@@ -51,7 +51,7 @@ end
 end
 
 @testset "det and logdet" begin
-    @test det(I) === 1
+    @test det(I) === true
     @test det(1.0I) === 1.0
     @test det(0I) === 0
     @test det(0.0I) === 0.0
@@ -215,4 +215,15 @@ end
     @test 0denseI != 2I != 0denseI # test generic path / inequality on diag
     @test alltwos != 2I != alltwos # test generic path / inequality off diag
     @test rdenseI !=  I != rdenseI # test square matrix check
+end
+
+@testset "operations involving I should preserve eltype" begin
+    @test isa(Int8(1) + I, Int8)
+    @test isa(Float16(1) + I, Float16)
+    @test eltype(Int8(1)I) == Int8
+    @test eltype(Float16(1)I) == Float16
+    @test eltype(fill(Int8(1), 2, 2)I) == Int8
+    @test eltype(fill(Float16(1), 2, 2)I) == Float16
+    @test eltype(fill(Int8(1), 2, 2) + I) == Int8
+    @test eltype(fill(Float16(1), 2, 2) + I) == Float16
 end

@@ -47,7 +47,7 @@ julia> [1 2im 3; 1im 2 3] * I
  0+1im  2+0im  3+0im
 ```
 """
-const I = UniformScaling(1)
+const I = UniformScaling(true)
 
 eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
@@ -99,7 +99,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
             ($op)(UL::$t2, J::UniformScaling) = ($t2)(($op)(UL.data, J))
 
             function ($op)(UL::$t1, J::UniformScaling)
-                ULnew = copy_oftype(UL.data, promote_type(eltype(UL), eltype(J)))
+                ULnew = copy_oftype(UL.data, Base.Broadcast._broadcast_eltype($op, UL, J))
                 for i = 1:size(ULnew, 1)
                     ULnew[i,i] = ($op)(1, J.λ)
                 end
@@ -110,7 +110,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
 end
 
 function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
-    ULnew = similar(parent(UL), promote_type(eltype(J), eltype(UL)))
+    ULnew = similar(parent(UL), Base.Broadcast._broadcast_eltype(-, J, UL))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n
@@ -126,7 +126,7 @@ function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
     return UpperTriangular(ULnew)
 end
 function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
-    ULnew = similar(parent(UL), promote_type(eltype(J), eltype(UL)))
+    ULnew = similar(parent(UL), Base.Broadcast._broadcast_eltype(-, J, UL))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n
@@ -142,9 +142,9 @@ function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
     return LowerTriangular(ULnew)
 end
 
-function (+)(A::AbstractMatrix{TA}, J::UniformScaling{TJ}) where {TA,TJ}
+function (+)(A::AbstractMatrix, J::UniformScaling)
     n = checksquare(A)
-    B = similar(A, promote_type(TA,TJ))
+    B = similar(A, Base.Broadcast._broadcast_eltype(+, A, J))
     copy!(B,A)
     @inbounds for i = 1:n
         B[i,i] += J.λ
@@ -152,18 +152,18 @@ function (+)(A::AbstractMatrix{TA}, J::UniformScaling{TJ}) where {TA,TJ}
     B
 end
 
-function (-)(A::AbstractMatrix{TA}, J::UniformScaling{TJ}) where {TA,TJ<:Number}
+function (-)(A::AbstractMatrix, J::UniformScaling)
     n = checksquare(A)
-    B = similar(A, promote_type(TA,TJ))
+    B = similar(A, Base.Broadcast._broadcast_eltype(-, A, J))
     copy!(B, A)
     @inbounds for i = 1:n
         B[i,i] -= J.λ
     end
     B
 end
-function (-)(J::UniformScaling{TJ}, A::AbstractMatrix{TA}) where {TA,TJ<:Number}
+function (-)(J::UniformScaling, A::AbstractMatrix)
     n = checksquare(A)
-    B = convert(AbstractMatrix{promote_type(TJ,TA)}, -A)
+    B = convert(AbstractMatrix{Base.Broadcast._broadcast_eltype(-, J, A)}, -A)
     @inbounds for j = 1:n
         B[j,j] += J.λ
     end
