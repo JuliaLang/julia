@@ -4,14 +4,14 @@ module JuliaConfig
 
 export cflags, ldflags, ldlibs, allflags
 
-threadingOn() = ccall(:jl_threading_enabled, Cint, ()) != 0
+threading_on() = ccall(:jl_threading_enabled, Cint, ()) != 0
 
 function shell_escape(str)
     str = replace(str, "'", "'\''")
     return "'$str'"
 end
 
-function libDir()
+function libdir()
     return if ccall(:jl_is_debugbuild, Cint, ()) != 0
         dirname(abspath(Libdl.dlpath("libjulia-debug")))
     else
@@ -19,14 +19,14 @@ function libDir()
     end
 end
 
-private_libDir() = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
+private_libdir() = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
 
-function includeDir()
+function includedir()
     return abspath(JULIA_HOME, Base.INCLUDEDIR, "julia")
 end
 
 function ldflags()
-    fl = "-L$(shell_escape(libDir()))"
+    fl = "-L$(shell_escape(libdir()))"
     if Sys.iswindows()
         fl = fl * " -Wl,--stack,8388608"
     elseif Sys.islinux()
@@ -42,7 +42,7 @@ function ldlibs()
         "julia"
     end
     if Sys.isunix()
-        return "-Wl,-rpath,$(shell_escape(libDir())) -Wl,-rpath,$(shell_escape(private_libDir())) -l$libname"
+        return "-Wl,-rpath,$(shell_escape(libdir())) -Wl,-rpath,$(shell_escape(private_libdir())) -l$libname"
     else
         return "-l$libname -lopenlibm"
     end
@@ -51,9 +51,9 @@ end
 function cflags()
     flags = IOBuffer()
     print(flags, "-std=gnu99")
-    include = shell_escape(includeDir())
+    include = shell_escape(includedir())
     print(flags, " -I", include)
-    if threadingOn()
+    if threading_on()
         print(flags, " -DJULIA_ENABLE_THREADING=1")
     end
     if Sys.isunix()
