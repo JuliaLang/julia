@@ -54,6 +54,7 @@ declare %jl_value_t addrspace(10)* @allocate_some_value()
 
 ; Check that the way we compute rooting is compatible with refinements
 define void @issue22770() {
+; CHECK-LABEL: @issue22770
 ; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
     %ptls = call %jl_value_t*** @julia.ptls_states()
     %y = call %jl_value_t addrspace(10)* @allocate_some_value()
@@ -183,6 +184,34 @@ L1:
 L2:
   ret void
 }
+
+declare %jl_value_t addrspace(10)* @julia.typeof(%jl_value_t addrspace(10)*) #0
+
+define %jl_value_t addrspace(10)* @typeof(%jl_value_t addrspace(10)* %x) {
+; CHECK-LABEL: @typeof(
+; CHECK-NOT: %gcframe
+  %ptls = call %jl_value_t*** @julia.ptls_states()
+  %v = call %jl_value_t addrspace(10)* @julia.typeof(%jl_value_t addrspace(10)* %x)
+  call void @one_arg_boxed(%jl_value_t addrspace(10)* %v)
+  ret %jl_value_t addrspace(10)* %v
+}
+
+declare void @julia.write_barrier(%jl_value_t addrspace(10)*, %jl_value_t addrspace(10)*) #1
+
+define %jl_value_t addrspace(10)* @setfield(%jl_value_t addrspace(10)* %p) {
+; CHECK-LABEL: @setfield(
+; CHECK-NOT: %gcframe
+; CHECK: call void @jl_gc_queue_root
+  %ptls = call %jl_value_t*** @julia.ptls_states()
+  %c = call %jl_value_t addrspace(10)* @allocate_some_value()
+  %fp = bitcast %jl_value_t addrspace(10)* %p to %jl_value_t addrspace(10)* addrspace(10)*
+  store %jl_value_t addrspace(10)* %c, %jl_value_t addrspace(10)* addrspace(10)* %fp
+  call void @julia.write_barrier(%jl_value_t addrspace(10)* %p, %jl_value_t addrspace(10)* %c)
+  ret %jl_value_t addrspace(10)* %c
+}
+
+attributes #0 = { argmemonly norecurse nounwind readonly }
+attributes #1 = { inaccessiblememonly norecurse nounwind }
 
 !0 = !{!"jtbaa"}
 !1 = !{!2, !2, i64 0}

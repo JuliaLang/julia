@@ -258,6 +258,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     // Remove dead use of ptls
     PM->add(createDeadCodeEliminationPass());
     PM->add(createLowerPTLSPass(dump_native));
+    // Clean up write barrier and ptls lowering
+    PM->add(createCFGSimplificationPass());
 #endif
     PM->add(createCombineMulAddPass());
 }
