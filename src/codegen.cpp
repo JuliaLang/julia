@@ -6240,6 +6240,9 @@ static void init_julia_llvm_env(Module *m)
     memcmp_derived_func =
         Function::Create(FunctionType::get(T_int32, args_memcmp, false),
                          Function::ExternalLinkage, "memcmp", m);
+    memcmp_derived_func->addFnAttr(Attribute::ReadOnly);
+    memcmp_derived_func->addFnAttr(Attribute::NoUnwind);
+    memcmp_derived_func->addFnAttr(Attribute::ArgMemOnly);
     add_named_global(memcmp_derived_func, &memcmp);
 
     std::vector<Type*> te_args(0);
