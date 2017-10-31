@@ -264,14 +264,14 @@ end
 Force reloading of a package, even if it has been loaded before. This is intended for use
 during package development as code is modified.
 """
-function reload(name::AbstractString)
+function reload(from::Module, name::AbstractString)
     if contains(name, Filesystem.path_separator) || contains(name, ".")
         # for reload("path/file.jl") just ask for include instead
         error("use `include` instead of `reload` to load source files")
     else
         # reload("Package") is ok
         unreference_module(Symbol(name))
-        require(Symbol(name))
+        require(from, Symbol(name))
     end
 end
 
@@ -299,6 +299,7 @@ Windows.
 """
 function require(from::Module, mod::Symbol)
     if !root_module_exists(mod)
+        info("@$(getpid()): require($from, $mod)")
         _require(from, mod)
         # After successfully loading, notify downstream consumers
         if toplevel_load[] && myid() == 1 && nprocs() > 1
