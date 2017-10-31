@@ -233,6 +233,39 @@ end
 ## Generic indexing functions ##
 
 """
+    thisind(str::AbstractString, i::Integer)
+
+Get the largest valid string index at or before `i`.
+Returns `0` if there is no valid string index at or before `i`.
+Returns `endof(str)` if `i≥endof(str)`.
+
+# Examples
+```jldoctest
+julia> thisind("αβγdef", -5)
+0
+
+julia> thisind("αβγdef", 1)
+1
+
+julia> thisind("αβγdef", 3)
+3
+
+julia> thisind("αβγdef", 4)
+3
+
+julia> thisind("αβγdef", 20)
+9
+"""
+function thisind(s::AbstractString, i::Integer)
+    j = Int(i)
+    isvalid(s, j) && return j
+    j < start(s) && return 0
+    e = endof(s)
+    j >= endof(s) && return e
+    prevind(s, j)
+end
+
+"""
     prevind(str::AbstractString, i::Integer, nchar::Integer=1)
 
 Get the previous valid string index before `i`.
@@ -249,7 +282,6 @@ julia> prevind("αβγdef", 1)
 
 julia> prevind("αβγdef", 3, 2)
 0
-
 ```
 """
 function prevind(s::AbstractString, i::Integer)

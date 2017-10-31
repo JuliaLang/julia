@@ -565,6 +565,32 @@ end
     @test_throws ParseError parse("\'\\.\'")
 end
 
+@testset "thisind" begin
+    let strs = Any["∀α>β:α+1>β", s"∀α>β:α+1>β",
+                   SubString("123∀α>β:α+1>β123", 4, 18),
+                   SubString(s"123∀α>β:α+1>β123", 4, 18)]
+        for s in strs
+            @test thisind(s, -2) == 0
+            @test thisind(s, 0) == 0
+            @test thisind(s, 1) == 1
+            @test thisind(s, 2) == 1
+            @test thisind(s, 3) == 1
+            @test thisind(s, 4) == 4
+            @test thisind(s, 5) == 4
+            @test thisind(s, 6) == 6
+            @test thisind(s, 15) == 15
+            @test thisind(s, 16) == 15
+            @test thisind(s, 30) == 15
+        end
+    end
+
+    let strs = Any["", s"", SubString("123", 2, 1), SubString(s"123", 2, 1)]
+        for s in strs, i in -2:2
+            @test thisind(s, i) == 0
+        end
+    end
+end
+
 @testset "prevind and nextind" begin
     let strs = Any["∀α>β:α+1>β", GenericString("∀α>β:α+1>β")]
         for i in 1:2
