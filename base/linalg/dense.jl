@@ -116,7 +116,7 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
     stride1(A) -> Int
 
 Returns the distance between successive array elements
-in units of element size.
+in dimension 1 in units of element size.
 
 # Examples
 ```jldoctest
