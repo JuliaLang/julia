@@ -606,13 +606,24 @@ void AllocOpt::replaceUsesWith(Instruction *orig_inst, Instruction *new_inst,
                 call->eraseFromParent();
                 return;
             }
+            // Also remove the preserve intrinsics so that it can be better optimized.
+            if (gc_preserve_begin && gc_preserve_begin == call->getCalledFunction()) {
+                while (!call->use_empty()) {
+                    auto end = cast<Instruction>(*call->user_begin());
+                    // gc_preserve_end returns void.
+                    assert(end->use_empty());
+                    end->eraseFromParent();
+                }
+                call->eraseFromParent();
+                return;
+            }
             if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
                 if (Intrinsic::ID ID = intrinsic->getIntrinsicID()) {
                     replaceIntrinsicUseWith(intrinsic, ID, orig_i, new_i);
                     return;
                 }
             }
-            // remove from operand bundle or arguments for gc_perserve_begin
+            // remove from operand bundle
             Type *orig_t = orig_i->getType();
             user->replaceUsesOfWith(orig_i, ConstantPointerNull::get(cast<PointerType>(orig_t)));
         }
