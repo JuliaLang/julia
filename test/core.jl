@@ -5868,3 +5868,14 @@ end
 macro m22098 end
 handle_on_m22098 = getfield(@__MODULE__, Symbol("@m22098"))
 @test isempty(methods(handle_on_m22098))
+
+# issue 24363
+mutable struct A24363
+    x::Union{Int,Void}
+end
+
+int24363 = A24363(65535)
+void24363 = A24363(nothing)
+f24363(a) = a.x
+@test f24363(int24363) === 65535
+@test f24363(void24363) === nothing
