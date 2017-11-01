@@ -269,7 +269,7 @@ end
 
 @testset "sparse map/broadcast with result eltype not a concrete subtype of Number (#19561/#19589)" begin
     N = 4
-    A, fA = sparse(1.0I, N, N), eye(N)
+    A, fA = sparse(1.0I, N, N), Matrix(1.0I, N, N)
     B, fB = spzeros(1, N), zeros(1, N)
     intorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : Int(1)
     stringorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : "hello"

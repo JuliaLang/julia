@@ -229,14 +229,14 @@ end
         @testset "Number of singular values: $j" for j in 2:6
             # Default size of subspace
             F = svds(A, nsv = j, v0 = v0)
-            @test F[1][:U]'F[1][:U] ≈ eye(j)
-            @test F[1][:V]'F[1][:V] ≈ eye(j)
+            @test F[1][:U]'F[1][:U] ≈ Matrix(I, j, j)
+            @test F[1][:V]'F[1][:V] ≈ Matrix(I, j, j)
             @test F[1][:S]          ≈ d[1:j]
             for k in 3j:2:5j
                 # Custom size of subspace
                 F = svds(A, nsv = j, ncv = k, v0 = v0)
-                @test F[1][:U]'F[1][:U] ≈ eye(j)
-                @test F[1][:V]'F[1][:V] ≈ eye(j)
+                @test F[1][:U]'F[1][:U] ≈ Matrix(I, j, j)
+                @test F[1][:V]'F[1][:V] ≈ Matrix(I, j, j)
                 @test F[1][:S]          ≈ d[1:j]
             end
         end

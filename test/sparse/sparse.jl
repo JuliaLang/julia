@@ -39,14 +39,14 @@ end
 @testset "SparseMatrixCSC construction from UniformScaling" begin
     @test_throws ArgumentError SparseMatrixCSC(I, -1, 3)
     @test_throws ArgumentError SparseMatrixCSC(I, 3, -1)
-    @test SparseMatrixCSC(2I, 3, 3)::SparseMatrixCSC{Int,Int} == 2*eye(3)
-    @test SparseMatrixCSC(2I, 3, 4)::SparseMatrixCSC{Int,Int} == 2*eye(3, 4)
-    @test SparseMatrixCSC(2I, 4, 3)::SparseMatrixCSC{Int,Int} == 2*eye(4, 3)
-    @test SparseMatrixCSC(2.0I, 3, 3)::SparseMatrixCSC{Float64,Int} == 2*eye(3)
-    @test SparseMatrixCSC{Real}(2I, 3, 3)::SparseMatrixCSC{Real,Int} == 2*eye(3)
-    @test SparseMatrixCSC{Float64}(2I, 3, 3)::SparseMatrixCSC{Float64,Int} == 2*eye(3)
-    @test SparseMatrixCSC{Float64,Int32}(2I, 3, 3)::SparseMatrixCSC{Float64,Int32} == 2*eye(3)
-    @test SparseMatrixCSC{Float64,Int32}(0I, 3, 3)::SparseMatrixCSC{Float64,Int32} == spzeros(Float64, Int32, 3, 3)
+    @test SparseMatrixCSC(2I, 3, 3)::SparseMatrixCSC{Int,Int} == Matrix(2I, 3, 3)
+    @test SparseMatrixCSC(2I, 3, 4)::SparseMatrixCSC{Int,Int} == Matrix(2I, 3, 4)
+    @test SparseMatrixCSC(2I, 4, 3)::SparseMatrixCSC{Int,Int} == Matrix(2I, 4, 3)
+    @test SparseMatrixCSC(2.0I, 3, 3)::SparseMatrixCSC{Float64,Int} == Matrix(2I, 3, 3)
+    @test SparseMatrixCSC{Real}(2I, 3, 3)::SparseMatrixCSC{Real,Int} == Matrix(2I, 3, 3)
+    @test SparseMatrixCSC{Float64}(2I, 3, 3)::SparseMatrixCSC{Float64,Int} == Matrix(2I, 3, 3)
+    @test SparseMatrixCSC{Float64,Int32}(2I, 3, 3)::SparseMatrixCSC{Float64,Int32} == Matrix(2I, 3, 3)
+    @test SparseMatrixCSC{Float64,Int32}(0I, 3, 3)::SparseMatrixCSC{Float64,Int32} == Matrix(0I, 3, 3)
 end
 
 se33 = SparseMatrixCSC{Float64}(I, 3, 3)
@@ -55,8 +55,8 @@ do33 = ones(3)
 @testset "sparse binary operations" begin
     @test isequal(se33 * se33, se33)
 
-    @test all(Array(se33 + convert(SparseMatrixCSC{Float32,Int32}, se33)) == 2*eye(3))
-    @test all(Array(se33 * convert(SparseMatrixCSC{Float32,Int32}, se33)) == eye(3))
+    @test Array(se33 + convert(SparseMatrixCSC{Float32,Int32}, se33)) == Matrix(2I, 3, 3)
+    @test Array(se33 * convert(SparseMatrixCSC{Float32,Int32}, se33)) == Matrix(I, 3, 3)
 
     @testset "shape checks for sparse elementwise binary operations equivalent to map" begin
         sqrfloatmat, colfloatmat = sprand(4, 4, 0.5), sprand(4, 1, 0.5)
@@ -108,7 +108,7 @@ end
 
     @testset "mixed sparse-dense concatenation" begin
         sz33 = spzeros(3, 3)
-        de33 = eye(3)
+        de33 = Matrix(1.0I, 3, 3)
         @test  all([se33 de33; sz33 se33] == Array([se33 se33; sz33 se33 ]))
     end
 
@@ -547,7 +547,7 @@ end
 end
 
 @testset "issue #5853, sparse diff" begin
-    for i=1:2, a=Any[[1 2 3], reshape([1, 2, 3],(3,1)), eye(3)]
+    for i=1:2, a=Any[[1 2 3], reshape([1, 2, 3],(3,1)), Matrix(1.0I, 3, 3)]
         @test all(diff(sparse(a),i) == diff(a,i))
     end
 end
@@ -974,7 +974,7 @@ end
 end
 
 @testset "sparsevec from matrices" begin
-    X = eye(5)
+    X = Matrix(1.0I, 5, 5)
     M = rand(5,4)
     C = spzeros(3,3)
     SX = sparse(X); SM = sparse(M)
@@ -1365,12 +1365,9 @@ end
     @test sparse([1:5;], [1:5;], 1) == sparse(1.0I, 5, 5)
 end
 
-@testset "sparse(I, ...) and one" begin
-    local A = sparse(ones(5, 5))
-    @test sparse(I, 5, 5)  == eye(A)
-    @test one(A)        == eye(A)
-    @test_throws DimensionMismatch one(sprand(5, 6, 0.2))
-    @test eltype(SparseMatrixCSC{Real}(I, 5, 5)) === Real
+@testset "one(A::SparseMatrixCSC)" begin
+    @test_throws DimensionMismatch one(sparse([1 1 1; 1 1 1]))
+    @test one(sparse([1 1; 1 1]))::SparseMatrixCSC == [1 0; 0 1]
 end
 
 @testset "istriu/istril" begin
@@ -1730,8 +1727,7 @@ end
 end
 
 @testset "spones" begin
-    local A = sparse(2.0I, 5, 5)
-    @test Array(spones(A)) == eye(Array(A))
+    @test spones(sparse(2.0I, 5, 5)) == Matrix(I, 5, 5)
 end
 
 @testset "factorization" begin
@@ -1891,7 +1887,10 @@ end
 end
 
 @testset "issue #19304" begin
-    @inferred hcat(sparse(rand(2,1)), eye(2,2))
+    @inferred hcat(sparse(rand(2,1)), I)
+    @inferred hcat(sparse(rand(2,1)), 1.0I)
+    @inferred hcat(sparse(rand(2,1)), Matrix(I, 2, 2))
+    @inferred hcat(sparse(rand(2,1)), Matrix(1.0I, 2, 2))
 end
 
 # Check that `broadcast` methods specialized for unary operations over
@@ -1907,7 +1906,7 @@ end
 end
 
 @testset "issue #14398" begin
-    @test transpose(view(sparse(I, 10, 10), 1:5, 1:5)) ≈ eye(5)
+    @test transpose(view(sparse(I, 10, 10), 1:5, 1:5)) ≈ Matrix(I, 5, 5)
 end
 
 @testset "dropstored issue #20513" begin
@@ -1995,7 +1994,7 @@ end
     @test_throws BoundsError A[n,n]
     A = SparseMatrixCSC(n, n, colptr, rowval, nzval2)
     @test nnz(A) == n
-    @test A      == eye(n)
+    @test A      == Matrix(I, n, n)
 end
 
 @testset "reverse search direction if step < 0 #21986" begin

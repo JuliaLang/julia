@@ -206,10 +206,10 @@ guardsrand(123) do
                 @test Array(A/α) ≈ Array(A)/α
 
                 @testset "Matmul with Triangular types" begin
-                    @test A*Base.LinAlg.UnitUpperTriangular(eye(n)) ≈ fA
-                    @test A*Base.LinAlg.UnitLowerTriangular(eye(n)) ≈ fA
-                    @test A*UpperTriangular(eye(n)) ≈ fA
-                    @test A*LowerTriangular(eye(n)) ≈ fA
+                    @test A*Base.LinAlg.UnitUpperTriangular(Matrix(1.0I, n, n)) ≈ fA
+                    @test A*Base.LinAlg.UnitLowerTriangular(Matrix(1.0I, n, n)) ≈ fA
+                    @test A*UpperTriangular(Matrix(1.0I, n, n)) ≈ fA
+                    @test A*LowerTriangular(Matrix(1.0I, n, n)) ≈ fA
                 end
                 @testset "A_mul_B! errors" begin
                     @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(zeros(fA),A,ones(elty,n,n+1))
@@ -261,7 +261,7 @@ guardsrand(123) do
                                 @inferred eig(A, 1.0, 2.0)
                                 D, Vecs = eig(fA)
                                 @test DT ≈ D
-                                @test abs.(VT'Vecs) ≈ eye(elty, n)
+                                @test abs.(VT'Vecs) ≈ Matrix(elty(1)I, n, n)
                                 Test.test_approx_eq_modphase(eigvecs(A), eigvecs(fA))
                                 #call to LAPACK.stein here
                                 Test.test_approx_eq_modphase(eigvecs(A,eigvals(A)),eigvecs(A))

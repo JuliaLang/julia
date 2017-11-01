@@ -188,7 +188,8 @@ end
 end
 
 @testset "Issue #9915" begin
-    @test sparse(1.0I, 2, 2) \ sparse(1.0I, 2, 2) == eye(2)
+    sparseI = sparse(1.0I, 2, 2)
+    @test sparseI \ sparseI == sparseI
 end
 
 @testset "test Sparse constructor Symmetric and Hermitian input (and issymmetric and ishermitian)" begin
@@ -296,7 +297,7 @@ end
 
     AA = CHOLMOD.eye(3)
     unsafe_store!(convert(Ptr{Csize_t}, pointer(AA)), 2, 1) # change size, but not stride, of Dense
-    @test convert(Matrix, AA) == eye(2, 3)
+    @test convert(Matrix, AA) == Matrix(I, 2, 3)
 end
 
 @testset "Low level interface" begin
@@ -453,7 +454,7 @@ end
 
     ## Low level interface
     @test CHOLMOD.nnz(A1Sparse) == nnz(A1)
-    @test CHOLMOD.speye(5, 5, elty) == eye(elty, 5, 5)
+    @test CHOLMOD.speye(5, 5, elty) == Matrix(I, 5, 5)
     @test CHOLMOD.spzeros(5, 5, 5, elty) == zeros(elty, 5, 5)
     if elty <: Real
         @test CHOLMOD.copy(A1Sparse, 0, 1) == A1Sparse
@@ -672,7 +673,7 @@ end
     x = rand(5)
     A = cholfact(sparse(Diagonal(x.\1)))
     @test A\view(ones(10),1:2:10) ≈ x
-    @test A\view(eye(5,5),:,:) ≈ Matrix(Diagonal(x))
+    @test A\view(Matrix(1.0I, 5, 5), :, :) ≈ Matrix(Diagonal(x))
 end
 
 @testset "Real factorization and complex rhs" begin

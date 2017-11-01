@@ -19,11 +19,11 @@ using Test
                 A_mul_Bc!(A, G)
                 A_mul_B!(G, R)
 
-                @test A_mul_B!(G,eye(elty,10,10)) == [G[i,j] for i=1:10,j=1:10]
+                @test A_mul_B!(G,Matrix{elty}(I, 10, 10)) == [G[i,j] for i=1:10,j=1:10]
 
                 @testset "transposes" begin
-                    @test adjoint(G)*G*eye(10) ≈ eye(elty, 10)
-                    @test adjoint(R)*(R*eye(10)) ≈ eye(elty, 10)
+                    @test adjoint(G)*G*Matrix(elty(1)I, 10, 10) ≈ Matrix(I, 10, 10)
+                    @test adjoint(R)*(R*Matrix(elty(1)I, 10, 10)) ≈ Matrix(I, 10, 10)
                     @test_throws ErrorException transpose(G)
                     @test_throws ErrorException transpose(R)
                 end
@@ -35,12 +35,13 @@ using Test
         @test_throws DimensionMismatch A_mul_B!(G, A)
         @test_throws DimensionMismatch A_mul_Bc!(A,G)
         @test abs.(A) ≈ abs.(hessfact(Ac)[:H])
-        @test norm(R*eye(elty, 10)) ≈ one(elty)
+        @test norm(R*Matrix{elty}(I, 10, 10)) ≈ one(elty)
 
+        I10 = Matrix{elty}(I, 10, 10)
         G, _ = givens(one(elty),zero(elty),9,10)
-        @test adjoint(G*eye(elty,10))*(G*eye(elty,10)) ≈ eye(elty, 10)
+        @test adjoint(G*I10) * (G*I10) ≈ I10
         K, _ = givens(zero(elty),one(elty),9,10)
-        @test adjoint(K*eye(elty,10))*(K*eye(elty,10)) ≈ eye(elty, 10)
+        @test adjoint(K*I10) * (K*I10) ≈ I10
 
         @testset "Givens * vectors" begin
             if isa(A, Array)

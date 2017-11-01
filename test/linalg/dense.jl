@@ -71,7 +71,7 @@ bimg  = randn(n,2)/2
                 @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
                 @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
                 @test size(nullspace(b), 2) == 0
-                @test nullspace(zeros(eltya,n)) == eye(eltya,1)
+                @test nullspace(zeros(eltya,n)) == Matrix(I, 1, 1)
             end
         end
     end # for eltyb
@@ -105,9 +105,9 @@ bimg  = randn(n,2)/2
                 z = zero(eltya)
                 t = convert(eltya,2)
                 r = convert(eltya,2.5)
-                @test a^z ≈ eye(a)
+                @test a^z ≈ Matrix(I, size(a))
                 @test a^t ≈ a^2
-                @test eye(eltya,n,n)^r ≈ eye(a)
+                @test Matrix{eltya}(I, n, n)^r ≈ Matrix(I, size(a))
             end
         end
     end # end for loop over arraytype
@@ -314,21 +314,21 @@ end
     @test A2sq*A2sq ≈ A2
 
     N = 3
-    @test log(det(eye(N))) ≈ logdet(eye(N))
+    @test log(det(Matrix(1.0I, N, N))) ≈ logdet(Matrix(1.0I, N, N))
 end
 
 @testset "issue #2637" begin
     a = [1, 2, 3]
     b = [4, 5, 6]
-    @test kron(eye(2),eye(2)) == eye(4)
+    @test kron(Matrix(I, 2, 2), Matrix(I, 2, 2)) == Matrix(I, 4, 4)
     @test kron(a,b) == [4,5,6,8,10,12,12,15,18]
     @test kron(a',b') == [4 5 6 8 10 12 12 15 18]
     @test kron(a,b')  == [4 5 6; 8 10 12; 12 15 18]
     @test kron(a',b)  == [4 8 12; 5 10 15; 6 12 18]
-    @test kron(a,eye(2)) == [1 0; 0 1; 2 0; 0 2; 3 0; 0 3]
-    @test kron(eye(2),a) == [ 1 0; 2 0; 3 0; 0 1; 0 2; 0 3]
-    @test kron(eye(2),2) == 2*eye(2)
-    @test kron(3,eye(3)) == 3*eye(3)
+    @test kron(a, Matrix(1I, 2, 2)) == [1 0; 0 1; 2 0; 0 2; 3 0; 0 3]
+    @test kron(Matrix(1I, 2, 2), a) == [ 1 0; 2 0; 3 0; 0 1; 0 2; 0 3]
+    @test kron(Matrix(1I, 2, 2), 2) == Matrix(2I, 2, 2)
+    @test kron(3, Matrix(1I, 3, 3)) == Matrix(3I, 3, 3)
     @test kron(a,2) == [2, 4, 6]
     @test kron(b',2) == [8 10 12]
 end
@@ -455,7 +455,7 @@ end
         # Identities
         for (i, A) in enumerate((A1, A2, A3, A4))
             @test sincos(A) == (sin(A), cos(A))
-            @test cos(A)^2 + sin(A)^2 ≈ eye(A)
+            @test cos(A)^2 + sin(A)^2 ≈ Matrix(I, size(A))
             @test cos(A) ≈ cos(-A)
             @test sin(A) ≈ -sin(-A)
             @test tan(A) ≈ sin(A) / cos(A)
@@ -478,7 +478,7 @@ end
             # The following identities fail for A1, A2 due to rounding errors;
             # probably needs better algorithm for the general case
             if i in (3, 4)
-                @test cosh(A)^2 - sinh(A)^2 ≈ eye(A)
+                @test cosh(A)^2 - sinh(A)^2 ≈ Matrix(I, size(A))
                 @test tanh(A) ≈ sinh(A) / cosh(A)
             end
         end
@@ -489,9 +489,9 @@ end
 
         @test sincos(A5) == (sin(A5), cos(A5))
 
-        @test cos(A5)^2 + sin(A5)^2 ≈ eye(A5)
-        @test cosh(A5)^2 - sinh(A5)^2 ≈ eye(A5)
-        @test cos(A5)^2 + sin(A5)^2 ≈ eye(A5)
+        @test cos(A5)^2 + sin(A5)^2 ≈ Matrix(I, size(A5))
+        @test cosh(A5)^2 - sinh(A5)^2 ≈ Matrix(I, size(A5))
+        @test cos(A5)^2 + sin(A5)^2 ≈ Matrix(I, size(A5))
         @test tan(A5) ≈ sin(A5) / cos(A5)
         @test tanh(A5) ≈ sinh(A5) / cosh(A5)
 
@@ -745,7 +745,7 @@ end
 
 @testset "Least squares solutions" begin
     a = [ones(20) 1:20 1:20]
-    b = reshape(eye(8, 5), 20, 2)
+    b = reshape(Matrix(1.0I, 8, 5), 20, 2)
     @testset "Tests for type $elty" for elty in (Float32, Float64, Complex64, Complex128)
         a = convert(Matrix{elty}, a)
         b = convert(Matrix{elty}, b)
