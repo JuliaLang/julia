@@ -1,0 +1,69 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+module JuliaConfig
+
+export cflags, ldflags, ldlibs, allflags
+
+threading_on() = ccall(:jl_threading_enabled, Cint, ()) != 0
+
+function shell_escape(str)
+    str = replace(str, "'", "'\''")
+    return "'$str'"
+end
+
+function libdir()
+    return if ccall(:jl_is_debugbuild, Cint, ()) != 0
+        dirname(abspath(Libdl.dlpath("libjulia-debug")))
+    else
+        dirname(abspath(Libdl.dlpath("libjulia")))
+    end
+end
+
+private_libdir() = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
+
+function includedir()
+    return abspath(JULIA_HOME, Base.INCLUDEDIR, "julia")
+end
+
+function ldflags()
+    fl = "-L$(shell_escape(libdir()))"
+    if Sys.iswindows()
+        fl = fl * " -Wl,--stack,8388608"
+    elseif Sys.islinux()
+        fl = fl * " -Wl,--export-dynamic"
+    end
+    return fl
+end
+
+function ldlibs()
+    libname = if ccall(:jl_is_debugbuild, Cint, ()) != 0
+        "julia-debug"
+    else
+        "julia"
+    end
+    if Sys.isunix()
+        return "-Wl,-rpath,$(shell_escape(libdir())) -Wl,-rpath,$(shell_escape(private_libdir())) -l$libname"
+    else
+        return "-l$libname -lopenlibm"
+    end
+end
+
+function cflags()
+    flags = IOBuffer()
+    print(flags, "-std=gnu99")
+    include = shell_escape(includedir())
+    print(flags, " -I", include)
+    if threading_on()
+        print(flags, " -DJULIA_ENABLE_THREADING=1")
+    end
+    if Sys.isunix()
+        print(flags, " -fPIC")
+    end
+    return String(take!(flags))
+end
+
+function allflags()
+    return "$(cflags()) $(ldflags()) $(ldlibs())"
+end
+
+end
