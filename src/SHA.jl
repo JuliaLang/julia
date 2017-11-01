@@ -49,7 +49,15 @@ for (f, ctx) in [(:sha1, :SHA1_CTX),
         # open("test.txt") do f
         #     sha256(f)
         # done
-        $f(io::IO) = $f(read(io))
+        function $f(io::IO, chunk_size=4*1024)
+            ctx = $ctx()
+            buff = Vector{UInt8}(chunk_size)
+            while !eof(io)
+                num_read = readbytes!(io, buff)
+                update!(ctx, buff[1:num_read])
+            end
+            return digest!(ctx)
+        end
     end
 end
 
