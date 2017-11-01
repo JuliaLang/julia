@@ -324,10 +324,10 @@ import Base.LinAlg: fillslots!, UnitLowerTriangular
             Bidiagonal(randn(3), randn(2), rand([:U,:L])),
             SymTridiagonal(randn(3), randn(2)),
             sparse(randn(3,4)),
-            Diagonal(randn(5)),
+            # Diagonal(randn(5)), # Diagonal fill! deprecated, see below
             sparse(rand(3)),
-            LowerTriangular(randn(3,3)),
-            UpperTriangular(randn(3,3))
+            # LowerTriangular(randn(3,3)), # AbstractTriangular fill! deprecated, see below
+            # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
             ]
             for A in exotic_arrays
                 fill!(A, 0)
@@ -335,6 +335,14 @@ import Base.LinAlg: fillslots!, UnitLowerTriangular
                     @test a == 0
                 end
             end
+            # Diagonal and AbstractTriangular fill! were defined as fillslots!,
+            # not matching the general behavior of fill!, and so have been deprecated.
+            # In a future dev cycle, these fill! methods should probably be reintroduced
+            # with behavior matching that of fill! for other structured matrix types.
+            # In the interm, equivalently test fillslots! below
+            @test iszero(fillslots!(Diagonal(fill(1, 3)), 0))
+            @test iszero(fillslots!(LowerTriangular(fill(1, 3, 3)), 0))
+            @test iszero(fillslots!(UpperTriangular(fill(1, 3, 3)), 0))
         end
         let # fill!(small, x)
             val = randn()

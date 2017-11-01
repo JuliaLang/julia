@@ -61,6 +61,11 @@ convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
 similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
 similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
+Base.zeros(D::Diagonal) = Diagonal(fill!(similar(D.diag), 0))
+Base.zeros(D::Diagonal, ::Type{T}) where {T} = Diagonal(fill!(similar(D, T), 0))
+Base.zeros(D::Diagonal, ::Type{T}, dims::Dims) where {T} = fill!(similar(D, T, dims), 0)
+Base.zeros(D::Diagonal, ::Type{T}, dims::Integer...) where {T} = fill!(similar(D, T, dims), 0)
+
 copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (length(D.diag),length(D.diag))

@@ -607,10 +607,6 @@ function fillslots!(A::SpecialArrays, x)
     return A
 end
 
-# for historical reasons:
-fill!(a::AbstractTriangular, x) = fillslots!(a, x)
-fill!(D::Diagonal, x) = fillslots!(D, x)
-
 _small_enough(A::Bidiagonal) = size(A, 1) <= 1
 _small_enough(A::Tridiagonal) = size(A, 1) <= 2
 _small_enough(A::SymTridiagonal) = size(A, 1) <= 2
