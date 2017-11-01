@@ -23,6 +23,8 @@ New language features
     `@generated` and normal implementations of part of a function. Surrounding code
     will be common to both versions ([#23168]).
 
+  * `↗`, `↖` are now operators with `*` precedence; `⟂` (perp) has comparison precedence
+
 Language changes
 ----------------
 
