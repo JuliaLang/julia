@@ -252,12 +252,12 @@ int32_t jl_jlcall_api(const char *fname)
         return 0;
     StringRef Name(fname);
     if (Name.startswith("japi3_")) // jlcall abi 3 from JIT
-        return 3;
+        return JL_API_WITH_PARAMETERS;
     assert(Name.startswith("japi1_") || // jlcall abi 1 from JIT
            Name.startswith("jsys1_") || // jlcall abi 1 from sysimg
            Name.startswith("jlcall_") || // jlcall abi 1 from JIT wrapping a specsig method
            Name.startswith("jlsysw_")); // jlcall abi 1 from sysimg wrapping a specsig method
-    return 1;
+    return JL_API_GENERIC;
 }
 
 
@@ -1079,7 +1079,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
         decls = li->functionObjectsDecls;
         bool already_compiled = params->cached && decls.functionObject != NULL;
         if (!src) {
-            if ((already_compiled || li->jlcall_api == 2) &&
+            if ((already_compiled || li->jlcall_api == JL_API_CONST) &&
                 (li->min_world <= world && li->max_world >= world)) {
                 return decls;
             }
@@ -1098,7 +1098,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
         // we waited at the lock).
         if (!jl_is_method(li->def.method)) {
             src = (jl_code_info_t*)li->inferred;
-            if (decls.functionObject != NULL || !src || !jl_is_code_info(src) || li->jlcall_api == 2) {
+            if (decls.functionObject != NULL || !src || !jl_is_code_info(src) || li->jlcall_api == JL_API_CONST) {
                 goto locked_out;
             }
         }
@@ -1106,7 +1106,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
             // If the caller didn't provide the source,
             // try to infer it for ourself, but first, re-check if it's already compiled.
             assert(li->min_world <= world && li->max_world >= world);
-            if ((params->cached && decls.functionObject != NULL) || li->jlcall_api == 2)
+            if ((params->cached && decls.functionObject != NULL) || li->jlcall_api == JL_API_CONST)
                 goto locked_out;
 
             // see if it is inferred
@@ -1118,7 +1118,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
                     src = jl_type_infer(pli, world, 0);
                     li = *pli;
                 }
-                if (!src || li->jlcall_api == 2)
+                if (!src || li->jlcall_api == JL_API_CONST)
                     goto locked_out;
             }
             else {
@@ -1128,7 +1128,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
         }
         else if (params->cached && decls.functionObject != NULL) {
             // similar to above, but never returns a NULL
-            // decl (unless compile fails), even if jlcall_api == 2
+            // decl (unless compile fails), even if jlcall_api == JL_API_CONST
             goto locked_out;
         }
         else {
@@ -1203,7 +1203,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
                 // and there is something to delete (test this before calling jl_ast_flag_inlineable)
                 li->inferred != jl_nothing &&
                 // don't delete inlineable code, unless it is constant
-                (li->jlcall_api == 2 || !jl_ast_flag_inlineable((jl_array_t*)li->inferred)) &&
+                (li->jlcall_api == JL_API_CONST || !jl_ast_flag_inlineable((jl_array_t*)li->inferred)) &&
                 // don't delete code when generating a precompile file
                 !imaging_mode &&
                 // don't delete code when it's not actually directly being used
@@ -1333,7 +1333,7 @@ jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, const char *F, size
         return fptr;
     }
     fptr.fptr = li->unspecialized_ducttape;
-    fptr.jlcall_api = 1;
+    fptr.jlcall_api = JL_API_GENERIC;
     if (!li->inferred && fptr.fptr) {
         return fptr;
     }
@@ -1390,7 +1390,7 @@ jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, const char *F, size
             // don't change fptr as that leads to race conditions
             // with the (not) simultaneous update to jlcall_api
         }
-        else if (li->inferred || fptr.jlcall_api != 1) {
+        else if (li->inferred || fptr.jlcall_api != JL_API_GENERIC) {
             li->jlcall_api = fptr.jlcall_api;
             li->fptr = fptr.fptr;
         }
@@ -1404,7 +1404,7 @@ jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, const char *F, size
             // with the (not) simultaneous update to jlcall_api
         }
         else if (unspec == li) {
-            if (fptr.jlcall_api == 1)
+            if (fptr.jlcall_api == JL_API_GENERIC)
                 li->unspecialized_ducttape = fptr.fptr;
         }
         else if (unspec->functionObjectsDecls.functionObject == F) {
@@ -1562,7 +1562,7 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
     // compile this normally
     jl_llvm_functions_t decls = jl_compile_for_dispatch(&linfo, world);
 
-    if (decls.functionObject == NULL && linfo->jlcall_api == 2 && jl_is_method(linfo->def.method)) {
+    if (decls.functionObject == NULL && linfo->jlcall_api == JL_API_CONST && jl_is_method(linfo->def.method)) {
         // normally we don't generate native code for these functions, so need an exception here
         // This leaks a bit of memory to cache native code that we'll never actually need
         JL_LOCK(&codegen_lock);
@@ -3021,13 +3021,13 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex)
         jl_method_instance_t *li = (jl_method_instance_t*)lival.constant;
         assert(jl_is_method_instance(li));
         jl_llvm_functions_t decls = jl_compile_linfo(&li, NULL, ctx.world, ctx.params);
-        if (li->jlcall_api == 2) {
+        if (li->jlcall_api == JL_API_CONST) {
             assert(li->inferred_const);
             return mark_julia_const(li->inferred_const);
         }
         if (decls.functionObject) {
             int jlcall_api = jl_jlcall_api(decls.functionObject);
-            if (jlcall_api == 1) {
+            if (jlcall_api == JL_API_GENERIC) {
                 jl_cgval_t result = emit_call_function_object(li, decls, argv, nargs, rt, ctx);
                 if (result.typ == jl_bottom_type)
                     CreateTrap(ctx.builder);
@@ -4135,7 +4135,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         if (!lam->inferred) // TODO: this isn't ideal to be unconditionally calling type inference from here
             src = jl_type_infer(&lam, world, 0);
         jl_compile_linfo(&lam, src, world, &jl_default_cgparams);
-        if (lam->jlcall_api != 2) {
+        if (lam->jlcall_api != JL_API_CONST) {
             if (lam->functionObjectsDecls.functionObject == NULL ||
                     jl_jlcall_api(lam->functionObjectsDecls.functionObject) != 1) {
                 lam = NULL; // TODO: use emit_invoke framework to dispatch these
@@ -4287,7 +4287,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     // Create the call
     bool jlfunc_sret;
     jl_cgval_t retval;
-    if (lam && lam->jlcall_api == 2) {
+    if (lam && lam->jlcall_api == JL_API_CONST) {
         nargs = 0; // arguments not needed -- TODO: not really true, should emit an age_ok test and jlcall
         jlfunc_sret = false;
         retval = mark_julia_const(lam->inferred_const);
@@ -5946,7 +5946,7 @@ extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_method_instance_t *lam, int s
             funcName << "jlsys_"; // the specsig implementation
         else if (lam->functionObjectsDecls.specFunctionObject)
             funcName << "jlsysw_"; // it's a specsig wrapper
-        else if (lam->jlcall_api == 1)
+        else if (lam->jlcall_api == JL_API_GENERIC)
             funcName << "jsys1_"; // it's a jlcall without a specsig
         const char* unadorned_name = jl_symbol_name(lam->def.method->name);
         funcName << unadorned_name << "_" << globalUnique++;
@@ -5959,7 +5959,7 @@ extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_method_instance_t *lam, int s
         else {
             assert(lam->fptr == NULL);
             lam->fptr = fptr;
-            if (lam->jlcall_api == 1) {
+            if (lam->jlcall_api == JL_API_GENERIC) {
                 if (lam->functionObjectsDecls.functionObject == NULL) {
                     lam->functionObjectsDecls.functionObject = strdup(f->getName().str().c_str());
                 }

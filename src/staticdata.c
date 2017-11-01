@@ -648,7 +648,7 @@ static void jl_write_values(jl_serializer_state *s)
                 newm->unspecialized_ducttape = NULL;
                 if (jl_is_method(m->def.method)) {
                     uintptr_t fptr_id = jl_fptr_id((void*)(uintptr_t)m->fptr);
-                    if (m->jlcall_api == 2) {
+                    if (m->jlcall_api == JL_API_CONST) {
                     }
                     else if (fptr_id >= 2) {
                         //write_int8(s->s, -li->jlcall_api);
@@ -950,7 +950,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
             }
             else {
                 uintptr_t base = (uintptr_t)fvars.base;
-                assert(jl_is_method(li->def.method) && li->jlcall_api && li->jlcall_api != 2);
+                assert(jl_is_method(li->def.method) && li->jlcall_api && li->jlcall_api != JL_API_CONST);
                 linfos[i] = li;
                 int32_t offset = fvars.offsets[i];
                 for (; clone_idx < fvars.nclones; clone_idx++) {

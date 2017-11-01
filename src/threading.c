@@ -307,7 +307,7 @@ static jl_value_t *ti_run_fun(const jl_generic_fptr_t *fptr, jl_method_instance_
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
-        (void)jl_assume(fptr->jlcall_api != 2);
+        (void)jl_assume(fptr->jlcall_api != JL_API_CONST);
         jl_call_fptr_internal(fptr, mfunc, args, nargs);
     }
     JL_CATCH {

@@ -636,7 +636,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
 
 jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs)
 {
-    if (lam->jlcall_api == 2)
+    if (lam->jlcall_api == JL_API_CONST)
         return lam->inferred_const;
     jl_code_info_t *src = (jl_code_info_t*)lam->inferred;
     if (!src || (jl_value_t*)src == jl_nothing) {
