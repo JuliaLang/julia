@@ -5074,11 +5074,11 @@ static std::unique_ptr<Module> emit_function(
                                      dbgFuncName,      // Name
                                      f->getName(),     // LinkageName
                                      topfile,          // File
-                                     0,                // LineNo
+                                     toplineno,        // LineNo
                                      subrty,           // Ty
                                      false,            // isLocalToUnit
                                      true,             // isDefinition
-                                     0,                // ScopeLine
+                                     toplineno,        // ScopeLine
                                      DIFlagZero,       // Flags
                                      true,             // isOptimized
                                      nullptr);         // Template Parameters
@@ -5512,11 +5512,11 @@ static std::unique_ptr<Module> emit_function(
                                                  std::string(inl_name) + ";",
                                                  inl_name,
                                                  new_file,
-                                                 0,
+                                                 inlined_func_lineno,
                                                  jl_di_func_null_sig,
                                                  false,
                                                  true,
-                                                 0,
+                                                 inlined_func_lineno,
                                                  DIFlagZero,
                                                  true,
                                                  nullptr);
