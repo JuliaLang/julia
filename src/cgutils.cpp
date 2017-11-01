@@ -1528,7 +1528,12 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         }
         else if (jl_is_uniontype(jfty)) {
             int fsz = jl_field_size(jt, idx);
-            Value *ptindex = emit_struct_gep(ctx, lt, staddr, byte_offset + fsz - 1);
+            Value *ptindex;
+            if (isa<StructType>(lt))
+                ptindex = emit_struct_gep(ctx, lt, staddr, byte_offset + fsz - 1);
+            else
+                ptindex = ctx.builder.CreateConstInBoundsGEP1_32(
+                    T_int8, emit_bitcast(ctx, staddr, T_pint8), byte_offset + fsz - 1);
             Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), ctx.builder.CreateLoad(T_int8, ptindex));
             bool isimmutable = strct.isimmutable;
             if (jt->mutabl) {
