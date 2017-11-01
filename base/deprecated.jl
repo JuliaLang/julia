@@ -1692,6 +1692,8 @@ end
 @deprecate selectperm partialsortperm
 @deprecate selectperm! partialsortperm!
 
+# `initialized` keyword arg to `sort` is deprecated in sort.jl
+
 @deprecate promote_noncircular promote false
 
 import .Iterators.enumerate

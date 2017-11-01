@@ -834,7 +834,7 @@ end
 ## sorting multi-dimensional arrays ##
 
 """
-    sort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
+    sort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
@@ -864,7 +864,10 @@ function sort(A::AbstractArray, dim::Integer;
               by=identity,
               rev::Bool=false,
               order::Ordering=Forward,
-              initialized::Bool=false)
+              initialized::Union{Bool,Void}=nothing)
+    if initialized !== nothing
+        Base.depwarn("`initialized` keyword argument is deprecated", :sort)
+    end
     order = ord(lt,by,rev,order)
     n = length(indices(A, dim))
     if dim != 1
