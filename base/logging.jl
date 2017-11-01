@@ -271,6 +271,16 @@ macro error(message, exs...) logmsg_code((@sourceinfo)..., :Error, message, exs.
 @eval @doc $_macro_docs :(@error)
 
 
+# Log a message. Called from the julia C code; kwargs is in the format
+# Any[key1,val1, ...] for convenience in construction on the C side.
+function logmsg_thunk(level, message, _module, group, id, file, line, kwargs)
+    real_kws = Any[(kwargs[i],kwargs[i+1]) for i in 1:2:length(kwargs)]
+    @logmsg(convert(LogLevel, level), message,
+            _module=_module, _id=id, _group=group,
+            _file=file, _line=line, real_kws...)
+end
+
+
 """
     handle_message(logger, level, message, _module, group, id, file, line; key1=val1, ...)
 
@@ -464,6 +474,5 @@ function disable_logging(level::LogLevel)
     _min_enabled_level[] = level + 1
 end
 disable_logging(level) = disable_logging(parse_level(level))
-
 
 init_logging() = global_logger(SimpleLogger(STDERR))

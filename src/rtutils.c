@@ -1038,6 +1038,64 @@ void jl_depwarn(const char *msg, jl_value_t *sym)
     JL_GC_POP();
 }
 
+void jl_log(int level, const char* group, const char* id,
+            const char* file, int line, jl_value_t** kwargs, int kwargs_len,
+            const char *msg)
+{
+    static jl_value_t *logmsg_func = NULL;
+    if (!logmsg_func && jl_base_module) {
+        logmsg_func = jl_get_global(jl_base_module, jl_symbol("logmsg_thunk"));
+    }
+    if (!logmsg_func) {
+        const char* levelstr = level < JL_LOGLEVEL_INFO ? "DEBUG" :
+                               level < JL_LOGLEVEL_WARN ? "INFO" :
+                               level < JL_LOGLEVEL_ERROR ? "WARN" :
+                               "ERROR";
+        jl_safe_printf("%s: %s:%d - %s\n", levelstr, file, line, msg);
+        return;
+    }
+    jl_value_t **args;
+    const int nargs = 9;
+    JL_GC_PUSHARGS(args, nargs);
+    args[0] = logmsg_func;
+    args[1] = jl_box_long(level);
+    args[2] = jl_cstr_to_string(msg);
+    args[3] = (jl_value_t*)jl_core_module;
+    if (group) {
+        args[4] = (jl_value_t*)jl_symbol(group);
+    }
+    else {
+        // set group to file basename without extension by default
+        group = strrchr(file, PATHSEPSTRING[0]);
+        group = group ? group + 1 : file;
+        const char* dot = strchr(group, '.');
+        args[4] = (jl_value_t*)(dot ? jl_symbol_n(group, dot-group) : jl_symbol(group));
+    }
+    args[5] = (jl_value_t*)jl_symbol(id);
+    args[6] = jl_cstr_to_string(file);
+    args[7] = jl_box_long(line);
+    args[8] = (jl_value_t*)jl_ptr_to_array_1d((jl_value_t*)jl_array_any_type,
+                                              kwargs, kwargs_len, 0);
+    jl_apply(args, nargs);
+    JL_GC_POP();
+}
+
+void jl_logf(int level, const char* group, const char* id,
+             const char* file, int line, jl_value_t** kwargs, int kwargs_len,
+             const char *fmt, ...)
+{
+    char *msg=NULL;
+    int c;
+    va_list args;
+    va_start(args, fmt);
+    c = vasprintf(&msg, fmt, args);
+    va_end(args);
+    if (c >= 0) {
+        jl_log(level, group, id, file, line, kwargs, kwargs_len, msg);
+        free(msg);
+    }
+}
+
 JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n)
 {
     static jl_value_t *depwarn_func = NULL;
