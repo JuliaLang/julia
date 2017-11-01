@@ -292,3 +292,12 @@ let
     io = IOBuffer(Int64(10))
     @test io isa IOBuffer
 end
+
+let
+    # IOBuffer(array) is writable by default.
+    buf = IOBuffer(UInt8[])
+    @test write(buf, b"foobar") == 3
+    # IOBuffer(string) is not writable.
+    buf = IOBuffer("foo")
+    @test_throws ArgumentError write(buf, b"foobar")
+end
