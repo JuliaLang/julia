@@ -854,13 +854,6 @@ JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
     return jl_field_offset(ty, field - 1);
 }
 
-JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
-{
-    if (ty->layout == NULL)
-        jl_error("non-leaf type doesn't have an alignment");
-    return jl_datatype_align(ty);
-}
-
 #ifdef __cplusplus
 }
 #endif

@@ -342,13 +342,13 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
 
-import Base: isstructtype, type_alignment, return_types
+import Base: isstructtype, datatype_alignment, return_types
 @test !isstructtype(Union{})
 @test !isstructtype(Union{Int,Float64})
 @test !isstructtype(Int)
 @test isstructtype(TLayout)
-@test type_alignment(UInt16) == 2
-@test type_alignment(TLayout) == 4
+@test datatype_alignment(UInt16) == 2
+@test datatype_alignment(TLayout) == 4
 let rts = return_types(TLayout)
     @test length(rts) >= 3 # general constructor, specific constructor, and call-to-convert adapter(s)
     @test all(rts .== TLayout)
