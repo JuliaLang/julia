@@ -305,6 +305,9 @@ Library improvements
 
   * The `crc32c` function for CRC-32c checksums is now exported ([#22274]).
 
+  * `eye(::Type{Diagonal{T}}, m::Integer)` has been deprecated in favor of
+    `Diagonal{T}(I, m)` ([#24413]).
+
   * The output of `versioninfo` is now controlled with keyword arguments ([#21974]).
 
   * The function `LibGit2.set_remote_url` now always sets both the fetch and push URLs for a
