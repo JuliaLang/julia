@@ -314,6 +314,32 @@ define %jl_value_t addrspace(10)* @vec_loadobj() {
   ret %jl_value_t addrspace(10)* %v7
 }
 
+declare void @throw_error(%jl_value_t addrspace(10)*) #0
+
+define void @local_root(i8 %b) {
+; CHECK-LABEL: @local_root(
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+; CHECK-NOT: store
+  %v4 = call %jl_value_t*** @julia.ptls_states()
+  %b1 = icmp eq i8 %b, 0
+  br i1 %b1, label %err, label %pass
+
+; CHECK-LABEL: err:
+err:
+; CHECK: call void @llvm.lifetime.start
+; CHECK: store
+  %err_obj = call %jl_value_t addrspace(10)* @alloc()
+  call void @throw_error(%jl_value_t addrspace(10)* %err_obj)
+  unreachable
+
+pass:
+; CHECK-LABEL: pass:
+; CHECK-NEXT: ret void
+  ret void
+}
+
+attributes #0 = { noreturn }
+
 !0 = !{!"jtbaa"}
 !1 = !{!"jtbaa_const", !0, i64 0}
 !2 = !{!1, !1, i64 0, i64 1}

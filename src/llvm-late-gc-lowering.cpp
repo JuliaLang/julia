@@ -2,6 +2,7 @@
 
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/PostOrderIterator.h>
+#include <llvm/ADT/SCCIterator.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallVector.h>
 #include "llvm/Analysis/CFG.h"
@@ -281,6 +282,7 @@ struct BBState {
     bool HasSafepoint = false;
     // Have we gone through this basic block in our local scan yet?
     bool Done = false;
+    bool HasLive = false;
 };
 
 struct State {
@@ -422,11 +424,13 @@ private:
     State LocalScan(Function &F);
     void ComputeLiveness(State &S);
     void ComputeLiveSets(State &S);
-    void PushGCFrame(AllocaInst *gcframe, unsigned NRoots, Instruction *InsertAfter);
+    AllocaInst *GCFrameAlloca(unsigned NRoots, Instruction *InsertBefore);
+    void PushGCFrame(AllocaInst *gcframe, unsigned NRoots, Instruction *InsertBefore);
     void PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore);
     std::vector<int> ColorRoots(const State &S);
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint);
     void PlaceGCFrameStores(State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
+    std::pair<SmallVector<Instruction*,4>,SmallVector<Instruction*,16>> LocatePushPop(State &S);
     void PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
     bool doInitialization(Module &M) override;
     void reinitFunctions(Module &M);
@@ -1526,9 +1530,17 @@ Instruction *LateLowerGCFrame::get_pgcstack(Instruction *ptlsStates)
                                      "jl_pgcstack");
 }
 
-void LateLowerGCFrame::PushGCFrame(AllocaInst *gcframe, unsigned NRoots, Instruction *InsertAfter) {
-    IRBuilder<> builder(gcframe->getContext());
-    builder.SetInsertPoint(&*(++BasicBlock::iterator(InsertAfter)));
+AllocaInst *LateLowerGCFrame::GCFrameAlloca(unsigned NRoots, Instruction *InsertBefore)
+{
+    IRBuilder<> builder(InsertBefore);
+    return builder.CreateAlloca(T_prjlvalue, ConstantInt::get(T_int32, NRoots + 2), "gcframe");
+}
+
+void LateLowerGCFrame::PushGCFrame(AllocaInst *gcframe, unsigned NRoots, Instruction *InsertBefore) {
+    IRBuilder<> builder(InsertBefore);
+    builder.CreateLifetimeStart(gcframe);
+    builder.CreateMemSet(gcframe, ConstantInt::get(T_int8, 0),
+                         sizeof(jl_value_t*) * (NRoots + 2), 0, false, tbaa_gcframe);
     Instruction *inst =
         builder.CreateStore(ConstantInt::get(T_size, NRoots << 1),
                           builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_size->getPointerTo()));
@@ -1544,15 +1556,14 @@ void LateLowerGCFrame::PushGCFrame(AllocaInst *gcframe, unsigned NRoots, Instruc
 void LateLowerGCFrame::PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore) {
     IRBuilder<> builder(InsertBefore->getContext());
     builder.SetInsertPoint(InsertBefore); // set insert *before* Ret
-    Instruction *gcpop =
-        (Instruction*)builder.CreateConstGEP1_32(gcframe, 1);
-    Instruction *inst = builder.CreateLoad(gcpop);
+    Instruction *inst = builder.CreateLoad(builder.CreateConstGEP1_32(gcframe, 1));
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateStore(inst,
                                builder.CreateBitCast(
                                  builder.Insert(get_pgcstack(ptlsStates)),
                                  PointerType::get(T_prjlvalue, 0)));
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
+    builder.CreateLifetimeEnd(gcframe);
 }
 
 // Size of T is assumed to be `sizeof(void*)`
@@ -1868,8 +1879,9 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
                                           const std::vector<int> &Colors, Value *GCFrame)
 {
     for (auto &BB : *S.F) {
-        const BBState &BBS = S.BBStates[&BB];
+        BBState &BBS = S.BBStates[&BB];
         if (!BBS.HasSafepoint) {
+            BBS.HasLive = !BBS.LiveOut.empty();
             continue;
         }
         BitVector LiveIn;
@@ -1878,6 +1890,7 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
         for(auto rit = BBS.Safepoints.rbegin();
               rit != BBS.Safepoints.rend(); ++rit ) {
             const BitVector &NowLive = S.LiveSets[*rit];
+            BBS.HasLive |= !NowLive.empty();
             for (int Idx = NowLive.find_first(); Idx >= 0; Idx = NowLive.find_next(Idx)) {
                 if (!HasBitSet(*LastLive, Idx)) {
                     PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
@@ -1887,6 +1900,189 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
             LastLive = &NowLive;
         }
     }
+}
+
+template<typename T1, typename T2, typename DT>
+static void HandleOnePushPopEdge(T1 &edges, T2 &ins_vec, DT *dt)
+{
+    auto edge = edges.pop_back_val();
+    // First check if we can avoid splitting the edge
+    bool all_edge_in_set = true;
+    for (auto pred_bb: predecessors(edge.second)) {
+        if (edge.first == pred_bb)
+            continue;
+        if (edges.count(std::make_pair(pred_bb, edge.second)) == 0) {
+            all_edge_in_set = false;
+            break;
+        }
+    }
+    if (all_edge_in_set) {
+        for (auto pred_bb: predecessors(edge.second)) {
+            if (edge.first == pred_bb)
+                continue;
+            edges.remove(std::make_pair(pred_bb, edge.second));
+        }
+        ins_vec.push_back(edge.second->getFirstNonPHI());
+        return;
+    }
+    all_edge_in_set = true;
+    for (auto succ_bb: successors(edge.first)) {
+        if (edge.second == succ_bb)
+            continue;
+        if (edges.count(std::make_pair(edge.first, succ_bb)) == 0) {
+            all_edge_in_set = false;
+            break;
+        }
+    }
+    if (all_edge_in_set) {
+        for (auto succ_bb: successors(edge.first)) {
+            if (edge.second == succ_bb)
+                continue;
+            edges.remove(std::make_pair(edge.first, succ_bb));
+        }
+        ins_vec.push_back(edge.first->getTerminator());
+        return;
+    }
+    ins_vec.push_back(SplitEdge(edge.first, edge.second, dt)->getTerminator());
+}
+
+std::pair<SmallVector<Instruction*,4>,SmallVector<Instruction*,16>>
+LateLowerGCFrame::LocatePushPop(State &S)
+{
+    std::pair<SmallVector<Instruction*,4>,SmallVector<Instruction*,16>> res;
+    auto &push = res.first;
+    auto &pop = res.second;
+    auto global_frame = [&] {
+        push.push_back(&*(++BasicBlock::iterator(ptlsStates)));
+        for (auto &BB: *S.F) {
+            if (auto ret = dyn_cast<ReturnInst>(BB.getTerminator())) {
+                pop.push_back(ret);
+            }
+        }
+    };
+    // These are harder to handle, ignore them for now...
+    if (!S.Allocas.empty() || !S.ReturnsTwice.empty()) {
+        global_frame();
+        return res;
+    }
+    // We don't want to place any push/pop in a loop so first identify the graph of SCC nodes
+    // Each SCC node will always has the same "liveness".
+    struct SCCInfo {
+        std::vector<BasicBlock*> BBs;
+        SetVector<unsigned> Succ{};
+        SetVector<unsigned> Pred{};
+        bool HasLive = false;
+        bool MayReachLive = false;
+        SCCInfo(const std::vector<BasicBlock*> &BBs)
+            : BBs(BBs)
+        {
+        }
+    };
+    SmallVector<SCCInfo,4> sccnodes;
+    std::map<BasicBlock*,unsigned> sccmap;
+    for (auto SCCI = scc_begin(S.F); !SCCI.isAtEnd(); ++SCCI) {
+        unsigned id = sccnodes.size();
+        sccnodes.emplace_back(*SCCI);
+        auto &node = sccnodes.back();
+        for (auto bb: node.BBs) {
+            sccmap[bb] = id;
+            BBState &BBS = S.BBStates[bb];
+            node.HasLive |= BBS.HasLive;
+            for (auto succ_bb: successors(bb)) {
+                auto succ_id = sccmap[succ_bb];
+                if (succ_id < id) {
+                    node.Succ.insert(succ_id);
+                    auto &succ_node = sccnodes[succ_id];
+                    succ_node.Pred.insert(id);
+                    if (succ_node.HasLive || succ_node.MayReachLive) {
+                        node.MayReachLive = true;
+                    }
+                }
+            }
+        }
+    }
+    // We want to make sure each path through the CFG of SCC has at most one push and one pop
+    // therefore we need to mark everything that's reachable from a live node and may reach
+    // a live node has to be live too.
+    // Iterate in the forward control flow direction to do this in one pass
+    // since we've already propagated the may reach live info in the reverse direction.
+    for (auto it = sccnodes.rbegin(); it != sccnodes.rend(); ++it) {
+        if (!it->HasLive)
+            continue;
+        for (auto succ_id: it->Succ) {
+            auto &succ_node = sccnodes[succ_id];
+            if (succ_node.MayReachLive) {
+                succ_node.HasLive = true;
+            }
+        }
+    }
+    // Now the liveness is valid, mark all nodes that has all outgoing or all incoming nodes
+    // live also as live to reduce the number of edges
+    // One of the loop can probably be merged with the one above if someone wants to....
+    for (auto it = sccnodes.rbegin(); it != sccnodes.rend(); ++it) {
+        // Already live
+        if (it->HasLive || it->Pred.empty())
+            continue;
+        bool all_pred_live = true;
+        for (auto pred_id: it->Pred) {
+            auto &pred_node = sccnodes[pred_id];
+            if (!pred_node.HasLive) {
+                all_pred_live = false;
+                break;
+            }
+        }
+        if (all_pred_live) {
+            it->HasLive = true;
+        }
+    }
+    for (auto it = sccnodes.begin(); it != sccnodes.end(); ++it) {
+        // Already live
+        if (it->HasLive || it->Succ.empty())
+            continue;
+        bool all_succ_live = true;
+        for (auto succ_id: it->Succ) {
+            auto &succ_node = sccnodes[succ_id];
+            if (!succ_node.HasLive) {
+                all_succ_live = false;
+                break;
+            }
+        }
+        if (all_succ_live) {
+            it->HasLive = true;
+        }
+    }
+    // Entry node
+    if (sccnodes.back().HasLive) {
+        global_frame();
+        return res;
+    }
+
+    SetVector<std::pair<BasicBlock*,BasicBlock*>> push_edges;
+    SetVector<std::pair<BasicBlock*,BasicBlock*>> pop_edges;
+    for (auto &node: sccnodes) {
+        auto HasLive = node.HasLive;
+        for (auto bb: node.BBs) {
+            for (auto succ_bb: successors(bb)) {
+                auto succ_id = sccmap[succ_bb];
+                auto &succ_node = sccnodes[succ_id];
+                if (HasLive && !succ_node.HasLive) {
+                    pop_edges.insert(std::make_pair(bb, succ_bb));
+                }
+                else if (!HasLive && succ_node.HasLive) {
+                    push_edges.insert(std::make_pair(bb, succ_bb));
+                }
+            }
+            if (HasLive && isa<ReturnInst>(bb->getTerminator())) {
+                pop.push_back(cast<ReturnInst>(bb->getTerminator()));
+            }
+        }
+    }
+
+    while (!push_edges.empty())
+        HandleOnePushPopEdge(push_edges, push, S.DT);
+    while (!pop_edges.empty())
+        HandleOnePushPopEdge(pop_edges, pop, S.DT);
+    return res;
 }
 
 void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>) {
@@ -1899,28 +2095,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
     if (MaxColor != -1 || S.Allocas.size() != 0) {
         unsigned NRoots = MaxColor + 1 + S.Allocas.size();
         // Create GC Frame
-        AllocaInst *gcframe = new AllocaInst(T_prjlvalue,
-#if JL_LLVM_VERSION >= 50000
-           0,
-#endif
-        ConstantInt::get(T_int32, NRoots+2), "gcframe");
-        gcframe->insertBefore(&*F->getEntryBlock().begin());
-        // Zero out gcframe
-        BitCastInst *tempSlot_i8 = new BitCastInst(gcframe, Type::getInt8PtrTy(F->getContext()), "");
-        tempSlot_i8->insertAfter(gcframe);
-        Type *argsT[2] = {tempSlot_i8->getType(), T_int32};
-        Function *memset = Intrinsic::getDeclaration(F->getParent(), Intrinsic::memset, makeArrayRef(argsT));
-        Value *args[5] = {
-            tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F->getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*)*(NRoots+2)), // len
-            ConstantInt::get(T_int32, 0), // align
-            ConstantInt::get(Type::getInt1Ty(F->getContext()), 0)}; // volatile
-        CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
-        zeroing->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-        zeroing->insertAfter(tempSlot_i8);
-        // Push GC Frame
-        PushGCFrame(gcframe, NRoots, ptlsStates);
+        auto gcframe = GCFrameAlloca(NRoots, &*F->getEntryBlock().begin());
         // Replace Allocas
         unsigned AllocaSlot = 2;
         for (AllocaInst *AI : S.Allocas) {
@@ -1947,12 +2122,17 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         }
         unsigned MinColorRoot = AllocaSlot;
         // Insert GC frame stores
+        // Also records which BBs require a live gc frame
         PlaceGCFrameStores(S, MinColorRoot, Colors, gcframe);
+
+        auto pushpop = LocatePushPop(S);
+        // Push GC Frame
+        for (auto push_ins: pushpop.first) {
+            PushGCFrame(gcframe, NRoots, push_ins);
+        }
         // Insert GCFrame pops
-        for(Function::iterator I = F->begin(), E = F->end(); I != E; ++I) {
-            if (isa<ReturnInst>(I->getTerminator())) {
-                PopGCFrame(gcframe, I->getTerminator());
-            }
+        for (auto pop_ins: pushpop.second) {
+            PopGCFrame(gcframe, pop_ins);
         }
     }
 }
