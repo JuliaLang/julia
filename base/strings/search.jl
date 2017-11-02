@@ -147,7 +147,7 @@ function _search_bloom_mask(c)
 end
 
 _nthbyte(s::String, i) = codeunit(s, i)
-_nthbyte(a::ByteArray, i) = a[i]
+_nthbyte(a::Union{AbstractVector{UInt8},AbstractVector{Int8}}, i) = a[i]
 
 function _searchindex(s::Union{String,ByteArray}, t::Union{String,ByteArray}, i)
     n = sizeof(t)

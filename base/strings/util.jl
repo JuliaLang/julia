@@ -475,24 +475,29 @@ julia> hex2bytes(a)
 """
 function hex2bytes end
 
-hex2bytes(s::AbstractString) = hex2bytes(Vector{UInt8}(String(s)))
-hex2bytes(s::AbstractVector{UInt8}) = hex2bytes!(Vector{UInt8}(uninitialized, length(s) >> 1), s)
+hex2bytes(s::AbstractString) = hex2bytes(String(s))
+hex2bytes(s::Union{String,AbstractVector{UInt8}}) = hex2bytes!(Vector{UInt8}(uninitialized, length(s) >> 1), s)
+
+_firstbyteidx(s::String) = 1
+_firstbyteidx(s::AbstractVector{UInt8}) = first(eachindex(s))
+_lastbyteidx(s::String) = sizeof(s)
+_lastbyteidx(s::AbstractVector{UInt8}) = endof(s)
 
 """
-    hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
+    hex2bytes!(d::AbstractVector{UInt8}, s::Union{String,AbstractVector{UInt8}})
 
 Convert an array `s` of bytes representing a hexadecimal string to its binary
 representation, similar to [`hex2bytes`](@ref) except that the output is written in-place
 in `d`.   The length of `s` must be exactly twice the length of `d`.
 """
-function hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
-    if 2length(d) != length(s)
-        isodd(length(s)) && throw(ArgumentError("input hex array must have even length"))
+function hex2bytes!(d::AbstractVector{UInt8}, s::Union{String,AbstractVector{UInt8}})
+    if 2length(d) != sizeof(s)
+        isodd(sizeof(s)) && throw(ArgumentError("input hex array must have even length"))
         throw(ArgumentError("output array must be half length of input array"))
     end
     j = first(eachindex(d)) - 1
-    for i = first(eachindex(s)):2:endof(s)
-        @inbounds d[j += 1] = number_from_hex(s[i]) << 4 + number_from_hex(s[i+1])
+    for i = _firstbyteidx(s):2:_lastbyteidx(s)
+        @inbounds d[j += 1] = number_from_hex(_nthbyte(s,i)) << 4 + number_from_hex(_nthbyte(s,i+1))
     end
     return d
 end
