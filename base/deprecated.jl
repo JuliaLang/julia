@@ -84,16 +84,6 @@ function depwarn(msg, funcsym)
     nothing
 end
 
-# Emit deprecated syntax warning. This function exists to be called from
-# the julia parser (see flisp julia-syntax-depwarn) and in that context any
-# exceptions will be ignored.
-function syntax_depwarn(msg, file, line)
-    opts = JLOptions()
-    deplevel = LogLevel(opts.depwarn)
-    @logmsg deplevel msg _file=file _line=line _group=:depwarn
-    return 0
-end
-
 firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol) = firstcaller(bt, (funcsym,))
 function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     # Identify the calling line

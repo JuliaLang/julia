@@ -171,41 +171,49 @@ value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
 
 
-value_t fl_julia_depwarn(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+value_t fl_julia_logmsg(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
-    if (nargs < 1)
-        lerror(fl_ctx, fl_ctx->ArgError, "julia-depwarn: too few arguments");
-    static jl_value_t *depwarn_func = NULL;
-    if (!depwarn_func && jl_base_module)
-        depwarn_func = jl_get_global(jl_base_module, jl_symbol("syntax_depwarn"));
-    if (!depwarn_func) {
-        // No julia function found - use fallbacks in flisp
-        return fixnum(jl_options.depwarn == JL_OPTIONS_DEPWARN_THROW ? 2 : 1);
+    int kwargs_len = (int)nargs - 6;
+    if (nargs < 6 || kwargs_len % 2 != 0) {
+        lerror(fl_ctx, fl_ctx->ArgError, "julia-logmsg: bad argument list - expected "
+               "level (symbol) group (symbol) id file line msg . kwargs");
     }
-    value_t ret = fixnum(0);
-    jl_value_t **depwarn_args;
-    JL_GC_PUSHARGS(depwarn_args, nargs+2);
-    JL_TRY {
-        depwarn_args[0] = depwarn_func;
-        for (int i = 0; i < nargs; ++i)
-            depwarn_args[i+1] = scm_to_julia_(fl_ctx, args[i], NULL);
-        jl_value_t* jlret = jl_apply(depwarn_args, nargs+1);
-        depwarn_args[nargs+1] = jlret;
-        ret = julia_to_scm(fl_ctx, jlret);
+    value_t arg_level = args[0];
+    value_t arg_group = args[1];
+    value_t arg_id    = args[2];
+    value_t arg_file  = args[3];
+    value_t arg_line  = args[4];
+    value_t arg_msg   = args[5];
+    value_t* arg_kwargs = args + 6;
+    if (!isfixnum(arg_level) || !issymbol(arg_group) || !issymbol(arg_id) ||
+        !issymbol(arg_file) || !isfixnum(arg_line) || !fl_isstring(fl_ctx, arg_msg)) {
+        lerror(fl_ctx, fl_ctx->ArgError,
+               "julia-logmsg: Unexpected type in argument list");
     }
-    JL_CATCH {
-        // Internal error on julia side - assume logging failed
-        ret = fixnum(1);
+
+    jl_value_t **kwargs = NULL;
+    if (kwargs_len > 0) {
+        JL_GC_PUSHARGS(kwargs, kwargs_len);
+        // Abuse scm_to_julia here to convert arguments.  This is really for
+        // `Expr`s so it won't work in more complicated cases.
+        for (int i = 0; i < kwargs_len; ++i)
+            kwargs[i] = scm_to_julia(fl_ctx, arg_kwargs[i], NULL);
     }
+
+    jl_log(numval(arg_level), NULL, symbol_name(fl_ctx, arg_group),
+           symbol_name(fl_ctx, arg_id), symbol_name(fl_ctx, arg_file),
+           numval(arg_line), kwargs, kwargs_len,
+           (char*)cvalue_data(arg_msg));
+
     JL_GC_POP();
-    return ret;
+    return fl_ctx->T;
 }
 
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
-    { "julia-depwarn", fl_julia_depwarn },
+    { "julia-logmsg", fl_julia_logmsg },
     { NULL, NULL }
 };
 
@@ -232,6 +240,7 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
     ctx->slot_sym = symbol(fl_ctx, "slot");
     ctx->task = NULL;
     ctx->module = NULL;
+    set(symbol(fl_ctx, "*depwarn-level*"), fixnum(jl_options.depwarn));
 }
 
 // There should be no GC allocation while holding this lock

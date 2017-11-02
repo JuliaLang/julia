@@ -240,13 +240,8 @@
           (if (equal? instead "") ""
             (string #\newline "Use `" instead "` instead."))))
 
-; Emit deprecation warning via julia logging layer if posible.  If not - eg,
-; in bootstrap or in the special case that deprecations have been set to
-; errors, do the job here.
-(define (frontend-depwarn msg file line)
-  (let ((warnstatus (julia-depwarn msg file line)))
-    (cond ((eq? warnstatus 2) (error msg))
-          ((eq? warnstatus 1) (io.write *stderr* msg))
-          ; (eq? warnstatus 0) - successfully logged
-          )))
+(define *depwarn-level* 0)
 
+; Emit deprecation warning via julia logging layer.
+(define (frontend-depwarn msg file line)
+  (julia-logmsg *depwarn-level* 'depwarn (symbol (string file line)) file line msg))
