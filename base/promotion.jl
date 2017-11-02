@@ -200,21 +200,20 @@ function promote end
 
 function _promote(x::T, y::S) where {T,S}
     @_inline_meta
-    (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
+    R = promote_type(T, S)
+    return (convert(R, x), convert(R, y))
 end
 promote_typeof(x) = typeof(x)
 promote_typeof(x, xs...) = (@_inline_meta; promote_type(typeof(x), promote_typeof(xs...)))
 function _promote(x, y, z)
     @_inline_meta
-    (convert(promote_typeof(x,y,z), x),
-     convert(promote_typeof(x,y,z), y),
-     convert(promote_typeof(x,y,z), z))
+    R = promote_typeof(x, y, z)
+    return (convert(R, x), convert(R, y), convert(R, z))
 end
 function _promote(x, y, zs...)
     @_inline_meta
-    (convert(promote_typeof(x,y,zs...), x),
-     convert(promote_typeof(x,y,zs...), y),
-     convert(Tuple{Vararg{promote_typeof(x,y,zs...)}}, zs)...)
+    R = promote_typeof(x, y, zs...)
+    return (convert(R, x), convert(R, y), convert(Tuple{Vararg{R}}, zs)...)
 end
 # TODO: promote(x::T, ys::T...) where {T} here to catch all circularities?
 
