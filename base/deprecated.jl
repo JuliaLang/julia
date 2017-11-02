@@ -1792,7 +1792,53 @@ end
     @deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)
 end
 
-@deprecate eye(::Type{Diagonal{T}}, n::Int) where {T} Diagonal{T}(I, n)
+## goodbeye, eye!
+export eye
+function eye(m::Integer)
+    depwarn(string("`eye(m::Integer)` has been deprecated in favor of `I` and `Matrix` ",
+        "constructors. For a direct replacement, consider `Matrix(1.0I, m, m)` or ",
+        "`Matrix{Float64}(I, m, m)`. If `Float64` element type is not necessary, ",
+        "consider the shorter `Matrix(I, m, m)` (with default `eltype(I)` `Bool`)."), :eye)
+    return Matrix{Float64}(I, m, m)
+end
+function eye(::Type{T}, m::Integer) where T
+    depwarn(string("`eye(T::Type, m::Integer)` has been deprecated in favor of `I` and ",
+        "`Matrix` constructors. For a direct replacement, consider `Matrix{T}(I, m, m)`. If ",
+        "`T` element type is not necessary, consider the shorter `Matrix(I, m, m)`",
+        "(with default `eltype(I)` `Bool`)"), :eye)
+    return Matrix{T}(I, m, m)
+end
+function eye(m::Integer, n::Integer)
+    depwarn(string("`eye(m::Integer, n::Integer)` has been deprecated in favor of `I` and ",
+        "`Matrix` constructors. For a direct replacement, consider `Matrix(1.0I, m, n)` ",
+        "or `Matrix{Float64}(I, m, n)`. If `Float64` element type is not necessary, ",
+        "consider the shorter `Matrix(I, m, n)` (with default `eltype(I)` `Bool`)."), :eye)
+    return Matrix{Float64}(I, m, n)
+end
+function eye(::Type{T}, m::Integer, n::Integer) where T
+    depwarn(string("`eye(T::Type, m::Integer, n::Integer)` has been deprecated in favor of ",
+        "`I` and `Matrix` constructors. For a direct replacement, consider `Matrix{T}(I, m, n)`.",
+        "If `T` element type is not necessary, consider the shorter `Matrix(I, m, n)` ",
+        "(with default `eltype(I)` `Bool`)."), :eye)
+    return Matrix{T}(I, m, n)
+end
+function eye(A::AbstractMatrix{T}) where T
+    depwarn(string("`eye(A::AbstractMatrix{T})` has been deprecated in favor of `I` and ",
+        "`Matrix` constructors. For a direct replacement, consider `Matrix{eltype(A)}(I, size(A))`.",
+        "If `eltype(A)` element type is not necessary, consider the shorter `Matrix(I, size(A))` ",
+        "(with default `eltype(I)` `Bool`)."), :eye)
+    return Matrix(one(T)I, size(A))
+end
+function eye(::Type{Diagonal{T}}, n::Int) where T
+    depwarn(string("`eye(DT::Type{Diagonal{T}}, n::Int)` has been deprecated in favor of `I` ",
+        "and `Diagonal` constructors. For a direct replacement, consider `Diagonal{T}(I, n)`. ",
+        "If `T` element type is not necessary, consider the shorter `Diagonal(I, n)` ",
+        "(with default `eltype(I)` `Bool`)."), :eye)
+    return Diagonal{T}(I, n)
+end
+@eval Base.LinAlg import Base.eye
+# @eval Base.SparseArrays import Base.eye # SparseArrays has an eye for things cholmod
+
 
 export tic, toq, toc
 function tic()

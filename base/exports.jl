@@ -560,7 +560,6 @@ export
     eigvals,
     eigvals!,
     eigvecs,
-    eye,
     factorize,
     givens,
     hessfact!,
