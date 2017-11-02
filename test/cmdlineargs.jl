@@ -201,14 +201,6 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     @test readchomp(`$exename --depwarn=yes -E
         "Base.syntax_deprecation_warnings(false)"`) == "true"
     @test !success(`$exename --depwarn=false`)
-    # test deprecated syntax
-    @test !success(`$exename -e "foo (x::Int) = x * x" --depwarn=error`)
-    # test deprecated method
-    @test !success(`$exename -e "
-        foo() = :foo; bar() = :bar
-        @deprecate foo() bar()
-        foo()
-    " --depwarn=error`)
 
     # test deprecated bindings, #13269
     let code = """
@@ -221,8 +213,6 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
         Foo.Deprecated
         """
-
-        @test !success(`$exename -E "$code" --depwarn=error`)
 
         let out  = Pipe(),
             proc = spawn(pipeline(`$exename -E "$code" --depwarn=yes`, stderr=out)),

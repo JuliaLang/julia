@@ -17,7 +17,7 @@ if !@isdefined(testenv_defined)
         elseif Base.JLOptions().code_coverage == 2
             cov_flag = `--code-coverage=all`
         end
-        const test_exeflags = `$cov_flag $inline_flag --check-bounds=yes --startup-file=no --depwarn=error`
+        const test_exeflags = `$cov_flag $inline_flag --check-bounds=yes --startup-file=no`
     end
 
     if haskey(ENV, "JULIA_TEST_EXENAME")

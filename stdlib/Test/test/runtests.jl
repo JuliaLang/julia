@@ -210,7 +210,7 @@ rde, wre = redirect_stderr()
 rdo, wro = redirect_stdout()
 
 # test that FallbackTestSet will throw immediately
-cmd = `$(Base.julia_cmd()) --startup-file=no --depwarn=error test_exec.jl`
+cmd = `$(Base.julia_cmd()) --startup-file=no test_exec.jl`
 @test !success(pipeline(cmd))
 
 @testset "no errors" begin
