@@ -8,9 +8,10 @@ using Main.TestHelpers.OAs
     @test length([1, 2, 3]) == 3
     @test count(!iszero, [1, 2, 3]) == 3
 
-    let a = ones(4), b = a+a, c = a-a
+    let a = ones(4), b = a+a, c = a-a, d = a+a+a
         @test b[1] === 2. && b[2] === 2. && b[3] === 2. && b[4] === 2.
         @test c[1] === 0. && c[2] === 0. && c[3] === 0. && c[4] === 0.
+        @test d[1] === 3. && d[2] === 3. && d[3] === 3. && d[4] === 3.
     end
 
     @test length((1,)) == 1
