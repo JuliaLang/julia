@@ -2034,11 +2034,15 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     e->Runions.depth = 0;
     e->Runions.more = 0;
     memset(e->Runions.stack, 0, sizeof(e->Runions.stack));
-    int lastset = 0, niter = 0;
+    jl_value_t **is;
+    JL_GC_PUSHARGS(is, 2);
+    int lastset = 0, niter = 0, total_iter = 0;
     jl_value_t *ii = intersect(x, y, e, 0);
     while (e->Runions.more) {
-        if (e->emptiness_only && ii != jl_bottom_type)
+        if (e->emptiness_only && ii != jl_bottom_type) {
+            JL_GC_POP();
             return ii;
+        }
         e->Runions.depth = 0;
         int set = e->Runions.more - 1;
         e->Runions.more = 0;
@@ -2047,8 +2051,6 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
             statestack_set(&e->Runions, i, 0);
         lastset = set;
 
-        jl_value_t **is;
-        JL_GC_PUSHARGS(is, 2);
         is[0] = ii;
         is[1] = intersect(x, y, e, 0);
         if (is[0] == jl_bottom_type)
@@ -2060,10 +2062,13 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
             ii = jl_type_union(is, 2);
             niter++;
         }
-        JL_GC_POP();
-        if (niter > 3)
+        total_iter++;
+        if (niter > 3 || total_iter > 400000) {
+            JL_GC_POP();
             return y;
+        }
     }
+    JL_GC_POP();
     return ii;
 }
 
