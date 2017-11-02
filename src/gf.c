@@ -2398,6 +2398,8 @@ int jl_has_concrete_subtype(jl_value_t *typ)
         typ = jl_unwrap_vararg(typ);
     if (!jl_is_datatype(typ))
         return 1;
+    if (((jl_datatype_t*)typ)->name == jl_namedtuple_typename)
+        return jl_has_concrete_subtype(jl_tparam1(typ));
     jl_svec_t *fields = ((jl_datatype_t*)typ)->types;
     size_t i, l = jl_svec_len(fields);
     if (l != ((jl_datatype_t*)typ)->ninitialized)

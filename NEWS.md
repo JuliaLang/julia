@@ -11,6 +11,9 @@ New language features
     a function argument name, the argument is unpacked into local variables `x` and `y`
     as in the assignment `(x, y) = arg` ([#6614]).
 
+  * Named tuples, with the syntax `(a=1, b=2)`. These behave very similarly to tuples,
+    except components can also be accessed by name using dot syntax `t.a` ([#22194]).
+
  * Custom infix operators can now be defined by appending Unicode
    combining marks, primes, and sub/superscripts to other operators.
    For example, `+̂ₐ″` is parsed as an infix operator with the same

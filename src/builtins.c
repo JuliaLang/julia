@@ -1295,6 +1295,7 @@ void jl_init_primitives(void)
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
+    add_builtin("NamedTuple", (jl_value_t*)jl_namedtuple_type);
 
     add_builtin("Bool", (jl_value_t*)jl_bool_type);
     add_builtin("UInt8", (jl_value_t*)jl_uint8_type);

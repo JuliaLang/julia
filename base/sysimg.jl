@@ -142,6 +142,10 @@ Vector(m::Integer) = Array{Any,1}(Int(m))
 Matrix{T}(m::Integer, n::Integer) where {T} = Matrix{T}(Int(m), Int(n))
 Matrix(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
 
+include("associative.jl")
+
+include("namedtuple.jl")
+
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
@@ -175,7 +179,6 @@ include("reduce.jl")
 include("reshapedarray.jl")
 include("bitarray.jl")
 include("bitset.jl")
-include("associative.jl")
 
 if !isdefined(Core, :Inference)
     include("docs/core.jl")

@@ -81,6 +81,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->hasfreetypevars = 0;
     t->isleaftype = 1;
     t->layout = NULL;
+    t->names = NULL;
     return t;
 }
 
@@ -288,7 +289,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             return;
         }
     }
-    if (st->types == NULL)
+    if (st->types == NULL || (jl_is_namedtuple_type(st) && !jl_is_leaf_type((jl_value_t*)st)))
         return;
     uint32_t nfields = jl_svec_len(st->types);
     if (nfields == 0) {

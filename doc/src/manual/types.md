@@ -905,6 +905,31 @@ used to represent the arguments accepted by varargs methods (see [Varargs Functi
 The type `Vararg{T,N}` corresponds to exactly `N` elements of type `T`.  `NTuple{N,T}` is a convenient
 alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` elements of type `T`.
 
+### Named Tuple Types
+
+Named tuples are instances of the `NamedTuple` type, which has two parameters: a tuple of
+symbols giving the field names, and a tuple type giving the field types.
+
+```jldoctest
+julia> typeof((a=1,b="hello"))
+NamedTuple{(:a, :b),Tuple{Int64,String}}
+```
+
+A `NamedTuple` type can be used as a constructor, accepting a single tuple argument.
+The constructed `NamedTuple` type can be either a concrete type, with both parameters specified,
+or a type that specifies only field names:
+
+```jldoctest
+julia> NamedTuple{(:a, :b),Tuple{Float32, String}}((1,""))
+(a = 1.0f0, b = "")
+
+julia> NamedTuple{(:a, :b)}((1,""))
+(a = 1, b = "")
+```
+
+If field types are specified, the arguments are converted. Otherwise the types of the arguments
+are used directly.
+
 #### [Singleton Types](@id man-singleton-types)
 
 There is a special kind of abstract parametric type that must be mentioned here: singleton types.

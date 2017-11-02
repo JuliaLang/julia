@@ -221,6 +221,48 @@ A zero-argument anonymous function is written as `()->3`. The idea of a function
 may seem strange, but is useful for "delaying" a computation. In this usage, a block of code is
 wrapped in a zero-argument function, which is later invoked by calling it as `f`.
 
+## Tuples
+
+Julia has a built-in data structure called a *tuple* that is closely related to function
+arguments and return values.
+A tuple is a fixed-length container that can hold any values, but cannot be modified
+(it is *immutable*).
+Tuples are constructed with commas and parentheses, and can be accessed via indexing:
+
+```jldoctest
+julia> (1, 1+1)
+(1, 2)
+
+julia> (1,)
+(1,)
+
+julia> x = (0.0, "hello", 6*7)
+(0.0, "hello", 42)
+
+julia> x[2]
+"hello"
+```
+
+Notice that a length-1 tuple must be written with a comma, `(1,)`, since `(1)` would just
+be a parenthesized value.
+`()` represents the empty (length-0) tuple.
+
+## Named Tuples
+
+The components of tuples can optionally be named, in which case a *named tuple* is
+constructed:
+
+```jldoctest
+julia> x = (a=1, b=1+1)
+(a = 1, b = 2)
+
+julia> x.a
+1
+```
+
+Named tuples are very similar to tuples, except that fields can additionally be accessed by name
+using dot syntax (`x.a`).
+
 ## Multiple Return Values
 
 In Julia, one returns a tuple of values to simulate returning multiple values. However, tuples
@@ -320,7 +362,7 @@ In all these cases, `x` is bound to a tuple of the trailing values passed to `ba
 It is possible to constrain the number of values passed as a variable argument; this will be discussed
 later in [Parametrically-constrained Varargs methods](@ref).
 
-On the flip side, it is often handy to "splice" the values contained in an iterable collection
+On the flip side, it is often handy to "splat" the values contained in an iterable collection
 into a function call as individual arguments. To do this, one also uses `...` but in the function
 call instead:
 
@@ -349,7 +391,7 @@ julia> bar(x...)
 (1, 2, (3, 4))
 ```
 
-Furthermore, the iterable object spliced into a function call need not be a tuple:
+Furthermore, the iterable object splatted into a function call need not be a tuple:
 
 ```jldoctest barfunc
 julia> x = [3,4]
@@ -371,7 +413,7 @@ julia> bar(x...)
 (1, 2, (3, 4))
 ```
 
-Also, the function that arguments are spliced into need not be a varargs function (although it
+Also, the function that arguments are splatted into need not be a varargs function (although it
 often is):
 
 ```jldoctest
@@ -397,7 +439,7 @@ Closest candidates are:
   baz(::Any, ::Any) at none:1
 ```
 
-As you can see, if the wrong number of elements are in the spliced container, then the function
+As you can see, if the wrong number of elements are in the splatted container, then the function
 call will fail, just as it would if too many arguments were given explicitly.
 
 ## Optional Arguments
