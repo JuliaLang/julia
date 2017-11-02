@@ -836,4 +836,39 @@ function next(itr::PartitionIterator, state)
     return resize!(v, i), state
 end
 
+# Iterator used to limit codegen and memory allocation for operations on long tuples
+struct TupleInterval{N,T}
+    t::NTuple{N,T}
+    start::Int
+    stop::Int
+end
+
+TupleInterval(t::NTuple{N,T}) where {N,T} = TupleInterval{N,T}(t, 1, length(t))
+TupleInterval(t::Tuple) = TupleInterval{length(t),Any}(t, 1, length(t))
+
+Base.iterator(t::Tuple) = TupleInterval(t)
+
+# Iterator traits
+Base.iteratoreltype(::Type{TupleInterval{N,T}}) where {N,T} = Base.HasEltype()
+Base.iteratoreltype(::Type{TupleInterval{N,Any}}) where N = Base.EltypeUnknown()
+Base.eltype(::Type{TupleInterval{N,T}}) where {N,T} = T
+
+Base.start(ti::TupleInterval) = ti.start
+Base.next(ti::TupleInterval, s) = ti.t[s], s+1
+Base.done(ti::TupleInterval, s) = s > ti.stop
+
+Base.length(ti::TupleInterval) = (l = ti.stop - ti.start + 1; max(0, l))
+Base.isempty(ti::TupleInterval) = ti.start > ti.stop
+
+Base.getindex(ti::TupleInterval, i::Int) = ti.t[i+ti.start-1]
+
+function Base.tail(ti::TupleInterval{N,T}) where {N,T}
+    ret = TupleInterval{N,T}(ti.t, ti.start+1, ti.stop)
+    isempty(ret) ? () : ret
+end
+function Base.front(ti::TupleInterval{N,T}) where {N,T}
+    ret = TupleInterval{N,T}(ti.t, ti.start, ti.stop-1)
+    isempty(ret) ? () : ret
+end
+
 end

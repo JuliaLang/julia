@@ -105,6 +105,44 @@ function _front(v, t...)
     (v, _front(t...)...)
 end
 
+"""
+    iter = Base.iterator(t::Tuple)
+
+Return an iterable object, where the iterator type depends on the length of `t`.
+For short tuples, `iterator(t)` returns `t`.
+Long tuples are wrapped in a `TupleIterator`, allow algorithms written for tuples
+to fall back to generic iterator interfaces.
+
+# Example
+
+Here's how `map` is defined for tuples:
+```
+map(f, t::Tuple) = _map(f, Base.iterator(t))
+# Implementation for short tuples
+_map(f, t::Tuple) = (f(t[1]), _map(f, Base.tail(t))...)
+_map(f, ::Tuple{}) = ()
+# Implementation for long tuples
+_map(f, iter) = (map(f, iter)...)
+```
+"""
+iterator(t::Tuple{}) = t
+iterator(t::Tuple{Any}) = t
+iterator(t::Tuple{Any,Any}) = t
+iterator(t::Tuple{Any,Any,Any}) = t
+iterator(t::Tuple{Any,Any,Any,Any}) = t
+iterator(t::Tuple{Any,Any,Any,Any,Any}) = t
+iterator(t::Tuple{Any,Any,Any,Any,Any,Any}) = t
+iterator(t::Tuple{Any,Any,Any,Any,Any,Any,Any}) = t
+iterator(t::Tuple{Any,Any,Any,Any,Any,Any,Any,Any}) = t
+iterator(t::Tuple{Any,Any,Any,Any,Any,Any,Any,Any,Any}) = t
+iterator(t::Tuple{Any,Any,Any,Any,Any,Any,Any,Any,Any,Any}) = t
+iterator(t::Tuple{Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any}) = t
+iterator(t::Tuple{Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any}) = t
+iterator(t::Tuple{Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any}) = t
+iterator(t::Tuple{Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any}) = t
+iterator(t::Tuple{Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any}) = t
+# See iterators.jl for arbitrary-length tuples
+
 ## mapping ##
 
 """
