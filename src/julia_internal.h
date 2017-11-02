@@ -966,25 +966,25 @@ void jl_depwarn(const char *msg, jl_value_t *sym);
 
 #define STR(x) #x
 #define XSTR(x) STR(x)
-#define JL_DEBUG(...) jl_logf(JL_LOGLEVEL_DEBUG, NULL, XSTR(__FILE__:__LINE__), __FILE__, __LINE__, NULL, 0, __VA_ARGS__)
-#define JL_INFO(...)  jl_logf(JL_LOGLEVEL_INFO,  NULL, XSTR(__FILE__:__LINE__), __FILE__, __LINE__, NULL, 0, __VA_ARGS__)
-#define JL_WARN(...)  jl_logf(JL_LOGLEVEL_WARN,  NULL, XSTR(__FILE__:__LINE__), __FILE__, __LINE__, NULL, 0, __VA_ARGS__)
-#define JL_ERROR(...) jl_logf(JL_LOGLEVEL_ERROR, NULL, XSTR(__FILE__:__LINE__), __FILE__, __LINE__, NULL, 0, __VA_ARGS__)
+#define JL_DEBUG(...) jl_logf(JL_LOGLEVEL_DEBUG, NULL, NULL, XSTR(__FILE__:__LINE__), __FILE__, __LINE__, NULL, 0, __VA_ARGS__)
+#define JL_INFO(...)  jl_logf(JL_LOGLEVEL_INFO,  NULL, NULL, XSTR(__FILE__:__LINE__), __FILE__, __LINE__, NULL, 0, __VA_ARGS__)
+#define JL_WARN(...)  jl_logf(JL_LOGLEVEL_WARN,  NULL, NULL, XSTR(__FILE__:__LINE__), __FILE__, __LINE__, NULL, 0, __VA_ARGS__)
+#define JL_ERROR(...) jl_logf(JL_LOGLEVEL_ERROR, NULL, NULL, XSTR(__FILE__:__LINE__), __FILE__, __LINE__, NULL, 0, __VA_ARGS__)
 
-#define JL_PROGRESS(level, msg, amount)                              \
-    do {                                                             \
-        jl_value_t* kwargs[] = {(jl_value_t*)jl_symbol("progress"),  \
-                                jl_box_float64(amount)};             \
-        jl_log(JL_LOGLEVEL_INFO, NULL, XSTR(__FILE__:__LINE__),      \
-               __FILE__, __LINE__, kwargs, 2, msg);                  \
+#define JL_PROGRESS(level, msg, amount)                                \
+    do {                                                               \
+        jl_value_t* kwargs[] = {(jl_value_t*)jl_symbol("progress"),    \
+                                jl_box_float64(amount)};               \
+        jl_log(JL_LOGLEVEL_INFO, NULL, NULL, XSTR(__FILE__:__LINE__),  \
+               __FILE__, __LINE__, kwargs, 2, msg);                    \
     } while (0)
 
 // Log `msg` to the current logger by calling logmsg() on the julia side.
-void jl_log(int level, const char* group, const char* id,
+void jl_log(int level, jl_module_t* module, const char* group, const char* id,
             const char* file, int line, jl_value_t** kwargs, int kwargs_len,
             const char *msg);
 // Log a message with printf style argument list
-void jl_logf(int level, const char* group, const char* id,
+void jl_logf(int level, jl_module_t* module, const char* group, const char* id,
              const char* file, int line, jl_value_t** kwargs, int kwargs_len,
              const char *fmt, ...);
 

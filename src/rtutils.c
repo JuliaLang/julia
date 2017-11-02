@@ -1038,7 +1038,7 @@ void jl_depwarn(const char *msg, jl_value_t *sym)
     JL_GC_POP();
 }
 
-void jl_log(int level, const char* group, const char* id,
+void jl_log(int level, jl_module_t* module, const char* group, const char* id,
             const char* file, int line, jl_value_t** kwargs, int kwargs_len,
             const char *msg)
 {
@@ -1060,7 +1060,7 @@ void jl_log(int level, const char* group, const char* id,
     args[0] = logmsg_func;
     args[1] = jl_box_long(level);
     args[2] = jl_cstr_to_string(msg);
-    args[3] = (jl_value_t*)jl_core_module;
+    args[3] = (jl_value_t*)(module ? module : jl_core_module);
     if (group) {
         args[4] = (jl_value_t*)jl_symbol(group);
     }
@@ -1080,7 +1080,7 @@ void jl_log(int level, const char* group, const char* id,
     JL_GC_POP();
 }
 
-void jl_logf(int level, const char* group, const char* id,
+void jl_logf(int level, jl_module_t* module, const char* group, const char* id,
              const char* file, int line, jl_value_t** kwargs, int kwargs_len,
              const char *fmt, ...)
 {
@@ -1091,7 +1091,7 @@ void jl_logf(int level, const char* group, const char* id,
     c = vasprintf(&msg, fmt, args);
     va_end(args);
     if (c >= 0) {
-        jl_log(level, group, id, file, line, kwargs, kwargs_len, msg);
+        jl_log(level, module, group, id, file, line, kwargs, kwargs_len, msg);
         free(msg);
     }
 }
