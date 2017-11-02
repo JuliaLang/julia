@@ -520,7 +520,7 @@ eye(x::AbstractMatrix{T}) where {T} = eye(typeof(one(T)), size(x, 1), size(x, 2)
 function _one(unit::T, x::AbstractMatrix) where T
     m,n = size(x)
     m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
-    eye(T, m)
+    Matrix{T}(I, m, m)
 end
 
 one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)

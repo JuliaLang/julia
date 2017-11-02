@@ -26,7 +26,7 @@ function svdfact!(A::StridedMatrix{T}; full::Bool = false, thin::Union{Bool,Void
     end
     m,n = size(A)
     if m == 0 || n == 0
-        u,s,vt = (eye(T, m, full ? m : n), real(zeros(T,0)), eye(T,n,n))
+        u,s,vt = (Matrix{T}(I, m, full ? m : n), real(zeros(T,0)), Matrix{T}(I, n, n))
     else
         u,s,vt = LAPACK.gesdd!(full ? 'A' : 'S', A)
     end
@@ -312,9 +312,11 @@ function getindex(obj::GeneralizedSVD{T}, d::Symbol) where T
     elseif d == :D1
         m = size(obj.U, 1)
         if m - obj.k - obj.l >= 0
-            return [eye(T, obj.k) zeros(T, obj.k, obj.l); zeros(T, obj.l, obj.k) Diagonal(obj.a[obj.k + 1:obj.k + obj.l]); zeros(T, m - obj.k - obj.l, obj.k + obj.l)]
+            return [Matrix{T}(I, obj.k, obj.k)  zeros(T, obj.k, obj.l)                      ;
+                    zeros(T, obj.l, obj.k)      Diagonal(obj.a[obj.k + 1:obj.k + obj.l])    ;
+                    zeros(T, m - obj.k - obj.l, obj.k + obj.l)                              ]
         else
-            return [eye(T, m, obj.k) [zeros(T, obj.k, m - obj.k); Diagonal(obj.a[obj.k + 1:m])] zeros(T, m, obj.k + obj.l - m)]
+            return [Matrix{T}(I, m, obj.k) [zeros(T, obj.k, m - obj.k); Diagonal(obj.a[obj.k + 1:m])] zeros(T, m, obj.k + obj.l - m)]
         end
     elseif d == :D2
         m = size(obj.U, 1)
@@ -322,7 +324,7 @@ function getindex(obj::GeneralizedSVD{T}, d::Symbol) where T
         if m - obj.k - obj.l >= 0
             return [zeros(T, obj.l, obj.k) Diagonal(obj.b[obj.k + 1:obj.k + obj.l]); zeros(T, p - obj.l, obj.k + obj.l)]
         else
-            return [zeros(T, p, obj.k) [Diagonal(obj.b[obj.k + 1:m]); zeros(T, obj.k + p - m, m - obj.k)] [zeros(T, m - obj.k, obj.k + obj.l - m); eye(T, obj.k + p - m, obj.k + obj.l - m)]]
+            return [zeros(T, p, obj.k) [Diagonal(obj.b[obj.k + 1:m]); zeros(T, obj.k + p - m, m - obj.k)] [zeros(T, m - obj.k, obj.k + obj.l - m); Matrix{T}(I, obj.k + p - m, obj.k + obj.l - m)]]
         end
     elseif d == :R
         return obj.R
