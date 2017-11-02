@@ -15,8 +15,8 @@ function enableRawMode(term)
     try
         Base.Terminals.raw!(term, true)
         return true
-    catch Exception
-        warn("TerminalMenus: Unable to enter raw mode")
+    catch err
+        warn("TerminalMenus: Unable to enter raw mode: $err")
     end
     return false
 end
@@ -26,8 +26,8 @@ function disableRawMode(term)
     try
         Base.Terminals.raw!(term, false)
         return true
-    catch Exception
-        warn("TerminalMenus: Unable to disable raw mode")
+    catch err
+        warn("TerminalMenus: Unable to disable raw mode: $err")
     end
     return false
 end
