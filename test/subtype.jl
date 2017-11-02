@@ -926,6 +926,12 @@ function test_intersection()
     A = Tuple{Ref, Vararg{Any}}
     B = Tuple{Vararg{Union{Z,Ref,Void}}} where Z<:Union{Ref,Void}
     @test B <: _type_intersect(A, B)
+    # TODO: this would be a better version of that test:
+    #let T = _type_intersect(A, B)
+    #    @test T <: A
+    #    @test T <: B
+    #    @test Tuple{Ref, Vararg{Union{Ref,Void}}} <: T
+    #end
     @testintersect(Tuple{Int,Any,Vararg{A}} where A>:Integer,
                    Tuple{Any,Int,Vararg{A}} where A>:Integer,
                    Tuple{Int,Int,Vararg{A}} where A>:Integer)
@@ -1229,3 +1235,22 @@ struct A23764{T, N, S} <: AbstractArray{Union{T, S}, N}; end
 struct A23764_2{T, N, S} <: AbstractArray{Union{Ref{T}, S}, N}; end
 @test Tuple{A23764_2{T, 1, Void} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
 @test Tuple{A23764_2{T, 1, Void} where T} <: Tuple{AbstractArray{T,N} where {T,N}}
+
+# issue #24305
+f24305(x) = [g24305(x) g24305(x) g24305(x) g24305(x); g24305(x) g24305(x) 0 0];
+@test_throws UndefVarError f24305(1)
+
+f1_24305(x,y,z) = x*y-z^2-1
+f2_24305(x,y,z) = x*y*z+y^2-x^2-2
+f3_24305(x,y,z) = exp(x)+z-exp(y)-3
+Fun_24305(x) = [ f1_24305(x[1],x[2],x[3]); f2_24305(x[1],x[2],x[3]); f3_24305(x[1],x[2],x[3]) ]
+Jac_24305(x) = [ x[2] x[1] -2*x[3] ; x[2]*x[3]-2x[1]  x[1]*x[3]+2x[2]  x[1]*x[2] ; exp(x[1])  -exp(x[2])  1 ]
+
+x_24305 = ones(3)
+
+for it = 1:5
+    h = - \(Jac_24305(x_24305), Fun_24305(x_24305))
+    global x_24305 = x_24305 + h
+end
+
+@test round.(x_24305, 2) == [1.78, 1.42, 1.24]
