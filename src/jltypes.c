@@ -1898,6 +1898,10 @@ void jl_init_types(void)
                                          jl_any_type, jl_emptysvec, 64);
     jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"), core,
                                          jl_any_type, jl_emptysvec, 8);
+    jl_uint32_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt32"), core,
+                                         jl_any_type, jl_emptysvec, 32);
+    jl_uint64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt64"), core,
+                                         jl_any_type, jl_emptysvec, 64);
 
     jl_ssavalue_type = jl_new_datatype(jl_symbol("SSAValue"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(1, "id"),
@@ -1960,8 +1964,8 @@ void jl_init_types(void)
                             jl_type_type, // TupleType
                             jl_any_type, // TupleType
                             jl_any_type, // SimpleVector{TupleType}
-                            jl_long_type, // Int
-                            jl_long_type, // Int
+                            jl_ulong_type, // UInt
+                            jl_ulong_type, // UInt
                             jl_any_type, // Any
                             jl_bool_type,
                             jl_bool_type,
@@ -2095,7 +2099,7 @@ void jl_init_types(void)
                             jl_sym_type,
                             jl_int32_type,
                             jl_type_type,
-                            jl_long_type,
+                            jl_ulong_type,
                             jl_any_type, // Union{Array, Void}
                             jl_any_type, // TypeMap
                             jl_simplevector_type,
@@ -2138,8 +2142,8 @@ void jl_init_types(void)
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
-                            jl_long_type,
-                            jl_long_type,
+                            jl_ulong_type,
+                            jl_ulong_type,
                             jl_bool_type,
                             jl_uint8_type,
                             jl_bool_type,
