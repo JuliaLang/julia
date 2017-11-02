@@ -264,6 +264,8 @@ This section lists changes that do not have deprecation warnings.
   * The return type of `reinterpret` has changed to `ReinterpretArray`. `reinterpret` on sparse
     arrays has been discontinued.
 
+  * `:=` is no longer parsed as an operator ([#23014]).
+
 Library improvements
 --------------------
 
@@ -1485,6 +1487,7 @@ Command-line option changes
 [#22925]: https://github.com/JuliaLang/julia/issues/22925
 [#22961]: https://github.com/JuliaLang/julia/issues/22961
 [#22984]: https://github.com/JuliaLang/julia/issues/22984
+[#23014]: https://github.com/JuliaLang/julia/issues/23014
 [#23035]: https://github.com/JuliaLang/julia/issues/23035
 [#23117]: https://github.com/JuliaLang/julia/issues/23117
 [#23144]: https://github.com/JuliaLang/julia/issues/23144
