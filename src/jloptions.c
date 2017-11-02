@@ -103,7 +103,7 @@ static const char opts[]  =
     " --history-file={yes|no}   Load or save history\n\n"
 
     // error and warning options
-    " --depwarn={yes|no|throw}  Enable or disable syntax and method deprecation warnings (\"throw\" turns warnings into exceptions)\n"
+    " --depwarn={yes|no}        Enable or disable syntax and method deprecation warnings\n"
     " --warn-overwrite={yes|no} Enable or disable method overwrite warnings\n\n"
 
     // code generation options
@@ -521,10 +521,10 @@ restart_switch:
                 jl_options.depwarn = JL_OPTIONS_DEPWARN_ON;
             else if (!strcmp(optarg,"no"))
                 jl_options.depwarn = JL_OPTIONS_DEPWARN_OFF;
-            else if (!strcmp(optarg,"throw") || !strcmp(optarg,"error"))
-                jl_options.depwarn = JL_OPTIONS_DEPWARN_THROW;
+            else if (!strcmp(optarg,"error"))
+                jl_printf(JL_STDERR, "--depwarn=error is deprecated. Install a custom logger instead.");
             else
-                jl_errorf("julia: invalid argument to --depwarn={yes|no|throw} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --depwarn={yes|no} (%s)", optarg);
             break;
         case opt_warn_overwrite:
             if (!strcmp(optarg,"yes"))

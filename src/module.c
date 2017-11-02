@@ -516,8 +516,7 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
     // For deprecated == 2 (moved to a package) the binding is to a function
     // that throws an error, so we don't want to print a warning too.
     if (b->deprecated == 1 && jl_options.depwarn != JL_OPTIONS_DEPWARN_OFF) {
-        if (jl_options.depwarn != JL_OPTIONS_DEPWARN_THROW)
-            jl_printf(JL_STDERR, "WARNING: ");
+        jl_printf(JL_STDERR, "WARNING: ");
         jl_binding_t *dep_message_binding = NULL;
         if (b->owner) {
             jl_printf(JL_STDERR, "%s.%s is deprecated",
@@ -558,18 +557,8 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
             }
         }
         jl_printf(JL_STDERR, ".\n");
-
-        if (jl_options.depwarn != JL_OPTIONS_DEPWARN_THROW)
-            jl_printf(JL_STDERR, "  likely near %s:%d\n", jl_filename, jl_lineno);
-
-        if (jl_options.depwarn == JL_OPTIONS_DEPWARN_THROW) {
-            if (b->owner)
-                jl_errorf("deprecated binding: %s.%s",
-                          jl_symbol_name(b->owner->name),
-                          jl_symbol_name(b->name));
-            else
-                jl_errorf("deprecated binding: %s", jl_symbol_name(b->name));
-        }
+        // TODO: Use backtrace for a more precise location
+        jl_printf(JL_STDERR, "  likely near %s:%d\n", jl_filename, jl_lineno);
     }
 }
 

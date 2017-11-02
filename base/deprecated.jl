@@ -62,14 +62,8 @@ macro deprecate(old, new, ex=true)
     end
 end
 
-# NB: keep in sync with JL_OPTIONS_DEPWARN_THROW
-depwarn_should_throw(opts) =  opts.depwarn == typemax(Int32)
-
 function depwarn(msg, funcsym)
     opts = JLOptions()
-    if depwarn_should_throw(opts)
-        throw(ErrorException(msg))
-    end
     deplevel = LogLevel(opts.depwarn)
     @logmsg(
         deplevel,
@@ -95,9 +89,6 @@ end
 # exceptions will be ignored.
 function syntax_depwarn(msg, file, line)
     opts = JLOptions()
-    if depwarn_should_throw(opts)
-        return 2 # Will throw error on parser side to simplify marshalling
-    end
     deplevel = LogLevel(opts.depwarn)
     @logmsg deplevel msg _file=file _line=line _group=:depwarn
     return 0
