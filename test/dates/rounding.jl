@@ -133,7 +133,7 @@ end
     @test_throws DomainError round(dt, Dates.Day, RoundToZero)
     @test round(dt, Dates.Day) == round(dt, Dates.Day, RoundNearestTiesUp)
 end
-@testset "Rounding to invalid resolutions" begin
+@testset "Rounding datetimes to invalid resolutions" begin
     dt = Dates.DateTime(2016, 2, 28, 12, 15)
     for p in [Dates.Year, Dates.Month, Dates.Week, Dates.Day, Dates.Hour]
         local p
@@ -141,6 +141,80 @@ end
             @test_throws DomainError floor(dt, p(v))
             @test_throws DomainError ceil(dt, p(v))
             @test_throws DomainError round(dt, p(v))
+        end
+    end
+end
+@testset "Rounding for periods" begin
+    x = Dates.Second(172799)
+    @test floor(x, Dates.Week) == Dates.Week(0)
+    @test floor(x, Dates.Day) == Dates.Day(1)
+    @test floor(x, Dates.Hour) == Dates.Hour(47)
+    @test floor(x, Dates.Minute) == Dates.Minute(2879)
+    @test floor(x, Dates.Second) == Dates.Second(172799)
+    @test floor(x, Dates.Millisecond) == Dates.Millisecond(172799000)
+    @test ceil(x, Dates.Week) == Dates.Week(1)
+    @test ceil(x, Dates.Day) == Dates.Day(2)
+    @test ceil(x, Dates.Hour) == Dates.Hour(48)
+    @test ceil(x, Dates.Minute) == Dates.Minute(2880)
+    @test ceil(x, Dates.Second) == Dates.Second(172799)
+    @test ceil(x, Dates.Millisecond) == Dates.Millisecond(172799000)
+    @test round(x, Dates.Week) == Dates.Week(0)
+    @test round(x, Dates.Day) == Dates.Day(2)
+    @test round(x, Dates.Hour) == Dates.Hour(48)
+    @test round(x, Dates.Minute) == Dates.Minute(2880)
+    @test round(x, Dates.Second) == Dates.Second(172799)
+    @test round(x, Dates.Millisecond) == Dates.Millisecond(172799000)
+
+    x = Dates.Nanosecond(2000999999)
+    @test floor(x, Dates.Second) == Dates.Second(2)
+    @test floor(x, Dates.Millisecond) == Dates.Millisecond(2000)
+    @test floor(x, Dates.Microsecond) == Dates.Microsecond(2000999)
+    @test floor(x, Dates.Nanosecond) == x
+    @test ceil(x, Dates.Second) == Dates.Second(3)
+    @test ceil(x, Dates.Millisecond) == Dates.Millisecond(2001)
+    @test ceil(x, Dates.Microsecond) == Dates.Microsecond(2001000)
+    @test ceil(x, Dates.Nanosecond) == x
+    @test round(x, Dates.Second) == Dates.Second(2)
+    @test round(x, Dates.Millisecond) == Dates.Millisecond(2001)
+    @test round(x, Dates.Microsecond) == Dates.Microsecond(2001000)
+    @test round(x, Dates.Nanosecond) == x
+end
+@testset "Rounding for periods that should not need rounding" begin
+    for x in [Dates.Week(3), Dates.Day(14), Dates.Second(604800)]
+        local x
+        for p in [Dates.Week, Dates.Day, Dates.Hour, Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond]
+            local p
+            @test floor(x, p) == p(x)
+            @test ceil(x, p) == p(x)
+        end
+    end
+end
+@testset "Various available RoundingModes for periods" begin
+    x = Dates.Hour(36)
+    @test round(x, Dates.Day, RoundNearestTiesUp) == Dates.Day(2)
+    @test round(x, Dates.Day, RoundUp) == Dates.Day(2)
+    @test round(x, Dates.Day, RoundDown) == Dates.Day(1)
+    @test_throws DomainError round(x, Dates.Day, RoundNearest)
+    @test_throws DomainError round(x, Dates.Day, RoundNearestTiesAway)
+    @test_throws DomainError round(x, Dates.Day, RoundToZero)
+    @test round(x, Dates.Day) == round(x, Dates.Day, RoundNearestTiesUp)
+end
+@testset "Rounding periods to invalid resolutions" begin
+    x = Dates.Hour(86399)
+    for p in [Dates.Week, Dates.Day, Dates.Hour, Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond]
+        local p
+        for v in [-1, 0]
+            @test_throws DomainError floor(x, p(v))
+            @test_throws DomainError ceil(x, p(v))
+            @test_throws DomainError round(x, p(v))
+        end
+    end
+    for p in [Dates.Year, Dates.Month]
+        local p
+        for v in [-1, 0, 1]
+            @test_throws MethodError floor(x, p(v))
+            @test_throws MethodError ceil(x, p(v))
+            @test_throws DomainError round(x, p(v))
         end
     end
 end
