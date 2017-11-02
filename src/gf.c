@@ -1348,7 +1348,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
 // add a backedge from callee to caller
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_method_instance_t *caller)
 {
-    assert(callee->min_world <= caller->min_world && callee->max_world >= caller->max_world);
+    assert(callee->def.method->min_world <= caller->min_world && callee->max_world >= caller->max_world);
     JL_LOCK(&callee->def.method->writelock);
     if (!callee->backedges) {
         // lazy-init the backedges array
