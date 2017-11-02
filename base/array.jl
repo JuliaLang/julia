@@ -470,6 +470,8 @@ end
 
 `m`-by-`n` identity matrix.
 """
+eye(s::Tuple{Integer,Integer}) = eye(s...)
+eye(::Type{T}, s::Tuple{Integer,Integer}) where {T} = eye(T, s...)
 eye(m::Integer, n::Integer) = eye(Float64, m, n)
 eye(::Type{T}, n::Integer) where {T} = eye(T, n, n)
 """
