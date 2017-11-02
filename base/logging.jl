@@ -309,17 +309,28 @@ the log level below or equal to which all messages are filtered.
 """
 min_enabled_level(logger::AbstractLogger) = Info
 
+"""
+    catch_exceptions(logger)
+
+Return true if the logger should catch exceptions which happen during log
+record construction.  By default, messages are caught
+
+By default all exceptions are caught to prevent log message generation from
+crashing the program.  This lets users confidently toggle little-used
+functionality - such as debug logging - in a production system.
+
+If you want to use logging as an audit trail you should disable this for your
+logger type.
+"""
+catch_exceptions(logger::AbstractLogger) = true
 
 function dispatch_message(logger, level, _module, group, id, filepath, line, create_msg)
-    # Catch all exceptions, to prevent log message generation from crashing
-    # the program.  This lets users confidently toggle little-used
-    # functionality - such as debug logging - in a production system.
-    #
-    # Users need to override and disable this if they want to use logging
-    # as an audit trail.
     try
         create_msg(logger, level, _module, group, id, filepath, line)
     catch err
+        if !catch_exceptions(logger)
+            rethrow(err)
+        end
         # Try really hard to get the message to the logger, with
         # progressively less information.
         try
