@@ -429,3 +429,21 @@ end
     @test length(arr) == 0
     @test eltype(arr) == Int
 end
+
+@testset "reverse iterators" begin
+    squash(A) = reshape(A, length(A))
+    Z = Array{Int}(); Z[] = 17 # zero-dimensional test case
+    for itr in (2:10, "∀ϵ>0", 1:0, "", (2,3,5,7,11), [2,3,5,7,11], rand(5,6), Z, 3, true, 'x', 4=>5,
+                eachindex("∀ϵ>0"), view(Z), view(rand(5,6),2:4,2:6), (x^2 for x in 1:10),
+                Iterators.Filter(isodd, 1:10), flatten((1:10, 50:60)), enumerate("foo"),
+                pairs(50:60), zip(1:10,21:30,51:60), product(1:3, 10:12), repeated(3.14159, 5))
+        @test squash(collect(Iterators.reverse(itr))) == reverse(squash(collect(itr)))
+    end
+    @test collect(take(Iterators.reverse(cycle(1:3)), 7)) == collect(take(cycle(3:-1:1), 7))
+    let r = repeated(3.14159)
+        @test Iterators.reverse(r) === r
+    end
+    let t = (2,3,5,7,11)
+        @test Iterators.reverse(Iterators.reverse(t)) === t
+    end
+end

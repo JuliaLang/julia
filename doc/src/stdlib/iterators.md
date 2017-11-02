@@ -12,4 +12,6 @@ Base.Iterators.repeated
 Base.Iterators.product
 Base.Iterators.flatten
 Base.Iterators.partition
+Base.Iterators.filter
+Base.Iterators.reverse
 ```
