@@ -431,7 +431,7 @@ eigvecs(A::AbstractMatrix, B::AbstractMatrix) = eigvecs(eigfact(A, B))
 # Conversion methods
 
 ## Can we determine the source/result is Real?  This is not stored in the type Eigen
-convert(::Type{AbstractMatrix}, F::Eigen) = F.vectors * Diagonal(F.values) / F.vectors
-convert(::Type{AbstractArray}, F::Eigen) = convert(AbstractMatrix, F)
-convert(::Type{Matrix}, F::Eigen) = convert(Array, convert(AbstractArray, F))
-convert(::Type{Array}, F::Eigen) = convert(Matrix, F)
+AbstractMatrix(F::Eigen) = F.vectors * Diagonal(F.values) / F.vectors
+AbstractArray(F::Eigen) = AbstractMatrix(F)
+Matrix(F::Eigen) = Array(AbstractArray(F))
+Array(F::Eigen) = Matrix(F)

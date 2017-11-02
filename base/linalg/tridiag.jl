@@ -76,11 +76,11 @@ function SymTridiagonal(A::AbstractMatrix)
     end
 end
 
-convert(::Type{SymTridiagonal{T}}, S::SymTridiagonal) where {T} =
+SymTridiagonal{T}(S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
-convert(::Type{AbstractMatrix{T}}, S::SymTridiagonal) where {T} =
+AbstractMatrix{T}(S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
-function convert(::Type{Matrix{T}}, M::SymTridiagonal) where T
+function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = zeros(T, n, n)
     @inbounds begin
@@ -93,8 +93,8 @@ function convert(::Type{Matrix{T}}, M::SymTridiagonal) where T
     end
     return Mf
 end
-convert(::Type{Matrix}, M::SymTridiagonal{T}) where {T} = convert(Matrix{T}, M)
-convert(::Type{Array}, M::SymTridiagonal) = convert(Matrix, M)
+Matrix(M::SymTridiagonal{T}) where {T} = Matrix{T}(M)
+Array(M::SymTridiagonal) = Matrix(M)
 
 size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
 function size(A::SymTridiagonal, d::Integer)
@@ -490,7 +490,7 @@ function size(M::Tridiagonal, d::Integer)
     end
 end
 
-function convert(::Type{Matrix{T}}, M::Tridiagonal{T}) where T
+function Matrix{T}(M::Tridiagonal{T}) where T
     A = zeros(T, size(M))
     for i = 1:length(M.d)
         A[i,i] = M.d[i]
@@ -501,8 +501,8 @@ function convert(::Type{Matrix{T}}, M::Tridiagonal{T}) where T
     end
     A
 end
-convert(::Type{Matrix}, M::Tridiagonal{T}) where {T} = convert(Matrix{T}, M)
-convert(::Type{Array}, M::Tridiagonal) = convert(Matrix, M)
+Matrix(M::Tridiagonal{T}) where {T} = Matrix{T}(M)
+Array(M::Tridiagonal) = Matrix(M)
 
 # For M<:Tridiagonal, similar(M[, neweltype]) should yield a Tridiagonal matrix.
 # On the other hand, similar(M, [neweltype,] shape...) should yield a sparse matrix.
@@ -646,11 +646,11 @@ end
 inv(A::Tridiagonal) = inv_usmani(A.dl, A.d, A.du)
 det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
-convert(::Type{Tridiagonal{T}},M::Tridiagonal) where {T} =
+Tridiagonal{T}(M::Tridiagonal) where {T} =
     Tridiagonal(convert(AbstractVector{T}, M.dl), convert(AbstractVector{T}, M.d), convert(AbstractVector{T}, M.du))
-convert(::Type{AbstractMatrix{T}},M::Tridiagonal) where {T} = convert(Tridiagonal{T}, M)
-convert(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
-function convert(::Type{SymTridiagonal{T}}, M::Tridiagonal) where T
+AbstractMatrix{T}(M::Tridiagonal) where {T} = Tridiagonal{T}(M)
+Tridiagonal{T}(M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
+function SymTridiagonal{T}(M::Tridiagonal) where T
     if M.dl == M.du
         return SymTridiagonal{T}(convert(AbstractVector{T},M.d), convert(AbstractVector{T},M.dl))
     else

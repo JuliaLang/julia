@@ -481,6 +481,17 @@ push!(t::Associative, p::Pair) = setindex!(t, p.second, p.first)
 push!(t::Associative, p::Pair, q::Pair) = push!(push!(t, p), q)
 push!(t::Associative, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
 
+# Associatives are convertible
+convert(::Type{T}, x::T) where {T<:Associative} = x
+
+function convert(::Type{T}, x::Associative) where T<:Associative
+    h = T(x)
+    if length(h) != length(x)
+        error("key collision during dictionary conversion")
+    end
+    return h
+end
+
 # hashing objects by identity
 
 """

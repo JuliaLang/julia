@@ -74,32 +74,29 @@ function write(s::IO, z::Rational)
     write(s,numerator(z),denominator(z))
 end
 
-convert(::Type{Rational{T}}, x::Rational) where {T<:Integer} = Rational{T}(convert(T,x.num),convert(T,x.den))
-convert(::Type{Rational{T}}, x::Integer) where {T<:Integer} = Rational{T}(convert(T,x), convert(T,1))
+Rational{T}(x::Rational) where {T<:Integer} = Rational{T}(convert(T,x.num), convert(T,x.den))
+Rational{T}(x::Integer) where {T<:Integer} = Rational{T}(convert(T,x), convert(T,1))
 
-convert(::Type{Rational}, x::Rational) = x
-convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
+Rational(x::Rational) = x
 
-convert(::Type{Bool}, x::Rational) = x==0 ? false : x==1 ? true :
-    throw(InexactError(:convert, Bool, x)) # to resolve ambiguity
-convert(::Type{Integer}, x::Rational) = (isinteger(x) ? convert(Integer, x.num) :
-    throw(InexactError(:convert, Integer, x)))
-convert(::Type{T}, x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
-    throw(InexactError(:convert, T, x)))
+Bool(x::Rational) = x==0 ? false : x==1 ? true :
+    throw(InexactError(:Bool, Bool, x)) # to resolve ambiguity
+(::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
+    throw(InexactError(Symbol(string(T)), T, x)))
 
-convert(::Type{AbstractFloat}, x::Rational) = float(x.num)/float(x.den)
-function convert(::Type{T}, x::Rational{S}) where T<:AbstractFloat where S
+AbstractFloat(x::Rational) = float(x.num)/float(x.den)
+function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
     P = promote_type(T,S)
     convert(T, convert(P,x.num)/convert(P,x.den))
 end
 
-function convert(::Type{Rational{T}}, x::AbstractFloat) where T<:Integer
+function Rational{T}(x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
-    x == convert(typeof(x), r) || throw(InexactError(:convert, Rational{T}, x))
+    x == convert(typeof(x), r) || throw(InexactError(:Rational, Rational{T}, x))
     r
 end
-convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)
-convert(::Type{Rational}, x::Float32) = convert(Rational{Int}, x)
+Rational(x::Float64) = Rational{Int64}(x)
+Rational(x::Float32) = Rational{Int}(x)
 
 big(z::Complex{<:Rational{<:Integer}}) = Complex{Rational{BigInt}}(z)
 

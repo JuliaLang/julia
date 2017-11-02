@@ -2147,7 +2147,7 @@ end
 
 Base.TypeArithmetic(::Type{F21666{T}}) where {T} = T()
 Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
-Base.convert(::Type{Float64}, x::F21666) = Float64(x.x)
+Float64(x::F21666) = Float64(x.x)
 @testset "Exactness of cumsum # 21666" begin
     # test that cumsum uses more stable algorithm
     # for types with unknown/rounding arithmetic

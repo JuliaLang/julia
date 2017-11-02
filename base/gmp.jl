@@ -228,8 +228,8 @@ widen(::Type{BigInt})  = BigInt
 
 signed(x::BigInt) = x
 
-convert(::Type{BigInt}, x::BigInt) = x
-convert(::Type{Signed}, x::BigInt) = x
+BigInt(x::BigInt) = x
+Signed(x::BigInt) = x
 
 hastypemax(::Type{BigInt}) = false
 
@@ -261,14 +261,14 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     Nullable(flipsign!(z, sgn))
 end
 
-convert(::Type{BigInt}, x::Union{Clong,Int32}) = MPZ.set_si(x)
-convert(::Type{BigInt}, x::Union{Culong,UInt32}) = MPZ.set_ui(x)
-convert(::Type{BigInt}, x::Bool) = BigInt(UInt(x))
+BigInt(x::Union{Clong,Int32}) = MPZ.set_si(x)
+BigInt(x::Union{Culong,UInt32}) = MPZ.set_ui(x)
+BigInt(x::Bool) = BigInt(UInt(x))
 
 unsafe_trunc(::Type{BigInt}, x::Union{Float32,Float64}) = MPZ.set_d(x)
 
-function convert(::Type{BigInt}, x::Union{Float32,Float64})
-    isinteger(x) || throw(InexactError(:convert, BigInt, x))
+function BigInt(x::Union{Float32,Float64})
+    isinteger(x) || throw(InexactError(:BigInt, BigInt, x))
     unsafe_trunc(BigInt,x)
 end
 
@@ -277,10 +277,10 @@ function trunc(::Type{BigInt}, x::Union{Float32,Float64})
     unsafe_trunc(BigInt,x)
 end
 
-convert(::Type{BigInt}, x::Float16) = BigInt(Float64(x))
-convert(::Type{BigInt}, x::Float32) = BigInt(Float64(x))
+BigInt(x::Float16) = BigInt(Float64(x))
+BigInt(x::Float32) = BigInt(Float64(x))
 
-function convert(::Type{BigInt}, x::Integer)
+function BigInt(x::Integer)
     if x < 0
         if typemin(Clong) <= x
             return BigInt(convert(Clong,x))
@@ -322,26 +322,26 @@ function rem(x::BigInt, ::Type{T}) where T<:Union{Base.BitUnsigned,Base.BitSigne
     flipsign(u, x.size)
 end
 
-rem(x::Integer, ::Type{BigInt}) = convert(BigInt, x)
+rem(x::Integer, ::Type{BigInt}) = BigInt(x)
 
-function convert(::Type{T}, x::BigInt) where T<:Base.BitUnsigned
+function (::Type{T})(x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
     else
-        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(:convert, T, x))
+        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(Symbol(string(T)), T, x))
         x % T
     end
 end
 
-function convert(::Type{T}, x::BigInt) where T<:Base.BitSigned
+function (::Type{T})(x::BigInt) where T<:Base.BitSigned
     n = abs(x.size)
     if sizeof(T) < sizeof(Limb)
         SLimb = typeof(Signed(one(Limb)))
         convert(T, convert(SLimb, x))
     else
-        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(:convert, T, x))
+        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(Symbol(string(T)), T, x))
         y = x % T
-        ispos(x) ⊻ (y > 0) && throw(InexactError(:convert, T, x)) # catch overflow
+        ispos(x) ⊻ (y > 0) && throw(InexactError(Symbol(string(T)), T, x)) # catch overflow
         y
     end
 end
@@ -384,9 +384,9 @@ function (::Type{T})(n::BigInt, ::RoundingMode{:Nearest}) where T<:CdoubleMax
     x
 end
 
-convert(::Type{Float64}, n::BigInt) = Float64(n,RoundNearest)
-convert(::Type{Float32}, n::BigInt) = Float32(n,RoundNearest)
-convert(::Type{Float16}, n::BigInt) = Float16(n,RoundNearest)
+Float64(n::BigInt) = Float64(n, RoundNearest)
+Float32(n::BigInt) = Float32(n, RoundNearest)
+Float16(n::BigInt) = Float16(n, RoundNearest)
 
 promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
 

@@ -401,8 +401,13 @@ function divexact(x, y)
     return q
 end
 
+# TODO: this is needed to prevent undefined Period constructors from
+# hitting the deprecated construct-to-convert fallback.
+(::Type{T})(p::Period) where {T<:Period} = convert(T, p)::T
+
 # FixedPeriod conversions and promotion rules
-const fixedperiod_conversions = [(Week, 7), (Day, 24), (Hour, 60), (Minute, 60), (Second, 1000), (Millisecond, 1000), (Microsecond, 1000), (Nanosecond, 1)]
+const fixedperiod_conversions = [(:Week, 7), (:Day, 24), (:Hour, 60), (:Minute, 60), (:Second, 1000),
+                                 (:Millisecond, 1000), (:Microsecond, 1000), (:Nanosecond, 1)]
 for i = 1:length(fixedperiod_conversions)
     T, n = fixedperiod_conversions[i]
     N = Int64(1)

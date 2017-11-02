@@ -32,13 +32,12 @@ const Complex128 = Complex{Float64}
 const Complex64  = Complex{Float32}
 const Complex32  = Complex{Float16}
 
-convert(::Type{Complex{T}}, x::Real) where {T<:Real} = Complex{T}(x,0)
-convert(::Type{Complex{T}}, z::Complex) where {T<:Real} = Complex{T}(real(z),imag(z))
-convert(::Type{T}, z::Complex) where {T<:Real} =
-    isreal(z) ? convert(T,real(z)) : throw(InexactError(:convert, T, z))
+Complex{T}(x::Real) where {T<:Real} = Complex{T}(x,0)
+Complex{T}(z::Complex) where {T<:Real} = Complex{T}(real(z),imag(z))
+(::Type{T})(z::Complex) where {T<:Real} =
+    isreal(z) ? T(real(z))::T : throw(InexactError(Symbol(string(T)), T, z))
 
-convert(::Type{Complex}, z::Complex) = z
-convert(::Type{Complex}, x::Real) = Complex(x)
+Complex(z::Complex) = z
 
 promote_rule(::Type{Complex{T}}, ::Type{S}) where {T<:Real,S<:Real} =
     Complex{promote_type(T,S)}

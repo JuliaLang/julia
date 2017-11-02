@@ -83,7 +83,6 @@ end
 
 Base.unsafe_convert(T::Union{Type{Ptr{Void}},Type{Ptr{FILE}}}, f::FILE) = convert(T, f.ptr)
 Base.close(f::FILE) = systemerror("fclose", ccall(:fclose, Cint, (Ptr{Void},), f.ptr) != 0)
-Base.convert(::Type{FILE}, s::IO) = FILE(s)
 
 function Base.seek(h::FILE, offset::Integer)
     systemerror("fseek", ccall(:fseek, Cint, (Ptr{Void}, Clong, Cint),

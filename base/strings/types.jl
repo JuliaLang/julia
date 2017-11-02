@@ -187,7 +187,7 @@ julia> repeat("ha", 3)
 "hahaha"
 ```
 """
-repeat(s::AbstractString, r::Integer) = repeat(convert(String, s), r)
+repeat(s::AbstractString, r::Integer) = repeat(String(s), r)
 
 """
     ^(s::Union{AbstractString,Char}, n::Integer)

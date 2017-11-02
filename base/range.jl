@@ -811,64 +811,61 @@ el_same(::Type, a, b) = typejoin(a, b)
 
 promote_rule(a::Type{UnitRange{T1}}, b::Type{UnitRange{T2}}) where {T1,T2} =
     el_same(promote_type(T1,T2), a, b)
-convert(::Type{UnitRange{T}}, r::UnitRange{T}) where {T<:Real} = r
-convert(::Type{UnitRange{T}}, r::UnitRange) where {T<:Real} = UnitRange{T}(r.start, r.stop)
+UnitRange{T}(r::UnitRange{T}) where {T<:Real} = r
+UnitRange{T}(r::UnitRange) where {T<:Real} = UnitRange{T}(r.start, r.stop)
 
 promote_rule(a::Type{OneTo{T1}}, b::Type{OneTo{T2}}) where {T1,T2} =
     el_same(promote_type(T1,T2), a, b)
-convert(::Type{OneTo{T}}, r::OneTo{T}) where {T<:Real} = r
-convert(::Type{OneTo{T}}, r::OneTo) where {T<:Real} = OneTo{T}(r.stop)
+OneTo{T}(r::OneTo{T}) where {T<:Integer} = r
+OneTo{T}(r::OneTo) where {T<:Integer} = OneTo{T}(r.stop)
 
 promote_rule(a::Type{UnitRange{T1}}, ::Type{UR}) where {T1,UR<:AbstractUnitRange} =
     promote_rule(a, UnitRange{eltype(UR)})
-convert(::Type{UnitRange{T}}, r::AbstractUnitRange) where {T<:Real} = UnitRange{T}(first(r), last(r))
-convert(::Type{UnitRange}, r::AbstractUnitRange) = UnitRange(first(r), last(r))
+UnitRange{T}(r::AbstractUnitRange) where {T<:Real} = UnitRange{T}(first(r), last(r))
+UnitRange(r::AbstractUnitRange) = UnitRange(first(r), last(r))
 
-convert(::Type{AbstractUnitRange{T}}, r::AbstractUnitRange{T}) where {T} = r
-convert(::Type{AbstractUnitRange{T}}, r::UnitRange) where {T} = convert(UnitRange{T}, r)
-convert(::Type{AbstractUnitRange{T}}, r::OneTo) where {T} = convert(OneTo{T}, r)
+AbstractUnitRange{T}(r::AbstractUnitRange{T}) where {T} = r
+AbstractUnitRange{T}(r::UnitRange) where {T} = UnitRange{T}(r)
+AbstractUnitRange{T}(r::OneTo) where {T} = OneTo{T}(r)
 
 promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b} =
     el_same(promote_type(T1a,T2a),
             # el_same only operates on array element type, so just promote second type parameter
             StepRange{T1a, promote_type(T1b,T2b)},
             StepRange{T2a, promote_type(T1b,T2b)})
-convert(::Type{StepRange{T1,T2}}, r::StepRange{T1,T2}) where {T1,T2} = r
+StepRange{T1,T2}(r::StepRange{T1,T2}) where {T1,T2} = r
 
 promote_rule(a::Type{StepRange{T1a,T1b}}, ::Type{UR}) where {T1a,T1b,UR<:AbstractUnitRange} =
     promote_rule(a, StepRange{eltype(UR), eltype(UR)})
-convert(::Type{StepRange{T1,T2}}, r::AbstractRange) where {T1,T2} =
+StepRange{T1,T2}(r::AbstractRange) where {T1,T2} =
     StepRange{T1,T2}(convert(T1, first(r)), convert(T2, step(r)), convert(T1, last(r)))
-convert(::Type{StepRange}, r::AbstractUnitRange{T}) where {T} =
+StepRange(r::AbstractUnitRange{T}) where {T} =
     StepRange{T,T}(first(r), step(r), last(r))
-convert(::Type{StepRange{T1,T2} where T1}, r::AbstractRange) where {T2} =
-    convert(StepRange{eltype(r),T2}, r)
+(::Type{StepRange{T1,T2} where T1})(r::AbstractRange) where {T2} = StepRange{eltype(r),T2}(r)
 
 promote_rule(::Type{StepRangeLen{T1,R1,S1}},::Type{StepRangeLen{T2,R2,S2}}) where {T1,T2,R1,R2,S1,S2} =
     el_same(promote_type(T1,T2),
             StepRangeLen{T1,promote_type(R1,R2),promote_type(S1,S2)},
             StepRangeLen{T2,promote_type(R1,R2),promote_type(S1,S2)})
-convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) where {T,R,S} = r
-convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) where {T,R,S} =
+StepRangeLen{T,R,S}(r::StepRangeLen{T,R,S}) where {T,R,S} = r
+StepRangeLen{T,R,S}(r::StepRangeLen) where {T,R,S} =
     StepRangeLen{T,R,S}(convert(R, r.ref), convert(S, r.step), length(r), r.offset)
-convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T} =
+StepRangeLen{T}(r::StepRangeLen) where {T} =
     StepRangeLen(convert(T, r.ref), convert(T, r.step), length(r), r.offset)
 
 promote_rule(a::Type{StepRangeLen{T,R,S}}, ::Type{OR}) where {T,R,S,OR<:AbstractRange} =
     promote_rule(a, StepRangeLen{eltype(OR), eltype(OR), eltype(OR)})
-convert(::Type{StepRangeLen{T,R,S}}, r::AbstractRange) where {T,R,S} =
+StepRangeLen{T,R,S}(r::AbstractRange) where {T,R,S} =
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
-convert(::Type{StepRangeLen{T}}, r::AbstractRange) where {T} =
+StepRangeLen{T}(r::AbstractRange) where {T} =
     StepRangeLen(T(first(r)), T(step(r)), length(r))
-convert(::Type{StepRangeLen}, r::AbstractRange) = convert(StepRangeLen{eltype(r)}, r)
+StepRangeLen(r::AbstractRange) = StepRangeLen{eltype(r)}(r)
 
 promote_rule(a::Type{LinSpace{T1}}, b::Type{LinSpace{T2}}) where {T1,T2} =
     el_same(promote_type(T1,T2), a, b)
-convert(::Type{LinSpace{T}}, r::LinSpace{T}) where {T} = r
-convert(::Type{LinSpace{T}}, r::AbstractRange) where {T} =
-    LinSpace{T}(first(r), last(r), length(r))
-convert(::Type{LinSpace}, r::AbstractRange{T}) where {T} =
-    convert(LinSpace{T}, r)
+LinSpace{T}(r::LinSpace{T}) where {T} = r
+LinSpace{T}(r::AbstractRange) where {T} = LinSpace{T}(first(r), last(r), length(r))
+LinSpace(r::AbstractRange{T}) where {T} = LinSpace{T}(r)
 
 promote_rule(a::Type{LinSpace{T}}, ::Type{OR}) where {T,OR<:OrdinalRange} =
     promote_rule(a, LinSpace{eltype(OR)})
@@ -894,7 +891,7 @@ function vcat(rs::AbstractRange{T}...) where T
     return a
 end
 
-convert(::Type{Array{T,1}}, r::AbstractRange{T}) where {T} = vcat(r)
+Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
 collect(r::AbstractRange) = vcat(r)
 
 reverse(r::OrdinalRange) = colon(last(r), -step(r), first(r))

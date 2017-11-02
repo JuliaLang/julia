@@ -5,5 +5,7 @@ struct Nullable{T}
     value::T
 
     Nullable{T}() where {T} = new(false)
-    Nullable{T}(value::T, hasvalue::Bool=true) where {T} = new(hasvalue, value)
+    Nullable{T}(value, hasvalue::Bool=true) where {T} = new(hasvalue, value)
+    Nullable{T}(::Void) where {T} = Nullable{T}()
+    (::Type{Nullable{Void}})(::Void) = new{Void}(true, nothing)
 end

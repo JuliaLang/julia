@@ -197,9 +197,9 @@ end
 T24Linear(::Type{T}, dims::Int...) where T = T24Linear(T, dims)
 T24Linear(::Type{T}, dims::NTuple{N,Int}) where {T,N} = T24Linear{T,N,dims}()
 
-Base.convert(::Type{T24Linear     }, X::AbstractArray{T,N}) where {T,N  } = convert(T24Linear{T,N}, X)
-Base.convert(::Type{T24Linear{T  }}, X::AbstractArray{_,N}) where {T,N,_} = convert(T24Linear{T,N}, X)
-Base.convert(::Type{T24Linear{T,N}}, X::AbstractArray     ) where {T,N  } = T24Linear{T,N,size(X)}(X...)
+T24Linear(     X::AbstractArray{T,N}) where {T,N  } = T24Linear{T,N}(X)
+T24Linear{T  }(X::AbstractArray{_,N}) where {T,N,_} = T24Linear{T,N}(X)
+T24Linear{T,N}(X::AbstractArray     ) where {T,N  } = T24Linear{T,N,size(X)}(X...)
 
 Base.size(::T24Linear{T,N,dims}) where {T,N,dims} = dims
 import Base: IndexLinear
@@ -215,10 +215,10 @@ end
 TSlow(::Type{T}, dims::Int...) where {T} = TSlow(T, dims)
 TSlow(::Type{T}, dims::NTuple{N,Int}) where {T,N} = TSlow{T,N}(Dict{NTuple{N,Int}, T}(), dims)
 
-Base.convert(::Type{TSlow{T,N}}, X::TSlow{T,N})         where {T,N  } = X
-Base.convert(::Type{TSlow     }, X::AbstractArray{T,N}) where {T,N  } = convert(TSlow{T,N}, X)
-Base.convert(::Type{TSlow{T  }}, X::AbstractArray{_,N}) where {T,N,_} = convert(TSlow{T,N}, X)
-Base.convert(::Type{TSlow{T,N}}, X::AbstractArray     ) where {T,N  } = begin
+TSlow{T,N}(X::TSlow{T,N})         where {T,N  } = X
+TSlow(     X::AbstractArray{T,N}) where {T,N  } = TSlow{T,N}(X)
+TSlow{T  }(X::AbstractArray{_,N}) where {T,N,_} = TSlow{T,N}(X)
+TSlow{T,N}(X::AbstractArray     ) where {T,N  } = begin
     A = TSlow(T, size(X))
     for I in CartesianRange(size(X))
         A[I.I...] = X[I.I...]

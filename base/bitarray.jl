@@ -497,12 +497,10 @@ function _bitreshape(B::BitArray, dims::NTuple{N,Int}) where N
     return Br
 end
 
-## Conversions ##
+## Constructors ##
 
-convert(::Type{Array{T}}, B::BitArray{N}) where {T,N} = convert(Array{T,N}, B)
-convert(::Type{Array{T,N}}, B::BitArray{N}) where {T,N} = _convert(Array{T,N}, B) # see #15801
-function _convert(::Type{Array{T,N}}, B::BitArray{N}) where {T,N}
-    A = Array{T}(size(B))
+function Array{T,N}(B::BitArray{N}) where {T,N}
+    A = Array{T,N}(size(B))
     Bc = B.chunks
     @inbounds for i = 1:length(A)
         A[i] = unsafe_bitgetindex(Bc, i)
@@ -510,8 +508,8 @@ function _convert(::Type{Array{T,N}}, B::BitArray{N}) where {T,N}
     return A
 end
 
-convert(::Type{BitArray}, A::AbstractArray{T,N}) where {T,N} = convert(BitArray{N}, A)
-function convert(::Type{BitArray{N}}, A::AbstractArray{T,N}) where N where T
+BitArray(A::AbstractArray{<:Any,N}) where {N} = BitArray{N}(A)
+function BitArray{N}(A::AbstractArray{T,N}) where N where T
     B = BitArray(size(A))
     Bc = B.chunks
     l = length(B)
@@ -536,7 +534,7 @@ function convert(::Type{BitArray{N}}, A::AbstractArray{T,N}) where N where T
     return B
 end
 
-function convert(::Type{BitArray{N}}, A::Array{Bool,N}) where N
+function BitArray{N}(A::Array{Bool,N}) where N
     B = BitArray(size(A))
     Bc = B.chunks
     l = length(B)
@@ -545,15 +543,8 @@ function convert(::Type{BitArray{N}}, A::Array{Bool,N}) where N
     return B
 end
 
-convert(::Type{BitArray{N}}, B::BitArray{N}) where {N} = B
-convert(::Type{AbstractArray{T,N}}, B::BitArray{N}) where {T,N} = convert(Array{T,N}, B)
-
 reinterpret(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) where {N} = reinterpret(B, dims)
 reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
-
-## Constructors from generic iterables ##
-
-BitArray(A::AbstractArray{<:Any,N}) where {N} = convert(BitArray{N}, A)
 
 if module_name(@__MODULE__) === :Base  # avoid method overwrite
 (::Type{T})(x::T) where {T<:BitArray} = copy(x)

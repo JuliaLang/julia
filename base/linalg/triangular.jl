@@ -13,22 +13,20 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
             data::S
         end
         $t(A::$t) = A
+        $t{T}(A::$t{T}) where {T} = A
         function $t(A::AbstractMatrix)
             Base.LinAlg.checksquare(A)
             return $t{eltype(A), typeof(A)}(A)
         end
 
-        size(A::$t, d) = size(A.data, d)
-        size(A::$t) = size(A.data)
-
-        convert(::Type{$t{T}}, A::$t{T}) where {T} = A
-        function convert(::Type{$t{T}}, A::$t) where T
+        function $t{T}(A::$t) where T
             Anew = convert(AbstractMatrix{T}, A.data)
             $t(Anew)
         end
-        convert(::Type{AbstractMatrix{T}}, A::$t{T}) where {T} = A
-        convert(::Type{AbstractMatrix{T}}, A::$t) where {T} = convert($t{T}, A)
-        convert(::Type{Matrix}, A::$t{T}) where {T} = convert(Matrix{T}, A)
+        Matrix(A::$t{T}) where {T} = Matrix{T}(A)
+
+        size(A::$t, d) = size(A.data, d)
+        size(A::$t) = size(A.data)
 
         # For A<:AbstractTriangular, similar(A[, neweltype]) should yield a matrix with the same
         # triangular type and underlying storage type as A. The following method covers these cases.
@@ -100,18 +98,18 @@ imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
 imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
 imag(A::UnitUpperTriangular) = UpperTriangular(triu!(imag(A.data),1))
 
-convert(::Type{Array}, A::AbstractTriangular) = convert(Matrix, A)
+Array(A::AbstractTriangular) = Matrix(A)
 parent(A::AbstractTriangular) = A.data
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
-function convert(::Type{Matrix{T}}, A::LowerTriangular) where T
+function Matrix{T}(A::LowerTriangular) where T
     B = Matrix{T}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     tril!(B)
     B
 end
-function convert(::Type{Matrix{T}}, A::UnitLowerTriangular) where T
+function Matrix{T}(A::UnitLowerTriangular) where T
     B = Matrix{T}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     tril!(B)
@@ -120,13 +118,13 @@ function convert(::Type{Matrix{T}}, A::UnitLowerTriangular) where T
     end
     B
 end
-function convert(::Type{Matrix{T}}, A::UpperTriangular) where T
+function Matrix{T}(A::UpperTriangular) where T
     B = Matrix{T}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     triu!(B)
     B
 end
-function convert(::Type{Matrix{T}}, A::UnitUpperTriangular) where T
+function Matrix{T}(A::UnitUpperTriangular) where T
     B = Matrix{T}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     triu!(B)

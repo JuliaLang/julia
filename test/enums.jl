@@ -36,19 +36,19 @@ end
 @test_throws MethodError Fruit(0.0)
 @test typemin(Fruit) == apple
 @test typemax(Fruit) == kiwi
-@test convert(Fruit,0) == apple
-@test convert(Fruit,1) == orange
-@test convert(Fruit,2) == kiwi
-@test_throws ArgumentError convert(Fruit,3)
-@test_throws ArgumentError convert(Fruit,-1)
-@test convert(UInt8,apple) === 0x00
-@test convert(UInt16,orange) === 0x0001
-@test convert(UInt128,kiwi) === 0x00000000000000000000000000000002
-@test typeof(convert(BigInt,apple)) <: BigInt
-@test convert(BigInt,apple) == 0
-@test convert(Bool,apple) == false
-@test convert(Bool,orange) == true
-@test_throws InexactError convert(Bool,kiwi)
+@test Fruit(0) == apple
+@test Fruit(1) == orange
+@test Fruit(2) == kiwi
+@test_throws ArgumentError Fruit(3)
+@test_throws ArgumentError Fruit(-1)
+@test UInt8(apple) === 0x00
+@test UInt16(orange) === 0x0001
+@test UInt128(kiwi) === 0x00000000000000000000000000000002
+@test typeof(BigInt(apple)) <: BigInt
+@test BigInt(apple) == 0
+@test Bool(apple) == false
+@test Bool(orange) == true
+@test_throws InexactError Bool(kiwi)
 @test instances(Fruit) == (apple, orange, kiwi)
 
 f(x::Fruit) = "hey, I'm a Fruit"
@@ -76,7 +76,7 @@ end
 @enum Negative _neg1=-1 _neg2=-2
 @test Int(_neg1) === -1
 @test Int(_neg2) === -2
-@test_throws InexactError convert(UInt8, _neg1)
+@test_throws InexactError UInt8(_neg1)
 @enum Negative2 _neg5=-5 _neg4 _neg3
 @test Int(_neg5) === -5
 @test Int(_neg4) === -4
@@ -98,7 +98,7 @@ end
 # other Integer types of enum members
 @enum Test3::UInt8 _one_Test3=0x01 _two_Test3=0x02 _three_Test3=0x03
 @test Test3.size == 1
-@test convert(UInt8, _one_Test3) === 0x01
+@test UInt8(_one_Test3) === 0x01
 @test length(instances(Test3)) == 3
 
 @enum Test4::UInt16 _one_Test4=0x01 _two_Test4=0x0002 _three_Test4=0x03
@@ -109,7 +109,7 @@ end
 
 @enum Test6::UInt128 _one_Test6=0x00000000000000000000000000000001 _two_Test6=0x00000000000000000000000000000002
 @test Test6.size == 16
-@test typeof(convert(Integer, _one_Test6)) == UInt128
+@test typeof(Integer(_one_Test6)) == UInt128
 
 # enum values must be integers
 @test_throws ArgumentError("invalid value for Enum Test7, _zero = \"zero\"=zero; values must be integers") @macrocall(@enum Test7 _zero="zero")

@@ -158,9 +158,9 @@ associative_with_eltype(DT_apply, kv, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv
 associative_with_eltype(DT_apply, kv::Generator, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
 associative_with_eltype(DT_apply, ::Type{Pair{K,V}}) where {K,V} = DT_apply(K, V)()
 associative_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
-associative_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(associative_with_eltype(DT_apply, @default_eltype(typeof(kv))), kv)
+associative_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(associative_with_eltype(DT_apply, @default_eltype(kv)), kv)
 function associative_with_eltype(DT_apply::F, kv::Generator, t) where F
-    T = @default_eltype(typeof(kv))
+    T = @default_eltype(kv)
     if T <: Union{Pair, Tuple{Any, Any}} && _isleaftype(T)
         return associative_with_eltype(DT_apply, kv, T)
     end
@@ -191,21 +191,6 @@ end
 
 similar(d::Dict{K,V}) where {K,V} = Dict{K,V}()
 similar(d::Dict, ::Type{Pair{K,V}}) where {K,V} = Dict{K,V}()
-
-# conversion between Dict types
-function convert(::Type{Dict{K,V}},d::Associative) where V where K
-    h = Dict{K,V}()
-    for (k,v) in d
-        ck = convert(K,k)
-        if !haskey(h,ck)
-            h[ck] = convert(V,v)
-        else
-            error("key collision during dictionary conversion")
-        end
-    end
-    return h
-end
-convert(::Type{Dict{K,V}},d::Dict{K,V}) where {K,V} = d
 
 hashindex(key, sz) = (((hash(key)%Int) & (sz-1)) + 1)::Int
 

@@ -291,7 +291,7 @@ end
     end
     let s = normalize_string("tést",:NFKC)
         @test unsafe_string(Base.unsafe_convert(Cstring, Base.cconvert(Cstring, s))) == s
-        @test unsafe_string(convert(Cstring, Symbol(s))) == s
+        @test unsafe_string(Base.unsafe_convert(Cstring, Symbol(s))) == s
     end
     @test_throws ArgumentError Base.unsafe_convert(Cstring, Base.cconvert(Cstring, "ba\0d"))
 

@@ -708,14 +708,14 @@ end
     T  = promote_type(eltype(v), typeof(v[1]*h))
 
     if h == 0
-        return T(v[i])
+        return convert(T, v[i])
     else
         a = v[i]
         b = v[i+1]
         if isfinite(a) && isfinite(b)
-            return T(a + h*(b-a))
+            return convert(T, a + h*(b-a))
         else
-            return T((1-h)*a + h*b)
+            return convert(T, (1-h)*a + h*b)
         end
     end
 end

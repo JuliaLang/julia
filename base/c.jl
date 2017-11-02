@@ -90,14 +90,16 @@ Cwchar_t
     end
 end
 
-# construction from typed pointers
-convert(::Type{Cstring}, p::Ptr{<:Union{Int8,UInt8}}) = bitcast(Cstring, p)
-convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = bitcast(Cwstring, p)
-convert(::Type{Ptr{T}}, p::Cstring) where {T<:Union{Int8,UInt8}} = bitcast(Ptr{T}, p)
-convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = bitcast(Ptr{Cwchar_t}, p)
+# construction from pointers
+Cstring(p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Void}}) = bitcast(Cstring, p)
+Cwstring(p::Union{Ptr{Cwchar_t},Ptr{Void}})       = bitcast(Cwstring, p)
+(::Type{Ptr{T}})(p::Cstring) where {T<:Union{Int8,UInt8,Void}} = bitcast(Ptr{T}, p)
+(::Type{Ptr{T}})(p::Cwstring) where {T<:Union{Cwchar_t,Void}}  = bitcast(Ptr{Cwchar_t}, p)
 
-# construction from untyped pointers
-convert(::Type{T}, p::Ptr{Void}) where {T<:Union{Cstring,Cwstring}} = bitcast(T, p)
+convert(::Type{Cstring}, p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Void}}) = Cstring(p)
+convert(::Type{Cwstring}, p::Union{Ptr{Cwchar_t},Ptr{Void}}) = Cwstring(p)
+convert(::Type{Ptr{T}}, p::Cstring) where {T<:Union{Int8,UInt8,Void}} = Ptr{T}(p)
+convert(::Type{Ptr{T}}, p::Cwstring) where {T<:Union{Cwchar_t,Void}} = Ptr{T}(p)
 
 """
     pointer(array [, index])
@@ -157,7 +159,8 @@ function unsafe_convert(::Type{Cwstring}, v::Vector{Cwchar_t})
 end
 
 # symbols are guaranteed not to contain embedded NUL
-convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
+cconvert(::Type{Cstring}, s::Symbol) = s
+unsafe_convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 
 @static if ccall(:jl_get_UNAME, Any, ()) === :NT
 """

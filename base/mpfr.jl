@@ -97,12 +97,12 @@ BigFloat(x)
 widen(::Type{Float64}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat
 
-convert(::Type{BigFloat}, x::BigFloat) = x
+BigFloat(x::BigFloat) = x
 
 # convert to BigFloat
 for (fJ, fC) in ((:si,:Clong), (:ui,:Culong), (:d,:Float64))
     @eval begin
-        function convert(::Type{BigFloat}, x::($fC))
+        function BigFloat(x::($fC))
             z = BigFloat()
             ccall(($(string(:mpfr_set_,fJ)), :libmpfr), Int32, (Ref{BigFloat}, $fC, Int32), z, x, ROUNDING_MODE[])
             return z
@@ -110,19 +110,19 @@ for (fJ, fC) in ((:si,:Clong), (:ui,:Culong), (:d,:Float64))
     end
 end
 
-function convert(::Type{BigFloat}, x::BigInt)
+function BigFloat(x::BigInt)
     z = BigFloat()
     ccall((:mpfr_set_z, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigInt}, Int32), z, x, ROUNDING_MODE[])
     return z
 end
 
-convert(::Type{BigFloat}, x::Integer) = BigFloat(BigInt(x))
+BigFloat(x::Integer) = BigFloat(BigInt(x))
 
-convert(::Type{BigFloat}, x::Union{Bool,Int8,Int16,Int32}) = BigFloat(convert(Clong, x))
-convert(::Type{BigFloat}, x::Union{UInt8,UInt16,UInt32}) = BigFloat(convert(Culong, x))
+BigFloat(x::Union{Bool,Int8,Int16,Int32}) = BigFloat(convert(Clong, x))
+BigFloat(x::Union{UInt8,UInt16,UInt32}) = BigFloat(convert(Culong, x))
 
-convert(::Type{BigFloat}, x::Union{Float16,Float32}) = BigFloat(Float64(x))
-convert(::Type{BigFloat}, x::Rational) = BigFloat(numerator(x)) / BigFloat(denominator(x))
+BigFloat(x::Union{Float16,Float32}) = BigFloat(Float64(x))
+BigFloat(x::Rational) = BigFloat(numerator(x)) / BigFloat(denominator(x))
 
 function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
     z = BigFloat()
@@ -130,8 +130,8 @@ function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
     err == 0 ? Nullable(z) : Nullable{BigFloat}()
 end
 
-convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
-convert(::Type{AbstractFloat}, x::BigInt) = BigFloat(x)
+Rational(x::BigFloat) = convert(Rational{BigInt}, x)
+AbstractFloat(x::BigInt) = BigFloat(x)
 
 float(::Type{BigInt}) = BigFloat
 
@@ -233,32 +233,28 @@ floor(::Type{Integer}, x::BigFloat) = floor(BigInt, x)
 ceil(::Type{Integer}, x::BigFloat) = ceil(BigInt, x)
 round(::Type{Integer}, x::BigFloat) = round(BigInt, x)
 
-function convert(::Type{Bool}, x::BigFloat)
+function Bool(x::BigFloat)
     iszero(x) && return false
     isone(x) && return true
-    throw(InexactError(:convert, Bool, x))
+    throw(InexactError(:Bool, Bool, x))
 end
-function convert(::Type{BigInt},x::BigFloat)
-    isinteger(x) || throw(InexactError(:convert, BigInt, x))
-    trunc(BigInt,x)
+function BigInt(x::BigFloat)
+    isinteger(x) || throw(InexactError(:BigInt, BigInt, x))
+    trunc(BigInt, x)
 end
 
-function convert(::Type{Integer}, x::BigFloat)
-    isinteger(x) || throw(InexactError(:convert, Integer, x))
-    trunc(Integer,x)
-end
-function convert(::Type{T},x::BigFloat) where T<:Integer
-    isinteger(x) || throw(InexactError(:convert, T, x))
+function (::Type{T})(x::BigFloat) where T<:Integer
+    isinteger(x) || throw(InexactError(Symbol(string(T)), T, x))
     trunc(T,x)
 end
 
 ## BigFloat -> AbstractFloat
-convert(::Type{Float64}, x::BigFloat) =
+Float64(x::BigFloat) =
     ccall((:mpfr_get_d,:libmpfr), Float64, (Ref{BigFloat}, Int32), x, ROUNDING_MODE[])
-convert(::Type{Float32}, x::BigFloat) =
+Float32(x::BigFloat) =
     ccall((:mpfr_get_flt,:libmpfr), Float32, (Ref{BigFloat}, Int32), x, ROUNDING_MODE[])
 # TODO: avoid double rounding
-convert(::Type{Float16}, x::BigFloat) = convert(Float16, convert(Float32, x))
+Float16(x::BigFloat) = convert(Float16, convert(Float32, x))
 
 Float64(x::BigFloat, r::RoundingMode) =
     ccall((:mpfr_get_d,:libmpfr), Float64, (Ref{BigFloat}, Int32), x, to_mpfr(r))
@@ -273,7 +269,7 @@ promote_rule(::Type{BigFloat}, ::Type{<:AbstractFloat}) = BigFloat
 
 big(::Type{<:AbstractFloat}) = BigFloat
 
-function convert(::Type{Rational{BigInt}}, x::AbstractFloat)
+function (::Type{Rational{BigInt}})(x::AbstractFloat)
     isnan(x) && return zero(BigInt) // zero(BigInt)
     isinf(x) && return copysign(one(BigInt),x) // zero(BigInt)
     iszero(x) && return zero(BigInt) // one(BigInt)
