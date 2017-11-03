@@ -262,9 +262,15 @@ end
         a = UpperTriangular(speye(5) + triu(0.1*sprandn(5, 5, 0.2)))
         b = sprandn(5, 5, 0.2)
         @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*eps())
+        # test error throwing for bwdTrisolve
+        @test_throws DimensionMismatch a\eye(6)
         a = LowerTriangular(speye(5) + tril(0.1*sprandn(5, 5, 0.2)))
         b = sprandn(5, 5, 0.2)
         @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*eps())
+        # test error throwing for fwdTrisolve
+        @test_throws DimensionMismatch a\eye(6)
+
+
 
         a = sparse(Diagonal(randn(5) + im*randn(5)))
         b = randn(5,3)
