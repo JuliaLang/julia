@@ -718,18 +718,17 @@ end
                   (T(19/16)+T(39/16))/2, T(39/16),
                   (T(39/16)+T(2)^23)/2, T(2)^23)
             x = T(7/16)
-            by = T(asin(big(x)))
-            @test abs(asin(x) - by)/eps(by) <= one(T)
+            by = T(atan(big(x)))
+            @test abs(atan(x) - by)/eps(by) <= one(T)
             x = prevfloat(T(7/16))
-            by = T(asin(big(x)))
-            @test abs(asin(x) - by)/eps(by) <= one(T)
+            by = T(atan(big(x)))
+            @test abs(atan(x) - by)/eps(by) <= one(T)
             x = nextfloat(T(7/16))
-            by = T(asin(big(x)))
-            @test abs(asin(x) - by)/eps(by) <= one(T)
+            by = T(atan(big(x)))
+            @test abs(atan(x) - by)/eps(by) <= one(T)
         end
         # This case was used to find a bug, but it isn't special in itself
         @test atan(1.7581305072934137) ≈ 1.053644580517088
-
     end
 end
 @testset "atan2" begin
