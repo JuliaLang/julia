@@ -36,7 +36,7 @@ mutable struct SharedArray{T,N} <: DenseArray{T,N}
     # the local partition into the array when viewed as a single dimensional array.
     # this can be removed when @parallel or its equivalent supports looping on
     # a subset of workers.
-    loc_subarr_1d::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int}},true}
+    loc_subarr_1d::SubArray{T,1,Array{T,N},Tuple{UnitRange{Int}}}
 
     function SharedArray{T,N}(d,p,r,sn,s) where {T,N}
         S = new(RRID(),d,p,r,sn,s,0,view(Array{T}(ntuple(d->0,N)), 1:0))

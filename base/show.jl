@@ -1888,7 +1888,7 @@ because of a definition similar to
     function Base.showarg(io::IO, v::SubArray, toplevel)
         print(io, "view(")
         showarg(io, parent(v), false)
-        print(io, ", ", join(v.indexes, ", "))
+        print(io, ", ", join(v.indices, ", "))
         print(io, ')')
         toplevel && print(io, " with eltype ", eltype(v))
     end
@@ -1916,12 +1916,14 @@ end
 function showarg(io::IO, v::SubArray, toplevel)
     print(io, "view(")
     showarg(io, parent(v), false)
-    showindices(io, v.indexes...)
+    showindices(IOContext(io, :limit=>true), v.indices...)
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(v))
 end
 showindices(io, ::Slice, inds...) =
     (print(io, ", :"); showindices(io, inds...))
+showindices(io, ind1::ReshapedRange, inds...) =
+    (print(io, ", reshape(", ind1.parent, ", ", ind1.dims, ")"); showindices(io, inds...))
 showindices(io, ind1, inds...) =
     (print(io, ", ", ind1); showindices(io, inds...))
 showindices(io) = nothing
