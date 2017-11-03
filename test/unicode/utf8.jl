@@ -18,7 +18,7 @@ end
         @test_throws BoundsError getindex(str, 17:18)
         @test_throws BoundsError getindex(str, 2:17)
         @test_throws UnicodeError getindex(str, 16:17)
-        @test string(Char(0x110000)) == "\ufffd"
+        @test string(Char(0x110000)) == String(b"\xf4\x90\x80\x80")
     end
 end
 

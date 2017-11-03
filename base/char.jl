@@ -1,21 +1,45 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+struct MalformedCharError <: Exception
+    char::Char
+end
+struct CodePointError <: Exception
+    code::Integer
+end
+@noinline malformed_char(c::Char) = throw(MalformedCharError(c))
+@noinline code_point_err(u::UInt32) = throw(CodePointError(u))
+
 function convert(::Type{UInt32}, c::Char)
+    # TODO: use optimized inline LLVM
     u = reinterpret(UInt32, c)
-    u ⊻= ifelse(
-        u <= 0x0000ffff,
-        ifelse(u <= 0x000000ff, 0x00000000, 0x0000c080),
-        ifelse(u <= 0x00ffffff, 0x00e08080, 0xf0808080),
-    )
-    ((u & 0x000000ff) >> 0) ⊻ ((u & 0x0000ff00) >> 2) ⊻
-    ((u & 0x00ff0000) >> 4) ⊻ ((u & 0xff000000) >> 6)
+    u < 0x80000000 && return reinterpret(UInt32, u >> 24)
+    l1 = leading_ones(u)
+    t0 = trailing_zeros(u) >> 3
+    (l1 + t0 ≤ 4) & (l1 ≠ 1) || malformed_char(c)::Union{}
+    u &= 0xffffffff >> l1
+    u >>= 8t0
+    (u & 0x0000007f >> 0) | (u & 0x00007f00 >> 2) |
+    (u & 0x007f0000 >> 4) | (u & 0x7f000000 >> 6)
 end
 
 function convert(::Type{Char}, u::UInt32)
-    c = (u & 0x3f) | ((u << 2) & 0x3f00) | ((u << 4) & 0x3f0000) | ((u << 6) & 0x3f000000)
-    reinterpret(Char, ifelse(u <= 0x7f, u,
-        c | ifelse(u <= 0x000007ff, 0x0000c080,
-            ifelse(u <= 0x0000ffff, 0x00e08080, 0xf0808080))))
+    u < 0x80 && return reinterpret(Char, u << 24)
+    u < 0x00200000 || code_point_err(u)::Union{}
+    c = ((u << 0) & 0x0000003f) | ((u << 2) & 0x00003f00) |
+        ((u << 4) & 0x003f0000) | ((u << 6) & 0x3f000000)
+    c = u < 0x00000800 ? (c << 16) | 0xc0800000 :
+        u < 0x00010000 ? (c << 08) | 0xe0808000 :
+                         (c << 00) | 0xf0808080
+    reinterpret(Char, c)
+end
+
+function convert(::Type{T}, c::Char) where T <: Union{Int8,UInt8}
+    i = reinterpret(Int32, c)
+    i ≥ 0 ? ((i >>> 24) % T) : T(UInt32(c))
+end
+
+function convert(::Type{Char}, b::Union{Int8,UInt8})
+    0 ≤ b ≤ 0x7f ? reinterpret(Char, (b % UInt32) << 24) : Char(UInt32(b))
 end
 
 convert(::Type{Char}, x::Number) = Char(UInt32(x))

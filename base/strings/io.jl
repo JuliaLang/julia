@@ -337,9 +337,9 @@ function unescape_string(io, s::AbstractString)
                     c == 'u' ? 4 : 8
                 while (k += 1) <= m && !done(s,i)
                     c, j = next(s,i)
-                    n = '0' <= c <= '9' ? n<<4 + c-'0' :
-                        'a' <= c <= 'f' ? n<<4 + c-'a'+10 :
-                        'A' <= c <= 'F' ? n<<4 + c-'A'+10 : break
+                    n = '0' <= c <= '9' ? n<<4 + (c-'0') :
+                        'a' <= c <= 'f' ? n<<4 + (c-'a'+10) :
+                        'A' <= c <= 'F' ? n<<4 + (c-'A'+10) : break
                     i = j
                 end
                 if k == 1

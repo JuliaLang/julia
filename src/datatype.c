@@ -545,15 +545,6 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
     }
 }
 
-uint32_t jl_uint32_to_char(uint32_t u)
-{
-    if (u > 0x7f) {
-        u = (u <= 0x07ff ? 0xc080 : u <= 0xffff ? 0xe08080 : 0xf0808080) |
-            (u & 0x3f) | ((u << 2) & 0x3f00) | ((u << 4) & 0x3f0000) | ((u << 6) & 0x3f000000);
-    }
-    return u;
-}
-
 #define BOXN_FUNC(nb,nw)                                                \
     JL_DLLEXPORT jl_value_t *jl_box##nb(jl_datatype_t *t, int##nb##_t x) \
     {                                                                   \
@@ -663,8 +654,8 @@ static jl_value_t *boxed_char_cache[128];
 JL_DLLEXPORT jl_value_t *jl_box_char(uint32_t x)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (x < 128)
-        return boxed_char_cache[x];
+    if (0 < (int32_t)x)
+        return boxed_char_cache[x >> 24];
     jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), jl_char_type);
     *(uint32_t*)jl_data_ptr(v) = x;
     return v;
@@ -704,7 +695,7 @@ void jl_init_box_caches(void)
 {
     int64_t i;
     for(i=0; i < 128; i++) {
-        boxed_char_cache[i] = jl_permbox32(jl_char_type, i);
+        boxed_char_cache[i] = jl_permbox32(jl_char_type, i << 24);
     }
     for(i=0; i < 256; i++) {
         boxed_int8_cache[i] = jl_permbox8(jl_int8_type, i);

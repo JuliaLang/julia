@@ -276,24 +276,13 @@ done(s::String, state) = state > sizeof(s)
     # function is split into this critical fast-path
     # for pure ascii data, such as parsing numbers,
     # and a longer function that can handle any utf8 data
-    @boundscheck if (i < 1) | (i > sizeof(s))
-        throw(BoundsError(s,i))
-    end
+    @boundscheck 1 ≤ i ≤ sizeof(s) || throw(BoundsError(s,i))
     @inbounds b = codeunit(s, i)
-    if b < 0x80
-        return Char(b), i + 1
-    end
+    b < 0x80 && return Char(b), i+1
     return slow_utf8_next(s, b, i, sizeof(s))
 end
 
-function first_utf8_byte(ch::Char)
-    c = UInt32(ch)
-    b = c < 0x80    ? c%UInt8 :
-        c < 0x800   ? ((c>>6)  | 0xc0)%UInt8 :
-        c < 0x10000 ? ((c>>12) | 0xe0)%UInt8 :
-                      ((c>>18) | 0xf0)%UInt8
-    return b
-end
+first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
 
 ## overload methods for efficiency ##
 
@@ -331,11 +320,11 @@ function search(s::String, c::Char, i::Integer = 1)
     @inbounds if is_valid_continuation(codeunit(s,i))
         throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s,i)))
     end
-    c < Char(0x80) && return search(s, c%UInt8, i)
+    c ≤ '\x7f' && return search(s, c % UInt8, i)
     while true
         i = search(s, first_utf8_byte(c), i)
-        (i==0 || s[i] == c) && return i
-        i = next(s,i)[2]
+        (i == 0 || s[i] == c) && return i
+        i = next(s, i)[2]
     end
 end
 
@@ -361,12 +350,12 @@ function search(a::ByteArray, b::Char, i::Integer = 1)
 end
 
 function rsearch(s::String, c::Char, i::Integer = sizeof(s))
-    c < Char(0x80) && return rsearch(s, c%UInt8, i)
+    c ≤ '\x7f' && return rsearch(s, c % UInt8, i)
     b = first_utf8_byte(c)
     while true
         i = rsearch(s, b, i)
-        (i==0 || s[i] == c) && return i
-        i = prevind(s,i)
+        (i == 0 || s[i] == c) && return i
+        i = prevind(s, i)
     end
 end
 
@@ -411,62 +400,16 @@ function string(a::String...)
 end
 
 # UTF-8 encoding length of a character
-function codelen(d::Char)
-    c = UInt32(d)
-    if c < 0x80
-        return 1
-    elseif c < 0x800
-        return 2
-    elseif c < 0x10000
-        return 3
-    elseif c < 0x110000
-        return 4
-    end
-    return 3  # '\ufffd'
+function codelen(c::Char)
+    4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
 end
 
 function string(a::Union{String,Char}...)
-    n = 0
-    for d in a
-        if isa(d,Char)
-            n += codelen(d::Char)
-        else
-            n += sizeof(d::String)
+    sprint() do io
+        for x in a
+            write(io, x)
         end
     end
-    out = _string_n(n)
-    offs = 1
-    p = pointer(out)
-    for d in a
-        if isa(d,Char)
-            c = UInt32(d::Char)
-            if c < 0x80
-                unsafe_store!(p, c%UInt8, offs); offs += 1
-            elseif c < 0x800
-                unsafe_store!(p, (( c >> 6          ) | 0xC0)%UInt8, offs); offs += 1
-                unsafe_store!(p, (( c        & 0x3F ) | 0x80)%UInt8, offs); offs += 1
-            elseif c < 0x10000
-                unsafe_store!(p, (( c >> 12         ) | 0xE0)%UInt8, offs); offs += 1
-                unsafe_store!(p, (((c >> 6)  & 0x3F ) | 0x80)%UInt8, offs); offs += 1
-                unsafe_store!(p, (( c        & 0x3F ) | 0x80)%UInt8, offs); offs += 1
-            elseif c < 0x110000
-                unsafe_store!(p, (( c >> 18         ) | 0xF0)%UInt8, offs); offs += 1
-                unsafe_store!(p, (((c >> 12) & 0x3F ) | 0x80)%UInt8, offs); offs += 1
-                unsafe_store!(p, (((c >> 6)  & 0x3F ) | 0x80)%UInt8, offs); offs += 1
-                unsafe_store!(p, (( c        & 0x3F ) | 0x80)%UInt8, offs); offs += 1
-            else
-                # '\ufffd'
-                unsafe_store!(p, 0xef, offs); offs += 1
-                unsafe_store!(p, 0xbf, offs); offs += 1
-                unsafe_store!(p, 0xbd, offs); offs += 1
-            end
-        else
-            l = sizeof(d::String)
-            unsafe_copy!(pointer(out,offs), pointer(d::String), l)
-            offs += l
-        end
-    end
-    return out
 end
 
 function repeat(s::String, r::Integer)

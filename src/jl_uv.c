@@ -493,15 +493,17 @@ JL_DLLEXPORT void jl_uv_putb(uv_stream_t *stream, uint8_t b)
 JL_DLLEXPORT void jl_uv_putc(uv_stream_t *stream, uint32_t c)
 {
     char s[4];
-    size_t n = 1;
-    n += !!(c >> 8);
-    n += !!(c >> 16);
-    n += !!(c >> 24);
-    c <<= ((4 - n) << 3);
-    s[3] = c;
-    s[2] = (c >>= 8);
-    s[1] = (c >>= 8);
-    s[0] = (c >>= 8);
+    int n = 1;
+    s[0] = c >> 24;
+    if ((s[1] = c >> 16)) {
+        n++;
+        if ((s[2] = c >> 8)) {
+            n++;
+            if ((s[3] = c)) {
+                n++;
+            }
+        }
+    }
     jl_uv_puts(stream, s, n);
 }
 

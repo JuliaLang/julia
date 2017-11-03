@@ -434,13 +434,12 @@ end
 
 function write(io::IO, c::Char)
     u = bswap(reinterpret(UInt32, c))
-    n = 24 & trailing_zeros(u)
-    u >>= n
+    n = 1
     while true
         write(io, u % UInt8)
-        0 < (u >>= 8) || break
+        (u >>= 8) == 0 && return n
+        n += 1
     end
-    4 - (n >> 3)
 end
 
 function write(io::IO, s::Symbol)
@@ -482,17 +481,17 @@ function read!(s::IO, a::Array{T}) where T
     return a
 end
 
-function read(s::IO, ::Type{Char})
-    b0 = read(s, UInt8)
-    n = leading_ones(b0)
-    c = UInt32(b0)
-    if n <= 4
-        while 1 < n && !eof(s)
-            peek(s) & 0xc0 == 0x80 || break
-            b = read(s, UInt8)
-            c <<= 8
-            c |= b
-            n -= 1
+function read(io::IO, ::Type{Char})
+    b0 = read(io, UInt8)
+    l = 8(4-leading_ones(b0))
+    c = UInt32(b0) << 24
+    if l < 24
+        s = 16
+        while s ≥ l && !eof(io)
+            peek(io) & 0xc0 == 0x80 || break
+            b = read(io, UInt8)
+            c |= UInt32(b) << s
+            s -= 8
         end
     end
     return reinterpret(Char, c)
@@ -584,7 +583,7 @@ function readuntil(io::IO, target::AbstractString)
     i = start(target)
     done(target, i) && return ""
     c, i = next(target, start(target))
-    if done(target, i) && c < Char(0x80)
+    if done(target, i) && c ≤ '\xf7'
         return readuntil_string(io, c % UInt8)
     end
     # decide how we can index target

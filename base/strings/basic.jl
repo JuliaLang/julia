@@ -490,7 +490,7 @@ julia> isascii("αβγ")
 false
 ```
 """
-isascii(c::Char) = c < Char(0x80)
+isascii(c::Char) = reinterpret(Int32, c) ≥ 0
 isascii(s::AbstractString) = all(isascii, s)
 
 ## string promotion rules ##
