@@ -611,6 +611,11 @@ Numeric literals also work as coefficients to parenthesized expressions:
 julia> 2(x-1)^2 - 3(x-1) + 1
 3
 ```
+!!! note
+    The precedence of numeric literal coefficients used for implicit
+    multiplication is higher than other binary operators such as multiplication
+    (`*`), and division (`/`, `\`, and `//`).  This means, for example, that
+    `1 / 2im` equals `-0.5im` and `6 // 2(2 + 1)` equals `1 // 1`.
 
 Additionally, parenthesized expressions can be used as coefficients to variables, implying multiplication
 of the expression by the variable:
