@@ -231,20 +231,26 @@ let
     end
 end
 
+# Dates are physical units, and ranges should require an explicit step.
+# See #19896 and https://discourse.julialang.org/t/type-restriction-on-unitrange/6557/12
+if VERSION >= v"1.0.0"
+    @test_throws MethodError Dates.DateTime(2013, 1, 1):Dates.DateTime(2013, 2, 1)
+end
+
 # All the range representations we want to test
 # Date ranges
-dr  = Dates.DateTime(2013, 1, 1):Dates.DateTime(2013, 2, 1)
-dr1 = Dates.DateTime(2013, 1, 1):Dates.DateTime(2013, 1, 1)
-dr2 = Dates.DateTime(2013, 1, 1):Dates.DateTime(2012, 2, 1) # empty range
+dr  = Dates.DateTime(2013, 1, 1):Dates.Day(1):Dates.DateTime(2013, 2, 1)
+dr1 = Dates.DateTime(2013, 1, 1):Dates.Day(1):Dates.DateTime(2013, 1, 1)
+dr2 = Dates.DateTime(2013, 1, 1):Dates.Day(1):Dates.DateTime(2012, 2, 1) # empty range
 dr3 = Dates.DateTime(2013, 1, 1):Dates.Day(-1):Dates.DateTime(2012) # negative step
 # Big ranges
-dr4 = Dates.DateTime(0):Dates.DateTime(20000, 1, 1)
-dr5 = Dates.DateTime(0):Dates.DateTime(200000, 1, 1)
-dr6 = Dates.DateTime(0):Dates.DateTime(2000000, 1, 1)
-dr7 = Dates.DateTime(0):Dates.DateTime(20000000, 1, 1)
-dr8 = Dates.DateTime(0):Dates.DateTime(200000000, 1, 1)
-dr9 = typemin(Dates.DateTime):typemax(Dates.DateTime)
-# Non-default steps
+dr4 = Dates.DateTime(0):Dates.Day(1):Dates.DateTime(20000, 1, 1)
+dr5 = Dates.DateTime(0):Dates.Day(1):Dates.DateTime(200000, 1, 1)
+dr6 = Dates.DateTime(0):Dates.Day(1):Dates.DateTime(2000000, 1, 1)
+dr7 = Dates.DateTime(0):Dates.Day(1):Dates.DateTime(20000000, 1, 1)
+dr8 = Dates.DateTime(0):Dates.Day(1):Dates.DateTime(200000000, 1, 1)
+dr9 = typemin(Dates.DateTime):Dates.Day(1):typemax(Dates.DateTime)
+# Other steps
 dr10 = typemax(Dates.DateTime):Dates.Day(-1):typemin(Dates.DateTime)
 dr11 = typemin(Dates.DateTime):Dates.Week(1):typemax(Dates.DateTime)
 
@@ -280,8 +286,8 @@ end
 @test_throws MethodError dr .+ 1
 a = Dates.DateTime(2013, 1, 1)
 b = Dates.DateTime(2013, 2, 1)
-@test map!(x->x + Dates.Day(1), Array{Dates.DateTime}(32), dr) == [(a + Dates.Day(1)):(b + Dates.Day(1));]
-@test map(x->x + Dates.Day(1), dr) == [(a + Dates.Day(1)):(b + Dates.Day(1));]
+@test map!(x->x + Dates.Day(1), Array{Dates.DateTime}(32), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
+@test map(x->x + Dates.Day(1), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
 
 @test map(x->a in x, drs[1:4]) == [true, true, false, true]
 @test a in dr
@@ -295,7 +301,7 @@ b = Dates.DateTime(2013, 2, 1)
 @test all(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x), drs)
 
 @test length(b:Dates.Day(-1):a) == 32
-@test length(b:a) == 0
+@test length(b:Dates.Day(1):a) == 0
 @test length(b:Dates.Day(1):a) == 0
 @test length(a:Dates.Day(2):b) == 16
 @test last(a:Dates.Day(2):b) == Dates.DateTime(2013, 1, 31)
@@ -303,31 +309,31 @@ b = Dates.DateTime(2013, 2, 1)
 @test last(a:Dates.Day(7):b) == Dates.DateTime(2013, 1, 29)
 @test length(a:Dates.Day(32):b) == 1
 @test last(a:Dates.Day(32):b) == Dates.DateTime(2013, 1, 1)
-@test (a:b)[1] == Dates.DateTime(2013, 1, 1)
-@test (a:b)[2] == Dates.DateTime(2013, 1, 2)
-@test (a:b)[7] == Dates.DateTime(2013, 1, 7)
-@test (a:b)[end] == b
-@test first(a:Dates.DateTime(20000, 1, 1)) == a
-@test first(a:Dates.DateTime(200000, 1, 1)) == a
-@test first(a:Dates.DateTime(2000000, 1, 1)) == a
-@test first(a:Dates.DateTime(20000000, 1, 1)) == a
-@test first(a:Dates.DateTime(200000000, 1, 1)) == a
-@test first(a:typemax(Dates.DateTime)) == a
-@test first(typemin(Dates.DateTime):typemax(Dates.DateTime)) == typemin(Dates.DateTime)
+@test (a:Dates.Day(1):b)[1] == Dates.DateTime(2013, 1, 1)
+@test (a:Dates.Day(1):b)[2] == Dates.DateTime(2013, 1, 2)
+@test (a:Dates.Day(1):b)[7] == Dates.DateTime(2013, 1, 7)
+@test (a:Dates.Day(1):b)[end] == b
+@test first(a:Dates.Day(1):Dates.DateTime(20000, 1, 1)) == a
+@test first(a:Dates.Day(1):Dates.DateTime(200000, 1, 1)) == a
+@test first(a:Dates.Day(1):Dates.DateTime(2000000, 1, 1)) == a
+@test first(a:Dates.Day(1):Dates.DateTime(20000000, 1, 1)) == a
+@test first(a:Dates.Day(1):Dates.DateTime(200000000, 1, 1)) == a
+@test first(a:Dates.Day(1):typemax(Dates.DateTime)) == a
+@test first(typemin(Dates.DateTime):Dates.Day(1):typemax(Dates.DateTime)) == typemin(Dates.DateTime)
 
 # Date ranges
-dr  = Dates.Date(2013, 1, 1):Dates.Date(2013, 2, 1)
-dr1 = Dates.Date(2013, 1, 1):Dates.Date(2013, 1, 1)
-dr2 = Dates.Date(2013, 1, 1):Dates.Date(2012, 2, 1) # empty range
+dr  = Dates.Date(2013, 1, 1):Dates.Day(1):Dates.Date(2013, 2, 1)
+dr1 = Dates.Date(2013, 1, 1):Dates.Day(1):Dates.Date(2013, 1, 1)
+dr2 = Dates.Date(2013, 1, 1):Dates.Day(1):Dates.Date(2012, 2, 1) # empty range
 dr3 = Dates.Date(2013, 1, 1):Dates.Day(-1):Dates.Date(2012, 1, 1) # negative step
 # Big ranges
-dr4 = Dates.Date(0):Dates.Date(20000, 1, 1)
-dr5 = Dates.Date(0):Dates.Date(200000, 1, 1)
-dr6 = Dates.Date(0):Dates.Date(2000000, 1, 1)
-dr7 = Dates.Date(0):Dates.Date(20000000, 1, 1)
-dr8 = Dates.Date(0):Dates.Date(200000000, 1, 1)
-dr9 = typemin(Dates.Date):typemax(Dates.Date)
-# Non-default steps
+dr4 = Dates.Date(0):Dates.Day(1):Dates.Date(20000, 1, 1)
+dr5 = Dates.Date(0):Dates.Day(1):Dates.Date(200000, 1, 1)
+dr6 = Dates.Date(0):Dates.Day(1):Dates.Date(2000000, 1, 1)
+dr7 = Dates.Date(0):Dates.Day(1):Dates.Date(20000000, 1, 1)
+dr8 = Dates.Date(0):Dates.Day(1):Dates.Date(200000000, 1, 1)
+dr9 = typemin(Dates.Date):Dates.Day(1):typemax(Dates.Date)
+# Other steps
 dr10 = typemax(Dates.Date):Dates.Day(-1):typemin(Dates.Date)
 dr11 = typemin(Dates.Date):Dates.Week(1):typemax(Dates.Date)
 dr12 = typemin(Dates.Date):Dates.Month(1):typemax(Dates.Date)
@@ -358,8 +364,8 @@ end
 @test_throws MethodError dr .+ 1
 a = Dates.Date(2013, 1, 1)
 b = Dates.Date(2013, 2, 1)
-@test map!(x->x + Dates.Day(1), Array{Dates.Date}(32), dr) == [(a + Dates.Day(1)):(b + Dates.Day(1));]
-@test map(x->x + Dates.Day(1), dr) == [(a + Dates.Day(1)):(b + Dates.Day(1));]
+@test map!(x->x + Dates.Day(1), Array{Dates.Date}(32), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
+@test map(x->x + Dates.Day(1), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
 
 @test map(x->a in x, drs[1:4]) == [true, true, false, true]
 @test a in dr
@@ -373,7 +379,6 @@ b = Dates.Date(2013, 2, 1)
 @test all(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x), drs)
 
 @test length(b:Dates.Day(-1):a) == 32
-@test length(b:a) == 0
 @test length(b:Dates.Day(1):a) == 0
 @test length(a:Dates.Day(2):b) == 16
 @test last(a:Dates.Day(2):b) == Dates.Date(2013, 1, 31)
@@ -381,19 +386,18 @@ b = Dates.Date(2013, 2, 1)
 @test last(a:Dates.Day(7):b) == Dates.Date(2013, 1, 29)
 @test length(a:Dates.Day(32):b) == 1
 @test last(a:Dates.Day(32):b) == Dates.Date(2013, 1, 1)
-@test (a:b)[1] == Dates.Date(2013, 1, 1)
-@test (a:b)[2] == Dates.Date(2013, 1, 2)
-@test (a:b)[7] == Dates.Date(2013, 1, 7)
-@test (a:b)[end] == b
-@test first(a:Dates.Date(20000, 1, 1)) == a
-@test first(a:Dates.Date(200000, 1, 1)) == a
-@test first(a:Dates.Date(2000000, 1, 1)) == a
-@test first(a:Dates.Date(20000000, 1, 1)) == a
-@test first(a:Dates.Date(200000000, 1, 1)) == a
-@test first(a:typemax(Dates.Date)) == a
-@test first(typemin(Dates.Date):typemax(Dates.Date)) == typemin(Dates.Date)
+@test (a:Dates.Day(1):b)[1] == Dates.Date(2013, 1, 1)
+@test (a:Dates.Day(1):b)[2] == Dates.Date(2013, 1, 2)
+@test (a:Dates.Day(1):b)[7] == Dates.Date(2013, 1, 7)
+@test (a:Dates.Day(1):b)[end] == b
+@test first(a:Dates.Day(1):Dates.Date(20000, 1, 1)) == a
+@test first(a:Dates.Day(1):Dates.Date(200000, 1, 1)) == a
+@test first(a:Dates.Day(1):Dates.Date(2000000, 1, 1)) == a
+@test first(a:Dates.Day(1):Dates.Date(20000000, 1, 1)) == a
+@test first(a:Dates.Day(1):Dates.Date(200000000, 1, 1)) == a
+@test first(a:Dates.Day(1):typemax(Dates.Date)) == a
+@test first(typemin(Dates.Date):Dates.Day(1):typemax(Dates.Date)) == typemin(Dates.Date)
 
-# Non-default step sizes
 @test length(typemin(Dates.Date):Dates.Week(1):typemax(Dates.Date)) == 26351950414948059
 # Big Month/Year ranges
 @test length(typemin(Dates.Date):Dates.Month(1):typemax(Dates.Date)) == 6060531933867600
@@ -414,17 +418,16 @@ c = Dates.Date(2013, 6, 1)
 @test [a:Dates.Month(2):Dates.Date(2013, 1, 2);] == [a]
 @test [c:Dates.Month(-1):a;] == reverse([a:Dates.Month(1):c;])
 
-@test length(range(Date(2000), 366)) == 366
+@test length(range(Date(2000), Dates.Day(1), 366)) == 366
 let n = 100000
     local a = Dates.Date(2000)
     for i = 1:n
-        @test length(range(a, i)) == i
+        @test length(range(a, Dates.Day(1), i)) == i
     end
     return a + Dates.Day(n)
 end
 
-# Custom definition to override default step of DateTime ranges
-@test typeof(step(Dates.DateTime(2000):Dates.DateTime(2001))) == Dates.Day
+@test typeof(step(Dates.DateTime(2000):Dates.Day(1):Dates.DateTime(2001))) == Dates.Day
 
 a = Dates.Date(2013, 1, 1)
 b = Dates.Date(2013, 2, 1)
@@ -492,10 +495,10 @@ end
 @test_throws OverflowError length(typemin(Dates.Year):Dates.Year(1):typemax(Dates.Year))
 @test_throws MethodError Dates.Date(0):Dates.DateTime(2000)
 @test_throws MethodError Dates.Date(0):Dates.Year(10)
-@test length(range(Dates.Date(2000), 366)) == 366
-@test last(range(Dates.Date(2000), 366)) == Dates.Date(2000, 12, 31)
-@test last(range(Dates.Date(2001), 365)) == Dates.Date(2001, 12, 31)
-@test last(range(Dates.Date(2000), 367)) == last(range(Dates.Date(2000), Dates.Month(12), 2)) == last(range(Dates.Date(2000), Dates.Year(1), 2))
+@test length(range(Dates.Date(2000), Dates.Day(1), 366)) == 366
+@test last(range(Dates.Date(2000), Dates.Day(1), 366)) == Dates.Date(2000, 12, 31)
+@test last(range(Dates.Date(2001), Dates.Day(1), 365)) == Dates.Date(2001, 12, 31)
+@test last(range(Dates.Date(2000), Dates.Day(1), 367)) == last(range(Dates.Date(2000), Dates.Month(12), 2)) == last(range(Dates.Date(2000), Dates.Year(1), 2))
 @test last(range(Dates.DateTime(2000), Dates.Day(366), 2)) == last(range(Dates.DateTime(2000), Dates.Hour(8784), 2))
 
 # Issue 5
@@ -509,14 +512,14 @@ let d = Dates.Day(1)
 end
 
 # Time ranges
-dr  = Dates.Time(23, 1, 1):Dates.Time(23, 2, 1)
-dr1 = Dates.Time(23, 1, 1):Dates.Time(23, 1, 1)
-dr2 = Dates.Time(23, 1, 1):Dates.Time(22, 2, 1) # empty range
+dr  = Dates.Time(23, 1, 1):Dates.Second(1):Dates.Time(23, 2, 1)
+dr1 = Dates.Time(23, 1, 1):Dates.Second(1):Dates.Time(23, 1, 1)
+dr2 = Dates.Time(23, 1, 1):Dates.Second(1):Dates.Time(22, 2, 1) # empty range
 dr3 = Dates.Time(23, 1, 1):Dates.Minute(-1):Dates.Time(22, 1, 1) # negative step
 # Big ranges
-dr8 = typemin(Dates.Time):typemax(Dates.Time)
+dr8 = typemin(Dates.Time):Dates.Second(1):typemax(Dates.Time)
 dr9 = typemin(Dates.Time):Dates.Nanosecond(1):typemax(Dates.Time)
-# Non - default steps
+# Other steps
 dr10 = typemax(Dates.Time):Dates.Microsecond(-1):typemin(Dates.Time)
 dr11 = typemin(Dates.Time):Dates.Millisecond(1):typemax(Dates.Time)
 dr12 = typemin(Dates.Time):Dates.Minute(1):typemax(Dates.Time)

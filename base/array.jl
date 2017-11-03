@@ -620,7 +620,7 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copy!(Vector{eltype(A)}(), A)
+_collect_indices(::Tuple{}, A) = copy!(Array{eltype(A)}(), A)
 _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
     copy!(Array{eltype(A)}(length.(indsA)), A)
 function _collect_indices(indsA, A)
@@ -645,7 +645,7 @@ else
 end
 
 _array_for(::Type{T}, itr, ::HasLength) where {T} = Array{T,1}(Int(length(itr)::Integer))
-_array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, indices(itr))
+_array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, indices(itr))::Array{T}
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
@@ -1450,7 +1450,8 @@ end
 """
     reverse(v [, start=1 [, stop=length(v) ]] )
 
-Return a copy of `v` reversed from start to stop.
+Return a copy of `v` reversed from start to stop.  See also [`Iterators.reverse`](@ref)
+for reverse-order iteration without making a copy.
 
 # Examples
 ```jldoctest

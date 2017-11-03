@@ -280,6 +280,9 @@ Library improvements
     For example, `x^-1` is now essentially a synonym for `inv(x)`, and works
     in a type-stable way even if `typeof(x) != typeof(inv(x))` ([#24240]).
 
+  * New `Iterators.reverse(itr)` for reverse-order iteration ([#24187]).  Iterator
+    types `T` can implement `start` etc. for `Iterators.Reverse{T}` to support this.
+
   * The functions `nextind` and `prevind` now accept `nchar` argument that indicates
     the number of characters to move ([#23805]).
 
@@ -605,6 +608,8 @@ Deprecated or removed
 
   * `num2hex` and `hex2num` have been deprecated in favor of `reinterpret` combined with `parse`/`hex` ([#22088]).
 
+  * `a:b` is deprecated for constructing a `StepRange` when `a` and `b` have physical units
+    (Dates and Times). Use `a:s:b`, where `s = Dates.Day(1)` or `s = Dates.Second(1)`.
 
 Command-line option changes
 ---------------------------

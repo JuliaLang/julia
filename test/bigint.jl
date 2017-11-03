@@ -396,3 +396,6 @@ end
     @test typeof(cos(a)) == BigFloat
     @test typeof(sin(a)) == BigFloat
 end
+
+# Issue #24298
+@test mod(BigInt(6), UInt(5)) == mod(6, 5)

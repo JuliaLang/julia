@@ -134,6 +134,7 @@ main utility is for reversed-order string processing, especially for reversed
 regular-expression searches.  See also [`reverseind`](@ref) to convert indices
 in `s` to indices in `reverse(s)` and vice-versa, and [`graphemes`](@ref)
 to operate on user-visible "characters" (graphemes) rather than codepoints.
+See also [`Iterators.reverse`](@ref) for reverse-order iteration without making a copy.
 
 # Examples
 ```jldoctest
