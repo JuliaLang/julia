@@ -19,10 +19,10 @@ end
 
 LogLevel(level::LogLevel) = level
 
-Base.isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
-Base.:+(level::LogLevel, inc) = LogLevel(level.level+inc)
-Base.:-(level::LogLevel, inc) = LogLevel(level.level-inc)
-Base.convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
+isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
++(level::LogLevel, inc) = LogLevel(level.level+inc)
+-(level::LogLevel, inc) = LogLevel(level.level-inc)
+convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
 
 const BelowMinLevel = LogLevel(-1000001)
 const Debug         = LogLevel(   -1000)
@@ -31,7 +31,7 @@ const Warn          = LogLevel(    1000)
 const Error         = LogLevel(    2000)
 const AboveMaxLevel = LogLevel( 1000001)
 
-function Base.show(io::IO, level::LogLevel)
+function show(io::IO, level::LogLevel)
     if     level == BelowMinLevel  print(io, "BelowMinLevel")
     elseif level == Debug          print(io, "Debug")
     elseif level == Info           print(io, "Info")
@@ -92,7 +92,7 @@ function log_record_id(_module, level, message_ex)
     # as we increment h to resolve any collisions.
     h = hash(string(modname, level, message_ex)) % (1<<31)
     while true
-        id = Symbol(string(modname, '_', hex(h, 8)))
+        id = Symbol(modname, '_', hex(h, 8))
         if !(id in _log_record_ids)
             push!(_log_record_ids, id)
             return id
