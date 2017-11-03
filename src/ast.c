@@ -557,7 +557,8 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         return (jl_value_t*)ex;
     }
     if (iscprim(e) && cp_class((cprim_t*)ptr(e)) == fl_ctx->wchartype) {
-        return jl_box32(jl_char_type, *(int32_t*)cp_data((cprim_t*)ptr(e)));
+        uint32_t u = *(uint32_t*)cp_data((cprim_t*)ptr(e));
+        return jl_box32(jl_char_type, jl_uint32_to_char(u));
     }
     if (iscvalue(e) && cv_class((cvalue_t*)ptr(e)) == jl_ast_ctx(fl_ctx)->jvtype) {
         return *(jl_value_t**)cv_data((cvalue_t*)ptr(e));

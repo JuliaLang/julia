@@ -1,8 +1,24 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-convert(::Type{Char}, x::UInt32) = reinterpret(Char, x)
+function convert(::Type{UInt32}, c::Char)
+    u = reinterpret(UInt32, c)
+    u ⊻= ifelse(
+        u <= 0x0000ffff,
+        ifelse(u <= 0x000000ff, 0x00000000, 0x0000c080),
+        ifelse(u <= 0x00ffffff, 0x00e08080, 0xf0808080),
+    )
+    ((u & 0x000000ff) >> 0) ⊻ ((u & 0x0000ff00) >> 2) ⊻
+    ((u & 0x00ff0000) >> 4) ⊻ ((u & 0xff000000) >> 6)
+end
+
+function convert(::Type{Char}, u::UInt32)
+    c = (u & 0x3f) | ((u << 2) & 0x3f00) | ((u << 4) & 0x3f0000) | ((u << 6) & 0x3f000000)
+    reinterpret(Char, ifelse(u <= 0x7f, u,
+        c | ifelse(u <= 0x000007ff, 0x0000c080,
+            ifelse(u <= 0x0000ffff, 0x00e08080, 0xf0808080))))
+end
+
 convert(::Type{Char}, x::Number) = Char(UInt32(x))
-convert(::Type{UInt32}, x::Char) = reinterpret(UInt32, x)
 convert(::Type{T}, x::Char) where {T<:Number} = convert(T, UInt32(x))
 
 rem(x::Char, ::Type{T}) where {T<:Number} = rem(UInt32(x), T)
@@ -29,11 +45,9 @@ done(c::Char, state) = state
 isempty(c::Char) = false
 in(x::Char, y::Char) = x == y
 
-==(x::Char, y::Char) = UInt32(x) == UInt32(y)
-isless(x::Char, y::Char) = UInt32(x) < UInt32(y)
-
-const hashchar_seed = 0xd4d64234
-hash(x::Char, h::UInt) = hash_uint64(((UInt64(x)+hashchar_seed)<<32) ⊻ UInt64(h))
+==(x::Char, y::Char) = reinterpret(UInt32, x) == reinterpret(UInt32, y)
+isless(x::Char, y::Char) = reinterpret(UInt32, x) < reinterpret(UInt32, y)
+hash(x::Char, h::UInt) = hash(reinterpret(UInt32, x), hash(Char, h))
 
 -(x::Char, y::Char) = Int(x) - Int(y)
 -(x::Char, y::Integer) = Char(Int32(x) - Int32(y))

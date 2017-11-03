@@ -539,6 +539,8 @@ extern char jl_using_oprofile_jitevents;
 #endif
 extern size_t jl_arr_xtralloc_limit;
 
+uint32_t jl_uint32_to_char(uint32_t u);
+
 void jl_init_types(void);
 void jl_init_box_caches(void);
 void jl_init_frontend(void);

@@ -432,26 +432,15 @@ function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
     end
 end
 
-
-function write(s::IO, ch::Char)
-    c = reinterpret(UInt32, ch)
-    if c < 0x80
-        return write(s, c%UInt8)
-    elseif c < 0x800
-        return (write(s, (( c >> 6          ) | 0xC0)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    elseif c < 0x10000
-        return (write(s, (( c >> 12         ) | 0xE0)%UInt8)) +
-               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    elseif c < 0x110000
-        return (write(s, (( c >> 18         ) | 0xF0)%UInt8)) +
-               (write(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    else
-        return write(s, '\ufffd')
+function write(io::IO, c::Char)
+    u = bswap(reinterpret(UInt32, c))
+    n = 24 & trailing_zeros(u)
+    u >>= n
+    while true
+        write(io, u % UInt8)
+        0 < (u >>= 8) || break
     end
+    4 - (n >> 3)
 end
 
 function write(io::IO, s::Symbol)
@@ -494,22 +483,19 @@ function read!(s::IO, a::Array{T}) where T
 end
 
 function read(s::IO, ::Type{Char})
-    ch = read(s, UInt8)
-    if ch < 0x80
-        return Char(ch)
+    b0 = read(s, UInt8)
+    n = leading_ones(b0)
+    c = UInt32(b0)
+    if n <= 4
+        while 1 < n && !eof(s)
+            peek(s) & 0xc0 == 0x80 || break
+            b = read(s, UInt8)
+            c <<= 8
+            c |= b
+            n -= 1
+        end
     end
-
-    # mimic utf8.next function
-    trailing = Base.utf8_trailing[ch+1]
-    c::UInt32 = 0
-    for j = 1:trailing
-        c += ch
-        c <<= 6
-        ch = read(s, UInt8)
-    end
-    c += ch
-    c -= Base.utf8_offset[trailing+1]
-    return Char(c)
+    return reinterpret(Char, c)
 end
 
 # readuntil_string is useful below since it has

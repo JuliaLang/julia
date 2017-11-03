@@ -198,3 +198,24 @@ end
 
 @test sprint(show, "text/plain", '$') == "'\$': ASCII/Unicode U+0024 (category Sc: Symbol, currency)"
 @test repr('$') == "'\$'"
+
+@testset "read incomplete character at end of stream or file" begin
+    local file = tempname()
+    local iob = IOBuffer([0xf0])
+    @test reinterpret(UInt32, read(iob, Char)) == 0xf0
+    @test eof(iob)
+    try
+        write(file, 0xf0)
+        open(file) do io
+            @test reinterpret(UInt32, read(io, Char)) == 0xf0
+            @test eof(io)
+        end
+        let io = Base.Filesystem.open(file, Base.Filesystem.JL_O_RDONLY)
+            @test reinterpret(UInt32, read(io, Char)) == 0xf0
+            @test eof(io)
+            close(io)
+        end
+   finally
+        rm(file, force=true)
+    end
+end
