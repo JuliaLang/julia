@@ -402,8 +402,7 @@ On Windows, double-click `usr/bin/julia.exe`.
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](https://julialang.org/manual/getting-started) in the manual.
 
-**Note**: While some system package managers have Julia installers available,
-these are not maintained nor endorsed by the Julia project. They may be outdated
+**Note**: Although some system package managers provide Julia, such installations are neither maintained nor endorsed by the Julia project. They may be outdated
 and/or unmaintained. We recommend you use the official Julia binaries instead.
 
 ## Editor and Terminal Setup
