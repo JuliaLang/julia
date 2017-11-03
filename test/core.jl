@@ -3306,6 +3306,7 @@ end
 @test Tuple{Int} === Tuple{Int, Vararg{Integer, 0}}
 
 # issue #12003
+using Dates
 const DATE12003 = DateTime(1917,1,1)
 failure12003(dt=DATE12003) = Dates.year(dt)
 @test isa(failure12003(), Integer)
@@ -4939,6 +4940,7 @@ mutable struct Sgnd <: Signed
     v::Int
 end
 using Test
+using Dates
 @test_throws ErrorException abs(Sgnd(1))       #12007
 io = IOBuffer()
 @test_throws ErrorException show(io, Sgnd(1))  #12007
@@ -5482,6 +5484,7 @@ end
 module UnionOptimizations
 
 using Test
+using Dates
 
 const boxedunions = [Union{}, Union{String, Void}]
 const unboxedunions = [Union{Int8, Void},

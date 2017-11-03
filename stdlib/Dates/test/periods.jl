@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module PeriodsTest
+
+using Dates
+using Test
+
 @testset "basic arithmetic" begin
     @test -Dates.Year(1) == Dates.Year(-1)
     @test Dates.Year(1) > Dates.Year(0)
@@ -414,4 +419,6 @@ end
         @test y == z
         @test hash(y) == hash(z)
     end
+end
+
 end

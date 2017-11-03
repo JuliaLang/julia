@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module QueryTests
+
+using Test
+using Dates
+
 Jan = Dates.DateTime(2013, 1, 1) # Tuesday
 Feb = Dates.DateTime(2013, 2, 2) # Saturday
 Mar = Dates.DateTime(2013, 3, 3) # Sunday
@@ -205,4 +210,6 @@ end
     @test Dates.dayofquarter(Dates.DateTime(2014, 6, 30)) == 91
     @test Dates.dayofquarter(Dates.DateTime(2014, 9, 30)) == 92
     @test Dates.dayofquarter(Dates.DateTime(2014, 12, 31)) == 92
+end
+
 end

@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module RangesTest
+
+using Test
+using Dates
+
 let
     for T in (Dates.Date, Dates.DateTime)
         f1 = T(2014); l1 = T(2013, 12, 31)
@@ -549,3 +554,10 @@ a = Dates.Time(23, 1, 1)
 
 @test all(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x), drs)
 @test all(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x), drs)
+
+@test !(1 in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+@test !(Complex(1, 0) in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+@test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+@test !("a" in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+
+end

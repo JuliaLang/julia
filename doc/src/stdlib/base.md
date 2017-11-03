@@ -89,7 +89,6 @@ primitive type
 ## Base Modules
 ```@docs
 Base.BLAS
-Base.Dates
 Base.Distributed
 Base.Docs
 Base.Iterators
