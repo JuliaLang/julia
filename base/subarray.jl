@@ -280,18 +280,18 @@ first_index(V::SubArray) = (@_inline_meta; first_index(V.parent, V.indices))
 first_index(parent::AbstractArray, I::Tuple{Any}) = (@_inline_meta; first(I[1]))
 first_index(parent::AbstractArray, I::Tuple) = (@_inline_meta; sub2ind(parent, map(first, I)...))
 
-unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{AbstractRange}}) where {T,N,P} =
+unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
 
-pointer(V::OneIndexSubArray, i::Int) = pointer(V.parent, V.indices[1][i])
-pointer(V::SubArray, i::Int) = _pointer(V, i)
-_pointer(V::SubArray{<:Any,1}, i::Int) = pointer(V, (i,))
-_pointer(V::SubArray, i::Int) = pointer(V, ind2sub(indices(V), i))
+pointer(V::SubArray{<:Any,<:Any,<:Any,<:Tuple{AbstractRange}}) = pointer(V, 1)
+pointer(V::SubArray{<:Any,<:Any,<:Any,<:Tuple{AbstractRange}}, i::Int) = pointer(V.parent, V.indices[1][i])
+pointer(V::SubArray{<:Any,N,<:Any,<:Tuple{Vararg{RangeIndex}}}) where {N} = _pointer(V, ntuple(_->1, Val(N)))
+pointer(V::SubArray{<:Any,<:Any,<:Any,<:Tuple{Vararg{RangeIndex}}}, i::Int) = _pointer(V, ind2sub(V, i))
+_pointer(V::SubArray, I) = pointer(V.parent, sub2ind(V.parent, reindex(V, V.indices, I)...))
 
 # Most of the time, reshape needs to add a full layer of indirection. But when
 # there's only one index then we just need to reshape that index
-# reshape(V::OneIndexSubArray, dims::Dims) =
-#     SubArray(V.parent, (reshape(V.indices[1], dims),))
+reshape(V::OneIndexSubArray, dims::Dims) = SubArray(V.parent, (reshape(V.indices[1], dims),))
 
 """
     replace_ref_end!(ex)

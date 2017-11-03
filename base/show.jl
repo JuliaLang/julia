@@ -1916,12 +1916,14 @@ end
 function showarg(io::IO, v::SubArray, toplevel)
     print(io, "view(")
     showarg(io, parent(v), false)
-    showindices(io, v.indices...)
+    showindices(IOContext(io, :limit=>true), v.indices...)
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(v))
 end
 showindices(io, ::Slice, inds...) =
     (print(io, ", :"); showindices(io, inds...))
+showindices(io, ind1::ReshapedRange, inds...) =
+    (print(io, ", reshape(", ind1.parent, ", ", ind1.dims, ")"); showindices(io, inds...))
 showindices(io, ind1, inds...) =
     (print(io, ", ", ind1); showindices(io, inds...))
 showindices(io) = nothing

@@ -101,9 +101,6 @@ end
         @test length(r) == 3
         @test r[1] == 2
         @test r[3,1] == 4
-        @test r[Base.ReshapedIndex(CartesianIndex((1,2)))] == 3
-        @test parent(reshape(r, (1,3))) === r.parent === s
-        @test parentindexes(r) == (1:1, 1:3)
         @test reshape(r, (3,)) === r
         @test convert(Array{Int,1}, r) == [2,3,4]
         @test_throws MethodError convert(Array{Int,2}, r)
@@ -117,9 +114,6 @@ end
         @test length(r) == 3
         @test r[1] == 2
         @test r[3,1] == 5
-        @test r[Base.ReshapedIndex(CartesianIndex((1,2)))] == 3
-        @test parent(reshape(r, (1,3))) === r.parent === s
-        @test parentindexes(r) == (1:1, 1:3)
         @test reshape(r, (3,)) === r
         @test convert(Array{Int,1}, r) == [2,3,5]
         @test_throws MethodError convert(Array{Int,2}, r)

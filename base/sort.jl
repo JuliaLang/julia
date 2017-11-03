@@ -971,12 +971,12 @@ end
 
 function slicetypeof(A::AbstractMatrix{T}, i1, i2) where T
     I = map(slice_dummy, to_indices(A, (i1, i2)))
-    SubArray{T,1,typeof(A),typeof(maybe_linearize(IndexStyle(viewindexing(I), IndexStyle(A)), I))}
+    SubArray{T,1,typeof(A),typeof(maybe_linearize(IndexStyle(viewindexing(I), IndexStyle(A)), A, I))}
 end
 slice_dummy(S::Slice) = S
 slice_dummy(::AbstractUnitRange{T}) where {T} = oneunit(T)
-maybe_linearize(::IndexCartesian, I) = I
-maybe_linearize(::IndexLinear, I) = Base.linearize_indices(parent, I, Base.index_shape(I...))
+maybe_linearize(::IndexCartesian, parent, I) = I
+maybe_linearize(::IndexLinear, parent, I) = Base.linearize_indices(parent, I, Base.index_shape(I...))
 
 ## fast clever sorting for floats ##
 

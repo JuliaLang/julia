@@ -254,5 +254,7 @@ _stepstrides(s, t::Tuple{}) = ()
 viewindexing(I::Tuple{Slice, ReshapedUnitRange, Vararg{ScalarIndex}}) = IndexLinear()
 viewindexing(I::Tuple{ReshapedRange, Vararg{ScalarIndex}}) = IndexLinear()
 _iscontiguousindex(::Type{<:ReshapedArray{<:Any,<:AbstractUnitRange}}) = true
+pointer(V::SubArray{<:Any,<:Any,<:Any,<:Tuple{ReshapedRange}}) = pointer(V, 1)
+pointer(V::SubArray{<:Any,<:Any,<:Any,<:Tuple{ReshapedRange}}, i::Int) = pointer(V.parent, V.indices[1][i])
 unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{ReshapedRange}}) where {T,N,P} =
-    unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
+    unsafe_convert(Ptr{T}, V.parent) + (first(V.indices[1])-1)*sizeof(T)
