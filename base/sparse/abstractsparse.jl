@@ -31,16 +31,16 @@ end
 
 # The following two methods should be overloaded by concrete types to avoid
 # allocating the I = find(...)
-_sparse_findnext(v::AbstractSparseArray, i) = (I = find(v); n = searchsortedfirst(I, i); n<=length(I) ? I[n] : 0)
-_sparse_findprev(v::AbstractSparseArray, i) = (I = find(v); n = searchsortedlast(I, i);  n>0          ? I[n] : 0)
+_sparse_findnextnz(v::AbstractSparseArray, i) = (I = find(!iszero, v); n = searchsortedfirst(I, i); n<=length(I) ? I[n] : 0)
+_sparse_findprevnz(v::AbstractSparseArray, i) = (I = find(!iszero, v); n = searchsortedlast(I, i);  n>0          ? I[n] : 0)
 
-function findnext(v::AbstractSparseArray, i::Int)
-    j = _sparse_findnext(v, i)
+function findnext(f::typeof(!iszero), v::AbstractSparseArray, i::Int)
+    j = _sparse_findnextnz(v, i)
     if j == 0
         return 0
     end
-    while v[j] == 0
-        j = _sparse_findnext(v, j+1)
+    while !f(v[j])
+        j = _sparse_findnextnz(v, j+1)
         if j == 0
             return 0
         end
@@ -48,13 +48,13 @@ function findnext(v::AbstractSparseArray, i::Int)
     return j
 end
 
-function findprev(v::AbstractSparseArray, i::Int)
-    j = _sparse_findprev(v, i)
+function findprev(f::typeof(!iszero), v::AbstractSparseArray, i::Int)
+    j = _sparse_findprevnz(v, i)
     if j == 0
         return 0
     end
-    while v[j] == 0
-        j = _sparse_findprev(v, j-1)
+    while !f(v[j])
+        j = _sparse_findprevnz(v, j-1)
         if j == 0
             return 0
         end

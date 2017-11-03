@@ -1318,7 +1318,7 @@ function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     return (I, J, V)
 end
 
-function _sparse_findnext(m::SparseMatrixCSC, i::Int)
+function _sparse_findnextnz(m::SparseMatrixCSC, i::Int)
     if i > length(m)
         return 0
     end
@@ -1336,7 +1336,7 @@ function _sparse_findnext(m::SparseMatrixCSC, i::Int)
     return sub2ind(m, m.rowval[nextlo], nextcol-1)
 end
 
-function _sparse_findprev(m::SparseMatrixCSC, i::Int)
+function _sparse_findprevnz(m::SparseMatrixCSC, i::Int)
     if i < 1
         return 0
     end

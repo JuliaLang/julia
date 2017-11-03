@@ -2155,8 +2155,8 @@ end
     x_sp = sparse(x)
 
     for i=1:length(x)
-        @test findnext(x,i) == findnext(x_sp,i)
-        @test findprev(x,i) == findprev(x_sp,i)
+        @test findnext(!iszero, x,i) == findnext(!iszero, x_sp,i)
+        @test findprev(!iszero, x,i) == findprev(!iszero, x_sp,i)
     end
 
     y = [0 0 0 0 0;
@@ -2167,15 +2167,15 @@ end
     y_sp = sparse(y)
 
     for i=1:length(y)
-        @test findnext(y,i) == findnext(y_sp,i)
-        @test findprev(y,i) == findprev(y_sp,i)
+        @test findnext(!iszero, y,i) == findnext(!iszero, y_sp,i)
+        @test findprev(!iszero, y,i) == findprev(!iszero, y_sp,i)
     end
 
     z_sp = sparsevec(Dict(1=>1, 5=>1, 8=>0, 10=>1))
     z = collect(z_sp)
 
     for i=1:length(z)
-        @test findnext(z,i) == findnext(z_sp,i)
-        @test findprev(z,i) == findprev(z_sp,i)
+        @test findnext(!iszero, z,i) == findnext(!iszero, z_sp,i)
+        @test findprev(!iszero, z,i) == findprev(!iszero, z_sp,i)
     end
 end
