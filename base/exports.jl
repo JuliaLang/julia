@@ -6,7 +6,6 @@ export
     Pkg,
     LibGit2,
     StackTraces,
-    Dates,
     Sys,
     Libc,
     Libdl,

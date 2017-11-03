@@ -202,8 +202,7 @@ function adjust(df::DateFunction, start, step, limit)
     throw(ArgumentError("Adjustment limit reached: $limit iterations"))
 end
 
-function adjust(func::Function, start; step::Period=Day(1), negate=nothing, limit::Int=10000)
-    func = deprecate_negate(:adjust, func, "func,start", negate)
+function adjust(func::Function, start; step::Period=Day(1), limit::Int=10000)
     return adjust(DateFunction(func, start), start, step, limit)
 end
 
@@ -232,8 +231,7 @@ Stacktrace:
 [...]
 ```
 """
-function Date(func::Function, y, m=1, d=1; step::Period=Day(1), negate=nothing, limit::Int=10000)
-    func = deprecate_negate(:Date, func, "func,y,m,d", negate)
+function Date(func::Function, y, m=1, d=1; step::Period=Day(1), limit::Int=10000)
     return adjust(DateFunction(func, Date(y, m, d)), Date(y, m, d), step, limit)
 end
 
@@ -259,24 +257,19 @@ Stacktrace:
 """
 DateTime(::Function, args...)
 
-function DateTime(func::Function, y, m=1; step::Period=Day(1), negate=nothing, limit::Int=10000)
-    func = deprecate_negate(:DateTime, func, "func,y,m", negate)
+function DateTime(func::Function, y, m=1; step::Period=Day(1), limit::Int=10000)
     return adjust(DateFunction(func, DateTime(y, m)), DateTime(y, m), step, limit)
 end
-function DateTime(func::Function, y, m, d; step::Period=Hour(1), negate=nothing, limit::Int=10000)
-    func = deprecate_negate(:DateTime, func, "func,y,m,d", negate)
+function DateTime(func::Function, y, m, d; step::Period=Hour(1), limit::Int=10000)
     return adjust(DateFunction(func, DateTime(y)), DateTime(y, m, d), step, limit)
 end
-function DateTime(func::Function, y, m, d, h; step::Period=Minute(1), negate=nothing, limit::Int=10000)
-    func = deprecate_negate(:DateTime, func, "func,y,m,d,h", negate)
+function DateTime(func::Function, y, m, d, h; step::Period=Minute(1), limit::Int=10000)
     return adjust(DateFunction(func, DateTime(y)), DateTime(y, m, d, h), step, limit)
 end
-function DateTime(func::Function, y, m, d, h, mi; step::Period=Second(1), negate=nothing, limit::Int=10000)
-    func = deprecate_negate(:DateTime, func, "func,y,m,d,h,mi", negate)
+function DateTime(func::Function, y, m, d, h, mi; step::Period=Second(1), limit::Int=10000)
     return adjust(DateFunction(func, DateTime(y)), DateTime(y, m, d, h, mi), step, limit)
 end
-function DateTime(func::Function, y, m, d, h, mi, s; step::Period=Millisecond(1), negate=nothing, limit::Int=10000)
-    func = deprecate_negate(:DateTime, func, "func,y,m,d,h,mi,s", negate)
+function DateTime(func::Function, y, m, d, h, mi, s; step::Period=Millisecond(1), limit::Int=10000)
     return adjust(DateFunction(func, DateTime(y)), DateTime(y, m, d, h, mi, s), step, limit)
 end
 
@@ -310,20 +303,16 @@ Stacktrace:
 """
 Time(::Function, args...)
 
-function Time(func::Function, h, mi=0; step::Period=Second(1), negate=nothing, limit::Int=10000)
-    func = deprecate_negate(:Time, func, "func,h,mi", negate)
+function Time(func::Function, h, mi=0; step::Period=Second(1), limit::Int=10000)
     return adjust(DateFunction(func, Time(h, mi)), Time(h, mi), step, limit)
 end
-function Time(func::Function, h, mi, s; step::Period=Millisecond(1), negate=nothing, limit::Int=10000)
-    func = deprecate_negate(:Time, func, "func,h,mi,s", negate)
+function Time(func::Function, h, mi, s; step::Period=Millisecond(1), limit::Int=10000)
     return adjust(DateFunction(func, Time(h, mi, s)), Time(h, mi, s), step, limit)
 end
-function Time(func::Function, h, mi, s, ms; step::Period=Microsecond(1), negate=nothing, limit::Int=10000)
-    func = deprecate_negate(:Time, func, "func,h,mi,s,ms", negate)
+function Time(func::Function, h, mi, s, ms; step::Period=Microsecond(1), limit::Int=10000)
     return adjust(DateFunction(func, Time(h, mi, s, ms)), Time(h, mi, s, ms), step, limit)
 end
-function Time(func::Function, h, mi, s, ms, us; step::Period=Nanosecond(1), negate=nothing, limit::Int=10000)
-    func = deprecate_negate(:Time, func, "func,h,mi,s,ms,us", negate)
+function Time(func::Function, h, mi, s, ms, us; step::Period=Nanosecond(1), limit::Int=10000)
     return adjust(DateFunction(func, Time(h, mi, s, ms, us)), Time(h, mi, s, ms, us), step, limit)
 end
 
@@ -354,8 +343,7 @@ Adjusts `dt` by iterating at most `limit` iterations by `step` increments until 
 returns `true`. `func` must take a single `TimeType` argument and return a [`Bool`](@ref).
 `same` allows `dt` to be considered in satisfying `func`.
 """
-function tonext(func::Function, dt::TimeType; step::Period=Day(1), negate=nothing, limit::Int=10000, same::Bool=false)
-    func = deprecate_negate(:tonext, func, "func,dt", negate)
+function tonext(func::Function, dt::TimeType; step::Period=Day(1), limit::Int=10000, same::Bool=false)
     return adjust(DateFunction(func, dt), same ? dt : dt + step, step, limit)
 end
 
@@ -375,8 +363,7 @@ Adjusts `dt` by iterating at most `limit` iterations by `step` increments until 
 returns `true`. `func` must take a single `TimeType` argument and return a [`Bool`](@ref).
 `same` allows `dt` to be considered in satisfying `func`.
 """
-function toprev(func::Function, dt::TimeType; step::Period=Day(-1), negate=nothing, limit::Int=10000, same::Bool=false)
-    func = deprecate_negate(:toprev, func, "func,dt", negate)
+function toprev(func::Function, dt::TimeType; step::Period=Day(-1), limit::Int=10000, same::Bool=false)
     return adjust(DateFunction(func, dt), same ? dt : dt + step, step, limit)
 end
 

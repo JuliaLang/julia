@@ -212,7 +212,7 @@ end
     @async begin sleep(1.0); put!(rr2, :ok) end
     @async begin sleep(2.0); put!(rr3, :ok) end
 
-    et = @elapsed timedwait(callback, Dates.Second(1))
+    et = @elapsed timedwait(callback, 1)
 
     # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
     try

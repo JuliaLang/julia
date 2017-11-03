@@ -1,7 +1,7 @@
 # Date and DateTime
 
 ```@meta
-CurrentModule = Base.Dates
+CurrentModule = Dates
 ```
 
 The `Dates` module provides two types for working with dates: [`Date`](@ref) and [`DateTime`](@ref),
@@ -144,14 +144,14 @@ julia> dt2 = Date(2000,2,1)
 
 julia> dump(dt)
 Date
-  instant: Base.Dates.UTInstant{Base.Dates.Day}
-    periods: Base.Dates.Day
+  instant: Dates.UTInstant{Dates.Day}
+    periods: Dates.Day
       value: Int64 734562
 
 julia> dump(dt2)
 Date
-  instant: Base.Dates.UTInstant{Base.Dates.Day}
-    periods: Base.Dates.Day
+  instant: Dates.UTInstant{Dates.Day}
+    periods: Dates.Day
       value: Int64 730151
 
 julia> dt > dt2
@@ -240,12 +240,12 @@ One may also access the underlying `UTInstant` or integer value:
 ```jldoctest tdate
 julia> dump(t)
 Date
-  instant: Base.Dates.UTInstant{Base.Dates.Day}
-    periods: Base.Dates.Day
+  instant: Dates.UTInstant{Dates.Day}
+    periods: Dates.Day
       value: Int64 735264
 
 julia> t.instant
-Base.Dates.UTInstant{Base.Dates.Day}(735264 days)
+Dates.UTInstant{Dates.Day}(735264 days)
 
 julia> Dates.value(t)
 735264

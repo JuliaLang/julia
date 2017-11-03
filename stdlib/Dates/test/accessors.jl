@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module AccessorsTest
+
+using Dates
+using Test
+
 @testset "yearmonthday/yearmonth/monthday" begin
     # yearmonthday is the opposite of totaldays
     # taking Rata Die Day # and returning proleptic Gregorian date
@@ -212,4 +217,6 @@ end
     @test Dates.millisecond.(tr) == repmat([4], 10)
     @test Dates.microsecond.(tr) == repmat([5], 10)
     @test Dates.nanosecond.(tr) == repmat([6], 10)
+end
+
 end

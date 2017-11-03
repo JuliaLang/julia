@@ -31,7 +31,7 @@ function choosetests(choices = [])
         "linalg", "subarray", "core", "inference", "worlds",
         "keywordargs", "numbers", "subtype",
         "printf", "char", "strings", "triplequote", "unicode", "intrinsics",
-        "dates", "dict", "hashing", "iobuffer", "staged", "offsetarray",
+        "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
@@ -78,16 +78,6 @@ function choosetests(choices = [])
         tests = testnames
     end
 
-    datestests = ["dates/accessors", "dates/adjusters", "dates/query",
-                  "dates/periods", "dates/ranges", "dates/rounding", "dates/types",
-                  "dates/io", "dates/arithmetic", "dates/conversions"]
-    if "dates" in skip_tests
-        filter!(x -> (x != "dates" && !(x in datestests)), tests)
-    elseif "dates" in tests
-        # specifically selected case
-        filter!(x -> x != "dates", tests)
-        prepend!(tests, datestests)
-    end
 
     unicodetests = ["unicode/UnicodeError", "unicode/utf8proc", "unicode/utf8"]
     if "unicode" in skip_tests
@@ -107,7 +97,6 @@ function choosetests(choices = [])
         filter!(x -> x != "strings", tests)
         prepend!(tests, stringtests)
     end
-
 
     sparsetests = ["sparse/sparse", "sparse/sparsevector", "sparse/higherorderfns"]
     if Base.USE_GPL_LIBS

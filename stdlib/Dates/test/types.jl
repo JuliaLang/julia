@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module TypesTest
+
+using Test
+using Dates
+
 # Date internal algorithms
 @testset "totaldays" begin
     @test Dates.totaldays(0, 2, 28) == -307
@@ -216,4 +221,6 @@ end
     @test a < b
     @test a != b
     @test Dates.Date(Dates.DateTime(Dates.Date(2012, 7, 1))) == Dates.Date(2012, 7, 1)
+end
+
 end
