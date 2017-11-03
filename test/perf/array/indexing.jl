@@ -169,6 +169,7 @@ function makearrays(::Type{T}, sz) where T
     B = reshape(convert(Vector{T}, [1:prod(outersz);]), outersz)
     Asub = view(B, 1:sz[1], 2:sz[2]+1)
     Bit = trues(sz)
-    (A, AF, AS, ASS, Asub, Bit,)
+    arrs = [view(a, i...) for a in (A, AS, ASS, AF, Astrd, Astrd1, B) for i in ((:,), (:, 1:size(a,2)-1), (1:size(a,1)-1, 1:size(a,2)-1), (isodd.(reshape(1:length(a), size(a))),))]
+    (arrs...)
 end
 
