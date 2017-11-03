@@ -19,35 +19,23 @@ end
 symlink_q(tgt, link) = isfile(link) || symlink(tgt, link)
 cp_q(src, dest) = isfile(dest) || cp(src, dest)
 
-# make links for stdlib package docs
-if Sys.iswindows()
-    cp_q("../stdlib/DelimitedFiles/docs/src/index.md",        "src/stdlib/delimitedfiles.md")
-    cp_q("../stdlib/Test/docs/src/index.md",                  "src/stdlib/test.md")
-    cp_q("../stdlib/Mmap/docs/src/index.md",                  "src/stdlib/mmap.md")
-    cp_q("../stdlib/SharedArrays/docs/src/index.md",          "src/stdlib/sharedarrays.md")
-    cp_q("../stdlib/Profile/docs/src/index.md",               "src/stdlib/profile.md")
-    cp_q("../stdlib/Base64/docs/src/index.md",                "src/stdlib/base64.md")
-    cp_q("../stdlib/FileWatching/docs/src/index.md",          "src/stdlib/filewatching.md")
-    cp_q("../stdlib/CRC32c/docs/src/index.md",                "src/stdlib/crc32c.md")
-    cp_q("../stdlib/Dates/docs/src/index.md",                 "src/stdlib/dates.md")
-    cp_q("../stdlib/IterativeEigensolvers/docs/src/index.md", "src/stdlib/iterativeeigensolvers.md")
-    cp_q("../stdlib/Unicode/docs/src/index.md",               "src/stdlib/unicode.md")
-    cp_q("../stdlib/Distributed/docs/src/index.md",           "src/stdlib/distributed.md")
-    cp_q("../stdlib/Printf/docs/src/index.md",                "src/stdlib/printf.md")
-else
-    symlink_q("../../../stdlib/DelimitedFiles/docs/src/index.md",        "src/stdlib/delimitedfiles.md")
-    symlink_q("../../../stdlib/Test/docs/src/index.md",                  "src/stdlib/test.md")
-    symlink_q("../../../stdlib/Mmap/docs/src/index.md",                  "src/stdlib/mmap.md")
-    symlink_q("../../../stdlib/SharedArrays/docs/src/index.md",          "src/stdlib/sharedarrays.md")
-    symlink_q("../../../stdlib/Profile/docs/src/index.md",               "src/stdlib/profile.md")
-    symlink_q("../../../stdlib/Base64/docs/src/index.md",                "src/stdlib/base64.md")
-    symlink_q("../../../stdlib/FileWatching/docs/src/index.md",          "src/stdlib/filewatching.md")
-    symlink_q("../../../stdlib/CRC32c/docs/src/index.md",                "src/stdlib/crc32c.md")
-    symlink_q("../../../stdlib/Dates/docs/src/index.md",                 "src/stdlib/dates.md")
-    symlink_q("../../../stdlib/IterativeEigensolvers/docs/src/index.md", "src/stdlib/iterativeeigensolvers.md")
-    symlink_q("../../../stdlib/Unicode/docs/src/index.md",               "src/stdlib/unicode.md")
-    symlink_q("../../../stdlib/Distributed/docs/src/index.md",           "src/stdlib/distributed.md")
-    symlink_q("../../../stdlib/Printf/docs/src/index.md",                "src/stdlib/printf.md")
+# make links for stdlib package docs, this is needed until #522 in Documenter.jl is finished
+const STDLIB_DOCS = []
+const STDLIB_DIR = joinpath(@__DIR__, "..", "stdlib")
+for dir in readdir(STDLIB_DIR)
+    sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src", "index.md")
+    if isfile(sourcefile)
+        cd(joinpath(@__DIR__, "src")) do
+            isdir("stdlib") || mkdir("stdlib")
+            targetfile = joinpath("stdlib", dir * ".md")
+            push!(STDLIB_DOCS, (stdlib = Symbol(dir), targetfile = targetfile))
+            if Sys.iswindows()
+                cp_q(sourcefile, targetfile)
+            else
+                symlink_q(sourcefile, targetfile)
+            end
+        end
+    end
 end
 
 const PAGES = [
@@ -93,42 +81,31 @@ const PAGES = [
         "manual/noteworthy-differences.md",
         "manual/unicode-input.md",
     ],
-    "Standard Library" => [
-        "stdlib/base.md",
-        "stdlib/collections.md",
-        "stdlib/math.md",
-        "stdlib/numbers.md",
-        "stdlib/strings.md",
-        "stdlib/arrays.md",
-        "stdlib/parallel.md",
-        "stdlib/distributed.md",
-        "stdlib/multi-threading.md",
-        "stdlib/linalg.md",
-        "stdlib/constants.md",
-        "stdlib/file.md",
-        "stdlib/delimitedfiles.md",
-        "stdlib/io-network.md",
-        "stdlib/punctuation.md",
-        "stdlib/sort.md",
-        "stdlib/pkg.md",
-        "stdlib/dates.md",
-        "stdlib/iterators.md",
-        "stdlib/test.md",
-        "stdlib/c.md",
-        "stdlib/libc.md",
-        "stdlib/libdl.md",
-        "stdlib/profile.md",
-        "stdlib/stacktraces.md",
-        "stdlib/simd-types.md",
-        "stdlib/base64.md",
-        "stdlib/mmap.md",
-        "stdlib/sharedarrays.md",
-        "stdlib/filewatching.md",
-        "stdlib/crc32c.md",
-        "stdlib/iterativeeigensolvers.md",
-        "stdlib/unicode.md",
-        "stdlib/printf.md",
+    "Base" => [
+        "base/base.md",
+        "base/collections.md",
+        "base/math.md",
+        "base/numbers.md",
+        "base/strings.md",
+        "base/arrays.md",
+        "base/parallel.md",
+        "base/multi-threading.md",
+        "base/linalg.md",
+        "base/constants.md",
+        "base/file.md",
+        "base/io-network.md",
+        "base/punctuation.md",
+        "base/sort.md",
+        "base/pkg.md",
+        "base/iterators.md",
+        "base/c.md",
+        "base/libc.md",
+        "base/libdl.md",
+        "base/stacktraces.md",
+        "base/simd-types.md",
     ],
+    "Standard Library" =>
+        [stdlib.targetfile for stdlib in STDLIB_DOCS],
     "Developer Documentation" => [
         "devdocs/reflection.md",
         "Documentation of Julia's Internals" => [
@@ -162,13 +139,13 @@ const PAGES = [
     ],
 ]
 
-using DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, CRC32c,
-      Dates, IterativeEigensolvers, Unicode, Distributed, Printf
+for stdlib in STDLIB_DOCS
+    @eval using $(stdlib.stdlib)
+end
 
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile,
-                 Base64, FileWatching, Dates, IterativeEigensolvers, Unicode, Distributed, Printf],
+    modules   = [Base, Core, BuildSysImg, [Module(stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,

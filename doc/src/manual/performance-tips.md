@@ -666,7 +666,7 @@ of `fill_twos!` for different types of `a`.
 
 The second form is also often better style and can lead to more code reuse.
 
-This pattern is used in several places in the standard library. For example, see `hvcat_fill`
+This pattern is used in several places in Julia Base. For example, see `hvcat_fill`
 in [`abstractarray.jl`](https://github.com/JuliaLang/julia/blob/master/base/abstractarray.jl), or
 the [`fill!`](@ref) function, which we could have used instead of writing our own `fill_twos!`.
 
@@ -804,7 +804,7 @@ statement can be found [on the mailing list](https://groups.google.com/forum/#!m
 Perhaps even worse than the run-time impact is the compile-time impact: Julia will compile specialized
 functions for each different `Car{Make, Model}`; if you have hundreds or thousands of such types,
 then every function that accepts such an object as a parameter (from a custom `get_year` function
-you might write yourself, to the generic `push!` function in the standard library) will have hundreds
+you might write yourself, to the generic `push!` function in Julia Base) will have hundreds
 or thousands of variants compiled for it.  Each of these increases the size of the cache of compiled
 code, the length of internal lists of methods, etc.  Excess enthusiasm for values-as-parameters
 can easily waste enormous resources.

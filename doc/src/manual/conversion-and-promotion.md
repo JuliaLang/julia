@@ -150,7 +150,7 @@ is never used in the function body. In this example, since the type is a singlet
 would never be any reason to use its value within the body.
 
 All instances of some abstract types are by default considered "sufficiently similar"
-that a universal `convert` definition is provided in the standard library.
+that a universal `convert` definition is provided in Julia Base.
 For example, this definition states that it's valid to `convert` any `Number` type to
 any other by calling a 1-argument constructor:
 
@@ -231,7 +231,7 @@ try again. That's all there is to it: nowhere else does one ever need to worry a
 to a common numeric type for arithmetic operations -- it just happens automatically. There are
 definitions of catch-all promotion methods for a number of other arithmetic and mathematical functions
 in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl), but beyond
-that, there are hardly any calls to `promote` required in the Julia standard library. The most
+that, there are hardly any calls to `promote` required in Julia Base. The most
 common usages of `promote` occur in outer constructors methods, provided for convenience, to allow
 constructor calls with mixed types to delegate to an inner type with fields promoted to an appropriate
 common type. For example, recall that [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl)
@@ -270,7 +270,7 @@ promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 
 one declares that when 64-bit and 32-bit floating-point values are promoted together, they should
 be promoted to 64-bit floating-point. The promotion type does not need to be one of the argument
-types, however; the following promotion rules both occur in Julia's standard library:
+types, however; the following promotion rules both occur in Julia Base:
 
 ```julia
 promote_rule(::Type{UInt8}, ::Type{Int8}) = Int
