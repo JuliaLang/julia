@@ -288,7 +288,7 @@ guardsrand(123) do
                             invFsv = Fs\vv
                             x = Ts\vv
                             @test x ≈ invFsv
-                            @test Array(AbstractArray(Tldlt)) ≈ Fs
+                            @test Array(Tldlt) ≈ Fs
                         end
 
                         @testset "similar" begin
