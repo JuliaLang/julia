@@ -989,9 +989,18 @@ PromoteToSparse(::Val{N}) where N = Broadcast.DefaultArrayStyle{N}()
 Broadcast.BroadcastStyle(::PromoteToSparse, ::SPVM) = PromoteToSparse()
 Broadcast.BroadcastStyle(::PromoteToSparse, ::Broadcast.Style{Tuple}) = Broadcast.DefaultArrayStyle{2}()
 
-Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{0}) = PromoteToSparse()
-Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{1}) = PromoteToSparse()
-Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{2}) = PromoteToSparse()
+# FIXME: switch to DefaultArrayStyle once we can delete VectorStyle and MatrixStyle
+# Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{0}) = PromoteToSparse()
+# Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{1}) = PromoteToSparse()
+# Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{2}) = PromoteToSparse()
+BroadcastStyle(::Type{<:Base.RowVector{T,<:Vector}}) where T = Broadcast.MatrixStyle() # RowVector not yet defined when broadcast.jl loaded
+Broadcast.BroadcastStyle(::SPVM, ::Broadcast.VectorStyle) = PromoteToSparse()
+Broadcast.BroadcastStyle(::SPVM, ::Broadcast.MatrixStyle) = PromoteToSparse()
+Broadcast.BroadcastStyle(::SparseVecStyle, ::Broadcast.DefaultArrayStyle{N}) where N =
+    Broadcast.DefaultArrayStyle(Broadcast._max(Val(N), Val(1)))
+Broadcast.BroadcastStyle(::SparseMatStyle, ::Broadcast.DefaultArrayStyle{N}) where N =
+    Broadcast.DefaultArrayStyle(Broadcast._max(Val(N), Val(2)))
+# end FIXME
 
 broadcast(f, ::PromoteToSparse, ::Void, ::Void, As::Vararg{Any,N}) where {N} =
     broadcast(f, map(_sparsifystructured, As)...)
