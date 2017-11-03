@@ -864,6 +864,47 @@ However, we don't do this for a good reason: wrapping the `expr` in a new scope 
 also slightly changes the meaning of the expression (the scope of any variables in it),
 while we want `@time` to be usable with minimum impact on the wrapped code.
 
+### Macros and dispatch
+
+Macros can have multiple methods and dispatch based on their arguments, like ordinary functions:
+```juliarepl
+julia> macro m end
+@m (macro with 0 methods)
+
+julia> macro m(args...)
+           println("$(length(args)) arguments")
+       end
+@m (macro with 1 method)
+
+julia> macro m(x,y)
+           println("Two arguments")
+       end
+@m (macro with 2 methods)
+
+julia> @m "asd"
+1 arguments
+
+julia> @m 1 2
+Two arguments
+```
+However one should keep in mind, that macro dispatch is based on the types of AST
+that are handed to the macro, not the types that the AST evaluates to at runtime:
+```juliarepl
+julia> macro m(::Int)
+           println("An Integer")
+       end
+@m (macro with 3 methods)
+
+julia> @m 2
+An Integer
+
+julia> x = 2
+2
+
+julia> @m x
+1 arguments
+```
+
 ## Code Generation
 
 When a significant amount of repetitive boilerplate code is required, it is common to generate
