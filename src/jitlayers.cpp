@@ -193,6 +193,11 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
 
     PM->add(createEarlyCSEPass()); //// ****
 
+#if JL_LLVM_VERSION >= 50000
+    // Load forwarding above can expose allocations that aren't actually used
+    // remove those before optimizing loops.
+    PM->add(createAllocOptPass());
+#endif
     PM->add(createLoopIdiomPass()); //// ****
     PM->add(createLoopRotatePass());           // Rotate loops.
 #ifdef USE_POLLY
@@ -215,6 +220,10 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
     //PM->add(createLoopStrengthReducePass());   // (jwb added)
 
+#if JL_LLVM_VERSION >= 50000
+    // Run our own SROA on heap objects before LLVM's
+    PM->add(createAllocOptPass());
+#endif
     // Re-run SROA after loop-unrolling (useful for small loops that operate,
     // over the structure of an aggregate)
     PM->add(createSROAPass());                 // Break up aggregate allocas
@@ -231,6 +240,10 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createJumpThreadingPass());         // Thread jumps
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
 
+#if JL_LLVM_VERSION >= 50000
+    // More dead allocation (store) deletion before loop optimization
+    PM->add(createAllocOptPass());
+#endif
     // see if all of the constant folding has exposed more loops
     // to simplification and deletion
     // this helps significantly with cleaning up iteration
