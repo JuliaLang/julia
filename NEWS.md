@@ -608,6 +608,8 @@ Deprecated or removed
 
   * `num2hex` and `hex2num` have been deprecated in favor of `reinterpret` combined with `parse`/`hex` ([#22088]).
 
+  * `a:b` is deprecated for constructing a `StepRange` when `a` and `b` have physical units
+    (Dates and Times). Use `a:s:b`, where `s = Dates.Day(1)` or `s = Dates.Second(1)`.
 
 Command-line option changes
 ---------------------------

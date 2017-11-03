@@ -2073,6 +2073,17 @@ end
 # issue #24167
 @deprecate EnvHash EnvDict
 
+# #24258
+# Physical units define an equivalence class: there is no such thing as a step of "1" (is
+# it one day or one second or one nanosecond?). So require the user to specify the step
+# (in physical units).
+@deprecate colon(start::T, stop::T) where {T<:DateTime}   start:Dates.Day(1):stop
+@deprecate colon(start::T, stop::T) where {T<:Date}       start:Dates.Day(1):stop
+@deprecate colon(start::T, stop::T) where {T<:Dates.Time} start:Dates.Second(1):stop
+
+@deprecate range(start::DateTime, len::Integer)  range(start, Dates.Day(1), len)
+@deprecate range(start::Date, len::Integer)      range(start, Dates.Day(1), len)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

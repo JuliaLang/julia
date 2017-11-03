@@ -2,14 +2,6 @@
 
 # Date/DateTime Ranges
 
-# Override default step; otherwise it would be Millisecond(1)
-Base.colon(start::T, stop::T) where {T<:DateTime} = StepRange(start, Day(1), stop)
-Base.colon(start::T, stop::T) where {T<:Date}     = StepRange(start, Day(1), stop)
-Base.colon(start::T, stop::T) where {T<:Time}     = StepRange(start, Second(1), stop)
-
-Base.range(start::DateTime, len::Integer)  = range(start, Day(1), len)
-Base.range(start::Date, len::Integer)      = range(start, Day(1), len)
-
 (::Type{StepRange{<:Dates.DatePeriod,<:Real}})(start, step, stop) =
     throw(ArgumentError("must specify step as a Period when constructing Dates ranges"))
 

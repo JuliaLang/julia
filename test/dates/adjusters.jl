@@ -317,32 +317,32 @@ dt = Dates.Date(2014, 5, 21)
 # filter (was recur)
 startdate = Dates.Date(2014, 1, 1)
 stopdate = Dates.Date(2014, 2, 1)
-@test length(filter(x->true, startdate:stopdate)) == 32
+@test length(filter(x->true, startdate:Dates.Day(1):stopdate))  == 32
 @test length(filter(x->true, stopdate:Dates.Day(-1):startdate)) == 32
 
 Januarymondays2014 = [Dates.Date(2014, 1, 6), Dates.Date(2014, 1, 13), Dates.Date(2014, 1, 20), Dates.Date(2014, 1, 27)]
-@test filter(Dates.ismonday, startdate:stopdate) == Januarymondays2014
+@test filter(Dates.ismonday, startdate:Dates.Day(1):stopdate) == Januarymondays2014
 
-@test_throws MethodError filter((x, y)->x + y, Dates.Date(2013):Dates.Date(2014))
+@test_throws MethodError filter((x, y)->x + y, Dates.Date(2013):Dates.Day(1):Dates.Date(2014))
 @test_throws MethodError Dates.DateFunction((x, y)->x + y, Date(0))
 @test_throws ArgumentError Dates.DateFunction((dt)->2, Date(0))
-@test length(filter(x->true, Dates.Date(2013):Dates.Date(2013, 2))) == 32
-@test length(filter(x->true, Dates.Date(2013):Dates.Date(2013, 1, 1))) == 1
-@test length(filter(x->true, Dates.Date(2013):Dates.Date(2013, 1, 2))) == 2
-@test length(filter(x->true, Dates.Date(2013):Dates.Date(2013, 1, 3))) == 3
-@test length(filter(x->true, Dates.Date(2013):Dates.Date(2013, 1, 4))) == 4
-@test length(filter(x->true, Dates.Date(2013):Dates.Date(2013, 1, 5))) == 5
-@test length(filter(x->true, Dates.Date(2013):Dates.Date(2013, 1, 6))) == 6
-@test length(filter(x->true, Dates.Date(2013):Dates.Date(2013, 1, 7))) == 7
-@test length(filter(x->true, Dates.Date(2013):Dates.Date(2013, 1, 8))) == 8
+@test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 2))) == 32
+@test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 1))) == 1
+@test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 2))) == 2
+@test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 3))) == 3
+@test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 4))) == 4
+@test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 5))) == 5
+@test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 6))) == 6
+@test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 7))) == 7
+@test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 8))) == 8
 @test length(filter(x->true, Dates.Date(2013):Dates.Month(1):Dates.Date(2013, 1, 1))) == 1
 @test length(filter(x->true, Dates.Date(2013):Dates.Day(-1):Dates.Date(2012, 1, 1))) == 367
 
 # Empty range
-@test length(filter(x->true, Dates.Date(2013):Dates.Date(2012, 1, 1))) == 0
+@test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2012, 1, 1))) == 0
 
 # All leap days in 20th century
-@test length(filter(Dates.Date(1900):Dates.Date(2000)) do x
+@test length(filter(Dates.Date(1900):Dates.Day(1):Dates.Date(2000)) do x
     Dates.month(x) == Dates.Feb && Dates.day(x) == 29
 end) == 24
 
@@ -362,7 +362,7 @@ end == Dates.Date(2014, 11, 27)
 end == Dates.Date(2013, 11, 28)
 
 # Pittsburgh street cleaning
-dr = Dates.Date(2014):Dates.Date(2015)
+dr = Dates.Date(2014):Dates.Day(1):Dates.Date(2015)
 @test length(filter(dr) do x
     Dates.dayofweek(x) == Dates.Tue &&
     Dates.April < Dates.month(x) < Dates.Nov &&
@@ -437,7 +437,7 @@ const OBSERVEDHOLIDAYS = x->begin
     end
 end
 
-observed = filter(OBSERVEDHOLIDAYS, Dates.Date(1999):Dates.Date(2000))
+observed = filter(OBSERVEDHOLIDAYS, Dates.Date(1999):Dates.Day(1):Dates.Date(2000))
 @test length(observed) == 11
 @test observed[10] == Dates.Date(1999, 12, 24)
 @test observed[11] == Dates.Date(1999, 12, 31)
@@ -445,14 +445,14 @@ observed = filter(OBSERVEDHOLIDAYS, Dates.Date(1999):Dates.Date(2000))
 # Get all business/working days of 2014
 # Since we have already defined observed holidays,
 # we just look at weekend days and negate the result
-@test length(filter(Dates.Date(2014):Dates.Date(2015)) do x
+@test length(filter(Dates.Date(2014):Dates.Day(1):Dates.Date(2015)) do x
     !(OBSERVEDHOLIDAYS(x) ||
     Dates.dayofweek(x) > 5)
 end) == 251
 
 # First day of the next month for each day of 2014
 @test length([Dates.firstdayofmonth(i + Dates.Month(1))
-    for i in Dates.Date(2014):Dates.Date(2014, 12, 31)]) == 365
+    for i in Dates.Date(2014):Dates.Day(1):Dates.Date(2014, 12, 31)]) == 365
 
 # From those goofy email forwards claiming a "special, lucky month"
 # that has 5 Fridays, 5 Saturdays, and 5 Sundays and that it only
@@ -469,7 +469,7 @@ end) == 15 # On average, there's one of those months every year
 r = Dates.Time(x->Dates.second(x) == 5, 1)
 @test r == Dates.Time(1, 0, 5)
 
-r = filter(x->Dates.second(x) == 5, Dates.Time(0):Dates.Time(10))
+r = filter(x->Dates.second(x) == 5, Dates.Time(0):Dates.Second(1):Dates.Time(10))
 @test length(r) == 600
 @test first(r) == Dates.Time(0, 0, 5)
 @test last(r) == Dates.Time(9, 59, 5)
