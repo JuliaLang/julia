@@ -108,8 +108,8 @@ end
 create_serialization_stream() do s # user-defined module
     mod = b"SomeModule"
     modstring = String(mod)
-    eval(parse("module $(modstring); end"))
-    modtype = eval(parse("$(modstring)"))
+    eval(Meta.parse("module $(modstring); end"))
+    modtype = eval(Meta.parse("$(modstring)"))
     serialize(s, modtype)
     seek(s, 0)
     @test deserialize(s) === modtype
@@ -129,8 +129,8 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType"
-    eval(parse("abstract type $(usertype) end"))
-    utype = eval(parse("$(usertype)"))
+    eval(Meta.parse("abstract type $(usertype) end"))
+    utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) === utype
@@ -138,8 +138,8 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType1"
-    eval(parse("mutable struct $(usertype); end"))
-    utype = eval(parse("$(usertype)"))
+    eval(Meta.parse("mutable struct $(usertype); end"))
+    utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) === utype
@@ -147,8 +147,8 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType2"
-    eval(parse("abstract type $(usertype){T} end"))
-    utype = eval(parse("$(usertype)"))
+    eval(Meta.parse("abstract type $(usertype){T} end"))
+    utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) == utype
@@ -156,8 +156,8 @@ end
 
 create_serialization_stream() do s # immutable struct with 1 field
     usertype = "SerializeSomeType3"
-    eval(parse("struct $(usertype){T}; a::T; end"))
-    utype = eval(parse("$(usertype)"))
+    eval(Meta.parse("struct $(usertype){T}; a::T; end"))
+    utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) == utype
@@ -165,8 +165,8 @@ end
 
 create_serialization_stream() do s # immutable struct with 2 field
     usertype = "SerializeSomeType4"
-    eval(parse("struct $(usertype){T}; a::T; b::T; end"))
-    utval = eval(parse("$(usertype)(1,2)"))
+    eval(Meta.parse("struct $(usertype){T}; a::T; b::T; end"))
+    utval = eval(Meta.parse("$(usertype)(1,2)"))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
@@ -174,8 +174,8 @@ end
 
 create_serialization_stream() do s # immutable struct with 3 field
     usertype = "SerializeSomeType5"
-    eval(parse("struct $(usertype){T}; a::T; b::T; c::T; end"))
-    utval = eval(parse("$(usertype)(1,2,3)"))
+    eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; end"))
+    utval = eval(Meta.parse("$(usertype)(1,2,3)"))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
@@ -183,8 +183,8 @@ end
 
 create_serialization_stream() do s # immutable struct with 4 field
     usertype = "SerializeSomeType6"
-    eval(parse("struct $(usertype){T}; a::T; b::T; c::T; d::T; end"))
-    utval = eval(parse("$(usertype)(1,2,3,4)"))
+    eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; d::T; end"))
+    utval = eval(Meta.parse("$(usertype)(1,2,3,4)"))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval

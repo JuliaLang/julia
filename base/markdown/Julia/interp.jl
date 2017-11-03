@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function Meta.parse(stream::IO; greedy::Bool = true, raise::Bool = true)
+function _parse(stream::IO; greedy::Bool = true, raise::Bool = true)
     pos = position(stream)
     ex, Δ = Meta.parse(read(stream, String), 1, greedy = greedy, raise = raise)
     seek(stream, pos + Δ - 1)
@@ -11,7 +11,7 @@ function interpinner(stream::IO, greedy = false)
     startswith(stream, '$') || return
     (eof(stream) || Char(peek(stream)) in whitespace) && return
     try
-        return Meta.parse(stream::IOBuffer, greedy = greedy)
+        return _parse(stream::IOBuffer, greedy = greedy)
     catch e
         return
     end

@@ -561,8 +561,8 @@ end
 end
 
 @testset "unrecognized escapes in string/char literals" begin
-    @test_throws ParseError Meta.parse("\"\\.\"")
-    @test_throws ParseError Meta.parse("\'\\.\'")
+    @test_throws Meta.ParseError Meta.parse("\"\\.\"")
+    @test_throws Meta.ParseError Meta.parse("\'\\.\'")
 end
 
 @testset "prevind and nextind" begin
