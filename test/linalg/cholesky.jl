@@ -1,8 +1,34 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
+
+function unary_ops_tests(a, ca, tol; n=size(a, 1))
+    @test inv(ca)*a ≈ eye(n)
+    @test a*inv(ca) ≈ eye(n)
+    @test abs((det(ca) - det(a))/det(ca)) <= tol # Ad hoc, but statistically verified, revisit
+    @test logdet(ca) ≈ logdet(a)
+    @test logdet(ca) ≈ log(det(ca))  # logdet is less likely to overflow
+    @test isposdef(ca)
+    @test_throws KeyError ca[:Z]
+    @test size(ca) == size(a)
+    @test Matrix(copy(ca)) ≈ a
+end
+
+function factor_recreation_tests(a_U, a_L)
+    c_U = cholfact(a_U)
+    c_L = cholfact(a_L)
+    cl  = chol(a_L)
+    ls = c_L[:L]
+    @test Matrix(c_U) ≈ Matrix(c_L) ≈ a_U
+    @test ls*ls' ≈ a_U
+    @test triu(c_U.factors) ≈ c_U[:U]
+    @test tril(c_L.factors) ≈ c_L[:L]
+    @test istriu(cl)
+    @test cl'cl ≈ a_U
+    @test cl'cl ≈ a_L
+end
 
 @testset "core functionality" begin
     n = 10
@@ -34,8 +60,15 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
         r     = capd[:U]
         κ     = cond(apd, 1) #condition number
 
-        #getindex
-        @test_throws KeyError capd[:Z]
+        unary_ops_tests(apd, capd, ε*κ*n)
+
+        @testset "throw for non-square input" begin
+            A = rand(eltya, 2, 3)
+            @test_throws DimensionMismatch chol(A)
+            @test_throws DimensionMismatch Base.LinAlg.chol!(A)
+            @test_throws DimensionMismatch cholfact(A)
+            @test_throws DimensionMismatch cholfact!(A)
+        end
 
         #Test error bound on reconstruction of matrix: LAWNS 14, Lemma 2.1
 
@@ -46,14 +79,12 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
         for i=1:n, j=1:n
             @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
         end
-        E = abs.(apd - full(capd))
+        E = abs.(apd - Matrix(capd))
         for i=1:n, j=1:n
             @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
         end
-        @test apd*inv(capd) ≈ eye(n)
         @test LinAlg.issuccess(capd)
-        @test abs((det(capd) - det(apd))/det(capd)) <= ε*κ*n # Ad hoc, but statistically verified, revisit
-        @test @inferred(logdet(capd)) ≈ log(det(capd)) # logdet is less likely to overflow
+        @inferred(logdet(capd))
 
         apos = apd[1,1]            # test chol(x::Number), needs x>0
         @test all(x -> x ≈ √apos, cholfact(apos).factors)
@@ -66,68 +97,33 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
         apdhL = Hermitian(apd, :L)
         if eltya <: Real
             capds = cholfact(apds)
-            @test inv(capds)*apds ≈ eye(n)
-            @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
-            @test logdet(capds) ≈ log(det(capds))
-            @test isposdef(capds)
+            unary_ops_tests(apds, capds, ε*κ*n)
             if eltya <: BlasReal
                 capds = cholfact!(copy(apds))
-                @test inv(capds)*apds ≈ eye(n)
-                @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
-                @test logdet(capds) ≈ log(det(capds))
-                @test isposdef(capds)
+                unary_ops_tests(apds, capds, ε*κ*n)
             end
-            ulstring = sprint(show,capds[:UL])
-            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring\nsuccessful: true"
+            ulstring = sprint(show, capds[:UL])
+            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
         else
             capdh = cholfact(apdh)
-            @test inv(capdh)*apdh ≈ eye(n)
-            @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
-            @test logdet(capdh) ≈ log(det(capdh))
-            @test isposdef(capdh)
+            unary_ops_tests(apdh, capdh, ε*κ*n)
             capdh = cholfact!(copy(apdh))
-            @test inv(capdh)*apdh ≈ eye(n)
-            @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
-            @test logdet(capdh) ≈ log(det(capdh))
-            @test isposdef(capdh)
+            unary_ops_tests(apdh, capdh, ε*κ*n)
             capdh = cholfact!(copy(apd))
-            @test inv(capdh)*apdh ≈ eye(n)
-            @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
-            @test logdet(capdh) ≈ log(det(capdh))
-            @test isposdef(capdh)
-            ulstring = sprint(show,capdh[:UL])
-            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring\nsuccessful: true"
+            unary_ops_tests(apd, capdh, ε*κ*n)
+            ulstring = sprint(show, capdh[:UL])
+            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
         end
 
         # test chol of 2x2 Strang matrix
-        S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
-        @test full(chol(S)) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
+        S = Matrix{eltya}(SymTridiagonal([2, 2], [-1]))
+        @test Matrix(chol(S)) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
 
         # test extraction of factor and re-creating original matrix
         if eltya <: Real
-            capds = cholfact(apds)
-            lapds = cholfact(apdsL)
-            cl    = chol(apdsL)
-            ls = lapds[:L]
-            @test full(capds) ≈ full(lapds) ≈ apd
-            @test ls*ls' ≈ apd
-            @test triu(capds.factors) ≈ lapds[:U]
-            @test tril(lapds.factors) ≈ capds[:L]
-            @test istriu(cl)
-            @test cl'cl ≈ apds
-            @test cl'cl ≈ apdsL
+            factor_recreation_tests(apds, apdsL)
         else
-            capdh = cholfact(apdh)
-            lapdh = cholfact(apdhL)
-            cl    = chol(apdhL)
-            ls = lapdh[:L]
-            @test full(capdh) ≈ full(lapdh) ≈ apd
-            @test ls*ls' ≈ apd
-            @test triu(capdh.factors) ≈ lapdh[:U]
-            @test tril(lapdh.factors) ≈ capdh[:L]
-            @test istriu(cl)
-            @test cl'cl ≈ apdh
-            @test cl'cl ≈ apdhL
+            factor_recreation_tests(apdh, apdhL)
         end
 
         #pivoted upper Cholesky
@@ -135,19 +131,10 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             cz = cholfact(Hermitian(zeros(eltya,n,n)), Val(true))
             @test_throws Base.LinAlg.RankDeficientException Base.LinAlg.chkfullrank(cz)
             cpapd = cholfact(apdh, Val(true))
+            unary_ops_tests(apdh, cpapd, ε*κ*n)
             @test rank(cpapd) == n
             @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
-            if isreal(apd)
-                @test apd*inv(cpapd) ≈ eye(n)
-            end
-            @test full(cpapd) ≈ apd
-            #getindex
-            @test_throws KeyError cpapd[:Z]
 
-            @test size(cpapd) == size(apd)
-            @test full(copy(cpapd)) ≈ apd
-            @test det(cpapd) ≈ det(apd)
-            @test logdet(cpapd) ≈ logdet(apd)
             @test cpapd[:P]*cpapd[:L]*cpapd[:U]*cpapd[:P]' ≈ apd
         end
 
@@ -187,32 +174,42 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
                 end
             end
         end
+        if eltya <: BlasFloat
+            @testset "throw for non positive definite matrix" begin
+                A = eltya[1 2; 2 1]; B = eltya[1, 1]
+                C = cholfact(A)
+                @test !isposdef(C)
+                @test !LinAlg.issuccess(C)
+                @test_throws PosDefException C\B
+                @test_throws PosDefException det(C)
+                @test_throws PosDefException logdet(C)
+            end
+
+            # Test generic cholfact!
+            @testset "generic cholfact!" begin
+                if eltya <: Complex
+                    A = complex.(randn(5,5), randn(5,5))
+                else
+                    A = randn(5,5)
+                end
+                A = convert(Matrix{eltya}, A'A)
+                @test Matrix(cholfact(A)[:L]) ≈ Matrix(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular)[1])
+                @test Matrix(cholfact(A)[:U]) ≈ Matrix(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular)[1])
+            end
+        end
     end
 end
 
 @testset "Cholesky factor of Matrix with non-commutative elements, here 2x2-matrices" begin
     X = Matrix{Float64}[0.1*rand(2,2) for i in 1:3, j = 1:3]
-    L = full(Base.LinAlg._chol!(X*X', LowerTriangular)[1])
-    U = full(Base.LinAlg._chol!(X*X', UpperTriangular)[1])
-    XX = full(X*X')
+    L = Matrix(Base.LinAlg._chol!(X*X', LowerTriangular)[1])
+    U = Matrix(Base.LinAlg._chol!(X*X', UpperTriangular)[1])
+    XX = Matrix(X*X')
 
     @test sum(sum(norm, L*L' - XX)) < eps()
     @test sum(sum(norm, U'*U - XX)) < eps()
 end
 
-# Test generic cholfact!
-@testset "generic cholfact!" begin
-    for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
-        if elty <: Complex
-            A = complex.(randn(5,5), randn(5,5))
-        else
-            A = randn(5,5)
-        end
-        A = convert(Matrix{elty}, A'A)
-        @test full(cholfact(A)[:L]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular)[1])
-        @test full(cholfact(A)[:U]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular)[1])
-    end
-end
 
 @testset "cholesky up- and downdates" begin
     A = complex.(randn(10,5), randn(10, 5))
@@ -274,16 +271,4 @@ end
 
 @testset "fail for non-BLAS element types" begin
     @test_throws ArgumentError cholfact!(Hermitian(rand(Float16, 5,5)), Val(true))
-end
-
-@testset "throw for non positive definite matrix" begin
-    for T in (Float32, Float64, Complex64, Complex128)
-        A = T[1 2; 2 1]; B = T[1, 1]
-        C = cholfact(A)
-        @test !isposdef(C)
-        @test !LinAlg.issuccess(C)
-        @test_throws PosDefException C\B
-        @test_throws PosDefException det(C)
-        @test_throws PosDefException logdet(C)
-    end
 end

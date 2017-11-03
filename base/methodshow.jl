@@ -42,6 +42,15 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
     return s, string_with_env(env, t)
 end
 
+function method_argnames(m::Method)
+    if !isdefined(m, :source) && isdefined(m, :generator)
+        return m.generator.argnames
+    end
+    argnames = Vector{Any}(m.nargs)
+    ccall(:jl_fill_argnames, Void, (Any, Any), m.source, argnames)
+    return argnames
+end
+
 function arg_decl_parts(m::Method)
     tv = Any[]
     sig = m.sig
@@ -52,8 +61,7 @@ function arg_decl_parts(m::Method)
     file = m.file
     line = m.line
     if isdefined(m, :source) || isdefined(m, :generator)
-        argnames = Vector{Any}(m.nargs)
-        ccall(:jl_fill_argnames, Void, (Any, Any), isdefined(m, :source) ? m.source : m.generator.inferred, argnames)
+        argnames = method_argnames(m)
         show_env = ImmutableDict{Symbol, Any}()
         for t in tv
             show_env = ImmutableDict(show_env, :unionall_env => t)
@@ -108,7 +116,7 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
                 # TODO: more accurate test? (tn.name === "#" name)
             ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.body.name
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)
@@ -235,7 +243,7 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=N
             isdefined(ft.name.module, ft.name.mt.name) &&
             ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.body.name
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)
@@ -262,6 +270,7 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=N
         end
     end
     print(io, ")")
+    print(io, " in ", m.module)
     if line > 0
         u = url(m)
         if isempty(u)

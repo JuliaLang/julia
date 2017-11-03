@@ -309,7 +309,7 @@ _nullable_eltype(f, A, As...) =
     T = _broadcast_eltype(f, A, Bs...)
     shape = broadcast_indices(A, Bs...)
     iter = CartesianRange(shape)
-    if isleaftype(T)
+    if Base._isleaftype(T)
         return broadcast_t(f, T, shape, iter, A, Bs...)
     end
     if isempty(iter)
@@ -320,8 +320,8 @@ end
 @inline function broadcast_c(f, ::Type{Nullable}, a...)
     nonnull = all(hasvalue, a)
     S = _nullable_eltype(f, a...)
-    if isleaftype(S) && null_safe_op(f, maptoTuple(_unsafe_get_eltype,
-                                                   a...).types...)
+    if Base._isleaftype(S) && null_safe_op(f, maptoTuple(_unsafe_get_eltype,
+                                                         a...).types...)
         Nullable{S}(f(map(unsafe_get, a)...), nonnull)
     else
         if nonnull
@@ -534,10 +534,7 @@ end
 # explicit calls to view.   (All of this can go away if slices
 # are changed to generate views by default.)
 
-Base.@propagate_inbounds dotview(args...) = getindex(args...)
-Base.@propagate_inbounds dotview(A::AbstractArray, args...) = view(A, args...)
-Base.@propagate_inbounds dotview(A::AbstractArray{<:AbstractArray}, args::Integer...) = getindex(A, args...)
-
+Base.@propagate_inbounds dotview(args...) = Base.maybeview(args...)
 
 ############################################################
 # The parser turns @. into a call to the __dot__ macro,
@@ -564,8 +561,8 @@ function __dot__(x::Expr)
         Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
     elseif x.head == :$
         x.args[1]
-    elseif x.head == :let # don't add dots to "let x=... assignments
-        Expr(:let, dotargs[1], map(undot, dotargs[2:end])...)
+    elseif x.head == :let # don't add dots to `let x=...` assignments
+        Expr(:let, undot(dotargs[1]), dotargs[2])
     elseif x.head == :for # don't add dots to for x=... assignments
         Expr(:for, undot(dotargs[1]), dotargs[2])
     elseif (x.head == :(=) || x.head == :function || x.head == :macro) &&
@@ -600,9 +597,9 @@ julia> x = 1.0:3.0; y = similar(x);
 
 julia> @. y = x + 3 * sin(x)
 3-element Array{Float64,1}:
- 3.52441
- 4.72789
- 3.42336
+ 3.5244129544236893
+ 4.727892280477045
+ 3.4233600241796016
 ```
 """
 macro __dot__(x)

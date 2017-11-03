@@ -51,6 +51,19 @@ end
 
 Print (using [`print`](@ref)) `xs` followed by a newline.
 If `io` is not supplied, prints to [`STDOUT`](@ref).
+
+# Examples
+```jldoctest
+julia> println("Hello, world")
+Hello, world
+
+julia> io = IOBuffer();
+
+julia> println(io, "Hello, world")
+
+julia> String(take!(io))
+"Hello, world\\n"
+```
 """
 println(io::IO, xs...) = print(io, xs..., '\n')
 
@@ -143,6 +156,16 @@ end
     repr(x)
 
 Create a string from any value using the [`show`](@ref) function.
+
+# Examples
+```jldoctest
+julia> repr(1)
+"1"
+
+julia> repr(zeros(3))
+"[0.0, 0.0, 0.0]"
+
+```
 """
 function repr(x)
     s = IOBuffer()
@@ -344,11 +367,28 @@ unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
 
 macro b_str(s); :(Vector{UInt8}($(unescape_string(s)))); end
 
+"""
+    @raw_str -> String
+
+Create a raw string without interpolation and unescaping.
+The exception is that quotation marks still must be escaped.
+
+# Examples
+```jldoctest
+julia> raw"\\""
+"\\""
+
+julia> raw""\" " ""\"
+" \\" "
+```
+"""
 macro raw_str(s); s; end
 
 ## multiline strings ##
 
 """
+    indentation(str::AbstractString; tabwidth=8)
+
 Calculate the width of leading blank space, and also return if string is blank
 
 Returns:
@@ -370,7 +410,9 @@ function indentation(str::AbstractString; tabwidth=8)
 end
 
 """
-Removes leading indentation from string
+    unindent(str::AbstractString, indent::Int; tabwidth=8)
+
+Remove leading indentation from string
 
 Returns:
 

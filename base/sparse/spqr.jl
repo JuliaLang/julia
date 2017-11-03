@@ -60,7 +60,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         H,              # m-by-nh Householder vectors
         HPinv,          # size m row permutation
         HTau,           # 1-by-nh Householder coefficients
-        CHOLMOD.common()) # /* workspace and parameters */
+        CHOLMOD.common_struct) # /* workspace and parameters */
 
     if rnk < 0
         error("Sparse QR factorization failed")
@@ -79,7 +79,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # the common struct is updated
         ccall((:cholmod_l_free, :libcholmod), Void,
             (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Void}),
-            n, sizeof(CHOLMOD.SuiteSparse_long), e, CHOLMOD.common())
+            n, sizeof(CHOLMOD.SuiteSparse_long), e, CHOLMOD.common_struct)
     end
     hpinv = HPinv[]
     if hpinv == C_NULL
@@ -94,7 +94,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # the common struct is updated
         ccall((:cholmod_l_free, :libcholmod), Void,
             (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Void}),
-            m, sizeof(CHOLMOD.SuiteSparse_long), hpinv, CHOLMOD.common())
+            m, sizeof(CHOLMOD.SuiteSparse_long), hpinv, CHOLMOD.common_struct)
     end
 
     return rnk, _E, _HPinv
@@ -341,14 +341,14 @@ function (\)(F::QRSparse{Float64}, B::VecOrMat{Complex{Float64}})
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    c2r = reshape(transpose(reinterpret(Float64, B, (2, length(B)))), size(B, 1), 2*size(B, 2))
+    c2r = reshape(transpose(reinterpret(Float64, reshape(B, (1, length(B))))), size(B, 1), 2*size(B, 2))
     x = F\c2r
 
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      <-       |y1|y2|y3|y4|     <-      |x2|y2|     <-    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    return reinterpret(Complex{Float64}, transpose(reshape(x, (length(x) >> 1), 2)), _ret_size(F, B))
+    return collect(reshape(reinterpret(Complex{Float64}, transpose(reshape(x, (length(x) >> 1), 2))), _ret_size(F, B)))
 end
 
 function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)

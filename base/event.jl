@@ -32,8 +32,7 @@ Block the current task until some event occurs, depending on the type of the arg
   can be used to determine success or failure.
 * [`Task`](@ref): Wait for a `Task` to finish, returning its result value. If the task fails
   with an exception, the exception is propagated (re-thrown in the task that called `wait`).
-* `RawFD`: Wait for changes on a file descriptor (see [`poll_fd`](@ref) for keyword
-  arguments and return code)
+* `RawFD`: Wait for changes on a file descriptor (see the `FileWatching` package).
 
 If no argument is passed, the task blocks for an undefined period. A task can only be
 restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
@@ -234,7 +233,7 @@ function ensure_rescheduled(othertask::Task)
         # if the current task was queued,
         # also need to return it to the runnable state
         # before throwing an error
-        i = findfirst(Workqueue, ct)
+        i = findfirst(t->t===ct, Workqueue)
         i == 0 || deleteat!(Workqueue, i)
         ct.state = :runnable
     end
@@ -347,9 +346,12 @@ end
 """
     Timer(delay, repeat=0)
 
-Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) at
-a specified interval.  Times are in seconds.  Waiting tasks are woken with an error when the
-timer is closed (by [`close`](@ref). Use [`isopen`](@ref) to check whether a timer is still active.
+Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object).
+
+Waiting tasks are woken after an intial delay of `delay` seconds, and then repeating with the given
+`repeat` interval in seconds. If `repeat` is equal to `0`, the timer is only triggered once. When
+the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
+to check whether a timer is still active.
 """
 mutable struct Timer
     handle::Ptr{Void}
@@ -447,11 +449,32 @@ end
 """
     Timer(callback::Function, delay, repeat=0)
 
-Create a timer to call the given `callback` function. The `callback` is passed one argument,
-the timer object itself. The callback will be invoked after the specified initial `delay`,
-and then repeating with the given `repeat` interval. If `repeat` is `0`, the timer is only
-triggered once. Times are in seconds. A timer is stopped and has its resources freed by
-calling [`close`](@ref) on it.
+Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) and
+calls the function `callback`.
+
+Waiting tasks are woken and the function `callback` is called after an intial delay of `delay` seconds,
+and then repeating with the given `repeat` interval in seconds. If `repeat` is equal to `0`, the timer
+is only triggered once. The function `callback` is called with a single argument, the timer itself.
+When the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
+to check whether a timer is still active.
+
+# Examples
+
+Here the first number is printed after a delay of two seconds, then the following numbers are printed quickly.
+
+```julia-repl
+julia> begin
+           i = 0
+           cb(timer) = (global i += 1; println(i))
+           t = Timer(cb, 2, 0.2)
+           wait(t)
+           sleep(0.5)
+           close(t)
+       end
+1
+2
+3
+```
 """
 function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
     t = Timer(timeout, repeat)

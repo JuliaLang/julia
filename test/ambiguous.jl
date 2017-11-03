@@ -65,20 +65,28 @@ end
 
 ## Other ways of accessing functions
 # Test that non-ambiguous cases work
-io = IOBuffer()
-@test precompile(ambig, (Int, Int)) == true
-cfunction(ambig, Int, Tuple{Int, Int})
-@test length(code_lowered(ambig, (Int, Int))) == 1
-@test length(code_typed(ambig, (Int, Int))) == 1
-code_llvm(io, ambig, (Int, Int))
-code_native(io, ambig, (Int, Int))
+let io = IOBuffer()
+    @test precompile(ambig, (Int, Int)) == true
+    cf = cfunction(ambig, Int, Tuple{Int, Int})
+    @test ccall(cf, Int, (Int, Int), 1, 2) == 4
+    @test length(code_lowered(ambig, (Int, Int))) == 1
+    @test length(code_typed(ambig, (Int, Int))) == 1
+    code_llvm(io, ambig, (Int, Int))
+    code_native(io, ambig, (Int, Int))
+end
 
 # Test that ambiguous cases fail appropriately
-@test precompile(ambig, (UInt8, Int)) == false
-cfunction(ambig, Int, Tuple{UInt8, Int})  # test for a crash (doesn't throw an error)
-@test_throws ErrorException which(ambig, (UInt8, Int))
-@test_throws ErrorException code_llvm(io, ambig, (UInt8, Int))
-@test_throws ErrorException code_native(io, ambig, (UInt8, Int))
+let io = IOBuffer()
+    @test precompile(ambig, (UInt8, Int)) == false
+    cf = cfunction(ambig, Int, Tuple{UInt8, Int})  # test for a crash (doesn't throw an error)
+    @test_throws MethodError ccall(cf, Int, (UInt8, Int), 1, 2)
+    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
+                 which(ambig, (UInt8, Int)))
+    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
+                 code_llvm(io, ambig, (UInt8, Int)))
+    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
+                 code_native(io, ambig, (UInt8, Int)))
+end
 
 # Method overwriting doesn't destroy ambiguities
 @test_throws MethodError ambig(2, 0x03)
@@ -145,7 +153,7 @@ ambs = detect_ambiguities(Ambig5)
 
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
-@test detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=false) == []
+@test detect_ambiguities(Core, Base; imported=true, recursive=true, ambiguous_bottom=false) == []
 # some ambiguities involving Union{} type parameters are expected, but not required
 @test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
 
@@ -262,6 +270,7 @@ end
         pop!(need_to_handle_undef_sparam, which(Base._totuple, (Type{Tuple{Vararg{E}}} where E, Any, Any)))
         pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Vararg{E}}} where E}))
         pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Any}}}))
+        pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Base.cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T}, 1}, Tuple{Vararg{Pair{T}}}} where T<:AbstractString,)))

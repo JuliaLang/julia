@@ -4,7 +4,8 @@ module TestBroadcastInternals
 
 using Base.Broadcast: broadcast_indices, check_broadcast_indices,
                       check_broadcast_shape, newindex, _bcs
-using Base: Test, OneTo
+using Base: OneTo
+using Test
 
 @test @inferred(_bcs((3,5), (3,5))) == (3,5)
 @test @inferred(_bcs((3,1), (3,5))) == (3,5)
@@ -90,22 +91,22 @@ n3 = 17
 rb = 1:5
 
 for arr in (identity, as_sub)
-    @test broadcast(+, arr(eye(2)), arr([1, 4])) == [2 1; 4 5]
-    @test broadcast(+, arr(eye(2)), arr([1  4])) == [2 4; 1 5]
+    @test broadcast(+, arr([1 0; 0 1]), arr([1, 4])) == [2 1; 4 5]
+    @test broadcast(+, arr([1 0; 0 1]), arr([1  4])) == [2 4; 1 5]
     @test broadcast(+, arr([1  0]), arr([1, 4])) == [2 1; 5 4]
     @test broadcast(+, arr([1, 0]), arr([1  4])) == [2 5; 1 4]
     @test broadcast(+, arr([1, 0]), arr([1, 4])) == [2, 4]
     @test broadcast(+, arr([1, 0]), 2) == [3, 2]
 
-    @test @inferred(broadcast(+, arr(eye(2)), arr([1, 4]))) == arr([2 1; 4 5])
-    @test arr(eye(2)) .+ arr([1  4]) == arr([2 4; 1 5])
+    @test @inferred(broadcast(+, arr([1 0; 0 1]), arr([1, 4]))) == arr([2 1; 4 5])
+    @test arr([1 0; 0 1]) .+ arr([1  4]) == arr([2 4; 1 5])
     @test arr([1  0]) .+ arr([1, 4]) == arr([2 1; 5 4])
     @test arr([1, 0]) .+ arr([1  4]) == arr([2 5; 1 4])
     @test arr([1, 0]) .+ arr([1, 4]) == arr([2, 4])
     @test arr([1]) .+ arr([]) == arr([])
 
-    A = arr(eye(2)); @test broadcast!(+, A, A, arr([1, 4])) == arr([2 1; 4 5])
-    A = arr(eye(2)); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4; 1 5])
+    A = arr([1 0; 0 1]); @test broadcast!(+, A, A, arr([1, 4])) == arr([2 1; 4 5])
+    A = arr([1 0; 0 1]); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4; 1 5])
     A = arr([1  0]); @test_throws DimensionMismatch broadcast!(+, A, A, arr([1, 4]))
     A = arr([1  0]); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4])
     A = arr([1  0]); @test broadcast!(+, A, A, 2) == arr([3 2])
@@ -120,13 +121,13 @@ for arr in (identity, as_sub)
     @test arr(BitArray([true false])) .^ arr([0, 3]) == [true true; true false]
 
     M = arr([11 12; 21 22])
-    @test broadcast_getindex(M, eye(Int, 2).+1,arr([1, 2])) == [21 11; 12 22]
-    @test_throws BoundsError broadcast_getindex(M, eye(Int, 2).+1,arr([1, -1]))
-    @test_throws BoundsError broadcast_getindex(M, eye(Int, 2).+1,arr([1, 2]), [2])
-    @test broadcast_getindex(M, eye(Int, 2).+1,arr([2, 1]), [1]) == [22 12; 11 21]
+    @test broadcast_getindex(M, [2 1; 1 2], arr([1, 2])) == [21 11; 12 22]
+    @test_throws BoundsError broadcast_getindex(M, [2 1; 1 2], arr([1, -1]))
+    @test_throws BoundsError broadcast_getindex(M, [2 1; 1 2], arr([1, 2]), [2])
+    @test broadcast_getindex(M, [2 1; 1 2],arr([2, 1]), [1]) == [22 12; 11 21]
 
     A = arr(zeros(2,2))
-    broadcast_setindex!(A, arr([21 11; 12 22]), eye(Int, 2).+1,arr([1, 2]))
+    broadcast_setindex!(A, arr([21 11; 12 22]), [2 1; 1 2], arr([1, 2]))
     @test A == M
     broadcast_setindex!(A, 5, [1,2], [2 2])
     @test A == [11 5; 21 5]
@@ -134,12 +135,12 @@ for arr in (identity, as_sub)
     @test A == fill(7, 2, 2)
     A = arr(zeros(3,3))
     broadcast_setindex!(A, 10:12, 1:3, 1:3)
-    @test A == diagm(10:12)
+    @test A == diagm(0 => 10:12)
     @test_throws BoundsError broadcast_setindex!(A, 7, [1,-1], [1 2])
 
     for f in ((==), (<) , (!=), (<=))
-        bittest(f, arr(eye(2)), arr([1, 4]))
-        bittest(f, arr(eye(2)), arr([1  4]))
+        bittest(f, arr([1 0; 0 1]), arr([1, 4]))
+        bittest(f, arr([1 0; 0 1]), arr([1  4]))
         bittest(f, arr([0, 1]), arr([1  4]))
         bittest(f, arr([0  1]), arr([1, 4]))
         bittest(f, arr([1, 0]), arr([1, 4]))
@@ -216,8 +217,8 @@ let A = [sqrt(i)+j for i = 1:3, j=1:4]
     @test atan2.(log.(A), sum(A,1)) == broadcast(atan2, broadcast(log, A), sum(A, 1))
 end
 let x = sin.(1:10)
-    @test atan2.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan2, x+1, x+2) == broadcast(atan2, x.+1, x.+2)
-    @test sin.(atan2.([x+1,x+2]...)) == sin.(atan2.(x+1,x+2)) == @. sin(atan2(x+1,x+2))
+    @test atan2.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan2, x.+1, x.+2)
+    @test sin.(atan2.([x.+1,x.+2]...)) == sin.(atan2.(x.+1 ,x.+2)) == @. sin(atan2(x+1,x+2))
     @test sin.(atan2.(x, 3.7)) == broadcast(x -> sin(atan2(x,3.7)), x)
     @test atan2.(x, 3.7) == broadcast(x -> atan2(x,3.7), x) == broadcast(atan2, x, 3.7)
 end
@@ -317,12 +318,12 @@ end
 
 # make sure scalars are inlined, which causes f.(x,scalar) to lower to a "thunk"
 import Base.Meta: isexpr
-@test isexpr(expand(Main, :(f.(x,y))), :call)
-@test isexpr(expand(Main, :(f.(x,1))), :thunk)
-@test isexpr(expand(Main, :(f.(x,1.0))), :thunk)
-@test isexpr(expand(Main, :(f.(x,$π))), :thunk)
-@test isexpr(expand(Main, :(f.(x,"hello"))), :thunk)
-@test isexpr(expand(Main, :(f.(x,$("hello")))), :thunk)
+@test isexpr(Meta.lower(Main, :(f.(x,y))), :call)
+@test isexpr(Meta.lower(Main, :(f.(x,1))), :thunk)
+@test isexpr(Meta.lower(Main, :(f.(x,1.0))), :thunk)
+@test isexpr(Meta.lower(Main, :(f.(x,$π))), :thunk)
+@test isexpr(Meta.lower(Main, :(f.(x,"hello"))), :thunk)
+@test isexpr(Meta.lower(Main, :(f.(x,$("hello")))), :thunk)
 
 # PR #17623: Fused binary operators
 @test [true] .* [true] == [true]
@@ -411,7 +412,6 @@ end
 @test (-).(C_NULL, C_NULL)::UInt == 0
 @test (+).(1, Ref(2)) == fill(3)
 @test (+).(Ref(1), Ref(2)) == fill(3)
-@test (+).([[0,2], [1,3]], [1,-1]) == [[1,3], [0,2]]
 @test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]
 
 # Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722),
@@ -525,3 +525,16 @@ let t = (0, 1, 2)
     o = 1
     @test @inferred(broadcast(+, t, o)) == (1, 2, 3)
 end
+
+# TODO: Enable after deprecations introduced in 0.7 are removed.
+# @testset "scalar .=" begin
+#     A = [[1,2,3],4:5,6]
+#     A[1] .= 0
+#     @test A[1] == [0,0,0]
+#     @test_throws ErrorException A[2] .= 0
+#     @test_throws MethodError A[3] .= 0
+#     A = [[1,2,3],4:5]
+#     A[1] .= 0
+#     @test A[1] == [0,0,0]
+#     @test_throws ErrorException A[2] .= 0
+# end

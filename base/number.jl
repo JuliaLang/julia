@@ -49,6 +49,7 @@ ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
 endof(x::Number) = 1
 iteratorsize(::Type{<:Number}) = HasShape()
+keys(::Number) = OneTo(1)
 
 getindex(x::Number) = x
 function getindex(x::Number, i::Integer)
@@ -202,7 +203,7 @@ Multiply `x` and `y`, giving the result as a larger type.
 
 ```jldoctest
 julia> widemul(Float32(3.), 4.)
-1.200000000000000000000000000000000000000000000000000000000000000000000000000000e+01
+1.2e+01
 ```
 """
 widemul(x::Number, y::Number) = widen(x)*widen(y)
@@ -225,7 +226,7 @@ julia> zero(1)
 0
 
 julia> zero(big"2.0")
-0.000000000000000000000000000000000000000000000000000000000000000000000000000000
+0.0
 
 julia> zero(rand(2,2))
 2×2 Array{Float64,2}:
@@ -308,8 +309,7 @@ julia> factorial(6)
 julia> factorial(21)
 ERROR: OverflowError: 21 is too large to look up in the table
 Stacktrace:
- [1] factorial_lookup at ./combinatorics.jl:19 [inlined]
- [2] factorial(::Int64) at ./combinatorics.jl:27
+[...]
 
 julia> factorial(21.0)
 5.109094217170944e19

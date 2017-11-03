@@ -141,6 +141,7 @@ function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
     @assertposdef C info
 end
 function chol!(A::StridedMatrix)
+    checksquare(A)
     C, info = _chol!(A)
     @assertposdef C info
 end
@@ -236,6 +237,7 @@ ERROR: InexactError: convert(Int64, 6.782329983125268)
 ```
 """
 function cholfact!(A::StridedMatrix, ::Val{false}=Val(false))
+    checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         return Cholesky(A, 'U', convert(BlasInt, -1))
     else
@@ -267,6 +269,7 @@ factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
 function cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0)
+    checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         return CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
                                tol, convert(BlasInt, -1))
@@ -299,7 +302,6 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
 julia> C = cholfact(A)
 Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
 [2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]
-successful: true
 
 julia> C[:U]
 3×3 UpperTriangular{Float64,Array{Float64,2}}:
@@ -361,7 +363,6 @@ convert(::Type{AbstractMatrix}, C::Cholesky) = C.uplo == 'U' ? C[:U]'C[:U] : C[:
 convert(::Type{AbstractArray}, C::Cholesky) = convert(AbstractMatrix, C)
 convert(::Type{Matrix}, C::Cholesky) = convert(Array, convert(AbstractArray, C))
 convert(::Type{Array}, C::Cholesky) = convert(Matrix, C)
-full(C::Cholesky) = convert(AbstractArray, C)
 
 function convert(::Type{AbstractMatrix}, F::CholeskyPivoted)
     ip = invperm(F[:p])
@@ -370,7 +371,6 @@ end
 convert(::Type{AbstractArray}, F::CholeskyPivoted) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::CholeskyPivoted) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::CholeskyPivoted) = convert(Matrix, F)
-full(F::CholeskyPivoted) = convert(AbstractArray, F)
 
 copy(C::Cholesky) = Cholesky(copy(C.factors), C.uplo, C.info)
 copy(C::CholeskyPivoted) = CholeskyPivoted(copy(C.factors), C.uplo, C.piv, C.rank, C.tol, C.info)
@@ -402,9 +402,12 @@ end
 issuccess(C::Cholesky) = C.info == 0
 
 function show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix})
-    println(io, "$(typeof(C)) with factor:")
-    show(io, C[:UL])
-    print(io, "\nsuccessful: $(issuccess(C))")
+    if issuccess(C)
+        println(io, "$(typeof(C)) with factor:")
+        show(io, C[:UL])
+    else
+        print("Failed factorization of type $(typeof(C))")
+    end
 end
 
 A_ldiv_B!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
@@ -455,7 +458,7 @@ function A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix)
     end
 end
 
-isposdef(C::Cholesky) = C.info == 0
+isposdef(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
 
 function det(C::Cholesky)
     isposdef(C) || throw(PosDefException(C.info))

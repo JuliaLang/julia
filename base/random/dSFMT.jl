@@ -104,7 +104,8 @@ function dsfmt_jump(s::DSFMT_state, jp::AbstractString)
     val = s.val
     nval = length(val)
     index = val[nval - 1]
-    work = zeros(UInt64, JN32 >> 1)
+    work = zeros(Int32, JN32)
+    rwork = reinterpret(UInt64, work)
     dsfmt = Vector{UInt64}(nval >> 1)
     ccall(:memcpy, Ptr{Void}, (Ptr{UInt64}, Ptr{Int32}, Csize_t),
           dsfmt, val, (nval - 1) * sizeof(Int32))
@@ -113,17 +114,17 @@ function dsfmt_jump(s::DSFMT_state, jp::AbstractString)
     for c in jp
         bits = parse(UInt8,c,16)
         for j in 1:4
-            (bits & 0x01) != 0x00 && dsfmt_jump_add!(work, dsfmt)
+            (bits & 0x01) != 0x00 && dsfmt_jump_add!(rwork, dsfmt)
             bits = bits >> 0x01
             dsfmt_jump_next_state!(dsfmt)
         end
     end
 
-    work[end] = index
-    return DSFMT_state(reinterpret(Int32, work))
+    rwork[end] = index
+    return DSFMT_state(work)
 end
 
-function dsfmt_jump_add!(dest::Vector{UInt64}, src::Vector{UInt64})
+function dsfmt_jump_add!(dest::AbstractVector{UInt64}, src::Vector{UInt64})
     dp = dest[end] >> 1
     sp = src[end] >> 1
     diff = ((sp - dp + N) % N)

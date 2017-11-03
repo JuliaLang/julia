@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Tools for collecting and manipulating stack traces. Mainly used for building errors.
+"""
 module StackTraces
 
 

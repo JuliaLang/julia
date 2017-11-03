@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
@@ -19,14 +19,10 @@ aimg  = randn(n,n)/2
     aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     asym = aa'+aa                  # symmetric indefinite
     apd  = aa'*aa                 # symmetric positive-definite
-    @testset for atype in ("Array", "SubArray")
-        if atype == "Array"
-            a = aa
-        else
-            a = view(aa, 1:n, 1:n)
-            asym = view(asym, 1:n, 1:n)
-            apd = view(apd, 1:n, 1:n)
-        end
+    for (a, asym, apd) in ((aa, asym, apd),
+                           (view(aa, 1:n, 1:n),
+                            view(asym, 1:n, 1:n),
+                            view(apd, 1:n, 1:n)))
         ε = εa = eps(abs(float(one(eltya))))
 
         α = rand(eltya)
@@ -46,6 +42,7 @@ aimg  = randn(n,n)/2
             @test isposdef(a) == isposdef(f)
             @test eigvals(f) === f[:values]
             @test eigvecs(f) === f[:vectors]
+            @test Array(f) ≈ a
 
             num_fact = eigfact(one(eltya))
             @test num_fact.values[1] == one(eltya)
@@ -56,7 +53,7 @@ aimg  = randn(n,n)/2
             @test_throws DomainError eigmax(a - a')
         end
         @testset "symmetric generalized eigenproblem" begin
-            if atype == "Array"
+            if isa(a, Array)
                 asym_sg = asym[1:n1, 1:n1]
                 a_sg = a[:,n1+1:n2]
             else
@@ -77,7 +74,7 @@ aimg  = randn(n,n)/2
             @test v == f[:vectors]
         end
         @testset "Non-symmetric generalized eigenproblem" begin
-            if atype == "Array"
+            if isa(a, Array)
                 a1_nsg = a[1:n1, 1:n1]
                 a2_nsg = a[n1+1:n2, n1+1:n2]
             else
@@ -110,12 +107,7 @@ end
 
 # test a matrix larger than 140-by-140 for #14174
 let aa = rand(200, 200)
-    for atype in ("Array", "SubArray")
-        if atype == "Array"
-            a = aa
-        else
-            a = view(aa, 1:n, 1:n)
-        end
+    for a in (aa, view(aa, 1:n, 1:n))
         f = eigfact(a)
         @test a ≈ f[:vectors] * Diagonal(f[:values]) / f[:vectors]
     end

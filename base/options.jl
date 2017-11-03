@@ -6,9 +6,7 @@ struct JLOptions
     banner::Int8
     julia_home::Ptr{UInt8}
     julia_bin::Ptr{UInt8}
-    eval::Ptr{UInt8}
-    print::Ptr{UInt8}
-    load::Ptr{UInt8}
+    commands::Ptr{Ptr{UInt8}} # (e)eval, (E)print, (L)load
     image_file::Ptr{UInt8}
     cpu_target::Ptr{UInt8}
     nprocs::Int32
@@ -31,8 +29,8 @@ struct JLOptions
     worker::Int8
     cookie::Ptr{UInt8}
     handle_signals::Int8
-    use_precompiled::Int8
-    use_compilecache::Int8
+    use_sysimage_native_code::Int8
+    use_compiled_modules::Int8
     bindto::Ptr{UInt8}
     outputbc::Ptr{UInt8}
     outputunoptbc::Ptr{UInt8}
@@ -58,8 +56,24 @@ function show(io::IO, opt::JLOptions)
         v = getfield(opt, i)
         if isa(v, Ptr{UInt8})
             v = (v != C_NULL) ? unsafe_string(v) : ""
+        elseif isa(v, Ptr{Ptr{UInt8}})
+            v = unsafe_load_commands(v)
         end
         print(io, f, " = ", repr(v), i < nfields ? ", " : "")
     end
     print(io, ")")
+end
+
+function unsafe_load_commands(v::Ptr{Ptr{UInt8}})
+    cmds = Pair{Char, String}[]
+    v == C_NULL && return cmds
+    i = 1
+    while true
+        s = unsafe_load(v, i)
+        s == C_NULL && break
+        e = Char(unsafe_load(s))
+        push!(cmds, e => unsafe_string(s + 1))
+        i += 1
+    end
+    return cmds
 end

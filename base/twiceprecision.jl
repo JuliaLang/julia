@@ -84,7 +84,7 @@ function add12(x::T, y::T) where {T}
     x, y = ifelse(abs(y) > abs(x), (y, x), (x, y))
     canonicalize2(x, y)
 end
-add12(x, y) = add12(promote_noncircular(x, y)...)
+add12(x, y) = add12(promote(x, y)...)
 
 """
     zhi, zlo = mul12(x, y)
@@ -116,7 +116,7 @@ function mul12(x::T, y::T) where {T<:AbstractFloat}
     ifelse(iszero(h) | !isfinite(h), (h, h), canonicalize2(h, fma(x, y, -h)))
 end
 mul12(x::T, y::T) where {T} = (p = x * y; (p, zero(p)))
-mul12(x, y) = mul12(promote_noncircular(x, y)...)
+mul12(x, y) = mul12(promote(x, y)...)
 
 """
     zhi, zlo = div12(x, y)
@@ -152,7 +152,7 @@ function div12(x::T, y::T) where {T<:AbstractFloat}
     ifelse(iszero(r) | !isfinite(r), (r, r), (ldexp(rh, xe-ye), ldexp(rl, xe-ye)))
 end
 div12(x::T, y::T) where {T} = (p = x / y; (p, zero(p)))
-div12(x, y) = div12(promote_noncircular(x, y)...)
+div12(x, y) = div12(promote(x, y)...)
 
 
 ## TwicePrecision
@@ -269,7 +269,7 @@ function +(x::TwicePrecision{T}, y::TwicePrecision{T}) where T
     s = abs(x.hi) > abs(y.hi) ? (((x.hi - r) + y.hi) + y.lo) + x.lo : (((y.hi - r) + x.hi) + x.lo) + y.lo
     TwicePrecision(canonicalize2(r, s)...)
 end
-+(x::TwicePrecision, y::TwicePrecision) = +(promote_noncircular(x, y)...)
++(x::TwicePrecision, y::TwicePrecision) = +(promote(x, y)...)
 
 -(x::TwicePrecision, y::TwicePrecision) = x + (-y)
 -(x::TwicePrecision, y::Number) = x + (-y)
@@ -292,7 +292,7 @@ function *(x::TwicePrecision{T}, y::TwicePrecision{T}) where {T}
     ret = TwicePrecision{T}(canonicalize2(zh, (x.hi * y.lo + x.lo * y.hi) + zl)...)
     ifelse(iszero(zh) | !isfinite(zh), TwicePrecision{T}(zh, zh), ret)
 end
-*(x::TwicePrecision, y::TwicePrecision) = *(promote_noncircular(x, y)...)
+*(x::TwicePrecision, y::TwicePrecision) = *(promote(x, y)...)
 
 function /(x::TwicePrecision, v::Number)
     x / TwicePrecision{typeof(x.hi/v)}(v)
@@ -485,20 +485,20 @@ convert(::Type{StepRangeLen{Float64}}, r::StepRangeLen) =
 convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T<:IEEEFloat} =
     _convertSRL(StepRangeLen{T,Float64,Float64}, r)
 
-convert(::Type{StepRangeLen{Float64}}, r::Range) =
+convert(::Type{StepRangeLen{Float64}}, r::AbstractRange) =
     _convertSRL(StepRangeLen{Float64,TwicePrecision{Float64},TwicePrecision{Float64}}, r)
-convert(::Type{StepRangeLen{T}}, r::Range) where {T<:IEEEFloat} =
+convert(::Type{StepRangeLen{T}}, r::AbstractRange) where {T<:IEEEFloat} =
     _convertSRL(StepRangeLen{T,Float64,Float64}, r)
 
 function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{<:Integer}) where {T,R,S}
     StepRangeLen{T,R,S}(R(r.ref), S(r.step), length(r), r.offset)
 end
 
-function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::Range{<:Integer}) where {T,R,S}
+function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::AbstractRange{<:Integer}) where {T,R,S}
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
 end
 
-function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::Range{U}) where {T,R,S,U}
+function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::AbstractRange{U}) where {T,R,S,U}
     # if start and step have a rational approximation in the old type,
     # then we transfer that rational approximation to the new type
     f, s = first(r), step(r)
@@ -521,7 +521,7 @@ end
 function __convertSRL(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{U}) where {T,R,S,U}
     StepRangeLen{T,R,S}(R(r.ref), S(r.step), length(r), r.offset)
 end
-function __convertSRL(::Type{StepRangeLen{T,R,S}}, r::Range{U}) where {T,R,S,U}
+function __convertSRL(::Type{StepRangeLen{T,R,S}}, r::AbstractRange{U}) where {T,R,S,U}
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
 end
 

@@ -190,6 +190,15 @@ timesofar("utils")
         @test Array(one(BitMatrix(2,2))) == eye(2,2)
         @test_throws DimensionMismatch one(BitMatrix(2,3))
     end
+
+    # constructors should copy
+    a = trues(3)
+    @test BitArray(a) !== a
+    @test BitArray{1}(a) !== a
+
+    # issue #24062
+    @test_throws InexactError BitArray([0, 1, 2, 3])
+    @test_throws MethodError BitArray([0, ""])
 end
 
 timesofar("constructors")
@@ -197,9 +206,16 @@ timesofar("constructors")
 @testset "Indexing" begin
     @testset "0d for size $sz" for (sz,T) in allsizes
         b1 = rand!(falses(sz...))
-        @check_bit_operation getindex(b1)         Bool
-        @check_bit_operation setindex!(b1, true)  T
-        @check_bit_operation setindex!(b1, false) T
+        if length(b1) == 1
+            @check_bit_operation getindex(b1)         Bool
+            @check_bit_operation setindex!(b1, true)  T
+            @check_bit_operation setindex!(b1, false) T
+        else
+            # TODO: Re-enable after PLI deprecation is removed
+            # @test_throws getindex(b1)
+            # @test_throws setindex!(b1, true)
+            # @test_throws setindex!(b1, false)
+        end
     end
 
     @testset "linear for size $sz" for (sz,T) in allsizes[2:end]
@@ -1035,23 +1051,25 @@ timesofar("binary comparison")
         @test isequal(b1 >>> m, [ falses(m); b1[1:end-m] ])
         @test isequal(b1 << -m, b1 >> m)
         @test isequal(b1 >>> -m, b1 << m)
-        @test isequal(rol(b1, m), [ b1[m+1:end]; b1[1:m] ])
-        @test isequal(ror(b1, m), [ b1[end-m+1:end]; b1[1:end-m] ])
-        @test isequal(ror(b1, m), rol(b1, -m))
-        @test isequal(rol(b1, m), ror(b1, -m))
+        @test isequal(circshift(b1, -m), [ b1[m+1:end]; b1[1:m] ])
+        @test isequal(circshift(b1, m), [ b1[end-m+1:end]; b1[1:end-m] ])
+        @test isequal(circshift(b1, m), circshift(b1, m - length(b1)))
     end
 
     b = bitrand(v1)
     i = bitrand(v1)
     for m = [rand(1:v1), 63, 64, 65, 191, 192, 193, v1-1]
         j = rand(1:m)
-        b1 = ror!(i, b, j)
-        i1 = ror!(b, j)
+        b1 = circshift!(i, b, j)
+        i1 = circshift!(b, j)
         @test b1 == i1
-        b2 = rol!(i1, b1, j)
-        i2 = rol!(b1, j)
+        b2 = circshift!(i1, b1, -j)
+        i2 = circshift!(b1, -j)
         @test b2 == i2
+
+        @check_bit_operation slicedim(b1, 1, m) Bool
     end
+    @check_bit_operation slicedim(b1, 1, :) BitVector
 end
 
 timesofar("datamove")
@@ -1062,9 +1080,9 @@ timesofar("datamove")
 
         @check_bit_operation findfirst(b1) Int
 
-        @check_bit_operation findfirst(b1, true)  Int
-        @check_bit_operation findfirst(b1, false) Int
-        @check_bit_operation findfirst(b1, 3)     Int
+        @check_bit_operation findfirst(!iszero, b1)    Int
+        @check_bit_operation findfirst(iszero, b1)     Int
+        @check_bit_operation findfirst(equalto(3), b1) Int
 
         @check_bit_operation findfirst(x->x, b1)     Int
         @check_bit_operation findfirst(x->!x, b1)    Int
@@ -1353,8 +1371,14 @@ timesofar("cat")
     @check_bit_operation dot(b1, b2) Int
 
     b1 = bitrand(n1, n2)
-    for k = (-n1):n2
+    @test_throws ArgumentError tril(b1, -n1 - 2)
+    @test_throws ArgumentError tril(b1, n2)
+    @test_throws ArgumentError triu(b1, -n1)
+    @test_throws ArgumentError triu(b1, n2 + 2)
+    for k in (-n1 - 1):(n2 - 1)
         @check_bit_operation tril(b1, k) BitMatrix
+    end
+    for k in (-n1 + 1):(n2 + 1)
         @check_bit_operation triu(b1, k) BitMatrix
     end
 
@@ -1389,11 +1413,11 @@ timesofar("cat")
     @check_bit_operation qr(b1)
 
     b1 = bitrand(v1)
-    @check_bit_operation gradient(b1)
-    @check_bit_operation gradient(b1, 1.0)
+    @check_bit_operation diagm(0 => b1) BitMatrix
 
     b1 = bitrand(v1)
-    @check_bit_operation diagm(b1) BitMatrix
+    b2 = bitrand(v1)
+    @check_bit_operation diagm(-1 => b1, 1 => b2) BitMatrix
 
     b1 = bitrand(n1, n1)
     @check_bit_operation diag(b1)

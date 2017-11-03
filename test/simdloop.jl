@@ -26,8 +26,9 @@ function simd_loop_with_multiple_reductions(x, y, z)
 end
 
 for T in [Int32,Int64,Float32,Float64]
-   # Try various lengths to make sure "remainder loop" works
-   for n in [0,1,2,3,4,255,256,257]
+    # Try various lengths to make sure "remainder loop" works
+    for n in [0,1,2,3,4,255,256,257]
+        local n, a, b, c, s, t
         # Dataset chosen so that results will be exact with only 24 bits of mantissa
         a = convert(Array{T},[2*j+1 for j in 1:n])
         b = convert(Array{T},[3*j+2 for j in 1:n])
@@ -74,24 +75,37 @@ import Base.SimdLoop.SimdError
 
 # Test that @simd rejects inner loop body with invalid control flow statements
 # issue #8613
-@test_throws SimdError eval(:(begin
+macro test_throws(ty, ex)
+    return quote
+        Test.@test_throws $(esc(ty)) try
+            $(esc(ex))
+        catch err
+            @test err isa LoadError
+            @test err.file === $(string(__source__.file))
+            @test err.line === $(__source__.line + 1)
+            rethrow(err.error)
+        end
+    end
+end
+
+@test_throws SimdError("break is not allowed inside a @simd loop body") @macroexpand begin
     @simd for x = 1:10
         x == 1 && break
     end
-end))
+end
 
-@test_throws SimdError eval(:(begin
+@test_throws SimdError("continue is not allowed inside a @simd loop body") @macroexpand begin
     @simd for x = 1:10
         x < 5 && continue
     end
-end))
+end
 
-@test_throws SimdError eval(:(begin
+@test_throws SimdError("@goto is not allowed inside a @simd loop body") @macroexpand begin
     @simd for x = 1:10
         x == 1 || @goto exit_loop
     end
     @label exit_loop
-end))
+end
 
 # @simd with cartesian iteration
 function simd_cartesian_range!(indexes, crng)

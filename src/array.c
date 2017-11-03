@@ -5,12 +5,12 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -157,7 +157,7 @@ jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, 
     return _new_array_(atype, ndims, dims, isunboxed, elsz);
 }
 
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
 static inline int is_ntuple_long(jl_value_t *v)
 {
     if (!jl_is_tuple(v))
@@ -180,6 +180,7 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     size_t ndims = jl_nfields(_dims);
     assert(is_ntuple_long(_dims));
     size_t *dims = (size_t*)_dims;
+    assert(jl_types_equal(jl_tparam0(jl_typeof(data)), jl_tparam0(atype)));
 
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords * sizeof(size_t) + sizeof(void*), JL_SMALL_BYTE_ALIGNMENT);
@@ -435,7 +436,7 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 {
     if (a->flags.how == 3 && a->offset == 0 && a->elsize == 1 &&
         (jl_array_ndims(a) != 1 ||
-         !(a->maxsize+sizeof(void*)+1 > GC_MAX_SZCLASS && jl_array_nrows(a)+sizeof(void*)+1 <= GC_MAX_SZCLASS))) {
+         ((a->maxsize + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (jl_array_len(a) + sizeof(void*) + 1 <= GC_MAX_SZCLASS)))) {
         jl_value_t *o = jl_array_data_owner(a);
         if (jl_is_string(o)) {
             a->flags.isshared = 1;
@@ -616,7 +617,8 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
         nbytes++;
         oldnbytes++;
     }
-    if (!a->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(a)))) {
+    int is_discriminated_union = !a->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(a)));
+    if (is_discriminated_union) {
         nbytes += newlen;
         oldnbytes += oldlen;
     }
@@ -627,15 +629,15 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
         a->data = jl_gc_managed_realloc(olddata, nbytes, oldnbytes,
                                         a->flags.isaligned, (jl_value_t*)a);
     }
-    else if (a->flags.how == 3 && jl_is_string(jl_array_data_owner(a))) {
+    else if (a->flags.how == 3 && jl_is_string(jl_array_data_owner(a)) && !is_discriminated_union) {
         // if data is in a String, keep it that way
         jl_value_t *s;
         if (a->flags.isshared) {
-            s = jl_alloc_string(nbytes);
+            s = jl_alloc_string(nbytes - (elsz == 1));
             newbuf = 1;
         }
         else {
-            s = jl_gc_realloc_string(jl_array_data_owner(a), nbytes);
+            s = jl_gc_realloc_string(jl_array_data_owner(a), nbytes - (elsz == 1));
         }
         jl_array_data_owner(a) = s;
         jl_gc_wb(a, s);
@@ -1091,14 +1093,6 @@ static NOINLINE ssize_t jl_array_ptr_copy_backward(jl_value_t *owner,
 JL_DLLEXPORT void jl_array_ptr_copy(jl_array_t *dest, void **dest_p,
                                     jl_array_t *src, void **src_p, ssize_t n)
 {
-    // need to intercept union isbits arrays here since they're unboxed
-    if (!src->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(src))) &&
-        !dest->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(dest)))) {
-        memcpy(dest_p, src_p, n * src->elsize);
-        memcpy((char*)dest->data + jl_array_len(dest) * dest->elsize,
-               (char*)src->data + jl_array_len(src) * src->elsize, n);
-        return;
-    }
     assert(dest->flags.ptrarray && src->flags.ptrarray);
     jl_value_t *owner = jl_array_owner(dest);
     // Destination is old and doesn't refer to any young object

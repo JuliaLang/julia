@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Convenience functions for metaprogramming.
+"""
 module Meta
-#
-# convenience functions for metaprogramming
-#
 
 export quot,
        isexpr,
@@ -54,6 +54,29 @@ Show every part of the representation of the given expression. Equivalent to
 """
 macro dump(expr)
     dump(expr)
+end
+
+"""
+    lower(m, x)
+
+Takes the expression `x` and returns an equivalent expression in lowered form
+for executing in module `m`.
+See also [`code_lowered`](@ref).
+"""
+lower(m::Module, @nospecialize(x)) = ccall(:jl_expand, Any, (Any, Any), x, m)
+
+"""
+    @lower [m] x
+
+Return lowered form of the expression `x` in module `m`.
+By default `m` is the module in which the macro is called.
+See also [`lower`](@ref).
+"""
+macro lower(code)
+    return :(lower($__module__, $(QuoteNode(code))))
+end
+macro lower(mod, code)
+    return :(lower($(esc(mod)), $(QuoteNode(code))))
 end
 
 end # module

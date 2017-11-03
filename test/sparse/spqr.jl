@@ -36,14 +36,15 @@ nn = 100
         @test (eye(m)*Q)*Q' ≈ eye(m)
 
         # test that Q'Pl*A*Pr = R
-        R0 = Q'*full(A[F[:prow], F[:pcol]])
+        R0 = Q'*Array(A[F[:prow], F[:pcol]])
         @test R0[1:n, :] ≈ F[:R]
         @test norm(R0[n + 1:end, :], 1) < 1e-12
 
-        @test_throws DimensionMismatch A_mul_B!(Q, eye(m + 1))
-        @test_throws DimensionMismatch Ac_mul_B!(Q, eye(m + 1))
-        @test_throws DimensionMismatch A_mul_B!(eye(m + 1), Q)
-        @test_throws DimensionMismatch A_mul_Bc!(eye(m + 1), Q)
+        offsizeA = Matrix{Float64}(m+1, m+1)
+        @test_throws DimensionMismatch A_mul_B!(Q, offsizeA)
+        @test_throws DimensionMismatch Ac_mul_B!(Q, offsizeA)
+        @test_throws DimensionMismatch A_mul_B!(offsizeA, Q)
+        @test_throws DimensionMismatch A_mul_Bc!(offsizeA, Q)
     end
 
     @testset "element type of B: $eltyB" for eltyB in (Int, Float64, Complex{Float64})
@@ -63,14 +64,14 @@ nn = 100
     end
 
     # Make sure that conversion to Sparse doesn't use SuiteSparse's symmetric flag
-    @test qrfact(sparse(eye(eltyA, 5)))\ones(eltyA, 5) == ones(5)
+    @test qrfact(sparse(one(eltyA)I, 5))\ones(eltyA, 5) == ones(5)
 end
 
 @testset "basic solution of rank deficient ls" begin
     A = sprandn(m, 5, 0.9)*sprandn(5, n, 0.9)
     b = randn(m)
     xs = A\b
-    xd = full(A)\b
+    xd = Array(A)\b
 
     # check that basic solution has more zeros
     @test count(!iszero, xs) < count(!iszero, xd)

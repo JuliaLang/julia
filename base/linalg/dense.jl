@@ -30,7 +30,7 @@ scale!(s::T, X::Array{T}) where {T<:BlasFloat} = scale!(X, s)
 scale!(X::Array{T}, s::Number) where {T<:BlasFloat} = scale!(X, convert(T, s))
 function scale!(X::Array{T}, s::Real) where T<:BlasComplex
     R = typeof(real(zero(T)))
-    BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
+    Base.@gc_preserve X BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
     X
 end
 
@@ -112,14 +112,41 @@ true
 isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact(Hermitian(A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
+"""
+    stride1(A) -> Int
+
+Returns the distance between successive array elements
+in dimension 1 in units of element size.
+
+# Examples
+```jldoctest
+julia> A = [1,2,3,4]
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+
+julia> Base.LinAlg.stride1(A)
+1
+
+julia> B = view(A, 2:2:4)
+2-element view(::Array{Int64,1}, 2:2:4) with eltype Int64:
+ 2
+ 4
+
+julia> Base.LinAlg.stride1(B)
+2
+```
+"""
 stride1(x::Array) = 1
 stride1(x::StridedVector) = stride(x, 1)::Int
 
-function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},Range{TI}}) where {T<:BlasFloat,TI<:Integer}
+function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
     end
-    BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
+    Base.@gc_preserve x BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
 vecnorm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =
@@ -155,8 +182,9 @@ julia> triu!(M, 1)
 """
 function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
-    if (k > 0 && k > n) || (k < 0 && -k > m)
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m,$n)"))
+    if !(-m + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-m + 1) and at most $(n + 1) in an $m-by-$n matrix")))
     end
     idx = 1
     for j = 0:n-1
@@ -198,8 +226,9 @@ julia> tril!(M, 2)
 """
 function tril!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
-    if (k > 0 && k > n) || (k < 0 && -k > m)
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m,$n)"))
+    if !(-m - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-m - 1) and at most $(n - 1) in an $m-by-$n matrix")))
     end
     idx = 1
     for j = 0:n-1
@@ -213,26 +242,10 @@ function tril!(M::AbstractMatrix, k::Integer)
 end
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
-function gradient(F::AbstractVector, h::Vector)
-    n = length(F)
-    T = typeof(oneunit(eltype(F))/oneunit(eltype(h)))
-    g = similar(F, T)
-    if n == 1
-        g[1] = zero(T)
-    elseif n > 1
-        g[1] = (F[2] - F[1]) / (h[2] - h[1])
-        g[n] = (F[n] - F[n-1]) / (h[end] - h[end-1])
-        if n > 2
-            h = h[3:n] - h[1:n-2]
-            g[2:n-1] = (F[3:n] - F[1:n-2]) ./ h
-        end
-    end
-    g
-end
-
 function diagind(m::Integer, n::Integer, k::Integer=0)
     if !(-m <= k <= n)
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m,$n)"))
+        throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) and ",
+            "at most $n in an $m-by-$n matrix")))
     end
     k <= 0 ? range(1-k, m+1, min(m+k, n)) : range(k*m+1, m+1, min(m, n-k))
 end
@@ -240,7 +253,7 @@ end
 """
     diagind(M, k::Integer=0)
 
-A `Range` giving the indices of the `k`th diagonal of the matrix `M`.
+An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
 
 # Examples
 ```jldoctest
@@ -260,7 +273,8 @@ diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
     diag(M, k::Integer=0)
 
 The `k`th diagonal of a matrix, as a vector.
-Use [`diagm`](@ref) to construct a diagonal matrix.
+
+See also: [`diagm`](@ref)
 
 # Examples
 ```jldoctest
@@ -279,29 +293,53 @@ julia> diag(A,1)
 diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 
 """
-    diagm(v, k::Integer=0)
+    diagm(kv::Pair{<:Integer,<:AbstractVector}...)
 
-Construct a matrix by placing `v` on the `k`th diagonal. This constructs a full matrix; if
-you want a storage-efficient version with fast arithmetic, use [`Diagonal`](@ref) instead.
+Construct a square matrix from `Pair`s of diagonals and vectors.
+Vector `kv.second` will be placed on the `kv.first` diagonal.
+`diagm` constructs a full matrix; if you want storage-efficient
+versions with fast arithmetic, see [`Diagonal`](@ref), [`Bidiagonal`](@ref)
+[`Tridiagonal`](@ref) and [`SymTridiagonal`](@ref).
+
+See also: [`spdiagm`](@ref)
 
 # Examples
 ```jldoctest
-julia> diagm([1,2,3],1)
+julia> diagm(1 => [1,2,3])
 4×4 Array{Int64,2}:
  0  1  0  0
  0  0  2  0
  0  0  0  3
  0  0  0  0
+
+julia> diagm(1 => [1,2,3], -1 => [4,5])
+4×4 Array{Int64,2}:
+ 0  1  0  0
+ 4  0  2  0
+ 0  5  0  3
+ 0  0  0  0
 ```
 """
-function diagm(v::AbstractVector{T}, k::Integer=0) where T
-    n = length(v) + abs(k)
-    A = zeros(T,n,n)
-    A[diagind(A,k)] = v
-    A
+function diagm(kv::Pair{<:Integer,<:AbstractVector}...)
+    A = diagm_container(kv...)
+    for p in kv
+        inds = diagind(A, p.first)
+        for (i, val) in enumerate(p.second)
+            A[inds[i]] += val
+        end
+    end
+    return A
+end
+function diagm_container(kv::Pair{<:Integer,<:AbstractVector}...)
+    T = promote_type(map(x -> eltype(x.second), kv)...)
+    n = mapreduce(x -> length(x.second) + abs(x.first), max, kv)
+    return zeros(T, n, n)
+end
+function diagm_container(kv::Pair{<:Integer,<:BitVector}...)
+    n = mapreduce(x -> length(x.second) + abs(x.first), max, kv)
+    return falses(n, n)
 end
 
-diagm(x::Number) = (X = Matrix{typeof(x)}(1,1); X[1,1] = x; X)
 
 function trace(A::Matrix{T}) where T
     n = checksquare(A)
@@ -374,8 +412,8 @@ function schurpow(A::AbstractMatrix, p)
         retmat = A ^ floor(p)
         # Real part
         if p - floor(p) == 0.5
-            # special case: A^0.5 === sqrtm(A)
-            retmat = retmat * sqrtm(A)
+            # special case: A^0.5 === sqrt(A)
+            retmat = retmat * sqrt(A)
         else
             retmat = retmat * powm!(UpperTriangular(float.(A)), real(p - floor(p)))
         end
@@ -385,8 +423,8 @@ function schurpow(A::AbstractMatrix, p)
         R = S ^ floor(p)
         # Real part
         if p - floor(p) == 0.5
-            # special case: A^0.5 === sqrtm(A)
-            R = R * sqrtm(S)
+            # special case: A^0.5 === sqrt(A)
+            R = R * sqrt(S)
         else
             R = R * powm!(UpperTriangular(float.(S)), real(p - floor(p)))
         end
@@ -405,7 +443,8 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
 
     # Quicker return if A is diagonal
     if isdiag(A)
-        retmat = copy(A)
+        TT = promote_op(^, T, typeof(p))
+        retmat = copy_oftype(A, TT)
         for i in 1:n
             retmat[i, i] = retmat[i, i] ^ p
         end
@@ -426,7 +465,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Otherwise, use Schur decomposition
     return schurpow(A, p)
 end
-(^)(A::AbstractMatrix, p::Number) = exp(p*logm(A))
+(^)(A::AbstractMatrix, p::Number) = exp(p*log(A))
 
 # Matrix exponential
 
@@ -458,14 +497,14 @@ julia> exp(A)
 ```
 """
 exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
-exp(A::StridedMatrix{<:Integer}) = exp!(float(A))
+exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
 function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     n = checksquare(A)
     if ishermitian(A)
-        return full(exp(Hermitian(A)))
+        return copytri!(parent(exp(Hermitian(A))), 'U', true)
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = norm(A, 1)
@@ -556,7 +595,7 @@ function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
 end
 
 """
-    logm(A{T}::StridedMatrix{T})
+    log(A{T}::StridedMatrix{T})
 
 If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
 the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
@@ -580,25 +619,23 @@ julia> A = 2.7182818 * eye(2)
  2.71828  0.0
  0.0      2.71828
 
-julia> logm(A)
-2×2 Symmetric{Float64,Array{Float64,2}}:
+julia> log(A)
+2×2 Array{Float64,2}:
  1.0  0.0
  0.0  1.0
 ```
 """
-function logm(A::StridedMatrix{T}) where T
+function log(A::StridedMatrix)
     # If possible, use diagonalization
-    if issymmetric(A) && T <: Real
-        return logm(Symmetric(A))
-    end
     if ishermitian(A)
-        return logm(Hermitian(A))
+        logHermA = log(Hermitian(A))
+        return isa(logHermA, Hermitian) ? copytri!(parent(logHermA), 'U', true) : parent(logHermA)
     end
 
     # Use Schur decomposition
     n = checksquare(A)
     if istriu(A)
-        return full(logm(UpperTriangular(complex(A))))
+        return triu!(parent(log(UpperTriangular(complex(A)))))
     else
         if isreal(A)
             SchurF = schurfact(real(A))
@@ -607,22 +644,17 @@ function logm(A::StridedMatrix{T}) where T
         end
         if !istriu(SchurF.T)
             SchurS = schurfact(complex(SchurF.T))
-            logT = SchurS.Z * logm(UpperTriangular(SchurS.T)) * SchurS.Z'
+            logT = SchurS.Z * log(UpperTriangular(SchurS.T)) * SchurS.Z'
             return SchurF.Z * logT * SchurF.Z'
         else
-            R = logm(UpperTriangular(complex(SchurF.T)))
+            R = log(UpperTriangular(complex(SchurF.T)))
             return SchurF.Z * R * SchurF.Z'
         end
     end
 end
-function logm(a::Number)
-    b = log(complex(a))
-    return imag(b) == 0 ? real(b) : b
-end
-logm(a::Complex) = log(a)
 
 """
-    sqrtm(A)
+    sqrt(A::AbstractMatrix)
 
 If `A` has no negative real eigenvalues, compute the principal matrix square root of `A`,
 that is the unique matrix ``X`` with eigenvalues having positive real part such that
@@ -646,56 +678,426 @@ julia> A = [4 0; 0 4]
  4  0
  0  4
 
-julia> sqrtm(A)
+julia> sqrt(A)
 2×2 Array{Float64,2}:
  2.0  0.0
  0.0  2.0
 ```
 """
-function sqrtm(A::StridedMatrix{<:Real})
+function sqrt(A::StridedMatrix{<:Real})
     if issymmetric(A)
-        return full(sqrtm(Symmetric(A)))
+        return copytri!(parent(sqrt(Symmetric(A))), 'U')
     end
     n = checksquare(A)
     if istriu(A)
-        return full(sqrtm(UpperTriangular(A)))
+        return triu!(parent(sqrt(UpperTriangular(A))))
     else
         SchurF = schurfact(complex(A))
-        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        R = triu!(parent(sqrt(UpperTriangular(SchurF[:T])))) # unwrapping unnecessary?
         return SchurF[:vectors] * R * SchurF[:vectors]'
     end
 end
-function sqrtm(A::StridedMatrix{<:Complex})
+function sqrt(A::StridedMatrix{<:Complex})
     if ishermitian(A)
-        return full(sqrtm(Hermitian(A)))
+        sqrtHermA = sqrt(Hermitian(A))
+        return isa(sqrtHermA, Hermitian) ? copytri!(parent(sqrtHermA), 'U', true) : parent(sqrtHermA)
     end
     n = checksquare(A)
     if istriu(A)
-        return full(sqrtm(UpperTriangular(A)))
+        return triu!(parent(sqrt(UpperTriangular(A))))
     else
         SchurF = schurfact(A)
-        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        R = triu!(parent(sqrt(UpperTriangular(SchurF[:T])))) # unwrapping unnecessary?
         return SchurF[:vectors] * R * SchurF[:vectors]'
     end
 end
-sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
-sqrtm(a::Complex) = sqrt(a)
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
     S = typeof((one(T)*zero(T) + one(T)*zero(T))/one(T))
     AA = convert(AbstractArray{S}, A)
     if istriu(AA)
-        Ai = inv(UpperTriangular(AA))
-        Ai = convert(typeof(parent(Ai)), Ai)
+        Ai = triu!(parent(inv(UpperTriangular(AA))))
     elseif istril(AA)
-        Ai = inv(LowerTriangular(AA))
-        Ai = convert(typeof(parent(Ai)), Ai)
+        Ai = tril!(parent(inv(LowerTriangular(AA))))
     else
         Ai = inv!(lufact(AA))
         Ai = convert(typeof(parent(Ai)), Ai)
     end
     return Ai
+end
+
+"""
+    cos(A::AbstractMatrix)
+
+Compute the matrix cosine of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the cosine. Otherwise, the cosine is determined by calling [`exp`](@ref).
+
+# Examples
+```jldoctest
+julia> cos(ones(2, 2))
+2×2 Array{Float64,2}:
+  0.291927  -0.708073
+ -0.708073   0.291927
+```
+"""
+function cos(A::AbstractMatrix{<:Real})
+    if issymmetric(A)
+        return copytri!(parent(cos(Symmetric(A))), 'U')
+    end
+    T = complex(float(eltype(A)))
+    return real(exp!(T.(im .* A)))
+end
+function cos(A::AbstractMatrix{<:Complex})
+    if ishermitian(A)
+        return copytri!(parent(cos(Hermitian(A))), 'U', true)
+    end
+    T = complex(float(eltype(A)))
+    X = exp!(T.(im .* A))
+    @. X = (X + $exp!(T(-im*A))) / 2
+    return X
+end
+
+"""
+    sin(A::AbstractMatrix)
+
+Compute the matrix sine of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the sine. Otherwise, the sine is determined by calling [`exp`](@ref).
+
+# Examples
+```jldoctest
+julia> sin(ones(2, 2))
+2×2 Array{Float64,2}:
+ 0.454649  0.454649
+ 0.454649  0.454649
+```
+"""
+function sin(A::AbstractMatrix{<:Real})
+    if issymmetric(A)
+        return copytri!(parent(sin(Symmetric(A))), 'U')
+    end
+    T = complex(float(eltype(A)))
+    return imag(exp!(T.(im .* A)))
+end
+function sin(A::AbstractMatrix{<:Complex})
+    if ishermitian(A)
+        return copytri!(parent(sin(Hermitian(A))), 'U', true)
+    end
+    T = complex(float(eltype(A)))
+    X = exp!(T.(im .* A))
+    Y = exp!(T.(.-im .* A))
+    @inbounds for i in eachindex(X)
+        x, y = X[i]/2, Y[i]/2
+        X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
+    end
+    return X
+end
+
+"""
+    sincos(A::AbstractMatrix)
+
+Compute the matrix sine and cosine of a square matrix `A`.
+
+# Examples
+```jldoctest
+julia> S, C = sincos(ones(2, 2));
+
+julia> S
+2×2 Array{Float64,2}:
+ 0.454649  0.454649
+ 0.454649  0.454649
+
+julia> C
+2×2 Array{Float64,2}:
+  0.291927  -0.708073
+ -0.708073   0.291927
+```
+"""
+function sincos(A::AbstractMatrix{<:Real})
+    if issymmetric(A)
+        symsinA, symcosA = sincos(Symmetric(A))
+        sinA = copytri!(parent(symsinA), 'U')
+        cosA = copytri!(parent(symcosA), 'U')
+        return sinA, cosA
+    end
+    T = complex(float(eltype(A)))
+    c, s = reim(exp!(T.(im .* A)))
+    return s, c
+end
+function sincos(A::AbstractMatrix{<:Complex})
+    if ishermitian(A)
+        hermsinA, hermcosA = sincos(Hermitian(A))
+        sinA = copytri!(parent(hermsinA), 'U', true)
+        cosA = copytri!(parent(hermcosA), 'U', true)
+        return sinA, cosA
+    end
+    T = complex(float(eltype(A)))
+    X = exp!(T.(im .* A))
+    Y = exp!(T.(.-im .* A))
+    @inbounds for i in eachindex(X)
+        x, y = X[i]/2, Y[i]/2
+        X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
+        Y[i] = x+y
+    end
+    return X, Y
+end
+
+"""
+    tan(A::AbstractMatrix)
+
+Compute the matrix tangent of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the tangent. Otherwise, the tangent is determined by calling [`exp`](@ref).
+
+# Examples
+```jldoctest
+julia> tan(ones(2, 2))
+2×2 Array{Float64,2}:
+ -1.09252  -1.09252
+ -1.09252  -1.09252
+```
+"""
+function tan(A::AbstractMatrix)
+    if ishermitian(A)
+        return copytri!(parent(tan(Hermitian(A))), 'U', true)
+    end
+    S, C = sincos(A)
+    S /= C
+    return S
+end
+
+"""
+    cosh(A::AbstractMatrix)
+
+Compute the matrix hyperbolic cosine of a square matrix `A`.
+"""
+function cosh(A::AbstractMatrix)
+    if ishermitian(A)
+        return copytri!(parent(cosh(Hermitian(A))), 'U', true)
+    end
+    X = exp(A)
+    @. X = (X + $exp!(float(-A))) / 2
+    return X
+end
+
+"""
+    sinh(A::AbstractMatrix)
+
+Compute the matrix hyperbolic sine of a square matrix `A`.
+"""
+function sinh(A::AbstractMatrix)
+    if ishermitian(A)
+        return copytri!(parent(sinh(Hermitian(A))), 'U', true)
+    end
+    X = exp(A)
+    @. X = (X - $exp!(float(-A))) / 2
+    return X
+end
+
+"""
+    tanh(A::AbstractMatrix)
+
+Compute the matrix hyperbolic tangent of a square matrix `A`.
+"""
+function tanh(A::AbstractMatrix)
+    if ishermitian(A)
+        return copytri!(parent(tanh(Hermitian(A))), 'U', true)
+    end
+    X = exp(A)
+    Y = exp!(float.(.-A))
+    @inbounds for i in eachindex(X)
+        x, y = X[i], Y[i]
+        X[i] = x - y
+        Y[i] = x + y
+    end
+    X /= Y
+    return X
+end
+
+"""
+    acos(A::AbstractMatrix)
+
+Compute the inverse matrix cosine of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the inverse cosine. Otherwise, the inverse cosine is determined by using
+[`log`](@ref) and [`sqrt`](@ref).  For the theory and logarithmic formulas used to compute
+this function, see [^AH16_1].
+
+[^AH16_1]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+
+# Examples
+```jldoctest
+julia> acos(cos([0.5 0.1; -0.2 0.3]))
+2×2 Array{Complex{Float64},2}:
+  0.5-8.32667e-17im  0.1-2.77556e-17im
+ -0.2+2.77556e-16im  0.3-3.46945e-16im
+```
+"""
+function acos(A::AbstractMatrix)
+    if ishermitian(A)
+        acosHermA = acos(Hermitian(A))
+        return isa(acosHermA, Hermitian) ? copytri!(parent(acosHermA), 'U', true) : parent(acosHermA)
+    end
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = triu!(parent(-im * log(U + im * sqrt(I - U^2))))
+    return SchurF.Z * R * SchurF.Z'
+end
+
+"""
+    asin(A::AbstractMatrix)
+
+Compute the inverse matrix sine of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the inverse sine. Otherwise, the inverse sine is determined by using [`log`](@ref)
+and [`sqrt`](@ref).  For the theory and logarithmic formulas used to compute this function,
+see [^AH16_2].
+
+[^AH16_2]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+
+# Examples
+```jldoctest
+julia> asin(sin([0.5 0.1; -0.2 0.3]))
+2×2 Array{Complex{Float64},2}:
+  0.5-4.16334e-17im  0.1-5.55112e-17im
+ -0.2+9.71445e-17im  0.3-1.249e-16im
+```
+"""
+function asin(A::AbstractMatrix)
+    if ishermitian(A)
+        asinHermA = asin(Hermitian(A))
+        return isa(asinHermA, Hermitian) ? copytri!(parent(asinHermA), 'U', true) : parent(asinHermA)
+    end
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = triu!(parent(-im * log(im * U + sqrt(I - U^2))))
+    return SchurF.Z * R * SchurF.Z'
+end
+
+"""
+    atan(A::AbstractMatrix)
+
+Compute the inverse matrix tangent of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the inverse tangent. Otherwise, the inverse tangent is determined by using
+[`log`](@ref).  For the theory and logarithmic formulas used to compute this function, see
+[^AH16_3].
+
+[^AH16_3]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+
+# Examples
+```jldoctest
+julia> atan(tan([0.5 0.1; -0.2 0.3]))
+2×2 Array{Complex{Float64},2}:
+  0.5+1.38778e-17im  0.1-2.77556e-17im
+ -0.2+6.93889e-17im  0.3-4.16334e-17im
+```
+"""
+function atan(A::AbstractMatrix)
+    if ishermitian(A)
+        return copytri!(parent(atan(Hermitian(A))), 'U', true)
+    end
+    SchurF = schurfact(complex(A))
+    U = im * UpperTriangular(SchurF.T)
+    R = triu!(parent(log((I + U) / (I - U)) / 2im))
+    return SchurF.Z * R * SchurF.Z'
+end
+
+"""
+    acosh(A::AbstractMatrix)
+
+Compute the inverse hyperbolic matrix cosine of a square matrix `A`.  For the theory and
+logarithmic formulas used to compute this function, see [^AH16_4].
+
+[^AH16_4]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+"""
+function acosh(A::AbstractMatrix)
+    if ishermitian(A)
+        acoshHermA = acosh(Hermitian(A))
+        return isa(acoshHermA, Hermitian) ? copytri!(parent(acoshHermA), 'U', true) : parent(acoshHermA)
+    end
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = triu!(parent(log(U + sqrt(U - I) * sqrt(U + I))))
+    return SchurF.Z * R * SchurF.Z'
+end
+
+"""
+    asinh(A::AbstractMatrix)
+
+Compute the inverse hyperbolic matrix sine of a square matrix `A`.  For the theory and
+logarithmic formulas used to compute this function, see [^AH16_5].
+
+[^AH16_5]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+"""
+function asinh(A::AbstractMatrix)
+    if ishermitian(A)
+        return copytri!(parent(asinh(Hermitian(A))), 'U', true)
+    end
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = triu!(parent(log(U + sqrt(I + U^2))))
+    return SchurF.Z * R * SchurF.Z'
+end
+
+"""
+    atanh(A::AbstractMatrix)
+
+Compute the inverse hyperbolic matrix tangent of a square matrix `A`.  For the theory and
+logarithmic formulas used to compute this function, see [^AH16_6].
+
+[^AH16_6]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+"""
+function atanh(A::AbstractMatrix)
+    if ishermitian(A)
+        return copytri!(parent(atanh(Hermitian(A))), 'U', true)
+    end
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = triu!(parent(log((I + U) / (I - U)) / 2))
+    return SchurF.Z * R * SchurF.Z'
+end
+
+for (finv, f, finvh, fh, fn) in ((:sec, :cos, :sech, :cosh, "secant"),
+                                 (:csc, :sin, :csch, :sinh, "cosecant"),
+                                 (:cot, :tan, :coth, :tanh, "cotangent"))
+    name = string(finv)
+    hname = string(finvh)
+    @eval begin
+        @doc """
+            $($name)(A::AbstractMatrix)
+
+        Compute the matrix $($fn) of a square matrix `A`.
+        """ ($finv)(A::AbstractMatrix{T}) where {T} = inv(($f)(A))
+        @doc """
+            $($hname)(A::AbstractMatrix)
+
+        Compute the matrix hyperbolic $($fn) of square matrix `A`.
+        """ ($finvh)(A::AbstractMatrix{T}) where {T} = inv(($fh)(A))
+    end
+end
+
+for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
+                                       (:acsc, :asin, :acsch, :asinh, "cosecant"),
+                                       (:acot, :atan, :acoth, :atanh, "cotangent"))
+    tname = string(tfa)
+    hname = string(hfa)
+    @eval begin
+        @doc """
+            $($tname)(A::AbstractMatrix)
+        Compute the inverse matrix $($fn) of `A`. """ ($tfa)(A::AbstractMatrix{T}) where {T} = ($tfainv)(inv(A))
+        @doc """
+            $($hname)(A::AbstractMatrix)
+        Compute the inverse matrix hyperbolic $($fn) of `A`. """ ($hfa)(A::AbstractMatrix{T}) where {T} = ($hfainv)(inv(A))
+    end
 end
 
 """
@@ -735,7 +1137,7 @@ julia> A = Array(Bidiagonal(ones(5, 5), :U))
  0.0  0.0  0.0  0.0  1.0
 
 julia> factorize(A) # factorize will check to see that A is already factorized
-5×5 Bidiagonal{Float64}:
+5×5 Bidiagonal{Float64,Array{Float64,1}}:
  1.0  1.0   ⋅    ⋅    ⋅
   ⋅   1.0  1.0   ⋅    ⋅
   ⋅    ⋅   1.0  1.0   ⋅
@@ -888,7 +1290,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
             return B
         end
     end
-    SVD         = svdfact(A, thin=true)
+    SVD         = svdfact(A, full = false)
     Stype       = eltype(SVD.S)
     Sinv        = zeros(Stype, length(SVD.S))
     index       = SVD.S .> tol*maximum(SVD.S)
@@ -897,7 +1299,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv(A::StridedMatrix{T}) where T
-    tol = eps(real(float(one(T))))*maximum(size(A))
+    tol = eps(real(float(one(T))))*min(size(A)...)
     return pinv(A, tol)
 end
 function pinv(x::Number)
@@ -930,7 +1332,7 @@ julia> nullspace(M)
 function nullspace(A::StridedMatrix{T}) where T
     m, n = size(A)
     (m == 0 || n == 0) && return eye(T, n)
-    SVD = svdfact(A, thin = false)
+    SVD = svdfact(A, full = true)
     indstart = sum(SVD.S .> max(m,n)*maximum(SVD.S)*eps(eltype(SVD.S))) + 1
     return SVD.Vt[indstart:end,:]'
 end

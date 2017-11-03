@@ -58,6 +58,7 @@ Return the high word of `x` as a `UInt32`.
 Return positive part of the high word of `x` as a `UInt32`.
 """
 @inline poshighword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)&0x7fffffff
+@inline poshighword(x::Float32) = reinterpret(UInt32, x)&0x7fffffff
 @inline poshighword(x::Float64) = poshighword(reinterpret(UInt64, x))
 
 @inline function cody_waite_2c_pio2(x::Float64, fn, n)
@@ -291,4 +292,52 @@ added for ``π/4<|x|<=π/2`` instead of simply returning `x`.
     end
     # if |x| >= 2^20*pi/2 switch to Payne Hanek
     return paynehanek(x)
+end
+
+## Float32
+@inline function rem_pio2_kernel(x::Float32)
+    pio2_1 = 1.57079631090164184570e+00
+    pio2_1t = 1.58932547735281966916e-08
+    inv_pio2 = 6.36619772367581382433e-01
+    xd = convert(Float64, x)
+    absxd = abs(xd)
+    # it is assumed that NaN and Infs have been checked
+    if absxd <= pi*5/4
+        if absxd <= pi*3/4
+            if x > 0
+                return 1, DoubleFloat32(xd - pi/2)
+            else
+                return -1, DoubleFloat32(xd + pi/2)
+            end
+        end
+        if x > 0
+            return 2, DoubleFloat32(xd - pi)
+        else
+            return -2, DoubleFloat32(xd + pi)
+        end
+    elseif absxd <= pi*9/4
+        if absxd <= pi*7/4
+            if x > 0
+                return 3, DoubleFloat32(xd - pi*3/2)
+            else
+                return -3, DoubleFloat32(xd + pi*3/2)
+            end
+        end
+        if x > 0
+            return 4, DoubleFloat32(xd - pi*4/2)
+        else
+            return -4, DoubleFloat32(xd + pi*4/2)
+        end
+    end
+    #/* 33+53 bit pi is good enough for medium size */
+    if absxd < Float32(pi)/2*2.0f0^28 # medium size */
+        # use Cody Waite reduction with two coefficients
+        fn = round(xd*inv_pio2)
+        r  = xd-fn*pio2_1
+        w  = fn*pio2_1t
+        y = r-w;
+        return unsafe_trunc(Int, fn), DoubleFloat32(y)
+    end
+    n, y = rem_pio2_kernel(xd)
+    return n, DoubleFloat32(y.hi)
 end

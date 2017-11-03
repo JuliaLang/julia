@@ -85,7 +85,7 @@ stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bol
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
-    shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
+    shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
     shell_name = Base.basename(shell[1])
 
     if isempty(cmd.exec)
@@ -102,7 +102,14 @@ function repl_cmd(cmd, out)
                 end
                 cd(ENV["OLDPWD"])
             else
-                cd(@static Sys.iswindows() ? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+                @static if !Sys.iswindows()
+                    # TODO: this is a rather expensive way to copy a string, remove?
+                    # If it's intended to simulate `cd`, it should instead be doing
+                    # more nearly `cd $dir && printf %s \$PWD` (with appropriate quoting),
+                    # since shell `cd` does more than just `echo` the result.
+                    dir = read(`$shell -c "printf %s $(shell_escape_posixly(dir))"`, String)
+                end
+                cd(dir)
             end
         else
             cd()
@@ -110,17 +117,19 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@static Sys.iswindows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
+        @static if !Sys.iswindows()
+            if shell_name == "fish"
+                shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
+            else
+                shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
+            end
+            cmd = `$shell`
+            isa(STDIN, TTY) && (cmd = `$cmd -i`)
+            cmd = `$cmd -c $shell_escape_cmd`
+        end
+        run(ignorestatus(cmd))
     end
     nothing
-end
-
-function shell_wrap_true(shell_name, cmd)
-    if shell_name == "fish"
-        "begin; $(shell_escape(cmd)); and true; end"
-    else
-        "($(shell_escape(cmd))) && true"
-    end
 end
 
 function display_error(io::IO, er, bt)
@@ -153,7 +162,7 @@ function eval_user_input(@nospecialize(ast), show_value)
                 display_error(lasterr,bt)
                 errcount, lasterr = 0, ()
             else
-                ast = expand(Main, ast)
+                ast = Meta.lower(Main, ast)
                 value = eval(Main, ast)
                 eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
                 if !(value === nothing) && show_value
@@ -208,9 +217,9 @@ function parse_input_line(s::String; filename::String="none")
     # expr
     ex = ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
                s, sizeof(s), filename, sizeof(filename))
-    if ex === :_
-        # remove with 0.6 deprecation
-        expand(Main, ex)  # to get possible warning about using _ as an rvalue
+    if ex isa Symbol && all(equalto('_'), string(ex))
+        # remove with 0.7 deprecation
+        Meta.lower(Main, ex)  # to get possible warning about using _ as an rvalue
     end
     return ex
 end
@@ -250,7 +259,6 @@ function process_options(opts::JLOptions)
         idxs = find(x -> x == "--", ARGS)
         length(idxs) > 0 && deleteat!(ARGS, idxs[1])
     end
-    repl                  = true
     quiet                 = (opts.quiet != 0)
     startup               = (opts.startupfile != 2)
     history_file          = (opts.historyfile != 0)
@@ -258,66 +266,75 @@ function process_options(opts::JLOptions)
     global have_color     = (opts.color == 1)
     global is_interactive = (opts.isinteractive != 0)
 
+    # pre-process command line argument list
+    arg_is_program = !isempty(ARGS)
+    repl = !arg_is_program
+    cmds = unsafe_load_commands(opts.commands)
+    for (cmd, arg) in cmds
+        if cmd == 'e'
+            arg_is_program = false
+            repl = false
+        elseif cmd == 'E'
+            arg_is_program = false
+            repl = false
+        elseif cmd == 'L'
+            # nothing
+        else
+            warn("unexpected command -$cmd'$arg'")
+        end
+    end
+
     # remove filename from ARGS
-    arg_is_program = opts.eval == C_NULL && opts.print == C_NULL && !isempty(ARGS)
     global PROGRAM_FILE = arg_is_program ? shift!(ARGS) : ""
 
-    while true
-        # startup worker.
-        # opts.startupfile, opts.load, etc should should not be processed for workers.
-        if opts.worker == 1
-            # does not return
-            if opts.cookie != C_NULL
-                start_worker(unsafe_string(opts.cookie))
-            else
-                start_worker()
-            end
+    # startup worker.
+    # opts.startupfile, opts.load, etc should should not be processed for workers.
+    if opts.worker == 1
+        # does not return
+        if opts.cookie != C_NULL
+            start_worker(unsafe_string(opts.cookie))
+        else
+            start_worker()
         end
+    end
 
-        # add processors
-        if opts.nprocs > 0
-            addprocs(opts.nprocs)
-        end
-        # load processes from machine file
-        if opts.machinefile != C_NULL
-            addprocs(load_machine_file(unsafe_string(opts.machinefile)))
-        end
+    # add processors
+    if opts.nprocs > 0
+        addprocs(opts.nprocs)
+    end
+    # load processes from machine file
+    if opts.machinefile != C_NULL
+        addprocs(load_machine_file(unsafe_string(opts.machinefile)))
+    end
 
-        # load ~/.juliarc file
-        startup && load_juliarc()
+    # load ~/.juliarc file
+    startup && load_juliarc()
 
-        # load file immediately on all processors
-        if opts.load != C_NULL
-            @sync for p in procs()
-                @async remotecall_fetch(include, p, Main, unsafe_string(opts.load))
-            end
-        end
-        # eval expression
-        if opts.eval != C_NULL
-            repl = false
-            eval(Main, parse_input_line(unsafe_string(opts.eval)))
-            break
-        end
-        # eval expression and show result
-        if opts.print != C_NULL
-            repl = false
-            show(eval(Main, parse_input_line(unsafe_string(opts.print))))
+    # process cmds list
+    for (cmd, arg) in cmds
+        if cmd == 'e'
+            eval(Main, parse_input_line(arg))
+        elseif cmd == 'E'
+            invokelatest(show, eval(Main, parse_input_line(arg)))
             println()
-            break
-        end
-        # load file
-        if !isempty(PROGRAM_FILE)
-            # program
-            repl = false
-            if !is_interactive
-                ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+        elseif cmd == 'L'
+            # load file immediately on all processors
+            @sync for p in procs()
+                @async remotecall_wait(include, p, Main, arg)
             end
-            include(Main, PROGRAM_FILE)
         end
-        break
+    end
+
+    # load file
+    if arg_is_program
+        # program
+        if !is_interactive
+            ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+        end
+        include(Main, PROGRAM_FILE)
     end
     repl |= is_interactive
-    return (quiet,repl,startup,color_set,history_file)
+    return (quiet, repl, startup, color_set, history_file)
 end
 
 function load_juliarc()
@@ -378,7 +395,7 @@ function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     opts = JLOptions()
-    @eval Main include(x) = $include(Main, x)
+    @eval Main using Base.MainInclude
     try
         (quiet,repl,startup,color_set,history_file) = process_options(opts)
         banner = opts.banner == 1

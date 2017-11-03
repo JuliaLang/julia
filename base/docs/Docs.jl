@@ -642,7 +642,7 @@ finddoc(λ, def) = false
 
 # Predicates and helpers for `docm` expression selection:
 
-const FUNC_HEADS    = [:function, :stagedfunction, :macro, :(=)]
+const FUNC_HEADS    = [:function, :macro, :(=)]
 const BINDING_HEADS = [:typealias, :const, :global, :(=)]  # deprecation: remove `typealias` post-0.6
 # For the special `:@mac` / `:(Base.@mac)` syntax for documenting a macro after definition.
 isquotedmacrocall(x) =
@@ -680,7 +680,7 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define = true)
     #   f(...)
     #
     isexpr(x, FUNC_HEADS) && is_signature(x.args[1])   ? objectdoc(source, mod, meta, def, x, signature(x)) :
-    isexpr(x, :function)  && !isexpr(x.args[1], :call) ? objectdoc(source, mod, meta, def, x) :
+    isexpr(x, [:function, :macro])  && !isexpr(x.args[1], :call) ? objectdoc(source, mod, meta, def, x) :
     isexpr(x, :call)                                   ? calldoc(source, mod, meta, x) :
 
     # Type definitions.

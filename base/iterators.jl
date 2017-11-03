@@ -1,11 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Methods for working with Iterators.
+"""
 module Iterators
 
-import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, indices, ndims
+import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, indices, ndims, pairs, last, first
 
 using Base: tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
-            IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds
+            IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange
 
 export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
 
@@ -26,6 +29,52 @@ and_iteratorsize(a, b) = SizeUnknown()
 
 and_iteratoreltype(iel::T, ::T) where {T} = iel
 and_iteratoreltype(a, b) = EltypeUnknown()
+
+## Reverse-order iteration for arrays and other collections.  Collections
+## should implement start/next/done etcetera if possible/practical.
+"""
+    Iterators.reverse(itr)
+
+Given an iterator `itr`, then `reverse(itr)` is an iterator over the
+same collection but in the reverse order.
+
+This iterator is "lazy" in that it does not make a copy of the collection in
+order to reverse it; see [`Base.reverse`](@ref) for an eager implementation.
+
+Not all iterator types `T` support reverse-order iteration.  If `T`
+doesn't, then iterating over `Iterators.reverse(itr::T)` will throw a [`MethodError`](@ref)
+because of the missing [`start`](@ref), [`next`](@ref), and [`done`](@ref)
+methods for `Iterators.Reverse{T}`.  (To implement these methods, the original iterator
+`itr::T` can be obtained from `r = Iterators.reverse(itr)` by `r.itr`.)
+"""
+reverse(itr) = Reverse(itr)
+
+struct Reverse{T}
+    itr::T
+end
+eltype(r::Reverse) = eltype(r.itr)
+length(r::Reverse) = length(r.itr)
+size(r::Reverse) = size(r.itr)
+iteratorsize(r::Reverse) = iteratorsize(r.itr)
+iteratoreltype(r::Reverse) = iteratoreltype(r.itr)
+last(r::Reverse) = first(r.itr) # the first shall be last
+first(r::Reverse) = last(r.itr) # and the last shall be first
+
+# reverse-order array iterators: assumes more-specialized Reverse for eachindex
+@inline start(A::Reverse{<:AbstractArray}) = (itr = reverse(eachindex(A.itr)); (itr, start(itr)))
+@propagate_inbounds next(A::Reverse{<:AbstractArray}, i) = ((idx, s) = next(i[1], i[2]); (A.itr[idx], (i[1], s)))
+@propagate_inbounds done(A::Reverse{<:AbstractArray}, i) = done(i[1], i[2])
+
+reverse(R::AbstractRange) = Base.reverse(R) # copying ranges is cheap
+reverse(G::Generator) = Generator(G.f, reverse(G.iter))
+reverse(r::Reverse) = r.itr
+reverse(x::Union{Number,Char}) = x
+reverse(p::Pair) = Base.reverse(p) # copying pairs is cheap
+
+start(r::Reverse{<:Tuple}) = length(r.itr)
+done(r::Reverse{<:Tuple}, i::Int) = i < 1
+next(r::Reverse{<:Tuple}, i::Int) = (r.itr[i], i-1)
+
 
 # enumerate
 
@@ -72,20 +121,32 @@ eltype(::Type{Enumerate{I}}) where {I} = Tuple{Int, eltype(I)}
 iteratorsize(::Type{Enumerate{I}}) where {I} = iteratorsize(I)
 iteratoreltype(::Type{Enumerate{I}}) where {I} = iteratoreltype(I)
 
+@inline function start(r::Reverse{<:Enumerate})
+    ri = reverse(r.itr.itr)
+    return (length(ri), ri, start(ri))
+end
+@inline function next(r::Reverse{<:Enumerate}, state)
+    n = next(state[2],state[3])
+    (state[1],n[1]), (state[1]-1,state[2],n[2])
+end
+@inline done(r::Reverse{<:Enumerate}, state) = state[1] < 1
+
 struct IndexValue{I,A<:AbstractArray}
     data::A
     itr::I
 end
 
 """
-    enumerate(IndexLinear(), A)
-    enumerate(IndexCartesian(), A)
-    enumerate(IndexStyle(A), A)
+    pairs(IndexLinear(), A)
+    pairs(IndexCartesian(), A)
+    pairs(IndexStyle(A), A)
 
 An iterator that accesses each element of the array `A`, returning
-`(i, x)`, where `i` is the index for the element and `x = A[i]`.  This
-is similar to `enumerate(A)`, except `i` will always be a valid index
-for `A`.
+`i => x`, where `i` is the index for the element and `x = A[i]`.
+Identical to `pairs(A)`, except that the style of index can be selected.
+Also similar to `enumerate(A)`, except `i` will be a valid index
+for `A`, while `enumerate` always counts from 1 regardless of the indices
+of `A`.
 
 Specifying `IndexLinear()` ensures that `i` will be an integer;
 specifying `IndexCartesian()` ensures that `i` will be a
@@ -96,7 +157,7 @@ been defined as the native indexing style for array `A`.
 ```jldoctest
 julia> A = ["a" "d"; "b" "e"; "c" "f"];
 
-julia> for (index, value) in enumerate(IndexStyle(A), A)
+julia> for (index, value) in pairs(IndexStyle(A), A)
            println("\$index \$value")
        end
 1 a
@@ -108,24 +169,23 @@ julia> for (index, value) in enumerate(IndexStyle(A), A)
 
 julia> S = view(A, 1:2, :);
 
-julia> for (index, value) in enumerate(IndexStyle(S), S)
+julia> for (index, value) in pairs(IndexStyle(S), S)
            println("\$index \$value")
        end
-CartesianIndex{2}((1, 1)) a
-CartesianIndex{2}((2, 1)) b
-CartesianIndex{2}((1, 2)) d
-CartesianIndex{2}((2, 2)) e
+CartesianIndex(1, 1) a
+CartesianIndex(2, 1) b
+CartesianIndex(1, 2) d
+CartesianIndex(2, 2) e
 ```
-
-Note that `enumerate(A)` returns `i` as a *counter* (always starting
-at 1), whereas `enumerate(IndexLinear(), A)` returns `i` as an *index*
-(starting at the first linear index of `A`, which may or may not be
-1).
 
 See also: [`IndexStyle`](@ref), [`indices`](@ref).
 """
-enumerate(::IndexLinear,    A::AbstractArray) = IndexValue(A, linearindices(A))
-enumerate(::IndexCartesian, A::AbstractArray) = IndexValue(A, CartesianRange(indices(A)))
+pairs(::IndexLinear,    A::AbstractArray) = IndexValue(A, linearindices(A))
+pairs(::IndexCartesian, A::AbstractArray) = IndexValue(A, CartesianRange(indices(A)))
+
+# faster than zip(keys(a), values(a)) for arrays
+pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
+pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 
 length(v::IndexValue)  = length(v.itr)
 indices(v::IndexValue) = indices(v.itr)
@@ -134,14 +194,16 @@ size(v::IndexValue)    = size(v.itr)
 @propagate_inbounds function next(v::IndexValue, state)
     indx, n = next(v.itr, state)
     item = v.data[indx]
-    (indx, item), n
+    (indx => item), n
 end
 @inline done(v::IndexValue, state) = done(v.itr, state)
 
-eltype(::Type{IndexValue{I,A}}) where {I,A} = Tuple{eltype(I), eltype(A)}
+eltype(::Type{IndexValue{I,A}}) where {I,A} = Pair{eltype(I), eltype(A)}
 
 iteratorsize(::Type{IndexValue{I}}) where {I} = iteratorsize(I)
 iteratoreltype(::Type{IndexValue{I}}) where {I} = iteratoreltype(I)
+
+reverse(v::IndexValue) = IndexValue(v.data, reverse(v.itr))
 
 # zip
 
@@ -217,7 +279,7 @@ julia> b = ["e","d","b","c","a"]
  "a"
 
 julia> c = zip(a,b)
-Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, String["e", "d", "b", "c", "a"])
+Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, ["e", "d", "b", "c", "a"])
 
 julia> length(c)
 5
@@ -241,6 +303,10 @@ end
 
 iteratorsize(::Type{Zip{I1,I2}}) where {I1,I2} = zip_iteratorsize(iteratorsize(I1),iteratorsize(I2))
 iteratoreltype(::Type{Zip{I1,I2}}) where {I1,I2} = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
+
+reverse(z::Zip1) = Zip1(reverse(z.a))
+reverse(z::Zip2) = Zip2(reverse(z.a), reverse(z.b))
+reverse(z::Zip) = Zip(reverse(z.a), reverse(z.z))
 
 # filter
 
@@ -309,6 +375,8 @@ eltype(::Type{Filter{F,I}}) where {F,I} = eltype(I)
 iteratoreltype(::Type{Filter{F,I}}) where {F,I} = iteratoreltype(I)
 iteratorsize(::Type{<:Filter}) = SizeUnknown()
 
+reverse(f::Filter) = Filter(f.flt, reverse(f.itr))
+
 # Rest -- iterate starting at the given state
 
 struct Rest{I,S}
@@ -341,7 +409,6 @@ iteratoreltype(::Type{Rest{I,S}}) where {I,S} = iteratoreltype(I)
 rest_iteratorsize(a) = SizeUnknown()
 rest_iteratorsize(::IsInfinite) = IsInfinite()
 iteratorsize(::Type{Rest{I,S}}) where {I,S} = rest_iteratorsize(iteratorsize(I))
-
 
 # Count -- infinite counting
 
@@ -535,6 +602,7 @@ end
 
 done(it::Cycle, state) = state[2]
 
+reverse(it::Cycle) = Cycle(reverse(it.xs))
 
 # Repeated - repeat an object infinitely many times
 
@@ -572,6 +640,7 @@ done(it::Repeated, state) = false
 iteratorsize(::Type{<:Repeated}) = IsInfinite()
 iteratoreltype(::Type{<:Repeated}) = HasEltype()
 
+reverse(it::Union{Repeated,Take{<:Repeated}}) = it
 
 # Product -- cartesian product of iterators
 struct ProductIterator{T<:Tuple}
@@ -702,6 +771,8 @@ function _prod_next(iterators, states, nvalues)
     end
 end
 
+reverse(p::ProductIterator) = ProductIterator(map(reverse, p.iterators))
+
 # flatten an iterator of iterators
 
 struct Flatten{I}
@@ -732,17 +803,14 @@ iteratoreltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, iteratoreltype(
 _flatteneltype(I, ::HasEltype) = iteratoreltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()
 
-flatten_iteratorsize(::Union{HasShape, HasLength}, b::Type{<:Tuple}) = isleaftype(b) ? HasLength() : SizeUnknown()
-flatten_iteratorsize(::Union{HasShape, HasLength}, b::Type{<:Number}) = HasLength()
+flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:NTuple{N,Any}}) where {N} = HasLength()
+flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Tuple}) = SizeUnknown()
+flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Number}) = HasLength()
 flatten_iteratorsize(a, b) = SizeUnknown()
 
 iteratorsize(::Type{Flatten{I}}) where {I} = flatten_iteratorsize(iteratorsize(I), eltype(I))
 
-function flatten_length(f, ::Type{T}) where {T<:Tuple}
-    if !isleaftype(T)
-        throw(ArgumentError(
-            "Cannot compute length of a tuple-type which is not a leaf-type"))
-    end
+function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
     fieldcount(T)*length(f.it)
 end
 flatten_length(f, ::Type{<:Number}) = length(f.it)
@@ -780,6 +848,7 @@ end
     return done(f.it, s) && done(inner, s2)
 end
 
+reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
 
 """
     partition(collection, n)

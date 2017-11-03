@@ -152,7 +152,7 @@ use utils, only: trace, randn, std, mean, stop_error
 use types, only: dp
 implicit none
 private
-public fib, parse_int, quicksort, mandelperf, pisum, randmatstat, randmatmul
+public fib, parse_int, printfd, quicksort, mandelperf, pisum, randmatstat, randmatmul
 
 contains
 
@@ -190,6 +190,20 @@ end do
 
 end function
 
+subroutine printfd(n)
+integer, intent(in) :: n
+integer :: i , unit
+open(unit=1, file="foo")
+do i = 1, n
+    write(unit=1, fmt=*) i, i
+end do
+close(unit=1)
+end subroutine
+
+real(dp) function abs2(z) result(r)
+complex(dp), intent(in) :: z
+    r = real(z)*real(z) + imag(z)*imag(z);
+end function
 
 integer function mandel(z0) result(r)
 complex(dp), intent(in) :: z0
@@ -199,7 +213,7 @@ maxiter = 80
 z = z0
 c = z0
 do n = 1, maxiter
-    if (abs(z) > 2) then
+    if (abs2(z) > 4) then
         r = n-1
         return
     end if
@@ -302,7 +316,8 @@ real(dp), allocatable :: A(:, :), B(:, :)
 allocate(A(n, n), B(n, n), C(n, n))
 call random_number(A)
 call random_number(B)
-C = matmul(A, B)
+!C = matmul(A, B)
+call dgemm('N','N',n,n,n,1.0d0,A,n,B,n,0.0d0,C,n)
 end subroutine
 
 end module
@@ -310,7 +325,7 @@ end module
 program perf
 use types, only: dp, i64
 use utils, only: assert, init_random_seed, sysclock2ms
-use bench, only: fib, parse_int, quicksort, mandelperf, pisum, randmatstat, &
+use bench, only: fib, parse_int, printfd, quicksort, mandelperf, pisum, randmatstat, &
     randmatmul
 implicit none
 
@@ -333,7 +348,7 @@ do i = 1, 5
     if (t2-t1 < tmin) tmin = t2-t1
 end do
 call assert(f == 6765)
-print "('fortran,fib,',f0.6)", sysclock2ms(tmin) / NRUNS
+print "('fortran,recursion_fibonacci,',f0.6)", sysclock2ms(tmin) / NRUNS
 
 tmin = huge(0_i64)
 do i = 1, 5
@@ -350,7 +365,17 @@ do i = 1, 5
     call system_clock(t2)
     if (t2-t1 < tmin) tmin = t2-t1
 end do
-print "('fortran,parse_int,',f0.6)", sysclock2ms(tmin) / NRUNS
+print "('fortran,parse_integers,',f0.6)", sysclock2ms(tmin) / NRUNS
+
+tmin = huge(0_i64)
+do i = 1, 5
+    call system_clock(t1)
+    call printfd(100000)
+    call system_clock(t2)
+    if (t2-t1 < tmin) tmin = t2-t1
+end do
+print "('fortran,print_to_file,',f0.6)", sysclock2ms(tmin)
+
 
 tmin = huge(0_i64)
 do i = 1, 5
@@ -362,7 +387,7 @@ do i = 1, 5
     if (t2-t1 < tmin) tmin = t2-t1
 end do
 call assert(f == 14791)
-print "('fortran,mandel,',f0.6)", sysclock2ms(tmin) / NRUNS
+print "('fortran,userfunc_mandelbrot,',f0.6)", sysclock2ms(tmin) / NRUNS
 
 tmin = huge(0_i64)
 do i = 1, 5
@@ -376,7 +401,7 @@ do i = 1, 5
     call system_clock(t2)
     if (t2-t1 < tmin) tmin = t2-t1
 end do
-print "('fortran,quicksort,',f0.6)", sysclock2ms(tmin) / NRUNS
+print "('fortran,recursion_quicksort,',f0.6)", sysclock2ms(tmin) / NRUNS
 
 tmin = huge(0_i64)
 do i = 1, 5
@@ -386,7 +411,7 @@ do i = 1, 5
     if (t2-t1 < tmin) tmin = t2-t1
 end do
 call assert(abs(pi - 1.644834071848065_dp) < 1e-6_dp)
-print "('fortran,pi_sum,',f0.6)", sysclock2ms(tmin)
+print "('fortran,iteration_pi_sum,',f0.6)", sysclock2ms(tmin)
 
 tmin = huge(0_i64)
 do i = 1, 5
@@ -397,7 +422,7 @@ do i = 1, 5
 end do
 ! call assert(s1 > 0.5_dp .and. s1 < 1)
 ! call assert(s2 > 0.5_dp .and. s2 < 1)
-print "('fortran,rand_mat_stat,',f0.6)", sysclock2ms(tmin)
+print "('fortran,matrix_statistics,',f0.6)", sysclock2ms(tmin)
 
 tmin = huge(0_i64)
 do i = 1, 5
@@ -407,6 +432,6 @@ do i = 1, 5
     call system_clock(t2)
     if (t2-t1 < tmin) tmin = t2-t1
 end do
-print "('fortran,rand_mat_mul,',f0.6)", sysclock2ms(tmin)
+print "('fortran,matrix_multiply,',f0.6)", sysclock2ms(tmin)
 
 end program

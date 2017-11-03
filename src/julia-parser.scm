@@ -12,13 +12,14 @@
 (define prec-conditional '(?))
 (define prec-arrow       (append!
                           '(-- -->)
-                          (add-dots '(← → ↔ ↚ ↛ ↠ ↣ ↦ ↮ ⇎ ⇏ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫))))
+                          (add-dots '(← → ↔ ↚ ↛ ↠ ↣ ↦ ↤ ↮ ⇎ ⇏ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫))))
 (define prec-lazy-or     '(|\|\||))
 (define prec-lazy-and    '(&&))
 (define prec-comparison
   (append! '(|<:| |>:| in isa)
            (add-dots '(> < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ ∈ ∉ ∋ ∌ ⊆ ⊈ ⊂ ⊄ ⊊ ∝ ∊ ∍ ∥ ∦ ∷ ∺ ∻ ∽ ∾ ≁ ≃ ≄ ≅ ≆ ≇ ≈ ≉ ≊ ≋ ≌ ≍ ≎ ≐ ≑ ≒ ≓ ≔ ≕ ≖ ≗ ≘ ≙ ≚ ≛ ≜ ≝ ≞ ≟ ≣ ≦ ≧ ≨ ≩ ≪ ≫ ≬ ≭ ≮ ≯ ≰ ≱ ≲ ≳ ≴ ≵ ≶ ≷ ≸ ≹ ≺ ≻ ≼ ≽ ≾ ≿ ⊀ ⊁ ⊃ ⊅ ⊇ ⊉ ⊋ ⊏ ⊐ ⊑ ⊒ ⊜ ⊩ ⊬ ⊮ ⊰ ⊱ ⊲ ⊳ ⊴ ⊵ ⊶ ⊷ ⋍ ⋐ ⋑ ⋕ ⋖ ⋗ ⋘ ⋙ ⋚ ⋛ ⋜ ⋝ ⋞ ⋟ ⋠ ⋡ ⋢ ⋣ ⋤ ⋥ ⋦ ⋧ ⋨ ⋩ ⋪ ⋫ ⋬ ⋭ ⋲ ⋳ ⋴ ⋵ ⋶ ⋷ ⋸ ⋹ ⋺ ⋻ ⋼ ⋽ ⋾ ⋿ ⟈ ⟉ ⟒ ⦷ ⧀ ⧁ ⧡ ⧣ ⧤ ⧥ ⩦ ⩧ ⩪ ⩫ ⩬ ⩭ ⩮ ⩯ ⩰ ⩱ ⩲ ⩳ ⩴ ⩵ ⩶ ⩷ ⩸ ⩹ ⩺ ⩻ ⩼ ⩽ ⩾ ⩿ ⪀ ⪁ ⪂ ⪃ ⪄ ⪅ ⪆ ⪇ ⪈ ⪉ ⪊ ⪋ ⪌ ⪍ ⪎ ⪏ ⪐ ⪑ ⪒ ⪓ ⪔ ⪕ ⪖ ⪗ ⪘ ⪙ ⪚ ⪛ ⪜ ⪝ ⪞ ⪟ ⪠ ⪡ ⪢ ⪣ ⪤ ⪥ ⪦ ⪧ ⪨ ⪩ ⪪ ⪫ ⪬ ⪭ ⪮ ⪯ ⪰ ⪱ ⪲ ⪳ ⪴ ⪵ ⪶ ⪷ ⪸ ⪹ ⪺ ⪻ ⪼ ⪽ ⪾ ⪿ ⫀ ⫁ ⫂ ⫃ ⫄ ⫅ ⫆ ⫇ ⫈ ⫉ ⫊ ⫋ ⫌ ⫍ ⫎ ⫏ ⫐ ⫑ ⫒ ⫓ ⫔ ⫕ ⫖ ⫗ ⫘ ⫙ ⫷ ⫸ ⫹ ⫺ ⊢ ⊣))))
-(define prec-pipe        (add-dots '(|\|>| |<\||)))
+(define prec-pipe<       '(|.<\|| |<\||))
+(define prec-pipe>       '(|.\|>| |\|>|))
 (define prec-colon       '(: |..|))
 (define prec-plus        (append! '($)
                           (add-dots '(+ - |\|| ⊕ ⊖ ⊞ ⊟ |++| ∪ ∨ ⊔ ± ∓ ∔ ∸ ≂ ≏ ⊎ ⊻ ⊽ ⋎ ⋓ ⧺ ⧻ ⨈ ⨢ ⨣ ⨤ ⨥ ⨦ ⨧ ⨨ ⨩ ⨪ ⨫ ⨬ ⨭ ⨮ ⨹ ⨺ ⩁ ⩂ ⩅ ⩊ ⩌ ⩏ ⩐ ⩒ ⩔ ⩖ ⩗ ⩛ ⩝ ⩡ ⩢ ⩣))))
@@ -34,8 +35,12 @@
 
 (define prec-names '(prec-assignment
                      prec-conditional prec-lazy-or prec-lazy-and prec-arrow prec-comparison
-                     prec-pipe prec-colon prec-plus prec-bitshift prec-times prec-rational
+                     prec-pipe< prec-pipe> prec-colon prec-plus prec-bitshift prec-times prec-rational
                      prec-power prec-decl prec-dot))
+
+(define trans-op (string->symbol ".'"))
+(define ctrans-op (string->symbol "'"))
+(define vararg-op (string->symbol "..."))
 
 (define (Set l)
   ;; construct a length-specialized membership tester
@@ -54,9 +59,29 @@
            (lambda (x)
              (has? t x))))))
 
+; only allow/strip suffixes for some operators
+(define no-suffix? (Set (append prec-assignment prec-conditional prec-lazy-or prec-lazy-and
+                                prec-colon prec-decl prec-dot
+                                '(-- --> -> |<:| |>:| in isa $)
+                                (list ctrans-op trans-op vararg-op))))
+(define (maybe-strip-op-suffix op)
+  (if (symbol? op)
+      (let ((op_ (strip-op-suffix op)))
+        (if (or (eq? op op_) (no-suffix? op_))
+            op
+            op_))
+      op))
+
+; like Set, but strip operator suffixes before testing membership
+(define (SuffSet l)
+  (let ((S (Set l)))
+    (if (every no-suffix? l)
+        S ; suffixes not allowed for anything in l
+        (lambda (op) (S (maybe-strip-op-suffix op))))))
+
 ;; for each prec-x generate an is-prec-x? procedure
 (for-each (lambda (name)
-            (eval `(define ,(symbol (string "is-" name "?")) (Set ,name))))
+            (eval `(define ,(symbol (string "is-" name "?")) (SuffSet ,name))))
           prec-names)
 
 ;; hash table of binary operators -> precedence
@@ -68,7 +93,9 @@
                              (pushprec (cdr L) (+ prec 1)))))
                      (pushprec (map eval prec-names) 1)
                      t))
-(define (operator-precedence op) (get prec-table op 0))
+(define (operator-precedence op) (get prec-table
+                                      (maybe-strip-op-suffix op)
+                                      0))
 
 (define unary-ops (append! '(|<:| |>:|)
                            (add-dots '(+ - ! ~ ¬ √ ∛ ∜))))
@@ -77,6 +104,8 @@
 
 ; operators that are both unary and binary
 (define unary-and-binary-ops '(+ - $ & ~ |.+| |.-|))
+
+(define unary-and-binary-op? (Set unary-and-binary-ops))
 
 ; operators that are special forms, not function names
 (define syntactic-operators
@@ -91,10 +120,6 @@
   (or (symbol? ex)
       (and (pair? ex)
            (eq? '$ (car ex)))))
-
-(define trans-op (string->symbol ".'"))
-(define ctrans-op (string->symbol "'"))
-(define vararg-op (string->symbol "..."))
 
 (define (is-word-operator? op)
   (every identifier-start-char? (string->list (symbol->string op))))
@@ -117,7 +142,7 @@
                      (delete-duplicates
                       (map (lambda (op) (string.char (string op) 1))
                            (cons `|..| (filter dotop? operators))))))
-(define operator? (Set operators))
+(define operator? (SuffSet operators))
 
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const do
@@ -202,21 +227,29 @@
           (else               (read-char port)
                               (skip-to-eol port)))))
 
+(define (op-or-sufchar? c) (or (op-suffix-char? c) (opchar? c)))
+
 (define (read-operator port c)
   (if (and (eqv? c #\*) (eqv? (peek-char port) #\*))
       (error "use \"^\" instead of \"**\""))
-  (if (or (eof-object? (peek-char port)) (not (opchar? (peek-char port))))
+  (if (or (eof-object? (peek-char port)) (not (op-or-sufchar? (peek-char port))))
       (symbol (string c)) ; 1-char operator
       (let ((str (let loop ((str (string c))
-                            (c   (peek-char port)))
-                   (if (and (not (eof-object? c)) (opchar? c))
-                       (let* ((newop (string str c))
-                              (opsym (string->symbol newop)))
-                         (if (operator? opsym)
-                             (begin (read-char port)
-                                    (loop newop (peek-char port)))
-                             str))
-                       str))))
+                            (c   (peek-char port))
+                            (in-suffix? #f))
+                   (if (eof-object? c)
+                       str
+                       (let ((sufchar? (op-suffix-char? c)))
+                         (if (if in-suffix?
+                                 sufchar?
+                                 (or sufchar? (opchar? c)))
+                             (let* ((newop (string str c))
+                                    (opsym (string->symbol newop)))
+                               (if (operator? opsym)
+                                   (begin (read-char port)
+                                          (loop newop (peek-char port) sufchar?))
+                                   str))
+                             str))))))
         (if (equal? str "--")
             (error (string "invalid operator \"" str "\"")))
         (string->symbol str))))
@@ -770,14 +803,14 @@
 (define (parse-and s)   (parse-RtoL s parse-comparison is-prec-lazy-and? #t parse-and))
 
 (define (parse-comparison s)
-  (let loop ((ex (parse-pipes s))
+  (let loop ((ex (parse-pipe< s))
              (first #t))
     (let ((t (peek-token s)))
       (cond ((is-prec-comparison? t)
              (begin (take-token s)
                     (if first
-                        (loop (list 'comparison ex t (parse-pipes s)) #f)
-                        (loop (append ex (list t (parse-pipes s))) #f))))
+                        (loop (list 'comparison ex t (parse-pipe< s)) #f)
+                        (loop (append ex (list t (parse-pipe< s))) #f))))
             (first ex)
             ((length= ex 4)
              ;; only a single comparison; special chained syntax not required
@@ -789,7 +822,8 @@
                    `(call ,op ,arg1 ,arg2))))
             (else ex)))))
 
-(define (parse-pipes s) (parse-LtoR s parse-range is-prec-pipe?))
+(define (parse-pipe< s) (parse-RtoL s parse-pipe> is-prec-pipe<? #f parse-pipe<))
+(define (parse-pipe> s) (parse-LtoR s parse-range is-prec-pipe>?))
 
 ; parse ranges and postfix ...
 ; colon is strange; 3 arguments with 2 colons yields one call:
@@ -1157,16 +1191,18 @@
              ;; ref(a,i) = x
              (let* ((es end-symbol)
                     (al (with-end-symbol (parse-cat s #\] es))))
-               (if (null? al)
-                   (loop (list 'ref ex))
-                   (case (car al)
-                     ((vect)  (loop (list* 'ref ex (cdr al))))
-                     ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
-                     ((vcat)
-                      (loop (list* 'typed_vcat ex (cdr al))))
-                     ((comprehension)
-                      (loop (list* 'typed_comprehension ex (cdr al))))
-                     (else (error "unknown parse-cat result (internal error)"))))))
+               (if macrocall?
+                   (list 'call ex al)
+                   (if (null? al)
+                       (loop (list 'ref ex))
+                       (case (car al)
+                         ((vect)  (loop (list* 'ref ex (cdr al))))
+                         ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
+                         ((vcat)
+                          (loop (list* 'typed_vcat ex (cdr al))))
+                         ((comprehension)
+                          (loop (list* 'typed_comprehension ex (cdr al))))
+                         (else (error "unknown parse-cat result (internal error)")))))))
             ((|.|)
              (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
@@ -1303,6 +1339,24 @@
           `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
                 ,body)))
 
+       ((let)
+        (let ((binds (if (memv (peek-token s) '(#\newline #\;))
+                         '()
+                         (parse-comma-separated-assignments s))))
+          (if (not (or (eof-object? (peek-token s))
+                       (memv (peek-token s) '(#\newline #\; end))))
+              (error "let variables should end in \";\" or newline"))
+          (let* ((ex (begin0 (parse-block s)
+                             (expect-end s word)))
+                 (ex (if (and (length= ex 2) (pair? (cadr ex)) (eq? (caadr ex) 'line))
+                         `(block)  ;; don't need line info in an empty let block
+                         ex)))
+            `(let ,(if (and (length= binds 1) (or (assignment? (car binds)) (decl? (car binds))
+                                                  (symbol? (car binds))))
+                       (car binds)
+                       (cons 'block binds))
+               ,ex))))
+
        ((if elseif)
         (if (newline? (peek-token s))
             (error (string "missing condition in \"if\" at " current-filename
@@ -1331,19 +1385,6 @@
              (begin0 (list word test then (parse-block s))
                      (expect-end s 'if)))
             (else      (error (string "unexpected \"" nxt "\""))))))
-       ((let)
-        (let ((binds (if (memv (peek-token s) '(#\newline #\;))
-                         '()
-                         (parse-comma-separated-assignments s))))
-          (if (not (or (eof-object? (peek-token s))
-                       (memv (peek-token s) '(#\newline #\; end))))
-              (error "let variables should end in \";\" or newline"))
-          (let ((ex (parse-block s)))
-            (expect-end s word)
-            ;; don't need line info in an empty let block
-            (if (and (length= ex 2) (pair? (cadr ex)) (eq? (caadr ex) 'line))
-                `(let (block) ,@binds)
-                `(let ,ex ,@binds)))))
 
        ((global local)
         (let* ((const (and (eq? (peek-token s) 'const)
@@ -1367,11 +1408,11 @@
        ((function macro)
         (let* ((paren (eqv? (require-token s) #\())
                (sig   (parse-def s (not (eq? word 'macro)))))
-          (if (and (eq? word 'function) (not paren) (symbol-or-interpolate? sig))
+          (if (and (not paren) (symbol-or-interpolate? sig))
               (begin (if (not (eq? (require-token s) 'end))
-                         (error (string "expected \"end\" in definition of function \"" sig "\"")))
+                         (error (string "expected \"end\" in definition of " word " \"" sig "\"")))
                      (take-token s)
-                     `(function ,sig))
+                     `(,word ,sig))
               (let* ((usig (unwrap-where sig))
                      (def  (if (or (valid-1arg-func-sig? usig)
                                    (and (assignment? usig)
@@ -1464,7 +1505,10 @@
                            (var (if nl #f (parse-eq* s)))
                            (var? (and (not nl) (or (and (symbol? var) (not (eq? var 'false))
                                                         (not (eq? var 'true)))
-                                                   (and (length= var 2) (eq? (car var) '$)))))
+                                                   (and (length= var 2) (eq? (car var) '$))
+                                                   (and (syntax-deprecation s (string "catch " (deparse var) "")
+                                                                            (string "catch; " (deparse var) ""))
+                                                        #f))))
                            (catch-block (if (eq? (require-token s) 'finally)
                                             `(block ,(line-number-node s))
                                             (parse-block s))))
@@ -1622,11 +1666,11 @@
                                     #f)
                              #t)))
                      #f))
-         (lhs (parse-pipes s))
+         (lhs (parse-pipe< s))
          (t   (peek-token s)))
     (cond ((memq t '(= in ∈))
            (take-token s)
-           (let* ((rhs (parse-pipes s))
+           (let* ((rhs (parse-pipe< s))
                   (t   (peek-token s)))
              #;(if (not (or (closing-token? t) (newline? t)))
                  ;; should be: (error "invalid iteration specification")

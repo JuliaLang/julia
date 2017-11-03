@@ -137,6 +137,18 @@ isone(z::Complex) = isone(real(z)) & iszero(imag(z))
     complex(r, [i])
 
 Convert real numbers or arrays to complex. `i` defaults to zero.
+
+# Examples
+```jldoctest
+julia> complex(7)
+7 + 0im
+
+julia> complex([1, 2, 3])
+3-element Array{Complex{Int64},1}:
+ 1 + 0im
+ 2 + 0im
+ 3 + 0im
+```
 """
 complex(z::Complex) = z
 complex(x::Real) = Complex(x)
@@ -211,7 +223,7 @@ bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
 
-in(x::Complex, r::Range{<:Real}) = isreal(x) && real(x) in r
+in(x::Complex, r::AbstractRange{<:Real}) = isreal(x) && real(x) in r
 
 if UInt === UInt64
     const h_imag = 0x32a7a07f3e7cd1f9
@@ -935,6 +947,12 @@ Returns the nearest integral value of the same type as the complex-valued `z` to
 breaking ties using the specified [`RoundingMode`](@ref)s. The first
 [`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
+
+# Example
+```jldoctest
+julia> round(3.14 + 4.5im)
+3.0 + 4.0im
+```
 """
 function round(z::Complex{<:AbstractFloat}, ::RoundingMode{MR}, ::RoundingMode{MI}) where {MR,MI}
     Complex(round(real(z), RoundingMode{MR}()),
@@ -958,7 +976,7 @@ big(z::Complex{T}) where {T<:Real} = Complex{big(T)}(z)
 complex(A::AbstractArray{<:Complex}) = A
 
 function complex(A::AbstractArray{T}) where T
-    if !isleaftype(T)
+    if !isconcrete(T)
         error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)

@@ -147,8 +147,7 @@ function convert(::Type{Matrix{T}}, A::Bidiagonal) where T
 end
 convert(::Type{Matrix}, A::Bidiagonal{T}) where {T} = convert(Matrix{T}, A)
 convert(::Type{Array}, A::Bidiagonal) = convert(Matrix, A)
-full(A::Bidiagonal) = convert(Array, A)
-promote_rule(::Type{Matrix{T}}, ::Type{Bidiagonal{S}}) where {T,S} = Matrix{promote_type(T,S)}
+promote_rule(::Type{Matrix{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} = Matrix{promote_type(T,S)}
 
 #Converting from Bidiagonal to Tridiagonal
 Tridiagonal(M::Bidiagonal{T}) where {T} = convert(Tridiagonal{T}, M)
@@ -158,7 +157,7 @@ function convert(::Type{Tridiagonal{T}}, A::Bidiagonal) where T
     z = fill!(similar(ev), zero(T))
     A.uplo == 'U' ? Tridiagonal(z, dv, ev) : Tridiagonal(ev, dv, z)
 end
-promote_rule(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}}) where {T,S} = Tridiagonal{promote_type(T,S)}
+promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} = Tridiagonal{promote_type(T,S)}
 
 # No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
 convert(::Type{Bidiagonal{T}}, A::Bidiagonal{T}) where {T} = A
@@ -170,7 +169,12 @@ convert(::Type{AbstractMatrix{T}}, A::Bidiagonal) where {T} = convert(Bidiagonal
 
 broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.uplo)
 
-similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal{T}(similar(B.dv, T), similar(B.ev, T), B.uplo)
+# For B<:Bidiagonal, similar(B[, neweltype]) should yield a Bidiagonal matrix.
+# On the other hand, similar(B, [neweltype,] shape...) should yield a sparse matrix.
+# The first method below effects the former, and the second the latter.
+similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), similar(B.ev, T), B.uplo)
+similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+
 
 ###################
 # LAPACK routines #
@@ -178,11 +182,27 @@ similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal{T}(similar(B.dv, T), si
 
 #Singular values
 svdvals!(M::Bidiagonal{<:BlasReal}) = LAPACK.bdsdc!(M.uplo, 'N', M.dv, M.ev)[1]
-function svdfact!(M::Bidiagonal{<:BlasReal}; thin::Bool=true)
+function svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Void} = nothing)
+    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
+    if thin != nothing
+        Base.depwarn(string("the `thin` keyword argument in `svdfact!(A; thin = $(thin))` has ",
+            "been deprecated in favor of `full`, which has the opposite meaning, ",
+            "e.g. `svdfact!(A; full = $(!thin))`."), :svdfact!)
+        full::Bool = !thin
+    end
     d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.uplo, 'I', M.dv, M.ev)
     SVD(U, d, Vt)
 end
-svdfact(M::Bidiagonal; thin::Bool=true) = svdfact!(copy(M),thin=thin)
+function svdfact(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Void} = nothing)
+    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
+    if thin != nothing
+        Base.depwarn(string("the `thin` keyword argument in `svdfact(A; thin = $(thin))` has ",
+            "been deprecated in favor of `full`, which has the opposite meaning, ",
+            "e.g. `svdfact(A; full = $(!thin))`."), :svdfact)
+        full::Bool = !thin
+    end
+    return svdfact!(copy(M), full = full)
+end
 
 ####################
 # Generic routines #
@@ -230,8 +250,9 @@ istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)
 
 function tril!(M::Bidiagonal, k::Integer=0)
     n = length(M.dv)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif M.uplo == 'U' && k < 0
         fill!(M.dv,0)
         fill!(M.ev,0)
@@ -248,8 +269,9 @@ end
 
 function triu!(M::Bidiagonal, k::Integer=0)
     n = length(M.dv)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least",
+            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif M.uplo == 'L' && k > 0
         fill!(M.dv,0)
         fill!(M.ev,0)
@@ -264,17 +286,18 @@ function triu!(M::Bidiagonal, k::Integer=0)
     return M
 end
 
-function diag(M::Bidiagonal{T}, n::Integer=0) where T
+function diag(M::Bidiagonal, n::Integer=0)
+    # every branch call similar(..., ::Int) to make sure the
+    # same vector type is returned independent of n
     if n == 0
-        return M.dv
-    elseif n == 1
-        return M.uplo == 'U' ? M.ev : zeros(T, size(M,1)-1)
-    elseif n == -1
-        return M.uplo == 'L' ? M.ev : zeros(T, size(M,1)-1)
-    elseif -size(M,1) < n < size(M,1)
-        return zeros(T, size(M,1)-abs(n))
+        return copy!(similar(M.dv, length(M.dv)), M.dv)
+    elseif (n == 1 && M.uplo == 'U') ||  (n == -1 && M.uplo == 'L')
+        return copy!(similar(M.ev, length(M.ev)), M.ev)
+    elseif -size(M,1) <= n <= size(M,1)
+        return fill!(similar(M.dv, size(M,1)-abs(n)), 0)
     else
-        throw(ArgumentError("matrix size is $(size(M)), n is $n"))
+        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
+            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
 end
 
@@ -307,6 +330,7 @@ A_mul_B!(C::AbstractMatrix, A::BiTri, B::BiTriSym) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::BiTriSym) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym) = A_mul_B_td!(C, A, B)
+A_mul_B!(C::AbstractMatrix, A::Diagonal, B::BiTriSym) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractVector, A::BiTri, B::AbstractVector) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractMatrix, A::BiTri, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractVecOrMat, A::BiTri, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
@@ -569,17 +593,19 @@ _valuefields(::Type{<:AbstractTriangular}) = [:data]
 
 const SpecialArrays = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal,AbstractTriangular}
 
-@generated function fillslots!(A::SpecialArrays, x)
-    ex = :(xT = convert(eltype(A), x))
-    for field in _valuefields(A)
-        ex = :($ex; fill!(A.$field, xT))
+function fillslots!(A::SpecialArrays, x)
+    xT = convert(eltype(A), x)
+    if @generated
+        quote
+            $([ :(fill!(A.$field, xT)) for field in _valuefields(A) ]...)
+        end
+    else
+        for field in _valuefields(A)
+            fill!(getfield(A, field), xT)
+        end
     end
-    :($ex;return A)
+    return A
 end
-
-# for historical reasons:
-fill!(a::AbstractTriangular, x) = fillslots!(a, x)
-fill!(D::Diagonal, x) = fillslots!(D, x)
 
 _small_enough(A::Bidiagonal) = size(A, 1) <= 1
 _small_enough(A::Tridiagonal) = size(A, 1) <= 2

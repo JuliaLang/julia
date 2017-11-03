@@ -6,8 +6,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
  Sparse factorizations call functions from [SuiteSparse](http://faculty.cse.tamu.edu/davis/suitesparse.html).
 
 ```@docs
-Base.:*(::AbstractArray, ::AbstractArray)
-Base.:\(::AbstractArray, ::Any)
+Base.:*(::AbstractMatrix, ::AbstractMatrix)
+Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
 Base.LinAlg.dot
 Base.LinAlg.vecdot
 Base.LinAlg.cross
@@ -92,8 +92,34 @@ Base.repmat
 Base.kron
 Base.SparseArrays.blkdiag
 Base.LinAlg.linreg
-Base.LinAlg.logm
-Base.LinAlg.sqrtm
+Base.LinAlg.exp(::StridedMatrix{<:Base.LinAlg.BlasFloat})
+Base.LinAlg.log(::StridedMatrix)
+Base.LinAlg.sqrt(::StridedMatrix{<:Real})
+Base.LinAlg.cos(::StridedMatrix{<:Real})
+Base.LinAlg.sin(::StridedMatrix{<:Real})
+Base.LinAlg.sincos(::StridedMatrix{<:Real})
+Base.LinAlg.tan(::StridedMatrix{<:Real})
+Base.LinAlg.sec(::StridedMatrix)
+Base.LinAlg.csc(::StridedMatrix)
+Base.LinAlg.cot(::StridedMatrix)
+Base.LinAlg.cosh(::StridedMatrix)
+Base.LinAlg.sinh(::StridedMatrix)
+Base.LinAlg.tanh(::StridedMatrix)
+Base.LinAlg.sech(::StridedMatrix)
+Base.LinAlg.csch(::StridedMatrix)
+Base.LinAlg.coth(::StridedMatrix)
+Base.LinAlg.acos(::StridedMatrix)
+Base.LinAlg.asin(::StridedMatrix)
+Base.LinAlg.atan(::StridedMatrix)
+Base.LinAlg.asec(::StridedMatrix)
+Base.LinAlg.acsc(::StridedMatrix)
+Base.LinAlg.acot(::StridedMatrix)
+Base.LinAlg.acosh(::StridedMatrix)
+Base.LinAlg.asinh(::StridedMatrix)
+Base.LinAlg.atanh(::StridedMatrix)
+Base.LinAlg.asech(::StridedMatrix)
+Base.LinAlg.acsch(::StridedMatrix)
+Base.LinAlg.acoth(::StridedMatrix)
 Base.LinAlg.lyap
 Base.LinAlg.sylvester
 Base.LinAlg.issuccess
@@ -114,6 +140,7 @@ Base.LinAlg.eigs(::Any)
 Base.LinAlg.eigs(::Any, ::Any)
 Base.LinAlg.svds
 Base.LinAlg.peakflops
+Base.LinAlg.stride1
 ```
 
 ## Low-level matrix operations

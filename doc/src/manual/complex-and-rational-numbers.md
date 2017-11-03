@@ -111,9 +111,9 @@ julia> angle(1 + 2im) # phase angle in radians
 1.1071487177940904
 ```
 
-As usual, the absolute value ([`abs()`](@ref)) of a complex number is its distance from zero.
-[`abs2()`](@ref) gives the square of the absolute value, and is of particular use for complex
-numbers where it avoids taking a square root. [`angle()`](@ref) returns the phase angle in radians
+As usual, the absolute value ([`abs`](@ref)) of a complex number is its distance from zero.
+[`abs2`](@ref) gives the square of the absolute value, and is of particular use for complex
+numbers where it avoids taking a square root. [`angle`](@ref) returns the phase angle in radians
 (also known as the *argument* or *arg* function). The full gamut of other [Elementary Functions](@ref)
 is also defined for complex numbers:
 
@@ -135,7 +135,7 @@ julia> sinh(1 + 2im)
 ```
 
 Note that mathematical functions typically return real values when applied to real numbers and
-complex values when applied to complex numbers. For example, [`sqrt()`](@ref) behaves differently
+complex values when applied to complex numbers. For example, [`sqrt`](@ref) behaves differently
 when applied to `-1` versus `-1 + 0im` even though `-1 == -1 + 0im`:
 
 ```jldoctest
@@ -143,9 +143,7 @@ julia> sqrt(-1)
 ERROR: DomainError with -1.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt(::Int64) at ./math.jl:472
+[...]
 
 julia> sqrt(-1 + 0im)
 0.0 + 1.0im
@@ -159,7 +157,7 @@ julia> a = 1; b = 2; a + b*im
 1 + 2im
 ```
 
-However, this is *not* recommended; Use the [`complex()`](@ref) function instead to construct
+However, this is *not* recommended; Use the [`complex`](@ref) function instead to construct
 a complex value directly from its real and imaginary parts:
 
 ```jldoctest
@@ -209,7 +207,7 @@ julia> -4//-12
 
 This normalized form for a ratio of integers is unique, so equality of rational values can be
 tested by checking for equality of the numerator and denominator. The standardized numerator and
-denominator of a rational value can be extracted using the [`numerator()`](@ref) and [`denominator()`](@ref)
+denominator of a rational value can be extracted using the [`numerator`](@ref) and [`denominator`](@ref)
 functions:
 
 ```jldoctest
@@ -285,8 +283,7 @@ Trying to construct a [`NaN`](@ref) rational value, however, is not:
 julia> 0//0
 ERROR: ArgumentError: invalid rational: zero(Int64)//zero(Int64)
 Stacktrace:
- [1] Rational{Int64}(::Int64, ::Int64) at ./rational.jl:13
- [2] //(::Int64, ::Int64) at ./rational.jl:40
+[...]
 ```
 
 As usual, the promotion system makes interactions with other numeric types effortless:

@@ -8,6 +8,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "threading.h"
+#include "julia_assert.h"
 
 // define `jl_unw_get` as a macro, since (like setjmp)
 // returning from the callee function will invalidate the context

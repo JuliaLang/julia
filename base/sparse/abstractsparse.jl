@@ -22,6 +22,13 @@ issparse(S::LinAlg.UnitUpperTriangular{<:Any,<:AbstractSparseMatrix}) = true
 
 indtype(S::AbstractSparseArray{<:Any,Ti}) where {Ti} = Ti
 
+function Base.reinterpret(::Type, A::AbstractSparseArray)
+    error("""
+          `reinterpret` on sparse arrays is discontinued.
+          Try reinterpreting the value itself instead.
+          """)
+end
+
 # The following two methods should be overloaded by concrete types to avoid
 # allocating the I = find(...)
 _sparse_findnext(v::AbstractSparseArray, i) = (I = find(v); n = searchsortedfirst(I, i); n<=length(I) ? I[n] : 0)

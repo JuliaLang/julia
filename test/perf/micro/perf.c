@@ -57,11 +57,15 @@ double *matmul_aat(int n, double *b) {
     return c;
 }
 
+double cabs2(double complex z) {
+  return creal(z)*creal(z) + cimag(z)*cimag(z);
+}
+
 int mandel(double complex z) {
     int maxiter = 80;
     double complex c = z;
     for (int n = 0; n < maxiter; ++n) {
-        if (cabs(z) > 2.0) {
+        if (cabs2(z) > 4.0) {
             return n;
         }
         z = z*z+c;
@@ -169,8 +173,8 @@ struct double_pair randmatstat(int t) {
                     4*n, 4*n, 4*n, 1.0, PtP1, 4*n, PtP1, 4*n, 0.0, PtP2, 4*n);
         cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
                     4*n, 4*n, 4*n, 1.0, PtP2, 4*n, PtP2, 4*n, 0.0, PtP1, 4*n);
-        for (int j=0; j < n; j++) {
-            v[i] += PtP1[(n+1)*j];
+        for (int j=0; j < 4*n; j++) {
+            v[i] += PtP1[(4*n+1)*j];
         }
         cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
                     2*n, 2*n, 2*n, 1.0, Q, 2*n, Q, 2*n, 0.0, QtQ1, 2*n);
@@ -245,7 +249,7 @@ int main() {
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
-    print_perf("fib", tmin / 1000);
+    print_perf("recursion_fibonacci", tmin / 1000);
 
     // parse_bin
     tmin = INFINITY;
@@ -261,7 +265,7 @@ int main() {
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
-    print_perf("parse_int", tmin / 100);
+    print_perf("parse_integers", tmin / 100);
 
     // // array constructor
     // tmin = INFINITY;
@@ -321,7 +325,7 @@ int main() {
         if (t < tmin) tmin = t;
     }
     assert(mandel_sum2 == 14791 * NITER);
-    print_perf("mandel", tmin / 100);
+    print_perf("userfunc_mandelbrot", tmin / 100);
 
     // sort
     tmin = INFINITY;
@@ -333,7 +337,7 @@ int main() {
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
-    print_perf("quicksort", tmin);
+    print_perf("recursion_quicksort", tmin);
 
     // pi sum
     double pi;
@@ -345,7 +349,7 @@ int main() {
         if (t < tmin) tmin = t;
     }
     assert(fabs(pi-1.644834071848065) < 1e-12);
-    print_perf("pi_sum", tmin);
+    print_perf("iteration_pi_sum", tmin);
 
     // rand mat stat
     struct double_pair r;
@@ -357,7 +361,7 @@ int main() {
         if (t < tmin) tmin = t;
     }
     // assert(0.5 < r.s1 && r.s1 < 1.0 && 0.5 < r.s2 && r.s2 < 1.0);
-    print_perf("rand_mat_stat", tmin);
+    print_perf("matrix_statistics", tmin);
 
     // rand mat mul
     tmin = INFINITY;
@@ -369,7 +373,7 @@ int main() {
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
-    print_perf("rand_mat_mul", tmin);
+    print_perf("matrix_multiply", tmin);
 
     // printfd
     tmin = INFINITY;
@@ -379,7 +383,7 @@ int main() {
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
-    print_perf("printfd", tmin);
+    print_perf("print_to_file", tmin);
 
     return 0;
 }

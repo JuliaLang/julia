@@ -40,7 +40,6 @@ const SparseVectorUnion{T} = Union{SparseVector{T}, SparseColumnView{T}}
 length(x::SparseVector)   = x.n
 size(x::SparseVector)     = (x.n,)
 nnz(x::SparseVector)      = length(x.nzval)
-count(x::SparseVector)    = count(x.nzval)
 count(f, x::SparseVector) = count(f, x.nzval) + f(zero(eltype(x)))*(length(x) - nnz(x))
 
 nonzeros(x::SparseVector) = x.nzval
@@ -59,11 +58,40 @@ function nonzeroinds(x::SparseColumnView)
     return y
 end
 
-similar(x::SparseVector, Tv::Type=eltype(x)) = SparseVector(x.n, copy(x.nzind), Vector{Tv}(length(x.nzval)))
-function similar(x::SparseVector, ::Type{Tv}, ::Type{Ti}) where {Tv,Ti}
-    return SparseVector(x.n, copy!(similar(x.nzind, Ti), x.nzind), copy!(similar(x.nzval, Tv), x.nzval))
-end
-similar(x::SparseVector, ::Type{T}, D::Dims) where {T} = spzeros(T, D...)
+
+## similar
+#
+# parent method for similar that preserves stored-entry structure (for when new and old dims match)
+_sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}) where {TvNew,TiNew} =
+    SparseVector(S.n, copy!(similar(S.nzind, TiNew), S.nzind), similar(S.nzval, TvNew))
+# parent method for similar that preserves nothing (for when old and new dims differ, and new is 1d)
+_sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
+    SparseVector(dims..., similar(S.nzind, TiNew, 0), similar(S.nzval, TvNew, 0))
+# parent method for similar that preserves storage space (for old and new dims differ, and new is 2d)
+_sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
+    SparseMatrixCSC(dims..., ones(TiNew, last(dims)+1), similar(S.nzind, TiNew), similar(S.nzval, TvNew))
+# The following methods hook into the AbstractArray similar hierarchy. The first method
+# covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
+# methods cover similar(A[, Tv], shape...) calls, which preserve nothing if the dims
+# specify a SparseVector result and storage space if the dims specify a SparseMatrixCSC result.
+similar(S::SparseVector{<:Any,Ti}, ::Type{TvNew}) where {Ti,TvNew} =
+    _sparsesimilar(S, TvNew, Ti)
+similar(S::SparseVector{<:Any,Ti}, ::Type{TvNew}, dims::Union{Dims{1},Dims{2}}) where {Ti,TvNew} =
+    _sparsesimilar(S, TvNew, Ti, dims)
+# The following methods cover similar(A, Tv, Ti[, shape...]) calls, which specify the
+# result's index type in addition to its entry type, and aren't covered by the hooks above.
+# The calls without shape again preserve stored-entry structure, whereas those with
+# one-dimensional shape preserve nothing, and those with two-dimensional shape
+# preserve storage space.
+similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}) where{TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew)
+similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Union{Dims{1},Dims{2}}) where {TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew, dims)
+similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, m::Integer) where {TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew, (m,))
+similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, m::Integer, n::Integer) where {TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew, (m, n))
+
 
 ### Construct empty sparse vector
 
@@ -573,7 +601,7 @@ function _logical_index(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool}) where Tv
     SparseVector(n, rowvalB, nzvalB)
 end
 
-# TODO: further optimizations are available for ::Colon and other types of Range
+# TODO: further optimizations are available for ::Colon and other types of AbstractRange
 getindex(A::SparseMatrixCSC, ::Colon) = A[1:end]
 
 function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
@@ -649,7 +677,17 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractVector) where Tv
     SparseVector(n, rowvalB, nzvalB)
 end
 
-function find(x::SparseVector{<:Any,Ti}) where Ti
+function find(x::SparseVector)
+    if !(eltype(x) <: Bool)
+        Base.depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
+    end
+    return find(x->x!=0, x)
+end
+
+function find(p::Function, x::SparseVector{<:Any,Ti}) where Ti
+    if p(zero(eltype(x)))
+        return invoke(find, Tuple{Function, Any}, p, x)
+    end
     numnz = nnz(x)
     I = Vector{Ti}(numnz)
 
@@ -658,7 +696,7 @@ function find(x::SparseVector{<:Any,Ti}) where Ti
 
     count = 1
     @inbounds for i = 1 : numnz
-        if nzval[i] != 0
+        if p(nzval[i])
             I[count] = nzind[i]
             count += 1
         end
@@ -856,7 +894,6 @@ function convert(::Type{Vector}, x::AbstractSparseVector{Tv}) where Tv
     return r
 end
 convert(::Type{Array}, x::AbstractSparseVector) = convert(Vector, x)
-full(x::AbstractSparseVector) = convert(Array, x)
 
 ### Array manipulation
 
@@ -1012,7 +1049,7 @@ function hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
     tmp_rows = Vector{SparseMatrixCSC}(nbr)
     k = 0
     @inbounds for i = 1 : nbr
-        tmp_rows[i] = hcat(X[(1 : rows[i]) + k]...)
+        tmp_rows[i] = hcat(X[(1 : rows[i]) .+ k]...)
         k += rows[i]
     end
     vcat(tmp_rows...)
@@ -1461,13 +1498,9 @@ scale!(x::AbstractSparseVector, a::Complex) = (scale!(nonzeros(x), a); x)
 scale!(a::Real, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
 scale!(a::Complex, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
 
-
 (*)(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) * a)
 (*)(a::Number, x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), a * nonzeros(x))
 (/)(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
-broadcast(::typeof(*), x::AbstractSparseVector, a::Number) = x * a
-broadcast(::typeof(*), a::Number, x::AbstractSparseVector) = a * x
-broadcast(::typeof(/), x::AbstractSparseVector, a::Number) = x / a
 
 # dot
 function dot(x::StridedVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
@@ -1845,7 +1878,7 @@ for isunittri in (true, false), islowertri in (true, false)
                 nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
                     :(b.nzind[1]:b.n) :
                     :(1:b.nzind[end]) )
-                nzrangeviewbnz = view(b.nzval, nzrange - b.nzind[1] + 1)
+                nzrangeviewbnz = view(b.nzval, nzrange .- (b.nzind[1] - 1))
                 nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
                 ($func)(nzrangeviewA, nzrangeviewbnz)
                 # could strip any miraculous zeros here perhaps
@@ -1908,9 +1941,9 @@ function sort(x::SparseVector{Tv,Ti}; kws...) where {Tv,Ti}
     allvals = push!(copy(nonzeros(x)),zero(Tv))
     sinds = sortperm(allvals;kws...)
     n,k = length(x),length(allvals)
-    z = findfirst(sinds,k)
+    z = findfirst(equalto(k),sinds)
     newnzind = collect(Ti,1:k-1)
-    newnzind[z:end]+= n-k+1
+    newnzind[z:end] .+= n-k+1
     newnzvals = allvals[deleteat!(sinds[1:k],z)]
     SparseVector(n,newnzind,newnzvals)
 end

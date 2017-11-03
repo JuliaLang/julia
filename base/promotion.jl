@@ -187,7 +187,8 @@ promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = 
 """
     promote(xs...)
 
-Convert all arguments to their common promotion type (if any), and return them all (as a tuple).
+Convert all arguments to a common type, and return them all (as a tuple).
+If no arguments can be converted, an error is raised.
 
 # Examples
 ```jldoctest
@@ -197,21 +198,19 @@ julia> promote(Int8(1), Float16(4.5), Float32(4.1))
 """
 function promote end
 
-promote() = ()
-promote(x) = (x,)
-function promote(x::T, y::S) where {T,S}
+function _promote(x::T, y::S) where {T,S}
     @_inline_meta
     (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
 end
 promote_typeof(x) = typeof(x)
 promote_typeof(x, xs...) = (@_inline_meta; promote_type(typeof(x), promote_typeof(xs...)))
-function promote(x, y, z)
+function _promote(x, y, z)
     @_inline_meta
     (convert(promote_typeof(x,y,z), x),
      convert(promote_typeof(x,y,z), y),
      convert(promote_typeof(x,y,z), z))
 end
-function promote(x, y, zs...)
+function _promote(x, y, zs...)
     @_inline_meta
     (convert(promote_typeof(x,y,zs...), x),
      convert(promote_typeof(x,y,zs...), y),
@@ -240,39 +239,38 @@ promote_to_supertype(::Type{T}, ::Type{S}, ::Type{S}) where {T<:Number,S<:Number
 promote_to_supertype(::Type{T}, ::Type{S}, ::Type) where {T<:Number,S<:Number} =
     error("no promotion exists for ", T, " and ", S)
 
-# promotion with a check for circularity. Can be used to catch what
-# would otherwise become StackOverflowErrors.
-function promote_noncircular(x, y)
+promote() = ()
+promote(x) = (x,)
+
+function promote(x, y)
     @_inline_meta
-    px, py = promote(x, y)
-    not_all_sametype((x,px), (y,py))
+    px, py = _promote(x, y)
+    not_sametype((x,y), (px,py))
     px, py
 end
-function promote_noncircular(x, y, z)
+function promote(x, y, z)
     @_inline_meta
-    px, py, pz = promote(x, y, z)
-    not_all_sametype((x,px), (y,py), (z,pz))
+    px, py, pz = _promote(x, y, z)
+    not_sametype((x,y,z), (px,py,pz))
     px, py, pz
 end
-function promote_noncircular(x, y, z, a...)
-    p = promote(x, y, z, a...)
-    not_all_sametype(map(identity, (x, y, z, a...), p))
+function promote(x, y, z, a...)
+    p = _promote(x, y, z, a...)
+    not_sametype((x, y, z, a...), p)
     p
 end
-not_all_sametype(x, y) = nothing
-not_all_sametype(x, y, z) = nothing
-not_all_sametype(x::Tuple{S,S}, y::Tuple{T,T}) where {S,T} = sametype_error(x[1], y[1])
-not_all_sametype(x::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}) where {R,S,T} = sametype_error(x[1], y[1], z[1])
-function not_all_sametype(::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}, args...) where {R,S,T}
-    @_inline_meta
-    not_all_sametype(y, z, args...)
-end
-not_all_sametype() = error("promotion failed to change any input types")
-function sametype_error(input...)
+
+promote(x::T, y::T, zs::T...) where {T} = (x, y, zs...)
+
+not_sametype(x::T, y::T) where {T} = sametype_error(x)
+
+not_sametype(x, y) = nothing
+
+function sametype_error(input)
     @_noinline_meta
-    error("circular method definition: promotion of types ",
+    error("promotion of types ",
           join(map(x->string(typeof(x)), input), ", ", " and "),
-          " failed to change any input types")
+          " failed to change any arguments")
 end
 
 +(x::Number, y::Number) = +(promote(x,y)...)
@@ -312,10 +310,6 @@ julia> A^3
 fma(x::Number, y::Number, z::Number) = fma(promote(x,y,z)...)
 muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
 
-(&)(x::Integer, y::Integer) = (&)(promote(x,y)...)
-(|)(x::Integer, y::Integer) = (|)(promote(x,y)...)
-xor(x::Integer, y::Integer) = xor(promote(x,y)...)
-
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
 <( x::Real, y::Real)     = (< )(promote(x,y)...)
 <=(x::Real, y::Real)     = (<=)(promote(x,y)...)
@@ -348,13 +342,13 @@ promote_op(::Any...) = (@_inline_meta; Any)
 function promote_op(f, ::Type{S}) where S
     @_inline_meta
     T = _return_type(f, Tuple{_default_type(S)})
-    isleaftype(S) && return isleaftype(T) ? T : Any
+    _isleaftype(S) && return _isleaftype(T) ? T : Any
     return typejoin(S, T)
 end
 function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
     @_inline_meta
     T = _return_type(f, Tuple{_default_type(R), _default_type(S)})
-    isleaftype(R) && isleaftype(S) && return isleaftype(T) ? T : Any
+    _isleaftype(R) && _isleaftype(S) && return _isleaftype(T) ? T : Any
     return typejoin(R, S, T)
 end
 
@@ -389,3 +383,5 @@ minmax(x::Real) = (x, x)
 max(x::T, y::T) where {T<:Real} = select_value(y < x, x, y)
 min(x::T, y::T) where {T<:Real} = select_value(y < x, y, x)
 minmax(x::T, y::T) where {T<:Real} = y < x ? (y, x) : (x, y)
+
+flipsign(x::T, y::T) where {T<:Signed} = no_op_err("flipsign", T)

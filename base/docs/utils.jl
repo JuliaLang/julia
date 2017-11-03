@@ -353,7 +353,7 @@ print_correction(word) = print_correction(STDOUT, word)
 const builtins = ["abstract type", "baremodule", "begin", "break",
                   "catch", "ccall", "const", "continue", "do", "else",
                   "elseif", "end", "export", "finally", "for", "function",
-                  "global", "if", "import", "importall", "let",
+                  "global", "if", "import", "let",
                   "local", "macro", "module", "mutable struct", "primitive type",
                   "quote", "return", "struct", "try", "using", "while"]
 

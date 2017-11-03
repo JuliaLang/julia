@@ -2,7 +2,7 @@
 
 @doc """
 
-`tests, net_on = choosetests(choices)` selects a set of tests to be
+`tests, net_on, exit_on_error, seed = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
 `["all"]`, all tests are selected.
 
@@ -10,8 +10,21 @@ This function also supports "test collections": specifically, "linalg"
  refers to collections of tests in the correspondingly-named
 directories.
 
-Upon return, `tests` is a vector of fully-expanded test names, and
-`net_on` is true if networking is available (required for some tests).
+Upon return:
+  - `tests` is a vector of fully-expanded test names,
+  - `net_on` is true if networking is available (required for some tests),
+  - `exit_on_error` is true if an error in one test should cancel
+    remaining tests to be run (otherwise, all tests are run unconditionally),
+  - `seed` is a seed which will be used to initialize the global RNG for each
+    test to be run.
+
+Three options can be passed to `choosetests` by including a special token
+in the `choices` argument:
+   - "--skip", which makes all tests coming after be skipped,
+   - "--exit-on-error" which sets the value of `exit_on_error`,
+   - "--seed=SEED", which sets the value of `seed` to `SEED`
+     (parsed as an `UInt128`); `seed` is otherwise initialized randomly.
+     This option can be used to reproduce failed tests.
 """ ->
 function choosetests(choices = [])
     testnames = [
@@ -24,26 +37,20 @@ function choosetests(choices = [])
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "path", "ccall", "parse", "loading", "bigint",
         "bigfloat", "sorting", "statistics", "spawn", "backtrace",
-        "file", "read", "mmap", "version", "resolve",
-        "pollfd", "mpfr", "broadcast", "complex", "socket",
-        "floatapprox", "datafmt", "reflection", "regex", "float16",
+        "file", "read", "version", "resolve", "namedtuple",
+        "mpfr", "broadcast", "complex", "socket",
+        "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
-        "replutil", "sets", "test", "goto", "llvmcall", "llvmcall2", "grisu",
-        "nullable", "meta", "stacktraces", "profile", "libgit2", "docs",
-        "markdown", "base64", "serialize", "misc", "threads",
+        "replutil", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
+        "nullable", "meta", "stacktraces", "libgit2", "docs",
+        "markdown", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
-        "checked", "intset", "floatfuncs", "compile", "distributed", "inline",
+        "checked", "bitset", "floatfuncs", "compile", "distributed", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
-        "channels", "iostream", "specificity", "codegen", "codevalidation"
+        "channels", "iostream", "specificity", "codegen", "codevalidation",
+        "reinterpretarray"
     ]
-    profile_skipped = false
-    if startswith(string(Sys.ARCH), "arm")
-        # Remove profile from default tests on ARM since it currently segfaults
-        # Allow explicitly adding it for testing
-        filter!(x -> (x != "profile"), testnames)
-        profile_skipped = true
-    end
 
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
         push!(testnames, "examples")
@@ -51,11 +58,17 @@ function choosetests(choices = [])
 
     tests = []
     skip_tests = []
+    exit_on_error = false
+    seed = rand(RandomDevice(), UInt128)
 
     for (i, t) in enumerate(choices)
         if t == "--skip"
             skip_tests = choices[i + 1:end]
             break
+        elseif t == "--exit-on-error"
+            exit_on_error = true
+        elseif startswith(t, "--seed=")
+            seed = parse(UInt128, t[8:end])
         else
             push!(tests, t)
         end
@@ -63,9 +76,6 @@ function choosetests(choices = [])
 
     if tests == ["all"] || isempty(tests)
         tests = testnames
-        if profile_skipped
-            warn("profile test skipped")
-        end
     end
 
     datestests = ["dates/accessors", "dates/adjusters", "dates/query",
@@ -168,5 +178,5 @@ function choosetests(choices = [])
 
     filter!(x -> !(x in skip_tests), tests)
 
-    tests, net_on
+    tests, net_on, exit_on_error, seed
 end

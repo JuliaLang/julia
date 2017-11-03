@@ -9,9 +9,9 @@ function perf()
 	
 	f = fib(20);
 	assert(f == 6765)
-	timeit('fib', @fib, 20)
+	timeit('recursion_fibonacci', @fib, 20)
 	
-	timeit('parse_int', @parseintperf, 1000)
+	timeit('parse_integers', @parseintperf, 1000)
 	
 	%% array constructors %%
 
@@ -24,14 +24,14 @@ function perf()
 	
 	mandel(complex(-.53,.68));
 	assert(sum(sum(mandelperf(true))) == 14791)
-	timeit('mandel', @mandelperf, true)
+	timeit('userfunc_mandelbrot', @mandelperf, true)
 	
 	assert(issorted(sortperf(5000)))
-	timeit('quicksort', @sortperf, 5000)
+	timeit('recursion_quicksort', @sortperf, 5000)
 	
 	s = pisum(true);
 	assert(abs(s-1.644834071848065) < 1e-12);
-	timeit('pi_sum',@pisum, true)
+	timeit('iteration_pi_sum',@pisum, true)
 	
 	%s = pisumvec(true);
 	%assert(abs(s-1.644834071848065) < 1e-12);
@@ -39,12 +39,12 @@ function perf()
 	
 	[s1, s2] = randmatstat(1000);
 	assert(round(10*s1) > 5 && round(10*s1) < 10);
-	timeit('rand_mat_stat', @randmatstat, 1000)
+	timeit('matrix_statistics', @randmatstat, 1000)
 	
-	timeit('rand_mat_mul', @randmatmul, 1000);
+	timeit('matrix_multiply', @randmatmul, 1000);
 	
 	printfd(1)
-	timeit('printfd', @printfd, 100000)
+	timeit('print_to_file', @printfd, 100000)
 
 end
 
@@ -92,8 +92,8 @@ end
 function n = parseintperf(t)
     for i = 1:t
         n = randi([0,2^32-1],1,'uint32');
-        s = sprintf('%08X',n);
-        m = sscanf(s,'%X');
+        s = sprintf('%08x',n);
+        m = sscanf(s,'%x');
         assert(m == n);
     end
 end
@@ -106,11 +106,15 @@ end
 
 %% mandelbrot set: complex arithmetic and comprehensions %%
 
+function r = abs2(z)
+    r = real(z)*real(z) + imag(z)*imag(z)
+end
+
 function n = mandel(z)
     n = 0;
     c = z;
     for n=0:79
-        if abs(z)>2
+        if abs2(z)>4
             return
         end
         z = z^2+c;

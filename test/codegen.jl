@@ -67,7 +67,7 @@ end
 function test_jl_dump_compiles_toplevel_thunks()
     tfile = tempname()
     io = open(tfile, "w")
-    topthunk = expand(Main, :(for i in 1:10; end))
+    topthunk = Meta.lower(Main, :(for i in 1:10; end))
     ccall(:jl_dump_compiles, Void, (Ptr{Void},), io.handle)
     Core.eval(Main, topthunk)
     ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
@@ -188,6 +188,13 @@ function two_breakpoint(a::Float64)
     ccall(:jl_breakpoint, Void, (Ref{Float64},), a)
 end
 
+function load_dummy_ref(x::Int)
+    r = Ref{Int}(x)
+    Base.@gc_preserve r begin
+        unsafe_load(Ptr{Int}(pointer_from_objref(r)))
+    end
+end
+
 if opt_level > 0
     breakpoint_f64_ir = get_llvm((a)->ccall(:jl_breakpoint, Void, (Ref{Float64},), a),
                                  Tuple{Float64})
@@ -198,6 +205,12 @@ if opt_level > 0
     two_breakpoint_ir = get_llvm(two_breakpoint, Tuple{Float64})
     @test !contains(two_breakpoint_ir, "jl_gc_pool_alloc")
     @test contains(two_breakpoint_ir, "llvm.lifetime.end")
+
+    @test load_dummy_ref(1234) === 1234
+    load_dummy_ref_ir = get_llvm(load_dummy_ref, Tuple{Int})
+    @test !contains(load_dummy_ref_ir, "jl_gc_pool_alloc")
+    # Hopefully this is reliable enough. LLVM should be able to optimize this to a direct return.
+    @test contains(load_dummy_ref_ir, "ret $Iptr %0")
 end
 
 # Issue 22770
@@ -244,4 +257,52 @@ let c = [1,2,3]
     len1 = length(c)
     len2 = issue22582!(c, true)
     @test len1 == len2
+end
+
+# PR #23595
+@generated f23595(g, args...) = Expr(:call, :g, Expr(:(...), :args))
+x23595 = rand(1)
+@test f23595(Core.arrayref, true, x23595, 1) == x23595[]
+
+# Issue #22421
+@noinline f22421_1(x) = x[] + 1
+@noinline f22421_2(x) = x[] + 2
+@noinline f22421_3(x, y, z, v) = x[] + y[] + z[] + v
+function g22421_1(x, y, b)
+    # Most likely generates a branch with phi node
+    if b
+        z = x
+        v = f22421_1(y)
+    else
+        z = y
+        v = f22421_2(x)
+    end
+    return f22421_3(x, y, z, v)
+end
+function g22421_2(x, y, b)
+    # Most likely generates a select
+    return f22421_3(x, y, b ? x : y, 1)
+end
+
+struct A24108
+    x::Vector{Int}
+end
+struct B24108
+    x::A24108
+end
+@noinline f24108(x) = length(x)
+# Test no gcframe is allocated for `x.x.x` even though `x.x` isn't live at the call site
+g24108(x::B24108) = f24108(x.x.x)
+
+@test g22421_1(Ref(1), Ref(2), true) === 7
+@test g22421_1(Ref(3), Ref(4), false) === 16
+@test g22421_2(Ref(5), Ref(6), true) === 17
+@test g22421_2(Ref(7), Ref(8), false) === 24
+
+if opt_level > 0
+    @test !contains(get_llvm(g22421_1, Tuple{Base.RefValue{Int},Base.RefValue{Int},Bool}),
+                    "%gcframe")
+    @test !contains(get_llvm(g22421_2, Tuple{Base.RefValue{Int},Base.RefValue{Int},Bool}),
+                    "%gcframe")
+    @test !contains(get_llvm(g24108, Tuple{B24108}), "%gcframe")
 end

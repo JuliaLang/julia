@@ -43,11 +43,11 @@ else
 end
 
 """
-    BigInt <: Integer
+    BigInt <: Signed
 
 Arbitrary precision integer type.
 """
-mutable struct BigInt <: Integer
+mutable struct BigInt <: Signed
     alloc::Cint
     size::Cint
     d::Ptr{Limb}
@@ -229,6 +229,7 @@ widen(::Type{BigInt})  = BigInt
 signed(x::BigInt) = x
 
 convert(::Type{BigInt}, x::BigInt) = x
+convert(::Type{Signed}, x::BigInt) = x
 
 hastypemax(::Type{BigInt}) = false
 
@@ -251,7 +252,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     if Base.containsnul(bstr)
         err = -1 # embedded NUL char (not handled correctly by GMP)
     else
-        err = MPZ.set_str!(z, pointer(bstr)+(i-start(bstr)), base)
+        err = Base.@gc_preserve bstr MPZ.set_str!(z, pointer(bstr)+(i-start(bstr)), base)
     end
     if err != 0
         raise && throw(ArgumentError("invalid BigInt: $(repr(bstr))"))
@@ -313,7 +314,7 @@ rem(x::BigInt, ::Type{Bool}) = !iszero(x) & unsafe_load(x.d) % Bool # never unsa
 rem(x::BigInt, ::Type{T}) where T<:Union{SLimbMax,ULimbMax} =
     iszero(x) ? zero(T) : flipsign(unsafe_load(x.d) % T, x.size)
 
-function rem(x::BigInt, ::Type{T}) where T<:Union{Unsigned,Signed}
+function rem(x::BigInt, ::Type{T}) where T<:Union{Base.BitUnsigned,Base.BitSigned}
     u = zero(T)
     for l = 1:min(abs(x.size), cld(sizeof(T), sizeof(Limb)))
         u += (unsafe_load(x.d, l) % T) << ((sizeof(Limb)<<3)*(l-1))
@@ -323,7 +324,7 @@ end
 
 rem(x::Integer, ::Type{BigInt}) = convert(BigInt, x)
 
-function convert(::Type{T}, x::BigInt) where T<:Unsigned
+function convert(::Type{T}, x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
     else
@@ -332,7 +333,7 @@ function convert(::Type{T}, x::BigInt) where T<:Unsigned
     end
 end
 
-function convert(::Type{T}, x::BigInt) where T<:Signed
+function convert(::Type{T}, x::BigInt) where T<:Base.BitSigned
     n = abs(x.size)
     if sizeof(T) < sizeof(Limb)
         SLimb = typeof(Signed(one(Limb)))
@@ -588,6 +589,8 @@ ispos(x::BigInt) = x.size > 0
 signbit(x::BigInt) = isneg(x)
 flipsign!(x::BigInt, y::Integer) = (signbit(y) && (x.size = -x.size); x)
 flipsign( x::BigInt, y::Integer) = signbit(y) ? -x : x
+flipsign( x::BigInt, y::BigInt)  = signbit(y) ? -x : x
+# above method to resolving ambiguities with flipsign(::T, ::T) where T<:Signed
 
 string(x::BigInt) = dec(x)
 show(io::IO, x::BigInt) = print(io, string(x))
@@ -609,8 +612,8 @@ function base(b::Integer, n::BigInt, pad::Integer=1)
     nd1 = ndigits(n, b)
     nd  = max(nd1, pad)
     sv  = Base.StringVector(nd + isneg(n))
-    MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
-    @inbounds for i = (1:nd-nd1) + isneg(n)
+    Base.@gc_preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
+    @inbounds for i = (1:nd-nd1) .+ isneg(n)
         sv[i] = '0' % UInt8
     end
     isneg(n) && (sv[1] = '-' % UInt8)

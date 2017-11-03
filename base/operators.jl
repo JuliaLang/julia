@@ -163,8 +163,9 @@ const ≠ = !=
     ≡(x,y) -> Bool
 
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
-them. Compares mutable objects by address in memory, and compares immutable objects (such as
-numbers) by contents at the bit level. This function is sometimes called `egal`.
+them. First it compares the types of `x` and `y`. If those are identical, it compares mutable
+objects by address in memory and immutable objects (such as numbers) by contents at the bit
+level. This function is sometimes called "egal".
 
 # Examples
 ```jldoctest
@@ -334,6 +335,7 @@ julia> cmp(2, 1)
 
 julia> cmp(2+im, 3-im)
 ERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})
+Stacktrace:
 [...]
 ```
 """
@@ -516,10 +518,10 @@ this is equivalent to `x >> -n`.
 julia> Int8(3) << 2
 12
 
-julia> bits(Int8(3))
+julia> bitstring(Int8(3))
 "00000011"
 
-julia> bits(Int8(12))
+julia> bitstring(Int8(12))
 "00001100"
 ```
 See also [`>>`](@ref), [`>>>`](@ref).
@@ -546,19 +548,19 @@ right by `n` bits, where `n >= 0`, filling with `0`s if `x >= 0`, `1`s if `x <
 julia> Int8(13) >> 2
 3
 
-julia> bits(Int8(13))
+julia> bitstring(Int8(13))
 "00001101"
 
-julia> bits(Int8(3))
+julia> bitstring(Int8(3))
 "00000011"
 
 julia> Int8(-14) >> 2
 -4
 
-julia> bits(Int8(-14))
+julia> bitstring(Int8(-14))
 "11110010"
 
-julia> bits(Int8(-4))
+julia> bitstring(Int8(-4))
 "11111100"
 ```
 See also [`>>>`](@ref), [`<<`](@ref).
@@ -587,10 +589,10 @@ For [`Unsigned`](@ref) integer types, this is equivalent to [`>>`](@ref). For
 julia> Int8(-14) >>> 2
 60
 
-julia> bits(Int8(-14))
+julia> bitstring(Int8(-14))
 "11110010"
 
-julia> bits(Int8(60))
+julia> bitstring(Int8(60))
 "00111100"
 ```
 
@@ -972,3 +974,22 @@ julia> filter(!isalpha, str)
 ```
 """
 !(f::Function) = (x...)->!f(x...)
+
+struct EqualTo{T} <: Function
+    x::T
+
+    EqualTo(x::T) where {T} = new{T}(x)
+end
+
+(f::EqualTo)(y) = isequal(f.x, y)
+
+"""
+    equalto(x)
+
+Create a function that compares its argument to `x` using [`isequal`](@ref); i.e. returns
+`y->isequal(x,y)`.
+
+The returned function is of type `Base.EqualTo`. This allows dispatching to
+specialized methods by using e.g. `f::Base.EqualTo` in a method signature.
+"""
+const equalto = EqualTo

@@ -81,7 +81,7 @@ typedef struct {
 
 // This includes all the thread local states we care about for a thread.
 #define JL_MAX_BT_SIZE 80000
-typedef struct _jl_tls_states_t {
+struct _jl_tls_states_t {
     struct _jl_gcframe_t *pgcstack;
     size_t world_age;
     struct _jl_value_t *exception_in_transit;
@@ -130,7 +130,7 @@ typedef struct _jl_tls_states_t {
     int finalizers_inhibited;
     arraylist_t finalizers;
     jl_gc_mark_cache_t gc_cache;
-} jl_tls_states_t;
+};
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
 #ifdef __MIC__

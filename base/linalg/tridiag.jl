@@ -95,7 +95,6 @@ function convert(::Type{Matrix{T}}, M::SymTridiagonal) where T
 end
 convert(::Type{Matrix}, M::SymTridiagonal{T}) where {T} = convert(Matrix{T}, M)
 convert(::Type{Array}, M::SymTridiagonal) = convert(Matrix, M)
-full(M::SymTridiagonal) = convert(Array, M)
 
 size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
 function size(A::SymTridiagonal, d::Integer)
@@ -108,7 +107,11 @@ function size(A::SymTridiagonal, d::Integer)
     end
 end
 
-similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal{T}(similar(S.dv, T), similar(S.ev, T))
+# For S<:SymTridiagonal, similar(S[, neweltype]) should yield a SymTridiagonal matrix.
+# On the other hand, similar(S, [neweltype,] shape...) should yield a sparse matrix.
+# The first method below effects the former, and the second the latter.
+similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
+similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 #Elementary operations
 broadcast(::typeof(abs), M::SymTridiagonal) = SymTridiagonal(abs.(M.dv), abs.(M.ev))
@@ -127,16 +130,19 @@ broadcast(::typeof(ceil), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = Sym
 transpose(M::SymTridiagonal) = M #Identity operation
 adjoint(M::SymTridiagonal) = conj(M)
 
-function diag(M::SymTridiagonal{T}, n::Integer=0) where T
+function diag(M::SymTridiagonal, n::Integer=0)
+    # every branch call similar(..., ::Int) to make sure the
+    # same vector type is returned independent of n
     absn = abs(n)
     if absn == 0
-        return M.dv
+        return copy!(similar(M.dv, length(M.dv)), M.dv)
     elseif absn==1
-        return M.ev
-    elseif absn<size(M,1)
-        return zeros(T,size(M,1)-absn)
+        return copy!(similar(M.ev, length(M.ev)), M.ev)
+    elseif absn <= size(M,1)
+        return fill!(similar(M.dv, size(M,1)-absn), 0)
     else
-        throw(ArgumentError("$n-th diagonal of a $(size(M)) matrix doesn't exist!"))
+        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
+            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
 end
 
@@ -236,16 +242,16 @@ returns the specific corresponding eigenvectors.
 # Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64}:
+3×3 SymTridiagonal{Float64,Array{Float64,1}}:
  1.0  2.0   ⋅
  2.0  2.0  3.0
   ⋅   3.0  1.0
 
 julia> eigvals(A)
 3-element Array{Float64,1}:
- -2.14005
-  1.0
-  5.14005
+ -2.1400549446402604
+  1.0000000000000002
+  5.140054944640259
 
 julia> eigvecs(A)
 3×3 Array{Float64,2}:
@@ -255,9 +261,9 @@ julia> eigvecs(A)
 
 julia> eigvecs(A, [1.])
 3×1 Array{Float64,2}:
-  0.83205
-  4.26351e-17
- -0.5547
+  0.8320502943378438
+  4.263514128092366e-17
+ -0.5547001962252291
 ```
 """
 eigvecs(A::SymTridiagonal{<:BlasFloat}, eigvals::Vector{<:Real}) = LAPACK.stein!(A.dv, A.ev, eigvals)
@@ -269,8 +275,9 @@ istril(M::SymTridiagonal) = iszero(M.ev)
 
 function tril!(M::SymTridiagonal, k::Integer=0)
     n = length(M.dv)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < -1
         fill!(M.ev,0)
         fill!(M.dv,0)
@@ -287,8 +294,9 @@ end
 
 function triu!(M::SymTridiagonal, k::Integer=0)
     n = length(M.dv)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 1
         fill!(M.ev,0)
         fill!(M.dv,0)
@@ -495,10 +503,12 @@ function convert(::Type{Matrix{T}}, M::Tridiagonal{T}) where T
 end
 convert(::Type{Matrix}, M::Tridiagonal{T}) where {T} = convert(Matrix{T}, M)
 convert(::Type{Array}, M::Tridiagonal) = convert(Matrix, M)
-full(M::Tridiagonal) = convert(Array, M)
-function similar(M::Tridiagonal, ::Type{T}) where T
-    Tridiagonal{T}(similar(M.dl, T), similar(M.d, T), similar(M.du, T))
-end
+
+# For M<:Tridiagonal, similar(M[, neweltype]) should yield a Tridiagonal matrix.
+# On the other hand, similar(M, [neweltype,] shape...) should yield a sparse matrix.
+# The first method below effects the former, and the second the latter.
+similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), similar(M.d, T), similar(M.du, T))
+similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 # Operations on Tridiagonal matrices
 copy!(dest::Tridiagonal, src::Tridiagonal) = (copy!(dest.dl, src.dl); copy!(dest.d, src.d); copy!(dest.du, src.du); dest)
@@ -527,16 +537,19 @@ transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 adjoint(M::Tridiagonal) = conj(transpose(M))
 
 function diag(M::Tridiagonal{T}, n::Integer=0) where T
+    # every branch call similar(..., ::Int) to make sure the
+    # same vector type is returned independent of n
     if n == 0
-        return M.d
+        return copy!(similar(M.d, length(M.d)), M.d)
     elseif n == -1
-        return M.dl
+        return copy!(similar(M.dl, length(M.dl)), M.dl)
     elseif n == 1
-        return M.du
-    elseif abs(n) < size(M,1)
-        return zeros(T,size(M,1)-abs(n))
+        return copy!(similar(M.du, length(M.du)), M.du)
+    elseif abs(n) <= size(M,1)
+        return fill!(similar(M.d, size(M,1)-abs(n)), 0)
     else
-        throw(ArgumentError("$n-th diagonal of a $(size(M)) matrix doesn't exist!"))
+        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
+            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
 end
 
@@ -582,8 +595,9 @@ istril(M::Tridiagonal) = iszero(M.du)
 
 function tril!(M::Tridiagonal, k::Integer=0)
     n = length(M.d)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < -1
         fill!(M.dl,0)
         fill!(M.d,0)
@@ -599,8 +613,9 @@ end
 
 function triu!(M::Tridiagonal, k::Integer=0)
     n = length(M.d)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 1
         fill!(M.dl,0)
         fill!(M.d,0)

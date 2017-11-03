@@ -25,7 +25,7 @@ fib = function(n) {
 }
 
 assert(fib(20) == 6765)
-timeit("fib", fib, 20)
+timeit("recursion_fibonacci", fib, 20)
 
 ## parse_int ##
 
@@ -39,7 +39,17 @@ parseintperf = function(t) {
     }
 }
 
-timeit("parse_int", parseintperf, 1000)
+timeit("parse_integers", parseintperf, 1000)
+
+printfdperf = function(t) {
+    fd<-file("/dev/null")
+    for (i in 1:t) {
+        s = sprintf("%d %d", i, i)
+	writeLines(s, fd)
+    }	
+}
+
+timeit("print_to_file", printfdperf, 100000)
 
 ## quicksort ##
 
@@ -75,15 +85,18 @@ sortperf = function(n) {
 }
 
 assert(!is.unsorted(sortperf(5000)))
-timeit('quicksort', sortperf, 5000)
+timeit('recursion_quicksort', sortperf, 5000)
 
 ## mandel ##
+Mod2 = function(z) {
+     return(Re(z)*Re(z) + Im(z)*Im(z))
+}
 
 mandel = function(z) {
     c = z
     maxiter = 80
     for (n in 1:maxiter) {
-        if (Mod(z) > 2) return(n-1)
+        if (Mod2(z) > 4) return(n-1)
         z = z^2+c
     }
     return(maxiter)
@@ -104,7 +117,7 @@ mandelperf = function() {
 }
 
 assert(sum(mandelperf()) == 14791)
-timeit("mandel", mandelperf)
+timeit("userfunc_mandelbrot", mandelperf)
 
 ## pi_sum ##
 
@@ -120,7 +133,7 @@ pisum = function() {
 }
 
 assert(abs(pisum()-1.644834071848065) < 1e-12);
-timeit("pi_sum", pisum, times=1)
+timeit("iteration_pi_sum", pisum, times=1)
 
 ## pi_sum_vec ##
 
@@ -153,7 +166,7 @@ randmatstat = function(t) {
     return(c(s1,s2))
 }
 
-timeit("rand_mat_stat", randmatstat, 1000)
+timeit("matrix_statistics", randmatstat, 1000)
 
 ## rand_mat_mul ##
 
@@ -164,4 +177,4 @@ randmatmul = function(n) {
 }
 
 assert(randmatmul(1000)[1] >= 0)
-timeit("rand_mat_mul", randmatmul, 1000)
+timeit("matrix_multiply", randmatmul, 1000)

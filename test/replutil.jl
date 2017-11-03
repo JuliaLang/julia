@@ -229,7 +229,7 @@ end
 
 module __tmp_replutil
 
-using Base.Test
+using Test
 import ..@except_str
 global +
 +() = nothing
@@ -256,7 +256,7 @@ struct TypeWithIntParam{T <: Integer} end
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
     @test contains(err_str, "Try sqrt(Complex(x)).")
-    err_str = @except_strbt 2^(-1) DomainError
+    err_str = @except_strbt 2^(1-2) DomainError
     @test contains(err_str, "Cannot raise an integer x to a negative power -1")
     err_str = @except_strbt (-1)^0.25 DomainError
     @test contains(err_str, "Exponentiation yielding a complex result requires a complex argument")
@@ -309,8 +309,7 @@ end
 
 
 # issue 11845
-let
-    buf = IOBuffer()
+let buf = IOBuffer()
     showerror(buf, MethodError(convert, (3, 1.0)))
     showerror(buf, MethodError(convert, (Int, 1.0)))
     showerror(buf, MethodError(convert, Tuple{Type, Float64}))
@@ -446,12 +445,12 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
 end
 
 # Issue #14684: `display` should print associative types in full.
-let d = Dict(1 => 2, 3 => 45)
-    buf = IOBuffer()
+let d = Dict(1 => 2, 3 => 45),
+    buf = IOBuffer(),
     td = TextDisplay(buf)
+
     display(td, d)
     result = String(take!(td.io))
-
     @test contains(result, summary(d))
 
     # Is every pair in the string?
@@ -486,7 +485,15 @@ let
     @test (@macroexpand @fastmath 1+2    ) == :(Base.FastMath.add_fast(1,2))
     @test (@macroexpand @fastmath +      ) == :(Base.FastMath.add_fast)
     @test (@macroexpand @fastmath min(1) ) == :(Base.FastMath.min_fast(1))
-    @test (@macroexpand @doc "" f() = @x) == Expr(:error, UndefVarError(Symbol("@x")))
+    let err = try; @macroexpand @doc "" f() = @x; catch ex; ex; end
+        file, line = @__FILE__, @__LINE__() - 1
+        err = err::LoadError
+        @test err.file == file && err.line == line
+        err = err.error::LoadError
+        @test err.file == file && err.line == line
+        err = err.error::UndefVarError
+        @test err == UndefVarError(Symbol("@x"))
+    end
     @test (@macroexpand @seven_dollar $bar) == 7
     x = 2
     @test (@macroexpand @seven_dollar 1+$x) == :(1 + $(Expr(:$, :x)))
@@ -609,6 +616,7 @@ let buf = IOBuffer()
 end
 
 @testset "Dict printing with limited rows" begin
+    local buf
     buf = IOBuffer()
     io = IOContext(buf, :displaysize => (4, 80), :limit => true)
     d = Base.ImmutableDict(1=>2)

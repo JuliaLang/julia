@@ -2,12 +2,12 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include "julia.h"
 #include "julia_internal.h"
 #ifndef _OS_WINDOWS_
 #include <unistd.h>
 #endif
+#include "julia_assert.h"
 
 #define MAX_METHLIST_COUNT 12 // this can strongly affect the sysimg size and speed!
 #define INIT_CACHE_SIZE 8 // must be a power-of-two
@@ -979,10 +979,10 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
     if ((jl_value_t*)simpletype == jl_nothing) {
         jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(*cache, type, NULL, 0, offs, min_world);
         if (ml && ml->simplesig == (void*)jl_nothing) {
-            if (newvalue == ml->func.value) // no change. TODO: involve world in computation!
-                return ml;
             if (overwritten != NULL)
                 *overwritten = ml->func.value;
+            if (newvalue == ml->func.value) // no change. TODO: involve world in computation!
+                return ml;
             if (newvalue == NULL)  // don't overwrite with guard entries
                 return ml;
             ml->max_world = min_world - 1;

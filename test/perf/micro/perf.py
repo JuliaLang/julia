@@ -43,13 +43,13 @@ def randmatstat(t):
     n = 5
     v = zeros(t)
     w = zeros(t)
-    for i in range(1,t):
+    for i in range(t):
         a = randn(n, n)
         b = randn(n, n)
         c = randn(n, n)
         d = randn(n, n)
-        P = concatenate((a, b, c, d))
-        Q = concatenate((concatenate((a, b)), concatenate((c, d))),axis=1)
+        P = concatenate((a, b, c, d), axis=1)
+        Q = concatenate((concatenate((a, b), axis=1), concatenate((c, d), axis=1)), axis=0)
         v[i] = trace(matrix_power(dot(P.T,P), 4))
         w[i] = trace(matrix_power(dot(Q.T,Q), 4))
     return (std(v)/mean(v), std(w)/mean(w))
@@ -63,11 +63,14 @@ def randmatmul(n):
 
 ## mandelbrot ##
 
+def abs2(z):
+    return real(z)*real(z) +  imag(z)*imag(z)
+
 def mandel(z):
     maxiter = 80
     c = z
     for n in range(maxiter):
-        if abs(z) > 2:
+        if abs2(z) > 4:
             return n
         z = z*z + c
     return maxiter
@@ -99,6 +102,13 @@ def parse_int(t):
         assert m == n
     return n
 
+def printfd(t):
+    f = open("/dev/null", "w")
+    for i in range(1,t):
+        f.write("%d %d\n")
+    f.close()
+    
+
 def print_perf(name, time):
     print("python," + name + "," + str(time*1000))
 
@@ -115,7 +125,7 @@ if __name__=="__main__":
         f = fib(20)
         t = time.time()-t
         if t < tmin: tmin = t
-    print_perf("fib", tmin)
+    print_perf("recursion_fibonacci", tmin)
 
     tmin = float('inf')
     for i in range(mintrials):
@@ -123,7 +133,7 @@ if __name__=="__main__":
         n = parse_int(1000)
         t = time.time()-t
         if t < tmin: tmin = t
-    print_perf ("parse_int", tmin)
+    print_perf ("parse_integers", tmin)
 
     assert sum(mandelperf()) == 14791
     tmin = float('inf')
@@ -132,7 +142,7 @@ if __name__=="__main__":
         mandelperf()
         t = time.time()-t
         if t < tmin: tmin = t
-    print_perf ("mandel", tmin)
+    print_perf ("userfunc_mandelbrot", tmin)
 
     tmin = float('inf')
     for i in range(mintrials):
@@ -141,7 +151,7 @@ if __name__=="__main__":
         qsort_kernel(lst, 0, len(lst)-1)
         t = time.time()-t
         if t < tmin: tmin = t
-    print_perf ("quicksort", tmin)
+    print_perf ("recursion_quicksort", tmin)
 
     assert abs(pisum()-1.644834071848065) < 1e-6
     tmin = float('inf')
@@ -150,7 +160,7 @@ if __name__=="__main__":
         pisum()
         t = time.time()-t
         if t < tmin: tmin = t
-    print_perf ("pi_sum", tmin)
+    print_perf ("iteration_pi_sum", tmin)
 
     # assert abs(pisumvec()-1.644834071848065) < 1e-6
     # tmin = float('inf')
@@ -169,7 +179,7 @@ if __name__=="__main__":
         randmatstat(1000)
         t = time.time()-t
         if t < tmin: tmin = t
-    print_perf ("rand_mat_stat", tmin)
+    print_perf ("matrix_statistics", tmin)
 
     tmin = float('inf')
     for i in range(mintrials):
@@ -178,4 +188,12 @@ if __name__=="__main__":
         assert C[0,0] >= 0
         t = time.time()-t
         if t < tmin: tmin = t
-    print_perf ("rand_mat_mul", tmin)
+    print_perf ("matrix_multiply", tmin)
+
+    tmin = float('inf')
+    for i in range(mintrials):
+        t = time.time()
+        printfd(100000)
+        t = time.time()-t
+        if t < tmin: tmin = t
+    print_perf ("print_to_file", tmin)

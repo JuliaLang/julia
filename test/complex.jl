@@ -784,8 +784,10 @@ end
 
 @test complex(1//2,1//3)^2 === complex(5//36, 1//3)
 @test complex(2,2)^2 === complex(0,8)
-@test_throws DomainError complex(2,2)^(-2)
-@test complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
+let p = -2
+    @test_throws DomainError complex(2,2)^p
+end
+@test complex(2,2)^(-2) === complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
 
 @test complex.(1.0, [1.0, 1.0]) == [complex(1.0, 1.0), complex(1.0, 1.0)]
 @test complex.([1.0, 1.0], 1.0) == [complex(1.0, 1.0), complex(1.0, 1.0)]
@@ -897,11 +899,11 @@ end
 @testset "round and float, PR #8291" begin
     @test round(Complex(1.125, 0.875), 2) == Complex(1.12, 0.88)
     @test round(Complex(1.5, 0.5), RoundDown, RoundUp) == Complex(1.0, 1.0)
-    @test round.([1:5;] + im) == [1:5;] + im
-    @test round.([1:5;] + 0.5im) == [1.0:5.0;]
+    @test round.([1:5;] .+ im) == [1:5;] .+ im
+    @test round.([1:5;] .+ 0.5im) == [1.0:5.0;]
 
     @test float(Complex(1, 2)) == Complex(1.0, 2.0)
-    @test round(float(Complex(π, e)),3) == Complex(3.142, 2.718)
+    @test round(float(Complex(π, ℯ)),3) == Complex(3.142, 2.718)
 end
 
 @testset "Complex32 arithmetic, PR #10003" begin
@@ -947,7 +949,7 @@ end
 @test big(1)/(10+10im) ≈ (5-5im)/big(100) ≈ big"0.05" - big"0.05"*im
 
 @testset "Complex Irrationals, issue #21204" begin
-    for x in (pi, e, catalan) # No need to test all of them
+    for x in (pi, ℯ, Base.MathConstants.catalan) # No need to test all of them
         z = Complex(x, x)
         @test typeof(z) == Complex{typeof(x)}
         @test exp(z) ≈ exp(x) * cis(x)

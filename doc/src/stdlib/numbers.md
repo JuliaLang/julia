@@ -11,6 +11,7 @@ Core.AbstractFloat
 Core.Integer
 Core.Signed
 Core.Unsigned
+Base.AbstractIrrational
 ```
 
 ### Concrete number types
@@ -47,7 +48,7 @@ Base.oct
 Base.base
 Base.digits
 Base.digits!
-Base.bits
+Base.bitstring
 Base.parse(::Type, ::Any, ::Any)
 Base.tryparse
 Base.big
@@ -69,12 +70,12 @@ Base.bytes2hex
 Base.one
 Base.oneunit
 Base.zero
-Base.pi
 Base.im
-Base.eu
-Base.catalan
-Base.eulergamma
-Base.golden
+Base.MathConstants.pi
+Base.MathConstants.ℯ
+Base.MathConstants.catalan
+Base.MathConstants.eulergamma
+Base.MathConstants.golden
 Base.Inf
 Base.Inf32
 Base.Inf16

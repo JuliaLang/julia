@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    var tmin, i, j, t, n, m, s, a, sum, a0, v, r, C;
+    var tmin, i, j, t, n, m, s, a, sum, a0, v, r, C, filename, fd;
 
     function assert(t) { if (!t) { throw new Error("assertion failed"); } }
 
@@ -21,14 +21,14 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin = t; }
     }
-    console.log("javascript,fib," + tmin/1000);
+    console.log("javascript,recursion_fibonacci," + tmin/1000);
 
     // parse int //
 
     tmin = Number.POSITIVE_INFINITY;
     for (i=0; i < 5; i++) {
         t = (new Date()).getTime();
-        for (j=0; j < 1000*1000; j++) {
+        for (j=0; j < 1000*100; j++) {
             n = Math.floor(4294967295*Math.random());
             s = n.toString(16);
             m = parseInt(s,16);
@@ -37,7 +37,20 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin = t; }
     }
-    console.log("javascript,parse_int," + tmin/1000);
+    console.log("javascript,parse_integers," + tmin/100);
+
+    //    for (i=0; i < 5; i++) {
+    //        t = (new Date()).getTime();	
+    //	filename = "/dev/null";
+    //	fd : StreamWriter = new StreamWriter(filepathIncludingFileName);
+    //    	  for (j=0; j < 100000; j++) {
+    //            s = j.toString();
+    //            fd.WriteLine(s + " " + s);
+    //        }
+    //        t = (new Date()).getTime()-t;
+    //        if (t < tmin) { tmin = t; }
+    //    }
+    //   console.log("javascript,print_to_file," + 9999);
 
     // mandelbrot set //
 
@@ -47,6 +60,9 @@
     }
     function complex_abs(z) {
         return Math.sqrt(z.re*z.re + z.im*z.im);
+    }
+    function complex_abs2(z) {
+        return z.re*z.re + z.im*z.im;
     }
     function complex_add(z,w) {
         return new Complex(z.re+w.re, z.im+w.im);
@@ -61,7 +77,7 @@
         maxiter = 80;
         n = 0;
         for (n = 0; n < maxiter; n++) {
-            if (complex_abs(z) > 2) { return n; }
+            if (complex_abs2(z) > 4) { return n; }
             z = complex_add(complex_multiply(z,z),c);
         }
         return maxiter;
@@ -100,7 +116,7 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin=t; }
     }
-    console.log("javascript,mandel," + tmin/1000);
+    console.log("javascript,userfunc_mandelbrot," + tmin/1000);
 
     // numeric vector sort //
 
@@ -160,7 +176,7 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin=t; }
     }
-    console.log("javascript,quicksort," + tmin/100);
+    console.log("javascript,recursion_quicksort," + tmin/100);
 
     // slow pi series //
 
@@ -185,7 +201,7 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin=t; }
     }
-    console.log("javascript,pi_sum," + tmin/10);
+    console.log("javascript,iteration_pi_sum," + tmin/10);
 
     // random matrix statistics //
 
@@ -248,7 +264,7 @@
     }
 
     function randmatstat(t) {
-        var n, P, PTransposed, PMatMul, Q, QTransposed, QMatMul,
+        var n, P, PTransposed, Pt1P, Pt2P, Q, QTransposed, Pt1Q, Pt2Q,
         a, b, c, d, aSub, bSub, cSub, dSub, v, w, i, j, k,
         trP, trQ, v1, v2, w1, w2;
         n = 5;
@@ -259,8 +275,10 @@
         PTransposed = new Float64Array( P.length );
         QTransposed = new Float64Array( Q.length );
 
-        PMatMul = new Float64Array( n*n );
-        QMatMul = new Float64Array( (2*n) * (2*n) );
+        Pt1P = new Float64Array( (4*n) * (4*n) );
+        Pt2P = new Float64Array( (4*n) * (4*n) );
+        Pt1Q = new Float64Array( (2*n) * (2*n) );
+        Pt2Q = new Float64Array( (2*n) * (2*n) );
 
         a = new Float64Array( n*n );
         b = new Float64Array( n*n );
@@ -307,24 +325,24 @@
             }
 
             transpose( PTransposed, P, n, 4*n );
-            matmulCopy( PMatMul, PTransposed, P, n, 4*n, n );
-            matmulCopy( PMatMul, P, P, n, n, n);
-            matmulCopy( PMatMul, P, P, n, n, n);
+            matmulCopy( Pt1P, PTransposed, P, 4*n, n, 4*n );
+            matmulCopy( Pt2P, Pt1P, Pt1P, 4*n, 4*n, 4*n);
+            matmulCopy( Pt1P, Pt2P, Pt2P, 4*n, 4*n, 4*n);
 
             trP = 0;
-            for (j = 0; j < n; j++) {
-                trP += PMatMul[(n+1)*j];
+            for (j = 0; j < 4*n; j++) {
+                trP += Pt1P[(4*n+1)*j];
             }
             v[i] = trP;
 
             transpose( QTransposed, Q, 2*n, 2*n );
-            matmulCopy( QMatMul, QTransposed, Q, 2*n, 2*n, 2*n );
-            matmulCopy( QMatMul, Q, Q, 2*n, 2*n, 2*n);
-            matmulCopy( QMatMul, Q, Q, 2*n, 2*n, 2*n);
+            matmulCopy( Pt1Q, QTransposed, Q, 2*n, 2*n, 2*n );
+            matmulCopy( Pt2Q, Pt1Q, Pt1Q, 2*n, 2*n, 2*n);
+            matmulCopy( Pt1Q, Pt2Q, Pt2Q, 2*n, 2*n, 2*n);
 
             trQ = 0;
             for (j = 0; j < 2*n; j++) {
-                trQ += QMatMul[(2*n+1)*j];
+                trQ += Pt1Q[(2*n+1)*j];
             }
             w[i] = trQ;
         }
@@ -355,7 +373,7 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin=t; }
     }
-    console.log("javascript,rand_mat_stat," + tmin/10);
+    console.log("javascript,matrix_statistics," + tmin/10);
 
     // random matrix multiply //
 
@@ -429,5 +447,5 @@
     assert(0 <= C[0]);
     t = (new Date()).getTime()-t;
     if (t < tmin) { tmin=t; }
-    console.log("javascript,rand_mat_mul," + tmin);
+    console.log("javascript,matrix_multiply," + tmin);
 }());

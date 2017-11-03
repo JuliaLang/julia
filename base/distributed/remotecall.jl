@@ -94,7 +94,7 @@ RemoteChannel(pid::Integer=myid()) = RemoteChannel{Channel{Any}}(pid, RRID())
 """
     RemoteChannel(f::Function, pid::Integer=myid())
 
-Create references to remote channels of a specific size and type. `f()` is a function that
+Create references to remote channels of a specific size and type. `f` is a function that
 when executed on `pid` must return an implementation of an `AbstractChannel`.
 
 For example, `RemoteChannel(()->Channel{Int}(10), pid)`, will return a reference to a

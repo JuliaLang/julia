@@ -8,7 +8,7 @@
 // so that we can always use the assert macro in this file
 // for use under their respective enable flags
 #undef NDEBUG
-#include <assert.h>
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -45,7 +45,7 @@ julia> randn(rng, Complex64, (2, 3))
 end
 
 # this unlikely branch is put in a separate function for better efficiency
-function randn_unlikely(rng, idx, rabs, x)
+@noinline function randn_unlikely(rng, idx, rabs, x)
     @inbounds if idx == 0
         while true
             xx = -ziggurat_nor_inv_r*log(rand(rng))
@@ -93,7 +93,7 @@ julia> randexp(rng, 3, 3)
  0.695867  0.693292  0.643644
 ```
 """
-@inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
+function randexp(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
         ri = rand_ui52(rng)
         idx = ri & 0xFF
@@ -103,7 +103,7 @@ julia> randexp(rng, 3, 3)
     end
 end
 
-function randexp_unlikely(rng, idx, x)
+@noinline function randexp_unlikely(rng, idx, x)
     @inbounds if idx == 0
         return ziggurat_exp_r - log(rand(rng))
     elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)
@@ -128,11 +128,11 @@ julia> rng = MersenneTwister(1234);
 
 julia> randn!(rng, zeros(5))
 5-element Array{Float64,1}:
-  0.867347
- -0.901744
- -0.494479
- -0.902914
-  0.864401
+  0.8673472019512456
+ -0.9017438158568171
+ -0.4944787535042339
+ -0.9029142938652416
+  0.8644013132535154
 ```
 """
 function randn! end
@@ -149,11 +149,11 @@ julia> rng = MersenneTwister(1234);
 
 julia> randexp!(rng, zeros(5))
 5-element Array{Float64,1}:
- 2.48351
- 1.5167
- 0.604436
- 0.695867
- 1.30652
+ 2.4835053723904896
+ 1.516703605376473
+ 0.6044364871025417
+ 0.6958665886385867
+ 1.3065196315496677
 ```
 """
 function randexp! end

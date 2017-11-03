@@ -811,7 +811,7 @@ the directory of the current source file. For example if `FooBar/src/FooBar.jl` 
 
 ```julia
 datapath = joinpath(@__DIR__, "..", "data")
-foo = readcsv(joinpath(datapath, "foo.csv"))
+foo = readdlm(joinpath(datapath, "foo.csv"), ',')
 ```
 
 ### Making Your Package Available

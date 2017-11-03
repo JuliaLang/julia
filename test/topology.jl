@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 pids = addprocs_with_testenv(4; topology="master_slave")
-p1 = pids[1]
-p2 = pids[2]
 
-@test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, p2), p1)
+let p1 = pids[1], p2 = pids[2]
+    @test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, p2), p1)
+end
 
 function test_worker_counts()
     # check if the nprocs/nworkers/workers are the same on the remaining workers
@@ -77,8 +77,9 @@ while true
     end
 end
 
-for outer p1 in workers()
-    for outer p2 in workers()
+let p1, p2
+for p1 in workers()
+    for p2 in workers()
         i1 = map_pid_ident[p1]
         i2 = map_pid_ident[p2]
         if (iseven(i1) && iseven(i2)) || (isodd(i1) && isodd(i2))
@@ -87,6 +88,7 @@ for outer p1 in workers()
             @test_throws RemoteException remotecall_fetch(p->remotecall_fetch(myid, p), p1, p2)
         end
     end
+end
 end
 
 remove_workers_and_test()
@@ -117,14 +119,16 @@ end
 
 # Initially only master-slave connections ought to be setup
 expected_num_conns = 8
-num_conns = sum(asyncmap(p->remotecall_fetch(count_connected_workers,p), workers()))
-@test num_conns == expected_num_conns
+let num_conns = sum(asyncmap(p->remotecall_fetch(count_connected_workers,p), workers()))
+    @test num_conns == expected_num_conns
+end
 
 for (i, (from,to)) in enumerate(combinations)
     remotecall_wait(topid->remotecall_fetch(myid, topid), from, to)
-    expected_num_conns += 2    # one connection endpoint on both from and to
-    num_conns = sum(asyncmap(p->remotecall_fetch(count_connected_workers,p), workers()))
-    @test num_conns == expected_num_conns
+    global expected_num_conns += 2    # one connection endpoint on both from and to
+    let num_conns = sum(asyncmap(p->remotecall_fetch(count_connected_workers,p), workers()))
+        @test num_conns == expected_num_conns
+    end
 end
 
 # With lazy=false, all connections ought to be setup during `addprocs`

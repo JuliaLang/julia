@@ -655,6 +655,7 @@ end
 # Simple tests for apropos:
 @test contains(sprint(apropos, "pearson"), "cor")
 @test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")
+using Profile
 @test contains(sprint(apropos, "print"), "Profile.print")
 
 # Issue #13068.
@@ -706,7 +707,18 @@ end
 )
 
 # Issue #13905.
-@test @macroexpand(@doc "" f() = @x) == Expr(:error, UndefVarError(Symbol("@x")))
+let err = try; @macroexpand(@doc "" f() = @x); false; catch ex; ex; end
+    __source__ = LineNumberNode(@__LINE__() -  1, Symbol(@__FILE__))
+    err::LoadError
+    @test err.file === string(__source__.file)
+    @test err.line === __source__.line
+    err = err.error::LoadError
+    @test err.file === string(__source__.file)
+    @test err.line === __source__.line
+    err = err.error::UndefVarError
+    @test err.var == Symbol("@x")
+ end
+
 
 # Undocumented DataType Summaries.
 
@@ -1055,3 +1067,8 @@ end
 end
 @test Main.f23011() == 2
 @test docstrings_equal(@doc(Main.f23011), doc"second")
+
+# issue 22098
+"an empty macro"
+macro mdoc22098 end
+@test docstrings_equal(@doc(:@mdoc22098), doc"an empty macro")

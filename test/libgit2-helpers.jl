@@ -3,6 +3,8 @@
 import Base.LibGit2: AbstractCredentials, UserPasswordCredentials, SSHCredentials,
     CachedCredentials, CredentialPayload, Payload
 
+const DEFAULT_PAYLOAD = CredentialPayload(allow_ssh_agent=false, allow_git_helpers=false)
+
 """
 Emulates the LibGit2 credential loop to allows testing of the credential_callback function
 without having to authenticate against a real server.
@@ -15,7 +17,6 @@ function credential_loop(
         payload::CredentialPayload)
     cb = Base.LibGit2.credentials_cb()
     libgitcred_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    payload_ptr = Ref(payload)
 
     # Number of times credentials were authenticated against. With the real LibGit2
     # credential loop this would be how many times we sent credentials to the remote.
@@ -25,12 +26,13 @@ function credential_loop(
     # until we find valid credentials or an exception is raised.
     err = Cint(0)
     while err == 0
-        err = ccall(cb, Cint, (Ptr{Ptr{Void}}, Cstring, Cstring, Cuint, Ptr{Void}),
-            libgitcred_ptr_ptr, url, get(user, C_NULL), allowed_types, pointer_from_objref(payload_ptr))
+        err = ccall(cb, Cint, (Ptr{Ptr{Void}}, Cstring, Cstring, Cuint, Any),
+                    libgitcred_ptr_ptr, url, get(user, C_NULL), allowed_types, payload)
         num_authentications += 1
 
         # Check if the callback provided us with valid credentials
         if !isnull(payload.credential) && get(payload.credential) == valid_credential
+            LibGit2.approve(payload)
             break
         end
 
@@ -39,14 +41,26 @@ function credential_loop(
         end
     end
 
-    return err, num_authentications
+    # Note: LibGit2.GitError(0) will not work if an error message has been set.
+    git_error = if err == 0
+        LibGit2.GitError(LibGit2.Error.None, LibGit2.Error.GIT_OK, "No errors")
+    else
+        LibGit2.GitError(err)
+    end
+
+    # Reject the credential when an authentication error occurs
+    if git_error.code == LibGit2.Error.EAUTH
+        LibGit2.reject(payload)
+    end
+
+    return git_error, num_authentications
 end
 
 function credential_loop(
         valid_credential::UserPasswordCredentials,
         url::AbstractString,
         user::Nullable{<:AbstractString}=Nullable{String}(),
-        payload::CredentialPayload=CredentialPayload())
+        payload::CredentialPayload=DEFAULT_PAYLOAD)
     credential_loop(valid_credential, url, user, 0x000001, payload)
 end
 
@@ -54,37 +68,14 @@ function credential_loop(
         valid_credential::SSHCredentials,
         url::AbstractString,
         user::Nullable{<:AbstractString}=Nullable{String}(),
-        payload::CredentialPayload=CredentialPayload();
-        use_ssh_agent::Bool=false)
-
-    if !use_ssh_agent
-        if isnull(payload.cache)
-            payload.cache = Nullable(CachedCredentials())
-        end
-        cache = get(payload.cache)
-
-        m = match(LibGit2.URL_REGEX, url)
-        default_cred = LibGit2.reset!(SSHCredentials(true), -1)
-        default_cred.usesshagent = "N"
-        LibGit2.get_creds!(cache, "ssh://$(m[:host])", default_cred)
-    end
-
+        payload::CredentialPayload=DEFAULT_PAYLOAD)
     credential_loop(valid_credential, url, user, 0x000046, payload)
 end
 
 function credential_loop(
-        valid_credential::UserPasswordCredentials,
+        valid_credential::AbstractCredentials,
         url::AbstractString,
         user::AbstractString,
-        payload::CredentialPayload=CredentialPayload())
+        payload::CredentialPayload=DEFAULT_PAYLOAD)
     credential_loop(valid_credential, url, Nullable(user), payload)
-end
-
-function credential_loop(
-        valid_credential::SSHCredentials,
-        url::AbstractString,
-        user::AbstractString,
-        payload::CredentialPayload=CredentialPayload();
-        use_ssh_agent::Bool=false)
-    credential_loop(valid_credential, url, Nullable(user), payload, use_ssh_agent=use_ssh_agent)
 end

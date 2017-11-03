@@ -163,7 +163,7 @@ f (generic function with 2 methods)
 ```
 
 This output tells us that `f` is a function object with two methods. To find out what the signatures
-of those methods are, use the [`methods()`](@ref) function:
+of those methods are, use the [`methods`](@ref) function:
 
 ```julia-repl
 julia> methods(f)
@@ -242,8 +242,11 @@ julia> g(2, 3.0)
 8.0
 
 julia> g(2.0, 3.0)
-ERROR: MethodError: g(::Float64, ::Float64) is ambiguous.
-[...]
+ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
+  g(x, y::Float64) in Main at none:1
+  g(x::Float64, y) in Main at none:1
+Possible fix, define
+  g(::Float64, ::Float64)
 ```
 
 Here the call `g(2.0, 3.0)` could be handled by either the `g(Float64, Any)` or the `g(Any, Float64)`
@@ -453,7 +456,7 @@ This monotonically increasing value tracks each method definition operation.
 This allows describing "the set of method definitions visible to a given runtime environment"
 as a single number, or "world age".
 It also allows comparing the methods available in two worlds just by comparing their ordinal value.
-In the example above, we see that the "current world" (in which the method `newfun()` exists),
+In the example above, we see that the "current world" (in which the method `newfun` exists),
 is one greater than the task-local "runtime world" that was fixed when the execution of `tryeval` started.
 
 Sometimes it is necessary to get around this (for example, if you are implementing the above REPL).

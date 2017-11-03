@@ -450,12 +450,12 @@ false
 ```
 """
 function fetchheads(repo::GitRepo)
-    fhr = Ref{Vector{FetchHead}}(FetchHead[])
+    fh = FetchHead[]
     ffcb = fetchhead_foreach_cb()
     @check ccall((:git_repository_fetchhead_foreach, :libgit2), Cint,
-                  (Ptr{Void}, Ptr{Void}, Ptr{Void}),
-                   repo.ptr, ffcb, fhr)
-    return fhr[]
+                 (Ptr{Void}, Ptr{Void}, Any),
+                 repo.ptr, ffcb, fh)
+    return fh
 end
 
 """

@@ -11,7 +11,13 @@ function completes_global(x, name)
 end
 
 function appendmacro!(syms, macros, needle, endchar)
-    append!(syms, s[2:end-sizeof(needle)]*endchar for s in filter(x -> endswith(x, needle), macros))
+    for s in macros
+        if endswith(s, needle)
+            from = nextind(s, start(s))
+            to = prevind(s, sizeof(s)-sizeof(needle)+1)
+            push!(syms, s[from:to]*endchar)
+        end
+    end
 end
 
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
@@ -96,7 +102,7 @@ const sorted_keywords = [
     "abstract type", "baremodule", "begin", "break", "catch", "ccall",
     "const", "continue", "do", "else", "elseif", "end", "export", "false",
     "finally", "for", "function", "global", "if", "import",
-    "importall", "let", "local", "macro", "module", "mutable struct",
+    "let", "local", "macro", "module", "mutable struct",
     "primitive type", "quote", "return", "struct",
     "true", "try", "using", "while"]
 
@@ -192,6 +198,11 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
     # hence we need to add one to get the first index. This is also correct when considering
     # pos, because pos is the `endof` a larger string which `endswith(path)==true`.
     return matchList, startpos:pos, !isempty(matchList)
+end
+
+function complete_expanduser(path::AbstractString, r)
+    expanded = expanduser(path)
+    return String[expanded], r, path != expanded
 end
 
 # Determines whether method_complete should be tried. It should only be done if
@@ -305,8 +316,7 @@ function get_type_call(expr::Expr)
 end
 
 # Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (String, true)
-function get_type(sym::Expr, fn::Module)
-    sym = expand(fn, sym)
+function try_get_type(sym::Expr, fn::Module)
     val, found = get_value(sym, fn)
     found && return Base.typesof(val).parameters[1], found
     if sym.head === :call
@@ -319,9 +329,28 @@ function get_type(sym::Expr, fn::Module)
             return found ? Base.typesof(val).parameters[1] : Any, found
         end
         return get_type_call(sym)
+    elseif sym.head === :thunk
+        thk = sym.args[1]
+        rt = ccall(:jl_infer_thunk, Any, (Any, Any), thk::CodeInfo, fn)
+        rt !== Any && return (rt, true)
+    elseif sym.head === :ref
+        # some simple cases of `expand`
+        return try_get_type(Expr(:call, GlobalRef(Base, :getindex), sym.args...), fn)
+    elseif sym.head === :.
+        return try_get_type(Expr(:call, GlobalRef(Core, :getfield), sym.args...), fn)
     end
     return (Any, false)
 end
+
+try_get_type(other, fn::Module) = get_type(other, fn)
+
+function get_type(sym::Expr, fn::Module)
+    # try to analyze nests of calls. if this fails, try using the expanded form.
+    val, found = try_get_type(sym, fn)
+    found && return val, found
+    return try_get_type(Meta.lower(fn, sym), fn)
+end
+
 function get_type(sym, fn::Module)
     val, found = get_value(sym, fn)
     return found ? Base.typesof(val).parameters[1] : Any, found
@@ -470,13 +499,21 @@ function completions(string, pos)
         m = match(r"[\t\n\r\"><=*?|]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
+
+        expanded = complete_expanduser(replace(string[r], r"\\ ", " "), r)
+        expanded[3] && return expanded  # If user expansion available, return it
+
         paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
+
         if inc_tag == :string &&
-           length(paths) == 1 &&                              # Only close if there's a single choice,
-           !isdir(expanduser(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " "))) &&  # except if it's a directory
-           (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
+           length(paths) == 1 &&  # Only close if there's a single choice,
+           !isdir(expanduser(replace(string[startpos:prevind(string, start(r))] * paths[1],
+                                     r"\\ ", " "))) &&  # except if it's a directory
+           (length(string) <= pos ||
+            string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
             paths[1] *= "\""
         end
+
         #Latex symbols can be completed for strings
         (success || inc_tag==:cmd) && return sort!(paths), r, success
     end
@@ -523,10 +560,11 @@ function completions(string, pos)
                         #   <Mod>/src/<Mod>.jl
                         #   <Mod>.jl/src/<Mod>.jl
                         if isfile(joinpath(dir, pname))
-                            endswith(pname, ".jl") && push!(suggestions, pname[1:end-3])
+                            endswith(pname, ".jl") && push!(suggestions,
+                                                            pname[1:prevind(pname, end-2)])
                         else
                             mod_name = if endswith(pname, ".jl")
-                                pname[1:end - 3]
+                                pname[1:prevind(pname, end-2)]
                             else
                                 pname
                             end
@@ -603,7 +641,7 @@ function shell_completions(string, pos)
         r = first(last_parse):prevind(last_parse, last(last_parse))
         partial = scs[r]
         ret, range = completions(partial, endof(partial))
-        range += first(r) - 1
+        range = range .+ (first(r) - 1)
         return ret, range, true
     end
     return String[], 0:-1, false

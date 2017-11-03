@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 import Base.LinAlg: BlasReal, BlasFloat
 
 n = 10 #Size of test matrix
@@ -78,8 +78,11 @@ srand(1)
         @test size(ubd, 3) == 1
         # bidiagonal similar
         @test isa(similar(ubd), Bidiagonal{elty})
+        @test similar(ubd).uplo == ubd.uplo
         @test isa(similar(ubd, Int), Bidiagonal{Int})
-        @test isa(similar(ubd, Int, (3, 2)), Matrix{Int})
+        @test similar(ubd, Int).uplo == ubd.uplo
+        @test isa(similar(ubd, (3, 2)), SparseMatrixCSC)
+        @test isa(similar(ubd, Int, (3, 2)), SparseMatrixCSC{Int})
     end
 
     @testset "show" begin
@@ -97,12 +100,12 @@ srand(1)
         @testset "Constructor and basic properties" begin
             @test size(T, 1) == size(T, 2) == n
             @test size(T) == (n, n)
-            @test Array(T) == diagm(dv) + diagm(ev, uplo == :U ? 1 : -1)
+            @test Array(T) == diagm(0 => dv, (uplo == :U ? 1 : -1) => ev)
             @test Bidiagonal(Array(T), uplo) == T
             @test big.(T) == T
-            @test Array(abs.(T)) == abs.(diagm(dv)) + abs.(diagm(ev, uplo == :U ? 1 : -1))
-            @test Array(real(T)) == real(diagm(dv)) + real(diagm(ev, uplo == :U ? 1 : -1))
-            @test Array(imag(T)) == imag(diagm(dv)) + imag(diagm(ev, uplo == :U ? 1 : -1))
+            @test Array(abs.(T)) == abs.(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
+            @test Array(real(T)) == real(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
+            @test Array(imag(T)) == imag(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
         end
 
         @testset for func in (conj, transpose, adjoint)
@@ -121,7 +124,8 @@ srand(1)
             @test tril!(bidiagcopy(dv,ev,:L),1)  == Bidiagonal(dv,ev,:L)
             @test tril!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,zeros(ev),:U)
             @test tril!(bidiagcopy(dv,ev,:L))    == Bidiagonal(dv,ev,:L)
-            @test_throws ArgumentError tril!(bidiagcopy(dv,ev,:U),n+1)
+            @test_throws ArgumentError tril!(bidiagcopy(dv, ev, :U), -n - 2)
+            @test_throws ArgumentError tril!(bidiagcopy(dv, ev, :U), n)
 
             @test istriu(Bidiagonal(dv,ev,:U))
             @test !istriu(Bidiagonal(dv,ev,:L))
@@ -133,7 +137,8 @@ srand(1)
             @test triu!(bidiagcopy(dv,ev,:L),-1) == Bidiagonal(dv,ev,:L)
             @test triu!(bidiagcopy(dv,ev,:L))    == Bidiagonal(dv,zeros(ev),:L)
             @test triu!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,ev,:U)
-            @test_throws ArgumentError triu!(bidiagcopy(dv,ev,:U),n+1)
+            @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), -n)
+            @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), n + 2)
         end
 
         Tfull = Array(T)
@@ -211,9 +216,18 @@ srand(1)
             end
         end
 
-        @testset "Diagonals" begin
-            @test diag(T,2) == zeros(elty, n-2)
-            @test_throws ArgumentError diag(T,n+1)
+        @testset "diag" begin
+            @test (@inferred diag(T))::typeof(dv) == dv
+            @test (@inferred diag(T, uplo == :U ? 1 : -1))::typeof(dv) == ev
+            @test (@inferred diag(T,2))::typeof(dv) == zeros(elty, n-2)
+            @test_throws ArgumentError diag(T, -n - 1)
+            @test_throws ArgumentError diag(T,  n + 1)
+            # test diag with another wrapped vector type
+            gdv, gev = GenericArray(dv), GenericArray(ev)
+            G = Bidiagonal(gdv, gev, uplo)
+            @test (@inferred diag(G))::typeof(gdv) == gdv
+            @test (@inferred diag(G, uplo == :U ? 1 : -1))::typeof(gdv) == gev
+            @test (@inferred diag(G,2))::typeof(gdv) == GenericArray(zeros(elty, n-2))
         end
 
         @testset "Eigensystems" begin
@@ -238,7 +252,7 @@ srand(1)
                     Test.test_approx_eq_modphase(u1, u2)
                     Test.test_approx_eq_modphase(v1, v2)
                 end
-                @test 0 ≈ vecnorm(u2*diagm(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),vecnorm(u1*diagm(d1)*v1'-Tfull))
+                @test 0 ≈ vecnorm(u2*Diagonal(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),vecnorm(u1*Diagonal(d1)*v1'-Tfull))
                 @inferred svdvals(T)
                 @inferred svd(T)
             end
@@ -247,6 +261,7 @@ srand(1)
         @testset "Binary operations" begin
             @test -T == Bidiagonal(-T.dv,-T.ev,T.uplo)
             @test convert(elty,-1.0) * T == Bidiagonal(-T.dv,-T.ev,T.uplo)
+            @test T / convert(elty,-1.0) == Bidiagonal(-T.dv,-T.ev,T.uplo)
             @test T * convert(elty,-1.0) == Bidiagonal(-T.dv,-T.ev,T.uplo)
             @testset for uplo2 in (:U, :L)
                 dv = convert(Vector{elty}, relty <: AbstractFloat ? randn(n) : rand(1:10, n))
@@ -261,7 +276,7 @@ srand(1)
             TriSym = SymTridiagonal(T.dv, T.ev)
             @test Array(TriSym*T) ≈ Array(TriSym)*Array(T)
             # test pass-through of A_mul_B! for AbstractTriangular*Bidiagonal
-            Tri = UpperTriangular(diagm(T.ev, 1))
+            Tri = UpperTriangular(diagm(1 => T.ev))
             @test Array(Tri*T) ≈ Array(Tri)*Array(T)
         end
 
@@ -286,7 +301,9 @@ end
     C = Tridiagonal(rand(Float64,9),rand(Float64,10),rand(Float64,9))
     @test promote_rule(Matrix{Float64}, Bidiagonal{Float64}) == Matrix{Float64}
     @test promote(B,A) == (B, convert(Matrix{Float64}, A))
+    @test promote(B,A) isa Tuple{Matrix{Float64}, Matrix{Float64}}
     @test promote(C,A) == (C,Tridiagonal(zeros(Float64,9),convert(Vector{Float64},A.dv),convert(Vector{Float64},A.ev)))
+    @test promote(C,A) isa Tuple{Tridiagonal, Tridiagonal}
 end
 
 import Base.LinAlg: fillslots!, UnitLowerTriangular
@@ -307,10 +324,10 @@ import Base.LinAlg: fillslots!, UnitLowerTriangular
             Bidiagonal(randn(3), randn(2), rand([:U,:L])),
             SymTridiagonal(randn(3), randn(2)),
             sparse(randn(3,4)),
-            Diagonal(randn(5)),
+            # Diagonal(randn(5)), # Diagonal fill! deprecated, see below
             sparse(rand(3)),
-            LowerTriangular(randn(3,3)),
-            UpperTriangular(randn(3,3))
+            # LowerTriangular(randn(3,3)), # AbstractTriangular fill! deprecated, see below
+            # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
             ]
             for A in exotic_arrays
                 fill!(A, 0)
@@ -318,6 +335,14 @@ import Base.LinAlg: fillslots!, UnitLowerTriangular
                     @test a == 0
                 end
             end
+            # Diagonal and AbstractTriangular fill! were defined as fillslots!,
+            # not matching the general behavior of fill!, and so have been deprecated.
+            # In a future dev cycle, these fill! methods should probably be reintroduced
+            # with behavior matching that of fill! for other structured matrix types.
+            # In the interm, equivalently test fillslots! below
+            @test iszero(fillslots!(Diagonal(fill(1, 3)), 0))
+            @test iszero(fillslots!(LowerTriangular(fill(1, 3, 3)), 0))
+            @test iszero(fillslots!(UpperTriangular(fill(1, 3, 3)), 0))
         end
         let # fill!(small, x)
             val = randn()

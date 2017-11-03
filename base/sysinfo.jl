@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Sys
+@doc """
+Provide methods for retrieving information about hardware and the operating system.
+""" -> Sys
 
 export CPU_CORES,
        WORD_SIZE,

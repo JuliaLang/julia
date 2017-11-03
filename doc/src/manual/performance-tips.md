@@ -73,8 +73,7 @@ julia> @time f(10^6)
 On the first call (`@time f(1)`), `f` gets compiled.  (If you've not yet used [`@time`](@ref)
 in this session, it will also compile functions needed for timing.)  You should not take the results
 of this run seriously. For the second run, note that in addition to reporting the time, it also
-indicated that a large amount of memory was allocated. This is the single biggest advantage of
-[`@time`](@ref) vs. functions like [`tic()`](@ref) and [`toc()`](@ref), which only report time.
+indicated that a large amount of memory was allocated.
 
 Unexpected memory allocation is almost always a sign of some problem with your code, usually a
 problem with type-stability. Consequently, in addition to the allocation itself, it's very likely
@@ -454,7 +453,10 @@ MyBetterContainer{Float64,UnitRange{Float64}}
 
 julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(UnitRange(1.3, 5.0));
 ERROR: MethodError: Cannot `convert` an object of type UnitRange{Float64} to an object of type MyBetterContainer{Int64,UnitRange{Float64}}
-[...]
+This may have arisen from a call to the constructor MyBetterContainer{Int64,UnitRange{Float64}}(...),
+since type constructors fall back to convert methods.
+Stacktrace:
+ [1] MyBetterContainer{Int64,UnitRange{Float64}}(::UnitRange{Float64}) at ./sysimg.jl:114
 ```
 
 The inner constructor requires that the element type of `A` be `T`.
@@ -484,6 +486,34 @@ of the code by loosening the type requirement. Notice that `convert` itself need
 annotation in this context in order to achieve type stability. This is because the compiler
 cannot deduce the type of the return value of a function, even `convert`, unless the types of
 all the function's arguments are known.
+
+Type annotation will not enhance (and can actually hinder) performance if the type is constructed
+at run-time. This is because the compiler cannot use the annotation to specialize the subsequent
+code, and the type-check itself takes time. For example, in the code:
+
+```julia
+function nr(a, prec)
+    ctype = prec == 32 ? Float32 : Float64
+    b = Complex{ctype}(a)
+    c = (b + 1.0f0)::Complex{ctype}
+    abs(c)
+end
+```
+
+the annotation of `c` harms performance. To write performant code involving types constructed at
+run-time, use the [function-barrier technique](@ref kernal-functions) discussed below, and ensure
+that the constructed type appears among the argument types of the kernel function so that the kernel
+operations are properly specialized by the compiler. For example, in the above snippet, as soon as
+`b` is constructed, it can be passed to another function `k`, the kernel. If, for example, function
+`k` declares `b` as an argument of type `Complex{T}`, where `T` is a type parameter, then a type annotation
+appearing in an assignment statement within `k` of the form:
+
+```julia
+c = (b + 1.0f0)::Complex{T}
+```
+
+does not hinder performance (but does not help either) since the compiler can determine the type of `c`
+at the time `k` is compiled.
 
 ### Declare types of keyword arguments
 
@@ -549,7 +579,7 @@ easily be fixed as follows:
 pos(x) = x < 0 ? zero(x) : x
 ```
 
-There is also a [`one()`](@ref) function, and a more general [`oftype(x, y)`](@ref) function, which
+There is also a [`one`](@ref) function, and a more general [`oftype(x, y)`](@ref) function, which
 returns `y` converted to the type of `x`.
 
 ## Avoid changing the type of a variable
@@ -609,7 +639,7 @@ This should be written as:
 
 ```jldoctest
 julia> function fill_twos!(a)
-           for i=1:length(a)
+           for i=eachindex(a)
                a[i] = 2
            end
        end
@@ -810,40 +840,40 @@ Consider the following contrived example. Imagine we wanted to write a function 
 [`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
 of the input vector. Assume that it is not important whether rows or columns are filled with these
 copies (perhaps the rest of the code can be easily adapted accordingly). We could conceivably
-do this in at least four ways (in addition to the recommended call to the built-in [`repmat()`](@ref)):
+do this in at least four ways (in addition to the recommended call to the built-in [`repmat`](@ref)):
 
 ```julia
 function copy_cols(x::Vector{T}) where T
-    n = size(x, 1)
-    out = Array{T}(n, n)
-    for i = 1:n
+    inds = indices(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for i = inds
         out[:, i] = x
     end
     out
 end
 
 function copy_rows(x::Vector{T}) where T
-    n = size(x, 1)
-    out = Array{T}(n, n)
-    for i = 1:n
+    inds = indices(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for i = inds
         out[i, :] = x
     end
     out
 end
 
 function copy_col_row(x::Vector{T}) where T
-    n = size(x, 1)
-    out = Array{T}(n, n)
-    for col = 1:n, row = 1:n
+    inds = indices(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for col = inds, row = inds
         out[row, col] = x[row]
     end
     out
 end
 
 function copy_row_col(x::Vector{T}) where T
-    n = size(x, 1)
-    out = Array{T}(n, n)
-    for row = 1:n, col = 1:n
+    inds = indices(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for row = inds, col = inds
         out[row, col] = x[col]
     end
     out
@@ -997,7 +1027,7 @@ An alternative is to create a "view" of the array, which is
 an array object (a `SubArray`) that actually references the data
 of the original array in-place, without making a copy.  (If you
 write to a view, it modifies the original array's data as well.)
-This can be done for individual slices by calling [`view()`](@ref),
+This can be done for individual slices by calling [`view`](@ref),
 or more simply for a whole expression or block of code by putting
 [`@views`](@ref) in front of that expression.  For example:
 
@@ -1125,7 +1155,7 @@ These are some minor points that might help in tight inner loops.
 
   * Avoid unnecessary arrays. For example, instead of [`sum([x,y,z])`](@ref) use `x+y+z`.
   * Use [`abs2(z)`](@ref) instead of [`abs(z)^2`](@ref) for complex `z`. In general, try to rewrite
-    code to use [`abs2()`](@ref) instead of [`abs()`](@ref) for complex arguments.
+    code to use [`abs2`](@ref) instead of [`abs`](@ref) for complex arguments.
   * Use [`div(x,y)`](@ref) for truncating division of integers instead of [`trunc(x/y)`](@ref), [`fld(x,y)`](@ref)
     instead of [`floor(x/y)`](@ref), and [`cld(x,y)`](@ref) instead of [`ceil(x/y)`](@ref).
 
@@ -1141,6 +1171,10 @@ Sometimes you can enable better optimization by promising certain program proper
   * Write `@simd` in front of `for` loops that are amenable to vectorization. **This feature is experimental**
     and could change or disappear in future versions of Julia.
 
+The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
+and may cause a segmentation fault if bounds checking is turned off. Use `linearindices(x)` or `eachindex(x)`
+instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
+
 Note: While `@simd` needs to be placed directly in front of a loop, both `@inbounds` and `@fastmath`
 can be applied to several statements at once, e.g. using `begin` ... `end`, or even to a whole
 function.
@@ -1150,7 +1184,7 @@ Here is an example with both `@inbounds` and `@simd` markup:
 ```julia
 function inner(x, y)
     s = zero(eltype(x))
-    for i=1:length(x)
+    for i=eachindex(x)
         @inbounds s += x[i]*y[i]
     end
     s
@@ -1158,7 +1192,7 @@ end
 
 function innersimd(x, y)
     s = zero(eltype(x))
-    @simd for i=1:length(x)
+    @simd for i=eachindex(x)
         @inbounds s += x[i]*y[i]
     end
     s
@@ -1208,8 +1242,8 @@ following additional properties:
   * The loop must be an innermost loop.
   * The loop body must be straight-line code. This is why `@inbounds` is currently needed for all
     array accesses. The compiler can sometimes turn short `&&`, `||`, and `?:` expressions into straight-line
-    code, if it is safe to evaluate all operands unconditionally. Consider using [`ifelse()`](@ref)
-    instead of `?:` in the loop if it is safe to do so.
+    code, if it is safe to evaluate all operands unconditionally. Consider using the [`ifelse`](@ref)
+    function instead of `?:` in the loop if it is safe to do so.
   * Accesses must have a stride pattern and cannot be "gathers" (random-index reads) or "scatters"
     (random-index writes).
   * The stride should be unit stride.
@@ -1220,15 +1254,15 @@ Here is an example with all three kinds of markup. This program first calculates
 of a one-dimensional array, and then evaluates the L2-norm of the result:
 
 ```julia
-function init!(u)
+function init!(u::Vector)
     n = length(u)
     dx = 1.0 / (n-1)
-    @fastmath @inbounds @simd for i in 1:n
+    @fastmath @inbounds @simd for i in 1:n #by asserting that `u` is a `Vector` we can assume it has 1-based indexing
         u[i] = sin(2pi*dx*i)
     end
 end
 
-function deriv!(u, du)
+function deriv!(u::Vector, du)
     n = length(u)
     dx = 1.0 / (n-1)
     @fastmath @inbounds du[1] = (u[2] - u[1]) / dx
@@ -1238,7 +1272,7 @@ function deriv!(u, du)
     @fastmath @inbounds du[n] = (u[n] - u[n-1]) / dx
 end
 
-function norm(u)
+function norm(u::Vector)
     n = length(u)
     T = eltype(u)
     s = zero(T)
@@ -1295,7 +1329,7 @@ on this particular computer), the main difference is that the expression `1 / (2
 `idx = 1 / (2*dx)`. In the loop, the expression `... / (2*dx)` then becomes `... * idx`, which
 is much faster to evaluate. Of course, both the actual optimization that is applied by the compiler
 as well as the resulting speedup depend very much on the hardware. You can examine the change
-in generated code by using Julia's [`code_native()`](@ref) function.
+in generated code by using Julia's [`code_native`](@ref) function.
 
 ## Treat Subnormal Numbers as Zeros
 
@@ -1359,7 +1393,7 @@ a = rand(Float32,1000) * 1.f-9
 
 ## [[`@code_warntype`](@ref)](@id man-code-warntype)
 
-The macro [`@code_warntype`](@ref) (or its function variant [`code_warntype()`](@ref)) can sometimes
+The macro [`@code_warntype`](@ref) (or its function variant [`code_warntype`](@ref)) can sometimes
 be helpful in diagnosing type-related problems. Here's an example:
 
 ```julia

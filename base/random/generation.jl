@@ -6,12 +6,12 @@
 
 ### GLOBAL_RNG fallback for all types
 
-@inline rand(T::Type) = rand(GLOBAL_RNG, T)
+rand(::Type{T}) where {T} = rand(GLOBAL_RNG, T)
 
 ### random floats
 
 # CloseOpen(T) is the fallback for an AbstractFloat T
-@inline rand(r::AbstractRNG=GLOBAL_RNG, ::Type{T}=Float64) where {T<:AbstractFloat} =
+rand(r::AbstractRNG=GLOBAL_RNG, ::Type{T}=Float64) where {T<:AbstractFloat} =
     rand(r, CloseOpen(T))
 
 # generic random generation function which can be used by RNG implementors
@@ -58,7 +58,7 @@ function _rand(rng::AbstractRNG, gen::BigFloatRandGenerator)
         limbs[end] |= Limb_high_bit
     end
     z.sign = 1
-    unsafe_copy!(z.d, pointer(limbs), gen.nlimbs)
+    Base.@gc_preserve limbs unsafe_copy!(z.d, pointer(limbs), gen.nlimbs)
     (z, randbool)
 end
 
@@ -95,8 +95,8 @@ rand_generic(rng::AbstractRNG, I::FloatInterval{BigFloat}) =
 rand_ui10_raw(r::AbstractRNG) = rand(r, UInt16)
 rand_ui23_raw(r::AbstractRNG) = rand(r, UInt32)
 
-@inline rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2()))
-@inline rand_ui52(r::AbstractRNG) = rand_ui52_raw(r) & 0x000fffffffffffff
+rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2()))
+rand_ui52(r::AbstractRNG) = rand_ui52_raw(r) & 0x000fffffffffffff
 
 ### random complex numbers
 
@@ -131,10 +131,14 @@ rand(                dims::Dims)       = rand(GLOBAL_RNG, dims)
 rand(r::AbstractRNG, dims::Integer...) = rand(r, Dims(dims))
 rand(                dims::Integer...) = rand(Dims(dims))
 
-rand(r::AbstractRNG, T::Type, dims::Dims)                   = rand!(r, Array{T}(dims))
-rand(                T::Type, dims::Dims)                   = rand(GLOBAL_RNG, T, dims)
-rand(r::AbstractRNG, T::Type, d::Integer, dims::Integer...) = rand(r, T, Dims((d, dims...)))
-rand(                T::Type, d::Integer, dims::Integer...) = rand(T, Dims((d, dims...)))
+rand(r::AbstractRNG, ::Type{T}, dims::Dims) where {T} = rand!(r, Array{T}(dims))
+rand(                ::Type{T}, dims::Dims) where {T} = rand(GLOBAL_RNG, T, dims)
+
+rand(r::AbstractRNG, ::Type{T}, d::Integer, dims::Integer...) where {T} =
+    rand(r, T, Dims((d, dims...)))
+
+rand(                ::Type{T}, d::Integer, dims::Integer...) where {T} =
+    rand(T, Dims((d, dims...)))
 # note: the above methods would trigger an ambiguity warning if d was not separated out:
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
@@ -290,13 +294,10 @@ end
 
 ### random values from UnitRange
 
-rand(rng::AbstractRNG, r::UnitRange{<:Union{Signed,Unsigned,BigInt,Bool}}) =
-    rand(rng, RangeGenerator(r))
+rand(rng::AbstractRNG, r::UnitRange{<:Integer}) = rand(rng, RangeGenerator(r))
 
-rand!(rng::AbstractRNG, A::AbstractArray,
-      r::UnitRange{<:Union{Signed,Unsigned,BigInt,Bool,Char}}) =
-          rand!(rng, A, RangeGenerator(r))
-
+rand!(rng::AbstractRNG, A::AbstractArray, r::UnitRange{<:Integer}) =
+    rand!(rng, A, RangeGenerator(r))
 
 ## random values from AbstractArray
 
@@ -322,7 +323,7 @@ rand(rng::AbstractRNG, r::AbstractArray, dims::Integer...) = rand(rng, r, Dims(d
 rand(                  r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, Dims(dims))
 
 
-## random values from Dict, Set, IntSet
+## random values from Dict, Set, BitSet
 
 function rand(r::AbstractRNG, t::Dict)
     isempty(t) && throw(ArgumentError("collection must be non-empty"))
@@ -335,7 +336,7 @@ end
 
 rand(r::AbstractRNG, s::Set) = rand(r, s.dict).first
 
-function rand(r::AbstractRNG, s::IntSet)
+function rand(r::AbstractRNG, s::BitSet)
     isempty(s) && throw(ArgumentError("collection must be non-empty"))
     # s can be empty while s.bits is not, so we cannot rely on the
     # length check in RangeGenerator below
@@ -360,7 +361,7 @@ rand(s::Union{Associative,AbstractSet}) = rand(GLOBAL_RNG, s)
 
 ### arrays
 
-function rand!(r::AbstractRNG, A::AbstractArray, s::Union{Dict,Set,IntSet})
+function rand!(r::AbstractRNG, A::AbstractArray, s::Union{Dict,Set,BitSet})
     for i in eachindex(A)
         @inbounds A[i] = rand(r, s)
     end
@@ -385,7 +386,7 @@ rand(s::Union{Associative,AbstractSet}, dims::Dims) = rand(GLOBAL_RNG, s, dims)
 
 ## random characters from a string
 
-isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(unsafe_load(pointer(s), i))
+isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(Base.@gc_preserve s unsafe_load(pointer(s), i))
 isvalid_unsafe(s::AbstractString, i) = isvalid(s, i)
 _endof(s::String) = sizeof(s)
 _endof(s::AbstractString) = endof(s)

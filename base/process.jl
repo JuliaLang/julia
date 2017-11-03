@@ -94,6 +94,8 @@ hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
 
 shell_escape(cmd::Cmd; special::AbstractString="") =
     shell_escape(cmd.exec..., special=special)
+shell_escape_posixly(cmd::Cmd) =
+    shell_escape_posixly(cmd.exec...)
 
 function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing
@@ -230,8 +232,6 @@ setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
 redir_err(src::AbstractCmd, dest::AbstractCmd) = ErrOrCmds(src, dest)
-Base.mr_empty(f, op::typeof(&), T::Type{<:Base.AbstractCmd}) =
-    throw(ArgumentError("reducing over an empty collection of type $T with operator & is not allowed"))
 
 # Stream Redirects
 redir_out(dest::Redirectable, src::AbstractCmd) = CmdRedirect(src, dest, STDIN_NO)
@@ -822,7 +822,7 @@ wait(x::ProcessChain) = for p in x.processes; wait(p); end
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 
 # allow the elements of the Cmd to be accessed as an array or iterator
-for f in (:length, :endof, :start, :eachindex, :eltype, :first, :last)
+for f in (:length, :endof, :start, :keys, :eltype, :first, :last)
     @eval $f(cmd::Cmd) = $f(cmd.exec)
 end
 for f in (:next, :done, :getindex)

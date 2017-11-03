@@ -52,7 +52,7 @@ final residual vector `resid`.
 
 # Examples
 ```jldoctest
-julia> A = spdiagm(1:4);
+julia> A = Diagonal(1:4);
 
 julia> λ, ϕ = eigs(A, nev = 2);
 
@@ -145,14 +145,14 @@ final residual vector `resid`.
 
 # Examples
 ```jldoctest
-julia> A = speye(4, 4); B = spdiagm(1:4);
+julia> A = speye(4, 4); B = Diagonal(1:4);
 
 julia> λ, ϕ = eigs(A, B, nev = 2);
 
 julia> λ
 2-element Array{Float64,1}:
  1.0
- 0.5
+ 0.4999999999999999
 ```
 
 !!! note
@@ -379,14 +379,14 @@ iterations derived from [`eigs`](@ref).
 
 # Examples
 ```jldoctest
-julia> A = spdiagm(1:4);
+julia> A = Diagonal(1:4);
 
 julia> s = svds(A, nsv = 2)[1];
 
 julia> s[:S]
 2-element Array{Float64,1}:
  4.0
- 3.0
+ 2.9999999999999996
 ```
 
 !!! note "Implementation"

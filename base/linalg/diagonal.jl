@@ -52,13 +52,19 @@ Diagonal{T}(V::AbstractVector) where {T} = Diagonal{T}(convert(AbstractVector{T}
 convert(::Type{Diagonal{T}}, D::Diagonal{T}) where {T} = D
 convert(::Type{Diagonal{T}}, D::Diagonal) where {T} = Diagonal{T}(convert(AbstractVector{T}, D.diag))
 convert(::Type{AbstractMatrix{T}}, D::Diagonal) where {T} = convert(Diagonal{T}, D)
-convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
+convert(::Type{Matrix}, D::Diagonal) = diagm(0 => D.diag)
 convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
-full(D::Diagonal) = convert(Array, D)
 
-function similar(D::Diagonal, ::Type{T}) where T
-    return Diagonal{T}(similar(D.diag, T))
-end
+# For D<:Diagonal, similar(D[, neweltype]) should yield a Diagonal matrix.
+# On the other hand, similar(D, [neweltype,] shape...) should yield a sparse matrix.
+# The first method below effects the former, and the second the latter.
+similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
+similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+
+Base.zeros(D::Diagonal) = Diagonal(fill!(similar(D.diag), 0))
+Base.zeros(D::Diagonal, ::Type{T}) where {T} = Diagonal(fill!(similar(D, T), 0))
+Base.zeros(D::Diagonal, ::Type{T}, dims::Dims) where {T} = fill!(similar(D, T, dims), 0)
+Base.zeros(D::Diagonal, ::Type{T}, dims::Integer...) where {T} = fill!(similar(D, T, dims), 0)
 
 copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)
 
@@ -118,8 +124,9 @@ istriu(D::Diagonal) = true
 istril(D::Diagonal) = true
 function triu!(D::Diagonal,k::Integer=0)
     n = size(D,1)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 0
         fill!(D.diag,0)
     end
@@ -128,8 +135,9 @@ end
 
 function tril!(D::Diagonal,k::Integer=0)
     n = size(D,1)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < 0
         fill!(D.diag,0)
     end
@@ -303,6 +311,11 @@ end
 A_rdiv_Bc!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, conj(D))
 A_rdiv_Bt!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, D)
 
+(\)(F::Factorization, D::Diagonal) =
+    A_ldiv_B!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
+Ac_ldiv_B(F::Factorization, D::Diagonal) =
+    Ac_ldiv_B!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
+
 # Methods to resolve ambiguities with `Diagonal`
 @inline *(rowvec::RowVector, D::Diagonal) = transpose(D * transpose(rowvec))
 @inline A_mul_Bt(D::Diagonal, rowvec::RowVector) = D*transpose(rowvec)
@@ -314,7 +327,18 @@ transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
 adjoint(D::Diagonal{<:Number}) = conj(D)
 adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
 
-diag(D::Diagonal) = D.diag
+function diag(D::Diagonal, k::Integer=0)
+    # every branch call similar(..., ::Int) to make sure the
+    # same vector type is returned independent of k
+    if k == 0
+        return copy!(similar(D.diag, length(D.diag)), D.diag)
+    elseif -size(D,1) <= k <= size(D,1)
+        return fill!(similar(D.diag, size(D,1)-abs(k)), 0)
+    else
+        throw(ArgumentError(string("requested diagonal, $k, must be at least $(-size(D, 1)) ",
+            "and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
+    end
+end
 trace(D::Diagonal) = sum(D.diag)
 det(D::Diagonal) = prod(D.diag)
 logdet(D::Diagonal{<:Real}) = sum(log, D.diag)
@@ -322,15 +346,15 @@ function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
     z = sum(log, D.diag)
     complex(real(z), rem2pi(imag(z), RoundNearest))
 end
-# identity matrices via eye(Diagonal{type},n)
-eye(::Type{Diagonal{T}}, n::Int) where {T} = Diagonal(ones(T,n))
 
 # Matrix functions
-exp(D::Diagonal) = Diagonal(exp.(D.diag))
-logm(D::Diagonal) = Diagonal(log.(D.diag))
-logm(D::Diagonal{<:AbstractMatrix}) = Diagonal(logm.(D.diag))
-sqrtm(D::Diagonal) = Diagonal(sqrt.(D.diag))
-sqrtm(D::Diagonal{<:AbstractMatrix}) = Diagonal(sqrtm.(D.diag))
+for f in (:exp, :log, :sqrt,
+          :cos, :sin, :tan, :csc, :sec, :cot,
+          :cosh, :sinh, :tanh, :csch, :sech, :coth,
+          :acos, :asin, :atan, :acsc, :asec, :acot,
+          :acosh, :asinh, :atanh, :acsch, :asech, :acoth)
+    @eval $f(D::Diagonal) = Diagonal($f.(D.diag))
+end
 
 #Linear solver
 function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)

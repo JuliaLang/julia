@@ -138,7 +138,7 @@ end
 
 # @generated functions that throw (shouldn't segfault or throw)
 module TestGeneratedThrow
-    using Base.Test
+    using Test
 
     @generated function bar(x)
         error("I'm not happy with type $x")
@@ -240,7 +240,7 @@ f22440kernel(::Type{T}) where {T<:AbstractFloat} = zero(T)
     sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, typemax(UInt))[1]
     code_info = Base.uncompressed_ast(method)
     body = Expr(:block, code_info.code...)
-    Base.Core.Inference.substitute!(body, 0, Any[], sig, Any[spvals...], 0)
+    Base.Core.Inference.substitute!(body, 0, Any[], sig, Any[spvals...], 0, :propagate)
     return code_info
 end
 
@@ -250,3 +250,34 @@ end
 @test f22440(0.0) === f22440kernel(0.0)
 @test f22440(0.0f0) === f22440kernel(0.0f0)
 @test f22440(0) === f22440kernel(0)
+
+# PR #23168
+
+function f23168(a, x)
+    push!(a, 1)
+    if @generated
+        :(y = x + x)
+    else
+        y = 2x
+    end
+    push!(a, y)
+    if @generated
+        :(y = (y, $x))
+    else
+        y = (y, typeof(x))
+    end
+    push!(a, 3)
+    return y
+end
+
+let a = Any[]
+    @test f23168(a, 3) == (6, Int)
+    @test a == [1, 6, 3]
+    @test contains(string(code_lowered(f23168, (Vector{Any},Int))), "x + x")
+    @test contains(string(Base.uncompressed_ast(first(methods(f23168)))), "2 * x")
+    @test contains(string(code_lowered(f23168, (Vector{Any},Int), false)), "2 * x")
+    @test contains(string(code_typed(f23168, (Vector{Any},Int))), "(Base.add_int)(x, x)")
+end
+
+# issue #18747
+@test_throws ErrorException eval(:(f(x) = @generated g() = x))

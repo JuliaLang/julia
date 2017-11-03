@@ -75,7 +75,7 @@ function permute!!(a, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(a)
-        ptr = start = findnext(p, start+1)
+        ptr = start = findnext(!iszero, p, start+1)
         temp = a[start]
         next = p[start]
         count += 1
@@ -125,7 +125,7 @@ function ipermute!!(a, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(a)
-        start = findnext(p, start+1)
+        start = findnext(!iszero, p, start+1)
         temp = a[start]
         next = p[start]
         count += 1

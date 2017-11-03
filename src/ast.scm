@@ -10,6 +10,12 @@
               (string.join (map deparse (cdar l)) ", "))
       (string.join (map deparse l) sep)))
 
+(define (deparse-prefix-call head args opn cls)
+  (string (if (decl? head)
+              (string "(" (deparse head) ")")
+              (deparse head))
+          opn (deparse-arglist args) cls))
+
 (define (deparse e)
   (define (block-stmts e)
     (if (and (pair? e) (eq? (car e) 'block))
@@ -58,9 +64,9 @@
                  (string #\( (deparse-arglist (cdr e))
                          (if (length= e 2) #\, "")
                          #\)))
-                ((call)   (string (deparse (cadr e)) #\( (deparse-arglist (cddr e)) #\)))
-                ((ref)    (string (deparse (cadr e)) #\[ (deparse-arglist (cddr e)) #\]))
-                ((curly)  (string (deparse (cadr e)) #\{ (deparse-arglist (cddr e)) #\}))
+                ((call)  (deparse-prefix-call (cadr e) (cddr e) #\( #\)))
+                ((curly) (deparse-prefix-call (cadr e) (cddr e) #\{ #\}))
+                ((ref)   (deparse-prefix-call (cadr e) (cddr e) #\[ #\]))
                 ((macrocall) (string (cadr e) " " (deparse-arglist (cddr e) " ")))
                 ((quote inert)
                  (if (and (symbol? (cadr e))
@@ -147,6 +153,7 @@
 ;; predicates and accessors
 
 (define (quoted? e) (memq (car e) '(quote top core globalref outerref line break inert meta)))
+(define (quotify e) `',e)
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
@@ -351,6 +358,20 @@
 (define (nospecialize-meta? e (one #f))
   (and (if one (length= e 3) (length> e 2))
        (eq? (car e) 'meta) (eq? (cadr e) 'nospecialize)))
+
+(define (if-generated? e)
+  (and (length= e 4) (eq? (car e) 'if) (equal? (cadr e) '(generated))))
+
+(define (generated-meta? e)
+  (and (length= e 3) (eq? (car e) 'meta) (eq? (cadr e) 'generated)))
+
+(define (generated_only-meta? e)
+  (and (length= e 2) (eq? (car e) 'meta) (eq? (cadr e) 'generated_only)))
+
+(define (function-def? e)
+  (and (pair? e) (or (eq? (car e) 'function) (eq? (car e) '->)
+                     (and (eq? (car e) '=) (length= e 3)
+                          (eventually-call? (cadr e))))))
 
 ;; flatten nested expressions with the given head
 ;; (op (op a b) c) => (op a b c)

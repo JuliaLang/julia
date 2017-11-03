@@ -171,10 +171,12 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
 
     len = endpos - startpos + 1
     p   = pointer(sbuff) + startpos - 1
-    (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-        p, "true", 4)) && (return Nullable(true))
-    (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-        p, "false", 5)) && (return Nullable(false))
+    @gc_preserve sbuff begin
+        (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+                                  p, "true", 4)) && (return Nullable(true))
+        (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+                                  p, "false", 5)) && (return Nullable(false))
+    end
 
     if raise
         substr = SubString(sbuff, orig_start, orig_end) # show input string in the error to avoid confusion
@@ -234,10 +236,6 @@ function parse(::Type{T}, s::AbstractString) where T<:AbstractFloat
     return unsafe_get(result)
 end
 
-float(x::AbstractString) = parse(Float64,x)
-
-float(a::AbstractArray{<:AbstractString}) = map!(float, similar(a,typeof(float(0))), a)
-
 ## interface to parser ##
 
 """
@@ -246,7 +244,7 @@ float(a::AbstractArray{<:AbstractString}) = map!(float, similar(a,typeof(float(0
 The expression passed to the `parse` function could not be interpreted as a valid Julia
 expression.
 """
-mutable struct ParseError <: Exception
+struct ParseError <: Exception
     msg::AbstractString
 end
 

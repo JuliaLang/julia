@@ -225,8 +225,7 @@ julia> eigmax(A)
 ERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:
 `A` cannot have complex eigenvalues.
 Stacktrace:
- [1] #eigmax#52(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:238
- [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:236
+[...]
 ```
 """
 function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
@@ -267,8 +266,7 @@ julia> eigmin(A)
 ERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:
 `A` cannot have complex eigenvalues.
 Stacktrace:
- [1] #eigmin#53(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:280
- [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:278
+[...]
 ```
 """
 function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
@@ -395,8 +393,8 @@ julia> B = [0 1; 1 0]
 
 julia> eigvals(A,B)
 2-element Array{Complex{Float64},1}:
- 0.0+1.0im
- 0.0-1.0im
+ 0.0 + 1.0im
+ 0.0 - 1.0im
 ```
 """
 function eigvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
@@ -437,4 +435,3 @@ convert(::Type{AbstractMatrix}, F::Eigen) = F.vectors * Diagonal(F.values) / F.v
 convert(::Type{AbstractArray}, F::Eigen) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::Eigen) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::Eigen) = convert(Matrix, F)
-full(F::Eigen) = convert(AbstractArray, F)

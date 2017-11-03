@@ -3,7 +3,7 @@
 ## basic task functions and TLS
 
 # Container for a captured exception and its backtrace. Can be serialized.
-mutable struct CapturedException <: Exception
+struct CapturedException <: Exception
     ex::Any
     processed_bt::Vector{Any}
 
@@ -26,7 +26,7 @@ function showerror(io::IO, ce::CapturedException)
     showerror(io, ce.ex, ce.processed_bt, backtrace=true)
 end
 
-mutable struct CompositeException <: Exception
+struct CompositeException <: Exception
     exceptions::Vector{Any}
     CompositeException() = new(Any[])
     CompositeException(exceptions) = new(exceptions)
@@ -253,7 +253,20 @@ function task_done_hook(t::Task)
     end
     # Clear sigatomic before waiting
     sigatomic_end()
-    wait() # this will not return
+    try
+        wait() # this will not return
+    catch e
+        # If an InterruptException happens while blocked in the event loop, try handing
+        # the exception to the REPL task since the current task is done.
+        # issue #19467
+        if isa(e,InterruptException) && isdefined(Base,:active_repl_backend) &&
+            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
+            active_repl_backend.in_eval
+            throwto(active_repl_backend.backend_task, e)
+        else
+            rethrow(e)
+        end
+    end
 end
 
 

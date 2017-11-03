@@ -10,7 +10,6 @@
 #include <string.h>
 #include <stdarg.h>
 #include <setjmp.h>
-#include <assert.h>
 #include <sys/types.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -25,6 +24,7 @@
 #include "julia_internal.h"
 #include "builtin_proto.h"
 #include "intrinsics.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,10 +36,11 @@ static int bits_equal(void *a, void *b, int sz)
 {
     switch (sz) {
     case 1:  return *(int8_t*)a == *(int8_t*)b;
-    case 2:  return *(int16_t*)a == *(int16_t*)b;
-    case 4:  return *(int32_t*)a == *(int32_t*)b;
-    case 8:  return *(int64_t*)a == *(int64_t*)b;
-    default: return memcmp(a, b, sz)==0;
+        // Let compiler constant folds the following.
+    case 2:  return memcmp(a, b, 2) == 0;
+    case 4:  return memcmp(a, b, 4) == 0;
+    case 8:  return memcmp(a, b, 8) == 0;
+    default: return memcmp(a, b, sz) == 0;
     }
 }
 
@@ -77,32 +78,89 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b)
 // See comment above for an explanation of NOINLINE.
 static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *dt)
 {
-    size_t nf = jl_datatype_nfields(dt);
-    for (size_t f=0; f < nf; f++) {
+    size_t f, nf = jl_datatype_nfields(dt);
+    for (f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *ao = (char*)jl_data_ptr(a) + offs;
         char *bo = (char*)jl_data_ptr(b) + offs;
-        int eq;
         if (jl_field_isptr(dt, f)) {
             jl_value_t *af = *(jl_value_t**)ao;
             jl_value_t *bf = *(jl_value_t**)bo;
-            if (af == bf) eq = 1;
-            else if (af==NULL || bf==NULL) eq = 0;
-            else eq = jl_egal(af, bf);
+            if (af != bf) {
+                if (af == NULL || bf == NULL)
+                    return 0;
+                if (!jl_egal(af, bf))
+                    return 0;
+            }
         }
         else {
             jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(dt, f);
+            if (jl_is_uniontype(ft)) {
+                uint8_t asel = ((uint8_t*)ao)[jl_field_size(dt, f) - 1];
+                uint8_t bsel = ((uint8_t*)bo)[jl_field_size(dt, f) - 1];
+                if (asel != bsel)
+                    return 0;
+                ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, asel);
+            }
             if (!ft->layout->haspadding) {
-                eq = bits_equal(ao, bo, jl_field_size(dt, f));
+                if (!bits_equal(ao, bo, jl_field_size(dt, f)))
+                    return 0;
             }
             else {
                 assert(jl_datatype_nfields(ft) > 0);
-                eq = compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft);
+                if (!compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft))
+                    return 0;
             }
         }
-        if (!eq) return 0;
     }
     return 1;
+}
+
+static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env)
+{
+    if (a == b)
+        return 1;
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
+    if (dt != (jl_datatype_t*)jl_typeof(b))
+        return 0;
+    if (dt == jl_tvar_type) {
+        jl_typeenv_t *pe = env;
+        while (pe != NULL) {
+            if (pe->var == (jl_tvar_t*)a)
+                return pe->val == b;
+            pe = pe->prev;
+        }
+        return 0;
+    }
+    if (dt == jl_uniontype_type) {
+        return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env) &&
+            egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env);
+    }
+    if (dt == jl_unionall_type) {
+        jl_unionall_t *ua = (jl_unionall_t*)a;
+        jl_unionall_t *ub = (jl_unionall_t*)b;
+        if (ua->var->name != ub->var->name)
+            return 0;
+        if (!(egal_types(ua->var->lb, ub->var->lb, env) && egal_types(ua->var->ub, ub->var->ub, env)))
+            return 0;
+        jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, env };
+        return egal_types(ua->body, ub->body, &e);
+    }
+    if (dt == jl_datatype_type) {
+        jl_datatype_t *dta = (jl_datatype_t*)a;
+        jl_datatype_t *dtb = (jl_datatype_t*)b;
+        if (dta->name != dtb->name)
+            return 0;
+        size_t i, l = jl_nparams(dta);
+        if (jl_nparams(dtb) != l)
+            return 0;
+        for (i = 0; i < l; i++) {
+            if (!egal_types(jl_tparam(dta, i), jl_tparam(dtb, i), env))
+                return 0;
+        }
+        return 1;
+    }
+    return jl_egal(a, b);
 }
 
 JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
@@ -110,12 +168,11 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
     // warning: a,b may NOT have been gc-rooted by the caller
     if (a == b)
         return 1;
-    jl_value_t *ta = (jl_value_t*)jl_typeof(a);
-    if (ta != (jl_value_t*)jl_typeof(b))
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
+    if (dt != (jl_datatype_t*)jl_typeof(b))
         return 0;
-    if (jl_is_svec(a))
+    if (dt == jl_simplevector_type)
         return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
-    jl_datatype_t *dt = (jl_datatype_t*)ta;
     if (dt == jl_datatype_type) {
         jl_datatype_t *dta = (jl_datatype_t*)a;
         jl_datatype_t *dtb = (jl_datatype_t*)b;
@@ -127,33 +184,37 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
             return 0;
         return !memcmp(jl_string_data(a), jl_string_data(b), l);
     }
-    if (dt->mutabl) return 0;
+    if (dt->mutabl)
+        return 0;
     size_t sz = jl_datatype_size(dt);
-    if (sz == 0) return 1;
+    if (sz == 0)
+        return 1;
     size_t nf = jl_datatype_nfields(dt);
     if (nf == 0)
         return bits_equal(jl_data_ptr(a), jl_data_ptr(b), sz);
+    if (dt == jl_unionall_type)
+        return egal_types(a, b, NULL);
     return compare_fields(a, b, dt);
 }
 
 // object_id ------------------------------------------------------------------
 
-static uintptr_t bits_hash(void *b, size_t sz)
+static uintptr_t bits_hash(const void *b, size_t sz)
 {
     switch (sz) {
-    case 1:  return int32hash(*(int8_t*)b);
-    case 2:  return int32hash(*(int16_t*)b);
-    case 4:  return int32hash(*(int32_t*)b);
+    case 1:  return int32hash(*(const int8_t*)b);
+    case 2:  return int32hash(jl_load_unaligned_i16(b));
+    case 4:  return int32hash(jl_load_unaligned_i32(b));
 #ifdef _P64
-    case 8:  return int64hash(*(int64_t*)b);
+    case 8:  return int64hash(jl_load_unaligned_i64(b));
 #else
-    case 8:  return int64to32hash(*(int64_t*)b);
+    case 8:  return int64to32hash(jl_load_unaligned_i64(b));
 #endif
     default:
 #ifdef _P64
-        return memhash((char*)b, sz);
+        return memhash((const char*)b, sz);
 #else
-        return memhash32((char*)b, sz);
+        return memhash32((const char*)b, sz);
 #endif
     }
 }
@@ -161,13 +222,59 @@ static uintptr_t bits_hash(void *b, size_t sz)
 static uintptr_t NOINLINE hash_svec(jl_svec_t *v)
 {
     uintptr_t h = 0;
-    size_t l = jl_svec_len(v);
-    for(size_t i = 0; i < l; i++) {
-        jl_value_t *x = jl_svecref(v,i);
-        uintptr_t u = x==NULL ? 0 : jl_object_id(x);
+    size_t i, l = jl_svec_len(v);
+    for (i = 0; i < l; i++) {
+        jl_value_t *x = jl_svecref(v, i);
+        uintptr_t u = (x == NULL) ? 0 : jl_object_id(x);
         h = bitmix(h, u);
     }
     return h;
+}
+
+typedef struct _varidx {
+    jl_tvar_t *var;
+    struct _varidx *prev;
+} jl_varidx_t;
+
+static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v);
+
+static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env)
+{
+    if (v == NULL) return 0;
+    jl_datatype_t *tv = (jl_datatype_t*)jl_typeof(v);
+    if (tv == jl_tvar_type) {
+        jl_varidx_t *pe = env;
+        int i = 0;
+        while (pe != NULL) {
+            if (pe->var == (jl_tvar_t*)v)
+                return (i<<8) + 42;
+            i++;
+            pe = pe->prev;
+        }
+        return inthash((uintptr_t)v);
+    }
+    if (tv == jl_uniontype_type) {
+        return bitmix(bitmix(jl_object_id((jl_value_t*)tv),
+                             type_object_id_(((jl_uniontype_t*)v)->a, env)),
+                      type_object_id_(((jl_uniontype_t*)v)->b, env));
+    }
+    if (tv == jl_unionall_type) {
+        jl_unionall_t *u = (jl_unionall_t*)v;
+        uintptr_t h = u->var->name->hash;
+        h = bitmix(h, type_object_id_(u->var->lb, env));
+        h = bitmix(h, type_object_id_(u->var->ub, env));
+        jl_varidx_t e = { u->var, env };
+        return bitmix(h, type_object_id_(u->body, &e));
+    }
+    if (tv == jl_datatype_type) {
+        uintptr_t h = ~((jl_datatype_t*)v)->name->hash;
+        size_t i, l = jl_nparams(v);
+        for (i = 0; i < l; i++) {
+            h = bitmix(h, type_object_id_(jl_tparam(v, i), env));
+        }
+        return h;
+    }
+    return jl_object_id_((jl_value_t*)tv, v);
 }
 
 static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
@@ -188,9 +295,11 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     if (dt == jl_typename_type)
         return ((jl_typename_t*)v)->hash;
 #ifdef _P64
-    if (v == jl_ANY_flag) return 0x31c472f68ee30bddULL;
+    if (v == jl_ANY_flag)
+        return 0x31c472f68ee30bddULL;
 #else
-    if (v == jl_ANY_flag) return 0x8ee30bdd;
+    if (v == jl_ANY_flag)
+        return 0x8ee30bdd;
 #endif
     if (dt == jl_string_type) {
 #ifdef _P64
@@ -199,24 +308,31 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
         return memhash32_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
 #endif
     }
-    if (dt->mutabl) return inthash((uintptr_t)v);
+    if (dt->mutabl)
+        return inthash((uintptr_t)v);
     size_t sz = jl_datatype_size(tv);
     uintptr_t h = jl_object_id(tv);
-    if (sz == 0) return ~h;
-    size_t nf = jl_datatype_nfields(dt);
-    if (nf == 0) {
+    if (sz == 0)
+        return ~h;
+    size_t f, nf = jl_datatype_nfields(dt);
+    if (nf == 0)
         return bits_hash(jl_data_ptr(v), sz) ^ h;
-    }
-    for (size_t f=0; f < nf; f++) {
+    if (dt == jl_unionall_type)
+        return type_object_id_(v, NULL);
+    for (f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *vo = (char*)jl_data_ptr(v) + offs;
         uintptr_t u;
         if (jl_field_isptr(dt, f)) {
             jl_value_t *f = *(jl_value_t**)vo;
-            u = f==NULL ? 0 : jl_object_id(f);
+            u = (f == NULL) ? 0 : jl_object_id(f);
         }
         else {
             jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type(dt, f);
+            if (jl_is_uniontype(fieldtype)) {
+                uint8_t sel = ((uint8_t*)vo)[jl_field_size(dt, f) - 1];
+                fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
+            }
             assert(jl_is_datatype(fieldtype) && !fieldtype->abstract && !fieldtype->mutabl);
             if (fieldtype->layout->haspadding)
                 u = jl_object_id_((jl_value_t*)fieldtype, (jl_value_t*)vo);
@@ -244,7 +360,7 @@ JL_CALLABLE(jl_f_is)
     JL_NARGS(===, 2, 2);
     if (args[0] == args[1])
         return jl_true;
-    return jl_egal(args[0],args[1]) ? jl_true : jl_false;
+    return jl_egal(args[0], args[1]) ? jl_true : jl_false;
 }
 
 JL_CALLABLE(jl_f_typeof)
@@ -609,6 +725,10 @@ JL_CALLABLE(jl_f_svec)
 
 JL_CALLABLE(jl_f_getfield)
 {
+    if (nargs == 3) {
+        JL_TYPECHK(getfield, bool, args[2]);
+        nargs -= 1;
+    }
     JL_NARGS(getfield, 2, 2);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
@@ -700,6 +820,10 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
 
 JL_CALLABLE(jl_f_fieldtype)
 {
+    if (nargs == 3) {
+        JL_TYPECHK(fieldtype, bool, args[2]);
+        nargs -= 1;
+    }
     JL_NARGS(fieldtype, 2, 2);
     jl_datatype_t *st = (jl_datatype_t*)args[0];
     if (st == jl_module_type)
@@ -876,7 +1000,7 @@ JL_CALLABLE(jl_f_invoke_kwsorter)
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_array_t *ar = n==0 ? (jl_array_t*)jl_an_empty_vec_any : jl_alloc_vec_any(n);
+    jl_array_t *ar = jl_alloc_vec_any(n);
     JL_GC_PUSH1(&ar);
     jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ptls, sizeof(jl_expr_t),
                                             jl_expr_type);
@@ -925,20 +1049,20 @@ JL_CALLABLE(jl_f_arraysize)
 static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
                              const char *fname)
 {
-    size_t i=0;
-    size_t k, stride=1;
+    size_t i = 0;
+    size_t k, stride = 1;
     size_t nd = jl_array_ndims(a);
-    for(k=0; k < nidxs; k++) {
+    for (k = 0; k < nidxs; k++) {
         if (!jl_is_long(args[k]))
             jl_type_error(fname, (jl_value_t*)jl_long_type, args[k]);
-        size_t ii = jl_unbox_long(args[k])-1;
+        size_t ii = jl_unbox_long(args[k]) - 1;
         i += ii * stride;
-        size_t d = k>=nd ? 1 : jl_array_dim(a, k);
-        if (k < nidxs-1 && ii >= d)
+        size_t d = (k >= nd) ? 1 : jl_array_dim(a, k);
+        if (k < nidxs - 1 && ii >= d)
             jl_bounds_error_v((jl_value_t*)a, args, nidxs);
         stride *= d;
     }
-    for(; k < nd; k++)
+    for (; k < nd; k++)
         stride *= jl_array_dim(a, k);
     if (i >= stride)
         jl_bounds_error_v((jl_value_t*)a, args, nidxs);
@@ -947,21 +1071,23 @@ static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
 
 JL_CALLABLE(jl_f_arrayref)
 {
-    JL_NARGSV(arrayref, 2);
-    JL_TYPECHK(arrayref, array, args[0]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = array_nd_index(a, &args[1], nargs-1, "arrayref");
+    JL_NARGSV(arrayref, 3);
+    JL_TYPECHK(arrayref, bool, args[0]);
+    JL_TYPECHK(arrayref, array, args[1]);
+    jl_array_t *a = (jl_array_t*)args[1];
+    size_t i = array_nd_index(a, &args[2], nargs - 2, "arrayref");
     return jl_arrayref(a, i);
 }
 
 JL_CALLABLE(jl_f_arrayset)
 {
-    JL_NARGSV(arrayset, 3);
-    JL_TYPECHK(arrayset, array, args[0]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = array_nd_index(a, &args[2], nargs-2, "arrayset");
-    jl_arrayset(a, args[1], i);
-    return args[0];
+    JL_NARGSV(arrayset, 4);
+    JL_TYPECHK(arrayset, bool, args[0]);
+    JL_TYPECHK(arrayset, array, args[1]);
+    jl_array_t *a = (jl_array_t*)args[1];
+    size_t i = array_nd_index(a, &args[3], nargs - 3, "arrayset");
+    jl_arrayset(a, args[2], i);
+    return args[1];
 }
 
 // IntrinsicFunctions ---------------------------------------------------------
@@ -1169,6 +1295,7 @@ void jl_init_primitives(void)
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
+    add_builtin("NamedTuple", (jl_value_t*)jl_namedtuple_type);
 
     add_builtin("Bool", (jl_value_t*)jl_bool_type);
     add_builtin("UInt8", (jl_value_t*)jl_uint8_type);

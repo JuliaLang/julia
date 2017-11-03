@@ -4,10 +4,11 @@ baremodule Base
 
 using Core.Intrinsics
 ccall(:jl_set_istopmod, Void, (Any, Bool), Base, true)
+
 function include(mod::Module, path::AbstractString)
     local result
     if INCLUDE_STATE === 1
-        result = Core.include(mod, path)
+        result = _include1(mod, path)
     elseif INCLUDE_STATE === 2
         result = _include(mod, path)
     elseif INCLUDE_STATE === 3
@@ -18,7 +19,7 @@ end
 function include(path::AbstractString)
     local result
     if INCLUDE_STATE === 1
-        result = Core.include(Base, path)
+        result = _include1(Base, path)
     elseif INCLUDE_STATE === 2
         result = _include(Base, path)
     else
@@ -28,12 +29,18 @@ function include(path::AbstractString)
     end
     result
 end
+const _included_files = Array{Tuple{Module,String}}(0)
+function _include1(mod::Module, path)
+    Core.Inference.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
+    Core.include(mod, path)
+end
 let SOURCE_PATH = ""
     # simple, race-y TLS, relative include
     global _include
     function _include(mod::Module, path)
         prev = SOURCE_PATH
         path = joinpath(dirname(prev), path)
+        push!(_included_files, (mod, abspath(path)))
         SOURCE_PATH = path
         result = Core.include(mod, path)
         SOURCE_PATH = prev
@@ -41,6 +48,11 @@ let SOURCE_PATH = ""
     end
 end
 INCLUDE_STATE = 1 # include = Core.include
+
+baremodule MainInclude
+export include
+include(fname::AbstractString) = Main.Base.include(Main, fname)
+end
 
 include("coreio.jl")
 
@@ -95,7 +107,7 @@ include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
 include("checked.jl")
-importall .Checked
+using .Checked
 
 # buggy handling of ispure in type-inference means this should be
 # after re-defining the basic operations that they might try to call
@@ -116,6 +128,7 @@ include("indices.jl")
 include("array.jl")
 include("abstractarray.jl")
 include("subarray.jl")
+include("reinterpretarray.jl")
 
 # Array convenience converting constructors
 Array{T}(m::Integer) where {T} = Array{T,1}(Int(m))
@@ -129,10 +142,14 @@ Vector(m::Integer) = Array{Any,1}(Int(m))
 Matrix{T}(m::Integer, n::Integer) where {T} = Matrix{T}(Int(m), Int(n))
 Matrix(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
 
+include("associative.jl")
+
+include("namedtuple.jl")
+
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
-importall .Rounding
+using .Rounding
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -153,7 +170,7 @@ include("strings/string.jl")
 
 # SIMD loops
 include("simdloop.jl")
-importall .SimdLoop
+using .SimdLoop
 
 # map-reduce operators
 include("reduce.jl")
@@ -161,8 +178,7 @@ include("reduce.jl")
 ## core structures
 include("reshapedarray.jl")
 include("bitarray.jl")
-include("intset.jl")
-include("associative.jl")
+include("bitset.jl")
 
 if !isdefined(Core, :Inference)
     include("docs/core.jl")
@@ -177,15 +193,16 @@ using .Iterators: Flatten, product  # for generators
 
 # Definition of StridedArray
 StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}
+StridedReinterpretArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
 StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
     I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
+    Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N,A}}
 StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},
     I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}}
+    Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}, StridedReinterpretArray{T,1,A}}
 StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},
     I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}}
+    Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}, StridedReinterpretArray{T,2,A}}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
 # For OS specific stuff
@@ -219,30 +236,32 @@ using .PermutedDimsArrays
 include("nullable.jl")
 
 include("broadcast.jl")
-importall .Broadcast
+using .Broadcast
 
 # define the real ntuple functions
-@generated function ntuple(f::F, ::Val{N}) where {F,N}
-    Core.typeassert(N, Int)
-    (N >= 0) || return :(throw($(ArgumentError(string("tuple length should be ≥0, got ", N)))))
-    return quote
-        $(Expr(:meta, :inline))
-        @nexprs $N i -> t_i = f(i)
-        @ncall $N tuple t
+@inline function ntuple(f::F, ::Val{N}) where {F,N}
+    N::Int
+    (N >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", N)))
+    if @generated
+        quote
+            @nexprs $N i -> t_i = f(i)
+            @ncall $N tuple t
+        end
+    else
+        Tuple(f(i) for i = 1:N)
     end
 end
-@generated function fill_to_length(t::Tuple, val, ::Val{N}) where {N}
-    M = length(t.parameters)
-    M > N  && return :(throw($(ArgumentError("input tuple of length $M, requested $N"))))
-    return quote
-        $(Expr(:meta, :inline))
-        (t..., $(Any[ :val for i = (M + 1):N ]...))
+@inline function fill_to_length(t::Tuple, val, ::Val{N}) where {N}
+    M = length(t)
+    M > N && throw(ArgumentError("input tuple of length $M, requested $N"))
+    if @generated
+        quote
+            (t..., $(fill(:val, N-length(t.parameters))...))
+        end
+    else
+        (t..., fill(val, N-M)...)
     end
 end
-
-# base64 conversions (need broadcast)
-include("base64.jl")
-importall .Base64
 
 # version
 include("version.jl")
@@ -267,10 +286,8 @@ include("weakkeydict.jl")
 include("stream.jl")
 include("socket.jl")
 include("filesystem.jl")
-importall .Filesystem
+using .Filesystem
 include("process.jl")
-include("multimedia.jl")
-importall .Multimedia
 include("grisu/grisu.jl")
 import .Grisu.print_shortest
 include("methodshow.jl")
@@ -278,7 +295,8 @@ include("methodshow.jl")
 # core math functions
 include("floatfuncs.jl")
 include("math.jl")
-importall .Math
+using .Math
+import .Math: gamma
 const (√)=sqrt
 const (∛)=cbrt
 
@@ -289,21 +307,21 @@ include("reducedim.jl")  # macros in this file relies on string.jl
 
 # basic data structures
 include("ordering.jl")
-importall .Order
+using .Order
 
 # Combinatorics
 include("sort.jl")
-importall .Sort
+using .Sort
 
 # Fast math
 include("fastmath.jl")
-importall .FastMath
+using .FastMath
 
 function deepcopy_internal end
 
 # BigInts and BigFloats
 include("gmp.jl")
-importall .GMP
+using .GMP
 
 for T in [Signed, Integer, BigInt, Float32, Float64, Real, Complex, Rational]
     @eval flipsign(x::$T, ::Unsigned) = +x
@@ -311,7 +329,7 @@ for T in [Signed, Integer, BigInt, Float32, Float64, Real, Complex, Rational]
 end
 
 include("mpfr.jl")
-importall .MPFR
+using .MPFR
 big(n::Integer) = convert(BigInt,n)
 big(x::AbstractFloat) = convert(BigFloat,x)
 big(q::Rational) = big(numerator(q))//big(denominator(q))
@@ -323,61 +341,53 @@ include("hashing2.jl")
 
 # irrational mathematical constants
 include("irrationals.jl")
+include("mathconstants.jl")
+using .MathConstants: ℯ, π, pi
 
 # random number generation
 include("random/dSFMT.jl")
 include("random/random.jl")
-importall .Random
+using .Random
+import .Random: rand, rand!
 
 # (s)printf macros
 include("printf.jl")
-importall .Printf
+using .Printf
 
 # metaprogramming
 include("meta.jl")
 
 # enums
 include("Enums.jl")
-importall .Enums
+using .Enums
 
 # concurrency and parallelism
 include("serialize.jl")
-importall .Serializer
+using .Serializer
+import .Serializer: serialize, deserialize
 include("channels.jl")
 
-# memory-mapped and shared arrays
-include("mmap.jl")
-import .Mmap
-
 # utilities - timing, help, edit
-include("datafmt.jl")
-importall .DataFmt
 include("deepcopy.jl")
 include("interactiveutil.jl")
 include("summarysize.jl")
 include("replutil.jl")
-include("test.jl")
 include("i18n.jl")
 using .I18n
 
-# frontend
-include("initdefs.jl")
-include("repl/Terminals.jl")
-include("repl/LineEdit.jl")
-include("repl/REPLCompletions.jl")
-include("repl/REPL.jl")
-include("client.jl")
-
 # Stack frames and traces
 include("stacktraces.jl")
-importall .StackTraces
+using .StackTraces
+
+include("initdefs.jl")
+include("client.jl")
 
 # misc useful functions & macros
 include("util.jl")
 
 # dense linear algebra
 include("linalg/linalg.jl")
-importall .LinAlg
+using .LinAlg
 const ⋅ = dot
 const × = cross
 
@@ -390,29 +400,42 @@ include("libgit2/libgit2.jl")
 # package manager
 include("pkg/pkg.jl")
 
-# profiler
-include("profile.jl")
-importall .Profile
-
 # dates
 include("dates/Dates.jl")
 import .Dates: Date, DateTime, DateFormat, @dateformat_str, now
 
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")
-importall .SparseArrays
+using .SparseArrays
 
 include("asyncmap.jl")
 
 include("distributed/Distributed.jl")
-importall .Distributed
-include("sharedarray.jl")
+using .Distributed
+
+# worker threads
+include("threadcall.jl")
 
 # code loading
 include("loading.jl")
 
-# worker threads
-include("threadcall.jl")
+# set up load path to be able to find stdlib packages
+init_load_path(ccall(:jl_get_julia_home, Any, ()))
+
+INCLUDE_STATE = 3 # include = include_relative
+
+import Base64
+
+INCLUDE_STATE = 2
+
+include("multimedia.jl")
+using .Multimedia
+
+# frontend
+include("repl/Terminals.jl")
+include("repl/LineEdit.jl")
+include("repl/REPLCompletions.jl")
+include("repl/REPL.jl")
 
 # deprecated functions
 include("deprecated.jl")
@@ -436,11 +459,21 @@ function __init__()
     init_threadcall()
 end
 
+include("precompile.jl")
+
 INCLUDE_STATE = 3 # include = include_relative
-include(Base, "precompile.jl")
 
 end # baremodule Base
 
 using Base
+
+# Ensure this file is also tracked
+unshift!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
+
+# load some stdlib packages but don't put their names in Main
+Base.require(:DelimitedFiles)
+Base.require(:Test)
+
+empty!(LOAD_PATH)
 
 Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")

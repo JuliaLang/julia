@@ -2,14 +2,6 @@
 
 # Date/DateTime Ranges
 
-# Override default step; otherwise it would be Millisecond(1)
-Base.colon(start::T, stop::T) where {T<:DateTime} = StepRange(start, Day(1), stop)
-Base.colon(start::T, stop::T) where {T<:Date}     = StepRange(start, Day(1), stop)
-Base.colon(start::T, stop::T) where {T<:Time}     = StepRange(start, Second(1), stop)
-
-Base.range(start::DateTime, len::Integer)  = range(start, Day(1), len)
-Base.range(start::Date, len::Integer)      = range(start, Day(1), len)
-
 (::Type{StepRange{<:Dates.DatePeriod,<:Real}})(start, step, stop) =
     throw(ArgumentError("must specify step as a Period when constructing Dates ranges"))
 
@@ -43,6 +35,6 @@ Base.start(r::StepRange{<:TimeType}) = 0
 Base.next(r::StepRange{<:TimeType}, i::Int) = (r.start + r.step*i, i + 1)
 Base.done(r::StepRange{<:TimeType,<:Period}, i::Integer) = length(r) <= i
 
-+(x::Period, r::Range{<:TimeType}) = (x + first(r)):step(r):(x + last(r))
-+(r::Range{<:TimeType}, x::Period) = x + r
--(r::Range{<:TimeType}, x::Period) = (first(r)-x):step(r):(last(r)-x)
++(x::Period, r::AbstractRange{<:TimeType}) = (x + first(r)):step(r):(x + last(r))
++(r::AbstractRange{<:TimeType}, x::Period) = x + r
+-(r::AbstractRange{<:TimeType}, x::Period) = (first(r)-x):step(r):(last(r)-x)
