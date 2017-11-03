@@ -529,7 +529,7 @@ similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(
 
 to_shape(::Tuple{}) = ()
 to_shape(dims::Dims) = dims
-to_shape(dims::DimsOrInds) = map(to_shape, dims)
+to_shape(dims::DimsOrInds) = map(to_shape, dims)::DimsOrInds
 # each dimension
 to_shape(i::Int) = i
 to_shape(i::Integer) = Int(i)
