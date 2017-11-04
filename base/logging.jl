@@ -1,3 +1,5 @@
+#-------------------------------------------------------------------------------
+# The AbstractLogger interface
 """
 A logger controls how log records are filtered and dispatched.  When a log
 record is generated, the logger is the first piece of user configurable code
@@ -5,8 +7,68 @@ which gets to inspect the record and decide what to do with it.
 """
 abstract type AbstractLogger ; end
 
+"""
+    handle_message(logger, level, message, _module, group, id, file, line; key1=val1, ...)
+
+Log a message to `logger` at `level`.  The logical location at which the
+message was generated is given by module `_module` and `group`; the source
+location by `file` and `line`. `id` is an arbitrary unique `Symbol` to be used
+as a key to identify the log statement when filtering.
+"""
+function handle_message end
 
 """
+    shouldlog(logger, level, _module, group, id)
+
+Return true when `logger` accepts a message at `level`, generated for
+`_module`, `group` and with unique log identifier `id`.
+"""
+shouldlog(::AbstractLogger, args...) = true
+
+"""
+    min_enabled_level(logger)
+
+Return the maximum disabled level for `logger` for early filtering.  That is,
+the log level below or equal to which all messages are filtered.
+"""
+min_enabled_level(logger::AbstractLogger) = Info
+
+"""
+    catch_exceptions(logger)
+
+Return true if the logger should catch exceptions which happen during log
+record construction.  By default, messages are caught
+
+By default all exceptions are caught to prevent log message generation from
+crashing the program.  This lets users confidently toggle little-used
+functionality - such as debug logging - in a production system.
+
+If you want to use logging as an audit trail you should disable this for your
+logger type.
+"""
+catch_exceptions(logger::AbstractLogger) = true
+
+
+# The logger equivalent of /dev/null, for when a placeholder is needed
+"""
+    NullLogger()
+
+Logger which disables all messages and produces no output - the logger
+equivalent of /dev/null.
+"""
+struct NullLogger <: AbstractLogger; end
+
+min_enabled_level(::NullLogger) = AboveMaxLevel
+shouldlog(::NullLogger, args...) = false
+handle_message(::NullLogger, args...; kwargs...) =
+    error("Null logger handle_message() should not be called")
+
+
+#-------------------------------------------------------------------------------
+# Standard log levels
+"""
+    LogLevel(level)
+
 Severity/verbosity of a log record.
 
 The log level provides a key against which potential log records may be
@@ -42,44 +104,105 @@ function show(io::IO, level::LogLevel)
     end
 end
 
-parse_level(level) = level
-parse_level(level::String) = parse_level(Symbol(lowercase(level)))
-function parse_level(level::Symbol)
-    if      level == :belowminlevel  return  BelowMinLevel
-    elseif  level == :debug          return  Debug
-    elseif  level == :info           return  Info
-    elseif  level == :warn           return  Warn
-    elseif  level == :error          return  Error
-    elseif  level == :abovemaxlevel  return  AboveMaxLevel
-    else
-        throw(ArgumentError("Unknown log level $level"))
-    end
-end
-
-
-# Global log limiting mechanism for super fast but inflexible global log
-# limiting.
-const _min_enabled_level = Ref(Debug)
-
-
-# A concretely typed cache of data extracted from the logger, plus the logger
-# itself.
-struct LogState
-    min_enabled_level::LogLevel
-    logger::AbstractLogger
-end
-
-LogState(logger) = LogState(LogLevel(min_enabled_level(logger)), logger)
-
 
 #-------------------------------------------------------------------------------
-# Logging macros and frontend
+# Logging macros
 
-# Registry of log record ids for use during compilation, to ensure uniqueness
-# of ids.  Note that this state will only persist during module compilation
-# so it will be empty when a precompiled module is loaded.
+_macro_docs = """
+    @debug message  [key=value | value ...]
+    @info  message  [key=value | value ...]
+    @warn  message  [key=value | value ...]
+    @error message  [key=value | value ...]
+
+    @logmsg level message [key=value | value ...]
+
+Create a log record with an informational `message`.  For convenience, four
+logging macros `@debug`, `@info`, `@warn` and `@error` are defined which log at
+the standard severity levels `Debug`, `Info`, `Warn` and `Error`.  `@logmsg`
+allows `level` to be set programmatically to any `LogLevel` or custom log level
+types.
+
+`message` should be an expression which evaluates to a string which is a human
+readable description of the log event.  By convention, this string will be
+formatted as markdown when presented.
+
+The optional list of `key=value` pairs supports arbitrary user defined
+metadata which will be passed through to the logging backend as part of the
+log record.  If only a `value` expression is supplied, a key representing the
+expression will be generated using `Symbol`. For example, `x` becomes `x=x`,
+and `foo(10)` becomes `Symbol("foo(10)")=foo(10)`.  For splatting a list of
+key value pairs, use the normal splatting syntax, `@info "blah" kws...`.
+
+There are some keys which allow automatically generated log data to be
+overridden:
+
+  * `_module=mod` can be used to specify a different originating module from
+    the source location of the message.
+  * `_group=symbol` can be used to override the message group (this is
+    normally derived from the base name of the source file).
+  * `_id=symbol` can be used to override the automatically generated unique
+    message identifier.  This is useful if you need to very closely associate
+    messages generated on different source lines.
+  * `_file=string` and `_line=integer` can be used to override the apparent
+    source location of a log message.
+
+There's also some key value pairs which have conventional meaning:
+
+  * `progress=fraction` should be used to indicate progress through an
+    algorithmic step named by `message`, it should be a value in the interval
+    [0,1], and would generally be used to drive a progress bar or meter.
+  * `max_log=integer` should be used as a hint to the backend that the message
+    should be displayed no more than `max_log` times.
+  * `exception=ex` should be used to accompany a log message with an exception,
+    as an indication that something went wrong.
+
+# Examples
+
+```
+@debug "Verbose degging information.  Invisible by default"
+@info  "An informational message"
+@warn  "Something was odd.  You should pay attention"
+@error "A non fatal error occurred"
+
+x = 10
+@info "Some variables attached to the message" x a=42.0
+
+@debug begin
+    sA = sum(A)
+    "sum(A) = \$sA is an expensive operation, evaluated only when `shouldlog` returns true"
+end
+
+for i=1:10000
+    @info "With the default backend, you will only see (i = \$i) ten times"  max_log=10
+    @debug "Algorithm1" i progress=i/10000
+end
+```
+"""
+
+# Get (module,filepath,line) for the location of the caller of a macro.
+# Designed to be used from within the body of a macro.
+macro sourceinfo()
+    esc(quote
+        (__module__,
+         __source__.file == nothing ? "?" : String(__source__.file),
+         __source__.line)
+    end)
+end
+
+macro logmsg(level, message, exs...) logmsg_code((@sourceinfo)..., esc(level), message, exs...) end
+macro debug(message, exs...) logmsg_code((@sourceinfo)..., :Debug, message, exs...) end
+macro  info(message, exs...) logmsg_code((@sourceinfo)..., :Info,  message, exs...) end
+macro  warn(message, exs...) logmsg_code((@sourceinfo)..., :Warn,  message, exs...) end
+macro error(message, exs...) logmsg_code((@sourceinfo)..., :Error, message, exs...) end
+
+# Logging macros share documentation
+@eval @doc $_macro_docs :(@logmsg)
+@eval @doc $_macro_docs :(@debug)
+@eval @doc $_macro_docs :(@info)
+@eval @doc $_macro_docs :(@warn)
+@eval @doc $_macro_docs :(@error)
+
 _log_record_ids = Set{Symbol}()
-
 # Generate a unique, stable, short, human readable identifier for a logging
 # statement.  The idea here is to have a key against which log records can be
 # filtered and otherwise manipulated. The key should uniquely identify the
@@ -93,6 +216,10 @@ function log_record_id(_module, level, message_ex)
     h = hash(string(modname, level, message_ex)) % (1<<31)
     while true
         id = Symbol(modname, '_', hex(h, 8))
+        # _log_record_ids is a registry of log record ids for use during
+        # compilation, to ensure uniqueness of ids.  Note that this state will
+        # only persist during module compilation so it will be empty when a
+        # precompiled module is loaded.
         if !(id in _log_record_ids)
             push!(_log_record_ids, id)
             return id
@@ -101,7 +228,7 @@ function log_record_id(_module, level, message_ex)
     end
 end
 
-# Generate code for @logmsg
+# Generate code for logging macros
 function logmsg_code(_module, file, line, level, message, exs...)
     # Generate a unique message id by default
     messagetemplate = string(message)
@@ -174,157 +301,13 @@ function logmsg_code(_module, file, line, level, message, exs...)
     end
 end
 
-# Get (module,filepath,line) for the location of the caller of a macro.
-# Designed to be used from within the body of a macro.
-macro sourceinfo()
-    esc(quote
-        (__module__,
-         __source__.file == nothing ? "?" : String(__source__.file),
-         __source__.line)
-    end)
-end
-
-
-_macro_docs = """
-    @debug message  [key=value | value ...]
-    @info  message  [key=value | value ...]
-    @warn  message  [key=value | value ...]
-    @error message  [key=value | value ...]
-
-    @logmsg level message [key=value | value ...]
-
-Create a log record with an informational `message`.  For convenience, four
-logging macros `@debug`, `@info`, `@warn` and `@error` are defined which log at
-the standard severity levels `Debug`, `Info`, `Warn` and `Error`.  `@logmsg`
-allows `level` to be set programmatically to any `LogLevel` or custom log level
-types.
-
-`message` should be an expression which evaluates to a string which is a human
-readable description of the log event.  By convention, this string will be
-formatted as markdown when presented.
-
-The optional list of `key=value` pairs supports arbitrary user defined
-metadata which will be passed through to the logging backend as part of the
-log record.  If only a `value` expression is supplied, a key representing the
-expression will be generated using `Symbol`. For example, `x` becomes `x=x`,
-and `foo(10)` becomes `Symbol("foo(10)")=foo(10)`.  For splatting a list of
-key value pairs, use the normal splatting syntax, `@info "blah" kws...`.
-
-There are some keys which allow automatically generated log data to be
-overridden:
-
-  * `_module=mod` can be used to specify a different originating module from
-    the source location of the message.
-  * `_group=symbol` can be used to override the message group (this is
-    normally derived from the base name of the source file).
-  * `_id=symbol` can be used to override the automatically generated unique
-    message identifier.  This is useful if you need to very closely associate
-    messages generated on different source lines.
-  * `_file=string` and `_line=integer` can be used to override the apparent
-    source location of a log message.
-
-There's also some key value pairs which have conventional meaning:
-
-  * `progress=fraction` should be used to indicate progress through an
-    algorithmic step named by `message`, it should be a value in the interval
-    [0,1], and would generally be used to drive a progress bar or meter.
-  * `max_log=integer` should be used as a hint to the backend that the message
-    should be displayed no more than `max_log` times.
-  * `exception=ex` should be used to accompany a log message with an exception,
-    as an indication that something went wrong.
-
-
-# Examples
-
-```
-@debug "Verbose degging information.  Invisible by default"
-@info  "An informational message"
-@warn  "Something was odd.  You should pay attention"
-@error "A non fatal error occurred"
-
-x = 10
-@info "Some variables attached to the message" x a=42.0
-
-@debug begin
-    sA = sum(A)
-    "sum(A) = \$sA is an expensive operation, evaluated only when `shouldlog` returns true"
-end
-
-for i=1:10000
-    @info "With the default backend, you will only see (i = \$i) ten times"  max_log=10
-    @debug "Algorithm1" i progress=i/10000
-end
-```
-"""
-
-macro logmsg(level, message, exs...) logmsg_code((@sourceinfo)..., esc(level), message, exs...) end
-macro debug(message, exs...) logmsg_code((@sourceinfo)..., :Debug, message, exs...) end
-macro  info(message, exs...) logmsg_code((@sourceinfo)..., :Info,  message, exs...) end
-macro  warn(message, exs...) logmsg_code((@sourceinfo)..., :Warn,  message, exs...) end
-macro error(message, exs...) logmsg_code((@sourceinfo)..., :Error, message, exs...) end
-
-# Logging macros share the same documentation
-@eval @doc $_macro_docs :(@logmsg)
-@eval @doc $_macro_docs :(@debug)
-@eval @doc $_macro_docs :(@info)
-@eval @doc $_macro_docs :(@warn)
-@eval @doc $_macro_docs :(@error)
-
-
-# Log a message. Called from the julia C code; kwargs is in the format
-# Any[key1,val1, ...] for convenience in construction on the C side.
-function logmsg_thunk(level, message, _module, group, id, file, line, kwargs)
-    real_kws = Any[(kwargs[i],kwargs[i+1]) for i in 1:2:length(kwargs)]
-    @logmsg(convert(LogLevel, level), message,
-            _module=_module, _id=id, _group=group,
-            _file=file, _line=line, real_kws...)
-end
-
-
-"""
-    handle_message(logger, level, message, _module, group, id, file, line; key1=val1, ...)
-
-Log a message to `logger` at `level`.  The logical location at which the
-message was generated is given by module `_module` and `group`; the source
-location by `file` and `line`. `id` is an arbitrary unique `Symbol` to be used
-as a key to identify the log statement when filtering.
-"""
-function handle_message end
-
-
-"""
-    shouldlog(logger, level, _module, group, id)
-
-Return true when `logger` accepts a message at `level`, generated for
-`_module`, `group` and with unique log identifier `id`.
-"""
-shouldlog(::AbstractLogger, args...) = true
-
-
-"""
-    min_enabled_level(logger)
-
-Return the maximum disabled level for `logger` for early filtering.  That is,
-the log level below or equal to which all messages are filtered.
-"""
-min_enabled_level(logger::AbstractLogger) = Info
-
-"""
-    catch_exceptions(logger)
-
-Return true if the logger should catch exceptions which happen during log
-record construction.  By default, messages are caught
-
-By default all exceptions are caught to prevent log message generation from
-crashing the program.  This lets users confidently toggle little-used
-functionality - such as debug logging - in a production system.
-
-If you want to use logging as an audit trail you should disable this for your
-logger type.
-"""
-catch_exceptions(logger::AbstractLogger) = true
-
-function dispatch_message(logger, level, _module, group, id, filepath, line, create_msg)
+# Call the log message creation function, and dispatch the result to `logger`.
+# TODO: Consider some @nospecialize annotations here
+# TODO: The `logger` is loaded from global state and inherently non-inferrable,
+# so it might be nice to sever all back edges from `dispatch_message` to
+# functions which call it. This function should always return `nothing`.
+@noinline function dispatch_message(logger, level, _module, group, id,
+                                    filepath, line, create_msg)
     try
         create_msg(logger, level, _module, group, id, filepath, line)
     catch err
@@ -351,21 +334,102 @@ function dispatch_message(logger, level, _module, group, id, filepath, line, cre
     nothing
 end
 
+# Global log limiting mechanism for super fast but inflexible global log
+# limiting.
+const _min_enabled_level = Ref(Debug)
+
+# LogState - a concretely typed cache of data extracted from the logger, plus
+# the logger itself.
+struct LogState
+    min_enabled_level::LogLevel
+    logger::AbstractLogger
+end
+
+LogState(logger) = LogState(LogLevel(min_enabled_level(logger)), logger)
+
+_global_logstate = LogState(NullLogger()) # See __init__
+
+function current_logstate()
+    get(task_local_storage(), :LOGGER_STATE, _global_logstate)::LogState
+end
+
+function with_logstate(f::Function, logstate)
+    task_local_storage(f, :LOGGER_STATE, logstate)
+end
+
+# Log a message. Called from the julia C code; kwargs is in the format
+# Any[key1,val1, ...] for convenience in construction on the C side.
+function logmsg_thunk(level, message, _module, group, id, file, line, kwargs)
+    real_kws = Any[(kwargs[i],kwargs[i+1]) for i in 1:2:length(kwargs)]
+    @logmsg(convert(LogLevel, level), message,
+            _module=_module, _id=id, _group=group,
+            _file=file, _line=line, real_kws...)
+end
 
 #-------------------------------------------------------------------------------
-# Logger implementations
+# Control of the current logger and early log filtering
+
 """
-    NullLogger()
+    disable_logging(level)
 
-Logger which disables all messages and produces no output
+Disable all log messages at log levels equal to or less than `level`.  This is
+a *global* setting, intended to make debug logging extremely cheap when
+disabled.
 """
-struct NullLogger <: AbstractLogger; end
+function disable_logging(level::LogLevel)
+    _min_enabled_level[] = level + 1
+end
+disable_logging(level) = disable_logging(parse_level(level))
 
-min_enabled_level(::NullLogger) = AboveMaxLevel
-shouldlog(::NullLogger, args...) = false
-handle_message(::NullLogger, args...; kwargs...) = error("Null logger handle_message() should not be called")
+
+"""
+    global_logger()
+
+Return the global logger, used to receive messages when no specific logger
+exists for the current task.
+
+    global_logger(logger)
+
+Set the global logger to `logger`.
+"""
+global_logger() = _global_logstate.logger
+
+function global_logger(logger::AbstractLogger)
+    global _global_logstate = LogState(logger)
+    logger
+end
+
+"""
+    with_logger(function, logger)
+
+Execute `function`, directing all log messages to `logger`.
+
+# Example
+
+```julia
+function test(x)
+    @info "x = \$x"
+end
+
+with_logger(logger) do
+    test(1)
+    test([1,2])
+end
+```
+"""
+with_logger(f::Function, logger::AbstractLogger) = with_logstate(f, LogState(logger))
+
+"""
+    current_logger()
+
+Return the logger for the current task, or the global logger if none is
+is attached to the task.
+"""
+current_logger() = current_logstate().logger
 
 
+#-------------------------------------------------------------------------------
+# SimpleLogger
 """
     SimpleLogger(stream=STDERR, min_level=Info)
 
@@ -393,68 +457,21 @@ end
 
 
 #-------------------------------------------------------------------------------
-# Logger control and lookup
+# Logger configuration
 
-_global_logstate = LogState(NullLogger()) # See __init__
-
-"""
-    global_logger()
-
-Return the global logger, used to receive messages when no specific logger
-exists for the current task.
-
-    global_logger(logger)
-
-Set the global logger to `logger`.
-"""
-global_logger() = _global_logstate.logger
-
-function global_logger(logger::AbstractLogger)
-    global _global_logstate = LogState(logger)
-    logger
+parse_level(level) = level
+parse_level(level::String) = parse_level(Symbol(lowercase(level)))
+function parse_level(level::Symbol)
+    if      level == :belowminlevel  return  BelowMinLevel
+    elseif  level == :debug          return  Debug
+    elseif  level == :info           return  Info
+    elseif  level == :warn           return  Warn
+    elseif  level == :error          return  Error
+    elseif  level == :abovemaxlevel  return  AboveMaxLevel
+    else
+        throw(ArgumentError("Unknown log level $level"))
+    end
 end
-
-function current_logstate()
-    get(task_local_storage(), :LOGGER_STATE, _global_logstate)::LogState
-end
-
-function with_logstate(f::Function, logstate)
-    task_local_storage(f, :LOGGER_STATE, logstate)
-end
-
-
-"""
-    with_logger(function, logger)
-
-Execute `function`, directing all log messages to `logger`.
-
-# Example
-
-```julia
-function test(x)
-    @info "x = \$x"
-end
-
-with_logger(logger) do
-    test(1)
-    test([1,2])
-end
-```
-"""
-with_logger(f::Function, logger::AbstractLogger) =
-    with_logstate(f, LogState(logger))
-
-
-"""
-    current_logger()
-
-Return the logger for the current task, or the global logger if none is
-is attached to the task.
-"""
-current_logger() = current_logstate().logger
-
-
-#-------------------------------------------------------------------------------
 
 """
     configure_logging(args...; kwargs...)
@@ -472,18 +489,8 @@ function configure_logging(args...; kwargs...)
     logger
 end
 
-configure_logging(::AbstractLogger, args...; kwargs...) = throw(ArgumentError("No configure_logging method matches the provided arguments."))
+configure_logging(::AbstractLogger, args...; kwargs...) =
+    throw(ArgumentError("No configure_logging method matches the provided arguments."))
 
-"""
-    disable_logging(level)
-
-Disable all log messages at log levels equal to or less than `level`.  This is
-a *global* setting, intended to make debug logging extremely cheap when
-disabled.
-"""
-function disable_logging(level::LogLevel)
-    _min_enabled_level[] = level + 1
-end
-disable_logging(level) = disable_logging(parse_level(level))
 
 init_logging() = global_logger(SimpleLogger(STDERR))

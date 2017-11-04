@@ -803,14 +803,21 @@ export
     warn,
 
 # logging
-    AbstractLogger, LogLevel,
-    @debug, @info, @warn, @error, @logmsg,
-    with_logger, current_logger, global_logger,
-    disable_logging, configure_logging,
-    # Logger methods
-    handle_message, shouldlog, min_enabled_level,
-    # Loggers
-    NullLogger, SimpleLogger,
+    AbstractLogger,
+    LogLevel,
+    NullLogger,
+    @debug,
+    @info,
+    @warn,
+    @error,
+    @logmsg,
+    with_logger,
+    current_logger,
+    global_logger,
+    disable_logging,
+    # TODO: Stuff for stdlib ?
+    SimpleLogger,
+    configure_logging,
 
 # random numbers
     AbstractRNG,
