@@ -172,9 +172,11 @@ function request(term::Base.Terminals.TTYTerminal, m::AbstractMenu)
             elseif c == 13 # <enter>
                 # will break if pick returns true
                 pick(m, cursor) && break
-            elseif c == UInt32('q') || c == 3 # ctrl-c (cancel)
+            elseif c == UInt32('q')
                 cancel(m)
                 break
+            elseif c == 3 # ctrl-c
+                throw(InterruptException())
             else
                 # will break if keypress returns true
                 keypress(m, c) && break
