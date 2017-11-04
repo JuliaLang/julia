@@ -176,7 +176,12 @@ function request(term::Base.Terminals.TTYTerminal, m::AbstractMenu)
                 cancel(m)
                 break
             elseif c == 3 # ctrl-c
-                throw(InterruptException())
+                cancel(m)
+                if CONFIG[:ctrl_c_interrupt]
+                    throw(InterruptException())
+                else
+                    break
+                end
             else
                 # will break if keypress returns true
                 keypress(m, c) && break
