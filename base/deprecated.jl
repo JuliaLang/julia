@@ -1825,6 +1825,8 @@ function toc()
     return t
 end
 
+@eval Base.SparseArrays @deprecate sparse(s::UniformScaling, m::Integer) sparse(s, m, m)
+
 # A[I...] .= with scalar indices should modify the element at A[I...]
 function Broadcast.dotview(A::AbstractArray, args::Number...)
     depwarn("the behavior of `A[I...] .= X` with scalar indices will change in the future. Use `A[I...] = X` instead.", :broadcast!)
