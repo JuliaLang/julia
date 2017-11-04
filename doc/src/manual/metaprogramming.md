@@ -314,7 +314,7 @@ equivalent of `eval(eval(:x))`.
 The usual representation of a `quote` form in an AST is an `Expr` with head `:quote`:
 
 ```jldoctest interp1
-julia> dump(parse(":(1+2)"))
+julia> dump(Meta.parse(":(1+2)"))
 Expr
   head: Symbol quote
   args: Array{Any}((1,))
@@ -335,7 +335,7 @@ as an object of type `QuoteNode`.
 The parser yields `QuoteNode`s for simple quoted items like symbols:
 
 ```jldoctest interp1
-julia> dump(parse(":x"))
+julia> dump(Meta.parse(":x"))
 QuoteNode
   value: Symbol x
 ```
