@@ -638,3 +638,11 @@ function last(str::AbstractString, nchar::Integer)
     end
     str[prevind(str, e, nchar-1):e]
 end
+
+# reverse-order iteration for strings and indices thereof
+start(r::Iterators.Reverse{<:AbstractString}) = endof(r.itr)
+done(r::Iterators.Reverse{<:AbstractString}, i) = i < start(r.itr)
+next(r::Iterators.Reverse{<:AbstractString}, i) = (r.itr[i], prevind(r.itr, i))
+start(r::Iterators.Reverse{<:EachStringIndex}) = endof(r.itr.s)
+done(r::Iterators.Reverse{<:EachStringIndex}, i) = i < start(r.itr.s)
+next(r::Iterators.Reverse{<:EachStringIndex}, i) = (i, prevind(r.itr.s, i))

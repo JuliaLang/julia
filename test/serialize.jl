@@ -31,6 +31,24 @@ create_serialization_stream() do s
     @test data[end] == UInt8(Serializer.sertag(Symbol))
 end
 
+# SubString
+
+create_serialization_stream() do s
+    ss = Any[SubString("12345", 2, 4),
+             SubString(GenericString("12345"), 2, 4),
+             SubString(s"12345", 2, 4),
+             SubString(GenericString(s"12345"), 2, 4),]
+    for x in ss
+        serialize(s, x)
+    end
+    seek(s, 0)
+    for x in ss
+        y = deserialize(s)
+        @test x == y
+        @test typeof(x) == typeof(y)
+    end
+end
+
 # Boolean & Empty & Nothing
 create_serialization_stream() do s
     serialize(s, true)

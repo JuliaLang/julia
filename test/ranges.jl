@@ -369,10 +369,10 @@ end
         @test !(π in 1.0:3.0)
         @test !("a" in 1:3)
         @test !("a" in 1.0:3.0)
-        @test !(1 in Date(2017, 01, 01):Date(2017, 01, 05))
-        @test !(Complex(1, 0) in Date(2017, 01, 01):Date(2017, 01, 05))
-        @test !(π in Date(2017, 01, 01):Date(2017, 01, 05))
-        @test !("a" in Date(2017, 01, 01):Date(2017, 01, 05))
+        @test !(1 in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+        @test !(Complex(1, 0) in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+        @test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+        @test !("a" in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
     end
 end
 @testset "indexing range with empty range (#4309)" begin

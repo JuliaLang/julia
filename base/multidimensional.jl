@@ -9,6 +9,7 @@ module IteratorsMD
     import Base: +, -, *
     import Base: simd_outer_range, simd_inner_length, simd_index
     using Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
+    using Base.Iterators: Reverse
 
     export CartesianIndex, CartesianRange
 
@@ -146,6 +147,11 @@ module IteratorsMD
         _, ni = next(CartesianRange(indices(a)), i)
         return ni
     end
+
+    # Iteration over the elements of CartesianIndex cannot be supported until its length can be inferred,
+    # see #23719
+    Base.start(::CartesianIndex) =
+        error("iteration is deliberately unsupported for CartesianIndex. Use `I` rather than `I...`, or use `Tuple(I)...`")
 
     # Iteration
     """
@@ -314,6 +320,33 @@ module IteratorsMD
         i, j = split(R.indices, V)
         CartesianRange(i), CartesianRange(j)
     end
+
+    # reversed CartesianRange iteration
+    @inline function start(r::Reverse{<:CartesianRange})
+        iterfirst, iterlast = last(r.itr), first(r.itr)
+        if any(map(<, iterfirst.I, iterlast.I))
+            return iterlast-1
+        end
+        iterfirst
+    end
+    @inline function next(r::Reverse{<:CartesianRange}, state)
+        state, CartesianIndex(dec(state.I, last(r.itr).I, first(r.itr).I))
+    end
+    # decrement & carry
+    @inline dec(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
+    @inline dec(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int}) = (state[1]-1,)
+    @inline function dec(state, start, stop)
+        if state[1] > stop[1]
+            return (state[1]-1,tail(state)...)
+        end
+        newtail = dec(tail(state), tail(start), tail(stop))
+        (start[1], newtail...)
+    end
+    @inline done(r::Reverse{<:CartesianRange}, state) = state.I[end] < first(r.itr.indices[end])
+    # 0-d cartesian ranges are special-cased to iterate once and only once
+    start(iter::Reverse{<:CartesianRange{0}}) = false
+    next(iter::Reverse{<:CartesianRange{0}}, state) = CartesianIndex(), true
+    done(iter::Reverse{<:CartesianRange{0}}, state) = state
 end  # IteratorsMD
 
 

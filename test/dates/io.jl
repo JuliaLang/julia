@@ -327,7 +327,7 @@ end
 @testset "formerly vectorized Date/DateTime/format methods" begin
     dr = ["2000-01-01", "2000-01-02", "2000-01-03", "2000-01-04", "2000-01-05",
           "2000-01-06", "2000-01-07", "2000-01-08", "2000-01-09", "2000-01-10"]
-    dr2 = [Dates.Date(2000) : Dates.Date(2000, 1, 10);]
+    dr2 = [Dates.Date(2000) : Dates.Day(1) : Dates.Date(2000, 1, 10);]
     @test Dates.Date.(dr) == dr2
     @test Dates.Date.(dr, dateformat"yyyy-mm-dd") == dr2
     @test Dates.DateTime.(dr) == Dates.DateTime.(dr2)

@@ -81,12 +81,8 @@ julia> @macroexpand Base.Cartesian.@nref 3 A i
 :(A[i_1, i_2, i_3])
 ```
 """
-macro nref(N, A, sym)
-    _nref(N, A, sym)
-end
-
-function _nref(N::Int, A::Symbol, ex)
-    vars = [ inlineanonymous(ex,i) for i = 1:N ]
+macro nref(N::Int, A::Symbol, ex)
+    vars = Any[ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:ref, A, vars...))
 end
 
@@ -105,14 +101,10 @@ while `@ncall 2 func a b i->c[i]` yields
     func(a, b, c[1], c[2])
 
 """
-macro ncall(N, f, sym...)
-    _ncall(N, f, sym...)
-end
-
-function _ncall(N::Int, f, args...)
+macro ncall(N::Int, f, args...)
     pre = args[1:end-1]
     ex = args[end]
-    vars = [ inlineanonymous(ex,i) for i = 1:N ]
+    vars = Any[ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:call, f, pre..., vars...))
 end
 
@@ -132,12 +124,8 @@ quote
 end
 ```
 """
-macro nexprs(N, ex)
-    _nexprs(N, ex)
-end
-
-function _nexprs(N::Int, ex::Expr)
-    exs = [ inlineanonymous(ex,i) for i = 1:N ]
+macro nexprs(N::Int, ex::Expr)
+    exs = Any[ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:block, exs...))
 end
 
@@ -159,17 +147,13 @@ while `@nextract 3 x d->y[2d-1]` yields
     x_3 = y[5]
 
 """
-macro nextract(N, esym, isym)
-    _nextract(N, esym, isym)
-end
-
-function _nextract(N::Int, esym::Symbol, isym::Symbol)
-    aexprs = [Expr(:escape, Expr(:(=), inlineanonymous(esym, i), :(($isym)[$i]))) for i = 1:N]
+macro nextract(N::Int, esym::Symbol, isym::Symbol)
+    aexprs = Any[ Expr(:escape, Expr(:(=), inlineanonymous(esym, i), :(($isym)[$i]))) for i = 1:N ]
     Expr(:block, aexprs...)
 end
 
-function _nextract(N::Int, esym::Symbol, ex::Expr)
-    aexprs = [Expr(:escape, Expr(:(=), inlineanonymous(esym, i), inlineanonymous(ex,i))) for i = 1:N]
+macro nextract(N::Int, esym::Symbol, ex::Expr)
+    aexprs = Any[ Expr(:escape, Expr(:(=), inlineanonymous(esym, i), inlineanonymous(ex,i))) for i = 1:N ]
     Expr(:block, aexprs...)
 end
 
@@ -182,15 +166,11 @@ evaluate to `true`.
 `@nall 3 d->(i_d > 1)` would generate the expression `(i_1 > 1 && i_2 > 1 && i_3 > 1)`. This
 can be convenient for bounds-checking.
 """
-macro nall(N, criterion)
-    _nall(N, criterion)
-end
-
-function _nall(N::Int, criterion::Expr)
+macro nall(N::Int, criterion::Expr)
     if criterion.head != :->
         throw(ArgumentError("second argument must be an anonymous function expression yielding the criterion"))
     end
-    conds = [Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N]
+    conds = Any[ Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N ]
     Expr(:&&, conds...)
 end
 
@@ -202,15 +182,11 @@ evaluate to `true`.
 
 `@nany 3 d->(i_d > 1)` would generate the expression `(i_1 > 1 || i_2 > 1 || i_3 > 1)`.
 """
-macro nany(N, criterion)
-    _nany(N, criterion)
-end
-
-function _nany(N::Int, criterion::Expr)
+macro nany(N::Int, criterion::Expr)
     if criterion.head != :->
         error("Second argument must be an anonymous function expression yielding the criterion")
     end
-    conds = [Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N]
+    conds = Any[ Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N ]
     Expr(:||, conds...)
 end
 
@@ -220,12 +196,8 @@ end
 Generates an `N`-tuple. `@ntuple 2 i` would generate `(i_1, i_2)`, and `@ntuple 2 k->k+1`
 would generate `(2,3)`.
 """
-macro ntuple(N, ex)
-    _ntuple(N, ex)
-end
-
-function _ntuple(N::Int, ex)
-    vars = [ inlineanonymous(ex,i) for i = 1:N ]
+macro ntuple(N::Int, ex)
+    vars = Any[ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:tuple, vars...))
 end
 
