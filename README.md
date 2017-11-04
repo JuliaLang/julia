@@ -211,6 +211,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `isleaftype` is now `isconcrete` ([#23666])
 
+* `IntSet` is now `BitSet` ([#24282])
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -343,4 +345,5 @@ includes this fix. Find the minimum version from there.
 [#23666]: https://github.com/JuliaLang/julia/issues/23666
 [#23812]: https://github.com/JuliaLang/julia/issues/23812
 [#23931]: https://github.com/JuliaLang/julia/issues/23931
+[#24282]: https://github.com/JuliaLang/julia/issues/24282
 [#22512]: https://github.com/JuliaLang/julia/issues/22532

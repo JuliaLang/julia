@@ -709,6 +709,12 @@ if VERSION < v"0.7.0-DEV.912"
     (*)(s1::Union{Char,AbstractString}, ss::Union{Char,AbstractString}...) = string(s1, ss...)
 end
 
+# 0.7.0-DEV.2318
+@static if !isdefined(Base, :BitSet)
+    const BitSet = IntSet
+    export BitSet
+end
+
 include("deprecated.jl")
 
 end # module Compat

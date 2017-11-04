@@ -850,6 +850,9 @@ end
 # 0.7
 @test 'a'*"b" == "a"*'b' == 'a'*'b' == "ab"
 
+# 0.7
+@test 1 in BitSet(1:10)
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end
