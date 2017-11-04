@@ -668,6 +668,29 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
     return NULL;
 }
 
+jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam)
+{
+    jl_code_info_t *src = (jl_code_info_t*)lam->inferred;
+    JL_GC_PUSH1(&src);
+    if (!src || (jl_value_t*)src == jl_nothing) {
+        if (lam->def.method->source) {
+            src = (jl_code_info_t*)lam->def.method->source;
+        }
+        else {
+            assert(lam->def.method->generator);
+            src = jl_code_for_staged(lam);
+        }
+    }
+    if (src && (jl_value_t*)src != jl_nothing) {
+        src = jl_uncompress_ast(lam->def.method, (jl_array_t*)src);
+    }
+    if (!src || !jl_is_code_info(src)) {
+        jl_error("source missing for method called in interpreter");
+    }
+    JL_GC_POP();
+    return src;
+}
+
 struct jl_interpret_call_args {
     jl_method_instance_t *lam;
     jl_value_t **args;
@@ -678,26 +701,9 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, 
 {
     struct jl_interpret_call_args *args =
         (struct jl_interpret_call_args *)vargs;
-    jl_code_info_t *src = (jl_code_info_t*)args->lam->inferred;
-    if (!src || (jl_value_t*)src == jl_nothing) {
-        if (args->lam->def.method->source) {
-            src = (jl_code_info_t*)args->lam->def.method->source;
-        }
-        else {
-            assert(args->lam->def.method->generator);
-            src = jl_code_for_staged(args->lam);
-            args->lam->inferred = (jl_value_t*)src;
-            jl_gc_wb(args->lam, src);
-        }
-    }
-    if (src && (jl_value_t*)src != jl_nothing) {
-        src = jl_uncompress_ast(args->lam->def.method, (jl_array_t*)src);
-        args->lam->inferred = (jl_value_t*)src;
-        jl_gc_wb(args->lam, src);
-    }
-    if (!src || !jl_is_code_info(src)) {
-        jl_error("source missing for method called in interpreter");
-    }
+    jl_code_info_t *src = jl_code_for_interpreter(args->lam);
+    args->lam->inferred = (jl_value_t*)src;
+    jl_gc_wb(args->lam, src);
 
     jl_array_t *stmts = src->code;
     assert(jl_typeis(stmts, jl_array_any_type));

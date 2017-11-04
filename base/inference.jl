@@ -3692,7 +3692,8 @@ function finish(me::InferenceState)
             end
         end
 
-        if !already_inferred
+        # don't store inferred code if we've decided to interpret this function
+        if !already_inferred && me.linfo.jlcall_api != 4
             const_flags = (me.const_ret) << 1 | me.const_api
             if me.const_ret
                 if isa(me.bestguess, Const)
