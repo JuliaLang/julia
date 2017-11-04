@@ -1156,4 +1156,3 @@ end
 @test Meta.parse("2e-3_") == Expr(:call, :*, 2e-3, :_)
 @test Meta.parse("2e3_\"x\"") == Expr(:call, :*, 2e3, Expr(:macrocall, Symbol("@__str"), LineNumberNode(1, :none), "x"))
 
-# test meta-expressions that annotate blocks of code
