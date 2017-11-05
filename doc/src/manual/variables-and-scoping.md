@@ -246,8 +246,7 @@ julia> x, y # verify that global x and y are unchanged
 ```
 
 The reason to allow *modifying local* variables of parent scopes in
-nested functions is to allow constructing `closures
-<https://en.wikipedia.org/wiki/Closure_%28computer_programming%29>`_
+nested functions is to allow constructing [`closures`](https://en.wikipedia.org/wiki/Closure_%28computer_programming%29)
 which have a private state, for instance the ``state`` variable in the
 following example:
 
