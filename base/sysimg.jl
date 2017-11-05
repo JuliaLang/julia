@@ -442,7 +442,7 @@ isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
 function __init__()
     # Base library init
     reinit_stdio()
-    init_logging()
+    global_logger(SimpleLogger(STDERR))
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_load_path()
