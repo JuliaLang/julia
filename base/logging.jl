@@ -1,7 +1,3 @@
-using Compat
-using FastClosures
-import Base: isless, +, -, convert, show
-
 #-------------------------------------------------------------------------------
 # The AbstractLogger interface
 """
@@ -27,7 +23,7 @@ function handle_message end
 Return true when `logger` accepts a message at `level`, generated for
 `_module`, `group` and with unique log identifier `id`.
 """
-shouldlog(::AbstractLogger, args...) = true
+shouldlog(logger, level, _module, group, id) = true
 
 """
     min_enabled_level(logger)
@@ -35,7 +31,7 @@ shouldlog(::AbstractLogger, args...) = true
 Return the maximum disabled level for `logger` for early filtering.  That is,
 the log level below or equal to which all messages are filtered.
 """
-min_enabled_level(logger::AbstractLogger) = Info
+min_enabled_level(logger) = Info
 
 """
     catch_exceptions(logger)
@@ -50,7 +46,7 @@ functionality - such as debug logging - in a production system.
 If you want to use logging as an audit trail you should disable this for your
 logger type.
 """
-catch_exceptions(logger::AbstractLogger) = true
+catch_exceptions(logger) = true
 
 
 # The logger equivalent of /dev/null, for when a placeholder is needed
@@ -112,7 +108,7 @@ end
 #-------------------------------------------------------------------------------
 # Logging macros
 
-_macro_docs = """
+_logmsg_docs = """
     @debug message  [key=value | value ...]
     @info  message  [key=value | value ...]
     @warn  message  [key=value | value ...]
@@ -155,10 +151,14 @@ There's also some key value pairs which have conventional meaning:
   * `progress=fraction` should be used to indicate progress through an
     algorithmic step named by `message`, it should be a value in the interval
     [0,1], and would generally be used to drive a progress bar or meter.
-  * `max_log=integer` should be used as a hint to the backend that the message
-    should be displayed no more than `max_log` times.
-  * `exception=ex` should be used to accompany a log message with an exception,
-    as an indication that something went wrong.
+  * `maxlog=integer` should be used as a hint to the backend that the message
+    should be displayed no more than `maxlog` times.
+  * `exception=ex` should be used to transport an exception with a log message,
+    often used with `@error`. `AbstractLoggers` should assume that the
+    associated backtrace can be obtained from `catch_backtrace()`. If the log
+    message is emitted outside the catch block which generated `ex`, an
+    associated backtrace `bt` may be attached explicitly using
+    `exception=(ex,bt)`.
 
 # Examples
 
@@ -177,7 +177,7 @@ x = 10
 end
 
 for i=1:10000
-    @info "With the default backend, you will only see (i = \$i) ten times"  max_log=10
+    @info "With the default backend, you will only see (i = \$i) ten times"  maxlog=10
     @debug "Algorithm1" i progress=i/10000
 end
 ```
@@ -185,38 +185,26 @@ end
 
 # Get (module,filepath,line) for the location of the caller of a macro.
 # Designed to be used from within the body of a macro.
-macro sourceinfo()
-    @static if Compat.macros_have_sourceloc
-        esc(quote
-            (__module__,
-             __source__.file == nothing ? "?" : String(__source__.file),
-             __source__.line)
-        end)
-    else
-        # For julia-0.6 and below, the above doesn't work, and the
-        # following dubious hack gives an approximate line number only
-        # - the line of the start of the current toplevel expression!
-        # See #1.
-        esc(quote
-            (current_module(),
-             (p = Base.source_path(); p == nothing ? "REPL" : p),
-             Int(unsafe_load(cglobal(:jl_lineno, Cint))))
-        end)
-    end
+macro _sourceinfo()
+    esc(quote
+        (__module__,
+         __source__.file == nothing ? "?" : String(__source__.file),
+         __source__.line)
+    end)
 end
 
-macro logmsg(level, message, exs...) logmsg_code((@sourceinfo)..., esc(level), message, exs...) end
-macro debug(message, exs...) logmsg_code((@sourceinfo)..., :Debug, message, exs...) end
-macro  info(message, exs...) logmsg_code((@sourceinfo)..., :Info,  message, exs...) end
-macro  warn(message, exs...) logmsg_code((@sourceinfo)..., :Warn,  message, exs...) end
-macro error(message, exs...) logmsg_code((@sourceinfo)..., :Error, message, exs...) end
+macro logmsg(level, message, exs...) logmsg_code((@_sourceinfo)..., esc(level), message, exs...) end
+macro debug(message, exs...) logmsg_code((@_sourceinfo)..., :Debug, message, exs...) end
+macro  info(message, exs...) logmsg_code((@_sourceinfo)..., :Info,  message, exs...) end
+macro  warn(message, exs...) logmsg_code((@_sourceinfo)..., :Warn,  message, exs...) end
+macro error(message, exs...) logmsg_code((@_sourceinfo)..., :Error, message, exs...) end
 
 # Logging macros share documentation
-@eval @doc $_macro_docs :(@logmsg)
-@eval @doc $_macro_docs :(@debug)
-@eval @doc $_macro_docs :(@info)
-@eval @doc $_macro_docs :(@warn)
-@eval @doc $_macro_docs :(@error)
+@eval @doc $_logmsg_docs :(@logmsg)
+@eval @doc $_logmsg_docs :(@debug)
+@eval @doc $_logmsg_docs :(@info)
+@eval @doc $_logmsg_docs :(@warn)
+@eval @doc $_logmsg_docs :(@error)
 
 _log_record_ids = Set{Symbol}()
 # Generate a unique, stable, short, human readable identifier for a logging
@@ -227,9 +215,6 @@ _log_record_ids = Set{Symbol}()
 # itself doesn't change.
 function log_record_id(_module, level, message_ex)
     modname = join(fullname(_module), "_")
-    if VERSION < v"0.7.0-DEV.1877" && isempty(modname)
-        modname = "Main"
-    end
     # Use (1<<31) to fit well within an (arbitriraly chosen) eight hex digits,
     # as we increment h to resolve any collisions.
     h = hash(string(modname, level, message_ex)) % (1<<31)
@@ -249,10 +234,8 @@ end
 
 # Generate code for logging macros
 function logmsg_code(_module, file, line, level, message, exs...)
-    # Generate a unique message id by default
-    messagetemplate = string(message)
-    id = Expr(:quote, log_record_id(_module, level, messagetemplate))
-    group = Expr(:quote, Symbol(splitext(basename(file))[1]))
+    id = nothing
+    group = nothing
     kwargs = Any[]
     for ex in exs
         if ex isa Expr && ex.head === :(=) && ex.args[1] isa Symbol
@@ -291,6 +274,9 @@ function logmsg_code(_module, file, line, level, message, exs...)
             push!(kwargs, Expr(:kw, Symbol(ex), esc(ex)))
         end
     end
+    # Note that it may be necessary to set `id` and `group` manually during bootstrap
+    id !== nothing || (id = Expr(:quote, log_record_id(_module, level, exs)))
+    group !== nothing || (group = Expr(:quote, Symbol(splitext(basename(file))[1])))
     quote
         level = $level
         std_level = convert(LogLevel, level)
@@ -306,9 +292,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 if shouldlog(logger, level, _module, group, id)
                     # Bind log record generation into a closure, allowing us to
                     # defer creation of the records until after filtering.
-                    #
-                    # Use FastClosures.@closure to work around https://github.com/JuliaLang/julia/issues/15276
-                    create_msg = @closure function cm(logger, level, _module, group, id, file, line)
+                    create_msg = function cm(logger, level, _module, group, id, file, line)
                         msg = $(esc(message))
                         handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
                     end
@@ -392,7 +376,6 @@ disabled.
 function disable_logging(level::LogLevel)
     _min_enabled_level[] = level + 1
 end
-disable_logging(level) = disable_logging(parse_level(level))
 
 
 """
@@ -452,24 +435,41 @@ Simplistic logger for logging all messages with level greater than or equal to
 struct SimpleLogger <: AbstractLogger
     stream::IO
     min_level::LogLevel
+    message_limits::Dict{Any,Int}
 end
-SimpleLogger(stream::IO=STDERR, level=Info) = SimpleLogger(stream, level)
+SimpleLogger(stream::IO=STDERR, level=Info) = SimpleLogger(stream, level, Dict{Any,Int}())
 
-shouldlog(logger::SimpleLogger, level, args...) = !(level < logger.min_level)
+shouldlog(logger::SimpleLogger, level, _module, group, id) =
+    get(logger.message_limits, id, 1) > 0
 
 min_enabled_level(logger::SimpleLogger) = logger.min_level
 
 function handle_message(logger::SimpleLogger, level, message, _module, group, id,
-                        filepath, line; kwargs...)
+                        filepath, line; maxlog=nothing, kwargs...)
+    # TODO: Factor out more complex things here into a separate logger in
+    # stdlib: in particular maxlog support + colorization.
+    if maxlog != nothing && maxlog isa Integer
+        remaining = get!(logger.message_limits, id, maxlog)
+        logger.message_limits[id] = remaining - 1
+        remaining > 0 || return
+    end
     levelstr = string(level)
     color = level < Info  ? :blue :
             level < Warn  ? :cyan :
             level < Error ? :yellow : :red
-    print_with_color(color, logger.stream, first(levelstr), "- ", bold=true)
-    print(logger.stream, replace(message, '\n', "\n|  "))
-    println(logger.stream, " -", levelstr, ":", _module, ":", basename(filepath), ":", line)
-    for (key,val) in kwargs
-        println(logger.stream, "|  ", key, " = ", val)
+    buf = IOBuffer()
+    print_with_color(color, buf, first(levelstr), "- ", bold=true)
+    msglines = split(string(message), '\n')
+    for i in 1:length(msglines)-1
+        println(buf, msglines[i])
+        print_with_color(color, buf, "|  ", bold=true)
     end
+    println(buf, msglines[end], " -", levelstr, ":", _module, ":", basename(filepath), ":", line)
+    for (key,val) in pairs(kwargs)
+        print_with_color(color, buf, "|  ", bold=true)
+        println(buf, key, " = ", val)
+    end
+    write(logger.stream, take!(buf))
+    nothing
 end
 
