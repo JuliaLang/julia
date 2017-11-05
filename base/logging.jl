@@ -1,3 +1,22 @@
+module CoreLogging
+
+import Base: isless, +, -, convert, show
+
+export
+    AbstractLogger,
+    LogLevel,
+    NullLogger,
+    @debug,
+    @info,
+    @warn,
+    @error,
+    @logmsg,
+    with_logger,
+    current_logger,
+    global_logger,
+    disable_logging,
+    SimpleLogger
+
 #-------------------------------------------------------------------------------
 # The AbstractLogger interface
 """
@@ -163,7 +182,7 @@ There's also some key value pairs which have conventional meaning:
 # Examples
 
 ```
-@debug "Verbose degging information.  Invisible by default"
+@debug "Verbose debugging information.  Invisible by default"
 @info  "An informational message"
 @warn  "Something was odd.  You should pay attention"
 @error "A non fatal error occurred"
@@ -473,3 +492,4 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
     nothing
 end
 
+end # CoreLogging

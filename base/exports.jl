@@ -769,6 +769,12 @@ export
     unescape_string,
     warn,
 
+# logging frontend
+    @debug,
+    @info,
+    @warn,
+    @error,
+
 # random numbers
     AbstractRNG,
     MersenneTwister,
