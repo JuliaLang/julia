@@ -413,8 +413,8 @@ function showerror(io::IO, ex::MethodError)
     end
     try
         show_method_candidates(io, ex, kwargs)
-    catch
-        warn(io, "Error showing method candidates, aborted")
+    catch ex
+        @error "Error showing method candidates, aborted" exception=ex
     end
 end
 

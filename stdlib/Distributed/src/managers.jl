@@ -232,11 +232,11 @@ function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symb
             host = get(config.host)
             sshflags = get(config.sshflags)
             if !success(`ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host "kill -2 $ospid"`)
-                warn(STDERR,"error sending a Ctrl-C to julia worker $id on $host")
+                @error "Error sending a Ctrl-C to julia worker $id on $host"
             end
         else
             # This state can happen immediately after an addprocs
-            warn(STDERR,"worker $id cannot be presently interrupted.")
+            @error "Worker $id cannot be presently interrupted."
         end
     end
 end
@@ -472,7 +472,7 @@ function socket_reuse_port()
         rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)
         if rc < 0
             # This is an issue only on systems with lots of client connections, hence delay the warning
-            nworkers() > 128 && warn_once("Error trying to reuse client port number, falling back to regular socket.")
+            nworkers() > 128 && @warn "Error trying to reuse client port number, falling back to regular socket" maxlog=1
 
             # provide a clean new socket
             return TCPSocket()

@@ -14,8 +14,8 @@ FooBase_module = :FooBase4b3a94a1a081a8cb
 end
 using .ConflictingBindings
 
-# this environment variable would affect some error messages being tested below
-# so we disable it for the tests below
+# FIXME: withenv() is a leftover from previous tests.  Oddly, one test below
+# fails without it, in a mysterious way.
 withenv( "JULIA_DEBUG_LOADING" => nothing ) do
 
 dir = mktempdir()
@@ -174,7 +174,7 @@ try
     cachefile = joinpath(dir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
-    @test_warn "WARNING: replacing module $Foo_module." begin
+    @test_logs (:warn,"Replacing module `$Foo_module`") begin
         ms = Base._require_from_serialized(Foo_module, cachefile)
         @test isa(ms, Array{Any,1})
         Base.register_all(ms)
@@ -219,7 +219,7 @@ try
                                # plus modules included in the system image
                                Dict(s => Base.module_uuid(Base.root_module(s)) for s in
                                     [:Base64, :CRC32c, :Dates, :DelimitedFiles, :FileWatching,
-                                     :IterativeEigenSolvers, :Mmap, :Profile, :SharedArrays,
+                                     :IterativeEigenSolvers, :Logging, :Mmap, :Profile, :SharedArrays,
                                      :SuiteSparse, :Test, :Unicode, :Distributed]))
         @test discard_module.(deps) == deps1
 
@@ -477,7 +477,7 @@ let dir = mktempdir()
         let fname = tempname()
             try
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                @test Test.ismatch_warn("WARNING: replacing module $Test_module.\n", read(fname, String))
+                @test ismatch(Regex("Replacing module `$Test_module`"), read(fname, String))
             finally
                 rm(fname, force=true)
             end
@@ -623,4 +623,4 @@ let
     end
 end
 
-end # !withenv
+end

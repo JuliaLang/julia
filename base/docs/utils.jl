@@ -385,7 +385,7 @@ function docsearch(haystack::Array, needle)
     false
 end
 function docsearch(haystack, needle)
-    Base.warn_once("unable to search documentation of type $(typeof(haystack))")
+    @warn "Unable to search documentation of type $(typeof(haystack))" maxlog=1
     false
 end
 
