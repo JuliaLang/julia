@@ -333,15 +333,6 @@ Determine whether a stream is read-only.
 isreadonly(s) = isreadable(s) && !iswritable(s)
 
 ## binary I/O ##
-
-function write(io::IO, x::T) where T
-    if isbits(T)
-        unsafe_write(io, Ref(x), sizeof(T))
-    else
-        throw(MethodError(write, (io, x)))
-    end
-end
-
 function write(io::IO, xs...)
     local written::Int = 0
     for x in xs
@@ -355,12 +346,16 @@ end
 unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
 write(s::IO, x::Ref{T}) where {T} = unsafe_write(s, x, Core.sizeof(T))
 write(s::IO, x::Int8) = write(s, reinterpret(UInt8, x))
-function write(s::IO, x::Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64})
-    return write(s, Ref(x))
-end
-
 write(s::IO, x::Bool) = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
+
+function write(io::IO, x::T) where T
+    if isbits(T)
+        write(io, Ref(x))
+    else
+        throw(MethodError(write, (io, x)))
+    end
+end
 
 function write(s::IO, A::AbstractArray)
     if !isbits(eltype(A))
