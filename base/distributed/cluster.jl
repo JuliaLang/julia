@@ -274,33 +274,40 @@ function read_worker_host_port(io::IO)
     # as an error.
 
     ntries = 1000
-    while ntries > 0
-        readtask = @schedule readline(io)
-        yield()
-        while !istaskdone(readtask) && ((time() - t0) < timeout)
-            sleep(0.05)
-        end
-        !istaskdone(readtask) && break
+    leader = String[]
+    try
+        while ntries > 0
+            readtask = @schedule readline(io)
+            yield()
+            while !istaskdone(readtask) && ((time() - t0) < timeout)
+                sleep(0.05)
+            end
+            !istaskdone(readtask) && break
 
-        conninfo = wait(readtask)
-        if isempty(conninfo) && !isopen(io)
-            error("Unable to read host:port string from worker. Launch command exited with error?")
-        end
+            conninfo = wait(readtask)
+            if isempty(conninfo) && !isopen(io)
+                error("Unable to read host:port string from worker. Launch command exited with error?")
+            end
 
-        ntries -= 1
-        bind_addr, port = parse_connection_info(conninfo)
-        if !isempty(bind_addr)
-            return bind_addr, port
-        end
+            ntries -= 1
+            bind_addr, port = parse_connection_info(conninfo)
+            if !isempty(bind_addr)
+                return bind_addr, port
+            end
 
-        # TODO: Identify root cause and report a better actionable error.
-        # Also print unmatched lines?
-    end
-    close(io)
-    if ntries > 0
-        error("Timed out waiting to read host:port string from worker.")
-    else
-        error("Unexpected output from worker launch command. Host:port string not found.")
+            # collect unmatched lines
+            push!(leader, conninfo)
+        end
+        close(io)
+        if ntries > 0
+            error("Timed out waiting to read host:port string from worker.")
+        else
+            error("Unexpected output from worker launch command. Host:port string not found.")
+        end
+    finally
+        for line in leader
+            println("\tFrom failed worker startup:\t", line)
+        end
     end
 end
 
