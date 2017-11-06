@@ -81,8 +81,8 @@ function _depwarn(msg, opts, bt, caller)
     end
 end
 
-firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol) = firstcaller(bt, (funcsym,))
-function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
+firstcaller(bt::Vector, funcsym::Symbol) = firstcaller(bt, (funcsym,))
+function firstcaller(bt::Vector, funcsyms)
     # Identify the calling line
     found = false
     lkup = StackTraces.UNKNOWN

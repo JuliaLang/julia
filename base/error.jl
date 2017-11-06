@@ -53,16 +53,50 @@ the current exception (if called within a `catch` block).
 rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 
+struct InterpreterIP
+    code::Union{CodeInfo,Core.MethodInstance,Void}
+    stmt::Csize_t
+end
+
+# convert dual arrays (ips, interpreter_frames) to a single array of locations
+function _reformat_bt(bt, bt2)
+    ret = Array{Union{InterpreterIP,Ptr{Void}},1}()
+    i, j = 1, 1
+    while i <= length(bt)
+        ip = bt[i]::Ptr{Void}
+        if ip == Ptr{Void}(-1%UInt)
+            # The next one is really a CodeInfo
+            push!(ret, InterpreterIP(
+                bt2[j],
+                bt[i+2]))
+            j += 1
+            i += 3
+        else
+            push!(ret, Ptr{Void}(ip))
+            i += 1
+        end
+    end
+    ret
+end
+
 """
     backtrace()
 
 Get a backtrace object for the current program point.
 """
-backtrace() = ccall(:jl_backtrace_from_here, Array{Ptr{Void},1}, (Int32,), false)
-
-struct InterpreterIP
-    code::CodeInfo
-    stmt::Csize_t
+function backtrace()
+    bt, bt2 = ccall(:jl_backtrace_from_here, Any, (Int32,), false)
+    if length(bt) > 2
+        # remove frames for jl_backtrace_from_here and backtrace()
+        if bt[2] == Ptr{Void}(-1%UInt)
+            # backtrace() is interpreted
+            deleteat!(bt, 1:3)
+            unshift!(bt2)
+        else
+            deleteat!(bt, 1:2)
+        end
+    end
+    return _reformat_bt(bt, bt2)
 end
 
 """
@@ -74,23 +108,7 @@ function catch_backtrace()
     bt = Ref{Any}(nothing)
     bt2 = Ref{Any}(nothing)
     ccall(:jl_get_backtrace, Void, (Ref{Any}, Ref{Any}), bt, bt2)
-    ret = Array{Union{InterpreterIP,Ptr{Void}},1}()
-    i, j = 1, 1
-    while i <= length(bt[])
-        ip = bt[][i]::Ptr{Void}
-        if ip == Ptr{Void}(-1%UInt)
-            # The next one is really a CodeInfo
-            push!(ret, InterpreterIP(
-                bt2[][j],
-                bt[][i+2]))
-            j += 1
-            i += 3
-        else
-            push!(ret, Ptr{Void}(ip))
-            i += 1
-        end
-    end
-    ret
+    return _reformat_bt(bt[], bt2[])
 end
 
 ## keyword arg lowering generates calls to this ##

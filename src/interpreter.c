@@ -16,11 +16,13 @@ extern "C" {
 
 typedef struct {
     jl_code_info_t *src; // contains the names and number of slots
+    jl_method_instance_t *mi; // MethodInstance we're executing, or NULL if toplevel
     jl_module_t *module; // context for globals
     jl_value_t **locals; // slots for holding local slots and ssavalues
     jl_svec_t *sparam_vals; // method static parameters, if eval-ing a method body
     size_t ip; // Points to the currently-evaluating statement
     int preevaluation; // use special rules for pre-evaluating expressions
+    int continue_at; // statement index to jump to after leaving exception handler (0 if none)
 } interpreter_state;
 
 #include "interpreter-stacktrace.c"
@@ -53,6 +55,8 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_toplevel_expr_in_callback(interprete
     s->module = args->m;
     s->sparam_vals = args->sparam_vals;
     s->preevaluation = (s->sparam_vals != NULL);
+    s->continue_at = 0;
+    s->mi = NULL;
 
     JL_TRY {
         ptls->current_task->current_module = ptls->current_module = args->m;
@@ -259,7 +263,7 @@ SECT_INTERP static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             defined = jl_boundp(modu, (jl_sym_t*)sym);
         }
         else if (jl_is_expr(sym) && ((jl_expr_t*)sym)->head == static_parameter_sym) {
-            ssize_t n = jl_unbox_long(args[0]);
+            ssize_t n = jl_unbox_long(jl_exprarg(sym, 0));
             assert(n > 0);
             if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
                 jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
@@ -544,6 +548,8 @@ SECT_INTERP CALLBACK_ABI void *jl_toplevel_eval_body_callback(interpreter_state 
     struct jl_toplevel_eval_body_args *args =
         (struct jl_toplevel_eval_body_args*)vargs;
     s->module = args->m;
+    s->continue_at = 0;
+    s->mi = NULL;
     jl_value_t *ret = eval_body(args->stmts, s, 0, 1);
     jl_get_ptls_states()->world_age = last_age;
     return ret;
@@ -627,6 +633,11 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 if (!jl_setjmp(__eh.eh_ctx,1)) {
                     return eval_body(stmts, s, s->ip + 1, toplevel);
                 }
+                else if (s->continue_at) {
+                    s->ip = s->continue_at;
+                    s->continue_at = 0;
+                    continue;
+                }
                 else {
 #ifdef _OS_WINDOWS_
                     if (jl_get_ptls_states()->exception_in_transit == jl_stackovf_exception)
@@ -638,7 +649,16 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
             }
             else if (head == leave_sym) {
                 int hand_n_leave = jl_unbox_long(jl_exprarg(stmt,0));
-                jl_pop_handler(hand_n_leave);
+                assert(hand_n_leave > 0);
+                // equivalent to jl_pop_handler(hand_n_leave) :
+                jl_ptls_t ptls = jl_get_ptls_states();
+                jl_handler_t *eh = ptls->current_task->eh;
+                while (--hand_n_leave > 0)
+                    eh = eh->prev;
+                jl_eh_restore_state(eh);
+                // pop jmp_bufs from stack
+                s->continue_at = s->ip + 1;
+                jl_longjmp(eh->eh_ctx, 1);
             }
             else if (toplevel && jl_is_toplevel_only_expr(stmt)) {
                 jl_toplevel_eval(s->module, stmt);
@@ -715,6 +735,8 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, 
     s->module = args->lam->def.method->module;
     s->locals = locals + 2;
     s->sparam_vals = args->lam->sparam_vals;
+    s->continue_at = 0;
+    s->mi = args->lam;
     size_t i;
     for (i = 0; i < args->lam->def.method->nargs; i++) {
         if (args->lam->def.method->isva && i == args->lam->def.method->nargs - 1)
@@ -750,6 +772,8 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_toplevel_thunk_callback(interpreter_
     s->locals = locals;
     s->module = args->m;
     s->sparam_vals = jl_emptysvec;
+    s->continue_at = 0;
+    s->mi = NULL;
     size_t last_age = jl_get_ptls_states()->world_age;
     jl_value_t *r = eval_body(stmts, s, 0, 1);
     jl_get_ptls_states()->world_age = last_age;

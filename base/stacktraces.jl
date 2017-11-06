@@ -139,16 +139,30 @@ end
 
 lookup(pointer::UInt) = lookup(convert(Ptr{Void}, pointer))
 
+const top_level_scope_sym = Symbol("top-level scope")
+
 using Base.Meta
 is_loc_meta(expr, kind) = isexpr(expr, :meta) && length(expr.args) >= 1 && expr.args[1] === kind
 function lookup(ip::Base.InterpreterIP)
     i = ip.stmt
     foundline = false
-    func = empty_sym
-    file = empty_sym
-    line = 0
+    if ip.code isa Core.MethodInstance
+        codeinfo = ip.code.inferred
+        func = ip.code.def.name
+        file = ip.code.def.file
+        line = ip.code.def.line
+    elseif ip.code === nothing
+        # interpreted top-level expression with no CodeInfo
+        return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
+    else
+        assert(ip.code isa CodeInfo)
+        codeinfo = ip.code
+        func = top_level_scope_sym
+        file = empty_sym
+        line = 0
+    end
     while i >= 1
-        expr = ip.code.code[i]
+        expr = codeinfo.code[i]
         if isa(expr, LineNumberNode)
             if line == 0
                 line = expr.line
@@ -174,7 +188,7 @@ function lookup(ip::Base.InterpreterIP)
             npops = 1
             while npops >= 1
                 i -= 1
-                expr = ip.code.code[i]
+                expr = codeinfo.code[i]
                 is_loc_meta(expr, :pop_loc) && (npops += 1)
                 is_loc_meta(expr, :push_loc) && (npops -= 1)
             end
@@ -252,10 +266,14 @@ function remove_frames!(stack::StackTrace, m::Module)
     return stack
 end
 
+is_top_level_frame(f::StackFrame) = f.linfo isa CodeInfo || (f.linfo === nothing && f.func === top_level_scope_sym)
+
 function show_spec_linfo(io::IO, frame::StackFrame)
     if frame.linfo == nothing
         if frame.func === empty_sym
             @printf(io, "ip:%#x", frame.pointer)
+        elseif frame.func === top_level_scope_sym
+            print(io, "top-level scope")
         else
             print_with_color(Base.have_color && get(io, :backtrace, false) ? Base.stackframe_function_color() : :nothing, io, string(frame.func))
         end
@@ -266,7 +284,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
             Base.show(io, frame.linfo)
         end
     elseif frame.linfo isa CodeInfo
-        print(io, "In toplevel scope")
+        print(io, "top-level scope")
     end
 end
 

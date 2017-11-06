@@ -1044,6 +1044,11 @@ static std::unique_ptr<Module> emit_function(
         const jl_cgparams_t *params);
 void jl_add_linfo_in_flight(StringRef name, jl_method_instance_t *linfo, const DataLayout &DL);
 
+const char *name_from_method_instance(jl_method_instance_t *li)
+{
+    return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
+}
+
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
 // (and the shadow module), but doesn't yet compile
@@ -1154,7 +1159,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
             li->functionObjectsDecls.specFunctionObject = NULL;
             nested_compile = last_n_c;
             JL_UNLOCK(&codegen_lock); // Might GC
-            const char *mname = jl_symbol_name(jl_is_method(li->def.method) ? li->def.method->name : anonymous_sym);
+            const char *mname = name_from_method_instance(li);
             jl_rethrow_with_add("error compiling %s", mname);
         }
         const char *f = decls.functionObject;
@@ -1496,7 +1501,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
         // something failed!
         nested_compile = last_n_c;
         JL_UNLOCK(&codegen_lock); // Might GC
-        const char *mname = jl_symbol_name(jl_is_method(linfo->def.method) ? linfo->def.method->name : anonymous_sym);
+        const char *mname = name_from_method_instance(linfo);
         jl_rethrow_with_add("error compiling %s", mname);
     }
     // Restore the previous compile context
@@ -4848,7 +4853,7 @@ static std::unique_ptr<Module> emit_function(
     ctx.linfo = lam;
     ctx.source = src;
     ctx.world = world;
-    ctx.name = jl_symbol_name(jl_is_method(lam->def.method) ? lam->def.method->name : anonymous_sym);
+    ctx.name = name_from_method_instance(lam);
     ctx.funcName = ctx.name;
     ctx.params = params;
     ctx.spvals_ptr = NULL;
