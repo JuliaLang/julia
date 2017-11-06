@@ -234,6 +234,13 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{2}) = x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
 
+# don't use the inv(x) transformation here since x^p is slightly more accurate
+@inline literal_pow(::typeof(^), x::Union{Float32,Float64}, ::Val{p}) where {p} = x^p
+@inline literal_pow(::typeof(^), x::Union{Float32,Float64}, ::Val{0}) = one(x)
+@inline literal_pow(::typeof(^), x::Union{Float32,Float64}, ::Val{1}) = x
+@inline literal_pow(::typeof(^), x::Union{Float32,Float64}, ::Val{2}) = x*x
+@inline literal_pow(::typeof(^), x::Union{Float32,Float64}, ::Val{3}) = x*x*x
+
 @inline @generated function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
     if p < 0
         :(literal_pow(^, inv(x), $(Val{-p}())))
