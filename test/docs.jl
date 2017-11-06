@@ -924,15 +924,15 @@ let x = Binding(curmod, :bindingdoesnotexist)
 end
 
 let x = Binding(Main, :+)
-    @test parse(string(x)) == :(Base.:+)
+    @test Meta.parse(string(x)) == :(Base.:+)
 end
 
-let x = Binding(Base, :parse)
-    @test parse(string(x)) == :(Base.parse)
+let x = Binding(Meta, :parse)
+    @test Meta.parse(string(x)) == :(Base.Meta.parse)
 end
 
 let x = Binding(Main, :⊕)
-    @test parse(string(x)) == :(⊕)
+    @test Meta.parse(string(x)) == :(⊕)
 end
 
 doc_util_path = Symbol(joinpath("docs", "utils.jl"))

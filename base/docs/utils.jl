@@ -103,7 +103,7 @@ function helpmode(io::IO, line::AbstractString)
             Symbol(line)
         else
             x = Base.syntax_deprecation_warnings(false) do
-                parse(line, raise = false)
+                Meta.parse(line, raise = false)
             end
             # Retrieving docs for macros requires us to make a distinction between the text
             # `@macroname` and `@macroname()`. These both parse the same, but are used by

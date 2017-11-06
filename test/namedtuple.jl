@@ -108,14 +108,14 @@ end
 
 # syntax errors
 
-@test Meta.lower(Main, parse("(a=1, 0)")) == Expr(:error, "invalid named tuple element \"0\"")
-@test Meta.lower(Main, parse("(a=1, f(x))")) == Expr(:error, "invalid named tuple element \"f(x)\"")
-@test Meta.lower(Main, parse("(a=1,a=2)")) == Expr(:error, "field name \"a\" repeated in named tuple")
-@test Meta.lower(Main, parse("(a=1,b=0,a=2)")) == Expr(:error, "field name \"a\" repeated in named tuple")
-@test Meta.lower(Main, parse("(c=1,a=1,b=0,a=2)")) == Expr(:error, "field name \"a\" repeated in named tuple")
+@test Meta.lower(Main, Meta.parse("(a=1, 0)")) == Expr(:error, "invalid named tuple element \"0\"")
+@test Meta.lower(Main, Meta.parse("(a=1, f(x))")) == Expr(:error, "invalid named tuple element \"f(x)\"")
+@test Meta.lower(Main, Meta.parse("(a=1,a=2)")) == Expr(:error, "field name \"a\" repeated in named tuple")
+@test Meta.lower(Main, Meta.parse("(a=1,b=0,a=2)")) == Expr(:error, "field name \"a\" repeated in named tuple")
+@test Meta.lower(Main, Meta.parse("(c=1,a=1,b=0,a=2)")) == Expr(:error, "field name \"a\" repeated in named tuple")
 
-@test parse("(;)") == quote end
-@test Meta.lower(Main, parse("(1,;2)")) == Expr(:error, "unexpected semicolon in tuple")
+@test Meta.parse("(;)") == quote end
+@test Meta.lower(Main, Meta.parse("(1,;2)")) == Expr(:error, "unexpected semicolon in tuple")
 
 # splatting
 

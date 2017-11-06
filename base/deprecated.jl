@@ -2073,6 +2073,11 @@ end
 # issue #24167
 @deprecate EnvHash EnvDict
 
+# issue #24349
+@deprecate parse(str::AbstractString; kwargs...) Meta.parse(str; kwargs...)
+@deprecate parse(str::AbstractString, pos::Int, ; kwargs...) Meta.parse(str, pos; kwargs...)
+@deprecate_binding ParseError Meta.ParseError
+
 # #24258
 # Physical units define an equivalence class: there is no such thing as a step of "1" (is
 # it one day or one second or one nanosecond?). So require the user to specify the step

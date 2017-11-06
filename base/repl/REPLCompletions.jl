@@ -45,7 +45,7 @@ function complete_symbol(sym, ffunc)
         lookup_name, name = rsplit(sym, ".", limit=2)
 
         ex = Base.syntax_deprecation_warnings(false) do
-            parse(lookup_name, raise=false)
+            Meta.parse(lookup_name, raise=false)
         end
 
         b, found = get_value(ex, context_module)
@@ -479,7 +479,7 @@ function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
     inc_tag = Base.syntax_deprecation_warnings(false) do
-        Base.incomplete_tag(parse(partial, raise=false))
+        Base.incomplete_tag(Meta.parse(partial, raise=false))
     end
 
     # if completing a key in a Dict
@@ -527,7 +527,7 @@ function completions(string, pos)
     if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         ex = Base.syntax_deprecation_warnings(false) do
-            parse(partial[frange] * ")", raise=false)
+            Meta.parse(partial[frange] * ")", raise=false)
         end
         if isa(ex, Expr) && ex.head==:call
             return complete_methods(ex), start(frange):method_name_end, false

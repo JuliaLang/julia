@@ -15,10 +15,10 @@ struct T5589
 end
 @test replstr(T5589(Array{String,1}(100))) == "$(curmod_prefix)T5589([#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
 
-@test replstr(parse("mutable struct X end")) == ":(mutable struct X\n        #= none:1 =#\n    end)"
-@test replstr(parse("struct X end")) == ":(struct X\n        #= none:1 =#\n    end)"
+@test replstr(Meta.parse("mutable struct X end")) == ":(mutable struct X\n        #= none:1 =#\n    end)"
+@test replstr(Meta.parse("struct X end")) == ":(struct X\n        #= none:1 =#\n    end)"
 let s = "ccall(:f, Int, (Ptr{Void},), &x)"
-    @test replstr(parse(s)) == ":($s)"
+    @test replstr(Meta.parse(s)) == ":($s)"
 end
 
 # recursive array printing
@@ -39,9 +39,9 @@ macro test_repr(x)
         # This could produce a few false positives, but until string
         # interpolation works we don't really have a choice.
         let
-            local x1 = parse($x)
-            local x2 = eval(parse(repr(x1)))
-            local x3 = eval(parse(repr(x2)))
+            local x1 = Meta.parse($x)
+            local x2 = eval(Meta.parse(repr(x1)))
+            local x3 = eval(Meta.parse(repr(x2)))
             if x3 != x1
                 error(string(
                     "repr test failed:",
@@ -105,8 +105,8 @@ end
 
 # Complex
 
-# parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
-@test iszero(eval(eval(parse(repr(:($(1 + 2im) - $(1 + 2im)))))))
+# Meta.parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
+@test iszero(eval(eval(Meta.parse(repr(:($(1 + 2im) - $(1 + 2im)))))))
 
 
 # control structures (shamelessly stolen from base/bitarray.jl)
@@ -342,7 +342,7 @@ end"
 # issue #9474
 for s in ("(1::Int64 == 1::Int64)::Bool", "(1:2:3) + 4", "x = 1:2:3")
     local s
-    @test sprint(show, parse(s)) == ":("*s*")"
+    @test sprint(show, Meta.parse(s)) == ":("*s*")"
 end
 
 # parametric type instantiation printing
@@ -350,8 +350,8 @@ struct TParametricPrint{a}; end
 @test sprint(show, :(TParametricPrint{false}())) == ":(TParametricPrint{false}())"
 
 # issue #9797
-let q1 = parse(repr(:("$(a)b"))),
-    q2 = parse(repr(:("$ab")))
+let q1 = Meta.parse(repr(:("$(a)b"))),
+    q2 = Meta.parse(repr(:("$ab")))
     @test isa(q1, Expr)
     @test q1.args[1].head === :string
     @test q1.args[1].args == [:a, "b"]
@@ -363,8 +363,8 @@ end
 
 x8d003 = 2
 let a = Expr(:quote,Expr(:$,:x8d003))
-    @test eval(parse(repr(a))) == a
-    @test eval(eval(parse(repr(a)))) == 2
+    @test eval(Meta.parse(repr(a))) == a
+    @test eval(eval(Meta.parse(repr(a)))) == 2
 end
 
 # issue #9865
@@ -765,7 +765,7 @@ end
 @test_repr "(x for a in b, c in d for e in f)"
 
 for op in (:(.=), :(.+=), :(.&=))
-    @test repr(parse("x $op y")) == ":(x $op y)"
+    @test repr(Meta.parse("x $op y")) == ":(x $op y)"
 end
 
 # pretty-printing of compact broadcast expressions (#17289)
