@@ -866,8 +866,7 @@ while we want `@time` to be usable with minimum impact on the wrapped code.
 
 ### Macros and dispatch
 
-Macros can have multiple methods and dispatch based on their arguments, like ordinary functions:
-```juliarepl
+Macros, just like ordinary functions, are generic. This means they can also have multiple method definitions, thanks to multiple dispatch:
 julia> macro m end
 @m (macro with 0 methods)
 
