@@ -860,7 +860,7 @@ Generic type for `Exception`s wrapping another `Exception`, such as `LoadError` 
 `InitError`. Those exceptions contain information about the the root cause of an
 exception. Subtypes define a field `error` containing the causing `Exception`.
 """
-WrappedException
+Core.WrappedException
 
 """
     UndefRefError()
