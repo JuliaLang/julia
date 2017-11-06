@@ -62,9 +62,9 @@ jobs:
             "$(cd julia-src && make print-CC)" &&
           mv julia-src project
 #      - run: cd project && make -C doc deploy
-#       - run:
-#           command: sudo dmesg
-#           when: on_fail
+      - run:
+          command: sudo dmesg
+          when: on_fail
       - save_cache:
           key: ccache-{{ checksum "/tmp/weeknumber" }}
           paths:
