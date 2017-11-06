@@ -631,7 +631,7 @@ function log1p(z::Complex{T}) where T
     end
 end
 
-function ^(z::Complex{T}, p::Complex{T})::Complex{T} where T<:AbstractFloat
+function ^(z::Complex{T}, p::Union{T,Complex{T}})::Complex{T} where T<:AbstractFloat
     if p == 2 #square
         zr, zi = reim(z)
         x = (zr-zi)*(zr+zi)
@@ -682,7 +682,7 @@ function exp10(z::Complex{T}) where T<:AbstractFloat
 end
 exp10(z::Complex) = exp10(float(z))
 
-function ^(z::T, p::T) where T<:Complex
+function ^(z::Complex{T}, p::Union{T,Complex{T}}) where T<:Real
     if isinteger(p)
         rp = real(p)
         if rp < 0
@@ -748,6 +748,11 @@ end
 ^(z::Complex{<:AbstractFloat}, n::Integer) =
     n>=0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
 ^(z::Complex{<:Integer}, n::Integer) = power_by_squaring(z,n) # DomainError for n<0
+
+function ^(z::Complex{T}, p::S) where {T<:Real,S<:Real}
+    P = promote_type(T,S)
+    return Complex{P}(z) ^ P(p)
+end
 
 function sin(z::Complex{T}) where T
     F = float(T)
