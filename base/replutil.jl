@@ -635,17 +635,26 @@ end
 global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
 
 function show_backtrace(io::IO, t::Vector)
-    n_frames = 0
-    frame_counter = 0
     resize!(LAST_SHOWN_LINE_INFOS, 0)
-    process_backtrace((a,b) -> n_frames += 1, t)
-    n_frames != 0 && print(io, "\nStacktrace:")
-    process_entry = (last_frame, n) -> begin
+    filtered = Any[]
+    process_backtrace((fr, count) -> push!(filtered, (fr, count)), t)
+    isempty(filtered) && return
+
+    if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
+        f = filtered[1][1]
+        if f.line == 0 && f.file == Symbol("")
+            # don't show a single top-level frame with no location info
+            return
+        end
+    end
+
+    print(io, "\nStacktrace:")
+    frame_counter = 0
+    for (last_frame, n) in filtered
         frame_counter += 1
         show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
         push!(LAST_SHOWN_LINE_INFOS, (string(last_frame.file), last_frame.line))
     end
-    process_backtrace(process_entry, t)
 end
 
 function show_backtrace(io::IO, t::Vector{Any})
@@ -671,7 +680,7 @@ function process_backtrace(process_func::Function, t::Vector, limit::Int=typemax
             count += 1
             if count > limit; break; end
 
-            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func
+            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== lkup.linfo
                 if n > 0
                     process_func(last_frame, n)
                 end

@@ -59,30 +59,32 @@ uintptr_t __stop_jl_interpreter_frame = (uintptr_t)&__stop_jl_interpreter_frame_
 // stack frames.
 #ifdef _CPU_X86_64_
 
+#define STR(x) #x
+#define XSTR(x) STR(x)
+
 #ifdef _OS_WINDOWS_
-size_t STACK_PADDING = 40;
+#define STACK_PADDING 32
 #else
-size_t STACK_PADDING = 8;
+#define STACK_PADDING 0
 #endif
 
 asm(
     ASM_ENTRY
     MANGLE("enter_interpreter_frame") ":\n"
     ".cfi_startproc\n"
-    // sizeof(struct interpreter_state) is 44, but we need to be 8 byte aligned,
-    // so subtract 48. For compact unwind info, we need to only have one subq,
-    // so combine in the stack realignment for a total of 56 bytes.
+    // Note: make sure stack is 8-byte aligned here even though
+    // sizeof(struct interpreter_state) might not be.
     "\tsubq $56, %rsp\n"
     ".cfi_def_cfa_offset 64\n"
 #ifdef _OS_WINDOWS_
     "\tmovq %rcx, %rax\n"
-    "\tleaq 8(%rsp), %rcx\n"
+    "\tleaq " XSTR(STACK_PADDING) "(%rsp), %rcx\n"
 #else
      "\tmovq %rdi, %rax\n"
-     "\tleaq 8(%rsp), %rdi\n"
+     "\tleaq " XSTR(STACK_PADDING) "(%rsp), %rdi\n"
 #endif
     // Zero out the src field
-    "\tmovq $0, 8(%rsp)\n"
+    "\tmovq $0, 0(%rdi)\n"
 #ifdef _OS_WINDOWS_
     // Make space for the register parameter area
     "\tsubq $32, %rsp\n"
@@ -105,11 +107,11 @@ asm(
     );
 
 #define CALLBACK_ABI
-static_assert(sizeof(interpreter_state) <= 48, "Update assembly code above");
+static_assert(sizeof(interpreter_state) <= 56, "Update assembly code above");
 
 #elif defined(_CPU_X86_)
 
-size_t STACK_PADDING = 12;
+#define STACK_PADDING 12
 asm(
      ASM_ENTRY
      MANGLE("enter_interpreter_frame") ":\n"
@@ -148,11 +150,11 @@ asm(
     "\tmovl %esp, %ebp\n"
 #endif
      // sizeof(struct interpreter_state) is 32
-     "\tsubl $32, %esp\n"
+     "\tsubl $36, %esp\n"
 #ifdef _OS_WINDOWS_
-     ".cfi_def_cfa_offset 40\n"
+     ".cfi_def_cfa_offset 44\n"
 #else
-     ".cfi_def_cfa_offset 36\n"
+     ".cfi_def_cfa_offset 40\n"
 #endif
      "\tmovl %ecx, %eax\n"
      "\tmovl %esp, %ecx\n"
@@ -166,16 +168,16 @@ asm(
 #else
      "\tsubl $12, %esp\n"
 #endif
-     ".cfi_def_cfa_offset 48\n"
+     ".cfi_def_cfa_offset 52\n"
      "Lenter_interpreter_frame_start_val:\n"
      "\tcalll *%eax\n"
      "Lenter_interpreter_frame_end_val:\n"
 #ifdef _OS_WINDOWS_
-     "\taddl $40, %esp\n"
+     "\taddl $44, %esp\n"
      ".cfi_def_cfa_offset 8\n"
      "\tpopl %ebp\n"
 #else
-     "\taddl $44, %esp\n"
+     "\taddl $48, %esp\n"
 #endif
      ".cfi_def_cfa_offset 4\n"
      "\tret\n"
@@ -214,11 +216,11 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintp
 #else
     interpreter_state *s = (interpreter_state *)(sp+STACK_PADDING);
 #endif
-    if (space_remaining <= 1 || s->src == 0)
+    if (space_remaining <= 1)
         return 0;
     // Sentinel value to indicate an interpreter frame
     data[0] = (uintptr_t)-1;
-    data[1] = (uintptr_t)s->src;
+    data[1] = s->mi ? (uintptr_t)s->mi : s->src ? (uintptr_t)s->src : (uintptr_t)jl_nothing;
     data[2] = (uintptr_t)s->ip;
     return 2;
 }

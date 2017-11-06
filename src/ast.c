@@ -43,7 +43,7 @@ jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
-jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
+jl_sym_t *underscore_sym;
 jl_sym_t *abstracttype_sym; jl_sym_t *primtype_sym;
 jl_sym_t *structtype_sym; jl_sym_t *foreigncall_sym;
 jl_sym_t *global_sym; jl_sym_t *list_sym;
@@ -312,7 +312,6 @@ void jl_init_frontend(void)
     const_sym = jl_symbol("const");
     global_sym = jl_symbol("global");
     thunk_sym = jl_symbol("thunk");
-    anonymous_sym = jl_symbol("anonymous");
     underscore_sym = jl_symbol("_");
     amp_sym = jl_symbol("&");
     abstracttype_sym = jl_symbol("abstract_type");
