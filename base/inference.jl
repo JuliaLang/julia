@@ -5713,10 +5713,9 @@ function meta_elim_pass!(code::Array{Any,1}, do_coverage::Bool)
             prev_dbg_stack[end] = 0
             push_loc_pos_stack[end] = 0
             continue
-        elseif !do_coverage && (isa(ex, LineNumberNode) ||
-                                (isa(ex, Expr) && (ex::Expr).head === :line))
+        elseif !do_coverage && isa(ex, LineNumberNode)
             prev_label = prev_dbg_stack[end]
-            if prev_label != 0
+            if prev_label != 0 && code[prev_label].file === ex.file
                 code[prev_label] = nothing
             end
             prev_dbg_stack[end] = i

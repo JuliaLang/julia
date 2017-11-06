@@ -149,9 +149,13 @@ function lookup(ip::Base.InterpreterIP)
     line = 0
     while i >= 1
         expr = ip.code.code[i]
-        if !foundline && isa(expr, LineNumberNode)
-            line = expr.line
-            file = expr.file
+        if isa(expr, LineNumberNode)
+            if line == 0
+                line = expr.line
+            end
+            if expr.file !== nothing
+                file = expr.file
+            end
             foundline = true
         elseif foundline && is_loc_meta(expr, :push_loc)
             file = expr.args[2]

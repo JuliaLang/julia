@@ -4868,6 +4868,8 @@ static std::unique_ptr<Module> emit_function(
     ctx.spvals_ptr = NULL;
     ctx.nargs = jl_is_method(lam->def.method) ? lam->def.method->nargs : 0;
     bool toplevel = !jl_is_method(lam->def.method);
+    jl_array_t *stmts = ctx.code;
+    size_t stmtslen = jl_array_dim0(stmts);
 
     // step 1b. unpack debug information
     int coverage_mode = jl_options.code_coverage;
@@ -4879,6 +4881,12 @@ static std::unique_ptr<Module> emit_function(
         toplineno = lam->def.method->line;
         if (lam->def.method->file != empty_sym)
             filename = jl_symbol_name(lam->def.method->file);
+    }
+    else if (stmtslen > 0 && jl_is_linenode(jl_array_ptr_ref(stmts, 0))) {
+        jl_value_t *lno = jl_array_ptr_ref(stmts, 0);
+        toplineno = jl_linenode_line(lno);
+        if (jl_is_symbol(jl_linenode_file(lno)))
+            filename = jl_symbol_name((jl_sym_t*)jl_linenode_file(lno));
     }
     ctx.file = filename;
     // jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
@@ -4960,9 +4968,6 @@ static std::unique_ptr<Module> emit_function(
             varinfo.value = mark_julia_type(ctx, (Value*)NULL, false, typ);
         }
     }
-
-    jl_array_t *stmts = ctx.code;
-    size_t stmtslen = jl_array_dim0(stmts);
 
     // finish recording variable use info
     for (i = 0; i < stmtslen; i++)
