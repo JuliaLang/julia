@@ -522,8 +522,6 @@ end
 ^(x::BigFloat, y::Integer)  = typemin(Clong)  <= y <= typemax(Clong)  ? x^Clong(y)  : x^BigInt(y)
 ^(x::BigFloat, y::Unsigned) = typemin(Culong) <= y <= typemax(Culong) ? x^Culong(y) : x^BigInt(y)
 
-literal_pow(::typeof(^), x::BigFloat, ::Val{p}) where {p} = x^p
-
 for f in (:exp, :exp2, :exp10, :expm1, :cosh, :sinh, :tanh, :sech, :csch, :coth, :cbrt)
     @eval function $f(x::BigFloat)
         z = BigFloat()
