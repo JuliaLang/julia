@@ -408,7 +408,7 @@ function readuntil(io::GenericIOBuffer, delim::UInt8)
 end
 
 # copy-free crc32c of IOBuffer:
-function crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
+function _crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
     io.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     n = min(nb, nb_available(io))
@@ -417,4 +417,4 @@ function crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
     io.ptr += n
     return crc
 end
-crc32c(io::IOBuffer, crc::UInt32=0x00000000) = crc32c(io, nb_available(io), crc)
+_crc32c(io::IOBuffer, crc::UInt32=0x00000000) = _crc32c(io, nb_available(io), crc)

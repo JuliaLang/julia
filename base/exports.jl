@@ -978,7 +978,6 @@ export
     atexit,
     atreplinit,
     clipboard,
-    crc32c,
     exit,
     ntuple,
     quit,
