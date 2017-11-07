@@ -537,30 +537,6 @@ SECT_INTERP static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     abort();
 }
 
-struct jl_toplevel_eval_body_args {
-    jl_module_t *m;
-    jl_array_t *stmts;
-};
-
-SECT_INTERP CALLBACK_ABI void *jl_toplevel_eval_body_callback(interpreter_state *s, void *vargs)
-{
-    size_t last_age = jl_get_ptls_states()->world_age;
-    struct jl_toplevel_eval_body_args *args =
-        (struct jl_toplevel_eval_body_args*)vargs;
-    s->module = args->m;
-    s->continue_at = 0;
-    s->mi = NULL;
-    jl_value_t *ret = eval_body(args->stmts, s, 0, 1);
-    jl_get_ptls_states()->world_age = last_age;
-    return ret;
-}
-
-SECT_INTERP jl_value_t *jl_toplevel_eval_body(jl_module_t *m, jl_array_t *stmts)
-{
-    struct jl_toplevel_eval_body_args args = { m, stmts };
-    return (jl_value_t*)enter_interpreter_frame(jl_toplevel_eval_body_callback, &args);
-}
-
 SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start, int toplevel)
 {
     jl_handler_t __eh;
