@@ -479,92 +479,95 @@ static inline void features_disable_avx(T &features)
                xsaveopt, xsavec, xsaves);
 }
 
+static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu(void)
+{
+    FeatureList<feature_sz> features = {};
+
+    int32_t info0[4];
+    jl_cpuid(info0, 0);
+    uint32_t maxleaf = info0[0];
+    if (maxleaf < 1)
+        return std::make_pair(uint32_t(CPU::generic), features);
+    int32_t info1[4];
+    jl_cpuid(info1, 1);
+
+    auto vendor = info0[1];
+    auto brand_id = info1[1] & 0xff;
+
+    auto family = (info1[0] >> 8) & 0xf; // Bits 8 - 11
+    auto model = (info1[0] >> 4) & 0xf;  // Bits 4 - 7
+    if (family == 6 || family == 0xf) {
+        if (family == 0xf)
+            // Examine extended family ID if family ID is F.
+            family += (info1[0] >> 20) & 0xff; // Bits 20 - 27
+        // Examine extended model ID if family ID is 6 or F.
+        model += ((info1[0] >> 16) & 0xf) << 4; // Bits 16 - 19
+    }
+
+    // Fill in the features
+    features[0] = info1[2];
+    features[1] = info1[3];
+    if (maxleaf >= 7) {
+        int32_t info7[4];
+        jl_cpuidex(info7, 7, 0);
+        features[2] = info7[1];
+        features[3] = info7[2];
+        features[4] = info7[3];
+    }
+    int32_t infoex0[4];
+    jl_cpuid(infoex0, 0x80000000);
+    uint32_t maxexleaf = infoex0[0];
+    if (maxexleaf >= 0x80000001) {
+        int32_t infoex1[4];
+        jl_cpuid(infoex1, 0x80000001);
+        features[5] = infoex1[2];
+        features[6] = infoex1[3];
+    }
+    if (maxleaf >= 0xd) {
+        int32_t infod[4];
+        jl_cpuidex(infod, 0xd, 0x1);
+        features[7] = infod[0];
+    }
+    if (maxexleaf >= 0x80000008) {
+        int32_t infoex8[4];
+        jl_cpuidex(infoex8, 0x80000008, 0);
+        features[8] = infoex8[1];
+    }
+
+    // Fix up AVX bits to account for OS support and match LLVM model
+    uint64_t xcr0 = 0;
+    const uint32_t avx_mask = (1 << 27) | (1 << 28);
+    bool hasavx = test_all_bits(features[0], avx_mask);
+    if (hasavx) {
+        xcr0 = get_xcr0();
+        hasavx = test_all_bits(xcr0, 0x6);
+    }
+    unset_bits(features, 32 + 27);
+    if (!hasavx)
+        features_disable_avx(features);
+    bool hasavx512save = hasavx && test_all_bits(xcr0, 0xe0);
+    if (!hasavx512save)
+        features_disable_avx512(features);
+    // Ignore feature bits that we are not interested in.
+    mask_features(feature_masks, &features[0]);
+
+    uint32_t cpu;
+    if (vendor == SIG_INTEL) {
+        cpu = uint32_t(get_intel_processor_name(family, model, brand_id, &features[0]));
+    }
+    else if (vendor == SIG_AMD) {
+        cpu = uint32_t(get_amd_processor_name(family, model, &features[0]));
+    }
+    else {
+        cpu = uint32_t(CPU::generic);
+    }
+
+    return std::make_pair(cpu, features);
+}
+
 static inline const std::pair<uint32_t,FeatureList<feature_sz>> &get_host_cpu()
 {
-    static const auto host_cpu = [] () NOINLINE {
-        FeatureList<feature_sz> features = {};
-
-        int32_t info0[4];
-        jl_cpuid(info0, 0);
-        uint32_t maxleaf = info0[0];
-        if (maxleaf < 1)
-            return std::make_pair(uint32_t(CPU::generic), features);
-        int32_t info1[4];
-        jl_cpuid(info1, 1);
-
-        auto vendor = info0[1];
-        auto brand_id = info1[1] & 0xff;
-
-        auto family = (info1[0] >> 8) & 0xf; // Bits 8 - 11
-        auto model = (info1[0] >> 4) & 0xf;  // Bits 4 - 7
-        if (family == 6 || family == 0xf) {
-            if (family == 0xf)
-                // Examine extended family ID if family ID is F.
-                family += (info1[0] >> 20) & 0xff; // Bits 20 - 27
-            // Examine extended model ID if family ID is 6 or F.
-            model += ((info1[0] >> 16) & 0xf) << 4; // Bits 16 - 19
-        }
-
-        // Fill in the features
-        features[0] = info1[2];
-        features[1] = info1[3];
-        if (maxleaf >= 7) {
-            int32_t info7[4];
-            jl_cpuidex(info7, 7, 0);
-            features[2] = info7[1];
-            features[3] = info7[2];
-            features[4] = info7[3];
-        }
-        int32_t infoex0[4];
-        jl_cpuid(infoex0, 0x80000000);
-        uint32_t maxexleaf = infoex0[0];
-        if (maxexleaf >= 0x80000001) {
-            int32_t infoex1[4];
-            jl_cpuid(infoex1, 0x80000001);
-            features[5] = infoex1[2];
-            features[6] = infoex1[3];
-        }
-        if (maxleaf >= 0xd) {
-            int32_t infod[4];
-            jl_cpuidex(infod, 0xd, 0x1);
-            features[7] = infod[0];
-        }
-        if (maxexleaf >= 0x80000008) {
-            int32_t infoex8[4];
-            jl_cpuidex(infoex8, 0x80000008, 0);
-            features[8] = infoex8[1];
-        }
-
-        // Fix up AVX bits to account for OS support and match LLVM model
-        uint64_t xcr0 = 0;
-        const uint32_t avx_mask = (1 << 27) | (1 << 28);
-        bool hasavx = test_all_bits(features[0], avx_mask);
-        if (hasavx) {
-            xcr0 = get_xcr0();
-            hasavx = test_all_bits(xcr0, 0x6);
-        }
-        unset_bits(features, 32 + 27);
-        if (!hasavx)
-            features_disable_avx(features);
-        bool hasavx512save = hasavx && test_all_bits(xcr0, 0xe0);
-        if (!hasavx512save)
-            features_disable_avx512(features);
-        // Ignore feature bits that we are not interested in.
-        mask_features(feature_masks, &features[0]);
-
-        uint32_t cpu;
-        if (vendor == SIG_INTEL) {
-            cpu = uint32_t(get_intel_processor_name(family, model, brand_id, &features[0]));
-        }
-        else if (vendor == SIG_AMD) {
-            cpu = uint32_t(get_amd_processor_name(family, model, &features[0]));
-        }
-        else {
-            cpu = uint32_t(CPU::generic);
-        }
-
-        return std::make_pair(cpu, features);
-    }();
+    static auto host_cpu = _get_host_cpu();
     return host_cpu;
 }
 
