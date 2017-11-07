@@ -267,6 +267,8 @@ This section lists changes that do not have deprecation warnings.
   * The return type of `reinterpret` has changed to `ReinterpretArray`. `reinterpret` on sparse
     arrays has been discontinued.
 
+  * `Base.find_in_path` is now `Base.find_package` or `Base.find_source_file` ([#24320])
+
 Library improvements
 --------------------
 
@@ -1499,3 +1501,4 @@ Command-line option changes
 [#23233]: https://github.com/JuliaLang/julia/issues/23233
 [#23342]: https://github.com/JuliaLang/julia/issues/23342
 [#23404]: https://github.com/JuliaLang/julia/issues/23404
+[#24320]: https://github.com/JuliaLang/julia/issues/24320
