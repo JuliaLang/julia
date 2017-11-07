@@ -106,6 +106,7 @@ Type{Integer}  # cache this
                    Tuple{Int8,Vararg{Integer}})
 @test Base.typeseq(typejoin(Union{Int,AbstractString},Int), Union{Int,AbstractString})
 @test Base.typeseq(typejoin(Union{Int,AbstractString},Int8), Any)
+@test typejoin(Tuple{}, Tuple{Int}) == Tuple{Vararg{Int}}
 
 # typejoin associativity
 abstract type Foo____{K} end
