@@ -1,5 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# AbstractSet
+
+# AbstractSets are idempotent under indexing:
+keys(set::AbstractSet) = set
+@inline function getindex(set::AbstractSet, x)
+    @boundscheck if x ∉ set
+        throw(KeyError(x))
+    end
+    return x
+end
+eltype(set::Type{<:AbstractSet{T}}) where {T} = T
+
+# Set
+
 mutable struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Void}
 
@@ -23,9 +37,8 @@ function Set(g::Generator)
     return Set{T}(g)
 end
 
-eltype(::Type{Set{T}}) where {T} = T
-similar(s::Set{T}) where {T} = Set{T}()
-similar(s::Set, T::Type) = Set{T}()
+similar(s::AbstractSet) where {T} = similar(s, eltype(s))
+similar(s::AbstractSet, T::Type) = Set{T}() # default empty set type
 
 function show(io::IO, s::Set)
     print(io, "Set")
@@ -64,7 +77,7 @@ rehash!(s::Set) = (rehash!(s.dict); s)
 start(s::Set)       = start(s.dict)
 done(s::Set, state) = done(s.dict, state)
 # NOTE: manually optimized to take advantage of Dict representation
-next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict, i+1))
+@propagate_inbounds next(s::Set, i) = (s.dict.keys[i], skip_deleted(s.dict, i+1))
 
 """
     union(s1,s2...)

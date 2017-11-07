@@ -364,6 +364,9 @@ Library improvements
     This supersedes the old behavior of reinterpret on Arrays. As a result, reinterpreting
     arrays with different alignment requirements (removed in 0.6) is once again allowed ([#23750]).
 
+  * `AbstractSet`s are now indexable, such that `set[x] == x` and `keys(set) == set`
+    ([#24508]).
+
 Compiler/Runtime improvements
 -----------------------------
 
