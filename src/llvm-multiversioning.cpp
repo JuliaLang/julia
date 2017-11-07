@@ -283,6 +283,7 @@ private:
     std::vector<Function*> fvars;
     std::vector<Constant*> gvars;
     Module &M;
+    Function *catcher;
     // Map from original functiton to one based index in `fvars`
     std::map<const Function*,uint32_t> func_ids{};
     std::vector<Function*> orig_funcs{};
@@ -345,7 +346,8 @@ CloneCtx::CloneCtx(MultiVersioning *pass, Module &M)
       specs(jl_get_llvm_clone_targets()),
       fvars(consume_gv<Function>(M, "jl_sysimg_fvars")),
       gvars(consume_gv<Constant>(M, "jl_sysimg_gvars")),
-      M(M)
+      M(M),
+      catcher(M.getFunction("julia.catch_exception"))
 {
     groups.emplace_back(0, specs[0]);
     uint32_t ntargets = specs.size();
@@ -548,6 +550,16 @@ void CloneCtx::check_partial(Group &grp, Target &tgt)
     // Reduce dispatch by expand the cloning set to functions that are directly called by
     // and calling cloned functions.
     auto &graph = pass->getAnalysis<CallGraphWrapperPass>().getCallGraph();
+    auto add_cloning = [&] (Function *orig_f) {
+        next_set->insert(orig_f);
+        all_origs.insert(orig_f);
+        auto f = grp.base_func(orig_f);
+        Function *new_f = Function::Create(f->getFunctionType(),
+                                           f->getLinkage(),
+                                           f->getName() + suffix, &M);
+        new_f->copyAttributesFrom(f);
+        vmap[f] = new_f;
+    };
     while (!cur_set->empty()) {
         for (auto orig_f: *cur_set) {
             // Use the uncloned function since it's already in the call graph
@@ -572,14 +584,22 @@ void CloneCtx::check_partial(Group &grp, Target &tgt)
                 }
                 if (!calling_clone)
                     continue;
-                next_set->insert(orig_child_f);
-                all_origs.insert(orig_child_f);
-                auto child_f = grp.base_func(orig_child_f);
-                Function *new_f = Function::Create(child_f->getFunctionType(),
-                                                   child_f->getLinkage(),
-                                                   child_f->getName() + suffix, &M);
-                new_f->copyAttributesFrom(child_f);
-                vmap[child_f] = new_f;
+                add_cloning(orig_child_f);
+            }
+        }
+        if (catcher) {
+            for (auto user: catcher->users()) {
+                auto call = cast<CallInst>(user);
+                auto caller = call->getFunction();
+                auto callee = cast<Function>(call->getArgOperand(0));
+                auto caller_cloned = all_origs.count(caller) != 0;
+                auto callee_cloned = all_origs.count(callee) != 0;
+                if (caller_cloned && !callee_cloned) {
+                    add_cloning(callee);
+                }
+                else if (!caller_cloned && callee_cloned) {
+                    add_cloning(caller);
+                }
             }
         }
         std::swap(cur_set, next_set);
@@ -805,6 +825,19 @@ void CloneCtx::fix_inst_uses()
                     auto use_i = info.val;
                     auto use_f = use_i->getFunction();
                     if (!use_f->getName().endswith(suffix))
+                        continue;
+                    // If the enclosing function is cloned on all partial targets
+                    // we don't need a relocation.
+                    // This is also needed so that `julia.catch_exception`
+                    // is handled correctly.
+                    bool all_cloned = true;
+                    for (auto &tgt: grp.clones) {
+                        if (!map_get(*tgt.vmap, use_f)) {
+                            all_cloned = false;
+                            break;
+                        }
+                    }
+                    if (all_cloned)
                         continue;
                     Instruction *insert_before = use_i;
                     if (auto phi = dyn_cast<PHINode>(use_i))

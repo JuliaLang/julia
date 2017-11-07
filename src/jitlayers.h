@@ -178,10 +178,11 @@ private:
 extern JuliaOJIT *jl_ExecutionEngine;
 JL_DLLEXPORT extern LLVMContext jl_LLVMContext;
 
+Pass *createEHOutliningPass();
+Pass *createEHLoweringPass();
 Pass *createLowerPTLSPass(bool imaging_mode);
 Pass *createCombineMulAddPass();
 Pass *createLateLowerGCFramePass();
-Pass *createLowerExcHandlersPass();
 Pass *createGCInvariantVerifierPass(bool Strong);
 Pass *createPropagateJuliaAddrspaces();
 Pass *createMultiVersioningPass();

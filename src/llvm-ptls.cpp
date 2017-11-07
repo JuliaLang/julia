@@ -81,50 +81,6 @@ void LowerPTLS::set_ptls_attrs(CallInst *ptlsStates) const
 
 Instruction *LowerPTLS::emit_ptls_tp(Value *offset, Instruction *insertBefore) const
 {
-#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
-    if (insertBefore->getFunction()->callsFunctionThatReturnsTwice()) {
-        // Workaround LLVM bug by hiding the offset computation
-        // (and therefore the optimization opportunity) from LLVM.
-        // Ref https://github.com/JuliaLang/julia/issues/17288
-        static const std::string const_asm_str = [&] () {
-            std::stringstream stm;
-#  if defined(_CPU_X86_64_)
-            stm << "movq %fs:0, $0;\naddq $$" << jl_tls_offset << ", $0";
-#  else
-            stm << "movl %gs:0, $0;\naddl $$" << jl_tls_offset << ", $0";
-#  endif
-            return stm.str();
-        }();
-#  if defined(_CPU_X86_64_)
-        const char *dyn_asm_str = "movq %fs:0, $0;\naddq $1, $0";
-#  else
-        const char *dyn_asm_str = "movl %gs:0, $0;\naddl $1, $0";
-#  endif
-
-        // The add instruction clobbers flags
-        Value *tls;
-        if (offset) {
-            std::vector<Type*> args(0);
-            args.push_back(offset->getType());
-            auto tp = InlineAsm::get(FunctionType::get(T_pint8, args, false),
-                                     dyn_asm_str, "=&r,r,~{dirflag},~{fpsr},~{flags}", false);
-            tls = CallInst::Create(tp, offset, "ptls_i8", insertBefore);
-        }
-        else {
-            auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
-                                     const_asm_str.c_str(), "=r,~{dirflag},~{fpsr},~{flags}",
-                                     false);
-            tls = CallInst::Create(tp, "ptls_i8", insertBefore);
-        }
-        return new BitCastInst(tls, T_pppjlvalue, "ptls", insertBefore);
-    }
-#endif
-    // AArch64/ARM doesn't seem to have this issue.
-    // (Possibly because there are many more registers and the offset is
-    // positive and small)
-    // It's also harder to emit the offset in a generic way on ARM/AArch64
-    // (need to generate one or two `add` with shift) so let llvm emit
-    // the add for now.
 #if defined(_CPU_AARCH64_)
     const char *asm_str = "mrs $0, tpidr_el0";
 #elif defined(__ARM_ARCH) && __ARM_ARCH >= 7

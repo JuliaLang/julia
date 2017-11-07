@@ -563,7 +563,6 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
             else if (head == leave_sym) {
                 int hand_n_leave = jl_unbox_long(jl_exprarg(stmt,0));
                 assert(hand_n_leave > 0);
-                // equivalent to jl_pop_handler(hand_n_leave) :
                 jl_ptls_t ptls = jl_get_ptls_states();
                 jl_handler_t *eh = ptls->current_task->eh;
                 while (--hand_n_leave > 0)

@@ -326,12 +326,6 @@ struct State {
     // Reverse mapping index -> safepoint
     std::vector<Instruction *> ReverseSafepointNumbering;
 
-    // Instructions that can return twice. For now, all values live at these
-    // instructions will get their own, dedicated GC frame slots, because they
-    // have unobservable control flow, so we can't be sure where they're
-    // actually live. All of these are also considered safepoints.
-    std::vector<Instruction *> ReturnsTwice;
-
     // The set of values live at a particular safepoint
     std::vector<BitVector> LiveSets;
     // Those values that - if live out from our parent basic block - are live
@@ -1077,9 +1071,6 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         continue;
                     }
                 }
-                if (CI->canReturnTwice()) {
-                    S.ReturnsTwice.push_back(CI);
-                }
                 if (callee) {
                     if (callee == gc_preserve_begin_func) {
                         std::vector<int> args;
@@ -1477,16 +1468,6 @@ std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
     Colors.resize(S.MaxPtrNumber + 1, -1);
     PEOIterator Ordering(S.Neighbors);
     int PreAssignedColors = 0;
-    /* First assign permanent slots to things that need them due
-       to returns_twice */
-    for (auto it : S.ReturnsTwice) {
-        int Num = S.SafepointNumbering.at(it);
-        const BitVector &LS = S.LiveSets[Num];
-        for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
-            if (Colors[Idx] == -1)
-                Colors[Idx] = PreAssignedColors++;
-        }
-    }
     /* Greedy coloring */
     int MaxAssignedColor = -1;
     int ActiveElement = 1;
@@ -1520,7 +1501,7 @@ std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
 Instruction *LateLowerGCFrame::get_pgcstack(Instruction *ptlsStates)
 {
     Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, pgcstack) / sizeof(void*));
-    return GetElementPtrInst::Create(nullptr,
+    return GetElementPtrInst::Create(T_ppjlvalue,
                                      ptlsStates,
                                      ArrayRef<Value*>(offset),
                                      "jl_pgcstack");
@@ -1529,13 +1510,15 @@ Instruction *LateLowerGCFrame::get_pgcstack(Instruction *ptlsStates)
 void LateLowerGCFrame::PushGCFrame(AllocaInst *gcframe, unsigned NRoots, Instruction *InsertAfter) {
     IRBuilder<> builder(gcframe->getContext());
     builder.SetInsertPoint(&*(++BasicBlock::iterator(InsertAfter)));
+    auto slot0 = builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0);
     Instruction *inst =
         builder.CreateStore(ConstantInt::get(T_size, NRoots << 1),
-                          builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_size->getPointerTo()));
+                            builder.CreateBitCast(slot0, T_size->getPointerTo()));
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
     Value *pgcstack = builder.Insert(get_pgcstack(ptlsStates));
+    auto slot1 = builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1);
     inst = builder.CreateStore(builder.CreateLoad(pgcstack),
-                               builder.CreatePointerCast(builder.CreateConstGEP1_32(gcframe, 1), PointerType::get(T_ppjlvalue,0)));
+                               builder.CreatePointerCast(slot1, PointerType::get(T_ppjlvalue,0)));
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
     builder.CreateStore(gcframe, builder.CreateBitCast(pgcstack,
         PointerType::get(PointerType::get(T_prjlvalue, 0), 0)));
@@ -1545,7 +1528,7 @@ void LateLowerGCFrame::PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore
     IRBuilder<> builder(InsertBefore->getContext());
     builder.SetInsertPoint(InsertBefore); // set insert *before* Ret
     Instruction *gcpop =
-        (Instruction*)builder.CreateConstGEP1_32(gcframe, 1);
+        (Instruction*)builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1);
     Instruction *inst = builder.CreateLoad(gcpop);
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateStore(inst,
@@ -1721,7 +1704,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 int slot = 0;
                 IRBuilder<> Builder (CI);
                 for (; it != CI->arg_end(); ++it) {
-                    Builder.CreateStore(*it, Builder.CreateGEP(T_prjlvalue, Frame,
+                    Builder.CreateStore(*it, Builder.CreateInBoundsGEP(T_prjlvalue, Frame,
                         ConstantInt::get(T_int32, slot++)));
                 }
                 ReplacementArgs.push_back(nframeargs == 0 ?
@@ -1854,6 +1837,7 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
         ConstantInt::get(T_int32, Colors[R]+MinColorRoot)
     };
     GetElementPtrInst *gep = GetElementPtrInst::Create(T_prjlvalue, GCFrame, makeArrayRef(args));
+    gep->setIsInBounds(true);
     gep->insertBefore(InsertionPoint);
     Val = MaybeExtractUnion(std::make_pair(Val, -1), InsertionPoint);
     // Pointee types don't have semantics, so the optimizer is
@@ -1928,6 +1912,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
                 ConstantInt::get(T_int32, AllocaSlot++)
             };
             GetElementPtrInst *gep = GetElementPtrInst::Create(T_prjlvalue, gcframe, makeArrayRef(args));
+            gep->setIsInBounds(true);
             gep->insertAfter(gcframe);
             gep->takeName(AI);
             // Check for lifetime intrinsics on this alloca, we can't keep them
