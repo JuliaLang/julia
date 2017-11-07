@@ -20,7 +20,7 @@ Stack information representing execution context, with the following fields:
 
   The name of the function containing the execution context.
 
-- `linfo::Nullable{Core.MethodInstance}`
+- `linfo::Union{Core.MethodInstance, CodeInfo, Void}`
 
   The MethodInstance containing the execution context (if it could be found).
 
@@ -52,8 +52,8 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     file::Symbol
     "the line number in the file containing the execution context"
     line::Int
-    "the MethodInstance containing the execution context (if it could be found)"
-    linfo::Nullable{Core.MethodInstance}
+    "the MethodInstance or CodeInfo containing the execution context (if it could be found)"
+    linfo::Union{Core.MethodInstance, CodeInfo, Void}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -63,7 +63,7 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
 end
 
 StackFrame(func, file, line) = StackFrame(Symbol(func), Symbol(file), line,
-                                          Nullable{Core.MethodInstance}(), false, false, 0)
+                                          nothing, false, false, 0)
 
 """
     StackTrace
@@ -74,7 +74,7 @@ An alias for `Vector{StackFrame}` provided for convenience; returned by calls to
 const StackTrace = Vector{StackFrame}
 
 const empty_sym = Symbol("")
-const UNKNOWN = StackFrame(empty_sym, empty_sym, -1, Nullable{Core.MethodInstance}(), true, false, 0) # === lookup(C_NULL)
+const UNKNOWN = StackFrame(empty_sym, empty_sym, -1, nothing, true, false, 0) # === lookup(C_NULL)
 
 
 #=
@@ -114,7 +114,7 @@ function deserialize(s::AbstractSerializer, ::Type{StackFrame})
     from_c = read(s.io, Bool)
     inlined = read(s.io, Bool)
     pointer = read(s.io, UInt64)
-    return StackFrame(func, file, line, Nullable{Core.MethodInstance}(), from_c, inlined, pointer)
+    return StackFrame(func, file, line, nothing, from_c, inlined, pointer)
 end
 
 
@@ -127,18 +127,58 @@ inlined at that point, innermost function first.
 """
 function lookup(pointer::Ptr{Void})
     infos = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), pointer - 1, false)
-    isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, Nullable{Core.MethodInstance}(), true, false, convert(UInt64, pointer))]
+    isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, convert(UInt64, pointer))]
     res = Vector{StackFrame}(length(infos))
     for i in 1:length(infos)
         info = infos[i]
         @assert(length(info) == 7)
-        li = info[4] === nothing ? Nullable{Core.MethodInstance}() : Nullable{Core.MethodInstance}(info[4])
-        res[i] = StackFrame(info[1], info[2], info[3], li, info[5], info[6], info[7])
+        res[i] = StackFrame(info[1], info[2], info[3], info[4], info[5], info[6], info[7])
     end
     return res
 end
 
 lookup(pointer::UInt) = lookup(convert(Ptr{Void}, pointer))
+
+using Base.Meta
+is_loc_meta(expr, kind) = isexpr(expr, :meta) && length(expr.args) >= 1 && expr.args[1] === kind
+function lookup(ip::Base.InterpreterIP)
+    i = ip.stmt
+    foundline = false
+    func = empty_sym
+    file = empty_sym
+    line = 0
+    while i >= 1
+        expr = ip.code.code[i]
+        if !foundline && isa(expr, LineNumberNode)
+            line = expr.line
+            file = expr.file
+            foundline = true
+        elseif foundline && is_loc_meta(expr, :push_loc)
+            file = expr.args[2]
+            if length(expr.args) >= 3
+                func = expr.args[3]
+            else
+                # Note: This is not quite correct. See issue #23971
+                func = Symbol("macro expansion")
+            end
+            scopes = lookup(Base.InterpreterIP(ip.code, i-1))
+            unshift!(scopes, StackFrame(
+                func, file, line, nothing, false, true, 0
+            ))
+            return scopes
+        elseif is_loc_meta(expr, :pop_loc)
+            npops = 1
+            while npops >= 1
+                i -= 1
+                expr = ip.code.code[i]
+                is_loc_meta(expr, :pop_loc) && (npops += 1)
+                is_loc_meta(expr, :push_loc) && (npops -= 1)
+            end
+        end
+        i -= 1
+    end
+    return [StackFrame(func, file, line, ip.code, false, false, 0)]
+end
 
 # allow lookup on already-looked-up data for easier handling of pre-processed frames
 lookup(s::StackFrame) = StackFrame[s]
@@ -151,7 +191,7 @@ Returns a stack trace in the form of a vector of `StackFrame`s. (By default stac
 doesn't return C functions, but this can be enabled.) When called without specifying a
 trace, `stacktrace` first calls `backtrace`.
 """
-function stacktrace(trace::Vector{Ptr{Void}}, c_funcs::Bool=false)
+function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Void}}}, c_funcs::Bool=false)
     stack = vcat(StackTrace(), map(lookup, trace)...)::StackTrace
 
     # Remove frames that come from C calls.
@@ -209,19 +249,20 @@ function remove_frames!(stack::StackTrace, m::Module)
 end
 
 function show_spec_linfo(io::IO, frame::StackFrame)
-    if isnull(frame.linfo)
+    if frame.linfo == nothing
         if frame.func === empty_sym
             @printf(io, "ip:%#x", frame.pointer)
         else
             print_with_color(Base.have_color && get(io, :backtrace, false) ? Base.stackframe_function_color() : :nothing, io, string(frame.func))
         end
-    else
-        linfo = get(frame.linfo)
-        if isa(linfo.def, Method)
-            Base.show_tuple_as_call(io, linfo.def.name, linfo.specTypes)
+    elseif frame.linfo isa Core.MethodInstance
+        if isa(frame.linfo.def, Method)
+            Base.show_tuple_as_call(io, frame.linfo.def.name, frame.linfo.specTypes)
         else
-            Base.show(io, linfo)
+            Base.show(io, frame.linfo)
         end
+    elseif frame.linfo isa CodeInfo
+        print(io, "In toplevel scope")
     end
 end
 
@@ -253,8 +294,8 @@ function from(frame::StackFrame, m::Module)
     finfo = frame.linfo
     result = false
 
-    if !isnull(finfo)
-        frame_m = get(finfo).def
+    if finfo isa Core.MethodInstance
+        frame_m = finfo.def
         isa(frame_m, Method) && (frame_m = frame_m.module)
         result = module_name(frame_m) === module_name(m)
     end

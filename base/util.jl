@@ -350,8 +350,8 @@ const log_warn_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
 const log_error_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
 
 function _redirect(io::IO, log_to::Dict, sf::StackTraces.StackFrame)
-    isnull(sf.linfo) && return io
-    mod = get(sf.linfo).def
+    (sf.linfo isa Core.MethodInstance) || return io
+    mod = sf.linfo.def
     isa(mod, Method) && (mod = mod.module)
     fun = sf.func
     if haskey(log_to, (mod,fun))
@@ -374,10 +374,10 @@ function _redirect(io::IO, log_to::Dict, fun::Symbol)
         stack::Vector{StackFrame} = StackTraces.lookup(trace)
         filter!(frame -> !frame.from_c, stack)
         for frame in stack
-            isnull(frame.linfo) && continue
+            (frame.linfo isa Core.MethodInstance) || continue
             sf = frame
             break_next_frame && (@goto skip)
-            mod = get(frame.linfo).def
+            mod = frame.linfo.def
             isa(mod, Method) && (mod = mod.module)
             mod === Base || continue
             sff = string(frame.func)

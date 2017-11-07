@@ -34,8 +34,8 @@ let
     frame2 = deserialize(b)
     @test frame !== frame2
     @test frame == frame2
-    @test !isnull(frame.linfo)
-    @test isnull(frame2.linfo)
+    @test frame.linfo !== nothing
+    @test frame2.linfo === nothing
 end
 
 # Test from_c
@@ -120,7 +120,7 @@ let ctestptr = cglobal((:ctest, "libccalltest")),
 
     @test length(ctest) == 1
     @test ctest[1].func === :ctest
-    @test isnull(ctest[1].linfo)
+    @test ctest[1].linfo === nothing
     @test ctest[1].from_c
     @test ctest[1].pointer === UInt64(ctestptr)
 end

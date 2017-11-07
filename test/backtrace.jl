@@ -149,3 +149,22 @@ end
 @test hasbtmacro
 
 end
+
+# Interpreter backtraces
+bt = eval(quote
+    try
+        error()
+    catch
+        catch_backtrace()
+    end
+end)
+lkup = map(StackTraces.lookup, bt)
+hastoplevel = false
+for sfs in lkup
+    for sf in sfs
+        if sf.linfo isa CodeInfo
+            global hastoplevel = true
+        end
+    end
+end
+@test hastoplevel

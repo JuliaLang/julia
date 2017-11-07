@@ -184,6 +184,7 @@ $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SR
 $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,\
 	intrinsics.cpp jitlayers.h intrinsics.h debuginfo.h codegen_shared.h cgutils.cpp ccall.cpp abi_*.cpp processor.h)
 $(BUILDDIR)/processor.o $(BUILDDIR)/processor.dbg.obj: $(addprefix $(SRCDIR)/,processor_*.cpp processor.h features_*.h)
+$(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj: $(SRCDIR)/interpreter-stacktrace.c
 $(BUILDDIR)/anticodegen.o $(BUILDDIR)/anticodegen.dbg.obj: $(SRCDIR)/intrinsics.h
 $(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: \
 	$(addprefix $(SRCDIR)/,debuginfo.h processor.h)
