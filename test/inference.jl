@@ -1296,3 +1296,6 @@ end
 f_constant(x) = convert(Int, x)
 g_test_constant() = (f_constant(3) == 3 && f_constant(4) == 4 ? true : "BAD")
 @test @inferred g_test_constant()
+
+f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
+@test @inferred f_pure_add()

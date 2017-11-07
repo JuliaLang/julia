@@ -1768,6 +1768,12 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
         return Any
     end
     if isa(f, IntrinsicFunction)
+        if is_pure_intrinsic_infer(f) && all(a -> isa(a, Const), argtypes)
+            argvals = anymap(a -> a.val, argtypes)
+            try
+                return Const(f(argvals...))
+            end
+        end
         iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
         if iidx < 0 || iidx > length(t_ifunc)
             # invalid intrinsic
@@ -4235,23 +4241,38 @@ const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof,
 # known effect-free calls (might not be affect-free)
 const _pure_builtins_volatile = Any[getfield, arrayref, isdefined, Core.sizeof]
 
-function is_pure_intrinsic(f::IntrinsicFunction)
+# whether `f` is pure for Inference
+function is_pure_intrinsic_infer(f::IntrinsicFunction)
     return !(f === Intrinsics.pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.llvmcall ||   # this one is never effect-free
-             f === Intrinsics.checked_sdiv_int ||
+             f === Intrinsics.arraylen ||   # this one is volatile
+             f === Intrinsics.sqrt_llvm ||  # this one may differ at runtime (by a few ulps)
+             f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
+end
+
+# whether `f` is pure for Optimizations
+function is_pure_intrinsic_optim(f::IntrinsicFunction)
+    return !(f === Intrinsics.pointerref || # this one is volatile
+             f === Intrinsics.pointerset || # this one is never effect-free
+             f === Intrinsics.llvmcall ||   # this one is never effect-free
+             f === Intrinsics.arraylen ||   # this one is volatile
+             f === Intrinsics.checked_sdiv_int ||  # these may throw errors
              f === Intrinsics.checked_udiv_int ||
              f === Intrinsics.checked_srem_int ||
              f === Intrinsics.checked_urem_int ||
-             f === Intrinsics.sqrt_llvm ||
              f === Intrinsics.cglobal)  # cglobal throws an error for symbol-not-found
 end
 
 function is_pure_builtin(@nospecialize(f))
-    return (contains_is(_pure_builtins, f) ||
-            contains_is(_pure_builtins_volatile, f) ||
-            (isa(f,IntrinsicFunction) && is_pure_intrinsic(f)) ||
-            f === return_type)
+    if isa(f, IntrinsicFunction)
+        return is_pure_intrinsic_optim(f)
+    elseif isa(f, Builtin)
+        return (contains_is(_pure_builtins, f) ||
+                contains_is(_pure_builtins_volatile, f))
+    else
+        return f === return_type
+    end
 end
 
 function statement_effect_free(@nospecialize(e), src::CodeInfo, mod::Module)
@@ -4592,7 +4613,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
                 (isbits(val) && Core.sizeof(val) <= MAX_INLINE_CONST_SIZE &&
                  (contains_is(_pure_builtins, f) ||
                   (f === getfield && effect_free(e, sv.src, sv.mod, false)) ||
-                  (isa(f,IntrinsicFunction) && is_pure_intrinsic(f)))))
+                  (isa(f, IntrinsicFunction) && is_pure_intrinsic_optim(f)))))
                 return inline_as_constant(val, argexprs, sv, nothing)
             end
         end
