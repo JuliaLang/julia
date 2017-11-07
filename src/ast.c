@@ -866,35 +866,6 @@ jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module
     return result;
 }
 
-// wrap expr in a thunk AST
-jl_code_info_t *jl_wrap_expr(jl_value_t *expr)
-{
-    // `(lambda () (() () () ()) ,expr)
-    jl_expr_t *le=NULL, *bo=NULL; jl_value_t *vi=NULL;
-    jl_value_t *mt = jl_an_empty_vec_any;
-    jl_code_info_t *src = NULL;
-    JL_GC_PUSH4(&le, &vi, &bo, &src);
-    le = jl_exprn(lambda_sym, 3);
-    jl_array_ptr_set(le->args, 0, mt);
-    vi = (jl_value_t*)jl_alloc_vec_any(4);
-    jl_array_ptr_set(vi, 0, mt);
-    jl_array_ptr_set(vi, 1, mt);
-    // front end always wraps toplevel exprs with ssavalues in (thunk (lambda () ...))
-    jl_array_ptr_set(vi, 2, jl_box_long(0));
-    jl_array_ptr_set(vi, 3, mt);
-    jl_array_ptr_set(le->args, 1, vi);
-    if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
-        bo = jl_exprn(body_sym, 1);
-        jl_array_ptr_set(bo->args, 0, (jl_value_t*)jl_exprn(return_sym, 1));
-        jl_array_ptr_set(((jl_expr_t*)jl_exprarg(bo,0))->args, 0, expr);
-        expr = (jl_value_t*)bo;
-    }
-    jl_array_ptr_set(le->args, 2, expr);
-    src = jl_new_code_info_from_ast(le);
-    JL_GC_POP();
-    return src;
-}
-
 // syntax tree accessors
 
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
