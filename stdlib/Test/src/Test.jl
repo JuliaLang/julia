@@ -940,7 +940,7 @@ function testset_beginend(args, tests, source)
     # it to the task local storage, evaluates the test(s), before
     # finally removing the testset and giving it a chance to take
     # action (such as reporting the results)
-    quote
+    ex = quote
         ts = $(testsettype)($desc; $options...)
         # this empty loop is here to force the block to be compiled,
         # which is needed for backtrace scrubbing to work correctly.
@@ -956,6 +956,11 @@ function testset_beginend(args, tests, source)
         pop_testset()
         finish(ts)
     end
+    # preserve outer location if possible
+    if tests isa Expr && tests.head === :block && !isempty(tests.args) && tests.args[1] isa LineNumberNode
+        ex = Expr(:block, tests.args[1], ex)
+    end
+    return ex
 end
 
 

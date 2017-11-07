@@ -168,3 +168,15 @@ for sfs in lkup
     end
 end
 @test hastoplevel
+
+# issue #23971
+let
+    for i = 1:1
+        global bt23971 = backtrace()
+    end
+end
+let st = stacktrace(bt23971)
+    @test st[1].func == :anonymous
+    @test string(st[1].file) == @__FILE__
+    @test !contains(string(st[2].file), "missing")
+end

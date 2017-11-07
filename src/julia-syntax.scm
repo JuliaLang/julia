@@ -3519,7 +3519,7 @@ f(x) = yt(x)
 ;; only possible returned values.
 (define (compile-body e vi lam)
   (let ((code '())            ;; statements (emitted in reverse order)
-        (filename 'none)
+        (filename #f)
         (first-line #t)
         (current-loc #f)
         (rett #f)
@@ -3712,7 +3712,7 @@ f(x) = yt(x)
                                     filename))
                     (file-diff  (not (eq? fname last-fname)))
                     ;; don't need a filename node for start of function
-                    (need-meta  (and file-diff
+                    (need-meta  (and file-diff last-fname
                                      (not (eq? e (lam:body lam))))))
                (if file-diff (set! filename fname))
                (if need-meta (emit `(meta push_loc ,fname)))

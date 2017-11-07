@@ -537,14 +537,14 @@ macro iter()
 end
 end
 let ex = Meta.lower(M16096, :(@iter))
-    @test isa(ex, Expr) && ex.head === :thunk
+    @test isa(ex, Expr)
 end
 let ex = Meta.lower(Main, :($M16096.@iter))
-    @test isa(ex, Expr) && ex.head === :thunk
+    @test isa(ex, Expr)
 end
 let thismodule = @__MODULE__,
     ex = Meta.lower(thismodule, :(@M16096.iter))
-    @test isa(ex, Expr) && ex.head === :thunk
+    @test isa(ex, Expr)
     @test !isdefined(M16096, :foo16096)
     local_foo16096 = eval(@__MODULE__, ex)
     @test local_foo16096(2.0) == 1
@@ -685,20 +685,21 @@ macro m4()
     end
 end
 """, "another_file.jl")
-m1_exprs = get_expr_list(Meta.lower(@__MODULE__, :(@m1)))
-m2_exprs = get_expr_list(Meta.lower(@__MODULE__, :(@m2)))
-m3_exprs = get_expr_list(Meta.lower(@__MODULE__, :(@m3)))
-m4_exprs = get_expr_list(Meta.lower(@__MODULE__, :(@m4)))
+m1_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m1 end))
+m2_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m2 end))
+m3_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m3 end))
+m4_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m4 end))
 
 # Check the expanded expresion has expected number of matching push/pop
 # and the return is handled correctly
-@test count_meta_loc(m1_exprs) == 1
-@test is_return_ssavalue(m1_exprs[end])
-@test is_pop_loc(m1_exprs[end - 1])
+# NOTE: we currently only emit push/pop locations for macros from other files
+@test_broken count_meta_loc(m1_exprs) == 1
+@test_broken is_return_ssavalue(m1_exprs[end])
+@test_broken is_pop_loc(m1_exprs[end - 1])
 
-@test count_meta_loc(m2_exprs) == 1
+@test_broken count_meta_loc(m2_exprs) == 1
 @test m2_exprs[end] == :(return 1)
-@test is_pop_loc(m2_exprs[end - 1])
+@test_broken is_pop_loc(m2_exprs[end - 1])
 
 @test count_meta_loc(m3_exprs) == 2
 @test is_return_ssavalue(m3_exprs[end])
