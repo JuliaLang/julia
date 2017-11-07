@@ -763,6 +763,11 @@ no_specialize(@nospecialize(x)) = sin(1)
 no_specialize(@nospecialize(x::Integer)) = sin(2)
 @test no_specialize(1.0) == sin(1)
 @test no_specialize(1) == sin(2)
+no_specialize_kw(@nospecialize(x=0)) = sin(1)
+no_specialize_kw(@nospecialize(x::Integer=0)) = sin(2)
+@test no_specialize_kw(1.0) == sin(1)
+@test no_specialize_kw(1) == sin(2)
+@test no_specialize_kw() == sin(2)
 
 # 0.7
 @test read(IOBuffer("aaaa"), String) == "aaaa"
