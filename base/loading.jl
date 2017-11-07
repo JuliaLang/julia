@@ -631,7 +631,7 @@ function compilecache(name::String)
     if success(create_expr_cache(path, cachefile, concrete_deps))
         # append checksum to the end of the .ji file:
         open(cachefile, "a+") do f
-            write(f, hton(crc32c(seekstart(f))))
+            write(f, hton(_crc32c(seekstart(f))))
         end
     else
         error("Failed to precompile $name to $cachefile.")
@@ -790,7 +790,7 @@ function stale_cachefile(modpath::String, cachefile::String)
         end
 
         # finally, verify that the cache file has a valid checksum
-        crc = crc32c(seekstart(io), filesize(io)-4)
+        crc = _crc32c(seekstart(io), filesize(io)-4)
         if crc != ntoh(read(io, UInt32))
             DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it has an invalid checksum.")
             return true
