@@ -1072,3 +1072,19 @@ end
 "an empty macro"
 macro mdoc22098 end
 @test docstrings_equal(@doc(:@mdoc22098), doc"an empty macro")
+
+# issue #24468
+let ex = try
+    include_string(@__MODULE__, """
+
+    \"\"\"
+    an example
+    \"\"\"
+    function hello(param::Vector{In64_nOt_DeFiNeD__})
+    end
+    """)
+catch e
+    e
+end
+    @test ex.line == 2
+end

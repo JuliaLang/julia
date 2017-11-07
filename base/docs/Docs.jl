@@ -531,10 +531,8 @@ end
 function objectdoc(__source__, __module__, str, def, expr, sig = :(Union{}))
     binding = esc(bindingexpr(namify(expr)))
     docstr  = esc(docexpr(__source__, __module__, lazy_iterpolate(str), metadata(__source__, __module__, expr, false)))
-    quote
-        $(esc(def))
-        $(doc!)($__module__, $binding, $docstr, $(esc(sig)))
-    end
+    # Note: we want to avoid introducing line number nodes here (issue #24468)
+    Expr(:block, esc(def), :($(doc!)($__module__, $binding, $docstr, $(esc(sig)))))
 end
 
 function calldoc(__source__, __module__, str, def)
