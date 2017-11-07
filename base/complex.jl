@@ -631,7 +631,24 @@ function log1p(z::Complex{T}) where T
     end
 end
 
-function ^(z::Complex{T}, p::Union{T,Complex{T}})::Complex{T} where T<:AbstractFloat
+function exp2(z::Complex{T}) where T<:AbstractFloat
+    er = exp2(real(z))
+    theta = imag(z) * log(convert(T, 2))
+    s, c = sincos(theta)
+    Complex(er * c, er * s)
+end
+exp2(z::Complex) = exp2(float(z))
+
+function exp10(z::Complex{T}) where T<:AbstractFloat
+    er = exp10(real(z))
+    theta = imag(z) * log(convert(T, 10))
+    s, c = sincos(theta)
+    Complex(er * c, er * s)
+end
+exp10(z::Complex) = exp10(float(z))
+
+# _cpow helper function to avoid method ambiguity with ^(::Complex,::Real)
+function _cpow(z::Complex{T}, p::Union{T,Complex{T}})::Complex{T} where T<:AbstractFloat
     if p == 2 #square
         zr, zi = reim(z)
         x = (zr-zi)*(zr+zi)
@@ -665,24 +682,7 @@ function ^(z::Complex{T}, p::Union{T,Complex{T}})::Complex{T} where T<:AbstractF
         Complex(one(T), zer)
     end
 end
-
-function exp2(z::Complex{T}) where T<:AbstractFloat
-    er = exp2(real(z))
-    theta = imag(z) * log(convert(T, 2))
-    s, c = sincos(theta)
-    Complex(er * c, er * s)
-end
-exp2(z::Complex) = exp2(float(z))
-
-function exp10(z::Complex{T}) where T<:AbstractFloat
-    er = exp10(real(z))
-    theta = imag(z) * log(convert(T, 10))
-    s, c = sincos(theta)
-    Complex(er * c, er * s)
-end
-exp10(z::Complex) = exp10(float(z))
-
-function ^(z::Complex{T}, p::Union{T,Complex{T}}) where T<:Real
+function _cpow(z::Complex{T}, p::Union{T,Complex{T}}) where T<:Real
     if isinteger(p)
         rp = real(p)
         if rp < 0
@@ -738,6 +738,8 @@ function ^(z::Complex{T}, p::Union{T,Complex{T}}) where T<:Real
 
     Complex(re, im)
 end
+^(z::Complex{T}, p::Complex{T}) where T<:Real = _cpow(z, p)
+^(z::Complex{T}, p::T) where T<:Real = _cpow(z, p)
 
 ^(z::Complex, n::Bool) = n ? z : one(z)
 ^(z::Complex, n::Integer) = z^Complex(n)
