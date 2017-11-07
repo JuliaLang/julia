@@ -349,6 +349,12 @@ end
     @test eigvals(Mi7647) == eigvals(Mi7647, 0.5, 3.5) == [1.0:3.0;]
 end
 
+@testset "Hermitian wrapper ignores imaginary parts on diagonal" begin
+    A = [1.0+im 2.0; 2.0 0.0]
+    @test !ishermitian(A)
+    @test Hermitian(A)[1,1] == 1
+end
+
 @testset "Issue #7933" begin
     A7933 = [1 2; 3 4]
     B7933 = copy(A7933)
@@ -363,10 +369,10 @@ end
     @test_throws ArgumentError f(A, 1:4)
 end
 
-@testset "Issue #10671" begin
+@testset "Ignore imaginary part of Hermitian diagonal" begin
     A = [1.0+im 2.0; 2.0 0.0]
     @test !ishermitian(A)
-    @test_throws ArgumentError Hermitian(A)
+    @test diag(Hermitian(A)) == real(diag(A))
 end
 
 @testset "Issue #17780" begin
