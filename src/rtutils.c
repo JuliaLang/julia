@@ -205,9 +205,8 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
         jl_type_error("typeassert", t, x);
 }
 
-JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
+STATIC_INLINE void jl_enter_handler_th(jl_ptls_t ptls, jl_handler_t *eh)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *current_task = ptls->current_task;
     // Must have no safepoint
     eh->prev = current_task->eh;
@@ -225,16 +224,67 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 #endif
 }
 
-JL_DLLEXPORT void jl_pop_handler(int n)
+JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (__unlikely(n <= 0))
-        return;
-    jl_handler_t *eh = ptls->current_task->eh;
-    while (--n > 0)
-        eh = eh->prev;
-    jl_eh_restore_state(eh);
+    jl_enter_handler_th(jl_get_ptls_states(), eh);
 }
+
+#ifdef _OS_WINDOWS_
+#  define jl_reset_stkoflw(cond, ptls) do {                             \
+        if (cond && ptls->exception_in_transit == jl_stackovf_exception) { \
+            _resetstkoflw();                                            \
+        }                                                               \
+    } while (0)
+#else
+#  define jl_reset_stkoflw(cond, ptls) do {} while (0)
+#endif
+
+#define DEF_JL_CATCH_FUNCS(suffix, sig1, arg1, sig2, arg2)              \
+    JL_DLLEXPORT int jl_catch_exception##suffix sig1                    \
+    {                                                                   \
+        jl_ptls_t ptls = jl_get_ptls_states();                          \
+        jl_handler_t eh;                                                \
+        jl_enter_handler_th(ptls, &eh);                                 \
+        if (__likely(!jl_setjmp(eh.eh_ctx, 0))) {                       \
+            cb arg1;                                                    \
+            jl_eh_restore_state(&eh);                                   \
+            return 0;                                                   \
+        }                                                               \
+        jl_eh_restore_state_th(ptls, &eh);                              \
+        jl_reset_stkoflw(1, ptls);                                      \
+        return 1;                                                       \
+    }                                                                   \
+    JL_DLLEXPORT int jl_catch_exception_generic##suffix sig2            \
+    {                                                                   \
+        jl_ptls_t ptls = jl_get_ptls_states();                          \
+        jl_handler_t eh;                                                \
+        jl_enter_handler_th(ptls, &eh);                                 \
+        int set = jl_setjmp(eh.eh_ctx, 0);                              \
+        jl_reset_stkoflw(set, ptls);                                    \
+        int ret = cb arg2;                                              \
+        jl_eh_restore_state_th(ptls, &eh);                              \
+        return ret;                                                     \
+    }
+
+DEF_JL_CATCH_FUNCS(0, (void (*cb)(void)), (),
+                   (int (*cb)(int)), (set))
+DEF_JL_CATCH_FUNCS(1, (void (*cb)(void*), void *a1), (a1),
+                   (int (*cb)(int, void*), void *a1), (set, a1))
+DEF_JL_CATCH_FUNCS(2, (void (*cb)(void*, void*), void *a1, void *a2), (a1, a2),
+                   (int (*cb)(int, void*, void*), void *a1, void *a2), (set, a1, a2))
+DEF_JL_CATCH_FUNCS(3, (void (*cb)(void*, void*, void*), void *a1, void *a2, void *a3),
+                   (a1, a2, a3),
+                   (int (*cb)(int, void*, void*, void*), void *a1, void *a2, void *a3),
+                   (set, a1, a2, a3))
+DEF_JL_CATCH_FUNCS(4, (void (*cb)(void*, void*, void*, void*),
+                       void *a1, void *a2, void *a3, void *a4), (a1, a2, a3, a4),
+                   (int (*cb)(int, void*, void*, void*, void*),
+                    void *a1, void *a2, void *a3, void *a4), (set, a1, a2, a3, a4))
+DEF_JL_CATCH_FUNCS(5, (void (*cb)(void*, void*, void*, void*, void*),
+                      void *a1, void *a2, void *a3, void *a4, void *a5), (a1, a2, a3, a4, a5),
+                   (int (*cb)(int, void*, void*, void*, void*, void*),
+                    void *a1, void *a2, void *a3, void *a4, void *a5), (set, a1, a2, a3, a4, a5))
+#undef DEF_JL_CATCH_FUNCS
 
 JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int drop_exceptions)
 {

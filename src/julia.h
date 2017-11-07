@@ -1556,9 +1556,8 @@ JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e);
 
 #include "locks.h"   // requires jl_task_t definition
 
-STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
+STATIC_INLINE void jl_eh_restore_state_th(jl_ptls_t ptls, jl_handler_t *eh)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *current_task = ptls->current_task;
     // `eh` may not be `ptls->current_task->eh`. See `jl_pop_handler`
     // This function should **NOT** have any safepoint before the ones at the
@@ -1587,8 +1586,12 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
     }
 }
 
+STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
+{
+    jl_eh_restore_state_th(jl_get_ptls_states(), eh);
+}
+
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh);
-JL_DLLEXPORT void jl_pop_handler(int n);
 
 #if defined(_OS_WINDOWS_)
 #if defined(_COMPILER_MINGW_)
@@ -1598,19 +1601,10 @@ __declspec(noreturn) __attribute__ ((__nothrow__)) void (jl_longjmp)(jmp_buf _Bu
 int (jl_setjmp)(jmp_buf _Buf);
 void (jl_longjmp)(jmp_buf _Buf, int _Value);
 #endif
-#define jl_setjmp_f jl_setjmp
-#define jl_setjmp_name "jl_setjmp"
 #define jl_setjmp(a,b) jl_setjmp(a)
 #define jl_longjmp(a,b) jl_longjmp(a,b)
 #else
 // determine actual entry point name
-#if defined(sigsetjmp)
-#define jl_setjmp_f    __sigsetjmp
-#define jl_setjmp_name "__sigsetjmp"
-#else
-#define jl_setjmp_f    sigsetjmp
-#define jl_setjmp_name "sigsetjmp"
-#endif
 #define jl_setjmp(a,b) sigsetjmp(a,b)
 #define jl_longjmp(a,b) siglongjmp(a,b)
 #endif

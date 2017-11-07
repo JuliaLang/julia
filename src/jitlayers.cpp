@@ -114,7 +114,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
         PM->add(createCFGSimplificationPass()); // Clean up disgusting code
 #if JL_LLVM_VERSION < 50000
         PM->add(createBarrierNoopPass());
-        PM->add(createLowerExcHandlersPass());
+        PM->add(createEHOutliningPass());
         PM->add(createGCInvariantVerifierPass(false));
         PM->add(createLateLowerGCFramePass());
         PM->add(createLowerPTLSPass(dump_native));
@@ -128,13 +128,14 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
 #endif
 #if JL_LLVM_VERSION >= 50000
         PM->add(createBarrierNoopPass());
-        PM->add(createLowerExcHandlersPass());
+        PM->add(createEHOutliningPass());
         PM->add(createGCInvariantVerifierPass(false));
         PM->add(createLateLowerGCFramePass());
         PM->add(createLowerPTLSPass(dump_native));
 #endif
         if (dump_native)
             PM->add(createMultiVersioningPass());
+        PM->add(createEHLoweringPass());
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
@@ -146,12 +147,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createCFGSimplificationPass()); // Clean up disgusting code
     PM->add(createDeadInstEliminationPass());
     PM->add(createPromoteMemoryToRegisterPass()); // Kill useless allocas
+    PM->add(createEHOutliningPass());
 
     // Due to bugs and missing features LLVM < 5.0, does not properly propagate
     // our invariants. We need to do GC rooting here. This reduces the
     // effectiveness of the optimization, but should retain correctness.
 #if JL_LLVM_VERSION < 50000
-    PM->add(createLowerExcHandlersPass());
     PM->add(createAllocOptPass());
     PM->add(createLateLowerGCFramePass());
     // Remove dead use of ptls
@@ -252,14 +253,16 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
 #if JL_LLVM_VERSION >= 50000
     PM->add(createBarrierNoopPass());
-    PM->add(createLowerExcHandlersPass());
     PM->add(createGCInvariantVerifierPass(false));
     PM->add(createLateLowerGCFramePass());
     // Remove dead use of ptls
     PM->add(createDeadCodeEliminationPass());
     PM->add(createLowerPTLSPass(dump_native));
+    PM->add(createEHLoweringPass());
     // Clean up write barrier and ptls lowering
     PM->add(createCFGSimplificationPass());
+#else
+    PM->add(createEHLoweringPass());
 #endif
     PM->add(createCombineMulAddPass());
 }
