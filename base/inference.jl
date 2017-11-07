@@ -2474,7 +2474,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         end
         return isa(rt, TypeVar) ? rt.ub : rt
     elseif f === Core.kwfunc
-        if length(fargs) == 2
+        if length(argtypes) == 2
             ft = widenconst(argtypes[2])
             if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
                 return Const(ft.name.mt.kwsorter)
@@ -2485,10 +2485,10 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         lb = Union{}
         ub = Any
         ub_certain = lb_certain = true
-        if length(fargs) >= 2 && isa(argtypes[2], Const)
+        if length(argtypes) >= 2 && isa(argtypes[2], Const)
             nv = argtypes[2].val
             ubidx = 3
-            if length(fargs) >= 4
+            if length(argtypes) >= 4
                 ubidx = 4
                 if isa(argtypes[3], Const)
                     lb = argtypes[3].val
@@ -2499,7 +2499,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
                     return TypeVar
                 end
             end
-            if length(fargs) >= ubidx
+            if length(argtypes) >= ubidx
                 if isa(argtypes[ubidx], Const)
                     ub = argtypes[ubidx].val
                 elseif isType(argtypes[ubidx])
@@ -2514,7 +2514,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         end
         return TypeVar
     elseif f === UnionAll
-        if length(fargs) == 3
+        if length(argtypes) == 3
             canconst = true
             if isa(argtypes[3], Const)
                 body = argtypes[3].val
@@ -2548,13 +2548,15 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         if rt_rt !== NF
             return rt_rt
         end
-    elseif length(fargs) == 2 && istopfunction(tm, f, :!)
+    elseif length(argtypes) == 2 && istopfunction(tm, f, :!)
+        # handle Conditional propagation through !Bool
         aty = argtypes[2]
         if isa(aty, Conditional)
             abstract_call_gf_by_type(f, Any[Const(f), Bool], Tuple{typeof(f), Bool}, sv) # make sure we've inferred `!(::Bool)`
             return Conditional(aty.var, aty.elsetype, aty.vtype)
         end
-    elseif length(fargs) == 3 && istopfunction(tm, f, :!==)
+    elseif length(argtypes) == 3 && istopfunction(tm, f, :!==)
+        # mark !== as exactly a negated call to ===
         rty = abstract_call((===), fargs, argtypes, vtypes, sv)
         if isa(rty, Conditional)
             return Conditional(rty.var, rty.elsetype, rty.vtype) # swap if-else
@@ -2562,12 +2564,30 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
             return Const(rty.val === false)
         end
         return rty
-    elseif length(fargs) == 3 && istopfunction(tm, f, :(>:))
+    elseif length(argtypes) == 3 && istopfunction(tm, f, :(>:))
+        # mark issupertype as a exact alias for issubtype
         # swap T1 and T2 arguments and call <:
-        fargs = Any[<:, fargs[3], fargs[2]]
+        if length(fargs) == 3
+            fargs = Any[<:, fargs[3], fargs[2]]
+        else
+            fargs = ()
+        end
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
         rty = abstract_call(<:, fargs, argtypes, vtypes, sv)
         return rty
+    elseif length(argtypes) == 2 && isa(argtypes[2], Const) && isa(argtypes[2].val, SimpleVector) && istopfunction(tm, f, :length)
+        # mark length(::SimpleVector) as @pure
+        return Const(length(argtypes[2].val))
+    elseif length(argtypes) == 3 && isa(argtypes[2], Const) && isa(argtypes[3], Const) &&
+            isa(argtypes[2].val, SimpleVector) && isa(argtypes[3].val, Int) && istopfunction(tm, f, :getindex)
+        # mark getindex(::SimpleVector, i::Int) as @pure
+        svecval = argtypes[2].val::SimpleVector
+        idx = argtypes[3].val::Int
+        if 1 <= idx <= length(svecval) && isassigned(svecval, idx)
+            return Const(getindex(svecval, idx))
+        end
+    elseif length(argtypes) == 2 && istopfunction(tm, f, :typename)
+        return typename_static(argtypes[2])
     end
 
     atype = argtypes_to_type(argtypes)
@@ -2576,8 +2596,6 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
 
     if istopfunction(tm, f, :typejoin) || f === return_type
         return Type # don't try to infer these function edges directly -- it won't actually come up with anything useful
-    elseif length(argtypes) == 2 && istopfunction(tm, f, :typename)
-        return typename_static(argtypes[2])
     end
 
     if sv.params.inlining
