@@ -233,11 +233,12 @@ SECT_INTERP static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             jl_undefined_var_error((jl_sym_t*)jl_array_ptr_ref(src->slotnames, n - 1));
         return v;
     }
+    if (jl_is_quotenode(e)) {
+        return jl_quotenode_value(e);
+    }
     if (jl_is_globalref(e)) {
         return jl_eval_global_var(jl_globalref_mod(e), jl_globalref_name(e));
     }
-    if (jl_is_quotenode(e))
-        return jl_fieldref(e,0);
     jl_module_t *modu = s->module;
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
         return jl_eval_global_var(modu, (jl_sym_t*)e);
@@ -247,7 +248,13 @@ SECT_INTERP static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     jl_expr_t *ex = (jl_expr_t*)e;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t nargs = jl_array_len(ex->args);
-    if (ex->head == isdefined_sym) {
+    if (ex->head == call_sym) {
+        return do_call(args, nargs, s);
+    }
+    else if (ex->head == invoke_sym) {
+        return do_invoke(args, nargs, s);
+    }
+    else if (ex->head == isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
         if (jl_is_slot(sym)) {
@@ -279,12 +286,6 @@ SECT_INTERP static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         }
         return defined ? jl_true : jl_false;
     }
-    else if (ex->head == call_sym) {
-        return do_call(args, nargs, s);
-    }
-    else if (ex->head == invoke_sym) {
-        return do_invoke(args, nargs, s);
-    }
     else if (ex->head == new_sym) {
         jl_value_t *thetype = eval(args[0], s);
         jl_value_t *v=NULL;
@@ -312,9 +313,6 @@ SECT_INTERP static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         }
         // static parameter val unknown needs to be an error for ccall
         jl_error("could not determine static parameter value");
-    }
-    else if (ex->head == inert_sym) {
-        return args[0];
     }
     else if (ex->head == copyast_sym) {
         return jl_copy_ast(eval(args[0], s));
@@ -527,7 +525,8 @@ SECT_INTERP static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     else if (ex->head == boundscheck_sym || ex->head == inbounds_sym || ex->head == fastmath_sym ||
              ex->head == simdloop_sym || ex->head == meta_sym) {
         return jl_nothing;
-    } else if (ex->head == gc_preserve_begin_sym || ex->head == gc_preserve_end_sym) {
+    }
+    else if (ex->head == gc_preserve_begin_sym || ex->head == gc_preserve_end_sym) {
         // The interpreter generally keeps values that were assigned in this scope
         // rooted. If the interpreter learns to be more agressive here, we may
         // want to explicitly root these values.
@@ -688,11 +687,34 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
     return NULL;
 }
 
+static jl_value_t *lookup_global_consts(jl_value_t *e)
+{
+    if (jl_is_globalref(e)) {
+        jl_binding_t *b = jl_get_binding(jl_globalref_mod(e), jl_globalref_name(e));
+        if (b && b->constp && b->value)
+            return jl_new_struct(jl_quotenode_type, b->value);
+    }
+    if (jl_is_expr(e)) {
+        size_t i = 0;
+        jl_sym_t *hd = ((jl_expr_t*)e)->head;
+        if (hd == assign_sym)
+            i++;
+        else if (hd != call_sym && hd != goto_ifnot_sym && hd != return_sym && hd != invoke_sym)
+            return e;
+        for( ; i < jl_expr_nargs(e); i++) {
+            jl_exprargset(e, i, lookup_global_consts(jl_exprarg(e, i)));
+        }
+    }
+    return e;
+}
+
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam)
 {
     jl_code_info_t *src = (jl_code_info_t*)lam->inferred;
+    int hadsrc = 1;
     JL_GC_PUSH1(&src);
     if (!src || (jl_value_t*)src == jl_nothing) {
+        hadsrc = 0;
         if (lam->def.method->source) {
             src = (jl_code_info_t*)lam->def.method->source;
         }
@@ -701,11 +723,17 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam)
             src = jl_code_for_staged(lam);
         }
     }
-    if (src && (jl_value_t*)src != jl_nothing) {
+    if (src && (jl_value_t*)src != jl_nothing && !jl_is_code_info(src)) {
+        hadsrc = 0;
         src = jl_uncompress_ast(lam->def.method, (jl_array_t*)src);
     }
     if (!src || !jl_is_code_info(src)) {
         jl_error("source missing for method called in interpreter");
+    }
+    if (!hadsrc) {
+        size_t i;
+        for (i = 0; i < jl_array_len(src->code); i++)
+            lookup_global_consts(jl_array_ptr_ref(src->code, i));
     }
     JL_GC_POP();
     return src;
