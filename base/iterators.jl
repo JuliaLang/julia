@@ -110,7 +110,7 @@ enumerate(iter) = Enumerate(iter)
 length(e::Enumerate) = length(e.itr)
 size(e::Enumerate) = size(e.itr)
 @inline start(e::Enumerate) = (1, start(e.itr))
-@inline function next(e::Enumerate, state)
+@propagate_inbounds function next(e::Enumerate, state)
     n = next(e.itr,state[2])
     (state[1],n[1]), (state[1]+1,n[2])
 end
@@ -225,7 +225,7 @@ size(z::Zip1) = size(z.a)
 indices(z::Zip1) = indices(z.a)
 eltype(::Type{Zip1{I}}) where {I} = Tuple{eltype(I)}
 @inline start(z::Zip1) = start(z.a)
-@inline function next(z::Zip1, st)
+@propagate_inbounds function next(z::Zip1, st)
     n = next(z.a,st)
     return ((n[1],), n[2])
 end
@@ -244,7 +244,7 @@ size(z::Zip2) = promote_shape(size(z.a), size(z.b))
 indices(z::Zip2) = promote_shape(indices(z.a), indices(z.b))
 eltype(::Type{Zip2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
 @inline start(z::Zip2) = (start(z.a), start(z.b))
-@inline function next(z::Zip2, st)
+@propagate_inbounds function next(z::Zip2, st)
     n1 = next(z.a,st[1])
     n2 = next(z.b,st[2])
     return ((n1[1], n2[1]), (n1[2], n2[2]))
@@ -294,7 +294,7 @@ size(z::Zip) = promote_shape(size(z.a), size(z.z))
 indices(z::Zip) = promote_shape(indices(z.a), indices(z.z))
 eltype(::Type{Zip{I,Z}}) where {I,Z} = tuple_type_cons(eltype(I), eltype(Z))
 @inline start(z::Zip) = tuple(start(z.a), start(z.z))
-@inline function next(z::Zip, st)
+@propagate_inbounds function next(z::Zip, st)
     n1 = next(z.a, st[1])
     n2 = next(z.z, st[2])
     (tuple(n1[1], n2[1]...), (n1[2], n2[2]))
@@ -401,7 +401,7 @@ julia> collect(Iterators.rest([1,2,3,4], 2))
 rest(itr,state) = Rest(itr,state)
 
 start(i::Rest) = i.st
-next(i::Rest, st) = next(i.itr, st)
+@propagate_inbounds next(i::Rest, st) = next(i.itr, st)
 done(i::Rest, st) = done(i.itr, st)
 
 eltype(::Type{Rest{I}}) where {I} = eltype(I)
@@ -490,7 +490,7 @@ length(t::Take) = _min_length(t.xs, 1:t.n, iteratorsize(t.xs), HasLength())
 
 start(it::Take) = (it.n, start(it.xs))
 
-function next(it::Take, state)
+@propagate_inbounds function next(it::Take, state)
     n, xs_state = state
     v, xs_state = next(it.xs, xs_state)
     return v, (n - 1, xs_state)
@@ -557,7 +557,7 @@ function start(it::Drop)
     xs_state
 end
 
-next(it::Drop, state) = next(it.xs, state)
+@propagate_inbounds next(it::Drop, state) = next(it.xs, state)
 done(it::Drop, state) = done(it.xs, state)
 
 # Cycle an iterator forever
@@ -833,7 +833,7 @@ function start(f::Flatten)
     return s, inner, s2
 end
 
-@inline function next(f::Flatten, state)
+@propagate_inbounds function next(f::Flatten, state)
     s, inner, s2 = state
     val, s2 = next(inner, s2)
     while done(inner, s2) && !done(f.it, s)
