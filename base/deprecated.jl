@@ -2089,6 +2089,10 @@ end
 @deprecate range(start::DateTime, len::Integer)  range(start, Dates.Day(1), len)
 @deprecate range(start::Date, len::Integer)      range(start, Dates.Day(1), len)
 
+@eval LinAlg begin
+    @deprecate chol!(x::Number, uplo) chol(x) false
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

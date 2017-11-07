@@ -132,8 +132,6 @@ function _chol!(x::Number, uplo)
     rx == abs(x) ? (rval, convert(BlasInt, 0)) : (rval, convert(BlasInt, 1))
 end
 
-chol!(x::Number, uplo) = ((C, info) = _chol!(x, uplo); @assertposdef C info)
-
 # chol!. Destructive methods for computing Cholesky factor of real symmetric or Hermitian
 # matrix
 function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
