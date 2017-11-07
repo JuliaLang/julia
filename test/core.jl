@@ -255,7 +255,7 @@ end
 @test_throws TypeError typeassert_instead_of_decl()
 
 # type declarations on globals not implemented yet
-@test_throws ErrorException eval(parse("global x20327::Int"))
+@test_throws ErrorException eval(Meta.parse("global x20327::Int"))
 
 y20327 = 1
 @test_throws TypeError y20327::Float64
