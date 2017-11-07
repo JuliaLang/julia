@@ -46,6 +46,16 @@
 // For C++, C++11 or MSVC is required. Both provide `static_assert`.
 #endif
 
+#ifndef alignof
+#  ifndef __cplusplus
+#    ifdef __GNUC__
+#      define alignof _Alignof
+#    else
+#      define alignof(...) 1
+#    endif
+#  endif
+#endif
+
 #if jl_has_builtin(__builtin_assume)
 #define jl_assume(cond) (__extension__ ({               \
                 __typeof__(cond) cond_ = (cond);        \
