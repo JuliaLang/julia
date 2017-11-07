@@ -515,8 +515,16 @@ end
                   Nullable("hello"))
 end
 
-# Issue #21291
-let t = (0, 1, 2)
-    o = 1
-    @test @inferred(broadcast(+, t, o)) == (1, 2, 3)
+@testset "broadcast resulting in tuples" begin
+    # Issue #21291
+    let t = (0, 1, 2)
+        o = 1
+        @test @inferred(broadcast(+, t, o)) == (1, 2, 3)
+    end
+
+    # Issue #23647
+    @test (1, 2, 3) .+ (1,) == (1,) .+ (1, 2, 3) == (2, 3, 4)
+    @test (1,) .+ () == () .+ (1,) == () .+ () == ()
+    @test (1, 2) .+ (1, 2) == (2, 4)
+    @test_throws DimensionMismatch (1, 2) .+ (1, 2, 3)
 end
