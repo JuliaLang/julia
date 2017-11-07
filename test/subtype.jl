@@ -1254,3 +1254,8 @@ for it = 1:5
 end
 
 @test round.(x_24305, 2) == [1.78, 1.42, 1.24]
+
+# PR #24399
+let (t, e) = intersection_env(Tuple{Union{Int,Int8}}, Tuple{T} where T)
+    @test e[1] isa TypeVar
+end
