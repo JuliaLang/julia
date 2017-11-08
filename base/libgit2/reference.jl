@@ -62,9 +62,12 @@ julia> LibGit2.shortname(branch_ref)
 """
 function shortname(ref::GitReference)
     isempty(ref) && return ""
-    name_ptr = ccall((:git_reference_shorthand, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
-    name_ptr == C_NULL && return ""
-    return unsafe_string(name_ptr)
+    Base.@gc_preserve ref begin
+        name_ptr = ccall((:git_reference_shorthand, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
+        name_ptr == C_NULL && return ""
+        name = unsafe_string(name_ptr)
+    end
+    return name
 end
 
 """
@@ -89,9 +92,12 @@ reference, returns an empty string.
 function fullname(ref::GitReference)
     isempty(ref) && return ""
     reftype(ref) == Consts.REF_OID && return ""
-    rname = ccall((:git_reference_symbolic_target, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
-    rname == C_NULL && return ""
-    return unsafe_string(rname)
+    Base.@gc_preserve ref begin
+        rname = ccall((:git_reference_symbolic_target, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
+        rname == C_NULL && return ""
+        name = unsafe_string(rname)
+    end
+    return name
 end
 
 """
@@ -101,17 +107,23 @@ Return the full name of `ref`.
 """
 function name(ref::GitReference)
     isempty(ref) && return ""
-    name_ptr = ccall((:git_reference_name, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
-    name_ptr == C_NULL && return ""
-    return unsafe_string(name_ptr)
+    Base.@gc_preserve ref begin
+        name_ptr = ccall((:git_reference_name, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
+        name_ptr == C_NULL && return ""
+        name = unsafe_string(name_ptr)
+    end
+    return name
 end
 
 function branch(ref::GitReference)
     isempty(ref) && return ""
     str_ptr_ptr = Ref{Cstring}()
-    @check ccall((:git_branch_name, :libgit2), Cint,
-                  (Ptr{Cstring}, Ptr{Void},), str_ptr_ptr, ref.ptr)
-    return unsafe_string(str_ptr_ptr[])
+    Base.@gc_preserve ref begin
+        @check ccall((:git_branch_name, :libgit2), Cint,
+                      (Ptr{Cstring}, Ptr{Void},), str_ptr_ptr, ref.ptr)
+        str = unsafe_string(str_ptr_ptr[])
+    end
+    return str
 end
 
 function ishead(ref::GitReference)

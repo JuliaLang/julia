@@ -66,8 +66,11 @@ end
 Return the [`GitHash`](@ref) of the object to which `te` refers.
 """
 function entryid(te::GitTreeEntry)
-    oid_ptr = ccall((:git_tree_entry_id, :libgit2), Ptr{UInt8}, (Ptr{Void},), te.ptr)
-    return GitHash(oid_ptr)
+    Base.@gc_preserve te begin
+        oid_ptr = ccall((:git_tree_entry_id, :libgit2), Ptr{UInt8}, (Ptr{Void},), te.ptr)
+        oid = GitHash(oid_ptr)
+    end
+    return oid
 end
 
 function Base.count(tree::GitTree)

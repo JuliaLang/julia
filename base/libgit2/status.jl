@@ -24,12 +24,15 @@ end
 
 function Base.getindex(status::GitStatus, i::Integer)
     1 <= i <= length(status) || throw(BoundsError())
-    entry_ptr = ccall((:git_status_byindex, :libgit2),
-                      Ptr{StatusEntry},
-                      (Ptr{Void}, Csize_t),
-                      status.ptr, i-1)
-    entry_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
-    return unsafe_load(entry_ptr)
+    Base.@gc_preserve status begin
+        entry_ptr = ccall((:git_status_byindex, :libgit2),
+                          Ptr{StatusEntry},
+                          (Ptr{Void}, Csize_t),
+                          status.ptr, i-1)
+        entry_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
+        entry = unsafe_load(entry_ptr)
+    end
+    return entry
 end
 
 """

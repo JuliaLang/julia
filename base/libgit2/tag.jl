@@ -57,9 +57,12 @@ end
 The name of `tag` (e.g. `"v0.5"`).
 """
 function name(tag::GitTag)
-    str_ptr = ccall((:git_tag_name, :libgit2), Cstring, (Ptr{Void},), tag.ptr)
-    str_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
-    return unsafe_string(str_ptr)
+    Base.@gc_preserve tag begin
+        str_ptr = ccall((:git_tag_name, :libgit2), Cstring, (Ptr{Void},), tag.ptr)
+        str_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
+        str = unsafe_string(str_ptr)
+    end
+    return str
 end
 
 # should we return the actual object? i.e. git_tag_target?
@@ -69,9 +72,12 @@ end
 The `GitHash` of the target object of `tag`.
 """
 function target(tag::GitTag)
-    oid_ptr = ccall((:git_tag_target_id, :libgit2), Ptr{GitHash}, (Ptr{Void},), tag.ptr)
-    oid_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
-    return unsafe_load(oid_ptr)
+    Base.@gc_preserve tag begin
+        oid_ptr = ccall((:git_tag_target_id, :libgit2), Ptr{GitHash}, (Ptr{Void},), tag.ptr)
+        oid_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
+        str = unsafe_load(oid_ptr)
+    end
+    return str
 end
 
 Base.show(io::IO, tag::GitTag) = print(io, "GitTag:\nTag name: $(name(tag)) target: $(target(tag))")
