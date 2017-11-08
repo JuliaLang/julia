@@ -54,13 +54,12 @@ uintptr_t __stop_jl_interpreter_frame = (uintptr_t)&__stop_jl_interpreter_frame_
 #warning "Interpreter backtraces not implemented for this platform"
 #endif
 
+#define STR(x) #x
+#define XSTR(x) STR(x)
 
 // This function is special. The unwinder looks for this function to find interpreter
 // stack frames.
 #ifdef _CPU_X86_64_
-
-#define STR(x) #x
-#define XSTR(x) STR(x)
 
 // Instructions: Make sure that MAX_INTERP_STATE_SIZE is a multiple of
 //               alignof(struct interpreter_state) and larger than
@@ -87,14 +86,14 @@ asm(
     "\tsubq $" XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(STACK_PADDING)", %rsp\n"
     ".cfi_def_cfa_offset " XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(STACK_PADDING)" + 8\n"
 #ifdef _OS_WINDOWS_
-    "\tmovq %rcx, %rax\n"
-    "\tleaq " XSTR(STACK_PADDING) "(%rsp), %rcx\n"
+#define ARG1_REG "rcx"
 #else
-     "\tmovq %rdi, %rax\n"
-     "\tleaq " XSTR(STACK_PADDING) "(%rsp), %rdi\n"
+#define ARG1_REG "rdi"
 #endif
+    "\tmovq %" ARG1_REG ", %rax\n"
+    "\tleaq " XSTR(STACK_PADDING) "(%rsp), %" ARG1_REG "\n"
     // Zero out the src field
-    "\tmovq $0, 0(%rdi)\n"
+    "\tmovq $0, 0(%" ARG1_REG ")\n"
 #ifdef _OS_WINDOWS_
     // Make space for the register parameter area
     "\tsubq $32, %rsp\n"
@@ -121,16 +120,18 @@ asm(
 #elif defined(_CPU_X86_)
 
 #define MAX_INTERP_STATE_SIZE 36
-#ifndef _OS_WINDOWS_
-#define STACK_PADDING 8
-#else
+#ifdef _OS_WINDOWS_
 #define STACK_PADDING 4
+#else
+#define STACK_PADDING 8
 #endif
 
-static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE, "Update assembly code above");
-static_assert(MAX_INTERP_STATE_SIZE % alignof(interpreter_state) == 0, "Update assembly code above");
+size_t TOTAL_STACK_PADDING = STACK_PADDING;
+
+static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE, "Stack layout invariants violated");
+static_assert(MAX_INTERP_STATE_SIZE % alignof(interpreter_state) == 0, "Stack layout invariants violated");
 #ifndef _OS_WINDOWS_
-static_assert(MAX_INTERP_STATE_SIZE + STACK_PADDING % 16 == 0, "Update assembly code above");
+static_assert((MAX_INTERP_STATE_SIZE + STACK_PADDING + 4) % 16 == 0, "Stack layout invariants violated");
 #endif
 
 asm(
@@ -182,8 +183,8 @@ asm(
      // Restore 16 byte stack alignment
      // Technically not necessary on windows, because we don't assume this
      // alignment, but let's be nice if we ever start doing that.
-     "\tsubl $" STACK_PADDING ", %esp\n"
-     ".cfi_def_cfa_offset " XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(ENTRY_OFFSET) "\n"
+     "\tsubl $" XSTR(STACK_PADDING) ", %esp\n"
+     ".cfi_def_cfa_offset " XSTR(STACK_PADDING) " + " XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(ENTRY_OFFSET) "\n"
      "Lenter_interpreter_frame_start_val:\n"
      "\tcalll *%eax\n"
      "Lenter_interpreter_frame_end_val:\n"
