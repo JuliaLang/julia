@@ -312,6 +312,7 @@ end
 
 mutable struct Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
+Base.hash(a::Alpha, h::UInt) = xor(h, object_id(a))
 @testset "issue #9463" begin
     sbuff = IOBuffer()
     io = Base.IOContext(sbuff, :limit => true, :displaysize => (10, 20))

@@ -218,11 +218,11 @@ mutable struct CachingPool <: AbstractWorkerPool
     channel::Channel{Int}
     workers::Set{Int}
 
-    # Mapping between a tuple (worker_id, f) and a remote_ref
-    map_obj2ref::Dict{Tuple{Int, Function}, RemoteChannel}
+    # Mapping from a tuple (worker_id, f) to a remote_ref
+    map_obj2ref::ObjectIdDict
 
     function CachingPool()
-        wp = new(Channel{Int}(typemax(Int)), Set{Int}(), Dict{Int, Function}())
+        wp = new(Channel{Int}(typemax(Int)), Set{Int}(), ObjectIdDict())
         finalizer(wp, clear!)
         wp
     end
