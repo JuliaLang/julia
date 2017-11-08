@@ -178,7 +178,7 @@ function open(fname::AbstractString, mode::AbstractString)
 end
 
 """
-    open(f::Function, args...)
+    open(f, args...)
 
 Apply the function `f` to the result of `open(args...)` and close the resulting file
 descriptor upon completion.
@@ -188,7 +188,7 @@ descriptor upon completion.
 open(f->read(f, String), "file.txt")
 ```
 """
-function open(f::Function, args...)
+function open(f, args...)
     io = open(args...)
     try
         f(io)
