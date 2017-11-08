@@ -613,13 +613,13 @@ function open(cmds::AbstractCmd, mode::AbstractString="r", other::Redirectable=D
 end
 
 """
-    open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
+    open(f, command, mode::AbstractString="r", stdio=DevNull)
 
 Similar to `open(command, mode, stdio)`, but calls `f(stream)` on the resulting process
 stream, then closes the input stream and waits for the process to complete.
 Returns the value returned by `f`.
 """
-function open(f::Function, cmds::AbstractCmd, args...)
+function open(f, cmds::AbstractCmd, args...)
     P = open(cmds, args...)
     ret = try
         f(P)
