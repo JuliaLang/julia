@@ -2426,6 +2426,12 @@
          (error "invalid \":\" outside indexing"))
      `(call colon ,.(map expand-forms (cdr e))))
 
+   '|...|
+   (lambda (e) (error "\"...\" expression outside call"))
+
+   '$
+   (lambda (e) (error "\"$\" expression outside quote"))
+
    'vect
    (lambda (e)
      (if (has-parameters? (cdr e))
@@ -2764,7 +2770,7 @@
                                (map (lambda (v) `(warn-loop-var ,v)) deprecated-loop-vars)
                                '()))))))
         ((eq? (car e) 'module)
-         (error "module expression not at top level"))
+         (error "\"module\" expression not at top level"))
         ((eq? (car e) 'break-block)
          `(break-block ,(cadr e) ;; ignore type symbol of break-block expression
                        ,(resolve-scopes- (caddr e) env outerglobals implicitglobals lam renames #f))) ;; body of break-block expression
@@ -3585,6 +3591,17 @@ f(x) = yt(x)
       (let ((g (if (null? name) (gensy) (named-gensy (car name)))))
         (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,g Any 2))))
         g))
+    ;; give an error for misplaced top-level-only expressions
+    (define (check-top-level e)
+      (define (head-to-text h)
+        (case h
+          ((abstract_type)  "\"abstract type\"")
+          ((primitive_type) "\"primitive type\"")
+          ((struct_type)    "\"struct\"")
+          ((method)         "method definition")
+          (else             (string "\"" h "\""))))
+      (if (not (null? (cadr lam)))
+          (error (string (head-to-text (car e)) " expression not at top level"))))
     ;; evaluate the arguments of a call, creating temporary locations as needed
     (define (compile-args lst break-labels (linearize #t))
       (if (null? lst) '()
@@ -3869,21 +3886,6 @@ f(x) = yt(x)
                                     (loop (cdr actions)))))))
                  val)))
 
-            ((method)
-             (if (length> e 2)
-                 (begin (emit `(method ,(or (cadr e) 'false)
-                                       ,(compile (caddr e) break-labels #t #f)
-                                       ,(linearize (cadddr e))))
-                        (if value (compile '(null) break-labels value tail)))
-                 (cond (tail  (emit-return e))
-                       (value e)
-                       (else  (emit e)))))
-            ((lambda)
-             (let ((temp (linearize e)))
-               (if tail
-                   (emit-return temp)
-                   (emit temp))))
-
             ((&)
              (if (or (not value) tail)
                  (error "misplaced \"&\" expression"))
@@ -3924,8 +3926,26 @@ f(x) = yt(x)
              '(null))
             ((boundscheck) (if tail (emit-return e) e))
 
+            ((method)
+             ;; TODO: we might want to disallow this
+             ;;(check-top-level e)
+             (if (length> e 2)
+                 (begin (emit `(method ,(or (cadr e) 'false)
+                                       ,(compile (caddr e) break-labels #t #f)
+                                       ,(linearize (cadddr e))))
+                        (if value (compile '(null) break-labels value tail)))
+                 (cond (tail  (emit-return e))
+                       (value e)
+                       (else  (emit e)))))
+            ((lambda)
+             (let ((temp (linearize e)))
+               (if tail
+                   (emit-return temp)
+                   (emit temp))))
+
             ;; top level expressions returning values
             ((abstract_type primitive_type struct_type thunk toplevel module)
+             (check-top-level e)
              (with-bindings
               ((*very-linear-mode* #f))  ;; type defs use nonstandard evaluation order
               (case (car e)
@@ -3951,13 +3971,22 @@ f(x) = yt(x)
              (if tail (emit-return '(null)))
              '(null))
 
-            ((gc_preserve_begin)
-              (let ((s (make-ssavalue)))
-                (emit `(= ,s ,e))
-                s))
+            ;; other top level expressions
+            ((import importall using export)
+             (check-top-level e)
+             (emit e)
+             (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
+               (if (and tail (not have-ret?))
+                   (emit-return '(null))))
+             '(null))
 
-            ;; other top level expressions and metadata
-            ((import importall using export line meta inbounds boundscheck simdloop gc_preserve_end)
+            ((gc_preserve_begin)
+             (let ((s (make-ssavalue)))
+               (emit `(= ,s ,e))
+               s))
+
+            ;; metadata expressions
+            ((line meta inbounds simdloop gc_preserve_end)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
                       (set! current-loc e)
@@ -3975,8 +4004,6 @@ f(x) = yt(x)
                (if (and tail (not have-ret?))
                    (emit-return '(null)))
                '(null)))
-            ((...)
-             (error "\"...\" expression outside call"))
             ((error)
              (error (cadr e)))
             (else
