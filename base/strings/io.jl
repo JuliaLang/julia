@@ -251,11 +251,15 @@ escape_nul(s::AbstractString, i::Int) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
 """
-    escape_string([io,] str::AbstractString[, esc::AbstractString]) -> AbstractString
+    escape_string(str::AbstractString[, esc::AbstractString]) -> AbstractString
 
 General escaping of traditional C and Unicode escape sequences.
 Any characters in `esc` are also escaped (with a backslash).
-See also [`unescape_string`](@ref).
+The reverse is [`unescape_string`](@ref).
+
+    escape_string(io, str::AbstractString[, esc::AbstractString]) -> Void
+
+Escape sequences in `str` and print result to `io`.
 """
 function escape_string(io, s::AbstractString, esc::AbstractString)
     i = start(s)
@@ -274,6 +278,7 @@ function escape_string(io, s::AbstractString, esc::AbstractString)
     end
 end
 
+escape_string(s::AbstractString, esc::AbstractString) = sprint(endof(s), escape_string, s, esc)
 escape_string(s::AbstractString) = sprint(endof(s), escape_string, s, "\"")
 
 function print_quoted(io, s::AbstractString)
@@ -304,10 +309,14 @@ unescape_chars(s::AbstractString, esc::AbstractString) =
 # general unescaping of traditional C and Unicode escape sequences
 
 """
-    unescape_string([io,] s::AbstractString) -> AbstractString
+    unescape_string(str::AbstractString) -> AbstractString
 
 General unescaping of traditional C and Unicode escape sequences. Reverse of
 [`escape_string`](@ref).
+
+    unescape_string(io, str::AbstractString) -> Void
+
+Unescapes sequences and prints result to `io`.
 """
 function unescape_string(io, s::AbstractString)
     i = start(s)
