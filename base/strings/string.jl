@@ -30,6 +30,22 @@ Copy a string from the address of a C-style (NUL-terminated) string encoded as U
 
 This function is labelled "unsafe" because it will crash if `p` is not
 a valid memory address to data of the requested length.
+
+# Examples
+```jldoctest
+julia> s = "abcdefghij"
+"abcdefghij"
+
+julia> sp = pointer(s)
+Ptr{UInt8} @0x00007f26aaefe6b8
+
+julia> unsafe_string(sp)
+"abcdefghij"
+
+julia> unsafe_string(sp,5)
+"abcde"
+```
+
 """
 function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer)
     p == C_NULL && throw(ArgumentError("cannot convert NULL to string"))
