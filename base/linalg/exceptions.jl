@@ -32,16 +32,22 @@ end
 """
    SingularException(info)
 
-The matrix passed is a singular matrix. Optional argument INFO is an INTEGER > 0  
-      if INFO = i, The matrix is exactly singular, and division by zero 
-      will occur if it is used to solve a system of equations.
+If pivoting is enabled the factorization failed 
+because the matrix passed is a singular matrix. 
+Optional argument info is an Integer > 0  
+if info == i, The matrix is exactly singular, and division by zero 
+will occur if it is used to solve a system of equations.
+
+Else if pivoting is not enabled the factorization failed because of zero pivot.
+
 """
 struct SingularException <: Exception
     info::BlasInt
 end
 
 function Base.showerror(io::IO, ex::SingularException)
-    print(io, "SingularException($ex.info): matrix is singular")
+    print(io, "SingularException($ex.info): If pivoting is enabled the matrix is singular and hence factorization failed, 
+           else the factorization failed because it hit a zero pivot.")
 end
 
 """
@@ -49,6 +55,9 @@ end
 
 Optional Argument info is an Integer. 
 If info == -1: The matrix is not Hermitian.
+Else if info == 0: The matrix is Positive Definite.
+Else if info>0: The Cholesky factorization for the matrix failed at the $(info) 
+                 diagonal element which indicates that the matrix is not positive definite.
 Else: The matrix is not positive definite.
 
 
