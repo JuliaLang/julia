@@ -209,6 +209,32 @@ for sha_idx in 1:length(sha_funcs)
 end
 println("Done! [$(nerrors - nerrors_old) errors]")
 
+# test hmac correctness using the examples on [wiki](https://en.wikipedia.org/wiki/Hash-based_message_authentication_code#Examples)
+print("Testing on the hmac functions")
+nerrors_old = nerrors
+for (key, msg, fun, hash) in (
+    (b"", b"", hmac_sha1, "fbdb1d1b18aa6c08324b7d64b71fb76370690e1d"),
+    (b"", b"", hmac_sha256, "b613679a0814d9ec772f95d778c35fc5ff1697c493715653c6c712144292c5ad"),
+    (b"key", b"The quick brown fox jumps over the lazy dog", hmac_sha1, "de7c9b85b8b78aa6bc8a7a36f70a90701c9db4d9"),
+    (b"key", b"The quick brown fox jumps over the lazy dog", hmac_sha256, "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8"),
+)
+    digest = bytes2hex(fun(key, msg))
+    if digest != hash
+        print("\n")
+        warn(
+        """
+        For $fun($(String(key)), $(String(msg))) expected:
+            $hash
+        Calculated:
+            $digest
+        """)
+        nerrors += 1
+    else
+        print(".")
+    end
+end
+println("Done! [$(nerrors - nerrors_old) errors]")
+
 if VERSION >= v"0.7.0-DEV.1472"
     replstr(x) = sprint((io, x) -> show(IOContext(io, :limit => true), MIME("text/plain"), x), x)
 else
