@@ -105,6 +105,13 @@ end
     end
 end
 
+let a = rand(10, 10)
+    f = eigfact(a)
+    sort!(f, by=real)
+    @test a ≈ f[:vectors] * Diagonal(f[:values]) / f[:vectors]
+end
+
+
 # test a matrix larger than 140-by-140 for #14174
 let aa = rand(200, 200)
     for a in (aa, view(aa, 1:n, 1:n))
