@@ -105,8 +105,8 @@ bimg  = randn(n,2)/2
             As1 = ones(eltya, n, n)
             As2 = complex(ones(eltya, n, n))
             As3 = complex(ones(eltya, n, n))
-            As3[end, 1] += convert(complex(eltya), im)
-            As3[1, end] -= convert(complex(eltya), im)
+            As3[end, 1] += im/2
+            As3[1, end] -= im/2
             for As = (As1, As2, As3)
                 for As in (As, view(As, 1:n, 1:n))
                     @testset "$uplo Bunch-Kaufman factors of a singular matrix" for uplo in (:L, :U)
