@@ -52,14 +52,14 @@ julia> F[:values]
  4.0
 ```
 """
-function sort!(F::Base.LinAlg.Eigen; kw...)
+function sort!(F::Eigen; kw...)
     perm = sortperm(F[:values]; kw...)
     permute!(F[:values], perm)
     Base.permutecols!!(F[:vectors], perm)
     return F
 end
 
-sort(F::Base.LinAlg.Eigen; kw...) = sort!(deepcopy(F), kw...)
+sort(F::Eigen; kw...) = sort!(deepcopy(F), kw...)
 
 isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
 
