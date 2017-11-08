@@ -27,6 +27,40 @@ function getindex(A::Union{Eigen,GeneralizedEigen}, d::Symbol)
     throw(KeyError(d))
 end
 
+"""
+    sort!(F::Base.LinAlg.Eigen; kw...)
+
+Sort the eigenvectors and eigenvalues of an eigenfactorization `F` in place using the eigenvalues
+for comparison.  See also `sort!(::AbstractVector)`.
+
+# Examples
+```jldoctest
+julia> F = eigfact([4.0 1.0; 0 1.0])
+Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([4.0, 1.0], [1.0 -0.316228; 0.0 0.948683])
+
+julia> F[:values]
+2-element Array{Float64,1}:
+ 4.0
+ 1.0
+
+julia> sort!(F)
+Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0, 4.0], [-0.316228 1.0; 0.948683 0.0])
+
+julia> F[:values]
+2-element Array{Float64,1}:
+ 1.0
+ 4.0
+```
+"""
+function sort!(F::Base.LinAlg.Eigen; kw...)
+    perm = sortperm(F[:values]; kw...)
+    permute!(F[:values], perm)
+    Base.permutecols!!(F[:vectors], perm)
+    return F
+end
+
+sort(F::Base.LinAlg.Eigen; kw...) = sort!(deepcopy(F), kw...)
+
 isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
 
 """
