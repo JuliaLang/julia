@@ -186,6 +186,7 @@ end
     for T in (Float64, Complex64, BigFloat, Int)
         λ = T(4)
         @test chol(λ*I) ≈ √λ*I
+        @test LinAlg.chol!(copy(λ*I)) ≈ √λ*I
         @test_throws LinAlg.PosDefException chol(-λ*I)
     end
 end

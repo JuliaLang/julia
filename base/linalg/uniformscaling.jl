@@ -356,7 +356,7 @@ function _chol!(J::UniformScaling, uplo)
     UniformScaling(c), info
 end
 
-chol!(J::UniformScaling, uplo) = ((J, info) = _chol!(J, uplo); @assertposdef J info)
+chol!(J::UniformScaling, args...) = ((J, info) = _chol!(J, nothing); @assertposdef J info)
 
 """
     chol(J::UniformScaling) -> C
