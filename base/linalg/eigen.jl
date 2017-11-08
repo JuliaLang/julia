@@ -27,6 +27,9 @@ function getindex(A::Union{Eigen,GeneralizedEigen}, d::Symbol)
     throw(KeyError(d))
 end
 
+eigsortby(λ::Real) = λ
+eigsortby(λ::Complex) = reim(λ)
+
 """
     sort!(F::Base.LinAlg.Eigen; kw...)
 
@@ -52,10 +55,12 @@ julia> F[:values]
  4.0
 ```
 """
-function sort!(F::Eigen; kw...)
-    perm = sortperm(F[:values]; kw...)
-    permute!(F[:values], perm)
-    Base.permutecols!!(F[:vectors], perm)
+function sort!(F::Eigen; by=eigsortby, kw...)
+    if !issorted(F[:values], by=by)
+        perm = sortperm(F[:values]; by=by, kw...)
+        permute!(F[:values], perm)
+        Base.permutecols!!(F[:vectors], perm)
+    end
     return F
 end
 
