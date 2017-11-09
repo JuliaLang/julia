@@ -111,7 +111,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
         m = n==1 ? "method" : "methods"
         sname = string(name)
         ns = (isself || '#' in sname) ? sname : string("(::", ft, ")")
-        what = startswith(ns, '@') ? "macro" : "generic function"
+        what = startswith(ns, '@') ? "macro" : "function"
         print(io, ns, " (", what, " with $n $m)")
     end
 end
