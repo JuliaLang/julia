@@ -34,7 +34,8 @@ eigsortby(λ::Complex) = reim(λ)
     sort!(F::Base.LinAlg.Eigen; kw...)
 
 Sort the eigenvectors and eigenvalues of an eigenfactorization `F` in place using the eigenvalues
-for comparison. See `sort` for a variant that returns a sorted copy leaving `F` itself unmodified.
+for comparison. See [`sort`](@ref) for a variant that returns a sorted copy leaving `F` itself
+unmodified.
 """
 function sort!(F::Eigen; by=eigsortby, kw...)
     if !issorted(F[:values], by=by, kw...)
@@ -49,8 +50,8 @@ end
     sort(F::Base.LinAlg.Eigen; kw...)
 
 Sort the eigenvectors and eigenvalues of an eigenfactorization `F` using the eigenvalues for
-comparison. See `sort!` for a variant that sorts `F` in place. See `sort(::AbstractVector)` for a
-description of possible keyword arguments.
+comparison. See [`sort!`](@ref) for a variant that sorts `F` in place. See
+[`sort(::AbstractVector)`](@ref) for a description of possible keyword arguments.
 
 # Examples
 ```jldoctest

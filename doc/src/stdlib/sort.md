@@ -107,8 +107,8 @@ can be specified via the `lt` keyword.
 ## Sorting Functions
 
 ```@docs
-Base.sort!
-Base.sort
+Base.sort!(::AbstractVector)
+Base.sort(::AbstractVector)
 Base.sortperm
 Base.Sort.sortperm!
 Base.Sort.sortrows

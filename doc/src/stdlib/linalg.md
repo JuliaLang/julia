@@ -141,6 +141,8 @@ Base.LinAlg.eigs(::Any, ::Any)
 Base.LinAlg.svds
 Base.LinAlg.peakflops
 Base.LinAlg.stride1
+Base.sort(::Base.LinAlg.Eigen)
+Base.sort!(::Base.LinAlg.Eigen)
 ```
 
 ## Low-level matrix operations
