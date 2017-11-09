@@ -2172,7 +2172,7 @@
    '=>
    (lambda (e)
      (syntax-deprecation #f "Expr(:(=>), ...)" "Expr(:call, :(=>), ...)")
-     `(call => ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+     (expand-forms `(call => ,@(cdr e))))
 
    'cell1d (lambda (e) (error "{ } vector syntax is discontinued"))
    'cell2d (lambda (e) (error "{ } matrix syntax is discontinued"))
@@ -2268,13 +2268,13 @@
              (and (length= e 4)
                   (eq? (cadddr e) ':)))
          (error "invalid \":\" outside indexing"))
-     `(call colon ,.(map expand-forms (cdr e))))
+     (expand-forms `(call colon ,@(cdr e))))
 
    'vect
    (lambda (e) (expand-forms `(call (top vect) ,@(cdr e))))
 
    'hcat
-   (lambda (e) (expand-forms `(call hcat ,.(map expand-forms (cdr e)))))
+   (lambda (e) (expand-forms `(call hcat ,@(cdr e))))
 
    'vcat
    (lambda (e)
@@ -2297,7 +2297,7 @@
                 `(call vcat ,@a))))))
 
    'typed_hcat
-   (lambda (e) `(call (top typed_hcat) ,(expand-forms (cadr e)) ,.(map expand-forms (cddr e))))
+   (lambda (e) (expand-forms `(call (top typed_hcat) ,@(cdr e))))
 
    'typed_vcat
    (lambda (e)
@@ -2318,8 +2318,8 @@
                      ,.(apply append rows)))
             `(call (top typed_vcat) ,t ,@a)))))
 
-   '|'|  (lambda (e) `(call ctranspose ,(expand-forms (cadr e))))
-   '|.'| (lambda (e) `(call  transpose ,(expand-forms (cadr e))))
+   '|'|  (lambda (e) (expand-forms `(call ctranspose ,(cadr e))))
+   '|.'| (lambda (e) (expand-forms `(call  transpose ,(cadr e))))
 
    'ccall
    (lambda (e)
@@ -2360,7 +2360,7 @@
                ,iter))))
 
    'flatten
-   (lambda (e) `(call (top Flatten) ,(expand-forms (cadr e))))
+   (lambda (e) (expand-forms `(call (top Flatten) ,(cadr e))))
 
    'comprehension
    (lambda (e)
