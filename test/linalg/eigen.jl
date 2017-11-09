@@ -106,8 +106,7 @@ end
 end
 
 let a = rand(10, 10)
-    f = eigfact(a)
-    sort!(f)
+    f = sort(eigfact(a))
     @test a ≈ f[:vectors] * Diagonal(f[:values]) / f[:vectors]
 end
 

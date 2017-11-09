@@ -56,7 +56,7 @@ julia> F[:values]
 ```
 """
 function sort!(F::Eigen; by=eigsortby, kw...)
-    if !issorted(F[:values], by=by)
+    if !issorted(F[:values], by=by, kw...)
         perm = sortperm(F[:values]; by=by, kw...)
         permute!(F[:values], perm)
         Base.permutecols!!(F[:vectors], perm)
