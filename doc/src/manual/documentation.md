@@ -496,7 +496,7 @@ sym
 ```
 
 Adds docstring `"..."` to the value associated with `sym`. Users should prefer documenting `sym`
-at it's definition.
+at its definition.
 
 ### Multiple Objects
 
