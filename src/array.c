@@ -943,7 +943,9 @@ STATIC_INLINE void jl_array_del_at_beg(jl_array_t *a, size_t idx, size_t dec,
                 memset(newdata + nbtotal + idx, 0, dec);
             }
         }
-        memmove(newdata + nb1, olddata + nb1 + nbdec, nbtotal - nb1);
+        // Move the rest of the data if the offset changed
+        if (newoffs != offset)
+            memmove(newdata + nb1, olddata + nb1 + nbdec, nbtotal - nb1);
         if (isbitsunion) {
             memmove(newdata + nbtotal + idx, olddata + n * elsz + idx + dec, n - idx);
         }
