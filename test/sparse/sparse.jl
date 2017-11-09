@@ -716,6 +716,13 @@ end
         @test S1290[end] == (S1290[1] + S1290[2,2])
         @test 6 == sum(diag(S1290))
         @test Array(S1290)[[3,1],1] == Array(S1290[[3,1],1])
+
+        # check that indexing with an abstract array returns matrix
+        # with same colptr and rowval eltypes as input. Tests PR 24548
+        r1 = S1290[[5,9]]
+        r2 = S1290[[1 2;5 9]]
+        @test isa(r1, SparseVector{Int64,UInt8})
+        @test isa(r2, SparseMatrixCSC{Int64,UInt8})
     # end
 end
 

@@ -2299,7 +2299,7 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVecto
     end
 end
 
-function getindex(A::SparseMatrixCSC{Tv}, I::AbstractArray) where Tv
+function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractArray) where {Tv,Ti}
     szA = size(A)
     nA = szA[1]*szA[2]
     colptrA = A.colptr
@@ -2310,8 +2310,8 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractArray) where Tv
     outm = size(I,1)
     outn = size(I,2)
     szB = (outm, outn)
-    colptrB = zeros(Int, outn+1)
-    rowvalB = Vector{Int}(n)
+    colptrB = zeros(Ti, outn+1)
+    rowvalB = Vector{Ti}(n)
     nzvalB = Vector{Tv}(n)
 
     colB = 1
