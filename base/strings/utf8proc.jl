@@ -3,7 +3,9 @@
 # Various Unicode functionality from the utf8proc library
 module UTF8proc
 
-import Base: show, ==, hash, string, Symbol, isless, length, eltype, start, next, done, convert, isvalid, lowercase, uppercase, titlecase
+import Base:
+    show, ==, hash, string, Symbol, isless, length, eltype, start, next,
+    done, convert, isvalid, lowercase, uppercase, titlecase, MalformedCharError
 
 export isgraphemebreak, category_code, category_abbrev, category_string
 
@@ -118,7 +120,9 @@ const category_strings = [
     "Other, control",
     "Other, format",
     "Other, surrogate",
-    "Other, private use"
+    "Other, private use",
+    "Invalid, too high",
+    "Malformed, bad data",
 ]
 
 const UTF8PROC_STABLE    = (1<<1)
@@ -268,7 +272,10 @@ julia> textwidth('❤')
 2
 ```
 """
-textwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
+function textwidth(c::Char)
+    Base.iswellformed(c) || (c = '\ufffd')
+    Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
+end
 
 """
     textwidth(s::AbstractString)
@@ -293,10 +300,19 @@ titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
 ############################################################################
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
-category_code(c) = ccall(:utf8proc_category, Cint, (UInt32,), c)
+function category_code(c::Char)
+    Base.iswellformed(c) || return Cint(31)
+    (u = UInt32(c)) ≤ 0x10ffff || return Cint(30)
+    ccall(:utf8proc_category, Cint, (UInt32,), u)
+end
 
 # more human-readable representations of the category code
-category_abbrev(c) = unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), c))
+function category_abbrev(c)
+    Base.iswellformed(c) || return "Ma"
+    (u = UInt32(c)) ≤ 0x10ffff || return "In"
+    unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), u))
+end
+
 category_string(c) = category_strings[category_code(c)+1]
 
 """
@@ -467,7 +483,7 @@ julia> iscntrl('a')
 false
 ```
 """
-iscntrl(c::Char) = (c <= Char(0x1f) || Char(0x7f) <= c <= Char(0x9f))
+iscntrl(c::Char) = c <= '\x1f' || '\x7f' <= c <= '\u9f'
 
 """
     ispunct(c::Char) -> Bool

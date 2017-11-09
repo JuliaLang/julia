@@ -9,6 +9,13 @@ end
 @noinline malformed_char(c::Char) = throw(MalformedCharError(c))
 @noinline code_point_err(u::UInt32) = throw(CodePointError(u))
 
+function iswellformed(c::Char)
+    u = reinterpret(UInt32, c)
+    l1 = leading_ones(u)
+    t0 = trailing_zeros(u) >> 3
+    (l1 + t0 ≤ 4) & (l1 ≠ 1)
+end
+
 function convert(::Type{UInt32}, c::Char)
     # TODO: use optimized inline LLVM
     u = reinterpret(UInt32, c)
@@ -104,12 +111,22 @@ function show(io::IO, c::Char)
     end
     if isprint(c)
         write(io, 0x27, c, 0x27)
-    else
+    elseif iswellformed(c)
         u = UInt32(c)
         write(io, 0x27, 0x5c, c <= '\x7f' ? 0x78 : c <= '\uffff' ? 0x75 : 0x55)
         d = max(2, 8 - (leading_zeros(u) >> 2))
         while 0 < d
             write(io, hex_chars[((u >> ((d -= 1) << 2)) & 0xf) + 1])
+        end
+        write(io, 0x27)
+    else # malformed
+        write(io, 0x27)
+        u = reinterpret(UInt32, c)
+        while true
+            a = hex_chars[((u >> 28) & 0xf) + 1]
+            b = hex_chars[((u >> 24) & 0xf) + 1]
+            write(io, 0x5c, 'x', a, b)
+            (u <<= 8) == 0 && break
         end
         write(io, 0x27)
     end
@@ -118,7 +135,13 @@ end
 
 function show(io::IO, ::MIME"text/plain", c::Char)
     show(io, c)
-    u = UInt32(c)
-    print(io, ": ", isascii(c) ? "ASCII/" : "", "Unicode U+", hex(u, u > 0xffff ? 6 : 4))
-    print(io, " (category ", UTF8proc.category_abbrev(c), ": ", UTF8proc.category_string(c), ")")
+    if iswellformed(c)
+        u = UInt32(c)
+        print(io, ": ", isascii(c) ? "ASCII/" : "", "Unicode U+", hex(u, u > 0xffff ? 6 : 4))
+    else
+        print(io, ": Malformed UTF-8")
+    end
+    abr = UTF8proc.category_abbrev(c)
+    str = UTF8proc.category_string(c)
+    print(io, " (category ", abr, ": ", str, ")")
 end
