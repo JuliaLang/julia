@@ -1164,3 +1164,8 @@ end
 @test Meta.lower(@__MODULE__, :(x->module Foo end)) == Expr(:error, "\"module\" expression not at top level")
 @test Meta.lower(@__MODULE__, :(x->struct Foo end)) == Expr(:error, "\"struct\" expression not at top level")
 @test Meta.lower(@__MODULE__, :(x->abstract type Foo end)) == Expr(:error, "\"abstract type\" expression not at top level")
+
+# caused by #24538. forms that lower to `call` should wrap with `call` before
+# recursively calling expand-forms.
+@test [(0,0)... 1] == [0 0 1]
+@test Float32[(0,0)... 1] == Float32[0 0 1]
