@@ -247,22 +247,6 @@ static DIDerivedType *jl_ppvalue_dillvmt;
 static DISubroutineType *jl_di_func_sig;
 static DISubroutineType *jl_di_func_null_sig;
 
-extern "C"
-int32_t jl_jlcall_api(const char *fname)
-{
-    // give the function an index in the constant lookup table
-    if (fname == NULL)
-        return 0;
-    StringRef Name(fname);
-    if (Name.startswith("japi3_")) // jlcall abi 3 from JIT
-        return JL_API_WITH_PARAMETERS;
-    assert(Name.startswith("japi1_") || // jlcall abi 1 from JIT
-           Name.startswith("jsys1_") || // jlcall abi 1 from sysimg
-           Name.startswith("jlcall_") || // jlcall abi 1 from JIT wrapping a specsig method
-           Name.startswith("jlsysw_")); // jlcall abi 1 from sysimg wrapping a specsig method
-    return JL_API_GENERIC;
-}
-
 
 // constants
 static Constant *V_null;
@@ -1060,6 +1044,11 @@ static std::unique_ptr<Module> emit_function(
         const jl_cgparams_t *params);
 void jl_add_linfo_in_flight(StringRef name, jl_method_instance_t *linfo, const DataLayout &DL);
 
+const char *name_from_method_instance(jl_method_instance_t *li)
+{
+    return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
+}
+
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
 // (and the shadow module), but doesn't yet compile
@@ -1170,7 +1159,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
             li->functionObjectsDecls.specFunctionObject = NULL;
             nested_compile = last_n_c;
             JL_UNLOCK(&codegen_lock); // Might GC
-            const char *mname = jl_symbol_name(jl_is_method(li->def.method) ? li->def.method->name : anonymous_sym);
+            const char *mname = name_from_method_instance(li);
             jl_rethrow_with_add("error compiling %s", mname);
         }
         const char *f = decls.functionObject;
@@ -1512,7 +1501,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
         // something failed!
         nested_compile = last_n_c;
         JL_UNLOCK(&codegen_lock); // Might GC
-        const char *mname = jl_symbol_name(jl_is_method(linfo->def.method) ? linfo->def.method->name : anonymous_sym);
+        const char *mname = name_from_method_instance(linfo);
         jl_rethrow_with_add("error compiling %s", mname);
     }
     // Restore the previous compile context
@@ -1563,7 +1552,9 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
     }
 
     // compile this normally
-    jl_llvm_functions_t decls = jl_compile_for_dispatch(&linfo, world);
+    if (linfo->inferred == NULL)
+        linfo->inferred = jl_nothing;
+    jl_llvm_functions_t decls = jl_compile_linfo(&linfo, NULL, world, &jl_default_cgparams);
 
     if (decls.functionObject == NULL && linfo->jlcall_api == JL_API_CONST && jl_is_method(linfo->def.method)) {
         // normally we don't generate native code for these functions, so need an exception here
@@ -4860,7 +4851,7 @@ static std::unique_ptr<Module> emit_function(
     ctx.linfo = lam;
     ctx.source = src;
     ctx.world = world;
-    ctx.name = jl_symbol_name(jl_is_method(lam->def.method) ? lam->def.method->name : anonymous_sym);
+    ctx.name = name_from_method_instance(lam);
     ctx.funcName = ctx.name;
     ctx.params = params;
     ctx.spvals_ptr = NULL;

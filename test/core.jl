@@ -5581,8 +5581,6 @@ let x5 = UnionField5(nothing, Int8(3))
     @test x5 == x5copy
     @test object_id(x5) === object_id(x5copy)
     @test hash(x5) === hash(x5copy)
-    @test pointer_from_objref(x5) === pointer_from_objref(x5)
-    @test pointer_from_objref(x5) !== pointer_from_objref(x5copy)
 end
 
 

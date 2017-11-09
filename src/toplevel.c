@@ -313,12 +313,25 @@ int jl_has_intrinsics(jl_value_t *v)
     return 0;
 }
 
+int jl_code_requires_compiler(jl_code_info_t *src)
+{
+    jl_array_t *body = src->code;
+    assert(jl_typeis(body, jl_array_any_type));
+    size_t i;
+    for(i=0; i < jl_array_len(body); i++) {
+        jl_value_t *stmt = jl_array_ptr_ref(body,i);
+        if (jl_has_intrinsics(stmt))
+            return 1;
+    }
+    return 0;
+}
+
 // heuristic for whether a top-level input should be evaluated with
 // the compiler or the interpreter.
 static int jl_eval_with_compiler_p(jl_code_info_t *src, jl_array_t *body, int compileloops, jl_module_t *m)
 {
     size_t i, maxlabl=0;
-    // compile if there are backwards branches
+    // compile if there are backwards branches and compiler is enabled
     for(i=0; i < jl_array_len(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
         if (jl_is_labelnode(stmt)) {
@@ -330,21 +343,23 @@ static int jl_eval_with_compiler_p(jl_code_info_t *src, jl_array_t *body, int co
     char *labls = (char*)alloca(sz); memset(labls,0,sz);
     for(i=0; i < jl_array_len(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
-        if (jl_is_labelnode(stmt)) {
-            int l = jl_labelnode_label(stmt);
-            labls[l/8] |= (1<<(l&7));
-        }
-        else if (compileloops && jl_is_gotonode(stmt)) {
-            int l = jl_gotonode_label(stmt);
-            if (labls[l/8]&(1<<(l&7))) {
-                return 1;
+        if (jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF) {
+            if (jl_is_labelnode(stmt)) {
+                int l = jl_labelnode_label(stmt);
+                labls[l/8] |= (1<<(l&7));
             }
-        }
-        else if (jl_is_expr(stmt)) {
-            if (compileloops && ((jl_expr_t*)stmt)->head==goto_ifnot_sym) {
-                int l = jl_unbox_long(jl_exprarg(stmt,1));
+            else if (compileloops && jl_is_gotonode(stmt)) {
+                int l = jl_gotonode_label(stmt);
                 if (labls[l/8]&(1<<(l&7))) {
                     return 1;
+                }
+            }
+            else if (jl_is_expr(stmt)) {
+                if (compileloops && ((jl_expr_t*)stmt)->head==goto_ifnot_sym) {
+                    int l = jl_unbox_long(jl_exprarg(stmt,1));
+                    if (labls[l/8]&(1<<(l&7))) {
+                        return 1;
+                    }
                 }
             }
         }

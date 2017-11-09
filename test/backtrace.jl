@@ -1,18 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-bt = backtrace()
-have_backtrace = false
-for l in bt
-    lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), l, true)
-    if lkup[1][1] == :backtrace
-        @test lkup[1][5] == false # fromC
-        global have_backtrace = true
-        break
-    end
-end
-
-@test have_backtrace
-
 # Test location information for inlined code (ref issues #1334 #12544)
 module test_inline_bt
 using Test
@@ -176,7 +163,7 @@ let
     end
 end
 let st = stacktrace(bt23971)
-    @test st[1].func == :anonymous
+    @test StackTraces.is_top_level_frame(st[1])
     @test string(st[1].file) == @__FILE__
     @test !contains(string(st[2].file), "missing")
 end

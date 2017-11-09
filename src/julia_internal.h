@@ -46,6 +46,16 @@
 // For C++, C++11 or MSVC is required. Both provide `static_assert`.
 #endif
 
+#ifndef alignof
+#  ifndef __cplusplus
+#    ifdef __GNUC__
+#      define alignof _Alignof
+#    else
+#      define alignof(...) 1
+#    endif
+#  endif
+#endif
+
 #if jl_has_builtin(__builtin_assume)
 #define jl_assume(cond) (__extension__ ({               \
                 __typeof__(cond) cond_ = (cond);        \
@@ -317,6 +327,9 @@ jl_llvm_functions_t jl_compile_linfo(
         const jl_cgparams_t *params);
 jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **li, size_t world);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
+jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs);
+jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam);
+int jl_code_requires_compiler(jl_code_info_t *src);
 jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast);
 
 STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
@@ -988,7 +1001,7 @@ extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
 extern jl_sym_t *compiler_temp_sym; extern jl_sym_t *foreigncall_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
-extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
+extern jl_sym_t *underscore_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *primtype_sym;
 extern jl_sym_t *structtype_sym;
 extern jl_sym_t *global_sym; extern jl_sym_t *unused_sym;

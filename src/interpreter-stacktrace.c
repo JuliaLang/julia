@@ -54,35 +54,46 @@ uintptr_t __stop_jl_interpreter_frame = (uintptr_t)&__stop_jl_interpreter_frame_
 #warning "Interpreter backtraces not implemented for this platform"
 #endif
 
+#define STR(x) #x
+#define XSTR(x) STR(x)
 
 // This function is special. The unwinder looks for this function to find interpreter
 // stack frames.
 #ifdef _CPU_X86_64_
 
+// Instructions: Make sure that MAX_INTERP_STATE_SIZE is a multiple of
+//               alignof(struct interpreter_state) and larger than
+//               sizeof(struct interpreter_state). Additionally, make sure that
+//               MAX_INTERP_STATE_SIZE+STACK_PADDING+8 is a multiple of 16 to
+//               ensure the proper stack alignment.
+#define MAX_INTERP_STATE_SIZE 56
+#define STACK_PADDING 0
+
+static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE, "Stack layout invariants violated.");
+static_assert(MAX_INTERP_STATE_SIZE % alignof(interpreter_state) == 0, "Stack layout invariants violated");
+static_assert(((MAX_INTERP_STATE_SIZE + STACK_PADDING + 8) % 16) == 0, "Stack layout invariants violated");
+
 #ifdef _OS_WINDOWS_
-size_t STACK_PADDING = 40;
+size_t TOTAL_STACK_PADDING = STACK_PADDING + 32;
 #else
-size_t STACK_PADDING = 8;
+size_t TOTAL_STACK_PADDING = STACK_PADDING;
 #endif
 
 asm(
     ASM_ENTRY
     MANGLE("enter_interpreter_frame") ":\n"
     ".cfi_startproc\n"
-    // sizeof(struct interpreter_state) is 44, but we need to be 8 byte aligned,
-    // so subtract 48. For compact unwind info, we need to only have one subq,
-    // so combine in the stack realignment for a total of 56 bytes.
-    "\tsubq $56, %rsp\n"
-    ".cfi_def_cfa_offset 64\n"
+    "\tsubq $" XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(STACK_PADDING)", %rsp\n"
+    ".cfi_def_cfa_offset " XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(STACK_PADDING)" + 8\n"
 #ifdef _OS_WINDOWS_
-    "\tmovq %rcx, %rax\n"
-    "\tleaq 8(%rsp), %rcx\n"
+#define ARG1_REG "rcx"
 #else
-     "\tmovq %rdi, %rax\n"
-     "\tleaq 8(%rsp), %rdi\n"
+#define ARG1_REG "rdi"
 #endif
+    "\tmovq %" ARG1_REG ", %rax\n"
+    "\tleaq " XSTR(STACK_PADDING) "(%rsp), %" ARG1_REG "\n"
     // Zero out the src field
-    "\tmovq $0, 8(%rsp)\n"
+    "\tmovq $0, 0(%" ARG1_REG ")\n"
 #ifdef _OS_WINDOWS_
     // Make space for the register parameter area
     "\tsubq $32, %rsp\n"
@@ -94,7 +105,7 @@ asm(
 #ifdef _OS_WINDOWS_
     "\taddq $32, %rsp\n"
 #endif
-    "\taddq $56, %rsp\n"
+    "\taddq $" XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(STACK_PADDING)", %rsp\n"
 #ifndef _OS_DARWIN_
     // Somehow this throws off compact unwind info on OS X
     ".cfi_def_cfa_offset 8\n"
@@ -105,11 +116,24 @@ asm(
     );
 
 #define CALLBACK_ABI
-static_assert(sizeof(interpreter_state) <= 48, "Update assembly code above");
 
 #elif defined(_CPU_X86_)
 
-size_t STACK_PADDING = 12;
+#define MAX_INTERP_STATE_SIZE 36
+#ifdef _OS_WINDOWS_
+#define STACK_PADDING 4
+#else
+#define STACK_PADDING 8
+#endif
+
+size_t TOTAL_STACK_PADDING = STACK_PADDING;
+
+static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE, "Stack layout invariants violated");
+static_assert(MAX_INTERP_STATE_SIZE % alignof(interpreter_state) == 0, "Stack layout invariants violated");
+#ifndef _OS_WINDOWS_
+static_assert((MAX_INTERP_STATE_SIZE + STACK_PADDING + 4) % 16 == 0, "Stack layout invariants violated");
+#endif
+
 asm(
      ASM_ENTRY
      MANGLE("enter_interpreter_frame") ":\n"
@@ -142,40 +166,32 @@ asm(
  * incorrect stack address for the previous frame. To work around all of this,
  * use ebp based addressing on win32
  */
-#define FP_CAPTURE_OFFSET 32
+#define FP_CAPTURE_OFFSET MAX_INTERP_STATE_SIZE
+#define ENTRY_OFFSET 8
     "\tpushl %ebp\n"
-    ".cfi_def_cfa_offset 8\n"
+    ".cfi_def_cfa_offset " XSTR(ENTRY_OFFSET)"\n"
     "\tmovl %esp, %ebp\n"
-#endif
-     // sizeof(struct interpreter_state) is 32
-     "\tsubl $32, %esp\n"
-#ifdef _OS_WINDOWS_
-     ".cfi_def_cfa_offset 40\n"
 #else
-     ".cfi_def_cfa_offset 36\n"
+#define ENTRY_OFFSET 4
 #endif
+     "\tsubl $" XSTR(MAX_INTERP_STATE_SIZE) ", %esp\n"
+     ".cfi_def_cfa_offset " XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(ENTRY_OFFSET) "\n"
      "\tmovl %ecx, %eax\n"
      "\tmovl %esp, %ecx\n"
      // Zero out the src field
      "\tmovl $0, (%esp)\n"
      // Restore 16 byte stack alignment
-#ifdef _OS_WINDOWS_
-     // Technically not necessary, because we don't assume this alignment, but
-     // let's be nice if we ever start doing that.
-     "\tsubl $8, %esp\n"
-#else
-     "\tsubl $12, %esp\n"
-#endif
-     ".cfi_def_cfa_offset 48\n"
+     // Technically not necessary on windows, because we don't assume this
+     // alignment, but let's be nice if we ever start doing that.
+     "\tsubl $" XSTR(STACK_PADDING) ", %esp\n"
+     ".cfi_def_cfa_offset " XSTR(STACK_PADDING) " + " XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(ENTRY_OFFSET) "\n"
      "Lenter_interpreter_frame_start_val:\n"
      "\tcalll *%eax\n"
      "Lenter_interpreter_frame_end_val:\n"
+     "\taddl $" XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(STACK_PADDING) ", %esp\n"
 #ifdef _OS_WINDOWS_
-     "\taddl $40, %esp\n"
      ".cfi_def_cfa_offset 8\n"
      "\tpopl %ebp\n"
-#else
-     "\taddl $44, %esp\n"
 #endif
      ".cfi_def_cfa_offset 4\n"
      "\tret\n"
@@ -184,7 +200,7 @@ asm(
      );
 
 #define CALLBACK_ABI  __attribute__((fastcall))
-static_assert(sizeof(interpreter_state) <= 32, "Update assembly code above");
+static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE, "Update assembly code above");
 
 #else
 #warning "Interpreter backtraces not implemented for this platform"
@@ -212,13 +228,13 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintp
 #ifdef FP_CAPTURE_OFFSET
     interpreter_state *s = (interpreter_state *)(fp-FP_CAPTURE_OFFSET);
 #else
-    interpreter_state *s = (interpreter_state *)(sp+STACK_PADDING);
+    interpreter_state *s = (interpreter_state *)(sp+TOTAL_STACK_PADDING);
 #endif
-    if (space_remaining <= 1 || s->src == 0)
+    if (space_remaining <= 1)
         return 0;
     // Sentinel value to indicate an interpreter frame
     data[0] = (uintptr_t)-1;
-    data[1] = (uintptr_t)s->src;
+    data[1] = s->mi ? (uintptr_t)s->mi : s->src ? (uintptr_t)s->src : (uintptr_t)jl_nothing;
     data[2] = (uintptr_t)s->ip;
     return 2;
 }
