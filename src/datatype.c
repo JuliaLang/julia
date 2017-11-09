@@ -393,8 +393,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     jl_errorf("type %s has field offset %d that exceeds the page size", jl_symbol_name(st->name->name), descsz);
 }
 
-extern int jl_boot_file_loaded;
-
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
         jl_sym_t *name,
         jl_module_t *module,

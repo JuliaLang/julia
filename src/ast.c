@@ -785,16 +785,9 @@ jl_value_t *jl_parse_eval_all(const char *fname,
             }
             jl_get_ptls_states()->world_age = jl_world_counter;
             form = scm_to_julia(fl_ctx, expression, inmodule);
-            jl_sym_t *head = NULL;
-            if (jl_is_expr(form))
-                head = ((jl_expr_t*)form)->head;
             JL_SIGATOMIC_END();
             jl_get_ptls_states()->world_age = jl_world_counter;
-            if (head == jl_incomplete_sym)
-                jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form, 0)));
-            else if (head == error_sym)
-                jl_interpret_toplevel_expr_in(inmodule, form, NULL, NULL);
-            else if (jl_is_linenode(form))
+            if (jl_is_linenode(form))
                 jl_lineno = jl_linenode_line(form);
             else
                 result = jl_toplevel_eval_flex(inmodule, form, 1, 1);

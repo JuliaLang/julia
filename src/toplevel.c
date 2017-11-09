@@ -459,7 +459,9 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
          ((jl_expr_t*)e)->head == export_sym ||
          ((jl_expr_t*)e)->head == thunk_sym ||
          ((jl_expr_t*)e)->head == global_sym ||
-         ((jl_expr_t*)e)->head == toplevel_sym);
+         ((jl_expr_t*)e)->head == toplevel_sym ||
+         ((jl_expr_t*)e)->head == error_sym ||
+         ((jl_expr_t*)e)->head == jl_incomplete_sym);
 }
 
 jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals);
@@ -542,11 +544,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     }
 
     jl_expr_t *ex = (jl_expr_t*)e;
-    if (ex->head == error_sym || ex->head == jl_incomplete_sym) {
-        // expression types simple enough not to need expansion
-        return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
-    }
-    else if (ex->head == module_sym) {
+    if (ex->head == module_sym) {
         return jl_eval_module_expr(m, ex);
     }
     else if (ex->head == importall_sym) {
@@ -640,7 +638,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     JL_GC_PUSH3(&li, &thk, &ex);
 
     if (!expanded && ex->head != body_sym && ex->head != thunk_sym && ex->head != return_sym &&
-        ex->head != method_sym && ex->head != toplevel_sym) {
+        ex->head != method_sym && ex->head != toplevel_sym && ex->head != error_sym &&
+        ex->head != jl_incomplete_sym) {
         // not yet expanded
         ex = (jl_expr_t*)jl_expand(e, m);
     }
@@ -657,6 +656,13 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
         ptls->world_age = last_age;
         JL_GC_POP();
         return res;
+    }
+    else if (head == error_sym || head == jl_incomplete_sym) {
+        if (jl_expr_nargs(ex) == 0)
+            jl_errorf("malformed \"%s\" expression", jl_symbol_name(head));
+        if (jl_is_string(jl_exprarg(ex,0)))
+            jl_errorf("syntax: %s", jl_string_data(jl_exprarg(ex,0)));
+        jl_throw(jl_exprarg(ex,0));
     }
 
     if (head == thunk_sym) {

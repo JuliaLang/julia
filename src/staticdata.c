@@ -1330,7 +1330,6 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname)
     JL_SIGATOMIC_END();
 }
 
-extern int jl_boot_file_loaded;
 extern void jl_get_builtins(void);
 extern void jl_get_builtin_hooks(void);
 extern void jl_gc_set_permalloc_region(void *start, void *end);
@@ -1487,7 +1486,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
     jl_get_builtins();
     jl_get_builtin_hooks();
-    jl_boot_file_loaded = 1;
     jl_init_box_caches();
 
     jl_update_all_gvars(&s);
