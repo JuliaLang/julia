@@ -335,9 +335,11 @@ static size_t dereferenceable_size(jl_value_t *jt)
     if (jl_is_array_type(jt)) {
         // Array has at least this much data
         return sizeof(jl_array_t);
-    } else if (((jl_datatype_t*)jt)->layout) {
+    }
+    else if (jl_is_datatype(jt) && ((jl_datatype_t*)jt)->layout) {
         return jl_datatype_size(jt);
-    } else {
+    }
+    else {
         return 0;
     }
 }
