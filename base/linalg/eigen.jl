@@ -34,26 +34,7 @@ eigsortby(λ::Complex) = reim(λ)
     sort!(F::Base.LinAlg.Eigen; kw...)
 
 Sort the eigenvectors and eigenvalues of an eigenfactorization `F` in place using the eigenvalues
-for comparison.  See also `sort!(::AbstractVector)`.
-
-# Examples
-```jldoctest
-julia> F = eigfact([4.0 1.0; 0 1.0])
-Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([4.0, 1.0], [1.0 -0.316228; 0.0 0.948683])
-
-julia> F[:values]
-2-element Array{Float64,1}:
- 4.0
- 1.0
-
-julia> sort!(F)
-Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0, 4.0], [-0.316228 1.0; 0.948683 0.0])
-
-julia> F[:values]
-2-element Array{Float64,1}:
- 1.0
- 4.0
-```
+for comparison. See `sort` for a variant that returns a sorted copy leaving `F` itself unmodified.
 """
 function sort!(F::Eigen; by=eigsortby, kw...)
     if !issorted(F[:values], by=by, kw...)
@@ -64,7 +45,33 @@ function sort!(F::Eigen; by=eigsortby, kw...)
     return F
 end
 
-sort(F::Eigen; kw...) = sort!(deepcopy(F), kw...)
+"""
+    sort(F::Base.LinAlg.Eigen; kw...)
+
+Sort the eigenvectors and eigenvalues of an eigenfactorization `F` using the eigenvalues for
+comparison. See `sort!` for a variant that sorts `F` in place. See `sort(::AbstractVector)` for a
+description of possible keyword arguments.
+
+# Examples
+```jldoctest
+julia> F1 = eigfact([4.0 1.0; 0 1.0])
+Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([4.0, 1.0], [1.0 -0.316228; 0.0 0.948683])
+
+julia> F1[:values]
+2-element Array{Float64,1}:
+ 4.0
+ 1.0
+
+julia> F2 = sort(F1)
+Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0, 4.0], [-0.316228 1.0; 0.948683 0.0])
+
+julia> F2[:values]
+2-element Array{Float64,1}:
+ 1.0
+ 4.0
+```
+"""
+sort(F::Eigen; kw...) = sort!(copy(F), kw...)
 
 isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
 
@@ -474,3 +481,5 @@ convert(::Type{AbstractMatrix}, F::Eigen) = F.vectors * Diagonal(F.values) / F.v
 convert(::Type{AbstractArray}, F::Eigen) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::Eigen) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::Eigen) = convert(Matrix, F)
+
+copy(F::Eigen) = Eigen(copy(F.values), copy(F.vectors))
