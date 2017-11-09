@@ -363,7 +363,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
         push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
     end
 
-    tokens_tuple = (tokens...)
+    tokens_tuple = (tokens...,)
     return DateFormat{Symbol(f),typeof(tokens_tuple)}(tokens_tuple, locale)
 end
 

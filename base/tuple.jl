@@ -20,7 +20,7 @@ endof(t::Tuple) = length(t)
 size(t::Tuple, d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 @eval getindex(t::Tuple, i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
-getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...)
+getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, find(b)) : throw(BoundsError(t, b))
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
@@ -137,7 +137,7 @@ end
 function _ntuple(f, n)
     @_noinline_meta
     (n >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", n)))
-    ([f(i) for i = 1:n]...)
+    ([f(i) for i = 1:n]...,)
 end
 
 # inferrable ntuple (enough for bootstrapping)
@@ -163,7 +163,7 @@ function map(f, t::Any16)
     for i=1:n
         A[i] = f(t[i])
     end
-    (A...)
+    (A...,)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
@@ -179,7 +179,7 @@ function map(f, t::Any16, s::Any16)
     for i = 1:n
         A[i] = f(t[i], s[i])
     end
-    (A...)
+    (A...,)
 end
 # n argument function
 heads(ts::Tuple...) = map(t -> t[1], ts)
@@ -195,7 +195,7 @@ function map(f, t1::Any16, t2::Any16, ts::Any16...)
     for i = 1:n
         A[i] = f(t1[i], t2[i], map(t -> t[i], ts)...)
     end
-    (A...)
+    (A...,)
 end
 
 

@@ -1150,6 +1150,11 @@ let xs = [:(1+2), :(3+4), :(5+6)]
     @test ex2.args[2:end] == [3,7,11]
 end
 
+let x = [3,2,1]
+    @test :( $(x...,) ) == (3, 2, 1)
+    @test :( $(x...), ) == Expr(:tuple, 3, 2, 1)
+end
+
 # issue #23519
 @test Meta.parse("@foo[1]") == Meta.parse("@foo([1])")
 @test Meta.parse("@foo[1 2; 3 4]") == Meta.parse("@foo([1 2; 3 4])")

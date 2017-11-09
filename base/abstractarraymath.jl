@@ -401,7 +401,7 @@ function repeat(A::AbstractArray;
 end
 
 rep_kw2tup(n::Integer) = (n,)
-rep_kw2tup(v::AbstractArray{<:Integer}) = (v...)
+rep_kw2tup(v::AbstractArray{<:Integer}) = (v...,)
 rep_kw2tup(t::Tuple) = t
 
 rep_shapes(A, i, o) = _rshps((), (), size(A), i, o)

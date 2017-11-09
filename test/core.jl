@@ -3184,7 +3184,7 @@ mutable struct D11597{T} <: C11597{T} d::T end
 @test_throws TypeError repr(D11597(1.0))
 
 # issue #11772
-@test_throws UndefRefError (Vector{Any}(5)...)
+@test_throws UndefRefError (Vector{Any}(5)...,)
 
 # issue #11813
 let a = UInt8[1, 107, 66, 88, 2, 99, 254, 13, 0, 0, 0, 0]
@@ -3204,8 +3204,8 @@ let a = UInt8[0, 0, 0, 0, 0x66, 99, 254, 13, 0, 0, 0, 0]
     f11813(p) = ((Int32(3),UInt8(0x66)),Int32(0)) === unsafe_load(convert(Ptr{Tuple{Tuple{Int32,UInt8},Int32}},p))
     @test f11813(p) === true # redundant comparison test seems to make this test more reliable, don't remove
 end
-let a = (1:1000...),
-    b = (1:1000...)
+let a = (1:1000...,),
+    b = (1:1000...,)
     @test a == b
     @test a === b
     @test (a == b) === true
