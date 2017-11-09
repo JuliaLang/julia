@@ -105,9 +105,13 @@ end
     end
 end
 
-let a = rand(10, 10)
-    f = sort(eigfact(a))
-    @test a ≈ f[:vectors] * Diagonal(f[:values]) / f[:vectors]
+let aa = rand(10, 10)
+    bb = aa'aa
+    for a in (aa, bb)
+        f = sort(eigfact(a))
+        @test issorted(f[:values], by=Base.LinAlg.eigsortby)
+        @test a ≈ f[:vectors] * Diagonal(f[:values]) / f[:vectors]
+    end
 end
 
 
