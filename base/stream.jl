@@ -104,7 +104,7 @@ mutable struct PipeEndpoint <: LibuvStream
     readnotify::Condition
     connectnotify::Condition
     closenotify::Condition
-    sendbuf::Union{Some{IOBuffer}, Void}
+    sendbuf::Union{IOBuffer, Void}
     lock::ReentrantLock
     throttle::Int
 
@@ -154,7 +154,7 @@ mutable struct TTY <: LibuvStream
     buffer::IOBuffer
     readnotify::Condition
     closenotify::Condition
-    sendbuf::Union{Some{IOBuffer}, Void}
+    sendbuf::Union{IOBuffer, Void}
     lock::ReentrantLock
     throttle::Int
     @static if Sys.iswindows(); ispty::Bool; end
@@ -852,7 +852,7 @@ function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         return uv_write(s, p, UInt(n))
     end
 
-    buf = get(s.sendbuf)
+    buf = s.sendbuf
     totb = nb_available(buf) + n
     if totb < buf.maxsize
         nb = unsafe_write(buf, p, n)
@@ -871,7 +871,7 @@ function flush(s::LibuvStream)
     if s.sendbuf === nothing
         return
     end
-    buf = get(s.sendbuf)
+    buf = s.sendbuf
     if nb_available(buf) > 0
         arr = take!(buf)        # Array of UInt8s
         uv_write(s, arr)
@@ -879,13 +879,13 @@ function flush(s::LibuvStream)
     return
 end
 
-buffer_writes(s::LibuvStream, bufsize) = (s.sendbuf=Some(PipeBuffer(bufsize)); s)
+buffer_writes(s::LibuvStream, bufsize) = (s.sendbuf=PipeBuffer(bufsize); s)
 
 ## low-level calls to libuv ##
 
 function write(s::LibuvStream, b::UInt8)
     if s.sendbuf !== nothing
-        buf = get(s.sendbuf)
+        buf = s.sendbuf
         if nb_available(buf) + 1 < buf.maxsize
             return write(buf, b)
         end

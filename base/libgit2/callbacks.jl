@@ -62,7 +62,7 @@ function exhausted_abort()
 end
 
 function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, username_ptr)
-    cred = Base.get(p.credential)::SSHCredential
+    cred = p.credential::SSHCredential
     revised = false
 
     # Use a filled credential as-is on the first pass. Reset password on sucessive calls.
@@ -115,7 +115,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
             url = git_url(scheme=p.scheme, host=p.host)
             response = Base.prompt("Username for '$url'", default=cred.user)
             response === nothing && return user_abort()
-            cred.user = Base.get(response)
+            cred.user = response
         end
 
         url = git_url(scheme=p.scheme, host=p.host, username=cred.user)
@@ -125,7 +125,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         if !isfile(cred.prvkey) || !revised || !haskey(ENV, "SSH_KEY_PATH")
             response = Base.prompt("Private key location for '$url'", default=cred.prvkey)
             response === nothing && return user_abort()
-            cred.prvkey = expanduser(Base.get(response))
+            cred.prvkey = expanduser(response)
 
             # Only update the public key if the private key changed
             if cred.prvkey != last_private_key
@@ -139,7 +139,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         if isfile(cred.prvkey) && (stale || !isfile(cred.pubkey))
             response = Base.prompt("Public key location for '$url'", default=cred.pubkey)
             response === nothing && return user_abort()
-            cred.pubkey = expanduser(Base.get(response))
+            cred.pubkey = expanduser(response)
         end
 
         # Ask for a passphrase when the private key exists and requires a passphrase
@@ -149,11 +149,11 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
                     "Your SSH Key requires a password, please enter it now:",
                     "Passphrase required", cred.prvkey; prompt_username=false)
                 response === nothing && return user_abort()
-                cred.pass = Base.get(response)[2]
+                cred.pass = response[2]
             else
                 response = Base.prompt("Passphrase for $(cred.prvkey)", password=true)
                 response === nothing && return user_abort()
-                cred.pass = Base.get(response)
+                cred.pass = response
                 isempty(cred.pass) && return user_abort()  # Ambiguous if EOF or newline
             end
         end
@@ -174,7 +174,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
 end
 
 function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload)
-    cred = Base.get(p.credential)::UserPasswordCredential
+    cred = p.credential::UserPasswordCredential
     revised = false
 
     # Use a filled credential as-is on the first pass. Reset password on sucessive calls.
@@ -204,16 +204,16 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayl
                 "Please enter your credentials for '$url'", "Credentials required",
                 username; prompt_username=true)
             response === nothing && return user_abort()
-            cred.user, cred.pass = Base.get(response)
+            cred.user, cred.pass = response
         else
             response = Base.prompt("Username for '$url'", default=username)
             response === nothing && return user_abort()
-            cred.user = Base.get(response)
+            cred.user = response
 
             url = git_url(scheme=p.scheme, host=p.host, username=cred.user)
             response = Base.prompt("Password for '$url'", password=true)
             response === nothing && return user_abort()
-            cred.pass = Base.get(response)
+            cred.pass = response
             isempty(cred.pass) && return user_abort()  # Ambiguous if EOF or newline
         end
 
@@ -283,10 +283,10 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
         # modification only is in effect for the first callback since `allowed_types` cannot
         # be mutated.
         if p.explicit !== nothing
-            cred = Base.get(p.explicit)
+            cred = p.explicit
 
             # Copy explicit credentials to avoid mutating approved credentials.
-            p.credential = Some(deepcopy(cred))
+            p.credential = deepcopy(cred)
 
             if isa(cred, SSHCredential)
                 allowed_types &= Cuint(Consts.CREDTYPE_SSH_KEY)
@@ -296,12 +296,11 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
                 allowed_types &= Cuint(0)  # Unhandled credential type
             end
         elseif p.cache !== nothing
-            cache = Base.get(p.cache)
             cred_id = credential_identifier(p.scheme, p.host)
 
             # Perform a deepcopy as we do not want to mutate approved cached credentials
-            if haskey(cache, cred_id)
-                p.credential = Some(deepcopy(cache[cred_id]))
+            if haskey(p.cache, cred_id)
+                p.credential = deepcopy(p.cache[cred_id])
             end
         end
 
@@ -312,16 +311,16 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     # use ssh key or ssh-agent
     if isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY))
-        if p.credential === nothing || !isa(Base.get(p.credential), SSHCredential)
-            p.credential = Some(SSHCredential(p.username))
+        if p.credential === nothing || !isa(p.credential, SSHCredential)
+            p.credential = SSHCredential(p.username)
         end
         err = authenticate_ssh(libgit2credptr, p, username_ptr)
         err == 0 && return err
     end
 
     if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
-        if p.credential === nothing || !isa(Base.get(p.credential), UserPasswordCredential)
-            p.credential = Some(UserPasswordCredential(p.username))
+        if p.credential === nothing || !isa(p.credential, UserPasswordCredential)
+            p.credential = UserPasswordCredential(p.username)
         end
         err = authenticate_userpass(libgit2credptr, p)
         err == 0 && return err

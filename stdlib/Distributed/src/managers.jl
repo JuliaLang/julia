@@ -209,15 +209,15 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     write_cookie(io)
 
     wconfig = WorkerConfig()
-    wconfig.io = Some(io.out)
-    wconfig.host = Some(host)
-    wconfig.tunnel = Some(params[:tunnel])
-    wconfig.sshflags = Some(sshflags)
-    wconfig.exeflags = Some(exeflags)
-    wconfig.exename = Some(exename)
-    wconfig.count = Some(cnt)
-    wconfig.max_parallel = Some(params[:max_parallel])
-    wconfig.enable_threaded_blas = Some(params[:enable_threaded_blas])
+    wconfig.io = io.out
+    wconfig.host = host
+    wconfig.tunnel = params[:tunnel]
+    wconfig.sshflags = sshflags
+    wconfig.exeflags = exeflags
+    wconfig.exename = exename
+    wconfig.count = cnt
+    wconfig.max_parallel = params[:max_parallel]
+    wconfig.enable_threaded_blas = params[:enable_threaded_blas]
 
 
     push!(launched, wconfig)
@@ -227,10 +227,10 @@ end
 
 function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symbol)
     if op == :interrupt
-        ospid = get(config.ospid, 0)
+        ospid = config.ospid === nothing ? 0 : config.ospid
         if ospid > 0
-            host = get(config.host)
-            sshflags = get(config.sshflags)
+            host = config.host
+            sshflags = config.sshflags
             if !success(`ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host "kill -2 $ospid"`)
                 @error "Error sending a Ctrl-C to julia worker $id on $host"
             end
@@ -330,9 +330,9 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
         write_cookie(io)
 
         wconfig = WorkerConfig()
-        wconfig.process = Some(io)
-        wconfig.io = Some(io.out)
-        wconfig.enable_threaded_blas = Some(params[:enable_threaded_blas])
+        wconfig.process = io
+        wconfig.io = io.out
+        wconfig.enable_threaded_blas = params[:enable_threaded_blas]
         push!(launched, wconfig)
     end
 
@@ -341,7 +341,7 @@ end
 
 function manage(manager::LocalManager, id::Integer, config::WorkerConfig, op::Symbol)
     if op == :interrupt
-        kill(get(config.process), 2)
+        kill(config.process, 2)
     end
 end
 
@@ -394,17 +394,17 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     # master connecting to workers
     if config.io !== nothing
-        (bind_addr, port) = read_worker_host_port(get(config.io))
-        pubhost = get(config.host, bind_addr)
-        config.host = Some(pubhost)
-        config.port = Some(port)
+        (bind_addr, port) = read_worker_host_port(config.io)
+        pubhost = config.host === nothing ? bind_addr : config.host
+        config.host = pubhost
+        config.port = port
     else
-        pubhost = get(config.host)
-        port = get(config.port)
-        bind_addr = get(config.bind_addr, pubhost)
+        pubhost = config.host
+        port = config.port
+        bind_addr = config.bind_addr === nothing ? pubhost : config.bind_addr
     end
 
-    tunnel = get(config.tunnel, false)
+    tunnel = config.tunnel === nothing ? false : config.tunnel
 
     s = split(pubhost,'@')
     user = ""
@@ -422,11 +422,12 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     if tunnel
         if !haskey(tunnel_hosts_map, pubhost)
-            tunnel_hosts_map[pubhost] = Semaphore(get(config.max_parallel, typemax(Int)))
+            tunnel_hosts_map[pubhost] = Semaphore(config.max_parallel === nothing ?
+                                                  typemax(Int) : config.max_parallel)
         end
         sem = tunnel_hosts_map[pubhost]
 
-        sshflags = get(config.sshflags)
+        sshflags = config.sshflags
         acquire(sem)
         try
             (s, bind_addr) = connect_to_worker(pubhost, bind_addr, port, user, sshflags)
@@ -437,14 +438,14 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
         (s, bind_addr) = connect_to_worker(bind_addr, port)
     end
 
-    config.bind_addr = Some(bind_addr)
+    config.bind_addr = bind_addr
 
     # write out a subset of the connect_at required for further worker-worker connection setups
-    config.connect_at = Some((bind_addr, port))
+    config.connect_at = (bind_addr, port)
 
     if config.io !== nothing
         let pid = pid
-            redirect_worker_output(pid, get(config.io))
+            redirect_worker_output(pid, config.io)
         end
     end
 
@@ -452,9 +453,9 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 end
 
 function connect_w2w(pid::Int, config::WorkerConfig)
-    (rhost, rport) = get(config.connect_at)
-    config.host = Some(rhost)
-    config.port = Some(rport)
+    (rhost, rport) = config.connect_at
+    config.host = rhost
+    config.port = rport
     (s, bind_addr) = connect_to_worker(rhost, rport)
     (s,s)
 end

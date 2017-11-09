@@ -73,7 +73,7 @@ returned by [`backtrace`](@ref):
 
 ```julia-repl
 julia> top_frame = stacktrace()[1]
-eval(::Module, ::Any) at boot.jl:236
+eval(::Module, ::Expr) at REPL.jl:3
 
 julia> top_frame.func
 :eval
@@ -85,7 +85,7 @@ julia> top_frame.line
 236
 
 julia> top_frame.linfo
-Some(MethodInstance for eval(::Module, ::Any))
+MethodInstance for eval(::Module, ::Expr)
 
 julia> top_frame.inlined
 false

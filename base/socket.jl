@@ -262,7 +262,7 @@ mutable struct TCPSocket <: LibuvStream
     readnotify::Condition
     connectnotify::Condition
     closenotify::Condition
-    sendbuf::Union{Some{IOBuffer}, Void}
+    sendbuf::Union{IOBuffer, Void}
     lock::ReentrantLock
     throttle::Int
 

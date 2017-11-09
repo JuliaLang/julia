@@ -56,7 +56,7 @@ function repository(idx::GitIndex)
     if idx.owner === nothing
         throw(GitError(Error.Index, Error.ENOTFOUND, "Index does not have an owning repository."))
     else
-        return Base.get(idx.owner)
+        return idx.owner
     end
 end
 
@@ -183,7 +183,7 @@ function Base.find(path::String, idx::GitIndex)
     ret = ccall((:git_index_find, :libgit2), Cint,
                   (Ref{Csize_t}, Ptr{Void}, Cstring), pos_ref, idx.ptr, path)
     ret == Cint(Error.ENOTFOUND) && return nothing
-    return Some(pos_ref[]+1)
+    return pos_ref[]+1
 end
 
 """

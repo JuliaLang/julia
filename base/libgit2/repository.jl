@@ -336,18 +336,18 @@ function checkout_tree(repo::GitRepo, obj::GitObject;
 end
 
 """
-    checkout_index(repo::GitRepo, idx::Union{Some{GitIndex}, Void} = nothing; options::CheckoutOptions = CheckoutOptions())
+    checkout_index(repo::GitRepo, idx::Union{GitIndex, Void} = nothing; options::CheckoutOptions = CheckoutOptions())
 
 Update the working tree of `repo` to match the index `idx`. If `idx` is `nothing`, the
 index of `repo` will be used. `options` controls how the checkout will be performed.
 See [`CheckoutOptions`](@ref) for more information.
 """
-function checkout_index(repo::GitRepo, idx::Union{Some{GitIndex}, Void} = nothing;
+function checkout_index(repo::GitRepo, idx::Union{GitIndex, Void} = nothing;
                         options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_index, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}, Ptr{CheckoutOptions}),
                  repo.ptr,
-                 idx === nothing ? C_NULL : Base.get(idx).ptr,
+                 idx === nothing ? C_NULL : idx.ptr,
                  Ref(options))
 end
 
@@ -385,11 +385,11 @@ function cherrypick(repo::GitRepo, commit::GitCommit; options::CherrypickOptions
 end
 
 """Updates some entries, determined by the `pathspecs`, in the index from the target commit tree."""
-function reset!(repo::GitRepo, obj::Union{Some{<:GitObject}, Void}, pathspecs::AbstractString...)
+function reset!(repo::GitRepo, obj::Union{GitObject, Void}, pathspecs::AbstractString...)
     @check ccall((:git_reset_default, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}, Ptr{StrArrayStruct}),
                  repo.ptr,
-                 obj === nothing ? C_NULL : Base.get(obj).ptr,
+                 obj === nothing ? C_NULL : obj.ptr,
                  collect(pathspecs))
     return head_oid(repo)
 end

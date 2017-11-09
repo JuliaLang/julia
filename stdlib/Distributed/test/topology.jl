@@ -48,10 +48,10 @@ function launch(manager::TopoTestManager, params::Dict, launched::Array, c::Cond
         Distributed.write_cookie(io)
 
         wconfig = WorkerConfig()
-        wconfig.process = Some(io)
-        wconfig.io = Some(io.out)
-        wconfig.ident = Some(i)
-        wconfig.connect_idents = Some(collect(i+2:2:manager.np))
+        wconfig.process = io
+        wconfig.io = io.out
+        wconfig.ident = i
+        wconfig.connect_idents = collect(i+2:2:manager.np)
         push!(launched, wconfig)
     end
 
@@ -61,9 +61,9 @@ end
 const map_pid_ident=Dict()
 function manage(manager::TopoTestManager, id::Integer, config::WorkerConfig, op::Symbol)
     if op == :register
-        map_pid_ident[id] = get(config.ident)
+        map_pid_ident[id] = config.ident
     elseif op == :interrupt
-        kill(get(config.process), 2)
+        kill(config.process, 2)
     end
 end
 

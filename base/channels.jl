@@ -21,7 +21,7 @@ mutable struct Channel{T} <: AbstractChannel
     cond_take::Condition                 # waiting for data to become available
     cond_put::Condition                  # waiting for a writeable slot
     state::Symbol
-    excp::Union{Some{<:Exception}, Void} # Exception to be thrown when state != :open
+    excp::Union{Exception, Void}         # exception to be thrown when state != :open
 
     data::Vector{T}
     sz_max::Int                          # maximum size of channel
@@ -129,7 +129,7 @@ isbuffered(c::Channel) = c.sz_max==0 ? false : true
 
 function check_channel_state(c::Channel)
     if !isopen(c)
-        c.excp !== nothing && throw(get(c.excp))
+        c.excp !== nothing && throw(c.excp)
         throw(closed_exception())
     end
 end
@@ -143,7 +143,7 @@ Close a channel. An exception is thrown by:
 """
 function close(c::Channel)
     c.state = :closed
-    c.excp = Some(closed_exception())
+    c.excp = closed_exception()
     notify_error(c)
     nothing
 end
@@ -237,7 +237,7 @@ function close_chnl_on_taskdone(t::Task, ref::WeakRef)
         !isopen(c) && return
         if istaskfailed(t)
             c.state = :closed
-            c.excp = Some(task_result(t))
+            c.excp = task_result(t)
             notify_error(c)
         else
             close(c)
@@ -387,7 +387,7 @@ function notify_error(c::Channel, err)
         foreach(t->schedule(t, err; error=true), waiters)
     end
 end
-notify_error(c::Channel) = notify_error(c, get(c.excp))
+notify_error(c::Channel) = notify_error(c, c.excp)
 
 eltype(::Type{Channel{T}}) where {T} = T
 

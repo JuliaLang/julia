@@ -603,12 +603,12 @@ macro big_str(s)
         print(bf, s[end])
         seekstart(bf)
         n = tryparse(BigInt, String(take!(bf)))
-        n !== nothing && return get(n)
+        n === nothing || return get(n)
     else
         n = tryparse(BigInt, s)
-        n !== nothing && return get(n)
+        n === nothing || return get(n)
         n = tryparse(BigFloat, s)
-        n !== nothing && return get(n)
+        n === nothing || return get(n)
     end
     message = "invalid number format $s for BigInt or BigFloat"
     return :(throw(ArgumentError($message)))

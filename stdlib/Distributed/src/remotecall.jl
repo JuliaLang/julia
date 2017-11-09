@@ -22,13 +22,12 @@ mutable struct Future <: AbstractRemoteRef
     where::Int
     whence::Int
     id::Int
-    v::Union{Some{<:Any}, Void}
+    v::Union{Some{Any}, Void}
 
-    Future(w::Int, rrid::RRID) = Future(w, rrid, nothing)
-    Future(w::Int, rrid::RRID, v::Union{Some{<:Any}, Void}) =
+    Future(w::Int, rrid::RRID, v::Union{Some{<:Any}, Void}=nothing) =
         (r = new(w,rrid.whence,rrid.id,v); return test_existing_ref(r))
 
-    Future(t::Tuple) = new(t[1],t[2],t[3],t[4])  # Useful for creating dummy, zeroed-out instances
+    Future(t::NTuple{4, Any}) = new(t[1],t[2],t[3],t[4])  # Useful for creating dummy, zeroed-out instances
 end
 
 """
@@ -183,7 +182,7 @@ or to use a local [`Channel`](@ref) as a proxy:
     isready(c)  # will not block
 """
 function isready(rr::Future)
-    rr.v !== nothing && return true
+    rr.v === nothing || return true
 
     rid = remoteref_id(rr)
     return if rr.where == myid()

@@ -142,7 +142,7 @@ linenumber, source code, and fielddocs.
 """
 mutable struct DocStr
     text   :: Core.SimpleVector
-    object :: Union{Some{<:Any}, Void}
+    object :: Any
     data   :: Dict{Symbol, Any}
 end
 
@@ -160,9 +160,9 @@ function docstr(binding::Binding, @nospecialize typesig = Union{})
 end
 docstr(object, data = Dict()) = _docstr(object, data)
 
-_docstr(vec::Core.SimpleVector, data) = DocStr(vec,            nothing,      data)
-_docstr(str::AbstractString,    data) = DocStr(Core.svec(str), nothing,      data)
-_docstr(object,                 data) = DocStr(Core.svec(),    Some(object), data)
+_docstr(vec::Core.SimpleVector, data) = DocStr(vec,            nothing, data)
+_docstr(str::AbstractString,    data) = DocStr(Core.svec(str), nothing, data)
+_docstr(object,                 data) = DocStr(Core.svec(),     object, data)
 
 _docstr(doc::DocStr, data) = (doc.data = merge(data, doc.data); doc)
 
@@ -188,9 +188,9 @@ function parsedoc(d::DocStr)
         md = formatdoc(d)
         md.meta[:module] = d.data[:module]
         md.meta[:path]   = d.data[:path]
-        d.object = Some(md)
+        d.object = md
     end
-    get(d.object)
+    d.object
 end
 
 """

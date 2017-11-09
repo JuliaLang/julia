@@ -260,9 +260,7 @@ function test_regular_io_ser(ref::Distributed.AbstractRemoteRef)
         v = getfield(ref2, fld)
         if isa(v, Number)
             @test v === zero(typeof(v))
-        elseif isa(v, Union{Some, Void})
-            @test v === nothing
-        else
+        elseif v !== nothing
             error(string("Add test for field ", fld))
         end
     end
@@ -604,7 +602,7 @@ if DoFullTest
     # error message but should not terminate.
     for w in Distributed.PGRP.workers
         if isa(w, Distributed.Worker)
-            local s = connect(get(w.config.host), get(w.config.port))
+            local s = connect(w.config.host, w.config.port)
             write(s, randstring(32))
         end
     end
@@ -943,7 +941,7 @@ end
 function test_blas_config(pid, expected)
     for worker in Distributed.PGRP.workers
         if worker.id == pid
-            @test get(worker.config.enable_threaded_blas) == expected
+            @test worker.config.enable_threaded_blas == expected
             return
         end
     end
@@ -1060,8 +1058,8 @@ function launch(manager::ErrorSimulator, params::Dict, launched::Array, c::Condi
     io = open(detach(setenv(cmd, dir=dir)))
 
     wconfig = WorkerConfig()
-    wconfig.process = Some(io)
-    wconfig.io = Some(io.out)
+    wconfig.process = io
+    wconfig.io = io.out
     push!(launched, wconfig)
     notify(c)
 end
@@ -1421,8 +1419,8 @@ function launch(manager::WorkerArgTester, params::Dict, launched::Array, c::Cond
     manager.write_cookie && Distributed.write_cookie(io)
 
     wconfig = WorkerConfig()
-    wconfig.process = Some(io)
-    wconfig.io = Some(io.out)
+    wconfig.process = io
+    wconfig.io = io.out
     push!(launched, wconfig)
 
     notify(c)

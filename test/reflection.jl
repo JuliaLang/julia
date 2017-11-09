@@ -593,7 +593,7 @@ function has_backslashes(f::Function)
 end
 function has_backslashes(meth::Method)
     if '\\' in string(meth.file)
-        return Some(meth)
+        return meth
     else
         return nothing
     end
