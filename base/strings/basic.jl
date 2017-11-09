@@ -595,7 +595,7 @@ end
 """
     first(str::AbstractString, nchar::Integer)
 
-Get a string consisting of the first `nchar` characters of `str`.
+Get a string consisting of at most the first `nchar` characters of `str`.
 
 ```jldoctest
 julia> first("∀ϵ≠0: ϵ²>0", 0)
@@ -606,19 +606,24 @@ julia> first("∀ϵ≠0: ϵ²>0", 1)
 
 julia> first("∀ϵ≠0: ϵ²>0", 3)
 "∀ϵ≠"
+
+julia> first("1234", 10)
+"1234"
 ```
 """
 function first(str::AbstractString, nchar::Integer)
+    s = start(str)
     if 0 <= nchar <= 1
-        return str[1:nchar]
+        return str[s:(s-1+nchar)]
     end
-    str[1:nextind(str, 1, nchar-1)]
+    idx = min(endof(str), nextind(str, s, nchar-1))
+    str[s:idx]
 end
 
 """
     last(str::AbstractString, nchar::Integer)
 
-Get a string consisting of the last `nchar` characters of `str`.
+Get a string consisting of at most the last `nchar` characters of `str`.
 
 ```jldoctest
 julia> last("∀ϵ≠0: ϵ²>0", 0)
@@ -629,6 +634,9 @@ julia> last("∀ϵ≠0: ϵ²>0", 1)
 
 julia> last("∀ϵ≠0: ϵ²>0", 3)
 "²>0"
+
+julia> last("1234", 10)
+"1234"
 ```
 """
 function last(str::AbstractString, nchar::Integer)
@@ -636,7 +644,8 @@ function last(str::AbstractString, nchar::Integer)
     if 0 <= nchar <= 1
         return str[(e-nchar+1):e]
     end
-    str[prevind(str, e, nchar-1):e]
+    idx = max(start(str), prevind(str, e, nchar-1))
+    str[idx:e]
 end
 
 # reverse-order iteration for strings and indices thereof

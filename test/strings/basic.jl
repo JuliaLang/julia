@@ -637,23 +637,24 @@ end
 end
 
 @testset "first and last" begin
-    s = "∀ϵ≠0: ϵ²>0"
-    @test_throws ArgumentError first(s, -1)
-    @test first(s, 0) == ""
-    @test first(s, 1) == "∀"
-    @test first(s, 2) == "∀ϵ"
-    @test first(s, 3) == "∀ϵ≠"
-    @test first(s, 4) == "∀ϵ≠0"
-    @test first(s, length(s)) == s
-    @test_throws BoundsError first(s, length(s)+1)
-    @test_throws ArgumentError last(s, -1)
-    @test last(s, 0) == ""
-    @test last(s, 1) == "0"
-    @test last(s, 2) == ">0"
-    @test last(s, 3) == "²>0"
-    @test last(s, 4) == "ϵ²>0"
-    @test last(s, length(s)) == s
-    @test_throws BoundsError last(s, length(s)+1)
+    let s = "∀ϵ≠0: ϵ²>0"
+        @test_throws ArgumentError first(s, -1)
+        @test first(s, 0) == ""
+        @test first(s, 1) == "∀"
+        @test first(s, 2) == "∀ϵ"
+        @test first(s, 3) == "∀ϵ≠"
+        @test first(s, 4) == "∀ϵ≠0"
+        @test first(s, length(s)) == s
+        @test first(s, length(s)+1) == s
+        @test_throws ArgumentError last(s, -1)
+        @test last(s, 0) == ""
+        @test last(s, 1) == "0"
+        @test last(s, 2) == ">0"
+        @test last(s, 3) == "²>0"
+        @test last(s, 4) == "ϵ²>0"
+        @test last(s, length(s)) == s
+        @test last(s, length(s)+1) == s
+    end
 end
 
 @testset "invalid code point" begin
