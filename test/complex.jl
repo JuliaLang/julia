@@ -989,3 +989,12 @@ end
         @test isequal(one(T) / complex(one(T), -zero(T)), Complex(one(T),  zero(T)))
     end
 end
+
+@testset "complex^real, issue #14342" begin
+    for T in (Float32, Float64, BigFloat), p in (T(-21//10), -21//10)
+        z = T(2)+0im
+        @test real(z^p) ≈ 2^p
+        @test signbit(imag(z^p))
+    end
+    @test (2+0im)^(-21//10) === (2//1+0im)^(-21//10) === 2^-2.1 - 0.0im
+end
