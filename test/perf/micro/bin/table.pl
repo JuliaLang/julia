@@ -54,29 +54,29 @@ our %systems = (
 our @systems = qw(c julia lua fortran go java javascript mathematica python matlab r octave);
 
 print qq[<table class="benchmarks">\n];
-print qq[<colgroup>\n];
-print qq[<col class="name">\n];
-printf qq[<col class="relative" span="%d">\n], scalar(@systems);
-print qq[</colgroup>\n];
-print qq[<thead>\n];
-print qq[<tr>\n];
-print qq[<th></th>\n];
-print qq[<th class="system">$systems{$_}[0]</th>\n] for @systems;
-print qq[</tr>\n];
-print qq[<tr>\n];
-print qq[<td></td>\n];
-print qq[<td class="version">$systems{$_}[1]</td>\n] for @systems;
-print qq[</tr>\n];
-print qq[</thead>\n];
-print qq[<tbody>\n];
+print qq[\t<colgroup>\n];
+print qq[\t\t<col class="name">\n];
+printf qq[\t\t<col class="relative" span="%d">\n], scalar(@systems);
+print qq[\t</colgroup>\n];
+print qq[\t<thead>\n];
+print qq[\t\t<tr>\n];
+print qq[\t\t\t<th></th>\n];
+print qq[\t\t\t<th class="system">$systems{$_}[0]</th>\n] for @systems;
+print qq[\t\t</tr>\n];
+print qq[\t\t<tr>\n];
+print qq[\t\t\t<td></td>\n];
+print qq[\t\t\t<td class="version">$systems{$_}[1]</td>\n] for @systems;
+print qq[\t\t</tr>\n];
+print qq[\t</thead>\n];
+print qq[\t<tbody>\n];
 
 for my $benchmark (@benchmarks) {
-  print qq[<tr>\n];
-  print qq[<th>$benchmark</th>\n];
+  print qq[\t\t<tr>\n];
+  print qq[\t\t\t<th>$benchmark</th>\n];
   for my $system (@systems) {
-    printf qq[<td class="data">%.2f</td>\n], $_{$benchmark}{$system}/$_{$benchmark}{'c'};
+    printf qq[\t\t\t<td class="data">%.2f</td>\n], $_{$benchmark}{$system}/$_{$benchmark}{'c'};
   }
-  print qq[</tr>\n];
+  print qq[\t\t</tr>\n];
 }
-print qq[</tbody>\n];
+print qq[\t</tbody>\n];
 print qq[</table>\n];
