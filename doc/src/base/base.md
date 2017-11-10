@@ -147,6 +147,8 @@ Base.identity
 
 ```@docs
 Base.supertype
+Core.Type
+Core.DataType
 Core.:(<:)
 Base.:(>:)
 Base.typejoin
