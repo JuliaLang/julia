@@ -60,7 +60,7 @@ printf qq[<col class="relative" span="%d">\n], scalar(@systems);
 print qq[</colgroup>\n];
 print qq[<thead>\n];
 print qq[<tr>];
-print qq[<td></td>];
+print qq[<th></th>];
 print qq[<th class="system">$systems{$_}[0]</th>] for @systems;
 print qq[</tr>\n];
 print qq[<tr>];
