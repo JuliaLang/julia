@@ -272,6 +272,8 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
+  * `in` now uses `isequal` to test for containment ([#9381]).
+
   * `Irrational` is now a subtype of `AbstractIrrational` ([#24245]).
 
   * The function `chop` now accepts two arguments `head` and `tail` allowing to specify
