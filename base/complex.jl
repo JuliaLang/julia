@@ -648,95 +648,45 @@ end
 exp10(z::Complex) = exp10(float(z))
 
 # _cpow helper function to avoid method ambiguity with ^(::Complex,::Real)
-function _cpow(z::Complex{T}, p::Union{T,Complex{T}})::Complex{T} where T<:AbstractFloat
-    if p == 2 #square
-        zr, zi = reim(z)
-        x = (zr-zi)*(zr+zi)
-        y = 2*zr*zi
-        if isnan(x)
-            if isinf(y)
-                x = copysign(zero(T),zr)
-            elseif isinf(zi)
-                x = convert(T,-Inf)
-            elseif isinf(zr)
-                x = convert(T,Inf)
-            end
-        elseif isnan(y) && isinf(x)
-            y = copysign(zero(T), y)
-        end
-        Complex(x,y)
-    elseif z!=0
-        if p!=0 && isinteger(p)
-            rp = real(p)
-            if rp < 0
-                return power_by_squaring(inv(z), convert(Integer, -rp))
+function _cpow(z, p)
+    if isreal(p)
+        pᵣ = real(p)
+        if isinteger(pᵣ) && abs(pᵣ) < typemax(Int32)
+            # |p| < typemax(Int32) serves two purposes: it prevents overflow
+            # when converting p to Int, and it also turns out to be roughly
+            # the crossover point for exp(p*log(z)) or similar to be faster.
+            ip = convert(Int, pᵣ)
+            zf = float(z)
+            return ip < 0 ? power_by_squaring(inv(zf), -ip) : power_by_squaring(zf, ip)
+        elseif isreal(z)
+            if iszero(real(z))
+                return pᵣ > 0 ? float(z) : inv(float(z)) # 0 or NaN+NaN*im
+            elseif real(z) > 0
+                return complex(float(real(z))^pᵣ, flipsign(float(imag(z)), pᵣ))
             else
-                return power_by_squaring(z, convert(Integer, rp))
-            end
-        end
-        exp(p*log(z))
-    elseif p!=0 #0^p
-        zero(z) #CHECK SIGNS
-    else #0^0
-        zer = copysign(zero(T),real(p))*copysign(zero(T),imag(z))
-        Complex(one(T), zer)
-    end
-end
-function _cpow(z::Complex{T}, p::Union{T,Complex{T}}) where T<:Real
-    if isinteger(p)
-        rp = real(p)
-        if rp < 0
-            return power_by_squaring(inv(float(z)), convert(Integer, -rp))
-        else
-            return power_by_squaring(float(z), convert(Integer, rp))
-        end
-    end
-    pr, pim = reim(p)
-    zr, zi = reim(z)
-    r = abs(z)
-    rp = r^pr
-    theta = atan2(zi, zr)
-    ntheta = pr*theta
-    if pim != 0 && r != 0
-        rp = rp*exp(-pim*theta)
-        ntheta = ntheta + pim*log(r)
-    end
-    sinntheta, cosntheta = sincos(ntheta)
-    re, im = rp*cosntheta, rp*sinntheta
-    if isinf(rp)
-        if isnan(re)
-            re = copysign(zero(re), cosntheta)
-        end
-        if isnan(im)
-            im = copysign(zero(im), sinntheta)
-        end
-    end
-
-    # apply some corrections to force known zeros
-    if pim == 0
-        if isinteger(pr)
-            if zi == 0
-                im = copysign(zero(im), im)
-            elseif zr == 0
-                if isinteger(0.5*pr) # pr is even
-                    im = copysign(zero(im), im)
-                else
-                    re = copysign(zero(re), re)
-                end
+                zᵣ = float(real(z))
+                return (-zᵣ)^pᵣ * cis(pᵣ*oftype(zᵣ, π))
             end
         else
-            dr = pr*2
-            if isinteger(dr) && zi == 0
-                if zr < 0
-                    re = copysign(zero(re), re)
-                else
-                    im = copysign(zero(im), im)
-                end
-            end
+            return abs(z)^pᵣ * cis(pᵣ*angle(z))
         end
+    elseif isreal(z)
+        iszero(z) && return real(p) > 0 ? float(z) : inv(float(z)) # 0 or NaN+NaN*im
+        zᵣ = float(real(z))
+        pᵣ, pᵢ = reim(p)
+        if zᵣ > 0
+            return zᵣ^pᵣ * cis(pᵢ*log(zᵣ))
+        else
+            r = -zᵣ
+            θ = oftype(zᵣ, π)
+            return (r^pᵣ * exp(-pᵢ*θ)) * cis(pᵣ*θ + pᵢ*log(r))
+        end
+    else
+        pᵣ, pᵢ = reim(p)
+        r = abs(z)
+        θ = angle(z)
+        return (r^pᵣ * exp(-pᵢ*θ)) * cis(pᵣ*θ + pᵢ*log(r))
     end
-
-    Complex(re, im)
 end
 ^(z::Complex{T}, p::Complex{T}) where T<:Real = _cpow(z, p)
 ^(z::Complex{T}, p::T) where T<:Real = _cpow(z, p)
