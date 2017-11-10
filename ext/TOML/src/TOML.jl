@@ -1,5 +1,3 @@
-__precompile__(true)
-
 module TOML
 
     if VERSION < v"0.6-"
