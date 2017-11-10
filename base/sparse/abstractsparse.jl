@@ -36,28 +36,16 @@ _sparse_findprevnz(v::AbstractSparseArray, i) = (I = find(!iszero, v); n = searc
 
 function findnext(f::typeof(!iszero), v::AbstractSparseArray, i::Int)
     j = _sparse_findnextnz(v, i)
-    if j == 0
-        return 0
-    end
-    while !f(v[j])
+    while j != 0 && !f(v[j])
         j = _sparse_findnextnz(v, j+1)
-        if j == 0
-            return 0
-        end
     end
     return j
 end
 
 function findprev(f::typeof(!iszero), v::AbstractSparseArray, i::Int)
     j = _sparse_findprevnz(v, i)
-    if j == 0
-        return 0
-    end
-    while !f(v[j])
+    while j != 0 && !f(v[j])
         j = _sparse_findprevnz(v, j-1)
-        if j == 0
-            return 0
-        end
     end
     return j
 end
