@@ -12,7 +12,7 @@ while (<>) {
 our @benchmarks = qw(
   iteration_pi_sum
   recursion_fibonacci
-  recursion_quicksort  
+  recursion_quicksort
   parse_integers
   print_to_file
   matrix_statistics
@@ -36,23 +36,22 @@ our $mathematica_ver = `echo quit | math -version | head -n 1 | cut -f2 -d" "`;
 our $java_ver = `java -version 2>&1 |grep "version" | cut -f 3 -d " " | cut -c 2-9`;
 
 our %systems = (
-  "c"          => ["C"           , "gcc $c_ver" ],    
-  "julia"      => ["Julia"       , $julia_ver  ],
-  "lua"        => ["LuaJIT"      , "$lua_ver" ],
-  "fortran"    => ["Fortran"     , "gcc $fortran_ver" ],
-  "java"       => ["Java"        , $java_ver ],
-  "javascript" => ["JavaScript"  , "V8 $javascript_ver" ],
-  "matlab"     => ["Matlab"      , "R$matlab_ver" ],
-  "python"     => ["Python"      , $python_ver ],
+  "c"          => ["C"                , "gcc $c_ver" ],
+  "julia"      => ["Julia"            , $julia_ver  ],
+  "lua"        => ["LuaJIT"           , "$lua_ver" ],
+  "fortran"    => ["Fortran"          , "gcc $fortran_ver" ],
+  "java"       => ["Java"             , $java_ver ],
+  "javascript" => ["JavaScript"       , "V8 $javascript_ver" ],
+  "matlab"     => ["Matlab"           , "R$matlab_ver" ],
+  "python"     => ["Python"           , $python_ver ],
   "mathematica"=> ["Mathe&shy;matica" , $mathematica_ver ],
-  "r"          => ["R"           , $R_ver ],
-  "octave"     => ["Octave"      , $octave_ver ],
-  "go"         => ["Go"          , $go_ver ],
-#  "stata"      => ["Stata"       , $stata_ver ],
+  "r"          => ["R"                , $R_ver ],
+  "octave"     => ["Octave"           , $octave_ver ],
+  "go"         => ["Go"               , $go_ver ],
+#  "stata"      => ["Stata"            , $stata_ver ],
 );
 
 our @systems = qw(c julia lua fortran go java javascript mathematica python matlab r octave);
-#our @systems = qw(lua);
 
 print qq[<table class="benchmarks">\n];
 print qq[<colgroup>\n];
