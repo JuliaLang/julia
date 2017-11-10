@@ -1037,6 +1037,8 @@ for bad in ('=', '$', ':', "||", "&&", "->", "<:")
 end
 @test Base.operator_precedence(:+̂) == Base.operator_precedence(:+)
 
+@test Meta.parse("(x)ᵀ") == Expr(:call, :*, :x, :ᵀ)
+
 # issue #19351
 # adding return type decl should not affect parse of function body
 @test :(t(abc) = 3).args[2] == :(t(abc)::Int = 3).args[2]
