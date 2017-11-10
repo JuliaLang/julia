@@ -5474,6 +5474,21 @@ module GlobalDef18933
     @test sincos === Base.sincos
 end
 
+# test that global resolution happens the same in top-level thunks whether
+# compiled or interpreted.
+module GlobalDef18933_2
+using Test
+@test_throws UndefVarError(:sin) begin
+    sin(2)
+    global sin = 1
+end
+@test_throws UndefVarError(:cos) begin
+    cos(2)
+    global cos = 1
+    for i = 1:2; end
+end
+end
+
 # issue #23218
 let idx = (7,5,9)
     (v,) = (idx...,)

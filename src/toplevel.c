@@ -464,19 +464,17 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
          ((jl_expr_t*)e)->head == jl_incomplete_sym);
 }
 
-jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals);
-static jl_method_instance_t *jl_new_thunk(jl_code_info_t *src, jl_module_t *module)
+void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals);
+
+static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_module_t *module)
 {
     jl_method_instance_t *li = jl_new_method_instance_uninit();
+    JL_GC_PUSH1(&li);
     li->inferred = (jl_value_t*)src;
     li->specTypes = (jl_value_t*)jl_emptytuple_type;
     li->def.module = module;
     jl_array_t *stmts = (jl_array_t*)src->code;
-    size_t i, l;
-    JL_GC_PUSH1(&li);
-    for (i = 0, l = jl_array_len(stmts); i < l; i++) {
-        jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), module, NULL));
-    }
+    jl_resolve_globals_in_ir(stmts, module, NULL);
     JL_GC_POP();
     return li;
 }
@@ -692,13 +690,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     }
 
     if (ewc) {
-        li = jl_new_thunk(thk, m);
+        li = method_instance_for_thunk(thk, m);
         size_t world = jl_get_ptls_states()->world_age;
         jl_type_infer(&li, world, 0);
         jl_value_t *dummy_f_arg = NULL;
         result = jl_call_method_internal(li, &dummy_f_arg, 1);
     }
     else {
+        jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL);
         result = jl_interpret_toplevel_thunk(m, thk);
     }
     JL_GC_POP();
@@ -712,7 +711,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 
 JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
 {
-    jl_method_instance_t *li = jl_new_thunk(thk, m);
+    jl_method_instance_t *li = method_instance_for_thunk(thk, m);
     JL_GC_PUSH1(&li);
     jl_type_infer(&li, jl_get_ptls_states()->world_age, 0);
     JL_GC_POP();

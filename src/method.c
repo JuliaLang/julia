@@ -16,7 +16,7 @@ extern "C" {
 #endif
 
 extern jl_value_t *jl_builtin_getfield;
-jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals)
+static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals)
 {
     if (jl_is_symbol(expr)) {
         if (module == NULL)
@@ -116,11 +116,20 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
             }
             for (; i < nargs; i++) {
                 // TODO: this should be making a copy, not mutating the source
-                jl_exprargset(e, i, jl_resolve_globals(jl_exprarg(e, i), module, sparam_vals));
+                jl_exprargset(e, i, resolve_globals(jl_exprarg(e, i), module, sparam_vals));
             }
         }
     }
     return expr;
+}
+
+void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals)
+{
+    size_t i, l = jl_array_len(stmts);
+    for (i = 0; i < l; i++) {
+        jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+        jl_array_ptr_set(stmts, i, resolve_globals(stmt, m, sparam_vals));
+    }
 }
 
 // copy a :lambda Expr into its CodeInfo representation,
@@ -308,12 +317,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             }
 
             jl_array_t *stmts = (jl_array_t*)func->code;
-            size_t i, l;
-            for (i = 0, l = jl_array_len(stmts); i < l; i++) {
-                jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-                stmt = jl_resolve_globals(stmt, linfo->def.method->module, linfo->sparam_vals);
-                jl_array_ptr_set(stmts, i, stmt);
-            }
+            jl_resolve_globals_in_ir(stmts, linfo->def.method->module, linfo->sparam_vals);
         }
 
         ptls->in_pure_callback = last_in;
@@ -437,7 +441,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             }
         }
         else {
-            st = jl_resolve_globals(st, m->module, sparam_vars);
+            st = resolve_globals(st, m->module, sparam_vars);
         }
         jl_array_ptr_set(copy, i, st);
     }
