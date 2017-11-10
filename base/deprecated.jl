@@ -1320,6 +1320,7 @@ module DFT
             @eval Base.@deprecate_moved $f "FFTW"
         end
     end
+    Base.deprecate(DFT, :FFTW, 2)
     export FFTW
 end
 using .DFT
@@ -1331,6 +1332,7 @@ module DSP
         @eval Base.@deprecate_moved $f "DSP"
     end
 end
+deprecate(Base, :DSP, 2)
 using .DSP
 export conv, conv2, deconv, filt, filt!, xcorr
 
