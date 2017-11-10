@@ -449,8 +449,6 @@ static jl_module_t *eval_import_path(jl_module_t *from, jl_array_t *args, jl_sym
     return m;
 }
 
-jl_value_t *jl_toplevel_eval_body(jl_module_t *m, jl_array_t *stmts);
-
 int jl_is_toplevel_only_expr(jl_value_t *e)
 {
     return jl_is_expr(e) &&
@@ -461,7 +459,9 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
          ((jl_expr_t*)e)->head == export_sym ||
          ((jl_expr_t*)e)->head == thunk_sym ||
          ((jl_expr_t*)e)->head == global_sym ||
-         ((jl_expr_t*)e)->head == toplevel_sym);
+         ((jl_expr_t*)e)->head == toplevel_sym ||
+         ((jl_expr_t*)e)->head == error_sym ||
+         ((jl_expr_t*)e)->head == jl_incomplete_sym);
 }
 
 jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals);
@@ -504,6 +504,34 @@ static jl_module_t *deprecation_replacement_module(jl_module_t *parent, jl_sym_t
     return NULL;
 }
 
+static jl_code_info_t *expr_to_code_info(jl_value_t *expr)
+{
+    jl_code_info_t *src = jl_new_code_info_uninit();
+    JL_GC_PUSH1(&src);
+
+    if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
+        jl_array_t *body = jl_alloc_vec_any(1);
+        src->code = body;
+        jl_gc_wb(src, body);
+        jl_array_ptr_set(body, 0, (jl_value_t*)jl_exprn(return_sym, 1));
+        jl_array_ptr_set(((jl_expr_t*)jl_array_ptr_ref(body, 0))->args, 0, expr);
+    }
+    else {
+        src->code = ((jl_expr_t*)expr)->args;
+        jl_gc_wb(src, src->code);
+    }
+    src->slotnames = jl_alloc_vec_any(0);
+    jl_gc_wb(src, src->slotnames);
+    src->slottypes = jl_nothing;
+    src->slotflags = jl_alloc_array_1d(jl_array_uint8_type, 0);
+    jl_gc_wb(src, src->slotflags);
+    src->ssavaluetypes = jl_box_long(0);
+    jl_gc_wb(src, src->ssavaluetypes);
+
+    JL_GC_POP();
+    return src;
+}
+
 jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -516,11 +544,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     }
 
     jl_expr_t *ex = (jl_expr_t*)e;
-    if (ex->head == error_sym || ex->head == jl_incomplete_sym) {
-        // expression types simple enough not to need expansion
-        return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
-    }
-    else if (ex->head == module_sym) {
+    if (ex->head == module_sym) {
         return jl_eval_module_expr(m, ex);
     }
     else if (ex->head == importall_sym) {
@@ -614,7 +638,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     JL_GC_PUSH3(&li, &thk, &ex);
 
     if (!expanded && ex->head != body_sym && ex->head != thunk_sym && ex->head != return_sym &&
-        ex->head != method_sym && ex->head != toplevel_sym) {
+        ex->head != method_sym && ex->head != toplevel_sym && ex->head != error_sym &&
+        ex->head != jl_incomplete_sym) {
         // not yet expanded
         ex = (jl_expr_t*)jl_expand(e, m);
     }
@@ -632,6 +657,13 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
         JL_GC_POP();
         return res;
     }
+    else if (head == error_sym || head == jl_incomplete_sym) {
+        if (jl_expr_nargs(ex) == 0)
+            jl_errorf("malformed \"%s\" expression", jl_symbol_name(head));
+        if (jl_is_string(jl_exprarg(ex,0)))
+            jl_errorf("syntax: %s", jl_string_data(jl_exprarg(ex,0)));
+        jl_throw(jl_exprarg(ex,0));
+    }
 
     if (head == thunk_sym) {
         thk = (jl_code_info_t*)jl_exprarg(ex,0);
@@ -641,14 +673,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     }
     else {
         if (head && jl_eval_expr_with_compiler_p((jl_value_t*)ex, fast, m)) {
-            thk = jl_wrap_expr((jl_value_t*)ex);
+            thk = expr_to_code_info((jl_value_t*)ex);
             ewc = 1;
         }
+        else if (head == body_sym) {
+            thk = expr_to_code_info((jl_value_t*)ex);
+        }
         else {
-            if (head == body_sym) {
-                result = jl_toplevel_eval_body(m, ex->args);
-            }
-            else if (jl_is_toplevel_only_expr((jl_value_t*)ex)) {
+            if (jl_is_toplevel_only_expr((jl_value_t*)ex)) {
                 result = jl_toplevel_eval(m, (jl_value_t*)ex);
             }
             else {

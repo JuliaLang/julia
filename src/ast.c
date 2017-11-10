@@ -785,16 +785,9 @@ jl_value_t *jl_parse_eval_all(const char *fname,
             }
             jl_get_ptls_states()->world_age = jl_world_counter;
             form = scm_to_julia(fl_ctx, expression, inmodule);
-            jl_sym_t *head = NULL;
-            if (jl_is_expr(form))
-                head = ((jl_expr_t*)form)->head;
             JL_SIGATOMIC_END();
             jl_get_ptls_states()->world_age = jl_world_counter;
-            if (head == jl_incomplete_sym)
-                jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form, 0)));
-            else if (head == error_sym)
-                jl_interpret_toplevel_expr_in(inmodule, form, NULL, NULL);
-            else if (jl_is_linenode(form))
+            if (jl_is_linenode(form))
                 jl_lineno = jl_linenode_line(form);
             else
                 result = jl_toplevel_eval_flex(inmodule, form, 1, 1);
@@ -864,35 +857,6 @@ jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module
     JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
     return result;
-}
-
-// wrap expr in a thunk AST
-jl_code_info_t *jl_wrap_expr(jl_value_t *expr)
-{
-    // `(lambda () (() () () ()) ,expr)
-    jl_expr_t *le=NULL, *bo=NULL; jl_value_t *vi=NULL;
-    jl_value_t *mt = jl_an_empty_vec_any;
-    jl_code_info_t *src = NULL;
-    JL_GC_PUSH4(&le, &vi, &bo, &src);
-    le = jl_exprn(lambda_sym, 3);
-    jl_array_ptr_set(le->args, 0, mt);
-    vi = (jl_value_t*)jl_alloc_vec_any(4);
-    jl_array_ptr_set(vi, 0, mt);
-    jl_array_ptr_set(vi, 1, mt);
-    // front end always wraps toplevel exprs with ssavalues in (thunk (lambda () ...))
-    jl_array_ptr_set(vi, 2, jl_box_long(0));
-    jl_array_ptr_set(vi, 3, mt);
-    jl_array_ptr_set(le->args, 1, vi);
-    if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
-        bo = jl_exprn(body_sym, 1);
-        jl_array_ptr_set(bo->args, 0, (jl_value_t*)jl_exprn(return_sym, 1));
-        jl_array_ptr_set(((jl_expr_t*)jl_exprarg(bo,0))->args, 0, expr);
-        expr = (jl_value_t*)bo;
-    }
-    jl_array_ptr_set(le->args, 2, expr);
-    src = jl_new_code_info_from_ast(le);
-    JL_GC_POP();
-    return src;
 }
 
 // syntax tree accessors

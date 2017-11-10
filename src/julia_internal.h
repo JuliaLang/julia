@@ -331,6 +331,7 @@ jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam);
 int jl_code_requires_compiler(jl_code_info_t *src);
 jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast);
+JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
 
 STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
                                                      jl_method_instance_t *meth)
@@ -502,7 +503,6 @@ jl_array_t *jl_get_loaded_modules(void);
 
 jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);
 
-jl_code_info_t *jl_wrap_expr(jl_value_t *expr);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen,

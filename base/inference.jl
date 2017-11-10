@@ -2590,8 +2590,6 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         t = (length(e.args) == 1) ? Any : Void
     elseif e.head === :copyast
         t = abstract_eval(e.args[1], vtypes, sv)
-    elseif e.head === :inert
-        return abstract_eval_constant(e.args[1])
     elseif e.head === :invoke
         error("type inference data-flow error: tried to double infer a function")
     elseif e.head === :boundscheck
@@ -2776,8 +2774,7 @@ issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
 is_meta_expr_head(head::Symbol) =
-    (head === :inbounds || head === :boundscheck || head === :meta ||
-     head === :line || head === :simdloop)
+    (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
 is_meta_expr(ex::Expr) = is_meta_expr_head(ex.head)
 
 function tmerge(@nospecialize(typea), @nospecialize(typeb))
