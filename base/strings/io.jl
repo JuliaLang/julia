@@ -335,7 +335,7 @@ function unescape_string(io, s::AbstractString)
                 n = k = 0
                 m = c == 'x' ? 2 :
                     c == 'u' ? 4 : 8
-                while (k+=1) <= m && !done(s,i)
+                while (k += 1) <= m && !done(s,i)
                     c, j = next(s,i)
                     n = '0' <= c <= '9' ? n<<4 + c-'0' :
                         'a' <= c <= 'f' ? n<<4 + c-'a'+10 :
@@ -344,7 +344,7 @@ function unescape_string(io, s::AbstractString)
                 end
                 if k == 1
                     throw(ArgumentError("invalid $(m == 2 ? "hex (\\x)" :
-                                            "unicode (\\u)") escape sequence used in $(repr(s))"))
+                                        "unicode (\\u)") escape sequence used in $(repr(s))"))
                 end
                 if m == 2 # \x escape sequence
                     write(io, UInt8(n))
@@ -354,7 +354,7 @@ function unescape_string(io, s::AbstractString)
             elseif '0' <= c <= '7'
                 k = 1
                 n = c-'0'
-                while (k+=1) <= 3 && !done(s,i)
+                while (k += 1) <= 3 && !done(s,i)
                     c, j = next(s,i)
                     n = ('0' <= c <= '7') ? n<<3 + c-'0' : break
                     i = j

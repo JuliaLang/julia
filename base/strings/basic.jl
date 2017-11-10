@@ -512,7 +512,7 @@ julia> isxdigit('x')
 false
 ```
 """
-isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
+isxdigit(c::Char) = '0' ≤ c ≤ '9' || 'a' ≤ c ≤ 'f' || 'A' ≤ c ≤ 'F'
 
 ## uppercase, lowercase, and titlecase transformations ##
 

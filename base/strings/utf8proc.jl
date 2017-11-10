@@ -155,7 +155,22 @@ end
 
 utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(String(s), flags)
 
-function normalize_string(s::AbstractString; stable::Bool=false, compat::Bool=false, compose::Bool=true, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
+function normalize_string(
+    s::AbstractString;
+    stable::Bool=false,
+    compat::Bool=false,
+    compose::Bool=true,
+    decompose::Bool=false,
+    stripignore::Bool=false,
+    rejectna::Bool=false,
+    newline2ls::Bool=false,
+    newline2ps::Bool=false,
+    newline2lf::Bool=false,
+    stripcc::Bool=false,
+    casefold::Bool=false,
+    lump::Bool=false,
+    stripmark::Bool=false,
+)
     flags = 0
     stable && (flags = flags | UTF8PROC_STABLE)
     compat && (flags = flags | UTF8PROC_COMPAT)
@@ -268,9 +283,12 @@ julia> textwidth("March")
 """
 textwidth(s::AbstractString) = mapreduce(textwidth, +, 0, s)
 
-lowercase(c::Char) = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) : Char(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
-uppercase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) : Char(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
-titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) : Char(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
+lowercase(c::Char) = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
+    Char(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
+uppercase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
+    Char(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
+titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
+    Char(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
 
 ############################################################################
 
@@ -318,7 +336,7 @@ julia> islower('❤')
 false
 ```
 """
-islower(c::Char) = (category_code(c) == UTF8PROC_CATEGORY_LL)
+islower(c::Char) = category_code(c) == UTF8PROC_CATEGORY_LL
 
 # true for Unicode upper and mixed case
 
@@ -342,8 +360,8 @@ false
 ```
 """
 function isupper(c::Char)
-    ccode = category_code(c)
-    return ccode == UTF8PROC_CATEGORY_LU || ccode == UTF8PROC_CATEGORY_LT
+    cat = category_code(c)
+    cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT
 end
 
 """
@@ -363,7 +381,7 @@ julia> isdigit('α')
 false
 ```
 """
-isdigit(c::Char)  = ('0' <= c <= '9')
+isdigit(c::Char) = '0' <= c <= '9'
 
 """
     isalpha(c::Char) -> Bool
@@ -384,7 +402,7 @@ julia> isalpha('9')
 false
 ```
 """
-isalpha(c::Char)  = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO)
+isalpha(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO
 
 """
     isnumber(c::Char) -> Bool
@@ -405,7 +423,7 @@ julia> isnumber('❤')
 false
 ```
 """
-isnumber(c::Char) = (UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO)
+isnumber(c::Char) = UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO
 
 """
     isalnum(c::Char) -> Bool
@@ -427,9 +445,9 @@ true
 ```
 """
 function isalnum(c::Char)
-    ccode = category_code(c)
-    return (UTF8PROC_CATEGORY_LU <= ccode <= UTF8PROC_CATEGORY_LO) ||
-           (UTF8PROC_CATEGORY_ND <= ccode <= UTF8PROC_CATEGORY_NO)
+    cat = category_code(c)
+    UTF8PROC_CATEGORY_LU <= cat <= UTF8PROC_CATEGORY_LO ||
+    UTF8PROC_CATEGORY_ND <= cat <= UTF8PROC_CATEGORY_NO
 end
 
 # following C++ only control characters from the Latin-1 subset return true
@@ -469,7 +487,7 @@ julia> ispunct(';')
 true
 ```
 """
-ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGORY_PO)
+ispunct(c::Char) = UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGORY_PO
 
 # \u85 is the Unicode Next Line (NEL) character
 
@@ -495,7 +513,9 @@ julia> isspace('\\x20')
 true
 ```
 """
-@inline isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == '\u85' || '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
+@inline isspace(c::Char) =
+    c == ' ' || '\t' <= c <= '\r' || c == '\u85' ||
+    '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
 
 """
     isprint(c::Char) -> Bool
@@ -511,7 +531,7 @@ julia> isprint('A')
 true
 ```
 """
-isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS)
+isprint(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS
 
 # true in principal if a printer would use ink
 
@@ -531,7 +551,7 @@ julia> isgraph('A')
 true
 ```
 """
-isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_SO)
+isgraph(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_SO
 
 ############################################################################
 # iterators for grapheme segmentation
@@ -563,7 +583,7 @@ eltype(::Type{GraphemeIterator{S}}) where {S} = SubString{S}
 eltype(::Type{GraphemeIterator{SubString{S}}}) where {S} = SubString{S}
 
 function length(g::GraphemeIterator)
-    c0 = Char(0x00ad) # soft hyphen (grapheme break always allowed after this)
+    c0 = '\uad' # soft hyphen (grapheme break always allowed after this)
     n = 0
     state = Ref{Int32}(0)
     for c in g.s

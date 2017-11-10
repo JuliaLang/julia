@@ -550,7 +550,8 @@ end
 # check for pure ASCII-ness
 
 function ascii(s::String)
-    for (i, b) in enumerate(Vector{UInt8}(s))
+    for i = 1:sizeof(s)
+        b = codeunit(s,i)
         b < 0x80 || throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
     end
     return s
