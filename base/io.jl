@@ -610,14 +610,13 @@ function readuntil(io::IO, target::AbstractVector{T}) where T
     return out
 end
 
-
 """
     readchomp(x)
 
-Read the entirety of `x` as a string and remove a single trailing newline.
-Equivalent to `chomp!(read(x, String))`.
+Read the entirety of `x` as a string and remove a single trailing newline
+if there is one. Equivalent to `chomp(read(x, String))`.
 """
-readchomp(x) = chomp!(read(x, String))
+readchomp(x) = chomp(read(x, String))
 
 # read up to nb bytes into nb, returning # bytes read
 

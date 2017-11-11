@@ -127,17 +127,6 @@ function chomp(s::String)
     end
 end
 
-# NOTE: use with caution -- breaks the immutable string convention!
-# TODO: this is hard to provide with the new representation
-#function chomp!(s::String)
-#    if !isempty(s) && codeunit(s,sizeof(s)) == 0x0a
-#        n = (endof(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
-#        ccall(:jl_array_del_end, Void, (Any, UInt), s.data, n)
-#    end
-#    return s
-#end
-chomp!(s::AbstractString) = chomp(s) # copying fallback for other string types
-
 const _default_delims = [' ','\t','\n','\v','\f','\r']
 
 """
