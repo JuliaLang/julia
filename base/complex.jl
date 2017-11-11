@@ -679,10 +679,15 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
             if iszero(real(z))
                 return pᵣ > 0 ? complex(z) : Complex(T(NaN),T(NaN)) # 0 or NaN+NaN*im
             elseif real(z) > 0
-                return Complex(real(z)^pᵣ, flipsign(imag(z), pᵣ))
+                # (if both z and p are complex with ±0.0 imaginary parts, the sign of
+                #  the ±0.0 imaginary part of the result is ambiguous)
+                return Complex(real(z)^pᵣ, z isa Real ? -imag(p) : flipsign(imag(z), pᵣ))
             else
                 zᵣ = real(z)
-                return (-zᵣ)^pᵣ * cis(pᵣ*copysign(T(π),imag(z)))
+                rᵖ = (-zᵣ)^pᵣ
+                phaseᵣ = cospi(pᵣ)
+                phaseᵢ = flipsign(sinpi(pᵣ),imag(z))
+                return complex(rᵖ * phaseᵣ, rᵖ * phaseᵢ)
             end
         else
             return abs(z)^pᵣ * cis(pᵣ*angle(z))
