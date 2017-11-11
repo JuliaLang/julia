@@ -688,9 +688,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
                 # figuring out the sign of 0.0 when p is a complex number
                 # with zero imaginary part and integer/2 real part could be
                 # improved here, but it's not clear if it's worth it…
-                phaseᵣ = cospi(pᵣ)
-                phaseᵢ = flipsign(sinpi(pᵣ),imag(z))
-                return complex(rᵖ * phaseᵣ, rᵖ * phaseᵢ)
+                return rᵖ * complex(cospi(pᵣ), flipsign(sinpi(pᵣ),imag(z)))
             end
         else
             return abs(z)^pᵣ * cis(pᵣ*angle(z))

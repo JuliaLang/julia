@@ -998,3 +998,42 @@ end
     end
     @test (2+0im)^(-21//10) === (2//1+0im)^(-21//10) === 2^-2.1 - 0.0im
 end
+
+
+@testset "more cpow" begin
+    # for testing signs of zeros, it is useful to convert ±0.0 to ±1e-15
+    zero2small(r::Real) = iszero(r) ? copysign(1e-15, r) : r
+    zero2small(z::Complex) = complex(zero2small(real(z)), zero2small(imag(z)))
+    ≋(x::Real, y::Real) = x*y == 0 ? abs(x) < 1e-8 && abs(y) < 1e-8 && signbit(x)==signbit(y) : isfinite(x) ? x ≈ y : isequal(x, y)
+    ≋(x::Complex, y::Complex) = real(x) ≋ real(y) && imag(x) ≋ imag(y)
+
+    # test z^p for positive/negative/zero real and imaginary parts of z and p:
+    v=(-2.7,-3.0,-2.0,-0.0,+0.0,2.0,3.0,2.7)
+    for zr=v, zi=v, pr=v, pi=v
+        z = complex(zr,zi)
+        p = iszero(pi) ? pr : complex(pr,pi)
+        if isinteger(p)
+            c = zero2small(z)^Integer(pr)
+        else
+            c = exp(zero2small(p) * log(zero2small(z)))
+        end
+        if !iszero(z*p) # z==0 or p==0 is tricky, check it separately
+            @test z^p ≋ c
+            if isreal(p)
+                @test z^(p + 1e-15im) ≈ z^(p - 1e-15im) ≈ c
+            end
+        end
+    end
+
+    @test 0.2 ^ (0.3 + 0.0im) === conj(0.2 ^ (0.3 - 0.0im)) ≋  0.2 ^ (0.3 + 1e-15im)
+    @test (0.0 - 0.0im)^2.0 === (0.0 - 0.0im)^2 === (0.0 - 0.0im)^1.1 === (0.0 - 0.0im) ^ (1.1 + 2.3im) === 0.0 - 0.0im
+    @test (0.0 - 0.0im)^-2.0 ≋ (0.0 - 0.0im)^-2 ≋ (0.0 - 0.0im)^-1.1 ≋ (0.0 - 0.0im) ^ (-1.1 + 2.3im) ≋ NaN + NaN*im
+    @test (1.0+0.0)^(1.2+0.7im) === 1.0 + 0.0im
+    @test (-1.0+0.0)^(2.0+0.7im) ≈ exp(-0.7π)
+    @test (-4.0+0.0im)^1.5 === (-4.0)^(1.5+0.0im) === 0.0 - 8.0im
+
+    # issue #24515:
+    @test (Inf + Inf*im)^2.0 ≋ (Inf + Inf*im)^2 ≋ NaN + Inf*im
+    @test (0+0im)^-3.0 ≋ (0+0im)^-3 ≋ NaN + NaN*im
+    @test (1.0+0.0im)^1e300 === 1.0 + 0.0im
+end
