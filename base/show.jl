@@ -87,7 +87,7 @@ pipe_writer(io::IOContext) = io.io
 lock(io::IOContext) = lock(io.io)
 unlock(io::IOContext) = unlock(io.io)
 
-in(key_value::Pair, io::IOContext) = in(key_value, io.dict, ===)
+in(key_value::Pair, io::IOContext) = in(key_value, io.dict, isequal)
 in(key_value::Pair, io::IO) = false
 haskey(io::IOContext, key) = haskey(io.dict, key)
 haskey(io::IO, key) = false

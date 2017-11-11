@@ -176,6 +176,11 @@ let
     end
 end #end of let block
 
+@testset "in(x::Char, y::Char) = isequal(x, y)" begin
+    @test in('a', 'a')
+    @test !in('a', 'b')
+end
+
 @test convert(Signed, 'A') === Int32(65)
 @test convert(Unsigned, 'A') === UInt32(65)
 

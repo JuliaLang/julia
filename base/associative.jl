@@ -16,7 +16,7 @@ const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::Associative, k) = in(k,keys(d))
 
-function in(p::Pair, a::Associative, valcmp=(==))
+function in(p::Pair, a::Associative, valcmp=isequal)
     v = get(a,p[1],secret_table_token)
     if v !== secret_table_token
         valcmp(v, p[2]) && return true
@@ -67,7 +67,7 @@ function next(v::ValueIterator, state)
     n[1][2], n[2]
 end
 
-in(k, v::KeyIterator) = get(v.dict, k, secret_table_token) !== secret_table_token
+in(k, v::KeyIterator) = !isequal(get(v.dict, k, secret_table_token), secret_table_token)
 
 """
     keys(iterator)

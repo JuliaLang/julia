@@ -135,6 +135,8 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * `in` now uses `isequal` to test for containment ([#9381]).
+
   * `getindex(s::String, r::UnitRange{Int})` now throws `UnicodeError` if `last(r)`
     is not a valid index into `s` ([#22572]).
 
@@ -271,8 +273,6 @@ This section lists changes that do not have deprecation warnings.
 
 Library improvements
 --------------------
-
-  * `in` now uses `isequal` to test for containment ([#9381]).
 
   * `Irrational` is now a subtype of `AbstractIrrational` ([#24245]).
 

@@ -773,10 +773,10 @@ ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
 ImmutableDict(t::ImmutableDict{K,V}, KV::Pair) where {K,V} = ImmutableDict{K,V}(t, KV[1], KV[2])
 
-function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
+function in(key_value::Pair, dict::ImmutableDict, valcmp=isequal)
     key, value = key_value
     while isdefined(dict, :parent)
-        if dict.key == key
+        if isequal(dict.key, key)
             valcmp(value, dict.value) && return true
         end
         dict = dict.parent

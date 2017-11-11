@@ -44,7 +44,7 @@ function search(s::AbstractString, c::Chars, i::Integer)
 end
 search(s::AbstractString, c::Chars) = search(s,c,start(s))
 
-in(c::Char, s::AbstractString) = (search(s,c)!=0)
+in(c::Char, s::AbstractString) = !isequal(search(s,c), 0)
 
 function _searchindex(s, t, i)
     if isempty(t)

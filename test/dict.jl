@@ -496,6 +496,7 @@ import Base.ImmutableDict
     @test in(k2 => v2, d4, ===)
     @test in(k2 => NaN, dnan, isequal)
     @test in(k2 => NaN, dnan, ===)
+    @test in(NaN => NaN, Dict(NaN => NaN))
     @test !in(k2 => NaN, dnan, ==)
     @test !in(k2 => 1, dnum, ===)
     @test in(k2 => 1.0, dnum, ===)

@@ -332,7 +332,9 @@ struct SomeFunctor end
       @test in(0, 1:3) == false
       @test in(1, 1:3) == true
       @test in(2, 1:3) == true
-      @test in(NaN, [1,1.3,2,NaN])
+      @test in(NaN, [1,1.3,2,NaN]) == true
+      @test in(0.0, [-0.0,2.3,"w"]) == false
+      @test in(-0.0, [-0.0,2.3,"w"]) == true
 end
 # contains
 
