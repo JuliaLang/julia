@@ -463,3 +463,9 @@ end
         @test isa(similar(symsparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
     end
 end
+
+@testset "#24572: eltype(A::HermOrSym) === eltype(parent(A))" begin
+    A = rand(Float32, 3, 3)
+    @test_throws TypeError Symmetric{Float64,Matrix{Float32}}(A, 'U')
+    @test_throws TypeError Hermitian{Float64,Matrix{Float32}}(A, 'U')
+end
