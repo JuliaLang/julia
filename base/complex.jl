@@ -648,41 +648,40 @@ end
 exp10(z::Complex) = exp10(float(z))
 
 # _cpow helper function to avoid method ambiguity with ^(::Complex,::Real)
-function _cpow(z, p)
+function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:AbstractFloat}
     if isreal(p)
         pᵣ = real(p)
         if isinteger(pᵣ) && abs(pᵣ) < typemax(Int32)
             # |p| < typemax(Int32) serves two purposes: it prevents overflow
             # when converting p to Int, and it also turns out to be roughly
             # the crossover point for exp(p*log(z)) or similar to be faster.
-            zf = float(z)
-            if iszero(pᵣ) && iszero(zf) # fix signs of imaginary part for 0^0
-                zer = flipsign(copysign(zero(real(zf)),pᵣ), imag(zf))
-                return Complex(one(real(zf)), zer)
+            if iszero(pᵣ) && iszero(z) # fix signs of imaginary part for 0^0
+                zer = flipsign(copysign(zero(T),pᵣ), imag(z))
+                return Complex(one(T), zer)
             end
             ip = convert(Int, pᵣ)
-            return ip < 0 ? power_by_squaring(inv(zf), -ip) : power_by_squaring(zf, ip)
+            return ip < 0 ? power_by_squaring(inv(z), -ip) : power_by_squaring(z, ip)
         elseif isreal(z)
             if iszero(real(z))
-                return pᵣ > 0 ? float(z) : inv(float(z)) # 0 or NaN+NaN*im
+                return pᵣ > 0 ? z : inv(z) # 0 or NaN+NaN*im
             elseif real(z) > 0
-                return complex(float(real(z))^pᵣ, flipsign(float(imag(z)), pᵣ))
+                return complex(real(z)^pᵣ, flipsign(imag(z), pᵣ))
             else
-                zᵣ = float(real(z))
-                return (-zᵣ)^pᵣ * cis(pᵣ*oftype(zᵣ, π))
+                zᵣ = real(z)
+                return (-zᵣ)^pᵣ * cis(pᵣ*T(π))
             end
         else
             return abs(z)^pᵣ * cis(pᵣ*angle(z))
         end
     elseif isreal(z)
-        iszero(z) && return real(p) > 0 ? float(z) : inv(float(z)) # 0 or NaN+NaN*im
-        zᵣ = float(real(z))
+        iszero(z) && return real(p) > 0 ? z : inv(z) # 0 or NaN+NaN*im
+        zᵣ = real(z)
         pᵣ, pᵢ = reim(p)
         if zᵣ > 0
             return zᵣ^pᵣ * cis(pᵢ*log(zᵣ))
         else
             r = -zᵣ
-            θ = oftype(zᵣ, π)
+            θ = T(π)
             return (r^pᵣ * exp(-pᵢ*θ)) * cis(pᵣ*θ + pᵢ*log(r))
         end
     else
@@ -692,6 +691,7 @@ function _cpow(z, p)
         return (r^pᵣ * exp(-pᵢ*θ)) * cis(pᵣ*θ + pᵢ*log(r))
     end
 end
+_cpow(z, p) = _cpow(float(z), float(p))
 ^(z::Complex{T}, p::Complex{T}) where T<:Real = _cpow(z, p)
 ^(z::Complex{T}, p::T) where T<:Real = _cpow(z, p)
 
