@@ -655,8 +655,12 @@ function _cpow(z, p)
             # |p| < typemax(Int32) serves two purposes: it prevents overflow
             # when converting p to Int, and it also turns out to be roughly
             # the crossover point for exp(p*log(z)) or similar to be faster.
-            ip = convert(Int, pᵣ)
             zf = float(z)
+            if iszero(pᵣ) && iszero(zf) # fix signs of imaginary part for 0^0
+                zer = flipsign(copysign(zero(real(zf)),pᵣ), imag(zf))
+                return Complex(one(real(zf)), zer)
+            end
+            ip = convert(Int, pᵣ)
             return ip < 0 ? power_by_squaring(inv(zf), -ip) : power_by_squaring(zf, ip)
         elseif isreal(z)
             if iszero(real(z))
