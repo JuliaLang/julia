@@ -334,7 +334,7 @@ g15844 = let
 end
 
 function add_method_to_glob_fn!()
-    global function f15844(x::Int64)
+    @eval global function f15844(x::Int64)
         3x
     end
 end
