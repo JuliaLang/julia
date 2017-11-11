@@ -681,7 +681,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
             if iszero(real(z))
                 return pᵣ > 0 ? complex(z) : Complex(T(NaN),T(NaN)) # 0 or NaN+NaN*im
             elseif real(z) > 0
-                return Complex(real(z)^pᵣ, z isa Real ? -imag(p) : flipsign(imag(z), pᵣ))
+                return Complex(real(z)^pᵣ, z isa Real ? ifelse(real(z) < 1, -imag(p), imag(p)) : flipsign(imag(z), pᵣ))
             else
                 zᵣ = real(z)
                 rᵖ = (-zᵣ)^pᵣ
@@ -729,6 +729,10 @@ _cpow(z, p) = _cpow(float(z), float(p))
 function ^(z::Complex{T}, p::S) where {T<:Real,S<:Real}
     P = promote_type(T,S)
     return Complex{P}(z) ^ P(p)
+end
+function ^(z::T, p::Complex{S}) where {T<:Real,S<:Real}
+    P = promote_type(T,S)
+    return P(z) ^ Complex{P}(p)
 end
 
 function sin(z::Complex{T}) where T

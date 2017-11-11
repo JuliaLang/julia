@@ -1021,16 +1021,22 @@ end
             @test z^p ≋ c
             if isreal(p)
                 @test z^(p + 1e-15im) ≈ z^(p - 1e-15im) ≈ c
+                if isinteger(p)
+                    @test isequal(z^Integer(pr), z^p)
+                end
+            elseif (zr != 0 || !signbit(zr)) && (zi != 0 || !signbit(zi))
+                @test isequal((Complex{Int}(z*10)//10)^p, z^p)
             end
         end
     end
 
+    @test 2 ^ (0.3 + 0.0im) === 2.0 ^ (0.3 + 0.0im) === conj(2.0 ^ (0.3 - 0.0im)) ≋  2.0 ^ (0.3 + 1e-15im)
     @test 0.2 ^ (0.3 + 0.0im) === conj(0.2 ^ (0.3 - 0.0im)) ≋  0.2 ^ (0.3 + 1e-15im)
     @test (0.0 - 0.0im)^2.0 === (0.0 - 0.0im)^2 === (0.0 - 0.0im)^1.1 === (0.0 - 0.0im) ^ (1.1 + 2.3im) === 0.0 - 0.0im
     @test (0.0 - 0.0im)^-2.0 ≋ (0.0 - 0.0im)^-2 ≋ (0.0 - 0.0im)^-1.1 ≋ (0.0 - 0.0im) ^ (-1.1 + 2.3im) ≋ NaN + NaN*im
     @test (1.0+0.0)^(1.2+0.7im) === 1.0 + 0.0im
     @test (-1.0+0.0)^(2.0+0.7im) ≈ exp(-0.7π)
-    @test (-4.0+0.0im)^1.5 === (-4.0)^(1.5+0.0im) === 0.0 - 8.0im
+    @test (-4.0+0.0im)^1.5 === (-4.0)^(1.5+0.0im) === (-4)^(1.5+0.0im) === (-4)^(3//2+0im) === 0.0 - 8.0im
 
     # issue #24515:
     @test (Inf + Inf*im)^2.0 ≋ (Inf + Inf*im)^2 ≋ NaN + Inf*im
