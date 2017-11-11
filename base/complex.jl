@@ -682,7 +682,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
                 return Complex(real(z)^pᵣ, flipsign(imag(z), pᵣ))
             else
                 zᵣ = real(z)
-                return (-zᵣ)^pᵣ * cis(pᵣ*T(π))
+                return (-zᵣ)^pᵣ * cis(pᵣ*copysign(T(π),imag(z)))
             end
         else
             return abs(z)^pᵣ * cis(pᵣ*angle(z))
@@ -695,7 +695,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
             return zᵣ^pᵣ * cis(pᵢ*log(zᵣ))
         else
             r = -zᵣ
-            θ = T(π)
+            θ = copysign(T(π),imag(z))
             return (r^pᵣ * exp(-pᵢ*θ)) * cis(pᵣ*θ + pᵢ*log(r))
         end
     else
