@@ -655,17 +655,31 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
             # |p| < typemax(Int32) serves two purposes: it prevents overflow
             # when converting p to Int, and it also turns out to be roughly
             # the crossover point for exp(p*log(z)) or similar to be faster.
-            if iszero(pᵣ) && iszero(z) # fix signs of imaginary part for 0^0
+            if iszero(pᵣ) # fix signs of imaginary part for z^0
                 zer = flipsign(copysign(zero(T),pᵣ), imag(z))
                 return Complex(one(T), zer)
             end
             ip = convert(Int, pᵣ)
-            return ip < 0 ? power_by_squaring(inv(z), -ip) : power_by_squaring(z, ip)
+            if isreal(z)
+                zᵣ = real(z)
+                if ip < 0
+                    iszero(z) && return Complex(T(NaN),T(NaN))
+                    re = power_by_squaring(inv(zᵣ), -ip)
+                    im = -imag(z)
+                else
+                    re = power_by_squaring(zᵣ, ip)
+                    im = imag(z)
+                end
+                # slightly tricky to get the correct sign of zero imag. part
+                return Complex(re, ifelse(iseven(ip) & signbit(zᵣ), -im, im))
+            else
+                return ip < 0 ? power_by_squaring(inv(z), -ip) : power_by_squaring(z, ip)
+            end
         elseif isreal(z)
             if iszero(real(z))
-                return pᵣ > 0 ? z : inv(z) # 0 or NaN+NaN*im
+                return pᵣ > 0 ? complex(z) : Complex(T(NaN),T(NaN)) # 0 or NaN+NaN*im
             elseif real(z) > 0
-                return complex(real(z)^pᵣ, flipsign(imag(z), pᵣ))
+                return Complex(real(z)^pᵣ, flipsign(imag(z), pᵣ))
             else
                 zᵣ = real(z)
                 return (-zᵣ)^pᵣ * cis(pᵣ*T(π))
@@ -674,7 +688,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
             return abs(z)^pᵣ * cis(pᵣ*angle(z))
         end
     elseif isreal(z)
-        iszero(z) && return real(p) > 0 ? z : inv(z) # 0 or NaN+NaN*im
+        iszero(z) && return real(p) > 0 ? complex(z) : Complex(T(NaN),T(NaN)) # 0 or NaN+NaN*im
         zᵣ = real(z)
         pᵣ, pᵢ = reim(p)
         if zᵣ > 0
@@ -694,6 +708,7 @@ end
 _cpow(z, p) = _cpow(float(z), float(p))
 ^(z::Complex{T}, p::Complex{T}) where T<:Real = _cpow(z, p)
 ^(z::Complex{T}, p::T) where T<:Real = _cpow(z, p)
+^(z::T, p::Complex{T}) where T<:Real = _cpow(z, p)
 
 ^(z::Complex, n::Bool) = n ? z : one(z)
 ^(z::Complex, n::Integer) = z^Complex(n)
