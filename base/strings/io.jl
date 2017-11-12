@@ -291,25 +291,6 @@ function print_quoted(io, s::AbstractString)
     print(io, '"')
 end
 
-# bare minimum unescaping function unescapes only given characters
-
-function print_unescaped_chars(io, s::AbstractString, esc::AbstractString)
-    if !('\\' in esc)
-        esc = string("\\", esc)
-    end
-    i = start(s)
-    while !done(s,i)
-        c, i = next(s,i)
-        if c == '\\' && !done(s,i) && s[i] in esc
-            c, i = next(s,i)
-        end
-        print(io, c)
-    end
-end
-
-unescape_chars(s::AbstractString, esc::AbstractString) =
-    sprint(endof(s), print_unescaped_chars, s, esc)
-
 # general unescaping of traditional C and Unicode escape sequences
 
 """
