@@ -302,8 +302,8 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     if i₊ == 0 # purely real or imaginary value
         if iᵢ > 0 # purely imaginary
             x_ = tryparse_internal(T, s, i, iᵢ-1, raise)
-            isnull(x_) && return nothing
-            x = unsafe_get(x_)
+            x_ === nothing && return nothing
+            x = get(x_)
             return Some(Complex{T}(zero(x),x))
         else # purely real
             return Some(tryparse_internal(T, s, i, e, raise))
@@ -344,4 +344,4 @@ tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, rais
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
 parse(::Type{T}, s::AbstractString) where T<:Union{Real,Complex} =
-    unsafe_get(tryparse_internal(T, s, start(s), endof(s), true))
+    get(tryparse_internal(T, s, start(s), endof(s), true))
