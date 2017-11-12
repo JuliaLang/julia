@@ -11,7 +11,7 @@ your experience at the command line.
 ### A basic editor/REPL workflow
 
 The most basic Julia workflows involve using a text editor in conjunction with the `julia` command
-line. To keep the code changes made by the editor in sync with the REPL session, there are multiple options. The package [Revise.jl](https://github.com/timholy/Revise.jl) can be used to manage this synchrony automatically. Alternatively, the following setup is recommended: 
+line. To keep the REPL session in sync with code changes made by the editor, there are multiple options. The package [Revise.jl](https://github.com/timholy/Revise.jl) can be used to manage this synchrony automatically. Alternatively, the following setup is recommended: 
 
   * **Put code under development in a temporary module.** Create a file, say `Tmp.jl`, and include
     within it
