@@ -588,7 +588,7 @@ false
 ```
 """
 haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
-in(key, v::KeyIterator{<:Dict}) = (ht_keyindex(v.dict, key) >= 0)
+in(key, v::KeySet{<:Any, <:Dict}) = (ht_keyindex(v.dict, key) >= 0)
 
 """
     getkey(collection, key, default)
@@ -720,7 +720,7 @@ end
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-@propagate_inbounds function next(v::KeyIterator{<:Dict}, i)
+@propagate_inbounds function next(v::KeySet{<:Any, <:Dict}, i)
     return (v.dict.keys[i], skip_deleted(v.dict,i+1))
 end
 @propagate_inbounds function next(v::ValueIterator{<:Dict}, i)

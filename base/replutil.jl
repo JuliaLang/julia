@@ -4,10 +4,10 @@
 show(io::IO, ::MIME"text/plain", x) = show(io, x)
 
 # multiline show functions for types defined before multimedia.jl:
-function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator})
+function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     print(io, summary(iter))
     isempty(iter) && return
-    print(io, ". ", isa(iter,KeyIterator) ? "Keys" : "Values", ":")
+    print(io, ". ", isa(iter,KeySet) ? "Keys" : "Values", ":")
     limit::Bool = get(io, :limit, false)
     if limit
         sz = displaysize(io)

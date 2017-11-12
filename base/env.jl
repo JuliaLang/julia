@@ -78,7 +78,7 @@ similar(::EnvDict) = Dict{String,String}()
 getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
 get(::EnvDict, k::AbstractString, def) = access_env(k->def, k)
 get(f::Callable, ::EnvDict, k::AbstractString) = access_env(k->f(), k)
-in(k::AbstractString, ::KeyIterator{EnvDict}) = _hasenv(k)
+in(k::AbstractString, ::KeySet{String, EnvDict}) = _hasenv(k)
 pop!(::EnvDict, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvDict, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
 delete!(::EnvDict, k::AbstractString) = (_unsetenv(k); ENV)
