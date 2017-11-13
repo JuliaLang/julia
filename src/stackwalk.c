@@ -284,6 +284,9 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
     if (fp)
         *fp = (uintptr_t)cursor->stackframe.AddrFrame.Offset;
     if (*ip == 0 || *ip == ((uintptr_t)0)-1) {
+        // -1 is a special marker in the backtrace,
+        // don't leave it in there since it can corrupt the GC.
+        *ip = 0;
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
         cursor->stackframe.AddrPC.Offset = *(DWORD32*)*sp;      // POP EIP (aka RET)
@@ -300,6 +303,9 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
     if (fp)
         *fp = (uintptr_t)cursor->Rbp;
     if (*ip == 0 || *ip == ((uintptr_t)0)-1) {
+        // -1 is a special marker in the backtrace,
+        // don't leave it in there since it can corrupt the GC.
+        *ip = 0;
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
         cursor->Rip = *(DWORD64*)*sp;      // POP RIP (aka RET)
@@ -352,7 +358,9 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
     unw_word_t reg;
     if (unw_get_reg(cursor, UNW_REG_IP, &reg) < 0)
         return 0;
-    *ip = reg;
+    // -1 is a special marker in the backtrace,
+    // don't leave it in there since it can corrupt the GC.
+    *ip = reg == (uintptr_t)-1 ? 0 : reg;
     if (unw_get_reg(cursor, UNW_REG_SP, &reg) < 0)
         return 0;
     *sp = reg;

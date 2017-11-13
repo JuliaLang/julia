@@ -3927,8 +3927,9 @@ f(x) = yt(x)
             ((boundscheck) (if tail (emit-return e) e))
 
             ((method)
-             ;; TODO: we might want to disallow this
-             ;;(check-top-level e)
+             (if (not (null? (cadr lam)))
+                 (error (string "Global method definition" (linenode-string current-loc)
+                                " needs to be placed at the top level, or use \"eval\".")))
              (if (length> e 2)
                  (begin (emit `(method ,(or (cadr e) 'false)
                                        ,(compile (caddr e) break-labels #t #f)
