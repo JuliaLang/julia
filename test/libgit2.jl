@@ -1515,17 +1515,17 @@ mktempdir() do dir
     @testset "Credentials" begin
         creds_user = "USER"
         creds_pass = "PASS"
-        creds = LibGit2.UserPasswordCredentials(creds_user, creds_pass)
+        creds = LibGit2.UserPasswordCredential(creds_user, creds_pass)
         @test creds.user == creds_user
         @test creds.pass == creds_pass
-        creds2 = LibGit2.UserPasswordCredentials(creds_user, creds_pass)
+        creds2 = LibGit2.UserPasswordCredential(creds_user, creds_pass)
         @test creds == creds2
-        sshcreds = LibGit2.SSHCredentials(creds_user, creds_pass)
+        sshcreds = LibGit2.SSHCredential(creds_user, creds_pass)
         @test sshcreds.user == creds_user
         @test sshcreds.pass == creds_pass
         @test isempty(sshcreds.prvkey)
         @test isempty(sshcreds.pubkey)
-        sshcreds2 = LibGit2.SSHCredentials(creds_user, creds_pass)
+        sshcreds2 = LibGit2.SSHCredential(creds_user, creds_pass)
         @test sshcreds == sshcreds2
     end
 
@@ -1534,7 +1534,7 @@ mktempdir() do dir
 
         url = "https://github.com/JuliaLang/Example.jl"
         cred_id = LibGit2.credential_identifier(url)
-        cred = LibGit2.UserPasswordCredentials("julia", "password")
+        cred = LibGit2.UserPasswordCredential("julia", "password")
 
         @test !haskey(cache, cred_id)
 
@@ -1812,11 +1812,11 @@ mktempdir() do dir
             username = "git"
 
             valid_key = joinpath(KEY_DIR, "valid")
-            valid_cred = LibGit2.SSHCredentials(username, "", valid_key, valid_key * ".pub")
+            valid_cred = LibGit2.SSHCredential(username, "", valid_key, valid_key * ".pub")
 
             valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
             passphrase = "secret"
-            valid_p_cred = LibGit2.SSHCredentials(username, passphrase, valid_p_key, valid_p_key * ".pub")
+            valid_p_cred = LibGit2.SSHCredential(username, passphrase, valid_p_key, valid_p_key * ".pub")
 
             invalid_key = joinpath(KEY_DIR, "invalid")
 
@@ -2054,7 +2054,7 @@ mktempdir() do dir
 
             valid_username = "julia"
             valid_password = randstring(16)
-            valid_cred = LibGit2.UserPasswordCredentials(valid_username, valid_password)
+            valid_cred = LibGit2.UserPasswordCredential(valid_username, valid_password)
 
             https_ex = quote
                 include($LIBGIT2_HELPER_PATH)
@@ -2116,7 +2116,7 @@ mktempdir() do dir
             url = "github.com:test/package.jl"
 
             valid_key = joinpath(KEY_DIR, "valid")
-            valid_cred = LibGit2.SSHCredentials("git", "", valid_key, valid_key * ".pub")
+            valid_cred = LibGit2.SSHCredential("git", "", valid_key, valid_key * ".pub")
 
             function gen_ex(; username="git")
                 quote
@@ -2149,11 +2149,11 @@ mktempdir() do dir
                 mkdir(dirname(default_key))
 
                 valid_key = joinpath(KEY_DIR, "valid")
-                valid_cred = LibGit2.SSHCredentials("git", "", valid_key, valid_key * ".pub")
+                valid_cred = LibGit2.SSHCredential("git", "", valid_key, valid_key * ".pub")
 
                 valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
                 passphrase = "secret"
-                valid_p_cred = LibGit2.SSHCredentials("git", passphrase, valid_p_key, valid_p_key * ".pub")
+                valid_p_cred = LibGit2.SSHCredential("git", passphrase, valid_p_key, valid_p_key * ".pub")
 
                 function gen_ex(cred)
                     quote
@@ -2206,7 +2206,7 @@ mktempdir() do dir
             url = "git@github.com:test/package.jl"
 
             valid_key = joinpath(KEY_DIR, "valid")
-            valid_cred = LibGit2.SSHCredentials("git", "", valid_key, valid_key * ".pub")
+            valid_cred = LibGit2.SSHCredential("git", "", valid_key, valid_key * ".pub")
 
             invalid_key = joinpath(KEY_DIR, "invalid")
 
@@ -2255,10 +2255,10 @@ mktempdir() do dir
 
             valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
             passphrase = "secret"
-            valid_cred = LibGit2.SSHCredentials(username, passphrase, valid_p_key, valid_p_key * ".pub")
+            valid_cred = LibGit2.SSHCredential(username, passphrase, valid_p_key, valid_p_key * ".pub")
 
             invalid_key = joinpath(KEY_DIR, "invalid")
-            invalid_cred = LibGit2.SSHCredentials(username, "", invalid_key, invalid_key * ".pub")
+            invalid_cred = LibGit2.SSHCredential(username, "", invalid_key, invalid_key * ".pub")
 
             function gen_ex(cred; allow_prompt=true, allow_ssh_agent=false)
                 quote
@@ -2291,8 +2291,8 @@ mktempdir() do dir
         @testset "HTTPS explicit credentials" begin
             url = "https://github.com/test/package.jl"
 
-            valid_cred = LibGit2.UserPasswordCredentials("julia", randstring(16))
-            invalid_cred = LibGit2.UserPasswordCredentials("alice", randstring(15))
+            valid_cred = LibGit2.UserPasswordCredential("julia", randstring(16))
+            invalid_cred = LibGit2.UserPasswordCredential("alice", randstring(15))
 
             function gen_ex(cred; allow_prompt=true)
                 quote
@@ -2326,11 +2326,11 @@ mktempdir() do dir
 
             valid_username = "julia"
             valid_password = randstring(16)
-            valid_cred = LibGit2.UserPasswordCredentials(valid_username, valid_password)
+            valid_cred = LibGit2.UserPasswordCredential(valid_username, valid_password)
 
             invalid_username = "alice"
             invalid_password = randstring(15)
-            invalid_cred = LibGit2.UserPasswordCredentials(invalid_username, invalid_password)
+            invalid_cred = LibGit2.UserPasswordCredential(invalid_username, invalid_password)
 
             function gen_ex(; cached_cred=nothing, allow_prompt=true)
                 quote
@@ -2409,7 +2409,7 @@ mktempdir() do dir
 
             valid_username = "julia"
             valid_password = randstring(16)
-            valid_cred = LibGit2.UserPasswordCredentials(valid_username, valid_password)
+            valid_cred = LibGit2.UserPasswordCredential(valid_username, valid_password)
 
             config_path = joinpath(dir, config_file)
             write(config_path, """
@@ -2420,7 +2420,7 @@ mktempdir() do dir
             https_ex = quote
                 include($LIBGIT2_HELPER_PATH)
                 LibGit2.with(LibGit2.GitConfig($config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
-                    payload = CredentialPayload(Nullable{AbstractCredentials}(),
+                    payload = CredentialPayload(Nullable{AbstractCredential}(),
                                                 Nullable{CachedCredentials}(), cfg,
                                                 allow_git_helpers=true)
                     credential_loop($valid_cred, $url, Nullable{String}(), payload, shred=false)
@@ -2442,7 +2442,7 @@ mktempdir() do dir
 
         @testset "Incompatible explicit credentials" begin
             # User provides a user/password credential where a SSH credential is required.
-            valid_cred = LibGit2.UserPasswordCredentials("foo", "bar")
+            valid_cred = LibGit2.UserPasswordCredential("foo", "bar")
             expect_ssh_ex = quote
                 include($LIBGIT2_HELPER_PATH)
                 payload = CredentialPayload($valid_cred, allow_ssh_agent=false,
@@ -2459,7 +2459,7 @@ mktempdir() do dir
 
 
             # User provides a SSH credential where a user/password credential is required.
-            valid_cred = LibGit2.SSHCredentials("foo", "", "", "")
+            valid_cred = LibGit2.SSHCredential("foo", "", "", "")
             expect_https_ex = quote
                 include($LIBGIT2_HELPER_PATH)
                 payload = CredentialPayload($valid_cred, allow_ssh_agent=false,
@@ -2484,7 +2484,7 @@ mktempdir() do dir
             # User provides a user/password credential where a SSH credential is required.
             ex = quote
                 include($LIBGIT2_HELPER_PATH)
-                valid_cred = LibGit2.UserPasswordCredentials("foo", "bar")
+                valid_cred = LibGit2.UserPasswordCredential("foo", "bar")
                 payload = CredentialPayload(valid_cred, allow_ssh_agent=false,
                                             allow_git_helpers=false)
                 credential_loop(valid_cred, "foo://github.com/repo", Nullable(""),
@@ -2508,7 +2508,7 @@ mktempdir() do dir
             # Users should be able to re-use the same payload if the state is reset
             ex = quote
                 include($LIBGIT2_HELPER_PATH)
-                valid_cred = LibGit2.UserPasswordCredentials($valid_username, $valid_password)
+                valid_cred = LibGit2.UserPasswordCredential($valid_username, $valid_password)
                 user = Nullable{String}()
                 payload = CredentialPayload(allow_git_helpers=false)
                 first_result = credential_loop(valid_cred, $(urls[1]), user, payload)

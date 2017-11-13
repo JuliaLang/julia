@@ -1621,10 +1621,10 @@ import .Iterators.enumerate
 
 # PR #23640
 # when this deprecation is deleted, remove all calls to it, and replace all keywords of:
-# `payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}` with
+# `payload::Union{CredentialPayload,Nullable{<:AbstractCredential}}` with
 # `payload::CredentialPayload` from base/libgit2/libgit2.jl
 @eval LibGit2 function deprecate_nullable_creds(f, sig, payload)
-    if isa(payload, Nullable{<:AbstractCredentials})
+    if isa(payload, Nullable{<:AbstractCredential})
         # Note: Be careful not to show the contents of the credentials as it could reveal a
         # password.
         if isnull(payload)
@@ -1685,7 +1685,7 @@ end
 @deprecate zeros(D::Diagonal, ::Type{T}, dims::Integer...) where {T}    fill!(similar(D, T, dims), 0)
 
 # PR #23690
-# `SSHCredentials` and `UserPasswordCredentials` constructors using `prompt_if_incorrect`
+# `SSHCredential` and `UserPasswordCredential` constructors using `prompt_if_incorrect`
 # are deprecated in base/libgit2/types.jl.
 
 # deprecate ones/zeros methods accepting an array as first argument
@@ -2175,6 +2175,13 @@ end
 # issue #24019
 @deprecate similar(a::Associative) empty(a)
 @deprecate similar(a::Associative, ::Type{Pair{K,V}}) where {K, V} empty(a, K, V)
+
+# PR #24594
+@eval LibGit2 begin
+    @deprecate AbstractCredentials AbstractCredential false
+    @deprecate UserPasswordCredentials UserPasswordCredential false
+    @deprecate SSHCredentials SSHCredential false
+end
 
 # END 0.7 deprecations
 

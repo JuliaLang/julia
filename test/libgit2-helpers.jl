@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base.LibGit2: AbstractCredentials, UserPasswordCredentials, SSHCredentials,
+import Base.LibGit2: AbstractCredential, UserPasswordCredential, SSHCredential,
     CachedCredentials, CredentialPayload, Payload
 
 const DEFAULT_PAYLOAD = CredentialPayload(allow_ssh_agent=false, allow_git_helpers=false)
@@ -10,7 +10,7 @@ Emulates the LibGit2 credential loop to allows testing of the credential_callbac
 without having to authenticate against a real server.
 """
 function credential_loop(
-        valid_credential::AbstractCredentials,
+        valid_credential::AbstractCredential,
         url::AbstractString,
         user::Nullable{<:AbstractString},
         allowed_types::UInt32,
@@ -58,7 +58,7 @@ function credential_loop(
 end
 
 function credential_loop(
-        valid_credential::UserPasswordCredentials,
+        valid_credential::UserPasswordCredential,
         url::AbstractString,
         user::Nullable{<:AbstractString}=Nullable{String}(),
         payload::CredentialPayload=DEFAULT_PAYLOAD;
@@ -67,7 +67,7 @@ function credential_loop(
 end
 
 function credential_loop(
-        valid_credential::SSHCredentials,
+        valid_credential::SSHCredential,
         url::AbstractString,
         user::Nullable{<:AbstractString}=Nullable{String}(),
         payload::CredentialPayload=DEFAULT_PAYLOAD;
@@ -76,7 +76,7 @@ function credential_loop(
 end
 
 function credential_loop(
-        valid_credential::AbstractCredentials,
+        valid_credential::AbstractCredential,
         url::AbstractString,
         user::AbstractString,
         payload::CredentialPayload=DEFAULT_PAYLOAD;
