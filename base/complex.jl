@@ -692,8 +692,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
                     return rᵖ * complex(cospi(pᵣ), flipsign(sinpi(pᵣ),imag(z)))
                 else
                     iszero(rᵖ) && return zero(Complex{T}) # no way to get correct signs of 0.0
-                    isnan(rᵖ) && return complex(rᵖ,rᵖ) # propagate NaN
-                    return Complex(T(NaN),T(NaN)) # non-finite phase angle
+                    return Complex(T(NaN),T(NaN)) # non-finite phase angle or NaN input
                 end
             end
         else
@@ -725,8 +724,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
         return rᵖ * cis(ϕ)
     else
         iszero(rᵖ) && return zero(Complex{T}) # no way to get correct signs of 0.0
-        isnan(ϕ) && (isnan(z) || isnan(p)) && return complex(ϕ,ϕ) # propagate NaN
-        return Complex(T(NaN),T(NaN)) # non-finite phase angle
+        return Complex(T(NaN),T(NaN)) # non-finite phase angle or NaN input
     end
 end
 _cpow(z, p) = _cpow(float(z), float(p))
