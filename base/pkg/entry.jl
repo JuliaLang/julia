@@ -126,7 +126,8 @@ end
 function status(io::IO; pkgname::AbstractString = "")
     showpkg(pkg) = isempty(pkgname) ? true : (pkg == pkgname)
     reqs = Reqs.parse("REQUIRE")
-    instd = Read.installed()
+    all_avail = Read.available()
+    instd = Read.installed(all_avail)
     required = sort!(collect(keys(reqs)))
     if !isempty(required)
         showpkg("") && println(io, "$(length(required)) required packages:")
@@ -135,7 +136,7 @@ function status(io::IO; pkgname::AbstractString = "")
                 showpkg(pkg) && status(io,pkg,"not found")
             else
                 ver,fix = pop!(instd,pkg)
-                showpkg(pkg) && status(io,pkg,ver,fix)
+                showpkg(pkg) && status(io,pkg,ver,fix,all_avail,instd)
             end
         end
     end
@@ -144,7 +145,7 @@ function status(io::IO; pkgname::AbstractString = "")
         showpkg("") && println(io, "$(length(additional)) additional packages:")
         for pkg in additional
             ver,fix = instd[pkg]
-            showpkg(pkg) && status(io,pkg,ver,fix)
+            showpkg(pkg) && status(io,pkg,ver,fix,all_avail,instd)
         end
     end
     if isempty(required) && isempty(additional)
@@ -154,31 +155,55 @@ end
 
 status(io::IO, pkg::AbstractString) = status(io, pkgname = pkg)
 
-function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
+function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool, avail::Dict, instd::Dict)
     @printf io " - %-29s " pkg
-    fix || return println(io,ver)
-    @printf io "%-19s" ver
-    if ispath(pkg,".git")
-        prepo = GitRepo(pkg)
-        try
-            with(LibGit2.head(prepo)) do phead
-                if LibGit2.isattached(prepo)
-                    print(io, LibGit2.shortname(phead))
+    if !fix
+        maxver = maximum(keys(avail[pkg]))
+        reqs = avail[pkg][maxver].requires
+        if maxver != ver
+            @printf io "%-19s" ver
+            heldby = String[]
+            required = String[]
+            for (req, reqver) in reqs
+                req == "julia" && continue
+                if !haskey(instd, req)
+                    push!(required, req)
                 else
-                    print(io, string(LibGit2.GitHash(phead))[1:8])
+                    !in(instd[req][1], reqver) && push!(heldby, req)
                 end
             end
-            attrs = AbstractString[]
-            isfile("METADATA",pkg,"url") || push!(attrs,"unregistered")
-            LibGit2.isdirty(prepo) && push!(attrs,"dirty")
-            isempty(attrs) || print(io, " (",join(attrs,", "),")")
-        catch err
-            print_with_color(Base.error_color(), io, " broken-repo (unregistered)")
-        finally
-            close(prepo)
+            length(heldby) > 0 && print(io, "held back by ",join(heldby,", "), "; ")
+            print(io, "most recent $maxver")
+            length(required) > 0 && print(io, " requires: ",join(required,", "))
+        else
+            print(io, ver)
         end
     else
-        print_with_color(Base.warn_color(), io, "non-repo (unregistered)")
+        @printf io "%-19s" ver
+        if ispath(pkg,".git")
+            prepo = GitRepo(pkg)
+            try
+                with(LibGit2.head(prepo)) do phead
+                    oid = LibGit2.GitHash(phead)
+                    fix && if LibGit2.isattached(prepo)
+                        print(io, LibGit2.shortname(phead))
+                    else
+                        print(io, string(oid)[1:8])
+                    end
+
+                    attrs = AbstractString[]
+                    isfile("METADATA",pkg,"url") || push!(attrs,"unregistered")
+                    LibGit2.isdirty(prepo) && push!(attrs,"dirty")
+                    isempty(attrs) || print(io, " (",join(attrs,", "),")")
+                end
+            catch err
+                print_with_color(Base.error_color(), io, " broken-repo (unregistered)")
+            finally
+                close(prepo)
+            end
+        else
+            print_with_color(Base.warn_color(), io, "non-repo (unregistered)")
+        end
     end
     println(io)
 end
