@@ -1058,9 +1058,9 @@ end
 
     # The following cases should arguably give Inf + Inf*im, but currently
     # give partial NaNs instead.  Marking as broken for now (since Julia 0.4 at least),
-    # in the hopes that someday we can fix these corner cases.  (Python gets them wrong too.)
-    @test_broken (Inf + 1im)^3 ≟ (Inf + 1im)^3.0 ≟ (Inf + 1im)^(3+0im) ≟ Inf + Inf*im
-    @test_broken (Inf + 1im)^3.1 ≟ (Inf + 1im)^(3.1+0im) ≟ Inf + Inf*im
+    # in the hope that someday we can fix these corner cases.  (Python gets them wrong too.)
+    @test_broken (Inf + 1im)^3 === (Inf + 1im)^3.0 === (Inf + 1im)^(3+0im) === Inf + Inf*im
+    @test_broken (Inf + 1im)^3.1 === (Inf + 1im)^(3.1+0im) === Inf + Inf*im
 
     # cases where phase angle is non-finite throw DomainError:
     @test_throws DomainError Inf ^ (2 + 3im)
