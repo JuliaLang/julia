@@ -85,4 +85,8 @@ end
 
 let f = Core.Intrinsics.ashr_int
     @test f(Int8(-17), 1) == -9
+    @test f(Int32(-1), 33) == -1
+    @test f(Int32(-1), -1) == -1
+    @test f(Int32(-1), -10) == -1
+    @test f(Int32(2), -1) == 0
 end
