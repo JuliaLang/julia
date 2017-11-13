@@ -647,6 +647,8 @@ function exp10(z::Complex{T}) where T<:AbstractFloat
 end
 exp10(z::Complex) = exp10(float(z))
 
+@noinline _cpow_domain_error_angle(z,p) = throw(DomainError((z,p), "z^p gave non-finite phase angle"))
+
 # _cpow helper function to avoid method ambiguity with ^(::Complex,::Real)
 function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:AbstractFloat}
     if isreal(p)
@@ -685,30 +687,48 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
             else
                 zᵣ = real(z)
                 rᵖ = (-zᵣ)^pᵣ
-                # figuring out the sign of 0.0 when p is a complex number
-                # with zero imaginary part and integer/2 real part could be
-                # improved here, but it's not clear if it's worth it…
-                return rᵖ * complex(cospi(pᵣ), flipsign(sinpi(pᵣ),imag(z)))
+                if isfinite(pᵣ)
+                    # figuring out the sign of 0.0 when p is a complex number
+                    # with zero imaginary part and integer/2 real part could be
+                    # improved here, but it's not clear if it's worth it…
+                    return rᵖ * complex(cospi(pᵣ), flipsign(sinpi(pᵣ),imag(z)))
+                else
+                    iszero(rᵖ) && return zero(z) # no way to get correct signs of 0.0
+                    isnan(rᵖ) && return complex(rᵖ,rᵖ) # propagate NaN
+                    _cpow_domain_error_angle(z,p)
+                end
             end
         else
-            return abs(z)^pᵣ * cis(pᵣ*angle(z))
+            rᵖ = abs(z)^pᵣ
+            ϕ = pᵣ*angle(z)
         end
     elseif isreal(z)
         iszero(z) && return real(p) > 0 ? complex(z) : Complex(T(NaN),T(NaN)) # 0 or NaN+NaN*im
         zᵣ = real(z)
         pᵣ, pᵢ = reim(p)
         if zᵣ > 0
-            return zᵣ^pᵣ * cis(pᵢ*log(zᵣ))
+            rᵖ = zᵣ^pᵣ
+            ϕ = pᵢ*log(zᵣ)
         else
             r = -zᵣ
             θ = copysign(T(π),imag(z))
-            return (r^pᵣ * exp(-pᵢ*θ)) * cis(pᵣ*θ + pᵢ*log(r))
+            rᵖ = r^pᵣ * exp(-pᵢ*θ)
+            ϕ = pᵣ*θ + pᵢ*log(r)
         end
     else
         pᵣ, pᵢ = reim(p)
         r = abs(z)
         θ = angle(z)
-        return (r^pᵣ * exp(-pᵢ*θ)) * cis(pᵣ*θ + pᵢ*log(r))
+        rᵖ = r^pᵣ * exp(-pᵢ*θ)
+        ϕ = pᵣ*θ + pᵢ*log(r)
+    end
+
+    if isfinite(ϕ)
+        return rᵖ * cis(ϕ)
+    else
+        iszero(rᵖ) && return zero(z) # no way to get correct signs of 0.0
+        isnan(ϕ) && (isnan(z) || isnan(p)) && return complex(ϕ,ϕ) # propagate NaN
+        _cpow_domain_error_angle(z,p)
     end
 end
 _cpow(z, p) = _cpow(float(z), float(p))

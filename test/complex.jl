@@ -999,13 +999,13 @@ end
     @test (2+0im)^(-21//10) === (2//1+0im)^(-21//10) === 2^-2.1 - 0.0im
 end
 
-
 @testset "more cpow" begin
     # for testing signs of zeros, it is useful to convert ±0.0 to ±1e-15
     zero2small(r::Real) = iszero(r) ? copysign(1e-15, r) : r
     zero2small(z::Complex) = complex(zero2small(real(z)), zero2small(imag(z)))
     ≋(x::Real, y::Real) = x*y == 0 ? abs(x) < 1e-8 && abs(y) < 1e-8 && signbit(x)==signbit(y) : isfinite(x) ? x ≈ y : isequal(x, y)
     ≋(x::Complex, y::Complex) = real(x) ≋ real(y) && imag(x) ≋ imag(y)
+    ≟(x,y) = isequal(x,y)
 
     # test z^p for positive/negative/zero real and imaginary parts of z and p:
     v=(-2.7,-3.0,-2.0,-0.0,+0.0,2.0,3.0,2.7)
@@ -1033,13 +1033,44 @@ end
     @test 2 ^ (0.3 + 0.0im) === 2.0 ^ (0.3 + 0.0im) === conj(2.0 ^ (0.3 - 0.0im)) ≋  2.0 ^ (0.3 + 1e-15im)
     @test 0.2 ^ (0.3 + 0.0im) === conj(0.2 ^ (0.3 - 0.0im)) ≋  0.2 ^ (0.3 + 1e-15im)
     @test (0.0 - 0.0im)^2.0 === (0.0 - 0.0im)^2 === (0.0 - 0.0im)^1.1 === (0.0 - 0.0im) ^ (1.1 + 2.3im) === 0.0 - 0.0im
-    @test (0.0 - 0.0im)^-2.0 ≋ (0.0 - 0.0im)^-2 ≋ (0.0 - 0.0im)^-1.1 ≋ (0.0 - 0.0im) ^ (-1.1 + 2.3im) ≋ NaN + NaN*im
+    @test (0.0 - 0.0im)^-2.0 ≟ (0.0 - 0.0im)^-2 ≟ (0.0 - 0.0im)^-1.1 ≟ (0.0 - 0.0im) ^ (-1.1 + 2.3im) ≟ NaN + NaN*im
     @test (1.0+0.0)^(1.2+0.7im) === 1.0 + 0.0im
     @test (-1.0+0.0)^(2.0+0.7im) ≈ exp(-0.7π)
     @test (-4.0+0.0im)^1.5 === (-4.0)^(1.5+0.0im) === (-4)^(1.5+0.0im) === (-4)^(3//2+0im) === 0.0 - 8.0im
 
     # issue #24515:
-    @test (Inf + Inf*im)^2.0 ≋ (Inf + Inf*im)^2 ≋ NaN + Inf*im
-    @test (0+0im)^-3.0 ≋ (0+0im)^-3 ≋ NaN + NaN*im
+    @test (Inf + Inf*im)^2.0 ≟ (Inf + Inf*im)^2 ≟ NaN + Inf*im
+    @test (0+0im)^-3.0 ≟ (0+0im)^-3 ≟ NaN + NaN*im
     @test (1.0+0.0im)^1e300 === 1.0 + 0.0im
+    @test Inf^(-Inf + 0.0im) == (Inf + 0.0im)^(-Inf - 0.0im) == (Inf - 0.0im)^(-Inf - 0.0im) == (Inf - 0.0im)^-Inf == 0
+
+    # NaN propagation
+    @test (0 + NaN*im)^1 ≟ (0 + NaN*im)^1.0 ≟ (0 + NaN*im)^(1.0+0im) ≟ 0.0 + NaN*im
+    @test (0 + NaN*im)^2 ≟ (0 + NaN*im)^2.0 ≟ (0 + NaN*im)^(2.0+0im) ≟ NaN + NaN*im
+    @test (NaN + 0im)^2.0 ≟ (NaN + 0im)^(2.0+0im) ≟ (2+0im)^NaN ≟ NaN + 0im
+    @test (NaN + 0im)^2.5 ≟ NaN^(2.5+0im) ≟ (NaN + NaN*im)^2.5 ≟ (-2+0im)^NaN ≟ (2+0im)^(1+NaN*im) ≟ NaN + NaN*im
+
+    # more Inf cases:
+    @test (Inf + 0im)^Inf === Inf^(Inf + 0im) === (Inf + 0im)^(Inf + 0im) == Inf + 0im
+    @test (-Inf + 0im)^(0.7 + 0im) === (-Inf + 1im)^(0.7 + 0im) === conj((-Inf - 1im)^(0.7 + 0im)) === -Inf + Inf*im
+    @test (-Inf + 0.0im) ^ 3.1 === conj((-Inf - 0.0im) ^ 3.1) === -Inf - Inf*im
+    @test (3.0+0.0im)^(Inf + 1im) === (3.0-0.0im)^(Inf + 1im) === conj((3.0+0.0im)^(Inf - 1im)) === Inf + Inf*im
+
+    # The following cases should arguably give Inf + Inf*im, but currently
+    # give partial NaNs instead.  Marking as broken for now (since Julia 0.4 at least),
+    # in the hopes that someday we can fix these corner cases.  (Python gets them wrong too.)
+    @test_broken (Inf + 1im)^3 ≟ (Inf + 1im)^3.0 ≟ (Inf + 1im)^(3+0im) ≟ Inf + Inf*im
+    @test_broken (Inf + 1im)^3.1 ≟ (Inf + 1im)^(3.1+0im) ≟ Inf + Inf*im
+
+    # cases where phase angle is non-finite throw DomainError:
+    @test_throws DomainError Inf ^ (2 + 3im)
+    @test_throws DomainError (Inf + 1im) ^ (2 + 3im)
+    @test_throws DomainError (Inf*im) ^ (2 + 3im)
+    @test_throws DomainError 3^(Inf*im)
+    @test_throws DomainError (-3)^(Inf + 0im)
+    @test_throws DomainError (-3)^(Inf + 1im)
+    @test_throws DomainError (3+1im)^Inf
+    @test_throws DomainError (3+1im)^(Inf + 1im)
+    @test_throws DomainError (1e200+1e-200im)^Inf  # angle(z) underflows
+    @test_throws DomainError (1e200+1e-200im)^(Inf+1im)
 end
