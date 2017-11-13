@@ -1073,4 +1073,6 @@ end
     @test_throws DomainError (3+1im)^(Inf + 1im)
     @test_throws DomainError (1e200+1e-200im)^Inf  # angle(z) underflows
     @test_throws DomainError (1e200+1e-200im)^(Inf+1im)
+
+    @test @inferred(2.0^(3.0+0im)) === @inferred((2.0+0im)^(3.0+0im)) === @inferred((2.0+0im)^3.0) === 8.0+0.0im
 end
