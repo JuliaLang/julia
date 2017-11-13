@@ -177,7 +177,6 @@ try
     @test_warn "WARNING: replacing module $Foo_module." begin
         ms = Base._require_from_serialized(Foo_module, cachefile)
         @test isa(ms, Array{Any,1})
-        Base.register_all(ms)
     end
 
     let Foo = root_module(Foo_module)
@@ -205,7 +204,7 @@ try
 
         modules, deps, required_modules = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3])
-        @test modules == Dict(Foo_module => Base.module_uuid(Foo))
+        @test modules == [Foo_module => Base.module_uuid(Foo)]
         @test map(x -> x[1],  sort(discard_module.(deps))) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
         srctxt = Base.read_dependency_src(cachefile, Foo_file)
         @test !isempty(srctxt) && srctxt == read(Foo_file, String)
@@ -214,13 +213,14 @@ try
         @test_throws ErrorException Base.read_dependency_src(cachefile, joinpath(dir, "foo.jl"))
 
         modules, deps1 = Base.cache_dependencies(cachefile)
-        @test modules == merge(Dict(s => Base.module_uuid(getfield(Foo, s)) for s in
-                                    [:Base, :Core, Foo2_module, FooBase_module, :Main]),
-                               # plus modules included in the system image
-                               Dict(s => Base.module_uuid(Base.root_module(s)) for s in
-                                    [:Base64, :CRC32c, :Dates, :DelimitedFiles, :FileWatching,
-                                     :IterativeEigenSolvers, :Mmap, :Profile, :SharedArrays,
-                                     :SuiteSparse, :Test]))
+        @test Dict(modules) == merge(
+            Dict(s => Base.module_uuid(getfield(Foo, s)) for s in
+                [:Base, :Core, Foo2_module, FooBase_module, :Main]),
+            # plus modules included in the system image
+            Dict(s => Base.module_uuid(Base.root_module(s)) for s in
+                [:Base64, :CRC32c, :Dates, :DelimitedFiles, :FileWatching,
+                :IterativeEigenSolvers, :Mmap, :Profile, :SharedArrays,
+                :SuiteSparse, :Test]))
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -297,26 +297,26 @@ try
 
     Base.compilecache("FooBar")
     @test isfile(joinpath(dir, "FooBar.ji"))
-    @test !Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) isa Vector
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
 
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) == !Sys.iswindows() # `..` is not a symlink on Windows
+    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) isa (Sys.iswindows() ? Vector : Bool) # `..` is not a symlink on Windows
     mkdir(joinpath(dir, "subfolder"))
-    @test !Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji"))
+    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) isa Vector
 
     @eval using FooBar
     fb_uuid = Base.module_uuid(FooBar)
     sleep(2); touch(FooBar_file)
     insert!(Base.LOAD_CACHE_PATH, 1, dir2)
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
     @eval using FooBar1
     @test !isfile(joinpath(dir2, "FooBar.ji"))
     @test !isfile(joinpath(dir, "FooBar1.ji"))
     @test isfile(joinpath(dir2, "FooBar1.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
-    @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) isa Vector
     @test fb_uuid == Base.module_uuid(FooBar)
     fb_uuid1 = Base.module_uuid(FooBar1)
     @test fb_uuid != fb_uuid1
@@ -326,9 +326,9 @@ try
     @test fb_uuid1 == Base.module_uuid(FooBar1)
     fb_uuid = Base.module_uuid(root_module(:FooBar))
     @test isfile(joinpath(dir2, "FooBar.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
-    @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
-    @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) isa Vector
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji")) isa Vector
 
     reload("FooBar1")
     @test fb_uuid == Base.module_uuid(root_module(:FooBar))
@@ -336,15 +336,15 @@ try
 
     @test isfile(joinpath(dir2, "FooBar.ji"))
     @test isfile(joinpath(dir2, "FooBar1.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
-    @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
-    @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji")) isa Vector
+    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) isa Vector
 
     # test checksum
     open(joinpath(dir2, "FooBar1.ji"), "a") do f
         write(f, 0x076cac96) # append 4 random bytes
     end
-    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
+    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) === true
 
     # test behavior of precompile modules that throw errors
     FooBar2_file = joinpath(dir, "FooBar2.jl")
@@ -395,7 +395,7 @@ try
           end
           """)
     rm(FooBarT_file)
-    @test Base.stale_cachefile(FooBarT2_file, joinpath(dir2, "FooBarT2.ji"))
+    @test Base.stale_cachefile(FooBarT2_file, joinpath(dir2, "FooBarT2.ji")) === true
     @test Base.require(:FooBarT2) isa Module
 finally
     splice!(Base.LOAD_CACHE_PATH, 1:2)
