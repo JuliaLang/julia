@@ -6,7 +6,7 @@ module UTF8proc
 import Base:
     show, ==, hash, string, Symbol, isless, length, eltype, start, next,
     done, convert, isvalid, lowercase, uppercase, titlecase,
-    MalformedCharError, iswellformed
+    MalformedCharError, ismalformed
 
 export isgraphemebreak, category_code, category_abbrev, category_string
 
@@ -275,7 +275,7 @@ julia> textwidth('❤')
 ```
 """
 function textwidth(c::Char)
-    iswellformed(c) || (c = '\ufffd')
+    ismalformed(c) && (c = '\ufffd')
     Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 end
 
@@ -303,14 +303,14 @@ titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
 function category_code(c::Char)
-    iswellformed(c) || return Cint(31)
+    ismalformed(c) && return Cint(31)
     (u = UInt32(c)) ≤ 0x10ffff || return Cint(30)
     ccall(:utf8proc_category, Cint, (UInt32,), u)
 end
 
 # more human-readable representations of the category code
 function category_abbrev(c)
-    iswellformed(c) || return "Ma"
+    ismalformed(c) && return "Ma"
     (u = UInt32(c)) ≤ 0x10ffff || return "In"
     unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), u))
 end
@@ -575,14 +575,14 @@ isgraph(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY
 # iterators for grapheme segmentation
 
 isgraphemebreak(c1::Char, c2::Char) =
-    !iswellformed(c1) || !iswellformed(c2) ||
+    ismalformed(c1) || ismalformed(c2) ||
     ccall(:utf8proc_grapheme_break, Bool, (UInt32, UInt32), c1, c2)
 
 # Stateful grapheme break required by Unicode-9 rules: the string
 # must be processed in sequence, with state initialized to Ref{Int32}(0).
 # Requires utf8proc v2.0 or later.
 function isgraphemebreak!(state::Ref{Int32}, c1::Char, c2::Char)
-    if !iswellformed(c1) || !iswellformed(c2)
+    if ismalformed(c1) || ismalformed(c2)
         state[] = 0
         return true
     end
