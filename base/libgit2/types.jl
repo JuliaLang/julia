@@ -1215,7 +1215,7 @@ function isfilled(cred::SSHCredential)
 end
 
 "Caches credential information for re-use"
-struct CachedCredentials <: AbstractCredential
+struct CachedCredentials
     cred::Dict{String,AbstractCredential}
     CachedCredentials() = new(Dict{String,AbstractCredential}())
 end

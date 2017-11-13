@@ -1621,10 +1621,10 @@ import .Iterators.enumerate
 
 # PR #23640
 # when this deprecation is deleted, remove all calls to it, and replace all keywords of:
-# `payload::Union{CredentialPayload,Nullable{<:AbstractCredential}}` with
-# `payload::CredentialPayload` from base/libgit2/libgit2.jl
+# `payload::Union{CredentialPayload,Nullable{<:Union{AbstractCredential, CachedCredentials}}}`
+#  with `payload::CredentialPayload` from base/libgit2/libgit2.jl
 @eval LibGit2 function deprecate_nullable_creds(f, sig, payload)
-    if isa(payload, Nullable{<:AbstractCredential})
+    if isa(payload, Nullable{<:Union{AbstractCredential, CachedCredentials}})
         # Note: Be careful not to show the contents of the credentials as it could reveal a
         # password.
         if isnull(payload)
