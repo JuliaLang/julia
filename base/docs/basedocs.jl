@@ -287,7 +287,7 @@ Multiple variables can be declared within a single `const`:
 const y, z = 7, 11
 ```
 
-Note that `const` only applies to one `=` operation, therefore `const x = y = 1` 
+Note that `const` only applies to one `=` operation, therefore `const x = y = 1`
 declares `x` to be constant but not `y`. On the other hand, `const x = const y = 1`
 declares both `x` and `y` as constants.
 
