@@ -693,7 +693,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
                     # improved here, but it's not clear if it's worth it…
                     return rᵖ * complex(cospi(pᵣ), flipsign(sinpi(pᵣ),imag(z)))
                 else
-                    iszero(rᵖ) && return zero(z) # no way to get correct signs of 0.0
+                    iszero(rᵖ) && return zero(Complex{T}) # no way to get correct signs of 0.0
                     isnan(rᵖ) && return complex(rᵖ,rᵖ) # propagate NaN
                     _cpow_domain_error_angle(z,p)
                 end
@@ -726,7 +726,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
     if isfinite(ϕ)
         return rᵖ * cis(ϕ)
     else
-        iszero(rᵖ) && return zero(z) # no way to get correct signs of 0.0
+        iszero(rᵖ) && return zero(Complex{T}) # no way to get correct signs of 0.0
         isnan(ϕ) && (isnan(z) || isnan(p)) && return complex(ϕ,ϕ) # propagate NaN
         _cpow_domain_error_angle(z,p)
     end
