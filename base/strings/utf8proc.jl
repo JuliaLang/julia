@@ -5,7 +5,8 @@ module UTF8proc
 
 import Base:
     show, ==, hash, string, Symbol, isless, length, eltype, start, next,
-    done, convert, isvalid, lowercase, uppercase, titlecase, MalformedCharError
+    done, convert, isvalid, lowercase, uppercase, titlecase,
+    MalformedCharError, iswellformed
 
 export isgraphemebreak, category_code, category_abbrev, category_string
 
@@ -178,6 +179,7 @@ function normalize_string(
     flags = 0
     stable && (flags = flags | UTF8PROC_STABLE)
     compat && (flags = flags | UTF8PROC_COMPAT)
+    # TODO: error if compose & decompose?
     if decompose
         flags = flags | UTF8PROC_DECOMPOSE
     elseif compose
@@ -273,7 +275,7 @@ julia> textwidth('❤')
 ```
 """
 function textwidth(c::Char)
-    Base.iswellformed(c) || (c = '\ufffd')
+    iswellformed(c) || (c = '\ufffd')
     Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 end
 
@@ -301,14 +303,14 @@ titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
 function category_code(c::Char)
-    Base.iswellformed(c) || return Cint(31)
+    iswellformed(c) || return Cint(31)
     (u = UInt32(c)) ≤ 0x10ffff || return Cint(30)
     ccall(:utf8proc_category, Cint, (UInt32,), u)
 end
 
 # more human-readable representations of the category code
 function category_abbrev(c)
-    Base.iswellformed(c) || return "Ma"
+    iswellformed(c) || return "Ma"
     (u = UInt32(c)) ≤ 0x10ffff || return "In"
     unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), u))
 end
@@ -573,13 +575,20 @@ isgraph(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY
 # iterators for grapheme segmentation
 
 isgraphemebreak(c1::Char, c2::Char) =
+    !iswellformed(c1) || !iswellformed(c2) ||
     ccall(:utf8proc_grapheme_break, Bool, (UInt32, UInt32), c1, c2)
 
 # Stateful grapheme break required by Unicode-9 rules: the string
 # must be processed in sequence, with state initialized to Ref{Int32}(0).
 # Requires utf8proc v2.0 or later.
-isgraphemebreak!(state::Ref{Int32}, c1::Char, c2::Char) =
-    ccall(:utf8proc_grapheme_break_stateful, Bool, (UInt32, UInt32, Ref{Int32}), c1, c2, state)
+function isgraphemebreak!(state::Ref{Int32}, c1::Char, c2::Char)
+    if !iswellformed(c1) || !iswellformed(c2)
+        state[] = 0
+        return true
+    end
+    ccall(:utf8proc_grapheme_break_stateful, Bool,
+          (UInt32, UInt32, Ref{Int32}), c1, c2, state)
+end
 
 struct GraphemeIterator{S<:AbstractString}
     s::S # original string (for generation of SubStrings)
@@ -599,7 +608,7 @@ eltype(::Type{GraphemeIterator{S}}) where {S} = SubString{S}
 eltype(::Type{GraphemeIterator{SubString{S}}}) where {S} = SubString{S}
 
 function length(g::GraphemeIterator)
-    c0 = '\uad' # soft hyphen (grapheme break always allowed after this)
+    c0 = typemax(Char)
     n = 0
     state = Ref{Int32}(0)
     for c in g.s
