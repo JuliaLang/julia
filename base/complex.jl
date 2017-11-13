@@ -647,8 +647,6 @@ function exp10(z::Complex{T}) where T<:AbstractFloat
 end
 exp10(z::Complex) = exp10(float(z))
 
-@noinline _cpow_domain_error_angle(z,p) = throw(DomainError((z,p), "z^p gave non-finite phase angle"))
-
 # _cpow helper function to avoid method ambiguity with ^(::Complex,::Real)
 function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:AbstractFloat}
     if isreal(p)
@@ -695,7 +693,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
                 else
                     iszero(rᵖ) && return zero(Complex{T}) # no way to get correct signs of 0.0
                     isnan(rᵖ) && return complex(rᵖ,rᵖ) # propagate NaN
-                    _cpow_domain_error_angle(z,p)
+                    return Complex(T(NaN),T(NaN)) # non-finite phase angle
                 end
             end
         else
@@ -728,7 +726,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
     else
         iszero(rᵖ) && return zero(Complex{T}) # no way to get correct signs of 0.0
         isnan(ϕ) && (isnan(z) || isnan(p)) && return complex(ϕ,ϕ) # propagate NaN
-        _cpow_domain_error_angle(z,p)
+        return Complex(T(NaN),T(NaN)) # non-finite phase angle
     end
 end
 _cpow(z, p) = _cpow(float(z), float(p))

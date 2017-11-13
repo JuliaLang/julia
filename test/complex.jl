@@ -1062,17 +1062,10 @@ end
     @test_broken (Inf + 1im)^3 === (Inf + 1im)^3.0 === (Inf + 1im)^(3+0im) === Inf + Inf*im
     @test_broken (Inf + 1im)^3.1 === (Inf + 1im)^(3.1+0im) === Inf + Inf*im
 
-    # cases where phase angle is non-finite throw DomainError:
-    @test_throws DomainError Inf ^ (2 + 3im)
-    @test_throws DomainError (Inf + 1im) ^ (2 + 3im)
-    @test_throws DomainError (Inf*im) ^ (2 + 3im)
-    @test_throws DomainError 3^(Inf*im)
-    @test_throws DomainError (-3)^(Inf + 0im)
-    @test_throws DomainError (-3)^(Inf + 1im)
-    @test_throws DomainError (3+1im)^Inf
-    @test_throws DomainError (3+1im)^(Inf + 1im)
-    @test_throws DomainError (1e200+1e-200im)^Inf  # angle(z) underflows
-    @test_throws DomainError (1e200+1e-200im)^(Inf+1im)
+    # cases where phase angle is non-finite yield NaN + NaN*im:
+    @test NaN + NaN*im ≟ Inf ^ (2 + 3im) ≟ (Inf + 1im) ^ (2 + 3im) ≟ (Inf*im) ^ (2 + 3im) ≟
+          3^(Inf*im) ≟ (-3)^(Inf + 0im) ≟ (-3)^(Inf + 1im) ≟ (3+1im)^Inf ≟
+          (3+1im)^(Inf + 1im) ≟ (1e200+1e-200im)^Inf ≟ (1e200+1e-200im)^(Inf+1im)
 
     @test @inferred(2.0^(3.0+0im)) === @inferred((2.0+0im)^(3.0+0im)) === @inferred((2.0+0im)^3.0) === 8.0+0.0im
 end
