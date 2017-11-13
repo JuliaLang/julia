@@ -267,9 +267,6 @@ This section lists changes that do not have deprecation warnings.
   * The return type of `reinterpret` has changed to `ReinterpretArray`. `reinterpret` on sparse
     arrays has been discontinued.
 
-  * `x^y` for complex arguments now throws a `DomainError` in some cases that would have
-    previously given `NaN` results ([#24570]).
-
   * `Base.find_in_path` is now `Base.find_package` or `Base.find_source_file` ([#24320])
 
 Library improvements
