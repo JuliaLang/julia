@@ -364,6 +364,10 @@ Library improvements
     This supersedes the old behavior of reinterpret on Arrays. As a result, reinterpreting
     arrays with different alignment requirements (removed in 0.6) is once again allowed ([#23750]).
 
+  * The function-taking form of `open` now accepts any callable as its first argument,
+    not just subtypes of `Function`. ([#24527])
+
+
 Compiler/Runtime improvements
 -----------------------------
 
