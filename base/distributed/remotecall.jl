@@ -52,13 +52,13 @@ function test_existing_ref(r::AbstractRemoteRef)
     end
 
     client_refs[r] = nothing
-    finalizer(r, finalize_ref)
+    finalizer(finalize_ref, r)
     return r
 end
 
 function finalize_ref(r::AbstractRemoteRef)
     if r.where > 0 # Handle the case of the finalizer having been called manually
-        islocked(client_refs) && return finalizer(r, finalize_ref) # delay finalizer for later, when it's not already locked
+        islocked(client_refs) && return finalizer(finalize_ref, r) # delay finalizer for later, when it's not already locked
         delete!(client_refs, r)
         if isa(r, RemoteChannel)
             send_del_client(r)

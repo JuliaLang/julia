@@ -221,7 +221,7 @@ let was_gced = false
 
     function foo22770()
         b = Ref(2)
-        finalizer(b, x -> was_gced = true)
+        finalizer(x -> was_gced = true, b)
         y = make_tuple(b)
         x = y[1]
         a = Ref(1)
