@@ -17,11 +17,16 @@ uintptr_t __stop_jl_interpreter_frame = (uintptr_t)&__stop_jl_interpreter_frame_
 #endif
 
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-#define ASM_ENTRY                               \
-    ".text\n"                                   \
-    ".p2align 4,0x90\n"                         \
-    ".global enter_interpreter_frame\n"         \
-    ".type enter_interpreter_frame,@function\n"
+#if defined(_CPU_ARM_)
+#  define ASM_FUNCTION_TYPE "%function"
+#else
+#  define ASM_FUNCTION_TYPE "@function"
+#endif
+#define ASM_ENTRY                                               \
+    ".text\n"                                                   \
+    ".p2align 4,0x90\n"                                         \
+    ".global enter_interpreter_frame\n"                         \
+    ".type enter_interpreter_frame," ASM_FUNCTION_TYPE "\n"
 #if defined(_OS_LINUX_)
 #define ASM_END ".previous\n"
 #else
@@ -92,8 +97,9 @@ asm(
 #endif
     "\tmovq %" ARG1_REG ", %rax\n"
     "\tleaq " XSTR(STACK_PADDING) "(%rsp), %" ARG1_REG "\n"
-    // Zero out the src field
+    // Zero out the src and mi fields
     "\tmovq $0, 0(%" ARG1_REG ")\n"
+    "\tmovq $0, 8(%" ARG1_REG ")\n"
 #ifdef _OS_WINDOWS_
     // Make space for the register parameter area
     "\tsubq $32, %rsp\n"
@@ -178,8 +184,9 @@ asm(
      ".cfi_def_cfa_offset " XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(ENTRY_OFFSET) "\n"
      "\tmovl %ecx, %eax\n"
      "\tmovl %esp, %ecx\n"
-     // Zero out the src field
+     // Zero out the src and mi fields
      "\tmovl $0, (%esp)\n"
+     "\tmovl $0, 4(%esp)\n"
      // Restore 16 byte stack alignment
      // Technically not necessary on windows, because we don't assume this
      // alignment, but let's be nice if we ever start doing that.
@@ -201,6 +208,95 @@ asm(
 
 #define CALLBACK_ABI  __attribute__((fastcall))
 static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE, "Update assembly code above");
+
+#elif defined(_CPU_AARCH64_)
+
+#define MAX_INTERP_STATE_SIZE 64
+#define STACK_PADDING 16
+
+// Check that the interpreter state can fit
+static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE,
+              "Stack layout invariants violated.");
+// Check that the alignment of the type is satisfied
+// (16 is stack alignment at function boundary)
+static_assert(alignof(interpreter_state) <= 16, "Stack layout invariants violated");
+static_assert(STACK_PADDING % alignof(interpreter_state) == 0,
+              "Stack layout invariants violated");
+// Check that ABI stack alignment requirement is maintained.
+static_assert(((MAX_INTERP_STATE_SIZE + STACK_PADDING) % 16) == 0,
+              "Stack layout invariants violated");
+// Check that the padding is large enough for lr.
+static_assert(STACK_PADDING >= sizeof(void*), "Stack layout invariants violated");
+
+size_t TOTAL_STACK_PADDING = STACK_PADDING;
+
+asm(
+    ASM_ENTRY
+    MANGLE("enter_interpreter_frame") ":\n"
+    ".cfi_startproc\n"
+    // Save lr
+    "\tstr x30, [sp, #-(" XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(STACK_PADDING) ")]!\n"
+    "\t.cfi_def_cfa_offset (" XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(STACK_PADDING) ")\n"
+    "\t.cfi_offset 30, -(" XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(STACK_PADDING) ")\n"
+    "\tmov x2, x0\n"
+    // Zero out the src and mi fields
+    "\tstp xzr, xzr, [sp, " XSTR(STACK_PADDING) "]\n"
+    "\tadd x0, sp, " XSTR(STACK_PADDING) "\n"
+    "Lenter_interpreter_frame_start_val:\n"
+    "\tblr x2\n"
+    "Lenter_interpreter_frame_end_val:\n"
+    "\tldr x30, [sp], (" XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(STACK_PADDING) ")\n"
+    "\t.cfi_restore 30\n"
+    "\t.cfi_def_cfa_offset 0\n"
+    "\tret\n"
+    ".cfi_endproc\n"
+    ASM_END
+    );
+
+#define CALLBACK_ABI
+
+#elif defined(_CPU_ARM_)
+
+#define MAX_INTERP_STATE_SIZE 32
+
+// Check that the interpreter state can fit
+static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE,
+              "Stack layout invariants violated.");
+// Check that the alignment of the type is satisfied
+// (16 is what we realign the stack to)
+static_assert(alignof(interpreter_state) <= 16, "Stack layout invariants violated");
+
+size_t TOTAL_STACK_PADDING = 0;
+
+asm(
+    ASM_ENTRY
+    MANGLE("enter_interpreter_frame") ":\n"
+    ".fnstart\n"
+    "\tpush {fp, lr}\n"
+    "\t.save {fp, lr}\n"
+    "\t.setfp fp, sp, #4\n"
+    "\tadd fp, sp, #4\n"
+    "\tmov r2, r0\n"
+    // Reserve enough space and realign stack to 16bytes
+    // The realignment is for consistency with every other architectures.
+    // It isn't strictly necessary since we currently do not rely on it.
+    "\tsub sp, sp, #" XSTR(MAX_INTERP_STATE_SIZE) "\n"
+    "\tbic sp, sp, #15\n"
+    // Zero out the src and mi field
+    "\tmov ip, #0\n"
+    "\tstr ip, [sp]\n"
+    "\tstr ip, [sp, #4]\n"
+    "\tmov r0, sp\n"
+    "Lenter_interpreter_frame_start_val:\n"
+    "\tblx r2\n"
+    "Lenter_interpreter_frame_end_val:\n"
+    "\tsub sp, fp, #4\n"
+    "\tpop {fp, pc}\n"
+    "\t.fnend\n"
+    ASM_END
+    );
+
+#define CALLBACK_ABI
 
 #else
 #warning "Interpreter backtraces not implemented for this platform"
