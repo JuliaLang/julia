@@ -328,6 +328,22 @@ Notice the extra set of parentheses in the definition of `range`.
 Without those, `range` would be a two-argument function, and this example would
 not work.
 
+## Argument evaluation order
+
+All arguments passed to a function are evaluated in lexical left-to-right order.
+
+```jldoctest
+julia> f(a, b, c; d=println("d default")) = a
+f (generic function with 1 method)
+
+julia> f(println("a"), println("b"), println("c"))
+a
+b
+c
+d default
+
+```
+
 ## Varargs Functions
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
@@ -533,7 +549,7 @@ this example, `width` is certain to have the value `2`.
 
 ## Evaluation Scope of Default Values
 
-All arguments passed to a function are evaluated in lexical left-to-right order. When optional and keyword argument default expressions are evaluated, only *previous* arguments are in
+When optional and keyword argument default expressions are evaluated, only *previous* arguments are in
 scope.
 For example, given this definition:
 
