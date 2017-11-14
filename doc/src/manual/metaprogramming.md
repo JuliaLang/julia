@@ -867,6 +867,7 @@ while we want `@time` to be usable with minimum impact on the wrapped code.
 ### Macros and dispatch
 
 Macros, just like Julia functions, are generic. This means they can also have multiple method definitions, thanks to multiple dispatch:
+```jldoctest macromethods
 julia> macro m end
 @m (macro with 0 methods)
 
@@ -888,7 +889,7 @@ Two arguments
 ```
 However one should keep in mind, that macro dispatch is based on the types of AST
 that are handed to the macro, not the types that the AST evaluates to at runtime:
-```juliarepl
+```jldoctest macromethods
 julia> macro m(::Int)
            println("An Integer")
        end
