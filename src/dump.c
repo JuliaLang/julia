@@ -3035,6 +3035,8 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start, jl_value_
         t = dt;
     }
     assert(t->uid != 0);
+    if (t == dt && v == NULL)
+        return t;
     // delete / replace any other usages of this type in the backref list
     // with the newly constructed object
     size_t i = start;
@@ -3087,8 +3089,7 @@ static void jl_recache_types(void)
             if (jl_is_datatype(o)) {
                 dt = (jl_datatype_t*)o;
                 v = dt->instance;
-                assert(dt->uid == -1);
-                t = jl_recache_type(dt, i + 2, NULL);
+                t = dt->uid == -1 ? jl_recache_type(dt, i + 2, NULL) : dt;
             }
             else {
                 dt = (jl_datatype_t*)jl_typeof(o);
