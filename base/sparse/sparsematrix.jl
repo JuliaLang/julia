@@ -1318,9 +1318,9 @@ function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     return (I, J, V)
 end
 
-function _sparse_findnextnz(m::SparseMatrixCSC, i::Int)
+function _sparse_findnextnz(m::SparseMatrixCSC, i::Integer)
     if i > length(m)
-        return 0
+        return zero(indtype(m))
     end
     row, col = ind2sub(m, i)
     lo, hi = m.colptr[col], m.colptr[col+1]
@@ -1329,16 +1329,16 @@ function _sparse_findnextnz(m::SparseMatrixCSC, i::Int)
         return sub2ind(m, m.rowval[n], col)
     end
     nextcol = findnext(c->(c>hi), m.colptr, col+1)
-    if nextcol == 0
-        return 0
+    if iszero(nextcol)
+        return zero(indtype(m))
     end
     nextlo = m.colptr[nextcol-1]
     return sub2ind(m, m.rowval[nextlo], nextcol-1)
 end
 
-function _sparse_findprevnz(m::SparseMatrixCSC, i::Int)
-    if i < 1
-        return 0
+function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
+    if iszero(i)
+        return zero(indtype(m))
     end
     row, col = ind2sub(m, i)
     lo, hi = m.colptr[col], m.colptr[col+1]
@@ -1347,8 +1347,8 @@ function _sparse_findprevnz(m::SparseMatrixCSC, i::Int)
         return sub2ind(m, m.rowval[n], col)
     end
     prevcol = findprev(c->(c<lo), m.colptr, col-1)
-    if prevcol == 0
-        return 0
+    if iszero(prevcol)
+        return zero(indtype(m))
     end
     prevhi = m.colptr[prevcol+1]
     return sub2ind(m, m.rowval[prevhi-1], prevcol)
