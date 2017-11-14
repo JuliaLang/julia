@@ -235,6 +235,8 @@ qrfact!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
 qrfact!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
 qrfact!(A::StridedMatrix) = qrfact!(A, Val(false))
 
+_qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
+
 """
     qrfact(A, pivot=Val(false)) -> F
 
@@ -293,12 +295,12 @@ true
     compactly rather as two separate dense matrices.
 """
 function qrfact(A::AbstractMatrix{T}, arg) where T
-    AA = similar(A, typeof(zero(T)/norm(one(T))), size(A))
+    AA = similar(A, _qreltype(T), size(A))
     copy!(AA, A)
     return qrfact!(AA, arg)
 end
 function qrfact(A::AbstractMatrix{T}) where T
-    AA = similar(A, typeof(zero(T)/norm(one(T))), size(A))
+    AA = similar(A, _qreltype(T), size(A))
     copy!(AA, A)
     return qrfact!(AA)
 end
