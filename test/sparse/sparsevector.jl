@@ -176,7 +176,25 @@ end
             I = rand(1:length(x), 20)
             r = x[I]
             @test isa(r, SparseVector{Float64,Int})
-            @test all(nonzeros(r) .!= 0.0)
+            @test all(!iszero, nonzeros(r))
+            @test Array(r) == Array(x)[I]
+        end
+
+        # issue 24534
+        let x = convert(SparseVector{Float64,UInt32},sprandn(100,0.5))
+            I = rand(1:length(x), 20)
+            r = x[I]
+            @test isa(r, SparseVector{Float64,UInt32})
+            @test all(!iszero, nonzeros(r))
+            @test Array(r) == Array(x)[I]
+        end
+
+        # issue 24534
+        let x = convert(SparseVector{Float64,UInt32},sprandn(100,0.5))
+            I = rand(1:length(x), 20,1)
+            r = x[I]
+            @test isa(r, SparseMatrixCSC{Float64,UInt32})
+            @test all(!iszero, nonzeros(r))
             @test Array(r) == Array(x)[I]
         end
     end
@@ -187,7 +205,7 @@ end
             bI[I] = true
             r = x[1,bI]
             @test isa(r, SparseVector{Float64,Int})
-            @test all(nonzeros(r) .!= 0.0)
+            @test all(!iszero, nonzeros(r))
             @test Array(r) == Array(x)[1,bI]
         end
 
@@ -197,7 +215,7 @@ end
             bI[I] = true
             r = x[bI]
             @test isa(r, SparseVector{Float64,Int})
-            @test all(nonzeros(r) .!= 0.0)
+            @test all(!iszero, nonzeros(r))
             @test Array(r) == Array(x)[bI]
         end
     end
