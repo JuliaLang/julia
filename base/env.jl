@@ -4,7 +4,7 @@ if Sys.iswindows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
     _getenvlen(var::Vector{UInt16}) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,C_NULL,0)
-    _hasenv(s::Vector{UInt16}) = !isequal(_getenvlen(s), 0) || !isequal(Libc.GetLastError(), ERROR_ENVVAR_NOT_FOUND)
+    _hasenv(s::Vector{UInt16}) = _getenvlen(s) != 0 || Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND
     _hasenv(s::AbstractString) = _hasenv(cwstring(s))
 
     function access_env(onError::Function, str::AbstractString)
@@ -38,7 +38,7 @@ if Sys.iswindows()
     end
 else # !windows
     _getenv(var::AbstractString) = ccall(:getenv, Cstring, (Cstring,), var)
-    _hasenv(s::AbstractString) = !isequal(_getenv(s), C_NULL)
+    _hasenv(s::AbstractString) = _getenv(s) != C_NULL
 
     function access_env(onError::Function, var::AbstractString)
         val = _getenv(var)

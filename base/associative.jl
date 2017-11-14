@@ -67,7 +67,7 @@ function next(v::ValueIterator, state)
     n[1][2], n[2]
 end
 
-in(k, v::KeyIterator) = !isequal(get(v.dict, k, secret_table_token), secret_table_token)
+in(k, v::KeyIterator) = get(v.dict, k, secret_table_token) !== secret_table_token
 
 """
     keys(iterator)
