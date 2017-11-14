@@ -533,7 +533,7 @@ this example, `width` is certain to have the value `2`.
 
 ## Evaluation Scope of Default Values
 
-All arguments to a function are evaluated in lexical left-to-right order. When optional and keyword argument default expressions are evaluated, only *previous* arguments are in
+All arguments passed to a function are evaluated in lexical left-to-right order. When optional and keyword argument default expressions are evaluated, only *previous* arguments are in
 scope.
 For example, given this definition:
 
