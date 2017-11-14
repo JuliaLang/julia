@@ -202,3 +202,8 @@ end
     A = rand(200,2)
     @test A \ linspace(0,1,200) == A \ collect(linspace(0,1,200))
 end
+
+@testset "Issue #24589. Promotion of rational matrices" begin
+    A = rand(1//1:5//5, 4,3)
+    @test first(qr(A)) == first(qr(float(A)))
+end
