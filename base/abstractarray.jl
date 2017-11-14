@@ -1493,6 +1493,7 @@ function hvcat_fill(a::Array, xs::Tuple)
 end
 
 hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs...) = typed_hvcat(promote_eltypeof(xs...), rows, xs...)
 
 function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
     nr = length(rows)
@@ -1507,18 +1508,6 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
         throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
     end
     hvcat_fill(Array{T,2}(nr, nc), xs)
-end
-
-# fallback definition of hvcat in terms of hcat and vcat
-function hvcat(rows::Tuple{Vararg{Int}}, as...)
-    nbr = length(rows)  # number of block rows
-    rs = Array{Any,1}(nbr)
-    a = 1
-    for i = 1:nbr
-        rs[i] = hcat(as[a:a-1+rows[i]]...)
-        a += rows[i]
-    end
-    vcat(rs...)
 end
 
 function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
