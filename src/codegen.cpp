@@ -5308,7 +5308,7 @@ static std::unique_ptr<Module> emit_function(
 
     // allocate Function declarations and wrapper objects
     Module *M = new Module(ctx.name, jl_LLVMContext);
-    jl_setup_module(M);
+    jl_setup_module(M, params);
     jl_returninfo_t returninfo = {};
     Function *f = NULL;
     Function *fwrap = NULL;
