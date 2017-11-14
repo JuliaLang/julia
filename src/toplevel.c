@@ -19,6 +19,7 @@
 #include "julia_internal.h"
 #include "uv.h"
 #include "julia_assert.h"
+#include "intrinsics.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -303,6 +304,24 @@ int jl_has_intrinsics(jl_value_t *v)
     if (e->head == toplevel_sym || e->head == copyast_sym)
         return 0;
     if (e->head == foreigncall_sym)
+        return 1;
+    jl_value_t *called = NULL;
+    if (e->head == call_sym && jl_expr_nargs(e) > 0) {
+        jl_value_t *f = jl_exprarg(e, 0);
+        if (jl_is_globalref(f)) {
+            jl_module_t *mod = jl_globalref_mod(f);
+            jl_sym_t *name = jl_globalref_name(f);
+            if (jl_binding_resolved_p(mod, name)) {
+                jl_binding_t *b = jl_get_binding(mod, name);
+                if (b && b->value && b->constp)
+                    called = b->value;
+            }
+        }
+        else if (jl_is_quotenode(f)) {
+            called = jl_quotenode_value(f);
+        }
+    }
+    if (called && jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall)
         return 1;
     int i;
     for (i = 0; i < jl_array_len(e->args); i++) {
