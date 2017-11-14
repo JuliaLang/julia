@@ -16,15 +16,18 @@ Before you can use this, install its dependencies:
 Pkg.add("SHA")
 Pkg.add("TerminalMenus")
 Pkg.clone("https://github.com/StefanKarpinski/TOML.jl.git")
+Pkg.clone("https://github.com/StefanKarpinski/Pkg3.jl.git")
 ```
 
-Now load `Pkg3` in Julia 0.6 (0.6 only with precompilation off) to add packages and load them:
+Now load `Pkg3` in Julia 0.6 to add packages and load them.
+Right now, packages will be installed to `joinpath(homedir(), ".julia", "packages")`, so they won't influnce the packages that you already have installed.
 
 ```jl
-$ path/to/julia.6/julia --compilecache=no
+$ path/to/julia.6/julia
 
 julia> using Pkg3
 ```
+
 
 This gives you a `pkg> ` REPL mode, activated (for now) by the `]` key. Currently, this supports three operations: `add`, `rm` and `up`:
 
