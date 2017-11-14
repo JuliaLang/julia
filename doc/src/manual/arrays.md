@@ -78,6 +78,57 @@ The syntax `[A, B, C, ...]` constructs a 1-d array (vector) of its arguments. If
 arguments have a common [promotion type](@ref conversion-and-promotion) then they get
 converted to that type using `convert`.
 
+For example,
+
+```jldoctest
+julia> bi = Bidiagonal([1, 2., 3+im], [4., 5+im], :U)
+3×3 Bidiagonal{Complex{Float64},Array{Complex{Float64},1}}:
+ 1.0+0.0im  4.0+0.0im      ⋅
+     ⋅      2.0+0.0im  5.0+1.0im
+     ⋅          ⋅      3.0+1.0im
+
+julia> tri = Tridiagonal(ones(2), ones(3), ones(2))
+3×3 Tridiagonal{Float64,Array{Float64,1}}:
+ 1.0  1.0   ⋅
+ 1.0  1.0  1.0
+  ⋅   1.0  1.0
+
+julia> [bi, tri]
+2-element Array{Tridiagonal{Complex{Float64},V} where V<:AbstractArray{Complex{Float64},1},1}:
+ Complex{Float64}[1.0+0.0im 4.0+0.0im 0.0+0.0im; 0.0+0.0im 2.0+0.0im 5.0+1.0im; 0.0+0.0im 0.0+0.0im 3.0+1.0im]
+ Complex{Float64}[1.0+0.0im 1.0+0.0im 0.0+0.0im; 1.0+0.0im 1.0+0.0im 1.0+0.0im; 0.0+0.0im 1.0+0.0im 1.0+0.0im]
+```
+
+This has created a vector of the common promotion type `Tridiagonal`, where all its
+elements are `Complex{Float64}` (since complex numbers are a superset of real numbers,
+and tridiagonal matrices are a superset of bidiagonal matrices). However, if we tried:
+
+```jldoctest
+julia> bi = Bidiagonal([1, 2., 3+im], [4., 5+im], :U)
+3×3 Bidiagonal{Complex{Float64},Array{Complex{Float64},1}}:
+ 1.0+0.0im  4.0+0.0im      ⋅
+     ⋅      2.0+0.0im  5.0+1.0im
+     ⋅          ⋅      3.0+1.0im
+
+julia> stri = SymTridiagonal(ones(3), ones(2))
+3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+ 1.0  1.0   ⋅
+ 1.0  1.0  1.0
+  ⋅   1.0  1.0
+
+julia> [bi, stri]
+2-element Array{AbstractArray{T,2} where T,1}:
+ 3×3 Bidiagonal{Complex{Float64},Array{Complex{Float64},1}}:
+ diag: 1.0 - 0.0im  2.0 - 0.0im  3.0 - 1.0im
+ super: 4.0 - 0.0im  5.0 - 1.0im
+ [1.0 1.0 0.0; 1.0 1.0 1.0; 0.0 1.0 1.0]
+```
+
+Since the common promotion type of `SymTridiagonal` and `Bidiagonal` is generic
+`AbstractArray` (because the off-diagonal elements of the bidiagonal matrix might
+not be 0), the `stri` matrix is converted to an `AbstractArray` - its full matrix
+format.
+
 ### Concatenation
 
 Arrays can be constructed and also concatenated using the following functions:
