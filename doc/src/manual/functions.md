@@ -333,7 +333,7 @@ not work.
 All arguments passed to a function are evaluated in lexical left-to-right order.
 
 ```jldoctest
-julia> f(a, b, c; d=println("d default")) = a
+julia> f(a, b, c, d=println("d default")) = a
 f (generic function with 1 method)
 
 julia> f(println("a"), println("b"), println("c"))
