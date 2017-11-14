@@ -1153,12 +1153,20 @@ append!(testruns, [
 ])
 
 for (addp_testf, expected_errstr, env) in testruns
+    old_stdout = STDOUT
+    stdout_out, stdout_in = redirect_stdout()
+    stdout_txt = @schedule filter!(readlines(stdout_out)) do s
+            return !startswith(s, "\tFrom failed worker startup:\t")
+        end
     try
         withenv(env...) do
             addp_testf()
         end
         error("Unexpected")
     catch ex
+        redirect_stdout(old_stdout)
+        close(stdout_in)
+        @test isempty(wait(stdout_txt))
         @test isa(ex, CompositeException)
         @test ex.exceptions[1].ex.msg == expected_errstr
     end
