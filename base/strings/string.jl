@@ -277,17 +277,17 @@ function length(s::String)
 
         (i += 1) ≤ z || break
         @inbounds b = codeunit(s, i) # cont byte 1
-        (b & 0xc0 == 0x80) || @goto L
-        (l ≥ 0xe0) || continue
+        b & 0xc0 == 0x80 || @goto L
+        l ≥ 0xe0 || continue
 
         (i += 1) ≤ z || break
         @inbounds b = codeunit(s, i) # cont byte 2
-        (b & 0xc0 == 0x80) || @goto L
-        (l ≥ 0xf0) || continue
+        b & 0xc0 == 0x80 || @goto L
+        l ≥ 0xf0 || continue
 
         (i += 1) ≤ z || break
         @inbounds b = codeunit(s, i) # cont byte 3
-        (b & 0xc0 == 0x80) || @goto L
+        b & 0xc0 == 0x80 || @goto L
     end
     return n
 end
