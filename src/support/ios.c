@@ -566,7 +566,11 @@ int ios_trunc(ios_t *s, size_t size)
 #if !defined(_OS_WINDOWS_)
         if (ftruncate(s->fd, size) == 0)
 #else
-        if (_chsize(s->fd, size) == 0)
+        #if !defined(__MINGW32__) || defined(MINGW_HAS_SECURE_API)
+            if (_chsize_s(s->fd, size) == 0)
+        #else
+            if (_chsize(s->fd, size) == 0)
+        #endif
 #endif
             return 0;
     }
