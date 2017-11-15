@@ -2101,15 +2101,12 @@ end
 # issue #16307
 @deprecate finalizer(o, f::Function) finalizer(f, o)
 # This misses other callables but they are very rare in the wild
-
-@deprecate finalizer(o::T, f::Ptr{Void}) where {T} finalizer(f, o)
-
+@deprecate finalizer(o, f::Ptr{Void}) finalizer(f, o)
 
 # Avoid ambiguity, can remove when deprecations are removed:
 # This is almost certainly going to be a silent failure for code that is not updated.
 finalizer(f::Ptr{Void}, o::Ptr{Void}) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
 finalizer(f::Ptr{Void}, o::Function) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
-
 
 # END 0.7 deprecations
 
