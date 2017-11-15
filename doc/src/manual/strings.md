@@ -920,5 +920,19 @@ non-standard string literals of the form `raw"..."`. Raw string literals create
 ordinary `String` objects which contain the enclosed contents exactly as
 entered with no interpolation or unescaping. This is useful for strings which
 contain code or markup in other languages which use `$` or `\` as special
-characters. The exception is quotation marks that still must be
-escaped, e.g. `raw"\""` is equivalent to `"\""`.
+characters.
+
+The exception is that quotation marks still must be escaped, e.g. `raw"\""` is equivalent
+to `"\""`.
+To make it possible to express all strings, backslashes then also must be escaped, but
+only when appearing right before a quote character:
+
+```jldoctest
+julia> println(raw"\\ \\\"")
+\\ \"
+```
+
+Notice that the first two backslashes appear verbatim in the output, since they do not
+precede a quote character.
+However, the next backslash character escapes the backslash that follows it, and the
+last backslash escapes a quote, since these backslashes appear before a quote.

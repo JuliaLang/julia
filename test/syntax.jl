@@ -739,10 +739,10 @@ end
 # Check that string and command literals are parsed to the appropriate macros
 @test :(x"s") == :(@x_str "s")
 @test :(x"s"flag) == :(@x_str "s" "flag")
-@test :(x"s\"`\x\$\\") == :(@x_str "s\"`\\x\\\$\\\\")
+@test :(x"s\"`\x\$\\") == :(@x_str "s\"`\\x\\\$\\")
 @test :(x`s`) == :(@x_cmd "s")
 @test :(x`s`flag) == :(@x_cmd "s" "flag")
-@test :(x`s\`"\x\$\\`) == :(@x_cmd "s`\"\\x\\\$\\\\")
+@test :(x`s\`"\x\$\\`) == :(@x_cmd "s`\"\\x\\\$\\")
 
 # Check multiline command literals
 @test :(@cmd "multiline\ncommand\n") == :```
@@ -1171,3 +1171,30 @@ end
 # recursively calling expand-forms.
 @test [(0,0)... 1] == [0 0 1]
 @test Float32[(0,0)... 1] == Float32[0 0 1]
+
+@testset "raw_str macro" begin
+    @test raw"$" == "\$"
+    @test raw"\n" == "\\n"
+    @test raw"\t" == "\\t"
+
+    s1 = raw"""
+         lorem ipsum\n
+         $x = 1$
+         """
+
+    s2 = """
+         lorem ipsum\\n
+         \$x = 1\$
+         """
+
+    @test s1 == s2
+
+    # issue #22926
+    @test raw"\\" == "\\"
+    @test raw"\\\\" == "\\\\"
+    @test raw"\"" == "\""
+    @test raw"\\\"" == "\\\""
+    @test raw"\\x\\" == "\\\\x\\"
+    @test raw"x \\\" y" == "x \\\" y"
+    @test raw"x \\\ y" == "x \\\\\\ y"
+end

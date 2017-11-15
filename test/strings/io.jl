@@ -183,23 +183,7 @@ end
     @test Base.unindent("\n\t\n    \tfoo",4) == "\n    \n    foo"
     @test Base.unindent("\n\tfoo\tbar",4) == "\n    foo     bar"
 end
-@testset "raw_str macro" begin
-    @test raw"$" == "\$"
-    @test raw"\n" == "\\n"
-    @test raw"\t" == "\\t"
 
-    s1 = raw"""
-         lorem ipsum\n
-         $x = 1$
-         """
-
-    s2 = """
-         lorem ipsum\\n
-         \$x = 1\$
-         """
-
-    @test s1 == s2
-end
 # issue #22021, string realloc bug with join
 s22021 = String["\"\"\"
      non_max_suppression(boxes, scores, max_output_size; iou_threshold=nothing)

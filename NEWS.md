@@ -130,6 +130,12 @@ Language changes
   * Like `_`, variable names consisting only of underscores can be assigned,
     but accessing their values is deprecated ([#24221]).
 
+  * Raw string literal escaping rules have been changed to make it possible to write all strings.
+    The rule is that backslashes escape both quotes and other backslashes, but only when a sequence
+    of backslashes precedes a quote character. Thus, 2n backslashes followed by a quote encodes n
+    backslashes and the end of the literal while 2n+1 backslashes followed by a quote encodes n
+    backslashes followed by a quote character ([#22926]).
+
 Breaking changes
 ----------------
 
