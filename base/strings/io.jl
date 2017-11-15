@@ -253,6 +253,8 @@ need_full_hex(s::AbstractString, i::Int) = !done(s,i) && isxdigit(next(s,i)[1])
 escape_nul(s::AbstractString, i::Int) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
+# TODO: handle escaping invalid UTF-8
+
 """
     escape_string(str::AbstractString[, esc::AbstractString]) -> AbstractString
 
@@ -272,15 +274,23 @@ function escape_string(io, s::AbstractString, esc::AbstractString="")
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        c == '\0'       ? print(io, escape_nul(s,j)) :
-        c == '\e'       ? print(io, "\\e") :
-        c == '\\'       ? print(io, "\\\\") :
-        c in esc        ? print(io, '\\', c) :
-        '\a' <= c <= '\r' ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
-        isprint(c)      ? print(io, c) :
-        c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
-        c <= '\uffff'   ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
-                          print(io, "\\U", hex(c, need_full_hex(s,j) ? 8 : 4))
+        if !ismalformed(c)
+            c == '\0'       ? print(io, escape_nul(s,j)) :
+            c == '\e'       ? print(io, "\\e") :
+            c == '\\'       ? print(io, "\\\\") :
+            c in esc        ? print(io, '\\', c) :
+            '\a' <= c <= '\r' ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
+            isprint(c)      ? print(io, c) :
+            c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
+            c <= '\uffff'   ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
+                              print(io, "\\U", hex(c, need_full_hex(s,j) ? 8 : 4))
+        else # malformed
+            u = bswap(reinterpret(UInt32, c))
+            while true
+                print(io, "\\x", hex(u % UInt8, 2))
+                (u >>= 8) == 0 && break
+            end
+        end
         i = j
     end
 end
@@ -292,6 +302,8 @@ function print_quoted(io, s::AbstractString)
 end
 
 # general unescaping of traditional C and Unicode escape sequences
+
+# TODO: handle unescaping invalid UTF-8 sequences
 
 """
     unescape_string(str::AbstractString) -> AbstractString

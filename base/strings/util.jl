@@ -438,6 +438,7 @@ replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int)
 # replace(s::AbstractString, pat, f, count::Integer=typemax(Int)) =
 #     replace(String(s), pat, f, count)
 
+# TODO: allow transform as the first argument to replace?
 
 # hex <-> bytes conversion
 

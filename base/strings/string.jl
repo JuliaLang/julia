@@ -131,6 +131,8 @@ function thisind(s::String, i::Integer)
     j
 end
 
+# TODO: these need updating
+
 function prevind(s::String, i::Integer)
     j = Int(i)
     e = sizeof(s)
@@ -208,78 +210,86 @@ byte_string_classify(s::String) =
 isvalid(::Type{String}, s::Union{Vector{UInt8},String}) = byte_string_classify(s) != 0
 isvalid(s::String) = isvalid(String, s)
 
-## basic UTF-8 decoding & iteration ##
-
-is_surrogate_lead(c::Unsigned) = ((c & ~0x003ff) == 0xd800)
-is_surrogate_trail(c::Unsigned) = ((c & ~0x003ff) == 0xdc00)
-is_surrogate_codeunit(c::Unsigned) = ((c & ~0x007ff) == 0xd800)
-is_valid_continuation(c) = ((c & 0xc0) == 0x80)
-
-const utf8_offset = [
-    0x00000000, 0x00003080,
-    0x000e2080, 0x03c82080,
-    0xfa082080, 0x82082080,
-]
-
-const utf8_trailing = [
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
-    2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, 3,3,3,3,3,3,3,3,4,4,4,4,5,5,5,5,
-]
+is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
+@inline between(b::UInt8, lo::UInt8, hi::UInt8) = (lo ≤ b) & (b ≤ hi)
+
 function endof(s::String)
     i = sizeof(s)
-    @inbounds while i > 0 && is_valid_continuation(codeunit(s, i))
-        i -= 1
-    end
-    i
+    i > 0 || return i
+    @inbounds b = codeunit(s, i)
+    (b & 0xc0 == 0x80) & (i-1 > 0) || return i
+    @inbounds b = codeunit(s, i-1)
+    between(b, 0b11000000, 0b11110111) && return i-1
+    (b & 0xc0 == 0x80) & (i-2 > 0) || return i
+    @inbounds b = codeunit(s, i-2)
+    between(b, 0b11100000, 0b11110111) && return i-2
+    (b & 0xc0 == 0x80) & (i-3 > 0) || return i
+    @inbounds b = codeunit(s, i-3)
+    between(b, 0b11110000, 0b11110111) && return i-3
+    return i
+end
+
+done(s::String, i::Int) = i > sizeof(s)
+
+function next(s::String, i::Int)
+    @boundscheck 1 ≤ i ≤ sizeof(s) || throw(BoundsError(s, i))
+    @inbounds b = codeunit(s, i)
+    # TODO: check index validity
+    u = UInt32(b) << 24
+    (b < 0xc0) | (0xf8 ≤ b) && return reinterpret(Char, u), i+1
+    return next_continued(s, i, u)
+end
+
+@noinline function next_continued(s::String, i::Int, u::UInt32)
+    z = sizeof(s)
+    # first continuation byte
+    (i += 1) > z && @goto ret
+    @inbounds b = codeunit(s, i)
+    (b & 0xc0 == 0x80) || @goto ret
+    u |= UInt32(b) << 16
+    # second continuation byte
+    ((i += 1) > z) | (u < 0xe0000000) && @goto ret
+    @inbounds b = codeunit(s, i)
+    (b & 0xc0 == 0x80) || @goto ret
+    u |= UInt32(b) << 8
+    # third continuation byte
+    ((i += 1) > z) | (u < 0xf0000000) && @goto ret
+    @inbounds b = codeunit(s, i)
+    (b & 0xc0 == 0x80) || @goto ret
+    u |= UInt32(b)
+@label ret
+    return reinterpret(Char, u), i
 end
 
 function length(s::String)
-    cnum = 0
-    @inbounds for i = 1:sizeof(s)
-        cnum += !is_valid_continuation(codeunit(s, i))
-    end
-    cnum
-end
+    i = n = 0
+    z = sizeof(s)
+    while true
+        (i += 1) ≤ z || break
+        @inbounds b = codeunit(s, i) # lead byte
+    @label L
+        n += 1
+        (0xc0 ≤ b) & (b < 0xf8) || continue
+        l = b
 
-@noinline function slow_utf8_next(s::String, b::UInt8, i::Int, l::Int)
-    @inbounds if is_valid_continuation(b)
-        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s, i)))
-    end
-    trailing = utf8_trailing[b + 1]
-    if l < i + trailing
-        return '\ufffd', i+1
-    end
-    c::UInt32 = 0
-    @inbounds for j = 1:(trailing + 1)
-        c <<= 6
-        c += codeunit(s, i)
-        i += 1
-    end
-    c -= utf8_offset[trailing + 1]
-    return Char(c), i
-end
+        (i += 1) ≤ z || break
+        @inbounds b = codeunit(s, i) # cont byte 1
+        (b & 0xc0 == 0x80) || @goto L
+        (l ≥ 0xe0) || continue
 
-# This implementation relies on `next` returning a value past the end of the
-# String's underlying data, which is true for valid Strings
-done(s::String, state) = state > sizeof(s)
+        (i += 1) ≤ z || break
+        @inbounds b = codeunit(s, i) # cont byte 2
+        (b & 0xc0 == 0x80) || @goto L
+        (l ≥ 0xf0) || continue
 
-@inline function next(s::String, i::Int)
-    # function is split into this critical fast-path
-    # for pure ascii data, such as parsing numbers,
-    # and a longer function that can handle any utf8 data
-    @boundscheck 1 ≤ i ≤ sizeof(s) || throw(BoundsError(s,i))
-    @inbounds b = codeunit(s, i)
-    b < 0x80 && return Char(b), i+1
-    return slow_utf8_next(s, b, i, sizeof(s))
+        (i += 1) ≤ z || break
+        @inbounds b = codeunit(s, i) # cont byte 3
+        (b & 0xc0 == 0x80) || @goto L
+    end
+    return n
 end
 
 first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
