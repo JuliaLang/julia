@@ -10,34 +10,58 @@
     PAGE_UP,
     PAGE_DOWN)
 
-# The user terminal
-terminal = Base.Terminals.TTYTerminal(get(ENV, "TERM", @static is_windows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
-
 # Enable raw mode. Allows us to process keyboard inputs directly.
-enableRawMode() = Base.Terminals.raw!(terminal, true)
+function enableRawMode(term)
+    try
+        Base.Terminals.raw!(term, true)
+        return true
+    catch err
+        warn("TerminalMenus: Unable to enter raw mode: $err")
+    end
+    return false
+end
 
 # Disable raw mode. Give control back to Julia REPL if interactive session.
-disableRawMode() = Base.Terminals.raw!(terminal, false)
+function disableRawMode(term)
+    try
+        Base.Terminals.raw!(term, false)
+        return true
+    catch err
+        warn("TerminalMenus: Unable to disable raw mode: $err")
+    end
+    return false
+end
+
 
 # Reads a single byte from STDIN
-readNextChar() = Char(read(STDIN,1)[1])
+readNextChar(stream::IO=STDIN) = Char(read(stream,1)[1])
 
 # Read the next key from STDIN. It is also able to read several bytes for
 #   escaped keys such as the arrow keys, home/end keys, etc.
 # Escaped keys are returned using the `Key` enum.
-function readKey() ::UInt32
-    c = readNextChar()
+function readKey(stream::IO=STDIN) ::UInt32
+    c = readNextChar(stream)
 
 	# Escape characters
 	if c == '\x1b'
-        STDIN.buffer.size < 3 && return '\x1b'
-        esc_a = readNextChar()
-        esc_b = readNextChar()
+        stream.buffer.size < 2 && return '\x1b'
+        esc_a = readNextChar(stream)
+
+        if esc_a == 'v'  # M-v
+            return PAGE_UP
+        elseif esc_a == '<'  # M-<
+            return HOME_KEY
+        elseif esc_a == '>'  # M->
+            return END_KEY
+        end
+
+        stream.buffer.size < 3 && return '\x1b'
+        esc_b = readNextChar(stream)
 
 		if esc_a == '['
 			if esc_b >= '0' && esc_b <= '9'
-				STDIN.buffer.size < 4 && return '\x1b'
-                esc_c = readNextChar()
+				stream.buffer.size < 4 && return '\x1b'
+                esc_c = readNextChar(stream)
 
 				if esc_c == '~'
 					if esc_b == '1'
@@ -86,7 +110,14 @@ function readKey() ::UInt32
 		end
 
 		return '\x1b'
+
+    elseif c == '\x16'  # C-v
+        return PAGE_DOWN
+    elseif c == '\x10'  # C-p
+        return ARROW_UP
+    elseif c == '\x0e'  # C-n
+        return ARROW_DOWN
     else
-		return c;
+		return c
 	end
 end
