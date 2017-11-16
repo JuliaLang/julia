@@ -372,7 +372,7 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})::Vector{UUID}
                 name, hash = names[uuid], hashes[uuid]
                 try
                     version_path, new = install(env, uuid, name, hash, urls[uuid], version)
-                    put!(results, (pkg, version_path, version, hash, true))
+                    put!(results, (pkg, version_path, version, hash, new))
                 catch e
                     put!(results, e)
                 end
