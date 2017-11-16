@@ -11,8 +11,8 @@ import
         exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
-        sum, sqrt, string, print, trunc, precision, exp10, expm1,
-        gamma, lgamma, log1p,
+        sum, sqrt, string, print, trunc, precision, expmin, expmax, exp10,
+        expm1, gamma, lgamma, log1p,
         eps, signbit, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
@@ -963,6 +963,24 @@ get_emin_max() = ccall((:mpfr_get_emin_max, :libmpfr), Clong, ())
 
 set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Void, (Clong,), x)
 set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Void, (Clong,), x)
+
+"""
+    expmin(BigFloat)
+
+Get the current minimum exponent e of a normalized [`BigFloat`](@ref) number.
+In other words, return the minimum integer e such that the [`BigFloat`](@ref)
+number 1.5 * 2^e is normalized.
+"""
+expmin(::Type{BigFloat}) = get_emin() - 1 # The '- 1' is to make it work as Base.exponent
+
+"""
+    expmax(BigFloat)
+
+Get the current maximum exponent e of a finite [`BigFloat`](@ref) number. In
+other words, return the maximum integer e such that the [`BigFloat`](@ref)
+number 1.5 * 2^e is finite.
+"""
+expmax(::Type{BigFloat}) = get_emax() - 1 # The '- 1' is to make it work as Base.exponent
 
 function Base.deepcopy_internal(x::BigFloat, stackdict::ObjectIdDict)
     haskey(stackdict, x) && return stackdict[x]

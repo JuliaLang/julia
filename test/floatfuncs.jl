@@ -4,6 +4,26 @@ using Test
 
 # test the basic floating point functions
 
+@testset "expminmax" begin
+    for elty in (Float16, Float32, Float64)
+        x = convert(elty,-2.0)
+        maxfinite = prevfloat(convert(elty,Inf))
+        minnormalized = nextfloat(convert(elty,0.0))/eps(elty)
+        @test exponent(maxfinite) == expmax(elty)
+        @test expmax(x) == expmax(elty)
+        @test exponent(minnormalized) == expmin(elty)
+        @test expmin(x) == expmin(elty)
+    end
+    #BigFloat does not have denormalized numbers
+    x = convert(BigFloat,-2.0)
+    maxfinite = prevfloat(convert(BigFloat,Inf))
+    minnormalized = nextfloat(convert(BigFloat,0.0))
+    @test exponent(maxfinite) == expmax(BigFloat)
+    @test expmax(x) == expmax(BigFloat)
+    @test exponent(minnormalized) == expmin(BigFloat)
+    @test expmin(x) == expmin(BigFloat)
+end
+
 @testset "flipsign" begin
     for elty in (Float32,Float64)
         x = convert(elty,-2.0)
