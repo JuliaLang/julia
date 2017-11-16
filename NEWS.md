@@ -409,6 +409,10 @@ Library improvements
   * The `keys` of an `Associative` are now an `AbstractSet`. `Base.KeyIterator{<:Associative}`
     has been changed to `KeySet{K, <:Associative{K}} <: AbstractSet{K}` ([#24580]).
 
+  * New function `ncodeunits(s::AbstractString)` gives the number of code units in a string.
+    The generic definition is constant time but calls `endof(s)` which may be inefficient.
+    Therefore custom string types may want to define direct `ncodeunits` methods.
+
 Compiler/Runtime improvements
 -----------------------------
 

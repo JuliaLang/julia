@@ -696,3 +696,11 @@ end
     @test String(take!(b)) == "UnicodeError: invalid character index 2 (0xba is a continuation byte)"
 end
 
+@testset "ncodeunits" begin
+    for (s, n) in [""     => 0, "a"   => 1, "abc"  => 3,
+                   "α"    => 2, "abγ" => 4, "∀"    => 3,
+                   "∀x∃y" => 8, "🍕"  => 4, "🍕∀" => 7]
+        @test ncodeunits(s) == n
+        @test ncodeunits(GenericString(s)) == n
+    end
+end

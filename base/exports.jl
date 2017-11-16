@@ -756,6 +756,7 @@ export
     lstrip,
     match,
     matchall,
+    ncodeunits,
     ndigits,
     nextind,
     normalize_string,

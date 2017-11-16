@@ -87,6 +87,20 @@ codeunit(s::AbstractString, i::Integer)
     @gc_preserve s unsafe_load(pointer(s, i))
 end
 
+"""
+    ncodeunits(s::AbstractString)
+
+The number of code units in a string. For example, for UTF-8-like data such as
+the default `String` type, the number of code units is the number of bytes in
+the string, a.k.a. `sizeof(s)`. For a UTF-16 encoded string type, however, the
+code unit is `UInt16` so the number of code units is the number of `UInt16`
+words in the representation of the string. The expression `codeunit(s, i)` is
+valid and safe for precisely the range of `i` values `1:ncodeunits(s)`.
+
+See also: [`codeunit`](@ref).
+"""
+ncodeunits(s::String) = sizeof(s)
+
 write(io::IO, s::String) =
     @gc_preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
 

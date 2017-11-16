@@ -69,6 +69,10 @@ julia> 'j' * "ulia"
 
 one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
 
+# generic number of code units; implementations generally know how long a string
+# is though and should override this with a more efficient method
+ncodeunits(s::AbstractString) = nextind(s, endof(s)) - 1
+
 """
     length(s::AbstractString)
 
