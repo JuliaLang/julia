@@ -1,3 +1,4 @@
+__precompile__(true)
 module Pkg3
 
 const DEPOTS = [joinpath(homedir(), ".julia")]
