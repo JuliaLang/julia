@@ -590,6 +590,34 @@ precision(::Type{Float64}) = 53
 precision(::T) where {T<:AbstractFloat} = precision(T)
 
 """
+    expmin(num::AbstractFloat)
+
+Get the minimum exponent e of a normalized floating point number. In other
+words, return the minimum integer e such that the floating point number 1.5 *
+2^e is normalized.
+"""
+function expmin end
+
+expmin(::Type{Float16}) = -14
+expmin(::Type{Float32}) = -126
+expmin(::Type{Float64}) = -1022
+expmin(::T) where {T<:AbstractFloat} = expmin(T)
+
+"""
+    expmax(num::AbstractFloat)
+
+Get the maximum exponent e of a finite floating point number. In other
+words, return the maximum integer e such that the floating point number 1.5 *
+2^e is finite.
+"""
+function expmax end
+
+expmax(::Type{Float16}) = 15
+expmax(::Type{Float32}) = 127
+expmax(::Type{Float64}) = 1023
+expmax(::T) where {T<:AbstractFloat} = expmax(T)
+
+"""
     uabs(x::Integer)
 
 Returns the absolute value of `x`, possibly returning a different type should the

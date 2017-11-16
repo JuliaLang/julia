@@ -811,6 +811,8 @@ export
 
 # bigfloat & precision
     precision,
+    expmin,
+    expmax,
     rounding,
     setprecision,
     setrounding,
