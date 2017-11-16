@@ -5,7 +5,7 @@ using Base: LibGit2
 using Base: Pkg
 using Pkg3.TerminalMenus
 using Pkg3.Types
-import Pkg3: depots
+import Pkg3: depots, BinaryProvider, USE_LIBGIT2_FOR_ALL_DOWNLOADS, NUM_CONCURRENT_DOWNLOADS
 
 const SlugInt = UInt32 # max p = 4
 const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
@@ -13,8 +13,8 @@ const nchars = SlugInt(length(chars))
 const max_p = floor(Int, log(nchars, typemax(SlugInt) >>> 8))
 
 function slug(x::SlugInt, p::Int)
-    1 ≤ p ≤ max_p || # otherwise previous steps are wrong
-        error("invalid slug size: $p (need 1 ≤ p ≤ $max_p)")
+    1 ≤ p ≤ max_p || # otherwise previous steps are wrong
+        error("invalid slug size: $p (need 1 ≤ p ≤ $max_p)")
     return sprint() do io
         for i = 1:p
             x, d = divrem(x, nchars)
@@ -74,7 +74,7 @@ function package_env_info(pkg::String, env::EnvCache = EnvCache(); verb::String 
             if haskey(paths, uuid)
                 for path in paths[uuid]
                     info′ = parse_toml(path, "package.toml")
-                    option *= " – $(info′["repo"])"
+                    option *= " – $(info′["repo"])"
                     break
                 end
             else
@@ -218,6 +218,13 @@ end
 
 const refspecs = ["+refs/*:refs/remotes/cache/*"]
 
+function get_archive_url_for_version(url::String, version)
+    if (m = match(r"https://github.com/(.*?)/(.*?).git", url)) != nothing
+        return "https://github.com/$(m.captures[1])/$(m.captures[2])/archive/v$(version).tar.gz"
+    end
+    return nothing
+end
+
 function install(
     env::EnvCache,
     uuid::UUID,
@@ -229,41 +236,71 @@ function install(
     # returns path to version & if it's newly installed
     version_path = find_installed(uuid, hash)
     ispath(version_path) && return version_path, false
-    upstream_dir = joinpath(depots()[1], "upstream")
-    ispath(upstream_dir) || mkpath(upstream_dir)
-    repo_path = joinpath(upstream_dir, string(uuid))
-    repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
-        info("Cloning [$uuid] $name")
-        LibGit2.clone(urls[1], repo_path, isbare=true)
+    http_download_successful = true
+    if !USE_LIBGIT2_FOR_ALL_DOWNLOADS && version != nothing
+        for url in urls
+            archive_url = get_archive_url_for_version(url, version)
+            if archive_url != nothing
+                path = joinpath(tempdir(), name * "_" * randstring(6) * ".tar.gz")
+                url_success = true
+                try
+                    cmd = BinaryProvider.gen_download_cmd(archive_url, path);
+                    run(cmd, (DevNull, DevNull, DevNull))
+                catch e
+                    e isa InterruptException && rethrow(e)
+                    url_success = false
+                end
+                url_success || continue
+                http_download_successful = true
+                dir = joinpath(tempdir(), randstring(12))
+                mkpath(dir)
+                cmd = BinaryProvider.gen_unpack_cmd(path, dir);
+                run(cmd, (DevNull, DevNull, DevNull))
+                dirs = readdir(dir)
+                # 7z on Win might create this spurious file
+                filter!(x -> x != "pax_global_header", dirs)
+                @assert length(dirs) == 1
+                !isdir(version_path) && mkpath(version_path)
+                mv(joinpath(dir, dirs[1]), version_path; remove_destination=true)
+                Base.rm(path; force = true)
+                break # object was found, we can stop
+            end
+        end
     end
-    git_hash = LibGit2.GitHash(hash.bytes)
-    for i = 2:length(urls)
-        try LibGit2.GitObject(repo, git_hash)
-            break # object was found, we can stop
+    if !http_download_successful || USE_LIBGIT2_FOR_ALL_DOWNLOADS
+        upstream_dir = joinpath(depots()[1], "upstream")
+        ispath(upstream_dir) || mkpath(upstream_dir)
+        repo_path = joinpath(upstream_dir, string(uuid))
+        repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
+            # info("Cloning [$uuid] $name")
+            LibGit2.clone(urls[1], repo_path, isbare=true)
+        end
+        git_hash = LibGit2.GitHash(hash.bytes)
+        for i = 2:length(urls)
+            try LibGit2.GitObject(repo, git_hash)
+                break # object was found, we can stop
+            catch err
+                err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+            end
+            url = urls[i]
+            LibGit2.fetch(repo, remoteurl=url, refspecs=refspecs)
+        end
+        tree = try
+            LibGit2.GitObject(repo, git_hash)
         catch err
             err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+            error("$name: git object $(string(hash)) could not be found")
         end
-        url = urls[i]
-        info("Updating $name $(repr(url))")
-        LibGit2.fetch(repo, remoteurl=url, refspecs=refspecs)
+        tree isa LibGit2.GitTree ||
+            error("$name: git object $(string(hash)) should be a tree, not $(typeof(tree))")
+        mkpath(version_path)
+        opts = LibGit2.CheckoutOptions(
+            checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
+            target_directory = Base.unsafe_convert(Cstring, version_path)
+        )
+        h = string(hash)[1:16]
+        LibGit2.checkout_tree(repo, tree, options=opts)
     end
-    tree = try
-        LibGit2.GitObject(repo, git_hash)
-    catch err
-        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-        error("$name: git object $(string(hash)) could not be found")
-    end
-    tree isa LibGit2.GitTree ||
-        error("$name: git object $(string(hash)) should be a tree, not $(typeof(tree))")
-    mkpath(version_path)
-    opts = LibGit2.CheckoutOptions(
-        checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
-        target_directory = Base.unsafe_convert(Cstring, version_path)
-    )
-    h = string(hash)[1:16]
-    vstr = version != nothing ? "v$version [$h]" : "[$h]"
-    info("Installing $name $vstr")
-    LibGit2.checkout_tree(repo, tree, options=opts)
     return version_path, true
 end
 
@@ -318,11 +355,44 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})::Vector{UUID}
     names, hashes, urls = version_data(env, pkgs)
     # install & update manifest
     new_versions = UUID[]
-    for pkg in pkgs
+
+    jobs = Channel(NUM_CONCURRENT_DOWNLOADS);
+    results = Channel(NUM_CONCURRENT_DOWNLOADS);
+    @schedule begin
+        for pkg in pkgs
+            put!(jobs, pkg)
+        end
+    end
+
+    for i in 1:NUM_CONCURRENT_DOWNLOADS
+        @schedule begin
+            for pkg in jobs
+                uuid = pkg.uuid
+                version = pkg.version::VersionNumber
+                name, hash = names[uuid], hashes[uuid]
+                try
+                    version_path, new = install(env, uuid, name, hash, urls[uuid], version)
+                    put!(results, (pkg, version_path, version, hash, true))
+                catch e
+                    put!(results, e)
+                end
+            end
+        end
+    end
+
+    max_name = maximum(strwidth(names[pkg.uuid]) for pkg in pkgs)
+
+    for _ in 1:length(pkgs)
+        r = take!(results)
+        r isa Exception && cmderror("Error when installing packages:\n", sprint(Base.showerror, r))
+        pkg, path, version, hash, new = r
+        if new
+            vstr = version != nothing ? "v$version" : "[$h]"
+            new && info("Installed $(rpad(names[pkg.uuid] * " ", max_name + 2, "─")) $vstr")
+        end
         uuid = pkg.uuid
         version = pkg.version::VersionNumber
         name, hash = names[uuid], hashes[uuid]
-        path, new = install(env, uuid, name, hash, urls[uuid], version)
         update_manifest(env, uuid, name, hash, version)
         new && push!(new_versions, uuid)
     end
@@ -508,3 +578,4 @@ function up(env::EnvCache, pkgs::Vector{PackageSpec})
 end
 
 end # module
+
