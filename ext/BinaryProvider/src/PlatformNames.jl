@@ -124,18 +124,6 @@ function supported_platforms()
     ]
 end
 
-# Compat doesn't use the Base definitions for whatever terrible reason, so we'll overload
-# both, ensuring the user gets our definitions regardless of whether they use Sys.is* or
-# Compat.Sys.is*.
-if isdefined(Base.Sys, :isapple)
-    Base.Sys.isapple(p::Platform) = p isa MacOS
-    Base.Sys.islinux(p::Platform) = p isa Linux
-    Base.Sys.iswindows(p::Platform) = p isa Windows
-end
-Compat.Sys.isapple(p::Platform) = p isa MacOS
-Compat.Sys.islinux(p::Platform) = p isa Linux
-Compat.Sys.iswindows(p::Platform) = p isa Windows
-
 """
     platform_key(machine::AbstractString = Sys.MACHINE)
 

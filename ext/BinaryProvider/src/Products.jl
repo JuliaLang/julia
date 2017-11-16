@@ -3,7 +3,7 @@ export Product, LibraryProduct, FileProduct, ExecutableProduct, satisfied, locat
 """
 A `Product` is an expected result after building or installation of a package.
 """
-abstract Product
+abstract type Product end
 
 """
 A `LibraryProduct` is a special kind of `Product` that not only needs to exist,
