@@ -271,9 +271,9 @@ This section lists changes that do not have deprecation warnings.
 
   * `finalizer` now takes functions or pointers as its first argument, and the object being 
     finalized as its second (rather than the reverse). For the majorities of uses cases this 
-	will trigger deprecation warnings. However, it will not if the 'function' is not a 
-	subtype of `Function`, nor will it for the ambiguous cases where both arguments are 
-	`Function`s or `Ptr{Void}`s ([#24605]).
+    will trigger deprecation warnings. However, it will not if the 'function' is not a 
+    subtype of `Function`, nor will it for the ambiguous cases where both arguments are 
+    `Function`s or `Ptr{Void}`s ([#24605]).
 
 Library improvements
 --------------------
