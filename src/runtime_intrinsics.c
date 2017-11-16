@@ -544,7 +544,7 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b);
     unsigned sz = jl_datatype_size(ty);
     unsigned sz2 = next_power_of_two(sz);
-    unsigned szb = jl_datatype_size(tyb);
+    unsigned szb = cvtb ? jl_datatype_size(tyb) : sz;
     if (sz2 > sz) {
         /* round type up to the appropriate c-type and set/clear the unused bits */
         void *pa2 = alloca(sz2);
@@ -553,10 +553,12 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
         pa = pa2;
     }
     if (sz2 > szb) {
-        /* round type up to the appropriate c-type and set/clear/truncate the unused bits */
+        /* round type up to the appropriate c-type and set/clear/truncate the unused bits
+         * (zero-extend if cvtb is set, since in that case b is unsigned while the sign of a comes from the op)
+         */
         void *pb2 = alloca(sz2);
         memcpy(pb2, pb, szb);
-        memset((char*)pb2 + szb, getsign(pb, sz), sz2 - szb);
+        memset((char*)pb2 + szb, cvtb ? 0 : getsign(pb, szb), sz2 - szb);
         pb = pb2;
     }
     jl_value_t *newv = lambda2(ty, pa, pb, sz, sz2, list);
