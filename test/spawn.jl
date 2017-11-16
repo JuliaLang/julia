@@ -510,3 +510,14 @@ end
 #    @test sizeof(readstring(stdout)) == 1048576 * 2 # make sure we get all the data
 #    @test success(p)
 #end
+
+# `kill` error conditions
+let p = spawn(`$sleepcmd 100`)
+    # Should throw on invalid signals
+    @test_throws Base.UVError kill(p, typemax(Cint))
+    kill(p)
+    wait(p)
+    # Should not throw if already dead
+    kill(p)
+end
+
