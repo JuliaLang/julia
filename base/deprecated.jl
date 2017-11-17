@@ -2994,6 +2994,193 @@ end
 
 @deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
 
+# 24490 - warnings and messages
+const log_info_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
+const log_warn_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
+const log_error_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
+
+function _redirect(io::IO, log_to::Dict, sf::StackTraces.StackFrame)
+    (sf.linfo isa Core.MethodInstance) || return io
+    mod = sf.linfo.def
+    isa(mod, Method) && (mod = mod.module)
+    fun = sf.func
+    if haskey(log_to, (mod,fun))
+        return log_to[(mod,fun)]
+    elseif haskey(log_to, (mod,nothing))
+        return log_to[(mod,nothing)]
+    elseif haskey(log_to, (nothing,nothing))
+        return log_to[(nothing,nothing)]
+    else
+        return io
+    end
+end
+
+function _redirect(io::IO, log_to::Dict, fun::Symbol)
+    clos = string("#",fun,"#")
+    kw = string("kw##",fun)
+    local sf
+    break_next_frame = false
+    for trace in backtrace()
+        stack::Vector{StackFrame} = StackTraces.lookup(trace)
+        filter!(frame -> !frame.from_c, stack)
+        for frame in stack
+            (frame.linfo isa Core.MethodInstance) || continue
+            sf = frame
+            break_next_frame && (@goto skip)
+            mod = frame.linfo.def
+            isa(mod, Method) && (mod = mod.module)
+            mod === Base || continue
+            sff = string(frame.func)
+            if frame.func == fun || startswith(sff, clos) || startswith(sff, kw)
+                break_next_frame = true
+            end
+        end
+    end
+    @label skip
+    _redirect(io, log_to, sf)
+end
+
+@inline function redirect(io::IO, log_to::Dict, arg::Union{Symbol,StackTraces.StackFrame})
+    if isempty(log_to)
+        return io
+    else
+        if length(log_to)==1 && haskey(log_to,(nothing,nothing))
+            return log_to[(nothing,nothing)]
+        else
+            return _redirect(io, log_to, arg)
+        end
+    end
+end
+
+"""
+    logging(io [, m [, f]][; kind=:all])
+    logging([; kind=:all])
+
+Stream output of informational, warning, and/or error messages to `io`,
+overriding what was otherwise specified.  Optionally, divert stream only for
+module `m`, or specifically function `f` within `m`.  `kind` can be `:all` (the
+default), `:info`, `:warn`, or `:error`.  See `Base.log_{info,warn,error}_to`
+for the current set of redirections.  Call `logging` with no arguments (or just
+the `kind`) to reset everything.
+"""
+function logging(io::IO, m::Union{Module,Void}=nothing, f::Union{Symbol,Void}=nothing;
+                 kind::Symbol=:all)
+    depwarn("""`logging()` is deprecated, use `with_logger` instead to capture
+               messages from `Base`""", :logging)
+    (kind==:all || kind==:info)  && (log_info_to[(m,f)] = io)
+    (kind==:all || kind==:warn)  && (log_warn_to[(m,f)] = io)
+    (kind==:all || kind==:error) && (log_error_to[(m,f)] = io)
+    nothing
+end
+
+function logging(;  kind::Symbol=:all)
+    depwarn("""`logging()` is deprecated, use `with_logger` instead to capture
+               messages from `Base`""", :logging)
+    (kind==:all || kind==:info)  && empty!(log_info_to)
+    (kind==:all || kind==:warn)  && empty!(log_warn_to)
+    (kind==:all || kind==:error) && empty!(log_error_to)
+    nothing
+end
+
+"""
+    info([io, ] msg..., [prefix="INFO: "])
+
+Display an informational message.
+Argument `msg` is a string describing the information to be displayed.
+The `prefix` keyword argument can be used to override the default
+prepending of `msg`.
+
+# Examples
+```jldoctest
+julia> info("hello world")
+INFO: hello world
+
+julia> info("hello world"; prefix="MY INFO: ")
+MY INFO: hello world
+```
+
+See also [`logging`](@ref).
+"""
+function info(io::IO, msg...; prefix="INFO: ")
+    depwarn("`info()` is deprecated, use `@info` instead.", :info)
+    buf = IOBuffer()
+    iob = redirect(IOContext(buf, io), log_info_to, :info)
+    print_with_color(info_color(), iob, prefix; bold = true)
+    println_with_color(info_color(), iob, chomp(string(msg...)))
+    print(io, String(take!(buf)))
+    return
+end
+info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
+
+# print a warning only once
+
+const have_warned = Set()
+
+warn_once(io::IO, msg...) = warn(io, msg..., once=true)
+warn_once(msg...) = warn(STDERR, msg..., once=true)
+
+"""
+    warn([io, ] msg..., [prefix="WARNING: ", once=false, key=nothing, bt=nothing, filename=nothing, lineno::Int=0])
+
+Display a warning. Argument `msg` is a string describing the warning to be
+displayed.  Set `once` to true and specify a `key` to only display `msg` the
+first time `warn` is called.  If `bt` is not `nothing` a backtrace is displayed.
+If `filename` is not `nothing` both it and `lineno` are displayed.
+
+See also [`logging`](@ref).
+"""
+function warn(io::IO, msg...;
+              prefix="WARNING: ", once=false, key=nothing, bt=nothing,
+              filename=nothing, lineno::Int=0)
+    depwarn("`warn()` is deprecated, use `@warn` instead.", :warn)
+    str = chomp(string(msg...))
+    if once
+        if key === nothing
+            key = str
+        end
+        (key in have_warned) && return
+        push!(have_warned, key)
+    end
+    buf = IOBuffer()
+    iob = redirect(IOContext(buf, io), log_warn_to, :warn)
+    print_with_color(warn_color(), iob, prefix; bold = true)
+    print_with_color(warn_color(), iob, str)
+    if bt !== nothing
+        show_backtrace(iob, bt)
+    end
+    if filename !== nothing
+        print(iob, "\nin expression starting at $filename:$lineno")
+    end
+    println(iob)
+    print(io, String(take!(buf)))
+    return
+end
+
+"""
+    warn(msg)
+
+Display a warning. Argument `msg` is a string describing the warning to be displayed.
+
+# Examples
+```jldoctest
+julia> warn("Beep Beep")
+WARNING: Beep Beep
+```
+"""
+warn(msg...; kw...) = warn(STDERR, msg...; kw...)
+
+warn(io::IO, err::Exception; prefix="ERROR: ", kw...) =
+    warn(io, sprint(showerror, err), prefix=prefix; kw...)
+
+warn(err::Exception; prefix="ERROR: ", kw...) =
+    warn(STDERR, err, prefix=prefix; kw...)
+
+info(io::IO, err::Exception; prefix="ERROR: ", kw...) =
+    info(io, sprint(showerror, err), prefix=prefix; kw...)
+
+info(err::Exception; prefix="ERROR: ", kw...) =
+    info(STDERR, err, prefix=prefix; kw...)
+
 # issue #24019
 @deprecate similar(a::AbstractDict) empty(a)
 @deprecate similar(a::AbstractDict, ::Type{Pair{K,V}}) where {K, V} empty(a, K, V)
