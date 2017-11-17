@@ -7,12 +7,14 @@ depots() = DEPOTS
 const USE_LIBGIT2_FOR_ALL_DOWNLOADS = false
 const NUM_CONCURRENT_DOWNLOADS      = 8
 
+iswindows() = @static VERSION < v"0.7-" ? Sys.is_windows() : Sys.iswindows()
+isapple()   = @static VERSION < v"0.7-" ? Sys.is_apple()   : Sys.isapple()
+islinux()   = @static VERSION < v"0.7-" ? Sys.is_linux()   : Sys.islinux()
+
 # load snapshotted dependencies
 include("../ext/BinaryProvider/src/BinaryProvider.jl")
 include("../ext/TOML/src/TOML.jl")
 include("../ext/TerminalMenus/src/TerminalMenus.jl")
-
-iswindows() = @static VERSION < v"0.7-" ? Sys.is_windows() : Sys.iswindows()
 
 include("Pkg2/Pkg2.jl")
 include("Types.jl")
@@ -40,17 +42,20 @@ function Base.julia_cmd(julia::AbstractString)
     return cmd
 end
 
-function _find_in_path(name::String, wd::Union{Void,String})
+if VERSION < v"0.7.0-DEV.2303"
+    Base.find_in_path(name::String, wd::Void)   = _find_package(name, nothing)
+    Base.find_in_path(name::String, wd::String) = _find_package(name, nothing)
+else
+    Base.find_package(name::String) = _find_package(name)
+end
+
+function _find_package(name::String, wd::Union{Void,String})
     isabspath(name) && return name
     base = name
     if endswith(name, ".jl")
         base = name[1:end-3]
     else
         name = string(base, ".jl")
-    end
-    if wd !== nothing
-        path = joinpath(wd, name)
-        Base.isfile_casesensitive(path) && return path
     end
 
     info = Pkg3.Operations.package_env_info(base, verb = "use")
@@ -87,12 +92,10 @@ function _find_in_path(name::String, wd::Union{Void,String})
         @label install
         Pkg3.Operations.ensure_resolved(env, pkgspec, true)
         Pkg3.Operations.add(env, pkgspec)
-        return _find_in_path(name, wd)
+        return _find_package(name)
     end
     return nothing
 end
 
-Base.find_in_path(name::String, wd::Void) = _find_in_path(name, wd)
-Base.find_in_path(name::String, wd::String) = _find_in_path(name, wd)
 
 end # module

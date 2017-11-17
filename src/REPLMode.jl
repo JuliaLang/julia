@@ -398,6 +398,10 @@ function create_mode(repl, main)
         prompt_suffix = "",
         sticky = true)
 
+    if VERSION >= v"0.7.0-DEV.1747"
+        pkg_mode.repl = repl
+    end
+
     hp = main.hist
     hp.mode_mapping[:pkg] = pkg_mode
     pkg_mode.hist = hp
