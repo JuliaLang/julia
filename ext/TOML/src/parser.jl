@@ -643,6 +643,7 @@ function array(p::Parser, st::Int)
     !expect(p, '[') && return NONE()
     ret = Any[]
     rettype = Any
+    expected = Any
     while true
 
         # Break out early if we see the closing bracket
@@ -657,9 +658,7 @@ function array(p::Parser, st::Int)
 
         pend = nextpos(p)
         valtype = isa(pvalue, Array) ? Array : typeof(pvalue)
-
         expected = rettype === Any ? valtype : expected
-
         if valtype != expected
             error(p, pstart, pend, "expected type `$expected`, found type `$valtype`")
         else
