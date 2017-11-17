@@ -25,7 +25,7 @@ You like the following fruits:
 ```
 
 """
-type MultiSelectMenu <: AbstractMenu
+mutable struct MultiSelectMenu <: AbstractMenu
     options::Array{String,1}
     pagesize::Int
     pageoffset::Int

@@ -17,7 +17,7 @@ Your favorite fruit is blueberry!
 ```
 
 """
-type RadioMenu <: AbstractMenu
+mutable struct RadioMenu <: AbstractMenu
     options::Array{String,1}
     pagesize::Int
     pageoffset::Int
