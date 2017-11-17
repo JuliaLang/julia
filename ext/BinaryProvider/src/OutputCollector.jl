@@ -5,7 +5,7 @@ import Base: wait, merge
 
 export OutputCollector, merge, stdout, stderr, tail, tee
 
-immutable LineStream
+struct LineStream
     pipe::Pipe
     lines::Vector{Tuple{Float64,String}}
     task::Task
@@ -79,7 +79,7 @@ OutputCollector
 A `run()` wrapper class that captures subprocess `stdout` and `stderr` streams
 independently, resynthesizing and colorizing the streams appropriately.
 """
-type OutputCollector
+mutable struct OutputCollector
     cmd::Base.AbstractCmd
     P::Base.AbstractPipe
     stdout_linestream::LineStream

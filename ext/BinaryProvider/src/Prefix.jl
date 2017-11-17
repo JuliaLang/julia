@@ -29,7 +29,7 @@ Usage example:
 function temp_prefix(func::Function)
     # Helper function to create a docker-mountable temporary directory
     function _tempdir()
-        @static if is_apple()
+        @static if isapple()
             # Docker, on OSX at least, can only mount from certain locations by
             # default, so we ensure all our temporary directories live within
             # those locations so that they are accessible by Docker.
@@ -50,7 +50,7 @@ end
 # This is the default prefix that things get saved to, it is initialized within
 # __init__() on first module load.
 global_prefix = nothing
-immutable Prefix
+struct Prefix
     path::String
 
     """
@@ -85,7 +85,7 @@ Splits a string such as the  `PATH` environment variable into a list of strings
 according to the path separation rules for the current platform.
 """
 function split_PATH(PATH::AbstractString = ENV["PATH"])
-    @static if is_windows()
+    @static if iswindows()
         return split(PATH, ";")
     else
         return split(PATH, ":")
@@ -98,8 +98,8 @@ end
 Given a list of strings, return a joined string suitable for the `PATH`
 environment variable appropriate for the current platform.
 """
-function join_PATH{S<:AbstractString}(paths::Vector{S})
-    @static if is_windows()
+function join_PATH(paths::Vector{S}) where S<:AbstractString
+    @static if iswindows()
         return join(paths, ";")
     else
         return join(paths, ":")
@@ -122,7 +122,7 @@ Returns the library directory for the given `prefix` (not ethat this differs
 between unix systems and windows systems).
 """
 function libdir(prefix::Prefix)
-    @static if is_windows()
+    @static if iswindows()
         return joinpath(prefix, "bin")
     else
         return joinpath(prefix, "lib")

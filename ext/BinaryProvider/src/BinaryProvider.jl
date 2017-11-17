@@ -1,5 +1,7 @@
 module BinaryProvider
 
+import Pkg3: iswindows, isapple, islinux
+
 # Include our subprocess running funtionality
 include("OutputCollector.jl")
 # External utilities such as downloading/decompressing tarballs
@@ -19,7 +21,7 @@ include("BinaryPackage.jl")
 
 
 function __init__()
-    global global_prefix
+    #global global_prefix
 
     # Initialize our global_prefix
     # global_prefix = Prefix(joinpath(dirname(@__FILE__), "../", "global_prefix"))
@@ -30,7 +32,7 @@ function __init__()
 
     # If we're on a julia that's too old, then fixup the color mappings
     # if !haskey(Base.text_colors, :default)
-    #    Base.text_colors[:default] = Base.color_normal
+    #     Base.text_colors[:default] = Base.color_normal
     # end
 end
 

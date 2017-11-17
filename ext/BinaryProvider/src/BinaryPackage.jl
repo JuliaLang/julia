@@ -13,7 +13,7 @@ There exist `install()`, `uninstall()` and `satisfied()` methods for
 `BinaryPackage` objects, similar to the lower-level versions that take direct
 `url` and `hash` arguments.
 """
-immutable BinaryPackage
+struct BinaryPackage
     url::String
     hash::String
     platform::Platform

@@ -12,7 +12,7 @@ will be installed to, and its name, e.g. to build a `LibraryProduct` that
 refers to `"/lib/libnettle.so"`, the "directory" would be "/lib", and the
 "libname" would be "libnettle".
 """
-immutable LibraryProduct <: Product
+struct LibraryProduct <: Product
     dir_path::String
     libname::String
 
@@ -119,7 +119,7 @@ non-Windows platforms, it will check for the executable bit being set.  On
 Windows platforms, it will check that the file ends with ".exe", (adding it on
 automatically, if it is not already present).
 """
-immutable ExecutableProduct <: Product
+struct ExecutableProduct <: Product
     path::AbstractString
 
     """
@@ -173,7 +173,7 @@ function locate(ep::ExecutableProduct; platform::Platform = platform_key(),
 
     # If the file is not executable, fail out (unless we're on windows since
     # windows doesn't honor these permissions on its filesystems)
-    @static if !is_windows()
+    @static if !iswindows()
         if uperm(path) & 0x1 == 0
             if verbose
                 info("$(path) is not executable, reporting unsatisfied")
@@ -188,7 +188,7 @@ end
 """
 A `FileProduct` represents a file that simply must exist to be satisfied.
 """
-immutable FileProduct <: Product
+struct FileProduct <: Product
     path::AbstractString
 end
 
@@ -255,12 +255,12 @@ the user to re-run `Pkg.build("package_name")`.
 """
 macro write_deps_file(capture...)
     # props to @tshort for his macro wizardry
-    const names = :($(capture))
-    const products = esc(Expr(:tuple, capture...))
+    names = :($(capture))
+    products = esc(Expr(:tuple, capture...))
 
     # We have to create this dummy_source, because we cannot, in a single line,
     # have both `@__FILE__` and `__source__` interpreted by the same julia.
-    const dummy_source = VERSION >= v"0.7.0-" ? __source__.file : ""
+    dummy_source = VERSION >= v"0.7.0-" ? __source__.file : ""
 
     return quote
         # First pick up important pieces of information from the call-site
