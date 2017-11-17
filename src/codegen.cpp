@@ -1552,9 +1552,10 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
     }
 
     // compile this normally
+    jl_code_info_t *src = NULL;
     if (linfo->inferred == NULL)
-        linfo->inferred = jl_nothing;
-    jl_llvm_functions_t decls = jl_compile_linfo(&linfo, NULL, world, &jl_default_cgparams);
+        src = jl_type_infer(&linfo, world, 0);
+    jl_llvm_functions_t decls = jl_compile_linfo(&linfo, src, world, &jl_default_cgparams);
 
     if (decls.functionObject == NULL && linfo->jlcall_api == JL_API_CONST && jl_is_method(linfo->def.method)) {
         // normally we don't generate native code for these functions, so need an exception here
@@ -1562,7 +1563,6 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
         JL_LOCK(&codegen_lock);
         decls = linfo->functionObjectsDecls;
         if (decls.functionObject == NULL) {
-            jl_code_info_t *src = NULL;
             src = jl_type_infer(&linfo, world, 0);
             if (!src) {
                 src = linfo->def.method->generator ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def.method->source;
