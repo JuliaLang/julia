@@ -275,6 +275,11 @@ This section lists changes that do not have deprecation warnings.
 
   * `Base.find_in_path` is now `Base.find_package` or `Base.find_source_file` ([#24320])
 
+  * The `kill` function now throws errors on user error (e.g. on permission
+    errors), but returns successfully if the process had previously exited.
+    Its return value has been removed. Use the `process_running` function
+    to determine if a process has already exited.
+
 Library improvements
 --------------------
 
