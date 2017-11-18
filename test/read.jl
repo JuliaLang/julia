@@ -521,8 +521,9 @@ f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
 close(f1)
 close(f2)
 rm(f)
-
 end # mktempdir() do dir
+
+
 
 @testset "countlines" begin
     @test countlines(IOBuffer("\n")) == 1
@@ -536,4 +537,19 @@ end # mktempdir() do dir
     @test countlines(file,'\r') == 0
     @test countlines(file,'\n') == 4
     rm(file)
+end
+
+
+# ensure opening can take functions or nonfunctions as its first arg
+struct NonFunctionCallable
+    f
+end
+(self::NonFunctionCallable)(args...) = self.f(args...)
+
+let t = "a modern language"
+    c = `$echocmd $t`
+    f, fh = mktemp()
+    write(fh, t)
+    close(fh)
+    @test open(NonFunctionCallable(readline), f) == open(readline, f) == t
 end
