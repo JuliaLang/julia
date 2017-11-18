@@ -232,12 +232,12 @@ end
 
 issuccess(F::LU) = F.info == 0
 
-function show(io::IO, F::LU)
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LU)
     if issuccess(F)
-        println(io, "$(typeof(F)) with factors L and U:")
-        show(io, F[:L])
-        println(io)
-        show(io, F[:U])
+        println(io, summary(F), "\nL factor:")
+        show(io, mime, F[:L])
+        println(io, "\nU factor:")
+        show(io, mime, F[:U])
     else
         print(io, "Failed factorization of type $(typeof(F))")
     end

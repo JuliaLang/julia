@@ -58,7 +58,7 @@ dimg  = randn(n)/2
     @testset "Singular LU" begin
         lua = lufact(zeros(eltya, 3, 3))
         @test !LinAlg.issuccess(lua)
-        @test sprint(show, lua) == "Failed factorization of type $(typeof(lua))"
+        @test sprint((t, s) -> show(t, "text/plain", s), lua) == "Failed factorization of type $(typeof(lua))"
     end
     κ  = cond(a,1)
     @testset "(Automatic) Square LU decomposition" begin
@@ -77,9 +77,10 @@ dimg  = randn(n)/2
             bflua = convert(bft, lua)
             @test bflua[:L]*bflua[:U] ≈ big.(a)[p,:] rtol=ε
         end
+        # compact printing
         lstring = sprint(show,l)
         ustring = sprint(show,u)
-        @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
+        # @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
     end
     κd    = cond(Array(d),1)
     @testset "Tridiagonal LU" begin
@@ -240,4 +241,24 @@ end
 
 @testset "Issue 21453" begin
     @test_throws ArgumentError LinAlg._cond1Inf(lufact(randn(5,5)), 2, 2.0)
+end
+
+@testset "REPL printing" begin
+        bf = IOBuffer()
+        show(bf, "text/plain", lufact(Matrix(I, 4, 4)))
+        seekstart(bf)
+        @test String(take!(bf)) == """
+Base.LinAlg.LU{Float64,Array{Float64,2}}
+L factor:
+4×4 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0
+ 0.0  1.0  0.0  0.0
+ 0.0  0.0  1.0  0.0
+ 0.0  0.0  0.0  1.0
+U factor:
+4×4 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0
+ 0.0  1.0  0.0  0.0
+ 0.0  0.0  1.0  0.0
+ 0.0  0.0  0.0  1.0"""
 end

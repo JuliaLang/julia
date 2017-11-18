@@ -399,13 +399,20 @@ end
 
 issuccess(C::Cholesky) = C.info == 0
 
-function show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix})
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
     if issuccess(C)
-        println(io, "$(typeof(C)) with factor:")
-        show(io, C[:UL])
+        println(io, summary(C), "\n$(C.uplo) factor:")
+        show(io, mime, C[:UL])
     else
         print(io, "Failed factorization of type $(typeof(C))")
     end
+end
+
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any,<:AbstractMatrix})
+    println(io, summary(C), "\n$(C.uplo) factor with rank $(rank(C)):")
+    show(io, mime, C.uplo == 'U' ? C[:U] : C[:L])
+    println(io, "\npermutation:")
+    show(io, mime, C[:p])
 end
 
 A_ldiv_B!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
