@@ -19,7 +19,7 @@ include("Types.jl")
 include("Display.jl")
 include("Operations.jl")
 include("REPLMode.jl")
-
+include("API.jl")
 
 @enum LoadErrorChoice LOAD_ERROR_QUERY LOAD_ERROR_INSTALL LOAD_ERROR_ERROR
 
