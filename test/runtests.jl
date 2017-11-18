@@ -15,9 +15,13 @@ function temp_pkg_dir(fn::Function)
 end
 
 temp_pkg_dir() do
+    Pkg3.API.add("Example"; preview = true)
+    @test_warn "not in project" Pkg3.API.rm("Example")
     Pkg3.API.add("Example")
     @eval import Example
     Pkg3.API.up()
+    Pkg3.API.rm("Example"; preview = true)
+    # TODO: Check Example is still considered install
     Pkg3.API.rm("Example")
 
     nonexisting_pkg = randstring(14)

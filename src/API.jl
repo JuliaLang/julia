@@ -4,11 +4,15 @@ import Pkg3
 using Pkg3.Types
 using Base.Random.UUID
 
-add(pkg::String)               = add([pkg])
-add(pkgs::Vector{String})      = add([PackageSpec(pkg) for pkg in pkgs])
-add(pkgs::Vector{PackageSpec}) = add(EnvCache(), pkgs)
+previewmode_info() = info("In preview mode")
 
-function add(env::EnvCache, pkgs::Vector{PackageSpec})
+add(pkg::String; kwargs...)               = add([pkg]; kwargs...)
+add(pkgs::Vector{String}; kwargs...)      = add([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
+add(pkgs::Vector{PackageSpec}; kwargs...) = add(EnvCache(), pkgs; kwargs...)
+
+function add(env::EnvCache, pkgs::Vector{PackageSpec}; preview::Bool=env.preview[])
+    env.preview[] = preview
+    preview && previewmode_info()
     project_resolve!(env, pkgs)
     registry_resolve!(env, pkgs)
     ensure_resolved(env, pkgs, true)
@@ -16,11 +20,13 @@ function add(env::EnvCache, pkgs::Vector{PackageSpec})
 end
 
 
-rm(pkg::String)               = rm([pkg])
-rm(pkgs::Vector{String})      = rm([PackageSpec(pkg) for pkg in pkgs])
-rm(pkgs::Vector{PackageSpec}) = rm(EnvCache(), pkgs)
+rm(pkg::String; kwargs...)               = rm([pkg]; kwargs...)
+rm(pkgs::Vector{String}; kwargs...)      = rm([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
+rm(pkgs::Vector{PackageSpec}; kwargs...) = rm(EnvCache(), pkgs; kwargs...)
 
-function rm(env::EnvCache, pkgs::Vector{PackageSpec})
+function rm(env::EnvCache, pkgs::Vector{PackageSpec}; preview::Bool=env.preview[])
+    env.preview[] = preview
+    preview && previewmode_info()
     project_resolve!(env, pkgs)
     manifest_resolve!(env, pkgs)
     Pkg3.Operations.rm(env, pkgs)
@@ -33,7 +39,9 @@ up(pkgs::Vector{String}; kwargs...)      = up([PackageSpec(pkg) for pkg in pkgs]
 up(pkgs::Vector{PackageSpec}; kwargs...) = up(EnvCache(), pkgs; kwargs...)
 
 function up(env::EnvCache, pkgs::Vector{PackageSpec};
-            level::UpgradeLevel=UpgradeLevel(:major), mode::Symbol=:project)
+            level::UpgradeLevel=UpgradeLevel(:major), mode::Symbol=:project, preview::Bool=env.preview[])
+    env.preview[] = preview
+    preview && previewmode_info()
     if isempty(pkgs)
         if mode == :project
             for (name::String, uuid::UUID) in env.project["deps"]

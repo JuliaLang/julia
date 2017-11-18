@@ -31,6 +31,7 @@ const cmds = Dict(
     "test"      => :test,
     "gc"        => :gc,
     "fsck"      => :fsck,
+    "preview"   => :preview,
 )
 
 const opts = Dict(
@@ -105,32 +106,9 @@ end
 function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
     try
         tokens = tokenize(input)
-        local cmd::Symbol
         local env_opt::Union{String,Void} = get(ENV, "JULIA_ENV", nothing)
-        while !isempty(tokens)
-            token = shift!(tokens)
-            if token[1] == :cmd
-                cmd = token[2]
-                break
-            elseif token[1] == :opt
-                if token[2] == :env
-                    length(token) == 3 ||
-                        cmderror("the `--env` option requires a value")
-                    env_opt = token[3]
-                else
-                    cmderror("unrecognized option: `--$(token[2])`")
-                end
-            else
-                cmderror("misplaced token: ", token)
-            end
-        end
         env = EnvCache(env_opt)
-        cmd == :help   ?   do_help!(env, tokens, repl) :
-        cmd == :rm     ?     do_rm!(env, tokens) :
-        cmd == :add    ?    do_add!(env, tokens) :
-        cmd == :up     ?     do_up!(env, tokens) :
-        cmd == :status ? do_status!(env, tokens) :
-            cmderror("`$cmd` command not yet implemented")
+        do_cmd!(env, tokens, repl)
     catch err
         if err isa CommandError
             Base.display_error(repl.t.err_stream, ErrorException(err.msg), Ptr{Void}[])
@@ -138,6 +116,43 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
             Base.display_error(repl.t.err_stream, err, Base.catch_backtrace())
         end
     end
+end
+
+function do_cmd!(env, tokens, repl)
+    local cmd::Symbol
+    while !isempty(tokens)
+        token = shift!(tokens)
+        if token[1] == :cmd
+            cmd = token[2]
+            break
+        elseif token[1] == :opt
+            if token[2] == :env
+                length(token) == 3 ||
+                    cmderror("the `--env` option requires a value")
+                env_opt = token[3]
+            else
+                cmderror("unrecognized option: `--$(token[2])`")
+            end
+        else
+            cmderror("misplaced token: ", token)
+        end
+    end
+    cmd == :help    ?    do_help!(env, tokens, repl) :
+    cmd == :preview ? do_preview!(env, tokens, repl) :
+    cmd == :rm      ?      do_rm!(env, tokens) :
+    cmd == :add     ?     do_add!(env, tokens) :
+    cmd == :up      ?      do_up!(env, tokens) :
+    cmd == :status  ?  do_status!(env, tokens) :
+        cmderror("`$cmd` command not yet implemented")
+end
+
+function do_preview!(env, tokens, repl)
+    isempty(tokens) && cmderror("`preview` needs a command")
+    env.preview[] = true
+    word = tokens[1][2]
+    word in keys(cmds) || cmderror("invalid command: ", repr(word))
+    tokens[1] = (:cmd, cmds[word])
+    do_cmd!(env, tokens, repl)
 end
 
 const help = Base.Markdown.parse("""
@@ -167,6 +182,8 @@ const help = Base.Markdown.parse("""
     `rm`: remove packages from project or manifest
 
     `up`: update packages in manifest
+
+    `preview`: previews a subsequent command without affecting the current state
     """)
 
 const helps = Dict(
@@ -236,7 +253,14 @@ const helps = Dict(
     the following packages to be upgraded only within the current major, minor,
     patch version; if the `--fixed` upgrade level is given, then the following
     packages will not be upgraded at all.
-    """,
+    """, :preview => md"""
+
+        preview cmd
+
+    Runs the command `cmd` in preview mode. This is defined such that no side effects
+    will take place i.e. no packages are downloaded and neither the project nor manifest
+    is modified.
+    """
 )
 
 function do_help!(
