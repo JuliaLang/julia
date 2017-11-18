@@ -7,7 +7,7 @@
 
 const ITER = 50
 
-function ismandel(z::Complex128)
+function ismandel(z::ComplexF64)
     c = z
     for n = 1:ITER
         if abs2(z) > 4

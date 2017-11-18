@@ -702,7 +702,7 @@ function sdmult!(A::Sparse{Tv}, transpose::Bool,
     end
     @isok ccall((@cholmod_name("sdmult", SuiteSparse_long),:libcholmod), Cint,
             (Ptr{C_Sparse{Tv}}, Cint,
-             Ref{Complex128}, Ref{Complex128},
+             Ref{ComplexF64}, Ref{ComplexF64},
              Ptr{C_Dense{Tv}}, Ptr{C_Dense{Tv}}, Ptr{UInt8}),
                 A, transpose, α, β, X, Y, common_struct)
     Y
@@ -756,7 +756,7 @@ function factorize_p!(A::Sparse{Tv}, β::Real, F::Factor{Tv}, cmmn::Vector{UInt8
     # note that β is passed as a complex number (double beta[2]),
     # but the CHOLMOD manual says that only beta[0] (real part) is used
     @isok ccall((@cholmod_name("factorize_p", SuiteSparse_long),:libcholmod), Cint,
-        (Ptr{C_Sparse{Tv}}, Ref{Complex128}, Ptr{SuiteSparse_long}, Csize_t,
+        (Ptr{C_Sparse{Tv}}, Ref{ComplexF64}, Ptr{SuiteSparse_long}, Csize_t,
          Ptr{C_Factor{Tv}}, Ptr{UInt8}),
             A, β, C_NULL, 0, F, cmmn)
     F
@@ -1379,7 +1379,7 @@ See also [`cholfact`](@ref).
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
     doubles or complex doubles. Input matrices not of those element types will
-    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
+    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}`
     as appropriate.
 """
 cholfact!(F::Factor, A::Union{SparseMatrixCSC{T},
@@ -1432,7 +1432,7 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
     doubles or complex doubles. Input matrices not of those element types will
-    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
+    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}`
     as appropriate.
 
     Many other functions from CHOLMOD are wrapped but not exported from the
@@ -1471,7 +1471,7 @@ See also [`ldltfact`](@ref).
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
     doubles or complex doubles. Input matrices not of those element types will
-    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
+    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}`
     as appropriate.
 """
 ldltfact!(F::Factor, A::Union{SparseMatrixCSC{T},
@@ -1530,7 +1530,7 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
     doubles or complex doubles. Input matrices not of those element types will
-    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
+    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}`
     as appropriate.
 
     Many other functions from CHOLMOD are wrapped but not exported from the

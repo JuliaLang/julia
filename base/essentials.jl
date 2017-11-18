@@ -364,7 +364,7 @@ Size, in bytes, of the canonical binary representation of the given DataType `T`
 julia> sizeof(Float32)
 4
 
-julia> sizeof(Complex128)
+julia> sizeof(ComplexF64)
 16
 ```
 

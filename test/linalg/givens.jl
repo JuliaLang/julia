@@ -4,7 +4,7 @@ using Test
 using Base.LinAlg: mul!, Adjoint, Transpose
 
 # Test givens rotations
-@testset for elty in (Float32, Float64, Complex64, Complex128)
+@testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
     if elty <: Real
         raw_A = convert(Matrix{elty}, randn(10,10))
     else

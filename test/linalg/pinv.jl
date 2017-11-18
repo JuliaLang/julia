@@ -101,7 +101,7 @@ function test_pinv(a,m,n,tol1,tol2,tol3)
     @test vecnorm(a*x-b)/vecnorm(b) ≈ 0 atol=tol2
 end
 
-@testset for eltya in (Float32, Float64, Complex64, Complex128)
+@testset for eltya in (Float32, Float64, ComplexF32, ComplexF64)
     @testset for (m, n) in [(1000, 100), (100, 100), (100, 1000)]
         default_tol = (real(one(eltya))) * max(m,n) * 10
         tol1 = 1e-2

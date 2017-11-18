@@ -21,7 +21,7 @@ end
 @test typeof(rand(false:true)) === Bool
 @test typeof(rand(Char)) === Char
 @test length(randn(4, 5)) == 20
-@test length(randn(Complex128, 4, 5)) == 20
+@test length(randn(ComplexF64, 4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
 @test rand(MersenneTwister(0)) == 0.8236475079774124
@@ -69,10 +69,10 @@ let A = zeros(2, 2)
                 -0.444383357109696  -0.29948409035891055]
 end
 
-let B = zeros(Complex128, 2)
+let B = zeros(ComplexF64, 2)
     randn!(MersenneTwister(42), B)
-    @test B == [Complex128(-0.5560268761463861,-0.444383357109696),
-                Complex128(0.027155338009193845,-0.29948409035891055)] * 0.7071067811865475244008
+    @test B == [ComplexF64(-0.5560268761463861,-0.444383357109696),
+                ComplexF64(0.027155338009193845,-0.29948409035891055)] * 0.7071067811865475244008
 end
 
 for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt,
@@ -321,7 +321,7 @@ end
 # test all rand APIs
 for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     ftypes = [Float16, Float32, Float64]
-    cftypes = [Complex32, Complex64, Complex128, ftypes...]
+    cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
     types = [Bool, Char, BigFloat, Base.BitInteger_types..., ftypes...]
     randset = Set(rand(Int, 20))
     randdict = Dict(zip(rand(Int,10), rand(Int, 10)))

@@ -186,7 +186,7 @@ d = SharedArrays.shmem_fill(1.0, dims)
 
 # similar
 d = SharedArrays.shmem_rand(dims)
-@test size(similar(d, Complex128)) == dims
+@test size(similar(d, ComplexF64)) == dims
 @test size(similar(d, dims)) == dims
 
 # issue #6362

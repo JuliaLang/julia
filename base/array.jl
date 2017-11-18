@@ -365,7 +365,7 @@ julia> ones(1,2)
 1×2 Array{Float64,2}:
  1.0  1.0
 
-julia> ones(Complex128, 2, 3)
+julia> ones(ComplexF64, 2, 3)
 2×3 Array{Complex{Float64},2}:
  1.0+0.0im  1.0+0.0im  1.0+0.0im
  1.0+0.0im  1.0+0.0im  1.0+0.0im

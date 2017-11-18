@@ -5,7 +5,7 @@
 
 Complex number type with real and imaginary part of type `T`.
 
-`Complex32`, `Complex64` and `Complex128` are aliases for
+`ComplexF16`, `ComplexF32` and `ComplexF64` are aliases for
 `Complex{Float16}`, `Complex{Float32}` and `Complex{Float64}` respectively.
 """
 struct Complex{T<:Real} <: Number
@@ -28,9 +28,9 @@ julia> im * im
 """
 const im = Complex(false, true)
 
-const Complex128 = Complex{Float64}
-const Complex64  = Complex{Float32}
-const Complex32  = Complex{Float16}
+const ComplexF64  = Complex{Float64}
+const ComplexF32  = Complex{Float32}
+const ComplexF16  = Complex{Float16}
 
 convert(::Type{Complex{T}}, x::Real) where {T<:Real} = Complex{T}(x,0)
 convert(::Type{Complex{T}}, z::Complex) where {T<:Real} = Complex{T}(real(z),imag(z))
@@ -353,7 +353,7 @@ inv(z::Complex{<:Union{Float16,Float32}}) =
 #             a + i*b
 #  p + i*q = ---------
 #             c + i*d
-function /(z::Complex128, w::Complex128)
+function /(z::ComplexF64, w::ComplexF64)
     a, b = reim(z); c, d = reim(w)
     half = 0.5
     two = 2.0
@@ -369,7 +369,7 @@ function /(z::Complex128, w::Complex128)
     ab <= un*two/ϵ && (a=a*bs; b=b*bs; s=s/bs      ) # scale up a,b
     cd <= un*two/ϵ && (c=c*bs; d=d*bs; s=s*bs      ) # scale up c,d
     abs(d)<=abs(c) ? ((p,q)=robust_cdiv1(a,b,c,d)  ) : ((p,q)=robust_cdiv1(b,a,d,c); q=-q)
-    return Complex128(p*s,q*s) # undo scaling
+    return ComplexF64(p*s,q*s) # undo scaling
 end
 function robust_cdiv1(a::Float64, b::Float64, c::Float64, d::Float64)
     r = d/c
@@ -387,7 +387,7 @@ function robust_cdiv2(a::Float64, b::Float64, c::Float64, d::Float64, r::Float64
     end
 end
 
-function inv(w::Complex128)
+function inv(w::ComplexF64)
     c, d = reim(w)
     half = 0.5
     two = 2.0
@@ -411,7 +411,7 @@ function inv(w::Complex128)
         p = r * t
         q = -t
     end
-    return Complex128(p*s,q*s) # undo scaling
+    return ComplexF64(p*s,q*s) # undo scaling
 end
 
 function ssqs(x::T, y::T) where T<:AbstractFloat

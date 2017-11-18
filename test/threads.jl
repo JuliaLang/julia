@@ -173,7 +173,7 @@ end
 # Ensure only LLVM-supported types can be atomic
 @test_throws TypeError Atomic{Bool}
 @test_throws TypeError Atomic{BigInt}
-@test_throws TypeError Atomic{Complex128}
+@test_throws TypeError Atomic{ComplexF64}
 
 # Test atomic memory ordering with load/store
 mutable struct CommBuf

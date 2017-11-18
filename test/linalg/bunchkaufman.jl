@@ -19,7 +19,7 @@ a2img  = randn(n,n)/2
 breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
-@testset "$eltya argument A" for eltya in (Float32, Float64, Complex64, Complex128, Int)
+@testset "$eltya argument A" for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     asym = a.'+ a                  # symmetric indefinite
@@ -71,7 +71,7 @@ bimg  = randn(n,2)/2
             end
         end
 
-        @testset "$eltyb argument B" for eltyb in (Float32, Float64, Complex64, Complex128, Int)
+        @testset "$eltyb argument B" for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
             b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
             for b in (b, view(b, 1:n, 1:2))
                 εb = eps(abs(float(one(eltyb))))
@@ -130,7 +130,7 @@ end
 @testset "test example due to @timholy in PR 15354" begin
     A = rand(6,5); A = complex(A'*A) # to avoid calling the real-lhs-complex-rhs method
     F = cholfact(A);
-    v6 = rand(Complex128, 6)
+    v6 = rand(ComplexF64, 6)
     v5 = view(v6, 1:5)
     @test F\v5 == F\v6[1:5]
 end

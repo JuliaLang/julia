@@ -906,12 +906,12 @@ end
     @test round(float(Complex(π, ℯ)),3) == Complex(3.142, 2.718)
 end
 
-@testset "Complex32 arithmetic, PR #10003" begin
-    @test Float16(1)+Float16(1)im === Complex32(1, 1)
-    @test Float16(1)-Float16(1)im === Float16(1)+Float16(-1)im === Complex32(1, -1)
-    @test Float16(1)*im === Complex32(im)
-    @test Float16(1)/im === Complex32(0,-1)
-    @test Float16(1)^im === Complex32(1) === Float16(1)+Float16(0)im
+@testset "ComplexF16 arithmetic, PR #10003" begin
+    @test Float16(1)+Float16(1)im === ComplexF16(1, 1)
+    @test Float16(1)-Float16(1)im === Float16(1)+Float16(-1)im === ComplexF16(1, -1)
+    @test Float16(1)*im === ComplexF16(im)
+    @test Float16(1)/im === ComplexF16(0,-1)
+    @test Float16(1)^im === ComplexF16(1) === Float16(1)+Float16(0)im
 end
 
 # issue/PR #10148
@@ -961,9 +961,9 @@ end
 
 @testset "expm1 type stability" begin
     x = @inferred expm1(0.1im)
-    @test x isa Complex128
+    @test x isa ComplexF64
     x = @inferred expm1(0.1f0im)
-    @test x isa Complex64
+    @test x isa ComplexF32
 end
 
 @testset "array printing with exponent format" begin

@@ -200,9 +200,9 @@ export
 # Constants
     I
 
-const BlasFloat = Union{Float64,Float32,Complex128,Complex64}
+const BlasFloat = Union{Float64,Float32,ComplexF64,ComplexF32}
 const BlasReal = Union{Float64,Float32}
-const BlasComplex = Union{Complex128,Complex64}
+const BlasComplex = Union{ComplexF64,ComplexF32}
 
 if USE_BLAS64
     const BlasInt = Int64

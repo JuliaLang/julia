@@ -2987,6 +2987,11 @@ end
 @deprecate_moved lcfirst "Unicode" true true
 @deprecate_moved ucfirst "Unicode" true true
 
+# PR #24647
+@deprecate_binding Complex32  ComplexF16
+@deprecate_binding Complex64  ComplexF32
+@deprecate_binding Complex128 ComplexF64
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

@@ -155,7 +155,7 @@ end
     @test std([1 2 3 4 5; 6 7 8 9 10], 2) ≈ sqrt.([2.5 2.5]')
     @test std([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) ≈ sqrt.([2.0 2.0]')
 
-    let A = Complex128[exp(i*im) for i in 1:10^4]
+    let A = ComplexF64[exp(i*im) for i in 1:10^4]
         @test varm(A, 0.) ≈ sum(map(abs2, A)) / (length(A) - 1)
         @test varm(A, mean(A)) ≈ var(A)
     end
@@ -350,7 +350,7 @@ let y = [0.40003674665581906, 0.4085630862624367, 0.41662034698690303, 0.4166203
 end
 
 @testset "variance of complex arrays (#13309)" begin
-    z = rand(Complex128, 10)
+    z = rand(ComplexF64, 10)
     @test var(z) ≈ invoke(var, Tuple{Any}, z) ≈ cov(z) ≈ var(z,1)[1] ≈ sum(abs2, z .- mean(z))/9
     @test isa(var(z), Float64)
     @test isa(invoke(var, Tuple{Any}, z), Float64)

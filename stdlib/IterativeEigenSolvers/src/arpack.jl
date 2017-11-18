@@ -255,8 +255,8 @@ for (T, saupd_name, seupd_name, naupd_name, neupd_name) in
 end
 
 for (T, TR, naupd_name, neupd_name) in
-    ((:Complex128, :Float64, :znaupd_, :zneupd_),
-     (:Complex64,  :Float32, :cnaupd_, :cneupd_))
+    ((:ComplexF64, :Float64, :znaupd_, :zneupd_),
+     (:ComplexF32, :Float32, :cnaupd_, :cneupd_))
     @eval begin
         function naupd(ido, bmat, n, evtype, nev, TOL::Ref{$TR}, resid::Vector{$T}, ncv, v::Matrix{$T}, ldv,
                        iparam, ipntr, workd::Vector{$T}, workl::Vector{$T}, lworkl,

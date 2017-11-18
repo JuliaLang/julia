@@ -729,13 +729,13 @@ function test_intersection()
     @testintersect((@UnionAll T Tuple{Type{Array{T,1}},Array{T,1}}),
                    Tuple{Type{AbstractVector},Vector{Int}}, Bottom)
 
-    @testintersect(Tuple{Type{Vector{Complex128}}, AbstractVector},
+    @testintersect(Tuple{Type{Vector{ComplexF64}}, AbstractVector},
                    (@UnionAll T @UnionAll S @UnionAll N Tuple{Type{Array{T,N}}, Array{S,N}}),
-                   Tuple{Type{Vector{Complex128}},Vector})
+                   Tuple{Type{Vector{ComplexF64}},Vector})
 
-    @testintersect(Tuple{Type{Vector{Complex128}}, AbstractArray},
+    @testintersect(Tuple{Type{Vector{ComplexF64}}, AbstractArray},
                    (@UnionAll T @UnionAll S @UnionAll N Tuple{Type{Array{T,N}}, Array{S,N}}),
-                   Tuple{Type{Vector{Complex128}},Vector})
+                   Tuple{Type{Vector{ComplexF64}},Vector})
 
     @testintersect(Type{Array}, Type{AbstractArray}, Bottom)
 
