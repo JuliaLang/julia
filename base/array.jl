@@ -432,6 +432,18 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     end
 end
 
+## Array construction from zeros/ones
+for (iterfn, scalfn) in ((ones, one), (zeros, zero))
+    Array{T,N}(::typeof(iterfn), dims::Dims{N}) where {T,N} = fill!(Array{T,N}(dims), scalfn(T))
+    Array{T}(::typeof(iterfn), dims::Dims{N}) where {T,N} = Array{T,N}(iterfn, dims)
+    Array{T,N}(::typeof(iterfn), dims...) where {T,N} = Array{T,N}(iterfn, Dims(dims))
+    Array{T}(::typeof(iterfn), dims...) where {T} = Array{T}(iterfn, Dims(dims))
+end
+Array(::typeof(zeros), dims::Dims{N}) where {N} = Array{Float64,N}(zeros, dims)
+Array(::typeof(zeros), dims...) = Array(zeros, Dims(dims))
+Array(::typeof(ones), dims::Dims{N}) where {N} = Array{Float64,N}(ones, dims)
+Array(::typeof(ones), dims...) = Array(ones, Dims(dims))
+
 """
     eye([T::Type=Float64,] m::Integer, n::Integer)
 
