@@ -191,16 +191,18 @@ end
     end
 end
 
-@testset "Matrix construction from UniformScaling" begin
+@testset "Matrix/Array construction from UniformScaling" begin
     I2_33 = [2 0 0; 0 2 0; 0 0 2]
     I2_34 = [2 0 0 0; 0 2 0 0; 0 0 2 0]
     I2_43 = [2 0 0; 0 2 0; 0 0 2; 0 0 0]
-    @test Matrix(2I, 3, 3)::Matrix{Int} == I2_33
-    @test Matrix(2I, 3, 4)::Matrix{Int} == I2_34
-    @test Matrix(2I, 4, 3)::Matrix{Int} == I2_43
-    @test Matrix(2.0I, 3, 3)::Matrix{Float64} == I2_33
-    @test Matrix{Real}(2I, 3, 3)::Matrix{Real} == I2_33
-    @test Matrix{Float64}(2I, 3, 3)::Matrix{Float64} == I2_33
+    for ArrType in (Matrix, Array)
+        @test ArrType(2I, 3, 3)::Matrix{Int} == I2_33
+        @test ArrType(2I, 3, 4)::Matrix{Int} == I2_34
+        @test ArrType(2I, 4, 3)::Matrix{Int} == I2_43
+        @test ArrType(2.0I, 3, 3)::Matrix{Float64} == I2_33
+        @test ArrType{Real}(2I, 3, 3)::Matrix{Real} == I2_33
+        @test ArrType{Float64}(2I, 3, 3)::Matrix{Float64} == I2_33
+    end
 end
 
 @testset "Diagonal construction from UniformScaling" begin
