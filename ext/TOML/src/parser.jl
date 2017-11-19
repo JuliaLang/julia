@@ -1,14 +1,14 @@
 NONE() = Nullable()
-NONE{T}(::Type{T}) = Nullable{T}()
-SOME{T}(v::T) = Nullable{T}(v)
+NONE(::Type{T}) where {T} = Nullable{T}()
+SOME(v::T) where {T} = Nullable{T}(v)
 
 "TOML Table"
-type Table
-    values::Dict{AbstractString,Any}
+mutable struct Table
+    values::Dict{String,Any}
     defined::Bool
 end
 
-Table(defined::Bool) = Table(Dict{AbstractString,Any}(), defined)
+Table(defined::Bool) = Table(Dict{String,Any}(), defined)
 function Base.show(io::IO, tbl::Table, level::Int=1)
     Base.print(io, "T($(tbl.defined)){\n")
     for (k,v) in tbl.values
@@ -34,14 +34,14 @@ Base.getindex(tbl::Table, key::AbstractString) = tbl.values[key]
 Base.haskey(tbl::Table, key::AbstractString) = haskey(tbl.values ,key)
 
 "Parser error exception"
-type ParserError <: Exception
+mutable struct ParserError <: Exception
     lo::Int
     hi::Int
     msg::String
 end
 
 "TOML Parser"
-type Parser
+mutable struct Parser
     input::IO
     errors::Vector{ParserError}
 
@@ -50,7 +50,7 @@ end
 Parser(input::String) = Parser(IOBuffer(input))
 Base.error(p::Parser, l, h, msg) = push!(p.errors, ParserError(l, h, msg))
 Base.eof(p::Parser) = eof(p.input)
-Base.position(p::Parser) = position(p.input)+1
+Base.position(p::Parser) = Int(position(p.input))+1
 Base.read(p::Parser) = read(p.input, Char)
 
 "Rewind parser input on `n` characters."
@@ -58,7 +58,7 @@ function rewind(p::Parser, n=1)
     pos = position(p.input)
     pos == 0 && return 0
     skip(p.input, -n)
-    return position(p.input)
+    return Int(position(p.input))
 end
 
 "Converts an offset to a line and a column in the original source."
