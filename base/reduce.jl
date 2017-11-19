@@ -610,10 +610,16 @@ true
 ```
 """
 function any(f, itr)
+    anymissing = false
     for x in itr
-        f(x) && return true
+        v = f(x)
+        if ismissing(v)
+            anymissing = true
+        elseif v
+            return true
+        end
     end
-    return false
+    return anymissing ? missing : false
 end
 
 """
@@ -635,11 +641,21 @@ false
 ```
 """
 function all(f, itr)
+    anymissing = false
     for x in itr
-        f(x) || return false
+        v = f(x)
+        if ismissing(v)
+            anymissing = true
+        # this syntax allows throwing a TypeError for non-Bool, for consistency with any
+        elseif v
+            continue
+        else
+            return false
+        end
     end
-    return true
+    return anymissing ? missing : true
 end
+
 
 ## in & contains
 

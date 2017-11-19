@@ -52,7 +52,7 @@ function choosetests(choices = [])
         "checked", "bitset", "floatfuncs", "compile", "distributed", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
         "channels", "iostream", "specificity", "codegen", "codevalidation",
-        "reinterpretarray", "syntax"
+        "reinterpretarray", "syntax", "missing"
     ]
 
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))

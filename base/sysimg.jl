@@ -399,6 +399,9 @@ const × = cross
 # statistics
 include("statistics.jl")
 
+# missing values
+include("missing.jl")
+
 # libgit2 support
 include("libgit2/libgit2.jl")
 

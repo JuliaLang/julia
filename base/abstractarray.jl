@@ -1554,12 +1554,16 @@ function (==)(A::AbstractArray, B::AbstractArray)
     if isa(A,AbstractRange) != isa(B,AbstractRange)
         return false
     end
+    anymissing = false
     for (a, b) in zip(A, B)
-        if !(a == b)
+        eq = (a == b)
+        if ismissing(eq)
+            anymissing = true
+        elseif !eq
             return false
         end
     end
-    return true
+    return anymissing ? missing : true
 end
 
 # sub2ind and ind2sub

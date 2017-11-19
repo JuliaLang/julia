@@ -76,6 +76,7 @@ export
     Irrational,
     Matrix,
     MergeSort,
+    Missing,
     NTuple,
     Nullable,
     ObjectIdDict,
@@ -150,6 +151,7 @@ export
     EOFError,
     InvalidStateException,
     KeyError,
+    MissingException,
     NullException,
     ParseError,
     SystemError,
@@ -879,6 +881,10 @@ export
     put!,
     isready,
     fetch,
+
+# missing values
+    ismissing,
+    missing,
 
 # time
     sleep,

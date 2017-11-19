@@ -751,3 +751,26 @@ This function simply returns its argument by default, since the elements
 of a general iterator are normally considered its "values".
 """
 values(itr) = itr
+
+"""
+    Missing
+
+A type with no fields whose singleton instance [`missing`](@ref) is used
+to represent missing values.
+"""
+struct Missing end
+
+"""
+    missing
+
+The singleton instance of type [`Missing`](@ref) representing a missing value.
+"""
+const missing = Missing()
+
+"""
+    ismissing(x)
+
+Indicate whether `x` is [`missing`](@ref).
+"""
+ismissing(::Any) = false
+ismissing(::Missing) = true

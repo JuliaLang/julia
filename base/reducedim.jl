@@ -112,7 +112,7 @@ function reducedim_init(f, op::typeof(*), A::AbstractArray, region)
 end
 function _reducedim_init(f, op, fv, fop, A, region)
     T = promote_union(eltype(A))
-    if applicable(zero, T)
+    if T !== Any && applicable(zero, T)
         x = f(zero(T))
         z = op(fv(x), fv(x))
         Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
