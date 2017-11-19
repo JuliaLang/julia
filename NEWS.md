@@ -434,6 +434,15 @@ Deprecated or removed
   * `expand(ex)` and `expand(module, ex)` have been deprecated in favor of
     `Meta.lower(module, ex)` ([#22064, #24278]).
 
+  * `ones(A::AbstractArray[, opts...])` and `zeros(A::AbstractArray[, opts...])` methods
+    have been deprecated. The general replacement is `fill!(similar(A[, opts...]), {1|0})`,
+    though in most use cases simpler alternatives are better: For `zeros(A)`, consider
+    `zero(A)`. For `ones(A)` or `zeros(A)`, consider `fill(v, size(A))` for `v` an
+    appropriate one or zero, `fill!(copy(A), {1|0})`, `ones(size(A))` or
+    `zeros(size(A))`, or any of the preceding with different element type
+    and/or shape depending on `opts...`. For an algebraic multiplicative identity,
+    consider `one(A)` ([#24656]).
+
   * The `Operators` module is deprecated. Instead, import required operators explicitly
     from `Base`, e.g. `import Base: +, -, *, /` ([#22251]).
 

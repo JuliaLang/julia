@@ -505,8 +505,8 @@ end
     @test A .- 3 == AF .- 3
     @test 3 .- A == 3 .- AF
     @test A .- B == AF .- BF
-    @test A - AF == zeros(AF)
-    @test AF - A == zeros(AF)
+    @test A - AF == zeros(size(AF))
+    @test AF - A == zeros(size(AF))
     @test A[1,:] .- B == AF[1,:] .- BF
     @test A[:,1] .- B == AF[:,1] .- BF
     @test A .- B[1,:] == AF .-  BF[1,:]
