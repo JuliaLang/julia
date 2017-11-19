@@ -354,9 +354,9 @@ tuplebroadcast_maxtuple(A, B) =
     tuplebroadcast_maxtuple(A, tuplebroadcast_maxtuple(Bs...))
 tuplebroadcast_maxtuple(A::NTuple{N,Any}, ::NTuple{N,Any}...) where {N} = A
 # Here we use the containertype trait to easier disambiguate between methods
-_tuplebroadcast_maxtuple(::Type{Any}, ::Type{Any}, A, B) = (nothing,)
-_tuplebroadcast_maxtuple(::Type{Tuple}, ::Type{Any}, A, B) = A
-_tuplebroadcast_maxtuple(::Type{Any}, ::Type{Tuple}, A, B) = B
+_tuplebroadcast_maxtuple(::Any, ::Any, A, B) = (nothing,)
+_tuplebroadcast_maxtuple(::Type{Tuple}, ::Any, A, B) = A
+_tuplebroadcast_maxtuple(::Any, ::Type{Tuple}, A, B) = B
 _tuplebroadcast_maxtuple(::Type{Tuple}, ::Type{Tuple}, A, B::Tuple{Any}) = A
 _tuplebroadcast_maxtuple(::Type{Tuple}, ::Type{Tuple}, A::Tuple{Any}, B) = B
 _tuplebroadcast_maxtuple(::Type{Tuple}, ::Type{Tuple}, A::Tuple{Any}, ::Tuple{Any}) = A
