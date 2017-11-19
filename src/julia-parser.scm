@@ -1052,13 +1052,18 @@
                  args
                  (cons 'call args)))))))
 
+(define block-form? (Set '(block quote if for while let function macro abstract primitive struct
+                                 try module)))
+
 ;; given an expression and the next token, is there a juxtaposition
 ;; operator between them?
 (define (juxtapose? s expr t)
   (and (or (number? expr)
            (large-number? expr)
            (and (not (number? t))    ;; disallow "x.3" and "sqrt(2)2"
-                (not (eqv? t #\@)))  ;; disallow "x@time"
+                (not (eqv? t #\@))   ;; disallow "x@time"
+                ;; issue #16427, disallow juxtaposition with block forms
+                (not (and (pair? expr) (block-form? (car expr)))))
            ;; to allow x'y as a special case
            #;(and (pair? expr) (memq (car expr) '(|'| |.'|))
                 (not (memv t '(#\( #\[ #\{))))
@@ -1067,7 +1072,8 @@
        (not (operator? t))
        (not (closing-token? t))
        (not (newline? t))
-       (or (not (string? expr))  ;; issue #20575
+       (or (and (not (string? expr)) (not (eqv? t #\")))
+           ;; issue #20575
            (error "cannot juxtapose string literal"))
        (not (initial-reserved-word? t))
        (not (and (pair? expr) (syntactic-unary-op? (car expr))))

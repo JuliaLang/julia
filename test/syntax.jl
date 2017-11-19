@@ -973,6 +973,12 @@ end
 # issue #20575
 @test_throws ParseError Meta.parse("\"a\"x")
 @test_throws ParseError Meta.parse("\"a\"begin end")
+@test_throws ParseError Meta.parse("\"a\"begin end\"b\"")
+
+# issue #16427
+@test_throws ParseError Meta.parse("for i=1:1 end(3)")
+@test_throws ParseError Meta.parse("begin end(3)")
+@test_throws ParseError Meta.parse("while false end(3)")
 
 # comment 298107224 on pull #21607
 module Test21607
