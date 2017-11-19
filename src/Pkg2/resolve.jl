@@ -12,7 +12,7 @@ import ..PkgError
 export resolve, sanity_check
 
 # Use the max-sum algorithm to resolve packages dependencies
-function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
+function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, uuid_to_name::Dict{String,String})
     # init interface structures
     interface = Interface(reqs, deps)
 
@@ -28,13 +28,15 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
         catch err
             isa(err, UnsatError) || rethrow(err)
             p = interface.pkgs[err.info]
+            name = haskey(uuid_to_name, p) ? uuid_to_name[p] : "UNKNOWN"
+            uuid_short = p[1:8]
             # TODO: build tools to analyze the problem, and suggest to use them here.
             msg =
                 """
                 resolve is unable to satisfy package requirements.
                   The problem was detected when trying to find a feasible version
-                  for package $p.
-                  However, this only means that package $p is involved in an
+                  for package $name [$uuid_short].
+                  However, this only means that package $name [$uuid_short] is involved in an
                   unsatisfiable or difficult dependency relation, and the root of
                   the problem may be elsewhere.
                 """

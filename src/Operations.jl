@@ -152,7 +152,9 @@ function resolve_versions!(env::EnvCache, pkgs::Vector{PackageSpec})::Dict{UUID,
     info("Resolving package versions")
     # anything not mentioned is fixed
     uuids = UUID[pkg.uuid for pkg in pkgs]
+    uuid_to_name = Dict{String, String}()
     for (name::String, uuid::UUID) in env.project["deps"]
+        uuid_to_name[string(uuid)] = name
         uuid in uuids && continue
         info = manifest_info(env, uuid)
         haskey(info, "version") || continue
@@ -162,8 +164,14 @@ function resolve_versions!(env::EnvCache, pkgs::Vector{PackageSpec})::Dict{UUID,
     # construct data structures for resolver and call it
     reqs = Dict{String,Pkg2.Types.VersionSet}(string(pkg.uuid) => pkg.version for pkg in pkgs)
     deps = convert(Dict{String,Dict{VersionNumber,Pkg2.Types.Available}}, deps_graph(env, pkgs))
-    deps = Pkg2.Query.prune_dependencies(reqs, deps)
-    vers = convert(Dict{UUID,VersionNumber}, Pkg2.Resolve.resolve(reqs, deps))
+    for dep_uuid in keys(deps)
+        info = manifest_info(env, UUID(dep_uuid))
+        if info != nothing
+            uuid_to_name[info["uuid"]] = info["name"]
+        end
+    end
+    deps = Pkg2.Query.prune_dependencies(reqs, deps, uuid_to_name)
+    vers = convert(Dict{UUID,VersionNumber}, Pkg2.Resolve.resolve(reqs, deps, uuid_to_name))
     find_registered!(env, collect(keys(vers)))
     # update vector of package versions
     for pkg in pkgs

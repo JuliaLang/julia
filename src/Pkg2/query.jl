@@ -12,7 +12,8 @@ using ..Types
 # The propagation is tracked so that in case a contradiction is detected the error
 # message allows to determine the cause.
 # This is a pre-pruning step, so it also creates some structures which are later used by pruning
-function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace)
+function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}},
+                         bktrc::ResolveBacktrace, uuid_to_name::Dict{String, String})
     allowed = Dict{String,Dict{VersionNumber,Bool}}()
     staged = copy(reqs)
     while !isempty(staged)
@@ -34,7 +35,9 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
             end
             @assert !isempty(allowedp)
             if !any(values(allowedp))
-                err_msg = "Unsatisfiable requirements detected for package $p:\n"
+                name = haskey(uuid_to_name, p) ? uuid_to_name[p] : "UNKNOWN"
+                uuid_short = p[1:8]
+                err_msg = "Unsatisfiable requirements detected for package $name [$uuid_short]:\n"
                 err_msg *= string(bktrc[p])
                 err_msg *= """The intersection of the requirements is $(bktrc[p].versionreq).
                               None of the available versions can satisfy this requirement."""
@@ -74,7 +77,9 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
                 bktrcp = get!(bktrc, rp) do; ResolveBacktraceItem(); end
                 push!(bktrcp, p=>bktrc[p], srvs)
                 if isa(bktrcp.versionreq, VersionSet) && isempty(bktrcp.versionreq)
-                    err_msg = "Unsatisfiable requirements detected for package $rp:\n"
+                    name = haskey(uuid_to_name, rp) ? uuid_to_name[rp] : "UNKNOWN"
+                    uuid_short = rp[1:8]
+                    err_msg = "Unsatisfiable requirements detected for package $name [$uuid_short]:\n"
                     err_msg *= string(bktrcp)
                     err_msg *= "The intersection of the requirements is empty."
                     throw(PkgError(err_msg))
@@ -105,8 +110,8 @@ end
 #      dependency relation, they are both required or both not required)
 #   2) They have the same dependencies
 # Preliminarily calls filter_versions.
-function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace)
-    filtered_deps, allowed = filter_versions(reqs, deps, bktrc)
+function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace, uuid_to_name::Dict{String, String})
+    filtered_deps, allowed = filter_versions(reqs, deps, bktrc, uuid_to_name)
 
     # To each version in each package, we associate a BitVector.
     # It is going to hold a pattern such that all versions with
@@ -250,10 +255,10 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
 
     return new_deps, eq_classes
 end
-prune_versions(deps::Dict{String,Dict{VersionNumber,Available}}) =
-    prune_versions(Dict{String,VersionSet}(), deps, ResolveBacktrace())
-prune_versions(deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace) =
-    prune_versions(Dict{String,VersionSet}(), deps, bktrc)
+prune_versions(env, deps::Dict{String,Dict{VersionNumber,Available}}) =
+    prune_versions(env, Dict{String,VersionSet}(), deps, ResolveBacktrace())
+prune_versions(env, deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace) =
+    prune_versions(env, Dict{String,VersionSet}(), deps, bktrc)
 
 # Build a graph restricted to a subset of the packages
 function subdeps(deps::Dict{String,Dict{VersionNumber,Available}}, pkgs::Set{String})
@@ -286,17 +291,18 @@ function dependencies_subset(deps::Dict{String,Dict{VersionNumber,Available}}, p
     return subdeps(deps, allpkgs)
 end
 
-function prune_dependencies(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
+function prune_dependencies(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, uuid_to_name::Dict{String, String})
     bktrc = ResolveBacktrace()
     for (p,vs) in reqs
         bktrc[p] = ResolveBacktraceItem(:required, vs)
     end
-    return prune_dependencies(reqs, deps, bktrc)
+    return prune_dependencies(reqs, deps, bktrc, uuid_to_name)
 end
 
-function prune_dependencies(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace)
+function prune_dependencies(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}},
+                            bktrc::ResolveBacktrace, uuid_to_name::Dict{String, String})
     deps = dependencies_subset(deps, Set{String}(keys(reqs)))
-    deps, _ = prune_versions(reqs, deps, bktrc)
+    deps, _ = prune_versions(reqs, deps, bktrc, uuid_to_name)
 
     return deps
 end
