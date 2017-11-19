@@ -2213,7 +2213,7 @@
                       (or (not (symbol? nxt))
                           (ts:space? s)))
                  ':
-                 (if (ts:space? s)
+                 (if (or (ts:space? s) (eqv? nxt #\newline))
                      (error "space not allowed after \":\" used for quoting")
                      (list 'quote (parse-atom s #f))))))
 

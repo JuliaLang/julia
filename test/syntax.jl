@@ -60,6 +60,9 @@ macro test999_str(args...); args; end
 
 # issue #5997
 @test_throws ParseError Meta.parse(": x")
+@test_throws ParseError Meta.parse("""begin
+    :
+    x""")
 @test_throws ParseError Meta.parse("d[: 2]")
 
 # issue #6770
