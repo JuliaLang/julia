@@ -781,19 +781,13 @@ stored zeros. (See [Sparse Matrix Storage](@ref man-csc).).
 
 ### Sparse Vector and Matrix Constructors
 
-The simplest way to create sparse arrays is to use functions equivalent to the [`zeros`](@ref)
-and [`eye`](@ref) functions that Julia provides for working with dense arrays. To produce
-sparse arrays instead, you can use the same names with an `sp` prefix:
+The simplest way to create a sparse array is to use a function equivalent to the [`zeros`](@ref)
+function that Julia provides for working with dense arrays. To produce a
+sparse array instead, you can use the same name with an `sp` prefix:
 
 ```jldoctest
 julia> spzeros(3)
 3-element SparseVector{Float64,Int64} with 0 stored entries
-
-julia> speye(3,5)
-3×5 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
 ```
 
 The [`sparse`](@ref) function is often a handy way to construct sparse arrays. For
@@ -867,7 +861,7 @@ You can go in the other direction using the [`Array`](@ref) constructor. The [`i
 function can be used to query if a matrix is sparse.
 
 ```jldoctest
-julia> issparse(speye(5))
+julia> issparse(spzeros(5))
 true
 ```
 
@@ -895,7 +889,7 @@ section of the standard library reference.
 |:-------------------------- |:---------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`spzeros(m,n)`](@ref)     | [`zeros(m,n)`](@ref)   | Creates a *m*-by-*n* matrix of zeros. ([`spzeros(m,n)`](@ref) is empty.)                                                                                              |
 | [`spones(S)`](@ref)        | [`ones(m,n)`](@ref)    | Creates a matrix filled with ones. Unlike the dense version, [`spones`](@ref) has the same sparsity pattern as *S*.                                                 |
-| [`speye(n)`](@ref)         | [`eye(n)`](@ref)       | Creates a *n*-by-*n* identity matrix.                                                                                                                                 |
+| [`sparse(I, n, n)`](@ref)  | [`eye(n)`](@ref)       | Creates a *n*-by-*n* identity matrix.                                                                                                                                 |
 | [`Array(S)`](@ref)         | [`sparse(A)`](@ref)    | Interconverts between dense and sparse formats.                                                                                                                       |
 | [`sprand(m,n,d)`](@ref)    | [`rand(m,n)`](@ref)    | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed uniformly on the half-open interval ``[0, 1)``.                            |
 | [`sprandn(m,n,d)`](@ref)   | [`randn(m,n)`](@ref)   | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed according to the standard normal (Gaussian) distribution.                  |

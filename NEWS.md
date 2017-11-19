@@ -528,6 +528,9 @@ Deprecated or removed
     particularly, consider instead `triu!(copy(parent(A)))`. On `LowerTriangular` matrices
     `A` particularly, consider instead `tril!(copy(parent(A)))` ([#24250]).
 
+  * `speye` has been deprecated in favor of `I`, `sparse`, and `SparseMatrixCSC`
+    constructor methods ([#24356]).
+
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).
 

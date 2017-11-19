@@ -922,9 +922,9 @@ end
         sparsecomplexvecs = SparseVector[SparseVector(m, sprvec.nzind, complex.(sprvec.nzval, sprvec.nzval)) for sprvec in sparsefloatvecs]
 
         sprmat = sprand(m, m, 0.2)
-        sparsefloatmat = speye(m) + sprmat/(2m)
-        sparsecomplexmat = speye(m) + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex.(sprmat.nzval, sprmat.nzval)/(4m))
-        sparseintmat = speye(Int, m)*10m + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round.(Int, sprmat.nzval*10))
+        sparsefloatmat = I + sprmat/(2m)
+        sparsecomplexmat = I + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex.(sprmat.nzval, sprmat.nzval)/(4m))
+        sparseintmat = 10m*I + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round.(Int, sprmat.nzval*10))
 
         denseintmat = I*10m + rand(1:m, m, m)
         densefloatmat = I + randn(m, m)/(2m)

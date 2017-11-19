@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @testset "UMFPACK wrappers" begin
-    se33 = speye(3)
+    se33 = sparse(1.0I, 3, 3)
     do33 = ones(3)
     @test isequal(se33 \ do33, do33)
 
@@ -98,7 +98,7 @@
     end
 
     @testset "Issue #4523 - complex sparse \\" begin
-        x = speye(2) + im * speye(2)
+        x = sparse((1.0 + 1.0im)I, 2, 2)
         @test (x*(lufact(x) \ ones(2))) ≈ ones(2)
 
         @test det(sparse([1,3,3,1], [1,1,3,3], [1,1,1,1])) == 0
@@ -142,13 +142,13 @@
 
     @testset "Test aliasing" begin
         a = rand(5)
-        @test_throws ArgumentError Base.SparseArrays.UMFPACK.solve!(a, lufact(speye(5,5)), a, Base.SparseArrays.UMFPACK.UMFPACK_A)
+        @test_throws ArgumentError Base.SparseArrays.UMFPACK.solve!(a, lufact(sparse(1.0I, 5, 5)), a, Base.SparseArrays.UMFPACK.UMFPACK_A)
         aa = complex(a)
-        @test_throws ArgumentError Base.SparseArrays.UMFPACK.solve!(aa, lufact(complex(speye(5,5))), aa, Base.SparseArrays.UMFPACK.UMFPACK_A)
+        @test_throws ArgumentError Base.SparseArrays.UMFPACK.solve!(aa, lufact(sparse((1.0im)I, 5, 5)), aa, Base.SparseArrays.UMFPACK.UMFPACK_A)
     end
 
     @testset "Issues #18246,18244 - lufact sparse pivot" begin
-        A = speye(4)
+        A = sparse(1.0I, 4, 4)
         A[1:2,1:2] = [-.01 -200; 200 .001]
         F = lufact(A)
         @test F[:p] == [3 ; 4 ; 2 ; 1]
@@ -157,7 +157,7 @@
     @testset "Test that A[c|t]_ldiv_B!{T<:Complex}(X::StridedMatrix{T}, lu::UmfpackLU{Float64}, B::StridedMatrix{T}) works as expected." begin
         N = 10
         p = 0.5
-        A = N*speye(N) + sprand(N, N, p)
+        A = N*I + sprand(N, N, p)
         X = zeros(Complex{Float64}, N, N)
         B = complex.(rand(N, N), rand(N, N))
         luA, lufA = lufact(A), lufact(Array(A))

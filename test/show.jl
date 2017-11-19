@@ -492,7 +492,7 @@ end
 # issue #12960
 mutable struct T12960 end
 let
-    A = speye(3)
+    A = sparse(1.0I, 3, 3)
     B = similar(A, T12960)
     @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
     @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
