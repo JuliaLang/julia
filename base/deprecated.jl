@@ -1783,6 +1783,12 @@ function spdiagm(x, d, m::Integer, n::Integer)
     return sparse(I, J, V, m, n)
 end
 
+# deprecate zeros(D::Diagonal[, opts...])
+@deprecate zeros(D::Diagonal)                         Diagonal(fill!(similar(D.diag), 0))
+@deprecate zeros(D::Diagonal, ::Type{T}) where {T}    Diagonal(fill!(similar(D.diag, T), 0))
+@deprecate zeros(D::Diagonal, ::Type{T}, dims::Dims) where {T}          fill!(similar(D, T, dims), 0)
+@deprecate zeros(D::Diagonal, ::Type{T}, dims::Integer...) where {T}    fill!(similar(D, T, dims), 0)
+
 # PR #23690
 # `SSHCredentials` and `UserPasswordCredentials` constructors using `prompt_if_incorrect`
 # are deprecated in base/libgit2/types.jl.

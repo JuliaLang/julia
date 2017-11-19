@@ -401,6 +401,8 @@ Deprecated or removed
   * `eye` has been deprecated in favor of `I` and `Matrix` constructors. Please see the
     deprecation warnings for replacement details ([#24438]).
 
+  * `zeros(D::Diagonal[, opts...])` has been deprecated ([#24654]).
+
   * Using Bool values directly as indices is now deprecated and will be an error in the future. Convert
     them to `Int` before indexing if you intend to access index `1` for `true` and `0` for `false`.
 
