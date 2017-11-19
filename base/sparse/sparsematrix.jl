@@ -1530,7 +1530,7 @@ if not specified.
 multiple `α` of the identity matrix.
 """
 speye(::Type{T}, m::Integer, n::Integer) where {T} = SparseMatrixCSC{T}(UniformScaling(one(T)), Dims((m, n)))
-sparse(s::UniformScaling, m::Integer, n::Integer=m) = SparseMatrixCSC(s, Dims((m, n)))
+sparse(s::UniformScaling, m::Integer, n::Integer) = SparseMatrixCSC(s, Dims((m, n)))
 
 function one(S::SparseMatrixCSC{T}) where T
     m,n = size(S)

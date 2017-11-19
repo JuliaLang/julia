@@ -64,7 +64,7 @@ nn = 100
     end
 
     # Make sure that conversion to Sparse doesn't use SuiteSparse's symmetric flag
-    @test qrfact(sparse(one(eltyA)I, 5))\ones(eltyA, 5) == ones(5)
+    @test qrfact(sparse(one(eltyA)I, 5, 5))\ones(eltyA, 5) == ones(5)
 end
 
 @testset "basic solution of rank deficient ls" begin

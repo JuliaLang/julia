@@ -409,6 +409,9 @@ Deprecated or removed
   * `readcsv(io[, T::Type]; opts...)` has been deprecated in favor of
     `readdlm(io, ','[, T]; opts...)` ([#23530]).
 
+  * `sparse(s::UniformScaling, m::Integer)` has been deprecated in favor of the
+    three-argument equivalent `sparse(s::UniformScaling, m, n)` ([#24472]).
+
   * The `cholfact`/`cholfact!` methods that accepted an `uplo` symbol have been deprecated
     in favor of using `Hermitian` (or `Symmetric`) views ([#22187], [#22188]).
 
