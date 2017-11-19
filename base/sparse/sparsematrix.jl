@@ -1522,7 +1522,8 @@ function Base.isone(A::SparseMatrixCSC)
     return true
 end
 
-sparse(s::UniformScaling, m::Integer, n::Integer) = SparseMatrixCSC(s, Dims((m, n)))
+sparse(s::UniformScaling, dims::Dims{2}) = SparseMatrixCSC(s, dims)
+sparse(s::UniformScaling, m::Integer, n::Integer) = sparse(s, Dims((m, n)))
 
 # TODO: More appropriate location?
 conj!(A::SparseMatrixCSC) = (@inbounds broadcast!(conj, A.nzval, A.nzval); A)

@@ -48,6 +48,12 @@ end
     @test SparseMatrixCSC{Float64,Int32}(2I, 3, 3)::SparseMatrixCSC{Float64,Int32} == 2*eye(3)
     @test SparseMatrixCSC{Float64,Int32}(0I, 3, 3)::SparseMatrixCSC{Float64,Int32} == spzeros(Float64, Int32, 3, 3)
 end
+@testset "sparse(S::UniformScaling, shape...) convenience constructors" begin
+    # we exercise these methods only lightly as these methods call the SparseMatrixCSC
+    # constructor methods well-exercised by the immediately preceding testset
+    @test sparse(2I, 3, 4)::SparseMatrixCSC{Int,Int} == Matrix(2I, 3, 4)
+    @test sparse(2I, (3, 4))::SparseMatrixCSC{Int,Int} == Matrix(2I, 3, 4)
+end
 
 se33 = SparseMatrixCSC{Float64}(I, 3, 3)
 do33 = ones(3)
