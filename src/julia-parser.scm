@@ -1021,14 +1021,14 @@
               (let ((nch (peek-char (ts:port s))))
                 (if (or (and (char? nch) (char-numeric? nch))
                         (and (eqv? nch #\.) (read-char (ts:port s))))
-                    (let ((num (parse-juxtapose
-                                (read-number (ts:port s) (eqv? nch #\.) (eq? op '-))
-                                s)))
-                      (if (is-prec-power? (peek-token s))
-                          ;; -2^x parsed as (- (^ 2 x))
+                    (let ((num (read-number (ts:port s) (eqv? nch #\.) (eq? op '-))))
+                      (if (or (memv (peek-token s) '(#\[ #\{))
+                              (is-prec-power? (peek-token s)))
+                          ;; `[`, `{` (issue #18851) and `^` have higher precedence than
+                          ;; unary negation; -2^x parsed as (- (^ 2 x)).
                           (begin (ts:put-back! s (maybe-negate op num) spc)
                                  (list 'call op (parse-factor s)))
-                          num))
+                          (parse-juxtapose num s)))
                     (parse-unary-call s op #t spc)))
               (parse-unary-call s op (unary-op? op) spc)))
         (parse-juxtapose (parse-factor s) s))))

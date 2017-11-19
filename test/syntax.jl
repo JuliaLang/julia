@@ -74,6 +74,14 @@ macro test999_str(args...); args; end
 @test_throws ParseError Meta.parse("x 'y")
 @test Meta.parse("x'y") == Expr(:call, :*, Expr(Symbol("'"), :x), :y)
 
+# issue #18851
+@test Meta.parse("-2[m]") == Expr(:call, :-, Expr(:ref, 2, :m))
+@test Meta.parse("+2[m]") == Expr(:call, :+, Expr(:ref, 2, :m))
+@test Meta.parse("!2[3]") == Expr(:call, :!, Expr(:ref, 2, 3))
+@test Meta.parse("-2{m}") == Expr(:call, :-, Expr(:curly, 2, :m))
+@test Meta.parse("+2{m}") == Expr(:call, :+, Expr(:curly, 2, :m))
+@test Meta.parse("-2(m)") == Expr(:call, :*, -2, :m)
+
 # issue #8301
 @test_throws ParseError Meta.parse("&*s")
 
