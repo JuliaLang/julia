@@ -1890,8 +1890,8 @@ end
 # Also un-comment the new definition in base/indices.jl
 
 # deprecate odd fill! methods
-@deprecate fill!(D::Diagonal, x)                       fillslots!(D, x)
-@deprecate fill!(A::Base.LinAlg.AbstractTriangular, x) fillslots!(A, x)
+@deprecate fill!(D::Diagonal, x)                       LinAlg.fillslots!(D, x)
+@deprecate fill!(A::Base.LinAlg.AbstractTriangular, x) LinAlg.fillslots!(A, x)
 
 function diagm(v::BitVector)
     depwarn(string("diagm(v::BitVector) is deprecated, use diagm(0 => v) or ",
