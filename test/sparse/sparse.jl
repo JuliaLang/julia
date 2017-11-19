@@ -37,15 +37,12 @@ end
 end
 
 @testset "SparseMatrixCSC construction from UniformScaling" begin
-    @test_throws ArgumentError SparseMatrixCSC(I, -1)
     @test_throws ArgumentError SparseMatrixCSC(I, -1, 3)
     @test_throws ArgumentError SparseMatrixCSC(I, 3, -1)
-    @test SparseMatrixCSC(2I, 3)::SparseMatrixCSC{Int,Int} == 2*eye(3)
     @test SparseMatrixCSC(2I, 3, 3)::SparseMatrixCSC{Int,Int} == 2*eye(3)
     @test SparseMatrixCSC(2I, 3, 4)::SparseMatrixCSC{Int,Int} == 2*eye(3, 4)
     @test SparseMatrixCSC(2I, 4, 3)::SparseMatrixCSC{Int,Int} == 2*eye(4, 3)
     @test SparseMatrixCSC(2.0I, 3, 3)::SparseMatrixCSC{Float64,Int} == 2*eye(3)
-    @test SparseMatrixCSC{Real}(2I, 3)::SparseMatrixCSC{Real,Int} == 2*eye(3)
     @test SparseMatrixCSC{Real}(2I, 3, 3)::SparseMatrixCSC{Real,Int} == 2*eye(3)
     @test SparseMatrixCSC{Float64}(2I, 3, 3)::SparseMatrixCSC{Float64,Int} == 2*eye(3)
     @test SparseMatrixCSC{Float64,Int32}(2I, 3, 3)::SparseMatrixCSC{Float64,Int32} == 2*eye(3)
