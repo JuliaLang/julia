@@ -8,7 +8,9 @@ import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
 import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact
 
 using ..SparseArrays
-import ..SparseArrays: increment, increment!, decrement, decrement!, nnz
+import ..SparseArrays: nnz
+
+import ..increment, ..increment!, ..decrement, ..decrement!
 
 include("umfpack_h.jl")
 struct MatrixIllConditionedException <: Exception

@@ -22,8 +22,8 @@ const ORDERING_BESTAMD = Int32(9) # try COLAMD and AMD; pick best#
 # the best of AMD and METIS. METIS is not tried if it isn't installed.
 
 using ..SparseArrays: SparseMatrixCSC
-using ..SparseArrays.CHOLMOD
-using ..SparseArrays.CHOLMOD: change_stype!, free!
+using ..SuiteSparse.CHOLMOD
+using ..SuiteSparse.CHOLMOD: change_stype!, free!
 
 function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         A::Sparse{Tv},

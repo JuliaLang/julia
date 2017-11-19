@@ -7,7 +7,7 @@
 
     # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
 
-    using Base.SparseArrays.UMFPACK.increment!
+    using SuiteSparse.increment!
 
     A0 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
                 increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
@@ -15,7 +15,7 @@
 
     @testset "Core functionality for $Tv elements" for Tv in (Float64, Complex128)
         # We might be able to support two index sizes one day
-        for Ti in Base.uniontypes(Base.SparseArrays.UMFPACK.UMFITypes)
+        for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
             A = convert(SparseMatrixCSC{Tv,Ti}, A0)
             lua = lufact(A)
             @test nnz(lua) == 18
@@ -31,7 +31,7 @@
 
             @test A*x ≈ b
             z = complex.(b)
-            x = Base.SparseArrays.A_ldiv_B!(lua, z)
+            x = SuiteSparse.A_ldiv_B!(lua, z)
             @test x ≈ float([1:5;])
             @test z === x
             y = similar(z)
@@ -46,11 +46,11 @@
 
             @test A'*x ≈ b
             z = complex.(b)
-            x = Base.SparseArrays.Ac_ldiv_B!(lua, z)
+            x = SuiteSparse.Ac_ldiv_B!(lua, z)
             @test x ≈ float([1:5;])
             @test x === z
             y = similar(x)
-            Base.SparseArrays.Ac_ldiv_B!(y, lua, complex.(b))
+            SuiteSparse.Ac_ldiv_B!(y, lua, complex.(b))
             @test y ≈ x
 
             @test A'*x ≈ b
@@ -58,10 +58,10 @@
             @test x ≈ float([1:5;])
 
             @test A.'*x ≈ b
-            x = Base.SparseArrays.At_ldiv_B!(lua,complex.(b))
+            x = SuiteSparse.At_ldiv_B!(lua,complex.(b))
             @test x ≈ float([1:5;])
             y = similar(x)
-            Base.SparseArrays.At_ldiv_B!(y, lua,complex.(b))
+            SuiteSparse.At_ldiv_B!(y, lua,complex.(b))
             @test y ≈ x
 
             @test A.'*x ≈ b
@@ -73,7 +73,7 @@
 
     @testset "More tests for complex cases" begin
         Ac0 = complex.(A0,A0)
-        for Ti in Base.uniontypes(Base.SparseArrays.UMFPACK.UMFITypes)
+        for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
             Ac = convert(SparseMatrixCSC{Complex128,Ti}, Ac0)
             x  = complex.(ones(size(Ac, 1)), ones(size(Ac,1)))
             lua = lufact(Ac)
@@ -142,9 +142,9 @@
 
     @testset "Test aliasing" begin
         a = rand(5)
-        @test_throws ArgumentError Base.SparseArrays.UMFPACK.solve!(a, lufact(sparse(1.0I, 5, 5)), a, Base.SparseArrays.UMFPACK.UMFPACK_A)
+        @test_throws ArgumentError SuiteSparse.UMFPACK.solve!(a, lufact(sparse(1.0I, 5, 5)), a, SuiteSparse.UMFPACK.UMFPACK_A)
         aa = complex(a)
-        @test_throws ArgumentError Base.SparseArrays.UMFPACK.solve!(aa, lufact(sparse((1.0im)I, 5, 5)), aa, Base.SparseArrays.UMFPACK.UMFPACK_A)
+        @test_throws ArgumentError SuiteSparse.UMFPACK.solve!(aa, lufact(sparse((1.0im)I, 5, 5)), aa, SuiteSparse.UMFPACK.UMFPACK_A)
     end
 
     @testset "Issues #18246,18244 - lufact sparse pivot" begin

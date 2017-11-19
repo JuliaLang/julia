@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.SparseArrays.CHOLMOD
+using SuiteSparse.CHOLMOD
 using DelimitedFiles
 using Test
 
@@ -328,8 +328,8 @@ end
     A1pdSparse = CHOLMOD.Sparse(
         A1pd.m,
         A1pd.n,
-        Base.SparseArrays.decrement(A1pd.colptr),
-        Base.SparseArrays.decrement(A1pd.rowval),
+        SuiteSparse.decrement(A1pd.colptr),
+        SuiteSparse.decrement(A1pd.rowval),
         A1pd.nzval)
 
     ## High level interface
@@ -584,7 +584,7 @@ end
         Asp = As[p,p]
         LDp = sparse(ldltfact(Asp, perm=[1,2,3])[:LD])
         # LDp = sparse(Fs[:LD])
-        Lp, dp = Base.SparseArrays.CHOLMOD.getLd!(copy(LDp))
+        Lp, dp = SuiteSparse.CHOLMOD.getLd!(copy(LDp))
         Dp = sparse(Diagonal(dp))
         @test Fs\b ≈ Af\b
         @test Fs[:UP]\(Fs[:PtLD]\b) ≈ Af\b
@@ -634,7 +634,7 @@ end
 end
 
 @testset "Issue 14134" begin
-    A = SparseArrays.CHOLMOD.Sparse(sprandn(10,5,0.1) + I |> t -> t't)
+    A = CHOLMOD.Sparse(sprandn(10,5,0.1) + I |> t -> t't)
     b = IOBuffer()
     serialize(b, A)
     seekstart(b)
@@ -655,9 +655,9 @@ end
 end
 
 @testset "Issue with promotion during conversion to CHOLMOD.Dense" begin
-    @test SparseArrays.CHOLMOD.Dense(ones(Float32, 5)) == ones(5, 1)
-    @test SparseArrays.CHOLMOD.Dense(ones(Int, 5)) == ones(5, 1)
-    @test SparseArrays.CHOLMOD.Dense(ones(Complex{Float32}, 5, 2)) == ones(5, 2)
+    @test CHOLMOD.Dense(ones(Float32, 5)) == ones(5, 1)
+    @test CHOLMOD.Dense(ones(Int, 5)) == ones(5, 1)
+    @test CHOLMOD.Dense(ones(Complex{Float32}, 5, 2)) == ones(5, 2)
 end
 
 @testset "Further issue with promotion #14894" begin
@@ -724,7 +724,7 @@ end
 
 @testset "Check that Symmetric{SparseMatrixCSC} can be constructed from CHOLMOD.Sparse" begin
     A = sprandn(10, 10, 0.1)
-    B = SparseArrays.CHOLMOD.Sparse(A)
+    B = CHOLMOD.Sparse(A)
     C = B'B
     # Change internal representation to symmetric (upper/lower)
     o = fieldoffset(CHOLMOD.C_Sparse{eltype(C)}, find(fieldnames(CHOLMOD.C_Sparse{eltype(C)}) .== :stype)[1])

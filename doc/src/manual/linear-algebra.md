@@ -275,7 +275,6 @@ of the standard library documentation.
 | `CholeskyPivoted` | [Pivoted](https://en.wikipedia.org/wiki/Pivot_element) Cholesky factorization                                  |
 | `LU`              | [LU factorization](https://en.wikipedia.org/wiki/LU_decomposition)                                             |
 | `LUTridiagonal`   | LU factorization for [`Tridiagonal`](@ref) matrices                                                            |
-| `UmfpackLU`       | LU factorization for sparse matrices (computed by UMFPack)                                                     |
 | `QR`              | [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                             |
 | `QRCompactWY`     | Compact WY form of the QR factorization                                                                        |
 | `QRPivoted`       | Pivoted [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                     |

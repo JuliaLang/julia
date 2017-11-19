@@ -488,6 +488,7 @@ unshift!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 Base.require(:DelimitedFiles)
 Base.require(:Test)
 Base.require(:Dates)
+Base.require(:SuiteSparse)
 
 empty!(LOAD_PATH)
 

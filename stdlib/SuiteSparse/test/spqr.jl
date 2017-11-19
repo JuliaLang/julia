@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.SparseArrays.SPQR
-using Base.SparseArrays.CHOLMOD
+using SuiteSparse.SPQR
+using SuiteSparse.CHOLMOD
 
 @testset "Sparse QR" begin
 m, n = 100, 10
