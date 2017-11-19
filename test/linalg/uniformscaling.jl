@@ -191,12 +191,10 @@ end
 end
 
 @testset "Matrix construction from UniformScaling" begin
-    @test Matrix(2I, 3)::Matrix{Int} == 2*eye(3)
     @test Matrix(2I, 3, 3)::Matrix{Int} == 2*eye(3)
     @test Matrix(2I, 3, 4)::Matrix{Int} == 2*eye(3, 4)
     @test Matrix(2I, 4, 3)::Matrix{Int} == 2*eye(4, 3)
     @test Matrix(2.0I, 3, 3)::Matrix{Float64} == 2*eye(3)
-    @test Matrix{Real}(2I, 3)::Matrix{Real} == 2*eye(3)
     @test Matrix{Real}(2I, 3, 3)::Matrix{Real} == 2*eye(3)
     @test Matrix{Float64}(2I, 3, 3)::Matrix{Float64} == 2*eye(3)
 end
