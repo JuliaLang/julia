@@ -64,7 +64,7 @@ end
 @test filemode(file) & 0o222 > 0 # writable
 chmod(file, filemode(file) & 0o7555)
 @test filemode(file) & 0o222 == 0
-chmod(file, filemode(file) | 0o222)
+chmod(file, bitor(filemode(file), 0o222))
 @test filemode(file) & 0o111 == 0
 @test filesize(file) == 0
 

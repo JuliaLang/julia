@@ -70,9 +70,9 @@ function floodFill(board::UInt64, fixme)
         return board
     end
 
-    board |= UInt64(1) << (x + width*y)
+    board = bitor(board, UInt64(1) << (x + width*y))
     for f in values(move)
-        board |= floodFill(board, f(x, y))
+        board = bitor(board, floodFill(board, f(x, y)))
     end
 
     return board
@@ -105,7 +105,7 @@ function getBitmask(x, y, piece)
     for cell_ in piece
         x, y = move[cell_](x,y)
         if valid(x, y)
-            mask |= UInt64(1) << (x + width*y)
+            mask = bitor(mask, UInt64(1) << (x + width*y))
         else
             return false, UInt64(0)
         end
@@ -189,7 +189,7 @@ function solveCell(cell_, board::UInt64, n)
             for mask in masksAtCell[cell_ + 1, color + 1]
                 if legal(mask, board)
                     masks[color + 1] = mask
-                    solveCell(cell_ - 1, UInt64(board | mask), n)
+                    solveCell(cell_ - 1, UInt64(bitor(board, mask)), n)
                     masks[color + 1] = 0
                 end
             end

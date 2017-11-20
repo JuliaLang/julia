@@ -185,7 +185,7 @@ end"""
     # line meta
     if delta_kd == 0
         # line meta
-        msk_d0 = bitnot(u << ld0) | (u << ld1 << 1)
+        msk_d0 = bitor(bitnot(u << ld0), u << ld1 << 1)
     else
         # line meta
         msk_d0 = bitnot(u << ld0)
@@ -203,7 +203,7 @@ end"""
     # line meta
     chunk_s0 = glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
     # line meta
-    dest[kd0] = (dest[kd0] & msk_d0) | ((chunk_s0 << ld0) & bitnot(msk_d0))
+    dest[kd0] = bitor(dest[kd0] & msk_d0, (chunk_s0 << ld0) & bitnot(msk_d0))
     # line meta
     if delta_kd == 0
         # line meta
@@ -214,7 +214,7 @@ end"""
         # line meta
         chunk_s1 = glue_src_bitchunks(src, ks0 + i, ks1, msk_s0, ls0)
         # line meta
-        chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
+        chunk_s = bitor(chunk_s0 >>> (63 - ld0) >>> 1, chunk_s1 << ld0)
         # line meta
         dest[kd0 + i] = chunk_s
         # line meta
@@ -229,9 +229,9 @@ end"""
         chunk_s1 = UInt64(0)
     end
     # line meta
-    chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
+    chunk_s = bitor(chunk_s0 >>> (63 - ld0) >>> 1, chunk_s1 << ld0)
     # line meta
-    dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & bitnot(msk_d1))
+    dest[kd1] = bitor(dest[kd1] & msk_d1, chunk_s & bitnot(msk_d1))
     # line meta
     return
 end"""

@@ -48,7 +48,7 @@ p = 1=>:foo
 @test endof(p) == 2
 @test p[endof(p)] == p[end] == p[2] == :foo
 
-@test (|)(2) == 2
+@test bitor(2) == 2
 @test xor(2) == 2
 @test (⊻)(2) == 2
 

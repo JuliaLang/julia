@@ -443,7 +443,7 @@ close(f1)
 close(f2)
 rm(f)
 
-io = Base.Filesystem.open(f, Base.Filesystem.JL_O_WRONLY | Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_EXCL, 0o000)
+io = Base.Filesystem.open(f, bitor(Base.Filesystem.JL_O_WRONLY, Base.Filesystem.JL_O_CREAT, Base.Filesystem.JL_O_EXCL), 0o000)
 @test write(io, "abc") == 3
 close(io)
 if !Sys.iswindows() && get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"

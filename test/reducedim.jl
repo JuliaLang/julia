@@ -109,7 +109,7 @@ end
 @test sum(Union{Float32, Float64}[1.0], 1) == [1.0]
 @test prod(Union{Float32, Float64}[1.0], 1) == [1.0]
 
-@test reducedim((a,b) -> a|b, [true false; false false], 1, false) == [true false]
+@test reducedim((a,b) -> bitor(a, b), [true false; false false], 1, false) == [true false]
 let R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
     @test eltype(R) == Float64
     @test R ≈ [3,7]

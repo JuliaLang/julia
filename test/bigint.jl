@@ -183,7 +183,7 @@ end
 @testset "boolean ops" begin
     @test bitnot(BigInt(123)) == -124
     @test BigInt(123) & BigInt(234) == 106
-    @test BigInt(123) | BigInt(234) == 251
+    @test bitor(BigInt(123), BigInt(234)) == 251
     @test BigInt(123) ⊻ BigInt(234) == 145
 
     @test gcd(BigInt(48), BigInt(180)) == 12
@@ -235,11 +235,11 @@ end
     @test (&)(a, b, c, d, f) == parse(BigInt,"8")
     @test (&)(a, b, c, d, f, g) == parse(BigInt,"8")
 
-    @test (|)(a, b) == parse(BigInt,"327423")
-    @test (|)(a, b, c) == parse(BigInt,"3426495623485904783802111")
-    @test (|)(a, b, c, d) == parse(BigInt,"-1396834561")
-    @test (|)(a, b, c, d, f) == parse(BigInt,"-1358954753")
-    @test (|)(a, b, c, d, f, g) == parse(BigInt,"-1")
+    @test bitor(a, b) == parse(BigInt,"327423")
+    @test bitor(a, b, c) == parse(BigInt,"3426495623485904783802111")
+    @test bitor(a, b, c, d) == parse(BigInt,"-1396834561")
+    @test bitor(a, b, c, d, f) == parse(BigInt,"-1358954753")
+    @test bitor(a, b, c, d, f, g) == parse(BigInt,"-1")
 
     @test trailing_ones(a) == 8
     @test trailing_zeros(b) == 2

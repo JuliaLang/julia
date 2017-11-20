@@ -49,7 +49,7 @@
 @test mapreduce(abs2, Base.scalarmax, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
 @test_throws ArgumentError mapreduce(abs2, &, Float64[])
-@test_throws ArgumentError mapreduce(abs2, |, Float64[])
+@test_throws ArgumentError mapreduce(abs2, bitor, Float64[])
 
 # mapreduce() type stability
 @test typeof(mapreduce(*, +, Int8[10])) ===

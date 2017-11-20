@@ -198,7 +198,7 @@ end
 
     # test fallthrough for unsupported ops
     local c = 0
-    @test @fastmath(c |= 1) == 1
+    @test @fastmath(c = bitor(c, 1)) == 1
 end
 
 @testset "issue #23218" begin

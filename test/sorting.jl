@@ -216,7 +216,7 @@ end
 end
 ## more advanced sorting tests ##
 
-randnans(n) = reinterpret(Float64,[rand(UInt64)|0x7ff8000000000000 for i=1:n])
+randnans(n) = reinterpret(Float64, [bitor(rand(UInt64), 0x7ff8000000000000) for i=1:n])
 
 function randn_with_nans(n,p)
     v = randn(n)
