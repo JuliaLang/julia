@@ -1927,6 +1927,14 @@ end
     nothing
 end
 
+@deprecate whos(io::IO, m::Module, pat::Regex) show(io, varinfo(m, pat))
+@deprecate whos(io::IO, m::Module)             show(io, varinfo(m))
+@deprecate whos(io::IO)                        show(io, varinfo())
+@deprecate whos(m::Module, pat::Regex)         varinfo(m, pat)
+@deprecate whos(m::Module)                     varinfo(m)
+@deprecate whos(pat::Regex)                    varinfo(pat)
+@deprecate whos()                              varinfo()
+
 # indexing with A[true] will throw an argument error in the future
 function to_index(i::Bool)
     depwarn("indexing with Bool values is deprecated. Convert the index to an integer first with `Int(i)`.", (:getindex, :setindex!, :view))
