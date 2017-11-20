@@ -729,6 +729,13 @@ end
     export BitSet
 end
 
+# 0.7.0-DEV.1930
+@static if !isdefined(Base, :textwidth)
+    textwidth(c::Char) = charwidth(c)
+    textwidth(c::AbstractString) = strwidth(c)
+    export textwidth
+end
+
 include("deprecated.jl")
 
 end # module Compat

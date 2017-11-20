@@ -213,6 +213,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `IntSet` is now `BitSet` ([#24282])
 
+* `strwidth` and `charwidth` are now merged into `textwidth` ([#23667]).
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -332,6 +334,7 @@ includes this fix. Find the minimum version from there.
 [#22182]: https://github.com/JuliaLang/julia/issues/22182
 [#22350]: https://github.com/JuliaLang/julia/issues/22350
 [#22475]: https://github.com/JuliaLang/julia/issues/22475
+[#22512]: https://github.com/JuliaLang/julia/issues/22512
 [#22629]: https://github.com/JuliaLang/julia/issues/22629
 [#22633]: https://github.com/JuliaLang/julia/issues/22633
 [#22666]: https://github.com/JuliaLang/julia/issues/22666
@@ -343,7 +346,7 @@ includes this fix. Find the minimum version from there.
 [#23427]: https://github.com/JuliaLang/julia/issues/23427
 [#23570]: https://github.com/JuliaLang/julia/issues/23570
 [#23666]: https://github.com/JuliaLang/julia/issues/23666
+[#23667]: https://github.com/JuliaLang/julia/issues/23667
 [#23812]: https://github.com/JuliaLang/julia/issues/23812
 [#23931]: https://github.com/JuliaLang/julia/issues/23931
 [#24282]: https://github.com/JuliaLang/julia/issues/24282
-[#22512]: https://github.com/JuliaLang/julia/issues/22532

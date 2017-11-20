@@ -863,6 +863,10 @@ end
 # 0.7
 @test 1 in BitSet(1:10)
 
+# 0.7.0-DEV.1930
+@test textwidth("A") == 1
+@test textwidth('A') == 1
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end
