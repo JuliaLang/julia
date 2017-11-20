@@ -233,7 +233,7 @@ function RangeGenerator(r::UnitRange{BigInt})
     nd = ndigits(m, 2)
     nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
     highbits > 0 && (nlimbs += 1)
-    mask = highbits == 0 ? ~zero(Limb) : one(Limb)<<highbits - one(Limb)
+    mask = highbits == 0 ? bitnot(zero(Limb)) : one(Limb)<<highbits - one(Limb)
     nlimbsmax = max(nlimbs, abs(last(r).size), abs(first(r).size))
     return RangeGeneratorBigInt(first(r), m, nlimbs, nlimbsmax, mask)
 end

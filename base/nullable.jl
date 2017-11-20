@@ -394,7 +394,7 @@ for op in (+, -, abs, abs2)
     null_safe_op(::typeof(op), ::Type{Rational{S}}) where {S} = null_safe_op(op, S)
 end
 
-null_safe_op(::typeof(~), ::NullSafeInts) = true
+null_safe_op(::typeof(bitnot), ::NullSafeInts) = true
 null_safe_op(::typeof(!), ::Type{Bool}) = true
 
 # Binary operators

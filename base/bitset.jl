@@ -145,7 +145,7 @@ end
 setdiff(s::BitSet, ns) = setdiff!(copy(s), ns)
 setdiff!(s::BitSet, ns) = (for n in ns; delete!(s, n); end; s)
 function setdiff!(s1::BitSet, s2::BitSet)
-    _matched_map!((p, q) -> p & ~q, s1.bits, s2.bits)
+    _matched_map!((p, q) -> p & bitnot(q), s1.bits, s2.bits)
     s1
 end
 
