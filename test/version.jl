@@ -103,18 +103,18 @@ end
 # issupbuild
 import Base.issupbuild
 @test issupbuild(v"4.3.2+")
-@test ~issupbuild(v"4.3.2")
-@test ~issupbuild(v"4.3.2-")
-@test ~issupbuild(v"4.3.2-a")
-@test ~issupbuild(v"4.3.2-a1")
-@test ~issupbuild(v"4.3.2-1")
-@test ~issupbuild(v"4.3.2-a.1")
-@test ~issupbuild(v"4.3.2-1a")
-@test ~issupbuild(v"4.3.2+a")
-@test ~issupbuild(v"4.3.2+a1")
-@test ~issupbuild(v"4.3.2+1")
-@test ~issupbuild(v"4.3.2+a.1")
-@test ~issupbuild(v"4.3.2+1a")
+@test !issupbuild(v"4.3.2")
+@test !issupbuild(v"4.3.2-")
+@test !issupbuild(v"4.3.2-a")
+@test !issupbuild(v"4.3.2-a1")
+@test !issupbuild(v"4.3.2-1")
+@test !issupbuild(v"4.3.2-a.1")
+@test !issupbuild(v"4.3.2-1a")
+@test !issupbuild(v"4.3.2+a")
+@test !issupbuild(v"4.3.2+a1")
+@test !issupbuild(v"4.3.2+1")
+@test !issupbuild(v"4.3.2+a.1")
+@test !issupbuild(v"4.3.2+1a")
 
 # basic comparison
 VersionNumber(2, 3, 1) == VersionNumber(Int8(2), UInt32(3), Int32(1)) == v"2.3.1"
