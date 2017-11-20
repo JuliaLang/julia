@@ -4,6 +4,7 @@ module REPLCompletions
 
 export completions, shell_completions, bslash_completions
 
+# import Base._Pkg
 using Base.Meta
 
 function completes_global(x, name)
@@ -553,11 +554,10 @@ function completions(string, pos)
         # also search for packages
         s = string[startpos:pos]
         if dotpos <= startpos
-            for dir in [Pkg.dir(); LOAD_PATH; pwd()]
+            for dir in [LOAD_PATH; pwd()]
                 dir isa AbstractString && isdir(dir) || continue
-                for pname in readdir(dir)
-                    if pname[1] != '.' && pname != "METADATA" &&
-                        pname != "REQUIRE" && startswith(pname, s)
+                for pname in [readdir(dir); isassigned(__Pkg.installed) ? keys(__Pkg.installed[]()) : []]
+                    if pname[1] != '.'
                         # Valid file paths are
                         #   <Mod>.jl
                         #   <Mod>/src/<Mod>.jl

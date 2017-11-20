@@ -99,7 +99,6 @@ Base.Libdl
 Base.LinAlg
 Base.Markdown
 Base.Meta
-Base.Pkg
 Base.Serializer
 Base.SparseArrays
 Base.StackTraces

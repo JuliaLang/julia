@@ -406,9 +406,6 @@ include("missing.jl")
 # libgit2 support
 include("libgit2/libgit2.jl")
 
-# package manager
-include("pkg/pkg.jl")
-
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")
 using .SparseArrays
@@ -420,6 +417,13 @@ using .Distributed
 
 # worker threads
 include("threadcall.jl")
+
+# The package manager can plug into these to give some extra functionality
+baremodule __Pkg
+    const dir = Ref{Any}()
+    const installed = Ref{Any}()
+    const find_package = Ref{Any}()
+end
 
 # code loading
 include("loading.jl")
@@ -464,6 +468,7 @@ function __init__()
     init_threadcall()
 end
 
+
 INCLUDE_STATE = 3 # include = include_relative
 
 end # baremodule Base
@@ -477,6 +482,7 @@ unshift!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 Base.require(:Base64)
 Base.require(:CRC32c)
 Base.require(:Dates)
+Base.require(:Pkg)
 Base.require(:DelimitedFiles)
 Base.require(:FileWatching)
 Base.require(:IterativeEigenSolvers)

@@ -220,7 +220,7 @@ try
                                Dict(s => Base.module_uuid(Base.root_module(s)) for s in
                                     [:Base64, :CRC32c, :Dates, :DelimitedFiles, :FileWatching,
                                      :IterativeEigenSolvers, :Mmap, :Profile, :SharedArrays,
-                                     :SuiteSparse, :Test]))
+                                     :SuiteSparse, :Test, :Pkg]))
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2

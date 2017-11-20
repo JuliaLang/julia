@@ -88,8 +88,12 @@ macro return_if_file(path)
 end
 
 function find_package(name::String)
+    if isassigned(__Pkg.find_package)
+        path = __Pkg.find_package[](name)::Union{String, Void}
+        path != nothing && return path
+    end
     endswith(name, ".jl") && (name = chop(name, 0, 3))
-    for dir in [Pkg.dir(); LOAD_PATH]
+    for dir in LOAD_PATH
         dir = abspath(dir)
         @return_if_file joinpath(dir, "$name.jl")
         @return_if_file joinpath(dir, "$name.jl", "src", "$name.jl")
@@ -290,7 +294,7 @@ current `include` path but does not use it to search for files (see help for `in
 This function is typically used to load library code, and is implicitly called by `using` to
 load packages.
 
-When searching for files, `require` first looks for package code under `Pkg.dir()`,
+When searching for files, `require` first looks for packages avaiable from the package manager,
 then tries paths in the global array `LOAD_PATH`. `require` is case-sensitive on
 all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
