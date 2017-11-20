@@ -42,7 +42,7 @@ end
     @test hash(s1) != hash(s3)
     d1 = Dict(Set([3]) => 33, Set([2]) => 22)
     d2 = Dict(Set([2]) => 33, Set([3]) => 22)
-    @test hash(d1) != hash(d2)    
+    @test hash(d1) != hash(d2)
 end
 @testset "isequal" begin
     @test  isequal(Set(), Set())
