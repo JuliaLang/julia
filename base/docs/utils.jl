@@ -373,7 +373,7 @@ completions(name::Symbol) = completions(string(name))
 # Searching and apropos
 
 # Docsearch simply returns true or false if an object contains the given needle
-docsearch(haystack::AbstractString, needle) = !isempty(search(haystack, needle))
+docsearch(haystack::AbstractString, needle) = !isempty(findfirst(needle, haystack))
 docsearch(haystack::Symbol, needle) = docsearch(string(haystack), needle)
 docsearch(::Nothing, needle) = false
 function docsearch(haystack::Array, needle)

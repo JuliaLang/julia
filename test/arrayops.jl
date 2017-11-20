@@ -459,6 +459,10 @@ end
     @test findprev(equalto(1),a,8) == 6
     @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
     @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
+    @test findfirst(equalto(0x00), [0x01, 0x00]) == 2
+    @test findlast(equalto(0x00), [0x01, 0x00]) == 2
+    @test findnext(equalto(0x00), [0x00, 0x01, 0x00], 2) == 3
+    @test findprev(equalto(0x00), [0x00, 0x01, 0x00], 2) == 1
 end
 @testset "find with general iterables" begin
     s = "julia"
@@ -1173,7 +1177,7 @@ end
 
         # logical indexing
         a = [1:10;]; acopy = copy(a)
-        @test deleteat!(a, map(i -> i in idx, 1:length(a))) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
+        @test deleteat!(a, map(occursin(idx), 1:length(a))) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
     end
     a = [1:10;]
     @test deleteat!(a, 11:10) == [1:10;]

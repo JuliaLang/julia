@@ -507,29 +507,30 @@ julia> "1 + 2 = 3" == "1 + 2 = $(1 + 2)"
 true
 ```
 
-You can search for the index of a particular character using the [`search`](@ref) function:
+You can search for the index of a particular character using the [`findfirst`](@ref) function:
 
 ```jldoctest
-julia> search("xylophone", 'x')
+julia> findfirst(equalto('x'), "xylophone")
 1
 
-julia> search("xylophone", 'p')
+julia> findfirst(equalto('p'), "xylophone")
 5
 
-julia> search("xylophone", 'z')
+julia> findfirst(equalto('z'), "xylophone")
 0
 ```
 
-You can start the search for a character at a given offset by providing a third argument:
+You can start the search for a character at a given offset by using [`findnext`](@ref)
+with a third argument:
 
 ```jldoctest
-julia> search("xylophone", 'o')
+julia> findnext(equalto('o'), "xylophone", 1)
 4
 
-julia> search("xylophone", 'o', 5)
+julia> findnext(equalto('o'), "xylophone", 5)
 7
 
-julia> search("xylophone", 'o', 8)
+julia> findnext(equalto('o'), "xylophone", 8)
 0
 ```
 

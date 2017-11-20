@@ -61,7 +61,7 @@ function warntype_hastag(f, types, tag)
     iob = IOBuffer()
     code_warntype(iob, f, types)
     str = String(take!(iob))
-    return !isempty(search(str, tag))
+    return contains(str, tag)
 end
 
 pos_stable(x) = x > 0 ? x : zero(x)
@@ -90,7 +90,7 @@ tag = "ANY"
 iob = IOBuffer()
 show(iob, Meta.lower(Main, :(x -> x^2)))
 str = String(take!(iob))
-@test isempty(search(str, tag))
+@test !contains(str, tag)
 
 # Make sure non used variables are not emphasized
 has_unused() = (a = rand(5))

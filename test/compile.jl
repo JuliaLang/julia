@@ -274,7 +274,7 @@ try
         error("__precompile__ disabled test failed")
     catch exc
         isa(exc, ErrorException) || rethrow(exc)
-        !isempty(search(exc.msg, "__precompile__(false)")) && rethrow(exc)
+        contains(exc.msg, "__precompile__(false)") && rethrow(exc)
     end
 
     # Issue #12720
@@ -341,7 +341,7 @@ try
         error("\"LoadError: break me\" test failed")
     catch exc
         isa(exc, ErrorException) || rethrow(exc)
-        !isempty(search(exc.msg, "ERROR: LoadError: break me")) && rethrow(exc)
+        contains(exc.msg, "ERROR: LoadError: break me") && rethrow(exc)
     end
 
     # Test transitive dependency for #21266

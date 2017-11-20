@@ -285,7 +285,8 @@ end
 matchall(re::Regex, str::SubString, overlap::Bool=false) =
     matchall(re, String(str), overlap)
 
-function search(str::Union{String,SubString}, re::Regex, idx::Integer)
+# TODO: return only start index and update deprecation
+function findnext(re::Regex, str::Union{String,SubString}, idx::Integer)
     if idx > nextind(str,endof(str))
         throw(BoundsError())
     end
@@ -294,10 +295,10 @@ function search(str::Union{String,SubString}, re::Regex, idx::Integer)
     PCRE.exec(re.regex, str, idx-1, opts, re.match_data) ?
         ((Int(re.ovec[1])+1):prevind(str,Int(re.ovec[2])+1)) : (0:-1)
 end
-search(s::AbstractString, r::Regex, idx::Integer) = throw(ArgumentError(
+findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
     "regex search is only available for the String type; use String(s) to convert"
 ))
-search(s::AbstractString, r::Regex) = search(s,r,start(s))
+findfirst(r::Regex, s::AbstractString) = findnext(r,s,start(s))
 
 struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T

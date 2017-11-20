@@ -900,6 +900,10 @@ Deprecated or removed
     in favor of dot overloading (`getproperty`) so factors should now be accessed as e.g.
     `F.Q` instead of `F[:Q]` ([#25184]).
 
+  * `search` and `rsearch` have been deprecated in favor of `findfirst`/`findnext` and
+    `findlast`/`findprev` respectively, in combination with the new `equalto` and `occursin`
+    predicates for some methods ([#24673]
+
 Command-line option changes
 ---------------------------
 

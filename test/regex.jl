@@ -36,7 +36,7 @@ show(buf, r"")
 
 # regex match / search string must be a String
 @test_throws ArgumentError match(r"test", GenericString("this is a test"))
-@test_throws ArgumentError search(GenericString("this is a test"), r"test")
+@test_throws ArgumentError findfirst(r"test", GenericString("this is a test"))
 
 # Named subpatterns
 let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")

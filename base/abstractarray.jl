@@ -1237,7 +1237,7 @@ _cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
     "mismatch in dimension $d (expected $a got $b)")))
 
 dims2cat(::Val{n}) where {n} = ntuple(i -> (i == n), Val(n))
-dims2cat(dims) = ntuple(i -> (i in dims), maximum(dims))
+dims2cat(dims) = ntuple(occursin(dims), maximum(dims))
 
 cat(dims, X...) = cat_t(dims, promote_eltypeof(X...), X...)
 
