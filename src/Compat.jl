@@ -736,6 +736,33 @@ end
     export textwidth
 end
 
+# 0.7.0-DEV.2116
+@static if VERSION < v"0.7.0-DEV.2116"
+    import Base: spdiagm
+    function spdiagm(kv::Pair...)
+        I, J, V = Base.SparseArrays.spdiagm_internal(last.(kv), first.(kv))
+        m = max(Base.SparseArrays.dimlub(I), Base.SparseArrays.dimlub(J))
+        return sparse(I, J, V, m, m)
+    end
+end
+
+# 0.7.0-DEV.2161
+@static if VERSION < v"0.7.0-DEV.2161"
+    import Base: diagm
+    function diagm(kv::Pair...)
+        T = promote_type(map(x -> eltype(x.second), kv)...)
+        n = mapreduce(x -> length(x.second) + abs(x.first), max, kv)
+        A = zeros(T, n, n)
+        for p in kv
+            inds = diagind(A, p.first)
+            for (i, val) in enumerate(p.second)
+                A[inds[i]] += val
+            end
+        end
+        return A
+    end
+end
+
 include("deprecated.jl")
 
 end # module Compat

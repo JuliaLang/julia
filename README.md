@@ -180,6 +180,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `*(::Union{Char,AbstractString},::Union{Char,AbstractString})` concatenation. ([#22512])
 
+* `diagm` and `spdiagm` accept pairs mapping diagonals to vectors ([#24047], [#23757])
+
 ## Renaming
 
 
@@ -347,6 +349,8 @@ includes this fix. Find the minimum version from there.
 [#23570]: https://github.com/JuliaLang/julia/issues/23570
 [#23666]: https://github.com/JuliaLang/julia/issues/23666
 [#23667]: https://github.com/JuliaLang/julia/issues/23667
+[#23757]: https://github.com/JuliaLang/julia/issues/23757
 [#23812]: https://github.com/JuliaLang/julia/issues/23812
 [#23931]: https://github.com/JuliaLang/julia/issues/23931
+[#24047]: https://github.com/JuliaLang/julia/issues/24047
 [#24282]: https://github.com/JuliaLang/julia/issues/24282
