@@ -38,7 +38,7 @@ function !(x::Bool)
     return not_int(x)
 end
 
-(~)(x::Bool) = !x
+bitnot(x::Bool) = !x
 (&)(x::Bool, y::Bool) = and_int(x, y)
 (|)(x::Bool, y::Bool) = or_int(x, y)
 

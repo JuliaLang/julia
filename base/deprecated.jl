@@ -2084,6 +2084,11 @@ end
 @deprecate parse(str::AbstractString, pos::Int, ; kwargs...) Meta.parse(str, pos; kwargs...)
 @deprecate_binding ParseError Meta.ParseError
 
+@deprecate (~)(x::BitInteger) bitnot(x)
+@deprecate (~)(n::Integer) bitnot(x)
+@deprecate (~)(x::BigInt) bitnot(x)
+@deprecate (~)(x::Bool) bitnot(x)
+
 # #24258
 # Physical units define an equivalence class: there is no such thing as a step of "1" (is
 # it one day or one second or one nanosecond?). So require the user to specify the step

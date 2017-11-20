@@ -465,7 +465,7 @@ end
 
 # unary ops
 (-)(x::BigInt) = MPZ.neg(x)
-(~)(x::BigInt) = MPZ.com(x)
+bitnot(x::BigInt) = MPZ.com(x)
 
 <<(x::BigInt, c::UInt) = c == 0 ? x : MPZ.mul_2exp(x, c)
 >>(x::BigInt, c::UInt) = c == 0 ? x : MPZ.fdiv_q_2exp(x, c)
