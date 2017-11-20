@@ -2089,6 +2089,18 @@ end
 @deprecate (~)(x::BigInt) bitnot(x)
 @deprecate (~)(x::Bool) bitnot(x)
 
+@deprecate (|)(a::BigInt, b::BigInt) bitor(a, b)
+@deprecate (|)(a::BigInt, b::BigInt, c::BigInt) bitor(a, b, c)
+@deprecate (|)(a::BigInt, b::BigInt, c::BigInt, d::BigInt) bitor(a, b, c, d)
+@deprecate (|)(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt) bitor(a, b, c, d, e)
+
+@deprecate (|)(x::Integer) bitor(x)
+@deprecate (|)(a::Integer, b::Integer) bitor(a, b)
+@deprecate (|)(x::T, y::T) where {T<:Integer} bitor(x, y)
+@deprecate (|)(x::T, y::T) where {T<:BitInteger} bitor(x, y)
+
+@deprecate (|)(a, b, c, xs...) bitor(a, b, c, xs...)
+
 # #24258
 # Physical units define an equivalence class: there is no such thing as a step of "1" (is
 # it one day or one second or one nanosecond?). So require the user to specify the step
