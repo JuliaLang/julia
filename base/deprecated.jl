@@ -2148,7 +2148,7 @@ function speye(::Type{T}, n::Integer) where T
                     "if `T` is either concrete or abstract. If element type `T` is not necessary, ",
                     "consider the shorter `sparse(I, n, n)` or `SparseMatrixCSC(I, n, n)` ",
                     "(with default `eltype(I)` of `Bool`)."), :speye)
-    return SparseMatrixCSC{T}(I, n)
+    return SparseMatrixCSC{T}(I, n, n)
 end
 function speye(::Type{T}, m::Integer, n::Integer) where T
     depwarn(string("`speye(T, m::Integer, n::Integer)` has been deprecated in favor of `I`, ",
