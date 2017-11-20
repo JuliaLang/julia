@@ -412,7 +412,7 @@ end
 #Eigensystem
 eigvals(D::Diagonal{<:Number}) = D.diag
 eigvals(D::Diagonal) = [eigvals(x) for x in D.diag] #For block matrices, etc.
-eigvecs(D::Diagonal) = eye(D)
+eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
 eigfact(D::Diagonal) = Eigen(eigvals(D), eigvecs(D))
 
 #Singular system

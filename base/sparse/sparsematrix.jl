@@ -401,7 +401,7 @@ Convert an AbstractMatrix `A` into a sparse matrix.
 
 # Examples
 ```jldoctest
-julia> A = eye(3)
+julia> A = Matrix(1.0I, 3, 3)
 3×3 Array{Float64,2}:
  1.0  0.0  0.0
  0.0  1.0  0.0

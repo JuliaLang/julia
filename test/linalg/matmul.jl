@@ -248,10 +248,10 @@ end
 
 @testset "Issue 11978" begin
     A = Array{Matrix{Float64}}(2, 2)
-    A[1,1] = eye(3)
-    A[1,2] = eye(3,2)
-    A[2,1] = eye(2,3)
-    A[2,2] = eye(2)
+    A[1,1] = Matrix(1.0I, 3, 3)
+    A[2,2] = Matrix(1.0I, 2, 2)
+    A[1,2] = Matrix(1.0I, 3, 2)
+    A[2,1] = Matrix(1.0I, 2, 3)
     b = Array{Vector{Float64}}(2)
     b[1] = ones(3)
     b[2] = ones(2)
@@ -266,12 +266,13 @@ end
     @test Base.LinAlg.gemv!(ones(elty,0),'N',rand(elty,0,0),rand(elty,0)) == ones(elty,0)
     @test Base.LinAlg.gemv!(ones(elty,10), 'N',ones(elty,10,0),ones(elty,0)) == zeros(elty,10)
 
-    @test Base.LinAlg.gemm_wrapper('N','N',eye(elty,10,10),eye(elty,10,10)) == eye(elty,10,10)
-    @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(eye(elty,10,10),'N','N',eye(elty,10,11),eye(elty,10,10))
-    @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(eye(elty,10,10),'N','N',eye(elty,0,0),eye(elty,0,0))
+    I10 = Matrix{elty}(I, 10, 10)
+    @test Base.LinAlg.gemm_wrapper('N','N', I10, I10) == I10
+    @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(I10,'N','N', Matrix{elty}(I, 10, 11), I10)
+    @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(I10,'N','N', Matrix{elty}(0, 0), Matrix{elty}(0, 0))
 
     A = rand(elty,3,3)
-    @test Base.LinAlg.matmul3x3('T','N',A,eye(elty,3)) == A.'
+    @test Base.LinAlg.matmul3x3('T','N',A, Matrix{elty}(I, 3, 3)) == A.'
 end
 
 @testset "#13593, #13488" begin

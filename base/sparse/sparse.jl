@@ -18,7 +18,7 @@ import Base.LinAlg: At_ldiv_B!, Ac_ldiv_B!, A_rdiv_B!, A_rdiv_Bc!
 import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     atan, atand, atanh, broadcast!, chol, conj!, cos, cosc, cosd, cosh, cospi, cot,
     cotd, coth, count, csc, cscd, csch, adjoint!, diag, diff, done, dot, eig,
-    exp10, exp2, eye, findn, floor, hash, indmin, inv, issymmetric, istril, istriu,
+    exp10, exp2, findn, floor, hash, indmin, inv, issymmetric, istril, istriu,
     log10, log2, lu, next, sec, secd, sech, show, sin,
     sinc, sind, sinh, sinpi, squeeze, start, sum, summary, tan,
     tand, tanh, trace, transpose!, tril!, triu!, trunc, vecnorm, abs, abs2,

@@ -224,7 +224,7 @@ function getindex(F::LU{T,<:StridedMatrix}, d::Symbol) where T
     elseif d == :p
         return ipiv2perm(F.ipiv, m)
     elseif d == :P
-        return eye(T, m)[:,invperm(F[:p])]
+        return Matrix{T}(I, m, m)[:,invperm(F[:p])]
     else
         throw(KeyError(d))
     end
@@ -337,7 +337,7 @@ end
 inv!(A::LU{<:BlasFloat,<:StridedMatrix}) =
     @assertnonsingular LAPACK.getri!(A.factors, A.ipiv) A.info
 inv!(A::LU{T,<:StridedMatrix}) where {T} =
-    @assertnonsingular A_ldiv_B!(A.factors, copy(A), eye(T, size(A, 1))) A.info
+    @assertnonsingular A_ldiv_B!(A.factors, copy(A), Matrix{T}(I, size(A, 1), size(A, 1))) A.info
 inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 
 function _cond1Inf(A::LU{<:BlasFloat,<:StridedMatrix}, p::Number, normA::Real)
@@ -437,7 +437,7 @@ function getindex(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
     elseif d == :p
         return ipiv2perm(F.ipiv, m)
     elseif d == :P
-        return eye(T, m)[:,invperm(F[:p])]
+        return Matrix{T}(I, m, m)[:,invperm(F[:p])]
     end
     throw(KeyError(d))
 end

@@ -510,7 +510,7 @@ end
 @test_throws ArgumentError UpperTriangular(LowerTriangular(randn(3,3)))
 
 # Issue 16196
-@test UpperTriangular(eye(3)) \ view(ones(3), [1,2,3]) == ones(3)
+@test UpperTriangular(Matrix(1.0I, 3, 3)) \ view(ones(3), [1,2,3]) == ones(3)
 
 # dimensional correctness:
 isdefined(Main, :TestHelpers) || @eval Main include("../TestHelpers.jl")

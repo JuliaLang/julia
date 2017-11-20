@@ -151,7 +151,7 @@ function getindex(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
     if d == :p
         return _ipiv2perm_bk(B.ipiv, n, B.uplo)
     elseif d == :P
-        return eye(T, n)[:,invperm(B[:p])]
+        return Matrix{T}(I, n, n)[:,invperm(B[:p])]
     elseif d == :L || d == :U || d == :D
         if B.rook
             LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', copy(B.LD), B.ipiv)

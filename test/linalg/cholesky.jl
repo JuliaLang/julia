@@ -5,8 +5,8 @@ using Test
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
 
 function unary_ops_tests(a, ca, tol; n=size(a, 1))
-    @test inv(ca)*a ≈ eye(n)
-    @test a*inv(ca) ≈ eye(n)
+    @test inv(ca)*a ≈ Matrix(I, n, n)
+    @test a*inv(ca) ≈ Matrix(I, n, n)
     @test abs((det(ca) - det(a))/det(ca)) <= tol # Ad hoc, but statistically verified, revisit
     @test logdet(ca) ≈ logdet(a)
     @test logdet(ca) ≈ log(det(ca))  # logdet is less likely to overflow

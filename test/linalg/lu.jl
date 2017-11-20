@@ -69,7 +69,7 @@ dimg  = randn(n)/2
         @test ll * ul ≈ a[pl,:]
         @test l*u ≈ a[p,:]
         @test (l*u)[invperm(p),:] ≈ a
-        @test a * inv(lua) ≈ eye(n)
+        @test a * inv(lua) ≈ Matrix(I, n, n)
         @test copy(lua) == lua
         if eltya <: BlasFloat
             # test conversion of LU factorization's numerical type
@@ -210,7 +210,7 @@ end
     l,u,p = lua[:L], lua[:U], lua[:p]
     @test l*u ≈ a[p,:]
     @test l[invperm(p),:]*u ≈ a
-    @test a*inv(lua) ≈ eye(n)
+    @test a*inv(lua) ≈ Matrix(I, n, n)
     let Bs = b
         for b in (Bs, view(Bs, 1:n, 1))
             @test a*(lua\b) ≈ b

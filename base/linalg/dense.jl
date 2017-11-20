@@ -485,7 +485,7 @@ used, otherwise the scaling and squaring algorithm (see [^H05]) is chosen.
 
 # Examples
 ```jldoctest
-julia> A = eye(2, 2)
+julia> A = Matrix(1.0I, 2, 2)
 2×2 Array{Float64,2}:
  1.0  0.0
  0.0  1.0
@@ -508,7 +508,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = norm(A, 1)
-    I    = eye(T,n)
+    Inn    = Matrix{T}(I, n, n)
     ## For sufficiently small nA, use lower order Padé-Approximations
     if (nA <= 2.1)
         if nA > 0.95
@@ -525,7 +525,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
             C = T[120.,60.,12.,1.]
         end
         A2 = A * A
-        P  = copy(I)
+        P  = copy(Inn)
         U  = C[2] * P
         V  = C[1] * P
         for k in 1:(div(size(C, 1), 2) - 1)
@@ -552,9 +552,9 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         A4 = A2 * A2
         A6 = A2 * A4
         U  = A * (A6 * (CC[14]*A6 + CC[12]*A4 + CC[10]*A2) +
-                  CC[8]*A6 + CC[6]*A4 + CC[4]*A2 + CC[2]*I)
+                  CC[8]*A6 + CC[6]*A4 + CC[4]*A2 + CC[2]*Inn)
         V  = A6 * (CC[13]*A6 + CC[11]*A4 + CC[9]*A2) +
-                   CC[7]*A6 + CC[5]*A4 + CC[3]*A2 + CC[1]*I
+                   CC[7]*A6 + CC[5]*A4 + CC[3]*A2 + CC[1]*Inn
 
         X = V + U
         LAPACK.gesv!(V-U, X)
@@ -614,7 +614,7 @@ triangular factor.
 
 # Examples
 ```jldoctest
-julia> A = 2.7182818 * eye(2)
+julia> A = Matrix(2.7182818*I, 2, 2)
 2×2 Array{Float64,2}:
  2.71828  0.0
  0.0      2.71828
@@ -1331,7 +1331,7 @@ julia> nullspace(M)
 """
 function nullspace(A::StridedMatrix{T}) where T
     m, n = size(A)
-    (m == 0 || n == 0) && return eye(T, n)
+    (m == 0 || n == 0) && return Matrix{T}(I, n, n)
     SVD = svdfact(A, full = true)
     indstart = sum(SVD.S .> max(m,n)*maximum(SVD.S)*eps(eltype(SVD.S))) + 1
     return SVD.Vt[indstart:end,:]'
