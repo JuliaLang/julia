@@ -60,6 +60,9 @@ macro test999_str(args...); args; end
 
 # issue #5997
 @test_throws ParseError Meta.parse(": x")
+@test_throws ParseError Meta.parse("""begin
+    :
+    x""")
 @test_throws ParseError Meta.parse("d[: 2]")
 
 # issue #6770
@@ -70,6 +73,14 @@ macro test999_str(args...); args; end
 @test_throws ParseError Meta.parse("x' y")
 @test_throws ParseError Meta.parse("x 'y")
 @test Meta.parse("x'y") == Expr(:call, :*, Expr(Symbol("'"), :x), :y)
+
+# issue #18851
+@test Meta.parse("-2[m]") == Expr(:call, :-, Expr(:ref, 2, :m))
+@test Meta.parse("+2[m]") == Expr(:call, :+, Expr(:ref, 2, :m))
+@test Meta.parse("!2[3]") == Expr(:call, :!, Expr(:ref, 2, 3))
+@test Meta.parse("-2{m}") == Expr(:call, :-, Expr(:curly, 2, :m))
+@test Meta.parse("+2{m}") == Expr(:call, :+, Expr(:curly, 2, :m))
+@test Meta.parse("-2(m)") == Expr(:call, :*, -2, :m)
 
 # issue #8301
 @test_throws ParseError Meta.parse("&*s")
@@ -973,6 +984,12 @@ end
 # issue #20575
 @test_throws ParseError Meta.parse("\"a\"x")
 @test_throws ParseError Meta.parse("\"a\"begin end")
+@test_throws ParseError Meta.parse("\"a\"begin end\"b\"")
+
+# issue #16427
+@test_throws ParseError Meta.parse("for i=1:1 end(3)")
+@test_throws ParseError Meta.parse("begin end(3)")
+@test_throws ParseError Meta.parse("while false end(3)")
 
 # comment 298107224 on pull #21607
 module Test21607

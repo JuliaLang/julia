@@ -1021,14 +1021,14 @@
               (let ((nch (peek-char (ts:port s))))
                 (if (or (and (char? nch) (char-numeric? nch))
                         (and (eqv? nch #\.) (read-char (ts:port s))))
-                    (let ((num (parse-juxtapose
-                                (read-number (ts:port s) (eqv? nch #\.) (eq? op '-))
-                                s)))
-                      (if (is-prec-power? (peek-token s))
-                          ;; -2^x parsed as (- (^ 2 x))
+                    (let ((num (read-number (ts:port s) (eqv? nch #\.) (eq? op '-))))
+                      (if (or (memv (peek-token s) '(#\[ #\{))
+                              (is-prec-power? (peek-token s)))
+                          ;; `[`, `{` (issue #18851) and `^` have higher precedence than
+                          ;; unary negation; -2^x parsed as (- (^ 2 x)).
                           (begin (ts:put-back! s (maybe-negate op num) spc)
                                  (list 'call op (parse-factor s)))
-                          num))
+                          (parse-juxtapose num s)))
                     (parse-unary-call s op #t spc)))
               (parse-unary-call s op (unary-op? op) spc)))
         (parse-juxtapose (parse-factor s) s))))
@@ -1052,13 +1052,18 @@
                  args
                  (cons 'call args)))))))
 
+(define block-form? (Set '(block quote if for while let function macro abstract primitive struct
+                                 try module)))
+
 ;; given an expression and the next token, is there a juxtaposition
 ;; operator between them?
 (define (juxtapose? s expr t)
   (and (or (number? expr)
            (large-number? expr)
            (and (not (number? t))    ;; disallow "x.3" and "sqrt(2)2"
-                (not (eqv? t #\@)))  ;; disallow "x@time"
+                (not (eqv? t #\@))   ;; disallow "x@time"
+                ;; issue #16427, disallow juxtaposition with block forms
+                (not (and (pair? expr) (block-form? (car expr)))))
            ;; to allow x'y as a special case
            #;(and (pair? expr) (memq (car expr) '(|'| |.'|))
                 (not (memv t '(#\( #\[ #\{))))
@@ -1067,7 +1072,8 @@
        (not (operator? t))
        (not (closing-token? t))
        (not (newline? t))
-       (or (not (string? expr))  ;; issue #20575
+       (or (and (not (string? expr)) (not (eqv? t #\")))
+           ;; issue #20575
            (error "cannot juxtapose string literal"))
        (not (initial-reserved-word? t))
        (not (and (pair? expr) (syntactic-unary-op? (car expr))))
@@ -2207,7 +2213,7 @@
                       (or (not (symbol? nxt))
                           (ts:space? s)))
                  ':
-                 (if (ts:space? s)
+                 (if (or (ts:space? s) (eqv? nxt #\newline))
                      (error "space not allowed after \":\" used for quoting")
                      (list 'quote (parse-atom s #f))))))
 
