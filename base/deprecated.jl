@@ -1927,6 +1927,8 @@ end
     nothing
 end
 
+@deprecate whos varinfo # PR24670
+
 # indexing with A[true] will throw an argument error in the future
 function to_index(i::Bool)
     depwarn("indexing with Bool values is deprecated. Convert the index to an integer first with `Int(i)`.", (:getindex, :setindex!, :view))

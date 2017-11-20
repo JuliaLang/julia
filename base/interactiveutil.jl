@@ -731,13 +731,13 @@ end
 
 
 """
-    whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
+    varinfo(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
 
 Print information about exported global variables in a module, optionally restricted to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 """
-function whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
+function varinfo(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
     maxline = displaysize(io)[2]
     line = zeros(UInt8, maxline)
     head = PipeBuffer(maxline + 1)
@@ -780,5 +780,5 @@ function whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
         end
     end
 end
-whos(m::Module, pat::Regex=r"") = whos(STDOUT, m, pat)
-whos(pat::Regex) = whos(STDOUT, Main, pat)
+varinfo(m::Module, pat::Regex=r"") = varinfo(STDOUT, m, pat)
+varinfo(pat::Regex) = varinfo(STDOUT, Main, pat)
