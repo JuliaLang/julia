@@ -263,6 +263,12 @@ richest supported multimedia output for `x`, with plain-text [`STDOUT`](@ref) ou
 The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
 a [`MethodError`](@ref) if `d` cannot display objects of this type.
 
+In general, you cannot assume that `display` output goes to `STDOUT` (unlike [`print(x)`](@ref) or
+[`show(x)`](@ref)).  For example, `display(x)` may open up a separate window with an image.
+`display(x)` means "show `x` in the best way you can for the current output device(s)."
+If you want REPL-like text output that is guaranteed to go to `STDOUT`, use
+[`show(STDOUT, "text/plain", x)`](@ref) instead.
+
 There are also two variants with a `mime` argument (a MIME type string, such as
 `"image/png"`), which attempt to display `x` using the requested MIME type *only*, throwing
 a `MethodError` if this type is not supported by either the display(s) or by `x`. With these

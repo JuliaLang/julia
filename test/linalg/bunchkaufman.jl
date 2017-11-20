@@ -19,7 +19,7 @@ a2img  = randn(n,n)/2
 breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
-@testset for eltya in (Float32, Float64, Complex64, Complex128, Int)
+@testset "$eltya argument A" for eltya in (Float32, Float64, Complex64, Complex128, Int)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     asym = a.'+ a                  # symmetric indefinite
@@ -71,7 +71,7 @@ bimg  = randn(n,2)/2
             end
         end
 
-        @testset for eltyb in (Float32, Float64, Complex64, Complex128, Int)
+        @testset "$eltyb argument B" for eltyb in (Float32, Float64, Complex64, Complex128, Int)
             b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
             for b in (b, view(b, 1:n, 1:2))
                 εb = eps(abs(float(one(eltyb))))
@@ -101,29 +101,25 @@ bimg  = randn(n,2)/2
                 end
             end
         end
-    end
-end
-
-
-@testset "Bunch-Kaufman factors of a singular matrix" begin
-    let As1 = ones(n, n)
-        As2 = complex(ones(n, n))
-        As3 = complex(ones(n, n))
-        As3[end, 1] += im
-        As3[1, end] -= im
-
-        for As = (As1, As2, As3)
-            for As in (As, view(As, 1:n, 1:n))
-                @testset for rook in (false, true)
-                    @testset for uplo in (:L, :U)
-                        F = bkfact(issymmetric(As) ? Symmetric(As, uplo) : Hermitian(As, uplo), rook)
-                        @test !LinAlg.issuccess(F)
-                        # test printing of this as well!
-                        bks = sprint(show, "text/plain", F)
-                        @test bks == "Failed factorization of type $(typeof(F))"
-                        @test det(F) == 0
-                        @test_throws LinAlg.SingularException inv(F)
-                        @test_throws LinAlg.SingularException F \ ones(size(As, 1))
+        if eltya <: BlasReal
+            As1 = ones(eltya, n, n)
+            As2 = complex(ones(eltya, n, n))
+            As3 = complex(ones(eltya, n, n))
+            As3[end, 1] += im/2
+            As3[1, end] -= im/2
+            for As = (As1, As2, As3)
+                for As in (As, view(As, 1:n, 1:n))
+                    @testset "$uplo Bunch-Kaufman factors of a singular matrix" for uplo in (:L, :U)
+                        @testset for rook in (false, true)
+                            F = bkfact(issymmetric(As) ? Symmetric(As, uplo) : Hermitian(As, uplo), rook)
+                            @test !LinAlg.issuccess(F)
+                            # test printing of this as well!
+                            bks = sprint(show, "text/plain", F)
+                            @test bks == "Failed factorization of type $(typeof(F))"
+                            @test det(F) == 0
+                            @test_throws LinAlg.SingularException inv(F)
+                            @test_throws LinAlg.SingularException F \ ones(size(As, 1))
+                        end
                     end
                 end
             end

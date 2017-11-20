@@ -9,13 +9,16 @@ leading newlines removed). If `raw` is `true`, the message is not stripped
 of any such newlines.
 """
 function message(c::GitCommit, raw::Bool=false)
-    local msg_ptr::Cstring
-    msg_ptr = raw ? ccall((:git_commit_message_raw, :libgit2), Cstring, (Ptr{Void},), c.ptr) :
-                    ccall((:git_commit_message, :libgit2), Cstring, (Ptr{Void},), c.ptr)
-    if msg_ptr == C_NULL
-        return nothing
+    Base.@gc_preserve c begin
+        local msg_ptr::Cstring
+        msg_ptr = raw ? ccall((:git_commit_message_raw, :libgit2), Cstring, (Ptr{Void},), c.ptr) :
+                        ccall((:git_commit_message, :libgit2), Cstring, (Ptr{Void},), c.ptr)
+        if msg_ptr == C_NULL
+            return nothing
+        end
+        msg_str = unsafe_string(msg_ptr)
     end
-    return unsafe_string(msg_ptr)
+    return msg_str
 end
 
 """
@@ -25,9 +28,12 @@ Return the `Signature` of the author of the commit `c`. The author is
 the person who made changes to the relevant file(s). See also [`committer`](@ref).
 """
 function author(c::GitCommit)
-    ptr = ccall((:git_commit_author, :libgit2), Ptr{SignatureStruct}, (Ptr{Void},), c.ptr)
-    @assert ptr != C_NULL
-    return Signature(ptr)
+    Base.@gc_preserve c begin
+        ptr = ccall((:git_commit_author, :libgit2), Ptr{SignatureStruct}, (Ptr{Void},), c.ptr)
+        @assert ptr != C_NULL
+        sig = Signature(ptr)
+    end
+    return sig
 end
 
 """
@@ -39,9 +45,11 @@ need not be the same as the `author`, for example, if the `author` emailed a pat
 a `committer` who committed it.
 """
 function committer(c::GitCommit)
-    ptr = ccall((:git_commit_committer, :libgit2), Ptr{SignatureStruct}, (Ptr{Void},), c.ptr)
-    @assert ptr != C_NULL
-    return Signature(ptr)
+    Base.@gc_preserve c begin
+        ptr = ccall((:git_commit_committer, :libgit2), Ptr{SignatureStruct}, (Ptr{Void},), c.ptr)
+        sig = Signature(ptr)
+    end
+    return sig
 end
 
 function Base.show(io::IO, c::GitCommit)
