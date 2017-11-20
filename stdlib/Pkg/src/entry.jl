@@ -3,9 +3,10 @@
 module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
+import Pkg
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
 using ...LibGit2
-import ...Pkg.PkgError
+import ..PkgError
 using ..Types
 
 macro recover(ex)
@@ -584,6 +585,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
     # TODO: serialize the same way the load cache does, not with strings
     LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
     code = """
+        import Pkg
         empty!(Base.LOAD_PATH)
         append!(Base.LOAD_PATH, $(repr(LOAD_PATH)))
         empty!(Base.LOAD_CACHE_PATH)
@@ -598,7 +600,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
                     evalfile(build_file)
                 end
             catch err
-                Base.Pkg.Entry.warnbanner(err, label="[ ERROR: \$pkg ]")
+                Pkg.Entry.warnbanner(err, label="[ ERROR: \$pkg ]")
                 serialize(f, pkg)
                 serialize(f, err)
             end

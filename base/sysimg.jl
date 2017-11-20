@@ -397,8 +397,8 @@ include("statistics.jl")
 # libgit2 support
 include("libgit2/libgit2.jl")
 
-# package manager
-include("pkg/pkg.jl")
+# package manager replacement functions
+include("_pkg.jl")
 
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")
@@ -467,6 +467,7 @@ using Base
 unshift!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
 # load some stdlib packages but don't put their names in Main
+Base.require(:Pkg)
 Base.require(:DelimitedFiles)
 Base.require(:Test)
 Base.require(:Dates)

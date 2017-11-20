@@ -1,10 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Pkg.Types
-using Base.Pkg.Query
-using Base.Pkg.Resolve
-using Base.Pkg.Resolve.VersionWeights
-import Base.Pkg.PkgError
+import Pkg
+using Pkg.Types
+using Pkg.Query
+using Pkg.Resolve
+using Pkg.Resolve.VersionWeights
+import Pkg.PkgError
 
 # Check that VersionWeight keeps the same ordering as VersionNumber
 
@@ -536,7 +537,7 @@ want_data = Dict("A"=>v"1", "B"=>v"2", "C"=>v"2", "D"=>v"2", "E"=>v"2")
 ## DEPENDENCY SCHEME 12: A REALISTIC EXAMPLE
 ## ref issue #21485
 
-include("resolvedata1.jl")
+include(joinpath(@__DIR__, "resolvedata1.jl"))
 
 @test sanity_tst(deps_data, problematic_data)
 @test resolve_tst(deps_data, reqs_data, want_data)

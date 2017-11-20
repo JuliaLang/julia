@@ -1,5 +1,6 @@
 # Install dependencies needed to build the documentation.
 ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
+import Pkg
 Pkg.init()
 cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); remove_destination = true)
 Pkg.update()
@@ -30,6 +31,7 @@ if Sys.iswindows()
     cp_q("../stdlib/FileWatching/docs/src/index.md",   "src/stdlib/filewatching.md")
     cp_q("../stdlib/CRC32c/docs/src/index.md",         "src/stdlib/crc32c.md")
     cp_q("../stdlib/Dates/docs/src/index.md",          "src/stdlib/dates.md")
+    cp_q("../stdlib/Pkg/docs/src/index.md",            "src/stdlib/pkg.md")
 else
     symlink_q("../../../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
     symlink_q("../../../stdlib/Test/docs/src/index.md",           "src/stdlib/test.md")
@@ -40,6 +42,7 @@ else
     symlink_q("../../../stdlib/FileWatching/docs/src/index.md",   "src/stdlib/filewatching.md")
     symlink_q("../../../stdlib/CRC32c/docs/src/index.md",         "src/stdlib/crc32c.md")
     symlink_q("../../../stdlib/Dates/docs/src/index.md",          "src/stdlib/dates.md")
+    symlink_q("../../../stdlib/Pkg/docs/src/index.md",            "src/stdlib/pkg.md")
 end
 
 const PAGES = [
@@ -148,11 +151,11 @@ const PAGES = [
     ],
 ]
 
-using DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, CRC32c, Dates
+using DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, CRC32c, Dates, Pkg
 
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, Dates],
+    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, CRC32c, Dates, Pkg],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,

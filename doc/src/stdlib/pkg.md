@@ -1,0 +1,1 @@
+../../../stdlib/Pkg/docs/src/index.md

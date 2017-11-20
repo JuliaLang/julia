@@ -246,8 +246,8 @@ io = IOBuffer()
 @test VersionNumber(true, 0x2, Int128(3), (), (GenericString("sp"), 0x2)) == v"1.2.3+sp.2"
 
 # VersionSet tests
-
-import Base.Pkg.Types: VersionInterval, VersionSet
+import Pkg
+import Pkg.Types: VersionInterval, VersionSet
 
 function chkint(a::VersionSet)
     ints = a.intervals

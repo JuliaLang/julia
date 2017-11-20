@@ -2,7 +2,8 @@
 
 module Cache
 
-import ...LibGit2, ..Dir, ...Pkg.PkgError
+import Pkg
+import ...LibGit2, ..Dir, ..PkgError
 using ..Types
 
 rewrite_url_to = "https"

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base.Pkg.PkgError
+import Pkg.PkgError
 
 function capture_stdout(f::Function)
     let fname = tempname()
@@ -400,13 +400,13 @@ temp_pkg_dir() do
         touch(depsbuild)
         # Pkg.build works without the src directory now
         # but it's probably fine to require it.
-        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`, String)
+        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); import Pkg; Pkg.build("BuildFail")'`, String)
         @test contains(msg, "Building BuildFail")
         @test !contains(msg, "ERROR")
         open(depsbuild, "w") do fd
             println(fd, "error(\"Throw build error\")")
         end
-        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`, String)
+        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); import Pkg; Pkg.build("BuildFail")'`, String)
         @test contains(msg, "Building BuildFail")
         @test contains(msg, "ERROR")
         @test contains(msg, "Pkg.build(\"BuildFail\")")
@@ -417,7 +417,7 @@ temp_pkg_dir() do
     let package = "Example"
         Pkg.rm(package)  # Remove package if installed
         @test Pkg.installed(package) === nothing  # Registered with METADATA but not installed
-        msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`), String)
+        msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); import Pkg; Pkg.build(\"$package\")"`), String)
         @test contains(msg, "$package is not an installed package")
         @test !contains(msg, "signal (15)")
     end
@@ -526,7 +526,7 @@ temp_pkg_dir() do
 
         Pkg.add(package)
         msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
-            "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`), String)
+            "redirect_stderr(STDOUT); using Example; import Pkg; Pkg.update(\"$package\")"`), String)
         @test contains(msg, "- $package\nRestart Julia to use the updated versions.")
     end
 
@@ -549,7 +549,7 @@ temp_pkg_dir() do
         write(joinpath(home, ".juliarc.jl"), "const JULIA_RC_LOADED = true")
 
         withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => home) do
-            code = "redirect_stderr(STDOUT); Pkg.build(\"$package\")"
+            code = "redirect_stderr(STDOUT); import Pkg; Pkg.build(\"$package\")"
 
             msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
             @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
@@ -559,7 +559,7 @@ temp_pkg_dir() do
             @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
             @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined true")
 
-            code = "redirect_stderr(STDOUT); Pkg.test(\"$package\")"
+            code = "redirect_stderr(STDOUT); import Pkg; Pkg.test(\"$package\")"
 
             msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
             @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
@@ -582,7 +582,7 @@ temp_pkg_dir() do
             """
         write_build(package, content)
 
-        code = "Pkg.build(\"$package\")"
+        code = "import Pkg; Pkg.build(\"$package\")"
         msg = run(pipeline(
             `$(Base.julia_cmd()) --startup-file=no -e $code`,
             stdout=stdout_file, stderr=stderr_file))
@@ -639,7 +639,7 @@ end
 end
 
 let io = IOBuffer()
-    Base.showerror(io, Base.Pkg.Entry.PkgTestError("ppp"), backtrace())
+    Base.showerror(io, Pkg.Entry.PkgTestError("ppp"), backtrace())
     @test !contains(String(take!(io)), "backtrace()")
 end
 

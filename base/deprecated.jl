@@ -334,7 +334,6 @@ for op in (:(!=), :≠, :+, :-, :*, :/, :÷, :%, :<, :(<=), :≤, :(==), :>, :>=
 end
 
 # Devectorize manually vectorized abs methods in favor of compact broadcast syntax
-@deprecate abs(f::Base.Pkg.Resolve.MaxSum.Field) abs.(f)
 @deprecate abs(B::BitArray) abs.(B)
 @deprecate abs(M::Bidiagonal) abs.(M)
 @deprecate abs(D::Diagonal) abs.(D)
@@ -1273,6 +1272,8 @@ export conv, conv2, deconv, filt, filt!, xcorr
 @deprecate_moved PollingFileWatcher "FileWatching" true true
 @deprecate_moved watch_file "FileWatching" true true
 @deprecate_moved FileMonitor "FileWatching" true true
+
+@deprecate_binding Pkg nothing true ", run `using Pkg` instead"
 
 @deprecate_moved crc32c "CRC32c" true true
 
