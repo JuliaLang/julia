@@ -2179,25 +2179,18 @@
                    (begin (read-char (ts:port s)) firstch)
                    (let ((b (open-output-string)))
                      (let loop ((c firstch))
-                       (if (eqv? c #\')
-                           #t
-                           (begin (if (eqv? c #\")
-                                      (error "invalid character literal") ;; issue 14683
-                                      #t)
+                       (if (not (eqv? c #\'))
+                           (begin (if (eqv? c #\")   ;; issue 14683
+                                      (error "invalid character literal"))
                                   (write-char (not-eof-1 c) b)
                                   (if (eqv? c #\\)
-                                      (write-char
-                                       (not-eof-1 (read-char (ts:port s))) b))
-                                      (loop (read-char (ts:port s))))))
-                     (let ((str (unescape-string (io.tostring! b))))
-                       (if (= (length str) 1)
-                           ;; one byte, e.g. '\xff'. maybe not valid UTF-8, but we
-                           ;; want to use the raw value as a codepoint in this case.
-                           (wchar (aref str 0))
-                           (if (or (not (= (string-length str) 1))
-                                   (not (string.isutf8 str)))
-                               (error "invalid character literal")
-                               (string.char str 0))))))))
+                                      (write-char (not-eof-1 (read-char (ts:port s)))
+                                                  b))
+                                  (loop (read-char (ts:port s))))))
+                     (let ((str (tostr #f b)))
+                       (if (= (string-length str) 1)
+                           (string.char str 0)
+                           (error "invalid character literal")))))))
 
           ;; symbol/expression quote
           ((eq? t ':)

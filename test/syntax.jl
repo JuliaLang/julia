@@ -237,6 +237,12 @@ end
 @test_throws ParseError Meta.parse("'\\A\"'")
 @test Meta.parse("'\"'") == Meta.parse("'\\\"'") == '"' == "\""[1] == '\42'
 
+# issue #24558
+@test_throws ParseError Meta.parse("'\\xff'")
+@test_throws ParseError Meta.parse("'\\x80'")
+@test_throws ParseError Meta.parse("'ab'")
+@test '\u2200' == "\u2200"[1]
+
 @test_throws ParseError Meta.parse("f(2x for x=1:10, y")
 
 # issue #15223
