@@ -229,6 +229,7 @@ include("parse.jl")
 include("shell.jl")
 include("regex.jl")
 include("show.jl")
+include("arrayshow.jl")
 
 # multidimensional arrays
 include("cartesian.jl")
