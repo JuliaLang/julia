@@ -35,10 +35,16 @@ function Base.convert(::Type{GitSignature}, sig::Signature)
     return GitSignature(sig_ptr_ptr[])
 end
 
+# Work around needing to access Dates from Base,
+# even though Dates is in the stdlib.
+# This Ref is filled with the needed function
+# when Dates is loaed
+const unix2datetime = Ref{Any}()
+
 function Base.show(io::IO, sig::Signature)
     print(io, "Name: ", sig.name, ", ")
     print(io, "Email: ", sig.email, ", ")
-    print(io, "Time: ", Dates.unix2datetime(sig.time + 60*sig.time_offset))
+    print(io, "Time: ", unix2datetime[](sig.time + 60*sig.time_offset))
     @printf(io, "%+03i:%02i", divrem(sig.time_offset, 60)...)
 end
 

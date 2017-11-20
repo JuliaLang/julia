@@ -50,6 +50,8 @@ include("io.jl")
 include("parse.jl")
 include("deprecated.jl")
 
+Base.LibGit2.unix2datetime[] = unix2datetime
+
 export Period, DatePeriod, TimePeriod,
        Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
        Microsecond, Nanosecond,
