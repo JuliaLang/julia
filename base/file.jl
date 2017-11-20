@@ -401,11 +401,11 @@ struct uv_dirent_t
 end
 
 """
-    readdir(dir::AbstractString=".") -> Vector{String}
+    readdir(dir::AbstractString="."; sort::Bool=true) -> Vector{String}
 
-Returns the files and directories in the directory `dir` (or the current working directory if not given).
+Returns the files and directories in the directory `dir` (or the current working directory if not given). If `sort=false` the resulting list won't necessarily be sorted.
 """
-function readdir(path::AbstractString)
+function readdir(path::AbstractString; sort::Bool=true)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
@@ -424,6 +424,9 @@ function readdir(path::AbstractString)
 
     # Clean up the request string
     ccall(:jl_uv_fs_req_cleanup, Void, (Ptr{UInt8},), uv_readdir_req)
+
+    # sort entries if not requested otherwise
+    sort && sort!(entries)
 
     return entries
 end
