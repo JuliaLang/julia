@@ -955,7 +955,7 @@ export
     names,
     versioninfo,
     which,
-    whos,
+    varinfo,
     workspace,
     @isdefined,
 

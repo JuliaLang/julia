@@ -566,7 +566,7 @@ julia> gvar_self = "Node1"
 julia> remotecall_fetch(()->gvar_self, 2)
 "Node1"
 
-julia> remotecall_fetch(whos, 2)
+julia> remotecall_fetch(varinfo, 2)
 	From worker 2:	                          Base  41762 KB     Module
 	From worker 2:	                          Core  27337 KB     Module
 	From worker 2:	                           Foo   2477 bytes  Module

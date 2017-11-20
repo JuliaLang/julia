@@ -312,7 +312,7 @@ julia> let B = B
            remotecall_fetch(()->B, 2)
        end;
 
-julia> @spawnat 2 whos();
+julia> @spawnat 2 varinfo();
 
 julia>  From worker 2:                               A    800 bytes  10×10 Array{Float64,2}
         From worker 2:                            Base               Module
