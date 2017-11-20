@@ -298,8 +298,12 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
  -16.0  -43.0   98.0
 
 julia> C = cholfact(A)
-Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
-[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]
+Base.LinAlg.Cholesky{Float64,Array{Float64,2}}
+U factor:
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 2.0  6.0  -8.0
+  ⋅   1.0   5.0
+  ⋅    ⋅    3.0
 
 julia> C[:U]
 3×3 UpperTriangular{Float64,Array{Float64,2}}:

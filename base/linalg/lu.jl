@@ -130,9 +130,15 @@ julia> A = [4 3; 6 3]
  6  3
 
 julia> F = lufact(A)
-Base.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:
-[1.0 0.0; 1.5 1.0]
-[4.0 3.0; 0.0 -1.5]
+Base.LinAlg.LU{Float64,Array{Float64,2}}
+L factor:
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 1.5  1.0
+U factor:
+2×2 Array{Float64,2}:
+ 4.0   3.0
+ 0.0  -1.5
 
 julia> F[:L] * F[:U] == A[F[:p], :]
 true
