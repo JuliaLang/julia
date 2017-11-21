@@ -603,7 +603,7 @@ Deprecated or removed
 
   * Automatically broadcasted `+` and `-` for `array + scalar`, `scalar - array`, and so-on have
     been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
-    instead.
+    instead ([#22880], [#22932]).
 
   * `isleaftype` is deprecated in favor of a simpler predicate `isconcrete`. Concrete types are
     those that might equal `typeof(x)` for some `x`; `isleaftype` includes some types for which
