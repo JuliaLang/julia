@@ -46,13 +46,13 @@ gethandle(io::IO) = fd(io)
 function settings(s::Int, shared::Bool)
     flags = shared ? MAP_SHARED : MAP_PRIVATE
     if s == INVALID_HANDLE_VALUE
-        flags |= MAP_ANONYMOUS
-        prot = PROT_READ | PROT_WRITE
+        flags = bitor(flags, MAP_ANONYMOUS)
+        prot = bitor(PROT_READ, PROT_WRITE)
     else
         mode = ccall(:fcntl,Cint,(Cint,Cint),s,F_GETFL)
         systemerror("fcntl F_GETFL", mode == -1)
         mode = mode & 3
-        prot = mode == 0 ? PROT_READ : mode == 1 ? PROT_WRITE : PROT_READ | PROT_WRITE
+        prot = mode == 0 ? PROT_READ : mode == 1 ? PROT_WRITE : bitor(PROT_READ, PROT_WRITE)
         if prot & PROT_READ == 0
             throw(ArgumentError("mmap requires read permissions on the file (open with \"r+\" mode to override)"))
         end

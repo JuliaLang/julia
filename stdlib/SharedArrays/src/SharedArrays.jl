@@ -113,12 +113,12 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
         shm_seg_name = @sprintf("/jl%06u%s", getpid() % 10^6, randstring(20))
         if onlocalhost
             shmmem_create_pid = myid()
-            s = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
+            s = shm_mmap_array(T, dims, shm_seg_name, bitor(JL_O_CREAT, JL_O_RDWR))
         else
             # The shared array is created on a remote machine
             shmmem_create_pid = pids[1]
             remotecall_fetch(pids[1]) do
-                shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
+                shm_mmap_array(T, dims, shm_seg_name, bitor(JL_O_CREAT, JL_O_RDWR))
                 nothing
             end
         end
@@ -659,7 +659,7 @@ shm_unlink(shm_seg_name) = 0
 
 else # !windows
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
-    fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
+    fd_mem = shm_open(shm_seg_name, mode, bitor(S_IRUSR, S_IWUSR))
     systemerror("shm_open() failed for " * shm_seg_name, fd_mem < 0)
 
     s = fdio(fd_mem, true)

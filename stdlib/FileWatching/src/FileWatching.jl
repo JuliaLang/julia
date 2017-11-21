@@ -288,7 +288,7 @@ function uv_pollcb(handle::Ptr{Void}, status::Int32, events::Int32)
     if status != 0
         notify_error(t.notify, UVError("FDWatcher", status))
     else
-        t.events |= events
+        t.events = bitor(t.events, events)
         if t.active[1] || t.active[2]
             if isempty(t.notify.waitq)
                 # if we keep hearing about events when nobody appears to be listening,
@@ -322,7 +322,7 @@ function start_watching(t::_FDWatcher)
         uv_error("start_watching (File Handle)",
                  ccall(:uv_poll_start, Int32, (Ptr{Void}, Int32, Ptr{Void}),
                        t.handle,
-                       (readable ? UV_READABLE : 0) | (writable ? UV_WRITABLE : 0),
+                       bitor(readable ? UV_READABLE : 0, writable ? UV_WRITABLE : 0),
                        uv_jl_pollcb::Ptr{Void}))
         t.active = (readable, writable)
     end
@@ -375,7 +375,7 @@ function wait(fdw::_FDWatcher; readable=true, writable=true)
     while true
         if isa(events, FDEvent)
             events = events::FDEvent
-            events |= FDEvent(fdw.events)
+            events = bitor(events, FDEvent(fdw.events))
             haveevent = false
             if readable && isreadable(events)
                 fdw.events &= bitnot(UV_READABLE)
