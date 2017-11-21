@@ -515,10 +515,7 @@ function _methods_by_ftype(t::ANY, lim::Int, world::UInt, min::Array{UInt,1}, ma
         end
     end
     if 1 < nu <= 64
-        ms = _methods_by_ftype(Any[tp...], t, length(tp), lim, [], world, min, max)
-        if all(m->isleaftype(m[1]), ms)
-            return ms
-        end
+        return _methods_by_ftype(Any[tp...], t, length(tp), lim, [], world, min, max)
     end
     # XXX: the following can return incorrect answers that the above branch would have corrected
     return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), t, lim, 0, world, min, max)
