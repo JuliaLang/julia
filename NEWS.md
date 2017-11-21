@@ -151,6 +151,8 @@ This section lists changes that do not have deprecation warnings.
 
   * Juxtaposing string literals (e.g. `"x"y`) is now a syntax error ([#20575]).
 
+  * `finalizer(function, object)` now returns `object` rather than `nothing` ([#24679]).
+
   * Macro calls with `for` expressions are now parsed as generators inside
     function argument lists ([#18650]). Examples:
 
