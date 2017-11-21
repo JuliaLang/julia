@@ -73,3 +73,12 @@ end
     @test_warn "deprecated" f21972()
     @test_nowarn f21972()
 end
+
+f24658() = depwarn24658()
+
+depwarn24658() = Base.firstcaller(backtrace(), :_func_not_found_)
+
+@testset "firstcaller" begin
+    # issue #24658
+    @test eval(:(if true; f24658(); end)) == StackTraces.UNKNOWN
+end
