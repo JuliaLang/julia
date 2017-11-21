@@ -231,12 +231,22 @@ end
     end
     trailing = utf8_trailing[b + 1]
     if l < i + trailing
-        return '\ufffd', i+1
+        for j in (i+1):l
+            @inbounds if !is_valid_continuation(codeunit(s, j))
+                return '\ufffd' j
+            end
+        end
+        return '\ufffd', l+1
     end
-    c::UInt32 = 0
-    @inbounds for j = 1:(trailing + 1)
+    @inbounds c::UInt32 = codeunit(s, i)
+    i += 1
+    @inbounds for j = 1:trailing
+        b = codeunit(s, i)
+        if !is_valid_continuation(b)
+            return '\ufffd', i
+        end
         c <<= 6
-        c += codeunit(s, i)
+        c += b
         i += 1
     end
     c -= utf8_offset[trailing + 1]
