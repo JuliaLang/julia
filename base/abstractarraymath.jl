@@ -265,12 +265,12 @@ end
 # TODO: Needs a separate IndexCartesian method, this is only fast for IndexLinear
 
 """
-    cumsum_kbn(A, [dim::Integer=1])
+    cumsum_kbn(A, dim::Integer)
 
 Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation
-algorithm for additional accuracy. The dimension defaults to 1.
+algorithm for additional accuracy.
 """
-function cumsum_kbn(A::AbstractArray{T}, axis::Integer=1) where T<:AbstractFloat
+function cumsum_kbn(A::AbstractArray{T}, axis::Integer) where T<:AbstractFloat
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]

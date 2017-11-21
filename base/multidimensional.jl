@@ -675,7 +675,7 @@ function accumulate_pairwise(op, v::AbstractVector{T}) where T
     return accumulate_pairwise!(op, out, v)
 end
 
-function cumsum!(out, v::AbstractVector, axis::Integer=1)
+function cumsum!(out, v::AbstractVector, axis::Integer)
     # we dispatch on the possibility of numerical stability issues
     _cumsum!(out, v, axis, TypeArithmetic(eltype(out)))
 end
@@ -691,7 +691,7 @@ function _cumsum!(out, v, axis, ::TypeArithmetic)
 end
 
 """
-    cumsum(A, dim=1)
+    cumsum(A, dim)
 
 Cumulative sum along a dimension `dim`. See also [`cumsum!`](@ref)
 to use a preallocated output array, both for performance and to control the precision of the
@@ -714,20 +714,24 @@ julia> cumsum(a,2)
  4  9  15
 ```
 """
-function cumsum(A::AbstractArray{T}, axis::Integer=1) where T
+function cumsum(A::AbstractArray{T}, axis::Integer) where T
     out = similar(A, rcum_promote_type(+, T))
     cumsum!(out, A, axis)
 end
 
+cumsum(x::AbstractVector) = cumsum(x, 1)
+
 """
-    cumsum!(B, A, dim::Integer=1)
+    cumsum!(B, A, dim::Integer)
 
 Cumulative sum of `A` along a dimension, storing the result in `B`. See also [`cumsum`](@ref).
 """
-cumsum!(B, A, axis::Integer=1) = accumulate!(+, B, A, axis)
+cumsum!(B, A, axis::Integer) = accumulate!(+, B, A, axis)
+
+cumsum!(y::AbstractVector, x::AbstractVector) = cumsum!(y, x, 1)
 
 """
-    cumprod(A, dim=1)
+    cumprod(A, dim)
 
 Cumulative product along a dimension `dim`. See also
 [`cumprod!`](@ref) to use a preallocated output array, both for performance and
@@ -750,18 +754,22 @@ julia> cumprod(a,2)
  4  20  120
 ```
 """
-cumprod(A::AbstractArray, axis::Integer=1) = accumulate(*, A, axis)
+cumprod(A::AbstractArray, axis::Integer) = accumulate(*, A, axis)
+
+cumprod(x::AbstractVector) = cumprod(x, 1)
 
 """
-    cumprod!(B, A, dim::Integer=1)
+    cumprod!(B, A, dim::Integer)
 
 Cumulative product of `A` along a dimension, storing the result in `B`.
 See also [`cumprod`](@ref).
 """
-cumprod!(B, A, axis::Integer=1) = accumulate!(*, B, A, axis)
+cumprod!(B, A, axis::Integer) = accumulate!(*, B, A, axis)
+
+cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, 1)
 
 """
-    accumulate(op, A, dim=1)
+    accumulate(op, A, dim)
 
 Cumulative operation `op` along a dimension `dim`. See also
 [`accumulate!`](@ref) to use a preallocated output array, both for performance and
@@ -783,11 +791,12 @@ julia> accumulate(*, [1,2,3])
  6
 ```
 """
-function accumulate(op, A, axis::Integer=1)
+function accumulate(op, A, axis::Integer)
     out = similar(A, rcum_promote_type(op, eltype(A)))
     accumulate!(op, out, A, axis)
 end
 
+accumulate(op, x::AbstractVector) = accumulate(op, x, 1)
 
 """
     accumulate(op, v0, A)
@@ -810,26 +819,29 @@ julia> accumulate(min, 0, [1,2,-1])
  -1
 ```
 """
-function accumulate(op, v0, A, axis::Integer=1)
+function accumulate(op, v0, A, axis::Integer)
     T = rcum_promote_type(op, typeof(v0), eltype(A))
     out = similar(A, T)
     accumulate!(op, out, v0, A, 1)
 end
 
-function accumulate!(op::Op, B, A::AbstractVector, axis::Integer=1) where Op
+accumulate(op, v0, x::AbstractVector) = accumulate(op, v0, x, 1)
+
+function accumulate!(op::Op, B, A::AbstractVector, axis::Integer) where Op
     isempty(A) && return B
     v1 = first(A)
     _accumulate1!(op, B, v1, A, axis)
 end
 
-function accumulate!(op, B, v0, A::AbstractVector, axis::Integer=1)
+function accumulate!(op, B, v0, A::AbstractVector, axis::Integer)
     isempty(A) && return B
     v1 = op(v0, first(A))
     _accumulate1!(op, B, v1, A, axis)
 end
 
+accumulate!(op, y::AbstractVector, v0, x::AbstractVector) = accumulate!(op, y, v0, x, 1)
 
-function _accumulate1!(op, B, v1, A::AbstractVector, axis::Integer=1)
+function _accumulate1!(op, B, v1, A::AbstractVector, axis::Integer)
     axis > 0 || throw(ArgumentError("axis must be a positive integer"))
     inds = linearindices(A)
     inds == linearindices(B) || throw(DimensionMismatch("linearindices of A and B don't match"))
@@ -845,12 +857,12 @@ function _accumulate1!(op, B, v1, A::AbstractVector, axis::Integer=1)
 end
 
 """
-    accumulate!(op, B, A, dim=1)
+    accumulate!(op, B, A, dim)
 
 Cumulative operation `op` on `A` along a dimension, storing the result in `B`.
 See also [`accumulate`](@ref).
 """
-function accumulate!(op, B, A, axis::Integer=1)
+function accumulate!(op, B, A, axis::Integer)
     axis > 0 || throw(ArgumentError("axis must be a positive integer"))
     inds_t = indices(A)
     indices(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))
@@ -875,6 +887,8 @@ function accumulate!(op, B, A, axis::Integer=1)
     end
     return B
 end
+
+accumulate!(op, y::AbstractVector, x::AbstractVector) = accumulate!(op, y, x, 1)
 
 @noinline function _accumulate!(op, B, A, R1, ind, R2)
     # Copy the initial element in each 1d vector along dimension `axis`
