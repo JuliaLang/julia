@@ -959,6 +959,20 @@ cd(dirwalk) do
 end
 rm(dirwalk, recursive=true)
 
+###################
+#     readdir     #
+###################
+
+camefrom = pwd()
+dirread = mktempdir()
+cd(dirread)
+for k in 1:10
+    touch(randstring())
+end
+@test issorted(readdir()) # Check sorted output (#24626)
+rm(dirread, recursive=true)
+cd(camefrom)
+
 ############
 # Clean up #
 ############
