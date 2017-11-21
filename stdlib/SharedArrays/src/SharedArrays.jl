@@ -255,7 +255,7 @@ function initialize_shared_array(S, onlocalhost, init, pids)
         end
     end
 
-    finalizer(S, finalize_refs)
+    finalizer(finalize_refs, S)
     S
 end
 

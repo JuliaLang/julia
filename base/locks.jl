@@ -185,7 +185,7 @@ mutable struct Mutex <: AbstractLock
     function Mutex()
         m = new(zero(Int16), Libc.malloc(UV_MUTEX_SIZE))
         ccall(:uv_mutex_init, Void, (Ptr{Void},), m.handle)
-        finalizer(m, _uv_hook_close)
+        finalizer(_uv_hook_close, m)
         return m
     end
 end
