@@ -25,7 +25,8 @@ function _threadsfor(iter,lbody)
     lidx = iter.args[1]         # index
     range = iter.args[2]
     quote
-        range = $(esc(range))
+        local threadsfor_fun
+        let range = $(esc(range))
         function threadsfor_fun(onethread=false)
             r = range # Load into local variable
             lenr = length(r)
@@ -62,6 +63,7 @@ function _threadsfor(iter,lbody)
                 local $(esc(lidx)) = Base.unsafe_getindex(r,i)
                 $(esc(lbody))
             end
+        end
         end
         # Hack to make nested threaded loops kinda work
         if threadid() != 1 || in_threaded_loop[]
