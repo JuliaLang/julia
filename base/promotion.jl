@@ -379,7 +379,7 @@ fma(x::T, y::T, z::T) where {T<:Number} = no_op_err("fma", T)
 fma(x::Integer, y::Integer, z::Integer) = x*y+z
 muladd(x::T, y::T, z::T) where {T<:Number} = x*y+z
 
-(&)(x::T, y::T) where {T<:Integer} = no_op_err("&", T)
+bitand(x::T, y::T) where {T<:Integer} = no_op_err("bitand", T)
 bitor(x::T, y::T) where {T<:Integer} = no_op_err("bitor", T)
 xor(x::T, y::T) where {T<:Integer} = no_op_err("xor", T)
 

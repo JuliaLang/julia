@@ -405,7 +405,7 @@ big(::Type{<:Rational}) = Rational{BigInt}
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
                  (:fld, :fdiv_q), (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),
                  (:gcd, :gcd), (:lcm, :lcm),
-                 (:&, :and), (:bitor, :ior), (:xor, :xor))
+                 (:bitand, :and), (:bitor, :ior), (:xor, :xor))
     @eval begin
         ($fJ)(x::BigInt, y::BigInt) = MPZ.$fC(x, y)
     end
@@ -433,7 +433,7 @@ function invmod(x::BigInt, y::BigInt)
 end
 
 # More efficient commutative operations
-for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:bitor, :ior), (:xor, :xor))
+for (fJ, fC) in ((:+, :add), (:*, :mul), (:bitand, :and), (:bitor, :ior), (:xor, :xor))
     fC! = Symbol(fC, :!)
     @eval begin
         ($fJ)(a::BigInt, b::BigInt, c::BigInt) = MPZ.$fC!(MPZ.$fC(a, b), c)

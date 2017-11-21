@@ -261,20 +261,20 @@ false
 bitnot(x::BitInteger)             = not_int(x)
 
 """
-    &(x, y)
+    bitand(x, y)
 
 Bitwise and.
 
 # Examples
 ```jldoctest
-julia> 4 & 10
+julia> bitand(4, 10)
 0
 
-julia> 4 & 12
+julia> bitand(4, 12)
 4
 ```
 """
-(&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
+bitand(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
 
 """
     bitor(x, y)
@@ -770,7 +770,7 @@ else
 end
 
 # issue #15489: since integer ops are unchecked, they shouldn't check promotion
-for op in (:+, :-, :*, :&, :bitor, :xor)
+for op in (:+, :-, :*, bitand, :bitor, :xor)
     @eval function $op(a::Integer, b::Integer)
         T = promote_typeof(a, b)
         return $op(a % T, b % T)

@@ -39,6 +39,7 @@ function !(x::Bool)
 end
 
 bitnot(x::Bool) = !x
+bitand(x::Bool, y::Bool) = and_int(x, y)
 bitor(x::Bool, y::Bool) = or_int(x, y)
 (&)(x::Bool, y::Bool) = and_int(x, y)
 (|)(x::Bool, y::Bool) = or_int(x, y)
