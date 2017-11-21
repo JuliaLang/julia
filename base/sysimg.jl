@@ -471,8 +471,8 @@ using Base
 unshift!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
 # load some stdlib packages but don't put their names in Main
-Base.require(:DelimitedFiles)
-Base.require(:Test)
+Base.require(Base, :DelimitedFiles)
+Base.require(Base, :Test)
 
 empty!(LOAD_PATH)
 

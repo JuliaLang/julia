@@ -118,17 +118,19 @@ end
 
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
-function _include_from_serialized(content::Vector{UInt8})
-    return ccall(:jl_restore_incremental_from_buf, Any, (Ptr{UInt8}, Int), content, sizeof(content))
+function _include_from_serialized(from::Module, content::Vector{UInt8})
+    return ccall(:jl_restore_incremental_from_buf, Any,
+                 (Any, Ptr{UInt8}, Int),
+                 from, content, sizeof(content))
 end
-function _include_from_serialized(path::String)
-    return ccall(:jl_restore_incremental, Any, (Cstring,), path)
+function _include_from_serialized(from::Module, path::String)
+    return ccall(:jl_restore_incremental, Any, (Any, Cstring), from, path)
 end
 
 # returns an array of modules loaded, or an Exception that describes why it failed
 # and it reconnects the Base.Docs.META
-function _require_from_serialized(mod::Symbol, path_to_try::String)
-    restored = _include_from_serialized(path_to_try)
+function _require_from_serialized(from::Module, mod::Symbol, path_to_try::String)
+    restored = _include_from_serialized(from, path_to_try)
     if !isa(restored, Exception)
         for M in restored::Vector{Any}
             if isdefined(M, Base.Docs.META)
@@ -142,13 +144,13 @@ end
 # returns `true` if require found a precompile cache for this mod, but couldn't load it
 # returns `false` if the module isn't known to be precompilable
 # returns the set of modules restored if the cache load succeeded
-function _require_search_from_serialized(mod::Symbol, sourcepath::String)
+function _require_search_from_serialized(from::Module, mod::Symbol, sourcepath::String)
     paths = find_all_in_cache_path(mod)
     for path_to_try in paths::Vector{String}
         if stale_cachefile(sourcepath, path_to_try)
             continue
         end
-        restored = _require_from_serialized(mod, path_to_try)
+        restored = _require_from_serialized(from, mod, path_to_try)
         if isa(restored, Exception)
             if isa(restored, ErrorException) && endswith(restored.msg, " uuid did not match cache file.")
                 # can't use this cache due to a module uuid mismatch,
@@ -277,7 +279,7 @@ end
 const toplevel_load = Ref(true)
 
 """
-    require(module::Symbol)
+    require(from::Module, module::Symbol)
 
 This function is part of the implementation of `using` / `import`, if a module is not
 already defined in `Main`. It can also be called directly to force reloading a module,
@@ -295,16 +297,16 @@ then tries paths in the global array `LOAD_PATH`. `require` is case-sensitive on
 all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
 """
-function require(mod::Symbol)
+function require(from::Module, mod::Symbol)
     if !root_module_exists(mod)
-        _require(mod)
+        _require(from, mod)
         # After successfully loading, notify downstream consumers
         if toplevel_load[] && myid() == 1 && nprocs() > 1
             # broadcast top-level import/using from node 1 (only)
             @sync for p in procs()
                 p == 1 && continue
                 @async remotecall_wait(p) do
-                    require(mod)
+                    require(from, mod)
                     nothing
                 end
             end
@@ -371,7 +373,7 @@ function register_all(a)
     end
 end
 
-function _require(mod::Symbol)
+function _require(from::Module, mod::Symbol)
     # dependency-tracking is only used for one top-level include(path),
     # and is not applied recursively to imported modules:
     old_track_dependencies = _track_dependencies[]
@@ -400,7 +402,7 @@ function _require(mod::Symbol)
         # attempt to load the module file via the precompile cache locations
         doneprecompile = false
         if JLOptions().use_compiled_modules != 0
-            doneprecompile = _require_search_from_serialized(mod, path)
+            doneprecompile = _require_search_from_serialized(from, mod, path)
             if !isa(doneprecompile, Bool)
                 register_all(doneprecompile)
                 return
@@ -424,7 +426,7 @@ function _require(mod::Symbol)
             # spawn off a new incremental pre-compile task for recursive `require` calls
             # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
             cachefile = compilecache(mod)
-            m = _require_from_serialized(mod, cachefile)
+            m = _require_from_serialized(from, mod, cachefile)
             if isa(m, Exception)
                 warn("The call to compilecache failed to create a usable precompiled cache file for module $name. Got:")
                 warn(m, prefix="WARNING: ")
@@ -446,7 +448,7 @@ function _require(mod::Symbol)
             end
             # the file requested `__precompile__`, so try to build a cache file and use that
             cachefile = compilecache(mod)
-            m = _require_from_serialized(mod, cachefile)
+            m = _require_from_serialized(from, mod, cachefile)
             if isa(m, Exception)
                 warn(m, prefix="WARNING: ")
                 # TODO: disable __precompile__(true) error and do normal include instead of error

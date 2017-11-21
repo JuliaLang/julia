@@ -1924,7 +1924,7 @@ static int size_isgreater(const void *a, const void *b)
     return *(size_t*)b - *(size_t*)a;
 }
 
-static jl_value_t *read_verify_mod_list(ios_t *s, arraylist_t *dependent_worlds)
+static jl_value_t *read_verify_mod_list(jl_module_t *from, ios_t *s, arraylist_t *dependent_worlds)
 {
     if (!jl_main_module->uuid) {
         return jl_get_exceptionf(jl_errorexception_type,
@@ -1947,9 +1947,9 @@ static jl_value_t *read_verify_mod_list(ios_t *s, arraylist_t *dependent_worlds)
         static jl_value_t *require_func = NULL;
         if (!require_func)
             require_func = jl_get_global(jl_base_module, jl_symbol("require"));
-        jl_value_t *reqargs[2] = {require_func, (jl_value_t*)sym};
+        jl_value_t *reqargs[3] = {require_func, (jl_value_t*)from, (jl_value_t*)sym};
         JL_TRY {
-            m = (jl_module_t*)jl_apply(reqargs, 2);
+            m = (jl_module_t*)jl_apply(reqargs, 3);
         }
         JL_CATCH {
             ios_close(s);
@@ -2659,7 +2659,7 @@ static int trace_method(jl_typemap_entry_t *entry, void *closure)
     return 1;
 }
 
-static jl_value_t *_jl_restore_incremental(ios_t *f)
+static jl_value_t *_jl_restore_incremental(jl_module_t *from, ios_t *f)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ios_eof(f) || !jl_read_verify_header(f)) {
@@ -2682,7 +2682,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     arraylist_new(&dependent_worlds, 0);
 
     // verify that the system state is valid
-    jl_value_t *verify_result = read_verify_mod_list(f, &dependent_worlds);
+    jl_value_t *verify_result = read_verify_mod_list(from, f, &dependent_worlds);
     if (!jl_is_array(verify_result)) {
         arraylist_free(&dependent_worlds);
         ios_close(f);
@@ -2751,21 +2751,21 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     return (jl_value_t*)restored;
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(jl_module_t *from, const char *buf, size_t sz)
 {
     ios_t f;
     ios_static_buffer(&f, (char*)buf, sz);
-    return _jl_restore_incremental(&f);
+    return _jl_restore_incremental(from, &f);
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental(jl_module_t *from, const char *fname)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
         return jl_get_exceptionf(jl_errorexception_type,
             "Cache file \"%s\" not found.\n", fname);
     }
-    return _jl_restore_incremental(&f);
+    return _jl_restore_incremental(from, &f);
 }
 
 // --- init ---
