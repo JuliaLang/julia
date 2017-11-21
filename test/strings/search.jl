@@ -26,6 +26,10 @@ end
 # @test_throws BoundsError rsearchindex("foo", Char[], 0)
 # @test_throws BoundsError rsearchindex("foo", Char[], 5)
 
+@testset "in(x::Char, r::AbstractRange{Char})" begin
+    @test in('a', "bar")
+    @test !in('x', "y")
+end
 # @test_throws ErrorException in("foobar","bar")
 @test_throws BoundsError search(b"\x1\x2",0x1,0)
 @test rsearchindex(b"foo",b"o",0) == 0

@@ -930,10 +930,10 @@ median(r::AbstractRange{<:Real}) = mean(r)
 
 function _in_range(x, r::AbstractRange)
     if step(r) == 0
-        return !isempty(r) && first(r) == x
+        return !isempty(r) && isequal(first(r), x)
     else
         n = round(Integer, (x - first(r)) / step(r)) + 1
-        return n >= 1 && n <= length(r) && r[n] == x
+        return n >= 1 && n <= length(r) && isequal(r[n], x)
     end
 end
 in(x::Real, r::AbstractRange{<:Real}) = _in_range(x, r)
@@ -945,10 +945,10 @@ in(x::Integer, r::AbstractUnitRange{<:Integer}) = (first(r) <= x) & (x <= last(r
 
 in(x::Real, r::AbstractRange{T}) where {T<:Integer} =
     isinteger(x) && !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
-        (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
+        (isequal(mod(convert(T,x),step(r))-mod(first(r),step(r)), 0))
 in(x::Char, r::AbstractRange{Char}) =
     !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
-        (mod(Int(x) - Int(first(r)), step(r)) == 0)
+        (isequal(mod(Int(x) - Int(first(r)), step(r)), 0))
 
 # Addition/subtraction of ranges
 

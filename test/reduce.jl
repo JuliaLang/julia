@@ -325,14 +325,17 @@ struct SomeFunctor end
 
 
 # in
-
-@test in(1, Int[]) == false
-@test in(1, Int[1]) == true
-@test in(1, Int[2]) == false
-@test in(0, 1:3) == false
-@test in(1, 1:3) == true
-@test in(2, 1:3) == true
-
+@testset "in" begin
+      @test in(1, Int[]) == false
+      @test in(1, Int[1]) == true
+      @test in(1, Int[2]) == false
+      @test in(0, 1:3) == false
+      @test in(1, 1:3) == true
+      @test in(2, 1:3) == true
+      @test in(NaN, [1,1.3,2,NaN]) == true
+      @test in(0.0, [-0.0,2.3,"w"]) == false
+      @test in(-0.0, [-0.0,2.3,"w"]) == true
+end
 # contains
 
 @test contains("quick fox", "fox") == true

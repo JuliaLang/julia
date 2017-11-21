@@ -2590,13 +2590,15 @@ end
     @test angle(10) == 0.0
     @test angle(-10) == 3.141592653589793
 end
-@testset "in(x::Number, y::Number) = x == y" begin
+@testset "in(x::Number, y::Number) = isequal(x, y)" begin
     @test in(3,3) == true #Int
     @test in(2.0,2.0) == true #FP
     @test in(ℯ,ℯ) == true #Const
     @test in(4//5,4//5) == true #Rat
     @test in(1+2im, 1+2im) == true #Imag
     @test in(3, 3.0) == true #mixed
+    @test in(NaN, NaN) == true
+    @test in(-0.0, 0.0) == false
 end
 @testset "map(f::Callable, x::Number, ys::Number...) = f(x)" begin
     @test map(sin, 3) == sin(3)
