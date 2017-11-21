@@ -182,7 +182,7 @@ end
 end
 @testset "boolean ops" begin
     @test bitnot(BigInt(123)) == -124
-    @test BigInt(123) & BigInt(234) == 106
+    @test bitand(BigInt(123), BigInt(234)) == 106
     @test bitor(BigInt(123), BigInt(234)) == 251
     @test BigInt(123) ⊻ BigInt(234) == 145
 
@@ -229,11 +229,11 @@ end
     @test xor(a, b, c, d, f) == parse(BigInt,"-2413804710837418037418307081437316711364709261074607933698")
     @test xor(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437316711364709261074607933697")
 
-    @test (&)(a, b) == parse(BigInt,"124")
-    @test (&)(a, b, c) == parse(BigInt,"72")
-    @test (&)(a, b, c, d) == parse(BigInt,"8")
-    @test (&)(a, b, c, d, f) == parse(BigInt,"8")
-    @test (&)(a, b, c, d, f, g) == parse(BigInt,"8")
+    @test bitand(a, b) == parse(BigInt,"124")
+    @test bitand(a, b, c) == parse(BigInt,"72")
+    @test bitand(a, b, c, d) == parse(BigInt,"8")
+    @test bitand(a, b, c, d, f) == parse(BigInt,"8")
+    @test bitand(a, b, c, d, f, g) == parse(BigInt,"8")
 
     @test bitor(a, b) == parse(BigInt,"327423")
     @test bitor(a, b, c) == parse(BigInt,"3426495623485904783802111")
@@ -263,7 +263,7 @@ function bigfib(n)
     r = [BigInt(1), BigInt(1), BigInt(0)]
     s = [BigInt(1), BigInt(0), BigInt(1)]
     while true
-       (n & 1) == 1 && (s = mul(s,r))
+       bitand(n, 1) == 1 && (s = mul(s,r))
        (n >>= 1) == 0 && return s[1]
        r = mul(r,r)
     end

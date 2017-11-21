@@ -115,9 +115,9 @@ function randn_zig()
 
     while (true)
         U = rand(UInt32)
-        i = 1 + (U & 0x0000007F)     # 7 bit to choose the step
-        sign = U & 0x00000080        # 1 bit for the sign
-        j = U>>8                     # 24 bit for the x-value
+        i = 1 + bitand(U, 0x0000007F)  # 7 bit to choose the step
+        sign = bitand(U, 0x00000080)   # 1 bit for the sign
+        j = U>>8                       # 24 bit for the x-value
 
         x = j*wtab[i]
         if j < ktab[i]; break; end

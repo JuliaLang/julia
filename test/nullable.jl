@@ -511,7 +511,7 @@ end
 for op in (+, *, -)
     for b1 in (false, true)
         for b2 in (false, true)
-            @test Nullable{Int}(op(1, 2), b1 & b2) ===
+            @test Nullable{Int}(op(1, 2), bitand(b1, b2)) ===
                 @inferred(broadcast(op, Nullable{Int}(1, b1),
                                         Nullable{Int}(2, b2)))
         end

@@ -47,13 +47,13 @@ const masks = zeros(UInt64, 10)
 const masksAtCell = Array{Any}(width*height, height)
 
 valid(x, y) = (0 <= x < width) && (0 <= y < height)
-legal(mask::UInt64, board::UInt64) = (mask & board) == 0
+legal(mask::UInt64, board::UInt64) = bitand(mask, board) == 0
 zerocount(mask::UInt64) = 50 - count_ones(mask)
 
 function findFreeCell(board::UInt64)
     for y in 0:height-1
         for x in 0:width-1
-            if board & (UInt64(1) << (x + width*y)) == 0
+            if bitand(board, UInt64(1) << (x + width*y)) == 0
                 return x, y
             end
         end
@@ -66,7 +66,7 @@ function floodFill(board::UInt64, fixme)
         return board
     end
 
-    if board & (UInt64(1) << (x + width*y)) != 0
+    if bitand(board, UInt64(1) << (x + width*y)) != 0
         return board
     end
 
@@ -148,7 +148,7 @@ function generateBitmasks()
         j = length(masks) - 1
 
         while j >= 0
-            if (masks[j + 1] & cellMask) == cellMask
+            if bitand(masks[j + 1], cellMask) == cellMask
                 push!(masksAtCell[cellCounter + 1, color + 1], masks[j + 1])
                 j -= 1
             else
@@ -173,7 +173,7 @@ function solveCell(cell_, board::UInt64, n)
         return
     end
 
-    if board & (UInt64(1) << cell_) != 0
+    if bitand(board, UInt64(1) << cell_) != 0
         # Cell full
         solveCell(cell_ - 1, UInt64(board), n)
         return
@@ -208,7 +208,7 @@ function stringOfMasks(masks)
     for y in 0:height-1
         for x in 0:width-1
             for color in 0:9
-                if (masks[color+1] & mask) != 0
+                if bitand(masks[color+1], mask) != 0
                     s = string(s, color)
                     break
                 elseif color == 9

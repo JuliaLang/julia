@@ -2353,7 +2353,7 @@ end
 
 for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128)
     for n = 1:2:1000
-        @test n*(n^typemax(T)) & typemax(T) == 1
+        @test bitand(n*(n^typemax(T)), typemax(T)) == 1
         n = bitor(rand(T), one(T))
         @test n*(n^typemax(T)) == 1
     end
@@ -2879,7 +2879,7 @@ end
             @test T === typeof(t)
 
             for R in types
-                for op in (&, bitor, <<, >>, (>>>), %, ÷)
+                for op in (bitand, bitor, <<, >>, (>>>), %, ÷)
                     T = @inferred Base.promote_op(op, S, R)
                     t = @inferred op(one(S), one(R))
                     @test T === typeof(t)
