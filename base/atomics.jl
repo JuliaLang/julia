@@ -226,7 +226,7 @@ function atomic_nand! end
 
 Atomically bitwise-or `x` with `val`
 
-Performs `x[] |= val` atomically. Returns the **old** value.
+Performs `x[] = bitor(x[], val)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw or` instruction.
 

@@ -102,7 +102,7 @@ function decompose(x::Float16)::NTuple{3,Int}
     n = reinterpret(UInt16, x)
     s = (n & 0x03ff) % Int16
     e = (n & 0x7c00 >> 10) % Int
-    s |= Int16(e != 0) << 10
+    s = bitor(s, Int16(e != 0) << 10)
     d = ifelse(signbit(x), -1, 1)
     s, e - 25 + (e == 0), d
 end
@@ -113,7 +113,7 @@ function decompose(x::Float32)::NTuple{3,Int}
     n = reinterpret(UInt32, x)
     s = (n & 0x007fffff) % Int32
     e = (n & 0x7f800000 >> 23) % Int
-    s |= Int32(e != 0) << 23
+    s = bitor(s, Int32(e != 0) << 23)
     d = ifelse(signbit(x), -1, 1)
     s, e - 150 + (e == 0), d
 end
@@ -124,7 +124,7 @@ function decompose(x::Float64)::Tuple{Int64, Int, Int}
     n = reinterpret(UInt64, x)
     s = (n & 0x000fffffffffffff) % Int64
     e = (n & 0x7ff0000000000000 >> 52) % Int
-    s |= Int64(e != 0) << 52
+    s = bitor(s, Int64(e != 0) << 52)
     d = ifelse(signbit(x), -1, 1)
     s, e - 1075 + (e == 0), d
 end

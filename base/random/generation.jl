@@ -19,13 +19,13 @@ rand(r::AbstractRNG=GLOBAL_RNG, ::Type{T}=Float64) where {T<:AbstractFloat} =
 
 rand_generic(r::AbstractRNG, ::CloseOpen{Float16}) =
     Float16(reinterpret(Float32,
-                        (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
+                        bitor((rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000, 0x3f800000) - 1)
 
 rand_generic(r::AbstractRNG, ::CloseOpen{Float32}) =
-    reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
+    reinterpret(Float32, bitor(rand_ui23_raw(r) % UInt32 & 0x007fffff, 0x3f800000) - 1
 
 rand_generic(r::AbstractRNG, ::Close1Open2_64) =
-    reinterpret(Float64, 0x3ff0000000000000 | rand(r, UInt64) & 0x000fffffffffffff)
+    reinterpret(Float64, bitor(0x3ff0000000000000, rand(r, UInt64) & 0x000fffffffffffff))
 
 rand_generic(r::AbstractRNG, ::CloseOpen_64) = rand(r, Close1Open2()) - 1.0
 
@@ -55,7 +55,7 @@ function _rand(rng::AbstractRNG, gen::BigFloatRandGenerator)
     @inbounds begin
         limbs[1] <<= gen.shift
         randbool = iszero(limbs[end] & Limb_high_bit)
-        limbs[end] |= Limb_high_bit
+        limbs[end] = bitor(limbs[end], Limb_high_bit)
     end
     z.sign = 1
     Base.@gc_preserve limbs unsafe_copy!(z.d, pointer(limbs), gen.nlimbs)

@@ -107,7 +107,7 @@ function _searchindex(s::Union{String,ByteArray}, t::Union{String,ByteArray}, i)
     skip = n - 1
     tlast = _nthbyte(t,n)
     for j in 1:n
-        bloom_mask |= _search_bloom_mask(_nthbyte(t,j))
+        bloom_mask = bitor(bloom_mask, _search_bloom_mask(_nthbyte(t,j)))
         if _nthbyte(t,j) == tlast && j < n
             skip = n - j - 1
         end
@@ -274,7 +274,7 @@ function _rsearchindex(s::Union{String,ByteArray}, t::Union{String,ByteArray}, k
     skip = n - 1
     tfirst = _nthbyte(t,1)
     for j in n:-1:1
-        bloom_mask |= _search_bloom_mask(_nthbyte(t,j))
+        bloom_mask = bitor(bloom_mask, _search_bloom_mask(_nthbyte(t,j)))
         if _nthbyte(t,j) == tfirst && j > 1
             skip = j - 2
         end

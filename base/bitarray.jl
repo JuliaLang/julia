@@ -107,7 +107,7 @@ function glue_src_bitchunks(src::Vector{UInt64}, k::Int, ks1::Int, msk_s0::UInt6
         chunk = ((src[k] & msk_s0) >>> ls0)
         if ks1 > k && ls0 > 0
             chunk_n = (src[k + 1] & bitnot(msk_s0))
-            chunk |= (chunk_n << (64 - ls0))
+            chunk = bitor(chunk, chunk_n << (64 - ls0))
         end
     end
     return chunk
@@ -129,7 +129,7 @@ function copy_chunks!(dest::Vector{UInt64}, pos_d::Integer, src::Vector{UInt64},
 
     u = _msk64
     if delta_kd == 0
-        msk_d0 = bitnot(u << ld0) | (u << (ld1+1))
+        msk_d0 = bitor(bitnot(u << ld0), u << (ld1+1))
     else
         msk_d0 = bitnot(u << ld0)
         msk_d1 = (u << (ld1+1))
@@ -142,14 +142,14 @@ function copy_chunks!(dest::Vector{UInt64}, pos_d::Integer, src::Vector{UInt64},
 
     chunk_s0 = glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
 
-    dest[kd0] = (dest[kd0] & msk_d0) | ((chunk_s0 << ld0) & bitnot(msk_d0))
+    dest[kd0] = bitor(dest[kd0] & msk_d0, (chunk_s0 << ld0) & bitnot(msk_d0))
 
     delta_kd == 0 && return
 
     for i = 1 : kd1 - kd0 - 1
         chunk_s1 = glue_src_bitchunks(src, ks0 + i, ks1, msk_s0, ls0)
 
-        chunk_s = (chunk_s0 >>> (64 - ld0)) | (chunk_s1 << ld0)
+        chunk_s = bitor(chunk_s0 >>> (64 - ld0), chunk_s1 << ld0)
 
         dest[kd0 + i] = chunk_s
 
@@ -162,9 +162,9 @@ function copy_chunks!(dest::Vector{UInt64}, pos_d::Integer, src::Vector{UInt64},
         chunk_s1 = UInt64(0)
     end
 
-    chunk_s = (chunk_s0 >>> (64 - ld0)) | (chunk_s1 << ld0)
+    chunk_s = bitor(chunk_s0 >>> (64 - ld0), chunk_s1 << ld0)
 
-    dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & bitnot(msk_d1))
+    dest[kd1] = bitor(dest[kd1] & msk_d1, chunk_s & bitnot(msk_d1))
 
     return
 end
@@ -189,7 +189,7 @@ function copy_chunks_rtol!(chunks::Vector{UInt64}, pos_d::Integer, pos_s::Intege
         delta_ks = ks1 - ks0
 
         if delta_kd == 0
-            msk_d0 = bitnot(u << ld0) | (u << (ld1+1))
+            msk_d0 = bitor(bitnot(u << ld0), u << (ld1+1))
         else
             msk_d0 = bitnot(u << ld0)
             msk_d1 = (u << (ld1+1))
@@ -201,12 +201,12 @@ function copy_chunks_rtol!(chunks::Vector{UInt64}, pos_d::Integer, pos_s::Intege
         end
 
         chunk_s0 = glue_src_bitchunks(chunks, ks0, ks1, msk_s0, ls0) & bitnot(u << s)
-        chunks[kd0] = (chunks[kd0] & msk_d0) | ((chunk_s0 << ld0) & bitnot(msk_d0))
+        chunks[kd0] = bitor(chunks[kd0] & msk_d0, (chunk_s0 << ld0) & bitnot(msk_d0))
 
         if delta_kd != 0
             chunk_s = (chunk_s0 >>> (64 - ld0))
 
-            chunks[kd1] = (chunks[kd1] & msk_d1) | (chunk_s & bitnot(msk_d1))
+            chunks[kd1] = bitor(chunks[kd1] & msk_d1, chunk_s & bitnot(msk_d1))
         end
 
         left -= s
@@ -230,11 +230,11 @@ function fill_chunks!(Bc::Array{UInt64}, x::Bool, pos::Integer, numbits::Integer
         msk1 = bitnot(u << (l1+1))
     end
     @inbounds if x
-        Bc[k0] |= msk0
+        Bc[k0] = bitor(Bc[k0], msk0)
         for k = k0+1:k1-1
             Bc[k] = u
         end
-        k1 > k0 && (Bc[k1] |= msk1)
+        k1 > k0 && (Bc[k1] = bitor(Bc[k1], msk1))
     else
         Bc[k0] &= bitnot(msk0)
         for k = k0+1:k1-1
@@ -250,9 +250,9 @@ copy_to_bitarray_chunks!(dest::Vector{UInt64}, pos_d::Int, src::BitArray, pos_s:
 # pack 8 Bools encoded as one contiguous UIn64 into a single byte, e.g.:
 # 0000001:0000001:00000000:00000000:00000001:00000000:00000000:00000001 → 11001001 → 0xc9
 function pack8bools(z::UInt64)
-    z |= z >>> 7
-    z |= z >>> 14
-    z |= z >>> 28
+    z = bitor(z, z >>> 7)
+    z = bitor(z, z >>> 14)
+    z = bitor(z, z >>> 28)
     z &= 0xFF
     return z
 end
@@ -265,7 +265,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
 
     u = _msk64
     if delta_kd == 0
-        msk_d0 = msk_d1 = bitnot(u << ld0) | (u << (ld1+1))
+        msk_d0 = msk_d1 = bitor(bitnot(u << ld0), u << (ld1+1))
         lt0 = ld1
     else
         msk_d0 = bitnot(u << ld0)
@@ -278,10 +278,10 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
     @inbounds if ld0 > 0
         c = UInt64(0)
         for j = ld0:lt0
-            c |= (UInt64(C[ind]) << j)
+            c = bitor(c, UInt64(C[ind]) << j)
             ind += 1
         end
-        Bc[kd0] = (Bc[kd0] & msk_d0) | (c & bitnot(msk_d0))
+        Bc[kd0] = bitor(Bc[kd0] & msk_d0, c & bitnot(msk_d0))
         bind += 1
     end
 
@@ -294,7 +294,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
             c = UInt64(0)
             for j = 0:7
                 # unaligned load
-                c |= (pack8bools(unsafe_load(P8, ind8)) << (j<<3))
+                c = bitor(c, pack8bools(unsafe_load(P8, ind8)) << (j<<3))
                 ind8 += 1
             end
             Bc[bind] = c
@@ -305,7 +305,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
     @inbounds for i = (nc8+1):nc
         c = UInt64(0)
         for j = 0:63
-            c |= (UInt64(C[ind]) << j)
+            c = bitor(c, UInt64(C[ind]) << j)
             ind += 1
         end
         Bc[bind] = c
@@ -315,10 +315,10 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
         @assert bind == kd1
         c = UInt64(0)
         for j = 0:ld1
-            c |= (UInt64(C[ind]) << j)
+            c = bitor(c, UInt64(C[ind]) << j)
             ind += 1
         end
-        Bc[kd1] = (Bc[kd1] & msk_d1) | (c & bitnot(msk_d1))
+        Bc[kd1] = bitor(Bc[kd1] & msk_d1, c & bitnot(msk_d1))
     end
 end
 
@@ -457,7 +457,7 @@ function copy!(dest::BitArray, src::BitArray)
         else
             msk_s = _msk_end(src)
             msk_d = bitnot(msk_s)
-            destc[nc] = (msk_d & destc[nc]) | (msk_s & srcc[nc])
+            destc[nc] = bitor(msk_d & destc[nc], msk_s & srcc[nc])
         end
     end
     return dest
@@ -521,14 +521,14 @@ function convert(::Type{BitArray{N}}, A::AbstractArray{T,N}) where N where T
         for i = 1:length(Bc)-1
             c = UInt64(0)
             for j = 0:63
-                c |= (UInt64(convert(Bool, A[ind])) << j)
+                c = bitor(c, UInt64(convert(Bool, A[ind])) << j)
                 ind += 1
             end
             Bc[i] = c
         end
         c = UInt64(0)
         for j = 0:_mod64(l-1)
-            c |= (UInt64(convert(Bool, A[ind])) << j)
+            c = bitor(c, UInt64(convert(Bool, A[ind])) << j)
             ind += 1
         end
         Bc[end] = c
@@ -688,7 +688,7 @@ end
     u = UInt64(1) << i2
     @inbounds begin
         c = Bc[i1]
-        Bc[i1] = ifelse(x, c | u, c & bitnot(u))
+        Bc[i1] = ifelse(x, bitor(c, u), c & bitnot(u))
     end
 end
 
@@ -726,7 +726,7 @@ function _unsafe_setindex!(B::BitArray, x, I::BitArray)
     length(Bc) == length(Ic) || throw_boundserror(B, I)
     @inbounds if y
         for i = 1:length(Bc)
-            Bc[i] |= Ic[i]
+            Bc[i] = bitor(Bc[i], Ic[i])
         end
     else
         for i = 1:length(Bc)
@@ -759,7 +759,7 @@ function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
             if Imsk & u != 0
                 lx < c && throw_setindex_mismatch(X, c)
                 @inbounds x = convert(Bool, X[c])
-                C = ifelse(x, C | u, C & bitnot(u))
+                C = ifelse(x, bitor(C, u), C & bitnot(u))
                 c += 1
             end
             u <<= 1
@@ -883,9 +883,9 @@ function unshift!(B::BitVector, item)
         return B
     end
     for i = length(Bc) : -1 : 2
-        Bc[i] = (Bc[i] << 1) | (Bc[i-1] >>> 63)
+        Bc[i] = bitor(Bc[i] << 1, Bc[i-1] >>> 63)
     end
-    Bc[1] = UInt64(item) | (Bc[1] << 1)
+    Bc[1] = bitor(UInt64(item), Bc[1] << 1)
     return B
 end
 
@@ -897,7 +897,7 @@ function shift!(B::BitVector)
         Bc = B.chunks
 
         for i = 1 : length(Bc) - 1
-            Bc[i] = (Bc[i] >>> 1) | (Bc[i+1] << 63)
+            Bc[i] = bitor(Bc[i] >>> 1, Bc[i+1] << 63)
         end
 
         l = _mod64(length(B))
@@ -929,12 +929,12 @@ function insert!(B::BitVector, i::Integer, item)
     B.len += 1
 
     for t = length(Bc) : -1 : k + 1
-        Bc[t] = (Bc[t] << 1) | (Bc[t - 1] >>> 63)
+        Bc[t] = bitor(Bc[t] << 1, Bc[t - 1] >>> 63)
     end
 
     msk_aft = (_msk64 << j)
     msk_bef = bitnot(msk_aft)
-    Bc[k] = (msk_bef & Bc[k]) | ((msk_aft & Bc[k]) << 1)
+    Bc[k] = bitor(msk_bef & Bc[k], (msk_aft & Bc[k]) << 1)
     B[i] = item
     B
 end
@@ -949,13 +949,13 @@ function _deleteat!(B::BitVector, i::Integer)
     Bc = B.chunks
 
     @inbounds begin
-        Bc[k] = (msk_bef & Bc[k]) | ((msk_aft & Bc[k]) >> 1)
+        Bc[k] = bitor(msk_bef & Bc[k], (msk_aft & Bc[k]) >> 1)
         if length(Bc) > k
-            Bc[k] |= (Bc[k + 1] << 63)
+            Bc[k] = bitor(Bc[k], Bc[k + 1] << 63)
         end
 
         for t = k + 1 : length(Bc) - 1
-            Bc[t] = (Bc[t] >>> 1) | (Bc[t + 1] << 63)
+            Bc[t] = bitor(Bc[t] >>> 1, Bc[t + 1] << 63)
         end
 
         l = _mod64(length(B))
@@ -1302,12 +1302,12 @@ end
 
 function reverse_bits(src::UInt64)
     z    = src
-    z    = ((z >>>  1) & 0x5555555555555555) | ((z <<  1) & 0xaaaaaaaaaaaaaaaa)
-    z    = ((z >>>  2) & 0x3333333333333333) | ((z <<  2) & 0xcccccccccccccccc)
-    z    = ((z >>>  4) & 0x0f0f0f0f0f0f0f0f) | ((z <<  4) & 0xf0f0f0f0f0f0f0f0)
-    z    = ((z >>>  8) & 0x00ff00ff00ff00ff) | ((z <<  8) & 0xff00ff00ff00ff00)
-    z    = ((z >>> 16) & 0x0000ffff0000ffff) | ((z << 16) & 0xffff0000ffff0000)
-    return ((z >>> 32) & 0x00000000ffffffff) | ((z << 32) & 0xffffffff00000000)
+    z    = bitor((z >>>  1) & 0x5555555555555555, (z <<  1) & 0xaaaaaaaaaaaaaaaa)
+    z    = bitor((z >>>  2) & 0x3333333333333333, (z <<  2) & 0xcccccccccccccccc)
+    z    = bitor((z >>>  4) & 0x0f0f0f0f0f0f0f0f, (z <<  4) & 0xf0f0f0f0f0f0f0f0)
+    z    = bitor((z >>>  8) & 0x00ff00ff00ff00ff, (z <<  8) & 0xff00ff00ff00ff00)
+    z    = bitor((z >>> 16) & 0x0000ffff0000ffff, (z << 16) & 0xffff0000ffff0000)
+    return bitor((z >>> 32) & 0x00000000ffffffff, (z << 32) & 0xffffffff00000000)
 end
 
 function reverse!(B::BitVector)
@@ -1342,8 +1342,8 @@ function reverse!(B::BitVector)
         end
         u = reverse_bits(B.chunks[i])
         B.chunks[i] = 0
-        B.chunks[j] |= u >>> h
-        B.chunks[i] |= v >>> h
+        B.chunks[j] = bitor(B.chunks[j], u >>> h)
+        B.chunks[i] = bitor(B.chunks[i], v >>> h)
 
         j -= 1
         if i == j
@@ -1351,14 +1351,14 @@ function reverse!(B::BitVector)
         end
         v = reverse_bits(B.chunks[j])
         B.chunks[j] = 0
-        B.chunks[i] |= v << k
-        B.chunks[j] |= u << k
+        B.chunks[i] = bitor(B.chunks[i], v << k)
+        B.chunks[j] = bitor(B.chunks[j], u << k)
     end
 
     if isodd(length(B.chunks))
-        B.chunks[i] |= v >>> h
+        B.chunks[i] = bitor(B.chunks[i], v >>> h)
     else
-        B.chunks[i] |= u << k
+        B.chunks[i] = bitor(B.chunks[i], u << k)
     end
 
     return B
@@ -1536,8 +1536,8 @@ function findnextnot(B::BitArray, start::Integer)
     mask = bitnot(_msk64 << within_chunk_start)
 
     @inbounds if chunk_start < l
-        if Bc[chunk_start] | mask != _msk64
-            return (chunk_start-1) << 6 + trailing_ones(Bc[chunk_start] | mask) + 1
+        if bitor(Bc[chunk_start], mask) != _msk64
+            return (chunk_start-1) << 6 + trailing_ones(bitor(Bc[chunk_start], mask)) + 1
         end
         for i = chunk_start+1:l-1
             if Bc[i] != _msk64
@@ -1547,8 +1547,8 @@ function findnextnot(B::BitArray, start::Integer)
         if Bc[l] != _msk_end(B)
             return (l-1) << 6 + trailing_ones(Bc[l]) + 1
         end
-    elseif Bc[l] | mask != _msk_end(B)
-        return (l-1) << 6 + trailing_ones(Bc[l] | mask) + 1
+    elseif bitor(Bc[l], mask) != _msk_end(B)
+        return (l-1) << 6 + trailing_ones(bitor(Bc[l], mask)) + 1
     end
     return 0
 end
@@ -1610,8 +1610,8 @@ function findprevnot(B::BitArray, start::Integer)
     mask = bitnot(_msk_end(start))
 
     @inbounds begin
-        if Bc[chunk_start] | mask != _msk64
-            return (chunk_start-1) << 6 + (64 - leading_ones(Bc[chunk_start] | mask))
+        if bitor(Bc[chunk_start], mask) != _msk64
+            return (chunk_start-1) << 6 + (64 - leading_ones(bitor(Bc[chunk_start], mask)))
         end
 
         for i = chunk_start-1:-1:1
@@ -1751,8 +1751,8 @@ map!(::typeof(identity), dest::BitArray, A::BitArray) = copy!(dest, A)
 for (T, f) in ((:(Union{typeof(&), typeof(*), typeof(min)}), :(&)),
                (:(Union{typeof(|), typeof(max)}),            :(|)),
                (:(Union{typeof(xor), typeof(!=)}),           :xor),
-               (:(Union{typeof(>=), typeof(^)}),             :((p, q) -> p | bitnot(q))),
-               (:(typeof(<=)),                               :((p, q) -> bitnot(p) | q)),
+               (:(Union{typeof(>=), typeof(^)}),             :((p, q) -> bitor(p, bitnot(q)))),
+               (:(typeof(<=)),                               :((p, q) -> bitor(bitnot(p), q))),
                (:(typeof(==)),                               :((p, q) -> bitnot(xor(p, q)))),
                (:(typeof(<)),                                :((p, q) -> bitnot(p) & q)),
                (:(typeof(>)),                                :((p, q) -> p & bitnot(q))))

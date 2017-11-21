@@ -215,6 +215,7 @@ export
     ^,
     |,
     |>,
+    bitor,
     bitnot,
     :,
     =>,

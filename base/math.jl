@@ -549,7 +549,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         xs == 0 && return x # +-0
         m = leading_zeros(xs) - exponent_bits(T)
         ys = xs << unsigned(m)
-        xu = ys | (xu & sign_mask(T))
+        xu = bitor(ys, xu & sign_mask(T))
         k = 1 - m
         # underflow, otherwise may have integer underflow in the following n + k
         e < -50000 && return flipsign(T(0.0), x)
@@ -568,7 +568,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         return flipsign(T(Inf), x)
     end
     if k > 0 # normal case
-        xu = (xu & bitnot(exponent_mask(T))) | (rem(k, uinttype(T)) << significand_bits(T))
+        xu = bitor(xu & bitnot(exponent_mask(T)), rem(k, uinttype(T)) << significand_bits(T))
         return reinterpret(T, xu)
     else # subnormal case
         if k <= -significand_bits(T) # underflow
@@ -578,7 +578,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         end
         k += significand_bits(T)
         z = T(2.0)^-significand_bits(T)
-        xu = (xu & bitnot(exponent_mask(T))) | (rem(k, uinttype(T)) << significand_bits(T))
+        xu = bitor(xu & bitnot(exponent_mask(T)), rem(k, uinttype(T)) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
 end
@@ -627,9 +627,9 @@ function significand(x::T) where T<:IEEEFloat
         xs == 0 && return x # +-0
         m = unsigned(leading_zeros(xs) - exponent_bits(T))
         xs <<= m
-        xu = xs | (xu & sign_mask(T))
+        xu = bitor(xs, xu & sign_mask(T))
     end
-    xu = (xu & bitnot(exponent_mask(T))) | exponent_one(T)
+    xu = bitor(xu & bitnot(exponent_mask(T)), exponent_one(T))
     return reinterpret(T, xu)
 end
 
@@ -648,11 +648,11 @@ function frexp(x::T) where T<:IEEEFloat
         xs == 0 && return x, 0 # +-0
         m = leading_zeros(xs) - exponent_bits(T)
         xs <<= unsigned(m)
-        xu = xs | (xu & sign_mask(T))
+        xu = bitor(xs, xu & sign_mask(T))
         k = 1 - m
     end
     k -= (exponent_bias(T) - 1)
-    xu = (xu & bitnot(exponent_mask(T))) | exponent_half(T)
+    xu = bitor(xu & bitnot(exponent_mask(T)), exponent_half(T))
     return reinterpret(T, xu), k
 end
 

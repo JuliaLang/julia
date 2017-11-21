@@ -664,10 +664,10 @@ if Sys.iswindows()
         captionArr = Base.cwstring(caption)
         pfSave = Ref{Bool}(false)
         cred = Ref{CREDUI_INFO}(CREDUI_INFO(sizeof(CREDUI_INFO), C_NULL, pointer(messageArr), pointer(captionArr), C_NULL))
-        dwflags = CREDUIWIN_GENERIC | CREDUIWIN_ENUMERATE_CURRENT_USER
+        dwflags = bitor(CREDUIWIN_GENERIC, CREDUIWIN_ENUMERATE_CURRENT_USER)
         if !prompt_username
             # Disable setting anything other than default_username
-            dwflags |= CREDUIWIN_IN_CRED_ONLY
+            dwflags = bitor(dwflags, CREDUIWIN_IN_CRED_ONLY)
         end
         authPackage = Ref{Culong}(0)
         outbuf_data = Ref{Ptr{Void}}(C_NULL)

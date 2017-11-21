@@ -4,7 +4,7 @@
 
 include("pcre.jl")
 
-const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX
+const DEFAULT_COMPILER_OPTS = bitor(PCRE.UTF, PCRE.NO_UTF_CHECK, PCRE.ALT_BSUX)
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
 mutable struct Regex
@@ -40,11 +40,12 @@ end
 function Regex(pattern::AbstractString, flags::AbstractString)
     options = DEFAULT_COMPILER_OPTS
     for f in flags
-        options |= f=='i' ? PCRE.CASELESS  :
+        flagbits = f=='i' ? PCRE.CASELESS  :
                    f=='m' ? PCRE.MULTILINE :
                    f=='s' ? PCRE.DOTALL    :
                    f=='x' ? PCRE.EXTENDED  :
                    throw(ArgumentError("unknown regex flag: $f"))
+       options = bitor(options, flagbits)
     end
     Regex(pattern, options, DEFAULT_MATCH_OPTS)
 end
@@ -83,7 +84,7 @@ RegexMatch("angry,\\nBad world")
 macro r_str(pattern, flags...) Regex(pattern, flags...) end
 
 function show(io::IO, re::Regex)
-    imsx = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED
+    imsx = bitor(PCRE.CASELESS, PCRE.MULTILINE, PCRE.DOTALL, PCRE.EXTENDED)
     opts = re.compile_options
     if (opts & bitnot(imsx)) == DEFAULT_COMPILER_OPTS
         print(io, 'r')
@@ -206,7 +207,7 @@ function match end
 
 function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, add_opts::UInt32=UInt32(0))
     compile(re)
-    opts = re.match_options | add_opts
+    opts = bitor(re.match_options, add_opts)
     if !PCRE.exec(re.regex, str, idx-1, opts, re.match_data)
         return nothing
     end
@@ -254,7 +255,7 @@ function matchall(re::Regex, str::String, overlap::Bool=false)
     matches = SubString{String}[]
     offset = UInt32(0)
     opts = re.match_options
-    opts_nonempty = opts | PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART
+    opts_nonempty = bitor(opts, PCRE.ANCHORED, PCRE.NOTEMPTY_ATSTART)
     prevempty = false
     ovec = re.ovec
     while true
@@ -411,7 +412,7 @@ function next(itr::RegexMatchIterator, prev_match)
         offset = prev_match.offset + endof(prev_match.match)
     end
 
-    opts_nonempty = UInt32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
+    opts_nonempty = UInt32(bitor(PCRE.ANCHORED, PCRE.NOTEMPTY_ATSTART))
     while true
         mat = match(itr.regex, itr.string, offset,
                     prevempty ? opts_nonempty : UInt32(0))

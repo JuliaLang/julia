@@ -4,7 +4,7 @@ module GMP
 
 export BigInt
 
-import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, bitnot, (&), (|), xor,
+import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, bitnot, (&), bitor, xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,

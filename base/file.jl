@@ -245,7 +245,7 @@ end
 Update the last-modified timestamp on a file to the current time.
 """
 function touch(path::AbstractString)
-    f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
+    f = open(path, bitor(JL_O_WRONLY, JL_O_CREAT), 0o0666)
     try
         t = time()
         futime(f,t,t)
@@ -520,8 +520,8 @@ function sendfile(src::AbstractString, dst::AbstractString)
     try
         src_file = open(src, JL_O_RDONLY)
         src_open = true
-        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY,
-             S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH)
+        dst_file = open(dst, bitor(JL_O_CREAT, JL_O_TRUNC, JL_O_WRONLY),
+                         bitor(S_IRUSR, S_IWUSR, S_IRGRP, S_IWGRP, S_IROTH, S_IWOTH))
         dst_open = true
 
         bytes = filesize(stat(src_file))
@@ -558,7 +558,7 @@ function symlink(p::AbstractString, np::AbstractString)
     flags = 0
     @static if Sys.iswindows()
         if isdir(p)
-            flags |= UV_FS_SYMLINK_JUNCTION
+            flags = bitor(flags, UV_FS_SYMLINK_JUNCTION)
             p = abspath(p)
         end
     end

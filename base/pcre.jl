@@ -30,42 +30,42 @@ end
 
 # supported options for different use cases
 
-const COMPILE_MASK      =
-      ANCHORED          |
-      CASELESS          |
-      DOLLAR_ENDONLY    |
-      DOTALL            |
-      EXTENDED          |
-      FIRSTLINE         |
-      MULTILINE         |
-      NEWLINE_ANY       |
-      NEWLINE_ANYCRLF   |
-      NEWLINE_CR        |
-      NEWLINE_CRLF      |
-      NEWLINE_LF        |
-      NO_AUTO_CAPTURE   |
-      NO_START_OPTIMIZE |
-      NO_UTF_CHECK      |
-      UNGREEDY          |
+const COMPILE_MASK      = bitor(
+      ANCHORED          ,
+      CASELESS          ,
+      DOLLAR_ENDONLY    ,
+      DOTALL            ,
+      EXTENDED          ,
+      FIRSTLINE         ,
+      MULTILINE         ,
+      NEWLINE_ANY       ,
+      NEWLINE_ANYCRLF   ,
+      NEWLINE_CR        ,
+      NEWLINE_CRLF      ,
+      NEWLINE_LF        ,
+      NO_AUTO_CAPTURE   ,
+      NO_START_OPTIMIZE ,
+      NO_UTF_CHECK      ,
+      UNGREEDY          )
       UTF
 
-const EXECUTE_MASK      =
-      NEWLINE_ANY       |
-      NEWLINE_ANYCRLF   |
-      NEWLINE_CR        |
-      NEWLINE_CRLF      |
-      NEWLINE_LF        |
-      NOTBOL            |
-      NOTEMPTY          |
-      NOTEMPTY_ATSTART  |
-      NOTEOL            |
-      NO_START_OPTIMIZE |
-      NO_UTF_CHECK      |
-      PARTIAL_HARD      |
-      PARTIAL_SOFT
+const EXECUTE_MASK      = bitor(
+      NEWLINE_ANY       ,
+      NEWLINE_ANYCRLF   ,
+      NEWLINE_CR        ,
+      NEWLINE_CRLF      ,
+      NEWLINE_LF        ,
+      NOTBOL            ,
+      NOTEMPTY          ,
+      NOTEMPTY_ATSTART  ,
+      NOTEOL            ,
+      NO_START_OPTIMIZE ,
+      NO_UTF_CHECK      ,
+      PARTIAL_HARD      ,
+      PARTIAL_SOFT      )
 
 
-const OPTIONS_MASK = COMPILE_MASK | EXECUTE_MASK
+const OPTIONS_MASK = bitor(COMPILE_MASK, EXECUTE_MASK)
 
 const UNSET = bitnot(Csize_t(0))  # Indicates that an output vector element is unset
 
@@ -173,7 +173,7 @@ function capture_names(re)
         # big-endian 16-bit value.
         high_byte = UInt16(unsafe_load(nametable_ptr, offset))
         low_byte = UInt16(unsafe_load(nametable_ptr, offset+1))
-        idx = (high_byte << 8) | low_byte
+        idx = bitor(high_byte << 8, low_byte)
         # The capture group name is a null-terminated string located directly
         # after the index.
         names[idx] = unsafe_string(nametable_ptr+offset+1)

@@ -22,9 +22,9 @@ struct Cmd <: AbstractCmd
                  detach::Bool = 0 != cmd.flags & UV_PROCESS_DETACHED,
                  windows_verbatim::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS,
                  windows_hide::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_HIDE)
-        flags = detach*UV_PROCESS_DETACHED |
-                windows_verbatim*UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS |
-                windows_hide*UV_PROCESS_WINDOWS_HIDE
+        flags = bitor(detach * UV_PROCESS_DETACHED,
+                      windows_hide * UV_PROCESS_WINDOWS_HIDE,
+                      windows_verbatim * UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS)
         new(cmd.exec, ignorestatus, flags, byteenv(env),
             dir === cmd.dir ? dir : cstr(dir))
     end
@@ -468,9 +468,8 @@ function setup_stdio(stdio::FileRedirect, readable::Bool)
         attr = JL_O_RDONLY
         perm = zero(S_IRUSR)
     else
-        attr = JL_O_WRONLY | JL_O_CREAT
-        attr |= stdio.append ? JL_O_APPEND : JL_O_TRUNC
-        perm = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH
+        attr = bitor(JL_O_WRONLY, JL_O_CREAT, stdio.append ? JL_O_APPEND : JL_O_TRUNC)
+        perm = bitor(S_IRUSR, S_IWUSR, S_IRGRP, S_IROTH)
     end
     io = Filesystem.open(stdio.filename, attr, perm)
     return (io, true)

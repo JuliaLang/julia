@@ -1199,7 +1199,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
 
     u = _msk64
     if delta_kd == 0
-        msk_d0 = msk_d1 = bitnot(u << ld0) | (u << (ld1+1))
+        msk_d0 = msk_d1 = bitor(bitnot(u << ld0), u << (ld1+1))
         lt0 = ld1
     else
         msk_d0 = bitnot(u << ld0)
@@ -1212,10 +1212,10 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
     @inbounds if ld0 > 0
         c = UInt64(0)
         for j = ld0:lt0
-            c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
+            c = bitor(c, UInt64(unchecked_bool_convert(C[ind])) << j)
             ind += 1
         end
-        Bc[kd0] = (Bc[kd0] & msk_d0) | (c & bitnot(msk_d0))
+        Bc[kd0] = bitor(Bc[kd0] & msk_d0, c & bitnot(msk_d0))
         bind += 1
     end
 
@@ -1223,7 +1223,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
     @inbounds for i = 1:nc
         c = UInt64(0)
         for j = 0:63
-            c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
+            c = bitor(c, UInt64(unchecked_bool_convert(C[ind])) << j)
             ind += 1
         end
         Bc[bind] = c
@@ -1234,10 +1234,10 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
         @assert bind == kd1
         c = UInt64(0)
         for j = 0:ld1
-            c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
+            c = bitor(c, UInt64(unchecked_bool_convert(C[ind])) << j)
             ind += 1
         end
-        Bc[kd1] = (Bc[kd1] & msk_d1) | (c & bitnot(msk_d1))
+        Bc[kd1] = bitor(Bc[kd1] & msk_d1, c & bitnot(msk_d1))
     end
 end
 

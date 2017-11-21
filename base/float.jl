@@ -101,7 +101,7 @@ function convert(::Type{Float64}, x::Int128)
         y &= bitnot(UInt64(trailing_zeros(x) == (n-54))) # fix last bit to round to even
     end
     d = ((n+1022) % UInt64) << 52
-    reinterpret(Float64, s | d + y)
+    reinterpret(Float64, bitor(s, d) + y)
 end
 
 function convert(::Type{Float32}, x::UInt128)
@@ -131,7 +131,7 @@ function convert(::Type{Float32}, x::Int128)
         y &= bitnot(UInt32(trailing_zeros(x) == (n-25))) # fix last bit to round to even
     end
     d = ((n+126) % UInt32) << 23
-    reinterpret(Float32, s | d + y)
+    reinterpret(Float32, bitor(s, d) + y)
 end
 
 function convert(::Type{Float16}, val::Float32)
@@ -167,7 +167,7 @@ function convert(::Type{Float32}, val::Float16)
     if exp == 0
         if sig == 0
             sign = sign << 31
-            ret = sign | exp | sig
+            ret = bitor(sign, exp, sig)
         else
             n_bit = 1
             bit = 0x0200
@@ -178,7 +178,7 @@ function convert(::Type{Float32}, val::Float16)
             sign = sign << 31
             exp = (-14 - n_bit + 127) << 23
             sig = ((sig & bitnot(bit)) << n_bit) << (23 - 10)
-            ret = sign | exp | sig
+            ret = bitor(sign, exp, sig)
         end
     elseif exp == 0x1f
         if sig == 0  # Inf
@@ -188,13 +188,13 @@ function convert(::Type{Float32}, val::Float16)
                 ret = 0xff800000
             end
         else  # NaN
-            ret = 0x7fc00000 | (sign<<31) | (sig<<(23-10))
+            ret = bitor(0x7fc00000, sign << 31, sig << (23-10))
         end
     else
         sign = sign << 31
         exp  = (exp - 15 + 127) << 23
         sig  = sig << (23 - 10)
-        ret = sign | exp | sig
+        ret = bitor(sign, exp, sig)
     end
     return reinterpret(Float32, ret)
 end
@@ -209,30 +209,30 @@ const shifttable = Vector{UInt8}(512)
 for i = 0:255
     e = i - 127
     if e < -24  # Very small numbers map to zero
-        basetable[i|0x000+1] = 0x0000
-        basetable[i|0x100+1] = 0x8000
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
+        basetable[bitor(i, 0x000) + 1] = 0x0000
+        basetable[bitor(i, 0x100) + 1] = 0x8000
+        shifttable[bitor(i, 0x000) + 1] = 24
+        shifttable[bitor(i, 0x100) + 1] = 24
     elseif e < -14  # Small numbers map to denorms
-        basetable[i|0x000+1] = (0x0400>>(-e-14))
-        basetable[i|0x100+1] = (0x0400>>(-e-14)) | 0x8000
-        shifttable[i|0x000+1] = -e-1
-        shifttable[i|0x100+1] = -e-1
+        basetable[bitor(i, 0x000) + 1] = (0x0400>>(-e-14))
+        basetable[bitor(i, 0x100) + 1] = bitor(0x0400>>(-e-14), 0x8000)
+        shifttable[bitor(i, 0x000) + 1] = -e-1
+        shifttable[bitor(i, 0x100) + 1] = -e-1
     elseif e <= 15  # Normal numbers just lose precision
-        basetable[i|0x000+1] = ((e+15)<<10)
-        basetable[i|0x100+1] = ((e+15)<<10) | 0x8000
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
+        basetable[bitor(i, 0x000) + 1] = ((e+15)<<10)
+        basetable[bitor(i, 0x100) + 1] = bitor((e+15)<<10, 0x8000)
+        shifttable[bitor(i, 0x000) + 1] = 13
+        shifttable[bitor(i, 0x100) + 1] = 13
     elseif e < 128  # Large numbers map to Infinity
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
+        basetable[bitor(i, 0x000) + 1] = 0x7C00
+        basetable[bitor(i, 0x100) + 1] = 0xFC00
+        shifttable[bitor(i, 0x000) + 1] = 24
+        shifttable[bitor(i, 0x100) + 1] = 24
     else  # Infinity and NaN's stay Infinity and NaN's
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
+        basetable[bitor(i, 0x000) + 1] = 0x7C00
+        basetable[bitor(i, 0x100) + 1] = 0xFC00
+        shifttable[bitor(i, 0x000) + 1] = 13
+        shifttable[bitor(i, 0x100) + 1] = 13
     end
 end
 #convert(::Type{Float16}, x::Float32) = fptrunc(Float16, x)
@@ -307,7 +307,7 @@ end
 function unsafe_trunc(::Type{UInt128}, x::Float64)
     xu = reinterpret(UInt64,x)
     k = Int(xu >> 52) & 0x07ff - 1075
-    xu = (xu & 0x000f_ffff_ffff_ffff) | 0x0010_0000_0000_0000
+    xu = bitor(xu & 0x000f_ffff_ffff_ffff, 0x0010_0000_0000_0000)
     if k <= 0
         UInt128(xu >> -k)
     else
@@ -321,7 +321,7 @@ end
 function unsafe_trunc(::Type{UInt128}, x::Float32)
     xu = reinterpret(UInt32,x)
     k = Int(xu >> 23) & 0x00ff - 150
-    xu = (xu & 0x007f_ffff) | 0x0080_0000
+    xu = bitor(xu & 0x007f_ffff, 0x0080_0000)
     if k <= 0
         UInt128(xu >> -k)
     else
@@ -432,10 +432,10 @@ end
 function ==(x::Float16, y::Float16)
     ix = reinterpret(UInt16,x)
     iy = reinterpret(UInt16,y)
-    if (ix|iy)&0x7fff > 0x7c00 #isnan(x) || isnan(y)
+    if bitor(ix, iy) & 0x7fff > 0x7c00 #isnan(x) || isnan(y)
         return false
     end
-    if (ix|iy)&0x7fff == 0x0000
+    if bitor(ix, iy) & 0x7fff == 0x0000
         return true
     end
     return ix == iy
@@ -640,7 +640,7 @@ function nextfloat(f::IEEEFloat, d::Integer)
         end
     end
     if fneg
-        fu |= sign_mask(F)
+        fu = bitor(fu, sign_mask(F))
     end
     reinterpret(F, fu)
 end

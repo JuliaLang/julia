@@ -94,10 +94,10 @@ between shared libraries.
 """
 function dlopen end
 
-dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+dlopen(s::Symbol, flags::Integer = bitor(RTLD_LAZY, RTLD_DEEPBIND)) =
     dlopen(string(s), flags)
 
-dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+dlopen(s::AbstractString, flags::Integer = bitor(RTLD_LAZY, RTLD_DEEPBIND)) =
     ccall(:jl_load_dynamic_library, Ptr{Void}, (Cstring,UInt32), s, flags)
 
 """
@@ -107,10 +107,10 @@ Similar to [`dlopen`](@ref), except returns a `NULL` pointer instead of raising 
 """
 function dlopen_e end
 
-dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+dlopen_e(s::Symbol, flags::Integer = bitor(RTLD_LAZY, RTLD_DEEPBIND)) =
     dlopen_e(string(s), flags)
 
-dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+dlopen_e(s::AbstractString, flags::Integer = bitor(RTLD_LAZY, RTLD_DEEPBIND)) =
     ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Cstring,UInt32), s, flags)
 
 """

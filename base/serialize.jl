@@ -227,14 +227,14 @@ function serialize_array_data(s::IO, a)
         count = 1
         for i = 2:length(a)
             if a[i] != last || count == 127
-                write(s, UInt8((UInt8(last) << 7) | count))
+                write(s, UInt8(bitor(UInt8(last) << 7, count))
                 last = a[i]
                 count = 1
             else
                 count += 1
             end
         end
-        write(s, UInt8((UInt8(last) << 7) | count))
+        write(s, UInt8(bitor(UInt8(last) << 7, count))
     else
         write(s, a)
     end
@@ -673,7 +673,7 @@ function writeheader(s::AbstractSerializer)
     machine = (sizeof(Int) == 4 ? 0 :
                sizeof(Int) == 8 ? 1 :
                error("unsupported word size in serializer"))
-    write(io, UInt8(endianness) | (UInt8(machine) << 2))
+    write(io, bitor(UInt8(endianness), UInt8(machine) << 2))
     write(io, b"\x00\x00\x00")  # 3 reserved bytes
     nothing
 end

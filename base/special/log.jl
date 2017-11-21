@@ -269,7 +269,7 @@ function log(x::Float64)
             m = Int(xu >> 52) & 0x07ff - 54
         end
         m -= 1023
-        y = reinterpret(Float64,(xu & 0x000f_ffff_ffff_ffff) | 0x3ff0_0000_0000_0000)
+        y = reinterpret(Float64, bitor(xu & 0x000f_ffff_ffff_ffff, 0x3ff0_0000_0000_0000))
 
         mf = Float64(m)
         F = (y + 3.5184372088832e13) - 3.5184372088832e13 # 0x1p-7*round(0x1p7*y)
@@ -305,7 +305,7 @@ function log(x::Float32)
             m = Int(xu >> 23) & 0x00ff - 25
         end
         m -= 127
-        y = reinterpret(Float32,(xu & 0x007f_ffff) | 0x3f80_0000)
+        y = reinterpret(Float32, bitor(xu & 0x007f_ffff, 0x3f80_0000))
 
         mf = Float32(m)
         F = (y + 65536.0f0) - 65536.0f0 # 0x1p-7*round(0x1p7*y)
@@ -340,7 +340,7 @@ function log1p(x::Float64)
         s = reinterpret(Float64,0x7fe0_0000_0000_0000 - (zu & 0xfff0_0000_0000_0000)) # 2^-m
         m = Int(zu >> 52) & 0x07ff - 1023 # z cannot be subnormal
         c = m > 0 ? 1.0-(z-x) : x-(z-1.0) # 1+x = z+c exactly
-        y = reinterpret(Float64,(zu & 0x000f_ffff_ffff_ffff) | 0x3ff0_0000_0000_0000)
+        y = reinterpret(Float64, bitor(zu & 0x000f_ffff_ffff_ffff, 0x3ff0_0000_0000_0000))
 
         mf = Float64(m)
         F = (y + 3.5184372088832e13) - 3.5184372088832e13 # 0x1p-7*round(0x1p7*y)
@@ -373,7 +373,7 @@ function log1p(x::Float32)
         s = reinterpret(Float32,0x7f000000 - (zu & 0xff80_0000)) # 2^-m
         m = Int(zu >> 23) & 0x00ff - 127 # z cannot be subnormal
         c = m > 0 ? 1f0-(z-x) : x-(z-1f0) # 1+x = z+c
-        y = reinterpret(Float32,(zu & 0x007f_ffff) | 0x3f80_0000)
+        y = reinterpret(Float32, bitor(zu & 0x007f_ffff, 0x3f80_0000))
 
         mf = Float32(m)
         F = (y + 65536.0f0) - 65536.0f0 # 0x1p-7*round(0x1p7*y)

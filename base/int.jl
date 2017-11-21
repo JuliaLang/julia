@@ -283,10 +283,10 @@ Bitwise or.
 
 # Examples
 ```jldoctest
-julia> 4 | 10
+julia> bitor(4, 10)
 14
 
-julia> 4 | 1
+julia> bitor(4, 1)
 5
 ```
 """

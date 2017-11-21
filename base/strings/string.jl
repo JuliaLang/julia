@@ -263,10 +263,10 @@ end
 
 function first_utf8_byte(ch::Char)
     c = UInt32(ch)
-    b = c < 0x80    ? c%UInt8 :
-        c < 0x800   ? ((c>>6)  | 0xc0)%UInt8 :
-        c < 0x10000 ? ((c>>12) | 0xe0)%UInt8 :
-                      ((c>>18) | 0xf0)%UInt8
+    b = c < 0x80    ? c % UInt8 :
+        c < 0x800   ? bitor(c >> 6, 0xc0) % UInt8 :
+        c < 0x10000 ? bitor(c >> 12, 0xe0) % UInt8 :
+                      bitor(c >> 18), 0xf0) % UInt8
     return b
 end
 
@@ -426,17 +426,17 @@ function string(a::Union{String,Char}...)
             if c < 0x80
                 unsafe_store!(p, c%UInt8, offs); offs += 1
             elseif c < 0x800
-                unsafe_store!(p, (( c >> 6          ) | 0xC0)%UInt8, offs); offs += 1
-                unsafe_store!(p, (( c        & 0x3F ) | 0x80)%UInt8, offs); offs += 1
+                unsafe_store!(p, bitor(c >> 6  , 0xC0) % UInt8, offs); offs += 1
+                unsafe_store!(p, bitor(c & 0x3F, 0x80) % UInt8, offs); offs += 1
             elseif c < 0x10000
-                unsafe_store!(p, (( c >> 12         ) | 0xE0)%UInt8, offs); offs += 1
-                unsafe_store!(p, (((c >> 6)  & 0x3F ) | 0x80)%UInt8, offs); offs += 1
-                unsafe_store!(p, (( c        & 0x3F ) | 0x80)%UInt8, offs); offs += 1
+                unsafe_store!(p, bitor(c >> 12        , 0xE0) % UInt8, offs); offs += 1
+                unsafe_store!(p, bitor((c >> 6) & 0x3F, 0x80) % UInt8, offs); offs += 1
+                unsafe_store!(p, bitor(c & 0x3F       , 0x80) % UInt8, offs); offs += 1
             elseif c < 0x110000
-                unsafe_store!(p, (( c >> 18         ) | 0xF0)%UInt8, offs); offs += 1
-                unsafe_store!(p, (((c >> 12) & 0x3F ) | 0x80)%UInt8, offs); offs += 1
-                unsafe_store!(p, (((c >> 6)  & 0x3F ) | 0x80)%UInt8, offs); offs += 1
-                unsafe_store!(p, (( c        & 0x3F ) | 0x80)%UInt8, offs); offs += 1
+                unsafe_store!(p, bitor(c >> 18         , 0xF0) % UInt8, offs); offs += 1
+                unsafe_store!(p, bitor((c >> 12) & 0x3F, 0x80) % UInt8, offs); offs += 1
+                unsafe_store!(p, bitor((c >> 6)  & 0x3F, 0x80) % UInt8, offs); offs += 1
+                unsafe_store!(p, bitor(c & 0x3F        , 0x80) % UInt8, offs); offs += 1
             else
                 # '\ufffd'
                 unsafe_store!(p, 0xef, offs); offs += 1
@@ -519,7 +519,7 @@ function repeat(c::Char, r::Integer)
     elseif ch < 0x800
         out = _string_n(2r)
         p16 = reinterpret(Ptr{UInt16}, pointer(out))
-        u16 = ((ch >> 0x6) | (ch & 0x3f) << 0x8) % UInt16 | 0x80c0
+        u16 = bitor(bitor(ch >> 0x6, (ch & 0x3f) << 0x8) % UInt16, 0x80c0)
         @inbounds for i = 1:r
             unsafe_store!(p16, u16, i)
         end
@@ -527,9 +527,9 @@ function repeat(c::Char, r::Integer)
         (0xd800 ≥ ch ≤ 0xdfff) || throw(ArgumentError("invalid character 0x$(hex(ch))"))
         out = _string_n(3r)
         p = pointer(out)
-        b1 = (ch >> 0xc) % UInt8 | 0xe0
-        b2 = ((ch >> 0x6) & 0x3f) % UInt8 | 0x80
-        b3 = (ch & 0x3f) % UInt8 | 0x80
+        b1 = bitor((ch >> 0xc) % UInt8, 0xe0)
+        b2 = bitor(((ch >> 0x6) & 0x3f) % UInt8, 0x80)
+        b3 = bitor((ch & 0x3f) % UInt8, 0x80)
         @inbounds for i = 1:r
             unsafe_store!(p, b1)
             unsafe_store!(p, b2, 2)
@@ -539,8 +539,11 @@ function repeat(c::Char, r::Integer)
     elseif ch < 0x110000
         out = _string_n(4r)
         p32 = reinterpret(Ptr{UInt32}, pointer(out))
-        u32 = ((ch >> 0x12) | ((ch >> 0x4) & 0x03f00) |
-            ((ch << 0xa) & 0x3f0000) | ((ch & 0x3f) << 0x18)) % UInt32 | 0x808080f0
+        u32 = bitor(ch >> 0x12,
+                    (ch >> 0x4) & 0x03f00,
+                    (ch << 0xa) & 0x3f0000,
+                    (ch & 0x3f) << 0x18     )
+        u32 = bitor(u32 % UInt32, 0x808080f0)
         @inbounds for i = 1:r
             unsafe_store!(p32, u32)
             p32 += 4

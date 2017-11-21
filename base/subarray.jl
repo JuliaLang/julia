@@ -407,7 +407,7 @@ function replace_ref_end_!(ex, withex)
                 J = endof(ex.args)
                 for j = 2:J
                     exj, used = replace_ref_end_!(ex.args[j],:($size($S,$n)))
-                    used_S |= used
+                    used_S = bitor(used_S, used)
                     ex.args[j] = exj
                     if isa(exj,Expr) && exj.head == :...
                         # splatted object

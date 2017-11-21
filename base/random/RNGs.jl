@@ -216,7 +216,7 @@ rand_ui52_raw(r::MersenneTwister) = (reserve_1(r); rand_ui52_raw_inbounds(r))
 
 function rand_ui2x52_raw(r::MersenneTwister)
     reserve(r, 2)
-    rand_ui52_raw_inbounds(r) % UInt128 << 64 | rand_ui52_raw_inbounds(r)
+    bitor(rand_ui52_raw_inbounds(r) % UInt128 << 64, rand_ui52_raw_inbounds(r))
 end
 
 function rand_ui104_raw(r::MersenneTwister)
@@ -318,10 +318,10 @@ function rand!(r::MersenneTwister, A::Array{Float64}, n::Int=length(A),
 end
 
 mask128(u::UInt128, ::Type{Float16}) =
-    (u & 0x03ff03ff03ff03ff03ff03ff03ff03ff) | 0x3c003c003c003c003c003c003c003c00
+    bitor(u & 0x03ff03ff03ff03ff03ff03ff03ff03ff, 0x3c003c003c003c003c003c003c003c00)
 
 mask128(u::UInt128, ::Type{Float32}) =
-    (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
+    bitor(u & 0x007fffff007fffff007fffff007fffff, 0x3f8000003f8000003f8000003f800000)
 
 function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}},
                ::Close1Open2_64)

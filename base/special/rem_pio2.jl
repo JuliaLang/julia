@@ -128,7 +128,7 @@ function fromfraction(f::Int128)
     n1 = 128-leading_zeros(x)         # ndigits0z(x,2)
     m1 = ((x >> (n1-26)) % UInt64) << 27
     d1 = ((n1-128+1021) % UInt64) << 52
-    z1 = reinterpret(Float64, s | (d1 + m1))
+    z1 = reinterpret(Float64, bitor(s, d1 + m1))
 
     # 2. compute remaining term
     x2 = (x - (UInt128(m1) << (n1-53)))
@@ -138,7 +138,7 @@ function fromfraction(f::Int128)
     n2 = 128-leading_zeros(x2)
     m2 = (x2 >> (n2-53)) % UInt64
     d2 = ((n2-128+1021) % UInt64) << 52
-    z2 = reinterpret(Float64,  s | (d2 + m2))
+    z2 = reinterpret(Float64, bitor(s, d2 + m2))
     return (z1,z2)
 end
 
@@ -152,7 +152,7 @@ function paynehanek(x::Float64)
     # Computations are integer based, so reinterpret x as UInt64
     u = reinterpret(UInt64, x)
     # Strip x of exponent bits and replace with ^1
-    X = (u & significand_mask(Float64)) | (one(UInt64) << significand_bits(Float64))
+    X = bitor(u & significand_mask(Float64), one(UInt64) << significand_bits(Float64))
     # Get k from formula above
     # k = exponent(x)-52
     k = Int((u & exponent_mask(Float64)) >> significand_bits(Float64)) - exponent_bias(Float64) - significand_bits(Float64)
@@ -186,9 +186,9 @@ function paynehanek(x::Float64)
         @inbounds a3 = INV_2PI[idx+3]
     else
         # use shifts to extract the relevant 64 bit window
-        @inbounds a1 = (idx < 0 ? zero(UInt64) : INV_2PI[idx+1] << shift) | (INV_2PI[idx+2] >> (64 - shift))
-        @inbounds a2 = (INV_2PI[idx+2] << shift) | (INV_2PI[idx+3] >> (64 - shift))
-        @inbounds a3 = (INV_2PI[idx+3] << shift) | (INV_2PI[idx+4] >> (64 - shift))
+        @inbounds a1 = bitor(idx < 0 ? zero(UInt64) : INV_2PI[idx+1] << shift, INV_2PI[idx+2] >> (64 - shift))
+        @inbounds a2 = bitor(INV_2PI[idx+2] << shift, INV_2PI[idx+3] >> (64 - shift))
+        @inbounds a3 = bitor(INV_2PI[idx+3] << shift, INV_2PI[idx+4] >> (64 - shift))
     end
 
     # 3. Perform the multiplication:

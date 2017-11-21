@@ -44,7 +44,7 @@ struct InferenceParams
     end
 end
 
-# alloc_elim_pass! relies on `Slot_AssignedOnce | Slot_UsedUndef` being
+# alloc_elim_pass! relies on `bitor(Slot_AssignedOnce, Slot_UsedUndef)` being
 # SSA. This should be true now but can break if we start to track conditional
 # constants. e.g.
 #
@@ -3691,7 +3691,7 @@ function finish(me::InferenceState)
 
         # don't store inferred code if we've decided to interpret this function
         if !already_inferred && me.linfo.jlcall_api != 4
-            const_flags = (me.const_ret) << 1 | me.const_api
+            const_flags = bitor((me.const_ret) << 1, me.const_api)
             if me.const_ret
                 if isa(me.bestguess, Const)
                     inferred_const = (me.bestguess::Const).val
@@ -3870,7 +3870,7 @@ function type_annotate!(sv::InferenceState)
     # finish marking used-undef variables
     for j = 1:nslots
         if undefs[j]
-            src.slotflags[j] |= Slot_UsedUndef
+            src.slotflags[j] = bitor(src.slotflags[j], Slot_UsedUndef)
         end
     end
 
@@ -6042,7 +6042,7 @@ function alloc_elim_pass!(sv::OptimizationState)
                                              sv.src.slotnames[slot_id(var)])
                             tmpv_id = slot_id(tmpv)
                             new_slots[j] = tmpv_id
-                            sv.src.slotflags[tmpv_id] |= Slot_UsedUndef
+                            sv.src.slotflags[tmpv_id] = bitor(sv.src.slotflags[tmpv_id], Slot_UsedUndef)
                         end
                         tmp = Expr(:(=), tmpv, tupelt)
                         insert!(body, i+n_ins, tmp)

@@ -220,10 +220,10 @@ function form_8x8_chunk(Bc::Vector{UInt64}, i1::Int, i2::Int, m::Int, cgap::Int,
     r = 0
     for j = 1:8
         k > nc && break
-        x |= ((Bc[k] >>> l) & msk8) << r
+        x = bitor(x, ((Bc[k] >>> l) & msk8) << r)
         if l + 8 >= 64 && nc > k
             r0 = 8 - Base._mod64(l + 8)
-            x |= (Bc[k + 1] & (msk8 >>> r0)) << (r + r0)
+            x = bitor(x, (Bc[k + 1] & (msk8 >>> r0)) << (r + r0))
         end
         k += cgap + (l + cinc >= 64 ? 1 : 0)
         l = Base._mod64(l + cinc)
@@ -238,10 +238,10 @@ function put_8x8_chunk(Bc::Vector{UInt64}, i1::Int, i2::Int, x::UInt64, m::Int, 
     r = 0
     for j = 1:8
         k > nc && break
-        Bc[k] |= ((x >>> r) & msk8) << l
+        Bc[k] = bitor(Bc[k], ((x >>> r) & msk8) << l)
         if l + 8 >= 64 && nc > k
             r0 = 8 - Base._mod64(l + 8)
-            Bc[k + 1] |= ((x >>> (r + r0)) & (msk8 >>> r0))
+            Bc[k + 1] = bitor(Bc[k + 1], (x >>> (r + r0)) & (msk8 >>> r0))
         end
         k += cgap + (l + cinc >= 64 ? 1 : 0)
         l = Base._mod64(l + cinc)

@@ -381,7 +381,7 @@ function uuid1(rng::AbstractRNG=GLOBAL_RNG)
     u &= 0x00000000000000003fffffffffffffff
 
     # set the unicast/multicast bit and version
-    u |= 0x00000000000010000000010000000000
+    u = bitor(u, 0x00000000000010000000010000000000)
 
     # 0x01b21dd213814000 is the number of 100 nanosecond intervals
     # between the UUID epoch and Unix epoch
@@ -390,9 +390,9 @@ function uuid1(rng::AbstractRNG=GLOBAL_RNG)
     ts_mid = (timestamp >> 32) & typemax(UInt16)
     ts_hi = (timestamp >> 48) & 0x0fff
 
-    u |= UInt128(ts_low) << 96
-    u |= UInt128(ts_mid) << 80
-    u |= UInt128(ts_hi) << 64
+    u = bitor(u, UInt128(ts_low) << 96)
+    u = bitor(u, UInt128(ts_mid) << 80)
+    u = bitor(u, UInt128(ts_hi) << 64)
 
     UUID(u)
 end
@@ -414,7 +414,7 @@ julia> Base.Random.uuid4(rng)
 function uuid4(rng::AbstractRNG=GLOBAL_RNG)
     u = rand(rng, UInt128)
     u &= 0xffffffffffff0fff3fffffffffffffff
-    u |= 0x00000000000040008000000000000000
+    u = bitor(u, 0x00000000000040008000000000000000)
     UUID(u)
 end
 
@@ -447,7 +447,7 @@ let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
         for i in groupings
             u <<= 4
             d = s[i] - '0'
-            u |= 0xf & (d - 39*(d > 9))
+            u = bitor(u, 0xf & (d - 39*(d > 9)))
         end
         return UUID(u)
     end

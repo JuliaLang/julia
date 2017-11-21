@@ -59,7 +59,7 @@ reset(val::Integer, flag::Integer) = (val &= bitnot(flag))
 Flip the bits of `val` indexed by `flag`, so that if a bit is `0` it
 will be `1` after the toggle, and vice-versa.
 """
-toggle(val::Integer, flag::Integer) = (val |= flag)
+toggle(val::Integer, flag::Integer) = bitor(val, flag)
 
 """
     features()

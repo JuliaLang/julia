@@ -116,7 +116,7 @@ union(s1::BitSet, ss::BitSet...) = union(s1, union(ss...))
 union(s::BitSet, ns) = union!(copy(s), ns)
 union!(s::BitSet, ns) = (for n in ns; push!(s, n); end; s)
 function union!(s1::BitSet, s2::BitSet)
-    _matched_map!(|, s1.bits, s2.bits)
+    _matched_map!(bitor, s1.bits, s2.bits)
     s1
 end
 
