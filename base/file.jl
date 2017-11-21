@@ -404,7 +404,7 @@ end
     readdir(dir::AbstractString="."; sort::Bool=true) -> Vector{String}
 
 Returns the files and directories in the directory `dir` (or the current working directory if not given).
-If `sort=false` the resulting list won't necessarily be sorted.
+If `sort=false`, the resulting list won't necessarily be sorted, but performance may improve slightly.
 """
 function readdir(path::AbstractString; sort::Bool=true)
     # Allocate space for uv_fs_t struct
