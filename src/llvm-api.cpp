@@ -31,23 +31,23 @@ namespace llvm {
 //
 // The LLVMInitialize* functions and friends are defined `static inline`
 
-extern "C" void LLVMExtraInitializeAllTargetInfos() {
+extern "C" JL_DLLEXPORT void LLVMExtraInitializeAllTargetInfos() {
   InitializeAllTargetInfos();
 }
 
-extern "C" void LLVMExtraInitializeAllTargets() { InitializeAllTargets(); }
+extern "C" JL_DLLEXPORT void LLVMExtraInitializeAllTargets() { InitializeAllTargets(); }
 
-extern "C" void LLVMExtraInitializeAllTargetMCs() { InitializeAllTargetMCs(); }
+extern "C" JL_DLLEXPORT void LLVMExtraInitializeAllTargetMCs() { InitializeAllTargetMCs(); }
 
-extern "C" void LLVMExtraInitializeAllAsmPrinters() {
+extern "C" JL_DLLEXPORT void LLVMExtraInitializeAllAsmPrinters() {
   InitializeAllAsmPrinters();
 }
 
-extern "C" void LLVMExtraInitializeAllAsmParsers() {
+extern "C" JL_DLLEXPORT void LLVMExtraInitializeAllAsmParsers() {
   InitializeAllAsmParsers();
 }
 
-extern "C" void LLVMExtraInitializeAllDisassemblers() {
+extern "C" JL_DLLEXPORT void LLVMExtraInitializeAllDisassemblers() {
   InitializeAllDisassemblers();
 }
 
@@ -57,19 +57,19 @@ extern "C" void LLVMExtraInitializeAllDisassemblers() {
 #error LLVM_NATIVE_TARGET not defined
 #endif
 
-extern "C" LLVMBool LLVMExtraInitializeNativeTarget() {
+extern "C" JL_DLLEXPORT LLVMBool LLVMExtraInitializeNativeTarget() {
   return InitializeNativeTarget();
 }
 
-extern "C" LLVMBool LLVMExtraInitializeNativeAsmParser() {
+extern "C" JL_DLLEXPORT LLVMBool LLVMExtraInitializeNativeAsmParser() {
   return InitializeNativeTargetAsmParser();
 }
 
-extern "C" LLVMBool LLVMExtraInitializeNativeAsmPrinter() {
+extern "C" JL_DLLEXPORT LLVMBool LLVMExtraInitializeNativeAsmPrinter() {
   return InitializeNativeTargetAsmPrinter();
 }
 
-extern "C" LLVMBool LLVMExtraInitializeNativeDisassembler() {
+extern "C" JL_DLLEXPORT LLVMBool LLVMExtraInitializeNativeDisassembler() {
   return InitializeNativeTargetDisassembler();
 }
 
@@ -79,7 +79,7 @@ extern "C" LLVMBool LLVMExtraInitializeNativeDisassembler() {
 typedef struct LLVMOpaquePass *LLVMPassRef;
 DEFINE_STDCXX_CONVERSION_FUNCTIONS(Pass, LLVMPassRef)
 
-extern "C" void LLVMExtraAddPass(LLVMPassManagerRef PM, LLVMPassRef P) {
+extern "C" JL_DLLEXPORT void LLVMExtraAddPass(LLVMPassManagerRef PM, LLVMPassRef P) {
   unwrap(PM)->add(unwrap(P));
 }
 
@@ -114,7 +114,7 @@ private:
   jl_value_t *Callback;
 };
 
-extern "C" LLVMPassRef LLVMExtraCreateModulePass(const char *Name,
+extern "C" JL_DLLEXPORT LLVMPassRef LLVMExtraCreateModulePass(const char *Name,
                                                  jl_value_t *Callback) {
   return wrap(new JuliaModulePass(Name, Callback));
 }
@@ -141,7 +141,7 @@ private:
   jl_value_t *Callback;
 };
 
-extern "C" LLVMPassRef LLVMExtraCreateFunctionPass(const char *Name,
+extern "C" JL_DLLEXPORT LLVMPassRef LLVMExtraCreateFunctionPass(const char *Name,
                                                    jl_value_t *Callback) {
   return wrap(new JuliaFunctionPass(Name, Callback));
 }
@@ -168,7 +168,7 @@ private:
   jl_value_t *Callback;
 };
 
-extern "C" LLVMPassRef LLVMExtraCreateBasicBlockPass(const char *Name,
+extern "C" JL_DLLEXPORT LLVMPassRef LLVMExtraCreateBasicBlockPass(const char *Name,
                                                      jl_value_t *Callback) {
   return wrap(new JuliaBasicBlockPass(Name, Callback));
 }
@@ -178,8 +178,8 @@ extern "C" LLVMPassRef LLVMExtraCreateBasicBlockPass(const char *Name,
 
 #if JL_LLVM_VERSION < 40000
 
-extern "C" unsigned
-LLVMGetAttributeCountAtIndex_D26392(LLVMValueRef F, LLVMAttributeIndex Idx) {
+extern "C" JL_DLLEXPORT unsigned
+LLVMExtraGetAttributeCountAtIndex_D26392(LLVMValueRef F, LLVMAttributeIndex Idx) {
   auto Fn = unwrap<Function>(F);
   if (Fn->getAttributes().isEmpty())
     return 0;
@@ -187,8 +187,8 @@ LLVMGetAttributeCountAtIndex_D26392(LLVMValueRef F, LLVMAttributeIndex Idx) {
     return LLVMGetAttributeCountAtIndex(F, Idx);
 }
 
-extern "C" unsigned
-LLVMGetCallSiteAttributeCount_D26392(LLVMValueRef C, LLVMAttributeIndex Idx) {
+extern "C" JL_DLLEXPORT unsigned
+LLVMExtraGetCallSiteAttributeCount_D26392(LLVMValueRef C, LLVMAttributeIndex Idx) {
   CallSite CS(unwrap<Instruction>(C));
   if (CS.getAttributes().isEmpty())
     return 0;
@@ -201,25 +201,25 @@ LLVMGetCallSiteAttributeCount_D26392(LLVMValueRef C, LLVMAttributeIndex Idx) {
 
 // Various missing functions
 
-extern "C" unsigned int LLVMExtraGetDebugMDVersion() {
+extern "C" JL_DLLEXPORT unsigned int LLVMExtraGetDebugMDVersion() {
   return DEBUG_METADATA_VERSION;
 }
 
-extern "C" LLVMContextRef LLVMExtraGetValueContext(LLVMValueRef V) {
+extern "C" JL_DLLEXPORT LLVMContextRef LLVMExtraGetValueContext(LLVMValueRef V) {
   return wrap(&unwrap(V)->getContext());
 }
 
 extern ModulePass *createNVVMReflectPass();
-extern "C" void LLVMExtraAddMVVMReflectPass(LLVMPassManagerRef PM) {
+extern "C" JL_DLLEXPORT void LLVMExtraAddMVVMReflectPass(LLVMPassManagerRef PM) {
   createNVVMReflectPass();
 }
 
-extern "C" void LLVMExtraAddTargetLibraryInfoByTiple(const char *T,
+extern "C" JL_DLLEXPORT void LLVMExtraAddTargetLibraryInfoByTiple(const char *T,
                                                      LLVMPassManagerRef PM) {
   unwrap(PM)->add(new TargetLibraryInfoWrapperPass(Triple(T)));
 }
 
-extern "C" void LLVMExtraAddInternalizePassWithExportList(
+extern "C" JL_DLLEXPORT void LLVMExtraAddInternalizePassWithExportList(
     LLVMPassManagerRef PM, const char **ExportList, size_t Length) {
   auto PreserveFobj = [=](const GlobalValue &GV) {
     for (size_t i = 0; i < Length; i++) {
