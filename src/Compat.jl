@@ -763,6 +763,30 @@ end
     end
 end
 
+if VERSION < v"0.7.0-DEV.2377"
+    (::Type{Matrix{T}}){T}(s::UniformScaling, dims::Dims{2}) = setindex!(zeros(T, dims), T(s.λ), diagind(dims...))
+    (::Type{Matrix{T}}){T}(s::UniformScaling, m::Integer, n::Integer) = Matrix{T}(s, Dims((m, n)))
+
+    (::Type{SparseMatrixCSC{Tv,Ti}}){Tv,Ti}(s::UniformScaling, m::Integer, n::Integer) = SparseMatrixCSC{Tv,Ti}(s, Dims((m, n)))
+    (::Type{SparseMatrixCSC{Tv}}){Tv}(s::UniformScaling, m::Integer, n::Integer) = SparseMatrixCSC{Tv}(s, Dims((m, n)))
+    (::Type{SparseMatrixCSC{Tv}}){Tv}(s::UniformScaling, dims::Dims{2}) = SparseMatrixCSC{Tv,Int}(s, dims)
+    function (::Type{SparseMatrixCSC{Tv,Ti}}){Tv,Ti}(s::UniformScaling, dims::Dims{2})
+        @boundscheck first(dims) < 0 && throw(ArgumentError("first dimension invalid ($(first(dims)) < 0)"))
+        @boundscheck last(dims) < 0 && throw(ArgumentError("second dimension invalid ($(last(dims)) < 0)"))
+        iszero(s.λ) && return spzeros(Tv, Ti, dims...)
+        m, n, k = dims..., min(dims...)
+        nzval = fill!(Vector{Tv}(k), Tv(s.λ))
+        rowval = copy!(Vector{Ti}(k), 1:k)
+        colptr = copy!(Vector{Ti}(n + 1), 1:(k + 1))
+        for i in (k + 2):(n + 1) colptr[i] = (k + 1) end
+        SparseMatrixCSC{Tv,Ti}(dims..., colptr, rowval, nzval)
+    end
+end
+if VERSION < v"0.7.0-DEV.2543"
+    (::Type{Array{T}}){T}(s::UniformScaling, dims::Dims{2}) = Matrix{T}(s, dims)
+    (::Type{Array{T}}){T}(s::UniformScaling, m::Integer, n::Integer) = Matrix{T}(s, m, n)
+end
+
 include("deprecated.jl")
 
 end # module Compat

@@ -182,6 +182,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `diagm` and `spdiagm` accept pairs mapping diagonals to vectors ([#24047], [#23757])
 
+* Constructors for `Matrix{T}`, `Array{T}`, and `SparseMatrixCSC{T}` from `UniformScaling` ([#24372], [#24657])
+
 ## Renaming
 
 
@@ -354,3 +356,5 @@ includes this fix. Find the minimum version from there.
 [#23931]: https://github.com/JuliaLang/julia/issues/23931
 [#24047]: https://github.com/JuliaLang/julia/issues/24047
 [#24282]: https://github.com/JuliaLang/julia/issues/24282
+[#24372]: https://github.com/JuliaLang/julia/issues/24372
+[#24657]: https://github.com/JuliaLang/julia/issues/24657
