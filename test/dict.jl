@@ -91,6 +91,14 @@ end
     end
 end
 
+let x = Dict(3=>3, 5=>5, 8=>8, 6=>6)
+    pop!(x, 5)
+    for k in keys(x)
+        Dict{Int,Int}(x)
+        @test k in [3, 8, 6]
+    end
+end
+
 let z = Dict()
     get_KeyError = false
     try
