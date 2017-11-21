@@ -5,7 +5,7 @@ LLVM for Julia.
 
 ## Overview of Julia to LLVM Interface
 
-Julia statically links in LLVM by default. Build with `USE_LLVM_SHLIB=1` to link dynamically.
+Julia dynamically links against LLVM by default. Build with `USE_LLVM_SHLIB=0` to link statically.
 
 The code for lowering Julia AST to LLVM IR or interpreting it directly is in directory `src/`.
 
