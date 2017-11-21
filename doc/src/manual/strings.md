@@ -856,10 +856,9 @@ julia> b"\uff"
  0xbf
 ```
 
-In character literals, this distinction is glossed over and `\xff` is allowed to represent the
-code point 255, because characters *always* represent code points. In strings, however, `\x` escapes
-always represent bytes, not code points, whereas `\u` and `\U` escapes always represent code points,
-which are encoded in one or more bytes. For code points less than `\u80`, it happens that the
+Character literals use the same behavior.
+
+For code points less than `\u80`, it happens that the
 UTF-8 encoding of each code point is just the single byte produced by the corresponding `\x` escape,
 so the distinction can safely be ignored. For the escapes `\x80` through `\xff` as compared to
 `\u80` through `\uff`, however, there is a major difference: the former escapes all encode single
