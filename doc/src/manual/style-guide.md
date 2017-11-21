@@ -91,11 +91,12 @@ is that declaring more specific types leaves more "space" for future method defi
 Instead of:
 
 ```julia
-function double(a::AbstractArray{<:Number})
-    for i = 1:endof(a)
-        a[i] *= 2
+function double{T<:Number}(a::AbstractArray{T})
+    b = copy(a)
+    for i = 1:endof(b)
+        b[i] *= 2
     end
-    return a
+    b
 end
 ```
 
