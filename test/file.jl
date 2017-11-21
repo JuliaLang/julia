@@ -1277,6 +1277,20 @@ cd(dirwalk) do
 end
 rm(dirwalk, recursive=true)
 
+###################
+#     readdir     #
+###################
+@testset "readdir is sorted" begin
+    mktempdir() do dir
+        cd(dir) do
+            for k in 1:10
+                touch(randstring())
+            end
+            @test issorted(readdir())
+        end
+    end
+end
+
 ############
 # Clean up #
 ############

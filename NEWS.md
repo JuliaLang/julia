@@ -30,6 +30,8 @@ New library functions
 * The `tempname` function now takes an optional `parent::AbstractString` argument to give it a directory in which to attempt to produce a temporary path name ([#33090]).
 * The `tempname` function now takes a `cleanup::Bool` keyword argument defaulting to `true`, which causes the process to try to ensure that any file or directory at the path returned by `tempname` is deleted upon process exit ([#33090]).
 * The `readdir` function now takes a `join::Bool` keyword argument defaulting to `false`, which when set causes `readdir` to join its directory argument with each listed name ([#33113]).
+* `readdir()` output is now guaranteed to be sorted. The keyword `sort` allows to
+  optionally turn off explicit sorting and get names in OS-native order ([#24626]).
 * The new `only(x)` function returns the one-and-only element of a collection `x`, and throws an `ArgumentError` if `x` contains zero or multiple elements. ([#33129])
 * `takewhile` and `dropwhile` have been added to the Iterators submodule ([#33437]).
 
