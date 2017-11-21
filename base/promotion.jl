@@ -133,11 +133,14 @@ end
 """
     promote_type(type1, type2)
 
-Determine a type big enough to hold values of each argument type without loss, whenever
-possible. In some cases, where no type exists to which both types can be promoted
-losslessly, some loss is tolerated; for example, `promote_type(Int64, Float64)` returns
-[`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be represented
-exactly as `Float64` values.
+Promotion refers to converting values of mixed types to a single common type.
+`promote_type` represents the default promotion behavior in Julia when
+operators (usually mathematical) are given arguments of differing types.
+`promote_type` generally tries to return a type which can at least approximate
+most values of either input type without excessively widening.  Some loss is
+tolerated; for example, `promote_type(Int64, Float64)` returns
+[`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be
+represented exactly as `Float64` values.
 
 ```jldoctest
 julia> promote_type(Int64, Float64)
@@ -148,6 +151,15 @@ Int64
 
 julia> promote_type(Float32, BigInt)
 BigFloat
+
+julia> promote_type(Int16, Float16)
+Float16
+
+julia> promote_type(Int64, Float16)
+Float16
+
+julia> promote_type(Int8, UInt16)
+UInt16
 ```
 """
 function promote_type end

@@ -626,7 +626,7 @@ function testmap_equivalence(f, c...)
 end
 
 testmap_equivalence(identity, (1,2,3,4))
-testmap_equivalence(x->x>0 ? 1.0 : 0.0, sparse(eye(5)))
+testmap_equivalence(x->x>0 ? 1.0 : 0.0, sparse(1.0I, 5, 5))
 testmap_equivalence((x,y,z)->x+y+z, 1,2,3)
 testmap_equivalence(x->x ? false : true, BitArray(10,10))
 testmap_equivalence(x->"foobar", BitArray(10,10))
@@ -1153,12 +1153,20 @@ append!(testruns, [
 ])
 
 for (addp_testf, expected_errstr, env) in testruns
+    old_stdout = STDOUT
+    stdout_out, stdout_in = redirect_stdout()
+    stdout_txt = @schedule filter!(readlines(stdout_out)) do s
+            return !startswith(s, "\tFrom failed worker startup:\t")
+        end
     try
         withenv(env...) do
             addp_testf()
         end
         error("Unexpected")
     catch ex
+        redirect_stdout(old_stdout)
+        close(stdout_in)
+        @test isempty(wait(stdout_txt))
         @test isa(ex, CompositeException)
         @test ex.exceptions[1].ex.msg == expected_errstr
     end

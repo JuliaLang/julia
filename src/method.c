@@ -525,8 +525,6 @@ static jl_method_t *jl_new_method(
 
 // method definition ----------------------------------------------------------
 
-extern int jl_boot_file_loaded;
-
 void print_func_loc(JL_STREAM *s, jl_method_t *m);
 
 static void jl_check_static_parameter_conflicts(jl_method_t *m, jl_code_info_t *src, jl_svec_t *t)

@@ -413,6 +413,14 @@ end
         @test X32[i:(i+1), j:(j+2)] == X
     end
 end
+@testset "fallback hvcat" begin
+    #Issue #23994
+    A23994 = [1 "two"; 3im 4.0; 5 6//1]
+    @test A23994[2] isa Complex{Int}
+    @test A23994[3] isa Int
+    @test A23994[5] isa Float64
+    @test A23994[6] isa Rational{Int}
+end
 @testset "end" begin
     X = [ i+2j for i=1:5, j=1:5 ]
     @test X[end,end] == 15
@@ -886,7 +894,8 @@ end
     @test isequal(c[3,:], cv)
     @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
 
-    @test repeat(BitMatrix(eye(2)), inner = (2,1), outer = (1,2)) == repeat(eye(2), inner = (2,1), outer = (1,2))
+    @test repeat(BitMatrix(Matrix(I, 2, 2)), inner = (2,1), outer = (1,2)) ==
+            repeat(Matrix(I, 2, 2), inner = (2,1), outer = (1,2))
 end
 
 @testset "indexing with bools" begin
@@ -1009,7 +1018,7 @@ end
     @test m[1,2] == ([2,4],)
 
     # issue #21123
-    @test mapslices(nnz, speye(3), 1) == [1 1 1]
+    @test mapslices(nnz, sparse(1.0I, 3, 3), 1) == [1 1 1]
 end
 
 @testset "single multidimensional index" begin

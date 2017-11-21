@@ -3225,7 +3225,7 @@ end
 
 g11858(x::Float64) = x
 f11858(a) = for Baz in a
-    (f::Baz)(x) = f(float(x))
+    @eval (f::$Baz)(x) = f(float(x))
 end
 f11858(Any[Type{Foo11858}, Type{Bar11858}, typeof(g11858)])
 
@@ -4158,10 +4158,10 @@ end
 end
 @test f15425(1) === nothing
 
-# issue #15809 --- TODO: this code should be disallowed
+# issue #15809
+# but note, direct global method defs inside functions have since been disallowed
 function f15809()
-    global g15809
-    g15809(x::T) where {T} = T
+    @eval g15809(x::T) where {T} = T
 end
 f15809()
 @test g15809(2) === Int
@@ -5150,8 +5150,7 @@ end
 f21568() = 0
 function foo21568()
     y = 1
-    global f21568
-    f21568(x::AbstractArray{T,1}) where {T<:Real} = y
+    @eval f21568(x::AbstractArray{T,1}) where {T<:Real} = $y
 end
 foo21568()
 @test f21568([0]) == 1
@@ -5581,8 +5580,6 @@ let x5 = UnionField5(nothing, Int8(3))
     @test x5 == x5copy
     @test object_id(x5) === object_id(x5copy)
     @test hash(x5) === hash(x5copy)
-    @test pointer_from_objref(x5) === pointer_from_objref(x5)
-    @test pointer_from_objref(x5) !== pointer_from_objref(x5copy)
 end
 
 

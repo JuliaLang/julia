@@ -198,6 +198,20 @@ static uintptr_t jl_fptr_id(void *fptr)
         return *(uintptr_t*)pbp;
 }
 
+int32_t jl_jlcall_api(const char *fname)
+{
+    // give the function an index in the constant lookup table
+    if (fname == NULL)
+        return 0;
+    if (!strncmp(fname, "japi3_", 6)) // jlcall abi 3 from JIT
+        return JL_API_WITH_PARAMETERS;
+    assert(!strncmp(fname, "japi1_", 6) ||  // jlcall abi 1 from JIT
+           !strncmp(fname, "jsys1_", 6) ||  // jlcall abi 1 from sysimg
+           !strncmp(fname, "jlcall_", 7) || // jlcall abi 1 from JIT wrapping a specsig method
+           !strncmp(fname, "jlsysw_", 7));  // jlcall abi 1 from sysimg wrapping a specsig method
+    return JL_API_GENERIC;
+}
+
 
 #define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v))
 static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v);
@@ -1316,7 +1330,6 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname)
     JL_SIGATOMIC_END();
 }
 
-extern int jl_boot_file_loaded;
 extern void jl_get_builtins(void);
 extern void jl_get_builtin_hooks(void);
 extern void jl_gc_set_permalloc_region(void *start, void *end);
@@ -1473,7 +1486,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
     jl_get_builtins();
     jl_get_builtin_hooks();
-    jl_boot_file_loaded = 1;
     jl_init_box_caches();
 
     jl_update_all_gvars(&s);

@@ -20,7 +20,7 @@ breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
 # helper functions to unambiguously recover explicit forms of an implicit QR Q
-squareQ(Q::LinAlg.AbstractQ) = A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))
+squareQ(Q::LinAlg.AbstractQ) = (sq = size(Q.factors, 1); A_mul_B!(Q, Matrix{eltype(Q)}(I, sq, sq)))
 rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
 
 @testset for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
@@ -51,17 +51,18 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 @inferred qr(a)
                 q, r  = qra[:Q], qra[:R]
                 @test_throws KeyError qra[:Z]
-                @test q'*squareQ(q) ≈ eye(a_1)
-                @test q*squareQ(q)' ≈ eye(a_1)
-                @test q'*eye(a_1)' ≈ squareQ(q)'
-                @test squareQ(q)'q ≈ eye(a_1)
-                @test eye(a_1)'q' ≈ squareQ(q)'
+                @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
+                @test q*squareQ(q)' ≈ Matrix(I, a_1, a_1)
+                @test q'*Matrix(1.0I, a_1, a_1)' ≈ squareQ(q)'
+                @test squareQ(q)'q ≈ Matrix(I, a_1, a_1)
+                @test Matrix(1.0I, a_1, a_1)'q' ≈ squareQ(q)'
                 @test q*r ≈ a
                 @test a*(qra\b) ≈ b atol=3000ε
                 @test Array(qra) ≈ a
-                @test A_mul_Bc(eye(eltyb, size(q.factors, 2)), q) * squareQ(q) ≈ eye(size(q.factors, 2)) atol=5000ε
+                sq = size(q.factors, 2)
+                @test A_mul_Bc(Matrix{eltyb}(I, sq, sq), q) * squareQ(q) ≈ Matrix(I, sq, sq) atol=5000ε
                 if eltya != Int
-                    @test eye(eltyb, a_1)*q ≈ convert(AbstractMatrix{tab}, q)
+                    @test Matrix{eltyb}(I, a_1, a_1)*q ≈ convert(AbstractMatrix{tab}, q)
                     ac = copy(a)
                     @test qrfact!(a[:, 1:5])\b == qrfact!(view(ac, :, 1:5))\b
                 end
@@ -74,16 +75,17 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 @inferred qr(a[:, 1:n1], Val(false))
                 q,r   = qra[:Q], qra[:R]
                 @test_throws KeyError qra[:Z]
-                @test q'*squareQ(q) ≈ eye(a_1)
-                @test q'*rectangularQ(q) ≈ eye(a_1, n1)
+                @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
+                @test q'*rectangularQ(q) ≈ Matrix(I, a_1, n1)
                 @test q*r ≈ a[:, 1:n1]
                 @test q*b[1:n1] ≈ rectangularQ(q)*b[1:n1] atol=100ε
                 @test q*b ≈ squareQ(q)*b atol=100ε
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch b[1:n1 + 1]*q'
-                @test A_mul_Bc(UpperTriangular(eye(eltyb, size(q.factors,2))), q)*squareQ(q) ≈ eye(n1, a_1) atol=5000ε
+                sq = size(q.factors, 2)
+                @test A_mul_Bc(UpperTriangular(Matrix{eltyb}(I, sq, sq)), q)*squareQ(q) ≈ Matrix(I, n1, a_1) atol=5000ε
                 if eltya != Int
-                    @test eye(eltyb, a_1)*q ≈ convert(AbstractMatrix{tab},q)
+                    @test Matrix{eltyb}(I, a_1, a_1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
             end
             @testset "(Automatic) Fat (pivoted) QR decomposition" begin
@@ -94,9 +96,10 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 q,r = qrpa[:Q], qrpa[:R]
                 @test_throws KeyError qrpa[:Z]
                 p = qrpa[:p]
-                @test q'*squareQ(q) ≈ eye(n1)
-                @test q*squareQ(q)' ≈ eye(n1)
-                @test (UpperTriangular(eye(eltya,size(q,2)))*q')*squareQ(q) ≈ eye(n1)
+                @test q'*squareQ(q) ≈ Matrix(I, n1, n1)
+                @test q*squareQ(q)' ≈ Matrix(I, n1, n1)
+                sq = size(q, 2);
+                @test (UpperTriangular(Matrix{eltya}(I, sq, sq))*q')*squareQ(q) ≈ Matrix(I, n1, n1)
                 @test q*r ≈ (isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:])
                 @test q*r[:,invperm(p)] ≈ a[1:n1,:]
                 @test q*r*qrpa[:P].' ≈ a[1:n1,:]
@@ -105,7 +108,7 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 @test_throws DimensionMismatch q*b[1:n1+1]
                 @test_throws DimensionMismatch b[1:n1+1]*q'
                 if eltya != Int
-                    @test eye(eltyb,n1)*q ≈ convert(AbstractMatrix{tab},q)
+                    @test Matrix{eltyb}(I, n1, n1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
             end
             @testset "(Automatic) Thin (pivoted) QR decomposition" begin
@@ -113,16 +116,17 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 q,r = qrpa[:Q], qrpa[:R]
                 @test_throws KeyError qrpa[:Z]
                 p = qrpa[:p]
-                @test q'*squareQ(q) ≈ eye(a_1)
-                @test q*squareQ(q)' ≈ eye(a_1)
+                @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
+                @test q*squareQ(q)' ≈ Matrix(I, a_1, a_1)
                 @test q*r ≈ a[:,p]
                 @test q*r[:,invperm(p)] ≈ a[:,1:n1]
                 @test Array(qrpa) ≈ a[:,1:5]
                 @test_throws DimensionMismatch q*b[1:n1+1]
                 @test_throws DimensionMismatch b[1:n1+1]*q'
-                @test A_mul_Bc(UpperTriangular(eye(eltyb, size(q.factors, 2))), q)*squareQ(q) ≈ eye(n1, a_1) atol=5000ε
+                sq = size(q.factors, 2)
+                @test A_mul_Bc(UpperTriangular(Matrix{eltyb}(I, sq, sq)), q)*squareQ(q) ≈ Matrix(I, n1, a_1) atol=5000ε
                 if eltya != Int
-                    @test eye(eltyb, a_1)*q ≈ convert(AbstractMatrix{tab},q)
+                    @test Matrix{eltyb}(I, a_1, a_1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
             end
         end
@@ -131,22 +135,22 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 a = raw_a
                 qrpa = factorize(a[:,1:n1])
                 q, r = qrpa[:Q], qrpa[:R]
-                @test A_mul_B!(squareQ(q)', q) ≈ eye(n)
-                @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
-                @test A_mul_Bc!(squareQ(q), q) ≈ eye(n)
-                @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
+                @test A_mul_B!(squareQ(q)', q) ≈ Matrix(I, n, n)
+                @test_throws DimensionMismatch A_mul_B!(Matrix{eltya}(I, n+1, n+1),q)
+                @test A_mul_Bc!(squareQ(q), q) ≈ Matrix(I, n, n)
+                @test_throws DimensionMismatch A_mul_Bc!(Matrix{eltya}(I, n+1, n+1),q)
                 @test_throws BoundsError size(q,-1)
                 @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(q,zeros(eltya,n1+1))
                 @test_throws DimensionMismatch Base.LinAlg.Ac_mul_B!(q,zeros(eltya,n1+1))
 
                 qra = qrfact(a[:,1:n1], Val(false))
                 q, r = qra[:Q], qra[:R]
-                @test A_mul_B!(squareQ(q)', q) ≈ eye(n)
-                @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
-                @test A_mul_Bc!(squareQ(q), q) ≈ eye(n)
-                @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
+                @test A_mul_B!(squareQ(q)', q) ≈ Matrix(I, n, n)
+                @test_throws DimensionMismatch A_mul_B!(Matrix{eltya}(I, n+1, n+1),q)
+                @test A_mul_Bc!(squareQ(q), q) ≈ Matrix(I, n, n)
+                @test_throws DimensionMismatch A_mul_Bc!(Matrix{eltya}(I, n+1, n+1),q)
                 @test_throws BoundsError size(q,-1)
-                @test_throws DimensionMismatch q * eye(Int8,n+4)
+                @test_throws DimensionMismatch q * Matrix{Int8}(I, n+4, n+4)
             end
         end
     end
@@ -201,4 +205,9 @@ end
 @testset "Issue 24107" begin
     A = rand(200,2)
     @test A \ linspace(0,1,200) == A \ collect(linspace(0,1,200))
+end
+
+@testset "Issue #24589. Promotion of rational matrices" begin
+    A = rand(1//1:5//5, 4,3)
+    @test first(qr(A)) == first(qr(float(A)))
 end

@@ -695,7 +695,7 @@ end
 
 # First test the world issue condition.
 let foo() = begin
-        Issue19774.f(x::Int) = 2
+        @eval Issue19774.f(x::Int) = 2
         return Issue19774.f(0)
     end
     @test foo() == 1    # We should be using the original function.
@@ -703,7 +703,7 @@ end
 
 # Now check that invokelatest fixes that issue.
 let foo() = begin
-        Issue19774.f(x::Int) = 3
+        @eval Issue19774.f(x::Int) = 3
         return Base.invokelatest(Issue19774.f, 0)
     end
     @test foo() == 3
@@ -717,7 +717,7 @@ end
 @test Kwargs19774.f(2, 3; z=1) == 7
 
 let foo() = begin
-        Kwargs19774.f(x::Int, y::Int; z=3) = z
+        @eval Kwargs19774.f(x::Int, y::Int; z=3) = z
         return Base.invokelatest(Kwargs19774.f, 2, 3; z=1)
     end
     @test foo() == 1

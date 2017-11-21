@@ -27,7 +27,7 @@ The object has two fields:
     triu(F.factors)` for a `QR` object `F`.
 
   - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format where
-    ``v_i`` is the ``i``th column of the matrix `V = eye(m,n) + tril(F.factors,-1)`.
+    ``v_i`` is the ``i``th column of the matrix `V = I + tril(F.factors, -1)`.
 
 * `τ` is a vector  of length `min(m,n)` containing the coefficients ``\tau_i``.
 
@@ -70,7 +70,7 @@ The object has two fields:
     triu(F.factors)` for a `QR` object `F`.
 
   - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format such
-    that `V = eye(m,n) + tril(F.factors,-1)`.
+    that `V = I + tril(F.factors, -1)`.
 
 * `T` is a square matrix with `min(m,n)` columns, whose upper triangular part gives the
   matrix ``T`` above (the subdiagonal elements are ignored).
@@ -117,7 +117,7 @@ The object has three fields:
     triu(F.factors)` for a `QR` object `F`.
 
   - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format where
-    ``v_i`` is the ``i``th column of the matrix `V = eye(m,n) + tril(F.factors,-1)`.
+    ``v_i`` is the ``i``th column of the matrix `V = I + tril(F.factors, -1)`.
 
 * `τ` is a vector of length `min(m,n)` containing the coefficients ``\tau_i``.
 
@@ -235,6 +235,8 @@ qrfact!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
 qrfact!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
 qrfact!(A::StridedMatrix) = qrfact!(A, Val(false))
 
+_qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
+
 """
     qrfact(A, pivot=Val(false)) -> F
 
@@ -293,12 +295,12 @@ true
     compactly rather as two separate dense matrices.
 """
 function qrfact(A::AbstractMatrix{T}, arg) where T
-    AA = similar(A, typeof(zero(T)/norm(one(T))), size(A))
+    AA = similar(A, _qreltype(T), size(A))
     copy!(AA, A)
     return qrfact!(AA, arg)
 end
 function qrfact(A::AbstractMatrix{T}) where T
-    AA = similar(A, typeof(zero(T)/norm(one(T))), size(A))
+    AA = similar(A, _qreltype(T), size(A))
     copy!(AA, A)
     return qrfact!(AA)
 end
@@ -326,12 +328,14 @@ end
 function _qr(A::Union{Number,AbstractMatrix}, ::Val{false}; full::Bool = false)
     F = qrfact(A, Val(false))
     Q, R = getq(F), F[:R]::Matrix{eltype(F)}
-    return (!full ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))), R
+    sQf1 = size(Q.factors, 1)
+    return (!full ? Array(Q) : A_mul_B!(Q, Matrix{eltype(Q)}(I, sQf1, sQf1))), R
 end
 function _qr(A::Union{Number, AbstractMatrix}, ::Val{true}; full::Bool = false)
     F = qrfact(A, Val(true))
     Q, R, p = getq(F), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
-    return (!full ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))), R, p
+    sQf1 = size(Q.factors, 1)
+    return (!full ? Array(Q) : A_mul_B!(Q, Matrix{eltype(Q)}(I, sQf1, sQf1))), R, p
 end
 
 """
@@ -504,7 +508,7 @@ convert(::Type{AbstractMatrix{T}}, Q::QRPackedQ) where {T} = convert(QRPackedQ{T
 convert(::Type{QRCompactWYQ{S}}, Q::QRCompactWYQ) where {S} = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
 convert(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ{S}) where {S} = Q
 convert(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ) where {S} = convert(QRCompactWYQ{S}, Q)
-convert(::Type{Matrix}, A::AbstractQ{T}) where {T} = A_mul_B!(A, eye(T, size(A.factors, 1), min(size(A.factors)...)))
+convert(::Type{Matrix}, A::AbstractQ{T}) where {T} = A_mul_B!(A, Matrix{T}(I, size(A.factors, 1), min(size(A.factors)...)))
 convert(::Type{Array}, A::AbstractQ) = convert(Matrix, A)
 
 size(A::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(A.factors, dim)

@@ -100,12 +100,14 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
 {
     jl_array_t *ip = NULL;
     jl_array_t *sp = NULL;
-    JL_GC_PUSH2(&ip, &sp);
+    jl_array_t *bt2 = NULL;
+    JL_GC_PUSH3(&ip, &sp, &bt2);
     if (array_ptr_void_type == NULL) {
         array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
     }
     ip = jl_alloc_array_1d(array_ptr_void_type, 0);
     sp = returnsp ? jl_alloc_array_1d(array_ptr_void_type, 0) : NULL;
+    bt2 = jl_alloc_array_1d(jl_array_any_type, 0);
     const size_t maxincr = 1000;
     bt_context_t context;
     bt_cursor_t cursor;
@@ -117,13 +119,22 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
             jl_array_grow_end(ip, maxincr);
             if (returnsp) jl_array_grow_end(sp, maxincr);
             n = jl_unw_stepn(&cursor, (uintptr_t*)jl_array_data(ip) + offset,
-                    returnsp ? (uintptr_t*)jl_array_data(sp) + offset : NULL, maxincr, 0);
+                    returnsp ? (uintptr_t*)jl_array_data(sp) + offset : NULL, maxincr, 1);
             offset += maxincr;
         } while (n > maxincr);
         jl_array_del_end(ip, maxincr - n);
         if (returnsp) jl_array_del_end(sp, maxincr - n);
+
+        n = 0;
+        while (n < jl_array_len(ip)) {
+            if ((uintptr_t)jl_array_ptr_ref(ip, n) == (uintptr_t)-1) {
+                jl_array_ptr_1d_push(bt2, jl_array_ptr_ref(ip, n+1));
+                n += 2;
+            }
+            n++;
+        }
     }
-    jl_value_t *bt = returnsp ? (jl_value_t*)jl_svec2(ip, sp) : (jl_value_t*)ip;
+    jl_value_t *bt = returnsp ? (jl_value_t*)jl_svec(3, ip, bt2, sp) : (jl_value_t*)jl_svec(2, ip, bt2);
     JL_GC_POP();
     return bt;
 }
@@ -273,6 +284,9 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
     if (fp)
         *fp = (uintptr_t)cursor->stackframe.AddrFrame.Offset;
     if (*ip == 0 || *ip == ((uintptr_t)0)-1) {
+        // -1 is a special marker in the backtrace,
+        // don't leave it in there since it can corrupt the GC.
+        *ip = 0;
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
         cursor->stackframe.AddrPC.Offset = *(DWORD32*)*sp;      // POP EIP (aka RET)
@@ -289,6 +303,9 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
     if (fp)
         *fp = (uintptr_t)cursor->Rbp;
     if (*ip == 0 || *ip == ((uintptr_t)0)-1) {
+        // -1 is a special marker in the backtrace,
+        // don't leave it in there since it can corrupt the GC.
+        *ip = 0;
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
         cursor->Rip = *(DWORD64*)*sp;      // POP RIP (aka RET)
@@ -341,7 +358,9 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
     unw_word_t reg;
     if (unw_get_reg(cursor, UNW_REG_IP, &reg) < 0)
         return 0;
-    *ip = reg;
+    // -1 is a special marker in the backtrace,
+    // don't leave it in there since it can corrupt the GC.
+    *ip = reg == (uintptr_t)-1 ? 0 : reg;
     if (unw_get_reg(cursor, UNW_REG_SP, &reg) < 0)
         return 0;
     *sp = reg;

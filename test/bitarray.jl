@@ -187,7 +187,7 @@ timesofar("utils")
     end
 
     @testset "one" begin
-        @test Array(one(BitMatrix(2,2))) == eye(2,2)
+        @test Array(one(BitMatrix(2,2))) == Matrix(I, 2, 2)
         @test_throws DimensionMismatch one(BitMatrix(2,3))
     end
 

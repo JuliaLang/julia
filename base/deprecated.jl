@@ -81,8 +81,8 @@ function _depwarn(msg, opts, bt, caller)
     end
 end
 
-firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol) = firstcaller(bt, (funcsym,))
-function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
+firstcaller(bt::Vector, funcsym::Symbol) = firstcaller(bt, (funcsym,))
+function firstcaller(bt::Vector, funcsyms)
     # Identify the calling line
     found = false
     lkup = StackTraces.UNKNOWN
@@ -1320,6 +1320,7 @@ module DFT
             @eval Base.@deprecate_moved $f "FFTW"
         end
     end
+    Base.deprecate(DFT, :FFTW, 2)
     export FFTW
 end
 using .DFT
@@ -1331,6 +1332,7 @@ module DSP
         @eval Base.@deprecate_moved $f "DSP"
     end
 end
+deprecate(Base, :DSP, 2)
 using .DSP
 export conv, conv2, deconv, filt, filt!, xcorr
 
@@ -1790,7 +1792,53 @@ end
     @deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)
 end
 
-@deprecate eye(::Type{Diagonal{T}}, n::Int) where {T} Diagonal{T}(I, n)
+## goodbeye, eye!
+export eye
+function eye(m::Integer)
+    depwarn(string("`eye(m::Integer)` has been deprecated in favor of `I` and `Matrix` ",
+        "constructors. For a direct replacement, consider `Matrix(1.0I, m, m)` or ",
+        "`Matrix{Float64}(I, m, m)`. If `Float64` element type is not necessary, ",
+        "consider the shorter `Matrix(I, m, m)` (with default `eltype(I)` `Bool`)."), :eye)
+    return Matrix{Float64}(I, m, m)
+end
+function eye(::Type{T}, m::Integer) where T
+    depwarn(string("`eye(T::Type, m::Integer)` has been deprecated in favor of `I` and ",
+        "`Matrix` constructors. For a direct replacement, consider `Matrix{T}(I, m, m)`. If ",
+        "`T` element type is not necessary, consider the shorter `Matrix(I, m, m)`",
+        "(with default `eltype(I)` `Bool`)"), :eye)
+    return Matrix{T}(I, m, m)
+end
+function eye(m::Integer, n::Integer)
+    depwarn(string("`eye(m::Integer, n::Integer)` has been deprecated in favor of `I` and ",
+        "`Matrix` constructors. For a direct replacement, consider `Matrix(1.0I, m, n)` ",
+        "or `Matrix{Float64}(I, m, n)`. If `Float64` element type is not necessary, ",
+        "consider the shorter `Matrix(I, m, n)` (with default `eltype(I)` `Bool`)."), :eye)
+    return Matrix{Float64}(I, m, n)
+end
+function eye(::Type{T}, m::Integer, n::Integer) where T
+    depwarn(string("`eye(T::Type, m::Integer, n::Integer)` has been deprecated in favor of ",
+        "`I` and `Matrix` constructors. For a direct replacement, consider `Matrix{T}(I, m, n)`.",
+        "If `T` element type is not necessary, consider the shorter `Matrix(I, m, n)` ",
+        "(with default `eltype(I)` `Bool`)."), :eye)
+    return Matrix{T}(I, m, n)
+end
+function eye(A::AbstractMatrix{T}) where T
+    depwarn(string("`eye(A::AbstractMatrix{T})` has been deprecated in favor of `I` and ",
+        "`Matrix` constructors. For a direct replacement, consider `Matrix{eltype(A)}(I, size(A))`.",
+        "If `eltype(A)` element type is not necessary, consider the shorter `Matrix(I, size(A))` ",
+        "(with default `eltype(I)` `Bool`)."), :eye)
+    return Matrix(one(T)I, size(A))
+end
+function eye(::Type{Diagonal{T}}, n::Int) where T
+    depwarn(string("`eye(DT::Type{Diagonal{T}}, n::Int)` has been deprecated in favor of `I` ",
+        "and `Diagonal` constructors. For a direct replacement, consider `Diagonal{T}(I, n)`. ",
+        "If `T` element type is not necessary, consider the shorter `Diagonal(I, n)` ",
+        "(with default `eltype(I)` `Bool`)."), :eye)
+    return Diagonal{T}(I, n)
+end
+@eval Base.LinAlg import Base.eye
+# @eval Base.SparseArrays import Base.eye # SparseArrays has an eye for things cholmod
+
 
 export tic, toq, toc
 function tic()
@@ -1822,6 +1870,8 @@ function toc()
     println("elapsed time: ", t, " seconds")
     return t
 end
+
+@eval Base.SparseArrays @deprecate sparse(s::UniformScaling, m::Integer) sparse(s, m, m)
 
 # A[I...] .= with scalar indices should modify the element at A[I...]
 function Broadcast.dotview(A::AbstractArray, args::Number...)
@@ -1886,8 +1936,8 @@ end
 # Also un-comment the new definition in base/indices.jl
 
 # deprecate odd fill! methods
-@deprecate fill!(D::Diagonal, x)                       fillslots!(D, x)
-@deprecate fill!(A::Base.LinAlg.AbstractTriangular, x) fillslots!(A, x)
+@deprecate fill!(D::Diagonal, x)                       LinAlg.fillslots!(D, x)
+@deprecate fill!(A::Base.LinAlg.AbstractTriangular, x) LinAlg.fillslots!(A, x)
 
 function diagm(v::BitVector)
     depwarn(string("diagm(v::BitVector) is deprecated, use diagm(0 => v) or ",
@@ -1982,8 +2032,8 @@ function full(Q::LinAlg.LQPackedQ; thin::Bool = true)
         "`full(Q::LQPackedQ; thin::Bool = true)` (and `full` in general) ",
         "has been deprecated. To replace `full(Q::LQPackedQ, true)`, ",
         "consider `Matrix(Q)` or `Array(Q)`. To replace `full(Q::LQPackedQ, false)`, ",
-        "consider `Base.LinAlg.A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 2)))`."), :full)
-    return thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 2)))
+        "consider `Base.LinAlg.A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))`."), :full)
+    return thin ? Array(Q) : A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))
 end
 function full(Q::Union{LinAlg.QRPackedQ,LinAlg.QRCompactWYQ}; thin::Bool = true)
     qtypestr = isa(Q, LinAlg.QRPackedQ)    ? "QRPackedQ"    :
@@ -1993,8 +2043,8 @@ function full(Q::Union{LinAlg.QRPackedQ,LinAlg.QRCompactWYQ}; thin::Bool = true)
         "`full(Q::$(qtypestr); thin::Bool = true)` (and `full` in general) ",
         "has been deprecated. To replace `full(Q::$(qtypestr), true)`, ",
         "consider `Matrix(Q)` or `Array(Q)`. To replace `full(Q::$(qtypestr), false)`, ",
-        "consider `Base.LinAlg.A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))`."), :full)
-    return thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))
+        "consider `Base.LinAlg.A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 1), size(Q.factors, 1)))`."), :full)
+    return thin ? Array(Q) : A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 1), size(Q.factors, 1)))
 end
 
 # full for symmetric / hermitian / triangular wrappers
@@ -2071,6 +2121,55 @@ end
 
 # deprecate bits to bitstring (#24263, #24281)
 @deprecate bits bitstring
+
+# deprecate speye
+export speye
+function speye(n::Integer)
+    depwarn(string("`speye(n::Integer)` has been deprecated in favor of `I`, `sparse`, and ",
+                    "`SparseMatrixCSC` constructor methods. For a direct replacement, consider ",
+                    "`sparse(1.0I, n, n)`, `SparseMatrixCSC(1.0I, n, n)`, or `SparseMatrixCSC{Float64}(I, n, n)`. ",
+                    "If `Float64` element type is not necessary, consider the shorter `sparse(I, n, n)` ",
+                    "or `SparseMatrixCSC(I, n, n)` (with default `eltype(I)` of `Bool`)."), :speye)
+    return sparse(1.0I, n, n)
+end
+function speye(m::Integer, n::Integer)
+    depwarn(string("`speye(m::Integer, n::Integer)` has been deprecated in favor of `I`, ",
+                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
+                    "replacement, consider `sparse(1.0I, m, n)`, `SparseMatrixCSC(1.0I, m, n)`, ",
+                    "or `SparseMatrixCSC{Float64}(I, m, n)`. If `Float64` element type is not ",
+                    " necessary, consider the shorter `sparse(I, m, n)` or `SparseMatrixCSC(I, m, n)` ",
+                    "(with default `eltype(I)` of `Bool`)."), :speye)
+    return sparse(1.0I, m, n)
+end
+function speye(::Type{T}, n::Integer) where T
+    depwarn(string("`speye(T, n::Integer)` has been deprecated in favor of `I`, `sparse`, and ",
+                    "`SparseMatrixCSC` constructor methods. For a direct replacement, consider ",
+                    "`sparse(T(1)I, n, n)` if `T` is concrete or `SparseMatrixCSC{T}(I, n, n)` ",
+                    "if `T` is either concrete or abstract. If element type `T` is not necessary, ",
+                    "consider the shorter `sparse(I, n, n)` or `SparseMatrixCSC(I, n, n)` ",
+                    "(with default `eltype(I)` of `Bool`)."), :speye)
+    return SparseMatrixCSC{T}(I, n, n)
+end
+function speye(::Type{T}, m::Integer, n::Integer) where T
+    depwarn(string("`speye(T, m::Integer, n::Integer)` has been deprecated in favor of `I`, ",
+                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
+                    "replacement, consider `sparse(T(1)I, m, n)` if `T` is concrete or ",
+                    "`SparseMatrixCSC{T}(I, m, n)` if `T` is either concrete or abstract. ",
+                    "If element type `T` is not necessary, consider the shorter ",
+                    "`sparse(I, m, n)` or `SparseMatrixCSC(I, m, n)` (with default `eltype(I)` ",
+                    "of `Bool`)."), :speye)
+    return SparseMatrixCSC{T}(I, m, n)
+end
+function speye(S::SparseMatrixCSC{T}) where T
+    depwarn(string("`speye(S::SparseMatrixCSC{T})` has been deprecated in favor of `I`, ",
+                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
+                    "replacement, consider `sparse(T(1)I, size(S)...)` if `T` is concrete or ",
+                    "`SparseMatrixCSC{eltype(S)}(I, size(S))` if `T` is either concrete or abstract. ",
+                    "If preserving element type `T` is not necessary, consider the shorter ",
+                    "`sparse(I, size(S)...)` or `SparseMatrixCSC(I, size(S))` (with default ",
+                    "`eltype(I)` of `Bool`)."), :speye)
+    return SparseMatrixCSC{T}(I, m, n)
+end
 
 # issue #24167
 @deprecate EnvHash EnvDict

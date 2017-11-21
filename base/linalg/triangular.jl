@@ -537,14 +537,14 @@ end
 
 function inv(A::LowerTriangular{T}) where T
     S = typeof((zero(T)*one(T) + zero(T))/one(T))
-    LowerTriangular(A_ldiv_B!(convert(AbstractArray{S}, A), eye(S, size(A, 1))))
+    LowerTriangular(A_ldiv_B!(convert(AbstractArray{S}, A), Matrix{S}(I, size(A, 1), size(A, 1))))
 end
 function inv(A::UpperTriangular{T}) where T
     S = typeof((zero(T)*one(T) + zero(T))/one(T))
-    UpperTriangular(A_ldiv_B!(convert(AbstractArray{S}, A), eye(S, size(A, 1))))
+    UpperTriangular(A_ldiv_B!(convert(AbstractArray{S}, A), Matrix{S}(I, size(A, 1), size(A, 1))))
 end
-inv(A::UnitUpperTriangular{T}) where {T} = UnitUpperTriangular(A_ldiv_B!(A, eye(T, size(A, 1))))
-inv(A::UnitLowerTriangular{T}) where {T} = UnitLowerTriangular(A_ldiv_B!(A, eye(T, size(A, 1))))
+inv(A::UnitUpperTriangular{T}) where {T} = UnitUpperTriangular(A_ldiv_B!(A, Matrix{T}(I, size(A, 1), size(A, 1))))
+inv(A::UnitLowerTriangular{T}) where {T} = UnitLowerTriangular(A_ldiv_B!(A, Matrix{T}(I, size(A, 1), size(A, 1))))
 
 errorbounds(A::AbstractTriangular{T,<:StridedMatrix}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:Union{BigFloat,Complex{BigFloat}}} =
     error("not implemented yet! Please submit a pull request.")
@@ -2156,7 +2156,7 @@ function sqrt(A::UnitUpperTriangular{T}) where T
     B = A.data
     n = checksquare(B)
     t = typeof(sqrt(zero(T)))
-    R = eye(t, n, n)
+    R = Matrix{t}(I, n, n)
     tt = typeof(zero(t)*zero(t))
     half = inv(R[1,1]+R[1,1]) # for general, algebraic cases. PR#20214
     @inbounds for j = 1:n

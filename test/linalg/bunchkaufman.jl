@@ -44,13 +44,13 @@ bimg  = randn(n,2)/2
             else
                 @test logabsdet(bc1)[2] ≈ sign(det(bc1))
             end
-            @test inv(bc1)*aher ≈ eye(n)
+            @test inv(bc1)*aher ≈ Matrix(I, n, n)
             @testset for rook in (false, true)
-                @test inv(bkfact(Symmetric(a.' + a, uplo), rook))*(a.' + a) ≈ eye(n)
+                @test inv(bkfact(Symmetric(a.' + a, uplo), rook))*(a.' + a) ≈ Matrix(I, n, n)
                 if eltya <: BlasFloat
                     # test also bkfact! without explicit type tag
                     # no bkfact! method for Int ... yet
-                    @test inv(bkfact!(a.' + a, rook))*(a.' + a) ≈ eye(n)
+                    @test inv(bkfact!(a.' + a, rook))*(a.' + a) ≈ Matrix(I, n, n)
                 end
                 @test size(bc1) == size(bc1.LD)
                 @test size(bc1, 1) == size(bc1.LD, 1)
@@ -94,7 +94,7 @@ bimg  = randn(n,2)/2
                         @test logdet(bc2) ≈ log(det(bc2))
                         @test logabsdet(bc2)[1] ≈ log(abs(det(bc2)))
                         @test logabsdet(bc2)[2] == sign(det(bc2))
-                        @test inv(bc2)*apd ≈ eye(eltyb, n)
+                        @test inv(bc2)*apd ≈ Matrix(I, n, n)
                         @test apd*(bc2\b) ≈ b atol=150000ε
                         @test ishermitian(bc2) == !issymmetric(bc2)
                     end

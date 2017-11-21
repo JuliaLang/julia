@@ -358,17 +358,31 @@ function check_A_mul_B!_sizes(C, A, B)
     end
 end
 
+# function to get the internally stored vectors for Bidiagonal and [Sym]Tridiagonal
+# to avoid allocations in A_mul_B_td! below (#24324, #24578)
+_diag(A::Tridiagonal, k) = k == -1 ? A.dl : k == 0 ? A.d : A.du
+_diag(A::SymTridiagonal, k) = k == 0 ? A.dv : A.ev
+function _diag(A::Bidiagonal, k)
+    if k == 0
+        return A.dv
+    elseif (A.uplo == 'L' && k == -1) || (A.uplo == 'U' && k == 1)
+        return A.ev
+    else
+        return diag(A, k)
+    end
+end
+
 function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
     n <= 3 && return A_mul_B!(C, Array(A), Array(B))
     fill!(C, zero(eltype(C)))
-    Al = diag(A, -1)
-    Ad = diag(A, 0)
-    Au = diag(A, 1)
-    Bl = diag(B, -1)
-    Bd = diag(B, 0)
-    Bu = diag(B, 1)
+    Al = _diag(A, -1)
+    Ad = _diag(A, 0)
+    Au = _diag(A, 1)
+    Bl = _diag(B, -1)
+    Bd = _diag(B, 0)
+    Bu = _diag(B, 1)
     @inbounds begin
         # first row of C
         C[1,1] = A[1,1]*B[1,1] + A[1, 2]*B[2, 1]
@@ -421,9 +435,9 @@ function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat)
         throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
     end
     nA <= 3 && return A_mul_B!(C, Array(A), Array(B))
-    l = diag(A, -1)
-    d = diag(A, 0)
-    u = diag(A, 1)
+    l = _diag(A, -1)
+    d = _diag(A, 0)
+    u = _diag(A, 1)
     @inbounds begin
         for j = 1:nB
             b₀, b₊ = B[1, j], B[2, j]
@@ -443,9 +457,9 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
     n = size(A,1)
     n <= 3 && return A_mul_B!(C, Array(A), Array(B))
     m = size(B,2)
-    Bl = diag(B, -1)
-    Bd = diag(B, 0)
-    Bu = diag(B, 1)
+    Bl = _diag(B, -1)
+    Bd = _diag(B, 0)
+    Bu = _diag(B, 1)
     @inbounds begin
         # first and last column of C
         B11 = Bd[1]

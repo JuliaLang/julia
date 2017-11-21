@@ -106,11 +106,11 @@ srand(1)
                 Uc = adjoint(U)
                 target = scale!(Uc, inv.(D.diag))
                 @test A_rdiv_B!(Uc, D) ≈ target atol=atol_three
-                @test_throws DimensionMismatch A_rdiv_B!(eye(elty, n-1), D)
+                @test_throws DimensionMismatch A_rdiv_B!(Matrix{elty}(I, n-1, n-1), D)
                 @test_throws SingularException A_rdiv_B!(Uc, zeros(D))
                 @test A_rdiv_Bt!(Uc, D) ≈ target atol=atol_three
                 @test A_rdiv_Bc!(Uc, conj(D)) ≈ target atol=atol_three
-                @test A_ldiv_B!(D, eye(D)) ≈ D\eye(D) atol=atol_three
+                @test A_ldiv_B!(D, Matrix{eltype(D)}(I, size(D))) ≈ D \ Matrix{eltype(D)}(I, size(D)) atol=atol_three
                 @test_throws DimensionMismatch A_ldiv_B!(D, ones(elty, n + 1))
                 @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty, n)), copy(v))
                 b = rand(elty, n, n)
@@ -206,7 +206,7 @@ srand(1)
     @testset "Eigensystem" begin
         eigD = eigfact(D)
         @test Diagonal(eigD[:values]) ≈ D
-        @test eigD[:vectors] == eye(D)
+        @test eigD[:vectors] == Matrix(I, size(D))
     end
 
     @testset "ldiv" begin
@@ -332,7 +332,7 @@ for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})
 end
 
 # Issue 15401
-@test eye(5) \ Diagonal(ones(5)) == eye(5)
+@test Matrix(1.0I, 5, 5) \ Diagonal(ones(5)) == Matrix(I, 5, 5)
 
 @testset "Triangular and Diagonal" begin
     for T in (LowerTriangular(randn(5,5)), LinAlg.UnitLowerTriangular(randn(5,5)))

@@ -32,8 +32,9 @@ nn = 100
 
     @testset "apply Q" begin
         Q = F[:Q]
-        @test Q'*(Q*eye(m)) ≈ eye(m)
-        @test (eye(m)*Q)*Q' ≈ eye(m)
+        Imm = Matrix{Float64}(I, m, m)
+        @test Q' * (Q*Imm) ≈ Imm
+        @test (Imm*Q) * Q' ≈ Imm
 
         # test that Q'Pl*A*Pr = R
         R0 = Q'*Array(A[F[:prow], F[:pcol]])
@@ -64,7 +65,7 @@ nn = 100
     end
 
     # Make sure that conversion to Sparse doesn't use SuiteSparse's symmetric flag
-    @test qrfact(sparse(one(eltyA)I, 5))\ones(eltyA, 5) == ones(5)
+    @test qrfact(SparseMatrixCSC{eltyA}(I, 5, 5)) \ ones(eltyA, 5) == ones(5)
 end
 
 @testset "basic solution of rank deficient ls" begin

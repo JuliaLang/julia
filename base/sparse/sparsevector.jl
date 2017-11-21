@@ -640,7 +640,7 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
     SparseVector(n, rowvalB, nzvalB)
 end
 
-function getindex(A::SparseMatrixCSC{Tv}, I::AbstractVector) where Tv
+function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     szA = size(A)
     nA = szA[1]*szA[2]
     colptrA = A.colptr
@@ -649,7 +649,7 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractVector) where Tv
 
     n = length(I)
     nnzB = min(n, nnz(A))
-    rowvalB = Vector{Int}(nnzB)
+    rowvalB = Vector{Ti}(nnzB)
     nzvalB = Vector{Tv}(nnzB)
 
     idxB = 1
@@ -784,15 +784,15 @@ end
 
 getindex(x::AbstractSparseVector, I::AbstractVector{Bool}) = x[find(I)]
 getindex(x::AbstractSparseVector, I::AbstractArray{Bool}) = x[find(I)]
-@inline function getindex(x::AbstractSparseVector, I::AbstractVector)
+@inline function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     # SparseMatrixCSC has a nicely optimized routine for this; punt
-    S = SparseMatrixCSC(x.n, 1, [1,length(x.nzind)+1], x.nzind, x.nzval)
+    S = SparseMatrixCSC(x.n, 1, Ti[1,length(x.nzind)+1], x.nzind, x.nzval)
     S[I, 1]
 end
 
-function getindex(x::AbstractSparseVector, I::AbstractArray)
+function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractArray) where {Tv,Ti}
     # punt to SparseMatrixCSC
-    S = SparseMatrixCSC(x.n, 1, [1,length(x.nzind)+1], x.nzind, x.nzval)
+    S = SparseMatrixCSC(x.n, 1, Ti[1,length(x.nzind)+1], x.nzind, x.nzval)
     S[I]
 end
 

@@ -280,7 +280,7 @@ srand(1)
             @test Array(Tri*T) ≈ Array(Tri)*Array(T)
         end
 
-        @test inv(T)*Tfull ≈ eye(elty,n)
+        @test inv(T)*Tfull ≈ Matrix(I, n, n)
     end
     BD = Bidiagonal(dv, ev, :U)
     @test Matrix{Complex{Float64}}(BD) == BD
