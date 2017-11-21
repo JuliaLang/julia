@@ -256,7 +256,11 @@ escape_nul(s::AbstractString, i::Int) =
 General escaping of traditional C and Unicode escape sequences.
 Any characters in `esc` are also escaped (with a backslash).
 The reverse is [`unescape_string`](@ref).
+"""
+escape_string(s::AbstractString, esc::AbstractString) = sprint(endof(s), escape_string, s, esc)
+escape_string(s::AbstractString) = sprint(endof(s), escape_string, s, "\"")
 
+"""
     escape_string(io, str::AbstractString[, esc::AbstractString]) -> Void
 
 Escape sequences in `str` and print result to `io`.
@@ -277,9 +281,6 @@ function escape_string(io, s::AbstractString, esc::AbstractString)
         i = j
     end
 end
-
-escape_string(s::AbstractString, esc::AbstractString) = sprint(endof(s), escape_string, s, esc)
-escape_string(s::AbstractString) = sprint(endof(s), escape_string, s, "\"")
 
 function print_quoted(io, s::AbstractString)
     print(io, '"')
