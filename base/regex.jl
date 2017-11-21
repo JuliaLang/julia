@@ -21,10 +21,10 @@ mutable struct Regex
         pattern = String(pattern)
         compile_options = UInt32(compile_options)
         match_options = UInt32(match_options)
-        if (compile_options & bitnot(PCRE.COMPILE_MASK)) != 0
+        if bitand(compile_options, bitnot(PCRE.COMPILE_MASK)) != 0
             throw(ArgumentError("invalid regex compile options: $compile_options"))
         end
-        if (match_options & bitnot(PCRE.EXECUTE_MASK)) !=0
+        if bitand(match_options, bitnot(PCRE.EXECUTE_MASK)) !=0
             throw(ArgumentError("invalid regex match options: $match_options"))
         end
         re = compile(new(pattern, compile_options, match_options, C_NULL,
@@ -86,13 +86,13 @@ macro r_str(pattern, flags...) Regex(pattern, flags...) end
 function show(io::IO, re::Regex)
     imsx = bitor(PCRE.CASELESS, PCRE.MULTILINE, PCRE.DOTALL, PCRE.EXTENDED)
     opts = re.compile_options
-    if (opts & bitnot(imsx)) == DEFAULT_COMPILER_OPTS
+    if bitand(opts, bitnot(imsx)) == DEFAULT_COMPILER_OPTS
         print(io, 'r')
         print_quoted_literal(io, re.pattern)
-        if (opts & PCRE.CASELESS ) != 0; print(io, 'i'); end
-        if (opts & PCRE.MULTILINE) != 0; print(io, 'm'); end
-        if (opts & PCRE.DOTALL   ) != 0; print(io, 's'); end
-        if (opts & PCRE.EXTENDED ) != 0; print(io, 'x'); end
+        if bitand(opts, PCRE.CASELESS ) != 0; print(io, 'i'); end
+        if bitand(opts, PCRE.MULTILINE) != 0; print(io, 'm'); end
+        if bitand(opts, PCRE.DOTALL   ) != 0; print(io, 's'); end
+        if bitand(opts, PCRE.EXTENDED ) != 0; print(io, 'x'); end
     else
         print(io, "Regex(")
         show(io, re.pattern)

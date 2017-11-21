@@ -7,7 +7,7 @@ function dot(x::BitVector, y::BitVector)
     xc = x.chunks
     yc = y.chunks
     @inbounds for i = 1:length(xc)
-        s += count_ones(xc[i] & yc[i])
+        s += count_ones(bitand(xc[i], yc[i]))
     end
     s
 end
@@ -33,7 +33,7 @@ end
         #for j = 1:nB
             #for k = 1:col_ch
                 ## TODO: improve
-                #C[i, j] += count_ones(aux_chunksA[k] & aux_chunksB[j][k])
+                #C[i, j] += count_ones(bitand(aux_chunksA[k], aux_chunksB[j][k]))
             #end
         #end
     #end
@@ -135,19 +135,19 @@ function nonzero_chunks(chunks::Vector{UInt64}, pos0::Int, pos1::Int)
     z = UInt64(0)
     u = bitnot(z)
     if delta_k == 0
-        msk_0 = (u << l0) & bitnot(u << l1 << 1)
+        msk_0 = bitand(u << l0, bitnot(u << l1 << 1))
     else
         msk_0 = (u << l0)
         msk_1 = bitnot(u << l1 << 1)
     end
 
     @inbounds begin
-        (chunks[k0] & msk_0) == z || return true
+        bitand(chunks[k0], msk_0) == z || return true
         delta_k == 0 && return false
         for i = k0 + 1 : k1 - 1
             chunks[i] == z || return true
         end
-        (chunks[k1] & msk_1)==z || return true
+        bitand(chunks[k1], msk_1) == z || return true
     end
     return false
 end
@@ -195,7 +195,7 @@ function findmin(a::BitArray)
         k == 64 || return (false, ti)
     end
     l = Base._mod64(length(a)-1) + 1
-    @inbounds k = trailing_ones(ac[end] & Base._msk_end(l))
+    @inbounds k = trailing_ones(bitand(ac[end], Base._msk_end(l)))
     ti += k
     k == l || return (false, ti)
     return m, mi
@@ -205,11 +205,11 @@ end
 # http://www.hackersdelight.org/hdcodetxt/transpose8.c.txt
 function transpose8x8(x::UInt64)
     y = x
-    t = xor(y, y >>> 7) & 0x00aa00aa00aa00aa
+    t = bitand(xor(y, y >>> 7), 0x00aa00aa00aa00aa)
     y = xor(y, t, t << 7)
-    t = xor(y, y >>> 14) & 0x0000cccc0000cccc
+    t = bitand(xor(y, y >>> 14), 0x0000cccc0000cccc)
     y = xor(y, t, t << 14)
-    t = xor(y, y >>> 28) & 0x00000000f0f0f0f0
+    t = bitand(xor(y, y >>> 28), 0x00000000f0f0f0f0)
     return xor(y, t, t << 28)
 end
 
@@ -220,10 +220,10 @@ function form_8x8_chunk(Bc::Vector{UInt64}, i1::Int, i2::Int, m::Int, cgap::Int,
     r = 0
     for j = 1:8
         k > nc && break
-        x = bitor(x, ((Bc[k] >>> l) & msk8) << r)
+        x = bitor(x, bitand(Bc[k] >>> l, msk8) << r)
         if l + 8 >= 64 && nc > k
             r0 = 8 - Base._mod64(l + 8)
-            x = bitor(x, (Bc[k + 1] & (msk8 >>> r0)) << (r + r0))
+            x = bitor(x, bitand(Bc[k + 1], msk8 >>> r0) << (r + r0))
         end
         k += cgap + (l + cinc >= 64 ? 1 : 0)
         l = Base._mod64(l + cinc)
@@ -238,10 +238,10 @@ function put_8x8_chunk(Bc::Vector{UInt64}, i1::Int, i2::Int, x::UInt64, m::Int, 
     r = 0
     for j = 1:8
         k > nc && break
-        Bc[k] = bitor(Bc[k], ((x >>> r) & msk8) << l)
+        Bc[k] = bitor(Bc[k], bitand(x >>> r, msk8) << l)
         if l + 8 >= 64 && nc > k
             r0 = 8 - Base._mod64(l + 8)
-            Bc[k + 1] = bitor(Bc[k + 1], (x >>> (r + r0)) & (msk8 >>> r0))
+            Bc[k + 1] = bitor(Bc[k + 1], bitand(x >>> (r + r0), msk8 >>> r0))
         end
         k += cgap + (l + cinc >= 64 ? 1 : 0)
         l = Base._mod64(l + cinc)

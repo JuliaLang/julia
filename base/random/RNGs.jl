@@ -173,7 +173,7 @@ function make_seed(n::Integer)
     n < 0 && throw(DomainError(n, "`n` must be non-negative."))
     seed = UInt32[]
     while true
-        push!(seed, n & 0xffffffff)
+        push!(seed, bitand(n, 0xffffffff))
         n >>= 32
         if n == 0
             return seed
@@ -318,10 +318,10 @@ function rand!(r::MersenneTwister, A::Array{Float64}, n::Int=length(A),
 end
 
 mask128(u::UInt128, ::Type{Float16}) =
-    bitor(u & 0x03ff03ff03ff03ff03ff03ff03ff03ff, 0x3c003c003c003c003c003c003c003c00)
+    bitor(bitand(u, 0x03ff03ff03ff03ff03ff03ff03ff03ff), 0x3c003c003c003c003c003c003c003c00)
 
 mask128(u::UInt128, ::Type{Float32}) =
-    bitor(u & 0x007fffff007fffff007fffff007fffff, 0x3f8000003f8000003f8000003f800000)
+    bitor(bitand(u, 0x007fffff007fffff007fffff007fffff), 0x3f8000003f8000003f8000003f800000)
 
 function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}},
                ::Close1Open2_64)
@@ -413,7 +413,7 @@ end
 
 function rand_lteq(r::AbstractRNG, randfun, u::U, mask::U) where U<:Integer
     while true
-        x = randfun(r) & mask
+        x = bitand(randfun(r), mask)
         x <= u && return x
     end
 end

@@ -3610,7 +3610,7 @@ function optimize(me::InferenceState)
             end
             if proven_pure
                 for fl in me.src.slotflags
-                    if (fl & Slot_UsedUndef) != 0
+                    if bitand(fl, Slot_UsedUndef) != 0
                         proven_pure = false
                         break
                     end
@@ -4111,7 +4111,7 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
     elseif isa(e, Symbol)
         return allow_volatile
     elseif isa(e, Slot)
-        return src.slotflags[slot_id(e)] & Slot_UsedUndef == 0
+        return bitand(src.slotflags[slot_id(e)], Slot_UsedUndef) == 0
     elseif isa(e, Expr)
         e = e::Expr
         head = e.head
@@ -5573,7 +5573,7 @@ function find_sa_vars(src::CodeInfo, nargs::Int)
                 # this transformation is not valid for vars used before def.
                 # we need to preserve the point of assignment to know where to
                 # throw errors (issue #4645).
-                if id > nargs && (src.slotflags[id] & Slot_UsedUndef == 0)
+                if id > nargs && bitand(src.slotflags[id], Slot_UsedUndef) == 0
                     if !haskey(av, lhs)
                         av[lhs] = e.args[2]
                     else
@@ -5636,7 +5636,7 @@ function occurs_outside_getfield(@nospecialize(e), @nospecialize(sym),
             end
         else
             if (head === :block && isa(sym, Slot) &&
-                sv.src.slotflags[slot_id(sym)] & Slot_UsedUndef == 0)
+                    bitand(sv.src.slotflags[slot_id(sym)], Slot_UsedUndef) == 0)
                 ignore_void = true
             else
                 ignore_void = false
@@ -5662,7 +5662,7 @@ function void_use_elim_pass!(sv::OptimizationState)
             # Explicitly listed here for clarity
             return false
         elseif isa(ex, Slot)
-            return sv.src.slotflags[slot_id(ex)] & Slot_UsedUndef != 0
+            return bitand(sv.src.slotflags[slot_id(ex)], Slot_UsedUndef) != 0
         elseif isa(ex, GlobalRef)
             ex = ex::GlobalRef
             return !isdefined(ex.mod, ex.name)
@@ -5989,7 +5989,7 @@ function alloc_elim_pass!(sv::OptimizationState)
             rhs = e.args[2]
             # Need to make sure LLVM can recognize this as LLVM ssa value too
             is_ssa = (isa(var, SSAValue) ||
-                      sv.src.slotflags[slot_id(var)] & Slot_UsedUndef == 0)
+                      bitand(sv.src.slotflags[slot_id(var)], Slot_UsedUndef) == 0)
         else
             var = nothing
             rhs = e

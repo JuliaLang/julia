@@ -287,11 +287,12 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
             p.credential = Nullable(deepcopy(cred))
 
             if isa(cred, SSHCredentials)
-                allowed_types &= Cuint(Consts.CREDTYPE_SSH_KEY)
+                allowed_types = bitand(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY))
             elseif isa(cred, UserPasswordCredentials)
-                allowed_types &= Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT)
+                allowed_types = bitand(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
             else
-                allowed_types &= Cuint(0)  # Unhandled credential type
+                # just allowed_types = zero(allowed_types) ?
+                allowed_types = bitand(allowed_types, Cuint(0)) # Unhandled credential type
             end
         elseif !isnull(p.cache)
             cache = unsafe_get(p.cache)

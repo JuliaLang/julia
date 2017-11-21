@@ -2147,9 +2147,9 @@ end
 
 function print_bit_chunk(io::IO, c::UInt64, l::Integer = 64)
     for s = 0:l-1
-        d = (c >>> s) & 1
+        d = bitand(c >>> s, 1)
         print(io, "01"[d + 1])
-        if (s + 1) & 7 == 0
+        if bitand(s + 1, 7) == 0
             print(io, " ")
         end
     end

@@ -138,14 +138,14 @@ Intersects sets `s1` and `s2` and overwrites the set `s1` with the result. If ne
 will be expanded to the size of `s2`.
 """
 function intersect!(s1::BitSet, s2::BitSet)
-    _matched_map!(&, s1.bits, s2.bits)
+    _matched_map!(bitand, s1.bits, s2.bits)
     s1
 end
 
 setdiff(s::BitSet, ns) = setdiff!(copy(s), ns)
 setdiff!(s::BitSet, ns) = (for n in ns; delete!(s, n); end; s)
 function setdiff!(s1::BitSet, s2::BitSet)
-    _matched_map!((p, q) -> p & bitnot(q), s1.bits, s2.bits)
+    _matched_map!((p, q) -> bitand(p, bitnot(q)), s1.bits, s2.bits)
     s1
 end
 

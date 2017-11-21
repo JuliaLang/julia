@@ -67,7 +67,7 @@ function digitgen(low,w,high,buffer)
     too_high = Float(high.s+unit,high.e)
     unsafe_interval = too_high - Float(low.s-unit,low.e)
     integrals = too_high.s >> -one.e
-    fractionals = too_high.s & (one.s-1)
+    fractionals = bitand(too_high.s, one.s - 1)
     divisor, kappa = bigpowten(integrals, 64 + one.e)
     len = 1
     rest = UInt64(0)
@@ -92,7 +92,7 @@ function digitgen(low,w,high,buffer)
         digit = fractionals >> -one.e
         buffer[len] = 0x30 + digit
         len += 1
-        fractionals &= one.s - 1
+        fractionals = bitand(fractionals, one.s - 1)
         kappa -= 1
         if fractionals < unsafe_interval.s
             r, kappa = roundweed(buffer,len,fractionals,one.s,

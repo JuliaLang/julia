@@ -43,10 +43,10 @@ end
 IPv4(str::AbstractString) = parse(IPv4, str)
 
 show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
-print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
-                                  dec((ip.host&(0xFF0000))>>16),".",
-                                  dec((ip.host&(0xFF00))>>8),".",
-                                  dec(ip.host&0xFF))
+print(io::IO,ip::IPv4) = print(io, dec(bitand(ip.host, 0xFF000000) >> 24), ".",
+                                   dec(bitand(ip.host, 0xFF0000) >> 16), ".",
+                                   dec(bitand(ip.host, 0xFF00) >> 8), ".",
+                                   dec(bitand(ip.host, 0xFF)))
 
 struct IPv6 <: IPAddr
     host::UInt128
@@ -102,7 +102,7 @@ function ipv6_field(ip::IPv6,i)
     if i < 0 || i > 7
         throw(BoundsError())
     end
-    UInt16(ip.host&(UInt128(0xFFFF)<<(i*16))>>(i*16))
+    UInt16(bitand(ip.host, UInt128(0xFFFF) << (i*16)) >> (i*16))
 end
 
 show(io::IO, ip::IPv6) = print(io,"ip\"",ip,"\"")
@@ -523,7 +523,7 @@ function uv_recvcb(handle::Ptr{Void}, nread::Cssize_t, buf::Ptr{Void}, addr::Ptr
     if nread < 0
         Libc.free(buf_addr)
         notify_error(sock.recvnotify, UVError("recv", nread))
-    elseif flags & UV_UDP_PARTIAL > 0
+    elseif bitand(flags, UV_UDP_PARTIAL) > 0
         Libc.free(buf_addr)
         notify_error(sock.recvnotify, "Partial message received")
     else

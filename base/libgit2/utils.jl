@@ -44,14 +44,14 @@ const VERSION = version()
 
 Test whether the bits of `val` indexed by `flag` are set (`1`) or unset (`0`).
 """
-isset(val::Integer, flag::Integer) = (val & flag == flag)
+isset(val::Integer, flag::Integer) = bitand(val, flag) == flag
 
 """
     reset(val::Integer, flag::Integer)
 
 Unset the bits of `val` indexed by `flag`, returning them to `0`.
 """
-reset(val::Integer, flag::Integer) = (val &= bitnot(flag))
+reset(val::Integer, flag::Integer) = bitand(val, bitnot(flag))
 
 """
     toggle(val::Integer, flag::Integer)

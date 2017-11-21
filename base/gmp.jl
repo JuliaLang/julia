@@ -4,7 +4,7 @@ module GMP
 
 export BigInt
 
-import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, bitnot, (&), bitor, xor,
+import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, bitnot, bitand, bitor, xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
@@ -288,7 +288,7 @@ function convert(::Type{BigInt}, x::Integer)
         b = BigInt(0)
         shift = 0
         while x < -1
-            b += BigInt(bitnot(UInt32(x&0xffffffff)))<<shift
+            b += BigInt(bitnot(UInt32(bitand(x, 0xffffffff)))) << shift
             x >>= 32
             shift += 32
         end
@@ -300,7 +300,7 @@ function convert(::Type{BigInt}, x::Integer)
         b = BigInt(0)
         shift = 0
         while x > 0
-            b += BigInt(UInt32(x&0xffffffff))<<shift
+            b += BigInt(UInt32(bitand(x, 0xffffffff))) << shift
             x >>>= 32
             shift += 32
         end

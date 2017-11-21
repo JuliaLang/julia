@@ -402,7 +402,7 @@ null_safe_op(::typeof(!), ::Type{Bool}) = true
 # Note this list does not include ^, ÷ and %
 # Operations between signed and unsigned types are not safe: promotion to unsigned
 # gives an InexactError for negative numbers
-for op in (+, -, *, /, &, bitor, <<, >>, >>>,
+for op in (+, -, *, /, bitand, bitor, <<, >>, >>>,
            scalarmin, scalarmax)
     # to fix ambiguities
     global null_safe_op

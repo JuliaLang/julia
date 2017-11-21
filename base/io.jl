@@ -406,17 +406,17 @@ function write(s::IO, ch::Char)
     if c < 0x80
         return write(s, c%UInt8)
     elseif c < 0x800
-        return (write(s, bitor(c >> 6  , 0xC0) % UInt8)) +
-               (write(s, bitor(c & 0x3F, 0x80) % UInt8))
+        return (write(s, bitor(c >> 6         , 0xC0) % UInt8)) +
+               (write(s, bitor(bitand(c, 0x3F), 0x80) % UInt8))
     elseif c < 0x10000
-        return (write(s, bitor(c >> 12        , 0xE0) % UInt8)) +
-               (write(s, bitor((c >> 6) & 0x3F, 0x80) % UInt8)) +
-               (write(s, bitor(c        & 0x3F, 0x80) % UInt8))
+        return (write(s, bitor(c >> 12             , 0xE0) % UInt8)) +
+               (write(s, bitor(bitand(c >> 6, 0x3F), 0x80) % UInt8)) +
+               (write(s, bitor(bitand(c, 0x3F)     , 0x80) % UInt8))
     elseif c < 0x110000
-        return (write(s, bitor(c >> 18         , 0xF0) % UInt8)) +
-               (write(s, bitor((c >> 12) & 0x3F, 0x80) % UInt8)) +
-               (write(s, bitor((c >> 6)  & 0x3F, 0x80) % UInt8)) +
-               (write(s, bitor(c         & 0x3F, 0x80) % UInt8))
+        return (write(s, bitor(c >> 18              , 0xF0) % UInt8)) +
+               (write(s, bitor(bitand(c >> 12, 0x3F), 0x80) % UInt8)) +
+               (write(s, bitor(bitand(c >> 6, 0x3F) , 0x80) % UInt8)) +
+               (write(s, bitor(bitand(c, 0x3F)      , 0x80) % UInt8))
     else
         return write(s, '\ufffd')
     end

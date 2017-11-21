@@ -942,7 +942,7 @@ function deserialize_array(s::AbstractSerializer)
             while i <= n
                 b = read(s.io, UInt8)::UInt8
                 v = (b >> 7) != 0
-                count = b & 0x7f
+                count = bitand(b, 0x7f)
                 nxt = i + count
                 while i < nxt
                     A[i] = v

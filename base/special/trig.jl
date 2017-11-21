@@ -38,7 +38,7 @@ function sin(x::T) where T<:Union{Float32, Float64}
         sin_domain_error(x)
     end
     n, y = rem_pio2_kernel(x)
-    n = n&3
+    n = bitand(n, 3)
     if n == 0
         return sin_kernel(y)
     elseif n == 1
@@ -108,7 +108,7 @@ function cos(x::T) where T<:Union{Float32, Float64}
         cos_domain_error(x)
     else
         n, y = rem_pio2_kernel(x)
-        n = n&3
+        n = bitand(n, 3)
         if n == 0
             return cos_kernel(y)
         elseif n == 1
@@ -181,7 +181,7 @@ function sincos(x::T) where T<:Union{Float32, Float64}
         sincos_domain_error(x)
     end
     n, y = rem_pio2_kernel(x)
-    n = n&3
+    n = bitand(n, 3)
     # calculate both kernels at the reduced y...
     si, co = sincos_kernel(y)
     # ... and use the same selection scheme as above: (sin, cos, -sin, -cos) for
@@ -528,7 +528,7 @@ function atan2(y::T, x::T) where T<:Union{Float32, Float64}
 
     if k > ATAN2_RATIO_THRESHOLD(T) # |y/x| >  threshold
         z=T(pi)/2+T(0.5)*ATAN2_PI_LO(T)
-        m&=1;
+        m = bitand(m, 1)
     elseif x<0 && k < -ATAN2_RATIO_THRESHOLD(T) # 0 > |y|/x > threshold
         z = zero(T)
     else #safe to do y/x
@@ -554,7 +554,7 @@ PIO2_HI(::Type{Float64}) = 1.57079632679489655800e+00
 PIO2_LO(::Type{Float64}) = 6.12323399573676603587e-17
 ACOS_PI(::Type{Float32}) = 3.1415925026f+00
 ACOS_PI(::Type{Float64}) = 3.14159265358979311600e+00
-@inline ACOS_CORRECT_LOWWORD(::Type{Float32}, x) = reinterpret(Float32, (reinterpret(UInt32, x) & 0xfffff000))
+@inline ACOS_CORRECT_LOWWORD(::Type{Float32}, x) = reinterpret(Float32, bitand(reinterpret(UInt32, x), 0xfffff000))
 @inline ACOS_CORRECT_LOWWORD(::Type{Float64}, x) = reinterpret(Float64, (reinterpret(UInt64, x) >> 32) << 32)
 
 @noinline acos_domain_error(x) = throw(DomainError(x, "acos(x) not defined for |x| > 1"))
@@ -620,7 +620,7 @@ function mulpi_ext(x::Float64)
     m_hi = 3.1415926218032837
     m_lo = 3.178650954705639e-8
 
-    x_hi = reinterpret(Float64, reinterpret(UInt64,x) & 0xffff_ffff_f800_0000)
+    x_hi = reinterpret(Float64, bitand(reinterpret(UInt64,x), 0xffff_ffff_f800_0000))
     x_lo = x-x_hi
 
     y_hi = m*x

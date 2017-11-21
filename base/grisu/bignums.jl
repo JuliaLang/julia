@@ -116,7 +116,7 @@ function bigitshiftleft!(x::Bignum,shift_amount)
     @inbounds begin
     for i = 1:x.used_digits
         new_carry::Chunk = x.bigits[i] >> (kBigitSize - shift_amount)
-        x.bigits[i] = ((x.bigits[i] << shift_amount) + carry) & kBigitMask
+        x.bigits[i] = bitand((x.bigits[i] << shift_amount) + carry, kBigitMask)
         carry = new_carry
     end
     if carry != 0
@@ -140,14 +140,14 @@ function subtracttimes!(x::Bignum,other::Bignum,factor)
     for i = 1:other.used_digits
         product::DoubleChunk = DoubleChunk(factor) * other.bigits[i]
         remove::DoubleChunk = borrow + product
-        difference::Chunk = (x.bigits[i+exponent_diff] - (remove & kBigitMask)) % Chunk
-        x.bigits[i+exponent_diff] = difference & kBigitMask
+        difference::Chunk = (x.bigits[i+exponent_diff] - bitand(remove, kBigitMask)) % Chunk
+        x.bigits[i+exponent_diff] = bitand(difference, kBigitMask)
         borrow = ((difference >> (kChunkSize - 1)) + (remove >> kBigitSize)) % Chunk
     end
     for i = (other.used_digits + exponent_diff + 1):x.used_digits
         borrow == 0 && return
         difference::Chunk = x.bigits[i] - borrow
-        x.bigits[i] = difference & kBigitMask
+        x.bigits[i] = bitand(difference, kBigitMask)
         borrow = difference >> (kChunkSize - 1)
     end
     end
@@ -168,7 +168,7 @@ function assignuint64!(x::Bignum,value::UInt64)
     value == 0 && return
     needed_bigits = div(kUInt64Size,kBigitSize) + 1
     @inbounds for i = 1:needed_bigits
-        x.bigits[i] = value & kBigitMask
+        x.bigits[i] = bitand(value, kBigitMask)
         value >>= kBigitSize
     end
     x.used_digits = needed_bigits
@@ -202,13 +202,13 @@ function addbignum!(x::Bignum,other::Bignum)
     bigit_pos = other.exponent - x.exponent
     @inbounds for i = 1:other.used_digits
         sum::Chunk = x.bigits[bigit_pos+1] + other.bigits[i] + carry
-        x.bigits[bigit_pos+1] = sum & kBigitMask
+        x.bigits[bigit_pos+1] = bitand(sum, kBigitMask)
         carry = sum >> kBigitSize
         bigit_pos += 1
     end
     @inbounds while carry != 0
         sum = x.bigits[bigit_pos+1] + carry
-        x.bigits[bigit_pos+1] = sum & kBigitMask
+        x.bigits[bigit_pos+1] = bitand(sum, kBigitMask)
         carry = sum >> kBigitSize
         bigit_pos += 1
     end
@@ -223,13 +223,13 @@ function subtractbignum!(x::Bignum,other::Bignum)
     @inbounds begin
     for i = 1:other.used_digits
         difference = x.bigits[i+offset] - other.bigits[i] - borrow
-        x.bigits[i+offset] = difference & kBigitMask
+        x.bigits[i+offset] = bitand(difference, kBigitMask)
         borrow = difference >> (kChunkSize - 1)
     end
     i = other.used_digits+1
     while borrow != 0
         difference = x.bigits[i+offset] - borrow
-        x.bigits[i+offset] = difference & kBigitMask
+        x.bigits[i+offset] = bitand(difference, kBigitMask)
         borrow = difference >> (kChunkSize - 1)
         i += 1
     end
@@ -255,11 +255,11 @@ function multiplybyuint32!(x::Bignum,factor::UInt32)
     @inbounds begin
     for i = 1:x.used_digits
         product::DoubleChunk = (factor % DoubleChunk) * x.bigits[i] + carry
-        x.bigits[i] = (product & kBigitMask) % Chunk
+        x.bigits[i] = bitand(product, kBigitMask) % Chunk
         carry = product >> kBigitSize
     end
     while carry != 0
-        x.bigits[x.used_digits+1] = carry & kBigitMask
+        x.bigits[x.used_digits+1] = bitand(carry, kBigitMask)
         x.used_digits += 1
         carry >>= kBigitSize
     end
@@ -274,19 +274,19 @@ function multiplybyuint64!(x::Bignum,factor::UInt64)
         return
     end
     carry::UInt64 = 0
-    low::UInt64 = factor & 0xFFFFFFFF
+    low::UInt64 = bitand(factor, 0xFFFFFFFF)
     high::UInt64 = factor >> 32
     @inbounds begin
     for i = 1:x.used_digits
         product_low::UInt64 = low * x.bigits[i]
         product_high::UInt64 = high * x.bigits[i]
-        tmp::UInt64 = (carry & kBigitMask) + product_low
-        x.bigits[i] = tmp & kBigitMask
+        tmp::UInt64 = bitand(carry, kBigitMask) + product_low
+        x.bigits[i] = bitand(tmp, kBigitMask)
         carry = (carry >> kBigitSize) + (tmp >> kBigitSize) +
                 (product_high << (32 - kBigitSize))
     end
     while carry != 0
-        x.bigits[x.used_digits+1] = carry & kBigitMask
+        x.bigits[x.used_digits+1] = bitand(carry, kBigitMask)
         x.used_digits += 1
         carry >>= kBigitSize
     end
@@ -346,7 +346,7 @@ function square!(x::Bignum)
             bigit_index1 -= 1
             bigit_index2 += 1
         end
-        x.bigits[i] = (accumulator % Chunk) & kBigitMask
+        x.bigits[i] = bitand(accumulator % Chunk, kBigitMask)
         accumulator >>= kBigitSize
     end
     for i = x.used_digits+1:product_length
@@ -359,7 +359,7 @@ function square!(x::Bignum)
             bigit_index1 -= 1
             bigit_index2 += 1
         end
-        x.bigits[i] = (accumulator % Chunk) & kBigitMask
+        x.bigits[i] = bitand(accumulator % Chunk, kBigitMask)
         accumulator >>= kBigitSize
     end
     end
@@ -375,7 +375,7 @@ function assignpoweruint16!(x::Bignum,base::UInt16,power_exponent::Int)
     end
     zero!(x)
     shifts::Int = 0
-    while base & UInt16(1) == UInt16(0)
+    while bitand(base, UInt16(1)) == UInt16(0)
         base >>= UInt16(1)
         shifts += 1
     end
@@ -396,9 +396,9 @@ function assignpoweruint16!(x::Bignum,base::UInt16,power_exponent::Int)
     max_32bits::UInt64 = 0xFFFFFFFF
     while mask != 0 && this_value <= max_32bits
         this_value *= this_value
-        if (power_exponent & mask) != 0
+        if bitand(power_exponent, mask) != 0
             base_bits_mask::UInt64 = bitnot(UInt64(1) << (64 - bit_size) - 1)
-            high_bits_zero = (this_value & base_bits_mask) == 0
+            high_bits_zero = bitand(this_value, base_bits_mask) == 0
             if high_bits_zero
                 this_value *= base
             else
@@ -411,7 +411,7 @@ function assignpoweruint16!(x::Bignum,base::UInt16,power_exponent::Int)
     delayed_multiplication && multiplybyuint32!(x,UInt32(base))
     while mask != 0
         square!(x)
-        (power_exponent & mask) != 0 && multiplybyuint32!(x,UInt32(base))
+        bitand(power_exponent, mask) != 0 && multiplybyuint32!(x,UInt32(base))
         mask >>= 1
     end
     shiftleft!(x,shifts * power_exponent)

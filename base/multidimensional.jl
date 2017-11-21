@@ -487,7 +487,7 @@ done(L::LogicalIndex, s) = s[3] > length(L)
     i, n = s
     Bc = L.mask.chunks
     while true
-        if Bc[_div64(i)+1] & (UInt64(1)<<_mod64(i)) != 0
+        if bitand(Bc[_div64(i)+1], UInt64(1) << _mod64(i)) != 0
             i += 1
             return (i, (i, n+1))
         end
@@ -1215,7 +1215,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
             c = bitor(c, UInt64(unchecked_bool_convert(C[ind])) << j)
             ind += 1
         end
-        Bc[kd0] = bitor(Bc[kd0] & msk_d0, c & bitnot(msk_d0))
+        Bc[kd0] = bitor(bitand(Bc[kd0], msk_d0), bitand(c, bitnot(msk_d0)))
         bind += 1
     end
 
@@ -1237,7 +1237,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
             c = bitor(c, UInt64(unchecked_bool_convert(C[ind])) << j)
             ind += 1
         end
-        Bc[kd1] = bitor(Bc[kd1] & msk_d1, c & bitnot(msk_d1))
+        Bc[kd1] = bitor(bitand(Bc[kd1], msk_d1), bitand(c, bitnot(msk_d1)))
     end
 end
 

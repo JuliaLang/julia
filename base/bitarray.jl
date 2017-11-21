@@ -81,7 +81,7 @@ IndexStyle(::Type{<:BitArray}) = IndexLinear()
 
 const _msk64 = bitnot(UInt64(0))
 @inline _div64(l) = l >>> 6
-@inline _mod64(l) = l & 63
+@inline _mod64(l) = bitand(l, 63)
 @inline _msk_end(l::Integer) = _msk64 >>> _mod64(-l)
 @inline _msk_end(B::BitArray) = _msk_end(length(B))
 num_bit_chunks(n::Int) = _div64(n+63)
@@ -96,7 +96,7 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
     nc = length(Bc)
     nc == num_bit_chunks(n) || (warn("incorrect chunks length for length $n: expected=$(num_bit_chunks(n)) actual=$nc"); return false)
     n == 0 && return true
-    Bc[end] & _msk_end(n) == Bc[end] || (warn("nonzero bits in chunk after BitArray end"); return false)
+    bitand(Bc[end], _msk_end(n)) == Bc[end] || (warn("nonzero bits in chunk after BitArray end"); return false)
     return true
 end
 
@@ -104,9 +104,9 @@ end
 
 function glue_src_bitchunks(src::Vector{UInt64}, k::Int, ks1::Int, msk_s0::UInt64, ls0::Int)
     @inbounds begin
-        chunk = ((src[k] & msk_s0) >>> ls0)
+        chunk = bitand(src[k], msk_s0) >>> ls0
         if ks1 > k && ls0 > 0
-            chunk_n = (src[k + 1] & bitnot(msk_s0))
+            chunk_n = bitand(src[k + 1], bitnot(msk_s0))
             chunk = bitor(chunk, chunk_n << (64 - ls0))
         end
     end
@@ -135,14 +135,14 @@ function copy_chunks!(dest::Vector{UInt64}, pos_d::Integer, src::Vector{UInt64},
         msk_d1 = (u << (ld1+1))
     end
     if delta_ks == 0
-        msk_s0 = (u << ls0) & bitnot(u << (ls1+1))
+        msk_s0 = bitand(u << ls0, bitnot(u << (ls1+1)))
     else
         msk_s0 = (u << ls0)
     end
 
     chunk_s0 = glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
 
-    dest[kd0] = bitor(dest[kd0] & msk_d0, (chunk_s0 << ld0) & bitnot(msk_d0))
+    dest[kd0] = bitor(bitand(dest[kd0], msk_d0), bitand(chunk_s0 << ld0, bitnot(msk_d0)))
 
     delta_kd == 0 && return
 
@@ -164,7 +164,7 @@ function copy_chunks!(dest::Vector{UInt64}, pos_d::Integer, src::Vector{UInt64},
 
     chunk_s = bitor(chunk_s0 >>> (64 - ld0), chunk_s1 << ld0)
 
-    dest[kd1] = bitor(dest[kd1] & msk_d1, chunk_s & bitnot(msk_d1))
+    dest[kd1] = bitor(bitand(dest[kd1], msk_d1), bitand(chunk_s, bitnot(msk_d1)))
 
     return
 end
@@ -195,18 +195,18 @@ function copy_chunks_rtol!(chunks::Vector{UInt64}, pos_d::Integer, pos_s::Intege
             msk_d1 = (u << (ld1+1))
         end
         if delta_ks == 0
-            msk_s0 = (u << ls0) & bitnot(u << (ls1+1))
+            msk_s0 = bitand(u << ls0, bitnot(u << (ls1+1)))
         else
             msk_s0 = (u << ls0)
         end
 
-        chunk_s0 = glue_src_bitchunks(chunks, ks0, ks1, msk_s0, ls0) & bitnot(u << s)
-        chunks[kd0] = bitor(chunks[kd0] & msk_d0, (chunk_s0 << ld0) & bitnot(msk_d0))
+        chunk_s0 = bitand(glue_src_bitchunks(chunks, ks0, ks1, msk_s0, ls0), bitnot(u << s))
+        chunks[kd0] = bitor(bitand(chunks[kd0], msk_d0), bitand(chunk_s0 << ld0, bitnot(msk_d0)))
 
         if delta_kd != 0
             chunk_s = (chunk_s0 >>> (64 - ld0))
 
-            chunks[kd1] = bitor(chunks[kd1] & msk_d1, chunk_s & bitnot(msk_d1))
+            chunks[kd1] = bitor(bitand(chunks[kd1], msk_d1), bitand(chunk_s, bitnot(msk_d1)))
         end
 
         left -= s
@@ -224,7 +224,7 @@ function fill_chunks!(Bc::Array{UInt64}, x::Bool, pos::Integer, numbits::Integer
 
     u = _msk64
     if k1 == k0
-        msk0 = (u << l0) & bitnot(u << (l1+1))
+        msk0 = bitand(u << l0, bitnot(u << (l1+1)))
     else
         msk0 = (u << l0)
         msk1 = bitnot(u << (l1+1))
@@ -236,11 +236,11 @@ function fill_chunks!(Bc::Array{UInt64}, x::Bool, pos::Integer, numbits::Integer
         end
         k1 > k0 && (Bc[k1] = bitor(Bc[k1], msk1))
     else
-        Bc[k0] &= bitnot(msk0)
+        Bc[k0] = bitand(Bc[k0], bitnot(msk0))
         for k = k0+1:k1-1
             Bc[k] = 0
         end
-        k1 > k0 && (Bc[k1] &= bitnot(msk1))
+        k1 > k0 && (Bc[k1] = bitand(Bc[k1], bitnot(msk1)))
     end
 end
 
@@ -253,7 +253,7 @@ function pack8bools(z::UInt64)
     z = bitor(z, z >>> 7)
     z = bitor(z, z >>> 14)
     z = bitor(z, z >>> 28)
-    z &= 0xFF
+    z = bitand(z, 0xFF)
     return z
 end
 
@@ -281,7 +281,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
             c = bitor(c, UInt64(C[ind]) << j)
             ind += 1
         end
-        Bc[kd0] = bitor(Bc[kd0] & msk_d0, c & bitnot(msk_d0))
+        Bc[kd0] = bitor(bitand(Bc[kd0], msk_d0), bitand(c, bitnot(msk_d0)))
         bind += 1
     end
 
@@ -318,7 +318,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
             c = bitor(c, UInt64(C[ind]) << j)
             ind += 1
         end
-        Bc[kd1] = bitor(Bc[kd1] & msk_d1, c & bitnot(msk_d1))
+        Bc[kd1] = bitor(bitand(Bc[kd1], msk_d1), bitand(c, bitnot(msk_d1)))
     end
 end
 
@@ -336,7 +336,7 @@ dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool}) =
 
 ## custom iterator ##
 start(B::BitArray) = 0
-next(B::BitArray, i::Int) = (B.chunks[_div64(i)+1] & (UInt64(1)<<_mod64(i)) != 0, i+1)
+next(B::BitArray, i::Int) = !iszero(bitand(B.chunks[_div64(i)+1], UInt64(1) << _mod64(i))), i+1
 done(B::BitArray, i::Int) = i >= length(B)
 
 ## similar, fill!, copy! etc ##
@@ -358,7 +358,7 @@ function fill!(B::BitArray, x)
         fill!(Bc, 0)
     else
         fill!(Bc, _msk64)
-        Bc[end] &= _msk_end(B)
+        Bc[end] = bitand(Bc[end], _msk_end(B))
     end
     return B
 end
@@ -457,7 +457,7 @@ function copy!(dest::BitArray, src::BitArray)
         else
             msk_s = _msk_end(src)
             msk_d = bitnot(msk_s)
-            destc[nc] = bitor(msk_d & destc[nc], msk_s & srcc[nc])
+            destc[nc] = bitor(bitand(msk_d, destc[nc]), bitand(msk_s, srcc[nc]))
         end
     end
     return dest
@@ -672,7 +672,7 @@ end
 @inline function unsafe_bitgetindex(Bc::Vector{UInt64}, i::Int)
     i1, i2 = get_chunks_id(i)
     u = UInt64(1) << i2
-    @inbounds r = (Bc[i1] & u) != 0
+    @inbounds r = bitand(Bc[i1], u) != 0
     return r
 end
 
@@ -688,7 +688,7 @@ end
     u = UInt64(1) << i2
     @inbounds begin
         c = Bc[i1]
-        Bc[i1] = ifelse(x, bitor(c, u), c & bitnot(u))
+        Bc[i1] = ifelse(x, bitor(c, u), bitand(c, bitnot(u)))
     end
 end
 
@@ -730,7 +730,7 @@ function _unsafe_setindex!(B::BitArray, x, I::BitArray)
         end
     else
         for i = 1:length(Bc)
-            Bc[i] &= bitnot(Ic[i])
+            Bc[i] = bitand(Bc[i], bitnot(Ic[i]))
         end
     end
     return B
@@ -756,10 +756,10 @@ function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
         @inbounds C = Bc[i]
         u = UInt64(1)
         for j = 1:(i < lc ? 64 : last_chunk_len)
-            if Imsk & u != 0
+            if bitand(Imsk, u) != 0
                 lx < c && throw_setindex_mismatch(X, c)
                 @inbounds x = convert(Bool, X[c])
-                C = ifelse(x, bitor(C, u), C & bitnot(u))
+                C = ifelse(x, bitor(C, u), bitand(C, bitnot(u)))
                 c += 1
             end
             u <<= 1
@@ -934,7 +934,7 @@ function insert!(B::BitVector, i::Integer, item)
 
     msk_aft = (_msk64 << j)
     msk_bef = bitnot(msk_aft)
-    Bc[k] = bitor(msk_bef & Bc[k], (msk_aft & Bc[k]) << 1)
+    Bc[k] = bitor(bitand(msk_bef, Bc[k]), bitand(msk_aft, Bc[k]) << 1)
     B[i] = item
     B
 end
@@ -949,7 +949,7 @@ function _deleteat!(B::BitVector, i::Integer)
     Bc = B.chunks
 
     @inbounds begin
-        Bc[k] = bitor(msk_bef & Bc[k], (msk_aft & Bc[k]) >> 1)
+        Bc[k] = bitor(bitand(msk_bef, Bc[k]), bitand(msk_aft, Bc[k]) >> 1)
         if length(Bc) > k
             Bc[k] = bitor(Bc[k], Bc[k + 1] << 63)
         end
@@ -997,7 +997,7 @@ function deleteat!(B::BitVector, r::UnitRange{Int})
     B.len = new_l
 
     if new_l > 0
-        Bc[end] &= _msk_end(new_l)
+        Bc[end] = bitand(Bc[end], _msk_end(new_l))
     end
 
     return B
@@ -1035,7 +1035,7 @@ function deleteat!(B::BitVector, inds)
     B.len = new_l
 
     if new_l > 0
-        Bc[end] &= _msk_end(new_l)
+        Bc[end] = bitand(Bc[end], _msk_end(new_l))
     end
 
     return B
@@ -1087,7 +1087,7 @@ function splice!(B::BitVector, r::Union{UnitRange{Int}, Integer}, ins::AbstractA
     B.len = new_l
 
     if new_l > 0
-        Bc[end] &= _msk_end(new_l)
+        Bc[end] = bitand(Bc[end], _msk_end(new_l))
     end
 
     return v
@@ -1122,7 +1122,7 @@ function (-)(B::BitArray)
         u = UInt64(1)
         c = Bc[i]
         for j = 1:64
-            if c & u != 0
+            if bitand(c, u) != 0
                 A[ind] = -1
             end
             ind += 1
@@ -1132,7 +1132,7 @@ function (-)(B::BitArray)
     u = UInt64(1)
     c = Bc[end]
     for j = 0:_mod64(l-1)
-        if c & u != 0
+        if bitand(c, u) != 0
             A[ind] = -1
         end
         ind += 1
@@ -1150,7 +1150,7 @@ function broadcast(::typeof(bitnot), B::BitArray)
         for i = 1:length(Bc)
             Cc[i] = bitnot(Bc[i])
         end
-        Cc[end] &= _msk_end(B)
+        Cc[end] = bitand(Cc[end], _msk_end(B))
     end
     return C
 end
@@ -1179,7 +1179,7 @@ function flipbits!(B::BitArray)
         for i = 1:length(Bc)
             Bc[i] = bitnot(Bc[i])
         end
-        Bc[end] &= _msk_end(B)
+        Bc[end] = bitand(Bc[end], _msk_end(B))
     end
     return B
 end
@@ -1229,7 +1229,7 @@ for f in (:&, :|, :xor)
             for i = 1:length(Fc)
                 Fc[i] = ($f)(Ac[i], Bc[i])
             end
-            Fc[end] &= _msk_end(F)
+            Fc[end] = bitand(Fc[end], _msk_end(F))
             return F
         end
         broadcast(::typeof($f), A::DenseArray{Bool}, B::BitArray) = broadcast($f, BitArray(A), B)
@@ -1302,12 +1302,12 @@ end
 
 function reverse_bits(src::UInt64)
     z    = src
-    z    = bitor((z >>>  1) & 0x5555555555555555, (z <<  1) & 0xaaaaaaaaaaaaaaaa)
-    z    = bitor((z >>>  2) & 0x3333333333333333, (z <<  2) & 0xcccccccccccccccc)
-    z    = bitor((z >>>  4) & 0x0f0f0f0f0f0f0f0f, (z <<  4) & 0xf0f0f0f0f0f0f0f0)
-    z    = bitor((z >>>  8) & 0x00ff00ff00ff00ff, (z <<  8) & 0xff00ff00ff00ff00)
-    z    = bitor((z >>> 16) & 0x0000ffff0000ffff, (z << 16) & 0xffff0000ffff0000)
-    return bitor((z >>> 32) & 0x00000000ffffffff, (z << 32) & 0xffffffff00000000)
+    z    = bitor(bitand(z >>>  1, 0x5555555555555555), bitand(z <<  1, 0xaaaaaaaaaaaaaaaa))
+    z    = bitor(bitand(z >>>  2, 0x3333333333333333), bitand(z <<  2, 0xcccccccccccccccc))
+    z    = bitor(bitand(z >>>  4, 0x0f0f0f0f0f0f0f0f), bitand(z <<  4, 0xf0f0f0f0f0f0f0f0))
+    z    = bitor(bitand(z >>>  8, 0x00ff00ff00ff00ff), bitand(z <<  8, 0xff00ff00ff00ff00))
+    z    = bitor(bitand(z >>> 16, 0x0000ffff0000ffff), bitand(z << 16, 0xffff0000ffff0000))
+    return bitor(bitand(z >>> 32, 0x00000000ffffffff), bitand(z << 32, 0xffffffff00000000))
 end
 
 function reverse!(B::BitVector)
@@ -1508,8 +1508,8 @@ function findnext(B::BitArray, start::Integer)
     mask = _msk64 << within_chunk_start
 
     @inbounds begin
-        if Bc[chunk_start] & mask != 0
-            return (chunk_start-1) << 6 + trailing_zeros(Bc[chunk_start] & mask) + 1
+        if bitand(Bc[chunk_start], mask) != 0
+            return (chunk_start-1) << 6 + trailing_zeros(bitand(Bc[chunk_start], mask)) + 1
         end
 
         for i = chunk_start+1:length(Bc)
@@ -1587,8 +1587,8 @@ function findprev(B::BitArray, start::Integer)
     mask = _msk_end(start)
 
     @inbounds begin
-        if Bc[chunk_start] & mask != 0
-            return (chunk_start-1) << 6 + (64 - leading_zeros(Bc[chunk_start] & mask))
+        if bitand(Bc[chunk_start], mask) != 0
+            return (chunk_start-1) << 6 + (64 - leading_zeros(bitand(Bc[chunk_start], mask)))
         end
 
         for i = (chunk_start-1):-1:1
@@ -1658,7 +1658,7 @@ function find(B::BitArray)
         u = UInt64(1)
         c = Bc[i]
         for j = 1:64
-            if c & u != 0
+            if bitand(c, u) != 0
                 I[Icount] = Bcount
                 Icount += 1
             end
@@ -1669,7 +1669,7 @@ function find(B::BitArray)
     u = UInt64(1)
     c = Bc[end]
     for j = 0:_mod64(l-1)
-        if c & u != 0
+        if bitand(c, u) != 0
             I[Icount] = Bcount
             Icount += 1
         end
@@ -1754,8 +1754,8 @@ for (T, f) in ((:(Union{typeof(&), typeof(*), typeof(min)}), :(&)),
                (:(Union{typeof(>=), typeof(^)}),             :((p, q) -> bitor(p, bitnot(q)))),
                (:(typeof(<=)),                               :((p, q) -> bitor(bitnot(p), q))),
                (:(typeof(==)),                               :((p, q) -> bitnot(xor(p, q)))),
-               (:(typeof(<)),                                :((p, q) -> bitnot(p) & q)),
-               (:(typeof(>)),                                :((p, q) -> p & bitnot(q))))
+               (:(typeof(<)),                                :((p, q) -> bitand(bitnot(p), q))),
+               (:(typeof(>)),                                :((p, q) -> bitand(p, bitnot(q)))))
     @eval map(::$T, A::BitArray, B::BitArray) = bit_map!($f, similar(A), A, B)
     @eval map!(::$T, dest::BitArray, A::BitArray, B::BitArray) = bit_map!($f, dest, A, B)
 end
@@ -1771,7 +1771,7 @@ function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     for i = 1:(length(Ac)-1)
         destc[i] = f(Ac[i])
     end
-    destc[end] = f(Ac[end]) & _msk_end(A)
+    destc[end] = bitand(f(Ac[end]), _msk_end(A))
     dest
 end
 function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
@@ -1783,7 +1783,7 @@ function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     for i = 1:(length(Ac)-1)
         destc[i] = f(Ac[i], Bc[i])
     end
-    destc[end] = f(Ac[end], Bc[end]) & _msk_end(A)
+    destc[end] = bitand(f(Ac[end], Bc[end]), _msk_end(A))
     dest
 end
 
@@ -1889,8 +1889,8 @@ function read!(s::IO, B::BitArray)
     n = length(B)
     Bc = B.chunks
     nc = length(read!(s, Bc))
-    if length(Bc) > 0 && Bc[end] & _msk_end(n) ≠ Bc[end]
-        Bc[end] &= _msk_end(n) # ensure that the BitArray is not broken
+    if length(Bc) > 0 && bitand(Bc[end], _msk_end(n)) ≠ Bc[end]
+        Bc[end] = bitand(Bc[end], _msk_end(n)) # ensure that the BitArray is not broken
         throw(DimensionMismatch("read mismatch, found non-zero bits after BitArray length"))
     end
     return B

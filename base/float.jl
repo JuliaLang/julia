@@ -78,11 +78,11 @@ function convert(::Type{Float64}, x::UInt128)
     x == 0 && return 0.0
     n = 128-leading_zeros(x) # ndigits0z(x,2)
     if n <= 53
-        y = ((x % UInt64) << (53-n)) & 0x000f_ffff_ffff_ffff
+        y = bitand((x % UInt64) << (53-n), 0x000f_ffff_ffff_ffff)
     else
-        y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
+        y = bitand((x >> (n-54)) % UInt64, 0x001f_ffff_ffff_ffff) # keep 1 extra bit
         y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= bitnot(UInt64(trailing_zeros(x) == (n-54))) # fix last bit to round to even
+        y = bitand(y, bitnot(UInt64(trailing_zeros(x) == (n-54)))) # fix last bit to round to even
     end
     d = ((n+1022) % UInt64) << 52
     reinterpret(Float64, d + y)
@@ -90,15 +90,15 @@ end
 
 function convert(::Type{Float64}, x::Int128)
     x == 0 && return 0.0
-    s = ((x >>> 64) % UInt64) & 0x8000_0000_0000_0000 # sign bit
+    s = bitand((x >>> 64) % UInt64, 0x8000_0000_0000_0000) # sign bit
     x = abs(x) % UInt128
     n = 128-leading_zeros(x) # ndigits0z(x,2)
     if n <= 53
-        y = ((x % UInt64) << (53-n)) & 0x000f_ffff_ffff_ffff
+        y = bitand((x % UInt64) << (53-n), 0x000f_ffff_ffff_ffff)
     else
-        y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
+        y = bitand((x >> (n-54)) % UInt64, 0x001f_ffff_ffff_ffff) # keep 1 extra bit
         y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= bitnot(UInt64(trailing_zeros(x) == (n-54))) # fix last bit to round to even
+        y = bitand(y, bitnot(UInt64(trailing_zeros(x) == (n-54)))) # fix last bit to round to even
     end
     d = ((n+1022) % UInt64) << 52
     reinterpret(Float64, bitor(s, d) + y)
@@ -108,11 +108,11 @@ function convert(::Type{Float32}, x::UInt128)
     x == 0 && return 0f0
     n = 128-leading_zeros(x) # ndigits0z(x,2)
     if n <= 24
-        y = ((x % UInt32) << (24-n)) & 0x007f_ffff
+        y = bitand(((x % UInt32) << (24-n), 0x007f_ffff)
     else
-        y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
+        y = bitand(((x >> (n-25)) % UInt32, 0x00ff_ffff) # keep 1 extra bit
         y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= bitnot(UInt32(trailing_zeros(x) == (n-25))) # fix last bit to round to even
+        y = bitand(y, bitnot(UInt32(trailing_zeros(x) == (n-25)))) # fix last bit to round to even
     end
     d = ((n+126) % UInt32) << 23
     reinterpret(Float32, d + y)
@@ -120,15 +120,15 @@ end
 
 function convert(::Type{Float32}, x::Int128)
     x == 0 && return 0f0
-    s = ((x >>> 96) % UInt32) & 0x8000_0000 # sign bit
+    s = bitand((x >>> 96) % UInt32, 0x8000_0000) # sign bit
     x = abs(x) % UInt128
     n = 128-leading_zeros(x) # ndigits0z(x,2)
     if n <= 24
-        y = ((x % UInt32) << (24-n)) & 0x007f_ffff
+        y = bitand((x % UInt32) << (24-n), 0x007f_ffff)
     else
-        y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
+        y = bitand((x >> (n-25)) % UInt32, 0x00ff_ffff) # keep 1 extra bit
         y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= bitnot(UInt32(trailing_zeros(x) == (n-25))) # fix last bit to round to even
+        y = bitand(y, bitnot(UInt32(trailing_zeros(x) == (n-25)))) # fix last bit to round to even
     end
     d = ((n+126) % UInt32) << 23
     reinterpret(Float32, bitor(s, d) + y)
@@ -137,20 +137,20 @@ end
 function convert(::Type{Float16}, val::Float32)
     f = reinterpret(UInt32, val)
     if isnan(val)
-        t = 0x8000 ⊻ (0x8000 & ((f >> 0x10) % UInt16))
+        t = 0x8000 ⊻ bitand(0x8000, (f >> 0x10) % UInt16)
         return reinterpret(Float16, t ⊻ ((f >> 0xd) % UInt16))
     end
-    i = (f >> 23) & 0x1ff + 1
+    i = bitand(f >> 23, 0x1ff) + 1
     sh = shifttable[i]
-    f &= 0x007fffff
+    f = bitand(f, 0x007fffff)
     h::UInt16 = basetable[i] + (f >> sh)
     # round
     # NOTE: we maybe should ignore NaNs here, but the payload is
     # getting truncated anyway so "rounding" it might not matter
-    nextbit = (f >> (sh-1)) & 1
+    nextbit = bitand(f >> (sh-1), 1)
     if nextbit != 0
         # Round halfway to even or check lower bits
-        if h&1 == 1 || (f & ((1<<(sh-1))-1)) != 0
+        if bitand(h, 1) == 1 || bitand(f, (1 << (sh-1)) - 1) != 0
             h += 1
         end
     end
@@ -159,9 +159,9 @@ end
 
 function convert(::Type{Float32}, val::Float16)
     local ival::UInt32 = reinterpret(UInt16, val)
-    local sign::UInt32 = (ival & 0x8000) >> 15
-    local exp::UInt32  = (ival & 0x7c00) >> 10
-    local sig::UInt32  = (ival & 0x3ff) >> 0
+    local sign::UInt32 = bitand(ival, 0x8000) >> 15
+    local exp::UInt32  = bitand(ival, 0x7c00) >> 10
+    local sig::UInt32  = bitand(ival, 0x3ff) >> 0
     local ret::UInt32
 
     if exp == 0
@@ -171,13 +171,13 @@ function convert(::Type{Float32}, val::Float16)
         else
             n_bit = 1
             bit = 0x0200
-            while (bit & sig) == 0
+            while bitand(bit, sig) == 0
                 n_bit = n_bit + 1
                 bit = bit >> 1
             end
             sign = sign << 31
             exp = (-14 - n_bit + 127) << 23
-            sig = ((sig & bitnot(bit)) << n_bit) << (23 - 10)
+            sig = (bitand(sig, bitnot(bit)) << n_bit) << (23 - 10)
             ret = bitor(sign, exp, sig)
         end
     elseif exp == 0x1f
@@ -306,8 +306,8 @@ end
 
 function unsafe_trunc(::Type{UInt128}, x::Float64)
     xu = reinterpret(UInt64,x)
-    k = Int(xu >> 52) & 0x07ff - 1075
-    xu = bitor(xu & 0x000f_ffff_ffff_ffff, 0x0010_0000_0000_0000)
+    k = bitand(Int(xu >> 52), 0x07ff) - 1075
+    xu = bitor(bitand(xu, 0x000f_ffff_ffff_ffff), 0x0010_0000_0000_0000)
     if k <= 0
         UInt128(xu >> -k)
     else
@@ -320,8 +320,8 @@ end
 
 function unsafe_trunc(::Type{UInt128}, x::Float32)
     xu = reinterpret(UInt32,x)
-    k = Int(xu >> 23) & 0x00ff - 150
-    xu = bitor(xu & 0x007f_ffff, 0x0080_0000)
+    k = bitand(Int(xu >> 23), 0x00ff) - 150
+    xu = bitor(bitand(xu, 0x007f_ffff), 0x0080_0000)
     if k <= 0
         UInt128(xu >> -k)
     else
@@ -432,10 +432,10 @@ end
 function ==(x::Float16, y::Float16)
     ix = reinterpret(UInt16,x)
     iy = reinterpret(UInt16,y)
-    if bitor(ix, iy) & 0x7fff > 0x7c00 #isnan(x) || isnan(y)
+    if bitand(bitor(ix, iy), 0x7fff) > 0x7c00 #isnan(x) || isnan(y)
         return false
     end
-    if bitor(ix, iy) & 0x7fff == 0x0000
+    if bitand(bitor(ix, iy), 0x7fff) == 0x0000
         return true
     end
     return ix == iy
@@ -526,7 +526,7 @@ end
 <=(x::Union{Int32,UInt32}, y::Float32) = Float64(x)<=Float64(y)
 
 
-abs(x::Float16) = reinterpret(Float16, reinterpret(UInt16, x) & 0x7fff)
+abs(x::Float16) = reinterpret(Float16, bitand(reinterpret(UInt16, x), 0x7fff))
 abs(x::Float32) = abs_float(x)
 abs(x::Float64) = abs_float(x)
 
@@ -536,7 +536,7 @@ abs(x::Float64) = abs_float(x)
 Test whether a floating point number is not a number (NaN).
 """
 isnan(x::AbstractFloat) = x != x
-isnan(x::Float16) = reinterpret(UInt16,x)&0x7fff > 0x7c00
+isnan(x::Float16) = bitand(reinterpret(UInt16,x), 0x7fff) > 0x7c00
 isnan(x::Real) = false
 
 """
@@ -553,7 +553,7 @@ false
 ```
 """
 isfinite(x::AbstractFloat) = x - x == 0
-isfinite(x::Float16) = reinterpret(UInt16,x)&0x7c00 != 0x7c00
+isfinite(x::Float16) = bitand(reinterpret(UInt16,x), 0x7c00) != 0x7c00
 isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
@@ -615,7 +615,7 @@ function nextfloat(f::IEEEFloat, d::Integer)
     isnan(f) && return f
     fi = reinterpret(Signed, f)
     fneg = fi < 0
-    fu = unsigned(fi & typemax(fi))
+    fu = unsigned(bitand(fi, typemax(fi)))
 
     dneg = d < 0
     da = uabs(d)
@@ -715,7 +715,7 @@ Test whether a floating point number is subnormal.
 """
 function issubnormal(x::T) where {T<:IEEEFloat}
     y = reinterpret(Unsigned, x)
-    (y & exponent_mask(T) == 0) & (y & significand_mask(T) != 0)
+    iszero(bitand(y, exponent_mask(T))) & !iszero(bitand(y, significand_mask(T)))
 end
 
 @eval begin
@@ -870,7 +870,7 @@ uinttype(::Type{Float64}) = UInt64
 uinttype(::Type{Float32}) = UInt32
 uinttype(::Type{Float16}) = UInt16
 
-Base.iszero(x::Float16) = reinterpret(UInt16, x) & bitnot(sign_mask(Float16)) == 0x0000
+Base.iszero(x::Float16) = bitand(reinterpret(UInt16, x), bitnot(sign_mask(Float16))) == 0x0000
 
 ## Array operations on floating point numbers ##
 

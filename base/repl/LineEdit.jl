@@ -395,7 +395,7 @@ function char_move_left(buf::IOBuffer)
     while position(buf) > 0
         seek(buf, position(buf)-1)
         c = peek(buf)
-        (((c & 0x80) == 0) || ((c & 0xc0) == 0xc0)) && break
+        bitand(c, 0x80) == 0 || bitand(c, 0xc0) == 0xc0 && break
     end
     pos = position(buf)
     c = read(buf, Char)

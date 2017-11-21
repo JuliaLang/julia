@@ -52,7 +52,7 @@ function digitgen(w,buffer,requested_digits=1000)
     unit::UInt64 = 1
     one = Float(unit << -w.e, w.e)
     integrals = w.s >> -one.e
-    fractionals = w.s & (one.s-1)
+    fractionals = bitand(w.s, one.s - 1)
     divisor, kappa = bigpowten(integrals, 64 + one.e)
     len = 1
     rest = 0
@@ -78,7 +78,7 @@ function digitgen(w,buffer,requested_digits=1000)
         buffer[len] = 0x30 + digit
         len += 1
         requested_digits -= 1
-        fractionals &= one.s - 1
+        fractionals = bitand(fractionals, one.s - 1)
         kappa -= 1
     end
     requested_digits != 0 && return false, kappa, len

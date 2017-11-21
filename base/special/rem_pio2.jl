@@ -57,8 +57,8 @@ Return the high word of `x` as a `UInt32`.
 
 Return positive part of the high word of `x` as a `UInt32`.
 """
-@inline poshighword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)&0x7fffffff
-@inline poshighword(x::Float32) = reinterpret(UInt32, x)&0x7fffffff
+@inline poshighword(x::UInt64) = bitand(unsafe_trunc(UInt32,x >> 32), 0x7fffffff)
+@inline poshighword(x::Float32) = bitand(reinterpret(UInt32, x), 0x7fffffff)
 @inline poshighword(x::Float64) = poshighword(reinterpret(UInt64, x))
 
 @inline function cody_waite_2c_pio2(x::Float64, fn, n)
@@ -89,7 +89,7 @@ end
     j  = xhp>>20
     y1 = r-w
     high = highword(y1)
-    i = j-((high>>20)&0x7ff)
+    i = j - bitand(high >> 20, 0x7ff)
     if i>16  # 2nd iteration needed, good to 118
         t  = r
         w  = fn*pio2_2
@@ -97,7 +97,7 @@ end
         w  = muladd(fn, pio2_2t,-((t-r)-w))
         y1 = r-w
         high = highword(y1)
-        i = j-((high>>20)&0x7ff)
+        i = j - bitand(high >> 20, 0x7ff)
         if i>49 # 3rd iteration need, 151 bits acc
             t  = r # will cover all possible cases
             w  = fn*pio2_3
@@ -152,10 +152,10 @@ function paynehanek(x::Float64)
     # Computations are integer based, so reinterpret x as UInt64
     u = reinterpret(UInt64, x)
     # Strip x of exponent bits and replace with ^1
-    X = bitor(u & significand_mask(Float64), one(UInt64) << significand_bits(Float64))
+    X = bitor(bitand(u, significand_mask(Float64)), one(UInt64) << significand_bits(Float64))
     # Get k from formula above
     # k = exponent(x)-52
-    k = Int((u & exponent_mask(Float64)) >> significand_bits(Float64)) - exponent_bias(Float64) - significand_bits(Float64)
+    k = Int(bitand(u, exponent_mask(Float64)) >> significand_bits(Float64)) - exponent_bias(Float64) - significand_bits(Float64)
 
     # 2. Let α = 1/2π, then:
     #
@@ -238,7 +238,7 @@ added for ``π/4<|x|<=π/2`` instead of simply returning `x`.
     if xhp <= 0x400f6a7a
         #  last five bits of xhp == last five bits of highword(pi/2) or
         #  highword(2pi/2) implies |x| ~= pi/2 or 2pi/2,
-        if (xhp & 0xfffff) == 0x921fb # use precise Cody Waite scheme
+        if bitand(xhp, 0xfffff) == 0x921fb # use precise Cody Waite scheme
             return cody_waite_ext_pio2(x, xhp)
         end
         # use Cody Waite with two constants

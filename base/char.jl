@@ -71,7 +71,7 @@ function show(io::IO, c::Char)
         write(io, 0x27, 0x5c, c <= '\x7f' ? 0x78 : c <= '\uffff' ? 0x75 : 0x55)
         d = max(2, 8 - (leading_zeros(u) >> 2))
         while 0 < d
-            write(io, hex_chars[((u >> ((d -= 1) << 2)) & 0xf) + 1])
+            write(io, hex_chars[bitand(u >> ((d -= 1) << 2), 0xf) + 1])
         end
         write(io, 0x27)
     end

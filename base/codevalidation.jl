@@ -146,4 +146,4 @@ function is_valid_rvalue(x)
     return !isa(x, GotoNode) && !isa(x, LabelNode) && !isa(x, LineNumberNode)
 end
 
-is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag
+is_flag_set(byte::UInt8, flag::UInt8) = bitand(byte, flag) == flag

@@ -138,7 +138,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         try
             @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
-                if (filemode(path) & 0o222) == 0
+                if bitand(filemode(path), 0o222) == 0
                     chmod(path, 0o777)
                 end
             end
@@ -287,7 +287,7 @@ end
 function mktempdir(parent=tempdir())
     seed::UInt32 = rand(UInt32)
     while true
-        if (seed & typemax(UInt16)) == 0
+        if bitand(seed, typemax(UInt16)) == 0
             seed += 1
         end
         filename = tempname(parent, seed)

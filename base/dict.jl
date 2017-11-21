@@ -207,7 +207,7 @@ function convert(::Type{Dict{K,V}},d::Associative) where V where K
 end
 convert(::Type{Dict{K,V}},d::Dict{K,V}) where {K,V} = d
 
-hashindex(key, sz) = (((hash(key)%Int) & (sz-1)) + 1)::Int
+hashindex(key, sz) = (bitand(hash(key) % Int, sz - 1) + 1)::Int
 
 @propagate_inbounds isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
 @propagate_inbounds isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
@@ -243,9 +243,9 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
             v = oldv[i]
             index0 = index = hashindex(k, newsz)
             while slots[index] != 0
-                index = (index & (newsz-1)) + 1
+                index = bitand(index, newsz - 1) + 1
             end
-            probe = (index - index0) & (newsz-1)
+            probe = bitand(index - index0, newsz - 1)
             probe > maxprobe && (maxprobe = probe)
             slots[index] = 0x1
             keys[index] = k
@@ -336,7 +336,7 @@ function ht_keyindex(h::Dict{K,V}, key) where V where K
             return index
         end
 
-        index = (index & (sz-1)) + 1
+        index = bitand(index, sz - 1) + 1
         iter += 1
         iter > maxprobe && break
     end
@@ -373,7 +373,7 @@ function ht_keyindex2(h::Dict{K,V}, key) where V where K
             return index
         end
 
-        index = (index & (sz-1)) + 1
+        index = bitand(index, sz - 1) + 1
         iter += 1
         iter > maxprobe && break
     end
@@ -387,7 +387,7 @@ function ht_keyindex2(h::Dict{K,V}, key) where V where K
             h.maxprobe = iter
             return -index
         end
-        index = (index & (sz-1)) + 1
+        index = bitand(index, sz - 1) + 1
         iter += 1
     end
 

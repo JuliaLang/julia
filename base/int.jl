@@ -465,7 +465,7 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
             @eval rem(x::($from), ::Type{$to}) = trunc_int($to, x)
         elseif from === Bool
             # Bools use i8 storage and may have garbage in their 7 high bits
-            @eval convert(::Type{$to}, x::($from)) = zext_int($to, x) & $to(1)
+            @eval convert(::Type{$to}, x::($from)) = bitand(zext_int($to, x), $to(1))
             @eval rem(x::($from), ::Type{$to}) = convert($to, x)
         elseif from.size < to.size
             if from <: Signed
@@ -518,7 +518,7 @@ end
 
 rem(x::T, ::Type{T}) where {T<:Integer} = x
 rem(x::Integer, T::Type{<:Integer}) = convert(T, x)  # `x % T` falls back to `convert`
-rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
+rem(x::Integer, ::Type{Bool}) = !iszero(bitand(x, 1))
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
@@ -693,14 +693,14 @@ if Core.sizeof(Int) == 4
         local u0::UInt64, v0::UInt64, w0::UInt64
         local u1::Int64, v1::Int64, w1::UInt64, w2::Int64, t::UInt64
 
-        u0 = u & 0xffffffff; u1 = u >> 32
-        v0 = v & 0xffffffff; v1 = v >> 32
+        u0 = bitand(u, 0xffffffff); u1 = u >> 32
+        v0 = bitand(v, 0xffffffff); v1 = v >> 32
         w0 = u0 * v0
         t = reinterpret(UInt64, u1) * v0 + (w0 >>> 32)
         w2 = reinterpret(Int64, t) >> 32
-        w1 = u0 * reinterpret(UInt64, v1) + (t & 0xffffffff)
+        w1 = u0 * reinterpret(UInt64, v1) + bitand(t, 0xffffffff)
         hi = u1 * v1 + w2 + (reinterpret(Int64, w1) >> 32)
-        lo = w0 & 0xffffffff + (w1 << 32)
+        lo = bitand(w0, 0xffffffff) + (w1 << 32)
         return Int128(hi) << 64 + Int128(lo)
     end
 
@@ -708,14 +708,14 @@ if Core.sizeof(Int) == 4
         local u0::UInt64, v0::UInt64, w0::UInt64
         local u1::UInt64, v1::UInt64, w1::UInt64, w2::UInt64, t::UInt64
 
-        u0 = u & 0xffffffff; u1 = u >>> 32
-        v0 = v & 0xffffffff; v1 = v >>> 32
+        u0 = bitand(u, 0xffffffff); u1 = u >>> 32
+        v0 = bitand(v, 0xffffffff); v1 = v >>> 32
         w0 = u0 * v0
         t = u1 * v0 + (w0 >>> 32)
         w2 = t >>> 32
-        w1 = u0 * v1 + (t & 0xffffffff)
+        w1 = u0 * v1 + bitand(t, 0xffffffff)
         hi = u1 * v1 + w2 + (w1 >>> 32)
-        lo = w0 & 0xffffffff + (w1 << 32)
+        lo = bitand(w0, 0xffffffff) + (w1 << 32)
         return UInt128(hi) << 64 + UInt128(lo)
     end
 
@@ -726,8 +726,8 @@ if Core.sizeof(Int) == 4
         lohi = widemul(reinterpret(Int64, u0), v1)
         hilo = widemul(u1, reinterpret(Int64, v0))
         t = reinterpret(UInt128, hilo) + (lolo >>> 64)
-        w1 = reinterpret(UInt128, lohi) + (t & 0xffffffffffffffff)
-        return Int128(lolo & 0xffffffffffffffff) + reinterpret(Int128, w1) << 64
+        w1 = reinterpret(UInt128, lohi) + bitand(t, 0xffffffffffffffff)
+        return Int128(bitand(lolo, 0xffffffffffffffff)) + reinterpret(Int128, w1) << 64
     end
 
     function *(u::UInt128, v::UInt128)
@@ -737,8 +737,8 @@ if Core.sizeof(Int) == 4
         lohi = widemul(u0, v1)
         hilo = widemul(u1, v0)
         t = hilo + (lolo >>> 64)
-        w1 = lohi + (t & 0xffffffffffffffff)
-        return (lolo & 0xffffffffffffffff) + UInt128(w1) << 64
+        w1 = lohi + bitand(t, 0xffffffffffffffff)
+        return bitand(lolo, 0xffffffffffffffff) + UInt128(w1) << 64
     end
 
     function div(x::Int128, y::Int128)
