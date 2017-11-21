@@ -136,8 +136,8 @@ Language changes
     backslashes and the end of the literal while 2n+1 backslashes followed by a quote encodes n
     backslashes followed by a quote character ([#22926]).
 
-  * `readdir()` output is now guaranteed to be sorted on any OS. The keyword `sort` allows to
-    optionally turn off explicit sorting ([#24626]).
+  * `readdir()` output is now guaranteed to be sorted on any OS. A new `sort` keyword argument can
+    be used to disable explicit sorting ([#24626]).
 
 Breaking changes
 ----------------
