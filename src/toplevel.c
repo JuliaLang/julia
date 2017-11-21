@@ -288,9 +288,11 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
 // - later, it refers to either old Base or new Base
 JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
 {
-    while (m != m->parent) {
+    for (;;) {
         if (m->istopmod)
             return m;
+        if (m == m->parent)
+            break;
         m = m->parent;
     }
     return jl_top_module;
