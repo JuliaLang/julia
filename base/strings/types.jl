@@ -47,6 +47,7 @@ function SubString(s::SubString, i::Int, j::Int)
     j <= endof(s) || throw(BoundsError(s, j))
     SubString(s.string, s.offset + i, s.offset + j)
 end
+SubString{T}(s::T, i::Int, j::Int) where {T<:SubString} = SubString(s, i, j)
 
 SubString(s::AbstractString) = SubString(s, 1, endof(s))
 SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, endof(s))
