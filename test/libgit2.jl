@@ -1700,31 +1700,29 @@ mktempdir() do dir
             # In order to use the "store" credential helper `git` needs to be installed and
             # on the path.
             if GIT_INSTALLED
-                config_path = joinpath(dir, config_file)
                 credential_path = joinpath(dir, ".git-credentials")
-
-                isfile(config_path) && rm(config_path)
                 isfile(credential_path) && rm(credential_path)
 
-                LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
-                    @test isempty(LibGit2.get(cfg, "credential.helper", ""))
+                # Requires `git` to be installed and available on the path.
+                helper = parse(LibGit2.GitCredentialHelper, "store")
 
-                    helper = parse(LibGit2.GitCredentialHelper, "store")  # Requires `git`
-                    LibGit2.set!(cfg, "credential.helper", "store --file $credential_path")
+                # Set HOME to control where the .git-credentials file is written.
+                # Note: In Cygwin environments `git` will use HOME instead of USERPROFILE.
+                # Setting both environment variables ensures home was overridden.
+                withenv("HOME" => dir, "USERPROFILE" => dir) do
+                    query = LibGit2.GitCredential("https", "mygithost")
+                    filled = LibGit2.GitCredential("https", "mygithost", nothing, "bob", "s3cre7")
 
-                    # Set HOME to control where .git-credentials file is written.
-                    withenv(HOME => dir) do
-                        query = LibGit2.GitCredential("https", "mygithost")
-                        filled = LibGit2.GitCredential("https", "mygithost", nothing, "bob", "s3cre7")
+                    @test !isfile(credential_path)
 
-                        @test LibGit2.fill!(helper, deepcopy(query)) == query
+                    @test LibGit2.fill!(helper, deepcopy(query)) == query
 
-                        LibGit2.approve(helper, filled)
-                        @test LibGit2.fill!(helper, deepcopy(query)) == filled
+                    LibGit2.approve(helper, filled)
+                    @test isfile(credential_path)
+                    @test LibGit2.fill!(helper, deepcopy(query)) == filled
 
-                        LibGit2.reject(helper, filled)
-                        @test LibGit2.fill!(helper, deepcopy(query)) == query
-                    end
+                    LibGit2.reject(helper, filled)
+                    @test LibGit2.fill!(helper, deepcopy(query)) == query
                 end
             end
         end
@@ -1733,53 +1731,50 @@ mktempdir() do dir
             # In order to use the "store" credential helper `git` needs to be installed and
             # on the path.
             if GIT_INSTALLED
-                config_path = joinpath(dir, config_file)
                 credential_path = joinpath(dir, ".git-credentials")
-
-                isfile(config_path) && rm(config_path)
                 isfile(credential_path) && rm(credential_path)
 
-                LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
-                    @test isempty(LibGit2.get(cfg, "credential.helper", ""))
+                # Requires `git` to be installed and available on the path.
+                helper = parse(LibGit2.GitCredentialHelper, "store")
 
-                    helper = parse(LibGit2.GitCredentialHelper, "store")  # Requires `git`
-                    LibGit2.set!(cfg, "credential.helper", "store --file $credential_path")
-                    LibGit2.set!(cfg, "credential.useHttpPath", "true")
+                # Set HOME to control where the .git-credentials file is written.
+                # Note: In Cygwin environments `git` will use HOME instead of USERPROFILE.
+                # Setting both environment variables ensures home was overridden.
+                withenv("HOME" => dir, "USERPROFILE" => dir) do
+                    query = LibGit2.GitCredential("https", "mygithost")
+                    query_a = LibGit2.GitCredential("https", "mygithost", "a")
+                    query_b = LibGit2.GitCredential("https", "mygithost", "b")
 
-                    # Set HOME to control where .git-credentials file is written.
-                    withenv(HOME => dir) do
-                        query = LibGit2.GitCredential("https", "mygithost")
-                        query_a = LibGit2.GitCredential("https", "mygithost", "a")
-                        query_b = LibGit2.GitCredential("https", "mygithost", "b")
+                    filled_a = LibGit2.GitCredential("https", "mygithost", "a", "alice", "1234")
+                    filled_b = LibGit2.GitCredential("https", "mygithost", "b", "bob", "s3cre7")
 
-                        filled_a = LibGit2.GitCredential("https", "mygithost", "a", "alice", "1234")
-                        filled_b = LibGit2.GitCredential("https", "mygithost", "b", "bob", "s3cre7")
-
-                        function without_path(cred)
-                            c = deepcopy(cred)
-                            c.path = Nullable()
-                            c
-                        end
-
-                        @test LibGit2.fill!(helper, deepcopy(query)) == query
-                        @test LibGit2.fill!(helper, deepcopy(query_a)) == query_a
-                        @test LibGit2.fill!(helper, deepcopy(query_b)) == query_b
-
-                        LibGit2.approve(helper, filled_a)
-                        @test LibGit2.fill!(helper, deepcopy(query)) == without_path(filled_a)
-                        @test LibGit2.fill!(helper, deepcopy(query_a)) == filled_a
-                        @test LibGit2.fill!(helper, deepcopy(query_b)) == query_b
-
-                        LibGit2.approve(helper, filled_b)
-                        @test LibGit2.fill!(helper, deepcopy(query)) == without_path(filled_b)
-                        @test LibGit2.fill!(helper, deepcopy(query_a)) == filled_a
-                        @test LibGit2.fill!(helper, deepcopy(query_b)) == filled_b
-
-                        LibGit2.reject(helper, filled_b)
-                        @test LibGit2.fill!(helper, deepcopy(query)) == without_path(filled_a)
-                        @test LibGit2.fill!(helper, deepcopy(query_a)) == filled_a
-                        @test LibGit2.fill!(helper, deepcopy(query_b)) == query_b
+                    function without_path(cred)
+                        c = deepcopy(cred)
+                        c.path = Nullable()
+                        c
                     end
+
+                    @test !isfile(credential_path)
+
+                    @test LibGit2.fill!(helper, deepcopy(query)) == query
+                    @test LibGit2.fill!(helper, deepcopy(query_a)) == query_a
+                    @test LibGit2.fill!(helper, deepcopy(query_b)) == query_b
+
+                    LibGit2.approve(helper, filled_a)
+                    @test isfile(credential_path)
+                    @test LibGit2.fill!(helper, deepcopy(query)) == without_path(filled_a)
+                    @test LibGit2.fill!(helper, deepcopy(query_a)) == filled_a
+                    @test LibGit2.fill!(helper, deepcopy(query_b)) == query_b
+
+                    LibGit2.approve(helper, filled_b)
+                    @test LibGit2.fill!(helper, deepcopy(query)) == without_path(filled_b)
+                    @test LibGit2.fill!(helper, deepcopy(query_a)) == filled_a
+                    @test LibGit2.fill!(helper, deepcopy(query_b)) == filled_b
+
+                    LibGit2.reject(helper, filled_b)
+                    @test LibGit2.fill!(helper, deepcopy(query)) == without_path(filled_a)
+                    @test LibGit2.fill!(helper, deepcopy(query_a)) == filled_a
+                    @test LibGit2.fill!(helper, deepcopy(query_b)) == query_b
                 end
             end
         end
