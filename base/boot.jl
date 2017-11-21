@@ -123,7 +123,7 @@ export
     SimpleVector, AbstractArray, DenseArray, NamedTuple,
     # special objects
     Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
-    Module, Symbol, Task, Array, WeakRef, VecElement,
+    Module, Symbol, Task, Array, junk, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,
@@ -350,25 +350,44 @@ unsafe_convert(::Type{T}, x::T) where {T} = x
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 
-# primitive array constructors
-Array{T,N}(d::NTuple{N,Int}) where {T,N} =
-    ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
-Array{T,1}(d::NTuple{1,Int}) where {T} = Array{T,1}(getfield(d,1))
-Array{T,2}(d::NTuple{2,Int}) where {T} = Array{T,2}(getfield(d,1), getfield(d,2))
-Array{T,3}(d::NTuple{3,Int}) where {T} = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
-Array{T,N}(d::Vararg{Int,N}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
-Array{T,1}(m::Int) where {T} = ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
-Array{T,2}(m::Int, n::Int) where {T} =
+## primitive Array constructors
+function junk end
+# type and dimensionality specified, accepting dims as series of Ints
+Array{T,1}(::typeof(junk), m::Int) where {T} =
+    ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
+Array{T,2}(::typeof(junk), m::Int, n::Int) where {T} =
     ccall(:jl_alloc_array_2d, Array{T,2}, (Any, Int, Int), Array{T,2}, m, n)
-Array{T,3}(m::Int, n::Int, o::Int) where {T} =
+Array{T,3}(::typeof(junk), m::Int, n::Int, o::Int) where {T} =
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any, Int, Int, Int), Array{T,3}, m, n, o)
+Array{T,N}(::typeof(junk), d::Vararg{Int,N}) where {T,N} =
+    ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+# type and dimensionality specified, accepting dims as tuples of Ints
+Array{T,1}(::typeof(junk), d::NTuple{1,Int}) where {T} = Array{T,1}(junk, getfield(d,1))
+Array{T,2}(::typeof(junk), d::NTuple{2,Int}) where {T} = Array{T,2}(junk, getfield(d,1), getfield(d,2))
+Array{T,3}(::typeof(junk), d::NTuple{3,Int}) where {T} = Array{T,3}(junk, getfield(d,1), getfield(d,2), getfield(d,3))
+Array{T,N}(::typeof(junk), d::NTuple{N,Int}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+# type but not dimensionality specified
+Array{T}(::typeof(junk), m::Int) where {T} = Array{T,1}(junk, m)
+Array{T}(::typeof(junk), m::Int, n::Int) where {T} = Array{T,2}(junk, m, n)
+Array{T}(::typeof(junk), m::Int, n::Int, o::Int) where {T} = Array{T,3}(junk, m, n, o)
+Array{T}(::typeof(junk), d::NTuple{N,Int}) where {T,N} = Array{T,N}(junk, d)
+# empty vector constructor
+Array{T,1}() where {T} = Array{T,1}(junk, 0)
 
-Array{T}(d::NTuple{N,Int}) where {T,N} = Array{T,N}(d)
-Array{T}(m::Int) where {T} = Array{T,1}(m)
-Array{T}(m::Int, n::Int) where {T} = Array{T,2}(m, n)
-Array{T}(m::Int, n::Int, o::Int) where {T} = Array{T,3}(m, n, o)
+## preexisting Array constructors, i.e. without junk, to deprecate
+# type and dimensionality specified, accepting dims as series of Ints
+Array{T,1}(m::Int) where {T} = Array{T,1}(junk, m)
+Array{T,2}(m::Int, n::Int) where {T} = Array{T,2}(junk, m, n)
+Array{T,3}(m::Int, n::Int, o::Int) where {T} = Array{T,3}(junk, m, n, o)
+Array{T,N}(d::Vararg{Int,N}) where {T,N} = Array{T,N}(junk, d)
+# type and dimensionality specified, accepting dims as tuples of Ints
+Array{T,N}(d::NTuple{N,Int}) where {T,N} = Array{T,N}(junk, d)
+# type but not dimensionality specified
+Array{T}(m::Int) where {T} = Array{T}(junk, m)
+Array{T}(m::Int, n::Int) where {T} = Array{T}(junk, m, n)
+Array{T}(m::Int, n::Int, o::Int) where {T} = Array{T}(junk, m, n, o)
+Array{T}(d::NTuple{N,Int}) where {T,N} = Array{T}(junk, d)
 
-Array{T,1}() where {T} = Array{T,1}(0)
 
 # primitive Symbol constructors
 function Symbol(s::String)
