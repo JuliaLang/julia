@@ -278,7 +278,7 @@ mutable struct TCPSocket <: LibuvStream
                 ReentrantLock(),
                 DEFAULT_READ_BUFFER_SZ)
         associate_julia_struct(tcp.handle, tcp)
-        finalizer(tcp, uvfinalize)
+        finalizer(uvfinalize, tcp)
         return tcp
     end
 end
@@ -308,7 +308,7 @@ mutable struct TCPServer <: LibuvServer
             Condition(),
             Condition())
         associate_julia_struct(tcp.handle, tcp)
-        finalizer(tcp, uvfinalize)
+        finalizer(uvfinalize, tcp)
         return tcp
     end
 end
@@ -370,7 +370,7 @@ mutable struct UDPSocket <: LibuvStream
             Condition(),
             Condition())
         associate_julia_struct(udp.handle, udp)
-        finalizer(udp, uvfinalize)
+        finalizer(uvfinalize, udp)
         return udp
     end
 end

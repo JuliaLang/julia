@@ -1019,7 +1019,7 @@
 (define (expand-function-def e)   ;; handle function definitions
   (define (just-arglist? ex)
     (and (pair? ex)
-         (or (memq (car ex) '(tuple block))
+         (or (memq (car ex) '(tuple block ...))
              (and (eq? (car ex) 'where)
                   (just-arglist? (cadr ex))))))
   (let ((name (cadr e)))

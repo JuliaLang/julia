@@ -417,7 +417,7 @@ index_ndims() = ()
 
 # combined dimensionality of all indices
 # rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
-@inline index_dimsum(i1, I...) = (index_dimsum(I...)...)
+@inline index_dimsum(i1, I...) = (index_dimsum(I...)...,)
 @inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
 @inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)
 @inline function index_dimsum(::AbstractArray{<:Any,N}, I...) where N

@@ -298,8 +298,12 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
  -16.0  -43.0   98.0
 
 julia> C = cholfact(A)
-Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
-[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]
+Base.LinAlg.Cholesky{Float64,Array{Float64,2}}
+U factor:
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 2.0  6.0  -8.0
+  ⋅   1.0   5.0
+  ⋅    ⋅    3.0
 
 julia> C[:U]
 3×3 UpperTriangular{Float64,Array{Float64,2}}:
@@ -399,13 +403,20 @@ end
 
 issuccess(C::Cholesky) = C.info == 0
 
-function show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix})
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
     if issuccess(C)
-        println(io, "$(typeof(C)) with factor:")
-        show(io, C[:UL])
+        println(io, summary(C), "\n$(C.uplo) factor:")
+        show(io, mime, C[:UL])
     else
         print(io, "Failed factorization of type $(typeof(C))")
     end
+end
+
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any,<:AbstractMatrix})
+    println(io, summary(C), "\n$(C.uplo) factor with rank $(rank(C)):")
+    show(io, mime, C.uplo == 'U' ? C[:U] : C[:L])
+    println(io, "\npermutation:")
+    show(io, mime, C[:p])
 end
 
 A_ldiv_B!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =

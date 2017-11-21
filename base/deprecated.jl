@@ -1783,6 +1783,12 @@ function spdiagm(x, d, m::Integer, n::Integer)
     return sparse(I, J, V, m, n)
 end
 
+# deprecate zeros(D::Diagonal[, opts...])
+@deprecate zeros(D::Diagonal)                         Diagonal(fill!(similar(D.diag), 0))
+@deprecate zeros(D::Diagonal, ::Type{T}) where {T}    Diagonal(fill!(similar(D.diag, T), 0))
+@deprecate zeros(D::Diagonal, ::Type{T}, dims::Dims) where {T}          fill!(similar(D, T, dims), 0)
+@deprecate zeros(D::Diagonal, ::Type{T}, dims::Integer...) where {T}    fill!(similar(D, T, dims), 0)
+
 # PR #23690
 # `SSHCredentials` and `UserPasswordCredentials` constructors using `prompt_if_incorrect`
 # are deprecated in base/libgit2/types.jl.
@@ -2193,6 +2199,17 @@ end
 @eval LinAlg begin
     @deprecate chol!(x::Number, uplo) chol(x) false
 end
+
+
+# issue #16307
+@deprecate finalizer(o, f::Function) finalizer(f, o)
+# This misses other callables but they are very rare in the wild
+@deprecate finalizer(o, f::Ptr{Void}) finalizer(f, o)
+
+# Avoid ambiguity, can remove when deprecations are removed:
+# This is almost certainly going to be a silent failure for code that is not updated.
+finalizer(f::Ptr{Void}, o::Ptr{Void}) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
+finalizer(f::Ptr{Void}, o::Function) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
 
 # END 0.7 deprecations
 

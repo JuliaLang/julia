@@ -139,6 +139,8 @@ Language changes
   * `readdir()` output is now guaranteed to be sorted on any OS. A new `sort` keyword argument can
     be used to disable explicit sorting ([#24626]).
 
+  * The syntax `(x...)` for constructing a tuple is deprecated; use `(x...,)` instead (#24452).
+
 Breaking changes
 ----------------
 
@@ -276,7 +278,13 @@ This section lists changes that do not have deprecation warnings.
   * The return type of `reinterpret` has changed to `ReinterpretArray`. `reinterpret` on sparse
     arrays has been discontinued.
 
-  * `Base.find_in_path` is now `Base.find_package` or `Base.find_source_file` ([#24320])
+  * `Base.find_in_path` is now `Base.find_package` or `Base.find_source_file` ([#24320]).
+
+  * `finalizer` now takes functions or pointers as its first argument, and the object being
+    finalized as its second (rather than the reverse). For the majority of use cases
+    deprecation warnings will be triggered. However, deprecation warnings will not trigger where
+    (1) the callable argument is not a subtype of `Function`; or (2) both arguments are
+    `Function`s or `Ptr{Void}`s ([#24605]).
 
   * The `kill` function now throws errors on user error (e.g. on permission
     errors), but returns successfully if the process had previously exited.
@@ -403,6 +411,8 @@ Deprecated or removed
 
   * `eye` has been deprecated in favor of `I` and `Matrix` constructors. Please see the
     deprecation warnings for replacement details ([#24438]).
+
+  * `zeros(D::Diagonal[, opts...])` has been deprecated ([#24654]).
 
   * Using Bool values directly as indices is now deprecated and will be an error in the future. Convert
     them to `Int` before indexing if you intend to access index `1` for `true` and `0` for `false`.

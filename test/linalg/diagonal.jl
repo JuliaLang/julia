@@ -107,7 +107,7 @@ srand(1)
                 target = scale!(Uc, inv.(D.diag))
                 @test A_rdiv_B!(Uc, D) ≈ target atol=atol_three
                 @test_throws DimensionMismatch A_rdiv_B!(Matrix{elty}(I, n-1, n-1), D)
-                @test_throws SingularException A_rdiv_B!(Uc, zeros(D))
+                @test_throws SingularException A_rdiv_B!(Uc, Diagonal(fill!(similar(D.diag), 0)))
                 @test A_rdiv_Bt!(Uc, D) ≈ target atol=atol_three
                 @test A_rdiv_Bc!(Uc, conj(D)) ≈ target atol=atol_three
                 @test A_ldiv_B!(D, Matrix{eltype(D)}(I, size(D))) ≈ D \ Matrix{eltype(D)}(I, size(D)) atol=atol_three
@@ -188,11 +188,11 @@ srand(1)
     @testset "triu/tril" begin
         @test istriu(D)
         @test istril(D)
-        @test triu(D,1)  == zeros(D)
+        @test iszero(triu(D,1))
         @test triu(D,0)  == D
         @test triu(D,-1) == D
         @test tril(D,1)  == D
-        @test tril(D,-1) == zeros(D)
+        @test iszero(tril(D,-1))
         @test tril(D,0)  == D
         @test_throws ArgumentError tril(D, -n - 2)
         @test_throws ArgumentError tril(D, n)

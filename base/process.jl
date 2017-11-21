@@ -328,7 +328,7 @@ mutable struct Process <: AbstractPipe
                    typemin(fieldtype(Process, :exitcode)),
                    typemin(fieldtype(Process, :termsignal)),
                    Condition(), Condition())
-        finalizer(this, uvfinalize)
+        finalizer(uvfinalize, this)
         return this
     end
 end

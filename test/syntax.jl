@@ -248,6 +248,12 @@ end
 @test_throws ParseError Meta.parse("'\\A\"'")
 @test Meta.parse("'\"'") == Meta.parse("'\\\"'") == '"' == "\""[1] == '\42'
 
+# issue #24558
+@test_throws ParseError Meta.parse("'\\xff'")
+@test_throws ParseError Meta.parse("'\\x80'")
+@test_throws ParseError Meta.parse("'ab'")
+@test '\u2200' == "\u2200"[1]
+
 @test_throws ParseError Meta.parse("f(2x for x=1:10, y")
 
 # issue #15223
@@ -1148,6 +1154,11 @@ let xs = [:(1+2), :(3+4), :(5+6)]
     @test ex.args[2].args[1].args[2].args[2] == :(3 + 4)
     ex2 = eval(ex)
     @test ex2.args[2:end] == [3,7,11]
+end
+
+let x = [3,2,1]
+    @test :( $(x...,) ) == (3, 2, 1)
+    @test :( $(x...), ) == Expr(:tuple, 3, 2, 1)
 end
 
 # issue #23519

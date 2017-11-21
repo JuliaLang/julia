@@ -19,7 +19,7 @@ mutable struct GitCredential
             username::Nullable{<:AbstractString},
             password::Nullable{<:AbstractString})
         c = new(protocol, host, path, username, password, true)
-        finalizer(c, securezero!)
+        finalizer(securezero!, c)
         return c
     end
 end
@@ -173,7 +173,7 @@ function Base.parse(::Type{GitCredentialHelper}, helper::AbstractString)
         cmd_str = "git credential-$helper"
     end
 
-    GitCredentialHelper(`$(Base.shell_split(cmd_str)...)`)
+    GitCredentialHelper(`$(Base.shell_split(cmd_str))`)
 end
 
 function Base.:(==)(a::GitCredentialHelper, b::GitCredentialHelper)

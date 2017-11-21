@@ -91,6 +91,14 @@ end
     end
 end
 
+let x = Dict(3=>3, 5=>5, 8=>8, 6=>6)
+    pop!(x, 5)
+    for k in keys(x)
+        Dict{Int,Int}(x)
+        @test k in [3, 8, 6]
+    end
+end
+
 let z = Dict()
     get_KeyError = false
     try
@@ -613,9 +621,9 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     local x = 0
     local y = 0
     local z = 0
-    finalizer(A, a->(x+=1))
-    finalizer(B, b->(y+=1))
-    finalizer(C, c->(z+=1))
+    finalizer(a->(x+=1), A)
+    finalizer(b->(y+=1), B)
+    finalizer(c->(z+=1), C)
 
     # construction
     wkd = WeakKeyDict()

@@ -177,6 +177,8 @@
 (define whitespace-newline #f)
 ; enable parsing `where` with high precedence
 (define where-enabled #t)
+; allow (x...), parsed as (... x). otherwise a deprecation warning is given (#24452)
+(define accept-dots-without-comma #f)
 
 (define current-filename 'none)
 
@@ -601,7 +603,9 @@
                   (if *deperror* "ERROR:" "WARNING:") " deprecated syntax \"" what "\""
                   (if (or (not s) (eq? current-filename 'none))
                       ""
-                      (string " at " current-filename ":" (input-port-line (if (port? s) s (ts:port s)))))
+                      (string " at " current-filename ":" (if (number? s)
+                                                              s
+                                                              (input-port-line (if (port? s) s (ts:port s))))))
                   "."
                   (if (equal? instead "")
                       ""
@@ -1044,7 +1048,8 @@
           ((not un)
            (error (string "\"" op "\" is not a unary operator")))
           (else
-           (let* ((arg  (parse-unary s))
+           (let* ((arg  (with-bindings ((accept-dots-without-comma #t))
+                                       (parse-unary s)))
                   (args (if (and (pair? arg) (eq? (car arg) 'tuple))
                             (cons op (cdr arg))
                             (list op arg))))
@@ -1131,11 +1136,14 @@
                              (or (closing-token? next) (newline? next))))
                       op)
                      ((memq op '(& |::|))  (list op (parse-where s parse-call)))
-                     (else                 (list op (parse-unary-prefix s)))))
+                     (else                 (list op (with-bindings
+                                                     ((accept-dots-without-comma #t))
+                                                     (parse-unary-prefix s))))))
         (parse-atom s))))
 
-(define (parse-def s is-func)
-  (let* ((ex (parse-unary-prefix s))
+(define (parse-def s is-func anon)
+  (let* ((ex  (with-bindings ((accept-dots-without-comma anon))
+                             (parse-unary-prefix s)))
          (sig (if (or (and is-func (reserved-word? ex)) (initial-reserved-word? ex))
                   (error (string "invalid name \"" ex "\""))
                   (parse-call-chain s ex #f)))
@@ -1281,6 +1289,7 @@
        (or (eq? (car sig) 'call)
            (eq? (car sig) 'tuple)
            (and paren (eq? (car sig) 'block))
+           (and paren (eq? (car sig) '...))
            (and (eq? (car sig) '|::|)
                 (pair? (cadr sig))
                 (eq? (car (cadr sig)) 'call))
@@ -1413,7 +1422,7 @@
 
        ((function macro)
         (let* ((paren (eqv? (require-token s) #\())
-               (sig   (parse-def s (not (eq? word 'macro)))))
+               (sig   (parse-def s (eq? word 'function) paren)))
           (if (and (not paren) (symbol-or-interpolate? sig))
               (begin (if (not (eq? (require-token s) 'end))
                          (error (string "expected \"end\" in definition of " word " \"" sig "\"")))
@@ -2185,25 +2194,18 @@
                    (begin (read-char (ts:port s)) firstch)
                    (let ((b (open-output-string)))
                      (let loop ((c firstch))
-                       (if (eqv? c #\')
-                           #t
-                           (begin (if (eqv? c #\")
-                                      (error "invalid character literal") ;; issue 14683
-                                      #t)
+                       (if (not (eqv? c #\'))
+                           (begin (if (eqv? c #\")   ;; issue 14683
+                                      (error "invalid character literal"))
                                   (write-char (not-eof-1 c) b)
                                   (if (eqv? c #\\)
-                                      (write-char
-                                       (not-eof-1 (read-char (ts:port s))) b))
-                                      (loop (read-char (ts:port s))))))
-                     (let ((str (unescape-string (io.tostring! b))))
-                       (if (= (length str) 1)
-                           ;; one byte, e.g. '\xff'. maybe not valid UTF-8, but we
-                           ;; want to use the raw value as a codepoint in this case.
-                           (wchar (aref str 0))
-                           (if (or (not (= (string-length str) 1))
-                                   (not (string.isutf8 str)))
-                               (error "invalid character literal")
-                               (string.char str 0))))))))
+                                      (write-char (not-eof-1 (read-char (ts:port s)))
+                                                  b))
+                                  (loop (read-char (ts:port s))))))
+                     (let ((str (tostr #f b)))
+                       (if (= (string-length str) 1)
+                           (string.char str 0)
+                           (error "invalid character literal")))))))
 
           ;; symbol/expression quote
           ((eq? t ':)
@@ -2265,10 +2267,15 @@
                       (t  (require-token s)))
                  (cond ((eqv? t #\) )
                         (take-token s)
+                        ;; value in parentheses (x)
                         (if (and (pair? ex) (eq? (car ex) '...))
-                            ;; (ex...)
-                            `(tuple ,ex)
-                            ;; value in parentheses (x)
+                            (let ((lineno (input-port-line (ts:port s))))
+                              (if (or accept-dots-without-comma (eq? (peek-token s) '->))
+                                  ex
+                                  (begin (syntax-deprecation lineno
+                                                             (string "(" (deparse (cadr ex)) "...)")
+                                                             (string "(" (deparse (cadr ex)) "...,)"))
+                                         `(tuple ,ex))))
                             ex))
                        ((eq? t 'for)
                         (expect-space-before s 'for)
