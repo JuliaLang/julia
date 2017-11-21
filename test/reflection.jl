@@ -22,7 +22,7 @@ end
 
 function test_code_reflection(freflect, f, types, tester)
     tester(freflect, f, types)
-    tester(freflect, f, (types.parameters...))
+    tester(freflect, f, (types.parameters...,))
     nothing
 end
 

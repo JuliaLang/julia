@@ -136,6 +136,8 @@ Language changes
     backslashes and the end of the literal while 2n+1 backslashes followed by a quote encodes n
     backslashes followed by a quote character ([#22926]).
 
+  * The syntax `(x...)` for constructing a tuple is deprecated; use `(x...,)` instead (#24452).
+
 Breaking changes
 ----------------
 

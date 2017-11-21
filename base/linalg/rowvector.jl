@@ -124,7 +124,7 @@ IndexStyle(::Type{<:RowVector}) = IndexLinear()
 # helper function for below
 @inline to_vec(rowvec::RowVector) = map(transpose, transpose(rowvec))
 @inline to_vec(x::Number) = x
-@inline to_vecs(rowvecs...) = (map(to_vec, rowvecs)...)
+@inline to_vecs(rowvecs...) = (map(to_vec, rowvecs)...,)
 
 # map: Preserve the RowVector by un-wrapping and re-wrapping, but note that `f`
 # expects to operate within the transposed domain, so to_vec transposes the elements

@@ -173,7 +173,7 @@ function Base.parse(::Type{GitCredentialHelper}, helper::AbstractString)
         cmd_str = "git credential-$helper"
     end
 
-    GitCredentialHelper(`$(Base.shell_split(cmd_str)...)`)
+    GitCredentialHelper(`$(Base.shell_split(cmd_str))`)
 end
 
 function Base.:(==)(a::GitCredentialHelper, b::GitCredentialHelper)
