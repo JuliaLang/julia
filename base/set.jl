@@ -469,11 +469,11 @@ end
 
 const hashs_seed = UInt === UInt64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
 function hash(s::Set, h::UInt)
-    h = hash(hashs_seed, h)
+    hv = hashs_seed
     for x in s
-        h ⊻= hash(x)
+        hv ⊻= hash(x)
     end
-    return h
+    hash(hv, h)
 end
 
 convert(::Type{Set{T}}, s::Set{T}) where {T} = s
