@@ -2270,7 +2270,9 @@
                         ;; value in parentheses (x)
                         (if (and (pair? ex) (eq? (car ex) '...))
                             (let ((lineno (input-port-line (ts:port s))))
-                              (if (or accept-dots-without-comma (eq? (peek-token s) '->))
+                              (if (or accept-dots-without-comma (eq? (with-bindings ((whitespace-newline #f))
+                                                                                    (peek-token s))
+                                                                     '->))
                                   ex
                                   (begin (syntax-deprecation lineno
                                                              (string "(" (deparse (cadr ex)) "...)")
