@@ -766,3 +766,21 @@ end
     @test edit!(edit_undo!) == ""
     @test edit!(edit_undo!) == "" # nothing more to undo (this "beeps")
 end
+
+@testset "edit_transpose_lines_{up,down}!" begin
+    local buf
+    buf = IOBuffer()
+    write(buf, "l1\nl2\nl3")
+    seek(buf, 0)
+    @test LineEdit.edit_transpose_lines_up!(buf) == false
+    @test transform!(LineEdit.edit_transpose_lines_up!, buf) == ("l1\nl2\nl3", 0, 0)
+    @test transform!(LineEdit.edit_transpose_lines_down!, buf) == ("l2\nl1\nl3", 3, 0)
+    @test LineEdit.edit_transpose_lines_down!(buf) == true
+    @test String(take!(copy(buf))) == "l2\nl3\nl1"
+    @test LineEdit.edit_transpose_lines_down!(buf) == false
+    @test String(take!(copy(buf))) == "l2\nl3\nl1" # no change
+    LineEdit.edit_move_right(buf)
+    @test transform!(LineEdit.edit_transpose_lines_up!, buf) == ("l2\nl1\nl3", 4, 0)
+    LineEdit.edit_move_right(buf)
+    @test transform!(LineEdit.edit_transpose_lines_up!, buf) == ("l1\nl2\nl3", 2, 0)
+end

@@ -532,6 +532,51 @@ function edit_move_down(s)
     changed
 end
 
+# swap current line with line above
+function edit_transpose_lines_up!(buf::IOBuffer)
+    b2 = beginofline(buf)
+    b2 == 0 && return false
+    b1 = beginofline(buf, b2-1)
+    # we do in this order so that the buffer's position is maintained in current line
+    line1 = edit_splice!(buf, b1 => b2) # delete whole previous line
+    line1 = '\n'*line1[1:end-1] # don't include the final '\n'
+    pos = position(buf) # register pos in case pos is at the end of line
+    b = endofline(buf)
+    edit_splice!(buf, b => b, line1)
+    seek(buf, pos)
+    true
+end
+
+# swap current line with line below
+function edit_transpose_lines_down!(buf::IOBuffer)
+    e1 = endofline(buf)
+    e1 == buf.size && return false
+    e2 = endofline(buf, e1+1)
+    line2 = edit_splice!(buf, e1 => e2) # delete whole next line
+    line2 = line2[2:end]*'\n' # don't include leading '\n'
+    b = beginofline(buf)
+    edit_splice!(buf, b => b, line2)
+    true
+end
+
+
+edit_transpose_lines_up!(s::MIState) =
+    if edit_transpose_lines_up!(buffer(s))
+        refresh_line(s)
+        :edit_transpose_lines_up!
+    else
+        # beeping can be a bit verbose here
+        :ignore
+    end
+
+edit_transpose_lines_down!(s::MIState) =
+    if edit_transpose_lines_down!(buffer(s))
+        refresh_line(s)
+        :edit_transpose_lines_down!
+    else
+        :ignore
+    end
+
 # splice! for IOBuffer: convert from close-open region to index, update the size,
 # and keep the cursor position and mark stable with the text
 # returns the removed portion as a String
@@ -1739,6 +1784,10 @@ AnyDict(
     "^F" => (s,o...)->edit_move_right(s),
     "^P" => (s,o...)->edit_move_up(s),
     "^N" => (s,o...)->edit_move_down(s),
+    # Meta-Up
+    "\e[1;3A" => (s,o...) -> edit_transpose_lines_up!(s),
+    # Meta-Down
+    "\e[1;3B" => (s,o...) -> edit_transpose_lines_down!(s),
     # Meta B
     "\eb" => (s,o...)->edit_move_word_left(s),
     # Meta F
