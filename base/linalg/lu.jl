@@ -130,9 +130,15 @@ julia> A = [4 3; 6 3]
  6  3
 
 julia> F = lufact(A)
-Base.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:
-[1.0 0.0; 1.5 1.0]
-[4.0 3.0; 0.0 -1.5]
+Base.LinAlg.LU{Float64,Array{Float64,2}}
+L factor:
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 1.5  1.0
+U factor:
+2×2 Array{Float64,2}:
+ 4.0   3.0
+ 0.0  -1.5
 
 julia> F[:L] * F[:U] == A[F[:p], :]
 true
@@ -232,12 +238,12 @@ end
 
 issuccess(F::LU) = F.info == 0
 
-function show(io::IO, F::LU)
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LU)
     if issuccess(F)
-        println(io, "$(typeof(F)) with factors L and U:")
-        show(io, F[:L])
-        println(io)
-        show(io, F[:U])
+        println(io, summary(F), "\nL factor:")
+        show(io, mime, F[:L])
+        println(io, "\nU factor:")
+        show(io, mime, F[:U])
     else
         print(io, "Failed factorization of type $(typeof(F))")
     end
