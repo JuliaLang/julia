@@ -439,9 +439,6 @@ include("statistics.jl")
 # missing values
 include("missing.jl")
 
-# libgit2 support
-include("libgit2/libgit2.jl")
-
 # worker threads
 include("threadcall.jl")
 
@@ -521,6 +518,7 @@ Base.require(Base, :SparseArrays)
 Base.require(Base, :SuiteSparse)
 Base.require(Base, :Test)
 Base.require(Base, :Unicode)
+Base.require(Base, :LibGit2)
 Base.require(Base, :Pkg)
 Base.require(Base, :REPL)
 Base.require(Base, :Markdown)
@@ -564,6 +562,7 @@ Base.require(Base, :Markdown)
     @deprecate_binding Terminals       root_module(Base, :REPL).Terminals       true ", use `REPL.Terminals` instead"
 
     @deprecate_binding Pkg root_module(Base, :Pkg) true ", run `using Pkg` instead"
+    @deprecate_binding LibGit2 root_module(Base, :LibGit2) true ", run `import LibGit2` instead"
 
     @eval @deprecate_binding $(Symbol("@doc_str")) getfield(root_module(Base, :Markdown), Symbol("@doc_str")) true ", use `Markdown` instead"
 

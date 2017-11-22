@@ -1,14 +1,108 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+module LibGit2Tests
 
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath(@__DIR__, "TestHelpers.jl"))
-import .Main.TestHelpers: challenge_prompt
-
+import LibGit2
+using Test
 using Random, Serialization
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
+import .Main.TestHelpers: with_fake_pty
+
+function challenge_prompt(code::Expr, challenges; timeout::Integer=10, debug::Bool=true)
+    output_file = tempname()
+    wrapped_code = quote
+        using Serialization
+        result = let
+            $code
+        end
+        open($output_file, "w") do fp
+            serialize(fp, result)
+        end
+    end
+    torun = "import LibGit2; $wrapped_code"
+    cmd = `$(Base.julia_cmd()) --startup-file=no -e $torun`
+    try
+        challenge_prompt(cmd, challenges, timeout=timeout, debug=debug)
+        return open(output_file, "r") do fp
+            deserialize(fp)
+        end
+    finally
+        isfile(output_file) && rm(output_file)
+    end
+    return nothing
+end
+
+function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool=true)
+    function format_output(output)
+        !debug && return ""
+        str = read(seekstart(output), String)
+        isempty(str) && return ""
+        "Process output found:\n\"\"\"\n$str\n\"\"\""
+    end
+    out = IOBuffer()
+    with_fake_pty() do slave, master
+        p = spawn(detach(cmd), slave, slave, slave)
+
+        # Kill the process if it takes too long. Typically occurs when process is waiting
+        # for input.
+        timer = Channel{Symbol}(1)
+        @async begin
+            waited = 0
+            while waited < timeout && process_running(p)
+                sleep(1)
+                waited += 1
+            end
+
+            if process_running(p)
+                kill(p)
+                put!(timer, :timeout)
+            elseif success(p)
+                put!(timer, :success)
+            else
+                put!(timer, :failure)
+            end
+
+            # SIGKILL stubborn processes
+            if process_running(p)
+                sleep(3)
+                process_running(p) && kill(p, Base.SIGKILL)
+            end
+
+            close(master)
+        end
+
+        for (challenge, response) in challenges
+            write(out, readuntil(master, challenge, keep=true))
+            if !isopen(master)
+                error("Could not locate challenge: \"$challenge\". ",
+                      format_output(out))
+            end
+            write(master, response)
+        end
+
+        # Capture output from process until `master` is closed
+        while !eof(master)
+            write(out, readavailable(master))
+        end
+
+        status = fetch(timer)
+        if status != :success
+            if status == :timeout
+                error("Process timed out possibly waiting for a response. ",
+                      format_output(out))
+            else
+                error("Failed process. ", format_output(out), "\n", p)
+            end
+        end
+    end
+    nothing
+end
 
 const LIBGIT2_MIN_VER = v"0.23.0"
 const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
 
-const KEY_DIR = joinpath(@__DIR__, "libgit2")
+const KEY_DIR = joinpath(@__DIR__, "keys")
 const HOME = Sys.iswindows() ? "USERPROFILE" : "HOME"  # Environment variable name for home
 const GIT_INSTALLED = try
     success(`git --version`)
@@ -932,7 +1026,7 @@ mktempdir() do dir
                 tree_entry = subtree[1]
                 @test LibGit2.filemode(tree_entry) == 33188
                 te_str = sprint(show, tree_entry)
-                ref_te_str = "GitTreeEntry:\nEntry name: testfile\nEntry type: Base.LibGit2.GitBlob\nEntry OID: "
+                ref_te_str = "GitTreeEntry:\nEntry name: testfile\nEntry type: LibGit2.GitBlob\nEntry OID: "
                 ref_te_str *= "$(LibGit2.entryid(tree_entry))\n"
                 @test te_str == ref_te_str
                 blob = LibGit2.GitBlob(tree_entry)
@@ -1101,7 +1195,7 @@ mktempdir() do dir
             # switch back, try to cherrypick
             # from branch/cherry_a
             LibGit2.branch!(repo, "master")
-            LibGit2.cherrypick(repo, cmt, options=Base.LibGit2.CherrypickOptions())
+            LibGit2.cherrypick(repo, cmt, options=LibGit2.CherrypickOptions())
             cmt_oid2 = LibGit2.commit(repo, "add file1")
             @test isempty(LibGit2.diff_files(repo, "master", "branch/cherry_a"))
         end
@@ -2616,6 +2710,7 @@ mktempdir() do dir
                 repo_dir = joinpath(root, "dest")
                 code = """
                     using Serialization
+                    import LibGit2
                     dest_dir = "$repo_dir"
                     open("$errfile", "w+") do f
                         try
@@ -2661,3 +2756,11 @@ mktempdir() do dir
         end
     end
 end
+
+let cache = LibGit2.CachedCredentials()
+    get!(cache, "foo", LibGit2.SSHCredential("", "bar"))
+    Base.securezero!(cache)
+    @test cache["foo"].pass == "\0\0\0"
+end
+
+end # module

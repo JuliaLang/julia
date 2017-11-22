@@ -246,19 +246,6 @@ DEPRECATED: use @__MODULE__ instead
 end
 export current_module
 
-# PR #22062
-function LibGit2.set_remote_url(repo::LibGit2.GitRepo, url::AbstractString; remote::AbstractString="origin")
-    Base.depwarn(string(
-        "`LibGit2.set_remote_url(repo, url; remote=remote)` is deprecated, use ",
-        "`LibGit2.set_remote_url(repo, remote, url)` instead."), :set_remote_url)
-    LibGit2.set_remote_url(repo, remote, url)
-end
-function LibGit2.set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
-    Base.depwarn(string(
-        "`LibGit2.set_remote_url(path, url; remote=remote)` is deprecated, use ",
-        "`LibGit2.set_remote_url(path, remote, url)` instead."), :set_remote_url)
-    LibGit2.set_remote_url(path, remote, url)
-end
 
 module Operators
     for op in [:!, :(!=), :(!==), :%, :&, :*, :+, :-, :/, ://, :<, :<:, :<<, :(<=),
@@ -413,16 +400,6 @@ end
 
 # issue #6466
 # `write` on non-isbits arrays is deprecated in io.jl.
-
-# PR #23092
-@eval LibGit2 begin
-    function prompt(msg::AbstractString; default::AbstractString="", password::Bool=false)
-        Base.depwarn(string(
-            "`LibGit2.prompt(msg::AbstractString; default::AbstractString=\"\", password::Bool=false)` is deprecated, use ",
-            "`result = Base.prompt(msg, default=default, password=password); result === nothing ? \"\" : result` instead."), :prompt)
-        coalesce(Base.prompt(msg, default=default, password=password), "")
-    end
-end
 
 # PR #23187
 @deprecate cpad(s, n::Integer, p=" ") rpad(lpad(s, div(n+textwidth(s), 2), p), n, p) false
@@ -602,41 +579,13 @@ import .Iterators.enumerate
 @deprecate -(a::Number, b::AbstractArray) broadcast(-, a, b)
 @deprecate -(a::AbstractArray, b::Number) broadcast(-, a, b)
 
-# PR #23640
-# when this deprecation is deleted, remove all calls to it, and replace all keywords of:
-# `payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}`
-#  with `payload::CredentialPayload` from base/libgit2/libgit2.jl
-@eval LibGit2 function deprecate_nullable_creds(f, sig, payload)
-    if isa(payload, Union{AbstractCredential, CachedCredentials, Nothing})
-        # Note: Be careful not to show the contents of the credentials as it could reveal a
-        # password.
-        if payload === nothing
-            msg = "`LibGit2.$f($sig; payload=nothing)` is deprecated, use "
-            msg *= "`LibGit2.$f($sig; payload=LibGit2.CredentialPayload())` instead."
-            p = CredentialPayload()
-        else
-            cred = payload
-            C = typeof(cred)
-            msg = "`LibGit2.$f($sig; payload=$C(...))` is deprecated, use "
-            msg *= "`LibGit2.$f($sig; payload=LibGit2.CredentialPayload($C(...)))` instead."
-            p = CredentialPayload(cred)
-        end
-        Base.depwarn(msg, f)
-    else
-        p = payload::CredentialPayload
-    end
-    return p
-end
-
-# ease transition for return type change of e.g. argmax due to PR #22907 when used in the
-# common pattern `ind2sub(size(a), argmax(a))`
 @deprecate(ind2sub(dims::NTuple{N,Integer}, idx::CartesianIndex{N}) where N, Tuple(idx))
 
 @deprecate contains(eq::Function, itr, x) any(y->eq(y,x), itr)
 
 # PR #23690
 # `SSHCredential` and `UserPasswordCredential` constructors using `prompt_if_incorrect`
-# are deprecated in base/libgit2/types.jl.
+# are deprecated in stdlib/LibGit2/types.jl.
 
 # deprecate ones/zeros methods accepting an array as first argument
 function ones(a::AbstractArray, ::Type{T}, dims::Tuple) where {T}
@@ -688,11 +637,6 @@ function zeros(a::AbstractArray)
         "`fill!(similar(a), 0)`. Where necessary, use ",
         "`fill!(similar(a), zero(eltype(a)))`."), :zeros)
     return fill!(similar(a), zero(eltype(a)))
-end
-
-# PR #23711
-@eval LibGit2 begin
-    @deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)
 end
 
 export tic, toq, toc
@@ -898,10 +842,6 @@ end
 # issue #24794
 @deprecate linspace(start, stop)     linspace(start, stop, 50)
 @deprecate logspace(start, stop)     logspace(start, stop, 50)
-
-@deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
-@deprecate push!(w::LibGit2.GitRevWalker, arg) LibGit2.push!(w, arg)
-
 
 # 24490 - warnings and messages
 const log_info_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
@@ -1128,13 +1068,6 @@ end
 # 25224
 @deprecate similar(s::AbstractSet) empty(s)
 @deprecate similar(s::AbstractSet, ::Type{T}) where {T} empty(s, T)
-
-# PR #24594
-@eval LibGit2 begin
-    @deprecate AbstractCredentials AbstractCredential false
-    @deprecate UserPasswordCredentials UserPasswordCredential false
-    @deprecate SSHCredentials SSHCredential false
-end
 
 # issue #24804
 @deprecate_moved sum_kbn "KahanSummation"

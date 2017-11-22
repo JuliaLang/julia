@@ -5,6 +5,7 @@ module PkgTests
 using Test
 import Pkg
 import Pkg.PkgError
+using LibGit2
 using Random: randstring
 
 function capture_stdout(f::Function)

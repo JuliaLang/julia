@@ -74,7 +74,6 @@ primitive type
 ```@docs
 Base.Docs
 Base.Iterators
-Base.LibGit2
 Base.Libc
 Base.Meta
 Base.StackTraces

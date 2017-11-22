@@ -212,6 +212,8 @@ function url(m::Method)
             return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
         end
     else
+        return fileurl(file)
+        #=
         try
             d = dirname(file)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
@@ -230,6 +232,7 @@ function url(m::Method)
         catch
             return fileurl(file)
         end
+        =#
     end
 end
 

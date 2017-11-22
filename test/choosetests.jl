@@ -48,7 +48,7 @@ function choosetests(choices = [])
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
-        "some", "meta", "stacktraces", "libgit2", "docs",
+        "some", "meta", "stacktraces", "docs",
         "misc", "threads",
         "enums", "cmdlineargs", "i18n", "int",
         "checked", "bitset", "floatfuncs", "compile", "inline",
@@ -130,6 +130,7 @@ function choosetests(choices = [])
 
 
     explicit_pkg =  "Pkg/pkg" in tests
+    explicit_libgit2 =  "LibGit2/online" in tests
     new_tests = String[]
     for test in tests
         if test in STDLIBS
@@ -143,9 +144,8 @@ function choosetests(choices = [])
     end
     filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
     prepend!(tests, new_tests)
-    if !explicit_pkg
-        filter!(x -> x != "Pkg/pkg", tests)
-    end
+    explicit_pkg || filter!(x -> x != "Pkg/pkg", tests)
+    explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
 
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     if "ambiguous" in skip_tests
@@ -162,7 +162,7 @@ function choosetests(choices = [])
         filter!(x -> (x != "Profile"), tests)
     end
 
-    net_required_for = ["socket", "libgit2"]
+    net_required_for = ["socket", "LibGit2"]
     net_on = true
     try
         ipa = getipaddr()

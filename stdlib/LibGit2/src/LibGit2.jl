@@ -40,6 +40,7 @@ include("status.jl")
 include("tree.jl")
 include("gitcredential.jl")
 include("callbacks.jl")
+include("deprecated.jl")
 
 using .Error
 
