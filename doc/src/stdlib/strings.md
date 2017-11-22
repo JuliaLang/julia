@@ -60,6 +60,7 @@ Base.chop
 Base.chomp
 Base.ind2chr
 Base.chr2ind
+Base.thisind
 Base.nextind
 Base.prevind
 Base.Random.randstring

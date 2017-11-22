@@ -787,6 +787,7 @@ export
     strip,
     summary,
     textwidth,
+    thisind,
     titlecase,
     transcode,
     ucfirst,

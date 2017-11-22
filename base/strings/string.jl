@@ -104,7 +104,18 @@ function ==(a::String, b::String)
     al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
 end
 
-## prevind and nextind ##
+## thisind, prevind and nextind ##
+
+function thisind(s::String, i::Integer)
+    j = Int(i)
+    j < 1 && return 0
+    e = endof(s)
+    j >= e && return e
+    @inbounds while j > 0 && is_valid_continuation(codeunit(s,j))
+        j -= 1
+    end
+    j
+end
 
 function prevind(s::String, i::Integer)
     j = Int(i)

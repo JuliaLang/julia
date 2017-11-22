@@ -293,6 +293,9 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
+  * The function `thisind(s::AbstractString, i::Integer)` returns the largest valid index
+    less or equal than `i` in the string `s` or `0` if no such index exists ([#24414]).
+
   * `Irrational` is now a subtype of `AbstractIrrational` ([#24245]).
 
   * The function `chop` now accepts two arguments `head` and `tail` allowing to specify
