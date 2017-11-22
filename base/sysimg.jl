@@ -158,8 +158,6 @@ Array{T}(d::Integer...) where {T} = Array{T}(convert(Tuple{Vararg{Int}}, d))
 # dimensionality but not type specified, accepting dims as series of Integers
 Vector(m::Integer) = Vector{Any}(Int(m))
 Matrix(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
-# empty vector constructor
-Vector() = Vector{Any}(0)
 
 
 include("associative.jl")
