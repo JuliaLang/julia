@@ -691,9 +691,9 @@ function _cumsum!(out, v, axis, ::TypeArithmetic)
 end
 
 """
-    cumsum(A, dim)
+    cumsum(A, axis::Integer)
 
-Cumulative sum along a dimension `dim`. See also [`cumsum!`](@ref)
+Cumulative sum along the axis `axis`. See also [`cumsum!`](@ref)
 to use a preallocated output array, both for performance and to control the precision of the
 output (e.g. to avoid overflow).
 
@@ -743,9 +743,9 @@ julia> cumsum([fill(1, 2) for i in 1:3])
 cumsum(x::AbstractVector) = cumsum(x, 1)
 
 """
-    cumsum!(B, A, dim::Integer)
+    cumsum!(B, A, axis::Integer)
 
-Cumulative sum of `A` along a dimension, storing the result in `B`. See also [`cumsum`](@ref).
+Cumulative sum of `A` along the axis `axis`, storing the result in `B`. See also [`cumsum`](@ref).
 """
 cumsum!(B, A, axis::Integer) = accumulate!(+, B, A, axis)
 
@@ -757,9 +757,9 @@ Cumulative sum of a vector `x`, storing the result in `y`. See also [`cumsum`](@
 cumsum!(y::AbstractVector, x::AbstractVector) = cumsum!(y, x, 1)
 
 """
-    cumprod(A, dim)
+    cumprod(A, axis::Integer)
 
-Cumulative product along a dimension `dim`. See also
+Cumulative product along the axis `axis`. See also
 [`cumprod!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow).
 
@@ -806,9 +806,9 @@ julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
 cumprod(x::AbstractVector) = cumprod(x, 1)
 
 """
-    cumprod!(B, A, dim::Integer)
+    cumprod!(B, A, axis::Integer)
 
-Cumulative product of `A` along a dimension, storing the result in `B`.
+Cumulative product of `A` along the axis `axis`, storing the result in `B`.
 See also [`cumprod`](@ref).
 """
 cumprod!(B, A, axis::Integer) = accumulate!(*, B, A, axis)
@@ -822,9 +822,9 @@ See also [`cumprod`](@ref).
 cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, 1)
 
 """
-    accumulate(op, A, dim)
+    accumulate(op, A, axis::Integer)
 
-Cumulative operation `op` along a dimension `dim`. See also
+Cumulative operation `op` along the axis `axis`. See also
 [`accumulate!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow). For common operations
 there are specialized variants of `accumulate`, see:
@@ -875,9 +875,9 @@ julia> accumulate(*, [1,2,3])
 accumulate(op, x::AbstractVector) = accumulate(op, x, 1)
 
 """
-    accumulate!(op, B, A, dim)
+    accumulate!(op, B, A, axis::Integer)
 
-Cumulative operation `op` on `A` along a dimension, storing the result in `B`.
+Cumulative operation `op` on `A` along the axis `axis`, storing the result in `B`.
 See also [`accumulate`](@ref).
 """
 function accumulate!(op, B, A, axis::Integer)
