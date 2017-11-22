@@ -2,7 +2,7 @@
 
 # Generate encode table.
 const BASE64_ENCODE = [UInt8(x) for x in ['A':'Z'; 'a':'z'; '0':'9'; '+'; '/']]
-encode(x::UInt8) = @inbounds return BASE64_ENCODE[(x & 0x3f) + 1]
+encode(x::UInt8) = @inbounds return BASE64_ENCODE[bitand(x, 0x3f) + 1]
 encodepadding()  = UInt8('=')
 
 """

@@ -30,9 +30,9 @@ struct FileEvent
     timedout::Bool
 end
 FileEvent() = FileEvent(false, false, false)
-FileEvent(flags::Integer) = FileEvent((flags & UV_RENAME) != 0,
-                                  (flags & UV_CHANGE) != 0,
-                                  (flags & FD_TIMEDOUT) != 0)
+FileEvent(flags::Integer) = FileEvent(bitand(flags, UV_RENAME) != 0,
+                                      bitand(flags, UV_CHANGE) != 0,
+                                      bitand(flags, FD_TIMEDOUT) != 0)
 fetimeout() = FileEvent(false, false, true)
 
 struct FDEvent
@@ -50,10 +50,10 @@ const FD_TIMEDOUT = 8
 isreadable(f::FDEvent) = f.readable
 iswritable(f::FDEvent) = f.writable
 FDEvent() = FDEvent(false, false, false, false)
-FDEvent(flags::Integer) = FDEvent((flags & UV_READABLE) != 0,
-                                  (flags & UV_WRITABLE) != 0,
-                                  (flags & UV_DISCONNECT) != 0,
-                                  (flags & FD_TIMEDOUT) != 0)
+FDEvent(flags::Integer) = FDEvent(bitand(flags, UV_READABLE) != 0,
+                                  bitand(flags, UV_WRITABLE) != 0,
+                                  bitand(flags, UV_DISCONNECT) != 0,
+                                  bitand(flags, FD_TIMEDOUT) != 0)
 fdtimeout() = FDEvent(false, false, false, true)
 |(a::FDEvent, b::FDEvent) =
     FDEvent(a.readable | b.readable,
@@ -378,11 +378,11 @@ function wait(fdw::_FDWatcher; readable=true, writable=true)
             events = bitor(events, FDEvent(fdw.events))
             haveevent = false
             if readable && isreadable(events)
-                fdw.events &= bitnot(UV_READABLE)
+                fdw.events = bitand(fdw.events, bitnot(UV_READABLE))
                 haveevent = true
             end
             if writable && iswritable(events)
-                fdw.events &= bitnot(UV_WRITABLE)
+                fdw.events = bitand(fdw.events, bitnot(UV_WRITABLE))
                 haveevent = true
             end
             if haveevent

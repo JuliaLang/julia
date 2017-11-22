@@ -51,13 +51,13 @@ function settings(s::Int, shared::Bool)
     else
         mode = ccall(:fcntl,Cint,(Cint,Cint),s,F_GETFL)
         systemerror("fcntl F_GETFL", mode == -1)
-        mode = mode & 3
+        mode = bitand(mode, 3)
         prot = mode == 0 ? PROT_READ : mode == 1 ? PROT_WRITE : bitor(PROT_READ, PROT_WRITE)
-        if prot & PROT_READ == 0
+        if iszero(bitand(prot, PROT_READ))
             throw(ArgumentError("mmap requires read permissions on the file (open with \"r+\" mode to override)"))
         end
     end
-    return prot, flags, (prot & PROT_WRITE) > 0
+    return prot, flags, bitand(prot, PROT_WRITE) > 0
 end
 
 # Before mapping, grow the file to sufficient size
@@ -196,12 +196,12 @@ function mmap(io::IO,
         szfile = convert(Csize_t, len + offset)
         readonly && szfile > filesize(io) && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
         handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Cptrdiff_t, Ptr{Void}, DWORD, DWORD, DWORD, Cwstring),
-                                file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
+                                file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, bitand(szfile, typemax(UInt32)), name) :
                           ccall(:OpenFileMappingW, stdcall, Ptr{Void}, (DWORD, Cint, Cwstring),
                                 readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
         handle == C_NULL && error("could not create file mapping: $(Libc.FormatMessage())")
         ptr = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, DWORD, DWORD, DWORD, Csize_t),
-                    handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), (offset - offset_page) + len)
+                    handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, bitand(offset_page, typemax(UInt32)), (offset - offset_page) + len)
         ptr == C_NULL && error("could not create mapping view: $(Libc.FormatMessage())")
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
@@ -251,9 +251,9 @@ function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
     nc = Base.num_bit_chunks(n)
     chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared)
     if !isreadonly(io)
-        chunks[end] &= Base._msk_end(n)
+        chunks[end] = bitand(chunks[end], Base._msk_end(n))
     else
-        if chunks[end] != chunks[end] & Base._msk_end(n)
+        if chunks[end] != bitand(chunks[end], Base._msk_end(n))
             throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
         end
     end
