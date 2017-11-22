@@ -359,7 +359,7 @@ end
 
 @testset "Pipe" begin
     P = Pipe()
-    Base.link_pipe(P)
+    Base.link_pipe!(P)
     write(P, "hello")
     @test bytesavailable(P) == 0
     @test !eof(P)

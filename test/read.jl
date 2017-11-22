@@ -53,10 +53,12 @@ function run_test_server(srv, text)
         try
             sock = accept(srv)
             try
-                write(sock,text)
+                write(sock, text)
             catch e
-                if typeof(e) != Base.UVError
-                    rethrow(e)
+                if !(isa(e, Base.UVError) && e.code == Base.UV_EPIPE)
+                    if !(isa(e, Base.UVError) && e.code == Base.UV_ECONNRESET)
+                        rethrow(e)
+                    end
                 end
             finally
                 close(sock)
@@ -554,7 +556,7 @@ end # mktempdir() do dir
 end
 
 let p = Pipe()
-    Base.link_pipe(p, julia_only_read=true, julia_only_write=true)
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
     t = @schedule read(p)
     @sync begin
         @async write(p, zeros(UInt16, 660_000))

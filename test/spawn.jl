@@ -462,7 +462,7 @@ if Sys.isunix()
         try
             for i = 1 : 100 * coalesce(ulimit_n, 1000)
                 p = Pipe()
-                Base.link_pipe(p)
+                Base.link_pipe!(p)
                 push!(ps, p)
             end
             if ulimit_n === nothing
@@ -505,8 +505,8 @@ end
 ## Deadlock in spawning a cmd (#22832)
 # FIXME?
 #let stdout = Pipe(), stdin = Pipe()
-#    Base.link_pipe(stdout, julia_only_read=true)
-#    Base.link_pipe(stdin, julia_only_write=true)
+#    Base.link_pipe!(stdout, reader_supports_async=true)
+#    Base.link_pipe!(stdin, writer_supports_async=true)
 #    p = spawn(pipeline(catcmd, stdin=stdin, stdout=stdout, stderr=DevNull))
 #    @async begin # feed cat with 2 MB of data (zeros)
 #        write(stdin, zeros(UInt8, 1048576 * 2))
