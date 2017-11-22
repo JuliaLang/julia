@@ -719,6 +719,27 @@ function cumsum(A::AbstractArray{T}, axis::Integer) where T
     cumsum!(out, A, axis)
 end
 
+"""
+    cumsum(x::AbstractVector)
+
+Cumulative sum a vector. See also [`cumsum!`](@ref)
+to use a preallocated output array, both for performance and to control the precision of the
+output (e.g. to avoid overflow).
+
+```jldoctest
+julia> cumsum([1, 1, 1])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> cumsum([fill(1, 2) for i in 1:3])
+3-element Array{Array{Int64,1},1}:
+ [1, 1]
+ [2, 2]
+ [3, 3]
+```
+"""
 cumsum(x::AbstractVector) = cumsum(x, 1)
 
 """
@@ -728,6 +749,11 @@ Cumulative sum of `A` along a dimension, storing the result in `B`. See also [`c
 """
 cumsum!(B, A, axis::Integer) = accumulate!(+, B, A, axis)
 
+"""
+    cumsum!(y::AbstractVector, x::AbstractVector)
+
+Cumulative sum of a vector `x`, storing the result in `y`. See also [`cumsum`](@ref).
+"""
 cumsum!(y::AbstractVector, x::AbstractVector) = cumsum!(y, x, 1)
 
 """
@@ -756,6 +782,27 @@ julia> cumprod(a,2)
 """
 cumprod(A::AbstractArray, axis::Integer) = accumulate(*, A, axis)
 
+"""
+    cumprod(x::AbstractVector)
+
+Cumulative product of a vector. See also
+[`cumprod!`](@ref) to use a preallocated output array, both for performance and
+to control the precision of the output (e.g. to avoid overflow).
+
+```jldoctest
+julia> cumprod(fill(1//2, 3))
+3-element Array{Rational{Int64},1}:
+ 1//2
+ 1//4
+ 1//8
+
+julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
+3-element Array{Array{Rational{Int64},2},1}:
+ Rational{Int64}[1//3 1//3; 1//3 1//3]
+ Rational{Int64}[2//9 2//9; 2//9 2//9]
+ Rational{Int64}[4//27 4//27; 4//27 4//27]
+```
+"""
 cumprod(x::AbstractVector) = cumprod(x, 1)
 
 """
@@ -766,12 +813,46 @@ See also [`cumprod`](@ref).
 """
 cumprod!(B, A, axis::Integer) = accumulate!(*, B, A, axis)
 
+"""
+    cumprod!(y::AbstractVector, x::AbstractVector)
+
+Cumulative product of a vector `x`, storing the result in `y`.
+See also [`cumprod`](@ref).
+"""
 cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, 1)
 
 """
     accumulate(op, A, dim)
 
 Cumulative operation `op` along a dimension `dim`. See also
+[`accumulate!`](@ref) to use a preallocated output array, both for performance and
+to control the precision of the output (e.g. to avoid overflow). For common operations
+there are specialized variants of `accumulate`, see:
+[`cumsum`](@ref), [`cumprod`](@ref)
+
+```jldoctest
+julia> accumulate(+, fill(1, 3, 3), 1)
+3×3 Array{Int64,2}:
+ 1  1  1
+ 2  2  2
+ 3  3  3
+
+julia> accumulate(+, fill(1, 3, 3), 2)
+3×3 Array{Int64,2}:
+ 1  2  3
+ 1  2  3
+ 1  2  3
+```
+"""
+function accumulate(op, A, axis::Integer)
+    out = similar(A, rcum_promote_type(op, eltype(A)))
+    accumulate!(op, out, A, axis)
+end
+
+"""
+    accumulate(op, x::AbstractVector)
+
+Cumulative operation `op` on a vector. See also
 [`accumulate!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow). For common operations
 there are specialized variants of `accumulate`, see:
@@ -791,70 +872,7 @@ julia> accumulate(*, [1,2,3])
  6
 ```
 """
-function accumulate(op, A, axis::Integer)
-    out = similar(A, rcum_promote_type(op, eltype(A)))
-    accumulate!(op, out, A, axis)
-end
-
 accumulate(op, x::AbstractVector) = accumulate(op, x, 1)
-
-"""
-    accumulate(op, v0, A)
-
-Like `accumulate`, but using a starting element `v0`. The first entry of the result will be
-`op(v0, first(A))`.
-
-# Examples
-```jldoctest
-julia> accumulate(+, 100, [1,2,3])
-3-element Array{Int64,1}:
- 101
- 103
- 106
-
-julia> accumulate(min, 0, [1,2,-1])
-3-element Array{Int64,1}:
-  0
-  0
- -1
-```
-"""
-function accumulate(op, v0, A, axis::Integer)
-    T = rcum_promote_type(op, typeof(v0), eltype(A))
-    out = similar(A, T)
-    accumulate!(op, out, v0, A, 1)
-end
-
-accumulate(op, v0, x::AbstractVector) = accumulate(op, v0, x, 1)
-
-function accumulate!(op::Op, B, A::AbstractVector, axis::Integer) where Op
-    isempty(A) && return B
-    v1 = first(A)
-    _accumulate1!(op, B, v1, A, axis)
-end
-
-function accumulate!(op, B, v0, A::AbstractVector, axis::Integer)
-    isempty(A) && return B
-    v1 = op(v0, first(A))
-    _accumulate1!(op, B, v1, A, axis)
-end
-
-accumulate!(op, y::AbstractVector, v0, x::AbstractVector) = accumulate!(op, y, v0, x, 1)
-
-function _accumulate1!(op, B, v1, A::AbstractVector, axis::Integer)
-    axis > 0 || throw(ArgumentError("axis must be a positive integer"))
-    inds = linearindices(A)
-    inds == linearindices(B) || throw(DimensionMismatch("linearindices of A and B don't match"))
-    axis > 1 && return copy!(B, A)
-    i1 = inds[1]
-    cur_val = v1
-    B[i1] = cur_val
-    @inbounds for i in inds[2:end]
-        cur_val = op(cur_val, A[i])
-        B[i] = cur_val
-    end
-    return B
-end
 
 """
     accumulate!(op, B, A, dim)
@@ -888,7 +906,17 @@ function accumulate!(op, B, A, axis::Integer)
     return B
 end
 
-accumulate!(op, y::AbstractVector, x::AbstractVector) = accumulate!(op, y, x, 1)
+"""
+    accumulate!(op, y, x::AbstractVector)
+
+Cumulative operation `op` on a vector `x`, storing the result in `y`.
+See also [`accumulate`](@ref).
+"""
+function accumulate!(op::Op, y, x::AbstractVector) where Op
+    isempty(x) && return y
+    v1 = first(x)
+    _accumulate1!(op, y, v1, x, 1)
+end
 
 @noinline function _accumulate!(op, B, A, R1, ind, R2)
     # Copy the initial element in each 1d vector along dimension `axis`
@@ -901,6 +929,54 @@ accumulate!(op, y::AbstractVector, x::AbstractVector) = accumulate!(op, y, x, 1)
         B[I, i, J] = op(B[I, i-1, J], A[I, i, J])
     end
     B
+end
+
+"""
+    accumulate(op, v0, x::AbstractVector)
+
+Like `accumulate`, but using a starting element `v0`. The first entry of the result will be
+`op(v0, first(A))`.
+
+# Examples
+```jldoctest
+julia> accumulate(+, 100, [1,2,3])
+3-element Array{Int64,1}:
+ 101
+ 103
+ 106
+
+julia> accumulate(min, 0, [1,2,-1])
+3-element Array{Int64,1}:
+  0
+  0
+ -1
+```
+"""
+function accumulate(op, v0, x::AbstractVector)
+    T = rcum_promote_type(op, typeof(v0), eltype(x))
+    out = similar(x, T)
+    accumulate!(op, out, v0, x)
+end
+
+function accumulate!(op, y, v0, x::AbstractVector)
+    isempty(x) && return y
+    v1 = op(v0, first(x))
+    _accumulate1!(op, y, v1, x, 1)
+end
+
+function _accumulate1!(op, B, v1, A::AbstractVector, axis::Integer)
+    axis > 0 || throw(ArgumentError("axis must be a positive integer"))
+    inds = linearindices(A)
+    inds == linearindices(B) || throw(DimensionMismatch("linearindices of A and B don't match"))
+    axis > 1 && return copy!(B, A)
+    i1 = inds[1]
+    cur_val = v1
+    B[i1] = cur_val
+    @inbounds for i in inds[2:end]
+        cur_val = op(cur_val, A[i])
+        B[i] = cur_val
+    end
+    return B
 end
 
 ### from abstractarray.jl
