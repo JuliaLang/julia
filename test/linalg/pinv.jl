@@ -9,7 +9,7 @@ using Test
 srand(12345)
 
 function hilb(T::Type, n::Integer)
-    a=Array{T}(n,n)
+    a = Matrix{T}(uninitialized, n, n)
     for i=1:n
         for j=1:n
             a[j,i]=one(T)/(i+j-one(T))
@@ -20,7 +20,7 @@ end
 hilb(n::Integer) = hilb(Float64,n)
 
 function hilb(T::Type, m::Integer, n::Integer)
-    a=Array{T}(m,n)
+    a = Matrix{T}(uninitialized, m, n)
     for i=1:n
         for j=1:m
             a[j,i]=one(T)/(i+j-one(T))
@@ -67,7 +67,7 @@ tridiag(m::Integer, n::Integer) = tridiag(Float64, m::Integer, n::Integer)
 
 function randn_float64(m::Integer, n::Integer)
     a=randn(m,n)
-    b=Array{Float64}(m,n)
+    b = Matrix{Float64}(uninitialized, m, n)
     for i=1:n
         for j=1:m
             b[j,i]=convert(Float64,a[j,i])
@@ -78,7 +78,7 @@ end
 
 function randn_float32(m::Integer, n::Integer)
     a=randn(m,n)
-    b=Array{Float32}(m,n)
+    b = Matrix{Float32}(uninitialized, m, n)
     for i=1:n
         for j=1:m
             b[j,i]=convert(Float32,a[j,i])

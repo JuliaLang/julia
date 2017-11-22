@@ -12,10 +12,10 @@ using Test
     @test ones(0,0)*ones(0,4) == zeros(0,4)
     @test ones(3,0)*ones(0,0) == zeros(3,0)
     @test ones(0,0)*ones(0,0) == zeros(0,0)
-    @test Array{Float64}(5, 0) |> t -> t't == zeros(0,0)
-    @test Array{Float64}(5, 0) |> t -> t*t' == zeros(5,5)
-    @test Array{Complex128}(5, 0) |> t -> t't == zeros(0,0)
-    @test Array{Complex128}(5, 0) |> t -> t*t' == zeros(5,5)
+    @test Matrix{Float64}(uninitialized, 5, 0) |> t -> t't == zeros(0,0)
+    @test Matrix{Float64}(uninitialized, 5, 0) |> t -> t*t' == zeros(5,5)
+    @test Matrix{Complex128}(uninitialized, 5, 0) |> t -> t't == zeros(0,0)
+    @test Matrix{Complex128}(uninitialized, 5, 0) |> t -> t*t' == zeros(5,5)
 end
 @testset "2x2 matmul" begin
     AA = [1 2; 3 4]
@@ -89,7 +89,7 @@ end
     end
     AA = rand(1:20, 5, 5) .- 10
     BB = rand(1:20, 5, 5) .- 10
-    CC = Array{Int}(size(AA, 1), size(BB, 2))
+    CC = Matrix{Int}(uninitialized, size(AA, 1), size(BB, 2))
     for A in (copy(AA), view(AA, 1:5, 1:5)), B in (copy(BB), view(BB, 1:5, 1:5)), C in (copy(CC), view(CC, 1:5, 1:5))
         @test At_mul_B(A, B) == A'*B
         @test A_mul_Bt(A, B) == A*B'
@@ -105,7 +105,7 @@ end
         @test_throws DimensionMismatch Base.LinAlg.Ac_mul_Bt!(C,ones(Int,4,4),B)
     end
     vv = [1,2]
-    CC = Array{Int}(2, 2)
+    CC = Matrix{Int}(uninitialized, 2, 2)
     for v in (copy(vv), view(vv, 1:2)), C in (copy(CC), view(CC, 1:2, 1:2))
         @test @inferred(A_mul_Bc!(C, v, v)) == [1 2; 2 4]
     end
@@ -119,12 +119,12 @@ end
         @test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(B,'N',A,zeros(6))
     end
     vv = [1,2,3]
-    CC = Array{Int}(3, 3)
+    CC = Matrix{Int}(uninitialized, 3, 3)
     for v in (copy(vv), view(vv, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
         @test A_mul_Bt!(C, v, v) == v*v'
     end
     vvf = map(Float64,vv)
-    CC = Array{Float64}(3, 3)
+    CC = Matrix{Float64}(uninitialized, 3, 3)
     for vf in (copy(vvf), view(vvf, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
         @test A_mul_Bt!(C, vf, vf) == vf*vf'
     end
@@ -247,12 +247,12 @@ vecdot_(x,y) = invoke(vecdot, Tuple{Any,Any}, x,y)
 end
 
 @testset "Issue 11978" begin
-    A = Array{Matrix{Float64}}(2, 2)
+    A = Matrix{Matrix{Float64}}(uninitialized, 2, 2)
     A[1,1] = Matrix(1.0I, 3, 3)
     A[2,2] = Matrix(1.0I, 2, 2)
     A[1,2] = Matrix(1.0I, 3, 2)
     A[2,1] = Matrix(1.0I, 2, 3)
-    b = Array{Vector{Float64}}(2)
+    b = Vector{Vector{Float64}}(uninitialized, 2)
     b[1] = ones(3)
     b[2] = ones(2)
     @test A*b == Vector{Float64}[[2,2,1], [2,2]]
@@ -266,10 +266,12 @@ end
     @test Base.LinAlg.gemv!(ones(elty,0),'N',rand(elty,0,0),rand(elty,0)) == ones(elty,0)
     @test Base.LinAlg.gemv!(ones(elty,10), 'N',ones(elty,10,0),ones(elty,0)) == zeros(elty,10)
 
-    I10 = Matrix{elty}(I, 10, 10)
-    @test Base.LinAlg.gemm_wrapper('N','N', I10, I10) == I10
-    @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(I10,'N','N', Matrix{elty}(I, 10, 11), I10)
-    @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(I10,'N','N', Matrix{elty}(0, 0), Matrix{elty}(0, 0))
+    I0x0 = Matrix{elty}(I, 0, 0)
+    I10x10 = Matrix{elty}(I, 10, 10)
+    I10x11 = Matrix{elty}(I, 10, 11)
+    @test Base.LinAlg.gemm_wrapper('N','N', I10x10, I10x10) == I10x10
+    @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(I10x10,'N','N', I10x11, I10x10)
+    @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(I10x10,'N','N', I0x0, I0x0)
 
     A = rand(elty,3,3)
     @test Base.LinAlg.matmul3x3('T','N',A, Matrix{elty}(I, 3, 3)) == A.'
