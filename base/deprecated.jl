@@ -3262,6 +3262,27 @@ end
 @deprecate_moved isnull "Nullables"
 @deprecate_moved unsafe_get "Nullables"
 
+# sub2ind and ind2sub deprecation (PR #24715)
+@deprecate ind2sub(A::AbstractArray, ind) CartesianRange(A)[ind]
+@deprecate ind2sub(::Tuple{}, ind::Integer) CartesianRange()[ind]
+@deprecate ind2sub(dims::Tuple{Vararg{Integer,N}} where N, ind::Integer) CartesianRange(dims)[ind]
+@deprecate ind2sub(inds::Tuple{Base.OneTo}, ind::Integer) CartesianRange(inds)[ind]
+@deprecate ind2sub(inds::Tuple{AbstractUnitRange}, ind::Integer) CartesianRange(inds)[ind]
+@deprecate ind2sub(inds::Tuple{Vararg{AbstractUnitRange,N}} where N, ind::Integer) CartesianRange(inds)[ind]
+@deprecate ind2sub(inds::Union{DimsInteger{N},Indices{N}}  where N, ind::AbstractVector{<:Integer}) CartesianRange(inds)[ind]
+
+@deprecate sub2ind(A::AbstractArray, I...) CartesianToLinear(A)[I...]
+@deprecate sub2ind(dims::Tuple{}) CartesianToLinear(dims)[]
+@deprecate sub2ind(dims::DimsInteger) CartesianToLinear(dims)[]
+@deprecate sub2ind(dims::Indices) CartesianToLinear(dims)[]
+@deprecate sub2ind(dims::Tuple{}, I::Integer...) CartesianToLinear(dims)[I...]
+@deprecate sub2ind(dims::DimsInteger, I::Integer...) CartesianToLinear(dims)[I...]
+@deprecate sub2ind(inds::Indices, I::Integer...) CartesianToLinear(inds)[I...]
+@deprecate sub2ind(inds::Tuple{OneTo}, I::Integer...) CartesianToLinear(inds)[I...]
+@deprecate sub2ind(inds::Tuple{OneTo}, i::Integer) CartesianToLinear(inds)[i]
+@deprecate sub2ind(inds::Tuple{OneTo}, I1::AbstractVector{T}, I::AbstractVector{T}...) where {T<:Integer} CartesianToLinear(inds)[CartesianIndex.(I1, I...)]
+@deprecate sub2ind(inds::Union{DimsInteger,Indices}, I1::AbstractVector{T}, I::AbstractVector{T}...) where {T<:Integer} CartesianToLinear(inds)[CartesianIndex.(I1, I...)]
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

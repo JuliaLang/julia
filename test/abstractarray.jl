@@ -112,62 +112,64 @@ end
     @test checkbounds(Bool, A, [CartesianIndex((5, 4))], 4) == false
 end
 
-@testset "sub2ind & ind2sub" begin
+@testset "index conversion" begin
     @testset "0-dimensional" begin
-        for i = 1:4
-            @test sub2ind((), i) == i
-        end
-        @test sub2ind((), 2, 2) == 3
-        @test ind2sub((), 1) == ()
-        @test_throws BoundsError ind2sub((), 2)
+        @test CartesianToLinear()[1] == 1
+        @test_throws BoundsError CartesianToLinear()[2]
+        @test CartesianToLinear()[1,1] == 1
+        @test CartesianRange()[1] == CartesianIndex()
+        @test_throws BoundsError CartesianRange()[2]
     end
 
     @testset "1-dimensional" begin
-        for i = 1:4
-            @test sub2ind((3,), i) == i
-            @test ind2sub((3,), i) == (i,)
+        for i = 1:3
+            @test CartesianToLinear((3,))[i] == i
+            @test CartesianRange((3,))[i] == CartesianIndex(i,)
         end
-        @test sub2ind((3,), 2, 2) == 5
-        @test_throws MethodError ind2sub((3,), 2, 2)
+        @test CartesianToLinear((3,))[2,1] == 2
+        @test_throws BoundsError CartesianRange((3,))[2,2]
         #   ambiguity btw cartesian indexing and linear indexing in 1d when
         #   indices may be nontraditional
-        @test_throws ArgumentError sub2ind((1:3,), 2)
-        @test_throws ArgumentError ind2sub((1:3,), 2)
+        @test_throws ArgumentError Base._sub2ind((1:3,), 2)
+        @test_throws ArgumentError Base._ind2sub((1:3,), 2)
     end
 
     @testset "2-dimensional" begin
         k = 0
+        cartesian = CartesianRange((4,3))
+        linear = CartesianToLinear(cartesian)
         for j = 1:3, i = 1:4
-            @test sub2ind((4,3), i, j) == (k+=1)
-            @test ind2sub((4,3), k) == (i,j)
-            @test sub2ind((1:4,1:3), i, j) == k
-            @test ind2sub((1:4,1:3), k) == (i,j)
-            @test sub2ind((0:3,3:5), i-1, j+2) == k
-            @test ind2sub((0:3,3:5), k) == (i-1, j+2)
+            @test linear[i,j] == (k+=1)
+            @test cartesian[k] == CartesianIndex(i,j)
+            @test CartesianToLinear(0:3,3:5)[i-1,j+2] == k
+            @test CartesianRange(0:3,3:5)[k] == CartesianIndex(i-1,j+2)
         end
     end
 
     @testset "3-dimensional" begin
         l = 0
         for k = 1:2, j = 1:3, i = 1:4
-            @test sub2ind((4,3,2), i, j, k) == (l+=1)
-            @test ind2sub((4,3,2), l) == (i,j,k)
-            @test sub2ind((1:4,1:3,1:2), i, j, k) == l
-            @test ind2sub((1:4,1:3,1:2), l) == (i,j,k)
-            @test sub2ind((0:3,3:5,-101:-100), i-1, j+2, k-102) == l
-            @test ind2sub((0:3,3:5,-101:-100), l) == (i-1, j+2, k-102)
+            @test CartesianToLinear((4,3,2))[i,j,k] == (l+=1)
+            @test CartesianRange((4,3,2))[l] == CartesianIndex(i,j,k)
+            @test CartesianToLinear(1:4,1:3,1:2)[i,j,k] == l
+            @test CartesianRange(1:4,1:3,1:2)[l] == CartesianIndex(i,j,k)
+            @test CartesianToLinear(0:3,3:5,-101:-100)[i-1,j+2,k-102] == l
+            @test CartesianRange(0:3,3:5,-101:-100)[l] == CartesianIndex(i-1, j+2, k-102)
         end
 
         local A = reshape(collect(1:9), (3,3))
-        @test ind2sub(size(A), 6) == (3,2)
-        @test sub2ind(size(A), 3, 2) == 6
-        @test ind2sub(A, 6) == (3,2)
-        @test sub2ind(A, 3, 2) == 6
+        @test CartesianRange(size(A))[6] == CartesianIndex(3,2)
+        @test CartesianToLinear(size(A))[3, 2] == 6
+        @test CartesianRange(A)[6] == CartesianIndex(3,2)
+        @test CartesianToLinear(A)[3, 2] == 6
+        for i in 1:length(A)
+            @test CartesianToLinear(A)[CartesianRange(A)[i]] == i
+        end
 
         @testset "PR #9256" begin
             function pr9256()
                 m = [1 2 3; 4 5 6; 7 8 9]
-                ind2sub(m, 6)
+                Base._ind2sub(m, 6)
             end
             @test pr9256() == (3,2)
         end
@@ -616,10 +618,9 @@ function test_ind2sub(::Type{TestAbstractArray})
     dims = tuple(rand(1:5, n)...)
     len = prod(dims)
     A = reshape(collect(1:len), dims...)
-    I = ind2sub(dims, [1:len...])
+    I = CartesianRange(dims)
     for i in 1:len
-        idx = [ I[j][i] for j in 1:n ]
-        @test A[idx...] == A[i]
+        @test A[I[i]] == A[i]
     end
 end
 
@@ -762,8 +763,8 @@ end
     @test Base.copymutable((1,2,3)) == [1,2,3]
 end
 
-@testset "sub2ind for empty tuple" begin
-    @test sub2ind(()) == 1
+@testset "_sub2ind for empty tuple" begin
+    @test Base._sub2ind(()) == 1
 end
 
 @testset "to_shape" begin
@@ -825,4 +826,25 @@ end
     @test isempty(v)
     @test isempty(v2::Vector{Int})
     @test isempty(v3::Vector{Float64})
+end
+
+@testset "CartesianRange" begin
+    xrng = 2:4
+    yrng = 1:5
+    CR = CartesianRange((xrng,yrng))
+
+    for (i,i_idx) in enumerate(xrng)
+        for (j,j_idx) in enumerate(yrng)
+            @test CR[i,j] == CartesianIndex(i_idx,j_idx)
+        end
+    end
+
+    for i_lin in linearindices(CR)
+        i = (i_lin-1) % length(xrng) + 1
+        j = (i_lin-i) ÷ length(xrng) + 1
+        @test CR[i_lin] == CartesianIndex(xrng[i],yrng[j])
+    end
+
+    @test CartesianRange(ones(2,3)) == CartesianRange((2,3))
+    @test CartesianToLinear((2,3)) == [1 3 5; 2 4 6]
 end
