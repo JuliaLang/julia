@@ -7,9 +7,11 @@ import Base.Checked: add_with_overflow, mul_with_overflow
 """
     parse(type, str, [base])
 
-Parse a string as a number. If the type is an integer type, then a base can be specified
-(the default is 10). If the type is a floating point type, the string is parsed as a decimal
-floating point number. If the string does not contain a valid number, an error is raised.
+Parse a string as a number. For `Integer` types, a base can be specified
+(the default is 10). For floating-point types, the string is parsed as a decimal
+floating-point number.  `Complex` types are parsed from decimal strings
+of the form `R±Iim` as a `Complex(R,I)` of the requested type; `i` or `j` can also be
+used instead of `im`.  If the string does not contain a valid number, an error is raised.
 
 ```jldoctest
 julia> parse(Int, "1234")
