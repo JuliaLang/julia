@@ -877,3 +877,21 @@ end
     Z = Array{Int,0}(uninitialized); Z[] = 17
     @test Z == collect(Z) == copy(Z)
 end
+
+@testset "CartesianRange" begin
+    xrng = 2:4
+    yrng = 1:5
+    CR = CartesianRange((xrng,yrng))
+
+    for (i,i_idx) in enumerate(xrng)
+        for (j,j_idx) in enumerate(yrng)
+            @test CR[i,j] == CartesianIndex(i_idx,j_idx)
+        end
+    end
+
+    for i_lin in linearindices(CR)
+        i = (i_lin-1) % length(xrng) + 1
+        j = (i_lin-i) ÷ length(xrng) + 1
+        @test CR[i_lin] == CartesianIndex(xrng[i],yrng[j])
+    end
+end

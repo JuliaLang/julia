@@ -185,7 +185,7 @@ module IteratorsMD
     CartesianIndex(2, 2, 2)
     ```
     """
-    struct CartesianRange{N,R<:NTuple{N,AbstractUnitRange{Int}}}
+    struct CartesianRange{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{CartesianIndex{N},N}
         indices::R
     end
 
@@ -221,6 +221,10 @@ module IteratorsMD
         convert(NTuple{N,UnitRange{Int}}, R)
     convert(::Type{Tuple{Vararg{UnitRange}}}, R::CartesianRange) =
         convert(Tuple{Vararg{UnitRange{Int}}}, R)
+
+    # AbstractArray implementation
+    Base.IndexStyle(::Type{CartesianRange{N,R}}) where {N,R} = IndexCartesian()
+    @inline Base.getindex(iter::CartesianRange{N,R}, I::Vararg{Int, N}) where {N,R} = CartesianIndex(first.(iter.indices) .- 1 .+ I)
 
     ndims(R::CartesianRange) = ndims(typeof(R))
     ndims(::Type{CartesianRange{N}}) where {N} = N
