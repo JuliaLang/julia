@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# SubString and RevString types
+# SubString type
 
 ## substrings reference original strings ##
 
@@ -109,99 +109,8 @@ function unsafe_convert(::Type{Ptr{R}}, s::SubString{String}) where R<:Union{Int
     convert(Ptr{R}, pointer(s.string)) + s.offset
 end
 
-## reversed strings without data movement ##
-
-struct RevString{T<:AbstractString} <: AbstractString
-    string::T
-end
-
-endof(s::RevString) = endof(s.string)
-length(s::RevString) = length(s.string)
-sizeof(s::RevString) = sizeof(s.string)
-
-function next(s::RevString, i::Int)
-    n = endof(s); j = n-i+1
-    (s.string[j], n-prevind(s.string,j)+1)
-end
-
-"""
-    reverse(s::AbstractString) -> AbstractString
-
-Reverses a string.
-
-Technically, this function reverses the codepoints in a string, and its
-main utility is for reversed-order string processing, especially for reversed
-regular-expression searches.  See also [`reverseind`](@ref) to convert indices
-in `s` to indices in `reverse(s)` and vice-versa, and [`graphemes`](@ref)
-to operate on user-visible "characters" (graphemes) rather than codepoints.
-See also [`Iterators.reverse`](@ref) for reverse-order iteration without making a copy.
-
-# Examples
-```jldoctest
-julia> reverse("JuliaLang")
-"gnaLailuJ"
-
-julia> reverse("ax̂e") # combining characters can lead to surprising results
-"êxa"
-
-julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
-"ex̂a"
-```
-"""
-reverse(s::AbstractString) = RevString(s)
-reverse(s::RevString) = s.string
-
-## reverse an index i so that reverse(s)[i] == s[reverseind(s,i)]
-
-"""
-    reverseind(v, i)
-
-Given an index `i` in [`reverse(v)`](@ref), return the corresponding index in `v` so that
-`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in cases where `v` contains
-non-ASCII characters.)
-
-# Examples
-```jldoctest
-julia> r = reverse("Julia")
-"ailuJ"
-
-julia> for i in 1:length(r)
-           print(r[reverseind("Julia", i)])
-       end
-Julia
-```
-"""
-reverseind(s::AbstractString, i) = chr2ind(s, length(s) + 1 - ind2chr(reverse(s), i))
-reverseind(s::RevString, i::Integer) = endof(s) - i + 1
 reverseind(s::SubString{String}, i::Integer) =
     reverseind(s.string, nextind(s.string, endof(s.string))-s.offset-s.endof+i-1) - s.offset
-
-"""
-    repeat(s::AbstractString, r::Integer)
-
-Repeat a string `r` times. This can equivalently be accomplished by calling [`s^r`](@ref ^).
-
-# Examples
-```jldoctest
-julia> repeat("ha", 3)
-"hahaha"
-```
-"""
-repeat(s::AbstractString, r::Integer) = repeat(convert(String, s), r)
-
-"""
-    ^(s::Union{AbstractString,Char}, n::Integer)
-
-Repeat a string or character `n` times.
-The [`repeat`](@ref) function is an alias to this operator.
-
-# Examples
-```jldoctest
-julia> "Test "^3
-"Test Test Test "
-```
-"""
-(^)(s::Union{AbstractString,Char}, r::Integer) = repeat(s,r)
 
 pointer(x::SubString{String}) = pointer(x.string) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)

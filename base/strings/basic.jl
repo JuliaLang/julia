@@ -646,3 +646,77 @@ next(r::Iterators.Reverse{<:AbstractString}, i) = (r.itr[i], prevind(r.itr, i))
 start(r::Iterators.Reverse{<:EachStringIndex}) = endof(r.itr.s)
 done(r::Iterators.Reverse{<:EachStringIndex}, i) = i < start(r.itr.s)
 next(r::Iterators.Reverse{<:EachStringIndex}, i) = (i, prevind(r.itr.s, i))
+
+"""
+    reverse(s::AbstractString) -> String
+
+Reverse a string. The result is always a `String`, regardless of the input type.
+
+Technically, this function reverses the codepoints in a string, and its
+main utility is for reversed-order string processing, especially for reversed
+regular-expression searches.  See also [`reverseind`](@ref) to convert indices
+in `s` to indices in `reverse(s)` and vice-versa, and [`graphemes`](@ref)
+to operate on user-visible "characters" (graphemes) rather than codepoints.
+
+# Examples
+```jldoctest
+julia> reverse("JuliaLang")
+"gnaLailuJ"
+
+julia> reverse("ax̂e") # combining characters can lead to surprising results
+"êxa"
+
+julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
+"ex̂a"
+```
+"""
+reverse(s::AbstractString) = reverse(convert(String, s))
+
+## reverse an index i so that reverse(s)[i] == s[reverseind(s,i)]
+
+"""
+    reverseind(v, i)
+
+Given an index `i` in [`reverse(v)`](@ref), return the corresponding index in `v` so that
+`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in cases where `v` contains
+non-ASCII characters.)
+
+# Examples
+```jldoctest
+julia> r = reverse("Julia")
+"ailuJ"
+
+julia> for i in 1:length(r)
+           print(r[reverseind("Julia", i)])
+       end
+Julia
+```
+"""
+reverseind(s::AbstractString, i) = chr2ind(s, length(s) + 1 - ind2chr(reverse(s), i))
+
+"""
+    repeat(s::AbstractString, r::Integer)
+
+Repeat a string `r` times. This can equivalently be accomplished by calling [`s^r`](@ref ^).
+
+# Examples
+```jldoctest
+julia> repeat("ha", 3)
+"hahaha"
+```
+"""
+repeat(s::AbstractString, r::Integer) = repeat(convert(String, s), r)
+
+"""
+    ^(s::Union{AbstractString,Char}, n::Integer)
+
+Repeat a string or character `n` times.
+The [`repeat`](@ref) function is an alias to this operator.
+
+# Examples
+```jldoctest
+julia> "Test "^3
+"Test Test Test "
+```
+"""
+(^)(s::Union{AbstractString,Char}, r::Integer) = repeat(s, r)

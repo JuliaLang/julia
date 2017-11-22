@@ -138,6 +138,9 @@ Language changes
 
   * The syntax `(x...)` for constructing a tuple is deprecated; use `(x...,)` instead (#24452).
 
+  * The `RevString` type for lazily reversed strings has been moved to the LegacyStrings
+    package ([#22611]).
+
 Breaking changes
 ----------------
 
@@ -289,6 +292,9 @@ This section lists changes that do not have deprecation warnings.
     errors), but returns successfully if the process had previously exited.
     Its return value has been removed. Use the `process_running` function
     to determine if a process has already exited.
+
+  * `reverse(::AbstractString)` now unconditionally returns a `String`. Previously it
+    returned a `RevString`, which has been removed from Base ([#23612]).
 
 Library improvements
 --------------------
@@ -1536,6 +1542,7 @@ Command-line option changes
 [#22572]: https://github.com/JuliaLang/julia/issues/22572
 [#22588]: https://github.com/JuliaLang/julia/issues/22588
 [#22605]: https://github.com/JuliaLang/julia/issues/22605
+[#22611]: https://github.com/JuliaLang/julia/issues/22611
 [#22666]: https://github.com/JuliaLang/julia/issues/22666
 [#22696]: https://github.com/JuliaLang/julia/issues/22696
 [#22703]: https://github.com/JuliaLang/julia/issues/22703
@@ -1591,6 +1598,7 @@ Command-line option changes
 [#23529]: https://github.com/JuliaLang/julia/issues/23529
 [#23530]: https://github.com/JuliaLang/julia/issues/23530
 [#23570]: https://github.com/JuliaLang/julia/issues/23570
+[#23612]: https://github.com/JuliaLang/julia/issues/23612
 [#23628]: https://github.com/JuliaLang/julia/issues/23628
 [#23665]: https://github.com/JuliaLang/julia/issues/23665
 [#23690]: https://github.com/JuliaLang/julia/issues/23690

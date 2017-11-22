@@ -156,7 +156,6 @@
       <item> RegexMatch </item>
       <item> RegexMatchIterator </item>
       <item> RepString </item>
-      <item> RevString </item>
       <item> Reverse </item>
       <item> Schur </item>
       <item> Set </item>
