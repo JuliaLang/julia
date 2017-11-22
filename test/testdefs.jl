@@ -2,7 +2,7 @@
 
 using Test
 
-function runtests(name, isolate=true; seed=nothing)
+function runtests(name, path, isolate=true; seed=nothing)
     old_print_setting = Test.TESTSET_PRINT_ENABLE[]
     Test.TESTSET_PRINT_ENABLE[] = false
     try
@@ -19,7 +19,7 @@ function runtests(name, isolate=true; seed=nothing)
             @timed @testset $"$name" begin
                 # srand(nothing) will fail
                 $seed != nothing && srand($seed)
-                include($"$name.jl")
+                include($"$path.jl")
             end
         end
         res_and_time_data = eval(m, ex)

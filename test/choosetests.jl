@@ -52,6 +52,8 @@ function choosetests(choices = [])
         "reinterpretarray", "syntax"
     ]
 
+    stdlibs = readdir(joinpath(@__DIR__, "..", "stdlib"))
+
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
         push!(testnames, "examples")
     end
@@ -175,6 +177,33 @@ function choosetests(choices = [])
     if !net_on
         filter!(x -> !(x in net_required_for), tests)
     end
+
+    if "stdlib" in skip_tests
+        filter!(x -> x != "stdlib", tests)
+    elseif "stdlib" in tests
+        filter!(x -> x != "stdlib", tests)
+        prepend!(tests, stdlibs)
+    end
+
+    if startswith(string(Sys.ARCH), "arm")
+        # Remove profile from default tests on ARM since it currently segfaults
+        # Allow explicitly adding it for testing
+        warn("Skipping Profile tests")
+        filter!(x -> (x != "Profile"), tests)
+    end
+
+    stdlib_dir = joinpath(@__DIR__, "..", "stdlib")
+    for stdlib in filter(x -> x in stdlibs, tests)
+        splice!(tests, findfirst(equalto(stdlib), tests))
+        dir = readdir(stdlib_dir)
+        test_file = joinpath(stdlib_dir, stdlib, "test", "runtests")
+        if isfile(test_file * ".jl")
+            unshift!(tests, test_file)
+        else
+            warn("Standard library $stdlib did not provide a `test/runtests.jl` file")
+        end
+    end
+
 
     filter!(x -> !(x in skip_tests), tests)
 
