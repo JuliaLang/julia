@@ -1,9 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# SubString and RevString types
-
-## substrings reference original strings ##
-
 """
     SubString(s::AbstractString, i::Integer, j::Integer=endof(s))
     SubString(s::AbstractString, r::UnitRange{<:Integer})
@@ -50,6 +46,9 @@ end
 
 SubString(s::AbstractString) = SubString(s, 1, endof(s))
 SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, endof(s))
+
+convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
+    SubString(convert(S, s))
 
 String(p::SubString{String}) =
     unsafe_string(pointer(p.string, p.offset+1), nextind(p, p.endof)-1)
@@ -123,32 +122,18 @@ function unsafe_convert(::Type{Ptr{R}}, s::SubString{String}) where R<:Union{Int
     convert(Ptr{R}, pointer(s.string)) + s.offset
 end
 
-## reversed strings without data movement ##
-
-struct RevString{T<:AbstractString} <: AbstractString
-    string::T
-end
-
-endof(s::RevString) = endof(s.string)
-length(s::RevString) = length(s.string)
-sizeof(s::RevString) = sizeof(s.string)
-
-function next(s::RevString, i::Int)
-    n = endof(s); j = n-i+1
-    (s.string[j], n-prevind(s.string,j)+1)
-end
-
 """
     reverse(s::AbstractString) -> AbstractString
 
-Reverses a string.
-
-Technically, this function reverses the codepoints in a string, and its
+Reverses a string. Technically, this function reverses the codepoints in a string and its
 main utility is for reversed-order string processing, especially for reversed
-regular-expression searches.  See also [`reverseind`](@ref) to convert indices
-in `s` to indices in `reverse(s)` and vice-versa, and [`graphemes`](@ref)
-to operate on user-visible "characters" (graphemes) rather than codepoints.
-See also [`Iterators.reverse`](@ref) for reverse-order iteration without making a copy.
+regular-expression searches. See also [`reverseind`](@ref) to convert indices in `s` to
+indices in `reverse(s)` and vice-versa, and [`graphemes`](@ref) to operate on user-visible
+"characters" (graphemes) rather than codepoints. See also [`Iterators.reverse`](@ref) for
+reverse-order iteration without making a copy. Custom string types must implement the
+`reverse` function themselves and should typically return a string with the same type
+and encoding. If they return a string with a different encoding, they must also override
+`reverseind` for that string type to satisfy `s[reverseind(s,i)] == reverse(s)[i]`.
 
 # Examples
 ```jldoctest
@@ -162,10 +147,15 @@ julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
 "ex̂a"
 ```
 """
-reverse(s::AbstractString) = RevString(s)
-reverse(s::RevString) = s.string
-
-## reverse an index i so that reverse(s)[i] == s[reverseind(s,i)]
+function reverse(s::Union{String,SubString{String}})::String
+    sprint() do io
+        i, j = start(s), endof(s)
+        while i ≤ j
+            c, j = s[j], prevind(s, j)
+            write(io, c)
+        end
+    end
+end
 
 """
     reverseind(v, i)
@@ -185,10 +175,7 @@ julia> for i in 1:length(r)
 Julia
 ```
 """
-reverseind(s::AbstractString, i) = chr2ind(s, length(s) + 1 - ind2chr(reverse(s), i))
-reverseind(s::RevString, i::Integer) = endof(s) - i + 1
-reverseind(s::SubString{String}, i::Integer) =
-    reverseind(s.string, nextind(s.string, endof(s.string))-s.offset-s.endof+i-1) - s.offset
+reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
 
 """
     repeat(s::AbstractString, r::Integer)

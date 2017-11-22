@@ -27,16 +27,16 @@ end
     @test reverse("a") == "a"
     @test reverse("abc") == "cba"
     @test reverse("xyz\uff\u800\uffff\U10ffff") == "\U10ffff\uffff\u800\uffzyx"
-    for str in [
-        b"xyz\xc1",
-        b"xyz\xd0",
-        b"xyz\xe0",
-        b"xyz\xed\x80",
-        b"xyz\xf0",
-        b"xyz\xf0\x80",
-        b"xyz\xf0\x80\x80"
+    for (s, r) in [
+        b"xyz\xc1"          => b"\xc1zyx",
+        b"xyz\xd0"          => b"\xd0zyx",
+        b"xyz\xe0"          => b"\xe0zyx",
+        b"xyz\xed\x80"      => b"\xed\x80zyx",
+        b"xyz\xf0"          => b"\xf0zyx",
+        b"xyz\xf0\x80"      => b"\xf0\x80zyx",
+        b"xyz\xf0\x80\x80"  => b"\xf0\x80\x80zyx",
     ]
-        @test_throws UnicodeError reverse(String(str))
+        @test_broken reverse(String(s)) == String(r)
     end
 end
 

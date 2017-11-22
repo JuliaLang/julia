@@ -295,14 +295,6 @@ function first_utf8_byte(ch::Char)
     return b
 end
 
-function reverseind(s::String, i::Integer)
-    j = sizeof(s) + 1 - i
-    @inbounds while is_valid_continuation(codeunit(s, j))
-        j -= 1
-    end
-    return j
-end
-
 ## overload methods for efficiency ##
 
 isvalid(s::String, i::Integer) =
@@ -475,38 +467,6 @@ function string(a::Union{String,Char}...)
         end
     end
     return out
-end
-
-function reverse(s::String)
-    dat = Vector{UInt8}(s)
-    n = length(dat)
-    n <= 1 && return s
-    buf = StringVector(n)
-    out = n
-    pos = 1
-    @inbounds while out > 0
-        ch = dat[pos]
-        if ch > 0xdf
-            if ch < 0xf0
-                (out -= 3) < 0 && throw(UnicodeError(UTF_ERR_SHORT, pos, ch))
-                buf[out + 1], buf[out + 2], buf[out + 3] = ch, dat[pos + 1], dat[pos + 2]
-                pos += 3
-            else
-                (out -= 4) < 0 && throw(UnicodeError(UTF_ERR_SHORT, pos, ch))
-                buf[out+1], buf[out+2], buf[out+3], buf[out+4] = ch, dat[pos+1], dat[pos+2], dat[pos+3]
-                pos += 4
-            end
-        elseif ch > 0x7f
-            (out -= 2) < 0 && throw(UnicodeError(UTF_ERR_SHORT, pos, ch))
-            buf[out + 1], buf[out + 2] = ch, dat[pos + 1]
-            pos += 2
-        else
-            buf[out] = ch
-            out -= 1
-            pos += 1
-        end
-    end
-    String(buf)
 end
 
 function repeat(s::String, r::Integer)
