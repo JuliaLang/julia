@@ -145,14 +145,14 @@ dimg  = randn(n)/2
             @test_throws DimensionMismatch lud\f
             @test_throws DimensionMismatch lud.'\f
             @test_throws DimensionMismatch lud'\f
-            @test_throws DimensionMismatch Base.LinAlg.At_ldiv_B!(lud, f)
+            @test_throws DimensionMismatch LinAlg.At_ldiv_B!2(lud, f)
             let Bs = copy(b)
                 for bb in (Bs, view(Bs, 1:n, 1))
                     @test norm(d*(lud\bb) - bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                     if eltya <: Real
                         @test norm((lud.'\bb) - Array(d.')\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                         if eltya != Int && eltyb != Int
-                            @test norm(Base.LinAlg.At_ldiv_B!(lud, copy(bb)) - Array(d.')\bb, 1) < ε*κd*n*2
+                            @test norm(LinAlg.At_ldiv_B!2(lud, copy(bb)) - Array(d.')\bb, 1) < ε*κd*n*2
                         end
                     end
                     if eltya <: Complex

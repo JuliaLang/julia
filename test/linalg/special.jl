@@ -97,7 +97,7 @@ end
     end
 
     C = rand(n,n)
-    for TriType in [Base.LinAlg.UnitLowerTriangular, Base.LinAlg.UnitUpperTriangular, UpperTriangular, LowerTriangular]
+    for TriType in [LinAlg.UnitLowerTriangular, LinAlg.UnitUpperTriangular, UpperTriangular, LowerTriangular]
         D = TriType(C)
         for Spectype in [Diagonal, Bidiagonal, Tridiagonal, Matrix]
             @test Matrix(D + convert(Spectype,A)) ≈ Matrix(D + A)
@@ -109,16 +109,16 @@ end
 end
 
 @testset "Triangular Types and QR" begin
-    for typ in [UpperTriangular,LowerTriangular,Base.LinAlg.UnitUpperTriangular,Base.LinAlg.UnitLowerTriangular]
+    for typ in [UpperTriangular,LowerTriangular,LinAlg.UnitUpperTriangular,LinAlg.UnitLowerTriangular]
         a = rand(n,n)
         atri = typ(a)
         b = rand(n,n)
         qrb = qrfact(b,Val(true))
-        @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
-        @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
+        @test LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
+        @test LinAlg.A_mul_Bc!1(copy(atri),qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
         qrb = qrfact(b,Val(false))
-        @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
-        @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
+        @test LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
+        @test LinAlg.A_mul_Bc!1(copy(atri),qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
     end
 end
 
@@ -171,8 +171,8 @@ end
     N = 4
     # The tested annotation types
     testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
-    utriannotations = (UpperTriangular, Base.LinAlg.UnitUpperTriangular)
-    ltriannotations = (LowerTriangular, Base.LinAlg.UnitLowerTriangular)
+    utriannotations = (UpperTriangular, LinAlg.UnitUpperTriangular)
+    ltriannotations = (LowerTriangular, LinAlg.UnitLowerTriangular)
     triannotations = (utriannotations..., ltriannotations...)
     symannotations = (Symmetric, Hermitian)
     annotations = testfull ? (triannotations..., symannotations...) : (LowerTriangular, Symmetric)

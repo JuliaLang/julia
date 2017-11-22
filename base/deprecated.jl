@@ -2211,6 +2211,113 @@ end
 finalizer(f::Ptr{Void}, o::Ptr{Void}) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
 finalizer(f::Ptr{Void}, o::Function) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
 
+# A_mul_B!
+import .LinAlg: A_mul_B!, A_mul_Bt!, A_mul_Bc!, At_mul_B!, Ac_mul_B!,
+    A_ldiv_B!, At_ldiv_B!, Ac_ldiv_B!, A_rdiv_B!, A_rdiv_Bt!, A_rdiv_Bc!
+
+@deprecate A_ldiv_B!(A, B) A_ldiv_B!2(A, B)
+@deprecate At_ldiv_B!(A, B) At_ldiv_B!2(A, B)
+@deprecate Ac_ldiv_B!(A, B) Ac_ldiv_B!2(A, B)
+
+@deprecate A_rdiv_B!(A, B) A_rdiv_B!1(A, B)
+@deprecate A_rdiv_Bt!(A, B) A_rdiv_Bt!1(A, B)
+@deprecate A_rdiv_Bc!(A, B) A_rdiv_Bc!1(A, B)
+
+# linalg/diagonal.jl
+@deprecate A_mul_B!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) A_mul_B!1(A, D)
+@deprecate A_mul_B!(A::LinAlg.UnitLowerTriangular, D::Diagonal) A_mul_B!1(A,D)
+@deprecate A_mul_B!(A::LinAlg.UnitUpperTriangular, D::Diagonal) A_mul_B!1(A,D)
+
+@deprecate A_mul_B!(D::Diagonal, B::LinAlg.UnitLowerTriangular) A_mul_B!2(D,B)
+@deprecate A_mul_B!(D::Diagonal, B::LinAlg.UnitUpperTriangular) A_mul_B!2(D,B)
+
+@deprecate A_mul_B!(A::Diagonal,B::AbstractMatrix)  A_mul_B!2(A,B)
+@deprecate At_mul_B!(A::Diagonal,B::AbstractMatrix) At_mul_B!2(A,B)
+@deprecate Ac_mul_B!(A::Diagonal,B::AbstractMatrix) Ac_mul_B!2(A,B)
+@deprecate A_mul_B!(A::AbstractMatrix,B::Diagonal)  A_mul_B!1(A,B)
+@deprecate A_mul_Bt!(A::AbstractMatrix,B::Diagonal) A_mul_Bt!1(A,B)
+@deprecate A_mul_Bc!(A::AbstractMatrix,B::Diagonal) A_mul_Bc!1(A,B)
+
+# linalg/givens.jl
+@deprecate A_mul_B!(G::LinAlg.Givens, A::AbstractVecOrMat) A_mul_B!2(G, A)
+@deprecate A_mul_Bc!(A::AbstractMatrix, G::LinAlg.Givens) A_mul_Bc!1(A, G)
+@deprecate A_mul_B!(G::LinAlg.Givens, R::LinAlg.Rotation) A_mul_B!2(G, R)
+@deprecate A_mul_B!(R::LinAlg.Rotation, A::AbstractMatrix) A_mul_B!2(R, A)
+@deprecate A_mul_Bc!(A::AbstractMatrix, R::LinAlg.Rotation) A_mul_Bc!1(A, R)
+
+# linalg/hessenberg.jl
+@deprecate A_mul_B!(Q::LinAlg.HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:LinAlg.BlasFloat}   A_mul_B!2(Q, X)
+@deprecate A_mul_B!(X::StridedMatrix{T}, Q::LinAlg.HessenbergQ{T}) where {T<:LinAlg.BlasFloat}     A_mul_B!1(X, Q)
+@deprecate Ac_mul_B!(Q::LinAlg.HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:LinAlg.BlasFloat}  Ac_mul_B!2(Q, X)
+@deprecate A_mul_Bc!(X::StridedMatrix{T}, Q::LinAlg.HessenbergQ{T}) where {T<:LinAlg.BlasFloat}    A_mul_Bc!1(X, Q)
+
+# linalg/lq.jl
+@deprecate A_mul_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:LinAlg.BlasFloat} A_mul_B!2(A, B)
+@deprecate A_mul_B!(A::LQ{T}, B::QR{T}) where {T<:LinAlg.BlasFloat}              A*B
+@deprecate A_mul_B!(A::QR{T}, B::LQ{T}) where {T<:LinAlg.BlasFloat}              A*B
+
+@deprecate A_mul_B!(A::LinAlg.LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:LinAlg.BlasFloat} A_mul_B!2(A, B)
+@deprecate Ac_mul_B!(A::LinAlg.LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:LinAlg.BlasReal} Ac_mul_B!2(A, B)
+@deprecate Ac_mul_B!(A::LinAlg.LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:LinAlg.BlasComplex} Ac_mul_B!2(A, B)
+
+@deprecate A_mul_B!(A::StridedMatrix{T}, B::LinAlg.LQPackedQ{T}) where {T<:LinAlg.BlasFloat}     A_mul_B!1(A, B)
+@deprecate A_mul_Bc!(A::StridedMatrix{T}, B::LinAlg.LQPackedQ{T}) where {T<:LinAlg.BlasReal}     A_mul_Bc!1(A, B)
+@deprecate A_mul_Bc!(A::StridedMatrix{T}, B::LinAlg.LQPackedQ{T}) where {T<:LinAlg.BlasComplex} A_mul_Bc!1(A, B)
+
+@deprecate A_ldiv_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T} A_ldiv_B!2(A, B)
+
+# linalg/qr.jl
+@deprecate A_mul_B!(A::LinAlg.QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:LinAlg.BlasFloat, S<:StridedMatrix} A_mul_B!2(A, B)
+@deprecate A_mul_B!(A::LinAlg.QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:LinAlg.BlasFloat, S<:StridedMatrix} A_mul_B!2(A, B)
+@deprecate A_mul_B!(A::LinAlg.QRPackedQ, B::AbstractVecOrMat) A_mul_B!2(A, B)
+
+@deprecate Ac_mul_B!(A::LinAlg.QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:LinAlg.BlasReal,S<:StridedMatrix} Ac_mul_B!2(A, B)
+@deprecate Ac_mul_B!(A::LinAlg.QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:LinAlg.BlasComplex,S<:StridedMatrix} Ac_mul_B!2(A, B)
+@deprecate Ac_mul_B!(A::LinAlg.QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:LinAlg.BlasReal,S<:StridedMatrix} Ac_mul_B!2(A, B)
+@deprecate Ac_mul_B!(A::LinAlg.QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:LinAlg.BlasComplex,S<:StridedMatrix} Ac_mul_B!2(A, B)
+@deprecate Ac_mul_B!(A::LinAlg.QRPackedQ, B::AbstractVecOrMat) Ac_mul_B!2(A, B)
+
+@deprecate A_mul_B!(A::StridedVecOrMat{T}, B::LinAlg.QRCompactWYQ{T,S}) where {T<:LinAlg.BlasFloat,S<:StridedMatrix} A_mul_B!1(A,B)
+@deprecate A_mul_B!(A::StridedVecOrMat{T}, B::LinAlg.QRPackedQ{T,S}) where {T<:LinAlg.BlasFloat,S<:StridedMatrix} A_mul_B!1(A,B)
+@deprecate A_mul_B!(A::StridedMatrix,Q::LinAlg.QRPackedQ) A_mul_B!1(A,B)
+
+@deprecate A_mul_Bc!(A::StridedVecOrMat{T}, B::LinAlg.QRCompactWYQ{T}) where {T<:LinAlg.BlasReal}    A_mul_Bc!1(A, B)
+@deprecate A_mul_Bc!(A::StridedVecOrMat{T}, B::LinAlg.QRCompactWYQ{T}) where {T<:LinAlg.BlasComplex} A_mul_Bc!1(A, B)
+@deprecate A_mul_Bc!(A::StridedVecOrMat{T}, B::LinAlg.QRPackedQ{T}) where {T<:LinAlg.BlasReal}       A_mul_Bc!1(A, B)
+@deprecate A_mul_Bc!(A::StridedVecOrMat{T}, B::LinAlg.QRPackedQ{T}) where {T<:LinAlg.BlasComplex}    A_mul_Bc!1(A, B)
+@deprecate A_mul_Bc!(A::StridedMatrix,Q::LinAlg.QRPackedQ) A_mul_Bc!1(A, B)
+
+@deprecate A_ldiv_B!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where {T<:LinAlg.BlasFloat}  A_ldiv_B!(A,B, rcond)
+
+# linalg/special.jl
+@deprecate A_mul_Bc!(A::LinAlg.AbstractTriangular, B::Union{LinAlg.QRCompactWYQ,LinAlg.QRPackedQ}) A_mul_Bc!1(A, B)
+
+# linalg/triangular.jl
+@deprecate A_mul_B!(A::Tridiagonal, B::LinAlg.AbstractTriangular) A*B
+
+@deprecate A_mul_B!(A::LinAlg.AbstractTriangular, b::StridedVector) A_mul_B!2(A,b)
+@deprecate A_mul_B!(A::LinAlg.AbstractTriangular, B::StridedMatrix) A_mul_B!2(A,B)
+@deprecate At_mul_B!(A::LinAlg.AbstractTriangular, b::StridedVector) At_mul_B!2(A,b)
+@deprecate At_mul_B!(A::LinAlg.AbstractTriangular, B::StridedMatrix) At_mul_B!2(A,B)
+@deprecate Ac_mul_B!(A::LinAlg.AbstractTriangular, b::StridedVector) Ac_mul_B!2(A,b)
+@deprecate Ac_mul_B!(A::LinAlg.AbstractTriangular, B::StridedMatrix) Ac_mul_B!2(A,B)
+
+@deprecate A_mul_B!(A::StridedMatrix, B::LinAlg.AbstractTriangular) A_mul_B!1(A,B)
+@deprecate A_mul_Bt!(A::StridedMatrix, B::LinAlg.AbstractTriangular) A_mul_Bt!1(A,B)
+@deprecate A_mul_Bc!(A::StridedMatrix, B::LinAlg.AbstractTriangular) A_mul_Bc!1(A,B)
+
+@deprecate At_mul_B!(A::LinAlg.AbstractTriangular, B::LinAlg.AbstractTriangular) At_mul_B!2(A,B)
+@deprecate Ac_mul_B!(A::LinAlg.AbstractTriangular, B::LinAlg.AbstractTriangular) Ac_mul_B!2(A,B)
+@deprecate A_mul_Bt!(A::LinAlg.AbstractTriangular, B::LinAlg.AbstractTriangular) A_mul_Bt!1(A,B)
+@deprecate A_mul_Bc!(A::LinAlg.AbstractTriangular, B::LinAlg.AbstractTriangular) A_mul_Bc!1(A,B)
+
+# sparse/spqr.jl
+@deprecate A_mul_B!(Q::SparseArrays.SPQR.QRSparseQ, A::StridedVecOrMat) A_mul_B!2(Q, A)
+@deprecate A_mul_B!(A::StridedMatrix, Q::SparseArrays.SPQR.QRSparseQ) A_mul_B!1(A, Q)
+@deprecate Ac_mul_B!(Q::SparseArrays.SPQR.QRSparseQ, A::StridedVecOrMat) Ac_mul_B!2(Q, A)
+@deprecate A_mul_Bc!(A::StridedMatrix, Q::SparseArrays.SPQR.QRSparseQ) A_mul_Bc!1(A, Q)
+
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

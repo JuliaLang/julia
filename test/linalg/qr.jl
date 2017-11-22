@@ -20,7 +20,7 @@ breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
 # helper functions to unambiguously recover explicit forms of an implicit QR Q
-squareQ(Q::LinAlg.AbstractQ) = (sq = size(Q.factors, 1); A_mul_B!(Q, Matrix{eltype(Q)}(I, sq, sq)))
+squareQ(Q::LinAlg.AbstractQ) = (sq = size(Q.factors, 1); LinAlg.A_mul_B!2(Q, Matrix{eltype(Q)}(I, sq, sq)))
 rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
 
 @testset for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
@@ -135,20 +135,20 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 a = raw_a
                 qrpa = factorize(a[:,1:n1])
                 q, r = qrpa[:Q], qrpa[:R]
-                @test A_mul_B!(squareQ(q)', q) ≈ Matrix(I, n, n)
-                @test_throws DimensionMismatch A_mul_B!(Matrix{eltya}(I, n+1, n+1),q)
-                @test A_mul_Bc!(squareQ(q), q) ≈ Matrix(I, n, n)
-                @test_throws DimensionMismatch A_mul_Bc!(Matrix{eltya}(I, n+1, n+1),q)
+                @test LinAlg.A_mul_B!1(squareQ(q)', q) ≈ Matrix(I, n, n)
+                @test_throws DimensionMismatch LinAlg.A_mul_B!1(Matrix{eltya}(I, n+1, n+1),q)
+                @test LinAlg.A_mul_Bc!1(squareQ(q), q) ≈ Matrix(I, n, n)
+                @test_throws DimensionMismatch LinAlg.A_mul_Bc!1(Matrix{eltya}(I, n+1, n+1),q)
                 @test_throws BoundsError size(q,-1)
-                @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(q,zeros(eltya,n1+1))
-                @test_throws DimensionMismatch Base.LinAlg.Ac_mul_B!(q,zeros(eltya,n1+1))
+                @test_throws DimensionMismatch LinAlg.A_mul_B!2(q,zeros(eltya,n1+1))
+                @test_throws DimensionMismatch LinAlg.Ac_mul_B!2(q,zeros(eltya,n1+1))
 
                 qra = qrfact(a[:,1:n1], Val(false))
                 q, r = qra[:Q], qra[:R]
-                @test A_mul_B!(squareQ(q)', q) ≈ Matrix(I, n, n)
-                @test_throws DimensionMismatch A_mul_B!(Matrix{eltya}(I, n+1, n+1),q)
-                @test A_mul_Bc!(squareQ(q), q) ≈ Matrix(I, n, n)
-                @test_throws DimensionMismatch A_mul_Bc!(Matrix{eltya}(I, n+1, n+1),q)
+                @test LinAlg.A_mul_B!1(squareQ(q)', q) ≈ Matrix(I, n, n)
+                @test_throws DimensionMismatch LinAlg.A_mul_B!1(Matrix{eltya}(I, n+1, n+1),q)
+                @test LinAlg.A_mul_Bc!1(squareQ(q), q) ≈ Matrix(I, n, n)
+                @test_throws DimensionMismatch LinAlg.A_mul_Bc!1(Matrix{eltya}(I, n+1, n+1),q)
                 @test_throws BoundsError size(q,-1)
                 @test_throws DimensionMismatch q * Matrix{Int8}(I, n+4, n+4)
             end

@@ -15,11 +15,11 @@ using Test
         for j = 1:8
             for i = j+2:10
                 G, _ = givens(A, j+1, i, j)
-                A_mul_B!(G, A)
-                A_mul_Bc!(A, G)
-                A_mul_B!(G, R)
+                LinAlg.A_mul_B!2(G, A)
+                LinAlg.A_mul_Bc!1(A, G)
+                LinAlg.A_mul_B!2(G, R)
 
-                @test A_mul_B!(G,Matrix{elty}(I, 10, 10)) == [G[i,j] for i=1:10,j=1:10]
+                @test LinAlg.A_mul_B!2(G,Matrix{elty}(I, 10, 10)) == [G[i,j] for i=1:10,j=1:10]
 
                 @testset "transposes" begin
                     @test adjoint(G)*G*Matrix(elty(1)I, 10, 10) ≈ Matrix(I, 10, 10)
@@ -32,8 +32,8 @@ using Test
         @test_throws ArgumentError givens(A, 3, 3, 2)
         @test_throws ArgumentError givens(one(elty),zero(elty),2,2)
         G, _ = givens(one(elty),zero(elty),11,12)
-        @test_throws DimensionMismatch A_mul_B!(G, A)
-        @test_throws DimensionMismatch A_mul_Bc!(A,G)
+        @test_throws DimensionMismatch LinAlg.A_mul_B!2(G, A)
+        @test_throws DimensionMismatch LinAlg.A_mul_Bc!1(A,G)
         @test abs.(A) ≈ abs.(hessfact(Ac)[:H])
         @test norm(R*Matrix{elty}(I, 10, 10)) ≈ one(elty)
 

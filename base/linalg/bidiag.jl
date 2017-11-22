@@ -494,10 +494,10 @@ for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
 end
 
 #Linear solvers
-A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
-At_ldiv_B!(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!(transpose(A), b)
-Ac_ldiv_B!(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!(adjoint(A), b)
-function A_ldiv_B!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
+A_ldiv_B!2(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
+At_ldiv_B!2(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!2(transpose(A), b)
+Ac_ldiv_B!2(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!2(adjoint(A), b)
+function A_ldiv_B!2(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
     n = size(B, 1)
@@ -506,12 +506,12 @@ function A_ldiv_B!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     end
     for i = 1:size(B,2)
         copy!(tmp, 1, B, (i - 1)*n + 1, n)
-        A_ldiv_B!(A, tmp)
+        A_ldiv_B!2(A, tmp)
         copy!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
     end
     B
 end
-for func in (:Ac_ldiv_B!, :At_ldiv_B!)
+for func in (:Ac_ldiv_B!2, :At_ldiv_B!2)
     @eval function ($func)(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
         nA,mA = size(A)
         tmp = similar(B,size(B,1))
@@ -550,13 +550,13 @@ function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) w
 end
 
 ### Generic promotion methods and fallbacks
-for (f,g) in ((:\, :A_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!))
+for (f,f!2) in ((:\, :A_ldiv_B!2), (:At_ldiv_B, :At_ldiv_B!2), (:Ac_ldiv_B, :Ac_ldiv_B!2))
     @eval begin
         function ($f)(A::Bidiagonal{TA}, B::AbstractVecOrMat{TB}) where {TA<:Number,TB<:Number}
             TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
+            ($f!2)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
         end
-        ($f)(A::Bidiagonal, B::AbstractVecOrMat) = ($g)(A, copy(B))
+        ($f)(A::Bidiagonal, B::AbstractVecOrMat) = ($f!2)(A, copy(B))
     end
 end
 

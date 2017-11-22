@@ -1,8 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
-import Base.LinAlg: BlasFloat, BlasComplex, SingularException, A_rdiv_B!, A_rdiv_Bt!,
-    A_rdiv_Bc!
+import Base.LinAlg: BlasFloat, BlasComplex, SingularException
 
 n=12 #Size of matrix problem to test
 srand(1)
@@ -97,37 +96,37 @@ srand(1)
                 atol_three = 2n^3 * eps(relty) * (1 + (elty <: Complex))
                 @test D\v ≈ DM\v atol=atol_two
                 @test D\U ≈ DM\U atol=atol_three
-                @test A_ldiv_B!(D, copy(v)) ≈ DM\v atol=atol_two
-                @test At_ldiv_B!(D, copy(v)) ≈ DM\v atol=atol_two
-                @test Ac_ldiv_B!(conj(D), copy(v)) ≈ DM\v atol=atol_two
-                @test A_ldiv_B!(D, copy(U)) ≈ DM\U atol=atol_three
-                @test At_ldiv_B!(D, copy(U)) ≈ DM\U atol=atol_three
-                @test Ac_ldiv_B!(conj(D), copy(U)) ≈ DM\U atol=atol_three
+                @test LinAlg.A_ldiv_B!2(D, copy(v)) ≈ DM\v atol=atol_two
+                @test LinAlg.At_ldiv_B!2(D, copy(v)) ≈ DM\v atol=atol_two
+                @test LinAlg.Ac_ldiv_B!2(conj(D), copy(v)) ≈ DM\v atol=atol_two
+                @test LinAlg.A_ldiv_B!2(D, copy(U)) ≈ DM\U atol=atol_three
+                @test LinAlg.At_ldiv_B!2(D, copy(U)) ≈ DM\U atol=atol_three
+                @test LinAlg.Ac_ldiv_B!2(conj(D), copy(U)) ≈ DM\U atol=atol_three
                 Uc = adjoint(U)
                 target = scale!(Uc, inv.(D.diag))
-                @test A_rdiv_B!(Uc, D) ≈ target atol=atol_three
-                @test_throws DimensionMismatch A_rdiv_B!(Matrix{elty}(I, n-1, n-1), D)
-                @test_throws SingularException A_rdiv_B!(Uc, Diagonal(fill!(similar(D.diag), 0)))
-                @test A_rdiv_Bt!(Uc, D) ≈ target atol=atol_three
-                @test A_rdiv_Bc!(Uc, conj(D)) ≈ target atol=atol_three
-                @test A_ldiv_B!(D, Matrix{eltype(D)}(I, size(D))) ≈ D \ Matrix{eltype(D)}(I, size(D)) atol=atol_three
-                @test_throws DimensionMismatch A_ldiv_B!(D, ones(elty, n + 1))
-                @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty, n)), copy(v))
+                @test LinAlg.A_rdiv_B!1(Uc, D) ≈ target atol=atol_three
+                @test_throws DimensionMismatch LinAlg.A_rdiv_B!1(Matrix{elty}(I, n-1, n-1), D)
+                @test_throws SingularException LinAlg.A_rdiv_B!1(Uc, Diagonal(fill!(similar(D.diag), 0)))
+                @test LinAlg.A_rdiv_Bt!1(Uc, D) ≈ target atol=atol_three
+                @test LinAlg.A_rdiv_Bc!1(Uc, conj(D)) ≈ target atol=atol_three
+                @test LinAlg.A_ldiv_B!2(D, Matrix{eltype(D)}(I, size(D))) ≈ D \ Matrix{eltype(D)}(I, size(D)) atol=atol_three
+                @test_throws DimensionMismatch LinAlg.A_ldiv_B!2(D, ones(elty, n + 1))
+                @test_throws SingularException LinAlg.A_ldiv_B!2(Diagonal(zeros(relty, n)), copy(v))
                 b = rand(elty, n, n)
                 b = sparse(b)
-                @test A_ldiv_B!(D, copy(b)) ≈ Array(D)\Array(b)
-                @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty, n)), copy(b))
+                @test LinAlg.A_ldiv_B!2(D, copy(b)) ≈ Array(D)\Array(b)
+                @test_throws SingularException LinAlg.A_ldiv_B!2(Diagonal(zeros(elty, n)), copy(b))
                 b = view(rand(elty, n), collect(1:n))
                 b2 = copy(b)
-                c = A_ldiv_B!(D, b)
+                c = LinAlg.A_ldiv_B!2(D, b)
                 d = Array(D)\b2
                 @test c ≈ d
-                @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty, n)), b)
+                @test_throws SingularException LinAlg.A_ldiv_B!2(Diagonal(zeros(elty, n)), b)
                 b = rand(elty, n+1, n+1)
                 b = sparse(b)
-                @test_throws DimensionMismatch A_ldiv_B!(D, copy(b))
+                @test_throws DimensionMismatch LinAlg.A_ldiv_B!2(D, copy(b))
                 b = view(rand(elty, n+1), collect(1:n+1))
-                @test_throws DimensionMismatch A_ldiv_B!(D, b)
+                @test_throws DimensionMismatch LinAlg.A_ldiv_B!2(D, b)
             end
         end
     end
@@ -146,9 +145,9 @@ srand(1)
             if relty <: BlasFloat
                 b = rand(elty,n,n)
                 b = sparse(b)
-                @test A_mul_B!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                @test At_mul_B!(copy(D), copy(b)) ≈ Array(D).'*Array(b)
-                @test Ac_mul_B!(copy(D), copy(b)) ≈ Array(D)'*Array(b)
+                @test LinAlg.A_mul_B!2(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                @test LinAlg.At_mul_B!2(copy(D), copy(b)) ≈ Array(D).'*Array(b)
+                @test LinAlg.Ac_mul_B!2(copy(D), copy(b)) ≈ Array(D)'*Array(b)
             end
         end
 
@@ -177,13 +176,13 @@ srand(1)
         VV = Array(D)
         DD = copy(D)
         r  = VV * Matrix(D)
-        @test Array(A_mul_B!(VV, DD)) ≈ r ≈ Array(D)*Array(D)
+        @test Array(LinAlg.A_mul_B!1(VV, DD)) ≈ r ≈ Array(D)*Array(D)
         DD = copy(D)
         r  = VV * (Array(D).')
-        @test Array(A_mul_Bt!(VV, DD)) ≈ r
+        @test Array(LinAlg.A_mul_Bt!1(VV, DD)) ≈ r
         DD = copy(D)
         r  = VV * (Array(D)')
-        @test Array(A_mul_Bc!(VV, DD)) ≈ r
+        @test Array(LinAlg.A_mul_Bc!1(VV, DD)) ≈ r
     end
     @testset "triu/tril" begin
         @test istriu(D)
@@ -347,9 +346,12 @@ end
 end
 
 let D1 = Diagonal(rand(5)), D2 = Diagonal(rand(5))
-    @test_throws MethodError A_mul_B!(D1,D2)
-    @test_throws MethodError At_mul_B!(D1,D2)
-    @test_throws MethodError Ac_mul_B!(D1,D2)
+    @test LinAlg.A_mul_B!1(copy(D1),D2) == D1*D2
+    @test LinAlg.A_mul_B!2(D1,copy(D2)) == D1*D2
+    @test LinAlg.A_mul_Bt!1(copy(D1),D2) == D1*D2
+    @test LinAlg.At_mul_B!2(D1,copy(D2)) == D1*D2
+    @test LinAlg.A_mul_Bc!1(copy(D1),D2) == D1*D2
+    @test LinAlg.Ac_mul_B!2(D1,copy(D2)) == D1*D2
 end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
@@ -357,7 +359,7 @@ end
     Q = qrfact(randn(5, 5))[:Q]
     @test D * Q' == Array(D) * Q'
     Q = qrfact(randn(5, 5), Val(true))[:Q]
-    @test_throws MethodError A_mul_B!(Q, D)
+    @test_throws MethodError LinAlg.A_mul_B!2(Q, D)
 end
 
 @testset "block diagonal matrices" begin

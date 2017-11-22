@@ -197,7 +197,7 @@ Base.LinAlg.qrfact(A::SparseMatrixCSC; tol = _default_tol(A)) = qrfact(A, Val{tr
 
 Base.LinAlg.qr(A::SparseMatrixCSC; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
 
-function Base.A_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
+function Base.A_mul_B!2(Q::QRSparseQ, A::StridedVecOrMat)
     if size(A, 1) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end
@@ -212,7 +212,7 @@ function Base.A_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
     return A
 end
 
-function Base.A_mul_B!(A::StridedMatrix, Q::QRSparseQ)
+function Base.A_mul_B!1(A::StridedMatrix, Q::QRSparseQ)
     if size(A, 2) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end
@@ -226,7 +226,7 @@ function Base.A_mul_B!(A::StridedMatrix, Q::QRSparseQ)
     return A
 end
 
-function Base.Ac_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
+function Base.Ac_mul_B!2(Q::QRSparseQ, A::StridedVecOrMat)
     if size(A, 1) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end
@@ -241,7 +241,7 @@ function Base.Ac_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
     return A
 end
 
-function Base.A_mul_Bc!(A::StridedMatrix, Q::QRSparseQ)
+function Base.A_mul_Bc!1(A::StridedMatrix, Q::QRSparseQ)
     if size(A, 2) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end
@@ -382,7 +382,7 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     X[rnk + 1:end, :] = 0
 
     # Solve R*X = B
-    A_ldiv_B!(UpperTriangular(view(F.R, :, Base.OneTo(rnk))), view(X0, Base.OneTo(rnk), :))
+    A_ldiv_B!2(UpperTriangular(view(F.R, :, Base.OneTo(rnk))), view(X0, Base.OneTo(rnk), :))
 
     # Apply right permutation and extract solution from X
     return getindex(X, ntuple(i -> i == 1 ? invperm(F.cpiv) : :, Val(ndims(B)))...)

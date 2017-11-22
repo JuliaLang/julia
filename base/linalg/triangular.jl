@@ -443,18 +443,21 @@ scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 # BlasFloat routines #
 ######################
 
-A_mul_B!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
+A_mul_B!2(A::Tridiagonal, B::AbstractTriangular) = A*full!(B) # is this necessary?
+
 A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = A_mul_B!(C, copy!(similar(parent(A)), A), B)
 A_mul_B!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = A_mul_B!(C, A, copy!(similar(parent(B)), B))
-A_mul_Bt!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, transpose!(C, B))
-A_mul_Bc!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, adjoint!(C, B))
-A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, adjoint!(C, B))
+A_mul_Bt!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!2(A, transpose!(C, B))
+A_mul_Bc!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!2(A, adjoint!(C, B))
+A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!2(A, adjoint!(C, B))
+
 # The three methods are neceesary to avoid ambiguities with definitions in matmul.jl
-for f in (:A_mul_B!, :Ac_mul_B!, :At_mul_B!)
+for f! in (:A_mul_B!, :Ac_mul_B!, :At_mul_B!)
+    f!2 = Symbol(f!,2)
     @eval begin
-        ($f)(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = ($f)(A, copy!(C, B))
-        ($f)(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = ($f)(A, copy!(C, B))
-        ($f)(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = ($f)(A, copy!(C, B))
+        ($f!)(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = ($f!2)(A, copy!(C, B))
+        ($f!)(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = ($f!2)(A, copy!(C, B))
+        ($f!)(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = ($f!2)(A, copy!(C, B))
     end
 end
 
@@ -464,53 +467,53 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitUpperTriangular, 'U', 'U'))
     @eval begin
         # Vector multiplication
-        A_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat} =
+        A_mul_B!2(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat} =
             BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
-        At_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat} =
+        At_mul_B!2(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat} =
             BLAS.trmv!($uploc, 'T', $isunitc, A.data, b)
-        Ac_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasReal} =
+        Ac_mul_B!2(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasReal} =
             BLAS.trmv!($uploc, 'T', $isunitc, A.data, b)
-        Ac_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasComplex} =
+        Ac_mul_B!2(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasComplex} =
             BLAS.trmv!($uploc, 'C', $isunitc, A.data, b)
 
         # Matrix multiplication
-        A_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} =
+        A_mul_B!2(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} =
             BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
-        A_mul_B!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
+        A_mul_B!1(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
             BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
 
-        At_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} =
+        At_mul_B!2(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} =
             BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B)
-        Ac_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasComplex} =
+        Ac_mul_B!2(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasComplex} =
             BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), A.data, B)
-        Ac_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasReal} =
+        Ac_mul_B!2(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasReal} =
             BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B)
 
-        A_mul_Bt!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
+        A_mul_Bt!1(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
             BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
-        A_mul_Bc!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasComplex} =
+        A_mul_Bc!1(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasComplex} =
             BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), B.data, A)
-        A_mul_Bc!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasReal} =
+        A_mul_Bc!1(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasReal} =
             BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
 
         # Left division
-        A_ldiv_B!(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+        A_ldiv_B!2(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
             LAPACK.trtrs!($uploc, 'N', $isunitc, A.data, B)
-        At_ldiv_B!(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+        At_ldiv_B!2(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
             LAPACK.trtrs!($uploc, 'T', $isunitc, A.data, B)
-        Ac_ldiv_B!(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasReal} =
+        Ac_ldiv_B!2(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasReal} =
             LAPACK.trtrs!($uploc, 'T', $isunitc, A.data, B)
-        Ac_ldiv_B!(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
+        Ac_ldiv_B!2(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
             LAPACK.trtrs!($uploc, 'C', $isunitc, A.data, B)
 
         # Right division
-        A_rdiv_B!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
+        A_rdiv_B!1(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
             BLAS.trsm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
-        A_rdiv_Bt!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
+        A_rdiv_Bt!1(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
             BLAS.trsm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
-        A_rdiv_Bc!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasReal} =
+        A_rdiv_Bc!1(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasReal} =
             BLAS.trsm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
-        A_rdiv_Bc!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasComplex} =
+        A_rdiv_Bc!1(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasComplex} =
             BLAS.trsm!('R', $uploc, 'C', $isunitc, one(T), B.data, A)
 
         # Matrix inverse
@@ -537,14 +540,14 @@ end
 
 function inv(A::LowerTriangular{T}) where T
     S = typeof((zero(T)*one(T) + zero(T))/one(T))
-    LowerTriangular(A_ldiv_B!(convert(AbstractArray{S}, A), Matrix{S}(I, size(A, 1), size(A, 1))))
+    LowerTriangular(A_ldiv_B!2(convert(AbstractArray{S}, A), Matrix{S}(I, size(A, 1), size(A, 1))))
 end
 function inv(A::UpperTriangular{T}) where T
     S = typeof((zero(T)*one(T) + zero(T))/one(T))
-    UpperTriangular(A_ldiv_B!(convert(AbstractArray{S}, A), Matrix{S}(I, size(A, 1), size(A, 1))))
+    UpperTriangular(A_ldiv_B!2(convert(AbstractArray{S}, A), Matrix{S}(I, size(A, 1), size(A, 1))))
 end
-inv(A::UnitUpperTriangular{T}) where {T} = UnitUpperTriangular(A_ldiv_B!(A, Matrix{T}(I, size(A, 1), size(A, 1))))
-inv(A::UnitLowerTriangular{T}) where {T} = UnitLowerTriangular(A_ldiv_B!(A, Matrix{T}(I, size(A, 1), size(A, 1))))
+inv(A::UnitUpperTriangular{T}) where {T} = UnitUpperTriangular(A_ldiv_B!2(A, Matrix{T}(I, size(A, 1), size(A, 1))))
+inv(A::UnitLowerTriangular{T}) where {T} = UnitLowerTriangular(A_ldiv_B!2(A, Matrix{T}(I, size(A, 1), size(A, 1))))
 
 errorbounds(A::AbstractTriangular{T,<:StridedMatrix}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:Union{BigFloat,Complex{BigFloat}}} =
     error("not implemented yet! Please submit a pull request.")
@@ -626,7 +629,7 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
 end
 
 ## Generic triangular multiplication
-function A_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
+function A_mul_B!2(A::UpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -642,7 +645,7 @@ function A_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
     end
     B
 end
-function A_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
+function A_mul_B!2(A::UnitUpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -659,7 +662,7 @@ function A_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
     B
 end
 
-function A_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
+function A_mul_B!2(A::LowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -675,7 +678,7 @@ function A_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
     end
     B
 end
-function A_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
+function A_mul_B!2(A::UnitLowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -692,7 +695,7 @@ function A_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
     B
 end
 
-function Ac_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
+function Ac_mul_B!2(A::UpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -708,7 +711,7 @@ function Ac_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
     end
     B
 end
-function Ac_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
+function Ac_mul_B!2(A::UnitUpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -725,7 +728,7 @@ function Ac_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
     B
 end
 
-function Ac_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
+function Ac_mul_B!2(A::LowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -741,7 +744,7 @@ function Ac_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
     end
     B
 end
-function Ac_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
+function Ac_mul_B!2(A::UnitLowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -758,7 +761,7 @@ function Ac_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
     B
 end
 
-function At_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
+function At_mul_B!2(A::UpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -774,7 +777,7 @@ function At_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
     end
     B
 end
-function At_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
+function At_mul_B!2(A::UnitUpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -791,7 +794,7 @@ function At_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
     B
 end
 
-function At_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
+function At_mul_B!2(A::LowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -807,7 +810,7 @@ function At_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
     end
     B
 end
-function At_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
+function At_mul_B!2(A::UnitLowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -824,7 +827,7 @@ function At_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
     B
 end
 
-function A_mul_B!(A::StridedMatrix, B::UpperTriangular)
+function A_mul_B!1(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -840,7 +843,7 @@ function A_mul_B!(A::StridedMatrix, B::UpperTriangular)
     end
     A
 end
-function A_mul_B!(A::StridedMatrix, B::UnitUpperTriangular)
+function A_mul_B!1(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -857,7 +860,7 @@ function A_mul_B!(A::StridedMatrix, B::UnitUpperTriangular)
     A
 end
 
-function A_mul_B!(A::StridedMatrix, B::LowerTriangular)
+function A_mul_B!1(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -873,7 +876,7 @@ function A_mul_B!(A::StridedMatrix, B::LowerTriangular)
     end
     A
 end
-function A_mul_B!(A::StridedMatrix, B::UnitLowerTriangular)
+function A_mul_B!1(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -890,7 +893,7 @@ function A_mul_B!(A::StridedMatrix, B::UnitLowerTriangular)
     A
 end
 
-function A_mul_Bc!(A::StridedMatrix, B::UpperTriangular)
+function A_mul_Bc!1(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -906,7 +909,7 @@ function A_mul_Bc!(A::StridedMatrix, B::UpperTriangular)
     end
     A
 end
-function A_mul_Bc!(A::StridedMatrix, B::UnitUpperTriangular)
+function A_mul_Bc!1(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -923,7 +926,7 @@ function A_mul_Bc!(A::StridedMatrix, B::UnitUpperTriangular)
     A
 end
 
-function A_mul_Bc!(A::StridedMatrix, B::LowerTriangular)
+function A_mul_Bc!1(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -939,7 +942,7 @@ function A_mul_Bc!(A::StridedMatrix, B::LowerTriangular)
     end
     A
 end
-function A_mul_Bc!(A::StridedMatrix, B::UnitLowerTriangular)
+function A_mul_Bc!1(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -956,7 +959,7 @@ function A_mul_Bc!(A::StridedMatrix, B::UnitLowerTriangular)
     A
 end
 
-function A_mul_Bt!(A::StridedMatrix, B::UpperTriangular)
+function A_mul_Bt!1(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -972,7 +975,7 @@ function A_mul_Bt!(A::StridedMatrix, B::UpperTriangular)
     end
     A
 end
-function A_mul_Bt!(A::StridedMatrix, B::UnitUpperTriangular)
+function A_mul_Bt!1(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -989,7 +992,7 @@ function A_mul_Bt!(A::StridedMatrix, B::UnitUpperTriangular)
     A
 end
 
-function A_mul_Bt!(A::StridedMatrix, B::LowerTriangular)
+function A_mul_Bt!1(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1005,7 +1008,7 @@ function A_mul_Bt!(A::StridedMatrix, B::LowerTriangular)
     end
     A
 end
-function A_mul_Bt!(A::StridedMatrix, B::UnitLowerTriangular)
+function A_mul_Bt!1(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1086,7 +1089,7 @@ function naivesub!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector 
 end
 # in the following transpose and conjugate transpose naive substitution variants,
 # accumulating in z rather than b[j] significantly improves performance as of Dec 2015
-function At_ldiv_B!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b)
+function At_ldiv_B!(A::LowerTriangular, b::AbstractVector, x::AbstractVector)
     n = size(A, 1)
     if !(n == length(b) == length(x))
         throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
@@ -1101,109 +1104,125 @@ function At_ldiv_B!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b
     end
     x
 end
-function At_ldiv_B!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector = b)
-    n = size(A, 1)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
-    end
-    @inbounds for j in n:-1:1
-        z = b[j]
-        for i in n:-1:j+1
-            z -= A.data[i,j] * x[i]
-        end
-        x[j] = z
-    end
-    x
-end
-function At_ldiv_B!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
-    n = size(A, 1)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
-    end
-    @inbounds for j in 1:n
-        z = b[j]
-        for i in 1:j-1
-            z -= A.data[i,j] * x[i]
-        end
-        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
-        x[j] = A.data[j,j] \ z
-    end
-    x
-end
-function At_ldiv_B!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector = b)
-    n = size(A, 1)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
-    end
-    @inbounds for j in 1:n
-        z = b[j]
-        for i in 1:j-1
-            z -= A.data[i,j] * x[i]
-        end
-        x[j] = z
-    end
-    x
-end
-function Ac_ldiv_B!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b)
-    n = size(A, 1)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
-    end
-    @inbounds for j in n:-1:1
-        z = b[j]
-        for i in n:-1:j+1
-            z -= A.data[i,j]' * x[i]
-        end
-        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
-        x[j] = A.data[j,j]' \ z
-    end
-    x
-end
-function Ac_ldiv_B!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector = b)
-    n = size(A, 1)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
-    end
-    @inbounds for j in n:-1:1
-        z = b[j]
-        for i in n:-1:j+1
-            z -= A.data[i,j]' * x[i]
-        end
-        x[j] = z
-    end
-    x
-end
-function Ac_ldiv_B!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
-    n = size(A, 1)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
-    end
-    @inbounds for j in 1:n
-        z = b[j]
-        for i in 1:j-1
-            z -= A.data[i,j]' * x[i]
-        end
-        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
-        x[j] = A.data[j,j]' \ z
-    end
-    x
-end
-function Ac_ldiv_B!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector = b)
-    n = size(A, 1)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
-    end
-    @inbounds for j in 1:n
-        z = b[j]
-        for i in 1:j-1
-            z -= A.data[i,j]' * x[i]
-        end
-        x[j] = z
-    end
-    x
-end
+At_ldiv_B!2(A::LowerTriangular, b::AbstractVector) = At_ldiv_B!(A,b,b)
 
-function A_rdiv_B!(A::StridedMatrix, B::UpperTriangular)
+function At_ldiv_B!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in n:-1:1
+        z = b[j]
+        for i in n:-1:j+1
+            z -= A.data[i,j] * x[i]
+        end
+        x[j] = z
+    end
+    x
+end
+At_ldiv_B!2(A::UnitLowerTriangular, b::AbstractVector) = At_ldiv_B!(A,b,b)
+
+function At_ldiv_B!(A::UpperTriangular, b::AbstractVector, x::AbstractVector)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in 1:n
+        z = b[j]
+        for i in 1:j-1
+            z -= A.data[i,j] * x[i]
+        end
+        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        x[j] = A.data[j,j] \ z
+    end
+    x
+end
+At_ldiv_B!2(A::UpperTriangular, b::AbstractVector) = At_ldiv_B!(A,b,b)
+
+function At_ldiv_B!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in 1:n
+        z = b[j]
+        for i in 1:j-1
+            z -= A.data[i,j] * x[i]
+        end
+        x[j] = z
+    end
+    x
+end
+At_ldiv_B!2(A::UnitUpperTriangular, b::AbstractVector) = At_ldiv_B!(A,b,b)
+
+
+function Ac_ldiv_B!(A::LowerTriangular, b::AbstractVector, x::AbstractVector)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in n:-1:1
+        z = b[j]
+        for i in n:-1:j+1
+            z -= A.data[i,j]' * x[i]
+        end
+        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        x[j] = A.data[j,j]' \ z
+    end
+    x
+end
+Ac_ldiv_B!2(A::LowerTriangular, b::AbstractVector) = Ac_ldiv_B!(A,b,b)
+
+function Ac_ldiv_B!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in n:-1:1
+        z = b[j]
+        for i in n:-1:j+1
+            z -= A.data[i,j]' * x[i]
+        end
+        x[j] = z
+    end
+    x
+end
+Ac_ldiv_B!2(A::UnitLowerTriangular, b::AbstractVector) = Ac_ldiv_B!(A,b,b)
+
+function Ac_ldiv_B!(A::UpperTriangular, b::AbstractVector, x::AbstractVector)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in 1:n
+        z = b[j]
+        for i in 1:j-1
+            z -= A.data[i,j]' * x[i]
+        end
+        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        x[j] = A.data[j,j]' \ z
+    end
+    x
+end
+Ac_ldiv_B!2(A::UpperTriangular, b::AbstractVector) = Ac_ldiv_B!(A,b,b)
+
+function Ac_ldiv_B!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in 1:n
+        z = b[j]
+        for i in 1:j-1
+            z -= A.data[i,j]' * x[i]
+        end
+        x[j] = z
+    end
+    x
+end
+Ac_ldiv_B!2(A::UnitUpperTriangular, b::AbstractVector) = Ac_ldiv_B!(A,b,b)
+
+function A_rdiv_B!1(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1219,7 +1238,7 @@ function A_rdiv_B!(A::StridedMatrix, B::UpperTriangular)
     end
     A
 end
-function A_rdiv_B!(A::StridedMatrix, B::UnitUpperTriangular)
+function A_rdiv_B!1(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1236,7 +1255,7 @@ function A_rdiv_B!(A::StridedMatrix, B::UnitUpperTriangular)
     A
 end
 
-function A_rdiv_B!(A::StridedMatrix, B::LowerTriangular)
+function A_rdiv_B!1(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1252,7 +1271,7 @@ function A_rdiv_B!(A::StridedMatrix, B::LowerTriangular)
     end
     A
 end
-function A_rdiv_B!(A::StridedMatrix, B::UnitLowerTriangular)
+function A_rdiv_B!1(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1269,7 +1288,7 @@ function A_rdiv_B!(A::StridedMatrix, B::UnitLowerTriangular)
     A
 end
 
-function A_rdiv_Bc!(A::StridedMatrix, B::UpperTriangular)
+function A_rdiv_Bc!1(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1285,7 +1304,7 @@ function A_rdiv_Bc!(A::StridedMatrix, B::UpperTriangular)
     end
     A
 end
-function A_rdiv_Bc!(A::StridedMatrix, B::UnitUpperTriangular)
+function A_rdiv_Bc!1(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1302,7 +1321,7 @@ function A_rdiv_Bc!(A::StridedMatrix, B::UnitUpperTriangular)
     A
 end
 
-function A_rdiv_Bc!(A::StridedMatrix, B::LowerTriangular)
+function A_rdiv_Bc!1(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1318,7 +1337,7 @@ function A_rdiv_Bc!(A::StridedMatrix, B::LowerTriangular)
     end
     A
 end
-function A_rdiv_Bc!(A::StridedMatrix, B::UnitLowerTriangular)
+function A_rdiv_Bc!1(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1335,7 +1354,7 @@ function A_rdiv_Bc!(A::StridedMatrix, B::UnitLowerTriangular)
     A
 end
 
-function A_rdiv_Bt!(A::StridedMatrix, B::UpperTriangular)
+function A_rdiv_Bt!1(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1351,7 +1370,7 @@ function A_rdiv_Bt!(A::StridedMatrix, B::UpperTriangular)
     end
     A
 end
-function A_rdiv_Bt!(A::StridedMatrix, B::UnitUpperTriangular)
+function A_rdiv_Bt!1(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1368,7 +1387,7 @@ function A_rdiv_Bt!(A::StridedMatrix, B::UnitUpperTriangular)
     A
 end
 
-function A_rdiv_Bt!(A::StridedMatrix, B::LowerTriangular)
+function A_rdiv_Bt!1(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1384,7 +1403,7 @@ function A_rdiv_Bt!(A::StridedMatrix, B::LowerTriangular)
     end
     A
 end
-function A_rdiv_Bt!(A::StridedMatrix, B::UnitLowerTriangular)
+function A_rdiv_Bt!1(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1401,26 +1420,26 @@ function A_rdiv_Bt!(A::StridedMatrix, B::UnitLowerTriangular)
     A
 end
 
-for f in (:Ac_mul_B!, :At_mul_B!, :Ac_ldiv_B!, :At_ldiv_B!)
+for f!2 in (:Ac_mul_B!2, :At_mul_B!2, :Ac_ldiv_B!2, :At_ldiv_B!2)
     @eval begin
-        $f(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular) =
-            UpperTriangular($f(A, triu!(B.data)))
-        $f(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular) =
-            LowerTriangular($f(A, tril!(B.data)))
+        ($f!2)(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular) =
+            UpperTriangular($f!2(A, triu!(B.data)))
+        ($f!2)(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular) =
+            LowerTriangular($f!2(A, tril!(B.data)))
     end
 end
 
-A_rdiv_B!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular}) =
-    UpperTriangular(A_rdiv_B!(triu!(A.data), B))
-A_rdiv_B!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular}) =
-    LowerTriangular(A_rdiv_B!(tril!(A.data), B))
+A_rdiv_B!1(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular}) =
+    UpperTriangular(A_rdiv_B!1(triu!(A.data), B))
+A_rdiv_B!1(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular}) =
+    LowerTriangular(A_rdiv_B!1(tril!(A.data), B))
 
-for f in (:A_mul_Bc!, :A_mul_Bt!, :A_rdiv_Bc!, :A_rdiv_Bt!)
+for f!1 in (:A_mul_Bc!1, :A_mul_Bt!1, :A_rdiv_Bc!1, :A_rdiv_Bt!1)
     @eval begin
-        $f(A::UpperTriangular, B::Union{LowerTriangular,UnitLowerTriangular}) =
-            UpperTriangular($f(triu!(A.data), B))
-        $f(A::LowerTriangular, B::Union{UpperTriangular,UnitUpperTriangular}) =
-            LowerTriangular($f(tril!(A.data), B))
+        $f!1(A::UpperTriangular, B::Union{LowerTriangular,UnitLowerTriangular}) =
+            UpperTriangular($f!1(triu!(A.data), B))
+        $f!1(A::LowerTriangular, B::Union{UpperTriangular,UnitUpperTriangular}) =
+            LowerTriangular($f!1(tril!(A.data), B))
     end
 end
 
@@ -1433,77 +1452,77 @@ end
 
 ## Some Triangular-Triangular cases. We might want to write taylored methods
 ## for these cases, but I'm not sure it is worth it.
-(*)(A::Union{Tridiagonal,SymTridiagonal}, B::AbstractTriangular) = A_mul_B!(Matrix(A), B)
+(*)(A::Union{Tridiagonal,SymTridiagonal}, B::AbstractTriangular) = A_mul_B!1(Matrix(A), B)
 
-for (f1, f2) in ((:*, :A_mul_B!), (:\, :A_ldiv_B!))
+for (f, f!2) in ((:*, :A_mul_B!2), (:\, :A_ldiv_B!2))
     @eval begin
-        function ($f1)(A::LowerTriangular, B::LowerTriangular)
-            TAB = typeof(($f1)(zero(eltype(A)), zero(eltype(B))) +
-                         ($f1)(zero(eltype(A)), zero(eltype(B))))
+        function ($f)(A::LowerTriangular, B::LowerTriangular)
+            TAB = typeof(($f)(zero(eltype(A)), zero(eltype(B))) +
+                         ($f)(zero(eltype(A)), zero(eltype(B))))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
-            return LowerTriangular($f2(convert(AbstractMatrix{TAB}, A), BB))
+            return LowerTriangular($f!2(convert(AbstractMatrix{TAB}, A), BB))
         end
 
-        function $(f1)(A::UnitLowerTriangular, B::LowerTriangular)
+        function $(f)(A::UnitLowerTriangular, B::LowerTriangular)
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
-            return LowerTriangular($f2(convert(AbstractMatrix{TAB}, A), BB))
+            return LowerTriangular($f!2(convert(AbstractMatrix{TAB}, A), BB))
         end
 
-        function ($f1)(A::UpperTriangular, B::UpperTriangular)
-            TAB = typeof(($f1)(zero(eltype(A)), zero(eltype(B))) +
-                         ($f1)(zero(eltype(A)), zero(eltype(B))))
+        function ($f)(A::UpperTriangular, B::UpperTriangular)
+            TAB = typeof(($f)(zero(eltype(A)), zero(eltype(B))) +
+                         ($f)(zero(eltype(A)), zero(eltype(B))))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
-            return UpperTriangular($f2(convert(AbstractMatrix{TAB}, A), BB))
+            return UpperTriangular($f!2(convert(AbstractMatrix{TAB}, A), BB))
         end
 
-        function ($f1)(A::UnitUpperTriangular, B::UpperTriangular)
+        function ($f)(A::UnitUpperTriangular, B::UpperTriangular)
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
-            return UpperTriangular($f2(convert(AbstractMatrix{TAB}, A), BB))
+            return UpperTriangular($f!2(convert(AbstractMatrix{TAB}, A), BB))
         end
     end
 end
 
-for (f1, f2) in ((:Ac_mul_B, :Ac_mul_B!), (:At_mul_B, :At_mul_B!),
-                 (:Ac_ldiv_B, Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
+for (f, f!2) in ((:Ac_mul_B, :Ac_mul_B!2), (:At_mul_B, :At_mul_B!2),
+                 (:Ac_ldiv_B, Ac_ldiv_B!2), (:At_ldiv_B, :At_ldiv_B!2))
     @eval begin
-        function ($f1)(A::UpperTriangular, B::LowerTriangular)
-            TAB = typeof(($f1)(zero(eltype(A)), zero(eltype(B))) +
-                         ($f1)(zero(eltype(A)), zero(eltype(B))))
+        function ($f)(A::UpperTriangular, B::LowerTriangular)
+            TAB = typeof(($f)(zero(eltype(A)), zero(eltype(B))) +
+                         ($f)(zero(eltype(A)), zero(eltype(B))))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
-            return LowerTriangular($f2(convert(AbstractMatrix{TAB}, A), BB))
+            return LowerTriangular($f!2(convert(AbstractMatrix{TAB}, A), BB))
         end
 
-        function ($f1)(A::UnitUpperTriangular, B::LowerTriangular)
+        function ($f)(A::UnitUpperTriangular, B::LowerTriangular)
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
-            return LowerTriangular($f2(convert(AbstractMatrix{TAB}, A), BB))
+            return LowerTriangular($f!2(convert(AbstractMatrix{TAB}, A), BB))
         end
 
-        function ($f1)(A::LowerTriangular, B::UpperTriangular)
-            TAB = typeof(($f1)(zero(eltype(A)), zero(eltype(B))) +
-                         ($f1)(zero(eltype(A)), zero(eltype(B))))
+        function ($f)(A::LowerTriangular, B::UpperTriangular)
+            TAB = typeof(($f)(zero(eltype(A)), zero(eltype(B))) +
+                         ($f)(zero(eltype(A)), zero(eltype(B))))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
-            return UpperTriangular($f2(convert(AbstractMatrix{TAB}, A), BB))
+            return UpperTriangular($f!2(convert(AbstractMatrix{TAB}, A), BB))
         end
 
-        function ($f1)(A::UnitLowerTriangular, B::UpperTriangular)
+        function ($f)(A::UnitLowerTriangular, B::UpperTriangular)
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
-            return UpperTriangular($f2(convert(AbstractMatrix{TAB}, A), BB))
+            return UpperTriangular($f!2(convert(AbstractMatrix{TAB}, A), BB))
         end
     end
 end
@@ -1513,86 +1532,86 @@ function (/)(A::LowerTriangular, B::LowerTriangular)
                  (/)(zero(eltype(A)), zero(eltype(B))))
     AA = similar(A, TAB, size(A))
     copy!(AA, A)
-    return LowerTriangular(A_rdiv_B!(AA, convert(AbstractMatrix{TAB}, B)))
+    return LowerTriangular(A_rdiv_B!1(AA, convert(AbstractMatrix{TAB}, B)))
 end
 function (/)(A::LowerTriangular, B::UnitLowerTriangular)
     TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                  (*)(zero(eltype(A)), zero(eltype(B))))
     AA = similar(A, TAB, size(A))
     copy!(AA, A)
-    return LowerTriangular(A_rdiv_B!(AA, convert(AbstractMatrix{TAB}, B)))
+    return LowerTriangular(A_rdiv_B!1(AA, convert(AbstractMatrix{TAB}, B)))
 end
 function (/)(A::UpperTriangular, B::UpperTriangular)
     TAB = typeof((/)(zero(eltype(A)), zero(eltype(B))) +
                  (/)(zero(eltype(A)), zero(eltype(B))))
     AA = similar(A, TAB, size(A))
     copy!(AA, A)
-    return UpperTriangular(A_rdiv_B!(AA, convert(AbstractMatrix{TAB}, B)))
+    return UpperTriangular(A_rdiv_B!1(AA, convert(AbstractMatrix{TAB}, B)))
 end
 function (/)(A::UpperTriangular, B::UnitUpperTriangular)
     TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                  (*)(zero(eltype(A)), zero(eltype(B))))
     AA = similar(A, TAB, size(A))
     copy!(AA, A)
-    return UpperTriangular(A_rdiv_B!(AA, convert(AbstractMatrix{TAB}, B)))
+    return UpperTriangular(A_rdiv_B!1(AA, convert(AbstractMatrix{TAB}, B)))
 end
 
-for (f1, f2) in ((:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!),
-                 (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
+for (f, f!1) in ((:A_mul_Bc, :A_mul_Bc!1), (:A_mul_Bt, :A_mul_Bt!1),
+                 (:A_rdiv_Bc, :A_rdiv_Bc!1), (:A_rdiv_Bt, :A_rdiv_Bt!1))
     @eval begin
-        function $f1(A::LowerTriangular, B::UpperTriangular)
-            TAB = typeof(($f1)(zero(eltype(A)), zero(eltype(B))) +
-                         ($f1)(zero(eltype(A)), zero(eltype(B))))
+        function $f(A::LowerTriangular, B::UpperTriangular)
+            TAB = typeof(($f)(zero(eltype(A)), zero(eltype(B))) +
+                         ($f)(zero(eltype(A)), zero(eltype(B))))
             AA = similar(A, TAB, size(A))
             copy!(AA, A)
-            return LowerTriangular($f2(AA, convert(AbstractMatrix{TAB}, B)))
+            return LowerTriangular($f!1(AA, convert(AbstractMatrix{TAB}, B)))
         end
 
-        function $f1(A::LowerTriangular, B::UnitUpperTriangular)
+        function $f(A::LowerTriangular, B::UnitUpperTriangular)
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
             AA = similar(A, TAB, size(A))
             copy!(AA, A)
-            return LowerTriangular($f2(AA, convert(AbstractMatrix{TAB}, B)))
+            return LowerTriangular($f!1(AA, convert(AbstractMatrix{TAB}, B)))
         end
 
-        function $f1(A::UpperTriangular, B::LowerTriangular)
-            TAB = typeof(($f1)(zero(eltype(A)), zero(eltype(B))) +
-                         ($f1)(zero(eltype(A)), zero(eltype(B))))
+        function $f(A::UpperTriangular, B::LowerTriangular)
+            TAB = typeof(($f)(zero(eltype(A)), zero(eltype(B))) +
+                         ($f)(zero(eltype(A)), zero(eltype(B))))
             AA = similar(A, TAB, size(A))
             copy!(AA, A)
-            return UpperTriangular($f2(AA, convert(AbstractMatrix{TAB}, B)))
+            return UpperTriangular($f!1(AA, convert(AbstractMatrix{TAB}, B)))
         end
 
-        function $f1(A::UpperTriangular, B::UnitLowerTriangular)
+        function $f(A::UpperTriangular, B::UnitLowerTriangular)
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
             AA = similar(A, TAB, size(A))
             copy!(AA, A)
-            return UpperTriangular($f2(AA, convert(AbstractMatrix{TAB}, B)))
+            return UpperTriangular($f!1(AA, convert(AbstractMatrix{TAB}, B)))
         end
     end
 end
 
 ## The general promotion methods
 
-for (f, g) in ((:*, :A_mul_B!), (:Ac_mul_B, :Ac_mul_B!), (:At_mul_B, :At_mul_B!))
+for (f, f!2) in ((:*, :A_mul_B!2), (:Ac_mul_B, :Ac_mul_B!2), (:At_mul_B, :At_mul_B!2))
     @eval begin
         function ($f)(A::AbstractTriangular, B::AbstractTriangular)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
-            ($g)(convert(AbstractArray{TAB}, A), BB)
+            ($f!2)(convert(AbstractArray{TAB}, A), BB)
         end
     end
 end
-for (f, g) in ((:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!))
+for (f, f!1) in ((:A_mul_Bc, :A_mul_Bc!1), (:A_mul_Bt, :A_mul_Bt!1))
     @eval begin
         function ($f)(A::AbstractTriangular, B::AbstractTriangular)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             AA = similar(A, TAB, size(A))
             copy!(AA, A)
-            ($g)(AA, convert(AbstractArray{TAB}, B))
+            ($f!1)(AA, convert(AbstractArray{TAB}, B))
         end
     end
 end
@@ -1600,69 +1619,69 @@ end
 for mat in (:AbstractVector, :AbstractMatrix)
 
 ### Multiplication with triangle to the left and hence rhs cannot be transposed.
-for (f, g) in ((:*, :A_mul_B!), (:Ac_mul_B, :Ac_mul_B!), (:At_mul_B, :At_mul_B!))
+for (f, f!2) in ((:*, :A_mul_B!2), (:Ac_mul_B, :Ac_mul_B!2), (:At_mul_B, :At_mul_B!2))
     @eval begin
         function ($f)(A::AbstractTriangular, B::$mat)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
-            ($g)(convert(AbstractArray{TAB}, A), BB)
+            ($f!2)(convert(AbstractArray{TAB}, A), BB)
         end
     end
 end
 ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
-for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
+for (f, f!2) in ((:\, :A_ldiv_B!2), (:Ac_ldiv_B, :Ac_ldiv_B!2), (:At_ldiv_B, :At_ldiv_B!2))
     @eval begin
         function ($f)(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
-            ($g)(convert(AbstractArray{TAB}, A), BB)
+            ($f!2)(convert(AbstractArray{TAB}, A), BB)
         end
     end
 end
 ### Left division with triangle to the left hence rhs cannot be transposed. Quotients.
-for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
+for (f, f!2) in ((:\, :A_ldiv_B!2), (:Ac_ldiv_B, :Ac_ldiv_B!2), (:At_ldiv_B, :At_ldiv_B!2))
     @eval begin
         function ($f)(A::Union{UpperTriangular,LowerTriangular}, B::$mat)
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
-            ($g)(convert(AbstractArray{TAB}, A), BB)
+            ($f!2)(convert(AbstractArray{TAB}, A), BB)
         end
     end
 end
 ### Multiplication with triangle to the right and hence lhs cannot be transposed.
-for (f, g) in ((:*, :A_mul_B!), (:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!))
+for (f, f!1) in ((:*, :A_mul_B!1), (:A_mul_Bc, :A_mul_Bc!1), (:A_mul_Bt, :A_mul_Bt!1))
     mat != :AbstractVector && @eval begin
         function ($f)(A::$mat, B::AbstractTriangular)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             AA = similar(A, TAB, size(A))
             copy!(AA, A)
-            ($g)(AA, convert(AbstractArray{TAB}, B))
+            ($f!1)(AA, convert(AbstractArray{TAB}, B))
         end
     end
 end
 ### Right division with triangle to the right hence lhs cannot be transposed. No quotients.
-for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
+for (f, f!1) in ((:/, :A_rdiv_B!1), (:A_rdiv_Bc, :A_rdiv_Bc!1), (:A_rdiv_Bt, :A_rdiv_Bt!1))
     @eval begin
         function ($f)(A::$mat, B::Union{UnitUpperTriangular, UnitLowerTriangular})
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             AA = similar(A, TAB, size(A))
             copy!(AA, A)
-            ($g)(AA, convert(AbstractArray{TAB}, B))
+            ($f!1)(AA, convert(AbstractArray{TAB}, B))
         end
     end
 end
 
 ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
-for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
+for (f, f!1) in ((:/, :A_rdiv_B!1), (:A_rdiv_Bc, :A_rdiv_Bc!1), (:A_rdiv_Bt, :A_rdiv_Bt!1))
     @eval begin
         function ($f)(A::$mat, B::Union{UpperTriangular,LowerTriangular})
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             AA = similar(A, TAB, size(A))
             copy!(AA, A)
-            ($g)(AA, convert(AbstractArray{TAB}, B))
+            ($f!1)(AA, convert(AbstractArray{TAB}, B))
         end
     end
 end
@@ -1749,7 +1768,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
         end
         copy!(Stmp, S)
         scale!(S, A, c)
-        A_ldiv_B!(Stmp, S.data)
+        A_ldiv_B!2(Stmp, S.data)
 
         c = (p - j) / (j4 - 2)
         for i = 1:n
@@ -1757,14 +1776,14 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
         end
         copy!(Stmp, S)
         scale!(S, A, c)
-        A_ldiv_B!(Stmp, S.data)
+        A_ldiv_B!2(Stmp, S.data)
     end
     for i = 1:n
         S[i, i] = S[i, i] + 1
     end
     copy!(Stmp, S)
     scale!(S, A, -p)
-    A_ldiv_B!(Stmp, S.data)
+    A_ldiv_B!2(Stmp, S.data)
     for i = 1:n
         @inbounds S[i, i] = S[i, i] + 1
     end

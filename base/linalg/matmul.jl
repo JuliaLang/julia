@@ -176,12 +176,18 @@ julia> Y
 A_mul_B!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = generic_matmatmul!(C, 'N', 'N', A, B)
 
 """
-    A_mul_B!(A, B)
+    A_mul_B!1(A, B)
 
-Calculate the matrix-matrix product ``AB``, overwriting one of `A` or `B` (but not both),
-and return the result (the overwritten argument).
+Calculate the matrix-matrix product ``AB``, overwriting `A`, and return the result.
 """
-A_mul_B!(A, B)
+A_mul_B!1(A, B)
+
+"""
+    A_mul_B!2(A, B)
+
+Calculate the matrix-matrix product ``AB``, overwriting `B`, and return the result.
+"""
+A_mul_B!2(A, B)
 
 function At_mul_B(A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
     TS = promote_op(matprod, T, S)

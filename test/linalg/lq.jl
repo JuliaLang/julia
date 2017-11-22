@@ -21,7 +21,7 @@ breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
 # helper functions to unambiguously recover explicit forms of an LQPackedQ
-squareQ(Q::LinAlg.LQPackedQ) = (n = size(Q.factors, 2); A_mul_B!(Q, Matrix{eltype(Q)}(I, n, n)))
+squareQ(Q::LinAlg.LQPackedQ) = (n = size(Q.factors, 2); Base.A_mul_B!2(Q, Matrix{eltype(Q)}(I, n, n)))
 rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
 
 @testset for eltya in (Float32, Float64, Complex64, Complex128)
@@ -100,9 +100,9 @@ rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
             l,q = lqa[:L], lqa[:Q]
             @test rectangularQ(q)*rectangularQ(q)' ≈ Matrix(I, n1, n1)
             @test squareQ(q)'*squareQ(q) ≈ Matrix(I, n1, n1)
-            @test_throws DimensionMismatch A_mul_B!(Matrix{eltya}(I, n+1, n+1),q)
-            @test Ac_mul_B!(q, rectangularQ(q)) ≈ Matrix(I, n1, n1)
-            @test_throws DimensionMismatch A_mul_Bc!(Matrix{eltya}(I, n+1, n+1),q)
+            @test_throws DimensionMismatch Base.A_mul_B!1(Matrix{eltya}(I, n+1, n+1),q)
+            @test Base.Ac_mul_B!2(q, rectangularQ(q)) ≈ Matrix(I, n1, n1)
+            @test_throws DimensionMismatch Base.A_mul_Bc!1(Matrix{eltya}(I, n+1, n+1),q)
             @test_throws BoundsError size(q,-1)
         end
     end
@@ -150,7 +150,7 @@ end
     function getqs(F::Base.LinAlg.LQ)
         implicitQ = F[:Q]
         sq = size(implicitQ.factors, 2)
-        explicitQ = A_mul_B!(implicitQ, Matrix{eltype(implicitQ)}(I, sq, sq))
+        explicitQ = Base.A_mul_B!2(implicitQ, Matrix{eltype(implicitQ)}(I, sq, sq))
         return implicitQ, explicitQ
     end
 
@@ -191,7 +191,7 @@ end
 @testset "postmultiplication with / right-application of LQPackedQ (#23779)" begin
     function getqs(F::Base.LinAlg.LQ)
         implicitQ = F[:Q]
-        explicitQ = A_mul_B!(implicitQ, Matrix{eltype(implicitQ)}(I, size(implicitQ)...))
+        explicitQ = Base.A_mul_B!2(implicitQ, Matrix{eltype(implicitQ)}(I, size(implicitQ)...))
         return implicitQ, explicitQ
     end
     # for any shape m-by-n of LQ-factored matrix, where Q is an LQPackedQ
