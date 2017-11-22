@@ -245,12 +245,12 @@ end
 function redirect_worker_output(ident, stream)
     @schedule while !eof(stream)
         line = readline(stream)
-        if startswith(line, "\tFrom worker ")
+        if startswith(line, "      From worker ")
             # STDOUT's of "additional" workers started from an initial worker on a host are not available
             # on the master directly - they are routed via the initial worker's STDOUT.
             println(line)
         else
-            println("\tFrom worker $(ident):\t$line")
+            println("      From worker $(ident):\t$line")
         end
     end
 end
