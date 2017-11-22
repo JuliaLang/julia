@@ -245,4 +245,5 @@ end
             end
         end
     end
+    @test parse(Complex{Int}, SubString("xxxxxx1+2imxxxx", 7, 10)) === 1+2im
 end
