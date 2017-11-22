@@ -67,7 +67,7 @@ do33 = ones(3)
         sqrboolmat, colboolmat = sprand(Bool, 4, 4, 0.5), sprand(Bool, 4, 1, 0.5)
         @test_throws DimensionMismatch map(bitand, sqrboolmat, colboolmat)
         @test_throws DimensionMismatch map(bitor, sqrboolmat, colboolmat)
-        @test_throws DimensionMismatch map(xor, sqrboolmat, colboolmat)
+        @test_throws DimensionMismatch map(bitxor, sqrboolmat, colboolmat)
     end
 end
 
@@ -1723,7 +1723,7 @@ end
     for op in (+, -)
         @test op(A13024, B13024) == op(Array(A13024), Array(B13024))
     end
-    for op in (max, min, bitand, bitor, xor)
+    for op in (max, min, bitand, bitor, bitxor)
         @test op.(A13024, B13024) == op.(Array(A13024), Array(B13024))
     end
 end
