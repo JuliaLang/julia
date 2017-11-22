@@ -1,5 +1,6 @@
 # Install dependencies needed to build the documentation.
 ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
+using Pkg
 Pkg.init()
 cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); remove_destination = true)
 Pkg.update()
@@ -101,7 +102,6 @@ const PAGES = [
         "base/io-network.md",
         "base/punctuation.md",
         "base/sort.md",
-        "base/pkg.md",
         "base/iterators.md",
         "base/c.md",
         "base/libc.md",

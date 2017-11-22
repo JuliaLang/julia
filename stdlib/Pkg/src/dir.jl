@@ -2,9 +2,9 @@
 
 module Dir
 
-import ..Pkg: DEFAULT_META, META_BRANCH, PkgError
+import Pkg
+import ..DEFAULT_META, ..META_BRANCH, ..PkgError
 import ...LibGit2, ...LibGit2.with
-
 const DIR_NAME = ".julia"
 
 _pkgroot() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))

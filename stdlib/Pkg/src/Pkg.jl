@@ -86,6 +86,7 @@ init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Di
 
 function __init__()
     vers = "v$(VERSION.major).$(VERSION.minor)"
+    pushfirst!(Base.LOAD_PATH, dir)
     pushfirst!(Base.LOAD_CACHE_PATH, abspath(Dir._pkgroot(), "lib", vers))
 end
 
@@ -287,7 +288,6 @@ Set the protocol used to access GitHub-hosted packages. Defaults to 'https', wit
 `proto` delegating the choice to the package developer.
 """
 setprotocol!(proto::AbstractString) = Cache.setprotocol!(proto)
-
 
 # point users to PkgDev
 register(args...) =

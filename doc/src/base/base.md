@@ -77,7 +77,6 @@ Base.Iterators
 Base.LibGit2
 Base.Libc
 Base.Meta
-Base.Pkg
 Base.StackTraces
 Base.Sys
 Base.Threads

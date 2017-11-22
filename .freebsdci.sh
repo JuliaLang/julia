@@ -36,10 +36,8 @@ runtests(){
     export JULIA_TEST_MAXRSS_MB=600
     export JULIA_CPU_CORES=$MAKE_JOBS_NUMBER
 
-    gmake testall \
-        test-download \
-        test-pkg \
-        test-libgit2-online
+    ./usr/bin/julia test/runtests.jl all
+    ./usr/bin/julia test/runtests.jl libgit2-online Pkg/pkg download
 }
 
 test-embedding(){
