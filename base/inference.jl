@@ -2310,6 +2310,11 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
                     end
                     return Conditional(a, bty, aty)
                 end
+            elseif f === Core.Inference.not_int
+                aty = argtypes[2]
+                if isa(aty, Conditional)
+                    return Conditional(aty.var, aty.elsetype, aty.vtype)
+                end
             end
         end
         return isa(rt, TypeVar) ? rt.ub : rt

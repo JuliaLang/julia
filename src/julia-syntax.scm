@@ -524,12 +524,12 @@
             (for (= ,i (: 1 (call (top >>) (call (top length) ,kw) 1)))
                  (block
                   ;; ii = i*2 - 1
-                  (= ,ii (call (top -) (call (top *) ,i 2) 1))
+                  (= ,ii (call (top sub_int) (call (top mul_int) ,i 2) 1))
                   (= ,elt (call (core arrayref) true ,kw ,ii))
                   ,(foldl (lambda (kn else)
                             (let* ((k     (car kn))
                                    (rval0 `(call (core arrayref) true ,kw
-                                                 (call (top +) ,ii 1)))
+                                                 (call (top add_int) ,ii 1)))
                                    ;; note: if the "declared" type of a KW arg
                                    ;; includes something from keyword-sparams
                                    ;; then don't assert it here, since those static
@@ -569,7 +569,7 @@
                                             'ccall 2
                                             ,rkw (tuple ,elt
                                                         (call (core arrayref) true ,kw
-                                                              (call (top +) ,ii 1)))))
+                                                              (call (top add_int) ,ii 1)))))
                           (map (lambda (k temp)
                                  (cons (if (decl? k) `(,(car k) ,temp ,(caddr k)) temp)
                                        (decl-var k)))
@@ -1720,7 +1720,7 @@
             ,@(if outer? `((require-existing-local ,lhs)) '())
             ,(expand-forms
               `(,while
-                (call (top !) (call (top done) ,coll ,state))
+                (call (top not_int) (call (core typeassert) (call (top done) ,coll ,state) (core Bool)))
                 (block
                  ;; NOTE: enable this to force loop-local var
                  #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
@@ -2548,10 +2548,10 @@
                   (inbounds true)
                   (call (top setindex!) ,result ,oneresult ,ri)
                   (inbounds pop)
-                  (= ,ri (call (top +) ,ri 1)))
+                  (= ,ri (call (top add_int) ,ri 1)))
           `(block
             (= ,(car states) (call (top start) ,(car rv)))
-            (while (call (top !) (call (top done) ,(car rv) ,(car states)))
+            (while (call (top not_int) (call (core typeassert) (call (top done) ,(car rv) ,(car states)) (core Bool)))
                    (scope-block
                    (block
                     (= (tuple ,(cadr (car ranges)) ,(car states))

@@ -155,7 +155,7 @@ julia> "foo" ≠ "foo"
 false
 ```
 """
-!=(x, y) = !(x == y)::Bool
+!=(x, y) = !(x == y)
 const ≠ = !=
 
 """
