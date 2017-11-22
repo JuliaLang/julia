@@ -245,11 +245,14 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
                 in_back_ticks = true
             end
         else
-            if !in_back_ticks && !in_double_quotes && c == '\'' && !done(r, i) && next(r, i)[1]!='\\'
+            if !in_back_ticks && !in_double_quotes &&
+                c == '\'' && !done(r, i) && next(r, i)[1] != '\\'
                 in_single_quotes = !in_single_quotes
-            elseif !in_back_ticks && !in_single_quotes && c == '"' && !done(r, i) && next(r, i)[1]!='\\'
+            elseif !in_back_ticks && !in_single_quotes &&
+                c == '"' && !done(r, i) && next(r, i)[1] != '\\'
                 in_double_quotes = !in_double_quotes
-            elseif !in_single_quotes && !in_double_quotes && c == '`' && !done(r, i) && next(r, i)[1]!='\\'
+            elseif !in_single_quotes && !in_double_quotes &&
+                c == '`' && !done(r, i) && next(r, i)[1] != '\\'
                 in_back_ticks = !in_back_ticks
             end
         end
