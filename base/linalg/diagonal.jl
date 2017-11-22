@@ -418,7 +418,7 @@ function svd(D::Diagonal{<:Number})
     piv = sortperm(S, rev = true)
     U   = Diagonal(D.diag ./ S)
     Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
-    V   = Diagonal(ones(D.diag))
+    V   = Diagonal(fill!(similar(D.diag), 1))
     Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)
     return (Up, S[piv], Vp)
 end

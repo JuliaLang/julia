@@ -1130,9 +1130,9 @@ end
                 sparr = Sp(arr)
                 fillval = rand(Tv)
                 fill!(sparr, fillval)
-                @test Array(sparr) == fillval * ones(arr)
+                @test Array(sparr) == fillval * ones(Tv, siz...)
                 fill!(sparr, 0)
-                @test Array(sparr) == zeros(arr)
+                @test Array(sparr) == zeros(Tv, siz...)
             end
         end
     end

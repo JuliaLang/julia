@@ -1793,6 +1793,16 @@ end
 # `SSHCredentials` and `UserPasswordCredentials` constructors using `prompt_if_incorrect`
 # are deprecated in base/libgit2/types.jl.
 
+# deprecate ones/zeros methods accepting an array as first argument
+@deprecate ones(a::AbstractArray, ::Type{T}, dims::Tuple) where {T} fill!(similar(a, T, dims), 1)
+@deprecate ones(a::AbstractArray, ::Type{T}, dims...) where {T}     fill!(similar(a, T, dims...), 1)
+@deprecate ones(a::AbstractArray, ::Type{T}) where {T}              fill!(similar(a, T), 1)
+@deprecate ones(a::AbstractArray)                                   fill!(similar(a), 1)
+@deprecate zeros(a::AbstractArray, ::Type{T}, dims::Tuple) where {T}  fill!(similar(a, T, dims), 0)
+@deprecate zeros(a::AbstractArray, ::Type{T}, dims...) where {T}      fill!(similar(a, T, dims...), 0)
+@deprecate zeros(a::AbstractArray, ::Type{T}) where {T}               fill!(similar(a, T), 0)
+@deprecate zeros(a::AbstractArray)                                    fill!(similar(a), 0)
+
 # PR #23711
 @eval LibGit2 begin
     @deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)
