@@ -814,7 +814,7 @@ Void
     nothing
 
 The singleton instance of type `Void`, used by convention when there is no value to return
-(as in a C `void` function). Can be converted to an empty `Nullable` value.
+(as in a C `void` function). Can be converted to an empty [`Nullable`](@ref) value.
 """
 nothing
 
@@ -867,7 +867,7 @@ UndefRefError
 """
     Float32(x [, mode::RoundingMode])
 
-Create a Float32 from `x`. If `x` is not exactly representable then `mode` determines how
+Create a `Float32` from `x`. If `x` is not exactly representable then `mode` determines how
 `x` is rounded.
 
 # Examples
@@ -886,7 +886,7 @@ Float32(x)
 """
     Float64(x [, mode::RoundingMode])
 
-Create a Float64 from `x`. If `x` is not exactly representable then `mode` determines how
+Create a `Float64` from `x`. If `x` is not exactly representable then `mode` determines how
 `x` is rounded.
 
 # Examples
@@ -974,7 +974,7 @@ DomainError
 """
     Task(func)
 
-Create a `Task` (i.e. coroutine) to execute the given function (which must be
+Create a `Task` (i.e. coroutine) to execute the given function `func` (which must be
 callable with no arguments). The task exits when this function returns.
 
 # Examples
@@ -1078,6 +1078,24 @@ invoke
 
 Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
 `x isa type`.
+
+# Examples
+```jldoctest
+julia> isa(1, Int)
+true
+
+julia> isa(1, Matrix)
+false
+
+julia> isa(1, Char)
+false
+
+julia> isa(1, Number)
+true
+
+julia> 1 isa Number
+true
+```
 """
 isa
 
@@ -1181,6 +1199,15 @@ end
     Symbol(x...) -> Symbol
 
 Create a `Symbol` by concatenating the string representations of the arguments together.
+
+# Examples
+```jldoctest
+julia> Symbol("my", "name")
+:myname
+
+julia> Symbol("day", 4)
+:day4
+```
 """
 Symbol
 
@@ -1210,6 +1237,9 @@ julia> a = 1//2
 
 julia> getfield(a, :num)
 1
+
+julia> a.num
+1
 ```
 """
 getfield
@@ -1218,7 +1248,27 @@ getfield
     setfield!(value, name::Symbol, x)
 
 Assign `x` to a named field in `value` of composite type. The syntax `a.b = c` calls
-`setfield!(a, :b, c)`.
+`setfield!(a, :b, c)`. `value` must be mutable.
+
+# Examples
+```jldoctest
+julia> mutable struct MyMutableStruct
+           field::Int
+       end
+
+julia> a = MyMutableStruct(1);
+
+julia> setfield!(a, :field, 2);
+
+julia> getfield(a, :field)
+2
+
+julia> a = 1//2
+1//2
+
+julia> setfield!(a, :num, 3);
+ERROR: type Rational is immutable
+```
 """
 setfield!
 
@@ -1301,6 +1351,15 @@ Array{T,N}(dims)
     +(x, y...)
 
 Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
+
+# Examples
+```jldoctest
+julia> 1 + 20 + 4
+25
+
+julia> +(1, 20, 4)
+25
+```
 """
 (+)(x, y...)
 
@@ -1308,6 +1367,20 @@ Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x
     -(x)
 
 Unary minus operator.
+
+# Examples
+```jldoctest
+julia> -1
+-1
+
+julia> -(2)
+-2
+
+julia> -[1 2; 3 4]
+2×2 Array{Int64,2}:
+ -1  -2
+ -3  -4
+```
 """
 -(x)
 
@@ -1315,6 +1388,15 @@ Unary minus operator.
     -(x, y)
 
 Subtraction operator.
+
+# Examples
+```jldoctest
+julia> 2 - 3
+-1
+
+julia> -(2, 4.5)
+-2.5
+```
 """
 -(x, y)
 
@@ -1322,6 +1404,15 @@ Subtraction operator.
     *(x, y...)
 
 Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`.
+
+# Examples
+```jldoctest
+julia> 2 * 7 * 8
+112
+
+julia> *(2, 7, 8)
+112
+```
 """
 (*)(x, y...)
 
@@ -1330,6 +1421,18 @@ Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e
 
 Right division operator: multiplication of `x` by the inverse of `y` on the right. Gives
 floating-point results for integer arguments.
+
+# Examples
+```jldoctest
+julia> 1/2
+0.5
+
+julia> 4/2
+2.0
+
+julia> 4.5/2
+2.25
+```
 """
 /(x, y)
 
