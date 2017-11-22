@@ -339,6 +339,8 @@ Create an array of all zeros with the same layout as `A`, element type `T` and s
 The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
 For convenience `dims` may also be passed in variadic form.
 
+See also: [`ones`](@ref), [`similar`](@ref)
+
 # Examples
 ```jldoctest
 julia> zeros(1)
@@ -371,7 +373,6 @@ julia> zeros(A, Bool, (3,))
  false
  false
 ```
-See also [`ones`](@ref), [`similar`](@ref).
 """
 function zeros end
 
@@ -381,6 +382,8 @@ function zeros end
 Create an array of all ones with the same layout as `A`, element type `T` and size `dims`.
 The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
 For convenience `dims` may also be passed in variadic form.
+
+See also: [`zeros`](@ref), [`similar`](@ref)
 
 # Examples
 ```jldoctest
@@ -414,7 +417,6 @@ julia> ones(A, Bool, (3,))
  true
  true
 ```
-See also [`zeros`](@ref), [`similar`](@ref).
 """
 function ones end
 
@@ -783,6 +785,8 @@ _deleteat!(a::Vector, i::Integer, delta::Integer) =
 
 Insert one or more `items` at the end of `collection`.
 
+See also: [`append!`](@ref), [`unshift!`](@ref), [`insert!`](@ref), [`pop!`](@ref)
+
 # Examples
 ```jldoctest
 julia> push!([1, 2, 3], 4, 5, 6)
@@ -794,10 +798,6 @@ julia> push!([1, 2, 3], 4, 5, 6)
  5
  6
 ```
-
-Use [`append!`](@ref) to add all the elements of another collection to
-`collection`. The result of the preceding example is equivalent to `append!([1, 2, 3], [4,
-5, 6])`.
 """
 function push! end
 
@@ -816,9 +816,11 @@ function push!(a::Array{Any,1}, @nospecialize item)
 end
 
 """
-    append!(collection, collection2) -> collection.
+    append!(a::Vector, items) -> collection.
 
-Add the elements of `collection2` to the end of `collection`.
+Add the elements of `items` to the end of `a`.
+
+See also: [`push!`](@ref), [`prepend!`](@ref), [`insert!`](@ref)
 
 # Examples
 ```jldoctest
@@ -827,20 +829,7 @@ julia> append!([1],[2,3])
  1
  2
  3
-
-julia> append!([1, 2, 3], [4, 5, 6])
-6-element Array{Int64,1}:
- 1
- 2
- 3
- 4
- 5
- 6
 ```
-
-Use [`push!`](@ref) to add individual items to `collection` which are not already
-themselves in another collection. The result is of the preceding example is equivalent to
-`push!([1, 2, 3], 4, 5, 6)`.
 """
 function append!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
@@ -873,6 +862,8 @@ end
     prepend!(a::Vector, items) -> collection
 
 Insert the elements of `items` to the beginning of `a`.
+
+See also: [`unshift!`](@ref), [`append!`](@ref), [`insert!`](@ref)
 
 # Examples
 ```jldoctest
@@ -980,6 +971,8 @@ end
 Remove an item in `collection` and return it. If `collection` is an
 ordered container, the last item is returned.
 
+See also: [`shift!`](@ref), [`splice!`](@ref), [`push!`](@ref)
+
 # Examples
 ```jldoctest
 julia> A=[1, 2, 3]
@@ -1023,16 +1016,18 @@ end
 
 Insert one or more `items` at the beginning of `collection`.
 
+See also: [`prepend!`](@ref), [`push!`](@ref), [`insert`](@ref), [`shift!`](@ref)
+
 # Examples
 ```jldoctest
-julia> unshift!([1, 2, 3, 4], 5, 6)
+julia> unshift!([1, 2, 3], 4, 5, 6)
 6-element Array{Int64,1}:
+ 4
  5
  6
  1
  2
  3
- 4
 ```
 """
 function unshift!(a::Array{T,1}, item) where T
@@ -1046,6 +1041,8 @@ end
     shift!(collection) -> item
 
 Remove the first `item` from `collection`.
+
+See also: [`pop!`](@ref), [`splice!`](@ref), [`unshift!`](@ref)
 
 # Examples
 ```jldoctest
@@ -1085,6 +1082,8 @@ end
 Insert an `item` into `a` at the given `index`. `index` is the index of `item` in
 the resulting `a`.
 
+See also: [`push!`](@ref), [`unshift!`](@ref),  [`splice!`](@ref)
+
 # Examples
 ```jldoctest
 julia> insert!([6, 5, 4, 2, 1], 4, 3)
@@ -1111,6 +1110,8 @@ end
 
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
+
+See also: [`splice!`](@ref), [`pop!`](@ref), [`unshift!`](@ref)
 
 # Examples
 ```jldoctest
@@ -1215,6 +1216,8 @@ Subsequent items are shifted left to fill the resulting gap.
 If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
 
+See also: [`pop!`](@ref), [`shift!`](@ref), [`insert!`](@ref), [`deleteat!`](@ref)
+
 # Examples
 ```jldoctest splice!
 julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
@@ -1252,9 +1255,6 @@ julia> A
   3
  -1
 ```
-
-To insert `replacement` before an index `n` without removing any items, use
-`splice!(collection, n:n-1, replacement)`.
 """
 function splice!(a::Vector, i::Integer, ins=_default_splice)
     v = a[i]
