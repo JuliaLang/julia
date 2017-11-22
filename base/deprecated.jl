@@ -95,7 +95,7 @@ function firstcaller(bt::Vector, funcsyms)
             found && @goto found
             found = lkup.func in funcsyms
             # look for constructor type name
-            if !found && lkup.linfo != nothing
+            if !found && lkup.linfo isa Core.MethodInstance
                 li = lkup.linfo
                 ft = ccall(:jl_first_argument_datatype, Any, (Any,), li.def.sig)
                 if isa(ft,DataType) && ft.name === Type.body.name
