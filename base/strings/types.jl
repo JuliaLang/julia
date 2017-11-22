@@ -88,16 +88,16 @@ end
 
 function thisind(s::SubString{String}, i::Integer)
     j = Int(i)
-    j < 1 && return 0
-    e = endof(s)
-    j >= e && return e
+    j < start(s) && return 0
+    n = ncodeunits(s)
+    j > n && return n + 1
     offset = s.offset
     str = s.string
     j += offset
     @inbounds while j > offset && is_valid_continuation(codeunit(str, j))
         j -= 1
     end
-    j-offset
+    j - offset
 end
 
 nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset

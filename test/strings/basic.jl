@@ -580,13 +580,14 @@ end
             @test thisind(s, 6) == 6
             @test thisind(s, 15) == 15
             @test thisind(s, 16) == 15
-            @test thisind(s, 30) == 15
+            @test thisind(s, 17) == 17
+            @test thisind(s, 30) == 17
         end
     end
 
     let strs = Any["", s"", SubString("123", 2, 1), SubString(s"123", 2, 1)]
         for s in strs, i in -2:2
-            @test thisind(s, i) == 0
+            @test thisind(s, i) == (i > 0)
         end
     end
 end

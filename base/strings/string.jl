@@ -123,8 +123,8 @@ end
 function thisind(s::String, i::Integer)
     j = Int(i)
     j < 1 && return 0
-    e = endof(s)
-    j >= e && return e
+    n = ncodeunits(s)
+    j > n && return n + 1
     @inbounds while j > 0 && is_valid_continuation(codeunit(s,j))
         j -= 1
     end

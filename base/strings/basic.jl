@@ -237,11 +237,11 @@ end
 ## Generic indexing functions ##
 
 """
-    thisind(str::AbstractString, i::Integer)
+    thisind(s::AbstractString, i::Integer)
 
-Get the largest valid string index at or before `i`.
-Returns `0` if there is no valid string index at or before `i`.
-Returns `endof(str)` if `i≥endof(str)`.
+If `i` is the index into a character in `s` then `thisind` returns the index of the
+start of that character. If `i < start(s)` then it returns `start(s) - 1`.
+If `i > ncodeunits(s)` then it returns `ncodeunits(s) + 1`.
 
 # Examples
 ```jldoctest
@@ -257,15 +257,21 @@ julia> thisind("αβγdef", 3)
 julia> thisind("αβγdef", 4)
 3
 
-julia> thisind("αβγdef", 20)
+julia> thisind("αβγdef", 9)
 9
+
+julia> thisind("αβγdef", 10)
+10
+
+julia> thisind("αβγdef", 20)
+10
 """
 function thisind(s::AbstractString, i::Integer)
     j = Int(i)
     isvalid(s, j) && return j
     j < start(s) && return 0
-    e = endof(s)
-    j >= endof(s) && return e
+    n = ncodeunits(s)
+    j > n && return n + 1
     prevind(s, j)
 end
 
