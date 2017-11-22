@@ -357,7 +357,6 @@ export conv, conv2, deconv, filt, filt!, xcorr
 @deprecate_moved RemoteException "Distributed" true true
 @deprecate_moved ProcessExitedException "Distributed" true true
 
-
 @deprecate_moved crc32c "CRC32c" true true
 
 @deprecate_moved DateTime "Dates" true true

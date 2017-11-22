@@ -129,7 +129,6 @@ function init_load_path(BINDIR = Sys.BINDIR)
     load_path = get(ENV, "JULIA_LOAD_PATH", "@|@v#.#.#|@v#.#|@v#|@default|@!v#.#")
     append!(empty!(LOAD_PATH), parse_load_path(load_path))
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    push!(LOAD_PATH, Pkg.dir)
     push!(LOAD_PATH, abspath(BINDIR, "..", "local", "share", "julia", "site", vers))
     push!(LOAD_PATH, abspath(BINDIR, "..", "share", "julia", "site", vers))
 end

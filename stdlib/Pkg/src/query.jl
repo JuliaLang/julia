@@ -2,7 +2,8 @@
 
 module Query
 
-import ...Pkg.PkgError
+import Pkg
+import ..PkgError
 using ..Types
 
 function init_resolve_backtrace(reqs::Requires, fix::Dict{String,Fixed} = Dict{String,Fixed}())

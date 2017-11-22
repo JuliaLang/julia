@@ -1,10 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Pkg.Types
-using Base.Pkg.Query
-using Base.Pkg.Resolve
-using Base.Pkg.Resolve.VersionWeights
-import Base.Pkg.PkgError
+import Pkg
+using Pkg.Types
+using Pkg.Query
+using Pkg.Resolve
+using Pkg.Resolve.VersionWeights
+import Pkg.PkgError
 
 # Check that VersionWeight keeps the same ordering as VersionNumber
 

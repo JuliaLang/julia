@@ -3,9 +3,10 @@
 module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
+import Pkg
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
 using ...LibGit2
-import ...Pkg.PkgError
+import ..PkgError
 using ..Types
 using Base.Printf: @printf
 
@@ -582,6 +583,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
     # To isolate the build from the running Julia process, we execute each build.jl file in
     # a separate process. Errors are written to errfile for later reporting.
     code = """
+        import Pkg
         empty!(Base.LOAD_PATH)
         append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
         empty!(Base.DEPOT_PATH)

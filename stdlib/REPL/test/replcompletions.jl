@@ -3,6 +3,7 @@
 using REPL.REPLCompletions
 using Test
 using Random
+import Pkg
 
 let ex = quote
     module CompletionFoo
@@ -206,7 +207,7 @@ let
 end
 
 # inexistent completion inside a string
-let s = "Pkg.add(\"lol"
+let s = "Base.print(\"lol"
     c, r, res = test_complete(s)
     @test res == false
 end
