@@ -1,4 +1,9 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+#This file is a part of Julia. License is MIT: https://julialang.org/license
+
+module AdjustersTest
+
+using Test
+using Dates
 
 #trunc
 dt = Dates.Date(2012, 12, 21)
@@ -473,3 +478,5 @@ r = filter(x->Dates.second(x) == 5, Dates.Time(0):Dates.Second(1):Dates.Time(10)
 @test length(r) == 600
 @test first(r) == Dates.Time(0, 0, 5)
 @test last(r) == Dates.Time(9, 59, 5)
+
+end

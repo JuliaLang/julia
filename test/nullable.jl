@@ -388,6 +388,7 @@ end
 @test isequal(convert(Nullable, "a"), Nullable("a"))
 @test isequal(convert(Nullable, Nullable("a")), Nullable("a"))
 
+using Dates
 @test promote_type(Nullable{Int}, Int) === Nullable{Int}
 @test promote_type(Nullable{Union{}}, Int) === Nullable{Int}
 @test promote_type(Nullable{Float64}, Nullable{Int}) === Nullable{Float64}
@@ -398,7 +399,7 @@ end
 @test Base.promote_op(-, Nullable{Int}, Nullable{Int}) == Nullable{Int}
 @test Base.promote_op(+, Nullable{Float64}, Nullable{Int}) == Nullable{Float64}
 @test Base.promote_op(-, Nullable{Float64}, Nullable{Int}) == Nullable{Float64}
-@test Base.promote_op(-, Nullable{DateTime}, Nullable{DateTime}) == Nullable{Base.Dates.Millisecond}
+@test Base.promote_op(-, Nullable{DateTime}, Nullable{DateTime}) == Nullable{Dates.Millisecond}
 
 # tests for istypeequal (which uses filter, broadcast)
 @test istypeequal(Nullable(0), Nullable(0))

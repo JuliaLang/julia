@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module ConversionTests
+
+using Test
+using Dates
+
 @testset "conversion to/from UNIX" begin
     # Test conversion to and from unix
     @test Dates.unix2datetime(Dates.datetime2unix(DateTime(2000, 1, 1))) == DateTime(2000, 1, 1)
@@ -116,4 +121,6 @@ end
     @test Dates.millisecond(t) == 50
     @test Dates.microsecond(t) == 0
     @test Dates.nanosecond(t) == 0
+end
+
 end

@@ -263,7 +263,7 @@ julia> one(3.7)
 julia> one(Int)
 1
 
-julia> one(Dates.Day(1))
+julia> import Dates; one(Dates.Day(1))
 1
 ```
 """
@@ -285,7 +285,7 @@ while `oneunit` is dimensionful (of the same type as `x`, or of type `T`).
 julia> oneunit(3.7)
 1.0
 
-julia> oneunit(Dates.Day)
+julia> import Dates; oneunit(Dates.Day)
 1 day
 ```
 """

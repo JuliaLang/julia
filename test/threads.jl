@@ -347,6 +347,8 @@ for T in (Int32, Int64, Float32, Float64)
     @test varmax[] === T(maximum(1:nloops))
     @test varmin[] === T(0)
 end
+
+using Dates
 for period in (0.06, Dates.Millisecond(60))
     let async = Base.AsyncCondition(), t
         c = Condition()
