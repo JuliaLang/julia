@@ -13,25 +13,26 @@ else
     typemax(Csize_t)
 end
 
-
-test_names = copy(tests)
-for (i, test) in enumerate(test_names)
-    if contains(test, "stdlib") && endswith(test, "runtests")
-        test_names[i] = split(test, "/")[end-2]
+function test_path(test)
+    if test in STDLIBS
+        test_file = joinpath(STDLIB_DIR, test, "test", "runtests")
+        if !isfile(test_file * ".jl")
+            error("Standard library $test did not provide a `test/runtests.jl` file")
+        end
+        return test_file
+    else
+        return test
     end
 end
 
 const node1_tests = String[]
-const node1_test_names = String[]
 function move_to_node1(t)
-    if t in test_names
-        i = findfirst(equalto(t), test_names)
-        push!(node1_test_names, test_names[i])
-        push!(node1_tests,      tests[i])
-        splice!(test_names, i)
-        splice!(tests,      i)
+    if t in tests
+        splice!(tests, findfirst(equalto(t), tests))
+        push!(node1_tests, t)
     end
 end
+
 # Base.compile only works from node 1, so compile test is handled specially
 move_to_node1("compile")
 move_to_node1("SharedArrays")
@@ -52,7 +53,7 @@ cd(dirname(@__FILE__)) do
     @everywhere include("testdefs.jl")
 
     #pretty print the information about gc and mem usage
-    name_align    = maximum([length("Test (Worker)"); map(x -> length(x) + 3 + ndigits(nworkers()), test_names)])
+    name_align    = maximum([length("Test (Worker)"); map(x -> length(x) + 3 + ndigits(nworkers()), tests)])
     elapsed_align = length("Time (s)")
     gc_align      = length("GC (s)")
     percent_align = length("GC %")
@@ -61,24 +62,23 @@ cd(dirname(@__FILE__)) do
     print_with_color(:white, rpad("Test (Worker)",name_align," "), " | ")
     print_with_color(:white, "Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n")
     results=[]
-    test_data = collect(zip(tests, test_names))
     @sync begin
         for p in workers()
             @async begin
-                while length(test_data) > 0
-                    test, test_name = shift!(test_data)
+                while length(tests) > 0
+                    test = shift!(tests)
                     local resp
                     wrkr = p
                     try
-                        resp = remotecall_fetch(runtests, wrkr, test_name, test; seed=seed)
+                        resp = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
                     catch e
                         resp = [e]
                     end
                     push!(results, (test, resp))
                     if resp[1] isa Exception
                         if exit_on_error
-                            skipped = length(test_data)
-                            empty!(test_data)
+                            skipped = length(tests)
+                            empty!(tests)
                         end
                     elseif resp[end] > max_worker_rss
                         if n > 1
@@ -90,7 +90,7 @@ cd(dirname(@__FILE__)) do
                         end
                     end
                     if !isa(resp[1], Exception)
-                        print_with_color(:white, rpad(test_name*" ($wrkr)", name_align, " "), " | ")
+                        print_with_color(:white, rpad(test*" ($wrkr)", name_align, " "), " | ")
                         time_str = @sprintf("%7.2f",resp[2])
                         print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
                         gc_str = @sprintf("%5.2f",resp[5].total_time/10^9)
@@ -113,7 +113,7 @@ cd(dirname(@__FILE__)) do
             end
         end
     end
-    for (t, t_name) in zip(node1_tests, node1_test_names)
+    for t in node1_tests
         # As above, try to run each test
         # which must run on node 1. If
         # the test fails, catch the error,
@@ -121,10 +121,10 @@ cd(dirname(@__FILE__)) do
         # to the overall aggregator
         n > 1 && print("\tFrom worker 1:\t")
         isolate = true
-        t_name == "SharedArrays" && (isolate = false)
+        t == "SharedArrays" && (isolate = false)
         local resp
         try
-            resp = eval(Expr(:call, () -> runtests(t_name, t, isolate, seed=seed))) # runtests is defined by the include above
+            resp = eval(Expr(:call, () -> runtests(t, test_path(t), isolate, seed=seed))) # runtests is defined by the include above
         catch e
             resp = [e]
         end

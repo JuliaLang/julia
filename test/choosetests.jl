@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+const STDLIB_DIR = joinpath(JULIA_HOME, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
+const STDLIBS = readdir(STDLIB_DIR)
+
 @doc """
 
 `tests, net_on, exit_on_error, seed = choosetests(choices)` selects a set of tests to be
@@ -51,8 +54,6 @@ function choosetests(choices = [])
         "channels", "iostream", "specificity", "codegen", "codevalidation",
         "reinterpretarray", "syntax"
     ]
-
-    stdlibs = readdir(joinpath(@__DIR__, "..", "stdlib"))
 
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
         push!(testnames, "examples")
@@ -179,10 +180,10 @@ function choosetests(choices = [])
     end
 
     if "stdlib" in skip_tests
-        filter!(x -> x != "stdlib", tests)
+        filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
     elseif "stdlib" in tests
-        filter!(x -> x != "stdlib", tests)
-        prepend!(tests, stdlibs)
+        filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
+        prepend!(tests, STDLIBS)
     end
 
     if startswith(string(Sys.ARCH), "arm")
@@ -191,19 +192,6 @@ function choosetests(choices = [])
         warn("Skipping Profile tests")
         filter!(x -> (x != "Profile"), tests)
     end
-
-    stdlib_dir = joinpath(@__DIR__, "..", "stdlib")
-    for stdlib in filter(x -> x in stdlibs, tests)
-        splice!(tests, findfirst(equalto(stdlib), tests))
-        dir = readdir(stdlib_dir)
-        test_file = joinpath(stdlib_dir, stdlib, "test", "runtests")
-        if isfile(test_file * ".jl")
-            unshift!(tests, test_file)
-        else
-            warn("Standard library $stdlib did not provide a `test/runtests.jl` file")
-        end
-    end
-
 
     filter!(x -> !(x in skip_tests), tests)
 
