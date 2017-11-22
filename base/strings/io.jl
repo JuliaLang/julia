@@ -263,7 +263,7 @@ escape_string(s::AbstractString) = sprint(endof(s), escape_string, s, "\"")
 """
     escape_string(io, str::AbstractString[, esc::AbstractString]) -> Void
 
-Escape sequences in `str` and print result to `io`.
+Escape sequences in `str` and print result to `io`. See also [`unescape_string`](@ref).
 """
 function escape_string(io, s::AbstractString, esc::AbstractString)
     i = start(s)
@@ -314,10 +314,13 @@ unescape_chars(s::AbstractString, esc::AbstractString) =
 
 General unescaping of traditional C and Unicode escape sequences. Reverse of
 [`escape_string`](@ref).
+"""
+unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
 
+"""
     unescape_string(io, str::AbstractString) -> Void
 
-Unescapes sequences and prints result to `io`.
+Unescapes sequences and prints result to `io`. See also [`escape_string`](@ref).
 """
 function unescape_string(io, s::AbstractString)
     i = start(s)
@@ -372,8 +375,6 @@ function unescape_string(io, s::AbstractString)
         end
     end
 end
-
-unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
 
 macro b_str(s); :(Vector{UInt8}($(unescape_string(s)))); end
 
@@ -504,15 +505,4 @@ function convert(::Type{String}, chars::AbstractVector{Char})
         while !done(chars, state)
             c, state = next(chars, state)
             if '\ud7ff' < c && c + 1024 < '\ue000'
-                d, state = next(chars, state)
-                if '\ud7ff' < d - 1024 && d < '\ue000'
-                    c = Char(0x10000 + ((UInt32(c) & 0x03ff) << 10) | (UInt32(d) & 0x03ff))
-                else
-                    write(io, c)
-                    c = d
-                end
-            end
-            write(io, c)
-        end
-    end)
-end
+                d, state = nex
