@@ -2111,8 +2111,16 @@ end
 @deprecate (&)(x::T, y::T) where {T<:BitInteger} bitand(x, y)
 @deprecate (&)(a, b, c, xs...) bitand(a, b, c, xs...)
 
+@deprecate xor(x::BigInt, y::BigInt) bitxor(x, y)
+@deprecate xor(a::BigInt, b::BigInt, c::BigInt) bitxor(a, b, c)
+@deprecate xor(a::BigInt, b::BigInt, c::BigInt, d::BigInt) bitxor(a, b, c, d)
+@deprecate xor(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt) bitxor(a, b, c, d, e)
 
-
+@deprecate xor(x::Integer) bitxor(x)
+@deprecate xor(a::Integer, b::Integer) bitxor(a, b)
+@deprecate xor(x::T, y::T) where {T<:Integer} bitxor(x, y)
+@deprecate xor(x::T, y::T) where {T<:BitInteger} bitxor(x, y)
+@deprecate xor(a, b, c, xs...) bitxor(a, b, c, xs...)
 
 # #24258
 # Physical units define an equivalence class: there is no such thing as a step of "1" (is

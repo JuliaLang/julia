@@ -381,7 +381,7 @@ muladd(x::T, y::T, z::T) where {T<:Number} = x*y+z
 
 bitand(x::T, y::T) where {T<:Integer} = no_op_err("bitand", T)
 bitor(x::T, y::T) where {T<:Integer} = no_op_err("bitor", T)
-xor(x::T, y::T) where {T<:Integer} = no_op_err("xor", T)
+bitxor(x::T, y::T) where {T<:Integer} = no_op_err("bitxor", T)
 
 (==)(x::T, y::T) where {T<:Number} = x === y
 (< )(x::T, y::T) where {T<:Real} = no_op_err("<" , T)

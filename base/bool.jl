@@ -41,28 +41,32 @@ end
 bitnot(x::Bool) = !x
 bitand(x::Bool, y::Bool) = and_int(x, y)
 bitor(x::Bool, y::Bool) = or_int(x, y)
+bitxor(x::Bool, y::Bool) = (x != y)
 (&)(x::Bool, y::Bool) = and_int(x, y)
 (|)(x::Bool, y::Bool) = or_int(x, y)
 
 """
     xor(x, y)
-    ⊻(x, y)
 
-Bitwise exclusive or of `x` and `y`.  The infix operation
-`a ⊻ b` is a synonym for `xor(a,b)`, and
-`⊻` can be typed by tab-completing `\\xor`
-or `\\veebar` in the Julia REPL.
+Logical exclusive or of `x` and `y`.
 
 # Examples
 ```jldoctest
-julia> [true; true; false] .⊻ [true; false; false]
-3-element BitArray{1}:
- false
-  true
- false
+julia> xor(true, false)
+true
+
+julia> xor(false, true)
+true
+
+julia> xor(true, true)
+false
+
+julia> xor(false, false)
+false
 ```
 """
 xor(x::Bool, y::Bool) = (x != y)
+
 
 >>(x::Bool, c::Unsigned) = Int(x) >> c
 <<(x::Bool, c::Unsigned) = Int(x) << c

@@ -291,7 +291,33 @@ julia> bitor(4, 1)
 ```
 """
 bitor(x::T, y::T) where {T<:BitInteger} = or_int(x, y)
-xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
+
+"""
+    bitxor(x, y)
+    ⊻(x, y)
+
+Bitwise exclusive or of `x` and `y`.  The infix operation
+`a ⊻ b` is a synonym for `bitxor(a,b)`, and
+`⊻` can be typed by tab-completing `\\xor`
+or `\\veebar` in the Julia REPL.
+
+# Examples
+```jldoctest
+julia> bitstring(Int8(3))
+"00000011"
+
+julia> bitstring(Int8(5))
+"00000101"
+
+julia> bitstring(bitxor(Int8(3), Int8(5)))
+"00000110"
+
+julia> bitstring(Int8(3) ⊻ Int8(5))
+"00000110"
+```
+"""
+bitxor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
+
 
 """
     bswap(n)
@@ -770,7 +796,7 @@ else
 end
 
 # issue #15489: since integer ops are unchecked, they shouldn't check promotion
-for op in (:+, :-, :*, bitand, :bitor, :xor)
+for op in (:+, :-, :*, bitand, :bitor, :bitxor)
     @eval function $op(a::Integer, b::Integer)
         T = promote_typeof(a, b)
         return $op(a % T, b % T)
