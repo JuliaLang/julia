@@ -136,9 +136,6 @@ Language changes
     backslashes and the end of the literal while 2n+1 backslashes followed by a quote encodes n
     backslashes followed by a quote character ([#22926]).
 
-  * `readdir()` output is now guaranteed to be sorted on any OS. A new `sort` keyword argument can
-    be used to disable explicit sorting ([#24626]).
-
   * The syntax `(x...)` for constructing a tuple is deprecated; use `(x...,)` instead (#24452).
 
 Breaking changes
@@ -385,6 +382,9 @@ Library improvements
   * `reinterpret` now works on any AbstractArray using the new `ReinterpretArray` type.
     This supersedes the old behavior of reinterpret on Arrays. As a result, reinterpreting
     arrays with different alignment requirements (removed in 0.6) is once again allowed ([#23750]).
+
+  * `readdir()` output is now guaranteed to be sorted on any OS. A new `sort` keyword argument can
+    be used to disable explicit sorting ([#24626]).
 
 Compiler/Runtime improvements
 -----------------------------
