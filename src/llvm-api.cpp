@@ -4,6 +4,9 @@
 //
 // These are part of the Julia repository as they need to be
 // built with the same C++ toolchain Julia & LLVM are built with
+//
+// They are not to be considered a stable API, and will be removed
+// when better package build systems are available
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
