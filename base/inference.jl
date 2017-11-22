@@ -2310,6 +2310,11 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
                     end
                     return Conditional(a, bty, aty)
                 end
+            elseif f === Core.Inference.not_int
+                aty = argtypes[2]
+                if isa(aty, Conditional)
+                    return Conditional(aty.var, aty.elsetype, aty.vtype)
+                end
             end
         end
         return isa(rt, TypeVar) ? rt.ub : rt
@@ -2590,8 +2595,6 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         t = (length(e.args) == 1) ? Any : Void
     elseif e.head === :copyast
         t = abstract_eval(e.args[1], vtypes, sv)
-    elseif e.head === :inert
-        return abstract_eval_constant(e.args[1])
     elseif e.head === :invoke
         error("type inference data-flow error: tried to double infer a function")
     elseif e.head === :boundscheck
@@ -2776,8 +2779,7 @@ issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
 is_meta_expr_head(head::Symbol) =
-    (head === :inbounds || head === :boundscheck || head === :meta ||
-     head === :line || head === :simdloop)
+    (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
 is_meta_expr(ex::Expr) = is_meta_expr_head(ex.head)
 
 function tmerge(@nospecialize(typea), @nospecialize(typeb))
@@ -3692,7 +3694,8 @@ function finish(me::InferenceState)
             end
         end
 
-        if !already_inferred
+        # don't store inferred code if we've decided to interpret this function
+        if !already_inferred && me.linfo.jlcall_api != 4
             const_flags = (me.const_ret) << 1 | me.const_api
             if me.const_ret
                 if isa(me.bestguess, Const)

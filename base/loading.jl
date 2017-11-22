@@ -756,6 +756,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             name = string(mod)
             path = find_package(name)
             if path === nothing
+                DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because dependency $name not found.")
                 return true # Won't be able to fullfill dependency
             end
         end

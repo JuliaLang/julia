@@ -1680,9 +1680,16 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
             }
         }
         if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF) {
-            jl_printf(JL_STDERR, "code missing for ");
-            jl_static_show(JL_STDERR, (jl_value_t*)li);
-            jl_printf(JL_STDERR, " : sysimg may not have been built with --compile=all\n");
+            jl_code_info_t *src = jl_code_for_interpreter(li);
+            if (!jl_code_requires_compiler(src)) {
+                li->inferred = (jl_value_t*)src;
+                jl_gc_wb(li, src);
+                li->functionObjectsDecls.functionObject = NULL;
+                li->functionObjectsDecls.specFunctionObject = NULL;
+                li->fptr = (jl_fptr_t)&jl_interpret_call;
+                li->jlcall_api = JL_API_INTERPRETED;
+                return li->functionObjectsDecls;
+            }
         }
     }
     jl_llvm_functions_t decls = li->functionObjectsDecls;

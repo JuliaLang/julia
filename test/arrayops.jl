@@ -413,6 +413,14 @@ end
         @test X32[i:(i+1), j:(j+2)] == X
     end
 end
+@testset "fallback hvcat" begin
+    #Issue #23994
+    A23994 = [1 "two"; 3im 4.0; 5 6//1]
+    @test A23994[2] isa Complex{Int}
+    @test A23994[3] isa Int
+    @test A23994[5] isa Float64
+    @test A23994[6] isa Rational{Int}
+end
 @testset "end" begin
     X = [ i+2j for i=1:5, j=1:5 ]
     @test X[end,end] == 15
@@ -886,7 +894,8 @@ end
     @test isequal(c[3,:], cv)
     @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
 
-    @test repeat(BitMatrix(eye(2)), inner = (2,1), outer = (1,2)) == repeat(eye(2), inner = (2,1), outer = (1,2))
+    @test repeat(BitMatrix(Matrix(I, 2, 2)), inner = (2,1), outer = (1,2)) ==
+            repeat(Matrix(I, 2, 2), inner = (2,1), outer = (1,2))
 end
 
 @testset "indexing with bools" begin
@@ -1009,7 +1018,7 @@ end
     @test m[1,2] == ([2,4],)
 
     # issue #21123
-    @test mapslices(nnz, speye(3), 1) == [1 1 1]
+    @test mapslices(nnz, sparse(1.0I, 3, 3), 1) == [1 1 1]
 end
 
 @testset "single multidimensional index" begin
@@ -2165,11 +2174,9 @@ Base.convert(::Type{Float64}, x::F21666) = Float64(x.x)
 end
 
 @testset "zeros and ones" begin
-    @test ones([1,2], Float64, (2,3)) == ones(2,3)
-    @test ones(2) == ones(Int, 2) == ones([2,3], Float32, 2) ==  [1,1]
+    @test ones(2) == ones(Int, 2) ==  [1,1]
     @test isa(ones(2), Vector{Float64})
     @test isa(ones(Int, 2), Vector{Int})
-    @test isa(ones([2,3], Float32, 2), Vector{Float32})
 
     function test_zeros(arr, T, s)
         @test all(arr .== 0)
@@ -2185,22 +2192,8 @@ end
     test_zeros(zeros(Int, 2, 3),   Matrix{Int}, (2,3))
     test_zeros(zeros(Int, (2, 3)), Matrix{Int}, (2,3))
 
-    test_zeros(zeros([1 2; 3 4]), Matrix{Int}, (2, 2))
-    test_zeros(zeros([1 2; 3 4], Float64), Matrix{Float64}, (2, 2))
-
-    zs = zeros(SparseMatrixCSC([1 2; 3 4]), Complex{Float64}, (2,3))
-    test_zeros(zs, SparseMatrixCSC{Complex{Float64}}, (2, 3))
-
     # #19265"
     @test_throws ErrorException zeros(Float64, [1.]) # TODO change to MethodError, when v0.6 deprecations are done
-    x = [1.]
-    test_zeros(zeros(x, Float64), Vector{Float64}, (1,))
-    @test x == [1.]
-
-    # exotic indexing
-    oarr = zeros(randn(3), UInt16, 1:3, -1:0)
-    @test indices(oarr) == (1:3, -1:0)
-    test_zeros(oarr.parent, Matrix{UInt16}, (3, 2))
 end
 
 # issue #11053

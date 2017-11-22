@@ -173,7 +173,7 @@ end
 end
 
 @testset "QR ambiguity methods" begin
-    qrmat = Base.LinAlg.getq(qrfact(eye(3)))
+    qrmat = Base.LinAlg.getq(qrfact(Matrix(1.0I, 3, 3)))
     v = [2,3,4]
     rv = v.'
 

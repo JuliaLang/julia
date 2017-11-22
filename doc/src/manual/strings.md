@@ -856,10 +856,9 @@ julia> b"\uff"
  0xbf
 ```
 
-In character literals, this distinction is glossed over and `\xff` is allowed to represent the
-code point 255, because characters *always* represent code points. In strings, however, `\x` escapes
-always represent bytes, not code points, whereas `\u` and `\U` escapes always represent code points,
-which are encoded in one or more bytes. For code points less than `\u80`, it happens that the
+Character literals use the same behavior.
+
+For code points less than `\u80`, it happens that the
 UTF-8 encoding of each code point is just the single byte produced by the corresponding `\x` escape,
 so the distinction can safely be ignored. For the escapes `\x80` through `\xff` as compared to
 `\u80` through `\uff`, however, there is a major difference: the former escapes all encode single
@@ -920,5 +919,19 @@ non-standard string literals of the form `raw"..."`. Raw string literals create
 ordinary `String` objects which contain the enclosed contents exactly as
 entered with no interpolation or unescaping. This is useful for strings which
 contain code or markup in other languages which use `$` or `\` as special
-characters. The exception is quotation marks that still must be
-escaped, e.g. `raw"\""` is equivalent to `"\""`.
+characters.
+
+The exception is that quotation marks still must be escaped, e.g. `raw"\""` is equivalent
+to `"\""`.
+To make it possible to express all strings, backslashes then also must be escaped, but
+only when appearing right before a quote character:
+
+```jldoctest
+julia> println(raw"\\ \\\"")
+\\ \"
+```
+
+Notice that the first two backslashes appear verbatim in the output, since they do not
+precede a quote character.
+However, the next backslash character escapes the backslash that follows it, and the
+last backslash escapes a quote, since these backslashes appear before a quote.

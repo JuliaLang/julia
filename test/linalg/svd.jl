@@ -19,10 +19,11 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
     @test sf1.S ≊ [2, 0]
     @test sf2.S ≊ [2, 1]
     # U & Vt are unitary
-    @test sf1.U*sf1.U'   ≊ eye(2)
-    @test sf1.Vt*sf1.Vt' ≊ eye(2)
-    @test sf2.U*sf2.U'   ≊ eye(2)
-    @test sf2.Vt*sf2.Vt' ≊ eye(2)
+    I22 = Matrix(I, 2, 2)
+    @test sf1.U*sf1.U'   ≊ I22
+    @test sf1.Vt*sf1.Vt' ≊ I22
+    @test sf2.U*sf2.U'   ≊ I22
+    @test sf2.Vt*sf2.Vt' ≊ I22
     # SVD not uniquely determined, so just test we can reconstruct the
     # matrices from the factorization as expected.
     @test sf1.U*Diagonal(sf1.S)*sf1.Vt' ≊ m1
@@ -62,9 +63,9 @@ a2img  = randn(n,n)/2
 
             if eltya <: BlasFloat
                 svdz = svdfact!(ones(eltya,0,0))
-                @test svdz[:U] ≈ eye(eltya,0,0)
+                @test svdz[:U] ≈ Matrix{eltya}(I, 0, 0)
                 @test svdz[:S] ≈ real(zeros(eltya,0))
-                @test svdz[:Vt] ≈ eye(eltya,0,0)
+                @test svdz[:Vt] ≈ Matrix{eltya}(I, 0, 0)
             end
         end
         @testset "Generalized svd" begin

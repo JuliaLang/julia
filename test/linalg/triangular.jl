@@ -109,7 +109,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test_throws ArgumentError tril!(A1, n)
             @test triu(A1,0)  == t1(diagm(0 => diag(A1)))
             @test triu(A1,-1) == t1(tril(triu(A1.data,-1)))
-            @test triu(A1,1)  == LowerTriangular(zeros(A1.data))
+            @test triu(A1,1)  == zeros(size(A1)) # or just @test iszero(triu(A1,1))?
             @test_throws ArgumentError triu!(A1, -n)
             @test_throws ArgumentError triu!(A1, n + 2)
         else
@@ -120,7 +120,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test_throws ArgumentError triu!(A1, n + 2)
             @test tril(A1,0)  == t1(diagm(0 => diag(A1)))
             @test tril(A1,1)  == t1(triu(tril(A1.data,1)))
-            @test tril(A1,-1) == UpperTriangular(zeros(A1.data))
+            @test tril(A1,-1) == zeros(size(A1)) # or just @test iszero(tril(A1,-1))?
             @test_throws ArgumentError tril!(A1, -n - 2)
             @test_throws ArgumentError tril!(A1, n)
         end
@@ -343,16 +343,16 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test B'A1' ≈ B'Matrix(A1)'
 
             if eltyB == elty1
-                @test A_mul_B!(zeros(B),A1,B)  ≈ A1*B
-                @test A_mul_Bc!(zeros(B),A1,B) ≈ A1*B'
-                @test A_mul_Bt!(zeros(B),A1,B) ≈ A1*B.'
-                @test Ac_mul_B!(zeros(B),A1,B) ≈ A1'*B
-                @test At_mul_B!(zeros(B),A1,B) ≈ A1.'*B
+                @test A_mul_B!(similar(B),A1,B)  ≈ A1*B
+                @test A_mul_Bc!(similar(B),A1,B) ≈ A1*B'
+                @test A_mul_Bt!(similar(B),A1,B) ≈ A1*B.'
+                @test Ac_mul_B!(similar(B),A1,B) ≈ A1'*B
+                @test At_mul_B!(similar(B),A1,B) ≈ A1.'*B
                 # test also vector methods
                 B1 = vec(B[1,:])
-                @test A_mul_B!(zeros(B1),A1,B1)  ≈ A1*B1
-                @test Ac_mul_B!(zeros(B1),A1,B1) ≈ A1'*B1
-                @test At_mul_B!(zeros(B1),A1,B1) ≈ A1.'*B1
+                @test A_mul_B!(similar(B1),A1,B1)  ≈ A1*B1
+                @test Ac_mul_B!(similar(B1),A1,B1) ≈ A1'*B1
+                @test At_mul_B!(similar(B1),A1,B1) ≈ A1.'*B1
             end
             #error handling
             @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(A1, ones(eltyB,n+1))
@@ -510,7 +510,7 @@ end
 @test_throws ArgumentError UpperTriangular(LowerTriangular(randn(3,3)))
 
 # Issue 16196
-@test UpperTriangular(eye(3)) \ view(ones(3), [1,2,3]) == ones(3)
+@test UpperTriangular(Matrix(1.0I, 3, 3)) \ view(ones(3), [1,2,3]) == ones(3)
 
 # dimensional correctness:
 isdefined(Main, :TestHelpers) || @eval Main include("../TestHelpers.jl")

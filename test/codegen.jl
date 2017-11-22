@@ -10,6 +10,12 @@ const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 get_llvm(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
     sprint(code_llvm, f, t, strip_ir_metadata, dump_module)
 
+get_llvm_noopt(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
+    Base._dump_function(f, t,
+                #=native=# false, #=wrapper=# false, #=strip=# strip_ir_metadata,
+                #=dump_module=# dump_module, #=syntax=#:att, #=optimize=#false)
+
+
 if opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
     @test !contains(get_llvm(identity, Tuple{String}), " call ")
@@ -221,7 +227,7 @@ let was_gced = false
 
     function foo22770()
         b = Ref(2)
-        finalizer(b, x -> was_gced = true)
+        finalizer(x -> was_gced = true, b)
         y = make_tuple(b)
         x = y[1]
         a = Ref(1)
@@ -306,3 +312,14 @@ if opt_level > 0
                     "%gcframe")
     @test !contains(get_llvm(g24108, Tuple{B24108}), "%gcframe")
 end
+
+# Issue 24632
+function foo24632(y::Bool)
+    x::Union{Int, String} = y ? "ABC" : 1
+    isa(x, Int) ? x : 0
+end
+
+# A bit coarse-grained perhaps, but ok for now. What we want to check is that the load from
+# the semi-boxed union on the if-branch of the `isa` is not annotated !nonnull
+@test contains(get_llvm_noopt(foo24632, (Bool,), false), "!dereferenceable_or_null")
+@test !contains(get_llvm_noopt(foo24632, (Bool,), false), "!nonnull")

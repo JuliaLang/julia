@@ -188,7 +188,8 @@ end
 end
 
 @testset "Issue #9915" begin
-    @test speye(2)\speye(2) == eye(2)
+    sparseI = sparse(1.0I, 2, 2)
+    @test sparseI \ sparseI == sparseI
 end
 
 @testset "test Sparse constructor Symmetric and Hermitian input (and issymmetric and ishermitian)" begin
@@ -296,7 +297,7 @@ end
 
     AA = CHOLMOD.eye(3)
     unsafe_store!(convert(Ptr{Csize_t}, pointer(AA)), 2, 1) # change size, but not stride, of Dense
-    @test convert(Matrix, AA) == eye(2, 3)
+    @test convert(Matrix, AA) == Matrix(I, 2, 3)
 end
 
 @testset "Low level interface" begin
@@ -453,7 +454,7 @@ end
 
     ## Low level interface
     @test CHOLMOD.nnz(A1Sparse) == nnz(A1)
-    @test CHOLMOD.speye(5, 5, elty) == eye(elty, 5, 5)
+    @test CHOLMOD.speye(5, 5, elty) == Matrix(I, 5, 5)
     @test CHOLMOD.spzeros(5, 5, 5, elty) == zeros(elty, 5, 5)
     if elty <: Real
         @test CHOLMOD.copy(A1Sparse, 0, 1) == A1Sparse
@@ -660,19 +661,19 @@ end
 end
 
 @testset "Further issue with promotion #14894" begin
-    @test cholfact(speye(Float16, 5))\ones(5) == ones(5)
-    @test cholfact(Symmetric(speye(Float16, 5)))\ones(5) == ones(5)
-    @test cholfact(Hermitian(speye(Complex{Float16}, 5)))\ones(5) == ones(Complex{Float64}, 5)
-    @test_throws MethodError cholfact(speye(BigFloat, 5))
-    @test_throws MethodError cholfact(Symmetric(speye(BigFloat, 5)))
-    @test_throws MethodError cholfact(Hermitian(speye(Complex{BigFloat}, 5)))
+    @test cholfact(sparse(Float16(1)I, 5, 5))\ones(5) == ones(5)
+    @test cholfact(Symmetric(sparse(Float16(1)I, 5, 5)))\ones(5) == ones(5)
+    @test cholfact(Hermitian(sparse(Complex{Float16}(1)I, 5, 5)))\ones(5) == ones(Complex{Float64}, 5)
+    @test_throws MethodError cholfact(sparse(BigFloat(1)I, 5, 5))
+    @test_throws MethodError cholfact(Symmetric(sparse(BigFloat(1)I, 5, 5)))
+    @test_throws MethodError cholfact(Hermitian(sparse(Complex{BigFloat}(1)I, 5, 5)))
 end
 
 @testset "test \\ for Factor and StridedVecOrMat" begin
     x = rand(5)
     A = cholfact(sparse(Diagonal(x.\1)))
     @test A\view(ones(10),1:2:10) ≈ x
-    @test A\view(eye(5,5),:,:) ≈ Matrix(Diagonal(x))
+    @test A\view(Matrix(1.0I, 5, 5), :, :) ≈ Matrix(Diagonal(x))
 end
 
 @testset "Real factorization and complex rhs" begin
@@ -684,7 +685,7 @@ end
 @testset "Make sure that ldltfact performs an LDLt (Issue #19032)" begin
     m, n = 400, 500
     A = sprandn(m, n, .2)
-    M = [speye(n) A'; A -speye(m)]
+    M = [I A'; A -I]
     b = M * ones(m + n)
     F = ldltfact(M)
     s = unsafe_load(pointer(F))
@@ -738,11 +739,12 @@ end
 end
 
 @testset "sparse right multiplication of Symmetric and Hermitian matrices #21431" begin
-    @test issparse(speye(2)*speye(2)*speye(2))
+    S = sparse(1.0I, 2, 2)
+    @test issparse(S*S*S)
     for T in (Symmetric, Hermitian)
-        @test issparse(speye(2)*T(speye(2))*speye(2))
-        @test issparse(speye(2)*(T(speye(2))*speye(2)))
-        @test issparse((speye(2)*T(speye(2)))*speye(2))
+        @test issparse(S*T(S)*S)
+        @test issparse(S*(T(S)*S))
+        @test issparse((S*T(S))*S)
     end
 end
 
@@ -788,7 +790,7 @@ end
 
 @testset "Issue #22335" begin
     local A, F
-    A = speye(3)
+    A = sparse(1.0I, 3, 3)
     @test LinAlg.issuccess(cholfact(A))
     A[3, 3] = -1
     F = cholfact(A)

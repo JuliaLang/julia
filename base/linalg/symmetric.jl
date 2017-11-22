@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Symmetric and Hermitian matrices
-struct Symmetric{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+struct Symmetric{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
@@ -42,7 +42,7 @@ Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric 
 """
 Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (checksquare(A); Symmetric{eltype(A),typeof(A)}(A, char_uplo(uplo)))
 
-struct Hermitian{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+struct Hermitian{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end

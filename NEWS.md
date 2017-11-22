@@ -130,6 +130,14 @@ Language changes
   * Like `_`, variable names consisting only of underscores can be assigned,
     but accessing their values is deprecated ([#24221]).
 
+  * Raw string literal escaping rules have been changed to make it possible to write all strings.
+    The rule is that backslashes escape both quotes and other backslashes, but only when a sequence
+    of backslashes precedes a quote character. Thus, 2n backslashes followed by a quote encodes n
+    backslashes and the end of the literal while 2n+1 backslashes followed by a quote encodes n
+    backslashes followed by a quote character ([#22926]).
+
+  * The syntax `(x...)` for constructing a tuple is deprecated; use `(x...,)` instead (#24452).
+
 Breaking changes
 ----------------
 
@@ -142,6 +150,8 @@ This section lists changes that do not have deprecation warnings.
     Previously an empty tuple was returned ([#21697]).
 
   * Juxtaposing string literals (e.g. `"x"y`) is now a syntax error ([#20575]).
+
+  * `finalizer(function, object)` now returns `object` rather than `nothing` ([#24679]).
 
   * Macro calls with `for` expressions are now parsed as generators inside
     function argument lists ([#18650]). Examples:
@@ -267,10 +277,24 @@ This section lists changes that do not have deprecation warnings.
   * The return type of `reinterpret` has changed to `ReinterpretArray`. `reinterpret` on sparse
     arrays has been discontinued.
 
-  * `Base.find_in_path` is now `Base.find_package` or `Base.find_source_file` ([#24320])
+  * `Base.find_in_path` is now `Base.find_package` or `Base.find_source_file` ([#24320]).
+
+  * `finalizer` now takes functions or pointers as its first argument, and the object being
+    finalized as its second (rather than the reverse). For the majority of use cases
+    deprecation warnings will be triggered. However, deprecation warnings will not trigger where
+    (1) the callable argument is not a subtype of `Function`; or (2) both arguments are
+    `Function`s or `Ptr{Void}`s ([#24605]).
+
+  * The `kill` function now throws errors on user error (e.g. on permission
+    errors), but returns successfully if the process had previously exited.
+    Its return value has been removed. Use the `process_running` function
+    to determine if a process has already exited.
 
 Library improvements
 --------------------
+
+  * The function `thisind(s::AbstractString, i::Integer)` returns the largest valid index
+    less or equal than `i` in the string `s` or `0` if no such index exists ([#24414]).
 
   * `Irrational` is now a subtype of `AbstractIrrational` ([#24245]).
 
@@ -387,8 +411,16 @@ Deprecated or removed
   * `fill!(A::Diagonal, x)` and `fill!(A::AbstractTriangular, x)` have been deprecated
     in favor of `Base.LinAlg.fillslots!(A, x)` ([#24413]).
 
+  * `eye` has been deprecated in favor of `I` and `Matrix` constructors. Please see the
+    deprecation warnings for replacement details ([#24438]).
+
+  * `zeros(D::Diagonal[, opts...])` has been deprecated ([#24654]).
+
   * Using Bool values directly as indices is now deprecated and will be an error in the future. Convert
     them to `Int` before indexing if you intend to access index `1` for `true` and `0` for `false`.
+
+  * `whos` has been renamed `varinfo`, and now returns a markdown table instead of printing
+    output ([#12131]).
 
   * `writecsv(io, a; opts...)` has been deprecated in favor of
     `writedlm(io, a, ','; opts...)` ([#23529]).
@@ -397,6 +429,9 @@ Deprecated or removed
 
   * `readcsv(io[, T::Type]; opts...)` has been deprecated in favor of
     `readdlm(io, ','[, T]; opts...)` ([#23530]).
+
+  * `sparse(s::UniformScaling, m::Integer)` has been deprecated in favor of the
+    three-argument equivalent `sparse(s::UniformScaling, m, n)` ([#24472]).
 
   * The `cholfact`/`cholfact!` methods that accepted an `uplo` symbol have been deprecated
     in favor of using `Hermitian` (or `Symmetric`) views ([#22187], [#22188]).
@@ -419,6 +454,15 @@ Deprecated or removed
 
   * `expand(ex)` and `expand(module, ex)` have been deprecated in favor of
     `Meta.lower(module, ex)` ([#22064, #24278]).
+
+  * `ones(A::AbstractArray[, opts...])` and `zeros(A::AbstractArray[, opts...])` methods
+    have been deprecated. The general replacement is `fill!(similar(A[, opts...]), {1|0})`,
+    though in most use cases simpler alternatives are better: For `zeros(A)`, consider
+    `zero(A)`. For `ones(A)` or `zeros(A)`, consider `fill(v, size(A))` for `v` an
+    appropriate one or zero, `fill!(copy(A), {1|0})`, `ones(size(A))` or
+    `zeros(size(A))`, or any of the preceding with different element type
+    and/or shape depending on `opts...`. For an algebraic multiplicative identity,
+    consider `one(A)` ([#24656]).
 
   * The `Operators` module is deprecated. Instead, import required operators explicitly
     from `Base`, e.g. `import Base: +, -, *, /` ([#22251]).
@@ -514,6 +558,9 @@ Deprecated or removed
     particularly, consider instead `triu!(copy(parent(A)))`. On `LowerTriangular` matrices
     `A` particularly, consider instead `tril!(copy(parent(A)))` ([#24250]).
 
+  * `speye` has been deprecated in favor of `I`, `sparse`, and `SparseMatrixCSC`
+    constructor methods ([#24356]).
+
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).
 
@@ -573,7 +620,7 @@ Deprecated or removed
 
   * Automatically broadcasted `+` and `-` for `array + scalar`, `scalar - array`, and so-on have
     been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
-    instead.
+    instead ([#22880], [#22932]).
 
   * `isleaftype` is deprecated in favor of a simpler predicate `isconcrete`. Concrete types are
     those that might equal `typeof(x)` for some `x`; `isleaftype` includes some types for which
@@ -1262,31 +1309,42 @@ Command-line option changes
 <!--- generated by NEWS-update.jl: -->
 [#265]: https://github.com/JuliaLang/julia/issues/265
 [#4615]: https://github.com/JuliaLang/julia/issues/4615
+[#5148]: https://github.com/JuliaLang/julia/issues/5148
+[#5794]: https://github.com/JuliaLang/julia/issues/5794
+[#6080]: https://github.com/JuliaLang/julia/issues/6080
 [#6466]: https://github.com/JuliaLang/julia/issues/6466
+[#6614]: https://github.com/JuliaLang/julia/issues/6614
 [#7669]: https://github.com/JuliaLang/julia/issues/7669
 [#8470]: https://github.com/JuliaLang/julia/issues/8470
 [#8974]: https://github.com/JuliaLang/julia/issues/8974
+[#9292]: https://github.com/JuliaLang/julia/issues/9292
 [#9343]: https://github.com/JuliaLang/julia/issues/9343
+[#10593]: https://github.com/JuliaLang/julia/issues/10593
 [#10946]: https://github.com/JuliaLang/julia/issues/10946
 [#11250]: https://github.com/JuliaLang/julia/issues/11250
 [#11310]: https://github.com/JuliaLang/julia/issues/11310
 [#12274]: https://github.com/JuliaLang/julia/issues/12274
 [#12563]: https://github.com/JuliaLang/julia/issues/12563
 [#13079]: https://github.com/JuliaLang/julia/issues/13079
+[#14770]: https://github.com/JuliaLang/julia/issues/14770
 [#15850]: https://github.com/JuliaLang/julia/issues/15850
 [#16213]: https://github.com/JuliaLang/julia/issues/16213
+[#16356]: https://github.com/JuliaLang/julia/issues/16356
 [#16378]: https://github.com/JuliaLang/julia/issues/16378
 [#16937]: https://github.com/JuliaLang/julia/issues/16937
 [#16961]: https://github.com/JuliaLang/julia/issues/16961
 [#16984]: https://github.com/JuliaLang/julia/issues/16984
 [#16986]: https://github.com/JuliaLang/julia/issues/16986
+[#17046]: https://github.com/JuliaLang/julia/issues/17046
 [#17057]: https://github.com/JuliaLang/julia/issues/17057
+[#17086]: https://github.com/JuliaLang/julia/issues/17086
 [#17155]: https://github.com/JuliaLang/julia/issues/17155
 [#17240]: https://github.com/JuliaLang/julia/issues/17240
 [#17261]: https://github.com/JuliaLang/julia/issues/17261
 [#17265]: https://github.com/JuliaLang/julia/issues/17265
 [#17302]: https://github.com/JuliaLang/julia/issues/17302
 [#17360]: https://github.com/JuliaLang/julia/issues/17360
+[#17367]: https://github.com/JuliaLang/julia/issues/17367
 [#17599]: https://github.com/JuliaLang/julia/issues/17599
 [#17607]: https://github.com/JuliaLang/julia/issues/17607
 [#17623]: https://github.com/JuliaLang/julia/issues/17623
@@ -1294,6 +1352,8 @@ Command-line option changes
 [#17723]: https://github.com/JuliaLang/julia/issues/17723
 [#17758]: https://github.com/JuliaLang/julia/issues/17758
 [#17785]: https://github.com/JuliaLang/julia/issues/17785
+[#17886]: https://github.com/JuliaLang/julia/issues/17886
+[#17997]: https://github.com/JuliaLang/julia/issues/17997
 [#18012]: https://github.com/JuliaLang/julia/issues/18012
 [#18050]: https://github.com/JuliaLang/julia/issues/18050
 [#18155]: https://github.com/JuliaLang/julia/issues/18155
@@ -1329,6 +1389,7 @@ Command-line option changes
 [#19088]: https://github.com/JuliaLang/julia/issues/19088
 [#19089]: https://github.com/JuliaLang/julia/issues/19089
 [#19157]: https://github.com/JuliaLang/julia/issues/19157
+[#19186]: https://github.com/JuliaLang/julia/issues/19186
 [#19233]: https://github.com/JuliaLang/julia/issues/19233
 [#19239]: https://github.com/JuliaLang/julia/issues/19239
 [#19246]: https://github.com/JuliaLang/julia/issues/19246
@@ -1391,6 +1452,7 @@ Command-line option changes
 [#19944]: https://github.com/JuliaLang/julia/issues/19944
 [#19949]: https://github.com/JuliaLang/julia/issues/19949
 [#19950]: https://github.com/JuliaLang/julia/issues/19950
+[#19987]: https://github.com/JuliaLang/julia/issues/19987
 [#19989]: https://github.com/JuliaLang/julia/issues/19989
 [#20005]: https://github.com/JuliaLang/julia/issues/20005
 [#20009]: https://github.com/JuliaLang/julia/issues/20009
@@ -1401,6 +1463,7 @@ Command-line option changes
 [#20164]: https://github.com/JuliaLang/julia/issues/20164
 [#20213]: https://github.com/JuliaLang/julia/issues/20213
 [#20228]: https://github.com/JuliaLang/julia/issues/20228
+[#20233]: https://github.com/JuliaLang/julia/issues/20233
 [#20248]: https://github.com/JuliaLang/julia/issues/20248
 [#20249]: https://github.com/JuliaLang/julia/issues/20249
 [#20268]: https://github.com/JuliaLang/julia/issues/20268
@@ -1424,7 +1487,9 @@ Command-line option changes
 [#20549]: https://github.com/JuliaLang/julia/issues/20549
 [#20575]: https://github.com/JuliaLang/julia/issues/20575
 [#20609]: https://github.com/JuliaLang/julia/issues/20609
+[#20816]: https://github.com/JuliaLang/julia/issues/20816
 [#20889]: https://github.com/JuliaLang/julia/issues/20889
+[#20912]: https://github.com/JuliaLang/julia/issues/20912
 [#20952]: https://github.com/JuliaLang/julia/issues/20952
 [#20974]: https://github.com/JuliaLang/julia/issues/20974
 [#21183]: https://github.com/JuliaLang/julia/issues/21183
@@ -1451,10 +1516,12 @@ Command-line option changes
 [#22062]: https://github.com/JuliaLang/julia/issues/22062
 [#22064]: https://github.com/JuliaLang/julia/issues/22064
 [#22088]: https://github.com/JuliaLang/julia/issues/22088
+[#22089]: https://github.com/JuliaLang/julia/issues/22089
 [#22092]: https://github.com/JuliaLang/julia/issues/22092
 [#22182]: https://github.com/JuliaLang/julia/issues/22182
 [#22187]: https://github.com/JuliaLang/julia/issues/22187
 [#22188]: https://github.com/JuliaLang/julia/issues/22188
+[#22194]: https://github.com/JuliaLang/julia/issues/22194
 [#22210]: https://github.com/JuliaLang/julia/issues/22210
 [#22224]: https://github.com/JuliaLang/julia/issues/22224
 [#22228]: https://github.com/JuliaLang/julia/issues/22228
@@ -1464,12 +1531,15 @@ Command-line option changes
 [#22281]: https://github.com/JuliaLang/julia/issues/22281
 [#22296]: https://github.com/JuliaLang/julia/issues/22296
 [#22310]: https://github.com/JuliaLang/julia/issues/22310
+[#22314]: https://github.com/JuliaLang/julia/issues/22314
 [#22325]: https://github.com/JuliaLang/julia/issues/22325
 [#22350]: https://github.com/JuliaLang/julia/issues/22350
 [#22390]: https://github.com/JuliaLang/julia/issues/22390
 [#22496]: https://github.com/JuliaLang/julia/issues/22496
+[#22511]: https://github.com/JuliaLang/julia/issues/22511
 [#22523]: https://github.com/JuliaLang/julia/issues/22523
 [#22532]: https://github.com/JuliaLang/julia/issues/22532
+[#22572]: https://github.com/JuliaLang/julia/issues/22572
 [#22588]: https://github.com/JuliaLang/julia/issues/22588
 [#22605]: https://github.com/JuliaLang/julia/issues/22605
 [#22666]: https://github.com/JuliaLang/julia/issues/22666
@@ -1477,28 +1547,80 @@ Command-line option changes
 [#22703]: https://github.com/JuliaLang/julia/issues/22703
 [#22712]: https://github.com/JuliaLang/julia/issues/22712
 [#22718]: https://github.com/JuliaLang/julia/issues/22718
+[#22720]: https://github.com/JuliaLang/julia/issues/22720
 [#22723]: https://github.com/JuliaLang/julia/issues/22723
 [#22732]: https://github.com/JuliaLang/julia/issues/22732
+[#22742]: https://github.com/JuliaLang/julia/issues/22742
 [#22751]: https://github.com/JuliaLang/julia/issues/22751
 [#22761]: https://github.com/JuliaLang/julia/issues/22761
 [#22762]: https://github.com/JuliaLang/julia/issues/22762
+[#22789]: https://github.com/JuliaLang/julia/issues/22789
 [#22793]: https://github.com/JuliaLang/julia/issues/22793
 [#22796]: https://github.com/JuliaLang/julia/issues/22796
 [#22800]: https://github.com/JuliaLang/julia/issues/22800
+[#22801]: https://github.com/JuliaLang/julia/issues/22801
 [#22814]: https://github.com/JuliaLang/julia/issues/22814
+[#22825]: https://github.com/JuliaLang/julia/issues/22825
 [#22829]: https://github.com/JuliaLang/julia/issues/22829
 [#22847]: https://github.com/JuliaLang/julia/issues/22847
 [#22868]: https://github.com/JuliaLang/julia/issues/22868
+[#22907]: https://github.com/JuliaLang/julia/issues/22907
 [#22925]: https://github.com/JuliaLang/julia/issues/22925
 [#22961]: https://github.com/JuliaLang/julia/issues/22961
 [#22984]: https://github.com/JuliaLang/julia/issues/22984
+[#23002]: https://github.com/JuliaLang/julia/issues/23002
 [#23035]: https://github.com/JuliaLang/julia/issues/23035
+[#23051]: https://github.com/JuliaLang/julia/issues/23051
+[#23054]: https://github.com/JuliaLang/julia/issues/23054
+[#23066]: https://github.com/JuliaLang/julia/issues/23066
 [#23117]: https://github.com/JuliaLang/julia/issues/23117
+[#23120]: https://github.com/JuliaLang/julia/issues/23120
 [#23144]: https://github.com/JuliaLang/julia/issues/23144
+[#23154]: https://github.com/JuliaLang/julia/issues/23154
 [#23157]: https://github.com/JuliaLang/julia/issues/23157
+[#23168]: https://github.com/JuliaLang/julia/issues/23168
 [#23187]: https://github.com/JuliaLang/julia/issues/23187
 [#23207]: https://github.com/JuliaLang/julia/issues/23207
 [#23233]: https://github.com/JuliaLang/julia/issues/23233
+[#23235]: https://github.com/JuliaLang/julia/issues/23235
+[#23261]: https://github.com/JuliaLang/julia/issues/23261
+[#23323]: https://github.com/JuliaLang/julia/issues/23323
+[#23341]: https://github.com/JuliaLang/julia/issues/23341
 [#23342]: https://github.com/JuliaLang/julia/issues/23342
+[#23366]: https://github.com/JuliaLang/julia/issues/23366
+[#23373]: https://github.com/JuliaLang/julia/issues/23373
 [#23404]: https://github.com/JuliaLang/julia/issues/23404
+[#23427]: https://github.com/JuliaLang/julia/issues/23427
+[#23504]: https://github.com/JuliaLang/julia/issues/23504
+[#23505]: https://github.com/JuliaLang/julia/issues/23505
+[#23519]: https://github.com/JuliaLang/julia/issues/23519
+[#23529]: https://github.com/JuliaLang/julia/issues/23529
+[#23530]: https://github.com/JuliaLang/julia/issues/23530
+[#23570]: https://github.com/JuliaLang/julia/issues/23570
+[#23628]: https://github.com/JuliaLang/julia/issues/23628
+[#23665]: https://github.com/JuliaLang/julia/issues/23665
+[#23690]: https://github.com/JuliaLang/julia/issues/23690
+[#23716]: https://github.com/JuliaLang/julia/issues/23716
+[#23750]: https://github.com/JuliaLang/julia/issues/23750
+[#23757]: https://github.com/JuliaLang/julia/issues/23757
+[#23805]: https://github.com/JuliaLang/julia/issues/23805
+[#23812]: https://github.com/JuliaLang/julia/issues/23812
+[#23816]: https://github.com/JuliaLang/julia/issues/23816
+[#23885]: https://github.com/JuliaLang/julia/issues/23885
+[#23923]: https://github.com/JuliaLang/julia/issues/23923
+[#23960]: https://github.com/JuliaLang/julia/issues/23960
+[#24047]: https://github.com/JuliaLang/julia/issues/24047
+[#24126]: https://github.com/JuliaLang/julia/issues/24126
+[#24153]: https://github.com/JuliaLang/julia/issues/24153
+[#24167]: https://github.com/JuliaLang/julia/issues/24167
+[#24187]: https://github.com/JuliaLang/julia/issues/24187
+[#24221]: https://github.com/JuliaLang/julia/issues/24221
+[#24240]: https://github.com/JuliaLang/julia/issues/24240
+[#24245]: https://github.com/JuliaLang/julia/issues/24245
+[#24250]: https://github.com/JuliaLang/julia/issues/24250
+[#24263]: https://github.com/JuliaLang/julia/issues/24263
+[#24279]: https://github.com/JuliaLang/julia/issues/24279
+[#24281]: https://github.com/JuliaLang/julia/issues/24281
 [#24320]: https://github.com/JuliaLang/julia/issues/24320
+[#24396]: https://github.com/JuliaLang/julia/issues/24396
+[#24413]: https://github.com/JuliaLang/julia/issues/24413

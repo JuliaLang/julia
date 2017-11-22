@@ -60,6 +60,9 @@ macro test999_str(args...); args; end
 
 # issue #5997
 @test_throws ParseError Meta.parse(": x")
+@test_throws ParseError Meta.parse("""begin
+    :
+    x""")
 @test_throws ParseError Meta.parse("d[: 2]")
 
 # issue #6770
@@ -70,6 +73,14 @@ macro test999_str(args...); args; end
 @test_throws ParseError Meta.parse("x' y")
 @test_throws ParseError Meta.parse("x 'y")
 @test Meta.parse("x'y") == Expr(:call, :*, Expr(Symbol("'"), :x), :y)
+
+# issue #18851
+@test Meta.parse("-2[m]") == Expr(:call, :-, Expr(:ref, 2, :m))
+@test Meta.parse("+2[m]") == Expr(:call, :+, Expr(:ref, 2, :m))
+@test Meta.parse("!2[3]") == Expr(:call, :!, Expr(:ref, 2, 3))
+@test Meta.parse("-2{m}") == Expr(:call, :-, Expr(:curly, 2, :m))
+@test Meta.parse("+2{m}") == Expr(:call, :+, Expr(:curly, 2, :m))
+@test Meta.parse("-2(m)") == Expr(:call, :*, -2, :m)
 
 # issue #8301
 @test_throws ParseError Meta.parse("&*s")
@@ -237,6 +248,12 @@ end
 @test_throws ParseError Meta.parse("'\\A\"'")
 @test Meta.parse("'\"'") == Meta.parse("'\\\"'") == '"' == "\""[1] == '\42'
 
+# issue #24558
+@test_throws ParseError Meta.parse("'\\xff'")
+@test_throws ParseError Meta.parse("'\\x80'")
+@test_throws ParseError Meta.parse("'ab'")
+@test '\u2200' == "\u2200"[1]
+
 @test_throws ParseError Meta.parse("f(2x for x=1:10, y")
 
 # issue #15223
@@ -334,7 +351,7 @@ g15844 = let
 end
 
 function add_method_to_glob_fn!()
-    global function f15844(x::Int64)
+    @eval global function f15844(x::Int64)
         3x
     end
 end
@@ -739,10 +756,10 @@ end
 # Check that string and command literals are parsed to the appropriate macros
 @test :(x"s") == :(@x_str "s")
 @test :(x"s"flag) == :(@x_str "s" "flag")
-@test :(x"s\"`\x\$\\") == :(@x_str "s\"`\\x\\\$\\\\")
+@test :(x"s\"`\x\$\\") == :(@x_str "s\"`\\x\\\$\\")
 @test :(x`s`) == :(@x_cmd "s")
 @test :(x`s`flag) == :(@x_cmd "s" "flag")
-@test :(x`s\`"\x\$\\`) == :(@x_cmd "s`\"\\x\\\$\\\\")
+@test :(x`s\`"\x\$\\`) == :(@x_cmd "s`\"\\x\\\$\\")
 
 # Check multiline command literals
 @test :(@cmd "multiline\ncommand\n") == :```
@@ -973,6 +990,12 @@ end
 # issue #20575
 @test_throws ParseError Meta.parse("\"a\"x")
 @test_throws ParseError Meta.parse("\"a\"begin end")
+@test_throws ParseError Meta.parse("\"a\"begin end\"b\"")
+
+# issue #16427
+@test_throws ParseError Meta.parse("for i=1:1 end(3)")
+@test_throws ParseError Meta.parse("begin end(3)")
+@test_throws ParseError Meta.parse("while false end(3)")
 
 # comment 298107224 on pull #21607
 module Test21607
@@ -1036,6 +1059,8 @@ for bad in ('=', '$', ':', "||", "&&", "->", "<:")
     @test_throws ParseError Meta.parse("3 $(bad)⁽¹⁾ 4")
 end
 @test Base.operator_precedence(:+̂) == Base.operator_precedence(:+)
+
+@test Meta.parse("(x)ᵀ") == Expr(:call, :*, :x, :ᵀ)
 
 # issue #19351
 # adding return type decl should not affect parse of function body
@@ -1131,6 +1156,11 @@ let xs = [:(1+2), :(3+4), :(5+6)]
     @test ex2.args[2:end] == [3,7,11]
 end
 
+let x = [3,2,1]
+    @test :( $(x...,) ) == (3, 2, 1)
+    @test :( $(x...), ) == Expr(:tuple, 3, 2, 1)
+end
+
 # issue #23519
 @test Meta.parse("@foo[1]") == Meta.parse("@foo([1])")
 @test Meta.parse("@foo[1 2; 3 4]") == Meta.parse("@foo([1 2; 3 4])")
@@ -1157,3 +1187,42 @@ end
 @test Meta.parse("2e-3_") == Expr(:call, :*, 2e-3, :_)
 @test Meta.parse("2e3_\"x\"") == Expr(:call, :*, 2e3, Expr(:macrocall, Symbol("@__str"), LineNumberNode(1, :none), "x"))
 
+# misplaced top-level expressions
+@test_throws ErrorException("syntax: \"\$\" expression outside quote") eval(@__MODULE__, Meta.parse("x->\$x"))
+@test Meta.lower(@__MODULE__, Expr(:$, :x)) == Expr(:error, "\"\$\" expression outside quote")
+@test Meta.lower(@__MODULE__, :(x->import Foo)) == Expr(:error, "\"import\" expression not at top level")
+@test Meta.lower(@__MODULE__, :(x->module Foo end)) == Expr(:error, "\"module\" expression not at top level")
+@test Meta.lower(@__MODULE__, :(x->struct Foo end)) == Expr(:error, "\"struct\" expression not at top level")
+@test Meta.lower(@__MODULE__, :(x->abstract type Foo end)) == Expr(:error, "\"abstract type\" expression not at top level")
+
+# caused by #24538. forms that lower to `call` should wrap with `call` before
+# recursively calling expand-forms.
+@test [(0,0)... 1] == [0 0 1]
+@test Float32[(0,0)... 1] == Float32[0 0 1]
+
+@testset "raw_str macro" begin
+    @test raw"$" == "\$"
+    @test raw"\n" == "\\n"
+    @test raw"\t" == "\\t"
+
+    s1 = raw"""
+         lorem ipsum\n
+         $x = 1$
+         """
+
+    s2 = """
+         lorem ipsum\\n
+         \$x = 1\$
+         """
+
+    @test s1 == s2
+
+    # issue #22926
+    @test raw"\\" == "\\"
+    @test raw"\\\\" == "\\\\"
+    @test raw"\"" == "\""
+    @test raw"\\\"" == "\\\""
+    @test raw"\\x\\" == "\\\\x\\"
+    @test raw"x \\\" y" == "x \\\" y"
+    @test raw"x \\\ y" == "x \\\\\\ y"
+end

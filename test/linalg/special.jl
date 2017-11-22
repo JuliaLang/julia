@@ -178,7 +178,7 @@ end
     annotations = testfull ? (triannotations..., symannotations...) : (LowerTriangular, Symmetric)
     # Concatenations involving these types, un/annotated, should yield sparse arrays
     spvec = spzeros(N)
-    spmat = speye(N)
+    spmat = sparse(1.0I, N, N)
     diagmat = Diagonal(ones(N))
     bidiagmat = Bidiagonal(ones(N), ones(N-1), :U)
     tridiagmat = Tridiagonal(ones(N-1), ones(N), ones(N-1))

@@ -287,6 +287,10 @@ Multiple variables can be declared within a single `const`:
 const y, z = 7, 11
 ```
 
+Note that `const` only applies to one `=` operation, therefore `const x = y = 1`
+declares `x` to be constant but not `y`. On the other hand, `const x = const y = 1`
+declares both `x` and `y` as constants.
+
 Note that "constant-ness" is not enforced inside containers, so if `x` is an array or
 dictionary (for example) you can still add and remove elements.
 
@@ -1292,6 +1296,42 @@ julia> B = Array{Float64}(2) # N determined by the input
 ```
 """
 Array{T,N}(dims)
+
+"""
+    Uninitialized
+
+Singleton type used in array initialization, indicating the array-constructor-caller
+would like an uninitialized array. See also [`uninitialized`](@ref),
+an alias for `Uninitialized()`.
+
+# Examples
+```julia-repl
+julia> Array{Float64,1}(Uninitialized(), 3)
+3-element Array{Float64,1}:
+ 2.2752528595e-314
+ 2.202942107e-314
+ 2.275252907e-314
+```
+"""
+Uninitialized
+
+"""
+    uninitialized
+
+Alias for `Uninitialized()`, which constructs an instance of the singleton type
+[`Uninitialized`](@ref), used in array initialization to indicate the
+array-constructor-caller would like an uninitialized array.
+
+# Examples
+```julia-repl
+julia> Array{Float64,1}(uninitialized, 3)
+3-element Array{Float64,1}:
+ 2.2752528595e-314
+ 2.202942107e-314
+ 2.275252907e-314
+```
+"""
+uninitialized
 
 """
     +(x, y...)

@@ -420,11 +420,6 @@ function ones end
 
 for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     @eval begin
-        # allow signature of similar
-        $fname(a::AbstractArray, ::Type{T}, dims::Tuple) where {T} = fill!(similar(a, T, dims), $felt(T))
-        $fname(a::AbstractArray, ::Type{T}, dims...) where {T} = fill!(similar(a, T, dims...), $felt(T))
-        $fname(a::AbstractArray, ::Type{T}=eltype(a)) where {T} = fill!(similar(a, T), $felt(T))
-
         $fname(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(Dims(dims)), $felt(T))
         $fname(dims::Tuple) = ($fname)(Float64, dims)
         $fname(::Type{T}, dims...) where {T} = $fname(T, dims)
@@ -432,95 +427,10 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     end
 end
 
-"""
-    eye([T::Type=Float64,] m::Integer, n::Integer)
-
-`m`-by-`n` identity matrix.
-The default element type is [`Float64`](@ref).
-
-# Examples
-```jldoctest
-julia> eye(3, 4)
-3×4 Array{Float64,2}:
- 1.0  0.0  0.0  0.0
- 0.0  1.0  0.0  0.0
- 0.0  0.0  1.0  0.0
-
-julia> eye(2, 2)
-2×2 Array{Float64,2}:
- 1.0  0.0
- 0.0  1.0
-
-julia> eye(Int, 2, 2)
-2×2 Array{Int64,2}:
- 1  0
- 0  1
-```
-"""
-function eye(::Type{T}, m::Integer, n::Integer) where T
-    a = zeros(T,m,n)
-    for i = 1:min(m,n)
-        a[i,i] = oneunit(T)
-    end
-    return a
-end
-
-"""
-    eye(m, n)
-
-`m`-by-`n` identity matrix.
-"""
-eye(m::Integer, n::Integer) = eye(Float64, m, n)
-eye(::Type{T}, n::Integer) where {T} = eye(T, n, n)
-"""
-    eye([T::Type=Float64,] n::Integer)
-
-`n`-by-`n` identity matrix.
-The default element type is [`Float64`](@ref).
-
-# Examples
-```jldoctest
-julia> eye(Int, 2)
-2×2 Array{Int64,2}:
- 1  0
- 0  1
-
-julia> eye(2)
-2×2 Array{Float64,2}:
- 1.0  0.0
- 0.0  1.0
-```
-"""
-eye(n::Integer) = eye(Float64, n)
-
-"""
-    eye(A)
-
-Constructs an identity matrix of the same dimensions and type as `A`.
-
-# Examples
-```jldoctest
-julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
- 7  8  9
-
-julia> eye(A)
-3×3 Array{Int64,2}:
- 1  0  0
- 0  1  0
- 0  0  1
-```
-
-Note the difference from [`ones`](@ref).
-"""
-eye(x::AbstractMatrix{T}) where {T} = eye(typeof(one(T)), size(x, 1), size(x, 2))
-
 function _one(unit::T, x::AbstractMatrix) where T
     m,n = size(x)
     m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
-    eye(T, m)
+    Matrix{T}(I, m, m)
 end
 
 one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)

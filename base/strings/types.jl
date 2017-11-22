@@ -86,6 +86,20 @@ function isvalid(s::SubString, i::Integer)
     return (start(s) <= i <= endof(s)) && isvalid(s.string, s.offset+i)
 end
 
+function thisind(s::SubString{String}, i::Integer)
+    j = Int(i)
+    j < 1 && return 0
+    e = endof(s)
+    j >= e && return e
+    offset = s.offset
+    str = s.string
+    j += offset
+    @inbounds while j > offset && is_valid_continuation(codeunit(str, j))
+        j -= 1
+    end
+    j-offset
+end
+
 nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 

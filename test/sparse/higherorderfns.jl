@@ -269,7 +269,7 @@ end
 
 @testset "sparse map/broadcast with result eltype not a concrete subtype of Number (#19561/#19589)" begin
     N = 4
-    A, fA = speye(N), eye(N)
+    A, fA = sparse(1.0I, N, N), Matrix(1.0I, N, N)
     B, fB = spzeros(1, N), zeros(1, N)
     intorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : Int(1)
     stringorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : "hello"
@@ -505,8 +505,8 @@ end
     @test A .- 3 == AF .- 3
     @test 3 .- A == 3 .- AF
     @test A .- B == AF .- BF
-    @test A - AF == zeros(AF)
-    @test AF - A == zeros(AF)
+    @test A - AF == zeros(size(AF))
+    @test AF - A == zeros(size(AF))
     @test A[1,:] .- B == AF[1,:] .- BF
     @test A[:,1] .- B == AF[:,1] .- BF
     @test A .- B[1,:] == AF .-  BF[1,:]

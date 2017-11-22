@@ -542,7 +542,7 @@ void CloneCtx::check_partial(Group &grp, Target &tgt)
         grp.clone_fs.insert(i);
         all_origs.insert(orig_f);
     }
-    std::set<Function*> sets[2] = {all_origs, {}};
+    std::set<Function*> sets[2]{all_origs, std::set<Function*>{}};
     auto *cur_set = &sets[0];
     auto *next_set = &sets[1];
     // Reduce dispatch by expand the cloning set to functions that are directly called by

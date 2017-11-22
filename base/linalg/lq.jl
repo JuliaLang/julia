@@ -57,7 +57,7 @@ function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Boo
     end
     F = lqfact(A)
     L, Q = F[:L], F[:Q]
-    return L, !full ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 2)))
+    return L, !full ? Array(Q) : A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))
 end
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))

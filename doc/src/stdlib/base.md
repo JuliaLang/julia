@@ -23,7 +23,7 @@ Base.quit
 Base.atexit
 Base.atreplinit
 Base.isinteractive
-Base.whos
+Base.varinfo
 Base.summarysize
 Base.edit(::AbstractString, ::Integer)
 Base.edit(::Any)
@@ -89,7 +89,6 @@ primitive type
 ## Base Modules
 ```@docs
 Base.BLAS
-Base.Dates
 Base.Distributed
 Base.Docs
 Base.Iterators

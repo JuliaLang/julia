@@ -896,7 +896,7 @@ end
 # finalizers
 let A = [1]
     local x = 0
-    finalizer(A, a->(x+=1))
+    finalizer(a->(x+=1), A)
     finalize(A)
     @test x == 1
     A = 0
@@ -3184,7 +3184,7 @@ mutable struct D11597{T} <: C11597{T} d::T end
 @test_throws TypeError repr(D11597(1.0))
 
 # issue #11772
-@test_throws UndefRefError (Vector{Any}(5)...)
+@test_throws UndefRefError (Vector{Any}(5)...,)
 
 # issue #11813
 let a = UInt8[1, 107, 66, 88, 2, 99, 254, 13, 0, 0, 0, 0]
@@ -3204,8 +3204,8 @@ let a = UInt8[0, 0, 0, 0, 0x66, 99, 254, 13, 0, 0, 0, 0]
     f11813(p) = ((Int32(3),UInt8(0x66)),Int32(0)) === unsafe_load(convert(Ptr{Tuple{Tuple{Int32,UInt8},Int32}},p))
     @test f11813(p) === true # redundant comparison test seems to make this test more reliable, don't remove
 end
-let a = (1:1000...),
-    b = (1:1000...)
+let a = (1:1000...,),
+    b = (1:1000...,)
     @test a == b
     @test a === b
     @test (a == b) === true
@@ -3225,7 +3225,7 @@ end
 
 g11858(x::Float64) = x
 f11858(a) = for Baz in a
-    (f::Baz)(x) = f(float(x))
+    @eval (f::$Baz)(x) = f(float(x))
 end
 f11858(Any[Type{Foo11858}, Type{Bar11858}, typeof(g11858)])
 
@@ -3306,6 +3306,7 @@ end
 @test Tuple{Int} === Tuple{Int, Vararg{Integer, 0}}
 
 # issue #12003
+using Dates
 const DATE12003 = DateTime(1917,1,1)
 failure12003(dt=DATE12003) = Dates.year(dt)
 @test isa(failure12003(), Integer)
@@ -3593,7 +3594,7 @@ end
 let
     obj = Ref(1)
     finalized = 0
-    finalizer(obj, (obj) -> (finalized = 1))
+    finalizer((obj) -> (finalized = 1), obj)
     # obj should be marked for promotion after the second gc and be promoted
     # after the third GC
     # GC_CLEAN; age = 0
@@ -3623,10 +3624,10 @@ let
     obj1 = Ref(1)
     obj2 = Ref(1)
     finalized = 0
-    finalizer(obj1, (obj) -> (finalized += 1))
-    finalizer(obj1, (obj) -> (finalized += 1))
-    finalizer(obj2, (obj) -> (finalized += 1; finalize(obj1)))
-    finalizer(obj2, (obj) -> (finalized += 1; finalize(obj1)))
+    finalizer((obj) -> (finalized += 1), obj1)
+    finalizer((obj) -> (finalized += 1), obj1)
+    finalizer((obj) -> (finalized += 1; finalize(obj1)), obj2)
+    finalizer((obj) -> (finalized += 1; finalize(obj1)), obj2)
     finalize(obj2)
     @test finalized == 4
 end
@@ -3963,10 +3964,10 @@ end
 # doesn't keep the object alive.
 @noinline function create_dead_object13995(finalized)
     obj = Ref(1)
-    finalizer(obj, (x)->(finalized[1] = true))
-    finalizer(obj, (x)->(finalized[2] = true))
-    finalizer(obj, (x)->(finalized[3] = true))
-    finalizer(obj, (x)->(finalized[4] = true))
+    finalizer((x)->(finalized[1] = true), obj)
+    finalizer((x)->(finalized[2] = true), obj)
+    finalizer((x)->(finalized[3] = true), obj)
+    finalizer((x)->(finalized[4] = true), obj)
     nothing
 end
 # disable GC to make sure no collection/promotion happens
@@ -4158,10 +4159,10 @@ end
 end
 @test f15425(1) === nothing
 
-# issue #15809 --- TODO: this code should be disallowed
+# issue #15809
+# but note, direct global method defs inside functions have since been disallowed
 function f15809()
-    global g15809
-    g15809(x::T) where {T} = T
+    @eval g15809(x::T) where {T} = T
 end
 f15809()
 @test g15809(2) === Int
@@ -4939,6 +4940,7 @@ mutable struct Sgnd <: Signed
     v::Int
 end
 using Test
+using Dates
 @test_throws ErrorException abs(Sgnd(1))       #12007
 io = IOBuffer()
 @test_throws ErrorException show(io, Sgnd(1))  #12007
@@ -5150,8 +5152,7 @@ end
 f21568() = 0
 function foo21568()
     y = 1
-    global f21568
-    f21568(x::AbstractArray{T,1}) where {T<:Real} = y
+    @eval f21568(x::AbstractArray{T,1}) where {T<:Real} = $y
 end
 foo21568()
 @test f21568([0]) == 1
@@ -5483,6 +5484,7 @@ end
 module UnionOptimizations
 
 using Test
+using Dates
 
 const boxedunions = [Union{}, Union{String, Void}]
 const unboxedunions = [Union{Int8, Void},
@@ -5581,8 +5583,6 @@ let x5 = UnionField5(nothing, Int8(3))
     @test x5 == x5copy
     @test object_id(x5) === object_id(x5copy)
     @test hash(x5) === hash(x5copy)
-    @test pointer_from_objref(x5) === pointer_from_objref(x5)
-    @test pointer_from_objref(x5) !== pointer_from_objref(x5copy)
 end
 
 

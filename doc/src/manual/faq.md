@@ -566,12 +566,13 @@ julia> gvar_self = "Node1"
 julia> remotecall_fetch(()->gvar_self, 2)
 "Node1"
 
-julia> remotecall_fetch(whos, 2)
-	From worker 2:	                          Base  41762 KB     Module
-	From worker 2:	                          Core  27337 KB     Module
-	From worker 2:	                           Foo   2477 bytes  Module
-	From worker 2:	                          Main  46191 KB     Module
-	From worker 2:	                     gvar_self     13 bytes  String
+julia> remotecall_fetch(varinfo, 2)
+name          size summary
+––––––––– –––––––– –––––––
+Base               Module
+Core               Module
+Main               Module
+gvar_self 13 bytes String
 ```
 
 This does not apply to `function` or `type` declarations. However, anonymous functions bound to global

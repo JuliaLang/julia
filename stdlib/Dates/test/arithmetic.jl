@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module ArithmeticTest
+
+using Test
+using Dates
+
 @testset "Time arithmetic" begin
     a = Dates.Time(23, 59, 59)
     b = Dates.Time(11, 59, 59)
@@ -457,4 +462,6 @@ end
         @test_throws MethodError (Dates.Month(1) + Dates.Day(1)) - t1
         @test_throws MethodError (Dates.Hour(1) + Dates.Minute(1)) - t3
     end
+end
+
 end

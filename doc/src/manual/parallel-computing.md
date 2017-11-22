@@ -312,12 +312,13 @@ julia> let B = B
            remotecall_fetch(()->B, 2)
        end;
 
-julia> @spawnat 2 whos();
-
-julia>  From worker 2:                               A    800 bytes  10×10 Array{Float64,2}
-        From worker 2:                            Base               Module
-        From worker 2:                            Core               Module
-        From worker 2:                            Main               Module
+julia> @fetchfrom 2 varinfo()
+name           size summary
+––––––––– ––––––––– ––––––––––––––––––––––
+A         800 bytes 10×10 Array{Float64,2}
+Base                Module
+Core                Module
+Main                Module
 ```
 
 As can be seen, global variable `A` is defined on worker 2, but `B` is captured as a local variable

@@ -736,7 +736,7 @@ of the [`eltype`](@ref) of `A`.
 
 # Examples
 ```jldoctest
-julia> rank(eye(3))
+julia> rank(Matrix(I, 3, 3))
 3
 
 julia> rank(diagm(0 => [1, 0, 2]))
@@ -802,14 +802,16 @@ julia> N = inv(M)
   3.0  -5.0
  -1.0   2.0
 
-julia> M*N == N*M == eye(2)
+julia> M*N == N*M == Matrix(I, 2, 2)
 true
 ```
 """
 function inv(A::AbstractMatrix{T}) where T
+    n = checksquare(A)
     S = typeof(zero(T)/one(T))      # dimensionful
     S0 = typeof(zero(T)/oneunit(T)) # dimensionless
-    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S0, checksquare(A)))
+    dest = Matrix{S0}(I, n, n)
+    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), dest)
 end
 
 function pinv(v::AbstractVector{T}, tol::Real=real(zero(T))) where T
@@ -1347,7 +1349,7 @@ julia> M = [1 0; 2 2]
 julia> logdet(M)
 0.6931471805599453
 
-julia> logdet(eye(3))
+julia> logdet(Matrix(I, 3, 3))
 0.0
 ```
 """

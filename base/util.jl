@@ -96,21 +96,25 @@ function padded_nonzero_print(value,str)
     end
 end
 
+function format_bytes(bytes)
+    bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
+    if mb == 1
+        @sprintf("%d %s%s", bytes, _mem_units[mb], bytes==1 ? "" : "s")
+    else
+        @sprintf("%.3f %s", bytes, _mem_units[mb])
+    end
+end
+
 function time_print(elapsedtime, bytes, gctime, allocs)
     @printf("%10.6f seconds", elapsedtime/1e9)
     if bytes != 0 || allocs != 0
-        bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
         if ma == 1
             @printf(" (%d%s allocation%s: ", allocs, _cnt_units[ma], allocs==1 ? "" : "s")
         else
             @printf(" (%.2f%s allocations: ", allocs, _cnt_units[ma])
         end
-        if mb == 1
-            @printf("%d %s%s", bytes, _mem_units[mb], bytes==1 ? "" : "s")
-        else
-            @printf("%.3f %s", bytes, _mem_units[mb])
-        end
+        print(format_bytes(bytes))
         if gctime > 0
             @printf(", %.2f%% gc time", 100*gctime/elapsedtime)
         end
@@ -448,9 +452,11 @@ MY INFO: hello world
 See also [`logging`](@ref).
 """
 function info(io::IO, msg...; prefix="INFO: ")
-    io = redirect(io, log_info_to, :info)
-    print_with_color(info_color(), io, prefix; bold = true)
-    println_with_color(info_color(), io, chomp(string(msg...)))
+    buf = IOBuffer()
+    iob = redirect(IOContext(buf, io), log_info_to, :info)
+    print_with_color(info_color(), iob, prefix; bold = true)
+    println_with_color(info_color(), iob, chomp(string(msg...)))
+    print(io, String(take!(buf)))
     return
 end
 info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
@@ -483,16 +489,18 @@ function warn(io::IO, msg...;
         (key in have_warned) && return
         push!(have_warned, key)
     end
-    io = redirect(io, log_warn_to, :warn)
-    print_with_color(warn_color(), io, prefix; bold = true)
-    print_with_color(warn_color(), io, str)
+    buf = IOBuffer()
+    iob = redirect(IOContext(buf, io), log_warn_to, :warn)
+    print_with_color(warn_color(), iob, prefix; bold = true)
+    print_with_color(warn_color(), iob, str)
     if bt !== nothing
-        show_backtrace(io, bt)
+        show_backtrace(iob, bt)
     end
     if filename !== nothing
-        print(io, "\nin expression starting at $filename:$lineno")
+        print(iob, "\nin expression starting at $filename:$lineno")
     end
-    println(io)
+    println(iob)
+    print(io, String(take!(buf)))
     return
 end
 

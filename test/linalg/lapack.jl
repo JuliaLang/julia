@@ -49,7 +49,7 @@ end
         n = 10
         @testset for elty in (Float32, Float64)
             d, e = convert(Vector{elty}, randn(n)), convert(Vector{elty}, randn(n - 1))
-            U, Vt, C = eye(elty, n), eye(elty, n), eye(elty, n)
+            U, Vt, C = Matrix{elty}(I, n, n), Matrix{elty}(I, n, n), Matrix{elty}(I, n, n)
             s, _ = LAPACK.bdsqr!('U', copy(d), copy(e), Vt, U, C)
             @test Array(Bidiagonal(d, e, :U)) ≈ U*Diagonal(s)*Vt
 
@@ -64,7 +64,7 @@ end
             A = rand(elty,n,n)
             B = copy(A)
             B, d, e, tauq, taup = LAPACK.gebrd!(B)
-            U, Vt, C = eye(elty, n), eye(elty, n), eye(elty, n)
+            U, Vt, C = Matrix{elty}(I, n, n), Matrix{elty}(I, n, n), Matrix{elty}(I, n, n)
             s, _ = LAPACK.bdsqr!('U',d,e[1:n-1],Vt, U, C)
             @test s ≈ svdvals(A)
         end
@@ -107,7 +107,7 @@ end
         A = diagm(-2 => dl2, -1 => dl, 0 => d, 1 => du)
         @test A\C ≈ D
         @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,ones(elty,7,6))
-        @test_throws Base.LinAlg.LAPACKException LAPACK.gbtrf!(2,1,6,zeros(AB))
+        @test_throws Base.LinAlg.LAPACKException LAPACK.gbtrf!(2,1,6,zeros(elty,6,6))
     end
 end
 
@@ -283,13 +283,13 @@ end
 
         B = copy(A)
         C = LAPACK.orglq!(B,tau)
-        @test LAPACK.ormlq!('R','N',A,tau,eye(elty,10)) ≈ C
+        @test LAPACK.ormlq!('R','N',A,tau, Matrix{elty}(I, 10, 10)) ≈ C
 
         A = rand(elty,10,10)
         A,tau = LAPACK.geqrf!(A)
         @test_throws DimensionMismatch LAPACK.orgqr!(A,tau,11)
         B = copy(A)
-        @test LAPACK.orgqr!(B,tau) ≈ LAPACK.ormqr!('R','N',A,tau,eye(elty,10))
+        @test LAPACK.orgqr!(B,tau) ≈ LAPACK.ormqr!('R','N',A,tau,Matrix{elty}(I, 10, 10))
         @test_throws DimensionMismatch LAPACK.ormqr!('R','N',A,tau,rand(elty,11,11))
         @test_throws DimensionMismatch LAPACK.ormqr!('L','N',A,tau,rand(elty,11,11))
         @test_throws DimensionMismatch LAPACK.ormqr!('R','N',A,zeros(elty,11),rand(elty,10,10))
@@ -299,7 +299,7 @@ end
         A,tau = LAPACK.geqlf!(A)
         @test_throws DimensionMismatch LAPACK.orgql!(A,tau,11)
         B = copy(A)
-        @test LAPACK.orgql!(B,tau) ≈ LAPACK.ormql!('R','N',A,tau,eye(elty,10))
+        @test LAPACK.orgql!(B,tau) ≈ LAPACK.ormql!('R','N',A,tau,Matrix{elty}(I, 10, 10))
         @test_throws DimensionMismatch LAPACK.ormql!('R','N',A,tau,rand(elty,11,11))
         @test_throws DimensionMismatch LAPACK.ormql!('L','N',A,tau,rand(elty,11,11))
         @test_throws DimensionMismatch LAPACK.ormql!('R','N',A,zeros(elty,11),rand(elty,10,10))
@@ -309,7 +309,7 @@ end
         A,tau = LAPACK.gerqf!(A)
         @test_throws DimensionMismatch LAPACK.orgrq!(A,tau,11)
         B = copy(A)
-        @test LAPACK.orgrq!(B,tau) ≈ LAPACK.ormrq!('R','N',A,tau,eye(elty,10))
+        @test LAPACK.orgrq!(B,tau) ≈ LAPACK.ormrq!('R','N',A,tau,Matrix{elty}(I, 10, 10))
         @test_throws DimensionMismatch LAPACK.ormrq!('R','N',A,tau,rand(elty,11,11))
         @test_throws DimensionMismatch LAPACK.ormrq!('L','N',A,tau,rand(elty,11,11))
         @test_throws DimensionMismatch LAPACK.ormrq!('R','N',A,zeros(elty,11),rand(elty,10,10))
@@ -320,7 +320,7 @@ end
         Q,tau = LAPACK.gerqf!(Q)
         R = triu(Q[:,2:11])
         LAPACK.orgrq!(Q,tau)
-        @test Q*Q' ≈ eye(elty,10)
+        @test Q*Q' ≈ Matrix(I, 10, 10)
         @test R*Q ≈ A
         @test_throws DimensionMismatch LAPACK.orgrq!(zeros(elty,11,10),zeros(elty,10))
 
@@ -405,7 +405,7 @@ end
         @test_throws DimensionMismatch LAPACK.stev!('U',d,rand(elty,10))
         @test_throws DimensionMismatch LAPACK.stebz!('A','B',zero(elty),zero(elty),0,0,-1.,d,rand(elty,10))
         @test_throws DimensionMismatch LAPACK.stegr!('N','A',d,rand(elty,10),zero(elty),zero(elty),0,0)
-        @test_throws DimensionMismatch LAPACK.stein!(d,zeros(elty,10),zeros(d),zeros(BlasInt,10),zeros(BlasInt,10))
+        @test_throws DimensionMismatch LAPACK.stein!(d,zeros(elty,10),zeros(elty,10),zeros(BlasInt,10),zeros(BlasInt,10))
         @test_throws DimensionMismatch LAPACK.stein!(d,e,zeros(elty,11),zeros(BlasInt,10),zeros(BlasInt,10))
     end
 end

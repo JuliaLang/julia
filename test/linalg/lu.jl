@@ -58,7 +58,7 @@ dimg  = randn(n)/2
     @testset "Singular LU" begin
         lua = lufact(zeros(eltya, 3, 3))
         @test !LinAlg.issuccess(lua)
-        @test sprint(show, lua) == "Failed factorization of type $(typeof(lua))"
+        @test sprint((t, s) -> show(t, "text/plain", s), lua) == "Failed factorization of type $(typeof(lua))"
     end
     κ  = cond(a,1)
     @testset "(Automatic) Square LU decomposition" begin
@@ -69,7 +69,7 @@ dimg  = randn(n)/2
         @test ll * ul ≈ a[pl,:]
         @test l*u ≈ a[p,:]
         @test (l*u)[invperm(p),:] ≈ a
-        @test a * inv(lua) ≈ eye(n)
+        @test a * inv(lua) ≈ Matrix(I, n, n)
         @test copy(lua) == lua
         if eltya <: BlasFloat
             # test conversion of LU factorization's numerical type
@@ -77,9 +77,10 @@ dimg  = randn(n)/2
             bflua = convert(bft, lua)
             @test bflua[:L]*bflua[:U] ≈ big.(a)[p,:] rtol=ε
         end
+        # compact printing
         lstring = sprint(show,l)
         ustring = sprint(show,u)
-        @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
+        # @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
     end
     κd    = cond(Array(d),1)
     @testset "Tridiagonal LU" begin
@@ -210,7 +211,7 @@ end
     l,u,p = lua[:L], lua[:U], lua[:p]
     @test l*u ≈ a[p,:]
     @test l[invperm(p),:]*u ≈ a
-    @test a*inv(lua) ≈ eye(n)
+    @test a*inv(lua) ≈ Matrix(I, n, n)
     let Bs = b
         for b in (Bs, view(Bs, 1:n, 1))
             @test a*(lua\b) ≈ b
@@ -240,4 +241,24 @@ end
 
 @testset "Issue 21453" begin
     @test_throws ArgumentError LinAlg._cond1Inf(lufact(randn(5,5)), 2, 2.0)
+end
+
+@testset "REPL printing" begin
+        bf = IOBuffer()
+        show(bf, "text/plain", lufact(Matrix(I, 4, 4)))
+        seekstart(bf)
+        @test String(take!(bf)) == """
+Base.LinAlg.LU{Float64,Array{Float64,2}}
+L factor:
+4×4 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0
+ 0.0  1.0  0.0  0.0
+ 0.0  0.0  1.0  0.0
+ 0.0  0.0  0.0  1.0
+U factor:
+4×4 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0
+ 0.0  1.0  0.0  0.0
+ 0.0  0.0  1.0  0.0
+ 0.0  0.0  0.0  1.0"""
 end

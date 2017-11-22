@@ -44,7 +44,10 @@ function GitAnnotated(repo::GitRepo, comittish::AbstractString)
 end
 
 function GitHash(ann::GitAnnotated)
-    unsafe_load(ccall((:git_annotated_commit_id, :libgit2), Ptr{GitHash}, (Ptr{Void},), ann.ptr))
+    Base.@gc_preserve ann begin
+        oid = unsafe_load(ccall((:git_annotated_commit_id, :libgit2), Ptr{GitHash}, (Ptr{Void},), ann.ptr))
+    end
+    return oid
 end
 
 """

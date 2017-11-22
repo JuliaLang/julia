@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module IOTests
+
+using Test
+using Dates
+
 @testset "string/show representation of Date" begin
     @test string(Dates.Date(1, 1, 1)) == "0001-01-01" # January 1st, 1 AD/CE
     @test sprint(show, Dates.Date(1, 1, 1)) == "0001-01-01"
@@ -486,4 +491,6 @@ end
         @test_throws ArgumentError Dates.Time("20:03:20", DateFormat("HH:MM"))  # too much precision
         @test_throws ArgumentError Dates.Time("10:33:51", DateFormat("YYYY-MM-DD HH:MM:SS"))  # Time can't hold year/month/day
     end
+end
+
 end

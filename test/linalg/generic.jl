@@ -42,13 +42,13 @@ n = 5 # should be odd
         @testset "det(A::Matrix)" begin
             # The determinant of the identity matrix should always be 1.
             for i = 1:10
-                A = eye(elty, i)
+                A = Matrix{elty}(I, i, i)
                 @test det(A) ≈ one(elty)
             end
 
             # The determinant of a Householder reflection matrix should always be -1.
             for i = 1:10
-                A = eye(elty, 10)
+                A = Matrix{elty}(I, 10, 10)
                 A[i, i] = -one(elty)
                 @test det(A) ≈ -one(elty)
             end
@@ -77,10 +77,10 @@ n = 5 # should be odd
         @test logdet(A[1,1]) == log(det(A[1,1]))
         @test logdet(A) ≈ log(det(A))
         @test logabsdet(A)[1] ≈ log(abs(det(A)))
-        @test logabsdet(convert(Matrix{elty}, -eye(n)))[2] == -1
+        @test logabsdet(Matrix{elty}(-I, n, n))[2] == -1
         if elty <: Real
             @test logabsdet(A)[2] == sign(det(A))
-            @test_throws DomainError logdet(convert(Matrix{elty}, -eye(n)))
+            @test_throws DomainError logdet(Matrix{elty}(-I, n, n))
         else
             @test logabsdet(A)[2] ≈ sign(det(A))
         end
@@ -150,7 +150,7 @@ end
 end
 
 @testset "diag" begin
-    A = eye(4)
+    A = Matrix(1.0I, 4, 4)
     @test diag(A) == ones(4)
     @test diag(view(A, 1:3, 1:3)) == ones(3)
     @test diag(view(A, 1:2, 1:2)) == ones(2)
@@ -325,7 +325,7 @@ end
 end
 
 @testset "Issue 14657" begin
-    @test det([true false; false true]) == det(eye(Int, 2))
+    @test det([true false; false true]) == det(Matrix(1I, 2, 2))
 end
 
 @test_throws ArgumentError Base.LinAlg.char_uplo(:Z)

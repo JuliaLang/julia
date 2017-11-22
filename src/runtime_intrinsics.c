@@ -806,10 +806,8 @@ bi_iintrinsic_fast(LLVMXor, xor_op, xor_int, u)
 bi_iintrinsic_cnvtb_fast(LLVMShl, shl_op, shl_int, u, 1)
 #define lshr_op(a,b) (b >= 8 * sizeof(a)) ? 0 : a >> b
 bi_iintrinsic_cnvtb_fast(LLVMLShr, lshr_op, lshr_int, u, 1)
-#define ashr_op(a,b) \
-        /* if ((signed)a > 0) [in two's complement] ? ... : ...) */ \
-        (a >> (host_char_bit * sizeof(a) - 1)) ? ~(b >= 8 * sizeof(a) ? 0 : (~a) >> b) : (b >= 8 * sizeof(a) ? 0 : a >> b)
-bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, u, 1)
+#define ashr_op(a,b) ((b < 0 || b >= 8 * sizeof(a)) ? a >> (8*sizeof(a) - 1) : a >> b)
+bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, , 1)
 //#define bswap_op(a) __builtin_bswap(a)
 //un_iintrinsic_fast(LLVMByteSwap, bswap_op, bswap_int, u)
 un_iintrinsic_slow(LLVMByteSwap, bswap_int, u)

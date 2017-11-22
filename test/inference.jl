@@ -285,7 +285,7 @@ const NInt1{N} = Tuple{Int, Vararg{Int, N}}
 @test Base.eltype(NInt{1}) === Int
 @test Base.eltype(NInt1{0}) === Int
 @test Base.eltype(NInt1{1}) === Int
-fNInt(x::NInt) = (x...)
+fNInt(x::NInt) = (x...,)
 gNInt() = fNInt(x)
 @test Base.return_types(gNInt, ()) == Any[NInt]
 @test Base.return_types(eltype, (NInt,)) == Any[Union{Type{Int}, Type{Union{}}}] # issue 21763

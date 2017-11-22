@@ -426,7 +426,7 @@ end
 
 ^(x::Number, y::Rational) = x^(y.num/y.den)
 ^(x::T, y::Rational) where {T<:AbstractFloat} = x^convert(T,y)
-^(x::Complex{T}, y::Rational) where {T<:AbstractFloat} = x^convert(T,y)
+^(z::Complex{T}, p::Rational) where {T<:Real} = z^convert(typeof(one(T)^p), p)
 
 ^(z::Complex{<:Rational}, n::Bool) = n ? z : one(z) # to resolve ambiguity
 function ^(z::Complex{<:Rational}, n::Integer)

@@ -178,7 +178,7 @@ let
     # Adjust the tolerance a bit since matrices with repeated eigenvalues
     # can be very stressful to ARPACK and this may therefore fail with
     # info = 3 if the tolerance is too small
-    @test eigs(speye(50), nev=10, tol = 5e-16)[1] ≈ ones(10) #Issue 4246
+    @test eigs(sparse(1.0I, 50, 50), nev=10, tol = 5e-16)[1] ≈ ones(10) #Issue 4246
 end
 
 @testset "real svds" begin
@@ -229,14 +229,14 @@ end
         @testset "Number of singular values: $j" for j in 2:6
             # Default size of subspace
             F = svds(A, nsv = j, v0 = v0)
-            @test F[1][:U]'F[1][:U] ≈ eye(j)
-            @test F[1][:V]'F[1][:V] ≈ eye(j)
+            @test F[1][:U]'F[1][:U] ≈ Matrix(I, j, j)
+            @test F[1][:V]'F[1][:V] ≈ Matrix(I, j, j)
             @test F[1][:S]          ≈ d[1:j]
             for k in 3j:2:5j
                 # Custom size of subspace
                 F = svds(A, nsv = j, ncv = k, v0 = v0)
-                @test F[1][:U]'F[1][:U] ≈ eye(j)
-                @test F[1][:V]'F[1][:V] ≈ eye(j)
+                @test F[1][:U]'F[1][:U] ≈ Matrix(I, j, j)
+                @test F[1][:V]'F[1][:V] ≈ Matrix(I, j, j)
                 @test F[1][:S]          ≈ d[1:j]
             end
         end

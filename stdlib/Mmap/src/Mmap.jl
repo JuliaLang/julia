@@ -206,7 +206,7 @@ function mmap(io::IO,
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
-    finalizer(A, function(x)
+    finalizer(A) do x
         @static if Sys.isunix()
             systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Void}, Int), ptr, mmaplen) != 0)
         else
@@ -214,7 +214,7 @@ function mmap(io::IO,
             status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), handle)!=0
             status || error("could not unmap view: $(Libc.FormatMessage())")
         end
-    end)
+    end
     return A
 end
 

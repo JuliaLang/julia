@@ -61,11 +61,6 @@ convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
 similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
 similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
-Base.zeros(D::Diagonal) = Diagonal(fill!(similar(D.diag), 0))
-Base.zeros(D::Diagonal, ::Type{T}) where {T} = Diagonal(fill!(similar(D, T), 0))
-Base.zeros(D::Diagonal, ::Type{T}, dims::Dims) where {T} = fill!(similar(D, T, dims), 0)
-Base.zeros(D::Diagonal, ::Type{T}, dims::Integer...) where {T} = fill!(similar(D, T, dims), 0)
-
 copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (length(D.diag),length(D.diag))
@@ -412,7 +407,7 @@ end
 #Eigensystem
 eigvals(D::Diagonal{<:Number}) = D.diag
 eigvals(D::Diagonal) = [eigvals(x) for x in D.diag] #For block matrices, etc.
-eigvecs(D::Diagonal) = eye(D)
+eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
 function eigfact(D::Diagonal; permute::Bool=true, scale::Bool=true)
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
@@ -428,7 +423,7 @@ function svd(D::Diagonal{<:Number})
     piv = sortperm(S, rev = true)
     U   = Diagonal(D.diag ./ S)
     Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
-    V   = Diagonal(ones(D.diag))
+    V   = Diagonal(fill!(similar(D.diag), 1))
     Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)
     return (Up, S[piv], Vp)
 end

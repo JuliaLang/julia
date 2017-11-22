@@ -8,6 +8,8 @@ Base.AbstractVector
 Base.AbstractMatrix
 Core.Array
 Core.Array(::Any)
+Core.Uninitialized
+Core.uninitialized
 Base.Vector
 Base.Vector(::Any)
 Base.Matrix
@@ -24,7 +26,6 @@ Base.fill
 Base.fill!
 Base.similar(::AbstractArray)
 Base.similar(::Any, ::Tuple)
-Base.eye
 Base.linspace
 Base.logspace
 Base.Random.randsubseq
@@ -187,8 +188,6 @@ Base.SparseArrays.issparse
 Base.SparseArrays.nnz
 Base.SparseArrays.spzeros
 Base.SparseArrays.spones
-Base.SparseArrays.speye(::Type, ::Integer, ::Integer)
-Base.SparseArrays.speye(::SparseMatrixCSC)
 Base.SparseArrays.spdiagm
 Base.SparseArrays.sprand
 Base.SparseArrays.sprandn

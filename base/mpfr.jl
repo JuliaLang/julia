@@ -63,7 +63,7 @@ mutable struct BigFloat <: AbstractFloat
         prec = precision(BigFloat)
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
         ccall((:mpfr_init2,:libmpfr), Void, (Ref{BigFloat}, Clong), z, prec)
-        finalizer(z, cglobal((:mpfr_clear, :libmpfr)))
+        finalizer(cglobal((:mpfr_clear, :libmpfr)), z)
         return z
     end
 
@@ -969,7 +969,7 @@ function Base.deepcopy_internal(x::BigFloat, stackdict::ObjectIdDict)
     prec = precision(x)
     y = BigFloat(zero(Clong), zero(Cint), zero(Clong), C_NULL)
     ccall((:mpfr_init2,:libmpfr), Void, (Ref{BigFloat}, Clong), y, prec)
-    finalizer(y, cglobal((:mpfr_clear, :libmpfr)))
+    finalizer(cglobal((:mpfr_clear, :libmpfr)), y)
     ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Int32), y, x, ROUNDING_MODE[])
     stackdict[x] = y
     return y

@@ -81,8 +81,8 @@ function _depwarn(msg, opts, bt, caller)
     end
 end
 
-firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol) = firstcaller(bt, (funcsym,))
-function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
+firstcaller(bt::Vector, funcsym::Symbol) = firstcaller(bt, (funcsym,))
+function firstcaller(bt::Vector, funcsyms)
     # Identify the calling line
     found = false
     lkup = StackTraces.UNKNOWN
@@ -95,7 +95,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
             found && @goto found
             found = lkup.func in funcsyms
             # look for constructor type name
-            if !found && lkup.linfo != nothing
+            if !found && lkup.linfo isa Core.MethodInstance
                 li = lkup.linfo
                 ft = ccall(:jl_first_argument_datatype, Any, (Any,), li.def.sig)
                 if isa(ft,DataType) && ft.name === Type.body.name
@@ -277,31 +277,6 @@ end
 # base/complex.jl
 @dep_vectorize_1arg Complex round
 @dep_vectorize_1arg Complex float
-# base/dates/*.jl
-for f in (:unix2datetime, :rata2datetime, :julian2datetime)  # base/dates/conversions.jl
-    @eval Dates Base.@dep_vectorize_1arg Real $f
-end
-for f in (
-        # base/dates/accessors.jl
-        :year, :month, :day, :week, :dayofmonth, :yearmonth, :monthday, :yearmonthday,
-        # base/dates/adjusters.jl
-        :firstdayofweek, :lastdayofweek, :firstdayofmonth,
-        :lastdayofmonth, :firstdayofyear, :lastdayofyear,
-        :firstdayofquarter, :lastdayofquarter,
-        # base/dates/query.jl
-        :dayname, :dayabbr, :dayofweek, :dayofweekofmonth,
-        :daysofweekinmonth, :monthname, :monthabbr, :daysinmonth,
-        :isleapyear, :dayofyear, :daysinyear, :quarterofyear, :dayofquarter,
-    )
-    @eval Dates Base.@dep_vectorize_1arg Dates.TimeType $f
-end
-for f in (
-    :hour, :minute, :second, :millisecond, # base/dates/accessors.jl
-    :Date, :datetime2unix, :datetime2rata, :datetime2julian, # base/dates/conversions.jl
-    )
-    @eval Dates Base.@dep_vectorize_1arg Dates.DateTime $f
-end
-@eval Dates Base.@dep_vectorize_1arg Dates.Date Datetime # base/dates/conversions.jl
 
 # Deprecate @vectorize_2arg-vectorized functions from...
 for f in (
@@ -476,19 +451,6 @@ end
 # #19088
 @deprecate takebuf_array take!
 @deprecate takebuf_string(b) String(take!(b))
-
-# #19288
-@eval Base.Dates begin
-    function recur(fun::Function, dr::StepRange{<:TimeType}; negate::Bool=false, limit::Int=10000)
-        Base.depwarn("Dates.recur is deprecated, use filter instead.",:recur)
-        if negate
-            filter(x -> !fun(x), dr)
-        else
-            filter(fun, dr)
-        end
-     end
-     recur(fun::Function, start::T, stop::T; step::Period=Day(1), negate::Bool=false, limit::Int=10000) where {T<:TimeType} = recur(fun, start:step:stop; negate=negate)
-end
 
 # Index conversions revamp; #19730
 function getindex(A::LogicalIndex, i::Int)
@@ -790,12 +752,6 @@ import .Math: clamp
 @deprecate rem(A::Number, B::AbstractArray) rem.(A, B)
 @deprecate rem(A::AbstractArray, B::Number) rem.(A, B)
 
-# Deprecate manually vectorized div, mod, and % methods for dates
-@deprecate div(X::StridedArray{P}, y::P) where {P<:Dates.Period}  div.(X, y)
-@deprecate div(X::StridedArray{<:Dates.Period}, y::Integer)       div.(X, y)
-@deprecate (%)(X::StridedArray{P}, y::P) where {P<:Dates.Period}  X .% y
-@deprecate mod(X::StridedArray{P}, y::P) where {P<:Dates.Period}  mod.(X, y)
-
 # Deprecate manually vectorized mod methods in favor of compact broadcast syntax
 @deprecate mod(B::BitArray, x::Bool) mod.(B, x)
 @deprecate mod(x::Bool, B::BitArray) mod.(x, B)
@@ -826,7 +782,6 @@ import .Math: clamp
 # Deprecate vectorized !
 @deprecate(!(A::AbstractArray{Bool}), .!A) # parens for #20541
 @deprecate(!(B::BitArray), .!B) # parens for #20541
-!(::typeof(()->())) = () # make sure ! has at least 4 methods so that for-loops don't end up getting a back-edge to depwarn
 
 # Deprecate vectorized ~
 @deprecate ~(A::AbstractArray) .~A
@@ -993,19 +948,6 @@ end
 
 @deprecate EachLine(stream, ondone) EachLine(stream, ondone=ondone)
 
-# These conversions should not be defined, see #19896
-@deprecate convert(::Type{T}, x::Dates.Period) where {T<:Number} convert(T, Dates.value(x))
-@deprecate convert(::Type{T}, x::Real) where {T<:Dates.Period}   T(x)
-@deprecate convert(::Type{R}, x::Dates.DateTime) where {R<:Real} R(Dates.value(x))
-@deprecate convert(::Type{R}, x::Dates.Date) where {R<:Real}     R(Dates.value(x))
-@deprecate convert(::Type{Dates.DateTime}, x::Real)              Dates.DateTime(Dates.Millisecond(x))
-@deprecate convert(::Type{Dates.Date}, x::Real)                  Dates.Date(Dates.Day(x))
-
-function colon(start::T, stop::T) where T<:Dates.Period
-    depwarn("$start:$stop is deprecated, use $start:$T(1):$stop instead.", :colon)
-    colon(start, T(1), stop)
-end
-
 # LibGit2 refactor (#19839)
 @eval Base.LibGit2 begin
      Base.@deprecate_binding Oid GitHash
@@ -1028,20 +970,6 @@ end
         end
     end
     Base.cat(repo::GitRepo, spec::Union{AbstractString,AbstractGitHash}) = cat(repo, GitBlob, spec)
-end
-
-# when this deprecation is deleted, remove all calls to it, and all
-# negate=nothing keyword arguments, from base/dates/adjusters.jl
-@eval Dates function deprecate_negate(f, func, sig, negate)
-    if negate === nothing
-        return func
-    else
-        msg = "$f($sig; negate=$negate) is deprecated, use $f("
-        negate && (msg *= "!")
-        msg *= "$sig) instead."
-        Base.depwarn(msg, f)
-        return negate ? !func : func
-    end
 end
 
 # TODO: remove `:typealias` from BINDING_HEADS in base/docs/Docs.jl
@@ -1168,17 +1096,6 @@ end
 @deprecate_binding LinearFast IndexLinear false
 @deprecate_binding LinearSlow IndexCartesian false
 @deprecate_binding linearindexing IndexStyle false
-
-# #20876
-@eval Base.Dates begin
-    function Base.Dates.parse(x::AbstractString, df::DateFormat)
-        Base.depwarn(string(
-            "`Dates.parse(x::AbstractString, df::DateFormat)` is deprecated, use ",
-            "`sort!(filter!(el -> isa(el, Dates.Period), Dates.parse_components(x, df), rev=true, lt=Dates.periodisless)` ",
-            " instead."), :parse)
-        sort!(filter!(el -> isa(el, Period), parse_components(x, df)), rev=true, lt=periodisless)
-     end
-end
 
 # #19635
 for fname in (:ones, :zeros)
@@ -1320,6 +1237,7 @@ module DFT
             @eval Base.@deprecate_moved $f "FFTW"
         end
     end
+    Base.deprecate(DFT, :FFTW, 2)
     export FFTW
 end
 using .DFT
@@ -1331,6 +1249,7 @@ module DSP
         @eval Base.@deprecate_moved $f "DSP"
     end
 end
+deprecate(Base, :DSP, 2)
 using .DSP
 export conv, conv2, deconv, filt, filt!, xcorr
 
@@ -1355,6 +1274,12 @@ export conv, conv2, deconv, filt, filt!, xcorr
 @deprecate_moved FileMonitor "FileWatching" true true
 
 @deprecate_moved crc32c "CRC32c" true true
+
+@deprecate_binding Dates nothing true ", run `using Dates` instead"
+@deprecate_moved DateTime "Dates" true true
+@deprecate_moved DateFormat "Dates" true true
+@eval @deprecate_moved $(Symbol("@dateformat_str")) "Dates" true true
+@deprecate_moved now "Dates" true true
 
 # PR #21709
 @deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)
@@ -1481,26 +1406,6 @@ for op in (:exp, :exp2, :exp10, :log, :log2, :log10,
     @eval import .Math: $op
     @eval @deprecate ($op)(x::AbstractSparseVector{<:Number,<:Integer}) ($op).(x)
 end
-
-# deprecate remaining vectorized methods from Base.Dates
-@eval Dates @deprecate(
-    DateTime(Y::AbstractArray{<:AbstractString}, f::AbstractString; locale::Locale=ENGLISH),
-    DateTime.(Y, f; locale=locale) )
-@eval Dates @deprecate(
-    DateTime(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateTimeFormat),
-    DateTime.(Y, df) )
-@eval Dates @deprecate(
-    Date(Y::AbstractArray{<:AbstractString}, f::AbstractString; locale::Locale=ENGLISH),
-    Date.(Y, f; locale=locale) )
-@eval Dates @deprecate(
-    Date(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateFormat),
-    Date.(Y, df) )
-@eval Dates @deprecate(
-    format(Y::AbstractArray{<:TimeType}, f::AbstractString; locale::Locale=ENGLISH),
-    format.(Y, f; locale=locale) )
-@eval Dates @deprecate(
-    format(Y::AbstractArray{T}, df::DateFormat=default_format(T)) where {T<:TimeType},
-    format.(Y, df) )
 
 # PR #22182
 @deprecate is_apple   Sys.isapple
@@ -1717,11 +1622,6 @@ import .Iterators.enumerate
 @deprecate -(a::Number, b::AbstractArray) broadcast(-, a, b)
 @deprecate -(a::AbstractArray, b::Number) broadcast(-, a, b)
 
-@deprecate +(a::Dates.GeneralPeriod, b::StridedArray{<:Dates.GeneralPeriod}) broadcast(+, a, b)
-@deprecate +(a::StridedArray{<:Dates.GeneralPeriod}, b::Dates.GeneralPeriod) broadcast(+, a, b)
-@deprecate -(a::Dates.GeneralPeriod, b::StridedArray{<:Dates.GeneralPeriod}) broadcast(-, a, b)
-@deprecate -(a::StridedArray{<:Dates.GeneralPeriod}, b::Dates.GeneralPeriod) broadcast(-, a, b)
-
 # PR #23640
 # when this deprecation is deleted, remove all calls to it, and replace all keywords of:
 # `payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}` with
@@ -1781,16 +1681,78 @@ function spdiagm(x, d, m::Integer, n::Integer)
     return sparse(I, J, V, m, n)
 end
 
+# deprecate zeros(D::Diagonal[, opts...])
+@deprecate zeros(D::Diagonal)                         Diagonal(fill!(similar(D.diag), 0))
+@deprecate zeros(D::Diagonal, ::Type{T}) where {T}    Diagonal(fill!(similar(D.diag, T), 0))
+@deprecate zeros(D::Diagonal, ::Type{T}, dims::Dims) where {T}          fill!(similar(D, T, dims), 0)
+@deprecate zeros(D::Diagonal, ::Type{T}, dims::Integer...) where {T}    fill!(similar(D, T, dims), 0)
+
 # PR #23690
 # `SSHCredentials` and `UserPasswordCredentials` constructors using `prompt_if_incorrect`
 # are deprecated in base/libgit2/types.jl.
+
+# deprecate ones/zeros methods accepting an array as first argument
+@deprecate ones(a::AbstractArray, ::Type{T}, dims::Tuple) where {T} fill!(similar(a, T, dims), 1)
+@deprecate ones(a::AbstractArray, ::Type{T}, dims...) where {T}     fill!(similar(a, T, dims...), 1)
+@deprecate ones(a::AbstractArray, ::Type{T}) where {T}              fill!(similar(a, T), 1)
+@deprecate ones(a::AbstractArray)                                   fill!(similar(a), 1)
+@deprecate zeros(a::AbstractArray, ::Type{T}, dims::Tuple) where {T}  fill!(similar(a, T, dims), 0)
+@deprecate zeros(a::AbstractArray, ::Type{T}, dims...) where {T}      fill!(similar(a, T, dims...), 0)
+@deprecate zeros(a::AbstractArray, ::Type{T}) where {T}               fill!(similar(a, T), 0)
+@deprecate zeros(a::AbstractArray)                                    fill!(similar(a), 0)
 
 # PR #23711
 @eval LibGit2 begin
     @deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)
 end
 
-@deprecate eye(::Type{Diagonal{T}}, n::Int) where {T} Diagonal{T}(I, n)
+## goodbeye, eye!
+export eye
+function eye(m::Integer)
+    depwarn(string("`eye(m::Integer)` has been deprecated in favor of `I` and `Matrix` ",
+        "constructors. For a direct replacement, consider `Matrix(1.0I, m, m)` or ",
+        "`Matrix{Float64}(I, m, m)`. If `Float64` element type is not necessary, ",
+        "consider the shorter `Matrix(I, m, m)` (with default `eltype(I)` `Bool`)."), :eye)
+    return Matrix{Float64}(I, m, m)
+end
+function eye(::Type{T}, m::Integer) where T
+    depwarn(string("`eye(T::Type, m::Integer)` has been deprecated in favor of `I` and ",
+        "`Matrix` constructors. For a direct replacement, consider `Matrix{T}(I, m, m)`. If ",
+        "`T` element type is not necessary, consider the shorter `Matrix(I, m, m)`",
+        "(with default `eltype(I)` `Bool`)"), :eye)
+    return Matrix{T}(I, m, m)
+end
+function eye(m::Integer, n::Integer)
+    depwarn(string("`eye(m::Integer, n::Integer)` has been deprecated in favor of `I` and ",
+        "`Matrix` constructors. For a direct replacement, consider `Matrix(1.0I, m, n)` ",
+        "or `Matrix{Float64}(I, m, n)`. If `Float64` element type is not necessary, ",
+        "consider the shorter `Matrix(I, m, n)` (with default `eltype(I)` `Bool`)."), :eye)
+    return Matrix{Float64}(I, m, n)
+end
+function eye(::Type{T}, m::Integer, n::Integer) where T
+    depwarn(string("`eye(T::Type, m::Integer, n::Integer)` has been deprecated in favor of ",
+        "`I` and `Matrix` constructors. For a direct replacement, consider `Matrix{T}(I, m, n)`.",
+        "If `T` element type is not necessary, consider the shorter `Matrix(I, m, n)` ",
+        "(with default `eltype(I)` `Bool`)."), :eye)
+    return Matrix{T}(I, m, n)
+end
+function eye(A::AbstractMatrix{T}) where T
+    depwarn(string("`eye(A::AbstractMatrix{T})` has been deprecated in favor of `I` and ",
+        "`Matrix` constructors. For a direct replacement, consider `Matrix{eltype(A)}(I, size(A))`.",
+        "If `eltype(A)` element type is not necessary, consider the shorter `Matrix(I, size(A))` ",
+        "(with default `eltype(I)` `Bool`)."), :eye)
+    return Matrix(one(T)I, size(A))
+end
+function eye(::Type{Diagonal{T}}, n::Int) where T
+    depwarn(string("`eye(DT::Type{Diagonal{T}}, n::Int)` has been deprecated in favor of `I` ",
+        "and `Diagonal` constructors. For a direct replacement, consider `Diagonal{T}(I, n)`. ",
+        "If `T` element type is not necessary, consider the shorter `Diagonal(I, n)` ",
+        "(with default `eltype(I)` `Bool`)."), :eye)
+    return Diagonal{T}(I, n)
+end
+@eval Base.LinAlg import Base.eye
+# @eval Base.SparseArrays import Base.eye # SparseArrays has an eye for things cholmod
+
 
 export tic, toq, toc
 function tic()
@@ -1822,6 +1784,8 @@ function toc()
     println("elapsed time: ", t, " seconds")
     return t
 end
+
+@eval Base.SparseArrays @deprecate sparse(s::UniformScaling, m::Integer) sparse(s, m, m)
 
 # A[I...] .= with scalar indices should modify the element at A[I...]
 function Broadcast.dotview(A::AbstractArray, args::Number...)
@@ -1877,6 +1841,14 @@ end
     nothing
 end
 
+@deprecate whos(io::IO, m::Module, pat::Regex) show(io, varinfo(m, pat))
+@deprecate whos(io::IO, m::Module)             show(io, varinfo(m))
+@deprecate whos(io::IO)                        show(io, varinfo())
+@deprecate whos(m::Module, pat::Regex)         varinfo(m, pat)
+@deprecate whos(m::Module)                     varinfo(m)
+@deprecate whos(pat::Regex)                    varinfo(pat)
+@deprecate whos()                              varinfo()
+
 # indexing with A[true] will throw an argument error in the future
 function to_index(i::Bool)
     depwarn("indexing with Bool values is deprecated. Convert the index to an integer first with `Int(i)`.", (:getindex, :setindex!, :view))
@@ -1886,8 +1858,8 @@ end
 # Also un-comment the new definition in base/indices.jl
 
 # deprecate odd fill! methods
-@deprecate fill!(D::Diagonal, x)                       fillslots!(D, x)
-@deprecate fill!(A::Base.LinAlg.AbstractTriangular, x) fillslots!(A, x)
+@deprecate fill!(D::Diagonal, x)                       LinAlg.fillslots!(D, x)
+@deprecate fill!(A::Base.LinAlg.AbstractTriangular, x) LinAlg.fillslots!(A, x)
 
 function diagm(v::BitVector)
     depwarn(string("diagm(v::BitVector) is deprecated, use diagm(0 => v) or ",
@@ -1982,8 +1954,8 @@ function full(Q::LinAlg.LQPackedQ; thin::Bool = true)
         "`full(Q::LQPackedQ; thin::Bool = true)` (and `full` in general) ",
         "has been deprecated. To replace `full(Q::LQPackedQ, true)`, ",
         "consider `Matrix(Q)` or `Array(Q)`. To replace `full(Q::LQPackedQ, false)`, ",
-        "consider `Base.LinAlg.A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 2)))`."), :full)
-    return thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 2)))
+        "consider `Base.LinAlg.A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))`."), :full)
+    return thin ? Array(Q) : A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))
 end
 function full(Q::Union{LinAlg.QRPackedQ,LinAlg.QRCompactWYQ}; thin::Bool = true)
     qtypestr = isa(Q, LinAlg.QRPackedQ)    ? "QRPackedQ"    :
@@ -1993,8 +1965,8 @@ function full(Q::Union{LinAlg.QRPackedQ,LinAlg.QRCompactWYQ}; thin::Bool = true)
         "`full(Q::$(qtypestr); thin::Bool = true)` (and `full` in general) ",
         "has been deprecated. To replace `full(Q::$(qtypestr), true)`, ",
         "consider `Matrix(Q)` or `Array(Q)`. To replace `full(Q::$(qtypestr), false)`, ",
-        "consider `Base.LinAlg.A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))`."), :full)
-    return thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))
+        "consider `Base.LinAlg.A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 1), size(Q.factors, 1)))`."), :full)
+    return thin ? Array(Q) : A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 1), size(Q.factors, 1)))
 end
 
 # full for symmetric / hermitian / triangular wrappers
@@ -2072,6 +2044,55 @@ end
 # deprecate bits to bitstring (#24263, #24281)
 @deprecate bits bitstring
 
+# deprecate speye
+export speye
+function speye(n::Integer)
+    depwarn(string("`speye(n::Integer)` has been deprecated in favor of `I`, `sparse`, and ",
+                    "`SparseMatrixCSC` constructor methods. For a direct replacement, consider ",
+                    "`sparse(1.0I, n, n)`, `SparseMatrixCSC(1.0I, n, n)`, or `SparseMatrixCSC{Float64}(I, n, n)`. ",
+                    "If `Float64` element type is not necessary, consider the shorter `sparse(I, n, n)` ",
+                    "or `SparseMatrixCSC(I, n, n)` (with default `eltype(I)` of `Bool`)."), :speye)
+    return sparse(1.0I, n, n)
+end
+function speye(m::Integer, n::Integer)
+    depwarn(string("`speye(m::Integer, n::Integer)` has been deprecated in favor of `I`, ",
+                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
+                    "replacement, consider `sparse(1.0I, m, n)`, `SparseMatrixCSC(1.0I, m, n)`, ",
+                    "or `SparseMatrixCSC{Float64}(I, m, n)`. If `Float64` element type is not ",
+                    " necessary, consider the shorter `sparse(I, m, n)` or `SparseMatrixCSC(I, m, n)` ",
+                    "(with default `eltype(I)` of `Bool`)."), :speye)
+    return sparse(1.0I, m, n)
+end
+function speye(::Type{T}, n::Integer) where T
+    depwarn(string("`speye(T, n::Integer)` has been deprecated in favor of `I`, `sparse`, and ",
+                    "`SparseMatrixCSC` constructor methods. For a direct replacement, consider ",
+                    "`sparse(T(1)I, n, n)` if `T` is concrete or `SparseMatrixCSC{T}(I, n, n)` ",
+                    "if `T` is either concrete or abstract. If element type `T` is not necessary, ",
+                    "consider the shorter `sparse(I, n, n)` or `SparseMatrixCSC(I, n, n)` ",
+                    "(with default `eltype(I)` of `Bool`)."), :speye)
+    return SparseMatrixCSC{T}(I, n, n)
+end
+function speye(::Type{T}, m::Integer, n::Integer) where T
+    depwarn(string("`speye(T, m::Integer, n::Integer)` has been deprecated in favor of `I`, ",
+                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
+                    "replacement, consider `sparse(T(1)I, m, n)` if `T` is concrete or ",
+                    "`SparseMatrixCSC{T}(I, m, n)` if `T` is either concrete or abstract. ",
+                    "If element type `T` is not necessary, consider the shorter ",
+                    "`sparse(I, m, n)` or `SparseMatrixCSC(I, m, n)` (with default `eltype(I)` ",
+                    "of `Bool`)."), :speye)
+    return SparseMatrixCSC{T}(I, m, n)
+end
+function speye(S::SparseMatrixCSC{T}) where T
+    depwarn(string("`speye(S::SparseMatrixCSC{T})` has been deprecated in favor of `I`, ",
+                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
+                    "replacement, consider `sparse(T(1)I, size(S)...)` if `T` is concrete or ",
+                    "`SparseMatrixCSC{eltype(S)}(I, size(S))` if `T` is either concrete or abstract. ",
+                    "If preserving element type `T` is not necessary, consider the shorter ",
+                    "`sparse(I, size(S)...)` or `SparseMatrixCSC(I, size(S))` (with default ",
+                    "`eltype(I)` of `Bool`)."), :speye)
+    return SparseMatrixCSC{T}(I, m, n)
+end
+
 # issue #24167
 @deprecate EnvHash EnvDict
 
@@ -2080,20 +2101,20 @@ end
 @deprecate parse(str::AbstractString, pos::Int, ; kwargs...) Meta.parse(str, pos; kwargs...)
 @deprecate_binding ParseError Meta.ParseError
 
-# #24258
-# Physical units define an equivalence class: there is no such thing as a step of "1" (is
-# it one day or one second or one nanosecond?). So require the user to specify the step
-# (in physical units).
-@deprecate colon(start::T, stop::T) where {T<:DateTime}   start:Dates.Day(1):stop
-@deprecate colon(start::T, stop::T) where {T<:Date}       start:Dates.Day(1):stop
-@deprecate colon(start::T, stop::T) where {T<:Dates.Time} start:Dates.Second(1):stop
-
-@deprecate range(start::DateTime, len::Integer)  range(start, Dates.Day(1), len)
-@deprecate range(start::Date, len::Integer)      range(start, Dates.Day(1), len)
-
 @eval LinAlg begin
     @deprecate chol!(x::Number, uplo) chol(x) false
 end
+
+
+# issue #16307
+@deprecate finalizer(o, f::Function) finalizer(f, o)
+# This misses other callables but they are very rare in the wild
+@deprecate finalizer(o, f::Ptr{Void}) finalizer(f, o)
+
+# Avoid ambiguity, can remove when deprecations are removed:
+# This is almost certainly going to be a silent failure for code that is not updated.
+finalizer(f::Ptr{Void}, o::Ptr{Void}) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
+finalizer(f::Ptr{Void}, o::Function) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
 
 # END 0.7 deprecations
 

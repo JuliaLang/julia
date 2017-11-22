@@ -47,7 +47,7 @@ end
 
 ### General promotion rules
 convert(::Type{Factorization{T}}, F::Factorization{T}) where {T} = F
-inv(F::Factorization{T}) where {T} = A_ldiv_B!(F, eye(T, size(F,1)))
+inv(F::Factorization{T}) where {T} = (n = size(F, 1); A_ldiv_B!(F, Matrix{T}(I, n, n)))
 
 Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, h, 1:nfields(F))
 Base.:(==)(  F::T, G::T) where {T<:Factorization} = all(f -> getfield(F, f) == getfield(G, f), 1:nfields(F))

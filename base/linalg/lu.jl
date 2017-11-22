@@ -130,9 +130,15 @@ julia> A = [4 3; 6 3]
  6  3
 
 julia> F = lufact(A)
-Base.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:
-[1.0 0.0; 1.5 1.0]
-[4.0 3.0; 0.0 -1.5]
+Base.LinAlg.LU{Float64,Array{Float64,2}}
+L factor:
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 1.5  1.0
+U factor:
+2×2 Array{Float64,2}:
+ 4.0   3.0
+ 0.0  -1.5
 
 julia> F[:L] * F[:U] == A[F[:p], :]
 true
@@ -224,7 +230,7 @@ function getindex(F::LU{T,<:StridedMatrix}, d::Symbol) where T
     elseif d == :p
         return ipiv2perm(F.ipiv, m)
     elseif d == :P
-        return eye(T, m)[:,invperm(F[:p])]
+        return Matrix{T}(I, m, m)[:,invperm(F[:p])]
     else
         throw(KeyError(d))
     end
@@ -232,12 +238,12 @@ end
 
 issuccess(F::LU) = F.info == 0
 
-function show(io::IO, F::LU)
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LU)
     if issuccess(F)
-        println(io, "$(typeof(F)) with factors L and U:")
-        show(io, F[:L])
-        println(io)
-        show(io, F[:U])
+        println(io, summary(F), "\nL factor:")
+        show(io, mime, F[:L])
+        println(io, "\nU factor:")
+        show(io, mime, F[:U])
     else
         print(io, "Failed factorization of type $(typeof(F))")
     end
@@ -337,7 +343,7 @@ end
 inv!(A::LU{<:BlasFloat,<:StridedMatrix}) =
     @assertnonsingular LAPACK.getri!(A.factors, A.ipiv) A.info
 inv!(A::LU{T,<:StridedMatrix}) where {T} =
-    @assertnonsingular A_ldiv_B!(A.factors, copy(A), eye(T, size(A, 1))) A.info
+    @assertnonsingular A_ldiv_B!(A.factors, copy(A), Matrix{T}(I, size(A, 1), size(A, 1))) A.info
 inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 
 function _cond1Inf(A::LU{<:BlasFloat,<:StridedMatrix}, p::Number, normA::Real)
@@ -437,7 +443,7 @@ function getindex(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
     elseif d == :p
         return ipiv2perm(F.ipiv, m)
     elseif d == :P
-        return eye(T, m)[:,invperm(F[:p])]
+        return Matrix{T}(I, m, m)[:,invperm(F[:p])]
     end
     throw(KeyError(d))
 end

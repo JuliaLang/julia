@@ -30,12 +30,12 @@ end
     @test !ishermitian(UniformScaling(complex(1.0,1.0)))
     @test UniformScaling(4.00000000000001) ≈ UniformScaling(4.0)
     @test UniformScaling(4.32) ≈ UniformScaling(4.3) rtol=0.1 atol=0.01
-    @test UniformScaling(4.32) ≈ 4.3*eye(2) rtol=0.1 atol=0.01
-    @test UniformScaling(4.32) ≈ 4.3*eye(2) rtol=0.1 atol=0.01 norm=norm
-    @test 4.3*eye(2) ≈ UniformScaling(4.32) rtol=0.1 atol=0.01
+    @test UniformScaling(4.32) ≈ 4.3 * [1 0; 0 1] rtol=0.1 atol=0.01
+    @test UniformScaling(4.32) ≈ 4.3 * [1 0; 0 1] rtol=0.1 atol=0.01 norm=norm
+    @test 4.3 * [1 0; 0 1] ≈ UniformScaling(4.32) rtol=0.1 atol=0.01
     @test [4.3201 0.002;0.001 4.32009] ≈ UniformScaling(4.32) rtol=0.1 atol=0.
     @test UniformScaling(4.32) ≉ 4.3*ones(2,2) rtol=0.1 atol=0.01
-    @test UniformScaling(4.32) ≈ 4.32*eye(2)
+    @test UniformScaling(4.32) ≈ 4.32 * [1 0; 0 1]
 end
 
 @testset "arithmetic with Number" begin
@@ -69,7 +69,7 @@ let
     @testset "transpose, conj, inv" begin
         @test ndims(J) == 2
         @test transpose(J) == J
-        @test J*eye(2) == conj(J'eye(2)) # ctranpose (and A(c)_mul_B)
+        @test J * [1 0; 0 1] == conj(Ac_mul_B(J, [1 0; 0 1])) # ctranpose (and A(c)_mul_B)
         @test I + I === UniformScaling(2) # +
         @test inv(I) == I
         @test inv(J) == UniformScaling(inv(λ))
@@ -79,18 +79,19 @@ let
 
     @testset "binary ops with matrices" begin
         B = bitrand(2, 2)
-        @test B + I == B + eye(B)
-        @test I + B == B + eye(B)
+        @test B + I == B + Matrix(I, size(B))
+        @test I + B == B + Matrix(I, size(B))
         AA = randn(2, 2)
-        for SS in (sprandn(3,3, 0.5), speye(Int, 3))
+        for SS in (sprandn(3,3, 0.5), sparse(Int(1)I, 3, 3))
             for (A, S) in ((AA, SS), (view(AA, 1:2, 1:2), view(SS, 1:3, 1:3)))
-                @test @inferred(A + I) == A + eye(A)
-                @test @inferred(I + A) == A + eye(A)
+                I22 = Matrix(I, size(A))
+                @test @inferred(A + I) == A + I22
+                @test @inferred(I + A) == A + I22
                 @test @inferred(I - I) === UniformScaling(0)
-                @test @inferred(B - I) == B - eye(B)
-                @test @inferred(I - B) == eye(B) - B
-                @test @inferred(A - I) == A - eye(A)
-                @test @inferred(I - A) == eye(A) - A
+                @test @inferred(B - I) == B - I22
+                @test @inferred(I - B) == I22 - B
+                @test @inferred(A - I) == A - I22
+                @test @inferred(I - A) == I22 - A
                 @test @inferred(I*J) === UniformScaling(λ)
                 @test @inferred(B*J) == B*λ
                 @test @inferred(J*B) == B*λ
@@ -173,12 +174,12 @@ end
     for T in (Matrix, SparseMatrixCSC)
         A = T(rand(3,4))
         B = T(rand(3,3))
-        @test (hcat(A,2I))::T == hcat(A,2eye(3,3))
-        @test (vcat(A,2I))::T == vcat(A,2eye(4,4))
-        @test (hcat(I,3I,A,2I))::T == hcat(eye(3,3),3eye(3,3),A,2eye(3,3))
-        @test (vcat(I,3I,A,2I))::T == vcat(eye(4,4),3eye(4,4),A,2eye(4,4))
-        @test (hvcat((2,1,2),B,2I,I,3I,4I))::T ==
-            hvcat((2,1,2),B,2eye(3,3),eye(6,6),3eye(3,3),4eye(3,3))
+        @test (hcat(A, 2I))::T == hcat(A, Matrix(2I, 3, 3))
+        @test (vcat(A, 2I))::T == vcat(A, Matrix(2I, 4, 4))
+        @test (hcat(I, 3I, A, 2I))::T == hcat(Matrix(I, 3, 3), Matrix(3I, 3, 3), A, Matrix(2I, 3, 3))
+        @test (vcat(I, 3I, A, 2I))::T == vcat(Matrix(I, 4, 4), Matrix(3I, 4, 4), A, Matrix(2I, 4, 4))
+        @test (hvcat((2,1,2), B, 2I, I, 3I, 4I))::T ==
+            hvcat((2,1,2), B, Matrix(2I, 3, 3), Matrix(I, 6, 6), Matrix(3I, 3, 3), Matrix(4I, 3, 3))
     end
 end
 
@@ -190,22 +191,25 @@ end
     end
 end
 
-@testset "Matrix construction from UniformScaling" begin
-    @test Matrix(2I, 3)::Matrix{Int} == 2*eye(3)
-    @test Matrix(2I, 3, 3)::Matrix{Int} == 2*eye(3)
-    @test Matrix(2I, 3, 4)::Matrix{Int} == 2*eye(3, 4)
-    @test Matrix(2I, 4, 3)::Matrix{Int} == 2*eye(4, 3)
-    @test Matrix(2.0I, 3, 3)::Matrix{Float64} == 2*eye(3)
-    @test Matrix{Real}(2I, 3)::Matrix{Real} == 2*eye(3)
-    @test Matrix{Real}(2I, 3, 3)::Matrix{Real} == 2*eye(3)
-    @test Matrix{Float64}(2I, 3, 3)::Matrix{Float64} == 2*eye(3)
+@testset "Matrix/Array construction from UniformScaling" begin
+    I2_33 = [2 0 0; 0 2 0; 0 0 2]
+    I2_34 = [2 0 0 0; 0 2 0 0; 0 0 2 0]
+    I2_43 = [2 0 0; 0 2 0; 0 0 2; 0 0 0]
+    for ArrType in (Matrix, Array)
+        @test ArrType(2I, 3, 3)::Matrix{Int} == I2_33
+        @test ArrType(2I, 3, 4)::Matrix{Int} == I2_34
+        @test ArrType(2I, 4, 3)::Matrix{Int} == I2_43
+        @test ArrType(2.0I, 3, 3)::Matrix{Float64} == I2_33
+        @test ArrType{Real}(2I, 3, 3)::Matrix{Real} == I2_33
+        @test ArrType{Float64}(2I, 3, 3)::Matrix{Float64} == I2_33
+    end
 end
 
 @testset "Diagonal construction from UniformScaling" begin
-    @test Diagonal(2I, 3)::Diagonal{Int} == 2*eye(3)
-    @test Diagonal(2.0I, 3)::Diagonal{Float64} == 2*eye(3)
-    @test Diagonal{Real}(2I, 3)::Diagonal{Real} == 2*eye(3)
-    @test Diagonal{Float64}(2I, 3)::Diagonal{Float64} == 2*eye(3)
+    @test Diagonal(2I, 3)::Diagonal{Int} == Matrix(2I, 3, 3)
+    @test Diagonal(2.0I, 3)::Diagonal{Float64} == Matrix(2I, 3, 3)
+    @test Diagonal{Real}(2I, 3)::Diagonal{Real} == Matrix(2I, 3, 3)
+    @test Diagonal{Float64}(2I, 3)::Diagonal{Float64} == Matrix(2I, 3, 3)
 end
 
 @testset "equality comparison of matrices with UniformScaling" begin
@@ -222,8 +226,8 @@ end
     @test bidiag != 2I != bidiag # test generic path / inequality off diag
     @test rdiagI !=  I != rdiagI # test square matrix check
     # StridedMatrix specialization
-    denseI = eye(3)
-    rdenseI = eye(3, 4)
+    denseI = [1 0 0; 0 1 0; 0 0 1]
+    rdenseI = [1 0 0 0; 0 1 0 0; 0 0 1 0]
     alltwos = fill(2, (3, 3))
     @test denseI  ==  I == denseI  # test isone(I) path / equality
     @test 2denseI !=  I != 2denseI # test isone(I) path / inequality

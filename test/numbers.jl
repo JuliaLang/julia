@@ -2995,8 +2995,8 @@ end
     @test !isone(tril(ones(Int, 5, 5)))
     @test !isone(triu(ones(Int, 5, 5)))
     @test !isone(zeros(Int, 5, 5))
-    @test isone(eye(Int, 5, 5))
-    @test isone(eye(Int, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
+    @test isone(Matrix(1I, 5, 5))
+    @test isone(Matrix(1I, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
 end
 
 f20065(B, i) = UInt8(B[i])
@@ -3060,14 +3060,22 @@ end
     end
 end
 
-@testset "printing non finite floats" for T in subtypes(AbstractFloat)
-    for (x, sx) in [(T(NaN), "NaN"),
-                    (-T(NaN), "NaN"),
-                    (T(Inf), "Inf"),
-                    (-T(Inf), "-Inf")]
-        @assert x isa T
-        @test string(x) == sx
-        @test sprint(io -> show(IOContext(io, :compact => true), x)) == sx
-        @test sprint(print, x) == sx
+@testset "printing non finite floats" begin
+    let float_types = Set()
+        allsubtypes!(Base, AbstractFloat, float_types)
+        allsubtypes!(Core, AbstractFloat, float_types)
+        @test !isempty(float_types)
+
+        for T in float_types
+            for (x, sx) in [(T(NaN), "NaN"),
+                            (-T(NaN), "NaN"),
+                            (T(Inf), "Inf"),
+                            (-T(Inf), "-Inf")]
+                @assert x isa T
+                @test string(x) == sx
+                @test sprint(io -> show(IOContext(io, :compact => true), x)) == sx
+                @test sprint(print, x) == sx
+            end
+        end
     end
 end

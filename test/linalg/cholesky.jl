@@ -5,8 +5,8 @@ using Test
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
 
 function unary_ops_tests(a, ca, tol; n=size(a, 1))
-    @test inv(ca)*a ≈ eye(n)
-    @test a*inv(ca) ≈ eye(n)
+    @test inv(ca)*a ≈ Matrix(I, n, n)
+    @test a*inv(ca) ≈ Matrix(I, n, n)
     @test abs((det(ca) - det(a))/det(ca)) <= tol # Ad hoc, but statistically verified, revisit
     @test logdet(ca) ≈ logdet(a)
     @test logdet(ca) ≈ log(det(ca))  # logdet is less likely to overflow
@@ -102,8 +102,8 @@ end
                 capds = cholfact!(copy(apds))
                 unary_ops_tests(apds, capds, ε*κ*n)
             end
-            ulstring = sprint(show, capds[:UL])
-            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
+            ulstring = sprint((t, s) -> show(t, "text/plain", s), capds[:UL])
+            @test sprint((t, s) -> show(t, "text/plain", s), capds) == "$(typeof(capds))\nU factor:\n$ulstring"
         else
             capdh = cholfact(apdh)
             unary_ops_tests(apdh, capdh, ε*κ*n)
@@ -111,8 +111,8 @@ end
             unary_ops_tests(apdh, capdh, ε*κ*n)
             capdh = cholfact!(copy(apd))
             unary_ops_tests(apd, capdh, ε*κ*n)
-            ulstring = sprint(show, capdh[:UL])
-            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
+            ulstring = sprint((t, s) -> show(t, "text/plain", s), capdh[:UL])
+            @test sprint((t, s) -> show(t, "text/plain", s), capdh) == "$(typeof(capdh))\nU factor:\n$ulstring"
         end
 
         # test chol of 2x2 Strang matrix
@@ -180,7 +180,7 @@ end
                 C = cholfact(A)
                 @test !isposdef(C)
                 @test !LinAlg.issuccess(C)
-                Cstr = sprint(show, C)
+                Cstr = sprint((t, s) -> show(t, "text/plain", s), C)
                 @test Cstr == "Failed factorization of type $(typeof(C))"
                 @test_throws PosDefException C\B
                 @test_throws PosDefException det(C)

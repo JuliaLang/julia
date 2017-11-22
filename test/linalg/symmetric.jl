@@ -5,7 +5,7 @@ using Test
 srand(101)
 
 @testset "Pauli σ-matrices: $σ" for σ in map(Hermitian,
-        Any[ eye(2), [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
+        Any[ [1 0; 0 1], [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
     @test ishermitian(σ)
 end
 
@@ -220,9 +220,9 @@ end
                         @test asym*v[:,1] ≈ d[1]*v[:,1]
                         @test v*Diagonal(d)*v.' ≈ asym
                         @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
-                        @test abs.(eigfact(Symmetric(asym), 1:2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+                        @test abs.(eigfact(Symmetric(asym), 1:2)[:vectors]'v[:,1:2]) ≈ Matrix(I, 2, 2)
                         eig(Symmetric(asym), 1:2) # same result, but checks that method works
-                        @test abs.(eigfact(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+                        @test abs.(eigfact(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ Matrix(I, 2, 2)
                         eig(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
                         @test eigvals(Symmetric(asym), 1:2) ≈ d[1:2]
                         @test eigvals(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
@@ -235,9 +235,9 @@ end
                     @test aherm*v[:,1] ≈ d[1]*v[:,1]
                     @test v*Diagonal(d)*v' ≈ aherm
                     @test isequal(eigvals(aherm[1]), eigvals(aherm[1:1,1:1]))
-                    @test abs.(eigfact(Hermitian(aherm), 1:2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+                    @test abs.(eigfact(Hermitian(aherm), 1:2)[:vectors]'v[:,1:2]) ≈ Matrix(I, 2, 2)
                     eig(Hermitian(aherm), 1:2) # same result, but checks that method works
-                    @test abs.(eigfact(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+                    @test abs.(eigfact(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ Matrix(I, 2, 2)
                     eig(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
                     @test eigvals(Hermitian(aherm), 1:2) ≈ d[1:2]
                     @test eigvals(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
@@ -462,4 +462,10 @@ end
         @test isa(similar(symsparsemat, (n, n)), typeof(sparsemat))
         @test isa(similar(symsparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
     end
+end
+
+@testset "#24572: eltype(A::HermOrSym) === eltype(parent(A))" begin
+    A = rand(Float32, 3, 3)
+    @test_throws TypeError Symmetric{Float64,Matrix{Float32}}(A, 'U')
+    @test_throws TypeError Hermitian{Float64,Matrix{Float32}}(A, 'U')
 end
