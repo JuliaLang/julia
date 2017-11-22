@@ -2338,9 +2338,29 @@ setindex!(A::SparseMatrixCSC, x::Number, i::Integer, J::AbstractVector{<:Integer
 setindex!(A::SparseMatrixCSC, x::Number, I::AbstractVector{<:Integer}, j::Integer) = setindex!(A, x, I, [j])
 
 # Colon translation
-setindex!(A::SparseMatrixCSC, x, ::Colon)          = setindex!(A, x, 1:length(A))
-setindex!(A::SparseMatrixCSC, x, ::Colon, ::Colon) = setindex!(A, x, 1:size(A, 1), 1:size(A,2))
-setindex!(A::SparseMatrixCSC, x, ::Colon, j::Union{Integer, AbstractVector}) = setindex!(A, x, 1:size(A, 1), j)
+function setindex!(A::SparseMatrixCSC, x, ::Colon)
+    if x == 0
+        fill!(view(A.nzval, 1:A.colptr[end]-1), 0)
+    else
+        setindex!(A, x, 1:length(A))
+    end
+end
+function setindex!(A::SparseMatrixCSC, x, ::Colon, ::Colon)
+    if x == 0
+        setindex!(A, x, :)
+    else
+        setindex!(A, x, 1:size(A, 1), 1:size(A,2))
+    end
+end
+function setindex!(A::SparseMatrixCSC, x, ::Colon, j::Union{Integer, AbstractVector})
+    if x == 0
+        for col in j
+            A.nzval[nzrange(A, col)] = 0
+        end
+    else
+        setindex!(A, x, 1:size(A, 1), j)
+    end
+end
 setindex!(A::SparseMatrixCSC, x, i::Union{Integer, AbstractVector}, ::Colon) = setindex!(A, x, i, 1:size(A, 2))
 
 function setindex!(A::SparseMatrixCSC{Tv}, x::Number,
