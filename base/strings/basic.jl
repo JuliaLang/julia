@@ -595,7 +595,8 @@ end
 """
     first(str::AbstractString, nchar::Integer)
 
-Get a string consisting of at most the first `nchar` characters of `str`.
+Get a string consisting of the first `nchar` characters of `str` unless `str`
+is shorter than `nchar` characters, in which case a string equal to `str` is returned.
 
 ```jldoctest
 julia> first("∀ϵ≠0: ϵ²>0", 0)
@@ -622,7 +623,8 @@ end
 """
     last(str::AbstractString, nchar::Integer)
 
-Get a string consisting of at most the last `nchar` characters of `str`.
+Get a string consisting of the last `nchar` characters of `str` unless `str`
+is shorter than `nchar` characters, in which case a string equal to `str` is returned.
 
 ```jldoctest
 julia> last("∀ϵ≠0: ϵ²>0", 0)
