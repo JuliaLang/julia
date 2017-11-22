@@ -136,9 +136,6 @@ Base.transpose
 Base.transpose!
 Base.adjoint
 Base.adjoint!
-Base.LinAlg.eigs(::Any)
-Base.LinAlg.eigs(::Any, ::Any)
-Base.LinAlg.svds
 Base.LinAlg.peakflops
 Base.LinAlg.stride1
 ```

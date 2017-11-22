@@ -1,5 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
+"""
+Arnoldi and Lanczos iteration for computing eigenvalues
+"""
+module IterativeEigenSolvers
+
+using Base.LinAlg: BlasFloat, BlasInt, SVD, checksquare
+
+export eigs, svds
+
+include("arpack.jl")
+
 using .ARPACK
 
 ## eigs
@@ -308,14 +321,14 @@ function SVDAugmented(A::AbstractMatrix{T}) where T
     SVDAugmented{Tnew,typeof(Anew)}(Anew)
 end
 
-function A_mul_B!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
+function Base.A_mul_B!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
     m, mn = size(A.X, 1), length(x)
     A_mul_B!( view(y, 1:m), A.X, view(x, m + 1:mn)) # left singular vector
     Ac_mul_B!(view(y, m + 1:mn), A.X, view(x, 1:m)) # right singular vector
     return y
 end
-size(A::SVDAugmented)  = ((+)(size(A.X)...), (+)(size(A.X)...))
-ishermitian(A::SVDAugmented) = true
+Base.size(A::SVDAugmented)  = ((+)(size(A.X)...), (+)(size(A.X)...))
+Base.ishermitian(A::SVDAugmented) = true
 
 struct AtA_or_AAt{T,S} <: AbstractArray{T, 2}
     A::S
@@ -328,7 +341,7 @@ function AtA_or_AAt(A::AbstractMatrix{T}) where T
     AtA_or_AAt{Tnew,typeof(Anew)}(Anew, Vector{Tnew}(uninitialized, max(size(A)...)))
 end
 
-function A_mul_B!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
+function Base.A_mul_B!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
     if size(A.A, 1) >= size(A.A, 2)
         A_mul_B!(A.buffer, A.A, x)
         return Ac_mul_B!(y, A.A, A.buffer)
@@ -337,8 +350,8 @@ function A_mul_B!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) wh
         return A_mul_B!(y, A.A, A.buffer)
     end
 end
-size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val(2))
-ishermitian(s::AtA_or_AAt) = true
+Base.size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val(2))
+Base.ishermitian(s::AtA_or_AAt) = true
 
 
 svds(A::AbstractMatrix{<:BlasFloat}; kwargs...) = _svds(A; kwargs...)
@@ -433,3 +446,5 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
                     ex[2], ex[3], ex[4], ex[5])
     end
 end
+
+end # module

@@ -490,12 +490,12 @@ Base.require(:CRC32c)
 Base.require(:Dates)
 Base.require(:DelimitedFiles)
 Base.require(:FileWatching)
+Base.require(:IterativeEigenSolvers)
 Base.require(:Mmap)
 Base.require(:Profile)
 Base.require(:SharedArrays)
 Base.require(:SuiteSparse)
 Base.require(:Test)
-
 
 empty!(LOAD_PATH)
 

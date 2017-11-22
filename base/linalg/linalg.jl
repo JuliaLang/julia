@@ -83,7 +83,6 @@ export
     eigfact!,
     eigmax,
     eigmin,
-    eigs,
     eigvals,
     eigvals!,
     eigvecs,
@@ -131,7 +130,6 @@ export
     svd,
     svdfact!,
     svdfact,
-    svds,
     svdvals!,
     svdvals,
     sylvester,
@@ -276,9 +274,6 @@ include("bitarray.jl")
 include("ldlt.jl")
 include("schur.jl")
 
-
-include("arpack.jl")
-include("arnoldi.jl")
 
 function __init__()
     try
