@@ -236,7 +236,7 @@ function install(
     # returns path to version & if it's newly installed
     version_path = find_installed(uuid, hash)
     ispath(version_path) && return version_path, false
-    http_download_successful = true
+    http_download_successful = false
     if !USE_LIBGIT2_FOR_ALL_DOWNLOADS && version != nothing
         for url in urls
             archive_url = get_archive_url_for_version(url, version)
