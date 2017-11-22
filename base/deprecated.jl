@@ -2224,12 +2224,11 @@ import .LinAlg: A_mul_B!, A_mul_Bt!, A_mul_Bc!, At_mul_B!, Ac_mul_B!,
 @deprecate A_rdiv_Bc!(A, B) A_rdiv_Bc!1(A, B)
 
 # linalg/diagonal.jl
-@deprecate A_mul_B!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) A_mul_B!1(A, D)
-@deprecate A_mul_B!(A::LinAlg.UnitLowerTriangular, D::Diagonal) A_mul_B!1(A,D)
-@deprecate A_mul_B!(A::LinAlg.UnitUpperTriangular, D::Diagonal) A_mul_B!1(A,D)
 
-@deprecate A_mul_B!(D::Diagonal, B::LinAlg.UnitLowerTriangular) A_mul_B!2(D,B)
-@deprecate A_mul_B!(D::Diagonal, B::LinAlg.UnitUpperTriangular) A_mul_B!2(D,B)
+function A_mul_B!(A::Diagonal,B::Diagonal)
+    depwarn("`A_mul_B!(A::Diagonal,B::Diagonal)` should be replaced with `A_mul_B!1(A, B)` or `A_mul_B!2(A, B)`.", :A_mul_B!)
+    throw(MethodError(A_mul_B!, Tuple{Diagonal,Diagonal}))
+end
 
 @deprecate A_mul_B!(A::Diagonal,B::AbstractMatrix)  A_mul_B!2(A,B)
 @deprecate At_mul_B!(A::Diagonal,B::AbstractMatrix) At_mul_B!2(A,B)
@@ -2288,6 +2287,7 @@ import .LinAlg: A_mul_B!, A_mul_Bt!, A_mul_Bc!, At_mul_B!, Ac_mul_B!,
 @deprecate A_mul_Bc!(A::StridedMatrix,Q::LinAlg.QRPackedQ) A_mul_Bc!1(A, B)
 
 @deprecate A_ldiv_B!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where {T<:LinAlg.BlasFloat}  A_ldiv_B!(A,B, rcond)
+A_mul_B!(A::Base.LinAlg.QRPackedQ, D::Diagonal) = throw(MethodError(A_mul_B!, Tuple{Diagonal,Diagonal}))
 
 # linalg/special.jl
 @deprecate A_mul_Bc!(A::LinAlg.AbstractTriangular, B::Union{LinAlg.QRCompactWYQ,LinAlg.QRPackedQ}) A_mul_Bc!1(A, B)
