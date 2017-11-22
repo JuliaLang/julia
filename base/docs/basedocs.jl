@@ -1298,6 +1298,42 @@ julia> B = Array{Float64}(2) # N determined by the input
 Array{T,N}(dims)
 
 """
+    Uninitialized
+
+Singleton type used in array initialization, indicating the array-constructor-caller
+would like an uninitialized array. See also [`uninitialized`](@ref),
+an alias for `Uninitialized()`.
+
+# Examples
+```julia-repl
+julia> Array{Float64,1}(Uninitialized(), 3)
+3-element Array{Float64,1}:
+ 2.2752528595e-314
+ 2.202942107e-314
+ 2.275252907e-314
+```
+"""
+Uninitialized
+
+"""
+    uninitialized
+
+Alias for `Uninitialized()`, which constructs an instance of the singleton type
+[`Uninitialized`](@ref), used in array initialization to indicate the
+array-constructor-caller would like an uninitialized array.
+
+# Examples
+```julia-repl
+julia> Array{Float64,1}(uninitialized, 3)
+3-element Array{Float64,1}:
+ 2.2752528595e-314
+ 2.202942107e-314
+ 2.275252907e-314
+```
+"""
+uninitialized
+
+"""
     +(x, y...)
 
 Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.

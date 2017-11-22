@@ -8,6 +8,8 @@ Base.AbstractVector
 Base.AbstractMatrix
 Core.Array
 Core.Array(::Any)
+Core.Uninitialized
+Core.uninitialized
 Base.Vector
 Base.Vector(::Any)
 Base.Matrix

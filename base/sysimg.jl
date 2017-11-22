@@ -130,17 +130,37 @@ include("abstractarray.jl")
 include("subarray.jl")
 include("reinterpretarray.jl")
 
-# Array convenience converting constructors
+
+# ## dims-type-converting Array constructors for convenience
+# type and dimensionality specified, accepting dims as series of Integers
+Vector{T}(::Uninitialized, m::Integer) where {T} = Vector{T}(uninitialized, Int(m))
+Matrix{T}(::Uninitialized, m::Integer, n::Integer) where {T} = Matrix{T}(uninitialized, Int(m), Int(n))
+# type but not dimensionality specified, accepting dims as series of Integers
+Array{T}(::Uninitialized, m::Integer) where {T} = Array{T,1}(uninitialized, Int(m))
+Array{T}(::Uninitialized, m::Integer, n::Integer) where {T} = Array{T,2}(uninitialized, Int(m), Int(n))
+Array{T}(::Uninitialized, m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(uninitialized, Int(m), Int(n), Int(o))
+Array{T}(::Uninitialized, d::Integer...) where {T} = Array{T}(uninitialized, convert(Tuple{Vararg{Int}}, d))
+# dimensionality but not type specified, accepting dims as series of Integers
+Vector(::Uninitialized, m::Integer) = Vector{Any}(uninitialized, Int(m))
+Matrix(::Uninitialized, m::Integer, n::Integer) = Matrix{Any}(uninitialized, Int(m), Int(n))
+# empty vector constructor
+Vector() = Vector{Any}(uninitialized, 0)
+
+## preexisting dims-type-converting Array constructors for convenience, i.e. without uninitialized, to deprecate
+# type and dimensionality specified, accepting dims as series of Integers
+Vector{T}(m::Integer) where {T} = Vector{T}(Int(m))
+Matrix{T}(m::Integer, n::Integer) where {T} = Matrix{T}(Int(m), Int(n))
+# type but not dimensionality specified, accepting dims as series of Integers
 Array{T}(m::Integer) where {T} = Array{T,1}(Int(m))
 Array{T}(m::Integer, n::Integer) where {T} = Array{T,2}(Int(m), Int(n))
 Array{T}(m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(Int(m), Int(n), Int(o))
 Array{T}(d::Integer...) where {T} = Array{T}(convert(Tuple{Vararg{Int}}, d))
-
-Vector() = Array{Any,1}(0)
-Vector{T}(m::Integer) where {T} = Array{T,1}(Int(m))
-Vector(m::Integer) = Array{Any,1}(Int(m))
-Matrix{T}(m::Integer, n::Integer) where {T} = Matrix{T}(Int(m), Int(n))
+# dimensionality but not type specified, accepting dims as series of Integers
+Vector(m::Integer) = Vector{Any}(Int(m))
 Matrix(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
+# empty vector constructor
+Vector() = Vector{Any}(0)
+
 
 include("associative.jl")
 
