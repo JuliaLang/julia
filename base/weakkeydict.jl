@@ -21,7 +21,10 @@ mutable struct WeakKeyDict{K,V} <: Associative{K,V}
         t = new(Dict{Any,V}(), Threads.RecursiveSpinLock(), identity)
         t.finalizer = function (k)
             # when a weak key is finalized, remove from dictionary if it is still there
-            islocked(t) && return finalizer(t.finalizer, k)
+            if islocked(t)
+                finalizer(t.finalizer, k)
+                return nothing
+            end
             delete!(t, k)
         end
         return t

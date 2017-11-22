@@ -8,8 +8,8 @@
     finalizer(f, x)
 
 Register a function `f(x)` to be called when there are no program-accessible references to
-`x`. The type of `x` must be a `mutable struct`, otherwise the behavior of this function is
-unpredictable.
+`x`, and return `x`. The type of `x` must be a `mutable struct`, otherwise the behavior of
+this function is unpredictable.
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
     if isimmutable(o)
@@ -17,6 +17,7 @@ function finalizer(@nospecialize(f), @nospecialize(o))
     end
     ccall(:jl_gc_add_finalizer_th, Void, (Ptr{Void}, Any, Any),
           Core.getptls(), o, f)
+    return o
 end
 
 function finalizer(f::Ptr{Void}, o::T) where T
@@ -26,6 +27,7 @@ function finalizer(f::Ptr{Void}, o::T) where T
     end
     ccall(:jl_gc_add_ptr_finalizer, Void, (Ptr{Void}, Any, Ptr{Void}),
           Core.getptls(), o, f)
+    return o
 end
 
 """
