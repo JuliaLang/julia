@@ -419,6 +419,9 @@ Deprecated or removed
   * Using Bool values directly as indices is now deprecated and will be an error in the future. Convert
     them to `Int` before indexing if you intend to access index `1` for `true` and `0` for `false`.
 
+  * `whos` has been renamed `varinfo`, and now returns a markdown table instead of printing
+    output ([#12131]).
+
   * `writecsv(io, a; opts...)` has been deprecated in favor of
     `writedlm(io, a, ','; opts...)` ([#23529]).
 

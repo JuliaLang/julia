@@ -96,21 +96,25 @@ function padded_nonzero_print(value,str)
     end
 end
 
+function format_bytes(bytes)
+    bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
+    if mb == 1
+        @sprintf("%d %s%s", bytes, _mem_units[mb], bytes==1 ? "" : "s")
+    else
+        @sprintf("%.3f %s", bytes, _mem_units[mb])
+    end
+end
+
 function time_print(elapsedtime, bytes, gctime, allocs)
     @printf("%10.6f seconds", elapsedtime/1e9)
     if bytes != 0 || allocs != 0
-        bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
         if ma == 1
             @printf(" (%d%s allocation%s: ", allocs, _cnt_units[ma], allocs==1 ? "" : "s")
         else
             @printf(" (%.2f%s allocations: ", allocs, _cnt_units[ma])
         end
-        if mb == 1
-            @printf("%d %s%s", bytes, _mem_units[mb], bytes==1 ? "" : "s")
-        else
-            @printf("%.3f %s", bytes, _mem_units[mb])
-        end
+        print(format_bytes(bytes))
         if gctime > 0
             @printf(", %.2f%% gc time", 100*gctime/elapsedtime)
         end

@@ -327,13 +327,16 @@ let R = Ref{Any}(nothing), depth = 10^6
     @test summarysize(R) == (depth + 4) * sizeof(Ptr)
 end
 
-module _test_whos_
+module _test_varinfo_
 export x
 x = 1.0
 end
-@test sprint(whos, Main, r"^$") == ""
-let v = sprint(whos, _test_whos_)
-    @test contains(v, "x      8 bytes  Float64")
+@test repr(varinfo(Main, r"^$")) == """
+| name | size | summary |
+|:---- | ----:|:------- |
+"""
+let v = repr(varinfo(_test_varinfo_))
+    @test contains(v, "| x              |   8 bytes | Float64 |")
 end
 
 # issue #13021
@@ -351,9 +354,9 @@ module Tmp14173
     export A
     A = randn(2000, 2000)
 end
-whos(IOBuffer(), Tmp14173) # warm up
+varinfo(Tmp14173) # warm up
 const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
-@test @allocated(whos(IOBuffer(), Tmp14173)) < (MEMDEBUG ? 30000 : 10000)
+@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 60000 : 20000)
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 

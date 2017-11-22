@@ -119,7 +119,7 @@ end
 There are three important standard modules: Main, Core, and Base.
 
 Main is the top-level module, and Julia starts with Main set as the current module.  Variables
-defined at the prompt go in Main, and `whos()` lists variables in Main.
+defined at the prompt go in Main, and `varinfo()` lists variables in Main.
 
 Core contains all identifiers considered "built in" to the language, i.e. part of the core language
 and not libraries. Every module implicitly specifies `using Core`, since you can't do anything

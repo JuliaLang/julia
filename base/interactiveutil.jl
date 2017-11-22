@@ -731,54 +731,24 @@ end
 
 
 """
-    whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
+    varinfo(m::Module=Main, pattern::Regex=r"")
 
-Print information about exported global variables in a module, optionally restricted to those matching `pattern`.
+Return a markdown table giving information about exported global variables in a module, optionally restricted
+to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 """
-function whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
-    maxline = displaysize(io)[2]
-    line = zeros(UInt8, maxline)
-    head = PipeBuffer(maxline + 1)
-    for v in sort!(names(m))
-        s = string(v)
-        if isdefined(m, v) && ismatch(pattern, s)
-            value = getfield(m, v)
-            @printf head "%30s " s
-            try
-                if value ∈ (Base, Main, Core)
-                    print(head, "              ")
-                else
-                    bytes = summarysize(value)
-                    if bytes < 10_000
-                        @printf(head, "%6d bytes  ", bytes)
-                    else
-                        @printf(head, "%6d KB     ", bytes ÷ (1024))
-                    end
-                end
-                print(head, summary(value))
-            catch e
-                print(head, "#=ERROR: unable to show value=#")
-            end
-            newline = search(head, UInt8('\n')) - 1
-            if newline < 0
-                newline = nb_available(head)
-            end
-            if newline > maxline
-                newline = maxline - 1 # make space for ...
-            end
-            line = resize!(line, newline)
-            line = read!(head, line)
+function varinfo(m::Module=Main, pattern::Regex=r"")
+    rows =
+        Any[ let value = getfield(m, v)
+                 Any[string(v),
+                     (value ∈ (Base, Main, Core) ? "" : format_bytes(summarysize(value))),
+                     summary(value)]
+             end
+             for v in sort!(names(m)) if isdefined(m, v) && ismatch(pattern, string(v)) ]
 
-            write(io, line)
-            if nb_available(head) > 0 # more to read? replace with ...
-                print(io, '\u2026') # hdots
-            end
-            println(io)
-            seekend(head) # skip the rest of the text
-        end
-    end
+    unshift!(rows, Any["name", "size", "summary"])
+
+    return Markdown.MD(Any[Markdown.Table(rows, Symbol[:l, :r, :l])])
 end
-whos(m::Module, pat::Regex=r"") = whos(STDOUT, m, pat)
-whos(pat::Regex) = whos(STDOUT, Main, pat)
+varinfo(pat::Regex) = varinfo(Main, pat)
