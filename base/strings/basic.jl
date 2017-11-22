@@ -614,7 +614,11 @@ julia> first("1234", 10)
 """
 function first(str::AbstractString, nchar::Integer)
     s = start(str)
-    (nchar == 0 || isempty(str)) && return str[s:(s-1)]
+    nchar == 0 && return str[s:(s-1)]
+    if isempty(str)
+        nchar > 0 && return str[s:(s-1)]
+        throw(ArgumentError("nchar must be greater or equal than 0"))
+    end
     nchar == 1 && return str[s:s]
     idx = min(endof(str), nextind(str, s, nchar-1))
     str[s:idx]
@@ -642,7 +646,11 @@ julia> last("1234", 10)
 """
 function last(str::AbstractString, nchar::Integer)
     e = endof(str)
-    (nchar == 0 || isempty(str)) && return str[e:(e-1)]
+    nchar == 0  && return str[e:(e-1)]
+    if isempty(str)
+        nchar > 0 && return str[e:(e-1)]
+        throw(ArgumentError("nchar must be greater or equal than 0"))
+    end
     nchar == 1 && return str[e:e]
     idx = max(start(str), prevind(str, e, nchar-1))
     str[idx:e]
