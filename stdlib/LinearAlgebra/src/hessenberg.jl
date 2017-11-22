@@ -73,7 +73,7 @@ function getindex(A::HessenbergQ, i::Integer, j::Integer)
     x[i] = 1
     y = zeros(eltype(A), size(A, 2))
     y[j] = 1
-    return dot(x, mul!(A, y))
+    return dot(x, mul2!(A, y))
 end
 
 ## reconstruct the original matrix
@@ -84,31 +84,30 @@ AbstractArray(F::Hessenberg) = AbstractMatrix(F)
 Matrix(F::Hessenberg) = Array(AbstractArray(F))
 Array(F::Hessenberg) = Matrix(F)
 
-mul!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
+mul2!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.ormhr!('L', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-mul!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat} =
+mul1!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat} =
     LAPACK.ormhr!('R', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-mul!(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
+mul2!(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormhr!('L', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
-mul!(X::StridedMatrix{T}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T<:BlasFloat} =
+mul1!(X::StridedMatrix{T}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormhr!('R', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
-
 
 function (*)(Q::HessenbergQ{T}, X::StridedVecOrMat{S}) where {T,S}
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return mul!(Q, copy_oftype(X, TT))
+    return mul2!(Q, copy_oftype(X, TT))
 end
 function (*)(X::StridedVecOrMat{S}, Q::HessenbergQ{T}) where {T,S}
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return mul!(copy_oftype(X, TT), Q)
+    return mul1!(copy_oftype(X, TT), Q)
 end
 function *(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::StridedVecOrMat{S}) where {T,S}
     Q = adjQ.parent
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return mul!(adjoint(Q), copy_oftype(X, TT))
+    return mul2!(adjoint(Q), copy_oftype(X, TT))
 end
 function *(X::StridedVecOrMat{S}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T,S}
     Q = adjQ.parent
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return mul!(copy_oftype(X, TT), adjoint(Q))
+    return mul1!(copy_oftype(X, TT), adjoint(Q))
 end

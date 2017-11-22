@@ -9,8 +9,8 @@ Get the name of a `Module` as a `Symbol`.
 
 # Examples
 ```jldoctest
-julia> module_name(Base.LinAlg)
-:LinAlg
+julia> module_name(Base)
+:Base
 ```
 """
 module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
@@ -25,8 +25,8 @@ Get a module's enclosing `Module`. `Main` is its own parent.
 julia> parentmodule(Main)
 Main
 
-julia> parentmodule(Base.LinAlg.BLAS)
-Base.LinAlg
+julia> parentmodule(Base.Sys)
+Base
 ```
 """
 parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)

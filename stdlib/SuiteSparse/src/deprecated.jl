@@ -30,12 +30,12 @@ end
         LinearAlgebra.ldiv!(X, transpose(lu), B)
     LinearAlgebra.Ac_ldiv_B!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
         LinearAlgebra.ldiv!(X, adjoint(lu), B)
-    LinearAlgebra.A_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = LinearAlgebra.ldiv!(lu, B)
-    LinearAlgebra.At_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = LinearAlgebra.ldiv!(transpose(lu), B)
-    LinearAlgebra.Ac_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = LinearAlgebra.ldiv!(adjoint(lu), B)
-    LinearAlgebra.A_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = LinearAlgebra.ldiv!(lu, B)
-    LinearAlgebra.At_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = LinearAlgebra.ldiv!(transpose(lu), B)
-    LinearAlgebra.Ac_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = LinearAlgebra.ldiv!(adjoint(lu), B)
+    LinearAlgebra.A_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = LinearAlgebra.ldiv!(B, lu, copy(B))
+    LinearAlgebra.At_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = LinearAlgebra.ldiv!(B, transpose(lu), copy(B))
+    LinearAlgebra.Ac_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = LinearAlgebra.ldiv!(B, adjoint(lu), copy(B))
+    LinearAlgebra.A_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = LinearAlgebra.ldiv!(B, lu, copy(B))
+    LinearAlgebra.At_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = LinearAlgebra.ldiv!(B, transpose(lu), copy(B))
+    LinearAlgebra.Ac_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = LinearAlgebra.ldiv!(B, adjoint(lu), copy(B))
 end
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from src/spqr.jl, to deprecate
