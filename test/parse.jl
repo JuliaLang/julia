@@ -229,3 +229,20 @@ end
 @test tryparse(Float32, "1.23") === Nullable(1.23f0)
 @test tryparse(Float16, "1.23") === Nullable(Float16(1.23))
 
+# parsing complex numbers (#22250)
+@testset "complex parsing" begin
+    for r in (1,0,-1), i in (1,0,-1), sign in ('-','+'), Im in ("i","j","im")
+        for s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")
+            n = Complex(r, sign == '+' ? i : -i)
+            s = string(s1, r, s2, sign, s3, i, Im, s4)
+            @test n === parse(Complex{Int}, s)
+            for T in (Float64, BigFloat)
+                nT = parse(Complex{T}, s)
+                @test nT isa Complex{T}
+                @test nT == n
+                @test n == parse(Complex{T}, string(s1, r, ".0", s2, sign, s3, i, ".0", Im, s4))
+                @test n*parse(T,"1e-3") == parse(Complex{T}, string(s1, r, "e-3", s2, sign, s3, i, "e-3", Im, s4))
+            end
+        end
+    end
+end

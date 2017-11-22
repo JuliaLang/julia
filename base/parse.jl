@@ -215,7 +215,6 @@ function parse(::Type{T}, s::AbstractString) where T<:Integer
     get(tryparse_internal(T, s, start(s), endof(s), 0, true)) # Zero means, "figure it out"
 end
 
-
 ## string to float functions ##
 
 tryparse(::Type{Float64}, s::String) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
@@ -228,11 +227,56 @@ tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = trypa
 
 tryparse(::Type{Float16}, s::AbstractString) = convert(Nullable{Float16}, tryparse(Float32, s))
 
-function parse(::Type{T}, s::AbstractString) where T<:AbstractFloat
+
+## string to complex functions ##
+
+function tryparse(::Type{Complex{T}}, s::Union{String,SubString{String}}) where {T<:Real}
+    # skip initial whitespace
+    i = start(s)
+    e = endof(s)
+    while i ≤ e && isspace(s[i])
+        i = nextind(s, i)
+    end
+    i > e && return Nullable{Complex{T}}()
+
+    # find index of ± separating real/imaginary parts (if any)
+    i₊ = search(s, ('+','-'), i)
+    if i₊ == i # leading ± sign
+        i₊ = search(s, ('+','-'), i₊+1)
+    end
+    if i₊ != 0 && s[i₊-1] in ('e','E') # exponent sign
+        i₊ = search(s, ('+','-'), i₊+1)
+    end
+    if i₊ == 0 # purely real value
+        return Nullable{Complex{T}}(tryparse(T, s))
+    end
+
+    # find trailing im/i/j
+    iᵢ = rsearch(s, ('m','i','j'), e)
+    iᵢ < i₊ && return Nullable{Complex{T}}()
+    if s[iᵢ] == 'm' # im
+        iᵢ -= 1
+        s[iᵢ] == 'i' || return Nullable{Complex{T}}()
+    end
+
+    # parse real part
+    re = tryparse(T, SubString(s, i, i₊-1))
+    isnull(re) && return Nullable{Complex{T}}()
+
+    # parse imaginary part
+    im = tryparse(T, SubString(s, i₊+1, iᵢ-1))
+    isnull(im) && return Nullable{Complex{T}}()
+
+    return Nullable{Complex{T}}(Complex{T}(get(re), s[i₊]=='-' ? -get(im) : get(im)))
+end
+
+# the ±1 indexing above for ascii chars is specific to String, so convert:
+tryparse(T::Type{<:Complex}, s::AbstractString) = tryparse(T, String(s))
+
+function parse(::Type{T}, s::AbstractString) where T<:Union{AbstractFloat,Complex}
     result = tryparse(T, s)
     if isnull(result)
         throw(ArgumentError("cannot parse $(repr(s)) as $T"))
     end
     return unsafe_get(result)
 end
-
