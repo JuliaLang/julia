@@ -246,9 +246,9 @@ end
 
 function rand(r::MersenneTwister, ::Type{UInt128})
     reserve(r, 3)
-    xor(rand_ui52_raw_inbounds(r) % UInt128 << 96,
-        rand_ui52_raw_inbounds(r) % UInt128 << 48,
-        rand_ui52_raw_inbounds(r))
+    bitxor(rand_ui52_raw_inbounds(r) % UInt128 << 96,
+           rand_ui52_raw_inbounds(r) % UInt128 << 48,
+           rand_ui52_raw_inbounds(r))
 end
 
 rand(r::MersenneTwister, ::Type{Int64})  = reinterpret(Int64,  rand(r, UInt64))

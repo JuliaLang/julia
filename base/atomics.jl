@@ -249,7 +249,7 @@ function atomic_or! end
 
 Atomically bitwise-xor (exclusive-or) `x` with `val`
 
-Performs `x[] \$= val` atomically. Returns the **old** value.
+Performs `x[] = bitxor(x[], val)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw xor` instruction.
 

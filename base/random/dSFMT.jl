@@ -165,10 +165,10 @@ function dsfmt_jump_next_state!(mts::Vector{UInt64})
     t1 = mts[a+1]
     L0 = mts[u]
     L1 = mts[u+1]
-    mts[u]   = xor(t0 << SL1, L1 >> 32, L1 << 32, mts[b])
-    mts[u+1] = xor(t1 << SL1, L0 >> 32, L0 << 32, mts[b+1])
-    mts[a]   = xor(mts[u]   >> SR, bitand(mts[u], MSK1), t0)
-    mts[a+1] = xor(mts[u+1] >> SR, bitand(mts[u+1], MSK2), t1)
+    mts[u]   = bitxor(t0 << SL1, L1 >> 32, L1 << 32, mts[b])
+    mts[u+1] = bitxor(t1 << SL1, L0 >> 32, L0 << 32, mts[b+1])
+    mts[a]   = bitxor(mts[u]   >> SR, bitand(mts[u], MSK1), t0)
+    mts[a+1] = bitxor(mts[u+1] >> SR, bitand(mts[u+1], MSK2), t1)
 
     mts[end] = (mts[end] + 2) % (N*2)
     return mts

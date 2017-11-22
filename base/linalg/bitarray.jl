@@ -205,12 +205,12 @@ end
 # http://www.hackersdelight.org/hdcodetxt/transpose8.c.txt
 function transpose8x8(x::UInt64)
     y = x
-    t = bitand(xor(y, y >>> 7), 0x00aa00aa00aa00aa)
-    y = xor(y, t, t << 7)
-    t = bitand(xor(y, y >>> 14), 0x0000cccc0000cccc)
-    y = xor(y, t, t << 14)
-    t = bitand(xor(y, y >>> 28), 0x00000000f0f0f0f0)
-    return xor(y, t, t << 28)
+    t = bitand(bitxor(y, y >>> 7), 0x00aa00aa00aa00aa)
+    y = bitxor(y, t, t << 7)
+    t = bitand(bitxor(y, y >>> 14), 0x0000cccc0000cccc)
+    y = bitxor(y, t, t << 14)
+    t = bitand(bitxor(y, y >>> 28), 0x00000000f0f0f0f0)
+    return bitxor(y, t, t << 28)
 end
 
 function form_8x8_chunk(Bc::Vector{UInt64}, i1::Int, i2::Int, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::UInt64)

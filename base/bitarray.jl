@@ -1750,10 +1750,10 @@ map!(::typeof(identity), dest::BitArray, A::BitArray) = copy!(dest, A)
 
 for (T, f) in ((:(Union{typeof(&), typeof(*), typeof(min)}), :(&)),
                (:(Union{typeof(|), typeof(max)}),            :(|)),
-               (:(Union{typeof(xor), typeof(!=)}),           :xor),
+               (:(Union{typeof(xor), typeof(!=)}),           :bitxor),
                (:(Union{typeof(>=), typeof(^)}),             :((p, q) -> bitor(p, bitnot(q)))),
                (:(typeof(<=)),                               :((p, q) -> bitor(bitnot(p), q))),
-               (:(typeof(==)),                               :((p, q) -> bitnot(xor(p, q)))),
+               (:(typeof(==)),                               :((p, q) -> bitnot(bitxor(p, q)))),
                (:(typeof(<)),                                :((p, q) -> bitand(bitnot(p), q))),
                (:(typeof(>)),                                :((p, q) -> bitand(p, bitnot(q)))))
     @eval map(::$T, A::BitArray, B::BitArray) = bit_map!($f, similar(A), A, B)
