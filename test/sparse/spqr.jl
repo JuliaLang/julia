@@ -41,7 +41,7 @@ nn = 100
         @test R0[1:n, :] ≈ F[:R]
         @test norm(R0[n + 1:end, :], 1) < 1e-12
 
-        offsizeA = Matrix{Float64}(m+1, m+1)
+        offsizeA = Matrix{Float64}(I, m+1, m+1)
         @test_throws DimensionMismatch A_mul_B!(Q, offsizeA)
         @test_throws DimensionMismatch Ac_mul_B!(Q, offsizeA)
         @test_throws DimensionMismatch A_mul_B!(offsizeA, Q)
