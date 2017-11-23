@@ -878,3 +878,70 @@ end
         @test Float32(abs(tanh(-x) - bym))/eps(abs(Float32(bym))) <= 1
     end
 end
+
+@testset "asinh" begin
+    for T in (Float32, Float64)
+        @test asinh(zero(T)) === zero(T)
+        @test asinh(-zero(T)) === -zero(T)
+        @test asinh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test asinh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test isnan_type(T, asinh(T(NaN)))
+    end
+    for x in (1.0, 1.5, prevfloat(2.0), nextfloat(2.0),
+              22.0, 710.0, nextfloat(2.0^28), 2.0^29)
+        by = asinh(big(x))
+        @test Float64((asinh(x) - by))/eps(abs(Float64(by))) <= 1
+        bym = asinh(big(-x))
+        @test Float64(abs(asinh(-x) - bym))/eps(abs(Float64(bym))) <= 1
+    end
+    for x in (1.0f0, 1.5f0, prevfloat(2.0f0), nextfloat(2.0f0),
+              22f0, 710f0, nextfloat(2.0f0^28), 2.0f0^29)
+        by = asinh(big(x))
+        @test Float32((asinh(x) - by))/eps(abs(Float32(by))) <= 1
+        bym = asinh(big(-x))
+        @test Float32(abs(asinh(-x) - bym))/eps(abs(Float32(bym))) <= 1
+    end
+end
+
+@testset "acosh" begin
+    for T in (Float32, Float64)
+        @test_throws DomainError acosh(T(0.1))
+        @test acosh(one(T)) === zero(T)
+        @test isnan_type(T, acosh(T(NaN)))
+    end
+    for x in (nextfloat(1.0), 1.5, prevfloat(2.0), 2.0, nextfloat(2.0),
+        9.0, 500.0, prevfloat(2.0^28), 2.0^28, nextfloat(2.0^28))
+        by = acosh(big(x))
+        @test Float64((acosh(x) - by))/eps(abs(Float64(by))) <= 1
+    end
+    for x in (nextfloat(1.0f0), 1.5f0, prevfloat(2.0f0), 2.0f0, nextfloat(2.0f0),
+        9f0, 500f0, prevfloat(2.0f0^28), 2.0f0^28, nextfloat(2.0f0^28))
+        by = acosh(big(x))
+        @test Float32((acosh(x) - by))/eps(abs(Float32(by))) <= 1
+    end
+end
+
+@testset "atanh" begin
+for T in (Float32, Float64)
+        @test_throws DomainError atanh(T(1.1))
+        @test atanh(zero(T)) === zero(T)
+        @test atanh(-zero(T)) === -zero(T)
+        @test atanh(one(T)) === T(Inf)
+        @test atanh(-one(T)) === -T(Inf)
+        @test atanh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test atanh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test isnan_type(T, atanh(T(NaN)))
+    end
+    for x in (0.1, prevfloat(0.5), 0.5, nextfloat(0.5), 0.75)
+        by = atanh(big(x))
+        @test Float64((atanh(x) - by))/eps(abs(Float64(by))) <= 1
+        bym = atanh(big(-x))
+        @test Float64(abs(atanh(-x) - bym))/eps(abs(Float64(bym))) <= 1
+    end
+    for x in (0.1f0, prevfloat(0.5f0), 0.5f0, nextfloat(0.5f0), 0.75f0)
+        by = atanh(big(x))
+        @test Float32((atanh(x) - by))/eps(abs(Float32(by))) <= 1
+        bym = atanh(big(-x))
+        @test Float32(abs(atanh(-x) - bym))/eps(abs(Float32(bym))) <= 1
+    end
+end
