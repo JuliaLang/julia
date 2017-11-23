@@ -99,7 +99,9 @@ julia> F[:vectors]
 """
 function eigfact(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
-    eigfact!(copy_oftype(A, S), permute = permute, scale = scale)
+    AA = copy_oftype(A, S)
+    isdiag(AA) && return eigfact(Diagonal(AA), permute = permute, scale = scale)
+    return eigfact!(AA, permute = permute, scale = scale)
 end
 eigfact(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
