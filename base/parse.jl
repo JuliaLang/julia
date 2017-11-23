@@ -236,7 +236,7 @@ tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int, endpos::
 tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s))
 
 tryparse(::Type{Float16}, s::AbstractString) = convert(Nullable{Float16}, tryparse(Float32, s))
-tryparse_internal(::Type{Float16}, s::SubString{String}, startpos::Int, endpos::Int) =
+tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =
     convert(Nullable{Float16}, tryparse_internal(Float32, s, startpos, endpos))
 
 ## string to complex functions ##
