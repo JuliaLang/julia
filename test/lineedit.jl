@@ -766,3 +766,27 @@ end
     @test edit!(edit_undo!) == ""
     @test edit!(edit_undo!) == "" # nothing more to undo (this "beeps")
 end
+
+@testset "edit_indent_{left,right}" begin
+    local buf = IOBuffer()
+    write(buf, "1\n22\n333")
+    seek(buf, 0)
+    @test LineEdit.edit_indent(buf, -1) == false
+    @test transform!(buf->LineEdit.edit_indent(buf, -1), buf) == ("1\n22\n333", 0, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, +1), buf) == (" 1\n22\n333", 1, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, +2), buf) == ("   1\n22\n333", 3, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, -2), buf) == (" 1\n22\n333", 1, 0)
+    seek(buf, 0) # if the cursor is already on the left column, it stays there
+    @test transform!(buf->LineEdit.edit_indent(buf, -2), buf) == ("1\n22\n333", 0, 0)
+    seek(buf, 3) # between the two "2"
+    @test transform!(buf->LineEdit.edit_indent(buf, +3), buf) == ("1\n   22\n333", 6, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, -9), buf) == ("1\n22\n333", 3, 0)
+    seekend(buf) # position 8
+    @test transform!(buf->LineEdit.edit_indent(buf, +3), buf) == ("1\n22\n   333", 11, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, -1), buf) == ("1\n22\n  333", 10, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, -2), buf) == ("1\n22\n333", 8, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, -1), buf) == ("1\n22\n333", 8, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, +3), buf) == ("1\n22\n   333", 11, 0)
+    seek(buf, 5) # left column
+    @test transform!(buf->LineEdit.edit_indent(buf, -2), buf) == ("1\n22\n 333", 5, 0)
+end

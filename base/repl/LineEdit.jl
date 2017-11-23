@@ -896,6 +896,39 @@ function replace_line(s::PromptState, l, keep_undo=false)
     write(s.input_buffer, l)
 end
 
+
+edit_indent_left(s::MIState, n=1) = edit_indent(s, -n)
+edit_indent_right(s::MIState, n=1) = edit_indent(s, n)
+
+function edit_indent(s::MIState, num::Int)
+    push_undo(s)
+    if edit_indent(buffer(s), num)
+        refresh_line(s)
+        :edit_indent
+    else
+        pop_undo(s)
+        :ignore
+    end
+end
+
+# indent by abs(num) characters, on the right if num >= 0, on the left otherwise
+function edit_indent(buf::IOBuffer, num::Int)
+    b = beginofline(buf)
+    if num >= 0
+        edit_splice!(buf, b => b, ' '^num)
+    else
+        # count leading spaces on the line, which is an upper bound
+        # on the number of spaces characters that can be removed
+        leadingspaces = findnext(_notspace, buf.data, b+1)-1
+        leadingspaces == -1 && (leadingspaces = buf.size)
+        leadingspaces -= b
+        leadingspaces == 0 && return false # no space can be removed
+        edit_splice!(buf, b => b + min(leadingspaces, -num))
+    end
+    true
+end
+
+
 history_prev(::EmptyHistoryProvider) = ("", false)
 history_next(::EmptyHistoryProvider) = ("", false)
 history_first(::EmptyHistoryProvider) = ("", false)
@@ -1793,6 +1826,10 @@ AnyDict(
     "\e[A" => (s,o...)->edit_move_up(s),
     # Down Arrow
     "\e[B" => (s,o...)->edit_move_down(s),
+    # Meta-Right Arrow
+    "\e[1;3C" => (s,o...) -> edit_indent_right(s, 1),
+    # Meta-Left Arrow
+    "\e[1;3D" => (s,o...) -> edit_indent_left(s, 1),
     # Delete
     "\e[3~" => (s,o...)->edit_delete(s),
     # Bracketed Paste Mode
