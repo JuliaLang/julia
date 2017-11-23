@@ -121,7 +121,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     of the form `if cond; statement; end`, `cond && statement` and `!cond || statement`. Assignment
     statements in the latter two syntaxes must be explicitly wrapped in parentheses, e.g. `cond && (x = value)`.
   * In Julia, `<-`, `<<-` and `->` are not assignment operators.
-  * Julia's `->` creates an anonymous function, like Python.
+  * Julia's `->` creates an anonymous function.
   * Julia constructs vectors using brackets. Julia's `[1, 2, 3]` is the equivalent of R's `c(1, 2, 3)`.
   * Julia's [`*`](@ref) operator can perform matrix multiplication, unlike in R. If `A` and `B` are
     matrices, then `A * B` denotes a matrix multiplication in Julia, equivalent to R's `A %*% B`.
