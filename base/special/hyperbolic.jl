@@ -1,3 +1,8 @@
+# sinh, cosh, tanh, asinh, acosh, and atanh are heavily based on FDLIBM code:
+# e_sinh.c, e_sinhf, e_cosh.c, e_coshf, s_tanh.c, s_tanhf.c, s_asinh.c,
+# s_asinhf.c, e_acosh.c, e_coshf.c, e_atanh.c, and e_atanhf.c
+# that are made available under the following licence:
+
 # ====================================================
 # Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
 #

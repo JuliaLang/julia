@@ -73,6 +73,7 @@ The following components of Julia's standard library have separate licenses:
 - base/sparse/cholmod.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
 - base/special/exp.jl (see [FDLIBM](http://www.netlib.org/fdlibm/e_exp.c) [Freely distributable with preserved copyright notice])
 - base/special/rem_pio2.jl (see [FDLIBM](http://www.netlib.org/fdlibm/e_rem_pio2.c) [Freely distributable with preserved copyright notice])
+- base/special/hyperbolic.jl (see [FDLIBM]) [Freely distributable with preserved copyright notice])
 
 
 Julia's build process uses the following external tools:
