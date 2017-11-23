@@ -11,7 +11,8 @@ Parse a string as a number. For `Integer` types, a base can be specified
 (the default is 10). For floating-point types, the string is parsed as a decimal
 floating-point number.  `Complex` types are parsed from decimal strings
 of the form `"R±Iim"` as a `Complex(R,I)` of the requested type; `"i"` or `"j"` can also be
-used instead of `"im"`.  If the string does not contain a valid number, an error is raised.
+used instead of `"im"`, and `"R"` or `"Iim"` are also permitted.
+If the string does not contain a valid number, an error is raised.
 
 ```jldoctest
 julia> parse(Int, "1234")
@@ -25,6 +26,9 @@ julia> parse(Int, "afc", 16)
 
 julia> parse(Float64, "1.2e-3")
 0.0012
+
+julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
+0.32 + 4.5im
 ```
 """
 parse(T::Type, str, base=Int)
@@ -249,17 +253,26 @@ function tryparse(::Type{Complex{T}}, s::Union{String,SubString{String}}) where 
     if i₊ != 0 && s[i₊-1] in ('e','E') # exponent sign
         i₊ = search(s, ('+','-'), i₊+1)
     end
-    if i₊ == 0 # purely real value
-        return Nullable{Complex{T}}(tryparse(T, s))
-    end
 
     # find trailing im/i/j
     iᵢ = rsearch(s, ('m','i','j'), e)
-    iᵢ < i₊ && return Nullable{Complex{T}}()
-    if s[iᵢ] == 'm' # im
+    if iᵢ > 0 && s[iᵢ] == 'm' # im
         iᵢ -= 1
         s[iᵢ] == 'i' || return Nullable{Complex{T}}()
     end
+
+    if i₊ == 0 # purely real or imaginary value
+        if iᵢ > 0 # purely imaginary
+            x_ = tryparse(T, SubString(s, i, iᵢ-1))
+            isnull(x_) && return Nullable{Complex{T}}()
+            x = get(x_)
+            return Nullable{Complex{T}}(Complex{T}(zero(x),x))
+        else # purely real
+            return Nullable{Complex{T}}(tryparse(T, s))
+        end
+    end
+
+    iᵢ < i₊ && return Nullable{Complex{T}}() # no imaginary part
 
     # parse real part
     re = tryparse(T, SubString(s, i, i₊-1))

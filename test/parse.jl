@@ -236,6 +236,8 @@ end
             n = Complex(r, sign == '+' ? i : -i)
             s = string(s1, r, s2, sign, s3, i, Im, s4)
             @test n === parse(Complex{Int}, s)
+            @test Complex(r) === parse(Complex{Int}, string(s1, r, s2))
+            @test Complex(0,i) === parse(Complex{Int}, string(s3, i, Im, s4))
             for T in (Float64, BigFloat)
                 nT = parse(Complex{T}, s)
                 @test nT isa Complex{T}
@@ -246,4 +248,8 @@ end
         end
     end
     @test parse(Complex{Int}, SubString("xxxxxx1+2imxxxx", 7, 10)) === 1+2im
+    for T in (Int, Float64), bad in ("3 + 4*im", "3 + 4", "1+2ij", "1im-3im", "++4im")
+        @test_throws ArgumentError parse(Complex{T}, bad)
+    end
+    @test_throws ArgumentError parse(Complex{Int}, "3 + 4.2im")
 end
