@@ -636,19 +636,6 @@ function open(f::Function, cmds::AbstractCmd, args...)
     return ret
 end
 
-# TODO: deprecate this
-
-"""
-    readandwrite(command)
-
-Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the
-output stream and input stream of the process, and the process object itself.
-"""
-function readandwrite(cmds::AbstractCmd)
-    processes = open(cmds, "r+")
-    return (processes.out, processes.in, processes)
-end
-
 function read(cmd::AbstractCmd)
     procs = open(cmd, "r", DevNull)
     bytes = read(procs.out)

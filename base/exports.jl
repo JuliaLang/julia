@@ -1072,7 +1072,6 @@ export
     kill,
     process_exited,
     process_running,
-    readandwrite,
     run,
     setenv,
     spawn,

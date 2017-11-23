@@ -138,16 +138,16 @@ let pathA = readchomp(setenv(`$shcmd -c "pwd -P"`;dir="..")),
     end
 end
 
-let str = "", stdin, stdout, proc, str2, file
+let str = "", proc, str2, file
     for i = 1:1000
       str = "$str\n $(randstring(10))"
     end
 
     # Here we test that if we close a stream with pending writes, we don't lose the writes.
-    stdout, stdin, proc = readandwrite(`$catcmd -`)
-    write(stdin, str)
-    close(stdin)
-    str2 = read(stdout, String)
+    proc = open(`$catcmd -`, "r+")
+    write(proc, str)
+    close(proc.in)
+    str2 = read(proc, String)
     @test str2 == str
 
     # This test hangs if the end-of-run-walk-across-uv-streams calls shutdown on a stream that is shutting down.
