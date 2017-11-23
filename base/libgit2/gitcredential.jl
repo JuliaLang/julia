@@ -44,8 +44,8 @@ end
 
 function GitCredential(cred::UserPasswordCredentials, url::AbstractString)
     git_cred = parse(GitCredential, url)
-    git_cred.username = Nullable{String}(cred.user)
-    git_cred.password = Nullable{String}(cred.pass)
+    git_cred.username = Nullable{String}(deepcopy(cred.user))
+    git_cred.password = Nullable{String}(deepcopy(cred.pass))
     return git_cred
 end
 

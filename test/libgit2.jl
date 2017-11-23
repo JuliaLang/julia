@@ -2403,17 +2403,27 @@ mktempdir() do dir
                     payload = CredentialPayload(Nullable{AbstractCredentials}(),
                                                 Nullable{CachedCredentials}(), cfg,
                                                 allow_git_helpers=true)
-                    credential_loop($valid_cred, $url, Nullable{String}(), payload)
+                    err, auth_attempts = credential_loop($valid_cred, $url,
+                                                         Nullable{String}(), payload)
+
+                    # Triggering a garbage collection will cause the internal GitCredential
+                    # used in `authenticate_userpass` to be securely wiped but this should
+                    # not cause the payload credential to be wiped (#24731).
+                    gc()
+
+                    (err, auth_attempts, payload.credential)
                 end
             end
 
+            # Username is supplied from the git configuration file
             challenges = [
                 "Username for 'https://github.com' [$valid_username]:" => "\n",
                 "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
             ]
-            err, auth_attempts = challenge_prompt(https_ex, challenges)
+            err, auth_attempts, credential = challenge_prompt(https_ex, challenges)
             @test err == git_ok
             @test auth_attempts == 1
+            @test get(credential) == valid_cred
         end
 
         @testset "Incompatible explicit credentials" begin
