@@ -408,7 +408,12 @@ end
 eigvals(D::Diagonal{<:Number}) = D.diag
 eigvals(D::Diagonal) = [eigvals(x) for x in D.diag] #For block matrices, etc.
 eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
-eigfact(D::Diagonal) = Eigen(eigvals(D), eigvecs(D))
+function eigfact(D::Diagonal; permute::Bool=true, scale::Bool=true)
+    if any(!isfinite, D.diag)
+        throw(ArgumentError("matrix contains Infs or NaNs"))
+    end
+    Eigen(eigvals(D), eigvecs(D))
+end
 
 #Singular system
 svdvals(D::Diagonal{<:Number}) = sort!(abs.(D.diag), rev = true)

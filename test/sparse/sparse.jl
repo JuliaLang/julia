@@ -266,12 +266,12 @@ end
         b = sprandn(5, 5, 0.2)
         @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*eps())
         # test error throwing for bwdTrisolve
-        @test_throws DimensionMismatch a\Matrix{Float64}(6, 6)
+        @test_throws DimensionMismatch a\Matrix{Float64}(I, 6, 6)
         a = LowerTriangular(I + tril(0.1*sprandn(5, 5, 0.2)))
         b = sprandn(5, 5, 0.2)
         @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*eps())
         # test error throwing for fwdTrisolve
-        @test_throws DimensionMismatch a\Matrix{Float64}(6, 6)
+        @test_throws DimensionMismatch a\Matrix{Float64}(I, 6, 6)
 
 
 
@@ -426,7 +426,7 @@ end
         @test_throws ArgumentError permute!(X, A, p, q, (D = copy(C); resize!(D.nzval, nnz(A) - 1); D))
     end
     @testset "common error checking of permute[!] methods / source-workcolptr compat" begin
-        @test_throws DimensionMismatch permute!(A, p, q, C, Vector{eltype(A.rowval)}(length(A.colptr) - 1))
+        @test_throws DimensionMismatch permute!(A, p, q, C, Vector{eltype(A.rowval)}(uninitialized, length(A.colptr) - 1))
     end
     @testset "common error checking of permute[!] methods / permutation validity" begin
         @test_throws ArgumentError permute!(A, (r = copy(p); r[2] = r[1]; r), q)
@@ -508,16 +508,16 @@ end
         @test var(sparse(Int[])) === NaN
 
         for f in (sum, prod, var)
-            @test isequal(f(spzeros(0, 1), 1), f(Array{Int}(0, 1), 1))
-            @test isequal(f(spzeros(0, 1), 2), f(Array{Int}(0, 1), 2))
-            @test isequal(f(spzeros(0, 1), (1, 2)), f(Array{Int}(0, 1), (1, 2)))
-            @test isequal(f(spzeros(0, 1), 3), f(Array{Int}(0, 1), 3))
+            @test isequal(f(spzeros(0, 1), 1), f(Matrix{Int}(I, 0, 1), 1))
+            @test isequal(f(spzeros(0, 1), 2), f(Matrix{Int}(I, 0, 1), 2))
+            @test isequal(f(spzeros(0, 1), (1, 2)), f(Matrix{Int}(I, 0, 1), (1, 2)))
+            @test isequal(f(spzeros(0, 1), 3), f(Matrix{Int}(I, 0, 1), 3))
         end
         for f in (minimum, maximum, findmin, findmax)
             @test_throws ArgumentError f(spzeros(0, 1), 1)
-            @test isequal(f(spzeros(0, 1), 2), f(Array{Int}(0,1), 2))
+            @test isequal(f(spzeros(0, 1), 2), f(Matrix{Int}(I, 0, 1), 2))
             @test_throws ArgumentError f(spzeros(0, 1), (1, 2))
-            @test isequal(f(spzeros(0, 1), 3), f(Array{Int}(0,1), 3))
+            @test isequal(f(spzeros(0, 1), 3), f(Matrix{Int}(I, 0, 1), 3))
         end
     end
 end
@@ -1035,7 +1035,7 @@ end
     @test indmax(S) == indmax(A) == CartesianIndex(1,1)
     @test indmin(S) == indmin(A) == CartesianIndex(1,1)
 
-    A = Array{Int}(0,0)
+    A = Matrix{Int}(I, 0, 0)
     S = sparse(A)
     iA = try indmax(A) end
     iS = try indmax(S) end

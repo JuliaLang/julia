@@ -54,6 +54,28 @@ The following functions are available for
 
 [^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0/).
 
+# Examples
+```jldoctest
+julia> A = [1 2; 2 3]
+2×2 Array{Int64,2}:
+ 1  2
+ 2  3
+
+julia> bkfact(A)
+Base.LinAlg.BunchKaufman{Float64,Array{Float64,2}}
+D factor:
+2×2 Tridiagonal{Float64,Array{Float64,1}}:
+ -0.333333  0.0
+  0.0       3.0
+U factor:
+2×2 Base.LinAlg.UnitUpperTriangular{Float64,Array{Float64,2}}:
+ 1.0  0.666667
+ 0.0  1.0
+permutation:
+2-element Array{Int64,1}:
+ 1
+ 2
+```
 """
 bkfact(A::AbstractMatrix{T}, rook::Bool=false) where {T} =
     bkfact!(copy_oftype(A, typeof(sqrt(one(T)))), rook)

@@ -260,8 +260,6 @@ struct AssertionError <: Exception
 end
 AssertionError() = AssertionError("")
 
-#Generic wrapping of arbitrary exceptions
-#Subtypes should put the exception in an 'error' field
 abstract type WrappedException <: Exception end
 
 struct LoadError <: WrappedException

@@ -691,6 +691,11 @@ end
     s = unsafe_load(pointer(F))
     @test s.is_super == 0
     @test F\b ≈ ones(m + n)
+    F2 = cholfact(M)
+    @test !LinAlg.issuccess(F2)
+    ldltfact!(F2, M)
+    @test LinAlg.issuccess(F2)
+    @test F2\b ≈ ones(m + n)
 end
 
 @testset "Test that imaginary parts in Hermitian{T,SparseMatrixCSC{T}} are ignored" begin

@@ -1444,9 +1444,7 @@ function ldltfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
     set_print_level(cm, 0)
 
     # Makes it an LDLt
-    unsafe_store!(common_final_ll[], 0)
-    # Really make sure it's an LDLt by avoiding supernodal factorization
-    unsafe_store!(common_supernodal[], 0)
+    change_factor!(eltype(F), false, false, true, false, F)
 
     # Compute the numerical factorization
     factorize_p!(A, shift, F, cm)
