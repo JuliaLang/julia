@@ -298,7 +298,8 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
 end
 
 # the ±1 indexing above for ascii chars is specific to String, so convert:
-tryparse(T::Type{<:Complex}, s::AbstractString) = tryparse(T, String(s))
+tryparse_internal(T::Type{<:Complex}, s::AbstractString, i::Int, e::Int, raise::Bool) =
+    tryparse_internal(T, String(s), i, e, raise)
 
 # fallback methods for tryparse_internal
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int) where T<:Real =
