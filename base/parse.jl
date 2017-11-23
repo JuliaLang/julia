@@ -225,25 +225,31 @@ end
 
 tryparse(::Type{Float64}, s::String) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
 tryparse(::Type{Float64}, s::SubString{String}) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.endof)
+tryparse_internal(::Type{Float64}, s::String, startpos::Int, endpos::Int) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
+tryparse_internal(::Type{Float64}, s::SubString{String}, startpos::Int, endpos::Int) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, s.offset+endpos-startpos+1)
 
 tryparse(::Type{Float32}, s::String) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
 tryparse(::Type{Float32}, s::SubString{String}) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.endof)
+tryparse_internal(::Type{Float32}, s::String, startpos::Int, endpos::Int) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
+tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int, endpos::Int) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, s.offset+endpos-startpos+1)
 
 tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s))
 
 tryparse(::Type{Float16}, s::AbstractString) = convert(Nullable{Float16}, tryparse(Float32, s))
-
+tryparse_internal(::Type{Float16}, s::SubString{String}, startpos::Int, endpos::Int) =
+    convert(Nullable{Float16}, tryparse_internal(Float32, s, startpos, endpos))
 
 ## string to complex functions ##
 
-function tryparse(::Type{Complex{T}}, s::Union{String,SubString{String}}) where {T<:Real}
+function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}}, i::Int, e::Int, raise::Bool) where {T<:Real}
     # skip initial whitespace
-    i = start(s)
-    e = endof(s)
     while i ≤ e && isspace(s[i])
         i = nextind(s, i)
     end
-    i > e && return Nullable{Complex{T}}()
+    if i > e
+        raise && throw(ArgumentError("input string is empty or only contains whitespace"))
+        return Nullable{Complex{T}}()
+    end
 
     # find index of ± separating real/imaginary parts (if any)
     i₊ = search(s, ('+','-'), i)
@@ -258,40 +264,54 @@ function tryparse(::Type{Complex{T}}, s::Union{String,SubString{String}}) where 
     iᵢ = rsearch(s, ('m','i','j'), e)
     if iᵢ > 0 && s[iᵢ] == 'm' # im
         iᵢ -= 1
-        s[iᵢ] == 'i' || return Nullable{Complex{T}}()
+        if s[iᵢ] != 'i'
+            raise && throw(ArgumentError("expected trailing \"im\", found only \"m\""))
+            return Nullable{Complex{T}}()
+        end
     end
 
     if i₊ == 0 # purely real or imaginary value
         if iᵢ > 0 # purely imaginary
-            x_ = tryparse(T, SubString(s, i, iᵢ-1))
+            x_ = tryparse_internal(T, s, i, iᵢ-1, raise)
             isnull(x_) && return Nullable{Complex{T}}()
-            x = get(x_)
+            x = unsafe_get(x_)
             return Nullable{Complex{T}}(Complex{T}(zero(x),x))
         else # purely real
-            return Nullable{Complex{T}}(tryparse(T, s))
+            return Nullable{Complex{T}}(tryparse_internal(T, s, i, e, raise))
         end
     end
 
-    iᵢ < i₊ && return Nullable{Complex{T}}() # no imaginary part
+    if iᵢ < i₊
+        raise && throw(ArgumentError("missing imaginary unit"))
+        return Nullable{Complex{T}}() # no imaginary part
+    end
 
     # parse real part
-    re = tryparse(T, SubString(s, i, i₊-1))
+    re = tryparse_internal(T, s, i, i₊-1, raise)
     isnull(re) && return Nullable{Complex{T}}()
 
     # parse imaginary part
-    im = tryparse(T, SubString(s, i₊+1, iᵢ-1))
+    im = tryparse_internal(T, s, i₊+1, iᵢ-1, raise)
     isnull(im) && return Nullable{Complex{T}}()
 
-    return Nullable{Complex{T}}(Complex{T}(get(re), s[i₊]=='-' ? -get(im) : get(im)))
+    return Nullable{Complex{T}}(Complex{T}(unsafe_get(re), s[i₊]=='-' ? -unsafe_get(im) : unsafe_get(im)))
 end
 
 # the ±1 indexing above for ascii chars is specific to String, so convert:
 tryparse(T::Type{<:Complex}, s::AbstractString) = tryparse(T, String(s))
 
-function parse(::Type{T}, s::AbstractString) where T<:Union{AbstractFloat,Complex}
-    result = tryparse(T, s)
-    if isnull(result)
-        throw(ArgumentError("cannot parse $(repr(s)) as $T"))
+# fallback methods for tryparse_internal
+tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int) where T<:Real =
+    startpos == start(s) && endpos == endof(s) ? tryparse(T, s) : tryparse(T, SubString(s, startpos, endpos))
+function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Real
+    result = tryparse_internal(T, s, startpos, endpos)
+    if raise && isnull(result)
+        throw(ArgumentError("cannot parse $(repr(s[startpos:endpos])) as $T"))
     end
-    return unsafe_get(result)
+    return result
 end
+tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Integer =
+    tryparse_internal(T, s, startpos, endpos, 10, raise)
+
+parse(::Type{T}, s::AbstractString) where T<:Union{Real,Complex} =
+    unsafe_get(tryparse_internal(T, s, start(s), endof(s), true))

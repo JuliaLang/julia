@@ -247,6 +247,7 @@ end
             end
         end
     end
+    @test parse(Complex{Float16}, "3.3+4i") === Complex{Float16}(3.3+4im)
     @test parse(Complex{Int}, SubString("xxxxxx1+2imxxxx", 7, 10)) === 1+2im
     for T in (Int, Float64), bad in ("3 + 4*im", "3 + 4", "1+2ij", "1im-3im", "++4im")
         @test_throws ArgumentError parse(Complex{T}, bad)
