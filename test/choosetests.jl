@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+const STDLIB_DIR = joinpath(JULIA_HOME, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
+const STDLIBS = readdir(STDLIB_DIR)
+
 @doc """
 
 `tests, net_on, exit_on_error, seed = choosetests(choices)` selects a set of tests to be
@@ -163,6 +166,20 @@ function choosetests(choices = [])
 
     if !net_on
         filter!(x -> !(x in net_required_for), tests)
+    end
+
+    if "stdlib" in skip_tests
+        filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
+    elseif "stdlib" in tests
+        filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
+        prepend!(tests, STDLIBS)
+    end
+
+    if startswith(string(Sys.ARCH), "arm")
+        # Remove profile from default tests on ARM since it currently segfaults
+        # Allow explicitly adding it for testing
+        warn("Skipping Profile tests")
+        filter!(x -> (x != "Profile"), tests)
     end
 
     filter!(x -> !(x in skip_tests), tests)

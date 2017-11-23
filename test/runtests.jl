@@ -13,6 +13,18 @@ else
     typemax(Csize_t)
 end
 
+function test_path(test)
+    if test in STDLIBS
+        test_file = joinpath(STDLIB_DIR, test, "test", "runtests")
+        if !isfile(test_file * ".jl")
+            error("Standard library $test did not provide a `test/runtests.jl` file")
+        end
+        return test_file
+    else
+        return test
+    end
+end
+
 const node1_tests = String[]
 function move_to_node1(t)
     if t in tests
@@ -20,8 +32,11 @@ function move_to_node1(t)
         push!(node1_tests, t)
     end
 end
+
 # Base.compile only works from node 1, so compile test is handled specially
 move_to_node1("compile")
+move_to_node1("SharedArrays")
+
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 max_worker_rss != typemax(Csize_t) && move_to_node1("distributed")
@@ -55,7 +70,7 @@ cd(dirname(@__FILE__)) do
                     local resp
                     wrkr = p
                     try
-                        resp = remotecall_fetch(runtests, wrkr, test; seed=seed)
+                        resp = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
                     catch e
                         resp = [e]
                     end
@@ -105,9 +120,11 @@ cd(dirname(@__FILE__)) do
         # and either way, append the results
         # to the overall aggregator
         n > 1 && print("\tFrom worker 1:\t")
+        isolate = true
+        t == "SharedArrays" && (isolate = false)
         local resp
         try
-            resp = eval(Expr(:call, () -> runtests(t, seed=seed))) # runtests is defined by the include above
+            resp = eval(Expr(:call, () -> runtests(t, test_path(t), isolate, seed=seed))) # runtests is defined by the include above
         catch e
             resp = [e]
         end
