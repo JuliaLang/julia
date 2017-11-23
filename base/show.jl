@@ -1577,20 +1577,20 @@ alignment(io::IO, x::Number) = (length(_sprint(show, (x,), env=io)), 0)
 alignment(io::IO, x::Integer) = (length(_sprint(show, (x,), env=io)), 0)
 "`alignment(4.23)` yields (1,3) for `4` and `.23`"
 function alignment(io::IO, x::Real)
-    m = match(r"^(.*?)((?:[\.eE].*)?)$", _sprint(show, (x,), env=io))
-    m === nothing ? (length(_sprint(show, (x,), env=io)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    s = _sprint(show, (x,), env=io)
+    m = match(r"^(.*?)((?:[\.eE].*)?)$", s)
+    m === nothing ? (length(s), 0) : (length(m.captures[1]), length(m.captures[2]))
 end
 "`alignment(1 + 10im)` yields (3,5) for `1 +` and `_10im` (plus sign on left, space on right)"
 function alignment(io::IO, x::Complex)
-    m = match(r"^(.*[^e][\+\-])(.*)$", _sprint(show, (x,), env=io))
-    m === nothing ? (length(_sprint(show, (x,), env=io)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    s = _sprint(show, (x,), env=io)
+    m = match(r"^(.*[^e][\+\-])(.*)$", s)
+    m === nothing ? (length(s), 0) : (length(m.captures[1]), length(m.captures[2]))
 end
 function alignment(io::IO, x::Rational)
-    m = match(r"^(.*?/)(/.*)$", _sprint(show, (x,), env=io))
-    m === nothing ? (length(_sprint(show, (x,), env=io)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    s = _sprint(show, (x,), env=io)
+    m = match(r"^(.*?/)(/.*)$", s)
+    m === nothing ? (length(s), 0) : (length(m.captures[1]), length(m.captures[2]))
 end
 
 function alignment(io::IO, x::Pair)
