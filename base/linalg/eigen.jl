@@ -164,6 +164,28 @@ Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead
 The option `permute=true` permutes the matrix to become
 closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
 make rows and columns more equal in norm.
+
+!!! note
+    The input matrix `A` will not contain its eigenvalues after `eigvals!` is
+    called on it - `A` is used as a workspace.
+
+# Examples
+```jldoctest
+julia> A = [1. 2.; 3. 4.]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> eigvals!(A)
+2-element Array{Float64,1}:
+ -0.3722813232690143
+  5.372281323269014
+
+julia> A
+2×2 Array{Float64,2}:
+ -0.372281  -1.0
+  0.0        5.37228
+```
 """
 function eigvals!(A::StridedMatrix{<:BlasReal}; permute::Bool=true, scale::Bool=true)
     issymmetric(A) && return eigvals!(Symmetric(A))
@@ -185,6 +207,19 @@ before the eigenvalue calculation. The option `permute=true` permutes the matrix
 become closer to upper triangular, and `scale=true` scales the matrix by its diagonal
 elements to make rows and columns more equal in norm. The default is `true` for both
 options.
+
+# Examples
+```jldoctest
+julia> diag_matrix = [1 0; 0 4]
+2×2 Array{Int64,2}:
+ 1  0
+ 0  4
+
+julia> eigvals(diag_matrix)
+2-element Array{Float64,1}:
+ 1.0
+ 4.0
+```
 """
 function eigvals(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
@@ -317,6 +352,31 @@ Computes the generalized eigenvalue decomposition of `A` and `B`, returning a
 `GeneralizedEigen` factorization object `F` which contains the generalized eigenvalues in
 `F[:values]` and the generalized eigenvectors in the columns of the matrix `F[:vectors]`.
 (The `k`th generalized eigenvector can be obtained from the slice `F[:vectors][:, k]`.)
+
+# Examples
+```jldoctest
+julia> A = [1 0; 0 -1]
+2×2 Array{Int64,2}:
+ 1   0
+ 0  -1
+
+julia> B = [0 1; 1 0]
+2×2 Array{Int64,2}:
+ 0  1
+ 1  0
+
+julia> F = eigfact(A, B);
+
+julia> F[:values]
+2-element Array{Complex{Float64},1}:
+ 0.0 + 1.0im
+ 0.0 - 1.0im
+
+julia> F[:vectors]
+2×2 Array{Complex{Float64},2}:
+  0.0-1.0im   0.0+1.0im
+ -1.0-0.0im  -1.0+0.0im
+```
 """
 function eigfact(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
@@ -361,7 +421,40 @@ end
 """
     eigvals!(A, B) -> values
 
-Same as [`eigvals`](@ref), but saves space by overwriting the input `A` (and `B`), instead of creating copies.
+Same as [`eigvals`](@ref), but saves space by overwriting the input `A` (and `B`),
+instead of creating copies.
+
+!!! note
+    The input matrices `A` and `B` will not contain their eigenvalues after
+    `eigvals!` is called. They are used as workspaces.
+
+# Examples
+```jldoctest
+julia> A = [1. 0.; 0. -1.]
+2×2 Array{Float64,2}:
+ 1.0   0.0
+ 0.0  -1.0
+
+julia> B = [0. 1.; 1. 0.]
+2×2 Array{Float64,2}:
+ 0.0  1.0
+ 1.0  0.0
+
+julia> eigvals!(A, B)
+2-element Array{Complex{Float64},1}:
+ 0.0 + 1.0im
+ 0.0 - 1.0im
+
+julia> A
+2×2 Array{Float64,2}:
+ -0.0  -1.0
+  1.0  -0.0
+
+julia> B
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
+```
 """
 function eigvals!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasReal
     issymmetric(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))
