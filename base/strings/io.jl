@@ -69,21 +69,21 @@ println(io::IO, xs...) = print(io, xs..., '\n')
 
 ## conversion of general objects to strings ##
 
-function sprint(size::Integer, f::Function, args...; env=nothing)
+function _sprint(f::Function, args::Tuple=(), kwargs::Array=[]; size::Integer=0, env=nothing)
     s = IOBuffer(StringVector(size), true, true)
     # specialized version of truncate(s,0)
     s.size = 0
     s.ptr = 1
     if env !== nothing
-        f(IOContext(s, env), args...)
+        f(IOContext(s, env), args...; kwargs...)
     else
-        f(s, args...)
+        f(s, args...; kwargs...)
     end
     String(resize!(s.data, s.size))
 end
 
 """
-    sprint(f::Function, args...)
+    sprint(f::Function, args...; kwargs...)
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
@@ -94,7 +94,7 @@ julia> sprint(showcompact, 66.66666)
 "66.6667"
 ```
 """
-sprint(f::Function, args...) = sprint(0, f, args...)
+sprint(f::Function, args...; kwargs...) = _sprint(f, args, kwargs)
 
 tostr_sizehint(x) = 0
 tostr_sizehint(x::AbstractString) = endof(x)
@@ -274,7 +274,7 @@ function escape_string(io, s::AbstractString, esc::AbstractString)
     end
 end
 
-escape_string(s::AbstractString) = sprint(endof(s), escape_string, s, "\"")
+escape_string(s::AbstractString) = _sprint(escape_string, (s, "\""), size=endof(s))
 
 function print_quoted(io, s::AbstractString)
     print(io, '"')
@@ -299,7 +299,7 @@ function print_unescaped_chars(io, s::AbstractString, esc::AbstractString)
 end
 
 unescape_chars(s::AbstractString, esc::AbstractString) =
-    sprint(endof(s), print_unescaped_chars, s, esc)
+    _sprint(print_unescaped_chars, (s, esc), size=endof(s))
 
 # general unescaping of traditional C and Unicode escape sequences
 
@@ -363,7 +363,7 @@ function unescape_string(io, s::AbstractString)
     end
 end
 
-unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
+unescape_string(s::AbstractString) = _sprint(unescape_string, (s,), size=endof(s))
 
 macro b_str(s); :(Vector{UInt8}($(unescape_string(s)))); end
 
@@ -489,7 +489,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
 end
 
 function convert(::Type{String}, chars::AbstractVector{Char})
-    sprint(length(chars), io->begin
+    _sprint(io->begin
         state = start(chars)
         while !done(chars, state)
             c, state = next(chars, state)
@@ -504,5 +504,5 @@ function convert(::Type{String}, chars::AbstractVector{Char})
             end
             write(io, c)
         end
-    end)
+    end, size=length(chars))
 end

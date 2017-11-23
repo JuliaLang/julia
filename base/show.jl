@@ -1571,33 +1571,33 @@ dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = dump(IOContext(STDOUT::IO, :limit =>
 `alignment(X)` returns a tuple (left,right) showing how many characters are
 needed on either side of an alignment feature such as a decimal point.
 """
-alignment(io::IO, x::Any) = (0, length(sprint(0, show, x, env=io)))
-alignment(io::IO, x::Number) = (length(sprint(0, show, x, env=io)), 0)
+alignment(io::IO, x::Any) = (0, length(_sprint(show, (x,), env=io)))
+alignment(io::IO, x::Number) = (length(_sprint(show, (x,), env=io)), 0)
 "`alignment(42)` yields (2,0)"
-alignment(io::IO, x::Integer) = (length(sprint(0, show, x, env=io)), 0)
+alignment(io::IO, x::Integer) = (length(_sprint(show, (x,), env=io)), 0)
 "`alignment(4.23)` yields (1,3) for `4` and `.23`"
 function alignment(io::IO, x::Real)
-    m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(0, show, x, env=io))
-    m === nothing ? (length(sprint(0, show, x, env=io)), 0) :
+    m = match(r"^(.*?)((?:[\.eE].*)?)$", _sprint(show, (x,), env=io))
+    m === nothing ? (length(_sprint(show, (x,), env=io)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
 "`alignment(1 + 10im)` yields (3,5) for `1 +` and `_10im` (plus sign on left, space on right)"
 function alignment(io::IO, x::Complex)
-    m = match(r"^(.*[^e][\+\-])(.*)$", sprint(0, show, x, env=io))
-    m === nothing ? (length(sprint(0, show, x, env=io)), 0) :
+    m = match(r"^(.*[^e][\+\-])(.*)$", _sprint(show, (x,), env=io))
+    m === nothing ? (length(_sprint(show, (x,), env=io)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
 function alignment(io::IO, x::Rational)
-    m = match(r"^(.*?/)(/.*)$", sprint(0, show, x, env=io))
-    m === nothing ? (length(sprint(0, show, x, env=io)), 0) :
+    m = match(r"^(.*?/)(/.*)$", _sprint(show, (x,), env=io))
+    m === nothing ? (length(_sprint(show, (x,), env=io)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
 
 function alignment(io::IO, x::Pair)
-    s = sprint(0, show, x, env=io)
+    s = _sprint(show, (x,), env=io)
     if has_tight_type(x) # i.e. use "=>" for display
         iocompact = IOContext(io, :compact => get(io, :compact, true))
-        left = length(sprint(0, show, x.first, env=iocompact))
+        left = length(_sprint(show, (x.first,), env=iocompact))
         left += 2 * !isdelimited(iocompact, x.first) # for parens around p.first
         left += !get(io, :compact, false) # spaces are added around "=>"
         (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
@@ -1676,7 +1676,7 @@ function print_matrix_row(io::IO,
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
             a = alignment(io, x)
-            sx = sprint(0, show, x, env=io)
+            sx = _sprint(show, (x,), env=io)
         else
             a = undef_ref_alignment
             sx = undef_ref_str

@@ -257,3 +257,10 @@ for i = 1:10
     print(buf, join(s22021, "\n"))
     @test isvalid(String, take!(buf))
 end
+
+@testset "sprint keywords" begin
+    f(io::IO; keyword=nothing) = print(io, keyword)
+
+    @test sprint(f) == "nothing"
+    @test sprint(f, keyword=true) == "true"
+end
