@@ -280,7 +280,7 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     end
     if absx < T(0.5)
         # in b)
-        t = absx+absx;
+        t = absx+absx
         t = T(0.5)*log1p(t+t*absx/(T(1)-absx))
     elseif absx < T(1)
         # in c)
