@@ -48,7 +48,7 @@ end
     @spawnat
 
 Create a closure around an expression and run the closure
-asynchronously on process `p`. Returns a [`Future`](@ref) to the result.
+asynchronously on process `p`. Return a [`Future`](@ref) to the result.
 Accepts two arguments, `p` and an expression.
 
 # Examples

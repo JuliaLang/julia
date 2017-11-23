@@ -51,7 +51,7 @@ inv(x::Integer) = float(one(x)) / float(x)
 """
     isodd(x::Integer) -> Bool
 
-Returns `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
+Return `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
 
 ```jldoctest
 julia> isodd(9)
@@ -66,7 +66,7 @@ isodd(n::Integer) = rem(n, 2) != 0
 """
     iseven(x::Integer) -> Bool
 
-Returns `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
+Return `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
 
 ```jldoctest
 julia> iseven(9)

@@ -115,7 +115,7 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
 """
     stride1(A) -> Int
 
-Returns the distance between successive array elements
+Return the distance between successive array elements
 in dimension 1 in units of element size.
 
 # Examples
@@ -158,7 +158,7 @@ vecnorm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
 """
     triu!(M, k::Integer)
 
-Returns the upper triangle of `M` starting from the `k`th superdiagonal,
+Return the upper triangle of `M` starting from the `k`th superdiagonal,
 overwriting `M` in the process.
 
 # Examples
@@ -202,7 +202,7 @@ triu(M::Matrix, k::Integer) = triu!(copy(M), k)
 """
     tril!(M, k::Integer)
 
-Returns the lower triangle of `M` starting from the `k`th superdiagonal, overwriting `M` in
+Return the lower triangle of `M` starting from the `k`th superdiagonal, overwriting `M` in
 the process.
 
 # Examples

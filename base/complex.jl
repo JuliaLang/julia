@@ -94,7 +94,7 @@ reim(z) = (real(z), imag(z))
 """
     real(T::Type)
 
-Returns the type that represents the real part of a value of type `T`.
+Return the type that represents the real part of a value of type `T`.
 e.g: for `T == Complex{R}`, returns `R`.
 Equivalent to `typeof(real(zero(T)))`.
 
@@ -157,7 +157,7 @@ complex(x::Real, y::Real) = Complex(x, y)
 """
     complex(T::Type)
 
-Returns an appropriate type which can represent a value of type `T` as a complex number.
+Return an appropriate type which can represent a value of type `T` as a complex number.
 Equivalent to `typeof(complex(zero(T)))`.
 
 # Examples
@@ -950,7 +950,7 @@ end
 """
     round(z, RoundingModeReal, RoundingModeImaginary)
 
-Returns the nearest integral value of the same type as the complex-valued `z` to `z`,
+Return the nearest integral value of the same type as the complex-valued `z` to `z`,
 breaking ties using the specified [`RoundingMode`](@ref)s. The first
 [`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.

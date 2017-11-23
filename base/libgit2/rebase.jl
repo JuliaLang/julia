@@ -88,7 +88,7 @@ end
 
 Cancel the in-progress rebase, undoing all changes made so far and returning
 the parent repository of `rb` and its working directory to their state before
-the rebase was initiated. Returns `0` if the abort is successful,
+the rebase was initiated. Return `0` if the abort is successful,
 `LibGit2.Error.ENOTFOUND` if no rebase is in progress (for example, if the
 rebase had completed), and `-1` for other errors.
 """
@@ -101,7 +101,7 @@ end
     finish(rb::GitRebase, sig::GitSignature) -> Csize_t
 
 Complete the rebase described by `rb`. `sig` is a [`GitSignature`](@ref)
-to specify the identity of the user finishing the rebase. Returns `0` if the
+to specify the identity of the user finishing the rebase. Return `0` if the
 rebase finishes successfully, `-1` if there is an error.
 """
 function finish(rb::GitRebase, sig::GitSignature)

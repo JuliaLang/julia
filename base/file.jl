@@ -350,7 +350,7 @@ tempname()
 """
     mktemp(parent=tempdir())
 
-Returns `(path, io)`, where `path` is the path of a new temporary file in `parent` and `io`
+Return `(path, io)`, where `path` is the path of a new temporary file in `parent` and `io`
 is an open file object for this path.
 """
 mktemp(parent)
@@ -403,7 +403,7 @@ end
 """
     readdir(dir::AbstractString=".") -> Vector{String}
 
-Returns the files and directories in the directory `dir` (or the current working directory if not given).
+Return the files and directories in the directory `dir` (or the current working directory if not given).
 """
 function readdir(path::AbstractString)
     # Allocate space for uv_fs_t struct
@@ -433,7 +433,7 @@ readdir() = readdir(".")
 """
     walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
 
-The `walkdir` method returns an iterator that walks the directory tree of a directory.
+Return an iterator that walks the directory tree of a directory.
 The iterator returns a tuple containing `(rootpath, dirs, files)`.
 The directory tree can be traversed top-down or bottom-up.
 If `walkdir` encounters a [`SystemError`](@ref)
@@ -574,7 +574,7 @@ end
 """
     readlink(path::AbstractString) -> AbstractString
 
-Returns the target location a symbolic link `path` points to.
+Return the target location a symbolic link `path` points to.
 """
 function readlink(path::AbstractString)
     req = Libc.malloc(_sizeof_uv_fs)

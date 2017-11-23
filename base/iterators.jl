@@ -262,7 +262,7 @@ end
 """
     zip(iters...)
 
-For a set of iterable objects, returns an iterable of tuples, where the `i`th tuple contains
+For a set of iterable objects, return an iterable of tuples, where the `i`th tuple contains
 the `i`th component of each input iterable.
 
 # Examples
@@ -650,7 +650,7 @@ end
 """
     product(iters...)
 
-Returns an iterator over the product of several iterators. Each generated element is
+Return an iterator over the product of several iterators. Each generated element is
 a tuple whose `i`th element comes from the `i`th argument iterator. The first iterator
 changes the fastest.
 

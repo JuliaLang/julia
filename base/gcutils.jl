@@ -49,7 +49,7 @@ gc(full::Bool=true) = ccall(:jl_gc_collect, Void, (Int32,), full)
     gc_enable(on::Bool)
 
 Control whether garbage collection is enabled using a boolean argument (`true` for enabled,
-`false` for disabled). Returns previous GC state. Disabling garbage collection should be
+`false` for disabled). Return previous GC state. Disabling garbage collection should be
 used only with extreme caution, as it can cause memory use to grow without bound.
 """
 gc_enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0

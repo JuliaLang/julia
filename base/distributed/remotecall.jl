@@ -352,7 +352,7 @@ end
     remotecall(f, id::Integer, args...; kwargs...) -> Future
 
 Call a function `f` asynchronously on the given arguments on the specified process.
-Returns a [`Future`](@ref).
+Return a [`Future`](@ref).
 Keyword arguments, if any, are passed through to `f`.
 """
 remotecall(f, id::Integer, args...; kwargs...) = remotecall(f, worker_from_id(id), args...; kwargs...)
@@ -538,7 +538,7 @@ put_ref(rid, args...) = (put!(lookup_ref(rid), args...); nothing)
 
 Store a set of values to the [`RemoteChannel`](@ref).
 If the channel is full, blocks until space is available.
-Returns its first argument.
+Return the first argument.
 """
 put!(rr::RemoteChannel, args...) = (call_on_owner(put_ref, rr, args...); rr)
 

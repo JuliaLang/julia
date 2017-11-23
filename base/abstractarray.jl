@@ -14,7 +14,7 @@ AbstractArray
 """
     size(A::AbstractArray, [dim...])
 
-Returns a tuple containing the dimensions of `A`. Optionally you can specify the
+Return a tuple containing the dimensions of `A`. Optionally you can specify the
 dimension(s) you want the length of, and get the length of that dimension, or a tuple of the
 lengths of dimensions you asked for.
 
@@ -36,7 +36,7 @@ size(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) where {N} =
 """
     indices(A, d)
 
-Returns the valid range of indices for array `A` along dimension `d`.
+Return the valid range of indices for array `A` along dimension `d`.
 
 # Examples
 ```jldoctest
@@ -54,7 +54,7 @@ end
 """
     indices(A)
 
-Returns the tuple of valid indices for array `A`.
+Return the tuple of valid indices for array `A`.
 
 # Examples
 ```jldoctest
@@ -82,7 +82,7 @@ unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use check
 """
     linearindices(A)
 
-Returns a `UnitRange` specifying the valid range of indices for `A[i]`
+Return a `UnitRange` specifying the valid range of indices for `A[i]`
 where `i` is an `Int`. For arrays with conventional indexing (indices
 start at 1), or any multidimensional array, this is `1:length(A)`;
 however, for one-dimensional arrays with unconventional indices, this
@@ -116,7 +116,7 @@ elsize(::AbstractArray{T}) where {T} = sizeof(T)
 """
     ndims(A::AbstractArray) -> Integer
 
-Returns the number of dimensions of `A`.
+Return the number of dimensions of `A`.
 
 # Examples
 ```jldoctest
@@ -156,7 +156,7 @@ _length(A) = (@_inline_meta; length(A))
 """
     endof(collection) -> Integer
 
-Returns the last index of the collection.
+Return the last index of the collection.
 
 # Examples
 ```jldoctest
@@ -171,7 +171,7 @@ first(a::AbstractArray) = a[first(eachindex(a))]
 """
     first(coll)
 
-Get the first element of an iterable collection. Returns the start point of an
+Get the first element of an iterable collection. Return the start point of an
 `AbstractRange` even if it is empty.
 
 # Examples
@@ -193,7 +193,7 @@ end
     last(coll)
 
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
-accomplished by calling [`endof`](@ref) to get the last index. Returns the end
+accomplished by calling [`endof`](@ref) to get the last index. Return the end
 point of an `AbstractRange` even if it is empty.
 
 # Examples
@@ -210,7 +210,7 @@ last(a) = a[end]
 """
     stride(A, k::Integer)
 
-Returns the distance in memory (in number of elements) between adjacent elements in dimension `k`.
+Return the distance in memory (in number of elements) between adjacent elements in dimension `k`.
 
 # Examples
 ```jldoctest
@@ -237,7 +237,7 @@ end
 """
     strides(A)
 
-Returns a tuple of the memory strides in each dimension.
+Return a tuple of the memory strides in each dimension.
 
 # Examples
 ```jldoctest
@@ -771,11 +771,11 @@ eachindex(A::AbstractVector) = (@_inline_meta(); indices1(A))
 """
     eachindex(A...)
 
-Creates an iterable object for visiting each index of an AbstractArray `A` in an efficient
+Create an iterable object for visiting each index of an AbstractArray `A` in an efficient
 manner. For array types that have opted into fast linear indexing (like `Array`), this is
-simply the range `1:length(A)`. For other array types, this returns a specialized Cartesian
+simply the range `1:length(A)`. For other array types, return a specialized Cartesian
 range to efficiently index into the array with indices specified for every dimension. For
-other iterables, including strings and dictionaries, this returns an iterator object
+other iterables, including strings and dictionaries, return an iterator object
 supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
 
 Example for a sparse 2-d array:
@@ -809,7 +809,7 @@ If you supply more than one `AbstractArray` argument, `eachindex` will create an
 iterable object that is fast for all arguments (a `UnitRange`
 if all inputs have fast linear indexing, a [`CartesianRange`](@ref)
 otherwise).
-If the arrays have different sizes and/or dimensionalities, `eachindex` returns an
+If the arrays have different sizes and/or dimensionalities, `eachindex` will return an
 iterable that spans the largest range along each dimension.
 """
 eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(IndexStyle(A), A))
@@ -1572,7 +1572,7 @@ end
 """
     ind2sub(a, index) -> subscripts
 
-Returns a tuple of subscripts into array `a` corresponding to the linear index `index`.
+Return a tuple of subscripts into array `a` corresponding to the linear index `index`.
 
 # Examples
 ```jldoctest
@@ -1600,7 +1600,7 @@ sub2ind(::Tuple{}, I::Integer...) = (@_inline_meta; _sub2ind((), 1, 1, I...))
 """
     sub2ind(dims, i, j, k...) -> index
 
-The inverse of [`ind2sub`](@ref), returns the linear index corresponding to the provided subscripts.
+The inverse of [`ind2sub`](@ref), return the linear index corresponding to the provided subscripts.
 
 # Examples
 ```jldoctest
@@ -1641,7 +1641,7 @@ ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsE
 """
     ind2sub(dims, index) -> subscripts
 
-Returns a tuple of subscripts into an array with dimensions `dims`,
+Return a tuple of subscripts into an array with dimensions `dims`,
 corresponding to the linear index `index`.
 
 # Examples

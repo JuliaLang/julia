@@ -5,7 +5,7 @@
 """
     editor()
 
-Determines the editor to use when running functions like `edit`. Returns an Array compatible
+Determine the editor to use when running functions like `edit`. Return an `Array` compatible
 for use within backticks. You can change the editor by setting `JULIA_EDITOR`, `VISUAL` or
 `EDITOR` as an environment variable.
 """
@@ -27,7 +27,7 @@ end
     edit(path::AbstractString, line::Integer=0)
 
 Edit a file or directory optionally providing a line number to edit the file at.
-Returns to the `julia` prompt when you quit the editor. The editor can be changed
+Return to the `julia` prompt when you quit the editor. The editor can be changed
 by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 """
 function edit(path::AbstractString, line::Integer=0)

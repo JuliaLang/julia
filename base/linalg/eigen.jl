@@ -140,7 +140,7 @@ end
 """
     eigvecs(A; permute::Bool=true, scale::Bool=true) -> Matrix
 
-Returns a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigenvector can
+Return a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigenvector can
 be obtained from the slice `M[:, k]`.) The `permute` and `scale` keywords are the same as
 for [`eigfact`](@ref).
 
@@ -202,7 +202,7 @@ end
 """
     eigvals(A; permute::Bool=true, scale::Bool=true) -> values
 
-Returns the eigenvalues of `A`.
+Return the eigenvalues of `A`.
 
 For general non-symmetric matrices it is possible to specify how the matrix is balanced
 before the eigenvalue calculation. The option `permute=true` permutes the matrix to
@@ -235,7 +235,7 @@ end
 """
     eigmax(A; permute::Bool=true, scale::Bool=true)
 
-Returns the largest eigenvalue of `A`.
+Return the largest eigenvalue of `A`.
 The option `permute=true` permutes the matrix to become
 closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
 make rows and columns more equal in norm.
@@ -276,7 +276,7 @@ end
 """
     eigmin(A; permute::Bool=true, scale::Bool=true)
 
-Returns the smallest eigenvalue of `A`.
+Return the smallest eigenvalue of `A`.
 The option `permute=true` permutes the matrix to become
 closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
 make rows and columns more equal in norm.
@@ -500,7 +500,7 @@ end
 """
     eigvecs(A, B) -> Matrix
 
-Returns a matrix `M` whose columns are the generalized eigenvectors of `A` and `B`. (The `k`th eigenvector can
+Return a matrix `M` whose columns are the generalized eigenvectors of `A` and `B`. (The `k`th eigenvector can
 be obtained from the slice `M[:, k]`.)
 
 # Examples

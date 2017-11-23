@@ -89,7 +89,7 @@ dayofweek(days) = mod1(days, 7)
 """
     daysinyear(dt::TimeType) -> Int
 
-Returns 366 if the year of `dt` is a leap year, otherwise returns 365.
+Return 366 if the year of `dt` is a leap year, otherwise return 365.
 
 # Examples
 ```jldoctest
@@ -110,7 +110,7 @@ dayofyear(y, m, d) = MONTHDAYS[m] + d + (m > 2 && isleapyear(y))
 """
     dayofweek(dt::TimeType) -> Int64
 
-Returns the day of the week as an [`Int64`](@ref) with `1 = Monday, 2 = Tuesday, etc.`.
+Return the day of the week as an [`Int64`](@ref) with `1 = Monday, 2 = Tuesday, etc.`.
 
 # Examples
 ```jldoctest
@@ -173,7 +173,7 @@ issunday(dt::TimeType) = dayofweek(dt) == Sun
 """
     dayofweekofmonth(dt::TimeType) -> Int
 
-For the day of week of `dt`, returns which number it is in `dt`'s month. So if the day of
+For the day of week of `dt`, return which number it is in `dt`'s month. So if the day of
 the week of `dt` is Monday, then `1 = First Monday of the month, 2 = Second Monday of the
 month, etc.` In the range 1:5.
 
@@ -203,7 +203,7 @@ const THIRTYONE = BitSet([1, 2, 3, 8, 9, 10, 15, 16, 17, 22, 23, 24, 29, 30, 31]
 """
     daysofweekinmonth(dt::TimeType) -> Int
 
-For the day of week of `dt`, returns the total number of that day of the week in `dt`'s
+For the day of week of `dt`, return the total number of that day of the week in `dt`'s
 month. Returns 4 or 5. Useful in temporal expressions for specifying the last day of a week
 in a month by including `dayofweekofmonth(dt) == daysofweekinmonth(dt)` in the adjuster
 function.
@@ -268,7 +268,7 @@ end
 """
     daysinmonth(dt::TimeType) -> Int
 
-Returns the number of days in the month of `dt`. Value will be 28, 29, 30, or 31.
+Return the number of days in the month of `dt`. Value will be 28, 29, 30, or 31.
 
 # Examples
 ```jldoctest
@@ -288,7 +288,7 @@ daysinmonth(dt::TimeType) = ((y, m) = yearmonth(dt); return daysinmonth(y, m))
 """
     isleapyear(dt::TimeType) -> Bool
 
-Returns `true` if the year of `dt` is a leap year.
+Return `true` if the year of `dt` is a leap year.
 
 # Examples
 ```jldoctest
@@ -304,7 +304,7 @@ isleapyear(dt::TimeType) = isleapyear(year(dt))
 """
     dayofyear(dt::TimeType) -> Int
 
-Returns the day of the year for `dt` with January 1st being day 1.
+Return the day of the year for `dt` with January 1st being day 1.
 """
 dayofyear(dt::TimeType) = ((y, m, d) = yearmonthday(dt); return dayofyear(y, m, d))
 
@@ -314,7 +314,7 @@ daysinyear(dt::TimeType) = 365 + isleapyear(dt)
 """
     quarterofyear(dt::TimeType) -> Int
 
-Returns the quarter that `dt` resides in. Range of value is 1:4.
+Return the quarter that `dt` resides in. Range of value is 1:4.
 """
 function quarterofyear(dt::TimeType)
     m = month(dt)
@@ -325,6 +325,6 @@ const QUARTERDAYS = (0, 90, 181, 273)
 """
     dayofquarter(dt::TimeType) -> Int
 
-Returns the day of the current quarter of `dt`. Range of value is 1:92.
+Return the day of the current quarter of `dt`. Range of value is 1:92.
 """
 dayofquarter(dt::TimeType) = dayofyear(dt) - QUARTERDAYS[quarterofyear(dt)]

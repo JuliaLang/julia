@@ -58,7 +58,7 @@ determine under what circumstances they can be merged. For instance, if `anns[1]
 is simply an ancestor of `ann[2]`, then `merge_analysis` will report that a
 fast-forward merge is possible.
 
-`merge_analysis` returns two outputs. `analysis` has several possible values:
+Return two outputs, `analysis` and `preference`. `analysis` has several possible values:
     * `MERGE_ANALYSIS_NONE`: it is not possible to merge the elements of `anns`.
     * `MERGE_ANALYSIS_NORMAL`: a regular merge, when HEAD and the commits that the
       user wishes to merge have all diverged from a common ancestor. In this case the

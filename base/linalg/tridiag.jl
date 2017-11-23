@@ -233,7 +233,7 @@ eigvecs(A::SymTridiagonal) = eigfact(A)[:vectors]
 """
     eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix
 
-Returns a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigenvector can
+Return a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigenvector can
 be obtained from the slice `M[:, k]`.)
 
 If the optional vector of eigenvalues `eigvals` is specified, `eigvecs`

@@ -47,7 +47,7 @@ end
 """
     isperm(v) -> Bool
 
-Returns `true` if `v` is a valid permutation.
+Return `true` if `v` is a valid permutation.
 
 # Examples
 ```jldoctest

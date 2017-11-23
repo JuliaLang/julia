@@ -196,7 +196,7 @@ end
     copy!(dest, do, src, so, N)
 
 Copy `N` elements from collection `src` starting at offset `so`, to array `dest` starting at
-offset `do`. Returns `dest`.
+offset `do`. Return `dest`.
 """
 function copy!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
     n == 0 && return dest
@@ -1536,7 +1536,7 @@ end
     findfirst(A)
 
 Return the linear index of the first `true` value in `A`.
-Returns `0` if no such value is found.
+Return `0` if no such value is found.
 To search for other kinds of values, pass a predicate as the first argument.
 
 # Examples
@@ -1590,7 +1590,7 @@ end
     findfirst(predicate::Function, A)
 
 Return the linear index of the first element of `A` for which `predicate` returns `true`.
-Returns `0` if there is no such element.
+Return `0` if there is no such element.
 
 # Examples
 ```jldoctest
@@ -1649,7 +1649,7 @@ end
     findlast(A)
 
 Return the linear index of the last `true` value in `A`.
-Returns `0` if there is no `true` value in `A`.
+Return `0` if there is no `true` value in `A`.
 
 # Examples
 ```jldoctest
@@ -1702,7 +1702,7 @@ end
     findlast(predicate::Function, A)
 
 Return the linear index of the last element of `A` for which `predicate` returns `true`.
-Returns `0` if there is no such element.
+Return `0` if there is no such element.
 
 # Examples
 ```jldoctest
@@ -1724,7 +1724,7 @@ findlast(testf::Function, A) = findprev(testf, A, endof(A))
     find(f::Function, A)
 
 Return a vector `I` of the linear indexes of `A` where `f(A[I])` returns `true`.
-If there are no such elements of `A`, find returns an empty array.
+If there are no such elements of `A`, return an empty array.
 
 # Examples
 ```jldoctest
@@ -1817,7 +1817,7 @@ findn(A::AbstractVector) = find(A)
 
 Return a vector of indexes for each dimension giving the locations of the non-zeros in `A`
 (determined by `A[i]!=0`).
-If there are no non-zero elements of `A`, `findn` returns a 2-tuple of empty arrays.
+If there are no non-zero elements of `A`, return a 2-tuple of empty arrays.
 
 # Examples
 ```jldoctest
@@ -1895,7 +1895,7 @@ end
 """
     findmax(itr) -> (x, index)
 
-Returns the maximum element of the collection `itr` and its index. If there are multiple
+Return the maximum element of the collection `itr` and its index. If there are multiple
 maximal elements, then the first one will be returned.
 If any data element is `NaN`, this element is returned.
 The result is in line with `max`.
@@ -1936,7 +1936,7 @@ end
 """
     findmin(itr) -> (x, index)
 
-Returns the minimum element of the collection `itr` and its index. If there are multiple
+Return the minimum element of the collection `itr` and its index. If there are multiple
 minimal elements, then the first one will be returned.
 If any data element is `NaN`, this element is returned.
 The result is in line with `min`.
@@ -1977,7 +1977,7 @@ end
 """
     indmax(itr) -> Integer
 
-Returns the index of the maximum element in a collection. If there are multiple maximal
+Return the index of the maximum element in a collection. If there are multiple maximal
 elements, then the first one will be returned.
 
 The collection must not be empty.
@@ -1999,7 +1999,7 @@ indmax(a) = findmax(a)[2]
 """
     indmin(itr) -> Integer
 
-Returns the index of the minimum element in a collection. If there are multiple minimal
+Return the index of the minimum element in a collection. If there are multiple minimal
 elements, then the first one will be returned.
 
 The collection must not be empty.
@@ -2022,7 +2022,7 @@ indmin(a) = findmin(a)[2]
 """
     indexin(a, b)
 
-Returns a vector containing the highest index in `b` for
+Return a vector containing the highest index in `b` for
 each value in `a` that is a member of `b` . The output
 vector contains 0 wherever `a` is not a member of `b`.
 
@@ -2107,7 +2107,7 @@ end
 """
     findin(a, b)
 
-Returns the indices of elements in collection `a` that appear in collection `b`.
+Return the indices of elements in collection `a` that appear in collection `b`.
 
 # Examples
 ```jldoctest

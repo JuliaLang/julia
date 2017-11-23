@@ -60,7 +60,7 @@ Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (t
 all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value
 is raised as an exception in the woken tasks.
 
-Returns the count of tasks woken up. Returns 0 if no tasks are waiting on `condition`.
+Return the count of tasks woken up. Return 0 if no tasks are waiting on `condition`.
 """
 notify(c::Condition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
 function notify(c::Condition, arg, all, error)
