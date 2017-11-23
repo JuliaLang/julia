@@ -83,6 +83,9 @@ Currently, the `@compat` macro supports the following syntaxes:
   Compat.DelimitedFiles` are provided on versions older than 0.7, where these are not yet
   part of the standard library. ([#23931])
 
+* `using Compat.Dates` is provided on versions older than 0.7, where this library is not
+  yet a part of the standard library. ([#24459])
+
 ## Module Aliases
 
 * In 0.6, some 0.5 iterator functions have been moved to the `Base.Iterators`
@@ -357,4 +360,5 @@ includes this fix. Find the minimum version from there.
 [#24047]: https://github.com/JuliaLang/julia/issues/24047
 [#24282]: https://github.com/JuliaLang/julia/issues/24282
 [#24372]: https://github.com/JuliaLang/julia/issues/24372
+[#24459]: https://github.com/JuliaLang/julia/issues/24459
 [#24657]: https://github.com/JuliaLang/julia/issues/24657

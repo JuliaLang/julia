@@ -695,6 +695,12 @@ else
     import Test, SharedArrays, Mmap, DelimitedFiles
 end
 
+if VERSION < v"0.7.0-DEV.2575"
+    const Dates = Base.Dates
+else
+    import Dates
+end
+
 # 0.7.0-DEV.1993
 @static if !isdefined(Base, :EqualTo)
     if VERSION >= v"0.6.0"

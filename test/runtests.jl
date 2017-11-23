@@ -645,6 +645,8 @@ cm359() = @__MODULE__
 
 # PR 21378
 let
+    import Compat: Dates
+
     # https://en.wikipedia.org/wiki/Swatch_Internet_Time
     eval(Expr(
         :type, false,
@@ -657,7 +659,7 @@ let
     Dates.toms(b::Beat) = Dates.value(b) * 86400
     Dates._units(b::Beat) = " beat" * (abs(Dates.value(b)) == 1 ? "" : "s")
     Base.promote_rule(::Type{Dates.Day}, ::Type{Beat}) = Dates.Millisecond
-    Base.convert{T<:Dates.Millisecond}(::Type{T}, b::Beat) = T(Dates.toms(b))
+    Base.convert(::Type{Dates.Millisecond}, b::Beat) = Dates.Millisecond(Dates.toms(b))
 
     @test Beat(1000) == Dates.Day(1)
     @test Beat(1) < Dates.Day(1)
@@ -845,6 +847,14 @@ module Test23876
     @test isdefined(@__MODULE__, :SharedArray)
     @test isdefined(@__MODULE__, :procs)
     @test isdefined(Mmap, :mmap)
+end
+
+# 0.7
+module Test24459
+    using Compat
+    using Compat.Test
+    using Compat.Dates
+    @test isdefined(@__MODULE__, :Dates)
 end
 
 let a = [0,1,2,3,0,1,2,3]
