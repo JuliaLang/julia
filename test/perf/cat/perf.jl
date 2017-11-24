@@ -14,7 +14,7 @@ function cat2d_perf2(n, iter)
     a = rand(n,n)
     b = rand(n,n)
     for i=1:iter
-        c = Array{Float64}(2n,2n)
+        c = Matrix{Float64}(uninitialized, 2n,2n)
         c[  1:n,  1:n] = a
         c[  1:n,  n+1:end] = b
         c[n+1:end,1:n] = b
@@ -35,7 +35,7 @@ function hcat_perf2(n, iter)
     a = rand(n,n)
     b = rand(n,n)
     for i=1:iter
-        c = Array{Float64}(n, 4n)
+        c = Matrix{Float64}(uninitialized, n, 4n)
         c[:,    1:  n] = a
         c[:,  n+1: 2n] = b
         c[:, 2n+1: 3n] = b
@@ -55,7 +55,7 @@ function vcat_perf2(n, iter)
     a = rand(n,n)
     b = rand(n,n)
     for i=1:iter
-        c = Array{Float64}(4n, n)
+        c = Matrix{Float64}(uninitialized, 4n, n)
         c[   1: n, :] = a
         c[ n+1:2n, :] = b
         c[2n+1:3n, :] = b
@@ -75,7 +75,7 @@ function catnd_perf2(n, iter)
     a = rand(1,n,n,1)
     b = rand(1,n,n)
     for i = 1:iter
-        c = Array{Float64}(1, n, 4n, 1)
+        c = Array{Float64}(uninitialized, 1, n, 4n, 1)
         c[1,:,   1: n,1] = a
         c[1,:, n+1:2n,1] = b
         c[1,:,2n+1:3n,1] = b
