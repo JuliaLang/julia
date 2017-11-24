@@ -89,7 +89,7 @@ end
 
 function find_package(name::String)
     endswith(name, ".jl") && (name = chop(name, 0, 3))
-    for dir in [Pkg.dir(); LOAD_PATH]
+    for dir in [isassigned(_Pkg.dir) ? _Pkg.dir[]() : []; LOAD_PATH]
         dir = abspath(dir)
         @return_if_file joinpath(dir, "$name.jl")
         @return_if_file joinpath(dir, "$name.jl", "src", "$name.jl")

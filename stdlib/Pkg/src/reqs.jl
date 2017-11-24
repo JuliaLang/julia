@@ -3,7 +3,8 @@
 module Reqs
 
 import Base: ==
-import ...Pkg.PkgError
+import Pkg
+import ..PkgError
 using ..Types
 
 # representing lines of REQUIRE files
