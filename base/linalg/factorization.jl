@@ -47,7 +47,7 @@ end
 
 ### General promotion rules
 convert(::Type{Factorization{T}}, F::Factorization{T}) where {T} = F
-inv(F::Factorization{T}) where {T} = (n = size(F, 1); A_ldiv_B!(F, Matrix{T}(I, n, n)))
+inv(F::Factorization{T}) where {T} = (n = size(F, 1); A_ldiv_B!2(F, Matrix{T}(I, n, n)))
 
 Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, h, 1:nfields(F))
 Base.:(==)(  F::T, G::T) where {T<:Factorization} = all(f -> getfield(F, f) == getfield(G, f), 1:nfields(F))
@@ -57,26 +57,27 @@ Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F,
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::Factorization{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
     c2r = reshape(transpose(reinterpret(T, reshape(B, (1, length(B))))), size(B, 1), 2*size(B, 2))
-    x = A_ldiv_B!(F, c2r)
+    x = A_ldiv_B!2(F, c2r)
     return reshape(collect(reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)))), _ret_size(F, B))
 end
 
-for (f1, f2) in ((:\, :A_ldiv_B!),
-                 (:Ac_ldiv_B, :Ac_ldiv_B!))
+for (f, f!2) in ((:\, :A_ldiv_B!2),
+                 (:Ac_ldiv_B, :Ac_ldiv_B!2))
     @eval begin
-        function $f1(F::Factorization, B::AbstractVecOrMat)
+        function $f(F::Factorization, B::AbstractVecOrMat)
             TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
             BB = similar(B, TFB, size(B))
             copy!(BB, B)
-            $f2(F, BB)
+            $f!2(F, BB)
         end
     end
 end
 
 # support the same 3-arg idiom as in our other in-place A_*_B functions:
-for f in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!)
-    @eval $f(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) =
-        $f(A, copy!(Y, B))
+for f! in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!)
+    f!2 = Symbol(f!,2)
+    @eval $f!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) =
+        $f!2(A, copy!(Y, B))
 end
 
 # fallback methods for transposed solves
@@ -84,11 +85,9 @@ At_ldiv_B(F::Factorization{<:Real}, B::AbstractVecOrMat) = Ac_ldiv_B(F, B)
 At_ldiv_B(F::Factorization, B) = conj.(Ac_ldiv_B(F, conj.(B)))
 
 """
-    A_ldiv_B!([Y,] A, B) -> Y
+    A_ldiv_B!(Y, A, B) -> Y
 
 Compute `A \\ B` in-place and store the result in `Y`, returning the result.
-If only two arguments are passed, then `A_ldiv_B!(A, B)` overwrites `B` with
-the result.
 
 The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
 factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
@@ -100,17 +99,41 @@ control over the factorization of `A`.
 A_ldiv_B!
 
 """
-    Ac_ldiv_B!([Y,] A, B) -> Y
+    A_ldiv_B!2(A, B)
+
+Compute `A \\ B` in-place and store the result in `B`, returning the result.
+"""
+A_ldiv_B!2
+
+
+"""
+    Ac_ldiv_B!(Y, A, B) -> Y
 
 Similar to [`A_ldiv_B!`](@ref), but return ``Aᴴ`` \\ ``B``,
-computing the result in-place in `Y` (or overwriting `B` if `Y` is not supplied).
+computing the result in-place in `Y`.
 """
 Ac_ldiv_B!
 
 """
-    At_ldiv_B!([Y,] A, B) -> Y
+    At_ldiv_B!(Y, A, B) -> Y
 
 Similar to [`A_ldiv_B!`](@ref), but return ``Aᵀ`` \\ ``B``,
-computing the result in-place in `Y` (or overwriting `B` if `Y` is not supplied).
+computing the result in-place in `Y`.
 """
 At_ldiv_B!
+
+"""
+    Ac_ldiv_B!2(A, B)
+
+Similar to [`Ac_ldiv_B!`](@ref), but return ``Aᴴ`` \\ ``B``,
+overwriting `B` with the result.
+"""
+Ac_ldiv_B!2
+
+"""
+    At_ldiv_B!2(Y, A, B) -> Y
+
+Similar to [`At_ldiv_B!`](@ref), but return ``Aᵀ`` \\ ``B``,
+overwriting `B` with the result.
+"""
+At_ldiv_B!2

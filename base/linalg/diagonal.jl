@@ -150,39 +150,39 @@ end
 (*)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
 (*)(D::Diagonal, V::AbstractVector) = D.diag .* V
 
-(*)(A::AbstractTriangular, D::Diagonal) = A_mul_B!(copy(A), D)
-(*)(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, copy(B))
+(*)(A::AbstractTriangular, D::Diagonal) = A_mul_B!1(copy(A), D)
+(*)(D::Diagonal, B::AbstractTriangular) = A_mul_B!2(D, copy(B))
 
 (*)(A::AbstractMatrix, D::Diagonal) =
     scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D.diag)
 (*)(D::Diagonal, A::AbstractMatrix) =
     scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D.diag, A)
 
-A_mul_B!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) =
-    typeof(A)(A_mul_B!(A.data, D))
-function A_mul_B!(A::UnitLowerTriangular, D::Diagonal)
-    A_mul_B!(A.data, D)
+A_mul_B!1(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) =
+    typeof(A)(A_mul_B!1(A.data, D))
+function A_mul_B!1(A::UnitLowerTriangular, D::Diagonal)
+    A_mul_B!1(A.data, D)
     for i = 1:size(A, 1)
         A.data[i,i] = D.diag[i]
     end
     LowerTriangular(A.data)
 end
-function A_mul_B!(A::UnitUpperTriangular, D::Diagonal)
-    A_mul_B!(A.data, D)
+function A_mul_B!1(A::UnitUpperTriangular, D::Diagonal)
+    A_mul_B!1(A.data, D)
     for i = 1:size(A, 1)
         A.data[i,i] = D.diag[i]
     end
     UpperTriangular(A.data)
 end
-function A_mul_B!(D::Diagonal, B::UnitLowerTriangular)
-    A_mul_B!(D, B.data)
+function A_mul_B!2(D::Diagonal, B::UnitLowerTriangular)
+    A_mul_B!2(D, B.data)
     for i = 1:size(B, 1)
         B.data[i,i] = D.diag[i]
     end
     LowerTriangular(B.data)
 end
-function A_mul_B!(D::Diagonal, B::UnitUpperTriangular)
-    A_mul_B!(D, B.data)
+function A_mul_B!2(D::Diagonal, B::UnitUpperTriangular)
+    A_mul_B!2(D, B.data)
     for i = 1:size(B, 1)
         B.data[i,i] = D.diag[i]
     end
@@ -190,51 +190,54 @@ function A_mul_B!(D::Diagonal, B::UnitUpperTriangular)
 end
 
 Ac_mul_B(D::Diagonal, B::Diagonal) = Diagonal(adjoint.(D.diag) .* B.diag)
-Ac_mul_B(A::AbstractTriangular, D::Diagonal) = A_mul_B!(adjoint(A), D)
+Ac_mul_B(A::AbstractTriangular, D::Diagonal) = A_mul_B!1(adjoint(A), D)
 function Ac_mul_B(A::AbstractMatrix, D::Diagonal)
     Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     adjoint!(Ac, A)
-    A_mul_B!(Ac, D)
+    A_mul_B!1(Ac, D)
 end
 
 At_mul_B(D::Diagonal, B::Diagonal) = Diagonal(transpose.(D.diag) .* B.diag)
-At_mul_B(A::AbstractTriangular, D::Diagonal) = A_mul_B!(transpose(A), D)
+At_mul_B(A::AbstractTriangular, D::Diagonal) = A_mul_B!1(transpose(A), D)
 function At_mul_B(A::AbstractMatrix, D::Diagonal)
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     transpose!(At, A)
-    A_mul_B!(At, D)
+    A_mul_B!1(At, D)
 end
 
 A_mul_Bc(D::Diagonal, B::Diagonal) = Diagonal(D.diag .* adjoint.(B.diag))
-A_mul_Bc(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, adjoint(B))
-A_mul_Bc(D::Diagonal, Q::Union{Base.LinAlg.QRCompactWYQ,Base.LinAlg.QRPackedQ}) = A_mul_Bc!(Array(D), Q)
+A_mul_Bc(D::Diagonal, B::AbstractTriangular) = A_mul_B!2(D, adjoint(B))
+A_mul_Bc(D::Diagonal, Q::Union{Base.LinAlg.QRCompactWYQ,Base.LinAlg.QRPackedQ}) = A_mul_Bc!1(Array(D), Q)
 function A_mul_Bc(D::Diagonal, A::AbstractMatrix)
     Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     adjoint!(Ac, A)
-    A_mul_B!(D, Ac)
+    A_mul_B!2(D, Ac)
 end
 
 A_mul_Bt(D::Diagonal, B::Diagonal) = Diagonal(D.diag .* transpose.(B.diag))
-A_mul_Bt(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, transpose(B))
+A_mul_Bt(D::Diagonal, B::AbstractTriangular) = A_mul_B!2(D, transpose(B))
 function A_mul_Bt(D::Diagonal, A::AbstractMatrix)
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     transpose!(At, A)
-    A_mul_B!(D, At)
+    A_mul_B!2(D, At)
 end
 
 Ac_mul_Bc(D::Diagonal, B::Diagonal) = Diagonal(adjoint.(D.diag) .* adjoint.(B.diag))
 At_mul_Bt(D::Diagonal, B::Diagonal) = Diagonal(transpose.(D.diag) .* transpose.(B.diag))
 
-A_mul_B!(A::Diagonal,B::Diagonal)  = throw(MethodError(A_mul_B!, Tuple{Diagonal,Diagonal}))
-At_mul_B!(A::Diagonal,B::Diagonal) = throw(MethodError(At_mul_B!, Tuple{Diagonal,Diagonal}))
-Ac_mul_B!(A::Diagonal,B::Diagonal) = throw(MethodError(Ac_mul_B!, Tuple{Diagonal,Diagonal}))
-A_mul_B!(A::Base.LinAlg.QRPackedQ, D::Diagonal) = throw(MethodError(A_mul_B!, Tuple{Diagonal,Diagonal}))
-A_mul_B!(A::Diagonal,B::AbstractMatrix)  = scale!(A.diag,B)
-At_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(A.diag,B)
-Ac_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(conj(A.diag),B)
-A_mul_B!(A::AbstractMatrix,B::Diagonal)  = scale!(A,B.diag)
-A_mul_Bt!(A::AbstractMatrix,B::Diagonal) = scale!(A,B.diag)
-A_mul_Bc!(A::AbstractMatrix,B::Diagonal) = scale!(A,conj(B.diag))
+A_mul_B!1(A::Diagonal,B::Diagonal) = Diagonal(A.diag .*= B.diag)
+A_mul_B!2(A::Diagonal,B::Diagonal) = Diagonal(B.diag .= A.diag .* B.diag)
+A_mul_Bt!1(A::Diagonal,B::Diagonal) = Diagonal(A.diag .*= transpose.(B.diag))
+At_mul_B!2(A::Diagonal,B::Diagonal) = Diagonal(B.diag .= transpose.(A.diag) .* B.diag)
+A_mul_Bc!1(A::Diagonal,B::Diagonal) = Diagonal(A.diag .*= adjoint.(B.diag))
+Ac_mul_B!2(A::Diagonal,B::Diagonal) = Diagonal(B.diag .= adjoint.(A.diag) .* B.diag)
+
+A_mul_B!2(A::Diagonal,B::AbstractMatrix)  = scale!(A.diag,B)
+At_mul_B!2(A::Diagonal,B::AbstractMatrix) = scale!(transpose.(A.diag),B)
+Ac_mul_B!2(A::Diagonal,B::AbstractMatrix) = scale!(adjoint.(A.diag),B)
+A_mul_B!1(A::AbstractMatrix,B::Diagonal)  = scale!(A,B.diag)
+A_mul_Bt!1(A::AbstractMatrix,B::Diagonal) = scale!(A,transpose.(B.diag))
+A_mul_Bc!1(A::AbstractMatrix,B::Diagonal) = scale!(A,adjoint.(B.diag))
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
 A_mul_B!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= A.diag .* in
@@ -253,7 +256,7 @@ A_mul_Bc(A::Diagonal, B::RealHermSymComplexHerm) = A*B
 Ac_mul_B(A::RealHermSymComplexHerm, B::Diagonal) = A*B
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
-function A_ldiv_B!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
+function A_ldiv_B!2(D::Diagonal{T}, v::AbstractVector{T}) where {T}
     if length(v) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
     end
@@ -266,7 +269,7 @@ function A_ldiv_B!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
     end
     v
 end
-function A_ldiv_B!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
+function A_ldiv_B!2(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
     if size(V,1) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
     end
@@ -282,10 +285,10 @@ function A_ldiv_B!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
     V
 end
 
-Ac_ldiv_B!(D::Diagonal{T}, B::AbstractVecOrMat{T}) where {T} = A_ldiv_B!(conj(D), B)
-At_ldiv_B!(D::Diagonal{T}, B::AbstractVecOrMat{T}) where {T} = A_ldiv_B!(D, B)
+Ac_ldiv_B!2(D::Diagonal{T}, B::AbstractVecOrMat{T}) where {T} = A_ldiv_B!2(conj(D), B)
+At_ldiv_B!2(D::Diagonal{T}, B::AbstractVecOrMat{T}) where {T} = A_ldiv_B!2(D, B)
 
-function A_rdiv_B!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
+function A_rdiv_B!1(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
     dd = D.diag
     m, n = size(A)
     if (k = length(dd)) ≠ n
@@ -303,13 +306,13 @@ function A_rdiv_B!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
     A
 end
 
-A_rdiv_Bc!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, conj(D))
-A_rdiv_Bt!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, D)
+A_rdiv_Bc!1(A::AbstractMatrix{T}, D::Diagonal{T}) where {T} = A_rdiv_B!1(A, conj(D))
+A_rdiv_Bt!1(A::AbstractMatrix{T}, D::Diagonal{T}) where {T} = A_rdiv_B!1(A, D)
 
 (\)(F::Factorization, D::Diagonal) =
-    A_ldiv_B!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
+    A_ldiv_B!2(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
 Ac_ldiv_B(F::Factorization, D::Diagonal) =
-    Ac_ldiv_B!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
+    Ac_ldiv_B!2(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
 
 # Methods to resolve ambiguities with `Diagonal`
 @inline *(rowvec::RowVector, D::Diagonal) = transpose(D * transpose(rowvec))
@@ -352,7 +355,7 @@ for f in (:exp, :log, :sqrt,
 end
 
 #Linear solver
-function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
+function A_ldiv_B!2(D::Diagonal, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))

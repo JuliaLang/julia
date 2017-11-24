@@ -57,7 +57,7 @@ function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Boo
     end
     F = lqfact(A)
     L, Q = F[:L], F[:Q]
-    return L, !full ? Array(Q) : A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))
+    return L, !full ? Array(Q) : A_mul_B!2(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))
 end
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
@@ -84,7 +84,7 @@ function getindex(A::LQ, d::Symbol)
 end
 
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
-    A_mul_B!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
+    A_mul_B!2(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
 getq(A::LQ) = LQPackedQ(A.factors, A.τ)
 
@@ -120,56 +120,52 @@ end
 
 
 ## Multiplication by LQ
-A_mul_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+A_mul_B!2(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     A[:L] * LAPACK.ormlq!('L', 'N', A.factors, A.τ, B)
-A_mul_B!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat} =
-    A[:L] * LAPACK.ormlq!('L', 'N', A.factors, A.τ, Matrix(B))
-A_mul_B!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat} =
-    A_mul_B!(zeros(eltype(A), size(A)), Matrix(A), Matrix(B))
-function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
-    TAB = promote_type(TA, TB)
-    A_mul_B!(convert(Factorization{TAB},A), copy_oftype(B, TAB))
-end
-function *(A::LQ{TA},B::QR{TB}) where {TA,TB}
-    TAB = promote_type(TA, TB)
-    A_mul_B!(convert(Factorization{TAB},A), convert(Factorization{TAB},B))
-end
-function *(A::QR{TA},B::LQ{TB}) where {TA,TB}
-    TAB = promote_type(TA, TB)
-    A_mul_B!(convert(Factorization{TAB},A), convert(Factorization{TAB},B))
-end
+
+# function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
+#     TAB = promote_type(TA, TB)
+#     A_mul_B!2(convert(Factorization{TAB},A), copy_oftype(B, TAB))
+# end
+# function *(A::LQ{TA},B::QR{TB}) where {TA,TB}
+#     TAB = promote_type(TA, TB)
+#     A_mul_B!2(convert(Factorization{TAB},A), Matrix(convert(Factorization{TAB},B)))
+# end
+*(A::LQ, B::StridedVecOrMat) = Matrix(A) * B
+*(A::LQ, B::QR) = Matrix(A) * Matrix(B)
+*(A::QR, B::LQ) = Matrix(A) * Matrix(B)
 
 ## Multiplication by Q
 ### QB
-A_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
+A_mul_B!2(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
 function (*)(A::LQPackedQ, B::StridedVecOrMat)
     TAB = promote_type(eltype(A), eltype(B))
-    A_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
+    A_mul_B!2(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
 end
 
 ### QcB
-Ac_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasReal} = LAPACK.ormlq!('L','T',A.factors,A.τ,B)
-Ac_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasComplex} = LAPACK.ormlq!('L','C',A.factors,A.τ,B)
+Ac_mul_B!2(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasReal} = LAPACK.ormlq!('L','T',A.factors,A.τ,B)
+Ac_mul_B!2(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasComplex} = LAPACK.ormlq!('L','C',A.factors,A.τ,B)
 function Ac_mul_B(A::LQPackedQ, B::StridedVecOrMat)
     TAB = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
-        Ac_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
+        Ac_mul_B!2(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
     elseif size(B,1) == size(A.factors,1)
-        Ac_mul_B!(convert(AbstractMatrix{TAB}, A), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
+        Ac_mul_B!2(convert(AbstractMatrix{TAB}, A), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
     else
         throw(DimensionMismatch("first dimension of B, $(size(B,1)), must equal one of the dimensions of A, $(size(A))"))
     end
 end
 
 ### QBc/QcBc
-for (f1, f2) in ((:A_mul_Bc, :A_mul_B!),
-                 (:Ac_mul_Bc, :Ac_mul_B!))
+for (f, f!2) in ((:A_mul_Bc, :A_mul_B!2),
+                 (:Ac_mul_Bc, :Ac_mul_B!2))
     @eval begin
-        function ($f1)(A::LQPackedQ, B::StridedVecOrMat)
+        function ($f)(A::LQPackedQ, B::StridedVecOrMat)
             TAB = promote_type(eltype(A), eltype(B))
             BB = similar(B, TAB, (size(B, 2), size(B, 1)))
             adjoint!(BB, B)
-            return ($f2)(A, BB)
+            return ($f!2)(A, BB)
         end
     end
 end
@@ -179,11 +175,11 @@ end
 # match the number of columns (nQ) of the LQPackedQ (Q) (necessary for in-place
 # operation, and the underlying LAPACK routine (ormlq) treats the implicit Q
 # as its (nQ-by-nQ) square form)
-A_mul_B!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasFloat} =
+A_mul_B!1(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasFloat} =
     LAPACK.ormlq!('R', 'N', B.factors, B.τ, A)
-A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasReal} =
+A_mul_Bc!1(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasReal} =
     LAPACK.ormlq!('R', 'T', B.factors, B.τ, A)
-A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasComplex} =
+A_mul_Bc!1(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasComplex} =
     LAPACK.ormlq!('R', 'C', B.factors, B.τ, A)
 
 # out-of-place right application of LQPackedQs
@@ -200,12 +196,12 @@ A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasComplex} =
 #
 function A_mul_Bc(A::StridedVecOrMat, Q::LQPackedQ)
     TR = promote_type(eltype(A), eltype(Q))
-    return A_mul_Bc!(copy_oftype(A, TR), convert(AbstractMatrix{TR}, Q))
+    return A_mul_Bc!1(copy_oftype(A, TR), convert(AbstractMatrix{TR}, Q))
 end
 function Ac_mul_Bc(A::StridedMatrix, Q::LQPackedQ)
     TR = promote_type(eltype(A), eltype(Q))
     C = adjoint!(similar(A, TR, reverse(size(A))), A)
-    return A_mul_Bc!(C, convert(AbstractMatrix{TR}, Q))
+    return A_mul_Bc!1(C, convert(AbstractMatrix{TR}, Q))
 end
 #
 # (2) the inner dimension in the multiplication is the LQPackedQ's first dimension.
@@ -230,7 +226,7 @@ function *(A::StridedVecOrMat, Q::LQPackedQ)
     else
         _rightappdimmismatch("columns")
     end
-    return A_mul_B!(C, convert(AbstractMatrix{TR}, Q))
+    return A_mul_B!1(C, convert(AbstractMatrix{TR}, Q))
 end
 function Ac_mul_B(A::StridedMatrix, Q::LQPackedQ)
     TR = promote_type(eltype(A), eltype(Q))
@@ -242,7 +238,7 @@ function Ac_mul_B(A::StridedMatrix, Q::LQPackedQ)
     else
         _rightappdimmismatch("rows")
     end
-    return A_mul_B!(C, convert(AbstractMatrix{TR}, Q))
+    return A_mul_B!1(C, convert(AbstractMatrix{TR}, Q))
 end
 _rightappdimmismatch(rowsorcols) =
     throw(DimensionMismatch(string("the number of $(rowsorcols) of the matrix on the left ",
@@ -256,7 +252,7 @@ function (\)(A::LQ{TA}, b::StridedVector{Tb}) where {TA,Tb}
     m = checksquare(A)
     m == length(b) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has length $(length(b))"))
     AA = convert(Factorization{S}, A)
-    x = A_ldiv_B!(AA, copy_oftype(b, S))
+    x = A_ldiv_B!2(AA, copy_oftype(b, S))
     return x
 end
 function (\)(A::LQ{TA},B::StridedMatrix{TB}) where {TA,TB}
@@ -264,20 +260,20 @@ function (\)(A::LQ{TA},B::StridedMatrix{TB}) where {TA,TB}
     m = checksquare(A)
     m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
     AA = convert(Factorization{S}, A)
-    X = A_ldiv_B!(AA, copy_oftype(B, S))
+    X = A_ldiv_B!2(AA, copy_oftype(B, S))
     return X
 end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
     c2r = reshape(transpose(reinterpret(T, reshape(B, (1, length(B))))), size(B, 1), 2*size(B, 2))
-    x = A_ldiv_B!(F, c2r)
+    x = A_ldiv_B!2(F, c2r)
     return reshape(collect(reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)))),
                            isa(B, AbstractVector) ? (size(F,2),) : (size(F,2), size(B,2)))
 end
 
 
-function A_ldiv_B!(A::LQ{T}, B::StridedVecOrMat{T}) where T
-    Ac_mul_B!(A[:Q], A_ldiv_B!(LowerTriangular(A[:L]),B))
+function A_ldiv_B!2(A::LQ{T}, B::StridedVecOrMat{T}) where T
+    Ac_mul_B!2(A[:Q], A_ldiv_B!2(LowerTriangular(A[:L]),B))
     return B
 end

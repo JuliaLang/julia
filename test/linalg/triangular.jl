@@ -2,7 +2,7 @@
 
 debug = false
 using Test
-using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!, UnitUpperTriangular, UnitLowerTriangular, A_rdiv_B!, A_rdiv_Bt!, A_rdiv_Bc!
+using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!, UnitUpperTriangular, UnitLowerTriangular, A_rdiv_B!1, A_rdiv_Bt!1, A_rdiv_Bc!1, A_mul_B!1, A_mul_B!2, A_mul_Bt!1, A_mul_Bc!1, At_mul_B!2, Ac_mul_B!2
 
 debug && println("Triangular matrices")
 
@@ -318,7 +318,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
 
             if !(eltyB in (BigFloat, Complex{BigFloat})) # rand does not support BigFloat and Complex{BigFloat} as of Dec 2015
                 Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
-                @test Base.LinAlg.A_mul_B!(Tri,copy(A1)) ≈ Tri*Matrix(A1)
+                @test Base.LinAlg.A_mul_B!2(Tri,copy(A1)) ≈ Tri*Matrix(A1)
             end
 
             # Triangular-dense Matrix/vector multiplication
@@ -355,12 +355,12 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
                 @test At_mul_B!(similar(B1),A1,B1) ≈ A1.'*B1
             end
             #error handling
-            @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(A1, ones(eltyB,n+1))
-            @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(ones(eltyB,n+1,n+1), A1)
-            @test_throws DimensionMismatch Base.LinAlg.At_mul_B!(A1, ones(eltyB,n+1))
-            @test_throws DimensionMismatch Base.LinAlg.Ac_mul_B!(A1, ones(eltyB,n+1))
-            @test_throws DimensionMismatch Base.LinAlg.A_mul_Bc!(ones(eltyB,n+1,n+1),A1)
-            @test_throws DimensionMismatch Base.LinAlg.A_mul_Bt!(ones(eltyB,n+1,n+1),A1)
+            @test_throws DimensionMismatch Base.LinAlg.A_mul_B!2(A1, ones(eltyB,n+1))
+            @test_throws DimensionMismatch Base.LinAlg.A_mul_B!1(ones(eltyB,n+1,n+1), A1)
+            @test_throws DimensionMismatch Base.LinAlg.At_mul_B!2(A1, ones(eltyB,n+1))
+            @test_throws DimensionMismatch Base.LinAlg.Ac_mul_B!2(A1, ones(eltyB,n+1))
+            @test_throws DimensionMismatch Base.LinAlg.A_mul_Bc!1(ones(eltyB,n+1,n+1),A1)
+            @test_throws DimensionMismatch Base.LinAlg.A_mul_Bt!1(ones(eltyB,n+1,n+1),A1)
 
             # ... and division
             @test A1\B[:,1] ≈ Matrix(A1)\B[:,1]
@@ -489,20 +489,20 @@ end
 let n = 5
     A = rand(Float16, n, n)
     B = rand(Float16, n-1, n-1)
-    @test_throws DimensionMismatch A_rdiv_B!(A, LowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_B!(A, UpperTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_B!(A, UnitLowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_B!(A, UnitUpperTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_B!1(A, LowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_B!1(A, UpperTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_B!1(A, UnitLowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_B!1(A, UnitUpperTriangular(B))
 
-    @test_throws DimensionMismatch A_rdiv_Bc!(A, LowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bc!(A, UpperTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bc!(A, UnitLowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bc!(A, UnitUpperTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bc!1(A, LowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bc!1(A, UpperTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bc!1(A, UnitLowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bc!1(A, UnitUpperTriangular(B))
 
-    @test_throws DimensionMismatch A_rdiv_Bt!(A, LowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bt!(A, UpperTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bt!(A, UnitLowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bt!(A, UnitUpperTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bt!1(A, LowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bt!1(A, UpperTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bt!1(A, UnitLowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bt!1(A, UnitUpperTriangular(B))
 end
 
 # Test that UpperTriangular(LowerTriangular) throws. See #16201

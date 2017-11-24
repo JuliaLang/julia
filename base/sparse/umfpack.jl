@@ -5,7 +5,7 @@ module UMFPACK
 export UmfpackLU
 
 import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
-import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact
+import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, A_ldiv_B!2, Ac_ldiv_B!2, At_ldiv_B!2, Factorization, det, lufact
 
 using ..SparseArrays
 import ..SparseArrays: increment, increment!, decrement, decrement!, nnz
@@ -382,12 +382,12 @@ function nnz(lu::UmfpackLU)
 end
 
 ### Solve with Factorization
-A_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = A_ldiv_B!(B, lu, copy(B))
-At_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = At_ldiv_B!(B, lu, copy(B))
-Ac_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = Ac_ldiv_B!(B, lu, copy(B))
-A_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = A_ldiv_B!(B, lu, copy(B))
-At_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = At_ldiv_B!(B, lu, copy(B))
-Ac_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = Ac_ldiv_B!(B, lu, copy(B))
+A_ldiv_B!2(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = A_ldiv_B!(B, lu, copy(B))
+At_ldiv_B!2(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = At_ldiv_B!(B, lu, copy(B))
+Ac_ldiv_B!2(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = Ac_ldiv_B!(B, lu, copy(B))
+A_ldiv_B!2(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = A_ldiv_B!(B, lu, copy(B))
+At_ldiv_B!2(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = At_ldiv_B!(B, lu, copy(B))
+Ac_ldiv_B!2(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = Ac_ldiv_B!(B, lu, copy(B))
 
 A_ldiv_B!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
     _Aq_ldiv_B!(X, lu, B, UMFPACK_A)
