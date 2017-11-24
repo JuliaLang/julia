@@ -41,7 +41,7 @@ const common_postorder = Ref{Ptr{Cint}}()
 ### These offsets are defined in SuiteSparse_wrapper.c
 const common_size = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
 
-const cholmod_com_offsets = Vector{Csize_t}(19)
+const cholmod_com_offsets = Vector{Csize_t}(uninitialized, 19)
 ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
     Void, (Ptr{Csize_t},), cholmod_com_offsets)
 
@@ -68,7 +68,7 @@ function defaults(a::Vector{UInt8})
     return a
 end
 
-const build_version_array = Vector{Cint}(3)
+const build_version_array = Vector{Cint}(uninitialized, 3)
 ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), build_version_array)
 const build_version = VersionNumber(build_version_array...)
 
@@ -76,7 +76,7 @@ function __init__()
     try
         ### Check if the linked library is compatible with the Julia code
         if Libdl.dlsym_e(Libdl.dlopen("libcholmod"), :cholmod_version) != C_NULL
-            current_version_array = Vector{Cint}(3)
+            current_version_array = Vector{Cint}(uninitialized, 3)
             ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), current_version_array)
             current_version = VersionNumber(current_version_array...)
         else # CHOLMOD < 2.1.1 does not include cholmod_version()
@@ -1029,7 +1029,7 @@ end
 ## convertion back to base Julia types
 function convert(::Type{Matrix{T}}, D::Dense{T}) where T
     s = unsafe_load(D.p)
-    a = Matrix{T}(s.nrow, s.ncol)
+    a = Matrix{T}(uninitialized, s.nrow, s.ncol)
     copy!(a, D)
 end
 
@@ -1060,7 +1060,7 @@ function convert(::Type{Vector{T}}, D::Dense{T}) where T
     if size(D, 2) > 1
         throw(DimensionMismatch("input must be a vector but had $(size(D, 2)) columns"))
     end
-    copy!(Vector{T}(size(D, 1)), D)
+    copy!(Vector{T}(uninitialized, size(D, 1)), D)
 end
 convert(::Type{Vector}, D::Dense{T}) where {T} = convert(Vector{T}, D)
 
@@ -1143,7 +1143,7 @@ function sparse(F::Factor)
     SparseArrays.sortSparseMatrixCSC!(A)
     p = get_perm(F)
     if p != [1:s.n;]
-        pinv = Vector{Int}(length(p))
+        pinv = Vector{Int}(uninitialized, length(p))
         for k = 1:length(p)
             pinv[p[k]] = k
         end
@@ -1273,7 +1273,7 @@ function getindex(F::Factor, sym::Symbol)
 end
 
 function getLd!(S::SparseMatrixCSC)
-    d = Vector{eltype(S)}(size(S, 1))
+    d = Vector{eltype(S)}(uninitialized, size(S, 1))
     fill!(d, 0)
     col = 1
     for k = 1:nnz(S)
