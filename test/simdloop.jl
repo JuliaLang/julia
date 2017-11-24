@@ -116,23 +116,23 @@ function simd_cartesian_range!(indexes, crng)
 end
 
 crng = CartesianRange(2:4, 0:1, 1:1, 3:5)
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
+indexes = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
 @test indexes == vec(collect(crng))
 
 crng = CartesianRange(-1:1, 1:3)
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
+indexes = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
 @test indexes == vec(collect(crng))
 
 crng = CartesianRange(-1:-1, 1:3)
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
+indexes = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
 @test indexes == vec(collect(crng))
 
 crng = CartesianRange(2:4)
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
+indexes = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
 @test indexes == collect(crng)
 
 crng = CartesianRange()
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
+indexes = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
 @test indexes == vec(collect(crng))
 
 # @simd with array as "range"
