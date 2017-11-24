@@ -663,6 +663,9 @@ Deprecated or removed
   * `a:b` is deprecated for constructing a `StepRange` when `a` and `b` have physical units
     (Dates and Times). Use `a:s:b`, where `s = Dates.Day(1)` or `s = Dates.Second(1)`.
 
+  * `cumsum`, `cumprod`, `accumulate`, and their mutating versions now require a `dim`
+    argument instead of defaulting to using the first dimension ([#24684]).
+
 Command-line option changes
 ---------------------------
 

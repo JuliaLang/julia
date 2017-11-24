@@ -2105,6 +2105,9 @@ end
     @deprecate chol!(x::Number, uplo) chol(x) false
 end
 
+@deprecate cumsum(A::AbstractArray)     cumsum(A, 1)
+@deprecate cumsum_kbn(A::AbstractArray) cumsum_kbn(A, 1)
+@deprecate cumprod(A::AbstractArray)    cumprod(A, 1)
 
 # issue #16307
 @deprecate finalizer(o, f::Function) finalizer(f, o)

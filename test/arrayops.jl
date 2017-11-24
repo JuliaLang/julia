@@ -632,7 +632,6 @@ end
     A1 = reshape(repmat([1,2],1,12),2,3,4)
     A2 = reshape(repmat([1 2 3],2,4),2,3,4)
     A3 = reshape(repmat([1 2 3 4],6,1),2,3,4)
-    @test isequal(cumsum(A),A1)
     @test isequal(cumsum(A,1),A1)
     @test isequal(cumsum(A,2),A2)
     @test isequal(cumsum(A,3),A3)
@@ -931,7 +930,7 @@ end
 end
 
 # issue #2342
-@test isequal(cumsum([1 2 3]), [1 2 3])
+@test isequal(cumsum([1 2 3], 1), [1 2 3])
 
 @testset "set-like operations" begin
     @test isequal(union([1,2,3], [4,3,4]), [1,2,3,4])
