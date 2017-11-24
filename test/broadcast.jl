@@ -444,7 +444,7 @@ getfield19745(x)             = x
 function Base.Broadcast.broadcast_c(f, ::Type{Array19745}, A, Bs...)
     T     = Base.Broadcast._broadcast_eltype(f, A, Bs...)
     shape = Base.Broadcast.broadcast_indices(A, Bs...)
-    dest = Array19745(Array{T}(Base.index_lengths(shape...)))
+    dest = Array19745(Array{T}(uninitialized, Base.index_lengths(shape...)))
     return broadcast!(f, dest, A, Bs...)
 end
 
