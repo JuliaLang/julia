@@ -11,6 +11,16 @@ iswindows() = @static VERSION < v"0.7-" ? Sys.is_windows() : Sys.iswindows()
 isapple()   = @static VERSION < v"0.7-" ? Sys.is_apple()   : Sys.isapple()
 islinux()   = @static VERSION < v"0.7-" ? Sys.is_linux()   : Sys.islinux()
 
+# Backport of Equalto
+if !isdefined(Base, :EqualTo)
+    struct EqualTo{T} <: Function
+        x::T
+        EqualTo(x::T) where {T} = new{T}(x)
+    end
+    (f::EqualTo)(y) = isequal(f.x, y)
+    const equalto = EqualTo
+end
+
 # load snapshotted dependencies
 include("../ext/BinaryProvider/src/BinaryProvider.jl")
 include("../ext/TOML/src/TOML.jl")
@@ -43,13 +53,13 @@ function Base.julia_cmd(julia::AbstractString)
 end
 
 if VERSION < v"0.7.0-DEV.2303"
-    Base.find_in_path(name::String, wd::Void)   = _find_package(name, nothing)
-    Base.find_in_path(name::String, wd::String) = _find_package(name, nothing)
+    Base.find_in_path(name::String, wd::Void)   = _find_package(name)
+    Base.find_in_path(name::String, wd::String) = _find_package(name)
 else
-    Base.find_package(name::String) = _find_package(name)
+    Base.find_package(name::String) = _find_package(name, )
 end
 
-function _find_package(name::String, wd::Union{Void,String})
+function _find_package(name::String)
     isabspath(name) && return name
     base = name
     if endswith(name, ".jl")
