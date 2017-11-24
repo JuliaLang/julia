@@ -447,7 +447,7 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test_throws DimensionMismatch reshape(B, (0, 1))
 
     # copy!(dest::AbstractArray, src::AbstractArray)
-    @test_throws BoundsError copy!(Array{Int}(10), [1:11...])
+    @test_throws BoundsError copy!(Vector{Int}(uninitialized, 10), [1:11...])
 
     # convert{T, N}(::Type{Array}, A::AbstractArray{T, N})
     X = [1:10...]
@@ -542,14 +542,14 @@ function test_cat(::Type{TestAbstractArray})
     A = T24Linear([1:24...])
     b_int = reshape([1:27...], 3, 3, 3)
     b_float = reshape(Float64[1:27...], 3, 3, 3)
-    b2hcat = Array{Float64}(3, 6, 3)
+    b2hcat = Array{Float64}(uninitialized, 3, 6, 3)
     b1 = reshape([1:9...], 3, 3)
     b2 = reshape([10:18...], 3, 3)
     b3 = reshape([19:27...], 3, 3)
     b2hcat[:, :, 1] = hcat(b1, b1)
     b2hcat[:, :, 2] = hcat(b2, b2)
     b2hcat[:, :, 3] = hcat(b3, b3)
-    b3hcat = Array{Float64}(3, 9, 3)
+    b3hcat = Array{Float64}(uninitialized, 3, 9, 3)
     b3hcat[:, :, 1] = hcat(b1, b1, b1)
     b3hcat[:, :, 2] = hcat(b2, b2, b2)
     b3hcat[:, :, 3] = hcat(b3, b3, b3)
@@ -674,7 +674,7 @@ function test_map(::Type{TestAbstractArray})
         end
 
         # AbstractArray map for N-arg case
-        A = Array{Int}(10)
+        A = Array{Int}(uninitialized, 10)
         f(x, y, z) = x + y + z
         D = Float64[1:10...]
 
@@ -869,7 +869,7 @@ end
 @testset "ImageCore #40" begin
     Base.convert(::Type{Array{T,n}}, a::Array{T,n}) where {T<:Number,n} = a
     Base.convert(::Type{Array{T,n}}, a::Array) where {T<:Number,n} =
-        copy!(Array{T,n}(size(a)), a)
+        copy!(Array{T,n}(uninitialized, size(a)), a)
     @test isa(similar(Dict(:a=>1, :b=>2.0), Pair{Union{},Union{}}), Dict{Union{}, Union{}})
 end
 
