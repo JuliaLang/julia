@@ -14,7 +14,7 @@ function tohtml(io::IO, m::MIME"image/png", img)
     print(io, "\" />")
 end
 
-function tohtml(m::MIME"image/svg+xml", img)
+function tohtml(io::IO, m::MIME"image/svg+xml", img)
     show(io, m, img)
 end
 
