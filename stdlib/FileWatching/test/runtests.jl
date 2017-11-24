@@ -13,13 +13,13 @@ using Test, FileWatching
 n = 20
 intvls = [2, .2, .1, .005]
 
-pipe_fds = Vector{Any}(n)
+pipe_fds = Vector{Any}(uninitialized, n)
 for i in 1:n
     @static if Sys.iswindows()
-        pipe_fds[i] = Array{Libc.WindowsRawSocket}(2)
+        pipe_fds[i] = Vector{Libc.WindowsRawSocket}(uninitialized, 2)
         0 == ccall(:wsasocketpair, Cint, (Cint, Cuint, Cint, Ptr{Libc.WindowsRawSocket}), 1, 1, 6, pipe_fds[i]) || error(Libc.FormatMessage())
     else
-        pipe_fds[i] = Array{RawFD}(2)
+        pipe_fds[i] = Array{RawFD}(uninitialized, 2)
         @test 0 == ccall(:pipe, Cint, (Ptr{RawFD},), pipe_fds[i])
     end
 end
@@ -42,7 +42,7 @@ function pfd_tst_reads(idx, intvl)
     # Disabled since this assertion fails randomly, notably on build VMs (issue #12824)
     # @test t_elapsed <= (intvl + 1)
 
-    dout = Array{UInt8}(1)
+    dout = Vector{UInt8}(uninitialized, 1)
     @static if Sys.iswindows()
         1 == ccall(:recv, stdcall, Cint, (Ptr{Void}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][1], dout, 1, 0) || error(Libc.FormatMessage())
     else
@@ -77,7 +77,7 @@ for (i, intvl) in enumerate(intvls)
     @sync begin
         global ready = 0
         global ready_c = Condition()
-        t = Vector{Task}(n)
+        t = Vector{Task}(uninitialized, n)
         for idx in 1:n
             if isodd(idx)
                 t[idx] = @async pfd_tst_reads(idx, intvl)

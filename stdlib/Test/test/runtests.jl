@@ -59,7 +59,7 @@ end
     end
 end
 @testset "@test and elements of an array" begin
-    a = Array{Float64, 5}(2, 2, 2, 2, 2)
+    a = Array{Float64, 5}(uninitialized, 2, 2, 2, 2, 2)
     a[1, 1, 1, 1, 1] = 10
     @test a[1, 1, 1, 1, 1] == 10
     @test a[1, 1, 1, 1, 1] != 2

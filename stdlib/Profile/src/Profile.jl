@@ -333,8 +333,8 @@ function count_flat(data::Vector{T}) where T<:Unsigned
         end
         linecount[ip] = get(linecount, ip, 0)+1
     end
-    iplist = Vector{T}(0)
-    n = Vector{Int}(0)
+    iplist = Vector{T}()
+    n = Vector{Int}()
     for (k,v) in linecount
         push!(iplist, k)
         push!(n, v)
@@ -447,8 +447,8 @@ function tree_aggregate(data::Vector{UInt64})
         treecount[tmp] = get(treecount, tmp, 0) + 1
         istart = iend + 1 + btskip
     end
-    bt = Vector{Vector{UInt64}}(0)
-    counts = Vector{Int}(0)
+    bt = Vector{Vector{UInt64}}()
+    counts = Vector{Int}()
     for (k, v) in treecount
         if !isempty(k)
             push!(bt, k)
@@ -467,7 +467,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
     ntext = cols - nindent - ndigcounts - ndigline - 5
     widthfile = floor(Integer, 0.4ntext)
     widthfunc = floor(Integer, 0.6ntext)
-    strs = Vector{String}(length(lilist))
+    strs = Vector{String}(uninitialized, length(lilist))
     showextra = false
     if level > nindent
         nextra = level - nindent
@@ -531,9 +531,9 @@ function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int},
         end
         # Generate counts
         dlen = length(d)
-        lilist = Vector{StackFrame}(dlen)
-        group = Vector{Vector{Int}}(dlen)
-        n = Vector{Int}(dlen)
+        lilist = Vector{StackFrame}(uninitialized, dlen)
+        group = Vector{Vector{Int}}(uninitialized, dlen)
+        n = Vector{Int}(uninitialized, dlen)
         i = 1
         for (key, v) in d
             lilist[i] = key
@@ -554,9 +554,9 @@ function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int},
         end
         # Generate counts, and do the code lookup
         dlen = length(d)
-        lilist = Vector{StackFrame}(dlen)
-        group = Vector{Vector{Int}}(dlen)
-        n = Vector{Int}(dlen)
+        lilist = Vector{StackFrame}(uninitialized, dlen)
+        group = Vector{Vector{Int}}(uninitialized, dlen)
+        n = Vector{Int}(uninitialized, dlen)
         i = 1
         for (key, v) in d
             lilist[i] = lidict[key]
@@ -659,7 +659,7 @@ truncto(str::Symbol, w::Int) = truncto(string(str), w)
 
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{StackFrame})
-    comb = Vector{String}(length(lilist))
+    comb = Vector{String}(uninitialized, length(lilist))
     for i = 1:length(lilist)
         li = lilist[i]
         if li != UNKNOWN

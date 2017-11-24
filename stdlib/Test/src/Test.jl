@@ -1021,7 +1021,7 @@ function testset_forloop(args, testloop, source)
         end
     end
     quote
-        arr = Array{Any,1}(0)
+        arr = Vector{Any}()
         local first_iteration = true
         local ts
         try
@@ -1428,8 +1428,8 @@ struct GenericArray{T,N} <: AbstractArray{T,N}
     a::Array{T,N}
 end
 
-GenericArray{T}(args...) where {T} = GenericArray(Array{T}(args...))
-GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(args...))
+GenericArray{T}(args...) where {T} = GenericArray(Array{T}(uninitialized, args...))
+GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(uninitialized, args...))
 
 Base.keys(a::GenericArray) = keys(a.a)
 Base.indices(a::GenericArray) = indices(a.a)

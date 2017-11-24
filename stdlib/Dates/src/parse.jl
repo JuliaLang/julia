@@ -301,7 +301,7 @@ number of components may be less than the total number of `DatePart`.
         values, pos, num_parsed = tryparsenext_core(str, pos, len, df, true)
         t = unsafe_get(values)
         types = $(Expr(:tuple, tokens...))
-        result = Vector{Any}(num_parsed)
+        result = Vector{Any}(uninitialized, num_parsed)
         for (i, typ) in enumerate(types)
             i > num_parsed && break
             result[i] = typ(t[i])  # Constructing types takes most of the time

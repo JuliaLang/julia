@@ -49,7 +49,7 @@ crc32c_sw(a::Union{Array{UInt8},Base.FastContiguousSubArray{UInt8,N,<:Array{UInt
 crc32c_sw(s::String, crc::UInt32=0x00000000) = unsafe_crc32c_sw(s, sizeof(s), crc)
 function crc32c_sw(io::IO, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
-    buf = Array{UInt8}(min(nb, 24576))
+    buf = Vector{UInt8}(uninitialized, min(nb, 24576))
     while !eof(io) && nb > 24576
         n = readbytes!(io, buf)
         crc = unsafe_crc32c_sw(buf, n, crc)

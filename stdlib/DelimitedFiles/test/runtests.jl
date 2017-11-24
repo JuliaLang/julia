@@ -230,7 +230,7 @@ end
     for data in ["A B C", "A B C\n"]
         data,hdr = readdlm(IOBuffer(data), header=true)
         @test hdr == AbstractString["A" "B" "C"]
-        @test data == Array{Float64}(0, 3)
+        @test data == Matrix{Float64}(uninitialized, 0, 3)
     end
 end
 
