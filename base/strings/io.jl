@@ -265,7 +265,7 @@ escape_string(s::AbstractString) = sprint(endof(s), escape_string, s, "\"")
 
 Escape sequences in `str` and print result to `io`. See also [`unescape_string`](@ref).
 """
-function escape_string(io, s::AbstractString, esc::AbstractString)
+function escape_string(io, s::AbstractString, esc::AbstractString="")
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
