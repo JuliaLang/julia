@@ -13,7 +13,7 @@ const TimeTypeOrPeriod = Union{TimeType, ConvertiblePeriod}
 """
     epochdays2date(days) -> Date
 
-Takes the number of days since the rounding epoch (`0000-01-01T00:00:00`) and returns the
+Take the number of days since the rounding epoch (`0000-01-01T00:00:00`) and return the
 corresponding `Date`.
 """
 epochdays2date(i) = Date(UTD(DATEEPOCH + Int64(i)))
@@ -21,15 +21,15 @@ epochdays2date(i) = Date(UTD(DATEEPOCH + Int64(i)))
 """
     epochms2datetime(milliseconds) -> DateTime
 
-Takes the number of milliseconds since the rounding epoch (`0000-01-01T00:00:00`) and
-returns the corresponding `DateTime`.
+Take the number of milliseconds since the rounding epoch (`0000-01-01T00:00:00`) and
+return the corresponding `DateTime`.
 """
 epochms2datetime(i) = DateTime(UTM(DATETIMEEPOCH + Int64(i)))
 
 """
     date2epochdays(dt::Date) -> Int64
 
-Takes the given `Date` and returns the number of days since the rounding epoch
+Take the given `Date` and return the number of days since the rounding epoch
 (`0000-01-01T00:00:00`) as an [`Int64`](@ref).
 """
 date2epochdays(dt::Date) = value(dt) - DATEEPOCH
@@ -37,7 +37,7 @@ date2epochdays(dt::Date) = value(dt) - DATEEPOCH
 """
     datetime2epochms(dt::DateTime) -> Int64
 
-Takes the given `DateTime` and returns the number of milliseconds since the rounding epoch
+Take the given `DateTime` and return the number of milliseconds since the rounding epoch
 (`0000-01-01T00:00:00`) as an [`Int64`](@ref).
 """
 datetime2epochms(dt::DateTime) = value(dt) - DATETIMEEPOCH
@@ -82,7 +82,7 @@ end
 """
     floor(x::Period, precision::T) where T <: Union{TimePeriod, Week, Day} -> T
 
-Rounds `x` down to the nearest multiple of `precision`. If `x` and `precision` are different
+Round `x` down to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`.
 
 For convenience, `precision` may be a type instead of a value: `floor(x, Dates.Hour)` is a
@@ -111,7 +111,7 @@ end
 """
     floor(dt::TimeType, p::Period) -> TimeType
 
-Returns the nearest `Date` or `DateTime` less than or equal to `dt` at resolution `p`.
+Return the nearest `Date` or `DateTime` less than or equal to `dt` at resolution `p`.
 
 For convenience, `p` may be a type instead of a value: `floor(dt, Dates.Hour)` is a shortcut
 for `floor(dt, Dates.Hour(1))`.
@@ -132,7 +132,7 @@ Base.floor(::Dates.TimeType, ::Dates.Period)
 """
     ceil(dt::TimeType, p::Period) -> TimeType
 
-Returns the nearest `Date` or `DateTime` greater than or equal to `dt` at resolution `p`.
+Return the nearest `Date` or `DateTime` greater than or equal to `dt` at resolution `p`.
 
 For convenience, `p` may be a type instead of a value: `ceil(dt, Dates.Hour)` is a shortcut
 for `ceil(dt, Dates.Hour(1))`.
@@ -156,7 +156,7 @@ end
 """
     ceil(x::Period, precision::T) where T <: Union{TimePeriod, Week, Day} -> T
 
-Rounds `x` up to the nearest multiple of `precision`. If `x` and `precision` are different
+Round `x` up to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`.
 
 For convenience, `precision` may be a type instead of a value: `ceil(x, Dates.Hour)` is a
@@ -206,7 +206,7 @@ end
 """
     round(dt::TimeType, p::Period, [r::RoundingMode]) -> TimeType
 
-Returns the `Date` or `DateTime` nearest to `dt` at resolution `p`. By default
+Return the `Date` or `DateTime` nearest to `dt` at resolution `p`. By default
 (`RoundNearestTiesUp`), ties (e.g., rounding 9:30 to the nearest hour) will be rounded up.
 
 For convenience, `p` may be a type instead of a value: `round(dt, Dates.Hour)` is a shortcut
@@ -234,7 +234,7 @@ end
 """
     round(x::Period, precision::T, [r::RoundingMode]) where T <: Union{TimePeriod, Week, Day} -> T
 
-Rounds `x` to the nearest multiple of `precision`. If `x` and `precision` are different
+Round `x` to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`. By default
 (`RoundNearestTiesUp`), ties (e.g., rounding 90 minutes to the nearest hour) will be rounded
 up.

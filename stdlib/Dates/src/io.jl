@@ -17,7 +17,7 @@ abstract type AbstractDateToken end
 `locale`. If a `tryparsenext` method does not need a locale, it can leave
 the argument out in the method definition.
 
-Returns a tuple of 2 elements `(res, idx)`, where:
+Return a tuple of 2 elements `(res, idx)`, where:
 
 * `res` is a `Nullable{T}` - the result of the parsing, null if parsing failed.
 * `idx` is an `Int` - if parsing failed, the index at which it failed; if

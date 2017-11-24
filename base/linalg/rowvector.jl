@@ -88,7 +88,7 @@ vec(rowvec::RowVector) = rowvec.vec
 """
     conj(v::RowVector)
 
-Returns a [`ConjArray`](@ref) lazy view of the input, where each element is conjugated.
+Return a [`ConjArray`](@ref) lazy view of the input, where each element is conjugated.
 
 # Examples
 ```jldoctest

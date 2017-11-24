@@ -554,7 +554,7 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 """
     isassigned(array, i) -> Bool
 
-Tests whether the given array has a value associated with index `i`. Returns `false`
+Test whether the given array has a value associated with index `i`. Return `false`
 if the index is out of bounds, or has an undefined reference.
 
 ```jldoctest

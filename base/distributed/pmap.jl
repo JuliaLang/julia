@@ -233,7 +233,7 @@ end
 """
     head_and_tail(c, n) -> head, tail
 
-Returns `head`: the first `n` elements of `c`;
+Return `head`: the first `n` elements of `c`;
 and `tail`: an iterator over the remaining elements.
 
 ```jldoctest

@@ -281,7 +281,7 @@ end
 """
     AsyncCollector(f, results, c...; ntasks=0, batch_size=nothing) -> iterator
 
-Returns an iterator which applies `f` to each element of `c` asynchronously
+Return an iterator which applies `f` to each element of `c` asynchronously
 and collects output into `results`.
 
 Keyword args `ntasks` and `batch_size` have the same behavior as in

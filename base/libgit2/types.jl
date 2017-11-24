@@ -1108,7 +1108,7 @@ Consts.OBJECT(ptr::Ptr{Void}) =
 """
     objtype(obj_type::Consts.OBJECT)
 
-Returns the type corresponding to the enum value.
+Return the type corresponding to the enum value.
 """
 function objtype(obj_type::Consts.OBJECT)
     if obj_type == Consts.OBJ_COMMIT

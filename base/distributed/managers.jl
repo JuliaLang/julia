@@ -259,7 +259,7 @@ end
     ssh_tunnel(user, host, bind_addr, port, sshflags) -> localport
 
 Establish an SSH tunnel to a remote worker.
-Returns a port number `localport` such that `localhost:localport` connects to `host:port`.
+Return a port number `localport` such that `localhost:localport` connects to `host:port`.
 """
 function ssh_tunnel(user, host, bind_addr, port, sshflags)
     port = Int(port)

@@ -21,7 +21,7 @@ end
 """
     LibGit2.isorphan(repo::GitRepo)
 
-Checks if the current branch is an "orphan" branch, i.e. has no commits. The first commit
+Check if the current branch is an "orphan" branch, i.e. has no commits. The first commit
 to this branch will have no parents.
 """
 function isorphan(repo::GitRepo)
@@ -33,7 +33,7 @@ end
 """
     LibGit2.head(repo::GitRepo) -> GitReference
 
-Returns a `GitReference` to the current HEAD of `repo`.
+Return a `GitReference` to the current HEAD of `repo`.
 """
 function head(repo::GitRepo)
     head_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -45,7 +45,7 @@ end
 """
     LibGit2.shortname(ref::GitReference)
 
-Returns a shortened version of the name of `ref` that's
+Return a shortened version of the name of `ref` that's
 "human-readable".
 
 ```julia-repl
@@ -73,7 +73,7 @@ end
 """
     LibGit2.reftype(ref::GitReference) -> Cint
 
-Returns a `Cint` corresponding to the type of `ref`:
+Return a `Cint` corresponding to the type of `ref`:
   * `0` if the reference is invalid
   * `1` if the reference is an object id
   * `2` if the reference is symbolic
@@ -87,7 +87,7 @@ end
 
 Return the name of the reference pointed to by the
 symbolic reference `ref`. If `ref` is not a symbolic
-reference, returns an empty string.
+reference, return an empty string.
 """
 function fullname(ref::GitReference)
     isempty(ref) && return ""
@@ -253,7 +253,7 @@ Determine if the branch specified by `branch_name` exists in the repository `rep
 If `remote` is `true`, `repo` is assumed to be a remote git repository. Otherwise, it
 is part of the local filesystem.
 
-`lookup_branch` returns a [`Nullable`](@ref), which will be null if the requested branch does
+Return a [`Nullable`](@ref), which will be null if the requested branch does
 not exist yet. If the branch does exist, the `Nullable` contains a `GitReference` to
 the branch.
 """
@@ -282,7 +282,7 @@ end
 
 Determine if the branch containing `ref` has a specified upstream branch.
 
-`upstream` returns a [`Nullable`](@ref), which will be null if the requested branch does
+Return a [`Nullable`](@ref), which will be null if the requested branch does
 not have an upstream counterpart. If the upstream branch does exist, the `Nullable`
 contains a `GitReference` to the upstream branch.
 """

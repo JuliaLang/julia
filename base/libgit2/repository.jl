@@ -67,7 +67,7 @@ end
 
 Lookup the name of the current HEAD of git
 repository `repo`. If `repo` is currently
-detached, returns the name of the HEAD it's
+detached, return the name of the HEAD it's
 detached from.
 """
 function headname(repo::GitRepo)

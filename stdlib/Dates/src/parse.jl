@@ -21,12 +21,12 @@ genvar(t::DataType) = Symbol(lowercase(string(Base.datatype_name(t))))
 """
     tryparsenext_core(str::AbstractString, pos::Int, len::Int, df::DateFormat, raise=false)
 
-Parses the string according to the directives within the DateFormat. Parsing will start at
+Parse the string according to the directives within the `DateFormat`. Parsing will start at
 character index `pos` and will stop when all directives are used or we have parsed up to
 the end of the string, `len`. When a directive cannot be parsed the returned value tuple
 will be null if `raise` is false otherwise an exception will be thrown.
 
-Returns a 3-element tuple `(values, pos, num_parsed)`:
+Return a 3-element tuple `(values, pos, num_parsed)`:
 * `values::Nullable{Tuple}`: A tuple which contains a value for each `DatePart` within the
   `DateFormat` in the order in which they occur. If the string ends before we finish parsing
   all the directives the missing values will be filled in with default values.
@@ -113,13 +113,13 @@ end
 """
     tryparsenext_internal(::Type{<:TimeType}, str, pos, len, df::DateFormat, raise=false)
 
-Parses the string according to the directives within the DateFormat. The specified TimeType
-type determines the type of and order of tokens returned. If the given DateFormat or string
+Parse the string according to the directives within the `DateFormat`. The specified `TimeType`
+type determines the type of and order of tokens returned. If the given `DateFormat` or string
 does not provide a required token a default value will be used. When the string cannot be
 parsed the returned value tuple will be null if `raise` is false otherwise an exception will
 be thrown.
 
-Returns a 2-element tuple `(values, pos)`:
+Return a 2-element tuple `(values, pos)`:
 * `values::Nullable{Tuple}`: A tuple which contains a value for each token as specified by
   the passed in type.
 * `pos::Int`: The character index at which parsing stopped.
@@ -287,9 +287,9 @@ end
 """
     parse_components(str::AbstractString, df::DateFormat) -> Array{Any}
 
-Parse the string into its components according to the directives in the DateFormat.
+Parse the string into its components according to the directives in the `DateFormat`.
 Each component will be a distinct type, typically a subtype of Period. The order of the
-components will match the order of the `DatePart` directives within the DateFormat. The
+components will match the order of the `DatePart` directives within the `DateFormat`. The
 number of components may be less than the total number of `DatePart`.
 """
 @generated function parse_components(str::AbstractString, df::DateFormat)

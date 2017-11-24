@@ -273,7 +273,7 @@ getdoc(x) = nothing
 """
     Docs.doc(binding, sig)
 
-Returns all documentation that matches both `binding` and `sig`.
+Return all documentation that matches both `binding` and `sig`.
 
 If `getdoc` returns a non-`nothing` result on the value of the binding, then a
 dynamic docstring is returned instead of one based on the binding itself.
@@ -330,7 +330,7 @@ doc(object, sig...)              = doc(object, Tuple{sig...})
 """
     Docs.fielddoc(binding, field)
 
-Returns documentation for a particular `field` of a type if it exists.
+Return documentation for a particular `field` of a type if it exists.
 """
 function fielddoc(binding::Binding, field::Symbol)
     for mod in modules

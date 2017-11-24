@@ -170,8 +170,32 @@ end
 """
     svdvals!(A)
 
-Returns the singular values of `A`, saving space by overwriting the input.
-See also [`svdvals`](@ref).
+Return the singular values of `A`, saving space by overwriting the input.
+See also [`svdvals`](@ref) and [`svdfact`](@ref).
+
+# Examples
+```jldoctest
+julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
+4×5 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  2.0
+ 0.0  0.0  3.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  0.0  0.0  0.0
+
+julia> svdvals!(A)
+4-element Array{Float64,1}:
+ 3.0
+ 2.23606797749979
+ 2.0
+ 0.0
+
+julia> A
+4×5 Array{Float64,2}:
+ -2.23607   0.0   0.0  0.0  0.618034
+  0.0      -3.0   1.0  0.0  0.0
+  0.0       0.0   0.0  0.0  0.0
+  0.0       0.0  -2.0  0.0  0.0
+```
 """
 svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = isempty(A) ? zeros(real(T), 0) : LAPACK.gesdd!('N', A)[2]
 svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
@@ -179,7 +203,7 @@ svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
 """
     svdvals(A)
 
-Returns the singular values of `A` in descending order.
+Return the singular values of `A` in descending order.
 
 # Examples
 ```jldoctest

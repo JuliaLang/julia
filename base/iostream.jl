@@ -30,7 +30,7 @@ show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
 """
     fd(stream)
 
-Returns the file descriptor backing the stream or file. Note that this function only applies
+Return the file descriptor backing the stream or file. Note that this function only applies
 to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 """
 fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
@@ -136,7 +136,7 @@ fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
     open(filename::AbstractString, [read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool]) -> IOStream
 
 Open a file in a mode specified by five boolean arguments. The default is to open files for
-reading only. Returns a stream for accessing the file.
+reading only. Return a stream for accessing the file.
 """
 function open(fname::AbstractString, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream(string("<file ",fname,">"))
