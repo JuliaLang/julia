@@ -122,7 +122,7 @@ let rt = Base.return_types(reducedim, Tuple{Function, Array{Float64, 3}, Int, Fl
 end
 
 @testset "empty cases" begin
-    A = Array{Int}(0,1)
+    A = Matrix{Int}(uninitialized, 0,1)
     @test sum(A) === 0
     @test prod(A) === 1
     @test_throws ArgumentError minimum(A)
