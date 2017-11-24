@@ -272,7 +272,7 @@ function serialize(s::AbstractSerializer, a::SubArray{T,N,A}) where {T,N,A<:Arra
 end
 
 function trimmedsubarray(V::SubArray{T,N,A}) where {T,N,A<:Array}
-    dest = Array{eltype(V)}(trimmedsize(V))
+    dest = Array{eltype(V)}(uninitialized, trimmedsize(V))
     copy!(dest, V)
     _trimmedsubarray(dest, V, (), V.indexes...)
 end
@@ -926,7 +926,7 @@ function deserialize_array(s::AbstractSerializer)
     end
     if isa(d1, Integer)
         if elty !== Bool && isbits(elty)
-            a = Array{elty, 1}(d1)
+            a = Vector{elty}(uninitialized, d1)
             s.table[slot] = a
             return read!(s.io, a)
         end
@@ -937,7 +937,7 @@ function deserialize_array(s::AbstractSerializer)
     if isbits(elty)
         n = prod(dims)::Int
         if elty === Bool && n > 0
-            A = Array{Bool, length(dims)}(dims)
+            A = Array{Bool, length(dims)}(uninitialized, dims)
             i = 1
             while i <= n
                 b = read(s.io, UInt8)::UInt8
@@ -950,12 +950,12 @@ function deserialize_array(s::AbstractSerializer)
                 end
             end
         else
-            A = read!(s.io, Array{elty}(dims))
+            A = read!(s.io, Array{elty}(uninitialized, dims))
         end
         s.table[slot] = A
         return A
     end
-    A = Array{elty, length(dims)}(dims)
+    A = Array{elty, length(dims)}(uninitialized, dims)
     s.table[slot] = A
     sizehint!(s.table, s.counter + div(length(A),4))
     for i = eachindex(A)

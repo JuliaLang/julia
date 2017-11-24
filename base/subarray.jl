@@ -355,7 +355,7 @@ end
 # deprecate?
 function parentdims(s::SubArray)
     nd = ndims(s)
-    dimindex = Vector{Int}(nd)
+    dimindex = Vector{Int}(uninitialized, nd)
     sp = strides(s.parent)
     sv = strides(s)
     j = 1

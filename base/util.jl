@@ -579,7 +579,7 @@ if Sys.iswindows()
 function getpass(prompt::AbstractString)
     print(prompt)
     flush(STDOUT)
-    p = Vector{UInt8}(128) # mimic Unix getpass in ignoring more than 128-char passwords
+    p = Vector{UInt8}(uninitialized, 128) # mimic Unix getpass in ignoring more than 128-char passwords
                           # (also avoids any potential memory copies arising from push!)
     try
         plen = 0
@@ -655,7 +655,7 @@ if Sys.iswindows()
     function winprompt(message, caption, default_username; prompt_username = true)
         # Step 1: Create an encrypted username/password bundle that will be used to set
         #         the default username (in theory could also provide a default password)
-        credbuf = Array{UInt8,1}(1024)
+        credbuf = Vector{UInt8}(uninitialized, 1024)
         credbufsize = Ref{UInt32}(sizeof(credbuf))
         succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
             (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
@@ -691,12 +691,12 @@ if Sys.iswindows()
         end
 
         # Step 3: Convert encrypted credentials back to plain text
-        passbuf = Array{UInt16,1}(1024)
+        passbuf = Vector{UInt16}(uninitialized, 1024)
         passlen = Ref{UInt32}(length(passbuf))
-        usernamebuf = Array{UInt16,1}(1024)
+        usernamebuf = Vector{UInt16}(uninitialized, 1024)
         usernamelen = Ref{UInt32}(length(usernamebuf))
         # Need valid buffers for domain, even though we don't care
-        dummybuf = Array{UInt16,1}(1024)
+        dummybuf = Vector{UInt16}(uninitialized, 1024)
         succeeded = ccall((:CredUnPackAuthenticationBufferW, "credui.dll"), Bool,
             (UInt32, Ptr{Void}, UInt32, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
             0, outbuf_data[], outbuf_size[], usernamebuf, usernamelen, dummybuf, Ref{UInt32}(1024), passbuf, passlen)
@@ -732,7 +732,7 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
     # use block size 24576=8192*3, since that is the threshold for
     # 3-way parallel SIMD code in the underlying jl_crc32c C function.
-    buf = Vector{UInt8}(min(nb, 24576))
+    buf = Vector{UInt8}(uninitialized, min(nb, 24576))
     while !eof(io) && nb > 24576
         n = readbytes!(io, buf)
         crc = unsafe_crc32c(buf, n, crc)

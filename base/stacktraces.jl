@@ -128,7 +128,7 @@ inlined at that point, innermost function first.
 function lookup(pointer::Ptr{Void})
     infos = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), pointer - 1, false)
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, convert(UInt64, pointer))]
-    res = Vector{StackFrame}(length(infos))
+    res = Vector{StackFrame}(uninitialized, length(infos))
     for i in 1:length(infos)
         info = infos[i]
         @assert(length(info) == 7)

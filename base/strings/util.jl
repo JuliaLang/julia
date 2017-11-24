@@ -539,7 +539,7 @@ julia> bytes2hex(b)
 ```
 """
 function bytes2hex(a::AbstractArray{UInt8})
-    b = Vector{UInt8}(2*length(a))
+    b = Vector{UInt8}(uninitialized, 2*length(a))
     i = 0
     for x in a
         b[i += 1] = hex_chars[1 + x >> 4]
