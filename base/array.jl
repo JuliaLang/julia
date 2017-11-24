@@ -2022,9 +2022,9 @@ indmin(a) = findmin(a)[2]
 """
     indexin(a, b)
 
-Returns a vector containing the highest index in `b` for
-each value in `a` that is a member of `b` . The output
-vector contains 0 wherever `a` is not a member of `b`.
+Returns an array containing the highest index in `b` for
+each value in `a` that is a member of `b`. The output
+array contains 0 wherever `a` is not a member of `b`.
 
 # Examples
 ```jldoctest
@@ -2048,9 +2048,9 @@ julia> indexin(b,a)
  3
 ```
 """
-function indexin(a::AbstractArray, b::AbstractArray)
+function indexin(a, b::AbstractArray)
     bdict = Dict(zip(b, 1:length(b)))
-    [get(bdict, i, 0) for i in a]
+    map(i -> get(bdict, i, 0), a)
 end
 
 function _findin(a, b)
