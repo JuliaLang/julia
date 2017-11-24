@@ -119,7 +119,7 @@ cd(dirname(@__FILE__)) do
         # the test fails, catch the error,
         # and either way, append the results
         # to the overall aggregator
-        n > 1 && print("\tFrom worker 1:\t")
+        n > 1 && print("      From worker 1:\t")
         isolate = true
         t == "SharedArrays" && (isolate = false)
         local resp
