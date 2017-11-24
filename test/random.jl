@@ -49,14 +49,14 @@ end
 # rand from AbstractArray
 let mt = MersenneTwister()
     @test rand(mt, 0:3:1000) in 0:3:1000
-    @test issubset(rand!(mt, Array{Int}(100), 0:3:1000), 0:3:1000)
+    @test issubset(rand!(mt, Vector{Int}(uninitialized, 100), 0:3:1000), 0:3:1000)
     coll = Any[2, UInt128(128), big(619), "string"]
     @test rand(mt, coll) in coll
     @test issubset(rand(mt, coll, 2, 3), coll)
 
     # check API with default RNG:
     rand(0:3:1000)
-    rand!(Array{Int}(100), 0:3:1000)
+    rand!(Vector{Int}(uninitialized, 100), 0:3:1000)
     rand(coll)
     rand(coll, 2, 3)
 end
@@ -137,13 +137,13 @@ emantissa           = Int64(2)^52
 ziggurat_exp_r      = parse(BigFloat,"7.69711747013104971404462804811408952334296818528283253278834867283241051210533")
 exp_section_area    = (ziggurat_exp_r + 1)*exp(-ziggurat_exp_r)
 
-ki = Array{UInt64}(ziggurat_table_size)
-wi = Array{Float64}(ziggurat_table_size)
-fi = Array{Float64}(ziggurat_table_size)
+ki = Vector{UInt64}(uninitialized, ziggurat_table_size)
+wi = Vector{Float64}(uninitialized, ziggurat_table_size)
+fi = Vector{Float64}(uninitialized, ziggurat_table_size)
 # Tables for exponential variates
-ke = Array{UInt64}(ziggurat_table_size)
-we = Array{Float64}(ziggurat_table_size)
-fe = Array{Float64}(ziggurat_table_size)
+ke = Vector{UInt64}(uninitialized, ziggurat_table_size)
+we = Vector{Float64}(uninitialized, ziggurat_table_size)
+fe = Vector{Float64}(uninitialized, ziggurat_table_size)
 function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
     wib = big.(wi)
     fib = big.(fi)
@@ -253,7 +253,7 @@ end
 # test code paths of rand!
 
 let mt = MersenneTwister(0)
-    A128 = Array{UInt128}(0)
+    A128 = Vector{UInt128}()
     @test length(rand!(mt, A128)) == 0
     for (i,n) in enumerate([1, 3, 5, 6, 10, 11, 30])
         resize!(A128, n)
@@ -270,8 +270,8 @@ let mt = MersenneTwister(0)
 
     srand(mt, 0)
     for (i,T) in enumerate([Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, Float16, Float32])
-        A = Array{T}(16)
-        B = Array{T}(31)
+        A = Vector{T}(uninitialized, 16)
+        B = Vector{T}(uninitialized, 31)
         rand!(mt, A)
         rand!(mt, B)
         @test A[end] == Any[21,0x7b,17385,0x3086,-1574090021,0xadcb4460,6797283068698303107,0x4e91c9c4d4f5f759,
@@ -282,7 +282,7 @@ let mt = MersenneTwister(0)
     end
 
     srand(mt, 0)
-    AF64 = Array{Float64}(Base.Random.dsfmt_get_min_array_size()-1)
+    AF64 = Vector{Float64}(uninitialized, Base.Random.dsfmt_get_min_array_size()-1)
     @test rand!(mt, AF64)[end] == 0.957735065345398
     @test rand!(mt, AF64)[end] == 0.6492481059865669
     resize!(AF64, 2*length(mt.vals))
@@ -291,10 +291,10 @@ end
 
 # Issue #9037
 let mt = MersenneTwister(0)
-    a = Array{Float64}(0)
+    a = Vector{Float64}()
     resize!(a, 1000) # could be 8-byte aligned
-    b = Array{Float64}(1000) # should be 16-byte aligned
-    c8 = Array{UInt64}(1001)
+    b = Vector{Float64}(uninitialized, 1000) # should be 16-byte aligned
+    c8 = Vector{UInt64}(uninitialized, 1001)
     pc8 = pointer(c8)
     if Int(pc8) % 16 == 0
         # Make sure pc8 is not 16-byte aligned since that's what we want to test.
@@ -389,7 +389,10 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     for f! in [rand!, randn!, randexp!]
         for T in functypes[f!]
             X = T == Bool ? T[0,1] : T[0,1,2]
-            for A in (Array{T}(5), Array{T}(2, 3), GenericArray{T}(5), GenericArray{T}(2, 3))
+            for A in (Vector{T}(uninitialized, 5),
+                        Matrix{T}(uninitialized, 2, 3),
+                        GenericArray{T}(5),
+                        GenericArray{T}(2, 3))
                 local A
                 f!(rng..., A)                    ::typeof(A)
                 if f! === rand!
@@ -483,7 +486,7 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test eltype(randperm(UInt(1))) === Int
     @test_throws ErrorException randperm(-1)
 
-    A, B = Vector{Int}(10), Vector{Int}(10)
+    A, B = Vector{Int}(uninitialized, 10), Vector{Int}(uninitialized, 10)
     @test randperm!(mta, A) == randperm!(mtb, B)
     @test randperm!(A) === A
 
