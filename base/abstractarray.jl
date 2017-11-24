@@ -110,7 +110,7 @@ keys(a::AbstractVector) = linearindices(a)
 prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
 
-eltype(::Type{<:AbstractArray{E}}) where {E} = E
+eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
 elsize(::AbstractArray{T}) where {T} = sizeof(T)
 
 """

@@ -355,3 +355,7 @@ end
     @test convert(Tuple{Complex, Complex}, (1, 2.0)) ===
         (Complex(1), Complex(2.0))
 end
+
+@testset "issue 24707" begin
+    @test eltype(Tuple{Vararg{T}} where T<:Integer) >: Integer
+end

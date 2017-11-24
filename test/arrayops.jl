@@ -2240,3 +2240,7 @@ end
 #     @test_throws ArgumentError zeros(2)[false]
 #     @test_throws ArgumentError zeros(2)[true]
 # end
+
+@testset "issue 24707" begin
+    @test eltype(Vector{Tuple{V}} where V<:Integer) >: Tuple{Integer}
+end

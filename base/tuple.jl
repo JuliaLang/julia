@@ -66,7 +66,6 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-eltype(::Type{Tuple{Vararg{E}}}) where {E} = E
 function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
     if @isdefined(E)
         return E
