@@ -260,3 +260,9 @@ using the `tf.gather operation`.  For example:
     "                    end), name, \"NonMaxSuppression\") ",
     "            tf.Tensor(tf.Operation(desc))",
     "        end"]
+
+for i = 1:10
+    buf = IOBuffer()
+    print(buf, join(s22021, "\n"))
+    @test isvalid(String, take!(buf))
+end
