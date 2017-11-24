@@ -83,8 +83,8 @@ function pstockcorr(n)
     # Optimization: pre-allocate these for performance
     # NOTE: the new GC will hopefully fix this, but currently GC time
     # kills performance if we don't do in-place computations
-    Wiener = Array{Float64}(T-1, 2)
-    CorrWiener = Array{Float64}(T-1, 2)
+    Wiener = Matrix{Float64}(uninitialized, T-1, 2)
+    CorrWiener = Matrix{Float64}(uninitialized, T-1, 2)
 
     # Runtime requirement: need per-thread RNG since it stores state
     rngs = [MersenneTwister(777+x) for x in 1:nthreads()]
