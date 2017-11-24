@@ -10,9 +10,6 @@
 
 precompile(Tuple{typeof(Base.pointer), Array{UInt8, 1}, UInt64})
 precompile(Tuple{typeof(Base.convert), Type{Ptr{Int32}}, Ptr{UInt8}})
-if USE_GPL_LIBS
-precompile(Tuple{typeof(Base.SparseArrays.CHOLMOD.set_print_level), Array{UInt8, 1}, Int64})
-end
 precompile(Tuple{Type{Base.Multimedia.TextDisplay}, Base.TTY})
 precompile(Tuple{typeof(Base._start)})
 precompile(Tuple{typeof(Base.copy!), Array{String, 1}, Int64, Array{Any, 1}, Int64, Int64})

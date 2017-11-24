@@ -38,12 +38,6 @@ include("abstractsparse.jl")
 include("sparsematrix.jl")
 include("sparsevector.jl")
 include("higherorderfns.jl")
-
 include("linalg.jl")
-if Base.USE_GPL_LIBS
-    include("umfpack.jl")
-    include("cholmod.jl")
-    include("spqr.jl")
-end
 
 end

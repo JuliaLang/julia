@@ -16,8 +16,9 @@ export
     Factor,
     Sparse
 
-import ..SparseArrays: AbstractSparseMatrix, SparseMatrixCSC, increment, indtype, sparse,
-    spzeros, nnz
+import ..SparseArrays: AbstractSparseMatrix, SparseMatrixCSC, indtype, sparse, spzeros, nnz
+
+import ..increment, ..increment!, ..decrement, ..decrement!
 
 #########
 # Setup #
