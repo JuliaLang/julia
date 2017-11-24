@@ -349,7 +349,7 @@ Dict{Int64,String} with 2 entries:
 ```
 """
 function filter!(f, d::Associative)
-    badkeys = Vector{keytype(d)}(0)
+    badkeys = Vector{keytype(d)}()
     try
         for (k,v) in d
             # don't delete!(d, k) here, since associative types
@@ -368,7 +368,7 @@ end
 function filter!_dict_deprecation(e, f, d::Associative)
     if isa(e, MethodError) && e.f === f
         depwarn("In `filter!(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter!)
-        badkeys = Vector{keytype(d)}(0)
+        badkeys = Vector{keytype(d)}()
         for (k,v) in d
             # don't delete!(d, k) here, since associative types
             # may not support mutation during iteration
@@ -495,7 +495,7 @@ See [`Dict`](@ref) for further help.
 mutable struct ObjectIdDict <: Associative{Any,Any}
     ht::Vector{Any}
     ndel::Int
-    ObjectIdDict() = new(Vector{Any}(32), 0)
+    ObjectIdDict() = new(Vector{Any}(uninitialized, 32), 0)
 
     function ObjectIdDict(itr)
         d = ObjectIdDict()

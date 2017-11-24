@@ -486,7 +486,7 @@ argument or as a series of integer arguments.
 
 Custom AbstractArray subtypes may choose which specific array type is best-suited to return
 for the given element type and dimensionality. If they do not specialize this method, the
-default is an `Array{element_type}(dims...)`.
+default is an `Array{element_type}(uninitialized, dims...)`.
 
 For example, `similar(1:10, 1, 4)` returns an uninitialized `Array{Int,2}` since ranges are
 neither mutable nor support 2 dimensions:
@@ -525,7 +525,7 @@ similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, 
 similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, to_shape(dims))
 similar(a::AbstractArray, ::Type{T}, dims::NeedsShaping) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
-similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(dims)
+similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(uninitialized, dims)
 
 to_shape(::Tuple{}) = ()
 to_shape(dims::Dims) = dims
@@ -550,7 +550,7 @@ argument. `storagetype` might be a type or a function.
 creates an array that "acts like" an `Array{Int}` (and might indeed be
 backed by one), but which is indexed identically to `A`. If `A` has
 conventional indexing, this will be identical to
-`Array{Int}(size(A))`, but if `A` has unconventional indexing then the
+`Array{Int}(uninitialized, size(A))`, but if `A` has unconventional indexing then the
 indices of the result will match `A`.
 
     similar(BitArray, (indices(A, 2),))
@@ -1078,10 +1078,10 @@ promote_eltype() = Bottom
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 
 #TODO: ERROR CHECK
-cat(catdim::Integer) = Array{Any,1}(0)
+cat(catdim::Integer) = Vector{Any}()
 
-typed_vcat(::Type{T}) where {T} = Array{T,1}(0)
-typed_hcat(::Type{T}) where {T} = Array{T,1}(0)
+typed_vcat(::Type{T}) where {T} = Vector{T}()
+typed_hcat(::Type{T}) where {T} = Vector{T}()
 
 ## cat: special cases
 vcat(X::T...) where {T}         = T[ X[i] for i=1:length(X) ]
@@ -1089,10 +1089,10 @@ vcat(X::T...) where {T<:Number} = T[ X[i] for i=1:length(X) ]
 hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=1:length(X) ]
 hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=1:length(X) ]
 
-vcat(X::Number...) = hvcat_fill(Vector{promote_typeof(X...)}(length(X)), X)
-hcat(X::Number...) = hvcat_fill(Matrix{promote_typeof(X...)}(1,length(X)), X)
-typed_vcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Array{T,1}(length(X)), X)
-typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Array{T,2}(1,length(X)), X)
+vcat(X::Number...) = hvcat_fill(Vector{promote_typeof(X...)}(uninitialized, length(X)), X)
+hcat(X::Number...) = hvcat_fill(Matrix{promote_typeof(X...)}(uninitialized, 1,length(X)), X)
+typed_vcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Vector{T}(uninitialized, length(X)), X)
+typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Matrix{T}(uninitialized, 1,length(X)), X)
 
 vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
 vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
@@ -1184,7 +1184,7 @@ cat_size(A::AbstractArray, d) = size(A, d)
 cat_indices(A, d) = OneTo(1)
 cat_indices(A::AbstractArray, d) = indices(A, d)
 
-cat_similar(A, T, shape) = Array{T}(shape)
+cat_similar(A, T, shape) = Array{T}(uninitialized, shape)
 cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
 
 cat_shape(dims, shape::Tuple) = shape
@@ -1233,7 +1233,7 @@ end
 
 function _cat(A, shape::NTuple{N}, catdims, X...) where N
     offsets = zeros(Int, N)
-    inds = Vector{UnitRange{Int}}(N)
+    inds = Vector{UnitRange{Int}}(uninitialized, N)
     concat = copy!(zeros(Bool, N), catdims)
     for x in X
         for i = 1:N
@@ -1457,13 +1457,13 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat..
 end
 
 hvcat(rows::Tuple{Vararg{Int}}) = []
-typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}) where {T} = Array{T,1}(0)
+typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}) where {T} = Vector{T}()
 
 function hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number
     nr = length(rows)
     nc = rows[1]
 
-    a = Array{T,2}(nr, nc)
+    a = Matrix{T}(uninitialized, nr, nc)
     if length(a) != length(xs)
         throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
     end
@@ -1507,12 +1507,12 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
     if nr*nc != len
         throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
     end
-    hvcat_fill(Array{T,2}(nr, nc), xs)
+    hvcat_fill(Matrix{T}(uninitialized, nr, nc), xs)
 end
 
 function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
     nbr = length(rows)  # number of block rows
-    rs = Array{Any,1}(nbr)
+    rs = Vector{Any}(uninitialized, nbr)
     a = 1
     for i = 1:nbr
         rs[i] = typed_hcat(T, as[a:a-1+rows[i]]...)
