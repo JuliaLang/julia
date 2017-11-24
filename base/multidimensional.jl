@@ -615,7 +615,7 @@ _countnz(x) = x != 0
 @generated function findn(A::AbstractArray{T,N}) where {T,N}
     quote
         nnzA = count(_countnz, A)
-        @nexprs $N d->(I_d = Vector{Int}(nnzA))
+        @nexprs $N d->(I_d = Vector{Int}(uninitialized, nnzA))
         k = 1
         @nloops $N i A begin
             @inbounds if (@nref $N A i) != zero(T)
@@ -1000,13 +1000,13 @@ julia> fill!(A, 2.)
  2.0  2.0  2.0
  2.0  2.0  2.0
 
-julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(3), a); a[1] = 2; A
+julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(uninitialized, 3), a); a[1] = 2; A
 3-element Array{Array{Int64,1},1}:
  [2, 1, 1]
  [2, 1, 1]
  [2, 1, 1]
 
-julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(3), f())
+julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(uninitialized, 3), f())
 3-element Array{Int64,1}:
  1
  1
@@ -1430,7 +1430,7 @@ end
 @generated function findn(B::BitArray{N}) where N
     quote
         nnzB = count(B)
-        I = ntuple(x->Vector{Int}(nnzB), Val($N))
+        I = ntuple(x->Vector{Int}(uninitialized, nnzB), Val($N))
         if nnzB > 0
             count = 1
             @nloops $N i B begin
@@ -1667,7 +1667,7 @@ julia> extrema(A, (1,2))
 function extrema(A::AbstractArray, dims)
     sz = [size(A)...]
     sz[[dims...]] = 1
-    B = Array{Tuple{eltype(A),eltype(A)}}(sz...)
+    B = Array{Tuple{eltype(A),eltype(A)}}(uninitialized, sz...)
     return extrema!(B, A)
 end
 

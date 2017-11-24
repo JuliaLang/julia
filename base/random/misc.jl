@@ -250,7 +250,7 @@ julia> randperm(MersenneTwister(1234), 4)
  3
 ```
 """
-randperm(r::AbstractRNG, n::Integer) = randperm!(r, Vector{Int}(n))
+randperm(r::AbstractRNG, n::Integer) = randperm!(r, Vector{Int}(uninitialized, n))
 randperm(n::Integer) = randperm(GLOBAL_RNG, n)
 
 """
@@ -263,7 +263,7 @@ optional `rng` argument specifies a random number generator (see
 
 # Examples
 ```jldoctest
-julia> randperm!(MersenneTwister(1234), Vector{Int}(4))
+julia> randperm!(MersenneTwister(1234), Vector{Int}(uninitialized, 4))
 4-element Array{Int64,1}:
  2
  1
@@ -311,7 +311,7 @@ julia> randcycle(MersenneTwister(1234), 6)
  2
 ```
 """
-randcycle(r::AbstractRNG, n::Integer) = randcycle!(r, Vector{Int}(n))
+randcycle(r::AbstractRNG, n::Integer) = randcycle!(r, Vector{Int}(uninitialized, n))
 randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
 
 """
@@ -323,7 +323,7 @@ The optional `rng` argument specifies a random number generator, see
 
 # Examples
 ```jldoctest
-julia> randcycle!(MersenneTwister(1234), Vector{Int}(6))
+julia> randcycle!(MersenneTwister(1234), Vector{Int}(uninitialized, 6))
 6-element Array{Int64,1}:
  3
  5

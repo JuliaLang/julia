@@ -42,7 +42,7 @@ struct BigFloatRandGenerator
 
     function BigFloatRandGenerator(prec::Int=precision(BigFloat))
         nlimbs = (prec-1) ÷ bits_in_Limb + 1
-        limbs = Vector{Limb}(nlimbs)
+        limbs = Vector{Limb}(uninitialized, nlimbs)
         shift = nlimbs * bits_in_Limb - prec
         new(prec, nlimbs, limbs, shift)
     end
@@ -131,7 +131,7 @@ rand(                dims::Dims)       = rand(GLOBAL_RNG, dims)
 rand(r::AbstractRNG, dims::Integer...) = rand(r, Dims(dims))
 rand(                dims::Integer...) = rand(Dims(dims))
 
-rand(r::AbstractRNG, ::Type{T}, dims::Dims) where {T} = rand!(r, Array{T}(dims))
+rand(r::AbstractRNG, ::Type{T}, dims::Dims) where {T} = rand!(r, Array{T}(uninitialized, dims))
 rand(                ::Type{T}, dims::Dims) where {T} = rand(GLOBAL_RNG, T, dims)
 
 rand(r::AbstractRNG, ::Type{T}, d::Integer, dims::Integer...) where {T} =
@@ -317,7 +317,7 @@ end
 rand!(A::AbstractArray, r::AbstractArray) = rand!(GLOBAL_RNG, A, r)
 
 rand(rng::AbstractRNG, r::AbstractArray{T}, dims::Dims) where {T} =
-    rand!(rng, Array{T}(dims), r)
+    rand!(rng, Array{T}(uninitialized, dims), r)
 rand(                  r::AbstractArray, dims::Dims)       = rand(GLOBAL_RNG, r, dims)
 rand(rng::AbstractRNG, r::AbstractArray, dims::Integer...) = rand(rng, r, Dims(dims))
 rand(                  r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, Dims(dims))
@@ -375,9 +375,9 @@ rand!(r::AbstractRNG, A::AbstractArray, s::Union{Associative,AbstractSet}) =
 rand!(A::AbstractArray, s::Union{Associative,AbstractSet}) = rand!(GLOBAL_RNG, A, s)
 
 rand(r::AbstractRNG, s::Associative{K,V}, dims::Dims) where {K,V} =
-    rand!(r, Array{Pair{K,V}}(dims), s)
+    rand!(r, Array{Pair{K,V}}(uninitialized, dims), s)
 
-rand(r::AbstractRNG, s::AbstractSet{T}, dims::Dims) where {T} = rand!(r, Array{T}(dims), s)
+rand(r::AbstractRNG, s::AbstractSet{T}, dims::Dims) where {T} = rand!(r, Array{T}(uninitialized, dims), s)
 rand(r::AbstractRNG, s::Union{Associative,AbstractSet}, dims::Integer...) =
     rand(r, s, Dims(dims))
 rand(s::Union{Associative,AbstractSet}, dims::Integer...) = rand(GLOBAL_RNG, s, Dims(dims))
@@ -408,7 +408,7 @@ rand(s::AbstractString) = rand(GLOBAL_RNG, s)
 rand!(rng::AbstractRNG, A::AbstractArray, str::AbstractString) = rand!(rng, A, collect(str))
 rand!(A::AbstractArray, str::AbstractString) = rand!(GLOBAL_RNG, A, str)
 rand(rng::AbstractRNG, str::AbstractString, dims::Dims) =
-    rand!(rng, Array{eltype(str)}(dims), str)
+    rand!(rng, Array{eltype(str)}(uninitialized, dims), str)
 
 rand(rng::AbstractRNG, str::AbstractString, d::Integer, dims::Integer...) =
     rand(rng, str, Dims((d, dims...)))
