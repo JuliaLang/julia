@@ -19,7 +19,7 @@ function fake_repl(f)
     Base.link_pipe(stdout, julia_only_read=true, julia_only_write=true)
     Base.link_pipe(stderr, julia_only_read=true, julia_only_write=true)
 
-    repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin.out, stdout.in, stderr.in))
+    repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin.out, stdout.in, stderr.in), true)
     f(stdin.in, stdout.out, repl)
     t = @async begin
         close(stdin.in)
