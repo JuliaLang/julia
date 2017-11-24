@@ -136,7 +136,7 @@ cosh(x::Real) = cosh(float(x))
 
 # tanh methods
 TANH_LARGE_X(::Type{Float64}) = 22.0
-TANH_LARGE_X(::Type{Float32}) = 9.0
+TANH_LARGE_X(::Type{Float32}) = 9.0f0
 TANH_SMALL_X(::Type{Float64}) = 2.0^-28
 TANH_SMALL_X(::Type{Float32}) = 2f0^-12
 function tanh(x::T) where T<:Union{Float32, Float64}
