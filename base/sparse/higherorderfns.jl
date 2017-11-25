@@ -159,14 +159,14 @@ _maxnnzfrom(shape::NTuple{2}, A::SparseMatrixCSC) = nnz(A) * div(shape[1], A.m) 
 @inline _checked_maxnnzbcres(shape::NTuple{1}, As...) = shape[1] != 0 ? _unchecked_maxnnzbcres(shape, As) : 0
 @inline _checked_maxnnzbcres(shape::NTuple{2}, As...) = shape[1] != 0 && shape[2] != 0 ? _unchecked_maxnnzbcres(shape, As) : 0
 @inline function _allocres(shape::NTuple{1}, indextype, entrytype, maxnnz)
-    storedinds = Vector{indextype}(maxnnz)
-    storedvals = Vector{entrytype}(maxnnz)
+    storedinds = Vector{indextype}(uninitialized, maxnnz)
+    storedvals = Vector{entrytype}(uninitialized, maxnnz)
     return SparseVector(shape..., storedinds, storedvals)
 end
 @inline function _allocres(shape::NTuple{2}, indextype, entrytype, maxnnz)
-    pointers = Vector{indextype}(shape[2] + 1)
-    storedinds = Vector{indextype}(maxnnz)
-    storedvals = Vector{entrytype}(maxnnz)
+    pointers = Vector{indextype}(uninitialized, shape[2] + 1)
+    storedinds = Vector{indextype}(uninitialized, maxnnz)
+    storedvals = Vector{entrytype}(uninitialized, maxnnz)
     return SparseMatrixCSC(shape..., pointers, storedinds, storedvals)
 end
 # Ambiguity killers, TODO: nix conflicting specializations
