@@ -82,6 +82,14 @@ Language changes
     For example, `f() = (global sin = "gluttony"; nothing)` will now resolve which module
     contains `sin` eagerly, rather than delaying that decision until `f` is run. ([#22984]).
 
+  * Uninitialized `BitArray` constructors of the form `BitArray[{N}](shape...)` have been
+    deprecated in favor of equivalents accepting `uninitialized` (an alias for
+    `Uninitialized()`) as their first argument, as in
+    `BitArray[{N}](uninitialized, shape...)`. For example, `BitVector(3)` is now
+    `BitVector(uninitialized, 3)`, `BitMatrix((2, 4))` is now
+    `BitMatrix(uninitialized, (2, 4))`, and `BitArray{3}(11, 13, 17)` is now
+    `BitArray{3}(uninitialized, 11, 14, 17)` ([#24785]).
+
   * Dispatch rules have been simplified:
     method matching is now determined exclusively by subtyping;
     the rule that method type parameters must also be captured has been removed.

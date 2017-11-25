@@ -1877,6 +1877,11 @@ end
 @deprecate diagm(v::AbstractVector, k::Integer) diagm(k => v)
 @deprecate diagm(x::Number) fill(x, 1, 1)
 
+# deprecate BitArray{...}(shape...) constructors to BitArray{...}(uninitialized, shape...) equivalents
+@deprecate BitArray{N}(dims::Vararg{Int,N}) where {N}   BitArray{N}(uninitialized, dims)
+@deprecate BitArray(dims::NTuple{N,Int}) where {N}      BitArray(uninitialized, dims...)
+@deprecate BitArray(dims::Integer...)                   BitArray(uninitialized, dims)
+
 ## deprecate full
 export full
 # full no-op fallback

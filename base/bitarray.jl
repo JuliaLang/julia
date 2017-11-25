@@ -29,8 +29,6 @@ mutable struct BitArray{N} <: DenseArray{Bool, N}
         return b
     end
 end
-# to deprecate in favor of the above uninitialized-accepting equivalent:
-BitArray{N}(dims::Vararg{Int,N}) where {N} = BitArray{N}(uninitialized, dims)
 
 # note: the docs for the two signatures are unified, but only
 # the first one is recognized by the help system; it would be nice
@@ -60,9 +58,6 @@ BitArray(::Uninitialized, dims::Integer...) = BitArray(uninitialized, map(Int,di
 BitArray{N}(::Uninitialized, dims::Integer...) where {N} = BitArray{N}(uninitialized, map(Int,dims))
 BitArray(::Uninitialized, dims::NTuple{N,Int}) where {N} = BitArray{N}(uninitialized, dims...)
 BitArray{N}(::Uninitialized, dims::NTuple{N,Int}) where {N} = BitArray{N}(uninitialized, dims...)
-# to deprecate in favor of the above uninitialized-accepting equivalents:
-BitArray(dims::Integer...) = BitArray(uninitialized, dims)
-BitArray(dims::NTuple{N,Int}) where {N} = BitArray{N}(uninitialized, dims...)
 
 const BitVector = BitArray{1}
 const BitMatrix = BitArray{2}
