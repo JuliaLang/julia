@@ -296,6 +296,8 @@ function approve(cfg::GitConfig, cred::UserPasswordCredentials, url::AbstractStr
         approve(helper, git_cred)
     end
 
+    securezero!(git_cred)
+
     nothing
 end
 
