@@ -29,7 +29,7 @@ end
 
 for (f, op, transp) in ((:A_mul_B, :identity, false),
                         (:Ac_mul_B, :adjoint, true),
-                        (:At_mul_B, :transpose, true))
+                        (:At_mul_B, :identity, true))
     @eval begin
         function $(Symbol(f,:!))(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
             if $transp
@@ -292,7 +292,7 @@ function A_rdiv_B!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
     A
 end
 
-A_rdiv_Bc!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, conj(D))
+A_rdiv_Bc!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, adjoint(D))
 A_rdiv_Bt!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, D)
 
 ## triu, tril
@@ -659,7 +659,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
             end
         end
 
-        # Use the conjugate transpose
+        # Use the conjugate transpose (adjoint)
         Z = F' \ S
         h_max = zero(real(eltype(Z)))
         h = zeros(real(eltype(Z)), n)

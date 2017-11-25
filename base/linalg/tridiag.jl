@@ -128,7 +128,7 @@ broadcast(::typeof(floor), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = Sy
 broadcast(::typeof(ceil), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(ceil.(T, M.dv), ceil.(T, M.ev))
 
 transpose(M::SymTridiagonal) = M #Identity operation
-adjoint(M::SymTridiagonal) = conj(M)
+adjoint(M::SymTridiagonal{<:Number}) = conj(M)
 
 function diag(M::SymTridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
@@ -534,7 +534,7 @@ broadcast(::typeof(ceil), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
     Tridiagonal(ceil.(T, M.dl), ceil.(T, M.d), ceil.(T, M.du))
 
 transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
-adjoint(M::Tridiagonal) = conj(transpose(M))
+adjoint(M::Tridiagonal) = Tridiagonal(adjoint.(M.du), adjoint.(M.d), adjoint.(M.dl))
 
 function diag(M::Tridiagonal{T}, n::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the

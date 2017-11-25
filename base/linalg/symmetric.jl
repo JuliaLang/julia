@@ -236,7 +236,7 @@ function adjoint(A::Symmetric)
     AC = adjoint(A.data)
     return Symmetric(AC, ifelse(A.uplo == 'U', :L, :U))
 end
-function transpose(A::Hermitian)
+function transpose(A::Hermitian{<:Number})
     AT = transpose(A.data)
     return Hermitian(AT, ifelse(A.uplo == 'U', :L, :U))
 end

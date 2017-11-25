@@ -3,7 +3,7 @@
 
 abstract type AbstractRotation{T} end
 
-transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R)). Consider using conjugate transpose (') instead of transpose (.').")
+transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R)). Consider using adjoint (') instead of transpose (.').")
 
 function *(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
