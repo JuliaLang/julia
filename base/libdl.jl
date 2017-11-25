@@ -234,7 +234,7 @@ if Sys.isbsd() && !Sys.isapple()
 end # bsd family
 
 function dllist()
-    dynamic_libraries = Vector{AbstractString}(0)
+    dynamic_libraries = Vector{AbstractString}()
 
     @static if Sys.islinux()
         callback = cfunction(dl_phdr_info_callback, Cint,
