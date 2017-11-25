@@ -595,8 +595,8 @@ end
 
 additional_io_objs=Dict()
 function launch_additional(np::Integer, cmd::Cmd)
-    io_objs = Vector{Any}(np)
-    addresses = Vector{Any}(np)
+    io_objs = Vector{Any}(uninitialized, np)
+    addresses = Vector{Any}(uninitialized, np)
 
     for i in 1:np
         io = open(detach(cmd), "r+")
