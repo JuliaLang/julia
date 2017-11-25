@@ -336,7 +336,7 @@ fill(v, dims::Integer...) = fill!(Array{typeof(v)}(uninitialized, dims...), v)
     zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
 
 Create an array of all zeros with the same layout as `A`, element type `T` and size `dims`.
-The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
+The `A` argument can be skipped, which behaves like `Array{Float64,0}(uninitialized)` was passed.
 For convenience `dims` may also be passed in variadic form.
 
 # Examples
@@ -379,7 +379,7 @@ function zeros end
     ones([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
 
 Create an array of all ones with the same layout as `A`, element type `T` and size `dims`.
-The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
+The `A` argument can be skipped, which behaves like `Array{Float64,0}(uninitialized)` was passed.
 For convenience `dims` may also be passed in variadic form.
 
 # Examples
@@ -530,7 +530,7 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copy!(Array{eltype(A)}(), A)
+_collect_indices(::Tuple{}, A) = copy!(Array{eltype(A),0}(uninitialized), A)
 _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
     copy!(Array{eltype(A)}(uninitialized, length.(indsA)), A)
 function _collect_indices(indsA, A)

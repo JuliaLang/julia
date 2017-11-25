@@ -80,7 +80,7 @@ end
 let gens_dims = [((i for i = 1:5),                    1),
                  ((i for i = 1:5, j = 1:5),           2),
                  ((i for i = 1:5, j = 1:5, k = 1:5),  3),
-                 ((i for i = Array{Int}()),           0),
+                 ((i for i = Array{Int,0}(uninitialized)),           0),
                  ((i for i = Vector{Int}(uninitialized, 1)),          1),
                  ((i for i = Matrix{Int}(uninitialized, 1, 2)),       2),
                  ((i for i = Array{Int}(uninitialized, 1, 2, 3)),    3)]
