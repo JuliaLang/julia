@@ -20,7 +20,7 @@ Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
 Base.BitArray
-Base.BitArray(::Integer...)
+Base.BitArray(::Uninitialized, ::Integer...)
 Base.BitArray(::Any)
 Base.trues
 Base.falses
