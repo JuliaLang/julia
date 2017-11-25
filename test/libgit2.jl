@@ -2405,12 +2405,6 @@ mktempdir() do dir
                                                 allow_git_helpers=true)
                     err, auth_attempts = credential_loop($valid_cred, $url,
                                                          Nullable{String}(), payload)
-
-                    # Triggering a garbage collection will cause the internal GitCredential
-                    # used in `authenticate_userpass` to be securely wiped but this should
-                    # not cause the payload credential to be wiped (#24731).
-                    gc()
-
                     (err, auth_attempts, payload.credential)
                 end
             end
@@ -2423,6 +2417,8 @@ mktempdir() do dir
             err, auth_attempts, credential = challenge_prompt(https_ex, challenges)
             @test err == git_ok
             @test auth_attempts == 1
+
+            # Verify credential wasn't accidentally zeroed (#24731)
             @test get(credential) == valid_cred
         end
 
