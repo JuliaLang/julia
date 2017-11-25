@@ -230,7 +230,7 @@ v = view(A0, 1:1, i1)
 @test indices(v) === (Base.OneTo(1), -4:-3)
 
 # copy! and fill!
-a = OffsetArray{Int}((-3:-1,))
+a = OffsetArray{Int}(uninitialized, (-3:-1,))
 fill!(a, -1)
 copy!(a, (1,2))   # non-array iterables
 @test a[-3] == 1
@@ -274,7 +274,7 @@ copy!(a, -3, b, 2)
 @test a[-3] == 2
 @test a[-2] == a[-1] == -1
 @test_throws BoundsError copy!(a, -3, b, 1, 4)
-am = OffsetArray{Int}((1:1, 7:9))  # for testing linear indexing
+am = OffsetArray{Int}(uninitialized, (1:1, 7:9))  # for testing linear indexing
 fill!(am, -1)
 copy!(am, b)
 @test am[1] == 1
