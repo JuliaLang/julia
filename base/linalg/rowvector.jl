@@ -35,13 +35,13 @@ const ConjRowVector{T,CV<:ConjVector} = RowVector{T,CV}
 @inline RowVector{T}(vec::AbstractVector{T}) where {T} = RowVector{T,typeof(vec)}(vec)
 
 # Constructors that take a size and default to Array
-@inline RowVector{T}(n::Int) where {T} = RowVector{T}(Vector{transpose_type(T)}(n))
+@inline RowVector{T}(n::Int) where {T} = RowVector{T}(Vector{transpose_type(T)}(uninitialized, n))
 @inline RowVector{T}(n1::Int, n2::Int) where {T} = n1 == 1 ?
-    RowVector{T}(Vector{transpose_type(T)}(n2)) :
+    RowVector{T}(Vector{transpose_type(T)}(uninitialized, n2)) :
     error("RowVector expects 1×N size, got ($n1,$n2)")
-@inline RowVector{T}(n::Tuple{Int}) where {T} = RowVector{T}(Vector{transpose_type(T)}(n[1]))
+@inline RowVector{T}(n::Tuple{Int}) where {T} = RowVector{T}(Vector{transpose_type(T)}(uninitialized, n[1]))
 @inline RowVector{T}(n::Tuple{Int,Int}) where {T} = n[1] == 1 ?
-    RowVector{T}(Vector{transpose_type(T)}(n[2])) :
+    RowVector{T}(Vector{transpose_type(T)}(uninitialized, n[2])) :
     error("RowVector expects 1×N size, got $n")
 
 # Conversion of underlying storage
