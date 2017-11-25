@@ -47,7 +47,7 @@ elseif Sys.isapple()
         path_basename = String(basename(path))
         local casepreserved_basename
         header_size = 12
-        buf = Vector{UInt8}(length(path_basename) + header_size + 1)
+        buf = Vector{UInt8}(uninitialized, length(path_basename) + header_size + 1)
         while true
             ret = ccall(:getattrlist, Cint,
                         (Cstring, Ptr{Void}, Ptr{Void}, Csize_t, Culong),

@@ -25,7 +25,7 @@ for f in (:-, :+)
         l0 = min(la, lb)
         l1 = max(la, lb)
         ld = la - lb
-        rv = Vector{T}(l1)
+        rv = Vector{T}(uninitialized, l1)
         rf = ($f)(a.rest, b.rest)
         @inbounds for i = 1:l0
             rv[i] = ($f)(av[i], bv[i])
@@ -109,7 +109,7 @@ function VWPreBuild(ispre::Bool, desc::Tuple{Vararg{Union{Integer,String}}})
     isempty(desc) && return _vwprebuild_zero
     desc == ("",) && return VWPreBuild(ispre ? -1 : 1, HierarchicalValue(VWPreBuildItem[]))
     nonempty = ispre ? -1 : 0
-    w = Vector{VWPreBuildItem}(length(desc))
+    w = Vector{VWPreBuildItem}(uninitialized, length(desc))
     i = 1
     @inbounds for item in desc
         w[i] = VWPreBuildItem(item)

@@ -180,8 +180,8 @@ end
 const PackageState = Union{Void,VersionNumber}
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
-    change = Vector{Tuple{String,Tuple{PackageState,PackageState}}}(0)
-    remove = Vector{Tuple{String,Tuple{PackageState,PackageState}}}(0)
+    change = Vector{Tuple{String,Tuple{PackageState,PackageState}}}()
+    remove = Vector{Tuple{String,Tuple{PackageState,PackageState}}}()
 
     for pkg in collect(union(keys(have),keys(want)))
         h, w = haskey(have,pkg), haskey(want,pkg)

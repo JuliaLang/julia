@@ -9,7 +9,7 @@ if Sys.iswindows()
     struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
-        RandomDevice() = new(Vector{UInt128}(1))
+        RandomDevice() = new(Vector{UInt128}(uninitialized, 1))
     end
 
     function rand(rd::RandomDevice, T::BoolBitIntegerType)

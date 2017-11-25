@@ -885,7 +885,7 @@ function vcat(rs::AbstractRange{T}...) where T
     for ra in rs
         n += length(ra)
     end
-    a = Vector{T}(n)
+    a = Vector{T}(uninitialized, n)
     i = 1
     for ra in rs, x in ra
         @inbounds a[i] = x
