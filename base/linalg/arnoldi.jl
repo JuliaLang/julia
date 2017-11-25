@@ -325,7 +325,7 @@ end
 function AtA_or_AAt(A::AbstractMatrix{T}) where T
     Tnew = typeof(zero(T)/sqrt(one(T)))
     Anew = convert(AbstractMatrix{Tnew}, A)
-    AtA_or_AAt{Tnew,typeof(Anew)}(Anew, Vector{Tnew}(max(size(A)...)))
+    AtA_or_AAt{Tnew,typeof(Anew)}(Anew, Vector{Tnew}(uninitialized, max(size(A)...)))
 end
 
 function A_mul_B!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
