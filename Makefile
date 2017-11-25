@@ -44,7 +44,7 @@ configure:
 endif
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,base test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia,$(link))))
+$(foreach link,base $(JULIAHOME)/test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia,$(notdir $(link)))))
 
 build_defaultpkgdir = $(build_datarootdir)/julia/site/$(shell echo $(VERSDIR))
 $(eval $(call symlink_target,$(JULIAHOME)/stdlib,$(build_datarootdir)/julia/site,$(shell echo $(VERSDIR))))
