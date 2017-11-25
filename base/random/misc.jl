@@ -33,11 +33,11 @@ julia> bitrand(rng, 10)
   true
 ```
 """
-bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
-bitrand(r::AbstractRNG, dims::Integer...) = rand!(r, BitArray(convert(Dims, dims)))
+bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(uninitialized, dims))
+bitrand(r::AbstractRNG, dims::Integer...) = rand!(r, BitArray(uninitialized, convert(Dims, dims)))
 
-bitrand(dims::Dims)   = rand!(BitArray(dims))
-bitrand(dims::Integer...) = rand!(BitArray(convert(Dims, dims)))
+bitrand(dims::Dims)   = rand!(BitArray(uninitialized, dims))
+bitrand(dims::Integer...) = rand!(BitArray(uninitialized, convert(Dims, dims)))
 
 
 ## randstring (often useful for temporary filenames/dirnames)
