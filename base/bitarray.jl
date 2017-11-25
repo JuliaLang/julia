@@ -13,7 +13,7 @@ mutable struct BitArray{N} <: DenseArray{Bool, N}
     chunks::Vector{UInt64}
     len::Int
     dims::NTuple{N,Int}
-    function BitArray{N}(dims::Vararg{Int,N}) where N
+    function BitArray{N}(::Uninitialized, dims::Vararg{Int,N}) where N
         n = 1
         i = 1
         for d in dims
@@ -29,38 +29,43 @@ mutable struct BitArray{N} <: DenseArray{Bool, N}
         return b
     end
 end
+# to deprecate in favor of the above uninitialized-accepting equivalent:
+BitArray{N}(dims::Vararg{Int,N}) where {N} = BitArray{N}(uninitialized, dims)
 
 # note: the docs for the two signatures are unified, but only
 # the first one is recognized by the help system; it would be nice
 # to fix this.
 """
-    BitArray(dims::Integer...)
-    BitArray{N}(dims::NTuple{N,Int})
+    BitArray(uninitialized, dims::Integer...)
+    BitArray{N}(uninitialized, dims::NTuple{N,Int})
 
 Construct an uninitialized [`BitArray`](@ref) with the given dimensions.
-Behaves identically to the [`Array`](@ref) constructor.
+Behaves identically to the [`Array`](@ref) constructor. See [`uninitialized`](@ref).
 
 # Examples
 ```julia-repl
-julia> BitArray(2, 2)
+julia> BitArray(uninitialized, 2, 2)
 2×2 BitArray{2}:
  false  false
  false  true
 
-julia> BitArray((3, 1))
+julia> BitArray(uninitialized, (3, 1))
 3×1 BitArray{2}:
  false
  true
  false
 ```
 """
-BitArray(dims::Integer...) = BitArray(map(Int,dims))
-BitArray(dims::NTuple{N,Int}) where {N} = BitArray{N}(dims...)
+BitArray(::Uninitialized, dims::Integer...) = BitArray(uninitialized, map(Int,dims))
+BitArray(::Uninitialized, dims::NTuple{N,Int}) where {N} = BitArray{N}(uninitialized, dims...)
+# to deprecate in favor of the above uninitialized-accepting equivalents:
+BitArray(dims::Integer...) = BitArray(uninitialized, dims)
+BitArray(dims::NTuple{N,Int}) where {N} = BitArray{N}(uninitialized, dims...)
 
 const BitVector = BitArray{1}
 const BitMatrix = BitArray{2}
 
-BitVector() = BitArray{1}(0)
+BitVector() = BitArray{1}(uninitialized, 0)
 
 ## utility functions ##
 
