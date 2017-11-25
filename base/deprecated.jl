@@ -792,7 +792,7 @@ function Math.frexp(A::Array{<:AbstractFloat})
                    "consider using dot-syntax to `broadcast` scalar `frexp` over `Array`s ",
                    "instead, for example `frexp.(rand(4))`."), :frexp)
     F = similar(A)
-    E = Array{Int}(size(A))
+    E = Array{Int}(uninitialized, size(A))
     for (iF, iE, iA) in zip(eachindex(F), eachindex(E), eachindex(A))
         F[iF], E[iE] = frexp(A[iA])
     end
@@ -931,15 +931,15 @@ iteratoreltype(::Type{Task}) = EltypeUnknown()
 isempty(::Task) = error("isempty not defined for Tasks")
 
 # Deprecate Array(T, dims...) in favor of proper type constructors
-@deprecate Array(::Type{T}, d::NTuple{N,Int}) where {T,N}               Array{T}(d)
-@deprecate Array(::Type{T}, d::Int...) where {T}                        Array{T}(d...)
-@deprecate Array(::Type{T}, m::Int) where {T}                           Array{T}(m)
-@deprecate Array(::Type{T}, m::Int,n::Int) where {T}                    Array{T}(m,n)
-@deprecate Array(::Type{T}, m::Int,n::Int,o::Int) where {T}             Array{T}(m,n,o)
-@deprecate Array(::Type{T}, d::Integer...) where {T}                    Array{T}(convert(Tuple{Vararg{Int}}, d))
-@deprecate Array(::Type{T}, m::Integer) where {T}                       Array{T}(Int(m))
-@deprecate Array(::Type{T}, m::Integer,n::Integer) where {T}            Array{T}(Int(m),Int(n))
-@deprecate Array(::Type{T}, m::Integer,n::Integer,o::Integer) where {T} Array{T}(Int(m),Int(n),Int(o))
+@deprecate Array(::Type{T}, d::NTuple{N,Int}) where {T,N}               Array{T}(uninitialized, d)
+@deprecate Array(::Type{T}, d::Int...) where {T}                        Array{T}(uninitialized, d...)
+@deprecate Array(::Type{T}, m::Int) where {T}                           Array{T}(uninitialized, m)
+@deprecate Array(::Type{T}, m::Int,n::Int) where {T}                    Array{T}(uninitialized, m,n)
+@deprecate Array(::Type{T}, m::Int,n::Int,o::Int) where {T}             Array{T}(uninitialized, m,n,o)
+@deprecate Array(::Type{T}, d::Integer...) where {T}                    Array{T}(uninitialized, convert(Tuple{Vararg{Int}}, d))
+@deprecate Array(::Type{T}, m::Integer) where {T}                       Array{T}(uninitialized, Int(m))
+@deprecate Array(::Type{T}, m::Integer,n::Integer) where {T}            Array{T}(uninitialized, Int(m),Int(n))
+@deprecate Array(::Type{T}, m::Integer,n::Integer,o::Integer) where {T} Array{T}(uninitialized, Int(m),Int(n),Int(o))
 
 @noinline function is_intrinsic_expr(@nospecialize(x))
     Base.depwarn("is_intrinsic_expr is deprecated. There are no intrinsic functions anymore.", :is_intrinsic_expr)
@@ -1062,14 +1062,14 @@ end
 ## end of FloatRange
 
 @noinline zero_arg_matrix_constructor(prefix::String) =
-    depwarn("$prefix() is deprecated, use $prefix(0, 0) instead.", :zero_arg_matrix_constructor)
+    depwarn("$prefix() is deprecated, use $prefix(uninitialized, 0, 0) instead.", :zero_arg_matrix_constructor)
 function Matrix{T}() where T
     zero_arg_matrix_constructor("Matrix{T}")
-    return Matrix{T}(0, 0)
+    return Matrix{T}(uninitialized, 0, 0)
 end
 function Matrix()
     zero_arg_matrix_constructor("Matrix")
-    return Matrix(0, 0)
+    return Matrix(uninitialized, 0, 0)
 end
 
 for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
@@ -1129,9 +1129,9 @@ import .LinAlg: cond
 
 # PR #21359
 import .Random: srand
-@deprecate srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) srand(r, read!(filename, Array{UInt32}(Int(n))))
-@deprecate srand(filename::AbstractString, n::Integer=4) srand(read!(filename, Array{UInt32}(Int(n))))
-@deprecate MersenneTwister(filename::AbstractString)  srand(MersenneTwister(0), read!(filename, Array{UInt32}(Int(4))))
+@deprecate srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) srand(r, read!(filename, Vector{UInt32}(uninitialized, Int(n))))
+@deprecate srand(filename::AbstractString, n::Integer=4) srand(read!(filename, Vector{UInt32}(uninitialized, Int(n))))
+@deprecate MersenneTwister(filename::AbstractString)  srand(MersenneTwister(0), read!(filename, Vector{UInt32}(uninitialized, Int(4))))
 
 # PR #21974
 @deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
@@ -1343,9 +1343,9 @@ import .LinAlg: lufact, lufact!, qrfact, qrfact!, cholfact, cholfact!
 
 @deprecate read(s::IO, x::Ref) read!(s, x)
 
-@deprecate read(s::IO, t::Type, d1::Int, dims::Int...) read!(s, Array{t}(tuple(d1,dims...)))
-@deprecate read(s::IO, t::Type, d1::Integer, dims::Integer...) read!(s, Array{t}(convert(Tuple{Vararg{Int}},tuple(d1,dims...))))
-@deprecate read(s::IO, t::Type, dims::Dims) read!(s, Array{t}(dims))
+@deprecate read(s::IO, t::Type, d1::Int, dims::Int...) read!(s, Array{t}(uninitialized, tuple(d1,dims...)))
+@deprecate read(s::IO, t::Type, d1::Integer, dims::Integer...) read!(s, Array{t}(uninitialized, convert(Tuple{Vararg{Int}},tuple(d1,dims...))))
+@deprecate read(s::IO, t::Type, dims::Dims) read!(s, Array{t}(uninitialized, dims))
 
 function CartesianRange(start::CartesianIndex{N}, stop::CartesianIndex{N}) where N
     inds = map((f,l)->f:l, start.I, stop.I)

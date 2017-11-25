@@ -22,7 +22,7 @@ mutable struct BitArray{N} <: DenseArray{Bool, N}
             i += 1
         end
         nc = num_bit_chunks(n)
-        chunks = Vector{UInt64}(nc)
+        chunks = Vector{UInt64}(uninitialized, nc)
         nc > 0 && (chunks[end] = UInt64(0))
         b = new(chunks, n)
         N != 1 && (b.dims = dims)
@@ -348,7 +348,7 @@ similar(B::BitArray, dims::Dims) = BitArray(dims...)
 similar(B::BitArray, T::Type{Bool}, dims::Dims) = BitArray(dims)
 # changing type to a non-Bool returns an Array
 # (this triggers conversions like float(bitvector) etc.)
-similar(B::BitArray, T::Type, dims::Dims) = Array{T}(dims)
+similar(B::BitArray, T::Type, dims::Dims) = Array{T}(uninitialized, dims)
 
 function fill!(B::BitArray, x)
     y = convert(Bool, x)
@@ -502,7 +502,7 @@ end
 convert(::Type{Array{T}}, B::BitArray{N}) where {T,N} = convert(Array{T,N}, B)
 convert(::Type{Array{T,N}}, B::BitArray{N}) where {T,N} = _convert(Array{T,N}, B) # see #15801
 function _convert(::Type{Array{T,N}}, B::BitArray{N}) where {T,N}
-    A = Array{T}(size(B))
+    A = Array{T}(uninitialized, size(B))
     Bc = B.chunks
     @inbounds for i = 1:length(A)
         A[i] = unsafe_bitgetindex(Bc, i)
@@ -620,7 +620,7 @@ gen_bitarray(::IsInfinite, itr) =  throw(ArgumentError("infinite-size iterable u
 
 function gen_bitarray_from_itr(itr, st)
     B = empty!(BitArray(bitcache_size))
-    C = Vector{Bool}(bitcache_size)
+    C = Vector{Bool}(uninitialized, bitcache_size)
     Bc = B.chunks
     ind = 1
     cind = 1
@@ -645,7 +645,7 @@ end
 
 function fill_bitarray_from_itr!(B::BitArray, itr, st)
     n = length(B)
-    C = Vector{Bool}(bitcache_size)
+    C = Vector{Bool}(uninitialized, bitcache_size)
     Bc = B.chunks
     ind = 1
     cind = 1
@@ -1189,7 +1189,7 @@ end
 
 for f in (:+, :-)
     @eval function ($f)(A::BitArray, B::BitArray)
-        r = Array{Int}(promote_shape(size(A), size(B)))
+        r = Array{Int}(uninitialized, promote_shape(size(A), size(B)))
         ai = start(A)
         bi = start(B)
         ri = 1
@@ -1649,7 +1649,7 @@ end
 function find(B::BitArray)
     l = length(B)
     nnzB = count(B)
-    I = Vector{Int}(nnzB)
+    I = Vector{Int}(uninitialized, nnzB)
     nnzB == 0 && return I
     Bc = B.chunks
     Bcount = 1
@@ -1683,8 +1683,8 @@ findn(B::BitVector) = find(B)
 
 function findn(B::BitMatrix)
     nnzB = count(B)
-    I = Vector{Int}(nnzB)
-    J = Vector{Int}(nnzB)
+    I = Vector{Int}(uninitialized, nnzB)
+    J = Vector{Int}(uninitialized, nnzB)
     cnt = 1
     for j = 1:size(B,2), i = 1:size(B,1)
         if B[i,j]
