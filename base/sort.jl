@@ -820,7 +820,7 @@ function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
     end
     cumsum!(where, where)
 
-    P = Vector{Int}(n)
+    P = Vector{Int}(uninitialized, n)
     @inbounds for i = 1:n
         label = x[i] + offs
         P[where[label]] = i

@@ -29,7 +29,7 @@ function include(path::AbstractString)
     end
     result
 end
-const _included_files = Array{Tuple{Module,String}}(0)
+const _included_files = Array{Tuple{Module,String},1}()
 function _include1(mod::Module, path)
     Core.Inference.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
     Core.include(mod, path)
@@ -148,16 +148,16 @@ Vector() = Vector{Any}(uninitialized, 0)
 
 ## preexisting dims-type-converting Array constructors for convenience, i.e. without uninitialized, to deprecate
 # type and dimensionality specified, accepting dims as series of Integers
-Vector{T}(m::Integer) where {T} = Vector{T}(Int(m))
-Matrix{T}(m::Integer, n::Integer) where {T} = Matrix{T}(Int(m), Int(n))
+Vector{T}(m::Integer) where {T} = Vector{T}(uninitialized, Int(m))
+Matrix{T}(m::Integer, n::Integer) where {T} = Matrix{T}(uninitialized, Int(m), Int(n))
 # type but not dimensionality specified, accepting dims as series of Integers
-Array{T}(m::Integer) where {T} = Array{T,1}(Int(m))
-Array{T}(m::Integer, n::Integer) where {T} = Array{T,2}(Int(m), Int(n))
-Array{T}(m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(Int(m), Int(n), Int(o))
-Array{T}(d::Integer...) where {T} = Array{T}(convert(Tuple{Vararg{Int}}, d))
+Array{T}(m::Integer) where {T} = Vector{T}(uninitialized, Int(m))
+Array{T}(m::Integer, n::Integer) where {T} = Array{T,2}(uninitialized, Int(m), Int(n))
+Array{T}(m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(uninitialized, Int(m), Int(n), Int(o))
+Array{T}(d::Integer...) where {T} = Array{T}(uninitialized, convert(Tuple{Vararg{Int}}, d))
 # dimensionality but not type specified, accepting dims as series of Integers
-Vector(m::Integer) = Vector{Any}(Int(m))
-Matrix(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
+Vector(m::Integer) = Vector{Any}(uninitialized, Int(m))
+Matrix(m::Integer, n::Integer) = Matrix{Any}(uninitialized, Int(m), Int(n))
 
 
 include("associative.jl")
