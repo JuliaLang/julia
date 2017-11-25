@@ -895,7 +895,7 @@ function next(itr::PartitionIterator{<:Vector}, state)
 end
 
 function next(itr::PartitionIterator, state)
-    v = Vector{eltype(itr.c)}(itr.n)
+    v = Vector{eltype(itr.c)}(uninitialized, itr.n)
     i = 0
     while !done(itr.c, state) && i < itr.n
         i += 1

@@ -511,11 +511,11 @@ iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union |
 
 const IInf = typemax(Int) # integer infinity
 const n_ifunc = reinterpret(Int32, arraylen) + 1
-const t_ifunc = Array{Tuple{Int, Int, Any}, 1}(n_ifunc)
-const t_ifunc_cost = Array{Int, 1}(n_ifunc)
-const t_ffunc_key = Array{Any, 1}(0)
-const t_ffunc_val = Array{Tuple{Int, Int, Any}, 1}(0)
-const t_ffunc_cost = Array{Int, 1}(0)
+const t_ifunc = Vector{Tuple{Int, Int, Any}}(uninitialized, n_ifunc)
+const t_ifunc_cost = Vector{Int}(uninitialized, n_ifunc)
+const t_ffunc_key = Vector{Any}()
+const t_ffunc_val = Vector{Tuple{Int, Int, Any}}()
+const t_ffunc_cost = Vector{Int}()
 function add_tfunc(f::IntrinsicFunction, minarg::Int, maxarg::Int, @nospecialize(tfunc), cost::Int)
     idx = reinterpret(Int32, f) + 1
     t_ifunc[idx] = (minarg, maxarg, tfunc)
@@ -4260,7 +4260,7 @@ function linearize_args!(args::Vector{Any}, atypes::Vector{Any}, stmts::Vector{A
     # linearize the IR by moving the arguments to SSA position
     na = length(args)
     @assert length(atypes) == na
-    newargs = Vector{Any}(na)
+    newargs = Vector{Any}(uninitialized, na)
     for i = na:-1:1
         aei = args[i]
         ti = atypes[i]
@@ -5272,7 +5272,7 @@ function inlining_pass(e::Expr, sv::OptimizationState, stmts::Vector{Any}, ins, 
     end
 
     for ninline = 1:100
-        ata = Vector{Any}(length(e.args))
+        ata = Vector{Any}(uninitialized, length(e.args))
         ata[1] = ft
         for i = 2:length(e.args)
             a = exprtype(e.args[i], sv.src, sv.mod)
@@ -5301,7 +5301,7 @@ function inlining_pass(e::Expr, sv::OptimizationState, stmts::Vector{Any}, ins, 
 
         if f === _apply
             na = length(e.args)
-            newargs = Vector{Any}(na-2)
+            newargs = Vector{Any}(uninitialized, na-2)
             newstmts = Any[]
             effect_free_upto = 0
             for i = 3:na
@@ -6025,10 +6025,10 @@ function alloc_elim_pass!(sv::OptimizationState)
                     end
                 end
             else
-                vals = Vector{Any}(nv)
+                vals = Vector{Any}(uninitialized, nv)
                 local new_slots::Vector{Int}
                 if !is_ssa
-                    new_slots = Vector{Int}(nv)
+                    new_slots = Vector{Int}(uninitialized, nv)
                 end
                 for j=1:nv
                     tupelt = tup[j+1]

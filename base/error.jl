@@ -60,7 +60,7 @@ end
 
 # convert dual arrays (ips, interpreter_frames) to a single array of locations
 function _reformat_bt(bt, bt2)
-    ret = Array{Union{InterpreterIP,Ptr{Void}},1}()
+    ret = Vector{Union{InterpreterIP,Ptr{Void}}}()
     i, j = 1, 1
     while i <= length(bt)
         ip = bt[i]::Ptr{Void}

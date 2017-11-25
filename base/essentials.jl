@@ -370,7 +370,7 @@ function append_any(xs...)
     # used by apply() and quote
     # must be a separate function from append(), since apply() needs this
     # exact function.
-    out = Vector{Any}(4)
+    out = Vector{Any}(uninitialized, 4)
     l = 4
     i = 1
     for x in xs
@@ -627,7 +627,7 @@ Val(x) = (@_pure_meta; Val{x}())
 # used by keyword arg call lowering
 function vector_any(@nospecialize xs...)
     n = length(xs)
-    a = Vector{Any}(n)
+    a = Vector{Any}(uninitialized, n)
     @inbounds for i = 1:n
         Core.arrayset(false, a, xs[i], i)
     end
@@ -636,7 +636,7 @@ end
 
 function as_kwargs(xs::Union{AbstractArray,Associative})
     n = length(xs)
-    to = Vector{Any}(n*2)
+    to = Vector{Any}(uninitialized, n*2)
     i = 1
     for (k, v) in xs
         to[i]   = k::Symbol
@@ -647,7 +647,7 @@ function as_kwargs(xs::Union{AbstractArray,Associative})
 end
 
 function as_kwargs(xs)
-    to = Vector{Any}(0)
+    to = Vector{Any}()
     for (k, v) in xs
         ccall(:jl_array_ptr_1d_push2, Void, (Any, Any, Any), to, k::Symbol, v)
     end
