@@ -1274,7 +1274,7 @@ function find(p::Function, S::SparseMatrixCSC)
     end
     sz = size(S)
     I, J = _findn(p, S)
-    return Base._sub2ind(sz, I, J)
+    return CartesianIndex.(I, J)
 end
 find(p::Base.OccursIn, x::SparseMatrixCSC) =
     invoke(find, Tuple{Base.OccursIn, AbstractArray}, p, x)

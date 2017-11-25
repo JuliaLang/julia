@@ -465,6 +465,16 @@ end
     @test findnext(equalto(0x00), [0x00, 0x01, 0x00], 2) == 3
     @test findprev(equalto(0x00), [0x00, 0x01, 0x00], 2) == 1
 end
+@testset "find with Matrix" begin
+    A = [1 2 0; 3 4 0]
+    @test find(isodd, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1)]
+    @test find(!iszero, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1),
+                               CartesianIndex(1, 2), CartesianIndex(2, 2)]
+end
+@testset "find with Dict" begin
+    d = Dict(:A => 10, :B => -1, :C => 0)
+    @test sort(find(x -> x >= 0, d)) == [:A, :C]
+end
 @testset "find with general iterables" begin
     s = "julia"
     @test find(c -> c == 'l', s) == [3]
