@@ -2403,17 +2403,23 @@ mktempdir() do dir
                     payload = CredentialPayload(Nullable{AbstractCredentials}(),
                                                 Nullable{CachedCredentials}(), cfg,
                                                 allow_git_helpers=true)
-                    credential_loop($valid_cred, $url, Nullable{String}(), payload)
+                    err, auth_attempts = credential_loop($valid_cred, $url,
+                                                         Nullable{String}(), payload)
+                    (err, auth_attempts, payload.credential)
                 end
             end
 
+            # Username is supplied from the git configuration file
             challenges = [
                 "Username for 'https://github.com' [$valid_username]:" => "\n",
                 "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
             ]
-            err, auth_attempts = challenge_prompt(https_ex, challenges)
+            err, auth_attempts, credential = challenge_prompt(https_ex, challenges)
             @test err == git_ok
             @test auth_attempts == 1
+
+            # Verify credential wasn't accidentally zeroed (#24731)
+            @test get(credential) == valid_cred
         end
 
         @testset "Incompatible explicit credentials" begin
