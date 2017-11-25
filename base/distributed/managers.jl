@@ -489,7 +489,11 @@ function bind_client_port(s)
 end
 
 function connect_to_worker(host::AbstractString, port::Integer)
-    s = socket_reuse_port()
+    # Revert support for now. Client socket port number reuse
+    # does not play well in a scenario where worker processes are repeatedly
+    # created and torn down, i.e., when the new workers end up reusing a
+    # a previous listen port.
+    s = TCPSocket()
     connect(s, host, UInt16(port))
 
     # Avoid calling getaddrinfo if possible - involves a DNS lookup
