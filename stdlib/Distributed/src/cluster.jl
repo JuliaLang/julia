@@ -172,13 +172,11 @@ worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
 
 ## worker creation and setup ##
 """
-    start_worker([out::IO=STDOUT], cookie::Union{AbstractString, Void})
+    start_worker([out::IO=STDOUT], cookie::AbstractString=readline(STDIN))
 
 `start_worker` is an internal function which is the default entry point for
 worker processes connecting via TCP/IP. It sets up the process as a Julia cluster
 worker.
-
-If the cookie is `nothing`, the worker tries to read it from its STDIN.
 
 host:port information is written to stream `out` (defaults to STDOUT).
 
@@ -188,8 +186,8 @@ line option) and schedules tasks to process incoming TCP connections and request
 
 It does not return.
 """
-start_worker(out::IO=STDOUT, cookie::Void=nothing) = start_worker(out, readline(STDIN))
-start_worker(cookie::Union{AbstractString, Void}) = start_worker(STDOUT, cookie)
+start_worker(out::IO=STDOUT, cookie::Void=readline(STDIN)) = start_worker(out, cookie)
+start_worker(cookie::AbstractString=readline(STDIN)) = start_worker(STDOUT, cookie)
 function start_worker(out::IO, cookie::AbstractString)
     close(STDIN) # workers will not use it
     redirect_stderr(STDOUT)

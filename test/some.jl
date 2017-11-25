@@ -1,9 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## eltype()
-
-@test eltype(Some(1)) === Int
-
 ## promote()
 
 @test promote_type(Some{Int}, Some{Float64}) === Some{Float64}
@@ -27,10 +23,7 @@
 
 @test convert(Some, Some(nothing)) === Some(nothing)
 @test convert(Some{Void}, Some(nothing)) === Some(nothing)
-@test convert(Some, Some(nothing)) === Some(nothing)
-@test convert(Some{Void}, Some(nothing)) === Some(nothing)
 
-@test convert(Union{Some, Void}, nothing) === nothing
 @test convert(Union{Some, Void}, nothing) === nothing
 @test convert(Union{Some{Int}, Void}, nothing) === nothing
 

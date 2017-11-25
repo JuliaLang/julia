@@ -24,7 +24,7 @@ mutable struct Future <: AbstractRemoteRef
     id::Int
     v::Union{Some{Any}, Void}
 
-    Future(w::Int, rrid::RRID, v::Union{Some{<:Any}, Void}=nothing) =
+    Future(w::Int, rrid::RRID, v::Union{Some, Void}=nothing) =
         (r = new(w,rrid.whence,rrid.id,v); return test_existing_ref(r))
 
     Future(t::NTuple{4, Any}) = new(t[1],t[2],t[3],t[4])  # Useful for creating dummy, zeroed-out instances
