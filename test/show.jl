@@ -118,7 +118,7 @@ end
     # line meta
     dims::NTuple{N,Int}
     # line meta
-    function BitArray(dims::Int...)
+    function BitArray(uninitialized, dims::Int...)
         # line meta
         if length(dims) != N
             # line meta
