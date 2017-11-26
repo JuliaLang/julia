@@ -168,7 +168,7 @@ end
         @nexprs $N i->(A_{i+1} = Bs[i])
         @nexprs $nargs i->(keep_i = keeps[i])
         @nexprs $nargs i->(Idefault_i = Idefaults[i])
-        C = Vector{Bool}(bitcache_size)
+        C = Vector{Bool}(uninitialized, bitcache_size)
         Bc = B.chunks
         ind = 1
         cind = 1

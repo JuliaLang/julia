@@ -42,10 +42,10 @@ mutable struct Channel{T} <: AbstractChannel
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
-        ch = new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(0), sz, 0)
+        ch = new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(), sz, 0)
         if sz == 0
-            ch.takers = Vector{Task}(0)
-            ch.putters = Vector{Task}(0)
+            ch.takers = Vector{Task}()
+            ch.putters = Vector{Task}()
         end
         return ch
     end
