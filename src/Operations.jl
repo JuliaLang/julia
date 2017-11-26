@@ -244,6 +244,7 @@ function install(
     version_path = find_installed(uuid, hash)
     ispath(version_path) && return version_path, false
     http_download_successful = false
+    env.preview[] && return version_path, true
     if !USE_LIBGIT2_FOR_ALL_DOWNLOADS && version != nothing
         for url in urls
             archive_url = get_archive_url_for_version(url, version)
@@ -429,6 +430,7 @@ end
 
 function build_versions(env::EnvCache, uuids::Vector{UUID})
     # collect builds for UUIDs with `deps/build.jl` files
+    env.preview[] && (info("Skipping building in preview mode"); return)
     builds = Tuple{UUID,String,SHA1,String}[]
     for uuid in uuids
         info = manifest_info(env, uuid)
@@ -473,6 +475,7 @@ function build_versions(env::EnvCache, uuids::Vector{UUID})
             warn("Error building `$name`; see log file for further info")
         end
     end
+    return
 end
 
 function rm(env::EnvCache, pkgs::Vector{PackageSpec})

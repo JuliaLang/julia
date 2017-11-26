@@ -231,6 +231,8 @@ struct EnvCache
     uuids::Dict{String,Vector{UUID}}
     paths::Dict{UUID,Vector{String}}
 
+    preview::Ref{Bool}
+
     function EnvCache(env::Union{Void,String})
         project_file, git_repo = find_project(env)
         project = read_project(project_file)
@@ -246,6 +248,7 @@ struct EnvCache
         manifest = read_manifest(manifest_file)
         uuids = Dict{String,Vector{UUID}}()
         paths = Dict{UUID,Vector{String}}()
+        preview = Ref(false)
         return new(
             env,
             git_repo,
@@ -255,6 +258,7 @@ struct EnvCache
             manifest,
             uuids,
             paths,
+            preview,
         )
     end
 end
@@ -302,9 +306,11 @@ function write_env(env::EnvCache)
     if !isempty(project) || ispath(env.project_file)
         info("Updating $(pathrepr(env, env.project_file))")
         Pkg3.Display.print_project_diff(old_env, env)
-        mkpath(dirname(env.project_file))
-        open(env.project_file, "w") do io
-            TOML.print(io, project, sorted=true)
+        if !env.preview[]
+            mkpath(dirname(env.project_file))
+            open(env.project_file, "w") do io
+                TOML.print(io, project, sorted=true)
+            end
         end
     end
     # update the manifest file
@@ -321,8 +327,10 @@ function write_env(env::EnvCache)
             all(d in uniques && uuids[d] == u for (d, u) in deps) || continue
             info["deps"] = sort!(collect(keys(deps)))
         end
-        open(env.manifest_file, "w") do io
-            TOML.print(io, manifest, sorted=true)
+        if !env.preview[]
+            open(env.manifest_file, "w") do io
+                TOML.print(io, manifest, sorted=true)
+            end
         end
     end
 end
