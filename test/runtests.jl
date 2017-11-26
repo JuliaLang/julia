@@ -1,5 +1,5 @@
 using Pkg3
-using Pkg3.Type
+using Pkg3.Types
 if Base.isdeprecated(Main, :Test)
     using Test
 else
