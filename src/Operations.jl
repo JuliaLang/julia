@@ -2,10 +2,9 @@ module Operations
 
 using Base.Random: UUID
 using Base: LibGit2
-using Base: Pkg
 using Pkg3.TerminalMenus
 using Pkg3.Types
-import Pkg3: depots, BinaryProvider, USE_LIBGIT2_FOR_ALL_DOWNLOADS, NUM_CONCURRENT_DOWNLOADS
+import Pkg3: Pkg2, depots, BinaryProvider, USE_LIBGIT2_FOR_ALL_DOWNLOADS, NUM_CONCURRENT_DOWNLOADS
 
 const SlugInt = UInt32 # max p = 4
 const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
@@ -153,7 +152,9 @@ function resolve_versions!(env::EnvCache, pkgs::Vector{PackageSpec})::Dict{UUID,
     info("Resolving package versions")
     # anything not mentioned is fixed
     uuids = UUID[pkg.uuid for pkg in pkgs]
+    uuid_to_name = Dict{String, String}()
     for (name::String, uuid::UUID) in env.project["deps"]
+        uuid_to_name[string(uuid)] = name
         uuid in uuids && continue
         info = manifest_info(env, uuid)
         haskey(info, "version") || continue
@@ -161,10 +162,16 @@ function resolve_versions!(env::EnvCache, pkgs::Vector{PackageSpec})::Dict{UUID,
         push!(pkgs, PackageSpec(name, uuid, ver))
     end
     # construct data structures for resolver and call it
-    reqs = Dict{String,Pkg.Types.VersionSet}(string(pkg.uuid) => pkg.version for pkg in pkgs)
-    deps = convert(Dict{String,Dict{VersionNumber,Pkg.Types.Available}}, deps_graph(env, pkgs))
-    deps = Pkg.Query.prune_dependencies(reqs, deps)
-    vers = convert(Dict{UUID,VersionNumber}, Pkg.Resolve.resolve(reqs, deps))
+    reqs = Dict{String,Pkg2.Types.VersionSet}(string(pkg.uuid) => pkg.version for pkg in pkgs)
+    deps = convert(Dict{String,Dict{VersionNumber,Pkg2.Types.Available}}, deps_graph(env, pkgs))
+    for dep_uuid in keys(deps)
+        info = manifest_info(env, UUID(dep_uuid))
+        if info != nothing
+            uuid_to_name[info["uuid"]] = info["name"]
+        end
+    end
+    deps = Pkg2.Query.prune_dependencies(reqs, deps, uuid_to_name)
+    vers = convert(Dict{UUID,VersionNumber}, Pkg2.Resolve.resolve(reqs, deps, uuid_to_name))
     find_registered!(env, collect(keys(vers)))
     # update vector of package versions
     for pkg in pkgs

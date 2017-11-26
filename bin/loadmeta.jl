@@ -1,14 +1,15 @@
 #!/usr/bin/env julia
 
 using Base: thispatch, thisminor, nextpatch, nextminor
-using Base.Pkg.Reqs: Reqs, Requirement
-using Base.Pkg.Types
 using Base.LinAlg: checksquare
 using Base.Random: UUID
 using SHA
 
-## Computing UUID5 values from (namespace, key) pairs ##
+import Pkg3.Pkg2
+import Pkg2.Reqs: Reqs, Requirement
+import Pkg2.Types: VersionInterval
 
+## Computing UUID5 values from (namespace, key) pairs ##
 function uuid5(namespace::UUID, key::String)
     data = [reinterpret(UInt8, [namespace.value]); Vector{UInt8}(key)]
     u = reinterpret(UInt128, sha1(data)[1:16])[1]
@@ -153,6 +154,6 @@ end
 
 ## Load package data ##
 
-const pkgs = load_packages(Pkg.dir("METADATA"))
+const pkgs = load_packages(Pkg2.dir("METADATA"))
 delete!(pkgs, "CardinalDicts") # package repo no longer exists
 prune!(pkgs)

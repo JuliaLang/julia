@@ -1,12 +1,12 @@
 module Types
 
 using Base.Random: UUID
-using Base.Pkg.Types: VersionSet, Available
+using Pkg3.Pkg2.Types: VersionSet, Available
 using Pkg3.TOML
 using Pkg3.TerminalMenus
 
 import Pkg3
-import Pkg3: depots
+import Pkg3: depots, iswindows
 
 export SHA1, VersionRange, VersionSpec, PackageSpec, UpgradeLevel, EnvCache,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
@@ -330,7 +330,7 @@ function git_discover(
     ceiling::Union{AbstractString,Vector} = "",
     across_fs::Bool = false,
 )
-    sep = @static is_windows() ? ";" : ":"
+    sep = @static iswindows() ? ";" : ":"
     ceil = ceiling isa AbstractString ? ceiling :
         join(convert(Vector{String}, ceiling), sep)
     buf_ref = Ref(LibGit2.Buffer())
@@ -734,8 +734,6 @@ function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Void}
     end
     return nothing
 end
-
-iswindows() = @static VERSION < v"0.7-" ? Sys.is_windows() : Sys.iswindows()
 
 "Give a short path string representation"
 function pathrepr(env::EnvCache, path::String, base::String=pwd())

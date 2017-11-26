@@ -12,6 +12,9 @@ include("../ext/BinaryProvider/src/BinaryProvider.jl")
 include("../ext/TOML/src/TOML.jl")
 include("../ext/TerminalMenus/src/TerminalMenus.jl")
 
+iswindows() = @static VERSION < v"0.7-" ? Sys.is_windows() : Sys.iswindows()
+
+include("Pkg2/Pkg2.jl")
 include("Types.jl")
 include("Display.jl")
 include("Operations.jl")
