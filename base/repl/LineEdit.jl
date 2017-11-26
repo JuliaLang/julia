@@ -83,8 +83,8 @@ end
 
 options(s::PromptState) = isdefined(s.p, :repl) ? s.p.repl.options : Base.REPL.Options()
 
-function setmark(s::MIState)
-    activate_region(s, s.key_repeats > 0)
+function setmark(s::MIState, guess_region_active::Bool=true)
+    guess_region_active && activate_region(s, s.key_repeats > 0)
     mark(buffer(s))
 end
 
@@ -207,12 +207,31 @@ const COMMAND_GROUPS =
          :misc        => [:complete_line, :setmark, :edit_undo!, :edit_redo!],
 
 const COMMAND_GROUP = Dict(command=>group for (group, commands) in COMMAND_GROUPS for command in commands)
-command_group(command) = get(COMMAND_GROUP, command, :nogroup)
+command_group(command::Symbol) = get(COMMAND_GROUP, command, :nogroup)
+command_group(command::Function) = command_group(Base.function_name(command))
 
 function set_action!(s::MIState, command::Symbol)
-    command_group(command) != :movement && deactivate_region(s)
-    # if a command is already running, don't update the current_action field
-    s.current_action == :unknown && (s.current_action = command)
+    # if a command is already running, don't update the current_action field,
+    # as the caller is used as a helper function
+    s.current_action == :unknown || return
+
+    ## handle activeness of the region
+    is_shift_move(cmd) = startswith(String(cmd), "shift_")
+    if is_shift_move(command)
+        if !is_shift_move(s.last_action)
+            setmark(s, false)
+            activate_region(s)
+            # NOTE: if the region was already active from a non-shift
+            # move (e.g. ^Space^Space), the region is visibly changed
+        end
+    elseif command_group(command) != :movement || is_shift_move(s.last_action)
+        # if we move after a shift-move, the region is de-activated
+        # (e.g. like emacs behavior)
+        deactivate_region(s)
+    end
+
+    ## record current action
+    s.current_action = command
 end
 
 set_action!(s, command::Symbol) = nothing
@@ -589,6 +608,12 @@ function edit_move_down(s)
     changed = edit_move_down(buffer(s))
     changed && refresh_line(s)
     changed
+end
+
+function edit_shift_move(s::MIState, move_function::Function)
+    @assert command_group(move_function) == :movement
+    set_action!(s, Symbol(:shift_, move_function))
+    move_function(s)
 end
 
 
@@ -1897,6 +1922,10 @@ AnyDict(
     "\e[1;3A" => (s,o...) -> edit_transpose_lines_up!(s),
     # Meta-Down
     "\e[1;3B" => (s,o...) -> edit_transpose_lines_down!(s),
+    "\e[1;2D" => (s,o...)->edit_shift_move(s, edit_move_left),
+    "\e[1;2C" => (s,o...)->edit_shift_move(s, edit_move_right),
+    "\e[1;2A" => (s,o...)->edit_shift_move(s, edit_move_up),
+    "\e[1;2B" => (s,o...)->edit_shift_move(s, edit_move_down),
     # Meta B
     "\eb" => (s,o...)->edit_move_word_left(s),
     # Meta F
