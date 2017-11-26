@@ -66,6 +66,17 @@ Base.Broadcast.broadcast_getindex
 Base.Broadcast.broadcast_setindex!
 ```
 
+For specializing broadcast on custom types, see
+```@docs
+Base.BroadcastStyle
+Base.broadcast_similar
+Base.broadcast_indices
+Base.Broadcast.Scalar
+Base.Broadcast.AbstractArrayStyle
+Base.Broadcast.ArrayStyle
+Base.Broadcast.DefaultArrayStyle
+```
+
 ## Indexing and assignment
 
 ```@docs
