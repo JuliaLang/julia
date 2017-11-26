@@ -606,5 +606,65 @@ function up(env::EnvCache, pkgs::Vector{PackageSpec})
     build_versions(env, new)
 end
 
+function test(env::EnvCache, pkgs::Vector{PackageSpec}; coverage=false)
+    # See if we can find the test files for all packages
+    missing_runtests = String[]
+    testfiles        = String[]
+    version_paths    = String[]
+    for pkg in pkgs
+        info = manifest_info(env, pkg.uuid)
+        haskey(info, "hash-sha1") || cmderror("Could not find hash-sha for package $(pkg.name)")
+        version_path = find_installed(pkg.uuid, SHA1(info["hash-sha1"]))
+        testfile = joinpath(version_path, "test", "runtests.jl")
+        if !isfile(testfile)
+            push!(missing_runtests, pkg.name)
+        end
+        push!(version_paths, version_path)
+        push!(testfiles, testfile)
+    end
+    if !isempty(missing_runtests)
+        cmderror(length(missing_runtests) == 1 ? "Package " : "Packages ",
+                join(missing_runtests, ", "),
+                " did not provide a `test/runtests.jl` file")
+    end
+
+    pkgs_errored = []
+    for (pkg, testfile, version_path) in zip(pkgs, testfiles, version_paths)
+        info("Testing $(pkg.name) located at $version_path")
+        if env.preview[]
+            info("In preview mode, skipping tests for $(pkg.name)")
+            continue
+        end
+        # TODO, cd to test folder (need to be careful with getting the same EnvCache
+        # as for this session in that case
+        compilemod_opt, compilemod_val = VERSION < v"0.7.0-DEV.1735" ?
+                ("compilecache" ,     Base.JLOptions().use_compilecache) :
+                ("compiled-modules",  Base.JLOptions().use_compiled_modules)
+
+        testcmd = `"import Pkg3; include(\"$testfile\")"`
+        cmd = ```
+            $(Base.julia_cmd())
+            --code-coverage=$(coverage ? "user" : "none")
+            --color=$(Base.have_color ? "yes" : "no")
+            --$compilemod_opt=$(Bool(compilemod_val) ? "yes" : "no")
+            --check-bounds=yes
+            --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
+            $testfile
+        ```
+        try
+            run(cmd)
+            info("$(pkg.name) tests passed")
+        catch err
+            push!(pkgs_errored, pkg.name)
+        end
+
+    end
+
+    if !isempty(pkgs_errored)
+        cmderror(length(pkgs_errored) == 1 ? "Package " : "Packages ",
+                 join(pkgs_errored, ", "),
+                 " errored during testing")
+    end
+end
 end # module
 

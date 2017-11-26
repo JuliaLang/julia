@@ -33,6 +33,9 @@ include("Operations.jl")
 include("REPLMode.jl")
 include("API.jl")
 
+import .API: add, rm, up, test
+const update = up
+
 @enum LoadErrorChoice LOAD_ERROR_QUERY LOAD_ERROR_INSTALL LOAD_ERROR_ERROR
 
 Base.@kwdef mutable struct GlobalSettings
@@ -56,7 +59,7 @@ if VERSION < v"0.7.0-DEV.2303"
     Base.find_in_path(name::String, wd::Void)   = _find_package(name)
     Base.find_in_path(name::String, wd::String) = _find_package(name)
 else
-    Base.find_package(name::String) = _find_package(name, )
+    Base.find_package(name::String) = _find_package(name)
 end
 
 function _find_package(name::String)
@@ -67,7 +70,6 @@ function _find_package(name::String)
     else
         name = string(base, ".jl")
     end
-
     info = Pkg3.Operations.package_env_info(base, verb = "use")
     info == nothing && @goto find_global
     haskey(info, "uuid") || @goto find_global

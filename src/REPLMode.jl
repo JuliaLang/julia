@@ -44,6 +44,7 @@ const opts = Dict(
     "minor"    => :minor,
     "patch"    => :patch,
     "fixed"    => :fixed,
+    "coverage" => :coverage,
 )
 
 function parse_option(word::AbstractString)
@@ -143,6 +144,7 @@ function do_cmd!(env, tokens, repl)
     cmd == :add     ?     do_add!(env, tokens) :
     cmd == :up      ?      do_up!(env, tokens) :
     cmd == :status  ?  do_status!(env, tokens) :
+    cmd == :test   ?   do_test!(env, tokens) :
         cmderror("`$cmd` command not yet implemented")
 end
 
@@ -184,6 +186,8 @@ const help = Base.Markdown.parse("""
     `up`: update packages in manifest
 
     `preview`: previews a subsequent command without affecting the current state
+
+    `test`: run tests for packages
     """)
 
 const helps = Dict(
@@ -260,7 +264,16 @@ const helps = Dict(
     Runs the command `cmd` in preview mode. This is defined such that no side effects
     will take place i.e. no packages are downloaded and neither the project nor manifest
     is modified.
-    """
+    """, :test => md"""
+
+        test [opts] pkg[=uuid] ...
+
+        opts: --coverage
+
+    Run the tests for package `pkg`. This is done by running the file `test/runtests.jl`
+    in the package directory. The option `--coverage` can be used to run the tests with
+    coverage enabled.
+    """,
 )
 
 function do_help!(
@@ -390,6 +403,35 @@ function do_status!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         end
     end
     Pkg3.Display.status(env, mode)
+end
+
+# TODO , test recursive dependencies as on option.
+function do_test!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+    pkgs = PackageSpec[]
+    coverage = false
+    while !isempty(tokens)
+        token = shift!(tokens)
+        if token[1] == :pkg
+            if length(token) == 2
+                pkg = PackageSpec(token[2])
+                pkg.mode = :manifest
+                push!(pkgs, pkg)
+            else
+                cmderror("`test` only takes a set of packages to test")
+            end
+        elseif token[1] == :opt
+            if token[2] == :coverage
+                coverage = true
+            else
+                cmderror("invalid option for `test`: --$(token[2])")
+            end
+        else
+            # TODO: Better error message
+            cmderror("invalid usage for `test`")
+        end
+    end
+    isempty(pkgs) && cmderror("`test` takes a set of packages")
+    Pkg3.API.test(env, pkgs; coverage = coverage)
 end
 
 function create_mode(repl, main)

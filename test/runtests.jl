@@ -19,25 +19,37 @@ function temp_pkg_dir(fn::Function)
     end
 end
 
+# Tests for Example.jl fail on master,
+# so let's use another small package
+# in the meantime
+const TEST_PKG = "Crayons"
+
 temp_pkg_dir() do
-    Pkg3.API.add("Example"; preview = true)
+    Pkg3.add(TEST_PKG; preview = true)
     @test_warn "not in project" Pkg3.API.rm("Example")
-    Pkg3.API.add("Example")
-    @eval import Example
-    Pkg3.API.up()
-    Pkg3.API.rm("Example"; preview = true)
-    # TODO: Check Example is still considered install
-    Pkg3.API.rm("Example")
+    Pkg3.add(TEST_PKG)
+    @eval import $(Symbol(TEST_PKG))
+    Pkg3.up()
+    Pkg3.rm(TEST_PKG; preview = true)
+
+    # TODO: Check coverage kwargs
+    # TODO: Check that preview = true doesn't actually execute the test
+    # by creating a package with a test file that fails.
+    Pkg3.test(TEST_PKG)
+    Pkg3.test(TEST_PKG; preview = true)
+
+    Pkg3.rm(TEST_PKG)
 
     try
-        Pkg3.API.add([PackageSpec("Example", VersionSpec(v"55"))])
+        Pkg3.add([PackageSpec(TEST_PKG, VersionSpec(v"55"))])
     catch e
-        @test contains(sprint(showerror, e), "Example")
+        @test contains(sprint(showerror, e), TEST_PKG)
     end
 
+
     nonexisting_pkg = randstring(14)
-    @test_throws CommandError Pkg3.API.add(nonexisting_pkg)
-    @test_throws CommandError Pkg3.API.up(nonexisting_pkg)
-    @test_warn "not in project" Pkg3.API.rm(nonexisting_pkg)
+    @test_throws CommandError Pkg3.add(nonexisting_pkg)
+    @test_throws CommandError Pkg3.up(nonexisting_pkg)
+    @test_warn "not in project" Pkg3.rm(nonexisting_pkg)
 end
 

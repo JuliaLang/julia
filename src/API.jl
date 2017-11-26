@@ -61,4 +61,19 @@ function up(env::EnvCache, pkgs::Vector{PackageSpec};
     Pkg3.Operations.up(env, pkgs)
 end
 
+test(;kwargs...)                           = test(PackageSpec[], kwargs...)
+test(pkg::String; kwargs...)               = test([pkg]; kwargs...)
+test(pkgs::Vector{String}; kwargs...)      = test([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
+test(pkgs::Vector{PackageSpec}; kwargs...) = test(EnvCache(), pkgs; kwargs...)
+
+function test(env::EnvCache, pkgs::Vector{PackageSpec}; coverage=false, preview=env.preview[])
+    env.preview[] = preview
+    preview && previewmode_info()
+    project_resolve!(env, pkgs)
+    manifest_resolve!(env, pkgs)
+    ensure_resolved(env, pkgs)
+    Pkg3.Operations.test(env, pkgs; coverage=coverage)
 end
+
+end # module
+
