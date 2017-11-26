@@ -6,6 +6,7 @@ export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!,
        ResolveBacktraceItem, ResolveBacktrace
 import Base: show, isempty, in, intersect, union!, union, ==, hash, copy, deepcopy_internal, push!
 
+import Pkg3.equalto
 import ...iswindows
 
 struct VersionInterval

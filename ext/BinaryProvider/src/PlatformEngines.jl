@@ -137,7 +137,7 @@ function probe_platform_engines!(;verbose::Bool = false)
     # download_engines is a list of (test_cmd, download_opts_functor)
     # The probulator will check each of them by attempting to run `$test_cmd`,
     # and if that works, will set the global download functions appropriately.
-    const download_engines = [
+    download_engines = [
         (`curl --help`, (url, path) -> `curl -C - -\# -f -o $path -L $url`),
         (`wget --help`, (url, path) -> `wget -c -O $path $url`),
         (`fetch --help`, (url, path) -> `fetch -f $path $url`),
@@ -175,17 +175,17 @@ function probe_platform_engines!(;verbose::Bool = false)
     # will check each of them by attempting to run `$test_cmd`, and if that
     # works, will set the global compression functions appropriately.
     gen_7z = (p) -> (unpack_7z(p), package_7z(p), list_7z(p), parse_7z_list)
-    const compression_engines = Tuple[
+    compression_engines = Tuple[
         (`tar --help`, unpack_tar, package_tar, list_tar, parse_tar_list),
     ]
 
     # sh_engines is just a list of Cmds-as-paths
-    const sh_engines = [
+    sh_engines = [
         `sh`
     ]
 
     # For windows, we need to tweak a few things, as the tools available differ
-    @static if is_windows()
+    @static if iswindows()
         # For download engines, we will most likely want to use powershell.
         # Let's generate a functor to return the necessary powershell magics
         # to download a file, given a path to the powershell executable
@@ -215,11 +215,11 @@ function probe_platform_engines!(;verbose::Bool = false)
         prepend!(compression_engines, [(`7z --help`, gen_7z("7z")...)])
 
         # On windows, we bundle 7z with Julia, so try invoking that directly
-        const exe7z = joinpath(JULIA_HOME, "7z.exe")
+        exe7z = joinpath(JULIA_HOME, "7z.exe")
         prepend!(compression_engines, [(`$exe7z --help`, gen_7z(exe7z)...)])
 
         # And finally, we want to look for sh as busybox as well:
-        const busybox = joinpath(JULIA_HOME, "busybox.exe")
+        busybox = joinpath(JULIA_HOME, "busybox.exe")
         prepend!(sh_engines, [(`$busybox sh`)])
     end
 
@@ -540,4 +540,3 @@ function download_verify_unpack(url::AbstractString,
         rm(tarball_path)
     end
 end
-

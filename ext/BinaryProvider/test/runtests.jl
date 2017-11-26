@@ -75,7 +75,7 @@ BinaryProvider.probe_platform_engines!(;verbose=true)
     end
 
     # Next, test a command that kills itself (NOTE: This doesn't work on windows.  sigh.)
-    @static if !is_windows()
+    @static if !iswindows()
         cd("output_tests") do
             oc = OutputCollector(sh(`./kill.sh`))
 
@@ -145,8 +145,8 @@ end
     # Test that we can indeed ask if something is linux or windows, etc...
     @test Compat.Sys.islinux(Linux(:aarch64))
     @test !Compat.Sys.islinux(Windows(:x86_64))
-    @test Compat.Sys.iswindows(Windows(:i686))
-    @test !Compat.Sys.iswindows(Linux(:x86_64))
+    @test iswindows(Windows(:i686))
+    @test !iswindows(Linux(:x86_64))
     @test Compat.Sys.isapple(MacOS())
     @test !Compat.Sys.isapple(Linux(:ppc64le))
 
@@ -155,7 +155,7 @@ end
         isbasesomething(p) = Sys.islinux(p) || Sys.iswindows(p) || Sys.isapple(p)
         @test all(isbasesomething, supported_platforms())
     end
-    issomething(p) = Compat.Sys.islinux(p) || Compat.Sys.iswindows(p) ||
+    issomething(p) = Compat.Sys.islinux(p) || iswindows(p) ||
                      Compat.Sys.isapple(p)
     @test all(issomething, supported_platforms())
 
@@ -201,7 +201,7 @@ end
         # Test we can run the script we dropped within this prefix.  Once again,
         # something about Windows | busybox | Julia won't pick this up even though
         # the path clearly points to the file.  :(
-        @static if !is_windows()
+        @static if !iswindows()
             @test success(sh(`$(ppt_path)`))
             @test success(sh(`prefix_path_test.sh`))
         end
@@ -234,7 +234,7 @@ end
         mkpath(bindir(prefix))
         touch(e_path)
         @test satisfied(ef, verbose=true)
-        @static if !is_windows()
+        @static if !iswindows()
             # Windows doesn't care about executable bit, grumble grumble
             @test !satisfied(e, verbose=true, platform=Linux(:x86_64))
         end
@@ -260,7 +260,7 @@ end
 
         # But if it is from a different platform, simple existence will be
         # enough to satisfy a LibraryProduct
-        @static if is_windows()
+        @static if iswindows()
             l_path = joinpath(libdir(prefix), "libfoo.so")
             touch(l_path)
             @test satisfied(l, verbose=true, platform=Linux(:x86_64))
@@ -347,7 +347,7 @@ end
 
     # Test that we can inspect the contents of the tarball
     contents = list_tarball_files(tarball_path)
-    const libdir_name = is_windows() ? "bin" : "lib"
+    const libdir_name = iswindows() ? "bin" : "lib"
     @test joinpath("bin", "bar.sh") in contents
     @test joinpath(libdir_name, "baz.so") in contents
 

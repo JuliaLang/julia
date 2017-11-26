@@ -134,7 +134,7 @@ function deps_graph(env::EnvCache, pkgs::Vector{PackageSpec})
                     d = get_or_make(Dict{String,UUID}, dependencies, v)
                     r = get_or_make(Dict{String,VersionSpec}, compatibility, v)
                     q = Dict(u => get_or_make(VersionSpec, r, p) for (p, u) in d)
-                    VERSION in get_or_make(VersionSpec, r, "julia") || continue
+                    # VERSION in get_or_make(VersionSpec, r, "julia") || continue
                     deps[uuid][v] = (h, q)
                     for (p, u) in d
                         u in uuids || push!(uuids, u)
@@ -351,11 +351,21 @@ function prune_manifest(env::EnvCache)
         end
         clean && break
     end
-    filter!(env.manifest) do _, infos
-        filter!(infos) do info
-            haskey(info, "uuid") && UUID(info["uuid"]) ∈ keep
+    if VERSION < v"0.7.0-DEV.1393"
+        filter!(env.manifest) do _, infos
+            filter!(infos) do info
+                haskey(info, "uuid") && UUID(info["uuid"]) ∈ keep
+            end
+            !isempty(infos)
         end
-        !isempty(infos)
+    else
+        filter!(env.manifest) do _infos # (_, info) doesn't parse on 0.6
+            _, infos = _infos
+            filter!(infos) do info
+                haskey(info, "uuid") && UUID(info["uuid"]) ∈ keep
+            end
+            !isempty(infos)
+        end
     end
 end
 
@@ -388,7 +398,8 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})::Vector{UUID}
         end
     end
 
-    max_name = maximum(strwidth(names[pkg.uuid]) for pkg in pkgs)
+    textwidth = VERSION < v"0.7.0-DEV.1930" ? Base.strwidth : Base.textwidth
+    max_name = maximum(textwidth(names[pkg.uuid]) for pkg in pkgs)
 
     for _ in 1:length(pkgs)
         r = take!(results)
@@ -466,7 +477,8 @@ function build_versions(env::EnvCache, uuids::Vector{UUID})
             cmd = ```
                 $(Base.julia_cmd()) -O0 --color=no --history-file=no
                 --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
-                --compilecache=$(Base.JLOptions().use_compilecache != 0 ? "yes" : "no")
+                --compilecache=$((VERSION < v"0.7.0-DEV.1735" ? Base.JLOptions().use_compilecache :
+                                  Base.JLOptions().use_compiled_modules) != 0 ? "yes" : "no")
                 --eval $code
                 ```
             open(log_file, "w") do log
@@ -526,8 +538,15 @@ function rm(env::EnvCache, pkgs::Vector{PackageSpec})
     end
     # delete drops from project
     n = length(env.project["deps"])
-    filter!(env.project["deps"]) do _, uuid
-        UUID(uuid) ∉ drop
+    if VERSION < v"0.7.0-DEV.1393"
+        filter!(env.project["deps"]) do _, uuid
+            UUID(uuid) ∉ drop
+        end
+    else
+        filter!(env.project["deps"]) do _uuid # (_, uuid) doesn't parse on 0.6
+            _, uuid = _uuid
+            UUID(uuid) ∉ drop
+        end
     end
     if length(env.project["deps"]) == n
         info("No changes")

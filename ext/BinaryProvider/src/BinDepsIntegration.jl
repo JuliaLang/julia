@@ -3,7 +3,7 @@ import BinDeps: Binaries, can_use, package_available, bindir, libdir,
                 generate_steps, LibraryDependency, provider, provides
 import Base: show
 
-type BP <: Binaries
+mutable struct BP <: Binaries
     url::String
     hash::String
     prefix::Prefix
@@ -14,7 +14,7 @@ show(io::IO, p::BP) = write(io, "BinaryProvider for $(p.url)")
 # We are cross-platform baby, and we never say no to a party
 can_use(::Type{BP}) = true
 package_available(p::BP) = true
-libdir(p::BP, dep) = @static if is_windows()
+libdir(p::BP, dep) = @static if Compat.Sys.iswindows()
     joinpath(p.prefix, "bin")
 else
     joinpath(p.prefix, "lib")

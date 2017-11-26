@@ -1,7 +1,12 @@
 using Pkg3
-using Base.Test
-using Pkg3.Types
+using Pkg3.Type
+if Base.isdeprecated(Main, :Test)
+    using Test
+else
+    using Base.Test
+end
 
+using Base.Test
 function temp_pkg_dir(fn::Function)
     local project_path
     try
