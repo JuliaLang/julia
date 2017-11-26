@@ -605,11 +605,11 @@ output = similar(input, Eltype)
 As an extension of this, in cases where the algorithm needs a copy of
 the input array,
 [`convert`](@ref) is insufficient as the return value may alias the original input.
-Combining [`similar`](@ref) (to make the output array) and [`copy!`](@ref) (to fill it with the input data)
+Combining [`similar`](@ref) (to make the output array) and [`copyto!`](@ref) (to fill it with the input data)
 is a generic way to express the requirement for a mutable copy of the input argument:
 
 ```julia
-copy_with_eltype(input, Eltype) = copy!(similar(input, Eltype), input)
+copy_with_eltype(input, Eltype) = copyto!(similar(input, Eltype), input)
 ```
 
 ### Iterated dispatch

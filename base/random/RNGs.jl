@@ -117,9 +117,9 @@ MersenneTwister(seed=nothing) =
     srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
 
 function copy!(dst::MersenneTwister, src::MersenneTwister)
-    copy!(resize!(dst.seed, length(src.seed)), src.seed)
+    copyto!(resize!(dst.seed, length(src.seed)), src.seed)
     copy!(dst.state, src.state)
-    copy!(dst.vals, src.vals)
+    copyto!(dst.vals, src.vals)
     dst.idx = src.idx
     dst
 end
@@ -190,7 +190,7 @@ end
 #### srand()
 
 function srand(r::MersenneTwister, seed::Vector{UInt32})
-    copy!(resize!(r.seed, length(seed)), seed)
+    copyto!(resize!(r.seed, length(seed)), seed)
     dsfmt_init_by_array(r.state, r.seed)
     mt_setempty!(r)
     return r
@@ -315,12 +315,12 @@ function _rand_max383!(r::MersenneTwister, A::UnsafeView{Float64}, I::FloatInter
     mt_avail(r) == 0 && gen_rand(r)
     # from now on, at most one call to gen_rand(r) will be necessary
     m = min(n, mt_avail(r))
-    @gc_preserve r unsafe_copy!(A.ptr, pointer(r.vals, r.idx+1), m)
+    @gc_preserve r unsafe_copyto!(A.ptr, pointer(r.vals, r.idx+1), m)
     if m == n
         r.idx += m
     else # m < n
         gen_rand(r)
-        @gc_preserve r unsafe_copy!(A.ptr+m*sizeof(Float64), pointer(r.vals), n-m)
+        @gc_preserve r unsafe_copyto!(A.ptr+m*sizeof(Float64), pointer(r.vals), n-m)
         r.idx = n-m
     end
     if I isa CloseOpen
@@ -342,7 +342,7 @@ fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::Close1Open2_64) =
 function rand!(r::MersenneTwister, A::UnsafeView{Float64},
                I::SamplerTrivial{<:FloatInterval_64})
     # depending on the alignment of A, the data written by fill_array! may have
-    # to be left-shifted by up to 15 bytes (cf. unsafe_copy! below) for
+    # to be left-shifted by up to 15 bytes (cf. unsafe_copyto! below) for
     # reproducibility purposes;
     # so, even for well aligned arrays, fill_array! is used to generate only
     # the n-2 first values (or n-3 if n is odd), and the remaining values are
@@ -356,7 +356,7 @@ function rand!(r::MersenneTwister, A::UnsafeView{Float64},
     if align > 0
         pA2 = pA + 16 - align
         fill_array!(r.state, pA2, n2, I[]) # generate the data in-place, but shifted
-        unsafe_copy!(pA, pA2, n2) # move the data to the beginning of the array
+        unsafe_copyto!(pA, pA2, n2) # move the data to the beginning of the array
     else
         fill_array!(r.state, pA, n2, I[])
     end

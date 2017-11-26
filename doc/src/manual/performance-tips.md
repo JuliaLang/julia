@@ -1076,8 +1076,8 @@ julia> @time sum(view(A, :, inds) * view(x, inds))
 7253.242699002263
 
 julia> @time begin
-           copy!(xtmp, view(x, inds))
-           copy!(Atmp, view(A, :, inds))
+           copyto!(xtmp, view(x, inds))
+           copyto!(Atmp, view(A, :, inds))
            sum(Atmp * xtmp)
        end
   0.261294 seconds (41 allocations: 1.391 KiB)

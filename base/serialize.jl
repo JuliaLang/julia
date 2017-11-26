@@ -273,7 +273,7 @@ end
 
 function trimmedsubarray(V::SubArray{T,N,A}) where {T,N,A<:Array}
     dest = Array{eltype(V)}(uninitialized, trimmedsize(V))
-    copy!(dest, V)
+    copyto!(dest, V)
     _trimmedsubarray(dest, V, (), V.indices...)
 end
 

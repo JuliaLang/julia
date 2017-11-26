@@ -283,7 +283,7 @@ rand
 Populate the array `A` with random values. If `S` is specified
 (`S` can be a type or a collection, cf. [`rand`](@ref) for details),
 the values are picked randomly from `S`.
-This is equivalent to `copy!(A, rand(rng, S, size(A)))`
+This is equivalent to `copyto!(A, rand(rng, S, size(A)))`
 but without allocating a new array.
 
 # Examples

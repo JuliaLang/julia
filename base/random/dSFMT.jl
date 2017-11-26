@@ -33,7 +33,7 @@ mutable struct DSFMT_state
     end
 end
 
-copy!(dst::DSFMT_state, src::DSFMT_state) = (copy!(dst.val, src.val); dst)
+copy!(dst::DSFMT_state, src::DSFMT_state) = (copyto!(dst.val, src.val); dst)
 copy(src::DSFMT_state) = DSFMT_state(copy(src.val))
 
 ==(s1::DSFMT_state, s2::DSFMT_state) = s1.val == s2.val

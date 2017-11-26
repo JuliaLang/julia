@@ -265,7 +265,7 @@ end
 copy(S::SparseMatrixCSC) =
     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), copy(S.nzval))
 
-function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
+function copyto!(A::SparseMatrixCSC, B::SparseMatrixCSC)
     # If the two matrices have the same length then all the
     # elements in A will be overwritten.
     if length(A) == length(B)
@@ -273,8 +273,8 @@ function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
         resize!(A.rowval, length(B.rowval))
         if size(A) == size(B)
             # Simple case: we can simply copy the internal fields of B to A.
-            copy!(A.colptr, B.colptr)
-            copy!(A.rowval, B.rowval)
+            copyto!(A.colptr, B.colptr)
+            copyto!(A.rowval, B.rowval)
         else
             # This is like a "reshape B into A".
             sparse_compute_reshaped_colptr_and_rowval(A.colptr, A.rowval, A.m, A.n, B.colptr, B.rowval, B.m, B.n)
@@ -300,8 +300,8 @@ function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
             # A will have more non-zero elements; unmodified elements are kept at the end.
             resize!(A.rowval, nnzB + nnzA - lastmodptrA)
             resize!(A.nzval, nnzB + nnzA - lastmodptrA)
-            copy!(A.rowval, nnzB+1, A.rowval, lastmodptrA+1, nnzA-lastmodptrA)
-            copy!(A.nzval, nnzB+1, A.nzval, lastmodptrA+1, nnzA-lastmodptrA)
+            copyto!(A.rowval, nnzB+1, A.rowval, lastmodptrA+1, nnzA-lastmodptrA)
+            copyto!(A.nzval, nnzB+1, A.nzval, lastmodptrA+1, nnzA-lastmodptrA)
         end
         # Adjust colptr accordingly.
         @inbounds for i in 2:length(A.colptr)
@@ -309,7 +309,7 @@ function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
         end
         sparse_compute_reshaped_colptr_and_rowval(A.colptr, A.rowval, A.m, lastmodcolA-1, B.colptr, B.rowval, B.m, B.n)
     end
-    copy!(A.nzval, B.nzval)
+    copyto!(A.nzval, B.nzval)
     return A
 end
 
@@ -317,8 +317,8 @@ end
 #
 # parent method for similar that preserves stored-entry structure (for when new and old dims match)
 function _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}) where {TvNew,TiNew}
-    newcolptr = copy!(similar(S.colptr, TiNew), S.colptr)
-    newrowval = copy!(similar(S.rowval, TiNew), S.rowval)
+    newcolptr = copyto!(similar(S.colptr, TiNew), S.colptr)
+    newrowval = copyto!(similar(S.rowval, TiNew), S.rowval)
     return SparseMatrixCSC(S.m, S.n, newcolptr, newrowval, similar(S.nzval, TvNew))
 end
 # parent methods for similar that preserves only storage space (for when new and old dims differ)
@@ -1476,8 +1476,8 @@ function SparseMatrixCSC{Tv,Ti}(s::UniformScaling, dims::Dims{2}) where {Tv,Ti}
     iszero(s.λ) && return spzeros(Tv, Ti, dims...)
     m, n, k = dims..., min(dims...)
     nzval = fill!(Vector{Tv}(uninitialized, k), Tv(s.λ))
-    rowval = copy!(Vector{Ti}(uninitialized, k), 1:k)
-    colptr = copy!(Vector{Ti}(uninitialized, n + 1), 1:(k + 1))
+    rowval = copyto!(Vector{Ti}(uninitialized, k), 1:k)
+    colptr = copyto!(Vector{Ti}(uninitialized, n + 1), 1:(k + 1))
     for i in (k + 2):(n + 1) colptr[i] = (k + 1) end
     SparseMatrixCSC{Tv,Ti}(dims..., colptr, rowval, nzval)
 end
@@ -2454,8 +2454,8 @@ function _spsetnz_setindex!(A::SparseMatrixCSC{Tv}, x::Tv,
 
                     if new_ptr > new_stop
                         nincl = old_stop-old_ptr+1
-                        copy!(rowvalA, rowidx, rowval, old_ptr, nincl)
-                        copy!(nzvalA, rowidx, nzval, old_ptr, nincl)
+                        copyto!(rowvalA, rowidx, rowval, old_ptr, nincl)
+                        copyto!(nzvalA, rowidx, nzval, old_ptr, nincl)
                         rowidx += nincl
                         break
                     end
@@ -2463,8 +2463,8 @@ function _spsetnz_setindex!(A::SparseMatrixCSC{Tv}, x::Tv,
             end
         elseif !isempty(rrange) # set old vals only
             nincl = length(rrange)
-            copy!(rowvalA, rowidx, rowval, rrange[1], nincl)
-            copy!(nzvalA, rowidx, nzval, rrange[1], nincl)
+            copyto!(rowvalA, rowidx, rowval, rrange[1], nincl)
+            copyto!(nzvalA, rowidx, nzval, rrange[1], nincl)
             rowidx += nincl
         end
     end
@@ -2650,8 +2650,8 @@ function setindex!(A::SparseMatrixCSC, x, I::AbstractMatrix{Bool})
                     copylen = searchsortedfirst(rowvalA, row, r1, r2, Forward) - r1
                     if (copylen > 0)
                         if (nadd > 0)
-                            copy!(rowvalB, bidx, rowvalA, r1, copylen)
-                            copy!(nzvalB, bidx, nzvalA, r1, copylen)
+                            copyto!(rowvalB, bidx, rowvalA, r1, copylen)
+                            copyto!(nzvalB, bidx, nzvalA, r1, copylen)
                         end
                         bidx += copylen
                         r1 += copylen
@@ -2692,8 +2692,8 @@ function setindex!(A::SparseMatrixCSC, x, I::AbstractMatrix{Bool})
         if (nadd != 0)
             l = r2-r1+1
             if l > 0
-                copy!(rowvalB, bidx, rowvalA, r1, l)
-                copy!(nzvalB, bidx, nzvalA, r1, l)
+                copyto!(rowvalB, bidx, rowvalA, r1, l)
+                copyto!(nzvalB, bidx, nzvalA, r1, l)
                 bidx += l
             end
             colptrB[col+1] = bidx
@@ -2705,8 +2705,8 @@ function setindex!(A::SparseMatrixCSC, x, I::AbstractMatrix{Bool})
                 r2 = colptrA[end]-1
                 l = r2-r1+1
                 if l > 0
-                    copy!(rowvalB, bidx, rowvalA, r1, l)
-                    copy!(nzvalB, bidx, nzvalA, r1, l)
+                    copyto!(rowvalB, bidx, rowvalA, r1, l)
+                    copyto!(nzvalB, bidx, nzvalA, r1, l)
                     bidx += l
                 end
             end
@@ -2762,8 +2762,8 @@ function setindex!(A::SparseMatrixCSC, x, I::AbstractVector{<:Real})
                 colptrB[(lastcol+1):col] = colptrA[(lastcol+1):col] .+ nadd
                 copylen = r1 - aidx
                 if copylen > 0
-                    copy!(rowvalB, bidx, rowvalA, aidx, copylen)
-                    copy!(nzvalB, bidx, nzvalA, aidx, copylen)
+                    copyto!(rowvalB, bidx, rowvalA, aidx, copylen)
+                    copyto!(nzvalB, bidx, nzvalA, aidx, copylen)
                     aidx += copylen
                     bidx += copylen
                 end
@@ -2777,8 +2777,8 @@ function setindex!(A::SparseMatrixCSC, x, I::AbstractVector{<:Real})
             copylen = searchsortedfirst(rowvalA, row, r1, r2, Forward) - r1
             if (copylen > 0)
                 if (nadd > 0)
-                    copy!(rowvalB, bidx, rowvalA, r1, copylen)
-                    copy!(nzvalB, bidx, nzvalA, r1, copylen)
+                    copyto!(rowvalB, bidx, rowvalA, r1, copylen)
+                    copyto!(nzvalB, bidx, nzvalA, r1, copylen)
                 end
                 bidx += copylen
                 r1 += copylen
@@ -2819,8 +2819,8 @@ function setindex!(A::SparseMatrixCSC, x, I::AbstractVector{<:Real})
         r1 = colptrA[end]-1
         copylen = r1 - aidx + 1
         if copylen > 0
-            copy!(rowvalB, bidx, rowvalA, aidx, copylen)
-            copy!(nzvalB, bidx, nzvalA, aidx, copylen)
+            copyto!(rowvalB, bidx, rowvalA, aidx, copylen)
+            copyto!(nzvalB, bidx, nzvalA, aidx, copylen)
             aidx += copylen
             bidx += copylen
         end
@@ -2923,8 +2923,8 @@ function dropstored!(A::SparseMatrixCSC,
         if isempty(rrange) || !(col in J)
             nincl = length(rrange)
             if(ndel > 0) && !isempty(rrange)
-                copy!(rowvalA, rowidx, rowval, rrange[1], nincl)
-                copy!(nzvalA, rowidx, nzval, rrange[1], nincl)
+                copyto!(rowvalA, rowidx, rowval, rrange[1], nincl)
+                copyto!(nzvalA, rowidx, nzval, rrange[1], nincl)
             end
             rowidx += nincl
         else
@@ -3251,7 +3251,7 @@ function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
         r = 1+i:numel+i
         I[r] = row+1:row+numel
         J[r] = col+1:col+numel
-        copy!(view(V, r), vect)
+        copyto!(view(V, r), vect)
         i += numel
     end
     return I, J, V

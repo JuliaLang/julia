@@ -4112,13 +4112,13 @@ f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, true)
 end
 
 # Copy of `#undef`
-copy!(Vector{Any}(uninitialized, 10), Vector{Any}(uninitialized, 10))
+copyto!(Vector{Any}(uninitialized, 10), Vector{Any}(uninitialized, 10))
 function test_copy_alias(::Type{T}) where T
     ary = T[1:100;]
-    unsafe_copy!(ary, 1, ary, 11, 90)
+    unsafe_copyto!(ary, 1, ary, 11, 90)
     @test ary == [11:100; 91:100]
     ary = T[1:100;]
-    unsafe_copy!(ary, 11, ary, 1, 90)
+    unsafe_copyto!(ary, 11, ary, 1, 90)
     @test ary == [1:10; 1:90]
 end
 test_copy_alias(Int)
@@ -5655,10 +5655,10 @@ let
     @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A5)), 6)
 end
 
-# copy!
+# copyto!
 A23567 = Vector{Union{Float64, Void}}(uninitialized, 5)
 B23567 = collect(Union{Float64, Void}, 1.0:3.0)
-copy!(A23567, 2, B23567)
+copyto!(A23567, 2, B23567)
 @test A23567[1] === nothing
 @test A23567[2] === 1.0
 @test A23567[3] === 2.0

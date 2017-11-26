@@ -100,7 +100,7 @@ function flipdim(A::Array{T}, d::Integer) where T
                 for j=0:stride:(N-stride)
                     offs = j + 1 + (i-1)*M
                     boffs = j + 1 + (ri-1)*M
-                    copy!(B, boffs, A, offs, M)
+                    copyto!(B, boffs, A, offs, M)
                 end
             end
         else

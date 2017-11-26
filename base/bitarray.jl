@@ -395,7 +395,7 @@ function one(x::BitMatrix)
     return a
 end
 
-function copy!(dest::BitArray, src::BitArray)
+function copyto!(dest::BitArray, src::BitArray)
     length(src) > length(dest) && throw(BoundsError(dest, length(dest)+1))
     destc = dest.chunks; srcc = src.chunks
     nc = min(length(destc), length(srcc))
@@ -415,24 +415,24 @@ function copy!(dest::BitArray, src::BitArray)
     return dest
 end
 
-function unsafe_copy!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer)
+function unsafe_copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer)
     copy_to_bitarray_chunks!(dest.chunks, doffs, src, soffs, n)
     return dest
 end
 
-function copy!(dest::BitArray, doffs::Integer, src::Array, soffs::Integer, n::Integer)
+function copyto!(dest::BitArray, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
     soffs+n-1 > length(src) && throw(BoundsError(src, length(src)+1))
     doffs+n-1 > length(dest) && throw(BoundsError(dest, length(dest)+1))
-    return unsafe_copy!(dest, doffs, src, soffs, n)
+    return unsafe_copyto!(dest, doffs, src, soffs, n)
 end
 
-function copy!(dest::BitArray, src::Array)
+function copyto!(dest::BitArray, src::Array)
     length(src) > length(dest) && throw(BoundsError(dest, length(dest)+1))
     length(src) == 0 && return det
-    return unsafe_copy!(dest, 1, src, 1, length(src))
+    return unsafe_copyto!(dest, 1, src, 1, length(src))
 end
 
 function reshape(B::BitArray{N}, dims::NTuple{N,Int}) where N
@@ -1421,7 +1421,7 @@ function circshift!(dest::BitVector, src::BitVector, i::Integer)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
     n = length(dest)
     i %= n
-    i == 0 && return (src === dest ? src : copy!(dest, src))
+    i == 0 && return (src === dest ? src : copyto!(dest, src))
     Bc = (src === dest ? copy(src.chunks) : src.chunks)
     if i > 0 # right
         copy_chunks!(dest.chunks, i+1, Bc, 1, n-i)
@@ -1697,7 +1697,7 @@ map(::typeof(identity), A::BitArray) = copy(A)
 map!(::Union{typeof(~), typeof(!)}, dest::BitArray, A::BitArray) = bit_map!(~, dest, A)
 map!(::typeof(zero), dest::BitArray, A::BitArray) = fill!(dest, false)
 map!(::typeof(one), dest::BitArray, A::BitArray) = fill!(dest, true)
-map!(::typeof(identity), dest::BitArray, A::BitArray) = copy!(dest, A)
+map!(::typeof(identity), dest::BitArray, A::BitArray) = copyto!(dest, A)
 
 for (T, f) in ((:(Union{typeof(&), typeof(*), typeof(min)}), :(&)),
                (:(Union{typeof(|), typeof(max)}),            :(|)),

@@ -18,9 +18,18 @@ BitSet(itr) = union!(BitSet(), itr)
 eltype(::Type{BitSet}) = Int
 similar(s::BitSet) = BitSet()
 copy(s1::BitSet) = copy!(BitSet(), s1)
+
+"""
+    copy!(dst, src)
+
+In-place [`copy`](@ref) of `src` into `dst`. After the call to `copy!`,
+`dst` must be left equal to `src`, otherwise an error is thrown; this
+function appropriately resizes `dst` if necessary.
+See also [`copyto!`](@ref).
+"""
 function copy!(dest::BitSet, src::BitSet)
     resize!(dest.bits, length(src.bits))
-    copy!(dest.bits, src.bits)
+    copyto!(dest.bits, src.bits)
     dest
 end
 eltype(s::BitSet) = Int
@@ -58,7 +67,7 @@ function _matched_map!(f, b1::BitArray, b2::BitArray)
         else # @assert f(false, x) == x
             resize!(b1, l2)
             chk_offs = 1+l1>>6
-            unsafe_copy!(b1.chunks, chk_offs, b2.chunks, chk_offs, 1+l2>>6-chk_offs)
+            unsafe_copyto!(b1.chunks, chk_offs, b2.chunks, chk_offs, 1+l2>>6-chk_offs)
         end
     elseif l1 > l2
         if f(false, false) == f(true, false) == false

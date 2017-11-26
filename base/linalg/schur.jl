@@ -123,10 +123,10 @@ function schur(A::StridedMatrix)
     SchurF = schurfact(A)
     SchurF[:T], SchurF[:Z], SchurF[:values]
 end
-schur(A::Symmetric) = schur(copy!(similar(parent(A)), A))
-schur(A::Hermitian) = schur(copy!(similar(parent(A)), A))
-schur(A::UpperTriangular) = schur(copy!(similar(parent(A)), A))
-schur(A::LowerTriangular) = schur(copy!(similar(parent(A)), A))
+schur(A::Symmetric) = schur(copyto!(similar(parent(A)), A))
+schur(A::Hermitian) = schur(copyto!(similar(parent(A)), A))
+schur(A::UpperTriangular) = schur(copyto!(similar(parent(A)), A))
+schur(A::LowerTriangular) = schur(copyto!(similar(parent(A)), A))
 schur(A::Tridiagonal) = schur(Matrix(A))
 
 

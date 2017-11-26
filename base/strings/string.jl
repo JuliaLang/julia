@@ -290,7 +290,7 @@ function string(a::String...)
     out = _string_n(n)
     offs = 1
     for str in a
-        unsafe_copy!(pointer(out,offs), pointer(str), sizeof(str))
+        unsafe_copyto!(pointer(out,offs), pointer(str), sizeof(str))
         offs += sizeof(str)
     end
     return out
@@ -317,7 +317,7 @@ function repeat(s::String, r::Integer)
         ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
     else
         for i = 0:r-1
-            unsafe_copy!(pointer(out, i*n+1), pointer(s), n)
+            unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)
         end
     end
     return out

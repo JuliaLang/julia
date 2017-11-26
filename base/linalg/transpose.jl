@@ -76,11 +76,11 @@ julia> A
 adjoint!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(adjoint, B, A)
 function transpose!(B::AbstractVector, A::AbstractMatrix)
     axes(B,1) == axes(A,2) && axes(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
-    copy!(B, A)
+    copyto!(B, A)
 end
 function transpose!(B::AbstractMatrix, A::AbstractVector)
     axes(B,2) == axes(A,1) && axes(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
-    copy!(B, A)
+    copyto!(B, A)
 end
 function adjoint!(B::AbstractVector, A::AbstractMatrix)
     axes(B,1) == axes(A,2) && axes(A,1) == 1:1 || throw(DimensionMismatch("transpose"))

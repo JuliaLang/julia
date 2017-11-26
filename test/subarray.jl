@@ -53,7 +53,7 @@ tup2val(::NTuple{N}) where {N} = Val(N)
 # `similar` ever changing its meaning.
 function copy_to_array(A::AbstractArray)
     Ac = Array{eltype(A)}(uninitialized, size(A))
-    copy!(Ac, A)
+    copyto!(Ac, A)
 end
 
 # Discover the highest dimension along which the values in A are
