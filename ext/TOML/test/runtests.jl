@@ -506,7 +506,7 @@ trimmed in raw strings.
                 a = [2]
                 [[a]]
                 b = 5
-            ", "expected type `TOML.Table`, found type `Int64`")
+            ", "expected type `TOML.Table`, found type `$(Int)`")
             @fail("
                 a = 1
                 [a.b]

@@ -17,7 +17,7 @@ julia> using TOML
 julia> TOML.parse("""
        name = "value"
        """)
-Dict{AbstractString,Any} with 1 entry:
+Dict{String,Any} with 1 entry:
   "name" => "value"
 
 julia> TOML.parsefile("etc/example.toml")
