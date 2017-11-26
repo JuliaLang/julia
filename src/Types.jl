@@ -147,6 +147,10 @@ struct CommandError <: Exception
 end
 cmderror(msg::String...) = throw(CommandError(join(msg)))
 
+function Base.showerror(io::IO, ex::CommandError, bt; backtrace=true)
+    print_with_color(Base.error_color(), io, string(ex.msg))
+end
+
 ## type for expressing operations ##
 
 @enum UpgradeLevel fixed=0 patch=1 minor=2 major=3

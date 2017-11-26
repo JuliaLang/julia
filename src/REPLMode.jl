@@ -289,9 +289,7 @@ function do_rm!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     end
     isempty(pkgs) &&
         cmderror("`rm` – list packages to remove")
-    project_resolve!(env, pkgs)
-    manifest_resolve!(env, pkgs)
-    Pkg3.Operations.rm(env, pkgs)
+    Pkg3.API.rm(env, pkgs)
 end
 
 function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
@@ -313,10 +311,7 @@ function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
             cmderror("`add` doesn't take options: --$(join(token[2:end], '='))")
         end
     end
-    project_resolve!(env, pkgs)
-    registry_resolve!(env, pkgs)
-    ensure_resolved(env, pkgs, true)
-    Pkg3.Operations.add(env, pkgs)
+    Pkg3.API.add(env, pkgs)
 end
 
 function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
@@ -351,22 +346,7 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         end
         last_token_type = token[1]
     end
-    project_resolve!(env, pkgs)
-    manifest_resolve!(env, pkgs)
-    ensure_resolved(env, pkgs)
-    if isempty(pkgs)
-        if mode == :project
-            for (name::String, uuid::UUID) in env.project["deps"]
-                push!(pkgs, PackageSpec(name, uuid, level))
-            end
-        elseif mode == :manifest
-            for (name, infos) in env.manifest, info in infos
-                uuid = UUID(info["uuid"])
-                push!(pkgs, PackageSpec(name, uuid, level))
-            end
-        end
-    end
-    Pkg3.Operations.up(env, pkgs)
+    Pkg3.API.up(env, pkgs; level=level, mode=mode)
 end
 
 function do_status!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
