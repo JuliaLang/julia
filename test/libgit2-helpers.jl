@@ -53,7 +53,7 @@ function credential_loop(
         LibGit2.reject(payload, shred=true)
     end
 
-    return git_error, num_authentications
+    return git_error, num_authentications, payload
 end
 
 function credential_loop(
