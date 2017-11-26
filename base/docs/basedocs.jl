@@ -1300,61 +1300,61 @@ isdefined
 
 
 """
-    Vector{T}(n)
+    Vector{T}(uninitialized, n)
 
-Construct an uninitialized [`Vector{T}`](@ref) of length `n`.
+Construct an uninitialized [`Vector{T}`](@ref) of length `n`. See [`uninitialized`](@ref).
 
 # Examples
 ```julia-repl
-julia> Vector{Float64}(3)
+julia> Vector{Float64}(uninitialized, 3)
 3-element Array{Float64,1}:
  6.90966e-310
  6.90966e-310
  6.90966e-310
 ```
 """
-Vector{T}(n)
+Vector{T}(uninitialized, n)
 
 """
-    Matrix{T}(m, n)
+    Matrix{T}(uninitialized, m, n)
 
-Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`.
+Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`. See [`uninitialized`](@ref).
 
 # Examples
 ```julia-repl
-julia> Matrix{Float64}(2, 3)
+julia> Matrix{Float64}(uninitialized, 2, 3)
 2×3 Array{Float64,2}:
  6.93517e-310  6.93517e-310  6.93517e-310
  6.93517e-310  6.93517e-310  1.29396e-320
 ```
 """
-Matrix{T}(m, n)
+Matrix{T}(uninitialized, m, n)
 
 """
-    Array{T}(dims)
-    Array{T,N}(dims)
+    Array{T}(uninitialized, dims)
+    Array{T,N}(uninitialized, dims)
 
 Construct an uninitialized `N`-dimensional [`Array`](@ref)
 containing elements of type `T`. `N` can either be supplied explicitly,
-as in `Array{T,N}(dims)`, or be determined by the length or number of `dims`.
+as in `Array{T,N}(uninitialized, dims)`, or be determined by the length or number of `dims`.
 `dims` may be a tuple or a series of integer arguments corresponding to the lengths
 in each dimension. If the rank `N` is supplied explicitly, then it must
-match the length or number of `dims`.
+match the length or number of `dims`. See [`uninitialized`](@ref).
 
 # Examples
 ```julia-repl
-julia> A = Array{Float64,2}(2, 3) # N given explicitly
+julia> A = Array{Float64,2}(uninitialized, 2, 3) # N given explicitly
 2×3 Array{Float64,2}:
  6.90198e-310  6.90198e-310  6.90198e-310
  6.90198e-310  6.90198e-310  0.0
 
-julia> B = Array{Float64}(2) # N determined by the input
+julia> B = Array{Float64}(uninitialized, 2) # N determined by the input
 2-element Array{Float64,1}:
  1.87103e-320
  0.0
 ```
 """
-Array{T,N}(dims)
+Array{T,N}(uninitialized, dims)
 
 """
     Uninitialized

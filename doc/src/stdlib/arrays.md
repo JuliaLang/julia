@@ -8,12 +8,14 @@ Base.AbstractVector
 Base.AbstractMatrix
 Core.Array
 Core.Array(::Any)
+Core.Array(::Any, ::Any)
 Core.Uninitialized
 Core.uninitialized
 Base.Vector
 Base.Vector(::Any)
+Base.Vector(::Any, ::Any)
 Base.Matrix
-Base.Matrix(::Any, ::Any)
+Base.Matrix(::Any, ::Any, ::Any)
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
