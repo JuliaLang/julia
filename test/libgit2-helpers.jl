@@ -32,7 +32,7 @@ function credential_loop(
 
         # Check if the callback provided us with valid credentials
         if !isnull(payload.credential) && get(payload.credential) == valid_credential
-            LibGit2.approve(payload)
+            LibGit2.approve(payload, shred=false)
             break
         end
 
@@ -48,9 +48,9 @@ function credential_loop(
         LibGit2.GitError(err)
     end
 
-    # Reject the credential when an authentication error occurs
+    # Reject and shred the credential when an authentication error occurs
     if git_error.code == LibGit2.Error.EAUTH
-        LibGit2.reject(payload)
+        LibGit2.reject(payload, shred=true)
     end
 
     return git_error, num_authentications

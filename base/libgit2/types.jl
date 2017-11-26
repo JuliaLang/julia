@@ -1239,7 +1239,6 @@ end
 function reject(cache::CachedCredentials, cred::AbstractCredentials, url::AbstractString)
     cred_id = credential_identifier(url)
     if haskey(cache.cred, cred_id)
-        securezero!(cache.cred[cred_id])  # Wipe out invalid credentials
         delete!(cache.cred, cred_id)
     end
     nothing
@@ -1318,37 +1317,51 @@ function reset!(p::CredentialPayload, config::GitConfig=p.config)
 end
 
 """
-    approve(payload::CredentialPayload) -> Void
+    approve(payload::CredentialPayload; shred::Bool=true) -> Void
 
 Store the `payload` credential for re-use in a future authentication. Should only be called
 when authentication was successful.
+
+The `shred` keyword controls whether sensitive information in the payload credential field
+should be destroyed. Should only be set to `false` during testing.
 """
-function approve(p::CredentialPayload)
+function approve(p::CredentialPayload; shred::Bool=true)
     isnull(p.credential) && return  # No credentials were used
     cred = unsafe_get(p.credential)
 
     if !isnull(p.cache)
         approve(unsafe_get(p.cache), cred, p.url)
+        shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
     if p.allow_git_helpers
         approve(p.config, cred, p.url)
     end
+
+    shred && securezero!(cred)
+    nothing
 end
 
 """
-    reject(payload::CredentialPayload) -> Void
+    reject(payload::CredentialPayload; shred::Bool=true) -> Void
 
 Discard the `payload` credential from begin re-used in future authentication. Should only be
 called when authentication was unsuccessful.
+
+The `shred` keyword controls whether sensitive information in the payload credential field
+should be destroyed. Should only be set to `false` during testing.
 """
-function reject(p::CredentialPayload)
+function reject(p::CredentialPayload; shred::Bool=true)
     isnull(p.credential) && return  # No credentials were used
     cred = unsafe_get(p.credential)
 
     if !isnull(p.cache)
         reject(unsafe_get(p.cache), cred, p.url)
+        shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
     if p.allow_git_helpers
         reject(p.config, cred, p.url)
     end
+
+    shred && securezero!(cred)
+    nothing
 end

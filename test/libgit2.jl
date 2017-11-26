@@ -1534,7 +1534,7 @@ mktempdir() do dir
 
         url = "https://github.com/JuliaLang/Example.jl"
         cred_id = LibGit2.credential_identifier(url)
-        cred = LibGit2.UserPasswordCredentials(deepcopy("julia"), deepcopy("password"))
+        cred = LibGit2.UserPasswordCredentials("julia", "password")
 
         @test !haskey(cache, cred_id)
 
@@ -1549,11 +1549,11 @@ mktempdir() do dir
         @test haskey(cache, cred_id)
         @test cache[cred_id] === cred
 
-        # Reject an approved should cause it to be removed and erased
+        # Reject an approved should cause it to be removed
         LibGit2.reject(cache, cred, url)
         @test !haskey(cache, cred_id)
-        @test cred.user != "julia"
-        @test cred.pass != "password"
+        @test cred.user == "julia"
+        @test cred.pass == "password"
     end
 
     @testset "Git credential username" begin
