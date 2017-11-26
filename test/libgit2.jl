@@ -2168,7 +2168,7 @@ mktempdir() do dir
 
                         try
                             include($LIBGIT2_HELPER_PATH)
-                            credential_loop(default_cred, $url, "git")
+                            credential_loop(default_cred, $url, "git", shred=false)
                         finally
                             rm(default_cred.prvkey)
                             rm(default_cred.pubkey)
@@ -2186,6 +2186,8 @@ mktempdir() do dir
                     err, auth_attempts, p = challenge_prompt(ex, [])
                     @test err == git_ok
                     @test auth_attempts == 1
+                    @test get(p.credential).prvkey == default_key
+                    @test get(p.credential).pubkey == default_key * ".pub"
 
                     # Confirm the private key if any other prompting is required
                     ex = gen_ex(valid_p_cred)
@@ -2212,7 +2214,7 @@ mktempdir() do dir
                 include($LIBGIT2_HELPER_PATH)
                 payload = CredentialPayload(allow_prompt=true, allow_ssh_agent=false,
                                             allow_git_helpers=false)
-                credential_loop($valid_cred, $url, "git", payload)
+                credential_loop($valid_cred, $url, "git", payload, shred=false)
             end
 
             withenv("SSH_KEY_PATH" => nothing,
@@ -2274,12 +2276,16 @@ mktempdir() do dir
             err, auth_attempts, p = challenge_prompt(ex, [])
             @test err == git_ok
             @test auth_attempts == 1
+            @test get(p.explicit) == valid_cred
+            @test get(p.credential) != valid_cred
 
             # Explicitly provided credential is incorrect
             ex = gen_ex(invalid_cred, allow_prompt=false, allow_ssh_agent=false)
             err, auth_attempts, p = challenge_prompt(ex, [])
             @test err == exhausted_error
             @test auth_attempts == 3
+            @test get(p.explicit) == invalid_cred
+            @test get(p.credential) != invalid_cred
         end
 
         @testset "HTTPS explicit credentials" begin
@@ -2302,12 +2308,16 @@ mktempdir() do dir
             err, auth_attempts, p = challenge_prompt(ex, [])
             @test err == git_ok
             @test auth_attempts == 1
+            @test get(p.explicit) == valid_cred
+            @test get(p.credential) != valid_cred
 
             # Explicitly provided credential is incorrect
             ex = gen_ex(invalid_cred, allow_prompt=false)
             err, auth_attempts, p = challenge_prompt(ex, [])
             @test err == exhausted_error
             @test auth_attempts == 2
+            @test get(p.explicit) == invalid_cred
+            @test get(p.credential) != invalid_cred
         end
 
         @testset "Cached credentials" begin
@@ -2338,6 +2348,8 @@ mktempdir() do dir
             @test err == git_ok
             @test auth_attempts == 1
 
+            # Note: Approved cached credentials are not shredded
+
             # Add a credential into the cache
             ex = gen_ex()
             challenges = [
@@ -2350,6 +2362,7 @@ mktempdir() do dir
             @test auth_attempts == 1
             @test typeof(cache) == LibGit2.CachedCredentials
             @test cache.cred == Dict(cred_id => valid_cred)
+            @test get(p.credential) == valid_cred
 
             # Replace a credential in the cache
             ex = gen_ex(cached_cred=invalid_cred)
@@ -2363,6 +2376,7 @@ mktempdir() do dir
             @test auth_attempts == 2
             @test typeof(cache) == LibGit2.CachedCredentials
             @test cache.cred == Dict(cred_id => valid_cred)
+            @test get(p.credential) == valid_cred
 
             # Canceling a credential request should leave the cache unmodified
             ex = gen_ex(cached_cred=invalid_cred)
@@ -2377,6 +2391,7 @@ mktempdir() do dir
             @test auth_attempts == 3
             @test typeof(cache) == LibGit2.CachedCredentials
             @test cache.cred == Dict(cred_id => invalid_cred)
+            @test get(p.credential) != invalid_cred
 
             # An EAUTH error should remove credentials from the cache
             ex = gen_ex(cached_cred=invalid_cred, allow_prompt=false)
@@ -2386,6 +2401,7 @@ mktempdir() do dir
             @test auth_attempts == 2
             @test typeof(cache) == LibGit2.CachedCredentials
             @test cache.cred == Dict()
+            @test get(p.credential) != invalid_cred
         end
 
         @testset "HTTPS git helper username" begin
@@ -2407,7 +2423,7 @@ mktempdir() do dir
                     payload = CredentialPayload(Nullable{AbstractCredentials}(),
                                                 Nullable{CachedCredentials}(), cfg,
                                                 allow_git_helpers=true)
-                    credential_loop($valid_cred, $url, Nullable{String}(), payload)
+                    credential_loop($valid_cred, $url, Nullable{String}(), payload, shred=false)
                 end
             end
 
@@ -2426,32 +2442,37 @@ mktempdir() do dir
 
         @testset "Incompatible explicit credentials" begin
             # User provides a user/password credential where a SSH credential is required.
+            valid_cred = LibGit2.UserPasswordCredentials("foo", "bar")
             expect_ssh_ex = quote
                 include($LIBGIT2_HELPER_PATH)
-                valid_cred = LibGit2.UserPasswordCredentials("foo", "bar")
-                payload = CredentialPayload(valid_cred, allow_ssh_agent=false,
+                payload = CredentialPayload($valid_cred, allow_ssh_agent=false,
                                             allow_git_helpers=false)
-                credential_loop(valid_cred, "ssh://github.com/repo", Nullable(""),
+                credential_loop($valid_cred, "ssh://github.com/repo", Nullable(""),
                                 Cuint(LibGit2.Consts.CREDTYPE_SSH_KEY), payload)
             end
 
             err, auth_attempts, p = challenge_prompt(expect_ssh_ex, [])
             @test err == incompatible_error
             @test auth_attempts == 1
+            @test get(p.explicit) == valid_cred
+            @test get(p.credential) != valid_cred
+
 
             # User provides a SSH credential where a user/password credential is required.
+            valid_cred = LibGit2.SSHCredentials("foo", "", "", "")
             expect_https_ex = quote
                 include($LIBGIT2_HELPER_PATH)
-                valid_cred = LibGit2.SSHCredentials("foo", "", "", "")
-                payload = CredentialPayload(valid_cred, allow_ssh_agent=false,
+                payload = CredentialPayload($valid_cred, allow_ssh_agent=false,
                                             allow_git_helpers=false)
-                credential_loop(valid_cred, "https://github.com/repo", Nullable(""),
+                credential_loop($valid_cred, "https://github.com/repo", Nullable(""),
                                 Cuint(LibGit2.Consts.CREDTYPE_USERPASS_PLAINTEXT), payload)
             end
 
             err, auth_attempts, p = challenge_prompt(expect_https_ex, [])
             @test err == incompatible_error
             @test auth_attempts == 1
+            @test get(p.explicit) == valid_cred
+            @test get(p.credential) != valid_cred
         end
 
         # A hypothetical scenario where the the allowed authentication can either be
