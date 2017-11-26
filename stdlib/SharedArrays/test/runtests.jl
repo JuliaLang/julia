@@ -47,7 +47,7 @@ end
 d = SharedArrays.shmem_rand(1:100, dims)
 a = convert(Array, d)
 
-partsums = Array{Int}(length(procs(d)))
+partsums = Vector{Int}(uninitialized, length(procs(d)))
 @sync begin
     for (i, p) in enumerate(procs(d))
         @async partsums[i] = remotecall_fetch(p, d) do D
@@ -142,7 +142,7 @@ write(fn3, ones(UInt8, 4))
 S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->D[localindexes(D)]=0x02)
 len = prod(sz)+4
 @test filesize(fn3) == len
-filedata = Array{UInt8}(len)
+filedata = Vector{UInt8}(uninitialized, len)
 read!(fn3, filedata)
 @test all(filedata[1:4] .== 0x01)
 @test all(filedata[5:end] .== 0x02)
