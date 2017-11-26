@@ -874,6 +874,6 @@ end
 end
 
 @testset "zero-dimensional copy" begin
-    Z = Array{Int}(); Z[] = 17
+    Z = Array{Int,0}(uninitialized); Z[] = 17
     @test Z == collect(Z) == copy(Z)
 end

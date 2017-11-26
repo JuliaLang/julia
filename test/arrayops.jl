@@ -2204,7 +2204,7 @@ Base.:(==)(a::T11053, b::T11053) = a.a == b.a
 @test [T11053(1)] * 5 == [T11053(1)] .* 5 == [T11053(5.0)]
 
 #15907
-@test typeof(Array{Int,0}()) == Array{Int,0}
+@test typeof(Array{Int,0}(uninitialized)) == Array{Int,0}
 
 # check a == b for arrays of Union type (#22403)
 let TT = Union{UInt8, Int8}
