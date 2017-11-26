@@ -148,12 +148,12 @@ end
 
 c7line = @__LINE__() + 1
 method_c7(a, b; kargs...) = a
-Base.show_method_candidates(buf, MethodError(method_c7, (1, 1)), [(:x, 1), (:y, 2)])
+Base.show_method_candidates(buf, MethodError(method_c7, (1, 1)), (x = 1, y = 2))
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line\e[0m",
                      "\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line")
 c8line = @__LINE__() + 1
 method_c8(a, b; y=1, w=1) = a
-Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), [(:x, 1), (:y, 2), (:z, 1), (:w, 1)])
+Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), (x = 1, y = 2, z = 1, w = 1))
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line\e[1m\e[31m got unsupported keyword arguments \"x\", \"z\"\e[0m\e[0m",
                      "\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line got unsupported keyword arguments \"x\", \"z\"")
 
@@ -161,7 +161,7 @@ ac15639line = @__LINE__
 addConstraint_15639(c::Int32) = c
 addConstraint_15639(c::Int64; uncset=nothing) = addConstraint_15639(Int32(c), uncset=uncset)
 
-Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), [(:uncset, nothing)])
+Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), (uncset = nothing,))
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1)\e[1m\e[31m got unsupported keyword argument \"uncset\"\e[0m\n  addConstraint_15639(\e[1m\e[31m::Int64\e[0m; uncset)$cfile$(ac15639line + 2)\e[0m",
                      "\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1) got unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)$cfile$(ac15639line + 2)")
 
@@ -536,7 +536,7 @@ foo_9965(x::Int) = 2x
     end
     @test typeof(ex) == MethodError
     io = IOBuffer()
-    Base.show_method_candidates(io, ex, [(:w,true)])
+    Base.show_method_candidates(io, ex, (w = true,))
     @test contains(String(take!(io)), "got unsupported keyword argument \"w\"")
 end
 

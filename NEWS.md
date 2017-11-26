@@ -14,6 +14,11 @@ New language features
   * Named tuples, with the syntax `(a=1, b=2)`. These behave very similarly to tuples,
     except components can also be accessed by name using dot syntax `t.a` ([#22194]).
 
+  * Keyword argument containers (`kw` in `f(; kw...)`) are now named tuples. Dictionary
+    functions like `haskey` and indexing can be used on them, and name-value pairs can be
+    iterated using `pairs(kw)`. `kw` can no longer contain multiple entries for the same
+    argument name ([#4916]).
+
  * Custom infix operators can now be defined by appending Unicode
    combining marks, primes, and sub/superscripts to other operators.
    For example, `+̂ₐ″` is parsed as an infix operator with the same

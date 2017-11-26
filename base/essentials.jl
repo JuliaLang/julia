@@ -634,26 +634,6 @@ function vector_any(@nospecialize xs...)
     a
 end
 
-function as_kwargs(xs::Union{AbstractArray,Associative})
-    n = length(xs)
-    to = Vector{Any}(uninitialized, n*2)
-    i = 1
-    for (k, v) in xs
-        to[i]   = k::Symbol
-        to[i+1] = v
-        i += 2
-    end
-    return to
-end
-
-function as_kwargs(xs)
-    to = Vector{Any}()
-    for (k, v) in xs
-        ccall(:jl_array_ptr_1d_push2, Void, (Any, Any, Any), to, k::Symbol, v)
-    end
-    return to
-end
-
 """
     invokelatest(f, args...; kwargs...)
 
