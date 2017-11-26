@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 module SuiteSparse
 
 import Base: At_ldiv_B, Ac_ldiv_B, A_ldiv_B!

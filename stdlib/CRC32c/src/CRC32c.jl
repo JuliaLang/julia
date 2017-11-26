@@ -1,3 +1,6 @@
+
+__precompile__(true)
+
 """
 Standard library module for computing the CRC-32c checksum.
 
