@@ -204,6 +204,9 @@ end
         @test L32[3] == 3 && L64[3] == 3
         @test L32[4] == 4 && L64[4] == 4
         @test @inferred(linspace(1.0, 2.0, 2.0f0)) === linspace(1.0, 2.0, 2)
+        @test @inferred(linspace(1.0, 2.0, 2))[1] === 1.0
+        @test @inferred(linspace(1.0f0, 2.0f0, 2))[1] === 1.0f0
+        @test @inferred(linspace(Float16(1.0), Float16(2.0), 2))[1] === Float16(1.0)
 
         let r = 5:-1:1
             @test r[1]==5
