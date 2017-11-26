@@ -24,6 +24,12 @@ temp_pkg_dir() do
     # TODO: Check Example is still considered install
     Pkg3.API.rm("Example")
 
+    try
+        Pkg3.API.add([PackageSpec("Example", VersionSpec(v"55"))])
+    catch e
+        @test contains(sprint(showerror, e), "Example")
+    end
+
     nonexisting_pkg = randstring(14)
     @test_throws CommandError Pkg3.API.add(nonexisting_pkg)
     @test_throws CommandError Pkg3.API.up(nonexisting_pkg)
