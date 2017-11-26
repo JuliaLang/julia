@@ -1380,7 +1380,9 @@ the `AbstractString` interface, in order to ensure that functions can work
 with string types besides the standard `String` type.
 """
 struct GenericString <: AbstractString
-    string::AbstractString
+    string::String
+
+    GenericString(s::AbstractString) = new(String(s))
 end
 Base.endof(s::GenericString) = endof(s.string)
 Base.next(s::GenericString, i::Int) = next(s.string, i)
