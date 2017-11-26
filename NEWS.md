@@ -427,6 +427,13 @@ Deprecated or removed
   * `whos` has been renamed `varinfo`, and now returns a markdown table instead of printing
     output ([#12131]).
 
+  * Uninitialized `RowVector` constructors of the form `RowVector{T}(shape...)` have been
+    deprecated in favor of equivalents accepting `uninitialized` (an alias for
+    `Uninitialized()`) as their first argument, as in
+    `RowVector{T}(uninitialized, shape...)`. For example, `RowVector{Int}(3)` is now
+    `RowVector{Int}(uninitialized, 3)`, and `RowVector{Float32}((1, 4))` is now
+    `RowVector{Float32}(uninitialized, (1, 4))` ([#24786]).
+
   * `writecsv(io, a; opts...)` has been deprecated in favor of
     `writedlm(io, a, ','; opts...)` ([#23529]).
 

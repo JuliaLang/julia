@@ -2109,6 +2109,12 @@ end
     @deprecate chol!(x::Number, uplo) chol(x) false
 end
 
+# deprecate RowVector{T}(shape...) constructors to RowVector{T}(uninitialized, shape...) equivalents
+@deprecate RowVector{T}(n::Int) where {T}               RowVector{T}(uninitialized, n)
+@deprecate RowVector{T}(n1::Int, n2::Int) where {T}     RowVector{T}(uninitialized, n1, n2)
+@deprecate RowVector{T}(n::Tuple{Int}) where {T}        RowVector{T}(uninitialized, n)
+@deprecate RowVector{T}(n::Tuple{Int,Int}) where {T}    RowVector{T}(uninitialized, n)
+
 @deprecate cumsum(A::AbstractArray)     cumsum(A, 1)
 @deprecate cumsum_kbn(A::AbstractArray) cumsum_kbn(A, 1)
 @deprecate cumprod(A::AbstractArray)    cumprod(A, 1)
