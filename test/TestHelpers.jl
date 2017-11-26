@@ -77,24 +77,35 @@ end
 
 function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool=true)
     function format_output(output)
-        debug ? "Process output found:\n\"\"\"\n$(read(seekstart(out), String))\n\"\"\"" : ""
+        !debug && return ""
+        str = read(seekstart(output), String)
+        isempty(str) && return ""
+        "Process output found:\n\"\"\"\n$str\n\"\"\""
     end
     out = IOBuffer()
     with_fake_pty() do slave, master
         p = spawn(detach(cmd), slave, slave, slave)
-        # Kill the process if it takes too long. Typically occurs when process is waiting for input
+
+        # Kill the process if it takes too long. Typically occurs when process is waiting
+        # for input.
+        done = Channel(1)
         @async begin
             sleep(timeout)
-            kill(p)
+            if process_running(p)
+                kill(p)
+                put!(done, :timed_out)
+            else
+                put!(done, :exited)
+            end
             close(master)
         end
+
         try
             for (challenge, response) in challenges
-                process_exited(p) && error("Too few prompts. $(format_output(out))")
-
                 write(out, readuntil(master, challenge))
                 if !isopen(master)
-                    error("Could not locate challenge: \"$challenge\". $(format_output(out))")
+                    error("Could not locate challenge: \"$challenge\". ",
+                          format_output(out))
                 end
                 write(master, response)
             end
@@ -102,9 +113,16 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool
         finally
             kill(p)
         end
-        # Determine if the process was explicitly killed
-        killed = process_exited(p) && (p.exitcode != 0 || p.termsignal != 0)
-        killed && error("Too many prompts. $(format_output(out))")
+
+        # Process timed out or aborted
+        if !success(p)
+            if isready(done) && fetch(done) == :timed_out
+                error("Process timed out possibly waiting for a response. ",
+                      format_output(out))
+            else
+                Base.pipeline_error(p)
+            end
+        end
     end
     nothing
 end
