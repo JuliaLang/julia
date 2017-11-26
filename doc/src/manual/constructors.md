@@ -524,7 +524,7 @@ one type to another, you should probably define a `convert` method instead.
 
 On the other hand, if your constructor does not represent a lossless conversion, or doesn't represent
 "conversion" at all, it is better to leave it as a constructor rather than a `convert` method.
-For example, the `Array{Int}()` constructor creates a zero-dimensional `Array` of the type `Int`,
+For example, the `Array{Int,0}(uninitialized)` constructor creates a zero-dimensional `Array` of the type `Int`,
 but is not really a "conversion" from `Int` to an `Array`.
 
 ## Outer-only constructors

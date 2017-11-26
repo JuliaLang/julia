@@ -108,7 +108,7 @@ of the parent array, whereas for `S2` one needs to apply them to the second and 
 approach to indexing would be to do the type-analysis at runtime:
 
 ```julia
-parentindexes = Array{Any}(0)
+parentindexes = Vector{Any}()
 for thisindex in S.indexes
     ...
     if isa(thisindex, Int)

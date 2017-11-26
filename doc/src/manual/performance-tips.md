@@ -646,7 +646,7 @@ julia> function fill_twos!(a)
 fill_twos! (generic function with 1 method)
 
 julia> function strange_twos(n)
-           a = Array{rand(Bool) ? Int64 : Float64}(n)
+           a = Vector{rand(Bool) ? Int64 : Float64}(uninitialized, n)
            fill_twos!(a)
            return a
        end
@@ -933,7 +933,7 @@ function xinc!(ret::AbstractVector{T}, x::T) where T
 end
 
 function loopinc_prealloc()
-    ret = Array{Int}(3)
+    ret = Vector{Int}(uninitialized, 3)
     y = 0
     for i = 1:10^7
         xinc!(ret, i)
@@ -1284,7 +1284,7 @@ end
 
 function main()
     n = 2000
-    u = Array{Float64}(n)
+    u = Vector{Float64}(uninitialized, n)
     init!(u)
     du = similar(u)
 

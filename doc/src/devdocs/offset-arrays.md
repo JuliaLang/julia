@@ -97,7 +97,7 @@ end
 
 ### Allocating storage using generalizations of `similar`
 
-Storage is often allocated with `Array{Int}(dims)` or `similar(A, args...)`. When the result needs
+Storage is often allocated with `Array{Int}(uninitialized, dims)` or `similar(A, args...)`. When the result needs
 to match the indices of some other array, this may not always suffice. The generic replacement
 for such patterns is to use `similar(storagetype, shape)`.  `storagetype` indicates the kind of
 underlying "conventional" behavior you'd like, e.g., `Array{Int}` or `BitArray` or even `dims->zeros(Float32, dims)`
@@ -109,7 +109,7 @@ Let's walk through a couple of explicit examples. First, if `A` has conventional
 `similar(Array{Int}, indices(A))` would end up calling `Array{Int}(size(A))`, and thus return
 an array.  If `A` is an `AbstractArray` type with unconventional indexing, then `similar(Array{Int}, indices(A))`
 should return something that "behaves like" an `Array{Int}` but with a shape (including indices)
-that matches `A`.  (The most obvious implementation is to allocate an `Array{Int}(size(A))` and
+that matches `A`.  (The most obvious implementation is to allocate an `Array{Int}(uninitialized, size(A))` and
 then "wrap" it in a type that shifts the indices.)
 
 Note also that `similar(Array{Int}, (indices(A, 2),))` would allocate an `AbstractVector{Int}`
