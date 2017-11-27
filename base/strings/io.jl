@@ -241,7 +241,10 @@ function join(io::IO, strings, delim)
     end
 end
 join(io::IO, strings) = join(io, strings, "")
-join(args...) = sprint(join, args...)
+
+join(strings) = sprint(join, strings)
+join(strings, delim) = sprint(join, strings, delim)
+join(strings, delim, last) = sprint(join, strings, delim, last)
 
 ## string escaping & unescaping ##
 
