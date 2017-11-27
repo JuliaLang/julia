@@ -1428,8 +1428,8 @@ struct GenericArray{T,N} <: AbstractArray{T,N}
     a::Array{T,N}
 end
 
-GenericArray{T}(args...) where {T} = GenericArray(Array{T}(uninitialized, args...))
-GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(uninitialized, args...))
+GenericArray{T}(args...) where {T} = GenericArray(Array{T}(args...))
+GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(args...))
 
 Base.keys(a::GenericArray) = keys(a.a)
 Base.indices(a::GenericArray) = indices(a.a)
