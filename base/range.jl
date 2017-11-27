@@ -232,7 +232,7 @@ function LinSpace(start, stop, len::Integer)
 end
 
 """
-    linspace(start, stop, n=50)
+    linspace(start, stop, n)
 
 Construct a range of `n` linearly spaced elements from `start` to `stop`.
 
@@ -241,8 +241,8 @@ julia> linspace(1.3,2.9,9)
 1.3:0.2:2.9
 ```
 """
-linspace(start, stop, len::Real=50) = linspace(promote(start, stop)..., Int(len))
-linspace(start::T, stop::T, len::Real=50) where {T} = linspace(start, stop, Int(len))
+linspace(start, stop, len::Real) = linspace(promote(start, stop)..., Int(len))
+linspace(start::T, stop::T, len::Real) where {T} = linspace(start, stop, Int(len))
 
 linspace(start::Real, stop::Real, len::Integer) = linspace(promote(start, stop)..., len)
 linspace(start::T, stop::T, len::Integer) where {T<:Integer} = linspace(Float64, start, stop, len, 1)
@@ -318,7 +318,7 @@ function print_range(io::IO, r::AbstractRange,
 end
 
 """
-    logspace(start::Real, stop::Real, n::Integer=50; base=10)
+    logspace(start::Real, stop::Real, n::Integer; base=10)
 
 Construct a vector of `n` logarithmically spaced numbers from `base^start` to `base^stop`.
 
@@ -340,7 +340,7 @@ julia> logspace(1.,10.,5,base=2)
  1024.0
 ```
 """
-logspace(start::Real, stop::Real, n::Integer=50; base=10) = base.^linspace(start, stop, n)
+logspace(start::Real, stop::Real, n::Integer; base=10) = base.^linspace(start, stop, n)
 
 ## interface implementations
 
