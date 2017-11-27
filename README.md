@@ -1,12 +1,6 @@
 # Pkg3
 
-<!--
-[![Build Status](https://travis-ci.org/StefanKarpinski/Pkg3.jl.svg?branch=master)](https://travis-ci.org/StefanKarpinski/Pkg3.jl)
-
-[![Coverage Status](https://coveralls.io/repos/StefanKarpinski/Pkg3.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/StefanKarpinski/Pkg3.jl?branch=master)
-
-[![codecov.io](http://codecov.io/github/StefanKarpinski/Pkg3.jl/coverage.svg?branch=master)](http://codecov.io/github/StefanKarpinski/Pkg3.jl?branch=master)
--->
+[![Build Status](https://travis-ci.org/JuliaLang/Pkg3.jl.svg?branch=master)](https://travis-ci.org/JuliaLang/Pkg3.jl) [![Build status](https://ci.appveyor.com/api/projects/status/0ke5q2vejfsgdoyx?svg=true)](https://ci.appveyor.com/project/JuliaLang/pkg3-jl) [![codecov](https://codecov.io/gh/JuliaLang/Pkg3.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaLang/Pkg3.jl)
 
 Next-generation package manager for Julia. Still quite alpha.
 
