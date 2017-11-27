@@ -583,7 +583,7 @@ function readuntil(io::IO, target::AbstractString)
     i = start(target)
     done(target, i) && return ""
     c, i = next(target, start(target))
-    if done(target, i) && c ≤ '\xf7'
+    if done(target, i) && c <= Char(0x7f)
         return readuntil_string(io, c % UInt8)
     end
     # decide how we can index target
