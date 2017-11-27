@@ -23,6 +23,9 @@ const text_colors = AnyDict(
     :default       => "\033[39m",
     :bold          => "\033[1m",
     :underline     => "\033[4m",
+    :blink         => "\033[5m",
+    :reverse       => "\033[7m",
+    :hidden        => "\033[8m",
     :nothing       => "",
 )
 
@@ -31,10 +34,13 @@ for i in 0:255
 end
 
 const disable_text_style = AnyDict(
-    :bold => "\033[22m",
+    :bold      => "\033[22m",
     :underline => "\033[24m",
-    :normal => "",
-    :default => "",
+    :blink     => "\033[25m",
+    :reverse   => "\033[27m",
+    :hidden    => "\033[28m",
+    :normal    => "",
+    :default   => "",
 )
 
 # Create a docstring with an automatically generated list
