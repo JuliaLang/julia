@@ -6,7 +6,6 @@ else
     using Base.Test
 end
 
-using Base.Test
 function temp_pkg_dir(fn::Function)
     local project_path
     try
