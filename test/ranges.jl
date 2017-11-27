@@ -1139,7 +1139,7 @@ let r = @inferred(colon(big(1.0),big(2.0),big(5.0)))
 end
 
 @testset "issue #14420" begin
-    for r in (linspace(0.10000000000000045, 1), 0.10000000000000045:(1-0.10000000000000045)/49:1)
+    for r in (linspace(0.10000000000000045, 1, 50), 0.10000000000000045:(1-0.10000000000000045)/49:1)
         local r
         @test r[1] === 0.10000000000000045
         @test r[end] === 1.0
@@ -1191,11 +1191,9 @@ end
 
 @testset "logspace" begin
     n = 10; a = 2; b = 4
-    # test default values; n = 50, base = 10
-    @test logspace(a, b) == logspace(a, b, 50) == 10 .^ linspace(a, b, 50)
+    # test default values; base = 10
     @test logspace(a, b, n) == 10 .^ linspace(a, b, n)
     for base in (10, 2, ℯ)
-        @test logspace(a, b, base=base) == logspace(a, b, 50, base=base) == base.^linspace(a, b, 50)
         @test logspace(a, b, n, base=base) == base.^linspace(a, b, n)
     end
 end
