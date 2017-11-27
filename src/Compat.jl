@@ -793,6 +793,29 @@ if VERSION < v"0.7.0-DEV.2543"
     (::Type{Array{T}}){T}(s::UniformScaling, m::Integer, n::Integer) = Matrix{T}(s, m, n)
 end
 
+# 0.7.0-DEV.2581
+@static if !isdefined(Base, :Uninitialized)
+    if VERSION >= v"0.6.0"
+        include_string(@__MODULE__, """
+            struct Uninitialized end
+            Array{T}(::Uninitialized, args...) where {T} = Array{T}(args...)
+            Array{T,N}(::Uninitialized, args...) where {T,N} = Array{T,N}(args...)
+            Vector(::Uninitialized, args...) = Vector(args...)
+            Matrix(::Uninitialized, args...) = Matrix(args...)
+        """)
+    else
+        include_string(@__MODULE__, """
+            immutable Uninitialized end
+            (::Type{Array{T}}){T}(::Uninitialized, args...) = Array{T}(args...)
+            (::Type{Array{T,N}}){T,N}(::Uninitialized, args...) = Array{T,N}(args...)
+            (::Type{Vector})(::Uninitialized, args...) = Vector(args...)
+            (::Type{Matrix})(::Uninitialized, args...) = Matrix(args...)
+        """)
+    end
+    const uninitialized = Uninitialized()
+    export Uninitialized, uninitialized
+end
+
 include("deprecated.jl")
 
 end # module Compat

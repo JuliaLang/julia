@@ -187,6 +187,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * Constructors for `Matrix{T}`, `Array{T}`, and `SparseMatrixCSC{T}` from `UniformScaling` ([#24372], [#24657])
 
+* `Uninitialized` and `uninitialized` with corresponding `Array` constructors ([#24652]).
+
 ## Renaming
 
 
@@ -361,4 +363,5 @@ includes this fix. Find the minimum version from there.
 [#24282]: https://github.com/JuliaLang/julia/issues/24282
 [#24372]: https://github.com/JuliaLang/julia/issues/24372
 [#24459]: https://github.com/JuliaLang/julia/issues/24459
+[#24652]: https://github.com/JuliaLang/julia/issues/24652
 [#24657]: https://github.com/JuliaLang/julia/issues/24657
