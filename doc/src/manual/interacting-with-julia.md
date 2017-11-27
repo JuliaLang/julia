@@ -184,7 +184,8 @@ to do so).
 | `meta-l`            | Change the next word to lowercase                                                                          |
 | `^/`, `^_`          | Undo previous editing action                                                                               |
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
-
+| `meta-Left Arrow`   | indent the current line on the left                                                                        |
+| `meta-Right Arrow`  | indent the current line on the right                                                                       |
 
 
 ### Customizing keybindings
