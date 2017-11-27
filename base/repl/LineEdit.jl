@@ -1956,20 +1956,36 @@ function init_state(terminal, m::ModalInterface)
     s
 end
 
+# By default, `repl_state` is `nothing`, it later gets initialized
+# by `run_interface()` to be an `MIState` containing the state of
+# the REPL
+global repl_state = nothing
+
+"""
+    get_current_state()
+
+Returns the current REPL state object.
+"""
+function get_current_state()
+    global repl_state
+    return repl_state
+end
+
 function run_interface(terminal, m::ModalInterface)
-    s::MIState = init_state(terminal, m)
-    while !s.aborted
-        buf, ok, suspend = prompt!(terminal, m, s)
+    global repl_state
+    repl_state = init_state(terminal, m)
+    while !repl_state.aborted
+        buf, ok, suspend = prompt!(terminal, m, repl_state)
         while suspend
             @static if Sys.isunix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
-            buf, ok, suspend = prompt!(terminal, m, s)
+            buf, ok, suspend = prompt!(terminal, m, repl_state)
         end
         eval(Main,
             Expr(:body,
                 Expr(:return,
                      Expr(:call,
-                          QuoteNode(mode(state(s)).on_done),
-                          QuoteNode(s),
+                          QuoteNode(mode(state(repl_state)).on_done),
+                          QuoteNode(repl_state),
                           QuoteNode(buf),
                           QuoteNode(ok)))))
     end
