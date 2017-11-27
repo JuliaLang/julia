@@ -547,7 +547,6 @@ end
 (self::NonFunctionCallable)(args...) = self.f(args...)
 
 let t = "a modern language"
-    c = `$echocmd $t`
     f, fh = mktemp()
     write(fh, t)
     close(fh)
