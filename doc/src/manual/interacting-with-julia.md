@@ -179,6 +179,8 @@ to do so).
 | `^Y`                | "Yank" insert the text from the kill ring                                                                  |
 | `meta-y`            | Replace a previously yanked text with an older entry from the kill ring                                    |
 | `^T`                | Transpose the characters about the cursor                                                                  |
+| `meta-Up arrow`     | Transpose current line with line above                                                                     |
+| `meta-Down arrow`   | Transpose current line with line below                                                                     |
 | `meta-u`            | Change the next word to uppercase                                                                          |
 | `meta-c`            | Change the next word to titlecase                                                                          |
 | `meta-l`            | Change the next word to lowercase                                                                          |

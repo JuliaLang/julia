@@ -790,3 +790,21 @@ end
     seek(buf, 5) # left column
     @test transform!(buf->LineEdit.edit_indent(buf, -2), buf) == ("1\n22\n 333", 5, 0)
 end
+
+@testset "edit_transpose_lines_{up,down}!" begin
+    local buf
+    buf = IOBuffer()
+    write(buf, "l1\nl2\nl3")
+    seek(buf, 0)
+    @test LineEdit.edit_transpose_lines_up!(buf) == false
+    @test transform!(LineEdit.edit_transpose_lines_up!, buf) == ("l1\nl2\nl3", 0, 0)
+    @test transform!(LineEdit.edit_transpose_lines_down!, buf) == ("l2\nl1\nl3", 3, 0)
+    @test LineEdit.edit_transpose_lines_down!(buf) == true
+    @test String(take!(copy(buf))) == "l2\nl3\nl1"
+    @test LineEdit.edit_transpose_lines_down!(buf) == false
+    @test String(take!(copy(buf))) == "l2\nl3\nl1" # no change
+    LineEdit.edit_move_right(buf)
+    @test transform!(LineEdit.edit_transpose_lines_up!, buf) == ("l2\nl1\nl3", 4, 0)
+    LineEdit.edit_move_right(buf)
+    @test transform!(LineEdit.edit_transpose_lines_up!, buf) == ("l1\nl2\nl3", 2, 0)
+end
