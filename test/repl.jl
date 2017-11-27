@@ -834,3 +834,27 @@ for keys = [altkeys, merge(altkeys...)],
         rm(histfile, force=true)
     end
 end
+
+# Test that module prefix is omitted when type is reachable from Main (PR #23806)
+fake_repl() do stdin_write, stdout_read, repl
+    repl.specialdisplay = Base.REPL.REPLDisplay(repl)
+    repl.history_file = false
+
+    repltask = @async begin
+        Base.REPL.run_repl(repl)
+    end
+
+    @eval Main module TestShowTypeREPL; export TypeA; struct TypeA end; end
+    write(stdin_write, "TestShowTypeREPL.TypeA\n")
+    @test endswith(readline(stdout_read), "\r\e[7CTestShowTypeREPL.TypeA\r\e[29C")
+    readline(stdout_read)
+    readline(stdout_read)
+    @eval Main using .TestShowTypeREPL
+    write(stdin_write, "TypeA\n")
+    @test endswith(readline(stdout_read), "\r\e[7CTypeA\r\e[12C")
+    readline(stdout_read)
+
+    # Close REPL ^D
+    write(stdin_write, '\x04')
+    wait(repltask)
+end
