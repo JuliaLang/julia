@@ -1192,8 +1192,10 @@ end
 @testset "logspace" begin
     n = 10; a = 2; b = 4
     # test default values; base = 10
+    @test logspace(a, b, 50) == 10 .^ linspace(a, b, 50)
     @test logspace(a, b, n) == 10 .^ linspace(a, b, n)
     for base in (10, 2, ℯ)
+        @test logspace(a, b, 50, base=base) == base.^linspace(a, b, 50)
         @test logspace(a, b, n, base=base) == base.^linspace(a, b, n)
     end
 end
