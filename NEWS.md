@@ -1306,6 +1306,8 @@ Deprecated or removed
 
   * `EnvHash` has been renamed to `EnvDict` ([#24167]).
 
+  * `linspace` and `logspace` now require an explicit number of elements to be supplied rather than defaulting to `50`.
+
 Command-line option changes
 ---------------------------
 
