@@ -33,7 +33,8 @@ import ..LineEdit:
     history_last,
     history_search,
     accept_result,
-    terminal
+    terminal,
+    MIState
 
 abstract type AbstractREPL end
 
@@ -273,11 +274,12 @@ mutable struct LineEditREPL <: AbstractREPL
     waserror::Bool
     specialdisplay::Union{Void,Display}
     options::Options
+    mistate::Union{MIState,Void}
     interface::ModalInterface
     backendref::REPLBackendRef
     LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
         new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, Options())
+            in_help,envcolors,false,nothing, Options(), nothing)
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
@@ -985,7 +987,8 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
         interface = repl.interface
     end
     repl.backendref = backend
-    run_interface(repl.t, interface)
+    repl.mistate = LineEdit.init_state(terminal(repl), interface)
+    run_interface(terminal(repl), interface, repl.mistate)
     dopushdisplay && popdisplay(d)
 end
 

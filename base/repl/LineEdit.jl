@@ -15,7 +15,7 @@ abstract type ModeState end
 export run_interface, Prompt, ModalInterface, transition, reset_state, edit_insert, keymap
 
 struct ModalInterface <: TextInterface
-    modes::Array{Base.LineEdit.TextInterface,1}
+    modes::Vector{TextInterface}
 end
 
 mutable struct Prompt <: TextInterface
@@ -2148,8 +2148,8 @@ function init_state(terminal, m::ModalInterface)
     s
 end
 
-function run_interface(terminal, m::ModalInterface)
-    s::MIState = init_state(terminal, m)
+
+function run_interface(terminal::TextTerminal, m::ModalInterface, s::MIState=init_state(terminal, m))
     while !s.aborted
         buf, ok, suspend = prompt!(terminal, m, s)
         while suspend
@@ -2233,7 +2233,7 @@ keymap_data(s::PromptState, prompt::Prompt) = prompt.repl
 keymap(ms::MIState, m::ModalInterface) = keymap(state(ms), mode(ms))
 keymap_data(ms::MIState, m::ModalInterface) = keymap_data(state(ms), mode(ms))
 
-function prompt!(term, prompt, s = init_state(term, prompt))
+function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_state(term, prompt))
     Base.reseteof(term)
     raw!(term, true)
     enable_bracketed_paste(term)
