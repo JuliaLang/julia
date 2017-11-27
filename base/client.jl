@@ -419,9 +419,8 @@ function _start()
                     active_repl = REPL.BasicREPL(term)
                     quiet || warn("Terminal not fully functional")
                 else
-                    active_repl = REPL.LineEditREPL(term, true)
+                    active_repl = REPL.LineEditREPL(term, have_color, true)
                     active_repl.history_file = history_file
-                    active_repl.hascolor = have_color
                 end
                 # Make sure any displays pushed in .juliarc.jl ends up above the
                 # REPLDisplay

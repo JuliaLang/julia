@@ -284,13 +284,13 @@ specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
 
-LineEditREPL(t::TextTerminal, envcolors::Bool=false) =
-    LineEditREPL(t, true,
-        Base.text_colors[:green],
-        Base.input_color(),
-        Base.answer_color(),
-        Base.text_colors[:red],
-        Base.text_colors[:yellow],
+LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
+    LineEditREPL(t, hascolor,
+        hascolor ? Base.text_colors[:green] : "",
+        hascolor ? Base.input_color() : "",
+        hascolor ? Base.answer_color() : "",
+        hascolor ? Base.text_colors[:red] : "",
+        hascolor ? Base.text_colors[:yellow] : "",
         false, false, false, envcolors
     )
 
