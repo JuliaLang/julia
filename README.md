@@ -1,6 +1,6 @@
 # Pkg3
 
-[![Build Status](https://travis-ci.org/JuliaLang/Pkg3.jl.svg?branch=master)](https://travis-ci.org/JuliaLang/Pkg3.jl) [![Build status](https://ci.appveyor.com/api/projects/status/0ke5q2vejfsgdoyx?svg=true)](https://ci.appveyor.com/project/JuliaLang/pkg3-jl) [![codecov](https://codecov.io/gh/JuliaLang/Pkg3.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaLang/Pkg3.jl)
+[![Build Status](https://travis-ci.org/JuliaLang/Pkg3.jl.svg?branch=master)](https://travis-ci.org/JuliaLang/Pkg3.jl) [![Build status](https://ci.appveyor.com/api/projects/status/ywiwk98gvye1ov6x/branch/master?svg=true)](https://ci.appveyor.com/project/KristofferC/pkg3-jl-li0m6/branch/master) [![codecov](https://codecov.io/gh/JuliaLang/Pkg3.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaLang/Pkg3.jl)
 
 Next-generation package manager for Julia. Still quite alpha.
 
