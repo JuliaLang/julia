@@ -37,7 +37,7 @@ jobs:
           echo "$ARCH $HOME $(date +%Y%W)" | tee /tmp/weeknumber
       - restore_cache: # silly to take a checksum of the tag file here instead of
           keys: # its contents but this is the only thing that works on circle
-            - ccache-{{ checksum "/tmp/weeknumber" }}
+            - ccache-{{ arch }}-{{ checksum "/tmp/weeknumber" }}
       - run: | # compile julia deps
           contrib/download_cmake.sh &&
           make -j8 -C deps || make
@@ -66,7 +66,7 @@ jobs:
           command: sudo dmesg
           when: on_fail
       - save_cache:
-          key: ccache-{{ checksum "/tmp/weeknumber" }}
+          key: ccache-{{ arch }}-{{ checksum "/tmp/weeknumber" }}
           paths:
             - ~/.ccache
 
