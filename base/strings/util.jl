@@ -492,7 +492,7 @@ julia> hex2bytes(a)
 function hex2bytes end
 
 hex2bytes(s::AbstractString) = hex2bytes(Vector{UInt8}(String(s)))
-hex2bytes(s::AbstractVector{UInt8}) = hex2bytes!(Vector{UInt8}(length(s) >> 1), s)
+hex2bytes(s::AbstractVector{UInt8}) = hex2bytes!(Vector{UInt8}(uninitialized, length(s) >> 1), s)
 
 """
     hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})

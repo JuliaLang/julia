@@ -7,8 +7,8 @@ const Bottom = Union{}
 include("testenv.jl")
 
 f47(x::Vector{Vector{T}}) where {T} = 0
-@test_throws MethodError f47(Vector{Vector}(uninitialized, 0))
-@test f47(Array{Vector{Int}}(0)) == 0
+@test_throws MethodError f47(Vector{Vector}())
+@test f47(Vector{Vector{Int}}()) == 0
 
 # checking unionall and typevar components
 @test_throws TypeError ([] where T)
@@ -591,7 +591,7 @@ let
     @test !isassigned(a,1) && !isassigned(a,2)
     a[1] = 1
     @test isassigned(a,1) && !isassigned(a,2)
-    a = Array{Float64}(uninitialized,1)
+    a = Vector{Float64}(uninitialized,1)
     @test isassigned(a,1)
     @test isassigned(a)
     @test !isassigned(a,2)
@@ -1256,7 +1256,7 @@ let
 
     # issue #1886
     X = [1:4;]
-    r = Array{UnitRange{Int}}(uninitialized, 1)
+    r = Vector{UnitRange{Int}}(uninitialized, 1)
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
@@ -1321,7 +1321,7 @@ struct Foo2509; foo::Int; end
 # issue #2517
 struct Foo2517; end
 @test repr(Foo2517()) == "$(curmod_prefix)Foo2517()"
-@test repr(Array{Foo2517}(uninitialized, 1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
+@test repr(Vector{Foo2517}(uninitialized, 1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
@@ -1398,7 +1398,7 @@ end
 
 # issue #3471
 function f3471(y)
-    convert(Array{typeof(y[1]),1}, y)
+    convert(Vector{typeof(y[1])}, y)
 end
 @test isa(f3471(Any[1.0,2.0]), Vector{Float64})
 
@@ -1450,13 +1450,13 @@ end
 # issue #3167
 let
     function foo(x)
-        ret=Array{typeof(x[1])}(uninitialized, length(x))
+        ret=Vector{typeof(x[1])}(uninitialized, length(x))
         for j = 1:length(x)
             ret[j] = x[j]
         end
         return ret
     end
-    x = Array{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void}}(3)
+    x = Vector{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void}}(uninitialized, 3)
     x[1] = 1.0
     x[2] = 2.0
     x[3] = 3.0
@@ -1704,8 +1704,8 @@ end
 @test invalid_tupleref()==true
 
 # issue #5150
-f5150(T) = Array{Rational{T}}(uninitialized, 1)
-@test typeof(f5150(Int)) === Array{Rational{Int},1}
+f5150(T) = Vector{Rational{T}}(uninitialized, 1)
+@test typeof(f5150(Int)) === Vector{Rational{Int}}
 
 
 # issue #5165

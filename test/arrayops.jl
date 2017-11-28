@@ -1123,7 +1123,7 @@ end
     fill!(A, UInt8(3))
     @test A == [0x03, 0x03, 0x03]
     # Issue #9964
-    A = Array{Vector{Float64}}(2)
+    A = Array{Vector{Float64}}(uninitialized, 2)
     fill!(A, [1, 2])
     @test A[1] == [1, 2]
     @test A[1] === A[2]

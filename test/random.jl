@@ -366,8 +366,8 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         a2 = rand(rng..., C, 2, 3)                   ::Array{T, 2}
         a3 = rand(rng..., C, (2, 3))                 ::Array{T, 2}
         a4 = rand(rng..., C, b2, u3)                 ::Array{T, 2}
-        a5 = rand!(rng..., Array{T}(5), C)           ::Vector{T}
-        a6 = rand!(rng..., Array{T}(2, 3), C)        ::Array{T, 2}
+        a5 = rand!(rng..., Array{T}(uninitialized, 5), C)           ::Vector{T}
+        a6 = rand!(rng..., Array{T}(uninitialized, 2, 3), C)        ::Array{T, 2}
         a7 = rand!(rng..., GenericArray{T}(uninitialized, 5), C)    ::GenericArray{T, 1}
         a8 = rand!(rng..., GenericArray{T}(uninitialized, 2, 3), C) ::GenericArray{T, 2}
         @test size(a1) == (5,)
