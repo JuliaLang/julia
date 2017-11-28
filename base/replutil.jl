@@ -25,7 +25,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator}
         i == rows < length(iter) && (print(io, "⋮"); break)
 
         if limit
-            str = sprint(0, show, v, env=io)
+            str = _sprint(show, (v,), env=io)
             str = _truncate_at_width_or_chars(str, cols, "\r\n")
             print(io, str)
         else
@@ -61,8 +61,8 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
         vallen = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
-            ks[i] = sprint(0, show, k, env=recur_io)
-            vs[i] = sprint(0, show, v, env=recur_io)
+            ks[i] = _sprint(show, (k,), env=recur_io)
+            vs[i] = _sprint(show, (v,), env=recur_io)
             keylen = clamp(length(ks[i]), keylen, cols)
             vallen = clamp(length(vs[i]), vallen, cols)
         end
@@ -80,7 +80,7 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
         else
-            key = sprint(0, show, k, env=recur_io)
+            key = _sprint(show, (k,), env=recur_io)
         end
         print(recur_io, key)
         print(io, " => ")

@@ -2137,6 +2137,9 @@ end
 @deprecate linspace(start, stop)     linspace(start, stop, 50)
 @deprecate logspace(start, stop)     logspace(start, stop, 50)
 
+# PR #24727
+@deprecate sprint(size::Integer, f::Function, args...; env=nothing) _sprint(f, args; size=size, env=env)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

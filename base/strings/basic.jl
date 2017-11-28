@@ -29,7 +29,7 @@ getindex(s::AbstractString, i::Colon) = s
 getindex(s::AbstractString, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
 getindex(s::AbstractString, v::AbstractVector{<:Integer}) =
-    sprint(length(v), io->(for i in v; write(io,s[i]) end))
+    _sprint(io->(for i in v; write(io,s[i]) end), size=length(v))
 getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 
