@@ -811,6 +811,17 @@ if all inputs have fast linear indexing, a [`CartesianRange`](@ref)
 otherwise).
 If the arrays have different sizes and/or dimensionalities, `eachindex` will return an
 iterable that spans the largest range along each dimension.
+
+For a CartesianRange, this returns a reshaped range of the linear indices into
+the range, e.g.:
+
+```jldoctest
+julia> eachindex(CartesianRange((1:2,1:3)))
+2×3 reshape(::Base.OneTo{Int64}, 2, 3) with eltype Int64:
+ 1  3  5
+ 2  4  6
+```
+
 """
 eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(IndexStyle(A), A))
 

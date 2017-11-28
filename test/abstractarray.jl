@@ -894,4 +894,7 @@ end
         j = (i_lin-i) ÷ length(xrng) + 1
         @test CR[i_lin] == CartesianIndex(xrng[i],yrng[j])
     end
+
+    @test CartesianRange(ones(2,3)) == CartesianRange((2,3))
+    @test eachindex(CartesianRange((2,3))) == [1 3 5; 2 4 6]
 end

@@ -22,9 +22,8 @@ computation (such as interpolation), and the type under discussion here, `SubArr
 For these types, the underlying information is more naturally described in terms of
 cartesian indexes.
 
-You can manually convert from a cartesian index to a linear index with `sub2ind`, and vice versa
-using `ind2sub`.  `getindex` and `setindex!` functions for `AbstractArray` types may include similar
-operations.
+The `getindex` and `setindex!` functions for `AbstractArray` types may include automatic conversion
+between indexing types. For explicit conversion, [`CartesianRange`](@ref) can be used.
 
 While converting from a cartesian index to a linear index is fast (it's just multiplication and
 addition), converting from a linear index to a cartesian index is very slow: it relies on the

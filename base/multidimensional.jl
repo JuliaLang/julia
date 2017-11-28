@@ -172,6 +172,11 @@ module IteratorsMD
     Consequently these can be useful for writing algorithms that
     work in arbitrary dimensions.
 
+        CartesianRange(A::AbstractArray) -> R
+
+    As a convenience, constructing a CartesianRange from an array makes a
+    range of its indices.
+
     # Examples
     ```jldoctest
     julia> foreach(println, CartesianRange((2, 2, 2)))
@@ -183,6 +188,44 @@ module IteratorsMD
     CartesianIndex(2, 1, 2)
     CartesianIndex(1, 2, 2)
     CartesianIndex(2, 2, 2)
+
+    julia> CartesianRange(ones(2,3))
+    2×3 CartesianRange{2,Tuple{Base.OneTo{Int64},Base.OneTo{Int64}}}:
+      CartesianIndex(1, 1)  CartesianIndex(1, 2)  CartesianIndex(1, 3)
+      CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
+    ```
+
+    ## Conversion between linear and cartesian indices
+
+    Linear index to cartesian index conversion exploits the fact that a
+    `CartesianRange` is an `AbstractArray` and can be indexed linearly:
+
+    ```jldoctest subarray
+    julia> cartesian = CartesianRange(1:3,1:2)
+    3×2 CartesianRange{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
+     CartesianIndex(1, 1)  CartesianIndex(1, 2)
+     CartesianIndex(2, 1)  CartesianIndex(2, 2)
+     CartesianIndex(3, 1)  CartesianIndex(3, 2)
+
+    julia> cartesian[4]
+    CartesianIndex(1, 2)
+    ```
+
+    For cartesian to linear index conversion, [`eachindex`](@ref) returns a
+    reshaped version of the linear indices when called on a `CartesianRange`:
+
+    ```jldoctest subarray
+    julia> linear = eachindex(cartesian)
+    3×2 reshape(::Base.OneTo{Int64}, 3, 2) with eltype Int64:
+     1  4
+     2  5
+     3  6
+
+    julia> linear[1,2]
+    4
+
+    julia> linear[cartesian[4]]
+    4
     ```
     """
     struct CartesianRange{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{CartesianIndex{N},N}
@@ -203,6 +246,8 @@ module IteratorsMD
     CartesianRange(sz::NTuple{N,<:Integer}) where {N} = CartesianRange(map(Base.OneTo, sz))
     CartesianRange(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
         CartesianRange(map(i->first(i):last(i), inds))
+
+    CartesianRange(A::AbstractArray) = CartesianRange(indices(A))
 
     convert(::Type{Tuple{}}, R::CartesianRange{0}) = ()
     convert(::Type{NTuple{N,AbstractUnitRange{Int}}}, R::CartesianRange{N}) where {N} =
@@ -225,6 +270,7 @@ module IteratorsMD
     # AbstractArray implementation
     Base.IndexStyle(::Type{CartesianRange{N,R}}) where {N,R} = IndexCartesian()
     @inline Base.getindex(iter::CartesianRange{N,R}, I::Vararg{Int, N}) where {N,R} = CartesianIndex(first.(iter.indices) .- 1 .+ I)
+    Base.eachindex(iter::CartesianRange) = reshape(linearindices(iter), size(iter))
 
     ndims(R::CartesianRange) = ndims(typeof(R))
     ndims(::Type{CartesianRange{N}}) where {N} = N
