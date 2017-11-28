@@ -156,6 +156,12 @@ end
     end
 end
 
+@testset "indexing" begin
+    s = Set(["a", "b", "c"])
+    @test s["b"] == "b"
+    @test_throws KeyError s["d"]
+end
+
 @testset "union" begin
     @test isequal(union(Set([1])),Set([1]))
     s = ∪(Set([1,2]), Set([3,4]))
