@@ -57,7 +57,9 @@ julia> BitArray(uninitialized, (3, 1))
 ```
 """
 BitArray(::Uninitialized, dims::Integer...) = BitArray(uninitialized, map(Int,dims))
+BitArray{N}(::Uninitialized, dims::Integer...) where {N} = BitArray{N}(uninitialized, map(Int,dims))
 BitArray(::Uninitialized, dims::NTuple{N,Int}) where {N} = BitArray{N}(uninitialized, dims...)
+BitArray{N}(::Uninitialized, dims::NTuple{N,Int}) where {N} = BitArray{N}(uninitialized, dims...)
 # to deprecate in favor of the above uninitialized-accepting equivalents:
 BitArray(dims::Integer...) = BitArray(uninitialized, dims)
 BitArray(dims::NTuple{N,Int}) where {N} = BitArray{N}(uninitialized, dims...)
@@ -354,6 +356,8 @@ similar(B::BitArray, T::Type{Bool}, dims::Dims) = BitArray(uninitialized, dims)
 # changing type to a non-Bool returns an Array
 # (this triggers conversions like float(bitvector) etc.)
 similar(B::BitArray, T::Type, dims::Dims) = Array{T}(uninitialized, dims)
+
+similar(::Type{T}, shape::Tuple) where {T<:BitArray} = T(uninitialized, to_shape(shape))
 
 function fill!(B::BitArray, x)
     y = convert(Bool, x)
