@@ -125,7 +125,7 @@ julia> for i = 1:10^5
        end
 ```
 
-A full suite of parsing and formatting tests and examples is available in [`tests/dates/io.jl`](https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl).
+A full suite of parsing and formatting tests and examples is available in [`stdlib/Dates/test/io.jl`](https://github.com/JuliaLang/julia/blob/master/stdlib/Dates/test/io.jl).
 
 ## Durations/Comparisons
 
@@ -503,7 +503,7 @@ julia> filter(dr) do x
  2014-11-11
 ```
 
-Additional examples and tests are available in [`test/dates/adjusters.jl`](https://github.com/JuliaLang/julia/blob/master/test/dates/adjusters.jl).
+Additional examples and tests are available in [`stdlib/Dates/test/adjusters.jl`](https://github.com/JuliaLang/julia/blob/master/stdlib/Dates/test/adjusters.jl).
 
 ## Period Types
 
