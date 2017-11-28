@@ -8,7 +8,7 @@ isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__),
 using Main.TestHelpers
 import Base: REPL, LineEdit
 
-function fake_repl(f)
+function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
@@ -20,6 +20,8 @@ function fake_repl(f)
     Base.link_pipe(stderr, julia_only_read=true, julia_only_write=true)
 
     repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin.out, stdout.in, stderr.in), true)
+    repl.options = options
+
     f(stdin.in, stdout.out, repl)
     t = @async begin
         close(stdin.in)
