@@ -251,6 +251,7 @@ similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(uninitialized, s
 similar(a::Array{T}, m::Int) where {T}              = Vector{T}(uninitialized, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(uninitialized, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(uninitialized, dims)
+similar(::Type{T}, shape::Tuple) where {T<:Array}   = T(uninitialized, to_shape(shape))
 
 # T[x...] constructs Array{T,1}
 """
