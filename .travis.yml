@@ -47,7 +47,6 @@ cache:
 branches:
   only:
     - master
-    - fix_trav
     - /^release-.*/
     - /^v\d+\.\d+\.\d+$/
 notifications:
