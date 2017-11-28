@@ -16,8 +16,9 @@ export quot,
 """
     Meta.quot(ex)::Expr
 
-Quote expression `ex` to produce an expression with head `quote`. This can for instance be used to represent objects of type `Expr` in the AST.
-See also the manual section about [QuoteNode](@ref man-quote-node).
+Quote expression `ex` to produce an expression with head `quote`. This can for
+instance be used to represent objects of type `Expr` in the AST. See also the
+manual section about [QuoteNode](@ref man-quote-node).
 
 # Examples
 ```jldoctest
@@ -39,7 +40,10 @@ quot(ex) = Expr(:quote, ex)
 """
     Meta.isexpr(ex, head[, n])::Bool
 
-Check if `ex` is an expression with head `head` and `n` arguments.
+Return true if `ex` is an `Expr` with the given type `head` and optionally that
+the argument list is of length `n`. `head` may be a `Symbol` or collection of
+`Symbol`s. For example, to check that a macro was passed a function call
+expression, you might use `isexpr(ex, :call)`.
 
 # Examples
 ```jldoctest
