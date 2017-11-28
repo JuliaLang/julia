@@ -191,6 +191,7 @@ Annotates a function to ease type inference by strictly specifying the
 output is completely determined by the input.
 
 Note: Misuse can lead to regressions.
+
 Do not use if the function involved:
 
 - Involves globals, pointers
@@ -202,7 +203,7 @@ Do not use if the function involved:
 
 ```julia-repl
 
-julia> immutable Discrete{apply_map,scale_by_time} end
+julia> mutable struct Discrete{apply_map,scale_by_time} end
 
 julia> Discrete(;apply_map=false,scale_by_time=false) = Discrete{apply_map,scale_by_time}()
 Discrete
@@ -216,7 +217,7 @@ Body:
       return ((Core.apply_type)(Main.Discrete, false, false)::Type{Discrete{_,_}} where _ where _)()::Discrete{_,_} where _ where _
   end::Discrete{_,_} where _ where _
 
-julia> immutable Discrete{apply_map,scale_by_time} end
+julia> mutable struct Discrete2{apply_map,scale_by_time} end
 
 julia> Base.@pure Discrete2(;apply_map=false,scale_by_time=false) = Discrete{apply_map,scale_by_time}()
 Discrete
