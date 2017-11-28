@@ -421,6 +421,14 @@ Deprecated or removed
     Instead, reshape the array or add trailing indices so the dimensionality and number of indices
     match ([#14770], [#23628]).
 
+  * Uninitialized `Array` constructors of the form
+    `Array[{T,N}](shape...)` have been deprecated in favor of equivalents
+    accepting `uninitialized` (an alias for `Uninitialized()`) as their first argument,
+    as in `Array[{T,N}](uninitialized, shape...)`. For example,
+    `Vector(3)` is now `Vector(uninitialized, 3)`, `Matrix{Int}((2, 4))` is now,
+    `Matrix{Int}(uninitialized, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
+    `Array{Float32,3}(uninitialized, 11, 13, 17)` ([#24781]).
+
   * `fill!(A::Diagonal, x)` and `fill!(A::AbstractTriangular, x)` have been deprecated
     in favor of `Base.LinAlg.fillslots!(A, x)` ([#24413]).
 
