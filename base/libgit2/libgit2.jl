@@ -5,7 +5,7 @@ Interface to [libgit2](https://libgit2.github.com/).
 """
 module LibGit2
 
-import Base: merge!, ==
+import Base: ==
 
 export with, GitRepo, GitConfig
 
