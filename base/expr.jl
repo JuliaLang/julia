@@ -184,6 +184,56 @@ macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
 end
 
+"""
+    @pure
+
+Annotates a function to ease type inference by strictly specifying the
+output is completely determined by the input.
+
+Note: Misuse can lead to regressions.
+Do not use if the function involved:
+
+- Involves globals, pointers
+- Recurses
+- Does not return exactly (`===`) the same result for the same input
+- Gets its methods extended after it is called
+
+### Example 
+
+```julia-repl
+
+julia> immutable Discrete{apply_map,scale_by_time} end
+
+julia> Discrete(;apply_map=false,scale_by_time=false) = Discrete{apply_map,scale_by_time}()
+Discrete
+
+julia> @code_warntype Discrete()
+Variables:
+  #self# <optimized out>
+
+Body:
+  begin 
+      return ((Core.apply_type)(Main.Discrete, false, false)::Type{Discrete{_,_}} where _ where _)()::Discrete{_,_} where _ where _
+  end::Discrete{_,_} where _ where _
+
+julia> immutable Discrete{apply_map,scale_by_time} end
+
+julia> Base.@pure Discrete2(;apply_map=false,scale_by_time=false) = Discrete{apply_map,scale_by_time}()
+Discrete
+
+julia> Base.@pure Discrete2(;apply_map=false,scale_by_time=false) = Discrete{apply_map,scale_by_time}()
+Discrete2 (generic function with 1 method)
+
+julia> @code_warntype Discrete2()
+Variables:
+  #self# <optimized out>
+
+Body:
+  begin 
+      return $(QuoteNode(Discrete{false,false}()))
+  end::Discrete{false,false}
+```
+"""
 macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
 end
