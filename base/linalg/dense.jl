@@ -1367,6 +1367,34 @@ _cond1Inf(A::AbstractMatrix, p::Real)             = norm(A, p)*norm(inv(A), p)
 
 Computes the solution `X` to the Sylvester equation `AX + XB + C = 0`, where `A`, `B` and
 `C` have compatible dimensions and `A` and `-B` have no eigenvalues with equal real part.
+
+# Examples
+```jldoctest
+julia> A = [3. 4.; 5. 6]
+2×2 Array{Float64,2}:
+ 3.0  4.0
+ 5.0  6.0
+
+julia> B = [1. 1.; 1. 2.]
+2×2 Array{Float64,2}:
+ 1.0  1.0
+ 1.0  2.0
+
+julia> C = [1. 2.; -2. 1]
+2×2 Array{Float64,2}:
+  1.0  2.0
+ -2.0  1.0
+
+julia> X = sylvester(A, B, C)
+2×2 Array{Float64,2}:
+ -4.46667   1.93333
+  3.73333  -1.8
+
+julia> A*X + X*B + C
+2×2 Array{Float64,2}:
+  2.66454e-15  1.77636e-15
+ -3.77476e-15  4.44089e-16
+```
 """
 function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) where T<:BlasFloat
     RA, QA = schur(A)
@@ -1388,6 +1416,29 @@ sylvester(a::Union{Real,Complex}, b::Union{Real,Complex}, c::Union{Real,Complex}
 Computes the solution `X` to the continuous Lyapunov equation `AX + XA' + C = 0`, where no
 eigenvalue of `A` has a zero real part and no two eigenvalues are negative complex
 conjugates of each other.
+
+# Examples
+```jldoctest
+julia> A = [3. 4.; 5. 6]
+2×2 Array{Float64,2}:
+ 3.0  4.0
+ 5.0  6.0
+
+julia> B = [1. 1.; 1. 2.]
+2×2 Array{Float64,2}:
+ 1.0  1.0
+ 1.0  2.0
+
+julia> X = lyap(A, B)
+2×2 Array{Float64,2}:
+  0.5  -0.5
+ -0.5   0.25
+
+julia> A*X + X*A' + B
+2×2 Array{Float64,2}:
+ 0.0          6.66134e-16
+ 6.66134e-16  8.88178e-16
+```
 """
 function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
     R, Q = schur(A)
