@@ -68,20 +68,18 @@ import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, c
 # utility routines
 function vendor()
     lib = Libdl.dlopen_e(Base.libblas_name)
+    vend = :unknown
     if lib != C_NULL
-        try
-            if Libdl.dlsym_e(lib, :openblas_set_num_threads) != C_NULL
-                return :openblas
-            elseif Libdl.dlsym_e(lib, :openblas_set_num_threads64_) != C_NULL
-                return :openblas64
-            elseif Libdl.dlsym_e(lib, :MKL_Set_Num_Threads) != C_NULL
-                return :mkl
-            end
-        finally
-            Libdl.dlclose(lib)
+        if Libdl.dlsym_e(lib, :openblas_set_num_threads) != C_NULL
+            vend = :openblas
+        elseif Libdl.dlsym_e(lib, :openblas_set_num_threads64_) != C_NULL
+            vend = :openblas64
+        elseif Libdl.dlsym_e(lib, :MKL_Set_Num_Threads) != C_NULL
+            vend = :mkl
         end
+        Libdl.dlclose(lib)
     end
-    return :unknown
+    return vend
 end
 
 if vendor() == :openblas64
