@@ -210,19 +210,21 @@ function next(s::String, i::Int)
 end
 
 @noinline function next_continued(s::String, i::Int, u::UInt32)
-    z = ncodeunits(s)
+    u ≥ 0x80000000 && thisind(s, i) < i &&
+        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, (u >> 24) % UInt8))
+    n = ncodeunits(s)
     # first continuation byte
-    (i += 1) > z && @goto ret
+    (i += 1) > n && @goto ret
     @inbounds b = codeunit(s, i)
     b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b) << 16
     # second continuation byte
-    ((i += 1) > z) | (u < 0xe0000000) && @goto ret
+    ((i += 1) > n) | (u < 0xe0000000) && @goto ret
     @inbounds b = codeunit(s, i)
     b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b) << 8
     # third continuation byte
-    ((i += 1) > z) | (u < 0xf0000000) && @goto ret
+    ((i += 1) > n) | (u < 0xf0000000) && @goto ret
     @inbounds b = codeunit(s, i)
     b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b); i += 1
@@ -231,61 +233,41 @@ end
 end
 
 function length(s::String)
-    i = n = 0
-    z = sizeof(s)
+    i = l = 0
+    n = ncodeunits(s)
     while true
-        (i += 1) ≤ z || break
+        (i += 1) ≤ n || break
         @inbounds b = codeunit(s, i) # lead byte
     @label L
-        n += 1
+        l += 1
         (0xc0 ≤ b) & (b < 0xf8) || continue
         l = b
 
-        (i += 1) ≤ z || break
+        (i += 1) ≤ n || break
         @inbounds b = codeunit(s, i) # cont byte 1
         b & 0xc0 == 0x80 || @goto L
         l ≥ 0xe0 || continue
 
-        (i += 1) ≤ z || break
+        (i += 1) ≤ n || break
         @inbounds b = codeunit(s, i) # cont byte 2
         b & 0xc0 == 0x80 || @goto L
         l ≥ 0xf0 || continue
 
-        (i += 1) ≤ z || break
+        (i += 1) ≤ n || break
         @inbounds b = codeunit(s, i) # cont byte 3
         b & 0xc0 == 0x80 || @goto L
     end
-    return n
+    return l
 end
 
 first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
 
 ## overload methods for efficiency ##
 
-isvalid(s::String, i::Integer) =
-    (1 <= i <= sizeof(s)) && ((@inbounds b = codeunit(s, i)); !is_valid_continuation(b))
+isvalid(s::String, i::Integer) = thisind(s, i) == i
 
-function getindex(s::String, r::UnitRange{Int})
-    isempty(r) && return ""
-    l = sizeof(s)
-    i = first(r)
-    if i < 1 || i > l
-        throw(BoundsError(s, i))
-    end
-    @inbounds si = codeunit(s, i)
-    if is_valid_continuation(si)
-        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, si))
-    end
-    j = last(r)
-    if j > l
-        throw(BoundsError(s, j))
-    end
-    @inbounds sj = codeunit(s, j)
-    if is_valid_continuation(sj)
-        throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, sj))
-    end
-    j = nextind(s,j)
-    unsafe_string(pointer(s,i), j-i)
+function getindex(s::String, i::Int)
+    
 end
 
 function search(s::String, c::Char, i::Integer = 1)
