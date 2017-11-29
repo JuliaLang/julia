@@ -188,7 +188,7 @@ end
     @pure
 
 Usage can easily lead to whole program corruption or crashes and should be avoided
-by beginners.
+by all users.
 
 Do not use if the function involved:
 
@@ -198,41 +198,6 @@ Do not use if the function involved:
 - Gets its methods extended after it is called
 - Uses dispatch on one of its arguments
 
-### Example 
-
-```julia-repl
-
-julia> struct Discrete{apply_map,scale_by_time} end
-
-julia> Discrete(;apply_map=false,scale_by_time=false) = Discrete{apply_map,scale_by_time}()
-Discrete
-
-julia> @code_warntype Discrete()
-Variables:
-  #self# <optimized out>
-
-Body:
-  begin 
-      return ((Core.apply_type)(Main.Discrete, false, false)::Type{Discrete{_,_}} where _ where _)()::Discrete{_,_} where _ where _
-  end::Discrete{_,_} where _ where _
-
-julia> struct Discrete2{apply_map,scale_by_time} end
-
-julia> Base.@pure Discrete2(;apply_map=false,scale_by_time=false) = Discrete{apply_map,scale_by_time}()
-Discrete
-
-julia> Base.@pure Discrete2(;apply_map=false,scale_by_time=false) = Discrete{apply_map,scale_by_time}()
-Discrete2 (generic function with 1 method)
-
-julia> @code_warntype Discrete2()
-Variables:
-  #self# <optimized out>
-
-Body:
-  begin 
-      return $(QuoteNode(Discrete{false,false}()))
-  end::Discrete{false,false}
-```
 """
 macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
