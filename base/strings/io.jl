@@ -281,7 +281,7 @@ function escape_string(io, s::AbstractString, esc::AbstractString="")
             c in esc        ? print(io, '\\', c) :
             '\a' <= c <= '\r' ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
             isprint(c)      ? print(io, c) :
-            c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
+            c <= Char(0x7f) ? print(io, "\\x", hex(c, 2)) :
             c <= '\uffff'   ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
                               print(io, "\\U", hex(c, need_full_hex(s,j) ? 8 : 4))
         else # malformed
