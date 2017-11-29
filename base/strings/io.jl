@@ -4,11 +4,11 @@
 
 
 """
-    print(io::IO, x)
+    print([io::IO], xs...)
 
 Write to `io` (or to the default output stream [`STDOUT`](@ref)
 if `io` is not given) a canonical (un-decorated) text representation
-of a value if there is one, otherwise call [`show`](@ref).
+of values `xs` if there is one, otherwise call [`show`](@ref).
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
@@ -18,7 +18,7 @@ julia> print("Hello World!")
 Hello World!
 julia> io = IOBuffer();
 
-julia> print(io, "Hello World!")
+julia> print(io, "Hello", ' ', :World!)
 
 julia> String(take!(io))
 "Hello World!"
@@ -47,7 +47,7 @@ function print(io::IO, xs...)
 end
 
 """
-    println(io::IO, xs...)
+    println([io::IO], xs...)
 
 Print (using [`print`](@ref)) `xs` followed by a newline.
 If `io` is not supplied, prints to [`STDOUT`](@ref).
