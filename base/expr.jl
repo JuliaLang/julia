@@ -187,13 +187,15 @@ end
 """
     @pure
 
+Annotates a function to ease type inference by strictly specifying the 
+output is completely determined by the input.
+
 Usage can easily lead to whole program corruption or crashes and should be avoided
 by all users.
 
 Do not use if the function involved:
 
 - Involves globals, pointers
-- Recurses
 - Does not return exactly (`===`) the same result for the same input
 - Gets its methods extended after it is called
 - Uses dispatch on any of its arguments
