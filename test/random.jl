@@ -409,8 +409,8 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     bitrand(rng..., 5)             ::BitArray{1}
     bitrand(rng..., 2, 3)          ::BitArray{2}
     bitrand(rng..., b2, u3)        ::BitArray{2}
-    rand!(rng..., BitArray(5))     ::BitArray{1}
-    rand!(rng..., BitArray(2, 3))  ::BitArray{2}
+    rand!(rng..., BitVector(uninitialized, 5))     ::BitArray{1}
+    rand!(rng..., BitMatrix(uninitialized, 2, 3))  ::BitArray{2}
 
     # Test that you cannot call randn or randexp with non-Float types.
     for r in [randn, randexp, randn!, randexp!]

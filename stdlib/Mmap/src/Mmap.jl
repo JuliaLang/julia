@@ -259,7 +259,7 @@ function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
             throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
         end
     end
-    B = BitArray{N}(ntuple(i->0,Val(N))...)
+    B = BitArray{N}(uninitialized, ntuple(i->0,Val(N))...)
     B.chunks = chunks
     B.len = n
     if N != 1
