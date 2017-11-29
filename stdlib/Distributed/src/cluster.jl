@@ -186,9 +186,8 @@ line option) and schedules tasks to process incoming TCP connections and request
 
 It does not return.
 """
-start_worker(out::IO=STDOUT, cookie::Void=readline(STDIN)) = start_worker(out, cookie)
 start_worker(cookie::AbstractString=readline(STDIN)) = start_worker(STDOUT, cookie)
-function start_worker(out::IO, cookie::AbstractString)
+function start_worker(out::IO, cookie::AbstractString=readline(STDIN))
     close(STDIN) # workers will not use it
     redirect_stderr(STDOUT)
 
