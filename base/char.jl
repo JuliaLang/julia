@@ -12,7 +12,7 @@ end
 function ismalformed(c::Char)
     u = reinterpret(UInt32, c)
     l1 = leading_ones(u) << 3
-    t0 = trailing_zeros(u) & 24
+    t0 = trailing_zeros(u) & 56
     (l1 == 8) | (l1 + t0 > 32) |
     (((u & 0x00c0c0c0) ⊻ 0x00808080) >> t0 != 0)
 end
@@ -22,7 +22,7 @@ function convert(::Type{UInt32}, c::Char)
     u = reinterpret(UInt32, c)
     u < 0x80000000 && return reinterpret(UInt32, u >> 24)
     l1 = leading_ones(u)
-    t0 = trailing_zeros(u) & 24
+    t0 = trailing_zeros(u) & 56
     (l1 == 1) | (8l1 + t0 > 32) |
     (((u & 0x00c0c0c0) ⊻ 0x00808080) >> t0 != 0) &&
         malformed_char(c)::Union{}

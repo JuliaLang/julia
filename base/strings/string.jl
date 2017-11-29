@@ -120,6 +120,8 @@ end
 
 ## thisind, prevind and nextind ##
 
+# TODO: these need updating
+
 function thisind(s::String, i::Integer)
     j = Int(i)
     j < 1 && return 0
@@ -130,8 +132,6 @@ function thisind(s::String, i::Integer)
     end
     j
 end
-
-# TODO: these need updating
 
 function prevind(s::String, i::Integer)
     j = Int(i)
@@ -244,22 +244,22 @@ function next(s::String, i::Int)
 end
 
 @noinline function next_continued(s::String, i::Int, u::UInt32)
-    z = sizeof(s)
+    z = ncodeunits(s)
     # first continuation byte
     (i += 1) > z && @goto ret
     @inbounds b = codeunit(s, i)
-    (b & 0xc0 == 0x80) || @goto ret
+    b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b) << 16
     # second continuation byte
     ((i += 1) > z) | (u < 0xe0000000) && @goto ret
     @inbounds b = codeunit(s, i)
-    (b & 0xc0 == 0x80) || @goto ret
+    b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b) << 8
     # third continuation byte
     ((i += 1) > z) | (u < 0xf0000000) && @goto ret
     @inbounds b = codeunit(s, i)
-    (b & 0xc0 == 0x80) || @goto ret
-    u |= UInt32(b)
+    b & 0xc0 == 0x80 || @goto ret
+    u |= UInt32(b); i += 1
 @label ret
     return reinterpret(Char, u), i
 end
