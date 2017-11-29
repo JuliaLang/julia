@@ -758,10 +758,14 @@ Deprecated or removed
     in the new `Unicode` standard library module ([#25021]).
 
   * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`,
-     `ComplexF32` and `ComplexF64` respectively (#24647).
+     `ComplexF32` and `ComplexF64` respectively ([#24647]).
 
   * `Associative` has been deprecated in favor of `AbstractDict` ([#25012]).
 
+  * `copy!` is deprecated for `AbstractSet` and `AbstractDict`, with the intention to re-enable
+    it with a cleaner meaning in a future version ([#24844]).
+
+>>>>>>> deprecate copy! for sets and dicts (part of #24808)
 Command-line option changes
 ---------------------------
 

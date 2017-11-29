@@ -230,15 +230,6 @@ function merge!(combine::Function, d::AbstractDict, others::AbstractDict...)
     return d
 end
 
-# very similar to `merge!`, but accepts any iterable and extends code
-# that would otherwise only use `copy!` with arrays.
-function copy!(dest::Union{AbstractDict,AbstractSet}, src)
-    for x in src
-        push!(dest, x)
-    end
-    return dest
-end
-
 """
     keytype(type)
 
