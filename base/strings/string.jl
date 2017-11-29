@@ -330,7 +330,7 @@ function search(s::String, c::Char, i::Integer = 1)
     @inbounds if is_valid_continuation(codeunit(s,i))
         throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s,i)))
     end
-    c ≤ Char(0x7f) && return search(s, c % UInt8, i)
+    c ≤ '\x7f' && return search(s, c % UInt8, i)
     while true
         i = search(s, first_utf8_byte(c), i)
         (i == 0 || s[i] == c) && return i
@@ -360,7 +360,7 @@ function search(a::ByteArray, b::Char, i::Integer = 1)
 end
 
 function rsearch(s::String, c::Char, i::Integer = sizeof(s))
-    c ≤ Char(0x7f) && return rsearch(s, c % UInt8, i)
+    c ≤ '\x7f' && return rsearch(s, c % UInt8, i)
     b = first_utf8_byte(c)
     while true
         i = rsearch(s, b, i)

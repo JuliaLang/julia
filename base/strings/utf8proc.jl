@@ -485,7 +485,7 @@ julia> iscntrl('a')
 false
 ```
 """
-iscntrl(c::Char) = c <= Char(0x1f) || Char(0x7f) <= c <= '\u9f'
+iscntrl(c::Char) = c <= '\x1f' || '\x7f' <= c <= '\u9f'
 
 """
     ispunct(c::Char) -> Bool

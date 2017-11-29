@@ -502,7 +502,7 @@ end
 readuntil_string(s::IO, delim::UInt8) = String(readuntil(s, delim))
 
 function readuntil(s::IO, delim::Char)
-    if delim ≤ Char(0x7f)
+    if delim ≤ '\x7f'
         return readuntil_string(s, delim % UInt8)
     end
     out = IOBuffer()
@@ -583,7 +583,7 @@ function readuntil(io::IO, target::AbstractString)
     i = start(target)
     done(target, i) && return ""
     c, i = next(target, start(target))
-    if done(target, i) && c <= Char(0x7f)
+    if done(target, i) && c <= '\x7f'
         return readuntil_string(io, c % UInt8)
     end
     # decide how we can index target
