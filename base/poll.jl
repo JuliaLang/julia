@@ -185,11 +185,11 @@ mutable struct _FDWatcher
             associate_julia_struct(handle, this)
             err = ccall(:uv_poll_init_socket, Int32, (Ptr{Void},   Ptr{Void}, Ptr{Void}),
                                                       eventloop(), handle,    fd.handle)
-            finalizer(this, uvfinalize)
             if err != 0
                 Libc.free(handle)
                 throw(UVError("FDWatcher", err))
             end
+            finalizer(this, uvfinalize)
             return this
         end
     end
