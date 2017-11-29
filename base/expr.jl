@@ -185,7 +185,7 @@ macro noinline(ex)
 end
 
 """
-    @pure
+    @hyperpure
 
 Annotates a function to ease type inference by strictly specifying the 
 output is completely determined by the input.
@@ -201,7 +201,7 @@ Do not use if the function involved:
 - Uses dispatch on any of its arguments
 
 """
-macro pure(ex)
+macro hyperpure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
 end
 
