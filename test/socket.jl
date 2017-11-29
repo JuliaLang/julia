@@ -351,3 +351,32 @@ let
     @test test_connect(addr)
 end
 
+# Issues #18818 and #24169
+mutable struct RLimit
+    cur::Int64
+    max::Int64
+end
+function with_ulimit(f::Function, stacksize::Int)
+    RLIMIT_STACK = 3 # from /usr/include/sys/resource.h
+    rlim = Ref(RLimit(0, 0))
+    # Get the current maximum stack size in bytes
+    rc = ccall(:getrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_STACK, rlim)
+    @assert rc == 0
+    current = rlim[].cur
+    try
+        rlim[].cur = stacksize * 1024
+        ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_STACK, rlim)
+        f()
+    finally
+        rlim[].cur = current
+        ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_STACK, rlim)
+    end
+    nothing
+end
+@static if is_apple()
+    @testset "Issues #18818 and #24169" begin
+        with_ulimit(7001) do
+            @test getaddrinfo("localhost") isa IPAddr
+        end
+    end
+end

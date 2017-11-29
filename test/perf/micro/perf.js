@@ -248,7 +248,7 @@
     }
 
     function randmatstat(t) {
-        var n, P, PTransposed, PMatMul, Q, QTransposed, QMatMul,
+        var n, P, PTransposed, Pt1P, Pt2P, Q, QTransposed, Pt1Q, Pt2Q,
         a, b, c, d, aSub, bSub, cSub, dSub, v, w, i, j, k,
         trP, trQ, v1, v2, w1, w2;
         n = 5;
@@ -259,8 +259,10 @@
         PTransposed = new Float64Array( P.length );
         QTransposed = new Float64Array( Q.length );
 
-        PMatMul = new Float64Array( n*n );
-        QMatMul = new Float64Array( (2*n) * (2*n) );
+        Pt1P = new Float64Array( (4*n) * (4*n) );
+        Pt2P = new Float64Array( (4*n) * (4*n) );
+        Pt1Q = new Float64Array( (2*n) * (2*n) );
+        Pt2Q = new Float64Array( (2*n) * (2*n) );
 
         a = new Float64Array( n*n );
         b = new Float64Array( n*n );
@@ -307,24 +309,24 @@
             }
 
             transpose( PTransposed, P, n, 4*n );
-            matmulCopy( PMatMul, PTransposed, P, n, 4*n, n );
-            matmulCopy( PMatMul, P, P, n, n, n);
-            matmulCopy( PMatMul, P, P, n, n, n);
+            matmulCopy( Pt1P, PTransposed, P, 4*n, n, 4*n );
+            matmulCopy( Pt2P, Pt1P, Pt1P, 4*n, 4*n, 4*n);
+            matmulCopy( Pt1P, Pt2P, Pt2P, 4*n, 4*n, 4*n);
 
             trP = 0;
-            for (j = 0; j < n; j++) {
-                trP += PMatMul[(n+1)*j];
+            for (j = 0; j < 4*n; j++) {
+                trP += Pt1P[(4*n+1)*j];
             }
             v[i] = trP;
 
             transpose( QTransposed, Q, 2*n, 2*n );
-            matmulCopy( QMatMul, QTransposed, Q, 2*n, 2*n, 2*n );
-            matmulCopy( QMatMul, Q, Q, 2*n, 2*n, 2*n);
-            matmulCopy( QMatMul, Q, Q, 2*n, 2*n, 2*n);
+            matmulCopy( Pt1Q, QTransposed, Q, 2*n, 2*n, 2*n );
+            matmulCopy( Pt2Q, Pt1Q, Pt1Q, 2*n, 2*n, 2*n);
+            matmulCopy( Pt1Q, Pt2Q, Pt2Q, 2*n, 2*n, 2*n);
 
             trQ = 0;
             for (j = 0; j < 2*n; j++) {
-                trQ += QMatMul[(2*n+1)*j];
+                trQ += Pt1Q[(2*n+1)*j];
             }
             w[i] = trQ;
         }

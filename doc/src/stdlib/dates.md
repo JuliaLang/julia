@@ -27,7 +27,7 @@ Base.Dates.DateTime(::Base.Dates.Period...)
 Base.Dates.DateTime(::Function, ::Any...)
 Base.Dates.DateTime(::Base.Dates.TimeType)
 Base.Dates.DateTime(::AbstractString, ::AbstractString)
-Base.Dates.format
+Base.Dates.format(::Base.Dates.TimeType, ::AbstractString)
 Base.Dates.DateFormat
 Base.Dates.@dateformat_str
 Base.Dates.DateTime(::AbstractString, ::Base.Dates.DateFormat)

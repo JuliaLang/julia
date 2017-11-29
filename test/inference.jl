@@ -963,14 +963,14 @@ end
 # approximate static parameters due to unions
 let T1 = Array{Float64}, T2 = Array{_1,2} where _1
     inference_test_copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
-    rt = Base.return_types(inference_test_copy, (Union{T1,T2},))[1]
+    rt = Union{Base.return_types(inference_test_copy, (Union{T1,T2},))...}
     @test rt >: T1 && rt >: T2
 
     el(x::T) where {T} = eltype(T)
-    rt = Base.return_types(el, (Union{T1,Array{Float32,2}},))[1]
+    rt = Union{Base.return_types(el, (Union{T1,Array{Float32,2}},))...}
     @test rt >: Union{Type{Float64}, Type{Float32}}
 
     g(x::Ref{T}) where {T} = T
-    rt = Base.return_types(g, (Union{Ref{Array{Float64}}, Ref{Array{Float32}}},))[1]
+    rt = Union{Base.return_types(g, (Union{Ref{Array{Float64}}, Ref{Array{Float32}}},))...}
     @test rt >: Union{Type{Array{Float64}}, Type{Array{Float32}}}
 end

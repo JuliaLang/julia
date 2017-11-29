@@ -549,7 +549,7 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b);
     unsigned sz = jl_datatype_size(ty);
     unsigned sz2 = next_power_of_two(sz);
-    unsigned szb = jl_datatype_size(tyb);
+    unsigned szb = cvtb ? jl_datatype_size(tyb) : sz;
     if (sz2 > sz) {
         /* round type up to the appropriate c-type and set/clear the unused bits */
         void *pa2 = alloca(sz2);
@@ -558,10 +558,12 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
         pa = pa2;
     }
     if (sz2 > szb) {
-        /* round type up to the appropriate c-type and set/clear/truncate the unused bits */
+        /* round type up to the appropriate c-type and set/clear/truncate the unused bits
+         * (zero-extend if cvtb is set, since in that case b is unsigned while the sign of a comes from the op)
+         */
         void *pb2 = alloca(sz2);
         memcpy(pb2, pb, szb);
-        memset((char*)pb2 + szb, getsign(pb, sz), sz2 - szb);
+        memset((char*)pb2 + szb, cvtb ? 0 : getsign(pb, szb), sz2 - szb);
         pb = pb2;
     }
     jl_value_t *newv = lambda2(ty, pa, pb, sz, sz2, list);
@@ -809,10 +811,8 @@ bi_iintrinsic_fast(LLVMXor, xor_op, xor_int, u)
 bi_iintrinsic_cnvtb_fast(LLVMShl, shl_op, shl_int, u, 1)
 #define lshr_op(a,b) (b >= 8 * sizeof(a)) ? 0 : a >> b
 bi_iintrinsic_cnvtb_fast(LLVMLShr, lshr_op, lshr_int, u, 1)
-#define ashr_op(a,b) \
-        /* if ((signed)a > 0) [in two's complement] ? ... : ...) */ \
-        (a >> (host_char_bit * sizeof(a) - 1)) ? ~(b >= 8 * sizeof(a) ? 0 : (~a) >> b) : (b >= 8 * sizeof(a) ? 0 : a >> b)
-bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, u, 1)
+#define ashr_op(a,b) ((b < 0 || b >= 8 * sizeof(a)) ? a >> (8*sizeof(a) - 1) : a >> b)
+bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, , 1)
 //#define bswap_op(a) __builtin_bswap(a)
 //un_iintrinsic_fast(LLVMByteSwap, bswap_op, bswap_int, u)
 un_iintrinsic_slow(LLVMByteSwap, bswap_int, u)

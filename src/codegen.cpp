@@ -1325,7 +1325,11 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
 
     JL_UNLOCK(&codegen_lock); // Might GC
 
-    if (dump_compiles_stream != NULL) {
+    // If logging of the compilation stream is enabled then dump the function to the stream
+    // ... unless li->def isn't defined here meaning the function is a toplevel thunk and
+    // would have its CodeInfo printed in the stream, which might contain double-quotes that
+    // would not be properly escaped given the double-quotes added to the stream below.
+    if (dump_compiles_stream != NULL && li->def) {
         uint64_t this_time = jl_hrtime();
         jl_printf(dump_compiles_stream, "%" PRIu64 "\t\"", this_time - last_time);
         jl_static_show(dump_compiles_stream, (jl_value_t*)li);
@@ -5304,7 +5308,7 @@ static std::unique_ptr<Module> emit_function(
 
     // allocate Function declarations and wrapper objects
     Module *M = new Module(ctx.name, jl_LLVMContext);
-    jl_setup_module(M);
+    jl_setup_module(M, params);
     jl_returninfo_t returninfo = {};
     Function *f = NULL;
     Function *fwrap = NULL;

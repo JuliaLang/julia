@@ -53,7 +53,8 @@ if is_unix()
     s = TCPSocket(delay = false)
     is_linux() && Base.Distributed.bind_client_port(s)
     if ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle) == 0
-        reuseport_tests()
+        # Client reuse port has been disabled in 0.6.2
+#        reuseport_tests()
     else
         info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
     end

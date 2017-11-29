@@ -144,3 +144,8 @@ baremodule B
 end
 @test B.x == 3
 @test B.M.x == 4
+
+# caused by #24538. forms that lower to `call` should wrap with `call` before
+# recursively calling expand-forms.
+@test [(0,0)... 1] == [0 0 1]
+@test Float32[(0,0)... 1] == Float32[0 0 1]

@@ -115,6 +115,17 @@ S = view(A, :, :)
 @test S[1,4] == S[4] == 4
 @test_throws BoundsError S[1,1]
 @test indices(S) === (0:1, 3:4)
+# https://github.com/JuliaArrays/OffsetArrays.jl/issues/27
+g = OffsetArray(collect(-2:3), (-3,))
+gv = view(g, -1:2)
+@test indices(gv, 1) === Base.OneTo(4)
+@test collect(gv) == collect(-1:2)
+gv = view(g, OffsetArray(-1:2, (-2,)))
+@test indices(gv, 1) === -1:2
+@test collect(gv) == collect(-1:2)
+gv = view(g, OffsetArray(-1:2, (-1,)))
+@test indices(gv, 1) === 0:3
+@test collect(gv) == collect(-1:2)
 
 # iteration
 for (a,d) in zip(A, A0)
@@ -158,6 +169,7 @@ cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,5), (10,-9)))       # rows&c
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,5), (10,-9)))    # columns fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,10^3), (10,-9)))    # rows fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9))) # neither fits
+cmp_showf(Base.show, io, OffsetArray(rand(1,1,10^3,1), (1,2,3,4)))      # issue in #24393
 targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1.0",
             "$OAs_name.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
             "$OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",

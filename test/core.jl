@@ -350,6 +350,20 @@ c23558(n,k) =
     end
 @test c23558(10, 5) == 252
 
+# issue #23996
+function foo23996(xs...)
+    rets = []
+    bar(::Int) = push!(rets, 1)
+    foobar() = push!(rets, 3)
+    bar(::AbstractFloat) = push!(rets, 2)
+    bar(::Bool) = foobar()
+    for x in xs
+	bar(x)
+    end
+    rets
+end
+@test foo23996(1,2.0,false) == [1,2,3]
+
 # variable scope, globals
 glob_x = 23
 function glotest()
@@ -906,6 +920,12 @@ let
     @test foor(Base.unwrap_unionall(StridedArray)) == 1
     @test_throws MethodError foor(StridedArray)
 end
+
+# issue #22842
+f22842(x::UnionAll) = UnionAll
+f22842(x::DataType) = length(x.parameters)
+@test f22842(Tuple{Vararg{Int64,N} where N}) == 1
+@test f22842(Tuple{Vararg{Int64,N}} where N) === UnionAll
 
 # issue #1153
 mutable struct SI{m, s, kg}

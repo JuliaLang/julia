@@ -390,10 +390,10 @@ Return a collection of all instances of the given type, if applicable. Mostly us
 enumerated types (see `@enum`).
 
 ```jldoctest
-julia> @enum Colors Red Blue Green
+julia> @enum Color red blue green
 
-julia> instances(Colors)
-(Red::Colors = 0, Blue::Colors = 1, Green::Colors = 2)
+julia> instances(Color)
+(red::Color = 0, blue::Color = 1, green::Color = 2)
 ```
 """
 function instances end
@@ -515,10 +515,7 @@ function _methods_by_ftype(t::ANY, lim::Int, world::UInt, min::Array{UInt,1}, ma
         end
     end
     if 1 < nu <= 64
-        ms = _methods_by_ftype(Any[tp...], t, length(tp), lim, [], world, min, max)
-        if all(m->isleaftype(m[1]), ms)
-            return ms
-        end
+        return _methods_by_ftype(Any[tp...], t, length(tp), lim, [], world, min, max)
     end
     # XXX: the following can return incorrect answers that the above branch would have corrected
     return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), t, lim, 0, world, min, max)

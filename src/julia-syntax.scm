@@ -2172,7 +2172,7 @@
    '=>
    (lambda (e)
      (syntax-deprecation #f "Expr(:(=>), ...)" "Expr(:call, :(=>), ...)")
-     `(call => ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+     (expand-forms `(call => ,@(cdr e))))
 
    'cell1d (lambda (e) (error "{ } vector syntax is discontinued"))
    'cell2d (lambda (e) (error "{ } matrix syntax is discontinued"))
@@ -2268,13 +2268,13 @@
              (and (length= e 4)
                   (eq? (cadddr e) ':)))
          (error "invalid \":\" outside indexing"))
-     `(call colon ,.(map expand-forms (cdr e))))
+     (expand-forms `(call colon ,@(cdr e))))
 
    'vect
    (lambda (e) (expand-forms `(call (top vect) ,@(cdr e))))
 
    'hcat
-   (lambda (e) (expand-forms `(call hcat ,.(map expand-forms (cdr e)))))
+   (lambda (e) (expand-forms `(call hcat ,@(cdr e))))
 
    'vcat
    (lambda (e)
@@ -2297,7 +2297,7 @@
                 `(call vcat ,@a))))))
 
    'typed_hcat
-   (lambda (e) `(call (top typed_hcat) ,(expand-forms (cadr e)) ,.(map expand-forms (cddr e))))
+   (lambda (e) (expand-forms `(call (top typed_hcat) ,@(cdr e))))
 
    'typed_vcat
    (lambda (e)
@@ -2318,8 +2318,8 @@
                      ,.(apply append rows)))
             `(call (top typed_vcat) ,t ,@a)))))
 
-   '|'|  (lambda (e) `(call ctranspose ,(expand-forms (cadr e))))
-   '|.'| (lambda (e) `(call  transpose ,(expand-forms (cadr e))))
+   '|'|  (lambda (e) (expand-forms `(call ctranspose ,(cadr e))))
+   '|.'| (lambda (e) (expand-forms `(call  transpose ,(cadr e))))
 
    'ccall
    (lambda (e)
@@ -2360,7 +2360,7 @@
                ,iter))))
 
    'flatten
-   (lambda (e) `(call (top Flatten) ,(expand-forms (cadr e))))
+   (lambda (e) (expand-forms `(call (top Flatten) ,(cadr e))))
 
    'comprehension
    (lambda (e)
@@ -2393,11 +2393,10 @@
         (oneresult (make-ssavalue))
         (lengths   (map (lambda (x) (make-ssavalue)) ranges))
         (states    (map (lambda (x) (gensy)) ranges))
-        (is        (map (lambda (x) (gensy)) ranges))
         (rv        (map (lambda (x) (make-ssavalue)) ranges)))
 
     ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges rv is states lengths)
+    (define (construct-loops ranges rv states lengths)
       (if (null? ranges)
           `(block (= ,oneresult ,expr)
                   (inbounds true)
@@ -2406,28 +2405,27 @@
                   (= ,ri (call (top +) ,ri 1)))
           `(block
             (= ,(car states) (call (top start) ,(car rv)))
-            (local (:: ,(car is) (call (core typeof) ,(car lengths))))
-            (= ,(car is) 0)
-            (while (call (top !=) ,(car is) ,(car lengths))
+            (while (call (top !) (call (top done) ,(car rv) ,(car states)))
                    (scope-block
                    (block
-                    (= ,(car is) (call (top +) ,(car is) 1))
                     (= (tuple ,(cadr (car ranges)) ,(car states))
                        (call (top next) ,(car rv) ,(car states)))
                     ;; *** either this or force all for loop vars local
                     ,.(map (lambda (r) `(local ,r))
                            (lhs-vars (cadr (car ranges))))
-                    ,(construct-loops (cdr ranges) (cdr rv) (cdr is) (cdr states) (cdr lengths))))))))
+                    ,(construct-loops (cdr ranges) (cdr rv) (cdr states) (cdr lengths))))))))
 
     ;; Evaluate the comprehension
     `(block
+      ,.(map (lambda (v) `(local ,v)) states)
+      (local ,ri)
       ,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
       ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
       (scope-block
        (block
         (= ,result (call (curly Array ,atype ,(length lengths)) ,@lengths))
         (= ,ri 1)
-        ,(construct-loops (reverse ranges) (reverse rv) is states (reverse lengths))
+        ,(construct-loops (reverse ranges) (reverse rv) states (reverse lengths))
         ,result)))))
 
 (define (lhs-vars e)
@@ -2955,14 +2953,29 @@ f(x) = yt(x)
     (take body)
     (reverse! acc)))
 
+;; find all methods for the same function as `ex` in `body`
+(define (all-methods-for ex body)
+  (let ((mname (method-expr-name ex)))
+    (expr-find-all (lambda (s)
+                     (and (length> s 2) (eq? (car s) 'method)
+                          (eq? (method-expr-name s) mname)))
+                   body
+                   identity
+                   (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda)))))))
+
 ;; clear capture bit for vars assigned once at the top, to avoid allocating
 ;; some unnecessary Boxes.
 (define (lambda-optimize-vars! lam)
-  (define (expr-uses-var ex v)
+  (define (expr-uses-var ex v stmts)
     (cond ((assignment? ex) (expr-contains-eq v (caddr ex)))
           ((eq? (car ex) 'method)
            (and (length> ex 2)
-                (assq v (cadr (lam:vinfo (cadddr ex))))))
+                ;; a method expression captures a variable if any methods for the
+                ;; same function do.
+                (let ((all-methods (all-methods-for ex (cons 'body stmts))))
+                  (any (lambda (ex)
+                         (assq v (cadr (lam:vinfo (cadddr ex)))))
+                       all-methods))))
           (else (expr-contains-eq v ex))))
   (assert (eq? (car lam) 'lambda))
   (let ((vi (car (lam:vinfo lam))))
@@ -2987,7 +3000,7 @@ f(x) = yt(x)
           ;; TODO: reorder leading statements to put assignments where the RHS is
           ;; `simple-atom?` at the top.
           (for-each (lambda (e)
-                      (set! unused (filter (lambda (v) (not (expr-uses-var e v)))
+                      (set! unused (filter (lambda (v) (not (expr-uses-var e v leading)))
                                            unused))
                       (if (and (memq (car e) '(method =)) (memq (cadr e) unused))
                           (let ((v (assq (cadr e) vi)))
@@ -3137,9 +3150,8 @@ f(x) = yt(x)
                                         (and name
                                              (symbol (string "#" name "#" (current-julia-module-counter))))))
                         (alldefs (expr-find-all
-                                  (lambda (ex) (and (eq? (car ex) 'method)
+                                  (lambda (ex) (and (length> ex 2) (eq? (car ex) 'method)
                                                     (not (eq? ex e))
-                                                    (length> ex 2)
                                                     (eq? (method-expr-name ex) name)))
                                   (lam:body lam)
                                   identity

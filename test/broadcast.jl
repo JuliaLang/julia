@@ -452,6 +452,20 @@ Base.Broadcast.broadcast_c(f, ::Type{Array19745}, A, Bs...) =
     @test isa(aa .* aa', Array19745)
 end
 
+# broadcast with a custom type that looses to tuple
+struct DataValue{T}
+    value::T
+end
+
+Base.Broadcast._containertype(::Type{<:DataValue}) = DataValue
+Base.Broadcast.promote_containertype(::Type{Tuple}, ::Type{DataValue}) = Tuple
+Base.Broadcast.promote_containertype(::Type{DataValue}, ::Type{Tuple}) = Tuple
+Base.Broadcast._broadcast_getindex(::Type{DataValue}, A, I) = A.value
+
+@testset "Broadcast with tuple and a custom type" begin
+    @test DataValue(1) .+ (1, 2) == (2, 3)
+end
+
 # broadcast should only "peel off" one container layer
 @test get.([Nullable(1), Nullable(2)]) == [1, 2]
 let io = IOBuffer()
@@ -515,8 +529,16 @@ end
                   Nullable("hello"))
 end
 
-# Issue #21291
-let t = (0, 1, 2)
-    o = 1
-    @test @inferred(broadcast(+, t, o)) == (1, 2, 3)
+@testset "broadcast resulting in tuples" begin
+    # Issue #21291
+    let t = (0, 1, 2)
+        o = 1
+        @test @inferred(broadcast(+, t, o)) == (1, 2, 3)
+    end
+
+    # Issue #23647
+    @test (1, 2, 3) .+ (1,) == (1,) .+ (1, 2, 3) == (2, 3, 4)
+    @test (1,) .+ () == () .+ (1,) == () .+ () == ()
+    @test (1, 2) .+ (1, 2) == (2, 4)
+    @test_throws DimensionMismatch (1, 2) .+ (1, 2, 3)
 end
