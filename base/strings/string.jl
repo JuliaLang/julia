@@ -205,13 +205,15 @@ function next(s::String, i::Int)
     @inbounds b = codeunit(s, i)
     # TODO: check index validity
     u = UInt32(b) << 24
-    (b < 0xc0) | (0xf8 ≤ b) && return reinterpret(Char, u), i+1
+    (b < 0x80) | (0xf8 ≤ b) && return reinterpret(Char, u), i+1
     return next_continued(s, i, u)
 end
 
 @noinline function next_continued(s::String, i::Int, u::UInt32)
-    u ≥ 0x80000000 && thisind(s, i) < i &&
+    if u < 0xc0000000
+        thisind(s, i) == i && (i += 1; @goto ret)
         throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, (u >> 24) % UInt8))
+    end
     n = ncodeunits(s)
     # first continuation byte
     (i += 1) > n && @goto ret
@@ -230,6 +232,40 @@ end
     u |= UInt32(b); i += 1
 @label ret
     return reinterpret(Char, u), i
+end
+
+function getindex(s::String, i::Int)
+    @boundscheck 1 ≤ i ≤ ncodeunits(s) || throw(BoundsError(s, i))
+    @inbounds b = codeunit(s, i)
+    # TODO: check index validity
+    u = UInt32(b) << 24
+    (b < 0x80) | (0xf8 ≤ b) && return reinterpret(Char, u)
+    return next_continued(s, i, u)
+end
+
+@noinline function getindex_continued(s::String, i::Int, u::UInt32)
+    if u < 0xc0000000
+        thisind(s, i) == i && @goto ret
+        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, (u >> 24) % UInt8))
+    end
+    n = ncodeunits(s)
+    # first continuation byte
+    (i += 1) > n && @goto ret
+    @inbounds b = codeunit(s, i)
+    b & 0xc0 == 0x80 || @goto ret
+    u |= UInt32(b) << 16
+    # second continuation byte
+    ((i += 1) > n) | (u < 0xe0000000) && @goto ret
+    @inbounds b = codeunit(s, i)
+    b & 0xc0 == 0x80 || @goto ret
+    u |= UInt32(b) << 8
+    # third continuation byte
+    ((i += 1) > n) | (u < 0xf0000000) && @goto ret
+    @inbounds b = codeunit(s, i)
+    b & 0xc0 == 0x80 || @goto ret
+    u |= UInt32(b)
+@label ret
+    return reinterpret(Char, u)
 end
 
 function length(s::String)
@@ -264,11 +300,8 @@ first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
 
 ## overload methods for efficiency ##
 
-isvalid(s::String, i::Integer) = thisind(s, i) == i
-
-function getindex(s::String, i::Int)
-    
-end
+isvalid(s::String, i::Int) = thisind(s, i) == i
+isvalid(s::String, i::Integer) = isvalid(s, Int(i))
 
 function search(s::String, c::Char, i::Integer = 1)
     if i < 1 || i > sizeof(s)
