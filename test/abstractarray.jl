@@ -463,7 +463,6 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     # convert{T}(::Type{Matrix}, A::AbstractMatrix{T})
     @test convert(Matrix, Y) == Y
     @test convert(Matrix, view(Y, 1:2, 1:2)) == Y
-    @test_throws MethodError convert(Matrix, X)
 end
 
 mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end

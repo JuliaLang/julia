@@ -443,6 +443,11 @@ convert(::Type{Vector{Union{}}}, a::Vector{Union{}}) = a
 
 convert(::Type{Vector}, x::AbstractVector{T}) where {T} = convert(Vector{T}, x)
 convert(::Type{Matrix}, x::AbstractMatrix{T}) where {T} = convert(Matrix{T}, x)
+function convert(::Type{Matrix}, x::Vector{T}) where {T}
+    xm = Matrix{T}(length(x), 1)
+    xm[:,1] = x[:]
+    return xm
+end
 
 convert(::Type{Array{T}}, x::Array{T,n}) where {T,n} = x
 convert(::Type{Array{T,n}}, x::Array{T,n}) where {T,n} = x
