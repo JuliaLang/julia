@@ -96,16 +96,16 @@ foldl(op, itr) = mapfoldl(identity, op, itr)
 
 ## foldr & mapfoldr
 
-function mapfoldr_impl(f, op, v0, itr, i::Integer)
+function mapfoldr_impl(f, op, v0, itr_r, i)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
-    if isempty(itr) || i == 0
+    if done(itr_r, i)
         return v0
     else
-        x = itr[i]
-        v  = op(f(x), v0)
-        while i > 1
-            x = itr[i -= 1]
+        (x, i) = next(itr_r, i)
+        v = op(f(x), v0)
+        while !done(itr_r, i)
+            @inbounds (x, i) = next(itr_r, i)
             v = op(f(x), v)
         end
         return v
@@ -118,7 +118,10 @@ end
 Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr`](@ref).
 `v0` will be used exactly once.
 """
-mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
+function mapfoldr(f, op, v0, itr)
+    itr_r = Iterators.reverse(itr)
+    mapfoldr_impl(f, op, v0, itr_r, start(itr_r))
+end
 
 """
     mapfoldr(f, op, itr)
@@ -129,11 +132,14 @@ Specifically, `mapfoldr(f, op, itr)` produces the same result as
 In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 """
 function mapfoldr(f, op, itr)
-    i = endof(itr)
-    if isempty(itr)
-        return Base.mapreduce_empty_iter(f, op, itr, iteratoreltype(itr))
+    itr_r = Iterators.reverse(itr)
+    i = start(itr_r)
+    if done(itr_r, i)
+        return Base.mapreduce_empty_iter(f, op, itr_r, iteratoreltype(itr_r))
     end
-    return mapfoldr_impl(f, op, f(itr[i]), itr, i-1)
+    (x, i) = next(itr_r, i)
+    v0 = f(x)
+    return mapfoldr_impl(f, op, v0, itr_r, i)
 end
 
 """
