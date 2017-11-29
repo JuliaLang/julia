@@ -2,6 +2,8 @@
 
 const ByteArray = Union{Vector{UInt8},Vector{Int8}}
 
+@inline between(b::T, lo::T, hi::T) where {T<:Integer} = (lo ≤ b) & (b ≤ hi)
+
 ## constructors and conversions ##
 
 # String constructor docstring from boot.jl, workaround for #16730
@@ -49,7 +51,6 @@ Convert a string to a contiguous byte array representation encoded as UTF-8 byte
 This representation is often appropriate for passing strings to C.
 """
 String(s::AbstractString) = print_to_string(s)
-
 String(s::Symbol) = unsafe_string(Cstring(s))
 
 (::Type{Vector{UInt8}})(s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
@@ -81,9 +82,7 @@ julia> s = "δ=γ"; [codeunit(s, i) for i in 1:sizeof(s)]
 codeunit(s::AbstractString, i::Integer)
 
 @inline function codeunit(s::String, i::Integer)
-    @boundscheck if (i < 1) | (i > sizeof(s))
-        throw(BoundsError(s,i))
-    end
+    @boundscheck between(i, 1, ncodeunits(s)) || throw(BoundsError(s, i))
     @gc_preserve s unsafe_load(pointer(s, i))
 end
 
@@ -120,82 +119,66 @@ end
 
 ## thisind, prevind and nextind ##
 
-# TODO: these need updating
-
-function thisind(s::String, i::Integer)
-    j = Int(i)
-    j < 1 && return 0
+function thisind(s::String, i::Int)
     n = ncodeunits(s)
-    j > n && return n + 1
-    @inbounds while j > 0 && is_valid_continuation(codeunit(s,j))
-        j -= 1
+    between(i, 2, n) || return i
+    @inbounds b = codeunit(s, i)
+    b & 0xc0 == 0x80 || return i
+    @inbounds b = codeunit(s, i-1)
+    between(b, 0b11000000, 0b11110111) && return i-1
+    (b & 0xc0 == 0x80) & (i-2 > 0) || return i
+    @inbounds b = codeunit(s, i-2)
+    between(b, 0b11100000, 0b11110111) && return i-2
+    (b & 0xc0 == 0x80) & (i-3 > 0) || return i
+    @inbounds b = codeunit(s, i-3)
+    between(b, 0b11110000, 0b11110111) && return i-3
+    return i
+end
+thisind(s::String, i::Integer) = thisind(s, Int(i))
+
+function prevind(s::String, i::Int, n::Int)
+    n > 0 || throw(ArgumentError("n must be greater than 0"))
+    i = thisind(s, i)
+    while n > 0
+        i = thisind(s, i-1)
+        n -= 1
     end
-    j
+    return i
+end
+prevind(s::String, i::Int) = thisind(s, thisind(s, i)-1)
+prevind(s::String, i::Integer, n::Integer) = prevind(s, Int(i), Int(n))
+
+function nextind(s::String, i::Int)
+    n = ncodeunits(s)
+    between(i, 1, n-1) || return i+1
+    @inbounds l = codeunit(s, i)
+    (l < 0x80) | (0xf8 ≤ l) && return i+1
+    if l < 0xc0
+        i′ = thisind(s, i)
+        return i′ < i ? nextind(s, i′) : i+1
+    end
+    # first continuation byte
+    @inbounds b = codeunit(s, i += 1)
+    (b & 0xc0 != 0x80) | ((i += 1) > n) | (l < 0xe0) && return i
+    # second continuation byte
+    @inbounds b = codeunit(s, i)
+    (b & 0xc0 != 0x80) | ((i += 1) > n) | (l < 0xf0) && return i
+    # third continuation byte
+    @inbounds b = codeunit(s, i)
+    ifelse(b & 0xc0 != 0x80, i, i+1)
 end
 
-function prevind(s::String, i::Integer)
-    j = Int(i)
-    e = sizeof(s)
-    if j > e
-        return endof(s)
+function nextind(s::String, i::Int, n::Int)
+    n > 0 || throw(ArgumentError("n must be greater than 0"))
+    i = nextind(s, i)
+    while n > 1
+        i = nextind(s, i)
+        n -= 1
     end
-    j -= 1
-    @inbounds while j > 0 && is_valid_continuation(codeunit(s,j))
-        j -= 1
-    end
-    j
+    return i
 end
-
-function prevind(s::String, i::Integer, nchar::Integer)
-    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
-    j = Int(i)
-    e = sizeof(s)
-    while nchar > 0
-        if j > e
-            j = endof(s)
-        else
-            j -= 1
-            @inbounds while j > 0 && is_valid_continuation(codeunit(s,j))
-                j -= 1
-            end
-        end
-        nchar -= 1
-        j <= 0 && return j - nchar
-    end
-    j
-end
-
-function nextind(s::String, i::Integer)
-    j = Int(i)
-    if j < 1
-        return 1
-    end
-    e = sizeof(s)
-    j += 1
-    @inbounds while j <= e && is_valid_continuation(codeunit(s,j))
-        j += 1
-    end
-    j
-end
-
-function nextind(s::String, i::Integer, nchar::Integer)
-    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
-    j = Int(i)
-    e = sizeof(s)
-    while nchar > 0
-        if j < 1
-            j = 1
-        else
-            j += 1
-            @inbounds while j <= e && is_valid_continuation(codeunit(s,j))
-                j += 1
-            end
-        end
-        nchar -= 1
-        j > e && return j + nchar
-    end
-    j
-end
+nextind(s::String, i::Integer) = nextind(s, Int(i))
+nextind(s::String, i::Integer, n::Integer) = nextind(s, Int(i), Int(n))
 
 ## checking UTF-8 & ACSII validity ##
 
@@ -214,25 +197,8 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
-@inline between(b::UInt8, lo::UInt8, hi::UInt8) = (lo ≤ b) & (b ≤ hi)
-
-function endof(s::String)
-    i = sizeof(s)
-    i > 0 || return i
-    @inbounds b = codeunit(s, i)
-    (b & 0xc0 == 0x80) & (i-1 > 0) || return i
-    @inbounds b = codeunit(s, i-1)
-    between(b, 0b11000000, 0b11110111) && return i-1
-    (b & 0xc0 == 0x80) & (i-2 > 0) || return i
-    @inbounds b = codeunit(s, i-2)
-    between(b, 0b11100000, 0b11110111) && return i-2
-    (b & 0xc0 == 0x80) & (i-3 > 0) || return i
-    @inbounds b = codeunit(s, i-3)
-    between(b, 0b11110000, 0b11110111) && return i-3
-    return i
-end
-
-done(s::String, i::Int) = i > sizeof(s)
+done(s::String, i::Int) = i > ncodeunits(s)
+endof(s::String) = thisind(s, ncodeunits(s))
 
 function next(s::String, i::Int)
     @boundscheck 1 ≤ i ≤ sizeof(s) || throw(BoundsError(s, i))
@@ -410,9 +376,7 @@ function string(a::String...)
 end
 
 # UTF-8 encoding length of a character
-function codelen(c::Char)
-    4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
-end
+codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
 
 function string(a::Union{String,Char}...)
     sprint() do io
