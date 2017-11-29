@@ -70,7 +70,7 @@ function Base.show(io::IO, t::Pass)
     if t.test_type == :test_throws
         # The correct type of exception was thrown
         print(io, "\n      Thrown: ", typeof(t.value))
-    elseif t.test_type == :test && isa(t.data, Expr)
+    elseif t.test_type == :test && t.data !== nothing
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.data)
@@ -103,7 +103,7 @@ function Base.show(io::IO, t::Fail)
         # An exception was expected, but no exception was thrown
         print(io, "\n    Expected: ", t.data)
         print(io, "\n  No exception thrown")
-    elseif t.test_type == :test && isa(t.data, Expr)
+    elseif t.test_type == :test && t.data !== nothing
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.data)
@@ -227,7 +227,10 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
     else
         throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
     end
-    Returned(res, quoted, source)
+    Returned(res,
+             # stringify arguments in case of failure, for easy remote printing
+             res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted)),
+             source)
 end
 
 const comparison_prec = Base.operator_precedence(:(==))
