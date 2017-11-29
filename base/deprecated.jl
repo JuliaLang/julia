@@ -2353,6 +2353,8 @@ end
 @deprecate logspace(start, stop)     logspace(start, stop, 50)
 
 @deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
+@deprecate push!(w::LibGit2.GitRevWalker, arg) LibGit2.push!(w, arg)
+
 
 # 24490 - warnings and messages
 const log_info_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()

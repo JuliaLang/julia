@@ -71,7 +71,7 @@ function features()
     feat = ccall((:git_libgit2_features, :libgit2), Cint, ())
     res = Consts.GIT_FEATURE[]
     for f in instances(Consts.GIT_FEATURE)
-        isset(feat, Cuint(f)) && push!(res, f)
+        isset(feat, Cuint(f)) && Base.push!(res, f)
     end
     return res
 end
