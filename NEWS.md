@@ -740,6 +740,9 @@ Deprecated or removed
 
   * `num2hex` and `hex2num` have been deprecated in favor of `reinterpret` combined with `parse`/`hex` ([#22088]).
 
+  * `copy!` is deprecated for `AbstractSet` and `AbstractDict`, with the intention to re-enable
+    it with a cleaner meaning in a future version ([#24844]).
+
   * `a:b` is deprecated for constructing a `StepRange` when `a` and `b` have physical units
     (Dates and Times). Use `a:s:b`, where `s = Dates.Day(1)` or `s = Dates.Second(1)`.
 
@@ -766,7 +769,7 @@ Deprecated or removed
     in the new `Unicode` standard library module ([#25021]).
 
   * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`,
-     `ComplexF32` and `ComplexF64` respectively (#24647).
+    `ComplexF32` and `ComplexF64` respectively ([#24647]).
 
   * `Associative` has been deprecated in favor of `AbstractDict` ([#25012]).
 

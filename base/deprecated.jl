@@ -3184,6 +3184,10 @@ info(io::IO, err::Exception; prefix="ERROR: ", kw...) =
 info(err::Exception; prefix="ERROR: ", kw...) =
     info(STDERR, err, prefix=prefix; kw...)
 
+# #24844
+@deprecate copy!(dest::AbstractSet, src) union!(dest, src)
+@deprecate copy!(dest::AbstractDict, src) foldl(push!, dest, src)
+
 # issue #24019
 @deprecate similar(a::AbstractDict) empty(a)
 @deprecate similar(a::AbstractDict, ::Type{Pair{K,V}}) where {K, V} empty(a, K, V)
