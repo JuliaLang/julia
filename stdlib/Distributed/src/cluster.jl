@@ -129,7 +129,7 @@ end
 exec_conn_func(id::Int) = exec_conn_func(worker_from_id(id))
 function exec_conn_func(w::Worker)
     try
-        f = w.conn_func
+        f = notnothing(w.conn_func)
         # Will be called if some other task tries to connect at the same time.
         w.conn_func = () -> wait_for_conn(w)
         f()
@@ -463,7 +463,7 @@ end
 
 function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launched_q)
     @sync begin
-        exename = fromconfig.exename
+        exename = notnothing(fromconfig.exename)
         exeflags = coalesce(fromconfig.exeflags, ``)
         cmd = `$exename $exeflags`
 
@@ -549,8 +549,7 @@ function create_worker(manager, wconfig)
     elseif PGRP.topology == :custom
         # wait for requested workers to be up before connecting to them.
         filterfunc(x) = (x.id != 1) && isdefined(x, :config) &&
-            (x.config.ident !== nothing) && (wconfig.connect_idents !== nothing) &&
-            (x.config.ident in wconfig.connect_idents)
+            (notnothing(x.config.ident) in coalesce(wconfig.connect_idents, []))
 
         wlist = filter(filterfunc, PGRP.workers)
         while wconfig.connect_idents !== nothing &&
@@ -1051,8 +1050,8 @@ function check_same_host(pids)
         if all(p -> (p==1) || (isa(map_pid_wrkr[p].manager, LocalManager)), pids)
             return true
         else
-            first_bind_addr = map_pid_wrkr[pids[1]].config.bind_addr
-            return all(p -> (p != 1) && (map_pid_wrkr[p].config.bind_addr == first_bind_addr), pids[2:end])
+            first_bind_addr = notnothing(map_pid_wrkr[pids[1]].config.bind_addr)
+            return all(p -> (p != 1) && (notnothing(map_pid_wrkr[p].config.bind_addr) == first_bind_addr), pids[2:end])
         end
     end
 end

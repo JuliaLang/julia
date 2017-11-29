@@ -209,7 +209,7 @@ end
 Base.done(ci::GitConfigIter, state) = state === nothing
 
 function Base.next(ci::GitConfigIter, state)
-    entry = state
+    entry = notnothing(state)
     entry_ptr_ptr = Ref{Ptr{ConfigEntry}}(C_NULL)
     err = ccall((:git_config_next, :libgit2), Cint,
                  (Ptr{Ptr{ConfigEntry}}, Ptr{Void}), entry_ptr_ptr, ci.ptr)

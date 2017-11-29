@@ -6,6 +6,7 @@ Interface to [libgit2](https://libgit2.github.com/).
 module LibGit2
 
 import Base: ==
+using Base: coalesce, notnothing
 
 export with, GitRepo, GitConfig
 

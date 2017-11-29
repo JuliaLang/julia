@@ -87,3 +87,11 @@ coalesce(x::Any) = x
 coalesce(x::Void) = nothing
 coalesce(x::Any, y...) = x
 coalesce(x::Void, y...) = coalesce(y...)
+
+"""
+    notnothing(x)
+
+Throw an error if `x == nothing`, and return `x` if not.
+"""
+notnothing(x::Any) = x
+notnothing(::Void) = throw(ArgumentError("nothing passed to notnothing"))

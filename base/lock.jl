@@ -44,7 +44,7 @@ function trylock(rl::ReentrantLock)
         rl.locked_by = t
         rl.reentrancy_cnt = 1
         return true
-    elseif t == rl.locked_by
+    elseif t == notnothing(rl.locked_by)
         rl.reentrancy_cnt += 1
         return true
     end
@@ -67,7 +67,7 @@ function lock(rl::ReentrantLock)
             rl.locked_by = t
             rl.reentrancy_cnt = 1
             return
-        elseif t == rl.locked_by
+        elseif t == notnothing(rl.locked_by)
             rl.reentrancy_cnt += 1
             return
         end

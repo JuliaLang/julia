@@ -67,3 +67,8 @@ using Base.coalesce
 @test coalesce(1, nothing, 2) === 1
 @test coalesce(nothing, nothing, 2) === 2
 @test coalesce(nothing, nothing, nothing) === nothing
+
+# notnothing()
+using Base: notnothing
+@test notnothing(1) === 1
+@test_throws ArgumentError notnothing(nothing)

@@ -2,6 +2,7 @@
 
 import Base.LibGit2: AbstractCredential, UserPasswordCredential, SSHCredential,
     CachedCredentials, CredentialPayload, Payload
+using Base: coalesce
 
 const DEFAULT_PAYLOAD = CredentialPayload(allow_ssh_agent=false, allow_git_helpers=false)
 

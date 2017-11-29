@@ -229,8 +229,8 @@ function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symb
     if op == :interrupt
         ospid = config.ospid
         if ospid !== nothing
-            host = config.host
-            sshflags = config.sshflags
+            host = notnothing(config.host)
+            sshflags = notnothing(config.sshflags)
             if !success(`ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host "kill -2 $ospid"`)
                 @error "Error sending a Ctrl-C to julia worker $id on $host"
             end
@@ -426,7 +426,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
         end
         sem = tunnel_hosts_map[pubhost]
 
-        sshflags = config.sshflags
+        sshflags = notnothing(config.sshflags)
         acquire(sem)
         try
             (s, bind_addr) = connect_to_worker(pubhost, bind_addr, port, user, sshflags)
@@ -444,7 +444,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     if config.io !== nothing
         let pid = pid
-            redirect_worker_output(pid, config.io)
+            redirect_worker_output(pid, notnothing(config.io))
         end
     end
 
@@ -452,7 +452,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 end
 
 function connect_w2w(pid::Int, config::WorkerConfig)
-    (rhost, rport) = config.connect_at
+    (rhost, rport) = notnothing(config.connect_at)
     config.host = rhost
     config.port = rport
     (s, bind_addr) = connect_to_worker(rhost, rport)
