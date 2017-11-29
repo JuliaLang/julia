@@ -82,6 +82,43 @@ julia> λ
 2-element Array{Float64,1}:
  1.0000000000000002
  2.0
+
+julia> B = Diagonal([1., 2., -3im, 4im])
+4×4 Diagonal{Complex{Float64},Array{Complex{Float64},1}}:
+ 1.0+0.0im      ⋅          ⋅          ⋅
+     ⋅      2.0+0.0im      ⋅          ⋅
+     ⋅          ⋅      0.0-3.0im      ⋅
+     ⋅          ⋅          ⋅      0.0+4.0im
+
+julia> λ, ϕ = eigs(B, nev=1, which=:LI);
+
+julia> λ
+1-element Array{Complex{Float64},1}:
+ -4.440892098500626e-16 + 3.999999999999998im
+
+julia> λ, ϕ = eigs(B, nev=1, which=:SI);
+
+julia> λ
+1-element Array{Complex{Float64},1}:
+ 1.3877787807814457e-16 - 2.999999999999999im
+
+julia> λ, ϕ = eigs(B, nev=1, which=:LR);
+
+julia> λ
+1-element Array{Complex{Float64},1}:
+ 2.0 + 4.242754940683747e-17im
+
+julia> λ, ϕ = eigs(B, nev=1, which=:SR);
+
+julia> λ
+1-element Array{Complex{Float64},1}:
+ 4.440892098500626e-16 + 4.0000000000000036im
+
+julia> λ, ϕ = eigs(B, nev=1, sigma=1.5);
+
+julia> λ
+1-element Array{Complex{Float64},1}:
+ 1.9999999999999996 + 2.4290457684137336e-17im
 ```
 
 !!! note
