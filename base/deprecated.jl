@@ -2137,6 +2137,8 @@ end
 @deprecate linspace(start, stop)     linspace(start, stop, 50)
 @deprecate logspace(start, stop)     logspace(start, stop, 50)
 
+@deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
