@@ -6225,6 +6225,17 @@ function merge_value_ssa!(ctx::AllocOptContext, info, key)
     if defkey.second || defkey.first > ctx.sv.nargs
         add_allocopt_todo(ctx, defkey)
     end
+
+    # don't replace TypedSlots with SSAValues
+    # TODO: introduce extra SSAValue for each differently-typed use.
+    if defkey.second
+        for use in info.uses
+            if isdefined(use, :expr) && use.expr.args[use.exidx] isa TypedSlot
+                return false
+            end
+        end
+    end
+
     definfo = ctx.infomap[defkey]
     for def in info.defs
         ctx.changes[def.assign] = nothing
@@ -6238,7 +6249,12 @@ function merge_value_ssa!(ctx::AllocOptContext, info, key)
     end
     for use in info.uses
         if isdefined(use, :expr)
-            use.expr.args[use.exidx] = replace_v
+            this_use = use.expr.args[use.exidx]
+            if !defkey.second && this_use isa TypedSlot
+                use.expr.args[use.exidx] = TypedSlot(replace_v.id, this_use.typ)
+            else
+                use.expr.args[use.exidx] = replace_v
+            end
             add_use(definfo, use)
         else
             # This variable is never used undef, ignore statement level use
