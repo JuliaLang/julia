@@ -89,7 +89,7 @@ output (such as images, formatted text, or even audio and video), consisting of 
     `x` (with a plain-text fallback).
   * Overloading [`show`](@ref) allows one to indicate arbitrary multimedia representations (keyed by standard
     MIME types) of user-defined types.
-  * Multimedia-capable display backends may be registered by subclassing a generic `Display` type
+  * Multimedia-capable display backends may be registered by subclassing a generic `AbstractDisplay` type
     and pushing them onto a stack of display backends via [`pushdisplay`](@ref).
 
 The base Julia runtime provides only plain-text display, but richer displays may be enabled by
@@ -111,7 +111,7 @@ PNG images in a window can register this capability with Julia, so that calling 
 types with PNG representations will automatically display the image using the module's window.
 
 In order to define a new display backend, one should first create a subtype `D` of the abstract
-class `Display`.  Then, for each MIME type (`mime` string) that can be displayed on `D`, one should
+class `AbstractDisplay`.  Then, for each MIME type (`mime` string) that can be displayed on `D`, one should
 define a function `display(d::D, ::MIME"mime", x) = ...` that displays `x` as that MIME type,
 usually by calling [`reprmime(mime, x)`](@ref).  A `MethodError` should be thrown if `x` cannot be displayed
 as that MIME type; this is automatic if one calls [`reprmime`](@ref). Finally, one should define a function

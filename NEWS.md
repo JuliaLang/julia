@@ -536,6 +536,8 @@ Deprecated or removed
 
   * The unexported type `AbstractIOBuffer` has been renamed to `GenericIOBuffer` ([#17360] [#22796]).
 
+  * `Display` has been renamed to `AbstractDisplay` ([#24831]).
+
   * Remaining vectorized methods over `SparseVector`s, particularly `floor`, `ceil`,
     `trunc`, `round`, and most common transcendental functions such as `exp`, `log`, and
     `sin` variants, have been deprecated in favor of dot-syntax ([#22961]).
