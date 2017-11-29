@@ -14,7 +14,7 @@ export
     StreamREPL
 
 import Base:
-    Display,
+    AbstractDisplay,
     display,
     show,
     AnyDict,
@@ -113,7 +113,7 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
-struct REPLDisplay{R<:AbstractREPL} <: Display
+struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
     repl::R
 end
 
@@ -271,7 +271,7 @@ mutable struct LineEditREPL <: AbstractREPL
     in_help::Bool
     envcolors::Bool
     waserror::Bool
-    specialdisplay::Union{Void,Display}
+    specialdisplay::Union{Void,AbstractDisplay}
     options::Options
     interface::ModalInterface
     backendref::REPLBackendRef

@@ -2138,6 +2138,9 @@ finalizer(f::Ptr{Void}, o::Function) = invoke(finalizer, Tuple{Ptr{Void}, Any}, 
     Base.@deprecate_binding broadcast_t broadcast false ", broadcast_t(f, ::Type{ElType}, shape, iter, As...)` should become `broadcast(f, Broadcast.DefaultArrayStyle{N}(), ElType, shape, As...))` (see the manual chapter Interfaces)"
 end
 
+# issue #24822
+@deprecate_binding Display AbstractDisplay
+
 # issue #24794
 @deprecate linspace(start, stop)     linspace(start, stop, 50)
 @deprecate logspace(start, stop)     logspace(start, stop, 50)

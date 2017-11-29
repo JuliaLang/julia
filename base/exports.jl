@@ -1054,7 +1054,7 @@ export
     UDPSocket,
 
 # multimedia I/O
-    Display,
+    AbstractDisplay,
     display,
     displayable,
     TextDisplay,
