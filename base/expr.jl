@@ -196,7 +196,7 @@ Do not use if the function involved:
 - Recurses
 - Does not return exactly (`===`) the same result for the same input
 - Gets its methods extended after it is called
-- Uses dispatch on one of its arguments
+- Uses dispatch on any of its arguments
 
 """
 macro pure(ex)
