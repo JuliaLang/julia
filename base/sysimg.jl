@@ -497,6 +497,13 @@ Base.require(:SharedArrays)
 Base.require(:SuiteSparse)
 Base.require(:Test)
 
+@eval Base begin
+    @deprecate_binding Test root_module(:Test) true ", run `using Test` instead"
+    @deprecate_binding Mmap root_module(:Mmap) true ", run `using Mmap` instead"
+    @deprecate_binding Profile root_module(:Profile) true ", run `using Profile` instead"
+    @deprecate_binding Dates root_module(:Dates) true ", run `using Dates` instead"
+end
+
 empty!(LOAD_PATH)
 
 Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")
