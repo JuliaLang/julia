@@ -283,6 +283,7 @@ static void ti_initthread(int16_t tid)
         abort();
     }
     ptls->bt_data = (uintptr_t*)bt_data;
+    ptls->julia_bt = NULL;
     jl_init_thread_heap(ptls);
     jl_install_thread_signal_handler(ptls);
 

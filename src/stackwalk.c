@@ -139,11 +139,16 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
     return bt;
 }
 
-JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
+JL_DLLEXPORT void jl_get_backtrace(jl_value_t **btout, jl_value_t **bt2out)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_array_t *bt = NULL;
     jl_array_t *bt2 = NULL;
+    if (ptls->julia_bt != NULL) {
+        *btout = ptls->julia_bt;
+        *bt2out = jl_nothing;
+        return;
+    }
     JL_GC_PUSH2(&bt, &bt2);
     if (array_ptr_void_type == NULL) {
         array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
@@ -160,11 +165,16 @@ JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
         }
         n++;
     }
-    *btout = bt;
-    *bt2out = bt2;
+    *btout = (jl_value_t*)bt;
+    *bt2out = (jl_value_t*)bt2;
     JL_GC_POP();
 }
 
+void jl_clear_backtrace(jl_ptls_t ptls)
+{
+    ptls->bt_size = 0;
+    ptls->julia_bt = NULL;
+}
 
 #if defined(_OS_WINDOWS_)
 #ifdef _CPU_X86_64_

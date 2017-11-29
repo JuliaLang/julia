@@ -71,3 +71,33 @@ end
     @test retry(foo_kwargs)(3) == 8
     @test retry(foo_kwargs)(3; y=4) == 7
 end
+
+# issue #19979
+@noinline function f19979()
+    throw("Error in f()!")
+end
+
+function test19979()
+    try
+        f19979()
+    catch e
+        bt = catch_backtrace()
+        yield()
+        try
+            throw(InterruptException())
+        catch
+        end
+        throw(e, bt)
+    end
+end
+
+@test_throws "Error in f()!" test19979()
+try
+    test19979()
+catch
+    bt = catch_backtrace()
+    @test any(f -> let lkup = Base.StackTraces.lookup(f)
+                  !isempty(lkup) && lkup[1].func === :f19979
+              end,
+              bt)
+end

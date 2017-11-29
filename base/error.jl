@@ -2,14 +2,10 @@
 
 # pseudo-definitions to show how everything behaves
 #
-# throw(label, val) = # throw a value to a dynamically enclosing block
-#
 # function rethrow(val)
 #     global current_exception = val
 #     throw(current_handler(), current_exception)
 # end
-#
-# rethrow() = rethrow(current_exception)
 #
 # function throw(val)
 #     global catch_backtrace = backtrace()
@@ -17,9 +13,10 @@
 # end
 
 """
-    throw(e)
+    throw(e[, backtrace])
 
-Throw an object as an exception.
+Throw an object as an exception, optionally specifying a backtrace object (from
+`catch_backtrace` or `backtrace`) specifying the location of the error.
 """
 throw
 
@@ -45,12 +42,12 @@ function error(s::Vararg{Any,N}) where {N}
 end
 
 """
-    rethrow([e])
+    rethrow(e)
 
-Throw an object without changing the current exception backtrace. The default argument is
-the current exception (if called within a `catch` block).
+Throw an object without changing the current exception backtrace.
+This is fragile, as intervening code may cause the current exception backtrace to change.
+Therefore `throw(e, bt)` is recommended instead.
 """
-rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 
 struct InterpreterIP
@@ -90,6 +87,9 @@ function catch_backtrace()
     bt = Ref{Any}(nothing)
     bt2 = Ref{Any}(nothing)
     ccall(:jl_get_backtrace, Void, (Ref{Any}, Ref{Any}), bt, bt2)
+    if bt2[] === nothing
+        return bt[]
+    end
     return _reformat_bt(bt[], bt2[])
 end
 

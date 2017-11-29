@@ -276,7 +276,7 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
         if isa(err, GitError) && err.code == Error.EAUTH
             reject(payload)
         end
-        rethrow()
+        rethrow(err)
     finally
         close(rmt)
     end
@@ -318,7 +318,7 @@ function push(repo::GitRepo; remote::AbstractString="origin",
         if isa(err, GitError) && err.code == Error.EAUTH
             reject(payload)
         end
-        rethrow()
+        rethrow(err)
     finally
         close(rmt)
     end
@@ -538,7 +538,7 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
             if isa(err, GitError) && err.code == Error.EAUTH
                 reject(payload)
             end
-            rethrow()
+            rethrow(err)
         end
     end
     approve(payload)
@@ -902,9 +902,9 @@ state of `repo` will not be corrupted.
 """
 function transact(f::Function, repo::GitRepo)
     state = snapshot(repo)
-    try f(repo) catch
+    try f(repo) catch e
         restore(state, repo)
-        rethrow()
+        rethrow(e)
     finally
         close(repo)
     end

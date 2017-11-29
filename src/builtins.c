@@ -434,8 +434,11 @@ JL_CALLABLE(jl_f_typeassert)
 
 JL_CALLABLE(jl_f_throw)
 {
-    JL_NARGS(throw, 1, 1);
-    jl_throw(args[0]);
+    JL_NARGS(throw, 1, 2);
+    if (nargs == 2)
+        jl_throw_with_bt(args[0], args[1]);
+    else
+        jl_throw(args[0]);
     return jl_nothing;
 }
 

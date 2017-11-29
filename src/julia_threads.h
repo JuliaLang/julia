@@ -109,6 +109,8 @@ struct _jl_tls_states_t {
     size_t bt_size;
     // JL_MAX_BT_SIZE + 1 elements long
     uintptr_t *bt_data;
+    // a julia object representation of the backtrace data, if we have one
+    struct _jl_value_t *julia_bt;
     // Atomically set by the sender, reset by the handler.
     volatile sig_atomic_t signal_request;
     // Allow the sigint to be raised asynchronously

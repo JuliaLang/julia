@@ -47,9 +47,9 @@ function wait(c::Condition)
 
     try
         return wait()
-    catch
+    catch ex
         filter!(x->x!==ct, c.waitq)
-        rethrow()
+        rethrow(ex)
     end
 end
 

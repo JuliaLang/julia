@@ -313,7 +313,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
 #endif
     if (!jl_setjmp(ptls->current_task->ctx, 0)) {
         // backtraces don't survive task switches, see e.g. issue #12485
-        ptls->bt_size = 0;
+        jl_clear_backtrace(ptls);
         jl_task_t *lastt = ptls->current_task;
 #ifdef COPY_STACKS
         save_stack(ptls, lastt, pt); // allocates (gc-safepoint, and can also fail)
@@ -586,6 +586,13 @@ JL_DLLEXPORT void jl_rethrow(void)
 
 JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e)
 {
+    throw_internal(e);
+}
+
+JL_DLLEXPORT void jl_throw_with_bt(jl_value_t *e, jl_value_t *bt)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->julia_bt = bt;
     throw_internal(e);
 }
 
