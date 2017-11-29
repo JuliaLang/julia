@@ -125,7 +125,7 @@ copy(src::MersenneTwister) =
     r1.seed == r2.seed && r1.state == r2.state && isequal(r1.vals, r2.vals) &&
     r1.idx == r2.idx
 
-hash(r::MersenneTwister, h::UInt) = foldr(hash, h, (r.seed, r.state, r.vals, r.idx))
+hash(r::MersenneTwister, h::UInt) = reduce(hash, (r.seed, r.state, r.vals, r.idx, h))
 
 
 ### low level API
