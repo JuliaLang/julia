@@ -240,7 +240,7 @@ function getindex(s::String, i::Int)
     # TODO: check index validity
     u = UInt32(b) << 24
     (b < 0x80) | (0xf8 ≤ b) && return reinterpret(Char, u)
-    return next_continued(s, i, u)
+    return getindex_continued(s, i, u)
 end
 
 @noinline function getindex_continued(s::String, i::Int, u::UInt32)
@@ -300,7 +300,7 @@ first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
 
 ## overload methods for efficiency ##
 
-isvalid(s::String, i::Int) = thisind(s, i) == i
+isvalid(s::String, i::Int) = 1 ≤ i ≤ ncodeunits(s) && thisind(s, i) == i
 isvalid(s::String, i::Integer) = isvalid(s, Int(i))
 
 function search(s::String, c::Char, i::Integer = 1)

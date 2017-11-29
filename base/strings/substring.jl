@@ -26,8 +26,12 @@ struct SubString{T<:AbstractString} <: AbstractString
 
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
         i > j && return new(s, i - 1, 0) # always allow i > j as it is consistent with getindex
-        isvalid(s, i) || throw(BoundsError(s, i))
-        isvalid(s, j) || throw(BoundsError(s, j))
+        start(s) ≤ i      || throw(BoundsError(s, i))
+        j ≤ ncodeunits(s) || throw(BoundsError(s, j))
+        @inbounds isvalid(s, i) ||
+            throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s, i)))
+        @inbounds isvalid(s, j) ||
+            throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, codeunit(s, j)))
         new(s, i-1, j-i+1)
     end
 end
