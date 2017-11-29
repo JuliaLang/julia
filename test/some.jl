@@ -55,3 +55,15 @@
 @test get(Some(1), 0) === 1
 @test get(Some(nothing), 0) === nothing
 @test get(nothing, 0) === 0
+
+# coalesce()
+using Base.coalesce
+@test coalesce(1) === 1
+@test coalesce(nothing) === nothing
+@test coalesce(nothing, 1) === 1
+@test coalesce(1, nothing) === 1
+@test coalesce(nothing, nothing) === nothing
+@test coalesce(nothing, 1, 2) === 1
+@test coalesce(1, nothing, 2) === 1
+@test coalesce(nothing, nothing, 2) === 2
+@test coalesce(nothing, nothing, nothing) === nothing

@@ -450,7 +450,7 @@ function setup_launched_worker(manager, wconfig, launched_q)
     # When starting workers on remote multi-core hosts, `launch` can (optionally) start only one
     # process on the remote machine, with a request to start additional workers of the
     # same type. This is done by setting an appropriate value to `WorkerConfig.cnt`.
-    cnt = wconfig.count === nothing ? 1 : wconfig.count
+    cnt = coalesce(wconfig.count, 1)
     if cnt === :auto
         cnt = wconfig.environ[:cpu_cores]
     end
@@ -465,7 +465,7 @@ end
 function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launched_q)
     @sync begin
         exename = fromconfig.exename
-        exeflags = fromconfig.exeflags === nothing ? `` : fromconfig.exeflags
+        exeflags = coalesce(fromconfig.exeflags, ``)
         cmd = `$exename $exeflags`
 
         new_addresses = remotecall_fetch(launch_additional, frompid, cnt, cmd)
@@ -567,11 +567,11 @@ function create_worker(manager, wconfig)
     end
 
     all_locs = map(x -> isa(x, Worker) ?
-                   ((x.config.connect_at === nothing ? () : x.config.connect_at), x.id) :
+                   (coalesce(x.config.connect_at, ()), x.id) :
                    ((), x.id, true),
                    join_list)
     send_connection_hdr(w, true)
-    enable_threaded_blas = wconfig.enable_threaded_blas === nothing ? false : wconfig.enable_threaded_blas
+    enable_threaded_blas = coalesce(wconfig.enable_threaded_blas, false)
     join_message = JoinPGRPMsg(w.id, all_locs, PGRP.topology, enable_threaded_blas, isclusterlazy())
     send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), join_message)
 
@@ -690,7 +690,7 @@ function topology(t)
     t
 end
 
-isclusterlazy() = PGRP.lazy === nothing ? false : PGRP.lazy
+isclusterlazy() = coalesce(PGRP.lazy, false)
 
 get_bind_addr(pid::Integer) = get_bind_addr(worker_from_id(pid))
 get_bind_addr(w::LocalProcess) = LPROC.bind_addr

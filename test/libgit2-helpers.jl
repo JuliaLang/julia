@@ -28,7 +28,7 @@ function credential_loop(
     err = Cint(0)
     while err == 0
         err = ccall(cb, Cint, (Ptr{Ptr{Void}}, Cstring, Cstring, Cuint, Any),
-                    libgitcred_ptr_ptr, url, user === nothing ? C_NULL : user,
+                    libgitcred_ptr_ptr, url, coalesce(user, C_NULL),
                     allowed_types, payload)
         num_authentications += 1
 

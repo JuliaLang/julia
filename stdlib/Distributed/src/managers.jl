@@ -227,8 +227,8 @@ end
 
 function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symbol)
     if op == :interrupt
-        ospid = config.ospid === nothing ? 0 : config.ospid
-        if ospid > 0
+        ospid = config.ospid
+        if ospid !== nothing
             host = config.host
             sshflags = config.sshflags
             if !success(`ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host "kill -2 $ospid"`)
@@ -395,16 +395,16 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     # master connecting to workers
     if config.io !== nothing
         (bind_addr, port) = read_worker_host_port(config.io)
-        pubhost = config.host === nothing ? bind_addr : config.host
+        pubhost = coalesce(config.host, bind_addr)
         config.host = pubhost
         config.port = port
     else
-        pubhost = config.host
-        port = config.port
-        bind_addr = config.bind_addr === nothing ? pubhost : config.bind_addr
+        pubhost = notnothing(config.host)
+        port = notnothing(config.port)
+        bind_addr = coalesce(config.bind_addr, pubhost)
     end
 
-    tunnel = config.tunnel === nothing ? false : config.tunnel
+    tunnel = coalesce(config.tunnel, false)
 
     s = split(pubhost,'@')
     user = ""
@@ -422,8 +422,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     if tunnel
         if !haskey(tunnel_hosts_map, pubhost)
-            tunnel_hosts_map[pubhost] = Semaphore(config.max_parallel === nothing ?
-                                                  typemax(Int) : config.max_parallel)
+            tunnel_hosts_map[pubhost] = Semaphore(coalesce(config.max_parallel, typemax(Int)))
         end
         sem = tunnel_hosts_map[pubhost]
 

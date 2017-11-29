@@ -188,8 +188,8 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayl
         git_cred = GitCredential(p.config, p.url)
 
         # Use `deepcopy` to ensure zeroing the `git_cred` doesn't also zero the `cred`s copy
-        cred.user = deepcopy(git_cred.username === nothing ? "" : git_cred.username)
-        cred.pass = deepcopy(git_cred.password === nothing ? "" : git_cred.password)
+        cred.user = deepcopy(coalesce(git_cred.username, ""))
+        cred.pass = deepcopy(coalesce(git_cred.password, ""))
         securezero!(git_cred)
         revised = true
 
@@ -274,8 +274,8 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
         p.url = unsafe_string(url_ptr)
         m = match(URL_REGEX, p.url)
 
-        p.scheme = m[:scheme] === nothing ? "" : m[:scheme]
-        p.username = m[:user] === nothing ? "" : m[:user]
+        p.scheme = coalesce(m[:scheme], "")
+        p.username = coalesce(m[:user], "")
         p.host = m[:host]
 
         # When an explicit credential is supplied we will make sure to use the given

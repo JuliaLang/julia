@@ -60,3 +60,30 @@ function get end
 get(x::Some) = x.value
 get(x::Some, y) = x.value
 get(x::Void, y) = y
+
+"""
+    coalesce(x, y...)
+
+Return the first value in the arguments which is not equal to `nothing`,
+or `nothing` if all arguments are `nothing`.
+
+# Examples
+
+```jldoctest
+julia> coalesce(nothing, 1)
+1
+
+julia> coalesce(1, nothing)
+1
+
+julia> coalesce(nothing, nothing)
+nothing
+
+```
+"""
+function coalesce end
+
+coalesce(x::Any) = x
+coalesce(x::Void) = nothing
+coalesce(x::Any, y...) = x
+coalesce(x::Void, y...) = coalesce(y...)

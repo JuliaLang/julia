@@ -65,10 +65,10 @@ function ismatch(url::AbstractString, git_cred::GitCredential)
     m === nothing && error("Unable to parse URL")
 
     # Note: missing URL groups match anything
-    (m[:scheme] === nothing ? true : isequal(m[:scheme], git_cred.protocol)) &&
-    (m[:host] === nothing ? true : isequal(m[:host], git_cred.host)) &&
-    (m[:path] === nothing ? true : isequal(m[:path], git_cred.path)) &&
-    (m[:user] === nothing ? true : isequal(m[:user], git_cred.username))
+    (m[:scheme] === nothing ? true : m[:scheme] == git_cred.protocol) &&
+    (m[:host] === nothing ? true : m[:host] == git_cred.host) &&
+    (m[:path] === nothing ? true : m[:path] == git_cred.path) &&
+    (m[:user] === nothing ? true : m[:user] == git_cred.username)
 end
 
 function isfilled(cred::GitCredential)
