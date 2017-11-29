@@ -862,6 +862,35 @@ function push!(a::Array{Any,1}, @nospecialize item)
 end
 
 """
+    push(coll, items...)
+
+Create a new collection containing all the elements from `coll` (in the same order
+for ordered collections) plus the provided new `items` (inserted at the end
+for ordered collections).
+
+# Examples
+```jldoctest
+julia> a = [1, 2]; push(a, 3, 4)
+
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+
+julia> a
+2-element Array{Int64,1}:
+ 1
+ 2
+```
+"""
+function push end
+
+push(a::Union{Vector,Associative,AbstractSet}, item) = push!(copy(a), item)
+push(a::Union{Vector,Associative,AbstractSet}, items...) = push!(copy(a), items...)
+
+
+"""
     append!(collection, collection2) -> collection.
 
 Add the elements of `collection2` to the end of `collection`.

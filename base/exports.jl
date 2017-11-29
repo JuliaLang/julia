@@ -467,6 +467,7 @@ export
     pop!,
     prepend!,
     push!,
+    push,
     resize!,
     popfirst!,
     pushfirst!,

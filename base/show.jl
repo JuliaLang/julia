@@ -269,6 +269,7 @@ short
 ```
 """
 IOContext(io::IO, KV::Pair, KVs::Pair...) = IOContext(IOContext(io, KV), KVs...)
+push(io::IO, KVs::Pair...) = IOContext(io, KVs...)
 
 show(io::IO, ctx::IOContext) = (print(io, "IOContext("); show(io, ctx.io); print(io, ")"))
 
