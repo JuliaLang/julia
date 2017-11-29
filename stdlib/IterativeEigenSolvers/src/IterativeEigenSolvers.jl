@@ -65,6 +65,8 @@ final residual vector `resid`.
 
 # Examples
 ```jldoctest
+julia> using IterativeEigenSolvers
+
 julia> A = Diagonal(1:4);
 
 julia> λ, ϕ = eigs(A, nev = 2);
@@ -73,6 +75,13 @@ julia> λ
 2-element Array{Float64,1}:
  4.0
  3.0
+
+julia> λ, ϕ = eigs(A, nev = 2, which=:SM);
+
+julia> λ
+2-element Array{Float64,1}:
+ 1.0000000000000002
+ 2.0
 ```
 
 !!! note
