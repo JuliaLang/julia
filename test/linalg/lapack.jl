@@ -207,10 +207,12 @@ end
 
 @testset "gels" begin
     @testset for elty in (Float32, Float64, Complex64, Complex128)
-        A = rand(elty,10,10)
-        X = rand(elty,10)
-        B,Y,z = LAPACK.gels!('N',copy(A),copy(X))
-        @test A\X ≈ Y
+        guardsrand(913) do
+            A = rand(elty,10,10)
+            X = rand(elty,10)
+            B,Y,z = LAPACK.gels!('N',copy(A),copy(X))
+            @test A\X ≈ Y
+        end
     end
 end
 
