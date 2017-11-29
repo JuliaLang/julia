@@ -64,6 +64,7 @@ Base.LinAlg.svdfact
 Base.LinAlg.svdfact!
 Base.LinAlg.svd
 Base.LinAlg.svdvals
+Base.LinAlg.svdvals!
 Base.LinAlg.Givens
 Base.LinAlg.givens
 Base.LinAlg.triu

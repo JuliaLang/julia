@@ -12,7 +12,27 @@ Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty} =
 """
     schurfact!(A::StridedMatrix) -> F::Schur
 
-Same as [`schurfact`](@ref) but uses the input argument as workspace.
+Same as [`schurfact`](@ref) but uses the input argument `A` as workspace.
+
+# Examples
+```jldoctest
+julia> A = [5. 7.; -2. -4.]
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> F = schurfact!(A)
+Base.LinAlg.Schur{Float64,Array{Float64,2}} with factors T and Z:
+[3.0 9.0; 0.0 -2.0]
+[0.961524 0.274721; -0.274721 0.961524]
+and values:
+[3.0, -2.0]
+
+julia> A
+2×2 Array{Float64,2}:
+ 3.0   9.0
+ 0.0  -2.0
+```
 """
 schurfact!(A::StridedMatrix{<:BlasFloat}) = Schur(LinAlg.LAPACK.gees!('V', A)...)
 
