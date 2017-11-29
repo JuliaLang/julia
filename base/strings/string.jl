@@ -136,18 +136,6 @@ function thisind(s::String, i::Int)
 end
 thisind(s::String, i::Integer) = thisind(s, Int(i))
 
-function prevind(s::String, i::Int, n::Int)
-    n > 0 || throw(ArgumentError("n must be greater than 0"))
-    i = thisind(s, i)
-    while n > 0
-        i = thisind(s, i-1)
-        n -= 1
-    end
-    return i
-end
-prevind(s::String, i::Int) = thisind(s, thisind(s, i)-1)
-prevind(s::String, i::Integer, n::Integer) = prevind(s, Int(i), Int(n))
-
 function nextind(s::String, i::Int)
     n = ncodeunits(s)
     between(i, 1, n-1) || return i+1
@@ -167,18 +155,7 @@ function nextind(s::String, i::Int)
     @inbounds b = codeunit(s, i)
     ifelse(b & 0xc0 != 0x80, i, i+1)
 end
-
-function nextind(s::String, i::Int, n::Int)
-    n > 0 || throw(ArgumentError("n must be greater than 0"))
-    i = nextind(s, i)
-    while n > 1
-        i = nextind(s, i)
-        n -= 1
-    end
-    return i
-end
 nextind(s::String, i::Integer) = nextind(s, Int(i))
-nextind(s::String, i::Integer, n::Integer) = nextind(s, Int(i), Int(n))
 
 ## checking UTF-8 & ACSII validity ##
 
@@ -269,13 +246,13 @@ end
 end
 
 function length(s::String)
-    i = l = 0
+    i = c = 0
     n = ncodeunits(s)
     while true
         (i += 1) ≤ n || break
         @inbounds b = codeunit(s, i) # lead byte
     @label L
-        l += 1
+        c += 1
         (0xc0 ≤ b) & (b < 0xf8) || continue
         l = b
 
@@ -293,7 +270,7 @@ function length(s::String)
         @inbounds b = codeunit(s, i) # cont byte 3
         b & 0xc0 == 0x80 || @goto L
     end
-    return l
+    return c
 end
 
 first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8

@@ -266,14 +266,8 @@ julia> thisind("αβγdef", 10)
 julia> thisind("αβγdef", 20)
 10
 """
-function thisind(s::AbstractString, i::Integer)
-    j = Int(i)
-    isvalid(s, j) && return j
-    j < start(s) && return 0
-    n = ncodeunits(s)
-    j > n && return n + 1
-    prevind(s, j)
-end
+thisind(s::AbstractString, i::Integer) =
+    (start(s) ≤ i ≤ ncodeunits(s)) ⊻ isvalid(s, i) ? prevind(s, i) : i
 
 """
     prevind(str::AbstractString, i::Integer, nchar::Integer=1)
@@ -295,38 +289,17 @@ julia> prevind("αβγdef", 3, 2)
 ```
 """
 function prevind(s::AbstractString, i::Integer)
-    e = endof(s)
-    if i > e
-        return e
-    end
-    j = Int(i)-1
-    while j >= 1
-        if isvalid(s,j)
-            return j
-        end
-        j -= 1
-    end
-    return 0 # out of range
+    j = thisind(s, i)
+    j < i ? j : thisind(s, i-1)
 end
 
-function prevind(s::AbstractString, i::Integer, nchar::Integer)
-    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
-    e = endof(s)
-    j = Int(i)
-    j < 1 && return 0
-    while nchar > 0
-        if j > e
-            j = e
-        else
-            j -= 1
-            while j >= 1 && !isvalid(s,j)
-                j -= 1
-            end
-        end
-        j < 1 && return 0
-        nchar -= 1
+function prevind(s::AbstractString, i::Integer, n::Integer)
+    n > 0 || throw(ArgumentError("n must be greater than 0"))
+    i = prevind(s, i)
+    while (n -= 1) > 0
+        i = prevind(s, i)
     end
-    j
+    return i
 end
 
 """
@@ -353,39 +326,15 @@ julia> nextind(str, 9)
 10
 ```
 """
-function nextind(s::AbstractString, i::Integer)
-    e = endof(s)
-    if i < 1
-        return 1
-    end
-    if i > e
-        return Int(i)+1
-    end
-    for j = Int(i)+1:e
-        if isvalid(s,j)
-            return j
-        end
-    end
-    next(s,e)[2] # out of range
-end
+nextind(s::AbstractString, i::Integer) = next(s, Int(i))[2]
 
-function nextind(s::AbstractString, i::Integer, nchar::Integer)
-    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
-    e = endof(s)
-    j = Int(i)
-    while nchar > 0
-        if j < 1
-            j = 1
-        else
-            j > e && return j + nchar
-            j == e && return next(s,e)[2] + nchar - 1
-            for outer j = j+1:e
-                isvalid(s,j) && break
-            end
-        end
-        nchar -= 1
+function nextind(s::AbstractString, i::Integer, n::Integer)
+    n > 0 || throw(ArgumentError("n must be greater than 0"))
+    i = nextind(s, i)
+    while (n -= 1) > 0
+        i = nextind(s, i)
     end
-    j
+    return i
 end
 
 checkbounds(s::AbstractString, i::Integer) =

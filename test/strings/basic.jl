@@ -491,7 +491,7 @@ end
     @test_throws ArgumentError ascii(GenericString("Hello, ∀"))
 end
 @testset "issue #17271: endof() doesn't throw an error even with invalid strings" begin
-    @test endof(String(b"\x90")) == 0
+    @test endof(String(b"\x90")) == 1
     @test endof(String(b"\xce")) == 1
 end
 # issue #17624, missing getindex method for String
@@ -573,7 +573,7 @@ end
                    SubString("123∀α>β:α+1>β123", 4, 18),
                    SubString(s"123∀α>β:α+1>β123", 4, 18)]
         for s in strs
-            @test thisind(s, -2) == 0
+            @test thisind(s, -2) == -2
             @test thisind(s, 0) == 0
             @test thisind(s, 1) == 1
             @test thisind(s, 2) == 1
@@ -584,13 +584,13 @@ end
             @test thisind(s, 15) == 15
             @test thisind(s, 16) == 15
             @test thisind(s, 17) == 17
-            @test thisind(s, 30) == 17
+            @test thisind(s, 30) == 30
         end
     end
 
     let strs = Any["", s"", SubString("123", 2, 1), SubString(s"123", 2, 1)]
         for s in strs, i in -2:2
-            @test thisind(s, i) == (i > 0)
+            @test thisind(s, i) == i
         end
     end
 end
@@ -615,17 +615,18 @@ end
             @test prevind(strs[i], 15, 4) == 10
             @test prevind(strs[i], 15, 10) == 0
             @test prevind(strs[i], 15, 9) == 1
-            @test prevind(strs[i], 15, 10) == 0
             @test prevind(strs[i], 16) == 15
             @test prevind(strs[i], 16, 1) == 15
             @test prevind(strs[i], 16, 2) == 14
-            @test prevind(strs[i], 20) == 15
-            @test prevind(strs[i], 20, 1) == 15
-            @test prevind(strs[i], 20, 10) == 1
+            @test prevind(strs[i], 20) == 19
+            @test prevind(strs[i], 20, 1) == 19
+            @test prevind(strs[i], 20, 10) == 7
             @test_throws ArgumentError prevind(strs[i], 20, 0)
 
-            @test nextind(strs[i], -1) == 1
-            @test nextind(strs[i], -1, 1) == 1
+            @test nextind(strs[i], -1) == 0
+            @test nextind(strs[i], -1, 1) == 0
+            @test nextind(strs[i], -1, 2) == 1
+            @test nextind(strs[i], -1, 3) == 4
             @test nextind(strs[i], 0, 2) == 4
             @test nextind(strs[i], 0, 20) == 26
             @test nextind(strs[i], 0, 10) == 15
