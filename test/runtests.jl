@@ -1,6 +1,8 @@
 using Compat
 using Compat.Test
 
+const struct_sym = VERSION < v"0.7.0-DEV.1263" ? :type : :struct
+
 # Issue #291
 # 0.6
 @test (1, 2) == @compat abs.((1, -2))
@@ -338,13 +340,15 @@ end
 @test !iszero([0, 1, 2, 3])
 @test iszero([0, 0, 0, 0])
 
-x = view(1:10, 2:4)
-D = Diagonal(x)
-@test D[1,1] == 2
-@test D[3,3] == 4
-A = view(rand(5,5), 1:3, 1:3)
-@test D*A == Diagonal(copy(x)) * copy(A)
-@test A*D == copy(A) * Diagonal(copy(x))
+let
+    x = view(1:10, 2:4)
+    D = Diagonal(x)
+    @test D[1,1] == 2
+    @test D[3,3] == 4
+    A = view(rand(5,5), 1:3, 1:3)
+    @test D*A == Diagonal(copy(x)) * copy(A)
+    @test A*D == copy(A) * Diagonal(copy(x))
+end
 
 # julia#17623
 # 0.6
@@ -365,11 +369,11 @@ end
 # julia#20006
 @compat abstract type AbstractFoo20006 end
 eval(Expr(
-    :type, false,
+    struct_sym, false,
     Expr(:(<:), :(ConcreteFoo20006{T<:Int}), :AbstractFoo20006),
     quote end))
 eval(Expr(
-    :type, false,
+    struct_sym, false,
     Expr(:(<:), :(ConcreteFoo20006N{T<:Int,N}), :AbstractFoo20006),
     quote end))
 @compat ConcreteFoo200061{T<:Int} = ConcreteFoo20006N{T,1}
@@ -541,20 +545,21 @@ f20500_2() = A20500_2
 @inferred f20500_2()
 
 module CompatArray
-using Compat
-eval(Expr(
-    :type, false,
-    Expr(:(<:), :(CartesianArray{T,N}), :(AbstractArray{T,N})),
-    quote
-        parent::Array{T,N}
-    end))
-eval(Expr(
-    :type, false,
-    Expr(:(<:), :(LinearArray{T,N}), :(AbstractArray{T,N})),
-    quote
-        parent::Array{T,N}
-    end))
-@compat Base.IndexStyle(::Type{<:LinearArray}) = IndexLinear()
+    using Compat
+    const struct_sym = VERSION < v"0.7.0-DEV.1263" ? :type : :struct
+    eval(Expr(
+        struct_sym, false,
+        Expr(:(<:), :(CartesianArray{T,N}), :(AbstractArray{T,N})),
+        quote
+            parent::Array{T,N}
+        end))
+    eval(Expr(
+        struct_sym, false,
+        Expr(:(<:), :(LinearArray{T,N}), :(AbstractArray{T,N})),
+        quote
+            parent::Array{T,N}
+        end))
+    @compat Base.IndexStyle(::Type{<:LinearArray}) = IndexLinear()
 end
 @test IndexStyle(Array{Float32,2}) === IndexLinear()
 @test IndexStyle(CompatArray.CartesianArray{Float32,2}) === IndexCartesian()
@@ -564,14 +569,14 @@ let a = CompatArray.CartesianArray(rand(2,3)), b = CompatArray.LinearArray(rand(
     @test IndexStyle(b) === IndexLinear()
 end
 
-for (A,val) in ((zeros(1:5, Float32, 3, 2), 0),
-                (ones(1:5, Float32, 3, 2), 1),
-                (zeros(1:5, Float32, (3, 2)), 0),
-                (ones(1:5, Float32, (3, 2)), 1))
+for (A,val) in ((fill!(Array{Float32}(3, 2), 0), 0),
+                (fill!(Array{Float32}(3, 2), 1), 1),
+                (fill!(Array{Float32}(3, 2), 0), 0),
+                (fill!(Array{Float32}(3, 2), 1), 1))
     @test isa(A, Matrix{Float32}) && size(A) == (3,2) && all(x->x==val, A)
 end
-for (A,val) in ((zeros(1:5, Float32), 0),
-                (ones(1:5, Float32), 1))
+for (A,val) in ((fill!(Array{Float32}(5), 0), 0),
+                (fill!(Array{Float32}(5), 1), 1))
     @test isa(A, Vector{Float32}) && size(A) == (5,) && all(x->x==val, A)
 end
 
@@ -649,7 +654,7 @@ let
 
     # https://en.wikipedia.org/wiki/Swatch_Internet_Time
     eval(Expr(
-        :type, false,
+        struct_sym, false,
         Expr(:(<:), :Beat, :(Dates.Period)),
         quote
             value::Int64
@@ -705,7 +710,7 @@ if VERSION < v"0.7.0-DEV.880"
 end
 
 # PR 22350
-eval(Expr(:type, false, :TestType, Expr(:block, :(a::Int), :b)))
+eval(Expr(struct_sym, false, :TestType, Expr(:block, :(a::Int), :b)))
 @test fieldcount(TestType) == 2
 @test fieldcount(Int) == 0
 

@@ -157,19 +157,36 @@ end
 
 export @compat
 
-if VERSION < v"0.6.0-dev.2042"
-    immutable ExponentialBackOff
-        n::Int
-        first_delay::Float64
-        max_delay::Float64
-        factor::Float64
-        jitter::Float64
-
-        function ExponentialBackOff(n, first_delay, max_delay, factor, jitter)
-            all(x->x>=0, (n, first_delay, max_delay, factor, jitter)) || error("all inputs must be non-negative")
-            new(n, first_delay, max_delay, factor, jitter)
-        end
+# https://github.com/JuliaLang/julia/pull/22064
+@static if !isdefined(Base, Symbol("@__MODULE__"))
+    # 0.7
+    export @__MODULE__
+    macro __MODULE__()
+        return current_module()
     end
+    Base.expand(mod::Module, x::ANY) = eval(mod, :(expand($(QuoteNode(x)))))
+    Base.macroexpand(mod::Module, x::ANY) = eval(mod, :(macroexpand($(QuoteNode(x)))))
+    Base.include_string(mod::Module, code::String, fname::String) =
+        eval(mod, :(include_string($code, $fname)))
+    Base.include_string(mod::Module, code::AbstractString, fname::AbstractString="string") =
+        eval(mod, :(include_string($code, $fname)))
+end
+
+if VERSION < v"0.6.0-dev.2042"
+    include_string(@__MODULE__, """
+        immutable ExponentialBackOff
+            n::Int
+            first_delay::Float64
+            max_delay::Float64
+            factor::Float64
+            jitter::Float64
+
+            function ExponentialBackOff(n, first_delay, max_delay, factor, jitter)
+                all(x->x>=0, (n, first_delay, max_delay, factor, jitter)) || error("all inputs must be non-negative")
+                new(n, first_delay, max_delay, factor, jitter)
+            end
+        end
+    """)
 
     """
         ExponentialBackOff(; n=1, first_delay=0.05, max_delay=10.0, factor=5.0, jitter=0.1)
@@ -287,7 +304,7 @@ else
 end
 
 # broadcast over same length tuples, from julia#16986
-if VERSION < v"0.6.0-dev.693"
+@static if VERSION < v"0.6.0-dev.693"
     Base.Broadcast.broadcast{N}(f, t::NTuple{N}, ts::Vararg{NTuple{N}}) = map(f, t, ts...)
 end
 
@@ -440,7 +457,7 @@ end
 end
 
 # https://github.com/JuliaLang/julia/pull/18727
-if VERSION < v"0.6.0-dev.838"
+@static if VERSION < v"0.6.0-dev.838"
     Base.convert{T}(::Type{Set{T}}, s::Set{T}) = s
     Base.convert{T}(::Type{Set{T}}, s::Set) = Set{T}(s)
 end
@@ -450,7 +467,7 @@ if VERSION < v"0.6.0-dev.2347"
     Base.isassigned(x::Base.RefValue) = isdefined(x, :x)
 end
 
-if VERSION < v"0.6.0-dev.735"
+@static if VERSION < v"0.6.0-dev.735"
     Base.unsafe_trunc{T<:Integer}(::Type{T}, x::Integer) = rem(x, T)
 end
 
@@ -464,21 +481,6 @@ end
     StringVector(n::Integer) = Vector{UInt8}(n)
 else
     using Base: StringVector
-end
-
-# https://github.com/JuliaLang/julia/pull/22064
-@static if !isdefined(Base, Symbol("@__MODULE__"))
-    # 0.7
-    export @__MODULE__
-    macro __MODULE__()
-        return current_module()
-    end
-    Base.expand(mod::Module, x::ANY) = eval(mod, :(expand($(QuoteNode(x)))))
-    Base.macroexpand(mod::Module, x::ANY) = eval(mod, :(macroexpand($(QuoteNode(x)))))
-    Base.include_string(mod::Module, code::String, fname::String) =
-        eval(mod, :(include_string($code, $fname)))
-    Base.include_string(mod::Module, code::AbstractString, fname::AbstractString="string") =
-        eval(mod, :(include_string($code, $fname)))
 end
 
 # https://github.com/JuliaLang/julia/pull/19784
@@ -529,7 +531,7 @@ if VERSION < v"0.6.0-pre.beta.455"
 end
 
 # https://github.com/JuliaLang/julia/pull/22475
-if VERSION < v"0.7.0-DEV.843"
+@static if VERSION < v"0.7.0-DEV.843"
     import Base: Val
     (::Type{Val})(x) = (Base.@_pure_meta; Val{x}())
     # Also add methods for Val(x) that were previously Val{x}
@@ -769,7 +771,7 @@ end
     end
 end
 
-if VERSION < v"0.7.0-DEV.2377"
+@static if VERSION < v"0.7.0-DEV.2377"
     (::Type{Matrix{T}}){T}(s::UniformScaling, dims::Dims{2}) = setindex!(zeros(T, dims), T(s.λ), diagind(dims...))
     (::Type{Matrix{T}}){T}(s::UniformScaling, m::Integer, n::Integer) = Matrix{T}(s, Dims((m, n)))
 
@@ -788,7 +790,7 @@ if VERSION < v"0.7.0-DEV.2377"
         SparseMatrixCSC{Tv,Ti}(dims..., colptr, rowval, nzval)
     end
 end
-if VERSION < v"0.7.0-DEV.2543"
+@static if VERSION < v"0.7.0-DEV.2543"
     (::Type{Array{T}}){T}(s::UniformScaling, dims::Dims{2}) = Matrix{T}(s, dims)
     (::Type{Array{T}}){T}(s::UniformScaling, m::Integer, n::Integer) = Matrix{T}(s, m, n)
 end
