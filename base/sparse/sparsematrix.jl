@@ -1282,7 +1282,7 @@ function find(p::Function, S::SparseMatrixCSC)
     return sub2ind(sz, I, J)
 end
 
-findn(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = _findn(x->x!=0, S)
+findn(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = _findn(x->true, S)
 
 function _findn(p::Function, S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
@@ -1298,12 +1298,6 @@ function _findn(p::Function, S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
         end
     end
 
-    count -= 1
-    if numnz != count
-        deleteat!(I, (count+1):numnz)
-        deleteat!(J, (count+1):numnz)
-    end
-
     return (I, J)
 end
 
@@ -1315,19 +1309,10 @@ function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
 
     count = 1
     @inbounds for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if S.nzval[k] != 0
-            I[count] = S.rowval[k]
-            J[count] = col
-            V[count] = S.nzval[k]
-            count += 1
-        end
-    end
-
-    count -= 1
-    if numnz != count
-        deleteat!(I, (count+1):numnz)
-        deleteat!(J, (count+1):numnz)
-        deleteat!(V, (count+1):numnz)
+        I[count] = S.rowval[k]
+        J[count] = col
+        V[count] = S.nzval[k]
+        count += 1
     end
 
     return (I, J, V)

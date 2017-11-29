@@ -526,9 +526,9 @@ end
     @test_throws ArgumentError sparsevec([3,5,7],[0.1,0.0,3.2],4)
 end
 
-@testset "issue #5386" begin
+@testset "what used to be issue #5386" begin
     K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
-    @test length(K) == length(J) == length(V) == 1
+    @test length(K) == length(J) == length(V) == 2
 end
 
 @testset "issue described in https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ" begin
