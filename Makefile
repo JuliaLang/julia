@@ -232,61 +232,44 @@ julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir
 JL_LIBS := julia julia-debug
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS := ccalltest
+JL_PRIVATE_LIBS-0 := libccalltest
 ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS += suitesparse_wrapper
+JL_PRIVATE_LIBS-0 += libsuitesparse_wrapper
 endif
-ifeq ($(USE_SYSTEM_PCRE),0)
-JL_PRIVATE_LIBS += pcre
+JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
+JL_PRIVATE_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
+JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp
+JL_PRIVATE_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSSH2) += libssh2
+JL_PRIVATE_LIBS-$(USE_SYSTEM_MBEDTLS) += libmbedtls libmbedcrypto libmbedx509
+JL_PRIVATE_LIBS-$(USE_SYSTEM_CURL) += libcurl
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBGIT2) += libgit2
+JL_PRIVATE_LIBS-$(USE_SYSTEM_ARPACK) += libarpack
+ifeq ($(USE_LLVM_SHLIB),1)
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM
 endif
+
 ifeq ($(USE_SYSTEM_OPENLIBM),0)
 ifeq ($(USE_SYSTEM_LIBM),0)
-JL_PRIVATE_LIBS += openlibm
+JL_PRIVATE_LIBS-0 += $(LIBMNAME)
 endif
 endif
-ifeq ($(USE_SYSTEM_DSFMT),0)
-JL_PRIVATE_LIBS += dSFMT
+
+JL_PRIVATE_LIBS-$(USE_SYSTEM_BLAS) += $(LIBBLASNAME)
+ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LAPACK) += $(LIBLAPACKNAME)
 endif
-ifeq ($(USE_SYSTEM_BLAS),0)
-JL_PRIVATE_LIBS += openblas
-else ifeq ($(USE_SYSTEM_LAPACK),0)
-JL_PRIVATE_LIBS += lapack
-endif
-ifeq ($(USE_SYSTEM_GMP),0)
-JL_PRIVATE_LIBS += gmp
-endif
-ifeq ($(USE_SYSTEM_MPFR),0)
-JL_PRIVATE_LIBS += mpfr
-endif
-ifeq ($(USE_SYSTEM_MBEDTLS),0)
-JL_PRIVATE_LIBS += mbedtls mbedcrypto mbedx509
-endif
-ifeq ($(USE_SYSTEM_LIBSSH2),0)
-JL_PRIVATE_LIBS += ssh2
-endif
-ifeq ($(USE_SYSTEM_CURL),0)
-JL_PRIVATE_LIBS += curl
-endif
-ifeq ($(USE_SYSTEM_LIBGIT2),0)
-JL_PRIVATE_LIBS += git2
-endif
-ifeq ($(USE_SYSTEM_ARPACK),0)
-JL_PRIVATE_LIBS += arpack
-endif
-ifeq ($(USE_SYSTEM_SUITESPARSE),0)
+
 ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS += amd camd ccolamd cholmod colamd umfpack spqr suitesparseconfig
+ifeq ($(USE_SYSTEM_SUITESPARSE),0)
+JL_PRIVATE_LIBS-0 += libamd libcamd libccolamd libcholmod libcolamd libumfpack libspqr libsuitesparseconfig
 endif
 endif
-ifeq ($(USE_SYSTEM_LLVM),0)
-ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS += LLVM
-endif
-endif
+
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
 ifeq ($(USE_SYSTEM_LAPACK),0)
-JL_PRIVATE_LIBS += gfortblas
+JL_PRIVATE_LIBS-0 += libgfortblas
 endif
 endif
 endif
@@ -342,12 +325,16 @@ endif
 			fi \
 		done \
 	done
-	for suffix in $(JL_PRIVATE_LIBS) ; do \
-		for lib in $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)*; do \
+	for suffix in $(JL_PRIVATE_LIBS-0) ; do \
+		for lib in $(build_libdir)/$${suffix}*.$(SHLIB_EXT)*; do \
 			if [ "$${lib##*.}" != "dSYM" ]; then \
 				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
 			fi \
 		done \
+	done
+	for suffix in $(JL_PRIVATE_LIBS-1) ; do \
+		lib=$(build_private_libdir)/$${suffix}.$(SHLIB_EXT); \
+		$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
 	done
 endif
 

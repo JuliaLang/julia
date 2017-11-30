@@ -94,8 +94,11 @@ before_install:
             BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
-        export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib:$(brew --prefix openblas-julia)/lib:$(brew --prefix suite-sparse-julia)/lib:$(brew --prefix arpack-julia)/lib";
-        export JULIA_MACOS_SPAWN="DYLD_FALLBACK_LIBRARY_PATH=\"$DYLD_FALLBACK_LIBRARY_PATH\" \$1";
+        spawn_DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib";
+        spawn_DYLD_FALLBACK_LIBRARY_PATH+=":$(brew --prefix openblas-julia)/lib";
+        spawn_DYLD_FALLBACK_LIBRARY_PATH+=":$(brew --prefix suite-sparse-julia)/lib";
+        spawn_DYLD_FALLBACK_LIBRARY_PATH+=":$(brew --prefix arpack-julia)/lib";
+        export JULIA_MACOS_SPAWN="DYLD_FALLBACK_LIBRARY_PATH=\"$spawn_DYLD_FALLBACK_LIBRARY_PATH\" \$1";
         export BUILDOPTS="$BUILDOPTS spawn=\$(JULIA_MACOS_SPAWN)";
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
         export JULIA_CPU_CORES=2;
@@ -126,13 +129,15 @@ script:
           false; }
     # compile / install Julia
     - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia install | moreutils/ts -s "%.s"
-    - make $BUILDOPTS NO_GIT=1 build-stats
-    - du -sk /tmp/julia/*
     - if [ `uname` = "Darwin" ]; then
         for name in suitesparseconfig spqr umfpack colamd cholmod amd suitesparse_wrapper; do
             install -pm755 usr/lib/lib${name}*.dylib* /tmp/julia/lib/julia/;
         done;
       fi
+    - make $BUILDOPTS NO_GIT=1 build-stats
+    - du -sk /tmp/julia/*
+    - ls -l /tmp/julia/lib
+    - ls -l /tmp/julia/lib/julia
     - cd .. && mv julia julia2
     # run tests
     - /tmp/julia/bin/julia --sysimage-native-code=no -e 'true' &&
@@ -145,7 +150,7 @@ script:
     # test that the embedding code works on our installation
     - mkdir /tmp/embedding-test &&
         make check -C /tmp/julia/share/doc/julia/examples/embedding \
-             JULIA="DYLD_FALLBACK_LIBRARY_PATH='$DYLD_FALLBACK_LIBRARY_PATH' /tmp/julia/bin/julia" \
+             JULIA="/tmp/julia/bin/julia" \
              BIN=/tmp/embedding-test \
              "$(cd julia2 && make print-CC)"
     # restore initial state and prepare for travis caching
