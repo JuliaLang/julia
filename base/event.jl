@@ -300,7 +300,7 @@ mutable struct AsyncCondition
     function AsyncCondition()
         this = new(Libc.malloc(_sizeof_uv_async), Condition(), true)
         associate_julia_struct(this.handle, this)
-        finalizer(uvfinalize, this)
+        finalizer(this, uvfinalize)
         err = ccall(:uv_async_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
             eventloop(), this, uv_jl_asynccb::Ptr{Cvoid})
         if err != 0
@@ -369,7 +369,7 @@ mutable struct Timer
         end
 
         associate_julia_struct(this.handle, this)
-        finalizer(uvfinalize, this)
+        finalizer(this, uvfinalize)
 
         ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), eventloop())
         ccall(:uv_timer_start,  Cint,  (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),

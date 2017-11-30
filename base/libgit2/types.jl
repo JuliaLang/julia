@@ -945,7 +945,7 @@ for (typ, owntyp, sup, cname) in [
                 obj = new(ptr)
                 if fin
                     Threads.atomic_add!(REFCOUNT, UInt(1))
-                    finalizer(Base.close, obj)
+                    finalizer(obj, Base.close)
                 end
                 return obj
             end
@@ -959,7 +959,7 @@ for (typ, owntyp, sup, cname) in [
                 obj = new(owner, ptr)
                 if fin
                     Threads.atomic_add!(REFCOUNT, UInt(1))
-                    finalizer(Base.close, obj)
+                    finalizer(obj, Base.close)
                 end
                 return obj
             end
@@ -999,7 +999,7 @@ mutable struct GitSignature <: AbstractGitObject
     function GitSignature(ptr::Ptr{SignatureStruct})
         @assert ptr != C_NULL
         obj = new(ptr)
-        finalizer(Base.close, obj)
+        finalizer(obj, Base.close)
         return obj
     end
 end
@@ -1142,7 +1142,7 @@ mutable struct UserPasswordCredential <: AbstractCredential
     pass::String
     function UserPasswordCredential(user::AbstractString="", pass::AbstractString="")
         c = new(user, pass)
-        finalizer(securezero!, c)
+        finalizer(c, securezero!)
         return c
     end
 
@@ -1180,7 +1180,7 @@ mutable struct SSHCredential <: AbstractCredential
     function SSHCredential(user::AbstractString="", pass::AbstractString="",
                             prvkey::AbstractString="", pubkey::AbstractString="")
         c = new(user, pass, prvkey, pubkey)
-        finalizer(securezero!, c)
+        finalizer(c, securezero!)
         return c
     end
 

@@ -275,7 +275,7 @@ end
 
 @noinline function f6597(c)
     t = @schedule nothing
-    finalizer(t -> c[] += 1, t)
+    finalizer(t, t -> c[] += 1)
     wait(t)
     @test c[] == 0
     wait(t)

@@ -19,7 +19,7 @@ mutable struct GitCredential
             username::Union{AbstractString, Nothing}=nothing,
             password::Union{AbstractString, Nothing}=nothing)
         c = new(protocol, host, path, username, password, true)
-        finalizer(securezero!, c)
+        finalizer(c, securezero!)
         return c
     end
 end

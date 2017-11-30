@@ -203,7 +203,7 @@ mutable struct Dense{T<:VTypes} <: DenseMatrix{T}
                 "unknown reasons. Please submit a bug report."))
         end
         A = new(p)
-        finalizer(free!, A)
+        finalizer(A, free!)
         return A
     end
 end
@@ -255,7 +255,7 @@ mutable struct Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
                 "unknown reasons. Please submit a bug report."))
         end
         A = new(p)
-        finalizer(free!, A)
+        finalizer(A, free!)
         return A
     end
 end
@@ -339,7 +339,7 @@ mutable struct Factor{Tv} <: Factorization{Tv}
         end
         F = new(p)
         if register_finalizer
-            finalizer(free!, F)
+            finalizer(F, free!)
         end
         return F
     end
