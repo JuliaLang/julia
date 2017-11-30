@@ -569,15 +569,17 @@ let a = CompatArray.CartesianArray(rand(2,3)), b = CompatArray.LinearArray(rand(
     @test IndexStyle(b) === IndexLinear()
 end
 
-for (A,val) in ((fill!(Array{Float32}(3, 2), 0), 0),
-                (fill!(Array{Float32}(3, 2), 1), 1),
-                (fill!(Array{Float32}(3, 2), 0), 0),
-                (fill!(Array{Float32}(3, 2), 1), 1))
-    @test isa(A, Matrix{Float32}) && size(A) == (3,2) && all(x->x==val, A)
-end
-for (A,val) in ((fill!(Array{Float32}(5), 0), 0),
-                (fill!(Array{Float32}(5), 1), 1))
-    @test isa(A, Vector{Float32}) && size(A) == (5,) && all(x->x==val, A)
+if VERSION < v"0.6.0-dev.1653"
+    for (A,val) in ((zeros(1:5, Float32, 3, 2), 0),
+                    (ones(1:5, Float32, 3, 2), 1),
+                    (zeros(1:5, Float32, (3, 2)), 0),
+                    (ones(1:5, Float32, (3, 2)), 1))
+        @test isa(A, Matrix{Float32}) && size(A) == (3,2) && all(x->x==val, A)
+    end
+    for (A,val) in ((zeros(1:5, Float32), 0),
+                    (ones(1:5, Float32), 1))
+        @test isa(A, Vector{Float32}) && size(A) == (5,) && all(x->x==val, A)
+    end
 end
 
 # PR 20203
