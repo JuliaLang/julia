@@ -374,11 +374,19 @@ LogState(logger) = LogState(LogLevel(min_enabled_level(logger)), logger)
 _global_logstate = LogState(NullLogger()) # See __init__
 
 function current_logstate()
-    get(task_local_storage(), :LOGGER_STATE, _global_logstate)::LogState
+    logstate = current_task().logstate
+    (logstate != nothing ? logstate : _global_logstate)::LogState
 end
 
 function with_logstate(f::Function, logstate)
-    task_local_storage(f, :LOGGER_STATE, logstate)
+    t = current_task()
+    old = t.logstate
+    try
+        t.logstate = logstate
+        f()
+    finally
+        t.logstate = old
+    end
 end
 
 
