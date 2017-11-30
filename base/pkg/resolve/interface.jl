@@ -82,7 +82,7 @@ mutable struct Interface
         end
 
         ## generate wveights:
-        vweight = Vector{Vector{VersionWeight}}(np)
+        vweight = Vector{Vector{VersionWeight}}(uninitialized, np)
         for p0 = 1:np
             pvers0 = pvers[p0]
             spp0 = spp[p0]

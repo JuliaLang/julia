@@ -4116,8 +4116,9 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
         # .. Array Arguments ..
         # INTEGER            IPIV( * )
         # DOUBLE PRECISION   A( LDA, * ), E( * )
-        function syconvf_rook!(uplo::Char, way::Char, A::StridedMatrix{$elty},
-                               ipiv::StridedVector{BlasInt}, e::StridedVector{$elty} = Vector{$elty}(length(ipiv)))
+        function syconvf_rook!(uplo::Char, way::Char,
+                                A::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt},
+                                e::StridedVector{$elty} = Vector{$elty}(uninitialized, length(ipiv)))
             # extract
             n = checksquare(A)
             lda = max(1, stride(A, 2))
@@ -4716,8 +4717,9 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
         # .. Array Arguments ..
         # INTEGER            IPIV( * )
         # COMPLEX*16         A( LDA, * ), E( * )
-        function syconvf_rook!(uplo::Char, way::Char, A::StridedMatrix{$elty},
-                               ipiv::StridedVector{BlasInt}, e::StridedVector{$elty} = Vector{$elty}(length(ipiv)))
+        function syconvf_rook!(uplo::Char, way::Char,
+                                A::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt},
+                                e::StridedVector{$elty} = Vector{$elty}(uninitialized, length(ipiv)))
             # extract
             n   = checksquare(A)
             lda = stride(A, 2)

@@ -373,20 +373,6 @@ Array{T}(::Uninitialized, d::NTuple{N,Int}) where {T,N} = Array{T,N}(uninitializ
 # empty vector constructor
 Array{T,1}() where {T} = Array{T,1}(uninitialized, 0)
 
-## preexisting Array constructors, i.e. without uninitialized, to deprecate
-# type and dimensionality specified, accepting dims as series of Ints
-Array{T,1}(m::Int) where {T} = Array{T,1}(uninitialized, m)
-Array{T,2}(m::Int, n::Int) where {T} = Array{T,2}(uninitialized, m, n)
-Array{T,3}(m::Int, n::Int, o::Int) where {T} = Array{T,3}(uninitialized, m, n, o)
-Array{T,N}(d::Vararg{Int,N}) where {T,N} = Array{T,N}(uninitialized, d)
-# type and dimensionality specified, accepting dims as tuples of Ints
-Array{T,N}(d::NTuple{N,Int}) where {T,N} = Array{T,N}(uninitialized, d)
-# type but not dimensionality specified
-Array{T}(m::Int) where {T} = Array{T}(uninitialized, m)
-Array{T}(m::Int, n::Int) where {T} = Array{T}(uninitialized, m, n)
-Array{T}(m::Int, n::Int, o::Int) where {T} = Array{T}(uninitialized, m, n, o)
-Array{T}(d::NTuple{N,Int}) where {T,N} = Array{T}(uninitialized, d)
-
 
 # primitive Symbol constructors
 function Symbol(s::String)

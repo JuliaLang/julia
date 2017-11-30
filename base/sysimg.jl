@@ -146,19 +146,6 @@ Matrix(::Uninitialized, m::Integer, n::Integer) = Matrix{Any}(uninitialized, Int
 # empty vector constructor
 Vector() = Vector{Any}(uninitialized, 0)
 
-## preexisting dims-type-converting Array constructors for convenience, i.e. without uninitialized, to deprecate
-# type and dimensionality specified, accepting dims as series of Integers
-Vector{T}(m::Integer) where {T} = Vector{T}(uninitialized, Int(m))
-Matrix{T}(m::Integer, n::Integer) where {T} = Matrix{T}(uninitialized, Int(m), Int(n))
-# type but not dimensionality specified, accepting dims as series of Integers
-Array{T}(m::Integer) where {T} = Vector{T}(uninitialized, Int(m))
-Array{T}(m::Integer, n::Integer) where {T} = Array{T,2}(uninitialized, Int(m), Int(n))
-Array{T}(m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(uninitialized, Int(m), Int(n), Int(o))
-Array{T}(d::Integer...) where {T} = Array{T}(uninitialized, convert(Tuple{Vararg{Int}}, d))
-# dimensionality but not type specified, accepting dims as series of Integers
-Vector(m::Integer) = Vector{Any}(uninitialized, Int(m))
-Matrix(m::Integer, n::Integer) = Matrix{Any}(uninitialized, Int(m), Int(n))
-
 
 include("associative.jl")
 

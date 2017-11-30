@@ -183,6 +183,8 @@ end
 
 Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) =
     OffsetArray(f(map(length, shape)), map(indsoffset, shape))
+Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:Array} =
+    OffsetArray(T(uninitialized, map(length, shape)), map(indsoffset, shape))
 Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:BitArray} =
     OffsetArray(T(uninitialized, map(length, shape)), map(indsoffset, shape))
 

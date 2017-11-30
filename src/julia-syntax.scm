@@ -410,7 +410,7 @@
          (block
           ,(scopenest (cdr names) (cdr vals) expr)))))
 
-(define empty-vector-any '(call (core AnyVector) 0))
+(define empty-vector-any '(call (core AnyVector) uninitialized 0))
 
 (define (keywords-method-def-expr name sparams argl body rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
@@ -2569,7 +2569,7 @@
       ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
       (scope-block
        (block
-        (= ,result (call (curly Array ,atype ,(length lengths)) ,@lengths))
+        (= ,result (call (curly Array ,atype ,(length lengths)) uninitialized ,@lengths))
         (= ,ri 1)
         ,(construct-loops (reverse ranges) (reverse rv) states (reverse lengths))
         ,result)))))

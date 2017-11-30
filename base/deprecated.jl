@@ -2037,6 +2037,27 @@ end
 # issue #24006
 @deprecate linearindices(s::AbstractString) eachindex(s)
 
+# deprecate Array(shape...)-like constructors to Array(uninitialized, shape...) equivalents
+# --> former primitive constructors
+@deprecate Array{T,1}(m::Int) where {T}                      Array{T,1}(uninitialized, m)
+@deprecate Array{T,2}(m::Int, n::Int) where {T}              Array{T,2}(uninitialized, m, n)
+@deprecate Array{T,3}(m::Int, n::Int, o::Int) where {T}      Array{T,3}(uninitialized, m, n, o)
+@deprecate Array{T,N}(d::Vararg{Int,N}) where {T,N}          Array{T,N}(uninitialized, d)
+@deprecate Array{T,N}(d::NTuple{N,Int}) where {T,N}          Array{T,N}(uninitialized, d)
+@deprecate Array{T}(m::Int) where {T}                        Array{T}(uninitialized, m)
+@deprecate Array{T}(m::Int, n::Int) where {T}                Array{T}(uninitialized, m, n)
+@deprecate Array{T}(m::Int, n::Int, o::Int) where {T}        Array{T}(uninitialized, m, n, o)
+@deprecate Array{T}(d::NTuple{N,Int}) where {T,N}            Array{T}(uninitialized, d)
+# --> former convenience constructors
+@deprecate Vector{T}(m::Integer) where {T}                          Vector{T}(uninitialized, m)
+@deprecate Matrix{T}(m::Integer, n::Integer) where {T}              Matrix{T}(uninitialized, m, n)
+@deprecate Array{T}(m::Integer) where {T}                           Array{T}(uninitialized, m)
+@deprecate Array{T}(m::Integer, n::Integer) where {T}               Array{T}(uninitialized, m, n)
+@deprecate Array{T}(m::Integer, n::Integer, o::Integer) where {T}   Array{T}(uninitialized, m, n, o)
+@deprecate Array{T}(d::Integer...) where {T}                        Array{T}(uninitialized, d)
+@deprecate Vector(m::Integer)                                       Vector(uninitialized, m)
+@deprecate Matrix(m::Integer, n::Integer)                           Matrix(uninitialized, m, n)
+
 # deprecate IntSet to BitSet
 @deprecate_binding IntSet BitSet
 

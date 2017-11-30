@@ -251,6 +251,7 @@ similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(uninitialized, s
 similar(a::Array{T}, m::Int) where {T}              = Vector{T}(uninitialized, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(uninitialized, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(uninitialized, dims)
+similar(::Type{T}, shape::Tuple) where {T<:Array}   = T(uninitialized, to_shape(shape))
 
 # T[x...] constructs Array{T,1}
 """
@@ -448,7 +449,7 @@ convert(::Type{Array{T}}, x::Array{T,n}) where {T,n} = x
 convert(::Type{Array{T,n}}, x::Array{T,n}) where {T,n} = x
 
 convert(::Type{Array{T}}, x::AbstractArray{S,n}) where {T,n,S} = convert(Array{T,n}, x)
-convert(::Type{Array{T,n}}, x::AbstractArray{S,n}) where {T,n,S} = copy!(Array{T,n}(size(x)), x)
+convert(::Type{Array{T,n}}, x::AbstractArray{S,n}) where {T,n,S} = copy!(Array{T,n}(uninitialized, size(x)), x)
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
