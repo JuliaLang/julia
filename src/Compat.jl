@@ -818,6 +818,14 @@ end
     export Uninitialized, uninitialized
 end
 
+if VERSION < v"0.7.0-DEV.2562"
+    import Base: finalizer
+    finalizer(f::Function, o) = finalizer(o, f)
+    finalizer(f::Ptr{Void}, o) = finalizer(o, f)
+    finalizer(f::Ptr{Void}, o::Ptr{Void}) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
+    finalizer(f::Ptr{Void}, o::Function) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
+end
+
 include("deprecated.jl")
 
 end # module Compat

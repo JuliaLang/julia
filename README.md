@@ -189,6 +189,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Uninitialized` and `uninitialized` with corresponding `Array` constructors ([#24652]).
 
+* `finalizer` accepts the finalizer to run as the first argument and the object to be finalized
+  as the second ([#24605])
+
 ## Renaming
 
 
@@ -363,5 +366,6 @@ includes this fix. Find the minimum version from there.
 [#24282]: https://github.com/JuliaLang/julia/issues/24282
 [#24372]: https://github.com/JuliaLang/julia/issues/24372
 [#24459]: https://github.com/JuliaLang/julia/issues/24459
+[#24605]: https://github.com/JuliaLang/julia/issues/24605
 [#24652]: https://github.com/JuliaLang/julia/issues/24652
 [#24657]: https://github.com/JuliaLang/julia/issues/24657
