@@ -773,3 +773,4 @@ Command-line option changes
 [#20889]: https://github.com/JuliaLang/julia/issues/20889
 [#20952]: https://github.com/JuliaLang/julia/issues/20952
 [#21183]: https://github.com/JuliaLang/julia/issues/21183
+[#21818]: https://github.com/JuliaLang/julia/issues/21818
