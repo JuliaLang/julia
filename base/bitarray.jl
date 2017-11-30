@@ -59,6 +59,31 @@ BitArray{N}(::Uninitialized, dims::Integer...) where {N} = BitArray{N}(uninitial
 BitArray(::Uninitialized, dims::NTuple{N,Int}) where {N} = BitArray{N}(uninitialized, dims...)
 BitArray{N}(::Uninitialized, dims::NTuple{N,Int}) where {N} = BitArray{N}(uninitialized, dims...)
 
+"""
+    BitArray(x::Bool, dims::Integer...)
+    BitArray{N}(x::Bool, dims::NTuple{N,Int})
+
+Construct a [`BitArray`](@ref) with the given dimension
+filled with the boolean value `x`.
+
+# Examples
+```julia-repl
+julia> BitArray(true, 2)
+2-element BitArray{1}:
+ true
+ true
+
+julia> BitArray(false, (2,2))
+2×2 BitArray{2}:
+ false  false
+ false  false
+```
+"""
+BitArray(x::Bool, dims...) = fill!(BitArray(uninitialized, dims...), x)
+BitArray{N}(x::Bool, dims...) where {N} = fill!(BitArray{N}(uninitialized, dims...), x)
+# TODO: Remove with deprecations, needed to resolve ambiguity with the deprecated BitArray constructors
+BitArray(x::Bool, dims::Integer...) = BitArray(x, map(Int, dims))
+
 const BitVector = BitArray{1}
 const BitMatrix = BitArray{2}
 
