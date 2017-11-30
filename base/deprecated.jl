@@ -2159,6 +2159,10 @@ finalizer(f::Ptr{Void}, o::Function) = invoke(finalizer, Tuple{Ptr{Void}, Any}, 
     Base.@deprecate_binding broadcast_t broadcast false ", broadcast_t(f, ::Type{ElType}, shape, iter, As...)` should become `broadcast(f, Broadcast.DefaultArrayStyle{N}(), ElType, shape, As...))` (see the manual chapter Interfaces)"
 end
 
+# part of #24595
+@deprecate falses(A::AbstractArray) BitArray(false, size(A))
+@deprecate trues(A::AbstractArray) BitArray(true, size(A))
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
