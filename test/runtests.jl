@@ -908,6 +908,12 @@ end
 @test isa(Array{Float64}(uninitialized, 2, 2), Matrix{Float64})
 @test isa(Array{Float64,3}(uninitialized, 2, 2, 2), Array{Float64,3})
 
+# 0.7.0-DEV.2338
+module Test24361
+    using Compat
+    using Compat.Test
+    @test String(Compat.Base64.base64decode("SGVsbG8h")) == "Hello!"
+end
 # 0.7
 let A = [1]
     local x = 0

@@ -771,6 +771,13 @@ end
     end
 end
 
+# 0.7.0-DEV.2338
+@static if VERSION >= v"0.7.0-DEV.2338"
+    import Base64
+else
+    import Base.Base64
+end
+
 @static if VERSION < v"0.7.0-DEV.2377"
     (::Type{Matrix{T}}){T}(s::UniformScaling, dims::Dims{2}) = setindex!(zeros(T, dims), T(s.λ), diagind(dims...))
     (::Type{Matrix{T}}){T}(s::UniformScaling, m::Integer, n::Integer) = Matrix{T}(s, Dims((m, n)))

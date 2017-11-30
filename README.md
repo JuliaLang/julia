@@ -83,6 +83,9 @@ Currently, the `@compat` macro supports the following syntaxes:
   Compat.DelimitedFiles` are provided on versions older than 0.7, where these are not yet
   part of the standard library. ([#23931])
 
+* `using Compat.Base64` is provided on versions older than 0.7, where this library is not
+  yet a part of the standard library. ([#24361])
+
 * `using Compat.Dates` is provided on versions older than 0.7, where this library is not
   yet a part of the standard library. ([#24459])
 
