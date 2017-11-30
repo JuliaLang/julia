@@ -81,7 +81,14 @@ mutable struct PromptState <: ModeState
     beeping::Float64
 end
 
-options(s::PromptState) = isdefined(s.p, :repl) ? s.p.repl.options : Base.REPL.Options()
+options(s::PromptState) =
+    if isdefined(s.p, :repl) && isdefined(s.p.repl, :options)
+        # we can't test isa(s.p.repl, LineEditREPL) as LineEditREPL is defined
+        # in the REPL module
+        s.p.repl.options
+    else
+        Base.REPL.Options(confirm_exit=false)
+    end
 
 function setmark(s::MIState, guess_region_active::Bool=true)
     guess_region_active && activate_region(s, s.key_repeats > 0)
@@ -1880,6 +1887,16 @@ function edit_insert_tab(buf::IOBuffer, jump_spaces=false, delete_trailing=jump_
     return true
 end
 
+function edit_abort(s, confirm::Bool=options(s).confirm_exit; key="^D")
+    set_action!(s, :edit_abort)
+    if !confirm || s.last_action == :edit_abort
+        println(terminal(s))
+        :abort
+    else
+        println("Type $key again to exit.\n")
+        refresh_line(s)
+    end
+end
 
 const default_keymap =
 AnyDict(
@@ -1906,8 +1923,7 @@ AnyDict(
         if buffer(s).size > 0
             edit_delete(s)
         else
-            println(terminal(s))
-            return :abort
+            edit_abort(s)
         end
     end,
     # Ctrl-Space
