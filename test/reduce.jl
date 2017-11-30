@@ -135,18 +135,6 @@ for f in (sum3, sum4, sum7, sum8)
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
 
-@test sum_kbn([1,1e100,1,-1e100]) === 2.0
-@test sum_kbn(Float64[]) === 0.0
-@test sum_kbn(i for i=1.0:1.0:10.0) === 55.0
-@test sum_kbn(i for i=1:1:10) === 55
-@test sum_kbn([1 2 3]) === 6
-@test sum_kbn([2+im 3-im]) === 5+0im
-@test sum_kbn([1+im 2+3im]) === 3+4im
-@test sum_kbn([7 8 9]) === sum_kbn([8 9 7])
-@test sum_kbn(i for i=1:1:10) === sum_kbn(i for i=10:-1:1)
-@test sum_kbn([-0.0]) === -0.0
-@test sum_kbn([-0.0,-0.0]) === -0.0
-
 # check sum(abs, ...) for support of empty collections
 @testset "sum(abs, [])" begin
     @test @inferred(sum(abs, Float64[])) === 0.0
@@ -362,13 +350,12 @@ end
 ## cumsum, cummin, cummax
 
 z = rand(10^6)
-let es = sum_kbn(z), es2 = sum_kbn(z[1:10^5])
+let es = sum(BigFloat.(z)), es2 = sum(BigFloat.(z[1:10^5]))
     @test (es - sum(z)) < es * 1e-13
     cs = cumsum(z)
     @test (es - cs[end]) < es * 1e-13
     @test (es2 - cs[10^5]) < es2 * 1e-13
 end
-
 
 @test sum(collect(map(UInt8,0:255))) == 32640
 @test sum(collect(map(UInt8,254:255))) == 509

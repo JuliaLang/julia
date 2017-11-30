@@ -383,14 +383,20 @@ I,J,N = findnz(z)
 @test vecnorm(A) ≈ vecnorm(parent(A))
 @test vecdot(v, v) ≈ vecdot(v0, v0)
 
-v  = OffsetArray([1,1e100,1,-1e100], (-3,))*1000
-v2 = OffsetArray([1,-1e100,1,1e100], (5,))*1000
-@test isa(v, OffsetArray)
-cv  = OffsetArray([1,1e100,1e100,2], (-3,))*1000
-cv2 = OffsetArray([1,-1e100,-1e100,2], (5,))*1000
-@test isequal(cumsum_kbn(v), cv)
-@test isequal(cumsum_kbn(v2), cv2)
-@test isequal(sum_kbn(v), sum_kbn(parent(v)))
+# Prior to its removal from Base, cumsum_kbn was used here. To achieve the same level of
+# accuracy in the tests, we need to use BigFloats with enlarged precision.
+@testset "high-precision array reduction" begin
+    setprecision(BigFloat, 500) do
+        v  = OffsetArray(BigFloat[1,1e100,1,-1e100], (-3,)) .* 1000
+        v2 = OffsetArray(BigFloat[1,-1e100,1,1e100], ( 5,)) .* 1000
+        @test isa(v, OffsetArray)
+        cv  = OffsetArray(BigFloat[1, 1e100, 1e100,2], (-3,)) .* 1000
+        cv2 = OffsetArray(BigFloat[1,-1e100,-1e100,2], ( 5,)) .* 1000
+        @test cumsum(v) ≈ cv
+        @test cumsum(v2) ≈ cv2
+        @test sum(v) ≈ sum(parent(v))
+    end
+end
 
 io = IOBuffer()
 writedlm(io, A)
