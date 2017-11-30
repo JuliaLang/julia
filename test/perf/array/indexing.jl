@@ -79,7 +79,7 @@ function sumlogical(A, n)
     s = zero(eltype(A)) + zero(eltype(A))
     nrows = size(A, 1)
     ncols = size(A, 2)
-    r = falses(nrows)
+    r = BitVector(false, nrows)
     r[1:4:end] = true
     for k = 1:n
         @simd for i = 1:ncols
@@ -168,7 +168,7 @@ function makearrays(::Type{T}, sz) where T
     outersz = (sz[1]+1,sz[2]+2)
     B = reshape(convert(Vector{T}, [1:prod(outersz);]), outersz)
     Asub = view(B, 1:sz[1], 2:sz[2]+1)
-    Bit = trues(sz)
+    Bit = BitArray(true, sz)
     (A, AF, AS, ASS, Asub, Bit,)
 end
 

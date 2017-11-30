@@ -337,7 +337,7 @@ function diagm_container(kv::Pair{<:Integer,<:AbstractVector}...)
 end
 function diagm_container(kv::Pair{<:Integer,<:BitVector}...)
     n = mapreduce(x -> length(x.second) + abs(x.first), max, kv)
-    return falses(n, n)
+    return BitMatrix(false, n, n)
 end
 
 

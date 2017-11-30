@@ -33,7 +33,7 @@ end
 ##### SharedArray tests
 
 function check_pids_all(S::SharedArray)
-    pidtested = falses(size(S))
+    pidtested = BitArray(false, size(S))
     for p in procs(S)
         idxes_in_p = remotecall_fetch(p, S) do D
             parentindexes(D.loc_subarr_1d)[1]

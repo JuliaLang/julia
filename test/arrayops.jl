@@ -339,7 +339,7 @@ end
     @test eltype(X) == Float32
     @test Base.elsize(X) == sizeof(Float32)
     @test !all(isinteger, X)
-    @test isnan.(X) == [trues(6);falses(5)]
+    @test isnan.(X) == [BitVector(true, 6); BitVector(false, 5)]
     @test X[7:11] == [1:5;]
     X = get(A, (2:4, 9:-2:-13), 0)
     Xv = zeros(Int, 3, 12)
@@ -1194,7 +1194,7 @@ end
     @test_throws BoundsError deleteat!(a, 5:20)
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
-    @test_throws BoundsError deleteat!(a, falses(11))
+    @test_throws BoundsError deleteat!(a, BitVector(false, 11))
 end
 
 @testset "comprehensions" begin
@@ -1457,7 +1457,7 @@ end
     @test isa(Base.IndexStyle(a), Base.IndexLinear)
     b = view(a, :)
     @test isa(Base.IndexStyle(b), Base.IndexLinear)
-    @test isa(Base.IndexStyle(trues(2)), Base.IndexLinear)
+    @test isa(Base.IndexStyle(BitVector(true, 2)), Base.IndexLinear)
     @test isa(Base.IndexStyle(BitArray{2}), Base.IndexLinear)
     aa = fill(99, 10)
     aa[1:2:9] = a
@@ -1690,21 +1690,21 @@ let x = fill(0.9, 1000)
 end
 
 @testset "binary ops on bool arrays" begin
-    A = Array(trues(5))
+    A = Array(BitVector(true, 5))
     @test A .+ true == [2,2,2,2,2]
-    A = Array(trues(5))
+    A = Array(BitVector(true, 5))
     @test A .+ false == [1,1,1,1,1]
-    A = Array(trues(5))
+    A = Array(BitVector(true, 5))
     @test true .+ A == [2,2,2,2,2]
-    A = Array(trues(5))
+    A = Array(BitVector(true, 5))
     @test false .+ A == [1,1,1,1,1]
-    A = Array(trues(5))
+    A = Array(BitVector(true, 5))
     @test A .- true == [0,0,0,0,0]
-    A = Array(trues(5))
+    A = Array(BitVector(true, 5))
     @test A .- false == [1,1,1,1,1]
-    A = Array(trues(5))
+    A = Array(BitVector(true, 5))
     @test true .- A == [0,0,0,0,0]
-    A = Array(trues(5))
+    A = Array(BitVector(true, 5))
     @test false .- A == [-1,-1,-1,-1,-1]
 end
 

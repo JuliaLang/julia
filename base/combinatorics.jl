@@ -60,7 +60,7 @@ false
 """
 function isperm(A)
     n = length(A)
-    used = falses(n)
+    used = BitVector(false, n)
     for a in A
         (0 < a <= n) && (used[a] ⊻= true) || return false
     end

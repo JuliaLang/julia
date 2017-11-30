@@ -356,7 +356,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
         vmask[p] = Dict{VersionNumber,BitVector}()
         vmaskp = vmask[p]
         for vn in keys(fdepsp)
-            vmaskp[vn] = falses(luds)
+            vmaskp[vn] = BitVector(false, luds)
         end
         for (vn,a) in fdepsp
             vmind = findfirst(equalto(a.requires), uniqdepssets)

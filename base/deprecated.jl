@@ -2162,6 +2162,8 @@ end
 # part of #24595
 @deprecate falses(A::AbstractArray) BitArray(false, size(A))
 @deprecate trues(A::AbstractArray) BitArray(true, size(A))
+@deprecate falses(dims...) BitArray(false, dims...)
+@deprecate trues(dims...) BitArray(true, dims...)
 
 # issue #24822
 @deprecate_binding Display AbstractDisplay

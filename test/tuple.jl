@@ -129,10 +129,10 @@ end
 
     @testset "boolean arrays" begin
         # issue #19719
-        @test_throws BoundsError (1,2,3)[falses(4)]
+        @test_throws BoundsError (1,2,3)[BitVector(false, 4)]
         @test_throws BoundsError (1,2,3)[[false,false,true,true]]
-        @test_throws BoundsError (1,2,3)[trues(2)]
-        @test_throws BoundsError (1,2,3)[falses(2)]
+        @test_throws BoundsError (1,2,3)[BitVector(true, 2)]
+        @test_throws BoundsError (1,2,3)[BitVector(false, 2)]
         @test_throws BoundsError ()[[false]]
         @test_throws BoundsError ()[[true]]
     end

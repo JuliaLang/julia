@@ -497,11 +497,11 @@ julia> similar(1:10, 1, 4)
  4419743872  4374413872  4419743888  0
 ```
 
-Conversely, `similar(trues(10,10), 2)` returns an uninitialized `BitVector` with two
+Conversely, `similar(BitArray(true,10,10), 2)` returns an uninitialized `BitVector` with two
 elements since `BitArray`s are both mutable and can support 1-dimensional arrays:
 
 ```julia-repl
-julia> similar(trues(10,10), 2)
+julia> similar(BitArray(true,10,10), 2)
 2-element BitArray{1}:
  false
  false
@@ -511,7 +511,7 @@ Since `BitArray`s can only store elements of type [`Bool`](@ref), however, if yo
 different element type it will create a regular `Array` instead:
 
 ```julia-repl
-julia> similar(falses(10), Float64, 2, 4)
+julia> similar(BitArray(false, 10), Float64, 2, 4)
 2×4 Array{Float64,2}:
  2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
  2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314

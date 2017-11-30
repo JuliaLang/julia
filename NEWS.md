@@ -696,6 +696,8 @@ Deprecated or removed
   * `cumsum`, `cumprod`, `accumulate`, and their mutating versions now require a `dim`
     argument instead of defaulting to using the first dimension ([#24684]).
 
+  * `trues` and `falses` have been deprecated in favor of new `BitArray(::Bool, dims...)` constructors ([#TBD]).
+
 Command-line option changes
 ---------------------------
 

@@ -18,7 +18,7 @@ end
 #function aTb(A::BitMatrix, B::BitMatrix)
     #(mA, nA) = size(A)
     #(mB, nB) = size(B)
-    #C = falses(nA, nB)
+    #C = BitMatrix(false, nA, nB)
     #if mA != mB; throw(DimensionMismatch()) end
     #if mA == 0; return C; end
     #col_ch = num_bit_chunks(mA)
@@ -48,7 +48,7 @@ function triu(B::BitMatrix, k::Integer=0)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least",
             "$(-m + 1) and at most $(n + 1) in an $m-by-$n matrix")))
     end
-    A = falses(m,n)
+    A = BitMatrix(false, m, n)
     Ac = A.chunks
     Bc = B.chunks
     for i = max(k+1,1):n
@@ -64,7 +64,7 @@ function tril(B::BitMatrix, k::Integer=0)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
             "$(-m - 1) and at most $(n - 1) in an $m-by-$n matrix")))
     end
-    A = falses(m, n)
+    A = BitMatrix(false, m, n)
     Ac = A.chunks
     Bc = B.chunks
     for i = 1:min(n, m+k)
@@ -95,7 +95,7 @@ qr(A::BitMatrix) = qr(float(A))
 function kron(a::BitVector, b::BitVector)
     m = length(a)
     n = length(b)
-    R = falses(n * m)
+    R = BitVector(false, n * m)
     Rc = R.chunks
     bc = b.chunks
     for j = 1:m
@@ -107,7 +107,7 @@ end
 function kron(a::BitMatrix, b::BitMatrix)
     mA,nA = size(a)
     mB,nB = size(b)
-    R = falses(mA*mB, nA*nB)
+    R = BitMatrix(false, mA*mB, nA*nB)
 
     for i = 1:mA
         ri = (1:mB) .+ ((i-1)*mB)
@@ -253,7 +253,7 @@ end
 function transpose(B::BitMatrix)
     l1 = size(B, 1)
     l2 = size(B, 2)
-    Bt = falses(l2, l1)
+    Bt = BitMatrix(false, l2, l1)
 
     cgap1, cinc1 = Base._div64(l1), Base._mod64(l1)
     cgap2, cinc2 = Base._div64(l2), Base._mod64(l2)

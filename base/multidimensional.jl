@@ -1588,7 +1588,7 @@ julia> unique(A, 3)
         uniquerows = collect(values(firstrow))
 
         # Check for collisions
-        collided = similar(falses, indices(A, dim))
+        collided = BitArray(false, to_shape(indices(A, dim)))
         @inbounds begin
             @nloops $N i A d->(if d == dim
                 k = i_d

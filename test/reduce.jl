@@ -171,7 +171,7 @@ end
 @test prod(1:big(16)) == big(20922789888000)
 @test prod(big(typemax(Int64)):big(typemax(Int64))+16) == parse(BigInt,"25300281663413827620486300433089141956148633919452440329174083959168114253708467653081909888307573358090001734956158476311046124934597861626299416732205795533726326734482449215730132757595422510465791525610410023802664753402501982524443370512346073948799084936298007821432734720004795146875180123558814648586972474376192000")
 
-@test typeof(prod(Array(trues(10)))) == Bool
+@test typeof(prod(Array(BitVector(true, 10)))) == Bool
 
 # check type-stability
 prod2(itr) = invoke(prod, Tuple{Any}, itr)
@@ -272,10 +272,10 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
 @test all(x->x>0, [4]) == true
 @test all(x->x>0, [-3, 4, 5]) == false
 
-@test reduce((a, b) -> a .| b, fill(trues(5), 24))  == trues(5)
-@test reduce((a, b) -> a .| b, fill(falses(5), 24)) == falses(5)
-@test reduce((a, b) -> a .& b, fill(trues(5), 24))  == trues(5)
-@test reduce((a, b) -> a .& b, fill(falses(5), 24)) == falses(5)
+@test reduce((a, b) -> a .| b, fill(BitVector(true, 5), 24))  == BitVector(true, 5)
+@test reduce((a, b) -> a .| b, fill(BitVector(false, 5), 24)) == BitVector(false, 5)
+@test reduce((a, b) -> a .& b, fill(BitVector(true, 5), 24))  == BitVector(true, 5)
+@test reduce((a, b) -> a .& b, fill(BitVector(false, 5), 24)) == BitVector(false, 5)
 
 @test_throws TypeError any(x->0, [false])
 @test_throws TypeError all(x->0, [false])

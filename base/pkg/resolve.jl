@@ -86,7 +86,7 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
 
     svdict = Dict{Tuple{String,VersionNumber},Int}(vers[i][1:2]=>i for i = 1:nv)
 
-    checked = falses(nv)
+    checked = BitVector(false, nv)
 
     problematic = Vector{Tuple{String,VersionNumber,String}}()
     i = 1

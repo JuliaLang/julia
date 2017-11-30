@@ -392,42 +392,10 @@ function fill!(B::BitArray, x)
     return B
 end
 
-"""
-    falses(dims)
-
-Create a `BitArray` with all values set to `false`.
-
-# Examples
-```jldoctest
-julia> falses(2,3)
-2×3 BitArray{2}:
- false  false  false
- false  false  false
-```
-"""
-falses(dims::Dims) = fill!(BitArray(uninitialized, dims), false)
-falses(dims::Integer...) = falses(map(Int,dims))
-
-"""
-    trues(dims)
-
-Create a `BitArray` with all values set to `true`.
-
-# Examples
-```jldoctest
-julia> trues(2,3)
-2×3 BitArray{2}:
- true  true  true
- true  true  true
-```
-"""
-trues(dims::Dims) = fill!(BitArray(uninitialized, dims), true)
-trues(dims::Integer...) = trues(map(Int,dims))
-
 function one(x::BitMatrix)
     m, n = size(x)
     m == n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
-    a = falses(n, n)
+    a = BitMatrix(false, n, n)
     for i = 1:n
         a[i,i] = true
     end
@@ -1152,7 +1120,7 @@ Performs a bitwise not operation on `B`. See [`~`](@ref).
 
 # Examples
 ```jldoctest
-julia> A = trues(2,2)
+julia> A = BitMatrix(true, 2, 2)
 2×2 BitArray{2}:
  true  true
  true  true
@@ -1202,9 +1170,9 @@ end
 (/)(x::Number, B::BitArray) = (/)(x, Array(B))
 
 # broadcast specializations for &, |, and xor/⊻
-broadcast(::typeof(&), B::BitArray, x::Bool) = x ? copy(B) : falses(size(B))
+broadcast(::typeof(&), B::BitArray, x::Bool) = x ? copy(B) : BitArray(false, size(B))
 broadcast(::typeof(&), x::Bool, B::BitArray) = broadcast(&, B, x)
-broadcast(::typeof(|), B::BitArray, x::Bool) = x ? trues(size(B)) : copy(B)
+broadcast(::typeof(|), B::BitArray, x::Bool) = x ? BitArray(true, size(B)) : copy(B)
 broadcast(::typeof(|), x::Bool, B::BitArray) = broadcast(|, B, x)
 broadcast(::typeof(xor), B::BitArray, x::Bool) = x ? .~B : copy(B)
 broadcast(::typeof(xor), x::Bool, B::BitArray) = broadcast(xor, B, x)
@@ -1360,7 +1328,7 @@ reverse(v::BitVector) = reverse!(copy(v))
 function (<<)(B::BitVector, i::UInt)
     n = length(B)
     i == 0 && return copy(B)
-    A = falses(n)
+    A = BitVector(false, n)
     i < n && copy_chunks!(A.chunks, 1, B.chunks, i+1, n-i)
     return A
 end
@@ -1368,7 +1336,7 @@ end
 function (>>>)(B::BitVector, i::UInt)
     n = length(B)
     i == 0 && return copy(B)
-    A = falses(n)
+    A = BitVector(false, n)
     i < n && copy_chunks!(A.chunks, i+1, B.chunks, 1, n-i)
     return A
 end
@@ -1688,7 +1656,7 @@ end
 
 function findnz(B::BitMatrix)
     I, J = findn(B)
-    return I, J, trues(length(I))
+    return I, J, BitVector(true, length(I))
 end
 
 ## Reductions ##
@@ -1865,7 +1833,7 @@ end
 function cat(dims::Integer, X::Union{BitArray, Bool}...)
     catdims = dims2cat(dims)
     shape = cat_shape(catdims, (), map(cat_size, X)...)
-    A = falses(shape)
+    A = BitArray(false, shape)
     return _cat(A, shape, catdims, X...)
 end
 

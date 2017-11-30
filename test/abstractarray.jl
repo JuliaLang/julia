@@ -73,24 +73,24 @@ end
 end
 
 @testset "logical" begin
-    @test checkbounds(Bool, A, trues(5), trues(4), trues(3)) == true
-    @test checkbounds(Bool, A, trues(6), trues(4), trues(3)) == false
-    @test checkbounds(Bool, A, trues(5), trues(5), trues(3)) == false
-    @test checkbounds(Bool, A, trues(5), trues(4), trues(4)) == false
-    @test checkbounds(Bool, A, trues(60)) == true
-    @test checkbounds(Bool, A, trues(61)) == false
-    @test checkbounds(Bool, A, 2, 2, 2, trues(1)) == true  # extra indices
-    @test checkbounds(Bool, A, 2, 2, 2, trues(2)) == false
-    # @test checkbounds(Bool, A, trues(5), trues(12)) == false # TODO: PLI
-    # @test checkbounds(Bool, A, trues(5), trues(13)) == false
-    # @test checkbounds(Bool, A, trues(6), trues(12)) == false
-    @test checkbounds(Bool, A, trues(5, 4, 3)) == true
-    @test checkbounds(Bool, A, trues(5, 4, 2)) == false
-    @test checkbounds(Bool, A, trues(5, 12)) == false
-    @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 3)) == false
-    @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 2)) == false
-    @test checkbounds(Bool, A, trues(1, 5), trues(1, 5, 1), trues(1, 1, 3)) == false
-    @test checkbounds(Bool, A, trues(1, 5), :, 2) == false
+    @test checkbounds(Bool, A, BitArray(true, 5), BitArray(true, 4), BitArray(true, 3)) == true
+    @test checkbounds(Bool, A, BitArray(true, 6), BitArray(true, 4), BitArray(true, 3)) == false
+    @test checkbounds(Bool, A, BitArray(true, 5), BitArray(true, 5), BitArray(true, 3)) == false
+    @test checkbounds(Bool, A, BitArray(true, 5), BitArray(true, 4), BitArray(true, 4)) == false
+    @test checkbounds(Bool, A, BitArray(true, 60)) == true
+    @test checkbounds(Bool, A, BitArray(true, 61)) == false
+    @test checkbounds(Bool, A, 2, 2, 2, BitArray(true, 1)) == true  # extra indices
+    @test checkbounds(Bool, A, 2, 2, 2, BitArray(true, 2)) == false
+    # @test checkbounds(Bool, A, BitArray(true, 5), BitArray(true, 12)) == false # TODO: PLI
+    # @test checkbounds(Bool, A, BitArray(true, 5), BitArray(true, 13)) == false
+    # @test checkbounds(Bool, A, BitArray(true, 6), BitArray(true, 12)) == false
+    @test checkbounds(Bool, A, BitArray(true, 5, 4, 3)) == true
+    @test checkbounds(Bool, A, BitArray(true, 5, 4, 2)) == false
+    @test checkbounds(Bool, A, BitArray(true, 5, 12)) == false
+    @test checkbounds(Bool, A, BitArray(true, 1, 5), BitArray(true, 1, 4, 1), BitArray(true, 1, 1, 3)) == false
+    @test checkbounds(Bool, A, BitArray(true, 1, 5), BitArray(true, 1, 4, 1), BitArray(true, 1, 1, 2)) == false
+    @test checkbounds(Bool, A, BitArray(true, 1, 5), BitArray(true, 1, 5, 1), BitArray(true, 1, 1, 3)) == false
+    @test checkbounds(Bool, A, BitArray(true, 1, 5), :, 2) == false
 end
 
 @testset "array of CartesianIndex" begin
