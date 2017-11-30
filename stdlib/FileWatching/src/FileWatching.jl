@@ -77,7 +77,7 @@ mutable struct FileMonitor
             Libc.free(handle)
             throw(UVError("FileMonitor", err))
         end
-        finalizer(uvfinalize, this)
+        finalizer(this, uvfinalize)
         return this
     end
 end
@@ -98,7 +98,7 @@ mutable struct PollingFileWatcher
             Libc.free(handle)
             throw(UVError("PollingFileWatcher", err))
         end
-        finalizer(uvfinalize, this)
+        finalizer(this, uvfinalize)
         return this
     end
 end
@@ -146,7 +146,7 @@ mutable struct _FDWatcher
                     Libc.free(handle)
                     throw(UVError("FDWatcher", err))
                 end
-                finalizer(uvfinalize, this)
+                finalizer(this, uvfinalize)
                 FDWatchers[fdnum] = this
                 return this
             end
@@ -195,7 +195,7 @@ mutable struct _FDWatcher
                 Libc.free(handle)
                 throw(UVError("FDWatcher", err))
             end
-            finalizer(uvfinalize, this)
+            finalizer(this, uvfinalize)
             return this
         end
     end
@@ -208,13 +208,13 @@ mutable struct FDWatcher
     # WARNING: make sure `close` has been manually called on this watcher before closing / destroying `fd`
     function FDWatcher(fd::RawFD, readable::Bool, writable::Bool)
         this = new(_FDWatcher(fd, readable, writable), readable, writable)
-        finalizer(close, this)
+        finalizer(this, close)
         return this
     end
     @static if Sys.iswindows()
         function FDWatcher(fd::WindowsRawSocket, readable::Bool, writable::Bool)
             this = new(_FDWatcher(fd, readable, writable), readable, writable)
-            finalizer(close, this)
+            finalizer(this, close)
             return this
         end
     end

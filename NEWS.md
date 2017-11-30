@@ -294,13 +294,7 @@ This section lists changes that do not have deprecation warnings.
   * The return type of `reinterpret` has changed to `ReinterpretArray`. `reinterpret` on sparse
     arrays has been discontinued.
 
-  * `Base.find_in_path` is now `Base.find_package` or `Base.find_source_file` ([#24320]).
-
-  * `finalizer` now takes functions or pointers as its first argument, and the object being
-    finalized as its second (rather than the reverse). For the majority of use cases
-    deprecation warnings will be triggered. However, deprecation warnings will not trigger where
-    (1) the callable argument is not a subtype of `Function`; or (2) both arguments are
-    `Function`s or `Ptr{Void}`s ([#24605]).
+  * `Base.find_in_path` is now `Base.find_package` or `Base.find_source_file` ([#24320])
 
   * The `kill` function now throws errors on user error (e.g. on permission
     errors), but returns successfully if the process had previously exited.

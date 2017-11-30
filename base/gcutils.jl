@@ -5,13 +5,13 @@
 ==(w, v::WeakRef) = isequal(w, v.value)
 
 """
-    finalizer(f, x)
+    finalizer(x, f)
 
 Register a function `f(x)` to be called when there are no program-accessible references to
 `x`, and return `x`. The type of `x` must be a `mutable struct`, otherwise the behavior of
 this function is unpredictable.
 """
-function finalizer(@nospecialize(f), @nospecialize(o))
+function finalizer(@nospecialize(o), @nospecialize(f))
     if isimmutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end
@@ -20,7 +20,7 @@ function finalizer(@nospecialize(f), @nospecialize(o))
     return o
 end
 
-function finalizer(f::Ptr{Void}, o::T) where T
+function finalizer(o::T, f::Ptr{Void}) where T
     @_inline_meta
     if isimmutable(T)
         error("objects of type ", T, " cannot be finalized")

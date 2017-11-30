@@ -896,7 +896,7 @@ end
 # finalizers
 let A = [1]
     local x = 0
-    finalizer(a->(x+=1), A)
+    finalizer(A, a->(x+=1))
     finalize(A)
     @test x == 1
     A = 0
@@ -3594,7 +3594,7 @@ end
 let
     obj = Ref(1)
     finalized = 0
-    finalizer((obj) -> (finalized = 1), obj)
+    finalizer(obj, (obj) -> (finalized = 1))
     # obj should be marked for promotion after the second gc and be promoted
     # after the third GC
     # GC_CLEAN; age = 0
@@ -3624,10 +3624,10 @@ let
     obj1 = Ref(1)
     obj2 = Ref(1)
     finalized = 0
-    finalizer((obj) -> (finalized += 1), obj1)
-    finalizer((obj) -> (finalized += 1), obj1)
-    finalizer((obj) -> (finalized += 1; finalize(obj1)), obj2)
-    finalizer((obj) -> (finalized += 1; finalize(obj1)), obj2)
+    finalizer(obj1, (obj) -> (finalized += 1))
+    finalizer(obj1, (obj) -> (finalized += 1))
+    finalizer(obj2, (obj) -> (finalized += 1; finalize(obj1)))
+    finalizer(obj2, (obj) -> (finalized += 1; finalize(obj1)))
     finalize(obj2)
     @test finalized == 4
 end
@@ -3964,10 +3964,10 @@ end
 # doesn't keep the object alive.
 @noinline function create_dead_object13995(finalized)
     obj = Ref(1)
-    finalizer((x)->(finalized[1] = true), obj)
-    finalizer((x)->(finalized[2] = true), obj)
-    finalizer((x)->(finalized[3] = true), obj)
-    finalizer((x)->(finalized[4] = true), obj)
+    finalizer(obj, (x)->(finalized[1] = true))
+    finalizer(obj, (x)->(finalized[2] = true))
+    finalizer(obj, (x)->(finalized[3] = true))
+    finalizer(obj, (x)->(finalized[4] = true))
     nothing
 end
 # disable GC to make sure no collection/promotion happens

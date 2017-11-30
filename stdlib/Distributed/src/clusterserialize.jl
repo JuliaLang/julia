@@ -74,9 +74,7 @@ function serialize(s::ClusterSerializer, t::TypeName)
         serialize_typename(s, t)
         s.anonfunc_id = prev
         push!(s.tn_obj_sent, identifier)
-        finalizer(t) do x
-            cleanup_tname_glbs(s, identifier)
-        end
+        finalizer(t, x->cleanup_tname_glbs(s, identifier))
     end
 
     # Send global refs if required.
@@ -135,9 +133,7 @@ function serialize_global_from_main(s::ClusterSerializer, sym)
     elseif !haskey(s.glbs_sent, oid)
         # set up a finalizer the first time this object is sent
         try
-            finalizer(v) do x
-                delete_global_tracker(s,x)
-            end
+            finalizer(v, x->delete_global_tracker(s,x))
         catch ex
             # Do not track objects that cannot be finalized.
             if isa(ex, ErrorException)

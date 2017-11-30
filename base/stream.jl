@@ -120,7 +120,7 @@ mutable struct PipeEndpoint <: LibuvStream
                 ReentrantLock(),
                 DEFAULT_READ_BUFFER_SZ)
         associate_julia_struct(handle, p)
-        finalizer(uvfinalize, p)
+        finalizer(p, uvfinalize)
         return p
     end
 end
@@ -136,7 +136,7 @@ mutable struct PipeServer <: LibuvServer
                 Condition(),
                 Condition())
         associate_julia_struct(p.handle, p)
-        finalizer(uvfinalize, p)
+        finalizer(p, uvfinalize)
         return p
     end
 end
@@ -169,7 +169,7 @@ mutable struct TTY <: LibuvStream
             nothing, ReentrantLock(),
             DEFAULT_READ_BUFFER_SZ)
         associate_julia_struct(handle, tty)
-        finalizer(uvfinalize, tty)
+        finalizer(tty, uvfinalize)
         @static if Sys.iswindows()
             tty.ispty = ccall(:jl_ispty, Cint, (Ptr{Void},), handle) != 0
         end

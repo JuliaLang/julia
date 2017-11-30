@@ -19,7 +19,7 @@ mutable struct GitCredential
             username::Nullable{<:AbstractString},
             password::Nullable{<:AbstractString})
         c = new(protocol, host, path, username, password, true)
-        finalizer(securezero!, c)
+        finalizer(c, securezero!)
         return c
     end
 end

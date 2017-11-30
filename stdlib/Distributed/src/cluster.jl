@@ -518,11 +518,7 @@ function create_worker(manager, wconfig)
 
     w = Worker(w.id, r_s, w_s, manager; config=wconfig)
     # install a finalizer to perform cleanup if necessary
-    finalizer(w) do w
-        if myid() == 1
-            manage(w.manager, w.id, w.config, :finalize)
-        end
-    end
+    finalizer(w, (w)->if myid() == 1 manage(w.manager, w.id, w.config, :finalize) end)
 
     # set when the new worker has finshed connections with all other workers
     ntfy_oid = RRID()

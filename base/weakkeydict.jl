@@ -22,7 +22,7 @@ mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
         t.finalizer = function (k)
             # when a weak key is finalized, remove from dictionary if it is still there
             if islocked(t)
-                finalizer(t.finalizer, k)
+                finalizer(k, t.finalizer)
                 return nothing
             end
             delete!(t, k)
@@ -91,7 +91,7 @@ trylock(f, wkh::WeakKeyDict) = trylock(f, wkh.lock)
 
 function setindex!(wkh::WeakKeyDict{K}, v, key) where K
     k = convert(K, key)
-    finalizer(wkh.finalizer, k)
+    finalizer(k, wkh.finalizer)
     lock(wkh) do
         wkh.ht[WeakRef(k)] = v
     end
@@ -121,12 +121,12 @@ length(t::WeakKeyDict) = length(t.ht)
 
 function start(t::WeakKeyDict{K,V}) where V where K
     gc_token = Ref{Bool}(false) # no keys will be deleted via finalizers until this token is gc'd
-    finalizer(gc_token) do r
+    finalizer(gc_token, function(r)
         if r[]
             r[] = false
             unlock(t.lock)
         end
-    end
+    end)
     s = lock(t.lock)
     gc_token[] = true
     return (start(t.ht), gc_token)
