@@ -105,13 +105,20 @@ end
     @test ismissing(missing * "a")
 end
 
+# Emulate a unitful type such as Dates.Minute
+struct Unit
+    value::Int
+end
+Base.zero(::Type{Unit}) = Unit(0)
+Base.one(::Type{Unit}) = 1
+
 @testset "elementary functions" begin
     elementary_functions = [abs, abs2, sign,
                             acos, acosh, asin, asinh, atan, atanh, sin, sinh,
                             conj, cos, cosh, tan, tanh,
                             exp, exp2, expm1, log, log10, log1p, log2,
                             exponent, sqrt, gamma, lgamma,
-                            identity, zero,
+                            identity, zero, one, oneunit,
                             iseven, isodd, ispow2,
                             isfinite, isinf, isnan, iszero,
                             isinteger, isreal, isempty, transpose, float]
@@ -121,9 +128,22 @@ end
         @test ismissing(f(missing))
     end
 
-    @test zero(Union{Int, Missing}) === 0
-    @test zero(Union{Float64, Missing}) === 0.0
+    for T in (Int, Float64)
+        @test zero(Union{T, Missing}) === T(0)
+        @test one(Union{T, Missing}) === T(1)
+        @test oneunit(Union{T, Missing}) === T(1)
+    end
+
+    for T in (Unit,)
+        @test zero(Union{T, Missing}) === T(0)
+        @test one(Union{T, Missing}) === 1
+        @test oneunit(Union{T, Missing}) === T(1)
+    end
+
     @test_throws MethodError zero(Any)
+    @test_throws MethodError one(Any)
+    @test_throws MethodError oneunit(Any)
+
     @test_throws MethodError zero(String)
     @test_throws MethodError zero(Union{String, Missing})
 end

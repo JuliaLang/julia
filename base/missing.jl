@@ -48,7 +48,7 @@ isless(::Missing, ::Any) = false
 isless(::Any, ::Missing) = true
 
 # Unary operators/functions
-for f in (:(!), :(+), :(-), :(identity), :(zero),
+for f in (:(!), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
           :(abs), :(abs2), :(sign),
           :(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
           :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
@@ -60,9 +60,12 @@ for f in (:(!), :(+), :(-), :(identity), :(zero),
     @eval Math.$(f)(::Missing) = missing
 end
 
-zero(::Type{Union{T, Missing}}) where {T} = zero(T)
-# To prevent StackOverflowError
-zero(::Type{Any}) = throw(MethodError(zero, (Any,)))
+for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
+    @eval function $(f)(::Type{Union{T, Missing}}) where T
+        T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
+        $f(T)
+    end
+end
 
 # Binary operators/functions
 for f in (:(+), :(-), :(*), :(/), :(^),
