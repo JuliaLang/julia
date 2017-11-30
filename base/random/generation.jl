@@ -309,22 +309,22 @@ rand(rng::AbstractRNG, sp::SamplerTrivial{<:Union{Associative,AbstractSet}}) =
 
 # we use collect(str), which is most of the time more efficient than specialized methods
 # (except maybe for very small arrays)
-Sampler(rng::AbstractRNG, str::AbstractString, n::Repetition) = Sampler(rng, collect(str), n)
+Sampler(rng::AbstractRNG, str::AbstractString, n::Val{Inf}) = Sampler(rng, collect(str), n)
 
 # when generating only one char from a string, the specialized method below
 # is usually more efficient
-Sampler(::AbstractRNG, str::AbstractString, ::Val{1}) = SamplerTrivial(str)
+Sampler(rng::AbstractRNG, str::AbstractString, ::Val{1}) =
+    SamplerSimple(str, Sampler(rng, 1:_endof(str), Val(Inf)))
 
 isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(Base.@gc_preserve s unsafe_load(pointer(s), i))
 isvalid_unsafe(s::AbstractString, i) = isvalid(s, i)
 _endof(s::String) = sizeof(s)
 _endof(s::AbstractString) = endof(s)
 
-function rand(rng::AbstractRNG, sp::SamplerTrivial{<:AbstractString})::Char
+function rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractString,<:Sampler})::Char
     str = sp[]
-    sp_pos = Sampler(rng, 1:_endof(str))
     while true
-        pos = rand(rng, sp_pos)
+        pos = rand(rng, sp.data)
         isvalid_unsafe(str, pos) && return str[pos]
     end
 end
