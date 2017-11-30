@@ -334,11 +334,10 @@ fill(v, dims::Dims)       = fill!(Array{typeof(v)}(uninitialized, dims), v)
 fill(v, dims::Integer...) = fill!(Array{typeof(v)}(uninitialized, dims...), v)
 
 """
-    zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
+    zeros([T=Float64,] dims...)
 
-Create an array of all zeros with the same layout as `A`, element type `T` and size `dims`.
-The `A` argument can be skipped, which behaves like `Array{Float64,0}(uninitialized)` was passed.
-For convenience `dims` may also be passed in variadic form.
+Create an `Array`, with element type `T`, of all zeros with size specified by `dims`.
+See also [`ones`](@ref), [`similar`](@ref).
 
 # Examples
 ```jldoctest
@@ -350,72 +349,27 @@ julia> zeros(Int8, 2, 3)
 2×3 Array{Int8,2}:
  0  0  0
  0  0  0
-
-julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
- 1  2
- 3  4
-
-julia> zeros(A)
-2×2 Array{Int64,2}:
- 0  0
- 0  0
-
-julia> zeros(A, Float64)
-2×2 Array{Float64,2}:
- 0.0  0.0
- 0.0  0.0
-
-julia> zeros(A, Bool, (3,))
-3-element Array{Bool,1}:
- false
- false
- false
 ```
-See also [`ones`](@ref), [`similar`](@ref).
 """
 function zeros end
 
 """
-    ones([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
+    ones([T=Float64,] dims...)
 
-Create an array of all ones with the same layout as `A`, element type `T` and size `dims`.
-The `A` argument can be skipped, which behaves like `Array{Float64,0}(uninitialized)` was passed.
-For convenience `dims` may also be passed in variadic form.
+Create an `Array`, with element type `T`, of all ones with size specified by `dims`.
+See also [`zeros`](@ref), [`similar`](@ref).
 
 # Examples
 ```jldoctest
-julia> ones(Complex128, 2, 3)
-2×3 Array{Complex{Float64},2}:
- 1.0+0.0im  1.0+0.0im  1.0+0.0im
- 1.0+0.0im  1.0+0.0im  1.0+0.0im
-
 julia> ones(1,2)
 1×2 Array{Float64,2}:
  1.0  1.0
 
-julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
- 1  2
- 3  4
-
-julia> ones(A)
-2×2 Array{Int64,2}:
- 1  1
- 1  1
-
-julia> ones(A, Float64)
-2×2 Array{Float64,2}:
- 1.0  1.0
- 1.0  1.0
-
-julia> ones(A, Bool, (3,))
-3-element Array{Bool,1}:
- true
- true
- true
+julia> ones(Complex128, 2, 3)
+2×3 Array{Complex{Float64},2}:
+ 1.0+0.0im  1.0+0.0im  1.0+0.0im
+ 1.0+0.0im  1.0+0.0im  1.0+0.0im
 ```
-See also [`zeros`](@ref), [`similar`](@ref).
 """
 function ones end
 
