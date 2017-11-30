@@ -915,6 +915,38 @@ end
     end
 end
 
+@testset "exp2" begin
+    # Overflow
+    @test exp2(1024.0) === Inf
+    @test exp2(128f0) === Inf32
+    # Just below overflow
+    @test !isinf(exp2(prevfloat(1024.0)))
+    @test !isinf(exp2(prevfloat(128f0)))
+    # Underflow
+    @test exp2(-1075.0) === 0.0
+    @test exp2(-150f0) === 0f0
+    # Small values branch
+    @test exp2(prevfloat(2.0^-54)) === 1.0 + prevfloat(2.0^-54)
+    @test exp2(prevfloat(2f0^-24)) === 1f0 + prevfloat(2f0^-24)
+    # NaN test
+    @test isnan_type(Float32, exp2(Float32(NaN)))
+    @test isnan_type(Float64, exp2(Float64(NaN)))
+    perturb = rand(100)
+    for x in -1074.0:1023.0
+        for xp in perturb
+            by = exp2(big(x+xp))
+            @test Float64((exp2(x+xp) - by))/eps(abs(Float64(by))) <= 1
+        end
+    end
+    perturb = rand(Float32, 100)
+    for x in -149f0:127f0
+        for xp in perturb
+            by = exp2(big(x+xp))
+            @test Float64((exp2(x+xp) - by))/eps(abs(Float32(by))) <= 1
+        end
+    end
+end
+
 # Define simple wrapper of a Float type:
 struct FloatWrapper <: Real
     x::Float64
