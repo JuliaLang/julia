@@ -664,6 +664,20 @@ int jl_is_submodule(jl_module_t *child, jl_module_t *parent)
     }
 }
 
+JL_DLLEXPORT jl_value_t *jl_fieldcall_lookup(jl_module_t *paren_mod,
+                                             jl_datatype_t *vt,
+                                             jl_sym_t *field)
+{
+    assert(jl_is_leaf_type((jl_value_t*)vt) && vt != jl_module_type);
+    assert(jl_is_module(paren_mod));
+    assert(jl_is_symbol(field));
+    jl_module_t *mod = vt->name->module;
+    // This is needed to give builtin types access to top functions.
+    if (mod == jl_core_module)
+        mod = paren_mod;
+    return jl_eval_global_var(mod, field);
+}
+
 #ifdef __cplusplus
 }
 #endif

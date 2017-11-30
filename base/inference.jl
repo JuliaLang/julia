@@ -1806,6 +1806,38 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
     return tf[3](argtypes...)
 end
 
+function get_type_module(@nospecialize(ty))
+    # TODO: this can be relaxed
+    isleaftype(ty) || return nothing
+    return ty.name.module
+end
+
+function fieldcall_lookup_tfunc(@nospecialize(f), argtypes, sv)
+    objt = argtypes[2]
+    objtw = widenconst(objt)
+    fldt = argtypes[3]
+    if objtw === Module
+        return getfield_tfunc(objt, fldt)
+    elseif !isleaftype(objtw)
+        return Any
+    elseif !(isa(fldt, Const) && isa(fldt.val, Symbol))
+        return Any
+    end
+    fld = fldt.val::Symbol
+    tymod = get_type_module(objtw)
+    parent_mod = typeof(f).name.module
+    if tymod === nothing
+        return Any
+    elseif tymod === Core
+        tymod = parent_mod
+    end
+    FieldFuncT = parent_mod.FieldFunc
+    newft = abstract_eval_global(tymod, fld)
+    new_types = [Type{FieldFuncT}, newft, objtw]
+    return abstract_call_gf_by_type(FieldFuncT, new_types,
+                                    argtypes_to_type(new_types), sv)
+end
+
 limit_tuple_depth(params::InferenceParams, @nospecialize(t)) = limit_tuple_depth_(params,t,0)
 
 function limit_tuple_depth_(params::InferenceParams, @nospecialize(t), d::Int)
@@ -2492,6 +2524,8 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
             end
         end
         return isa(rt, TypeVar) ? rt.ub : rt
+    elseif length(fargs) == 3 && istopfunction(tm, f, :fieldcall_lookup)
+        return fieldcall_lookup_tfunc(f, argtypes, sv)
     elseif f === Core.kwfunc
         if length(argtypes) == 2
             ft = widenconst(argtypes[2])
@@ -4582,6 +4616,45 @@ function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::Opti
     return NF
 end
 
+function try_inline_fieldcall_lookup(@nospecialize(f),
+                                     @nospecialize(ft), e, atypes,
+                                     pending_stmt, boundscheck, sv)
+    objt = atypes[2]
+    objtw = widenconst(objt)
+    fldt = atypes[3]
+    if !(isa(fldt, Const) && isa(fldt.val, Symbol))
+        return NF
+    end
+    fld = fldt.val::Symbol
+    argexprs = e.args
+    if objtw === Module
+        argexprs[1] = getfield
+        atypes[1] = typeof(getfield)
+        return inlineable(getfield, typeof(getfield), e, atypes,
+                          pending_stmt, boundscheck, sv)
+    end
+    tymod = get_type_module(objtw)
+    parent_mod = typeof(f).name.module
+    if tymod === nothing
+        return Any
+    elseif tymod === Core
+        tymod = parent_mod
+    end
+    newft = abstract_eval_global(tymod, fld)
+    FieldFuncT = parent_mod.FieldFunc
+    # obj
+    argexprs[3] = argexprs[2]
+    atypes[3] = atypes[2]
+    # func
+    argexprs[2] = GlobalRef(tymod, fld)
+    atypes[2] = newft
+    # FieldFunc
+    argexprs[1] = FieldFuncT
+    atypes[1] = Type{FieldFuncT}
+    return inlineable(FieldFuncT, Type{FieldFuncT}, e, atypes,
+                      pending_stmt, boundscheck, sv)
+end
+
 # inline functions whose bodies are "inline_worthy"
 # where the function body doesn't contain any argument more than once.
 # static parameters are ok if all the static parameter values are leaf types,
@@ -4603,6 +4676,11 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         end
     end
     topmod = _topmod(sv)
+    if istopfunction(topmod, f, :fieldcall_lookup)
+        return try_inline_fieldcall_lookup(f, ft, e, atypes,
+                                           pending_stmt,
+                                           boundscheck, sv)
+    end
     # special-case inliners for known pure functions that compute types
     if sv.params.inlining
         if isa(e.typ, Const) # || isconstType(e.typ)

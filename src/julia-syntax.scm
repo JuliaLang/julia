@@ -1958,6 +1958,11 @@
    (lambda (e) ; e = (|.| f x)
      (expand-fuse-broadcast '() e))
 
+   '-->
+   (lambda (e)
+     `(call (top fieldcall_lookup) ,(expand-forms (cadr e))
+            (quote ,(caddr e))))
+
    '.=
    (lambda (e)
      (expand-fuse-broadcast (cadr e) (caddr e)))

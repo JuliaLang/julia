@@ -778,7 +778,8 @@ end
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
     if isa(func, Symbol) || (isa(func, Expr) &&
-            (func.head == :. || func.head == :curly))
+            (func.head === :. || func.head === :--> ||
+             func.head === :curly))
         show_unquoted(io, func, indent)
     else
         print(io, '(')
@@ -1226,6 +1227,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif head === :meta && length(args) == 2 && args[1] === :pop_loc
         print(io, "# meta: pop locations ($(args[2]))")
         show_type = false
+    elseif head === :--> && length(args) == 2 && isa(args[2], Symbol)
+        func_prec = operator_precedence(head)
+        args_ = args[1], args[2]
+        show_list(io, args_, head, indent, func_prec)
     # print anything else as "Expr(head, args...)"
     else
         if head !== :invoke

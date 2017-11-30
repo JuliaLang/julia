@@ -27,6 +27,16 @@ macro _gc_preserve_end(token)
 end
 
 """
+    @__MODULE__ -> Module
+
+Get the `Module` of the toplevel eval,
+which is the `Module` code is currently being read from.
+"""
+macro __MODULE__()
+    return __module__
+end
+
+"""
     @nospecialize
 
 Applied to a function argument name, hints to the compiler that the method
@@ -664,6 +674,29 @@ function invokelatest(f, args...; kwargs...)
     # We use a closure (`inner`) to handle kwargs.
     inner() = f(args...; kwargs...)
     Core._apply_latest(inner)
+end
+
+# Use an explicit closure so that type inference can construct it
+struct FieldFunc{F,T}
+    f::F
+    v::T
+    FieldFunc{F,T}(f::F, v::T) where {F,T} = new(f, v)
+end
+FieldFunc(f::F, v::T) where {F,T} = FieldFunc{F,T}(f, v)
+FieldFunc(f::F, ::Type{T}) where {F,T} = FieldFunc{F,Type{T}}(f, T)
+
+function (f::FieldFunc)(args...; kwargs...)
+    @_inline_meta
+    return f.f(f.v, args...; kwargs...)
+end
+
+function fieldcall_lookup(@nospecialize(obj), field::Symbol)
+    if isa(obj, Module)
+        return Core.getfield(obj, field)
+    end
+    f = ccall(:jl_fieldcall_lookup, Any, (Any, Any, Any),
+              @__MODULE__, typeof(obj), field)
+    return FieldFunc(f, obj)
 end
 
 # iteration protocol

@@ -32,16 +32,6 @@ Base.LinAlg
 module_parent(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
 
 """
-    @__MODULE__ -> Module
-
-Get the `Module` of the toplevel eval,
-which is the `Module` code is currently being read from.
-"""
-macro __MODULE__()
-    return __module__
-end
-
-"""
     fullname(m::Module)
 
 Get the fully-qualified name of a module as a tuple of symbols. For example,
