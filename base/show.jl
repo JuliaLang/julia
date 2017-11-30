@@ -132,7 +132,7 @@ function show_default(io::IO, @nospecialize(x))
     nb = sizeof(x)
     if nf != 0 || nb == 0
         if !show_circular(io, x)
-            recur_io = IOContext(io, :SHOWN_SET => x)
+            recur_io = IOContext(io, Pair{Symbol,Any}(:SHOWN_SET, x))
             for i in 1:nf
                 f = fieldname(t, i)
                 if !isdefined(x, f)
