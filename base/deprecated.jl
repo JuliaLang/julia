@@ -2168,6 +2168,11 @@ end
 
 @deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
 
+# Remember to delete the module when removing this
+@eval Math.JuliaLibm begin
+    Base.@deprecate log(x) Base.log(x)
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
