@@ -2530,7 +2530,7 @@ end
 f7221(::T) where {T<:Number} = 1
 f7221(::BitArray) = 2
 f7221(::AbstractVecOrMat) = 3
-@test f7221(trues(1)) == 2
+@test f7221(BitVector(true, 1)) == 2
 
 # issue #10570
 struct Array_512_Uint8

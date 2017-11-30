@@ -316,7 +316,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
     # Finally uninstall unneeded packages:
     # start from the required ones and keep only
     # the packages reachable from them along the graph
-    uninst = trues(np)
+    uninst = BitVector(true, np)
     staged = Set{String}(keys(reqs))
     seen = copy(staged)
 

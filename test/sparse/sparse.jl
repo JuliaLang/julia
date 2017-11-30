@@ -174,9 +174,9 @@ end
 
 @testset "sparse matrix * BitArray" begin
     A = sprand(5,5,0.2)
-    B = trues(5)
+    B = BitVector(true, 5)
     @test A*B ≈ Array(A)*B
-    B = trues(5,5)
+    B = BitMatrix(true, 5, 5)
     @test A*B ≈ Array(A)*B
     @test B*A ≈ B*Array(A)
 end
@@ -696,13 +696,13 @@ end
         @test_throws BoundsError ss116[end+1, 1]
         @test_throws BoundsError ss116[1, 0]
         @test_throws BoundsError ss116[1, end+1]
-        for j in (1, 1:size(s116,2), 1:1, Int[1], trues(size(s116, 2)), 1:0, Int[])
+        for j in (1, 1:size(s116,2), 1:1, Int[1], BitArray(true, size(s116, 2)), 1:0, Int[])
             @test_throws BoundsError ss116[0:1, j]
             @test_throws BoundsError ss116[[0, 1], j]
             @test_throws BoundsError ss116[end:end+1, j]
             @test_throws BoundsError ss116[[end, end+1], j]
         end
-        for i in (1, 1:size(s116,1), 1:1, Int[1], trues(size(s116, 1)), 1:0, Int[])
+        for i in (1, 1:size(s116,1), 1:1, Int[1], BitArray(true, size(s116, 1)), 1:0, Int[])
             @test_throws BoundsError ss116[i, 0:1]
             @test_throws BoundsError ss116[i, [0, 1]]
             @test_throws BoundsError ss116[i, end:end+1]
@@ -856,7 +856,7 @@ end
 
     A = sparse(1I, 5, 5)
     lininds = 1:10
-    X=reshape([trues(10); falses(15)],5,5)
+    X=reshape([BitVector(true, 10); BitVector(false, 15)],5,5)
     @test A[lininds] == A[X] == [1,0,0,0,0,0,1,0,0,0]
     A[lininds] = [1:10;]
     @test A[lininds] == A[X] == collect(1:10)

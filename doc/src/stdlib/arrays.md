@@ -22,8 +22,6 @@ Base.ones
 Base.BitArray
 Base.BitArray(::Uninitialized, ::Integer...)
 Base.BitArray(::Any)
-Base.trues
-Base.falses
 Base.fill
 Base.fill!
 Base.similar(::AbstractArray)

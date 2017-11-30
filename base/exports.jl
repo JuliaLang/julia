@@ -622,9 +622,7 @@ export
     dropzeros!,
 
 # bitarrays
-    falses,
     flipbits!,
-    trues,
 
 # dequeues
     append!,

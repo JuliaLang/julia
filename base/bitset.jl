@@ -2,7 +2,7 @@
 
 struct BitSet <: AbstractSet{Int}
     bits::BitVector
-    BitSet() = new(sizehint!(falses(0), 256))
+    BitSet() = new(sizehint!(BitVector(), 256))
 end
 
 """

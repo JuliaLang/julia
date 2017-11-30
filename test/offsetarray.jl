@@ -82,9 +82,9 @@ for i = 1:9 @test A_3_3[i] == i end
 
 # logical indexing
 @test A[A .> 2] == [3,4]
-@test_throws BoundsError h[trues(2)]
-@test_throws BoundsError h[trues(5)]
-@test h[OffsetArray(trues(5), (-3,))] == parent(h)
+@test_throws BoundsError h[BitVector(true, 2)]
+@test_throws BoundsError h[BitVector(true, 5)]
+@test h[OffsetArray(BitVector(true, 5), (-3,))] == parent(h)
 @test h[OffsetArray([true,false,false,true,true], (-3,))] == parent(h)[[1,4,5]]
 @test A[OffsetArray([true false; false true], A.offsets)] == [1,4]
 @test A[OffsetArray([true true;  false true], A.offsets)] == [1,3,4]

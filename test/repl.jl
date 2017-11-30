@@ -686,7 +686,7 @@ end
 let io = IOBuffer()
     Base.display_error(io,
         try
-            [][trues(6000)]
+            [][BitVector(true, 6000)]
         catch e
             e
         end, [])

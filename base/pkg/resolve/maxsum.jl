@@ -120,7 +120,7 @@ mutable struct Graph
                         adjdict[p1][p0] = j0
                         adjdict[p0][p1] = j1
 
-                        bm = trues(spp[p1], spp[p0])
+                        bm = BitMatrix(true, spp[p1], spp[p0])
                         bmt = bm'
 
                         push!(gmsk[p0], bm)
@@ -230,7 +230,7 @@ mutable struct Messages
         gadj = graph.gadj
         msg = [[zeros(FieldValue, spp[p0]) for p1 = 1:length(gadj[p0])] for p0 = 1:np]
 
-        return new(msg, fld, initial_fld, falses(np), np)
+        return new(msg, fld, initial_fld, BitVector(false, np), np)
     end
 end
 

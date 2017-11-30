@@ -201,7 +201,7 @@ end
     @testset "boolean array index" begin
         let x = sprand(10, 10, 0.5)
             I = rand(1:size(x, 2), 10)
-            bI = falses(size(x, 2))
+            bI = BitVector(false, size(x, 2))
             bI[I] = true
             r = x[1,bI]
             @test isa(r, SparseVector{Float64,Int})
@@ -211,7 +211,7 @@ end
 
         let x = sprand(10, 0.5)
             I = rand(1:length(x), 5)
-            bI = falses(length(x))
+            bI = BitVector(false, length(x))
             bI[I] = true
             r = x[bI]
             @test isa(r, SparseVector{Float64,Int})

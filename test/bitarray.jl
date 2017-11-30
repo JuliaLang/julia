@@ -53,20 +53,20 @@ s1, s2, s3, s4 = 5, 8, 3, 7
 allsizes = [((), BitArray{0}), ((v1,), BitVector),
             ((n1,n2), BitMatrix), ((s1,s2,s3,s4), BitArray{4})]
 
-@testset "trues and falses for size $sz" for (sz,T) in allsizes
-    a = falses(sz...)
-    @test a == falses(sz)
+@testset "BitArray(true/bool, size) for size $sz" for (sz,T) in allsizes
+    a = BitArray(false, sz...)
+    @test a == BitArray(false, sz)
     @test !any(a)
     @test sz == size(a)
-    b = trues(sz...)
-    @test b == trues(sz)
+    b = BitArray(true, sz...)
+    @test b == BitArray(true, sz)
     @test all(b)
     @test sz == size(b)
-    c = trues(a)
+    c = BitArray(true, size(a))
     @test all(c)
     @test !any(a)
     @test sz == size(c)
-    d = falses(b)
+    d = BitArray(false, size(b))
     @test !any(d)
     @test all(b)
     @test sz == size(d)
@@ -74,7 +74,7 @@ end
 
 
 @testset "Conversions for size $sz" for (sz, T) in allsizes
-    b1 = rand!(falses(sz...))
+    b1 = rand!(BitArray(false, sz...))
     @test isequal(BitArray(Array(b1)), b1)
     @test isequal(convert(Array{Float64,ndims(b1)}, b1),
                   convert(Array{Float64,ndims(b1)}, Array(b1)))
@@ -89,14 +89,14 @@ timesofar("conversions")
 
 @testset "utility functions" begin
     b1 = bitrand(v1)
-    @test isequal(fill!(b1, true), trues(size(b1)))
-    @test isequal(fill!(b1, false), falses(size(b1)))
+    @test isequal(fill!(b1, true), BitArray(true, size(b1)))
+    @test isequal(fill!(b1, false), BitArray(false, size(b1)))
 
     for (sz,T) in allsizes
-        @test isequal(Array(trues(sz...)), ones(Bool, sz...))
-        @test isequal(Array(falses(sz...)), zeros(Bool, sz...))
+        @test isequal(Array(BitArray(true, sz...)), ones(Bool, sz...))
+        @test isequal(Array(BitArray(false, sz...)), zeros(Bool, sz...))
 
-        b1 = rand!(falses(sz...))
+        b1 = rand!(BitArray(false, sz...))
         @test isa(b1, T)
 
         @check_bit_operation length(b1) Int
@@ -111,7 +111,7 @@ timesofar("conversions")
 
     @testset "copy!" begin
         for n in [1; 1023:1025]
-            b1 = falses(n)
+            b1 = BitVector(false, n)
             for m in [1; 10; 1023:1025]
                 u1 = ones(Bool, m)
                 for fu! in [u->fill!(u, true), u->rand!(u)]
@@ -133,7 +133,7 @@ timesofar("conversions")
         end
     end
 
-    @test_throws BoundsError size(trues(5), 0)
+    @test_throws BoundsError size(BitVector(true, 5), 0)
 
     @testset "reshape and resize!" begin
         b1 = bitrand(n1, n2)
@@ -168,12 +168,8 @@ timesofar("utils")
         b1 = BitVector(uninitialized, Int32(v1))
         b2 = BitVector(uninitialized, Int64(v1))
         @test size(b1) == size(b2)
-
-        for c in [trues, falses]
-            b1 = c(Int32(v1))
-            b2 = c(Int64(v1))
-            @test b1 == b2
-        end
+        @test BitVector(true, Int32(v1)) == BitVector(true, Int64(v1))
+        @test BitVector(false, Int32(v1)) == BitVector(false, Int64(v1))
     end
 
     @testset "constructors from iterables" begin
@@ -192,7 +188,7 @@ timesofar("utils")
     end
 
     # constructors should copy
-    a = trues(3)
+    a = BitVector(true, 3)
     @test BitArray(a) !== a
     @test BitVector(a) !== a
 
@@ -205,7 +201,7 @@ timesofar("constructors")
 
 @testset "Indexing" begin
     @testset "0d for size $sz" for (sz,T) in allsizes
-        b1 = rand!(falses(sz...))
+        b1 = rand!(BitArray(false, sz...))
         if length(b1) == 1
             @check_bit_operation getindex(b1)         Bool
             @check_bit_operation setindex!(b1, true)  T
@@ -220,7 +216,7 @@ timesofar("constructors")
 
     @testset "linear for size $sz" for (sz,T) in allsizes[2:end]
         l = *(sz...)
-        b1 = rand!(falses(sz...))
+        b1 = rand!(BitArray(false, sz...))
         for j = 1:l
             @check_bit_operation getindex(b1, j) Bool
         end
@@ -750,7 +746,7 @@ timesofar("dequeue")
     @check_bit_operation imag(b1) BitMatrix
     @check_bit_operation conj(b1) BitMatrix
 
-    b0 = falses(0)
+    b0 = BitVector()
     @check_bit_operation broadcast(~, b0)  BitVector
     @check_bit_operation broadcast(!, b0)  BitVector
     @check_bit_operation (-)(b0)  Vector{Int}
@@ -780,7 +776,7 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(^, b1, b2) BitMatrix
         @check_bit_operation (/)(b1,1) Matrix{Float64}
 
-        b2 = trues(n1, n2)
+        b2 = BitMatrix(true, n1, n2)
         @check_bit_operation broadcast(div, b1, b2) BitMatrix
         @check_bit_operation broadcast(mod, b1, b2) BitMatrix
         @check_bit_operation broadcast(div, b1, Array(b2)) BitMatrix
@@ -798,7 +794,7 @@ timesofar("unary arithmetic")
         @check_bit_operation (/)(b1, b1) Matrix{Float64}
         @check_bit_operation (\)(b1, b1) Matrix{Float64}
 
-        b0 = falses(0)
+        b0 = BitVector()
         @check_bit_operation broadcast(&, b0, b0)  BitVector
         @check_bit_operation broadcast(|, b0, b0)  BitVector
         @check_bit_operation broadcast(xor, b0, b0)  BitVector
@@ -863,7 +859,7 @@ timesofar("unary arithmetic")
             @check_bit_operation broadcast(*, x1, b2) Matrix{t1}
         end
 
-        b2 = trues(n1, n2)
+        b2 = BitMatrix(true, n1, n2)
         @check_bit_operation broadcast(/, true, b2)  Matrix{Float64}
         @check_bit_operation broadcast(div, true, b2)   BitMatrix
         @check_bit_operation broadcast(mod, true, b2)   BitMatrix
@@ -1002,7 +998,7 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(^, b1, 0im)   Matrix{Complex128}
         @test_throws DomainError broadcast(^, b1, -1)
 
-        b1 = trues(n1, n2)
+        b1 = BitMatrix(true, n1, n2)
         @check_bit_operation broadcast(^, b1, -1.0im) Matrix{Complex128}
         @check_bit_operation broadcast(^, b1, 1.0im)  Matrix{Complex128}
         @check_bit_operation broadcast(^, b1, -1im)   Matrix{Complex128}
@@ -1047,8 +1043,8 @@ timesofar("binary comparison")
 
     b1 = bitrand(v1)
     for m = [rand(1:v1)-1, 0, 1, 63, 64, 65, 191, 192, 193, v1-1]
-        @test isequal(b1 << m, [ b1[m+1:end]; falses(m) ])
-        @test isequal(b1 >>> m, [ falses(m); b1[1:end-m] ])
+        @test isequal(b1 << m, [ b1[m+1:end]; BitArray(false, m) ])
+        @test isequal(b1 >>> m, [ BitArray(false, m); b1[1:end-m] ])
         @test isequal(b1 << -m, b1 >> m)
         @test isequal(b1 >>> -m, b1 << m)
         @test isequal(circshift(b1, -m), [ b1[m+1:end]; b1[1:m] ])
@@ -1075,7 +1071,7 @@ end
 timesofar("datamove")
 
 @testset "count & find" begin
-    for m = 0:v1, b1 in Any[bitrand(m), trues(m), falses(m)]
+    for m = 0:v1, b1 in Any[bitrand(m), BitVector(true, m), BitVector(true, m)]
         @check_bit_operation count(b1) Int
 
         @check_bit_operation findfirst(b1) Int
@@ -1092,7 +1088,7 @@ timesofar("datamove")
         @check_bit_operation find(b1) Vector{Int}
     end
 
-    b1 = trues(v1)
+    b1 = BitVector(true, v1)
     for i = 0:(v1-1)
         @test findfirst(b1 >> i) == i+1
         @test Base.findfirstnot(.~(b1 >> i)) == i+1
@@ -1111,8 +1107,8 @@ end
 timesofar("nnz&find")
 
 @testset "Findnext/findprev" begin
-    b1 = trues(v1)
-    b2 = falses(v1)
+    b1 = BitVector(true, v1)
+    b2 = BitVector(false, v1)
     for i = 1:v1
         @test findprev(b1, i) == findprev(b1, true, i) == findprev(identity, b1, i)
         @test findprevnot(b2, i) == findprev(!, b2, i) == i
@@ -1137,8 +1133,7 @@ timesofar("nnz&find")
 
     elts = (1:64:(64*64+1)) .+ (0:64)
     n = maximum(elts)
-    for c = [falses, trues]
-        b1 = c(n)
+    for b1 = (BitVector(false, n), BitVector(true, n))
         b1[elts] = .!b1[elts]
         b2 = .~b1
         i1 = Array(b1)
@@ -1148,7 +1143,7 @@ timesofar("nnz&find")
         end
     end
 
-    b1 = falses(1000)
+    b1 = BitVector(false, 1000)
     b1[77] = true
     b1[777] = true
     b2 = .~b1
@@ -1188,7 +1183,7 @@ timesofar("nnz&find")
     @test_throws BoundsError findnext(x->true, b0, -1)
     @test findnext(x->true, b0, 1) == 0
 
-    b1 = falses(10)
+    b1 = BitVector(false, 10)
     @test findprev(x->true, b1, 5) == 5
     @test findnext(x->true, b1, 5) == 5
     @test findprev(x->true, b1, -1) == 0
@@ -1201,17 +1196,17 @@ timesofar("nnz&find")
     @test_throws BoundsError findnext(x->true, b1, -1)
 
     for l = [1, 63, 64, 65, 127, 128, 129]
-        f = falses(l)
-        t = trues(l)
+        f = BitVector(false, l)
+        t = BitVector(true, l)
         @test findprev(f, l) == findprevnot(t, l) == 0
         @test findprev(t, l) == findprevnot(f, l) == l
-        b1 = falses(l)
+        b1 = BitVector(false, l)
         b1[end] = true
         b2 = .~b1
         @test findprev(b1, l) == findprevnot(b2, l) == l
         @test findprevnot(b1, l) == findprev(b2, l) == l-1
         if l > 1
-            b1 = falses(l)
+            b1 = BitVector(false, l)
             b1[end-1] = true
             b2 = .~b1
             @test findprev(b1, l) == findprevnot(b2, l) == l-1
@@ -1234,7 +1229,7 @@ end
     @check_bit_operation all(b1) Bool
     @check_bit_operation sum(b1) Int
 
-    b0 = falses(0)
+    b0 = BitVector()
     @check_bit_operation any(b0) Bool
     @check_bit_operation all(b0) Bool
     @check_bit_operation sum(b0) Int
@@ -1271,8 +1266,8 @@ timesofar("reductions")
             @test map!(~, b, b1) == map!(x->~x, b, b1) == broadcast(~, b1) == b
             @test map!(!, b, b1) == map!(x->!x, b, b1) == broadcast(~, b1) == b
             @test map!(identity, b, b1) == map!(x->x, b, b1) == b1 == b
-            @test map!(zero, b, b1) == map!(x->false, b, b1) == falses(l) == b
-            @test map!(one, b, b1) == map!(x->true, b, b1) == trues(l) == b
+            @test map!(zero, b, b1) == map!(x->false, b, b1) == BitVector(false, l) == b
+            @test map!(one, b, b1) == map!(x->true, b, b1) == BitVector(true, l) == b
 
             @test map!(&, b, b1, b2) == map!((x,y)->x&y, b, b1, b2) == broadcast(&, b1, b2) == b
             @test map!(|, b, b1, b2) == map!((x,y)->x|y, b, b1, b2) == broadcast(|, b1, b2) == b
@@ -1334,8 +1329,8 @@ timesofar("permutedims")
     for m = 1:(v1-1)
         @check_bit_operation vcat(b1[1:m], b1[m+1:end]) BitVector
     end
-    @test_throws DimensionMismatch hcat(b1,trues(n1+1))
-    @test_throws DimensionMismatch hcat(hcat(b1, b2),trues(n1+1))
+    @test_throws DimensionMismatch hcat(b1,BitVector(true, n1+1))
+    @test_throws DimensionMismatch hcat(hcat(b1, b2),BitVector(true, n1+1))
 
     b1 = bitrand(n1, n2)
     b2 = bitrand(n1)
@@ -1343,7 +1338,7 @@ timesofar("permutedims")
     b4 = bitrand(1, n2)
     @check_bit_operation hcat(b1, b2, b3) BitMatrix
     @check_bit_operation vcat(b1, b4, b3) BitMatrix
-    @test_throws DimensionMismatch vcat(b1, b4, trues(n1,n2+1))
+    @test_throws DimensionMismatch vcat(b1, b4, BitMatrix(true,n1,n2+1))
 
     b1 = bitrand(s1, s2, s3, s4)
     b2 = bitrand(s1, s3, s3, s4)
@@ -1426,11 +1421,11 @@ end
 timesofar("linalg")
 
 @testset "findmax, findmin" begin
-    b1 = trues(0)
+    b1 = BitVector()
     @test_throws ArgumentError findmax(b1)
     @test_throws ArgumentError findmin(b1)
 
-    for b1 in [falses(v1), trues(v1),
+    for b1 in [BitVector(false, v1), BitVector(true, v1),
                BitArray([1,0,1,1,0]),
                BitArray([0,0,1,1,0]),
                bitrand(v1)]
@@ -1449,22 +1444,22 @@ end
         open(fname, "w") do f
             write(f, b1)
         end
-        b2 = falses(v1)
+        b2 = BitVector(false, v1)
         read!(fname, b2)
         @test bitcheck(b2)
         @test b1 == b2
-        b2 = falses(v1 ÷ 10, 10)
+        b2 = BitVector(false, v1 ÷ 10, 10)
         read!(fname, b2)
         @test bitcheck(b2)
         @test reshape(b1, v1 ÷ 10, 10) == b2
-        b2 = falses(v1 + 65)
+        b2 = BitVector(false, v1 + 65)
         @test bitcheck(b2)
         @test_throws EOFError read!(fname, b2)
         @test bitcheck(b2)
-        b2 = falses(v1 ÷ 2)
+        b2 = BitVector(false, v1 ÷ 2)
         @test_throws DimensionMismatch read!(fname, b2)
         @test bitcheck(b2)
-        b2 = falses(v1 - 1)
+        b2 = BitVector(false, v1 - 1)
         @test_throws DimensionMismatch read!(fname, b2)
         @test bitcheck(b2)
 
@@ -1476,7 +1471,7 @@ end
         read!(fname, b2)
         @test b1 == b2
         @test bitcheck(b2)
-        b2 = trues(1)
+        b2 = BitVector(true, 1)
         @test_throws EOFError read!(fname, b2)
         @test bitcheck(b2)
     finally

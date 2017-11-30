@@ -1550,7 +1550,7 @@ julia> A = [false false; true false]
 julia> findfirst(A)
 2
 
-julia> findfirst(falses(3))
+julia> findfirst(BitVector(false, 3))
 0
 ```
 """
@@ -1662,7 +1662,7 @@ julia> A = [true false; true false]
 julia> findlast(A)
 2
 
-julia> A = falses(2,2);
+julia> A = BitMatrix(false, 2, 2);
 
 julia> findlast(A)
 0
@@ -1785,7 +1785,7 @@ julia> find(A)
  1
  4
 
-julia> find(falses(3))
+julia> find(BitVector(false, 3))
 0-element Array{Int64,1}
 ```
 """

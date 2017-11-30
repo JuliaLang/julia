@@ -11,7 +11,7 @@ chnlprod(x) = Channel(c->for i in x; put!(c,i); end)
         ([1, 2, 3], () -> [4, 5], () -> [1, 2, 3, 4, 5], () -> Int[], mainres),
         ([1, 2, 3], () -> 4:5, () -> 1:5, () -> 1:0, mainres),
         ([1, 2, 3], () -> chnlprod(4:5), () -> chnlprod(1:5), () -> chnlprod(1:0), mainres),
-        (falses(3), () -> trues(2), () -> trues(5), () -> trues(0), bitres)]
+        (BitVector(false, 3), () -> BitVector(true, 2), () -> BitVector(true, 5), () -> BitVector(true, 0), bitres)]
 
         @test copy!(copy(dest), src()) == res[1]
         @test copy!(copy(dest), 1, src()) == res[1]

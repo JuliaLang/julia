@@ -352,7 +352,7 @@ See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
 function code_warntype(io::IO, f, @nospecialize(t))
     function slots_used(ci, slotnames)
-        used = falses(length(slotnames))
+        used = BitVector(false, length(slotnames))
         scan_exprs!(used, ci.code)
         return used
     end
