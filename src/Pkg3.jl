@@ -46,7 +46,15 @@ GLOBAL_SETTINGS = GlobalSettings()
 
 function __init__()
     push!(empty!(LOAD_PATH), dirname(dirname(@__DIR__)))
-    isdefined(Base, :active_repl) && REPLMode.repl_init(Base.active_repl)
+
+    if isdefined(Base, :active_repl)
+        REPLMode.repl_init(Base.active_repl)
+    else
+        atreplinit() do repl
+            repl.interface = Base.REPL.setup_interface(repl)
+            REPLMode.repl_init(repl)
+        end
+    end
 end
 
 function Base.julia_cmd(julia::AbstractString)
