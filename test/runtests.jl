@@ -1,6 +1,8 @@
 using Compat
 using Compat.Test
 
+@test isempty(detect_ambiguities(Base, Core, Compat))
+
 const struct_sym = VERSION < v"0.7.0-DEV.1263" ? :type : :struct
 
 # Issue #291
