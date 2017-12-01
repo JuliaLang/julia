@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Random
 
 function runtests(name, path, isolate=true; seed=nothing)
     old_print_setting = Test.TESTSET_PRINT_ENABLE[]
@@ -14,7 +14,7 @@ function runtests(name, path, isolate=true; seed=nothing)
         else
             m = Main
         end
-        @eval(m, using Test)
+        @eval(m, using Test, Random)
         ex = quote
             @timed @testset $"$name" begin
                 # srand(nothing) will fail

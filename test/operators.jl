@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random: randstring
+
 @test ifelse(true, 1, 2) == 1
 @test ifelse(false, 1, 2) == 2
 

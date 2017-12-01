@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Order: Forward
+using Random
 
 @test sort([2,3,1]) == [1,2,3]
 @test sort([2,3,1], rev=true) == [3,2,1]

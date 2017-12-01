@@ -5,6 +5,8 @@ isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using Main.TestHelpers.OAs
 using SparseArrays
 
+using Random
+
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
     @test count(!iszero, [1, 2, 3]) == 3

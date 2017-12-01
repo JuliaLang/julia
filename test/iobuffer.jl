@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 
 bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)

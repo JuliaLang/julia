@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using IterativeEigensolvers
-using Test, SparseArrays
+using Test, SparseArrays, Random
 
 @testset "eigs" begin
     srand(1234)

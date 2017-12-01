@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random: randcycle
+
 @testset "binomial" begin
     @test binomial(5,-1) == 0
     @test binomial(5,10) == 0

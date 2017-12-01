@@ -59,7 +59,6 @@ Base.chomp
 Base.thisind
 Base.nextind
 Base.prevind
-Base.Random.randstring
 Base.textwidth
 Base.isalpha
 Base.isascii

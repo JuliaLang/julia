@@ -28,6 +28,8 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     rotl90, rotr90, round, scale!, setindex!, similar, size, transpose, tril,
     triu, vec, permute!, map, map!, Array
 
+using Random: defaultRNG, AbstractRNG, randsubseq, randsubseq!
+
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
     SparseMatrixCSC, SparseVector, blkdiag, droptol!, dropzeros!, dropzeros,
     issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm,

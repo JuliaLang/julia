@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
 const STDLIBS = readdir(STDLIB_DIR)
 
@@ -35,7 +37,7 @@ function choosetests(choices = [])
         "keywordargs", "numbers", "subtype",
         "char", "strings", "triplequote", "unicode", "intrinsics",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
-        "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
+        "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
         "intfuncs", "simdloop", "vecelement",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "path", "ccall", "parse", "loading", "bigint",

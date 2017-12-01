@@ -18,6 +18,7 @@ module Test
 export @test, @test_throws, @test_broken, @test_skip,
     @test_warn, @test_nowarn,
     @test_logs, @test_deprecated
+
 export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
@@ -26,6 +27,8 @@ export GenericString, GenericSet, GenericDict, GenericArray
 export guardsrand, TestSetException
 
 import Distributed: myid
+
+using Random: srand, AbstractRNG, GLOBAL_RNG
 
 #-----------------------------------------------------------------------
 
@@ -997,17 +1000,17 @@ function testset_beginend(args, tests, source)
         # we reproduce the logic of guardsrand, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
-        oldrng = copy(Base.GLOBAL_RNG)
+        oldrng = copy(GLOBAL_RNG)
         try
             # GLOBAL_RNG is re-seeded with its own seed to ease reproduce a failed test
-            srand(Base.GLOBAL_RNG.seed)
+            srand(GLOBAL_RNG.seed)
             $(esc(tests))
         catch err
             # something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
         finally
-            copy!(Base.GLOBAL_RNG, oldrng)
+            copy!(GLOBAL_RNG, oldrng)
         end
         pop_testset()
         finish(ts)
@@ -1066,7 +1069,7 @@ function testset_forloop(args, testloop, source)
             pop_testset()
             push!(arr, finish(ts))
             # it's 1000 times faster to copy from tmprng rather than calling srand
-            copy!(Base.GLOBAL_RNG, tmprng)
+            copy!(GLOBAL_RNG, tmprng)
 
         end
         ts = $(testsettype)($desc; $options...)
@@ -1084,9 +1087,9 @@ function testset_forloop(args, testloop, source)
         arr = Vector{Any}()
         local first_iteration = true
         local ts
-        local oldrng = copy(Base.GLOBAL_RNG)
-        srand(Base.GLOBAL_RNG.seed)
-        local tmprng = copy(Base.GLOBAL_RNG)
+        local oldrng = copy(GLOBAL_RNG)
+        srand(GLOBAL_RNG.seed)
+        local tmprng = copy(GLOBAL_RNG)
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
         finally
@@ -1095,7 +1098,7 @@ function testset_forloop(args, testloop, source)
                 pop_testset()
                 push!(arr, finish(ts))
             end
-            copy!(Base.GLOBAL_RNG, oldrng)
+            copy!(GLOBAL_RNG, oldrng)
         end
         arr
     end
@@ -1506,7 +1509,7 @@ Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 
 "`guardsrand(f)` runs the function `f()` and then restores the
 state of the global RNG as it was before."
-function guardsrand(f::Function, r::AbstractRNG=Base.GLOBAL_RNG)
+function guardsrand(f::Function, r::AbstractRNG=GLOBAL_RNG)
     old = copy(r)
     try
         f()

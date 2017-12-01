@@ -2,6 +2,8 @@
 
 # tests for parser and syntax lowering
 
+using Random
+
 import Base.Meta.ParseError
 
 function parseall(str)

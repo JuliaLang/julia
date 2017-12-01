@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 debug = false
-using Test
+using Test, Random
 using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!,
                     UnitUpperTriangular, UnitLowerTriangular,
                     mul!, rdiv!

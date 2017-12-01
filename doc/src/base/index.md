@@ -34,3 +34,4 @@
   * [Sparse Arrays](@ref)
   * [Iterative Eigensolvers](@ref lib-itereigen)
   * [Printf](@ref)
+  * [Random Numbers](@ref)

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 # Test asyncmap
 @test allunique(asyncmap(x->(sleep(1.0);object_id(current_task())), 1:10))
 

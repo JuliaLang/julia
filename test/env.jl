@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @test !("f=a=k=e=n=a=m=e" ∈ keys(ENV))
 
 @testset "issue #10994" begin

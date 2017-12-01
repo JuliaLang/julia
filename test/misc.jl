@@ -226,6 +226,7 @@ end
 
 # Issue 14173
 module Tmp14173
+    using Random
     export A
     A = randn(2000, 2000)
 end

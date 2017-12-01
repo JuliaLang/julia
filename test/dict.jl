@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @testset "Pair" begin
     p = Pair(10,20)
     @test p == (10=>20)

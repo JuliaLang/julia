@@ -4,6 +4,8 @@
 import Core.Inference: Const, Conditional, ⊑
 const isleaftype = Core.Inference._isleaftype
 
+using Random
+
 # demonstrate some of the type-size limits
 @test Core.Inference.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 0) == Ref
 @test Core.Inference.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 0) == Ref{Complex{T} where T}

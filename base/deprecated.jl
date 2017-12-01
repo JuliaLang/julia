@@ -199,20 +199,6 @@ end
 import .LinAlg: cond
 @deprecate cond(F::LinAlg.LU, p::Integer) cond(convert(AbstractArray, F), p)
 
-# PR #21359
-import .Random: srand, randjump
-
-@deprecate srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) srand(r, read!(filename, Vector{UInt32}(uninitialized, Int(n))))
-@deprecate srand(filename::AbstractString, n::Integer=4) srand(read!(filename, Vector{UInt32}(uninitialized, Int(n))))
-@deprecate MersenneTwister(filename::AbstractString)  srand(MersenneTwister(0), read!(filename, Vector{UInt32}(uninitialized, Int(4))))
-
-function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString)
-    depwarn("`randjump(rng, jumps, jumppoly::AbstractString)` is deprecated; use `randjump(rng, steps, jumps)` instead", :randjump)
-    Base.Random._randjump(mt, dSFMT.GF2X(jumppoly), jumps)
-end
-
-@deprecate randjump(mt::MersenneTwister, jumps::Integer)  randjump(mt, big(10)^20, jumps)
-
 # PR #21974
 @deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
 @deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
@@ -641,8 +627,6 @@ end
 @deprecate convert(::Type{S}, g::Unicode.GraphemeIterator) where {S<:AbstractString}  convert(S, g.s)
 @deprecate convert(::Type{String}, v::AbstractVector{Char})   String(v)
 
-@deprecate convert(::Type{UInt128},     u::Random.UUID)     UInt128(u)
-@deprecate convert(::Type{Random.UUID}, s::AbstractString)  Random.UUID(s)
 @deprecate convert(::Type{Libc.FILE}, s::IO)  Libc.FILE(s)
 @deprecate convert(::Type{VersionNumber}, v::Integer)         VersionNumber(v)
 @deprecate convert(::Type{VersionNumber}, v::Tuple)           VersionNumber(v)
@@ -2337,6 +2321,28 @@ end
 
 # issue #24822
 @deprecate_binding Display AbstractDisplay
+
+# PR #24874
+@deprecate_moved rand! "Random" true true
+@deprecate_moved srand "Random" true true
+@deprecate_moved AbstractRNG "Random" true true
+@deprecate_moved randcycle  "Random" true true
+@deprecate_moved randcycle!  "Random" true true
+@deprecate_moved randperm  "Random" true true
+@deprecate_moved randperm! "Random" true true
+@deprecate_moved shuffle  "Random" true true
+@deprecate_moved shuffle! "Random" true true
+@deprecate_moved randsubseq "Random" true true
+@deprecate_moved randsubseq! "Random" true true
+@deprecate_moved randstring "Random" true true
+@deprecate_moved MersenneTwister  "Random" true true
+@deprecate_moved RandomDevice  "Random" true true
+@deprecate_moved randn! "Random" true true
+@deprecate_moved randexp "Random" true true
+@deprecate_moved randexp! "Random" true true
+@deprecate_moved bitrand "Random" true true
+@deprecate_moved randjump "Random" true true
+@deprecate_moved GLOBAL_RNG "Random" false true
 
 # 24595
 @deprecate falses(A::AbstractArray) falses(size(A))

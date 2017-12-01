@@ -4,7 +4,7 @@
 #  Test the pseudo-inverse
 #
 
-using Test
+using Test, Random
 
 srand(12345)
 
