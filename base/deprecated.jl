@@ -2162,6 +2162,10 @@ end
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
+# 24595
+@deprecate falses(A::AbstractArray) falses(size(A))
+@deprecate trues(A::AbstractArray) trues(size(A))
+
 # issue #24794
 @deprecate linspace(start, stop)     linspace(start, stop, 50)
 @deprecate logspace(start, stop)     logspace(start, stop, 50)
