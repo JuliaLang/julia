@@ -593,10 +593,23 @@ macro uint128_str(s)
 end
 
 macro big_str(s)
-    n = tryparse(BigInt, s)
-    !isnull(n) && return get(n)
-    n = tryparse(BigFloat, s)
-    !isnull(n) && return get(n)
+    if '_' in s
+        # remove _ in s[2:end-1]
+        bf = IOBuffer(endof(s))
+        print(bf, s[1])
+        for c in SubString(s, 2, endof(s)-1)
+            c != '_' && print(bf, c)
+        end
+        print(bf, s[end])
+        seekstart(bf)
+        n = tryparse(BigInt, String(take!(bf)))
+        !isnull(n) && return get(n)
+    else
+        n = tryparse(BigInt, s)
+        !isnull(n) && return get(n)
+        n = tryparse(BigFloat, s)
+        !isnull(n) && return get(n)
+    end
     message = "invalid number format $s for BigInt or BigFloat"
     return :(throw(ArgumentError($message)))
 end
