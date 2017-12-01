@@ -204,7 +204,7 @@ end
 end
 
 @inline function _unsafe_getindex(A::ReshapedArray{T,N}, indexes::Vararg{Int,N}) where {T,N}
-    i = sub2ind(size(A), indexes...)
+    i = Base._sub2ind(size(A), indexes...)
     I = ind2sub_rs(A.mi, i)
     _unsafe_getindex_rs(parent(A), I)
 end
@@ -227,7 +227,7 @@ end
 end
 
 @inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indexes::Vararg{Int,N}) where {T,N}
-    @inbounds parent(A)[ind2sub_rs(A.mi, sub2ind(size(A), indexes...))...] = val
+    @inbounds parent(A)[ind2sub_rs(A.mi, Base._sub2ind(size(A), indexes...))...] = val
     val
 end
 

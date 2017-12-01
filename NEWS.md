@@ -202,6 +202,13 @@ This section lists changes that do not have deprecation warnings.
     longer present. Use `first(R)` and `last(R)` to obtain
     start/stop. ([#20974])
 
+  * `CartesianRange` inherits from AbstractArray and construction with an
+    `AbstractArray` argument constructs the indices for that array. Consequently,
+    linear indexing can be used to provide linear-to-cartesian conversion ([#24715])
+
+  * The type `CartesianToLinear` has been added, providing conversion from
+    cartesian incices to linear indices using the normal indexing operation. ([#24715])
+
   * The `Diagonal`, `Bidiagonal`, `Tridiagonal` and `SymTridiagonal` type definitions have
     changed from `Diagonal{T}`, `Bidiagonal{T}`, `Tridiagonal{T}` and `SymTridiagonal{T}`
     to `Diagonal{T,V<:AbstractVector{T}}`, `Bidiagonal{T,V<:AbstractVector{T}}`,
@@ -400,11 +407,6 @@ Library improvements
   * `reinterpret` now works on any AbstractArray using the new `ReinterpretArray` type.
     This supersedes the old behavior of reinterpret on Arrays. As a result, reinterpreting
     arrays with different alignment requirements (removed in 0.6) is once again allowed ([#23750]).
-
-  * `CartesianRange` changes ([#24715]):
-    - Inherits from `AbstractArray`
-    - Constructor taking an array
-    - `eachindex` returns the linear indices into a reshaped array, as `sub2ind` alternative
 
 Compiler/Runtime improvements
 -----------------------------
@@ -703,6 +705,8 @@ Deprecated or removed
 
   * `cumsum`, `cumprod`, `accumulate`, and their mutating versions now require a `dim`
     argument instead of defaulting to using the first dimension ([#24684]).
+
+  * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianRange` and `CartesianToLinear` ([#24715]).
 
 Command-line option changes
 ---------------------------
@@ -1668,3 +1672,4 @@ Command-line option changes
 [#24320]: https://github.com/JuliaLang/julia/issues/24320
 [#24396]: https://github.com/JuliaLang/julia/issues/24396
 [#24413]: https://github.com/JuliaLang/julia/issues/24413
+[#24715]: https://github.com/JuliaLang/julia/issues/24715

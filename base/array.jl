@@ -135,7 +135,7 @@ sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
     @_inline_meta
-    ii = (sub2ind(size(a), i...) % UInt) - 1
+    ii = (_sub2ind(size(a), i...) % UInt) - 1
     @boundscheck ii < length(a) % UInt || return false
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end

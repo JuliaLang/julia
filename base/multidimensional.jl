@@ -11,7 +11,7 @@ module IteratorsMD
     using Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
     using Base.Iterators: Reverse
 
-    export CartesianIndex, CartesianRange
+    export CartesianIndex, CartesianRange, CartesianToLinear
 
     """
         CartesianIndex(i, j, k...)   -> I
@@ -211,22 +211,7 @@ module IteratorsMD
     CartesianIndex(1, 2)
     ```
 
-    For cartesian to linear index conversion, [`eachindex`](@ref) returns a
-    reshaped version of the linear indices when called on a `CartesianRange`:
-
-    ```jldoctest subarray
-    julia> linear = eachindex(cartesian)
-    3×2 reshape(::Base.OneTo{Int64}, 3, 2) with eltype Int64:
-     1  4
-     2  5
-     3  6
-
-    julia> linear[1,2]
-    4
-
-    julia> linear[cartesian[4]]
-    4
-    ```
+    For cartesian to linear index conversion, see [`CartesianToLinear`](@ref).
     """
     struct CartesianRange{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{CartesianIndex{N},N}
         indices::R
@@ -270,7 +255,6 @@ module IteratorsMD
     # AbstractArray implementation
     Base.IndexStyle(::Type{CartesianRange{N,R}}) where {N,R} = IndexCartesian()
     @inline Base.getindex(iter::CartesianRange{N,R}, I::Vararg{Int, N}) where {N,R} = CartesianIndex(first.(iter.indices) .- 1 .+ I)
-    Base.eachindex(iter::CartesianRange) = reshape(linearindices(iter), size(iter))
 
     ndims(R::CartesianRange) = ndims(typeof(R))
     ndims(::Type{CartesianRange{N}}) where {N} = N
@@ -397,6 +381,53 @@ module IteratorsMD
     start(iter::Reverse{<:CartesianRange{0}}) = false
     next(iter::Reverse{<:CartesianRange{0}}, state) = CartesianIndex(), true
     done(iter::Reverse{<:CartesianRange{0}}, state) = state
+
+    """
+        CartesianToLinear(inds::CartesianRange) -> R
+        CartesianToLinear(sz::Dims) -> R
+        CartesianToLinear(istart:istop, jstart:jstop, ...) -> R
+
+    Define a mapping between cartesian indices and the corresponding linear index into a CartesianRange
+
+    # Example
+
+    The main purpose of this type is intuitive conversion from cartesian to linear indexing:
+
+    ```jldoctest subarray
+    julia> linear = CartesianToLinear(1:3,1:2)
+    CartesianToLinear{2,Tuple{UnitRange{Int64},UnitRange{Int64}}} with indices 1:3×1:2:
+      1  4
+      2  5
+      3  6
+
+    julia> linear[1,2]
+    4
+    ```
+    """
+    struct CartesianToLinear{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int,N}
+        indices::R
+    end
+
+    CartesianToLinear(inds::CartesianRange{N,R}) where {N,R} = CartesianToLinear{N,R}(inds.indices)
+    CartesianToLinear(::Tuple{}) = CartesianToLinear(CartesianRange(()))
+    CartesianToLinear(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} = CartesianToLinear(CartesianRange(inds))
+    CartesianToLinear(inds::Vararg{AbstractUnitRange{Int},N}) where {N} = CartesianToLinear(CartesianRange(inds))
+    CartesianToLinear(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} = CartesianToLinear(CartesianRange(inds))
+    CartesianToLinear(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} = CartesianToLinear(CartesianRange(inds))
+    CartesianToLinear(index::CartesianIndex) = CartesianToLinear(CartesianRange(index))
+    CartesianToLinear(sz::NTuple{N,<:Integer}) where {N} = CartesianToLinear(CartesianRange(sz))
+    CartesianToLinear(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} = CartesianToLinear(CartesianRange(inds))
+    CartesianToLinear(A::AbstractArray) = CartesianToLinear(CartesianRange(A))
+
+    # AbstractArray implementation
+    Base.IndexStyle(::Type{CartesianToLinear{N,R}}) where {N,R} = IndexCartesian()
+    Base.indices(iter::CartesianToLinear{N,R}) where {N,R} = iter.indices
+    @inline function Base.getindex(iter::CartesianToLinear{N,R}, I::Vararg{Int, N}) where {N,R}
+        dims = length.(iter.indices)
+        #without the inbounds, this is slower than Base._sub2ind(iter.indices, I...)
+        @inbounds result = reshape(1:prod(dims), dims)[(I .- first.(iter.indices) .+ 1)...]
+        return result
+    end
 end  # IteratorsMD
 
 
