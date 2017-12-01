@@ -916,10 +916,11 @@ module Test24361
     using Compat.Test
     @test String(Compat.Base64.base64decode("SGVsbG8h")) == "Hello!"
 end
+
 # 0.7
 let A = [1]
     local x = 0
-    finalizer(a->(x+=1), A)
+    @compat finalizer(a->(x+=1), A)
     finalize(A)
     @test x == 1
     A = 0

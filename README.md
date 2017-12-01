@@ -192,8 +192,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Uninitialized` and `uninitialized` with corresponding `Array` constructors ([#24652]).
 
-* `finalizer` accepts the finalizer to run as the first argument and the object to be finalized
-  as the second ([#24605])
+* `@compat finalizer(func, obj)` with the finalizer to run as the first argument and the object to be finalized
+  as the second ([#24605]).
 
 ## Renaming
 
