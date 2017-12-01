@@ -20,7 +20,7 @@ using .ARPACK
     eigs(A; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
 Computes eigenvalues `d` of `A` using implicitly restarted Lanczos or Arnoldi iterations for real symmetric or
-general nonsymmetric matrices respectively. See [the manual](@ref man-linalg-iterativeeig) for more information.
+general nonsymmetric matrices respectively. See [the manual](@ref lib-itereigen) for more information.
 
 `eigs` returns the `nev` requested eigenvalues in `d`, the corresponding Ritz vectors `v`
 (only if `ritzvec=true`), the number of converged eigenvalues `nconv`, the number of
@@ -60,7 +60,7 @@ end
     eigs(A, B; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
 Computes generalized eigenvalues `d` of `A` and `B` using implicitly restarted Lanczos or Arnoldi iterations for
-real symmetric or general nonsymmetric matrices respectively. See [the manual](@ref man-linalg-iterativeeig) for more information.
+real symmetric or general nonsymmetric matrices respectively. See [the manual](@ref lib-itereigen) for more information.
 """
 eigs(A, B; kwargs...) = _eigs(A, B; kwargs...)
 function _eigs(A, B;
