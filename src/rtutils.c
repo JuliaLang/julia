@@ -242,11 +242,14 @@ JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, 
     jl_value_t *exc = ptls->exception_in_transit;
     jl_array_t *bt = NULL;
     jl_array_t *bt2 = NULL;
-    JL_GC_PUSH3(&exc, &bt, &bt2);
+    jl_value_t *jl_bt = NULL;
+    JL_GC_PUSH4(&exc, &bt, &bt2, &jl_bt);
     if (ptls->bt_size > 0) {
-        jl_get_backtrace(&bt, &bt2);
+        jl_get_backtrace((jl_value_t**)&bt, (jl_value_t**)&bt2);
         ptls->bt_size = 0;
     }
+    jl_bt = ptls->julia_bt;
+    ptls->julia_bt = NULL;
     jl_value_t *v;
     JL_TRY {
         v = jl_apply(args, nargs);
@@ -266,6 +269,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, 
         memcpy(ptls->bt_data, bt->data, jl_array_len(bt) * sizeof(void*));
         ptls->bt_size = jl_array_len(bt);
     }
+    ptls->julia_bt = jl_bt;
     JL_GC_POP();
     return v;
 }

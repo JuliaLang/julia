@@ -804,7 +804,7 @@ end
 function break_21369()
     try
         error("uhoh")
-    catch
+    catch err
         eval(:(inf_error_21369(false)))
         bt = catch_backtrace()
         i = 1
@@ -817,7 +817,7 @@ function break_21369()
             i += 1
         end
         @test fr.func === :break_21369
-        rethrow()
+        rethrow(err)
     end
 end
 @test_throws ErrorException break_21369()  # not TypeError

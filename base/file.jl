@@ -118,7 +118,7 @@ function mkpath(path::AbstractString, mode::Unsigned=0o777)
         if isa(err, SystemError) && isdir(path)
             return
         else
-            rethrow()
+            rethrow(err)
         end
     end
 end
@@ -147,7 +147,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
             if force && isa(err, UVError) && err.code==Base.UV_ENOENT
                 return
             end
-            rethrow()
+            rethrow(err)
         end
     else
         if recursive

@@ -442,7 +442,7 @@ function _require(mod::Symbol)
             return
         catch ex
             if doneprecompile === true || JLOptions().use_compiled_modules == 0 || !precompilableerror(ex, true)
-                rethrow() # rethrow non-precompilable=true errors
+                rethrow(ex) # rethrow non-precompilable=true errors
             end
             # the file requested `__precompile__`, so try to build a cache file and use that
             cachefile = compilecache(mod)

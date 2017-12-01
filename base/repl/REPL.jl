@@ -220,7 +220,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                     hit_eof = true
                     break
                 else
-                    rethrow()
+                    rethrow(e)
                 end
             end
             ast = Base.parse_input_line(line)

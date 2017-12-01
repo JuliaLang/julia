@@ -636,9 +636,9 @@ else
         if downloadcmd == :wget
             try
                 run(`wget -O $filename $url`)
-            catch
+            catch e
                 rm(filename)  # wget always creates a file
-                rethrow()
+                rethrow(e)
             end
         elseif downloadcmd == :curl
             run(`curl -g -L -f -o $filename $url`)

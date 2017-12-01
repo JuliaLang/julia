@@ -2172,6 +2172,11 @@ end
 
 @deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
 
+function rethrow()
+    depwarn("`rethrow()` is deprecated in favor of `rethrow(err)` or `throw(err, backtrace)`.", :rethrow)
+    ccall(:jl_rethrow, Bottom, ())
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

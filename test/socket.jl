@@ -335,7 +335,7 @@ end
             if isa(e, Base.UVError) && Base.uverrorname(e) == "EPERM"
                 warn("UDP broadcast test skipped (permission denied upon send, restrictive firewall?)")
             else
-                rethrow()
+                rethrow(e)
             end
         end
         [close(s) for s in [a, b, c]]

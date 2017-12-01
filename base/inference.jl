@@ -528,7 +528,7 @@ function add_tfunc(f::Function, minarg::Int, maxarg::Int, @nospecialize(tfunc), 
     push!(t_ffunc_cost, cost)
 end
 
-add_tfunc(throw, 1, 1, (@nospecialize(x)) -> Bottom, 0)
+add_tfunc(throw, 1, 2, (@nospecialize(x...)) -> Bottom, 0)
 
 # the inverse of typeof_tfunc
 # returns (type, isexact)

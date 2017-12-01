@@ -195,11 +195,14 @@ static void jl_gc_run_finalizers_in_list(jl_ptls_t ptls, arraylist_t *list)
     jl_value_t *exc = ptls->exception_in_transit;
     jl_array_t *bt = NULL;
     jl_array_t *bt2 = NULL;
-    JL_GC_PUSH3(&exc, &bt, &bt2);
+    jl_value_t *jl_bt = NULL;
+    JL_GC_PUSH4(&exc, &bt, &bt2, &jl_bt);
     if (ptls->bt_size > 0) {
-        jl_get_backtrace(&bt, &bt2);
+        jl_get_backtrace((jl_value_t**)&bt, (jl_value_t**)&bt2);
         ptls->bt_size = 0;
     }
+    jl_bt = ptls->julia_bt;
+    ptls->julia_bt = NULL;
     for (size_t i = 2;i < len;i += 2)
         run_finalizer(ptls, items[i], items[i + 1]);
     ptls->exception_in_transit = exc;
@@ -208,6 +211,7 @@ static void jl_gc_run_finalizers_in_list(jl_ptls_t ptls, arraylist_t *list)
         memcpy(ptls->bt_data, bt->data, jl_array_len(bt) * sizeof(void*));
         ptls->bt_size = jl_array_len(bt);
     }
+    ptls->julia_bt = jl_bt;
     JL_GC_POP();
     // matches the jl_gc_push_arraylist above
     JL_GC_POP();
@@ -2252,6 +2256,8 @@ static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t 
     gc_mark_queue_obj(gc_cache, sp, ptls2->current_task);
     gc_mark_queue_obj(gc_cache, sp, ptls2->root_task);
     gc_mark_queue_obj(gc_cache, sp, ptls2->exception_in_transit);
+    if (ptls2->julia_bt)
+        gc_mark_queue_obj(gc_cache, sp, ptls2->julia_bt);
 }
 
 // mark the initial root set

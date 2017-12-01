@@ -700,7 +700,8 @@ size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #endif
-JL_DLLEXPORT void jl_get_backtrace(jl_array_t **bt, jl_array_t **bt2);
+JL_DLLEXPORT void jl_get_backtrace(jl_value_t **bt, jl_value_t **bt2);
+void jl_clear_backtrace(jl_ptls_t ptls);
 JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int drop_exceptions);
 void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size);
 JL_DLLEXPORT void jl_raise_debugger(void);
