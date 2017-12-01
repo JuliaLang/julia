@@ -322,8 +322,6 @@ using .Sort
 include("fastmath.jl")
 using .FastMath
 
-function deepcopy_internal end
-
 # BigInts and BigFloats
 include("gmp.jl")
 using .GMP

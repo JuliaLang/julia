@@ -8,10 +8,25 @@
 """
     deepcopy(x)
 
-Create a deep copy of `x`: everything is copied recursively, resulting in a fully
+Create a deep copy of `x`: everything is copied recursively, resulting usually in a fully
 independent object. For example, deep-copying an array produces a new array whose elements
 are deep copies of the original elements. Calling `deepcopy` on an object should generally
 have the same effect as serializing and then deserializing it.
+
+Julia objects can roughly be categorized into two groups:
+- "containers", which contain other objects: this includes collections like arrays, sets, etc., but
+  also composite types which contain objects corresponding to their fields;
+- "atoms", which don't contain other objects, like `1` or `"a string"`, but also objects of types
+  like `BigInt`, which, despite internally being implemented as `mutable struct`, are conceptually
+  considered as immutables (there is no public API to mutate them);
+
+Given this definition, a rule of thumb for defining `deepcopy` is as follows:
+- for a container `x`, `deepcopy(x)` copies the outer structure of `x` and populates it
+  recursively with deepcopies of the objects contained in `x`;
+- for an atom `x`, `deepcopy(x) = copy(x)`.
+
+This means for example that for `x::BigInt`, we have `deepcopy(x) === x`; in particular this is a case
+where calling `deepcopy` doensn't have the same effect as serializing and then deserializing.
 
 As a special case, functions can only be actually deep-copied if they are anonymous,
 otherwise they are just copied. The difference is only relevant in the case of closures,
@@ -27,7 +42,7 @@ updated as appropriate before returning.
 """
 deepcopy(x) = deepcopy_internal(x, ObjectIdDict())::typeof(x)
 
-deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,Task},
+deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,Task,BigFloat,BigInt},
                   stackdict::ObjectIdDict) = x
 deepcopy_internal(x::Tuple, stackdict::ObjectIdDict) =
     ntuple(i->deepcopy_internal(x[i], stackdict), length(x))
@@ -112,4 +127,3 @@ function deepcopy_internal(x::Dict, stackdict::ObjectIdDict)
     end
     dest
 end
-

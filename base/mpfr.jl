@@ -964,17 +964,6 @@ get_emin_max() = ccall((:mpfr_get_emin_max, :libmpfr), Clong, ())
 set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Void, (Clong,), x)
 set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Void, (Clong,), x)
 
-function Base.deepcopy_internal(x::BigFloat, stackdict::ObjectIdDict)
-    haskey(stackdict, x) && return stackdict[x]
-    prec = precision(x)
-    y = BigFloat(zero(Clong), zero(Cint), zero(Clong), C_NULL)
-    ccall((:mpfr_init2,:libmpfr), Void, (Ref{BigFloat}, Clong), y, prec)
-    finalizer(cglobal((:mpfr_clear, :libmpfr)), y)
-    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Int32), y, x, ROUNDING_MODE[])
-    stackdict[x] = y
-    return y
-end
-
 function Base.lerpi(j::Integer, d::Integer, a::BigFloat, b::BigFloat)
     t = BigFloat(j)/d
     fma(t, b, fma(-t, a, a))
