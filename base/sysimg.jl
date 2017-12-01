@@ -460,8 +460,6 @@ function __init__()
     init_threadcall()
 end
 
-include("precompile.jl")
-
 INCLUDE_STATE = 3 # include = include_relative
 
 end # baremodule Base
@@ -494,3 +492,5 @@ end
 empty!(LOAD_PATH)
 
 Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")
+
+Base.include(Base, "precompile.jl")

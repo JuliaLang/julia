@@ -136,6 +136,8 @@ This includes arrays, where the keys are the array indices.
 """
 pairs(collection) = Generator(=>, keys(collection), values(collection))
 
+pairs(a::Associative) = a
+
 function copy(a::Associative)
     b = similar(a)
     for (k,v) in a
@@ -351,16 +353,29 @@ Dict{Int64,String} with 2 entries:
 function filter!(f, d::Associative)
     badkeys = Vector{keytype(d)}()
     try
-        for (k,v) in d
+        for pair in d
             # don't delete!(d, k) here, since associative types
             # may not support mutation during iteration
-            f(k => v) || push!(badkeys, k)
+            f(pair) || push!(badkeys, pair.first)
         end
     catch e
         return filter!_dict_deprecation(e, f, d)
     end
     for k in badkeys
         delete!(d, k)
+    end
+    return d
+end
+
+function filter_in_one_pass!(f, d::Associative)
+    try
+        for pair in d
+            if !f(pair)
+                delete!(d, pair.first)
+            end
+        end
+    catch e
+        return filter!_dict_deprecation(e, f, d)
     end
     return d
 end
@@ -405,9 +420,9 @@ function filter(f, d::Associative)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
     df = similar(d)
     try
-        for (k, v) in d
-            if f(k => v)
-                df[k] = v
+        for pair in d
+            if f(pair)
+                df[pair.first] = pair.second
             end
         end
     catch e
@@ -582,3 +597,7 @@ end
 copy(o::ObjectIdDict) = ObjectIdDict(o)
 
 get!(o::ObjectIdDict, key, default) = (o[key] = get(o, key, default))
+
+# For some Associative types, it is safe to implement filter!
+# by deleting keys during iteration.
+filter!(f, d::ObjectIdDict) = filter_in_one_pass!(f, d)
