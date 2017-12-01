@@ -2430,7 +2430,7 @@ mktempdir() do dir
                 payload = CredentialPayload(valid_cred, allow_ssh_agent=false,
                                             allow_git_helpers=false)
                 credential_loop(valid_cred, "ssh://github.com/repo", Nullable(""),
-                    Cuint(LibGit2.Consts.CREDTYPE_SSH_KEY), payload)
+                                Cuint(LibGit2.Consts.CREDTYPE_SSH_KEY), payload)
             end
 
             err, auth_attempts = challenge_prompt(expect_ssh_ex, [])
@@ -2444,7 +2444,7 @@ mktempdir() do dir
                 payload = CredentialPayload(valid_cred, allow_ssh_agent=false,
                                             allow_git_helpers=false)
                 credential_loop(valid_cred, "https://github.com/repo", Nullable(""),
-                    Cuint(LibGit2.Consts.CREDTYPE_USERPASS_PLAINTEXT), payload)
+                                Cuint(LibGit2.Consts.CREDTYPE_USERPASS_PLAINTEXT), payload)
             end
 
             err, auth_attempts = challenge_prompt(expect_https_ex, [])
@@ -2465,7 +2465,7 @@ mktempdir() do dir
                 payload = CredentialPayload(valid_cred, allow_ssh_agent=false,
                                             allow_git_helpers=false)
                 credential_loop(valid_cred, "foo://github.com/repo", Nullable(""),
-                    $allowed_types, payload)
+                                $allowed_types, payload)
             end
 
             err, auth_attempts = challenge_prompt(ex, [])
