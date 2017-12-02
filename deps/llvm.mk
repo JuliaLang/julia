@@ -23,6 +23,28 @@ endif
 endif
 endif
 
+ifeq ($(USE_TAPIR),1)
+ifeq ($(USE_SYSTEM_LLVM),0)
+ifneq ($(LLVM_VER),svn)
+$(error USE_TAPIR=1 requires LLVM_VER=svn)
+else
+TAPIR_GIT_URL=https://github.com/wsmoses
+LLVM_GIT_URL_LLVM=$(TAPIR_GIT_URL)/Parallel-IR.git
+# Against llvm-standard these are linked through submodules in Parallel-IR.git
+# so we should do a `git submodule update --init`, but that doesn't quite work
+# well with the rest of the build system. As long as we only build LLVM we shouldn't
+# need the repositories below.
+LLVM_GIT_URL_CLANG=$(TAPIR_GIT_URL)/Cilk-Clang.git
+LLVM_GIT_URL_COMPILER_RT=$(TAPIR_GIT_URL)/Tapir-compiler-rt.git
+LLVM_GIT_URL_POLLY=$(TAPIR_GIT_URL)/Parallel-Polly.git
+
+# Set the patch level to be correct, Parallel-IR is based on 5.0 right now
+# We still want to pick up LLVM patches we carry.
+LLVM_VER_SHORT=5.0
+endif
+endif
+endif
+
 include $(SRCDIR)/llvm-options.mk
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
