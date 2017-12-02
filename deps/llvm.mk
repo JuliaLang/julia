@@ -24,6 +24,25 @@ endif
 endif
 endif
 
+ifeq ($(USE_TAPIR),1)
+ifeq ($(USE_SYSTEM_LLVM),0)
+ifneq ($(LLVM_VER),svn)
+$(error USE_TAPIR=1 requires LLVM_VER=svn)
+else
+TAPIR_GIT_URL=https://github.com/wsmoses
+LLVM_GIT_URL_LLVM=$(TAPIR_GIT_URL)/Tapir-LLVM.git
+LLVM_GIT_URL_CLANG=$(TAPIR_GIT_URL)/Tapir-Clang.git
+LLVM_GIT_URL_COMPILER_RT=$(TAPIR_GIT_URL)/Tapir-compiler-rt.git
+LLVM_GIT_URL_POLLY=$(TAPIR_GIT_URL)/Tapir-Polly.git
+
+# Set the patch level to be correct, Parallel-IR is based on 6.0 right now
+# We still want to pick up LLVM patches we carry.
+LLVM_VER_SHORT=6.0
+LLVM_VER_PATH=0
+endif
+endif
+endif
+
 include $(SRCDIR)/llvm-options.mk
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
@@ -336,11 +355,11 @@ ifneq ($(LLVM_LLDB_TAR),)
 endif # LLVM_LLDB_TAR
 else # LLVM_VER
 ifeq ($(BUILD_LLVM_CLANG),1)
-	([ ! -d $(LLVM_SRC_DIR)/tools/clang ] && \
+	([ ! -d $(LLVM_SRC_DIR)/tools/clang/.git ] && \
 		git clone $(LLVM_GIT_URL_CLANG) $(LLVM_SRC_DIR)/tools/clang  ) || \
 		(cd $(LLVM_SRC_DIR)/tools/clang  && \
 		git pull --ff-only)
-	([ ! -d $(LLVM_SRC_DIR)/projects/compiler-rt ] && \
+	([ ! -d $(LLVM_SRC_DIR)/projects/compiler-rt/.git ] && \
 		git clone $(LLVM_GIT_URL_COMPILER_RT) $(LLVM_SRC_DIR)/projects/compiler-rt  ) || \
 		(cd $(LLVM_SRC_DIR)/projects/compiler-rt  && \
 		git pull --ff-only)
@@ -348,6 +367,10 @@ ifneq ($(LLVM_GIT_VER_CLANG),)
 	(cd $(LLVM_SRC_DIR)/tools/clang && \
 		git checkout $(LLVM_GIT_VER_CLANG))
 endif # LLVM_GIT_VER_CLANG
+ifneq ($(LLVM_GIT_VER_COMPILER_RT),)
+	(cd $(LLVM_SRC_DIR)/projects/compiler-rt && \
+		git checkout $(LLVM_GIT_VER_COMPILER_RT))
+endif # LLVM_GIT_VER_COMPILER_RT
 endif # BUILD_LLVM_CLANG
 ifeq ($(BUILD_LLDB),1)
 	([ ! -d $(LLVM_SRC_DIR)/tools/lldb ] && \
