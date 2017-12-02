@@ -21,7 +21,7 @@ include $(SRCDIR)/tools/bb-install.mk
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
-# autoconf configure-driven scripts: llvm pcre unwind gmp mpfr patchelf libuv curl
+# autoconf configure-driven scripts: llvm pcre unwind gmp mpfr patchelf libuv curl cilkrts
 # custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind libwhich
 # CMake libs: libgit2 libssh2 mbedtls
 #
@@ -151,6 +151,10 @@ ifneq ($(OS), WINNT)
 DEP_LIBS += libwhich
 endif
 
+ifeq ($(USE_TAPIR),1)
+DEP_LIBS += cilkrts
+endif
+
 DEP_LIBS_STAGED := $(filter-out suitesparse suitesparse-wrapper osxunwind,$(DEP_LIBS)) # unlist targets that have not been converted to use the staged-install
 
 
@@ -169,7 +173,7 @@ uninstall: $(addprefix uninstall-, $(DEP_LIBS_STAGED))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-dsfmt get-openblas get-lapack get-suitesparse get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-curl get-libgit2 get-libwhich
+getall: get-llvm get-libuv get-pcre get-openlibm get-dsfmt get-openblas get-lapack get-suitesparse get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-curl get-libgit2 get-libwhich get-cilkrts
 
 include $(SRCDIR)/llvm.mk
 include $(SRCDIR)/libuv.mk
@@ -189,3 +193,4 @@ include $(SRCDIR)/libssh2.mk
 include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
+include $(SRCDIR)/cilkrts.mk
