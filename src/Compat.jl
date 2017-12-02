@@ -100,6 +100,11 @@ function _compat(ex::Expr)
             end
         end
     end
+    if VERSION < v"0.7.0-DEV.2562"
+        if ex.head == :call && ex.args[1] == :finalizer
+            ex.args[2], ex.args[3] = ex.args[3], ex.args[2]
+        end
+    end
     return Expr(ex.head, map(_compat, ex.args)...)
 end
 
@@ -823,14 +828,6 @@ end
     end
     const uninitialized = Uninitialized()
     export Uninitialized, uninitialized
-end
-
-if VERSION < v"0.7.0-DEV.2562"
-    import Base: finalizer
-    finalizer(f::Function, o) = finalizer(o, f)
-    finalizer(f::Ptr{Void}, o) = finalizer(o, f)
-    finalizer(f::Ptr{Void}, o::Ptr{Void}) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
-    finalizer(f::Ptr{Void}, o::Function) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
 end
 
 include("deprecated.jl")
