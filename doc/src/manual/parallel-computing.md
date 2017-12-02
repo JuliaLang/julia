@@ -478,16 +478,14 @@ function pmap(f, lst)
     i = 1
     # function to produce the next work item from the queue.
     # in this case it's just an index.
-    nextidx() = (idx=i; i+=1; idx)
+    nextidx() = (global i; idx=i; i+=1; idx)
     @sync begin
         for p=1:np
             if p != myid() || np == 1
                 @async begin
                     while true
                         idx = nextidx()
-                        if idx > n
-                            break
-                        end
+                        idx > n && break
                         results[idx] = remotecall_fetch(f, p, lst[idx])
                     end
                 end
