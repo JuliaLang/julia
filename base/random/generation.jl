@@ -154,7 +154,7 @@ SamplerRangeInt(a::T, k::U) where {T,U<:Union{UInt32,UInt128}} =
 SamplerRangeInt(a::T, k::UInt64) where {T} =
     SamplerRangeInt{T,UInt64}(a, k, maxmultiplemix(k))
 
-function Sampler(::AbstractRNG, r::UnitRange{T}, ::Repetition) where T<:Unsigned
+function Sampler(::AbstractRNG, r::AbstractUnitRange{T}, ::Repetition) where T<:Unsigned
     isempty(r) && throw(ArgumentError("range must be non-empty"))
     SamplerRangeInt(first(r), last(r) - first(r) + oneunit(T))
 end
@@ -163,7 +163,7 @@ for (T, U) in [(UInt8, UInt32), (UInt16, UInt32),
                (Int8, UInt32), (Int16, UInt32), (Int32, UInt32),
                (Int64, UInt64), (Int128, UInt128), (Bool, UInt32)]
 
-    @eval Sampler(::AbstractRNG, r::UnitRange{$T}, ::Repetition) = begin
+    @eval Sampler(::AbstractRNG, r::AbstractUnitRange{$T}, ::Repetition) = begin
         isempty(r) && throw(ArgumentError("range must be non-empty"))
         # overflow ok:
         SamplerRangeInt(first(r), convert($U, unsigned(last(r) - first(r)) + one($U)))
@@ -206,7 +206,7 @@ struct SamplerBigInt <: Sampler
     mask::Limb        # applied to the highest limb
 end
 
-function Sampler(::AbstractRNG, r::UnitRange{BigInt}, ::Repetition)
+function Sampler(::AbstractRNG, r::AbstractUnitRange{BigInt}, ::Repetition)
     m = last(r) - first(r)
     m < 0 && throw(ArgumentError("range must be non-empty"))
     nd = ndigits(m, 2)
@@ -238,7 +238,7 @@ end
 ## random values from AbstractArray
 
 Sampler(rng::AbstractRNG, r::AbstractArray, n::Repetition) =
-    SamplerSimple(r, Sampler(rng, 1:length(r), n))
+    SamplerSimple(r, Sampler(rng, linearindices(r), n))
 
 rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractArray,<:Sampler}) =
     @inbounds return sp[][rand(rng, sp.data)]
