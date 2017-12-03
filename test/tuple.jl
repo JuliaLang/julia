@@ -243,6 +243,8 @@ end
 
     @test reverse(()) === ()
     @test reverse((1,2,3)) === (3,2,1)
+
+    @test keys((1, 2.0, :c)) === (1, 2, 3)
 end
 # issue #21697
 @test_throws ArgumentError ntuple(identity, -1)
