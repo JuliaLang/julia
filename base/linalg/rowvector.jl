@@ -158,7 +158,7 @@ IndexStyle(::RowVector) = IndexLinear()
 IndexStyle(::Type{<:RowVector}) = IndexLinear()
 
 @propagate_inbounds getindex(rowvec::RowVector, i::Int) = transpose(rowvec.vec[i])
-@propagate_inbounds setindex!(rowvec::RowVector, v, i::Int) = setindex!(rowvec.vec, transpose(v), i)
+@propagate_inbounds setindex!(rowvec::RowVector, v, i::Int) = (setindex!(rowvec.vec, transpose(v), i); rowvec)
 
 # Keep a RowVector where appropriate
 @propagate_inbounds getindex(rowvec::RowVector, ::Colon, i::Int) = transpose.(rowvec.vec[i:i])
