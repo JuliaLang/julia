@@ -35,6 +35,5 @@ If your favorite IDE, is not listed there, [open an issue in the JuliaEditorSupp
 | ------------------------------ | ----------------------------------------------------------- |
 |[ ackrc ](https://github.com/JuliaLang/julia/blob/master/contrib/ackrc ) |  Config for Ack search tool |
 |[ debug_bootstrap.gdb ](https://github.com/JuliaLang/julia/blob/master/contrib/debug_bootstrap.gdb) | Bootstrap process using the debug build |
-|[ julia.lang ](https://github.com/JuliaLang/julia/blob/master/contrib/julia.lang) | GtkSourceView (GTK+ framework) for multiline text editing config file |
 |[ README.ackrc.txt ](https://github.com/JuliaLang/julia/blob/master/contrib/README.ackrc.txt) | README for ackrc  config file |
 |[ valgrind-julia.supp ](https://github.com/JuliaLang/julia/blob/master/contrib/valgrind-julia.supp) | Suppressions  for Valgrind debugging tool |
