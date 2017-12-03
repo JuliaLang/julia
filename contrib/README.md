@@ -37,7 +37,6 @@ If your favorite IDE, is not listed there, [open an issue in the JuliaEditorSupp
 |[ ctags ](https://github.com/JuliaLang/julia/blob/master/contrib/ctags) | Add more keywords to ctags regex search tool |
 |[ debug_bootstrap.gdb ](https://github.com/JuliaLang/julia/blob/master/contrib/debug_bootstrap.gdb) | Bootstrap process using the debug build |
 |[ julia.hrc ](https://github.com/JuliaLang/julia/blob/master/contrib/julia.hrc) | Julia syntax highlighting definition for Colorer |
-|[ julia.lang ](https://github.com/JuliaLang/julia/blob/master/contrib/julia.lang) | GtkSourceView (GTK+ framework) for multiline text editing config file |
 |[ julia.xml ](https://github.com/JuliaLang/julia/blob/master/contrib/julia.xml) | KDE editors Kate and Kwrite config file |
 |[ README.ackrc.txt ](https://github.com/JuliaLang/julia/blob/master/contrib/README.ackrc.txt) | README for ackrc  config file |
 |[ README.ctags.txt ](https://github.com/JuliaLang/julia/blob/master/contrib/README.ctags.txt) | README for ctags  config file |
