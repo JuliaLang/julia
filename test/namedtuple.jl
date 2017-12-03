@@ -114,6 +114,9 @@ end
 @test Meta.lower(Main, Meta.parse("(a=1,b=0,a=2)")) == Expr(:error, "field name \"a\" repeated in named tuple")
 @test Meta.lower(Main, Meta.parse("(c=1,a=1,b=0,a=2)")) == Expr(:error, "field name \"a\" repeated in named tuple")
 
+@test Meta.lower(Main, Meta.parse("(; f(x))")) == Expr(:error, "invalid named tuple element \"f(x)\"")
+@test Meta.lower(Main, Meta.parse("(;1=0)")) == Expr(:error, "invalid named tuple field name \"1\"")
+
 @test Meta.parse("(;)") == quote end
 @test Meta.lower(Main, Meta.parse("(1,;2)")) == Expr(:error, "unexpected semicolon in tuple")
 
@@ -123,6 +126,14 @@ let d = [:a=>1, :b=>2, :c=>3]   # use an array to preserve order
     @test (d..., a=10) == (a=10, b=2, c=3)
     @test (a=0, b=0, z=1, d..., x=4, y=5) == (a=1, b=2, z=1, c=3, x=4, y=5)
     @test (a=0, (b=2,a=1)..., c=3) == (a=1, b=2, c=3)
+
+    t = (x=1, y=20)
+    @test (;d...) == (a=1, b=2, c=3)
+    @test (;d..., :z=>20) == (a=1, b=2, c=3, z=20)
+    @test (;a=10, d..., :c=>30) == (a=1, b=2, c=30)
+    y = (w=30, z=40)
+    @test (;t..., y...) == (x=1, y=20, w=30, z=40)
+    @test (;t..., y=0, y...) == (x=1, y=0, w=30, z=40)
 end
 
 # inference tests
@@ -189,3 +200,11 @@ function abstr_nt_22194_3()
 end
 abstr_nt_22194_3()
 @test Base.return_types(abstr_nt_22194_3, ()) == Any[Any]
+
+@test Base.structdiff((a=1, b=2), (b=3,)) == (a=1,)
+@test Base.structdiff((a=1, b=2, z=20), (b=3,)) == (a=1, z=20)
+@test Base.structdiff((a=1, b=2, z=20), (b=3, q=20, z=1)) == (a=1,)
+@test Base.structdiff((a=1, b=2, z=20), (b=3, q=20, z=1, a=0)) == NamedTuple()
+@test Base.structdiff((a=1, b=2, z=20), NamedTuple{(:b,)}) == (a=1, z=20)
+@test typeof(Base.structdiff(NamedTuple{(:a, :b), Tuple{Int32, Union{Int32, Void}}}((1, Int32(2))),
+                             (a=0,))) === NamedTuple{(:b,), Tuple{Union{Int32, Void}}}

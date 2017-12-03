@@ -265,6 +265,7 @@ end
         pop!(need_to_handle_undef_sparam, which(Core.Inference.eltype, Tuple{Type{Tuple{Any}}}))
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Core.Inference.cat, Tuple{Any, AbstractArray}))
+        pop!(need_to_handle_undef_sparam, first(methods(Core.Inference.same_names)))
         @test need_to_handle_undef_sparam == Set()
     end
     let need_to_handle_undef_sparam =

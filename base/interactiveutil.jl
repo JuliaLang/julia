@@ -406,7 +406,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
             return quote
                 local arg1 = $(esc(args[1]))
                 $(fcn)(Core.kwfunc(arg1),
-                       Tuple{Vector{Any}, Core.Typeof(arg1),
+                       Tuple{NamedTuple, Core.Typeof(arg1),
                              $(typesof)($(map(esc, args[2:end])...)).parameters...})
             end
         elseif ex0.head == :call

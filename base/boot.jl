@@ -149,8 +149,6 @@ export
     # constants
     nothing, Main
 
-const AnyVector = Array{Any,1}
-
 abstract type Number end
 abstract type Real     <: Number end
 abstract type AbstractFloat <: Real end
@@ -459,6 +457,44 @@ function (g::GeneratedFunctionStub)(@nospecialize args...)
         return lam
     else
         return Expr(Symbol("with-static-parameters"), lam, g.spnames...)
+    end
+end
+
+NamedTuple() = NamedTuple{(),Tuple{}}(())
+
+"""
+    NamedTuple{names}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
+"""
+NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
+
+using .Intrinsics: sle_int, add_int
+
+macro generated()
+    return Expr(:generated)
+end
+
+function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
+    if @generated
+        N = nfields(names)
+        flds = Array{Any,1}(uninitialized, N)
+        i = 1
+        while sle_int(i, N)
+            arrayset(false, flds, :(getfield(args, $i)), i)
+            i = add_int(i, 1)
+        end
+        Expr(:new, :(NamedTuple{names,T}), flds...)
+    else
+        N = nfields(names)
+        NT = NamedTuple{names,T}
+        flds = Array{Any,1}(uninitialized, N)
+        i = 1
+        while sle_int(i, N)
+            arrayset(false, flds, getfield(args, i), i)
+            i = add_int(i, 1)
+        end
+        ccall(:jl_new_structv, Any, (Any, Ptr{Void}, UInt32), NT, fields, N)::NT
     end
 end
 
