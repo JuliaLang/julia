@@ -298,7 +298,7 @@ end
     @test rv[CartesianIndex()] == 2
     rv[CartesianIndex(1)] = 1
     @test rv[CartesianIndex(1)] == 1
-    
+
     # setindex!(v::RowVector, ...) should return v rather than v's parent
     @test setindex!(RowVector([1, 2, 3]), 4, 1)::RowVector == [4 2 3]
 end
