@@ -201,6 +201,54 @@ julia> λ
     | `nothing`       | ordinary (forward)               | ``Av = Bv\\lambda``                |
     | real or complex | inverse with level shift `sigma` | ``(A - \\sigma B )^{-1}B = v\\nu`` |
 
+`svds` computes the largest singular values `s` of `A` using implicitly restarted Lanczos
+iterations derived from [`eigs`](@ref). For the single input version,
+
+`svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000, ncv=2*nsv, v0=zeros((0,))) -> (SVD([left_sv,] s, [right_sv,]), nconv, niter, nmult, resid)`
+
+the inputs and outputs are as follows:
+
+**Inputs**
+
+* `A`: Linear operator whose singular values are desired. `A` may be represented as a
+  subtype of `AbstractArray`, e.g., a sparse matrix, or any other type supporting the four
+  methods `size(A)`, `eltype(A)`, `A * vector`, and `A' * vector`.
+* `nsv`: Number of singular values. Default: 6.
+* `ritzvec`: If `true`, return the left and right singular vectors `left_sv` and `right_sv`.
+   If `false`, omit the singular vectors. Default: `true`.
+* `tol`: tolerance, see [`eigs`](@ref).
+* `maxiter`: Maximum number of iterations, see [`eigs`](@ref). Default: 1000.
+* `ncv`: Maximum size of the Krylov subspace, see [`eigs`](@ref) (there called `nev`). Default: `2*nsv`.
+* `v0`: Initial guess for the first Krylov vector. It may have length `min(size(A)...)`, or 0.
+
+**Outputs**
+
+* `svd`: An `SVD` object containing the left singular vectors, the requested values, and the
+  right singular vectors. If `ritzvec = false`, the left and right singular vectors will be
+  empty.
+* `nconv`: Number of converged singular values.
+* `niter`: Number of iterations.
+* `nmult`: Number of matrix--vector products used.
+* `resid`: Final residual vector.
+
+# Examples
+```jldoctest
+julia> using IterativeEigenSolvers
+
+julia> A = Diagonal(1:4);
+
+julia> s = svds(A, nsv = 2)[1];
+
+julia> s[:S]
+2-element Array{Float64,1}:
+ 4.0
+ 2.9999999999999996
+```
+
+!!! note "Implementation"
+    `svds(A)` is formally equivalent to calling [`eigs`](@ref) to perform implicitly restarted
+    Lanczos tridiagonalization on the Hermitian matrix ``A^\\prime A`` or ``AA^\\prime`` such
+    that the size is smallest.
 
 ```@docs
 IterativeEigenSolvers.eigs(::Any)
