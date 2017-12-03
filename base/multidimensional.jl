@@ -9,6 +9,7 @@ module IteratorsMD
     import Base: +, -, *
     import Base: simd_outer_range, simd_inner_length, simd_index
     using Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
+    using Base: @propagate_inbounds
     using Base.Iterators: Reverse
 
     export CartesianIndex, CartesianRange
@@ -185,7 +186,7 @@ module IteratorsMD
     CartesianIndex(2, 2, 2)
     ```
     """
-    struct CartesianRange{N,R<:NTuple{N,AbstractUnitRange{Int}}}
+    struct CartesianRange{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{CartesianIndex{N}, N} 
         indices::R
     end
 
@@ -222,10 +223,6 @@ module IteratorsMD
     convert(::Type{Tuple{Vararg{UnitRange}}}, R::CartesianRange) =
         convert(Tuple{Vararg{UnitRange{Int}}}, R)
 
-    ndims(R::CartesianRange) = ndims(typeof(R))
-    ndims(::Type{CartesianRange{N}}) where {N} = N
-    ndims(::Type{CartesianRange{N,TT}}) where {N,TT} = N
-
     eachindex(::IndexCartesian, A::AbstractArray) = CartesianRange(indices(A))
 
     @inline eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...) =
@@ -237,11 +234,6 @@ module IteratorsMD
     @inline maxt(a::Tuple{}, b::Tuple)   = b
     @inline maxt(a::Tuple,   b::Tuple{}) = a
     @inline maxt(a::Tuple,   b::Tuple)   = (max(a[1], b[1]), maxt(tail(a), tail(b))...)
-
-    eltype(R::CartesianRange) = eltype(typeof(R))
-    eltype(::Type{CartesianRange{N}}) where {N} = CartesianIndex{N}
-    eltype(::Type{CartesianRange{N,TT}}) where {N,TT} = CartesianIndex{N}
-    iteratorsize(::Type{<:CartesianRange}) = Base.HasShape()
 
     @inline function start(iter::CartesianRange)
         iterfirst, iterlast = first(iter), last(iter)
@@ -272,6 +264,16 @@ module IteratorsMD
 
     size(iter::CartesianRange) = map(dimlength, first(iter).I, last(iter).I)
     dimlength(start, stop) = stop-start+1
+
+    @inline function getindex(iter::CartesianRange{N}, i::CartesianIndex{N}) where {N}
+        @boundscheck if i ∉ iter
+            throw(BoundsError(A, i))
+        end
+        return i
+    end
+    @propagate_inbounds function getindex(iter::CartesianRange{N}, i::Vararg{Int, N}) where {N}
+        return iter[CartesianRange(i)]
+    end
 
     length(iter::CartesianRange) = prod(size(iter))
 
