@@ -2172,7 +2172,7 @@ end
 
 @deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
 
-@deprecate |>(f, x) f(x)
+@deprecate |>(x, f) f(x)
 
 # END 0.7 deprecations
 
