@@ -302,6 +302,8 @@ end
 Base.length(a::UnsafeView) = a.len
 Base.getindex(a::UnsafeView, i::Int) = unsafe_load(a.ptr, i)
 Base.setindex!(a::UnsafeView, x, i::Int) = unsafe_store!(a.ptr, x, i)
+Base.pointer(a::UnsafeView) = a.ptr
+Base.size(a::UnsafeView) = (a.len,)
 
 # this is essentially equivalent to rand!(r, ::AbstractArray{Float64}, I) above, but due to
 # optimizations which can't be done currently when working with pointers, we have to re-order
@@ -424,7 +426,7 @@ end
 
 #### arrays of integers
 
-function _rand!(r::MersenneTwister, A::UnsafeView{UInt128})
+function rand!(r::MersenneTwister, A::UnsafeView{UInt128}, ::SamplerType{UInt128})
     n::Int=length(A)
     i = n
     while true
@@ -450,10 +452,15 @@ function _rand!(r::MersenneTwister, A::UnsafeView{UInt128})
 end
 
 for T in BitInteger_types
-    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerType{$T})
+    @eval rand!(r::MersenneTwister, A::Array{$T}, sp::SamplerType{$T}) =
+        (@gc_preserve A rand!(r, UnsafeView(pointer(A), length(A)), sp); A)
+
+    T == UInt128 && continue
+
+    @eval function rand!(r::MersenneTwister, A::UnsafeView{$T}, ::SamplerType{$T})
         n = length(A)
         n128 = n * sizeof($T) ÷ 16
-        @gc_preserve A _rand!(r, UnsafeView{UInt128}(pointer(A), n128))
+        rand!(r, UnsafeView{UInt128}(pointer(A), n128))
         for i = 16*n128÷sizeof($T)+1:n
             @inbounds A[i] = rand(r, $T)
         end

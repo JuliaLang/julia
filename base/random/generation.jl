@@ -278,17 +278,19 @@ end
 
 function rand(rng::AbstractRNG, sp::SamplerBigInt)
     x = MPZ.realloc2(sp.nlimbsmax*8*sizeof(Limb))
-    limbs = unsafe_wrap(Array, x.d, sp.nlimbs)
-    while true
-        rand!(rng, limbs)
-        @inbounds limbs[end] &= sp.mask
-        MPZ.mpn_cmp(x, sp.m, sp.nlimbs) <= 0 && break
-    end
-    # adjust x.size (normally done by mpz_limbs_finish, in GMP version >= 6)
-    x.size = sp.nlimbs
-    while x.size > 0
-        @inbounds limbs[x.size] != 0 && break
-        x.size -= 1
+    @gc_preserve x begin
+        limbs = UnsafeView(x.d, sp.nlimbs)
+        while true
+            rand!(rng, limbs)
+            limbs[end] &= sp.mask
+            MPZ.mpn_cmp(x, sp.m, sp.nlimbs) <= 0 && break
+        end
+        # adjust x.size (normally done by mpz_limbs_finish, in GMP version >= 6)
+        x.size = sp.nlimbs
+        while x.size > 0
+            limbs[x.size] != 0 && break
+            x.size -= 1
+        end
     end
     MPZ.add!(x, sp.a)
 end
