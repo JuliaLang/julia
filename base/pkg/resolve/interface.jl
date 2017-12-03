@@ -44,7 +44,7 @@ mutable struct Interface
 
     function Interface(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
         # generate pkgs
-        pkgs = sort!(String[Set{String}(keys(deps))...])
+        pkgs = sort!(String[keys(deps)...])
 
         np = length(pkgs)
 

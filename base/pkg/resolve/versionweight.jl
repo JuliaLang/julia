@@ -110,14 +110,8 @@ const _vwprebuild_zero = VWPreBuild(0, HierarchicalValue(VWPreBuildItem))
 function VWPreBuild(ispre::Bool, desc::Tuple{Vararg{Union{Int,String}}})
     isempty(desc) && return _vwprebuild_zero
     desc == ("",) && return VWPreBuild(ispre ? -1 : 1, HierarchicalValue(VWPreBuildItem[]))
-    nonempty = ispre ? -1 : 0
-    w = Vector{VWPreBuildItem}(length(desc))
-    i = 1
-    @inbounds for item in desc
-        w[i] = VWPreBuildItem(item)
-        i += 1
-    end
-    return VWPreBuild(nonempty, HierarchicalValue(w))
+    hv = HierarchicalValue([VWPreBuildItem(item) for item in desc])
+    return VWPreBuild(ispre ? -1 : 0, hv)
 end
 VWPreBuild() = _vwprebuild_zero
 
