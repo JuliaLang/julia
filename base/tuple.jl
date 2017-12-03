@@ -38,7 +38,7 @@ start(t::Tuple) = 1
 done(t::Tuple, i::Int) = (length(t) < i)
 next(t::Tuple, i::Int) = (t[i], i+1)
 
-keys(t::Tuple) = 1:length(t)
+keys(t::Tuple) = ntuple(identity, Val(length(t)))
 
 prevind(t::Tuple, i::Integer) = Int(i)-1
 nextind(t::Tuple, i::Integer) = Int(i)+1
