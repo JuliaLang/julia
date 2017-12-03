@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.LineEdit
-using Base.LineEdit: edit_insert, buffer, content, setmark, getmark
+using Base.LineEdit: edit_insert, buffer, content, setmark, getmark, region
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using Main.TestHelpers
@@ -802,19 +802,33 @@ end
 end
 
 @testset "edit_transpose_lines_{up,down}!" begin
+    transpose_lines_up!(buf) = LineEdit.edit_transpose_lines_up!(buf, position(buf)=>position(buf))
+    transpose_lines_up_reg!(buf) = LineEdit.edit_transpose_lines_up!(buf, region(buf))
+    transpose_lines_down!(buf) = LineEdit.edit_transpose_lines_down!(buf, position(buf)=>position(buf))
+    transpose_lines_down_reg!(buf) = LineEdit.edit_transpose_lines_down!(buf, region(buf))
+
     local buf
     buf = IOBuffer()
+
     write(buf, "l1\nl2\nl3")
     seek(buf, 0)
-    @test LineEdit.edit_transpose_lines_up!(buf) == false
-    @test transform!(LineEdit.edit_transpose_lines_up!, buf) == ("l1\nl2\nl3", 0, 0)
-    @test transform!(LineEdit.edit_transpose_lines_down!, buf) == ("l2\nl1\nl3", 3, 0)
-    @test LineEdit.edit_transpose_lines_down!(buf) == true
+    @test transpose_lines_up!(buf) == false
+    @test transform!(transpose_lines_up!, buf) == ("l1\nl2\nl3", 0, 0)
+    @test transform!(transpose_lines_down!, buf) == ("l2\nl1\nl3", 3, 0)
+    @test transpose_lines_down!(buf) == true
     @test String(take!(copy(buf))) == "l2\nl3\nl1"
-    @test LineEdit.edit_transpose_lines_down!(buf) == false
+    @test transpose_lines_down!(buf) == false
     @test String(take!(copy(buf))) == "l2\nl3\nl1" # no change
     LineEdit.edit_move_right(buf)
-    @test transform!(LineEdit.edit_transpose_lines_up!, buf) == ("l2\nl1\nl3", 4, 0)
+    @test transform!(transpose_lines_up!, buf) == ("l2\nl1\nl3", 4, 0)
     LineEdit.edit_move_right(buf)
-    @test transform!(LineEdit.edit_transpose_lines_up!, buf) == ("l1\nl2\nl3", 2, 0)
+    @test transform!(transpose_lines_up!, buf) == ("l1\nl2\nl3", 2, 0)
+
+    # multiline
+    @test transpose_lines_up_reg!(buf) == false
+    @test transform!(transpose_lines_down_reg!, buf) == ("l2\nl1\nl3", 5, 0)
+    Base.LineEdit.edit_exchange_point_and_mark(buf)
+    seek(buf, 1)
+    @test transpose_lines_up_reg!(buf) == false
+    @test transform!(transpose_lines_down_reg!, buf) == ("l3\nl2\nl1", 4, 8)
 end

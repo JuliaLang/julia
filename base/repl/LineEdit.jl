@@ -219,7 +219,7 @@ command_group(command::Function) = command_group(Base.function_name(command))
 
 # return true if command should keep active a region
 function preserve_active(command::Symbol)
-    command == :edit_indent
+    command ∈ [:edit_indent, :edit_transpose_lines_down!, :edit_transpose_lines_up!]
 end
 
 function set_action!(s::MIState, command::Symbol)
@@ -953,37 +953,39 @@ function edit_transpose_words(buf::IOBuffer, mode=:emacs)
 end
 
 
-# swap current line with line above
-function edit_transpose_lines_up!(buf::IOBuffer)
-    b2 = beginofline(buf)
+# swap all lines intersecting the region with line above
+function edit_transpose_lines_up!(buf::IOBuffer, reg::Region)
+    b2 = beginofline(buf, first(reg))
     b2 == 0 && return false
     b1 = beginofline(buf, b2-1)
     # we do in this order so that the buffer's position is maintained in current line
     line1 = edit_splice!(buf, b1 => b2) # delete whole previous line
     line1 = '\n'*line1[1:end-1] # don't include the final '\n'
     pos = position(buf) # save pos in case it's at the end of line
-    b = endofline(buf)
+    b = endofline(buf, last(reg) - b2 + b1) # b2-b1 is the size of the removed line1
     edit_splice!(buf, b => b, line1)
     seek(buf, pos)
     true
 end
 
-# swap current line with line below
-function edit_transpose_lines_down!(buf::IOBuffer)
-    e1 = endofline(buf)
+# swap all lines intersecting the region with line below
+function edit_transpose_lines_down!(buf::IOBuffer, reg::Region)
+    e1 = endofline(buf, last(reg))
     e1 == buf.size && return false
     e2 = endofline(buf, e1+1)
     line2 = edit_splice!(buf, e1 => e2) # delete whole next line
     line2 = line2[2:end]*'\n' # don't include leading '\n'
-    b = beginofline(buf)
+    b = beginofline(buf, first(reg))
     edit_splice!(buf, b => b, line2)
     true
 end
 
+# return the region if active, or the current position as a Region otherwise
+region_if_active(s)::Region = is_region_active(s) ? region(s) : position(s)=>position(s)
 
 function edit_transpose_lines_up!(s::MIState)
     set_action!(s, :edit_transpose_lines_up!)
-    if edit_transpose_lines_up!(buffer(s))
+    if edit_transpose_lines_up!(buffer(s), region_if_active(s))
         refresh_line(s)
     else
         # beeping would be too noisy here
@@ -993,7 +995,7 @@ end
 
 function edit_transpose_lines_down!(s::MIState)
     set_action!(s, :edit_transpose_lines_down!)
-    if edit_transpose_lines_down!(buffer(s))
+    if edit_transpose_lines_down!(buffer(s), region_if_active(s))
         refresh_line(s)
     else
         :ignore
