@@ -760,7 +760,7 @@ function push!(a::Array{T,1}, item) where T
     # convert first so we don't grow the array if the assignment won't work
     itemT = convert(T, item)
     _growend!(a, 1)
-    a[end] = itemT
+    @inbounds a[end] = itemT
     return a
 end
 
@@ -968,7 +968,7 @@ function pop!(a::Vector)
     if isempty(a)
         throw(ArgumentError("array must be non-empty"))
     end
-    item = a[end]
+    @inbounds item = a[end]
     _deleteend!(a, 1)
     return item
 end
@@ -993,7 +993,7 @@ julia> unshift!([1, 2, 3, 4], 5, 6)
 function unshift!(a::Array{T,1}, item) where T
     item = convert(T, item)
     _growbeg!(a, 1)
-    a[1] = item
+    @inbounds a[1] = item
     return a
 end
 
@@ -1029,7 +1029,7 @@ function shift!(a::Vector)
     if isempty(a)
         throw(ArgumentError("array must be non-empty"))
     end
-    item = a[1]
+    @inbounds item = a[1]
     _deletebeg!(a, 1)
     return item
 end
@@ -1473,7 +1473,7 @@ function findnext(A, start::Integer)
     l = endof(A)
     i = start
     warned = false
-    while i <= l
+    @inbounds while i <= l
         a = A[i]
         if !warned && !(a isa Bool)
             depwarn("In the future `findnext` will only work on boolean collections. Use `findnext(x->x!=0, A, start)` instead.", :findnext)
@@ -1532,7 +1532,7 @@ julia> findnext(isodd, A, 2)
 function findnext(testf::Function, A, start::Integer)
     l = endof(A)
     i = start
-    while i <= l
+    @inbounds while i <= l
         if testf(A[i])
             return i
         end
@@ -1588,7 +1588,7 @@ julia> findprev(A,1)
 function findprev(A, start::Integer)
     i = start
     warned = false
-    while i >= 1
+    @inbounds while i >= 1
         a = A[i]
         if !warned && !(a isa Bool)
             depwarn("In the future `findprev` will only work on boolean collections. Use `findprev(x->x!=0, A, start)` instead.", :findprev)
@@ -1646,7 +1646,7 @@ julia> findprev(isodd, A, 3)
 """
 function findprev(testf::Function, A, start::Integer)
     i = start
-    while i >= 1
+    @inbounds while i >= 1
         testf(A[i]) && return i
         i = prevind(A, i)
     end
@@ -1709,7 +1709,7 @@ function find(testf::Function, A)
     # array for the return
     tmpI = Vector{Int}()
     inds = _index_remapper(A)
-    for (i,a) = enumerate(A)
+    @inbounds for (i,a) = enumerate(A)
         if testf(a)
             push!(tmpI, inds[i])
         end
@@ -1749,7 +1749,7 @@ function find(A)
     cnt = 1
     inds = _index_remapper(A)
     warned = false
-    for (i,a) in enumerate(A)
+    for (i,a) in enumerate(A) #not inbounds in mulithreaded if A is concurrently mutated
         if !warned && !(a isa Bool)
             depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
             warned = true
@@ -1799,7 +1799,7 @@ function findn(A::AbstractMatrix)
     I = similar(A, Int, nnzA)
     J = similar(A, Int, nnzA)
     cnt = 1
-    for j=indices(A,2), i=indices(A,1)
+    for j=indices(A,2), i=indices(A,1) #not inbounds in mulithreaded if A is concurrently mutated
         if A[i,j] != 0
             I[cnt] = i
             J[cnt] = j
@@ -1834,7 +1834,7 @@ function findnz(A::AbstractMatrix{T}) where T
     NZs = Vector{T}(uninitialized, nnzA)
     cnt = 1
     if nnzA > 0
-        for j=indices(A,2), i=indices(A,1)
+        for j=indices(A,2), i=indices(A,1) #not inbounds in mulithreaded if A is concurrently mutated
             Aij = A[i,j]
             if Aij != 0
                 I[cnt] = i
