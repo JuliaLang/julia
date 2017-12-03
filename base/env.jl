@@ -73,8 +73,6 @@ variables.
 """
 const ENV = EnvDict()
 
-similar(::EnvDict) = Dict{String,String}()
-
 getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
 get(::EnvDict, k::AbstractString, def) = access_env(k->def, k)
 get(f::Callable, ::EnvDict, k::AbstractString) = access_env(k->f(), k)

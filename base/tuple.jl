@@ -328,3 +328,10 @@ any(x::Tuple{}) = false
 any(x::Tuple{Bool}) = x[1]
 any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
+
+"""
+    empty(x::Tuple)
+
+Returns an empty tuple, `()`.
+"""
+empty(x::Tuple) = ()

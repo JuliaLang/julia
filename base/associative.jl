@@ -138,8 +138,23 @@ pairs(collection) = Generator(=>, keys(collection), values(collection))
 
 pairs(a::Associative) = a
 
+"""
+    empty(a::Associative, [index_type=keytype(a)], [value_type=valtype(a)])
+
+Create an empty `Associative` container which can accept indices of type `index_type` and
+values of type `value_type`. The second and third arguments are optional and default to the
+input's `keytype` and `valtype`, respectively. (If only one of the two types is specified,
+it is assumed to be the `value_type`, and the `index_type` we default to `keytype(a)`).
+
+Custom `Associative` subtypes may choose which specific associative type is best suited to
+return for the given index and value types, by specializing on the three-argument signature.
+The default is to return an empty `Dict`.
+"""
+empty(a::Associative) = empty(a, keytype(a), valtype(a))
+empty(a::Associative, ::Type{V}) where {V} = empty(a, keytype(a), V) # Note: this is the form which makes sense for `Vector`.
+
 function copy(a::Associative)
-    b = similar(a)
+    b = empty(a)
     for (k,v) in a
         b[k] = v
     end
@@ -418,7 +433,7 @@ Dict{Int64,String} with 1 entry:
 """
 function filter(f, d::Associative)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
-    df = similar(d)
+    df = empty(d)
     try
         for pair in d
             if f(pair)
@@ -527,7 +542,7 @@ mutable struct ObjectIdDict <: Associative{Any,Any}
     ObjectIdDict(o::ObjectIdDict) = new(copy(o.ht))
 end
 
-similar(d::ObjectIdDict) = ObjectIdDict()
+empty(d::ObjectIdDict, ::Type{Any}, ::Type{Any}) = ObjectIdDict()
 
 function rehash!(t::ObjectIdDict, newsz = length(t.ht))
     t.ht = ccall(:jl_idtable_rehash, Any, (Any, Csize_t), t.ht, newsz)

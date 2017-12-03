@@ -107,6 +107,9 @@ mutable struct Dict{K,V} <: Associative{K,V}
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
             d.idxfloor, d.maxprobe)
     end
+    function Dict{K, V}(slots, keys, vals, ndel, count, age, idxfloor, maxprobe) where {K, V}
+        new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe)
+    end
 end
 function Dict{K,V}(kv) where V where K
     h = Dict{K,V}()
@@ -166,7 +169,7 @@ end
 # this is a special case due to (1) allowing both Pairs and Tuples as elements,
 # and (2) Pair being invariant. a bit annoying.
 function grow_to!(dest::Associative, itr)
-    out = grow_to!(similar(dest, Pair{Union{},Union{}}), itr, start(itr))
+    out = grow_to!(empty(dest, Union{}, Union{}), itr, start(itr))
     return isempty(out) ? dest : out
 end
 
@@ -176,7 +179,7 @@ function grow_to!(dest::Associative{K,V}, itr, st) where V where K
         if isa(k,K) && isa(v,V)
             dest[k] = v
         else
-            new = similar(dest, Pair{typejoin(K,typeof(k)), typejoin(V,typeof(v))})
+            new = empty(dest, typejoin(K,typeof(k)), typejoin(V,typeof(v)))
             copy!(new, dest)
             new[k] = v
             return grow_to!(new, itr, st)
@@ -185,8 +188,7 @@ function grow_to!(dest::Associative{K,V}, itr, st) where V where K
     return dest
 end
 
-similar(d::Dict{K,V}) where {K,V} = Dict{K,V}()
-similar(d::Dict, ::Type{Pair{K,V}}) where {K,V} = Dict{K,V}()
+empty(a::Associative, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
 # conversion between Dict types
 function convert(::Type{Dict{K,V}},d::Associative) where V where K
@@ -794,12 +796,7 @@ next(::ImmutableDict{K,V}, t) where {K,V} = (Pair{K,V}(t.key, t.value), t.parent
 done(::ImmutableDict, t) = !isdefined(t, :parent)
 length(t::ImmutableDict) = count(x->true, t)
 isempty(t::ImmutableDict) = done(t, start(t))
-function similar(t::ImmutableDict)
-    while isdefined(t, :parent)
-        t = t.parent
-    end
-    return t
-end
+empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
-_similar_for(c::Dict, ::Type{P}, itr, isz) where {P<:Pair} = similar(c, P)
+_similar_for(c::Dict, ::Type{Pair{K,V}}, itr, isz) where {K, V} = empty(c, K, V)
 _similar_for(c::Associative, T, itr, isz) = throw(ArgumentError("for Associatives, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))

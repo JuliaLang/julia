@@ -83,6 +83,8 @@ end
         @test Tuple{Int,Vararg{Any}}.ninitialized == 1
         @test Tuple{Any,Any,Vararg{Any}}.ninitialized == 2
     end
+
+    @test empty((1, 2.0, "c")) === ()
 end
 
 @testset "size" begin
