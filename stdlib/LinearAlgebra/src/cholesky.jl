@@ -32,6 +32,11 @@ struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     uplo::Char
     info::BlasInt
+
+    function Cholesky{T,S}(factors, uplo, info) where {T,S<:AbstractMatrix}
+        @assert !has_offset_axes(factors)
+        new(factors, uplo, info)
+    end
 end
 Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::BlasInt) where {T} =
     Cholesky{T,typeof(A)}(A, char_uplo(uplo), info)
@@ -45,6 +50,11 @@ struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     rank::BlasInt
     tol::Real
     info::BlasInt
+
+    function CholeskyPivoted{T,S}(factors, uplo, piv, rank, tol, info) where {T,S<:AbstractMatrix}
+        @assert !has_offset_axes(factors)
+        new(factors, uplo, piv, rank, tol, info)
+    end
 end
 function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{BlasInt},
                             rank::BlasInt, tol::Real, info::BlasInt) where T
@@ -75,6 +85,7 @@ end
 
 ## Non BLAS/LAPACK element types (generic)
 function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
+    @assert !has_offset_axes(A)
     n = checksquare(A)
     @inbounds begin
         for k = 1:n
@@ -98,6 +109,7 @@ function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
     return UpperTriangular(A), convert(BlasInt, 0)
 end
 function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
+    @assert !has_offset_axes(A)
     n = checksquare(A)
     @inbounds begin
         for k = 1:n

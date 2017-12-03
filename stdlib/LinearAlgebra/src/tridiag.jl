@@ -314,6 +314,7 @@ end
 #    Linear Algebra and its Applications 212-213 (1994), pp.413-414
 #    doi:10.1016/0024-3795(94)90414-6
 function inv_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
+    @assert !has_offset_axes(a, b, c)
     n = length(b)
     θ = zeros(T, n+1) #principal minors of A
     θ[1] = 1
@@ -344,6 +345,7 @@ end
 #Implements the determinant using principal minors
 #Inputs and reference are as above for inv_usmani()
 function det_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
+    @assert !has_offset_axes(a, b, c)
     n = length(b)
     θa = one(T)
     if n == 0
@@ -391,6 +393,7 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     du::V    # sup-diagonal
     du2::V   # supsup-diagonal for pivoting in LU
     function Tridiagonal{T}(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}}
+        @assert !has_offset_axes(dl, d, du)
         n = length(d)
         if (length(dl) != n-1 || length(du) != n-1)
             throw(ArgumentError(string("cannot construct Tridiagonal from incompatible ",
@@ -401,6 +404,8 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     end
     # constructor used in lu!
     function Tridiagonal{T,V}(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}}
+        @assert !has_offset_axes(dl, d, du, du2)
+        # length checks?
         new{T,V}(dl, d, du, du2)
     end
 end

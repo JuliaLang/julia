@@ -83,6 +83,17 @@ function axes(A)
     map(OneTo, size(A))
 end
 
+"""
+    has_offset_axes(A)
+    has_offset_axes(A, B, ...)
+
+Return `true` if the indices of `A` start with something other than 1 along any axis.
+If multiple arguments are passed, equivalent to `has_offset_axes(A) | has_offset_axes(B) | ...`.
+"""
+has_offset_axes(A)    = _tuple_any(x->first(x)!=1, axes(A))
+has_offset_axes(A...) = _tuple_any(has_offset_axes, A)
+has_offset_axes(::Colon) = false
+
 # Performance optimization: get rid of a branch on `d` in `axes(A, d)`
 # for d=1. 1d arrays are heavily used, and the first dimension comes up
 # in other applications.

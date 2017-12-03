@@ -144,8 +144,8 @@ similar(A::AdjOrTransAbsVec) = wrapperop(A)(similar(A.parent))
 similar(A::AdjOrTransAbsVec, ::Type{T}) where {T} = wrapperop(A)(similar(A.parent, Base.promote_op(wrapperop(A), T)))
 # for matrices, the semantics of the wrapped and unwrapped types are generally the same
 # and as you are allocating with similar anyway, you might as well get something unwrapped
-similar(A::AdjOrTrans) = similar(A.parent, eltype(A), size(A))
-similar(A::AdjOrTrans, ::Type{T}) where {T} = similar(A.parent, T, size(A))
+similar(A::AdjOrTrans) = similar(A.parent, eltype(A), axes(A))
+similar(A::AdjOrTrans, ::Type{T}) where {T} = similar(A.parent, T, axes(A))
 similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent, T, dims)
 
 # sundry basic definitions
@@ -197,6 +197,7 @@ broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...
 *(u::AdjointAbsVec, v::AbstractVector) = dot(u.parent, v)
 *(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
 function *(u::TransposeAbsVec, v::AbstractVector)
+    @assert !has_offset_axes(u, v)
     @boundscheck length(u) == length(v) || throw(DimensionMismatch())
     return sum(@inbounds(u[k]*v[k]) for k in 1:length(u))
 end

@@ -145,6 +145,7 @@ _reshape(parent::Array, dims::Dims) = reshape(parent, dims)
 
 # When reshaping Vector->Vector, don't wrap with a ReshapedArray
 function _reshape(v::AbstractVector, dims::Dims{1})
+    @assert !has_offset_axes(v)
     len = dims[1]
     len == length(v) || _throw_dmrs(_length(v), "length", len)
     v

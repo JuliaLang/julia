@@ -804,6 +804,7 @@ The size of `b` will be increased if needed (i.e. if `nb` is greater than `lengt
 and enough bytes could be read), but it will never be decreased.
 """
 function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
+    @assert !has_offset_axes(b)
     olb = lb = length(b)
     nr = 0
     while nr < nb && !eof(s)

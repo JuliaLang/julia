@@ -327,6 +327,7 @@ function getindex(G::Givens, i::Integer, j::Integer)
 end
 
 function lmul!(G::Givens, A::AbstractVecOrMat)
+    @assert !has_offset_axes(A)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > m
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
@@ -339,6 +340,7 @@ function lmul!(G::Givens, A::AbstractVecOrMat)
     return A
 end
 function rmul!(A::AbstractMatrix, adjG::Adjoint{<:Any,<:Givens})
+    @assert !has_offset_axes(A)
     G = adjG.parent
     m, n = size(A, 1), size(A, 2)
     if G.i2 > n

@@ -226,6 +226,10 @@ Language changes
   * `try` blocks without `catch` or `finally` are no longer allowed. An explicit empty
     `catch` block should be written instead ([#27554]).
 
+  * `AbstractArray` types that use unconventional (not 1-based) indexing can now support
+    `size`, `length`, and `@inbounds`. To optionally enforce conventional indices,
+    you can `@assert !has_offset_axes(A)`.
+
 Breaking changes
 ----------------
 

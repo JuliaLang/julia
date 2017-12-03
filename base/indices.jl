@@ -289,9 +289,8 @@ axes1(S::Slice{<:OneTo}) = S.indices
 
 first(S::Slice) = first(S.indices)
 last(S::Slice) = last(S.indices)
-errmsg(A) = error("size not supported for arrays with indices $(axes(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
-size(S::Slice) = first(S.indices) == 1 ? (length(S.indices),) : errmsg(S)
-length(S::Slice) = first(S.indices) == 1 ? length(S.indices) : errmsg(S)
+size(S::Slice) = (length(S.indices),)
+length(S::Slice) = length(S.indices)
 _length(S::Slice) = length(S.indices)
 unsafe_length(S::Slice) = unsafe_length(S.indices)
 getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)

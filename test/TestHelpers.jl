@@ -72,9 +72,8 @@ parenttype(A::OffsetArray) = parenttype(typeof(A))
 
 Base.parent(A::OffsetArray) = A.parent
 
-errmsg(A) = error("size not supported for arrays with indices $(axes(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
-Base.size(A::OffsetArray) = errmsg(A)
-Base.size(A::OffsetArray, d) = errmsg(A)
+Base.size(A::OffsetArray) = size(A.parent)
+Base.size(A::OffsetArray, d) = size(A.parent, d)
 Base.eachindex(::IndexCartesian, A::OffsetArray) = CartesianIndices(axes(A))
 Base.eachindex(::IndexLinear, A::OffsetVector) = axes(A, 1)
 

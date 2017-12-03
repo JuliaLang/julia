@@ -15,15 +15,15 @@ v0 = rand(4)
 v = OffsetArray(v0, (-3,))
 h = OffsetArray([-1,1,-2,2,0], (-3,))
 @test axes(v) == (-2:1,)
-@test_throws ErrorException size(v)
-@test_throws ErrorException size(v, 1)
+@test size(v) == (4,)
+@test size(v, 1) == 4
 
 A0 = [1 3; 2 4]
 A = OffsetArray(A0, (-1,2))                   # IndexLinear
 S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # IndexCartesian
 @test axes(A) == axes(S) == (0:1, 3:4)
-@test_throws ErrorException size(A)
-@test_throws ErrorException size(A, 1)
+@test size(A) == (2,2)
+@test size(A, 1) == 2
 
 # Scalar indexing
 @test A[0,3] == A[1] == A[0,3,1] == S[0,3] == S[1] == S[0,3,1] == 1

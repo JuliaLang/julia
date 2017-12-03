@@ -445,6 +445,7 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
 end
 
 function _one(unit::T, x::AbstractMatrix) where T
+    @assert !has_offset_axes(x)
     m,n = size(x)
     m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
     # Matrix{T}(I, m, m)
@@ -748,6 +749,7 @@ function setindex! end
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     @_propagate_inbounds_meta
     @boundscheck setindex_shape_check(X, length(I))
+    @assert !has_offset_axes(X)
     X′ = unalias(A, X)
     I′ = unalias(A, I)
     count = 1
@@ -876,6 +878,7 @@ append!(a::Vector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::Vector, iter...) = append!(a, iter)
 
 function _append!(a, ::Union{HasLength,HasShape}, iter)
+    @assert !has_offset_axes(a)
     n = length(a)
     resize!(a, n+length(iter))
     @inbounds for (i,item) in zip(n+1:length(a), iter)
@@ -923,6 +926,7 @@ prepend!(a::Vector, iter) = _prepend!(a, IteratorSize(iter), iter)
 pushfirst!(a::Vector, iter...) = prepend!(a, iter)
 
 function _prepend!(a, ::Union{HasLength,HasShape}, iter)
+    @assert !has_offset_axes(a)
     n = length(iter)
     _growbeg!(a, n)
     i = 0
