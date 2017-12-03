@@ -268,3 +268,8 @@ end
 @testset "ambiguity between * methods with RowVectors and ConjRowVectors (#20971)" begin
     @test RowVector(ConjArray(ones(4))) * ones(4) == 4
 end
+
+@testset "setindex!/getindex" begin
+    # setindex!(v::RowVector, ...) should return v rather than v's parent
+    @test setindex!(RowVector([1, 2, 3]), 4, 1)::RowVector == [4 2 3]
+end
