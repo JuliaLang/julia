@@ -504,6 +504,7 @@ $(eval $(call LLVM_PATCH,llvm-PR29010-i386-xmm)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D32593))
 $(eval $(call LLVM_PATCH,llvm-D33179))
 $(eval $(call LLVM_PATCH,llvm-3.9.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
+$(eval $(call LLVM_PATCH,llvm-D31524-sovers_4.0)) # Remove for 4.0
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,compiler_rt-3.9-glibc_2.25.90)) # Remove for 5.0
 endif
