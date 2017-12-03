@@ -424,6 +424,63 @@ end
     @test eltype(d) == Pair{Any,Any}
 end
 
+# Egal dict
+@testset "issue #10647 for EgalDict" begin
+    a = EgalDict()
+    a[1] = a
+    a[a] = 2
+    a[3] = T10647(a)
+    @test a == a
+    show(IOBuffer(), a)
+    Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
+    Base.show(IOBuffer(), a)
+    Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
+end
+
+@testset "EgalDict" begin
+    a = EgalDict()
+    a[1] = a
+    a[a] = 2
+
+    sa = empty(a)
+    @test isempty(sa)
+    @test isa(sa, EgalDict)
+
+    @test length(a) == 2
+    @test 1 in keys(a)
+    @test a in keys(a)
+    @test a[1] === a
+    @test a[a] === 2
+
+    ca = copy(a)
+    @test length(ca) == length(a)
+    @test ca == a
+    @test ca !== a # make sure they are different objects
+
+    ca = empty!(ca)
+    @test length(ca) == 0
+    @test length(a) == 2
+
+    d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
+    @test a != d
+
+    @test length(EgalDict(1=>2, 1.0=>3)) == 2
+    @test length(Dict(1=>2, 1.0=>3)) == 1
+
+    d = @inferred EgalDict(i=>i for i=1:3)
+    @test isa(d, EgalDict)
+    @test d == EgalDict(1=>1, 2=>2, 3=>3)
+
+    d = @inferred EgalDict(Pair(1,1), Pair(2,2), Pair(3,3))
+    @test isa(d, EgalDict)
+    @test d == EgalDict(1=>1, 2=>2, 3=>3)
+    @test eltype(d) == Pair{Int,Int}
+
+    # make sure there is no conversion of keys:
+    @test_throws ArgumentError EgalDict{Int,Any}(8.0=>1)
+end
+
+
 @testset "Issue #7944" begin
     d = Dict{Int,Int}()
     get!(d, 0) do
