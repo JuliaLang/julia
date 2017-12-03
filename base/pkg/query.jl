@@ -273,23 +273,28 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
             # Collect all required packages
             isreq = Dict{String,Bool}(rp=>true for a in values(fdepsp) for rp in keys(a.requires))
             # Compute whether a required package appears in all requirements
-            for a in values(fdepsp), rp in keys(isreq)
-                haskey(a.requires, rp) || (isreq[rp] = false)
+            for rp in keys(isreq)
+                isreq[rp] = all(haskey(a.requires, rp) for a in values(fdepsp))
             end
+
+            # Create a list of candidates for new implicit requirements
             staged_new = Set{String}()
-            for a in values(fdepsp)
-                for (rp,rvs) in a.requires
-                    # Skip packages that may not be required
-                    isreq[rp] || continue
-                    # Compute the union of the version sets
-                    snvs = get!(staged_next, rp, copy(rvs))
+            for a in values(fdepsp), (rp,rvs) in a.requires
+                # Skip packages that may not be required
+                isreq[rp] || continue
+                # Compute the union of the version sets
+                if haskey(staged_next, rp)
+                    snvs = staged_next[rp]
                     union!(snvs, rvs)
-                    push!(staged_new, rp)
+                else
+                    snvs = copy(rvs)
+                    staged_next[rp] = snvs
                 end
+                push!(staged_new, rp)
             end
             for rp in staged_new
+                @assert isreq[rp]
                 srvs = staged_next[rp]
-                isreq[rp] || continue
                 bktrcp = get!(bktrc, rp) do; ResolveBacktraceItem(); end
                 push!(bktrcp, p=>bktrc[p], srvs)
                 if isa(bktrcp.versionreq, VersionSet) && isempty(bktrcp.versionreq)
@@ -306,7 +311,7 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
     filtered_deps = Dict{String,Dict{VersionNumber,Available}}()
     for (p,depsp) in deps
         filtered_deps[p] = Dict{VersionNumber,Available}()
-        allowedp = get(allowed, p, Dict{VersionNumber,Bool}())
+        allowedp = get(allowed, p) do; Dict{VersionNumber,Bool}() end
         fdepsp = filtered_deps[p]
         for (vn,a) in depsp
             get(allowedp, vn, true) || continue
@@ -326,6 +331,9 @@ end
 # Preliminarily calls filter_versions.
 function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace)
     filtered_deps, allowed = filter_versions(reqs, deps, bktrc)
+    if !isempty(reqs)
+        filtered_deps = dependencies_subset(filtered_deps, Set{String}(keys(reqs)))
+    end
 
     # To each version in each package, we associate a BitVector.
     # It is going to hold a pattern such that all versions with
@@ -432,7 +440,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
     # Recompute deps. We could simplify them, but it's not worth it
     new_deps = Dict{String,Dict{VersionNumber,Available}}()
 
-    for (p,depsp) in deps
+    for (p,depsp) in filtered_deps
         @assert !haskey(new_deps, p)
         if !haskey(pruned_vers, p)
             new_deps[p] = depsp
@@ -542,9 +550,7 @@ function prune_dependencies(reqs::Requires, deps::Dict{String,Dict{VersionNumber
 end
 
 function prune_dependencies(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace)
-    deps = dependencies_subset(deps, Set{String}(keys(reqs)))
     deps, _ = prune_versions(reqs, deps, bktrc)
-
     return deps
 end
 
