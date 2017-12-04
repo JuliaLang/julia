@@ -1474,7 +1474,7 @@ function findnext(A, start::Integer)
     i = start
     warned = false
     while i <= l
-        @inbounds a = A[i]
+        a = A[i]
         if !warned && !(a isa Bool)
             depwarn("In the future `findnext` will only work on boolean collections. Use `findnext(x->x!=0, A, start)` instead.", :findnext)
             warned = true
@@ -1758,7 +1758,7 @@ function find(A)
         end
         if a != 0
             @inbounds ii = inds[i]
-            I[cnt] = ii #not inbounds in mulithreaded if A is concurrently mutated
+            I[cnt] = ii #not inbounds in multithreaded if A is concurrently mutated
             cnt += 1
         end
     end
@@ -1805,7 +1805,7 @@ function findn(A::AbstractMatrix)
     for j=indices(A,2), i=indices(A,1)
         @inbounds aij = A[i,j]
         if aij != 0
-            I[cnt] = i #not inbounds in mulithreaded if A is concurrently mutated
+            I[cnt] = i #not inbounds in multithreaded if A is concurrently mutated
             J[cnt] = j
             cnt += 1
         end
@@ -1841,7 +1841,7 @@ function findnz(A::AbstractMatrix{T}) where T
         for j=indices(A,2), i=indices(A,1)
             @inbounds Aij = A[i,j]
             if Aij != 0
-                I[cnt] = i #not inbounds in mulithreaded if A is concurrently mutated
+                I[cnt] = i #not inbounds in multithreaded if A is concurrently mutated
                 J[cnt] = j
                 NZs[cnt] = Aij
                 cnt += 1
