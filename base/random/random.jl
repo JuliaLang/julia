@@ -93,6 +93,12 @@ end
 
 Base.getindex(sp::SamplerSimple) = sp.self
 
+# simple sampler carrying a (type) tag T and data
+struct SamplerTag{T,S} <: Sampler
+    data::S
+    SamplerTag{T}(s::S) where {T,S} = new{T,S}(s)
+end
+
 
 ### machinery for generation with Sampler
 
