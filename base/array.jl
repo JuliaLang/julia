@@ -1473,8 +1473,8 @@ function findnext(A, start::Integer)
     l = endof(A)
     i = start
     warned = false
-    @inbounds while i <= l
-        a = A[i]
+    while i <= l
+        @inbounds a = A[i]
         if !warned && !(a isa Bool)
             depwarn("In the future `findnext` will only work on boolean collections. Use `findnext(x->x!=0, A, start)` instead.", :findnext)
             warned = true
@@ -1532,8 +1532,9 @@ julia> findnext(isodd, A, 2)
 function findnext(testf::Function, A, start::Integer)
     l = endof(A)
     i = start
-    @inbounds while i <= l
-        if testf(A[i])
+    while i <= l
+        @inbounds ai = A[i]
+        if testf(ai)
             return i
         end
         i = nextind(A, i)
@@ -1588,8 +1589,8 @@ julia> findprev(A,1)
 function findprev(A, start::Integer)
     i = start
     warned = false
-    @inbounds while i >= 1
-        a = A[i]
+    while i >= 1
+        @inbounds a = A[i]
         if !warned && !(a isa Bool)
             depwarn("In the future `findprev` will only work on boolean collections. Use `findprev(x->x!=0, A, start)` instead.", :findprev)
             warned = true
@@ -1646,8 +1647,9 @@ julia> findprev(isodd, A, 3)
 """
 function findprev(testf::Function, A, start::Integer)
     i = start
-    @inbounds while i >= 1
-        testf(A[i]) && return i
+    while i >= 1
+        @inbounds ai = A[i]
+        testf(ai) && return i
         i = prevind(A, i)
     end
     return 0
@@ -1709,7 +1711,7 @@ function find(testf::Function, A)
     # array for the return
     tmpI = Vector{Int}()
     inds = _index_remapper(A)
-    @inbounds for (i,a) = enumerate(A)
+    for (i,a) = enumerate(A)
         if testf(a)
             push!(tmpI, inds[i])
         end
@@ -1749,13 +1751,14 @@ function find(A)
     cnt = 1
     inds = _index_remapper(A)
     warned = false
-    for (i,a) in enumerate(A) #not inbounds in mulithreaded if A is concurrently mutated
+    for (i,a) in enumerate(A)
         if !warned && !(a isa Bool)
             depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
             warned = true
         end
         if a != 0
-            I[cnt] = inds[i]
+            @inbounds ii = inds[i]
+            I[cnt] = ii #not inbounds in mulithreaded if A is concurrently mutated
             cnt += 1
         end
     end
@@ -1799,9 +1802,10 @@ function findn(A::AbstractMatrix)
     I = similar(A, Int, nnzA)
     J = similar(A, Int, nnzA)
     cnt = 1
-    for j=indices(A,2), i=indices(A,1) #not inbounds in mulithreaded if A is concurrently mutated
-        if A[i,j] != 0
-            I[cnt] = i
+    for j=indices(A,2), i=indices(A,1)
+        @inbounds aij = A[i,j]
+        if aij != 0
+            I[cnt] = i #not inbounds in mulithreaded if A is concurrently mutated
             J[cnt] = j
             cnt += 1
         end
@@ -1834,10 +1838,10 @@ function findnz(A::AbstractMatrix{T}) where T
     NZs = Vector{T}(uninitialized, nnzA)
     cnt = 1
     if nnzA > 0
-        for j=indices(A,2), i=indices(A,1) #not inbounds in mulithreaded if A is concurrently mutated
-            Aij = A[i,j]
+        for j=indices(A,2), i=indices(A,1)
+            @inbounds Aij = A[i,j]
             if Aij != 0
-                I[cnt] = i
+                I[cnt] = i #not inbounds in mulithreaded if A is concurrently mutated
                 J[cnt] = j
                 NZs[cnt] = Aij
                 cnt += 1
