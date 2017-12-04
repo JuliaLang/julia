@@ -53,6 +53,15 @@
         0x0010ffff      '\U10ffff'  "\\U10ffff"
     ]
 
+    buf = IOBuffer()
+    @test typeof(escape_string(buf, "test")) == Void
+    @test String(take!(buf)) == "test"
+    @test typeof(escape_string(buf, "hello", "l")) == Void
+    @test String(take!(buf)) == "he\\l\\lo"
+
+    @test typeof(escape_string("test", "t")) == String
+    @test escape_string("test", "t") == "\\tes\\t"
+
     for i = 1:size(cx,1)
         cp, ch, st = cx[i,:]
         @test cp == convert(UInt32, ch)
