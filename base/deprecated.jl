@@ -2255,6 +2255,13 @@ end
     A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = *(A, Adjoint(B))
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/bunchkaufman.jl, to deprecate
+@eval Base.LinAlg begin
+    A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where {T<:BlasReal} = ldiv!(B, R)
+    A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where {T<:BlasComplex} = ldiv!(B, R)
+    A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{S}) where {T,S} = ldiv!(B, R)
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
