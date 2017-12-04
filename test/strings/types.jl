@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## SubString, RevString and Cstring tests ##
+## SubString and Cstring tests ##
 
 ## SubString tests ##
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
@@ -207,29 +207,11 @@ let s = "|η(α)-ϕ(κ)| < ε"
     @test length(SubString(s,4,11))==length(s[4:11])
 end
 
-## Reverse strings ##
-
-let rs = RevString("foobar")
-    @test length(rs) == 6
-    @test sizeof(rs) == 6
-    @test isascii(rs)
-end
-
-# issue #4586
-@test rsplit(RevString("ailuj"),'l') == ["ju","ia"]
-@test parse(Float64,RevString("64")) === 46.0
-
-# reverseind
-for T in (String, GenericString)
+@testset "reverseind" for T in (String, SubString, GenericString)
     for prefix in ("", "abcd", "\U0001d6a4\U0001d4c1", "\U0001d6a4\U0001d4c1c", " \U0001d6a4\U0001d4c1")
         for suffix in ("", "abcde", "\U0001d4c1β\U0001d6a4", "\U0001d4c1β\U0001d6a4c", " \U0001d4c1β\U0001d6a4")
             for c in ('X', 'δ', '\U0001d6a5')
                 s = convert(T, string(prefix, c, suffix))
-                r = reverse(s)
-                ri = search(r, c)
-                @test r == RevString(s)
-                @test c == s[reverseind(s, ri)] == r[ri]
-                s = RevString(s)
                 r = reverse(s)
                 ri = search(r, c)
                 @test c == s[reverseind(s, ri)] == r[ri]
@@ -241,6 +223,18 @@ for T in (String, GenericString)
                 @test c == sb[reverseind(sb, ri)] == r[ri]
             end
         end
+    end
+end
+
+@testset "reverseind of empty strings" begin
+    for s in ("",
+              SubString("", 1, 0),
+              SubString("ab", 1, 0),
+              SubString("ab", 2, 1),
+              SubString("ab", 3, 2),
+              GenericString(""))
+        @test reverseind(s, 0) == 1
+        @test reverseind(s, 1) == 0
     end
 end
 

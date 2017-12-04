@@ -580,13 +580,14 @@ end
             @test thisind(s, 6) == 6
             @test thisind(s, 15) == 15
             @test thisind(s, 16) == 15
-            @test thisind(s, 30) == 15
+            @test thisind(s, 17) == 17
+            @test thisind(s, 30) == 17
         end
     end
 
     let strs = Any["", s"", SubString("123", 2, 1), SubString(s"123", 2, 1)]
         for s in strs, i in -2:2
-            @test thisind(s, i) == 0
+            @test thisind(s, i) == (i > 0)
         end
     end
 end
@@ -696,3 +697,11 @@ end
     @test String(take!(b)) == "UnicodeError: invalid character index 2 (0xba is a continuation byte)"
 end
 
+@testset "ncodeunits" begin
+    for (s, n) in [""     => 0, "a"   => 1, "abc"  => 3,
+                   "α"    => 2, "abγ" => 4, "∀"    => 3,
+                   "∀x∃y" => 8, "🍕"  => 4, "🍕∀" => 7]
+        @test ncodeunits(s) == n
+        @test ncodeunits(GenericString(s)) == n
+    end
+end

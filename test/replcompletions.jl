@@ -3,7 +3,7 @@
 using Base.REPLCompletions
 
 let ex = quote
-        module CompletionFoo
+    module CompletionFoo
         mutable struct Test_y
             yy
         end

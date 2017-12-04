@@ -14,7 +14,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="")
     s = lstrip(str)
     # strips the end but respects the space when the string ends with "\\ "
-    r = RevString(s)
+    r = reverse(s)
     i = start(r)
     c_old = nothing
     while !done(r,i)

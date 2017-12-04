@@ -1387,6 +1387,9 @@ struct GenericString <: AbstractString
 end
 Base.endof(s::GenericString) = endof(s.string)
 Base.next(s::GenericString, i::Int) = next(s.string, i)
+Base.reverse(s::GenericString) = GenericString(reverse(s.string))
+Base.reverse(s::SubString{GenericString}) =
+    GenericString(typeof(s.string)(reverse(String(s))))
 
 """
 The `GenericSet` can be used to test generic set APIs that program to
