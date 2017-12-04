@@ -75,8 +75,8 @@ Like [`reduce`](@ref), but with guaranteed left associativity. `v0` will be used
 exactly once.
 
 ```jldoctest
-julia> foldl(-, 1, 2:5)
--13
+julia> foldl(=>, 0, 1:4)
+(((0=>1)=>2)=>3) => 4
 ```
 """
 foldl(op, v0, itr) = mapfoldl(identity, op, v0, itr)
@@ -88,8 +88,8 @@ Like `foldl(op, v0, itr)`, but using the first element of `itr` as `v0`. In gene
 cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 
 ```jldoctest
-julia> foldl(-, 2:5)
--10
+julia> foldl(=>, 1:4)
+((1=>2)=>3) => 4
 ```
 """
 foldl(op, itr) = mapfoldl(identity, op, itr)
@@ -143,8 +143,8 @@ Like [`reduce`](@ref), but with guaranteed right associativity. `v0` will be use
 exactly once.
 
 ```jldoctest
-julia> foldr(-, 1, 2:5)
--1
+julia> foldr(=>, 0, 1:4)
+1 => (2=>(3=>(4=>0)))
 ```
 """
 foldr(op, v0, itr) = mapfoldr(identity, op, v0, itr)
@@ -156,8 +156,8 @@ Like `foldr(op, v0, itr)`, but using the last element of `itr` as `v0`. In gener
 cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 
 ```jldoctest
-julia> foldr(-, 2:5)
--2
+julia> foldr(=>, 1:4)
+1 => (2=>(3=>4))
 ```
 """
 foldr(op, itr) = mapfoldr(identity, op, itr)
