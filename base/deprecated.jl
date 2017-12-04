@@ -2159,6 +2159,36 @@ finalizer(f::Ptr{Void}, o::Function) = invoke(finalizer, Tuple{Ptr{Void}, Any}, 
     Base.@deprecate_binding broadcast_t broadcast false ", broadcast_t(f, ::Type{ElType}, shape, iter, As...)` should become `broadcast(f, Broadcast.DefaultArrayStyle{N}(), ElType, shape, As...))` (see the manual chapter Interfaces)"
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/bidiag.jl, to deprecate
+@eval Base.LinAlg begin
+    A_mul_B!(C::AbstractMatrix, A::SymTridiagonal, B::BiTriSym) = mul!(C, A, B)
+    A_mul_B!(C::AbstractMatrix, A::BiTri, B::BiTriSym) = mul!(C, A, B)
+    A_mul_B!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym) = mul!(C, A, B)
+    A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::BiTriSym) = mul!(C, A, B)
+    A_mul_B!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym) = mul!(C, A, B)
+    A_mul_B!(C::AbstractMatrix, A::Diagonal, B::BiTriSym) = mul!(C, A, B)
+    A_mul_B!(C::AbstractVector, A::BiTri, B::AbstractVector) = mul!(C, A, B)
+    A_mul_B!(C::AbstractMatrix, A::BiTri, B::AbstractVecOrMat) = mul!(C, A, B)
+    A_mul_B!(C::AbstractVecOrMat, A::BiTri, B::AbstractVecOrMat) = mul!(C, A, B)
+    Ac_ldiv_B(A::Bidiagonal, v::RowVector) = \(Adjoint(A), v)
+    At_ldiv_B(A::Bidiagonal, v::RowVector) = \(Transpose(A), v)
+    Ac_ldiv_B(A::Bidiagonal{<:Number}, v::RowVector{<:Number}) = \(Adjoint(A), v)
+    At_ldiv_B(A::Bidiagonal{<:Number}, v::RowVector{<:Number}) = \(Transpose(A), v)
+    Ac_mul_B(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Adjoint(A), B)
+    A_mul_Bc(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(A, Adjoint(B))
+    A_rdiv_Bc(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = /(A, Adjoint(B))
+    A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = ldiv!(A, b)
+    At_ldiv_B!(A::Bidiagonal, b::AbstractVector) = ldiv!(Transpose(A), b)
+    Ac_ldiv_B!(A::Bidiagonal, b::AbstractVector) = ldiv!(Adjoint(A), b)
+    A_ldiv_B!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix) = ldiv!(A, B)
+    Ac_ldiv_B!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix) = ldiv!(Adjoint(A), B)
+    At_ldiv_B!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix) = ldiv!(Transpose(A), B)
+    At_ldiv_B(A::Bidiagonal{TA}, B::AbstractVecOrMat{TB}) where {TA<:Number,TB<:Number} = \(Transpose(A), B)
+    At_ldiv_B(A::Bidiagonal, B::AbstractVecOrMat) = \(Transpose(A), B)
+    Ac_ldiv_B(A::Bidiagonal{TA}, B::AbstractVecOrMat{TB}) where {TA<:Number,TB<:Number} = \(Adjoint(A), B)
+    Ac_ldiv_B(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(Adjoint(A), B)
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 

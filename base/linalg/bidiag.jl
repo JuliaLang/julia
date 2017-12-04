@@ -325,25 +325,24 @@ end
 
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
-A_mul_B!(C::AbstractMatrix, A::SymTridiagonal, B::BiTriSym) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::BiTri, B::BiTriSym) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::BiTriSym) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::Diagonal, B::BiTriSym) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractVector, A::BiTri, B::AbstractVector) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::BiTri, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractVecOrMat, A::BiTri, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::SymTridiagonal,     B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::BiTri,              B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::BiTriSym,           B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::AbstractTriangular, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::AbstractMatrix,     B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::Diagonal,           B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractVector,   A::BiTri,              B::AbstractVector) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::BiTri,              B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractVecOrMat, A::BiTri,              B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
 
-\(::Diagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-\(::Bidiagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-\(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-
-At_ldiv_B(::Bidiagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-At_ldiv_B(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-
-Ac_ldiv_B(::Bidiagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-Ac_ldiv_B(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+\(::Diagonal, ::RowVector) = _mat_ldiv_rowvec_error()
+\(::Bidiagonal, ::RowVector) = _mat_ldiv_rowvec_error()
+\(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = _mat_ldiv_rowvec_error()
+\(::Adjoint{<:Any,<:Bidiagonal}, ::RowVector) = _mat_ldiv_rowvec_error()
+\(::Transpose{<:Any,<:Bidiagonal}, ::RowVector) = _mat_ldiv_rowvec_error()
+\(::Adjoint{<:Number,<:Bidiagonal{<:Number}}, ::RowVector{<:Number}) = _mat_ldiv_rowvec_error()
+\(::Transpose{<:Number,<:Bidiagonal{<:Number}}, ::RowVector{<:Number}) = _mat_ldiv_rowvec_error()
+_mat_ldiv_rowvec_error() = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 
 function check_A_mul_B!_sizes(C, A, B)
     nA, mA = size(A)
@@ -489,15 +488,17 @@ const SpecialMatrix = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
 *(A::SpecialMatrix, B::SpecialMatrix) = Array(A) * Array(B)
 
 #Generic multiplication
-for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
-    @eval ($func)(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = ($func)(Array(A), B)
-end
+*(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Array(A), B)
+*(adjA::Adjoint{<:Any,<:Bidiagonal{T}}, B::AbstractVector{T}) where {T} = Ac_mul_B(Array(adjA.parent), B)
+*(A::Bidiagonal{T}, adjB::Adjoint{<:Any,<:AbstractVector{T}}) where {T} = A_mul_Bc(Array(A), adjB.parent)
+/(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = /(Array(A), B)
+/(A::Bidiagonal{T}, adjB::Adjoint{<:Any,<:AbstractVector{T}}) where {T} = A_rdiv_Bc(Array(A), adjB.parent)
 
 #Linear solvers
-A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
-At_ldiv_B!(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!(transpose(A), b)
-Ac_ldiv_B!(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!(adjoint(A), b)
-function A_ldiv_B!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
+ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
+ldiv!(transA::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = A_ldiv_B!(transpose(transA.parent), b)
+ldiv!(adjA::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVector) = A_ldiv_B!(adjoint(adjA.parent), b)
+function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
     n = size(B, 1)
@@ -511,21 +512,35 @@ function A_ldiv_B!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     end
     B
 end
-for func in (:Ac_ldiv_B!, :At_ldiv_B!)
-    @eval function ($func)(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
-        nA,mA = size(A)
-        tmp = similar(B,size(B,1))
-        n = size(B, 1)
-        if mA != n
-            throw(DimensionMismatch("size of A' is ($mA,$nA), corresponding dimension of B is $n"))
-        end
-        for i = 1:size(B,2)
-            copy!(tmp, 1, B, (i - 1)*n + 1, n)
-            ($func)(A, tmp)
-            copy!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
-        end
-        B
+function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
+    A = adjA.parent
+    nA,mA = size(A)
+    tmp = similar(B,size(B,1))
+    n = size(B, 1)
+    if mA != n
+        throw(DimensionMismatch("size of A' is ($mA,$nA), corresponding dimension of B is $n"))
     end
+    for i = 1:size(B,2)
+        copy!(tmp, 1, B, (i - 1)*n + 1, n)
+        Ac_ldiv_B!(A, tmp)
+        copy!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
+    end
+    B
+end
+function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
+    A = transA.parent
+    nA,mA = size(A)
+    tmp = similar(B,size(B,1))
+    n = size(B, 1)
+    if mA != n
+        throw(DimensionMismatch("size of A' is ($mA,$nA), corresponding dimension of B is $n"))
+    end
+    for i = 1:size(B,2)
+        copy!(tmp, 1, B, (i - 1)*n + 1, n)
+        At_ldiv_B!(A, tmp)
+        copy!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
+    end
+    B
 end
 #Generic solver using naive substitution
 function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) where T
@@ -550,15 +565,23 @@ function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) w
 end
 
 ### Generic promotion methods and fallbacks
-for (f,g) in ((:\, :A_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!))
-    @eval begin
-        function ($f)(A::Bidiagonal{TA}, B::AbstractVecOrMat{TB}) where {TA<:Number,TB<:Number}
-            TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
-        end
-        ($f)(A::Bidiagonal, B::AbstractVecOrMat) = ($g)(A, copy(B))
-    end
+function \(A::Bidiagonal{TA}, B::AbstractVecOrMat{TB}) where {TA<:Number,TB<:Number}
+    TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
+    A_ldiv_B!(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
 end
+\(A::Bidiagonal, B::AbstractVecOrMat) = A_ldiv_B!(A, copy(B))
+function \(transA::Transpose{<:Any,<:Bidiagonal{TA}}, B::AbstractVecOrMat{TB}) where {TA<:Number,TB<:Number}
+    A = transA.parent
+    TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
+    At_ldiv_B!(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
+end
+\(transA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = At_ldiv_B!(transA.parent, copy(B))
+function \(adjA::Adjoint{<:Any,<:Bidiagonal{TA}}, B::AbstractVecOrMat{TB}) where {TA<:Number,TB<:Number}
+    A = adjA.parent
+    TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
+    Ac_ldiv_B!(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
+end
+\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = Ac_ldiv_B!(adjA.parent, copy(B))
 
 factorize(A::Bidiagonal) = A
 
