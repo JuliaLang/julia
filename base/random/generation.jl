@@ -15,6 +15,9 @@
 
 ## from types: rand(::Type, [dims...])
 
+Sampler(rng::AbstractRNG, d::Union{UniformWrap,UniformType}, n::Repetition) =
+    Sampler(rng, d[], n)
+
 ### random floats
 
 Sampler(rng::AbstractRNG, ::Type{T}, n::Repetition) where {T<:AbstractFloat} =
@@ -34,6 +37,12 @@ rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen12_64}) =
     reinterpret(Float64, 0x3ff0000000000000 | rand(r, UInt52()))
 
 rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01_64}) = rand(r, CloseOpen12()) - 1.0
+
+Sampler(rng::AbstractRNG, d::CloseOpenAB{T}, n::Repetition) where {T} =
+    SamplerTag{CloseOpenAB{T}}((a=d.a, d=d.b - d.a, sp=Sampler(rng, CloseOpen01{T}(), n)))
+
+rand(rng::AbstractRNG, sp::SamplerTag{CloseOpenAB{T}}) where {T} =
+    sp.data.a + sp.data.d  * rand(rng, sp.data.sp)
 
 #### BigFloat
 
@@ -121,10 +130,25 @@ rand(r::AbstractRNG, ::SamplerTrivial{UInt104{UInt128}}) = rand(r, UInt104Raw())
 rand(r::AbstractRNG, sp::SamplerTrivial{<:UniformBits{T}}) where {T} =
         rand(r, uint_default(sp[])) % T
 
-### random complex numbers
+### sampler for pairs and complex numbers
 
-rand(r::AbstractRNG, ::SamplerType{Complex{T}}) where {T<:Real} =
-    complex(rand(r, T), rand(r, T))
+function Sampler(rng::AbstractRNG, u::Combine2{T}, n::Repetition) where T <: Union{Pair,Complex}
+    sp1 = Sampler(rng, u.x, n)
+    sp2 = u.x == u.y ? sp1 : Sampler(rng, u.y, n)
+    SamplerTag{Cont{T}}((sp1, sp2))
+end
+
+rand(rng::AbstractRNG, sp::SamplerTag{Cont{T}}) where {T<:Union{Pair,Complex}} =
+    T(rand(rng, sp.data[1]), rand(rng, sp.data[2]))
+
+#### additional methods for complex numbers
+
+Sampler(rng::AbstractRNG, u::Combine1{Complex}, n::Repetition) =
+    Sampler(rng, Combine(Complex, u.x, u.x), n)
+
+Sampler(rng::AbstractRNG, ::Type{Complex{T}}, n::Repetition) where {T<:Real} =
+    Sampler(rng, Combine(Complex, T, T), n)
+
 
 ### random characters
 

@@ -19,7 +19,8 @@ export srand,
        randperm, randperm!,
        randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice,
-       GLOBAL_RNG, randjump
+       GLOBAL_RNG, randjump,
+       Distribution, Combine, Uniform, Sampler
 
 
 ## __init__ & include
