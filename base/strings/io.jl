@@ -68,19 +68,6 @@ println(io::IO, xs...) = print(io, xs..., '\n')
 
 ## conversion of general objects to strings ##
 
-function sprint(size::Integer, f::Function, args...; env=nothing)
-    s = IOBuffer(StringVector(size), true, true)
-    # specialized version of truncate(s,0)
-    s.size = 0
-    s.ptr = 1
-    if env !== nothing
-        f(IOContext(s, env), args...)
-    else
-        f(s, args...)
-    end
-    String(resize!(s.data, s.size))
-end
-
 """
     sprint(f::Function, args...)
 
@@ -93,7 +80,18 @@ julia> sprint(showcompact, 66.66666)
 "66.6667"
 ```
 """
-sprint(f::Function, args...) = sprint(0, f, args...)
+function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
+    s = IOBuffer(StringVector(sizehint), true, true)
+    # specialized version of truncate(s,0)
+    s.size = 0
+    s.ptr = 1
+    if context !== nothing
+        f(IOContext(s, context), args...)
+    else
+        f(s, args...)
+    end
+    String(resize!(s.data, s.size))
+end
 
 tostr_sizehint(x) = 0
 tostr_sizehint(x::AbstractString) = endof(x)
@@ -259,8 +257,8 @@ General escaping of traditional C and Unicode escape sequences.
 Any characters in `esc` are also escaped (with a backslash).
 The reverse is [`unescape_string`](@ref).
 """
-escape_string(s::AbstractString, esc::AbstractString) = sprint(endof(s), escape_string, s, esc)
-escape_string(s::AbstractString) = sprint(endof(s), escape_string, s, "\"")
+escape_string(s::AbstractString, esc::AbstractString) = sprint(escape_string, s, esc, sizehint=endof(s))
+escape_string(s::AbstractString) = sprint(escape_string, s, "\"", sizehint=endof(s))
 
 """
     escape_string(io, str::AbstractString[, esc::AbstractString]) -> Void
@@ -308,7 +306,7 @@ end
 General unescaping of traditional C and Unicode escape sequences. Reverse of
 [`escape_string`](@ref).
 """
-unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
+unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=endof(s))
 
 """
     unescape_string(io, str::AbstractString) -> Void
@@ -493,9 +491,9 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
 end
 
 function convert(::Type{String}, chars::AbstractVector{Char})
-    sprint(length(chars), io->begin
+    sprint(sizehint=length(chars)) do io
         for c in chars
             write(io, c)
         end
-    end)
+    end
 end

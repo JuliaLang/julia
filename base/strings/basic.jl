@@ -154,7 +154,7 @@ getindex(s::AbstractString, i::Colon) = s
 # TODO: add more @propagate_inbounds annotations?
 getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)
 getindex(s::AbstractString, v::AbstractVector{<:Integer}) =
-    sprint(length(v), io->(for i in v; write(io, s[i]) end))
+    sprint(io->(for i in v; write(io, s[i]) end), sizehint=length(v))
 getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 

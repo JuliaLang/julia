@@ -102,7 +102,7 @@ function print_matrix_row(io::IO,
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
             a = alignment(io, x)
-            sx = sprint(0, show, x, env=io)
+            sx = sprint(show, x, context=io, sizehint=0)
         else
             a = undef_ref_alignment
             sx = undef_ref_str
