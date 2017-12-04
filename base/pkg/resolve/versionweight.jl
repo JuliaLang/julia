@@ -214,4 +214,17 @@ Base.copy(a::VersionWeight) =
     VersionWeight(a.major, a.minor, a.patch,
                   copy(a.prerelease), copy(a.build))
 
+# This isn't nice, but it's for debugging only anyway
+function Base.show(io::IO, a::VersionWeight)
+    print(io, "(", a.major)
+    a == VersionWeight(a.major) && @goto done
+    print(io, ".", a.minor)
+    a == VersionWeight(a.major, a.minor) && @goto done
+    print(io, ".", a.patch)
+    a.prerelease ≠ _vwprebuild_zero && print(io, "-", a.prerelease)
+    a.build ≠ _vwprebuild_zero && print(io, "+", a.build)
+    @label done
+    print(io, ")")
+end
+
 end
