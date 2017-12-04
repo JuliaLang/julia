@@ -2249,6 +2249,12 @@ end
     A_ldiv_B!(D::Diagonal, B::StridedVecOrMat) = ldiv!(D, B)
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/special.jl, to deprecate
+@eval Base.LinAlg begin
+    A_mul_Bc!(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = mul!(A, Adjoint(B))
+    A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = *(A, Adjoint(B))
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
