@@ -1560,7 +1560,7 @@ import .LinAlg: diagm
 # PR #23271
 function IOContext(io::IO; kws...)
     depwarn("IOContext(io, k=v, ...) is deprecated, use IOContext(io, :k => v, ...) instead.", :IOContext)
-    IOContext(io, (k=>v for (k, v) in kws)...)
+    IOContext(io, (k=>v for (k, v) in pairs(kws))...)
 end
 
 @deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)
