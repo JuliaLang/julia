@@ -4111,4 +4111,4 @@ f(x) = yt(x)
 (define (julia-expand ex)
   (julia-expand1
    (julia-expand0
-     julia-expand-macroscope ex)))
+    (julia-expand-macroscope ex))))
