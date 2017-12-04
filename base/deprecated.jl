@@ -2189,6 +2189,11 @@ end
     Ac_ldiv_B(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(Adjoint(A), B)
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/tridiag.jl, to deprecate
+@eval Base.LinAlg begin
+    A_mul_B!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat) = mul!(C, S, B)
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
