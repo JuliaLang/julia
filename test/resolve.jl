@@ -19,7 +19,20 @@ vlst = [
     v"1.0.0",
     v"1.0.1",
     v"1.1.0",
-    v"1.1.1",
+    v"1.1.1"
+    ]
+
+for v1 in vlst, v2 in vlst
+    vw1 = VersionWeight(v1)
+    vw2 = VersionWeight(v2)
+    clt = v1 < v2
+    @test clt == (vw1 < vw2)
+    ceq = v1 == v2
+    @test ceq == (vw1 == vw2)
+end
+
+# TODO: check that these are unacceptable for VersionSpec
+vlst_invalid = [
     v"1.0.0-pre",
     v"1.0.0-pre1",
     v"1.0.1-pre",
@@ -50,14 +63,6 @@ vlst = [
     v"1.0.0-a+-.0"
     ]
 
-for v1 in vlst, v2 in vlst
-    vw1 = VersionWeight(v1)
-    vw2 = VersionWeight(v2)
-    clt = v1 < v2
-    @test clt == (vw1 < vw2)
-    ceq = v1 == v2
-    @test ceq == (vw1 == vw2)
-end
 
 # auxiliary functions
 fakeuuid(p::String) = rpad(p, 8, "0")
@@ -431,81 +436,7 @@ want_data = Dict("A"=>v"2", "B"=>v"2", "C"=>v"1",
                  "D"=>v"2", "E"=>v"1", "F"=>v"1")
 @test resolve_tst(deps_data, reqs_data, want_data)
 
-## DEPENDENCY SCHEME 10: SIX PACKAGES, DAG, WITH PRERELEASE/BUILD VERSIONS
-deps_data = Any[
-    ["A", v"1"],
-    ["A", v"2-rc.1"],
-    ["A", v"2-rc.1+bld"],
-    ["A", v"2"],
-    ["A", v"2.1.0"],
-    ["B", v"1", "A", v"1", v"2-"],
-    ["B", v"1.0.1-beta", "A", v"2-rc"],
-    ["B", v"1.0.1", "A"],
-    ["C", v"1", "A", v"2-", v"2.1"],
-    ["C", v"1+BLD", "A", v"2-rc.1", v"2.1"],
-    ["C", v"2", "A", v"2-rc.1"],
-    ["D", v"1", "B", v"1"],
-    ["D", v"2", "B", v"1.0.1-"],
-    ["E", v"1-plztst", "D"],
-    ["E", v"1", "D"],
-    ["F", v"1.1", "A", v"1", v"2.1"],
-    ["F", v"1.1", "E", v"1"],
-    ["F", v"2-rc.1", "A", v"2-", v"2.1"],
-    ["F", v"2-rc.1", "C", v"1"],
-    ["F", v"2-rc.1", "E"],
-    ["F", v"2-rc.2", "A", v"2-", v"2.1"],
-    ["F", v"2-rc.2", "C", v"2"],
-    ["F", v"2-rc.2", "E"],
-    ["F", v"2", "C", v"2"],
-    ["F", v"2", "E"],
-]
-
-@test sanity_tst(deps_data)
-
-# require just F
-reqs_data = Any[
-    ["F"]
-]
-want_data = Dict("A"=>v"2.1", "B"=>v"1.0.1", "C"=>v"2",
-                 "D"=>v"2", "E"=>v"1", "F"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
-
-# require just F, lower version
-reqs_data = Any[
-    ["F", v"1", v"2-"]
-]
-want_data = Dict("A"=>v"2", "B"=>v"1.0.1", "D"=>v"2",
-                 "E"=>v"1", "F"=>v"1.1")
-@test resolve_tst(deps_data, reqs_data, want_data)
-
-# require F and B; force lower B version -> must bring down F, A, and D versions too
-reqs_data = Any[
-    ["F"],
-    ["B", v"1", v"1.0.1-"]
-]
-want_data = Dict("A"=>v"1", "B"=>v"1", "D"=>v"1",
-                 "E"=>v"1", "F"=>v"1.1")
-@test resolve_tst(deps_data, reqs_data, want_data)
-
-# require F and D; force lower D version -> must not bring down F version
-reqs_data = Any[
-    ["F"],
-    ["D", v"1", v"2"]
-]
-want_data = Dict("A"=>v"2.1", "B"=>v"1.0.1", "C"=>v"2",
-                 "D"=>v"1", "E"=>v"1", "F"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
-
-# require F and C; force lower C version -> must bring down F and A versions
-reqs_data = Any[
-    ["F"],
-    ["C", v"1", v"2"]
-]
-want_data = Dict("A"=>v"2", "B"=>v"1.0.1", "C"=>v"1+BLD",
-                 "D"=>v"2", "E"=>v"1", "F"=>v"2-rc.1")
-@test resolve_tst(deps_data, reqs_data, want_data)
-
-## DEPENDENCY SCHEME 11: FIVE PACKAGES, SAME AS SCHEMES 5 + 1, UNCONNECTED
+## DEPENDENCY SCHEME 10: FIVE PACKAGES, SAME AS SCHEMES 5 + 1, UNCONNECTED
 deps_data = Any[
     ["A", v"1", "B", v"2"],
     ["A", v"1", "C", v"2"],

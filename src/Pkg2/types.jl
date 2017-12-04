@@ -12,9 +12,15 @@ import ...iswindows
 struct VersionInterval
     lower::VersionNumber
     upper::VersionNumber
+    function VersionInterval(lower::VersionNumber, upper::VersionNumber)
+        @assert isempty(lower.prerelease) && isempty(lower.build)
+        @assert isempty(upper.prerelease) && isempty(upper.build)
+        return new(lower, upper)
+    end
 end
-VersionInterval(lower::VersionNumber) = VersionInterval(lower,typemax(VersionNumber))
-VersionInterval() = VersionInterval(typemin(VersionNumber))
+const _up = v"9223372036854775807.9223372036854775807.9223372036854775807"
+VersionInterval(lower::VersionNumber) = VersionInterval(lower,_up)
+VersionInterval() = VersionInterval(v"0")
 
 show(io::IO, i::VersionInterval) = print(io, "[$(i.lower),$(i.upper))")
 isempty(i::VersionInterval) = i.upper <= i.lower
@@ -73,7 +79,7 @@ function VersionSet(versions::Vector{VersionNumber})
     if isempty(versions)
         push!(intervals, VersionInterval())
     else
-        isodd(length(versions)) && push!(versions, typemax(VersionNumber))
+        isodd(length(versions)) && push!(versions, _up)
         while !isempty(versions)
             push!(intervals, VersionInterval(shift!(versions), shift!(versions)))
         end
