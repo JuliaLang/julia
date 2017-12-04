@@ -259,8 +259,8 @@ link>""") == "<p>&lt;https://julialang.org/nota link&gt;</p>\n"
 @test html(md"""Hello
 
 ---
-World""") == html("<p>Hello</p>\n<hr />\n<p>World</p>\n"
-@test md"`escape</code>`") == "<p><code>escape&lt;/code&gt;</code></p>\n"
+World""") == html("<p>Hello</p>\n<hr />\n<p>World</p>\n")
+@test html(md"`escape</code>`") == "<p><code>escape&lt;/code&gt;</code></p>\n"
 
 @test html(md"""
     code1
