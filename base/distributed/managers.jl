@@ -36,8 +36,8 @@ end
 
 function check_addprocs_args(kwargs)
     valid_kw_names = collect(keys(default_addprocs_params()))
-    for keyname in kwargs
-        !(keyname[1] in valid_kw_names) && throw(ArgumentError("Invalid keyword argument $(keyname[1])"))
+    for keyname in keys(kwargs)
+        !(keyname in valid_kw_names) && throw(ArgumentError("Invalid keyword argument $(keyname)"))
     end
 end
 

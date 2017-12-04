@@ -464,11 +464,10 @@
                     (not (any (lambda (p) (eq? (car p) (car s)))
                               positional-sparams)))
                   sparams)))
-    (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy))
-          (rkw (if (null? restkw) '() (symbol (string (car restkw) "..."))))
+    (let ((kw      (gensy))
+          (rkw     (if (null? restkw) (make-ssavalue) (symbol (string (car restkw) "..."))))
           (mangled (symbol (string "#" (if name (undot-name name) 'call) "#"
-                                   (string (current-julia-module-counter)))))
-          (tempnames (map (lambda (x) (gensy)) keynames)))
+                                   (string (current-julia-module-counter))))))
       `(block
         ;; call with no keyword args
         ,(method-def-expr-
@@ -478,7 +477,7 @@
             ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
                    (ret `(return (call ,mangled
                                        ,@(if ordered-defaults keynames vals)
-                                       ,@(if (null? restkw) '() (list empty-vector-any))
+                                       ,@(if (null? restkw) '() `((call (core NamedTuple))))
                                        ,@(map arg-name pargl)
                                        ,@(if (null? vararg) '()
                                              (list `(... ,(arg-name (car vararg)))))))))
@@ -513,79 +512,58 @@
           `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
              ,(if (any kwarg? pargl) (gensy) UNUSED)
-             (call (core kwftype) ,ftype)) (:: ,kw (core AnyVector)) ,@pargl ,@vararg)
+             (call (core kwftype) ,ftype)) (:: ,kw (core NamedTuple)) ,@pargl ,@vararg)
           `(block
-            ;; temp variables that will be assigned if their corresponding keywords are passed.
-            ;; `isdefined` is then used to check whether default values should be evaluated.
-            ,@(map (lambda (v) `(local ,v)) tempnames)
-            ,@(if (null? restkw) '()
-                  `((= ,rkw ,empty-vector-any)))
-            ;; for i = 1:(length(kw)>>1)
-            (for (= ,i (: 1 (call (top >>) (call (top length) ,kw) 1)))
-                 (block
-                  ;; ii = i*2 - 1
-                  (= ,ii (call (top sub_int) (call (top mul_int) ,i 2) 1))
-                  (= ,elt (call (core arrayref) true ,kw ,ii))
-                  ,(foldl (lambda (kn else)
-                            (let* ((k     (car kn))
-                                   (rval0 `(call (core arrayref) true ,kw
-                                                 (call (top add_int) ,ii 1)))
-                                   ;; note: if the "declared" type of a KW arg
-                                   ;; includes something from keyword-sparams
-                                   ;; then don't assert it here, since those static
-                                   ;; parameters don't have values yet.
-                                   ;; instead, the type will be picked up when the
-                                   ;; underlying method is called.
-                                   (rval (if (and (decl? k)
-                                                  (not (any (lambda (s)
-                                                              (expr-contains-eq (car s) (caddr k)))
-                                                            keyword-sparams)))
-                                             (let ((T (caddr k)))
-                                               `(call (core typeassert)
-                                                      ,rval0
-                                                      ;; work around `ANY` not being a type. if arg type
-                                                      ;; looks like `ANY`, test whether it is `ANY` at run
-                                                      ;; time and if so, substitute `Any`. issue #21510
-                                                      ,(if (or (eq? T 'ANY)
-                                                               (and (globalref? T)
-                                                                    (eq? (caddr T) 'ANY)))
-                                                           `(call (|.| (core Intrinsics) 'select_value)
-                                                                  (call (core ===) ,T (core ANY))
-                                                                  (core Any)
-                                                                  ,T)
-                                                           T)))
-                                             rval0)))
-                              ;; if kw[ii] == 'k; k_temp = kw[ii+1]::Type; end
-                              `(if (comparison ,elt === (quote ,(cdr kn)))
-                                   (= ,(decl-var k) ,rval)
-                                   ,else)))
-                          (if (null? restkw)
-                              ;; if no rest kw, give error for unrecognized
-                              `(call (top kwerr) ,kw ,@(map arg-name pargl)
-                                     ,@(if (null? vararg) '()
-                                           (list `(... ,(arg-name (car vararg))))))
-                              ;; otherwise add to rest keywords
-                              `(foreigncall 'jl_array_ptr_1d_push (core Void) (call (core svec) Any Any)
-                                            'ccall 2
-                                            ,rkw (tuple ,elt
-                                                        (call (core arrayref) true ,kw
-                                                              (call (top add_int) ,ii 1)))))
-                          (map (lambda (k temp)
-                                 (cons (if (decl? k) `(,(car k) ,temp ,(caddr k)) temp)
-                                       (decl-var k)))
-                               vars tempnames))))
-            ;; set keywords that weren't present to their default values
-            ,(scopenest keynames
-                        (map (lambda (v dflt) `(if (isdefined ,v)
-                                                   ,v
-                                                   ,dflt))
-                             tempnames vals)
-                        `(return (call ,mangled  ;; finally, call the core function
-                                       ,@keynames
-                                       ,@(if (null? restkw) '() (list rkw))
-                                       ,@(map arg-name pargl)
-                                       ,@(if (null? vararg) '()
-                                             (list `(... ,(arg-name (car vararg))))))))))
+            ,(scopenest
+              keynames
+              (map (lambda (v dflt)
+                     (let* ((k     (decl-var v))
+                            (rval0 `(call (top getfield) ,kw (quote ,k)))
+                            ;; note: if the "declared" type of a KW arg includes something
+                            ;; from keyword-sparams then don't assert it here, since those
+                            ;; static parameters don't have values yet. instead, the type
+                            ;; will be picked up when the underlying method is called.
+                            (rval (if (and (decl? v)
+                                           (not (any (lambda (s)
+                                                       (expr-contains-eq (car s) (caddr v)))
+                                                     keyword-sparams)))
+                                      (let ((T (caddr v)))
+                                        `(call (core typeassert)
+                                               ,rval0
+                                               ;; work around `ANY` not being a type. if arg type
+                                               ;; looks like `ANY`, test whether it is `ANY` at run
+                                               ;; time and if so, substitute `Any`. issue #21510
+                                               ,(if (or (eq? T 'ANY)
+                                                        (and (globalref? T)
+                                                             (eq? (caddr T) 'ANY)))
+                                                    `(call (|.| (core Intrinsics) 'select_value)
+                                                           (call (core ===) ,T (core ANY))
+                                                           (core Any)
+                                                           ,T)
+                                                    T)))
+                                      rval0)))
+                       `(if (call (top haskey) ,kw (quote ,k))
+                            ,rval
+                            ,dflt)))
+                   vars vals)
+              `(block
+                (= ,rkw ,(if (null? keynames)
+                             kw
+                             `(call (top structdiff) ,kw (curly (core NamedTuple)
+                                                                (tuple ,@(map quotify keynames))))))
+                ,@(if (null? restkw)
+                      `((if (call (top isempty) ,rkw)
+                            (null)
+                            (call (top kwerr) ,kw ,@(map arg-name pargl)
+                                  ,@(if (null? vararg) '()
+                                        (list `(... ,(arg-name (car vararg))))))))
+                      '())
+                (return (call ,mangled  ;; finally, call the core function
+                              ,@keynames
+                              ,@(if (null? restkw) '() (list rkw))
+                              ,@(map arg-name pargl)
+                              ,@(if (null? vararg) '()
+                                    (list `(... ,(arg-name (car vararg)))))))))))
         ;; return primary function
         ,(if (not (symbol? name))
              '(null) name)))))
@@ -1506,95 +1484,36 @@
       (reverse a)))))
 
 (define (lower-kw-call f args)
-  (let* ((p    (if (has-parameters? args) (car args) '(parameters)))
+  (let* ((para (if (has-parameters? args) (cdar args) '()))
          (args (if (has-parameters? args) (cdr args) args)))
     (let* ((parg-stmts (remove-argument-side-effects `(call ,f ,@args)))
            (call-ex    (car parg-stmts))
            (fexpr      (cadr call-ex))
-           (cargs      (cddr call-ex))
-           (para-stmts (remove-argument-side-effects p))
-           (pkws       (cdr (car para-stmts))))
+           (cargs      (cddr call-ex)))
       `(block
         ,.(cdr parg-stmts)
-        ,.(cdr para-stmts)
         ,(receive
           (kws pargs) (separate kwarg? cargs)
-          (lower-kw-call- fexpr (append! kws pkws) pargs))))))
+          (lower-kw-call- fexpr (append! kws para) pargs))))))
 
-;; lower function call containing keyword arguments
-(define (lower-kw-call- fexpr kw0 pa)
-
-  ;; check for keyword arguments syntactically passed more than once
-  (let ((dups (has-dups (map cadr (filter kwarg? kw0)))))
-    (if dups
-        (error (string "keyword argument \"" (car dups) "\" repeated in call to \"" (deparse fexpr) "\""))))
-
+(define (lower-kw-call- fexpr kw pa)
   (define (kwcall-unless-empty f pa kw-container-test kw-container)
     `(if (call (top isempty) ,kw-container-test)
          (call ,f ,@pa)
          (call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))
 
-  (let ((f (if (sym-ref? fexpr) fexpr (make-ssavalue))))
+  (let ((f            (if (sym-ref? fexpr) fexpr (make-ssavalue)))
+        (kw-container (make-ssavalue)))
     `(block
       ,@(if (eq? f fexpr) '() `((= ,f, fexpr)))
-      ,(if ;; optimize splatting one existing container, `f(...; kw...)`
-        (and (length= kw0 1) (vararg? (car kw0)))
-        (let* ((container  (cadr (car kw0)))
-               (expr_stmts (remove-argument-side-effects `(call _ ,container)))
-               (container  (caddr (car expr_stmts)))
-               (stmts      (cdr expr_stmts)))
-          `(block
-            ,@stmts
-            ,(kwcall-unless-empty f pa container `(call (top as_kwargs) ,container))))
-        (let ((container (make-ssavalue)))
-          (let loop ((kw kw0)
-                     (initial-kw '()) ;; keyword args before any splats
-                     (stmts '())
-                     (has-kw #f))     ;; whether there are definitely >0 kwargs
-            (if (null? kw)
-                (if (null? stmts)
-                    `(call (call (core kwfunc) ,f) (call (top vector_any) ,@(reverse initial-kw)) ,f ,@pa)
-                    `(block
-                      (= ,container (call (top vector_any) ,@(reverse initial-kw)))
-                      ,@(reverse stmts)
-                      ,(if has-kw
-                           `(call (call (core kwfunc) ,f) ,container ,f ,@pa)
-                           (kwcall-unless-empty f pa container container))))
-                (let ((arg (car kw)))
-                  (cond ((and (pair? arg) (eq? (car arg) 'parameters))
-                         (error "more than one semicolon in argument list"))
-                        ((kwarg? arg)
-                         (if (not (symbol? (cadr arg)))
-                             (error (string "keyword argument is not a symbol: \""
-                                            (deparse (cadr arg)) "\"")))
-                         (if (vararg? (caddr arg))
-                             (error "splicing with \"...\" cannot be used for a keyword argument value"))
-                         (if (null? stmts)
-                             (loop (cdr kw) (list* (caddr arg) `(quote ,(cadr arg)) initial-kw) stmts #t)
-                             (loop (cdr kw) initial-kw
-                                   (cons `(foreigncall 'jl_array_ptr_1d_push2 (core Void) (call (core svec) Any Any Any)
-                                                       'ccall 3
-                                                       ,container
-                                                       (|::| (quote ,(cadr arg)) (core Symbol))
-                                                       ,(caddr arg))
-                                         stmts)
-                                   #t)))
-                        (else
-                         (loop (cdr kw) initial-kw
-                               (cons (let* ((k (make-ssavalue))
-                                            (v (make-ssavalue))
-                                            (push-expr `(foreigncall 'jl_array_ptr_1d_push2 (core Void) (call (core svec) Any Any Any)
-                                                                     'ccall 3
-                                                                     ,container
-                                                                     (|::| ,k (core Symbol))
-                                                                     ,v)))
-                                       (if (vararg? arg)
-                                           `(for (= (tuple ,k ,v) ,(cadr arg))
-                                                 ,push-expr)
-                                           `(block (= (tuple ,k ,v) ,arg)
-                                                   ,push-expr)))
-                                     stmts)
-                               (or has-kw (not (vararg? arg))))))))))))))
+      (= ,kw-container ,(lower-named-tuple kw
+                                           (lambda (name) (string "keyword argument \"" name
+                                                                  "\" repeated in call to \"" (deparse fexpr) "\""))
+                                           "keyword argument"
+                                           "keyword argument syntax"))
+      ,(if (every vararg? kw)
+           (kwcall-unless-empty f pa kw-container kw-container)
+           `(call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))))
 
 ;; convert e.g. A'*B to Ac_mul_B(A,B)
 (define (expand-transposed-op e ops)
@@ -1924,7 +1843,10 @@
   `(call (curly (core NamedTuple) (tuple ,@names))
          (tuple ,@values)))
 
-(define (lower-named-tuple lst)
+(define (lower-named-tuple lst
+                           (dup-error-fn (lambda (name) (string "field name \"" name "\" repeated in named tuple")))
+                           (name-str     "named tuple field")
+                           (syntax-str   "named tuple element"))
   (let* ((names (apply append
                        (map (lambda (x)
                               (cond #;((symbol? x) (list x))
@@ -1936,7 +1858,7 @@
                             lst)))
          (dups (has-dups names)))
     (if dups
-        (error (string "field name \"" (car dups) "\" repeated in named tuple"))))
+        (error (dup-error-fn (car dups)))))
   (define (to-nt n v)
     (if (null? n)
         #f
@@ -1956,7 +1878,7 @@
         (let ((el (car L)))
           (cond ((or (assignment? el) (kwarg? el))
                  (if (not (symbol? (cadr el)))
-                     (error (string "invalid named tuple field name \"" (deparse (cadr el)) "\"")))
+                     (error (string "invalid " name-str " name \"" (deparse (cadr el)) "\"")))
                  (loop (cdr L)
                        (cons (cadr el) current-names)
                        (cons (caddr el) current-vals)
@@ -1972,13 +1894,13 @@
                        (cons (cadr (caddr el)) current-names)
                        (cons el current-vals)
                        expr))
+|#
                 ((and (length= el 4) (eq? (car el) 'call) (eq? (cadr el) '=>))
                  (loop (cdr L)
                        '()
                        '()
                        (merge (merge expr (to-nt current-names current-vals))
                               (named-tuple-expr (list (caddr el)) (list (cadddr el))))))
-|#
                 ((vararg? el)
                  (loop (cdr L)
                        '()
@@ -1988,7 +1910,7 @@
                              (merge current (cadr el))
                              `(call (top merge) (call (top NamedTuple)) ,(cadr el))))))
                 (else
-                 (error (string "invalid named tuple element \"" (deparse el) "\""))))))))
+                 (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
 (define (expand-forms e)
   (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta)))
@@ -2317,9 +2239,7 @@
    'tuple
    (lambda (e)
      (cond ((and (length> e 1) (pair? (cadr e)) (eq? (caadr e) 'parameters))
-            (error "unexpected semicolon in tuple")
-            ;; this enables `(; ...)` named tuple syntax
-            #;(if (length= e 2)
+            (if (length= e 2)
                 (expand-forms (lower-named-tuple (cdr (cadr e))))
                 (error "unexpected semicolon in tuple")))
            ((any assignment? (cdr e))

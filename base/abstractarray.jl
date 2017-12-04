@@ -566,6 +566,24 @@ indices of `A`.
 similar(f, shape::Tuple) = f(to_shape(shape))
 similar(f, dims::DimOrInd...) = similar(f, dims)
 
+"""
+    empty(v::AbstractVector, [eltype])
+
+Create an empty vector similar to `v`, optionally changing the `eltype`.
+
+# Examples
+
+```jldoctest
+julia> empty([1.0, 2.0, 3.0])
+0-element Array{Float64,1}
+
+julia> empty([1.0, 2.0, 3.0], String)
+0-element Array{String,1}
+```
+"""
+empty(a::AbstractVector) = empty(a, eltype(a))
+empty(a::AbstractVector, ::Type{T}) where {T} = Vector{T}()
+
 ## from general iterable to any array
 
 function copy!(dest::AbstractArray, src)

@@ -1679,7 +1679,8 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
                 return li->functionObjectsDecls;
             }
         }
-        if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF) {
+        if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF &&
+            jl_is_method(li->def.method)) {
             jl_code_info_t *src = jl_code_for_interpreter(li);
             if (!jl_code_requires_compiler(src)) {
                 li->inferred = (jl_value_t*)src;

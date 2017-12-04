@@ -20,10 +20,10 @@
 @test isempty(sprint(io->warn(io, "testonce", once=true)))
 @test !isempty(sprint(io->warn(io, "testonce", once=true, key=hash("testonce",hash("testanother")))))
 let bt = backtrace()
-    ws = split(chomp(sprint(warn, "test", bt)), '\n')
+    ws = split(chomp(sprint(io->warn(io, "test", bt = bt))), '\n')
     bs = split(chomp(sprint(Base.show_backtrace, bt)), '\n')
     @test contains(ws[1],"WARNING: test")
-    for (l,b) in zip(ws[2:end],bs)
+    for (l,b) in zip(ws[2:end],bs[2:end])
         @test contains(l, b)
     end
 end

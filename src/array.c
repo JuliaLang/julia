@@ -1139,15 +1139,6 @@ JL_DLLEXPORT void jl_array_ptr_1d_append(jl_array_t *a, jl_array_t *a2)
     }
 }
 
-JL_DLLEXPORT void jl_array_ptr_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c)
-{
-    assert(jl_typeis(a, jl_array_any_type));
-    jl_array_grow_end(a, 2);
-    size_t n = jl_array_nrows(a);
-    jl_array_ptr_set(a, n - 2, b);
-    jl_array_ptr_set(a, n - 1, c);
-}
-
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a)
 {
     return jl_array_data_owner(a);

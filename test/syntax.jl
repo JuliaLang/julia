@@ -827,7 +827,7 @@ let f = function (x; kw...)
     g = function (x; a = 2)
             return (x, a)
         end
-    @test f(1) == (1, Any[])
+    @test f(1) == (1, NamedTuple())
     @test g(1) == (1, 2)
 end
 
@@ -1226,3 +1226,6 @@ end
     @test raw"x \\\" y" == "x \\\" y"
     @test raw"x \\\ y" == "x \\\\\\ y"
 end
+
+# issue #9972
+@test Meta.lower(@__MODULE__, :(f(;3))) == Expr(:error, "invalid keyword argument syntax \"3\"")

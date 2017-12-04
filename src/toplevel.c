@@ -298,17 +298,31 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-int jl_has_intrinsics(jl_value_t *v)
+static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
 {
     if (!jl_is_expr(v))
-        return 0;
+        return;
     jl_expr_t *e = (jl_expr_t*)v;
-    if (e->head == toplevel_sym || e->head == copyast_sym)
-        return 0;
-    if (e->head == foreigncall_sym)
-        return 1;
-    jl_value_t *called = NULL;
-    if (e->head == call_sym && jl_expr_nargs(e) > 0) {
+    jl_sym_t *head = e->head;
+    if (head == toplevel_sym || head == thunk_sym) {
+        return;
+    }
+    else if (head == global_sym || head == const_sym || head == copyast_sym) {
+        // Note: `copyast` is included here since it indicates the presence of
+        // `quote` and probably `eval`.
+        *has_defs = 1;
+        return;
+    }
+    else if (head == method_sym || head == abstracttype_sym || head == primtype_sym ||
+             head == structtype_sym || jl_is_toplevel_only_expr(v)) {
+        *has_defs = 1;
+    }
+    else if (head == foreigncall_sym) {
+        *has_intrinsics = 1;
+        return;
+    }
+    else if (head == call_sym && jl_expr_nargs(e) > 0) {
+        jl_value_t *called = NULL;
         jl_value_t *f = jl_exprarg(e, 0);
         if (jl_is_globalref(f)) {
             jl_module_t *mod = jl_globalref_mod(f);
@@ -322,16 +336,17 @@ int jl_has_intrinsics(jl_value_t *v)
         else if (jl_is_quotenode(f)) {
             called = jl_quotenode_value(f);
         }
+        if (called && jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
+            *has_intrinsics = 1;
+            return;
+        }
     }
-    if (called && jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall)
-        return 1;
     int i;
     for (i = 0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e, i);
-        if (jl_is_expr(a) && jl_has_intrinsics(a))
-            return 1;
+        if (jl_is_expr(a))
+            expr_attributes(a, has_intrinsics, has_defs);
     }
-    return 0;
 }
 
 int jl_code_requires_compiler(jl_code_info_t *src)
@@ -339,20 +354,19 @@ int jl_code_requires_compiler(jl_code_info_t *src)
     jl_array_t *body = src->code;
     assert(jl_typeis(body, jl_array_any_type));
     size_t i;
+    int has_intrinsics = 0, has_defs = 0;
     for(i=0; i < jl_array_len(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
-        if (jl_has_intrinsics(stmt))
+        expr_attributes(stmt, &has_intrinsics, &has_defs);
+        if (has_intrinsics)
             return 1;
     }
     return 0;
 }
 
-// heuristic for whether a top-level input should be evaluated with
-// the compiler or the interpreter.
-static int jl_eval_with_compiler_p(jl_code_info_t *src, jl_array_t *body, int compileloops, jl_module_t *m)
+static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs, int *has_loops)
 {
     size_t i, maxlabl=0;
-    // compile if there are backwards branches and compiler is enabled
     for(i=0; i < jl_array_len(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
         if (jl_is_labelnode(stmt)) {
@@ -362,41 +376,29 @@ static int jl_eval_with_compiler_p(jl_code_info_t *src, jl_array_t *body, int co
     }
     size_t sz = (maxlabl+1+7)/8;
     char *labls = (char*)alloca(sz); memset(labls,0,sz);
+    *has_loops = 0;
     for(i=0; i < jl_array_len(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
-        if (jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF) {
+        if (!*has_loops) {
             if (jl_is_labelnode(stmt)) {
                 int l = jl_labelnode_label(stmt);
                 labls[l/8] |= (1<<(l&7));
             }
-            else if (compileloops && jl_is_gotonode(stmt)) {
+            else if (jl_is_gotonode(stmt)) {
                 int l = jl_gotonode_label(stmt);
-                if (labls[l/8]&(1<<(l&7))) {
-                    return 1;
-                }
+                if (labls[l/8] & (1<<(l&7)))
+                    *has_loops = 1;
             }
             else if (jl_is_expr(stmt)) {
-                if (compileloops && ((jl_expr_t*)stmt)->head==goto_ifnot_sym) {
+                if (((jl_expr_t*)stmt)->head==goto_ifnot_sym) {
                     int l = jl_unbox_long(jl_exprarg(stmt,1));
-                    if (labls[l/8]&(1<<(l&7))) {
-                        return 1;
-                    }
+                    if (labls[l/8] & (1<<(l&7)))
+                        *has_loops = 1;
                 }
             }
         }
-        if (jl_has_intrinsics(stmt))
-            return 1;
+        expr_attributes(stmt, has_intrinsics, has_defs);
     }
-    return 0;
-}
-
-static int jl_eval_expr_with_compiler_p(jl_value_t *e, int compileloops, jl_module_t *m)
-{
-    if (jl_is_expr(e) && ((jl_expr_t*)e)->head == body_sym)
-        return jl_eval_with_compiler_p(NULL, ((jl_expr_t*)e)->args, compileloops, m);
-    if (jl_has_intrinsics(e))
-        return 1;
-    return 0;
 }
 
 static jl_module_t *call_require(jl_sym_t *var)
@@ -485,20 +487,15 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
          ((jl_expr_t*)e)->head == jl_incomplete_sym);
 }
 
-jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals);
-static jl_method_instance_t *jl_new_thunk(jl_code_info_t *src, jl_module_t *module)
+void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
+                              int binding_effects);
+
+static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_module_t *module)
 {
     jl_method_instance_t *li = jl_new_method_instance_uninit();
     li->inferred = (jl_value_t*)src;
     li->specTypes = (jl_value_t*)jl_emptytuple_type;
     li->def.module = module;
-    jl_array_t *stmts = (jl_array_t*)src->code;
-    size_t i, l;
-    JL_GC_PUSH1(&li);
-    for (i = 0, l = jl_array_len(stmts); i < l; i++) {
-        jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), module, NULL));
-    }
-    JL_GC_POP();
     return li;
 }
 
@@ -653,9 +650,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     }
 
     jl_method_instance_t *li = NULL;
-    jl_value_t *result;
     jl_code_info_t *thk = NULL;
-    int ewc = 0;
     JL_GC_PUSH3(&li, &thk, &ex);
 
     if (!expanded && ex->head != body_sym && ex->head != thunk_sym && ex->head != return_sym &&
@@ -686,42 +681,50 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
         jl_throw(jl_exprarg(ex,0));
     }
 
+    int has_intrinsics = 0, has_defs = 0, has_loops = 0;
     if (head == thunk_sym) {
         thk = (jl_code_info_t*)jl_exprarg(ex,0);
         assert(jl_is_code_info(thk));
         assert(jl_typeis(thk->code, jl_array_any_type));
-        ewc = jl_eval_with_compiler_p(thk, (jl_array_t*)thk->code, fast, m);
+        body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops);
+    }
+    else if (head == body_sym) {
+        thk = expr_to_code_info((jl_value_t*)ex);
+        body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops);
     }
     else {
-        if (head && jl_eval_expr_with_compiler_p((jl_value_t*)ex, fast, m)) {
-            thk = expr_to_code_info((jl_value_t*)ex);
-            ewc = 1;
-        }
-        else if (head == body_sym) {
-            thk = expr_to_code_info((jl_value_t*)ex);
-        }
-        else {
-            if (jl_is_toplevel_only_expr((jl_value_t*)ex)) {
-                result = jl_toplevel_eval(m, (jl_value_t*)ex);
-            }
-            else {
-                result = jl_interpret_toplevel_expr_in(m, (jl_value_t*)ex, NULL, NULL);
-            }
-            JL_GC_POP();
-            return result;
-        }
+        expr_attributes((jl_value_t*)ex, &has_intrinsics, &has_defs);
     }
 
-    if (ewc) {
-        li = jl_new_thunk(thk, m);
-        size_t world = jl_get_ptls_states()->world_age;
-        jl_type_infer(&li, world, 0);
+    jl_value_t *result;
+    if (has_intrinsics || (!has_defs && fast && has_loops &&
+                           jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF)) {
+        // use codegen
+        if (thk == NULL)
+            thk = expr_to_code_info((jl_value_t*)ex);
+        li = method_instance_for_thunk(thk, m);
+        jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
+        // Don't infer blocks containing e.g. method definitions, since it's probably not
+        // worthwhile and also unsound (see #24316).
+        // TODO: This is still not correct since an `eval` can happen elsewhere, but it
+        // helps in common cases.
+        if (!has_defs) {
+            size_t world = jl_get_ptls_states()->world_age;
+            jl_type_infer(&li, world, 0);
+        }
         jl_value_t *dummy_f_arg = NULL;
         result = jl_call_method_internal(li, &dummy_f_arg, 1);
     }
     else {
-        result = jl_interpret_toplevel_thunk(m, thk);
+        // use interpreter
+        if (thk != NULL)
+            result = jl_interpret_toplevel_thunk(m, thk);
+        else if (jl_is_toplevel_only_expr((jl_value_t*)ex))
+            result = jl_toplevel_eval(m, (jl_value_t*)ex);
+        else
+            result = jl_interpret_toplevel_expr_in(m, (jl_value_t*)ex, NULL, NULL);
     }
+
     JL_GC_POP();
     return result;
 }
@@ -733,8 +736,9 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 
 JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
 {
-    jl_method_instance_t *li = jl_new_thunk(thk, m);
+    jl_method_instance_t *li = method_instance_for_thunk(thk, m);
     JL_GC_PUSH1(&li);
+    jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
     jl_type_infer(&li, jl_get_ptls_states()->world_age, 0);
     JL_GC_POP();
     return li->rettype;
