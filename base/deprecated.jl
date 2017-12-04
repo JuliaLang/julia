@@ -2262,6 +2262,16 @@ end
     A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{S}) where {T,S} = ldiv!(B, R)
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/cholesky.jl, to deprecate
+@eval Base.LinAlg begin
+    A_ldiv_B!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = ldiv!(C, B)
+    A_ldiv_B!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat) = ldiv!(C, B)
+    A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} = ldiv!(C, B)
+    A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = ldiv!(C, B)
+    A_ldiv_B!(C::CholeskyPivoted, B::StridedVector) = ldiv!(C, B)
+    A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix) = ldiv!(C, B)
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
