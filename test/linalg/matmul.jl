@@ -12,10 +12,10 @@ using Test
     @test ones(0,0)*ones(0,4) == zeros(0,4)
     @test ones(3,0)*ones(0,0) == zeros(3,0)
     @test ones(0,0)*ones(0,0) == zeros(0,0)
-    @test Matrix{Float64}(uninitialized, 5, 0) |> t -> t't == zeros(0,0)
-    @test Matrix{Float64}(uninitialized, 5, 0) |> t -> t*t' == zeros(5,5)
-    @test Matrix{Complex128}(uninitialized, 5, 0) |> t -> t't == zeros(0,0)
-    @test Matrix{Complex128}(uninitialized, 5, 0) |> t -> t*t' == zeros(5,5)
+    @test (t -> t't)(Matrix{Float64}(uninitialized, 5, 0)) == zeros(0,0)
+    @test (t -> t*t')(Matrix{Float64}(uninitialized, 5, 0)) == zeros(5,5)
+    @test (t -> t't)(Matrix{Complex128}(uninitialized, 5, 0)) == zeros(0,0)
+    @test (t -> t*t')(Matrix{Complex128}(uninitialized, 5, 0)) == zeros(5,5)
 end
 @testset "2x2 matmul" begin
     AA = [1 2; 3 4]

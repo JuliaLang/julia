@@ -51,7 +51,7 @@ end
 # Wrapping
 
 function ansi_length(s)
-    replace(s, r"\e\[[0-9]+m", "") |> length
+    length(replace(s, r"\e\[[0-9]+m", ""))
 end
 
 words(s) = split(s, " ")
@@ -64,7 +64,7 @@ function wrapped_lines(s::AbstractString; width = 80, i = 0)
     end
     ws = words(s)
     lines = AbstractString[ws[1]]
-    i += ws[1] |> ansi_length
+    i += ansi_length(ws[1])
     for word in ws[2:end]
         word_length = ansi_length(word)
         if i + word_length + 1 > width

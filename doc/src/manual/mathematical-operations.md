@@ -361,7 +361,6 @@ Julia applies the following order and associativity of operations, from highest 
 | Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
 | Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                    |
 | Syntax         | `: ..`                                                                                            | Left                       |
-| Syntax         | `\|>`                                                                                             | Left                       |
 | Syntax         | `<\|`                                                                                             | Right                      |
 | Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
 | Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |

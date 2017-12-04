@@ -384,11 +384,11 @@ module MacroGenerated
 import Base.@__doc__
 
 macro example_1(f)
-    quote
+    esc(quote
         $(f)() = 0
         @__doc__ $(f)(x) = x
         $(f)(x, y) = x + y
-    end |> esc
+    end)
 end
 
 "f"
@@ -397,11 +397,11 @@ end
 @example_1 _f
 
 macro example_2(f)
-    quote
+    esc(quote
         $(f)() = 0
         @__doc__ $(f)(x) = x
         @__doc__ $(f)(x, y) = x + y
-    end |> esc
+    end)
 end
 
 "g"

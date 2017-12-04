@@ -326,7 +326,6 @@ import Base.Meta: isexpr
 
 # PR #17623: Fused binary operators
 @test [true] .* [true] == [true]
-@test [1,2,3] .|> (x->x+1) == [2,3,4]
 let g = Int[], ⊕ = (a,b) -> let c=a+2b; push!(g, c); c; end
     @test [1,2,3] .⊕ [10,11,12] .⊕ [100,200,300] == [221,424,627]
     @test g == [21,221,24,424,27,627] # test for loop fusion
