@@ -62,10 +62,11 @@ end
 
 # Scan dependencies for (explicit or implicit) contradictions
 function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
+                      uuid_to_name::Dict{String,String},
                       pkgs::Set{String} = Set{String}())
     isempty(pkgs) || (deps = Query.undirected_dependencies_subset(deps, pkgs))
 
-    deps, eq_classes = Query.prune_versions(deps)
+    deps, eq_classes = Query.prune_versions(deps, uuid_to_name)
 
     ndeps = Dict{String,Dict{VersionNumber,Int}}()
 
@@ -76,12 +77,7 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
         end
     end
 
-    vers = Vector{Tuple{String,VersionNumber,VersionNumber}}(0)
-    for (p,d) in deps, vn in keys(d)
-        lvns = VersionNumber[Iterators.filter(vn2->(vn2>vn), keys(d))...]
-        nvn = isempty(lvns) ? typemax(VersionNumber) : minimum(lvns)
-        push!(vers, (p,vn,nvn))
-    end
+    vers = [(p,vn) for (p,d) in deps for vn in keys(d)]
     sort!(vers, by=pvn->(-ndeps[pvn[1]][pvn[2]]))
 
     nv = length(vers)
@@ -90,17 +86,36 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
 
     checked = falses(nv)
 
-    problematic = Vector{Tuple{String,VersionNumber,String}}(0)
+    problematic = Tuple{String,VersionNumber,String}[]
     i = 1
-    psl = 0
-    for (p,vn,nvn) in vers
+    for (p,vn) in vers
         ndeps[p][vn] == 0 && break
         checked[i] && (i += 1; continue)
 
-        sub_reqs = Dict{String,VersionSet}(p=>VersionSet([vn, nvn]))
-        local sub_deps::Dict{String,Dict{VersionNumber,Available}}
+        fixed = Dict{String,Fixed}(p=>Fixed(vn, deps[p][vn].requires), "julia"=>Fixed(VERSION))
+        sub_reqs = Dict{String,VersionSet}()
+        bktrc = Query.init_resolve_backtrace(sub_reqs, fixed)
+        Query.propagate_fixed!(sub_reqs, bktrc, fixed)
+        sub_deps = Query.dependencies_subset(deps, Set{String}([p]))
+        sub_deps, conflicts = Query.dependencies(sub_deps, fixed)
+
         try
-            sub_deps = Query.prune_dependencies(sub_reqs, deps)
+            for rp in keys(sub_reqs)
+                if !haskey(sub_deps, rp)
+                    name = uuid_to_name[rp]
+                    uuid_short = rp[1:8]
+                    if "julia" in conflicts[rp]
+                        throw(PkgError("$name [$uuid_short] can't be installed because it has no versions that support $VERSION " *
+                           "of julia. You may need to update METADATA by running `Pkg.update()`"))
+                    else
+                        sconflicts = join(map(p1->"$(uuid_to_name[p1]) [$(p1[1:8])]", conflicts[rp]), ", ", " and ")
+                        throw(PkgError("$name's [$uuid_short] requirements can't be satisfied because " *
+                            "of the following fixed packages: $sconflicts"))
+                    end
+                end
+            end
+            Query.check_requirements(sub_reqs, sub_deps, fixed, uuid_to_name)
+            sub_deps = Query.prune_dependencies(sub_reqs, sub_deps, uuid_to_name, bktrc)
         catch err
             isa(err, PkgError) || rethrow(err)
             ## info("ERROR MESSAGE:\n" * err.msg)
@@ -135,11 +150,6 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
             end
         end
         if ok
-            let p0 = interface.pdict[p]
-                svn = red_pvers[p0][sol[p0]]
-                @assert svn == vn
-            end
-
             for p0 = 1:red_np
                 s0 = sol[p0]
                 if s0 != red_spp[p0]
