@@ -40,7 +40,7 @@ rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01_64}) = rand(r, CloseOpen12()) 
 const bits_in_Limb = sizeof(Limb) << 3
 const Limb_high_bit = one(Limb) << (bits_in_Limb-1)
 
-struct SamplerBigFloat{I<:FloatInterval{BigFloat}} <: Sampler
+struct SamplerBigFloat{I<:FloatInterval{BigFloat}} <: Sampler{BigFloat}
     prec::Int
     nlimbs::Int
     limbs::Vector{Limb}
@@ -155,7 +155,7 @@ uint_sup(::Type{<:Union{Int128,UInt128}}) = UInt128
 
 #### Fast
 
-struct SamplerRangeFast{U<:BitUnsigned,T<:Union{BitInteger,Bool}} <: Sampler
+struct SamplerRangeFast{U<:BitUnsigned,T<:Union{BitInteger,Bool}} <: Sampler{T}
     a::T      # first element of the range
     bw::UInt  # bit width
     m::U      # range length - 1
@@ -215,7 +215,7 @@ maxmultiple(k::T, sup::T=zero(T)) where {T<:Unsigned} =
 unsafe_maxmultiple(k::T, sup::T) where {T<:Unsigned} =
     div(sup, k + (k == 0))*k - one(k)
 
-struct SamplerRangeInt{T<:Union{Bool,Integer},U<:Unsigned} <: Sampler
+struct SamplerRangeInt{T<:Union{Bool,Integer},U<:Unsigned} <: Sampler{T}
     a::T      # first element of the range
     bw::Int   # bit width
     k::U      # range length or zero for full range
@@ -270,7 +270,7 @@ end
 
 ### BigInt
 
-struct SamplerBigInt <: Sampler
+struct SamplerBigInt <: Sampler{BigInt}
     a::BigInt         # first
     m::BigInt         # range length - 1
     nlimbs::Int       # number of limbs in generated BigInt's (z ∈ [0, m])
@@ -336,9 +336,10 @@ end
 
 ## random values from Set
 
-Sampler(rng::AbstractRNG, t::Set, n::Repetition) = SamplerTag{Set}(Sampler(rng, t.dict, n))
+Sampler(rng::AbstractRNG, t::Set{T}, n::Repetition) where {T} =
+    SamplerTag{Set{T}}(Sampler(rng, t.dict, n))
 
-rand(rng::AbstractRNG, sp::SamplerTag{Set,<:Sampler}) = rand(rng, sp.data).first
+rand(rng::AbstractRNG, sp::SamplerTag{<:Set,<:Sampler}) = rand(rng, sp.data).first
 
 ## random values from BitSet
 
