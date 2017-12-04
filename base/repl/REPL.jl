@@ -255,7 +255,7 @@ Options(;
         hascolor = true,
         extra_keymap = AnyDict[],
         backspace_align = true, backspace_adjust = backspace_align,
-        confirm_exit = true) =
+        confirm_exit = false) =
             Options(hascolor, extra_keymap, backspace_align, backspace_adjust, confirm_exit)
 
 ## LineEditREPL ##
