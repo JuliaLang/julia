@@ -389,7 +389,7 @@ end
     a[1] = a
     a[a] = 2
 
-    sa = similar(a)
+    sa = empty(a)
     @test isempty(sa)
     @test isa(sa, ObjectIdDict)
 
@@ -515,8 +515,8 @@ import Base.ImmutableDict
     @test get(d, k1, :default) === :default
     @test d1["key1"] === v1
     @test d4["key1"] === v2
-    @test similar(d3) === d
-    @test similar(d) === d
+    @test empty(d3) === d
+    @test empty(d) === d
 
     @test_throws KeyError d[k1]
     @test_throws KeyError d1["key2"]
@@ -657,8 +657,8 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test !isempty(wkd)
 
     wkd = empty!(wkd)
-    @test wkd == similar(wkd)
-    @test typeof(wkd) == typeof(similar(wkd))
+    @test wkd == empty(wkd)
+    @test typeof(wkd) == typeof(empty(wkd))
     @test length(wkd) == 0
     @test isempty(wkd)
     @test isa(wkd, WeakKeyDict)

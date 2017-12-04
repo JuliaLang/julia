@@ -962,12 +962,12 @@ JL_CALLABLE(jl_f_invoke_kwsorter)
                                                       jl_nfields(argtypes));
     }
     if (jl_is_tuple_type(argtypes)) {
-        // construct a tuple type for invoking a keyword sorter by putting `Vector{Any}`
+        // construct a tuple type for invoking a keyword sorter by putting the kw container type
         // and the type of the function at the front.
         size_t i, nt = jl_nparams(argtypes) + 2;
         if (nt < jl_page_size/sizeof(jl_value_t*)) {
             jl_value_t **types = (jl_value_t**)alloca(nt*sizeof(jl_value_t*));
-            types[0] = jl_array_any_type; types[1] = jl_typeof(func);
+            types[0] = (jl_value_t*)jl_namedtuple_type; types[1] = jl_typeof(func);
             for(i=2; i < nt; i++)
                 types[i] = jl_tparam(argtypes,i-2);
             argtypes = (jl_value_t*)jl_apply_tuple_type_v(types, nt);

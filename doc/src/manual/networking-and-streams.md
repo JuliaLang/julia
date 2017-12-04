@@ -249,7 +249,7 @@ the accept function returns a server-side connection to the newly created socket
 World" to indicate that the connection was successful.
 
 A great strength of Julia is that since the API is exposed synchronously even though the I/O is
-actually happening asynchronously, we didn't have to worry callbacks or even making sure that
+actually happening asynchronously, we didn't have to worry about callbacks or even making sure that
 the server gets to run. When we called [`connect`](@ref) the current task waited for the connection
 to be established and only continued executing after that was done. In this pause, the server
 task resumed execution (because a connection request was now available), accepted the connection,

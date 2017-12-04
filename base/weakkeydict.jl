@@ -68,8 +68,7 @@ function WeakKeyDict(kv)
     end
 end
 
-similar(d::WeakKeyDict{K,V}) where {K,V} = WeakKeyDict{K,V}()
-similar(d::WeakKeyDict, ::Type{Pair{K,V}}) where {K,V} = WeakKeyDict{K,V}()
+empty(d::WeakKeyDict, ::Type{K}, ::Type{V}) where {K, V} = WeakKeyDict{K, V}()
 
 # conversion between Dict types
 function convert(::Type{WeakKeyDict{K,V}},d::Associative) where V where K

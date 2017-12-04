@@ -870,10 +870,22 @@ end
     Base.convert(::Type{Array{T,n}}, a::Array{T,n}) where {T<:Number,n} = a
     Base.convert(::Type{Array{T,n}}, a::Array) where {T<:Number,n} =
         copy!(Array{T,n}(uninitialized, size(a)), a)
-    @test isa(similar(Dict(:a=>1, :b=>2.0), Pair{Union{},Union{}}), Dict{Union{}, Union{}})
+    @test isa(empty(Dict(:a=>1, :b=>2.0), Union{}, Union{}), Dict{Union{}, Union{}})
 end
 
 @testset "zero-dimensional copy" begin
     Z = Array{Int,0}(uninitialized); Z[] = 17
     @test Z == collect(Z) == copy(Z)
+end
+
+@testset "empty" begin
+    @test isempty([])
+    v = [1, 2, 3]
+    v2 = empty(v)
+    v3 = empty(v, Float64)
+    @test !isempty(v)
+    empty!(v)
+    @test isempty(v)
+    @test isempty(v2::Vector{Int})
+    @test isempty(v3::Vector{Float64})
 end

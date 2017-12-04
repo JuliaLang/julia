@@ -18,10 +18,12 @@ import Base.range
     Date.(Y, df) )
 @deprecate(
     format(Y::AbstractArray{<:TimeType}, f::AbstractString; locale::Locale=ENGLISH),
-    format.(Y, f; locale=locale) )
+    format.(Y, f; locale=locale),
+    false )
 @deprecate(
     format(Y::AbstractArray{T}, df::DateFormat=default_format(T)) where {T<:TimeType},
-    format.(Y, df) )
+    format.(Y, df),
+    false )
 
 @deprecate +(a::GeneralPeriod, b::StridedArray{<:GeneralPeriod}) broadcast(+, a, b) false
 @deprecate +(a::StridedArray{<:GeneralPeriod}, b::GeneralPeriod) broadcast(+, a, b) false
