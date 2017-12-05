@@ -2272,6 +2272,17 @@ end
     A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix) = ldiv!(C, B)
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/factorization.jl, to deprecate
+@eval Base.LinAlg begin
+    Ac_ldiv_B(F::Factorization, B::AbstractVecOrMat) = \(Adjoint(F), B)
+    A_ldiv_B!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) = ldiv!(Y, A, B)
+    Ac_ldiv_B!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) = ldiv!(Y, Adjoint(A), B)
+    At_ldiv_B!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) = ldiv!(Y, Transpose(A), B)
+    At_ldiv_B(F::Factorization{<:Real}, B::AbstractVecOrMat) = \(Transpose(F), B)
+    At_ldiv_B(F::Factorization, B) = \(Transpose(F), B)
+end
+
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 

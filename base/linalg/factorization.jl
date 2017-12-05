@@ -61,27 +61,30 @@ function (\)(F::Factorization{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
     return reshape(collect(reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)))), _ret_size(F, B))
 end
 
-for (f1, f2) in ((:\, :A_ldiv_B!),
-                 (:Ac_ldiv_B, :Ac_ldiv_B!))
-    @eval begin
-        function $f1(F::Factorization, B::AbstractVecOrMat)
-            TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-            BB = similar(B, TFB, size(B))
-            copy!(BB, B)
-            $f2(F, BB)
-        end
-    end
+function \(F::Factorization, B::AbstractVecOrMat)
+    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
+    BB = similar(B, TFB, size(B))
+    copy!(BB, B)
+    A_ldiv_B!(F, BB)
+end
+function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
+    F = adjF.parent
+    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
+    BB = similar(B, TFB, size(B))
+    copy!(BB, B)
+    Ac_ldiv_B!(F, BB)
 end
 
 # support the same 3-arg idiom as in our other in-place A_*_B functions:
-for f in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!)
-    @eval $f(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) =
-        $f(A, copy!(Y, B))
-end
+ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) = A_ldiv_B!(A, copy!(Y, B))
+ldiv!(Y::AbstractVecOrMat, adjA::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat) =
+    (A = adjA.parent; Ac_ldiv_B!(A, copy!(Y, B)))
+ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) =
+    (A = transA.parent; At_ldiv_B!(A, copy!(Y, B)))
 
 # fallback methods for transposed solves
-At_ldiv_B(F::Factorization{<:Real}, B::AbstractVecOrMat) = Ac_ldiv_B(F, B)
-At_ldiv_B(F::Factorization, B) = conj.(Ac_ldiv_B(F, conj.(B)))
+\(transF::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = (F = transF.parent; Ac_ldiv_B(F, B))
+\(transF::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) = (F = transF.parent; conj.(Ac_ldiv_B(F, conj.(B))))
 
 """
     A_ldiv_B!([Y,] A, B) -> Y
