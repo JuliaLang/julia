@@ -297,7 +297,6 @@ function approve(cfg::GitConfig, cred::UserPasswordCredentials, url::AbstractStr
     end
 
     securezero!(git_cred)
-
     nothing
 end
 
@@ -310,7 +309,5 @@ function reject(cfg::GitConfig, cred::UserPasswordCredentials, url::AbstractStri
     end
 
     securezero!(git_cred)
-    securezero!(cred)
-
     nothing
 end

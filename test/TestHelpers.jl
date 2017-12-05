@@ -55,14 +55,14 @@ end
 
 function challenge_prompt(code::Expr, challenges; timeout::Integer=10, debug::Bool=true)
     output_file = tempname()
-    wrapped_code = """
-    result = let
-        $code
+    wrapped_code = quote
+        result = let
+            $code
+        end
+        open($output_file, "w") do fp
+            serialize(fp, result)
+        end
     end
-    open("$output_file", "w") do fp
-        serialize(fp, result)
-    end
-    """
     cmd = `$(Base.julia_cmd()) --startup-file=no -e $wrapped_code`
     try
         challenge_prompt(cmd, challenges, timeout=timeout, debug=debug)
@@ -116,11 +116,12 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool
 
         # Process timed out or aborted
         if !success(p)
+            write(out, readavailable(master))
             if isready(done) && fetch(done) == :timed_out
                 error("Process timed out possibly waiting for a response. ",
                       format_output(out))
             else
-                Base.pipeline_error(p)
+                error("Failed process. ", format_output(out), "\n", p)
             end
         end
     end
