@@ -120,11 +120,11 @@ end
 
 
 ## Multiplication by LQ
-A_mul_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+mul!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     A[:L] * LAPACK.ormlq!('L', 'N', A.factors, A.τ, B)
-A_mul_B!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat} =
+mul!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat} =
     A[:L] * LAPACK.ormlq!('L', 'N', A.factors, A.τ, Matrix(B))
-A_mul_B!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat} =
+mul!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat} =
     A_mul_B!(zeros(eltype(A), size(A)), Matrix(A), Matrix(B))
 function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
@@ -141,16 +141,19 @@ end
 
 ## Multiplication by Q
 ### QB
-A_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
+mul!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
 function (*)(A::LQPackedQ, B::StridedVecOrMat)
     TAB = promote_type(eltype(A), eltype(B))
     A_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
 end
 
 ### QcB
-Ac_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasReal} = LAPACK.ormlq!('L','T',A.factors,A.τ,B)
-Ac_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasComplex} = LAPACK.ormlq!('L','C',A.factors,A.τ,B)
-function Ac_mul_B(A::LQPackedQ, B::StridedVecOrMat)
+mul!(adjA::Adjoint{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasReal} =
+    (A = adjA.parent; LAPACK.ormlq!('L','T',A.factors,A.τ,B))
+mul!(adjA::Adjoint{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
+    (A = adjA.parent; LAPACK.ormlq!('L','C',A.factors,A.τ,B))
+function *(adjA::Adjoint{<:Any,<:LQPackedQ}, B::StridedVecOrMat)
+    A = adjA.parent
     TAB = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
         Ac_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
@@ -162,16 +165,19 @@ function Ac_mul_B(A::LQPackedQ, B::StridedVecOrMat)
 end
 
 ### QBc/QcBc
-for (f1, f2) in ((:A_mul_Bc, :A_mul_B!),
-                 (:Ac_mul_Bc, :Ac_mul_B!))
-    @eval begin
-        function ($f1)(A::LQPackedQ, B::StridedVecOrMat)
-            TAB = promote_type(eltype(A), eltype(B))
-            BB = similar(B, TAB, (size(B, 2), size(B, 1)))
-            adjoint!(BB, B)
-            return ($f2)(A, BB)
-        end
-    end
+function *(A::LQPackedQ, adjB::Adjoint{<:Any,<:StridedVecOrMat})
+    B = adjB.parent
+    TAB = promote_type(eltype(A), eltype(B))
+    BB = similar(B, TAB, (size(B, 2), size(B, 1)))
+    adjoint!(BB, B)
+    return A_mul_B!(A, BB)
+end
+function *(adjA::Adjoint{<:Any,<:LQPackedQ}, adjB::Adjoint{<:Any,<:StridedVecOrMat})
+    A, B = adjA.parent, adjB.parent
+    TAB = promote_type(eltype(A), eltype(B))
+    BB = similar(B, TAB, (size(B, 2), size(B, 1)))
+    adjoint!(BB, B)
+    return Ac_mul_B!(A, BB)
 end
 
 # in-place right-application of LQPackedQs
@@ -179,12 +185,12 @@ end
 # match the number of columns (nQ) of the LQPackedQ (Q) (necessary for in-place
 # operation, and the underlying LAPACK routine (ormlq) treats the implicit Q
 # as its (nQ-by-nQ) square form)
-A_mul_B!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasFloat} =
+mul!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasFloat} =
     LAPACK.ormlq!('R', 'N', B.factors, B.τ, A)
-A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasReal} =
-    LAPACK.ormlq!('R', 'T', B.factors, B.τ, A)
-A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasComplex} =
-    LAPACK.ormlq!('R', 'C', B.factors, B.τ, A)
+mul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:LQPackedQ{T}}) where {T<:BlasReal} =
+    (B = adjB.parent; LAPACK.ormlq!('R', 'T', B.factors, B.τ, A))
+mul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:LQPackedQ{T}}) where {T<:BlasComplex} =
+    (B = adjB.parent; LAPACK.ormlq!('R', 'C', B.factors, B.τ, A))
 
 # out-of-place right application of LQPackedQs
 #
@@ -198,11 +204,13 @@ A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasComplex} =
 # (1) the inner dimension in the multiplication is the LQPackedQ's second dimension.
 # in this case, the LQPackedQ behaves like its square form.
 #
-function A_mul_Bc(A::StridedVecOrMat, Q::LQPackedQ)
+function *(A::StridedVecOrMat, adjQ::Adjoint{<:Any,<:LQPackedQ})
+    Q = adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
     return A_mul_Bc!(copy_oftype(A, TR), convert(AbstractMatrix{TR}, Q))
 end
-function Ac_mul_Bc(A::StridedMatrix, Q::LQPackedQ)
+function *(adjA::Adjoint{<:Any,<:StridedMatrix}, adjQ::Adjoint{<:Any,<:LQPackedQ})
+    A, Q = adjA.parent, adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
     C = adjoint!(similar(A, TR, reverse(size(A))), A)
     return A_mul_Bc!(C, convert(AbstractMatrix{TR}, Q))
@@ -232,7 +240,8 @@ function *(A::StridedVecOrMat, Q::LQPackedQ)
     end
     return A_mul_B!(C, convert(AbstractMatrix{TR}, Q))
 end
-function Ac_mul_B(A::StridedMatrix, Q::LQPackedQ)
+function *(adjA::Adjoint{<:Any,<:StridedMatrix}, Q::LQPackedQ)
+    A = adjA.parent
     TR = promote_type(eltype(A), eltype(Q))
     if size(A, 1) == size(Q.factors, 2)
         C = adjoint!(similar(A, TR, reverse(size(A))), A)
@@ -277,7 +286,7 @@ function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
 end
 
 
-function A_ldiv_B!(A::LQ{T}, B::StridedVecOrMat{T}) where T
+function ldiv!(A::LQ{T}, B::StridedVecOrMat{T}) where T
     Ac_mul_B!(A[:Q], A_ldiv_B!(LowerTriangular(A[:L]),B))
     return B
 end

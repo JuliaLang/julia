@@ -2345,6 +2345,26 @@ end
     Ac_ldiv_B!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V} = ldiv!(Adjoint(A), B)
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/lq.jl, to deprecate
+@eval Base.LinAlg begin
+    A_mul_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = mul!(A, B)
+    A_mul_B!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat} = mul!(A, B)
+    A_mul_B!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat} = mul!(A, B)
+    A_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = mul!(A, B)
+    Ac_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasReal} = mul!(Adjoint(A), B)
+    Ac_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasComplex} = mul!(Adjoint(A), B)
+    Ac_mul_B(A::LQPackedQ, B::StridedVecOrMat) = *(Adjoint(A), B)
+    A_mul_Bc(A::LQPackedQ, B::StridedVecOrMat) = *(A, Adjoint(B))
+    Ac_mul_Bc(A::LQPackedQ, B::StridedVecOrMat) = *(Adjoint(A), Adjoint(B))
+    A_mul_B!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasFloat} = mul!(A, B)
+    A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasReal} = mul!(A, Adjoint(B))
+    A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasComplex} = mul!(A, Adjoint(B))
+    A_mul_Bc(A::StridedVecOrMat, Q::LQPackedQ) = *(A, Adjoint(Q))
+    Ac_mul_Bc(A::StridedMatrix, Q::LQPackedQ) = *(Adjoint(A), Adjoint(Q))
+    Ac_mul_B(A::StridedMatrix, Q::LQPackedQ) = *(Adjoint(A), Q)
+    A_ldiv_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T} = ldiv!(A, B)
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
