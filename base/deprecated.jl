@@ -2282,6 +2282,15 @@ end
     At_ldiv_B(F::Factorization, B) = \(Transpose(F), B)
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/hessenberg.jl, to deprecate
+@eval Base.LinAlg begin
+    A_mul_B!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} = mul!(Q, X)
+    A_mul_B!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat} = mul!(X, Q)
+    Ac_mul_B!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} = mul!(Adjoint(Q), X)
+    A_mul_Bc!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat} = mul!(X, Adjoint(Q))
+    Ac_mul_B(Q::HessenbergQ{T}, X::StridedVecOrMat{S}) where {T,S} = *(Adjoint(Q), X)
+    A_mul_Bc(X::StridedVecOrMat{S}, Q::HessenbergQ{T}) where {T,S} = *(X, Adjoint(Q))
+end
 
 # issue #24822
 @deprecate_binding Display AbstractDisplay
