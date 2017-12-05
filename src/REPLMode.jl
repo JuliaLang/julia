@@ -63,7 +63,7 @@ let uuid = raw"(?i)[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(
     global name_uuid_re = Regex("^$name\\s*=\\s*($uuid)\$")
 end
 
-const lex_re = r"^[\?\./\+\-] | [^@\s]+\s*=\s*[^@\s]+ | @\s*[^@\s]* | [^@\s]+"x
+const lex_re = r"^[\?\./\+\-](?!\-) | [^@\s]+\s*=\s*[^@\s]+ | @\s*[^@\s]* | [^@\s]+"x
 
 function tokenize(cmd::String)::Vector{Tuple{Symbol,Vararg{Any}}}
     tokens = Tuple{Symbol,Vararg{Any}}[]
