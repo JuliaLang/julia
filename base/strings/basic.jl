@@ -85,19 +85,11 @@ julia> length("jμΛIα")
 ```
 """
 function length(s::AbstractString)
-    i = start(s)
-    if done(s,i)
-        return 0
+    n = 0
+    for i = start(s):ncodeunits(s)
+        n += isvalid(s, i)
     end
-    n = 1
-    while true
-        c, j = next(s,i)
-        if done(s,j)
-            return n
-        end
-        n += 1
-        i = j
-    end
+    return n
 end
 
 ## string comparison functions ##
@@ -266,15 +258,20 @@ julia> thisind("αβγdef", 10)
 julia> thisind("αβγdef", 20)
 10
 """
-thisind(s::AbstractString, i::Integer) =
-    (start(s) ≤ i ≤ ncodeunits(s)) ⊻ isvalid(s, i) ? prevind(s, i) : i
+function thisind(s::AbstractString, i::Integer)
+    i ≤ ncodeunits(s) || return i
+    a = start(i)
+    while a ≤ i && !isvalid(s, i)
+        i -= 1
+    end
+    return i
+end
 
 """
-    prevind(str::AbstractString, i::Integer, nchar::Integer=1)
+    prevind(str::AbstractString, i::Integer, n::Integer=1)
 
-Get the previous valid string index before `i`.
-Returns a value less than `1` at the beginning of the string.
-If the `nchar` argument is given the function goes back `nchar` characters.
+Get the previous valid string index after `i` or `i - 1` if `i` is out of bounds.
+If the `n` argument is given the function goes forward `n` characters.
 
 # Examples
 ```jldoctest
@@ -288,26 +285,20 @@ julia> prevind("αβγdef", 3, 2)
 0
 ```
 """
-function prevind(s::AbstractString, i::Integer)
-    j = thisind(s, i)
-    j < i ? j : thisind(s, i-1)
-end
-
-function prevind(s::AbstractString, i::Integer, n::Integer)
+function prevind(s::AbstractString, i::Integer, n::Integer=1)
     n > 0 || throw(ArgumentError("n must be greater than 0"))
-    i = prevind(s, i)
-    while (n -= 1) > 0
-        i = prevind(s, i)
+    a = start(i)
+    while a ≤ i
+        n -= isvalid(s, i -= 1)
     end
     return i
 end
 
 """
-    nextind(str::AbstractString, i::Integer, nchar::Integer=1)
+    nextind(str::AbstractString, i::Integer, n::Integer=1)
 
-Get the next valid string index after `i`.
-Returns a value greater than `endof(str)` at or after the end of the string.
-If the `nchar` argument is given the function goes forward `nchar` characters.
+Get the next valid string index after `i` or `i + 1` if `i` is out of bounds.
+If the `n` argument is given the function goes forward `n` characters.
 
 # Examples
 ```jldoctest
@@ -326,13 +317,11 @@ julia> nextind(str, 9)
 10
 ```
 """
-nextind(s::AbstractString, i::Integer) = next(s, Int(i))[2]
-
-function nextind(s::AbstractString, i::Integer, n::Integer)
+function nextind(s::AbstractString, i::Integer, n::Integer=1)
     n > 0 || throw(ArgumentError("n must be greater than 0"))
-    i = nextind(s, i)
-    while (n -= 1) > 0
-        i = nextind(s, i)
+    z = ncodeunits(s)
+    while i ≤ z
+        n -= isvalid(s, i += 1)
     end
     return i
 end
