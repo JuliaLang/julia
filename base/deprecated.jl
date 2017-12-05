@@ -2302,6 +2302,31 @@ end
     A_ldiv_B!(A::SVD{T}, B::StridedVecOrMat) where {T} = ldiv!(A, B)
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/symmetric.jl, to deprecate
+@eval Base.LinAlg begin
+    A_mul_B!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasFloat} = mul!(y, A, x)
+    A_mul_B!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasReal} = mul!(y, A, x)
+    A_mul_B!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasComplex} = mul!(y, A, x)
+    A_mul_B!(C::StridedMatrix{T}, A::Symmetric{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} = mul!(C, A, B)
+    A_mul_B!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,<:StridedMatrix}) where {T<:BlasFloat} = mul!(C, A, B)
+    A_mul_B!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasReal} = mul!(C, A, B)
+    A_mul_B!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) where {T<:BlasReal} = mul!(C, A, B)
+    A_mul_B!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasComplex} = mul!(C, A, B)
+    A_mul_B!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) where {T<:BlasComplex} = mul!(C, A, B)
+    At_mul_B(A::RealHermSymComplexSym, B::AbstractVector) = *(Transpose(A), B)
+    At_mul_B(A::RealHermSymComplexSym, B::AbstractMatrix) = *(Transpose(A), B)
+    A_mul_Bt(A::AbstractMatrix, B::RealHermSymComplexSym) = *(A, Transpose(B))
+    Ac_mul_B(A::RealHermSymComplexHerm, B::AbstractVector) = *(Adjoint(A), B)
+    Ac_mul_B(A::RealHermSymComplexHerm, B::AbstractMatrix) = *(Adjoint(A), B)
+    A_mul_Bc(A::AbstractMatrix, B::RealHermSymComplexHerm) = *(A, Adjoint(B))
+    A_mul_Bt(A::RowVector, B::RealHermSymComplexSym) = *(A, Transpose(B))
+    A_mul_Bc(A::RowVector, B::RealHermSymComplexHerm) = *(A, Adjoint(B))
+    At_mul_B(A::RealHermSymComplexSym, B::AbstractTriangular) = *(Transpose(A), B)
+    A_mul_Bt(A::AbstractTriangular, B::RealHermSymComplexSym) = *(A, Transpose(B))
+    Ac_mul_B(A::RealHermSymComplexHerm, B::AbstractTriangular) = *(Adjoint(A), B)
+    A_mul_Bc(A::AbstractTriangular, B::RealHermSymComplexHerm) = *(A, Adjoint(B))
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
