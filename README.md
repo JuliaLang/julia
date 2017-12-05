@@ -195,6 +195,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `@compat finalizer(func, obj)` with the finalizer to run as the first argument and the object to be finalized
   as the second ([#24605]).
 
+* `IOContext` accepting key-value `Pair`s ([#23271]).
+
 ## Renaming
 
 
@@ -358,6 +360,7 @@ includes this fix. Find the minimum version from there.
 [#22864]: https://github.com/JuliaLang/julia/issues/22864
 [#23051]: https://github.com/JuliaLang/julia/issues/23051
 [#23235]: https://github.com/JuliaLang/julia/issues/23235
+[#23271]: https://github.com/JuliaLang/julia/issues/23271
 [#23427]: https://github.com/JuliaLang/julia/issues/23427
 [#23570]: https://github.com/JuliaLang/julia/issues/23570
 [#23666]: https://github.com/JuliaLang/julia/issues/23666
@@ -367,6 +370,7 @@ includes this fix. Find the minimum version from there.
 [#23931]: https://github.com/JuliaLang/julia/issues/23931
 [#24047]: https://github.com/JuliaLang/julia/issues/24047
 [#24282]: https://github.com/JuliaLang/julia/issues/24282
+[#24361]: https://github.com/JuliaLang/julia/issues/24361
 [#24372]: https://github.com/JuliaLang/julia/issues/24372
 [#24459]: https://github.com/JuliaLang/julia/issues/24459
 [#24605]: https://github.com/JuliaLang/julia/issues/24605

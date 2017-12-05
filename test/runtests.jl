@@ -912,6 +912,10 @@ end
 @test isa(Array{Float64}(uninitialized, 2, 2), Matrix{Float64})
 @test isa(Array{Float64,3}(uninitialized, 2, 2, 2), Array{Float64,3})
 
+# 0.7.0-DEV.1472
+@test get(IOContext(IOBuffer(), :arg1=>true, :arg2=>true, :arg3=>true), :arg3, false)
+@test get(IOContext(IOBuffer(), :arg1=>true, :arg2=>true), :arg2, false)
+
 # 0.7.0-DEV.2338
 module Test24361
     using Compat
