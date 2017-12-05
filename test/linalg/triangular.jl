@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 debug = false
-using Test
+using Base.Test
 using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!, UnitUpperTriangular, UnitLowerTriangular, A_rdiv_B!, A_rdiv_Bt!, A_rdiv_Bc!
 
 debug && println("Triangular matrices")
@@ -11,7 +11,7 @@ srand(123)
 
 debug && println("Test basic type functionality")
 @test_throws DimensionMismatch LowerTriangular(randn(5, 4))
-@test (t -> [size(t, i) for i = 1:3])(LowerTriangular(randn(3, 3))) == [size(Matrix(t), i) for i = 1:3]
+@test (t -> [size(t, i) for i = 1:3]  == [size(Matrix(t), i) for i = 1:3])(LowerTriangular(randn(3, 3)))
 
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
 for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat}, Int)

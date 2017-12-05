@@ -634,7 +634,7 @@ end
 end
 
 @testset "Issue 14134" begin
-    A =  (t -> t't)(CHOLMOD.Sparse(sprandn(10,5,0.1) + I))
+    A = CHOLMOD.Sparse((t -> t't)(sprandn(10,5,0.1) + I))
     b = IOBuffer()
     serialize(b, A)
     seekstart(b)
