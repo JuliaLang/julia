@@ -633,22 +633,42 @@ end
 end
 
 @testset "file info in test errors" begin
-     local f = tempname()
+    local f = tempname()
 
-     write(f,
-     """
-     using Test
-     @testset begin
-         @test 1==2
-         @test_throws UndefVarError 1
-         @test_broken 1 == 1
-     end
-     """)
+    write(f,
+    """
+    using Test
+    @testset begin
+        @test 1==2
+        @test_throws UndefVarError 1
+        @test_broken 1 == 1
+    end
+    """)
 
-     local msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=DevNull), String)
-     @test contains(msg, "at " * f * ":" * "3")
-     @test contains(msg, "at " * f * ":" * "4")
-     @test contains(msg, "at " * f * ":" * "5")
+    local msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=DevNull), String)
+    @test contains(msg, "at " * f * ":" * "3")
+    @test contains(msg, "at " * f * ":" * "4")
+    @test contains(msg, "at " * f * ":" * "5")
 
-     rm(f; force=true)
+    rm(f; force=true)
  end
+
+# issue #24919
+@testset "≈ with atol" begin
+    local cmd = `$(Base.julia_cmd()) --startup-file=no --color=no`
+    f(src) = read(pipeline(ignorestatus(`$cmd -e $src`), stderr=DevNull), String)
+
+    msg = f("""
+    using Test
+    x, y = 0.9, 0.1
+    @test x ≈ y atol=0.01
+    """)
+    @test contains(msg, "Evaluated: 0.9 ≈ 0.1 (atol=0.01)")
+
+    msg = f("""
+    using Test
+    x, y = 0.9, 0.1
+    @test x ≈ y nans=true atol=0.01
+    """)
+    @test contains(msg, "Evaluated: 0.9 ≈ 0.1 (nans=true, atol=0.01)")
+end
