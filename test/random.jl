@@ -3,7 +3,7 @@
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using Main.TestHelpers.OAs
 
-using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt, dSFMT, Combine, Normal, Uniform, Exponential
+using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt, dSFMT, Combine, Normal, Uniform, Exponential, Rand
 
 @testset "Issue #6573" begin
     srand(0)
@@ -750,4 +750,18 @@ end
     s = rand(rng..., "asd", String)
     @test length(s) == 8
     @test Set(s) <= Set("asd")
+end
+
+@testset "Rand" for rng in ([], [MersenneTwister(0)], [RandomDevice()])
+    for XT = zip(([Int], [1:3], []), (Int, Int, Float64))
+        X, T = XT
+        r = Rand(rng..., X...)
+        @test collect(Iterators.take(r, 10)) isa Vector{T}
+        @test r() isa T
+        @test r(2, 3) isa Matrix{T}
+        @test r(.3, 2, 3) isa SparseMatrixCSC{T}
+    end
+    for d = (Uniform(1:10), Uniform(Int))
+        @test collect(Iterators.take(d, 10)) isa Vector{Int}
+    end
 end
