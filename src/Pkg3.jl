@@ -1,8 +1,16 @@
 __precompile__(true)
 module Pkg3
 
+
+if VERSION < v"0.7.0-DEV.2575"
+    const Dates = Base.Dates
+else
+    import Dates
+end
+
 const DEPOTS = [joinpath(homedir(), ".julia")]
 depots() = DEPOTS
+logdir() = joinpath(DEPOTS[1], "logs")
 
 const USE_LIBGIT2_FOR_ALL_DOWNLOADS = false
 const NUM_CONCURRENT_DOWNLOADS      = 8
@@ -33,7 +41,7 @@ include("Operations.jl")
 include("REPLMode.jl")
 include("API.jl")
 
-import .API: add, rm, up, test
+import .API: add, rm, up, test, gc
 const update = up
 
 @enum LoadErrorChoice LOAD_ERROR_QUERY LOAD_ERROR_INSTALL LOAD_ERROR_ERROR

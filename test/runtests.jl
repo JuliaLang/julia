@@ -1,17 +1,18 @@
 using Pkg3
 using Pkg3.Types
-if Base.isdeprecated(Main, :Test)
-    using Test
-else
+if VERSION < v"0.7.0-DEV.2005"
     using Base.Test
+else
+    using Test
 end
 
 function temp_pkg_dir(fn::Function)
     local project_path
     try
+        # TODO: Use a temporary depot
         project_path = joinpath(tempdir(), randstring())
         withenv("JULIA_ENV" => project_path) do
-            fn()
+            fn(project_path)
         end
     finally
         rm(project_path, recursive=true, force=true)
@@ -23,7 +24,7 @@ end
 # in the meantime
 const TEST_PKG = "Crayons"
 
-temp_pkg_dir() do
+temp_pkg_dir() do project_path
     Pkg3.add(TEST_PKG; preview = true)
     @test_warn "not in project" Pkg3.API.rm("Example")
     Pkg3.add(TEST_PKG)
@@ -45,6 +46,8 @@ temp_pkg_dir() do
         @test contains(sprint(showerror, e), TEST_PKG)
     end
 
+    usage = Pkg3.TOML.parse(String(read(joinpath(Pkg3.logdir(), "usage.toml"))))
+    @test any(x -> startswith(x, joinpath(project_path, "Manifest.toml")), keys(usage))
 
     nonexisting_pkg = randstring(14)
     @test_throws CommandError Pkg3.add(nonexisting_pkg)

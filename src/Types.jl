@@ -2,11 +2,10 @@ module Types
 
 using Base.Random: UUID
 using Pkg3.Pkg2.Types: VersionSet, Available
-using Pkg3.TOML
-using Pkg3.TerminalMenus
+using Pkg3: TOML, TerminalMenus, Dates
 
 import Pkg3
-import Pkg3: depots, iswindows
+import Pkg3: depots, logdir, iswindows
 
 export SHA1, VersionRange, VersionSpec, PackageSpec, UpgradeLevel, EnvCache,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
@@ -245,6 +244,7 @@ struct EnvCache
                 isfile(manifest_file) && break
             end
         end
+        write_env_usage(manifest_file)
         manifest = read_manifest(manifest_file)
         uuids = Dict{String,Vector{UUID}}()
         paths = Dict{UUID,Vector{String}}()
@@ -263,6 +263,17 @@ struct EnvCache
     end
 end
 EnvCache() = EnvCache(get(ENV, "JULIA_ENV", nothing))
+
+function write_env_usage(manifest_file::AbstractString)
+    !ispath(logdir()) && mkpath(logdir())
+    usage_file = joinpath(logdir(), "usage.toml")
+    touch(usage_file)
+    !isfile(manifest_file) && return
+    open(usage_file, "a") do io
+        println(io, "[[\"", escape_string(manifest_file), "\"]]")
+        println(io, "time = ", Dates.format(now(), "YYYY-mm-ddTHH:MM:SS.sssZ"))
+    end
+end
 
 function read_project(io::IO)
     project = TOML.parse(io)

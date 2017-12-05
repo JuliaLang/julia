@@ -144,7 +144,8 @@ function do_cmd!(env, tokens, repl)
     cmd == :add     ?     do_add!(env, tokens) :
     cmd == :up      ?      do_up!(env, tokens) :
     cmd == :status  ?  do_status!(env, tokens) :
-    cmd == :test   ?   do_test!(env, tokens) :
+    cmd == :test    ?    do_test!(env, tokens) :
+    cmd == :gc      ?      do_gc!(env, tokens) :
         cmderror("`$cmd` command not yet implemented")
 end
 
@@ -188,6 +189,8 @@ const help = Base.Markdown.parse("""
     `preview`: previews a subsequent command without affecting the current state
 
     `test`: run tests for packages
+
+    `gc`: garbage collect packages not used for a significant time
     """)
 
 const helps = Dict(
@@ -273,7 +276,10 @@ const helps = Dict(
     Run the tests for package `pkg`. This is done by running the file `test/runtests.jl`
     in the package directory. The option `--coverage` can be used to run the tests with
     coverage enabled.
-    """,
+    """, :gc => md"""
+
+    Deletes packages that are not reached from any environment used within the last 6 weeks.
+    """
 )
 
 function do_help!(
@@ -433,6 +439,12 @@ function do_test!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     isempty(pkgs) && cmderror("`test` takes a set of packages")
     Pkg3.API.test(env, pkgs; coverage = coverage)
 end
+
+function do_gc!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+    !isempty(tokens) && cmderror("`gc` does not take any arguments")
+    Pkg3.API.gc(env)
+end
+
 
 function create_mode(repl, main)
     pkg_mode = LineEdit.Prompt("pkg> ";
