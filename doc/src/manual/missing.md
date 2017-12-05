@@ -259,7 +259,8 @@ holding the actual values combined with an `Array{UInt8}` indicating the type
 of the entry (i.e. whether it is `Missing` or `T`).
 
 Uninitialized arrays allowing for missing values can be constructed with the
-standard syntax. By default, they are filled with `missing` values:
+standard syntax. By default, arrays with an [`isbits`](@ref) element type are
+filled with `missing` values:
 ```doctest
 julia> Array{Union{Missing, Int}}(uninitialized, 2, 3)
 2×3 Array{Union{Missing, Int64},2}:
