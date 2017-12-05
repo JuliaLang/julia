@@ -62,6 +62,7 @@ The following properties are in common use:
    output. This can be used to override the display size for called functions, but to
    get the size of the screen use the `displaysize` function.
 
+# Examples
 ```jldoctest
 julia> function f(io::IO)
            if get(io, :short, false)
@@ -1522,6 +1523,8 @@ dump(io::IO, arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = (dump(io, arg, maxdepth, "")
     dump(x; maxdepth=$DUMP_DEFAULT_MAXDEPTH)
 
 Show every part of the representation of a value.
+
+# Examples
 ```jldoctest
 julia> struct MyStruct
            x
@@ -1834,6 +1837,7 @@ a value. By default returns `string(typeof(x))`, e.g. [`Int64`](@ref).
 For arrays, returns a string of size and type info,
 e.g. `10-element Array{Int64,1}`.
 
+# Examples
 ```jldoctest
 julia> summary(1)
 "Int64"
@@ -2111,6 +2115,17 @@ the representation of an element.
 
 To offer a compact representation different from its standard one, a custom type should
 test `get(io, :compact, false)` in its normal [`show`](@ref) method.
+
+# Examples
+```jldoctest
+julia> A = [1. 2.; 3. 4]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> showcompact(A)
+[1.0 2.0; 3.0 4.0]
+```
 """
 showcompact(x) = showcompact(STDOUT, x)
 function showcompact(io::IO, x)
