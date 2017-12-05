@@ -2327,6 +2327,24 @@ end
     A_mul_Bc(A::AbstractTriangular, B::RealHermSymComplexHerm) = *(A, Adjoint(B))
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/lu.jl, to deprecate
+@eval Base.LinAlg begin
+    A_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = ldiv!(A, B)
+    A_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat) = ldiv!(A, B)
+    At_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = ldiv!(Transpose(A), B)
+    At_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat) = ldiv!(Transpose(A), B)
+    Ac_ldiv_B!(F::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:Real} = ldiv!(Adjoint(F), B)
+    Ac_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasComplex} = ldiv!(Adjoint(A), B)
+    Ac_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat) = ldiv!(Adjoint(A), B)
+    At_ldiv_Bt(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = \(Transpose(A), Transpose(B))
+    At_ldiv_Bt(A::LU, B::StridedVecOrMat) = \(Transpose(A), Transpose(B))
+    Ac_ldiv_Bc(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasComplex} = \(Adjoint(A), Adjoint(B))
+    Ac_ldiv_Bc(A::LU, B::StridedVecOrMat) = \(Adjoint(A), Adjoint(B))
+    A_ldiv_B!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V} = ldiv!(A, B)
+    At_ldiv_B!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V} = \(Transpose(A), B)
+    Ac_ldiv_B!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V} = ldiv!(Adjoint(A), B)
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 

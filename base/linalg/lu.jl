@@ -302,39 +302,49 @@ function _swap_rows!(B::StridedMatrix, i::Integer, j::Integer)
     B
 end
 
-A_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+ldiv!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
 
-function A_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
+function ldiv!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
     _apply_ipiv!(A, B)
     A_ldiv_B!(UpperTriangular(A.factors), A_ldiv_B!(UnitLowerTriangular(A.factors), B))
 end
 
-At_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, B) A.info
+ldiv!(transA::Transpose{<:Any,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+    (A = transA.parent; @assertnonsingular(LAPACK.getrs!('T', A.factors, A.ipiv, B), A.info))
 
-function At_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
+function ldiv!(transA::Transpose{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOrMat)
+    A = transA.parent
     At_ldiv_B!(UnitLowerTriangular(A.factors), At_ldiv_B!(UpperTriangular(A.factors), B))
     _apply_inverse_ipiv!(A, B)
 end
 
-Ac_ldiv_B!(F::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:Real} =
-    At_ldiv_B!(F, B)
-Ac_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
-    @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, B) A.info
+ldiv!(adjF::Adjoint{<:Any,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:Real} =
+    (F = adjF.parent; At_ldiv_B!(F, B))
+ldiv!(adjA::Adjoint{<:Any,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
+    (A = adjA.parent; @assertnonsingular(LAPACK.getrs!('C', A.factors, A.ipiv, B), A.info))
 
-function Ac_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
+function ldiv!(adjA::Adjoint{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOrMat)
+    A = adjA.parent
     Ac_ldiv_B!(UnitLowerTriangular(A.factors), Ac_ldiv_B!(UpperTriangular(A.factors), B))
     _apply_inverse_ipiv!(A, B)
 end
 
-At_ldiv_Bt(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+function \(transA::Transpose{<:Any,<:LU{T,<:StridedMatrix}},
+           transB::Transpose{<:Any,<:StridedVecOrMat{T}}) where {T<:BlasFloat}
+    A, B = transA.parent, transB.parent
     @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, transpose(B)) A.info
-At_ldiv_Bt(A::LU, B::StridedVecOrMat) = At_ldiv_B(A, transpose(B))
+end
+\(transA::Transpose{<:Any,<:LU}, transB::Transpose{<:Any,<:StridedVecOrMat}) =
+    (A = transA.parent; B = transB.parent; At_ldiv_B(A, transpose(B)))
 
-Ac_ldiv_Bc(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
+function \(adjA::Adjoint{<:Any,<:LU{T,<:StridedMatrix}},
+           adjB::Adjoint{<:Any,<:StridedVecOrMat{T}}) where {T<:BlasComplex}
+    A, B = adjA.parent, adjB.parent
     @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, adjoint(B)) A.info
-Ac_ldiv_Bc(A::LU, B::StridedVecOrMat) = Ac_ldiv_B(A, adjoint(B))
+end
+\(adjA::Adjoint{<:Any,<:LU}, adjB::Adjoint{<:Any,<:StridedVecOrMat}) =
+    (A = adjA.parent; B = adjB.parent; Ac_ldiv_B(A, adjoint(B)))
 
 function det(F::LU{T}) where T
     n = checksquare(F)
@@ -478,7 +488,7 @@ function getindex(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
 end
 
 # See dgtts2.f
-function A_ldiv_B!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
+function ldiv!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
     n = size(A,1)
     if n != size(B,1)
         throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
@@ -509,7 +519,8 @@ function A_ldiv_B!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
     return B
 end
 
-function At_ldiv_B!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
+function ldiv!(transA::Transpose{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
+    A = transA.parent
     n = size(A,1)
     if n != size(B,1)
         throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
@@ -544,7 +555,8 @@ function At_ldiv_B!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
 end
 
 # Ac_ldiv_B!(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) where {T<:Real} = At_ldiv_B!(A,B)
-function Ac_ldiv_B!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
+function ldiv!(adjA::Adjoint{<:Any,LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
+    A = adjA.parent
     n = size(A,1)
     if n != size(B,1)
         throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
