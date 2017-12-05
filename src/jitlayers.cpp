@@ -22,6 +22,13 @@
 #endif
 #endif
 
+#if defined(USE_TAPIR)
+#include <llvm/Transforms/Tapir/TapirTypes.h>
+#include <llvm/Transforms/Tapir/TapirUtils.h>
+#include <llvm/Transforms/Tapir/CilkABI.h>
+#include <llvm/Transforms/Tapir/OpenMPABI.h>
+#endif
+
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
