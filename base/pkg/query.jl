@@ -5,7 +5,7 @@ module Query
 import ...Pkg.PkgError
 using ..Types
 
-function requirements(reqs::Dict, fix::Dict, avail::Dict)
+function init_resolve_backtrace(reqs::Requires, fix::Dict{String,Fixed} = Dict{String,Fixed}())
     bktrc = ResolveBacktrace()
     for (p,f) in fix
         bktrc[p] = ResolveBacktraceItem(:fixed, f.version)
@@ -14,7 +14,10 @@ function requirements(reqs::Dict, fix::Dict, avail::Dict)
         bktrcp = get!(bktrc, p) do; ResolveBacktraceItem() end
         push!(bktrcp, :required, vs)
     end
+    return bktrc
+end
 
+function check_fixed(reqs::Requires, fix::Dict{String,Fixed}, avail::Dict)
     for (p1,f1) in fix
         for p2 in keys(f1.requires)
             haskey(avail, p2) || haskey(fix, p2) || throw(PkgError("unknown package $p2 required by $p1"))
@@ -26,7 +29,9 @@ function requirements(reqs::Dict, fix::Dict, avail::Dict)
                 warn("$p1 is fixed at $(f1.version) conflicting with requirement for $p2: $(f2.requires[p1])")
         end
     end
-    reqs = deepcopy(reqs)
+end
+
+function propagate_fixed!(reqs::Requires, bktrc::ResolveBacktrace, fix::Dict{String,Fixed})
     for (p,f) in fix
         merge_requires!(reqs, f.requires)
         for (rp,rvs) in f.requires
@@ -37,7 +42,7 @@ function requirements(reqs::Dict, fix::Dict, avail::Dict)
     for (p,f) in fix
         delete!(reqs, p)
     end
-    reqs, bktrc
+    reqs
 end
 
 # Specialized copy for the avail argument below because the deepcopy is slow
@@ -53,39 +58,71 @@ function availcopy(avail)
     return new_avail
 end
 
+# Generate a reverse dependency graph (package names only)
+function gen_backdeps(avail::Dict)
+    backdeps = Dict{String,Set{String}}()
+    for (ap,av) in avail, (v,a) in av, rp in keys(a.requires)
+        s = get!(backdeps, rp) do; Set{String}() end
+        push!(s, ap)
+    end
+    return backdeps
+end
+
 function dependencies(avail::Dict, fix::Dict = Dict{String,Fixed}("julia"=>Fixed(VERSION)))
     avail = availcopy(avail)
     conflicts = Dict{String,Set{String}}()
+    to_expunge = VersionNumber[]
+    emptied = String[]
+    backdeps = gen_backdeps(avail)
+
     for (fp,fx) in fix
         delete!(avail, fp)
-        for (ap,av) in avail, (v,a) in copy(av)
-            if satisfies(fp, fx.version, a.requires)
-                delete!(a.requires, fp)
-            else
-                haskey(conflicts, ap) || (conflicts[ap] = Set{String}())
-                push!(conflicts[ap], fp)
+        haskey(backdeps, fp) || continue
+        # for (ap,av) in avail
+        for ap in backdeps[fp]
+            haskey(avail, ap) || continue
+            av = avail[ap]
+            empty!(to_expunge)
+            for (v,a) in av
+                if satisfies(fp, fx.version, a.requires)
+                    delete!(a.requires, fp)
+                else
+                    conflicts_ap = get!(conflicts, ap) do; Set{String}() end
+                    push!(conflicts_ap, fp)
+                    # don't delete v from av right away so as not to screw up iteration
+                    push!(to_expunge, v)
+                end
+            end
+            for v in to_expunge
                 delete!(av, v)
             end
+            isempty(av) && push!(emptied, ap)
         end
     end
-    again = true
-    while again
-        again = false
+    while !isempty(emptied)
         deleted_pkgs = String[]
-        for (ap,av) in avail
-            if isempty(av)
-                delete!(avail, ap)
-                push!(deleted_pkgs, ap)
-                again = true
-            end
+        for ap in emptied
+            delete!(avail, ap)
+            push!(deleted_pkgs, ap)
         end
+        empty!(emptied)
+
         for dp in deleted_pkgs
-            for (ap,av) in avail, (v,a) in copy(av)
-                if haskey(a.requires, dp)
-                    haskey(conflicts, ap) || (conflicts[ap] = Set{String}())
-                    union!(conflicts[ap], conflicts[dp])
+            haskey(backdeps, dp) || continue
+            for ap in backdeps[dp]
+                haskey(avail, ap) || continue
+                av = avail[ap]
+                empty!(to_expunge)
+                for (v,a) in av
+                    haskey(a.requires, dp) || continue
+                    conflicts_ap = get!(conflicts, ap) do; Set{String}() end
+                    union!(conflicts_ap, conflicts[dp])
+                    push!(to_expunge, v)
+                end
+                for v in to_expunge
                     delete!(av, v)
                 end
+                isempty(av) && push!(emptied, ap)
             end
         end
     end
@@ -273,23 +310,28 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
             # Collect all required packages
             isreq = Dict{String,Bool}(rp=>true for a in values(fdepsp) for rp in keys(a.requires))
             # Compute whether a required package appears in all requirements
-            for a in values(fdepsp), rp in keys(isreq)
-                haskey(a.requires, rp) || (isreq[rp] = false)
+            for rp in keys(isreq)
+                isreq[rp] = all(haskey(a.requires, rp) for a in values(fdepsp))
             end
+
+            # Create a list of candidates for new implicit requirements
             staged_new = Set{String}()
-            for a in values(fdepsp)
-                for (rp,rvs) in a.requires
-                    # Skip packages that may not be required
-                    isreq[rp] || continue
-                    # Compute the union of the version sets
-                    snvs = get!(staged_next, rp, copy(rvs))
+            for a in values(fdepsp), (rp,rvs) in a.requires
+                # Skip packages that may not be required
+                isreq[rp] || continue
+                # Compute the union of the version sets
+                if haskey(staged_next, rp)
+                    snvs = staged_next[rp]
                     union!(snvs, rvs)
-                    push!(staged_new, rp)
+                else
+                    snvs = copy(rvs)
+                    staged_next[rp] = snvs
                 end
+                push!(staged_new, rp)
             end
             for rp in staged_new
+                @assert isreq[rp]
                 srvs = staged_next[rp]
-                isreq[rp] || continue
                 bktrcp = get!(bktrc, rp) do; ResolveBacktraceItem(); end
                 push!(bktrcp, p=>bktrc[p], srvs)
                 if isa(bktrcp.versionreq, VersionSet) && isempty(bktrcp.versionreq)
@@ -306,7 +348,7 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
     filtered_deps = Dict{String,Dict{VersionNumber,Available}}()
     for (p,depsp) in deps
         filtered_deps[p] = Dict{VersionNumber,Available}()
-        allowedp = get(allowed, p, Dict{VersionNumber,Bool}())
+        allowedp = get(allowed, p) do; Dict{VersionNumber,Bool}() end
         fdepsp = filtered_deps[p]
         for (vn,a) in depsp
             get(allowedp, vn, true) || continue
@@ -326,6 +368,9 @@ end
 # Preliminarily calls filter_versions.
 function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace)
     filtered_deps, allowed = filter_versions(reqs, deps, bktrc)
+    if !isempty(reqs)
+        filtered_deps = dependencies_subset(filtered_deps, Set{String}(keys(reqs)))
+    end
 
     # To each version in each package, we associate a BitVector.
     # It is going to hold a pattern such that all versions with
@@ -432,7 +477,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
     # Recompute deps. We could simplify them, but it's not worth it
     new_deps = Dict{String,Dict{VersionNumber,Available}}()
 
-    for (p,depsp) in deps
+    for (p,depsp) in filtered_deps
         @assert !haskey(new_deps, p)
         if !haskey(pruned_vers, p)
             new_deps[p] = depsp
@@ -533,18 +578,10 @@ function undirected_dependencies_subset(deps::Dict{String,Dict{VersionNumber,Ava
     return subdeps(deps, allpkgs)
 end
 
-function prune_dependencies(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
-    bktrc = ResolveBacktrace()
-    for (p,vs) in reqs
-        bktrc[p] = ResolveBacktraceItem(:required, vs)
-    end
-    return prune_dependencies(reqs, deps, bktrc)
-end
-
-function prune_dependencies(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace)
-    deps = dependencies_subset(deps, Set{String}(keys(reqs)))
+function prune_dependencies(reqs::Requires,
+                            deps::Dict{String,Dict{VersionNumber,Available}},
+                            bktrc::ResolveBacktrace = init_resolve_backtrace(reqs))
     deps, _ = prune_versions(reqs, deps, bktrc)
-
     return deps
 end
 
