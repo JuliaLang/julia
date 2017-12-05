@@ -46,6 +46,16 @@ doesn't, then iterating over `Iterators.reverse(itr::T)` will throw a [`MethodEr
 because of the missing [`start`](@ref), [`next`](@ref), and [`done`](@ref)
 methods for `Iterators.Reverse{T}`.  (To implement these methods, the original iterator
 `itr::T` can be obtained from `r = Iterators.reverse(itr)` by `r.itr`.)
+
+# Examples
+```jldoctest
+julia> foreach(println, Iterators.reverse(1:5))
+5
+4
+3
+2
+1
+```
 """
 reverse(itr) = Reverse(itr)
 
