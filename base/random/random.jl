@@ -67,15 +67,15 @@ end
 
 abstract type FloatInterval{T<:AbstractFloat} end
 
-struct CloseOpen{  T<:AbstractFloat} <: FloatInterval{T} end # interval [0,1)
-struct Close1Open2{T<:AbstractFloat} <: FloatInterval{T} end # interval [1,2)
+struct CloseOpen01{T<:AbstractFloat} <: FloatInterval{T} end # interval [0,1)
+struct CloseOpen12{T<:AbstractFloat} <: FloatInterval{T} end # interval [1,2)
 
 const FloatInterval_64 = FloatInterval{Float64}
-const CloseOpen_64     = CloseOpen{Float64}
-const Close1Open2_64   = Close1Open2{Float64}
+const CloseOpen01_64   = CloseOpen01{Float64}
+const CloseOpen12_64   = CloseOpen12{Float64}
 
-CloseOpen(  ::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen{T}()
-Close1Open2(::Type{T}=Float64) where {T<:AbstractFloat} = Close1Open2{T}()
+CloseOpen01(::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen01{T}()
+CloseOpen12(::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen12{T}()
 
 Base.eltype(::Type{<:FloatInterval{T}}) where {T<:AbstractFloat} = T
 
