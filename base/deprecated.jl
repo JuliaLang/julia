@@ -2401,6 +2401,81 @@ end
     A_ldiv_B!(A::QRPivoted, B::StridedMatrix) = ldiv!(A, B)
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/matmul.jl, to deprecate
+@eval Base.LinAlg begin
+    Ac_mul_Bc(A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S} = *(Adjoint(A), Adjoint(B))
+    Ac_mul_Bc!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = mul!(C, Adjoint(A), Adjoint(B))
+    Ac_mul_Bc!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = mul!(C, Adjoint(A), Adjoint(B))
+    Ac_mul_Bt!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = mul!(C, Adjoint(A), Transpose(B))
+    A_mul_Bc!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasComplex} = mul!(C, A, Adjoint(B))
+    A_mul_Bc!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = mul!(C, A, Adjoint(B))
+    A_mul_Bc(A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S} = *(A, Adjoint(B))
+    A_mul_Bc(A::StridedMatrix{<:BlasFloat}, B::StridedMatrix{<:BlasReal}) = *(A, Adjoint(B))
+    A_mul_Bc!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{<:BlasReal}) where {T<:BlasFloat} = mul!(C, A, Adjoint(B))
+    Ac_mul_B!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasComplex} = mul!(C, Adjoint(A), B)
+    Ac_mul_B!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = mul!(C, Adjoint(A), B)
+    Ac_mul_B(A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S} = *(Adjoint(A), B)
+    Ac_mul_B(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasReal} = *(Adjoint(A), B)
+    Ac_mul_B!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasReal} = mul!(C, Adjoint(A), B)
+    At_mul_Bt!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = mul!(C, Transpose(A), Transpose(B))
+    At_mul_Bt!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = mul!(C, Transpose(A), Transpose(B))
+    At_mul_Bt(A::AbstractMatrix{T}, B::AbstractVecOrMat{S}) where {T,S} = *(Transpose(A), Transpose(B))
+    A_mul_Bt!(C::AbstractVecOrMat, A::AbstractVecOrMat, B::AbstractVecOrMat) = mul!(C, A, Transpose(B))
+    A_mul_Bt!(C::StridedMatrix{Complex{Float32}}, A::StridedVecOrMat{Complex{Float32}}, B::StridedVecOrMat{Float32}) = mul!(C, A, Transpose(B))
+    A_mul_Bt!(C::StridedMatrix{Complex{Float64}}, A::StridedVecOrMat{Complex{Float64}}, B::StridedVecOrMat{Float64}) = mul!(C, A, Transpose(B))
+    A_mul_Bt!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = mul!(C, A, Transpose(B))
+    A_mul_Bt(A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S} = *(A, Transpose(B))
+    At_mul_B!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = mul!(C, Transpose(A), B)
+    At_mul_B!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = mul!(C, Transpose(A), B)
+    At_mul_B(A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S} = *(Transpose(A), B)
+    """
+        A_mul_B!(A, B)
+
+    Calculate the matrix-matrix product ``AB``, overwriting one of `A` or `B` (but not both),
+    and return the result (the overwritten argument).
+    """
+    A_mul_B!(A, B)
+    """
+        A_mul_B!(Y, A, B) -> Y
+
+    Calculates the matrix-matrix or matrix-vector product ``AB`` and stores the result in `Y`,
+    overwriting the existing value of `Y`. Note that `Y` must not be aliased with either `A` or
+    `B`.
+
+    # Examples
+    ```jldoctest
+    julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);
+
+    julia> Y
+    2×2 Array{Float64,2}:
+     3.0  3.0
+     7.0  7.0
+    ```
+    """
+    A_mul_B!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = mul!(C, A, B)
+    A_mul_B!(C::StridedMatrix{Complex{Float32}}, A::StridedVecOrMat{Complex{Float32}}, B::StridedVecOrMat{Float32}) = mul!(C, A, B)
+    A_mul_B!(C::StridedMatrix{Complex{Float64}}, A::StridedVecOrMat{Complex{Float64}}, B::StridedVecOrMat{Float64}) = mul!(C, A, B)
+    A_mul_B!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = mul!(C, A, B)
+    Ac_mul_B!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) where {T<:BlasReal} = mul!(y, Adjoint(A), x)
+    Ac_mul_B!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) where {T<:BlasComplex} = mul!(y, Adjoint(A), x)
+    Ac_mul_B!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector) = mul!(y, Adjoint(A), x)
+    Ac_mul_B(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S} = *(Adjoint(A), x)
+    Ac_mul_B(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S} = *(Adjoint(A), x)
+    At_mul_B(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S} = *(Transpose(A), x)
+    At_mul_B(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S} = *(Transpose(A), x)
+    At_mul_B!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) where {T<:BlasFloat} = mul!(y, Transpose(A), x)
+    At_mul_B!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector) = mul!(y, Transpose(A), x)
+    A_mul_B!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector) = mul!(y, A, x)
+    A_mul_B!(y::StridedVector{Complex{Float32}}, A::StridedVecOrMat{Complex{Float32}}, x::StridedVector{Float32}) = mul!(y, A, x)
+    A_mul_B!(y::StridedVector{Complex{Float64}}, A::StridedVecOrMat{Complex{Float64}}, x::StridedVector{Float64}) = mul!(y, A, x)
+    A_mul_B!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) where {T<:BlasFloat} = mul!(y, A, x)
+    A_mul_Bt(a::AbstractVector, B::AbstractMatrix) = *(a, Transpose(B))
+    A_mul_Bt(A::AbstractMatrix, b::AbstractVector) = *(A, Transpose(b))
+    A_mul_Bc(a::AbstractVector, B::AbstractMatrix) = *(a, Adjoint(B))
+    A_mul_Bc(A::AbstractMatrix, b::AbstractVector) = *(A, Adjoint(b))
+    At_mul_B(x::StridedVector{T}, y::StridedVector{T}) where {T<:BlasComplex} = *(Transpose(x), y)
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 

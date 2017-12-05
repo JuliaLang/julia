@@ -262,6 +262,19 @@ mul!(out::AbstractMatrix, transA::Transpose{<:Any,<:Diagonal}, in::AbstractMatri
 *(transA::Transpose{<:Any,<:RealHermSymComplexSym}, B::Diagonal) = transA.parent * B
 *(A::Diagonal, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * adjB.parent
 *(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Diagonal) = adjA.parent * B
+*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, transD::Transpose{<:Any,<:Diagonal}) = transA.parent * transD
+*(transD::Transpose{<:Any,<:Diagonal}, transA::Transpose{<:Any,<:RealHermSymComplexSym}) = transD * transA.parent
+*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, adjD::Adjoint{<:Any,<:Diagonal}) = adjA.parent * adjD
+*(adjD::Adjoint{<:Any,<:Diagonal}, adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjD * adjA.parent
+mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:Diagonal}, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) =
+    mul!(C, adjA, adjB.parent)
+mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:Diagonal}, transB::Transpose{<:Any,<:RealHermSymComplexSym}) =
+    mul!(C, transA, transB.parent)
+mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:Diagonal}, adjB::Adjoint{<:Any,<:RealHermSymComplexSym}) =
+    (A = adjA.parent; C .= adjoint.(A.diag) .* adjB)
+mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:Diagonal}, transB::Transpose{<:Any,<:RealHermSymComplexHerm}) =
+    (A = transA.parent; C .= transpose.(A.diag) .* transB)
+
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
 function ldiv!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
