@@ -597,6 +597,9 @@ Determine whether predicate `p` returns `true` for any elements of `itr`, return
 `true` as soon as the first item in `itr` for which `p` returns `true` is encountered
 (short-circuiting).
 
+If the input contains [`missing`](@ref) values, return `missing` if all non-missing
+values are `false` (or equivalently, if the input contains no `true` value).
+
 ```jldoctest
 julia> any(i->(4<=i<=6), [3,5,7])
 true
@@ -610,10 +613,16 @@ true
 ```
 """
 function any(f, itr)
+    anymissing = false
     for x in itr
-        f(x) && return true
+        v = f(x)
+        if ismissing(v)
+            anymissing = true
+        elseif v
+            return true
+        end
     end
-    return false
+    return anymissing ? missing : false
 end
 
 """
@@ -622,6 +631,9 @@ end
 Determine whether predicate `p` returns `true` for all elements of `itr`, returning
 `false` as soon as the first item in `itr` for which `p` returns `false` is encountered
 (short-circuiting).
+
+If the input contains [`missing`](@ref) values, return `missing` if all non-missing
+values are `true` (or equivalently, if the input contains no `false` value).
 
 ```jldoctest
 julia> all(i->(4<=i<=6), [4,5,6])
@@ -635,11 +647,21 @@ false
 ```
 """
 function all(f, itr)
+    anymissing = false
     for x in itr
-        f(x) || return false
+        v = f(x)
+        if ismissing(v)
+            anymissing = true
+        # this syntax allows throwing a TypeError for non-Bool, for consistency with any
+        elseif v
+            continue
+        else
+            return false
+        end
     end
-    return true
+    return anymissing ? missing : true
 end
+
 
 ## in & contains
 

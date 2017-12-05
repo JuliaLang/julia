@@ -221,6 +221,13 @@ Base.isnull
 Base.unsafe_get
 ```
 
+## Missing Values
+```@docs
+Base.Missing
+Base.missing
+Base.ismissing
+```
+
 ## System
 
 ```@docs
@@ -285,6 +292,7 @@ Core.InterruptException
 Base.KeyError
 Base.LoadError
 Base.MethodError
+Base.MissingException
 Base.NullException
 Core.OutOfMemoryError
 Core.ReadOnlyMemoryError

@@ -22,6 +22,7 @@
   * [Metaprogramming](@ref)
   * [Multi-dimensional Arrays](@ref man-multi-dim-arrays)
   * [Linear Algebra](@ref)
+  * [Missing Values](@ref missing)
   * [Networking and Streams](@ref)
   * [Parallel Computing](@ref)
   * [Date and DateTime](@ref)

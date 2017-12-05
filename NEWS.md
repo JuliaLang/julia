@@ -31,6 +31,10 @@ New language features
     `@generated` and normal implementations of part of a function. Surrounding code
     will be common to both versions ([#23168]).
 
+  * The `missing` singleton object (of type `Missing`) has been added to represent
+    missing values ([#24653]). It propagates through standard operators and mathematical functions,
+    and implements three-valued logic, similar to SQLs `NULL` and R's `NA`.
+
 Language changes
 ----------------
 
@@ -1700,3 +1704,4 @@ Command-line option changes
 [#24320]: https://github.com/JuliaLang/julia/issues/24320
 [#24396]: https://github.com/JuliaLang/julia/issues/24396
 [#24413]: https://github.com/JuliaLang/julia/issues/24413
+[#24653]: https://github.com/JuliaLang/julia/issues/24653

@@ -67,6 +67,7 @@ const PAGES = [
         "manual/metaprogramming.md",
         "manual/arrays.md",
         "manual/linear-algebra.md",
+        "manual/missing.md",
         "manual/networking-and-streams.md",
         "manual/parallel-computing.md",
         "manual/dates.md",
