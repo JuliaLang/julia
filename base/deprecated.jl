@@ -2365,6 +2365,42 @@ end
     A_ldiv_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T} = ldiv!(A, B)
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/qr.jl, to deprecate
+@eval Base.LinAlg begin
+    A_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} = mul!(A, B)
+    A_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} = mul!(A, B)
+    A_mul_B!(A::QRPackedQ, B::AbstractVecOrMat) = mul!(A, B)
+    Ac_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} = mul!(Adjoint(A), B)
+    Ac_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} = mul!(Adjoint(A), B)
+    Ac_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} = mul!(Adjoint(A), B)
+    Ac_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} = mul!(Adjoint(A), B)
+    Ac_mul_B!(A::QRPackedQ, B::AbstractVecOrMat) = mul!(Adjoint(A), B)
+    Ac_mul_B(Q::AbstractQ, B::StridedVecOrMat) = *(Adjoint(Q), B)
+    A_mul_Bc(Q::AbstractQ, B::StridedVecOrMat) = *(Q, Adjoint(B))
+    Ac_mul_Bc(Q::AbstractQ, B::StridedVecOrMat) = *(Adjoint(Q), Adjoint(B))
+    A_mul_B!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} = mul!(A, B)
+    A_mul_B!(A::StridedVecOrMat{T}, B::QRPackedQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} = mul!(A, B)
+    A_mul_B!(A::StridedMatrix,Q::QRPackedQ) = mul!(A, Q)
+    A_mul_Bc!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) where {T<:BlasReal} = mul!(A, Adjoint(B))
+    A_mul_Bc!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) where {T<:BlasComplex} = mul!(A, Adjoint(B))
+    A_mul_Bc!(A::StridedVecOrMat{T}, B::QRPackedQ{T}) where {T<:BlasReal} = mul!(A, Adjoint(B))
+    A_mul_Bc!(A::StridedVecOrMat{T}, B::QRPackedQ{T}) where {T<:BlasComplex} = mul!(A, Adjoint(B))
+    A_mul_Bc!(A::StridedMatrix,Q::QRPackedQ) = mul!(A, Adjoint(Q))
+    A_mul_Bc(A::StridedMatrix, B::AbstractQ) = *(A, Adjoint(B))
+    A_mul_Bc(rowvec::RowVector, B::AbstractQ) = *(rowvec, Adjoint(B))
+    Ac_mul_B(A::StridedVecOrMat, Q::AbstractQ) = *(Adjoint(A), Q)
+    Ac_mul_Bc(A::StridedVecOrMat, Q::AbstractQ) = *(Adjoint(A), Adjoint(Q))
+    A_ldiv_B!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} = ldiv!(A, b)
+    A_ldiv_B!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = ldiv!(A, B)
+    A_ldiv_B!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where {T<:BlasFloat} = ldiv!(A, B, rcond)
+    A_ldiv_B!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} = ldiv!(A, B)
+    A_ldiv_B!(A::QRPivoted{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = ldiv!(A, B)
+    A_ldiv_B!(A::QR{T}, B::StridedMatrix{T}) where {T} = ldiv!(A, B)
+    A_ldiv_B!(A::QR, B::StridedVector) = ldiv!(A, B)
+    A_ldiv_B!(A::QRPivoted, b::StridedVector) = ldiv!(A, b)
+    A_ldiv_B!(A::QRPivoted, B::StridedMatrix) = ldiv!(A, B)
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 

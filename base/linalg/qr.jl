@@ -527,11 +527,11 @@ end
 
 ## Multiplication by Q
 ### QB
-A_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
+mul!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
     LAPACK.gemqrt!('L','N',A.factors,A.T,B)
-A_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
+mul!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
     LAPACK.ormqr!('L','N',A.factors,A.τ,B)
-function A_mul_B!(A::QRPackedQ, B::AbstractVecOrMat)
+function mul!(A::QRPackedQ, B::AbstractVecOrMat)
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
     if mA != mB
@@ -582,15 +582,16 @@ function (*)(A::AbstractQ, B::StridedMatrix)
 end
 
 ### QcB
-Ac_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
-    LAPACK.gemqrt!('L','T',A.factors,A.T,B)
-Ac_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
-    LAPACK.gemqrt!('L','C',A.factors,A.T,B)
-Ac_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
-    LAPACK.ormqr!('L','T',A.factors,A.τ,B)
-Ac_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
-    LAPACK.ormqr!('L','C',A.factors,A.τ,B)
-function Ac_mul_B!(A::QRPackedQ, B::AbstractVecOrMat)
+mul!(adjA::Adjoint{<:Any,<:QRCompactWYQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
+    (A = adjA.parent; LAPACK.gemqrt!('L','T',A.factors,A.T,B))
+mul!(adjA::Adjoint{<:Any,<:QRCompactWYQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
+    (A = adjA.parent; LAPACK.gemqrt!('L','C',A.factors,A.T,B))
+mul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
+    (A = adjA.parent; LAPACK.ormqr!('L','T',A.factors,A.τ,B))
+mul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
+    (A = adjA.parent; LAPACK.ormqr!('L','C',A.factors,A.τ,B))
+function mul!(adjA::Adjoint{<:Any,<:QRPackedQ}, B::AbstractVecOrMat)
+    A = adjA.parent
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
     if mA != mB
@@ -614,30 +615,34 @@ function Ac_mul_B!(A::QRPackedQ, B::AbstractVecOrMat)
     end
     B
 end
-function Ac_mul_B(Q::AbstractQ, B::StridedVecOrMat)
+function *(adjQ::Adjoint{<:Any,<:AbstractQ}, B::StridedVecOrMat)
+    Q = adjQ.parent
     TQB = promote_type(eltype(Q), eltype(B))
     return Ac_mul_B!(convert(AbstractMatrix{TQB}, Q), copy_oftype(B, TQB))
 end
 
 ### QBc/QcBc
-for (f1, f2) in ((:A_mul_Bc, :A_mul_B!),
-                 (:Ac_mul_Bc, :Ac_mul_B!))
-    @eval begin
-        function ($f1)(Q::AbstractQ, B::StridedVecOrMat)
-            TQB = promote_type(eltype(Q), eltype(B))
-            Bc = similar(B, TQB, (size(B, 2), size(B, 1)))
-            adjoint!(Bc, B)
-            return ($f2)(convert(AbstractMatrix{TQB}, Q), Bc)
-        end
-    end
+function *(Q::AbstractQ, adjB::Adjoint{<:Any,<:StridedVecOrMat})
+    B = adjB.parent
+    TQB = promote_type(eltype(Q), eltype(B))
+    Bc = similar(B, TQB, (size(B, 2), size(B, 1)))
+    adjoint!(Bc, B)
+    return A_mul_B!(convert(AbstractMatrix{TQB}, Q), Bc)
+end
+function *(adjQ::Adjoint{<:Any,<:AbstractQ}, adjB::Adjoint{<:Any,<:StridedVecOrMat})
+    Q, B = adjQ.parent, adjB.parent
+    TQB = promote_type(eltype(Q), eltype(B))
+    Bc = similar(B, TQB, (size(B, 2), size(B, 1)))
+    adjoint!(Bc, B)
+    return Ac_mul_B!(convert(AbstractMatrix{TQB}, Q), Bc)
 end
 
 ### AQ
-A_mul_B!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
+mul!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
     LAPACK.gemqrt!('R','N', B.factors, B.T, A)
-A_mul_B!(A::StridedVecOrMat{T}, B::QRPackedQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
+mul!(A::StridedVecOrMat{T}, B::QRPackedQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
     LAPACK.ormqr!('R', 'N', B.factors, B.τ, A)
-function A_mul_B!(A::StridedMatrix,Q::QRPackedQ)
+function mul!(A::StridedMatrix,Q::QRPackedQ)
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
     if nA != mQ
@@ -668,11 +673,16 @@ function (*)(A::StridedMatrix, Q::AbstractQ)
 end
 
 ### AQc
-A_mul_Bc!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) where {T<:BlasReal} = LAPACK.gemqrt!('R','T',B.factors,B.T,A)
-A_mul_Bc!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) where {T<:BlasComplex} = LAPACK.gemqrt!('R','C',B.factors,B.T,A)
-A_mul_Bc!(A::StridedVecOrMat{T}, B::QRPackedQ{T}) where {T<:BlasReal} = LAPACK.ormqr!('R','T',B.factors,B.τ,A)
-A_mul_Bc!(A::StridedVecOrMat{T}, B::QRPackedQ{T}) where {T<:BlasComplex} = LAPACK.ormqr!('R','C',B.factors,B.τ,A)
-function A_mul_Bc!(A::StridedMatrix,Q::QRPackedQ)
+mul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRCompactWYQ{T}}) where {T<:BlasReal} =
+    (B = adjB.parent; LAPACK.gemqrt!('R','T',B.factors,B.T,A))
+mul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRCompactWYQ{T}}) where {T<:BlasComplex} =
+    (B = adjB.parent; LAPACK.gemqrt!('R','C',B.factors,B.T,A))
+mul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRPackedQ{T}}) where {T<:BlasReal} =
+    (B = adjB.parent; LAPACK.ormqr!('R','T',B.factors,B.τ,A))
+mul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRPackedQ{T}}) where {T<:BlasComplex} =
+    (B = adjB.parent; LAPACK.ormqr!('R','C',B.factors,B.τ,A))
+function mul!(A::StridedMatrix, adjQ::Adjoint{<:Any,<:QRPackedQ})
+    Q = adjQ.parent
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
     if nA != mQ
@@ -696,7 +706,8 @@ function A_mul_Bc!(A::StridedMatrix,Q::QRPackedQ)
     end
     A
 end
-function A_mul_Bc(A::StridedMatrix, B::AbstractQ)
+function *(A::StridedMatrix, adjB::Adjoint{<:Any,<:AbstractQ})
+    B = adjB.parent
     TAB = promote_type(eltype(A),eltype(B))
     BB = convert(AbstractMatrix{TAB}, B)
     if size(A,2) == size(B.factors, 1)
@@ -709,27 +720,32 @@ function A_mul_Bc(A::StridedMatrix, B::AbstractQ)
         throw(DimensionMismatch("matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(B))"))
     end
 end
-@inline A_mul_Bc(rowvec::RowVector, B::AbstractQ) = adjoint(B*adjoint(rowvec))
+@inline *(rowvec::RowVector, adjB::Adjoint{<:Any,<:AbstractQ}) = (B = adjB.parent; adjoint(B*adjoint(rowvec)))
 
 
 ### AcQ/AcQc
-for (f1, f2) in ((:Ac_mul_B, :A_mul_B!),
-                 (:Ac_mul_Bc, :A_mul_Bc!))
-    @eval begin
-        function ($f1)(A::StridedVecOrMat, Q::AbstractQ)
-            TAQ = promote_type(eltype(A), eltype(Q))
-            Ac = similar(A, TAQ, (size(A, 2), size(A, 1)))
-            adjoint!(Ac, A)
-            return ($f2)(Ac, convert(AbstractMatrix{TAQ}, Q))
-        end
-    end
+function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, Q::AbstractQ)
+    A = adjA.parent
+    TAQ = promote_type(eltype(A), eltype(Q))
+    Ac = similar(A, TAQ, (size(A, 2), size(A, 1)))
+    adjoint!(Ac, A)
+    return A_mul_B!(Ac, convert(AbstractMatrix{TAQ}, Q))
+end
+function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:AbstractQ})
+    A, Q = adjA.parent, adjQ.parent
+    TAQ = promote_type(eltype(A), eltype(Q))
+    Ac = similar(A, TAQ, (size(A, 2), size(A, 1)))
+    adjoint!(Ac, A)
+    return A_mul_Bc!(Ac, convert(AbstractMatrix{TAQ}, Q))
 end
 
-A_ldiv_B!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], b), 1:size(A, 2))); b)
-A_ldiv_B!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], B), 1:size(A, 2), 1:size(B, 2))); B)
+ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} =
+    (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], b), 1:size(A, 2))); b)
+ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
+    (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], B), 1:size(A, 2), 1:size(B, 2))); B)
 
 # Julia implementation similar to xgelsy
-function A_ldiv_B!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasFloat
+function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasFloat
     mA, nA = size(A.factors)
     nr = min(mA,nA)
     nrhs = size(B, 2)
@@ -764,11 +780,11 @@ function A_ldiv_B!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:B
     B[1:nA,:] = view(B, 1:nA, :)[invperm(A[:p]::Vector{BlasInt}),:]
     return B, rnk
 end
-A_ldiv_B!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} =
+ldiv!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} =
     vec(A_ldiv_B!(A,reshape(B,length(B),1)))
-A_ldiv_B!(A::QRPivoted{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+ldiv!(A::QRPivoted{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     A_ldiv_B!(A, B, min(size(A)...)*eps(real(float(one(eltype(B))))))[1]
-function A_ldiv_B!(A::QR{T}, B::StridedMatrix{T}) where T
+function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
@@ -814,13 +830,13 @@ function A_ldiv_B!(A::QR{T}, B::StridedMatrix{T}) where T
     end
     return B
 end
-A_ldiv_B!(A::QR, B::StridedVector) = A_ldiv_B!(A, reshape(B, length(B), 1))[:]
-function A_ldiv_B!(A::QRPivoted, b::StridedVector)
+ldiv!(A::QR, B::StridedVector) = A_ldiv_B!(A, reshape(B, length(B), 1))[:]
+function ldiv!(A::QRPivoted, b::StridedVector)
     A_ldiv_B!(QR(A.factors,A.τ), b)
     b[1:size(A.factors, 2)] = view(b, 1:size(A.factors, 2))[invperm(A.jpvt)]
     b
 end
-function A_ldiv_B!(A::QRPivoted, B::StridedMatrix)
+function ldiv!(A::QRPivoted, B::StridedMatrix)
     A_ldiv_B!(QR(A.factors, A.τ), B)
     B[1:size(A.factors, 2),:] = view(B, 1:size(A.factors, 2), :)[invperm(A.jpvt),:]
     B
