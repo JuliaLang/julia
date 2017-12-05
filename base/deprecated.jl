@@ -2292,6 +2292,11 @@ end
     A_mul_Bc(X::StridedVecOrMat{S}, Q::HessenbergQ{T}) where {T,S} = *(X, Adjoint(Q))
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/ldlt.jl, to deprecate
+@eval Base.LinAlg begin
+    A_ldiv_B!(S::LDLt{T,M}, B::AbstractVecOrMat{T}) where {T,M<:SymTridiagonal{T}} = ldiv!(S, B)
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
