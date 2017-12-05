@@ -153,6 +153,9 @@ export
     # constants
     nothing, Main
 
+const getproperty = getfield
+const setproperty! = setfield!
+
 abstract type Number end
 abstract type Real     <: Number end
 abstract type AbstractFloat <: Real end

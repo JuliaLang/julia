@@ -5,6 +5,16 @@ baremodule Base
 using Core.Intrinsics
 ccall(:jl_set_istopmod, Void, (Any, Bool), Base, true)
 
+getproperty(x, f::Symbol) = getfield(x, f)
+setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
+
+# Try to help prevent users from shooting them-selves in the foot
+# with ambiguities by defining a few common and critical operations
+getproperty(x::Module, f::Symbol) = getfield(x, f)
+setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
+getproperty(x::Type, f::Symbol) = getfield(x, f)
+setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
+
 function include(mod::Module, path::AbstractString)
     local result
     if INCLUDE_STATE === 1

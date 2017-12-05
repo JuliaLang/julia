@@ -1,8 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-Main.Core.eval(Main.Core, :(baremodule Inference
+getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Inference
 using Core.Intrinsics
 import Core: print, println, show, write, unsafe_write, STDOUT, STDERR
+
+const getproperty = getfield
+const setproperty! = setfield!
 
 ccall(:jl_set_istopmod, Void, (Any, Bool), Inference, false)
 

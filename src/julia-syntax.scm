@@ -1752,7 +1752,7 @@
     (if (and (pair? e) (eq? (car e) '|.|))
         (let ((f (cadr e)) (x (caddr e)))
           (cond ((or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
-                 `(call (core getfield) ,f ,x))
+                 `(call (top getproperty) ,f ,x))
                 ((eq? (car x) 'tuple)
                  (make-fuse f (cdr x)))
                 (else
@@ -2039,10 +2039,12 @@
                 ,.(if (eq? aa a)   '() `((= ,aa ,(expand-forms a))))
                 ,.(if (eq? bb b)   '() `((= ,bb ,(expand-forms b))))
                 ,.(if (eq? rr rhs) '() `((= ,rr ,(expand-forms rhs))))
-                (call (core setfield!) ,aa ,bb
-                      (call (top convert)
-                            (call (core fieldtype) (call (core typeof) ,aa) ,bb)
-                            ,rr))
+                (call (top setproperty!) ,aa ,bb
+                      (if (call (top ===) (top setproperty!) (core setfield!))
+                          (call (top convert)
+                                (call (core fieldtype) (call (core typeof) ,aa) ,bb)
+                                ,rr)
+                          ,rr))
                 (unnecessary ,rr)))))
          ((tuple)
           ;; multiple assignment
