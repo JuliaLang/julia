@@ -538,7 +538,7 @@ end
         C = copy(A)
         D = copy(B)
         X, rcond, f, b, r = LAPACK.gesvx!(C,D)
-        @test X ≈ A\B
+        @test X ≈ A\B rtol=inv(rcond)*eps(real(elty))
     end
 end
 
