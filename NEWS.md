@@ -433,6 +433,13 @@ Compiler/Runtime improvements
     exceeds the cost of setting up and issuing a subroutine
     call. ([#22210], [#22732])
 
+  * Inference recursion-detection heuristics are now more precise,
+    allowing them to be triggered less often, but being more agressive when they
+    are triggered to drive the inference computation to a solution ([#23912]).
+
+  * Inference now propagates constants inter-procedurally, and can compute
+    various constants expressions at compile-time ([#24362]).
+
 Deprecated or removed
 ---------------------
 
