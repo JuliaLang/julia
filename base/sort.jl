@@ -922,7 +922,7 @@ julia> sortrows([7 3 5; -1 6 4; 9 -2 8], rev=true)
 function sortrows(A::AbstractMatrix; kws...)
     inds = indices(A,1)
     T = slicetypeof(A, inds, :)
-    rows = similar(Vector{T}, indices(A, 1))
+    rows = similar(A, T, indices(A, 1))
     for i in inds
         rows[i] = view(A, i, :)
     end
@@ -961,7 +961,7 @@ julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], rev=true)
 function sortcols(A::AbstractMatrix; kws...)
     inds = indices(A,2)
     T = slicetypeof(A, :, inds)
-    cols = similar(Vector{T}, indices(A, 2))
+    cols = similar(A, T, indices(A, 2))
     for i in inds
         cols[i] = view(A, :, i)
     end
