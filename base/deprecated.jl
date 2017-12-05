@@ -2297,6 +2297,11 @@ end
     A_ldiv_B!(S::LDLt{T,M}, B::AbstractVecOrMat{T}) where {T,M<:SymTridiagonal{T}} = ldiv!(S, B)
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/svd.jl, to deprecate
+@eval Base.LinAlg begin
+    A_ldiv_B!(A::SVD{T}, B::StridedVecOrMat) where {T} = ldiv!(A, B)
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
