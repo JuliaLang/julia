@@ -214,11 +214,7 @@ const mykeys = Dict{Any,Any}(
     "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
 )
 
-function customize_keys(repl)
-    repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)
-end
-
-atreplinit(customize_keys)
+initREPL(extra_keymap = mykeys)
 ```
 
 Users should refer to `LineEdit.jl` to discover the available actions on key input.

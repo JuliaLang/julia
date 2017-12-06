@@ -14,9 +14,7 @@ abstract type ModeState end
 
 export run_interface, Prompt, ModalInterface, transition, reset_state, edit_insert, keymap
 
-struct ModalInterface <: TextInterface
-    modes::Vector{TextInterface}
-end
+const ModalInterface = Vector{TextInterface}
 
 mutable struct Prompt <: TextInterface
     # A string or function to be printed as the prompt.
@@ -42,7 +40,6 @@ Beyond this number, oldest entries are discarded first."
 const KILL_RING_MAX = Ref(100)
 
 mutable struct MIState
-    interface::ModalInterface
     current_mode::TextInterface
     aborted::Bool
     mode_state::Dict
@@ -54,7 +51,7 @@ mutable struct MIState
     current_action::Symbol
 end
 
-MIState(i, c, a, m) = MIState(i, c, a, m, String[], 0, Char[], 0, :none, :none)
+MIState(c, a, m) = MIState(c, a, m, String[], 0, Char[], 0, :none, :none)
 
 function show(io::IO, s::MIState)
     print(io, "MI State (", mode(s), " active)")
@@ -2152,27 +2149,26 @@ function Prompt(prompt;
         complete, on_enter, on_done, hist, sticky)
 end
 
-run_interface(::Prompt) = nothing
-
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), false, IOBuffer[], 1, InputAreaState(1, 1),
                 #=indent(spaces)=# -1, Threads.SpinLock(), 0.0)
 
-function init_state(terminal, m::ModalInterface)
-    s = MIState(m, m.modes[1], false, Dict{Any,Any}())
-    for mode in m.modes
+function init_state(terminal, modes::ModalInterface)
+    s = MIState(modes[1], false, Dict{Any,Any}())
+    for mode in modes
         s.mode_state[mode] = init_state(terminal, mode)
     end
     s
 end
 
 
-function run_interface(terminal::TextTerminal, m::ModalInterface, s::MIState=init_state(terminal, m))
+function run_interface(repl #=::LineEditREPL=#)
+    s::MIState = repl.mistate
     while !s.aborted
-        buf, ok, suspend = prompt!(terminal, m, s)
+        buf, ok, suspend = prompt!(repl)
         while suspend
             @static if Sys.isunix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
-            buf, ok, suspend = prompt!(terminal, m, s)
+            buf, ok, suspend = prompt!(repl)
         end
         eval(Main,
             Expr(:body,
@@ -2248,20 +2244,23 @@ edit_redo!(s) = nothing
 
 keymap(s::PromptState, prompt::Prompt) = prompt.keymap_dict
 keymap_data(s::PromptState, prompt::Prompt) = prompt.repl
-keymap(ms::MIState, m::ModalInterface) = keymap(state(ms), mode(ms))
-keymap_data(ms::MIState, m::ModalInterface) = keymap_data(state(ms), mode(ms))
+keymap(ms::MIState, ::ModalInterface) = keymap(state(ms), mode(ms))
+keymap_data(ms::MIState, ::ModalInterface) = keymap_data(state(ms), mode(ms))
 
-function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_state(term, prompt))
+function prompt!(repl #=::LineEditREPL=#)
+    term::TextTerminal = terminal(repl)
+    s::MIState = repl.mistate
+
     Base.reseteof(term)
     raw!(term, true)
     enable_bracketed_paste(term)
     try
-        activate(prompt, s, term, term)
+        activate(repl.modes, s, term, term)
         old_state = mode(s)
         while true
-            kmap = keymap(s, prompt)
+            kmap = keymap(s, repl.modes)
             fcn = match_input(kmap, s)
-            kdata = keymap_data(s, prompt)
+            kdata = keymap_data(s, repl.modes)
             s.current_action = :unknown # if the to-be-run action doesn't update this field,
                                         # :unknown will be recorded in the last_action field
             local status
