@@ -91,8 +91,10 @@ options(s::PromptState) =
     end
 
 function setmark(s::MIState, guess_region_active::Bool=true)
+    was_active = is_region_active(s)
     guess_region_active && activate_region(s, s.key_repeats > 0)
     mark(buffer(s))
+    was_active && refresh_line(s)
 end
 
 # the default mark is 0
