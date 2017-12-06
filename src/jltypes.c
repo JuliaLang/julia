@@ -2046,8 +2046,9 @@ void jl_init_types(void)
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(9,
+                        jl_perm_symsvec(10,
                             "code",
+                            "method_for_inference_heuristics"
                             "slottypes",
                             "ssavaluetypes",
                             "slotflags",
@@ -2056,8 +2057,9 @@ void jl_init_types(void)
                             "inlineable",
                             "propagate_inbounds",
                             "pure"),
-                        jl_svec(9,
+                        jl_svec(10,
                             jl_array_any_type,
+                            jl_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_array_uint8_type,
@@ -2066,7 +2068,7 @@ void jl_init_types(void)
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type),
-                        0, 1, 9);
+                        0, 1, 10);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,

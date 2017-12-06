@@ -3396,6 +3396,7 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     method = linfo.def::Method
                     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
                     tree.code = Any[ Expr(:return, quoted(linfo.inferred_const)) ]
+                    tree.method_for_inference_heuristics = nothing
                     tree.slotnames = Any[ compiler_temp_sym for i = 1:method.nargs ]
                     tree.slotflags = UInt8[ 0 for i = 1:method.nargs ]
                     tree.slottypes = nothing
