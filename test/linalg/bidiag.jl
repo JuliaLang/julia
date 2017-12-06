@@ -364,3 +364,12 @@ import Base.LinAlg: fillslots!, UnitLowerTriangular
         end
     end
 end
+
+@testset "pathological promotion (#24707)" begin
+    @test promote_type(Matrix{Int}, Bidiagonal{Tuple{S}} where S<:Integer) <: Matrix
+    @test promote_type(Matrix{Tuple{T}} where T<:Integer, Bidiagonal{Tuple{S}} where S<:Integer) <: Matrix
+    @test promote_type(Matrix{Tuple{T}} where T<:Integer, Bidiagonal{Int}) <: Matrix
+    @test promote_type(Tridiagonal{Int}, Bidiagonal{Tuple{S}} where S<:Integer) <: Tridiagonal
+    @test promote_type(Tridiagonal{Tuple{T}} where T<:Integer, Bidiagonal{Tuple{S}} where S<:Integer) <: Tridiagonal
+    @test promote_type(Tridiagonal{Tuple{T}} where T<:Integer, Bidiagonal{Int}) <: Tridiagonal
+end

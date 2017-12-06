@@ -261,7 +261,6 @@ end
     # TODO: review this list and remove everything between test_broken and test
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Core; recursive=true))
-        pop!(need_to_handle_undef_sparam, which(Core.Inference.eltype, Tuple{Type{Tuple{Vararg{E}}} where E}))
         pop!(need_to_handle_undef_sparam, which(Core.Inference.eltype, Tuple{Type{Tuple{Any}}}))
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Core.Inference.cat, Tuple{Any, AbstractArray}))
@@ -271,7 +270,6 @@ end
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Base; recursive=true))
         pop!(need_to_handle_undef_sparam, which(Base._totuple, (Type{Tuple{Vararg{E}}} where E, Any, Any)))
-        pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Vararg{E}}} where E}))
         pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Any}}}))
         pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))
         @test_broken need_to_handle_undef_sparam == Set()
