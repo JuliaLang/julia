@@ -442,8 +442,8 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             else if (jl_expr_nargs(st) == 2 && jl_exprarg(st, 0) == (jl_value_t*)generated_sym) {
                 m->generator = NULL;
                 jl_value_t *gexpr = jl_exprarg(st, 1);
-                if (jl_expr_nargs(gexpr) == 6) {
-                    // expects (new (core GeneratedFunctionStub) funcname argnames sp line file)
+                if (jl_expr_nargs(gexpr) == 7) {
+                    // expects (new (core GeneratedFunctionStub) funcname argnames sp line file expandearly)
                     jl_value_t *funcname = jl_exprarg(gexpr, 1);
                     assert(jl_is_symbol(funcname));
                     if (jl_get_global(m->module, (jl_sym_t*)funcname) != NULL) {
