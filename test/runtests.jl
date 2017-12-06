@@ -652,6 +652,14 @@ end
 cm359() = @__MODULE__
 @test Compat.invokelatest(cm359) === @__MODULE__
 
+pr22646(x; y=0) = 1
+let foo() = begin
+        eval(:(pr22646(x::Int; y=0) = 2))
+        return Compat.invokelatest(pr22646, 0, y=1)
+    end
+    @test foo() == 2
+end
+
 # PR 21378
 let
     import Compat: Dates

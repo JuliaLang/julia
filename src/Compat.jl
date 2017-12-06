@@ -490,10 +490,20 @@ end
 
 # https://github.com/JuliaLang/julia/pull/19784
 @static if isdefined(Base, :invokelatest)
-    # 0.6
-    import Base.invokelatest
+    # https://github.com/JuliaLang/julia/pull/22646
+    if VERSION < v"0.7.0-DEV.1139"
+        function invokelatest(f, args...; kwargs...)
+            inner() = f(args...; kwargs...)
+            Base.invokelatest(inner)
+        end
+    else
+        import Base.invokelatest
+    end
 else
-    invokelatest(f, args...) = eval(current_module(), Expr(:call, f, map(QuoteNode, args)...))
+    function invokelatest(f, args...; kwargs...)
+        kw = [Expr(:kw, k, QuoteNode(v)) for (k, v) in kwargs]
+        eval(current_module(), Expr(:call, f, map(QuoteNode, args)..., kw...))
+    end
 end
 
 # https://github.com/JuliaLang/julia/pull/21257

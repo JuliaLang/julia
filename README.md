@@ -151,6 +151,8 @@ Currently, the `@compat` macro supports the following syntaxes:
   but works in Julia 0.5+, and allows you to guarantee that a function call
   invokes the latest version of a function ([#19784]).
 
+* `Compat.invokelatest` supports keywords ([#22646]).
+
 * `Compat.StringVector` is supported on 0.5 and below. On 0.6 and later, it aliases `Base.StringVector`. This function allocates a `Vector{UInt8}` whose data can be made into a `String` in constant time; that is, without copying. On 0.5 and later, use `String(...)` with the vector allocated by `StringVector` as an argument to create a string without copying. Note that if 0.4 support is needed, `Compat.UTF8String(...)` should be used instead. ([#19449])
 
 * `==(::Period, ::Period)` and `isless(::Period, ::Period)` is supported for 0.5 and below. Earlier versions of Julia only supported limited comparison methods between Periods which did not support comparing custom Period subtypes. ([#21378])
@@ -356,6 +358,7 @@ includes this fix. Find the minimum version from there.
 [#22512]: https://github.com/JuliaLang/julia/issues/22512
 [#22629]: https://github.com/JuliaLang/julia/issues/22629
 [#22633]: https://github.com/JuliaLang/julia/issues/22633
+[#22646]: https://github.com/JuliaLang/julia/issues/22646
 [#22666]: https://github.com/JuliaLang/julia/issues/22666
 [#22751]: https://github.com/JuliaLang/julia/issues/22751
 [#22761]: https://github.com/JuliaLang/julia/issues/22761
