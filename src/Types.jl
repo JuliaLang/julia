@@ -11,7 +11,7 @@ export SHA1, VersionRange, VersionSpec, PackageSpec, UpgradeLevel, EnvCache,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
-    git_file_stream, read_project, read_manifest, pathrepr
+    git_file_stream, read_project, read_manifest, pathrepr, registries
 
 ## ordering of UUIDs ##
 
@@ -146,6 +146,7 @@ struct CommandError <: Exception
 end
 cmderror(msg::String...) = throw(CommandError(join(msg)))
 
+Base.showerror(io::IO, ex::CommandError) = showerror(io, ex, [])
 function Base.showerror(io::IO, ex::CommandError, bt; backtrace=true)
     print_with_color(Base.error_color(), io, string(ex.msg))
 end
