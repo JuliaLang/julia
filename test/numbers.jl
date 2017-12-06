@@ -2967,11 +2967,13 @@ end
 
 @testset "literal negative power accuracy" begin
     # a few cases chosen to maximize the error for inv(x)^+n:
-    @test 0.7130409001548401^-2 === 1.9668494399322154
-    @test 0.09496527f0^-2 === 110.88438f0
-    @test 0.20675883960662367^-100 === 2.841786121808917e68
-    @test 0.6123676f0^-100 === 1.9896729f21
-    @test 0.004155780785470562^-1 === 240.6286692253353
+    ==′(x::T,y::T) where T = abs(x-y) ≤ eps(y) # equality within 1ulp
+    ==′(x,y) = false
+    @test 0.7130409001548401^-2 ==′ 1.9668494399322154
+    @test 0.09496527f0^-2 ==′ 110.88438f0
+    @test 0.20675883960662367^-100 ==′ 2.841786121808917e68
+    @test 0.6123676f0^-100 ==′ 1.9896729f21
+    @test 0.004155780785470562^-1 ==′ 240.6286692253353
 end
 
 @testset "iszero & isone" begin
