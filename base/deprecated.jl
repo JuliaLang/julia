@@ -2734,6 +2734,41 @@ end
     Ac_mul_Bc(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(Adjoint(A), Adjoint(B))
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/sparse/sparsevector.jl, to deprecate
+for isunittri in (true, false), islowertri in (true, false)
+    unitstr = isunittri ? "Unit" : ""
+    halfstr = islowertri ? "Lower" : "Upper"
+    tritype = :(Base.LinAlg.$(Symbol(unitstr, halfstr, "Triangular")))
+    @eval Base.SparseArrays begin
+        using Base.LinAlg: Adjoint, Transpose
+        At_ldiv_B(A::$tritype{TA,<:AbstractMatrix}, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number} = \(Transpose(A), b)
+        At_ldiv_B(A::$tritype{TA,<:StridedMatrix}, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number} = \(Transpose(A), b)
+        At_ldiv_B(A::$tritype, b::SparseVector) = \(Transpose(A), b)
+        Ac_ldiv_B(A::$tritype{TA,<:AbstractMatrix}, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number} = \(Adjoint(A), b)
+        Ac_ldiv_B(A::$tritype{TA,<:StridedMatrix}, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number} = \(Adjoint(A), b)
+        Ac_ldiv_B(A::$tritype, b::SparseVector) = \(Adjoint(A), b)
+        A_ldiv_B!(A::$tritype{<:Any,<:StridedMatrix}, b::SparseVector) = ldiv!(A, b)
+        At_ldiv_B!(A::$tritype{<:Any,<:StridedMatrix}, b::SparseVector) = ldiv!(Transpose(A), b)
+        Ac_ldiv_B!(A::$tritype{<:Any,<:StridedMatrix}, b::SparseVector) = ldiv!(Adjoint(A), b)
+    end
+end
+@eval Base.SparseArrays begin
+    using Base.LinAlg: Adjoint, Transpose
+    Ac_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) = *(Adjoint(A), x)
+    At_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) = *(Transpose(A), x)
+    Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector) = mul!(α, Adjoint(A), x, β, y)
+    Ac_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} = mul!(y, Adjoint(A), x)
+    At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector) = mul!(α, Transpose(A), x, β, y)
+    At_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} = mul!(y, Transpose(A), x)
+    A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector) = mul!(α, A, x, β, y)
+    A_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} = mul!(y, A, x)
+    At_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector) = mul!(α, Transpose(A), x, β, y)
+    At_mul_B!(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} = mul!(y, Transpose(A), x)
+    At_mul_B(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx} = *(Transpose(A), x)
+    A_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector) = mul!(α, A, x, β, y)
+    A_mul_B!(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} = mul!(y, A, x)
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
