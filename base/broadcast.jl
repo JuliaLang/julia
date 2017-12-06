@@ -682,6 +682,7 @@ broadcast(f, ::Union{Scalar,Unknown}, ::Void, ::Void, a...) = f(a...)
 longest_tuple(A::Tuple, B::Tuple, Bs...) = longest_tuple(_longest_tuple(A, B), Bs...)
 longest_tuple(A, B::Tuple, Bs...) = longest_tuple(B, Bs...)
 longest_tuple(A::Tuple, B, Bs...) = longest_tuple(A, Bs...)
+longest_tuple(A, B, Bs...) = longest_tuple(Bs...)
 longest_tuple(A::Tuple) = A
 # Support only 1-tuples and N-tuples where there are no conflicts in N
 _longest_tuple(A::Tuple{Any}, B::Tuple{Any}) = A
