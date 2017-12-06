@@ -730,7 +730,7 @@ endif
 
 # Set MARCH-specific flags
 ifneq ($(MARCH),)
-ifneq ($(USEICC),1)	  
+ifneq ($(USEICC),1)
 CC += -march=$(MARCH)
 CXX += -march=$(MARCH)
 FC += -march=$(MARCH)
