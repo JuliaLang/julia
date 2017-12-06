@@ -37,9 +37,6 @@ end
 
 show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), "\",...)"))
 
-"Maximum number of entries in the kill ring queue.
-Beyond this number, oldest entries are discarded first."
-const KILL_RING_MAX = Ref(100)
 
 mutable struct MIState
     interface::ModalInterface
@@ -87,7 +84,7 @@ options(s::PromptState) =
         # in the REPL module
         s.p.repl.options
     else
-        Base.REPL.Options(confirm_exit=false)
+        Base.REPL.GlobalOptions
     end
 
 function setmark(s::MIState, guess_region_active::Bool=true)
@@ -118,7 +115,6 @@ deactivate_region(s::ModeState) = activate_region(s, false)
 is_region_active(s::PromptState)  = s.region_active
 is_region_active(s::ModeState) = false
 
-const REGION_ANIMATION_DURATION = Ref(0.2)
 
 input_string(s::PromptState) = String(take!(copy(s.input_buffer)))
 
@@ -144,16 +140,11 @@ terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
 
-# these may be better stored in Prompt or LineEditREPL
-const BEEP_DURATION = Ref(0.2)
-const BEEP_BLINK = Ref(0.2)
-const BEEP_MAXDURATION = Ref(1.0)
-const BEEP_COLORS = ["\e[90m"] # gray (text_colors not yet available)
-const BEEP_USE_CURRENT = Ref(true)
-
-function beep(s::PromptState, duration::Real=BEEP_DURATION[], blink::Real=BEEP_BLINK[],
-              maxduration::Real=BEEP_MAXDURATION[];
-              colors=BEEP_COLORS, use_current::Bool=BEEP_USE_CURRENT[])
+function beep(s::PromptState, duration::Real=options(s).beep_duration,
+              blink::Real=options(s).beep_blink,
+              maxduration::Real=options(s).beep_maxduration;
+              colors=options(s).beep_colors,
+              use_current::Bool=options(s).beep_use_current)
     isinteractive() || return # some tests fail on some platforms
     s.beeping = min(s.beeping + duration, maxduration)
     @async begin
@@ -855,7 +846,7 @@ function push_kill!(s::MIState, killed::String, concat = s.key_repeats > 0; rev=
             s.kill_ring[end] * killed
     else
         push!(s.kill_ring, killed)
-        length(s.kill_ring) > KILL_RING_MAX[] && shift!(s.kill_ring)
+        length(s.kill_ring) > options(s).kill_ring_max && shift!(s.kill_ring)
     end
     s.kill_idx = endof(s.kill_ring)
     true
@@ -880,9 +871,9 @@ function edit_copy_region(s::MIState)
     set_action!(s, :edit_copy_region)
     buf = buffer(s)
     push_kill!(s, content(buf, region(buf)), false) || return :ignore
-    if REGION_ANIMATION_DURATION[] > 0.0
+    if options(s).region_animation_duration > 0.0
         edit_exchange_point_and_mark(s)
-        sleep(REGION_ANIMATION_DURATION[])
+        sleep(options(s).region_animation_duration)
         edit_exchange_point_and_mark(s)
     end
 end
@@ -1822,16 +1813,7 @@ function commit_line(s)
     state(s, mode(s)).ias = InputAreaState(0, 0)
 end
 
-"""
-`Base.LineEdit.tabwidth` controls the presumed tab width of code pasted into the REPL.
-
-You can modify it by doing `@eval Base.LineEdit tabwidth = 4`, for example.
-
-Must satisfy `0 < tabwidth <= 16`.
-"""
-global tabwidth = 8
-
-function bracketed_paste(s)
+function bracketed_paste(s; tabwidth=options(s).tabwidth)
     ps = state(s, mode(s))
     str = readuntil(ps.terminal, "\e[201~")
     input = str[1:prevind(str, end-5)]
