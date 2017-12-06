@@ -1,5 +1,36 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+The `AbstractString` type is the supertype of all string implementations in Julia.
+Strings are encodings of sequences of [Unicode](https://unicode.org/) code points
+as represented by the `Char` type. Julia makes a few assumptions about strings:
+
+* Strings are encoded in terms of fixed-size "code units"
+  * Code units can be extracted with `codeunit(s, i)`
+  * The first code unit has index `1`
+  * The last code unit has index `ncodeunits(s)`
+  * Any index `i` such that `1 ≤ i ≤ ncodeunits(s)` is in bounds
+* String indexing is done in terms of these code units:
+  * Characters are extracted by `s[i]` with a valid string index `i`
+  * Each `Char` in a string is encoded by one or more code units
+  * Only the index of the first code unit of a `Char` is a valid index
+  * The encoding of a `Char` is independent of what precedes or follows it
+  * String encodings are "self-synchronizing" – i.e. `isvalid(s,i)` is O(1)
+
+Some string functions error if you use an out-of-bounds or invalid string index,
+including code unit extraction `codeunit(s,i)`, string indexing `s[i]`, and
+string iteration `next(s,i)`. Other string functions take a more relaxed approach
+to indexing and give you the closest valid string index when in-bounds, or when
+out-of-bounds, behave as if there were an infinite number of single-code-unit
+characters padding each side of the string. These "relaxed" indexing functions
+include those intended for index arithmetic: `thisind`, `nextind` and `prevind`.
+This model allows index arithmetic to work with out-of-bounds indices as
+intermediate values so long as one never uses them to retrieve a character.
+
+See also: `codeunit`, `ncodeunits`, `thisind`, `nextind`, `prevind`
+"""
+AbstractString
+
 ## core string functions ##
 
 endof(s::AbstractString) = error("you must implement endof(", typeof(s), ")")

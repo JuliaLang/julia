@@ -87,6 +87,19 @@ codeunit(s::AbstractString, i::Integer)
 end
 
 """
+    codeunit(s::AbstractString)
+
+Without an index argument `codeunit(s)` gives the code unit type of the string `s`.
+
+# Examples
+```jldoctest
+julia> codeunit("Hello")
+UInt8
+```
+"""
+codeunit(::String) = UInt8
+
+"""
     ncodeunits(s::AbstractString)
 
 The number of code units in a string. For example, for UTF-8-like data such as
@@ -273,6 +286,7 @@ function length(s::String)
     return c
 end
 
+# TODO: delete or move to char.jl
 first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
 
 ## overload methods for efficiency ##
@@ -368,6 +382,7 @@ function string(a::String...)
 end
 
 # UTF-8 encoding length of a character
+# TODO: delete or move to char.jl
 codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
 
 function string(a::Union{String,Char}...)

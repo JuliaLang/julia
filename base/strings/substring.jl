@@ -152,6 +152,8 @@ function reverse(s::Union{String,SubString{String}})::String
     end
 end
 
+# TODO: below here is generic code
+
 """
     reverseind(v, i)
 
