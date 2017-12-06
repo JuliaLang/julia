@@ -566,7 +566,7 @@ let a = [1,2,3]
     @test a == [0,0,0]
 end
 let cache = Base.LibGit2.CachedCredentials()
-    get!(cache, "foo", LibGit2.SSHCredentials("", "bar"))
+    get!(cache, "foo", LibGit2.SSHCredential("", "bar"))
     securezero!(cache)
     @test cache["foo"].pass == "\0\0\0"
 end
