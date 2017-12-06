@@ -823,6 +823,9 @@ end
             Array{T,N}(::Uninitialized, args...) where {T,N} = Array{T,N}(args...)
             Vector(::Uninitialized, args...) = Vector(args...)
             Matrix(::Uninitialized, args...) = Matrix(args...)
+
+            BitArray{N}(::Uninitialized, args...) where {N} = BitArray{N}(args...)
+            BitArray(::Uninitialized, args...) = BitArray(args...)
         """)
     else
         include_string(@__MODULE__, """
@@ -831,6 +834,9 @@ end
             (::Type{Array{T,N}}){T,N}(::Uninitialized, args...) = Array{T,N}(args...)
             (::Type{Vector})(::Uninitialized, args...) = Vector(args...)
             (::Type{Matrix})(::Uninitialized, args...) = Matrix(args...)
+
+            (::Type{BitArray{N}}){N}(::Uninitialized, args...) = BitArray{N}(args...)
+            (::Type{BitArray})(::Uninitialized, args...) = BitArray(args...)
         """)
     end
     const uninitialized = Uninitialized()

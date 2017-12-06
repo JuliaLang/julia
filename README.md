@@ -192,6 +192,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Uninitialized` and `uninitialized` with corresponding `Array` constructors ([#24652]).
 
+* `BitArray` constructors for `uninitialized` ([#24785]).
+
 * `@compat finalizer(func, obj)` with the finalizer to run as the first argument and the object to be finalized
   as the second ([#24605]).
 
@@ -376,3 +378,4 @@ includes this fix. Find the minimum version from there.
 [#24605]: https://github.com/JuliaLang/julia/issues/24605
 [#24652]: https://github.com/JuliaLang/julia/issues/24652
 [#24657]: https://github.com/JuliaLang/julia/issues/24657
+[#24785]: https://github.com/JuliaLang/julia/issues/24785
