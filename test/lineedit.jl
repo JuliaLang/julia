@@ -649,6 +649,18 @@ end
     LineEdit.edit_delete_next_word(s)
     s.key_repeats = 0
     @test s.kill_ring[end] == "B  C"
+
+    # edit_kill_line_backwards
+    LineEdit.edit_clear(s)
+    edit_insert(s, "begin\n  a=1\n  b=2")
+    LineEdit.edit_kill_line_backwards(s)
+    @test s.kill_ring[end] == "  b=2"
+    s.key_repeats = 1
+    LineEdit.edit_kill_line_backwards(s)
+    @test s.kill_ring[end] == "\n  b=2"
+    LineEdit.edit_kill_line_backwards(s)
+    @test s.kill_ring[end] == "  a=1\n  b=2"
+    s.key_repeats = 0
 end
 
 @testset "undo" begin
@@ -694,6 +706,10 @@ end
     LineEdit.move_line_start(s)
     LineEdit.edit_kill_line(s)
     LineEdit.edit_kill_line(s) # no effect
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.move_line_end(s)
+    @test edit!(LineEdit.edit_kill_line_backwards) == ""
     @test edit!(edit_undo!) == "one two three"
 
     LineEdit.move_line_start(s)

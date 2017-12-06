@@ -205,7 +205,9 @@ const COMMAND_GROUPS =
     Dict(:movement    => [:edit_move_left, :edit_move_right, :edit_move_word_left, :edit_move_word_right,
                           :edit_move_up, :edit_move_down, :edit_exchange_point_and_mark],
          :deletion    => [:edit_clear, :edit_backspace, :edit_delete, :edit_werase,
-                          :edit_delete_prev_word, :edit_delete_next_word, :edit_kill_line, :edit_kill_region],
+                          :edit_delete_prev_word,
+                          :edit_delete_next_word,
+                          :edit_kill_line_forwards, :edit_kill_line_backwards, :edit_kill_region],
          :insertion   => [:edit_insert, :edit_insert_newline, :edit_yank],
          :replacement => [:edit_yank_pop, :edit_transpose_chars, :edit_transpose_words,
                           :edit_upper_case, :edit_lower_case, :edit_title_case, :edit_indent,
@@ -869,20 +871,31 @@ function push_kill!(s::MIState, killed::String, concat = s.key_repeats > 0; rev=
     true
 end
 
-function edit_kill_line(s::MIState)
-    set_action!(s, :edit_kill_line)
-    push_undo(s)
+function edit_kill_line(s::MIState, backwards::Bool=false)
     buf = buffer(s)
-    pos = position(buf)
-    endpos = endofline(buf)
-    endpos == pos && buf.size > pos && (endpos += 1)
-    if push_kill!(s, edit_splice!(s, pos => endpos))
+    if backwards
+        set_action!(s, :edit_kill_line_backwards)
+        pos = beginofline(buf)
+        endpos = position(buf)
+        pos == endpos && pos > 0 && (pos -= 1)
+    else
+        set_action!(s, :edit_kill_line_forwards)
+        pos = position(buf)
+        endpos = endofline(buf)
+        endpos == pos && buf.size > pos && (endpos += 1)
+    end
+    push_undo(s)
+    if push_kill!(s, edit_splice!(s, pos => endpos); rev=backwards)
         refresh_line(s)
     else
         pop_undo(s)
+        beep(s)
         return :ignore
     end
 end
+
+edit_kill_line_forwards(s) = edit_kill_line(s, false)
+edit_kill_line_backwards(s) = edit_kill_line(s, true)
 
 function edit_copy_region(s::MIState)
     set_action!(s, :edit_copy_region)
@@ -1995,8 +2008,8 @@ AnyDict(
     "\e_" => (s,o...)->edit_redo!(s),
     # Simply insert it into the buffer by default
     "*" => (s,data,c)->(edit_insert(s, c)),
-    "^U" => (s,o...)->edit_clear(s),
-    "^K" => (s,o...)->edit_kill_line(s),
+    "^U" => (s,o...)->edit_kill_line_backwards(s),
+    "^K" => (s,o...)->edit_kill_line_forwards(s),
     "^Y" => (s,o...)->edit_yank(s),
     "\ey" => (s,o...)->edit_yank_pop(s),
     "\ew" => (s,o...)->edit_copy_region(s),
