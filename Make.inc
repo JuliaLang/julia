@@ -751,7 +751,6 @@ FC += -Wa,-q
 AS += -q
 endif
 endif
-endif
 
 JULIA_CPU_TARGET ?= native
 
