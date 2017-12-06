@@ -393,22 +393,17 @@ end
 
 function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Bool,2}, row::Int, col::Int)
     n = tryparse_internal(Bool, sbuff, startpos, endpos, 0, false)
-    isnull(n) || (cells[row, col] = get(n))
+    isnull(n) || (cells[row, col] = unsafe_get(n))
     isnull(n)
 end
 function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int) where T<:Integer
     n = tryparse_internal(T, sbuff, startpos, endpos, 0, false)
-    isnull(n) || (cells[row, col] = get(n))
+    isnull(n) || (cells[row, col] = unsafe_get(n))
     isnull(n)
 end
-function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Float64,2}, row::Int, col::Int)
-    n = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), sbuff, startpos-1, endpos-startpos+1)
-    isnull(n) || (cells[row, col] = get(n))
-    isnull(n)
-end
-function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Float32,2}, row::Int, col::Int)
-    n = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8}, Csize_t, Csize_t), sbuff, startpos-1, endpos-startpos+1)
-    isnull(n) || (cells[row, col] = get(n))
+function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int) where T<:Union{Real,Complex}
+    n = tryparse_internal(T, sbuff, startpos, endpos, false)
+    isnull(n) || (cells[row, col] = unsafe_get(n))
     isnull(n)
 end
 function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{<:AbstractString,2}, row::Int, col::Int)
@@ -421,15 +416,15 @@ function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Any,2}, 
     if len > 0
         # check Inteter
         ni64 = tryparse_internal(Int, sbuff, startpos, endpos, 0, false)
-        isnull(ni64) || (cells[row, col] = get(ni64); return false)
+        isnull(ni64) || (cells[row, col] = unsafe_get(ni64); return false)
 
         # check Bool
         nb = tryparse_internal(Bool, sbuff, startpos, endpos, 0, false)
-        isnull(nb) || (cells[row, col] = get(nb); return false)
+        isnull(nb) || (cells[row, col] = unsafe_get(nb); return false)
 
         # check float64
         nf64 = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8}, Csize_t, Csize_t), sbuff, startpos-1, endpos-startpos+1)
-        isnull(nf64) || (cells[row, col] = get(nf64); return false)
+        isnull(nf64) || (cells[row, col] = unsafe_get(nf64); return false)
     end
     cells[row, col] = SubString(sbuff, startpos, endpos)
     false

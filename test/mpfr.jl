@@ -7,22 +7,10 @@ import Base.MPFR
         x = BigFloat(12)
     end
     x = BigFloat(12)
-    y = BigFloat(x)
-    @test x ≈ y
-    y = BigFloat(0xc)
-    @test x ≈ y
-    y = BigFloat(12.)
-    @test x ≈ y
-    y = BigFloat(BigInt(12))
-    @test x ≈ y
-    y = BigFloat(BigFloat(12))
-    @test x ≈ y
-    y = parse(BigFloat,"12")
-    @test x ≈ y
-    y = BigFloat(Float32(12.))
-    @test x ≈ y
-    y = BigFloat(12//1)
-    @test x ≈ y
+    @test x == BigFloat(x) == BigFloat(0xc) == BigFloat(12.) ==
+          BigFloat(BigInt(12)) == BigFloat(BigFloat(12)) == parse(BigFloat,"12") ==
+          parse(BigFloat,"12 ") == parse(BigFloat," 12") == parse(BigFloat," 12 ") ==
+          BigFloat(Float32(12.)) == BigFloat(12//1)
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat

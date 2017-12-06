@@ -7,9 +7,12 @@ import Base.Checked: add_with_overflow, mul_with_overflow
 """
     parse(type, str, [base])
 
-Parse a string as a number. If the type is an integer type, then a base can be specified
-(the default is 10). If the type is a floating point type, the string is parsed as a decimal
-floating point number. If the string does not contain a valid number, an error is raised.
+Parse a string as a number. For `Integer` types, a base can be specified
+(the default is 10). For floating-point types, the string is parsed as a decimal
+floating-point number.  `Complex` types are parsed from decimal strings
+of the form `"R±Iim"` as a `Complex(R,I)` of the requested type; `"i"` or `"j"` can also be
+used instead of `"im"`, and `"R"` or `"Iim"` are also permitted.
+If the string does not contain a valid number, an error is raised.
 
 ```jldoctest
 julia> parse(Int, "1234")
@@ -23,6 +26,9 @@ julia> parse(Int, "afc", 16)
 
 julia> parse(Float64, "1.2e-3")
 0.0012
+
+julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
+0.32 + 4.5im
 ```
 """
 parse(T::Type, str, base=Int)
@@ -151,7 +157,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     return Nullable{T}(n)
 end
 
-function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
+function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
         startpos::Int, endpos::Int, base::Integer, raise::Bool)
     if isempty(sbuff)
         raise && throw(ArgumentError("input string is empty"))
@@ -215,24 +221,98 @@ function parse(::Type{T}, s::AbstractString) where T<:Integer
     get(tryparse_internal(T, s, start(s), endof(s), 0, true)) # Zero means, "figure it out"
 end
 
-
 ## string to float functions ##
 
 tryparse(::Type{Float64}, s::String) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
 tryparse(::Type{Float64}, s::SubString{String}) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.endof)
+tryparse_internal(::Type{Float64}, s::String, startpos::Int, endpos::Int) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
+tryparse_internal(::Type{Float64}, s::SubString{String}, startpos::Int, endpos::Int) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
 
 tryparse(::Type{Float32}, s::String) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
 tryparse(::Type{Float32}, s::SubString{String}) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.endof)
+tryparse_internal(::Type{Float32}, s::String, startpos::Int, endpos::Int) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
+tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int, endpos::Int) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
 
 tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s))
 
 tryparse(::Type{Float16}, s::AbstractString) = convert(Nullable{Float16}, tryparse(Float32, s))
+tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =
+    convert(Nullable{Float16}, tryparse_internal(Float32, s, startpos, endpos))
 
-function parse(::Type{T}, s::AbstractString) where T<:AbstractFloat
-    result = tryparse(T, s)
-    if isnull(result)
-        throw(ArgumentError("cannot parse $(repr(s)) as $T"))
+## string to complex functions ##
+
+function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}}, i::Int, e::Int, raise::Bool) where {T<:Real}
+    # skip initial whitespace
+    while i ≤ e && isspace(s[i])
+        i = nextind(s, i)
     end
-    return unsafe_get(result)
+    if i > e
+        raise && throw(ArgumentError("input string is empty or only contains whitespace"))
+        return Nullable{Complex{T}}()
+    end
+
+    # find index of ± separating real/imaginary parts (if any)
+    i₊ = search(s, ('+','-'), i)
+    if i₊ == i # leading ± sign
+        i₊ = search(s, ('+','-'), i₊+1)
+    end
+    if i₊ != 0 && s[i₊-1] in ('e','E') # exponent sign
+        i₊ = search(s, ('+','-'), i₊+1)
+    end
+
+    # find trailing im/i/j
+    iᵢ = rsearch(s, ('m','i','j'), e)
+    if iᵢ > 0 && s[iᵢ] == 'm' # im
+        iᵢ -= 1
+        if s[iᵢ] != 'i'
+            raise && throw(ArgumentError("expected trailing \"im\", found only \"m\""))
+            return Nullable{Complex{T}}()
+        end
+    end
+
+    if i₊ == 0 # purely real or imaginary value
+        if iᵢ > 0 # purely imaginary
+            x_ = tryparse_internal(T, s, i, iᵢ-1, raise)
+            isnull(x_) && return Nullable{Complex{T}}()
+            x = unsafe_get(x_)
+            return Nullable{Complex{T}}(Complex{T}(zero(x),x))
+        else # purely real
+            return Nullable{Complex{T}}(tryparse_internal(T, s, i, e, raise))
+        end
+    end
+
+    if iᵢ < i₊
+        raise && throw(ArgumentError("missing imaginary unit"))
+        return Nullable{Complex{T}}() # no imaginary part
+    end
+
+    # parse real part
+    re = tryparse_internal(T, s, i, i₊-1, raise)
+    isnull(re) && return Nullable{Complex{T}}()
+
+    # parse imaginary part
+    im = tryparse_internal(T, s, i₊+1, iᵢ-1, raise)
+    isnull(im) && return Nullable{Complex{T}}()
+
+    return Nullable{Complex{T}}(Complex{T}(unsafe_get(re), s[i₊]=='-' ? -unsafe_get(im) : unsafe_get(im)))
 end
 
+# the ±1 indexing above for ascii chars is specific to String, so convert:
+tryparse_internal(T::Type{<:Complex}, s::AbstractString, i::Int, e::Int, raise::Bool) =
+    tryparse_internal(T, String(s), i, e, raise)
+
+# fallback methods for tryparse_internal
+tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int) where T<:Real =
+    startpos == start(s) && endpos == endof(s) ? tryparse(T, s) : tryparse(T, SubString(s, startpos, endpos))
+function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Real
+    result = tryparse_internal(T, s, startpos, endpos)
+    if raise && isnull(result)
+        throw(ArgumentError("cannot parse $(repr(s[startpos:endpos])) as $T"))
+    end
+    return result
+end
+tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Integer =
+    tryparse_internal(T, s, startpos, endpos, 10, raise)
+
+parse(::Type{T}, s::AbstractString) where T<:Union{Real,Complex} =
+    unsafe_get(tryparse_internal(T, s, start(s), endof(s), true))
