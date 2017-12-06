@@ -67,6 +67,7 @@ mutable struct Graph
     # adjacency dict:
     #   allows one to retrieve the indices in gadj, so that
     #   gadj[p0][adjdict[p1][p0]] = p1
+    #   ("At which index does package p1 appear in gadj[p0]?")
     adjdict::Vector{Dict{Int,Int}}
 
     # states per package: same as in Interface
@@ -379,17 +380,30 @@ function iterate(graph::Graph, msgs::Messages)
 end
 
 function decimate1(p0::Int, graph::Graph, msgs::Messages)
-    @assert !msgs.decimated[p0]
-    fld0 = msgs.fld[p0]
+    decimated = msgs.decimated
+    fld = msgs.fld
+    adjdict = graph.adjdict
+    gmsk = graph.gmsk
+
+    @assert !decimated[p0]
+    fld0 = fld[p0]
     s0 = indmax(fld0)
-    #println("DECIMATING $p0 ($(packages()[p0]) s0=$s0)")
+    # only do the decimation if it is consistent with
+    # the previously decimated nodes
+    for p1 in find(decimated)
+        haskey(adjdict[p0], p1) || continue
+        s1 = indmax(fld[p1])
+        j1 = adjdict[p0][p1]
+        gmsk[p1][j1][s0,s1] || return false
+    end
+    #println("DECIMATING $p0 (s0=$s0 fld=$fld0)")
     for v0 = 1:length(fld0)
-        if v0 != s0
-            fld0[v0] = FieldValue(-1)
-        end
+        v0 == s0 && continue
+        fld0[v0] = FieldValue(-1)
     end
     msgs.decimated[p0] = true
     msgs.num_nondecimated -= 1
+    return true
 end
 
 function reset_messages!(msgs::Messages)
@@ -411,16 +425,35 @@ end
 # but the maximum
 function decimate(n::Int, graph::Graph, msgs::Messages)
     #println("DECIMATING $n NODES")
+    adjdict = graph.adjdict
     fld = msgs.fld
     decimated = msgs.decimated
     fldorder = sortperm(fld, by=secondmax)
+    did_dec = false
     for p0 in fldorder
         decimated[p0] && continue
-        decimate1(p0, graph, msgs)
+        did_dec |= decimate1(p0, graph, msgs)
         n -= 1
         n == 0 && break
     end
     @assert n == 0
+    if !did_dec
+        # did not succeed in decimating anything;
+        # try to decimate at least one node
+        for p0 in fldorder
+            decimated[p0] && continue
+            if decimate1(p0, graph, msgs)
+                did_dec = true
+                break
+            end
+        end
+    end
+    if !did_dec
+        # still didn't succeed, give up
+        p0 = first(fldorder[.~(decimated)])
+        throw(UnsatError(p0))
+    end
+
     reset_messages!(msgs)
     return
 end
@@ -429,6 +462,7 @@ end
 # keep converging
 function break_ties(msgs::Messages)
     fld = msgs.fld
+    unbroken_ties = Int[]
     for p0 = 1:length(fld)
         fld0 = fld[p0]
         z = 0
@@ -443,10 +477,12 @@ function break_ties(msgs::Messages)
         end
         if z > 1
             #println("TIE! p0=$p0")
-            decimate1(p0, msgs)
-            return false
+            decimate1(p0, msgs) && return false
+            push!(unbroken_ties, p0)
         end
     end
+    # If there were ties, but none were broken, bail out
+    isempty(unbroken_ties) || throw(PkgError(first(unbroken_ties)))
     return true
 end
 
