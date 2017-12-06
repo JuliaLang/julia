@@ -2696,6 +2696,44 @@ end
     At_ldiv_B!
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/sparse/linalg.jl, to deprecate
+@eval Base.SparseArrays begin
+    using Base.LinAlg: Adjoint, Transpose
+    Ac_ldiv_B(A::SparseMatrixCSC, B::RowVector) = \(Adjoint(A), B)
+    At_ldiv_B(A::SparseMatrixCSC, B::RowVector) = \(Transpose(A), B)
+    Ac_ldiv_B(A::SparseMatrixCSC, B::AbstractVecOrMat) = \(Adjoint(A), B)
+    At_ldiv_B(A::SparseMatrixCSC, B::AbstractVecOrMat) = \(Transpose(A), B)
+    A_rdiv_Bc!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = rdiv!(A, Adjoint(D))
+    A_rdiv_Bt!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = rdiv!(A, Transpose(D))
+    A_rdiv_B!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = rdiv!(A, D)
+    A_ldiv_B!(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = ldiv!(L, B)
+    A_ldiv_B!(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = ldiv!(U, B)
+    A_mul_Bt(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = *(A, Transpose(B))
+    A_mul_Bc(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = *(A, Adjoint(B))
+    At_mul_B(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = *(Transpose(A), B)
+    Ac_mul_B(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = *(Adjoint(A), B)
+    At_mul_Bt(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = *(Transpose(A), Transpose(B))
+    Ac_mul_Bc(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = *(Adjoint(A), Adjoint(B))
+    A_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = mul!(C, A, B)
+    Ac_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = mul!(C, Adjoint(A), B)
+    At_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = mul!(C, Transpose(A), B)
+    A_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat) = mul!(α, A, B, β, C)
+    A_mul_B(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} = *(A, x)
+    A_mul_B(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} = *(A, B)
+    Ac_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat) = mul!(α, Adjoint(A), B, β, C)
+    Ac_mul_B(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} = *(Adjoint(A), x)
+    Ac_mul_B(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} = *(Adjoint(A), B)
+    At_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat) = mul!(α, Transpose(A), B, β, C)
+    At_mul_B(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} = *(Transpose(A), x)
+    At_mul_B(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} = *(Transpose(A), B)
+    A_mul_Bt(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(A, Transpose(B))
+    A_mul_Bc(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(A, Adjoint(B))
+    At_mul_B(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(Transpose(A), B)
+    Ac_mul_B(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(Adjoint(A),B)
+    At_mul_Bt(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(Transpose(A), Transpose(B))
+    Ac_mul_Bc(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(Adjoint(A), Adjoint(B))
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
