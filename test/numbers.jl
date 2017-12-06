@@ -2966,14 +2966,11 @@ module M20889 # do we get the expected behavior without importing Base.^?
 end
 
 @testset "literal negative power accuracy" begin
-    # a few cases chosen to maximize the error for inv(x)^+n:
-    ==′(x::T,y::T) where T = abs(x-y) ≤ eps(y) # equality within 1ulp
-    ==′(x,y) = false
-    @test 0.7130409001548401^-2 ==′ Float64(big(0.7130409001548401)^-2)
-    @test 0.09496527f0^-2 ==′ Float32(big(0.09496527f0)^-2)
-    @test 0.20675883960662367^-100 ==′ Float64(big(0.20675883960662367)^-100)
-    @test 0.6123676f0^-100 ==′ Float32(big(0.6123676f0)^-100)
-    @test 0.004155780785470562^-1 ==′ Float64(big(0.004155780785470562)^-1) 
+    @test 0.7130409001548401^-2 == 0.7130409001548401^-2.0
+    @test 0.09496527f0^-2 == 0.09496527f0^-2.0f0
+    @test 0.20675883960662367^-100 == 0.20675883960662367^-100.0
+    @test 0.6123676f0^-100 == 0.6123676f0^-100.0f0
+    @test 0.004155780785470562^-1 == 0.004155780785470562^-1.0
 end
 
 @testset "iszero & isone" begin
