@@ -371,9 +371,13 @@ function _validate(linfo::MethodInstance, src::CodeInfo, kind::String)
 end
 
 function get_staged(li::MethodInstance)
-    return ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
+    try
+        # user code might throw errors – ignore them
+        return ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
+    catch
+        return nothing
+    end
 end
-
 
 mutable struct OptimizationState
     linfo::MethodInstance
@@ -472,12 +476,7 @@ end
 function retrieve_code_info(linfo::MethodInstance)
     m = linfo.def::Method
     if isdefined(m, :generator)
-        try
-            # user code might throw errors – ignore them
-            c = get_staged(linfo)
-        catch
-            return nothing
-        end
+        return get_staged(linfo)
     else
         # TODO: post-inference see if we can swap back to the original arrays?
         if isa(m.source, Array{UInt8,1})
@@ -2090,6 +2089,24 @@ end
 
 const deprecated_sym = Symbol("deprecated.jl")
 
+function method_for_inference_heuristics(infstate::InferenceState)
+    m = infstate.src.method_for_inference_heuristics
+    return isa(m, Method) ? m : infstate.linfo.def
+end
+
+function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams, world)
+    if isdefined(method, :generator) && method.generator.expand_early
+        method_instance = code_for_method(method, sig, sparams, world, false)
+        if isa(method_instance, MethodInstance)
+            cinfo = get_staged(method_instance)
+            if isa(cinfo, CodeInfo) && isa(cinfo.method_for_inference_heuristics, Method)
+                return cinfo.method_for_inference_heuristics
+            end
+        end
+    end
+    return method
+ end
+
 function abstract_call_method(method::Method, @nospecialize(sig), sparams::SimpleVector, sv::InferenceState)
     # TODO: remove with 0.7 deprecations
     if method.file === deprecated_sym && method.sig == (Tuple{Type{T},Any} where T)
@@ -2103,16 +2120,18 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
     cyclei = 0
     infstate = sv
     edgecycle = false
+    checked_method = method_for_inference_heuristics(method, sig, sparams, sv.params.world)
     while !(infstate === nothing)
         infstate = infstate::InferenceState
-        if method === infstate.linfo.def
-            if infstate.linfo.specTypes == sig
-                # avoid widening when detecting self-recursion
-                # TODO: merge call cycle and return right away
-                topmost = nothing
-                edgecycle = true
-                break
-            end
+        if infstate.linfo.specTypes == sig
+            # avoid widening when detecting self-recursion
+            # TODO: merge call cycle and return right away
+            topmost = nothing
+            edgecycle = true
+            break
+        end
+        working_method = method_for_inference_heuristics(infstate)
+        if checked_method === working_method
             if topmost === nothing
                 # inspect the parent of this edge,
                 # to see if they are the same Method as sv
@@ -2131,7 +2150,8 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                     # then check the parent link
                     if topmost === nothing && parent !== nothing
                         parent = parent::InferenceState
-                        if parent.cached && parent.linfo.def === sv.linfo.def
+                        parent_method = method_for_inference_heuristics(parent)
+                        if parent.cached && parent_method === working_method
                             topmost = infstate
                             edgecycle = true
                         end
