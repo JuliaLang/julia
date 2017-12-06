@@ -104,7 +104,7 @@ mutable struct UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
 end
 
 """
-    lufact(A::SparseMatrixCSC) -> F::UmfpackLU
+    lufact(A::AbstractSparseMatrixCSC) -> F::UmfpackLU
 
 Compute the LU factorization of a sparse matrix `A`.
 
@@ -134,12 +134,12 @@ The relation between `F` and `A` is
 - [`det`](@ref)
 
 !!! note
-    `lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
+    `lufact(A::AbstractSparseMatrixCSC)` uses the UMFPACK library that is part of
     SuiteSparse. As this library only supports sparse matrices with [`Float64`](@ref) or
     `Complex128` elements, `lufact` converts `A` into a copy that is of type
     `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as appropriate.
 """
-function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
+function lufact(S::AbstractSparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
                     zerobased ? copy(S.colptr) : decrement(S.colptr),
@@ -148,16 +148,16 @@ function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
     finalizer(umfpack_free_symbolic, res)
     umfpack_numeric!(res)
 end
-lufact(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) where {Ti<:UMFITypes} =
+lufact(A::AbstractSparseMatrixCSC{<:Union{Float16,Float32},Ti}) where {Ti<:UMFITypes} =
     lufact(convert(SparseMatrixCSC{Float64,Ti}, A))
-lufact(A::SparseMatrixCSC{<:Union{Complex32,Complex64},Ti}) where {Ti<:UMFITypes} =
+lufact(A::AbstractSparseMatrixCSC{<:Union{Complex32,Complex64},Ti}) where {Ti<:UMFITypes} =
     lufact(convert(SparseMatrixCSC{Complex128,Ti}, A))
-lufact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) where {T<:AbstractFloat} =
+lufact(A::Union{AbstractSparseMatrixCSC{T},AbstractSparseMatrixCSC{Complex{T}}}) where {T<:AbstractFloat} =
     throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
     "Try lufact(convert(SparseMatrixCSC{Float64/Complex128,Int}, A)) for ",
     "sparse floating point LU using UMFPACK or lufact(Array(A)) for generic ",
     "dense LU.")))
-lufact(A::SparseMatrixCSC) = lufact(float(A))
+lufact(A::AbstractSparseMatrixCSC) = lufact(float(A))
 
 
 size(F::UmfpackLU) = (F.m, F.n)

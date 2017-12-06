@@ -6,12 +6,21 @@
 #      issorted(rowval[colptr[i]:(colptr[i+1]-1)]) == true
 
 """
+    AbstractSparseMatrixCSC{Tv,Ti} <: AbstractSparseMatrix{Tv,Ti}
+
+Supertype of all sparse matrices that store the data using
+[Compressed Sparse Column](@ref man-csc) format.  Concrete types must have all the fields
+of [`SparseMatrixCSC`](@ref) to be usable by external linear algebra libraries.
+"""
+abstract type AbstractSparseMatrixCSC{Tv,Ti} <: AbstractSparseMatrix{Tv,Ti}
+
+"""
     SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
 
 Matrix type for storing sparse matrices in the
 [Compressed Sparse Column](@ref man-csc) format.
 """
-struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrixCSC{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)

@@ -16,7 +16,9 @@ export
     Factor,
     Sparse
 
-import ..SparseArrays: AbstractSparseMatrix, SparseMatrixCSC, indtype, sparse, spzeros, nnz
+# why are these imports needed?  most of these names are exported?
+import ..SparseArrays: AbstractSparseMatrix, SparseMatrixCSC, AbstractSparseMatrixCSC,
+                       indtype, sparse, spzeros, nnz
 
 import ..increment, ..increment!, ..decrement, ..decrement!
 
@@ -249,7 +251,7 @@ struct C_SparseVoid <: SuiteSparseStruct
     packed::Cint
 end
 
-mutable struct Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
+mutable struct Sparse{Tv<:VTypes} <: AbstractSparseMatrixCSC{Tv,SuiteSparse_long}
     p::Ptr{C_Sparse{Tv}}
     function Sparse{Tv}(p::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
         if p == C_NULL
@@ -887,7 +889,7 @@ function Sparse(m::Integer, n::Integer,
     o
 end
 
-function Sparse(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where Tv<:VTypes
+function Sparse(A::AbstractSparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where Tv<:VTypes
     ## Check length of input. This should never fail but see #20024
     if length(A.colptr) <= A.n
         throw(ArgumentError("length of colptr must be at least size(A,2) + 1 = $(A.n + 1) but was $(length(A.colptr))"))
@@ -917,7 +919,7 @@ end
 # convert SparseVectors into CHOLMOD Sparse types through a mx1 CSC matrix
 convert(::Type{Sparse}, A::SparseVector{<:VTypes,SuiteSparse_long}) =
     convert(Sparse, convert(SparseMatrixCSC, A))
-function convert(::Type{Sparse}, A::SparseMatrixCSC{<:VTypes,<:ITypes})
+function convert(::Type{Sparse}, A::AbstractSparseMatrixCSC{<:VTypes,<:ITypes})
     o = Sparse(A, 0)
     # check if array is symmetric and change stype if it is
     if ishermitian(o)
@@ -925,15 +927,15 @@ function convert(::Type{Sparse}, A::SparseMatrixCSC{<:VTypes,<:ITypes})
     end
     o
 end
-convert(::Type{Sparse}, A::SparseMatrixCSC{Complex{Float32},<:ITypes}) =
+convert(::Type{Sparse}, A::AbstractSparseMatrixCSC{Complex{Float32},<:ITypes}) =
     convert(Sparse, convert(SparseMatrixCSC{Complex{Float64},SuiteSparse_long}, A))
-convert(::Type{Sparse}, A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}) =
+convert(::Type{Sparse}, A::Symmetric{Float64,AbstractSparseMatrixCSC{Float64,SuiteSparse_long}}) =
     Sparse(A.data, A.uplo == 'L' ? -1 : 1)
 # The convert method for Hermitian is very similar to the general convert method, but we need to
 # remove any non real elements in the diagonal because, in contrast to BLAS/LAPACK these are not
 # ignored by CHOLMOD. If even tiny imaginary parts are present CHOLMOD will fail with a non-positive
 # definite/zero pivot error.
-function convert(::Type{Sparse}, AH::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) where {Tv<:VTypes}
+function convert(::Type{Sparse}, AH::Hermitian{Tv,AbstractSparseMatrixCSC{Tv,SuiteSparse_long}}) where {Tv<:VTypes}
     A = AH.data
 
     # Here we allocate a Symmetric/Hermitian CHOLMOD.Sparse matrix so we only need to copy
@@ -958,16 +960,16 @@ function convert(::Type{Sparse}, AH::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse
     return o
 end
 function convert(::Type{Sparse},
-                 A::Union{SparseMatrixCSC{BigFloat,Ti},
-                          Symmetric{BigFloat,SparseMatrixCSC{BigFloat,Ti}},
-                          Hermitian{Complex{BigFloat},SparseMatrixCSC{Complex{BigFloat},Ti}}},
+                 A::Union{AbstractSparseMatrixCSC{BigFloat,Ti},
+                          Symmetric{BigFloat,AbstractSparseMatrixCSC{BigFloat,Ti}},
+                          Hermitian{Complex{BigFloat},AbstractSparseMatrixCSC{Complex{BigFloat},Ti}}},
                  args...) where Ti<:ITypes
     throw(MethodError(convert, (Sparse, A)))
 end
 function convert(::Type{Sparse},
-    A::Union{SparseMatrixCSC{T,Ti},
-             Symmetric{T,SparseMatrixCSC{T,Ti}},
-             Hermitian{T,SparseMatrixCSC{T,Ti}}},
+    A::Union{AbstractSparseMatrixCSC{T,Ti},
+             Symmetric{T,AbstractSparseMatrixCSC{T,Ti}},
+             Hermitian{T,AbstractSparseMatrixCSC{T,Ti}}},
     args...) where T where Ti<:ITypes
     return Sparse(convert(AbstractMatrix{promote_type(Float64, T)}, A), args...)
 end
@@ -1272,7 +1274,7 @@ function getindex(F::Factor, sym::Symbol)
     FactorComponent(F, sym)
 end
 
-function getLd!(S::SparseMatrixCSC)
+function getLd!(S::AbstractSparseMatrixCSC)
     d = Vector{eltype(S)}(uninitialized, size(S, 1))
     fill!(d, 0)
     col = 1
@@ -1365,8 +1367,8 @@ end
     cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
 
 Compute the Cholesky (``LL'``) factorization of `A`, reusing the symbolic
-factorization `F`. `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/
-[`Hermitian`](@ref) view of a `SparseMatrixCSC`. Note that even if `A` doesn't
+factorization `F`. `A` must be an [`AbstractSparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/
+[`Hermitian`](@ref) view of a `AbstractSparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
 See also [`cholfact`](@ref).
@@ -1377,11 +1379,11 @@ See also [`cholfact`](@ref).
     be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
     as appropriate.
 """
-cholfact!(F::Factor, A::Union{SparseMatrixCSC{T},
-        SparseMatrixCSC{Complex{T}},
-        Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-        Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
-        Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+cholfact!(F::Factor, A::Union{AbstractSparseMatrixCSC{T},
+        AbstractSparseMatrixCSC{Complex{T}},
+        Symmetric{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}},
+        Hermitian{Complex{T},AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}},
+        Hermitian{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}}};
     shift = 0.0) where {T<:Real} =
     cholfact!(F, Sparse(A); shift = shift)
 
@@ -1404,8 +1406,8 @@ end
     cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
 
 Compute the Cholesky factorization of a sparse positive definite matrix `A`.
-`A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
-view of a `SparseMatrixCSC`. Note that even if `A` doesn't
+`A` must be a [`AbstractSparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
+view of a `AbstractSparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 A fill-reducing permutation is used.
 `F = cholfact(A)` is most frequently used to solve systems of equations with `F\\b`,
@@ -1433,10 +1435,10 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
     Many other functions from CHOLMOD are wrapped but not exported from the
     `Base.SparseArrays.CHOLMOD` module.
 """
-cholfact(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
-    Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-    Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
-    Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+cholfact(A::Union{AbstractSparseMatrixCSC{T}, AbstractSparseMatrixCSC{Complex{T}},
+    Symmetric{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}},
+    Hermitian{Complex{T},AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}},
+    Hermitian{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}}};
     kws...) where {T<:Real} = cholfact(Sparse(A); kws...)
 
 
@@ -1457,8 +1459,8 @@ end
     ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F`.
-`A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
-view of a `SparseMatrixCSC`. Note that even if `A` doesn't
+`A` must be a [`AbstractSparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
+view of a `AbstractSparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
 See also [`ldltfact`](@ref).
@@ -1469,11 +1471,11 @@ See also [`ldltfact`](@ref).
     be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
     as appropriate.
 """
-ldltfact!(F::Factor, A::Union{SparseMatrixCSC{T},
-    SparseMatrixCSC{Complex{T}},
-    Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-    Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
-    Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+ldltfact!(F::Factor, A::Union{AbstractSparseMatrixCSC{T},
+    AbstractSparseMatrixCSC{Complex{T}},
+    Symmetric{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}},
+    Hermitian{Complex{T},AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}},
+    Hermitian{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}}};
     shift = 0.0) where {T<:Real} =
     ldltfact!(F, Sparse(A), shift = shift)
 
@@ -1501,8 +1503,8 @@ end
     ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of a sparse matrix `A`.
-`A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
-view of a `SparseMatrixCSC`. Note that even if `A` doesn't
+`A` must be a [`AbstractSparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
+view of a `AbstractSparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 A fill-reducing permutation is used. `F = ldltfact(A)` is most frequently
 used to solve systems of equations `A*x = b` with `F\\b`. The returned
@@ -1531,10 +1533,10 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
     Many other functions from CHOLMOD are wrapped but not exported from the
     `Base.SparseArrays.CHOLMOD` module.
 """
-ldltfact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
-    Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-    Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
-    Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+ldltfact(A::Union{AbstractSparseMatrixCSC{T},AbstractSparseMatrixCSC{Complex{T}},
+    Symmetric{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}},
+    Hermitian{Complex{T},AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}},
+    Hermitian{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}}};
     kws...) where {T<:Real} = ldltfact(Sparse(A); kws...)
 
 ## Rank updates
@@ -1660,7 +1662,7 @@ for (T, f) in ((:Dense, :solve), (:Sparse, :spsolve))
     end
 end
 
-SparseVecOrMat{Tv,Ti} = Union{SparseVector{Tv,Ti}, SparseMatrixCSC{Tv,Ti}}
+SparseVecOrMat{Tv,Ti} = Union{SparseVector{Tv,Ti}, AbstractSparseMatrixCSC{Tv,Ti}}
 
 function (\)(L::FactorComponent, b::Vector)
     reshape(convert(Matrix, L\Dense(b)), length(b))
@@ -1692,9 +1694,9 @@ Ac_ldiv_B(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
 Ac_ldiv_B(L::Factor, B::SparseVecOrMat) = Ac_ldiv_B(L, Sparse(B))
 
 for f in (:\, :Ac_ldiv_B)
-    @eval function ($f)(A::Union{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
-                          Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
-                          Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}, B::StridedVecOrMat)
+    @eval function ($f)(A::Union{Symmetric{Float64,AbstractSparseMatrixCSC{Float64,SuiteSparse_long}},
+                          Hermitian{Float64,AbstractSparseMatrixCSC{Float64,SuiteSparse_long}},
+                          Hermitian{Complex{Float64},AbstractSparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}, B::StridedVecOrMat)
         F = cholfact(A)
         if issuccess(F)
             return ($f)(F, B)
@@ -1703,7 +1705,7 @@ for f in (:\, :Ac_ldiv_B)
             if issuccess(F)
                 return ($f)(F, B)
             else
-                return ($f)(lufact(convert(SparseMatrixCSC{eltype(A), SuiteSparse_long}, A)), B)
+                return ($f)(lufact(convert(AbstractSparseMatrixCSC{eltype(A), SuiteSparse_long}, A)), B)
             end
         end
     end
@@ -1801,18 +1803,19 @@ function ishermitian(A::Sparse{Complex{Float64}})
     end
 end
 
-(*)(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}},
+#TODO: make these return in same type as A (which might not be SparseMatrixCSC).
+(*)(A::Symmetric{Float64,AbstractSparseMatrixCSC{Float64,Ti}},
     B::SparseVecOrMat{Float64,Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
-(*)(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}},
+(*)(A::Hermitian{Complex{Float64},AbstractSparseMatrixCSC{Complex{Float64},Ti}},
     B::SparseVecOrMat{Complex{Float64},Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
-(*)(A::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}},
+(*)(A::Hermitian{Float64,AbstractSparseMatrixCSC{Float64,Ti}},
     B::SparseVecOrMat{Float64,Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 
 (*)(A::SparseVecOrMat{Float64,Ti},
-    B::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+    B::Symmetric{Float64,AbstractSparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 (*)(A::SparseVecOrMat{Complex{Float64},Ti},
-    B::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+    B::Hermitian{Complex{Float64},AbstractSparseMatrixCSC{Complex{Float64},Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 (*)(A::SparseVecOrMat{Float64,Ti},
-    B::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+    B::Hermitian{Float64,AbstractSparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 
 end #module

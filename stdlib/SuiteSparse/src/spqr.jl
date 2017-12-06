@@ -21,7 +21,7 @@ const ORDERING_BESTAMD = Int32(9) # try COLAMD and AMD; pick best#
 # tried.  If there is a high fill-in with AMD then try METIS(A'A) and take
 # the best of AMD and METIS. METIS is not tried if it isn't installed.
 
-using ..SparseArrays: SparseMatrixCSC
+using ..SparseArrays: SparseMatrixCSC, AbstractSparseMatrixCSC
 using ..SuiteSparse.CHOLMOD
 using ..SuiteSparse.CHOLMOD: change_stype!, free!
 
@@ -132,10 +132,10 @@ end
 Base.size(Q::QRSparseQ) = (size(Q.factors, 1), size(Q.factors, 1))
 
 # From SPQR manual p. 6
-_default_tol(A::SparseMatrixCSC) =
+_default_tol(A::AbstractSparseMatrixCSC) =
     20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i))^2 for i in 1:size(A, 2))
 
-function Base.LinAlg.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
+function Base.LinAlg.qrfact(A::AbstractSparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
     R     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
     E     = Ref{Ptr{CHOLMOD.SuiteSparse_long}}()
     H     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
@@ -193,9 +193,9 @@ Column permutation:
  2
 ```
 """
-Base.LinAlg.qrfact(A::SparseMatrixCSC; tol = _default_tol(A)) = qrfact(A, Val{true}, tol = tol)
+Base.LinAlg.qrfact(A::AbstractSparseMatrixCSC; tol = _default_tol(A)) = qrfact(A, Val{true}, tol = tol)
 
-Base.LinAlg.qr(A::SparseMatrixCSC; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
+Base.LinAlg.qr(A::AbstractSparseMatrixCSC; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
 
 function Base.A_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
     if size(A, 1) != size(Q, 1)
