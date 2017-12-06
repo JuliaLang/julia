@@ -7605,7 +7605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
 },
 
 {
@@ -13253,7 +13253,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.:*",
     "category": "Method",
-    "text": "*(x, y...)\n\nMultiplication operator. x*y*z*... calls this function with all arguments, i.e. *(x, y, z, ...).\n\nExamples\n\njulia> 2 * 7 * 8\n112\n\njulia> *(2, 7, 8)\n112\n\n\n\n*(A::AbstractMatrix, B::AbstractMatrix)\n\nMatrix multiplication.\n\nExamples\n\njulia> [1 1; 0 1] * [1 0; 1 1]\n2×2 Array{Int64,2}:\n 2  1\n 1  1\n\n\n\n"
+    "text": "*(A::AbstractMatrix, B::AbstractMatrix)\n\nMatrix multiplication.\n\nExamples\n\njulia> [1 1; 0 1] * [1 0; 1 1]\n2×2 Array{Int64,2}:\n 2  1\n 1  1\n\n\n\n*(x, y...)\n\nMultiplication operator. x*y*z*... calls this function with all arguments, i.e. *(x, y, z, ...).\n\nExamples\n\njulia> 2 * 7 * 8\n112\n\njulia> *(2, 7, 8)\n112\n\n\n\n"
 },
 
 {
@@ -22017,27 +22017,19 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/libgit2/#Base.LibGit2.AbstractCredentials",
+    "location": "devdocs/libgit2/#Base.LibGit2.UserPasswordCredential",
     "page": "Base.LibGit2",
-    "title": "Base.LibGit2.AbstractCredentials",
+    "title": "Base.LibGit2.UserPasswordCredential",
     "category": "Type",
-    "text": "Abstract credentials payload\n\n\n\n"
+    "text": "Credential that support only user and password parameters\n\n\n\n"
 },
 
 {
-    "location": "devdocs/libgit2/#Base.LibGit2.UserPasswordCredentials",
+    "location": "devdocs/libgit2/#Base.LibGit2.SSHCredential",
     "page": "Base.LibGit2",
-    "title": "Base.LibGit2.UserPasswordCredentials",
+    "title": "Base.LibGit2.SSHCredential",
     "category": "Type",
-    "text": "Credentials that support only user and password parameters\n\n\n\n"
-},
-
-{
-    "location": "devdocs/libgit2/#Base.LibGit2.SSHCredentials",
-    "page": "Base.LibGit2",
-    "title": "Base.LibGit2.SSHCredentials",
-    "category": "Type",
-    "text": "SSH credentials type\n\n\n\n"
+    "text": "SSH credential type\n\n\n\n"
 },
 
 {
@@ -22045,7 +22037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.isfilled",
     "category": "Function",
-    "text": "isfilled(cred::AbstractCredentials) -> Bool\n\nVerifies that a credential is ready for use in authentication.\n\n\n\n"
+    "text": "isfilled(cred::AbstractCredential) -> Bool\n\nVerifies that a credential is ready for use in authentication.\n\n\n\n"
 },
 
 {
@@ -22053,7 +22045,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.CachedCredentials",
     "category": "Type",
-    "text": "Credentials that support caching\n\n\n\n"
+    "text": "Caches credential information for re-use\n\n\n\n"
 },
 
 {
@@ -22085,7 +22077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Functionality",
     "category": "section",
-    "text": "Some of this documentation assumes some prior knowledge of the libgit2 API. For more information on some of the objects and methods referenced here, consult the upstream libgit2 API reference.Base.LibGit2.Buffer\nBase.LibGit2.CheckoutOptions\nBase.LibGit2.CloneOptions\nBase.LibGit2.DescribeOptions\nBase.LibGit2.DescribeFormatOptions\nBase.LibGit2.DiffDelta\nBase.LibGit2.DiffFile\nBase.LibGit2.DiffOptionsStruct\nBase.LibGit2.FetchHead\nBase.LibGit2.FetchOptions\nBase.LibGit2.GitAnnotated\nBase.LibGit2.GitBlame\nBase.LibGit2.GitBlob\nBase.LibGit2.GitCommit\nBase.LibGit2.GitHash\nBase.LibGit2.GitObject\nBase.LibGit2.GitRemote\nBase.LibGit2.GitRemoteAnon\nBase.LibGit2.GitRepo\nBase.LibGit2.GitRepoExt\nBase.LibGit2.GitRevWalker\nBase.LibGit2.GitShortHash\nBase.LibGit2.GitSignature\nBase.LibGit2.GitStatus\nBase.LibGit2.GitTag\nBase.LibGit2.GitTree\nBase.LibGit2.IndexEntry\nBase.LibGit2.IndexTime\nBase.LibGit2.BlameOptions\nBase.LibGit2.MergeOptions\nBase.LibGit2.ProxyOptions\nBase.LibGit2.PushOptions\nBase.LibGit2.RebaseOperation\nBase.LibGit2.RebaseOptions\nBase.LibGit2.RemoteCallbacks\nBase.LibGit2.SignatureStruct\nBase.LibGit2.StatusEntry\nBase.LibGit2.StatusOptions\nBase.LibGit2.StrArrayStruct\nBase.LibGit2.TimeStruct\nBase.LibGit2.add!\nBase.LibGit2.add_fetch!\nBase.LibGit2.add_push!\nBase.LibGit2.addblob!\nBase.LibGit2.author\nBase.LibGit2.authors\nBase.LibGit2.branch\nBase.LibGit2.branch!\nBase.LibGit2.checkout!\nBase.LibGit2.clone\nBase.LibGit2.commit\nBase.LibGit2.committer\nBase.LibGit2.count(::Function, ::Base.LibGit2.GitRevWalker; ::Base.LibGit2.GitHash, ::Cint, ::Bool)\nBase.LibGit2.counthunks\nBase.LibGit2.create_branch\nBase.LibGit2.credentials_callback\nBase.LibGit2.credentials_cb\nBase.LibGit2.default_signature\nBase.LibGit2.delete_branch\nBase.LibGit2.diff_files\nBase.LibGit2.entryid\nBase.LibGit2.entrytype\nBase.LibGit2.fetch\nBase.LibGit2.fetchheads\nBase.LibGit2.fetch_refspecs\nBase.LibGit2.fetchhead_foreach_cb\nBase.LibGit2.merge_base\nBase.LibGit2.merge!(::Base.LibGit2.GitRepo; ::Any...)\nBase.LibGit2.merge!(::Base.LibGit2.GitRepo, ::Vector{Base.LibGit2.GitAnnotated}; ::Base.LibGit2.MergeOptions, ::Base.LibGit2.CheckoutOptions)\nBase.LibGit2.merge!(::Base.LibGit2.GitRepo, ::Vector{Base.LibGit2.GitAnnotated}, ::Bool; ::Base.LibGit2.MergeOptions, ::Base.LibGit2.CheckoutOptions)\nBase.LibGit2.ffmerge!\nBase.LibGit2.fullname\nBase.LibGit2.features\nBase.LibGit2.filename\nBase.LibGit2.filemode\nBase.LibGit2.gitdir\nBase.LibGit2.git_url\nBase.LibGit2.@githash_str\nBase.LibGit2.head\nBase.LibGit2.head!\nBase.LibGit2.head_oid\nBase.LibGit2.headname\nBase.LibGit2.init\nBase.LibGit2.is_ancestor_of\nBase.LibGit2.isbinary\nBase.LibGit2.iscommit\nBase.LibGit2.isdiff\nBase.LibGit2.isdirty\nBase.LibGit2.isorphan\nBase.LibGit2.isset\nBase.LibGit2.iszero\nBase.LibGit2.lookup_branch\nBase.LibGit2.map(::Function, ::Base.LibGit2.GitRevWalker; ::Base.LibGit2.GitHash, ::AbstractString, ::Cint, ::Bool)\nBase.LibGit2.mirror_callback\nBase.LibGit2.mirror_cb\nBase.LibGit2.message\nBase.LibGit2.merge_analysis\nBase.LibGit2.name\nBase.LibGit2.need_update\nBase.LibGit2.objtype\nBase.LibGit2.path\nBase.LibGit2.peel\nBase.LibGit2.posixpath\nBase.LibGit2.push\nBase.LibGit2.push!(::Base.LibGit2.GitRevWalker, ::Base.LibGit2.GitHash)\nBase.LibGit2.push_head!\nBase.LibGit2.push_refspecs\nBase.LibGit2.raw\nBase.LibGit2.read_tree!\nBase.LibGit2.rebase!\nBase.LibGit2.ref_list\nBase.LibGit2.reftype\nBase.LibGit2.remotes\nBase.LibGit2.remove!\nBase.LibGit2.reset\nBase.LibGit2.reset!\nBase.LibGit2.restore\nBase.LibGit2.revcount\nBase.LibGit2.set_remote_url\nBase.LibGit2.shortname\nBase.LibGit2.snapshot\nBase.LibGit2.status\nBase.LibGit2.stage\nBase.LibGit2.tag_create\nBase.LibGit2.tag_delete\nBase.LibGit2.tag_list\nBase.LibGit2.target\nBase.LibGit2.toggle\nBase.LibGit2.transact\nBase.LibGit2.treewalk\nBase.LibGit2.upstream\nBase.LibGit2.update!\nBase.LibGit2.url\nBase.LibGit2.version\nBase.LibGit2.with\nBase.LibGit2.with_warn\nBase.LibGit2.workdir\nBase.LibGit2.GitObject(::Base.LibGit2.GitTreeEntry)\nBase.LibGit2.AbstractCredentials\nBase.LibGit2.UserPasswordCredentials\nBase.LibGit2.SSHCredentials\nBase.LibGit2.isfilled\nBase.LibGit2.CachedCredentials\nBase.LibGit2.CredentialPayload\nBase.LibGit2.approve\nBase.LibGit2.reject"
+    "text": "Some of this documentation assumes some prior knowledge of the libgit2 API. For more information on some of the objects and methods referenced here, consult the upstream libgit2 API reference.Base.LibGit2.Buffer\nBase.LibGit2.CheckoutOptions\nBase.LibGit2.CloneOptions\nBase.LibGit2.DescribeOptions\nBase.LibGit2.DescribeFormatOptions\nBase.LibGit2.DiffDelta\nBase.LibGit2.DiffFile\nBase.LibGit2.DiffOptionsStruct\nBase.LibGit2.FetchHead\nBase.LibGit2.FetchOptions\nBase.LibGit2.GitAnnotated\nBase.LibGit2.GitBlame\nBase.LibGit2.GitBlob\nBase.LibGit2.GitCommit\nBase.LibGit2.GitHash\nBase.LibGit2.GitObject\nBase.LibGit2.GitRemote\nBase.LibGit2.GitRemoteAnon\nBase.LibGit2.GitRepo\nBase.LibGit2.GitRepoExt\nBase.LibGit2.GitRevWalker\nBase.LibGit2.GitShortHash\nBase.LibGit2.GitSignature\nBase.LibGit2.GitStatus\nBase.LibGit2.GitTag\nBase.LibGit2.GitTree\nBase.LibGit2.IndexEntry\nBase.LibGit2.IndexTime\nBase.LibGit2.BlameOptions\nBase.LibGit2.MergeOptions\nBase.LibGit2.ProxyOptions\nBase.LibGit2.PushOptions\nBase.LibGit2.RebaseOperation\nBase.LibGit2.RebaseOptions\nBase.LibGit2.RemoteCallbacks\nBase.LibGit2.SignatureStruct\nBase.LibGit2.StatusEntry\nBase.LibGit2.StatusOptions\nBase.LibGit2.StrArrayStruct\nBase.LibGit2.TimeStruct\nBase.LibGit2.add!\nBase.LibGit2.add_fetch!\nBase.LibGit2.add_push!\nBase.LibGit2.addblob!\nBase.LibGit2.author\nBase.LibGit2.authors\nBase.LibGit2.branch\nBase.LibGit2.branch!\nBase.LibGit2.checkout!\nBase.LibGit2.clone\nBase.LibGit2.commit\nBase.LibGit2.committer\nBase.LibGit2.count(::Function, ::Base.LibGit2.GitRevWalker; ::Base.LibGit2.GitHash, ::Cint, ::Bool)\nBase.LibGit2.counthunks\nBase.LibGit2.create_branch\nBase.LibGit2.credentials_callback\nBase.LibGit2.credentials_cb\nBase.LibGit2.default_signature\nBase.LibGit2.delete_branch\nBase.LibGit2.diff_files\nBase.LibGit2.entryid\nBase.LibGit2.entrytype\nBase.LibGit2.fetch\nBase.LibGit2.fetchheads\nBase.LibGit2.fetch_refspecs\nBase.LibGit2.fetchhead_foreach_cb\nBase.LibGit2.merge_base\nBase.LibGit2.merge!(::Base.LibGit2.GitRepo; ::Any...)\nBase.LibGit2.merge!(::Base.LibGit2.GitRepo, ::Vector{Base.LibGit2.GitAnnotated}; ::Base.LibGit2.MergeOptions, ::Base.LibGit2.CheckoutOptions)\nBase.LibGit2.merge!(::Base.LibGit2.GitRepo, ::Vector{Base.LibGit2.GitAnnotated}, ::Bool; ::Base.LibGit2.MergeOptions, ::Base.LibGit2.CheckoutOptions)\nBase.LibGit2.ffmerge!\nBase.LibGit2.fullname\nBase.LibGit2.features\nBase.LibGit2.filename\nBase.LibGit2.filemode\nBase.LibGit2.gitdir\nBase.LibGit2.git_url\nBase.LibGit2.@githash_str\nBase.LibGit2.head\nBase.LibGit2.head!\nBase.LibGit2.head_oid\nBase.LibGit2.headname\nBase.LibGit2.init\nBase.LibGit2.is_ancestor_of\nBase.LibGit2.isbinary\nBase.LibGit2.iscommit\nBase.LibGit2.isdiff\nBase.LibGit2.isdirty\nBase.LibGit2.isorphan\nBase.LibGit2.isset\nBase.LibGit2.iszero\nBase.LibGit2.lookup_branch\nBase.LibGit2.map(::Function, ::Base.LibGit2.GitRevWalker; ::Base.LibGit2.GitHash, ::AbstractString, ::Cint, ::Bool)\nBase.LibGit2.mirror_callback\nBase.LibGit2.mirror_cb\nBase.LibGit2.message\nBase.LibGit2.merge_analysis\nBase.LibGit2.name\nBase.LibGit2.need_update\nBase.LibGit2.objtype\nBase.LibGit2.path\nBase.LibGit2.peel\nBase.LibGit2.posixpath\nBase.LibGit2.push\nBase.LibGit2.push!(::Base.LibGit2.GitRevWalker, ::Base.LibGit2.GitHash)\nBase.LibGit2.push_head!\nBase.LibGit2.push_refspecs\nBase.LibGit2.raw\nBase.LibGit2.read_tree!\nBase.LibGit2.rebase!\nBase.LibGit2.ref_list\nBase.LibGit2.reftype\nBase.LibGit2.remotes\nBase.LibGit2.remove!\nBase.LibGit2.reset\nBase.LibGit2.reset!\nBase.LibGit2.restore\nBase.LibGit2.revcount\nBase.LibGit2.set_remote_url\nBase.LibGit2.shortname\nBase.LibGit2.snapshot\nBase.LibGit2.status\nBase.LibGit2.stage\nBase.LibGit2.tag_create\nBase.LibGit2.tag_delete\nBase.LibGit2.tag_list\nBase.LibGit2.target\nBase.LibGit2.toggle\nBase.LibGit2.transact\nBase.LibGit2.treewalk\nBase.LibGit2.upstream\nBase.LibGit2.update!\nBase.LibGit2.url\nBase.LibGit2.version\nBase.LibGit2.with\nBase.LibGit2.with_warn\nBase.LibGit2.workdir\nBase.LibGit2.GitObject(::Base.LibGit2.GitTreeEntry)\nBase.LibGit2.UserPasswordCredential\nBase.LibGit2.SSHCredential\nBase.LibGit2.isfilled\nBase.LibGit2.CachedCredentials\nBase.LibGit2.CredentialPayload\nBase.LibGit2.approve\nBase.LibGit2.reject"
 },
 
 {
