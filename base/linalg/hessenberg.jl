@@ -47,10 +47,8 @@ julia> F[:Q] * F[:H] * F[:Q]'
  4.0  3.0  2.0
 ```
 """
-function hessfact(A::StridedMatrix{T}) where T
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
-    return hessfact!(copy_oftype(A, S))
-end
+hessfact(A::StridedMatrix{T}) where T =
+    hessfact!(copy_oftype(A, eigtype(T)))
 
 struct HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::S
