@@ -85,35 +85,3 @@ ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::Abstract
 # fallback methods for transposed solves
 \(transF::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = (F = transF.parent; Ac_ldiv_B(F, B))
 \(transF::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) = (F = transF.parent; conj.(Ac_ldiv_B(F, conj.(B))))
-
-"""
-    A_ldiv_B!([Y,] A, B) -> Y
-
-Compute `A \\ B` in-place and store the result in `Y`, returning the result.
-If only two arguments are passed, then `A_ldiv_B!(A, B)` overwrites `B` with
-the result.
-
-The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
-factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
-The reason for this is that factorization itself is both expensive and typically allocates memory
-(although it can also be done in-place via, e.g., [`lufact!`](@ref)),
-and performance-critical situations requiring `A_ldiv_B!` usually also require fine-grained
-control over the factorization of `A`.
-"""
-A_ldiv_B!
-
-"""
-    Ac_ldiv_B!([Y,] A, B) -> Y
-
-Similar to [`A_ldiv_B!`](@ref), but return ``Aᴴ`` \\ ``B``,
-computing the result in-place in `Y` (or overwriting `B` if `Y` is not supplied).
-"""
-Ac_ldiv_B!
-
-"""
-    At_ldiv_B!([Y,] A, B) -> Y
-
-Similar to [`A_ldiv_B!`](@ref), but return ``Aᵀ`` \\ ``B``,
-computing the result in-place in `Y` (or overwriting `B` if `Y` is not supplied).
-"""
-At_ldiv_B!

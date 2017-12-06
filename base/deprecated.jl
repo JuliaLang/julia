@@ -2476,6 +2476,226 @@ end
     At_mul_B(x::StridedVector{T}, y::StridedVector{T}) where {T<:BlasComplex} = *(Transpose(x), y)
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/triangular.jl, to deprecate
+@eval Base.LinAlg begin
+    A_mul_Bc(A::AbstractTriangular, B::AbstractTriangular) = *(A, Adjoint(B))
+    A_mul_Bt(A::AbstractTriangular, B::AbstractTriangular) = *(A, Transpose(B))
+    Ac_mul_B(A::AbstractTriangular, B::AbstractTriangular) = *(Adjoint(A), B)
+    At_mul_B(A::AbstractTriangular, B::AbstractTriangular) = *(Transpose(A), B)
+    Ac_ldiv_B(A::Union{UpperTriangular,LowerTriangular}, B::RowVector) = \(Adjoint(A), B)
+    Ac_ldiv_B(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::RowVector) = \(Adjoint(A), B)
+    At_ldiv_B(A::Union{UpperTriangular,LowerTriangular}, B::RowVector) = \(Transpose(A), B)
+    At_ldiv_B(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::RowVector) = \(Transpose(A), B)
+    A_rdiv_Bc(rowvec::RowVector, A::Union{UpperTriangular,LowerTriangular}) = /(rowvec, Adjoint(A))
+    A_rdiv_Bc(rowvec::RowVector, A::Union{UnitUpperTriangular,UnitLowerTriangular}) = /(rowvec, Adjoint(A))
+    A_rdiv_Bt(rowvec::RowVector, A::Union{UpperTriangular,LowerTriangular}) = /(rowvec, Transpose(A))
+    A_rdiv_Bt(rowvec::RowVector, A::Union{UnitUpperTriangular,UnitLowerTriangular}) = /(rowvec, Transpose(A))
+    A_mul_Bt(rowvec::RowVector, A::AbstractTriangular) = *(rowvec, Transpose(A))
+    A_mul_Bt(A::AbstractTriangular, rowvec::RowVector) = *(A, Transpose(rowvec))
+    At_mul_Bt(A::AbstractTriangular, rowvec::RowVector) = *(Transpose(A), Transpose(rowvec))
+    A_mul_Bc(rowvec::RowVector, A::AbstractTriangular) = *(rowvec, Adjoint(A))
+    A_mul_Bc(A::AbstractTriangular, rowvec::RowVector) = *(A, Adjoint(rowvec))
+    Ac_mul_Bc(A::AbstractTriangular, rowvec::RowVector) = *(Adjoint(A), Adjoint(rowvec))
+    Ac_mul_B(A::AbstractMatrix, B::AbstractTriangular) = *(Adjoint(A), B)
+    At_mul_B(A::AbstractMatrix, B::AbstractTriangular) = *(Transpose(A), B)
+    A_mul_Bc(A::AbstractTriangular, B::AbstractMatrix) = *(A, Adjoint(B))
+    A_mul_Bt(A::AbstractTriangular, B::AbstractMatrix) = *(A, Transpose(B))
+    Ac_mul_Bc(A::AbstractTriangular, B::AbstractTriangular) = *(Adjoint(A), Adjoint(B))
+    Ac_mul_Bc(A::AbstractTriangular, B::AbstractMatrix) = *(Adjoint(A), Adjoint(B))
+    Ac_mul_Bc(A::AbstractMatrix, B::AbstractTriangular) = *(Adjoint(A), Adjoint(B))
+    At_mul_Bt(A::AbstractTriangular, B::AbstractTriangular) = *(Transpose(A), Transpose(B))
+    At_mul_Bt(A::AbstractTriangular, B::AbstractMatrix) = *(Transpose(A), Transpose(B))
+    At_mul_Bt(A::AbstractMatrix, B::AbstractTriangular) = *(Transpose(A), Transpose(B))
+    A_mul_Bc!(A::UpperTriangular, B::Union{LowerTriangular,UnitLowerTriangular}) = mul!(A, Adjoint(B))
+    A_mul_Bc!(A::LowerTriangular, B::Union{UpperTriangular,UnitUpperTriangular}) = mul!(A, Adjoint(B))
+    A_mul_Bt!(A::UpperTriangular, B::Union{LowerTriangular,UnitLowerTriangular}) = mul!(A, Transpose(B))
+    A_mul_Bt!(A::LowerTriangular, B::Union{UpperTriangular,UnitUpperTriangular}) = mul!(A, Transpose(B))
+    A_rdiv_Bc!(A::UpperTriangular, B::Union{LowerTriangular,UnitLowerTriangular}) = rdiv!(A, Adjoint(B))
+    A_rdiv_Bc!(A::LowerTriangular, B::Union{UpperTriangular,UnitUpperTriangular}) = rdiv!(A, Adjoint(B))
+    A_rdiv_Bt!(A::UpperTriangular, B::Union{LowerTriangular,UnitLowerTriangular}) = rdiv!(A, Transpose(B))
+    A_rdiv_Bt!(A::LowerTriangular, B::Union{UpperTriangular,UnitUpperTriangular}) = rdiv!(A, Transpose(B))
+    A_rdiv_B!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular}) = rdiv!(A, B)
+    A_rdiv_B!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular}) = rdiv!(A, B)
+    Ac_mul_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular) = mul!(Adjoint(A), B)
+    Ac_mul_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular) = mul!(Adjoint(A), B)
+    At_mul_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular) = mul!(Transpose(A), B)
+    At_mul_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular) = mul!(Transpose(A), B)
+    Ac_ldiv_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular) = ldiv!(Adjoint(A), B)
+    Ac_ldiv_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular) = ldiv!(Adjoint(A), B)
+    At_ldiv_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular) = ldiv!(Transpose(A), B)
+    At_ldiv_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular) = ldiv!(Transpose(A), B)
+    A_rdiv_Bt!(A::StridedMatrix, B::UnitLowerTriangular) = rdiv!(A, Transpose(B))
+    A_rdiv_Bt!(A::StridedMatrix, B::LowerTriangular) = rdiv!(A, Transpose(B))
+    A_rdiv_Bt!(A::StridedMatrix, B::UnitUpperTriangular) = rdiv!(A, Transpose(B))
+    A_rdiv_Bt!(A::StridedMatrix, B::UpperTriangular) = rdiv!(A, Transpose(B))
+    A_rdiv_Bc!(A::StridedMatrix, B::UnitLowerTriangular) = rdiv!(A, Adjoint(B))
+    A_rdiv_Bc!(A::StridedMatrix, B::LowerTriangular) = rdiv!(A, Adjoint(B))
+    A_rdiv_Bc!(A::StridedMatrix, B::UnitUpperTriangular) = rdiv!(A, Adjoint(B))
+    A_rdiv_Bc!(A::StridedMatrix, B::UpperTriangular) = rdiv!(A, Adjoint(B))
+    A_rdiv_B!(A::StridedMatrix, B::UnitLowerTriangular) = rdiv!(A, B)
+    A_rdiv_B!(A::StridedMatrix, B::LowerTriangular) = rdiv!(A, B)
+    A_rdiv_B!(A::StridedMatrix, B::UnitUpperTriangular) = rdiv!(A, B)
+    A_rdiv_B!(A::StridedMatrix, B::UpperTriangular) = rdiv!(A, B)
+    Ac_ldiv_B!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector = b) = ldiv!(Adjoint(A), b, x)
+    Ac_ldiv_B!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b) = ldiv!(Adjoint(A), b, x)
+    Ac_ldiv_B!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector = b) = ldiv!(Adjoint(A), b, x)
+    Ac_ldiv_B!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b) = ldiv!(Adjoint(A), b, x)
+    At_ldiv_B!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector = b) = ldiv!(Transpose(A), b, x)
+    At_ldiv_B!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b) = ldiv!(Transpose(A), b, x)
+    At_ldiv_B!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector = b) = ldiv!(Transpose(A), b, x)
+    At_ldiv_B!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b) = ldiv!(Transpose(A), b, x)
+    A_mul_Bt!(A::StridedMatrix, B::UnitLowerTriangular) = mul!(A, Transpose(B))
+    A_mul_Bt!(A::StridedMatrix, B::LowerTriangular) = mul!(A, Transpose(B))
+    A_mul_Bt!(A::StridedMatrix, B::UnitUpperTriangular) = mul!(A, Transpose(B))
+    A_mul_Bt!(A::StridedMatrix, B::UpperTriangular) = mul!(A, Transpose(B))
+    A_mul_Bc!(A::StridedMatrix, B::UnitLowerTriangular) = mul!(A, Adjoint(B))
+    A_mul_Bc!(A::StridedMatrix, B::LowerTriangular) = mul!(A, Adjoint(B))
+    A_mul_Bc!(A::StridedMatrix, B::UnitUpperTriangular) = mul!(A, Adjoint(B))
+    A_mul_Bc!(A::StridedMatrix, B::UpperTriangular) = mul!(A, Adjoint(B))
+    A_mul_B!(A::StridedMatrix, B::UnitLowerTriangular) = mul!(A, B)
+    A_mul_B!(A::StridedMatrix, B::LowerTriangular) = mul!(A, B)
+    A_mul_B!(A::StridedMatrix, B::UnitUpperTriangular) = mul!(A, B)
+    A_mul_B!(A::StridedMatrix, B::UpperTriangular) = mul!(A, B)
+    At_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat) = mul!(Transpose(A), B)
+    At_mul_B!(A::LowerTriangular, B::StridedVecOrMat) = mul!(Transpose(A), B)
+    At_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat) = mul!(Transpose(A), B)
+    At_mul_B!(A::UpperTriangular, B::StridedVecOrMat) = mul!(Transpose(A), B)
+    Ac_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat) = mul!(Adjoint(A), B)
+    Ac_mul_B!(A::LowerTriangular, B::StridedVecOrMat) = mul!(Adjoint(A), B)
+    Ac_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat) = mul!(Adjoint(A), B)
+    Ac_mul_B!(A::UpperTriangular, B::StridedVecOrMat) = mul!(Adjoint(A), B)
+    A_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat) = mul!(A, B)
+    A_mul_B!(A::LowerTriangular, B::StridedVecOrMat) = mul!(A, B)
+    A_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat) = mul!(A, B)
+    A_mul_B!(A::UpperTriangular, B::StridedVecOrMat) = mul!(A, B)
+    A_mul_B!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = mul!(C, A, B)
+    A_mul_B!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = mul!(C, A, B)
+    A_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = mul!(C, A, B)
+    Ac_mul_B!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = mul!(C, Adjoint(A), B)
+    Ac_mul_B!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = mul!(C, Adjoint(A), B)
+    Ac_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = mul!(C, Adjoint(A), B)
+    At_mul_B!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = mul!(C, Transpose(A), B)
+    At_mul_B!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = mul!(C, Transpose(A), B)
+    At_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = mul!(C, Transpose(A), B)
+    A_mul_B!(A::Tridiagonal, B::AbstractTriangular) = mul!(A, B)
+    A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = mul!(C, A, B)
+    A_mul_B!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = mul!(C, A, B)
+    A_mul_Bt!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = mul!(C, A, Transpose(B))
+    A_mul_Bc!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVecOrMat) = mul!(C, A, Adjoint(B))
+    A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = mul!(C, A, Adjoint(B))
+end
+for mat in (:AbstractVector, :AbstractMatrix)
+    @eval Base.LinAlg begin
+        Ac_mul_B(A::AbstractTriangular, B::$mat) = *(Adjoint(A), B)
+        At_mul_B(A::AbstractTriangular, B::$mat) = *(Transpose(A), B)
+        Ac_ldiv_B(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat) = \(Adjoint(A), B)
+        At_ldiv_B(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat) = \(Transpose(A), B)
+        Ac_ldiv_B(A::Union{UpperTriangular,LowerTriangular}, B::$mat) = \(Adjoint(A), B)
+        At_ldiv_B(A::Union{UpperTriangular,LowerTriangular}, B::$mat) = \(Transpose(A), B)
+        A_rdiv_Bc(A::$mat, B::Union{UnitUpperTriangular, UnitLowerTriangular}) = /(A, Adjoint(B))
+        A_rdiv_Bt(A::$mat, B::Union{UnitUpperTriangular, UnitLowerTriangular}) = /(A, Transpose(B))
+        A_rdiv_Bc(A::$mat, B::Union{UpperTriangular,LowerTriangular}) = /(A, Adjoint(B))
+        A_rdiv_Bt(A::$mat, B::Union{UpperTriangular,LowerTriangular}) = /(A, Transpose(B))
+    end
+end
+@eval Base.LinAlg begin
+    A_mul_Bc(A::AbstractMatrix, B::AbstractTriangular) = *(A, Adjoint(B))
+    A_mul_Bt(A::AbstractMatrix, B::AbstractTriangular) = *(A, Transpose(B))
+end
+for (f, op, transform) in (
+        (:A_mul_Bc, :*, :Adjoint),
+        (:A_mul_Bt, :*, :Transpose),
+        (:A_rdiv_Bc, :/, :Adjoint),
+        (:A_rdiv_Bt, :/, :Transpose))
+    @eval Base.LinAlg begin
+        $f(A::LowerTriangular, B::UpperTriangular) = ($op)(A, ($transform)(B))
+        $f(A::LowerTriangular, B::UnitUpperTriangular) = ($op)(A, ($transform)(B))
+        $f(A::UpperTriangular, B::LowerTriangular) = ($op)(A, ($transform)(B))
+        $f(A::UpperTriangular, B::UnitLowerTriangular) = ($op)(A, ($transform)(B))
+    end
+end
+for (f, op, transform) in (
+        (:Ac_mul_B, :*, :Adjoint),
+        (:At_mul_B, :*, :Transpose),
+        (:Ac_ldiv_B, :\, :Adjoint),
+        (:At_ldiv_B, :\, :Transpose))
+    @eval Base.LinAlg begin
+        ($f)(A::UpperTriangular, B::LowerTriangular) = ($op)(($transform)(A), B)
+        ($f)(A::UnitUpperTriangular, B::LowerTriangular) = ($op)(($transform)(A), B)
+        ($f)(A::LowerTriangular, B::UpperTriangular) = ($op)(($transform)(A), B)
+        ($f)(A::UnitLowerTriangular, B::UpperTriangular) = ($op)(($transform)(A), B)
+    end
+end
+for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
+                            (:UnitLowerTriangular, 'L', 'U'),
+                            (:UpperTriangular, 'U', 'N'),
+                            (:UnitUpperTriangular, 'U', 'U'))
+    @eval Base.LinAlg begin
+        # Vector multiplication
+        A_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat} = mul!(A, b)
+        At_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat} = mul!(Transpose(A), b)
+        Ac_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasReal} = mul!(Adjoint(A), b)
+        Ac_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasComplex} = mul!(Adjoint(A), b)
+
+        # Matrix multiplication
+        A_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} = mul!(A, B)
+        A_mul_B!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} = mul!(A, B)
+
+        At_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} = mul!(Transpose(A), B)
+        Ac_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasComplex} = mul!(Adjoint(A), B)
+        Ac_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasReal} = mul!(Adjoint(A), B)
+
+        A_mul_Bt!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} = mul!(A, Transpose(B))
+        A_mul_Bc!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasComplex} = mul!(A, Adjoint(B))
+        A_mul_Bc!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasReal} = mul!(A, Adjoint(B))
+
+        # Left division
+        A_ldiv_B!(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = ldiv!(A, B)
+        At_ldiv_B!(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = ldiv!(Transpose(A), B)
+        Ac_ldiv_B!(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasReal} = ldiv!(Adjoint(A), B)
+        Ac_ldiv_B!(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasComplex} = ldiv!(Adjoint(A), B)
+
+        # Right division
+        A_rdiv_B!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} = rdiv!(A, B)
+        A_rdiv_Bt!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} = rdiv!(A, Transpose(B))
+        A_rdiv_Bc!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasReal} = rdiv!(A, Adjoint(B))
+        A_rdiv_Bc!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasComplex} = rdiv!(A, Adjoint(B))
+    end
+end
+@eval Base.LinAlg begin
+    """
+        A_ldiv_B!([Y,] A, B) -> Y
+
+    Compute `A \\ B` in-place and store the result in `Y`, returning the result.
+    If only two arguments are passed, then `A_ldiv_B!(A, B)` overwrites `B` with
+    the result.
+
+    The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
+    factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
+    The reason for this is that factorization itself is both expensive and typically allocates memory
+    (although it can also be done in-place via, e.g., [`lufact!`](@ref)),
+    and performance-critical situations requiring `A_ldiv_B!` usually also require fine-grained
+    control over the factorization of `A`.
+    """
+    A_ldiv_B!
+
+    """
+        Ac_ldiv_B!([Y,] A, B) -> Y
+
+    Similar to [`A_ldiv_B!`](@ref), but return ``Aᴴ`` \\ ``B``,
+    computing the result in-place in `Y` (or overwriting `B` if `Y` is not supplied).
+    """
+    Ac_ldiv_B!
+
+    """
+        At_ldiv_B!([Y,] A, B) -> Y
+
+    Similar to [`A_ldiv_B!`](@ref), but return ``Aᵀ`` \\ ``B``,
+    computing the result in-place in `Y` (or overwriting `B` if `Y` is not supplied).
+    """
+    At_ldiv_B!
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
