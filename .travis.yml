@@ -73,6 +73,11 @@ before_install:
         gcc --version;
         BAR="bar -i 30";
         BUILDOPTS="-j5 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1";
+        if [ "$ARCH" = "x86_64" ]; then
+            BUILDOPTS="$BUILDOPTS JULIA_CPU_TARGET=x86-64";
+        else
+            BUILDOPTS="$BUILDOPTS JULIA_CPU_TARGET=i686";
+        fi;
         echo "override ARCH=$ARCH" >> Make.user;
         sudo sh -c "echo 0 > /proc/sys/net/ipv6/conf/lo/disable_ipv6";
         export JULIA_CPU_CORES=4;
@@ -101,7 +106,6 @@ before_install:
         export JULIA_CPU_CORES=2;
         export JULIA_TEST_MAXRSS_MB=600;
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
-    - echo "override JULIA_CPU_TARGET=$ARCH" >> Make.user
     - git clone -q git://git.kitenet.net/moreutils
 script:
     - echo BUILDOPTS=$BUILDOPTS
