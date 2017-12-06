@@ -1826,6 +1826,12 @@ function *(A::AbstractMatrix, transB::Transpose{<:Any,<:AbstractTriangular})
     copy!(AA, A)
     A_mul_Bt!(AA, convert(AbstractArray{TAB}, B))
 end
+# ambiguity resolution with definitions in linalg/rowvector.jl
+*(transA::Transpose{<:Any,<:AbstractVector}, B::AbstractTriangular) = *(transpose(transA.parent), B)
+*(adjA::Adjoint{<:Any,<:AbstractVector}, B::AbstractTriangular) = *(adjoint(adjA.parent), B)
+*(transA::Transpose{<:Any,<:AbstractVector}, transB::Transpose{<:Any,<:AbstractTriangular}) = *(transpose(transA.parent), transB)
+*(adjA::Adjoint{<:Any,<:AbstractVector}, adjB::Adjoint{<:Any,<:AbstractTriangular}) = *(adjoint(adjA.parent), adjB)
+
 
 # If these are not defined, they will fallback to the versions in matmul.jl
 # and dispatch to generic_matmatmul! which is very costly to compile. The methods
@@ -1844,7 +1850,7 @@ end
 *(transA::Transpose{<:Any,<:AbstractMatrix}, transB::Transpose{<:Any,<:AbstractTriangular}) = A_mul_Bt(transA.parent.', transB.parent)
 
 # Specializations for RowVector
-@inline *(rowvec::RowVector, A::AbstractTriangular) = transpose(A * transpose(rowvec))
+*(rowvec::RowVector, A::AbstractTriangular) = transpose(transpose(A) * transpose(rowvec))
 *(rowvec::RowVector, transA::Transpose{<:Any,<:AbstractTriangular}) = transpose(transA.parent * transpose(rowvec))
 *(A::AbstractTriangular, transrowvec::Transpose{<:Any,<:RowVector}) = A * transpose(transrowvec.parent)
 *(transA::Transpose{<:Any,<:AbstractTriangular}, transrowvec::Transpose{<:Any,<:RowVector}) = transA.parent.' * transpose(transrowvec.parent)

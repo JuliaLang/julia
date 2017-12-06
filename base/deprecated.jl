@@ -2769,6 +2769,49 @@ end
     A_mul_B!(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} = mul!(y, A, x)
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/rowvector.jl, to deprecate
+@eval Base.LinAlg begin
+    A_rdiv_Bt(rowvec::RowVector, mat::AbstractMatrix) = /(rowvec, Transpose(mat))
+    A_rdiv_Bc(rowvec::RowVector, mat::AbstractMatrix) = /(rowvec, Adjoint(mat))
+    At_ldiv_B(mat::AbstractMatrix, rowvec::RowVector) = \(Transpose(mat), rowvec)
+    Ac_ldiv_B(mat::AbstractMatrix, rowvec::RowVector) = \(Adjoint(mat), rowvec)
+    Ac_mul_B(u::RowVector, v::AbstractVector) = *(Adjoint(u), v)
+    Ac_mul_B(vec::AbstractVector, mat::AbstractMatrix) = *(Adjoint(vec), mat)
+    Ac_mul_B(rowvec1::RowVector, rowvec2::RowVector) = *(Adjoint(rowvec1), rowvec2)
+    Ac_mul_B(vec::AbstractVector, rowvec::RowVector) = *(Adjoint(vec), rowvec)
+    Ac_mul_B(vec1::AbstractVector, vec2::AbstractVector) = *(Adjoint(vec1), vec2)
+    Ac_mul_Bc(rowvec::RowVector, vec::AbstractVector) = *(Adjoint(rowvec), Adjoint(vec))
+    Ac_mul_Bc(vec::AbstractVector, mat::AbstractMatrix) = *(Adjoint(vec), Adjoint(mat))
+    Ac_mul_Bc(rowvec1::RowVector, rowvec2::RowVector) = *(Adjoint(rowvec1), Adjoint(rowvec2))
+    Ac_mul_Bc(vec::AbstractVector, rowvec::RowVector) = *(Adjoint(vec), Adjoint(rowvec))
+    Ac_mul_Bc(vec::AbstractVector, rowvec::AbstractVector) = *(Adjoint(vec), Adjoint(rowvec))
+    Ac_mul_Bc(mat::AbstractMatrix, rowvec::RowVector) = *(Adjoint(mat), Adjoint(rowvec))
+    A_mul_Bc(u::RowVector, v::AbstractVector) = *(u, Adjoint(v))
+    A_mul_Bc(rowvec::RowVector, mat::AbstractMatrix) = *(rowvec, Adjoint(mat))
+    A_mul_Bc(rowvec1::RowVector, rowvec2::RowVector) = *(rowvec1, Adjoint(rowvec2))
+    A_mul_Bc(vec::AbstractVector, rowvec::RowVector) = *(vec, Adjoint(rowvec))
+    A_mul_Bc(vec1::AbstractVector, vec2::AbstractVector) = *(vec1, Adjoint(vec2))
+    A_mul_Bc(mat::AbstractMatrix, rowvec::RowVector) = *(mat, Adjoint(rowvec))
+    At_mul_B(v::RowVector, u::AbstractVector) = *(Transpose(v), u)
+    At_mul_B(vec::AbstractVector, mat::AbstractMatrix) = *(Transpose(vec), mat)
+    At_mul_B(rowvec1::RowVector, rowvec2::RowVector) = *(Transpose(rowvec1), rowvec2)
+    At_mul_B(vec::AbstractVector, rowvec::RowVector) = *(Transpose(vec), rowvec)
+    At_mul_B(vec1::AbstractVector{T}, vec2::AbstractVector{T}) where {T<:Real} = *(Transpose(vec1), vec2)
+    At_mul_B(vec1::AbstractVector, vec2::AbstractVector) = *(Transpose(vec1), vec2)
+    At_mul_Bt(rowvec::RowVector, vec::AbstractVector) = *(Transpose(rowvec), Transpose(vec))
+    At_mul_Bt(vec::AbstractVector, mat::AbstractMatrix) = *(Transpose(vec), Transpose(mat))
+    At_mul_Bt(rowvec1::RowVector, rowvec2::RowVector) = *(Transpose(rowvec1), Transpose(rowvec2))
+    At_mul_Bt(vec::AbstractVector, rowvec::RowVector) = *(Transpose(vec), Transpose(rowvec))
+    At_mul_Bt(vec::AbstractVector, rowvec::AbstractVector) = *(Transpose(vec), Transpose(rowvec))
+    At_mul_Bt(mat::AbstractMatrix, rowvec::RowVector) = *(Transpose(mat), Transpose(rowvec))
+    A_mul_Bt(v::RowVector, A::AbstractVector) = *(v, Transpose(A))
+    A_mul_Bt(rowvec::RowVector, mat::AbstractMatrix) = *(rowvec, Transpose(mat))
+    A_mul_Bt(rowvec1::RowVector, rowvec2::RowVector) = *(rowvec1, Transpose(rowvec2))
+    A_mul_Bt(vec::AbstractVector, rowvec::RowVector) = *(vec, Transpose(rowvec))
+    A_mul_Bt(vec1::AbstractVector, vec2::AbstractVector) = *(vec1, Transpose(vec2))
+    A_mul_Bt(mat::AbstractMatrix, rowvec::RowVector) = *(mat, Transpose(rowvec))
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
