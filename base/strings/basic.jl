@@ -22,11 +22,13 @@ Some string functions error if you use an out-of-bounds or invalid string index,
 including code unit extraction `codeunit(s,i)`, string indexing `s[i]`, and
 string iteration `next(s,i)`. Other string functions take a more relaxed
 approach to indexing and give you the closest valid string index when in-bounds,
-or when out-of-bounds, behave as if there were an infinite number of single-
-code-unit characters padding each side of the string. These "relaxed" indexing
-functions include those intended for index arithmetic: `thisind`, `nextind` and
-`prevind`. This model allows index arithmetic to work with out-of-bounds indices
-as intermediate values so long as one never uses them to retrieve a character.
+or when out-of-bounds, behave as if there were an infinite number of characters
+padding each side of the string. Usually these imaginary padding characters have
+code unit length `1`, but string types may choose different sizes. Relaxed
+indexing functions include those intended for index arithmetic: `thisind`,
+`nextind` and `prevind`. This model allows index arithmetic to work with out-of-
+bounds indices as intermediate values so long as one never uses them to retrieve
+a character, which often helps avoid needing to code around edge cases.
 
 See also: `codeunit`, `ncodeunits`, `thisind`, `nextind`, `prevind`
 """
@@ -653,7 +655,7 @@ julia> first("∀ϵ≠0: ϵ²>0", 3)
 "∀ϵ≠"
 ```
 """
-first(s::AbstractString, n::Integer) = s[1:min(end,nextind(s,0,n))]
+first(s::AbstractString, n::Integer) = s[1:min(end, nextind(s, 0, n))]
 
 """
     last(s::AbstractString, n::Integer)
@@ -671,7 +673,54 @@ julia> last("∀ϵ≠0: ϵ²>0", 3)
 "²>0"
 ```
 """
-last(s::AbstractString, n::Integer) = s[max(1,prevind(s,ncodeunits(s)+1,n)):end]
+last(s::AbstractString, n::Integer) = s[max(1, prevind(s, ncodeunits(s)+1, n)):end]
+
+"""
+    reverseind(v, i)
+
+Given an index `i` in [`reverse(v)`](@ref), return the corresponding index in `v` so that
+`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in cases where `v` contains
+non-ASCII characters.)
+
+# Examples
+```jldoctest
+julia> r = reverse("Julia")
+"ailuJ"
+
+julia> for i in 1:length(r)
+           print(r[reverseind("Julia", i)])
+       end
+Julia
+```
+"""
+reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
+
+"""
+    repeat(s::AbstractString, r::Integer)
+
+Repeat a string `r` times. This can equivalently be accomplished by calling [`s^r`](@ref ^).
+
+# Examples
+```jldoctest
+julia> repeat("ha", 3)
+"hahaha"
+```
+"""
+repeat(s::AbstractString, r::Integer) = repeat(convert(String, s), r)
+
+"""
+    ^(s::Union{AbstractString,Char}, n::Integer)
+
+Repeat a string or character `n` times.
+The [`repeat`](@ref) function is an alias to this operator.
+
+# Examples
+```jldoctest
+julia> "Test "^3
+"Test Test Test "
+```
+"""
+(^)(s::Union{AbstractString,Char}, r::Integer) = repeat(s, r)
 
 # reverse-order iteration for strings and indices thereof
 start(r::Iterators.Reverse{<:AbstractString}) = endof(r.itr)
