@@ -292,8 +292,9 @@ julia> length("jμΛIα")
 ```
 """
 function length(s::AbstractString, lo::Integer=1, hi::Integer=ncodeunits(s))
-    a = Int(max(lo, 1))
-    b = Int(min(hi, ncodeunits(s)))
+    z = ncodeunits(s)
+    a = Int(clamp(lo, 1, z))
+    b = Int(clamp(hi, 1, z))
     n = a - b
     for i = a:b
         n += isvalid(s, i)
@@ -348,7 +349,7 @@ If `i` is in bounds in `s` return the index of the start of the character whose
 encoding starts before index `i`. In other words, if `i` is the start of a
 character, return the start of the previous character; if `i` is not the start
 of a character, rewind until the start of a character and return that index.
-If `i` is out of bounds in `s` return `i - 1`.
+If `i` is out of bounds in `s` return `i - 1`. If `n == 0` return `i`.
 
 # Examples
 ```jldoctest
@@ -366,8 +367,8 @@ julia> prevind("αβγdef", 3, 2)
 ```
 """
 function prevind(s::AbstractString, i::Integer, n::Integer=1)
-    n > 0 || throw(ArgumentError("n must be greater than 0"))
-    z = ncodeunits(s)
+    n < 0 && throw(ArgumentError("n cannot be negative: $n"))
+    z = ncodeunits(s) + 1
     if i > z
         n -= i - z
         i = z
@@ -383,6 +384,7 @@ end
 
 If `i` is in bounds in `s` return the index of the start of the character whose
 encoding starts after index `i`. If `i` is out of bounds in `s` return `i + 1`.
+If `n == 0` return `i`.
 
 # Examples
 ```jldoctest
@@ -402,7 +404,7 @@ julia> nextind(str, 9)
 ```
 """
 function nextind(s::AbstractString, i::Integer, n::Integer=1)
-    n > 0 || throw(ArgumentError("n must be greater than 0"))
+    n < 0 && throw(ArgumentError("n cannot be negative: $n"))
     if i < 1
         n += i - 1
         i = 1
@@ -617,7 +619,7 @@ function map(f, s::AbstractString)
     for c in s
         c′ = f(c)
         isa(c′, Char) || throw(ArgumentError(
-            "map(f, s::AbstractString) requires f to return Char; "
+            "map(f, s::AbstractString) requires f to return Char; " *
             "try map(f, collect(s)) or a comprehension instead"))
         write(out, c′::Char)
     end
@@ -636,9 +638,9 @@ end
 ## string first and last ##
 
 """
-    first(str::AbstractString, n::Integer)
+    first(s::AbstractString, n::Integer)
 
-Get a string consisting of the first `n` characters of `str`.
+Get a string consisting of the first `n` characters of `s`.
 
 ```jldoctest
 julia> first("∀ϵ≠0: ϵ²>0", 0)
@@ -651,18 +653,12 @@ julia> first("∀ϵ≠0: ϵ²>0", 3)
 "∀ϵ≠"
 ```
 """
-first(str::AbstractString, n::Integer) = str[1:nextind(s, 1, n)]
-
-    if 0 <= n <= 1
-        return str[1:n]
-    end
-    str[1:nextind(str, 1, n-1)]
-end
+first(s::AbstractString, n::Integer) = s[1:min(end,nextind(s,0,n))]
 
 """
-    last(str::AbstractString, n::Integer)
+    last(s::AbstractString, n::Integer)
 
-Get a string consisting of the last `n` characters of `str`.
+Get a string consisting of the last `n` characters of `s`.
 
 ```jldoctest
 julia> last("∀ϵ≠0: ϵ²>0", 0)
@@ -675,13 +671,7 @@ julia> last("∀ϵ≠0: ϵ²>0", 3)
 "²>0"
 ```
 """
-function last(str::AbstractString, n::Integer)
-    e = endof(str)
-    if 0 <= n <= 1
-        return str[(e-n+1):e]
-    end
-    str[prevind(str, e, n-1):e]
-end
+last(s::AbstractString, n::Integer) = s[max(1,prevind(s,ncodeunits(s)+1,n)):end]
 
 # reverse-order iteration for strings and indices thereof
 start(r::Iterators.Reverse{<:AbstractString}) = endof(r.itr)

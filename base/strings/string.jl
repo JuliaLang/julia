@@ -60,58 +60,13 @@ String(s::Symbol) = unsafe_string(Cstring(s))
 pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
 pointer(s::String, i::Integer) = pointer(s)+(i-1)
 
-sizeof(s::String) = Core.sizeof(s)
-
-"""
-    codeunit(s::AbstractString, i::Integer)
-
-Get the `i`th code unit of an encoded string. For example,
-returns the `i`th byte of the representation of a UTF-8 string.
-
-# Examples
-```jldoctest
-julia> s = "δ=γ"; [codeunit(s, i) for i in 1:sizeof(s)]
-5-element Array{UInt8,1}:
- 0xce
- 0xb4
- 0x3d
- 0xce
- 0xb3
-```
-"""
-codeunit(s::AbstractString, i::Integer)
+ncodeunits(s::String) = Core.sizeof(s)
+codeunit(s::String) = UInt8
 
 @inline function codeunit(s::String, i::Integer)
     @boundscheck between(i, 1, ncodeunits(s)) || throw(BoundsError(s, i))
     @gc_preserve s unsafe_load(pointer(s, i))
 end
-
-"""
-    codeunit(s::AbstractString)
-
-Without an index argument `codeunit(s)` gives the code unit type of the string `s`.
-
-# Examples
-```jldoctest
-julia> codeunit("Hello")
-UInt8
-```
-"""
-codeunit(::String) = UInt8
-
-"""
-    ncodeunits(s::AbstractString)
-
-The number of code units in a string. For example, for UTF-8-like data such as
-the default `String` type, the number of code units is the number of bytes in
-the string, a.k.a. `sizeof(s)`. For a UTF-16 encoded string type, however, the
-code unit is `UInt16` so the number of code units is the number of `UInt16`
-words in the representation of the string. The expression `codeunit(s, i)` is
-valid and safe for precisely the range of `i` values `1:ncodeunits(s)`.
-
-See also: [`codeunit`](@ref).
-"""
-ncodeunits(s::String) = sizeof(s)
 
 write(io::IO, s::String) =
     @gc_preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
@@ -130,7 +85,11 @@ function ==(a::String, b::String)
     al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
 end
 
-## thisind, prevind and nextind ##
+## thisind, nextind, prevind ##
+
+thisind(s::String, i::Integer) = thisind(s, Int(i))
+nextind(s::String, i::Integer) = nextind(s, Int(i))
+prevind(s::String, i::Integer) = prevind(s, Int(i))
 
 function thisind(s::String, i::Int)
     n = ncodeunits(s)
@@ -147,7 +106,6 @@ function thisind(s::String, i::Int)
     between(b, 0b11110000, 0b11110111) && return i-3
     return i
 end
-thisind(s::String, i::Integer) = thisind(s, Int(i))
 
 function nextind(s::String, i::Int)
     n = ncodeunits(s)
@@ -168,7 +126,6 @@ function nextind(s::String, i::Int)
     @inbounds b = codeunit(s, i)
     ifelse(b & 0xc0 != 0x80, i, i+1)
 end
-nextind(s::String, i::Integer) = nextind(s, Int(i))
 
 ## checking UTF-8 & ACSII validity ##
 
@@ -186,9 +143,6 @@ isvalid(s::String) = isvalid(String, s)
 is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
-
-done(s::String, i::Int) = i > ncodeunits(s)
-endof(s::String) = thisind(s, ncodeunits(s))
 
 function next(s::String, i::Int)
     @boundscheck 1 ≤ i ≤ sizeof(s) || throw(BoundsError(s, i))
@@ -258,32 +212,39 @@ end
     return reinterpret(Char, u)
 end
 
-function length(s::String)
-    i = c = 0
-    n = ncodeunits(s)
-    while true
-        (i += 1) ≤ n || break
-        @inbounds b = codeunit(s, i) # lead byte
-    @label L
-        c += 1
-        (0xc0 ≤ b) & (b < 0xf8) || continue
-        l = b
+function length(s::String, lo::Int, hi::Int)
+    z = ncodeunits(s)
+    i = Int(clamp(lo, 1, z))
+    n = Int(clamp(hi, 1, z))
+    c = i - n
+    if i ≤ n
+        i, j = thisind(s, i), i
+        c -= i < j
+        i -= 1
+        while true
+            (i += 1) ≤ n || break
+            @inbounds b = codeunit(s, i) # lead byte
+        @label L
+            c += 1
+            (0xc0 ≤ b) & (b < 0xf8) || continue
+            l = b
 
-        (i += 1) ≤ n || break
-        @inbounds b = codeunit(s, i) # cont byte 1
-        b & 0xc0 == 0x80 || @goto L
-        l ≥ 0xe0 || continue
+            (i += 1) ≤ n || break
+            @inbounds b = codeunit(s, i) # cont byte 1
+            b & 0xc0 == 0x80 || @goto L
+            l ≥ 0xe0 || continue
 
-        (i += 1) ≤ n || break
-        @inbounds b = codeunit(s, i) # cont byte 2
-        b & 0xc0 == 0x80 || @goto L
-        l ≥ 0xf0 || continue
+            (i += 1) ≤ n || break
+            @inbounds b = codeunit(s, i) # cont byte 2
+            b & 0xc0 == 0x80 || @goto L
+            l ≥ 0xf0 || continue
 
-        (i += 1) ≤ n || break
-        @inbounds b = codeunit(s, i) # cont byte 3
-        b & 0xc0 == 0x80 || @goto L
+            (i += 1) ≤ n || break
+            @inbounds b = codeunit(s, i) # cont byte 3
+            b & 0xc0 == 0x80 || @goto L
+        end
     end
-    return c
+    return c + hi - lo
 end
 
 # TODO: delete or move to char.jl
@@ -291,7 +252,10 @@ first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
 
 ## overload methods for efficiency ##
 
-isvalid(s::String, i::Int) = 1 ≤ i ≤ ncodeunits(s) && thisind(s, i) == i
+function isvalid(s::String, i::Int)
+    @boundscheck checkbounds(s, i)
+    return thisind(s, i) == i
+end
 isvalid(s::String, i::Integer) = isvalid(s, Int(i))
 
 function search(s::String, c::Char, i::Integer = 1)

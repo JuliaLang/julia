@@ -98,7 +98,7 @@ nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
 function getindex(s::AbstractString, r::UnitRange{Int})
-    checkbounds(s, r) || throw(BoundsError(s, r))
+    @boundscheck checkbounds(s, r)
     SubString(s, first(r), last(r))
 end
 
