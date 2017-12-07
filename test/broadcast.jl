@@ -610,3 +610,9 @@ end
 
 # Issue #22180
 @test isequal(convert.(Nullable, [1,2]), [Nullable(1), Nullable(2)])
+
+# Issue #24944
+let n = 1
+    @test ceil.(Int, n ./ (1,)) == (1,)
+    @test ceil.(Int, 1 ./ (1,)) == (1,)
+end
