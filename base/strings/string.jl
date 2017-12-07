@@ -87,9 +87,8 @@ end
 
 ## thisind, nextind, prevind ##
 
-thisind(s::String, i::Integer) = thisind(s, Int(i))
-nextind(s::String, i::Integer) = nextind(s, Int(i))
-prevind(s::String, i::Integer) = prevind(s, Int(i))
+thisind(s::String, i::Integer) = oftype(i, thisind(s, Int(i)))
+nextind(s::String, i::Integer) = oftype(i, nextind(s, Int(i)))
 
 function thisind(s::String, i::Int)
     n = ncodeunits(s)
@@ -214,8 +213,8 @@ end
 
 function length(s::String, lo::Int, hi::Int)
     z = ncodeunits(s)
-    i = Int(clamp(lo, 1, z))
-    n = Int(clamp(hi, 1, z))
+    i = ifelse(lo < 1, 1, ifelse(z < lo, z, Int(lo)))
+    n = ifelse(hi < 1, 1, ifelse(z < hi, z, Int(hi)))
     c = i - n
     if i ≤ n
         i, j = thisind(s, i), i

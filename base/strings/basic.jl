@@ -133,8 +133,7 @@ eltype(::Type{<:AbstractString}) = Char
 sizeof(s::AbstractString) = ncodeunits(s) * sizeof(codeunit(s))
 endof(s::AbstractString) = thisind(s, ncodeunits(s))
 
-getindex(s::AbstractString, i::Int) = next(s, i)[1]
-getindex(s::AbstractString, i::Integer) = s[Int(i)]
+getindex(s::AbstractString, i::Integer) = next(s, i)[1]
 getindex(s::AbstractString, i::Colon) = s
 getindex(s::AbstractString, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
@@ -144,6 +143,19 @@ getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 
 get(s::AbstractString, i::Integer, default) = checkbounds(Bool, s, i) ? s[i] : default
+
+## bounds checking ##
+
+checkbounds(::Type{Bool}, s::AbstractString, i::Integer) =
+    1 ≤ i ≤ ncodeunits(s)
+checkbounds(::Type{Bool}, s::AbstractString, r::AbstractRange{<:Integer}) =
+    isempty(r) || (1 ≤ minimum(r) && maximum(r) ≤ ncodeunits(s))
+checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Real}) =
+    all(i -> checkbounds(s, i), I)
+checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Integer}) =
+    all(i -> checkbounds(s, i), I)
+checkbounds(s::AbstractString, I::Union{Integer,AbstractRange}) =
+    checkbounds(Bool, s, I) || throw(BoundsError(s, I))
 
 ## construction, conversion, promotion ##
 
@@ -295,8 +307,8 @@ julia> length("jμΛIα")
 """
 function length(s::AbstractString, lo::Integer=1, hi::Integer=ncodeunits(s))
     z = ncodeunits(s)
-    a = Int(clamp(lo, 1, z))
-    b = Int(clamp(hi, 1, z))
+    a = ifelse(lo < 1, 1, ifelse(z < lo, z, Int(lo)))
+    b = ifelse(hi < 1, 1, ifelse(z < hi, z, Int(hi)))
     n = a - b
     for i = a:b
         n += isvalid(s, i)
