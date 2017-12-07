@@ -9,6 +9,8 @@ nn = 100
 
 @test size(qrfact(sprandn(m, n, 0.1))[:Q]) == (m, m)
 
+@test size(qrfact(TestCSC(sprandn(m, n, 0.1)))[:Q]) == (m, m)
+
 @testset "element type of A: $eltyA" for eltyA in (Float64, Complex{Float64})
     if eltyA <: Real
         A = sparse([1:n; rand(1:m, nn - n)], [1:n; rand(1:n, nn - n)], randn(nn), m, n)
@@ -16,18 +18,33 @@ nn = 100
         A = sparse([1:n; rand(1:m, nn - n)], [1:n; rand(1:n, nn - n)], complex.(randn(nn), randn(nn)), m, n)
     end
 
+    A2 = TestCSC(A)
+
     F = qrfact(A)
+    F2 = qrfact(A2)
     @test size(F) == (m,n)
     @test size(F, 1) == m
     @test size(F, 2) == n
     @test size(F, 3) == 1
     @test_throws ArgumentError size(F, 0)
 
+    @test size(F2) == (m,n)
+    @test size(F2, 1) == m
+    @test size(F2, 2) == n
+    @test size(F2, 3) == 1
+    @test_throws ArgumentError size(F2, 0)
+
+
     @testset "getindex" begin
         @test istriu(F[:R])
         @test isperm(F[:pcol])
         @test isperm(F[:prow])
         @test_throws KeyError F[:T]
+
+        @test istriu(F2[:R])
+        @test isperm(F2[:pcol])
+        @test isperm(F2[:prow])
+        @test_throws KeyError F2[:T]
     end
 
     @testset "apply Q" begin
@@ -36,10 +53,20 @@ nn = 100
         @test Q' * (Q*Imm) ≈ Imm
         @test (Imm*Q) * Q' ≈ Imm
 
+        Q2 = F2[:Q]
+        @test Q2' * (Q2*Imm) ≈ Imm
+        @test (Imm*Q2) * Q2' ≈ Imm
+
+
         # test that Q'Pl*A*Pr = R
         R0 = Q'*Array(A[F[:prow], F[:pcol]])
         @test R0[1:n, :] ≈ F[:R]
         @test norm(R0[n + 1:end, :], 1) < 1e-12
+
+        R02 = Q'*Array(A[F[:prow], F[:pcol]])
+        @test R02[1:n, :] ≈ F2[:R]
+        @test norm(R02[n + 1:end, :], 1) < 1e-12
+
 
         offsizeA = Matrix{Float64}(I, m+1, m+1)
         @test_throws DimensionMismatch A_mul_B!(Q, offsizeA)
@@ -77,6 +104,10 @@ end
     # check that basic solution has more zeros
     @test count(!iszero, xs) < count(!iszero, xd)
     @test A*xs ≈ A*xd
+
+    A2 = TestCSC(A)
+    xs = A2\b
+    @test A2*xs ≈ A2*xd
 end
 
 end

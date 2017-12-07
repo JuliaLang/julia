@@ -4,6 +4,7 @@
     se33 = sparse(1.0I, 3, 3)
     do33 = ones(3)
     @test isequal(se33 \ do33, do33)
+    @test isequal(TestCSC(se33) \ do33, do33)
 
     # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
 
@@ -17,17 +18,31 @@
         # We might be able to support two index sizes one day
         for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
             A = convert(SparseMatrixCSC{Tv,Ti}, A0)
+            A2 = TestCSC(A)
             lua = lufact(A)
+            lua2 = lufact(A2)
+
             @test nnz(lua) == 18
             @test_throws KeyError lua[:Z]
             L,U,p,q,Rs = lua[:(:)]
             @test (Diagonal(Rs) * A)[p,q] ≈ L * U
 
+            @test nnz(lua2) == 18
+            @test_throws KeyError lua2[:Z]
+            L,U,p,q,Rs = lua2[:(:)]
+            @test (Diagonal(Rs) * A)[p,q] ≈ L * U
+
+
+            # should this have an @test ?
             det(lua) ≈ det(Array(A))
 
             b = [8., 45., -3., 3., 19.]
             x = lua\b
             @test x ≈ float([1:5;])
+
+            x2 = lua2\b
+            @test x2 ≈ float([1:5;])
+
 
             @test A*x ≈ b
             z = complex.(b)
@@ -40,9 +55,26 @@
 
             @test A*x ≈ b
 
+            
+            @test A2*x ≈ b
+            z = complex.(b)
+            x = SuiteSparse.A_ldiv_B!(lua2, z)
+            @test x ≈ float([1:5;])
+            @test z === x
+            y = similar(z)
+            A_ldiv_B!(y, lua2, complex.(b))
+            @test y ≈ x
+
+            @test A2*x ≈ b
+
+
             b = [8., 20., 13., 6., 17.]
             x = lua'\b
             @test x ≈ float([1:5;])
+
+            x2 = lua2'\b
+            @test x2 ≈ float([1:5;])
+
 
             @test A'*x ≈ b
             z = complex.(b)
@@ -53,9 +85,24 @@
             SuiteSparse.Ac_ldiv_B!(y, lua, complex.(b))
             @test y ≈ x
 
+            @test A2'*x2 ≈ b
+            z = complex.(b)
+            x2 = SuiteSparse.Ac_ldiv_B!(lua, z)
+            @test x2 ≈ float([1:5;])
+            @test x2 === z
+            y = similar(x2)
+            SuiteSparse.Ac_ldiv_B!(y, lua, complex.(b))
+            @test y ≈ x2
+
+
             @test A'*x ≈ b
             x = lua.'\b
             @test x ≈ float([1:5;])
+
+            @test A2'*x2 ≈ b
+            x2 = lua.'\b
+            @test x2 ≈ float([1:5;])
+
 
             @test A.'*x ≈ b
             x = SuiteSparse.At_ldiv_B!(lua,complex.(b))
@@ -64,7 +111,16 @@
             SuiteSparse.At_ldiv_B!(y, lua,complex.(b))
             @test y ≈ x
 
+            @test A2.'*x2 ≈ b
+            x2 = SuiteSparse.At_ldiv_B!(lua,complex.(b))
+            @test x2 ≈ float([1:5;])
+            y = similar(x2)
+            SuiteSparse.At_ldiv_B!(y, lua,complex.(b))
+            @test y ≈ x2
+
+
             @test A.'*x ≈ b
+            @test A2.'*x2 ≈ b
 
             # Element promotion and type inference
             @inferred lua\ones(Int, size(A, 2))
@@ -164,6 +220,13 @@
         @test A_ldiv_B!(copy(X), luA, B) ≈ A_ldiv_B!(copy(X), lufA, B)
         @test At_ldiv_B!(copy(X), luA, B) ≈ At_ldiv_B!(copy(X), lufA, B)
         @test Ac_ldiv_B!(copy(X), luA, B) ≈ Ac_ldiv_B!(copy(X), lufA, B)
+
+        A2 = TestCSC(A)
+        luA2 = lufact(A2)
+        @test A_ldiv_B!(copy(X), luA2, B) ≈ A_ldiv_B!(copy(X), lufA, B)
+        @test At_ldiv_B!(copy(X), luA2, B) ≈ At_ldiv_B!(copy(X), lufA, B)
+        @test Ac_ldiv_B!(copy(X), luA2, B) ≈ Ac_ldiv_B!(copy(X), lufA, B)
+
     end
 
 end
