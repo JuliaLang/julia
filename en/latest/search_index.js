@@ -7909,7 +7909,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
 },
 
 {
@@ -9109,7 +9109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -13253,7 +13253,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.:*",
     "category": "Method",
-    "text": "*(A::AbstractMatrix, B::AbstractMatrix)\n\nMatrix multiplication.\n\nExamples\n\njulia> [1 1; 0 1] * [1 0; 1 1]\n2×2 Array{Int64,2}:\n 2  1\n 1  1\n\n\n\n*(x, y...)\n\nMultiplication operator. x*y*z*... calls this function with all arguments, i.e. *(x, y, z, ...).\n\nExamples\n\njulia> 2 * 7 * 8\n112\n\njulia> *(2, 7, 8)\n112\n\n\n\n"
+    "text": "*(x, y...)\n\nMultiplication operator. x*y*z*... calls this function with all arguments, i.e. *(x, y, z, ...).\n\nExamples\n\njulia> 2 * 7 * 8\n112\n\njulia> *(2, 7, 8)\n112\n\n\n\n*(A::AbstractMatrix, B::AbstractMatrix)\n\nMatrix multiplication.\n\nExamples\n\njulia> [1 1; 0 1] * [1 0; 1 1]\n2×2 Array{Int64,2}:\n 2  1\n 1  1\n\n\n\n"
 },
 
 {
@@ -16173,7 +16173,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Delimited Files",
     "title": "DelimitedFiles.readdlm",
     "category": "Method",
-    "text": "readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=true, comment_char='#')\n\nRead a matrix from the source where each line (separated by eol) gives one row, with elements separated by the given delimiter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.\n\nIf T is a numeric type, the result is an array of that type, with any non-numeric elements as NaN for floating-point types, or zero. Other useful values of T include String, AbstractString, and Any.\n\nIf header is true, the first row of data will be read as header and the tuple (data_cells, header_cells) is returned instead of only data_cells.\n\nSpecifying skipstart will ignore the corresponding number of initial lines from the input.\n\nIf skipblanks is true, blank lines in the input will be ignored.\n\nIf use_mmap is true, the file specified by source is memory mapped for potential speedups. Default is true except on Windows. On Windows, you may want to specify true if the file is large, and is only read once and not written to.\n\nIf quotes is true, columns enclosed within double-quote (\") characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.  Specifying dims as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.  If comments is true, lines beginning with comment_char and text following comment_char in any line are ignored.\n\n\n\n"
+    "text": "readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=true, comment_char='#')\n\nRead a matrix from the source where each line (separated by eol) gives one row, with elements separated by the given delimiter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.\n\nIf T is a numeric type, the result is an array of that type, with any non-numeric elements as NaN for floating-point types, or zero. Other useful values of T include String, AbstractString, and Any.\n\nIf header is true, the first row of data will be read as header and the tuple (data_cells, header_cells) is returned instead of only data_cells.\n\nSpecifying skipstart will ignore the corresponding number of initial lines from the input.\n\nIf skipblanks is true, blank lines in the input will be ignored.\n\nIf use_mmap is true, the file specified by source is memory mapped for potential speedups. Default is true except on Windows. On Windows, you may want to specify true if the file is large, and is only read once and not written to.\n\nIf quotes is true, columns enclosed within double-quote (\") characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.  Specifying dims as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.  If comments is true, lines beginning with comment_char and text following comment_char in any line are ignored.\n\nExamples\n\njulia> using DelimitedFiles\n\njulia> x = [1; 2; 3; 4];\n\njulia> y = [5; 6; 7; 8];\n\njulia> open(\"delim_file.txt\", \"w\") do io\n           writedlm(io, [x y])\n       end\n\njulia> readdlm(\"delim_file.txt\", '	', Int, '\n')\n4×2 Array{Int64,2}:\n 1  5\n 2  6\n 3  7\n 4  8\n\n\n\n"
 },
 
 {
@@ -16221,7 +16221,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Delimited Files",
     "title": "DelimitedFiles.writedlm",
     "category": "Function",
-    "text": "writedlm(f, A, delim='\\t'; opts)\n\nWrite A (a vector, matrix, or an iterable collection of iterable rows) as text to f (either a filename string or an IO stream) using the given delimiter delim (which defaults to tab, but can be any printable Julia object, typically a Char or AbstractString).\n\nFor example, two vectors x and y of the same length can be written as two columns of tab-delimited text to f by either writedlm(f, [x y]) or by writedlm(f, zip(x, y)).\n\n\n\n"
+    "text": "writedlm(f, A, delim='\\t'; opts)\n\nWrite A (a vector, matrix, or an iterable collection of iterable rows) as text to f (either a filename string or an IO stream) using the given delimiter delim (which defaults to tab, but can be any printable Julia object, typically a Char or AbstractString).\n\nFor example, two vectors x and y of the same length can be written as two columns of tab-delimited text to f by either writedlm(f, [x y]) or by writedlm(f, zip(x, y)).\n\nExamples\n\njulia> using DelimitedFiles\n\njulia> x = [1; 2; 3; 4];\n\njulia> y = [5; 6; 7; 8];\n\njulia> open(\"delim_file.txt\", \"w\") do io\n           writedlm(io, [x y])\n       end\n\njulia> readdlm(\"delim_file.txt\", '	', Int, '\n')\n4×2 Array{Int64,2}:\n 1  5\n 2  6\n 3  7\n 4  8\n\n\n\n"
 },
 
 {
