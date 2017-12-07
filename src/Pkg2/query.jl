@@ -3,6 +3,7 @@
 module Query
 
 import ..PkgError
+using ...Types
 using ...Types.Pkg2Types
 import Pkg3.equalto
 
@@ -147,7 +148,7 @@ function check_requirements(reqs::Requires, deps::Dict{String,Dict{VersionNumber
                             uuid_to_name::Dict{String, String})
     for (p,vs) in reqs
         if !any(vn->(vn in vs), keys(deps[p]))
-            remaining_vs = VersionSet()
+            remaining_vs = VersionSpec()
             name = haskey(uuid_to_name, p) ? uuid_to_name[p] : "UNKNOWN"
             uuid_short = p[1:8]
             err_msg = "fixed packages introduce conflicting requirements for $name [$uuid_short]: \n"
@@ -250,7 +251,7 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
                 srvs = staged_next[rp]
                 bktrcp = get!(bktrc, rp) do; ResolveBacktraceItem(); end
                 push!(bktrcp, p=>bktrc[p], srvs)
-                if isa(bktrcp.versionreq, VersionSet) && isempty(bktrcp.versionreq)
+                if isa(bktrcp.versionreq, VersionSpec) && isempty(bktrcp.versionreq)
                     name = haskey(uuid_to_name, rp) ? uuid_to_name[rp] : "UNKNOWN"
                     uuid_short = rp[1:8]
                     err_msg = "Unsatisfiable requirements detected for package $name [$uuid_short]:\n"
@@ -298,7 +299,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
     # For each package, we examine the dependencies of its versions
     # and put together those which are equal.
     # While we're at it, we also collect all dependencies into alldeps
-    alldeps = Dict{String,Set{VersionSet}}()
+    alldeps = Dict{String,Set{VersionSpec}}()
     for (p,fdepsp) in filtered_deps
         # Extract unique dependencies lists (aka classes), thereby
         # assigning an index to each class.
@@ -306,7 +307,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
 
         # Store all dependencies seen so far for later use
         for r in uniqdepssets, (rp,rvs) in r
-            get!(alldeps, rp) do; Set{VersionSet}() end
+            get!(alldeps, rp) do; Set{VersionSpec}() end
             push!(alldeps[rp], rvs)
         end
 
@@ -334,7 +335,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
         # packages with just one version, or dependencies
         # which do not distiguish between versions, are not
         # interesting
-        (length(deps[p]) == 1 || vs == VersionSet()) && continue
+        (length(deps[p]) == 1 || vs == VersionSpec()) && continue
 
         # Store the dependency info in the patterns
         @assert haskey(vmask, p)

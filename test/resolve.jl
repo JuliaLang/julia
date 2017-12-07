@@ -3,6 +3,7 @@
 module ResolveTest
 
 using ..Test
+using Pkg3.Types
 using Pkg3.Types.Pkg2Types
 using Pkg3.Pkg2.Query
 using Pkg3.Pkg2.Resolve
@@ -77,6 +78,14 @@ function storeuuid(p::String, uuid_to_name::Dict{String,String})
 end
 wantuuids(want_data) = Dict{String,VersionNumber}(fakeuuid(p) => v for (p,v) in want_data)
 
+vr(lb) = VersionRange("$lb-*")
+vr(lb, ub) = VersionRange("$lb-$ub")
+
+function get_verspec(r)
+    length(r) == 1 && return VersionSpec()
+    VersionSpec([k == length(r) ? vr(r[k]) : vr(r[k], r[k+1]) for k = 2:2:length(r)])
+end
+
 function deps_from_data(deps_data, uuid_to_name = Dict{String,String}())
     deps = Dict{String,Dict{VersionNumber,Available}}()
     uuid(p) = storeuuid(p, uuid_to_name)
@@ -86,25 +95,21 @@ function deps_from_data(deps_data, uuid_to_name = Dict{String,String}())
             deps[p] = Dict{VersionNumber,Available}()
         end
         if !haskey(deps[p], vn)
-            deps[p][vn] = Available("$(p)_$(vn)_sha1", Dict{String,VersionSet}())
+            deps[p][vn] = Available("$(p)_$(vn)_sha1", Dict{String,VersionSpec}())
         end
         isempty(r) && continue
         rp = uuid(r[1])
-        if length(r) > 1
-            rvs = VersionSet(VersionNumber[r[2:end]...])
-        else
-            rvs = VersionSet()
-        end
+        rvs = get_verspec(r)
         deps[p][vn].requires[rp] = rvs
     end
     deps, uuid_to_name
 end
 function reqs_from_data(reqs_data, uuid_to_name = Dict{String,String}())
-    reqs = Dict{String,VersionSet}()
+    reqs = Dict{String,VersionSpec}()
     uuid(p) = storeuuid(p, uuid_to_name)
     for r in reqs_data
         p = uuid(r[1])
-        reqs[p] = VersionSet(VersionNumber[r[2:end]...])
+        reqs[p] = get_verspec(r)
     end
     reqs, uuid_to_name
 end
@@ -136,8 +141,8 @@ end
 
 ## DEPENDENCY SCHEME 1: TWO PACKAGES, DAG
 deps_data = Any[
-    ["A", v"1", "B", v"1"],
-    ["A", v"2", "B", v"2"],
+    ["A", v"1", "B", "1"],
+    ["A", v"2", "B", "2"],
     ["B", v"1"],
     ["B", v"2"]
 ]
@@ -165,10 +170,10 @@ want_data = Dict("A"=>v"2", "B"=>v"2")
 
 ## DEPENDENCY SCHEME 2: TWO PACKAGES, CYCLIC
 deps_data = Any[
-    ["A", v"1", "B", v"2"],
-    ["A", v"2", "B", v"1"],
-    ["B", v"1", "A", v"2"],
-    ["B", v"2", "A", v"1"]
+    ["A", v"1", "B", "2"],
+    ["A", v"2", "B", "1"],
+    ["B", v"1", "A", "2"],
+    ["B", v"2", "A", "1"]
 ]
 
 @test sanity_tst(deps_data)
@@ -182,14 +187,14 @@ want_data = Dict("A"=>v"2", "B"=>v"2")
 
 # require just B, force lower version
 reqs_data = Any[
-    ["B", v"1", v"2"]
+    ["B", "1", "1"]
 ]
 want_data = Dict("A"=>v"2", "B"=>v"1")
 @test resolve_tst(deps_data, reqs_data, want_data)
 
 # require just A, force lower version
 reqs_data = Any[
-    ["A", v"1", v"2"]
+    ["A", "1", "1"]
 ]
 want_data = Dict("A"=>v"1", "B"=>v"2")
 @test resolve_tst(deps_data, reqs_data, want_data)
@@ -197,12 +202,12 @@ want_data = Dict("A"=>v"1", "B"=>v"2")
 
 ## DEPENDENCY SCHEME 3: THREE PACKAGES, CYCLIC, TWO MUTUALLY EXCLUSIVE SOLUTIONS
 deps_data = Any[
-    ["A", v"1", "B", v"2"],
-    ["A", v"2", "B", v"1", v"2"],
-    ["B", v"1", "C", v"2"],
-    ["B", v"2", "C", v"1", v"2"],
-    ["C", v"1", "A", v"1", v"2"],
-    ["C", v"2", "A", v"2"]
+    ["A", v"1", "B", "2"],
+    ["A", v"2", "B", "1", "1"],
+    ["B", v"1", "C", "2"],
+    ["B", v"2", "C", "1", "1"],
+    ["C", v"1", "A", "1", "1"],
+    ["C", v"2", "A", "2"]
 ]
 
 @test sanity_tst(deps_data)
@@ -223,22 +228,22 @@ want_data = Dict("A"=>v"1", "B"=>v"2", "C"=>v"1")
 
 # require just A, force lower version
 reqs_data = Any[
-    ["A", v"1", v"2"]
+    ["A", "1", "1"]
 ]
 want_data = Dict("A"=>v"1", "B"=>v"2", "C"=>v"1")
 @test resolve_tst(deps_data, reqs_data, want_data)
 
 # require A and C, incompatible versions
 reqs_data = Any[
-    ["A", v"1", v"2"],
-    ["C", v"2"]
+    ["A", "1", "1"],
+    ["C", "2"]
 ]
 @test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 4: TWO PACKAGES, DAG, WITH TRIVIAL INCONSISTENCY
 deps_data = Any[
-    ["A", v"1", "B", v"2"],
+    ["A", v"1", "B", "2"],
     ["B", v"1"]
 ]
 
@@ -255,12 +260,12 @@ want_data = Dict("B"=>v"1")
 
 ## DEPENDENCY SCHEME 5: THREE PACKAGES, DAG, WITH IMPLICIT INCONSISTENCY
 deps_data = Any[
-    ["A", v"1", "B", v"2"],
-    ["A", v"1", "C", v"2"],
-    ["A", v"2", "B", v"1", v"2"],
-    ["A", v"2", "C", v"1", v"2"],
-    ["B", v"1", "C", v"2"],
-    ["B", v"2", "C", v"2"],
+    ["A", v"1", "B", "2"],
+    ["A", v"1", "C", "2"],
+    ["A", v"2", "B", "1", "1"],
+    ["A", v"2", "C", "1", "1"],
+    ["B", v"1", "C", "2"],
+    ["B", v"2", "C", "2"],
     ["C", v"1"],
     ["C", v"2"]
 ]
@@ -278,17 +283,17 @@ want_data = Dict("A"=>v"1", "B"=>v"2", "C"=>v"2")
 
 # require A, force highest version (impossible)
 reqs_data = Any[
-    ["A", v"2"]
+    ["A", "2"]
 ]
 @test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 6: TWO PACKAGES, CYCLIC, TOTALLY INCONSISTENT
 deps_data = Any[
-    ["A", v"1", "B", v"2"],
-    ["A", v"2", "B", v"1", v"2"],
-    ["B", v"1", "A", v"1", v"2"],
-    ["B", v"2", "A", v"2"]
+    ["A", v"1", "B", "2"],
+    ["A", v"2", "B", "1", "1"],
+    ["B", v"1", "A", "1", "1"],
+    ["B", v"2", "A", "2"]
 ]
 
 @test sanity_tst(deps_data, [("A", v"1"), ("A", v"2"),
@@ -309,12 +314,12 @@ reqs_data = Any[
 
 ## DEPENDENCY SCHEME 7: THREE PACKAGES, CYCLIC, WITH INCONSISTENCY
 deps_data = Any[
-    ["A", v"1", "B", v"1", v"2"],
-    ["A", v"2", "B", v"2"],
-    ["B", v"1", "C", v"1", v"2"],
-    ["B", v"2", "C", v"2"],
-    ["C", v"1", "A", v"2"],
-    ["C", v"2", "A", v"2"],
+    ["A", v"1", "B", "1", "1"],
+    ["A", v"2", "B", "2"],
+    ["B", v"1", "C", "1", "1"],
+    ["B", v"2", "C", "2"],
+    ["C", v"1", "A", "2"],
+    ["C", v"2", "A", "2"],
 ]
 
 @test sanity_tst(deps_data, [("A", v"1"), ("B", v"1"),
@@ -336,19 +341,19 @@ want_data = Dict("A"=>v"2", "B"=>v"2", "C"=>v"2")
 
 # require C, lowest version (impossible)
 reqs_data = Any[
-    ["C", v"1", v"2"]
+    ["C", "1", "1"]
 ]
 @test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 8: THREE PACKAGES, CYCLIC, TOTALLY INCONSISTENT
 deps_data = Any[
-    ["A", v"1", "B", v"1", v"2"],
-    ["A", v"2", "B", v"2"],
-    ["B", v"1", "C", v"1", v"2"],
-    ["B", v"2", "C", v"2"],
-    ["C", v"1", "A", v"2"],
-    ["C", v"2", "A", v"1", v"2"],
+    ["A", v"1", "B", "1", "1"],
+    ["A", v"2", "B", "2"],
+    ["B", v"1", "C", "1", "1"],
+    ["B", v"2", "C", "2"],
+    ["C", v"1", "A", "2"],
+    ["C", v"2", "A", "1", "1"],
 ]
 
 @test sanity_tst(deps_data, [("A", v"1"), ("A", v"2"),
@@ -378,16 +383,16 @@ deps_data = Any[
     ["A", v"1"],
     ["A", v"2"],
     ["A", v"3"],
-    ["B", v"1", "A", v"1", v"2"],
+    ["B", v"1", "A", "1", "1"],
     ["B", v"2", "A"],
-    ["C", v"1", "A", v"2", v"3"],
-    ["C", v"2", "A", v"2"],
-    ["D", v"1", "B", v"1"],
-    ["D", v"2", "B", v"2"],
+    ["C", v"1", "A", "2", "2"],
+    ["C", v"2", "A", "2"],
+    ["D", v"1", "B", "1"],
+    ["D", v"2", "B", "2"],
     ["E", v"1", "D"],
-    ["F", v"1", "A", v"1", v"3"],
+    ["F", v"1", "A", "1", "2"],
     ["F", v"1", "E"],
-    ["F", v"2", "C", v"2"],
+    ["F", v"2", "C", "2"],
     ["F", v"2", "E"],
 ]
 
@@ -403,7 +408,7 @@ want_data = Dict("A"=>v"3", "B"=>v"2", "C"=>v"2",
 
 # require just F, lower version
 reqs_data = Any[
-    ["F", v"1", v"2"]
+    ["F", "1", "1"]
 ]
 want_data = Dict("A"=>v"2", "B"=>v"2", "D"=>v"2",
                  "E"=>v"1", "F"=>v"1")
@@ -412,7 +417,7 @@ want_data = Dict("A"=>v"2", "B"=>v"2", "D"=>v"2",
 # require F and B; force lower B version -> must bring down F, A, and D versions too
 reqs_data = Any[
     ["F"],
-    ["B", v"1", v"2"]
+    ["B", "1", "1"]
 ]
 want_data = Dict("A"=>v"1", "B"=>v"1", "D"=>v"1",
                  "E"=>v"1", "F"=>v"1")
@@ -421,7 +426,7 @@ want_data = Dict("A"=>v"1", "B"=>v"1", "D"=>v"1",
 # require F and D; force lower D version -> must not bring down F version
 reqs_data = Any[
     ["F"],
-    ["D", v"1", v"2"]
+    ["D", "1", "1"]
 ]
 want_data = Dict("A"=>v"3", "B"=>v"2", "C"=>v"2",
                  "D"=>v"1", "E"=>v"1", "F"=>v"2")
@@ -430,7 +435,7 @@ want_data = Dict("A"=>v"3", "B"=>v"2", "C"=>v"2",
 # require F and C; force lower C version -> must bring down F and A versions
 reqs_data = Any[
     ["F"],
-    ["C", v"1", v"2"]
+    ["C", "1", "1"]
 ]
 want_data = Dict("A"=>v"2", "B"=>v"2", "C"=>v"1",
                  "D"=>v"2", "E"=>v"1", "F"=>v"1")
@@ -438,16 +443,16 @@ want_data = Dict("A"=>v"2", "B"=>v"2", "C"=>v"1",
 
 ## DEPENDENCY SCHEME 10: FIVE PACKAGES, SAME AS SCHEMES 5 + 1, UNCONNECTED
 deps_data = Any[
-    ["A", v"1", "B", v"2"],
-    ["A", v"1", "C", v"2"],
-    ["A", v"2", "B", v"1", v"2"],
-    ["A", v"2", "C", v"1", v"2"],
-    ["B", v"1", "C", v"2"],
-    ["B", v"2", "C", v"2"],
+    ["A", v"1", "B", "2"],
+    ["A", v"1", "C", "2"],
+    ["A", v"2", "B", "1", "1"],
+    ["A", v"2", "C", "1", "1"],
+    ["B", v"1", "C", "2"],
+    ["B", v"2", "C", "2"],
     ["C", v"1"],
     ["C", v"2"],
-    ["D", v"1", "E", v"1"],
-    ["D", v"2", "E", v"2"],
+    ["D", v"1", "E", "1"],
+    ["D", v"2", "E", "2"],
     ["E", v"1"],
     ["E", v"2"]
 ]
@@ -481,7 +486,7 @@ reqs_data = Any[
 want_data = Dict("A"=>v"1", "B"=>v"2", "C"=>v"2", "D"=>v"2", "E"=>v"2")
 @test resolve_tst(deps_data, reqs_data, want_data)
 
-## DEPENDENCY SCHEME 12: A REALISTIC EXAMPLE
+## DEPENDENCY SCHEME 11: A REALISTIC EXAMPLE
 ## ref issue #21485
 
 include("resolvedata1.jl")

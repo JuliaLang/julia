@@ -2,6 +2,7 @@
 
 module PkgToMaxSumInterface
 
+using ....Types
 using ....Types.Pkg2Types
 using ...Query, ..VersionWeights
 
@@ -256,9 +257,9 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
     # prepare some useful structures
     # pdeps[p0][v0] has all dependencies of package p0 version v0
     pdeps = [Vector{Requires}(spp[p0]-1) for p0 = 1:np]
-    # prevdeps[p1][p0][v0] is the VersionSet of package p1 which package p0 version v0
+    # prevdeps[p1][p0][v0] is the VersionSpec of package p1 which package p0 version v0
     # depends upon
-    prevdeps = [Dict{Int,Dict{Int,VersionSet}}() for p0 = 1:np]
+    prevdeps = [Dict{Int,Dict{Int,VersionSpec}}() for p0 = 1:np]
 
     for (p,d) in deps
         p0 = pdict[p]
@@ -269,7 +270,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
             for (rp, rvs) in a.requires
                 p1 = pdict[rp]
                 if !haskey(prevdeps[p1], p0)
-                    prevdeps[p1][p0] = Dict{Int,VersionSet}()
+                    prevdeps[p1][p0] = Dict{Int,VersionSpec}()
                 end
                 prevdeps[p1][p0][v0] = rvs
             end

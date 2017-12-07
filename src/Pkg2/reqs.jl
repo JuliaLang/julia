@@ -5,6 +5,7 @@ module Reqs
 import Base: ==
 import ..PkgError
 using ..Reqs
+using ...Types
 using ...Types.Pkg2Types
 
 # representing lines of REQUIRE files
@@ -16,7 +17,7 @@ end
 struct Requirement <: Line
     content::AbstractString
     package::AbstractString
-    versions::VersionSet
+    versions::VersionSpec
     system::Vector{AbstractString}
 
     function Requirement(content::AbstractString)
@@ -31,7 +32,7 @@ struct Requirement <: Line
             throw(PkgError("invalid requires entry for $package: $content"))
         versions = VersionNumber[fields...]
         issorted(versions) || throw(PkgError("invalid requires entry for $package: $content"))
-        new(content, package, VersionSet(versions), system)
+        new(content, package, VersionSpec(versions), system)
     end
 end
 

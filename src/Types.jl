@@ -252,17 +252,8 @@ Base.show(io::IO, s::VersionSpec) = print(io, "VersionSpec(\"", s, "\")")
 ### INCLUDE PKG2 TYPES HERE (temporary, until they are all replaced)
 
 include("Pkg2/types.jl")
-using .Pkg2Types: VersionSet, Available
+using .Pkg2Types: Available
 
-Base.convert(::Type{VersionSet}, v::VersionNumber) = VersionSet(v, Base.nextpatch(v))
-Base.convert(::Type{VersionSet}, r::VersionRange{0,0}) = VersionSet()
-Base.convert(::Type{VersionSet}, r::VersionRange{m,1}) where {m} =
-    VersionSet(VersionNumber(r.lower.t...), VersionNumber(r.upper[1]+1))
-Base.convert(::Type{VersionSet}, r::VersionRange{m,2}) where {m} =
-    VersionSet(VersionNumber(r.lower.t...), VersionNumber(r.upper[1], r.upper[2]+1))
-Base.convert(::Type{VersionSet}, r::VersionRange{m,3}) where {m} =
-    VersionSet(VersionNumber(r.lower.t...), VersionNumber(r.upper[1], r.upper[2], r.upper[3]+1))
-Base.convert(::Type{VersionSet}, s::VersionSpec) = mapreduce(VersionSet, ∪, s.ranges)
 Base.convert(::Type{Available}, t::Tuple{SHA1,Dict{UUID,VersionSpec}}) = Available(t...)
 
 ## command errors (no stacktrace) ##

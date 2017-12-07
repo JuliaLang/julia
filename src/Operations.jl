@@ -164,7 +164,7 @@ function resolve_versions!(env::EnvCache, pkgs::Vector{PackageSpec})::Dict{UUID,
         push!(pkgs, PackageSpec(name, uuid, ver))
     end
     # construct data structures for resolver and call it
-    reqs = Dict{String,VersionSet}(string(pkg.uuid) => pkg.version for pkg in pkgs)
+    reqs = Dict{String,VersionSpec}(string(pkg.uuid) => pkg.version for pkg in pkgs)
     deps = convert(Dict{String,Dict{VersionNumber,Available}}, deps_graph(env, pkgs))
     for dep_uuid in keys(deps)
         info = manifest_info(env, UUID(dep_uuid))

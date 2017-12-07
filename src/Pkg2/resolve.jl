@@ -6,6 +6,7 @@ include(joinpath("resolve", "versionweight.jl"))
 include(joinpath("resolve", "interface.jl"))
 include(joinpath("resolve", "maxsum.jl"))
 
+using ...Types
 using ...Types.Pkg2Types
 using ..Query, .PkgToMaxSumInterface, .MaxSum
 import ..PkgError
@@ -94,7 +95,7 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
         checked[i] && (i += 1; continue)
 
         fixed = Dict{String,Fixed}(p=>Fixed(vn, deps[p][vn].requires), "julia"=>Fixed(VERSION))
-        sub_reqs = Dict{String,VersionSet}()
+        sub_reqs = Dict{String,VersionSpec}()
         bktrc = Query.init_resolve_backtrace(sub_reqs, fixed)
         Query.propagate_fixed!(sub_reqs, bktrc, fixed)
         sub_deps = Query.dependencies_subset(deps, Set{String}([p]))
