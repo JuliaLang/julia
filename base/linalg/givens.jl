@@ -9,7 +9,8 @@ function *(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_B!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
 end
-function A_mul_Bc(A::AbstractVecOrMat{T}, R::AbstractRotation{S}) where {T,S}
+function *(A::AbstractVecOrMat{T}, adjR::Adjoint{<:Any,<:AbstractRotation{S}}) where {T,S}
+    R = adjR.parent
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_Bc!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), convert(AbstractRotation{TS}, R))
 end
@@ -318,9 +319,9 @@ function getindex(G::Givens, i::Integer, j::Integer)
 end
 
 
-A_mul_B!(G1::Givens, G2::Givens) = error("Operation not supported. Consider *")
+mul!(G1::Givens, G2::Givens) = error("Operation not supported. Consider *")
 
-function A_mul_B!(G::Givens, A::AbstractVecOrMat)
+function mul!(G::Givens, A::AbstractVecOrMat)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > m
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
@@ -332,7 +333,8 @@ function A_mul_B!(G::Givens, A::AbstractVecOrMat)
     end
     return A
 end
-function A_mul_Bc!(A::AbstractMatrix, G::Givens)
+function mul!(A::AbstractMatrix, adjG::Adjoint{<:Any,<:Givens})
+    G = adjG.parent
     m, n = size(A, 1), size(A, 2)
     if G.i2 > n
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
@@ -344,17 +346,18 @@ function A_mul_Bc!(A::AbstractMatrix, G::Givens)
     end
     return A
 end
-function A_mul_B!(G::Givens, R::Rotation)
+function mul!(G::Givens, R::Rotation)
     push!(R.rotations, G)
     return R
 end
-function A_mul_B!(R::Rotation, A::AbstractMatrix)
+function mul!(R::Rotation, A::AbstractMatrix)
     @inbounds for i = 1:length(R.rotations)
         A_mul_B!(R.rotations[i], A)
     end
     return A
 end
-function A_mul_Bc!(A::AbstractMatrix, R::Rotation)
+function mul!(A::AbstractMatrix, adjR::Adjoint{<:Any,<:Rotation})
+    R = adjR.parent
     @inbounds for i = 1:length(R.rotations)
         A_mul_Bc!(A, R.rotations[i])
     end

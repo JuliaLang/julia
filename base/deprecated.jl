@@ -2812,6 +2812,17 @@ end
     A_mul_Bt(mat::AbstractMatrix, rowvec::RowVector) = *(mat, Transpose(rowvec))
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/givens.jl, to deprecate
+@eval Base.LinAlg begin
+    A_mul_Bc!(A::AbstractMatrix, R::Rotation) = mul!(A, Adjoint(R))
+    A_mul_B!(R::Rotation, A::AbstractMatrix) = mul!(R, A)
+    A_mul_B!(G::Givens, R::Rotation) = mul!(G, R)
+    A_mul_Bc!(A::AbstractMatrix, G::Givens) = mul!(A, Adjoint(G))
+    A_mul_B!(G::Givens, A::AbstractVecOrMat) = mul!(G, A)
+    A_mul_B!(G1::Givens, G2::Givens) = mul!(G1, G2)
+    A_mul_Bc(A::AbstractVecOrMat{T}, R::AbstractRotation{S}) where {T,S} = *(A, Adjoint(R))
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 

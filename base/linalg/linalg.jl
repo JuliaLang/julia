@@ -238,6 +238,7 @@ function char_uplo(uplo::Symbol)
 end
 
 # shims to maintain existence of names in A_mul_B deprecation process
+function A_mul_B! end
 function Ac_mul_B! end
 function Ac_mul_B! end
 function At_mul_B! end
