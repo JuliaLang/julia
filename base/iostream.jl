@@ -184,8 +184,15 @@ Apply the function `f` to the result of `open(args...)` and close the resulting 
 descriptor upon completion.
 
 # Examples
-```julia-repl
-open(f->read(f, String), "file.txt")
+```jldoctest
+julia> open("myfile.txt", "w") do io
+           write(io, "Hello world!");
+       end
+
+julia> open(f->read(f, String), "myfile.txt")
+"Hello world!"
+
+julia> rm("myfile.txt")
 ```
 """
 function open(f::Function, args...)
