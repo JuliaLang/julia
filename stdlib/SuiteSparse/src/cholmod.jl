@@ -929,13 +929,15 @@ function convert(::Type{Sparse}, A::AbstractSparseMatrixCSC{<:VTypes,<:ITypes})
 end
 convert(::Type{Sparse}, A::AbstractSparseMatrixCSC{Complex{Float32},<:ITypes}) =
     convert(Sparse, convert(SparseMatrixCSC{Complex{Float64},SuiteSparse_long}, A))
-convert(::Type{Sparse}, A::Symmetric{Float64,AbstractSparseMatrixCSC{Float64,SuiteSparse_long}}) =
-    Sparse(A.data, A.uplo == 'L' ? -1 : 1)
+convert(::Type{Sparse}, A::Symmetric{Float64, Tcsc}) where {
+    Tcsc<:AbstractSparseMatrixCSC{Float64,SuiteSparse_long}
+    } = Sparse(A.data, A.uplo == 'L' ? -1 : 1)
 # The convert method for Hermitian is very similar to the general convert method, but we need to
 # remove any non real elements in the diagonal because, in contrast to BLAS/LAPACK these are not
 # ignored by CHOLMOD. If even tiny imaginary parts are present CHOLMOD will fail with a non-positive
 # definite/zero pivot error.
-function convert(::Type{Sparse}, AH::Hermitian{Tv,AbstractSparseMatrixCSC{Tv,SuiteSparse_long}}) where {Tv<:VTypes}
+function convert(::Type{Sparse}, AH::Hermitian{Tv,Tcsc}) where {
+    Tv<:VTypes,Tcsc<:AbstractSparseMatrixCSC{Tv,SuiteSparse_long}}
     A = AH.data
 
     # Here we allocate a Symmetric/Hermitian CHOLMOD.Sparse matrix so we only need to copy
@@ -960,17 +962,18 @@ function convert(::Type{Sparse}, AH::Hermitian{Tv,AbstractSparseMatrixCSC{Tv,Sui
     return o
 end
 function convert(::Type{Sparse},
-                 A::Union{AbstractSparseMatrixCSC{BigFloat,Ti},
-                          Symmetric{BigFloat,AbstractSparseMatrixCSC{BigFloat,Ti}},
-                          Hermitian{Complex{BigFloat},AbstractSparseMatrixCSC{Complex{BigFloat},Ti}}},
-                 args...) where Ti<:ITypes
+                 A::Union{Tcsc,
+                          Symmetric{BigFloat, Tcsc},
+                          Hermitian{Complex{BigFloat}, TCcsc}},
+                 args...) where {Ti<:ITypes, Tcsc<:AbstractSparseMatrixCSC{BigFloat,Ti},
+                                 TCcsc<:AbstractSparseMatrixCSC{Complex{BigFloat},Ti}}
     throw(MethodError(convert, (Sparse, A)))
 end
 function convert(::Type{Sparse},
-    A::Union{AbstractSparseMatrixCSC{T,Ti},
-             Symmetric{T,AbstractSparseMatrixCSC{T,Ti}},
-             Hermitian{T,AbstractSparseMatrixCSC{T,Ti}}},
-    args...) where T where Ti<:ITypes
+    A::Union{Tcsc,
+             Symmetric{T,Tcsc},
+             Hermitian{T,Tcsc}},
+    args...) where {T, Ti<:ITypes,Tcsc<:AbstractSparseMatrixCSC{T,Ti}}
     return Sparse(convert(AbstractMatrix{promote_type(Float64, T)}, A), args...)
 end
 
@@ -1381,10 +1384,12 @@ See also [`cholfact`](@ref).
 """
 cholfact!(F::Factor, A::Union{AbstractSparseMatrixCSC{T},
         AbstractSparseMatrixCSC{Complex{T}},
-        Symmetric{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}},
-        Hermitian{Complex{T},AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}},
-        Hermitian{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}}};
-    shift = 0.0) where {T<:Real} =
+        Symmetric{T,Tcsc},
+        Hermitian{Complex{T},TCcsc},
+        Hermitian{T,Tcsc}};
+    shift = 0.0) where {T<:Real, 
+                  Tcsc<:AbstractSparseMatrixCSC{T,SuiteSparse_long},
+                  TCcsc<:AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}} =
     cholfact!(F, Sparse(A); shift = shift)
 
 function cholfact(A::Sparse; shift::Real=0.0,
@@ -1436,10 +1441,12 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
     `Base.SparseArrays.CHOLMOD` module.
 """
 cholfact(A::Union{AbstractSparseMatrixCSC{T}, AbstractSparseMatrixCSC{Complex{T}},
-    Symmetric{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}},
-    Hermitian{Complex{T},AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}},
-    Hermitian{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}}};
-    kws...) where {T<:Real} = cholfact(Sparse(A); kws...)
+    Symmetric{T, Tcsc},
+    Hermitian{Complex{T},TCcsc},
+    Hermitian{T,Tcsc}};
+    kws...) where {T<:Real, Tcsc<:AbstractSparseMatrixCSC{T, SuiteSparse_long},
+                   TCcsc<:AbstractSparseMatrixCSC{Complex{T}, SuiteSparse_long}
+                  } = cholfact(Sparse(A); kws...)
 
 
 function ldltfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
@@ -1473,10 +1480,12 @@ See also [`ldltfact`](@ref).
 """
 ldltfact!(F::Factor, A::Union{AbstractSparseMatrixCSC{T},
     AbstractSparseMatrixCSC{Complex{T}},
-    Symmetric{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}},
-    Hermitian{Complex{T},AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}},
-    Hermitian{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}}};
-    shift = 0.0) where {T<:Real} =
+    Symmetric{T,Tcsc},
+    Hermitian{Complex{T},TCcsc},
+    Hermitian{T,TCcsc}};
+    shift = 0.0) where {T<:Real,
+                Tcsc<:AbstractSparseMatrixCSC{T,SuiteSparse_long},
+                TCcsc<:AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}} =
     ldltfact!(F, Sparse(A), shift = shift)
 
 function ldltfact(A::Sparse; shift::Real=0.0,
@@ -1534,10 +1543,13 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
     `Base.SparseArrays.CHOLMOD` module.
 """
 ldltfact(A::Union{AbstractSparseMatrixCSC{T},AbstractSparseMatrixCSC{Complex{T}},
-    Symmetric{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}},
-    Hermitian{Complex{T},AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}},
-    Hermitian{T,AbstractSparseMatrixCSC{T,SuiteSparse_long}}};
-    kws...) where {T<:Real} = ldltfact(Sparse(A); kws...)
+    Symmetric{T,Tcsc},
+    Hermitian{Complex{T},TCcsc},
+    Hermitian{T,Tcsc}};
+    kws...) where {T<:Real,
+      Tcsc<:AbstractSparseMatrixCSC{T,SuiteSparse_long},
+      TCcsc<:AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}} = 
+      ldltfact(Sparse(A); kws...)
 
 ## Rank updates
 
@@ -1694,9 +1706,12 @@ Ac_ldiv_B(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
 Ac_ldiv_B(L::Factor, B::SparseVecOrMat) = Ac_ldiv_B(L, Sparse(B))
 
 for f in (:\, :Ac_ldiv_B)
-    @eval function ($f)(A::Union{Symmetric{Float64,AbstractSparseMatrixCSC{Float64,SuiteSparse_long}},
-                          Hermitian{Float64,AbstractSparseMatrixCSC{Float64,SuiteSparse_long}},
-                          Hermitian{Complex{Float64},AbstractSparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}, B::StridedVecOrMat)
+    @eval function ($f)(A::Union{Symmetric{Float64, Tcsc},
+                          Hermitian{Float64,Tcsc},
+                          Hermitian{Complex{Float64}, TCcsc}}, 
+                          B::StridedVecOrMat) where {
+                      Tcsc<:AbstractSparseMatrixCSC{Float64,SuiteSparse_long},
+                      TCcsc<:AbstractSparseMatrixCSC{Complex{Float64},SuiteSparse_long}}
         F = cholfact(A)
         if issuccess(F)
             return ($f)(F, B)
@@ -1804,18 +1819,20 @@ function ishermitian(A::Sparse{Complex{Float64}})
 end
 
 #TODO: make these return in same type as A (which might not be SparseMatrixCSC).
-(*)(A::Symmetric{Float64,AbstractSparseMatrixCSC{Float64,Ti}},
-    B::SparseVecOrMat{Float64,Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
-(*)(A::Hermitian{Complex{Float64},AbstractSparseMatrixCSC{Complex{Float64},Ti}},
-    B::SparseVecOrMat{Complex{Float64},Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
-(*)(A::Hermitian{Float64,AbstractSparseMatrixCSC{Float64,Ti}},
-    B::SparseVecOrMat{Float64,Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+(*)(A::Symmetric{Float64, Tcsc},
+    B::SparseVecOrMat{Float64,Ti}) where {
+      Ti, Tcsc<:AbstractSparseMatrixCSC{Float64,Ti}} = sparse(Sparse(A)*Sparse(B))
+(*)(A::Hermitian{Complex{Float64},TCcsc},
+    B::SparseVecOrMat{Complex{Float64},Ti}) where {Ti, 
+      TCcsc<:AbstractSparseMatrixCSC{Complex{Float64},Ti}} = sparse(Sparse(A)*Sparse(B))
+(*)(A::Hermitian{Float64,Tcsc},
+    B::SparseVecOrMat{Float64,Ti}) where {Ti, Tcsc<:AbstractSparseMatrixCSC{Float64,Ti}} = sparse(Sparse(A)*Sparse(B))
 
 (*)(A::SparseVecOrMat{Float64,Ti},
-    B::Symmetric{Float64,AbstractSparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+    B::Symmetric{Float64,Tcsc}) where {Ti, Tcsc<:AbstractSparseMatrixCSC{Float64,Ti}} = sparse(Sparse(A)*Sparse(B))
 (*)(A::SparseVecOrMat{Complex{Float64},Ti},
-    B::Hermitian{Complex{Float64},AbstractSparseMatrixCSC{Complex{Float64},Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+    B::Hermitian{Complex{Float64},TCcsc}) where {Ti, TCcsc<:AbstractSparseMatrixCSC{Complex{Float64},Ti}} = sparse(Sparse(A)*Sparse(B))
 (*)(A::SparseVecOrMat{Float64,Ti},
-    B::Hermitian{Float64,AbstractSparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+    B::Hermitian{Float64,Tcsc}) where {Ti, Tcsc<:AbstractSparseMatrixCSC{Float64,Ti}} = sparse(Sparse(A)*Sparse(B))
 
 end #module

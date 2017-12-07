@@ -12,7 +12,7 @@ Supertype of all sparse matrices that store the data using
 [Compressed Sparse Column](@ref man-csc) format.  Concrete types must have all the fields
 of [`SparseMatrixCSC`](@ref) to be usable by external linear algebra libraries.
 """
-abstract type AbstractSparseMatrixCSC{Tv,Ti} <: AbstractSparseMatrix{Tv,Ti}
+abstract type AbstractSparseMatrixCSC{Tv,Ti} <: AbstractSparseMatrix{Tv,Ti} end
 
 """
     SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
