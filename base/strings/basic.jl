@@ -135,8 +135,8 @@ endof(s::AbstractString) = thisind(s, ncodeunits(s))
 
 getindex(s::AbstractString, i::Integer) = next(s, i)[1]
 getindex(s::AbstractString, i::Colon) = s
-getindex(s::AbstractString, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
+getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)
 getindex(s::AbstractString, v::AbstractVector{<:Integer}) =
     sprint(length(v), io->(for i in v; write(io, s[i]) end))
 getindex(s::AbstractString, v::AbstractVector{Bool}) =

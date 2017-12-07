@@ -26,12 +26,13 @@ struct SubString{T<:AbstractString} <: AbstractString
 
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
         i ≤ j || return new(s, i-1, 0)
-        @boundscheck 1 ≤ i || throw(BoundsError(s, i))
-        @boundscheck j ≤ ncodeunits(s) || throw(BoundsError(s, j))
-        @inbounds isvalid(s, i) ||
-            throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s, i)))
-        @inbounds isvalid(s, j) ||
-            throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, codeunit(s, j)))
+        @boundscheck begin
+            checkbounds(s, i:j)
+            @inbounds isvalid(s, i) ||
+                throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s, i)))
+            @inbounds isvalid(s, j) ||
+                throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, codeunit(s, j)))
+        end
         return new(s, i-1, nextind(s,j)-i)
     end
 end

@@ -140,7 +140,7 @@ write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); en
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
 write(to::GenericIOBuffer, s::SubString{String}) =
-    s.endof==0 ? 0 : unsafe_write(to, pointer(s.string, s.offset + 1), UInt(nextind(s, s.endof) - 1))
+    s.ncodeunits ≤ 0 ? 0 : unsafe_write(to, pointer(s.string, s.offset + 1), UInt(s.ncodeunits))
 
 ## printing literal quoted string data ##
 

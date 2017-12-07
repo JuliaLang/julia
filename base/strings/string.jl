@@ -154,7 +154,7 @@ end
 
 @noinline function next_continued(s::String, i::Int, u::UInt32)
     if u < 0xc0000000
-        thisind(s, i) == i && (i += 1; @goto ret)
+        isvalid(s, i) && (i += 1; @goto ret)
         throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, (u >> 24) % UInt8))
     end
     n = ncodeunits(s)
@@ -188,7 +188,7 @@ end
 
 @noinline function getindex_continued(s::String, i::Int, u::UInt32)
     if u < 0xc0000000
-        thisind(s, i) == i && @goto ret
+        isvalid(s, i) && @goto ret
         throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, (u >> 24) % UInt8))
     end
     n = ncodeunits(s)
@@ -209,6 +209,25 @@ end
     u |= UInt32(b)
 @label ret
     return reinterpret(Char, u)
+end
+
+getindex(s::String, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
+
+function getindex(s::String, r::UnitRange{Int})
+    isempty(r) && return ""
+    @boundscheck begin
+        checkbounds(s, r)
+        @inbounds isvalid(s, first(r)) ||
+            throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s, i)))
+        @inbounds isvalid(s, last(r)) ||
+            throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, codeunit(s, j)))
+    end
+    ss = _string_n(length(r))
+    p = pointer(ss)
+    for (i, j) in enumerate(r)
+        unsafe_store!(p, codeunit(s, j), i)
+    end
+    return ss
 end
 
 function length(s::String, lo::Int, hi::Int)
