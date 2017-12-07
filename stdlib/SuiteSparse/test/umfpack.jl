@@ -55,7 +55,6 @@
 
             @test A*x ≈ b
 
-            
             @test A2*x ≈ b
             z = complex.(b)
             x = SuiteSparse.A_ldiv_B!(lua2, z)

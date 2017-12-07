@@ -393,7 +393,7 @@ end
     @test_throws ArgumentError cholfact(A3, shift=1.0)
     @test_throws ArgumentError ldltfact(A3)
     @test_throws ArgumentError ldltfact(A3, shift=1.0)
- 
+
 
     @test_throws LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))*I)\ones(size(A1, 1))
     @test_throws LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1')))\ones(size(A1, 1))

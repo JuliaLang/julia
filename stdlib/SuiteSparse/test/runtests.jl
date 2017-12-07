@@ -13,11 +13,11 @@ struct TestCSC{Tv,Ti} <: AbstractSparseMatrixCSC{Tv,Ti}
   rowval::Vector{Ti}
   nzval::Vector{Tv}
   # for simplicity, have an underlying matrix and alias the above arrays
-  _A::SparseMatrixCSC{Tv,Ti}  
+  _A::SparseMatrixCSC{Tv,Ti}
 end
 
 function TestCSC(A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
-  
+
   A2 = copy(A)
   return TestCSC{Tv,Ti}(A2.m, A2.n, A2.colptr, A2.rowval, A2.nzval, A2)
 end

@@ -1389,7 +1389,7 @@ cholfact!(F::Factor, A::Union{AbstractSparseMatrixCSC{T},
         Symmetric{T,Tcsc},
         Hermitian{Complex{T},TCcsc},
         Hermitian{T,Tcsc}};
-    shift = 0.0) where {T<:Real, 
+    shift = 0.0) where {T<:Real,
                   Tcsc<:AbstractSparseMatrixCSC{T,SuiteSparse_long},
                   TCcsc<:AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}} =
     cholfact!(F, Sparse(A); shift = shift)
@@ -1550,7 +1550,7 @@ ldltfact(A::Union{AbstractSparseMatrixCSC{T},AbstractSparseMatrixCSC{Complex{T}}
     Hermitian{T,Tcsc}};
     kws...) where {T<:Real,
       Tcsc<:AbstractSparseMatrixCSC{T,SuiteSparse_long},
-      TCcsc<:AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}} = 
+      TCcsc<:AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}} =
       ldltfact(Sparse(A); kws...)
 
 ## Rank updates
@@ -1710,7 +1710,7 @@ Ac_ldiv_B(L::Factor, B::SparseVecOrMat) = Ac_ldiv_B(L, Sparse(B))
 for f in (:\, :Ac_ldiv_B)
     @eval function ($f)(A::Union{Symmetric{Float64, Tcsc},
                           Hermitian{Float64,Tcsc},
-                          Hermitian{Complex{Float64}, TCcsc}}, 
+                          Hermitian{Complex{Float64}, TCcsc}},
                           B::StridedVecOrMat) where {
                       Tcsc<:AbstractSparseMatrixCSC{Float64,SuiteSparse_long},
                       TCcsc<:AbstractSparseMatrixCSC{Complex{Float64},SuiteSparse_long}}
@@ -1825,7 +1825,7 @@ end
     B::SparseVecOrMat{Float64,Ti}) where {
       Ti, Tcsc<:AbstractSparseMatrixCSC{Float64,Ti}} = sparse(Sparse(A)*Sparse(B))
 (*)(A::Hermitian{Complex{Float64},TCcsc},
-    B::SparseVecOrMat{Complex{Float64},Ti}) where {Ti, 
+    B::SparseVecOrMat{Complex{Float64},Ti}) where {Ti,
       TCcsc<:AbstractSparseMatrixCSC{Complex{Float64},Ti}} = sparse(Sparse(A)*Sparse(B))
 (*)(A::Hermitian{Float64,Tcsc},
     B::SparseVecOrMat{Float64,Ti}) where {Ti, Tcsc<:AbstractSparseMatrixCSC{Float64,Ti}} = sparse(Sparse(A)*Sparse(B))
