@@ -4,7 +4,7 @@ import Base.LinAlg: checksquare
 
 ## sparse matrix multiplication
 
-function (*)(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
+function (*)(A::AbstractSparseMatrixCSC{TvA,TiA}, B::AbstractSparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
     (*)(sppromote(A, B)...)
 end
 for f in (:A_mul_Bt, :A_mul_Bc,
@@ -17,7 +17,7 @@ for f in (:A_mul_Bt, :A_mul_Bc,
     end
 end
 
-function sppromote(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
+function sppromote(A::AbstractSparseMatrixCSC{TvA,TiA}, B::AbstractSparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
     Tv = promote_type(TvA, TvB)
     Ti = promote_type(TiA, TiB)
     A  = convert(SparseMatrixCSC{Tv,Ti}, A)
@@ -106,7 +106,7 @@ end
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://dl.acm.org/citation.cfm?id=355796
 
-(*)(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(A,B)
+(*)(A::AbstractSparseMatrixCSC{Tv,Ti}, B::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(A,B)
 for (f, opA, opB) in ((:A_mul_Bt, :identity, :transpose),
                       (:A_mul_Bc, :identity, :adjoint),
                       (:At_mul_B, :transpose, :identity),
@@ -120,7 +120,7 @@ for (f, opA, opB) in ((:A_mul_Bt, :identity, :transpose),
     end
 end
 
-function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
+function spmatmul(A::AbstractSparseMatrixCSC{Tv,Ti}, B::AbstractSparseMatrixCSC{Tv,Ti};
                   sortindices::Symbol = :sortcols) where {Tv,Ti}
     mA, nA = size(A)
     mB, nB = size(B)
