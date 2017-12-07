@@ -735,6 +735,8 @@ Deprecated or removed
   * `cumsum`, `cumprod`, `accumulate`, and their mutating versions now require a `dim`
     argument instead of defaulting to using the first dimension ([#24684]).
 
+  * Use of `and`, `or`, and `not` as identifier names is deprecated.
+
 Command-line option changes
 ---------------------------
 
