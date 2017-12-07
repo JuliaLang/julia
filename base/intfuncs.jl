@@ -234,6 +234,12 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{2}) = x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
 
+# don't use the inv(x) transformation here since float^p is slightly more accurate
+@inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{p}) where {p} = x^p
+@inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{-1}) = inv(x)
+
+# for other types, define x^-n as inv(x)^n so that negative literal powers can
+# be computed in a type-stable way even for e.g. integers.
 @inline @generated function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
     if p < 0
         :(literal_pow(^, inv(x), $(Val{-p}())))
