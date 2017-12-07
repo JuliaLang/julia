@@ -222,6 +222,18 @@ end
     @test Union{Int, Missing}[1] != Union{Int, Missing}[2]
 end
 
+@testset "== and != on tuples" begin
+    @test ismissing((1, missing) == (1, missing))
+    @test ismissing(("a", missing) == ("a", missing))
+    @test ismissing((missing,) == (missing,))
+    @test ismissing((missing, 2) == (1, missing))
+
+    @test ismissing((1, missing) != (1, missing))
+    @test ismissing(("a", missing) != ("a", missing))
+    @test ismissing((missing,) != (missing,))
+    @test ismissing((missing, 2) != (1, missing))
+end
+
 @testset "any & all" begin
     @test any([true, missing])
     @test any(x -> x == 1, [1, missing])
