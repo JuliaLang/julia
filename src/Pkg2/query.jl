@@ -3,7 +3,7 @@
 module Query
 
 import ..PkgError
-using ..Types
+using ...Types.Pkg2Types
 import Pkg3.equalto
 
 function init_resolve_backtrace(reqs::Requires, fix::Dict{String,Fixed} = Dict{String,Fixed}())

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module Types
+module Pkg2Types
 
 export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies,
        ResolveBacktraceItem, ResolveBacktrace

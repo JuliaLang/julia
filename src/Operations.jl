@@ -4,6 +4,7 @@ using Base.Random: UUID
 using Base: LibGit2
 using Pkg3.TerminalMenus
 using Pkg3.Types
+using Pkg3.Types.Pkg2Types
 import Pkg3: Pkg2, depots, BinaryProvider, USE_LIBGIT2_FOR_ALL_DOWNLOADS, NUM_CONCURRENT_DOWNLOADS
 import Pkg3: depots, BinaryProvider, USE_LIBGIT2_FOR_ALL_DOWNLOADS, NUM_CONCURRENT_DOWNLOADS
 
@@ -163,8 +164,8 @@ function resolve_versions!(env::EnvCache, pkgs::Vector{PackageSpec})::Dict{UUID,
         push!(pkgs, PackageSpec(name, uuid, ver))
     end
     # construct data structures for resolver and call it
-    reqs = Dict{String,Pkg2.Types.VersionSet}(string(pkg.uuid) => pkg.version for pkg in pkgs)
-    deps = convert(Dict{String,Dict{VersionNumber,Pkg2.Types.Available}}, deps_graph(env, pkgs))
+    reqs = Dict{String,VersionSet}(string(pkg.uuid) => pkg.version for pkg in pkgs)
+    deps = convert(Dict{String,Dict{VersionNumber,Available}}, deps_graph(env, pkgs))
     for dep_uuid in keys(deps)
         info = manifest_info(env, UUID(dep_uuid))
         if info != nothing

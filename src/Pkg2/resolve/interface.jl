@@ -2,7 +2,8 @@
 
 module PkgToMaxSumInterface
 
-using ...Types, ...Query, ..VersionWeights
+using ....Types.Pkg2Types
+using ...Query, ..VersionWeights
 
 export Interface, compute_output_dict, greedysolver,
        verify_solution, enforce_optimality!

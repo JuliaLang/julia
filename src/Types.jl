@@ -1,7 +1,6 @@
 module Types
 
 using Base.Random: UUID
-using Pkg3.Pkg2.Types: VersionSet, Available
 using Pkg3: TOML, TerminalMenus, Dates
 
 import Pkg3
@@ -249,6 +248,11 @@ function Base.print(io::IO, s::VersionSpec)
     print(io, ']')
 end
 Base.show(io::IO, s::VersionSpec) = print(io, "VersionSpec(\"", s, "\")")
+
+### INCLUDE PKG2 TYPES HERE (temporary, until they are all replaced)
+
+include("Pkg2/types.jl")
+using .Pkg2Types: VersionSet, Available
 
 Base.convert(::Type{VersionSet}, v::VersionNumber) = VersionSet(v, Base.nextpatch(v))
 Base.convert(::Type{VersionSet}, r::VersionRange{0,0}) = VersionSet()

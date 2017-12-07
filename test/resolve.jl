@@ -3,7 +3,7 @@
 module ResolveTest
 
 using ..Test
-using Pkg3.Pkg2.Types
+using Pkg3.Types.Pkg2Types
 using Pkg3.Pkg2.Query
 using Pkg3.Pkg2.Resolve
 using Pkg3.Pkg2.Resolve.VersionWeights

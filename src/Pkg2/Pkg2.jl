@@ -37,7 +37,6 @@ function dir()
 end
 dir(pkg::AbstractString...) = normpath(dir(),pkg...)
 
-include("types.jl")
 include("reqs.jl")
 include("query.jl")
 # include("read.jl")
