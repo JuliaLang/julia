@@ -40,10 +40,11 @@ function transpose(A::TestCSC{Tv,Ti}) where {Tv,Ti}
   convert(TestCSC{Tv,Ti}, A2)
 end
 
+#=
 # TODO: implement in Base
 import Base:nnz
 nnz(A::TestCSC) = nnz(A._A)
-
+=#
 
 if Base.USE_GPL_LIBS
    include("umfpack.jl")

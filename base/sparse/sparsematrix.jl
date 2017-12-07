@@ -78,7 +78,7 @@ julia> nnz(A)
 3
 ```
 """
-nnz(S::SparseMatrixCSC)         = Int(S.colptr[S.n + 1] - 1)
+nnz(S::AbstractSparseMatrixCSC)         = Int(S.colptr[S.n + 1] - 1)
 count(pred, S::SparseMatrixCSC) = count(pred, view(S.nzval, 1:nnz(S))) + pred(zero(eltype(S)))*(prod(size(S)) - nnz(S))
 
 """
