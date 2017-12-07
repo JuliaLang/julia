@@ -37,13 +37,28 @@ end
                                 "Complex(x)^y, or similar.")))
 end
 
+"""
+    exponent_max(T)
+
+Maximum exponent a real floating point number of type `T` can have,
+for example 1023 for `Float64`. `exponent_max(T) + 1` is a possible value of
+the exponent field with bias, but it is used as sentinel value for `Inf` and `NaN`.
+"""
+function exponent_max end
+
+"""
+    exponent_raw_max(T)
+
+The maximum value of the exponent field of floating point type `T` without bias,
+that is the maximum integer value representable by `exponent_bits(T)` bits.
+"""
+function exponent_raw_max end
+
 for T in (Float16, Float32, Float64)
     @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
     @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
     @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
-    # maximum float exponent
-    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
-    # maximum float exponent without bias
+    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T) - 1)
     @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
 end
 

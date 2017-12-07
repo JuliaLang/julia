@@ -116,7 +116,7 @@ function exp(x::T) where T<:Union{Float32,Float64}
         # scale back
         if k > -significand_bits(T)
             # multiply by 2.0 first to prevent overflow, which helps extends the range
-            k == exponent_max(T) && return y * T(2.0) * T(2.0)^(exponent_max(T) - 1)
+            k == exponent_max(T) + 1 && return y * T(2.0) * T(2.0)^exponent_max(T)
             twopk = reinterpret(T, rem(exponent_bias(T) + k, uinttype(T)) << significand_bits(T))
             return y*twopk
         else
