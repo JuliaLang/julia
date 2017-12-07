@@ -7,7 +7,7 @@ using Pkg3: TOML, TerminalMenus, Dates
 import Pkg3
 import Pkg3: depots, logdir, iswindows
 
-export SHA1, VersionRange, VersionSpec, PackageSpec, UpgradeLevel, EnvCache,
+export SHA1, VersionRange, VersionSpec, empty_versionspec, PackageSpec, UpgradeLevel, EnvCache,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
@@ -68,13 +68,65 @@ Base.getindex(b::VersionBound, i::Int) = b.t[i]
 ≳(v::VersionNumber, b::VersionBound) = v ≲ b
 ≳(b::VersionBound, v::VersionNumber) = b ≲ v
 
+# Comparison between two lower bounds
+# (could be done with generated functions, or even manually unrolled...)
+function isless_ll(a::VersionBound{m}, b::VersionBound{n}) where {m,n}
+    for i = 1:min(m,n)
+        a[i] < b[i] && return true
+        a[i] > b[i] && return false
+    end
+    return m < n
+end
+
+stricterlower(a::VersionBound, b::VersionBound) = isless_ll(a, b) ? b : a
+
+# Comparison between two upper bounds
+# (could be done with generated functions, or even manually unrolled...)
+function isless_uu(a::VersionBound{m}, b::VersionBound{n}) where {m,n}
+    for i = 1:min(m,n)
+        a[i] < b[i] && return true
+        a[i] > b[i] && return false
+    end
+    return m > n
+end
+
+stricterupper(a::VersionBound, b::VersionBound) = isless_uu(a, b) ? a : b
+
+# `isjoinable` compares an upper bound of a range with the lower bound of the next range
+# to determine if they can be joined, as in [1.5-2.8, 2.5-3] -> [1.5-3]. Used by `union!`.
+# The equal-length-bounds case is special since e.g. `1.5` can be joined with `1.6`,
+# `2.3.4` can be joined with `2.3.5` etc.
+
+isjoinable(up::VersionBound{0}, lo::VersionBound{0}) = true
+
+function isjoinable(up::VersionBound{n}, lo::VersionBound{n}) where {n}
+    for i = 1:(n - 1)
+        up[i] > lo[i] && return true
+        up[i] < lo[i] && return false
+    end
+    up[n] < lo[n] - 1 && return false
+    return true
+end
+
+function isjoinable(up::VersionBound{m}, lo::VersionBound{n}) where {m,n}
+    l = min(m,n)
+    for i = 1:l
+        up[i] > lo[i] && return true
+        up[i] < lo[i] && return false
+    end
+    return true
+end
+
+
+Base.hash(r::VersionBound, h::UInt) = hash(r.t, h)
+
 Base.convert(::Type{VersionBound}, s::AbstractString) =
-    VersionBound(map(x->parse(Int, x), split(s, '.'))...)
+    s == "*" ? VersionBound() : VersionBound(map(x->parse(Int, x), split(s, '.'))...)
 
 struct VersionRange{m,n}
     lower::VersionBound{m}
     upper::VersionBound{n}
-    # TODO: check non-emptiness of range?
+    # NOTE: ranges are allowed to be empty; they are ignored by VersionSpec anyway
 end
 VersionRange(b::VersionBound=VersionBound()) = VersionRange(b, b)
 VersionRange(t::Integer...) = VersionRange(VersionBound(t...))
@@ -82,9 +134,16 @@ VersionRange(t::Integer...) = VersionRange(VersionBound(t...))
 Base.convert(::Type{VersionRange}, v::VersionNumber) =
     VersionRange(VersionBound(v))
 
+function Base.isempty(r::VersionRange{m,n}) where {m,n}
+    for i = 1:min(m,n)
+        r.lower[i] > r.upper[i] && return true
+        r.lower[i] < r.upper[i] && return false
+    end
+    return false
+end
+
 function Base.convert(::Type{VersionRange}, s::AbstractString)
-    ismatch(r"^\s*\*\s*$", s) && return VersionRange()
-    m = match(r"^\s*(\d+(?:\.\d+)?(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?(?:\.\d+)?))?\s*$", s)
+    m = match(r"^\s*((?:\d+(?:\.\d+)?(?:\.\d+)?)|\*)(?:\s*-\s*((?:\d+(?:\.\d+)?(?:\.\d+)?)|\*))?\s*$", s)
     m == nothing && throw(ArgumentError("invalid version range: $(repr(s))"))
     lower = VersionBound(m.captures[1])
     upper = m.captures[2] != nothing ? VersionBound(m.captures[2]) : lower
@@ -104,9 +163,47 @@ Base.show(io::IO, r::VersionRange) = print(io, "VersionRange(\"", r, "\")")
 Base.in(v::VersionNumber, r::VersionRange) = r.lower ≲ v ≲ r.upper
 Base.in(v::VersionNumber, r::VersionNumber) = v == r
 
+Base.intersect(a::VersionRange, b::VersionRange) = VersionRange(stricterlower(a.lower,b.lower), stricterupper(a.upper,b.upper))
+
+function Base.union!(ranges::Vector{<:VersionRange})
+    l = length(ranges)
+    l == 0 && return ranges
+
+    sort!(ranges, lt=(a,b)->(isless_ll(a.lower, b.lower) || (a.lower == b.lower && isless_uu(a.upper, b.upper))))
+
+    k0 = 1
+    ks = findfirst(!isempty, ranges)
+    ks == 0 && return empty!(ranges)
+
+    lo, up, k0 = ranges[ks].lower, ranges[ks].upper, 1
+    for k = (ks+1):l
+        isempty(ranges[k]) && continue
+        lo1, up1 = ranges[k].lower, ranges[k].upper
+        if isjoinable(up, lo1)
+            isless_uu(up, up1) && (up = up1)
+            continue
+        end
+        vr = VersionRange(lo, up)
+        @assert !isempty(vr)
+        ranges[k0] = vr
+        k0 += 1
+        lo, up = lo1, up1
+    end
+    vr = VersionRange(lo, up)
+    if !isempty(vr)
+        ranges[k0] = vr
+        k0 += 1
+    end
+    resize!(ranges, k0 - 1)
+    return ranges
+end
+
 struct VersionSpec
     ranges::Vector{VersionRange}
-    VersionSpec(r::Vector{<:VersionRange}) = new(r)
+    VersionSpec(r::Vector{<:VersionRange}) = new(union!(r))
+    # copy is defined inside the struct block to call `new` directly
+    # without going through `union!`
+    Base.copy(vs::VersionSpec) = new(copy(vs.ranges))
 end
 VersionSpec() = VersionSpec(VersionRange())
 
@@ -117,7 +214,32 @@ Base.convert(::Type{VersionSpec}, r::VersionRange) = VersionSpec(VersionRange[r]
 Base.convert(::Type{VersionSpec}, s::AbstractString) = VersionSpec(VersionRange(s))
 Base.convert(::Type{VersionSpec}, v::AbstractVector) = VersionSpec(map(VersionRange, v))
 
+const empty_versionspec = VersionSpec(VersionRange[])
+# Windows console doesn't like Unicode
+const _empty_symbol = @static iswindows() ? "empty" : "∅"
+
+Base.isempty(s::VersionSpec) = all(isempty, s.ranges)
+@assert isempty(empty_versionspec)
+function Base.intersect(A::VersionSpec, B::VersionSpec)
+    (isempty(A) || isempty(B)) && return copy(empty_versionspec)
+    ranges = [intersect(a,b) for a in A.ranges for b in B.ranges]
+    VersionSpec(ranges)
+end
+
+Base.union(A::VersionSpec, B::VersionSpec) = union!(copy(A), B)
+function Base.union!(A::VersionSpec, B::VersionSpec)
+    A == B && return A
+    append!(A.ranges, B.ranges)
+    union!(A.ranges)
+    return A
+end
+
+Base.:(==)(A::VersionSpec, B::VersionSpec) = A.ranges == B.ranges
+Base.hash(s::VersionSpec, h::UInt) = hash(s.ranges, h + (0x2fd2ca6efa023f44 % UInt))
+Base.deepcopy_internal(vs::VersionSpec, ::ObjectIdDict) = copy(vs)
+
 function Base.print(io::IO, s::VersionSpec)
+    isempty(s) && return print(io, _empty_symbol)
     length(s.ranges) == 1 && return print(io, s.ranges[1])
     print(io, '[')
     for i = 1:length(s.ranges)
