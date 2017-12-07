@@ -357,7 +357,7 @@ end
         A = A + A.' #symmetric!
         B = copy(A)
         B,ipiv = LAPACK.sytrf!('U',B)
-        @test triu(inv(A)) ≈ triu(LAPACK.sytri!('U',B,ipiv))
+        @test triu(inv(A)) ≈ triu(LAPACK.sytri!('U',B,ipiv)) rtol=eps(cond(A))
         @test_throws DimensionMismatch LAPACK.sytrs!('U',B,ipiv,rand(elty,11,5))
         @test LAPACK.sytrf!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0))
     end
@@ -368,7 +368,7 @@ end
         A = A + A.' #symmetric!
         B = copy(A)
         B,ipiv = LAPACK.sytrf_rook!('U',B)
-        @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U',B,ipiv))
+        @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U',B,ipiv)) rtol=eps(cond(A))
         @test_throws DimensionMismatch LAPACK.sytrs_rook!('U',B,ipiv,rand(elty,11,5))
         @test LAPACK.sytrf_rook!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0))
         A = rand(elty,10,10)
