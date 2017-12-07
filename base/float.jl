@@ -78,10 +78,34 @@ for T in (Float16, Float32, Float64)
     @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
     @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
     # maximum float exponent
-    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
+    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T) - 1)
     # maximum float exponent without bias
     @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
 end
+
+"""
+    exponent_max(T)
+s
+Maximum exponent a real floating point number of type `T` can have.
+
+# Examples
+```jldoctest
+julia> exponent_max(Float64)
+1023
+```
+
+The value `exponent_max(T) + 1` is a possible value of the exponent field
+with bias, which might be used as sentinel value for `Inf` and `NaN`.
+"""
+function exponent_max end
+
+"""
+    exponent_raw_max(T)
+
+The maximum value of the exponent field of floating point type `T` without bias,
+i.e. the maximum integer value representable by `exponent_bits(T)` bits.
+"""
+function exponent_raw_max end
 
 ## conversions to floating-point ##
 

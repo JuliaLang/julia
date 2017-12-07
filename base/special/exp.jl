@@ -239,7 +239,7 @@ for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
                     twopk = reinterpret(T, (N+Int32(151)) << Int32(23))
                     return (twopk*small_part)*(2f0^(-24))
                 end
-                N == exponent_max(T) && return small_part * T(2.0) * T(2.0)^(exponent_max(T) - 1)
+                N == (exponent_max(T)+1) && return small_part * T(2.0) * T(2.0)^exponent_max(T)
             end
             twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
             return twopk*small_part
