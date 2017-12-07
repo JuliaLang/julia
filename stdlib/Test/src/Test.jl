@@ -220,6 +220,17 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
         func_sym = quoted_args[1]
         if isempty(kwargs)
             quoted = Expr(:call, func_sym, args...)
+        elseif func_sym === :≈
+            # in case of `≈(x, y, atol = z)`
+            # make the display like `Evaluated: x ≈ y (atol=z)`
+            kws = [Symbol(Expr(:kw, k, v), ",") for (k, v) in kwargs]
+            kws[end] = Symbol(Expr(:kw, kwargs[end]...))
+            kws[1] = Symbol("(", kws[1])
+            kws[end] = Symbol(kws[end], ")")
+            quoted = Expr(:comparison, args[1], func_sym, args[2], kws...)
+            if length(quoted.args) & 1 == 0  # hack to fit `show_unquoted`
+                push!(quoted.args, Symbol())
+            end
         else
             kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
             quoted = Expr(:call, func_sym, kwargs_expr, args...)
@@ -339,7 +350,7 @@ function get_test_result(ex, source)
             Expr(:comparison, $(quoted_terms...)),
             $(QuoteNode(source)),
         ))
-    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox)
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox, :≈)
         escaped_func = esc(ex.args[1])
         quoted_func = QuoteNode(ex.args[1])
 
