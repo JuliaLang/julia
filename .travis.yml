@@ -114,6 +114,9 @@ script:
     - contrib/download_cmake.sh
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
+    # Check that the llvm cache is not poisoned
+    - if [ -f deps/srccache/llvm-3.9.1/llvm-D37939-Mem2Reg-Also-handle-memcpy.patch-applied ]; then
+      make -C deps distclean-llvm; fi
     # capture the log, but only print it if `make deps` fails
     # try to show the end of the log first, because this log might be very long (> 4MB)
     # and thus be truncated by travis
