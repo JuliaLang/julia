@@ -946,6 +946,12 @@ let A = [1]
     @test x == 1
 end
 
+# 0.7.0-DEV.1499
+let key = "TEST_23412"
+    @test !haskey(ENV, key)
+    @test get(() -> "default", ENV, key) == "default"
+end
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end

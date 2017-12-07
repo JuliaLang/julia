@@ -853,6 +853,13 @@ end
     export Uninitialized, uninitialized
 end
 
+# 0.7.0-DEV.1499
+if VERSION < v"0.7.0-DEV.1499"
+    function Base.get(f::Base.Callable, ::Base.EnvHash, k::AbstractString)
+        Base.access_env(k->f(), k)
+    end
+end
+
 include("deprecated.jl")
 
 end # module Compat
