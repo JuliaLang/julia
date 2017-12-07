@@ -226,6 +226,11 @@ function isapprox(x::Number, y::Number; atol::Real=0, rtol::Real=rtoldefault(x,y
 end
 
 const ≈ = isapprox
+"""
+    x ≉ y
+
+This is equivalent to `!isapprox(x,y)` (see [`isapprox`](@ref)).
+"""
 ≉(args...; kws...) = !≈(args...; kws...)
 
 # default tolerance arguments
