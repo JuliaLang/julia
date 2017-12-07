@@ -32,6 +32,7 @@ const cmds = Dict(
     "gc"        => :gc,
     "fsck"      => :fsck,
     "preview"   => :preview,
+    "init"      => :init,
 )
 
 const opts = Dict(
@@ -107,9 +108,7 @@ end
 function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
     try
         tokens = tokenize(input)
-        local env_opt::Union{String,Void} = get(ENV, "JULIA_ENV", nothing)
-        env = EnvCache(env_opt)
-        do_cmd!(env, tokens, repl)
+        do_cmd!(tokens, repl)
     catch err
         if err isa CommandError
             Base.display_error(repl.t.err_stream, ErrorException(err.msg), Ptr{Void}[])
@@ -119,7 +118,7 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
     end
 end
 
-function do_cmd!(env, tokens, repl)
+function do_cmd!(tokens, repl)
     local cmd::Symbol
     while !isempty(tokens)
         token = shift!(tokens)
@@ -138,6 +137,9 @@ function do_cmd!(env, tokens, repl)
             cmderror("misplaced token: ", token)
         end
     end
+    cmd == :init && return do_init!(tokens)
+    local env_opt::Union{String,Void} = get(ENV, "JULIA_ENV", nothing)
+    env = EnvCache(env_opt)
     cmd == :help    ?    do_help!(env, tokens, repl) :
     cmd == :preview ? do_preview!(env, tokens, repl) :
     cmd == :rm      ?      do_rm!(env, tokens) :
@@ -191,6 +193,8 @@ const help = Base.Markdown.parse("""
     `test`: run tests for packages
 
     `gc`: garbage collect packages not used for a significant time
+
+    `init` initializes an environment in the current, or git base, directory
     """)
 
 const helps = Dict(
@@ -279,6 +283,11 @@ const helps = Dict(
     """, :gc => md"""
 
     Deletes packages that are not reached from any environment used within the last 6 weeks.
+    """, :init => md"""
+        init
+
+    Creates an environment in the current directory, or the git base directory if the current directory
+    is in a git repository.
     """
 )
 
@@ -443,6 +452,13 @@ end
 function do_gc!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     !isempty(tokens) && cmderror("`gc` does not take any arguments")
     Pkg3.API.gc(env)
+end
+
+function do_init!(tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+    if !isempty(tokens)
+        cmderror("`init` does currently not take any arguments")
+    end
+    Pkg3.API.init(pwd())
 end
 
 

@@ -11,7 +11,7 @@ export SHA1, VersionRange, VersionSpec, PackageSpec, UpgradeLevel, EnvCache,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
-    git_file_stream, read_project, read_manifest, pathrepr, registries
+    git_file_stream, git_discover, read_project, read_manifest, pathrepr, registries
 
 ## ordering of UUIDs ##
 
@@ -390,15 +390,22 @@ function git_file_stream(repo::LibGit2.GitRepo, spec::String; fakeit::Bool=false
     return IOBuffer(LibGit2.rawcontent(blob))
 end
 
-function find_local_env(start_path::String = pwd())
-    path = git_discover(start_path, ceiling = homedir())
-    repo = LibGit2.GitRepo(path)
-    work = LibGit2.workdir(repo)
+function find_local_env(start_path::String)
+    work = nothing
+    repo = nothing
+    try
+        gitpath = git_discover(start_path, ceiling = homedir())
+        repo = LibGit2.GitRepo(gitpath)
+        work = LibGit2.workdir(repo)
+    catch err
+        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+    end
+    work = (work != nothing) ? work : start_path
     for name in project_names
         path = abspath(work, name)
         isfile(path) && return path, repo
     end
-    return abspath(work, project_names[end]), repo
+    return nothing, repo
 end
 
 function find_named_env()
@@ -417,19 +424,24 @@ function find_project(env::String)
     elseif env == "/"
         return find_named_env()
     elseif env == "."
-        return find_local_env()
+        path, gitrepo = find_local_env(pwd())
+        path == nothing && return init_if_interactive(pwd()), gitrepo
+        return path, gitrepo
     elseif startswith(env, "/") || startswith(env, "./")
         # path to project file or project directory
         if splitext(env)[2] == ".toml"
             path = abspath(env)
-            return path, find_git_repo(path)
+            if isfile(env)
+                return path, find_git_repo(path)
+            else
+                return init_if_interactive(path), find_git_repo(path)
+            end
         end
         for name in project_names
             path = abspath(env, name)
             isfile(path) && return path, find_git_repo(path)
         end
-        path = abspath(env, project_names[end])
-        return path, find_git_repo(path)
+        return init_if_interactive(env), find_git_repo(path)
     else # named environment
         for depot in depots()
             path = abspath(depot, "environments", env, project_names[end])
@@ -440,12 +452,24 @@ function find_project(env::String)
     end
 end
 
-function find_project(::Void)
-    try return find_local_env()
-    catch err
-        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+function init_if_interactive(path::String)
+    if isinteractive()
+        choice = TerminalMenus.request("Could not find local environment in $(path), do you want to create it?",
+                   TerminalMenus.RadioMenu(["yes", "no"]))
+        if choice == 1
+            Pkg3.Operations.init(pwd())
+            path, gitrepo = find_project(path)
+            return path
+        end
     end
-    return find_named_env()
+    cmderror("did not find a local environment at $(path), run `init` to create one")
+end
+
+function find_project(::Void)
+    path, gitrepo = find_local_env(pwd())
+    path != nothing && return path, gitrepo
+    path, gitrepo = find_named_env()
+    return path, gitrepo
 end
 
 ## resolving packages from name or uuid ##

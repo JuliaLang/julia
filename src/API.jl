@@ -224,5 +224,9 @@ function gc(env::EnvCache=EnvCache(); period = Week(6), preview=env.preview[])
     info("Deleted $(length(paths_to_delete)) package installations", byte_save_str)
 end
 
+function init(path = pwd())
+    Pkg3.Operations.init(path)
+end
+
 end # module
 

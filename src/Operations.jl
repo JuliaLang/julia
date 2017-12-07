@@ -5,6 +5,7 @@ using Base: LibGit2
 using Pkg3.TerminalMenus
 using Pkg3.Types
 import Pkg3: Pkg2, depots, BinaryProvider, USE_LIBGIT2_FOR_ALL_DOWNLOADS, NUM_CONCURRENT_DOWNLOADS
+import Pkg3: depots, BinaryProvider, USE_LIBGIT2_FOR_ALL_DOWNLOADS, NUM_CONCURRENT_DOWNLOADS
 
 const SlugInt = UInt32 # max p = 4
 const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
@@ -399,7 +400,8 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})::Vector{UUID}
     end
 
     textwidth = VERSION < v"0.7.0-DEV.1930" ? Base.strwidth : Base.textwidth
-    max_name = maximum(textwidth(names[pkg.uuid]) for pkg in pkgs)
+    widths = [textwidth(names[pkg.uuid]) for pkg in pkgs]
+    max_name = length(widths) == 0 ? 0 : maximum(widths)
 
     for _ in 1:length(pkgs)
         r = take!(results)
@@ -666,5 +668,20 @@ function test(env::EnvCache, pkgs::Vector{PackageSpec}; coverage=false)
                  " errored during testing")
     end
 end
+
+function init(path::String)
+    gitpath = nothing
+    try
+        gitpath = git_discover(path, ceiling = homedir())
+    catch err
+        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+    end
+    path = gitpath == nothing ? path : dirname(dirname(gitpath))
+    mkpath(path)
+    isfile(joinpath(path, "Project.toml")) && cmderror("Environment already initialized at $path")
+    touch(joinpath(path, "Project.toml"))
+    info("Initialized environment in $path by creating the file Project.toml")
+end
+
 end # module
 
