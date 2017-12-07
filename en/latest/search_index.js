@@ -16461,7 +16461,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.iswritable",
     "category": "Function",
-    "text": "iswritable(io) -> Bool\n\nReturn true if the specified IO object is writable (if that can be determined).\n\n\n\n"
+    "text": "iswritable(io) -> Bool\n\nReturn true if the specified IO object is writable (if that can be determined).\n\nExamples\n\njulia> open(\"myfile.txt\", \"w\") do io\n           write(io, \"Hello world!\");\n           iswritable(io)\n       end\ntrue\n\njulia> open(\"myfile.txt\", \"r\") do io\n           iswritable(io)\n       end\nfalse\n\njulia> rm(\"myfile.txt\")\n\n\n\n"
 },
 
 {
@@ -16469,7 +16469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.isreadable",
     "category": "Function",
-    "text": "isreadable(io) -> Bool\n\nReturn true if the specified IO object is readable (if that can be determined).\n\n\n\n"
+    "text": "isreadable(io) -> Bool\n\nReturn true if the specified IO object is readable (if that can be determined).\n\nExamples\n\njulia> open(\"myfile.txt\", \"w\") do io\n           write(io, \"Hello world!\");\n           isreadable(io)\n       end\nfalse\n\njulia> open(\"myfile.txt\", \"r\") do io\n           isreadable(io)\n       end\ntrue\n\njulia> rm(\"myfile.txt\")\n\n\n\n"
 },
 
 {
