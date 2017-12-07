@@ -11,6 +11,7 @@ export
     AbstractREPL,
     BasicREPL,
     LineEditREPL,
+    initREPL,
     StreamREPL
 
 import Base:
@@ -245,7 +246,7 @@ end
 ## User Options
 
 mutable struct Options
-    hascolor::Bool
+    usecolor::Bool
     extra_keymap::Union{Dict,Vector{<:Dict}}
     backspace_align::Bool
     backspace_adjust::Bool
@@ -253,17 +254,27 @@ mutable struct Options
 end
 
 Options(;
-        hascolor = true,
+        usecolor = true,
         extra_keymap = AnyDict[],
         backspace_align = true, backspace_adjust = backspace_align,
         confirm_exit = false) =
-            Options(hascolor, extra_keymap, backspace_align, backspace_adjust, confirm_exit)
+            Options(usecolor, extra_keymap, backspace_align, backspace_adjust, confirm_exit)
+
+
+# convenient customization function for implemented options
+# atreplinit remains available for more exotic customizations
+function initREPL(;kw...)
+    atreplinit() do repl
+        repl isa Base.REPL.LineEditREPL || return
+        repl.options = Base.REPL.Options(;kw...)
+    end
+end
 
 ## LineEditREPL ##
 
 mutable struct LineEditREPL <: AbstractREPL
     t::TextTerminal
-    hascolor::Bool
+    hascolor::Bool # value of the --color command line flag
     prompt_color::String
     input_color::String
     answer_color::String
@@ -276,12 +287,13 @@ mutable struct LineEditREPL <: AbstractREPL
     waserror::Bool
     specialdisplay::Union{Void,AbstractDisplay}
     options::Options
-    mistate::Union{MIState,Void}
-    interface::ModalInterface
+    # remaining fields are left temporarily uninitialized (#undef)
+    mistate::MIState
+    modes::ModalInterface
     backendref::REPLBackendRef
     LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
         new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, Options(), nothing)
+            in_help,envcolors,false,nothing, Options())
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
@@ -721,12 +733,10 @@ repl_filename(repl, hp) = "REPL"
 const JL_PROMPT_PASTE = Ref(true)
 enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
-function setup_interface(
-    repl::LineEditREPL;
-    # those keyword arguments may be deprecated eventually in favor of the Options mechanism
-    hascolor::Bool = repl.options.hascolor,
+function setup_modes!(repl::LineEditREPL)
+    usecolor::Bool = repl.options.usecolor
     extra_repl_keymap::Union{Dict,Vector{<:Dict}} = repl.options.extra_keymap
-)
+
     ###
     #
     # This function returns the main interface that describes the REPL
@@ -734,12 +744,6 @@ function setup_interface(
     # Terminal-based REPL frontend, but if you want to customize your REPL
     # or embed the REPL in another interface, you may call this function
     # directly and append it to your interface.
-    #
-    # Usage:
-    #
-    # repl_channel,response_channel = Channel(),Channel()
-    # start_repl_backend(repl_channel, response_channel)
-    # setup_interface(REPLDisplay(t),repl_channel,response_channel)
     #
     ###
 
@@ -759,8 +763,8 @@ function setup_interface(
     # Set up the main Julia prompt
     julia_prompt = Prompt(JULIA_PROMPT;
         # Copy colors from the prompt object
-        prompt_prefix = hascolor ? repl.prompt_color : "",
-        prompt_suffix = hascolor ?
+        prompt_prefix = usecolor ? repl.prompt_color : "",
+        prompt_suffix = usecolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = replc,
@@ -768,8 +772,8 @@ function setup_interface(
 
     # Setup help mode
     help_mode = Prompt("help?> ",
-        prompt_prefix = hascolor ? repl.help_color : "",
-        prompt_suffix = hascolor ?
+        prompt_prefix = usecolor ? repl.help_color : "",
+        prompt_suffix = usecolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = replc,
@@ -778,8 +782,8 @@ function setup_interface(
 
     # Set up shell mode
     shell_mode = Prompt("shell> ";
-        prompt_prefix = hascolor ? repl.shell_color : "",
-        prompt_suffix = hascolor ?
+        prompt_prefix = usecolor ? repl.shell_color : "",
+        prompt_suffix = usecolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = ShellCompletionProvider(),
@@ -976,21 +980,19 @@ function setup_interface(
 
     shell_mode.keymap_dict = help_mode.keymap_dict = LineEdit.keymap(b)
 
-    ModalInterface([julia_prompt, shell_mode, help_mode, search_prompt, prefix_prompt])
+    repl.modes = [julia_prompt, shell_mode, help_mode, search_prompt, prefix_prompt]::ModalInterface
 end
 
 function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     d = REPLDisplay(repl)
     dopushdisplay = repl.specialdisplay === nothing && !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
-    if !isdefined(repl,:interface)
-        interface = repl.interface = setup_interface(repl)
-    else
-        interface = repl.interface
+    if !isdefined(repl, :modes) # setup_modes! may have been called via atreplinit
+        setup_modes!(repl)
     end
     repl.backendref = backend
-    repl.mistate = LineEdit.init_state(terminal(repl), interface)
-    run_interface(terminal(repl), interface, repl.mistate)
+    repl.mistate = LineEdit.init_state(terminal(repl), repl.modes)
+    run_interface(repl)
     dopushdisplay && popdisplay(d)
 end
 

@@ -982,6 +982,7 @@ export
 # misc
     atexit,
     atreplinit,
+    initREPL,
     clipboard,
     exit,
     ntuple,

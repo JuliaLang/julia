@@ -440,6 +440,7 @@ include("repl/Terminals.jl")
 include("repl/LineEdit.jl")
 include("repl/REPLCompletions.jl")
 include("repl/REPL.jl")
+using .REPL: initREPL
 
 # deprecated functions
 include("deprecated.jl")
