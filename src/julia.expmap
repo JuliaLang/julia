@@ -35,6 +35,7 @@
     __ZN4llvm23createLowerSimdLoopPassEv;
     LLVMAddLowerGCFramePass;
     LLVMAddLowerPTLSPass;
+    LLVMExtra*;
 
     /* freebsd */
     environ;
