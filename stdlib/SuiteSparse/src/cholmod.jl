@@ -251,7 +251,9 @@ struct C_SparseVoid <: SuiteSparseStruct
     packed::Cint
 end
 
-mutable struct Sparse{Tv<:VTypes} <: AbstractSparseMatrixCSC{Tv,SuiteSparse_long}
+# although this contains a SparseMatrixCSC via the C_SparseVoid struct, making
+# it an AbstractSparseMatrixCSC changes method specificity in undesirable ways
+mutable struct Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
     p::Ptr{C_Sparse{Tv}}
     function Sparse{Tv}(p::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
         if p == C_NULL
@@ -1482,7 +1484,7 @@ ldltfact!(F::Factor, A::Union{AbstractSparseMatrixCSC{T},
     AbstractSparseMatrixCSC{Complex{T}},
     Symmetric{T,Tcsc},
     Hermitian{Complex{T},TCcsc},
-    Hermitian{T,TCcsc}};
+    Hermitian{T,Tcsc}};
     shift = 0.0) where {T<:Real,
                 Tcsc<:AbstractSparseMatrixCSC{T,SuiteSparse_long},
                 TCcsc<:AbstractSparseMatrixCSC{Complex{T},SuiteSparse_long}} =
@@ -1720,7 +1722,7 @@ for f in (:\, :Ac_ldiv_B)
             if issuccess(F)
                 return ($f)(F, B)
             else
-                return ($f)(lufact(convert(AbstractSparseMatrixCSC{eltype(A), SuiteSparse_long}, A)), B)
+                return ($f)(lufact(convert(SparseMatrixCSC{eltype(A), SuiteSparse_long}, A)), B)
             end
         end
     end
