@@ -130,6 +130,14 @@ resolve_path += && \
 	$1_wd=`dirname "$${$1}"`; $1=$${$1_}; \
 	if [ -z "`echo $${$1} | grep '^/'`" ]; then $1=$${$1_wd}/$${$1}; fi; \
 	fi
+else
+# try to use the SO_NAME (if the named file exists)
+resolve_path += && \
+	$1_=`objdump -p "$${$1}" | awk '/SONAME/ {print $$2}'` && \
+	if [ -n "$${$1_}" ]; then \
+	$1_=$$(dirname "$${$1}")/$${$1_}; \
+	if [ -e "$${$1_}" ]; then $1=$${$1_}; fi; \
+	fi
 endif
 
 ## debug code: `make resolve-path P=<path to test>`
@@ -201,12 +209,12 @@ symlink_system_libraries: $(SYMLINK_SYSTEM_LIBRARIES)
 .PHONY: $(BUILDDIR)/build_h.jl.phony $(BUILDDIR)/version_git.jl.phony clean all symlink_*
 
 clean:
-	rm -f $(BUILDDIR)/pcre_h.jl
-	rm -f $(BUILDDIR)/errno_h.jl
-	rm -f $(BUILDDIR)/build_h.jl
-	rm -f $(BUILDDIR)/build_h.jl.phony
-	rm -f $(BUILDDIR)/fenv_constants.jl # To be removed
-	rm -f $(BUILDDIR)/uv_constants.jl
-	rm -f $(BUILDDIR)/file_constants.jl
-	rm -f $(BUILDDIR)/version_git.jl
-	rm -f $(BUILDDIR)/version_git.jl.phony
+	-rm -f $(BUILDDIR)/pcre_h.jl
+	-rm -f $(BUILDDIR)/errno_h.jl
+	-rm -f $(BUILDDIR)/build_h.jl
+	-rm -f $(BUILDDIR)/build_h.jl.phony
+	-rm -f $(BUILDDIR)/uv_constants.jl
+	-rm -f $(BUILDDIR)/file_constants.jl
+	-rm -f $(BUILDDIR)/version_git.jl
+	-rm -f $(BUILDDIR)/version_git.jl.phony
+	-rm -f $(build_private_libdir)/lib*.$(SHLIB_EXT)*
