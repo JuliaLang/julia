@@ -474,8 +474,6 @@ function create_mode(repl, main)
     end
 
     mk = REPL.mode_keymap(main)
-    # ^C should not exit prompt
-    delete!(mk, "^C")
 
     b = Dict{Any,Any}[
         skeymap, mk, prefix_keymap, LineEdit.history_keymap,
