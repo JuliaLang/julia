@@ -97,6 +97,26 @@ be escaped with another double-quote.  Specifying `dims` as a tuple of the expec
 columns (including header, if any) may speed up reading of large files.  If `comments` is
 `true`, lines beginning with `comment_char` and text following `comment_char` in any line
 are ignored.
+
+# Examples
+```jldoctest
+julia> using DelimitedFiles
+
+julia> x = [1; 2; 3; 4];
+
+julia> y = [5; 6; 7; 8];
+
+julia> open("delim_file.txt", "w") do io
+           writedlm(io, [x y])
+       end
+
+julia> readdlm("delim_file.txt", '\t', Int, '\n')
+4×2 Array{Int64,2}:
+ 1  5
+ 2  6
+ 3  7
+ 4  8
+```
 """
 readdlm(input, dlm::Char, T::Type, eol::Char; opts...) =
     readdlm_auto(input, dlm, T, eol, false; opts...)
@@ -674,6 +694,26 @@ Write `A` (a vector, matrix, or an iterable collection of iterable rows) as text
 
 For example, two vectors `x` and `y` of the same length can be written as two columns of
 tab-delimited text to `f` by either `writedlm(f, [x y])` or by `writedlm(f, zip(x, y))`.
+
+# Examples
+```jldoctest
+julia> using DelimitedFiles
+
+julia> x = [1; 2; 3; 4];
+
+julia> y = [5; 6; 7; 8];
+
+julia> open("delim_file.txt", "w") do io
+           writedlm(io, [x y])
+       end
+
+julia> readdlm("delim_file.txt", '\t', Int, '\n')
+4×2 Array{Int64,2}:
+ 1  5
+ 2  6
+ 3  7
+ 4  8
+```
 """
 writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)
 
