@@ -7605,7 +7605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\n"
 },
 
 {
@@ -16277,7 +16277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.open",
     "category": "Function",
-    "text": "open(filename::AbstractString, [read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool]) -> IOStream\n\nOpen a file in a mode specified by five boolean arguments. The default is to open files for reading only. Return a stream for accessing the file.\n\n\n\nopen(filename::AbstractString, [mode::AbstractString]) -> IOStream\n\nAlternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of mode correspond to those from fopen(3) or Perl open, and are equivalent to setting the following boolean groups:\n\nMode Description\nr read\nr+ read, write\nw write, create, truncate\nw+ read, write, create, truncate\na write, create, append\na+ read, write, create, append\n\n\n\nopen(f::Function, args...)\n\nApply the function f to the result of open(args...) and close the resulting file descriptor upon completion.\n\nExamples\n\njulia> open(\"myfile.txt\", \"w\") do io\n           write(io, \"Hello world!\");\n       end\n\njulia> open(f->read(f, String), \"myfile.txt\")\n\"Hello world!\"\n\njulia> rm(\"myfile.txt\")\n\n\n\nopen(command, mode::AbstractString=\"r\", stdio=DevNull)\n\nStart running command asynchronously, and return a tuple (stream,process).  If mode is \"r\", then stream reads from the process's standard output and stdio optionally specifies the process's standard input stream.  If mode is \"w\", then stream writes to the process's standard input and stdio optionally specifies the process's standard output stream.\n\n\n\nopen(f::Function, command, mode::AbstractString=\"r\", stdio=DevNull)\n\nSimilar to open(command, mode, stdio), but calls f(stream) on the resulting process stream, then closes the input stream and waits for the process to complete. Returns the value returned by f.\n\n\n\n"
+    "text": "open(filename::AbstractString, [read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool]) -> IOStream\n\nOpen a file in a mode specified by five boolean arguments. The default is to open files for reading only. Return a stream for accessing the file.\n\n\n\nopen(filename::AbstractString, [mode::AbstractString]) -> IOStream\n\nAlternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of mode correspond to those from fopen(3) or Perl open, and are equivalent to setting the following boolean groups:\n\nMode Description\nr read\nr+ read, write\nw write, create, truncate\nw+ read, write, create, truncate\na write, create, append\na+ read, write, create, append\n\nExamples\n\njulia> io = open(\"myfile.txt\", \"w\");\n\njulia> write(io, \"Hello world!\");\n\njulia> close(io);\n\njulia> io = open(\"myfile.txt\", \"r\");\n\njulia> read(io, String)\n\"Hello world!\"\n\njulia> write(io, \"This file is read only\")\nERROR: ArgumentError: write failed, IOStream is not writeable\n[...]\n\njulia> close(io)\n\njulia> io = open(\"myfile.txt\", \"a\");\n\njulia> write(io, \"This stream is not read only\")\n28\n\njulia> close(io)\n\njulia> rm(\"myfile.txt\")\n\n\n\nopen(f::Function, args...)\n\nApply the function f to the result of open(args...) and close the resulting file descriptor upon completion.\n\nExamples\n\njulia> open(\"myfile.txt\", \"w\") do io\n           write(io, \"Hello world!\");\n       end\n\njulia> open(f->read(f, String), \"myfile.txt\")\n\"Hello world!\"\n\njulia> rm(\"myfile.txt\")\n\n\n\nopen(command, mode::AbstractString=\"r\", stdio=DevNull)\n\nStart running command asynchronously, and return a tuple (stream,process).  If mode is \"r\", then stream reads from the process's standard output and stdio optionally specifies the process's standard input stream.  If mode is \"w\", then stream writes to the process's standard input and stdio optionally specifies the process's standard output stream.\n\n\n\nopen(f::Function, command, mode::AbstractString=\"r\", stdio=DevNull)\n\nSimilar to open(command, mode, stdio), but calls f(stream) on the resulting process stream, then closes the input stream and waits for the process to complete. Returns the value returned by f.\n\n\n\n"
 },
 
 {
@@ -16373,7 +16373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.position",
     "category": "Function",
-    "text": "position(s)\n\nGet the current position of a stream.\n\n\n\n"
+    "text": "position(s)\n\nGet the current position of a stream.\n\nExamples\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization.\");\n\njulia> seek(io, 5);\n\njulia> position(io)\n5\n\njulia> skip(io, 10);\n\njulia> position(io)\n15\n\njulia> seekend(io);\n\njulia> position(io)\n35\n\n\n\n"
 },
 
 {
@@ -16381,7 +16381,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.seek",
     "category": "Function",
-    "text": "seek(s, pos)\n\nSeek a stream to the given position.\n\n\n\n"
+    "text": "seek(s, pos)\n\nSeek a stream to the given position.\n\nExamples\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization.\");\n\njulia> seek(io, 5);\n\njulia> read(io, Char)\n'L': ASCII/Unicode U+004c (category Lu: Letter, uppercase)\n\n\n\n"
 },
 
 {
@@ -16389,7 +16389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.seekstart",
     "category": "Function",
-    "text": "seekstart(s)\n\nSeek a stream to its beginning.\n\n\n\n"
+    "text": "seekstart(s)\n\nSeek a stream to its beginning.\n\nExamples\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization.\");\n\njulia> seek(io, 5);\n\njulia> read(io, Char)\n'L': ASCII/Unicode U+004c (category Lu: Letter, uppercase)\n\njulia> seekstart(io);\n\njulia> read(io, Char)\n'J': ASCII/Unicode U+004a (category Lu: Letter, uppercase)\n\n\n\n"
 },
 
 {
@@ -16405,7 +16405,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.skip",
     "category": "Function",
-    "text": "skip(s, offset)\n\nSeek a stream relative to the current position.\n\n\n\n"
+    "text": "skip(s, offset)\n\nSeek a stream relative to the current position.\n\nExamples\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization.\");\n\njulia> seek(io, 5);\n\njulia> skip(io, 10);\n\njulia> read(io, Char)\n'G': ASCII/Unicode U+0047 (category Lu: Letter, uppercase)\n\n\n\n"
 },
 
 {
@@ -16581,7 +16581,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.truncate",
     "category": "Function",
-    "text": "truncate(file,n)\n\nResize the file or buffer given by the first argument to exactly n bytes, filling previously unallocated space with '\\0' if the file or buffer is grown.\n\n\n\n"
+    "text": "truncate(file,n)\n\nResize the file or buffer given by the first argument to exactly n bytes, filling previously unallocated space with '\\0' if the file or buffer is grown.\n\nExamples\n\njulia> io = IOBuffer();\n\njulia> write(io, \"JuliaLang is a GitHub organization.\")\n35\n\njulia> truncate(io, 15)\nIOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=15, maxsize=Inf, ptr=16, mark=-1)\n\njulia> String(take!(io))\n\"JuliaLang is a \"\n\njulia> io = IOBuffer();\n\njulia> write(io, \"JuliaLang is a GitHub organization.\");\n\njulia> truncate(io, 40);\n\njulia> String(take!(io))\n\"JuliaLang is a GitHub organization.     \"\n\n\n\n"
 },
 
 {
