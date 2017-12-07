@@ -7061,7 +7061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.foldl",
     "category": "Method",
-    "text": "foldl(op, v0, itr)\n\nLike reduce, but with guaranteed left associativity. v0 will be used exactly once.\n\njulia> foldl(-, 1, 2:5)\n-13\n\n\n\n"
+    "text": "foldl(op, v0, itr)\n\nLike reduce, but with guaranteed left associativity. v0 will be used exactly once.\n\njulia> foldl(=>, 0, 1:4)\n(((0=>1)=>2)=>3) => 4\n\n\n\n"
 },
 
 {
@@ -7069,7 +7069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.foldl",
     "category": "Method",
-    "text": "foldl(op, itr)\n\nLike foldl(op, v0, itr), but using the first element of itr as v0. In general, this cannot be used with empty collections (see reduce(op, itr)).\n\njulia> foldl(-, 2:5)\n-10\n\n\n\n"
+    "text": "foldl(op, itr)\n\nLike foldl(op, v0, itr), but using the first element of itr as v0. In general, this cannot be used with empty collections (see reduce(op, itr)).\n\njulia> foldl(=>, 1:4)\n((1=>2)=>3) => 4\n\n\n\n"
 },
 
 {
@@ -7077,7 +7077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.foldr",
     "category": "Method",
-    "text": "foldr(op, v0, itr)\n\nLike reduce, but with guaranteed right associativity. v0 will be used exactly once.\n\njulia> foldr(-, 1, 2:5)\n-1\n\n\n\n"
+    "text": "foldr(op, v0, itr)\n\nLike reduce, but with guaranteed right associativity. v0 will be used exactly once.\n\njulia> foldr(=>, 0, 1:4)\n1 => (2=>(3=>(4=>0)))\n\n\n\n"
 },
 
 {
@@ -7085,7 +7085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.foldr",
     "category": "Method",
-    "text": "foldr(op, itr)\n\nLike foldr(op, v0, itr), but using the last element of itr as v0. In general, this cannot be used with empty collections (see reduce(op, itr)).\n\njulia> foldr(-, 2:5)\n-2\n\n\n\n"
+    "text": "foldr(op, itr)\n\nLike foldr(op, v0, itr), but using the last element of itr as v0. In general, this cannot be used with empty collections (see reduce(op, itr)).\n\njulia> foldr(=>, 1:4)\n1 => (2=>(3=>4))\n\n\n\n"
 },
 
 {
