@@ -20,20 +20,20 @@ our @benchmarks = qw(
   userfunc_mandelbrot
 );
 
-our $c_ver = chomp(`gcc -v 2>&1 | grep "gcc version" | cut -f3 -d" "`);
-our $julia_ver = chomp(`../../../julia -v | cut -f3 -d" "`);
-our $fortran_ver = chomp(`gfortran -v 2>&1 | grep "gcc version" | cut -f3 -d" "`);
-our $python_ver = chomp(`python3 -V 2>&1 | cut -f2 -d" "`);
-our $matlab_ver = chomp(`matlab -nodisplay -nojvm -nosplash -r "version -release, quit" | tail -n 3 | head -n 1`);
-our $R_ver = chomp(`R --version | grep "R version" | cut -f3 -d" "`);
-our $octave_ver = chomp(`octave -v | grep version | cut -f4 -d" "`);
-our $go_ver = chomp(`go version | cut -f3 -d" "`);
-#our $lua_ver = chomp(`scilua -v 2>&1 | grep Shell | cut -f3 -d" " | cut -f1 -d,`);
-our $lua_ver = "scilua v1.0.0-b12"; # scilua has no run-time versioninfo function
-our $javascript_ver = chomp(`nodejs -e "console.log(process.versions.v8)"`);
-our $mathematica_ver = chomp(`echo quit | math -version | head -n 1 | cut -f2 -d" "`);
-#our $stata_ver = chomp(`stata -q -b version && grep version stata.log | cut -f2 -d" " && rm stata.log`);
-our $java_ver = chomp(`java -version 2>&1 |grep "version" | cut -f3 -d " " | cut -c 2-9`);
+chomp(our $c_ver = `gcc -v 2>&1 | grep "gcc version" | cut -f3 -d" "`);
+chomp(our $julia_ver = `../../../julia -v | cut -f3 -d" "`);
+chomp(our $fortran_ver = `gfortran -v 2>&1 | grep "gcc version" | cut -f3 -d" "`);
+chomp(our $python_ver = `python3 -V 2>&1 | cut -f2 -d" "`);
+chomp(our $matlab_ver = `matlab -nodisplay -nojvm -nosplash -r "version -release, quit" | tail -n 3 | head -n 1`);
+chomp(our $R_ver = `R --version | grep "R version" | cut -f3 -d" "`);
+chomp(our $octave_ver = `octave -v | grep version | cut -f4 -d" "`);
+chomp(our $go_ver = `go version | cut -f3 -d" "`);
+#chomp(our $lua_ver = `scilua -v 2>&1 | grep Shell | cut -f3 -d" " | cut -f1 -d,`);
+chomp(our $lua_ver = "scilua v1.0.0-b12"); # scilua has no run-time versioninfo function
+chomp(our $javascript_ver = `nodejs -e "console.log(process.versions.v8)"`);
+chomp(our $mathematica_ver = `echo quit | math -version | head -n 1 | cut -f2 -d" "`);
+#chomp(our $stata_ver = `stata -q -b version && grep version stata.log | cut -f2 -d" " && rm stata.log`);
+chomp(our $java_ver = `java -version 2>&1 |grep "version" | cut -f3 -d " " | cut -c 2-9`);
 
 our %systems = (
   "c"          => ["C"                , "gcc $c_ver" ],
