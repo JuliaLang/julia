@@ -735,6 +735,9 @@ Deprecated or removed
   * `cumsum`, `cumprod`, `accumulate`, and their mutating versions now require a `dim`
     argument instead of defaulting to using the first dimension ([#24684]).
 
+  * The `sum_kbn` and `cumsum_kbn` functions have been moved to the
+    [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
+
 Command-line option changes
 ---------------------------
 
@@ -1707,3 +1710,4 @@ Command-line option changes
 [#24396]: https://github.com/JuliaLang/julia/issues/24396
 [#24413]: https://github.com/JuliaLang/julia/issues/24413
 [#24653]: https://github.com/JuliaLang/julia/issues/24653
+[#24869]: https://github.com/JuliaLang/julia/issues/24869
