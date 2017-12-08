@@ -1135,14 +1135,19 @@ end
 A = sparse(["a", "b"])
 @test_throws MethodError findmin(A, 1)
 
-# Support the case, when user defined `zero` and `isless` for non-numerical type
-#
-Base.zero(::Type{T}) where T<:AbstractString = ""
-for (tup, rval, rind) in [((1,), ["a"], [1])]
+# Support the case when user defined `zero` and `isless` for non-numerical type
+struct CustomType
+    x::String
+end
+Base.zero(::Type{CustomType}) = CustomType("")
+Base.isless(x::CustomType, y::CustomType) = isless(x.x, y.x)
+A = sparse([CustomType("a"), CustomType("b")])
+
+for (tup, rval, rind) in [((1,), [CustomType("a")], [1])]
     @test isequal(findmin(A, tup), (rval, rind))
 end
 
-for (tup, rval, rind) in [((1,), ["b"], [2])]
+for (tup, rval, rind) in [((1,), [CustomType("b")], [2])]
     @test isequal(findmax(A, tup), (rval, rind))
 end
 
