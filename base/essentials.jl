@@ -284,6 +284,19 @@ convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
     oftype(x, y)
 
 Convert `y` to the type of `x` (`convert(typeof(x), y)`).
+
+# Examples
+```jldoctest
+julia> x = 4;
+
+julia> y = 3.;
+
+julia> oftype(x, y)
+3
+
+julia> oftype(y, x)
+4.0
+```
 """
 oftype(x, y) = convert(typeof(x), y)
 
@@ -417,9 +430,11 @@ esc(@nospecialize(e)) = Expr(:escape, e)
 
 Annotates the expression `blk` as a bounds checking block, allowing it to be elided by [`@inbounds`](@ref).
 
-Note that the function in which `@boundscheck` is written must be inlined into
-its caller with [`@inline`](@ref) in order for `@inbounds` to have effect.
+!!! note
+    The function in which `@boundscheck` is written must be inlined into
+    its caller in order for `@inbounds` to have effect.
 
+# Examples
 ```jldoctest
 julia> @inline function g(A, i)
            @boundscheck checkbounds(A, i)
@@ -557,6 +572,7 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 Test whether the given array has a value associated with index `i`. Return `false`
 if the index is out of bounds, or has an undefined reference.
 
+# Examples
 ```jldoctest
 julia> isassigned(rand(3, 3), 5)
 true
@@ -729,6 +745,20 @@ For an iterator or collection that has keys and values, return an iterator
 over the values.
 This function simply returns its argument by default, since the elements
 of a general iterator are normally considered its "values".
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2);
+
+julia> values(d)
+Base.ValueIterator for a Dict{String,Int64} with 2 entries. Values:
+  2
+  1
+
+julia> values([2])
+1-element Array{Int64,1}:
+ 2
+```
 """
 values(itr) = itr
 
