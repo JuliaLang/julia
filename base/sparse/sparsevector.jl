@@ -1475,14 +1475,14 @@ end
 
 # scale
 
-scale!(x::AbstractSparseVector, a::Real) = (scale!(nonzeros(x), a); x)
-scale!(x::AbstractSparseVector, a::Complex) = (scale!(nonzeros(x), a); x)
-scale!(a::Real, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
-scale!(a::Complex, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
+scale!(x::SparseVectorUnion, a::Real)    = (scale!(nonzeros(x), a); x)
+scale!(x::SparseVectorUnion, a::Complex) = (scale!(nonzeros(x), a); x)
+scale!(a::Real, x::SparseVectorUnion)    = (scale!(nonzeros(x), a); x)
+scale!(a::Complex, x::SparseVectorUnion) = (scale!(nonzeros(x), a); x)
 
-(*)(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) * a)
-(*)(a::Number, x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), a * nonzeros(x))
-(/)(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
+(*)(x::SparseVectorUnion, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) * a)
+(*)(a::Number, x::SparseVectorUnion) = SparseVector(length(x), copy(nonzeroinds(x)), a * nonzeros(x))
+(/)(x::SparseVectorUnion, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
 
 # dot
 function dot(x::StridedVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
