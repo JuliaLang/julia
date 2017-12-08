@@ -803,7 +803,16 @@ show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ": ")
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
-show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
+function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
+    print(io, ex.mod)
+    print(io, '.')
+    quoted = !isidentifier(ex.name)
+    parens = quoted && !isoperator(ex.name)
+    quoted && print(io, ':')
+    parens && print(io, '(')
+    print(io, ex.name)
+    parens && print(io, ')')
+end
 
 function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
     typ = isa(ex,TypedSlot) ? ex.typ : Any
@@ -898,11 +907,29 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     if !emphstate && ex.typ === Any
         show_type = false
     end
+    unhandled = false
     # dot (i.e. "x.y"), but not compact broadcast exps
-    if head === :(.) && !is_expr(args[2], :tuple)
-        func_prec = operator_precedence(head)
-        args_ = (args[1], (is_quoted(arg) && !is_quoted(unquoted(arg)) ? unquoted(arg) : arg for arg in args[2:end])...)
-        show_list(io, args_, head, indent, func_prec)
+    if head === :(.) && (length(args) != 2 || !is_expr(args[2], :tuple))
+        if length(args) == 2 && is_quoted(args[2])
+            item = args[1]
+            # field
+            field = unquoted(args[2])
+            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item))
+            parens && print(io, '(')
+            show_unquoted(io, item, indent)
+            parens && print(io, ')')
+            # .
+            print(io, '.')
+            # item
+            parens = !(field isa Symbol)
+            quoted = parens || isoperator(field)
+            quoted && print(io, ':')
+            parens && print(io, '(')
+            show_unquoted(io, field, indent)
+            parens && print(io, ')')
+        else
+            unhandled = true
+        end
 
     # infix (i.e. "x <: y" or "x = y")
     elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
@@ -1226,6 +1253,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_type = false
     # print anything else as "Expr(head, args...)"
     else
+        unhandled = true
+    end
+    if unhandled
         if head !== :invoke
             show_type = false
         end
