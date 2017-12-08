@@ -19,13 +19,13 @@ New language features
     iterated using `pairs(kw)`. `kw` can no longer contain multiple entries for the same
     argument name ([#4916]).
 
- * Custom infix operators can now be defined by appending Unicode
-   combining marks, primes, and sub/superscripts to other operators.
-   For example, `+̂ₐ″` is parsed as an infix operator with the same
-   precedence as `+` ([#22089]).
+  * Custom infix operators can now be defined by appending Unicode
+    combining marks, primes, and sub/superscripts to other operators.
+    For example, `+̂ₐ″` is parsed as an infix operator with the same
+    precedence as `+` ([#22089]).
 
- * The macro call syntax `@macroname[args]` is now available and is parsed
-   as `@macroname([args])` ([#23519]).
+  * The macro call syntax `@macroname[args]` is now available and is parsed
+    as `@macroname([args])` ([#23519]).
 
   * The construct `if @generated ...; else ...; end` can be used to provide both
     `@generated` and normal implementations of part of a function. Surrounding code
@@ -34,6 +34,9 @@ New language features
   * The `missing` singleton object (of type `Missing`) has been added to represent
     missing values ([#24653]). It propagates through standard operators and mathematical functions,
     and implements three-valued logic, similar to SQLs `NULL` and R's `NA`.
+
+  * Field access via dot-syntax can now be overloaded by adding methods to
+    `Base.getproperty` and `Base.setproperty!` ([#1974]).
 
 Language changes
 ----------------
