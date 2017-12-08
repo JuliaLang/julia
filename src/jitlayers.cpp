@@ -23,10 +23,9 @@
 #endif
 
 #if defined(USE_TAPIR)
-#include <llvm/Transforms/Tapir/TapirTypes.h>
-#include <llvm/Transforms/Tapir/TapirUtils.h>
+#include <llvm/Transforms/Tapir.h>
 #include <llvm/Transforms/Tapir/CilkABI.h>
-#include <llvm/Transforms/Tapir/OpenMPABI.h>
+#include <llvm/Transforms/IPO/InferFunctionAttrs.h>
 #endif
 
 #include <llvm/Transforms/IPO.h>
@@ -106,6 +105,9 @@ void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 // it assumes that the TLI and TTI wrapper passes have already been added.
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump_native)
 {
+#ifdef USE_TAPIR
+    tapir::CilkABI cilkTarget = tapir::CilkABI();
+#endif
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
     PM->add(createVerifierPass());
@@ -134,6 +136,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
         PM->add(createAlwaysInlinerPass()); // Respect always_inline
 #endif
 #if JL_LLVM_VERSION >= 50000
+#ifdef USE_TAPIR
+        PM->add(createInferFunctionAttrsLegacyPass());
+        PM->add(createLowerTapirToTargetPass(&cilkTarget));
+        PM->add(createCFGSimplificationPass());
+        PM->add(createInferFunctionAttrsLegacyPass());
+        PM->add(createMergeFunctionsPass());
+#endif
         PM->add(createBarrierNoopPass());
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
@@ -200,7 +209,17 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createEarlyCSEPass()); //// ****
 
     PM->add(createLoopIdiomPass()); //// ****
+#ifdef USE_TAPIR
+    PM->add(createLICMPass());                 // Hoist loop invariants
+    PM->add(createIndVarSimplifyPass());       // Canonicalize indvars
     PM->add(createLoopRotatePass());           // Rotate loops.
+    PM->add(createLoopSpawningPass(&cilkTarget));
+    PM->add(createLoopDeletionPass());         // Delete dead loops
+    PM->add(createCFGSimplificationPass());    // Merge & remove BBs
+    PM->add(createInstructionCombiningPass());
+#else
+    PM->add(createLoopRotatePass());           // Rotate loops.
+#endif
 #ifdef USE_POLLY
     // LCSSA (which has already run at this point due to the dependencies of the
     // above passes) introduces redundant phis that hinder Polly. Therefore we
@@ -254,6 +273,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
         PM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
+#ifdef USE_TAPIR
+    PM->add(createInferFunctionAttrsLegacyPass());
+    PM->add(createLowerTapirToTargetPass(&cilkTarget));
+    PM->add(createCFGSimplificationPass());
+    PM->add(createInferFunctionAttrsLegacyPass());
+    PM->add(createMergeFunctionsPass());
+#endif
     // LowerPTLS removes an indirect call. As a result, it is likely to trigger
     // LLVM's devirtualization heuristics, which would result in the entire
     // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
