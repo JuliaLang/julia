@@ -305,7 +305,7 @@ end
 
 ncodeunits(s::SubstitutionString) = ncodeunits(s.string)
 codeunit(s::SubstitutionString) = codeunit(s.string)
-codeuint(s::SubstitutionString, i::Integer) = codeunit(s.string, i)
+codeunit(s::SubstitutionString, i::Integer) = codeunit(s.string, i)
 isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)
 next(s::SubstitutionString, i::Integer) = next(s.string, i)
 
