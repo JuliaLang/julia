@@ -64,7 +64,7 @@ ncodeunits(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
 @inline function codeunit(s::String, i::Integer)
-    @boundscheck between(i, 1, ncodeunits(s)) || throw(BoundsError(s, i))
+    @boundscheck checkbounds(s, i)
     @gc_preserve s unsafe_load(pointer(s, i))
 end
 
@@ -144,7 +144,7 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 ## required core functionality ##
 
 function next(s::String, i::Int)
-    @boundscheck 1 ≤ i ≤ sizeof(s) || throw(BoundsError(s, i))
+    @boundscheck checkbounds(s, i)
     @inbounds b = codeunit(s, i)
     # TODO: check index validity
     u = UInt32(b) << 24
@@ -178,9 +178,8 @@ end
 end
 
 function getindex(s::String, i::Int)
-    @boundscheck 1 ≤ i ≤ ncodeunits(s) || throw(BoundsError(s, i))
+    @boundscheck checkbounds(s, i)
     @inbounds b = codeunit(s, i)
-    # TODO: check index validity
     u = UInt32(b) << 24
     (b < 0x80) | (0xf8 ≤ b) && return reinterpret(Char, u)
     return getindex_continued(s, i, u)
