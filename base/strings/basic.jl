@@ -74,7 +74,9 @@ I.e. the value returned by `codeunit(s, i)` is of the type returend by
 
 See also: `ncodeunits`, `checkbounds`
 """
-codeunit(s::AbstractString, i::Integer) = codeunit(s, Int(i))
+codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
+    throw(MethodError(codeunit, Tuple{typeof(s),Int})) :
+        codeunit(s, Int(i))
 
 """
     isvalid(s::AbstractString, i::Integer) -> Bool
@@ -110,7 +112,9 @@ Stacktrace:
 [...]
 ```
 """
-isvalid(s::AbstractString, i::Integer) = isvalid(s, Int(i))
+isvalid(s::AbstractString, i::Integer) = typeof(i) === Int ?
+    throw(MethodError(isvalid, Tuple{typeof(s),Int})) :
+        isvalid(s, Int(i))
 
 """
     next(s::AbstractString, i::Integer) -> Tuple{Char, Int}
@@ -123,7 +127,9 @@ a Unicode index error is raised.
 
 See also: `getindex`, `start`, `done`, `checkbounds`
 """
-next(s::AbstractString, i::Integer) = next(s, Int(i))
+next(s::AbstractString, i::Integer) = typeof(i) === Int ?
+    throw(MethodError(next, Tuple{typeof(s),Int})) :
+        next(s, Int(i))
 
 ## basic generic definitions ##
 
@@ -154,7 +160,7 @@ checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Real}) =
     all(i -> checkbounds(s, i), I)
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Integer}) =
     all(i -> checkbounds(s, i), I)
-checkbounds(s::AbstractString, I::Union{Integer,AbstractRange}) =
+checkbounds(s::AbstractString, I::Union{Integer,AbstractArray}) =
     checkbounds(Bool, s, I) || throw(BoundsError(s, I))
 
 ## construction, conversion, promotion ##
@@ -307,8 +313,8 @@ julia> length("jμΛIα")
 """
 function length(s::AbstractString, lo::Integer=1, hi::Integer=ncodeunits(s))
     z = ncodeunits(s)
-    a = ifelse(lo < 1, 1, ifelse(z < lo, z, Int(lo)))
-    b = ifelse(hi < 1, 1, ifelse(z < hi, z, Int(hi)))
+    a = Int(max(1, min(z, lo)))
+    b = Int(min(z, max(1, hi)))
     n = a - b
     for i = a:b
         n += isvalid(s, i)
@@ -628,7 +634,7 @@ julia> lcfirst("Julia")
 function lcfirst(s::AbstractString)
     isempty(s) && return ""
     c = s[1]
-    c′ = uppercase(c)
+    c′ = lowercase(c)
     c == c′ ? convert(String, s) :
     string(c′, SubString(s, nextind(s, 1)))
 end

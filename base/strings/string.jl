@@ -235,8 +235,8 @@ end
 
 function length(s::String, lo::Int, hi::Int)
     z = ncodeunits(s)
-    i = ifelse(lo < 1, 1, ifelse(z < lo, z, Int(lo)))
-    n = ifelse(hi < 1, 1, ifelse(z < hi, z, Int(hi)))
+    i = Int(max(1, min(z, lo)))
+    n = Int(min(z, max(1, hi)))
     c = i - n
     if i ≤ n
         i, j = thisind(s, i), i
