@@ -42,11 +42,8 @@ SubString(s::AbstractString, i::Integer, j::Integer=endof(s)) = SubString(s, Int
 SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
 function SubString(s::SubString, i::Int, j::Int)
-    if i ≤ j
-        1 ≤ i || throw(BoundsError(s, i))
-        j ≤ ncodeunits(s) || throw(BoundsError(s, j))
-    end
-    return SubString(s.string, s.offset+i, nextind(s,j)-i)
+    @boundscheck i ≤ j && checkbounds(s, i:j)
+    SubString(s.string, s.offset+i, nextind(s.string, s.offset+j)-1)
 end
 
 SubString(s::AbstractString) = SubString(s, 1, endof(s))

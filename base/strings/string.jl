@@ -215,17 +215,20 @@ getindex(s::String, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 
 function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""
+    i, j = first(r), last(r)
     @boundscheck begin
         checkbounds(s, r)
-        @inbounds isvalid(s, first(r)) ||
+        @inbounds isvalid(s, i) ||
             throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s, i)))
-        @inbounds isvalid(s, last(r)) ||
+        @inbounds isvalid(s, j) ||
             throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, codeunit(s, j)))
     end
-    ss = _string_n(length(r))
+    j = nextind(s, j) - 1
+    n = j - i + 1
+    ss = _string_n(n)
     p = pointer(ss)
-    for (i, j) in enumerate(r)
-        unsafe_store!(p, codeunit(s, j), i)
+    for k = 1:n
+        unsafe_store!(p, codeunit(s, i + k - 1), k)
     end
     return ss
 end
