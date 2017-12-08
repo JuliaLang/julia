@@ -138,6 +138,8 @@ function *(A::QR{TA},B::LQ{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
     A_mul_B!(convert(Factorization{TAB},A), convert(Factorization{TAB},B))
 end
+*(A::Adjoint{<:Any,<:LQ}, B::LQ) = adjoint(A.parent) * B
+*(A::LQ, B::Adjoint{<:Any,<:LQ}) = A * adjoint(B.parent)
 
 ## Multiplication by Q
 ### QB

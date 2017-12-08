@@ -298,6 +298,13 @@ pinv(v::RowVector, tol::Real=0) = pinv(v', tol)'
 /(rowvec::RowVector, transmat::Transpose{<:Any,<:AbstractMatrix}) = transpose(transmat.parent \ transpose(rowvec))
 /(rowvec::RowVector, adjmat::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(adjmat.parent \ adjoint(rowvec))
 
+
+# definitions necessary for test/linalg/dense.jl to pass
+# should be cleaned up / revised as necessary in the future
+/(A::Number, B::Adjoint{<:Any,<:RowVector}) = /(A, adjoint(B.parent))
+/(A::Matrix, B::RowVector) = adjoint(adjoint(B) \ adjoint(A))
+
+
 # dismabiguation methods
 *(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:RowVector}) = adjoint(A.parent) * B
 *(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:RowVector}) = A * transpose(B.parent)

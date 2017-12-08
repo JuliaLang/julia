@@ -2823,6 +2823,128 @@ end
     A_mul_Bc(A::AbstractVecOrMat{T}, R::AbstractRotation{S}) where {T,S} = *(A, Adjoint(R))
 end
 
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/operators.jl, to deprecate
+@eval Base begin
+    using Base.LinAlg: Adjoint, Transpose
+    """
+        Ac_ldiv_Bt(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᵀ``.
+    """
+    Ac_ldiv_Bt(a,b) = \(Adjoint(a), Transpose(b))
+    """
+        At_ldiv_Bt(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``Bᵀ``.
+    """
+    At_ldiv_Bt(a,b) = \(Transpose(a), Transpose(b))
+    """
+        A_ldiv_Bt(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᵀ``.
+    """
+    A_ldiv_Bt(a,b)  = \(a, Transpose(b))
+    """
+        At_ldiv_B(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``B``.
+    """
+    At_ldiv_B(a,b)  = \(Transpose(a), b)
+    """
+        Ac_ldiv_Bc(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᴴ``.
+    """
+    Ac_ldiv_Bc(a,b) = \(Adjoint(a), Adjoint(b))
+    """
+        A_ldiv_Bc(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᴴ``.
+    """
+    A_ldiv_Bc(a,b)  = \(a, Adjoint(b))
+    """
+        Ac_ldiv_B(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``B``.
+    """
+    Ac_ldiv_B(a,b)  = \(Adjoint(a), b)
+    """
+        At_rdiv_Bt(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / Bᵀ``.
+    """
+    At_rdiv_Bt(a,b) = /(Transpose(a), Transpose(b))
+    """
+        A_rdiv_Bt(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``A / Bᵀ``.
+    """
+    A_rdiv_Bt(a,b)  = /(a, Transpose(b))
+    """
+        At_rdiv_B(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / B``.
+    """
+    At_rdiv_B(a,b)  = /(Transpose(a), b)
+    """
+        Ac_rdiv_Bc(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / Bᴴ``.
+    """
+    Ac_rdiv_Bc(a,b) = /(Adjoint(a), Adjoint(b))
+    """
+        A_rdiv_Bc(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``A / Bᴴ``.
+    """
+    A_rdiv_Bc(a,b)  = /(a, Adjoint(b))
+    """
+        Ac_rdiv_B(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / B``.
+    """
+    Ac_rdiv_B(a,b)  = /(Adjoint(a), b)
+    """
+        At_mul_Bt(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅Bᵀ``.
+    """
+    At_mul_Bt(a,b) = *(Transpose(a), Transpose(b))
+    """
+        A_mul_Bt(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᵀ``.
+    """
+    A_mul_Bt(a,b)  = *(a, Transpose(b))
+    """
+        At_mul_B(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅B``.
+    """
+    At_mul_B(a,b)  = *(Transpose(a), b)
+    """
+        Ac_mul_Bc(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ Bᴴ``.
+    """
+    Ac_mul_Bc(a,b) = *(Adjoint(a), Adjoint(b))
+    """
+        A_mul_Bc(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᴴ``.
+    """
+    A_mul_Bc(a,b)  = *(a, Adjoint(b))
+    """
+        Ac_mul_B(A, B)
+
+    For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ⋅B``.
+    """
+    Ac_mul_B(a,b)  = *(Adjoint(a), b)
+end
+
+# re. A_mul_B deprecation, don't forget to:
+# 1) delete function shims in base/linalg/linalg.jl
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 

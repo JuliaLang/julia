@@ -98,6 +98,16 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 parent(A::AdjOrTrans) = A.parent
 vec(v::AdjOrTransAbsVec) = v.parent
 
+
+### linear algebra
+
+# definitions necessary for test/linalg/rowvector.jl to pass
+# should be cleaned up / revised as necessary in the future
+/(A::Transpose{<:Any,<:Vector}, B::Matrix) = /(transpose(A.parent), B)
+/(A::Transpose{<:Any,<:Vector}, B::Transpose{<:Any,<:Matrix}) = /(transpose(A.parent), B)
+*(A::Adjoint{<:Any,<:Matrix}, B::Adjoint{<:Any,<:Vector}) = *(adjoint(A.parent), adjoint(B.parent))
+
+
 # dismabiguation methods
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractVector}) = transpose(A.parent) * B
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractMatrix}) = transpose(A.parent) * B
