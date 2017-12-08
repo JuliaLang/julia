@@ -69,7 +69,7 @@ Return the code unit value in the string `s` at index `i`. Note that
 
     codeunit(s, i) :: codeunit(s)
 
-I.e. the value returned by `codeunit(s, i)` is of the type returend by
+I.e. the value returned by `codeunit(s, i)` is of the type returned by
 `codeunit(s)`.
 
 See also: `ncodeunits`, `checkbounds`
