@@ -735,7 +735,7 @@ Deprecated or removed
   * `cumsum`, `cumprod`, `accumulate`, and their mutating versions now require a `dim`
     argument instead of defaulting to using the first dimension ([#24684]).
 
-  * Use of `and`, `or`, and `not` as identifier names is deprecated.
+  * Use of `and`, `or`, and `not` as identifier names is deprecated ([#24965]).
 
 Command-line option changes
 ---------------------------
@@ -1709,3 +1709,4 @@ Command-line option changes
 [#24396]: https://github.com/JuliaLang/julia/issues/24396
 [#24413]: https://github.com/JuliaLang/julia/issues/24413
 [#24653]: https://github.com/JuliaLang/julia/issues/24653
+[#24965]: https://github.com/JuliaLang/julia/issues/24965
