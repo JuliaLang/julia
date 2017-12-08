@@ -76,7 +76,7 @@ before_install:
         if [ "$ARCH" = "x86_64" ]; then
             BUILDOPTS="$BUILDOPTS JULIA_CPU_TARGET=x86-64";
         else
-            BUILDOPTS="$BUILDOPTS JULIA_CPU_TARGET=i686";
+            BUILDOPTS="$BUILDOPTS JULIA_CPU_TARGET=pentium4 MARCH=pentium4 CFLAGS=\"-mfpmath=sse\"";
         fi;
         echo "override ARCH=$ARCH" >> Make.user;
         sudo sh -c "echo 0 > /proc/sys/net/ipv6/conf/lo/disable_ipv6";
