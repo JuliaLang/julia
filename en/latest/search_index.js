@@ -4125,7 +4125,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Style Guide",
     "title": "Use naming conventions consistent with Julia's base/",
     "category": "section",
-    "text": "modules and type names use capitalization and camel case: module SparseArrays, struct UnitRange.\nfunctions are lowercase (maximum, convert) and, when readable, with multiple words squashed together (isequal, haskey). When necessary, use underscores as word separators. Underscores are also used to indicate a combination of concepts (remotecall_fetch as a more efficient implementation of fetch(remotecall(...))) or as modifiers (sum_kbn).\nconciseness is valued, but avoid abbreviation (indexin rather than indxin) as it becomes difficult to remember whether and how particular words are abbreviated.If a function name requires multiple words, consider whether it might represent more than one concept and might be better split into pieces."
+    "text": "modules and type names use capitalization and camel case: module SparseArrays, struct UnitRange.\nfunctions are lowercase (maximum, convert) and, when readable, with multiple words squashed together (isequal, haskey). When necessary, use underscores as word separators. Underscores are also used to indicate a combination of concepts (remotecall_fetch as a more efficient implementation of fetch(remotecall(...))) or as modifiers.\nconciseness is valued, but avoid abbreviation (indexin rather than indxin) as it becomes difficult to remember whether and how particular words are abbreviated.If a function name requires multiple words, consider whether it might represent more than one concept and might be better split into pieces."
 },
 
 {
@@ -7909,7 +7909,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
 },
 
 {
@@ -9109,7 +9109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -11921,14 +11921,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays/#Base.cumsum_kbn",
-    "page": "Arrays",
-    "title": "Base.cumsum_kbn",
-    "category": "Function",
-    "text": "cumsum_kbn(A, dim::Integer)\n\nCumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.\n\n\n\n"
-},
-
-{
     "location": "stdlib/arrays/#Base.LinAlg.diff",
     "page": "Arrays",
     "title": "Base.LinAlg.diff",
@@ -11993,19 +11985,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays/#Base.sum_kbn",
-    "page": "Arrays",
-    "title": "Base.sum_kbn",
-    "category": "Function",
-    "text": "sum_kbn(A)\n\nReturns the sum of all elements of A, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.\n\n\n\n"
-},
-
-{
     "location": "stdlib/arrays/#Array-functions-1",
     "page": "Arrays",
     "title": "Array functions",
     "category": "section",
-    "text": "Base.accumulate(::Any, ::Any, ::Integer)\nBase.accumulate!\nBase.cumprod\nBase.cumprod!\nBase.cumsum\nBase.cumsum!\nBase.cumsum_kbn\nBase.LinAlg.diff\nBase.repeat(::AbstractArray)\nBase.rot180\nBase.rotl90\nBase.rotr90\nBase.reducedim\nBase.mapreducedim\nBase.mapslices\nBase.sum_kbn"
+    "text": "Base.accumulate(::Any, ::Any, ::Integer)\nBase.accumulate!\nBase.cumprod\nBase.cumprod!\nBase.cumsum\nBase.cumsum!\nBase.LinAlg.diff\nBase.repeat(::AbstractArray)\nBase.rot180\nBase.rotl90\nBase.rotr90\nBase.reducedim\nBase.mapreducedim\nBase.mapslices"
 },
 
 {
