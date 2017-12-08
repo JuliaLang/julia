@@ -1197,12 +1197,12 @@ end
 
 ### Keymap Support
 
-const wildcard = Char(0x0010f7ff) # "Private Use" Char
+const wildcard = '\U10f7ff' # "Private Use" Char
 
 normalize_key(key::Char) = string(key)
 normalize_key(key::Integer) = normalize_key(Char(key))
 function normalize_key(key::AbstractString)
-    wildcard in key && error("Matching Char(0x0010f7ff) not supported.")
+    wildcard in key && error("Matching '\U10f7ff' not supported.")
     buf = IOBuffer()
     i = start(key)
     while !done(key, i)
