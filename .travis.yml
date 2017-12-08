@@ -113,7 +113,6 @@ script:
     # compile / install dependencies
     - contrib/download_cmake.sh
     - make -C moreutils mispipe
-    - make -C deps distclean-curl # REMOVE THIS
     - make $BUILDOPTS -C base version_git.jl.phony
     # Check that the llvm cache is not poisoned
     - if [ -f deps/srccache/llvm-3.9.1/llvm-D37939-Mem2Reg-Also-handle-memcpy.patch-applied ]; then
