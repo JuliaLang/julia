@@ -6,8 +6,9 @@ using Pkg3: TOML, TerminalMenus, Dates
 import Pkg3
 import Pkg3: depots, logdir, iswindows
 
-export SHA1, VersionRange, VersionSpec, empty_versionspec, Requires, Fixed, DepsGraph,
-    merge_requires!, satisfies, ResolveBacktraceItem, ResolveBacktrace,
+export UUID, pkgID, julia_UUID, SHA1, VersionRange, VersionSpec, empty_versionspec,
+    Requires, Fixed, DepsGraph, merge_requires!, satisfies,
+    ResolveBacktraceItem, ResolveBacktrace, showitem,
     PackageSpec, UpgradeLevel, EnvCache,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
@@ -18,6 +19,17 @@ export SHA1, VersionRange, VersionSpec, empty_versionspec, Requires, Fixed, Deps
 
 Base.isless(a::UUID, b::UUID) = a.value < b.value
 Base.convert(::Type{String}, u::UUID) = string(u)
+
+## user-friendly representation of package IDs ##
+
+function pkgID(p::UUID, uuid_to_name::Dict{UUID,String})
+    name = haskey(uuid_to_name, p) ? uuid_to_name[p] : "UNKNOWN"
+    uuid_short = string(p)[1:8]
+    return "$name [$uuid_short]"
+end
+
+# oh well...
+const julia_UUID = UUID("11111111-0000-1111-1111-444444444444")
 
 ## SHA1 ##
 
@@ -251,7 +263,7 @@ function Base.print(io::IO, s::VersionSpec)
 end
 Base.show(io::IO, s::VersionSpec) = print(io, "VersionSpec(\"", s, "\")")
 
-const Requires = Dict{String,VersionSpec}
+const Requires = Dict{UUID,VersionSpec}
 
 function merge_requires!(A::Requires, B::Requires)
     for (pkg,vers) in B
@@ -260,12 +272,10 @@ function merge_requires!(A::Requires, B::Requires)
     return A
 end
 
-satisfies(pkg::AbstractString, ver::VersionNumber, reqs::Requires) =
+satisfies(pkg::UUID, ver::VersionNumber, reqs::Requires) =
     !haskey(reqs, pkg) || in(ver, reqs[pkg])
 
-Base.convert(::Type{Requires}, t::Dict{UUID,VersionSpec}) = Requires(String(uuid)=>vs for (uuid,vs) in t)
-
-const DepsGraph = Dict{String,Dict{VersionNumber,Requires}}
+const DepsGraph = Dict{UUID,Dict{VersionNumber,Requires}}
 
 struct Fixed
     version::VersionNumber
@@ -328,9 +338,21 @@ function Base.push!(ritem::ResolveBacktraceItem, reason, version::VersionNumber)
 end
 
 
-Base.show(io::IO, ritem::ResolveBacktraceItem) = _show(io, ritem, "", Set{ResolveBacktraceItem}([ritem]))
+struct ResolveBacktrace
+    uuid_to_name::Dict{UUID,String}
+    bktrc::Dict{UUID,ResolveBacktraceItem}
+    ResolveBacktrace(uuid_to_name::Dict{UUID,String}) = new(uuid_to_name, Dict{UUID,ResolveBacktraceItem}())
+end
 
-function _show(io::IO, ritem::ResolveBacktraceItem, indent::String, seen::Set{ResolveBacktraceItem})
+Base.getindex(bt::ResolveBacktrace, p) = bt.bktrc[p]
+Base.setindex!(bt::ResolveBacktrace, v, p) = setindex!(bt.bktrc, v, p)
+Base.haskey(bt::ResolveBacktrace, p) = haskey(bt.bktrc, p)
+Base.get!(bt::ResolveBacktrace, p, def) = get!(bt.bktrc, p, def)
+Base.get!(def::Base.Callable, bt::ResolveBacktrace, p) = get!(def, bt.bktrc, p)
+
+showitem(io::IO, bt::ResolveBacktrace, p) = _show(io, bt.uuid_to_name, bt[p], "", Set{ResolveBacktraceItem}([bt[p]]))
+
+function _show(io::IO, uuid_to_name::Dict{UUID,String}, ritem::ResolveBacktraceItem, indent::String, seen::Set{ResolveBacktraceItem})
     l = length(ritem.why)
     for (i,(vs,w)) in enumerate(ritem.why)
         print(io, indent, (i==l ? '└' : '├'), '─')
@@ -341,29 +363,31 @@ function _show(io::IO, ritem::ResolveBacktraceItem, indent::String, seen::Set{Re
             @assert vs isa VersionSpec
             println(io, "version range $vs set by an explicit requirement")
         else
-            @assert w isa Pair{<:AbstractString,ResolveBacktraceItem}
+            @assert w isa Pair{UUID,ResolveBacktraceItem}
             if vs isa VersionNumber
                 print(io, "version $vs ")
             else
                 print(io, "version range $vs ")
             end
-            print(io, "required by package $(w[1]), ")
-            if w[2].versionreq isa VersionSpec
-                println(io, "whose allowed version range is $(w[2].versionreq):")
+            id = pkgID(w[1], uuid_to_name)
+            otheritem = w[2]
+            print(io, "required by package $id, ")
+            if otheritem.versionreq isa VersionSpec
+                println(io, "whose allowed version range is $(otheritem.versionreq):")
             else
-                println(io, "whose only allowed version is $(w[2].versionreq):")
+                println(io, "whose only allowed version is $(otheritem.versionreq):")
             end
-            if w[2] ∈ seen
-                println(io, (i==l ? "  " : "│ ") * indent, "└─[see above for $(w[1]) backtrace]")
+            if otheritem ∈ seen
+                println(io, (i==l ? "  " : "│ ") * indent, "└─[see above for $id backtrace]")
                 continue
             end
-            push!(seen, w[2])
-            _show(io, w[2], (i==l ? "  " : "│ ") * indent, seen)
+            push!(seen, otheritem)
+            _show(io, uuid_to_name, otheritem, (i==l ? "  " : "│ ") * indent, seen)
         end
     end
 end
 
-const ResolveBacktrace = Dict{AbstractString,ResolveBacktraceItem}
+
 
 ## command errors (no stacktrace) ##
 

@@ -16,7 +16,7 @@ mutable struct Interface
     deps::DepsGraph
 
     # packages list
-    pkgs::Vector{String}
+    pkgs::Vector{UUID}
 
     # number of packages
     np::Int
@@ -24,8 +24,8 @@ mutable struct Interface
     # states per package: one per version + uninstalled
     spp::Vector{Int}
 
-    # pakage dict: associates an index to each package name
-    pdict::Dict{String,Int}
+    # pakage dict: associates an index to each package id
+    pdict::Dict{UUID,Int}
 
     # package versions: for each package, keep the list of the
     #                   possible version numbers; this defines a
@@ -50,7 +50,7 @@ mutable struct Interface
         np = length(pkgs)
 
         # generate pdict
-        pdict = Dict{String,Int}(pkgs[i] => i for i = 1:np)
+        pdict = Dict{UUID,Int}(pkgs[i] => i for i = 1:np)
 
         # generate spp and pvers
         spp = Vector{Int}(np)
@@ -105,7 +105,7 @@ function compute_output_dict(sol::Vector{Int}, interface::Interface)
     pvers = interface.pvers
     spp = interface.spp
 
-    want = Dict{String,VersionNumber}()
+    want = Dict{UUID,VersionNumber}()
     for p0 = 1:np
         p = pkgs[p0]
         s = sol[p0]
@@ -147,11 +147,11 @@ function greedysolver(interface::Interface)
 
     # we start from required packages and explore the graph
     # following dependencies
-    staged = Set{String}(keys(reqs))
+    staged = Set{UUID}(keys(reqs))
     seen = copy(staged)
 
     while !isempty(staged)
-        staged_next = Set{String}()
+        staged_next = Set{UUID}()
         for p in staged
             p0 = pdict[p]
             @assert sol[p0] < spp[p0]
@@ -332,11 +332,11 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
     # start from the required ones and keep only
     # the packages reachable from them along the graph
     uninst = trues(np)
-    staged = Set{String}(keys(reqs))
+    staged = Set{UUID}(keys(reqs))
     seen = copy(staged)
 
     while !isempty(staged)
-        staged_next = Set{String}()
+        staged_next = Set{UUID}()
         for p in staged
             p0 = pdict[p]
             uninst[p0] = false

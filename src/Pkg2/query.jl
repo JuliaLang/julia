@@ -6,14 +6,8 @@ import ..PkgError
 using ...Types
 import Pkg3.equalto
 
-function nameuuid(uuid, uuid_to_name)
-    name = haskey(uuid_to_name, uuid) ? uuid_to_name[uuid] : "UNKNOWN"
-    uuid_short = uuid[1:8]
-    return "$name [$uuid_short]"
-end
-
-function init_resolve_backtrace(reqs::Requires, fix::Dict{String,Fixed} = Dict{String,Fixed}())
-    bktrc = ResolveBacktrace()
+function init_resolve_backtrace(uuid_to_name::Dict{UUID,String}, reqs::Requires, fix::Dict{UUID,Fixed} = Dict{UUID,Fixed}())
+    bktrc = ResolveBacktrace(uuid_to_name)
     for (p,f) in fix
         bktrc[p] = ResolveBacktraceItem(:fixed, f.version)
     end
@@ -24,26 +18,26 @@ function init_resolve_backtrace(reqs::Requires, fix::Dict{String,Fixed} = Dict{S
     return bktrc
 end
 
-function check_fixed(reqs::Requires, fix::Dict{String,Fixed}, deps::DepsGraph, uuid_to_name::Dict{String, String})
-    nu(p) = nameuuid(p, uuid_to_name)
+function check_fixed(reqs::Requires, fix::Dict{UUID,Fixed}, deps::DepsGraph, uuid_to_name::Dict{UUID,String})
+    id(p) = pkgID(p, uuid_to_name)
     for (p1,f1) in fix
         for p2 in keys(f1.requires)
             if !(haskey(deps, p2) || haskey(fix, p2))
-                throw(PkgError("unknown package $(nu(p1)) required by $(nu(p2))"))
+                throw(PkgError("unknown package $(id(p1)) required by $(id(p2))"))
             end
         end
         if !satisfies(p1, f1.version, reqs)
-            warn("$(nu(p1)) is fixed at $(f1.version) conflicting with top-level requirement: $(reqs[p1])")
+            warn("$(id(p1)) is fixed at $(f1.version) conflicting with top-level requirement: $(reqs[p1])")
         end
         for (p2,f2) in fix
             if !satisfies(p1, f1.version, f2.requires)
-                warn("$(nu(p1)) is fixed at $(f1.version) conflicting with requirement for $(nu(p2)): $(f2.requires[p1])")
+                warn("$(id(p1)) is fixed at $(f1.version) conflicting with requirement for $(id(p2)): $(f2.requires[p1])")
             end
         end
     end
 end
 
-function propagate_fixed!(reqs::Requires, bktrc::ResolveBacktrace, fix::Dict{String,Fixed})
+function propagate_fixed!(reqs::Requires, bktrc::ResolveBacktrace, fix::Dict{UUID,Fixed})
     for (p,f) in fix
         merge_requires!(reqs, f.requires)
         for (rp,rvs) in f.requires
@@ -72,19 +66,19 @@ end
 
 # Generate a reverse dependency graph (package names only)
 function gen_backdeps(deps::DepsGraph)
-    backdeps = Dict{String,Set{String}}()
+    backdeps = Dict{UUID,Set{UUID}}()
     for (p,depsp) in deps, (vn,vdep) in depsp, rp in keys(vdep)
-        s = get!(backdeps, rp) do; Set{String}() end
+        s = get!(backdeps, rp) do; Set{UUID}() end
         push!(s, p)
     end
     return backdeps
 end
 
-function dependencies(deps::DepsGraph, fix::Dict = Dict{String,Fixed}("julia"=>Fixed(VERSION)))
+function dependencies(deps::DepsGraph, fix::Dict = Dict{UUID,Fixed}(julia_UUID=>Fixed(VERSION)))
     deps = depscopy(deps)
-    conflicts = Dict{String,Set{String}}()
+    conflicts = Dict{UUID,Set{UUID}}()
     to_expunge = VersionNumber[]
-    emptied = String[]
+    emptied = UUID[]
     backdeps = gen_backdeps(deps)
 
     for (fp,fx) in fix
@@ -98,7 +92,7 @@ function dependencies(deps::DepsGraph, fix::Dict = Dict{String,Fixed}("julia"=>F
                 if satisfies(fp, fx.version, vdep)
                     delete!(vdep, fp)
                 else
-                    conflicts_p = get!(conflicts, p) do; Set{String}() end
+                    conflicts_p = get!(conflicts, p) do; Set{UUID}() end
                     push!(conflicts_p, fp)
                     # don't delete vn from depsp right away so as not to screw up iteration
                     push!(to_expunge, vn)
@@ -111,7 +105,7 @@ function dependencies(deps::DepsGraph, fix::Dict = Dict{String,Fixed}("julia"=>F
         end
     end
     while !isempty(emptied)
-        deleted_pkgs = String[]
+        deleted_pkgs = UUID[]
         for p in emptied
             delete!(deps, p)
             push!(deleted_pkgs, p)
@@ -126,7 +120,7 @@ function dependencies(deps::DepsGraph, fix::Dict = Dict{String,Fixed}("julia"=>F
                 empty!(to_expunge)
                 for (vn,vdep) in depsp
                     haskey(vdep, dp) || continue
-                    conflicts_p = get!(conflicts, p) do; Set{String}() end
+                    conflicts_p = get!(conflicts, p) do; Set{UUID}() end
                     union!(conflicts_p, conflicts[dp])
                     push!(to_expunge, vn)
                 end
@@ -140,18 +134,18 @@ function dependencies(deps::DepsGraph, fix::Dict = Dict{String,Fixed}("julia"=>F
     deps, conflicts
 end
 
-function check_requirements(reqs::Requires, deps::DepsGraph, fix::Dict,
-                            uuid_to_name::Dict{String, String})
-    nu(p) = nameuuid(p, uuid_to_name)
+function check_requirements(reqs::Requires, deps::DepsGraph, fix::Dict{UUID,Fixed},
+                            uuid_to_name::Dict{UUID,String})
+    id(p) = pkgID(p, uuid_to_name)
     for (p,vs) in reqs
         any(vn->(vn ∈ vs), keys(deps[p])) && continue
         remaining_vs = VersionSpec()
-        err_msg = "fixed packages introduce conflicting requirements for $(nu(p)): \n"
+        err_msg = "fixed packages introduce conflicting requirements for $(id(p)): \n"
         available_list = sort!(collect(keys(deps[p])))
         for (p1,f1) in fix
             f1r = f1.requires
             haskey(f1r, p) || continue
-            err_msg *= "         $(nu(p1)) requires versions $(f1r[p])"
+            err_msg *= "         $(id(p1)) requires versions $(f1r[p])"
             if !any([vn in f1r[p] for vn in available_list])
                 err_msg *= " [none of the available versions can satisfy this requirement]"
             end
@@ -175,9 +169,9 @@ end
 # message allows to determine the cause.
 # This is a pre-pruning step, so it also creates some structures which are later used by pruning
 function filter_versions(reqs::Requires, deps::DepsGraph,
-                         bktrc::ResolveBacktrace, uuid_to_name::Dict{String,String})
-    nu(p) = nameuuid(p, uuid_to_name)
-    allowed = Dict{String,Dict{VersionNumber,Bool}}()
+                         bktrc::ResolveBacktrace, uuid_to_name::Dict{UUID,String})
+    id(p) = pkgID(p, uuid_to_name)
+    allowed = Dict{UUID,Dict{VersionNumber,Bool}}()
     staged = copy(reqs)
     while !isempty(staged)
         staged_next = Requires()
@@ -198,8 +192,8 @@ function filter_versions(reqs::Requires, deps::DepsGraph,
             end
             @assert !isempty(allowedp)
             if !any(values(allowedp))
-                err_msg = "Unsatisfiable requirements detected for package $(nu(p)):\n"
-                err_msg *= string(bktrc[p])
+                err_msg = "Unsatisfiable requirements detected for package $(id(p)):\n"
+                err_msg *= sprint(showitem, bktrc, p)
                 err_msg *= """The intersection of the requirements is $(bktrc[p].versionreq).
                               None of the available versions can satisfy this requirement."""
                 throw(PkgError(err_msg))
@@ -216,14 +210,14 @@ function filter_versions(reqs::Requires, deps::DepsGraph,
             # Start by filtering out the non-allowed versions
             fdepsp = Dict{VersionNumber,Requires}(vn=>depsp[vn] for vn in keys(depsp) if allowedp[vn])
             # Collect all required packages
-            isreq = Dict{String,Bool}(rp=>true for vdep in values(fdepsp) for rp in keys(vdep))
+            isreq = Dict{UUID,Bool}(rp=>true for vdep in values(fdepsp) for rp in keys(vdep))
             # Compute whether a required package appears in all requirements
             for rp in keys(isreq)
                 isreq[rp] = all(haskey(vdep, rp) for vdep in values(fdepsp))
             end
 
             # Create a list of candidates for new implicit requirements
-            staged_new = Set{String}()
+            staged_new = Set{UUID}()
             for vdep in values(fdepsp), (rp,rvs) in vdep
                 # Skip packages that may not be required
                 isreq[rp] || continue
@@ -241,10 +235,10 @@ function filter_versions(reqs::Requires, deps::DepsGraph,
                 @assert isreq[rp]
                 srvs = staged_next[rp]
                 bktrcp = get!(bktrc, rp) do; ResolveBacktraceItem(); end
-                push!(bktrcp, nu(p)=>bktrc[p], srvs)
+                push!(bktrcp, p=>bktrc[p], srvs)
                 if isa(bktrcp.versionreq, VersionSpec) && isempty(bktrcp.versionreq)
-                    err_msg = "Unsatisfiable requirements detected for package $(nu(rp)):\n"
-                    err_msg *= string(bktrcp)
+                    err_msg = "Unsatisfiable requirements detected for package $(id(rp)):\n"
+                    err_msg *= sprint(showitem, bktrc, rp)
                     err_msg *= "The intersection of the requirements is empty."
                     throw(PkgError(err_msg))
                 end
@@ -274,21 +268,21 @@ end
 #      dependency relation, they are both required or both not required)
 #   2) They have the same dependencies
 # Preliminarily calls filter_versions.
-function prune_versions(reqs::Requires, deps::DepsGraph, bktrc::ResolveBacktrace, uuid_to_name::Dict{String,String})
+function prune_versions(reqs::Requires, deps::DepsGraph, bktrc::ResolveBacktrace, uuid_to_name::Dict{UUID,String})
     filtered_deps, allowed = filter_versions(reqs, deps, bktrc, uuid_to_name)
     if !isempty(reqs)
-        filtered_deps = dependencies_subset(filtered_deps, Set{String}(keys(reqs)))
+        filtered_deps = dependencies_subset(filtered_deps, Set{UUID}(keys(reqs)))
     end
 
     # To each version in each package, we associate a BitVector.
     # It is going to hold a pattern such that all versions with
     # the same pattern are equivalent.
-    vmask = Dict{String,Dict{VersionNumber,BitVector}}()
+    vmask = Dict{UUID,Dict{VersionNumber,BitVector}}()
 
     # For each package, we examine the dependencies of its versions
     # and put together those which are equal.
     # While we're at it, we also collect all dependencies into alldeps
-    alldeps = Dict{String,Set{VersionSpec}}()
+    alldeps = Dict{UUID,Set{VersionSpec}}()
     for (p,fdepsp) in filtered_deps
         # Extract unique dependencies lists (aka classes), thereby
         # assigning an index to each class.
@@ -335,8 +329,8 @@ function prune_versions(reqs::Requires, deps::DepsGraph, bktrc::ResolveBacktrace
 
     # At this point, the vmask patterns are computed. We divide them into
     # classes so that we can keep just one version for each class.
-    pruned_vers = Dict{String,Vector{VersionNumber}}()
-    eq_classes = Dict{String,Dict{VersionNumber,Vector{VersionNumber}}}()
+    pruned_vers = Dict{UUID,Vector{VersionNumber}}()
+    eq_classes = Dict{UUID,Dict{VersionNumber,Vector{VersionNumber}}}()
     for (p,vmaskp) in vmask
         vmask0_uniq = unique(values(vmaskp))
         nc = length(vmask0_uniq)
@@ -421,11 +415,11 @@ function prune_versions(reqs::Requires, deps::DepsGraph, bktrc::ResolveBacktrace
 
     return new_deps, eq_classes
 end
-prune_versions(deps::DepsGraph, uuid_to_name::Dict{String,String}) =
-    prune_versions(Requires(), deps, ResolveBacktrace(), uuid_to_name)
+prune_versions(deps::DepsGraph, uuid_to_name::Dict{UUID,String}) =
+    prune_versions(Requires(), deps, ResolveBacktrace(uuid_to_name), uuid_to_name)
 
 # Build a graph restricted to a subset of the packages
-function subdeps(deps::DepsGraph, pkgs::Set{String})
+function subdeps(deps::DepsGraph, pkgs::Set{UUID})
     sub_deps = DepsGraph()
     for p in pkgs
         haskey(sub_deps, p) || (sub_deps[p] = Dict{VersionNumber,Requires}())
@@ -439,13 +433,13 @@ end
 
 # Build a subgraph incuding only the (direct and indirect) dependencies
 # of a given package set
-function dependencies_subset(deps::DepsGraph, pkgs::Set{String})
-    staged::Set{String} = filter(p->p ∈ keys(deps), pkgs)
+function dependencies_subset(deps::DepsGraph, pkgs::Set{UUID})
+    staged::Set{UUID} = filter(p->p ∈ keys(deps), pkgs)
     allpkgs = copy(staged)
     while !isempty(staged)
-        staged_next = Set{String}()
+        staged_next = Set{UUID}()
         for p in staged, vdep in values(get(deps, p, Dict{VersionNumber,Requires}())), rp in keys(vdep)
-            rp ∉ allpkgs && rp ≠ "julia" && push!(staged_next, rp)
+            rp ∉ allpkgs && rp ≠ julia_UUID && push!(staged_next, rp)
         end
         union!(allpkgs, staged_next)
         staged = staged_next
@@ -456,14 +450,14 @@ end
 
 # Build a subgraph incuding only the (direct and indirect) dependencies and dependants
 # of a given package set
-function undirected_dependencies_subset(deps::DepsGraph, pkgs::Set{String})
-    graph = Dict{String, Set{String}}()
+function undirected_dependencies_subset(deps::DepsGraph, pkgs::Set{UUID})
+    graph = Dict{UUID,Set{UUID}}()
 
     for (p,d) in deps
-        haskey(graph, p) || (graph[p] = Set{String}())
+        haskey(graph, p) || (graph[p] = Set{UUID}())
         for vdep in values(d), rp in keys(vdep)
             push!(graph[p], rp)
-            haskey(graph, rp) || (graph[rp] = Set{String}())
+            haskey(graph, rp) || (graph[rp] = Set{UUID}())
             push!(graph[rp], p)
         end
     end
@@ -471,7 +465,7 @@ function undirected_dependencies_subset(deps::DepsGraph, pkgs::Set{String})
     staged = pkgs
     allpkgs = copy(pkgs)
     while !isempty(staged)
-        staged_next = Set{String}()
+        staged_next = Set{UUID}()
         for p in staged, rp in graph[p]
             rp ∉ allpkgs && push!(staged_next, rp)
         end
@@ -482,8 +476,8 @@ function undirected_dependencies_subset(deps::DepsGraph, pkgs::Set{String})
     return subdeps(deps, allpkgs)
 end
 
-function prune_dependencies(reqs::Requires, deps::DepsGraph, uuid_to_name::Dict{String,String},
-                            bktrc::ResolveBacktrace = init_resolve_backtrace(reqs))
+function prune_dependencies(reqs::Requires, deps::DepsGraph, uuid_to_name::Dict{UUID,String},
+                            bktrc::ResolveBacktrace = init_resolve_backtrace(uuid_to_name, reqs))
     deps, _ = prune_versions(reqs, deps, bktrc, uuid_to_name)
     return deps
 end

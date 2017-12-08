@@ -189,7 +189,7 @@ mutable struct Messages
 
         # a "deterministic noise" function based on hashes
         function noise(p0::Int, v0::Int)
-            s = pkgs[p0] * string(v0 == spp[p0] ? "UNINST" : pvers[p0][v0])
+            s = string(pkgs[p0]) * string(v0 == spp[p0] ? "UNINST" : pvers[p0][v0])
             Int128(hash(s))
         end
 

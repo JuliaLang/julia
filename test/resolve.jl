@@ -65,8 +65,8 @@ vlst_invalid = [
 
 
 # auxiliary functions
-fakeuuid(p::String) = rpad(p, 8, "0")
-function storeuuid(p::String, uuid_to_name::Dict{String,String})
+fakeuuid(p::String) = Base.Random.uuid4(MersenneTwister(hash(p)))
+function storeuuid(p::String, uuid_to_name::Dict{UUID,String})
     uuid = fakeuuid(p)
     if haskey(uuid_to_name, uuid)
         @assert uuid_to_name[uuid] == p
@@ -75,9 +75,9 @@ function storeuuid(p::String, uuid_to_name::Dict{String,String})
     end
     return uuid
 end
-wantuuids(want_data) = Dict{String,VersionNumber}(fakeuuid(p) => v for (p,v) in want_data)
+wantuuids(want_data) = Dict{UUID,VersionNumber}(fakeuuid(p) => v for (p,v) in want_data)
 
-function deps_from_data(deps_data, uuid_to_name = Dict{String,String}())
+function deps_from_data(deps_data, uuid_to_name = Dict{UUID,String}())
     deps = DepsGraph()
     uuid(p) = storeuuid(p, uuid_to_name)
     for d in deps_data
@@ -86,7 +86,7 @@ function deps_from_data(deps_data, uuid_to_name = Dict{String,String}())
             deps[p] = Dict{VersionNumber,Requires}()
         end
         if !haskey(deps[p], vn)
-            deps[p][vn] = Dict{String,VersionSpec}()
+            deps[p][vn] = Dict{UUID,VersionSpec}()
         end
         isempty(r) && continue
         rp = uuid(r[1])
@@ -95,8 +95,8 @@ function deps_from_data(deps_data, uuid_to_name = Dict{String,String}())
     end
     deps, uuid_to_name
 end
-function reqs_from_data(reqs_data, uuid_to_name = Dict{String,String}())
-    reqs = Dict{String,VersionSpec}()
+function reqs_from_data(reqs_data, uuid_to_name = Dict{UUID,String}())
+    reqs = Dict{UUID,VersionSpec}()
     uuid(p) = storeuuid(p, uuid_to_name)
     for r in reqs_data
         p = uuid(r[1])
@@ -106,11 +106,12 @@ function reqs_from_data(reqs_data, uuid_to_name = Dict{String,String}())
 end
 function sanity_tst(deps_data, expected_result; pkgs=[])
     deps, uuid_to_name = deps_from_data(deps_data)
+    id(p) = pkgID(fakeuuid(p), uuid_to_name)
     #println("deps=$deps")
     #println()
     result = sanity_check(deps, uuid_to_name, Set(fakeuuid(p) for p in pkgs))
     length(result) == length(expected_result) || return false
-    expected_result_uuid = [(fakeuuid(p), vn) for (p,vn) in expected_result]
+    expected_result_uuid = [(id(p), vn) for (p,vn) in expected_result]
     for (p, vn, pp) in result
         (p, vn) ∈ expected_result_uuid || return  false
     end
