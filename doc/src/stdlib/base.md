@@ -226,6 +226,7 @@ Base.unsafe_get
 Base.Missing
 Base.missing
 Base.ismissing
+Base.skipmissing
 ```
 
 ## System

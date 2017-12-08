@@ -4,6 +4,12 @@
     @test sprint(showerror, MissingException("test")) == "MissingException: test"
 end
 
+@testset "nonmissingtype" begin
+    @test Base.nonmissingtype(Union{Int, Missing}) == Int
+    @test Base.nonmissingtype(Any) == Any
+    @test Base.nonmissingtype(Missing) == Union{}
+end
+
 @testset "convert" begin
     @test convert(Union{Int, Missing}, 1) === 1
     @test convert(Union{Int, Missing}, 1.0) === 1
@@ -245,4 +251,36 @@ end
     @test float(Union{Int, Missing}[1]) isa Vector{Union{Float64, Missing}}
     @test isequal(float([missing]), [missing])
     @test float([missing]) isa Vector{Missing}
+end
+
+@testset "skipmissing" begin
+    x = skipmissing([1, 2, missing, 4])
+    @test eltype(x) === Int
+    @test collect(x) == [1, 2, 4]
+    @test collect(x) isa Vector{Int}
+
+    x = skipmissing([1  2; missing 4])
+    @test eltype(x) === Int
+    @test collect(x) == [1, 2, 4]
+    @test collect(x) isa Vector{Int}
+
+    x = collect(skipmissing([missing]))
+    @test eltype(x) === Union{}
+    @test isempty(collect(x))
+    @test collect(x) isa Vector{Union{}}
+
+    x = collect(skipmissing(Union{Int, Missing}[]))
+    @test eltype(x) === Int
+    @test isempty(collect(x))
+    @test collect(x) isa Vector{Int}
+
+    x = skipmissing([missing, missing, 1, 2, missing, 4, missing, missing])
+    @test eltype(x) === Int
+    @test collect(x) == [1, 2, 4]
+    @test collect(x) isa Vector{Int}
+
+    x = skipmissing(v for v in [missing, 1, missing, 2, 4])
+    @test eltype(x) === Any
+    @test collect(x) == [1, 2, 4]
+    @test collect(x) isa Vector{Int}
 end

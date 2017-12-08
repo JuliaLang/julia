@@ -296,6 +296,46 @@ since type constructors fall back to convert methods.
 Stacktrace:
 [...]
 ```
+## Skipping Missing Values
+
+Since `missing` values propagate with standard mathematical operators, reduction
+functions return `missing` when called on arrays which contain missing values:
+```doctest
+julia> sum([1, missing])
+missing
+
+```
+
+In this situation, use the [`skipmissing`](@ref) function to skip missing values:
+```doctest
+julia> sum(skipmissing([1, missing]))
+1
+
+```
+
+This convenience function returns an iterator which filters out `missing` values
+efficiently. It can therefore be used with any function which supports iterators:
+```doctest
+julia> maximum(skipmissing([3, missing, 2, 1]))
+3
+
+julia> mean(skipmissing([3, missing, 2, 1]))
+2.0
+
+julia> mapreduce(sqrt, +, skipmissing([3, missing, 2, 1]))
+4.146264369941973
+
+```
+
+Use [`collect`](@ref) to extract non-`missing` values and store them in an array:
+```doctest
+julia> collect(skipmissing([3, missing, 2, 1]))
+3-element Array{Int64,1}:
+ 3
+ 2
+ 1
+
+```
 
 ## Logical Operations on Arrays
 

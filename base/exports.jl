@@ -886,6 +886,7 @@ export
 # missing values
     ismissing,
     missing,
+    skipmissing,
 
 # time
     sleep,

@@ -18,6 +18,11 @@ end
 showerror(io::IO, ex::MissingException) =
     print(io, "MissingException: ", ex.msg)
 
+nonmissingtype(::Type{Union{T, Missing}}) where {T} = T
+nonmissingtype(::Type{Missing}) = Union{}
+nonmissingtype(::Type{T}) where {T} = T
+nonmissingtype(::Type{Any}) = Any
+
 promote_rule(::Type{Missing}, ::Type{T}) where {T} = Union{T, Missing}
 promote_rule(::Type{Union{S,Missing}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), Missing}
 promote_rule(::Type{Any}, ::Type{T}) where {T} = Any
@@ -116,3 +121,81 @@ function float(A::AbstractArray{Union{T, Missing}}) where {T}
     convert(AbstractArray{Union{U, Missing}}, A)
 end
 float(A::AbstractArray{Missing}) = A
+
+"""
+    skipmissing(itr)
+
+Return an iterator over the elements in `itr` skipping [`missing`](@ref) values.
+
+Use [`collect`](@ref) to obtain an `Array` containing the non-`missing` values in
+`itr`. Note that even if `itr` is a multidimensional array, the result will always
+be a `Vector` since it is not possible to remove missings while preserving dimensions
+of the input.
+
+# Examples
+```jldoctest
+julia> sum(skipmissing([1, missing, 2]))
+3
+
+julia> collect(skipmissing([1, missing, 2]))
+2-element Array{Int64,1}:
+1
+2
+
+julia> collect(skipmissing([1 missing; 2 missing]))
+2-element Array{Int64,1}:
+1
+2
+
+```
+"""
+skipmissing(itr) = SkipMissing(itr)
+
+struct SkipMissing{T}
+    x::T
+end
+iteratorsize(::Type{<:SkipMissing}) = SizeUnknown()
+iteratoreltype(::Type{SkipMissing{T}}) where {T} = iteratoreltype(T)
+eltype(itr::SkipMissing) = nonmissingtype(eltype(itr.x))
+# Fallback implementation for general iterables: we cannot access a value twice,
+# so after finding the next non-missing element in start() or next(), we have to
+# pass it in the iterator state, which introduces a type instability since the value
+# is missing if the input does not contain any non-missing element.
+@inline function Base.start(itr::SkipMissing)
+    s = start(itr.x)
+    v = missing
+    @inbounds while !done(itr.x, s) && v isa Missing
+        v, s = next(itr.x, s)
+    end
+    (v, s)
+end
+@inline Base.done(itr::SkipMissing, state) = ismissing(state[1]) && done(itr.x, state[2])
+@inline function Base.next(itr::SkipMissing, state)
+    v1, s = state
+    v2 = missing
+    @inbounds while !done(itr.x, s) && v2 isa Missing
+        v2, s = next(itr.x, s)
+    end
+    (v1, (v2, s))
+end
+# Optimized implementation for AbstractArray, relying on the ability to access x[i] twice:
+# once in done() to find the next non-missing entry, and once in next() to return it.
+# This works around the type instability problem of the generic fallback.
+@inline function _next_nonmissing_ind(x::AbstractArray, s)
+    idx = eachindex(x)
+    @inbounds while !done(idx, s)
+        i, new_s = next(idx, s)
+        x[i] isa Missing || break
+        s = new_s
+    end
+    s
+end
+@inline Base.start(itr::SkipMissing{<:AbstractArray}) =
+    _next_nonmissing_ind(itr.x, start(eachindex(itr.x)))
+@inline Base.done(itr::SkipMissing{<:AbstractArray}, state) =
+    done(eachindex(itr.x), state)
+@inline function Base.next(itr::SkipMissing{<:AbstractArray}, state)
+    i, state = next(eachindex(itr.x), state)
+    @inbounds v = itr.x[i]::eltype(itr)
+    (v, _next_nonmissing_ind(itr.x, state))
+end
