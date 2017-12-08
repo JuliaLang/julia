@@ -5365,7 +5365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.oftype",
     "category": "Function",
-    "text": "oftype(x, y)\n\nConvert y to the type of x (convert(typeof(x), y)).\n\n\n\n"
+    "text": "oftype(x, y)\n\nConvert y to the type of x (convert(typeof(x), y)).\n\nExamples\n\njulia> x = 4;\n\njulia> y = 3.;\n\njulia> oftype(x, y)\n3\n\njulia> oftype(y, x)\n4.0\n\n\n\n"
 },
 
 {
@@ -5797,7 +5797,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.@boundscheck",
     "category": "Macro",
-    "text": "@boundscheck(blk)\n\nAnnotates the expression blk as a bounds checking block, allowing it to be elided by @inbounds.\n\nNote that the function in which @boundscheck is written must be inlined into its caller with @inline in order for @inbounds to have effect.\n\njulia> @inline function g(A, i)\n           @boundscheck checkbounds(A, i)\n           return \"accessing ($A)[$i]\"\n       end\n       f1() = return g(1:2, -1)\n       f2() = @inbounds return g(1:2, -1)\nf2 (generic function with 1 method)\n\njulia> f1()\nERROR: BoundsError: attempt to access 2-element UnitRange{Int64} at index [-1]\nStacktrace:\n [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:435\n [2] checkbounds at ./abstractarray.jl:399 [inlined]\n [3] g at ./none:2 [inlined]\n [4] f1() at ./none:1\n\njulia> f2()\n\"accessing (1:2)[-1]\"\n\nwarning: Warning\nThe @boundscheck annotation allows you, as a library writer, to opt-in to allowing other code to remove your bounds checks with @inbounds. As noted there, the caller must verify—using information they can access—that their accesses are valid before using @inbounds. For indexing into your AbstractArray subclasses, for example, this involves checking the indices against its size. Therefore, @boundscheck annotations should only be added to a getindex or setindex! implementation after you are certain its behavior is correct.\n\n\n\n"
+    "text": "@boundscheck(blk)\n\nAnnotates the expression blk as a bounds checking block, allowing it to be elided by @inbounds.\n\nnote: Note\nThe function in which @boundscheck is written must be inlined into its caller in order for @inbounds to have effect.\n\nExamples\n\njulia> @inline function g(A, i)\n           @boundscheck checkbounds(A, i)\n           return \"accessing ($A)[$i]\"\n       end\n       f1() = return g(1:2, -1)\n       f2() = @inbounds return g(1:2, -1)\nf2 (generic function with 1 method)\n\njulia> f1()\nERROR: BoundsError: attempt to access 2-element UnitRange{Int64} at index [-1]\nStacktrace:\n [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:435\n [2] checkbounds at ./abstractarray.jl:399 [inlined]\n [3] g at ./none:2 [inlined]\n [4] f1() at ./none:1\n\njulia> f2()\n\"accessing (1:2)[-1]\"\n\nwarning: Warning\nThe @boundscheck annotation allows you, as a library writer, to opt-in to allowing other code to remove your bounds checks with @inbounds. As noted there, the caller must verify—using information they can access—that their accesses are valid before using @inbounds. For indexing into your AbstractArray subclasses, for example, this involves checking the indices against its size. Therefore, @boundscheck annotations should only be added to a getindex or setindex! implementation after you are certain its behavior is correct.\n\n\n\n"
 },
 
 {
@@ -7597,7 +7597,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.values",
     "category": "Function",
-    "text": "values(iterator)\n\nFor an iterator or collection that has keys and values, return an iterator over the values. This function simply returns its argument by default, since the elements of a general iterator are normally considered its \"values\".\n\n\n\nvalues(a::Associative)\n\nReturn an iterator over all values in a collection. collect(values(a)) returns an array of values. Since the values are stored internally in a hash table, the order in which they are returned may vary. But keys(a) and values(a) both iterate a and return the elements in the same order.\n\nExamples\n\njulia> a = Dict('a'=>2, 'b'=>3)\nDict{Char,Int64} with 2 entries:\n  'b' => 3\n  'a' => 2\n\njulia> collect(values(a))\n2-element Array{Int64,1}:\n 3\n 2\n\n\n\n"
+    "text": "values(iterator)\n\nFor an iterator or collection that has keys and values, return an iterator over the values. This function simply returns its argument by default, since the elements of a general iterator are normally considered its \"values\".\n\nExamples\n\njulia> d = Dict(\"a\"=>1, \"b\"=>2);\n\njulia> values(d)\nBase.ValueIterator for a Dict{String,Int64} with 2 entries. Values:\n  2\n  1\n\njulia> values([2])\n1-element Array{Int64,1}:\n 2\n\n\n\nvalues(a::Associative)\n\nReturn an iterator over all values in a collection. collect(values(a)) returns an array of values. Since the values are stored internally in a hash table, the order in which they are returned may vary. But keys(a) and values(a) both iterate a and return the elements in the same order.\n\nExamples\n\njulia> a = Dict('a'=>2, 'b'=>3)\nDict{Char,Int64} with 2 entries:\n  'b' => 3\n  'a' => 2\n\njulia> collect(values(a))\n2-element Array{Int64,1}:\n 3\n 2\n\n\n\n"
 },
 
 {
@@ -7605,7 +7605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
 },
 
 {
@@ -11525,7 +11525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.isassigned",
     "category": "Function",
-    "text": "isassigned(array, i) -> Bool\n\nTest whether the given array has a value associated with index i. Return false if the index is out of bounds, or has an undefined reference.\n\njulia> isassigned(rand(3, 3), 5)\ntrue\n\njulia> isassigned(rand(3, 3), 3 * 3 + 1)\nfalse\n\njulia> mutable struct Foo end\n\njulia> v = similar(rand(3), Foo)\n3-element Array{Foo,1}:\n #undef\n #undef\n #undef\n\njulia> isassigned(v, 1)\nfalse\n\n\n\n"
+    "text": "isassigned(array, i) -> Bool\n\nTest whether the given array has a value associated with index i. Return false if the index is out of bounds, or has an undefined reference.\n\nExamples\n\njulia> isassigned(rand(3, 3), 5)\ntrue\n\njulia> isassigned(rand(3, 3), 3 * 3 + 1)\nfalse\n\njulia> mutable struct Foo end\n\njulia> v = similar(rand(3), Foo)\n3-element Array{Foo,1}:\n #undef\n #undef\n #undef\n\njulia> isassigned(v, 1)\nfalse\n\n\n\n"
 },
 
 {
@@ -13237,7 +13237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.:*",
     "category": "Method",
-    "text": "*(A::AbstractMatrix, B::AbstractMatrix)\n\nMatrix multiplication.\n\nExamples\n\njulia> [1 1; 0 1] * [1 0; 1 1]\n2×2 Array{Int64,2}:\n 2  1\n 1  1\n\n\n\n*(x, y...)\n\nMultiplication operator. x*y*z*... calls this function with all arguments, i.e. *(x, y, z, ...).\n\nExamples\n\njulia> 2 * 7 * 8\n112\n\njulia> *(2, 7, 8)\n112\n\n\n\n"
+    "text": "*(x, y...)\n\nMultiplication operator. x*y*z*... calls this function with all arguments, i.e. *(x, y, z, ...).\n\nExamples\n\njulia> 2 * 7 * 8\n112\n\njulia> *(2, 7, 8)\n112\n\n\n\n*(A::AbstractMatrix, B::AbstractMatrix)\n\nMatrix multiplication.\n\nExamples\n\njulia> [1 1; 0 1] * [1 0; 1 1]\n2×2 Array{Int64,2}:\n 2  1\n 1  1\n\n\n\n"
 },
 
 {
@@ -16269,7 +16269,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.IOBuffer",
     "category": "Type",
-    "text": "IOBuffer([data, ][readable::Bool=true, writable::Bool=false[, maxsize::Int=typemax(Int)]])\n\nCreate an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. The last argument optionally specifies a size beyond which the buffer may not be grown.\n\n\n\nIOBuffer() -> IOBuffer\n\nCreate an in-memory I/O stream.\n\n\n\nIOBuffer(size::Integer)\n\nCreate a fixed size IOBuffer. The buffer will not grow dynamically.\n\n\n\nIOBuffer(string::String)\n\nCreate a read-only IOBuffer on the data underlying the given string.\n\nExamples\n\njulia> io = IOBuffer(\"Haho\");\n\njulia> String(take!(io))\n\"Haho\"\n\njulia> String(take!(io))\n\"Haho\"\n\n\n\n"
+    "text": "IOBuffer([data, ][readable::Bool=true, writable::Bool=false[, maxsize::Int=typemax(Int)]])\n\nCreate an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. The last argument optionally specifies a size beyond which the buffer may not be grown.\n\nExamples\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization.\")\nIOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=35, maxsize=Inf, ptr=1, mark=-1)\n\njulia> read(io, String)\n\"JuliaLang is a GitHub organization.\"\n\njulia> write(io, \"This isn't writable.\")\nERROR: ArgumentError: ensureroom failed, IOBuffer is not writeable\n\njulia> io = IOBuffer(UInt8[], true, true, 34)\nIOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=34, ptr=1, mark=-1)\n\njulia> write(io, \"JuliaLang is a GitHub organization.\")\n34\n\njulia> String(take!(io))\n\"JuliaLang is a GitHub organization\"\n\n\n\nIOBuffer() -> IOBuffer\n\nCreate an in-memory I/O stream, which is both readable and writable.\n\nExamples\n\njulia> io = IOBuffer();\n\njulia> write(io, \"JuliaLang is a GitHub organization.\", \" It has many members.\")\n56\n\njulia> String(take!(io))\n\"JuliaLang is a GitHub organization. It has many members.\"\n\n\n\nIOBuffer(size::Integer)\n\nCreate a fixed size IOBuffer. The buffer will not grow dynamically.\n\nExamples\n\njulia> io = IOBuffer(12)\nIOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=12, ptr=1, mark=-1)\n\njulia> write(io, \"Hello world.\")\n12\n\njulia> String(take!(io))\n\"Hello world.\"\n\njulia> write(io, \"Hello world again.\")\n12\n\njulia> String(take!(io))\n\"Hello world \"\n\n\n\nIOBuffer(string::String)\n\nCreate a read-only IOBuffer on the data underlying the given string.\n\nExamples\n\njulia> io = IOBuffer(\"Haho\");\n\njulia> String(take!(io))\n\"Haho\"\n\njulia> String(take!(io))\n\"Haho\"\n\n\n\n"
 },
 
 {
@@ -16277,7 +16277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.take!",
     "category": "Method",
-    "text": "take!(b::IOBuffer)\n\nObtain the contents of an IOBuffer as an array, without copying. Afterwards, the IOBuffer is reset to its initial state.\n\n\n\n"
+    "text": "take!(b::IOBuffer)\n\nObtain the contents of an IOBuffer as an array, without copying. Afterwards, the IOBuffer is reset to its initial state.\n\nExamples\n\njulia> io = IOBuffer();\n\njulia> write(io, \"JuliaLang is a GitHub organization.\", \"It has many members.\")\n55\n\njulia> String(take!(io))\n\"JuliaLang is a GitHub organization.It has many members.\"\n\n\n\n"
 },
 
 {
@@ -16309,7 +16309,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.write",
     "category": "Function",
-    "text": "write(stream::IO, x)\nwrite(filename::AbstractString, x)\n\nWrite the canonical binary representation of a value to the given I/O stream or file. Return the number of bytes written into the stream.\n\nYou can write multiple values with the same write call. i.e. the following are equivalent:\n\nwrite(stream, x, y...)\nwrite(stream, x) + write(stream, y...)\n\n\n\n"
+    "text": "write(io::IO, x)\nwrite(filename::AbstractString, x)\n\nWrite the canonical binary representation of a value to the given I/O stream or file. Return the number of bytes written into the stream.\n\nYou can write multiple values with the same write call. i.e. the following are equivalent:\n\nwrite(io, x, y...)\nwrite(io, x) + write(io, y...)\n\nExamples\n\njulia> io = IOBuffer();\n\njulia> write(io, \"JuliaLang is a GitHub organization.\", \" It has many members.\")\n56\n\njulia> String(take!(io))\n\"JuliaLang is a GitHub organization. It has many members.\"\n\njulia> write(io, \"Sometimes those members\") + write(io, \" write documentation.\")\n44\n\njulia> String(take!(io))\n\"Sometimes those members write documentation.\"\n\n\n\n"
 },
 
 {
@@ -16317,7 +16317,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.read",
     "category": "Function",
-    "text": "read(stream::IO, T)\n\nRead a single value of type T from stream, in canonical binary representation.\n\nread(stream::IO, String)\n\nRead the entirety of stream, as a String.\n\n\n\nread(filename::AbstractString, args...)\n\nOpen a file and read its contents. args is passed to read: this is equivalent to open(io->read(io, args...), filename).\n\nread(filename::AbstractString, String)\n\nRead the entire contents of a file as a string.\n\n\n\nread(s::IO, nb=typemax(Int))\n\nRead at most nb bytes from s, returning a Vector{UInt8} of the bytes read.\n\n\n\nread(s::IOStream, nb::Integer; all=true)\n\nRead at most nb bytes from s, returning a Vector{UInt8} of the bytes read.\n\nIf all is true (the default), this function will block repeatedly trying to read all requested bytes, until an error or end-of-file occurs. If all is false, at most one read call is performed, and the amount of data returned is device-dependent. Note that not all stream types support the all option.\n\n\n\n"
+    "text": "read(io::IO, T)\n\nRead a single value of type T from io, in canonical binary representation.\n\nread(io::IO, String)\n\nRead the entirety of io, as a String.\n\nExamples\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization\");\n\njulia> read(io, Char)\n'J': ASCII/Unicode U+004a (category Lu: Letter, uppercase)\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization\");\n\njulia> read(io, String)\n\"JuliaLang is a GitHub organization\"\n\n\n\nread(filename::AbstractString, args...)\n\nOpen a file and read its contents. args is passed to read: this is equivalent to open(io->read(io, args...), filename).\n\nread(filename::AbstractString, String)\n\nRead the entire contents of a file as a string.\n\n\n\nread(s::IO, nb=typemax(Int))\n\nRead at most nb bytes from s, returning a Vector{UInt8} of the bytes read.\n\n\n\nread(s::IOStream, nb::Integer; all=true)\n\nRead at most nb bytes from s, returning a Vector{UInt8} of the bytes read.\n\nIf all is true (the default), this function will block repeatedly trying to read all requested bytes, until an error or end-of-file occurs. If all is false, at most one read call is performed, and the amount of data returned is device-dependent. Note that not all stream types support the all option.\n\n\n\n"
 },
 
 {
@@ -16437,7 +16437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.isreadonly",
     "category": "Function",
-    "text": "isreadonly(stream) -> Bool\n\nDetermine whether a stream is read-only.\n\n\n\n"
+    "text": "isreadonly(io) -> Bool\n\nDetermine whether a stream is read-only.\n\nExamples\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization\");\n\njulia> isreadonly(io)\ntrue\n\njulia> io = IOBuffer();\n\njulia> isreadonly(io)\nfalse\n\n\n\n"
 },
 
 {
@@ -16573,7 +16573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.skipchars",
     "category": "Function",
-    "text": "skipchars(io::IO, predicate; linecomment=nothing)\n\nAdvance the stream io such that the next-read character will be the first remaining for which predicate returns false. If the keyword argument linecomment is specified, all characters from that character until the start of the next line are ignored.\n\njulia> buf = IOBuffer(\"    text\")\nIOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=1, mark=-1)\n\njulia> skipchars(buf, isspace)\nIOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=5, mark=-1)\n\njulia> String(readavailable(buf))\n\"text\"\n\n\n\n"
+    "text": "skipchars(io::IO, predicate; linecomment=nothing)\n\nAdvance the stream io such that the next-read character will be the first remaining for which predicate returns false. If the keyword argument linecomment is specified, all characters from that character until the start of the next line are ignored.\n\nExamples\n\njulia> buf = IOBuffer(\"    text\")\nIOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=1, mark=-1)\n\njulia> skipchars(buf, isspace)\nIOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=5, mark=-1)\n\njulia> String(readavailable(buf))\n\"text\"\n\n\n\n"
 },
 
 {
@@ -16581,7 +16581,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.countlines",
     "category": "Function",
-    "text": "countlines(io::IO, eol::Char='\\n')\n\nRead io until the end of the stream/file and count the number of lines. To specify a file pass the filename as the first argument. EOL markers other than '\\n' are supported by passing them as the second argument.\n\n\n\n"
+    "text": "countlines(io::IO, eol::Char='\\n')\n\nRead io until the end of the stream/file and count the number of lines. To specify a file pass the filename as the first argument. EOL markers other than '\\n' are supported by passing them as the second argument.\n\nExamples\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization.\n\");\n\njulia> countlines(io)\n1\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization.\");\n\njulia> countlines(io)\n0\n\njulia> countlines(io, '.')\n1\n\n\n\n"
 },
 
 {
@@ -16989,7 +16989,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.nb_available",
     "category": "Function",
-    "text": "nb_available(stream)\n\nReturn the number of bytes available for reading before a read from this stream or buffer will block.\n\n\n\n"
+    "text": "nb_available(io)\n\nReturn the number of bytes available for reading before a read from this stream or buffer will block.\n\nExamples\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization\");\n\njulia> nb_available(io)\n34\n\n\n\n"
 },
 
 {
