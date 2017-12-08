@@ -209,10 +209,10 @@ let s = "Σx + βz - 2"
 end
 
 let ss = SubString("hello", 1, 5)
-    @test_throws BoundsError ind2chr(ss, -1)
-    @test_throws BoundsError chr2ind(ss, -1)
-    @test_throws BoundsError chr2ind(ss, 10)
-    @test_throws BoundsError ind2chr(ss, 10)
+    @test ind2chr(ss, -1) == -1
+    @test chr2ind(ss, -1) == -1
+    @test chr2ind(ss, 10) == 10
+    @test ind2chr(ss, 10) == 10
 end
 
 # length(SubString{String}) performance specialization
