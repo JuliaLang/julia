@@ -4,10 +4,9 @@ module ResolveTest
 
 using ..Test
 using Pkg3.Types
-using Pkg3.Pkg2.Query
-using Pkg3.Pkg2.Resolve
-using Pkg3.Pkg2.Resolve.VersionWeights
-import Pkg3.Pkg2.PkgError
+using Pkg3.Query
+using Pkg3.Resolve
+using Pkg3.Resolve.VersionWeights
 
 # Check that VersionWeight keeps the same ordering as VersionNumber
 

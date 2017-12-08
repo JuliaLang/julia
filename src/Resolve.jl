@@ -2,13 +2,12 @@
 
 module Resolve
 
-include(joinpath("resolve", "versionweight.jl"))
-include(joinpath("resolve", "interface.jl"))
-include(joinpath("resolve", "maxsum.jl"))
+include(joinpath("resolve", "VersionWeights.jl"))
+include(joinpath("resolve", "PkgToMaxSumInterface.jl"))
+include(joinpath("resolve", "MaxSum.jl"))
 
-using ...Types
+using ..Types
 using ..Query, .PkgToMaxSumInterface, .MaxSum
-import ..PkgError
 
 export resolve, sanity_check
 

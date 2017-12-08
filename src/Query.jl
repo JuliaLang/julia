@@ -2,8 +2,7 @@
 
 module Query
 
-import ..PkgError
-using ...Types
+using ..Types
 import Pkg3.equalto
 
 function init_resolve_backtrace(uuid_to_name::Dict{UUID,String}, reqs::Requires, fix::Dict{UUID,Fixed} = Dict{UUID,Fixed}())

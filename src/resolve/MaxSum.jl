@@ -2,7 +2,7 @@
 
 module MaxSum
 
-include("fieldvalue.jl")
+include("FieldValues.jl")
 
 using .FieldValues, ..VersionWeights, ..PkgToMaxSumInterface
 

@@ -2,7 +2,7 @@
 
 module PkgToMaxSumInterface
 
-using ....Types
+using ...Types
 using ...Query, ..VersionWeights
 
 export Interface, compute_output_dict, greedysolver,

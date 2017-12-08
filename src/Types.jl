@@ -8,7 +8,7 @@ import Pkg3: depots, logdir, iswindows
 
 export UUID, pkgID, julia_UUID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     Requires, Fixed, DepsGraph, merge_requires!, satisfies,
-    ResolveBacktraceItem, ResolveBacktrace, showitem,
+    PkgError, ResolveBacktraceItem, ResolveBacktrace, showitem,
     PackageSpec, UpgradeLevel, EnvCache,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
@@ -289,6 +289,29 @@ Base.hash(f::Fixed, h::UInt) = hash((f.version, f.requires), h + (0x68628b809fd4
 Base.show(io::IO, f::Fixed) = isempty(f.requires) ?
     print(io, "Fixed(", repr(f.version), ")") :
     print(io, "Fixed(", repr(f.version), ",", f.requires, ")")
+
+
+struct PkgError <: Exception
+    msg::AbstractString
+    ex::Nullable{Exception}
+end
+PkgError(msg::AbstractString) = PkgError(msg, Nullable{Exception}())
+
+function Base.showerror(io::IO, pkgerr::PkgError)
+    print(io, pkgerr.msg)
+    if !isnull(pkgerr.ex)
+        pkgex = get(pkgerr.ex)
+        if isa(pkgex, CompositeException)
+            for cex in pkgex
+                print(io, "\n=> ")
+                showerror(io, cex)
+            end
+        else
+            print(io, "\n")
+            showerror(io, pkgex)
+        end
+    end
+end
 
 
 const VersionReq = Union{VersionNumber,VersionSpec}

@@ -2,9 +2,7 @@ module Operations
 
 using Base.Random: UUID
 using Base: LibGit2
-using Pkg3.TerminalMenus
-using Pkg3.Types
-import Pkg3: Pkg2, depots, BinaryProvider, USE_LIBGIT2_FOR_ALL_DOWNLOADS, NUM_CONCURRENT_DOWNLOADS
+using Pkg3: TerminalMenus, Types, Query, Resolve
 import Pkg3: depots, BinaryProvider, USE_LIBGIT2_FOR_ALL_DOWNLOADS, NUM_CONCURRENT_DOWNLOADS
 
 const SlugInt = UInt32 # max p = 4
@@ -171,8 +169,8 @@ function resolve_versions!(env::EnvCache, pkgs::Vector{PackageSpec})::Dict{UUID,
             uuid_to_name[UUID(info["uuid"])] = info["name"]
         end
     end
-    deps = Pkg2.Query.prune_dependencies(reqs, deps, uuid_to_name)
-    vers = Pkg2.Resolve.resolve(reqs, deps, uuid_to_name)
+    deps = Query.prune_dependencies(reqs, deps, uuid_to_name)
+    vers = Resolve.resolve(reqs, deps, uuid_to_name)
     find_registered!(env, collect(keys(vers)))
     # update vector of package versions
     for pkg in pkgs
