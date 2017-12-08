@@ -381,11 +381,12 @@ function repeat(s::String, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
     n = sizeof(s)
     out = _string_n(n*r)
-    if n == 1 # common case: repeating a single ASCII char
-        @inbounds ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), out, codeunit(s, 1), r)
+    if n == 1 # common case: repeating a single-byte string
+        @inbounds b = codeunit(s, 1)
+        ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
     else
-        for i=1:r
-            unsafe_copy!(pointer(out, 1+(i-1)*n), pointer(s), n)
+        for i = 0:r-1
+            unsafe_copy!(pointer(out, i*n+1), pointer(s), n)
         end
     end
     return out
@@ -403,43 +404,33 @@ julia> repeat('A', 3)
 ```
 """
 function repeat(c::Char, r::Integer)
-    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
     r == 0 && return ""
-    ch = UInt(c)
-    if ch < 0x80
-        out = _string_n(r)
-        ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), out, c, r)
-    elseif ch < 0x800
-        out = _string_n(2r)
-        p16 = reinterpret(Ptr{UInt16}, pointer(out))
-        u16 = ((ch >> 0x6) | (ch & 0x3f) << 0x8) % UInt16 | 0x80c0
-        @inbounds for i = 1:r
-            unsafe_store!(p16, u16, i)
+    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
+    u = bswap(reinterpret(UInt32, c))
+    n = 4 - (leading_zeros(u | 0xff) >> 3)
+    s = _string_n(n*r)
+    p = pointer(s)
+    if n == 1
+        ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), p, u % UInt8, r)
+    elseif n == 2
+        p16 = reinterpret(Ptr{UInt16}, p)
+        for i = 1:r
+            unsafe_store!(p16, u % UInt16, i)
         end
-    elseif ch < 0x10000
-        (0xd800 ≥ ch ≤ 0xdfff) || throw(ArgumentError("invalid character 0x$(hex(ch))"))
-        out = _string_n(3r)
-        p = pointer(out)
-        b1 = (ch >> 0xc) % UInt8 | 0xe0
-        b2 = ((ch >> 0x6) & 0x3f) % UInt8 | 0x80
-        b3 = (ch & 0x3f) % UInt8 | 0x80
-        @inbounds for i = 1:r
-            unsafe_store!(p, b1)
-            unsafe_store!(p, b2, 2)
-            unsafe_store!(p, b3, 3)
-            p += 3
+    elseif n == 3
+        b1 = (u >> 0) % UInt8
+        b2 = (u >> 8) % UInt8
+        b3 = (u >> 16) % UInt8
+        for i = 0:r-1
+            unsafe_store!(p, b1, 3i + 1)
+            unsafe_store!(p, b2, 3i + 2)
+            unsafe_store!(p, b3, 3i + 3)
         end
-    elseif ch < 0x110000
-        out = _string_n(4r)
-        p32 = reinterpret(Ptr{UInt32}, pointer(out))
-        u32 = ((ch >> 0x12) | ((ch >> 0x4) & 0x03f00) |
-            ((ch << 0xa) & 0x3f0000) | ((ch & 0x3f) << 0x18)) % UInt32 | 0x808080f0
-        @inbounds for i = 1:r
-            unsafe_store!(p32, u32)
-            p32 += 4
+    elseif n == 4
+        p32 = reinterpret(Ptr{UInt32}, pointer(s))
+        for i = 1:r
+            unsafe_store!(p32, u, i)
         end
-    else
-        throw(ArgumentError("invalid character 0x$(hex(ch))"))
     end
-    return out
+    return s
 end
