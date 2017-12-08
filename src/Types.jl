@@ -6,7 +6,7 @@ using Pkg3: TOML, TerminalMenus, Dates
 import Pkg3
 import Pkg3: depots, logdir, iswindows
 
-export SHA1, VersionRange, VersionSpec, empty_versionspec, Requires, Available, Fixed,
+export SHA1, VersionRange, VersionSpec, empty_versionspec, Requires, Fixed, DepsGraph,
     merge_requires!, satisfies, ResolveBacktraceItem, ResolveBacktrace,
     PackageSpec, UpgradeLevel, EnvCache,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
@@ -251,8 +251,6 @@ function Base.print(io::IO, s::VersionSpec)
 end
 Base.show(io::IO, s::VersionSpec) = print(io, "VersionSpec(\"", s, "\")")
 
-### INCLUDE PKG2 TYPES HERE (temporary, until they are all replaced)
-
 const Requires = Dict{String,VersionSpec}
 
 function merge_requires!(A::Requires, B::Requires)
@@ -265,20 +263,9 @@ end
 satisfies(pkg::AbstractString, ver::VersionNumber, reqs::Requires) =
     !haskey(reqs, pkg) || in(ver, reqs[pkg])
 
-struct Available
-    sha1::String
-    requires::Requires
-end
+Base.convert(::Type{Requires}, t::Dict{UUID,VersionSpec}) = Requires(String(uuid)=>vs for (uuid,vs) in t)
 
-Base.convert(::Type{Available}, t::Tuple{SHA1,Dict{UUID,VersionSpec}}) = Available(t...)
-
-Base.:(==)(a::Available, b::Available) = a.sha1 == b.sha1 && a.requires == b.requires
-Base.hash(a::Available, h::UInt) = hash((a.sha1, a.requires), h + (0xbc8ae0de9d11d972 % UInt))
-Base.copy(a::Available) = Available(a.sha1, copy(a.requires))
-
-Base.show(io::IO, a::Available) = isempty(a.requires) ?
-    print(io, "Available(", repr(a.sha1), ")") :
-    print(io, "Available(", repr(a.sha1), ",", a.requires, ")")
+const DepsGraph = Dict{String,Dict{VersionNumber,Requires}}
 
 struct Fixed
     version::VersionNumber
@@ -292,10 +279,6 @@ Base.hash(f::Fixed, h::UInt) = hash((f.version, f.requires), h + (0x68628b809fd4
 Base.show(io::IO, f::Fixed) = isempty(f.requires) ?
     print(io, "Fixed(", repr(f.version), ")") :
     print(io, "Fixed(", repr(f.version), ",", f.requires, ")")
-
-# TODO: Available & Fixed are almost the same – merge them?
-# Free could include the same information too, it just isn't
-# required by anything that processes these things.
 
 
 const VersionReq = Union{VersionNumber,VersionSpec}

@@ -117,7 +117,7 @@ load_package_data(f::Base.Callable, path::String, version::VersionNumber) =
     get(load_package_data(f, path, [version]), version, nothing)
 
 function deps_graph(env::EnvCache, pkgs::Vector{PackageSpec})
-    deps = Dict{UUID,Dict{VersionNumber,Tuple{SHA1,Dict{UUID,VersionSpec}}}}()
+    deps = Dict{UUID,Dict{VersionNumber,Dict{UUID,VersionSpec}}}()
     uuids = [pkg.uuid for pkg in pkgs]
     seen = UUID[]
     while true
@@ -136,7 +136,7 @@ function deps_graph(env::EnvCache, pkgs::Vector{PackageSpec})
                     r = get_or_make(Dict{String,VersionSpec}, compatibility, v)
                     q = Dict(u => get_or_make(VersionSpec, r, p) for (p, u) in d)
                     # VERSION in get_or_make(VersionSpec, r, "julia") || continue
-                    deps[uuid][v] = (h, q)
+                    deps[uuid][v] = q
                     for (p, u) in d
                         u in uuids || push!(uuids, u)
                     end
@@ -163,8 +163,8 @@ function resolve_versions!(env::EnvCache, pkgs::Vector{PackageSpec})::Dict{UUID,
         push!(pkgs, PackageSpec(name, uuid, ver))
     end
     # construct data structures for resolver and call it
-    reqs = Dict{String,VersionSpec}(string(pkg.uuid) => pkg.version for pkg in pkgs)
-    deps = convert(Dict{String,Dict{VersionNumber,Available}}, deps_graph(env, pkgs))
+    reqs = Requires(string(pkg.uuid) => pkg.version for pkg in pkgs)
+    deps = convert(Dict{String,Dict{VersionNumber,Requires}}, deps_graph(env, pkgs))
     for dep_uuid in keys(deps)
         info = manifest_info(env, UUID(dep_uuid))
         if info != nothing

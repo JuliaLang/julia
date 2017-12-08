@@ -93,12 +93,12 @@ mutable struct Graph
         gdir = [Int[] for i = 1:np]
         adjdict = [Dict{Int,Int}() for i = 1:np]
 
-        for (p,d) in deps
+        for (p,depsp) in deps
             p0 = pdict[p]
             vdict0 = vdict[p0]
-            for (vn,a) in d
+            for (vn,vdep) in depsp
                 v0 = vdict0[vn]
-                for (rp, rvs) in a.requires
+                for (rp, rvs) in vdep
                     p1 = pdict[rp]
 
                     j0 = 1
@@ -349,14 +349,14 @@ end
 
 # A simple shuffling machinery for the update order in iterate()
 # (woulnd't pass any random quality test but it's arguably enough)
-let step=1
+let step = 1
 global shuffleperm, shuffleperminit
 shuffleperminit() = (step = 1)
 function shuffleperm(graph::Graph)
     perm = graph.perm
     np = graph.np
     for j = np:-1:2
-        k = mod(step,j)+1
+        k = mod(step,j) + 1
         perm[j], perm[k] = perm[k], perm[j]
         step += isodd(j) ? 1 : k
     end

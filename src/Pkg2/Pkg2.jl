@@ -39,8 +39,6 @@ dir(pkg::AbstractString...) = normpath(dir(),pkg...)
 
 include("reqs.jl")
 include("query.jl")
-# include("read.jl")
 include("resolve.jl")
 
-
-end
+end # module

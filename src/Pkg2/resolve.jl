@@ -13,7 +13,7 @@ import ..PkgError
 export resolve, sanity_check
 
 # Use the max-sum algorithm to resolve packages dependencies
-function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, uuid_to_name::Dict{String,String})
+function resolve(reqs::Requires, deps::DepsGraph, uuid_to_name::Dict{String,String})
     nu(p) = Query.nameuuid(p, uuid_to_name)
 
     # init interface structures
@@ -62,8 +62,7 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
 end
 
 # Scan dependencies for (explicit or implicit) contradictions
-function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
-                      uuid_to_name::Dict{String,String},
+function sanity_check(deps::DepsGraph, uuid_to_name::Dict{String,String},
                       pkgs::Set{String} = Set{String}())
     nu(p) = Query.nameuuid(p, uuid_to_name)
 
@@ -75,12 +74,12 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
 
     for (p,depsp) in deps
         ndeps[p] = ndepsp = Dict{VersionNumber,Int}()
-        for (vn,a) in depsp
-            ndepsp[vn] = length(a.requires)
+        for (vn,vdep) in depsp
+            ndepsp[vn] = length(vdep)
         end
     end
 
-    vers = [(p,vn) for (p,d) in deps for vn in keys(d)]
+    vers = [(p,vn) for (p,depsp) in deps for vn in keys(depsp)]
     sort!(vers, by=pvn->(-ndeps[pvn[1]][pvn[2]]))
 
     nv = length(vers)
@@ -95,8 +94,8 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
         ndeps[p][vn] == 0 && break
         checked[i] && (i += 1; continue)
 
-        fixed = Dict{String,Fixed}(p=>Fixed(vn, deps[p][vn].requires), "julia"=>Fixed(VERSION))
-        sub_reqs = Dict{String,VersionSpec}()
+        fixed = Dict{String,Fixed}(p=>Fixed(vn, deps[p][vn]), "julia"=>Fixed(VERSION))
+        sub_reqs = Requires()
         bktrc = Query.init_resolve_backtrace(sub_reqs, fixed)
         Query.propagate_fixed!(sub_reqs, bktrc, fixed)
         sub_deps = Query.dependencies_subset(deps, Set{String}([p]))
@@ -104,15 +103,14 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
 
         try
             for rp in keys(sub_reqs)
-                if !haskey(sub_deps, rp)
-                    if "julia" in conflicts[rp]
-                        throw(PkgError("$(nu(rp)) can't be installed because it has no versions that support $VERSION " *
-                           "of julia. You may need to update METADATA by running `Pkg.update()`"))
-                    else
-                        sconflicts = join(map(nu, conflicts[rp]), ", ", " and ")
-                        throw(PkgError("$(nu(rp)) requirements can't be satisfied because " *
-                            "of the following fixed packages: $sconflicts"))
-                    end
+                haskey(sub_deps, rp) && continue
+                if "julia" in conflicts[rp]
+                    throw(PkgError("$(nu(rp)) can't be installed because it has no versions that support $VERSION " *
+                       "of julia. You may need to update METADATA by running `Pkg.update()`"))
+                else
+                    sconflicts = join(map(nu, conflicts[rp]), ", ", " and ")
+                    throw(PkgError("$(nu(rp)) requirements can't be satisfied because " *
+                        "of the following fixed packages: $sconflicts"))
                 end
             end
             Query.check_requirements(sub_reqs, sub_deps, fixed, uuid_to_name)

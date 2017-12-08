@@ -13,7 +13,7 @@ export Interface, compute_output_dict, greedysolver,
 mutable struct Interface
     # requirements and dependencies, in external representation
     reqs::Requires
-    deps::Dict{String,Dict{VersionNumber,Available}}
+    deps::DepsGraph
 
     # packages list
     pkgs::Vector{String}
@@ -43,9 +43,9 @@ mutable struct Interface
     #                   higher the weight, the more favored the version)
     vweight::Vector{Vector{VersionWeight}}
 
-    function Interface(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
+    function Interface(reqs::Requires, deps::DepsGraph)
         # generate pkgs
-        pkgs = sort!(String[keys(deps)...])
+        pkgs = sort!(collect(keys(deps)))
 
         np = length(pkgs)
 
@@ -156,10 +156,10 @@ function greedysolver(interface::Interface)
             p0 = pdict[p]
             @assert sol[p0] < spp[p0]
             vn = pvers[p0][sol[p0]]
-            a = deps[p][vn]
+            vdep = deps[p][vn]
 
             # scan dependencies
-            for (rp,rvs) in a.requires
+            for (rp,rvs) in vdep
                 rp0 = pdict[rp]
                 # look for the highest version which satisfies the requirements
                 rv = spp[rp0] - 1
@@ -209,13 +209,13 @@ function verify_solution(sol::Vector{Int}, interface::Interface)
     end
 
     # verify dependencies
-    for (p,d) in deps
+    for (p,depsp) in deps
         p0 = pdict[p]
         vdict0 = vdict[p0]
-        for (vn,a) in d
+        for (vn,vdep) in depsp
             v0 = vdict0[vn]
             if sol[p0] == v0
-                for (rp, rvs) in a.requires
+                for (rp, rvs) in vdep
                     p1 = pdict[rp]
                     if sol[p1] == spp[p1]
                         println("""
@@ -260,13 +260,13 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
     # depends upon
     prevdeps = [Dict{Int,Dict{Int,VersionSpec}}() for p0 = 1:np]
 
-    for (p,d) in deps
+    for (p,depsp) in deps
         p0 = pdict[p]
         vdict0 = vdict[p0]
-        for (vn,a) in d
+        for (vn,vdep) in depsp
             v0 = vdict0[vn]
-            pdeps[p0][v0] = a.requires
-            for (rp, rvs) in a.requires
+            pdeps[p0][v0] = vdep
+            for (rp,rvs) in vdep
                 p1 = pdict[rp]
                 if !haskey(prevdeps[p1], p0)
                     prevdeps[p1][p0] = Dict{Int,VersionSpec}()
@@ -342,10 +342,10 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
             uninst[p0] = false
             @assert sol[p0] < spp[p0]
             vn = pvers[p0][sol[p0]]
-            a = deps[p][vn]
+            vdep = deps[p][vn]
 
             # scan dependencies
-            for (rp,rvs) in a.requires
+            for (rp,rvs) in vdep
                 rp0 = pdict[rp]
                 @assert sol[rp0] < spp[rp0] && pvers[rp0][sol[rp0]] ∈ rvs
                 rp ∈ seen || push!(staged_next, rp)

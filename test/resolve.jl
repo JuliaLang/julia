@@ -78,20 +78,20 @@ end
 wantuuids(want_data) = Dict{String,VersionNumber}(fakeuuid(p) => v for (p,v) in want_data)
 
 function deps_from_data(deps_data, uuid_to_name = Dict{String,String}())
-    deps = Dict{String,Dict{VersionNumber,Available}}()
+    deps = DepsGraph()
     uuid(p) = storeuuid(p, uuid_to_name)
     for d in deps_data
         p, vn, r = uuid(d[1]), d[2], d[3:end]
         if !haskey(deps, p)
-            deps[p] = Dict{VersionNumber,Available}()
+            deps[p] = Dict{VersionNumber,Requires}()
         end
         if !haskey(deps[p], vn)
-            deps[p][vn] = Available("$(p)_$(vn)_sha1", Dict{String,VersionSpec}())
+            deps[p][vn] = Dict{String,VersionSpec}()
         end
         isempty(r) && continue
         rp = uuid(r[1])
         rvs = VersionSpec(r[2:end])
-        deps[p][vn].requires[rp] = rvs
+        deps[p][vn][rp] = rvs
     end
     deps, uuid_to_name
 end
