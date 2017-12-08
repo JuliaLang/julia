@@ -79,7 +79,7 @@ mutable struct ResolveBacktraceItem
 end
 
 function push!(ritem::ResolveBacktraceItem, reason, versionspec::VersionSpec)
-    if isa(ritem.versionreq, VersionSpec)
+    if ritem.versionreq isa VersionSpec
         ritem.versionreq = ritem.versionreq ∩ versionspec
     elseif ritem.versionreq ∉ versionspec
         ritem.versionreq = copy(empty_versionspec)
@@ -88,7 +88,7 @@ function push!(ritem::ResolveBacktraceItem, reason, versionspec::VersionSpec)
 end
 
 function push!(ritem::ResolveBacktraceItem, reason, version::VersionNumber)
-    if isa(ritem.versionreq, VersionSpec)
+    if ritem.versionreq isa VersionSpec
         if version ∈ ritem.versionreq
             ritem.versionreq = version
         else
@@ -108,20 +108,20 @@ function _show(io::IO, ritem::ResolveBacktraceItem, indent::String, seen::Set{Re
     for (i,(vs,w)) in enumerate(ritem.why)
         print(io, indent, (i==l ? '└' : '├'), '─')
         if w ≡ :fixed
-            @assert isa(vs, VersionNumber)
+            @assert vs isa VersionNumber
             println(io, "version $vs set by fixed requirement (package is checked out, dirty or pinned)")
         elseif w ≡ :required
-            @assert isa(vs, VersionSpec)
+            @assert vs isa VersionSpec
             println(io, "version range $vs set by an explicit requirement")
         else
-            @assert isa(w, Pair{<:AbstractString,ResolveBacktraceItem})
-            if isa(vs, VersionNumber)
+            @assert w isa Pair{<:AbstractString,ResolveBacktraceItem}
+            if vs isa VersionNumber
                 print(io, "version $vs ")
             else
                 print(io, "version range $vs ")
             end
             print(io, "required by package $(w[1]), ")
-            if isa(w[2].versionreq, VersionSpec)
+            if w[2].versionreq isa VersionSpec
                 println(io, "whose allowed version range is $(w[2].versionreq):")
             else
                 println(io, "whose only allowed version is $(w[2].versionreq):")

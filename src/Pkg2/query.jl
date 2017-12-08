@@ -250,7 +250,9 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
                 @assert isreq[rp]
                 srvs = staged_next[rp]
                 bktrcp = get!(bktrc, rp) do; ResolveBacktraceItem(); end
-                push!(bktrcp, p=>bktrc[p], srvs)
+                name = haskey(uuid_to_name, p) ? uuid_to_name[p] : "UNKNOWN"
+                uuid_short = p[1:8]
+                push!(bktrcp, "$name [$uuid_short]"=>bktrc[p], srvs)
                 if isa(bktrcp.versionreq, VersionSpec) && isempty(bktrcp.versionreq)
                     name = haskey(uuid_to_name, rp) ? uuid_to_name[rp] : "UNKNOWN"
                     uuid_short = rp[1:8]
