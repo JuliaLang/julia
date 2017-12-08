@@ -449,7 +449,10 @@ julia> chr2ind(str, 2)
 3
 ```
 """
-ind2chr(s::AbstractString, i::Integer) = length(s, 1, i)
+function ind2chr(s::AbstractString, i::Integer)
+    @boundscheck checkbounds(s, i)
+    return length(s, 1, i)
+end
 
 """
     chr2ind(s::AbstractString, i::Integer)
@@ -469,7 +472,12 @@ julia> ind2chr(str, 3)
 2
 ```
 """
-chr2ind(s::AbstractString, n::Integer) = nextind(s, 0, n)
+function chr2ind(s::AbstractString, n::Integer)
+    n < 0 && throw(BoundsError(s, n))
+    i = nextind(s, 0, n)
+    @boundscheck checkbounds(s, i)
+    return i
+end
 
 ## string index iteration type ##
 

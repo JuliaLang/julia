@@ -43,7 +43,7 @@ SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), l
 
 function SubString(s::SubString, i::Int, j::Int)
     @boundscheck i ≤ j && checkbounds(s, i:j)
-    SubString(s.string, s.offset+i, nextind(s.string, s.offset+j)-1)
+    SubString(s.string, s.offset+i, s.offset+j)
 end
 
 SubString(s::AbstractString) = SubString(s, 1, endof(s))
