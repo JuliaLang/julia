@@ -38,6 +38,27 @@ Create an `IOBuffer`, which may optionally operate on a pre-existing array. If t
 readable/writable arguments are given, they restrict whether or not the buffer may be read
 from or written to respectively. The last argument optionally specifies a size beyond which
 the buffer may not be grown.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.")
+IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=35, maxsize=Inf, ptr=1, mark=-1)
+
+julia> read(io, String)
+"JuliaLang is a GitHub organization."
+
+julia> write(io, "This isn't writable.")
+ERROR: ArgumentError: ensureroom failed, IOBuffer is not writeable
+
+julia> io = IOBuffer(UInt8[], true, true, 34)
+IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=34, ptr=1, mark=-1)
+
+julia> write(io, "JuliaLang is a GitHub organization.")
+34
+
+julia> String(take!(io))
+"JuliaLang is a GitHub organization"
+```
 """
 IOBuffer(data::AbstractVector{UInt8}, readable::Bool=true, writable::Bool=false, maxsize::Integer=typemax(Int)) =
     GenericIOBuffer(data, readable, writable, true, false, maxsize)
@@ -51,7 +72,18 @@ end
 """
     IOBuffer() -> IOBuffer
 
-Create an in-memory I/O stream.
+Create an in-memory I/O stream, which is both readable and writable.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer();
+
+julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
+56
+
+julia> String(take!(io))
+"JuliaLang is a GitHub organization. It has many members."
+```
 """
 IOBuffer() = IOBuffer(true, true)
 
@@ -59,6 +91,24 @@ IOBuffer() = IOBuffer(true, true)
     IOBuffer(size::Integer)
 
 Create a fixed size IOBuffer. The buffer will not grow dynamically.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer(12)
+IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=12, ptr=1, mark=-1)
+
+julia> write(io, "Hello world.")
+12
+
+julia> String(take!(io))
+"Hello world."
+
+julia> write(io, "Hello world again.")
+12
+
+julia> String(take!(io))
+"Hello world "
+```
 """
 IOBuffer(maxsize::Integer) = (x=IOBuffer(StringVector(maxsize), true, true, maxsize); x.size=0; x)
 
@@ -262,6 +312,17 @@ isopen(io::GenericIOBuffer) = io.readable || io.writable || io.seekable || nb_av
 
 Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
 `IOBuffer` is reset to its initial state.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer();
+
+julia> write(io, "JuliaLang is a GitHub organization.", "It has many members.")
+55
+
+julia> String(take!(io))
+"JuliaLang is a GitHub organization.It has many members."
+```
 """
 function take!(io::GenericIOBuffer)
     ismarked(io) && unmark(io)
