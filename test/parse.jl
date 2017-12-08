@@ -254,3 +254,26 @@ end
     end
     @test_throws ArgumentError parse(Complex{Int}, "3 + 4.2im")
 end
+
+@testset "and/or/not" begin
+    dw = Base.JLOptions().depwarn
+    if dw == 2
+        @test_throws ErrorException parse("and = 1")
+        @test_throws ErrorException parse("function or(x::T) where T; x; end")
+        @test_throws ErrorException parse("struct not end")
+    elseif dw == 1
+        @test @test_warn "deprecated" include_string("and = 1; and") == 1
+        @test @test_warn "deprecated" include_string("function or(x::T) where T; x; end; or(2)") == 2
+        expr = @test_warn "deprecated" parse("struct not end")
+        @test expr.head === :struct
+        @test expr.args[2] === :not
+    elseif dw == 0
+        @test @test_nowarn include_string("and = 1; and") == 1
+        @test @test_nowarn include_string("function or(x::T) where T; x; end; or(2)") == 2
+        expr = @test_nowarn parse("struct not end")
+        @test expr.head === :struct
+        @test expr.args[2] === :not
+    else
+        error("unexpected depwarn value")
+    end
+end
