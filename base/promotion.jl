@@ -2,17 +2,11 @@
 
 ## type join (closest common ancestor, or least upper bound) ##
 
-# Note: no methods must be added to this function after `typejoin` has been defined,
-# since it is declared as `@pure`
-isspecial(::Type) = false
-isspecial(::Type{Void}) = true
-isspecial(::Type{Missing}) = true
-isspecialpair(a, b) = isconcrete(a) && isconcrete(b) && (isspecial(a) || isspecial(b))
-
 """
     typejoin(T, S)
 
-Compute a type that contains both `T` and `S`.
+Return the closest common ancestor of `T` and `S`, i.e. a type which
+contains both of them.
 """
 typejoin() = (@_pure_meta; Bottom)
 typejoin(@nospecialize(t)) = (@_pure_meta; t)
@@ -31,9 +25,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return typejoin(a.ub, b)
     elseif isa(b,TypeVar)
         return typejoin(a, b.ub)
-    elseif isa(a,Union) && !isspecialpair(a.a, a.b)
+    elseif isa(a,Union)
         return typejoin(typejoin(a.a,a.b), b)
-    elseif isa(b,Union) && !isspecialpair(b.a, b.b)
+    elseif isa(b,Union)
         return typejoin(a, typejoin(b.a,b.b))
     elseif a <: Tuple
         if !(b <: Tuple)
@@ -82,10 +76,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
-    b2 = b
-    while b2 !== Any && a isa DataType && b2 isa DataType
-        if a <: b2.name.wrapper
-            while a.name !== b2.name
+    while b !== Any
+        if a <: b.name.wrapper
+            while a.name !== b.name
                 a = supertype(a)
             end
             aprimary = unwrap_unionall(a.name.wrapper)
@@ -96,7 +89,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             end
             p = Vector{Any}(uninitialized, n)
             for i = 1:n
-                ai, bi = a.parameters[i], b2.parameters[i]
+                ai, bi = a.parameters[i], b.parameters[i]
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
                     p[i] = ai
                 else
@@ -105,11 +98,31 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             end
             return rewrap_unionall(a.name.wrapper{p...}, a.name.wrapper)
         end
-        b2 = supertype(b2)
+        b = supertype(b)
     end
-    isspecialpair(a, b) && return Union{a, b}
     return Any
 end
+
+"""
+    promote_join(T, S)
+
+Compute a type that contains both `T` and `S`, which could be
+either a parent of both types, or a `Union` if appropriate.
+Falls back to [`typejoin`](@ref).
+"""
+promote_join(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
+promote_join(::Type{Nothing}, ::Type{T}) where {T} =
+    isconcrete(T) ? Union{T, Nothing} : Any
+promote_join(::Type{T}, ::Type{Void}) where {T} =
+    isconcrete(T) ? Union{T, Nothing} : Any
+promote_join(::Type{Missing}, ::Type{T}) where {T} =
+    isconcrete(T) ? Union{T, Missing} : Any
+promote_join(::Type{T}, ::Type{Missing}) where {T} =
+    isconcrete(T) ? Union{T, Missing} : Any
+promote_join(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
+promote_join(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
+promote_join(::Type{Nothing}, ::Type{Nothing}) = Nothing
+promote_join(::Type{Missing}, ::Type{Missing}) = Missing
 
 # Returns length, isfixed
 function full_va_len(p)

@@ -162,16 +162,6 @@ end
     @test res isa Vector{Bool}
     res = @inferred map(s -> s === v, x)
     @test res isa Vector{Bool}
-
-    x = ["a", "b"]
-    res = @inferred collect(s for s in x)
-    @test res isa Vector{String}
-    res = @inferred map(identity, x)
-    @test res isa Vector{String}
-    res = @inferred collect(s === v for s in x)
-    @test res isa Vector{Bool}
-    res = @inferred map(s -> s === v, x)
-    @test res isa Vector{Bool}
     y = Union{String, T}["a", v]
     f(s::Union{Void, Missing}) = s
     f(s::String) = s == "a"

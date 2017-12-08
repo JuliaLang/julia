@@ -142,7 +142,6 @@ function union!(s::Set{T}, itr) where T
     s
 end
 
-
 """
     intersect(s, itrs...)
     ∩(s, itrs...)
@@ -368,7 +367,7 @@ _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
         x, i = next(itr, i)
         S = typeof(x)
         if !(S === T || S <: T)
-            R = typejoin(S, T)
+            R = promote_join(S, T)
             seenR = convert(Set{R}, seen)
             outR = convert(Vector{R}, out)
             if !in(x, seenR)

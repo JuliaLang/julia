@@ -5,7 +5,7 @@ module Broadcast
 using Base.Cartesian
 using Base: Indices, OneTo, linearindices, tail, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            isoperator
+            isoperator, promote_join
 import Base: broadcast, broadcast!
 export BroadcastStyle, broadcast_indices, broadcast_similar,
        broadcast_getindex, broadcast_setindex!, dotview, @__dot__
@@ -507,7 +507,7 @@ end
             else
                 # This element type doesn't fit in B. Allocate a new B with wider eltype,
                 # copy over old values, and continue
-                newB = Base.similar(B, typejoin(eltype(B), S))
+                newB = Base.similar(B, promote_join(eltype(B), S))
                 for II in Iterators.take(iter, count)
                     newB[II] = B[II]
                 end
