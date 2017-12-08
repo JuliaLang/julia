@@ -205,8 +205,15 @@ struct tstStringType <: AbstractString
 end
 @testset "AbstractString functions" begin
     tstr = tstStringType(Vector{UInt8}("12"))
+    @test_throws MethodError ncodeunits(tstr)
+    @test_throws MethodError codeunit(tstr)
+    @test_throws MethodError codeunit(tstr, 1)
+    @test_throws MethodError codeunit(tstr, true)
+    @test_throws MethodError isvalid(tstr, 1)
+    @test_throws MethodError isvalid(tstr, true)
+    @test_throws MethodError next(tstr, 1)
+    @test_throws MethodError next(tstr, true)
     @test_throws MethodError endof(tstr)
-    @test_throws MethodError next(tstr, Bool(1))
 
     gstr = GenericString("12")
     @test string(gstr) isa GenericString
