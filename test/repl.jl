@@ -166,6 +166,7 @@ fake_repl() do stdin_write, stdout_read, repl
             redirect_stdout(old_stdout)
         end
         close(proc_stdout)
+        @test contains(wait(get_stdout), "HI\n")
         @test wait(get_stdout) == "HI\n"
     end
 
