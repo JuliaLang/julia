@@ -404,6 +404,8 @@ perhaps range-types `Ind` of your own design. For more information, see [Arrays 
 | `broadcast(f, As...)` | Complete bypass of broadcasting machinery |
 | `broadcast(f, ::DestStyle, ::Nothing, ::Nothing, As...)` | Bypass after container type is computed |
 | `broadcast(f, ::DestStyle, ::Type{ElType}, inds::Tuple, As...)` | Bypass after container type, eltype, and indices are computed |
+| `broadcast!(f, dest::DestType, ::Nothing, As...)` | Bypass in-place broadcast, specialization on destination type |
+| `broadcast!(f, dest, ::BroadcastStyle, As...)` | Bypass in-place broadcast, specialization on `BroadcastStyle` |
 
 [Broadcasting](@ref) is triggered by an explicit call to `broadcast` or `broadcast!`, or implicitly by
 "dot" operations like `A .+ b`. Any `AbstractArray` type supports broadcasting,
@@ -591,3 +593,37 @@ yields another `SparseVecStyle`, that its combination with a 2-dimensional array
 yields a `SparseMatStyle`, and anything of higher dimensionality falls back to the dense arbitrary-dimensional framework.
 These rules allow broadcasting to keep the sparse representation for operations that result
 in one or two dimensional outputs, but produce an `Array` for any other dimensionality.
+
+### [Extending `broadcast!`](@id extending-in-place-broadcast)
+
+Extending `broadcast!` (in-place broadcast) should be done with care, as it is easy to introduce
+ambiguities between packages. To avoid these ambiguities, we adhere to the following conventions.
+
+First, if you want to specialize on the destination type, say `DestType`, then you should
+define a method with the following signature:
+
+```julia
+broadcast!(f, dest::DestType, ::Nothing, As...)
+```
+
+Note that no bounds should be placed on the types of `f` and `As...`.
+
+Second, if specialized `broadcast!` behavior is desired depending on the input types,
+you should write [binary broadcasting rules](@ref writing-binary-broadcasting-rules) to
+determine a custom `BroadcastStyle` given the input types, say `MyBroadcastStyle`, and you should define a method with the following
+signature:
+
+```julia
+broadcast!(f, dest, ::MyBroadcastStyle, As...)
+```
+
+Note the lack of bounds on `f`, `dest`, and `As...`.
+
+Third, simultaneously specializing on both the type of `dest` and the `BroadcastStyle` is fine. In this case,
+it is also allowed to specialize on the types of the source arguments (`As...`). For example, these method signatures are OK:
+
+```julia
+broadcast!(f, dest::DestType, ::MyBroadcastStyle, As...)
+broadcast!(f, dest::DestType, ::MyBroadcastStyle, As::AbstractArray...)
+broadcast!(f, dest::DestType, ::Broadcast.Scalar, As::Number...)
+```
