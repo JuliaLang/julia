@@ -90,15 +90,9 @@ julia> chop(a, 5, 5)
 ""
 ```
 """
-function chop(s::AbstractString, head::Integer, tail::Integer)
-    # negative values of head/tail will throw error in nextind/prevind
-    headidx = head == 0 ? start(s) : nextind(s, start(s), head)
-    tailidx = tail == 0 ? endof(s) : prevind(s, endof(s), tail)
-    SubString(s, headidx, tailidx)
-end
-
-# no head/tail version left for performance reasons
 chop(s::AbstractString) = SubString(s, start(s), prevind(s, endof(s)))
+chop(s::AbstractString, head::Integer, tail::Integer) =
+    SubString(s, nextind(s, start(s), head), prevind(s, endof(s), tail))
 
 """
     chomp(s::AbstractString)
