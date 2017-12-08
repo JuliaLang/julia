@@ -4,7 +4,6 @@ using Base.Random: UUID
 using Base: LibGit2
 using Pkg3.TerminalMenus
 using Pkg3.Types
-using Pkg3.Types.Pkg2Types
 import Pkg3: Pkg2, depots, BinaryProvider, USE_LIBGIT2_FOR_ALL_DOWNLOADS, NUM_CONCURRENT_DOWNLOADS
 import Pkg3: depots, BinaryProvider, USE_LIBGIT2_FOR_ALL_DOWNLOADS, NUM_CONCURRENT_DOWNLOADS
 

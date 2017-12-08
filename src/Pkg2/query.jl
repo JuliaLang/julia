@@ -4,7 +4,6 @@ module Query
 
 import ..PkgError
 using ...Types
-using ...Types.Pkg2Types
 import Pkg3.equalto
 
 function nameuuid(uuid, uuid_to_name)
