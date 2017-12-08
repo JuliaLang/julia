@@ -7,6 +7,12 @@ using ...Types
 using ...Types.Pkg2Types
 import Pkg3.equalto
 
+function nameuuid(uuid, uuid_to_name)
+    name = haskey(uuid_to_name, uuid) ? uuid_to_name[uuid] : "UNKNOWN"
+    uuid_short = uuid[1:8]
+    return "$name [$uuid_short]"
+end
+
 function init_resolve_backtrace(reqs::Requires, fix::Dict{String,Fixed} = Dict{String,Fixed}())
     bktrc = ResolveBacktrace()
     for (p,f) in fix
@@ -20,28 +26,19 @@ function init_resolve_backtrace(reqs::Requires, fix::Dict{String,Fixed} = Dict{S
 end
 
 function check_fixed(reqs::Requires, fix::Dict{String,Fixed}, avail::Dict, uuid_to_name::Dict{String, String})
+    nu(p) = nameuuid(p, uuid_to_name)
     for (p1,f1) in fix
         for p2 in keys(f1.requires)
             if !(haskey(avail, p2) || haskey(fix, p2))
-                name1 = haskey(uuid_to_name, p1) ? uuid_to_name[p1] : "UNKNOWN"
-                uuid_short1 = p1[1:8]
-                name2 = haskey(uuid_to_name, p2) ? uuid_to_name[p2] : "UNKNOWN"
-                uuid_short2 = p2[1:8]
-                throw(PkgError("unknown package $name2 [$uuid_short2] required by $name1 [$uuid_short1]"))
+                throw(PkgError("unknown package $(nu(p1)) required by $(nu(p2))"))
             end
         end
         if !satisfies(p1, f1.version, reqs)
-            name1 = haskey(uuid_to_name, p1) ? uuid_to_name[p1] : "UNKNOWN"
-            uuid_short1 = p1[1:8]
-            warn("$name1 [$uuid_short1] is fixed at $(f1.version) conflicting with top-level requirement: $(reqs[p1])")
+            warn("$(nu(p1)) is fixed at $(f1.version) conflicting with top-level requirement: $(reqs[p1])")
         end
         for (p2,f2) in fix
             if !satisfies(p1, f1.version, f2.requires)
-                name1 = haskey(uuid_to_name, p1) ? uuid_to_name[p1] : "UNKNOWN"
-                uuid_short1 = p1[1:8]
-                name2 = haskey(uuid_to_name, p2) ? uuid_to_name[p2] : "UNKNOWN"
-                uuid_short2 = p2[1:8]
-                warn("$name1 [$uuid_short1] is fixed at $(f1.version) conflicting with requirement for $name2 [$uuid_short2]: $(f2.requires[p1])")
+                warn("$(nu(p1)) is fixed at $(f1.version) conflicting with requirement for $(nu(p2)): $(f2.requires[p1])")
             end
         end
     end
@@ -146,19 +143,16 @@ function dependencies(avail::Dict, fix::Dict = Dict{String,Fixed}("julia"=>Fixed
 end
 function check_requirements(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, fix::Dict,
                             uuid_to_name::Dict{String, String})
+    nu(p) = nameuuid(p, uuid_to_name)
     for (p,vs) in reqs
         if !any(vn->(vn in vs), keys(deps[p]))
             remaining_vs = VersionSpec()
-            name = haskey(uuid_to_name, p) ? uuid_to_name[p] : "UNKNOWN"
-            uuid_short = p[1:8]
-            err_msg = "fixed packages introduce conflicting requirements for $name [$uuid_short]: \n"
+            err_msg = "fixed packages introduce conflicting requirements for $(nu(p)): \n"
             available_list = sort!(collect(keys(deps[p])))
             for (p1,f1) in fix
                 f1r = f1.requires
                 haskey(f1r, p) || continue
-                name1 = haskey(uuid_to_name, p1) ? uuid_to_name[p1] : "UNKNOWN"
-                uuid_short1 = p1[1:8]
-                err_msg *= "         $name1 [$uuid_short1] requires versions $(f1r[p])"
+                err_msg *= "         $(nu(p1)) requires versions $(f1r[p])"
                 if !any([vn in f1r[p] for vn in available_list])
                     err_msg *= " [none of the available versions can satisfy this requirement]"
                 end
@@ -184,6 +178,7 @@ end
 # This is a pre-pruning step, so it also creates some structures which are later used by pruning
 function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}},
                          bktrc::ResolveBacktrace, uuid_to_name::Dict{String, String})
+    nu(p) = nameuuid(p, uuid_to_name)
     allowed = Dict{String,Dict{VersionNumber,Bool}}()
     staged = copy(reqs)
     while !isempty(staged)
@@ -205,9 +200,7 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
             end
             @assert !isempty(allowedp)
             if !any(values(allowedp))
-                name = haskey(uuid_to_name, p) ? uuid_to_name[p] : "UNKNOWN"
-                uuid_short = p[1:8]
-                err_msg = "Unsatisfiable requirements detected for package $name [$uuid_short]:\n"
+                err_msg = "Unsatisfiable requirements detected for package $(nu(p)):\n"
                 err_msg *= string(bktrc[p])
                 err_msg *= """The intersection of the requirements is $(bktrc[p].versionreq).
                               None of the available versions can satisfy this requirement."""
@@ -250,13 +243,9 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
                 @assert isreq[rp]
                 srvs = staged_next[rp]
                 bktrcp = get!(bktrc, rp) do; ResolveBacktraceItem(); end
-                name = haskey(uuid_to_name, p) ? uuid_to_name[p] : "UNKNOWN"
-                uuid_short = p[1:8]
-                push!(bktrcp, "$name [$uuid_short]"=>bktrc[p], srvs)
+                push!(bktrcp, nu(p)=>bktrc[p], srvs)
                 if isa(bktrcp.versionreq, VersionSpec) && isempty(bktrcp.versionreq)
-                    name = haskey(uuid_to_name, rp) ? uuid_to_name[rp] : "UNKNOWN"
-                    uuid_short = rp[1:8]
-                    err_msg = "Unsatisfiable requirements detected for package $name [$uuid_short]:\n"
+                    err_msg = "Unsatisfiable requirements detected for package $(nu(rp)):\n"
                     err_msg *= string(bktrcp)
                     err_msg *= "The intersection of the requirements is empty."
                     throw(PkgError(err_msg))

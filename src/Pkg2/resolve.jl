@@ -15,6 +15,8 @@ export resolve, sanity_check
 
 # Use the max-sum algorithm to resolve packages dependencies
 function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, uuid_to_name::Dict{String,String})
+    nu(p) = Query.nameuuid(p, uuid_to_name)
+
     # init interface structures
     interface = Interface(reqs, deps)
 
@@ -30,15 +32,13 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
         catch err
             isa(err, UnsatError) || rethrow(err)
             p = interface.pkgs[err.info]
-            name = haskey(uuid_to_name, p) ? uuid_to_name[p] : "UNKNOWN"
-            uuid_short = p[1:8]
             # TODO: build tools to analyze the problem, and suggest to use them here.
             msg =
                 """
                 resolve is unable to satisfy package requirements.
                   The problem was detected when trying to find a feasible version
-                  for package $name [$uuid_short].
-                  However, this only means that package $name [$uuid_short] is involved in an
+                  for package $(nu(p)).
+                  However, this only means that package $(nu(p)) is involved in an
                   unsatisfiable or difficult dependency relation, and the root of
                   the problem may be elsewhere.
                 """
@@ -66,6 +66,8 @@ end
 function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
                       uuid_to_name::Dict{String,String},
                       pkgs::Set{String} = Set{String}())
+    nu(p) = Query.nameuuid(p, uuid_to_name)
+
     isempty(pkgs) || (deps = Query.undirected_dependencies_subset(deps, pkgs))
 
     deps, eq_classes = Query.prune_versions(deps, uuid_to_name)
@@ -104,14 +106,12 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
         try
             for rp in keys(sub_reqs)
                 if !haskey(sub_deps, rp)
-                    name = uuid_to_name[rp]
-                    uuid_short = rp[1:8]
                     if "julia" in conflicts[rp]
-                        throw(PkgError("$name [$uuid_short] can't be installed because it has no versions that support $VERSION " *
+                        throw(PkgError("$(nu(rp)) can't be installed because it has no versions that support $VERSION " *
                            "of julia. You may need to update METADATA by running `Pkg.update()`"))
                     else
-                        sconflicts = join(map(p1->"$(uuid_to_name[p1]) [$(p1[1:8])]", conflicts[rp]), ", ", " and ")
-                        throw(PkgError("$name's [$uuid_short] requirements can't be satisfied because " *
+                        sconflicts = join(map(nu, conflicts[rp]), ", ", " and ")
+                        throw(PkgError("$(nu(rp)) requirements can't be satisfied because " *
                             "of the following fixed packages: $sconflicts"))
                     end
                 end
