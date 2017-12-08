@@ -391,38 +391,6 @@ julia> sum(1:20)
 sum(a) = mapreduce(promote_sys_size_add, +, a)
 sum(a::AbstractArray{Bool}) = count(a)
 
-
-# Kahan (compensated) summation: O(1) error growth, at the expense
-# of a considerable increase in computational expense.
-
-"""
-    sum_kbn(A)
-
-Returns the sum of all elements of `A`, using the Kahan-Babuska-Neumaier compensated
-summation algorithm for additional accuracy.
-"""
-function sum_kbn(A)
-    T = @default_eltype(typeof(A))
-    c = promote_sys_size_add(zero(T)::T)
-    i = start(A)
-    if done(A, i)
-        return c
-    end
-    Ai, i = next(A, i)
-    s = Ai - c
-    while !(done(A, i))
-        Ai, i = next(A, i)
-        t = s + Ai
-        if abs(s) >= abs(Ai)
-            c -= ((s-t) + Ai)
-        else
-            c -= ((Ai-t) + s)
-        end
-        s = t
-    end
-    s - c
-end
-
 ## prod
 """
     prod(f, itr)

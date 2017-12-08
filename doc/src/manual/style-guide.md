@@ -159,7 +159,7 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
   * functions are lowercase ([`maximum`](@ref), [`convert`](@ref)) and, when readable, with multiple
     words squashed together ([`isequal`](@ref), [`haskey`](@ref)). When necessary, use underscores
     as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch`](@ref)
-    as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers ([`sum_kbn`](@ref)).
+    as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers.
   * conciseness is valued, but avoid abbreviation ([`indexin`](@ref) rather than `indxin`) as
     it becomes difficult to remember whether and how particular words are abbreviated.
 

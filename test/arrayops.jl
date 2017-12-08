@@ -870,29 +870,6 @@ end
         @test c[2,2] == A[3,1]+A[3,3]
     end
 
-    v   = [1,1e100,1,-1e100]*1000
-    v2  = [1,-1e100,1,1e100]*1000
-
-    cv  = [1,1e100,1e100,2]*1000
-    cv2 = [1,-1e100,-1e100,2]*1000
-
-    @test isequal(cumsum_kbn(v), cv)
-    @test isequal(cumsum_kbn(v2), cv2)
-
-    A = [v reverse(v) v2 reverse(v2)]
-
-    c = cumsum_kbn(A, 1)
-
-    @test isequal(c[:,1], cv)
-    @test isequal(c[:,3], cv2)
-    @test isequal(c[4,:], [2.0, 2.0, 2.0, 2.0]*1000)
-
-    c = cumsum_kbn(A, 2)
-
-    @test isequal(c[1,:], cv2)
-    @test isequal(c[3,:], cv)
-    @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
-
     @test repeat(BitMatrix(Matrix(I, 2, 2)), inner = (2,1), outer = (1,2)) ==
             repeat(Matrix(I, 2, 2), inner = (2,1), outer = (1,2))
 end
