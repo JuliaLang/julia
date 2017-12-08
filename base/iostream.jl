@@ -315,12 +315,13 @@ end
 
 ## low-level calls ##
 
-write(s::IOStream, b::UInt8) = Int(ccall(:ios_putc, Cint, (Cint, Ptr{Void}), b, s.ios))
+function write(s::IOStream, b::UInt8)
+    iswritable(s) || throw(ArgumentError("write failed, IOStream is not writeable"))
+    Int(ccall(:ios_putc, Cint, (Cint, Ptr{Void}), b, s.ios))
+end
 
 function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
-    if !iswritable(s)
-        throw(ArgumentError("write failed, IOStream is not writeable"))
-    end
+    iswritable(s) || throw(ArgumentError("write failed, IOStream is not writeable"))
     return Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, p, nb))
 end
 
@@ -352,14 +353,6 @@ function unsafe_read(s::IOStream, p::Ptr{UInt8}, nb::UInt)
 end
 
 ## text I/O ##
-
-function write(s::IOStream, c::Char)
-    if !iswritable(s)
-        throw(ArgumentError("write failed, IOStream is not writeable"))
-    end
-    Int(ccall(:ios_pututf8, Cint, (Ptr{Void}, UInt32), s.ios, c))
-end
-read(s::IOStream, ::Type{Char}) = Char(ccall(:jl_getutf8, UInt32, (Ptr{Void},), s.ios))
 
 take!(s::IOStream) =
     ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Void},), s.ios)
@@ -452,14 +445,23 @@ function read(s::IOStream, nb::Integer; all::Bool=true)
 end
 
 ## Character streams ##
-const _chtmp = Ref{Char}()
+
 function peekchar(s::IOStream)
-    if ccall(:ios_peekutf8, Cint, (Ptr{Void}, Ptr{Char}), s, _chtmp) < 0
+    chref = Ref{UInt32}()
+    if ccall(:ios_peekutf8, Cint, (Ptr{Void}, Ptr{UInt32}), s, chref) < 0
         return typemax(Char)
     end
-    return _chtmp[]
+    return Char(chref[])
 end
 
 function peek(s::IOStream)
     ccall(:ios_peekc, Cint, (Ptr{Void},), s)
+end
+
+function peek(s::IO)
+    mark(s)
+    try read(s, UInt8)
+    finally
+        reset(s)
+    end
 end

@@ -640,7 +640,6 @@ SIBOX_FUNC(int16,  int16_t, 1)
 SIBOX_FUNC(int32,  int32_t, 1)
 UIBOX_FUNC(uint16, uint16_t, 1)
 UIBOX_FUNC(uint32, uint32_t, 1)
-UIBOX_FUNC(char,   uint32_t, 1)
 UIBOX_FUNC(ssavalue, size_t, 1)
 UIBOX_FUNC(slotnumber, size_t, 1)
 #ifdef _P64
@@ -650,6 +649,17 @@ UIBOX_FUNC(uint64, uint64_t, 1)
 SIBOX_FUNC(int64,  int64_t, 2)
 UIBOX_FUNC(uint64, uint64_t, 2)
 #endif
+
+static jl_value_t *boxed_char_cache[128];
+JL_DLLEXPORT jl_value_t *jl_box_char(uint32_t x)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (0 < (int32_t)x)
+        return boxed_char_cache[x >> 24];
+    jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), jl_char_type);
+    *(uint32_t*)jl_data_ptr(v) = x;
+    return v;
+}
 
 static jl_value_t *boxed_int8_cache[256];
 JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x)
@@ -684,14 +694,16 @@ void jl_init_int32_int64_cache(void)
 void jl_init_box_caches(void)
 {
     int64_t i;
+    for(i=0; i < 128; i++) {
+        boxed_char_cache[i] = jl_permbox32(jl_char_type, i << 24);
+    }
     for(i=0; i < 256; i++) {
-        boxed_int8_cache[i]  = jl_permbox8(jl_int8_type, i);
+        boxed_int8_cache[i] = jl_permbox8(jl_int8_type, i);
     }
     for(i=0; i < NBOX_C; i++) {
         boxed_int16_cache[i]  = jl_permbox16(jl_int16_type, i-NBOX_C/2);
         boxed_uint16_cache[i] = jl_permbox16(jl_uint16_type, i);
         boxed_uint32_cache[i] = jl_permbox32(jl_uint32_type, i);
-        boxed_char_cache[i]   = jl_permbox32(jl_char_type, i);
         boxed_uint64_cache[i] = jl_permbox64(jl_uint64_type, i);
     }
 }

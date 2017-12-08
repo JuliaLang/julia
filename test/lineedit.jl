@@ -16,8 +16,8 @@ function new_state()
     LineEdit.init_state(term, ModalInterface([Prompt("test> ")]))
 end
 
-charseek(buf, i) = seek(buf, Base.unsafe_chr2ind(content(buf), i+1)-1)
-charpos(buf, pos=position(buf)) = Base.unsafe_ind2chr(content(buf), pos+1)-1
+charseek(buf, i) = seek(buf, chr2ind(content(buf), i+1)-1)
+charpos(buf, pos=position(buf)) = ind2chr(content(buf), pos+1)-1
 
 function transform!(f, s, i = -1) # i is char-based (not bytes) buffer position
     buf = buffer(s)

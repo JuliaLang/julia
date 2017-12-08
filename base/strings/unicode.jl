@@ -3,7 +3,8 @@
 # Various Unicode functionality from the utf8proc library
 module Unicode
 
-import Base: show, ==, hash, string, Symbol, isless, length, eltype, start, next, done, convert, isvalid
+import Base: show, ==, hash, string, Symbol, isless, length, eltype, start,
+             next, done, convert, isvalid, MalformedCharError, ismalformed
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
@@ -111,7 +112,9 @@ const category_strings = [
     "Other, control",
     "Other, format",
     "Other, surrogate",
-    "Other, private use"
+    "Other, private use",
+    "Invalid, too high",
+    "Malformed, bad data",
 ]
 
 const UTF8PROC_STABLE    = (1<<1)
@@ -148,10 +151,26 @@ end
 
 utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(String(s), flags)
 
-function normalize(s::AbstractString; stable::Bool=false, compat::Bool=false, compose::Bool=true, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
+function normalize(
+    s::AbstractString;
+    stable::Bool=false,
+    compat::Bool=false,
+    compose::Bool=true,
+    decompose::Bool=false,
+    stripignore::Bool=false,
+    rejectna::Bool=false,
+    newline2ls::Bool=false,
+    newline2ps::Bool=false,
+    newline2lf::Bool=false,
+    stripcc::Bool=false,
+    casefold::Bool=false,
+    lump::Bool=false,
+    stripmark::Bool=false,
+)
     flags = 0
     stable && (flags = flags | UTF8PROC_STABLE)
     compat && (flags = flags | UTF8PROC_COMPAT)
+    # TODO: error if compose & decompose?
     if decompose
         flags = flags | UTF8PROC_DECOMPOSE
     elseif compose
@@ -250,7 +269,10 @@ julia> textwidth('❤')
 2
 ```
 """
-textwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
+function textwidth(c::Char)
+    ismalformed(c) && (c = '\ufffd')
+    Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
+end
 
 """
     textwidth(s::AbstractString)
@@ -267,17 +289,29 @@ julia> textwidth("March")
 """
 textwidth(s::AbstractString) = mapreduce(textwidth, +, 0, s)
 
-lowercase(c::Char) = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) : Char(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
-uppercase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) : Char(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
-titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) : Char(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
+lowercase(c::Char) = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
+    Char(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
+uppercase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
+    Char(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
+titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
+    Char(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
 
 ############################################################################
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
-category_code(c) = ccall(:utf8proc_category, Cint, (UInt32,), c)
+function category_code(c::Char)
+    ismalformed(c) && return Cint(31)
+    (u = UInt32(c)) ≤ 0x10ffff || return Cint(30)
+    ccall(:utf8proc_category, Cint, (UInt32,), u)
+end
 
 # more human-readable representations of the category code
-category_abbrev(c) = unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), c))
+function category_abbrev(c)
+    ismalformed(c) && return "Ma"
+    (u = UInt32(c)) ≤ 0x10ffff || return "In"
+    unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), u))
+end
+
 category_string(c) = category_strings[category_code(c)+1]
 
 """
@@ -321,7 +355,7 @@ julia> islower('❤')
 false
 ```
 """
-islower(c::Char) = (category_code(c) == UTF8PROC_CATEGORY_LL)
+islower(c::Char) = category_code(c) == UTF8PROC_CATEGORY_LL
 
 # true for Unicode upper and mixed case
 
@@ -347,8 +381,8 @@ false
 ```
 """
 function isupper(c::Char)
-    ccode = category_code(c)
-    return ccode == UTF8PROC_CATEGORY_LU || ccode == UTF8PROC_CATEGORY_LT
+    cat = category_code(c)
+    cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT
 end
 
 """
@@ -370,7 +404,7 @@ julia> isdigit('α')
 false
 ```
 """
-isdigit(c::Char)  = ('0' <= c <= '9')
+isdigit(c::Char) = '0' <= c <= '9'
 
 """
     isalpha(c::Char) -> Bool
@@ -393,7 +427,7 @@ julia> isalpha('9')
 false
 ```
 """
-isalpha(c::Char)  = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO)
+isalpha(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO
 
 """
     isnumeric(c::Char) -> Bool
@@ -422,7 +456,7 @@ julia> isnumeric('❤')
 false
 ```
 """
-isnumeric(c::Char) = (UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO)
+isnumeric(c::Char) = UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO
 
 """
     isalnum(c::Char) -> Bool
@@ -446,9 +480,9 @@ true
 ```
 """
 function isalnum(c::Char)
-    ccode = category_code(c)
-    return (UTF8PROC_CATEGORY_LU <= ccode <= UTF8PROC_CATEGORY_LO) ||
-           (UTF8PROC_CATEGORY_ND <= ccode <= UTF8PROC_CATEGORY_NO)
+    cat = category_code(c)
+    UTF8PROC_CATEGORY_LU <= cat <= UTF8PROC_CATEGORY_LO ||
+    UTF8PROC_CATEGORY_ND <= cat <= UTF8PROC_CATEGORY_NO
 end
 
 # following C++ only control characters from the Latin-1 subset return true
@@ -470,7 +504,7 @@ julia> iscntrl('a')
 false
 ```
 """
-iscntrl(c::Char) = (c <= Char(0x1f) || Char(0x7f) <= c <= Char(0x9f))
+iscntrl(c::Char) = c <= '\x1f' || '\x7f' <= c <= '\u9f'
 
 """
     ispunct(c::Char) -> Bool
@@ -492,7 +526,7 @@ julia> ispunct(';')
 true
 ```
 """
-ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGORY_PO)
+ispunct(c::Char) = UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGORY_PO
 
 # \u85 is the Unicode Next Line (NEL) character
 
@@ -520,7 +554,9 @@ julia> isspace('\\x20')
 true
 ```
 """
-@inline isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == '\u85' || '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
+@inline isspace(c::Char) =
+    c == ' ' || '\t' <= c <= '\r' || c == '\u85' ||
+    '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
 
 """
     isprint(c::Char) -> Bool
@@ -538,7 +574,7 @@ julia> isprint('A')
 true
 ```
 """
-isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS)
+isprint(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS
 
 # true in principal if a printer would use ink
 
@@ -560,7 +596,7 @@ julia> isgraph('A')
 true
 ```
 """
-isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_SO)
+isgraph(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_SO
 
 """
     isascii(c::Union{Char,AbstractString}) -> Bool
@@ -585,7 +621,7 @@ julia> isascii("αβγ")
 false
 ```
 """
-isascii(c::Char) = c < Char(0x80)
+isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
 isascii(s::AbstractString) = all(isascii, s)
 
 """
@@ -640,7 +676,7 @@ julia> lowercase("STRINGS AND THINGS")
 lowercase(s::AbstractString) = map(lowercase, s)
 
 """
-    titlecase(s::AbstractString)
+    titlecase(s::AbstractString) -> String
 
 Capitalize the first character of each word in `s`.
 See also [`ucfirst`](@ref) to capitalize only the first
@@ -648,9 +684,7 @@ character in `s`.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
-julia> titlecase("the julia programming language")
+julia> titlecase("the Julia programming language")
 "The Julia Programming Language"
 ```
 """
@@ -670,56 +704,67 @@ function titlecase(s::AbstractString)
 end
 
 """
-    ucfirst(s::AbstractString)
+    ucfirst(s::AbstractString) -> String
 
-Return `string` with the first character converted to uppercase
-(technically "title case" for Unicode).
-See also [`titlecase`](@ref) to capitalize the first character of
-every word in `s`.
+Return `s` with the first character converted to uppercase (technically "title
+case" for Unicode). See also [`titlecase`](@ref) to capitalize the first
+character of every word in `s`.
+
+See also: `lcfirst`, `uppercase`, `lowercase`, `titlecase`
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> ucfirst("python")
 "Python"
 ```
 """
 function ucfirst(s::AbstractString)
-    isempty(s) && return s
+    isempty(s) && return ""
     c = s[1]
-    tc = titlecase(c)
-    return c==tc ? s : string(tc,s[nextind(s,1):end])
+    c′ = titlecase(c)
+    c == c′ ? convert(String, s) :
+    string(c′, SubString(s, nextind(s, 1)))
 end
 
 """
     lcfirst(s::AbstractString)
 
-Return `string` with the first character converted to lowercase.
+Return `s` with the first character converted to lowercase.
+
+See also: `ucfirst`, `uppercase`, `lowercase`, `titlecase`
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> lcfirst("Julia")
 "julia"
 ```
 """
 function lcfirst(s::AbstractString)
-    isempty(s) || islower(s[1]) ? s : string(lowercase(s[1]),s[nextind(s,1):end])
+    isempty(s) && return ""
+    c = s[1]
+    c′ = lowercase(c)
+    c == c′ ? convert(String, s) :
+    string(c′, SubString(s, nextind(s, 1)))
 end
 
 ############################################################################
 # iterators for grapheme segmentation
 
 isgraphemebreak(c1::Char, c2::Char) =
+    ismalformed(c1) || ismalformed(c2) ||
     ccall(:utf8proc_grapheme_break, Bool, (UInt32, UInt32), c1, c2)
 
 # Stateful grapheme break required by Unicode-9 rules: the string
 # must be processed in sequence, with state initialized to Ref{Int32}(0).
 # Requires utf8proc v2.0 or later.
-isgraphemebreak!(state::Ref{Int32}, c1::Char, c2::Char) =
-    ccall(:utf8proc_grapheme_break_stateful, Bool, (UInt32, UInt32, Ref{Int32}), c1, c2, state)
+function isgraphemebreak!(state::Ref{Int32}, c1::Char, c2::Char)
+    if ismalformed(c1) || ismalformed(c2)
+        state[] = 0
+        return true
+    end
+    ccall(:utf8proc_grapheme_break_stateful, Bool,
+          (UInt32, UInt32, Ref{Int32}), c1, c2, state)
+end
 
 struct GraphemeIterator{S<:AbstractString}
     s::S # original string (for generation of SubStrings)
@@ -739,7 +784,7 @@ eltype(::Type{GraphemeIterator{S}}) where {S} = SubString{S}
 eltype(::Type{GraphemeIterator{SubString{S}}}) where {S} = SubString{S}
 
 function length(g::GraphemeIterator)
-    c0 = Char(0x00ad) # soft hyphen (grapheme break always allowed after this)
+    c0 = typemax(Char)
     n = 0
     state = Ref{Int32}(0)
     for c in g.s

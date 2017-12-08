@@ -303,8 +303,12 @@ struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end
 
-endof(s::SubstitutionString) = endof(s.string)
-next(s::SubstitutionString, idx::Int) = next(s.string, idx)
+ncodeunits(s::SubstitutionString) = ncodeunits(s.string)
+codeunit(s::SubstitutionString) = codeunit(s.string)
+codeunit(s::SubstitutionString, i::Integer) = codeunit(s.string, i)
+isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)
+next(s::SubstitutionString, i::Integer) = next(s.string, i)
+
 function show(io::IO, s::SubstitutionString)
     print(io, "s")
     show(io, s.string)
