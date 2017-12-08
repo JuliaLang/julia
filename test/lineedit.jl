@@ -7,7 +7,7 @@ isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__),
 using Main.TestHelpers
 
 # no need to have animation in tests
-LineEdit.REGION_ANIMATION_DURATION[] = 0.001
+Base.REPL.GlobalOptions.region_animation_duration=0.001
 
 ## helper functions
 
