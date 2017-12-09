@@ -15,7 +15,7 @@ export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay
 # struct MIME{mime} end
 # macro MIME_str(s)
 import Base: MIME, @MIME_str
-
+import Base64
 import Base: show, print, string, convert
 MIME(s) = MIME{Symbol(s)}()
 show(io::IO, ::MIME{mime}) where {mime} = print(io, "MIME type ", string(mime))
@@ -45,26 +45,26 @@ mimewritable(::MIME{mime}, x) where {mime} =
     method_exists(show, Tuple{IO, MIME{mime}, typeof(x)})
 
 """
-    show(stream, mime, x)
+    show(io, mime, x)
 
 The [`display`](@ref) functions ultimately call `show` in order to write an object `x` as a
-given `mime` type to a given I/O `stream` (usually a memory buffer), if possible. In order
+given `mime` type to a given I/O stream `io` (usually a memory buffer), if possible. In order
 to provide a rich multimedia representation of a user-defined type `T`, it is only necessary
-to define a new `show` method for `T`, via: `show(stream, ::MIME"mime", x::T) = ...`,
-where `mime` is a MIME-type string and the function body calls `write` (or similar) to write
-that representation of `x` to `stream`. (Note that the `MIME""` notation only supports
+to define a new `show` method for `T`, via: `show(io, ::MIME"mime", x::T) = ...`,
+where `mime` is a MIME-type string and the function body calls [`write`](@ref) (or similar) to write
+that representation of `x` to `io`. (Note that the `MIME""` notation only supports
 literal strings; to construct `MIME` types in a more flexible manner use
 `MIME{Symbol("")}`.)
 
 For example, if you define a `MyImage` type and know how to write it to a PNG file, you
-could define a function `show(stream, ::MIME"image/png", x::MyImage) = ...` to allow
+could define a function `show(io, ::MIME"image/png", x::MyImage) = ...` to allow
 your images to be displayed on any PNG-capable `AbstractDisplay` (such as IJulia). As usual, be sure
 to `import Base.show` in order to add new methods to the built-in Julia function
 `show`.
 
 The default MIME type is `MIME"text/plain"`. There is a fallback definition for `text/plain`
 output that calls `show` with 2 arguments. Therefore, this case should be handled by
-defining a 2-argument `show(stream::IO, x::MyType)` method.
+defining a 2-argument `show(io::IO, x::MyType)` method.
 
 Technically, the `MIME"mime"` macro defines a singleton type for the given `mime` string,
 which allows us to exploit Julia's dispatch mechanisms in determining how to display objects
@@ -85,8 +85,8 @@ verbose_show(io, m, x) = show(IOContext(io, :limit => false), m, x)
     reprmime(mime, x)
 
 Returns an `AbstractString` or `Vector{UInt8}` containing the representation of
-`x` in the requested `mime` type, as written by `show` (throwing a
-`MethodError` if no appropriate `show` is available). An `AbstractString` is
+`x` in the requested `mime` type, as written by [`show`](@ref) (throwing a
+[`MethodError`](@ref) if no appropriate `show` is available). An `AbstractString` is
 returned for MIME types with textual representations (such as `"text/html"` or
 `"application/postscript"`), whereas binary data is returned as
 `Vector{UInt8}`. (The function `istextmime(mime)` returns whether or not Julia
@@ -97,6 +97,14 @@ As a special case, if `x` is an `AbstractString` (for textual MIME types) or a
 `x` is already in the requested `mime` format and simply returns `x`. This
 special case does not apply to the `"text/plain"` MIME type. This is useful so
 that raw data can be passed to `display(m::MIME, x)`.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4];
+
+julia> reprmime("text/plain", A)
+"2×2 Array{Int64,2}:\\n 1  2\\n 3  4"
+```
 """
 reprmime(m::MIME, x) = istextmime(m) ? _textreprmime(m, x) : _binreprmime(m, x)
 
