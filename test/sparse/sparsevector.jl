@@ -1240,3 +1240,21 @@ end
     @test length(simA.rowval) == length(A.nzind)
     @test length(simA.nzval) == length(A.nzval)
 end
+
+@testset "Fast operations on full column views" begin
+    n = 1000
+    A = sprandn(n, n, 0.01)
+    for j in 1:5:n
+        Aj, Ajview = A[:, j], view(A, :, j)
+        @test norm(Aj)          == norm(Ajview)
+        @test dot(Aj, copy(Aj)) == dot(Ajview, Aj) # don't alias since it takes a different code path
+        @test scale!(Aj, 0.1)   == scale!(Ajview, 0.1)
+        @test Aj*0.1            == Ajview*0.1
+        @test 0.1*Aj            == 0.1*Ajview
+        @test Aj/0.1            == Ajview/0.1
+        @test LinAlg.axpy!(1.0, Aj,     sparse(ones(n))) ==
+              LinAlg.axpy!(1.0, Ajview, sparse(ones(n)))
+        @test LinAlg.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Aj) ==
+              LinAlg.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Ajview)
+    end
+end
