@@ -744,7 +744,8 @@ fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 """
     adjoint(A)
 
-The conjugate transposition operator (`'`).
+The conjugate transposition operator (`'`). Operates recursively on arrays with vector or
+matrix element type (e.g., block matrices).
 
 # Examples
 ```jldoctest
