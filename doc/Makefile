@@ -7,6 +7,7 @@ SRCDIR           := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME        := $(abspath $(SRCDIR)/..)
 include $(JULIAHOME)/Make.inc
 JULIA_EXECUTABLE := $(call spawn,$(build_bindir)/julia)
+export JULIA_PKGDIR := $(call cygpath_w,$(abspath $(SRCDIR)/deps))
 
 .PHONY: help clean cleanall html pdf linkcheck doctest doctest-fix check deps deploy
 
