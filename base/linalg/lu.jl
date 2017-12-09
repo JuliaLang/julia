@@ -310,7 +310,7 @@ function ldiv!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
     A_ldiv_B!(UpperTriangular(A.factors), A_ldiv_B!(UnitLowerTriangular(A.factors), B))
 end
 
-ldiv!(transA::Transpose{<:Any,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+ldiv!(transA::Transpose{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     (A = transA.parent; @assertnonsingular(LAPACK.getrs!('T', A.factors, A.ipiv, B), A.info))
 
 function ldiv!(transA::Transpose{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOrMat)
@@ -319,9 +319,9 @@ function ldiv!(transA::Transpose{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedV
     _apply_inverse_ipiv!(A, B)
 end
 
-ldiv!(adjF::Adjoint{<:Any,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:Real} =
+ldiv!(adjF::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:Real} =
     (F = adjF.parent; At_ldiv_B!(F, B))
-ldiv!(adjA::Adjoint{<:Any,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
+ldiv!(adjA::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
     (A = adjA.parent; @assertnonsingular(LAPACK.getrs!('C', A.factors, A.ipiv, B), A.info))
 
 function ldiv!(adjA::Adjoint{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOrMat)
@@ -330,16 +330,16 @@ function ldiv!(adjA::Adjoint{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOr
     _apply_inverse_ipiv!(A, B)
 end
 
-function \(transA::Transpose{<:Any,<:LU{T,<:StridedMatrix}},
-           transB::Transpose{<:Any,<:StridedVecOrMat{T}}) where {T<:BlasFloat}
+function \(transA::Transpose{T,<:LU{T,<:StridedMatrix}},
+           transB::Transpose{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat}
     A, B = transA.parent, transB.parent
     @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, transpose(B)) A.info
 end
 \(transA::Transpose{<:Any,<:LU}, transB::Transpose{<:Any,<:StridedVecOrMat}) =
     (A = transA.parent; B = transB.parent; At_ldiv_B(A, transpose(B)))
 
-function \(adjA::Adjoint{<:Any,<:LU{T,<:StridedMatrix}},
-           adjB::Adjoint{<:Any,<:StridedVecOrMat{T}}) where {T<:BlasComplex}
+function \(adjA::Adjoint{T,<:LU{T,<:StridedMatrix}},
+           adjB::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasComplex}
     A, B = adjA.parent, adjB.parent
     @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, adjoint(B)) A.info
 end

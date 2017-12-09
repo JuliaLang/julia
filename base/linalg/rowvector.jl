@@ -297,3 +297,9 @@ pinv(v::RowVector, tol::Real=0) = pinv(v', tol)'
 @inline /(rowvec::RowVector, mat::AbstractMatrix) = transpose(transpose(mat) \ transpose(rowvec))
 /(rowvec::RowVector, transmat::Transpose{<:Any,<:AbstractMatrix}) = transpose(transmat.parent \ transpose(rowvec))
 /(rowvec::RowVector, adjmat::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(adjmat.parent \ adjoint(rowvec))
+
+# dismabiguation methods
+*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:RowVector}) = adjoint(A.parent) * B
+*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:RowVector}) = A * transpose(B.parent)
+*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:RowVector}) = transpose(A.parent) * B
+*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:RowVector}) = A * adjoint(B.parent)

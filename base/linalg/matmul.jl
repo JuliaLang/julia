@@ -154,8 +154,8 @@ julia> [1 1; 0 1] * [1 0; 1 1]
  1  1
 ```
 """
-function (*)(A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
-    TS = promote_op(matprod, T, S)
+function (*)(A::AbstractMatrix, B::AbstractMatrix)
+    TS = promote_op(matprod, eltype(A), eltype(B))
     A_mul_B!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
 mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = gemm_wrapper!(C, 'N', 'N', A, B)

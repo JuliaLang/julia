@@ -565,19 +565,22 @@ function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) w
 end
 
 ### Generic promotion methods and fallbacks
-function \(A::Bidiagonal{TA}, B::AbstractVecOrMat{TB}) where {TA<:Number,TB<:Number}
+function \(A::Bidiagonal{<:Number}, B::AbstractVecOrMat{<:Number})
+    TA, TB = eltype(A), eltype(B)
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
     A_ldiv_B!(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
 end
 \(A::Bidiagonal, B::AbstractVecOrMat) = A_ldiv_B!(A, copy(B))
-function \(transA::Transpose{<:Any,<:Bidiagonal{TA}}, B::AbstractVecOrMat{TB}) where {TA<:Number,TB<:Number}
+function \(transA::Transpose{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrMat{<:Number})
     A = transA.parent
+    TA, TB = eltype(A), eltype(B)
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
     At_ldiv_B!(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
 end
 \(transA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = At_ldiv_B!(transA.parent, copy(B))
-function \(adjA::Adjoint{<:Any,<:Bidiagonal{TA}}, B::AbstractVecOrMat{TB}) where {TA<:Number,TB<:Number}
+function \(adjA::Adjoint{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrMat{<:Number})
     A = adjA.parent
+    TA, TB = eltype(A), eltype(B)
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
     Ac_ldiv_B!(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
 end

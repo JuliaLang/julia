@@ -85,3 +85,8 @@ ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::Abstract
 # fallback methods for transposed solves
 \(transF::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = (F = transF.parent; Ac_ldiv_B(F, B))
 \(transF::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) = (F = transF.parent; conj.(Ac_ldiv_B(F, conj.(B))))
+
+# dismabiguation methods
+\(A::Adjoint{<:Any,<:Factorization}, B::RowVector) = adjoint(A.parent) \ B
+\(A::Transpose{<:Any,<:Factorization}, B::RowVector) = transpose(A.parent) \ B
+\(A::Transpose{<:Any,<:Factorization{<:Real}}, B::RowVector) = transpose(A.parent) \ B

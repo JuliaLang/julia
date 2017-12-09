@@ -459,3 +459,9 @@ function svdfact(D::Diagonal)
     U, s, V = svd(D)
     SVD(U, s, V')
 end
+
+# dismabiguation methods: * of Diagonal and Adj/Trans AbsVec
+*(A::Diagonal, B::Adjoint{<:Any,<:AbstractVector}) = A * adjoint(B.parent)
+*(A::Diagonal, B::Transpose{<:Any,<:AbstractVector}) = A * transpose(B.parent)
+*(A::Adjoint{<:Any,<:AbstractVector}, B::Diagonal) = adjoint(A.parent) * B
+*(A::Transpose{<:Any,<:AbstractVector}, B::Diagonal) = transpose(A.parent) * B
