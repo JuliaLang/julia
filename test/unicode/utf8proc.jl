@@ -92,7 +92,7 @@ end
         @test islower(c) == true
         @test isupper(c) == false
         @test isdigit(c) == false
-        @test isnumber(c) == false
+        @test isnumeric(c) == false
     end
 
     aupper=['A', 'D', 'J', 'Y', 'Z']
@@ -102,7 +102,7 @@ end
         @test islower(c) == false
         @test isupper(c) == true
         @test isdigit(c) == false
-        @test isnumber(c) == false
+        @test isnumeric(c) == false
     end
 
     nocase=['א','ﺵ']
@@ -110,7 +110,7 @@ end
 
     for c in alphas
         @test isalpha(c) == true
-        @test isnumber(c) == false
+        @test isnumeric(c) == false
     end
 
     anumber=['0', '1', '5', '9']
@@ -118,11 +118,11 @@ end
 
     for c in anumber
         @test isdigit(c) == true
-        @test isnumber(c) == true
+        @test isnumeric(c) == true
     end
     for c in unumber
         @test isdigit(c) == false
-        @test isnumber(c) == true
+        @test isnumeric(c) == true
     end
 
     alnums=vcat(alphas,anumber,unumber)
@@ -197,7 +197,7 @@ end
     @test !all(isgraph,"  \t   \n   \r  ")
     @test !all(isprint,"  \t   \n   \r  ")
     @test !all(isalpha,"  \t   \n   \r  ")
-    @test !all(isnumber,"  \t   \n   \r  ")
+    @test !all(isnumeric,"  \t   \n   \r  ")
     @test !all(ispunct,"  \t   \n   \r  ")
 
     @test !all(isspace,"ΣβΣβ")
@@ -206,11 +206,11 @@ end
     @test  all(isprint,"ΣβΣβ")
     @test !all(isupper,"ΣβΣβ")
     @test !all(islower,"ΣβΣβ")
-    @test !all(isnumber,"ΣβΣβ")
+    @test !all(isnumeric,"ΣβΣβ")
     @test !all(iscntrl,"ΣβΣβ")
     @test !all(ispunct,"ΣβΣβ")
 
-    @test  all(isnumber,"23435")
+    @test  all(isnumeric,"23435")
     @test  all(isdigit,"23435")
     @test  all(isalnum,"23435")
     @test !all(isalpha,"23435")

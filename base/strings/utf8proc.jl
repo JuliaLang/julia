@@ -9,7 +9,7 @@ export isgraphemebreak, category_code, category_abbrev, category_string
 
 # also exported by Base:
 export normalize_string, graphemes, is_assigned_char, textwidth, isvalid,
-   islower, isupper, isalpha, isdigit, isnumber, isalnum,
+   islower, isupper, isalpha, isdigit, isnumeric, isalnum,
    iscntrl, ispunct, isspace, isprint, isgraph
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
@@ -349,7 +349,7 @@ end
 """
     isdigit(c::Char) -> Bool
 
-Tests whether a character is a numeric digit (0-9).
+Tests whether a character is a decimal digit (0-9).
 
 # Examples
 ```jldoctest
@@ -387,25 +387,31 @@ false
 isalpha(c::Char)  = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO)
 
 """
-    isnumber(c::Char) -> Bool
+    isnumeric(c::Char) -> Bool
 
 Tests whether a character is numeric.
 A character is classified as numeric if it belongs to the Unicode general category Number,
 i.e. a character whose category code begins with 'N'.
 
+Note that this broad category includes characters such as ¾ and ௰.
+Use [`isdigit`](@ref) to check whether a character a decimal digit between 0 and 9.
+
 # Examples
 ```jldoctest
-julia> isnumber('9')
+julia> isnumeric('௰')
 true
 
-julia> isnumber('α')
+julia> isnumeric('9')
+true
+
+julia> isnumeric('α')
 false
 
-julia> isnumber('❤')
+julia> isnumeric('❤')
 false
 ```
 """
-isnumber(c::Char) = (UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO)
+isnumeric(c::Char) = (UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO)
 
 """
     isalnum(c::Char) -> Bool

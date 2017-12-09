@@ -72,7 +72,7 @@ Base.UTF8proc.iscntrl
 Base.UTF8proc.isdigit
 Base.UTF8proc.isgraph
 Base.UTF8proc.islower
-Base.UTF8proc.isnumber
+Base.UTF8proc.isnumeric
 Base.UTF8proc.isprint
 Base.UTF8proc.ispunct
 Base.UTF8proc.isspace
