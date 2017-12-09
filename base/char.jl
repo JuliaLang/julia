@@ -81,7 +81,8 @@ in(x::Char, y::Char) = x == y
 
 ==(x::Char, y::Char) = reinterpret(UInt32, x) == reinterpret(UInt32, y)
 isless(x::Char, y::Char) = reinterpret(UInt32, x) < reinterpret(UInt32, y)
-hash(x::Char, h::UInt) = hash(reinterpret(UInt32, x), hash(Char, h))
+hash(x::Char, h::UInt) =
+    hash_uint64(((reinterpret(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
 
 -(x::Char, y::Char) = Int(x) - Int(y)
 -(x::Char, y::Integer) = Char(Int32(x) - Int32(y))
