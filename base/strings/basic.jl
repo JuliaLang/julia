@@ -16,19 +16,24 @@ about strings:
   * Each `Char` in a string is encoded by one or more code units
   * Only the index of the first code unit of a `Char` is a valid index
   * The encoding of a `Char` is independent of what precedes or follows it
-  * String encodings are "self-synchronizing" – i.e. `isvalid(s,i)` is O(1)
+  * String encodings are [self-synchronizing] – i.e. `isvalid(s,i)` is O(1)
 
-Some string functions error if you use an out-of-bounds or invalid string index,
-including code unit extraction `codeunit(s,i)`, string indexing `s[i]`, and
-string iteration `next(s,i)`. Other string functions take a more relaxed
-approach to indexing and give you the closest valid string index when in-bounds,
-or when out-of-bounds, behave as if there were an infinite number of characters
-padding each side of the string. Usually these imaginary padding characters have
-code unit length `1`, but string types may choose different sizes. Relaxed
-indexing functions include those intended for index arithmetic: `thisind`,
-`nextind` and `prevind`. This model allows index arithmetic to work with out-of-
-bounds indices as intermediate values so long as one never uses them to retrieve
-a character, which often helps avoid needing to code around edge cases.
+[self-synchronizing]: https://en.wikipedia.org/wiki/Self-synchronizing_code
+
+Some string functions that extract code units, characters or substrings from
+strings error if you pass them out-of-bounds or invalid string indices. This
+includes `codeunit(s, i)`, `s[i]`, and `next(s, i)`. Functions that do string
+index arithmetic take a more relaxed approach to indexing and give you the
+closest valid string index when in-bounds, or when out-of-bounds, behave as if
+there were an infinite number of characters padding each side of the string.
+Usually these imaginary padding characters have code unit length `1` but string
+types may choose different "imaginary" character sizes as makes sense for their
+implementations (e.g. substrings may pass index arithmetic through to the
+underlying string they provide a view into). Relaxed indexing functions include
+those intended for index arithmetic: `thisind`, `nextind` and `prevind`. This
+model allows index arithmetic to work with out-of- bounds indices as
+intermediate values so long as one never uses them to retrieve a character,
+which often helps avoid needing to code around edge cases.
 
 See also: [`codeunit`](@ref), [`ncodeunits`](@ref), [`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
 """
@@ -75,8 +80,7 @@ I.e. the value returned by `codeunit(s, i)` is of the type returned by
 See also: [`ncodeunits`](@ref), [`checkbounds`](@ref)
 """
 codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(codeunit, Tuple{typeof(s),Int})) :
-        codeunit(s, Int(i))
+    throw(MethodError(codeunit, Tuple{typeof(s),Int})) : codeunit(s, Int(i))
 
 """
     isvalid(s::AbstractString, i::Integer) -> Bool
@@ -113,8 +117,7 @@ Stacktrace:
 ```
 """
 isvalid(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(isvalid, Tuple{typeof(s),Int})) :
-        isvalid(s, Int(i))
+    throw(MethodError(isvalid, Tuple{typeof(s),Int})) : isvalid(s, Int(i))
 
 """
     next(s::AbstractString, i::Integer) -> Tuple{Char, Int}
@@ -128,8 +131,7 @@ a Unicode index error is raised.
 See also: [`getindex`](@ref), [`start`](@ref), [`done`](@ref), [`checkbounds`](@ref)
 """
 next(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(next, Tuple{typeof(s),Int})) :
-        next(s, Int(i))
+    throw(MethodError(next, Tuple{typeof(s),Int})) : next(s, Int(i))
 
 ## basic generic definitions ##
 
@@ -182,10 +184,12 @@ promote_rule(::Type{<:AbstractString}, ::Type{<:AbstractString}) = String
 ## string & character concatenation ##
 
 """
-    *(s::Union{AbstractString, Char}, t::Union{AbstractString, Char}...) -> String
+    *(s::Union{AbstractString, Char}, t::Union{AbstractString, Char}...) -> AbstractString
 
 Concatenate strings and/or characters, producing a [`String`](@ref). This is equivalent
-to calling the [`string`](@ref) function on the arguments.
+to calling the [`string`](@ref) function on the arguments. Concatenation of built-in
+string types always produces a value of type `String` but other string types may choose
+to return a string of a different type as appropriate.
 
 # Examples
 ```jldoctest
@@ -299,9 +303,10 @@ isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
 The number of characters in string `s` from indices `lo` through `hi`. This is
 computed as the number of code unit indices from `lo` to `hi` which are valid
 character indices. Without only a single string argument, this computes the
-number of characters in the entire string. If `lo` or `hi` are out of ranges
-each out of range code unit is considered to be one character. This matches the
-"loose" indexing model of `thisind`, `nextind` and `prevind`.
+number of characters in the entire string. With `lo` and `hi` arguments it computes
+the number of indices between `lo` and `hi` inclusive that are valid indices in
+the string `s`. Note that the trailing character may include code units past `hi`
+and still be counted.
 
 See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`endof`](@ref), [`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
 
