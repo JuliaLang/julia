@@ -23,17 +23,17 @@ Sampler(rng::AbstractRNG, ::Type{T}, n::Repetition) where {T<:AbstractFloat} =
 # generic random generation function which can be used by RNG implementors
 # it is not defined as a fallback rand method as this could create ambiguities
 
-rand_generic(r::AbstractRNG, ::CloseOpen{Float16}) =
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen{Float16}}) =
     Float16(reinterpret(Float32,
-                        (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
+                        (rand(r, UInt10(UInt32)) << 13)  | 0x3f800000) - 1)
 
-rand_generic(r::AbstractRNG, ::CloseOpen{Float32}) =
-    reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen{Float32}}) =
+    reinterpret(Float32, rand(r, UInt23()) | 0x3f800000) - 1
 
-rand_generic(r::AbstractRNG, ::Close1Open2_64) =
-    reinterpret(Float64, 0x3ff0000000000000 | rand(r, UInt64) & 0x000fffffffffffff)
+rand(r::AbstractRNG, ::SamplerTrivial{Close1Open2_64}) =
+    reinterpret(Float64, 0x3ff0000000000000 | rand(r, UInt52()))
 
-rand_generic(r::AbstractRNG, ::CloseOpen_64) = rand(r, Close1Open2()) - 1.0
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen_64}) = rand(r, Close1Open2()) - 1.0
 
 #### BigFloat
 
@@ -101,11 +101,21 @@ rand(rng::AbstractRNG, sp::SamplerBigFloat{T}) where {T<:FloatInterval{BigFloat}
 
 ### random integers
 
-rand_ui10_raw(r::AbstractRNG) = rand(r, UInt16)
-rand_ui23_raw(r::AbstractRNG) = rand(r, UInt32)
+rand(r::AbstractRNG, ::SamplerTrivial{UInt10Raw{UInt16}}) = rand(r, UInt16)
+rand(r::AbstractRNG, ::SamplerTrivial{UInt23Raw{UInt32}}) = rand(r, UInt32)
 
-rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2()))
-rand_ui52(r::AbstractRNG) = rand_ui52_raw(r) & 0x000fffffffffffff
+rand(r::AbstractRNG, ::SamplerTrivial{UInt52Raw{UInt64}}) =
+    _rand52(r, rng_native_52(r))
+
+_rand52(r::AbstractRNG, ::Type{Float64}) = reinterpret(UInt64, rand(r, Close1Open2()))
+_rand52(r::AbstractRNG, ::Type{UInt64})  = rand(r, UInt64)
+
+rand(r::AbstractRNG, ::SamplerTrivial{UInt10{UInt16}}) = rand(r, UInt10Raw()) & 0x03ff
+rand(r::AbstractRNG, ::SamplerTrivial{UInt23{UInt32}}) = rand(r, UInt23Raw()) & 0x007fffff
+rand(r::AbstractRNG, ::SamplerTrivial{UInt52{UInt64}}) = rand(r, UInt52Raw()) & 0x000fffffffffffff
+
+rand(r::AbstractRNG, sp::SamplerTrivial{<:UniformBits{T}}) where {T} =
+        rand(r, uint_default(sp[])) % T
 
 ### random complex numbers
 
@@ -158,25 +168,28 @@ function SamplerRangeFast(r::AbstractUnitRange{T}) where T<:Union{Int128,UInt128
     SamplerRangeFast{UInt128,T}(first(r), bw, m, mask)
 end
 
-function rand_lteq(r::AbstractRNG, randfun, u::U, mask::U) where U<:Integer
+function rand_lteq(r::AbstractRNG, S, u::U, mask::U) where U<:Integer
     while true
-        x = randfun(r) & mask
+        x = rand(r, S) & mask
         x <= u && return x
     end
 end
 
+# helper function, to turn types to values, should be removed once we can do rand(Uniform(UInt))
+rand(rng::AbstractRNG, ::Val{T}) where {T} = rand(rng, T)
+
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt64,T}) where T
     a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
-    x = bw <= 52 ? rand_lteq(rng, rand_ui52_raw, m, mask) :
-                   rand_lteq(rng, rng->rand(rng, UInt64), m, mask)
+    x = bw <= 52 ? rand_lteq(rng, UInt52Raw(), m, mask) :
+                   rand_lteq(rng, Val(UInt64), m, mask)
     (x + a % UInt64) % T
 end
 
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt128,T}) where T
     a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
-    x = bw <= 52  ? rand_lteq(rng, rand_ui52_raw, m % UInt64, mask % UInt64) % UInt128 :
-        bw <= 104 ? rand_lteq(rng, rand_ui104_raw, m, mask) :
-                    rand_lteq(rng, rng->rand(rng, UInt128), m, mask)
+    x = bw <= 52  ? rand_lteq(rng, UInt52Raw(), m % UInt64, mask % UInt64) % UInt128 :
+        bw <= 104 ? rand_lteq(rng, UInt104Raw(), m, mask) :
+                    rand_lteq(rng, Val(UInt128), m, mask)
     x % T + a
 end
 

@@ -25,6 +25,43 @@ export srand,
 
 abstract type AbstractRNG end
 
+### integers
+
+# we define types which encode the generation of a specific number of bits
+# the "raw" version means that the unused bits are not zeroed
+
+abstract type UniformBits{T<:BitInteger} end
+
+struct UInt10{T}    <: UniformBits{T} end
+struct UInt10Raw{T} <: UniformBits{T} end
+
+struct UInt23{T}    <: UniformBits{T} end
+struct UInt23Raw{T} <: UniformBits{T} end
+
+struct UInt52{T}    <: UniformBits{T} end
+struct UInt52Raw{T} <: UniformBits{T} end
+
+struct UInt104{T}    <: UniformBits{T} end
+struct UInt104Raw{T} <: UniformBits{T} end
+
+struct UInt2x52{T}    <: UniformBits{T} end
+struct UInt2x52Raw{T} <: UniformBits{T} end
+
+uint_sup(::Type{<:Union{UInt10,UInt10Raw}}) = UInt16
+uint_sup(::Type{<:Union{UInt23,UInt23Raw}}) = UInt32
+uint_sup(::Type{<:Union{UInt52,UInt52Raw}}) = UInt64
+uint_sup(::Type{<:Union{UInt104,UInt104Raw}}) = UInt128
+uint_sup(::Type{<:Union{UInt2x52,UInt2x52Raw}}) = UInt128
+
+for UI = (:UInt10, :UInt10Raw, :UInt23, :UInt23Raw, :UInt52, :UInt52Raw,
+          :UInt104, :UInt104Raw, :UInt2x52, :UInt2x52Raw)
+    @eval begin
+        $UI(::Type{T}=uint_sup($UI)) where {T} = $UI{T}()
+        # useful for defining rand generically:
+        uint_default(::$UI) = $UI{uint_sup($UI)}()
+    end
+end
+
 ### floats
 
 abstract type FloatInterval{T<:AbstractFloat} end
