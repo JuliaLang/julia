@@ -7,19 +7,19 @@ export VersionWeight
 # The numeric type used to determine how the different
 # versions of a package should be weighed
 struct VersionWeight
-    major::Int
-    minor::Int
-    patch::Int
+    major::Int64
+    minor::Int64
+    patch::Int64
 end
-VersionWeight(major::Int, minor::Int) = VersionWeight(major, minor, 0)
-VersionWeight(major::Int) = VersionWeight(major, 0)
+VersionWeight(major::Integer, minor::Integer) = VersionWeight(major, minor, 0)
+VersionWeight(major::Integer) = VersionWeight(major, 0)
 VersionWeight() = VersionWeight(0)
 
 Base.convert(::Type{VersionWeight}, vn::VersionNumber) = VersionWeight(vn.major, vn.minor, vn.patch)
 
 Base.zero(::Type{VersionWeight}) = VersionWeight()
 
-Base.typemin(::Type{VersionWeight}) = (x=typemin(Int); VersionWeight(x, x, x))
+Base.typemin(::Type{VersionWeight}) = (x=typemin(Int64); VersionWeight(x, x, x))
 
 Base.:(-)(a::VersionWeight, b::VersionWeight) =
     VersionWeight(a.major-b.major, a.minor-b.minor, a.patch-b.patch)

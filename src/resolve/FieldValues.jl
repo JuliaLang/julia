@@ -6,7 +6,7 @@ using ...VersionWeights
 
 export FieldValue, Field, validmax, secondmax
 
-# FieldValue is a hierarchical numeric type with 6 levels.
+# FieldValue is a hierarchical numeric type with 5 levels.
 # When summing two FieldValues, the levels are summed independently.
 # When comparing them, lower levels take precedence.
 # The levels are used as such:
@@ -16,22 +16,19 @@ export FieldValue, Field, validmax, secondmax
 #  l2 : for favoring higher versions of all other packages
 #  l3 : for favoring uninstallation of non-needed packages
 #  l4 : for favoring dependants over dependencies
-#  l5 : for symmetry-breaking random noise
 #
 struct FieldValue
-    l0::Int
+    l0::Int64
     l1::VersionWeight
     l2::VersionWeight
-    l3::Int
-    l4::Int
-    l5::Int128
+    l3::Int64
+    l4::Int64
+    FieldValue(l0::Integer = 0,
+               l1::VersionWeight = zero(VersionWeight),
+               l2::VersionWeight = zero(VersionWeight),
+               l3::Integer = 0,
+               l4::Integer = 0) = new(l0, l1, l2, l3, l4)
 end
-FieldValue(l0::Integer, l1::VersionWeight, l2::VersionWeight, l3::Integer, l4::Integer) = FieldValue(l0, l1, l2, l3, l4, Int128(0))
-FieldValue(l0::Integer, l1::VersionWeight, l2::VersionWeight, l3::Integer) = FieldValue(l0, l1, l2, l3, 0)
-FieldValue(l0::Integer, l1::VersionWeight, l2::VersionWeight) = FieldValue(l0, l1, l2, 0)
-FieldValue(l0::Integer, l1::VersionWeight) = FieldValue(l0, l1, zero(VersionWeight))
-FieldValue(l0::Integer) = FieldValue(l0, zero(VersionWeight))
-FieldValue() = FieldValue(0)
 
 # This isn't nice, but it's for debugging only anyway
 function Base.show(io::IO, a::FieldValue)
@@ -44,8 +41,6 @@ function Base.show(io::IO, a::FieldValue)
     print(io, ".", a.l3)
     a == FieldValue(a.l0, a.l1, a.l2, a.l3) && return
     print(io, ".", a.l4)
-    a == FieldValue(a.l0, a.l1, a.l2, a.l3, a.l4) && return
-    print(io, ".", a.l5)
     return
 end
 
@@ -53,10 +48,10 @@ const Field = Vector{FieldValue}
 
 Base.zero(::Type{FieldValue}) = FieldValue()
 
-Base.typemin(::Type{FieldValue}) = (x=typemin(Int); y=typemin(VersionWeight); FieldValue(x, y, y, x, x, typemin(Int128)))
+Base.typemin(::Type{FieldValue}) = (x=typemin(Int64); y=typemin(VersionWeight); FieldValue(x, y, y, x, x))
 
-Base.:-(a::FieldValue, b::FieldValue) = FieldValue(a.l0-b.l0, a.l1-b.l1, a.l2-b.l2, a.l3-b.l3, a.l4-b.l4, a.l5-b.l5)
-Base.:+(a::FieldValue, b::FieldValue) = FieldValue(a.l0+b.l0, a.l1+b.l1, a.l2+b.l2, a.l3+b.l3, a.l4+b.l4, a.l5+b.l5)
+Base.:-(a::FieldValue, b::FieldValue) = FieldValue(a.l0-b.l0, a.l1-b.l1, a.l2-b.l2, a.l3-b.l3, a.l4-b.l4)
+Base.:+(a::FieldValue, b::FieldValue) = FieldValue(a.l0+b.l0, a.l1+b.l1, a.l2+b.l2, a.l3+b.l3, a.l4+b.l4)
 
 function Base.isless(a::FieldValue, b::FieldValue)
     a.l0 < b.l0 && return true
@@ -70,17 +65,15 @@ function Base.isless(a::FieldValue, b::FieldValue)
     a.l3 < b.l3 && return true
     a.l3 > b.l3 && return false
     a.l4 < b.l4 && return true
-    a.l4 > b.l4 && return false
-    a.l5 < b.l5 && return true
     return false
 end
 
 Base.:(==)(a::FieldValue, b::FieldValue) =
-    a.l0 == b.l0 && a.l1 == b.l1 && a.l2 == b.l2 && a.l3 == b.l3 && a.l4 == b.l4 && a.l5 == b.l5
+    a.l0 == b.l0 && a.l1 == b.l1 && a.l2 == b.l2 && a.l3 == b.l3 && a.l4 == b.l4
 
-Base.abs(a::FieldValue) = FieldValue(abs(a.l0), abs(a.l1), abs(a.l2), abs(a.l3), abs(a.l4), abs(a.l5))
+Base.abs(a::FieldValue) = FieldValue(abs(a.l0), abs(a.l1), abs(a.l2), abs(a.l3), abs(a.l4))
 
-Base.copy(a::FieldValue) = FieldValue(a.l0, copy(a.l1), copy(a.l2), a.l3, a.l4, a.l5)
+Base.copy(a::FieldValue) = FieldValue(a.l0, copy(a.l1), copy(a.l2), a.l3, a.l4)
 
 # if the maximum field has l0 < 0, it means that
 # some hard constraint is being violated
