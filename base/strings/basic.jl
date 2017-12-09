@@ -30,7 +30,7 @@ indexing functions include those intended for index arithmetic: `thisind`,
 bounds indices as intermediate values so long as one never uses them to retrieve
 a character, which often helps avoid needing to code around edge cases.
 
-See also: `codeunit`, `ncodeunits`, `thisind`, `nextind`, `prevind`
+See also: [`codeunit`](@ref), [`ncodeunits`](@ref), [`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
 """
 AbstractString
 
@@ -44,7 +44,7 @@ access this string must satisfy `1 ≤ i ≤ ncodeunits(s)`. Not all such indic
 are valid – they may not be the start of a character, but they will return a
 code unit value when calling `codeunit(s,i)`.
 
-See also: `codeunit`, `checkbounds`, `sizeof`, `length`, `endof`
+See also: [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref), [`length`](@ref), [`endof`](@ref)
 """
 ncodeunits(s::AbstractString)
 
@@ -58,7 +58,7 @@ limited to these three types, but it's hard to think of widely used string
 encodings that don't use one of these units. `codeunit(s)` is the same as
 `typeof(codeunit(s,1))` when `s` is a non-empty string.
 
-See also: `ncodeunits`
+See also: [`ncodeunits`](@ref)
 """
 codeunit(s::AbstractString)
 
@@ -72,7 +72,7 @@ Return the code unit value in the string `s` at index `i`. Note that
 I.e. the value returned by `codeunit(s, i)` is of the type returned by
 `codeunit(s)`.
 
-See also: `ncodeunits`, `checkbounds`
+See also: [`ncodeunits`](@ref), [`checkbounds`](@ref)
 """
 codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
     throw(MethodError(codeunit, Tuple{typeof(s),Int})) :
@@ -90,7 +90,7 @@ In order for `isvalid(s, i)` to be an O(1) function, the encoding of `s` must
 be [self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code);
 this is a basic assumption of Julia's generic string support.
 
-See also: `getindex`, `next`, `thisind`, `nextind`, `prevind`, `length`
+See also: [`getindex`](@ref), [`next`](@ref), [`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref), [`length`](@ref)
 
 # Examples
 
@@ -125,7 +125,7 @@ be iterated, yielding a sequences of characters. If `i` is out of bounds in `s`
 then a bounds error is raised; if `i` is not a valid character index in `s` then
 a Unicode index error is raised.
 
-See also: `getindex`, `start`, `done`, `checkbounds`
+See also: [`getindex`](@ref), [`start`](@ref), [`done`](@ref), [`checkbounds`](@ref)
 """
 next(s::AbstractString, i::Integer) = typeof(i) === Int ?
     throw(MethodError(next, Tuple{typeof(s),Int})) :
@@ -303,7 +303,7 @@ number of characters in the entire string. If `lo` or `hi` are out of ranges
 each out of range code unit is considered to be one character. This matches the
 "loose" indexing model of `thisind`, `nextind` and `prevind`.
 
-See also: `isvalid`, `ncodeunits`, `endof`, `thisind`, `nextind`, `prevind`
+See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`endof`](@ref), [`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
 
 # Examples
 ```jldoctest

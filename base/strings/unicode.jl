@@ -710,7 +710,8 @@ Return `s` with the first character converted to uppercase (technically "title
 case" for Unicode). See also [`titlecase`](@ref) to capitalize the first
 character of every word in `s`.
 
-See also: `lcfirst`, `uppercase`, `lowercase`, `titlecase`
+See also: [`lcfirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
+[`titlecase`](@ref)
 
 # Examples
 ```jldoctest
@@ -731,7 +732,8 @@ end
 
 Return `s` with the first character converted to lowercase.
 
-See also: `ucfirst`, `uppercase`, `lowercase`, `titlecase`
+See also: [`ucfirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
+[`titlecase`](@ref)
 
 # Examples
 ```jldoctest
