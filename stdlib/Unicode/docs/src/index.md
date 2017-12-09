@@ -1,8 +1,8 @@
 # Unicode
 
 ```@docs
-Unicode.is_assigned_char
-Unicode.normalize_string
+Unicode.isassigned
+Unicode.normalize
 Unicode.graphemes
 Unicode.uppercase
 Unicode.lowercase
@@ -16,7 +16,7 @@ Unicode.iscntrl
 Unicode.isdigit
 Unicode.isgraph
 Unicode.islower
-Unicode.isnumber
+Unicode.isnumeric
 Unicode.isprint
 Unicode.ispunct
 Unicode.isspace

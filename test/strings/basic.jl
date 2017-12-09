@@ -278,7 +278,7 @@ end
     for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, Float64, Float32]
         @test isnull(tryparse(T, "1\0"))
     end
-    let s = Base.Unicode.normalize_string("tést",:NFKC)
+    let s = Base.Unicode.normalize("tést",:NFKC)
         @test unsafe_string(Base.unsafe_convert(Cstring, Base.cconvert(Cstring, s))) == s
         @test unsafe_string(convert(Cstring, Symbol(s))) == s
     end

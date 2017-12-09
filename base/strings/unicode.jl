@@ -148,7 +148,7 @@ end
 
 utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(String(s), flags)
 
-function normalize_string(s::AbstractString; stable::Bool=false, compat::Bool=false, compose::Bool=true, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
+function normalize(s::AbstractString; stable::Bool=false, compat::Bool=false, compose::Bool=true, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
     flags = 0
     stable && (flags = flags | UTF8PROC_STABLE)
     compat && (flags = flags | UTF8PROC_COMPAT)
@@ -173,7 +173,7 @@ function normalize_string(s::AbstractString; stable::Bool=false, compat::Bool=fa
 end
 
 """
-    normalize_string(s::AbstractString, normalform::Symbol)
+    Unicode.normalize(s::AbstractString, normalform::Symbol)
 
 Normalize the string `s` according to one of the four "normal forms" of the Unicode
 standard: `normalform` can be `:NFC`, `:NFD`, `:NFKC`, or `:NFKD`.  Normal forms C
@@ -185,7 +185,7 @@ canonical choice (e.g. they expand ligatures into the individual characters), wi
 being more compact.
 
 Alternatively, finer control and additional transformations may be be obtained by calling
-`normalize_string(s; keywords...)`, where any number of the following boolean keywords
+`Unicode.normalize(s; keywords...)`, where any number of the following boolean keywords
 options (which all default to `false` except for `compose`) are specified:
 
 * `compose=false`: do not perform canonical composition
@@ -211,17 +211,17 @@ For example, NFKC corresponds to the options `compose=true, compat=true, stable=
 ```jldoctest
 julia> using Unicode
 
-julia> "μ" == normalize_string("µ", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5
+julia> "μ" == normalize("µ", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5
 true
 
-julia> normalize_string("JuLiA", casefold=true)
+julia> normalize("JuLiA", casefold=true)
 "julia"
 
-julia> normalize_string("JúLiA", stripmark=true)
+julia> normalize("JúLiA", stripmark=true)
 "JuLiA"
 ```
 """
-function normalize_string(s::AbstractString, nf::Symbol)
+function normalize(s::AbstractString, nf::Symbol)
     utf8proc_map(s, nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
                     nf == :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
                     nf == :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
@@ -281,7 +281,7 @@ category_abbrev(c) = unsafe_string(ccall(:utf8proc_category_string, Cstring, (UI
 category_string(c) = category_strings[category_code(c)+1]
 
 """
-    is_assigned_char(c) -> Bool
+    Unicode.isassigned(c) -> Bool
 
 Returns `true` if the given char or integer is an assigned Unicode code point.
 
@@ -289,14 +289,14 @@ Returns `true` if the given char or integer is an assigned Unicode code point.
 ```jldoctest
 julia> using Unicode
 
-julia> is_assigned_char(101)
+julia> isassigned(101)
 true
 
-julia> is_assigned_char('\\x01')
+julia> isassigned('\\x01')
 true
 ```
 """
-is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
+isassigned(c) = category_code(c) != UTF8PROC_CATEGORY_CN
 
 ## libc character class predicates ##
 
@@ -354,7 +354,7 @@ end
 """
     isdigit(c::Char) -> Bool
 
-Tests whether a character is a numeric digit (0-9).
+Tests whether a character is a decimal digit (0-9).
 
 # Examples
 ```jldoctest
@@ -396,27 +396,33 @@ false
 isalpha(c::Char)  = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO)
 
 """
-    isnumber(c::Char) -> Bool
+    isnumeric(c::Char) -> Bool
 
 Tests whether a character is numeric.
 A character is classified as numeric if it belongs to the Unicode general category Number,
 i.e. a character whose category code begins with 'N'.
 
+Note that this broad category includes characters such as ¾ and ௰.
+Use [`isdigit`](@ref) to check whether a character a decimal digit between 0 and 9.
+
 # Examples
 ```jldoctest
 julia> using Unicode
 
-julia> isnumber('9')
+julia> isnumeric('௰')
 true
 
-julia> isnumber('α')
+julia> isnumeric('9')
+true
+
+julia> isnumeric('α')
 false
 
-julia> isnumber('❤')
+julia> isnumeric('❤')
 false
 ```
 """
-isnumber(c::Char) = (UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO)
+isnumeric(c::Char) = (UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO)
 
 """
     isalnum(c::Char) -> Bool
