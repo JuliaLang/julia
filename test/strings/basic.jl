@@ -99,14 +99,14 @@ end
 end
 
 @testset "issue #7248" begin
-    @test_throws BoundsError ind2chr("hello", -1)
-    @test_throws BoundsError chr2ind("hello", -1)
-    @test_throws BoundsError ind2chr("hellø", -1)
-    @test_throws BoundsError chr2ind("hellø", -1)
-    @test_throws BoundsError ind2chr("hello", 10)
-    @test_throws BoundsError chr2ind("hello", 10)
-    @test_throws BoundsError ind2chr("hellø", 10)
-    @test_throws BoundsError chr2ind("hellø", 10)
+    @test ind2chr("hello", -1) == -1
+    @test chr2ind("hello", -1) == -1
+    @test ind2chr("hellø", -1) == -1
+    @test chr2ind("hellø", -1) == -1
+    @test ind2chr("hello", 10) == 10
+    @test chr2ind("hello", 10) == 10
+    @test ind2chr("hellø", 10) == 9
+    @test chr2ind("hellø", 10) == 11
     @test_throws BoundsError checkbounds("hello", 0)
     @test_throws BoundsError checkbounds("hello", 6)
     @test_throws BoundsError checkbounds("hello", 0:3)
@@ -127,7 +127,6 @@ end
     @test SubString("hellø", 1, 5)[10:9] == ""
     @test SubString("hellø", 1, 0)[10:9] == ""
     @test SubString("", 1, 0)[10:9] == ""
-
     @test_throws BoundsError SubString("", 1, 6)
     @test_throws BoundsError SubString("", 1, 1)
 end
@@ -143,8 +142,8 @@ end
     @test get(utf8_str, -1, 'X') == 'X'
     @test get(utf8_str, 1000, 'X') == 'X'
 
-    # Test that indexing into the middle of a character returns the default
-    @test get(utf8_str, 2, 'X') == 'X'
+    # Test that indexing into the middle of a character throws
+    @test_throws UnicodeError get(utf8_str, 2, 'X')
 end
 
 #=
@@ -172,8 +171,10 @@ end
 
 # make sure substrings do not accept code unit if it is not start of codepoint
 let s = "x\u0302"
+    @test s[1:2] == s
+    @test_throws BoundsError s[0:3]
+    @test_throws BoundsError s[1:4]
     @test_throws UnicodeError s[1:3]
-    @test s[1:2]==s
 end
 
 @testset "issue #9781" begin
@@ -204,8 +205,15 @@ struct tstStringType <: AbstractString
 end
 @testset "AbstractString functions" begin
     tstr = tstStringType(Vector{UInt8}("12"))
-    @test_throws ErrorException endof(tstr)
-    @test_throws ErrorException next(tstr, Bool(1))
+    @test_throws MethodError ncodeunits(tstr)
+    @test_throws MethodError codeunit(tstr)
+    @test_throws MethodError codeunit(tstr, 1)
+    @test_throws MethodError codeunit(tstr, true)
+    @test_throws MethodError isvalid(tstr, 1)
+    @test_throws MethodError isvalid(tstr, true)
+    @test_throws MethodError next(tstr, 1)
+    @test_throws MethodError next(tstr, true)
+    @test_throws MethodError endof(tstr)
 
     gstr = GenericString("12")
     @test string(gstr) isa GenericString
@@ -224,18 +232,19 @@ end
     @test done(eachindex("foobar"),7)
     @test eltype(Base.EachStringIndex) == Int
     @test map(uppercase, "foó") == "FOÓ"
-    @test chr2ind("fóobar",3) == 4
+    @test chr2ind("fóobar", 3) == 4
 
-    @test Symbol(gstr)==Symbol("12")
+    @test Symbol(gstr) == Symbol("12")
 
-    @test_throws ErrorException sizeof(gstr)
-
-    @test length(GenericString(""))==0
+    @test sizeof(gstr) == 2
+    @test ncodeunits(gstr) == 2
+    @test length(gstr) == 2
+    @test length(GenericString("")) == 0
 
     @test nextind(1:1, 1) == 2
     @test nextind([1], 1) == 2
 
-    @test ind2chr(gstr,2)==2
+    @test ind2chr(gstr, 2) == 2
 
     # tests promote_rule
     let svec = [s"12", GenericString("12"), SubString("123", 1, 2)]
@@ -463,8 +472,8 @@ end
     foobar(ch) = Char(0xd800)
     foobaz(ch) = reinterpret(Char, typemax(UInt32))
     @test_throws ArgumentError map(foomap, GenericString(str))
-    @test map(foobar, GenericString(str)) == String(repeat(b"\ud800", outer=[17]))
-    @test map(foobaz, GenericString(str)) == String(repeat(b"\ufffd", outer=[17]))
+    @test map(foobar, GenericString(str)) == String(repeat(b"\ud800", outer=[length(str)]))
+    @test map(foobaz, GenericString(str)) == String(repeat([0xff], outer=[4*length(str)]))
 
     @test "a".*["b","c"] == ["ab","ac"]
     @test ["b","c"].*"a" == ["ba","ca"]
@@ -488,7 +497,7 @@ end
     @test_throws ArgumentError ascii(GenericString("Hello, ∀"))
 end
 @testset "issue #17271: endof() doesn't throw an error even with invalid strings" begin
-    @test endof(String(b"\x90")) == 0
+    @test endof(String(b"\x90")) == 1
     @test endof(String(b"\xce")) == 1
 end
 # issue #17624, missing getindex method for String
@@ -570,7 +579,7 @@ end
                    SubString("123∀α>β:α+1>β123", 4, 18),
                    SubString(s"123∀α>β:α+1>β123", 4, 18)]
         for s in strs
-            @test thisind(s, -2) == 0
+            @test thisind(s, -2) == -2
             @test thisind(s, 0) == 0
             @test thisind(s, 1) == 1
             @test thisind(s, 2) == 1
@@ -581,13 +590,13 @@ end
             @test thisind(s, 15) == 15
             @test thisind(s, 16) == 15
             @test thisind(s, 17) == 17
-            @test thisind(s, 30) == 17
+            @test thisind(s, 30) == 30
         end
     end
 
     let strs = Any["", s"", SubString("123", 2, 1), SubString(s"123", 2, 1)]
         for s in strs, i in -2:2
-            @test thisind(s, i) == (i > 0)
+            @test thisind(s, i) == i
         end
     end
 end
@@ -612,17 +621,18 @@ end
             @test prevind(strs[i], 15, 4) == 10
             @test prevind(strs[i], 15, 10) == 0
             @test prevind(strs[i], 15, 9) == 1
-            @test prevind(strs[i], 15, 10) == 0
             @test prevind(strs[i], 16) == 15
             @test prevind(strs[i], 16, 1) == 15
             @test prevind(strs[i], 16, 2) == 14
-            @test prevind(strs[i], 20) == 15
-            @test prevind(strs[i], 20, 1) == 15
-            @test prevind(strs[i], 20, 10) == 1
-            @test_throws ArgumentError prevind(strs[i], 20, 0)
+            @test prevind(strs[i], 20) == 19
+            @test prevind(strs[i], 20, 1) == 19
+            @test prevind(strs[i], 20, 10) == 7
+            @test prevind(strs[i], 20, 0) == 20
 
-            @test nextind(strs[i], -1) == 1
-            @test nextind(strs[i], -1, 1) == 1
+            @test nextind(strs[i], -1) == 0
+            @test nextind(strs[i], -1, 1) == 0
+            @test nextind(strs[i], -1, 2) == 1
+            @test nextind(strs[i], -1, 3) == 4
             @test nextind(strs[i], 0, 2) == 4
             @test nextind(strs[i], 0, 20) == 26
             @test nextind(strs[i], 0, 10) == 15
@@ -643,7 +653,7 @@ end
             @test nextind(strs[i], 15, 1) == 17
             @test nextind(strs[i], 20) == 21
             @test nextind(strs[i], 20, 1) == 21
-            @test_throws ArgumentError nextind(strs[i], 20, 0)
+            @test nextind(strs[i], 20, 0) == 20
 
             for x in -10:20
                 n = p = x
@@ -658,8 +668,8 @@ end
         @test prevind(strs[1], -1) == -2
         @test prevind(strs[1], -1, 1) == -2
 
-        @test prevind(strs[2], -1) == 0
-        @test prevind(strs[2], -1, 1) == 0
+        @test prevind(strs[2], -1) == -2
+        @test prevind(strs[2], -1, 1) == -2
     end
 end
 
@@ -672,7 +682,7 @@ end
     @test first(s, 3) == "∀ϵ≠"
     @test first(s, 4) == "∀ϵ≠0"
     @test first(s, length(s)) == s
-    @test_throws BoundsError first(s, length(s)+1)
+    @test first(s, length(s)+1) == s
     @test_throws ArgumentError last(s, -1)
     @test last(s, 0) == ""
     @test last(s, 1) == "0"
@@ -680,21 +690,13 @@ end
     @test last(s, 3) == "²>0"
     @test last(s, 4) == "ϵ²>0"
     @test last(s, length(s)) == s
-    @test_throws BoundsError last(s, length(s)+1)
+    @test last(s, length(s)+1) == s
 end
 
 @testset "invalid code point" begin
     s = String([0x61, 0xba, 0x41])
     @test !isvalid(s)
-    @test_throws UnicodeError s[2]
-    e = try
-        s[2]
-    catch e
-        e
-    end
-    b = IOBuffer()
-    show(b, e)
-    @test String(take!(b)) == "UnicodeError: invalid character index 2 (0xba is a continuation byte)"
+    @test s[2] == reinterpret(Char, UInt32(0xba) << 24)
 end
 
 @testset "ncodeunits" begin

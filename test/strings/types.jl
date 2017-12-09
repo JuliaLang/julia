@@ -32,12 +32,21 @@ for idx in 0:1
 end
 
 # Substring provided with invalid end index throws BoundsError
-@test_throws BoundsError SubString("∀", 1, 2)
-@test_throws BoundsError SubString("∀", 1, 3)
+@test_throws UnicodeError SubString("∀", 1, 2)
+@test_throws UnicodeError SubString("∀", 1, 3)
 @test_throws BoundsError SubString("∀", 1, 4)
 
 # Substring provided with invalid start index throws BoundsError
-@test_throws BoundsError SubString("∀∀", 2:4)
+@test SubString("∀∀", 1:1) == "∀"
+@test SubString("∀∀", 1:4) == "∀∀"
+@test SubString("∀∀", 4:4) == "∀"
+@test_throws UnicodeError SubString("∀∀", 1:2)
+@test_throws UnicodeError SubString("∀∀", 1:5)
+@test_throws UnicodeError SubString("∀∀", 2:4)
+@test_throws BoundsError SubString("∀∀", 0:1)
+@test_throws BoundsError SubString("∀∀", 0:4)
+@test_throws BoundsError SubString("∀∀", 1:7)
+@test_throws BoundsError SubString("∀∀", 4:7)
 
 # tests for SubString of more than one multibyte `Char` string
 # we are consistent with `getindex` for `String`
@@ -46,10 +55,12 @@ for idx in [0, 1, 4]
     @test SubString("∀∀", 4, idx) == "∀∀"[4:idx]
 end
 
-# second index beyond endof("∀∀")
-for idx in 5:8
+# index beyond endof("∀∀")
+for idx in [2:3; 5:6]
+    @test_throws UnicodeError SubString("∀∀", 1, idx)
+end
+for idx in 7:8
     @test_throws BoundsError SubString("∀∀", 1, idx)
-    @test_throws BoundsError SubString("∀∀", 4, idx)
 end
 
 let str="tempus fugit"              #length(str)==12
@@ -65,13 +76,13 @@ let str="tempus fugit"              #length(str)==12
     ss=SubString(str,1:0)
     @test length(ss)==0
 
-    @test_throws BoundsError SubString(str,14,20)  #start indexing beyond source string length
-    @test_throws BoundsError SubString(str,10,16)  #end indexing beyond source string length
+    @test_throws BoundsError SubString(str, 14, 20)  #start indexing beyond source string length
+    @test_throws BoundsError SubString(str, 10, 16)  #end indexing beyond source string length
 
     @test_throws BoundsError SubString("", 1, 4)  #empty source string
     @test_throws BoundsError SubString("", 1, 1)  #empty source string, identical start and end index
     @test_throws BoundsError SubString("", 10, 12)
-    @test SubString("",12,10) == ""
+    @test SubString("", 12, 10) == ""
 end
 
 @test SubString("foobar", big(1), big(3)) == "foo"
@@ -83,7 +94,7 @@ let str = "aa\u2200\u2222bb"
     write(b, u)
     @test String(take!(b)) == "\u2200\u2222"
 
-    @test_throws BoundsError SubString(str, 4, 5)
+    @test_throws UnicodeError SubString(str, 4, 5)
     @test_throws BoundsError next(u, 0)
     @test_throws BoundsError next(u, 7)
     @test_throws BoundsError getindex(u, 0)
@@ -147,64 +158,69 @@ end
 @test ismatch(Regex(""), SubString("",1,0))
 
 # isvalid(), chr2ind() and ind2chr() for SubString{String}
-let ss, s="lorem ipsum",
-    sdict=Dict(SubString(s,1,11)=>s,
-               SubString(s,1,6)=>"lorem ",
-               SubString(s,1,0)=>"",
-               SubString(s,2,4)=>"ore",
-               SubString(s,2,11)=>"orem ipsum",
-               SubString(s,15,14)=>""
-               )
-    for (ss,s) in sdict
-        local ss
-        for i in -1:12
-            @test isvalid(ss,i)==isvalid(s,i)
-        end
-    end
-    for (ss,s) in sdict
-        local ss
-        for i in 1:length(ss)
-            @test ind2chr(ss,i)==ind2chr(s,i)
-        end
-    end
-    for (ss,s) in sdict
-        local ss
-        for i in 1:length(ss)
-            @test chr2ind(ss,i)==chr2ind(s,i)
-        end
-    end
-end #let
-
-#for isvalid(SubString{String})
-let s = "Σx + βz - 2"
-    for i in -1:(length(s)+2)
-        if isvalid(s, i)
-            ss=SubString(s,1,i)
-            # make sure isvalid gives equivalent results for SubString and String
-            @test isvalid(ss,i)==isvalid(s,i)
-        else
-            if i > 0
-                @test_throws BoundsError SubString(s,1,i)
+let s = "lorem ipsum", sdict = Dict(
+    SubString(s, 1, 11)  => "lorem ipsum",
+    SubString(s, 1, 6)   => "lorem ",
+    SubString(s, 1, 0)   => "",
+    SubString(s, 2, 4)   => "ore",
+    SubString(s, 2, 11)  => "orem ipsum",
+    SubString(s, 15, 14) => "",
+)
+    for (ss, s) in sdict
+        @test ncodeunits(ss) == ncodeunits(s)
+        for i in -2:13
+            if 1 ≤ i ≤ ncodeunits(ss)
+                @test isvalid(ss, i) == isvalid(s, i)
             else
-                @test SubString(s,1,i) == ""
+                @test_throws BoundsError isvalid(ss, i)
+                @test_throws BoundsError isvalid(s, i)
             end
+        end
+        for i in 1:ncodeunits(ss)
+            @test ind2chr(ss, i) == ind2chr(s, i)
+        end
+    end
+    for (ss, s) in sdict
+        @test length(ss) == length(s)
+        for i in 1:length(ss)
+            @test chr2ind(ss, i) == chr2ind(s, i)
         end
     end
 end
 
-let ss=SubString("hello",1,5)
-    @test_throws BoundsError ind2chr(ss, -1)
-    @test_throws BoundsError chr2ind(ss, -1)
-    @test_throws BoundsError chr2ind(ss, 10)
-    @test_throws BoundsError ind2chr(ss, 10)
+# for isvalid(SubString{String})
+let s = "Σx + βz - 2"
+    for i in -1:ncodeunits(s)+2
+        if checkbounds(Bool, s, i)
+            if isvalid(s, i)
+                ss = SubString(s, 1, i)
+                for j = 1:ncodeunits(ss)
+                    @test isvalid(ss, j) == isvalid(s, j)
+                end
+            else
+                @test_throws UnicodeError SubString(s, 1, i)
+            end
+        elseif i > 0
+            @test_throws BoundsError SubString(s, 1, i)
+        else
+            @test SubString(s, 1, i) == ""
+        end
+    end
+end
+
+let ss = SubString("hello", 1, 5)
+    @test ind2chr(ss, -1) == -1
+    @test chr2ind(ss, -1) == -1
+    @test chr2ind(ss, 10) == 10
+    @test ind2chr(ss, 10) == 10
 end
 
 # length(SubString{String}) performance specialization
 let s = "|η(α)-ϕ(κ)| < ε"
-    @test length(SubString(s,1,0))==length(s[1:0])
-    @test length(SubString(s,4,4))==length(s[4:4])
-    @test length(SubString(s,1,7))==length(s[1:7])
-    @test length(SubString(s,4,11))==length(s[4:11])
+    @test length(SubString(s, 1, 0)) == length(s[1:0])
+    @test length(SubString(s, 4, 4)) == length(s[4:4])
+    @test length(SubString(s, 1, 7)) == length(s[1:7])
+    @test length(SubString(s, 4, 11)) == length(s[4:11])
 end
 
 @testset "reverseind" for T in (String, SubString, GenericString)
@@ -217,7 +233,8 @@ end
                 @test c == s[reverseind(s, ri)] == r[ri]
                 s = convert(T, string(prefix, prefix, c, suffix, suffix))
                 pre = convert(T, prefix)
-                sb = SubString(s, nextind(pre, endof(pre)), endof(convert(T, string(prefix, prefix, c, suffix))))
+                sb = SubString(s, nextind(pre, endof(pre)),
+                               endof(convert(T, string(prefix, prefix, c, suffix))))
                 r = reverse(sb)
                 ri = search(r, c)
                 @test c == sb[reverseind(sb, ri)] == r[ri]

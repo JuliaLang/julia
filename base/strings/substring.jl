@@ -22,13 +22,18 @@ julia> SubString("abc", 2)
 struct SubString{T<:AbstractString} <: AbstractString
     string::T
     offset::Int
-    endof::Int
+    ncodeunits::Int
 
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
-        i > j && return new(s, i - 1, 0) # always allow i > j as it is consistent with getindex
-        isvalid(s, i) || throw(BoundsError(s, i))
-        isvalid(s, j) || throw(BoundsError(s, j))
-        new(s, i-1, j-i+1)
+        i ≤ j || return new(s, i-1, 0)
+        @boundscheck begin
+            checkbounds(s, i:j)
+            @inbounds isvalid(s, i) ||
+                throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s, i)))
+            @inbounds isvalid(s, j) ||
+                throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, codeunit(s, j)))
+        end
+        return new(s, i-1, nextind(s,j)-i)
     end
 end
 
@@ -37,11 +42,8 @@ SubString(s::AbstractString, i::Integer, j::Integer=endof(s)) = SubString(s, Int
 SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
 function SubString(s::SubString, i::Int, j::Int)
-    # always allow i > j as it is consistent with getindex
-    i > j && return SubString(s.string, s.offset + i, s.offset + j)
-    i >= 1 || throw(BoundsError(s, i))
-    j <= endof(s) || throw(BoundsError(s, j))
-    SubString(s.string, s.offset + i, s.offset + j)
+    @boundscheck i ≤ j && checkbounds(s, i:j)
+    SubString(s.string, s.offset+i, s.offset+j)
 end
 
 SubString(s::AbstractString) = SubString(s, 1, endof(s))
@@ -50,77 +52,55 @@ SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, endof(s))
 convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
     SubString(convert(S, s))
 
-String(p::SubString{String}) =
-    unsafe_string(pointer(p.string, p.offset+1), nextind(p, p.endof)-1)
+String(s::SubString{String}) = unsafe_string(pointer(s.string, s.offset+1), s.ncodeunits)
 
-sizeof(s::SubString{String}) = s.endof == 0 ? 0 : nextind(s, s.endof) - 1
+ncodeunits(s::SubString) = s.ncodeunits
+codeunit(s::SubString) = codeunit(s.string)
+length(s::SubString) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
 
-# TODO: length(s::SubString) = ??
-# default implementation will work but it's slow
-# can this be delegated efficiently somehow?
-# that may require additional string interfaces
-function length(s::SubString{String})
-    return s.endof==0 ? 0 : Int(ccall(:u8_charnum, Csize_t, (Ptr{UInt8}, Csize_t),
-                                      pointer(s), nextind(s, s.endof) - 1))
+function codeunit(s::SubString, i::Integer)
+    @boundscheck checkbounds(s, i)
+    @inbounds return codeunit(s.string, s.offset + i)
 end
 
-function next(s::SubString, i::Int)
-    if i < 1 || i > s.endof
-        throw(BoundsError(s, i))
-    end
-    c, i = next(s.string, i+s.offset)
-    c, i-s.offset
+function next(s::SubString, i::Integer)
+    @boundscheck checkbounds(s, i)
+    @inbounds c, i = next(s.string, s.offset + i)
+    return c, i - s.offset
 end
 
-function getindex(s::SubString, i::Int)
-    if i < 1 || i > s.endof
-        throw(BoundsError(s, i))
-    end
-    getindex(s.string, i+s.offset)
+function getindex(s::SubString, i::Integer)
+    @boundscheck checkbounds(s, i)
+    @inbounds return getindex(s.string, s.offset + i)
 end
-
-endof(s::SubString) = s.endof
 
 function isvalid(s::SubString, i::Integer)
-    return (start(s) <= i <= endof(s)) && isvalid(s.string, s.offset+i)
+    @boundscheck checkbounds(s, i)
+    @inbounds return isvalid(s.string, s.offset + i)
 end
 
-function thisind(s::SubString{String}, i::Integer)
-    j = Int(i)
-    j < start(s) && return 0
-    n = ncodeunits(s)
-    j > n && return n + 1
-    offset = s.offset
-    str = s.string
-    j += offset
-    @inbounds while j > offset && is_valid_continuation(codeunit(str, j))
-        j -= 1
-    end
-    j - offset
-end
-
-nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
-prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
-
-function getindex(s::AbstractString, r::UnitRange{Int})
-    checkbounds(s, r) || throw(BoundsError(s, r))
-    SubString(s, first(r), last(r))
-end
+thisind(s::SubString, i::Integer) = thisind(s.string, s.offset + i) - s.offset
+nextind(s::SubString, i::Integer) = nextind(s.string, s.offset + i) - s.offset
+prevind(s::SubString, i::Integer) = prevind(s.string, s.offset + i) - s.offset
 
 function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)
     nb = sizeof(b)
     c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-              pointer(a), pointer(b), min(na,nb))
-    c < 0 ? -1 : c > 0 ? +1 : cmp(na,nb)
+              pointer(a), pointer(b), min(na, nb))
+    return c < 0 ? -1 : c > 0 ? +1 : cmp(na, nb)
 end
 
 # don't make unnecessary copies when passing substrings to C functions
 cconvert(::Type{Ptr{UInt8}}, s::SubString{String}) = s
 cconvert(::Type{Ptr{Int8}}, s::SubString{String}) = s
+
 function unsafe_convert(::Type{Ptr{R}}, s::SubString{String}) where R<:Union{Int8, UInt8}
     convert(Ptr{R}, pointer(s.string)) + s.offset
 end
+
+pointer(x::SubString{String}) = pointer(x.string) + x.offset
+pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)
 
 """
     reverse(s::AbstractString) -> AbstractString
@@ -156,53 +136,3 @@ function reverse(s::Union{String,SubString{String}})::String
         end
     end
 end
-
-"""
-    reverseind(v, i)
-
-Given an index `i` in [`reverse(v)`](@ref), return the corresponding index in `v` so that
-`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in cases where `v` contains
-non-ASCII characters.)
-
-# Examples
-```jldoctest
-julia> r = reverse("Julia")
-"ailuJ"
-
-julia> for i in 1:length(r)
-           print(r[reverseind("Julia", i)])
-       end
-Julia
-```
-"""
-reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
-
-"""
-    repeat(s::AbstractString, r::Integer)
-
-Repeat a string `r` times. This can equivalently be accomplished by calling [`s^r`](@ref ^).
-
-# Examples
-```jldoctest
-julia> repeat("ha", 3)
-"hahaha"
-```
-"""
-repeat(s::AbstractString, r::Integer) = repeat(convert(String, s), r)
-
-"""
-    ^(s::Union{AbstractString,Char}, n::Integer)
-
-Repeat a string or character `n` times.
-The [`repeat`](@ref) function is an alias to this operator.
-
-# Examples
-```jldoctest
-julia> "Test "^3
-"Test Test Test "
-```
-"""
-(^)(s::Union{AbstractString,Char}, r::Integer) = repeat(s,r)
-
-pointer(x::SubString{String}) = pointer(x.string) + x.offset
-pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)

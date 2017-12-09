@@ -58,10 +58,12 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-startswith(a::String, b::String) =
-    (sizeof(a) >= sizeof(b) && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, sizeof(b)) == 0)
-startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
-    (length(a) >= length(b) && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
+# FIXME: check that end of `b` doesn't match a partial character in `a`
+startswith(a::String, b::String) = sizeof(a) ≥ sizeof(b) &&
+    ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, sizeof(b)) == 0
+
+startswith(a::Vector{UInt8}, b::Vector{UInt8}) = length(a) ≥ length(b) &&
+    ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0
 
 # TODO: fast endswith
 
@@ -88,15 +90,9 @@ julia> chop(a, 5, 5)
 ""
 ```
 """
-function chop(s::AbstractString, head::Integer, tail::Integer)
-    # negative values of head/tail will throw error in nextind/prevind
-    headidx = head == 0 ? start(s) : nextind(s, start(s), head)
-    tailidx = tail == 0 ? endof(s) : prevind(s, endof(s), tail)
-    SubString(s, headidx, tailidx)
-end
-
-# no head/tail version left for performance reasons
 chop(s::AbstractString) = SubString(s, start(s), prevind(s, endof(s)))
+chop(s::AbstractString, head::Integer, tail::Integer) =
+    SubString(s, nextind(s, start(s), head), prevind(s, endof(s), tail))
 
 """
     chomp(s::AbstractString)
@@ -126,17 +122,6 @@ function chomp(s::String)
         SubString(s, 1, prevind(s, i-1))
     end
 end
-
-# NOTE: use with caution -- breaks the immutable string convention!
-# TODO: this is hard to provide with the new representation
-#function chomp!(s::String)
-#    if !isempty(s) && codeunit(s,sizeof(s)) == 0x0a
-#        n = (endof(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
-#        ccall(:jl_array_del_end, Void, (Any, UInt), s.data, n)
-#    end
-#    return s
-#end
-chomp!(s::AbstractString) = chomp(s) # copying fallback for other string types
 
 const _default_delims = [' ','\t','\n','\v','\f','\r']
 
@@ -449,6 +434,7 @@ replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int)
 # replace(s::AbstractString, pat, f, count::Integer=typemax(Int)) =
 #     replace(String(s), pat, f, count)
 
+# TODO: allow transform as the first argument to replace?
 
 # hex <-> bytes conversion
 
@@ -550,7 +536,8 @@ end
 # check for pure ASCII-ness
 
 function ascii(s::String)
-    for (i, b) in enumerate(Vector{UInt8}(s))
+    for i = 1:sizeof(s)
+        b = codeunit(s,i)
         b < 0x80 || throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
     end
     return s

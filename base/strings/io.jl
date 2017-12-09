@@ -140,7 +140,7 @@ write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); en
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
 write(to::GenericIOBuffer, s::SubString{String}) =
-    s.endof==0 ? 0 : unsafe_write(to, pointer(s.string, s.offset + 1), UInt(nextind(s, s.endof) - 1))
+    s.ncodeunits ≤ 0 ? 0 : unsafe_write(to, pointer(s.string, s.offset+1), UInt(s.ncodeunits))
 
 ## printing literal quoted string data ##
 
@@ -253,6 +253,8 @@ need_full_hex(s::AbstractString, i::Int) = !done(s,i) && isxdigit(next(s,i)[1])
 escape_nul(s::AbstractString, i::Int) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
+# TODO: handle escaping invalid UTF-8
+
 """
     escape_string(str::AbstractString[, esc::AbstractString]) -> AbstractString
 
@@ -272,15 +274,23 @@ function escape_string(io, s::AbstractString, esc::AbstractString="")
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        c == '\0'       ? print(io, escape_nul(s,j)) :
-        c == '\e'       ? print(io, "\\e") :
-        c == '\\'       ? print(io, "\\\\") :
-        c in esc        ? print(io, '\\', c) :
-        '\a' <= c <= '\r' ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
-        isprint(c)      ? print(io, c) :
-        c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
-        c <= '\uffff'   ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
-                          print(io, "\\U", hex(c, need_full_hex(s,j) ? 8 : 4))
+        if !ismalformed(c)
+            c == '\0'       ? print(io, escape_nul(s,j)) :
+            c == '\e'       ? print(io, "\\e") :
+            c == '\\'       ? print(io, "\\\\") :
+            c in esc        ? print(io, '\\', c) :
+            '\a' <= c <= '\r' ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
+            isprint(c)      ? print(io, c) :
+            c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
+            c <= '\uffff'   ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
+                              print(io, "\\U", hex(c, need_full_hex(s,j) ? 8 : 4))
+        else # malformed
+            u = bswap(reinterpret(UInt32, c))
+            while true
+                print(io, "\\x", hex(u % UInt8, 2))
+                (u >>= 8) == 0 && break
+            end
+        end
         i = j
     end
 end
@@ -291,26 +301,9 @@ function print_quoted(io, s::AbstractString)
     print(io, '"')
 end
 
-# bare minimum unescaping function unescapes only given characters
-
-function print_unescaped_chars(io, s::AbstractString, esc::AbstractString)
-    if !('\\' in esc)
-        esc = string("\\", esc)
-    end
-    i = start(s)
-    while !done(s,i)
-        c, i = next(s,i)
-        if c == '\\' && !done(s,i) && s[i] in esc
-            c, i = next(s,i)
-        end
-        print(io, c)
-    end
-end
-
-unescape_chars(s::AbstractString, esc::AbstractString) =
-    sprint(endof(s), print_unescaped_chars, s, esc)
-
 # general unescaping of traditional C and Unicode escape sequences
+
+# TODO: handle unescaping invalid UTF-8 sequences
 
 """
     unescape_string(str::AbstractString) -> AbstractString
@@ -335,16 +328,16 @@ function unescape_string(io, s::AbstractString)
                 n = k = 0
                 m = c == 'x' ? 2 :
                     c == 'u' ? 4 : 8
-                while (k+=1) <= m && !done(s,i)
+                while (k += 1) <= m && !done(s,i)
                     c, j = next(s,i)
-                    n = '0' <= c <= '9' ? n<<4 + c-'0' :
-                        'a' <= c <= 'f' ? n<<4 + c-'a'+10 :
-                        'A' <= c <= 'F' ? n<<4 + c-'A'+10 : break
+                    n = '0' <= c <= '9' ? n<<4 + (c-'0') :
+                        'a' <= c <= 'f' ? n<<4 + (c-'a'+10) :
+                        'A' <= c <= 'F' ? n<<4 + (c-'A'+10) : break
                     i = j
                 end
                 if k == 1
                     throw(ArgumentError("invalid $(m == 2 ? "hex (\\x)" :
-                                            "unicode (\\u)") escape sequence used in $(repr(s))"))
+                                        "unicode (\\u)") escape sequence used in $(repr(s))"))
                 end
                 if m == 2 # \x escape sequence
                     write(io, UInt8(n))
@@ -354,7 +347,7 @@ function unescape_string(io, s::AbstractString)
             elseif '0' <= c <= '7'
                 k = 1
                 n = c-'0'
-                while (k+=1) <= 3 && !done(s,i)
+                while (k += 1) <= 3 && !done(s,i)
                     c, j = next(s,i)
                     n = ('0' <= c <= '7') ? n<<3 + c-'0' : break
                     i = j
@@ -504,18 +497,7 @@ end
 
 function convert(::Type{String}, chars::AbstractVector{Char})
     sprint(length(chars), io->begin
-        state = start(chars)
-        while !done(chars, state)
-            c, state = next(chars, state)
-            if '\ud7ff' < c && c + 1024 < '\ue000'
-                d, state = next(chars, state)
-                if '\ud7ff' < d - 1024 && d < '\ue000'
-                    c = Char(0x10000 + ((UInt32(c) & 0x03ff) << 10) | (UInt32(d) & 0x03ff))
-                else
-                    write(io, c)
-                    c = d
-                end
-            end
+        for c in chars
             write(io, c)
         end
     end)

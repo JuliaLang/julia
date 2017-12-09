@@ -490,10 +490,21 @@ JL_DLLEXPORT void jl_uv_putb(uv_stream_t *stream, uint8_t b)
     jl_uv_puts(stream, (char*)&b, 1);
 }
 
-JL_DLLEXPORT void jl_uv_putc(uv_stream_t *stream, uint32_t wchar)
+JL_DLLEXPORT void jl_uv_putc(uv_stream_t *stream, uint32_t c)
 {
     char s[4];
-    jl_uv_puts(stream, s, u8_wc_toutf8(s, wchar));
+    int n = 1;
+    s[0] = c >> 24;
+    if ((s[1] = c >> 16)) {
+        n++;
+        if ((s[2] = c >> 8)) {
+            n++;
+            if ((s[3] = c)) {
+                n++;
+            }
+        }
+    }
+    jl_uv_puts(stream, s, n);
 }
 
 extern int vasprintf(char **str, const char *fmt, va_list ap);
