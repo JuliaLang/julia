@@ -140,7 +140,7 @@ repl_corrections(s) = repl_corrections(STDOUT, s)
 const symbols_latex = Dict{String,String}()
 function symbol_latex(s::String)
     if isempty(symbols_latex)
-        for (k,v) in Base.REPLCompletions.latex_symbols
+        for (k,v) in pairs(Base.REPLCompletions.latex_symbols)
             symbols_latex[v] = k
         end
     end

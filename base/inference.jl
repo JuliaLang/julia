@@ -6445,7 +6445,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
         elseif isa(ty, Conditional)
             exprs = []
             vars = []
-            for (t, v) in alltypes
+            for (t, v) in pairs(alltypes)
                 isa(v, SlotNumber) || continue
                 if t ⊑ widenconst(ty.vtype)
                     new_var = newvar!(ctx.sv, Bool)

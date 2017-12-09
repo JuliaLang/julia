@@ -43,7 +43,7 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
         if !show_circular(io, t)
             first = true
             n = 0
-            for pair in t
+            for pair in pairs(t)
                 first || print(io, ',')
                 first = false
                 show(recur_io, pair)
@@ -139,9 +139,12 @@ Dict(ps::Pair{K}...)             where {K}   = Dict{K,Any}(ps)
 Dict(ps::(Pair{K,V} where K)...) where {V}   = Dict{Any,V}(ps)
 Dict(ps::Pair...)                            = Dict{Any,Any}(ps)
 
+pair_or_eltype(x) = eltype(x)
+pair_or_eltype(x::AbstractDict) = pairtype(x)
+
 function Dict(kv)
     try
-        dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
+        dict_with_eltype((K, V) -> Dict{K, V}, kv, pair_or_eltype(kv))
     catch e
         if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
@@ -193,7 +196,7 @@ empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 # conversion between Dict types
 function convert(::Type{Dict{K,V}},d::AbstractDict) where V where K
     h = Dict{K,V}()
-    for (k,v) in d
+    for (k,v) in pairs(d)
         ck = convert(K,k)
         if !haskey(h,ck)
             h[ck] = convert(V,v)
@@ -711,8 +714,8 @@ function start(t::Dict)
     return i
 end
 done(t::Dict, i) = i > length(t.vals)
-@propagate_inbounds function next(t::Dict{K,V}, i) where {K,V}
-    return (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1))
+@propagate_inbounds function next(t::PairIterator{Dict{K,V}}, i) where {K,V}
+    return (Pair{K,V}(t.dict.keys[i],t.dict.vals[i]), skip_deleted(t.dict,i+1))
 end
 
 isempty(t::Dict) = (t.count == 0)
@@ -756,13 +759,14 @@ ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
 ImmutableDict(t::ImmutableDict{K,V}, KV::Pair) where {K,V} = ImmutableDict{K,V}(t, KV[1], KV[2])
 
-function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
+function in(key_value::Pair, dict::PairIterator{<:ImmutableDict}, valcmp=(==))
     key, value = key_value
-    while isdefined(dict, :parent)
-        if dict.key == key
-            valcmp(value, dict.value) && return true
+    d = dict.dict
+    while isdefined(d, :parent)
+        if d.key == key
+            valcmp(value, d.value) && return true
         end
-        dict = dict.parent
+        d = d.parent
     end
     return false
 end
@@ -792,7 +796,7 @@ end
 
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
 start(t::ImmutableDict) = t
-next(::ImmutableDict{K,V}, t) where {K,V} = (Pair{K,V}(t.key, t.value), t.parent)
+next(::PairIterator{ImmutableDict{K,V}}, t) where {K,V} = (Pair{K,V}(t.key, t.value), t.parent)
 done(::ImmutableDict, t) = !isdefined(t, :parent)
 length(t::ImmutableDict) = count(x->true, t)
 isempty(t::ImmutableDict) = done(t, start(t))

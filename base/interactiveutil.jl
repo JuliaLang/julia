@@ -333,13 +333,13 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
     println(io, "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
 
     println(io, "Environment:")
-    for (k,v) in ENV
+    for (k,v) in pairs(ENV)
         if ismatch(r"JULIA", String(k))
             println(io, "  $(k) = $(v)")
         end
     end
     if verbose
-        for (k,v) in ENV
+        for (k,v) in pairs(ENV)
             if ismatch(r"PATH|FLAG|^TERM$|HOME", String(k))
                 println(io, "  $(k) = $(v)")
             end

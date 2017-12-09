@@ -432,7 +432,7 @@ end
 
 function mode_idx(hist::REPLHistoryProvider, mode)
     c = :julia
-    for (k,v) in hist.mode_mapping
+    for (k,v) in pairs(hist.mode_mapping)
         isequal(v, mode) && (c = k)
     end
     return c

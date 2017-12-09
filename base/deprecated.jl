@@ -3376,6 +3376,11 @@ end
 # Associative -> AbstractDict (#25012)
 @deprecate_binding Associative AbstractDict
 
+# PR #25013
+@deprecate eltype(A::Type{AbstractDict{K,V}}) where {K,V} pairtype(A)
+@deprecate next(a::AbstractDict, i) next(pairs(a), i)
+#@deprecate Base.in(p::Pair, a::AbstractDict, valcmp = (==)) Base.in(p, PairIterator(a), valcmp)
+
 # issue #25016
 @deprecate lpad(s, n::Integer, p) lpad(string(s), n, string(p))
 @deprecate rpad(s, n::Integer, p) rpad(string(s), n, string(p))

@@ -77,13 +77,13 @@ end
     h["a","b","c"] = 4
     @test h["a","b","c"] == h[("a","b","c")] == 4
 
-    @testset "eltype, keytype and valtype" begin
-        @test eltype(h) == Pair{Any,Any}
+    @testset "pairtype, keytype and valtype" begin
+        @test pairtype(h) == Pair{Any,Any}
         @test keytype(h) == Any
         @test valtype(h) == Any
 
         td = Dict{AbstractString,Float64}()
-        @test eltype(td) == Pair{AbstractString,Float64}
+        @test pairtype(td) == Pair{AbstractString,Float64}
         @test keytype(td) == AbstractString
         @test valtype(td) == Float64
         @test keytype(Dict{AbstractString,Float64}) === AbstractString
@@ -421,7 +421,7 @@ end
     d = @inferred ObjectIdDict(Pair(1,1), Pair(2,2), Pair(3,3))
     @test isa(d, ObjectIdDict)
     @test d == ObjectIdDict(1=>1, 2=>2, 3=>3)
-    @test eltype(d) == Pair{Any,Any}
+    @test pairtype(d) == Pair{Any,Any}
 end
 
 @testset "Issue #7944" begin
@@ -435,7 +435,8 @@ end
 @testset "iteration" begin
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test [d[k] for k in keys(d)] == [d[k] for k in eachindex(d)] ==
-          [v for (k, v) in d] == [d[x[1]] for (i, x) in enumerate(d)]
+          [v for (k, v) in pairs(d)] == [d[x[1]] for (i, x) in enumerate(d)] ==
+          [v for v in values(d)]
 end
 
 @testset "generators, similar" begin
@@ -496,19 +497,19 @@ import Base.ImmutableDict
     @test collect(d1) == [Pair(k1, v1)]
     @test collect(d4) == reverse([Pair(k1, v1), Pair(k2, v2), Pair(k1, v2), Pair(k2, v1)])
     @test d1 == ImmutableDict(d, k1 => v1)
-    @test !((k1 => v2) in d2)
-    @test (k1 => v2) in d3
-    @test (k1 => v1) in d4
-    @test (k1 => v2) in d4
-    @test in(k2 => "value2", d4, ===)
-    @test in(k2 => v2, d4, ===)
-    @test in(k2 => NaN, dnan, isequal)
-    @test in(k2 => NaN, dnan, ===)
-    @test !in(k2 => NaN, dnan, ==)
-    @test !in(k2 => 1, dnum, ===)
-    @test in(k2 => 1.0, dnum, ===)
-    @test !in(k2 => 1, dnum, <)
-    @test in(k2 => 0, dnum, <)
+    @test !((k1 => v2) in pairs(d2))
+    @test (k1 => v2) in pairs(d3)
+    @test (k1 => v1) in pairs(d4)
+    @test (k1 => v2) in pairs(d4)
+    @test in(k2 => "value2", pairs(d4), ===)
+    @test in(k2 => v2, pairs(d4), ===)
+    @test in(k2 => NaN, pairs(dnan), isequal)
+    @test in(k2 => NaN, pairs(dnan), ===)
+    @test !in(k2 => NaN, pairs(dnan), ==)
+    @test !in(k2 => 1, pairs(dnum), ===)
+    @test in(k2 => 1.0, pairs(dnum), ===)
+    @test !in(k2 => 1, pairs(dnum), <)
+    @test in(k2 => 0, pairs(dnum), <)
     @test get(d1, "key1", :default) === v1
     @test get(d4, "key1", :default) === v2
     @test get(d4, "foo", :default) === :default

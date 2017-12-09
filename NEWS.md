@@ -830,6 +830,10 @@ Deprecated or removed
 
   * `Associative` has been deprecated in favor of `AbstractDict` ([#25012]).
 
+  * Iteration (`next`, `eltype`, `in`, `map`, etc) on `AbstractDict`s has been deprecated.
+    Explicitly nominate `pairs(dict)`, `values(dict)` or `keys(dict)` as appropriate
+    ([#25013]).
+
   * `Nullable{T}` has been deprecated and moved to the Nullables package ([#23642]).
     Use `Union{T, Void}` instead, or `Union{Some{T}, Void}` if `nothing` is a possible value
     (i.e. `Void <: T`). `isnull(x)` can be replaced with `x === nothing`

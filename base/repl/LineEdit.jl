@@ -1235,7 +1235,7 @@ end
 
 function normalize_keys(keymap::Dict)
     ret = Dict{Any,Any}()
-    for (k,v) in keymap
+    for (k,v) in pairs(keymap)
         normalized = normalize_key(k)
         if haskey(ret,normalized)
             error("""Multiple spellings of a key in a single keymap
@@ -1398,7 +1398,7 @@ function postprocess!(dict::Dict)
     if haskey(dict, wildcard)
         add_specialisations(dict, dict, 1)
     end
-    for (k,v) in dict
+    for (k,v) in pairs(dict)
         k == wildcard && continue
         postprocess!(v)
     end
@@ -2181,7 +2181,7 @@ function reset_state(s::PromptState)
 end
 
 function reset_state(s::MIState)
-    for (mode, state) in s.mode_state
+    for (mode, state) in pairs(s.mode_state)
         reset_state(state)
     end
 end
