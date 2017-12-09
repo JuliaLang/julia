@@ -205,7 +205,7 @@ function SVDAugmented(A::AbstractMatrix{T}) where T
     SVDAugmented{Tnew,typeof(Anew)}(Anew)
 end
 
-function Base.A_mul_B!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
+function Base.LinAlg.mul!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
     m, mn = size(A.X, 1), length(x)
     A_mul_B!( view(y, 1:m), A.X, view(x, m + 1:mn)) # left singular vector
     Ac_mul_B!(view(y, m + 1:mn), A.X, view(x, 1:m)) # right singular vector
@@ -225,7 +225,7 @@ function AtA_or_AAt(A::AbstractMatrix{T}) where T
     AtA_or_AAt{Tnew,typeof(Anew)}(Anew, Vector{Tnew}(uninitialized, max(size(A)...)))
 end
 
-function Base.A_mul_B!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
+function Base.LinAlg.mul!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
     if size(A.A, 1) >= size(A.A, 2)
         A_mul_B!(A.buffer, A.A, x)
         return Ac_mul_B!(y, A.A, A.buffer)
@@ -330,5 +330,7 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
                     ex[2], ex[3], ex[4], ex[5])
     end
 end
+
+include("deprecated.jl")
 
 end # module

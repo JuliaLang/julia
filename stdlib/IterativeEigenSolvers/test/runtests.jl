@@ -105,7 +105,7 @@ using Test
     end
 end
 
-# Problematic example from #6965
+# Problematic example from #6965A
 let A6965 = [
          1.0   1.0   1.0   1.0   1.0   1.0   1.0  1.0
         -1.0   2.0   0.0   0.0   0.0   0.0   0.0  1.0
@@ -138,8 +138,7 @@ end
 size(Phi::CPM) = (size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
 issymmetric(Phi::CPM) = false
 ishermitian(Phi::CPM) = false
-import Base: A_mul_B!
-function A_mul_B!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:Base.LinAlg.BlasFloat}
+function Base.LinAlg.mul!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:Base.LinAlg.BlasFloat}
     rho = reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
     rho1 = zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
     for s = 1:size(Phi.kraus,2)
@@ -148,6 +147,8 @@ function A_mul_B!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) wher
     end
     return copy!(rho2,rho1)
 end
+Base.LinAlg.A_mul_B!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:Base.LinAlg.BlasFloat} = Base.LinAlg.mul!(rho2, Phi, rho)
+# after the A_mul_B! deprecation, remove this A_mul_B! def and the import above
 
 let
     # Generate random isometry
