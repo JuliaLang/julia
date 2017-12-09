@@ -288,11 +288,27 @@ read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
 
 Read a string from an I/O stream or a file, up to and including the given delimiter byte.
 The text is assumed to be encoded in UTF-8.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\nIt has many members.\n");
+       end
+57
+
+julia> readuntil("my_file.txt", 'L')
+"JuliaL"
+
+julia> readuntil("my_file.txt", '.')
+"JuliaLang is a GitHub organization."
+
+julia> rm("my_file.txt")
+```
 """
 readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
 
 """
-    readline(stream::IO=STDIN; chomp::Bool=true)
+    readline(io::IO=STDIN; chomp::Bool=true)
     readline(filename::AbstractString; chomp::Bool=true)
 
 Read a single line of text from the given I/O stream or file (defaults to `STDIN`).
@@ -301,6 +317,22 @@ input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `chomp`
 true (as it is by default), these trailing newline characters are removed from the
 line before it is returned. When `chomp` is false, they are returned as part of the
 line.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\nIt has many members.\n");
+       end
+57
+
+julia> readline("my_file.txt")
+"JuliaLang is a GitHub organization."
+
+julia> readline("my_file.txt", chomp=false)
+"JuliaLang is a GitHub organization.\n"
+
+julia> rm("my_file.txt")
+```
 """
 function readline(filename::AbstractString; chomp::Bool=true)
     open(filename) do f
@@ -321,12 +353,32 @@ function readline(s::IO=STDIN; chomp::Bool=true)
 end
 
 """
-    readlines(stream::IO=STDIN; chomp::Bool=true)
+    readlines(io::IO=STDIN; chomp::Bool=true)
     readlines(filename::AbstractString; chomp::Bool=true)
 
 Read all lines of an I/O stream or a file as a vector of strings. Behavior is
-equivalent to saving the result of reading `readline` repeatedly with the same
+equivalent to saving the result of reading [`readline`](@ref) repeatedly with the same
 arguments and saving the resulting lines as a vector of strings.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\nIt has many members.\n");
+       end
+57
+
+julia> readlines("my_file.txt")
+2-element Array{String,1}:
+ "JuliaLang is a GitHub organization."
+ "It has many members."
+
+julia> readlines("my_file.txt", chomp=false)
+2-element Array{String,1}:
+ "JuliaLang is a GitHub organization.\n"
+ "It has many members.\n"
+
+julia> rm("my_file.txt")
+```
 """
 function readlines(filename::AbstractString; chomp::Bool=true)
     open(filename) do f
