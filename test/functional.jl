@@ -147,3 +147,45 @@ end
                  for n = 0:5:100-q-d
                  for p = 100-q-d-n
                  if p < n < d < q] == [(50,30,15,5), (50,30,20,0), (50,40,10,0), (75,20,5,0)]
+
+@testset "return type of map() and collect() on generators" begin
+    x = ["a", "b"]
+    res = @inferred collect(s for s in x)
+    @test res isa Vector{String}
+    res = @inferred map(identity, x)
+    @test res isa Vector{String}
+    res = @inferred collect(s === nothing for s in x)
+    @test res isa Vector{Bool}
+    res = @inferred map(s -> s === nothing, x)
+    @test res isa Vector{Bool}
+
+    y = Union{String, Void}["a", nothing]
+    f(::Void) = nothing
+    f(s::String) = s == "a"
+    res = @inferred collect(s for s in y)
+    @test res isa Vector{Union{String, Void}}
+    res = @inferred map(identity, y)
+    @test res isa Vector{Union{String, Void}}
+    res = @inferred collect(s === nothing for s in y)
+    @test res isa Vector{Bool}
+    res = @inferred map(s -> s === nothing, y)
+    @test res isa Vector{Bool}
+    res = @inferred collect(f(s) for s in y)
+    @test res isa Vector{Union{Bool, Void}}
+    res = @inferred map(f, y)
+    @test res isa Vector{Union{Bool, Void}}
+
+    y[2] = "c"
+    res = @inferred collect(s for s in y)
+    @test res isa Vector{Union{String, Void}}
+    res = @inferred map(identity, y)
+    @test res isa Vector{Union{String, Void}}
+    res = @inferred collect(s === nothing for s in y)
+    @test res isa Vector{Bool}
+    res = @inferred map(s -> s === nothing, y)
+    @test res isa Vector{Bool}
+    res = @inferred collect(f(s) for s in y)
+    @test res isa Vector{Union{Bool, Void}}
+    res = @inferred map(f, y)
+    @test res isa Vector{Union{Bool, Void}}
+end
