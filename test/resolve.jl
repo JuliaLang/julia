@@ -7,6 +7,7 @@ using Pkg3.Types
 using Pkg3.Query
 using Pkg3.Resolve
 using Pkg3.Resolve.VersionWeights
+import Pkg3.Types: uuid5, uuid_package
 
 # Check that VersionWeight keeps the same ordering as VersionNumber
 
@@ -64,9 +65,9 @@ vlst_invalid = [
 
 
 # auxiliary functions
-fakeuuid(p::String) = Base.Random.uuid4(MersenneTwister(hash(p)))
+pkguuid(p::String) = uuid5(uuid_package, p)
 function storeuuid(p::String, uuid_to_name::Dict{UUID,String})
-    uuid = fakeuuid(p)
+    uuid = pkguuid(p)
     if haskey(uuid_to_name, uuid)
         @assert uuid_to_name[uuid] == p
     else
@@ -74,7 +75,7 @@ function storeuuid(p::String, uuid_to_name::Dict{UUID,String})
     end
     return uuid
 end
-wantuuids(want_data) = Dict{UUID,VersionNumber}(fakeuuid(p) => v for (p,v) in want_data)
+wantuuids(want_data) = Dict{UUID,VersionNumber}(pkguuid(p) => v for (p,v) in want_data)
 
 function deps_from_data(deps_data, uuid_to_name = Dict{UUID,String}())
     deps = DepsGraph()
@@ -105,10 +106,10 @@ function reqs_from_data(reqs_data, uuid_to_name = Dict{UUID,String}())
 end
 function sanity_tst(deps_data, expected_result; pkgs=[])
     deps, uuid_to_name = deps_from_data(deps_data)
-    id(p) = pkgID(fakeuuid(p), uuid_to_name)
+    id(p) = pkgID(pkguuid(p), uuid_to_name)
     #println("deps=$deps")
     #println()
-    result = sanity_check(deps, uuid_to_name, Set(fakeuuid(p) for p in pkgs))
+    result = sanity_check(deps, uuid_to_name, Set(pkguuid(p) for p in pkgs))
     length(result) == length(expected_result) || return false
     expected_result_uuid = [(id(p), vn) for (p,vn) in expected_result]
     for (p, vn, pp) in result

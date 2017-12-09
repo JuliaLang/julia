@@ -1,12 +1,13 @@
 module Types
 
 using Base.Random: UUID
+using SHA
 using Pkg3: TOML, TerminalMenus, Dates
 
 import Pkg3
 import Pkg3: depots, logdir, iswindows
 
-export UUID, pkgID, julia_UUID, SHA1, VersionRange, VersionSpec, empty_versionspec,
+export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     Requires, Fixed, DepsGraph, merge_requires!, satisfies,
     PkgError, ResolveBacktraceItem, ResolveBacktrace, showitem,
     PackageSpec, UpgradeLevel, EnvCache,
@@ -20,6 +21,22 @@ export UUID, pkgID, julia_UUID, SHA1, VersionRange, VersionSpec, empty_versionsp
 Base.isless(a::UUID, b::UUID) = a.value < b.value
 Base.convert(::Type{String}, u::UUID) = string(u)
 
+## Computing UUID5 values from (namespace, key) pairs ##
+function uuid5(namespace::UUID, key::String)
+    data = [reinterpret(UInt8, [namespace.value]); Vector{UInt8}(key)]
+    u = reinterpret(UInt128, sha1(data)[1:16])[1]
+    u &= 0xffffffffffff0fff3fffffffffffffff
+    u |= 0x00000000000050008000000000000000
+    return UUID(u)
+end
+uuid5(namespace::UUID, key::AbstractString) = uuid5(namespace, String(key))
+
+const uuid_dns = UUID(0x6ba7b810_9dad_11d1_80b4_00c04fd430c8)
+const uuid_julia = uuid5(uuid_dns, "julialang.org")
+const uuid_package = uuid5(uuid_julia, "package")
+const uuid_registry = uuid5(uuid_julia, "registry")
+
+
 ## user-friendly representation of package IDs ##
 
 function pkgID(p::UUID, uuid_to_name::Dict{UUID,String})
@@ -27,9 +44,6 @@ function pkgID(p::UUID, uuid_to_name::Dict{UUID,String})
     uuid_short = string(p)[1:8]
     return "$name [$uuid_short]"
 end
-
-# oh well...
-const julia_UUID = UUID("11111111-0000-1111-1111-444444444444")
 
 ## SHA1 ##
 

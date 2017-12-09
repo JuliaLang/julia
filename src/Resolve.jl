@@ -8,6 +8,7 @@ include(joinpath("resolve", "MaxSum.jl"))
 
 using ..Types
 using ..Query, .PkgToMaxSumInterface, .MaxSum
+import ..Types: uuid_julia
 
 export resolve, sanity_check
 
@@ -93,7 +94,7 @@ function sanity_check(deps::DepsGraph, uuid_to_name::Dict{UUID,String},
         ndeps[p][vn] == 0 && break
         checked[i] && (i += 1; continue)
 
-        fixed = Dict{UUID,Fixed}(p=>Fixed(vn, deps[p][vn]), julia_UUID=>Fixed(VERSION))
+        fixed = Dict{UUID,Fixed}(p=>Fixed(vn, deps[p][vn]), uuid_julia=>Fixed(VERSION))
         sub_reqs = Requires()
         bktrc = Query.init_resolve_backtrace(uuid_to_name, sub_reqs, fixed)
         Query.propagate_fixed!(sub_reqs, bktrc, fixed)
@@ -103,7 +104,7 @@ function sanity_check(deps::DepsGraph, uuid_to_name::Dict{UUID,String},
         try
             for rp in keys(sub_reqs)
                 haskey(sub_deps, rp) && continue
-                if julia_UUID in conflicts[rp]
+                if uuid_julia in conflicts[rp]
                     throw(PkgError("$(id(rp)) can't be installed because it has no versions that support $VERSION " *
                        "of julia. You may need to update METADATA by running `Pkg.update()`"))
                 else

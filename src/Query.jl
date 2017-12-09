@@ -3,6 +3,7 @@
 module Query
 
 using ..Types
+import ..Types.uuid_julia
 import Pkg3.equalto
 
 function init_resolve_backtrace(uuid_to_name::Dict{UUID,String}, reqs::Requires, fix::Dict{UUID,Fixed} = Dict{UUID,Fixed}())
@@ -73,7 +74,7 @@ function gen_backdeps(deps::DepsGraph)
     return backdeps
 end
 
-function dependencies(deps::DepsGraph, fix::Dict = Dict{UUID,Fixed}(julia_UUID=>Fixed(VERSION)))
+function dependencies(deps::DepsGraph, fix::Dict = Dict{UUID,Fixed}(uuid_julia=>Fixed(VERSION)))
     deps = depscopy(deps)
     conflicts = Dict{UUID,Set{UUID}}()
     to_expunge = VersionNumber[]
@@ -438,7 +439,7 @@ function dependencies_subset(deps::DepsGraph, pkgs::Set{UUID})
     while !isempty(staged)
         staged_next = Set{UUID}()
         for p in staged, vdep in values(get(deps, p, Dict{VersionNumber,Requires}())), rp in keys(vdep)
-            rp ∉ allpkgs && rp ≠ julia_UUID && push!(staged_next, rp)
+            rp ∉ allpkgs && rp ≠ uuid_julia && push!(staged_next, rp)
         end
         union!(allpkgs, staged_next)
         staged = staged_next

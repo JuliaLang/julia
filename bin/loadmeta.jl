@@ -3,26 +3,11 @@
 using Base: thispatch, thisminor, nextpatch, nextminor
 using Base.LinAlg: checksquare
 using Base.Random: UUID
-using SHA
+using Pkg3.Types
 
 import Pkg3.Pkg2
 import Pkg2.Reqs: Reqs, Requirement
 import Pkg2.Types: VersionInterval
-
-## Computing UUID5 values from (namespace, key) pairs ##
-function uuid5(namespace::UUID, key::String)
-    data = [reinterpret(UInt8, [namespace.value]); Vector{UInt8}(key)]
-    u = reinterpret(UInt128, sha1(data)[1:16])[1]
-    u &= 0xffffffffffff0fff3fffffffffffffff
-    u |= 0x00000000000050008000000000000000
-    return UUID(u)
-end
-uuid5(namespace::UUID, key::AbstractString) = uuid5(namespace, String(key))
-
-const uuid_dns = UUID(0x6ba7b810_9dad_11d1_80b4_00c04fd430c8)
-const uuid_julia = uuid5(uuid_dns, "julialang.org")
-const uuid_package = uuid5(uuid_julia, "package")
-const uuid_registry = uuid5(uuid_julia, "registry")
 
 ## Loading data into various data structures ##
 
