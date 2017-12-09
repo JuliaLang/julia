@@ -419,41 +419,9 @@ end
 
 #### from a range
 
-function rand_lteq(r::AbstractRNG, randfun, u::U, mask::U) where U<:Integer
-    while true
-        x = randfun(r) & mask
-        x <= u && return x
-    end
-end
-
-function rand(rng::MersenneTwister,
-              sp::SamplerTrivial{UnitRange{T}}) where T<:Union{Base.BitInteger64,Bool}
-    r = sp[]
-    isempty(r) && throw(ArgumentError("range must be non-empty"))
-    m = last(r) % UInt64 - first(r) % UInt64
-    bw = (64 - leading_zeros(m)) % UInt # bit-width
-    mask = (1 % UInt64 << bw) - (1 % UInt64)
-    x = bw <= 52 ? rand_lteq(rng, rand_ui52_raw, m, mask) :
-                   rand_lteq(rng, rng->rand(rng, UInt64), m, mask)
-    (x + first(r) % UInt64) % T
-end
-
-function rand(rng::MersenneTwister,
-              sp::SamplerTrivial{UnitRange{T}}) where T<:Union{Int128,UInt128}
-    r = sp[]
-    isempty(r) && throw(ArgumentError("range must be non-empty"))
-    m = (last(r)-first(r)) % UInt128
-    bw = (128 - leading_zeros(m)) % UInt # bit-width
-    mask = (1 % UInt128 << bw) - (1 % UInt128)
-    x = bw <= 52  ? rand_lteq(rng, rand_ui52_raw, m % UInt64, mask % UInt64) % UInt128 :
-        bw <= 104 ? rand_lteq(rng, rand_ui104_raw, m, mask) :
-                    rand_lteq(rng, rng->rand(rng, UInt128), m, mask)
-    x % T + first(r)
-end
-
 for T in (Bool, BitInteger_types...) # eval because of ambiguity otherwise
     @eval Sampler(rng::MersenneTwister, r::UnitRange{$T}, ::Val{1}) =
-        SamplerTrivial(r)
+        SamplerRangeFast(r)
 end
 
 

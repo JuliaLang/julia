@@ -4,7 +4,7 @@ module Random
 
 using Base.dSFMT
 using Base.GMP: Limb, MPZ
-using Base: BitInteger, BitInteger_types
+using Base: BitInteger, BitInteger_types, BitUnsigned
 import Base: copymutable, copy, copy!, ==, hash
 
 export srand,
