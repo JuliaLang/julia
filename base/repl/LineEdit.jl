@@ -1947,7 +1947,7 @@ AnyDict(
     end,
     '\n' => KeyAlias('\r'),
     # Backspace/^H
-    '\b' => (s,o...)->edit_backspace(s),
+    '\b' => (s,o...) -> is_region_active(s) ? edit_kill_region(s) : edit_backspace(s),
     127 => KeyAlias('\b'),
     # Meta Backspace
     "\e\b" => (s,o...)->edit_delete_prev_word(s),
