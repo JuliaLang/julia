@@ -1,5 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+struct StringIndexError <: Exception
+    string::AbstractString
+    index::Integer
+end
+@noinline string_index_err(s::AbstractString, i::Integer) =
+    throw(StringIndexError(s, Int(i)))
+
 const ByteArray = Union{Vector{UInt8},Vector{Int8}}
 
 @inline between(b::T, lo::T, hi::T) where {T<:Integer} = (lo ≤ b) & (b ≤ hi)
@@ -155,7 +162,7 @@ end
 @noinline function next_continued(s::String, i::Int, u::UInt32)
     if u < 0xc0000000
         isvalid(s, i) && (i += 1; @goto ret)
-        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, (u >> 24) % UInt8))
+        string_index_err(s, i)
     end
     n = ncodeunits(s)
     # first continuation byte
@@ -188,7 +195,7 @@ end
 @noinline function getindex_continued(s::String, i::Int, u::UInt32)
     if u < 0xc0000000
         isvalid(s, i) && @goto ret
-        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, (u >> 24) % UInt8))
+        string_index_err(s, i)
     end
     n = ncodeunits(s)
     # first continuation byte
@@ -217,10 +224,8 @@ function getindex(s::String, r::UnitRange{Int})
     i, j = first(r), last(r)
     @boundscheck begin
         checkbounds(s, r)
-        @inbounds isvalid(s, i) ||
-            throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s, i)))
-        @inbounds isvalid(s, j) ||
-            throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, codeunit(s, j)))
+        @inbounds isvalid(s, i) || string_index_err(s, i)
+        @inbounds isvalid(s, j) || string_index_err(s, j)
     end
     j = nextind(s, j) - 1
     n = j - i + 1
@@ -284,7 +289,7 @@ function search(s::String, c::Char, i::Integer = 1)
         throw(BoundsError(s, i))
     end
     @inbounds if is_valid_continuation(codeunit(s,i))
-        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s,i)))
+        string_index_err(s, i)
     end
     c ≤ '\x7f' && return search(s, c % UInt8, i)
     while true

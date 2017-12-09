@@ -107,7 +107,7 @@ julia> isvalid(str, 2)
 false
 
 julia> str[2]
-ERROR: UnicodeError: invalid character index
+ERROR: StringIndexError: invalid character index
 Stacktrace:
 [...]
 ```

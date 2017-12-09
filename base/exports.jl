@@ -154,7 +154,7 @@ export
     NullException,
     ParseError,
     SystemError,
-    UnicodeError,
+    StringIndexError,
 
 # Global constants and variables
     ARGS,

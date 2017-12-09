@@ -143,7 +143,7 @@ end
     @test get(utf8_str, 1000, 'X') == 'X'
 
     # Test that indexing into the middle of a character throws
-    @test_throws UnicodeError get(utf8_str, 2, 'X')
+    @test_throws StringIndexError get(utf8_str, 2, 'X')
 end
 
 #=
@@ -174,7 +174,7 @@ let s = "x\u0302"
     @test s[1:2] == s
     @test_throws BoundsError s[0:3]
     @test_throws BoundsError s[1:4]
-    @test_throws UnicodeError s[1:3]
+    @test_throws StringIndexError s[1:3]
 end
 
 @testset "issue #9781" begin
@@ -215,7 +215,7 @@ end
     @test gstr[[1]] == "1"
 
     @test s"∀∃"[big(1)] == '∀'
-    @test_throws UnicodeError GenericString("∀∃")[Int8(2)]
+    @test_throws StringIndexError GenericString("∀∃")[Int8(2)]
     @test_throws BoundsError GenericString("∀∃")[UInt16(10)]
 
     @test done(eachindex("foobar"),7)

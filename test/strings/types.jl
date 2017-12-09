@@ -32,17 +32,17 @@ for idx in 0:1
 end
 
 # Substring provided with invalid end index throws BoundsError
-@test_throws UnicodeError SubString("∀", 1, 2)
-@test_throws UnicodeError SubString("∀", 1, 3)
+@test_throws StringIndexError SubString("∀", 1, 2)
+@test_throws StringIndexError SubString("∀", 1, 3)
 @test_throws BoundsError SubString("∀", 1, 4)
 
 # Substring provided with invalid start index throws BoundsError
 @test SubString("∀∀", 1:1) == "∀"
 @test SubString("∀∀", 1:4) == "∀∀"
 @test SubString("∀∀", 4:4) == "∀"
-@test_throws UnicodeError SubString("∀∀", 1:2)
-@test_throws UnicodeError SubString("∀∀", 1:5)
-@test_throws UnicodeError SubString("∀∀", 2:4)
+@test_throws StringIndexError SubString("∀∀", 1:2)
+@test_throws StringIndexError SubString("∀∀", 1:5)
+@test_throws StringIndexError SubString("∀∀", 2:4)
 @test_throws BoundsError SubString("∀∀", 0:1)
 @test_throws BoundsError SubString("∀∀", 0:4)
 @test_throws BoundsError SubString("∀∀", 1:7)
@@ -57,7 +57,7 @@ end
 
 # index beyond endof("∀∀")
 for idx in [2:3; 5:6]
-    @test_throws UnicodeError SubString("∀∀", 1, idx)
+    @test_throws StringIndexError SubString("∀∀", 1, idx)
 end
 for idx in 7:8
     @test_throws BoundsError SubString("∀∀", 1, idx)
@@ -94,7 +94,7 @@ let str = "aa\u2200\u2222bb"
     write(b, u)
     @test String(take!(b)) == "\u2200\u2222"
 
-    @test_throws UnicodeError SubString(str, 4, 5)
+    @test_throws StringIndexError SubString(str, 4, 5)
     @test_throws BoundsError next(u, 0)
     @test_throws BoundsError next(u, 7)
     @test_throws BoundsError getindex(u, 0)
@@ -198,7 +198,7 @@ let s = "Σx + βz - 2"
                     @test isvalid(ss, j) == isvalid(s, j)
                 end
             else
-                @test_throws UnicodeError SubString(s, 1, i)
+                @test_throws StringIndexError SubString(s, 1, i)
             end
         elseif i > 0
             @test_throws BoundsError SubString(s, 1, i)

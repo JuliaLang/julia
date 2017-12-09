@@ -28,10 +28,8 @@ struct SubString{T<:AbstractString} <: AbstractString
         i ≤ j || return new(s, i-1, 0)
         @boundscheck begin
             checkbounds(s, i:j)
-            @inbounds isvalid(s, i) ||
-                throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s, i)))
-            @inbounds isvalid(s, j) ||
-                throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, codeunit(s, j)))
+            @inbounds isvalid(s, i) || string_index_err(s, i)
+            @inbounds isvalid(s, j) || string_index_err(s, j)
         end
         return new(s, i-1, nextind(s,j)-i)
     end
