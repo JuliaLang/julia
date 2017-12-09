@@ -633,7 +633,7 @@ end
 # splice! for IOBuffer: convert from close-open region to index, update the size,
 # and keep the cursor position and mark stable with the text
 # returns the removed portion as a String
-function edit_splice!(s, r::Region=region(s), ins::AbstractString = "")
+function edit_splice!(s, r::Region=region(s), ins::AbstractString = ""; rigid_mark::Bool=true)
     A, B = first(r), last(r)
     A >= B && isempty(ins) && return String(ins)
     buf = buffer(s)
@@ -646,10 +646,11 @@ function edit_splice!(s, r::Region=region(s), ins::AbstractString = "")
     else
         adjust_pos = false
     end
-    if A < buf.mark  < B
-        buf.mark = A
-    elseif A < B <= buf.mark || # handles edit_yank
-        A == B < buf.mark       # handles edit_indent
+    if A < buf.mark  < B || A == buf.mark == B
+        # rigid_mark is used only if the mark is strictly "inside"
+        # the region, or the region is empty and the mark is at the boundary
+        buf.mark = rigid_mark ? A : A + sizeof(ins)
+    elseif buf.mark >= B
         buf.mark += sizeof(ins) - B + A
     end
     ret = splice!(buf.data, A+1:B, Vector{UInt8}(ins)) # position(), etc, are 0-indexed
@@ -976,7 +977,7 @@ function edit_transpose_lines_down!(buf::IOBuffer, reg::Region)
     line2 = edit_splice!(buf, e1 => e2) # delete whole next line
     line2 = line2[2:end]*'\n' # don't include leading '\n'
     b = beginofline(buf, first(reg))
-    edit_splice!(buf, b => b, line2)
+    edit_splice!(buf, b => b, line2, rigid_mark=false)
     true
 end
 
@@ -1118,7 +1119,7 @@ end
 # if num < 0, it is assumed that there are at least num white spaces
 # at the beginning of line
 _edit_indent(buf::IOBuffer, b::Int, num::Int) =
-    num >= 0 ? edit_splice!(buf, b => b, ' '^num) :
+    num >= 0 ? edit_splice!(buf, b => b, ' '^num, rigid_mark=false) :
                edit_splice!(buf, b => b - num)
 
 

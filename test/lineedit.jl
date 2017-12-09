@@ -799,6 +799,12 @@ end
     Base.LineEdit.edit_exchange_point_and_mark(buf)
     seek(buf, 5)
     @test transform!(buf->LineEdit.edit_indent(buf, -1, true), buf) == (" 1\n22\n 333", 4, 6)
+
+    # check that if the mark at the beginning of the line, it is moved when right-indenting,
+    # which is more natural when the region is active
+    seek(buf, 0)
+    buf.mark = 0
+#    @test transform!(buf->LineEdit.edit_indent(buf, +1, false), buf) == ("  1\n22\n 333", 1, 1)
 end
 
 @testset "edit_transpose_lines_{up,down}!" begin
@@ -831,4 +837,12 @@ end
     seek(buf, 1)
     @test transpose_lines_up_reg!(buf) == false
     @test transform!(transpose_lines_down_reg!, buf) == ("l3\nl2\nl1", 4, 8)
+
+    # check that if the mark is at the beginning of the line, it is moved when transposing down,
+    # which is necessary when the region is active: otherwise, the line which is moved up becomes
+    # included in the region
+    buf.mark = 0
+    seek(buf, 1)
+    @test transform!(transpose_lines_down_reg!, buf) == ("l2\nl3\nl1", 4, 3)
+
 end
