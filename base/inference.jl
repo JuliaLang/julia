@@ -5686,7 +5686,7 @@ function remove_redundant_temp_vars!(src::CodeInfo, nargs::Int, sa::ObjectIdDict
     slottypes = src.slottypes
     ssavaluetypes = src.ssavaluetypes
     repls = ObjectIdDict()
-    for (v, init) in sa
+    for (v, init) in pairs(sa)
         repl = get_replacement(sa, v, init, nargs, slottypes, ssavaluetypes)
         compare = isa(repl, TypedSlot) ? normslot(repl) : repl
         if compare !== v

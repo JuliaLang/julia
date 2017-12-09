@@ -345,7 +345,7 @@ end
 function serialize(s::AbstractSerializer, d::Dict)
     serialize_cycle_header(s, d) && return
     write(s.io, Int32(length(d)))
-    for (k,v) in d
+    for (k,v) in pairs(d)
         serialize(s, k)
         serialize(s, v)
     end

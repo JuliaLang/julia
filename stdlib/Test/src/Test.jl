@@ -1420,14 +1420,14 @@ struct GenericDict{K,V} <: Associative{K,V}
     s::Associative{K,V}
 end
 
-for (G, A) in ((GenericSet, AbstractSet),
-               (GenericDict, Associative))
+for (G, I, A) in ((GenericSet, GenericSet, AbstractSet),
+               (GenericDict, PairIterator{<:GenericSet}, Associative))
     @eval begin
         Base.convert(::Type{$G}, s::$A) = $G(s)
         Base.done(s::$G, state) = done(s.s, state)
-        Base.next(s::$G, state) = next(s.s, state)
+        Base.next(s::$I, state) = next(s.s, state)
     end
-    for f in (:eltype, :isempty, :length, :start)
+    for f in (:isempty, :length, :start)
         @eval begin
             Base.$f(s::$G) = $f(s.s)
         end

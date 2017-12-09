@@ -738,6 +738,10 @@ Deprecated or removed
   * The `sum_kbn` and `cumsum_kbn` functions have been moved to the
     [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
 
+  * Iteration (`next`, `eltype`, `in`, `map`, etc) on `Associative`s has been deprecated.
+    Explicitly nominate `pairs(dict)`, `values(dict)` or `keys(dict)` as appropriate
+    ([#25013]).
+
 Command-line option changes
 ---------------------------
 

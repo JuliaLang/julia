@@ -2186,6 +2186,11 @@ end
 @deprecate_moved sum_kbn "KahanSummation"
 @deprecate_moved cumsum_kbn "KahanSummation"
 
+# PR #25013
+@deprecate eltype(A::Type{Associative{K,V}}) where {K,V} pairtype(A)
+@deprecate next(a::Associative, i) next(pairs(a), i)
+#@deprecate Base.in(p::Pair, a::Associative, valcmp = (==)) Base.in(p, PairIterator(a), valcmp)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

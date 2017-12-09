@@ -73,7 +73,7 @@ empty(d::WeakKeyDict, ::Type{K}, ::Type{V}) where {K, V} = WeakKeyDict{K, V}()
 # conversion between Dict types
 function convert(::Type{WeakKeyDict{K,V}},d::Associative) where V where K
     h = WeakKeyDict{K,V}()
-    for (k,v) in d
+    for (k,v) in pairs(d)
         ck = convert(K,k)
         if !haskey(h,ck)
             h[ck] = convert(V,v)
@@ -132,9 +132,9 @@ function start(t::WeakKeyDict{K,V}) where V where K
     return (start(t.ht), gc_token)
 end
 done(t::WeakKeyDict, i) = done(t.ht, i[1])
-function next(t::WeakKeyDict{K,V}, i)  where V where K
+function next(t::PairIterator{WeakKeyDict{K,V}}, i)  where V where K
     gc_token = i[2]
-    wkv, i = next(t.ht, i[1])
+    wkv, i = next(PairIterator(t.dict.ht), i[1])
     kv = Pair{K,V}(wkv[1].value::K, wkv[2])
     return (kv, (i, gc_token))
 end

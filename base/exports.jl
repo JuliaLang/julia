@@ -82,6 +82,7 @@ export
     ObjectIdDict,
     OrdinalRange,
     Pair,
+    PairIterator,
     PartialQuickSort,
     PermutedDimsArray,
     QuickSort,
