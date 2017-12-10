@@ -902,7 +902,7 @@ function test_intersection()
     @test length(E)==1 && isa(E[1],TypeVar)
 
     @testintersect(Tuple{Dict{Int,Int}, Ref{Pair{K,V}}} where V where K,
-                   Tuple{Associative{Int,Int}, Ref{Pair{T,T}} where T},
+                   Tuple{AbstractDict{Int,Int}, Ref{Pair{T,T}} where T},
                    Tuple{Dict{Int,Int}, Ref{Pair{K,K}}} where K)
 
     # issue #20643

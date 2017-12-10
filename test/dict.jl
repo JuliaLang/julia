@@ -170,7 +170,7 @@ end
 @testset "issue #2344" begin
     local bar
     bestkey(d, key) = key
-    bestkey(d::Associative{K,V}, key) where {K<:AbstractString,V} = string(key)
+    bestkey(d::AbstractDict{K,V}, key) where {K<:AbstractString,V} = string(key)
     bar(x) = bestkey(x, :y)
     @test bar(Dict(:x => [1,2,5])) == :y
     @test bar(Dict("x" => [1,2,5])) == "y"
@@ -305,7 +305,7 @@ end
     end
 end
 
-@testset "Issue #15739" begin # Compact REPL printouts of an `Associative` use brackets when appropriate
+@testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
     d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
     buf = IOBuffer()
     showcompact(buf, d)
@@ -526,7 +526,7 @@ end
     d = Dict(zip(1:1000,1:1000))
     f = p -> iseven(p.first)
     @test filter(f, d) == filter!(f, copy(d)) ==
-          invoke(filter!, Tuple{Function,Associative}, f, copy(d)) ==
+          invoke(filter!, Tuple{Function,AbstractDict}, f, copy(d)) ==
           Dict(zip(2:2:1000, 2:2:1000))
 end
 

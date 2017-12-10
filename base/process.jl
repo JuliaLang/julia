@@ -207,7 +207,7 @@ end
 # convert various env representations into an array of "key=val" strings
 byteenv(env::AbstractArray{<:AbstractString}) =
     String[cstr(x) for x in env]
-byteenv(env::Associative) =
+byteenv(env::AbstractDict) =
     String[cstr(string(k)*"="*string(v)) for (k,v) in env]
 byteenv(env::Void) = nothing
 byteenv(env::Union{AbstractVector{Pair{T}}, Tuple{Vararg{Pair{T}}}}) where {T<:AbstractString} =

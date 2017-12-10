@@ -34,7 +34,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     end
 end
 
-function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
+function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)

@@ -1416,15 +1416,15 @@ end
 
 """
 The `GenericDict` can be used to test generic dict APIs that program to
-the `Associative` interface, in order to ensure that functions can work
+the `AbstractDict` interface, in order to ensure that functions can work
 with associative types besides the standard `Dict` type.
 """
-struct GenericDict{K,V} <: Associative{K,V}
-    s::Associative{K,V}
+struct GenericDict{K,V} <: AbstractDict{K,V}
+    s::AbstractDict{K,V}
 end
 
 for (G, A) in ((GenericSet, AbstractSet),
-               (GenericDict, Associative))
+               (GenericDict, AbstractDict))
     @eval begin
         Base.convert(::Type{$G}, s::$A) = $G(s)
         Base.done(s::$G, state) = done(s.s, state)
