@@ -446,48 +446,6 @@ function nextind(s::AbstractString, i::Integer, n::Integer=1)
     return i + n
 end
 
-"""
-    ind2chr(s::AbstractString, i::Integer)
-
-Convert a byte index `i` to a character index with
-respect to string `s`.
-
-See also [`chr2ind`](@ref).
-
-# Examples
-```jldoctest
-julia> str = "αβγdef";
-
-julia> ind2chr(str, 3)
-2
-
-julia> chr2ind(str, 2)
-3
-```
-"""
-ind2chr(s::AbstractString, i::Integer) = length(s, 1, i)
-
-"""
-    chr2ind(s::AbstractString, i::Integer)
-
-Convert a character index `i` to a byte index.
-
-See also [`ind2chr`](@ref).
-
-# Examples
-```jldoctest
-julia> str = "αβγdef";
-
-julia> chr2ind(str, 2)
-3
-
-julia> ind2chr(str, 3)
-2
-```
-"""
-chr2ind(s::AbstractString, n::Integer) =
-    n < 0 ? prevind(s, 0, -n) : nextind(s, 0, n)
-
 ## string index iteration type ##
 
 struct EachStringIndex{T<:AbstractString}

@@ -157,7 +157,7 @@ end
 @test !ismatch(Regex("aa"), SubString("",1,0))
 @test ismatch(Regex(""), SubString("",1,0))
 
-# isvalid(), chr2ind() and ind2chr() for SubString{String}
+# isvalid(), formerly length() and nextind() for SubString{String}
 let s = "lorem ipsum", sdict = Dict(
     SubString(s, 1, 11)  => "lorem ipsum",
     SubString(s, 1, 6)   => "lorem ",
@@ -176,14 +176,15 @@ let s = "lorem ipsum", sdict = Dict(
                 @test_throws BoundsError isvalid(s, i)
             end
         end
-        for i in 1:ncodeunits(ss)
-            @test ind2chr(ss, i) == ind2chr(s, i)
+        for i in 1:ncodeunits(ss), j = i-1:ncodeunits(ss)
+            @test length(ss, i, j) == length(s, i, j)
         end
     end
     for (ss, s) in sdict
         @test length(ss) == length(s)
-        for i in 1:length(ss)
-            @test chr2ind(ss, i) == chr2ind(s, i)
+        for i in 0:length(ss)+1, j = 0:length(ss)+1
+            @test nextind(ss, i, j) == nextind(s, i, j)
+            @test prevind(ss, i, j) == prevind(s, i, j)
         end
     end
 end
@@ -209,10 +210,10 @@ let s = "Σx + βz - 2"
 end
 
 let ss = SubString("hello", 1, 5)
-    @test ind2chr(ss, -1) == -1
-    @test chr2ind(ss, -1) == -1
-    @test chr2ind(ss, 10) == 10
-    @test ind2chr(ss, 10) == 10
+    @test length(ss, 1, -1) == -1
+    @test length(ss, 1, 10) == 10
+    @test prevind(ss, 0, 1) == -1
+    @test nextind(ss, 0, 10) == 10
 end
 
 # length(SubString{String}) performance specialization

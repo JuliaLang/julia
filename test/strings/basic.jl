@@ -99,14 +99,14 @@ end
 end
 
 @testset "issue #7248" begin
-    @test ind2chr("hello", -1) == -1
-    @test chr2ind("hello", -1) == -1
-    @test ind2chr("hellø", -1) == -1
-    @test chr2ind("hellø", -1) == -1
-    @test ind2chr("hello", 10) == 10
-    @test chr2ind("hello", 10) == 10
-    @test ind2chr("hellø", 10) == 9
-    @test chr2ind("hellø", 10) == 11
+    @test length("hello", 1, -1) == -1
+    @test prevind("hello", 0, 1) == -1
+    @test length("hellø", 1, -1) == -1
+    @test prevind("hellø", 0, 1) == -1
+    @test length("hello", 1, 10) == 10
+    @test nextind("hello", 0, 10) == 10
+    @test length("hellø", 1, 10) == 9
+    @test nextind("hellø", 0, 10) == 11
     @test_throws BoundsError checkbounds("hello", 0)
     @test_throws BoundsError checkbounds("hello", 6)
     @test_throws BoundsError checkbounds("hello", 0:3)
@@ -221,7 +221,7 @@ end
     @test done(eachindex("foobar"),7)
     @test eltype(Base.EachStringIndex) == Int
     @test map(Base.Unicode.uppercase, "foó") == "FOÓ"
-    @test chr2ind("fóobar", 3) == 4
+    @test nextind("fóobar", 0, 3) == 4
 
     @test Symbol(gstr) == Symbol("12")
 
@@ -233,7 +233,7 @@ end
     @test nextind(1:1, 1) == 2
     @test nextind([1], 1) == 2
 
-    @test ind2chr(gstr, 2) == 2
+    @test length(gstr, 1, 2) == 2
 
     # tests promote_rule
     let svec = [s"12", GenericString("12"), SubString("123", 1, 2)]

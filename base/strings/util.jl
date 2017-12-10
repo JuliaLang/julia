@@ -206,28 +206,18 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     m = n - Unicode.textwidth(s)
-    (m <= 0) && (return s)
+    m ≤ 0 && return s
     l = Unicode.textwidth(p)
-    if l==1
-        return string(p^m, s)
-    end
-    q = div(m,l)
-    r = m - q*l
-    i = r != 0 ? chr2ind(p, r) : -1
-    string(p^q, p[1:i], s)
+    q, r = divrem(m, l)
+    string(p^q, first(p, r), s)
 end
 
 function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     m = n - Unicode.textwidth(s)
-    (m <= 0) && (return s)
+    m ≤ 0 && return s
     l = Unicode.textwidth(p)
-    if l==1
-        return string(s, p^m)
-    end
-    q = div(m,l)
-    r = m - q*l
-    i = r != 0 ? chr2ind(p, r) : -1
-    string(s, p^q, p[1:i])
+    q, r = divrem(m, l)
+    string(s, p^q, first(p, r))
 end
 
 """
