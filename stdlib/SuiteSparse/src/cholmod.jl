@@ -7,7 +7,8 @@ import Base: (*), convert, copy, eltype, getindex, show, size,
 
 import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
-                 issuccess, issymmetric, ldltfact, ldltfact!, logdet
+                 issuccess, issymmetric, ldltfact, ldltfact!, logdet,
+                 Adjoint, Transpose
 
 using ..SparseArrays
 
@@ -1293,7 +1294,8 @@ end
 (*)(A::Sparse, B::Dense) = sdmult!(A, false, 1., 0., B, zeros(size(A, 1), size(B, 2)))
 (*)(A::Sparse, B::VecOrMat) = (*)(A, Dense(B))
 
-function A_mul_Bc(A::Sparse{Tv}, B::Sparse{Tv}) where Tv<:VRealTypes
+function *(A::Sparse{Tv}, adjB::Adjoint{Tv,Sparse{Tv}}) where Tv<:VRealTypes
+    B = adjB.parent
     if A !== B
         aa1 = transpose_(B, 2)
         ## result of ssmult will have stype==0, contain numerical values and be sorted
@@ -1312,7 +1314,8 @@ function A_mul_Bc(A::Sparse{Tv}, B::Sparse{Tv}) where Tv<:VRealTypes
     end
 end
 
-function Ac_mul_B(A::Sparse, B::Sparse)
+function *(adjA::Adjoint{<:Any,<:Sparse}, B::Sparse)
+    A = adjA.parent
     aa1 = transpose_(A, 2)
     if A === B
         return A_mul_Bc(aa1, aa1)
@@ -1321,8 +1324,10 @@ function Ac_mul_B(A::Sparse, B::Sparse)
     return ssmult(aa1, B, 0, true, true)
 end
 
-Ac_mul_B(A::Sparse, B::Dense) = sdmult!(A, true, 1., 0., B, zeros(size(A, 2), size(B, 2)))
-Ac_mul_B(A::Sparse, B::VecOrMat) =  Ac_mul_B(A, Dense(B))
+*(adjA::Adjoint{<:Any,<:Sparse}, B::Dense) =
+    (A = adjA.parent; sdmult!(A, true, 1., 0., B, zeros(size(A, 2), size(B, 2))))
+*(adjA::Adjoint{<:Any,<:Sparse}, B::VecOrMat) =
+    (A = adjA.parent; Ac_mul_B(A, Dense(B)))
 
 
 ## Factorization methods
@@ -1672,8 +1677,8 @@ function (\)(L::FactorComponent, B::SparseVecOrMat)
     sparse(L\Sparse(B,0))
 end
 
-Ac_ldiv_B(L::FactorComponent, B) = adjoint(L)\B
-Ac_ldiv_B(L::FactorComponent, B::RowVector) = adjoint(L)\B # ambiguity
+\(adjL::Adjoint{<:Any,<:FactorComponent}, B::Union{VecOrMat,SparseVecOrMat}) = (L = adjL.parent; adjoint(L)\B)
+\(adjL::Adjoint{<:Any,<:FactorComponent}, B::RowVector) = (L = adjL.parent; adjoint(L)\B) # ambiguity
 
 (\)(L::Factor{T}, B::Dense{T}) where {T<:VTypes} = solve(CHOLMOD_A, L, B)
 # Explicit typevars are necessary to avoid ambiguities with defs in linalg/factorizations.jl
@@ -1686,25 +1691,39 @@ Ac_ldiv_B(L::FactorComponent, B::RowVector) = adjoint(L)\B # ambiguity
 # When right hand side is sparse, we have to ensure that the rhs is not marked as symmetric.
 (\)(L::Factor, B::SparseVecOrMat) = sparse(spsolve(CHOLMOD_A, L, Sparse(B, 0)))
 
-Ac_ldiv_B(L::Factor, B::Dense) = solve(CHOLMOD_A, L, B)
-Ac_ldiv_B(L::Factor, B::VecOrMat) = convert(Matrix, solve(CHOLMOD_A, L, Dense(B)))
-Ac_ldiv_B(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
-Ac_ldiv_B(L::Factor, B::SparseVecOrMat) = Ac_ldiv_B(L, Sparse(B))
+\(adjL::Adjoint{<:Any,<:Factor}, B::Dense) = (L = adjL.parent; solve(CHOLMOD_A, L, B))
+\(adjL::Adjoint{<:Any,<:Factor}, B::VecOrMat) = (L = adjL.parent; convert(Matrix, solve(CHOLMOD_A, L, Dense(B))))
+\(adjL::Adjoint{<:Any,<:Factor}, B::Sparse) = (L = adjL.parent; spsolve(CHOLMOD_A, L, B))
+\(adjL::Adjoint{<:Any,<:Factor}, B::SparseVecOrMat) = (L = adjL.parent; Ac_ldiv_B(L, Sparse(B)))
 
-for f in (:\, :Ac_ldiv_B)
-    @eval function ($f)(A::Union{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
-                          Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
-                          Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}, B::StridedVecOrMat)
-        F = cholfact(A)
+const RealHermSymComplexHermF64SSL = Union{
+    Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+    Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+    Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}
+function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMat)
+    F = cholfact(A)
+    if issuccess(F)
+        return \(F, B)
+    else
+        ldltfact!(F, A)
         if issuccess(F)
-            return ($f)(F, B)
+            return \(F, B)
         else
-            ldltfact!(F, A)
-            if issuccess(F)
-                return ($f)(F, B)
-            else
-                return ($f)(lufact(convert(SparseMatrixCSC{eltype(A), SuiteSparse_long}, A)), B)
-            end
+            return \(lufact(convert(SparseMatrixCSC{eltype(A), SuiteSparse_long}, A)), B)
+        end
+    end
+end
+function \(adjA::Adjoint{<:Any,<:RealHermSymComplexHermF64SSL}, B::StridedVecOrMat)
+    A = adjA.parent
+    F = cholfact(A)
+    if issuccess(F)
+        return Ac_ldiv_B(F, B)
+    else
+        ldltfact!(F, A)
+        if issuccess(F)
+            return Ac_ldiv_B(F, B)
+        else
+            return Ac_ldiv_B(lufact(convert(SparseMatrixCSC{eltype(A), SuiteSparse_long}, A)), B)
         end
     end
 end
