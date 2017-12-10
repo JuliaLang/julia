@@ -1302,25 +1302,23 @@ function empty!(a::Vector)
     return a
 end
 
+_memcmp(a, b, len) = ccall(:memcmp, Int32, (Ptr{Void}, Ptr{Void}, Csize_t), a, b, len) % Int
+
 # use memcmp for lexcmp on byte arrays
 function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
-    c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-              a, b, min(length(a),length(b)))
+    c = _memcmp(a, b, min(length(a),length(b)))
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
 const BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where N
 # use memcmp for == on bit integer types
-function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray
-    size(a) == size(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(Arr)) * length(a))
-end
+==(a::Arr, b::Arr) where {Arr <: BitIntegerArray} =
+    size(a) == size(b) && 0 == _memcmp(a, b, sizeof(eltype(Arr)) * length(a))
 
 # this is ~20% faster than the generic implementation above for very small arrays
 function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
     len = length(a)
-    len == length(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(Arr)) * len)
+    len == length(b) && 0 == _memcmp(a, b, sizeof(eltype(Arr)) * len)
 end
 
 """

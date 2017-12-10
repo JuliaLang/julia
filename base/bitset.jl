@@ -1,8 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+const Bits = Vector{UInt64}
+const Chk0 = zero(UInt64)
+
 struct BitSet <: AbstractSet{Int}
-    bits::BitVector
-    BitSet() = new(sizehint!(falses(0), 256))
+    bits::Vector{UInt64}
+    BitSet() = new(sizehint!(zeros(UInt64, 0), 4))
 end
 
 """
@@ -35,39 +38,67 @@ end
 eltype(s::BitSet) = Int
 sizehint!(s::BitSet, n::Integer) = (n > length(s.bits) && _resize0!(s.bits, n); s)
 
+# given an integer i, return the chunk which stores it
+chk_index(i::Integer) = _div64(Int(i)+63)
+# return the bit offset of i within chk_index(i)
+chk_offset(i::Int) = _mod64(i-1)
+
+unsafe_bitsetindex!(a, b::Bool, n::Integer) = unsafe_bitsetindex!(a, b, Int(n))
+
+function _bits_getindex(b::Bits, i::Int)
+    ci = chk_index(i)
+    ci > length(b) && return false
+    @inbounds r = (b[ci] & (one(UInt64) << chk_offset(i))) != 0
+    r
+end
+
+function _bits_findnext(b::Bits, start::Int)
+    start = max(1, start)
+    chk_index(start) > length(b) && return 0
+    unsafe_bitfindnext(b, start)
+end
+
+function _bits_findprev(b::Bits, start::Int)
+    start = min(length(b)*64, start)
+    start > 0 || return 0
+    unsafe_bitfindprev(b, start)
+end
+
 # An internal function for setting the inclusion bit for a given integer n >= 0
 @inline function _setint!(s::BitSet, idx::Integer, b::Bool)
-    if idx > length(s.bits)
+    cidx = chk_index(idx)
+    if cidx > length(s.bits)
         b || return s # setting a bit to zero outside the set's bits is a no-op
-        _resize0!(s.bits, idx)
+        _resize0!(s.bits, cidx)
     end
-    @inbounds s.bits[idx] = b
+    unsafe_bitsetindex!(s.bits, b, idx)
     s
 end
 
-# An internal function to resize a bitarray and ensure the newly allocated
+# An internal function to resize a Bits object and ensure the newly allocated
 # elements are zeroed (will become unnecessary if this behavior changes)
-@inline function _resize0!(b::BitVector, newlen::Integer)
+@inline function _resize0!(b::Bits, newlen::Int)
     len = length(b)
-    newlen = ((newlen+63) >> 6) << 6 # smallest multiple of 64 >= newlen
     resize!(b, newlen)
-    len < newlen && @inbounds b[len+1:newlen] = false # resize! gives dirty memory
-    b
+    len < newlen && @inbounds b[len+1:newlen] = Chk0 # resize! gives dirty memory
+    nothing
 end
 
 # An internal function that takes a pure function `f` and maps across two BitArrays
 # allowing the lengths to be different and altering b1 with the result
 # WARNING: the assumptions written in the else clauses must hold
-function _matched_map!(f, b1::BitArray, b2::BitArray)
+function _matched_map!(f, b1::Bits, b2::Bits)
     l1, l2 = length(b1), length(b2)
-    _bit_map!(f, b1, b2)
+
+    # map! over the common indices
+    map!(f, b1, b1, b2)
+
     if l1 < l2
         if f(false, false) == f(false, true) == false
             # We don't need to worry about the trailing bits — they're all false
         else # @assert f(false, x) == x
             resize!(b1, l2)
-            chk_offs = 1+l1>>6
-            unsafe_copyto!(b1.chunks, chk_offs, b2.chunks, chk_offs, 1+l2>>6-chk_offs)
+            unsafe_copyto!(b1, l1+1, b2, l1+1, l2-l1)
         end
     elseif l1 > l2
         if f(false, false) == f(true, false) == false
@@ -77,17 +108,6 @@ function _matched_map!(f, b1::BitArray, b2::BitArray)
             # We don't need to worry about the trailing bits — they already have the
             # correct value
         end
-    end
-    b1
-end
-
-# similar to bit_map! in bitarray.jl, but lengths are multiple of 64,
-# and may not match
-function _bit_map!(f, b1::BitArray, b2::BitArray)
-    b1c, b2c = b1.chunks, b2.chunks
-    l = min(length(b1c), length(b2c))
-    @inbounds for i = 1:l
-        b1c[i] = f(b1c[i], b2c[i])
     end
     b1
 end
@@ -114,8 +134,8 @@ end
 @inline delete!(s::BitSet, n::Integer) = n > 0 ? _delete!(s, n) : s
 shift!(s::BitSet) = pop!(s, first(s))
 
-empty!(s::BitSet) = (fill!(s.bits, false); s)
-isempty(s::BitSet) = !any(s.bits)
+empty!(s::BitSet) = (fill!(s.bits, Chk0); s)
+isempty(s::BitSet) = all(equalto(Chk0), s.bits)
 
 # Mathematical set functions: union!, intersect!, setdiff!, symdiff!
 
@@ -183,30 +203,30 @@ function symdiff!(s1::BitSet, s2::BitSet)
     s1
 end
 
-@inline in(n::Integer, s::BitSet) = get(s.bits, n, false)
+@inline in(n::Integer, s::BitSet) = _bits_getindex(s.bits, Int(n))
 
 # Use the next-set index as the state to prevent looking it up again in done
 start(s::BitSet) = next(s, 0)[2]
-function next(s::BitSet, i)
-    nextidx = i == typemax(Int) ? 0 : findnext(s.bits, i+1)
+function next(s::BitSet, i::Int)
+    nextidx = i == typemax(Int) ? 0 : _bits_findnext(s.bits, i+1)
     (i, nextidx)
 end
-done(s::BitSet, i) = i <= 0
+done(s::BitSet, i) = i == 0
 
 
 @noinline _throw_bitset_notempty_error() = throw(ArgumentError("collection must be non-empty"))
 
 function first(s::BitSet)
-    idx = findfirst(s.bits)
+    idx = _bits_findnext(s.bits, 1)
     idx == 0 ? _throw_bitset_notempty_error() : idx
 end
 
 function last(s::BitSet)
-    idx = findprev(s.bits, length(s.bits))
+    idx = _bits_findprev(s.bits, typemax(Int))
     idx == 0 ? _throw_bitset_notempty_error() : idx
 end
 
-length(s::BitSet) = sum(s.bits)
+length(s::BitSet) = bitcount(s.bits) # = mapreduce(count_ones, +, 0, s.bits)
 
 function show(io::IO, s::BitSet)
     print(io, "BitSet([")
@@ -220,25 +240,16 @@ function show(io::IO, s::BitSet)
 end
 
 function ==(s1::BitSet, s2::BitSet)
-    l1 = length(s1.bits)
-    l2 = length(s2.bits)
-    # If the lengths are the same, simply punt to bitarray comparison
-    l1 == l2 && return s1.bits == s2.bits
-
-    # Swap so s1 is always longer
-    if l1 < l2
-        s2, s1 = s1, s2
-        l2, l1 = l1, l2
+    c1 = s1.bits
+    c2 = s2.bits
+    # Swap so c1 is always longer
+    if length(c1) < length(c2)
+        c1, c2 = c2, c1
     end
-    # Iteratively check the chunks of the bitarrays
-    c1 = s1.bits.chunks
-    c2 = s2.bits.chunks
-    @inbounds for i in 1:length(c2)
-        c1[i] == c2[i] || return false
-    end
+    _memcmp(c1, c2, length(c2)) == 0 || return false
     # Ensure remaining chunks are zero
     @inbounds for i in length(c2)+1:length(c1)
-        c1[i] == UInt64(0) || return false
+        c1[i] == Chk0 || return false
     end
     return true
 end
@@ -250,7 +261,7 @@ issubset(a::BitSet, b::BitSet) = isequal(a, intersect(a,b))
 const hashis_seed = UInt === UInt64 ? 0x88989f1fc7dea67d : 0xc7dea67d
 function hash(s::BitSet, h::UInt)
     h ⊻= hashis_seed
-    bc = s.bits.chunks
+    bc = s.bits
     i = length(bc)
     while i > 0 && bc[i] == UInt64(0)
         # Skip trailing empty bytes to prevent extra space from changing the hash

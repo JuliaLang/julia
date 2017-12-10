@@ -1438,22 +1438,17 @@ circshift!(B::BitVector, i::Integer) = circshift!(B, B, i)
 
 ## count & find ##
 
-function count(B::BitArray)
+function bitcount(Bc::Vector{UInt64})
     n = 0
-    Bc = B.chunks
     @inbounds for i = 1:length(Bc)
         n += count_ones(Bc[i])
     end
     return n
 end
 
-# returns the index of the next non-zero element, or 0 if all zeros
-function findnext(B::BitArray, start::Integer)
-    start > 0 || throw(BoundsError(B, start))
-    start > length(B) && return 0
+count(B::BitArray) = bitcount(B.chunks)
 
-    Bc = B.chunks
-
+function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Integer)
     chunk_start = _div64(start-1)+1
     within_chunk_start = _mod64(start-1)
     mask = _msk64 << within_chunk_start
@@ -1471,6 +1466,14 @@ function findnext(B::BitArray, start::Integer)
     end
     return 0
 end
+
+# returns the index of the next non-zero element, or 0 if all zeros
+function findnext(B::BitArray, start::Integer)
+    start > 0 || throw(BoundsError(B, start))
+    start > length(B) && return 0
+    unsafe_bitfindnext(B.chunks, start)
+end
+
 #findfirst(B::BitArray) = findnext(B, 1)  ## defined in array.jl
 
 # aux function: same as findnext(~B, start), but performed without temporaries
@@ -1527,13 +1530,7 @@ function findnext(testf::Function, B::BitArray, start::Integer)
 end
 #findfirst(testf::Function, B::BitArray) = findnext(testf, B, 1)  ## defined in array.jl
 
-# returns the index of the previous non-zero element, or 0 if all zeros
-function findprev(B::BitArray, start::Integer)
-    start > 0 || return 0
-    start > length(B) && throw(BoundsError(B, start))
-
-    Bc = B.chunks
-
+function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Integer)
     chunk_start = _div64(start-1)+1
     mask = _msk_end(start)
 
@@ -1549,6 +1546,13 @@ function findprev(B::BitArray, start::Integer)
         end
     end
     return 0
+end
+
+# returns the index of the previous non-zero element, or 0 if all zeros
+function findprev(B::BitArray, start::Integer)
+    start > 0 || return 0
+    start > length(B) && throw(BoundsError(B, start))
+    unsafe_bitfindprev(B.chunks, start)
 end
 
 function findprevnot(B::BitArray, start::Integer)

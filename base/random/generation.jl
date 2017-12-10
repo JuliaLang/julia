@@ -340,21 +340,6 @@ Sampler(rng::AbstractRNG, t::Set, n::Repetition) = SamplerTag{Set}(Sampler(rng, 
 
 rand(rng::AbstractRNG, sp::SamplerTag{Set,<:Sampler}) = rand(rng, sp.data).first
 
-## random values from BitSet
-
-function Sampler(rng::AbstractRNG, t::BitSet, n::Repetition)
-    isempty(t) && throw(ArgumentError("collection must be non-empty"))
-    SamplerSimple(t, Sampler(rng, linearindices(t.bits), Val(Inf)))
-end
-
-function rand(rng::AbstractRNG, sp::SamplerSimple{BitSet,<:Sampler})
-    while true
-        n = rand(rng, sp.data)
-        @inbounds b = sp[].bits[n]
-        b && return n
-    end
-end
-
 ## random values from AbstractDict/AbstractSet
 
 # we defer to _Sampler to avoid ambiguities with a call like Sampler(rng, Set(1), Val(1))
