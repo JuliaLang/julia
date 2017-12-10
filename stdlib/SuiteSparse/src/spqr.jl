@@ -3,6 +3,7 @@
 module SPQR
 
 import Base: \
+using Base.LinAlg: Adjoint, Transpose
 
 # ordering options */
 const ORDERING_FIXED   = Int32(0)
@@ -197,7 +198,7 @@ Base.LinAlg.qrfact(A::SparseMatrixCSC; tol = _default_tol(A)) = qrfact(A, Val{tr
 
 Base.LinAlg.qr(A::SparseMatrixCSC; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
 
-function Base.A_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
+function Base.LinAlg.mul!(Q::QRSparseQ, A::StridedVecOrMat)
     if size(A, 1) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end
@@ -212,7 +213,7 @@ function Base.A_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
     return A
 end
 
-function Base.A_mul_B!(A::StridedMatrix, Q::QRSparseQ)
+function Base.LinAlg.mul!(A::StridedMatrix, Q::QRSparseQ)
     if size(A, 2) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end
@@ -226,7 +227,8 @@ function Base.A_mul_B!(A::StridedMatrix, Q::QRSparseQ)
     return A
 end
 
-function Base.Ac_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
+function Base.LinAlg.mul!(adjQ::Adjoint{<:Any,<:QRSparseQ}, A::StridedVecOrMat)
+    Q = adjQ.parent
     if size(A, 1) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end
@@ -241,7 +243,8 @@ function Base.Ac_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
     return A
 end
 
-function Base.A_mul_Bc!(A::StridedMatrix, Q::QRSparseQ)
+function Base.LinAlg.mul!(A::StridedMatrix, adjQ::Adjoint{<:Any,<:QRSparseQ})
+    Q = adjQ.parent
     if size(A, 2) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end

@@ -38,3 +38,12 @@ end
     At_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = Base.LinAlg.ldiv!(Transpose(lu), B)
     Ac_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = Base.LinAlg.ldiv!(Adjoint(lu), B)
 end
+
+# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from src/spqr.jl, to deprecate
+@eval SuiteSparse.SPQR begin
+    using Base.LinAlg: Adjoint, Transpose
+    Base.A_mul_Bc!(A::StridedMatrix, Q::QRSparseQ) = Base.LinAlg.mul!(A, Adjoint(Q))
+    Base.Ac_mul_B!(Q::QRSparseQ, A::StridedVecOrMat) = Base.LinAlg.mul!(Adjoint(Q), A)
+    Base.A_mul_B!(A::StridedMatrix, Q::QRSparseQ) = Base.LinAlg.mul!(A, Q)
+    Base.A_mul_B!(Q::QRSparseQ, A::StridedVecOrMat) = Base.LinAlg.mul!(Q, A)
+end
