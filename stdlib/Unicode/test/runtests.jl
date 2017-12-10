@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test
+using Unicode
+
 @testset "string normalization" begin
     # normalize_string (Unicode normalization etc.):
     @test normalize_string("\u006e\u0303", :NFC) == "\u00f1"
@@ -226,9 +229,9 @@ end
 @testset "utf8proc" begin
     # check utf8proc handling of CN category constants
     let c_ll = 'β', c_cn = '\u038B'
-        @test Base.UTF8proc.category_code(c_ll) == Base.UTF8proc.UTF8PROC_CATEGORY_LL
+        @test Base.Unicode.category_code(c_ll) == Base.Unicode.UTF8PROC_CATEGORY_LL
         # check codepoint with category code CN
-        @test Base.UTF8proc.category_code(c_cn) == Base.UTF8proc.UTF8PROC_CATEGORY_CN
+        @test Base.Unicode.category_code(c_cn) == Base.Unicode.UTF8PROC_CATEGORY_CN
     end
 end
 
@@ -319,4 +322,73 @@ end
     g = graphemes(SubString("123α56789", 1, 6))
     @test eltype(g) == SubString{String}
     @test collect(g) == ["1","2","3","α","5"]
+end
+
+@testset "ucfirst/lcfirst" begin
+    @test ucfirst("Hola")=="Hola"
+    @test ucfirst("hola")=="Hola"
+    @test ucfirst("")==""
+    @test ucfirst("*")=="*"
+    @test ucfirst("Ǆxx") == ucfirst("ǆxx") == "ǅxx"
+
+    @test lcfirst("Hola")=="hola"
+    @test lcfirst("hola")=="hola"
+    @test lcfirst("")==""
+    @test lcfirst("*")=="*"
+end
+
+@testset "issue #11482" begin
+    @testset "uppercase/lowercase" begin
+        @test uppercase("aBc") == "ABC"
+        @test uppercase('A') == 'A'
+        @test uppercase('a') == 'A'
+        @test lowercase("AbC") == "abc"
+        @test lowercase('A') == 'a'
+        @test lowercase('a') == 'a'
+        @test uppercase('α') == '\u0391'
+        @test lowercase('Δ') == 'δ'
+        @test lowercase('\U118bf') == '\U118df'
+        @test uppercase('\U1044d') == '\U10425'
+    end
+    @testset "ucfirst/lcfirst" begin
+        @test ucfirst("Abc") == "Abc"
+        @test ucfirst("abc") == "Abc"
+        @test lcfirst("ABC") == "aBC"
+        @test lcfirst("aBC") == "aBC"
+        @test ucfirst(GenericString("")) == ""
+        @test lcfirst(GenericString("")) == ""
+        @test ucfirst(GenericString("a")) == "A"
+        @test lcfirst(GenericString("A")) == "a"
+        @test lcfirst(GenericString("a")) == "a"
+        @test ucfirst(GenericString("A")) == "A"
+    end
+    @testset "titlecase" begin
+        @test titlecase('ǉ') == 'ǈ'
+        @test titlecase("ǉubljana") == "ǈubljana"
+        @test titlecase("aBc ABC") == "ABc ABC"
+        @test titlecase("abcD   EFG\n\thij") == "AbcD   EFG\n\tHij"
+    end
+end
+
+@testset "issue # 11464: uppercase/lowercase of GenericString becomes a String" begin
+    str = "abcdef\uff\uffff\u10ffffABCDEF"
+    @test typeof(uppercase("abcdef")) == String
+    @test typeof(uppercase(GenericString(str))) == String
+    @test typeof(lowercase("ABCDEF")) == String
+    @test typeof(lowercase(GenericString(str))) == String
+
+    foomap(ch) = (ch > Char(65))
+    foobar(ch) = Char(0xd800)
+    foobaz(ch) = reinterpret(Char, typemax(UInt32))
+    @test_throws ArgumentError map(foomap, GenericString(str))
+    @test map(foobar, GenericString(str)) == String(repeat(b"\ud800", outer=[17]))
+    @test map(foobaz, GenericString(str)) == String(repeat(b"\ufffd", outer=[17]))
+
+    @test "a".*["b","c"] == ["ab","ac"]
+    @test ["b","c"].*"a" == ["ba","ca"]
+    @test ["a","b"].*["c" "d"] == ["ac" "ad"; "bc" "bd"]
+
+    @test one(String) == ""
+    @test prod(["*" for i in 1:3]) == "***"
+    @test prod(["*" for i in 1:0]) == ""
 end

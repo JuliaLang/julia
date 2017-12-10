@@ -353,7 +353,7 @@ function search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1
 end
 
 function search(a::ByteArray, b::Char, i::Integer = 1)
-    if isascii(b)
+    if Unicode.isascii(b)
         search(a,UInt8(b),i)
     else
         search(a,Vector{UInt8}(string(b)),i).start
@@ -384,7 +384,7 @@ function rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 
 end
 
 function rsearch(a::ByteArray, b::Char, i::Integer = length(a))
-    if isascii(b)
+    if Unicode.isascii(b)
         rsearch(a,UInt8(b),i)
     else
         rsearch(a,Vector{UInt8}(string(b)),i).start

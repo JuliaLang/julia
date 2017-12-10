@@ -210,7 +210,7 @@ end
     @test replace("ḟøøƀäṙḟøø", r"(ḟø|ƀä)", "xx") == "xxøxxṙxxø"
     @test replace("ḟøøƀäṙḟøø", r"(ḟøø|ƀä)", "ƀäṙ") == "ƀäṙƀäṙṙƀäṙ"
 
-    @test replace("foo", "oo", uppercase) == "fOO"
+    @test replace("foo", "oo", Base.Unicode.uppercase) == "fOO"
 
     # Issue 13332
     @test replace("abc", 'b', 2.1) == "a2.1c"

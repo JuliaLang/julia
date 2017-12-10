@@ -2,7 +2,6 @@
 
 ## core text I/O ##
 
-
 """
     print([io::IO], xs...)
 
@@ -248,7 +247,7 @@ join(strings, delim, last) = sprint(join, strings, delim, last)
 
 ## string escaping & unescaping ##
 
-need_full_hex(s::AbstractString, i::Int) = !done(s,i) && isxdigit(next(s,i)[1])
+need_full_hex(s::AbstractString, i::Int) = !done(s,i) && Unicode.isxdigit(next(s,i)[1])
 
 escape_nul(s::AbstractString, i::Int) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
@@ -272,15 +271,15 @@ function escape_string(io, s::AbstractString, esc::AbstractString="")
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        c == '\0'       ? print(io, escape_nul(s,j)) :
-        c == '\e'       ? print(io, "\\e") :
-        c == '\\'       ? print(io, "\\\\") :
-        c in esc        ? print(io, '\\', c) :
-        '\a' <= c <= '\r' ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
-        isprint(c)      ? print(io, c) :
-        c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
-        c <= '\uffff'   ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
-                          print(io, "\\U", hex(c, need_full_hex(s,j) ? 8 : 4))
+        c == '\0'           ? print(io, escape_nul(s,j)) :
+        c == '\e'           ? print(io, "\\e") :
+        c == '\\'           ? print(io, "\\\\") :
+        c in esc            ? print(io, '\\', c) :
+        '\a' <= c <= '\r'   ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
+        Unicode.isprint(c)  ? print(io, c) :
+        c <= '\x7f'         ? print(io, "\\x", hex(c, 2)) :
+        c <= '\uffff'       ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
+                              print(io, "\\U", hex(c, need_full_hex(s,j) ? 8 : 4))
         i = j
     end
 end

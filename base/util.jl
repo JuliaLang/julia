@@ -591,7 +591,7 @@ function getpass(prompt::AbstractString)
                 ccall(:_getch, UInt8, ()) # ignore function/arrow keys
             elseif c == UInt8('\b') && plen > 0
                 plen -= 1 # delete last character on backspace
-            elseif !iscntrl(Char(c)) && plen < 128
+            elseif !Unicode.iscntrl(Char(c)) && plen < 128
                 p[plen += 1] = c
             end
         end

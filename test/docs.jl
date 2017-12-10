@@ -952,7 +952,7 @@ for (line, expr) in Pair[
     "\"...\""      => "...",
     "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
     ]
-    @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(117, doc_util_path), STDOUT, expr)
+    @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(118, doc_util_path), STDOUT, expr)
     buf = IOBuffer()
     @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
 end
@@ -991,8 +991,8 @@ dynamic_test.x = "test 2"
 @test @doc(dynamic_test) == "test 2 Union{}"
 @test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
 
-@test Docs._repl(:(dynamic_test(1.0))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), :(dynamic_test(::typeof(1.0)))))
-@test Docs._repl(:(dynamic_test(::String))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), :(dynamic_test(::String))))
+@test Docs._repl(:(dynamic_test(1.0))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(207, doc_util_path), :(dynamic_test(::typeof(1.0)))))
+@test Docs._repl(:(dynamic_test(::String))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(207, doc_util_path), :(dynamic_test(::String))))
 
 
 # Equality testing

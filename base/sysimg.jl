@@ -485,6 +485,7 @@ Base.require(:Profile)
 Base.require(:SharedArrays)
 Base.require(:SuiteSparse)
 Base.require(:Test)
+Base.require(:Unicode)
 
 @eval Base begin
     @deprecate_binding Test root_module(:Test) true ", run `using Test` instead"

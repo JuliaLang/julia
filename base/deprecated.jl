@@ -1072,13 +1072,6 @@ function Matrix()
     return Matrix(uninitialized, 0, 0)
 end
 
-for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
-             "lower", "print", "punct", "space", "upper", "xdigit")
-    f = Symbol("is",name)
-    @eval import .UTF8proc: $f
-    @eval @deprecate ($f)(s::AbstractString) all($f, s)
-end
-
 # TODO: remove warning for using `_` in parse_input_line in base/client.jl
 
 # Special functions have been moved to a package
@@ -1512,7 +1505,7 @@ export hex2num
 @deprecate convert(::Type{Symbol}, s::AbstractString)         Symbol(s)
 @deprecate convert(::Type{String}, s::Symbol)                 String(s)
 @deprecate convert(::Type{String}, v::Vector{UInt8})          String(v)
-@deprecate convert(::Type{S}, g::UTF8proc.GraphemeIterator) where {S<:AbstractString}  convert(S, g.s)
+@deprecate convert(::Type{S}, g::Unicode.GraphemeIterator) where {S<:AbstractString}  convert(S, g.s)
 
 # Issue #19923
 @deprecate ror                  circshift
@@ -2185,6 +2178,28 @@ end
 # issue #24804
 @deprecate_moved sum_kbn "KahanSummation"
 @deprecate_moved cumsum_kbn "KahanSummation"
+
+# PR #25021
+@deprecate_moved normalize_string "Unicode" true true
+@deprecate_moved graphemes "Unicode" true true
+@deprecate_moved is_assigned_char "Unicode" true true
+@deprecate_moved textwidth "Unicode" true true
+@deprecate_moved islower "Unicode" true true
+@deprecate_moved isupper "Unicode" true true
+@deprecate_moved isalpha "Unicode" true true
+@deprecate_moved isdigit "Unicode" true true
+@deprecate_moved isnumber "Unicode" true true
+@deprecate_moved isalnum "Unicode" true true
+@deprecate_moved iscntrl "Unicode" true true
+@deprecate_moved ispunct "Unicode" true true
+@deprecate_moved isspace "Unicode" true true
+@deprecate_moved isprint "Unicode" true true
+@deprecate_moved isgraph "Unicode" true true
+@deprecate_moved lowercase "Unicode" true true
+@deprecate_moved uppercase "Unicode" true true
+@deprecate_moved titlecase "Unicode" true true
+@deprecate_moved lcfirst "Unicode" true true
+@deprecate_moved ucfirst "Unicode" true true
 
 # END 0.7 deprecations
 

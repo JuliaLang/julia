@@ -632,6 +632,7 @@ testmap_equivalence(x->x ? false : true, BitMatrix(uninitialized, 10,10))
 testmap_equivalence(x->"foobar", BitMatrix(uninitialized, 10,10))
 testmap_equivalence((x,y,z)->string(x,y,z), BitVector(uninitialized, 10), ones(10), "1234567890")
 
+using Base.Unicode: uppercase
 @test asyncmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
 @test pmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
 

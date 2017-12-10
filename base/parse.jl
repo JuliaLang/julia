@@ -53,7 +53,7 @@ end
 function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos::Int, endpos::Int)
     c, i, j = parseint_next(s, startpos, endpos)
 
-    while isspace(c)
+    while Unicode.isspace(c)
         c, i, j = parseint_next(s,i,endpos)
     end
     (j == 0) && (return 0, 0, 0)
@@ -66,7 +66,7 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
         end
     end
 
-    while isspace(c)
+    while Unicode.isspace(c)
         c, i, j = parseint_next(s,i,endpos)
     end
     (j == 0) && (return 0, 0, 0)
@@ -125,10 +125,10 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
             return Nullable{T}(n)
         end
         c, i = next(s,i)
-        isspace(c) && break
+        Unicode.isspace(c) && break
     end
     (T <: Signed) && (n *= sgn)
-    while !isspace(c)
+    while !Unicode.isspace(c)
         d::T = '0' <= c <= '9' ? c-'0'    :
         'A' <= c <= 'Z' ? c-'A'+10 :
             'a' <= c <= 'z' ? c-'a'+a  : base
@@ -149,7 +149,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     end
     while i <= endpos
         c, i = next(s,i)
-        if !isspace(c)
+        if !Unicode.isspace(c)
             raise && throw(ArgumentError("extra characters after whitespace in $(repr(SubString(s,startpos,endpos)))"))
             return _n
         end
@@ -168,10 +168,10 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
     orig_end   = endpos
 
     # Ignore leading and trailing whitespace
-    while isspace(sbuff[startpos]) && startpos <= endpos
+    while Unicode.isspace(sbuff[startpos]) && startpos <= endpos
         startpos = nextind(sbuff, startpos)
     end
-    while isspace(sbuff[endpos]) && endpos >= startpos
+    while Unicode.isspace(sbuff[endpos]) && endpos >= startpos
         endpos = prevind(sbuff, endpos)
     end
 
@@ -186,7 +186,7 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
 
     if raise
         substr = SubString(sbuff, orig_start, orig_end) # show input string in the error to avoid confusion
-        if all(isspace, substr)
+        if all(Unicode.isspace, substr)
             throw(ArgumentError("input string only contains whitespace"))
         else
             throw(ArgumentError("invalid Bool representation: $(repr(substr))"))
@@ -243,7 +243,7 @@ tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int
 
 function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}}, i::Int, e::Int, raise::Bool) where {T<:Real}
     # skip initial whitespace
-    while i ≤ e && isspace(s[i])
+    while i ≤ e && Unicode.isspace(s[i])
         i = nextind(s, i)
     end
     if i > e

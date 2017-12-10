@@ -1,16 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Various Unicode functionality from the utf8proc library
-module UTF8proc
+module Unicode
 
-import Base: show, ==, hash, string, Symbol, isless, length, eltype, start, next, done, convert, isvalid, lowercase, uppercase, titlecase
-
-export isgraphemebreak, category_code, category_abbrev, category_string
-
-# also exported by Base:
-export normalize_string, graphemes, is_assigned_char, textwidth, isvalid,
-   islower, isupper, isalpha, isdigit, isnumber, isalnum,
-   iscntrl, ispunct, isspace, isprint, isgraph
+import Base: show, ==, hash, string, Symbol, isless, length, eltype, start, next, done, convert, isvalid
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
@@ -216,6 +209,8 @@ For example, NFKC corresponds to the options `compose=true, compat=true, stable=
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> "μ" == normalize_string("µ", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5
 true
 
@@ -246,6 +241,8 @@ Give the number of columns needed to print a character.
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> textwidth('α')
 1
 
@@ -262,6 +259,8 @@ Give the number of columns needed to print a string.
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> textwidth("March")
 5
 ```
@@ -288,6 +287,8 @@ Returns `true` if the given char or integer is an assigned Unicode code point.
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> is_assigned_char(101)
 true
 
@@ -308,6 +309,8 @@ Letter: Lowercase.
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> islower('α')
 true
 
@@ -331,6 +334,8 @@ Letter: Uppercase, or Lt, Letter: Titlecase.
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> isupper('γ')
 false
 
@@ -353,6 +358,8 @@ Tests whether a character is a numeric digit (0-9).
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> isdigit('❤')
 false
 
@@ -374,6 +381,8 @@ category Letter, i.e. a character whose category code begins with 'L'.
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> isalpha('❤')
 false
 
@@ -395,6 +404,8 @@ i.e. a character whose category code begins with 'N'.
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> isnumber('9')
 true
 
@@ -416,6 +427,8 @@ category Letter or Number, i.e. a character whose category code begins with 'L' 
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> isalnum('❤')
 false
 
@@ -442,6 +455,8 @@ Control characters are the non-printing characters of the Latin-1 subset of Unic
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> iscntrl('\\x01')
 true
 
@@ -459,6 +474,8 @@ character whose category code begins with 'P'.
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> ispunct('α')
 false
 
@@ -482,6 +499,8 @@ category Zs.
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> isspace('\\n')
 true
 
@@ -504,6 +523,8 @@ Tests whether a character is printable, including spaces, but not a control char
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> isprint('\\x01')
 false
 
@@ -524,6 +545,8 @@ classified with `isgraph(c)==true`.
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> isgraph('\\x01')
 false
 
@@ -532,6 +555,153 @@ true
 ```
 """
 isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_SO)
+
+"""
+    isascii(c::Union{Char,AbstractString}) -> Bool
+
+Test whether a character belongs to the ASCII character set, or whether this is true for
+all elements of a string.
+
+# Examples
+```jldoctest
+julia> using Unicode
+
+julia> isascii('a')
+true
+
+julia> isascii('α')
+false
+
+julia> isascii("abc")
+true
+
+julia> isascii("αβγ")
+false
+```
+"""
+isascii(c::Char) = c < Char(0x80)
+isascii(s::AbstractString) = all(isascii, s)
+
+"""
+    isxdigit(c::Char) -> Bool
+
+Test whether a character is a valid hexadecimal digit. Note that this does not
+include `x` (as in the standard `0x` prefix).
+
+# Examples
+```jldoctest
+julia> using Unicode
+
+julia> isxdigit('a')
+true
+
+julia> isxdigit('x')
+false
+```
+"""
+isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
+
+## uppercase, lowercase, and titlecase transformations ##
+
+"""
+    uppercase(s::AbstractString)
+
+Return `s` with all characters converted to uppercase.
+
+# Examples
+```jldoctest
+julia> using Unicode
+
+julia> uppercase("Julia")
+"JULIA"
+```
+"""
+uppercase(s::AbstractString) = map(uppercase, s)
+
+"""
+    lowercase(s::AbstractString)
+
+Return `s` with all characters converted to lowercase.
+
+# Examples
+```jldoctest
+julia> using Unicode
+
+julia> lowercase("STRINGS AND THINGS")
+"strings and things"
+```
+"""
+lowercase(s::AbstractString) = map(lowercase, s)
+
+"""
+    titlecase(s::AbstractString)
+
+Capitalize the first character of each word in `s`.
+See also [`ucfirst`](@ref) to capitalize only the first
+character in `s`.
+
+# Examples
+```jldoctest
+julia> using Unicode
+
+julia> titlecase("the julia programming language")
+"The Julia Programming Language"
+```
+"""
+function titlecase(s::AbstractString)
+    startword = true
+    b = IOBuffer()
+    for c in s
+        if isspace(c)
+            print(b, c)
+            startword = true
+        else
+            print(b, startword ? titlecase(c) : c)
+            startword = false
+        end
+    end
+    return String(take!(b))
+end
+
+"""
+    ucfirst(s::AbstractString)
+
+Return `string` with the first character converted to uppercase
+(technically "title case" for Unicode).
+See also [`titlecase`](@ref) to capitalize the first character of
+every word in `s`.
+
+# Examples
+```jldoctest
+julia> using Unicode
+
+julia> ucfirst("python")
+"Python"
+```
+"""
+function ucfirst(s::AbstractString)
+    isempty(s) && return s
+    c = s[1]
+    tc = titlecase(c)
+    return c==tc ? s : string(tc,s[nextind(s,1):end])
+end
+
+"""
+    lcfirst(s::AbstractString)
+
+Return `string` with the first character converted to lowercase.
+
+# Examples
+```jldoctest
+julia> using Unicode
+
+julia> lcfirst("Julia")
+"julia"
+```
+"""
+function lcfirst(s::AbstractString)
+    isempty(s) || islower(s[1]) ? s : string(lowercase(s[1]),s[nextind(s,1):end])
+end
 
 ############################################################################
 # iterators for grapheme segmentation
