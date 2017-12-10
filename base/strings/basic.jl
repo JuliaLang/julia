@@ -16,7 +16,7 @@ about strings:
   * Each `Char` in a string is encoded by one or more code units
   * Only the index of the first code unit of a `Char` is a valid index
   * The encoding of a `Char` is independent of what precedes or follows it
-  * String encodings are [self-synchronizing] – i.e. `isvalid(s,i)` is O(1)
+  * String encodings are [self-synchronizing] – i.e. `isvalid(s, i)` is O(1)
 
 [self-synchronizing]: https://en.wikipedia.org/wiki/Self-synchronizing_code
 
@@ -35,7 +35,8 @@ model allows index arithmetic to work with out-of- bounds indices as
 intermediate values so long as one never uses them to retrieve a character,
 which often helps avoid needing to code around edge cases.
 
-See also: [`codeunit`](@ref), [`ncodeunits`](@ref), [`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
+See also: [`codeunit`](@ref), [`ncodeunits`](@ref), [`thisind`](@ref),
+[`nextind`](@ref), [`prevind`](@ref)
 """
 AbstractString
 
@@ -49,7 +50,8 @@ access this string must satisfy `1 ≤ i ≤ ncodeunits(s)`. Not all such indic
 are valid – they may not be the start of a character, but they will return a
 code unit value when calling `codeunit(s,i)`.
 
-See also: [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref), [`length`](@ref), [`endof`](@ref)
+See also: [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
+[`length`](@ref), [`endof`](@ref)
 """
 ncodeunits(s::AbstractString)
 
@@ -94,7 +96,8 @@ In order for `isvalid(s, i)` to be an O(1) function, the encoding of `s` must
 be [self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code);
 this is a basic assumption of Julia's generic string support.
 
-See also: [`getindex`](@ref), [`next`](@ref), [`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref), [`length`](@ref)
+See also: [`getindex`](@ref), [`next`](@ref), [`thisind`](@ref),
+[`nextind`](@ref), [`prevind`](@ref), [`length`](@ref)
 
 # Examples
 
@@ -128,7 +131,8 @@ be iterated, yielding a sequences of characters. If `i` is out of bounds in `s`
 then a bounds error is raised; if `i` is not a valid character index in `s` then
 a Unicode index error is raised.
 
-See also: [`getindex`](@ref), [`start`](@ref), [`done`](@ref), [`checkbounds`](@ref)
+See also: [`getindex`](@ref), [`start`](@ref), [`done`](@ref),
+[`checkbounds`](@ref)
 """
 next(s::AbstractString, i::Integer) = typeof(i) === Int ?
     throw(MethodError(next, Tuple{typeof(s),Int})) : next(s, Int(i))
@@ -308,7 +312,8 @@ the number of indices between `lo` and `hi` inclusive that are valid indices in
 the string `s`. Note that the trailing character may include code units past `hi`
 and still be counted.
 
-See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`endof`](@ref), [`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
+See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`endof`](@ref),
+[`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
 
 # Examples
 ```jldoctest
@@ -561,9 +566,9 @@ last(s::AbstractString, n::Integer) = s[max(1, prevind(s, ncodeunits(s)+1, n)):e
 """
     reverseind(v, i)
 
-Given an index `i` in [`reverse(v)`](@ref), return the corresponding index in `v` so that
-`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in cases where `v` contains
-non-ASCII characters.)
+Given an index `i` in [`reverse(v)`](@ref), return the corresponding index in
+`v` so that `v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in
+cases where `v` contains non-ASCII characters.)
 
 # Examples
 ```jldoctest
@@ -581,7 +586,9 @@ reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
 """
     repeat(s::AbstractString, r::Integer)
 
-Repeat a string `r` times. This can equivalently be accomplished by calling [`s^r`](@ref ^).
+Repeat a string `r` times. This can be written as `s^r`.
+
+See also: [`^`](@ref)
 
 # Examples
 ```jldoctest
@@ -594,8 +601,9 @@ repeat(s::AbstractString, r::Integer) = repeat(convert(String, s), r)
 """
     ^(s::Union{AbstractString,Char}, n::Integer)
 
-Repeat a string or character `n` times.
-The [`repeat`](@ref) function is an alias to this operator.
+Repeat a string or character `n` times. This can also be written as `repeat(s, n)`.
+
+See also: [`repeat`](@ref)
 
 # Examples
 ```jldoctest
