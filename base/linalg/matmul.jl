@@ -247,6 +247,7 @@ mul!(C::StridedMatrix{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, transB:
     (A = transA.parent; B = transB.parent; gemm_wrapper!(C, 'T', 'T', A, B))
 mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
     (A = transA.parent; B = transB.parent; generic_matmatmul!(C, 'T', 'T', A, B))
+mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, adjoint(B.parent))
 
 *(adjA::Adjoint{<:Any,<:StridedMatrix{T}}, B::StridedMatrix{T}) where {T<:BlasReal} =
     (A = adjA.parent; At_mul_B(A, B))

@@ -232,6 +232,17 @@ end
 
 mul!(A::Diagonal, B::Diagonal) = throw(MethodError(mul!, Tuple{Diagonal,Diagonal}))
 mul!(A::QRPackedQ, D::Diagonal) = throw(MethodError(mul!, Tuple{Diagonal,Diagonal}))
+mul!(A::QRPackedQ, B::Adjoint{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
+mul!(A::QRPackedQ, B::Transpose{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
+mul!(A::Adjoint{<:Any,<:QRPackedQ}, B::Diagonal) = throw(MethodError(mul!, (A, B)))
+mul!(A::Adjoint{<:Any,<:QRPackedQ}, B::Adjoint{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
+mul!(A::Adjoint{<:Any,<:QRPackedQ}, B::Transpose{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
+mul!(A::Diagonal, B::Adjoint{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
+mul!(A::Diagonal, B::Transpose{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
+mul!(A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
+mul!(A::Adjoint{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
+mul!(A::Transpose{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
+mul!(A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
 mul!(transA::Transpose{<:Any,<:Diagonal}, B::Diagonal) =
     throw(MethodError(mul!, Tuple{Transpose{<:Any,<:Diagonal},Diagonal}))
 mul!(adjA::Adjoint{<:Any,<:Diagonal}, B::Diagonal) =
@@ -255,6 +266,14 @@ mul!(out::AbstractMatrix, adjA::Adjoint{<:Any,<:Diagonal}, in::AbstractMatrix) =
     (A = adjA.parent; out .= adjoint.(A.diag) .* in)
 mul!(out::AbstractMatrix, transA::Transpose{<:Any,<:Diagonal}, in::AbstractMatrix) =
     (A = transA.parent; out .= transpose.(A.diag) .* in)
+
+mul!(C::AbstractMatrix, A::Diagonal, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, adjoint(B.parent))
+mul!(C::AbstractMatrix, A::Diagonal, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, transpose(B.parent))
+mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, adjoint(B.parent))
+mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, transpose(B.parent))
+mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, adjoint(B.parent))
+mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, transpose(B.parent))
+
 
 # ambiguities with Symmetric/Hermitian
 # RealHermSymComplex[Sym]/[Herm] only include Number; invariant to [c]transpose
