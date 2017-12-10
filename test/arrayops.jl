@@ -2221,3 +2221,11 @@ end
 @testset "issue 24707" begin
     @test eltype(Vector{Tuple{V}} where V<:Integer) >: Tuple{Integer}
 end
+
+@testset "fill with different Integer types" begin
+    A = fill(1.0, 2, 2)
+    @test A == fill(1.0, Int16(2), 2)
+    @test A == fill(1.0, Int16(2), Int16(2))
+    @test A == fill(1.0, (Int16(2), 2))
+    @test A == fill(1.0, (Int16(2), Int16(2)))
+end

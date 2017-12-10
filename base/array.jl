@@ -330,8 +330,9 @@ julia> fill(1.0, (5,5))
 If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
 dims)` will return an array filled with the result of evaluating `Foo()` once.
 """
-fill(v, dims::Dims)       = fill!(Array{typeof(v)}(uninitialized, dims), v)
-fill(v, dims::Integer...) = fill!(Array{typeof(v)}(uninitialized, dims...), v)
+fill(v, dims::Dims)                     = fill!(Array{typeof(v)}(uninitialized, dims), v)
+fill(v, dims::Vararg{<:Integer})        = fill(v, Dims(dims))
+fill(v, dims::Tuple{Vararg{<:Integer}}) = fill(v, Dims(dims))
 
 """
     zeros([T=Float64,] dims...)
