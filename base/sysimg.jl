@@ -135,6 +135,9 @@ include("reinterpretarray.jl")
 # type and dimensionality specified, accepting dims as series of Integers
 Vector{T}(::Uninitialized, m::Integer) where {T} = Vector{T}(uninitialized, Int(m))
 Matrix{T}(::Uninitialized, m::Integer, n::Integer) where {T} = Matrix{T}(uninitialized, Int(m), Int(n))
+Array{T,N}(::Uninitialized, d::Vararg{<:Integer}) where {T,N} = Array{T,N}(uninitialized, Dims(d))
+# type and dimensionality specified, accepting dims as a tuple of Integers
+Array{T,N}(::Uninitialized, d::Tuple{Vararg{<:Integer}}) where {T,N} = Array{T,N}(uninitialized, Dims(d))
 # type but not dimensionality specified, accepting dims as series of Integers
 Array{T}(::Uninitialized, m::Integer) where {T} = Array{T,1}(uninitialized, Int(m))
 Array{T}(::Uninitialized, m::Integer, n::Integer) where {T} = Array{T,2}(uninitialized, Int(m), Int(n))

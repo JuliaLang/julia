@@ -331,6 +331,11 @@ end
     @test TA == typeof(Array{Int}(uninitialized, Int16(2), Int16(2)))
     @test TA == typeof(Array{Int}(uninitialized, (Int16(2), 2)))
     @test TA == typeof(Array{Int}(uninitialized, (Int16(2), Int16(2))))
+    # Array{T,N} construction with different Integer combinations
+    @test TA == typeof(Matrix{Int}(uninitialized, Int16(2), 2))
+    @test TA == typeof(Matrix{Int}(uninitialized, Int16(2), Int16(2)))
+    @test TA == typeof(Matrix{Int}(uninitialized, (Int16(2), 2)))
+    @test TA == typeof(Matrix{Int}(uninitialized, (Int16(2), Int16(2))))
 end
 @testset "get" begin
     A = reshape(1:24, 3, 8)
