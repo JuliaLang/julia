@@ -400,7 +400,7 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})::Vector{UUID}
     end
 
     textwidth = VERSION < v"0.7.0-DEV.1930" ? Base.strwidth : Base.textwidth
-    widths = [textwidth(names[pkg.uuid]) for pkg in pkgs]
+    widths = [textwidth(names[pkg.uuid]) for pkg in pkgs if haskey(names, pkg.uuid)]
     max_name = length(widths) == 0 ? 0 : maximum(widths)
 
     for _ in 1:length(pkgs)
