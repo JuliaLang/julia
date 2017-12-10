@@ -13,7 +13,8 @@ Core.String(::AbstractString)
 Base.SubString
 Base.transcode
 Base.unsafe_string
-Base.codeunit(::AbstractString, ::Integer)
+Base.ncodeunits(::AbstractString)
+Base.codeunit
 Base.ascii
 Base.@r_str
 Base.@raw_str
