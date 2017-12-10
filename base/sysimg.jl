@@ -140,6 +140,8 @@ Array{T}(::Uninitialized, m::Integer) where {T} = Array{T,1}(uninitialized, Int(
 Array{T}(::Uninitialized, m::Integer, n::Integer) where {T} = Array{T,2}(uninitialized, Int(m), Int(n))
 Array{T}(::Uninitialized, m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(uninitialized, Int(m), Int(n), Int(o))
 Array{T}(::Uninitialized, d::Integer...) where {T} = Array{T}(uninitialized, convert(Tuple{Vararg{Int}}, d))
+# type but not dimensionality specified, accepting dims as tuple of Integers
+Array{T}(::Uninitialized, d::Tuple{Vararg{<:Integer}}) where {T} = Array{T}(uninitialized, Dims(d))
 # dimensionality but not type specified, accepting dims as series of Integers
 Vector(::Uninitialized, m::Integer) = Vector{Any}(uninitialized, Int(m))
 Matrix(::Uninitialized, m::Integer, n::Integer) = Matrix{Any}(uninitialized, Int(m), Int(n))

@@ -324,6 +324,13 @@ end
         error("unexpected depwarn value")
     end
     @test_throws MethodError Array{Int,3}()
+
+    # Array{T} construction with different Integer combinations
+    TA = typeof(Array{Int}(uninitialized, 2, 2))
+    @test TA == typeof(Array{Int}(uninitialized, Int16(2), 2))
+    @test TA == typeof(Array{Int}(uninitialized, Int16(2), Int16(2)))
+    @test TA == typeof(Array{Int}(uninitialized, (Int16(2), 2)))
+    @test TA == typeof(Array{Int}(uninitialized, (Int16(2), Int16(2))))
 end
 @testset "get" begin
     A = reshape(1:24, 3, 8)
