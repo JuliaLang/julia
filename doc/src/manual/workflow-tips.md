@@ -11,7 +11,7 @@ your experience at the command line.
 ### A basic editor/REPL workflow
 
 The most basic Julia workflows involve using a text editor in conjunction with the `julia` command
-line. A common pattern includes the following elements:
+line. To keep the REPL session in sync with code changes made by the editor, there are multiple options. The package [Revise.jl](https://github.com/timholy/Revise.jl) can be used to manage this synchrony automatically. Alternatively, the following setup is recommended: 
 
   * **Put code under development in a temporary module.** Create a file, say `Tmp.jl`, and include
     within it
@@ -32,7 +32,12 @@ line. A common pattern includes the following elements:
     and includes tests for the contents of `Tmp`. The value of using `import` versus `using` is that
     you can call `reload("Tmp")` instead of having to restart the REPL when your definitions change.
     Of course, the cost is the need to prepend `Tmp.` to uses of names defined in your module. (You
-    can lower that cost by keeping your module name short.)
+    can lower that cost by keeping your module name short.)  
+    If the module name is long, you can also alias it after importing, 
+    `ShrtNm = MyVeryLongModuleName`. Then you can refer to your symbols using `ShrtNm.func` instead of 
+    `MyVeryLongModuleName.func` Everytime you `reload` the module, you
+    must also update the binding `ShrtNm = MyVeryLongModuleName`, or else
+    `ShrtNm` will refer to the old definitions.
 
     Alternatively, you can wrap the contents of your test file in a module, as
 
