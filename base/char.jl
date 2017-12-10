@@ -89,8 +89,6 @@ hash(x::Char, h::UInt) =
 +(x::Char, y::Integer) = Char(Int32(x) + Int32(y))
 +(x::Integer, y::Char) = y + x
 
-bswap(x::Char) = Char(bswap(UInt32(x)))
-
 print(io::IO, c::Char) = (write(io, c); nothing)
 
 const hex_chars = UInt8['0':'9';'a':'z']

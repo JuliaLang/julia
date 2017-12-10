@@ -5,13 +5,10 @@
 @test typemin(Char) == Char(0)
 @test ndims(Char) == 0
 @test getindex('a', 1) == 'a'
-@test_throws BoundsError getindex('a',2)
-# This is current behavior, but it seems incorrect
-@test getindex('a',1,1,1) == 'a'
-@test_throws BoundsError getindex('a',1,1,2)
-# bswap of a Char should be removed, only the underlying codeunit (UInt32)
-# should be swapped
-@test bswap('\U10200') == '\U20100'
+@test_throws BoundsError getindex('a', 2)
+# This is current behavior, but it seems questionable
+@test getindex('a', 1, 1, 1) == 'a'
+@test_throws BoundsError getindex('a', 1, 1, 2)
 
 @test 'b' + 1 == 'c'
 @test typeof('b' + 1) == Char
