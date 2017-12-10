@@ -5,7 +5,8 @@ module UMFPACK
 export UmfpackLU
 
 import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
-import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact
+import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact, ldiv!
+using Base.LinAlg: Adjoint, Transpose
 
 using ..SparseArrays
 import ..SparseArrays: nnz
@@ -384,25 +385,31 @@ function nnz(lu::UmfpackLU)
 end
 
 ### Solve with Factorization
-A_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = A_ldiv_B!(B, lu, copy(B))
-At_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = At_ldiv_B!(B, lu, copy(B))
-Ac_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = Ac_ldiv_B!(B, lu, copy(B))
-A_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = A_ldiv_B!(B, lu, copy(B))
-At_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = At_ldiv_B!(B, lu, copy(B))
-Ac_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = Ac_ldiv_B!(B, lu, copy(B))
+ldiv!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+    A_ldiv_B!(B, lu, copy(B))
+ldiv!(translu::Transpose{T,<:UmfpackLU{T}}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+    (lu = translu.parent; At_ldiv_B!(B, lu, copy(B)))
+ldiv!(adjlu::Adjoint{T,<:UmfpackLU{T}}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+    (lu = adjlu.parent; Ac_ldiv_B!(B, lu, copy(B)))
+ldiv!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) =
+    A_ldiv_B!(B, lu, copy(B))
+ldiv!(translu::Transpose{Float64,<:UmfpackLU{Float64}}, B::StridedVecOrMat{<:Complex}) =
+    (lu = translu.parent; At_ldiv_B!(B, lu, copy(B)))
+ldiv!(adjlu::Adjoint{Float64,<:UmfpackLU{Float64}}, B::StridedVecOrMat{<:Complex}) =
+    (lu = adjlu.parent; Ac_ldiv_B!(B, lu, copy(B)))
 
-A_ldiv_B!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+ldiv!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
     _Aq_ldiv_B!(X, lu, B, UMFPACK_A)
-At_ldiv_B!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
-    _Aq_ldiv_B!(X, lu, B, UMFPACK_Aat)
-Ac_ldiv_B!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
-    _Aq_ldiv_B!(X, lu, B, UMFPACK_At)
-A_ldiv_B!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
+ldiv!(X::StridedVecOrMat{T}, translu::Transpose{T,<:UmfpackLU{T}}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+    (lu = translu.parent; _Aq_ldiv_B!(X, lu, B, UMFPACK_Aat))
+ldiv!(X::StridedVecOrMat{T}, adjlu::Adjoint{T,<:UmfpackLU{T}}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+    (lu = adjlu.parent; _Aq_ldiv_B!(X, lu, B, UMFPACK_At))
+ldiv!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
     _Aq_ldiv_B!(X, lu, B, UMFPACK_A)
-At_ldiv_B!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
-    _Aq_ldiv_B!(X, lu, B, UMFPACK_Aat)
-Ac_ldiv_B!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
-    _Aq_ldiv_B!(X, lu, B, UMFPACK_At)
+ldiv!(X::StridedVecOrMat{Tb}, translu::Transpose{Float64,<:UmfpackLU{Float64}}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
+    (lu = translu.parent; _Aq_ldiv_B!(X, lu, B, UMFPACK_Aat))
+ldiv!(X::StridedVecOrMat{Tb}, adjlu::Adjoint{Float64,<:UmfpackLU{Float64}}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
+    (lu = adjlu.parent; _Aq_ldiv_B!(X, lu, B, UMFPACK_At))
 
 function _Aq_ldiv_B!(X::StridedVecOrMat, lu::UmfpackLU, B::StridedVecOrMat, transposeoptype)
     if size(X, 2) != size(B, 2)
