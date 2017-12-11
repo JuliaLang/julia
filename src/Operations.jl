@@ -129,7 +129,7 @@ function deps_graph(env::EnvCache, pkgs::Vector{PackageSpec})
                 versions = sort!(collect(keys(version_info)))
                 dependencies = load_package_data(UUID, joinpath(path, "dependencies.toml"), versions)
                 compatibility = load_package_data(VersionSpec, joinpath(path, "compatibility.toml"), versions)
-                for (v, h) in version_info
+                for v in versions
                     d = get_or_make(Dict{String,UUID}, dependencies, v)
                     r = get_or_make(Dict{String,VersionSpec}, compatibility, v)
                     q = Dict(u => get_or_make(VersionSpec, r, p) for (p, u) in d)
@@ -164,7 +164,7 @@ function resolve_versions!(env::EnvCache, pkgs::Vector{PackageSpec})::Dict{UUID,
     reqs = Requires(pkg.uuid => pkg.version for pkg in pkgs)
     deps = deps_graph(env, pkgs)
     for dep_uuid in keys(deps)
-        info = manifest_info(env, UUID(dep_uuid))
+        info = manifest_info(env, dep_uuid)
         if info != nothing
             uuid_to_name[UUID(info["uuid"])] = info["name"]
         end

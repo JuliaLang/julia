@@ -144,7 +144,7 @@ function sanity_check(deps::DepsGraph, uuid_to_name::Dict{UUID,String},
                 isa(err, UnsatError) || rethrow(err)
                 pp = red_pkgs[err.info]
                 for vneq in eq_classes[p][vn]
-                    push!(problematic, (p, vneq, pp))
+                    push!(problematic, (id(p), vneq, pp))
                 end
             end
         end
