@@ -636,6 +636,10 @@ end
 
 @inline function unsafe_bitsetindex!(Bc::Array{UInt64}, x::Bool, i::Int)
     i1, i2 = get_chunks_id(i)
+    _unsafe_bitsetindex!(Bc, x, i1, i2)
+end
+
+@inline function _unsafe_bitsetindex!(Bc::Array{UInt64}, x::Bool, i1::Int, i2::Int)
     u = UInt64(1) << i2
     @inbounds begin
         c = Bc[i1]

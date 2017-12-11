@@ -100,8 +100,9 @@ end
         b || return s
         _growbeg0!(s.bits, -diff)
         s.offset += diff
+        diff = 0
     end
-    unsafe_bitsetindex!(s.bits, b, 1+idx-intoffset(s))
+    _unsafe_bitsetindex!(s.bits, b, diff+1, chk_offset(idx))
     s
 end
 
@@ -323,7 +324,8 @@ end
 
 done(s::BitSet, i) = i == -1
 
-@noinline _throw_bitset_notempty_error() = throw(ArgumentError("collection must be non-empty"))
+@noinline _throw_bitset_notempty_error() =
+    throw(ArgumentError("collection must be non-empty"))
 
 function first(s::BitSet)
     idx = _bits_findnext(s.bits, 0)
