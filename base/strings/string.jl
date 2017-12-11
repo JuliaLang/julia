@@ -124,13 +124,13 @@ function nextind(s::String, i::Int)
     end
     # first continuation byte
     @inbounds b = codeunit(s, i += 1)
-    (b & 0xc0 != 0x80) | ((i += 1) > n) | (l < 0xe0) && return i
+    (b & 0xc0 ≠ 0x80) | ((i += 1) > n) | (l < 0xe0) && return i
     # second continuation byte
     @inbounds b = codeunit(s, i)
-    (b & 0xc0 != 0x80) | ((i += 1) > n) | (l < 0xf0) && return i
+    (b & 0xc0 ≠ 0x80) | ((i += 1) > n) | (l < 0xf0) && return i
     # third continuation byte
     @inbounds b = codeunit(s, i)
-    ifelse(b & 0xc0 != 0x80, i, i+1)
+    ifelse(b & 0xc0 ≠ 0x80, i, i+1)
 end
 
 ## checking UTF-8 & ACSII validity ##
@@ -143,7 +143,7 @@ byte_string_classify(s::String) =
     # 1: valid ASCII
     # 2: valid UTF-8
 
-isvalid(::Type{String}, s::Union{Vector{UInt8},String}) = byte_string_classify(s) != 0
+isvalid(::Type{String}, s::Union{Vector{UInt8},String}) = byte_string_classify(s) ≠ 0
 isvalid(s::String) = isvalid(String, s)
 
 is_valid_continuation(c) = c & 0xc0 == 0x80
