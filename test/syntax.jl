@@ -541,7 +541,7 @@ for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :c
 end
 
 # meta nodes for optional positional arguments
-@test Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[2].args[3].inlineable
+@test Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-1].args[3].inlineable
 
 # issue #16096
 module M16096
@@ -711,7 +711,7 @@ m4_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m4 end))
 # and the return is handled correctly
 # NOTE: we currently only emit push/pop locations for macros from other files
 @test_broken count_meta_loc(m1_exprs) == 1
-@test_broken is_return_ssavalue(m1_exprs[end])
+@test is_return_ssavalue(m1_exprs[end])
 @test_broken is_pop_loc(m1_exprs[end - 1])
 
 @test_broken count_meta_loc(m2_exprs) == 1
@@ -745,7 +745,7 @@ f2_exprs = get_expr_list(@code_typed(f2(1))[1])
 @test is_pop_loc(f2_exprs[end])
 @test Meta.isexpr(f2_exprs[end - 1], :return)
 
-if Base.JLOptions().code_coverage != 0 && Base.JLOptions().can_inline != 0
+if Base.JLOptions().can_inline != 0
     @test count_meta_loc(f1_exprs) == 1
     @test count_meta_loc(f2_exprs) == 2
 else

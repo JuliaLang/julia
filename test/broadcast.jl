@@ -317,7 +317,6 @@ end
 
 # make sure scalars are inlined, which causes f.(x,scalar) to lower to a "thunk"
 import Base.Meta: isexpr
-@test isexpr(Meta.lower(Main, :(f.(x,y))), :call)
 @test isexpr(Meta.lower(Main, :(f.(x,1))), :thunk)
 @test isexpr(Meta.lower(Main, :(f.(x,1.0))), :thunk)
 @test isexpr(Meta.lower(Main, :(f.(x,$π))), :thunk)

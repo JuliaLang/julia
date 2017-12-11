@@ -124,6 +124,11 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname, jl_value_t *expec
     jl_type_error_rt(fname, "", expected, got);
 }
 
+JL_DLLEXPORT void JL_NORETURN jl_type_error_new_expr(jl_value_t *ty, jl_value_t *got)
+{
+    jl_type_error_rt("Type", "new", ty, got);
+}
+
 JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
 {
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));

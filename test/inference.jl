@@ -895,10 +895,11 @@ let f, m
     f() = 0
     m = first(methods(f))
     m.source = Base.uncompressed_ast(m)::CodeInfo
-    m.source.ssavaluetypes = 1
+    m.source.ssavaluetypes = 2
     m.source.code = Any[
         Expr(:(=), SSAValue(0), Expr(:call, GlobalRef(Core, :svec), 1, 2, 3)),
-        Expr(:return, Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(0)))
+        Expr(:(=), SSAValue(1), Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(0))),
+        Expr(:return, SSAValue(1))
     ]
     @test @inferred(f()) == 6
 end
