@@ -2,7 +2,9 @@
 
 debug = false
 using Test
-using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!, UnitUpperTriangular, UnitLowerTriangular, A_rdiv_B!, A_rdiv_Bt!, A_rdiv_Bc!
+using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!,
+                    UnitUpperTriangular, UnitLowerTriangular,
+                    mul!, rdiv!, Adjoint, Transpose
 
 debug && println("Triangular matrices")
 
@@ -318,7 +320,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
 
             if !(eltyB in (BigFloat, Complex{BigFloat})) # rand does not support BigFloat and Complex{BigFloat} as of Dec 2015
                 Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
-                @test Base.LinAlg.A_mul_B!(Tri,copy(A1)) ≈ Tri*Matrix(A1)
+                @test mul!(Tri,copy(A1)) ≈ Tri*Matrix(A1)
             end
 
             # Triangular-dense Matrix/vector multiplication
@@ -343,24 +345,24 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test B'A1' ≈ B'Matrix(A1)'
 
             if eltyB == elty1
-                @test A_mul_B!(similar(B),A1,B)  ≈ A1*B
-                @test A_mul_Bc!(similar(B),A1,B) ≈ A1*B'
-                @test A_mul_Bt!(similar(B),A1,B) ≈ A1*B.'
-                @test Ac_mul_B!(similar(B),A1,B) ≈ A1'*B
-                @test At_mul_B!(similar(B),A1,B) ≈ A1.'*B
+                @test mul!(similar(B),A1,B)  ≈ A1*B
+                @test mul!(similar(B), A1, Adjoint(B)) ≈ A1*B'
+                @test mul!(similar(B), A1, Transpose(B)) ≈ A1*B.'
+                @test mul!(similar(B), Adjoint(A1), B) ≈ A1'*B
+                @test mul!(similar(B), Transpose(A1), B) ≈ A1.'*B
                 # test also vector methods
                 B1 = vec(B[1,:])
-                @test A_mul_B!(similar(B1),A1,B1)  ≈ A1*B1
-                @test Ac_mul_B!(similar(B1),A1,B1) ≈ A1'*B1
-                @test At_mul_B!(similar(B1),A1,B1) ≈ A1.'*B1
+                @test mul!(similar(B1),A1,B1)  ≈ A1*B1
+                @test mul!(similar(B1), Adjoint(A1), B1) ≈ A1'*B1
+                @test mul!(similar(B1), Transpose(A1), B1) ≈ A1.'*B1
             end
             #error handling
-            @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(A1, ones(eltyB,n+1))
-            @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(ones(eltyB,n+1,n+1), A1)
-            @test_throws DimensionMismatch Base.LinAlg.At_mul_B!(A1, ones(eltyB,n+1))
-            @test_throws DimensionMismatch Base.LinAlg.Ac_mul_B!(A1, ones(eltyB,n+1))
-            @test_throws DimensionMismatch Base.LinAlg.A_mul_Bc!(ones(eltyB,n+1,n+1),A1)
-            @test_throws DimensionMismatch Base.LinAlg.A_mul_Bt!(ones(eltyB,n+1,n+1),A1)
+            @test_throws DimensionMismatch mul!(A1, ones(eltyB,n+1))
+            @test_throws DimensionMismatch mul!(ones(eltyB,n+1,n+1), A1)
+            @test_throws DimensionMismatch mul!(Transpose(A1), ones(eltyB,n+1))
+            @test_throws DimensionMismatch mul!(Adjoint(A1), ones(eltyB,n+1))
+            @test_throws DimensionMismatch mul!(ones(eltyB,n+1,n+1), Adjoint(A1))
+            @test_throws DimensionMismatch mul!(ones(eltyB,n+1,n+1), Transpose(A1))
 
             # ... and division
             @test A1\B[:,1] ≈ Matrix(A1)\B[:,1]
@@ -489,20 +491,20 @@ end
 let n = 5
     A = rand(Float16, n, n)
     B = rand(Float16, n-1, n-1)
-    @test_throws DimensionMismatch A_rdiv_B!(A, LowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_B!(A, UpperTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_B!(A, UnitLowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_B!(A, UnitUpperTriangular(B))
+    @test_throws DimensionMismatch rdiv!(A, LowerTriangular(B))
+    @test_throws DimensionMismatch rdiv!(A, UpperTriangular(B))
+    @test_throws DimensionMismatch rdiv!(A, UnitLowerTriangular(B))
+    @test_throws DimensionMismatch rdiv!(A, UnitUpperTriangular(B))
 
-    @test_throws DimensionMismatch A_rdiv_Bc!(A, LowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bc!(A, UpperTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bc!(A, UnitLowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bc!(A, UnitUpperTriangular(B))
+    @test_throws DimensionMismatch rdiv!(A, Adjoint(LowerTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, Adjoint(UpperTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, Adjoint(UnitLowerTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, Adjoint(UnitUpperTriangular(B)))
 
-    @test_throws DimensionMismatch A_rdiv_Bt!(A, LowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bt!(A, UpperTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bt!(A, UnitLowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bt!(A, UnitUpperTriangular(B))
+    @test_throws DimensionMismatch rdiv!(A, Transpose(LowerTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, Transpose(UpperTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, Transpose(UnitLowerTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, Transpose(UnitUpperTriangular(B)))
 end
 
 # Test that UpperTriangular(LowerTriangular) throws. See #16201
