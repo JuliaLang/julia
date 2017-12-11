@@ -158,7 +158,7 @@ function docstr(binding::Binding, @nospecialize typesig = Union{})
     end
     error("could not find matching docstring for '$binding :: $typesig'.")
 end
-docstr(object, data = Dict()) = _docstr(object, data)
+docstr(object, data = Dict{Any,Any}()) = _docstr(object, data)
 
 _docstr(vec::Core.SimpleVector, data) = DocStr(vec,            Nullable(),       data)
 _docstr(str::AbstractString,    data) = DocStr(Core.svec(str), Nullable(),       data)

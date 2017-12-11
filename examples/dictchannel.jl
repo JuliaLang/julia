@@ -5,7 +5,7 @@ import Base: put!, wait, isready, take!, fetch
 mutable struct DictChannel <: AbstractChannel
     d::Dict
     cond_take::Condition    # waiting for data to become available
-    DictChannel() = new(Dict(), Condition())
+    DictChannel() = new(Dict{Any,Any}(), Condition())
 end
 
 function put!(D::DictChannel, k, v)

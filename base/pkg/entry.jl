@@ -648,7 +648,7 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set{Any}())
 end
 
 function build(pkgs::Vector)
-    errs = Dict()
+    errs = Dict{Any,Any}()
     build!(pkgs,errs)
     isempty(errs) && return
     println(STDERR)
@@ -680,7 +680,7 @@ function updatehook!(pkgs::Vector, errs::Dict, seen::Set=Set{Any}())
 end
 
 function updatehook(pkgs::Vector)
-    errs = Dict()
+    errs = Dict{Any,Any}()
     updatehook!(pkgs,errs)
     isempty(errs) && return
     println(STDERR)

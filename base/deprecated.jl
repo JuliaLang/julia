@@ -2059,6 +2059,7 @@ end
 @deprecate Matrix(m::Integer, n::Integer)                           Matrix(uninitialized, m, n)
 
 @deprecate Set() Set{Any}()
+@deprecate Dict() Dict{Any,Any}()
 
 # deprecate IntSet to BitSet
 @deprecate_binding IntSet BitSet

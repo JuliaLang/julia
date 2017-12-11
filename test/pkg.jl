@@ -658,7 +658,7 @@ temp_pkg_dir(initialize=false) do
     write_build("Exit", "exit()")
 
     cd(Pkg.dir()) do
-        errors = Dict()
+        errors = Dict{Any,Any}()
 
         empty!(errors)
         @test_warn ("INFO: Building Error",

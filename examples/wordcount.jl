@@ -22,7 +22,7 @@
 # appears in that string.
 function wordcount(text)
     words=split(text,[' ','\n','\t','-','.',',',':',';'];keep=false)
-    counts=Dict()
+    counts=Dict{Any,Any}()
     for w = words
         counts[w]=get(counts,w,0)+1
     end
@@ -34,7 +34,7 @@ end
 # Returns a Dict in which words that appear in multiple inputs
 # have their totals added together.
 function wcreduce(wcs)
-    counts=Dict()
+    counts=Dict{Any,Any}()
     for c in wcs, (k,v) in c
         counts[k] = get(counts,k,0)+v
     end

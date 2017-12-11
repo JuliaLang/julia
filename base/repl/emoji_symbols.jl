@@ -4,7 +4,7 @@
 import JSON
 emojis = JSON.parsefile(download("https://raw.githubusercontent.com/iamcal/emoji-data/0f0cf4ea8845eb52d26df2a48c3c31c3b8cad14e/emoji_pretty.json"))
 
-result = Dict()
+result = Dict{Any,Any}()
 for emj in emojis
     name = "\\:" * emj["short_name"] * ":"
     unicode = emj["unified"]

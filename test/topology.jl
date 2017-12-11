@@ -58,7 +58,7 @@ function Base.launch(manager::TopoTestManager, params::Dict, launched::Array, c:
     notify(c)
 end
 
-const map_pid_ident=Dict()
+const map_pid_ident = Dict{Any,Any}()
 function Base.manage(manager::TopoTestManager, id::Integer, config::WorkerConfig, op::Symbol)
     if op == :register
         map_pid_ident[id] = get(config.ident)

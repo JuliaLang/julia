@@ -4,7 +4,7 @@ mutable struct MD
     content::Vector{Any}
     meta::Dict{Any, Any}
 
-    MD(content::AbstractVector, meta::Dict = Dict()) =
+    MD(content::AbstractVector, meta::Dict = Dict{Any,Any}()) =
         new(content, meta)
 end
 
