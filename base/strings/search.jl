@@ -1,5 +1,73 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+function search(s::String, c::Char, i::Integer = 1)
+    if i < 1 || i > sizeof(s)
+        i == sizeof(s) + 1 && return 0
+        throw(BoundsError(s, i))
+    end
+    @inbounds if is_valid_continuation(codeunit(s,i))
+        string_index_err(s, i)
+    end
+    c ≤ '\x7f' && return search(s, c % UInt8, i)
+    while true
+        i = search(s, first_utf8_byte(c), i)
+        (i == 0 || s[i] == c) && return i
+        i = next(s, i)[2]
+    end
+end
+
+function search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
+    if i < 1
+        throw(BoundsError(a, i))
+    end
+    n = sizeof(a)
+    if i > n
+        return i == n+1 ? 0 : throw(BoundsError(a, i))
+    end
+    p = pointer(a)
+    q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
+    q == C_NULL ? 0 : Int(q-p+1)
+end
+
+function search(a::ByteArray, b::Char, i::Integer = 1)
+    if Unicode.isascii(b)
+        search(a,UInt8(b),i)
+    else
+        search(a,Vector{UInt8}(string(b)),i).start
+    end
+end
+
+function rsearch(s::String, c::Char, i::Integer = sizeof(s))
+    c ≤ '\x7f' && return rsearch(s, c % UInt8, i)
+    b = first_utf8_byte(c)
+    while true
+        i = rsearch(s, b, i)
+        (i == 0 || s[i] == c) && return i
+        i = prevind(s, i)
+    end
+end
+
+function rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(s))
+    if i < 1
+        return i == 0 ? 0 : throw(BoundsError(a, i))
+    end
+    n = sizeof(a)
+    if i > n
+        return i == n+1 ? 0 : throw(BoundsError(a, i))
+    end
+    p = pointer(a)
+    q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
+    q == C_NULL ? 0 : Int(q-p+1)
+end
+
+function rsearch(a::ByteArray, b::Char, i::Integer = length(a))
+    if Unicode.isascii(b)
+        rsearch(a,UInt8(b),i)
+    else
+        rsearch(a,Vector{UInt8}(string(b)),i).start
+    end
+end
+
 const Chars = Union{Char,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
 
 """
