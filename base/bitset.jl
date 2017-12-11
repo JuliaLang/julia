@@ -5,7 +5,7 @@ const CHK0 = zero(UInt64)
 
 mutable struct BitSet <: AbstractSet{Int}
     bits::Vector{UInt64}
-    # 1st stored Int equals 64*offset+1
+    # 1st stored Int equals 64*offset
     offset::Int
 
     BitSet() = new(sizehint!(zeros(UInt64, 0), 4), 0)
@@ -47,27 +47,29 @@ eltype(s::BitSet) = Int
 sizehint!(s::BitSet, n::Integer) = (sizehint!(s.bits, (n+63) >> 6); s)
 
 # given an integer i, return the chunk which stores it
-chk_indice(i::Int) = (((i % Int128)+63) >> 6) % Int # Int128 necessary when i close to typemax(Int)
+chk_indice(i::Int) = i >> 6
 # return the bit offset of i within chk_indice(i)
-chk_offset(i::Int) = ((i % Int128)-1) & 63 % Int
+chk_offset(i::Int) = i & 63
 
 function _bits_getindex(b::Bits, n::Int, offset::Int)
-    ci = chk_indice(n) - offset
+    ci = chk_indice(n) - offset + 1
     1 <= ci <= length(b) || return false
     @inbounds r = (b[ci] & (one(UInt64) << chk_offset(n))) != 0
     r
 end
 
 function _bits_findnext(b::Bits, start::Int)
-    start = max(1, start)
-    chk_indice(start) > length(b) && return 0
-    unsafe_bitfindnext(b, start)
+    # start is 0-based
+    # @assert start >= 0
+    chk_indice(start) + 1 > length(b) && return -1
+    unsafe_bitfindnext(b, start+1) - 1
 end
 
 function _bits_findprev(b::Bits, start::Int)
-    start = min(length(b) << 6, start)
-    start > 0 || return 0
-    unsafe_bitfindprev(b, start)
+    # start is 0-based
+    # @assert start <= 64 * length(b) - 1
+    start >= 0 || return -1
+    unsafe_bitfindprev(b, start+1) - 1
 end
 
 # An internal function for setting the inclusion bit for a given integer
@@ -76,19 +78,18 @@ end
     len = length(s.bits)
     if len == 0 # initialize the offset
         b || return s
-        s.offset = cidx - 1
+        s.offset = cidx
     end
     diff = cidx - s.offset
-    if diff > len
+    if diff >= len
         b || return s # setting a bit to zero outside the set's bits is a no-op
-        _growend0!(s.bits, diff - len)
-    elseif diff <= 0
+        _growend0!(s.bits, diff - len + 1)
+    elseif diff < 0
         b || return s
-        nchunks = 1 - diff
-        _growbeg0!(s.bits, nchunks)
-        s.offset -= nchunks
+        _growbeg0!(s.bits, -diff)
+        s.offset += diff
     end
-    unsafe_bitsetindex!(s.bits, b, idx-intoffset(s))
+    unsafe_bitsetindex!(s.bits, b, 1+idx-intoffset(s))
     s
 end
 
@@ -273,25 +274,25 @@ symdiff!(s1::BitSet, s2::BitSet) = _matched_map!(xor, s1, s2)
 @inline in(n::Integer, s::BitSet) = _is_convertible_Int(n) ? in(Int(n), s) : false
 
 # Use the next-set index as the state to prevent looking it up again in done
-start(s::BitSet) = next(s, 0)[2]
+start(s::BitSet) = _bits_findnext(s.bits, 0)
 
 function next(s::BitSet, i::Int)
-    nextidx = i == typemax(Int) ? 0 : _bits_findnext(s.bits, i+1)
+    nextidx = _bits_findnext(s.bits, i+1)
     (i+intoffset(s), nextidx)
 end
 
-done(s::BitSet, i) = i == 0
+done(s::BitSet, i) = i == -1
 
 @noinline _throw_bitset_notempty_error() = throw(ArgumentError("collection must be non-empty"))
 
 function first(s::BitSet)
-    idx = _bits_findnext(s.bits, 1)
-    idx == 0 ? _throw_bitset_notempty_error() : idx + intoffset(s)
+    idx = _bits_findnext(s.bits, 0)
+    idx == -1 ? _throw_bitset_notempty_error() : idx + intoffset(s)
 end
 
 function last(s::BitSet)
-    idx = _bits_findprev(s.bits, typemax(Int))
-    idx == 0 ? _throw_bitset_notempty_error() : idx + intoffset(s)
+    idx = _bits_findprev(s.bits, (length(s.bits) << 6) - 1)
+    idx == -1 ? _throw_bitset_notempty_error() : idx + intoffset(s)
 end
 
 length(s::BitSet) = bitcount(s.bits) # = mapreduce(count_ones, +, 0, s.bits)
