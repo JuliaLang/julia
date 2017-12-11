@@ -112,3 +112,11 @@ let aa = rand(200, 200)
         @test a ≈ f[:vectors] * Diagonal(f[:values]) / f[:vectors]
     end
 end
+
+@testset "rational promotion: issue #24935" begin
+    A = [1//2 0//1; 0//1 2//3]
+    for λ in (eigvals(A), @inferred(eigvals(Symmetric(A))))
+        @test λ isa Vector{Float64}
+        @test λ ≈ [0.5, 2/3]
+    end
+end
