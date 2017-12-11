@@ -47,7 +47,7 @@ end
 
 ### General promotion rules
 convert(::Type{Factorization{T}}, F::Factorization{T}) where {T} = F
-inv(F::Factorization{T}) where {T} = (n = size(F, 1); A_ldiv_B!(F, Matrix{T}(I, n, n)))
+inv(F::Factorization{T}) where {T} = (n = size(F, 1); ldiv!(F, Matrix{T}(I, n, n)))
 
 Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, h, 1:nfields(F))
 Base.:(==)(  F::T, G::T) where {T<:Factorization} = all(f -> getfield(F, f) == getfield(G, f), 1:nfields(F))
@@ -57,7 +57,7 @@ Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F,
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::Factorization{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
     c2r = reshape(transpose(reinterpret(T, reshape(B, (1, length(B))))), size(B, 1), 2*size(B, 2))
-    x = A_ldiv_B!(F, c2r)
+    x = ldiv!(F, c2r)
     return reshape(collect(reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)))), _ret_size(F, B))
 end
 
@@ -65,26 +65,26 @@ function \(F::Factorization, B::AbstractVecOrMat)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
     BB = similar(B, TFB, size(B))
     copy!(BB, B)
-    A_ldiv_B!(F, BB)
+    ldiv!(F, BB)
 end
 function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
     F = adjF.parent
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
     BB = similar(B, TFB, size(B))
     copy!(BB, B)
-    Ac_ldiv_B!(F, BB)
+    ldiv!(Adjoint(F), BB)
 end
 
 # support the same 3-arg idiom as in our other in-place A_*_B functions:
-ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) = A_ldiv_B!(A, copy!(Y, B))
+ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) = ldiv!(A, copy!(Y, B))
 ldiv!(Y::AbstractVecOrMat, adjA::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat) =
-    (A = adjA.parent; Ac_ldiv_B!(A, copy!(Y, B)))
+    (A = adjA.parent; ldiv!(Adjoint(A), copy!(Y, B)))
 ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) =
-    (A = transA.parent; At_ldiv_B!(A, copy!(Y, B)))
+    (A = transA.parent; ldiv!(Transpose(A), copy!(Y, B)))
 
 # fallback methods for transposed solves
-\(transF::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = (F = transF.parent; Ac_ldiv_B(F, B))
-\(transF::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) = (F = transF.parent; conj.(Ac_ldiv_B(F, conj.(B))))
+\(transF::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = (F = transF.parent; \(Adjoint(F), B))
+\(transF::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) = (F = transF.parent; conj.(\(Adjoint(F), conj.(B))))
 
 # dismabiguation methods
 \(A::Adjoint{<:Any,<:Factorization}, B::RowVector) = adjoint(A.parent) \ B
