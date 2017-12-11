@@ -59,7 +59,7 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
         vs = Vector{AbstractString}(uninitialized, min(rows, length(t)))
         keylen = 0
         vallen = 0
-        for (i, (k, v)) in enumerate(t)
+        for (i, (k, v)) in enumerate(pairs(t))
             i > rows && break
             ks[i] = sprint(0, show, k, env=recur_io)
             vs[i] = sprint(0, show, v, env=recur_io)
@@ -73,7 +73,7 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
         rows = cols = typemax(Int)
     end
 
-    for (i, (k, v)) in enumerate(t)
+    for (i, (k, v)) in enumerate(pairs(t))
         print(io, "\n  ")
         i == rows < length(t) && (print(io, rpad("⋮", keylen), " => ⋮"); break)
 

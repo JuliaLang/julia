@@ -81,7 +81,7 @@ pop!(::EnvDict, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvDict, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
 delete!(::EnvDict, k::AbstractString) = (_unsetenv(k); ENV)
 setindex!(::EnvDict, v, k::AbstractString) = _setenv(k,string(v))
-push!(::EnvDict, k::AbstractString, v) = setindex!(ENV, v, k)
+push!(::EnvDict, k::AbstractString, v) = setindex!(ENV, v, k) # Should this be a `Pair`?
 
 if Sys.iswindows()
     start(hash::EnvDict) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
@@ -92,7 +92,7 @@ if Sys.iswindows()
         end
         return false
     end
-    function next(hash::EnvDict, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
+    function next(hash::PairIterator{EnvDict}, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
         pos = block[1]
         blk = block[2]
         len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
@@ -109,7 +109,7 @@ else # !windows
     start(::EnvDict) = 0
     done(::EnvDict, i) = (ccall(:jl_environ, Any, (Int32,), i) === nothing)
 
-    function next(::EnvDict, i)
+    function next(::PairIterator{EnvDict}, i)
         env = ccall(:jl_environ, Any, (Int32,), i)
         if env === nothing
             throw(BoundsError())
@@ -126,7 +126,7 @@ end # os-test
 #TODO: Make these more efficent
 function length(::EnvDict)
     i = 0
-    for (k,v) in ENV
+    for (k,v) in pairs(ENV)
         i += 1
     end
     return i

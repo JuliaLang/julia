@@ -244,7 +244,7 @@ function sparsevec(dict::Associative{Ti,Tv}) where {Tv,Ti<:Integer}
 
     cnt = 0
     len = zero(Ti)
-    for (k, v) in dict
+    for (k, v) in pairs(dict)
         k >= 1 || throw(ArgumentError("index must be positive."))
         if k > len
             len = k
@@ -265,7 +265,7 @@ function sparsevec(dict::Associative{Ti,Tv}, len::Integer) where {Tv,Ti<:Integer
 
     cnt = 0
     maxk = convert(Ti, len)
-    for (k, v) in dict
+    for (k, v) in pairs(dict)
         1 <= k <= maxk || throw(ArgumentError("an index (key) is out of bound."))
         cnt += 1
         @inbounds nzind[cnt] = k

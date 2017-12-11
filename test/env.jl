@@ -37,7 +37,7 @@ end
     k1, k2 = "__test__", "__test1__"
     withenv(k1=>k1, k2=>k2) do
         b_k1, b_k2 = false, false
-        for (k, v) in ENV
+        for (k, v) in pairs(ENV)
             if k==k1
                 b_k1=true
             elseif k==k2
@@ -66,7 +66,7 @@ end
 @test withenv(Dict{Any,Any}()...) do; true; end
 
 # Test for #18141
-for (k, v) in ENV
+for (k, v) in pairs(ENV)
     if length(v) > 0
         @test v[end] != '\0'
     end

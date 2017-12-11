@@ -94,7 +94,7 @@ pipe_writer(io::IOContext) = io.io
 lock(io::IOContext) = lock(io.io)
 unlock(io::IOContext) = unlock(io.io)
 
-in(key_value::Pair, io::IOContext) = in(key_value, io.dict, ===)
+in(key_value::Pair, io::IOContext) = in(key_value, pairs(io.dict), ===)
 in(key_value::Pair, io::IO) = false
 haskey(io::IOContext, key) = haskey(io.dict, key)
 haskey(io::IO, key) = false
@@ -108,7 +108,7 @@ displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displ
 show_circular(io::IO, @nospecialize(x)) = false
 function show_circular(io::IOContext, @nospecialize(x))
     d = 1
-    for (k, v) in io.dict
+    for (k, v) in pairs(io.dict)
         if k === :SHOWN_SET
             if v === x
                 print(io, "#= circular reference @-$d =#")
@@ -215,7 +215,7 @@ end
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v)!=0
 
 function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
-    for (key, val) in io.dict
+    for (key, val) in pairs(io.dict)
         if key === :unionall_env && val isa TypeVar && val.name === name && has_typevar(x, val)
             return true
         end
