@@ -150,12 +150,10 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
-function next(s::String, i::Int)
-    @boundscheck checkbounds(s, i)
-    @inbounds b = codeunit(s, i)
-    # TODO: check index validity
+@propagate_inbounds function next(s::String, i::Int)
+    b = codeunit(s, i)
     u = UInt32(b) << 24
-    (b < 0x80) | (0xf8 ≤ b) && return reinterpret(Char, u), i+1
+    between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
     return next_continued(s, i, u)
 end
 
@@ -187,29 +185,30 @@ end
 @propagate_inbounds function getindex(s::String, i::Int)
     b = codeunit(s, i)
     u = UInt32(b) << 24
-    (b < 0x80) | (0xf8 ≤ b) && return reinterpret(Char, u)
+    between(b, 0x80, 0xf7) || return reinterpret(Char, u)
     return getindex_continued(s, i, u)
 end
 
-@noinline function getindex_continued(s::String, i::Int, u::UInt32)
+function getindex_continued(s::String, i::Int, u::UInt32)
     if u < 0xc0000000
-        isvalid(s, i) && @goto ret
+        # called from `getindex` which checks bounds
+        @inbounds isvalid(s, i) && @goto ret
         string_index_err(s, i)
     end
     n = ncodeunits(s)
-    # first continuation byte
+
     (i += 1) > n && @goto ret
-    @inbounds b = codeunit(s, i)
+    @inbounds b = codeunit(s, i) # cont byte 1
     b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b) << 16
-    # second continuation byte
+
     ((i += 1) > n) | (u < 0xe0000000) && @goto ret
-    @inbounds b = codeunit(s, i)
+    @inbounds b = codeunit(s, i) # cont byte 2
     b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b) << 8
-    # third continuation byte
+
     ((i += 1) > n) | (u < 0xf0000000) && @goto ret
-    @inbounds b = codeunit(s, i)
+    @inbounds b = codeunit(s, i) # cont byte 3
     b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b)
 @label ret
@@ -252,13 +251,13 @@ end
 
 length(s::String) = _length(s, 1, ncodeunits(s), ncodeunits(s))
 
-function _length(s::String, i::Int, n::Int, c::Int)
+@inline function _length(s::String, i::Int, n::Int, c::Int)
     i < n || return c
     @inbounds b = codeunit(s, i)
     @inbounds while true
         while true
             (i += 1) ≤ n || return c
-            between(b, 0xc0, 0xf7) && break
+            0xc0 ≤ b ≤ 0xf7 && break
             b = codeunit(s, i)
         end
         l = b
