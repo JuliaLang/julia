@@ -1961,7 +1961,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         # if there's a possibility we could constant-propagate a better result
         # (hopefully without doing too much work), try to do that now
         # TODO: it feels like this could be better integrated into abstract_call_method / typeinf_edge
-        const_rettype = abstract_call_method_with_const_args(argtypes, applicable[1]::SimpleVector, sv)
+        const_rettype = abstract_call_method_with_const_args(f, argtypes, applicable[1]::SimpleVector, sv)
         if const_rettype ⊑ rettype
             # use the better result, if it's a refinement of rettype
             rettype = const_rettype
@@ -2020,7 +2020,7 @@ function cache_lookup(code::MethodInstance, argtypes::Vector{Any}, cache::Vector
     return nothing
 end
 
-function abstract_call_method_with_const_args(argtypes::Vector{Any}, match::SimpleVector, sv::InferenceState)
+function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector{Any}, match::SimpleVector, sv::InferenceState)
     method = match[3]::Method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
@@ -2053,11 +2053,14 @@ function abstract_call_method_with_const_args(argtypes::Vector{Any}, match::Simp
         end
     end
     if !cache_inlineable && !sv.params.aggressive_constant_propagation
-        # in this case, see if all of the arguments are constants
-        for i in 1:nargs
-            a = argtypes[i]
-            if !isa(a, Const) && !isconstType(a)
-                return Any
+        tm = _topmod(sv)
+        if !istopfunction(tm, f, :getproperty) && !istopfunction(tm, f, :setproperty!)
+            # in this case, see if all of the arguments are constants
+            for i in 1:nargs
+                a = argtypes[i]
+                if !isa(a, Const) && !isconstType(a)
+                    return Any
+                end
             end
         end
     end

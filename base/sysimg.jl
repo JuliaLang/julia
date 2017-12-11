@@ -10,6 +10,7 @@ setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f),
 
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
+# (and these don't need the extra convert code)
 getproperty(x::Module, f::Symbol) = getfield(x, f)
 setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
 getproperty(x::Type, f::Symbol) = getfield(x, f)
