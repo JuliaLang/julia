@@ -1956,8 +1956,8 @@ function full(Q::LinAlg.LQPackedQ; thin::Bool = true)
         "`full(Q::LQPackedQ; thin::Bool = true)` (and `full` in general) ",
         "has been deprecated. To replace `full(Q::LQPackedQ, true)`, ",
         "consider `Matrix(Q)` or `Array(Q)`. To replace `full(Q::LQPackedQ, false)`, ",
-        "consider `Base.LinAlg.A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))`."), :full)
-    return thin ? Array(Q) : A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))
+        "consider `Base.LinAlg.mul!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))`."), :full)
+    return thin ? Array(Q) : Base.LinAlg.mul!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))
 end
 function full(Q::Union{LinAlg.QRPackedQ,LinAlg.QRCompactWYQ}; thin::Bool = true)
     qtypestr = isa(Q, LinAlg.QRPackedQ)    ? "QRPackedQ"    :
@@ -1967,8 +1967,8 @@ function full(Q::Union{LinAlg.QRPackedQ,LinAlg.QRCompactWYQ}; thin::Bool = true)
         "`full(Q::$(qtypestr); thin::Bool = true)` (and `full` in general) ",
         "has been deprecated. To replace `full(Q::$(qtypestr), true)`, ",
         "consider `Matrix(Q)` or `Array(Q)`. To replace `full(Q::$(qtypestr), false)`, ",
-        "consider `Base.LinAlg.A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 1), size(Q.factors, 1)))`."), :full)
-    return thin ? Array(Q) : A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 1), size(Q.factors, 1)))
+        "consider `Base.LinAlg.mul!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 1), size(Q.factors, 1)))`."), :full)
+    return thin ? Array(Q) : Base.LinAlg.mul!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 1), size(Q.factors, 1)))
 end
 
 # full for symmetric / hermitian / triangular wrappers
