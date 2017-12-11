@@ -73,22 +73,22 @@ end
 # Matrix-vector multiplication
 function (*)(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S}
     TS = promote_op(matprod, T, S)
-    A_mul_B!(similar(x, TS, size(A,1)), A, convert(AbstractVector{TS}, x))
+    mul!(similar(x, TS, size(A,1)), A, convert(AbstractVector{TS}, x))
 end
 function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
     TS = promote_op(matprod, T, S)
-    A_mul_B!(similar(x,TS,size(A,1)),A,x)
+    mul!(similar(x,TS,size(A,1)),A,x)
 end
 
 # these will throw a DimensionMismatch unless B has 1 row (or 1 col for transposed case):
 *(a::AbstractVector, transB::Transpose{<:Any,<:AbstractMatrix}) =
-    (B = transB.parent; A_mul_Bt(reshape(a,length(a),1),B))
+    (B = transB.parent; *(reshape(a,length(a),1), Transpose(B)))
 *(A::AbstractMatrix, transb::Transpose{<:Any,<:AbstractVector}) =
-    (b = transb.parent; A_mul_Bt(A,reshape(b,length(b),1)))
+    (b = transb.parent; *(A, Transpose(reshape(b,length(b),1))))
 *(a::AbstractVector, adjB::Adjoint{<:Any,<:AbstractMatrix}) =
-    (B = adjB.parent; A_mul_Bc(reshape(a,length(a),1),B))
+    (B = adjB.parent; *(reshape(a,length(a),1), Adjoint(B)))
 *(A::AbstractMatrix, adjb::Adjoint{<:Any,<:AbstractVector}) =
-    (b = adjb.parent; A_mul_Bc(A,reshape(b,length(b),1)))
+    (b = adjb.parent; *(A, Adjoint(reshape(b,length(b),1))))
 (*)(a::AbstractVector, B::AbstractMatrix) = reshape(a,length(a),1)*B
 
 mul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) where {T<:BlasFloat} = gemv!(y, 'N', A, x)
@@ -107,12 +107,12 @@ mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector) = generic_matvec
 function *(transA::Transpose{<:Any,<:StridedMatrix{T}}, x::StridedVector{S}) where {T<:BlasFloat,S}
     A = transA.parent
     TS = promote_op(matprod, T, S)
-    At_mul_B!(similar(x,TS,size(A,2)), A, convert(AbstractVector{TS}, x))
+    mul!(similar(x,TS,size(A,2)), Transpose(A), convert(AbstractVector{TS}, x))
 end
 function *(transA::Transpose{<:Any,<:AbstractMatrix{T}}, x::AbstractVector{S}) where {T,S}
     A = transA.parent
     TS = promote_op(matprod, T, S)
-    At_mul_B!(similar(x,TS,size(A,2)), A, x)
+    mul!(similar(x,TS,size(A,2)), Transpose(A), x)
 end
 mul!(y::StridedVector{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T}) where {T<:BlasFloat} =
     (A = transA.parent; gemv!(y, 'T', A, x))
@@ -122,16 +122,16 @@ mul!(y::AbstractVector, transA::Transpose{<:Any,<:AbstractVecOrMat}, x::Abstract
 function *(adjA::Adjoint{<:Any,<:StridedMatrix{T}}, x::StridedVector{S}) where {T<:BlasFloat,S}
     A = adjA.parent
     TS = promote_op(matprod, T, S)
-    Ac_mul_B!(similar(x,TS,size(A,2)),A,convert(AbstractVector{TS},x))
+    mul!(similar(x,TS,size(A,2)), Adjoint(A) ,convert(AbstractVector{TS},x))
 end
 function *(adjA::Adjoint{<:Any,<:AbstractMatrix{T}}, x::AbstractVector{S}) where {T,S}
     A = adjA.parent
     TS = promote_op(matprod, T, S)
-    Ac_mul_B!(similar(x,TS,size(A,2)), A, x)
+    mul!(similar(x,TS,size(A,2)), Adjoint(A), x)
 end
 
 mul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T}) where {T<:BlasReal} =
-    (A = adjA.parent; At_mul_B!(y, A, x))
+    (A = adjA.parent; mul!(y, Transpose(A), x))
 mul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T}) where {T<:BlasComplex} =
     (A = adjA.parent; gemv!(y, 'C', A, x))
 mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, x::AbstractVector) =
@@ -156,7 +156,7 @@ julia> [1 1; 0 1] * [1 0; 1 1]
 """
 function (*)(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_B!(similar(B, TS, (size(A,1), size(B,2))), A, B)
+    mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
 mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = gemm_wrapper!(C, 'N', 'N', A, B)
 for elty in (Float32,Float64)
@@ -200,7 +200,7 @@ mul!(A, B)
 function *(transA::Transpose{<:Any,<:AbstractMatrix}, B::AbstractMatrix)
     A = transA.parent
     TS = promote_op(matprod, eltype(A), eltype(B))
-    At_mul_B!(similar(B, TS, (size(A,2), size(B,2))), A, B)
+    mul!(similar(B, TS, (size(A,2), size(B,2))), Transpose(A), B)
 end
 mul!(C::StridedMatrix{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     (A = transA.parent; A===B ? syrk_wrapper!(C, 'T', A) : gemm_wrapper!(C, 'T', 'N', A, B))
@@ -210,7 +210,7 @@ mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, B::Abstract
 function *(A::AbstractMatrix, transB::Transpose{<:Any,<:AbstractMatrix})
     B = transB.parent
     TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_Bt!(similar(B, TS, (size(A,1), size(B,1))), A, B)
+    mul!(similar(B, TS, (size(A,1), size(B,1))), A, Transpose(B))
 end
 mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, transB::Transpose{<:Any,<:StridedVecOrMat{T}}) where {T<:BlasFloat} =
     (B = transB.parent; A===B ? syrk_wrapper!(C, 'N', A) : gemm_wrapper!(C, 'N', 'T', A, B))
@@ -241,7 +241,7 @@ _disambigmul!(C::AbstractVecOrMat, A::AbstractVecOrMat, transB::Transpose{<:Any,
 function _disambigmul(transA::Transpose{<:Any,<:AbstractMatrix{T}}, transB::Transpose{<:Any,<:AbstractVecOrMat{S}}) where {T,S}
     A, B = transA.parent, transB.parent
     TS = promote_op(matprod, T, S)
-    At_mul_Bt!(similar(B, TS, (size(A,2), size(B,1))), A, B)
+    mul!(similar(B, TS, (size(A,2), size(B,1))), Transpose(A), Transpose(B))
 end
 mul!(C::StridedMatrix{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, transB::Transpose{<:Any,<:StridedVecOrMat{T}}) where {T<:BlasFloat} =
     (A = transA.parent; B = transB.parent; gemm_wrapper!(C, 'T', 'T', A, B))
@@ -250,13 +250,13 @@ mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, transB::Tra
 mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, adjoint(B.parent))
 
 *(adjA::Adjoint{<:Any,<:StridedMatrix{T}}, B::StridedMatrix{T}) where {T<:BlasReal} =
-    (A = adjA.parent; At_mul_B(A, B))
+    (A = adjA.parent; *(Transpose(A), B))
 mul!(C::StridedMatrix{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, B::StridedVecOrMat{T}) where {T<:BlasReal} =
-    (A = adjA.parent; At_mul_B!(C, A, B))
+    (A = adjA.parent; mul!(C, Transpose(A), B))
 function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, B::AbstractMatrix)
     A = adjA.parent
     TS = promote_op(matprod, eltype(A), eltype(B))
-    Ac_mul_B!(similar(B, TS, (size(A,2), size(B,2))), A, B)
+    mul!(similar(B, TS, (size(A,2), size(B,2))), Adjoint(A), B)
 end
 mul!(C::StridedMatrix{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
     (A = adjA.parent; A===B ? herk_wrapper!(C,'C',A) : gemm_wrapper!(C,'C', 'N', A, B))
@@ -264,13 +264,13 @@ mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, B::AbstractVecO
     (A = adjA.parent; generic_matmatmul!(C, 'C', 'N', A, B))
 
 *(A::StridedMatrix{<:BlasFloat}, adjB::Adjoint{<:Any,<:StridedMatrix{<:BlasReal}}) =
-    (B = adjB.parent; A_mul_Bt(A, B))
+    (B = adjB.parent; *(A, Transpose(B)))
 mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:StridedVecOrMat{<:BlasReal}}) where {T<:BlasFloat} =
-    (B = adjB.parent; A_mul_Bt!(C, A, B))
+    (B = adjB.parent; mul!(C, A, Transpose(B)))
 function *(A::AbstractMatrix, adjB::Adjoint{<:Any,<:AbstractMatrix})
     B = adjB.parent
     TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_Bc!(similar(B,TS,(size(A,1),size(B,1))),A,B)
+    mul!(similar(B,TS,(size(A,1),size(B,1))), A, Adjoint(B))
 end
 mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:StridedVecOrMat{T}}) where {T<:BlasComplex} =
     (B = adjB.parent; A===B ? herk_wrapper!(C, 'N', A) : gemm_wrapper!(C, 'N', 'C', A, B))
@@ -278,7 +278,7 @@ mul!(C::AbstractMatrix, A::AbstractVecOrMat, adjB::Adjoint{<:Any,<:AbstractVecOr
     (B = adjB.parent; generic_matmatmul!(C, 'N', 'C', A, B))
 
 *(adjA::Adjoint{<:Any,<:AbstractMatrix}, adjB::Adjoint{<:Any,<:AbstractMatrix}) =
-    (A = adjA.parent; B = adjB.parent; Ac_mul_Bc!(similar(B, promote_op(matprod, eltype(A), eltype(B)), (size(A,2), size(B,1))), A, B))
+    (A = adjA.parent; B = adjB.parent; mul!(similar(B, promote_op(matprod, eltype(A), eltype(B)), (size(A,2), size(B,1))), Adjoint(A), Adjoint(B)))
 mul!(C::StridedMatrix{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, adjB::Adjoint{<:Any,<:StridedVecOrMat{T}}) where {T<:BlasFloat} =
     (A = adjA.parent; B = adjB.parent; gemm_wrapper!(C, 'C', 'C', A, B))
 mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, adjB::Adjoint{<:Any,<:AbstractVecOrMat}) =
