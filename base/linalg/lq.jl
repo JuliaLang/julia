@@ -57,7 +57,7 @@ function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Boo
     end
     F = lqfact(A)
     L, Q = F[:L], F[:Q]
-    return L, !full ? Array(Q) : A_mul_B!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))
+    return L, !full ? Array(Q) : mul!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))
 end
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
@@ -84,7 +84,7 @@ function getindex(A::LQ, d::Symbol)
 end
 
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
-    A_mul_B!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
+    mul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
 getq(A::LQ) = LQPackedQ(A.factors, A.τ)
 
@@ -125,18 +125,18 @@ mul!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
 mul!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat} =
     A[:L] * LAPACK.ormlq!('L', 'N', A.factors, A.τ, Matrix(B))
 mul!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat} =
-    A_mul_B!(zeros(eltype(A), size(A)), Matrix(A), Matrix(B))
+    mul!(zeros(eltype(A), size(A)), Matrix(A), Matrix(B))
 function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
-    A_mul_B!(convert(Factorization{TAB},A), copy_oftype(B, TAB))
+    mul!(convert(Factorization{TAB},A), copy_oftype(B, TAB))
 end
 function *(A::LQ{TA},B::QR{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
-    A_mul_B!(convert(Factorization{TAB},A), convert(Factorization{TAB},B))
+    mul!(convert(Factorization{TAB},A), convert(Factorization{TAB},B))
 end
 function *(A::QR{TA},B::LQ{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
-    A_mul_B!(convert(Factorization{TAB},A), convert(Factorization{TAB},B))
+    mul!(convert(Factorization{TAB},A), convert(Factorization{TAB},B))
 end
 *(A::Adjoint{<:Any,<:LQ}, B::LQ) = adjoint(A.parent) * B
 *(A::LQ, B::Adjoint{<:Any,<:LQ}) = A * adjoint(B.parent)
@@ -146,7 +146,7 @@ end
 mul!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
 function (*)(A::LQPackedQ, B::StridedVecOrMat)
     TAB = promote_type(eltype(A), eltype(B))
-    A_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
+    mul!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
 end
 
 ### QcB
@@ -158,9 +158,9 @@ function *(adjA::Adjoint{<:Any,<:LQPackedQ}, B::StridedVecOrMat)
     A = adjA.parent
     TAB = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
-        Ac_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
+        mul!(Adjoint(convert(AbstractMatrix{TAB}, A)), copy_oftype(B, TAB))
     elseif size(B,1) == size(A.factors,1)
-        Ac_mul_B!(convert(AbstractMatrix{TAB}, A), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
+        mul!(Adjoint(convert(AbstractMatrix{TAB}, A)), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
     else
         throw(DimensionMismatch("first dimension of B, $(size(B,1)), must equal one of the dimensions of A, $(size(A))"))
     end
@@ -172,14 +172,14 @@ function *(A::LQPackedQ, adjB::Adjoint{<:Any,<:StridedVecOrMat})
     TAB = promote_type(eltype(A), eltype(B))
     BB = similar(B, TAB, (size(B, 2), size(B, 1)))
     adjoint!(BB, B)
-    return A_mul_B!(A, BB)
+    return mul!(A, BB)
 end
 function *(adjA::Adjoint{<:Any,<:LQPackedQ}, adjB::Adjoint{<:Any,<:StridedVecOrMat})
     A, B = adjA.parent, adjB.parent
     TAB = promote_type(eltype(A), eltype(B))
     BB = similar(B, TAB, (size(B, 2), size(B, 1)))
     adjoint!(BB, B)
-    return Ac_mul_B!(A, BB)
+    return mul!(Adjoint(A), BB)
 end
 
 # in-place right-application of LQPackedQs
@@ -209,13 +209,13 @@ mul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:LQPackedQ{T}}) where {T<:BlasCom
 function *(A::StridedVecOrMat, adjQ::Adjoint{<:Any,<:LQPackedQ})
     Q = adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
-    return A_mul_Bc!(copy_oftype(A, TR), convert(AbstractMatrix{TR}, Q))
+    return mul!(copy_oftype(A, TR), Adjoint(convert(AbstractMatrix{TR}, Q)))
 end
 function *(adjA::Adjoint{<:Any,<:StridedMatrix}, adjQ::Adjoint{<:Any,<:LQPackedQ})
     A, Q = adjA.parent, adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
     C = adjoint!(similar(A, TR, reverse(size(A))), A)
-    return A_mul_Bc!(C, convert(AbstractMatrix{TR}, Q))
+    return mul!(C, Adjoint(convert(AbstractMatrix{TR}, Q)))
 end
 #
 # (2) the inner dimension in the multiplication is the LQPackedQ's first dimension.
@@ -240,7 +240,7 @@ function *(A::StridedVecOrMat, Q::LQPackedQ)
     else
         _rightappdimmismatch("columns")
     end
-    return A_mul_B!(C, convert(AbstractMatrix{TR}, Q))
+    return mul!(C, convert(AbstractMatrix{TR}, Q))
 end
 function *(adjA::Adjoint{<:Any,<:StridedMatrix}, Q::LQPackedQ)
     A = adjA.parent
@@ -253,7 +253,7 @@ function *(adjA::Adjoint{<:Any,<:StridedMatrix}, Q::LQPackedQ)
     else
         _rightappdimmismatch("rows")
     end
-    return A_mul_B!(C, convert(AbstractMatrix{TR}, Q))
+    return mul!(C, convert(AbstractMatrix{TR}, Q))
 end
 _rightappdimmismatch(rowsorcols) =
     throw(DimensionMismatch(string("the number of $(rowsorcols) of the matrix on the left ",
@@ -267,7 +267,7 @@ function (\)(A::LQ{TA}, b::StridedVector{Tb}) where {TA,Tb}
     m = checksquare(A)
     m == length(b) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has length $(length(b))"))
     AA = convert(Factorization{S}, A)
-    x = A_ldiv_B!(AA, copy_oftype(b, S))
+    x = ldiv!(AA, copy_oftype(b, S))
     return x
 end
 function (\)(A::LQ{TA},B::StridedMatrix{TB}) where {TA,TB}
@@ -275,20 +275,20 @@ function (\)(A::LQ{TA},B::StridedMatrix{TB}) where {TA,TB}
     m = checksquare(A)
     m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
     AA = convert(Factorization{S}, A)
-    X = A_ldiv_B!(AA, copy_oftype(B, S))
+    X = ldiv!(AA, copy_oftype(B, S))
     return X
 end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
     c2r = reshape(transpose(reinterpret(T, reshape(B, (1, length(B))))), size(B, 1), 2*size(B, 2))
-    x = A_ldiv_B!(F, c2r)
+    x = ldiv!(F, c2r)
     return reshape(collect(reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)))),
                            isa(B, AbstractVector) ? (size(F,2),) : (size(F,2), size(B,2)))
 end
 
 
 function ldiv!(A::LQ{T}, B::StridedVecOrMat{T}) where T
-    Ac_mul_B!(A[:Q], A_ldiv_B!(LowerTriangular(A[:L]),B))
+    mul!(Adjoint(A[:Q]), ldiv!(LowerTriangular(A[:L]),B))
     return B
 end
