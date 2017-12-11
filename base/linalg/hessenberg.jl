@@ -73,7 +73,7 @@ function getindex(A::HessenbergQ, i::Integer, j::Integer)
     x[i] = 1
     y = zeros(eltype(A), size(A, 2))
     y[j] = 1
-    return dot(x, A_mul_B!(A, y))
+    return dot(x, mul!(A, y))
 end
 
 ## reconstruct the original matrix
@@ -96,19 +96,19 @@ mul!(X::StridedMatrix{T}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T<:BlasF
 
 function (*)(Q::HessenbergQ{T}, X::StridedVecOrMat{S}) where {T,S}
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return A_mul_B!(Q, copy_oftype(X, TT))
+    return mul!(Q, copy_oftype(X, TT))
 end
 function (*)(X::StridedVecOrMat{S}, Q::HessenbergQ{T}) where {T,S}
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return A_mul_B!(copy_oftype(X, TT), Q)
+    return mul!(copy_oftype(X, TT), Q)
 end
 function *(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::StridedVecOrMat{S}) where {T,S}
     Q = adjQ.parent
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return Ac_mul_B!(Q, copy_oftype(X, TT))
+    return mul!(Adjoint(Q), copy_oftype(X, TT))
 end
 function *(X::StridedVecOrMat{S}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T,S}
     Q = adjQ.parent
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return A_mul_Bc!(copy_oftype(X, TT), Q)
+    return mul!(copy_oftype(X, TT), Adjoint(Q))
 end
