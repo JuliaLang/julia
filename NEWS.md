@@ -629,7 +629,8 @@ Deprecated or removed
 
   * `Set()` has been deprecated in favor of `Set{Any}()` ([#TBD]).
 
-  * `Dict()` has been deprecated in favor of `Dict{Any,Any}()` ([#TBD]).
+  * `Dict()` and `WeakKeyDict()` have been deprecated in favor of `Dict{Any,Any}()`
+    and `WeakKeyDict{Any,Any}()` ([#TBD]).
 
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).

@@ -2060,6 +2060,7 @@ end
 
 @deprecate Set() Set{Any}()
 @deprecate Dict() Dict{Any,Any}()
+@deprecate WeakKeyDict() WeakKeyDict{Any,Any}()
 
 # deprecate IntSet to BitSet
 @deprecate_binding IntSet BitSet

@@ -626,7 +626,7 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     finalizer(c->(z+=1), C)
 
     # construction
-    wkd = WeakKeyDict()
+    wkd = WeakKeyDict{Any,Any}()
     wkd[A] = 2
     wkd[B] = 3
     wkd[C] = 4
