@@ -274,7 +274,7 @@ end
 
 @testset "promotion" begin
     eigs(rand(1:10, 10, 10))
-    eigs(rand(1:10, 10, 10), rand(1:10, 10, 10) |> t -> t't)
+    eigs(rand(1:10, 10, 10), (t -> t't)(rand(1:10, 10, 10)))
     svds(rand(1:10, 10, 8))
     @test_throws MethodError eigs(big.(rand(1:10, 10, 10)))
     @test_throws MethodError eigs(big.(rand(1:10, 10, 10)), rand(1:10, 10, 10))

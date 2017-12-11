@@ -402,7 +402,7 @@ end
     @test logdet(ldltfact(A1pd)) ≈ logdet(Array(A1pd))
     @test isposdef(A1pd)
     @test !isposdef(A1)
-    @test !isposdef(A1 + A1' |> t -> t - 2eigmax(Array(t))*I)
+    @test !isposdef((t -> t - 2eigmax(Array(t))*I)(A1 + A1'))
 
     if elty <: Real
         @test CHOLMOD.issymmetric(Sparse(A1pd, 0))
@@ -634,7 +634,7 @@ end
 end
 
 @testset "Issue 14134" begin
-    A = CHOLMOD.Sparse(sprandn(10,5,0.1) + I |> t -> t't)
+    A = CHOLMOD.Sparse((t -> t't)(sprandn(10,5,0.1) + I))
     b = IOBuffer()
     serialize(b, A)
     seekstart(b)
@@ -677,7 +677,7 @@ end
 end
 
 @testset "Real factorization and complex rhs" begin
-    A = sprandn(5, 5, 0.4) |> t -> t't + I
+    A =  (t -> t't + I)(sprandn(5, 5, 0.4))
     B = complex.(randn(5, 2), randn(5, 2))
     @test cholfact(A)\B ≈ A\B
 end

@@ -917,21 +917,6 @@ julia> widen(1.5f0)
 """
 widen(x::T) where {T<:Number} = convert(widen(T), x)
 
-# function pipelining
-
-"""
-    |>(x, f)
-
-Applies a function to the preceding argument. This allows for easy function chaining.
-
-# Examples
-```jldoctest
-julia> [1:5;] |> x->x.^2 |> sum |> inv
-0.01818181818181818
-```
-"""
-|>(x, f) = f(x)
-
 # function composition
 
 """

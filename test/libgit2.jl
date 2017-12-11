@@ -512,7 +512,7 @@ mktempdir() do dir
                 @test isdir(joinpath(cache_repo, ".git"))
                 # set a remote branch
                 branch = "upstream"
-                LibGit2.GitRemote(repo, branch, repo_url) |> close
+                close(LibGit2.GitRemote(repo, branch, repo_url))
 
                 # test remote's representation in the repo's config
                 config = joinpath(cache_repo, ".git", "config")

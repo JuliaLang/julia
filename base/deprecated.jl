@@ -2171,6 +2171,8 @@ end
 
 @deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
 
+@deprecate |>(x, f) f(x)
+
 # issue #24019
 @deprecate similar(a::Associative) empty(a)
 @deprecate similar(a::Associative, ::Type{Pair{K,V}}) where {K, V} empty(a, K, V)

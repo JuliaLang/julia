@@ -188,7 +188,6 @@ Core.applicable
 Core.invoke
 Base.invokelatest
 new
-Base.:(|>)
 Base.:(∘)
 Base.equalto
 ```

@@ -11,7 +11,7 @@ srand(123)
 
 debug && println("Test basic type functionality")
 @test_throws DimensionMismatch LowerTriangular(randn(5, 4))
-@test LowerTriangular(randn(3, 3)) |> t -> [size(t, i) for i = 1:3] == [size(Matrix(t), i) for i = 1:3]
+@test (t -> [size(t, i) for i = 1:3]  == [size(Matrix(t), i) for i = 1:3])(LowerTriangular(randn(3, 3)))
 
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
 for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat}, Int)
@@ -22,7 +22,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
                         (UnitLowerTriangular, :L))
 
         # Construct test matrix
-        A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't) |> t -> uplo1 == :U ? t : adjoint(t)))
+        A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (t -> uplo1 == :U ? t : adjoint(t))((t -> chol(t't))(elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)))))
 
 
         debug && println("elty1: $elty1, A1: $t1")
@@ -238,7 +238,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         @test ladb ≈ fladb atol=sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
-        @test sqrt(A1) |> t -> t*t ≈ A1
+        @test (t -> t*t)(sqrt(A1)) ≈ A1
 
         # naivesub errors
         @test_throws DimensionMismatch naivesub!(A1,ones(elty1,n+1))
@@ -275,7 +275,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
 
                 debug && println("elty1: $elty1, A1: $t1, elty2: $elty2")
 
-                A2 = t2(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't) |> t -> uplo2 == :U ? t : adjoint(t)))
+                A2 = t2(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (t -> uplo2 == :U ? t : adjoint(t))((t -> chol(t't))(elty2 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)))))
 
                 # Convert
                 if elty1 <: Real && !(elty2 <: Integer)
@@ -397,9 +397,9 @@ end
 # Matrix square root
 Atn = UpperTriangular([-1 1 2; 0 -2 2; 0 0 -3])
 Atp = UpperTriangular([1 1 2; 0 2 2; 0 0 3])
-@test sqrt(Atn) |> t->t*t ≈ Atn
+@test (t->t*t)(sqrt(Atn)) ≈ Atn
 @test typeof(sqrt(Atn)[1,1]) <: Complex
-@test sqrt(Atp) |> t->t*t ≈ Atp
+@test (t->t*t)(sqrt(Atp)) ≈ Atp
 @test typeof(sqrt(Atp)[1,1]) <: Real
 
 Areal   = randn(n, n)/2
@@ -419,7 +419,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         debug && println("\ntype of A: ", eltya, " type of b: ", eltyb, "\n")
 
         debug && println("Solve upper triangular system")
-        Atri = UpperTriangular(lufact(A)[:U]) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
+        Atri = (t -> eltya <: Complex && eltyb <: Real ? real(t) : t)(UpperTriangular(lufact(A)[:U])) # Here the triangular matrix can't be too badly conditioned
         b = convert(Matrix{eltyb}, eltya <: Complex ? Matrix(Atri)*ones(n, 2) : Matrix(Atri)*ones(n, 2))
         x = Matrix(Atri) \ b
 
@@ -447,7 +447,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         end
 
         debug && println("Solve lower triangular system")
-        Atri = UpperTriangular(lufact(A)[:U]) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
+        Atri = (t -> eltya <: Complex && eltyb <: Real ? real(t) : t)(UpperTriangular(lufact(A)[:U])) # Here the triangular matrix can't be too badly conditioned
         b = convert(Matrix{eltyb}, eltya <: Complex ? Matrix(Atri)*ones(n, 2) : Matrix(Atri)*ones(n, 2))
         x = Matrix(Atri)\b
 

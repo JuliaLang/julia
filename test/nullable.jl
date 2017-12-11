@@ -404,63 +404,61 @@ using Dates
 
 # filter
 for p in (_ -> true, _ -> false)
-    @test @inferred(filter(p, Nullable()))      |> isnull_oftype(Union{})
-    @test @inferred(filter(p, Nullable{Int}())) |> isnull_oftype(Int)
+    @test isnull_oftype(Union{})(@inferred(filter(p, Nullable())))
+    @test isnull_oftype(Int)(@inferred(filter(p, Nullable{Int}())))
 end
 @test @inferred(filter(_ -> true, Nullable(85)))  === Nullable(85)
-@test @inferred(filter(_ -> false, Nullable(85))) |> isnull_oftype(Int)
+@test isnull_oftype(Int)(@inferred(filter(_ -> false, Nullable(85))))
 @test @inferred(filter(x -> x > 0, Nullable(85))) === Nullable(85)
-@test @inferred(filter(x -> x < 0, Nullable(85))) |> isnull_oftype(Int)
+@test isnull_oftype(Int)(@inferred(filter(x -> x < 0, Nullable(85))))
 @test get(@inferred(filter(x -> length(x) > 2, Nullable("test")))) == "test"
-@test @inferred(filter(x -> length(x) > 5, Nullable("test"))) |>
-    isnull_oftype(String)
+@test isnull_oftype(String)(@inferred(filter(x -> length(x) > 5, Nullable("test"))))
+
 
 # map
 sqr(x) = x^2
-@test @inferred(map(sqr, Nullable()))        |> isnull_oftype(Union{})
-@test @inferred(map(sqr, Nullable{Int}()))   |> isnull_oftype(Int)
+@test isnull_oftype(Union{})(@inferred(map(sqr, Nullable())))
+@test isnull_oftype(Int)(@inferred(map(sqr, Nullable{Int}())))
 @test @inferred(map(sqr, Nullable(2)))       === Nullable(4)
 @test @inferred(map(+, Nullable(0.0)))       === Nullable(0.0)
 @test @inferred(map(+, Nullable(3.0, false)))=== Nullable(3.0, false)
 @test @inferred(map(-, Nullable(1.0)))       === Nullable(-1.0)
-@test @inferred(map(-, Nullable{Float64}())) |> isnull_oftype(Float64)
+@test isnull_oftype(Float64)(@inferred(map(-, Nullable{Float64}())))
 @test @inferred(map(sin, Nullable(1)))       === Nullable(sin(1))
-@test @inferred(map(sin, Nullable{Int}()))   |> isnull_oftype(Float64)
+@test isnull_oftype(Float64)(@inferred(map(sin, Nullable{Int}())))
 
 # should not throw if function wouldn't be called
-@test map(x -> x ? 0 : 0.0, Nullable())       |> isnull_oftype(Union{})
+@test isnull_oftype(Union{})(map(x -> x ? 0 : 0.0, Nullable()))
 @test map(x -> x ? 0 : 0.0, Nullable(true))   === Nullable(0)
 @test map(x -> x ? 0 : 0.0, Nullable(false))  === Nullable(0.0)
-@test map(x -> x ? 0 : 0.0, Nullable{Bool}()) |> isnull_oftype(Union{})
+@test isnull_oftype(Union{})(map(x -> x ? 0 : 0.0, Nullable{Bool}()))
 
 # broadcast and elementwise
 @test sin.(Nullable(0.0))            === Nullable(0.0)
-@test sin.(Nullable{Float64}())      |> isnull_oftype(Float64)
+@test isnull_oftype(Float64)(sin.(Nullable{Float64}()))
 @test @inferred(broadcast(sin, Nullable(0.0)))       === Nullable(0.0)
-@test @inferred(broadcast(sin, Nullable{Float64}())) |> isnull_oftype(Float64)
+@test isnull_oftype(Float64)(@inferred(broadcast(sin, Nullable{Float64}())))
 
 @test Nullable(8) .+ Nullable(10)     === Nullable(18)
 @test Nullable(8) .- Nullable(10)     === Nullable(-2)
-@test Nullable(8) .+ Nullable{Int}()  |> isnull_oftype(Int)
-@test Nullable{Int}() .- Nullable(10) |> isnull_oftype(Int)
+@test isnull_oftype(Int)(Nullable(8) .+ Nullable{Int}())
+@test isnull_oftype(Int)(Nullable{Int}() .- Nullable(10))
 
 @test @inferred(broadcast(log, 10, Nullable(1.0))) ===
       Nullable(0.0)
-@test @inferred(broadcast(log, 10, Nullable{Float64}())) |>
-      isnull_oftype(Float64)
+@test isnull_oftype(Float64)(@inferred(broadcast(log, 10, Nullable{Float64}())))
 @test @inferred(broadcast(log, Nullable(10), Nullable(1.0))) ===
       Nullable(0.0)
-@test @inferred(broadcast(log, Nullable(10), Nullable{Float64}())) |>
-      isnull_oftype(Float64)
+@test isnull_oftype(Float64)(@inferred(broadcast(log, Nullable(10), Nullable{Float64}())))
 
 @test Nullable(2) .^ Nullable(4)      === Nullable(16)
-@test Nullable(2) .^ Nullable{Int}()  |> isnull_oftype(Int)
+@test isnull_oftype(Int)(Nullable(2) .^ Nullable{Int}())
 
 # multi-arg broadcast
 @test (Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+
        Nullable(1) === Nullable(6))
-@test (Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable{Int}() .+
-       Nullable(1) .+ Nullable(1) |> isnull_oftype(Int))
+@test isnull_oftype(Int)(Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable{Int}() .+
+       Nullable(1) .+ Nullable(1))
 
 # these are not inferrable because there are too many arguments
 us = map(Nullable, 1:20)
@@ -474,12 +472,9 @@ for op in (+, -, *, /, \, //, ==, <, !=, <=, ÷, %, <<, >>, ^)
     res = op(1, 1)
     @test @inferred(broadcast(op, Nullable(1), Nullable(1)))         ===
           Nullable(res)
-    @test @inferred(broadcast(op, Nullable{Int}(), Nullable(1)))     |>
-          isnull_oftype(typeof(res))
-    @test @inferred(broadcast(op, Nullable(1), Nullable{Int}()))     |>
-          isnull_oftype(typeof(res))
-    @test @inferred(broadcast(op, Nullable{Int}(), Nullable{Int}())) |>
-          isnull_oftype(typeof(res))
+    @test isnull_oftype(typeof(res))(@inferred(broadcast(op, Nullable{Int}(), Nullable(1))))
+    @test isnull_oftype(typeof(res))(@inferred(broadcast(op, Nullable(1), Nullable{Int}())))
+    @test isnull_oftype(typeof(res))(@inferred(broadcast(op, Nullable{Int}(), Nullable{Int}())))
     @test @inferred(broadcast(op, Nullable(1), 1))                   ===
           Nullable(res)
     @test @inferred(broadcast(op, 1, Nullable(1)))                   ===
