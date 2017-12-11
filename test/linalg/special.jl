@@ -2,6 +2,8 @@
 
 using Test
 
+using Base.LinAlg: mul!, Adjoint, Transpose
+
 n= 10 #Size of matrix to test
 srand(1)
 
@@ -114,11 +116,11 @@ end
         atri = typ(a)
         b = rand(n,n)
         qrb = qrfact(b,Val(true))
-        @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
-        @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
+        @test *(atri, Adjoint(qrb[:Q])) ≈ Matrix(atri) * qrb[:Q]'
+        @test mul!(copy(atri), Adjoint(qrb[:Q])) ≈ Matrix(atri) * qrb[:Q]'
         qrb = qrfact(b,Val(false))
-        @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
-        @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
+        @test *(atri, Adjoint(qrb[:Q])) ≈ Matrix(atri) * qrb[:Q]'
+        @test mul!(copy(atri), Adjoint(qrb[:Q])) ≈ Matrix(atri) * qrb[:Q]'
     end
 end
 
