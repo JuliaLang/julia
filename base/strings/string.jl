@@ -237,10 +237,13 @@ function getindex(s::String, r::UnitRange{Int})
 end
 
 function length(s::String, lo::Int, hi::Int)
-    z = ncodeunits(s)
-    i = Int(max(1, min(z, lo)))
-    n = Int(min(z, max(1, hi)))
-    c = hi - lo + 1
+    i, n = lo, hi
+    c = max(0, hi - lo + 1)
+    @boundscheck begin
+        z = ncodeunits(s)
+        i = Int(max(1, min(z, lo)))
+        n = Int(min(z, max(1, hi)))
+    end
     i < n || return c
     @inbounds i, j = thisind(s, i), i
     c -= i < j

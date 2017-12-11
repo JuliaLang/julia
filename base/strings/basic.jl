@@ -322,6 +322,7 @@ julia> length("jμΛIα")
 ```
 """
 function length(s::AbstractString, lo::Integer=1, hi::Integer=ncodeunits(s))
+    lo ≤ hi || return 0
     z = ncodeunits(s)
     a = Int(max(1, min(z, lo)))
     b = Int(min(z, max(1, hi)))

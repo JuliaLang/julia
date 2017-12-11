@@ -210,7 +210,7 @@ let s = "Σx + βz - 2"
 end
 
 let ss = SubString("hello", 1, 5)
-    @test length(ss, 1, -1) == -1
+    @test length(ss, 1, -1) == 0
     @test length(ss, 1, 10) == 10
     @test prevind(ss, 0, 1) == -1
     @test nextind(ss, 0, 10) == 10
