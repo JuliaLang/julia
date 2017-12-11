@@ -34,7 +34,7 @@ function parse_json(strng::AbstractString)
 
     function parse_array()
         parse_char('[')
-        object = Set()
+        object = Set{Any}()
         if next_char != ']'
             while true
                 val = parse_value()

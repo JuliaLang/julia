@@ -1113,7 +1113,7 @@ end
 
 @deprecate issubtype (<:)
 
-@deprecate union() Set()
+@deprecate union() Set{Any}()
 
 # 12807
 start(::Union{Process, ProcessChain}) = 1
@@ -2057,6 +2057,8 @@ end
 @deprecate Array{T}(d::Integer...) where {T}                        Array{T}(uninitialized, d)
 @deprecate Vector(m::Integer)                                       Vector(uninitialized, m)
 @deprecate Matrix(m::Integer, n::Integer)                           Matrix(uninitialized, m, n)
+
+@deprecate Set() Set{Any}()
 
 # deprecate IntSet to BitSet
 @deprecate_binding IntSet BitSet

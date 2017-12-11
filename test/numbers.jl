@@ -2529,7 +2529,7 @@ function allsubtypes!(m::Module, x::DataType, sts::Set)
 end
 
 @testset "eltype and ndims" begin
-    let number_types = Set()
+    let number_types = Set{Any}()
         allsubtypes!(Base, Number, number_types)
         allsubtypes!(Core, Number, number_types)
 
@@ -3071,7 +3071,7 @@ end
 end
 
 @testset "printing non finite floats" begin
-    let float_types = Set()
+    let float_types = Set{Any}()
         allsubtypes!(Base, AbstractFloat, float_types)
         allsubtypes!(Core, AbstractFloat, float_types)
         @test !isempty(float_types)

@@ -106,7 +106,7 @@ let a = Expr(:block, TypedSlot(1, Any)),
     @test b != c && hash(b) != hash(c)
 end
 
-@test hash(Dict(),hash(Set())) != hash(Set(),hash(Dict()))
+@test hash(Dict(),hash(Set{Any}())) != hash(Set{Any}(),hash(Dict()))
 
 # issue 15659
 for prec in [3, 11, 15, 16, 31, 32, 33, 63, 64, 65, 254, 255, 256, 257, 258, 1023, 1024, 1025],

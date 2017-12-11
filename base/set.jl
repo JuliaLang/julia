@@ -9,7 +9,6 @@ mutable struct Set{T} <: AbstractSet{T}
     Set{T}(s::Set{T}) where {T} = new(Dict{T,Void}(s.dict))
     Set{T}(itr) where {T} = union!(new(Dict{T,Void}()), itr)
 end
-Set() = Set{Any}()
 
 """
     Set([itr])
@@ -312,7 +311,7 @@ julia> unique(x -> x^2, [1, -1, 3, -3, 4])
 """
 function unique(f::Callable, C)
     out = Vector{eltype(C)}()
-    seen = Set()
+    seen = Set{Any}()
     for x in C
         y = f(x)
         if !in(y, seen)

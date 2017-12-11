@@ -262,17 +262,17 @@ end
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Core; recursive=true))
         pop!(need_to_handle_undef_sparam, which(Core.Inference.eltype, Tuple{Type{Tuple{Any}}}))
-        @test_broken need_to_handle_undef_sparam == Set()
+        @test_broken need_to_handle_undef_sparam == Set{Any}()
         pop!(need_to_handle_undef_sparam, which(Core.Inference.cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, first(methods(Core.Inference.same_names)))
-        @test need_to_handle_undef_sparam == Set()
+        @test need_to_handle_undef_sparam == Set{Any}()
     end
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Base; recursive=true))
         pop!(need_to_handle_undef_sparam, which(Base._totuple, (Type{Tuple{Vararg{E}}} where E, Any, Any)))
         pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Any}}}))
         pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))
-        @test_broken need_to_handle_undef_sparam == Set()
+        @test_broken need_to_handle_undef_sparam == Set{Any}()
         pop!(need_to_handle_undef_sparam, which(Base.cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T}, 1}, Tuple{Vararg{Pair{T}}}} where T<:AbstractString,)))
         pop!(need_to_handle_undef_sparam, which(Base.LinAlg.promote_leaf_eltypes, (Union{AbstractArray{T}, Tuple{Vararg{T}}} where T<:Number,)))
@@ -287,7 +287,7 @@ end
         pop!(need_to_handle_undef_sparam, which(Base.zero, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.oneunit, Tuple{Type{Union{Missing, T}} where T}))
-        @test need_to_handle_undef_sparam == Set()
+        @test need_to_handle_undef_sparam == Set{Any}()
     end
 end
 
