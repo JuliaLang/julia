@@ -418,6 +418,8 @@ end
 scale!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = scale!(A,A,c)
 scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 
+fillstored!(A::AbstractTriangular, x) = (fill!(A.data, x); A)
+
 # Binary operations
 +(A::UpperTriangular, B::UpperTriangular) = UpperTriangular(A.data + B.data)
 +(A::LowerTriangular, B::LowerTriangular) = LowerTriangular(A.data + B.data)
