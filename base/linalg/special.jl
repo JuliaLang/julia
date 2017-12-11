@@ -123,6 +123,6 @@ for op in (:+, :-)
 end
 
 mul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    (B = adjB.parent; A_mul_Bc!(full!(A), B))
+    (B = adjB.parent; mul!(full!(A), Adjoint(B)))
 *(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    (B = adjB.parent; A_mul_Bc(copy!(similar(parent(A)), A), B))
+    (B = adjB.parent; *(copy!(similar(parent(A)), A), Adjoint(B)))
