@@ -8,17 +8,17 @@ import Base.LinAlg: checksquare
 *(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
     *(sppromote(A, B)...)
 *(A::SparseMatrixCSC{TvA,TiA}, transB::Transpose{<:Any,<:SparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
-    (B = transB.parent; A_mul_Bt(sppromote(A, B)...))
+    (B = transB.parent; (pA, pB) = sppromote(A, B); *(pA, Transpose(pB)))
 *(A::SparseMatrixCSC{TvA,TiA}, adjB::Adjoint{<:Any,<:SparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
-    (B = adjB.parent; A_mul_Bc(sppromote(A, B)...))
+    (B = adjB.parent; (pA, pB) = sppromote(A, B); *(pA, Adjoint(pB)))
 *(transA::Transpose{<:Any,<:SparseMatrixCSC{TvA,TiA}}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
-    (A = transA.parent; At_mul_B(sppromote(A, B)...))
+    (A = transA.parent; (pA, pB) = sppromote(A, B); *(Transpose(pA), pB))
 *(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TvA,TiA}}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
-    (A = adjA.parent; Ac_mul_B(sppromote(A, B)...))
+    (A = adjA.parent; (pA, pB) = sppromote(A, B); *(Adjoint(pA), pB))
 *(transA::Transpose{<:Any,<:SparseMatrixCSC{TvA,TiA}}, transB::Transpose{<:Any,<:SparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
-    (A = transA.parent; B = transB.parent; At_mul_Bt(sppromote(A, B)...))
+    (A = transA.parent; B = transB.parent; (pA, pB) = sppromote(A, B); *(Transpose(pA), Transpose(pB)))
 *(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TvA,TiA}}, adjB::Adjoint{<:Any,<:SparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
-    (A = adjA.parent; B = adjB.parent; Ac_mul_Bc(sppromote(A, B)...))
+    (A = adjA.parent; B = adjB.parent; (pA, pB) = sppromote(A, B); *(Adjoint(pA), Adjoint(pB)))
 
 function sppromote(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
     Tv = promote_type(TvA, TvB)
@@ -50,9 +50,9 @@ function mul!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C:
     C
 end
 *(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (T = promote_type(TA, Tx); A_mul_B!(one(T), A, x, zero(T), similar(x, T, A.m)))
+    (T = promote_type(TA, Tx); mul!(one(T), A, x, zero(T), similar(x, T, A.m)))
 *(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (T = promote_type(TA, Tx); A_mul_B!(one(T), A, B, zero(T), similar(B, T, (A.m, size(B, 2)))))
+    (T = promote_type(TA, Tx); mul!(one(T), A, B, zero(T), similar(B, T, (A.m, size(B, 2)))))
 
 function mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
     A = adjA.parent
@@ -76,9 +76,9 @@ function mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecO
     C
 end
 *(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (A = adjA.parent; T = promote_type(TA, Tx); Ac_mul_B!(one(T), A, x, zero(T), similar(x, T, A.n)))
+    (A = adjA.parent; T = promote_type(TA, Tx); mul!(one(T), Adjoint(A), x, zero(T), similar(x, T, A.n)))
 *(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (A = adjA.parent; T = promote_type(TA, Tx); Ac_mul_B!(one(T), A, B, zero(T), similar(B, T, (A.n, size(B, 2)))))
+    (A = adjA.parent; T = promote_type(TA, Tx); mul!(one(T), Adjoint(A), B, zero(T), similar(B, T, (A.n, size(B, 2)))))
 
 function mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
     A = transA.parent
@@ -102,18 +102,18 @@ function mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::Strided
     C
 end
 *(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (A = transA.parent; T = promote_type(TA, Tx); At_mul_B!(one(T), A, x, zero(T), similar(x, T, A.n)))
+    (A = transA.parent; T = promote_type(TA, Tx); mul!(one(T), Transpose(A), x, zero(T), similar(x, T, A.n)))
 *(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (A = transA.parent; T = promote_type(TA, Tx); At_mul_B!(one(T), A, B, zero(T), similar(B, T, (A.n, size(B, 2)))))
+    (A = transA.parent; T = promote_type(TA, Tx); mul!(one(T), Transpose(A), B, zero(T), similar(B, T, (A.n, size(B, 2)))))
 
 # For compatibility with dense multiplication API. Should be deleted when dense multiplication
 # API is updated to follow BLAS API.
 mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) =
-    A_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
+    mul!(one(eltype(B)), A, B, zero(eltype(C)), C)
 mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat) =
-    (A = adjA.parent; Ac_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C))
+    (A = adjA.parent; mul!(one(eltype(B)), Adjoint(A), B, zero(eltype(C)), C))
 mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat) =
-    (A = transA.parent; At_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C))
+    (A = transA.parent; mul!(one(eltype(B)), Transpose(A), B, zero(eltype(C)), C))
 
 function (*)(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA}
     mX, nX = size(X)
@@ -304,8 +304,8 @@ end
 ldiv!(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = fwdTriSolve!(L.data, B)
 ldiv!(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = bwdTriSolve!(U.data, B)
 
-(\)(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(L, Array(B))
-(\)(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(U, Array(B))
+(\)(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::SparseMatrixCSC) where {T} = ldiv!(L, Array(B))
+(\)(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::SparseMatrixCSC) where {T} = ldiv!(U, Array(B))
 \(A::Transpose{<:Real,<:Hermitian{<:Real,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
 \(A::Transpose{<:Complex,<:Hermitian{<:Complex,<:SparseMatrixCSC}}, B::Vector) = transpose(A.parent) \ B
 \(A::Transpose{<:Number,<:Symmetric{<:Number,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
@@ -329,9 +329,9 @@ function rdiv!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
 end
 
 rdiv!(A::SparseMatrixCSC{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
-    (D = adjD.parent; A_rdiv_B!(A, conj(D)))
+    (D = adjD.parent; rdiv!(A, conj(D)))
 rdiv!(A::SparseMatrixCSC{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
-    (D = transD.parent; A_rdiv_B!(A, D))
+    (D = transD.parent; rdiv!(A, D))
 
 ## triu, tril
 
@@ -942,7 +942,7 @@ function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
     end
 end
 \(::SparseMatrixCSC, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-for (xform, f) in ((:Adjoint, :Ac_ldiv_B), (:Transpose, :At_ldiv_B))
+for xform in (:Adjoint, :Transpose)
     @eval begin
         function \(xformA::($xform){<:Any,<:SparseMatrixCSC}, B::AbstractVecOrMat)
             A = xformA.parent
@@ -950,19 +950,19 @@ for (xform, f) in ((:Adjoint, :Ac_ldiv_B), (:Transpose, :At_ldiv_B))
             if m == n
                 if istril(A)
                     if istriu(A)
-                        return ($f)(Diagonal(Vector(diag(A))), B)
+                        return \($xform(Diagonal(Vector(diag(A)))), B)
                     else
-                        return ($f)(LowerTriangular(A), B)
+                        return \($xform(LowerTriangular(A)), B)
                     end
                 elseif istriu(A)
-                    return ($f)(UpperTriangular(A), B)
+                    return \($xform(UpperTriangular(A)), B)
                 end
                 if ishermitian(A)
-                    return ($f)(Hermitian(A), B)
+                    return \($xform(Hermitian(A)), B)
                 end
-                return ($f)(lufact(A), B)
+                return \($xform(lufact(A)), B)
             else
-                return ($f)(qrfact(A), B)
+                return \($xform(qrfact(A)), B)
             end
         end
         \(::($xform){<:Any,<:SparseMatrixCSC}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
