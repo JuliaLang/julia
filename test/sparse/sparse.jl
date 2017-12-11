@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base.LinAlg: mul!, ldiv!, rdiv!, Adjoint, Transpose
+
 @testset "issparse" begin
     @test issparse(sparse(ones(5,5)))
     @test !issparse(ones(5,5))
@@ -191,10 +193,10 @@ end
         α = rand(Complex128)
         β = rand(Complex128)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
-        @test (maximum(abs.(A_mul_B!(similar(b), a, b) - Array(a)*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(A_mul_B!(similar(c), a, c) - Array(a)*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(At_mul_B!(similar(b), a, b) - Array(a).'*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(At_mul_B!(similar(c), a, c) - Array(a).'*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(b), a, b) - Array(a)*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(c), a, c) - Array(a)*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(b), Transpose(a), b) - Array(a).'*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(c), Transpose(a), c) - Array(a).'*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
         @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
@@ -340,11 +342,11 @@ dA = Array(sA)
         bi = inv.(b)
         dAt = transpose(dA)
         sAt = transpose(sA)
-        @test scale!(copy(dAt), bi) ≈ Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(b))
-        @test scale!(copy(dAt), bi) ≈ Base.LinAlg.A_rdiv_Bt!(copy(sAt), Diagonal(b))
-        @test scale!(copy(dAt), conj(bi)) ≈ Base.LinAlg.A_rdiv_Bc!(copy(sAt), Diagonal(b))
-        @test_throws DimensionMismatch Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(ones(length(b) + 1)))
-        @test_throws LinAlg.SingularException Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(zeros(length(b))))
+        @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), Diagonal(b))
+        @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), Transpose(Diagonal(b)))
+        @test scale!(copy(dAt), conj(bi)) ≈ rdiv!(copy(sAt), Adjoint(Diagonal(b)))
+        @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(ones(length(b) + 1)))
+        @test_throws LinAlg.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
     end
 end
 
@@ -1842,7 +1844,7 @@ end
     m = 5
     intmat = fill(1, m, m)
     ltintmat = LowerTriangular(rand(1:5, m, m))
-    @test At_ldiv_B(ltintmat, sparse(intmat)) ≈ At_ldiv_B(ltintmat, intmat)
+    @test \(Transpose(ltintmat), sparse(intmat)) ≈ \(Transpose(ltintmat), intmat)
 end
 
 # Test temporary fix for issue #16548 in PR #16979. Somewhat brittle. Expect to remove with `\` revisions.
