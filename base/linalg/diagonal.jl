@@ -150,38 +150,38 @@ end
 (*)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
 (*)(D::Diagonal, V::AbstractVector) = D.diag .* V
 
-(*)(A::AbstractTriangular, D::Diagonal) = A_mul_B!(copy(A), D)
-(*)(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, copy(B))
+(*)(A::AbstractTriangular, D::Diagonal) = mul!(copy(A), D)
+(*)(D::Diagonal, B::AbstractTriangular) = mul!(D, copy(B))
 
 (*)(A::AbstractMatrix, D::Diagonal) =
     scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D.diag)
 (*)(D::Diagonal, A::AbstractMatrix) =
     scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D.diag, A)
 
-mul!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) = typeof(A)(A_mul_B!(A.data, D))
+mul!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) = typeof(A)(mul!(A.data, D))
 function mul!(A::UnitLowerTriangular, D::Diagonal)
-    A_mul_B!(A.data, D)
+    mul!(A.data, D)
     for i = 1:size(A, 1)
         A.data[i,i] = D.diag[i]
     end
     LowerTriangular(A.data)
 end
 function mul!(A::UnitUpperTriangular, D::Diagonal)
-    A_mul_B!(A.data, D)
+    mul!(A.data, D)
     for i = 1:size(A, 1)
         A.data[i,i] = D.diag[i]
     end
     UpperTriangular(A.data)
 end
 function mul!(D::Diagonal, B::UnitLowerTriangular)
-    A_mul_B!(D, B.data)
+    mul!(D, B.data)
     for i = 1:size(B, 1)
         B.data[i,i] = D.diag[i]
     end
     LowerTriangular(B.data)
 end
 function mul!(D::Diagonal, B::UnitUpperTriangular)
-    A_mul_B!(D, B.data)
+    mul!(D, B.data)
     for i = 1:size(B, 1)
         B.data[i,i] = D.diag[i]
     end
@@ -189,40 +189,40 @@ function mul!(D::Diagonal, B::UnitUpperTriangular)
 end
 
 *(adjD::Adjoint{<:Any,<:Diagonal}, B::Diagonal) = (D = adjD.parent; Diagonal(adjoint.(D.diag) .* B.diag))
-*(adjA::Adjoint{<:Any,<:AbstractTriangular}, D::Diagonal) = (A = adjA.parent; A_mul_B!(adjoint(A), D))
+*(adjA::Adjoint{<:Any,<:AbstractTriangular}, D::Diagonal) = (A = adjA.parent; mul!(adjoint(A), D))
 function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, D::Diagonal)
     A = adjA.parent
     Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     adjoint!(Ac, A)
-    A_mul_B!(Ac, D)
+    mul!(Ac, D)
 end
 
 *(transD::Transpose{<:Any,<:Diagonal}, B::Diagonal) = (D = transD.parent; Diagonal(transpose.(D.diag) .* B.diag))
-*(transA::Transpose{<:Any,<:AbstractTriangular}, D::Diagonal) = (A = transA.parent; A_mul_B!(transpose(A), D))
+*(transA::Transpose{<:Any,<:AbstractTriangular}, D::Diagonal) = (A = transA.parent; mul!(transpose(A), D))
 function *(transA::Transpose{<:Any,<:AbstractMatrix}, D::Diagonal)
     A = transA.parent
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     transpose!(At, A)
-    A_mul_B!(At, D)
+    mul!(At, D)
 end
 
 *(D::Diagonal, adjB::Adjoint{<:Any,<:Diagonal}) = (B = adjB.parent; Diagonal(D.diag .* adjoint.(B.diag)))
-*(D::Diagonal, adjB::Adjoint{<:Any,<:AbstractTriangular}) = (B = adjB.parent; A_mul_B!(D, adjoint(B)))
-*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) = (Q = adjQ.parent; A_mul_Bc!(Array(D), Q))
+*(D::Diagonal, adjB::Adjoint{<:Any,<:AbstractTriangular}) = (B = adjB.parent; mul!(D, adjoint(B)))
+*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) = (Q = adjQ.parent; mul!(Array(D), Adjoint(Q)))
 function *(D::Diagonal, adjA::Adjoint{<:Any,<:AbstractMatrix})
     A = adjA.parent
     Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     adjoint!(Ac, A)
-    A_mul_B!(D, Ac)
+    mul!(D, Ac)
 end
 
 *(D::Diagonal, transB::Transpose{<:Any,<:Diagonal}) = (B = transB.parent; Diagonal(D.diag .* transpose.(B.diag)))
-*(D::Diagonal, transB::Transpose{<:Any,<:AbstractTriangular}) = (B = transB.parent; A_mul_B!(D, transpose(B)))
+*(D::Diagonal, transB::Transpose{<:Any,<:AbstractTriangular}) = (B = transB.parent; mul!(D, transpose(B)))
 function *(D::Diagonal, transA::Transpose{<:Any,<:AbstractMatrix})
     A = transA.parent
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     transpose!(At, A)
-    A_mul_B!(D, At)
+    mul!(D, At)
 end
 
 *(adjD::Adjoint{<:Any,<:Diagonal}, adjB::Adjoint{<:Any,<:Diagonal}) =
@@ -326,9 +326,9 @@ function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
 end
 
 ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
-    (D = adjD.parent; A_ldiv_B!(conj(D), B))
+    (D = adjD.parent; ldiv!(conj(D), B))
 ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
-    (D = transD.parent; A_ldiv_B!(D, B))
+    (D = transD.parent; ldiv!(D, B))
 
 function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
     dd = D.diag
@@ -349,14 +349,14 @@ function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
 end
 
 rdiv!(A::AbstractMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
-    (D = adjD.parent; A_rdiv_B!(A, conj(D)))
+    (D = adjD.parent; rdiv!(A, conj(D)))
 rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
-    (D = transD.parent; A_rdiv_B!(A, D))
+    (D = transD.parent; rdiv!(A, D))
 
 (\)(F::Factorization, D::Diagonal) =
-    A_ldiv_B!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
+    ldiv!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
 \(adjF::Adjoint{<:Any,<:Factorization}, D::Diagonal) =
-    (F = adjF.parent; Ac_ldiv_B!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D)))
+    (F = adjF.parent; ldiv!(Adjoint(F), Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D)))
 
 # Methods to resolve ambiguities with `Diagonal`
 @inline *(rowvec::RowVector, D::Diagonal) = transpose(D * transpose(rowvec))
