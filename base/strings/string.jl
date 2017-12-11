@@ -184,9 +184,8 @@ end
     return reinterpret(Char, u), i
 end
 
-function getindex(s::String, i::Int)
-    @boundscheck checkbounds(s, i)
-    @inbounds b = codeunit(s, i)
+@propagate_inbounds function getindex(s::String, i::Int)
+    b = codeunit(s, i)
     u = UInt32(b) << 24
     (b < 0x80) | (0xf8 ≤ b) && return reinterpret(Char, u)
     return getindex_continued(s, i, u)
@@ -241,35 +240,38 @@ function length(s::String, lo::Int, hi::Int)
     z = ncodeunits(s)
     i = Int(max(1, min(z, lo)))
     n = Int(min(z, max(1, hi)))
-    c = i - n
-    if i ≤ n
-        i, j = thisind(s, i), i
-        c -= i < j
-        i -= 1
+    c = hi - lo + 1
+    i < n || return c
+    @inbounds i, j = thisind(s, i), i
+    c -= i < j
+    _length(s, i, n, c)
+end
+
+length(s::String) = _length(s, 1, ncodeunits(s), ncodeunits(s))
+
+function _length(s::String, i::Int, n::Int, c::Int)
+    i < n || return c
+    @inbounds b = codeunit(s, i)
+    @inbounds while true
         while true
-            (i += 1) ≤ n || break
-            @inbounds b = codeunit(s, i) # lead byte
-        @label L
-            c += 1
-            (0xc0 ≤ b) & (b < 0xf8) || continue
-            l = b
-
-            (i += 1) ≤ n || break
-            @inbounds b = codeunit(s, i) # cont byte 1
-            b & 0xc0 == 0x80 || @goto L
-            l ≥ 0xe0 || continue
-
-            (i += 1) ≤ n || break
-            @inbounds b = codeunit(s, i) # cont byte 2
-            b & 0xc0 == 0x80 || @goto L
-            l ≥ 0xf0 || continue
-
-            (i += 1) ≤ n || break
-            @inbounds b = codeunit(s, i) # cont byte 3
-            b & 0xc0 == 0x80 || @goto L
+            (i += 1) ≤ n || return c
+            between(b, 0xc0, 0xf7) && break
+            b = codeunit(s, i)
         end
+        l = b
+        b = codeunit(s, i) # cont byte 1
+        c -= (x = b & 0xc0 == 0x80)
+        x & (l ≥ 0xe0) || continue
+
+        (i += 1) ≤ n || return c
+        b = codeunit(s, i) # cont byte 2
+        c -= (x = b & 0xc0 == 0x80)
+        x & (l ≥ 0xf0) || continue
+
+        (i += 1) ≤ n || return c
+        b = codeunit(s, i) # cont byte 3
+        c -= (b & 0xc0 == 0x80)
     end
-    return c + hi - lo
 end
 
 # TODO: delete or move to char.jl
