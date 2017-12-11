@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base.LinAlg: mul!, ldiv!, Adjoint, Transpose
+
 ### Data
 
 spv_x1 = SparseVector(8, [2, 5, 6], [1.25, -0.75, 3.5])
@@ -816,7 +818,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*A*xf + β*y
-                @test A_mul_B!(α, A, x, β, y) === y
+                @test mul!(α, A, x, β, y) === y
                 @test y ≈ rr
             end
             y = A*x
@@ -829,12 +831,12 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*A'xf + β*y
-                @test At_mul_B!(α, A, x, β, y) === y
+                @test mul!(α, Transpose(A), x, β, y) === y
                 @test y ≈ rr
             end
-            y = At_mul_B(A, x)
+            y = *(Transpose(A), x)
             @test isa(y, Vector{Float64})
-            @test y ≈ At_mul_B(A, xf)
+            @test y ≈ *(Transpose(A), xf)
         end
     end
     @testset "sparse A * sparse x -> dense y" begin
@@ -844,7 +846,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*Af*xf + β*y
-                @test A_mul_B!(α, A, x, β, y) === y
+                @test mul!(α, A, x, β, y) === y
                 @test y ≈ rr
             end
             y = SparseArrays.densemv(A, x)
@@ -858,12 +860,12 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*Af'xf + β*y
-                @test At_mul_B!(α, A, x, β, y) === y
+                @test mul!(α, Transpose(A), x, β, y) === y
                 @test y ≈ rr
             end
             y = SparseArrays.densemv(A, x; trans='T')
             @test isa(y, Vector{Float64})
-            @test y ≈ At_mul_B(Af, xf)
+            @test y ≈ *(Transpose(Af), xf)
         end
 
         let A = complex.(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
@@ -889,7 +891,7 @@ end
             @test all(nonzeros(y) .!= 0.0)
             @test Array(y) ≈ Af * xf
 
-            y = At_mul_B(A, x2)
+            y = *(Transpose(A), x2)
             @test isa(y, SparseVector{Float64,Int})
             @test all(nonzeros(y) .!= 0.0)
             @test Array(y) ≈ Af'x2f
@@ -906,11 +908,11 @@ end
             @test isa(y, SparseVector{Complex128,Int})
             @test Array(y) ≈ Af * xf
 
-            y = At_mul_B(A, x2)
+            y = *(Transpose(A), x2)
             @test isa(y, SparseVector{Complex128,Int})
             @test Array(y) ≈ Af.' * x2f
 
-            y = Ac_mul_B(A, x2)
+            y = *(Adjoint(A), x2)
             @test isa(y, SparseVector{Complex128,Int})
             @test Array(y) ≈ Af'x2f
         end
@@ -955,19 +957,25 @@ end
                 for spvec in spvecs
                     fspvec = convert(Array, spvec)
                     # test out-of-place left-division methods
-                    for mat in (trimats..., unittrimats...), func in (\, At_ldiv_B, Ac_ldiv_B)
-                        @test func(mat, spvec) ≈ func(mat, fspvec)
+                    for mat in (trimats..., unittrimats...)
+                        @test \(mat, spvec)            ≈ \(mat, fspvec)
+                        @test \(Adjoint(mat), spvec)   ≈ \(Adjoint(mat), fspvec)
+                        @test \(Transpose(mat), spvec) ≈ \(Transpose(mat), fspvec)
                     end
                     # test in-place left-division methods not involving quotients
                     if eltypevec == typeof(zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))
-                        for mat in unittrimats, func in (A_ldiv_B!, Base.LinAlg.At_ldiv_B!, Base.LinAlg.Ac_ldiv_B!)
-                            @test func(mat, copy(spvec)) ≈ func(mat, copy(fspvec))
+                        for mat in unittrimats
+                            @test ldiv!(mat, copy(spvec)) ≈ ldiv!(mat, copy(fspvec))
+                            @test ldiv!(Adjoint(mat), copy(spvec)) ≈ ldiv!(Adjoint(mat), copy(fspvec))
+                            @test ldiv!(Transpose(mat), copy(spvec)) ≈ ldiv!(Transpose(mat), copy(fspvec))
                         end
                     end
                     # test in-place left-division methods involving quotients
                     if eltypevec == typeof((zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))/one(eltypemat))
-                        for mat in trimats, func in (A_ldiv_B!, Base.LinAlg.At_ldiv_B!, Base.LinAlg.Ac_ldiv_B!)
-                            @test func(mat, copy(spvec)) ≈ func(mat, copy(fspvec))
+                        for mat in trimats
+                            @test ldiv!(mat, copy(spvec)) ≈ ldiv!(mat, copy(fspvec))
+                            @test ldiv!(Adjoint(mat), copy(spvec)) ≈ ldiv!(Adjoint(mat), copy(fspvec))
+                            @test ldiv!(Transpose(mat), copy(spvec)) ≈ ldiv!(Transpose(mat), copy(fspvec))
                         end
                     end
                 end
@@ -987,12 +995,12 @@ end
         zerodvec = zeros(Float64, 2)
 
         for mat in (utmat, ltmat, uutmat, ultmat)
-            for func in (\, At_ldiv_B, Ac_ldiv_B)
-                @test isequal((func)(mat, zerospvec), zerodvec)
-            end
-            for ipfunc in (A_ldiv_B!, Base.LinAlg.At_ldiv_B!, Base.LinAlg.Ac_ldiv_B!)
-                @test isequal((ipfunc)(mat, copy(zerospvec)), zerospvec)
-            end
+            @test isequal(\(mat, zerospvec), zerodvec)
+            @test isequal(\(Adjoint(mat), zerospvec), zerodvec)
+            @test isequal(\(Transpose(mat), zerospvec), zerodvec)
+            @test isequal(ldiv!(mat, copy(zerospvec)), zerospvec)
+            @test isequal(ldiv!(Adjoint(mat), copy(zerospvec)), zerospvec)
+            @test isequal(ldiv!(Transpose(mat), copy(zerospvec)), zerospvec)
         end
     end
 end
