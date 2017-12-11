@@ -646,7 +646,7 @@ _valuefields(::Type{<:AbstractTriangular}) = [:data]
 
 const SpecialArrays = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal,AbstractTriangular}
 
-function fillslots!(A::SpecialArrays, x)
+function fillstored!(A::SpecialArrays, x)
     xT = convert(eltype(A), x)
     if @generated
         quote
@@ -666,7 +666,7 @@ _small_enough(A::SymTridiagonal) = size(A, 1) <= 2
 
 function fill!(A::Union{Bidiagonal,Tridiagonal,SymTridiagonal}, x)
     xT = convert(eltype(A), x)
-    (xT == zero(eltype(A)) || _small_enough(A)) && return fillslots!(A, xT)
+    (xT == zero(eltype(A)) || _small_enough(A)) && return fillstored!(A, xT)
     throw(ArgumentError("array A of type $(typeof(A)) and size $(size(A)) can
     not be filled with x=$x, since some of its entries are constrained."))
 end

@@ -465,8 +465,10 @@ Deprecated or removed
     `Matrix{Int}(uninitialized, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
     `Array{Float32,3}(uninitialized, 11, 13, 17)` ([#24781]).
 
+  * `LinAlg.fillslots!` has been renamed `LinAlg.fillstored!` ([#25030]).
+
   * `fill!(A::Diagonal, x)` and `fill!(A::AbstractTriangular, x)` have been deprecated
-    in favor of `Base.LinAlg.fillslots!(A, x)` ([#24413]).
+    in favor of `Base.LinAlg.fillstored!(A, x)` ([#24413]).
 
   * `eye` has been deprecated in favor of `I` and `Matrix` constructors. Please see the
     deprecation warnings for replacement details ([#24438]).

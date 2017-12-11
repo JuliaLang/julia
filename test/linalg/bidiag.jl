@@ -310,18 +310,18 @@ end
     @test promote(C,A) isa Tuple{Tridiagonal, Tridiagonal}
 end
 
-import Base.LinAlg: fillslots!, UnitLowerTriangular
-@testset "fill! and fillslots!" begin
+import Base.LinAlg: fillstored!, UnitLowerTriangular
+@testset "fill! and fillstored!" begin
     let #fill!
-        let # fillslots!
+        let # fillstored!
             A = Tridiagonal(randn(2), randn(3), randn(2))
-            @test fillslots!(A, 3) == Tridiagonal([3, 3.], [3, 3, 3.], [3, 3.])
+            @test fillstored!(A, 3) == Tridiagonal([3, 3.], [3, 3, 3.], [3, 3.])
             B = Bidiagonal(randn(3), randn(2), :U)
-            @test fillslots!(B, 2) == Bidiagonal([2.,2,2], [2,2.], :U)
+            @test fillstored!(B, 2) == Bidiagonal([2.,2,2], [2,2.], :U)
             S = SymTridiagonal(randn(3), randn(2))
-            @test fillslots!(S, 1) == SymTridiagonal([1,1,1.], [1,1.])
+            @test fillstored!(S, 1) == SymTridiagonal([1,1,1.], [1,1.])
             Ult = UnitLowerTriangular(randn(3,3))
-            @test fillslots!(Ult, 3) == UnitLowerTriangular([1 0 0; 3 1 0; 3 3 1])
+            @test fillstored!(Ult, 3) == UnitLowerTriangular([1 0 0; 3 1 0; 3 3 1])
         end
         let # fill!(exotic, 0)
             exotic_arrays = Any[Tridiagonal(randn(3), randn(4), randn(3)),
@@ -339,14 +339,14 @@ import Base.LinAlg: fillslots!, UnitLowerTriangular
                     @test a == 0
                 end
             end
-            # Diagonal and AbstractTriangular fill! were defined as fillslots!,
+            # Diagonal and AbstractTriangular fill! were defined as fillstored!,
             # not matching the general behavior of fill!, and so have been deprecated.
             # In a future dev cycle, these fill! methods should probably be reintroduced
             # with behavior matching that of fill! for other structured matrix types.
-            # In the interm, equivalently test fillslots! below
-            @test iszero(fillslots!(Diagonal(fill(1, 3)), 0))
-            @test iszero(fillslots!(LowerTriangular(fill(1, 3, 3)), 0))
-            @test iszero(fillslots!(UpperTriangular(fill(1, 3, 3)), 0))
+            # In the interm, equivalently test fillstored! below
+            @test iszero(fillstored!(Diagonal(fill(1, 3)), 0))
+            @test iszero(fillstored!(LowerTriangular(fill(1, 3, 3)), 0))
+            @test iszero(fillstored!(UpperTriangular(fill(1, 3, 3)), 0))
         end
         let # fill!(small, x)
             val = randn()
