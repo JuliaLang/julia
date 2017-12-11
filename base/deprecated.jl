@@ -1072,12 +1072,13 @@ function Matrix()
     return Matrix(uninitialized, 0, 0)
 end
 
-for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
+for name in ("alnum", "alpha", "cntrl", "digit", "graph",
              "lower", "print", "punct", "space", "upper", "xdigit")
     f = Symbol("is",name)
     @eval import .UTF8proc: $f
     @eval @deprecate ($f)(s::AbstractString) all($f, s)
 end
+@deprecate isnumber(s::AbstractString) all(isnumeric, s)
 
 # TODO: remove warning for using `_` in parse_input_line in base/client.jl
 
@@ -2185,6 +2186,9 @@ end
 # issue #24804
 @deprecate_moved sum_kbn "KahanSummation"
 @deprecate_moved cumsum_kbn "KahanSummation"
+
+# PR #25008
+@deprecate isnumber(c::Char) isnumeric(c)
 
 # END 0.7 deprecations
 

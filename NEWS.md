@@ -738,6 +738,8 @@ Deprecated or removed
   * The `sum_kbn` and `cumsum_kbn` functions have been moved to the
     [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
 
+  * `isnumber` has been deprecated in favor of `isnumeric` ([#25008])
+
 Command-line option changes
 ---------------------------
 
@@ -1711,3 +1713,4 @@ Command-line option changes
 [#24413]: https://github.com/JuliaLang/julia/issues/24413
 [#24653]: https://github.com/JuliaLang/julia/issues/24653
 [#24869]: https://github.com/JuliaLang/julia/issues/24869
+[#25008]: https://github.com/JuliaLang/julia/issues/25008

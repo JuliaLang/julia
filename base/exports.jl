@@ -740,7 +740,7 @@ export
     isgraph,
     islower,
     ismatch,
-    isnumber,
+    isnumeric,
     isprint,
     ispunct,
     isspace,
