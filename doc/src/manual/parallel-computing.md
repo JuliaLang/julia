@@ -1118,7 +1118,7 @@ unspecified, i.e, with the `--worker` option, the worker tries to read it from i
  `LocalManager` and `SSHManager` both pass the cookie to newly launched workers via their
  standard inputs.
 
-By default a worker will listen on a free port at the address returned by a call to `getipaddr()`.
+By default a worker will listen on a free port at the address returned by a call to [`getipaddr()`](@ref).
 A specific address to listen on may be specified by optional argument `--bind-to bind_addr[:port]`.
 This is useful for multi-homed hosts.
 
@@ -1213,7 +1213,7 @@ the other to write data that needs to be sent to worker `pid`. Custom cluster ma
 an in-memory `BufferStream` as the plumbing to proxy data between the custom, possibly non-`IO`
 transport and Julia's in-built parallel infrastructure.
 
-A `BufferStream` is an in-memory `IOBuffer` which behaves like an `IO`--it is a stream which can
+A `BufferStream` is an in-memory [`IOBuffer`](@ref) which behaves like an `IO`--it is a stream which can
 be handled asynchronously.
 
 Folder `examples/clustermanager/0mq` contains an example of using ZeroMQ to connect Julia workers
@@ -1228,7 +1228,7 @@ When using custom transports:
   * For every incoming logical connection with a worker, `Base.process_messages(rd::IO, wr::IO)()`
     must be called. This launches a new task that handles reading and writing of messages from/to
     the worker represented by the `IO` objects.
-  * `init_worker(cookie, manager::FooManager)` MUST be called as part of worker process initialization.
+  * `init_worker(cookie, manager::FooManager)` *must* be called as part of worker process initialization.
   * Field `connect_at::Any` in `WorkerConfig` can be set by the cluster manager when [`launch`](@ref)
     is called. The value of this field is passed in in all [`connect`](@ref) callbacks. Typically,
     it carries information on *how to connect* to a worker. For example, the TCP/IP socket transport
@@ -1272,7 +1272,7 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
     the ephemeral port range (varies by OS).
 
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
-    can be done via a custom ClusterManager.
+    can be done via a custom `ClusterManager`.
 
 ## Cluster Cookie
 
@@ -1285,8 +1285,8 @@ on the master process:
     are allowed to connect to each other.
   * The cookie may be passed to the workers at startup via argument `--worker=<cookie>`. If argument
     `--worker` is specified without the cookie, the worker tries to read the cookie from its
-    standard input (STDIN). The STDIN is closed immediately after the cookie is retrieved.
-  * ClusterManagers can retrieve the cookie on the master by calling [`Base.cluster_cookie()`](@ref).
+    standard input ([`STDIN`](@ref)). The `STDIN` is closed immediately after the cookie is retrieved.
+  * `ClusterManager`s can retrieve the cookie on the master by calling [`Base.cluster_cookie()`](@ref).
     Cluster managers not using the default TCP/IP transport (and hence not specifying `--worker`)
     must call `init_worker(cookie, manager)` with the same cookie as on the master.
 
@@ -1423,7 +1423,7 @@ Note that while Julia code runs on a single thread (by default), libraries used 
 their own internal threads. For example, the BLAS library may start as many threads as there are
 cores on a machine.
 
-The `@threadcall` macro addresses scenarios where we do not want a `ccall` to block the main Julia
+The [`@threadcall`](@ref) macro addresses scenarios where we do not want a [`ccall`](@ref) to block the main Julia
 event loop. It schedules a C function for execution in a separate thread. A threadpool with a
 default size of 4 is used for this. The size of the threadpool is controlled via environment variable
 `UV_THREADPOOL_SIZE`. While waiting for a free thread, and during function execution once a thread
