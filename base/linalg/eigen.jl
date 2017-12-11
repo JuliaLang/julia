@@ -199,7 +199,7 @@ function eigvals!(A::StridedMatrix{<:BlasComplex}; permute::Bool=true, scale::Bo
 end
 
 # promotion type to use for eigenvalues of a Matrix{T}
-eigtype(T) = (Base.@_pure_meta; promote_type(Float32, typeof(float(zero(T)/norm(one(T))))))
+eigtype(T) = promote_type(Float32, typeof(zero(T)/sqrt(one(T))))
 
 """
     eigvals(A; permute::Bool=true, scale::Bool=true) -> values
