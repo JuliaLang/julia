@@ -17,7 +17,7 @@ function new_state()
 end
 
 charseek(buf, i) = seek(buf, nextind(content(buf), 0, i+1)-1)
-charpos(buf, pos=position(buf)) = length(content(buf), 1, pos+1)-1
+charpos(buf, pos=position(buf)) = length(content(buf), 1, pos)
 
 function transform!(f, s, i = -1) # i is char-based (not bytes) buffer position
     buf = buffer(s)

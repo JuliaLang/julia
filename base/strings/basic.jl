@@ -313,15 +313,17 @@ isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
 ## character index arithmetic ##
 
 """
-    length(s::AbstractString, lo::Integer=1, hi::Integer=ncodeunits(s)) -> Integer
+    length(s::AbstractString) -> Int
+    length(s::AbstractString, i::Integer, j::Integer) -> Int
 
-The number of characters in string `s` from indices `lo` through `hi`. This is
-computed as the number of code unit indices from `lo` to `hi` which are valid
+The number of characters in string `s` from indices `i` through `j`. This is
+computed as the number of code unit indices from `i` to `j` which are valid
 character indices. Without only a single string argument, this computes the
-number of characters in the entire string. With `lo` and `hi` arguments it computes
-the number of indices between `lo` and `hi` inclusive that are valid indices in
-the string `s`. Note that the trailing character may include code units past `hi`
-and still be counted.
+number of characters in the entire string. With `i` and `j` arguments it
+computes the number of indices between `i` and `j` inclusive that are valid
+indices in the string `s`. In addition to in-bounds values, `i` may take the
+out-of-bounds value `ncodeunits(s) + 1` and `j` may take the out-of-bounds
+value `0`.
 
 See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`endof`](@ref),
 [`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
@@ -332,17 +334,22 @@ julia> length("jμΛIα")
 5
 ```
 """
-function length(s::AbstractString, lo::Integer=1, hi::Integer=ncodeunits(s))
-    lo ≤ hi || return 0
-    z = ncodeunits(s)
-    a = Int(max(1, min(z, lo)))
-    b = Int(min(z, max(1, hi)))
-    n = a - b
-    for i = a:b
-        n += isvalid(s, i)
+length(s::AbstractString) = @inbounds return length(s, 1, ncodeunits(s))
+
+function length(s::AbstractString, i::Int, j::Int)
+    @boundscheck begin
+        0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
+        0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
     end
-    return n + hi - lo
+    n = 0
+    for k = i:j
+        @inbounds n += isvalid(s, k)
+    end
+    return n
 end
+
+@propagate_inbounds length(s::AbstractString, i::Integer, j::Integer) =
+    length(s, Int(i), Int(j))
 
 """
     thisind(s::AbstractString, i::Integer) -> Int

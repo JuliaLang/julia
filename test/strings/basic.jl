@@ -99,13 +99,13 @@ end
 end
 
 @testset "issue #7248" begin
-    @test length("hello", 1, -1) == 0
+    @test_throws BoundsError length("hello", 1, -1) == 0
     @test prevind("hello", 0, 1) == -1
-    @test length("hellø", 1, -1) == 0
+    @test_throws BoundsError length("hellø", 1, -1) == 0
     @test prevind("hellø", 0, 1) == -1
-    @test length("hello", 1, 10) == 10
+    @test_throws BoundsError length("hello", 1, 10) == 10
     @test nextind("hello", 0, 10) == 10
-    @test length("hellø", 1, 10) == 9
+    @test_throws BoundsError length("hellø", 1, 10) == 9
     @test nextind("hellø", 0, 10) == 11
     @test_throws BoundsError checkbounds("hello", 0)
     @test_throws BoundsError checkbounds("hello", 6)

@@ -232,18 +232,16 @@ function getindex(s::String, r::UnitRange{Int})
     return ss
 end
 
-function length(s::String, lo::Int, hi::Int)
-    i, n = lo, hi
-    c = max(0, hi - lo + 1)
+function length(s::String, i::Int, j::Int)
     @boundscheck begin
-        z = ncodeunits(s)
-        i = Int(max(1, min(z, lo)))
-        n = Int(min(z, max(1, hi)))
+        0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
+        0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
     end
-    i < n || return c
-    @inbounds i, j = thisind(s, i), i
-    c -= i < j
-    _length(s, i, n, c)
+    j < i && return 0
+    c = j - i + 1
+    @inbounds i, k = thisind(s, i), i
+    c -= i < k
+    _length(s, i, j, c)
 end
 
 length(s::String) = _length(s, 1, ncodeunits(s), ncodeunits(s))
