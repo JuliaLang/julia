@@ -82,7 +82,7 @@ IndexStyle(::Type{<:BitArray}) = IndexLinear()
 ## aux functions ##
 
 const _msk64 = ~UInt64(0)
-@inline _div64(l) = l >>> 6
+@inline _div64(l) = l >> 6
 @inline _mod64(l) = l & 63
 @inline _msk_end(l::Integer) = _msk64 >>> _mod64(-l)
 @inline _msk_end(B::BitArray) = _msk_end(length(B))
