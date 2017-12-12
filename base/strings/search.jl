@@ -5,9 +5,7 @@ function search(s::String, c::Char, i::Integer = 1)
         i == sizeof(s) + 1 && return 0
         throw(BoundsError(s, i))
     end
-    @inbounds if is_valid_continuation(codeunit(s,i))
-        string_index_err(s, i)
-    end
+    @inbounds isvalid(s, i) || string_index_err(s, i)
     c ≤ '\x7f' && return search(s, c % UInt8, i)
     while true
         i = search(s, first_utf8_byte(c), i)
@@ -94,13 +92,10 @@ julia> search("JuliaLang","Julia")
 ```
 """
 function search(s::AbstractString, c::Chars, i::Integer)
-    if isempty(c)
-        return 1 <= i <= nextind(s,endof(s)) ? i :
-               throw(BoundsError(s, i))
-    end
-    if i < 1 || i > nextind(s,endof(s))
-        throw(BoundsError(s, i))
-    end
+    z = ncodeunits(s) + 1
+    isempty(c) && return 1 ≤ i ≤ z ? i : throw(BoundsError(s, i))
+    1 ≤ i ≤ z || throw(BoundsError(s, i))
+    @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
     while !done(s,i)
         d, j = next(s,i)
         if d in c

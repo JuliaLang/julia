@@ -87,14 +87,13 @@ See also: [`ncodeunits`](@ref), [`checkbounds`](@ref)
 """
     isvalid(s::AbstractString, i::Integer) -> Bool
 
-Predicate indicating whether the given index is the start of the encoding of
-a character in `s` or not. If `isvalid(s, i)` is true then `s[i]` will return
-the character whose encoding starts at that index, if it's false, then `s[i]`
-will raise an invalid index error. Behavior of `next(s, i)` is similar except
-that the character is returned along with the index of the following character.
-In order for `isvalid(s, i)` to be an O(1) function, the encoding of `s` must
-be [self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code);
-this is a basic assumption of Julia's generic string support.
+Predicate indicating whether the given index is the start of the encoding of a
+character in `s` or not. If `isvalid(s, i)` is true then `s[i]` will return the
+character whose encoding starts at that index, if it's false, then `s[i]` will
+raise an invalid index error or a bounds error depending on if `i` is in bounds.
+In order for `isvalid(s, i)` to be an O(1) function, the encoding of `s` must be
+[self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code) this
+is a basic assumption of Julia's generic string support.
 
 See also: [`getindex`](@ref), [`next`](@ref), [`thisind`](@ref),
 [`nextind`](@ref), [`prevind`](@ref), [`length`](@ref)
@@ -128,8 +127,8 @@ Stacktrace:
 Return a tuple of the character in `s` at index `i` with the index of the start
 of the following character in `s`. This is the key method that allows strings to
 be iterated, yielding a sequences of characters. If `i` is out of bounds in `s`
-then a bounds error is raised; if `i` is not a valid character index in `s` then
-a Unicode index error is raised.
+then a bounds error is raised. The `next` function, as part of the iteration
+protocoal may assume that `i` is the start of a character in `s`.
 
 See also: [`getindex`](@ref), [`start`](@ref), [`done`](@ref),
 [`checkbounds`](@ref)
@@ -145,7 +144,11 @@ eltype(::Type{<:AbstractString}) = Char
 sizeof(s::AbstractString) = ncodeunits(s) * sizeof(codeunit(s))
 endof(s::AbstractString) = thisind(s, ncodeunits(s))
 
-getindex(s::AbstractString, i::Integer) = next(s, i)[1]
+function getindex(s::AbstractString, i::Integer)
+    @boundscheck checkbounds(s, i)
+    @inbounds return isvalid(s, i) ? next(s, i)[1] : string_index_err(s, i)
+end
+
 getindex(s::AbstractString, i::Colon) = s
 # TODO: handle other ranges with stride ±1 specially?
 # TODO: add more @propagate_inbounds annotations?

@@ -169,12 +169,7 @@ let s = "lorem ipsum", sdict = Dict(
     for (ss, s) in sdict
         @test ncodeunits(ss) == ncodeunits(s)
         for i in -2:13
-            if 1 ≤ i ≤ ncodeunits(ss)
-                @test isvalid(ss, i) == isvalid(s, i)
-            else
-                @test_throws BoundsError isvalid(ss, i)
-                @test_throws BoundsError isvalid(s, i)
-            end
+            @test isvalid(ss, i) == isvalid(s, i)
         end
         for i in 1:ncodeunits(ss), j = i-1:ncodeunits(ss)
             @test length(ss, i, j) == length(s, i, j)

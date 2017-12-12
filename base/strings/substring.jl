@@ -73,8 +73,9 @@ function getindex(s::SubString, i::Integer)
 end
 
 function isvalid(s::SubString, i::Integer)
-    @boundscheck checkbounds(s, i)
-    @inbounds return isvalid(s.string, s.offset + i)
+    ib = true
+    @boundscheck ib = checkbounds(Bool, s, i)
+    @inbounds return ib && isvalid(s.string, s.offset + i)
 end
 
 thisind(s::SubString, i::Integer) = thisind(s.string, s.offset + i) - s.offset

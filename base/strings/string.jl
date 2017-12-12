@@ -157,11 +157,8 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     return next_continued(s, i, u)
 end
 
-@noinline function next_continued(s::String, i::Int, u::UInt32)
-    if u < 0xc0000000
-        isvalid(s, i) && (i += 1; @goto ret)
-        string_index_err(s, i)
-    end
+function next_continued(s::String, i::Int, u::UInt32)
+    u < 0xc0000000 && (i += 1; @goto ret)
     n = ncodeunits(s)
     # first continuation byte
     (i += 1) > n && @goto ret
@@ -281,11 +278,7 @@ first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
 
 ## overload methods for efficiency ##
 
-function isvalid(s::String, i::Int)
-    @boundscheck checkbounds(s, i)
-    return thisind(s, i) == i
-end
-isvalid(s::String, i::Integer) = isvalid(s, Int(i))
+isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
 ## optimized concatenation, reverse, repeat ##
 
