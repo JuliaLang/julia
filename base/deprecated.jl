@@ -1767,14 +1767,14 @@ end
 # are deprecated in base/libgit2/types.jl.
 
 # deprecate ones/zeros methods accepting an array as first argument
-@deprecate ones(a::AbstractArray, ::Type{T}, dims::Tuple) where {T} fill!(similar(a, T, dims), 1)
-@deprecate ones(a::AbstractArray, ::Type{T}, dims...) where {T}     fill!(similar(a, T, dims...), 1)
-@deprecate ones(a::AbstractArray, ::Type{T}) where {T}              fill!(similar(a, T), 1)
-@deprecate ones(a::AbstractArray)                                   fill!(similar(a), 1)
-@deprecate zeros(a::AbstractArray, ::Type{T}, dims::Tuple) where {T}  fill!(similar(a, T, dims), 0)
-@deprecate zeros(a::AbstractArray, ::Type{T}, dims...) where {T}      fill!(similar(a, T, dims...), 0)
-@deprecate zeros(a::AbstractArray, ::Type{T}) where {T}               fill!(similar(a, T), 0)
-@deprecate zeros(a::AbstractArray)                                    fill!(similar(a), 0)
+@deprecate ones(a::AbstractArray, ::Type{T}, dims::Tuple) where {T} fill!(similar(a, T, dims), one(T))
+@deprecate ones(a::AbstractArray, ::Type{T}, dims...) where {T}     fill!(similar(a, T, dims...), one(T))
+@deprecate ones(a::AbstractArray, ::Type{T}) where {T}              fill!(similar(a, T), one(T))
+@deprecate ones(a::AbstractArray)                                   fill!(similar(a), one(eltype(a)))
+@deprecate zeros(a::AbstractArray, ::Type{T}, dims::Tuple) where {T}  fill!(similar(a, T, dims), zero(T))
+@deprecate zeros(a::AbstractArray, ::Type{T}, dims...) where {T}      fill!(similar(a, T, dims...), zero(T))
+@deprecate zeros(a::AbstractArray, ::Type{T}) where {T}               fill!(similar(a, T), zero(T))
+@deprecate zeros(a::AbstractArray)                                    fill!(similar(a), zero(eltype(a)))
 
 # PR #23711
 @eval LibGit2 begin
