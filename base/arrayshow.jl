@@ -321,10 +321,6 @@ function _display(io::IO, X::AbstractArray)
         # override usual show method for Vector{Method}: don't abbreviate long lists
         io = IOContext(io, :limit => false)
     end
-    # we assume this function is always called from top-level, i.e. that it's not nested
-    # within another "show" method; hence we always print the summary, without
-    # checking for current :typeinfo (this could be changed in the future)
-    io = IOContext(io, :typeinfo => eltype(X))
 
     # 1) print summary info
     summary(io, X)
@@ -335,6 +331,15 @@ function _display(io::IO, X::AbstractArray)
     else
         println(io)
     end
+
+    # 2) update typeinfo
+    #
+    # it must come after printing the summary, which can exploit :typeinfo itself
+    # (e.g. views)
+    # we assume this function is always called from top-level, i.e. that it's not nested
+    # within another "show" method; hence we always print the summary, without
+    # checking for current :typeinfo (this could be changed in the future)
+    io = IOContext(io, :typeinfo => eltype(X))
 
     # 2) show actual content
     print_array(io, X)

@@ -1041,4 +1041,7 @@ end
         # from eltype(x), so this must also be printed
         @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[1]]"
     end
+    # Issue #25038
+    A = [0.0, 1.0]
+    @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
 end
