@@ -43,11 +43,10 @@ true
 """
 isvalid(T,value)
 
-isvalid(::Type{Char}, ch::Unsigned) = !((ch - 0xd800 < 0x800) | (ch > 0x10ffff))
-isvalid(::Type{Char}, ch::Integer) = isvalid(Char, Unsigned(ch))
-isvalid(::Type{Char}, ch::Char) = isvalid(Char, UInt32(ch))
-
-isvalid(ch::Char) = isvalid(Char, ch)
+isvalid(c::Char) = !ismalformed(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
+isvalid(::Type{Char}, c::Unsigned) = ((c ≤  0xd7ff ) | ( 0xe000  ≤ c) & (c ≤  0x10ffff ))
+isvalid(::Type{Char}, c::Integer)  = isvalid(Char, Unsigned(c))
+isvalid(::Type{Char}, c::Char)     = isvalid(c)
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_CN = 0
@@ -301,15 +300,15 @@ titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
 function category_code(c::Char)
     ismalformed(c) && return Cint(31)
-    (u = UInt32(c)) ≤ 0x10ffff || return Cint(30)
-    ccall(:utf8proc_category, Cint, (UInt32,), u)
+    c ≤ '\U10ffff' || return Cint(30)
+    ccall(:utf8proc_category, Cint, (UInt32,), c)
 end
 
 # more human-readable representations of the category code
 function category_abbrev(c)
     ismalformed(c) && return "Ma"
-    (u = UInt32(c)) ≤ 0x10ffff || return "In"
-    unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), u))
+    c ≤ '\U10ffff' || return "In"
+    unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), c))
 end
 
 category_string(c) = category_strings[category_code(c)+1]
