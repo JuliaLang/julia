@@ -249,7 +249,7 @@ function empty!(s::BitSet)
     s
 end
 
-isempty(s::BitSet) = all(equalto(CHK0), s.bits)
+isempty(s::BitSet) = _check0(s.bits, 1, length(s.bits))
 
 # Mathematical set functions: union!, intersect!, setdiff!, symdiff!
 
@@ -366,18 +366,19 @@ function ==(s1::BitSet, s2::BitSet)
     included = overlap0 >= l2  # whether a2's indices are included in a1's
     overlap  = included ? l2 : overlap0
 
-    # compare overlap values
-    if overlap > 0
-        _memcmp(pointer(a1, b2-b1+1), pointer(a2), overlap<<3) == 0 || return false
-    end
-
-    # Ensure remaining chunks are zero
+    # Ensure non-overlap chunks are zero (unlikely)
     _check0(a1, 1, l1-overlap0) || return false
     if included
         _check0(a1, b2-b1+l2+1, l1) || return false
     else
         _check0(a2, 1+overlap, l2) || return false
     end
+
+    # compare overlap values
+    if overlap > 0
+        _memcmp(pointer(a1, b2-b1+1), pointer(a2), overlap<<3) == 0 || return false
+    end
+
     return true
 end
 
