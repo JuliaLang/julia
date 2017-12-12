@@ -92,14 +92,12 @@ function ==(a::String, b::String)
     al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
 end
 
-## thisind, nextind, prevind ##
-
-thisind(s::String, i::Integer) = oftype(i, thisind(s, Int(i)))
-nextind(s::String, i::Integer) = oftype(i, nextind(s, Int(i)))
+## thisind, prevind, nextind ##
 
 function thisind(s::String, i::Int)
     n = ncodeunits(s)
-    between(i, 2, n) || return i
+    i == n + 1 && return i
+    @boundscheck between(i, 0, n) || throw(BoundsError(s, i))
     @inbounds b = codeunit(s, i)
     b & 0xc0 == 0x80 || return i
     @inbounds b = codeunit(s, i-1)
@@ -114,8 +112,9 @@ function thisind(s::String, i::Int)
 end
 
 function nextind(s::String, i::Int)
+    i == 0 && return 1
     n = ncodeunits(s)
-    between(i, 1, n-1) || return i+1
+    @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
     @inbounds l = codeunit(s, i)
     (l < 0x80) | (0xf8 ≤ l) && return i+1
     if l < 0xc0

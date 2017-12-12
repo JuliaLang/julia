@@ -99,11 +99,11 @@ end
 end
 
 @testset "issue #7248" begin
-    @test_throws BoundsError length("hello", 1, -1) == 0
-    @test prevind("hello", 0, 1) == -1
-    @test_throws BoundsError length("hellø", 1, -1) == 0
-    @test prevind("hellø", 0, 1) == -1
-    @test_throws BoundsError length("hello", 1, 10) == 10
+    @test_throws BoundsError length("hello", 1, -1)
+    @test_throws BoundsError prevind("hello", 0, 1)
+    @test_throws BoundsError length("hellø", 1, -1)
+    @test_throws BoundsError prevind("hellø", 0, 1)
+    @test_throws BoundsError length("hello", 1, 10)
     @test nextind("hello", 0, 10) == 10
     @test_throws BoundsError length("hellø", 1, 10) == 9
     @test nextind("hellø", 0, 10) == 11
@@ -512,7 +512,8 @@ end
                    SubString("123∀α>β:α+1>β123", 4, 18),
                    SubString(s"123∀α>β:α+1>β123", 4, 18)]
         for s in strs
-            @test thisind(s, -2) == -2
+            @test_throws BoundsError thisind(s, -2)
+            @test_throws BoundsError thisind(s, -1)
             @test thisind(s, 0) == 0
             @test thisind(s, 1) == 1
             @test thisind(s, 2) == 1
@@ -523,86 +524,97 @@ end
             @test thisind(s, 15) == 15
             @test thisind(s, 16) == 15
             @test thisind(s, 17) == 17
-            @test thisind(s, 30) == 30
+            @test_throws BoundsError thisind(s, 18)
+            @test_throws BoundsError thisind(s, 19)
         end
     end
 
     let strs = Any["", s"", SubString("123", 2, 1), SubString(s"123", 2, 1)]
-        for s in strs, i in -2:2
-            @test thisind(s, i) == i
+        for s in strs
+            @test_throws BoundsError thisind(s, -1)
+            @test thisind(s, 0) == 0
+            @test thisind(s, 1) == 1
+            @test_throws BoundsError thisind(s, 2)
         end
     end
 end
 
 @testset "prevind and nextind" begin
-    let strs = Any["∀α>β:α+1>β", GenericString("∀α>β:α+1>β")]
-        for i in 1:2
-            @test prevind(strs[i], 1) == 0
-            @test prevind(strs[i], 1, 1) == 0
-            @test prevind(strs[i], 2) == 1
-            @test prevind(strs[i], 2, 1) == 1
-            @test prevind(strs[i], 4) == 1
-            @test prevind(strs[i], 4, 1) == 1
-            @test prevind(strs[i], 5) == 4
-            @test prevind(strs[i], 5, 1) == 4
-            @test prevind(strs[i], 5, 2) == 1
-            @test prevind(strs[i], 5, 3) == 0
-            @test prevind(strs[i], 15) == 14
-            @test prevind(strs[i], 15, 1) == 14
-            @test prevind(strs[i], 15, 2) == 13
-            @test prevind(strs[i], 15, 3) == 12
-            @test prevind(strs[i], 15, 4) == 10
-            @test prevind(strs[i], 15, 10) == 0
-            @test prevind(strs[i], 15, 9) == 1
-            @test prevind(strs[i], 16) == 15
-            @test prevind(strs[i], 16, 1) == 15
-            @test prevind(strs[i], 16, 2) == 14
-            @test prevind(strs[i], 20) == 19
-            @test prevind(strs[i], 20, 1) == 19
-            @test prevind(strs[i], 20, 10) == 7
-            @test prevind(strs[i], 20, 0) == 20
+    for s in Any["∀α>β:α+1>β", GenericString("∀α>β:α+1>β")]
+        @test_throws BoundsError prevind(s, 0)
+        @test_throws BoundsError prevind(s, 0, 0)
+        @test_throws BoundsError prevind(s, 0, 1)
+        @test prevind(s, 1) == 0
+        @test prevind(s, 1, 1) == 0
+        @test prevind(s, 1, 0) == 1
+        @test prevind(s, 2) == 1
+        @test prevind(s, 2, 1) == 1
+        @test prevind(s, 4) == 1
+        @test prevind(s, 4, 1) == 1
+        @test prevind(s, 5) == 4
+        @test prevind(s, 5, 1) == 4
+        @test prevind(s, 5, 2) == 1
+        @test prevind(s, 5, 3) == 0
+        @test prevind(s, 15) == 14
+        @test prevind(s, 15, 1) == 14
+        @test prevind(s, 15, 2) == 13
+        @test prevind(s, 15, 3) == 12
+        @test prevind(s, 15, 4) == 10
+        @test prevind(s, 15, 10) == 0
+        @test prevind(s, 15, 9) == 1
+        @test prevind(s, 16) == 15
+        @test prevind(s, 16, 1) == 15
+        @test prevind(s, 16, 2) == 14
+        @test prevind(s, 17) == 15
+        @test prevind(s, 17, 1) == 15
+        @test prevind(s, 17, 2) == 14
+        @test_throws BoundsError prevind(s, 18)
+        @test_throws BoundsError prevind(s, 18, 0)
+        @test_throws BoundsError prevind(s, 18, 1)
 
-            @test nextind(strs[i], -1) == 0
-            @test nextind(strs[i], -1, 1) == 0
-            @test nextind(strs[i], -1, 2) == 1
-            @test nextind(strs[i], -1, 3) == 4
-            @test nextind(strs[i], 0, 2) == 4
-            @test nextind(strs[i], 0, 20) == 26
-            @test nextind(strs[i], 0, 10) == 15
-            @test nextind(strs[i], 1) == 4
-            @test nextind(strs[i], 1, 1) == 4
-            @test nextind(strs[i], 1, 2) == 6
-            @test nextind(strs[i], 1, 9) == 15
-            @test nextind(strs[i], 1, 10) == 17
-            @test nextind(strs[i], 2) == 4
-            @test nextind(strs[i], 2, 1) == 4
-            @test nextind(strs[i], 3) == 4
-            @test nextind(strs[i], 3, 1) == 4
-            @test nextind(strs[i], 4) == 6
-            @test nextind(strs[i], 4, 1) == 6
-            @test nextind(strs[i], 14) == 15
-            @test nextind(strs[i], 14, 1) == 15
-            @test nextind(strs[i], 15) == 17
-            @test nextind(strs[i], 15, 1) == 17
-            @test nextind(strs[i], 20) == 21
-            @test nextind(strs[i], 20, 1) == 21
-            @test nextind(strs[i], 20, 0) == 20
+        @test_throws BoundsError nextind(s, -1)
+        @test_throws BoundsError nextind(s, -1, 0)
+        @test_throws BoundsError nextind(s, -1, 1)
+        @test nextind(s, 0, 2) == 4
+        @test nextind(s, 0, 20) == 26
+        @test nextind(s, 0, 10) == 15
+        @test nextind(s, 1) == 4
+        @test nextind(s, 1, 1) == 4
+        @test nextind(s, 1, 2) == 6
+        @test nextind(s, 1, 9) == 15
+        @test nextind(s, 1, 10) == 17
+        @test nextind(s, 2) == 4
+        @test nextind(s, 2, 1) == 4
+        @test nextind(s, 3) == 4
+        @test nextind(s, 3, 1) == 4
+        @test nextind(s, 4) == 6
+        @test nextind(s, 4, 1) == 6
+        @test nextind(s, 14) == 15
+        @test nextind(s, 14, 1) == 15
+        @test nextind(s, 15) == 17
+        @test nextind(s, 15, 1) == 17
+        @test nextind(s, 15, 2) == 18
+        @test nextind(s, 16) == 17
+        @test nextind(s, 16, 1) == 17
+        @test nextind(s, 16, 2) == 18
+        @test nextind(s, 16, 3) == 19
+        @test_throws BoundsError nextind(s, 17)
+        @test_throws BoundsError nextind(s, 17, 0)
+        @test_throws BoundsError nextind(s, 17, 1)
 
-            for x in -10:20
-                n = p = x
-                for j in 1:40
-                    p = prevind(strs[i], p)
-                    @test prevind(strs[i], x, j) == p
-                    n = nextind(strs[i], n)
-                    @test nextind(strs[i], x, j) == n
+        for x in 0:ncodeunits(s)+1
+            n = p = x
+            for j in 1:40
+                if 1 ≤ p
+                    p = prevind(s, p)
+                    @test prevind(s, x, j) == p
+                end
+                if n ≤ ncodeunits(s)
+                    n = nextind(s, n)
+                    @test nextind(s, x, j) == n
                 end
             end
         end
-        @test prevind(strs[1], -1) == -2
-        @test prevind(strs[1], -1, 1) == -2
-
-        @test prevind(strs[2], -1) == -2
-        @test prevind(strs[2], -1, 1) == -2
     end
 end
 

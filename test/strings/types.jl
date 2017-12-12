@@ -146,7 +146,7 @@ end
 @test prevind(SubString("{var}",2,4),4) == 3
 
 # issue #4183
-@test split(SubString("x", 2, 0), "y") == AbstractString[""]
+@test split(SubString("x", 2, 0), "y") == [""]
 
 # issue #6772
 @test parse(Float64, SubString("10",1,1)) === 1.0
@@ -157,7 +157,7 @@ end
 @test !ismatch(Regex("aa"), SubString("",1,0))
 @test ismatch(Regex(""), SubString("",1,0))
 
-# isvalid(), formerly length() and nextind() for SubString{String}
+# isvalid, length, prevind, nextind for SubString{String}
 let s = "lorem ipsum", sdict = Dict(
     SubString(s, 1, 11)  => "lorem ipsum",
     SubString(s, 1, 6)   => "lorem ",
@@ -177,10 +177,14 @@ let s = "lorem ipsum", sdict = Dict(
     end
     for (ss, s) in sdict
         @test length(ss) == length(s)
-        for i in 0:length(ss)+1, j = 0:length(ss)+1
+        for i in 0:ncodeunits(ss), j = 0:length(ss)+1
+            @test prevind(ss, i+1, j) == prevind(s, i+1, j)
             @test nextind(ss, i, j) == nextind(s, i, j)
-            @test prevind(ss, i, j) == prevind(s, i, j)
         end
+        @test_throws BoundsError prevind(s, 0)
+        @test_throws BoundsError prevind(ss, 0)
+        @test_throws BoundsError nextind(s, ncodeunits(ss)+1)
+        @test_throws BoundsError nextind(ss, ncodeunits(ss)+1)
     end
 end
 
@@ -206,11 +210,17 @@ end
 
 let ss = SubString("hello", 1, 5)
     @test length(ss, 1, 0) == 0
-    @test_throws BoundsError length(ss, 1, -1) == 0
+    @test_throws BoundsError length(ss, 1, -1)
     @test_throws BoundsError length(ss, 1, 6)
     @test_throws BoundsError length(ss, 1, 10)
-    @test prevind(ss, 0, 1) == -1
-    @test nextind(ss, 0, 10) == 10
+    @test_throws BoundsError prevind(ss, 0, 1)
+    @test prevind(ss, 1, 1) == 0
+    @test prevind(ss, 6, 1) == 5
+    @test_throws BoundsError prevind(ss, 7, 1)
+    @test_throws BoundsError nextind(ss, -1, 1)
+    @test nextind(ss, 0, 1) == 1
+    @test nextind(ss, 5, 1) == 6
+    @test_throws BoundsError nextind(ss, 6, 1)
 end
 
 # length(SubString{String}) performance specialization

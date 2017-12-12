@@ -78,9 +78,26 @@ function isvalid(s::SubString, i::Integer)
     @inbounds return ib && isvalid(s.string, s.offset + i)
 end
 
-thisind(s::SubString, i::Integer) = thisind(s.string, s.offset + i) - s.offset
-nextind(s::SubString, i::Integer) = nextind(s.string, s.offset + i) - s.offset
-prevind(s::SubString, i::Integer) = prevind(s.string, s.offset + i) - s.offset
+function thisind(s::SubString, i::Int)
+    @boundscheck 0 ≤ i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
+    @inbounds return thisind(s.string, s.offset + i) - s.offset
+end
+function nextind(s::SubString, i::Int, n::Int)
+    @boundscheck 0 ≤ i < ncodeunits(s)+1 || throw(BoundsError(s, i))
+    @inbounds return nextind(s.string, s.offset + i, n) - s.offset
+end
+function nextind(s::SubString, i::Int)
+    @boundscheck 0 ≤ i < ncodeunits(s)+1 || throw(BoundsError(s, i))
+    @inbounds return nextind(s.string, s.offset + i) - s.offset
+end
+function prevind(s::SubString, i::Int, n::Int)
+    @boundscheck 0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
+    @inbounds return prevind(s.string, s.offset + i, n) - s.offset
+end
+function prevind(s::SubString, i::Int)
+    @boundscheck 0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
+    @inbounds return prevind(s.string, s.offset + i) - s.offset
+end
 
 function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)

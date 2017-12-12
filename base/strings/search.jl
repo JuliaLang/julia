@@ -412,7 +412,8 @@ function rsearchindex(s::String, t::String, i::Integer)
     if endof(t) == 1
         rsearch(s, t[1], i)
     elseif endof(t) != 0
-        _rsearchindex(s, t, nextind(s, i)-1)
+        j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
+        _rsearchindex(s, t, j)
     elseif i > sizeof(s)
         return 0
     elseif i == 0

@@ -609,7 +609,11 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1 # position is zero-indexed
-    b = min(endof(response_str), prevind(response_str, a + sizeof(searchdata))) # ensure that b is valid
+    # FIXME: I'm pretty sure this is broken since it uses an index
+    # into the search data to index into the response string
+    b = a + sizeof(searchdata)
+    b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
+    b = min(endof(response_str), b) # ensure that b is valid
 
     !skip_current && searchdata == response_str[a:b] && return true
 

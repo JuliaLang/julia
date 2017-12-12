@@ -383,8 +383,12 @@ julia> thisind("αβγdef", 10)
 julia> thisind("αβγdef", 20)
 20
 """
-function thisind(s::AbstractString, i::Integer)
-    i ≤ ncodeunits(s) || return i
+thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
+
+function thisind(s::AbstractString, i::Int)
+    z = ncodeunits(s) + 1
+    i == z && return i
+    @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
     @inbounds while 1 < i && !isvalid(s, i)
         i -= 1
     end
@@ -415,13 +419,14 @@ julia> prevind("αβγdef", 3, 2)
 0
 ```
 """
-function prevind(s::AbstractString, i::Integer, n::Integer=1)
+prevind(s::AbstractString, i::Integer, n::Integer) = prevind(s, Int(i), Int(n))
+prevind(s::AbstractString, i::Integer)             = prevind(s, Int(i))
+prevind(s::AbstractString, i::Int)                 = prevind(s, i, 1)
+
+function prevind(s::AbstractString, i::Int, n::Int)
     n < 0 && throw(ArgumentError("n cannot be negative: $n"))
     z = ncodeunits(s) + 1
-    if i > z
-        n -= i - z
-        i = z
-    end
+    @boundscheck 0 < i ≤ z || throw(BoundsError(s, i))
     while n > 0 && 1 < i
         @inbounds n -= isvalid(s, i -= 1)
     end
@@ -452,13 +457,14 @@ julia> nextind(str, 9)
 10
 ```
 """
-function nextind(s::AbstractString, i::Integer, n::Integer=1)
+nextind(s::AbstractString, i::Integer, n::Integer) = nextind(s, Int(i), Int(n))
+nextind(s::AbstractString, i::Integer)             = nextind(s, Int(i))
+nextind(s::AbstractString, i::Int)                 = nextind(s, i, 1)
+
+function nextind(s::AbstractString, i::Int, n::Int)
     n < 0 && throw(ArgumentError("n cannot be negative: $n"))
-    if i < 1
-        n += i - 1
-        i = 1
-    end
     z = ncodeunits(s)
+    @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
     while n > 0 && i < z
         @inbounds n -= isvalid(s, i += 1)
     end

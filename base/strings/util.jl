@@ -281,17 +281,20 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
     i = start(str)
     n = endof(str)
     r = search(str,splitter,i)
-    j, k = first(r), nextind(str,last(r))
-    while 0 < j <= n && length(strs) != limit-1
-        if i < k
-            if keep_empty || i < j
-                push!(strs, SubString(str,i,prevind(str,j)))
-            end
-            i = k
-        end
-        (k <= j) && (k = nextind(str,j))
-        r = search(str,splitter,k)
+    if r != 0:-1
         j, k = first(r), nextind(str,last(r))
+        while 0 < j <= n && length(strs) != limit-1
+            if i < k
+                if keep_empty || i < j
+                    push!(strs, SubString(str,i,prevind(str,j)))
+                end
+                i = k
+            end
+            (k <= j) && (k = nextind(str,j))
+            r = search(str,splitter,k)
+            r == 0:-1 && break
+            j, k = first(r), nextind(str,last(r))
+        end
     end
     if keep_empty || !done(str,i)
         push!(strs, SubString(str,i))
@@ -377,18 +380,16 @@ function replace_new(str::String, pattern, repl, count::Integer)
             unsafe_write(out, pointer(str, i), UInt(j-i))
             _replace(out, repl, str, r, pattern)
         end
-        if k<j
+        if k < j
             i = j
+            j > e && break
             k = nextind(str, j)
         else
             i = k = nextind(str, k)
         end
-        if j > e
-            break
-        end
         r = search(str,pattern,k)
+        r == 0:-1 || n == count && break
         j, k = first(r), last(r)
-        n == count && break
         n += 1
     end
     write(out, SubString(str,i))
