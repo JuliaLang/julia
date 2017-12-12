@@ -141,17 +141,10 @@ large.) Technically, this process is known as "Bernoulli sampling" of `A`.
 randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 
 
-## rand_lt (helper function)
+## rand Less Than Masked 52 bits (helper function)
 
-"Return a random `Int` (masked with `mask`) in ``[0, n)``, when `n <= 2^52`."
-@inline function rand_lt(r::AbstractRNG, n::Int, mask::Int=nextpow2(n)-1)
-    # this duplicates the functionality of rand(1:n), to optimize this special case
-    while true
-        x = rand(r, UInt52Raw(Int)) & mask
-        x < n && return x
-    end
-end
-
+"Return a sampler generating a random `Int` (masked with `mask`) in ``[0, n)``, when `n <= 2^52`."
+ltm52(n::Int, mask::Int=nextpow2(n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(Int)))
 
 ## shuffle & shuffle!
 
@@ -191,7 +184,7 @@ function shuffle!(r::AbstractRNG, a::AbstractArray)
     mask = nextpow2(n) - 1
     for i = n:-1:2
         (mask >> 1) == i && (mask >>= 1)
-        j = 1 + rand_lt(r, i, mask)
+        j = 1 + rand(r, ltm52(i, mask))
         a[i], a[j] = a[j], a[i]
     end
     return a
@@ -277,7 +270,7 @@ function randperm!(r::AbstractRNG, a::Array{<:Integer})
     a[1] = 1
     mask = 3
     @inbounds for i = 2:n
-        j = 1 + rand_lt(r, i, mask)
+        j = 1 + rand(r, ltm52(i, mask))
         if i != j # a[i] is uninitialized (and could be #undef)
             a[i] = a[j]
         end
@@ -339,7 +332,7 @@ function randcycle!(r::AbstractRNG, a::Array{<:Integer})
     a[1] = 1
     mask = 3
     @inbounds for i = 2:n
-        j = 1 + rand_lt(r, i-1, mask)
+        j = 1 + rand(r, ltm52(i-1, mask))
         a[i] = a[j]
         a[j] = i
         i == 1+mask && (mask = 2mask + 1)

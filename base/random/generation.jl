@@ -149,24 +149,6 @@ end
 
 #### helper functions
 
-function rand_lteq(r::AbstractRNG, S, u::U, mask::U) where U<:Integer
-    while true
-        x = rand(r, S) & mask
-        x <= u && return x
-    end
-end
-
-function rand_lteq(rng::AbstractRNG, S, u::T)::T where T
-    while true
-        x = rand(rng, S)
-        x <= u && return x
-    end
-end
-
-# helper function, to turn types to values, should be removed once we
-# can do rand(Uniform(UInt))
-rand(rng::AbstractRNG, ::Val{T}) where {T} = rand(rng, T)
-
 uint_sup(::Type{<:Union{Bool,BitInteger}}) = UInt32
 uint_sup(::Type{<:Union{Int64,UInt64}}) = UInt64
 uint_sup(::Type{<:Union{Int128,UInt128}}) = UInt128
@@ -193,22 +175,24 @@ end
 
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt32,T}) where T
     a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
-    x = rand_lteq(rng, Val(UInt32), m, mask)
+    x = rand(rng, LessThan(m, Masked(mask, uniform(UInt32))))
     (x + a % UInt32) % T
 end
 
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt64,T}) where T
     a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
-    x = bw <= 52 ? rand_lteq(rng, UInt52Raw(), m, mask) :
-                   rand_lteq(rng, Val(UInt64), m, mask)
+    x = bw <= 52 ? rand(rng, LessThan(m, Masked(mask, UInt52Raw()))) :
+                   rand(rng, LessThan(m, Masked(mask, uniform(UInt64))))
     (x + a % UInt64) % T
 end
 
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt128,T}) where T
     a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
-    x = bw <= 52  ? rand_lteq(rng, UInt52Raw(), m % UInt64, mask % UInt64) % UInt128 :
-        bw <= 104 ? rand_lteq(rng, UInt104Raw(), m, mask) :
-                    rand_lteq(rng, Val(UInt128), m, mask)
+    x = bw <= 52  ?
+        rand(rng, LessThan(m % UInt64, Masked(mask % UInt64, UInt52Raw()))) % UInt128 :
+    bw <= 104 ?
+        rand(rng, LessThan(m, Masked(mask, UInt104Raw()))) :
+        rand(rng, LessThan(m, Masked(mask, uniform(UInt128))))
     x % T + a
 end
 
@@ -266,19 +250,20 @@ Sampler(::AbstractRNG, r::AbstractUnitRange{T},
         ::Repetition) where {T<:Union{Bool,BitInteger}} = SamplerRangeInt(r)
 
 rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt32}) where {T<:Union{Bool,BitInteger}} =
-    (unsigned(sp.a) + rem_knuth(rand_lteq(rng, Val(UInt32), sp.u), sp.k)) % T
+    (unsigned(sp.a) + rem_knuth(rand(rng, LessThan(sp.u, uniform(UInt32))), sp.k)) % T
+
 
 # this function uses 52 bit entropy for small ranges of length <= 2^52
 function rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt64}) where T<:BitInteger
-    x = sp.bw <= 52 ? rand_lteq(rng, UInt52(), sp.u) :
-                      rand_lteq(rng, Val(UInt64), sp.u)
+    x = sp.bw <= 52 ? rand(rng, LessThan(sp.u, UInt52())) :
+                      rand(rng, LessThan(sp.u, uniform(UInt64)))
     return ((sp.a % UInt64) + rem_knuth(x, sp.k)) % T
 end
 
 function rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt128}) where T<:BitInteger
-    x = sp.bw <= 52  ? rand_lteq(rng, UInt52(UInt128), sp.u) :
-        sp.bw <= 104 ? rand_lteq(rng, UInt104(UInt128), sp.u) :
-                       rand_lteq(rng, Val(UInt128), sp.u)
+    x = sp.bw <= 52  ? rand(rng, LessThan(sp.u, UInt52(UInt128))) :
+        sp.bw <= 104 ? rand(rng, LessThan(sp.u, UInt104(UInt128))) :
+                       rand(rng, LessThan(sp.u, uniform(UInt128)))
     return ((sp.a % UInt128) + rem_knuth(x, sp.k)) % T
 end
 
