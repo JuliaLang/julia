@@ -122,5 +122,7 @@ for op in (:+, :-)
     end
 end
 
-A_mul_Bc!(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc!(full!(A), B)
-A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(copy!(similar(parent(A)), A), B)
+mul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
+    (B = adjB.parent; mul!(full!(A), Adjoint(B)))
+*(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
+    (B = adjB.parent; *(copy!(similar(parent(A)), A), Adjoint(B)))

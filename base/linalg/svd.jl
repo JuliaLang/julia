@@ -252,7 +252,7 @@ svdvals(x::Number) = abs(x)
 svdvals(S::SVD{<:Any,T}) where {T} = (S[:S])::Vector{T}
 
 # SVD least squares
-function A_ldiv_B!(A::SVD{T}, B::StridedVecOrMat) where T
+function ldiv!(A::SVD{T}, B::StridedVecOrMat) where T
     k = searchsortedlast(A.S, eps(real(T))*A.S[1], rev=true)
     view(A.Vt,1:k,:)' * (view(A.S,1:k) .\ (view(A.U,:,1:k)' * B))
 end

@@ -811,7 +811,7 @@ function inv(A::AbstractMatrix{T}) where T
     S = typeof(zero(T)/one(T))      # dimensionful
     S0 = typeof(zero(T)/oneunit(T)) # dimensionless
     dest = Matrix{S0}(I, n, n)
-    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), dest)
+    ldiv!(factorize(convert(AbstractMatrix{S}, A)), dest)
 end
 
 function pinv(v::AbstractVector{T}, tol::Real=real(zero(T))) where T

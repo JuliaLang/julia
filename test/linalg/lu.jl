@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+using Base.LinAlg: ldiv!, Adjoint, Transpose
 import Base.LinAlg.BlasInt, Base.LinAlg.BlasFloat
 
 n = 10
@@ -119,18 +120,18 @@ dimg  = randn(n)/2
                 b_dest = similar(b, resultT)
                 c_dest = similar(c, resultT)
 
-                A_ldiv_B!(b_dest, lua, b)
-                A_ldiv_B!(c_dest, lua, c)
+                ldiv!(b_dest, lua, b)
+                ldiv!(c_dest, lua, c)
                 @test norm(b_dest - lua \ b, 1) < ε*κ*2n
                 @test norm(c_dest - lua \ c, 1) < ε*κ*n
 
-                At_ldiv_B!(b_dest, lua, b)
-                At_ldiv_B!(c_dest, lua, c)
+                ldiv!(b_dest, Transpose(lua), b)
+                ldiv!(c_dest, Transpose(lua), c)
                 @test norm(b_dest - lua.' \ b, 1) < ε*κ*2n
                 @test norm(c_dest - lua.' \ c, 1) < ε*κ*n
 
-                Ac_ldiv_B!(b_dest, lua, b)
-                Ac_ldiv_B!(c_dest, lua, c)
+                ldiv!(b_dest, Adjoint(lua), b)
+                ldiv!(c_dest, Adjoint(lua), c)
                 @test norm(b_dest - lua' \ b, 1) < ε*κ*2n
                 @test norm(c_dest - lua' \ c, 1) < ε*κ*n
             end
@@ -145,14 +146,14 @@ dimg  = randn(n)/2
             @test_throws DimensionMismatch lud\f
             @test_throws DimensionMismatch lud.'\f
             @test_throws DimensionMismatch lud'\f
-            @test_throws DimensionMismatch Base.LinAlg.At_ldiv_B!(lud, f)
+            @test_throws DimensionMismatch Base.LinAlg.ldiv!(Transpose(lud), f)
             let Bs = copy(b)
                 for bb in (Bs, view(Bs, 1:n, 1))
                     @test norm(d*(lud\bb) - bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                     if eltya <: Real
                         @test norm((lud.'\bb) - Array(d.')\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                         if eltya != Int && eltyb != Int
-                            @test norm(Base.LinAlg.At_ldiv_B!(lud, copy(bb)) - Array(d.')\bb, 1) < ε*κd*n*2
+                            @test norm(Base.LinAlg.ldiv!(Transpose(lud), copy(bb)) - Array(d.')\bb, 1) < ε*κd*n*2
                         end
                     end
                     if eltya <: Complex

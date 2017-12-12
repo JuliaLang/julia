@@ -307,14 +307,14 @@ end
                 @test a * Hermitian(aherm) ≈ a * aherm
                 @test Hermitian(aherm) * Hermitian(aherm) ≈ aherm*aherm
                 @test_throws DimensionMismatch Hermitian(aherm) * ones(eltya,n+1)
-                Base.LinAlg.A_mul_B!(C,a,Hermitian(aherm))
+                Base.LinAlg.mul!(C,a,Hermitian(aherm))
                 @test C ≈ a*aherm
 
                 @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
                 @test Symmetric(asym) * a ≈ asym * a
                 @test a * Symmetric(asym) ≈ a * asym
                 @test_throws DimensionMismatch Symmetric(asym) * ones(eltya,n+1)
-                Base.LinAlg.A_mul_B!(C,a,Symmetric(asym))
+                Base.LinAlg.mul!(C,a,Symmetric(asym))
                 @test C ≈ a*asym
 
                 tri_b = UpperTriangular(triu(b))

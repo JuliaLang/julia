@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+using Base.LinAlg: mul!, Adjoint, Transpose
 import Base.LinAlg: BlasReal, BlasFloat
 
 n = 10 #Size of test matrix
@@ -182,8 +183,8 @@ srand(1)
             @test_throws DimensionMismatch T \ RowVector(ones(elty,n+1))
             @test_throws DimensionMismatch T.' \ RowVector(ones(elty,n+1))
             @test_throws DimensionMismatch T' \ RowVector(ones(elty,n+1))
-            @test_throws DimensionMismatch Base.LinAlg.At_ldiv_B(T, RowVector(ones(elty,n+1)))
-            @test_throws DimensionMismatch Base.LinAlg.Ac_ldiv_B(T, RowVector(ones(elty,n+1)))
+            @test_throws DimensionMismatch Transpose(T) \ RowVector(ones(elty,n+1))
+            @test_throws DimensionMismatch Adjoint(T) \ RowVector(ones(elty,n+1))
             let bb = b, cc = c
                 for atype in ("Array", "SubArray")
                     if atype == "Array"
@@ -275,10 +276,10 @@ srand(1)
                     @test Array(op(T, T2)) ≈ op(Tfull, Tfull2)
                 end
             end
-            # test pass-through of A_mul_B! for SymTridiagonal*Bidiagonal
+            # test pass-through of mul! for SymTridiagonal*Bidiagonal
             TriSym = SymTridiagonal(T.dv, T.ev)
             @test Array(TriSym*T) ≈ Array(TriSym)*Array(T)
-            # test pass-through of A_mul_B! for AbstractTriangular*Bidiagonal
+            # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
             @test Array(Tri*T) ≈ Array(Tri)*Array(T)
         end

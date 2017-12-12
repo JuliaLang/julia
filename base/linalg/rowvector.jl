@@ -208,50 +208,77 @@ end
 *(vec::AbstractVector, rowvec::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
 
 # Transposed forms
-A_mul_Bt(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
-@inline A_mul_Bt(rowvec::RowVector, mat::AbstractMatrix) = transpose(mat * transpose(rowvec))
-@inline A_mul_Bt(rowvec1::RowVector, rowvec2::RowVector) = rowvec1*transpose(rowvec2)
-A_mul_Bt(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
-@inline A_mul_Bt(vec1::AbstractVector, vec2::AbstractVector) = vec1 * transpose(vec2)
-@inline A_mul_Bt(mat::AbstractMatrix, rowvec::RowVector) = mat * transpose(rowvec)
+*(::RowVector, ::Transpose{<:Any,<:AbstractVector}) =
+    throw(DimensionMismatch("Cannot multiply two transposed vectors"))
+*(rowvec::RowVector, transmat::Transpose{<:Any,<:AbstractMatrix}) =
+    (mat = transmat.parent; transpose(mat * transpose(rowvec)))
+*(rowvec1::RowVector, transrowvec2::Transpose{<:Any,<:RowVector}) =
+    (rowvec2 = transrowvec2.parent; rowvec1*transpose(rowvec2))
+*(::AbstractVector, ::Transpose{<:Any,<:RowVector}) =
+    throw(DimensionMismatch("Cannot multiply two vectors"))
+*(vec1::AbstractVector, transvec2::Transpose{<:Any,<:AbstractVector}) =
+    (vec2 = transvec2.parent; vec1 * transpose(vec2))
+*(mat::AbstractMatrix, transrowvec::Transpose{<:Any,<:RowVector}) =
+    (rowvec = transrowvec.parent; mat * transpose(rowvec))
 
-@inline At_mul_Bt(rowvec::RowVector, vec::AbstractVector) = transpose(rowvec) * transpose(vec)
-@inline At_mul_Bt(vec::AbstractVector, mat::AbstractMatrix) = transpose(mat * vec)
-At_mul_Bt(rowvec1::RowVector, rowvec2::RowVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
-@inline At_mul_Bt(vec::AbstractVector, rowvec::RowVector) = transpose(vec)*transpose(rowvec)
-At_mul_Bt(vec::AbstractVector, rowvec::AbstractVector) = throw(DimensionMismatch(
-    "Cannot multiply two transposed vectors"))
-@inline At_mul_Bt(mat::AbstractMatrix, rowvec::RowVector) = mat.' * transpose(rowvec)
+*(transrowvec::Transpose{<:Any,<:RowVector}, transvec::Transpose{<:Any,<:AbstractVector}) =
+    transpose(transrowvec.parent) * transpose(transvec.parent)
+*(transvec::Transpose{<:Any,<:AbstractVector}, transmat::Transpose{<:Any,<:AbstractMatrix}) =
+    transpose(transmat.parent * transvec.parent)
+*(transrowvec1::Transpose{<:Any,<:RowVector}, transrowvec2::Transpose{<:Any,<:RowVector}) =
+    throw(DimensionMismatch("Cannot multiply two vectors"))
+*(transvec::Transpose{<:Any,<:AbstractVector}, transrowvec::Transpose{<:Any,<:RowVector}) =
+    transpose(transvec.parent)*transpose(transrowvec.parent)
+*(transvec::Transpose{<:Any,<:AbstractVector}, transrowvec::Transpose{<:Any,<:AbstractVector}) =
+    throw(DimensionMismatch("Cannot multiply two transposed vectors"))
+*(transmat::Transpose{<:Any,<:AbstractMatrix}, transrowvec::Transpose{<:Any,<:RowVector}) =
+    (transmat.parent).' * transpose(transrowvec.parent)
 
-At_mul_B(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
-@inline At_mul_B(vec::AbstractVector, mat::AbstractMatrix) = transpose(At_mul_B(mat,vec))
-@inline At_mul_B(rowvec1::RowVector, rowvec2::RowVector) = transpose(rowvec1) * rowvec2
-At_mul_B(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch(
-    "Cannot multiply two transposed vectors"))
-@inline At_mul_B(vec1::AbstractVector{T}, vec2::AbstractVector{T}) where {T<:Real} =
-    reduce(+, map(At_mul_B, vec1, vec2)) # Seems to be overloaded...
-@inline At_mul_B(vec1::AbstractVector, vec2::AbstractVector) = transpose(vec1) * vec2
+*(::Transpose{<:Any,<:RowVector}, ::AbstractVector) =
+    throw(DimensionMismatch("Cannot multiply two vectors"))
+*(transvec::Transpose{<:Any,<:AbstractVector}, mat::AbstractMatrix) =
+    transpose(*(Transpose(mat), transvec.parent))
+*(transrowvec1::Transpose{<:Any,<:RowVector}, rowvec2::RowVector) =
+    transpose(transrowvec1.parent) * rowvec2
+*(transvec::Transpose{<:Any,<:AbstractVector}, rowvec::RowVector) =
+    throw(DimensionMismatch("Cannot multiply two transposed vectors"))
+*(transvec1::Transpose{<:Any,<:AbstractVector{T}}, vec2::AbstractVector{T}) where {T<:Real} =
+    reduce(+, map(*, transvec1.parent, vec2)) # Seems to be overloaded...
+*(transvec1::Transpose{<:Any,<:AbstractVector}, vec2::AbstractVector) =
+    transpose(transvec1.parent) * vec2
 
 # Conjugated forms
-A_mul_Bc(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
-@inline A_mul_Bc(rowvec::RowVector, mat::AbstractMatrix) = adjoint(mat * adjoint(rowvec))
-@inline A_mul_Bc(rowvec1::RowVector, rowvec2::RowVector) = rowvec1 * adjoint(rowvec2)
-A_mul_Bc(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
-@inline A_mul_Bc(vec1::AbstractVector, vec2::AbstractVector) = vec1 * adjoint(vec2)
-@inline A_mul_Bc(mat::AbstractMatrix, rowvec::RowVector) = mat * adjoint(rowvec)
+*(::RowVector, ::Adjoint{<:Any,<:AbstractVector}) =
+    throw(DimensionMismatch("Cannot multiply two transposed vectors"))
+*(rowvec::RowVector, adjmat::Adjoint{<:Any,<:AbstractMatrix}) =
+    adjoint(adjmat.parent * adjoint(rowvec))
+*(rowvec1::RowVector, adjrowvec2::Adjoint{<:Any,<:RowVector}) =
+    rowvec1 * adjoint(adjrowvec2.parent)
+*(vec::AbstractVector, adjrowvec::Adjoint{<:Any,<:RowVector}) =
+    throw(DimensionMismatch("Cannot multiply two vectors"))
+*(vec1::AbstractVector, adjvec2::Adjoint{<:Any,<:AbstractVector}) =
+    vec1 * adjoint(adjvec2.parent)
+*(mat::AbstractMatrix, adjrowvec::Adjoint{<:Any,<:RowVector}) =
+    mat * adjoint(adjrowvec.parent)
 
-@inline Ac_mul_Bc(rowvec::RowVector, vec::AbstractVector) = adjoint(rowvec) * adjoint(vec)
-@inline Ac_mul_Bc(vec::AbstractVector, mat::AbstractMatrix) = adjoint(mat * vec)
-Ac_mul_Bc(rowvec1::RowVector, rowvec2::RowVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
-@inline Ac_mul_Bc(vec::AbstractVector, rowvec::RowVector) = adjoint(vec)*adjoint(rowvec)
-Ac_mul_Bc(vec::AbstractVector, rowvec::AbstractVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
-@inline Ac_mul_Bc(mat::AbstractMatrix, rowvec::RowVector) = mat' * adjoint(rowvec)
+*(adjrowvec::Adjoint{<:Any,<:RowVector}, adjvec::Adjoint{<:Any,<:AbstractVector}) =
+    adjoint(adjrowvec.parent) * adjoint(adjvec.parent)
+*(adjvec::Adjoint{<:Any,<:AbstractVector}, adjmat::Adjoint{<:Any,<:AbstractMatrix}) =
+    adjoint(adjmat.parent * adjvec.parent)
+*(adjrowvec1::Adjoint{<:Any,<:RowVector}, adjrowvec2::Adjoint{<:Any,<:RowVector}) =
+    throw(DimensionMismatch("Cannot multiply two vectors"))
+*(adjvec::Adjoint{<:Any,<:AbstractVector}, adjrowvec::Adjoint{<:Any,<:RowVector}) =
+    adjoint(adjvec.parent)*adjoint(adjrowvec.parent)
+*(adjvec::Adjoint{<:Any,<:AbstractVector}, adjrowvec::Adjoint{<:Any,<:AbstractVector}) =
+    throw(DimensionMismatch("Cannot multiply two transposed vectors"))
+*(adjmat::Adjoint{<:Any,<:AbstractMatrix}, adjrowvec::Adjoint{<:Any,<:RowVector}) =
+    (adjmat.parent)' * adjoint(adjrowvec.parent)
 
-Ac_mul_B(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
-@inline Ac_mul_B(vec::AbstractVector, mat::AbstractMatrix) = adjoint(Ac_mul_B(mat,vec))
-@inline Ac_mul_B(rowvec1::RowVector, rowvec2::RowVector) = adjoint(rowvec1) * rowvec2
-Ac_mul_B(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
-@inline Ac_mul_B(vec1::AbstractVector, vec2::AbstractVector) = adjoint(vec1)*vec2
+*(::Adjoint{<:Any,<:RowVector}, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
+*(adjvec::Adjoint{<:Any,<:AbstractVector}, mat::AbstractMatrix) = adjoint(*(Adjoint(mat), adjvec.parent))
+*(adjrowvec1::Adjoint{<:Any,<:RowVector}, rowvec2::RowVector) = adjoint(adjrowvec1.parent) * rowvec2
+*(adjvec::Adjoint{<:Any,<:AbstractVector}, rowvec::RowVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
+*(adjvec1::Adjoint{<:Any,<:AbstractVector}, vec2::AbstractVector) = adjoint(adjvec1.parent)*vec2
 
 # Pseudo-inverse
 pinv(v::RowVector, tol::Real=0) = pinv(v', tol)'
@@ -260,11 +287,26 @@ pinv(v::RowVector, tol::Real=0) = pinv(v', tol)'
 
 \(rowvec1::RowVector, rowvec2::RowVector) = pinv(rowvec1) * rowvec2
 \(mat::AbstractMatrix, rowvec::RowVector) = throw(DimensionMismatch("Cannot left-divide transposed vector by matrix"))
-At_ldiv_B(mat::AbstractMatrix, rowvec::RowVector) = throw(DimensionMismatch("Cannot left-divide transposed vector by matrix"))
-Ac_ldiv_B(mat::AbstractMatrix, rowvec::RowVector) = throw(DimensionMismatch("Cannot left-divide transposed vector by matrix"))
+\(transmat::Transpose{<:Any,<:AbstractMatrix}, rowvec::RowVector) =
+    throw(DimensionMismatch("Cannot left-divide transposed vector by matrix"))
+\(adjmat::Adjoint{<:Any,<:AbstractMatrix}, rowvec::RowVector) =
+    throw(DimensionMismatch("Cannot left-divide transposed vector by matrix"))
 
 # Right Division #
 
 @inline /(rowvec::RowVector, mat::AbstractMatrix) = transpose(transpose(mat) \ transpose(rowvec))
-@inline A_rdiv_Bt(rowvec::RowVector, mat::AbstractMatrix) = transpose(mat \ transpose(rowvec))
-@inline A_rdiv_Bc(rowvec::RowVector, mat::AbstractMatrix) = adjoint(mat  \ adjoint(rowvec))
+/(rowvec::RowVector, transmat::Transpose{<:Any,<:AbstractMatrix}) = transpose(transmat.parent \ transpose(rowvec))
+/(rowvec::RowVector, adjmat::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(adjmat.parent \ adjoint(rowvec))
+
+
+# definitions necessary for test/linalg/dense.jl to pass
+# should be cleaned up / revised as necessary in the future
+/(A::Number, B::Adjoint{<:Any,<:RowVector}) = /(A, adjoint(B.parent))
+/(A::Matrix, B::RowVector) = adjoint(adjoint(B) \ adjoint(A))
+
+
+# dismabiguation methods
+*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:RowVector}) = adjoint(A.parent) * B
+*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:RowVector}) = A * transpose(B.parent)
+*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:RowVector}) = transpose(A.parent) * B
+*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:RowVector}) = A * adjoint(B.parent)

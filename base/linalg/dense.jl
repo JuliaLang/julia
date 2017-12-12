@@ -1400,9 +1400,9 @@ function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) 
     RA, QA = schur(A)
     RB, QB = schur(B)
 
-    D = -Ac_mul_B(QA,C*QB)
+    D = -(Adjoint(QA) * (C*QB))
     Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
-    scale!(QA*A_mul_Bc(Y,QB), inv(scale))
+    scale!(QA*(Y * Adjoint(QB)), inv(scale))
 end
 sylvester(A::StridedMatrix{T}, B::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = sylvester(float(A), float(B), float(C))
 
@@ -1443,9 +1443,9 @@ julia> A*X + X*A' + B
 function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
     R, Q = schur(A)
 
-    D = -Ac_mul_B(Q,C*Q)
+    D = -(Adjoint(Q) * (C*Q))
     Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
-    scale!(Q*A_mul_Bc(Y,Q), inv(scale))
+    scale!(Q*(Y * Adjoint(Q)), inv(scale))
 end
 lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = lyap(float(A), float(C))
 lyap(a::T, c::T) where {T<:Number} = -c/(2a)

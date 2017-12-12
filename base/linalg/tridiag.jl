@@ -153,7 +153,7 @@ end
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
-function A_mul_B!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
+function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if !(m == size(S, 1) == size(C, 1))
         throw(DimensionMismatch("A has first dimension $(size(S,1)), B has $(size(B,1)), C has $(size(C,1)) but all must match"))
@@ -521,6 +521,8 @@ broadcast(::typeof(ceil), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
 
 transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 adjoint(M::Tridiagonal) = conj(transpose(M))
+
+\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = adjoint(A.parent) \ adjoint(B.parent)
 
 function diag(M::Tridiagonal{T}, n::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the

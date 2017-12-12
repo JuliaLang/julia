@@ -3,6 +3,7 @@
 module SPQR
 
 import Base: \
+using Base.LinAlg: Adjoint, Transpose
 
 # ordering options */
 const ORDERING_FIXED   = Int32(0)
@@ -197,7 +198,7 @@ Base.LinAlg.qrfact(A::SparseMatrixCSC; tol = _default_tol(A)) = qrfact(A, Val{tr
 
 Base.LinAlg.qr(A::SparseMatrixCSC; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
 
-function Base.A_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
+function Base.LinAlg.mul!(Q::QRSparseQ, A::StridedVecOrMat)
     if size(A, 1) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end
@@ -212,7 +213,7 @@ function Base.A_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
     return A
 end
 
-function Base.A_mul_B!(A::StridedMatrix, Q::QRSparseQ)
+function Base.LinAlg.mul!(A::StridedMatrix, Q::QRSparseQ)
     if size(A, 2) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end
@@ -220,13 +221,14 @@ function Base.A_mul_B!(A::StridedMatrix, Q::QRSparseQ)
     for l in 1:size(Q.factors, 2)
         τl = -Q.τ[l]
         h = view(Q.factors, :, l)
-        A_mul_B!(tmp, A, h)
+        Base.LinAlg.mul!(tmp, A, h)
         LinAlg.lowrankupdate!(A, tmp, h, τl)
     end
     return A
 end
 
-function Base.Ac_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
+function Base.LinAlg.mul!(adjQ::Adjoint{<:Any,<:QRSparseQ}, A::StridedVecOrMat)
+    Q = adjQ.parent
     if size(A, 1) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end
@@ -241,7 +243,8 @@ function Base.Ac_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
     return A
 end
 
-function Base.A_mul_Bc!(A::StridedMatrix, Q::QRSparseQ)
+function Base.LinAlg.mul!(A::StridedMatrix, adjQ::Adjoint{<:Any,<:QRSparseQ})
+    Q = adjQ.parent
     if size(A, 2) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end
@@ -249,7 +252,7 @@ function Base.A_mul_Bc!(A::StridedMatrix, Q::QRSparseQ)
     for l in size(Q.factors, 2):-1:1
         τl = -Q.τ[l]
         h = view(Q.factors, :, l)
-        A_mul_B!(tmp, A, h)
+        Base.LinAlg.mul!(tmp, A, h)
         LinAlg.lowrankupdate!(A, tmp, h, τl')
     end
     return A
@@ -330,7 +333,7 @@ end
 # the complex rhs as a real rhs with twice the number of columns
 #
 # This definition is similar to the definition in factorization.jl except that
-# here we have to use \ instead of A_ldiv_B! because of limitations in SPQR
+# here we have to use \ instead of ldiv! because of limitations in SPQR
 
 ## Two helper methods
 _ret_size(F::QRSparse, b::AbstractVector) = (size(F, 2),)
@@ -376,13 +379,13 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     X0 = view(X, 1:size(B, 1), :)
 
     # Apply Q' to B
-    Ac_mul_B!(LinAlg.getq(F), X0)
+    Base.LinAlg.mul!(Adjoint(LinAlg.getq(F)), X0)
 
     # Zero out to get basic solution
     X[rnk + 1:end, :] = 0
 
     # Solve R*X = B
-    A_ldiv_B!(UpperTriangular(view(F.R, :, Base.OneTo(rnk))), view(X0, Base.OneTo(rnk), :))
+    Base.LinAlg.ldiv!(UpperTriangular(view(F.R, :, Base.OneTo(rnk))), view(X0, Base.OneTo(rnk), :))
 
     # Apply right permutation and extract solution from X
     return getindex(X, ntuple(i -> i == 1 ? invperm(F.cpiv) : :, Val(ndims(B)))...)
