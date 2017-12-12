@@ -81,7 +81,7 @@ I.e. the value returned by `codeunit(s, i)` is of the type returned by
 
 See also: [`ncodeunits`](@ref), [`checkbounds`](@ref)
 """
-codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
     throw(MethodError(codeunit, Tuple{typeof(s),Int})) : codeunit(s, Int(i))
 
 """
@@ -119,7 +119,7 @@ Stacktrace:
 [...]
 ```
 """
-isvalid(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds isvalid(s::AbstractString, i::Integer) = typeof(i) === Int ?
     throw(MethodError(isvalid, Tuple{typeof(s),Int})) : isvalid(s, Int(i))
 
 """
@@ -134,7 +134,7 @@ a Unicode index error is raised.
 See also: [`getindex`](@ref), [`start`](@ref), [`done`](@ref),
 [`checkbounds`](@ref)
 """
-next(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds next(s::AbstractString, i::Integer) = typeof(i) === Int ?
     throw(MethodError(next, Tuple{typeof(s),Int})) : next(s, Int(i))
 
 ## basic generic definitions ##
@@ -148,13 +148,21 @@ endof(s::AbstractString) = thisind(s, ncodeunits(s))
 getindex(s::AbstractString, i::Integer) = next(s, i)[1]
 getindex(s::AbstractString, i::Colon) = s
 # TODO: handle other ranges with stride ±1 specially?
+# TODO: add more @propagate_inbounds annotations?
 getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)
 getindex(s::AbstractString, v::AbstractVector{<:Integer}) =
     sprint(length(v), io->(for i in v; write(io, s[i]) end))
 getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 
-get(s::AbstractString, i::Integer, default) = checkbounds(Bool, s, i) ? s[i] : default
+function get(s::AbstractString, i::Integer, default)
+# TODO: use ternary once @inbounds is expression-like
+    if checkbounds(Bool, s, i)
+        @inbounds return s[i]
+    else
+        return default
+    end
+end
 
 ## bounds checking ##
 
