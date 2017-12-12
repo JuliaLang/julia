@@ -103,9 +103,9 @@ if sizeof(Int32) < sizeof(Int)
     @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RangeGenerator(map(UInt64,1:k)).u for k in 13 .+ Int64(2).^(32:62)])
     @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RangeGenerator(map(Int64,1:k)).u for k in 13 .+ Int64(2).^(32:61)])
 
-    @test Base.Random.maxmultiplemix(0x000100000000) === 0xffffffffffffffff
-    @test Base.Random.maxmultiplemix(0x0000FFFFFFFF) === 0x00000000fffffffe
-    @test Base.Random.maxmultiplemix(0x000000000000) === 0xffffffffffffffff
+    @test Base.Random._maxmultiple(0x000100000000) === 0xffffffffffffffff
+    @test Base.Random._maxmultiple(0x0000FFFFFFFF) === 0x00000000fffffffe
+    @test Base.Random._maxmultiple(0x000000000000) === 0xffffffffffffffff
 end
 
 # BigInt specific

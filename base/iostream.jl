@@ -52,6 +52,29 @@ isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios)!=0
 
 Resize the file or buffer given by the first argument to exactly `n` bytes, filling
 previously unallocated space with '\\0' if the file or buffer is grown.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer();
+
+julia> write(io, "JuliaLang is a GitHub organization.")
+35
+
+julia> truncate(io, 15)
+IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=15, maxsize=Inf, ptr=16, mark=-1)
+
+julia> String(take!(io))
+"JuliaLang is a "
+
+julia> io = IOBuffer();
+
+julia> write(io, "JuliaLang is a GitHub organization.");
+
+julia> truncate(io, 40);
+
+julia> String(take!(io))
+"JuliaLang is a GitHub organization.\0\0\0\0\0"
+```
 """
 function truncate(s::IOStream, n::Integer)
     systemerror("truncate", ccall(:ios_trunc, Cint, (Ptr{Void}, Csize_t), s.ios, n) != 0)
@@ -62,6 +85,16 @@ end
     seek(s, pos)
 
 Seek a stream to the given position.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
+julia> seek(io, 5);
+
+julia> read(io, Char)
+'L': ASCII/Unicode U+004c (category Lu: Letter, uppercase)
+```
 """
 function seek(s::IOStream, n::Integer)
     ret = ccall(:ios_seek, Int64, (Ptr{Void}, Int64), s.ios, n)
@@ -74,6 +107,21 @@ end
     seekstart(s)
 
 Seek a stream to its beginning.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
+julia> seek(io, 5);
+
+julia> read(io, Char)
+'L': ASCII/Unicode U+004c (category Lu: Letter, uppercase)
+
+julia> seekstart(io);
+
+julia> read(io, Char)
+'J': ASCII/Unicode U+004a (category Lu: Letter, uppercase)
+```
 """
 seekstart(s::IO) = seek(s,0)
 
@@ -91,6 +139,18 @@ end
     skip(s, offset)
 
 Seek a stream relative to the current position.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
+julia> seek(io, 5);
+
+julia> skip(io, 10);
+
+julia> read(io, Char)
+'G': ASCII/Unicode U+0047 (category Lu: Letter, uppercase)
+```
 """
 function skip(s::IOStream, delta::Integer)
     ret = ccall(:ios_skip, Int64, (Ptr{Void}, Int64), s.ios, delta)
@@ -103,6 +163,26 @@ end
     position(s)
 
 Get the current position of a stream.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
+julia> seek(io, 5);
+
+julia> position(io)
+5
+
+julia> skip(io, 10);
+
+julia> position(io)
+15
+
+julia> seekend(io);
+
+julia> position(io)
+35
+```
 """
 function position(s::IOStream)
     pos = ccall(:ios_pos, Int64, (Ptr{Void},), s.ios)
@@ -166,6 +246,35 @@ equivalent to setting the following boolean groups:
 | w+   | read, write, create, truncate |
 | a    | write, create, append         |
 | a+   | read, write, create, append   |
+
+# Examples
+```jldoctest
+julia> io = open("myfile.txt", "w");
+
+julia> write(io, "Hello world!");
+
+julia> close(io);
+
+julia> io = open("myfile.txt", "r");
+
+julia> read(io, String)
+"Hello world!"
+
+julia> write(io, "This file is read only")
+ERROR: ArgumentError: write failed, IOStream is not writeable
+[...]
+
+julia> close(io)
+
+julia> io = open("myfile.txt", "a");
+
+julia> write(io, "This stream is not read only")
+28
+
+julia> close(io)
+
+julia> rm("myfile.txt")
+```
 """
 function open(fname::AbstractString, mode::AbstractString)
     mode == "r"  ? open(fname, true , false, false, false, false) :

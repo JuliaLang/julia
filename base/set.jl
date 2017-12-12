@@ -29,14 +29,9 @@ similar(s::Set{T}) where {T} = Set{T}()
 similar(s::Set, T::Type) = Set{T}()
 
 function show(io::IO, s::Set)
-    print(io, "Set")
-    if isempty(s)
-        print(io, "{", eltype(s), "}()")
-        return
-    end
-    print(io, "(")
-    show_vector(io, s, "[", "]")
-    print(io, ")")
+    print(io, "Set(")
+    show_vector(io, s)
+    print(io, ')')
 end
 
 isempty(s::Set) = isempty(s.dict)

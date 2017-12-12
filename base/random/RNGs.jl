@@ -4,7 +4,7 @@
 
 # SamplerUnion(Union{X,Y,...}) == Union{SamplerType{X},SamplerType{Y},...}
 SamplerUnion(U::Union) = Union{map(T->SamplerType{T}, Base.uniontypes(U))...}
-const SamplerBoolBitInteger = SamplerUnion(Union{Bool, Base.BitInteger})
+const SamplerBoolBitInteger = SamplerUnion(Union{Bool, BitInteger})
 
 if Sys.iswindows()
     struct RandomDevice <: AbstractRNG
@@ -30,7 +30,7 @@ else # !windows
 end # os-test
 
 # NOTE: this can't be put within the if-else block above
-for T in (Bool, Base.BitInteger_types...)
+for T in (Bool, BitInteger_types...)
     if Sys.iswindows()
         @eval function rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T})
             ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Void}, UInt32),
@@ -403,7 +403,7 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, ::SamplerType{UInt128})
     A
 end
 
-for T in Base.BitInteger_types
+for T in BitInteger_types
     T === UInt128 && continue
     @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerType{$T})
         n = length(A)
@@ -451,7 +451,7 @@ function rand(rng::MersenneTwister,
     x % T + first(r)
 end
 
-for T in (Bool, Base.BitInteger_types...) # eval because of ambiguity otherwise
+for T in (Bool, BitInteger_types...) # eval because of ambiguity otherwise
     @eval Sampler(rng::MersenneTwister, r::UnitRange{$T}, ::Val{1}) =
         SamplerTrivial(r)
 end

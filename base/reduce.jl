@@ -75,8 +75,8 @@ Like [`reduce`](@ref), but with guaranteed left associativity. `v0` will be used
 exactly once.
 
 ```jldoctest
-julia> foldl(-, 1, 2:5)
--13
+julia> foldl(=>, 0, 1:4)
+(((0=>1)=>2)=>3) => 4
 ```
 """
 foldl(op, v0, itr) = mapfoldl(identity, op, v0, itr)
@@ -88,8 +88,8 @@ Like `foldl(op, v0, itr)`, but using the first element of `itr` as `v0`. In gene
 cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 
 ```jldoctest
-julia> foldl(-, 2:5)
--10
+julia> foldl(=>, 1:4)
+((1=>2)=>3) => 4
 ```
 """
 foldl(op, itr) = mapfoldl(identity, op, itr)
@@ -143,8 +143,8 @@ Like [`reduce`](@ref), but with guaranteed right associativity. `v0` will be use
 exactly once.
 
 ```jldoctest
-julia> foldr(-, 1, 2:5)
--1
+julia> foldr(=>, 0, 1:4)
+1 => (2=>(3=>(4=>0)))
 ```
 """
 foldr(op, v0, itr) = mapfoldr(identity, op, v0, itr)
@@ -156,8 +156,8 @@ Like `foldr(op, v0, itr)`, but using the last element of `itr` as `v0`. In gener
 cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 
 ```jldoctest
-julia> foldr(-, 2:5)
--2
+julia> foldr(=>, 1:4)
+1 => (2=>(3=>4))
 ```
 """
 foldr(op, itr) = mapfoldr(identity, op, itr)
@@ -390,38 +390,6 @@ julia> sum(1:20)
 """
 sum(a) = mapreduce(promote_sys_size_add, +, a)
 sum(a::AbstractArray{Bool}) = count(a)
-
-
-# Kahan (compensated) summation: O(1) error growth, at the expense
-# of a considerable increase in computational expense.
-
-"""
-    sum_kbn(A)
-
-Returns the sum of all elements of `A`, using the Kahan-Babuska-Neumaier compensated
-summation algorithm for additional accuracy.
-"""
-function sum_kbn(A)
-    T = @default_eltype(typeof(A))
-    c = promote_sys_size_add(zero(T)::T)
-    i = start(A)
-    if done(A, i)
-        return c
-    end
-    Ai, i = next(A, i)
-    s = Ai - c
-    while !(done(A, i))
-        Ai, i = next(A, i)
-        t = s + Ai
-        if abs(s) >= abs(Ai)
-            c -= ((s-t) + Ai)
-        else
-            c -= ((Ai-t) + s)
-        end
-        s = t
-    end
-    s - c
-end
 
 ## prod
 """

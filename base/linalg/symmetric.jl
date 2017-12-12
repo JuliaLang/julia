@@ -390,7 +390,7 @@ eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) = Eigen(LAPACK.s
 
 function eigfact(A::RealHermSymComplexHerm)
     T = eltype(A)
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    S = eigtype(T)
     eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A))
 end
 
@@ -413,7 +413,7 @@ The `UnitRange` `irange` specifies indices of the sorted eigenvalues to search f
 """
 function eigfact(A::RealHermSymComplexHerm, irange::UnitRange)
     T = eltype(A)
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    S = eigtype(T)
     eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
 end
 
@@ -437,7 +437,7 @@ The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`
 """
 function eigfact(A::RealHermSymComplexHerm, vl::Real, vh::Real)
     T = eltype(A)
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    S = eigtype(T)
     eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
 end
 
@@ -446,7 +446,7 @@ eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) =
 
 function eigvals(A::RealHermSymComplexHerm)
     T = eltype(A)
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    S = eigtype(T)
     eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A))
 end
 
@@ -486,7 +486,7 @@ julia> eigvals(A)
 """
 function eigvals(A::RealHermSymComplexHerm, irange::UnitRange)
     T = eltype(A)
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    S = eigtype(T)
     eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
 end
 
@@ -525,7 +525,7 @@ julia> eigvals(A)
 """
 function eigvals(A::RealHermSymComplexHerm, vl::Real, vh::Real)
     T = eltype(A)
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    S = eigtype(T)
     eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
 end
 

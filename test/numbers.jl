@@ -2965,6 +2965,14 @@ module M20889 # do we get the expected behavior without importing Base.^?
     Test.@test PR20889(2)^3 == 5
 end
 
+@testset "literal negative power accuracy" begin
+    @test 0.7130409001548401^-2 == 0.7130409001548401^-2.0
+    @test 0.09496527f0^-2 == 0.09496527f0^-2.0f0
+    @test 0.20675883960662367^-100 == 0.20675883960662367^-100.0
+    @test 0.6123676f0^-100 == 0.6123676f0^-100.0f0
+    @test 0.004155780785470562^-1 == 0.004155780785470562^-1.0
+end
+
 @testset "iszero & isone" begin
     # Numeric scalars
     for T in [Float16, Float32, Float64, BigFloat,

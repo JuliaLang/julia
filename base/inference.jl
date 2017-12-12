@@ -135,17 +135,17 @@ struct InferenceParams
     end
 end
 
-# alloc_elim_pass! relies on `Slot_AssignedOnce | Slot_UsedUndef` being
-# SSA. This should be true now but can break if we start to track conditional
-# constants. e.g.
-#
-#     cond && (a = 1)
-#     other_code()
-#     cond && use(a)
-
 # slot property bit flags
+# The slot is has uses that are not statically dominated by any assignment
+# This is implied by `Slot_UsedUndef`.
+# If this is not set, all the uses are (statically) dominated by the defs.
+# In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
+const Slot_StaticUndef  = 1
+# The slot is assigned to only once
 const Slot_AssignedOnce = 16
+# The slot has uses that might raise UndefVarError
 const Slot_UsedUndef    = 32
+# const Slot_Called       = 64
 
 #### inference state types ####
 
@@ -338,6 +338,7 @@ mutable struct InferenceState
     end
 end
 
+
 function InferenceState(linfo::MethodInstance,
                         optimize::Bool, cached::Bool, params::InferenceParams)
     return InferenceState(InferenceResult(linfo), optimize, cached, params)
@@ -347,17 +348,26 @@ function InferenceState(result::InferenceResult,
     # prepare an InferenceState object for inferring lambda
     src = retrieve_code_info(result.linfo)
     src === nothing && return nothing
+    _validate(result.linfo, src, "lowered")
+    return InferenceState(result, src, optimize, cached, params)
+end
+
+function _validate(linfo::MethodInstance, src::CodeInfo, kind::String)
     if JLOptions().debug_level == 2
         # this is a debug build of julia, so let's validate linfo
-        errors = validate_code(result.linfo, src)
+        errors = validate_code(linfo, src)
         if !isempty(errors)
             for e in errors
-                println(STDERR, "WARNING: Encountered invalid lowered code for method ",
-                        result.linfo, ": ", e)
+                if linfo.def isa Method
+                    println(STDERR, "WARNING: Encountered invalid ", kind, " code for method ",
+                            linfo.def, ": ", e)
+                else
+                    println(STDERR, "WARNING: Encountered invalid ", kind, " code for top level expression in ",
+                            linfo.def, ": ", e)
+                end
             end
         end
     end
-    return InferenceState(result, src, optimize, cached, params)
 end
 
 function get_staged(li::MethodInstance)
@@ -537,7 +547,7 @@ end
 
 function is_self_quoting(@nospecialize(x))
     return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type) ||
-        isa(x,Char) || x === nothing || isa(x,Builtin) || isa(x,IntrinsicFunction)
+        isa(x,Char) || x === nothing || isa(x,Function)
 end
 
 function quoted(@nospecialize(x))
@@ -2342,6 +2352,9 @@ function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::Inferenc
                 af_argtype = isa(tt, Const) ? tt.val : tt.parameters[1]
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
+                    if contains_is(argtypes_vec, Union{})
+                        return Const(Union{})
+                    end
                     astype = argtypes_to_type(argtypes_vec)
                     if isa(aft, Const)
                         rt = abstract_call(aft.val, (), argtypes_vec, vtypes, sv)
@@ -2785,11 +2798,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         # replace singleton types with their equivalent Const object
         t = Const(t.instance)
     end
-    if isa(t, Conditional)
-        e.typ = Bool
-    else
-        e.typ = t
-    end
+    e.typ = t
     return t
 end
 
@@ -3402,6 +3411,9 @@ end
 # compute (and cache) an inferred AST and return the inferred return type
 function typeinf_type(method::Method, @nospecialize(atypes), sparams::SimpleVector,
                       cached::Bool, params::InferenceParams)
+    if contains_is(unwrap_unionall(atypes).parameters, Union{})
+        return Union{}
+    end
     code = code_for_method(method, atypes, sparams, params.world)
     code === nothing && return nothing
     code = code::MethodInstance
@@ -3736,11 +3748,15 @@ function optimize(me::InferenceState)
         gotoifnot_elim_pass!(opt)
         basic_dce_pass!(opt)
         void_use_elim_pass!(opt)
+        copy_duplicated_expr_pass!(opt)
+        split_undef_flag_pass!(opt)
+        fold_constant_getfield_pass!(opt)
         # Compute escape information
         # and elide unnecessary allocations
         alloc_elim_pass!(opt)
-        getfield_elim_pass!(opt)
-        # Clean up for `alloc_elim_pass!` and `getfield_elim_pass!`
+        # Clean up for `alloc_elim_pass!`
+        gotoifnot_elim_pass!(opt)
+        basic_dce_pass!(opt)
         void_use_elim_pass!(opt)
         # Pop metadata before label reindexing
         let code = opt.src.code::Array{Any,1}
@@ -3825,6 +3841,9 @@ function optimize(me::InferenceState)
         me.src.inlineable = isinlineable(def, me.src, me.mod, me.params, bonus)
     end
     me.src.inferred = true
+    if me.optimize && !(me.limited && me.parent !== nothing)
+        _validate(me.linfo, me.src, "optimized")
+    end
     nothing
 end
 
@@ -4041,7 +4060,7 @@ function type_annotate!(sv::InferenceState)
     # finish marking used-undef variables
     for j = 1:nslots
         if undefs[j]
-            src.slotflags[j] |= Slot_UsedUndef
+            src.slotflags[j] |= Slot_UsedUndef | Slot_StaticUndef
         end
     end
 
@@ -4072,7 +4091,7 @@ function _widen_all_consts!(e::Expr, untypedload::Vector{Bool}, slottypes::Vecto
         elseif isa(x, TypedSlot)
             vt = widenconst(x.typ)
             if !(vt === x.typ)
-                if slottypes[x.id] <: vt
+                if slottypes[x.id] ⊑ vt
                     x = SlotNumber(x.id)
                     untypedload[x.id] = true
                 else
@@ -4319,7 +4338,7 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
                         return false
                     elseif is_known_call(e, getfield, src, mod)
                         nargs = length(ea)
-                        (nargs == 3 || nargs == 4) || return false
+                        (2 < nargs < 5) || return false
                         et = exprtype(e, src, mod)
                         if !isa(et, Const) && !(isType(et) && isleaftype(et))
                             # first argument must be immutable to ensure e is affect_free
@@ -4368,6 +4387,8 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
             return allow_volatile
         elseif head === :the_exception
             return allow_volatile
+        elseif head === :copyast
+            return true
         else
             return false
         end
@@ -4437,25 +4458,6 @@ function get_spec_lambda(@nospecialize(atypes), sv::OptimizationState, @nospecia
     end
 end
 
-function linearize_args!(args::Vector{Any}, atypes::Vector{Any}, stmts::Vector{Any}, sv::OptimizationState)
-    # linearize the IR by moving the arguments to SSA position
-    na = length(args)
-    @assert length(atypes) == na
-    newargs = Vector{Any}(uninitialized, na)
-    for i = na:-1:1
-        aei = args[i]
-        ti = atypes[i]
-        if isa(aei, Expr) || isa(aei, GlobalRef)
-            newvar = newvar!(sv, ti)
-            unshift!(stmts, Expr(:(=), newvar, aei))
-        else
-            newvar = aei
-        end
-        newargs[i] = newvar
-    end
-    return newargs
-end
-
 function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::OptimizationState,
                    @nospecialize(atype_unlimited), @nospecialize(invoke_data))
     # converts a :call to :invoke
@@ -4471,14 +4473,13 @@ function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::Opti
     end
 
     if nu > 1
-        # linearize the IR by moving the arguments to SSA position
         stmts = []
 
         spec_miss = nothing
         error_label = nothing
         ex = Expr(:call)
         ex.typ = etype
-        ex.args = linearize_args!(argexprs, atypes, stmts, sv)
+        ex.args = copy(argexprs)
         invoke_texpr === nothing || insert!(stmts, 2, invoke_texpr)
         invoke_fexpr === nothing || unshift!(stmts, invoke_fexpr)
 
@@ -4515,9 +4516,11 @@ function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::Opti
                         local match = splitunion(atypes, i - 1)
                         if match !== false
                             after = genlabel(sv)
+                            isa_var = newvar!(sv, Bool)
                             isa_ty = Expr(:call, GlobalRef(Core, :isa), aei, ty)
                             isa_ty.typ = Bool
-                            unshift!(match, Expr(:gotoifnot, isa_ty, after.label))
+                            unshift!(match, Expr(:gotoifnot, isa_var, after.label))
+                            unshift!(match, Expr(:(=), isa_var, isa_ty))
                             append!(stmts, match)
                             push!(stmts, after)
                         else
@@ -4675,11 +4678,12 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         if isa(e.typ, Const)
             return inline_as_constant(e.typ.val, argexprs, sv, nothing)
         end
-        not_is = Expr(:call, GlobalRef(Core.Intrinsics, :not_int),
-                             Expr(:call, GlobalRef(Core, :(===)), argexprs[2], argexprs[3]))
+        is_var = newvar!(sv, Bool)
+        stmts = Any[ Expr(:(=), is_var, Expr(:call, GlobalRef(Core, :(===)), argexprs[2], argexprs[3])) ]
+        stmts[1].args[2].typ = Bool
+        not_is = Expr(:call, GlobalRef(Core.Intrinsics, :not_int), is_var)
         not_is.typ = Bool
-        not_is.args[2].typ = Bool
-        return (not_is, ())
+        return (not_is, stmts)
     elseif length(atypes) == 3 && istopfunction(topmod, f, :(>:))
         # special-case inliner for issupertype
         # that works, even though inference generally avoids inferring the `>:` Method
@@ -4857,6 +4861,12 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     stmts_free = true # true = all entries of stmts are effect_free
 
     argexprs = copy(argexprs)
+    if isva
+        # move constructed vararg tuple to an ssavalue
+        varargvar = newvar!(sv, atypes[na])
+        push!(prelude_stmts, Expr(:(=), varargvar, argexprs[na]))
+        argexprs[na] = varargvar
+    end
     for i = na:-1:1 # stmts_free needs to be calculated in reverse-argument order
         #args_i = args[i]
         aei = argexprs[i]
@@ -5231,7 +5241,7 @@ function inlining_pass!(sv::OptimizationState, propagate_inbounds::Bool)
                 else
                      boundscheck = :on
                 end
-                eargs[i] = inlining_pass(ei, sv, stmtbuf, 1, boundscheck)
+                eargs[i] = inline_expr(ei, sv, stmtbuf, boundscheck)
                 if !isempty(stmtbuf)
                     splice!(eargs, i:(i - 1), stmtbuf)
                     i += length(stmtbuf)
@@ -5245,121 +5255,35 @@ end
 
 const corenumtype = Union{Int32, Int64, Float32, Float64}
 
-# return inlined replacement for `e`, inserting new needed statements
-# at index `ins` in `stmts`.
-function inlining_pass(e::Expr, sv::OptimizationState, stmts::Vector{Any}, ins, boundscheck::Symbol)
-    if e.head === :meta
-        # ignore meta nodes
-        return e
-    end
-    if e.head === :method
-        # avoid running the inlining pass on function definitions
-        return e
-    end
-    # inliners for special expressions
-    if e.head === :boundscheck
-        return e
-    end
-    if e.head === :isdefined
+function inline_expr(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundscheck::Symbol)
+    if e.head === :call
+        return inline_call(e, sv, stmts, boundscheck)
+    elseif e.head === :isdefined
         isa(e.typ, Const) && return e.typ.val
-        return e
+    elseif e.head === :(=) && isa(e.args[2], Expr)
+        e.args[2] = inline_expr(e.args[2], sv, stmts, boundscheck)
+    elseif e.head === :return && isa(e.args[1], Expr)
+        e.args[1] = inline_expr(e.args[1], sv, stmts, boundscheck)
     end
+    return e
+end
 
+function finddef(v::SSAValue, stmts::Vector{Any})
+    for s in stmts
+        if isa(s,Expr) && s.head === :(=) && s.args[1] === v
+            return s
+        end
+    end
+    return nothing
+end
+
+# return inlined replacement for call `e`, inserting new needed statements in `stmts`.
+function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundscheck::Symbol)
     eargs = e.args
     if length(eargs) < 1
         return e
     end
     arg1 = eargs[1]
-    isccall = false
-    i0 = 1
-    # don't inline first (global) arguments of ccall, as this needs to be evaluated
-    # by the interpreter and inlining might put in something it can't handle,
-    # like another ccall (or try to move the variables out into the function)
-    if e.head === :foreigncall
-        # 5 is rewritten to 1 below to handle the callee.
-        i0 = 5
-        isccall = true
-    elseif is_known_call(e, Core.Intrinsics.llvmcall, sv.src, sv.mod)
-        i0 = 5
-    end
-    has_stmts = false # needed to preserve order-of-execution
-    prev_stmts_length = length(stmts)
-    for _i = length(eargs):-1:i0
-        if isccall && _i == 5
-            i = 1
-            isccallee = true
-        else
-            i = _i
-            isccallee = false
-        end
-        ei = eargs[i]
-        if isa(ei,Expr)
-            ei = ei::Expr
-            if ei.head === :&
-                argloc = ei.args
-                i = 1
-                ei = argloc[1]
-                if !isa(ei,Expr)
-                    continue
-                end
-                ei = ei::Expr
-            else
-                argloc = eargs
-            end
-            sl0 = length(stmts)
-            res = inlining_pass(ei, sv, stmts, ins, boundscheck)
-            ns = length(stmts) - sl0  # number of new statements just added
-            if isccallee
-                restype = exprtype(res, sv.src, sv.mod)
-                if isa(restype, Const)
-                    argloc[i] = restype.val
-                    if !effect_free(res, sv.src, sv.mod, false)
-                        insert!(stmts, ins+ns, res)
-                    end
-                    # Assume this is the last argument to process
-                    break
-                end
-            end
-            if has_stmts && !effect_free(res, sv.src, sv.mod, false)
-                restype = exprtype(res, sv.src, sv.mod)
-                vnew = newvar!(sv, restype)
-                argloc[i] = vnew
-                insert!(stmts, ins+ns, Expr(:(=), vnew, res))
-            else
-                argloc[i] = res
-            end
-            if !has_stmts && ns > 0 && !(_i == i0)
-                for s = ins:ins+ns-1
-                    stmt = stmts[s]
-                    if !effect_free(stmt, sv.src, sv.mod, true)
-                        has_stmts = true; break
-                    end
-                end
-            end
-        end
-    end
-    if isccall
-        le = length(eargs)
-        nccallargs = eargs[5]::Int
-        ccallargs = ObjectIdDict()
-        for i in 6:(5 + nccallargs)
-            ccallargs[eargs[i]] = nothing
-        end
-        i = 6 + nccallargs
-        while i <= le
-            rootarg = eargs[i]
-            if haskey(ccallargs, rootarg)
-                deleteat!(eargs, i)
-                le -= 1
-            elseif i < le
-                ccallargs[rootarg] = nothing
-            end
-            i += 1
-        end
-    end
-    if e.head !== :call
-        return e
-    end
 
     ft = exprtype(arg1, sv.src, sv.mod)
     if isa(ft, Const)
@@ -5374,8 +5298,10 @@ function inlining_pass(e::Expr, sv::OptimizationState, stmts::Vector{Any}, ins, 
         end
     end
 
-    ins += (length(stmts) - prev_stmts_length)
+    ins = 1
 
+    # TODO: determine whether this is really necessary
+#=
     if sv.params.inlining
         if isdefined(Main, :Base) &&
             ((isdefined(Main.Base, :^) && f === Main.Base.:^) ||
@@ -5410,7 +5336,7 @@ function inlining_pass(e::Expr, sv::OptimizationState, stmts::Vector{Any}, ins, 
             end
         end
     end
-
+=#
     for ninline = 1:100
         ata = Vector{Any}(uninitialized, length(e.args))
         ata[1] = ft
@@ -5448,10 +5374,7 @@ function inlining_pass(e::Expr, sv::OptimizationState, stmts::Vector{Any}, ins, 
                 aarg = e.args[i]
                 argt = exprtype(aarg, sv.src, sv.mod)
                 t = widenconst(argt)
-                if isa(aarg, Expr) && (is_known_call(aarg, tuple, sv.src, sv.mod) || is_known_call(aarg, svec, sv.src, sv.mod))
-                    # apply(f, tuple(x, y, ...)) => f(x, y, ...)
-                    newargs[i - 2] = aarg.args[2:end]
-                elseif isa(argt, Const) && (isa(argt.val, Tuple) || isa(argt.val, SimpleVector)) &&
+                if isa(argt, Const) && (isa(argt.val, Tuple) || isa(argt.val, SimpleVector)) &&
                         effect_free(aarg, sv.src, sv.mod, true)
                     val = argt.val
                     newargs[i - 2] = Any[ quoted(val[i]) for i in 1:(length(val)::Int) ] # avoid making a tuple Generator here!
@@ -5487,7 +5410,28 @@ function inlining_pass(e::Expr, sv::OptimizationState, stmts::Vector{Any}, ins, 
                     else
                         tp = t.parameters
                     end
-                    newargs[i - 2] = Any[ mk_getfield(tmpv, j, tp[j]) for j in 1:(length(tp)::Int) ]
+                    ntp = length(tp)::Int
+                    if isa(aarg,SSAValue) && any(p->(p === DataType || p === UnionAll || p === Union || p === Type), tp)
+                        # replace element type from Tuple{DataType} with more specific type if possible
+                        def = finddef(aarg, sv.src.code)
+                        if def !== nothing
+                            defex = def.args[2]
+                            if isa(defex, Expr) && is_known_call(defex, tuple, sv.src, sv.mod)
+                                tp = collect(Any, tp)
+                                for j = 1:ntp
+                                    specific_type = exprtype(defex.args[j+1], sv.src, sv.mod)
+                                    if (tp[j] <: Type) && specific_type ⊑ tp[j]
+                                        tp[j] = specific_type
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    fldvars = Any[ newvar!(sv, tp[j]) for j in 1:ntp ]
+                    for j = 1:ntp
+                        push!(newstmts, Expr(:(=), fldvars[j], mk_getfield(tmpv, j, tp[j])))
+                    end
+                    newargs[i - 2] = fldvars
                 else
                     # not all args expandable
                     return e
@@ -5544,260 +5488,9 @@ function is_known_call_p(e::Expr, @nospecialize(pred), src::CodeInfo, mod::Modul
     return (isa(f, Const) && pred(f.val)) || (isType(f) && pred(f.parameters[1]))
 end
 
-function record_used(@nospecialize(e), @nospecialize(T), used::Vector{Bool})
-    if isa(e,T)
-        used[e.id+1] = true
-    elseif isa(e,Expr)
-        i0 = e.head === :(=) ? 2 : 1
-        for i = i0:length(e.args)
-            record_used(e.args[i], T, used)
-        end
-    end
-end
-
-function remove_unused_vars!(src::CodeInfo)
-    used = fill(false, length(src.slotnames)+1)
-    used_ssa = fill(false, length(src.ssavaluetypes)+1)
-    for i = 1:length(src.code)
-        record_used(src.code[i], Slot, used)
-        record_used(src.code[i], SSAValue, used_ssa)
-    end
-    for i = 1:length(src.code)
-        e = src.code[i]
-        if isa(e,NewvarNode) && !used[e.slot.id+1]
-            src.code[i] = nothing
-        elseif isa(e,Expr) && e.head === :(=)
-            if (isa(e.args[1],Slot) && !used[e.args[1].id+1]) ||
-                (isa(e.args[1],SSAValue) && !used_ssa[e.args[1].id+1])
-                src.code[i] = e.args[2]
-            end
-        end
-    end
-end
-
-function delete_vars!(src::CodeInfo, r::ObjectIdDict)
-    filter!(x->!(isa(x,Expr) && (x.head === :(=) || x.head === :const) &&
-                 haskey(r, normvar(x.args[1]))),
-            src.code)
-    return src
-end
-
-function replace_vars!(src::CodeInfo, r::ObjectIdDict)
-    for i = 1:length(src.code)
-        src.code[i] = _replace_vars!(src.code[i], r)
-    end
-    return src
-end
-
-function _replace_vars!(@nospecialize(e), r::ObjectIdDict)
-    if isa(e, SSAValue) || isa(e, Slot)
-        v = normvar(e)
-        if haskey(r, v)
-            return r[v]
-        end
-    end
-    if isa(e, Expr)
-        for i = 1:length(e.args)
-            a = e.args[i]
-            if e.head === :isdefined
-                if e.args[i] !== _replace_vars!(a, r)
-                    return true
-                end
-            else
-                e.args[i] = _replace_vars!(a, r)
-            end
-        end
-    end
-    return e
-end
-
-is_argument(nargs::Int, v::Slot) = slot_id(v) <= nargs
-
-normslot(s::SlotNumber) = s
-normslot(s::TypedSlot) = SlotNumber(slot_id(s))
-normvar(s::Slot) = normslot(s)
-normvar(s::SSAValue) = s
-normvar(@nospecialize(s)) = s
-
-function is_repeatable_literal(@nospecialize(x))
-    return isa(x, Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Float32,Float64}) ||
-        isa(x, Type) || isa(x, Char) || isa(x, IntrinsicFunction) || isa(x, Builtin) ||
-        x === "" || x === () || x === nothing
-end
-
-# given a single-assigned var and its initializer `init`, return what we can
-# replace `var` with, or `var` itself if we shouldn't replace it
-function get_replacement(table::ObjectIdDict, var::Union{SlotNumber, SSAValue}, @nospecialize(init),
-                         nargs::Int, slottypes::Vector{Any}, ssavaluetypes::Vector{Any})
-    if isa(init, QuoteNode) && is_repeatable_literal(init.value)
-        return init.value
-    elseif isa(init, Expr) && init.head === :static_parameter
-        # if we aren't certain about the type, it might be an UndefVarError at runtime (!effect_free)
-        # so we need to preserve the original point of assignment
-        if (isa(init.typ, DataType) && isleaftype(init.typ)) || isa(init.typ, Const)
-            return init
-        end
-    elseif is_repeatable_literal(init)
-        return init
-    elseif isa(init, Slot) && is_argument(nargs, init::Slot)
-        # the transformation is not ideal if the assignment
-        # is present for the auto-unbox functionality
-        # (from inlining improved type inference information)
-        # and this transformation would worsen the type information
-        # everywhere later in the function
-        ityp = isa(init, TypedSlot) ? init.typ : slottypes[(init::SlotNumber).id]
-        if ityp ⊑ (isa(var,SSAValue) ? ssavaluetypes[var.id + 1] : slottypes[var.id])
-            return init
-        end
-    elseif isa(init, SSAValue)
-        if isa(var, SlotNumber) && slottypes[var.id] ⊑ Tuple
-            # Here we avoid replacing a Slot with an SSAValue when the type is an
-            # aggregate. That can cause LLVM to generate a bunch of extra memcpys
-            # if the data ever needs to be stack allocated later.
-            return var
-        end
-        if haskey(table, init)
-            return get_replacement(table, init, table[init], nargs, slottypes, ssavaluetypes)
-        end
-        return init
-    elseif isa(init, SlotNumber) && haskey(table, init)
-        return get_replacement(table, init, table[init], nargs, slottypes, ssavaluetypes)
-    elseif isa(init, TypedSlot)
-        sl = normslot(init)
-        if haskey(table, sl)
-            rep = get_replacement(table, sl, table[sl], nargs, slottypes, ssavaluetypes)
-            if isa(rep, SlotNumber)
-                rep = TypedSlot(rep.id, init.typ)
-            end
-            return rep
-        end
-    elseif isa(init, GlobalRef)
-        if isdefined(init.mod, init.name) && isconst(init.mod, init.name)
-            return init
-        end
-    end
-    return var
-end
-
-# remove all single-assigned vars v in "v = x" where x is an argument.
-# "sa" is the result of find_sa_vars
-function remove_redundant_temp_vars!(src::CodeInfo, nargs::Int, sa::ObjectIdDict)
-    flags = src.slotflags
-    slottypes = src.slottypes
-    ssavaluetypes = src.ssavaluetypes
-    repls = ObjectIdDict()
-    for (v, init) in sa
-        repl = get_replacement(sa, v, init, nargs, slottypes, ssavaluetypes)
-        compare = isa(repl, TypedSlot) ? normslot(repl) : repl
-        if compare !== v
-            repls[v] = repl
-        end
-    end
-    if !isempty(repls)
-        delete_vars!(src, repls)
-        replace_vars!(src, repls)
-    end
-    return src
-end
-
-# compute set of slots assigned once
-function find_sa_vars(src::CodeInfo, nargs::Int)
-    body = src.code
-    av = ObjectIdDict()
-    av2 = ObjectIdDict()
-    for i = 1:length(body)
-        e = body[i]
-        if isa(e,Expr) && e.head === :(=)
-            lhs = e.args[1]
-            if isa(lhs, SSAValue)
-                av[lhs] = e.args[2]
-            elseif isa(lhs, Slot)
-                lhs = normslot(lhs)
-                id = lhs.id
-                # exclude args and used undef vars
-                # this transformation is not valid for vars used before def.
-                # we need to preserve the point of assignment to know where to
-                # throw errors (issue #4645).
-                if id > nargs && (src.slotflags[id] & Slot_UsedUndef == 0)
-                    if !haskey(av, lhs)
-                        av[lhs] = e.args[2]
-                    else
-                        av2[lhs] = true
-                    end
-                end
-            end
-        end
-    end
-    filter!(p -> !haskey(av2, p.first), av)
-    return av
-end
-
 symequal(x::SSAValue, y::SSAValue) = x.id === y.id
 symequal(x::Slot    , y::Slot)     = x.id === y.id
 symequal(@nospecialize(x)     , @nospecialize(y))      = x === y
-
-function occurs_outside_getfield(@nospecialize(e), @nospecialize(sym),
-                                 sv::OptimizationState, field_count::Int, @nospecialize(field_names))
-    if e === sym || (isa(e, Slot) && isa(sym, Slot) && slot_id(e) == slot_id(sym))
-        return true
-    end
-    if isa(e,Expr)
-        e = e::Expr
-        head = e.head
-        is_meta_expr_head(head) && return false
-        if is_known_call(e, getfield, sv.src, sv.mod) && symequal(e.args[2],sym)
-            idx = e.args[3]
-            if isa(idx,QuoteNode) && (idx.value in field_names)
-                return false
-            end
-            if isa(idx,Int) && (1 <= idx <= field_count)
-                return false
-            end
-            return true
-        end
-        if head === :(=)
-            return occurs_outside_getfield(e.args[2], sym, sv,
-                                           field_count, field_names)
-        elseif head === :foreigncall
-            args = e.args
-            nccallargs = args[5]::Int
-            # Only arguments escape the structure/layout of the object,
-            # GC root arguments do not.
-            # Also note that only being used in the root slot for this ccall itself
-            # does **not** mean that the object is not needed during the ccall.
-            # However, if its address is never taken
-            # and the object is never used in a way that escapes its layout, we can be sure
-            # that there's no way the user code can rely on the heap allocation of this object.
-            for i in 1:length(args)
-                a = args[i]
-                if i > 5 + nccallargs && symequal(a, sym)
-                    # No need to verify indices, uninitialized members can be
-                    # ignored in root slot.
-                    continue
-                end
-                if occurs_outside_getfield(a, sym, sv, field_count, field_names)
-                    return true
-                end
-            end
-        else
-            if (head === :block && isa(sym, Slot) &&
-                sv.src.slotflags[slot_id(sym)] & Slot_UsedUndef == 0)
-                ignore_void = true
-            else
-                ignore_void = false
-            end
-            for a in e.args
-                if ignore_void && isa(a, Slot) && slot_id(a) == slot_id(sym)
-                    continue
-                end
-                if occurs_outside_getfield(a, sym, sv, field_count, field_names)
-                    return true
-                end
-            end
-        end
-    end
-    return false
-end
 
 function void_use_elim_pass!(sv::OptimizationState)
     # Remove top level SSAValue and slots that is `!usedUndef`.
@@ -5815,7 +5508,7 @@ function void_use_elim_pass!(sv::OptimizationState)
             h = ex.head
             if h === :return || h === :(=) || h === :gotoifnot || is_meta_expr_head(h)
                 return true
-            elseif h === :isdefined
+            elseif h === :isdefined || h === :copyast || h === :the_exception
                 return false
             end
             return !effect_free(ex, sv.src, sv.mod, false)
@@ -5928,123 +5621,23 @@ function meta_elim_pass!(code::Array{Any,1}, do_coverage::Bool)
         if isa(ex, Expr) && ex.head === :meta && length(ex.args) > 0 && ex.args[1] == :pop_loc
             npops += (length(ex.args) > 1 ? ex.args[2]::Int : 1)
             if lastpop === nothing
-                lastpop = ex
+                lastpop = i
             else
                 code[i] = nothing
             end
         elseif ex !== nothing && lastpop !== nothing
             if npops > 1
-                resize!(lastpop.args, 2)
-                lastpop.args[2] = npops
+                popex = code[lastpop]
+                if length(popex.args) == 1
+                    code[lastpop] = Expr(:meta, :pop_loc, npops)
+                else
+                    popex.args[2] = npops
+                end
             end
             lastpop = nothing
             npops = 0
         end
     end
-end
-
-# does the same job as alloc_elim_pass for allocations inline in getfields
-# TODO can probably be removed when we switch to a linear IR
-function getfield_elim_pass!(sv::OptimizationState)
-    body = sv.src.code
-    nssavalues = length(sv.src.ssavaluetypes)
-    ssa_defs = find_ssavalue_defs(body, nssavalues)
-    ssa_uses = find_ssavalue_uses(body, nssavalues)
-    for i = 1:length(body)
-        body[i] = _getfield_elim_pass!(body[i], ssa_defs, ssa_uses, sv)
-    end
-end
-
-function _getfield_elim_pass!(e::Expr, ssa_defs::Vector{LineNum}, ssa_uses::Vector{BitSet}, sv::OptimizationState)
-    nargs = length(e.args)
-    for i = 1:nargs
-        e.args[i] = _getfield_elim_pass!(e.args[i], ssa_defs, ssa_uses, sv)
-    end
-    if is_known_call(e, getfield, sv.src, sv.mod) &&
-            (nargs == 3 || nargs == 4) &&
-            (isa(e.args[3], Int) || isa(e.args[3], QuoteNode)) &&
-            (nargs == 3 || isa(e.args[4], Bool))
-        e1 = e.args[2]
-        j = e.args[3]
-        single_use = true
-        while isa(e1, SSAValue)
-            if single_use
-                if length(ssa_uses[e1.id + 1]) > 1
-                    single_use = false
-                end
-            end
-            def = ssa_defs[e1.id + 1]
-            stmt = sv.src.code[def]::Expr
-            e1 = stmt.args[2]
-        end
-        if isa(e1, Expr)
-            alloc = single_use && is_allocation(e1, sv)
-            if alloc !== false
-                flen, fnames = alloc
-                if isa(j, QuoteNode)
-                    j = findfirst(equalto(j.value), fnames)
-                end
-                if 1 <= j <= flen
-                    ok = true
-                    for k = 2:length(e1.args)
-                        k == j+1 && continue
-                        if !effect_free(e1.args[k], sv.src, sv.mod, true)
-                            ok = false; break
-                        end
-                    end
-                    if ok
-                        return e1.args[j+1]
-                    end
-                end
-            end
-        elseif isa(e1, GlobalRef) || isa(e1, Symbol) || isa(e1, Slot)
-            # non-self-quoting value
-        else
-            if isa(e1, QuoteNode)
-                e1 = e1.value
-            end
-            if isimmutable(e1) || isa(e1, SimpleVector)
-                # SimpleVector length field is immutable
-                if isa(j, QuoteNode)
-                    j = j.value
-                    if !(isa(j, Int) || isa(j, Symbol))
-                        return e
-                    end
-                end
-                if isdefined(e1, j)
-                    return quoted(getfield(e1, j))
-                end
-            end
-        end
-    end
-    return e
-end
-
-_getfield_elim_pass!(@nospecialize(e), ssa_defs::Vector{LineNum}, ssa_uses::Vector{BitSet}, sv::OptimizationState) = e
-
-# check if e is a successful allocation of an struct
-# if it is, returns (n,f) such that it is always valid to call
-# getfield(..., 1 <= x <= n) or getfield(..., x in f) on the result
-function is_allocation(@nospecialize(e), sv::OptimizationState)
-    isa(e, Expr) || return false
-    if is_known_call(e, tuple, sv.src, sv.mod)
-        return (length(e.args)-1,())
-    elseif e.head === :new
-        typ = widenconst(exprtype(e, sv.src, sv.mod))
-        if isa(typ, DataType) && isleaftype(typ)
-            nf = length(e.args) - 1
-            names = fieldnames(typ)
-            @assert(nf <= length(names))
-            if nf < length(names)
-                # some fields were left undef
-                # we could potentially propagate Bottom
-                # for pointer fields
-                names = names[1:nf]
-            end
-            return (nf, names)
-        end
-    end
-    false
 end
 
 # Replace branches with constant conditions with unconditional branches
@@ -6110,210 +5703,1989 @@ function basic_dce_pass!(sv::OptimizationState)
     end
 end
 
-
-# eliminate allocation of unnecessary objects
-# that are only used as arguments to safe getfield calls
-function alloc_elim_pass!(sv::OptimizationState)
+# Run on linear IR before the `alloc_elim_pass!` to fold away
+# getfield on constant immutable objects. Any chained getfield will then be optimized
+# away by the `alloc_elim_pass!`.
+# Also expect undefined variable access check to be lifted into flags.
+function fold_constant_getfield_pass!(sv::OptimizationState)
     body = sv.src.code
-    bexpr = Expr(:block)
-    bexpr.args = body
-    vs = find_sa_vars(sv.src, sv.nargs)
-    remove_redundant_temp_vars!(sv.src, sv.nargs, vs)
-    remove_unused_vars!(sv.src)
-    i = 1
-    while i < length(body)
-        e = body[i]
-        if !isa(e, Expr)
-            i += 1
+    nexpr = length(body)
+    for i in 1:nexpr
+        ex = body[i]
+        isa(ex, Expr) || continue
+        head = ex.head
+        parent = body
+        pidx = i
+        if head === :(=)
+            parent = ex.args
+            pidx = 2
+            ex = ex.args[2]
+            isa(ex, Expr) || continue
+            head = ex.head
+        end
+        (head === :call && 2 < length(ex.args) < 5) || continue
+        is_known_call(ex, getfield, sv.src, sv.mod) || continue
+        # No side effect can happen for linear IR
+        obj = exprtype(ex.args[2], sv.src, sv.mod)
+        isa(obj, Const) || continue
+        obj = obj.val
+        !typeof(obj).mutable || isa(obj, DataType) || continue
+        fld = ex.args[3]
+        if isa(fld, Int)
+            fld = fld
+        elseif isa(fld, QuoteNode)
+            fld = fld.value
+        else
             continue
         end
-        e = e::Expr
-        if e.head === :(=) && (isa(e.args[1], SSAValue) ||
-                               (isa(e.args[1], Slot) && haskey(vs, normslot(e.args[1]))))
-            var = e.args[1]
-            rhs = e.args[2]
-            # Need to make sure LLVM can recognize this as LLVM ssa value too
-            is_ssa = (isa(var, SSAValue) ||
-                      sv.src.slotflags[slot_id(var)] & Slot_UsedUndef == 0)
-        else
-            var = nothing
-            rhs = e
-            is_ssa = false # doesn't matter as long as it's a Bool...
+        isa(fld, Symbol) || isa(fld, Int) || continue
+        if isdefined(obj, fld)
+            parent[pidx] = quoted(getfield(obj, fld))
         end
-        alloc = is_allocation(rhs, sv)
-        if alloc !== false
-            nv, field_names = alloc
-            tup = rhs.args
-            # This makes sure the value doesn't escape so we can elide
-            # allocation of mutable structs too
-            if (var !== nothing &&
-                occurs_outside_getfield(bexpr, var, sv, nv, field_names))
-                i += 1
+    end
+end
+
+function get_undef_flag_slot(src::CodeInfo, flagslots, id)
+    flag_id = flagslots[id]
+    flag_id != 0 && return SlotNumber(flag_id)
+    slot = add_slot!(src, Void, src.slotflags[id] & Slot_AssignedOnce != 0, src.slotnames[id])
+    flag_id = slot_id(slot)
+    src.slotflags[flag_id] |= Slot_StaticUndef | Slot_UsedUndef
+    flagslots[id] = flag_id
+    return slot
+end
+
+# Run on linear IR before the `alloc_elim_pass!` to make sure all expression arguments are
+# effect-free while maintaining the original def-use chain so that assignments of allocation
+# to a UsedUndef slot can still be optimized.
+# After this pass, we are sure that no `Expr` arguments have side-effects.
+function split_undef_flag_pass!(sv::OptimizationState)
+    body = sv.src.code
+    len = length(body)
+    next_i = 1
+    norigslots = length(sv.src.slotflags)
+    flagslots = zeros(Int, norigslots)
+    while next_i <= len
+        i = next_i
+        next_i += 1
+        ex = body[i]
+        if isa(ex, Slot)
+            id = slot_id(ex)
+            var_has_undef(sv.src, id) || continue
+            body[i] = get_undef_flag_slot(sv.src, flagslots, id)
+            continue
+        elseif isa(ex, NewvarNode)
+            id = slot_id(ex.slot)
+            var_has_undef(sv.src, id) || continue
+            body[i] = NewvarNode(get_undef_flag_slot(sv.src, flagslots, id))
+            continue
+        elseif !isa(ex, Expr)
+            continue
+        end
+        head = ex.head
+        if head === :(=)
+            rhs = ex.args[2]
+            lhs = ex.args[1]
+            if isa(lhs, Slot)
+                id = slot_id(lhs)
+                if var_has_undef(sv.src, id)
+                    flagslot = get_undef_flag_slot(sv.src, flagslots, id)
+                    insert!(body, i + 1, :($flagslot = $nothing))
+                    next_i += 1
+                    len += 1
+                end
+            end
+            if isa(rhs, Expr)
+                ex = rhs
+                head = ex.head
+            else
+                if isa(rhs, Slot)
+                    id = slot_id(rhs)
+                    if var_has_undef(sv.src, id)
+                        insert!(body, i, get_undef_flag_slot(sv.src, flagslots, id))
+                        i += 1
+                        next_i += 1
+                        len += 1
+                    end
+                end
                 continue
             end
-
-            deleteat!(body, i)  # remove tuple allocation
-            # convert tuple allocation to a series of local var assignments
-            n_ins = 0
-            if var === nothing
-                for j=1:nv
-                    tupelt = tup[j+1]
-                    if !(isa(tupelt,Number) || isa(tupelt,AbstractString) ||
-                         isa(tupelt,QuoteNode) || isa(tupelt, SSAValue))
-                        insert!(body, i+n_ins, tupelt)
-                        n_ins += 1
-                    end
-                end
-            else
-                vals = Vector{Any}(uninitialized, nv)
-                local new_slots::Vector{Int}
-                if !is_ssa
-                    new_slots = Vector{Int}(uninitialized, nv)
-                end
-                for j=1:nv
-                    tupelt = tup[j+1]
-                    # If `!is_ssa` we have to create new variables for each
-                    # (used) fields in order to preserve the undef check.
-                    if is_ssa && (isa(tupelt,Number) ||
-                                  isa(tupelt,AbstractString) ||
-                                  isa(tupelt,QuoteNode) || isa(tupelt, SSAValue))
-                        vals[j] = tupelt
-                    else
-                        elty = exprtype(tupelt, sv.src, sv.mod)
-                        if is_ssa
-                            tmpv = newvar!(sv, elty)
-                        else
-                            tmpv = add_slot!(sv.src, widenconst(elty), false,
-                                             sv.src.slotnames[slot_id(var)])
-                            tmpv_id = slot_id(tmpv)
-                            new_slots[j] = tmpv_id
-                            sv.src.slotflags[tmpv_id] |= Slot_UsedUndef
-                        end
-                        tmp = Expr(:(=), tmpv, tupelt)
-                        insert!(body, i+n_ins, tmp)
-                        vals[j] = tmpv
-                        n_ins += 1
-                    end
-                end
-                replace_getfield!(bexpr, var, vals, field_names, sv)
-                if !is_ssa
-                    i += replace_newvar_node!(body, slot_id(var),
-                                              new_slots, i)
-                elseif isa(var, Slot)
-                    # occurs_outside_getfield might have allowed
-                    # void use of the slot, we need to delete them too
-                    i -= delete_void_use!(body, var, i)
+        end
+        eargs = ex.args
+        if head === :const || is_meta_expr_head(head)
+            continue
+        elseif head === :isdefined
+            @assert length(eargs) == 1
+            ea1 = eargs[1]
+            if isa(ea1, Slot)
+                id = slot_id(ea1)
+                if var_has_undef(sv.src, id)
+                    eargs[1] = get_undef_flag_slot(sv.src, flagslots, id)
                 end
             end
-            # Do not increment counter and do the optimization recursively
-            # on the allocation of fields too.
-            # This line can probably be added back for linear IR
-            # i += n_ins
-        else
-            i += 1
-        end
-    end
-end
-
-# Return the number of expressions added before `i0`
-function replace_newvar_node!(body, orig, new_slots, i0)
-    nvars = length(new_slots)
-    nvars == 0 && return 0
-    narg = length(body)
-    i = 1
-    nins = 0
-    newvars = [ NewvarNode(SlotNumber(id)) for id in new_slots ]
-    while i <= narg
-        a = body[i]
-        if isa(a, NewvarNode) && slot_id((a::NewvarNode).slot) == orig
-            splice!(body, i, newvars)
-            if i - nins < i0
-                nins += nvars - 1
-            end
-            narg += nvars - 1
-            i += nvars
-        else
-            i += 1
-        end
-    end
-    return nins
-end
-
-# Return the number of expressions deleted before `i0`
-function delete_void_use!(body, var::Slot, i0)
-    narg = length(body)
-    i = 1
-    ndel = 0
-    while i <= narg
-        a = body[i]
-        if isa(a, Slot) && slot_id(a) == slot_id(var)
-            deleteat!(body, i)
-            if i + ndel < i0
-                ndel += 1
-            end
-            narg -= 1
-        else
-            i += 1
-        end
-    end
-    return ndel
-end
-
-function replace_getfield!(e::Expr, tupname, vals, field_names, sv::OptimizationState)
-    for i = 1:length(e.args)
-        a = e.args[i]
-        if !isa(a, Expr)
             continue
         end
-        a = a::Expr
-        if is_known_call(a, getfield, sv.src, sv.mod) && symequal(a.args[2], tupname)
-            idx = if isa(a.args[3], Int)
-                a.args[3]
-            else
-                @assert isa(a.args[3], QuoteNode)
-                findfirst(equalto(a.args[3].value), field_names)
+        isccall = head === :foreigncall
+        for j in 1:length(eargs)
+            ea = eargs[j]
+            if isccall && isa(ea, Expr) && ea.head === :&
+                ea = ea.args[1]
             end
-            @assert(idx > 0) # clients should check that all getfields are valid
-            val = vals[idx]
-            # original expression might have better type info than
-            # the tuple element expression that's replacing it.
-            if isa(val, Slot)
-                val = val::Slot
-                id = slot_id(val)
-                valtyp = isa(val, TypedSlot) ? val.typ : sv.src.slottypes[id]
-                if a.typ ⊑ valtyp && !(valtyp ⊑ a.typ)
-                    if isa(val, TypedSlot)
-                        val = TypedSlot(id, a.typ)
-                    end
-                    sv.src.slottypes[id] = widenconst(a.typ)
-                end
-            elseif isa(val,SSAValue)
-                val = val::SSAValue
-                typ = exprtype(val, sv.src, sv.mod)
-                if a.typ ⊑ typ && !(typ ⊑ a.typ)
-                    sv.src.ssavaluetypes[val.id + 1] = a.typ
-                end
-            end
-            e.args[i] = val
-        else
-            if a.head === :foreigncall
-                args = a.args
-                nccallargs = args[5]::Int
-                le = length(args)
-                next_i = 6 + nccallargs
-                while next_i <= le
-                    i = next_i
+            if isa(ea, Slot)
+                id = slot_id(ea)
+                if j == 1 && head === :method
+                    flagslot = get_undef_flag_slot(sv.src, flagslots, id)
+                    insert!(body, i + 1, :($flagslot = $nothing))
                     next_i += 1
-
-                    symequal(args[i], tupname) || continue
-                    # Replace the gc root argument with its fields
-                    splice!(args, i, vals)
-                    next_i += length(vals) - 1
+                    len += 1
+                    continue
+                end
+                if var_has_undef(sv.src, id)
+                    insert!(body, i, get_undef_flag_slot(sv.src, flagslots, id))
+                    i += 1
+                    next_i += 1
+                    len += 1
                 end
             end
-            replace_getfield!(a, tupname, vals, field_names, sv)
         end
     end
+    for i in 1:norigslots
+        if flagslots[i] != 0
+            sv.src.slotflags[i] = (sv.src.slotflags[i] | Slot_StaticUndef) & ~UInt8(Slot_UsedUndef)
+        end
+    end
+end
+
+# This struct contains information about a use of certain value (`SSAValue` or `Slot`)
+# This might be a toplevel use for `Slot` in which case the `expr` field is `#undef`,
+# and it only happens if the slot might be used before it's defined.
+struct ValueUse
+    # The statement array where `expr` (or its parent assignment) appears in
+    stmts::Vector{Any}
+    # The position of the `expr` in the `stmts` array
+    stmtidx::Int
+
+    # The position the value appears in `expr`
+    exidx::Int
+    # The expression the value is used in.
+    # If `expr` is undef, the use is a statement level use.
+    # This must be one of the following:
+    # 1. A statement level `Expr(:(=), ...)`.
+    # 2. The RHS of a statement level `Expr(:(=), ...)`.
+    # 3. A `&` ccall argument.
+    expr::Expr
+
+    ValueUse(stmts, stmtidx, expr, exidx) = new(stmts, stmtidx, exidx, expr)
+    ValueUse(stmts, stmtidx) = new(stmts, stmtidx, 0)
+end
+# Check if the use is still valid.
+# The code that invalidate this use is responsible for adding new use(s) if any.
+function check_valid(use::ValueUse, changes::ObjectIdDict)
+    haskey(changes, use.stmts=>use.stmtidx) && return false
+    isdefined(use, :expr) && haskey(changes, use.expr) && return false
+    return true
+end
+
+# This struct contains information about a def of certain value (`SSAValue` or `Slot`)
+# The `assign` field is usually an assignment but it might be a `NewvarNode` for `Slot`,
+# which can happen if the slot might be used before it's defined.
+struct ValueDef
+    assign::Union{Expr,NewvarNode}
+
+    # The statement array where `expr` (or its parent assignment) appears in
+    stmts::Vector{Any}
+    # The position of the `expr` in the `stmts` array
+    stmtidx::Int
+end
+# Check if the use is still valid.
+# The code that invalidate this use is responsible for adding new def(s) if any.
+check_valid(def::ValueDef, changes::ObjectIdDict) = !haskey(changes, def.stmts=>def.stmtidx)
+
+# Allocation optimization, must not be mutated.
+const empty_uses = ValueUse[]
+const empty_defs = ValueDef[]
+# Uses and defs of a value.
+mutable struct ValueInfo
+    uses::Vector{ValueUse}
+    defs::Vector{ValueDef}
+    has_method::Bool
+    ValueInfo() = new(empty_uses, empty_defs, false)
+end
+function remove_invalid!(info::ValueInfo, changes::ObjectIdDict)
+    if isempty(changes)
+        return
+    end
+    cb = x->check_valid(x, changes)
+    filter!(cb, info.uses)
+    filter!(cb, info.defs)
+    return
+end
+
+function add_def(info::ValueInfo, def::ValueDef)
+    if info.defs === empty_defs
+        info.defs = [def]
+    else
+        push!(info.defs, def)
+    end
+    return
+end
+function add_use(info::ValueInfo, use::ValueUse)
+    if info.uses === empty_uses
+        info.uses = [use]
+    else
+        push!(info.uses, use)
+    end
+    return
+end
+
+# The def and use information of all variables in a function.
+# `slots` is indexed by slot id and `ssas` is indexed by ssa id + 1.
+# This structure is indexable by either a `Slot`, a `SSAValue` or a `id=>is_ssa` pair.
+struct ValueInfoMap
+    slots::Vector{ValueInfo}
+    ssas::Vector{ValueInfo}
+    ValueInfoMap() = new(ValueInfo[], ValueInfo[])
+end
+@inline get_info_entry(infomap::ValueInfoMap, slot::Slot) = (infomap.slots, slot_id(slot))
+@inline get_info_entry(infomap::ValueInfoMap, ssa::SSAValue) = (infomap.ssas, ssa.id + 1)
+@inline get_info_entry(infomap::ValueInfoMap, pair::Pair{Int,Bool}) =
+    (pair.second ? infomap.ssas : infomap.slots, pair.first)
+isassigned(infomap::ValueInfoMap, var) = isassigned(get_info_entry(infomap, var)...)
+function delete!(infomap::ValueInfoMap, var)
+    infos, idx = get_info_entry(infomap, var)
+    ccall(:jl_arrayunset, Void, (Any, Csize_t), infos, (idx - 1) % UInt)
+end
+function getindex(infomap::ValueInfoMap, var)
+    infos, idx = get_info_entry(infomap, var)
+    if isassigned(infos, idx)
+        return infos[idx]
+    else
+        idx > length(infos) && resize!(infos, idx)
+        info = ValueInfo()
+        infos[idx] = info
+        return info
+    end
+end
+function setindex!(infomap::ValueInfoMap, info::ValueInfo, var)
+    ary, idx = get_info_entry(infomap, var)
+    idx > length(ary) && resize!(ary, idx)
+    ary[idx] = info
+end
+add_def(infomap::ValueInfoMap, var, def::ValueDef) = add_def(infomap[var], def)
+add_use(infomap::ValueInfoMap, var, use::ValueUse) = add_use(infomap[var], use)
+
+@inline function var_has_static_undef(src, id, ssa=false)
+    ssa && return false
+    flags = src.slotflags[id]
+    # The check for `UsedUndef` shouldn't be necessary but doesn't hurt
+    return flags & Slot_UsedUndef != 0 || flags & Slot_StaticUndef != 0
+end
+
+@inline function var_has_undef(src, id, ssa=false)
+    ssa && return false
+    flags = src.slotflags[id]
+    return flags & Slot_UsedUndef != 0
+end
+
+@inline function var_is_ssa(src, id, ssa=false)
+    ssa && return true
+    flags = src.slotflags[id]
+    # The check for `UsedUndef` shouldn't be necessary but doesn't hurt
+    return flags & (Slot_UsedUndef | Slot_StaticUndef) == 0 && flags & Slot_AssignedOnce != 0
+end
+
+function scan_expr_use!(infomap, body, i, ex, src)
+    if isa(ex, Vector{Any})
+        # Shouldn't happen but just to be safe since we treat this as nested blocks
+        # in the `alloc_elim_pass!`
+        body[i] = nothing
+        return
+    elseif isa(ex, SSAValue)
+        body[i] = nothing
+        return
+    elseif isa(ex, Slot)
+        if var_has_undef(src, slot_id(ex))
+            add_use(infomap, ex, ValueUse(body, i))
+        else
+            body[i] = nothing
+        end
+        return
+    elseif isa(ex, NewvarNode)
+        # Clear newvarnode if the variable is never used undefined
+        if var_has_undef(src, slot_id(ex.slot))
+            add_def(infomap, ex.slot, ValueDef(ex, body, i))
+        else
+            body[i] = nothing
+        end
+        return
+    elseif !isa(ex, Expr)
+        return
+    end
+    head = ex.head
+    is_meta_expr_head(head) && return
+    if head === :(=)
+        rhs = ex.args[2]
+        lhs = ex.args[1]
+        lhs_slot = isa(lhs, Slot)
+        rhs_slot = isa(rhs, Slot)
+        if lhs_slot && rhs_slot && symequal(lhs, rhs)
+            # Self assignment
+            if var_has_undef(src, slot_id(lhs))
+                body[i] = rhs
+                add_use(infomap, rhs, ValueUse(body, i))
+            else
+                body[i] = nothing
+            end
+            return
+        end
+        if lhs_slot || isa(lhs, SSAValue)
+            add_def(infomap, lhs, ValueDef(ex, body, i))
+        end
+        if isa(rhs, Expr)
+            ex = rhs
+            head = ex.head
+        else
+            if rhs_slot || isa(rhs, SSAValue)
+                add_use(infomap, rhs, ValueUse(body, i, ex, 2))
+            end
+            return
+        end
+    end
+    eargs = ex.args
+    isccall = head === :foreigncall
+    for j in 1:length(eargs)
+        ea = eargs[j]
+        if j == 1 && head === :method
+            if isa(ea, Slot)
+                infomap[ea].has_method = true
+                continue
+            end
+        end
+        if isccall && isa(ea, Expr) && ea.head === :&
+            ea2 = ea.args[1]
+            if isa(ea2, Slot) || isa(ea2, SSAValue)
+                add_use(infomap, ea2, ValueUse(body, i, ea, 1))
+            end
+        elseif isa(ea, Slot) || isa(ea, SSAValue)
+            add_use(infomap, ea, ValueUse(body, i, ex, j))
+        end
+    end
+end
+
+# Collect infomation about all the defs and uses of variables in the function
+# Also do simple cleanups as we do a linear scan over the code
+function collect_value_infos(body::Vector{Any}, src::CodeInfo, nargs::Int)
+    infomap = ValueInfoMap()
+    nexpr = length(body)
+    for i in 1:nexpr
+        ex = body[i]
+        scan_expr_use!(infomap, body, i, ex, src)
+    end
+
+    # Remove arguments from slot uses since they are useless
+    slotsinfo = infomap.slots
+    for i in 1:length(slotsinfo)
+        if isassigned(slotsinfo, i)
+            info = slotsinfo[i]
+            if i > nargs && length(info.defs) == 1 && isa(info.defs[1].assign, Expr)
+                src.slotflags[i] |= Slot_AssignedOnce
+            end
+        end
+    end
+
+    return infomap
+end
+
+struct StructInfo
+    defs::Vector{Any}
+    names::Vector{Symbol}
+    typ::DataType
+    mutable::Bool
+    isnew::Bool
+end
+
+struct AllocOptContext
+    infomap::ValueInfoMap
+    sv::OptimizationState
+    todo::ObjectIdDict
+    changes::ObjectIdDict
+    sym_count::ObjectIdDict
+    all_fld::ObjectIdDict
+    setfield_typ::ObjectIdDict
+    undef_fld::ObjectIdDict
+    structinfos::Vector{StructInfo}
+    function AllocOptContext(infomap::ValueInfoMap, sv::OptimizationState)
+        todo = ObjectIdDict()
+        for i in 1:length(infomap.ssas)
+            isassigned(infomap.ssas, i) || continue
+            todo[i=>true] = nothing
+        end
+        for i in 1:length(infomap.slots)
+            isassigned(infomap.slots, i) || continue
+            i > sv.nargs || continue
+            todo[i=>false] = nothing
+        end
+        return new(infomap, sv, todo, ObjectIdDict(), ObjectIdDict(),
+                   ObjectIdDict(), ObjectIdDict(), ObjectIdDict(), StructInfo[])
+    end
+end
+
+function delete_valueinfo!(ctx::AllocOptContext, key)
+    # Slot
+    if !key.second
+        ctx.sv.src.slotflags[key.first] = 0
+    end
+    delete!(ctx.infomap, key)
+    return
+end
+
+function add_allocopt_todo(ctx::AllocOptContext, id, is_ssa)
+    ctx.todo[id=>is_ssa] = nothing
+end
+
+@inline function add_allocopt_todo(ctx::AllocOptContext, @nospecialize(var))
+    if isa(var, SSAValue)
+        ctx.todo[(var.id + 1)=>true] = nothing
+    elseif isa(var, Pair{Int,Bool})
+        ctx.todo[var] = nothing
+    else
+        ctx.todo[slot_id(var)=>false] = nothing
+    end
+end
+
+@inline function maybe_add_allocopt_todo(ctx::AllocOptContext, @nospecialize(var))
+    if isa(var, SSAValue)
+        ctx.todo[(var.id + 1)=>true] = nothing
+    elseif isa(var, Slot)
+        ctx.todo[slot_id(var)=>false] = nothing
+    end
+end
+
+function delete_value!(ctx::AllocOptContext, info, key)
+    # No use is left for this value, delete the assignment
+    for def in info.defs
+        ctx.changes[def.assign] = nothing
+        assign = def.assign
+        if isa(assign, NewvarNode)
+            def.stmts[def.stmtidx] = nothing
+            continue
+        end
+        defex = assign.args[2]
+        if isa(defex, SSAValue)
+            add_allocopt_todo(ctx, defex)
+            def.stmts[def.stmtidx] = nothing
+        elseif isa(defex, Slot)
+            if var_has_undef(ctx.sv.src, slot_id(defex))
+                add_use(ctx.infomap, defex, ValueUse(def.stmts, def.stmtidx))
+                def.stmts[def.stmtidx] = defex
+            else
+                add_allocopt_todo(ctx, defex)
+                def.stmts[def.stmtidx] = nothing
+            end
+        elseif isa(defex, Vector{Any})
+            def.stmts[def.stmtidx] = nothing
+        else
+            # Update this to add todo
+            # when adding cases where this might enable further optimizations.
+            def.stmts[def.stmtidx] = defex
+        end
+    end
+    delete_valueinfo!(ctx, key)
+end
+
+function merge_value_ssa!(ctx::AllocOptContext, info, key)
+    # There are other cases that we can merge
+    # but those require control flow analysis.
+    var_has_static_undef(ctx.sv.src, key.first, key.second) && return false
+    local defkey
+    for def in info.defs
+        # No NewvarNode def for variables that aren't used undefined
+        defex = (def.assign::Expr).args[2]
+        if isa(defex, SSAValue)
+            new_key = (defex.id + 1)=>true
+            if @isdefined(defkey) && defkey != new_key
+                return true
+            else
+                defkey = new_key
+            end
+        elseif isa(defex, Slot)
+            id = slot_id(defex)
+            new_key = id=>false
+            defslot_is_ssa = id <= ctx.sv.nargs || var_is_ssa(ctx.sv.src, id)
+            if !defslot_is_ssa || (@isdefined(defkey) && defkey != new_key)
+                return true
+            else
+                defkey = new_key
+            end
+        else
+            return @isdefined(defkey)
+        end
+    end
+
+    if defkey.second || defkey.first > ctx.sv.nargs
+        add_allocopt_todo(ctx, defkey)
+    end
+
+    # don't replace TypedSlots with SSAValues
+    # TODO: introduce extra SSAValue for each differently-typed use.
+    if defkey.second
+        for use in info.uses
+            if isdefined(use, :expr) && use.expr.args[use.exidx] isa TypedSlot
+                return false
+            end
+        end
+    end
+
+    definfo = ctx.infomap[defkey]
+    for def in info.defs
+        ctx.changes[def.assign] = nothing
+        def.stmts[def.stmtidx] = nothing
+    end
+    if defkey.second
+        # SSAValue def
+        replace_v = SSAValue(defkey.first - 1)
+    else
+        replace_v = SlotNumber(defkey.first)
+    end
+    for use in info.uses
+        if isdefined(use, :expr)
+            this_use = use.expr.args[use.exidx]
+            if !defkey.second && this_use isa TypedSlot
+                use.expr.args[use.exidx] = TypedSlot(replace_v.id, this_use.typ)
+            else
+                use.expr.args[use.exidx] = replace_v
+            end
+            add_use(definfo, use)
+        else
+            # This variable is never used undef, ignore statement level use
+            use.stmts[use.stmtidx] = nothing
+        end
+    end
+    delete_valueinfo!(ctx, key)
+    return true
+end
+
+function replace_use_expr_with!(ctx::AllocOptContext, use::ValueUse, expr,
+                                delete_old=true, update_var_use=false)
+    # Not supported on ccall & expression
+    oldexpr = use.expr
+    stmt = use.stmts[use.stmtidx]::Expr
+    if stmt === oldexpr
+        use.stmts[use.stmtidx] = expr
+        if update_var_use && (isa(expr, Slot) || isa(expr, SSAValue))
+            add_use(ctx.infomap, expr, ValueUse(use.stmts, use.stmtidx))
+        end
+    else
+        @assert stmt.head === :(=) && stmt.args[2] === oldexpr
+        stmt.args[2] = expr
+        if update_var_use && (isa(expr, Slot) || isa(expr, SSAValue))
+            add_use(ctx.infomap, expr, ValueUse(use.stmts, use.stmtidx, stmt, 2))
+        end
+        maybe_add_allocopt_todo(ctx, stmt.args[1])
+    end
+    if delete_old
+        ctx.changes[oldexpr] = nothing
+    end
+end
+
+function propagate_const_def!(ctx::AllocOptContext, info, key)
+    local constv
+    for def in info.defs
+        # No NewvarNode def for variables that aren't used undefined
+        defex = (def.assign::Expr).args[2]
+        # We don't want to probagate this constant since this is a token.
+        isa(defex, Expr) && defex.head === :gc_preserve_begin && return false
+        v = exprtype(defex, ctx.sv.src, ctx.sv.mod)
+        isa(v, Const) || return false
+        v = v.val
+        @isdefined(constv) && constv !== v && return false
+        constv = v
+    end
+    for def in info.defs
+        defex = (def.assign::Expr).args[2]
+        if isa(defex, Expr)
+            # Expr def can have side effects
+            def.stmts[def.stmtidx] = defex
+        else
+            def.stmts[def.stmtidx] = nothing
+        end
+        ctx.changes[def.assign] = nothing
+    end
+    replace_ex = quoted(constv)
+    is_immutable = !typeof(constv).mutable || isa(constv, DataType)
+    for use in info.uses
+        if !isdefined(use, :expr)
+            use.stmts[use.stmtidx] = nothing
+            continue
+        elseif is_immutable
+            if use.exidx == 2 && is_known_call(use.expr, getfield, ctx.sv.src, ctx.sv.mod) &&
+                2 < length(use.expr.args) < 5
+
+                fld = use.expr.args[3]
+                if isa(fld, Int)
+                    fld = fld
+                elseif isa(fld, QuoteNode)
+                    fld = fld.value
+                else
+                    fld = nothing
+                end
+                if isa(fld, Symbol) || isa(fld, Int)
+                    if isdefined(constv, fld)
+                        fieldv = getfield(constv, fld)
+                        replace_use_expr_with!(ctx, use, quoted(fieldv))
+                        continue
+                    end
+                end
+            end
+        end
+        use.expr.args[use.exidx] = replace_ex
+        if use.expr.head === :(=)
+            maybe_add_allocopt_todo(ctx, use.expr.args[1])
+        end
+    end
+    delete_valueinfo!(ctx, key)
+    return true
+end
+
+function split_disjoint_assign!(ctx::AllocOptContext, info, key)
+    key.second && return false
+    isleaftype(ctx.sv.src.slottypes[key.first]) && return false
+    alltypes = ObjectIdDict()
+    ndefs = length(info.defs)
+    deftypes = Vector{Any}(uninitialized, ndefs)
+    for i in 1:ndefs
+        def = info.defs[i]
+        defex = (def.assign::Expr).args[2]
+        rhstyp = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
+        isleaftype(rhstyp) || return false
+        alltypes[rhstyp] = nothing
+        deftypes[i] = rhstyp
+    end
+    need_tag = false
+    for use in info.uses
+        usex = use.expr
+        slot = usex.args[use.exidx]
+        if isa(slot, TypedSlot)
+            usetyp = widenconst(slot.typ)
+            if isleaftype(usetyp)
+                alltypes[usetyp] = nothing
+                continue
+            end
+        end
+        if usex.head === :(=) || usex.head === :&
+            return false
+        else
+            ty = exprtype(usex, ctx.sv.src, ctx.sv.mod)
+            if isa(ty, Const)
+            elseif isa(ty, Conditional) && isa(ty.var, Slot) && slot_id(ty.var) == key.first
+                if isa(ty.vtype, Const) && !isdefined(typeof(ty.vtype.val), :instance)
+                    return false
+                end
+                need_tag = true
+            else
+                return false
+            end
+            effect_free(usex, ctx.sv.src, ctx.sv.mod, false) || return false
+        end
+    end
+    name = ctx.sv.src.slotnames[key.first]
+    flags = ctx.sv.src.slotflags[key.first]
+    if need_tag
+        tag_var = add_slot!(ctx.sv.src, Int, false, name)
+        ctx.sv.src.slotflags[tag_var.id] = flags
+    end
+    for i in 1:ndefs
+        def = info.defs[i]
+        assign = def.assign::Expr
+        defex = assign.args[2]
+        rhstyp = deftypes[i]
+        new_slot = alltypes[rhstyp]
+        if !isa(new_slot, SlotNumber)
+            new_slot = add_slot!(ctx.sv.src, rhstyp, false, name)
+            ctx.sv.src.slotflags[new_slot.id] = flags | Slot_StaticUndef
+            alltypes[rhstyp] = new_slot
+            add_allocopt_todo(ctx, new_slot)
+        end
+        assign.args[1] = new_slot
+        if need_tag
+            stmts = Any[:($tag_var = $(new_slot.id)), assign]
+            add_def(ctx.infomap, tag_var, ValueDef(stmts[1], stmts, 1))
+            scan_expr_use!(ctx.infomap, stmts, 2, assign, ctx.sv.src)
+            ctx.changes[def.stmts=>def.stmtidx] = nothing
+            def.stmts[def.stmtidx] = stmts
+        else
+            add_def(ctx.infomap, new_slot, def)
+        end
+    end
+    for use in info.uses
+        usex = use.expr
+        slot = usex.args[use.exidx]
+        if isa(slot, TypedSlot)
+            usetyp = widenconst(slot.typ)
+            if isleaftype(usetyp)
+                usetyp = widenconst(slot.typ)
+                new_slot = alltypes[usetyp]
+                if !isa(new_slot, SlotNumber)
+                    new_slot = add_slot!(ctx.sv.src, usetyp, false, name)
+                    ctx.sv.src.slotflags[new_slot.id] = flags | Slot_StaticUndef
+                    alltypes[usetyp] = new_slot
+                end
+                new_slot = new_slot::SlotNumber
+                use.expr.args[use.exidx] = new_slot
+                add_use(ctx.infomap, new_slot, use)
+                continue
+            end
+        end
+        ty = exprtype(usex, ctx.sv.src, ctx.sv.mod)
+        if isa(ty, Const)
+            replace_use_expr_with!(ctx, use, quoted(ty.val))
+        elseif isa(ty, Conditional)
+            exprs = []
+            vars = []
+            for (t, v) in alltypes
+                isa(v, SlotNumber) || continue
+                if t ⊑ widenconst(ty.vtype)
+                    new_var = newvar!(ctx.sv, Bool)
+                    new_val = :($(GlobalRef(Core, :(===)))($tag_var, $(v.id)))
+                    new_val.typ = Bool
+                    new_ex = :($new_var = $new_val)
+                    push!(exprs, new_ex)
+                    push!(vars, new_var)
+                    add_def(ctx.infomap, new_var, ValueDef(new_ex, exprs, length(exprs)))
+                    add_use(ctx.infomap, tag_var, ValueUse(exprs, length(exprs), new_val, 2))
+                end
+            end
+            if isempty(vars)
+                replace_use_expr_with!(ctx, use, quoted(false))
+            else
+                var = vars[1]
+                for var_i in 2:length(vars)
+                    new_var = newvar!(ctx.sv, Bool)
+                    new_val = :($(GlobalRef(Core.Intrinsics, :and_int))($var, $(vars[var_i])))
+                    new_val.typ = Bool
+                    new_ex = :($new_var = $new_val)
+                    push!(exprs, new_ex)
+                    add_def(ctx.infomap, new_var, ValueDef(new_ex, exprs, length(exprs)))
+                    add_use(ctx.infomap, var, ValueUse(exprs, length(exprs), new_val, 2))
+                    add_use(ctx.infomap, vars[var_i], ValueUse(exprs, length(exprs), new_val, 3))
+                    var = new_var
+                end
+                replace_use_expr_with!(ctx, use, var, false)
+                old_expr = use.stmts[use.stmtidx]
+                push!(exprs, old_expr)
+                use.stmts[use.stmtidx] = exprs
+                scan_expr_use!(ctx.infomap, exprs, length(exprs), old_expr, ctx.sv.src)
+                ctx.changes[use.stmts=>use.stmtidx] = nothing
+            end
+        end
+    end
+    delete_valueinfo!(ctx, key)
+    return true
+end
+
+function show_info(io::IO, use::ValueUse, ctx)
+    if isdefined(use, :expr)
+        print(io, "ValueUse(expr=`", use.expr, "`, exidx=", use.exidx,
+              ", stmts[", use.stmtidx, "]=`", use.stmts[use.stmtidx], "`)")
+    else
+        print(io, "ValueUse(stmts[", use.stmtidx, "]=", use.stmts[use.stmtidx], ")")
+    end
+    if isa(ctx, AllocOptContext) && !check_valid(use, ctx.changes)
+        print(io, " Invalidated")
+    end
+end
+function show_info(io::IO, def::ValueDef, ctx)
+    print(io, "ValueDef(assign=`", def.assign, "`, stmts=..., stmtidx=", def.stmtidx, ")")
+    if isa(ctx, AllocOptContext) && !check_valid(def, ctx.changes)
+        print(io, " Invalidated")
+    end
+end
+function show_info(io::IO, info::ValueInfo, ctx, prefix="")
+    println(io, prefix, "ValueInfo:")
+    if !isempty(info.defs)
+        println(io, prefix, "  Defs:")
+        for def in info.defs
+            print(io, prefix, "    ")
+            show_info(io, def, ctx)
+            println(io)
+        end
+    end
+    if !isempty(info.uses)
+        println(io, prefix, "  Uses:")
+        for use in info.uses
+            print(io, prefix, "    ")
+            show_info(io, use, ctx)
+            println(io)
+        end
+    end
+end
+function show_info(io::IO, info::ValueInfoMap, ctx)
+    for i in 1:length(info.ssas)
+        isassigned(info.ssas, i) || continue
+        println(io, "SSAValue(", i - 1, "):")
+        show_info(io, info.ssas[i], ctx, "  ")
+    end
+    for i in 1:length(info.slots)
+        isassigned(info.slots, i) || continue
+        println(io, "Slot(", i, "):")
+        show_info(io, info.slots[i], ctx, "  ")
+    end
+end
+
+function structinfo_constant(ctx::AllocOptContext, @nospecialize(v), vt::DataType)
+    nf = fieldcount(vt)
+    if vt <: Tuple
+        si = StructInfo(Vector{Any}(uninitialized, nf), Symbol[], vt, false, false)
+    else
+        si = StructInfo(Vector{Any}(uninitialized, nf), fieldnames(vt), vt, false, false)
+    end
+    for i in 1:nf
+        if isdefined(v, i)
+            si.defs[i] = quoted(getfield(v, i))
+        else
+            ctx.undef_fld[i] = nothing
+            ctx.undef_fld[si.names[i]] = nothing
+        end
+    end
+    return si
+end
+
+structinfo_tuple(ex::Expr) = StructInfo(ex.args[2:end], Symbol[], Tuple, false, false)
+function structinfo_new(ctx::AllocOptContext, ex::Expr, vt::DataType)
+    nf = fieldcount(vt)
+    si = StructInfo(Vector{Any}(uninitialized, nf), fieldnames(vt), vt, vt.mutable, true)
+    ninit = length(ex.args) - 1
+    for i in 1:nf
+        if i <= ninit
+            si.defs[i] = ex.args[i + 1]
+        else
+            ft = fieldtype(vt, i)
+            if isbits(ft)
+                ex = Expr(:new, ft)
+                ex.typ = ft
+                si.defs[i] = ex
+            else
+                ctx.undef_fld[i] = nothing
+                ctx.undef_fld[si.names[i]] = nothing
+            end
+        end
+    end
+    return si
+end
+
+function split_struct_alloc!(ctx::AllocOptContext, info, key)
+    # Collect information about each struct/tuple allocation
+    min_nf = typemax(Int)
+    max_nf = 0
+    n_immut = 0
+    ndef = length(info.defs)
+    empty!(ctx.sym_count)
+    empty!(ctx.undef_fld)
+    empty!(ctx.structinfos)
+    for def in info.defs
+        local defex, si, def_nf
+        defex = (def.assign::Expr).args[2]
+        if isa(defex, Expr)
+            defex = defex::Expr
+            if is_known_call(defex, tuple, ctx.sv.src, ctx.sv.mod)
+                si = structinfo_tuple(defex)
+            elseif defex.head === :new
+                typ = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
+                # typ <: Tuple shouldn't happen but just in case someone generated invalid AST
+                if !isa(typ, DataType) || !isleaftype(typ) || typ <: Tuple
+                    return false
+                end
+                si = structinfo_new(ctx, defex, typ)
+            else
+                return false
+            end
+        else
+            v = exprtype(defex, ctx.sv.src, ctx.sv.mod)
+            isa(v, Const) || return false
+            v = v.val
+            vt = typeof(v)
+            if (vt.mutable && !isa(v, DataType)) || fieldcount(vt) == 0
+                # allowing DataType as immutable can change the behavior if the user calls
+                # `setfield!` on it but that's invalid anyway and throwing an error is actually
+                # better than letting it work.
+                return false
+            end
+            si = structinfo_constant(ctx, v, vt)
+        end
+        if !si.mutable
+            n_immut += 1
+        end
+        def_nf = length(si.defs)
+        if def_nf < min_nf
+            min_nf = def_nf
+        end
+        if def_nf > max_nf
+            max_nf = def_nf
+        end
+        for fld_idx in 1:length(si.names)
+            sym = si.names[fld_idx]
+            prev_count = get(ctx.sym_count, sym, 0=>0)
+            if isa(prev_count, Pair{Int,Int})
+                if first(prev_count) == 0
+                    ctx.sym_count[sym] = 1=>fld_idx
+                elseif last(prev_count) == fld_idx
+                    ctx.sym_count[sym] = (first(prev_count) + 1)=>fld_idx
+                else
+                    ctx.sym_count[sym] = (first(prev_count) + 1)=>[last(prev_count), fld_idx]
+                end
+            else
+                prev_count = prev_count::Pair{Int,Vector{Int}}
+                ctx.sym_count[sym] = (first(prev_count) + 1)=>push!(last(prev_count), fld_idx)
+            end
+        end
+        push!(ctx.structinfos, si)
+    end
+    if ndef > 1
+        allowed_idx = trues(min_nf)
+        idx_count = zeros(Int, min_nf)
+        for v in values(ctx.sym_count)
+            # Ignore field names that will not be allowed to be optimized
+            if isa(v, Pair{Int,Int})
+                first(v) == ndef || continue
+                if last(v) <= min_nf
+                    idx_count[last(v)] += 1
+                end
+            else
+                v = v::Pair{Int,Vector{Int}}
+                first(v) == ndef || continue
+                for fld_idx in last(v)
+                    allowed_idx[fld_idx] = false
+                end
+            end
+        end
+        for fld_idx in 1:min_nf
+            if idx_count[fld_idx] > 1
+                allowed_idx[fld_idx] = false
+            end
+        end
+    end
+
+    # Find the set of valid operations for each kind of use
+    #
+    # * `isdefined`
+    #
+    #     Field name or index must be constant and unambiguous.
+    #     Field that are known or unknown for all defs are allowed.
+    #     Unambiguous means that each field must be only accessed by index or only by name
+    #     that maps to the same index for all defs.
+    #     Currently this requirement is raised to be only based on the def and not the use
+    #
+    # * `getfield`
+    #
+    #     Requires all conditions for `isdefined`.
+    #     Field index must be within the intersect of all the defs.
+    #     Field name must be known for all defs.
+    #
+    # * `setfield!`
+    #
+    #     Requires all conditions for `getfield`.
+    #     Additionally require all defs to be mutable.
+    #
+    # * preserved objects (`@gc_preserve` and `ccall` roots)
+    #
+    #     No `setfield!` should be called for mutable defs on the NULL sites.
+    #     This is because it's currently unclear how conditional undefined root slots
+    #     can be represented. It's possible that we can just change the requirement in codegen
+    #     for preserved objects.
+    #     Currently also require single assignment.
+    #     Lifting this requirement is certainly possible but harder to implement....
+
+    has_preserve = false
+    has_setfield_undef = false
+    empty!(ctx.all_fld)
+    empty!(ctx.setfield_typ)
+    for use in info.uses
+        isdefined(use, :expr) || continue
+        local fld
+        local expr = use.expr
+        local head = expr.head
+        if head === :isdefined
+            # May or may not be needed but trivial to handle
+            continue
+        elseif head === :gc_preserve_begin
+            if ndef > 1
+                # This is certainly overkill, but too hard for initial version ;-p
+                return false
+            end
+            has_setfield_undef && return false
+            has_preserve = true
+            continue
+        elseif head === :foreigncall
+            if ndef > 1
+                # This is certainly overkill, but too hard for initial version ;-p
+                return false
+            end
+            nccallargs = expr.args[5]::Int
+            if use.exidx <= 5 + nccallargs
+                return false
+            end
+            has_setfield_undef && return false
+            has_preserve = true
+            continue
+        elseif head === :call
+            if use.exidx != 2 || length(expr.args) < 3
+                return false
+            end
+            fld = expr.args[3]
+            if is_known_call(expr, isdefined, ctx.sv.src, ctx.sv.mod)
+                use_kind = 0
+            elseif is_known_call(expr, getfield, ctx.sv.src, ctx.sv.mod)
+                use_kind = 1
+            elseif is_known_call(expr, setfield!, ctx.sv.src, ctx.sv.mod)
+                if n_immut != 0 || length(expr.args) < 4
+                    return false
+                end
+                use_kind = 2
+            else
+                return false
+            end
+        else
+            return false
+        end
+        if isa(fld, Int)
+            fld = fld
+        elseif isa(fld, QuoteNode)
+            fld = fld.value
+        else
+            return false
+        end
+        if isa(fld, Int)
+            if 0 < fld <= min_nf
+                ndef == 1 || allowed_idx[fld] || return false
+            elseif min_nf < fld <= max_nf
+                return false
+            elseif use_kind == 0
+                # We can handle this but don't record in `all_fld`
+                continue
+            else
+                return false
+            end
+        elseif isa(fld, Symbol)
+            v = get(ctx.sym_count, fld, 0=>0)
+            fld_count = isa(v, Pair{Int,Int}) ? first(v) : first(v::Pair{Int,Vector})
+            if use_kind == 0 && fld_count == 0
+                # We can handle this but don't record in `all_fld`
+                continue
+            elseif fld_count != ndef
+                return false
+            end
+        else
+            return false
+        end
+        if use_kind == 2
+            if haskey(ctx.undef_fld, fld)
+                has_preserve && return false
+                has_setfield_undef = true
+            end
+            fld_typ = widenconst(exprtype(expr.args[4], ctx.sv.src, ctx.sv.mod))
+            ctx.setfield_typ[fld] = Union{fld_typ, get(ctx.setfield_typ, fld, Union{})}
+        end
+        ctx.all_fld[fld] = nothing
+    end
+    if ndef == 1
+        split_struct_alloc_single!(ctx, info, key, min_nf, has_preserve, has_setfield_undef)
+    else
+        split_struct_alloc_multi!(ctx, info, key)
+    end
+    delete_valueinfo!(ctx, key)
+    return true
+end
+
+function split_struct_alloc_multi!(ctx::AllocOptContext, info, key)
+    # If there are multiple assignments, we have to create slots for each values
+    # We currently only allow ccall root with a single assignment so we only need to handle
+    # isdefined, setfield! and getfield here.
+
+    # First, assign a slot to each variable.
+    # The slot types at this point is determined only by the setfield that are applied.
+    # We'll include the initialization type as we go through the defs
+    vars = ObjectIdDict()
+    create_struct_field_slots!(ctx, key, vars)
+
+    # Now, for each def. Assign all the slots.
+    # Also `Union` the RHS of the assignments into the slot type as we scan through the defs.
+    replace_struct_defs!(ctx, info, vars)
+
+    # Finally replace all uses
+    replace_struct_uses!(ctx, info, vars)
+end
+
+function replace_struct_uses!(ctx, info, vars)
+    for use in info.uses
+        if !isdefined(use, :expr)
+            # Top level dummy use, remove
+            use.stmts[use.stmtidx] = nothing
+            continue
+        end
+        local fld
+        local use_kind
+        expr = use.expr
+        head = expr.head
+        if head === :isdefined
+            replace_use_expr_with!(ctx, use, quoted(true))
+            continue
+        elseif head === :call
+            fld = expr.args[3]
+            if is_known_call(expr, isdefined, ctx.sv.src, ctx.sv.mod)
+                use_kind = 0
+            elseif is_known_call(expr, getfield, ctx.sv.src, ctx.sv.mod)
+                use_kind = 1
+            elseif is_known_call(expr, setfield!, ctx.sv.src, ctx.sv.mod)
+                use_kind = 2
+            end
+        end
+        if isa(fld, QuoteNode)
+            fld = fld.value
+        end
+        slot_id = get(vars, fld, 0)
+        if slot_id == 0
+            @assert use_kind == 0
+            replace_use_expr_with!(ctx, use, quoted(false))
+            continue
+        end
+
+        if use_kind == 0
+            # isdefined
+            if haskey(ctx.undef_fld, fld)
+                replace_use_expr_with!(ctx, use, SlotNumber(slot_id + 1), true, true)
+            else
+                replace_use_expr_with!(ctx, use, quoted(true))
+            end
+        elseif use_kind == 1
+            # getfield
+            if !haskey(ctx.undef_fld, fld)
+                replace_use_expr_with!(ctx, use, SlotNumber(slot_id), true, true)
+            else
+                replace_var = SlotNumber(slot_id)
+                flag_slot = SlotNumber(slot_id + 1)
+                check_expr = Expr(:call, throw_undefreferror_ifnot, flag_slot)
+                stmts = Any[check_expr]
+                add_use(ctx.infomap, flag_slot, ValueUse(stmts, 1, check_expr, 2))
+                stmt = use.stmts[use.stmtidx]::Expr
+                if stmt !== expr
+                    @assert stmt.head === :(=) && stmt.args[2] === expr
+                    stmt.args[2] = replace_var
+                    push!(stmts, stmt)
+                    scan_expr_use!(ctx.infomap, stmts, length(stmts), stmt, ctx.sv.src)
+                end
+                ctx.changes[use.stmts=>use.stmtidx] = nothing
+                use.stmts[use.stmtidx] = stmts
+            end
+        else
+            @assert use_kind == 2
+            # setfield!
+            replace_var = SlotNumber(slot_id)
+            val = expr.args[4]
+            stmts = Any[]
+            if haskey(ctx.undef_fld, fld)
+                flag_slot = SlotNumber(slot_id + 1)
+                assign_flag_ex = :($flag_slot = true)
+                push!(stmts, assign_flag_ex)
+                add_def(ctx.infomap, flag_slot, ValueDef(assign_flag_ex, stmts, length(stmts)))
+            end
+            assign_ex = :($replace_var = $val)
+            push!(stmts, assign_ex)
+            scan_expr_use!(ctx.infomap, stmts, length(stmts), assign_ex, ctx.sv.src)
+            stmt = use.stmts[use.stmtidx]::Expr
+            if stmt !== expr
+                @assert stmt.head === :(=) && stmt.args[2] === expr
+                extra_assign_ex = :($(stmt.args[1]) = $val)
+                push!(stmts, extra_assign_ex)
+                scan_expr_use!(ctx.infomap, stmts, length(stmts), extra_assign_ex, ctx.sv.src)
+            end
+            use.stmts[use.stmtidx] = stmts
+            ctx.changes[use.stmts=>use.stmtidx] = nothing
+        end
+    end
+end
+
+function check_new_field_type(@nospecialize(val), @nospecialize(typ))
+    if !isa(val, typ)
+        ccall(:jl_type_error_new_expr, Union{}, (Any, Any), typ, val)
+    end
+end
+
+function replace_struct_defs!(ctx, info, vars)
+    for i in 1:length(info.defs)
+        si = ctx.structinfos[i]
+        has_name = !isempty(si.names)
+        exprs = []
+        for fld_idx in 1:length(si.defs)
+            local slot_id
+            local fld_def
+            need_flag = false
+            if isassigned(si.defs, fld_idx)
+                fld_def = si.defs[fld_idx]
+            end
+            has_def = @isdefined(fld_def)
+            # First check field name
+            if has_name
+                fname = si.names[fld_idx]
+                if haskey(vars, fname)
+                    slot_id = vars[fname]
+                    need_flag = haskey(ctx.undef_fld, fname)
+                end
+            end
+            if !@isdefined(slot_id)
+                # Then check field index
+                if haskey(vars, fld_idx)
+                    slot_id = vars[fld_idx]
+                    need_flag = haskey(ctx.undef_fld, fld_idx)
+                else
+                    # The field is not used and we don't need to deal with any side effects
+                    if has_def
+                        if si.isnew && !(exprtype(fld_def, ctx.sv.src,
+                                                  ctx.sv.mod) ⊑ fieldtype(si.typ, fld_idx))
+                            check_ex = Expr(:call, check_new_field_type, fld_def,
+                                            quoted(fieldtype(si.typ, fld_idx)))
+                            push!(exprs, check_ex)
+                            scan_expr_use!(ctx.infomap, exprs, length(exprs), check_ex, ctx.sv.src)
+                        else
+                            maybe_add_allocopt_todo(ctx, fld_def)
+                        end
+                    end
+                    continue
+                end
+            end
+
+            if need_flag
+                flag_slot = SlotNumber(slot_id + 1)
+                flag_ex = :($flag_slot = $has_def)
+                push!(exprs, flag_ex)
+                add_def(ctx.infomap, flag_slot, ValueDef(flag_ex, exprs, length(exprs)))
+            end
+            if has_def
+                fld_ty = widenconst(exprtype(fld_def, ctx.sv.src, ctx.sv.mod))
+                if si.isnew && !(fld_ty ⊑ fieldtype(si.typ, fld_idx))
+                    struct_fld_ty = fieldtype(si.typ, fld_idx)
+                    check_ex = Expr(:call, check_new_field_type, fld_def,
+                                    quoted(struct_fld_ty))
+                    push!(exprs, check_ex)
+                    scan_expr_use!(ctx.infomap, exprs, length(exprs), check_ex, ctx.sv.src)
+                    fld_ty = typeintersect(struct_fld_ty, fld_ty)
+                else
+                    maybe_add_allocopt_todo(ctx, fld_def)
+                end
+                assign_ex = :($(SlotNumber(slot_id)) = $fld_def)
+                push!(exprs, assign_ex)
+                scan_expr_use!(ctx.infomap, exprs, length(exprs), assign_ex, ctx.sv.src)
+                slot_type = ctx.sv.src.slottypes[slot_id]
+                ctx.sv.src.slottypes[slot_id] = Union{slot_type,fld_ty}
+            end
+        end
+        def = info.defs[i]
+        ctx.changes[def.stmts=>def.stmtidx] = nothing
+        def.stmts[def.stmtidx] = exprs
+    end
+end
+
+function create_struct_field_slots!(ctx, key, vars)
+    slot_flag = var_has_static_undef(ctx.sv.src, key.first, key.second) * Slot_StaticUndef
+    for fld in keys(ctx.all_fld)
+        haskey(vars, fld) && continue
+        local fldidx
+        local slot_id
+        slot_type = get(ctx.setfield_typ, fld, Union{})
+        # We shouldn't need to check both field index and field name for undef
+        # since the two should agree for unambiguous fields.
+        if isa(fld, Symbol)
+            slot_name = fld
+            v = get(ctx.sym_count, fld, 0=>0)
+            if isa(v, Pair{Int,Int}) && first(v) != 0
+                # single field index
+                fldidx = last(v)
+                slot_type = Union{slot_type,get(ctx.setfield_typ, fldidx, Union{})}
+                if haskey(vars, fldidx)
+                    slot_id = first(vars[fldidx]::Int)
+                    ctx.sv.src.slottypes[slot_id] = slot_type
+                    ctx.sv.src.slotnames[slot_id] = slot_name
+                end
+            end
+        else
+            slot_name = :field_slot
+        end
+
+        if !@isdefined(slot_id)
+            slot_id = add_slot!(ctx.sv.src, slot_type, false, slot_name).id
+            add_allocopt_todo(ctx, slot_id, false)
+            if haskey(ctx.undef_fld, fld)
+                ctx.sv.src.slotflags[end] = Slot_StaticUndef
+                undef_slot = add_slot!(ctx.sv.src, Bool, false, :field_flag)
+                ctx.sv.src.slotflags[end] = slot_flag
+                add_allocopt_todo(ctx, undef_slot)
+                @assert undef_slot.id == slot_id + 1
+            else
+                ctx.sv.src.slotflags[end] = slot_flag
+            end
+            if @isdefined(fldidx)
+                vars[fldidx] = slot_id
+            end
+        end
+        vars[fld] = slot_id
+    end
+end
+
+function throw_undefreferror_ifnot(cond::Bool)
+    if !cond
+        throw(UndefRefError())
+    end
+    return
+end
+
+function split_struct_alloc_single!(ctx::AllocOptContext, info, key, nf, has_preserve,
+                                    has_setfield_undef)
+    # If there's only a single def, there's a lot more tricks we can do that's impossible
+    # when there are multiple ones.
+    #
+    # 1. Using SSAValue instead of Slot if the variable itself is SSA and there isn't
+    #    any setfield on the value
+    # 2. Forward SSAValue or constant field value to use directly when there isn't setfield
+    # 3. (For now) Splitting preserved objects
+    def = info.defs[1]
+    si = ctx.structinfos[1]
+    if !isempty(ctx.undef_fld) && has_setfield_undef
+        flag_vars = Vector{SlotNumber}(uninitialized, nf)
+    end
+    vars = Vector{Any}(uninitialized, nf)
+    is_ssa = !var_has_static_undef(ctx.sv.src, key.first, key.second)
+    def_exprs = Any[]
+    if has_preserve
+        preserved_vars = Any[]
+    end
+    # First go through each field and decide the variable name and create assignments
+    # expressions.
+    for i in 1:nf
+        local fld_name, orig_def
+        if !isempty(si.names)
+            fld_name = si.names[i]
+        end
+        has_fld_use = haskey(ctx.all_fld, i) || (@isdefined(fld_name) &&
+                                                 haskey(ctx.all_fld, fld_name))
+        has_def = isassigned(si.defs, i)
+        has_setfld_use = false
+        if has_def
+            orig_def = si.defs[i]
+            field_typ = widenconst(exprtype(orig_def, ctx.sv.src, ctx.sv.mod))
+            if si.isnew && !(field_typ ⊑ fieldtype(si.typ, i))
+                struct_fld_ty = fieldtype(si.typ, i)
+                check_ex = Expr(:call, check_new_field_type, orig_def,
+                                quoted(struct_fld_ty))
+                push!(def_exprs, check_ex)
+                scan_expr_use!(ctx.infomap, def_exprs, length(def_exprs), check_ex, ctx.sv.src)
+                field_typ = typeintersect(struct_fld_ty, field_typ)
+            else
+                maybe_add_allocopt_todo(ctx, orig_def)
+            end
+        else
+            field_typ = Union{}
+        end
+        if has_fld_use && !isempty(ctx.setfield_typ)
+            if haskey(ctx.setfield_typ, i)
+                has_setfld_use = true
+                field_typ = Union{field_typ,ctx.setfield_typ[i]}
+            end
+            if @isdefined(fld_name) && haskey(ctx.setfield_typ, fld_name)
+                has_setfld_use = true
+                field_typ = Union{field_typ,ctx.setfield_typ[fld_name]}
+            end
+        end
+        if !@isdefined(fld_name)
+            fld_name = :struct_field
+        end
+        need_preserved_root = has_preserve && !isbits(field_typ)
+        local var_slot
+        if !has_def
+            # If there's no direct use of the field
+            # (and we know that there's no use in preserved root) we can ignore this field
+            # Similarly, unless someone set the field, it is always #undef and we can
+            # replace all uses with that
+            has_setfld_use || continue
+            # OK, so someone calls setfield! on this =(
+            # We need to allocate the variable **AND** the undef tag variable
+            flag_slot = add_slot!(ctx.sv.src, Bool, false, fld_name)
+            ctx.sv.src.slotflags[end] = is_ssa ? 0 : Slot_StaticUndef
+            flag_vars[i] = flag_slot
+            add_allocopt_todo(ctx, flag_slot)
+
+            var_slot = add_slot!(ctx.sv.src, field_typ, false, fld_name)
+            ctx.sv.src.slotflags[end] = Slot_StaticUndef
+            vars[i] = var_slot
+            add_allocopt_todo(ctx, var_slot)
+
+            newvar_flag = :($flag_slot = false)
+            push!(def_exprs, newvar_flag)
+            add_def(ctx.infomap, flag_slot, ValueDef(newvar_flag, def_exprs, length(def_exprs)))
+            continue
+        elseif has_setfld_use
+            var_slot = add_slot!(ctx.sv.src, field_typ, false, fld_name)
+            ctx.sv.src.slotflags[end] = is_ssa ? 0 : Slot_StaticUndef
+            def_ex = :($var_slot = $orig_def)
+            push!(def_exprs, def_ex)
+            scan_expr_use!(ctx.infomap, def_exprs, length(def_exprs), def_ex, ctx.sv.src)
+            vars[i] = var_slot
+            add_allocopt_todo(ctx, var_slot)
+        else
+            # OK so no setfield
+            # First check if the field was a constant
+            cv = exprtype(orig_def, ctx.sv.src, ctx.sv.mod)
+            if isa(cv, Const)
+                vars[i] = quoted(cv.val)
+                # Constants don't need to be preserved
+                continue
+            end
+            if has_fld_use || need_preserved_root
+                need_assign = true
+                if is_ssa
+                    if isa(orig_def, SSAValue)
+                        var_slot = orig_def
+                        need_assign = false
+                    else
+                        var_slot = newvar!(ctx.sv, field_typ)
+                    end
+                else
+                    var_slot = add_slot!(ctx.sv.src, field_typ, false, fld_name)
+                    ctx.sv.src.slotflags[end] = Slot_StaticUndef
+                end
+                if need_assign
+                    def_ex = :($var_slot = $orig_def)
+                    push!(def_exprs, def_ex)
+                    scan_expr_use!(ctx.infomap, def_exprs, length(def_exprs), def_ex, ctx.sv.src)
+                end
+                vars[i] = var_slot
+                add_allocopt_todo(ctx, var_slot)
+            end
+            # No side effect allowed in `Expr` arguments at this point
+        end
+        if need_preserved_root
+            push!(preserved_vars, var_slot)
+        end
+    end
+    # OK, so now we've created all the variables and assignments needed, replace the def.
+    ctx.changes[def.stmts=>def.stmtidx] = nothing
+    def.stmts[def.stmtidx] = def_exprs
+    # Now fix up uses =)
+    for use in info.uses
+        local fld
+        local use_kind
+        if !isdefined(use, :expr)
+            # Top level dummy use, remove
+            use.stmts[use.stmtidx] = nothing
+            continue
+        end
+        expr = use.expr
+        head = expr.head
+        if head === :isdefined
+            replace_use_expr_with!(ctx, use, quoted(true))
+            continue
+        elseif head === :foreigncall || head === :gc_preserve_begin
+            # Splicing in the new ccall roots without moving existing other roots
+            npreserved_vars = length(preserved_vars)
+            if npreserved_vars == 0
+                use.expr.args[use.exidx] = nothing
+            else
+                cvar = preserved_vars[1]
+                expr.args[use.exidx] = cvar
+                add_use(ctx.infomap, cvar, use)
+                if npreserved_vars > 1
+                    old_nargs = length(expr.args)
+                    resize!(expr.args, old_nargs + npreserved_vars - 1)
+                    for i in 2:npreserved_vars
+                        cvar = preserved_vars[i]
+                        expr.args[old_nargs + i - 1] = cvar
+                        add_use(ctx.infomap, cvar, ValueUse(use.stmts, use.stmtidx,
+                                                            expr, old_nargs + i - 1))
+                    end
+                end
+            end
+            continue
+        elseif head === :call
+            fld = expr.args[3]
+            if is_known_call(expr, isdefined, ctx.sv.src, ctx.sv.mod)
+                use_kind = 0
+            elseif is_known_call(expr, getfield, ctx.sv.src, ctx.sv.mod)
+                use_kind = 1
+            elseif is_known_call(expr, setfield!, ctx.sv.src, ctx.sv.mod)
+                use_kind = 2
+            end
+        end
+        if isa(fld, QuoteNode)
+            fld = fld.value
+        end
+        if !isa(fld, Int)
+            v = get(ctx.sym_count, fld, 0=>0)::Pair{Int,Int}
+            if first(v) == 0
+                @assert use_kind == 0
+                replace_use_expr_with!(ctx, use, quoted(false))
+                continue
+            end
+            fld = last(v)
+        end
+        if fld > nf || fld <= 0
+            @assert use_kind == 0
+            replace_use_expr_with!(ctx, use, quoted(false))
+            continue
+        end
+        if use_kind == 0
+            # isdefined
+            if isassigned(si.defs, fld)
+                replace_use_expr_with!(ctx, use, quoted(true))
+                continue
+            end
+            flag_slot = flag_vars[fld]
+            replace_use_expr_with!(ctx, use, flag_slot, true, true)
+        elseif use_kind == 1
+            # getfield
+            if isassigned(si.defs, fld)
+                replace_var = vars[fld]
+                replace_use_expr_with!(ctx, use, replace_var, true, true)
+            elseif haskey(ctx.setfield_typ, fld) || (!isempty(si.names) &&
+                                                     haskey(ctx.setfield_typ, si.names[fld]))
+                replace_var = vars[fld]
+                flag_slot = flag_vars[fld]
+                check_expr = Expr(:call, throw_undefreferror_ifnot, flag_slot)
+                stmts = Any[check_expr]
+                add_use(ctx.infomap, flag_slot, ValueUse(stmts, 1, check_expr, 2))
+                stmt = use.stmts[use.stmtidx]::Expr
+                if stmt !== expr
+                    @assert stmt.head === :(=) && stmt.args[2] === expr
+                    stmt.args[2] = replace_var
+                    push!(stmts, stmt)
+                    scan_expr_use!(ctx.infomap, stmts, length(stmts), stmt, ctx.sv.src)
+                end
+                ctx.changes[use.stmts=>use.stmtidx] = nothing
+                use.stmts[use.stmtidx] = stmts
+            else
+                throw_err = Expr(:call, GlobalRef(Core, :throw), UndefRefError())
+                throw_err.typ = Union{}
+                # We can't simply delete the assignment since it can break assumptions downstream
+                # If we are assigning to anything, just assign the throw instead.
+                stmt = use.stmts[use.stmtidx]::Expr
+                if stmt === expr
+                    use.stmts[use.stmtidx] = Any[throw_err]
+                else
+                    @assert stmt.head === :(=) && stmt.args[2] === expr
+                    stmt.args[2] = throw_err
+                    stmts = Any[stmt]
+                    use.stmts[use.stmtidx] = stmts
+                    lhs = stmt.args[1]
+                    if isa(lhs, SSAValue) || isa(lhs, Slot)
+                        add_def(ctx.infomap, lhs, ValueDef(stmt, stmts, 1))
+                    end
+                end
+                ctx.changes[use.stmts=>use.stmtidx] = nothing
+            end
+        else
+            @assert use_kind == 2
+            # setfield!
+            replace_var = vars[fld]
+            val = expr.args[4]
+            stmts = Any[]
+            if !isassigned(si.defs, fld)
+                flag_slot = flag_vars[fld]
+                assign_flag_ex = :($flag_slot = true)
+                push!(stmts, assign_flag_ex)
+                add_def(ctx.infomap, flag_slot, ValueDef(assign_flag_ex, stmts, length(stmts)))
+            end
+            assign_ex = :($replace_var = $val)
+            push!(stmts, assign_ex)
+            scan_expr_use!(ctx.infomap, stmts, length(stmts), assign_ex, ctx.sv.src)
+            stmt = use.stmts[use.stmtidx]::Expr
+            if stmt !== expr
+                @assert stmt.head === :(=) && stmt.args[2] === expr
+                extra_assign_ex = :($(stmt.args[1]) = $val)
+                push!(stmts, extra_assign_ex)
+                scan_expr_use!(ctx.infomap, stmts, length(stmts), extra_assign_ex, ctx.sv.src)
+            end
+            use.stmts[use.stmtidx] = stmts
+            ctx.changes[use.stmts=>use.stmtidx] = nothing
+        end
+    end
+end
+
+macro check_ast(ctx, ex)
+    eex = esc(ex)
+    ectx = esc(ctx)
+    qex = QuoteNode(ex)
+    quote
+        ctx = $ectx
+        if !$eex
+            println("Check failed: ", $qex)
+            println("Code:")
+            println(ctx.sv.src)
+            println("Value Info Map:")
+            show_info(STDOUT, ctx.infomap, ctx)
+            ccall(:abort, Union{}, ())
+        end
+    end
+end
+
+function verify_value_infomap(ctx::AllocOptContext)
+    seen = ObjectIdDict()
+    in_methods = ObjectIdDict()
+    infomap = ctx.infomap
+    all_stmts = ObjectIdDict()
+    for i in 1:length(infomap.ssas)
+        isassigned(infomap.ssas, i) || continue
+        info = infomap.ssas[i]
+        ssav = SSAValue(i - 1)
+        @check_ast(ctx, !info.has_method)
+        ndef = 0
+        for def in info.defs
+            check_valid(def, ctx.changes) || continue
+            ndef += 1
+            @check_ast(ctx, !haskey(seen, def))
+            seen[def] = nothing
+            all_stmts[def.stmts] = nothing
+
+            assign = def.assign
+            @check_ast(ctx, isa(assign, Expr))
+            @check_ast(ctx, assign.head === :(=))
+            @check_ast(ctx, def.stmts[def.stmtidx] === assign)
+            @check_ast(ctx, assign.args[1] === ssav)
+        end
+        @check_ast(ctx, ndef <= 1)
+        nuse = 0
+        for use in info.uses
+            check_valid(use, ctx.changes) || continue
+            nuse += 1
+            @check_ast(ctx, !haskey(seen, use))
+            seen[use] = nothing
+            all_stmts[use.stmts] = nothing
+            stmt = use.stmts[use.stmtidx]
+            if !isdefined(use, :expr)
+                @check_ast(ctx, stmt === ssav)
+            else
+                expr = use.expr
+                @check_ast(ctx, expr.args[use.exidx] === ssav)
+                if stmt === expr
+                    if expr.head === :(=)
+                        @check_ast(ctx, use.exidx != 1)
+                    end
+                elseif expr.head === :&
+                    @check_ast(ctx, use.exidx === 1)
+                    ccall_expr = stmt::Expr
+                    if ccall_expr.head === :(=)
+                        ccall_expr = ccall_expr.args[2]::Expr
+                    end
+                    @check_ast(ctx, ccall_expr.head === :foreigncall)
+                    nccallargs = ccall_expr.args[5]::Int
+                    found_ccallarg = false
+                    for argi in 6:(5 + nccallargs)
+                        if ccall_expr.args[argi] === expr
+                            found_ccallarg = true
+                            break
+                        end
+                    end
+                    @check_ast(ctx, found_ccallarg)
+                else
+                    @check_ast(ctx, stmt.head === :(=) && stmt.args[2] === expr)
+                end
+            end
+        end
+        if ndef == 0
+            @check_ast(ctx, nuse == 0)
+        end
+    end
+    for i in 1:length(infomap.slots)
+        isassigned(infomap.slots, i) || continue
+        info = infomap.slots[i]
+        slotv = SlotNumber(i)
+        if info.has_method
+            in_methods[slotv] = nothing
+        end
+        ndef = 0
+        for def in info.defs
+            check_valid(def, ctx.changes) || continue
+            @check_ast(ctx, !haskey(seen, def))
+            seen[def] = nothing
+            all_stmts[def.stmts] = nothing
+
+            assign = def.assign
+            @check_ast(ctx, def.stmts[def.stmtidx] === assign)
+            if isa(assign, NewvarNode)
+                @check_ast(ctx, var_has_undef(ctx.sv.src, i))
+                @check_ast(ctx, assign.slot === slotv)
+            else
+                ndef += 1
+                @check_ast(ctx, assign.head === :(=))
+                @check_ast(ctx, assign.args[1] === slotv)
+            end
+        end
+        if ctx.sv.src.slotflags[i] & Slot_AssignedOnce != 0
+            @check_ast(ctx, ndef <= 1)
+        end
+        for use in info.uses
+            check_valid(use, ctx.changes) || continue
+            @check_ast(ctx, !haskey(seen, use))
+            seen[use] = nothing
+            all_stmts[use.stmts] = nothing
+            stmt = use.stmts[use.stmtidx]
+
+            if !isdefined(use, :expr)
+                @check_ast(ctx, symequal(stmt, slotv))
+            else
+                expr = use.expr
+                @check_ast(ctx, symequal(expr.args[use.exidx], slotv))
+                if stmt === expr
+                    if expr.head === :(=)
+                        @check_ast(ctx, use.exidx != 1)
+                    end
+                elseif expr.head === :&
+                    @check_ast(ctx, use.exidx === 1)
+                    ccall_expr = stmt::Expr
+                    if ccall_expr.head === :(=)
+                        ccall_expr = ccall_expr.args[2]::Expr
+                    end
+                    @check_ast(ctx, ccall_expr.head === :foreigncall)
+                    nccallargs = ccall_expr.args[5]::Int
+                    found_ccallarg = false
+                    for argi in 6:(5 + nccallargs)
+                        if ccall_expr.args[argi] === expr
+                            found_ccallarg = true
+                            break
+                        end
+                    end
+                    @check_ast(ctx, found_ccallarg)
+                else
+                    @check_ast(ctx, stmt.head === :(=) && stmt.args[2] === expr)
+                end
+            end
+        end
+    end
+    verify_value_infomap_rescan(ctx, ctx.sv.src.code, seen, in_methods, all_stmts)
+    @check_ast(ctx, isempty(all_stmts))
+    @check_ast(ctx, isempty(seen))
+end
+
+function verify_seen_info(ctx::AllocOptContext, seen, def_or_use)
+    @check_ast(ctx, haskey(seen, def_or_use))
+    delete!(seen, def_or_use)
+end
+
+function verify_value_infomap_rescan(ctx::AllocOptContext, stmts, seen, in_methods, all_stmts)
+    if haskey(all_stmts, stmts)
+        delete!(all_stmts, stmts)
+    end
+    for i in 1:length(stmts)
+        ex = stmts[i]
+        if isa(ex, Vector{Any})
+            verify_value_infomap_rescan(ctx, ex, seen, in_methods, all_stmts)
+            continue
+        elseif isa(ex, SSAValue)
+            verify_seen_info(ctx, seen, ValueUse(stmts, i))
+            continue
+        elseif isa(ex, Slot)
+            verify_seen_info(ctx, seen, ValueUse(stmts, i))
+            continue
+        elseif isa(ex, NewvarNode)
+            verify_seen_info(ctx, seen, ValueDef(ex, stmts, i))
+            continue
+        elseif !isa(ex, Expr)
+            continue
+        end
+        head = ex.head
+        is_meta_expr_head(head) && continue
+        if head === :(=)
+            rhs = ex.args[2]
+            lhs = ex.args[1]
+            lhs_slot = isa(lhs, Slot)
+            rhs_slot = isa(rhs, Slot)
+            if lhs_slot && rhs_slot
+                @check_ast(ctx, !symequal(lhs, rhs))
+            end
+            if lhs_slot || isa(lhs, SSAValue)
+                verify_seen_info(ctx, seen, ValueDef(ex, stmts, i))
+            end
+            if isa(rhs, Expr)
+                ex = rhs
+                head = ex.head
+            else
+                if rhs_slot || isa(rhs, SSAValue)
+                    verify_seen_info(ctx, seen, ValueUse(stmts, i, ex, 2))
+                end
+                continue
+            end
+        end
+        eargs = ex.args
+        isccall = head === :foreigncall
+        for j in 1:length(eargs)
+            ea = eargs[j]
+            if j == 1 && head === :method
+                if isa(ea, Slot)
+                    @check_ast(ctx, haskey(in_methods, SlotNumber(slot_id(ea))))
+                    continue
+                end
+            end
+            if isccall && isa(ea, Expr)
+                @check_ast(ctx, ea.head === :& || ea.head === :boundscheck)
+                ea2 = ea.args[1]
+                if isa(ea2, Slot) || isa(ea2, SSAValue)
+                    verify_seen_info(ctx, seen, ValueUse(stmts, i, ea, 1))
+                end
+            elseif isa(ea, Slot) || isa(ea, SSAValue)
+                verify_seen_info(ctx, seen, ValueUse(stmts, i, ex, j))
+            end
+        end
+    end
+end
+
+function optimize_value!(ctx::AllocOptContext, key)
+    info = ctx.infomap[key]
+    if info.has_method
+        return
+    end
+    remove_invalid!(info, ctx.changes)
+    if isempty(info.uses)
+        delete_value!(ctx, info, key)
+        return
+    elseif isempty(info.defs)
+        # Undefined but used variable these can only be variables whose uses are guarded by
+        # conditions that will never be true. Ignore them for now.
+        # TODO: slots introduced by inlining multiple-`return` functions might have their
+        # defs removed by DCE but not be marked StaticUndef.
+        #@assert ((!key.second && key.first <= ctx.sv.nargs) ||
+        #         var_has_static_undef(ctx.sv.src, key.first, key.second))
+        return
+    elseif var_has_undef(ctx.sv.src, key.first, key.second)
+        return
+    end
+    # Split assignments of leaftypes that do no have overlaping uses with each other
+    split_disjoint_assign!(ctx, info, key) && return
+    # If we've found SSAValue or Slot as def, no need to try other optimizations
+    merge_value_ssa!(ctx, info, key) && return
+    # Check if it's just a constant
+    propagate_const_def!(ctx, info, key) && return
+    # Split/eliminate allocation
+    split_struct_alloc!(ctx, info, key) && return
+    return
+end
+
+const enable_verify_valueinfo = Array{Bool,0}(uninitialized)
+enable_verify_valueinfo[] = false
+
+# Simplify the AST and eliminate unnecessary allocations
+# This does the following optimizations iteratively until there's no changes to be made
+# 1. Remove def of variables that is never used
+# 2. Merge variables that have identical SSA definitions
+# 3. Replace variables that always take the same constant definition with the constant
+# 4. Deconstruct variables with defs that are only constant or inlined allocations
+#    and with only known non-escape uses into its fields.
+# This pass requires the IR to be linear, in particular, the only allowed nested `Expr` are
+# RHS of a `Expr(:(=))` and the `Expr(:(&))` argument of a `ccall`.
+function alloc_elim_pass!(sv::OptimizationState)
+    body = sv.src.code
+    infomap = collect_value_infos(body, sv.src, sv.nargs)
+    ctx = AllocOptContext(infomap, sv)
+    enable_verify_valueinfo[] && verify_value_infomap(ctx)
+    while !isempty(ctx.todo)
+        k, v = first(ctx.todo)
+        k = k::Pair{Int,Bool}
+        delete!(ctx.todo, k)
+        optimize_value!(ctx, k)
+        enable_verify_valueinfo[] && verify_value_infomap(ctx)
+    end
+    len = length(body)
+    next_i = 1
+    while next_i <= len
+        i = next_i
+        next_i += 1
+        ex = body[i]
+        if isa(ex, Vector{Any})
+            len += length(ex) - 1
+            next_i = i
+            splice!(body, i, ex)
+        elseif (isa(ex, Expr) && ex.head === :call && length(ex.args) == 2 &&
+                ex.args[1] === throw_undefreferror_ifnot)
+            len += 3
+            next_i = i + 4
+            flag_slot = ex.args[2]
+            _growat!(body, i, 3)
+
+            not_flag = newvar!(ctx.sv, Bool)
+            not_flag_val = :($(GlobalRef(Core.Intrinsics, :not_int))($flag_slot))
+            not_flag_val.typ = Bool
+            body[i] = :($not_flag = $not_flag_val)
+
+            after_lbl = genlabel(ctx.sv)
+            body[i + 1] = Expr(:gotoifnot, not_flag, after_lbl.label)
+
+            throw_err = Expr(:call, GlobalRef(Core, :throw), UndefRefError())
+            throw_err.typ = Union{}
+            body[i + 2] = throw_err
+            body[i + 3] = after_lbl
+        elseif (isa(ex, Expr) && ex.head === :call && length(ex.args) == 3 &&
+                ex.args[1] === check_new_field_type)
+            val_ex = ex.args[2]
+            typ_ex = ex.args[3]
+
+            len += 4
+            next_i = i + 5
+            _growat!(body, i, 4)
+
+            flag = newvar!(ctx.sv, Bool)
+            flag_val = :($(GlobalRef(Core, :isa))($val_ex, $typ_ex))
+            flag_val.typ = Bool
+            body[i] = :($flag = $flag_val)
+
+            not_flag = newvar!(ctx.sv, Bool)
+            not_flag_val = :($(GlobalRef(Core.Intrinsics, :not_int))($flag))
+            not_flag_val.typ = Bool
+            body[i + 1] = :($not_flag = $not_flag_val)
+
+            after_lbl = genlabel(ctx.sv)
+            body[i + 2] = Expr(:gotoifnot, not_flag, after_lbl.label)
+
+            throw_err = Expr(:foreigncall, QuoteNode(:jl_type_error_new_expr),
+                             Union{}, Core.svec(Any, Any), QuoteNode(:ccall), 2, typ_ex, val_ex)
+            throw_err.typ = Union{}
+            body[i + 3] = throw_err
+            body[i + 4] = after_lbl
+        end
+    end
+end
+
+const meta_pop_loc = Expr(:meta, :pop_loc)
+
+function copy_expr_in_array!(ary, seen)
+    for i in 1:length(ary)
+        ex = ary[i]
+        isa(ex, Expr) || continue
+        ex = ex::Expr
+        if ex.head === :meta
+            # Try to save some memory by using the same object for all `:pop_loc` meta node
+            if ex !== meta_pop_loc && length(ex.args) == 1 && ex.args[1] === :pop_loc
+                ary[i] = meta_pop_loc
+            end
+            continue # No need to copy meta expressions
+        end
+        if haskey(seen, ex)
+            newex = Expr(ex.head)
+            append!(newex.args, ex.args)
+            newex.typ = ex.typ
+            ary[i] = ex = newex
+            # No need to add to `seen`, there's no way there can be another one of the copied
+            # version in the AST....
+        else
+            seen[ex] = nothing
+            if haskey(seen, ex.args)
+                # Haven't actually seen this happen but it's pretty easy to check
+                ex.args = copy(ex.args)
+            else
+                seen[ex.args] = nothing
+            end
+        end
+        copy_expr_in_array!(ex.args, seen)
+    end
+end
+
+# Clone expressions that appears multiple times in the code
+function copy_duplicated_expr_pass!(sv::OptimizationState)
+    copy_expr_in_array!(sv.src.code, ObjectIdDict())
 end
 
 # fix label numbers to always equal the statement index of the label
@@ -6374,7 +7746,7 @@ end
 # especially try to make sure any recursive and leaf functions have concrete signatures,
 # since we won't be able to specialize & infer them at runtime
 
-let fs = Any[typeinf_ext, typeinf, typeinf_edge, occurs_outside_getfield, pure_eval_call],
+let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call],
     world = ccall(:jl_get_world_counter, UInt, ())
     for x in t_ffunc_val
         push!(fs, x[3])

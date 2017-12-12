@@ -147,7 +147,6 @@ Base.cumprod
 Base.cumprod!
 Base.cumsum
 Base.cumsum!
-Base.cumsum_kbn
 Base.LinAlg.diff
 Base.repeat(::AbstractArray)
 Base.rot180
@@ -156,7 +155,6 @@ Base.rotr90
 Base.reducedim
 Base.mapreducedim
 Base.mapslices
-Base.sum_kbn
 ```
 
 ## Combinatorics

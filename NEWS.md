@@ -737,6 +737,9 @@ Deprecated or removed
 
   * Use of `and`, `or`, and `not` as identifier names is deprecated ([#24965]).
 
+  * The `sum_kbn` and `cumsum_kbn` functions have been moved to the
+    [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
+
 Command-line option changes
 ---------------------------
 
@@ -1709,4 +1712,5 @@ Command-line option changes
 [#24396]: https://github.com/JuliaLang/julia/issues/24396
 [#24413]: https://github.com/JuliaLang/julia/issues/24413
 [#24653]: https://github.com/JuliaLang/julia/issues/24653
+[#24869]: https://github.com/JuliaLang/julia/issues/24869
 [#24965]: https://github.com/JuliaLang/julia/issues/24965
