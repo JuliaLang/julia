@@ -147,6 +147,30 @@ end
 # 2) "Default" which tries to use as few entropy bits as possible, at the cost of a
 #    a bigger upfront price associated with the creation of the sampler
 
+#### helper functions
+
+function rand_lteq(r::AbstractRNG, S, u::U, mask::U) where U<:Integer
+    while true
+        x = rand(r, S) & mask
+        x <= u && return x
+    end
+end
+
+function rand_lteq(rng::AbstractRNG, S, u::T)::T where T
+    while true
+        x = rand(rng, S)
+        x <= u && return x
+    end
+end
+
+# helper function, to turn types to values, should be removed once we
+# can do rand(Uniform(UInt))
+rand(rng::AbstractRNG, ::Val{T}) where {T} = rand(rng, T)
+
+uint_sup(::Type{<:Union{Bool,BitInteger}}) = UInt32
+uint_sup(::Type{<:Union{Int64,UInt64}}) = UInt64
+uint_sup(::Type{<:Union{Int128,UInt128}}) = UInt128
+
 #### Fast
 
 struct SamplerRangeFast{U<:BitUnsigned,T<:Union{BitInteger,Bool}} <: Sampler
@@ -156,31 +180,22 @@ struct SamplerRangeFast{U<:BitUnsigned,T<:Union{BitInteger,Bool}} <: Sampler
     mask::U   # mask generated values before threshold rejection
 end
 
-function SamplerRangeFast(r::AbstractUnitRange{T}) where T<:Union{Base.BitInteger64,Bool}
+SamplerRangeFast(r::AbstractUnitRange{T}) where T<:Union{Bool,BitInteger} =
+    SamplerRangeFast(r, uint_sup(T))
+
+function SamplerRangeFast(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
     isempty(r) && throw(ArgumentError("range must be non-empty"))
-    m = last(r) % UInt64 - first(r) % UInt64
-    bw = (64 - leading_zeros(m)) % UInt # bit-width
-    mask = (1 % UInt64 << bw) - (1 % UInt64)
-    SamplerRangeFast{UInt64,T}(first(r), bw, m, mask)
+    m = (last(r) - first(r)) % U
+    bw = (sizeof(U) << 3 - leading_zeros(m)) % UInt # bit-width
+    mask = (1 % U << bw) - (1 % U)
+    SamplerRangeFast{U,T}(first(r), bw, m, mask)
 end
 
-function SamplerRangeFast(r::AbstractUnitRange{T}) where T<:Union{Int128,UInt128}
-    isempty(r) && throw(ArgumentError("range must be non-empty"))
-    m = (last(r)-first(r)) % UInt128
-    bw = (128 - leading_zeros(m)) % UInt # bit-width
-    mask = (1 % UInt128 << bw) - (1 % UInt128)
-    SamplerRangeFast{UInt128,T}(first(r), bw, m, mask)
+function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt32,T}) where T
+    a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
+    x = rand_lteq(rng, Val(UInt32), m, mask)
+    (x + a % UInt32) % T
 end
-
-function rand_lteq(r::AbstractRNG, S, u::U, mask::U) where U<:Integer
-    while true
-        x = rand(r, S) & mask
-        x <= u && return x
-    end
-end
-
-# helper function, to turn types to values, should be removed once we can do rand(Uniform(UInt))
-rand(rng::AbstractRNG, ::Val{T}) where {T} = rand(rng, T)
 
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt64,T}) where T
     a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
@@ -216,7 +231,6 @@ maxmultiple(k::T, sup::T=zero(T)) where {T<:Unsigned} =
 unsafe_maxmultiple(k::T, sup::T) where {T<:Unsigned} =
     div(sup, k + (k == 0))*k - one(k)
 
-
 struct SamplerRangeInt{T<:Union{Bool,Integer},U<:Unsigned} <: Sampler
     a::T      # first element of the range
     bw::Int   # bit width
@@ -224,9 +238,6 @@ struct SamplerRangeInt{T<:Union{Bool,Integer},U<:Unsigned} <: Sampler
     u::U      # rejection threshold
 end
 
-uint_sup(::Type{<:Union{Bool,BitInteger}}) = UInt32
-uint_sup(::Type{<:Union{Int64,UInt64}}) = UInt64
-uint_sup(::Type{<:Union{Int128,UInt128}}) = UInt128
 
 SamplerRangeInt(r::AbstractUnitRange{T}) where T<:Union{Bool,BitInteger} =
     SamplerRangeInt(r, uint_sup(T))
@@ -253,13 +264,6 @@ end
 
 Sampler(::AbstractRNG, r::AbstractUnitRange{T},
         ::Repetition) where {T<:Union{Bool,BitInteger}} = SamplerRangeInt(r)
-
-function rand_lteq(rng::AbstractRNG, S, u::T)::T where T
-    while true
-        x = rand(rng, S)
-        x <= u && return x
-    end
-end
 
 rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt32}) where {T<:Union{Bool,BitInteger}} =
     (unsigned(sp.a) + rem_knuth(rand_lteq(rng, Val(UInt32), sp.u), sp.k)) % T
