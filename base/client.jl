@@ -129,9 +129,7 @@ function repl_cmd(cmd, out)
             else
                 shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
             end
-            cmd = `$shell`
-            isa(STDIN, TTY) && (cmd = `$cmd -i`)
-            cmd = `$cmd -c $shell_escape_cmd`
+            cmd = `$shell -c $shell_escape_cmd`
         end
         run(ignorestatus(cmd))
     end
