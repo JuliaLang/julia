@@ -110,6 +110,35 @@ typed_hcat(::Type{T}, avs::Union{Number,AdjointAbsVec}...) where {T} = Adjoint(t
 typed_hcat(::Type{T}, avs::Union{Number,TransposeAbsVec}...) where {T} = Transpose(typed_vcat(T, map(Transpose, avs)...))
 
 
+### higher order functions
+# preserve Adjoint/Transpose wrapper around vectors
+# to retain the associated semantics post-map/broadcast
+
+# vectorfy takes an Adoint/Transpose-wrapped vector and builds
+# an unwrapped vector with the entrywise-same contents
+vectorfy(x::Number) = x
+vectorfy(adjvec::AdjointAbsVec) = map(Adjoint, adjvec.parent)
+vectorfy(transvec::TransposeAbsVec) = map(Transpose, transvec.parent)
+vectorfyall(transformedvecs...) = (map(vectorfy, transformedvecs)...,)
+
+# map over collections of Adjoint/Transpose-wrapped vectors
+# note that the caller's operation `f` should be applied to the entries of the wrapped
+# vectors, rather than the entires of the wrapped vector's parents. so first we use vectorfy
+# to build unwrapped vectors with entrywise-same contents as the wrapped input vectors.
+# then we map the caller's operation over that set of unwrapped vectors. but now re-wrapping
+# the resulting vector would inappropriately transform the result vector's entries. so
+# instead of simply mapping the caller's operation over the set of unwrapped vectors,
+# we map Adjoint/Transpose composed with the caller's operationt over the set of unwrapped
+# vectors. then re-wrapping the result vector yields a wrapped vector with the correct entries.
+map(f, avs::AdjointAbsVec...) = Adjoint(map(Adjoint∘f, vectorfyall(avs...)...))
+map(f, tvs::TransposeAbsVec...) = Transpose(map(Transpose∘f, vectorfyall(tvs...)...))
+
+# broadcast over collections of Adjoint/Transpose-wrapped vectors and numbers
+# similar explanation for these definitions as for map above
+broadcast(f, avs::Union{Number,AdjointAbsVec}...) = Adjoint(broadcast(Adjoint∘f, vectorfyall(avs...)...))
+broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = Transpose(broadcast(Transpose∘f, vectorfyall(tvs...) ...))
+
+
 ### linear algebra
 
 # definitions necessary for test/linalg/rowvector.jl to pass
