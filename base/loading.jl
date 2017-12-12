@@ -118,57 +118,21 @@ end
 
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
-function _include_from_serialized(content::Vector{UInt8}, depmods::Vector{Module})
-    return ccall(:jl_restore_incremental_from_buf, Any, (Ptr{UInt8}, Int, Any), content, sizeof(content), depmods)
+function _include_from_serialized(content::Vector{UInt8})
+    return ccall(:jl_restore_incremental_from_buf, Any, (Ptr{UInt8}, Int), content, sizeof(content))
 end
-function _include_from_serialized(path::String, depmods::Vector{Module})
-    return ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
+function _include_from_serialized(path::String)
+    return ccall(:jl_restore_incremental, Any, (Cstring,), path)
 end
 
 # returns an array of modules loaded, or an Exception that describes why it failed
 # and it reconnects the Base.Docs.META
 function _require_from_serialized(mod::Symbol, path_to_try::String)
-    return _require_from_serialized(mod, path_to_try, parse_cache_header(path_to_try)[3])
-end
-function _require_from_serialized(mod::Symbol, path_to_try::String, depmodnames::Vector{Pair{Symbol, UInt64}})
-    # load all of the dependent modules
-    ndeps = length(depmodnames)
-    depmods = Vector{Module}(uninitialized, ndeps)
-    for i in 1:ndeps
-        modname, uuid = depmodnames[i]
-        if root_module_exists(modname)
-            M = root_module(modname)
-            if module_name(M) === modname && module_uuid(M) === uuid
-                depmods[i] = M
-            end
-        else
-            modpath = find_package(string(modname))
-            modpath === nothing && return ErrorException("Required dependency $modname not found in current path.")
-            mod = _require_search_from_serialized(modname, String(modpath))
-            if !isa(mod, Bool)
-                for M in mod::Vector{Any}
-                    if module_name(M) === modname && module_uuid(M) === uuid
-                        depmods[i] = M
-                        break
-                    end
-                end
-                for callback in package_callbacks
-                    invokelatest(callback, modname)
-                end
-            end
-        end
-        isassigned(depmods, i) || return ErrorException("Required dependency $modname failed to load from a cache file.")
-    end
-    # now load the path_to_try.ji file
-    restored = _include_from_serialized(path_to_try, depmods)
+    restored = _include_from_serialized(path_to_try)
     if !isa(restored, Exception)
         for M in restored::Vector{Any}
-            M = M::Module
             if isdefined(M, Base.Docs.META)
                 push!(Base.Docs.modules, M)
-            end
-            if module_parent(M) === M
-                register_root_module(module_name(M), M)
             end
         end
     end
@@ -181,13 +145,12 @@ end
 function _require_search_from_serialized(mod::Symbol, sourcepath::String)
     paths = find_all_in_cache_path(mod)
     for path_to_try in paths::Vector{String}
-        deps = stale_cachefile(sourcepath, path_to_try)
-        if deps === true
+        if stale_cachefile(sourcepath, path_to_try)
             continue
         end
-        restored = _require_from_serialized(mod, path_to_try, deps)
+        restored = _require_from_serialized(mod, path_to_try)
         if isa(restored, Exception)
-            if isa(restored, ErrorException)
+            if isa(restored, ErrorException) && endswith(restored.msg, " uuid did not match cache file.")
                 # can't use this cache due to a module uuid mismatch,
                 # defer reporting error until after trying all of the possible matches
                 DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Failed to load $path_to_try because $(restored.msg)")
@@ -220,7 +183,7 @@ const package_callbacks = Any[]
 const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
-const _concrete_dependencies = Pair{Symbol, UInt64}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
+const _concrete_dependencies = Any[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
 const _require_dependencies = Any[] # a list of (mod, path, mtime) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 function _include_dependency(modstring::AbstractString, _path::AbstractString)
@@ -400,6 +363,14 @@ function unreference_module(key)
     end
 end
 
+function register_all(a)
+    for m in a
+        if module_parent(m) === m
+            register_root_module(module_name(m), m)
+        end
+    end
+end
+
 function _require(mod::Symbol)
     # dependency-tracking is only used for one top-level include(path),
     # and is not applied recursively to imported modules:
@@ -425,13 +396,13 @@ function _require(mod::Symbol)
         if path === nothing
             throw(ArgumentError("Module $name not found in current path.\nRun `Pkg.add(\"$name\")` to install the $name package."))
         end
-        path = String(path)
 
         # attempt to load the module file via the precompile cache locations
         doneprecompile = false
         if JLOptions().use_compiled_modules != 0
             doneprecompile = _require_search_from_serialized(mod, path)
             if !isa(doneprecompile, Bool)
+                register_all(doneprecompile)
                 return
             end
         end
@@ -459,6 +430,7 @@ function _require(mod::Symbol)
                 warn(m, prefix="WARNING: ")
                 # fall-through, TODO: disable __precompile__(true) error so that the normal include will succeed
             else
+                register_all(m)
                 return
             end
         end
@@ -480,6 +452,7 @@ function _require(mod::Symbol)
                 # TODO: disable __precompile__(true) error and do normal include instead of error
                 error("Module $mod declares __precompile__(true) but require failed to create a usable precompiled cache file.")
             end
+            register_all(m)
         end
     finally
         toplevel_load[] = last
@@ -572,7 +545,7 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
-function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies))
+function create_expr_cache(input::String, output::String, concrete_deps::Vector{Any})
     rm(output, force=true)   # Remove file if it exists
     code_object = """
         while !eof(STDIN)
@@ -639,12 +612,12 @@ function compilecache(name::String)
     if !isdir(cachepath)
         mkpath(cachepath)
     end
-    cachefile::String = abspath(cachepath, "$name.ji")
+    cachefile::String = abspath(cachepath, name*".ji")
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
-    for (key, mod) in loaded_modules
+    for (key,mod) in loaded_modules
         if !(mod === Main || mod === Core || mod === Base)
-            push!(concrete_deps, key => module_uuid(mod))
+            push!(concrete_deps, (key, module_uuid(mod)))
         end
     end
     # run the expression and cache the result
@@ -671,13 +644,13 @@ module_uuid(m::Module) = ccall(:jl_module_uuid, UInt64, (Any,), m)
 isvalid_cache_header(f::IOStream) = 0 != ccall(:jl_read_verify_header, Cint, (Ptr{Void},), f.ios)
 
 function parse_cache_header(f::IO)
-    modules = Vector{Pair{Symbol, UInt64}}()
+    modules = Dict{Symbol,UInt64}()
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break
         sym = Symbol(read(f, n)) # module symbol
         uuid = ntoh(read(f, UInt64)) # module UUID (mostly just a timestamp)
-        push!(modules, sym => uuid)
+        modules[sym] = uuid
     end
     totbytes = ntoh(read(f, Int64)) # total bytes for file dependencies
     # read the list of files
@@ -696,13 +669,13 @@ function parse_cache_header(f::IO)
     @assert totbytes == 12 "header of cache file appears to be corrupt"
     srctextpos = ntoh(read(f, Int64))
     # read the list of modules that are required to be present during loading
-    required_modules = Vector{Pair{Symbol, UInt64}}()
+    required_modules = Dict{Symbol,UInt64}()
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break
         sym = Symbol(read(f, n)) # module symbol
         uuid = ntoh(read(f, UInt64)) # module UUID
-        push!(required_modules, sym => uuid)
+        required_modules[sym] = uuid
     end
     return modules, files, required_modules, srctextpos
 end
@@ -763,8 +736,6 @@ function read_dependency_src(cachefile::String, filename::AbstractString)
     end
 end
 
-# returns true if it "cachefile.ji" is stale relative to "modpath.jl"
-# otherwise returns the list of dependencies to also check
 function stale_cachefile(modpath::String, cachefile::String)
     io = open(cachefile, "r")
     try
@@ -773,12 +744,13 @@ function stale_cachefile(modpath::String, cachefile::String)
             return true # invalid cache file
         end
         modules, files, required_modules = parse_cache_header(io)
-        modules = Dict{Symbol, UInt64}(modules)
 
         # Check if transitive dependencies can be fullfilled
-        for (mod, uuid_req) in required_modules
+        for mod in keys(required_modules)
+            if mod == :Main || mod == :Core || mod == :Base
+                continue
             # Module is already loaded
-            if root_module_exists(mod)
+            elseif root_module_exists(mod)
                 continue
             end
             name = string(mod)
@@ -796,7 +768,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             uuid = get(modules, mod, UInt64(0))
             if uuid !== UInt64(0)
                 if uuid === uuid_req
-                    return required_modules # this is the file we want
+                    return false # this is the file we want
                 end
                 DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it provides the wrong uuid (got $uuid) for $mod (want $uuid_req).")
                 return true # cachefile doesn't provide the required version of the dependency
@@ -825,7 +797,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             return true
         end
 
-        return required_modules # fresh cachefile
+        return false # fresh cachefile
     finally
         close(io)
     end
