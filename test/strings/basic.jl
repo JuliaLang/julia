@@ -417,6 +417,9 @@ end
     end
     # Check seven-byte sequences, should be invalid
     @test isvalid(String, UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
+    #issue #24214 Check valid SubString
+    @test isvalid(lstrip(" ghjki")) == true
+    @test isvalid(SubString(String(UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]), 1,2)) == false
 end
 
 @testset "issue #11482" begin
