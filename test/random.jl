@@ -3,6 +3,8 @@
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using Main.TestHelpers.OAs
 
+using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt
+
 # Issue #6573
 guardsrand(0) do
     rand()
@@ -646,4 +648,11 @@ struct RandomStruct23964 end
 @testset "error message when rand not defined for a type" begin
     @test_throws ArgumentError rand(nothing)
     @test_throws ArgumentError rand(RandomStruct23964())
+end
+
+@testset "rand(::$RNG, ::UnitRange{$T}" for RNG ∈ (MersenneTwister(), RandomDevice()),
+                                                 T ∈ (Int32, UInt32, Int64, Int128, UInt128)
+    RNG isa MersenneTwister && srand(RNG, rand(UInt128)) # for reproducibility
+    r = T(1):T(108)
+    @test rand(RNG, SamplerRangeFast(r)) ∈ r
 end

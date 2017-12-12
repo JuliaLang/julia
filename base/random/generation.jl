@@ -125,6 +125,63 @@ end
 
 ### BitInteger
 
+# there are two implemented samplers for unit ranges, which assume that Float64 (i.e.
+# 52 random bits) is the native type for the RNG:
+# 1) "Fast", which is the most efficient when the underlying RNG produces rand(Float64)
+#     "fast enough". The tradeoff is faster creation of the sampler, but more
+#     consumption of entropy bits
+# 2) "Default" which tries to use as few entropy bits as possible, at the cost of a
+#    a bigger upfront price associated with the creation of the sampler
+
+#### Fast
+
+struct SamplerRangeFast{U<:BitUnsigned,T<:Union{BitInteger,Bool}} <: Sampler
+    a::T      # first element of the range
+    bw::UInt  # bit width
+    m::U      # range length - 1
+    mask::U   # mask generated values before threshold rejection
+end
+
+function SamplerRangeFast(r::AbstractUnitRange{T}) where T<:Union{Base.BitInteger64,Bool}
+    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    m = last(r) % UInt64 - first(r) % UInt64
+    bw = (64 - leading_zeros(m)) % UInt # bit-width
+    mask = (1 % UInt64 << bw) - (1 % UInt64)
+    SamplerRangeFast{UInt64,T}(first(r), bw, m, mask)
+end
+
+function SamplerRangeFast(r::AbstractUnitRange{T}) where T<:Union{Int128,UInt128}
+    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    m = (last(r)-first(r)) % UInt128
+    bw = (128 - leading_zeros(m)) % UInt # bit-width
+    mask = (1 % UInt128 << bw) - (1 % UInt128)
+    SamplerRangeFast{UInt128,T}(first(r), bw, m, mask)
+end
+
+function rand_lteq(r::AbstractRNG, randfun, u::U, mask::U) where U<:Integer
+    while true
+        x = randfun(r) & mask
+        x <= u && return x
+    end
+end
+
+function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt64,T}) where T
+    a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
+    x = bw <= 52 ? rand_lteq(rng, rand_ui52_raw, m, mask) :
+                   rand_lteq(rng, rng->rand(rng, UInt64), m, mask)
+    (x + a % UInt64) % T
+end
+
+function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt128,T}) where T
+    a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
+    x = bw <= 52  ? rand_lteq(rng, rand_ui52_raw, m % UInt64, mask % UInt64) % UInt128 :
+        bw <= 104 ? rand_lteq(rng, rand_ui104_raw, m, mask) :
+                    rand_lteq(rng, rng->rand(rng, UInt128), m, mask)
+    x % T + a
+end
+
+#### Default
+
 # remainder function according to Knuth, where rem_knuth(a, 0) = a
 rem_knuth(a::UInt, b::UInt) = a % (b + (b == 0)) + a * (b == 0)
 rem_knuth(a::T, b::T) where {T<:Unsigned} = b != 0 ? a % b : a
