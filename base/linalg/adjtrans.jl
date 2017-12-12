@@ -55,6 +55,8 @@ Transpose(A::Transpose) = A.parent
 
 # some aliases for internal convenience use
 const AdjOrTrans{T,S} = Union{Adjoint{T,S},Transpose{T,S}} where {T,S}
+const AdjointAbsVec{T} = Adjoint{T,<:AbstractVector}
+const TransposeAbsVec{T} = Transpose{T,<:AbstractVector}
 const AdjOrTransAbsVec{T} = AdjOrTrans{T,<:AbstractVector}
 const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
 
@@ -97,6 +99,15 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
 vec(v::AdjOrTransAbsVec) = v.parent
+
+
+### concatenation
+# preserve Adjoint/Transpose wrapper around vectors
+# to retain the associated semantics post-concatenation
+hcat(avs::Union{Number,AdjointAbsVec}...) = Adjoint(vcat(map(Adjoint, avs)...))
+hcat(avs::Union{Number,TransposeAbsVec}...) = Transpose(vcat(map(Transpose, avs)...))
+typed_hcat(::Type{T}, avs::Union{Number,AdjointAbsVec}...) where {T} = Adjoint(typed_vcat(T, map(Adjoint, avs)...))
+typed_hcat(::Type{T}, avs::Union{Number,TransposeAbsVec}...) where {T} = Transpose(typed_vcat(T, map(Transpose, avs)...))
 
 
 ### linear algebra

@@ -286,3 +286,20 @@ end
     @test vec(Adjoint(intvec)) === intvec
     @test vec(Transpose(intvec)) === intvec
 end
+
+@testset "horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers" begin
+    # horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers
+    # should preserve the Adjoint/Transpose-wrapper to preserve semantics downstream
+    vec, tvec, avec = [1im, 2im], [1im 2im], [-1im -2im]
+    vecvec = [[1im, 2im], [3im, 4im]]
+    tvecvec = [[[1im 2im]] [[3im 4im]]]
+    avecvec = [[[-1im -2im]] [[-3im -4im]]]
+    # for arrays with concrete scalar eltype
+    @test hcat(Adjoint(vec), Adjoint(vec))::Adjoint{Complex{Int},Vector{Complex{Int}}} == hcat(avec, avec)
+    @test hcat(Adjoint(vec), 1, Adjoint(vec))::Adjoint{Complex{Int},Vector{Complex{Int}}} == hcat(avec, 1, avec)
+    @test hcat(Transpose(vec), Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == hcat(tvec, tvec)
+    @test hcat(Transpose(vec), 1, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == hcat(tvec, 1, tvec)
+    # for arrays with concrete array eltype
+    @test hcat(Adjoint(vecvec), Adjoint(vecvec))::Adjoint{Adjoint{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == hcat(avecvec, avecvec)
+    @test hcat(Transpose(vecvec), Transpose(vecvec))::Transpose{Transpose{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == hcat(tvecvec, tvecvec)
+end
