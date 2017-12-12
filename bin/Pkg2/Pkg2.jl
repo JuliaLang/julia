@@ -1,3 +1,5 @@
+# Trimmed-down code from Pkg2 with only the essential parts needed by loadmeta.jl
+
 module Pkg2
 
 struct PkgError <: Exception
@@ -39,9 +41,5 @@ dir(pkg::AbstractString...) = normpath(dir(),pkg...)
 
 include("types.jl")
 include("reqs.jl")
-include("query.jl")
-# include("read.jl")
-include("resolve.jl")
-
 
 end

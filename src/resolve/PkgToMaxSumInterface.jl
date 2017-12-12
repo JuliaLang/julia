@@ -2,7 +2,8 @@
 
 module PkgToMaxSumInterface
 
-using ...Types, ...Query, ..VersionWeights
+using ...Types
+using ...Query, ..VersionWeights
 
 export Interface, compute_output_dict, greedysolver,
        verify_solution, enforce_optimality!
@@ -12,10 +13,10 @@ export Interface, compute_output_dict, greedysolver,
 mutable struct Interface
     # requirements and dependencies, in external representation
     reqs::Requires
-    deps::Dict{String,Dict{VersionNumber,Available}}
+    deps::DepsGraph
 
     # packages list
-    pkgs::Vector{String}
+    pkgs::Vector{UUID}
 
     # number of packages
     np::Int
@@ -23,8 +24,8 @@ mutable struct Interface
     # states per package: one per version + uninstalled
     spp::Vector{Int}
 
-    # pakage dict: associates an index to each package name
-    pdict::Dict{String,Int}
+    # pakage dict: associates an index to each package id
+    pdict::Dict{UUID,Int}
 
     # package versions: for each package, keep the list of the
     #                   possible version numbers; this defines a
@@ -42,14 +43,14 @@ mutable struct Interface
     #                   higher the weight, the more favored the version)
     vweight::Vector{Vector{VersionWeight}}
 
-    function Interface(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
+    function Interface(reqs::Requires, deps::DepsGraph)
         # generate pkgs
-        pkgs = sort!(String[keys(deps)...])
+        pkgs = sort!(collect(keys(deps)))
 
         np = length(pkgs)
 
         # generate pdict
-        pdict = Dict{String,Int}(pkgs[i] => i for i = 1:np)
+        pdict = Dict{UUID,Int}(pkgs[i] => i for i = 1:np)
 
         # generate spp and pvers
         spp = Vector{Int}(np)
@@ -104,7 +105,7 @@ function compute_output_dict(sol::Vector{Int}, interface::Interface)
     pvers = interface.pvers
     spp = interface.spp
 
-    want = Dict{String,VersionNumber}()
+    want = Dict{UUID,VersionNumber}()
     for p0 = 1:np
         p = pkgs[p0]
         s = sol[p0]
@@ -146,19 +147,19 @@ function greedysolver(interface::Interface)
 
     # we start from required packages and explore the graph
     # following dependencies
-    staged = Set{String}(keys(reqs))
+    staged = Set{UUID}(keys(reqs))
     seen = copy(staged)
 
     while !isempty(staged)
-        staged_next = Set{String}()
+        staged_next = Set{UUID}()
         for p in staged
             p0 = pdict[p]
             @assert sol[p0] < spp[p0]
             vn = pvers[p0][sol[p0]]
-            a = deps[p][vn]
+            vdep = deps[p][vn]
 
             # scan dependencies
-            for (rp,rvs) in a.requires
+            for (rp,rvs) in vdep
                 rp0 = pdict[rp]
                 # look for the highest version which satisfies the requirements
                 rv = spp[rp0] - 1
@@ -208,13 +209,13 @@ function verify_solution(sol::Vector{Int}, interface::Interface)
     end
 
     # verify dependencies
-    for (p,d) in deps
+    for (p,depsp) in deps
         p0 = pdict[p]
         vdict0 = vdict[p0]
-        for (vn,a) in d
+        for (vn,vdep) in depsp
             v0 = vdict0[vn]
             if sol[p0] == v0
-                for (rp, rvs) in a.requires
+                for (rp, rvs) in vdep
                     p1 = pdict[rp]
                     if sol[p1] == spp[p1]
                         println("""
@@ -255,20 +256,20 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
     # prepare some useful structures
     # pdeps[p0][v0] has all dependencies of package p0 version v0
     pdeps = [Vector{Requires}(spp[p0]-1) for p0 = 1:np]
-    # prevdeps[p1][p0][v0] is the VersionSet of package p1 which package p0 version v0
+    # prevdeps[p1][p0][v0] is the VersionSpec of package p1 which package p0 version v0
     # depends upon
-    prevdeps = [Dict{Int,Dict{Int,VersionSet}}() for p0 = 1:np]
+    prevdeps = [Dict{Int,Dict{Int,VersionSpec}}() for p0 = 1:np]
 
-    for (p,d) in deps
+    for (p,depsp) in deps
         p0 = pdict[p]
         vdict0 = vdict[p0]
-        for (vn,a) in d
+        for (vn,vdep) in depsp
             v0 = vdict0[vn]
-            pdeps[p0][v0] = a.requires
-            for (rp, rvs) in a.requires
+            pdeps[p0][v0] = vdep
+            for (rp,rvs) in vdep
                 p1 = pdict[rp]
                 if !haskey(prevdeps[p1], p0)
-                    prevdeps[p1][p0] = Dict{Int,VersionSet}()
+                    prevdeps[p1][p0] = Dict{Int,VersionSpec}()
                 end
                 prevdeps[p1][p0][v0] = rvs
             end
@@ -331,20 +332,20 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
     # start from the required ones and keep only
     # the packages reachable from them along the graph
     uninst = trues(np)
-    staged = Set{String}(keys(reqs))
+    staged = Set{UUID}(keys(reqs))
     seen = copy(staged)
 
     while !isempty(staged)
-        staged_next = Set{String}()
+        staged_next = Set{UUID}()
         for p in staged
             p0 = pdict[p]
             uninst[p0] = false
             @assert sol[p0] < spp[p0]
             vn = pvers[p0][sol[p0]]
-            a = deps[p][vn]
+            vdep = deps[p][vn]
 
             # scan dependencies
-            for (rp,rvs) in a.requires
+            for (rp,rvs) in vdep
                 rp0 = pdict[rp]
                 @assert sol[rp0] < spp[rp0] && pvers[rp0][sol[rp0]] ∈ rvs
                 rp ∈ seen || push!(staged_next, rp)

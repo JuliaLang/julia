@@ -1,13 +1,16 @@
 module Types
 
 using Base.Random: UUID
-using Pkg3.Pkg2.Types: VersionSet, Available
+using SHA
 using Pkg3: TOML, TerminalMenus, Dates
 
 import Pkg3
 import Pkg3: depots, logdir, iswindows
 
-export SHA1, VersionRange, VersionSpec, PackageSpec, UpgradeLevel, EnvCache,
+export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
+    Requires, Fixed, DepsGraph, merge_requires!, satisfies,
+    PkgError, ResolveBacktraceItem, ResolveBacktrace, showitem,
+    PackageSpec, UpgradeLevel, EnvCache,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
@@ -17,6 +20,30 @@ export SHA1, VersionRange, VersionSpec, PackageSpec, UpgradeLevel, EnvCache,
 
 Base.isless(a::UUID, b::UUID) = a.value < b.value
 Base.convert(::Type{String}, u::UUID) = string(u)
+
+## Computing UUID5 values from (namespace, key) pairs ##
+function uuid5(namespace::UUID, key::String)
+    data = [reinterpret(UInt8, [namespace.value]); Vector{UInt8}(key)]
+    u = reinterpret(UInt128, sha1(data)[1:16])[1]
+    u &= 0xffffffffffff0fff3fffffffffffffff
+    u |= 0x00000000000050008000000000000000
+    return UUID(u)
+end
+uuid5(namespace::UUID, key::AbstractString) = uuid5(namespace, String(key))
+
+const uuid_dns = UUID(0x6ba7b810_9dad_11d1_80b4_00c04fd430c8)
+const uuid_julia = uuid5(uuid_dns, "julialang.org")
+const uuid_package = uuid5(uuid_julia, "package")
+const uuid_registry = uuid5(uuid_julia, "registry")
+
+
+## user-friendly representation of package IDs ##
+
+function pkgID(p::UUID, uuid_to_name::Dict{UUID,String})
+    name = haskey(uuid_to_name, p) ? uuid_to_name[p] : "UNKNOWN"
+    uuid_short = string(p)[1:8]
+    return "$name [$uuid_short]"
+end
 
 ## SHA1 ##
 
@@ -68,13 +95,65 @@ Base.getindex(b::VersionBound, i::Int) = b.t[i]
 ≳(v::VersionNumber, b::VersionBound) = v ≲ b
 ≳(b::VersionBound, v::VersionNumber) = b ≲ v
 
+# Comparison between two lower bounds
+# (could be done with generated functions, or even manually unrolled...)
+function isless_ll(a::VersionBound{m}, b::VersionBound{n}) where {m,n}
+    for i = 1:min(m,n)
+        a[i] < b[i] && return true
+        a[i] > b[i] && return false
+    end
+    return m < n
+end
+
+stricterlower(a::VersionBound, b::VersionBound) = isless_ll(a, b) ? b : a
+
+# Comparison between two upper bounds
+# (could be done with generated functions, or even manually unrolled...)
+function isless_uu(a::VersionBound{m}, b::VersionBound{n}) where {m,n}
+    for i = 1:min(m,n)
+        a[i] < b[i] && return true
+        a[i] > b[i] && return false
+    end
+    return m > n
+end
+
+stricterupper(a::VersionBound, b::VersionBound) = isless_uu(a, b) ? a : b
+
+# `isjoinable` compares an upper bound of a range with the lower bound of the next range
+# to determine if they can be joined, as in [1.5-2.8, 2.5-3] -> [1.5-3]. Used by `union!`.
+# The equal-length-bounds case is special since e.g. `1.5` can be joined with `1.6`,
+# `2.3.4` can be joined with `2.3.5` etc.
+
+isjoinable(up::VersionBound{0}, lo::VersionBound{0}) = true
+
+function isjoinable(up::VersionBound{n}, lo::VersionBound{n}) where {n}
+    for i = 1:(n - 1)
+        up[i] > lo[i] && return true
+        up[i] < lo[i] && return false
+    end
+    up[n] < lo[n] - 1 && return false
+    return true
+end
+
+function isjoinable(up::VersionBound{m}, lo::VersionBound{n}) where {m,n}
+    l = min(m,n)
+    for i = 1:l
+        up[i] > lo[i] && return true
+        up[i] < lo[i] && return false
+    end
+    return true
+end
+
+
+Base.hash(r::VersionBound, h::UInt) = hash(r.t, h)
+
 Base.convert(::Type{VersionBound}, s::AbstractString) =
-    VersionBound(map(x->parse(Int, x), split(s, '.'))...)
+    s == "*" ? VersionBound() : VersionBound(map(x->parse(Int, x), split(s, '.'))...)
 
 struct VersionRange{m,n}
     lower::VersionBound{m}
     upper::VersionBound{n}
-    # TODO: check non-emptiness of range?
+    # NOTE: ranges are allowed to be empty; they are ignored by VersionSpec anyway
 end
 VersionRange(b::VersionBound=VersionBound()) = VersionRange(b, b)
 VersionRange(t::Integer...) = VersionRange(VersionBound(t...))
@@ -82,9 +161,16 @@ VersionRange(t::Integer...) = VersionRange(VersionBound(t...))
 Base.convert(::Type{VersionRange}, v::VersionNumber) =
     VersionRange(VersionBound(v))
 
+function Base.isempty(r::VersionRange{m,n}) where {m,n}
+    for i = 1:min(m,n)
+        r.lower[i] > r.upper[i] && return true
+        r.lower[i] < r.upper[i] && return false
+    end
+    return false
+end
+
 function Base.convert(::Type{VersionRange}, s::AbstractString)
-    ismatch(r"^\s*\*\s*$", s) && return VersionRange()
-    m = match(r"^\s*(\d+(?:\.\d+)?(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?(?:\.\d+)?))?\s*$", s)
+    m = match(r"^\s*((?:\d+(?:\.\d+)?(?:\.\d+)?)|\*)(?:\s*-\s*((?:\d+(?:\.\d+)?(?:\.\d+)?)|\*))?\s*$", s)
     m == nothing && throw(ArgumentError("invalid version range: $(repr(s))"))
     lower = VersionBound(m.captures[1])
     upper = m.captures[2] != nothing ? VersionBound(m.captures[2]) : lower
@@ -104,9 +190,47 @@ Base.show(io::IO, r::VersionRange) = print(io, "VersionRange(\"", r, "\")")
 Base.in(v::VersionNumber, r::VersionRange) = r.lower ≲ v ≲ r.upper
 Base.in(v::VersionNumber, r::VersionNumber) = v == r
 
+Base.intersect(a::VersionRange, b::VersionRange) = VersionRange(stricterlower(a.lower,b.lower), stricterupper(a.upper,b.upper))
+
+function Base.union!(ranges::Vector{<:VersionRange})
+    l = length(ranges)
+    l == 0 && return ranges
+
+    sort!(ranges, lt=(a,b)->(isless_ll(a.lower, b.lower) || (a.lower == b.lower && isless_uu(a.upper, b.upper))))
+
+    k0 = 1
+    ks = findfirst(!isempty, ranges)
+    ks == 0 && return empty!(ranges)
+
+    lo, up, k0 = ranges[ks].lower, ranges[ks].upper, 1
+    for k = (ks+1):l
+        isempty(ranges[k]) && continue
+        lo1, up1 = ranges[k].lower, ranges[k].upper
+        if isjoinable(up, lo1)
+            isless_uu(up, up1) && (up = up1)
+            continue
+        end
+        vr = VersionRange(lo, up)
+        @assert !isempty(vr)
+        ranges[k0] = vr
+        k0 += 1
+        lo, up = lo1, up1
+    end
+    vr = VersionRange(lo, up)
+    if !isempty(vr)
+        ranges[k0] = vr
+        k0 += 1
+    end
+    resize!(ranges, k0 - 1)
+    return ranges
+end
+
 struct VersionSpec
     ranges::Vector{VersionRange}
-    VersionSpec(r::Vector{<:VersionRange}) = new(r)
+    VersionSpec(r::Vector{<:VersionRange}) = new(union!(r))
+    # copy is defined inside the struct block to call `new` directly
+    # without going through `union!`
+    Base.copy(vs::VersionSpec) = new(copy(vs.ranges))
 end
 VersionSpec() = VersionSpec(VersionRange())
 
@@ -117,7 +241,32 @@ Base.convert(::Type{VersionSpec}, r::VersionRange) = VersionSpec(VersionRange[r]
 Base.convert(::Type{VersionSpec}, s::AbstractString) = VersionSpec(VersionRange(s))
 Base.convert(::Type{VersionSpec}, v::AbstractVector) = VersionSpec(map(VersionRange, v))
 
+const empty_versionspec = VersionSpec(VersionRange[])
+# Windows console doesn't like Unicode
+const _empty_symbol = @static iswindows() ? "empty" : "∅"
+
+Base.isempty(s::VersionSpec) = all(isempty, s.ranges)
+@assert isempty(empty_versionspec)
+function Base.intersect(A::VersionSpec, B::VersionSpec)
+    (isempty(A) || isempty(B)) && return copy(empty_versionspec)
+    ranges = [intersect(a,b) for a in A.ranges for b in B.ranges]
+    VersionSpec(ranges)
+end
+
+Base.union(A::VersionSpec, B::VersionSpec) = union!(copy(A), B)
+function Base.union!(A::VersionSpec, B::VersionSpec)
+    A == B && return A
+    append!(A.ranges, B.ranges)
+    union!(A.ranges)
+    return A
+end
+
+Base.:(==)(A::VersionSpec, B::VersionSpec) = A.ranges == B.ranges
+Base.hash(s::VersionSpec, h::UInt) = hash(s.ranges, h + (0x2fd2ca6efa023f44 % UInt))
+Base.deepcopy_internal(vs::VersionSpec, ::ObjectIdDict) = copy(vs)
+
 function Base.print(io::IO, s::VersionSpec)
+    isempty(s) && return print(io, _empty_symbol)
     length(s.ranges) == 1 && return print(io, s.ranges[1])
     print(io, '[')
     for i = 1:length(s.ranges)
@@ -128,16 +277,154 @@ function Base.print(io::IO, s::VersionSpec)
 end
 Base.show(io::IO, s::VersionSpec) = print(io, "VersionSpec(\"", s, "\")")
 
-Base.convert(::Type{VersionSet}, v::VersionNumber) = VersionSet(v, Base.nextpatch(v))
-Base.convert(::Type{VersionSet}, r::VersionRange{0,0}) = VersionSet()
-Base.convert(::Type{VersionSet}, r::VersionRange{m,1}) where {m} =
-    VersionSet(VersionNumber(r.lower.t...), VersionNumber(r.upper[1]+1))
-Base.convert(::Type{VersionSet}, r::VersionRange{m,2}) where {m} =
-    VersionSet(VersionNumber(r.lower.t...), VersionNumber(r.upper[1], r.upper[2]+1))
-Base.convert(::Type{VersionSet}, r::VersionRange{m,3}) where {m} =
-    VersionSet(VersionNumber(r.lower.t...), VersionNumber(r.upper[1], r.upper[2], r.upper[3]+1))
-Base.convert(::Type{VersionSet}, s::VersionSpec) = mapreduce(VersionSet, ∪, s.ranges)
-Base.convert(::Type{Available}, t::Tuple{SHA1,Dict{UUID,VersionSpec}}) = Available(t...)
+const Requires = Dict{UUID,VersionSpec}
+
+function merge_requires!(A::Requires, B::Requires)
+    for (pkg,vers) in B
+        A[pkg] = haskey(A,pkg) ? intersect(A[pkg],vers) : vers
+    end
+    return A
+end
+
+satisfies(pkg::UUID, ver::VersionNumber, reqs::Requires) =
+    !haskey(reqs, pkg) || in(ver, reqs[pkg])
+
+const DepsGraph = Dict{UUID,Dict{VersionNumber,Requires}}
+
+struct Fixed
+    version::VersionNumber
+    requires::Requires
+end
+Fixed(v::VersionNumber) = Fixed(v,Requires())
+
+Base.:(==)(a::Fixed, b::Fixed) = a.version == b.version && a.requires == b.requires
+Base.hash(f::Fixed, h::UInt) = hash((f.version, f.requires), h + (0x68628b809fd417ca % UInt))
+
+Base.show(io::IO, f::Fixed) = isempty(f.requires) ?
+    print(io, "Fixed(", repr(f.version), ")") :
+    print(io, "Fixed(", repr(f.version), ",", f.requires, ")")
+
+
+struct PkgError <: Exception
+    msg::AbstractString
+    ex::Nullable{Exception}
+end
+PkgError(msg::AbstractString) = PkgError(msg, Nullable{Exception}())
+
+function Base.showerror(io::IO, pkgerr::PkgError)
+    print(io, pkgerr.msg)
+    if !isnull(pkgerr.ex)
+        pkgex = get(pkgerr.ex)
+        if isa(pkgex, CompositeException)
+            for cex in pkgex
+                print(io, "\n=> ")
+                showerror(io, cex)
+            end
+        else
+            print(io, "\n")
+            showerror(io, pkgex)
+        end
+    end
+end
+
+
+const VersionReq = Union{VersionNumber,VersionSpec}
+const WhyReq = Tuple{VersionReq,Any}
+
+# This is used to keep track of dependency relations when propagating
+# requirements, so as to emit useful information in case of unsatisfiable
+# conditions.
+# The `versionreq` field keeps track of the remaining allowed versions,
+# intersecting all requirements.
+# The `why` field is a Vector which keeps track of the requirements. Each
+# entry is a Tuple of two elements:
+# 1) the first element is the version requirement (can be a single VersionNumber
+#    or a VersionSpec).
+# 2) the second element can be either :fixed (for requirements induced by
+#    fixed packages), :required (for requirements induced by explicitly
+#    required packages), or a Pair p=>backtrace_item (for requirements induced
+#    indirectly, where `p` is the package name and `backtrace_item` is
+#    another ResolveBacktraceItem.
+mutable struct ResolveBacktraceItem
+    versionreq::VersionReq
+    why::Vector{WhyReq}
+    ResolveBacktraceItem() = new(VersionSpec(), WhyReq[])
+    ResolveBacktraceItem(reason, versionreq::VersionReq) = new(versionreq, WhyReq[(versionreq,reason)])
+end
+
+function Base.push!(ritem::ResolveBacktraceItem, reason, versionspec::VersionSpec)
+    if ritem.versionreq isa VersionSpec
+        ritem.versionreq = ritem.versionreq ∩ versionspec
+    elseif ritem.versionreq ∉ versionspec
+        ritem.versionreq = copy(empty_versionspec)
+    end
+    push!(ritem.why, (versionspec,reason))
+end
+
+function Base.push!(ritem::ResolveBacktraceItem, reason, version::VersionNumber)
+    if ritem.versionreq isa VersionSpec
+        if version ∈ ritem.versionreq
+            ritem.versionreq = version
+        else
+            ritem.versionreq = copy(empty_versionspec)
+        end
+    elseif ritem.versionreq ≠ version
+        ritem.versionreq = copy(empty_versionspec)
+    end
+    push!(ritem.why, (version,reason))
+end
+
+
+struct ResolveBacktrace
+    uuid_to_name::Dict{UUID,String}
+    bktrc::Dict{UUID,ResolveBacktraceItem}
+    ResolveBacktrace(uuid_to_name::Dict{UUID,String}) = new(uuid_to_name, Dict{UUID,ResolveBacktraceItem}())
+end
+
+Base.getindex(bt::ResolveBacktrace, p) = bt.bktrc[p]
+Base.setindex!(bt::ResolveBacktrace, v, p) = setindex!(bt.bktrc, v, p)
+Base.haskey(bt::ResolveBacktrace, p) = haskey(bt.bktrc, p)
+Base.get!(bt::ResolveBacktrace, p, def) = get!(bt.bktrc, p, def)
+Base.get!(def::Base.Callable, bt::ResolveBacktrace, p) = get!(def, bt.bktrc, p)
+
+showitem(io::IO, bt::ResolveBacktrace, p) = _show(io, bt.uuid_to_name, bt[p], "", Set{ResolveBacktraceItem}([bt[p]]))
+
+function _show(io::IO, uuid_to_name::Dict{UUID,String}, ritem::ResolveBacktraceItem, indent::String, seen::Set{ResolveBacktraceItem})
+    l = length(ritem.why)
+    for (i,(vs,w)) in enumerate(ritem.why)
+        print(io, indent, (i==l ? '└' : '├'), '─')
+        if w ≡ :fixed
+            @assert vs isa VersionNumber
+            println(io, "version $vs set by fixed requirement (package is checked out, dirty or pinned)")
+        elseif w ≡ :required
+            @assert vs isa VersionSpec
+            println(io, "version range $vs set by an explicit requirement")
+        else
+            @assert w isa Pair{UUID,ResolveBacktraceItem}
+            if vs isa VersionNumber
+                print(io, "version $vs ")
+            else
+                print(io, "version range $vs ")
+            end
+            id = pkgID(w[1], uuid_to_name)
+            otheritem = w[2]
+            print(io, "required by package $id, ")
+            if otheritem.versionreq isa VersionSpec
+                println(io, "whose allowed version range is $(otheritem.versionreq):")
+            else
+                println(io, "whose only allowed version is $(otheritem.versionreq):")
+            end
+            if otheritem ∈ seen
+                println(io, (i==l ? "  " : "│ ") * indent, "└─[see above for $id backtrace]")
+                continue
+            end
+            push!(seen, otheritem)
+            _show(io, uuid_to_name, otheritem, (i==l ? "  " : "│ ") * indent, seen)
+        end
+    end
+end
+
+
 
 ## command errors (no stacktrace) ##
 

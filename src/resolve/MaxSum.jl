@@ -2,7 +2,7 @@
 
 module MaxSum
 
-include("fieldvalue.jl")
+include("FieldValues.jl")
 
 using .FieldValues, ..VersionWeights, ..PkgToMaxSumInterface
 
@@ -34,6 +34,9 @@ mutable struct MaxSumParams
     end
 end
 
+# aux function to make graph generation consistent across platforms
+sortedpairs(d::Dict) = (k=>d[k] for k in sort!(collect(keys(d))))
+
 # Graph holds the graph structure onto which max-sum is run, in
 # sparse format
 mutable struct Graph
@@ -60,8 +63,7 @@ mutable struct Graph
     #   Used to break symmetry between dependants and
     #   dependencies (introduces a FieldValue at level l3).
     #   The "both" case is for when there are dependency
-    #   relations which go both ways, in which case the
-    #   noise is left to discriminate in case of ties
+    #   relations which go both ways
     gdir::Vector{Vector{Int}}
 
     # adjacency dict:
@@ -93,12 +95,12 @@ mutable struct Graph
         gdir = [Int[] for i = 1:np]
         adjdict = [Dict{Int,Int}() for i = 1:np]
 
-        for (p,d) in deps
+        for (p,depsp) in sortedpairs(deps)
             p0 = pdict[p]
             vdict0 = vdict[p0]
-            for (vn,a) in d
+            for (vn,vdep) in sortedpairs(depsp)
                 v0 = vdict0[vn]
-                for (rp, rvs) in a.requires
+                for (rp, rvs) in sortedpairs(vdep)
                     p1 = pdict[rp]
 
                     j0 = 1
@@ -187,15 +189,8 @@ mutable struct Messages
         pdict = interface.pdict
         vweight = interface.vweight
 
-        # a "deterministic noise" function based on hashes
-        function noise(p0::Int, v0::Int)
-            s = pkgs[p0] * string(v0 == spp[p0] ? "UNINST" : pvers[p0][v0])
-            Int128(hash(s))
-        end
-
-        # external fields: there are 2 terms, a noise to break potential symmetries
-        #                  and one to favor newest versions over older, and no-version over all
-        fld = [[FieldValue(0, zero(VersionWeight), vweight[p0][v0], (v0==spp[p0]), 0, noise(p0,v0)) for v0 = 1:spp[p0]] for p0 = 1:np]
+        # external fields: favor newest versions over older, and no-version over all
+        fld = [[FieldValue(0, zero(VersionWeight), vweight[p0][v0], (v0==spp[p0]), 0) for v0 = 1:spp[p0]] for p0 = 1:np]
 
         # enforce requirements
         for (rp, rvs) in reqs
@@ -349,14 +344,14 @@ end
 
 # A simple shuffling machinery for the update order in iterate()
 # (woulnd't pass any random quality test but it's arguably enough)
-let step=1
+let step = 1
 global shuffleperm, shuffleperminit
 shuffleperminit() = (step = 1)
 function shuffleperm(graph::Graph)
     perm = graph.perm
     np = graph.np
     for j = np:-1:2
-        k = mod(step,j)+1
+        k = mod(step,j) + 1
         perm[j], perm[k] = perm[k], perm[j]
         step += isodd(j) ? 1 : k
     end

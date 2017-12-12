@@ -4,7 +4,6 @@ module Reqs
 
 import Base: ==
 import ..PkgError
-using ..Reqs
 using ..Types
 
 # representing lines of REQUIRE files

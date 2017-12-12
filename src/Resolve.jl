@@ -2,17 +2,20 @@
 
 module Resolve
 
-include(joinpath("resolve", "versionweight.jl"))
-include(joinpath("resolve", "interface.jl"))
-include(joinpath("resolve", "maxsum.jl"))
+include(joinpath("resolve", "VersionWeights.jl"))
+include(joinpath("resolve", "PkgToMaxSumInterface.jl"))
+include(joinpath("resolve", "MaxSum.jl"))
 
-using ..Types, ..Query, .PkgToMaxSumInterface, .MaxSum
-import ..PkgError
+using ..Types
+using ..Query, .PkgToMaxSumInterface, .MaxSum
+import ..Types: uuid_julia
 
 export resolve, sanity_check
 
 # Use the max-sum algorithm to resolve packages dependencies
-function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, uuid_to_name::Dict{String,String})
+function resolve(reqs::Requires, deps::DepsGraph, uuid_to_name::Dict{UUID,String})
+    id(p) = pkgID(p, uuid_to_name)
+
     # init interface structures
     interface = Interface(reqs, deps)
 
@@ -28,15 +31,13 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
         catch err
             isa(err, UnsatError) || rethrow(err)
             p = interface.pkgs[err.info]
-            name = haskey(uuid_to_name, p) ? uuid_to_name[p] : "UNKNOWN"
-            uuid_short = p[1:8]
             # TODO: build tools to analyze the problem, and suggest to use them here.
             msg =
                 """
                 resolve is unable to satisfy package requirements.
                   The problem was detected when trying to find a feasible version
-                  for package $name [$uuid_short].
-                  However, this only means that package $name [$uuid_short] is involved in an
+                  for package $(id(p)).
+                  However, this only means that package $(id(p)) is involved in an
                   unsatisfiable or difficult dependency relation, and the root of
                   the problem may be elsewhere.
                 """
@@ -61,28 +62,29 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
 end
 
 # Scan dependencies for (explicit or implicit) contradictions
-function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
-                      uuid_to_name::Dict{String,String},
-                      pkgs::Set{String} = Set{String}())
+function sanity_check(deps::DepsGraph, uuid_to_name::Dict{UUID,String},
+                      pkgs::Set{UUID} = Set{UUID}())
+    id(p) = pkgID(p, uuid_to_name)
+
     isempty(pkgs) || (deps = Query.undirected_dependencies_subset(deps, pkgs))
 
     deps, eq_classes = Query.prune_versions(deps, uuid_to_name)
 
-    ndeps = Dict{String,Dict{VersionNumber,Int}}()
+    ndeps = Dict{UUID,Dict{VersionNumber,Int}}()
 
     for (p,depsp) in deps
         ndeps[p] = ndepsp = Dict{VersionNumber,Int}()
-        for (vn,a) in depsp
-            ndepsp[vn] = length(a.requires)
+        for (vn,vdep) in depsp
+            ndepsp[vn] = length(vdep)
         end
     end
 
-    vers = [(p,vn) for (p,d) in deps for vn in keys(d)]
+    vers = [(p,vn) for (p,depsp) in deps for vn in keys(depsp)]
     sort!(vers, by=pvn->(-ndeps[pvn[1]][pvn[2]]))
 
     nv = length(vers)
 
-    svdict = Dict{Tuple{String,VersionNumber},Int}(vers[i][1:2]=>i for i = 1:nv)
+    svdict = Dict{Tuple{UUID,VersionNumber},Int}(vers[i][1:2]=>i for i = 1:nv)
 
     checked = falses(nv)
 
@@ -92,26 +94,23 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
         ndeps[p][vn] == 0 && break
         checked[i] && (i += 1; continue)
 
-        fixed = Dict{String,Fixed}(p=>Fixed(vn, deps[p][vn].requires), "julia"=>Fixed(VERSION))
-        sub_reqs = Dict{String,VersionSet}()
-        bktrc = Query.init_resolve_backtrace(sub_reqs, fixed)
+        fixed = Dict{UUID,Fixed}(p=>Fixed(vn, deps[p][vn]), uuid_julia=>Fixed(VERSION))
+        sub_reqs = Requires()
+        bktrc = Query.init_resolve_backtrace(uuid_to_name, sub_reqs, fixed)
         Query.propagate_fixed!(sub_reqs, bktrc, fixed)
-        sub_deps = Query.dependencies_subset(deps, Set{String}([p]))
+        sub_deps = Query.dependencies_subset(deps, Set{UUID}([p]))
         sub_deps, conflicts = Query.dependencies(sub_deps, fixed)
 
         try
             for rp in keys(sub_reqs)
-                if !haskey(sub_deps, rp)
-                    name = uuid_to_name[rp]
-                    uuid_short = rp[1:8]
-                    if "julia" in conflicts[rp]
-                        throw(PkgError("$name [$uuid_short] can't be installed because it has no versions that support $VERSION " *
-                           "of julia. You may need to update METADATA by running `Pkg.update()`"))
-                    else
-                        sconflicts = join(map(p1->"$(uuid_to_name[p1]) [$(p1[1:8])]", conflicts[rp]), ", ", " and ")
-                        throw(PkgError("$name's [$uuid_short] requirements can't be satisfied because " *
-                            "of the following fixed packages: $sconflicts"))
-                    end
+                haskey(sub_deps, rp) && continue
+                if uuid_julia in conflicts[rp]
+                    throw(PkgError("$(id(rp)) can't be installed because it has no versions that support $VERSION " *
+                       "of julia. You may need to update METADATA by running `Pkg.update()`"))
+                else
+                    sconflicts = join(map(id, conflicts[rp]), ", ", " and ")
+                    throw(PkgError("$(id(rp)) requirements can't be satisfied because " *
+                        "of the following fixed packages: $sconflicts"))
                 end
             end
             Query.check_requirements(sub_reqs, sub_deps, fixed, uuid_to_name)
@@ -120,7 +119,7 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
             isa(err, PkgError) || rethrow(err)
             ## info("ERROR MESSAGE:\n" * err.msg)
             for vneq in eq_classes[p][vn]
-                push!(problematic, (p, vneq, ""))
+                push!(problematic, (id(p), vneq, ""))
             end
             i += 1
             continue
