@@ -7,7 +7,7 @@ Arnoldi and Lanczos iteration for computing eigenvalues
 """
 module IterativeEigenSolvers
 
-using Base.LinAlg: BlasFloat, BlasInt, SVD, checksquare
+using Base.LinAlg: BlasFloat, BlasInt, SVD, checksquare, mul!, Adjoint, Transpose
 
 export eigs, svds
 
@@ -152,7 +152,7 @@ function _eigs(A, B;
     end
 
     # Refer to ex-*.doc files in ARPACK/DOCUMENTS for calling sequence
-    matvecA!(y, x) = A_mul_B!(y, A, x)
+    matvecA!(y, x) = mul!(y, A, x)
     if !isgeneral           # Standard problem
         matvecB = x -> x
         if !isshift         #    Regular mode
@@ -207,8 +207,8 @@ end
 
 function Base.LinAlg.mul!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
     m, mn = size(A.X, 1), length(x)
-    A_mul_B!( view(y, 1:m), A.X, view(x, m + 1:mn)) # left singular vector
-    Ac_mul_B!(view(y, m + 1:mn), A.X, view(x, 1:m)) # right singular vector
+    mul!( view(y, 1:m), A.X, view(x, m + 1:mn)) # left singular vector
+    mul!(view(y, m + 1:mn), Adjoint(A.X), view(x, 1:m)) # right singular vector
     return y
 end
 Base.size(A::SVDAugmented)  = ((+)(size(A.X)...), (+)(size(A.X)...))
@@ -227,11 +227,11 @@ end
 
 function Base.LinAlg.mul!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
     if size(A.A, 1) >= size(A.A, 2)
-        A_mul_B!(A.buffer, A.A, x)
-        return Ac_mul_B!(y, A.A, A.buffer)
+        mul!(A.buffer, A.A, x)
+        return mul!(y, Adjoint(A.A), A.buffer)
     else
-        Ac_mul_B!(A.buffer, A.A, x)
-        return A_mul_B!(y, A.A, A.buffer)
+        mul!(A.buffer, Adjoint(A.A), x)
+        return mul!(y, A.A, A.buffer)
     end
 end
 Base.size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val(2))
