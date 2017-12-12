@@ -8,12 +8,19 @@ else
     import Dates
 end
 
-const DEPOTS = [joinpath(homedir(), ".julia")]
-depots() = DEPOTS
-logdir() = joinpath(DEPOTS[1], "logs")
+@enum LoadErrorChoice LOAD_ERROR_QUERY LOAD_ERROR_INSTALL LOAD_ERROR_ERROR
 
-const USE_LIBGIT2_FOR_ALL_DOWNLOADS = false
-const NUM_CONCURRENT_DOWNLOADS      = 8
+Base.@kwdef mutable struct GlobalSettings
+    load_error_choice::LoadErrorChoice = LOAD_ERROR_QUERY # query, install, or error, when not finding package on import
+    use_libgit2_for_all_downloads::Bool = false
+    num_concurrent_downloads::Int = 8
+    depots::Vector{String} = [joinpath(homedir(), ".julia")]
+end
+
+const GLOBAL_SETTINGS = GlobalSettings()
+
+depots() = GLOBAL_SETTINGS.depots
+logdir() = joinpath(depots()[1], "logs")
 
 iswindows() = @static VERSION < v"0.7-" ? Sys.is_windows() : Sys.iswindows()
 isapple()   = @static VERSION < v"0.7-" ? Sys.is_apple()   : Sys.isapple()
@@ -44,14 +51,6 @@ include("API.jl")
 
 import .API: add, rm, up, test, gc, init
 const update = up
-
-@enum LoadErrorChoice LOAD_ERROR_QUERY LOAD_ERROR_INSTALL LOAD_ERROR_ERROR
-
-Base.@kwdef mutable struct GlobalSettings
-    load_error_choice::LoadErrorChoice = LOAD_ERROR_QUERY # query, install, or error, when not finding package on import
-end
-
-GLOBAL_SETTINGS = GlobalSettings()
 
 function __init__()
     push!(empty!(LOAD_PATH), dirname(dirname(@__DIR__)))

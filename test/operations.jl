@@ -39,6 +39,10 @@ temp_pkg_dir() do project_path
     Pkg3.test(TEST_PKG)
     Pkg3.test(TEST_PKG; preview = true)
 
+    Pkg3.GLOBAL_SETTINGS.use_libgit2_for_all_downloads = true
+    Pkg3.add("Example")
+    Pkg3.GLOBAL_SETTINGS.use_libgit2_for_all_downloads = false
+
     try
         Pkg3.add([PackageSpec(TEST_PKG, VersionSpec(v"55"))])
     catch e
@@ -63,6 +67,8 @@ temp_pkg_dir() do project_path
                 Pkg3.init()
                 @test !isinstalled(TEST_PKG)
                 @test isfile(joinpath(tmp, "Project.toml"))
+                Pkg3.add(TEST_PKG)
+                @test isinstalled(TEST_PKG)
             end
         end
     end
