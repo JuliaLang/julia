@@ -110,9 +110,13 @@ rand(r::AbstractRNG, ::SamplerTrivial{UInt52Raw{UInt64}}) =
 _rand52(r::AbstractRNG, ::Type{Float64}) = reinterpret(UInt64, rand(r, Close1Open2()))
 _rand52(r::AbstractRNG, ::Type{UInt64})  = rand(r, UInt64)
 
-rand(r::AbstractRNG, ::SamplerTrivial{UInt10{UInt16}}) = rand(r, UInt10Raw()) & 0x03ff
-rand(r::AbstractRNG, ::SamplerTrivial{UInt23{UInt32}}) = rand(r, UInt23Raw()) & 0x007fffff
-rand(r::AbstractRNG, ::SamplerTrivial{UInt52{UInt64}}) = rand(r, UInt52Raw()) & 0x000fffffffffffff
+rand(r::AbstractRNG, ::SamplerTrivial{UInt104Raw{UInt128}}) =
+    rand(r, UInt52Raw(UInt128)) << 52 ⊻ rand_inbounds(r, UInt52Raw(UInt128))
+
+rand(r::AbstractRNG, ::SamplerTrivial{UInt10{UInt16}})   = rand(r, UInt10Raw())  & 0x03ff
+rand(r::AbstractRNG, ::SamplerTrivial{UInt23{UInt32}})   = rand(r, UInt23Raw())  & 0x007fffff
+rand(r::AbstractRNG, ::SamplerTrivial{UInt52{UInt64}})   = rand(r, UInt52Raw())  & 0x000fffffffffffff
+rand(r::AbstractRNG, ::SamplerTrivial{UInt104{UInt128}}) = rand(r, UInt104Raw()) & 0x000000ffffffffffffffffffffffffff
 
 rand(r::AbstractRNG, sp::SamplerTrivial{<:UniformBits{T}}) where {T} =
         rand(r, uint_default(sp[])) % T
@@ -199,60 +203,80 @@ end
 rem_knuth(a::UInt, b::UInt) = a % (b + (b == 0)) + a * (b == 0)
 rem_knuth(a::T, b::T) where {T<:Unsigned} = b != 0 ? a % b : a
 
-# maximum multiple of k <= 2^bits(T) decremented by one,
-# that is 0xFFFF...FFFF if k = typemax(T) - typemin(T) with intentional underflow
+# maximum multiple of k <= sup decremented by one,
+# that is 0xFFFF...FFFF if k = (typemax(T) - typemin(T)) + 1 and sup == typemax(T) - 1
+# with intentional underflow
 # see http://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
-maxmultiple(k::T) where {T<:Unsigned} =
-    (div(typemax(T) - k + one(k), k + (k == 0))*k + k - one(k))::T
 
-# serves as rejection threshold
-_maxmultiple(k)  = maxmultiple(k)
+# sup == 0 means typemax(T) + 1
+maxmultiple(k::T, sup::T=zero(T)) where {T<:Unsigned} =
+    (div(sup - k, k + (k == 0))*k + k - one(k))::T
 
-# maximum multiple of k within 1:2^32 or 1:2^64 decremented by one, depending on size
-_maxmultiple(k::UInt64)::UInt64 = k >> 32 != 0 ?
-    maxmultiple(k) :
-    div(0x0000000100000000, k + (k == 0))*k - one(k)
+# similar but sup must not be equal to typemax(T)
+unsafe_maxmultiple(k::T, sup::T) where {T<:Unsigned} =
+    div(sup, k + (k == 0))*k - one(k)
+
 
 struct SamplerRangeInt{T<:Union{Bool,Integer},U<:Unsigned} <: Sampler
-    a::T   # first element of the range
-    k::U   # range length or zero for full range
-    u::U   # rejection threshold
-end
-
-function SamplerRangeInt(a::T, diff::U) where {T<:Union{Bool,Integer},U<:Unsigned}
-    k = diff+one(U)
-    SamplerRangeInt{T,U}(a, k, _maxmultiple(k)) # overflow ok
+    a::T      # first element of the range
+    bw::Int   # bit width
+    k::U      # range length or zero for full range
+    u::U      # rejection threshold
 end
 
 uint_sup(::Type{<:Union{Bool,BitInteger}}) = UInt32
 uint_sup(::Type{<:Union{Int64,UInt64}}) = UInt64
 uint_sup(::Type{<:Union{Int128,UInt128}}) = UInt128
 
-function SamplerRangeInt(r::AbstractUnitRange{T}) where T<:Union{Bool,BitInteger}
+SamplerRangeInt(r::AbstractUnitRange{T}) where T<:Union{Bool,BitInteger} =
+    SamplerRangeInt(r, uint_sup(T))
+
+function SamplerRangeInt(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
     isempty(r) && throw(ArgumentError("range must be non-empty"))
-    SamplerRangeInt(first(r), (last(r) - first(r)) % uint_sup(T))
+    a = first(r)
+    m = (last(r) - first(r)) % U
+    k = m + one(U)
+    bw = (sizeof(U) << 3 - leading_zeros(m)) % Int
+    mult = if U === UInt32
+        maxmultiple(k)
+    elseif U === UInt64
+        bw <= 52 ? unsafe_maxmultiple(k, one(UInt64) << 52) :
+                   maxmultiple(k)
+    else # U === UInt128
+        bw <= 52  ? unsafe_maxmultiple(k, one(UInt128) << 52) :
+        bw <= 104 ? unsafe_maxmultiple(k, one(UInt128) << 104) :
+                    maxmultiple(k)
+    end
+
+    SamplerRangeInt{T,U}(a, bw, k, mult) # overflow ok
 end
 
-Sampler(::AbstractRNG, r::AbstractUnitRange{T}, ::Repetition) where {T<:Union{Bool,BitInteger}} =
-    SamplerRangeInt(r)
+Sampler(::AbstractRNG, r::AbstractUnitRange{T},
+        ::Repetition) where {T<:Union{Bool,BitInteger}} = SamplerRangeInt(r)
 
-function rand_lteq(rng::AbstractRNG, u::T)::T where T
+function rand_lteq(rng::AbstractRNG, S, u::T)::T where T
     while true
-        x = rand(rng, T)
+        x = rand(rng, S)
         x <= u && return x
     end
 end
 
-# this function uses 32 bit entropy for small ranges of length <= typemax(UInt32) + 1
+rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt32}) where {T<:Union{Bool,BitInteger}} =
+    (unsigned(sp.a) + rem_knuth(rand_lteq(rng, Val(UInt32), sp.u), sp.k)) % T
+
+# this function uses 52 bit entropy for small ranges of length <= 2^52
 function rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt64}) where T<:BitInteger
-    x::UInt64 = (sp.k - 1) >> 32 == 0 ?
-        rand_lteq(rng, sp.u % UInt32) % UInt64 :
-        rand_lteq(rng, sp.u)
+    x = sp.bw <= 52 ? rand_lteq(rng, UInt52(), sp.u) :
+                      rand_lteq(rng, Val(UInt64), sp.u)
     return ((sp.a % UInt64) + rem_knuth(x, sp.k)) % T
 end
 
-rand(rng::AbstractRNG, sp::SamplerRangeInt{T,U}) where {T<:Union{Bool,BitInteger},U} =
-    (unsigned(sp.a) + rem_knuth(rand_lteq(rng, sp.u), sp.k)) % T
+function rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt128}) where T<:BitInteger
+    x = sp.bw <= 52  ? rand_lteq(rng, UInt52(UInt128), sp.u) :
+        sp.bw <= 104 ? rand_lteq(rng, UInt104(UInt128), sp.u) :
+                       rand_lteq(rng, Val(UInt128), sp.u)
+    return ((sp.a % UInt128) + rem_knuth(x, sp.k)) % T
+end
 
 
 ### BigInt
