@@ -30,6 +30,35 @@ const offs_chunk_size = 5000
 
 The columns are assumed to be separated by one or more whitespaces. The end of line
 delimiter is taken as `\\n`.
+
+# Examples
+```jldoctest
+julia> using DelimitedFiles
+
+julia> x = [1; 2; 3; 4];
+
+julia> y = [5; 6; 7; 8];
+
+julia> open("delim_file.txt", "w") do io
+           writedlm(io, [x y])
+       end;
+
+julia> readdlm("delim_file.txt", Int64)
+4×2 Array{Int64,2}:
+ 1  5
+ 2  6
+ 3  7
+ 4  8
+
+julia> readdlm("delim_file.txt", Float64)
+4×2 Array{Float64,2}:
+ 1.0  5.0
+ 2.0  6.0
+ 3.0  7.0
+ 4.0  8.0
+
+julia> rm("delim_file.txt")
+```
 """
 readdlm(input, T::Type; opts...) = readdlm(input, invalid_dlm(Char), T, '\n'; opts...)
 
@@ -37,6 +66,28 @@ readdlm(input, T::Type; opts...) = readdlm(input, invalid_dlm(Char), T, '\n'; op
     readdlm(source, delim::Char, T::Type; options...)
 
 The end of line delimiter is taken as `\\n`.
+
+# Examples
+```jldoctest
+julia> using DelimitedFiles
+
+julia> x = [1; 2; 3; 4];
+
+julia> y = [1.1; 2.2; 3.3; 4.4];
+
+julia> open("delim_file.txt", "w") do io
+           writedlm(io, [x y], ',')
+       end;
+
+julia> readdlm("delim_file.txt", ',', Float64)
+4×2 Array{Float64,2}:
+ 1.0  1.1
+ 2.0  2.2
+ 3.0  3.3
+ 4.0  4.4
+
+julia> rm("delim_file.txt")
+```
 """
 readdlm(input, dlm::Char, T::Type; opts...) = readdlm(input, dlm, T, '\n'; opts...)
 
@@ -47,6 +98,28 @@ The columns are assumed to be separated by one or more whitespaces. The end of l
 delimiter is taken as `\\n`. If all data is numeric, the result will be a numeric array. If
 some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings
 is returned.
+
+# Examples
+```jldoctest
+julia> using DelimitedFiles
+
+julia> x = [1; 2; 3; 4];
+
+julia> y = ["a"; "b"; "c"; "d"];
+
+julia> open("delim_file.txt", "w") do io
+           writedlm(io, [x y])
+       end;
+
+julia> readdlm("delim_file.txt")
+4×2 Array{Any,2}:
+ 1  "a"
+ 2  "b"
+ 3  "c"
+ 4  "d"
+
+julia> rm("delim_file.txt")
+```
 """
 readdlm(input; opts...) = readdlm(input, invalid_dlm(Char), '\n'; opts...)
 
@@ -56,6 +129,43 @@ readdlm(input; opts...) = readdlm(input, invalid_dlm(Char), '\n'; opts...)
 The end of line delimiter is taken as `\\n`. If all data is numeric, the result will be a
 numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of
 numbers and strings is returned.
+
+# Examples
+```jldoctest
+julia> using DelimitedFiles
+
+julia> x = [1; 2; 3; 4];
+
+julia> y = [1.1; 2.2; 3.3; 4.4];
+
+julia> open("delim_file.txt", "w") do io
+           writedlm(io, [x y], ',')
+       end;
+
+julia> readdlm("delim_file.txt", ',')
+4×2 Array{Float64,2}:
+ 1.0  1.1
+ 2.0  2.2
+ 3.0  3.3
+ 4.0  4.4
+
+julia> rm("delim_file.txt")
+
+julia> z = ["a"; "b"; "c"; "d"];
+
+julia> open("delim_file.txt", "w") do io
+           writedlm(io, [x z], ',')
+       end;
+
+julia> readdlm("delim_file.txt", ',')
+4×2 Array{Any,2}:
+ 1  "a"
+ 2  "b"
+ 3  "c"
+ 4  "d"
+
+julia> rm("delim_file.txt")
+```
 """
 readdlm(input, dlm::Char; opts...) = readdlm(input, dlm, '\n'; opts...)
 
@@ -110,7 +220,7 @@ julia> open("delim_file.txt", "w") do io
            writedlm(io, [x y])
        end
 
-julia> readdlm("delim_file.txt", '\t', Int, '\n')
+julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
 4×2 Array{Int64,2}:
  1  5
  2  6
@@ -707,7 +817,7 @@ julia> open("delim_file.txt", "w") do io
            writedlm(io, [x y])
        end
 
-julia> readdlm("delim_file.txt", '\t', Int, '\n')
+julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
 4×2 Array{Int64,2}:
  1  5
  2  6
