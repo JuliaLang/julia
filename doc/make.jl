@@ -1,10 +1,5 @@
 # Install dependencies needed to build the documentation.
-if ENV["JULIA_PKGDIR"] != joinpath(@__DIR__, "deps")
-    # We clobber package repositories here, so don't let the user hurt themselves
-    error("Must set JULIA_PKGDIR to $(joinpath(@__DIR__, "deps"))")
-else
-    info(ENV["JULIA_PKGDIR"])
-end
+ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
 Pkg.init()
 cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); remove_destination = true)
 Pkg.update()
