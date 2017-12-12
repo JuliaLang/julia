@@ -960,7 +960,6 @@ export
     varinfo,
     versioninfo,
     which,
-    workspace,
     @isdefined,
 
 # loading source files
