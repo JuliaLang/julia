@@ -35,7 +35,7 @@ julia> randn(rng, Complex64, (2, 3))
 """
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
-        r = rand_ui52(rng)
+        r = rand(rng, UInt52())
         rabs = Int64(r>>1) # One bit for the sign
         idx = rabs & 0xFF
         x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
@@ -95,7 +95,7 @@ julia> randexp(rng, 3, 3)
 """
 function randexp(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
-        ri = rand_ui52(rng)
+        ri = rand(rng, UInt52())
         idx = ri & 0xFF
         x = ri*we[idx+1]
         ri < ke[idx+1] && return x # 98.9% of the time we return here 1st try

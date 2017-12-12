@@ -147,7 +147,7 @@ randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 @inline function rand_lt(r::AbstractRNG, n::Int, mask::Int=nextpow2(n)-1)
     # this duplicates the functionality of rand(1:n), to optimize this special case
     while true
-        x = (rand_ui52_raw(r) % Int) & mask
+        x = rand(r, UInt52Raw(Int)) & mask
         x < n && return x
     end
 end
