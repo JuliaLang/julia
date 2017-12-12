@@ -8,6 +8,7 @@
     # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
 
     using SuiteSparse.increment!
+    using Base.LinAlg: Adjoint, Transpose
 
     A0 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
                 increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
@@ -31,11 +32,11 @@
 
             @test A*x ≈ b
             z = complex.(b)
-            x = SuiteSparse.A_ldiv_B!(lua, z)
+            x = SuiteSparse.ldiv!(lua, z)
             @test x ≈ float([1:5;])
             @test z === x
             y = similar(z)
-            A_ldiv_B!(y, lua, complex.(b))
+            Base.LinAlg.ldiv!(y, lua, complex.(b))
             @test y ≈ x
 
             @test A*x ≈ b
@@ -46,11 +47,11 @@
 
             @test A'*x ≈ b
             z = complex.(b)
-            x = SuiteSparse.Ac_ldiv_B!(lua, z)
+            x = SuiteSparse.ldiv!(Adjoint(lua), z)
             @test x ≈ float([1:5;])
             @test x === z
             y = similar(x)
-            SuiteSparse.Ac_ldiv_B!(y, lua, complex.(b))
+            SuiteSparse.ldiv!(y, Adjoint(lua), complex.(b))
             @test y ≈ x
 
             @test A'*x ≈ b
@@ -58,10 +59,10 @@
             @test x ≈ float([1:5;])
 
             @test A.'*x ≈ b
-            x = SuiteSparse.At_ldiv_B!(lua,complex.(b))
+            x = SuiteSparse.ldiv!(Transpose(lua), complex.(b))
             @test x ≈ float([1:5;])
             y = similar(x)
-            SuiteSparse.At_ldiv_B!(y, lua,complex.(b))
+            SuiteSparse.ldiv!(y, Transpose(lua), complex.(b))
             @test y ≈ x
 
             @test A.'*x ≈ b
@@ -161,9 +162,9 @@
         X = zeros(Complex{Float64}, N, N)
         B = complex.(rand(N, N), rand(N, N))
         luA, lufA = lufact(A), lufact(Array(A))
-        @test A_ldiv_B!(copy(X), luA, B) ≈ A_ldiv_B!(copy(X), lufA, B)
-        @test At_ldiv_B!(copy(X), luA, B) ≈ At_ldiv_B!(copy(X), lufA, B)
-        @test Ac_ldiv_B!(copy(X), luA, B) ≈ Ac_ldiv_B!(copy(X), lufA, B)
+        @test Base.LinAlg.ldiv!(copy(X), luA, B) ≈ Base.LinAlg.ldiv!(copy(X), lufA, B)
+        @test Base.LinAlg.ldiv!(copy(X), Adjoint(luA), B) ≈ Base.LinAlg.ldiv!(copy(X), Adjoint(lufA), B)
+        @test Base.LinAlg.ldiv!(copy(X), Transpose(luA), B) ≈ Base.LinAlg.ldiv!(copy(X), Transpose(lufA), B)
     end
 
 end

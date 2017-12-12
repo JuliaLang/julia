@@ -4,8 +4,8 @@ module UMFPACK
 
 export UmfpackLU
 
-import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
-import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact, ldiv!
+import Base: (\), findnz, getindex, show, size
+import Base.LinAlg: Factorization, det, lufact, ldiv!
 using Base.LinAlg: Adjoint, Transpose
 
 using ..SparseArrays
@@ -386,17 +386,17 @@ end
 
 ### Solve with Factorization
 ldiv!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
-    A_ldiv_B!(B, lu, copy(B))
+    ldiv!(B, lu, copy(B))
 ldiv!(translu::Transpose{T,<:UmfpackLU{T}}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
-    (lu = translu.parent; At_ldiv_B!(B, lu, copy(B)))
+    (lu = translu.parent; ldiv!(B, Transpose(lu), copy(B)))
 ldiv!(adjlu::Adjoint{T,<:UmfpackLU{T}}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
-    (lu = adjlu.parent; Ac_ldiv_B!(B, lu, copy(B)))
+    (lu = adjlu.parent; ldiv!(B, Adjoint(lu), copy(B)))
 ldiv!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) =
-    A_ldiv_B!(B, lu, copy(B))
+    ldiv!(B, lu, copy(B))
 ldiv!(translu::Transpose{Float64,<:UmfpackLU{Float64}}, B::StridedVecOrMat{<:Complex}) =
-    (lu = translu.parent; At_ldiv_B!(B, lu, copy(B)))
+    (lu = translu.parent; ldiv!(B, Transpose(lu), copy(B)))
 ldiv!(adjlu::Adjoint{Float64,<:UmfpackLU{Float64}}, B::StridedVecOrMat{<:Complex}) =
-    (lu = adjlu.parent; Ac_ldiv_B!(B, lu, copy(B)))
+    (lu = adjlu.parent; ldiv!(B, Adjoint(lu), copy(B)))
 
 ldiv!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
     _Aq_ldiv_B!(X, lu, B, UMFPACK_A)

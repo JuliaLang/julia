@@ -2,6 +2,7 @@
 
 using SuiteSparse.SPQR
 using SuiteSparse.CHOLMOD
+using Base.LinAlg: mul!, Adjoint, Transpose
 
 @testset "Sparse QR" begin
 m, n = 100, 10
@@ -42,10 +43,10 @@ nn = 100
         @test norm(R0[n + 1:end, :], 1) < 1e-12
 
         offsizeA = Matrix{Float64}(I, m+1, m+1)
-        @test_throws DimensionMismatch A_mul_B!(Q, offsizeA)
-        @test_throws DimensionMismatch Ac_mul_B!(Q, offsizeA)
-        @test_throws DimensionMismatch A_mul_B!(offsizeA, Q)
-        @test_throws DimensionMismatch A_mul_Bc!(offsizeA, Q)
+        @test_throws DimensionMismatch mul!(Q, offsizeA)
+        @test_throws DimensionMismatch mul!(Adjoint(Q), offsizeA)
+        @test_throws DimensionMismatch mul!(offsizeA, Q)
+        @test_throws DimensionMismatch mul!(offsizeA, Adjoint(Q))
     end
 
     @testset "element type of B: $eltyB" for eltyB in (Int, Float64, Complex{Float64})

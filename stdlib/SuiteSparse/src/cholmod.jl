@@ -5,7 +5,7 @@ module CHOLMOD
 import Base: (*), convert, copy, eltype, getindex, show, size,
              IndexStyle, IndexLinear, IndexCartesian, adjoint
 
-import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
+import Base.LinAlg: (\),
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
                  issuccess, issymmetric, ldltfact, ldltfact!, logdet,
                  Adjoint, Transpose
@@ -1318,7 +1318,7 @@ function *(adjA::Adjoint{<:Any,<:Sparse}, B::Sparse)
     A = adjA.parent
     aa1 = transpose_(A, 2)
     if A === B
-        return A_mul_Bc(aa1, aa1)
+        return *(aa1, Adjoint(aa1))
     end
     ## result of ssmult will have stype==0, contain numerical values and be sorted
     return ssmult(aa1, B, 0, true, true)
@@ -1327,7 +1327,7 @@ end
 *(adjA::Adjoint{<:Any,<:Sparse}, B::Dense) =
     (A = adjA.parent; sdmult!(A, true, 1., 0., B, zeros(size(A, 2), size(B, 2))))
 *(adjA::Adjoint{<:Any,<:Sparse}, B::VecOrMat) =
-    (A = adjA.parent; Ac_mul_B(A, Dense(B)))
+    (A = adjA.parent; *(Adjoint(A), Dense(B)))
 
 
 ## Factorization methods
@@ -1694,7 +1694,7 @@ end
 \(adjL::Adjoint{<:Any,<:Factor}, B::Dense) = (L = adjL.parent; solve(CHOLMOD_A, L, B))
 \(adjL::Adjoint{<:Any,<:Factor}, B::VecOrMat) = (L = adjL.parent; convert(Matrix, solve(CHOLMOD_A, L, Dense(B))))
 \(adjL::Adjoint{<:Any,<:Factor}, B::Sparse) = (L = adjL.parent; spsolve(CHOLMOD_A, L, B))
-\(adjL::Adjoint{<:Any,<:Factor}, B::SparseVecOrMat) = (L = adjL.parent; Ac_ldiv_B(L, Sparse(B)))
+\(adjL::Adjoint{<:Any,<:Factor}, B::SparseVecOrMat) = (L = adjL.parent; \(Adjoint(L), Sparse(B)))
 
 const RealHermSymComplexHermF64SSL = Union{
     Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
@@ -1717,13 +1717,13 @@ function \(adjA::Adjoint{<:Any,<:RealHermSymComplexHermF64SSL}, B::StridedVecOrM
     A = adjA.parent
     F = cholfact(A)
     if issuccess(F)
-        return Ac_ldiv_B(F, B)
+        return \(Adjoint(F), B)
     else
         ldltfact!(F, A)
         if issuccess(F)
-            return Ac_ldiv_B(F, B)
+            return \(Adjoint(F), B)
         else
-            return Ac_ldiv_B(lufact(convert(SparseMatrixCSC{eltype(A), SuiteSparse_long}, A)), B)
+            return \(Adjoint(lufact(convert(SparseMatrixCSC{eltype(A), SuiteSparse_long}, A))), B)
         end
     end
 end
