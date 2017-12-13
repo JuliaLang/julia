@@ -33,6 +33,7 @@ const cmds = Dict(
     "fsck"      => :fsck,
     "preview"   => :preview,
     "init"      => :init,
+    "build"     => :build,
 )
 
 const opts = Dict(
@@ -59,9 +60,9 @@ end
 
 let uuid = raw"(?i)[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(?-i)",
     name = raw"(\w+)(?:\.jl)?"
-    global name_re = Regex("^$name\$")
-    global uuid_re = Regex("^$uuid\$")
-    global name_uuid_re = Regex("^$name\\s*=\\s*($uuid)\$")
+    global const name_re = Regex("^$name\$")
+    global const uuid_re = Regex("^$uuid\$")
+    global const name_uuid_re = Regex("^$name\\s*=\\s*($uuid)\$")
 end
 
 const lex_re = r"^[\?\./\+\-](?!\-) | [^@\s]+\s*=\s*[^@\s]+ | @\s*[^@\s]* | [^@\s]+"x
@@ -148,6 +149,7 @@ function do_cmd!(tokens, repl)
     cmd == :status  ?  do_status!(env, tokens) :
     cmd == :test    ?    do_test!(env, tokens) :
     cmd == :gc      ?      do_gc!(env, tokens) :
+    cmd == :build   ?   do_build!(env, tokens) :
         cmderror("`$cmd` command not yet implemented")
 end
 
@@ -195,6 +197,8 @@ const help = Base.Markdown.parse("""
     `gc`: garbage collect packages not used for a significant time
 
     `init` initializes an environment in the current, or git base, directory
+
+    `build` run the build script for packages
     """)
 
 const helps = Dict(
@@ -284,11 +288,18 @@ const helps = Dict(
 
     Deletes packages that are not reached from any environment used within the last 6 weeks.
     """, :init => md"""
+
         init
 
     Creates an environment in the current directory, or the git base directory if the current directory
     is in a git repository.
-    """
+    """, :build =>md"""
+
+        build pkg[=uuid] ...
+
+    Run the build script in deps/build.jl for each package in pkgs and all of their dependencies in depth-first recursive order.
+    If no packages are given, runs the build scripts for all packages in the manifest.
+    """,
 )
 
 function do_help!(
@@ -452,6 +463,19 @@ end
 function do_gc!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     !isempty(tokens) && cmderror("`gc` does not take any arguments")
     Pkg3.API.gc(env)
+end
+
+function do_build!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+    pkgs = PackageSpec[]
+    while !isempty(tokens)
+        token = shift!(tokens)
+        if token[1] == :pkg
+            push!(pkgs, PackageSpec(token[2:end]...))
+        else
+            cmderror("`build` only takes a list of packages")
+        end
+    end
+    Pkg3.API.build(env, pkgs)
 end
 
 function do_init!(tokens::Vector{Tuple{Symbol,Vararg{Any}}})

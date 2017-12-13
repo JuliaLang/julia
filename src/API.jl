@@ -224,9 +224,30 @@ function gc(env::EnvCache=EnvCache(); period = Week(6), preview=env.preview[])
     info("Deleted $(length(paths_to_delete)) package installations", byte_save_str)
 end
 
+
+build(pkg::String) = build([pkg])
+build(pkgs::Vector{String}) = build([PackageSpec(pkg) for pkg in pkgs])
+build(pkg::PackageSpec) = build([pkg])
+build(pkgs::Vector{PackageSpec}) = build(EnvCache(), pkgs)
+
+function build(env::EnvCache, pkgs::Vector{PackageSpec})
+    if isempty(pkgs)
+        for (name, infos) in env.manifest, info in infos
+            uuid = UUID(info["uuid"])
+            push!(pkgs, PackageSpec(name, uuid))
+        end
+    end
+    for pkg in pkgs
+        pkg.mode = :manifest
+    end
+    manifest_resolve!(env, pkgs)
+    ensure_resolved(env, pkgs)
+    Pkg3.Operations.build_versions(env, [pkg.uuid for pkg in pkgs])
+end
+
+
 function init(path = pwd())
     Pkg3.Operations.init(path)
 end
 
 end # module
-
