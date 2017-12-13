@@ -3009,6 +3009,13 @@ end
     *(D::Diagonal, adjrowvec::Adjoint{<:Any,<:RowVector}) = (rowvec = adjrowvec.parent; D*adjoint(rowvec))
 end
 
+# methods involving RowVector from base/sparse/linalg.jl, to deprecate
+@eval Base.SparseArrays begin
+    \(::SparseMatrixCSC, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+    \(::Adjoint{<:Any,<:SparseMatrixCSC}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+    \(::Transpose{<:Any,<:SparseMatrixCSC}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
