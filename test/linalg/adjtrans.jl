@@ -339,3 +339,36 @@ end
     @test broadcast(+, Adjoint(vec), 1, Adjoint(vec))::Adjoint{Complex{Int},Vector{Complex{Int}}} == avec + avec .+ 1
     @test broadcast(+, Transpose(vec), 1, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == tvec + tvec .+ 1
 end
+
+@testset "Adjoint/Transpose-wrapped vector multiplication" begin
+    realvec, realmat = [1, 2, 3], [1 2 3; 4 5 6; 7 8 9]
+    complexvec, complexmat = [1im, 2, -3im], [1im 2 3; 4 5 -6im; 7im 8 9]
+    # Adjoint/Transpose-vector * vector
+    @test Adjoint(realvec) * realvec == dot(realvec, realvec)
+    @test Transpose(realvec) * realvec == dot(realvec, realvec)
+    @test Adjoint(complexvec) * complexvec == dot(complexvec, complexvec)
+    @test Transpose(complexvec) * complexvec == dot(conj(complexvec), complexvec)
+    # vector * Adjoint/Transpose-vector
+    @test realvec * Adjoint(realvec) == broadcast(*, realvec, reshape(realvec, (1, 3)))
+    @test realvec * Transpose(realvec) == broadcast(*, realvec, reshape(realvec, (1, 3)))
+    @test complexvec * Adjoint(complexvec) == broadcast(*, complexvec, reshape(conj(complexvec), (1, 3)))
+    @test complexvec * Transpose(complexvec) == broadcast(*, complexvec, reshape(complexvec, (1, 3)))
+    # Adjoint/Transpose-vector * matrix
+    @test (Adjoint(realvec) * realmat)::Adjoint{Int,Vector{Int}} ==
+        reshape(adjoint(realmat) * realvec, (1, 3))
+    @test (Transpose(realvec) * realmat)::Transpose{Int,Vector{Int}} ==
+        reshape(transpose(realmat) * realvec, (1, 3))
+    @test (Adjoint(complexvec) * complexmat)::Adjoint{Complex{Int},Vector{Complex{Int}}} ==
+        reshape(conj(adjoint(complexmat) * complexvec), (1, 3))
+    @test (Transpose(complexvec) * complexmat)::Transpose{Complex{Int},Vector{Complex{Int}}} ==
+        reshape(transpose(complexmat) * complexvec, (1, 3))
+    # Adjoint/Transpose-vector * Adjoint/Transpose-matrix
+    @test (Adjoint(realvec) * Adjoint(realmat))::Adjoint{Int,Vector{Int}} ==
+        reshape(realmat * realvec, (1, 3))
+    @test (Transpose(realvec) * Transpose(realmat))::Transpose{Int,Vector{Int}} ==
+        reshape(realmat * realvec, (1, 3))
+    @test (Adjoint(complexvec) * Adjoint(complexmat))::Adjoint{Complex{Int},Vector{Complex{Int}}} ==
+        reshape(conj(complexmat * complexvec), (1, 3))
+    @test (Transpose(complexvec) * Transpose(complexmat))::Transpose{Complex{Int},Vector{Complex{Int}}} ==
+        reshape(complexmat * complexvec, (1, 3))
+end
