@@ -90,12 +90,12 @@ end
 let a, b, x
     a = 2.84 + 5.2im
 
-    x = ccall((:cgtest, libccalltest), Complex128, (Complex128,), a)
+    x = ccall((:cgtest, libccalltest), ComplexF64, (ComplexF64,), a)
 
     @test x == a + 1 - 2im
 
     b = [a] # Make sure the array is alive during unsafe_load
-    x = unsafe_load(ccall((:cgptest, libccalltest), Ptr{Complex128}, (Ptr{Complex128},), b))
+    x = unsafe_load(ccall((:cgptest, libccalltest), Ptr{ComplexF64}, (Ptr{ComplexF64},), b))
 
     @test x == a + 1 - 2im
     @test a == 2.84 + 5.2im
@@ -104,12 +104,12 @@ end
 let a, b, x
     a = 3.34f0 + 53.2f0im
 
-    x = ccall((:cftest, libccalltest), Complex64, (Complex64,), a)
+    x = ccall((:cftest, libccalltest), ComplexF32, (ComplexF32,), a)
 
     @test x == a + 1 - 2im
 
     b = [a] # Make sure the array is alive during unsafe_load
-    x = unsafe_load(ccall((:cfptest, libccalltest), Ptr{Complex64}, (Ptr{Complex64},), b))
+    x = unsafe_load(ccall((:cfptest, libccalltest), Ptr{ComplexF32}, (Ptr{ComplexF32},), b))
 
     @test x == a + 1 - 2im
     @test a == 3.34f0 + 53.2f0im
@@ -405,10 +405,10 @@ test_struct10(Struct10)
 test_struct10(Struct10I)
 
 mutable struct Struct11
-    x::Complex64
+    x::ComplexF32
 end
 struct Struct11I
-    x::Complex64
+    x::ComplexF32
 end
 
 function test_struct11(::Type{Struct}) where {Struct}
@@ -427,12 +427,12 @@ test_struct11(Struct11)
 test_struct11(Struct11I)
 
 mutable struct Struct12
-    x::Complex64
-    y::Complex64
+    x::ComplexF32
+    y::ComplexF32
 end
 struct Struct12I
-    x::Complex64
-    y::Complex64
+    x::ComplexF32
+    y::ComplexF32
 end
 
 function test_struct12(::Type{Struct}) where {Struct}
@@ -452,10 +452,10 @@ test_struct12(Struct12)
 test_struct12(Struct12I)
 
 mutable struct Struct13
-    x::Complex128
+    x::ComplexF64
 end
 struct Struct13I
-    x::Complex128
+    x::ComplexF64
 end
 
 function test_struct13(::Type{Struct}) where {Struct}
@@ -761,7 +761,7 @@ s1 = Struct1(352.39422f23, 19.287577)
 ==(a::Struct1,b::Struct1) = a.x == b.x && a.y == b.y
 
 for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
-              (Complex64,:cf32),(Complex128,:cf64),(Struct1,:s1))
+              (ComplexF32,:cf32),(ComplexF64,:cf64),(Struct1,:s1))
     fname = Symbol("foo",v)
     fname1 = Symbol("foo1",v)
     @eval begin

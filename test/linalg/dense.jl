@@ -18,7 +18,7 @@ srand(1234321)
 
 @testset "Matrix condition number" begin
     ainit = rand(n,n)
-    @testset "for $elty" for elty in (Float32, Float64, Complex64, Complex128)
+    @testset "for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         ainit = convert(Matrix{elty}, ainit)
         for a in (copy(ainit), view(ainit, 1:n, 1:n))
             @test cond(a,1) ≈ 4.837320054554436e+02 atol=0.01
@@ -37,7 +37,7 @@ a2img  = randn(n,n)/2
 breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
-@testset "For A containing $eltya" for eltya in (Float32, Float64, Complex64, Complex128, Int)
+@testset "For A containing $eltya" for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     ainit = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     ainit2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     ε = εa = eps(abs(float(one(eltya))))
@@ -51,7 +51,7 @@ bimg  = randn(n,2)/2
             @test isposdef!(copy(apd))
         end
     end
-    @testset "For b containing $eltyb" for eltyb in (Float32, Float64, Complex64, Complex128, Int)
+    @testset "For b containing $eltyb" for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
@@ -347,7 +347,7 @@ end
 end
 
 @testset "Matrix exponential" begin
-    @testset "Tests for $elty" for elty in (Float32, Float64, Complex64, Complex128)
+    @testset "Tests for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
         eA1 = convert(Matrix{elty}, [147.866622446369 127.781085523181  127.781085523182;
                                      183.765138646367 183.765138646366  163.679601723179;
@@ -415,7 +415,7 @@ end
 end
 
 @testset "Matrix trigonometry" begin
-    @testset "Tests for $elty" for elty in (Float32, Float64, Complex64, Complex128)
+    @testset "Tests for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A1  = convert(Matrix{elty}, [3 2 0; 1 3 1; 1 1 3])
         A2  = convert(Matrix{elty},
                       [3.975884257819758 0.15631501695814318 -0.4579038628067864;
@@ -484,7 +484,7 @@ end
         end
     end
 
-    @testset "Additional tests for $elty" for elty in (Complex64, Complex128)
+    @testset "Additional tests for $elty" for elty in (ComplexF32, ComplexF64)
         A5 = convert(Matrix{elty}, [1im 2; 0.02+0.5im 3])
 
         @test sincos(A5) == (sin(A5), cos(A5))
@@ -746,7 +746,7 @@ end
 @testset "Least squares solutions" begin
     a = [ones(20) 1:20 1:20]
     b = reshape(Matrix(1.0I, 8, 5), 20, 2)
-    @testset "Tests for type $elty" for elty in (Float32, Float64, Complex64, Complex128)
+    @testset "Tests for type $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         a = convert(Matrix{elty}, a)
         b = convert(Matrix{elty}, b)
 
@@ -788,7 +788,7 @@ function test_div_pinv_consistency(a, b)
 end
 
 @testset "/ and \\ consistency with pinv for vectors" begin
-    @testset "Tests for type $elty" for elty in (Float32, Float64, Complex64, Complex128)
+    @testset "Tests for type $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         c = rand(elty, 5)
         r = rand(elty, 5)'
         cm = rand(elty, 5, 1)
@@ -811,7 +811,7 @@ end
     end
 end
 
-@testset "test ops on Numbers for $elty" for elty in [Float32,Float64,Complex64,Complex128]
+@testset "test ops on Numbers for $elty" for elty in [Float32,Float64,ComplexF32,ComplexF64]
     a = rand(elty)
     @test isposdef(one(elty))
     @test lyap(one(elty),a) == -a/2

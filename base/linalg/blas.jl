@@ -171,8 +171,8 @@ function blascopy! end
 
 for (fname, elty) in ((:dcopy_,:Float64),
                       (:scopy_,:Float32),
-                      (:zcopy_,:Complex128),
-                      (:ccopy_,:Complex64))
+                      (:zcopy_,:ComplexF64),
+                      (:ccopy_,:ComplexF32))
     @eval begin
         # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
         function blascopy!(n::Integer, DX::Union{Ptr{$elty},StridedArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},StridedArray{$elty}}, incy::Integer)
@@ -202,8 +202,8 @@ function scal end
 
 for (fname, elty) in ((:dscal_,:Float64),
                       (:sscal_,:Float32),
-                      (:zscal_,:Complex128),
-                      (:cscal_,:Complex64))
+                      (:zscal_,:ComplexF64),
+                      (:cscal_,:ComplexF32))
     @eval begin
         # SUBROUTINE DSCAL(N,DA,DX,INCX)
         function scal!(n::Integer, DA::$elty, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer)
@@ -277,8 +277,8 @@ for (fname, elty) in ((:ddot_,:Float64),
         end
     end
 end
-for (fname, elty) in ((:cblas_zdotc_sub,:Complex128),
-                      (:cblas_cdotc_sub,:Complex64))
+for (fname, elty) in ((:cblas_zdotc_sub,:ComplexF64),
+                      (:cblas_cdotc_sub,:ComplexF32))
     @eval begin
                 #       DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
                 # *     .. Scalar Arguments ..
@@ -295,8 +295,8 @@ for (fname, elty) in ((:cblas_zdotc_sub,:Complex128),
         end
     end
 end
-for (fname, elty) in ((:cblas_zdotu_sub,:Complex128),
-                      (:cblas_cdotu_sub,:Complex64))
+for (fname, elty) in ((:cblas_zdotu_sub,:ComplexF64),
+                      (:cblas_cdotu_sub,:ComplexF32))
     @eval begin
                 #       DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
                 # *     .. Scalar Arguments ..
@@ -358,8 +358,8 @@ function nrm2 end
 
 for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
                                 (:snrm2_,:Float32,:Float32),
-                                (:dznrm2_,:Complex128,:Float64),
-                                (:scnrm2_,:Complex64,:Float32))
+                                (:dznrm2_,:ComplexF64,:Float64),
+                                (:scnrm2_,:ComplexF32,:Float32))
     @eval begin
         # SUBROUTINE DNRM2(N,X,INCX)
         function nrm2(n::Integer, X::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer)
@@ -391,8 +391,8 @@ function asum end
 
 for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
                                 (:sasum_,:Float32,:Float32),
-                                (:dzasum_,:Complex128,:Float64),
-                                (:scasum_,:Complex64,:Float32))
+                                (:dzasum_,:ComplexF64,:Float64),
+                                (:scasum_,:ComplexF32,:Float32))
     @eval begin
         # SUBROUTINE ASUM(N, X, INCX)
         function asum(n::Integer, X::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer)
@@ -428,8 +428,8 @@ function axpy! end
 
 for (fname, elty) in ((:daxpy_,:Float64),
                       (:saxpy_,:Float32),
-                      (:zaxpy_,:Complex128),
-                      (:caxpy_,:Complex64))
+                      (:zaxpy_,:ComplexF64),
+                      (:caxpy_,:ComplexF32))
     @eval begin
                 # SUBROUTINE DAXPY(N,DA,DX,INCX,DY,INCY)
                 # DY <- DA*DX + DY
@@ -490,7 +490,7 @@ julia> Base.BLAS.axpby!(2., x, 3., y)
 function axpby! end
 
 for (fname, elty) in ((:daxpby_,:Float64), (:saxpby_,:Float32),
-                      (:zaxpby_,:Complex128), (:caxpby_,:Complex64))
+                      (:zaxpby_,:ComplexF64), (:caxpby_,:ComplexF32))
     @eval begin
         # SUBROUTINE DAXPBY(N,DA,DX,INCX,DB,DY,INCY)
         # DY <- DA*DX + DB*DY
@@ -521,8 +521,8 @@ end
 ## iamax
 for (fname, elty) in ((:idamax_,:Float64),
                       (:isamax_,:Float32),
-                      (:izamax_,:Complex128),
-                      (:icamax_,:Complex64))
+                      (:izamax_,:ComplexF64),
+                      (:icamax_,:ComplexF32))
     @eval begin
         function iamax(n::Integer, dx::Union{Ptr{$elty}, DenseArray{$elty}}, incx::Integer)
             ccall((@blasfunc($fname), libblas),BlasInt,
@@ -538,8 +538,8 @@ iamax(dx::Union{StridedVector,Array}) = Base.@gc_preserve dx iamax(length(dx), p
 ### gemv
 for (fname, elty) in ((:dgemv_,:Float64),
                       (:sgemv_,:Float32),
-                      (:zgemv_,:Complex128),
-                      (:cgemv_,:Complex64))
+                      (:zgemv_,:ComplexF64),
+                      (:cgemv_,:ComplexF32))
     @eval begin
              #SUBROUTINE DGEMV(TRANS,M,N,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
              #*     .. Scalar Arguments ..
@@ -621,8 +621,8 @@ function gbmv end
 
 for (fname, elty) in ((:dgbmv_,:Float64),
                       (:sgbmv_,:Float32),
-                      (:zgbmv_,:Complex128),
-                      (:cgbmv_,:Complex64))
+                      (:zgbmv_,:ComplexF64),
+                      (:cgbmv_,:ComplexF32))
     @eval begin
              # SUBROUTINE DGBMV(TRANS,M,N,KL,KU,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
              # *     .. Scalar Arguments ..
@@ -666,8 +666,8 @@ function symv! end
 
 for (fname, elty, lib) in ((:dsymv_,:Float64,libblas),
                            (:ssymv_,:Float32,libblas),
-                           (:zsymv_,:Complex128,liblapack),
-                           (:csymv_,:Complex64,liblapack))
+                           (:zsymv_,:ComplexF64,liblapack),
+                           (:csymv_,:ComplexF32,liblapack))
     # Note that the complex symv are not BLAS but auiliary functions in LAPACK
     @eval begin
              #      SUBROUTINE DSYMV(UPLO,N,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
@@ -724,8 +724,8 @@ Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 symv(ul, A, x)
 
 ### hemv
-for (fname, elty) in ((:zhemv_,:Complex128),
-                      (:chemv_,:Complex64))
+for (fname, elty) in ((:zhemv_,:ComplexF64),
+                      (:chemv_,:ComplexF32))
     @eval begin
         function hemv!(uplo::Char, α::$elty, A::StridedMatrix{$elty}, x::StridedVector{$elty}, β::$elty, y::StridedVector{$elty})
             m, n = size(A)
@@ -822,8 +822,8 @@ Return the updated `y`.
 sbmv!
 
 ### hbmv, (HB) Hermitian banded matrix-vector multiplication
-for (fname, elty) in ((:zhbmv_,:Complex128),
-                      (:chbmv_,:Complex64))
+for (fname, elty) in ((:zhbmv_,:ComplexF64),
+                      (:chbmv_,:ComplexF32))
     @eval begin
              #       SUBROUTINE ZHBMV(UPLO,N,K,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
              # *     .. Scalar Arguments ..
@@ -877,8 +877,8 @@ function trmv! end
 
 for (fname, elty) in ((:dtrmv_,:Float64),
                         (:strmv_,:Float32),
-                        (:ztrmv_,:Complex128),
-                        (:ctrmv_,:Complex64))
+                        (:ztrmv_,:ComplexF64),
+                        (:ctrmv_,:ComplexF32))
     @eval begin
                 #       SUBROUTINE DTRMV(UPLO,TRANS,DIAG,N,A,LDA,X,INCX)
                 # *     .. Scalar Arguments ..
@@ -929,8 +929,8 @@ function trsv end
 
 for (fname, elty) in ((:dtrsv_,:Float64),
                         (:strsv_,:Float32),
-                        (:ztrsv_,:Complex128),
-                        (:ctrsv_,:Complex64))
+                        (:ztrsv_,:ComplexF64),
+                        (:ctrsv_,:ComplexF32))
     @eval begin
                 #       SUBROUTINE DTRSV(UPLO,TRANS,DIAG,N,A,LDA,X,INCX)
                 #       .. Scalar Arguments ..
@@ -967,8 +967,8 @@ function ger! end
 
 for (fname, elty) in ((:dger_,:Float64),
                       (:sger_,:Float32),
-                      (:zgerc_,:Complex128),
-                      (:cgerc_,:Complex64))
+                      (:zgerc_,:ComplexF64),
+                      (:cgerc_,:ComplexF32))
     @eval begin
         function ger!(α::$elty, x::StridedVector{$elty}, y::StridedVector{$elty}, A::StridedMatrix{$elty})
             m, n = size(A)
@@ -999,8 +999,8 @@ function syr! end
 
 for (fname, elty, lib) in ((:dsyr_,:Float64,libblas),
                            (:ssyr_,:Float32,libblas),
-                           (:zsyr_,:Complex128,liblapack),
-                           (:csyr_,:Complex64,liblapack))
+                           (:zsyr_,:ComplexF64,liblapack),
+                           (:csyr_,:ComplexF32,liblapack))
     @eval begin
         function syr!(uplo::Char, α::$elty, x::StridedVector{$elty}, A::StridedMatrix{$elty})
             n = checksquare(A)
@@ -1028,8 +1028,8 @@ as `alpha*x*x' + A`.
 """
 function her! end
 
-for (fname, elty, relty) in ((:zher_,:Complex128, :Float64),
-                             (:cher_,:Complex64, :Float32))
+for (fname, elty, relty) in ((:zher_,:ComplexF64, :Float64),
+                             (:cher_,:ComplexF32, :Float32))
     @eval begin
         function her!(uplo::Char, α::$relty, x::StridedVector{$elty}, A::StridedMatrix{$elty})
             n = checksquare(A)
@@ -1060,8 +1060,8 @@ function gemm! end
 for (gemm, elty) in
         ((:dgemm_,:Float64),
          (:sgemm_,:Float32),
-         (:zgemm_,:Complex128),
-         (:cgemm_,:Complex64))
+         (:zgemm_,:ComplexF64),
+         (:cgemm_,:ComplexF32))
     @eval begin
              # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              # *     .. Scalar Arguments ..
@@ -1119,8 +1119,8 @@ gemm(tA, tB, A, B)
 ## (SY) symmetric matrix-matrix and matrix-vector multiplication
 for (mfname, elty) in ((:dsymm_,:Float64),
                        (:ssymm_,:Float32),
-                       (:zsymm_,:Complex128),
-                       (:csymm_,:Complex64))
+                       (:zsymm_,:ComplexF64),
+                       (:csymm_,:ComplexF32))
     @eval begin
              #     SUBROUTINE DSYMM(SIDE,UPLO,M,N,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              #     .. Scalar Arguments ..
@@ -1184,8 +1184,8 @@ Update `C` as `alpha*A*B + beta*C` or `alpha*B*A + beta*C` according to [`side`]
 symm!
 
 ## (HE) Hermitian matrix-matrix and matrix-vector multiplication
-for (mfname, elty) in ((:zhemm_,:Complex128),
-                       (:chemm_,:Complex64))
+for (mfname, elty) in ((:zhemm_,:ComplexF64),
+                       (:chemm_,:ComplexF32))
     @eval begin
              #     SUBROUTINE DHEMM(SIDE,UPLO,M,N,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              #     .. Scalar Arguments ..
@@ -1244,8 +1244,8 @@ function syrk end
 
 for (fname, elty) in ((:dsyrk_,:Float64),
                       (:ssyrk_,:Float32),
-                      (:zsyrk_,:Complex128),
-                      (:csyrk_,:Complex64))
+                      (:zsyrk_,:ComplexF64),
+                      (:csyrk_,:ComplexF32))
    @eval begin
        # SUBROUTINE DSYRK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
        # *     .. Scalar Arguments ..
@@ -1298,8 +1298,8 @@ according to [`trans`](@ref stdlib-blas-trans).
 """
 function herk end
 
-for (fname, elty, relty) in ((:zherk_, :Complex128, :Float64),
-                             (:cherk_, :Complex64, :Float32))
+for (fname, elty, relty) in ((:zherk_, :ComplexF64, :Float64),
+                             (:cherk_, :ComplexF32, :Float32))
    @eval begin
        # SUBROUTINE CHERK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
        # *     .. Scalar Arguments ..
@@ -1337,8 +1337,8 @@ end
 ## syr2k
 for (fname, elty) in ((:dsyr2k_,:Float64),
                       (:ssyr2k_,:Float32),
-                      (:zsyr2k_,:Complex128),
-                      (:csyr2k_,:Complex64))
+                      (:zsyr2k_,:ComplexF64),
+                      (:csyr2k_,:ComplexF32))
     @eval begin
              #       SUBROUTINE DSYR2K(UPLO,TRANS,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              #
@@ -1374,7 +1374,7 @@ function syr2k(uplo::Char, trans::Char, alpha::Number, A::StridedVecOrMat, B::St
 end
 syr2k(uplo::Char, trans::Char, A::StridedVecOrMat, B::StridedVecOrMat) = syr2k(uplo, trans, one(eltype(A)), A, B)
 
-for (fname, elty1, elty2) in ((:zher2k_,:Complex128,:Float64), (:cher2k_,:Complex64,:Float32))
+for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:ComplexF32,:Float32))
    @eval begin
        # SUBROUTINE CHER2K(UPLO,TRANS,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
        #
@@ -1461,8 +1461,8 @@ function trsm end
 for (mmname, smname, elty) in
         ((:dtrmm_,:dtrsm_,:Float64),
          (:strmm_,:strsm_,:Float32),
-         (:ztrmm_,:ztrsm_,:Complex128),
-         (:ctrmm_,:ctrsm_,:Complex64))
+         (:ztrmm_,:ztrsm_,:ComplexF64),
+         (:ctrmm_,:ctrsm_,:ComplexF32))
     @eval begin
         #       SUBROUTINE DTRMM(SIDE,UPLO,TRANSA,DIAG,M,N,ALPHA,A,LDA,B,LDB)
         # *     .. Scalar Arguments ..

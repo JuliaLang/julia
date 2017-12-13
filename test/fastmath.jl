@@ -72,7 +72,7 @@ fm_fast_64_upd(x) = @fastmath (r=x; r+=eps64_2; r+=eps64_2)
         end
     end
 
-    for T in (Complex64, Complex128, Complex{BigFloat})
+    for T in (ComplexF32, ComplexF64, Complex{BigFloat})
         zero = convert(T,0)
         one = convert(T,1) + im*eps(real(convert(T,1)))
         two = convert(T,2) + im//10
@@ -139,7 +139,7 @@ end
     end
 end
 @testset "complex arithmetic" begin
-    for T in (Complex64, Complex128, Complex{BigFloat})
+    for T in (ComplexF32, ComplexF64, Complex{BigFloat})
         half = (1+1im)/T(2)
         third = (1-1im)/T(3)
 

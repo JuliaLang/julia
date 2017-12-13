@@ -2421,8 +2421,8 @@ end
 
 @testset "issue #12832" begin
     @test_throws ErrorException reinterpret(Float64, Complex{Int64}(1))
-    @test_throws ErrorException reinterpret(Float64, Complex64(1))
-    @test_throws ErrorException reinterpret(Complex64, Float64(1))
+    @test_throws ErrorException reinterpret(Float64, ComplexF32(1))
+    @test_throws ErrorException reinterpret(ComplexF32, Float64(1))
     @test_throws ErrorException reinterpret(Int32, false)
 end
 # issue #41
@@ -2504,8 +2504,8 @@ end
     zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
                      0x40, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0xc0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-    z1 = read(zbuf, Complex64)
-    z2 = read(zbuf, Complex128)
+    z1 = read(zbuf, ComplexF32)
+    z2 = read(zbuf, ComplexF64)
     @test bswap(z1) === -1.5f0 + 2.5f0im
     @test bswap(z2) ===  3.5 - 4.5im
 end
@@ -2842,7 +2842,7 @@ end
     let types = (Base.BitInteger_types..., BigInt, Bool,
                  Rational{Int}, Rational{BigInt},
                  Float16, Float32, Float64, BigFloat,
-                 Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
+                 Complex{Int}, Complex{UInt}, ComplexF16, ComplexF32, ComplexF64)
         for S in types
             for op in (+, -)
                 T = @inferred Base.promote_op(op, S)

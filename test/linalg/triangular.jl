@@ -16,7 +16,7 @@ debug && println("Test basic type functionality")
 @test LowerTriangular(randn(3, 3)) |> t -> [size(t, i) for i = 1:3] == [size(Matrix(t), i) for i = 1:3]
 
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
-for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat}, Int)
+for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
     # Begin loop for first Triangular matrix
     for (t1, uplo1) in ((UpperTriangular, :U),
                         (UnitUpperTriangular, :U),
@@ -178,7 +178,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         end
 
         #exp/log
-        if (elty1 == Float64 || elty1 == Complex128) && (t1 == UpperTriangular || t1 == LowerTriangular)
+        if (elty1 == Float64 || elty1 == ComplexF64) && (t1 == UpperTriangular || t1 == LowerTriangular)
             @test exp(Matrix(log(A1))) ≈ A1
         end
 
@@ -269,7 +269,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         end
 
         # Begin loop for second Triangular matrix
-        for elty2 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat}, Int)
+        for elty2 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
             for (t2, uplo2) in ((UpperTriangular, :U),
                                 (UnitUpperTriangular, :U),
                                 (LowerTriangular, :L),
@@ -313,7 +313,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             end
         end
 
-        for eltyB in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat})
+        for eltyB in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
             B = convert(Matrix{eltyB}, elty1 <: Complex ? real(A1)*ones(n, n) : A1*ones(n, n))
 
             debug && println("elty1: $elty1, A1: $t1, B: $eltyB")
@@ -409,12 +409,12 @@ Aimg    = randn(n, n)/2
 A2real  = randn(n, n)/2
 A2img   = randn(n, n)/2
 
-for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
+for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
     A = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(Areal, Aimg) : Areal)
     # a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     εa = eps(abs(float(one(eltya))))
 
-    for eltyb in (Float32, Float64, Complex64, Complex128)
+    for eltyb in (Float32, Float64, ComplexF32, ComplexF64)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 

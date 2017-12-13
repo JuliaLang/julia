@@ -25,7 +25,7 @@ dlimg  = randn(n-1)/2
 dreal = randn(n)/2
 dimg  = randn(n)/2
 
-@testset for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
+@testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
     a = eltya == Int ? rand(1:7, n, n) :
         convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     d = if eltya == Int
@@ -93,7 +93,7 @@ dimg  = randn(n)/2
         @test lud[:L]*lud[:U] ≈ Array(d)[lud[:p],:]
         @test AbstractArray(lud) ≈ d
     end
-    @testset for eltyb in (Float32, Float64, Complex64, Complex128, Int)
+    @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         b  = eltyb == Int ? rand(1:5, n, 2) :
             convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         c  = eltyb == Int ? rand(1:5, n) :
@@ -236,7 +236,7 @@ end
 end
 
 @testset "logdet" begin
-    @test @inferred(logdet(Complex64[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
+    @test @inferred(logdet(ComplexF32[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
     @test_throws DomainError logdet([1 1; 1 -1])
 end
 

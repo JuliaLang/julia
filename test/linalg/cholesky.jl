@@ -46,7 +46,7 @@ end
     breal = randn(n,2)/2
     bimg  = randn(n,2)/2
 
-    for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
+    for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
         a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
 
@@ -73,7 +73,7 @@ end
         #Test error bound on reconstruction of matrix: LAWNS 14, Lemma 2.1
 
         #these tests were failing on 64-bit linux when inside the inner loop
-        #for eltya = Complex64 and eltyb = Int. The E[i,j] had NaN32 elements
+        #for eltya = ComplexF32 and eltyb = Int. The E[i,j] had NaN32 elements
         #but only with srand(1234321) set before the loops.
         E = abs.(apd - r'*r)
         for i=1:n, j=1:n
@@ -138,7 +138,7 @@ end
             @test cpapd[:P]*cpapd[:L]*cpapd[:U]*cpapd[:P]' ≈ apd
         end
 
-        for eltyb in (Float32, Float64, Complex64, Complex128, Int)
+        for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
             b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
             εb = eps(abs(float(one(eltyb))))
             ε = max(εa,εb)
@@ -253,7 +253,7 @@ end
     cholfact(Hermitian(apd, :L), Val(true)) \ b
     r = factorize(apd)[:U]
     E = abs.(apd - r'*r)
-    ε = eps(abs(float(one(Complex64))))
+    ε = eps(abs(float(one(ComplexF32))))
     n = 10
     for i=1:n, j=1:n
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))

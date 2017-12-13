@@ -391,7 +391,7 @@ end
     # complex
     acp = complex(af)
     @test complex(acp) == acp
-    @test isa(acp, SparseVector{Complex128,Int})
+    @test isa(acp, SparseVector{ComplexF64,Int})
     @test exact_equal(acp, SparseVector(8, [2, 5, 6], complex([12., 35., 72.])))
     @test sparsevec(adjoint(adjoint(acp))) == acp
 end
@@ -804,8 +804,8 @@ end
 
     let x = complex.(sprand(32, 0.6), sprand(32, 0.6)),
         y = complex.(sprand(32, 0.6), sprand(32, 0.6))
-        xf = Array(x)::Vector{Complex128}
-        yf = Array(y)::Vector{Complex128}
+        xf = Array(x)::Vector{ComplexF64}
+        yf = Array(y)::Vector{ComplexF64}
         @test dot(x, x) ≈ dot(xf, xf)
         @test dot(x, y) ≈ dot(xf, yf)
     end
@@ -905,15 +905,15 @@ end
             x2f = Array(x2)
 
             y = A*x
-            @test isa(y, SparseVector{Complex128,Int})
+            @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af * xf
 
             y = *(Transpose(A), x2)
-            @test isa(y, SparseVector{Complex128,Int})
+            @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af.' * x2f
 
             y = *(Adjoint(A), x2)
-            @test isa(y, SparseVector{Complex128,Int})
+            @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af'x2f
         end
     end
@@ -1129,7 +1129,7 @@ end
     end
 end
 @testset "fill!" begin
-    for Tv in [Float32, Float64, Int64, Int32, Complex128]
+    for Tv in [Float32, Float64, Int64, Int32, ComplexF64]
         for Ti in [Int16, Int32, Int64, BigInt]
             sptypes = (SparseMatrixCSC{Tv, Ti}, SparseVector{Tv, Ti})
             sizes = [(3, 4), (3,)]

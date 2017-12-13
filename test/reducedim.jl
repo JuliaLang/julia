@@ -98,10 +98,10 @@ end
 @test @inferred(sum(UInt8[1], 1)) == [1]
 
 # Complex types
-@test typeof(@inferred(sum([1.0+1.0im], 1))) == Vector{Complex128}
+@test typeof(@inferred(sum([1.0+1.0im], 1))) == Vector{ComplexF64}
 @test typeof(@inferred(Base.sum(abs, [1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(Base.sum(abs2, [1.0+1.0im], 1))) == Vector{Float64}
-@test typeof(@inferred(prod([1.0+1.0im], 1))) == Vector{Complex128}
+@test typeof(@inferred(prod([1.0+1.0im], 1))) == Vector{ComplexF64}
 @test typeof(@inferred(Base.prod(abs, [1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(Base.prod(abs2, [1.0+1.0im], 1))) == Vector{Float64}
 

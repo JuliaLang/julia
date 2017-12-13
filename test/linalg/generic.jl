@@ -244,7 +244,7 @@ end
     @test q\qmat ≉ qmat/q
 end
 @testset "ops on Numbers" begin
-    @testset for elty in [Float32,Float64,Complex64,Complex128]
+    @testset for elty in [Float32,Float64,ComplexF32,ComplexF64]
         a = rand(elty)
         @test trace(a)         == a
         @test rank(zero(elty)) == 0
@@ -336,7 +336,7 @@ end
 
 @testset "Issue 19035" begin
     @test Base.LinAlg.promote_leaf_eltypes([1, 2, [3.0, 4.0]]) == Float64
-    @test Base.LinAlg.promote_leaf_eltypes([[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]) == Complex128
+    @test Base.LinAlg.promote_leaf_eltypes([[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]) == ComplexF64
     @test [1, 2, 3] ≈ [1, 2, 3]
     @test [[1, 2], [3, 4]] ≈ [[1, 2], [3, 4]]
     @test [[1, 2], [3, 4]] ≈ [[1.0-eps(), 2.0+eps()], [3.0+2eps(), 4.0-1e8eps()]]

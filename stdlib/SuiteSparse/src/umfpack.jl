@@ -69,7 +69,7 @@ else
     const UMFITypes = Union{Int32, Int64}
 end
 
-const UMFVTypes = Union{Float64,Complex128}
+const UMFVTypes = Union{Float64,ComplexF64}
 
 ## UMFPACK
 
@@ -110,7 +110,7 @@ end
 Compute the LU factorization of a sparse matrix `A`.
 
 For sparse `A` with real or complex element type, the return type of `F` is
-`UmfpackLU{Tv, Ti}`, with `Tv` = [`Float64`](@ref) or `Complex128` respectively and
+`UmfpackLU{Tv, Ti}`, with `Tv` = [`Float64`](@ref) or `ComplexF64` respectively and
 `Ti` is an integer type ([`Int32`](@ref) or [`Int64`](@ref)).
 
 The individual components of the factorization `F` can be accessed by indexing:
@@ -137,8 +137,8 @@ The relation between `F` and `A` is
 !!! note
     `lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
     SuiteSparse. As this library only supports sparse matrices with [`Float64`](@ref) or
-    `Complex128` elements, `lufact` converts `A` into a copy that is of type
-    `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as appropriate.
+    `ComplexF64` elements, `lufact` converts `A` into a copy that is of type
+    `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
 """
 function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
     zerobased = S.colptr[1] == 0
@@ -151,11 +151,11 @@ function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
 end
 lufact(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) where {Ti<:UMFITypes} =
     lufact(convert(SparseMatrixCSC{Float64,Ti}, A))
-lufact(A::SparseMatrixCSC{<:Union{Complex32,Complex64},Ti}) where {Ti<:UMFITypes} =
-    lufact(convert(SparseMatrixCSC{Complex128,Ti}, A))
+lufact(A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32},Ti}) where {Ti<:UMFITypes} =
+    lufact(convert(SparseMatrixCSC{ComplexF64,Ti}, A))
 lufact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) where {T<:AbstractFloat} =
     throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
-    "Try lufact(convert(SparseMatrixCSC{Float64/Complex128,Int}, A)) for ",
+    "Try lufact(convert(SparseMatrixCSC{Float64/ComplexF64,Int}, A)) for ",
     "sparse floating point LU using UMFPACK or lufact(Array(A)) for generic ",
     "dense LU.")))
 lufact(A::SparseMatrixCSC) = lufact(float(A))
@@ -186,17 +186,17 @@ umf_nm(nm,Tv,Ti) = "umfpack_" * (Tv == :Float64 ? "d" : "z") * (Ti == :Int64 ? "
 
 for itype in UmfpackIndexTypes
     sym_r = umf_nm("symbolic", :Float64, itype)
-    sym_c = umf_nm("symbolic", :Complex128, itype)
+    sym_c = umf_nm("symbolic", :ComplexF64, itype)
     num_r = umf_nm("numeric", :Float64, itype)
-    num_c = umf_nm("numeric", :Complex128, itype)
+    num_c = umf_nm("numeric", :ComplexF64, itype)
     sol_r = umf_nm("solve", :Float64, itype)
-    sol_c = umf_nm("solve", :Complex128, itype)
+    sol_c = umf_nm("solve", :ComplexF64, itype)
     det_r = umf_nm("get_determinant", :Float64, itype)
-    det_z = umf_nm("get_determinant", :Complex128, itype)
+    det_z = umf_nm("get_determinant", :ComplexF64, itype)
     lunz_r = umf_nm("get_lunz", :Float64, itype)
-    lunz_z = umf_nm("get_lunz", :Complex128, itype)
+    lunz_z = umf_nm("get_lunz", :ComplexF64, itype)
     get_num_r = umf_nm("get_numeric", :Float64, itype)
-    get_num_z = umf_nm("get_numeric", :Complex128, itype)
+    get_num_z = umf_nm("get_numeric", :ComplexF64, itype)
     @eval begin
         function umfpack_symbolic!(U::UmfpackLU{Float64,$itype})
             if U.symbolic != C_NULL return U end
@@ -209,7 +209,7 @@ for itype in UmfpackIndexTypes
             U.symbolic = tmp[1]
             return U
         end
-        function umfpack_symbolic!(U::UmfpackLU{Complex128,$itype})
+        function umfpack_symbolic!(U::UmfpackLU{ComplexF64,$itype})
             if U.symbolic != C_NULL return U end
             tmp = Vector{Ptr{Void}}(uninitialized, 1)
             @isok ccall(($sym_c, :libumfpack), $itype,
@@ -235,7 +235,7 @@ for itype in UmfpackIndexTypes
             U.numeric = tmp[1]
             return U
         end
-        function umfpack_numeric!(U::UmfpackLU{Complex128,$itype})
+        function umfpack_numeric!(U::UmfpackLU{ComplexF64,$itype})
             if U.numeric != C_NULL return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
             tmp = Vector{Ptr{Void}}(uninitialized, 1)
@@ -268,7 +268,7 @@ for itype in UmfpackIndexTypes
                 umf_info)
             return x
         end
-        function solve!(x::StridedVector{Complex128}, lu::UmfpackLU{Complex128,$itype}, b::StridedVector{Complex128}, typ::Integer)
+        function solve!(x::StridedVector{ComplexF64}, lu::UmfpackLU{ComplexF64,$itype}, b::StridedVector{ComplexF64}, typ::Integer)
             if x === b
                 throw(ArgumentError("output array must not be aliased with input array"))
             end
@@ -294,7 +294,7 @@ for itype in UmfpackIndexTypes
                            mx, C_NULL, lu.numeric, umf_info)
             mx[]
         end
-        function det(lu::UmfpackLU{Complex128,$itype})
+        function det(lu::UmfpackLU{ComplexF64,$itype})
             mx = Ref{Float64}()
             mz = Ref{Float64}()
             @isok ccall(($det_z,:libumfpack), $itype,
@@ -313,7 +313,7 @@ for itype in UmfpackIndexTypes
                            lnz, unz, n_row, n_col, nz_diag, lu.numeric)
             (lnz[], unz[], n_row[], n_col[], nz_diag[])
         end
-        function umf_lunz(lu::UmfpackLU{Complex128,$itype})
+        function umf_lunz(lu::UmfpackLU{ComplexF64,$itype})
             lnz = Ref{$itype}()
             unz = Ref{$itype}()
             n_row = Ref{$itype}()
@@ -349,7 +349,7 @@ for itype in UmfpackIndexTypes
              SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), Ux),
              increment!(P), increment!(Q), Rs)
         end
-        function umf_extract(lu::UmfpackLU{Complex128,$itype})
+        function umf_extract(lu::UmfpackLU{ComplexF64,$itype})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
             (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
             Lp = Vector{$itype}(uninitialized, n_row + 1)
@@ -466,7 +466,7 @@ function getindex(lu::UmfpackLU, d::Symbol)
     end
 end
 
-for Tv in (:Float64, :Complex128), Ti in UmfpackIndexTypes
+for Tv in (:Float64, :ComplexF64), Ti in UmfpackIndexTypes
     f = Symbol(umf_nm("free_symbolic", Tv, Ti))
     @eval begin
         function ($f)(symb::Ptr{Void})

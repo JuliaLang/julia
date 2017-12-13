@@ -14,7 +14,7 @@
                 increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
                 [2.,1.,3.,4.,-1.,-3.,3.,6.,2.,1.,4.,2.], 5, 5)
 
-    @testset "Core functionality for $Tv elements" for Tv in (Float64, Complex128)
+    @testset "Core functionality for $Tv elements" for Tv in (Float64, ComplexF64)
         # We might be able to support two index sizes one day
         for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
             A = convert(SparseMatrixCSC{Tv,Ti}, A0)
@@ -75,7 +75,7 @@
     @testset "More tests for complex cases" begin
         Ac0 = complex.(A0,A0)
         for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
-            Ac = convert(SparseMatrixCSC{Complex128,Ti}, Ac0)
+            Ac = convert(SparseMatrixCSC{ComplexF64,Ti}, Ac0)
             x  = complex.(ones(size(Ac, 1)), ones(size(Ac,1)))
             lua = lufact(Ac)
             L,U,p,q,Rs = lua[:(:)]
@@ -89,7 +89,7 @@
         end
     end
 
-    @testset "Rectangular cases" for elty in (Float64, Complex128)
+    @testset "Rectangular cases" for elty in (Float64, ComplexF64)
         for (m, n) in ((10,5), (5, 10))
             A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex.(randn(min(m, n) + 10), randn(min(m, n) + 10)))
             F = lufact(A)
@@ -110,9 +110,9 @@
     end
 
     @testset "Issue #15099" for (Tin, Tout) in (
-            (Complex32, Complex128),
-            (Complex64, Complex128),
-            (Complex128, Complex128),
+            (ComplexF16, ComplexF64),
+            (ComplexF32, ComplexF64),
+            (ComplexF64, ComplexF64),
             (Float16, Float64),
             (Float32, Float64),
             (Float64, Float64),

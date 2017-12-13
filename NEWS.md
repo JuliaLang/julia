@@ -751,6 +751,10 @@ Deprecated or removed
     in favor of `isassigned` and `normalize_string` in favor of `normalize`, all three
     in the new `Unicode` standard library module ([#25021]).
 
+  * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`,
+     `ComplexF32` and `ComplexF64` respectively (#24647).
+
+
 Command-line option changes
 ---------------------------
 

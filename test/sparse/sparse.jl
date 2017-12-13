@@ -190,8 +190,8 @@ end
         b = randn(5,3) + im*randn(5,3)
         c = randn(5) + im*randn(5)
         d = randn(5) + im*randn(5)
-        α = rand(Complex128)
-        β = rand(Complex128)
+        α = rand(ComplexF64)
+        β = rand(ComplexF64)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(mul!(similar(b), a, b) - Array(a)*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
         @test (maximum(abs.(mul!(similar(c), a, c) - Array(a)*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
@@ -1465,7 +1465,7 @@ end
 end
 
 @testset "diag" begin
-    for T in (Float64, Complex128)
+    for T in (Float64, ComplexF64)
         S1 = sprand(T,  5,  5, 0.5)
         S2 = sprand(T, 10,  5, 0.5)
         S3 = sprand(T,  5, 10, 0.5)
@@ -1545,7 +1545,7 @@ end
     @test ishermitian(A) == false
     @test issymmetric(A) == false
 
-    A = sparse(Complex128(1)I, 5, 5)
+    A = sparse(ComplexF64(1)I, 5, 5)
     A[3,2] = 1.0 + im
     @test ishermitian(A) == false
     @test issymmetric(A) == false
@@ -1558,7 +1558,7 @@ end
     @test issymmetric(A) == true
 
     # explicit zeros
-    A = sparse(Complex128(1)I, 5, 5)
+    A = sparse(ComplexF64(1)I, 5, 5)
     A[3,1] = 2
     A.nzval[2] = 0.0
     @test ishermitian(A) == true
@@ -2089,11 +2089,11 @@ end
 
 @testset "similar with type conversion" begin
     local A = sparse(1.0I, 5, 5)
-    @test size(similar(A, Complex128, Int)) == (5, 5)
-    @test typeof(similar(A, Complex128, Int)) == SparseMatrixCSC{Complex128, Int}
-    @test size(similar(A, Complex128, Int8)) == (5, 5)
-    @test typeof(similar(A, Complex128, Int8)) == SparseMatrixCSC{Complex128, Int8}
-    @test similar(A, Complex128,(6, 6)) == spzeros(Complex128, 6, 6)
+    @test size(similar(A, ComplexF64, Int)) == (5, 5)
+    @test typeof(similar(A, ComplexF64, Int)) == SparseMatrixCSC{ComplexF64, Int}
+    @test size(similar(A, ComplexF64, Int8)) == (5, 5)
+    @test typeof(similar(A, ComplexF64, Int8)) == SparseMatrixCSC{ComplexF64, Int8}
+    @test similar(A, ComplexF64,(6, 6)) == spzeros(ComplexF64, 6, 6)
     @test convert(Matrix, A) == Array(A) # lolwut, are you lost, test?
 end
 
