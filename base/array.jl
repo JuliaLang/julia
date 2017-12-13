@@ -760,7 +760,7 @@ function push!(a::Array{T,1}, item) where T
     # convert first so we don't grow the array if the assignment won't work
     itemT = convert(T, item)
     _growend!(a, 1)
-    a[end] = itemT
+    @inbounds a[end] = itemT
     return a
 end
 
@@ -968,7 +968,7 @@ function pop!(a::Vector)
     if isempty(a)
         throw(ArgumentError("array must be non-empty"))
     end
-    item = a[end]
+    @inbounds item = a[end]
     _deleteend!(a, 1)
     return item
 end
@@ -993,7 +993,7 @@ julia> unshift!([1, 2, 3, 4], 5, 6)
 function unshift!(a::Array{T,1}, item) where T
     item = convert(T, item)
     _growbeg!(a, 1)
-    a[1] = item
+    @inbounds a[1] = item
     return a
 end
 
@@ -1029,7 +1029,7 @@ function shift!(a::Vector)
     if isempty(a)
         throw(ArgumentError("array must be non-empty"))
     end
-    item = a[1]
+    @inbounds item = a[1]
     _deletebeg!(a, 1)
     return item
 end
@@ -1533,7 +1533,8 @@ function findnext(testf::Function, A, start::Integer)
     l = endof(A)
     i = start
     while i <= l
-        if testf(A[i])
+        @inbounds ai = A[i]
+        if testf(ai)
             return i
         end
         i = nextind(A, i)
@@ -1589,7 +1590,7 @@ function findprev(A, start::Integer)
     i = start
     warned = false
     while i >= 1
-        a = A[i]
+        @inbounds a = A[i]
         if !warned && !(a isa Bool)
             depwarn("In the future `findprev` will only work on boolean collections. Use `findprev(x->x!=0, A, start)` instead.", :findprev)
             warned = true
@@ -1647,7 +1648,8 @@ julia> findprev(isodd, A, 3)
 function findprev(testf::Function, A, start::Integer)
     i = start
     while i >= 1
-        testf(A[i]) && return i
+        @inbounds ai = A[i]
+        testf(ai) && return i
         i = prevind(A, i)
     end
     return 0
@@ -1755,7 +1757,8 @@ function find(A)
             warned = true
         end
         if a != 0
-            I[cnt] = inds[i]
+            @inbounds ii = inds[i]
+            I[cnt] = ii #not inbounds in multithreaded if A is concurrently mutated
             cnt += 1
         end
     end
@@ -1800,8 +1803,9 @@ function findn(A::AbstractMatrix)
     J = similar(A, Int, nnzA)
     cnt = 1
     for j=indices(A,2), i=indices(A,1)
-        if A[i,j] != 0
-            I[cnt] = i
+        @inbounds aij = A[i,j]
+        if aij != 0
+            I[cnt] = i #not inbounds in multithreaded if A is concurrently mutated
             J[cnt] = j
             cnt += 1
         end
@@ -1835,9 +1839,9 @@ function findnz(A::AbstractMatrix{T}) where T
     cnt = 1
     if nnzA > 0
         for j=indices(A,2), i=indices(A,1)
-            Aij = A[i,j]
+            @inbounds Aij = A[i,j]
             if Aij != 0
-                I[cnt] = i
+                I[cnt] = i #not inbounds in multithreaded if A is concurrently mutated
                 J[cnt] = j
                 NZs[cnt] = Aij
                 cnt += 1
