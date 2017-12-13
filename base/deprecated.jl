@@ -3067,6 +3067,13 @@ end
     norm(tv::RowVector) = norm(transpose(tv))
 end
 
+# methods involving RowVector from base/linalg/factorization.jl, to deprecate
+@eval Base.LinAlg begin
+    \(A::Adjoint{<:Any,<:Factorization}, B::RowVector) = adjoint(A.parent) \ B
+    \(A::Transpose{<:Any,<:Factorization}, B::RowVector) = transpose(A.parent) \ B
+    \(A::Transpose{<:Any,<:Factorization{<:Real}}, B::RowVector) = transpose(A.parent) \ B
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
