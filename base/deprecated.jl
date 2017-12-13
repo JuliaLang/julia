@@ -3026,6 +3026,47 @@ end
     *(A::RowVector, B::Adjoint{<:Any,<:AbstractRotation}) = A * adjoint(B.parent)
 end
 
+# methods involving RowVector from base/linalg/generic.jl, to deprecate
+@eval Base.LinAlg begin
+    """
+        norm(A::RowVector, q::Real=2)
+
+    For row vectors, return the ``q``-norm of `A`, which is equivalent to the p-norm with
+    value `p = q/(q-1)`. They coincide at `p = q = 2`.
+
+    The difference in norm between a vector space and its dual arises to preserve
+    the relationship between duality and the inner product, and the result is
+    consistent with the p-norm of `1 × n` matrix.
+
+    # Examples
+    ```jldoctest
+    julia> v = [1; im];
+
+    julia> vc = v';
+
+    julia> norm(vc, 1)
+    1.0
+
+    julia> norm(v, 1)
+    2.0
+
+    julia> norm(vc, 2)
+    1.4142135623730951
+
+    julia> norm(v, 2)
+    1.4142135623730951
+
+    julia> norm(vc, Inf)
+    2.0
+
+    julia> norm(v, Inf)
+    1.0
+    ```
+    """
+    norm(tv::RowVector, q::Real) = q == Inf ? norm(transpose(tv), 1) : norm(transpose(tv), q/(q-1))
+    norm(tv::RowVector) = norm(transpose(tv))
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 

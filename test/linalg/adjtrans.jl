@@ -414,3 +414,19 @@ end
     @test (Transpose(realvec) / Transpose(realmat))::Transpose ≈ rowrealvec / transpose(realmat)
     @test (Transpose(complexvec) / Transpose(complexmat))::Transpose ≈ rowcomplexvec / transpose(complexmat)
 end
+
+@testset "norm of Adjoint/Transpose-wrapped vectors" begin
+    # definitions are in base/linalg/generic.jl
+    realvec, complexvec = [3, -4], [3im, -4im]
+    # one norm result should be maximum(abs.(realvec)) == 4
+    # two norm result should be sqrt(sum(abs.(realvec))) == 5
+    # inf norm result should be sum(abs.(realvec)) == 7
+    for v in (realvec, complexvec)
+        @test norm(Adjoint(v)) ≈ 5
+        @test norm(Adjoint(v), 1) ≈ 4
+        @test norm(Adjoint(v), Inf) ≈ 7
+        @test norm(Transpose(v)) ≈ 5
+        @test norm(Transpose(v), 1) ≈ 4
+        @test norm(Transpose(v), Inf) ≈ 7
+    end
+end
