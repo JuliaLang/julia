@@ -34,7 +34,7 @@ size(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) where {N} =
     (size(x, d1), size(x, d2), ntuple(k->size(x, dx[k]), Val(N))...)
 
 """
-    indices(A, d)
+    axes(A, d)
 
 Return the valid range of indices for array `A` along dimension `d`.
 
@@ -42,17 +42,17 @@ Return the valid range of indices for array `A` along dimension `d`.
 ```jldoctest
 julia> A = ones(5,6,7);
 
-julia> indices(A,2)
+julia> axes(A,2)
 Base.OneTo(6)
 ```
 """
-function indices(A::AbstractArray{T,N}, d) where {T,N}
+function axes(A::AbstractArray{T,N}, d) where {T,N}
     @_inline_meta
-    d <= N ? indices(A)[d] : OneTo(1)
+    d <= N ? axes(A)[d] : OneTo(1)
 end
 
 """
-    indices(A)
+    axes(A)
 
 Return the tuple of valid indices for array `A`.
 
@@ -60,23 +60,23 @@ Return the tuple of valid indices for array `A`.
 ```jldoctest
 julia> A = ones(5,6,7);
 
-julia> indices(A)
+julia> axes(A)
 (Base.OneTo(5), Base.OneTo(6), Base.OneTo(7))
 ```
 """
-function indices(A)
+function axes(A)
     @_inline_meta
     map(OneTo, size(A))
 end
 
-# Performance optimization: get rid of a branch on `d` in `indices(A, d)`
+# Performance optimization: get rid of a branch on `d` in `axes(A, d)`
 # for d=1. 1d arrays are heavily used, and the first dimension comes up
 # in other applications.
 indices1(A::AbstractArray{<:Any,0}) = OneTo(1)
-indices1(A::AbstractArray) = (@_inline_meta; indices(A)[1])
+indices1(A::AbstractArray) = (@_inline_meta; axes(A)[1])
 indices1(iter) = OneTo(length(iter))
 
-unsafe_indices(A) = indices(A)
+unsafe_indices(A) = axes(A)
 unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
 
 """
@@ -86,7 +86,7 @@ Return a `UnitRange` specifying the valid range of indices for `A[i]`
 where `i` is an `Int`. For arrays with conventional indexing (indices
 start at 1), or any multidimensional array, this is `1:length(A)`;
 however, for one-dimensional arrays with unconventional indices, this
-is `indices(A, 1)`.
+is `axes(A, 1)`.
 
 Calling this function is the "safe" way to write algorithms that
 exploit linear indexing.
@@ -104,7 +104,7 @@ julia> extrema(b)
 linearindices(A::AbstractArray) = (@_inline_meta; OneTo(_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
 
-keys(a::AbstractArray) = CartesianRange(indices(a))
+keys(a::AbstractArray) = CartesianRange(axes(a))
 keys(a::AbstractVector) = linearindices(a)
 
 prevind(::AbstractArray, i::Integer) = Int(i)-1
@@ -150,7 +150,7 @@ julia> length([1 2; 3 4])
 ```
 """
 length(t::AbstractArray) = (@_inline_meta; prod(size(t)))
-_length(A::AbstractArray) = (@_inline_meta; prod(map(unsafe_length, indices(A)))) # circumvent missing size
+_length(A::AbstractArray) = (@_inline_meta; prod(map(unsafe_length, axes(A)))) # circumvent missing size
 _length(A) = (@_inline_meta; length(A))
 
 """
@@ -376,7 +376,7 @@ false
 """
 function checkbounds(::Type{Bool}, A::AbstractArray, I...)
     @_inline_meta
-    checkbounds_indices(Bool, indices(A), I)
+    checkbounds_indices(Bool, axes(A), I)
 end
 # Linear indexing is explicitly allowed when there is only one (non-cartesian) index
 function checkbounds(::Type{Bool}, A::AbstractArray, i)
@@ -386,7 +386,7 @@ end
 # As a special extension, allow using logical arrays that match the source array exactly
 function checkbounds(::Type{Bool}, A::AbstractArray{<:Any,N}, I::AbstractArray{Bool,N}) where N
     @_inline_meta
-    indices(A) == indices(I)
+    axes(A) == axes(I)
 end
 
 """
@@ -519,7 +519,7 @@ julia> similar(falses(10), Float64, 2, 4)
 
 """
 similar(a::AbstractArray{T}) where {T}                             = similar(a, T)
-similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, to_shape(indices(a)))
+similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, to_shape(axes(a)))
 similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, to_shape(dims))
 similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, to_shape(dims))
 similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, to_shape(dims))
@@ -545,7 +545,7 @@ argument. `storagetype` might be a type or a function.
 
 **Examples**:
 
-    similar(Array{Int}, indices(A))
+    similar(Array{Int}, axes(A))
 
 creates an array that "acts like" an `Array{Int}` (and might indeed be
 backed by one), but which is indexed identically to `A`. If `A` has
@@ -553,12 +553,12 @@ conventional indexing, this will be identical to
 `Array{Int}(uninitialized, size(A))`, but if `A` has unconventional indexing then the
 indices of the result will match `A`.
 
-    similar(BitArray, (indices(A, 2),))
+    similar(BitArray, (axes(A, 2),))
 
 would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
 
-    similar(dims->zeros(Int, dims), indices(A))
+    similar(dims->zeros(Int, dims), axes(A))
 
 would create an array of `Int`, initialized to zero, matching the
 indices of `A`.
@@ -869,7 +869,7 @@ convert(::Type{Array}, A::AbstractArray{T,N}) where {T,N} = convert(Array{T,N}, 
 
 Represents the array `y` as an array having the same indices type as `x`.
 """
-of_indices(x, y) = similar(dims->y, oftype(indices(x), indices(y)))
+of_indices(x, y) = similar(dims->y, oftype(axes(x), axes(y)))
 
 
 ## range conversions ##
@@ -986,11 +986,11 @@ function _to_subscript_indices(A::AbstractArray{T,N}, I::Int...) where {T,N}
     _to_subscript_indices(A, J, Jrem)
 end
 _to_subscript_indices(A::AbstractArray, J::Tuple, Jrem::Tuple{}) =
-    __to_subscript_indices(A, indices(A), J, Jrem)
+    __to_subscript_indices(A, axes(A), J, Jrem)
 function __to_subscript_indices(A::AbstractArray,
         ::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}, J::Tuple, Jrem::Tuple{})
     @_inline_meta
-    (J..., map(first, tail(_remaining_size(J, indices(A))))...)
+    (J..., map(first, tail(_remaining_size(J, axes(A))))...)
 end
 _to_subscript_indices(A, J::Tuple, Jrem::Tuple) = J # already bounds-checked, safe to drop
 _to_subscript_indices(A::AbstractArray{T,N}, I::Vararg{Int,N}) where {T,N} = I
@@ -1200,7 +1200,7 @@ cat_size(A, d) = 1
 cat_size(A::AbstractArray, d) = size(A, d)
 
 cat_indices(A, d) = OneTo(1)
-cat_indices(A::AbstractArray, d) = indices(A, d)
+cat_indices(A::AbstractArray, d) = axes(A, d)
 
 cat_similar(A, T, shape) = Array{T}(uninitialized, shape)
 cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
@@ -1543,7 +1543,7 @@ end
 
 function isequal(A::AbstractArray, B::AbstractArray)
     if A === B return true end
-    if indices(A) != indices(B)
+    if axes(A) != axes(B)
         return false
     end
     if isa(A,AbstractRange) != isa(B,AbstractRange)
@@ -1566,7 +1566,7 @@ function lexcmp(A::AbstractArray, B::AbstractArray)
 end
 
 function (==)(A::AbstractArray, B::AbstractArray)
-    if indices(A) != indices(B)
+    if axes(A) != axes(B)
         return false
     end
     if isa(A,AbstractRange) != isa(B,AbstractRange)
@@ -1588,7 +1588,7 @@ end
 # fallbacks
 function sub2ind(A::AbstractArray, I...)
     @_inline_meta
-    sub2ind(indices(A), I...)
+    sub2ind(axes(A), I...)
 end
 
 """
@@ -1609,7 +1609,7 @@ julia> ind2sub(A,70)
 """
 function ind2sub(A::AbstractArray, ind)
     @_inline_meta
-    ind2sub(indices(A), ind)
+    ind2sub(axes(A), ind)
 end
 
 # 0-dimensional arrays and indexing with []
@@ -1835,16 +1835,16 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
         return map(f,A)
     end
 
-    dimsA = [indices(A)...]
+    dimsA = [axes(A)...]
     ndimsA = ndims(A)
     alldims = [1:ndimsA;]
 
     otherdims = setdiff(alldims, dims)
 
-    idx = Any[first(ind) for ind in indices(A)]
+    idx = Any[first(ind) for ind in axes(A)]
     itershape   = tuple(dimsA[otherdims]...)
     for d in dims
-        idx[d] = Slice(indices(A, d))
+        idx[d] = Slice(axes(A, d))
     end
 
     # Apply the function to the first slice in order to determine the next steps
@@ -1867,13 +1867,13 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     if eltype(Rsize) == Int
         Rsize[dims] = [size(r1)..., ntuple(d->1, nextra)...]
     else
-        Rsize[dims] = [indices(r1)..., ntuple(d->OneTo(1), nextra)...]
+        Rsize[dims] = [axes(r1)..., ntuple(d->OneTo(1), nextra)...]
     end
     R = similar(r1, tuple(Rsize...,))
 
-    ridx = Any[map(first, indices(R))...]
+    ridx = Any[map(first, axes(R))...]
     for d in dims
-        ridx[d] = indices(R,d)
+        ridx[d] = axes(R,d)
     end
 
     R[ridx...] = r1

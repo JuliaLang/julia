@@ -120,7 +120,7 @@ end
         # TODO strengthen this test, avoiding dependence on checking whether
         # check_broadcast_indices throws to determine whether sparse broadcast should throw
         try
-            Base.Broadcast.check_broadcast_indices(indices(Z), spzeros((shapeX .- 1)...))
+            Base.Broadcast.check_broadcast_indices(axes(Z), spzeros((shapeX .- 1)...))
         catch
             @test_throws DimensionMismatch broadcast!(sin, Z, spzeros((shapeX .- 1)...))
         end
@@ -144,7 +144,7 @@ end
         # TODO strengthen this test, avoiding dependence on checking whether
         # check_broadcast_indices throws to determine whether sparse broadcast should throw
         try
-            Base.Broadcast.check_broadcast_indices(indices(V), spzeros((shapeX .- 1)...))
+            Base.Broadcast.check_broadcast_indices(axes(V), spzeros((shapeX .- 1)...))
         catch
             @test_throws DimensionMismatch broadcast!(sin, V, spzeros((shapeX .- 1)...))
         end
@@ -202,7 +202,7 @@ end
             # TODO strengthen this test, avoiding dependence on checking whether
             # check_broadcast_indices throws to determine whether sparse broadcast should throw
             try
-                Base.Broadcast.check_broadcast_indices(indices(Z), spzeros((shapeX .- 1)...), Y)
+                Base.Broadcast.check_broadcast_indices(axes(Z), spzeros((shapeX .- 1)...), Y)
             catch
                 @test_throws DimensionMismatch broadcast!(f, Z, spzeros((shapeX .- 1)...), Y)
             end
@@ -259,7 +259,7 @@ end
             # TODO strengthen this test, avoiding dependence on checking whether
             # check_broadcast_indices throws to determine whether sparse broadcast should throw
             try
-                Base.Broadcast.check_broadcast_indices(indices(Q), spzeros((shapeX .- 1)...), Y, Z)
+                Base.Broadcast.check_broadcast_indices(axes(Q), spzeros((shapeX .- 1)...), Y, Z)
             catch
                 @test_throws DimensionMismatch broadcast!(f, Q, spzeros((shapeX .- 1)...), Y, Z)
             end

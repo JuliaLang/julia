@@ -536,8 +536,8 @@ function gen_broadcast_body_zpreserving(f::Function, is_first_sparse::Bool)
         op2 = :(val1)
     end
     quote
-        Base.Broadcast.check_broadcast_indices(indices(B), $A1)
-        Base.Broadcast.check_broadcast_indices(indices(B), $A2)
+        Base.Broadcast.check_broadcast_indices(axes(B), $A1)
+        Base.Broadcast.check_broadcast_indices(axes(B), $A2)
 
         nnzB = isempty(B) ? 0 :
                nnz($A1) * div(B.n, ($A1).n) * div(B.m, ($A1).m)
@@ -3039,6 +3039,10 @@ end
 # issue #25016
 @deprecate lpad(s, n::Integer, p) lpad(string(s), n, string(p))
 @deprecate rpad(s, n::Integer, p) rpad(string(s), n, string(p))
+
+# PR #25057
+@deprecate indices(a) axes(a)
+@deprecate indices(a, d) axes(a, d)
 
 # END 0.7 deprecations
 

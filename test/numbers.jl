@@ -2822,9 +2822,9 @@ end
     @test ndims(Integer) == 0
     @test size(1,1) == 1
     @test_throws BoundsError size(1,-1)
-    @test indices(1) == ()
-    @test indices(1,1) == 1:1
-    @test_throws BoundsError indices(1,-1)
+    @test axes(1) == ()
+    @test axes(1,1) == 1:1
+    @test_throws BoundsError axes(1,-1)
     @test isinteger(Integer(2)) == true
     @test !isinteger(π)
     @test size(1) == ()

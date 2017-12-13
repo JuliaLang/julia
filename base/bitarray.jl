@@ -562,7 +562,7 @@ gen_bitarray(isz::IteratorSize, itr) = gen_bitarray_from_itr(itr, start(itr))
 # generic iterable with known shape
 function gen_bitarray(::HasShape, itr)
     B = BitArray(uninitialized, size(itr))
-    for (I,x) in zip(CartesianRange(indices(itr)), itr)
+    for (I,x) in zip(CartesianRange(axes(itr)), itr)
         B[I] = x
     end
     return B
