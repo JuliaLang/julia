@@ -422,6 +422,7 @@ end
     end
 end
 
-@testset "Diagonal of a RowVector (#23649)" begin
-    @test Diagonal([1,2,3].') == Diagonal([1 2 3])
+@testset "Diagonal of Adjoint/Transpose vectors (#23649)" begin
+    @test Diagonal(Adjoint([1, 2, 3])) == Diagonal([1 2 3])
+    @test Diagonal(Transpose([1, 2, 3])) == Diagonal([1 2 3])
 end

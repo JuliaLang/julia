@@ -3002,6 +3002,13 @@ end
     _mat_ldiv_rowvec_error() = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 end
 
+# methods involving RowVector from base/linalg/diagonal.jl, to deprecate
+@eval Base.LinAlg begin
+    *(rowvec::RowVector, D::Diagonal) = transpose(D * transpose(rowvec)) # seems potentially incorrect without also transposing D?
+    *(D::Diagonal, transrowvec::Transpose{<:Any,<:RowVector}) = (rowvec = transrowvec.parent; D*transpose(rowvec))
+    *(D::Diagonal, adjrowvec::Adjoint{<:Any,<:RowVector}) = (rowvec = adjrowvec.parent; D*adjoint(rowvec))
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
