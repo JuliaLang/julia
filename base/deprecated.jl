@@ -2999,6 +2999,10 @@ end
 # Associative -> AbstractDict (#25012)
 @deprecate_binding Associative AbstractDict
 
+# issue #25016
+@deprecate lpad(s, n::Integer, p) lpad(string(s), n, string(p))
+@deprecate rpad(s, n::Integer, p) rpad(string(s), n, string(p))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
