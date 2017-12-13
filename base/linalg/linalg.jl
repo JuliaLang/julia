@@ -48,6 +48,8 @@ export
     BLAS,
 
 # Types
+    Adjoint,
+    Transpose,
     RowVector,
     ConjArray,
     ConjVector,

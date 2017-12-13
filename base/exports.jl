@@ -95,6 +95,8 @@ export
     RoundNearestTiesUp,
     RoundToZero,
     RoundUp,
+    Adjoint,
+    Transpose,
     RowVector,
     AbstractSerializer,
     SerializationState,
