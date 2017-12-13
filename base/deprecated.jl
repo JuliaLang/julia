@@ -3021,6 +3021,11 @@ end
     *(rowvec::RowVector, adjB::Adjoint{<:Any,<:AbstractQ}) = (B = adjB.parent; adjoint(B*adjoint(rowvec)))
 end
 
+# methods involving RowVector from base/linalg/qr.jl, to deprecate
+@eval Base.LinAlg begin
+    *(A::RowVector, B::Adjoint{<:Any,<:AbstractRotation}) = A * adjoint(B.parent)
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 

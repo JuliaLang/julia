@@ -379,7 +379,6 @@ end
 *(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:AbstractRotation}) = A.parent * B
 # dismabiguation methods: *(Diag/RowVec/AbsTri, Adj of AbstractRotation)
 *(A::Diagonal, B::Adjoint{<:Any,<:AbstractRotation}) = A * adjoint(B.parent)
-*(A::RowVector, B::Adjoint{<:Any,<:AbstractRotation}) = A * adjoint(B.parent)
 *(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractRotation}) = A * adjoint(B.parent)
 # moar disambiguation
 mul!(A::QRPackedQ, B::Adjoint{<:Any,<:Givens}) = throw(MethodError(mul!, (A, B)))
