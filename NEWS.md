@@ -465,6 +465,9 @@ Deprecated or removed
     `Matrix{Int}(uninitialized, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
     `Array{Float32,3}(uninitialized, 11, 13, 17)` ([#24781]).
 
+  * `Vector()`, `Vector(n)` and `Matrix(m,n)` have been deprecated in favor of `Vector{Any}()`,
+    `Vector{Any}(uninitialized, n)` and `Matrix{Any}(uninitialized, m,n)` ([#24974]).
+
   * `fill!(A::Diagonal, x)` and `fill!(A::AbstractTriangular, x)` have been deprecated
     in favor of `Base.LinAlg.fillslots!(A, x)` ([#24413]).
 

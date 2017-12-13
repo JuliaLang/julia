@@ -1061,17 +1061,6 @@ end
 
 ## end of FloatRange
 
-@noinline zero_arg_matrix_constructor(prefix::String) =
-    depwarn("$prefix() is deprecated, use $prefix(uninitialized, 0, 0) instead.", :zero_arg_matrix_constructor)
-function Matrix{T}() where T
-    zero_arg_matrix_constructor("Matrix{T}")
-    return Matrix{T}(uninitialized, 0, 0)
-end
-function Matrix()
-    zero_arg_matrix_constructor("Matrix")
-    return Matrix(uninitialized, 0, 0)
-end
-
 for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
              "lower", "print", "punct", "space", "upper", "xdigit")
     f = Symbol("is",name)
@@ -2055,8 +2044,11 @@ end
 @deprecate Array{T}(m::Integer, n::Integer) where {T}               Array{T}(uninitialized, m, n)
 @deprecate Array{T}(m::Integer, n::Integer, o::Integer) where {T}   Array{T}(uninitialized, m, n, o)
 @deprecate Array{T}(d::Integer...) where {T}                        Array{T}(uninitialized, d)
-@deprecate Vector(m::Integer)                                       Vector(uninitialized, m)
-@deprecate Matrix(m::Integer, n::Integer)                           Matrix(uninitialized, m, n)
+@deprecate Vector(m::Integer)                                       Vector{Any}(uninitialized, m)
+@deprecate Matrix(m::Integer, n::Integer)                           Matrix{Any}(uninitialized, m, n)
+
+# PR #24974
+@deprecate Vector() Vector{Any}()
 
 # deprecate IntSet to BitSet
 @deprecate_binding IntSet BitSet
