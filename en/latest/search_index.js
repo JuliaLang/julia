@@ -29,7 +29,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Standard Library",
     "category": "section",
-    "text": "Essentials\nCollections and Data Structures\nMathematics\nNumbers\nStrings\nArrays\nTasks and Parallel Computing\nLinear Algebra\nConstants\nFilesystem\nDelimited Files\nI/O and Network\nPunctuation\nSorting and Related Functions\nPackage Manager Functions\nDates and Time\nIteration utilities\nUnit Testing\nC Interface\nC Standard Library\nDynamic Linker\nStackTraces\nSIMD Support\nProfiling\nMemory-mapped I/O\nShared Arrays\nBase64\nFile Events\nIterative Eigensolvers"
+    "text": "Essentials\nCollections and Data Structures\nMathematics\nNumbers\nStrings\nArrays\nTasks and Parallel Computing\nLinear Algebra\nConstants\nFilesystem\nDelimited Files\nI/O and Network\nPunctuation\nSorting and Related Functions\nPackage Manager Functions\nDates and Time\nIteration utilities\nUnit Testing\nC Interface\nC Standard Library\nDynamic Linker\nStackTraces\nSIMD Support\nProfiling\nMemory-mapped I/O\nShared Arrays\nBase64\nFile Events\nIterative Eigensolvers\nUnicode"
 },
 
 {
@@ -4397,7 +4397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Frequently Asked Questions",
     "title": "How does \"null\" or \"nothingness\" work in Julia?",
     "category": "section",
-    "text": "Unlike many languages (for example, C and Java), Julia does not have a \"null\" value. When a reference (variable, object field, or array element) is uninitialized, accessing it will immediately throw an error. This situation can be detected using the isdefined or isassigned functions.Some functions are used only for their side effects, and do not need to return a value. In these cases, the convention is to return the value nothing, which is just a singleton object of type Void. This is an ordinary type with no fields; there is nothing special about it except for this convention, and that the REPL does not print anything for it. Some language constructs that would not otherwise have a value also yield nothing, for example if false; end.To represent missing data in the statistical sense (NA in R or NULL in SQL), use the missing object. See the `Missing Values| section for more details.The empty tuple (()) is another form of nothingness. But, it should not really be thought of as nothing but rather a tuple of zero values.In code written for Julia prior to version 0.4 you may occasionally see None, which is quite different. It is the empty (or \"bottom\") type, a type with no values and no subtypes (except itself). This is now written as Union{} (an empty union type). You will generally not need to use this type."
+    "text": "Unlike many languages (for example, C and Java), Julia does not have a \"null\" value. When a reference (variable, object field, or array element) is uninitialized, accessing it will immediately throw an error. This situation can be detected using the isdefined or isassigned functions.Some functions are used only for their side effects, and do not need to return a value. In these cases, the convention is to return the value nothing, which is just a singleton object of type Void. This is an ordinary type with no fields; there is nothing special about it except for this convention, and that the REPL does not print anything for it. Some language constructs that would not otherwise have a value also yield nothing, for example if false; end.To represent missing data in the statistical sense (NA in R or NULL in SQL), use the missing object. See the Missing Values section for more details.The empty tuple (()) is another form of nothingness. But, it should not really be thought of as nothing but rather a tuple of zero values.In code written for Julia prior to version 0.4 you may occasionally see None, which is quite different. It is the empty (or \"bottom\") type, a type with no values and no subtypes (except itself). This is now written as Union{} (an empty union type). You will generally not need to use this type."
 },
 
 {
@@ -4517,7 +4517,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unicode Input",
     "title": "Unicode Input",
     "category": "section",
-    "text": "The following table lists Unicode characters that can be entered via tab completion of LaTeX-like abbreviations in the Julia REPL (and in various other editing environments).  You can also get information on how to type a symbol by entering it in the REPL help, i.e. by typing ? and then entering the symbol in the REPL (e.g., by copy-paste from somewhere you saw the symbol).warning: Warning\nThis table may appear to contain missing characters in the second column, or even show characters that are inconsistent with the characters as they are rendered in the Julia REPL. In these cases, users are strongly advised to check their choice of fonts in their browser and REPL environment, as there are known issues with glyphs in many fonts.#\n# Generate a table containing all LaTeX and Emoji tab completions available in the REPL.\n#\n\nconst NBSP = '\\u00A0'\n\nfunction tab_completions(symbols...)\n    completions = Dict{String, Vector{String}}()\n    for each in symbols, (k, v) in each\n        completions[v] = push!(get!(completions, v, String[]), k)\n    end\n    return completions\nend\n\nfunction unicode_data()\n    file = normpath(JULIA_HOME, \"..\", \"..\", \"doc\", \"UnicodeData.txt\")\n    names = Dict{UInt32, String}()\n    open(file) do unidata\n        for line in readlines(unidata)\n            id, name, desc = split(line, \";\")[[1, 2, 11]]\n            codepoint = parse(UInt32, \"0x$id\")\n            names[codepoint] = titlecase(lowercase(name == \"\" ? desc : desc == \"\" ? name : \"$name / $desc\"))\n        end\n    end\n    return names\nend\n\n# Surround combining characters with no-break spaces (i.e '\\u00A0'). Follows the same format\n# for how unicode is displayed on the unicode.org website:\n# http://unicode.org/cldr/utility/character.jsp?a=0300\nfunction fix_combining_chars(char)\n    cat = Base.UTF8proc.category_code(char)\n    return cat == 6 || cat == 8 ? \"$NBSP$char$NBSP\" : \"$char\"\nend\n\n\nfunction table_entries(completions, unicode_dict)\n    entries = [[\n        \"Code point(s)\", \"Character(s)\",\n        \"Tab completion sequence(s)\", \"Unicode name(s)\"\n    ]]\n    for (chars, inputs) in sort!(collect(completions), by = first)\n        code_points, unicode_names, characters = String[], String[], String[]\n        for char in chars\n            push!(code_points, \"U+$(uppercase(hex(char, 5)))\")\n            push!(unicode_names, get(unicode_dict, UInt32(char), \"(No Unicode name)\"))\n            push!(characters, isempty(characters) ? fix_combining_chars(char) : \"$char\")\n        end\n        push!(entries, [\n            join(code_points, \" + \"), join(characters),\n            join(inputs, \", \"), join(unicode_names, \" + \")\n        ])\n    end\n    return Markdown.Table(entries, [:l, :l, :l, :l])\nend\n\ntable_entries(\n    tab_completions(\n        Base.REPLCompletions.latex_symbols,\n        Base.REPLCompletions.emoji_symbols\n    ),\n    unicode_data()\n)"
+    "text": "The following table lists Unicode characters that can be entered via tab completion of LaTeX-like abbreviations in the Julia REPL (and in various other editing environments).  You can also get information on how to type a symbol by entering it in the REPL help, i.e. by typing ? and then entering the symbol in the REPL (e.g., by copy-paste from somewhere you saw the symbol).warning: Warning\nThis table may appear to contain missing characters in the second column, or even show characters that are inconsistent with the characters as they are rendered in the Julia REPL. In these cases, users are strongly advised to check their choice of fonts in their browser and REPL environment, as there are known issues with glyphs in many fonts.#\n# Generate a table containing all LaTeX and Emoji tab completions available in the REPL.\n#\n\nconst NBSP = '\\u00A0'\n\nfunction tab_completions(symbols...)\n    completions = Dict{String, Vector{String}}()\n    for each in symbols, (k, v) in each\n        completions[v] = push!(get!(completions, v, String[]), k)\n    end\n    return completions\nend\n\nfunction unicode_data()\n    file = normpath(JULIA_HOME, \"..\", \"..\", \"doc\", \"UnicodeData.txt\")\n    names = Dict{UInt32, String}()\n    open(file) do unidata\n        for line in readlines(unidata)\n            id, name, desc = split(line, \";\")[[1, 2, 11]]\n            codepoint = parse(UInt32, \"0x$id\")\n            names[codepoint] = Base.Unicode.titlecase(Base.Unicode.lowercase(\n                name == \"\" ? desc : desc == \"\" ? name : \"$name / $desc\"))\n        end\n    end\n    return names\nend\n\n# Surround combining characters with no-break spaces (i.e '\\u00A0'). Follows the same format\n# for how unicode is displayed on the unicode.org website:\n# http://unicode.org/cldr/utility/character.jsp?a=0300\nfunction fix_combining_chars(char)\n    cat = Base.Unicode.category_code(char)\n    return cat == 6 || cat == 8 ? \"$NBSP$char$NBSP\" : \"$char\"\nend\n\n\nfunction table_entries(completions, unicode_dict)\n    entries = [[\n        \"Code point(s)\", \"Character(s)\",\n        \"Tab completion sequence(s)\", \"Unicode name(s)\"\n    ]]\n    for (chars, inputs) in sort!(collect(completions), by = first)\n        code_points, unicode_names, characters = String[], String[], String[]\n        for char in chars\n            push!(code_points, \"U+$(Base.Unicode.uppercase(hex(char, 5)))\")\n            push!(unicode_names, get(unicode_dict, UInt32(char), \"(No Unicode name)\"))\n            push!(characters, isempty(characters) ? fix_combining_chars(char) : \"$char\")\n        end\n        push!(entries, [\n            join(code_points, \" + \"), join(characters),\n            join(inputs, \", \"), join(unicode_names, \" + \")\n        ])\n    end\n    return Markdown.Table(entries, [:l, :l, :l, :l])\nend\n\ntable_entries(\n    tab_completions(\n        Base.REPLCompletions.latex_symbols,\n        Base.REPLCompletions.emoji_symbols\n    ),\n    unicode_data()\n)"
 },
 
 {
@@ -5733,7 +5733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.:∘",
     "category": "Function",
-    "text": "f ∘ g\n\nCompose functions: i.e. (f ∘ g)(args...) means f(g(args...)). The ∘ symbol can be entered in the Julia REPL (and most editors, appropriately configured) by typing \\circ<tab>.\n\nExamples\n\njulia> map(uppercase∘hex, 250:255)\n6-element Array{String,1}:\n \"FA\"\n \"FB\"\n \"FC\"\n \"FD\"\n \"FE\"\n \"FF\"\n\n\n\n"
+    "text": "f ∘ g\n\nCompose functions: i.e. (f ∘ g)(args...) means f(g(args...)). The ∘ symbol can be entered in the Julia REPL (and most editors, appropriately configured) by typing \\circ<tab>.\n\nExamples\n\njulia> using Unicode\n\njulia> map(uppercase∘hex, 250:255)\n6-element Array{String,1}:\n \"FA\"\n \"FB\"\n \"FC\"\n \"FD\"\n \"FE\"\n \"FF\"\n\n\n\n"
 },
 
 {
@@ -7301,7 +7301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "Function",
-    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n"
+    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n"
 },
 
 {
@@ -7333,7 +7333,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nmap(f, x::Nullable)\n\nReturn f applied to the value of x if it has one, as a Nullable. If x is null, then return a null value of type Nullable{S}. S is guaranteed to be either Union{} or a concrete type. Whichever of these is chosen is an implementation detail, but typically the choice that maximizes performance would be used. If x has a value, then the return type is guaranteed to be of type Nullable{typeof(f(x))}.\n\nExamples\n\njulia> map(isodd, Nullable(1))\nNullable{Bool}(true)\n\njulia> map(isodd, Nullable(2))\nNullable{Bool}(false)\n\njulia> map(isodd, Nullable{Int}())\nNullable{Bool}()\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n"
+    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nmap(f, x::Nullable)\n\nReturn f applied to the value of x if it has one, as a Nullable. If x is null, then return a null value of type Nullable{S}. S is guaranteed to be either Union{} or a concrete type. Whichever of these is chosen is an implementation detail, but typically the choice that maximizes performance would be used. If x has a value, then the return type is guaranteed to be of type Nullable{typeof(f(x))}.\n\nExamples\n\njulia> map(isodd, Nullable(1))\nNullable{Bool}(true)\n\njulia> map(isodd, Nullable(2))\nNullable{Bool}(false)\n\njulia> map(isodd, Nullable{Int}())\nNullable{Bool}()\n\n\n\n"
 },
 
 {
@@ -9109,7 +9109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -10513,22 +10513,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/strings/#Base.UTF8proc.normalize_string",
-    "page": "Strings",
-    "title": "Base.UTF8proc.normalize_string",
-    "category": "Function",
-    "text": "normalize_string(s::AbstractString, normalform::Symbol)\n\nNormalize the string s according to one of the four \"normal forms\" of the Unicode standard: normalform can be :NFC, :NFD, :NFKC, or :NFKD.  Normal forms C (canonical composition) and D (canonical decomposition) convert different visually identical representations of the same abstract string into a single canonical form, with form C being more compact.  Normal forms KC and KD additionally canonicalize \"compatibility equivalents\": they convert characters that are abstractly similar but visually distinct into a single canonical choice (e.g. they expand ligatures into the individual characters), with form KC being more compact.\n\nAlternatively, finer control and additional transformations may be be obtained by calling normalize_string(s; keywords...), where any number of the following boolean keywords options (which all default to false except for compose) are specified:\n\ncompose=false: do not perform canonical composition\ndecompose=true: do canonical decomposition instead of canonical composition (compose=true is ignored if present)\ncompat=true: compatibility equivalents are canonicalized\ncasefold=true: perform Unicode case folding, e.g. for case-insensitive string comparison\nnewline2lf=true, newline2ls=true, or newline2ps=true: convert various newline sequences (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS) character, respectively\nstripmark=true: strip diacritical marks (e.g. accents)\nstripignore=true: strip Unicode's \"default ignorable\" characters (e.g. the soft hyphen or the left-to-right marker)\nstripcc=true: strip control characters; horizontal tabs and form feeds are converted to spaces; newlines are also converted to spaces unless a newline-conversion flag was specified\nrejectna=true: throw an error if unassigned code points are found\nstable=true: enforce Unicode Versioning Stability\n\nFor example, NFKC corresponds to the options compose=true, compat=true, stable=true.\n\nExamples\n\njulia> \"μ\" == normalize_string(\"µ\", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5\ntrue\n\njulia> normalize_string(\"JuLiA\", casefold=true)\n\"julia\"\n\njulia> normalize_string(\"JúLiA\", stripmark=true)\n\"JuLiA\"\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.UTF8proc.graphemes",
-    "page": "Strings",
-    "title": "Base.UTF8proc.graphemes",
-    "category": "Function",
-    "text": "graphemes(s::AbstractString) -> GraphemeIterator\n\nReturns an iterator over substrings of s that correspond to the extended graphemes in the string, as defined by Unicode UAX #29. (Roughly, these are what users would perceive as single characters, even though they may contain more than one codepoint; for example a letter combined with an accent mark is a single grapheme.)\n\n\n\n"
-},
-
-{
     "location": "stdlib/strings/#Base.isvalid-Tuple{Any}",
     "page": "Strings",
     "title": "Base.isvalid",
@@ -10550,14 +10534,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Base.isvalid",
     "category": "Method",
     "text": "isvalid(str::AbstractString, i::Integer)\n\nTell whether index i is valid for the given string.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> isvalid(str, 1)\ntrue\n\njulia> str[1]\n'α': Unicode U+03b1 (category Ll: Letter, lowercase)\n\njulia> isvalid(str, 2)\nfalse\n\njulia> str[2]\nERROR: UnicodeError: invalid character index\nStacktrace:\n[...]\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.UTF8proc.is_assigned_char",
-    "page": "Strings",
-    "title": "Base.UTF8proc.is_assigned_char",
-    "category": "Function",
-    "text": "is_assigned_char(c) -> Bool\n\nReturns true if the given char or integer is an assigned Unicode code point.\n\nExamples\n\njulia> is_assigned_char(101)\ntrue\n\njulia> is_assigned_char('\\x01')\ntrue\n\n\n\n"
 },
 
 {
@@ -10677,7 +10653,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.reverse",
     "category": "Method",
-    "text": "reverse(s::AbstractString) -> AbstractString\n\nReverses a string. Technically, this function reverses the codepoints in a string and its main utility is for reversed-order string processing, especially for reversed regular-expression searches. See also reverseind to convert indices in s to indices in reverse(s) and vice-versa, and graphemes to operate on user-visible \"characters\" (graphemes) rather than codepoints. See also Iterators.reverse for reverse-order iteration without making a copy. Custom string types must implement the reverse function themselves and should typically return a string with the same type and encoding. If they return a string with a different encoding, they must also override reverseind for that string type to satisfy s[reverseind(s,i)] == reverse(s)[i].\n\nExamples\n\njulia> reverse(\"JuliaLang\")\n\"gnaLailuJ\"\n\njulia> reverse(\"ax̂e\") # combining characters can lead to surprising results\n\"êxa\"\n\njulia> join(reverse(collect(graphemes(\"ax̂e\")))) # reverses graphemes\n\"ex̂a\"\n\n\n\n"
+    "text": "reverse(s::AbstractString) -> AbstractString\n\nReverses a string. Technically, this function reverses the codepoints in a string and its main utility is for reversed-order string processing, especially for reversed regular-expression searches. See also reverseind to convert indices in s to indices in reverse(s) and vice-versa, and Unicode.graphemes to operate on user-visible \"characters\" (graphemes) rather than codepoints. See also Iterators.reverse for reverse-order iteration without making a copy. Custom string types must implement the reverse function themselves and should typically return a string with the same type and encoding. If they return a string with a different encoding, they must also override reverseind for that string type to satisfy s[reverseind(s,i)] == reverse(s)[i].\n\nExamples\n\njulia> reverse(\"JuliaLang\")\n\"gnaLailuJ\"\n\njulia> reverse(\"ax̂e\") # combining characters can lead to surprising results\n\"êxa\"\n\njulia> using Unicode\n\njulia> join(reverse(collect(graphemes(\"ax̂e\")))) # reverses graphemes\n\"ex̂a\"\n\n\n\n"
 },
 
 {
@@ -10693,7 +10669,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.split",
     "category": "Function",
-    "text": "split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)\n\nReturn an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by search's second argument (i.e. a single character, collection of characters, string, or regular expression). If chars is omitted, it defaults to the set of all space characters, and keep is taken to be false. The two keyword arguments are optional: they are a maximum size for the result and a flag determining whether empty fields should be kept in the result.\n\nExamples\n\njulia> a = \"Ma.rch\"\n\"Ma.rch\"\n\njulia> split(a,\".\")\n2-element Array{SubString{String},1}:\n \"Ma\"\n \"rch\"\n\n\n\nsplit(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}\n\nBreak the ConfigEntry up to the following pieces: section, subsection, name, and value.\n\nExamples\n\nGiven the git configuration file containing:\n\n[credential \"https://example.com\"]\n    username = me\n\nThe ConfigEntry would look like the following:\n\njulia> entry\nConfigEntry(\"credential.https://example.com.username\", \"me\")\n\njulia> split(entry)\n(\"credential\", \"https://example.com\", \"username\", \"me\")\n\nRefer to the git config syntax documenation for more details.\n\n\n\n"
+    "text": "split(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}\n\nBreak the ConfigEntry up to the following pieces: section, subsection, name, and value.\n\nExamples\n\nGiven the git configuration file containing:\n\n[credential \"https://example.com\"]\n    username = me\n\nThe ConfigEntry would look like the following:\n\njulia> entry\nConfigEntry(\"credential.https://example.com.username\", \"me\")\n\njulia> split(entry)\n(\"credential\", \"https://example.com\", \"username\", \"me\")\n\nRefer to the git config syntax documenation for more details.\n\n\n\nsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)\n\nReturn an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by search's second argument (i.e. a single character, collection of characters, string, or regular expression). If chars is omitted, it defaults to the set of all space characters, and keep is taken to be false. The two keyword arguments are optional: they are a maximum size for the result and a flag determining whether empty fields should be kept in the result.\n\nExamples\n\njulia> a = \"Ma.rch\"\n\"Ma.rch\"\n\njulia> split(a,\".\")\n2-element Array{SubString{String},1}:\n \"Ma\"\n \"rch\"\n\n\n\n"
 },
 
 {
@@ -10758,46 +10734,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Base.last",
     "category": "Method",
     "text": "last(str::AbstractString, nchar::Integer)\n\nGet a string consisting of the last nchar characters of str.\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 1)\n\"0\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 3)\n\"²>0\"\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.uppercase",
-    "page": "Strings",
-    "title": "Base.uppercase",
-    "category": "Function",
-    "text": "uppercase(s::AbstractString)\n\nReturn s with all characters converted to uppercase.\n\nExamples\n\njulia> uppercase(\"Julia\")\n\"JULIA\"\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.lowercase",
-    "page": "Strings",
-    "title": "Base.lowercase",
-    "category": "Function",
-    "text": "lowercase(s::AbstractString)\n\nReturn s with all characters converted to lowercase.\n\nExamples\n\njulia> lowercase(\"STRINGS AND THINGS\")\n\"strings and things\"\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.titlecase",
-    "page": "Strings",
-    "title": "Base.titlecase",
-    "category": "Function",
-    "text": "titlecase(s::AbstractString)\n\nCapitalize the first character of each word in s. See also ucfirst to capitalize only the first character in s.\n\nExamples\n\njulia> titlecase(\"the julia programming language\")\n\"The Julia Programming Language\"\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.ucfirst",
-    "page": "Strings",
-    "title": "Base.ucfirst",
-    "category": "Function",
-    "text": "ucfirst(s::AbstractString)\n\nReturn string with the first character converted to uppercase (technically \"title case\" for Unicode). See also titlecase to capitalize the first character of every word in s.\n\nExamples\n\njulia> ucfirst(\"python\")\n\"Python\"\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.lcfirst",
-    "page": "Strings",
-    "title": "Base.lcfirst",
-    "category": "Function",
-    "text": "lcfirst(s::AbstractString)\n\nReturn string with the first character converted to lowercase.\n\nExamples\n\njulia> lcfirst(\"Julia\")\n\"julia\"\n\n\n\n"
 },
 
 {
@@ -10873,118 +10809,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/strings/#Base.UTF8proc.textwidth",
-    "page": "Strings",
-    "title": "Base.UTF8proc.textwidth",
-    "category": "Function",
-    "text": "textwidth(c)\n\nGive the number of columns needed to print a character.\n\nExamples\n\njulia> textwidth('α')\n1\n\njulia> textwidth('❤')\n2\n\n\n\ntextwidth(s::AbstractString)\n\nGive the number of columns needed to print a string.\n\nExamples\n\njulia> textwidth(\"March\")\n5\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.UTF8proc.isalnum",
-    "page": "Strings",
-    "title": "Base.UTF8proc.isalnum",
-    "category": "Function",
-    "text": "isalnum(c::Char) -> Bool\n\nTests whether a character is alphanumeric. A character is classified as alphabetic if it belongs to the Unicode general category Letter or Number, i.e. a character whose category code begins with 'L' or 'N'.\n\nExamples\n\njulia> isalnum('❤')\nfalse\n\njulia> isalnum('9')\ntrue\n\njulia> isalnum('α')\ntrue\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.UTF8proc.isalpha",
-    "page": "Strings",
-    "title": "Base.UTF8proc.isalpha",
-    "category": "Function",
-    "text": "isalpha(c::Char) -> Bool\n\nTests whether a character is alphabetic. A character is classified as alphabetic if it belongs to the Unicode general category Letter, i.e. a character whose category code begins with 'L'.\n\nExamples\n\njulia> isalpha('❤')\nfalse\n\njulia> isalpha('α')\ntrue\n\njulia> isalpha('9')\nfalse\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.isascii",
-    "page": "Strings",
-    "title": "Base.isascii",
-    "category": "Function",
-    "text": "isascii(c::Union{Char,AbstractString}) -> Bool\n\nTest whether a character belongs to the ASCII character set, or whether this is true for all elements of a string.\n\nExamples\n\njulia> isascii('a')\ntrue\n\njulia> isascii('α')\nfalse\n\njulia> isascii(\"abc\")\ntrue\n\njulia> isascii(\"αβγ\")\nfalse\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.UTF8proc.iscntrl",
-    "page": "Strings",
-    "title": "Base.UTF8proc.iscntrl",
-    "category": "Function",
-    "text": "iscntrl(c::Char) -> Bool\n\nTests whether a character is a control character. Control characters are the non-printing characters of the Latin-1 subset of Unicode.\n\nExamples\n\njulia> iscntrl('\\x01')\ntrue\n\njulia> iscntrl('a')\nfalse\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.UTF8proc.isdigit",
-    "page": "Strings",
-    "title": "Base.UTF8proc.isdigit",
-    "category": "Function",
-    "text": "isdigit(c::Char) -> Bool\n\nTests whether a character is a numeric digit (0-9).\n\nExamples\n\njulia> isdigit('❤')\nfalse\n\njulia> isdigit('9')\ntrue\n\njulia> isdigit('α')\nfalse\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.UTF8proc.isgraph",
-    "page": "Strings",
-    "title": "Base.UTF8proc.isgraph",
-    "category": "Function",
-    "text": "isgraph(c::Char) -> Bool\n\nTests whether a character is printable, and not a space. Any character that would cause a printer to use ink should be classified with isgraph(c)==true.\n\nExamples\n\njulia> isgraph('\\x01')\nfalse\n\njulia> isgraph('A')\ntrue\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.UTF8proc.islower",
-    "page": "Strings",
-    "title": "Base.UTF8proc.islower",
-    "category": "Function",
-    "text": "islower(c::Char) -> Bool\n\nTests whether a character is a lowercase letter. A character is classified as lowercase if it belongs to Unicode category Ll, Letter: Lowercase.\n\nExamples\n\njulia> islower('α')\ntrue\n\njulia> islower('Γ')\nfalse\n\njulia> islower('❤')\nfalse\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.UTF8proc.isnumber",
-    "page": "Strings",
-    "title": "Base.UTF8proc.isnumber",
-    "category": "Function",
-    "text": "isnumber(c::Char) -> Bool\n\nTests whether a character is numeric. A character is classified as numeric if it belongs to the Unicode general category Number, i.e. a character whose category code begins with 'N'.\n\nExamples\n\njulia> isnumber('9')\ntrue\n\njulia> isnumber('α')\nfalse\n\njulia> isnumber('❤')\nfalse\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.UTF8proc.isprint",
-    "page": "Strings",
-    "title": "Base.UTF8proc.isprint",
-    "category": "Function",
-    "text": "isprint(c::Char) -> Bool\n\nTests whether a character is printable, including spaces, but not a control character.\n\nExamples\n\njulia> isprint('\\x01')\nfalse\n\njulia> isprint('A')\ntrue\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.UTF8proc.ispunct",
-    "page": "Strings",
-    "title": "Base.UTF8proc.ispunct",
-    "category": "Function",
-    "text": "ispunct(c::Char) -> Bool\n\nTests whether a character belongs to the Unicode general category Punctuation, i.e. a character whose category code begins with 'P'.\n\nExamples\n\njulia> ispunct('α')\nfalse\n\njulia> ispunct('/')\ntrue\n\njulia> ispunct(';')\ntrue\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.UTF8proc.isspace",
-    "page": "Strings",
-    "title": "Base.UTF8proc.isspace",
-    "category": "Function",
-    "text": "isspace(c::Char) -> Bool\n\nTests whether a character is any whitespace character. Includes ASCII characters '\\t', '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode category Zs.\n\nExamples\n\njulia> isspace('\\n')\ntrue\n\njulia> isspace('\\r')\ntrue\n\njulia> isspace(' ')\ntrue\n\njulia> isspace('\\x20')\ntrue\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.UTF8proc.isupper",
-    "page": "Strings",
-    "title": "Base.UTF8proc.isupper",
-    "category": "Function",
-    "text": "isupper(c::Char) -> Bool\n\nTests whether a character is an uppercase letter. A character is classified as uppercase if it belongs to Unicode category Lu, Letter: Uppercase, or Lt, Letter: Titlecase.\n\nExamples\n\njulia> isupper('γ')\nfalse\n\njulia> isupper('Γ')\ntrue\n\njulia> isupper('❤')\nfalse\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.isxdigit",
-    "page": "Strings",
-    "title": "Base.isxdigit",
-    "category": "Function",
-    "text": "isxdigit(c::Char) -> Bool\n\nTest whether a character is a valid hexadecimal digit. Note that this does not include x (as in the standard 0x prefix).\n\nExamples\n\njulia> isxdigit('a')\ntrue\n\njulia> isxdigit('x')\nfalse\n\n\n\n"
-},
-
-{
     "location": "stdlib/strings/#Core.Symbol",
     "page": "Strings",
     "title": "Core.Symbol",
@@ -11013,7 +10837,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Strings",
     "category": "section",
-    "text": "Base.length(::AbstractString)\nBase.sizeof(::AbstractString)\nBase.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)\nBase.:^(::AbstractString, ::Integer)\nBase.string\nBase.repeat(::AbstractString, ::Integer)\nBase.repeat(::Char, ::Integer)\nBase.repr\nCore.String(::AbstractString)\nBase.SubString\nBase.transcode\nBase.unsafe_string\nBase.codeunit(::AbstractString, ::Integer)\nBase.ascii\nBase.@r_str\nBase.@raw_str\nBase.Docs.@html_str\nBase.Docs.@text_str\nBase.UTF8proc.normalize_string\nBase.UTF8proc.graphemes\nBase.isvalid(::Any)\nBase.isvalid(::Any, ::Any)\nBase.isvalid(::AbstractString, ::Integer)\nBase.UTF8proc.is_assigned_char\nBase.ismatch\nBase.match\nBase.eachmatch\nBase.matchall\nBase.isless(::AbstractString, ::AbstractString)\nBase.:(==)(::AbstractString, ::AbstractString)\nBase.cmp(::AbstractString, ::AbstractString)\nBase.lpad\nBase.rpad\nBase.search\nBase.rsearch\nBase.searchindex\nBase.rsearchindex\nBase.contains(::AbstractString, ::AbstractString)\nBase.reverse(::Union{String,SubString{String}})\nBase.replace\nBase.split\nBase.rsplit\nBase.strip\nBase.lstrip\nBase.rstrip\nBase.startswith\nBase.endswith\nBase.first(::AbstractString, ::Integer)\nBase.last(::AbstractString, ::Integer)\nBase.uppercase\nBase.lowercase\nBase.titlecase\nBase.ucfirst\nBase.lcfirst\nBase.join\nBase.chop\nBase.chomp\nBase.ind2chr\nBase.chr2ind\nBase.thisind\nBase.nextind\nBase.prevind\nBase.Random.randstring\nBase.UTF8proc.textwidth\nBase.UTF8proc.isalnum\nBase.UTF8proc.isalpha\nBase.isascii\nBase.UTF8proc.iscntrl\nBase.UTF8proc.isdigit\nBase.UTF8proc.isgraph\nBase.UTF8proc.islower\nBase.UTF8proc.isnumber\nBase.UTF8proc.isprint\nBase.UTF8proc.ispunct\nBase.UTF8proc.isspace\nBase.UTF8proc.isupper\nBase.isxdigit\nCore.Symbol\nBase.escape_string\nBase.unescape_string"
+    "text": "Base.length(::AbstractString)\nBase.sizeof(::AbstractString)\nBase.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)\nBase.:^(::AbstractString, ::Integer)\nBase.string\nBase.repeat(::AbstractString, ::Integer)\nBase.repeat(::Char, ::Integer)\nBase.repr\nCore.String(::AbstractString)\nBase.SubString\nBase.transcode\nBase.unsafe_string\nBase.codeunit(::AbstractString, ::Integer)\nBase.ascii\nBase.@r_str\nBase.@raw_str\nBase.Docs.@html_str\nBase.Docs.@text_str\nBase.isvalid(::Any)\nBase.isvalid(::Any, ::Any)\nBase.isvalid(::AbstractString, ::Integer)\nBase.ismatch\nBase.match\nBase.eachmatch\nBase.matchall\nBase.isless(::AbstractString, ::AbstractString)\nBase.:(==)(::AbstractString, ::AbstractString)\nBase.cmp(::AbstractString, ::AbstractString)\nBase.lpad\nBase.rpad\nBase.search\nBase.rsearch\nBase.searchindex\nBase.rsearchindex\nBase.contains(::AbstractString, ::AbstractString)\nBase.reverse(::Union{String,SubString{String}})\nBase.replace\nBase.split\nBase.rsplit\nBase.strip\nBase.lstrip\nBase.rstrip\nBase.startswith\nBase.endswith\nBase.first(::AbstractString, ::Integer)\nBase.last(::AbstractString, ::Integer)\nBase.join\nBase.chop\nBase.chomp\nBase.ind2chr\nBase.chr2ind\nBase.thisind\nBase.nextind\nBase.prevind\nBase.Random.randstring\nCore.Symbol\nBase.escape_string\nBase.unescape_string"
 },
 
 {
@@ -12077,7 +11901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.reverse",
     "category": "Function",
-    "text": "reverse(v [, start=1 [, stop=length(v) ]] )\n\nReturn a copy of v reversed from start to stop.  See also Iterators.reverse for reverse-order iteration without making a copy.\n\nExamples\n\njulia> A = collect(1:5)\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n\njulia> reverse(A)\n5-element Array{Int64,1}:\n 5\n 4\n 3\n 2\n 1\n\njulia> reverse(A, 1, 4)\n5-element Array{Int64,1}:\n 4\n 3\n 2\n 1\n 5\n\njulia> reverse(A, 3, 5)\n5-element Array{Int64,1}:\n 1\n 2\n 5\n 4\n 3\n\n\n\nreverse(s::AbstractString) -> AbstractString\n\nReverses a string. Technically, this function reverses the codepoints in a string and its main utility is for reversed-order string processing, especially for reversed regular-expression searches. See also reverseind to convert indices in s to indices in reverse(s) and vice-versa, and graphemes to operate on user-visible \"characters\" (graphemes) rather than codepoints. See also Iterators.reverse for reverse-order iteration without making a copy. Custom string types must implement the reverse function themselves and should typically return a string with the same type and encoding. If they return a string with a different encoding, they must also override reverseind for that string type to satisfy s[reverseind(s,i)] == reverse(s)[i].\n\nExamples\n\njulia> reverse(\"JuliaLang\")\n\"gnaLailuJ\"\n\njulia> reverse(\"ax̂e\") # combining characters can lead to surprising results\n\"êxa\"\n\njulia> join(reverse(collect(graphemes(\"ax̂e\")))) # reverses graphemes\n\"ex̂a\"\n\n\n\n"
+    "text": "reverse(v [, start=1 [, stop=length(v) ]] )\n\nReturn a copy of v reversed from start to stop.  See also Iterators.reverse for reverse-order iteration without making a copy.\n\nExamples\n\njulia> A = collect(1:5)\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n\njulia> reverse(A)\n5-element Array{Int64,1}:\n 5\n 4\n 3\n 2\n 1\n\njulia> reverse(A, 1, 4)\n5-element Array{Int64,1}:\n 4\n 3\n 2\n 1\n 5\n\njulia> reverse(A, 3, 5)\n5-element Array{Int64,1}:\n 1\n 2\n 5\n 4\n 3\n\n\n\nreverse(s::AbstractString) -> AbstractString\n\nReverses a string. Technically, this function reverses the codepoints in a string and its main utility is for reversed-order string processing, especially for reversed regular-expression searches. See also reverseind to convert indices in s to indices in reverse(s) and vice-versa, and Unicode.graphemes to operate on user-visible \"characters\" (graphemes) rather than codepoints. See also Iterators.reverse for reverse-order iteration without making a copy. Custom string types must implement the reverse function themselves and should typically return a string with the same type and encoding. If they return a string with a different encoding, they must also override reverseind for that string type to satisfy s[reverseind(s,i)] == reverse(s)[i].\n\nExamples\n\njulia> reverse(\"JuliaLang\")\n\"gnaLailuJ\"\n\njulia> reverse(\"ax̂e\") # combining characters can lead to surprising results\n\"êxa\"\n\njulia> using Unicode\n\njulia> join(reverse(collect(graphemes(\"ax̂e\")))) # reverses graphemes\n\"ex̂a\"\n\n\n\n"
 },
 
 {
@@ -16573,7 +16397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.skipchars",
     "category": "Function",
-    "text": "skipchars(io::IO, predicate; linecomment=nothing)\n\nAdvance the stream io such that the next-read character will be the first remaining for which predicate returns false. If the keyword argument linecomment is specified, all characters from that character until the start of the next line are ignored.\n\nExamples\n\njulia> buf = IOBuffer(\"    text\")\nIOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=1, mark=-1)\n\njulia> skipchars(buf, isspace)\nIOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=5, mark=-1)\n\njulia> String(readavailable(buf))\n\"text\"\n\n\n\n"
+    "text": "skipchars(io::IO, predicate; linecomment=nothing)\n\nAdvance the stream io such that the next-read character will be the first remaining for which predicate returns false. If the keyword argument linecomment is specified, all characters from that character until the start of the next line are ignored.\n\nExamples\n\njulia> buf = IOBuffer(\"    text\")\nIOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=1, mark=-1)\n\njulia> using Unicode\n\njulia> skipchars(buf, isspace)\nIOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=5, mark=-1)\n\njulia> String(readavailable(buf))\n\"text\"\n\n\n\n"
 },
 
 {
@@ -19574,6 +19398,190 @@ var documenterSearchIndex = {"docs": [
     "title": "Iterative Eigensolvers",
     "category": "section",
     "text": "Julia provides bindings to ARPACK, which can be used to perform iterative solutions for eigensystems (using eigs) or singular value decompositions (using svds).eigs calculates the eigenvalues and, optionally, eigenvectors of its input(s) using implicitly restarted Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively.For the single matrix version,eigs(A; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)the following keyword arguments are supported:nev: Number of eigenvalues\nncv: Number of Krylov vectors used in the computation; should satisfy nev+1 <= ncv <= n for real symmetric problems and nev+2 <= ncv <= n for other problems, where n is the size of the input matrix A. The default is ncv = max(20,2*nev+1). Note that these restrictions limit the input matrix A to be of dimension at least 2.\nwhich: type of eigenvalues to compute. See the note below.which type of eigenvalues\n:LM eigenvalues of largest magnitude (default)\n:SM eigenvalues of smallest magnitude\n:LR eigenvalues of largest real part\n:SR eigenvalues of smallest real part\n:LI eigenvalues of largest imaginary part (nonsymmetric or complex A only)\n:SI eigenvalues of smallest imaginary part (nonsymmetric or complex A only)\n:BE compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric A only)tol: parameter defining the relative tolerance for convergence of Ritz values (eigenvalue estimates).    A Ritz value  is considered converged when its associated residual    is less than or equal to the product of tol and max(^23 ),    where ɛ = eps(real(eltype(A)))/2 is LAPACK's machine epsilon.    The residual associated with  and its corresponding Ritz vector v    is defined as the norm Av - v.    The specified value of tol should be positive; otherwise, it is ignored    and  is used instead.    Default: .\nmaxiter: Maximum number of iterations (default = 300)\nsigma: Specifies the level shift used in inverse iteration. If nothing (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to sigma using shift and invert iterations.\nritzvec: Returns the Ritz vectors v (eigenvectors) if true\nv0: starting vector from which to start the iterationsWe can see the various keywords in action in the following examples:julia> using IterativeEigenSolvers\n\njulia> A = Diagonal(1:4);\n\njulia> λ, ϕ = eigs(A, nev = 2, which=:SM);\n\njulia> λ\n2-element Array{Float64,1}:\n 1.0000000000000002\n 2.0\n\njulia> B = Diagonal([1., 2., -3im, 4im])\n4×4 Diagonal{Complex{Float64},Array{Complex{Float64},1}}:\n 1.0+0.0im      ⋅          ⋅          ⋅\n     ⋅      2.0+0.0im      ⋅          ⋅\n     ⋅          ⋅      0.0-3.0im      ⋅\n     ⋅          ⋅          ⋅      0.0+4.0im\n\njulia> λ, ϕ = eigs(B, nev=1, which=:LI);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n -4.440892098500626e-16 + 3.999999999999998im\n\njulia> λ, ϕ = eigs(B, nev=1, which=:SI);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n 1.3877787807814457e-16 - 2.999999999999999im\n\njulia> λ, ϕ = eigs(B, nev=1, which=:LR);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n 2.0 + 4.242754940683747e-17im\n\njulia> λ, ϕ = eigs(B, nev=1, which=:SR);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n 4.440892098500626e-16 + 4.0000000000000036im\n\njulia> λ, ϕ = eigs(B, nev=1, sigma=1.5);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n 1.9999999999999996 + 2.4290457684137336e-17imnote: Note\nThe sigma and which keywords interact: the description of eigenvalues searched for by which do not necessarily refer to the eigenvalues of A, but rather the linear operator constructed by the specification of the iteration mode implied by sigma.sigma iteration mode which refers to eigenvalues of\nnothing ordinary (forward) A\nreal or complex inverse with level shift sigma (A - sigma I )^-1note: Note\nAlthough tol has a default value, the best choice depends strongly on the matrix A. We recommend that users _always_ specify a value for tol which suits their specific needs.For details of how the errors in the computed eigenvalues are estimated, see:B. N. Parlett, \"The Symmetric Eigenvalue Problem\", SIAM: Philadelphia, 2/e (1998), Ch. 13.2, \"Accessing Accuracy in Lanczos Problems\", pp. 290-292 ff.\nR. B. Lehoucq and D. C. Sorensen, \"Deflation Techniques for an Implicitly Restarted Arnoldi Iteration\", SIAM Journal on Matrix Analysis and Applications (1996), 17(4), 789–821.  doi:10.1137/S0895479895281484For the two-input generalized eigensolution version,eigs(A, B; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)the following keyword arguments are supported:nev: Number of eigenvalues\nncv: Number of Krylov vectors used in the computation; should satisfy nev+1 <= ncv <= n for real symmetric problems and nev+2 <= ncv <= n for other problems, where n is the size of the input matrices A and B. The default is ncv = max(20,2*nev+1). Note that these restrictions limit the input matrix A to be of dimension at least 2.\nwhich: type of eigenvalues to compute. See the note below.which type of eigenvalues\n:LM eigenvalues of largest magnitude (default)\n:SM eigenvalues of smallest magnitude\n:LR eigenvalues of largest real part\n:SR eigenvalues of smallest real part\n:LI eigenvalues of largest imaginary part (nonsymmetric or complex A only)\n:SI eigenvalues of smallest imaginary part (nonsymmetric or complex A only)\n:BE compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric A only)tol: relative tolerance used in the convergence criterion for eigenvalues, similar to    tol in the eigs(A) method for the ordinary eigenvalue    problem, but effectively for the eigenvalues of B^-1 A instead of A.    See the documentation for the ordinary eigenvalue problem in    eigs(A) and the accompanying note about tol.\nmaxiter: Maximum number of iterations (default = 300)\nsigma: Specifies the level shift used in inverse iteration. If nothing (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to sigma using shift and invert iterations.\nritzvec: Returns the Ritz vectors v (eigenvectors) if true\nv0: starting vector from which to start the iterationseigs returns the nev requested eigenvalues in d, the corresponding Ritz vectors v (only if ritzvec=true), the number of converged eigenvalues nconv, the number of iterations niter and the number of matrix vector multiplications nmult, as well as the final residual vector resid.We can see the various keywords in action in the following examples:julia> using IterativeEigenSolvers\n\njulia> A = sparse(1.0I, 4, 4); B = Diagonal(1:4);\n\njulia> λ, ϕ = eigs(A, B, nev = 2);\n\njulia> λ\n2-element Array{Float64,1}:\n 1.0\n 0.4999999999999999\n\njulia> A = sparse(1.0I, 4, 4); B = Diagonal([1, -2im, 3, 4im]);\n\njulia> λ, ϕ = eigs(A, B, nev=1, which=:SI);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n 0.03291282838780993 - 2.0627621271174514im\n\njulia> λ, ϕ = eigs(A, B, nev=1, which=:LI);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n -0.6428551411711136 + 2.1820633510068994imnote: Note\nThe sigma and which keywords interact: the description of eigenvalues searched for by which do not necessarily refer to the eigenvalue problem Av = Bvlambda, but rather the linear operator constructed by the specification of the iteration mode implied by sigma.sigma iteration mode which refers to the problem\nnothing ordinary (forward) Av = Bvlambda\nreal or complex inverse with level shift sigma (A - sigma B )^-1B = vnuIterativeEigenSolvers.eigs(::Any)\nIterativeEigenSolvers.eigs(::Any, ::Any)\nIterativeEigenSolvers.svds"
+},
+
+{
+    "location": "stdlib/unicode/#",
+    "page": "Unicode",
+    "title": "Unicode",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.isassigned",
+    "page": "Unicode",
+    "title": "Base.Unicode.isassigned",
+    "category": "Function",
+    "text": "Unicode.isassigned(c) -> Bool\n\nReturns true if the given char or integer is an assigned Unicode code point.\n\nExamples\n\njulia> using Unicode\n\njulia> isassigned(101)\ntrue\n\njulia> isassigned('\\x01')\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.normalize",
+    "page": "Unicode",
+    "title": "Base.Unicode.normalize",
+    "category": "Function",
+    "text": "Unicode.normalize(s::AbstractString, normalform::Symbol)\n\nNormalize the string s according to one of the four \"normal forms\" of the Unicode standard: normalform can be :NFC, :NFD, :NFKC, or :NFKD.  Normal forms C (canonical composition) and D (canonical decomposition) convert different visually identical representations of the same abstract string into a single canonical form, with form C being more compact.  Normal forms KC and KD additionally canonicalize \"compatibility equivalents\": they convert characters that are abstractly similar but visually distinct into a single canonical choice (e.g. they expand ligatures into the individual characters), with form KC being more compact.\n\nAlternatively, finer control and additional transformations may be be obtained by calling Unicode.normalize(s; keywords...), where any number of the following boolean keywords options (which all default to false except for compose) are specified:\n\ncompose=false: do not perform canonical composition\ndecompose=true: do canonical decomposition instead of canonical composition (compose=true is ignored if present)\ncompat=true: compatibility equivalents are canonicalized\ncasefold=true: perform Unicode case folding, e.g. for case-insensitive string comparison\nnewline2lf=true, newline2ls=true, or newline2ps=true: convert various newline sequences (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS) character, respectively\nstripmark=true: strip diacritical marks (e.g. accents)\nstripignore=true: strip Unicode's \"default ignorable\" characters (e.g. the soft hyphen or the left-to-right marker)\nstripcc=true: strip control characters; horizontal tabs and form feeds are converted to spaces; newlines are also converted to spaces unless a newline-conversion flag was specified\nrejectna=true: throw an error if unassigned code points are found\nstable=true: enforce Unicode Versioning Stability\n\nFor example, NFKC corresponds to the options compose=true, compat=true, stable=true.\n\nExamples\n\njulia> using Unicode\n\njulia> \"μ\" == normalize(\"µ\", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5\ntrue\n\njulia> normalize(\"JuLiA\", casefold=true)\n\"julia\"\n\njulia> normalize(\"JúLiA\", stripmark=true)\n\"JuLiA\"\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.graphemes",
+    "page": "Unicode",
+    "title": "Base.Unicode.graphemes",
+    "category": "Function",
+    "text": "graphemes(s::AbstractString) -> GraphemeIterator\n\nReturns an iterator over substrings of s that correspond to the extended graphemes in the string, as defined by Unicode UAX #29. (Roughly, these are what users would perceive as single characters, even though they may contain more than one codepoint; for example a letter combined with an accent mark is a single grapheme.)\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.uppercase",
+    "page": "Unicode",
+    "title": "Base.Unicode.uppercase",
+    "category": "Function",
+    "text": "uppercase(s::AbstractString)\n\nReturn s with all characters converted to uppercase.\n\nExamples\n\njulia> using Unicode\n\njulia> uppercase(\"Julia\")\n\"JULIA\"\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.lowercase",
+    "page": "Unicode",
+    "title": "Base.Unicode.lowercase",
+    "category": "Function",
+    "text": "lowercase(s::AbstractString)\n\nReturn s with all characters converted to lowercase.\n\nExamples\n\njulia> using Unicode\n\njulia> lowercase(\"STRINGS AND THINGS\")\n\"strings and things\"\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.titlecase",
+    "page": "Unicode",
+    "title": "Base.Unicode.titlecase",
+    "category": "Function",
+    "text": "titlecase(s::AbstractString)\n\nCapitalize the first character of each word in s. See also ucfirst to capitalize only the first character in s.\n\nExamples\n\njulia> using Unicode\n\njulia> titlecase(\"the julia programming language\")\n\"The Julia Programming Language\"\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.ucfirst",
+    "page": "Unicode",
+    "title": "Base.Unicode.ucfirst",
+    "category": "Function",
+    "text": "ucfirst(s::AbstractString)\n\nReturn string with the first character converted to uppercase (technically \"title case\" for Unicode). See also titlecase to capitalize the first character of every word in s.\n\nExamples\n\njulia> using Unicode\n\njulia> ucfirst(\"python\")\n\"Python\"\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.lcfirst",
+    "page": "Unicode",
+    "title": "Base.Unicode.lcfirst",
+    "category": "Function",
+    "text": "lcfirst(s::AbstractString)\n\nReturn string with the first character converted to lowercase.\n\nExamples\n\njulia> using Unicode\n\njulia> lcfirst(\"Julia\")\n\"julia\"\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.textwidth",
+    "page": "Unicode",
+    "title": "Base.Unicode.textwidth",
+    "category": "Function",
+    "text": "textwidth(c)\n\nGive the number of columns needed to print a character.\n\nExamples\n\njulia> using Unicode\n\njulia> textwidth('α')\n1\n\njulia> textwidth('❤')\n2\n\n\n\ntextwidth(s::AbstractString)\n\nGive the number of columns needed to print a string.\n\nExamples\n\njulia> using Unicode\n\njulia> textwidth(\"March\")\n5\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.isalnum",
+    "page": "Unicode",
+    "title": "Base.Unicode.isalnum",
+    "category": "Function",
+    "text": "isalnum(c::Char) -> Bool\n\nTests whether a character is alphanumeric. A character is classified as alphabetic if it belongs to the Unicode general category Letter or Number, i.e. a character whose category code begins with 'L' or 'N'.\n\nExamples\n\njulia> using Unicode\n\njulia> isalnum('❤')\nfalse\n\njulia> isalnum('9')\ntrue\n\njulia> isalnum('α')\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.isalpha",
+    "page": "Unicode",
+    "title": "Base.Unicode.isalpha",
+    "category": "Function",
+    "text": "isalpha(c::Char) -> Bool\n\nTests whether a character is alphabetic. A character is classified as alphabetic if it belongs to the Unicode general category Letter, i.e. a character whose category code begins with 'L'.\n\nExamples\n\njulia> using Unicode\n\njulia> isalpha('❤')\nfalse\n\njulia> isalpha('α')\ntrue\n\njulia> isalpha('9')\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.iscntrl",
+    "page": "Unicode",
+    "title": "Base.Unicode.iscntrl",
+    "category": "Function",
+    "text": "iscntrl(c::Char) -> Bool\n\nTests whether a character is a control character. Control characters are the non-printing characters of the Latin-1 subset of Unicode.\n\nExamples\n\njulia> using Unicode\n\njulia> iscntrl('\\x01')\ntrue\n\njulia> iscntrl('a')\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.isdigit",
+    "page": "Unicode",
+    "title": "Base.Unicode.isdigit",
+    "category": "Function",
+    "text": "isdigit(c::Char) -> Bool\n\nTests whether a character is a decimal digit (0-9).\n\nExamples\n\njulia> using Unicode\n\njulia> isdigit('❤')\nfalse\n\njulia> isdigit('9')\ntrue\n\njulia> isdigit('α')\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.isgraph",
+    "page": "Unicode",
+    "title": "Base.Unicode.isgraph",
+    "category": "Function",
+    "text": "isgraph(c::Char) -> Bool\n\nTests whether a character is printable, and not a space. Any character that would cause a printer to use ink should be classified with isgraph(c)==true.\n\nExamples\n\njulia> using Unicode\n\njulia> isgraph('\\x01')\nfalse\n\njulia> isgraph('A')\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.islower",
+    "page": "Unicode",
+    "title": "Base.Unicode.islower",
+    "category": "Function",
+    "text": "islower(c::Char) -> Bool\n\nTests whether a character is a lowercase letter. A character is classified as lowercase if it belongs to Unicode category Ll, Letter: Lowercase.\n\nExamples\n\njulia> using Unicode\n\njulia> islower('α')\ntrue\n\njulia> islower('Γ')\nfalse\n\njulia> islower('❤')\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.isnumeric",
+    "page": "Unicode",
+    "title": "Base.Unicode.isnumeric",
+    "category": "Function",
+    "text": "isnumeric(c::Char) -> Bool\n\nTests whether a character is numeric. A character is classified as numeric if it belongs to the Unicode general category Number, i.e. a character whose category code begins with 'N'.\n\nNote that this broad category includes characters such as ¾ and ௰. Use isdigit to check whether a character a decimal digit between 0 and 9.\n\nExamples\n\njulia> using Unicode\n\njulia> isnumeric('௰')\ntrue\n\njulia> isnumeric('9')\ntrue\n\njulia> isnumeric('α')\nfalse\n\njulia> isnumeric('❤')\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.isprint",
+    "page": "Unicode",
+    "title": "Base.Unicode.isprint",
+    "category": "Function",
+    "text": "isprint(c::Char) -> Bool\n\nTests whether a character is printable, including spaces, but not a control character.\n\nExamples\n\njulia> using Unicode\n\njulia> isprint('\\x01')\nfalse\n\njulia> isprint('A')\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.ispunct",
+    "page": "Unicode",
+    "title": "Base.Unicode.ispunct",
+    "category": "Function",
+    "text": "ispunct(c::Char) -> Bool\n\nTests whether a character belongs to the Unicode general category Punctuation, i.e. a character whose category code begins with 'P'.\n\nExamples\n\njulia> using Unicode\n\njulia> ispunct('α')\nfalse\n\njulia> ispunct('/')\ntrue\n\njulia> ispunct(';')\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.isspace",
+    "page": "Unicode",
+    "title": "Base.Unicode.isspace",
+    "category": "Function",
+    "text": "isspace(c::Char) -> Bool\n\nTests whether a character is any whitespace character. Includes ASCII characters '\\t', '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode category Zs.\n\nExamples\n\njulia> using Unicode\n\njulia> isspace('\\n')\ntrue\n\njulia> isspace('\\r')\ntrue\n\njulia> isspace(' ')\ntrue\n\njulia> isspace('\\x20')\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.isupper",
+    "page": "Unicode",
+    "title": "Base.Unicode.isupper",
+    "category": "Function",
+    "text": "isupper(c::Char) -> Bool\n\nTests whether a character is an uppercase letter. A character is classified as uppercase if it belongs to Unicode category Lu, Letter: Uppercase, or Lt, Letter: Titlecase.\n\nExamples\n\njulia> using Unicode\n\njulia> isupper('γ')\nfalse\n\njulia> isupper('Γ')\ntrue\n\njulia> isupper('❤')\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Base.Unicode.isxdigit",
+    "page": "Unicode",
+    "title": "Base.Unicode.isxdigit",
+    "category": "Function",
+    "text": "isxdigit(c::Char) -> Bool\n\nTest whether a character is a valid hexadecimal digit. Note that this does not include x (as in the standard 0x prefix).\n\nExamples\n\njulia> using Unicode\n\njulia> isxdigit('a')\ntrue\n\njulia> isxdigit('x')\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/unicode/#Unicode-1",
+    "page": "Unicode",
+    "title": "Unicode",
+    "category": "section",
+    "text": "Unicode.isassigned\nUnicode.normalize\nUnicode.graphemes\nUnicode.uppercase\nUnicode.lowercase\nUnicode.titlecase\nUnicode.ucfirst\nUnicode.lcfirst\nUnicode.textwidth\nUnicode.isalnum\nUnicode.isalpha\nUnicode.iscntrl\nUnicode.isdigit\nUnicode.isgraph\nUnicode.islower\nUnicode.isnumeric\nUnicode.isprint\nUnicode.ispunct\nUnicode.isspace\nUnicode.isupper\nUnicode.isxdigit"
 },
 
 {
