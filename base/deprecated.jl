@@ -3016,6 +3016,11 @@ end
     \(::Transpose{<:Any,<:SparseMatrixCSC}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 end
 
+# methods involving RowVector from base/linalg/qr.jl, to deprecate
+@eval Base.LinAlg begin
+    *(rowvec::RowVector, adjB::Adjoint{<:Any,<:AbstractQ}) = (B = adjB.parent; adjoint(B*adjoint(rowvec)))
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
