@@ -113,8 +113,8 @@ real(::Type{Complex{T}}) where {T<:Real} = T
 """
     isreal(x) -> Bool
 
-Test whether `x` or all its elements are numerically equal to some real number.
-If `x` is `Inf` or `NaN` it returns True.
+Test whether `x` or all its elements are numerically equal to some real number,
+`Inf` or `NaN`.
 
 # Examples
 ```jldoctest
