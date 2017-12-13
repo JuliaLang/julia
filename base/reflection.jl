@@ -1084,6 +1084,21 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
 end
 
 """
+    delete_method(m::Method)
+
+Make method `m` uncallable and force recompilation of any methods that use(d) it.
+"""
+function delete_method(m::Method)
+    ccall(:jl_method_table_disable, Void, (Any, Any), MethodTable(m), m)
+end
+
+function MethodTable(m::Method)
+    ft = ccall(:jl_first_argument_datatype, Any, (Any,), m.sig)
+    ft == C_NULL && error("Method ", m, " does not correspond to a function type")
+    (ft::DataType).name.mt
+end
+
+"""
     has_bottom_parameter(t) -> Bool
 
 Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.

@@ -1131,6 +1131,8 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
         closure->after = 1;
         return 1;
     }
+    if (oldentry->max_world < ~(size_t)0)
+        return 1;
     union jl_typemap_t map = closure->defs;
     jl_tupletype_t *type = (jl_tupletype_t*)closure->match.type;
     jl_method_t *m = closure->newentry->func.method;
@@ -1212,7 +1214,7 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
     return 1;
 }
 
-static jl_value_t *check_ambiguous_matches(union jl_typemap_t defs, jl_typemap_entry_t *newentry)
+static jl_value_t *check_ambiguous_matches(union jl_typemap_t defs, jl_typemap_entry_t *newentry, jl_typemap_intersection_visitor_fptr fptr)
 {
     jl_tupletype_t *type = newentry->sig;
     jl_tupletype_t *ttypes = (jl_tupletype_t*)jl_unwrap_unionall((jl_value_t*)type);
@@ -1226,7 +1228,7 @@ static jl_value_t *check_ambiguous_matches(union jl_typemap_t defs, jl_typemap_e
             va = NULL;
     }
     struct ambiguous_matches_env env;
-    env.match.fptr = check_ambiguous_visitor;
+    env.match.fptr = fptr;
     env.match.type = (jl_value_t*)type;
     env.match.va = va;
     env.match.ti = NULL;
@@ -1240,6 +1242,47 @@ static jl_value_t *check_ambiguous_matches(union jl_typemap_t defs, jl_typemap_e
     JL_GC_POP();
     return env.shadowed;
 }
+
+static int check_disabled_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_intersection_env *closure0)
+{
+    struct ambiguous_matches_env *closure = container_of(closure0, struct ambiguous_matches_env, match);
+    if (oldentry == closure->newentry) {
+        closure->after = 1;
+        return 1;
+    }
+    if (!closure->after || oldentry->max_world < ~(size_t)0)  // the second condition prevents us from confusion in multiple cycles of add/delete
+        return 1;
+    jl_tupletype_t *sig = oldentry->sig;
+    jl_value_t *isect = closure->match.ti;
+    if (closure->shadowed == NULL)
+        closure->shadowed = (jl_value_t*)jl_alloc_vec_any(0);
+
+    int i, l = jl_array_len(closure->shadowed);
+    for (i = 0; i < l; i++) {
+        jl_method_t *mth = (jl_method_t*)jl_array_ptr_ref(closure->shadowed, i);
+        jl_value_t *isect2 = jl_type_intersection(mth->sig, (jl_value_t*)sig);
+        // see if the intersection was covered by precisely the disabled method
+        // that means we now need to record the ambiguity
+        if (jl_types_equal(isect, isect2)) {
+            jl_method_t *mambig = mth;
+            jl_method_t *m = oldentry->func.method;
+            if (m->ambig == jl_nothing) {
+                m->ambig = (jl_value_t*) jl_alloc_vec_any(0);
+                jl_gc_wb(m, m->ambig);
+            }
+            if (mambig->ambig == jl_nothing) {
+                mambig->ambig = (jl_value_t*) jl_alloc_vec_any(0);
+                jl_gc_wb(mambig, mambig->ambig);
+            }
+            jl_array_ptr_1d_push((jl_array_t*) m->ambig, (jl_value_t*) mambig);
+            jl_array_ptr_1d_push((jl_array_t*) mambig->ambig, (jl_value_t*) m);
+        }
+    }
+
+    jl_array_ptr_1d_push((jl_array_t*)closure->shadowed, oldentry->func.value);
+    return 1;
+}
+
 
 static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue)
 {
@@ -1405,6 +1448,33 @@ void jl_method_instance_delete(jl_method_instance_t *mi)
         jl_uv_puts(JL_STDOUT, "<<<\n", 4);
 }
 
+static int typemap_search(jl_typemap_entry_t *entry, void *closure)
+{
+    if ((void*)(entry->func.method) == *(jl_method_t**)closure) {
+        *(jl_typemap_entry_t**)closure = entry;
+        return 0;
+    }
+    return 1;
+}
+
+JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *method)
+{
+    jl_typemap_entry_t *methodentry = (jl_typemap_entry_t*)(method);
+    if (jl_typemap_visitor(mt->defs, typemap_search, &methodentry))
+        jl_error("method not in method table");
+    JL_LOCK(&mt->writelock);
+    // Narrow the world age on the method to make it uncallable
+    methodentry->max_world = jl_world_counter++;
+    // Recompute ambiguities (deleting a more specific method might reveal ambiguities that it previously resolved)
+    check_ambiguous_matches(mt->defs, methodentry, check_disabled_ambiguous_visitor); // TODO: decrease repeated work?
+    // Invalidate the backedges
+    struct invalidate_conflicting_env env;
+    env.invalidated = 0;
+    env.max_world = methodentry->max_world;
+    jl_typemap_visitor(methodentry->func.method->specializations, (jl_typemap_visitor_fptr)invalidate_backedges, &env);
+    JL_UNLOCK(&mt->writelock);
+}
+
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
 {
     assert(jl_is_method(method));
@@ -1430,7 +1500,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
         method_overwrite(newentry, (jl_method_t*)oldvalue);
     }
     else {
-        oldvalue = check_ambiguous_matches(mt->defs, newentry);
+        oldvalue = check_ambiguous_matches(mt->defs, newentry, check_ambiguous_visitor);
         if (mt->backedges) {
             jl_value_t **backedges = (jl_value_t**)jl_array_data(mt->backedges);
             size_t i, na = jl_array_len(mt->backedges);
