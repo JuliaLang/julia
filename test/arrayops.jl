@@ -2079,6 +2079,25 @@ end
     @test size(a) == size(b)
 end
 
+@testset "type constructor Array{T, N}(nothing, d...) works (especially for N>3)" for T in (Int, String),
+                                                                                      U in (Void, Missing)
+    a = Array{Union{T, U}}(U(), 10)
+    b = Vector{Union{T, U}}(U(), 10)
+    @test size(a) == size(b) == (10,)
+    @test all(x -> x isa U, a)
+    @test all(x -> x isa U, b)
+    a = Array{Union{T, U}}(U(), 2,3)
+    b = Matrix{Union{T, U}}(U(), 2,3)
+    @test size(a) ==  size(b) == (2,3)
+    @test all(x -> x isa U, a)
+    @test all(x -> x isa U, b)
+    a = Array{Union{T, U}}(U(), 9,8,7,6,5,4,3,2,1)
+    b = Array{Union{T, U},9}(U(), 9,8,7,6,5,4,3,2,1)
+    @test size(a) ==  size(b) == (9,8,7,6,5,4,3,2,1)
+    @test all(x -> x isa U, a)
+    @test all(x -> x isa U, b)
+end
+
 @testset "accumulate, accumulate!" begin
     @test accumulate(+, [1,2,3]) == [1, 3, 6]
     @test accumulate(min, [1 2; 3 4], 1) == [1 2; 1 2]

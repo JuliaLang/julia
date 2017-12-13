@@ -1313,7 +1313,41 @@ julia> Vector{Float64}(uninitialized, 3)
  6.90966e-310
 ```
 """
-Vector{T}(uninitialized, n)
+Vector{T}(::Uninitialized, n)
+
+"""
+    Vector{T}(nothing, m)
+
+Construct a [`Vector{T}`](@ref) of length `m`, initialized with
+[`nothing`](@ref) entries. Element type `T` must be able to hold
+these values, i.e. `Void <: T`.
+
+# Examples
+```jldoctest
+julia> Vector{Union{Void, String}}(nothing, 2)
+2-element Array{Union{Void, String},1}:
+ nothing
+ nothing
+```
+"""
+Vector{T}(::Void, n)
+
+"""
+    Vector{T}(missing, m)
+
+Construct a [`Vector{T}`](@ref) of length `m`, initialized with
+[`missing`](@ref) entries. Element type `T` must be able to hold
+these values, i.e. `Missing <: T`.
+
+# Examples
+```jldoctest
+julia> Vector{Union{Missing, String}}(missing, 2)
+2-element Array{Union{Missing, String},1}:
+ missing
+ missing
+```
+"""
+Vector{T}(::Missing, n)
 
 """
     Matrix{T}(uninitialized, m, n)
@@ -1328,7 +1362,41 @@ julia> Matrix{Float64}(uninitialized, 2, 3)
  6.93517e-310  6.93517e-310  1.29396e-320
 ```
 """
-Matrix{T}(uninitialized, m, n)
+Matrix{T}(::Uninitialized, m, n)
+
+"""
+    Matrix{T}(nothing, m, n)
+
+Construct a [`Matrix{T}`](@ref) of size `m`×`n`, initialized with
+[`nothing`](@ref) entries. Element type `T` must be able to hold
+these values, i.e. `Void <: T`.
+
+# Examples
+```jldoctest
+julia> Matrix{Union{Void, String}}(nothing, 2, 3)
+2×3 Array{Union{Void, String},2}:
+ nothing  nothing  nothing
+ nothing  nothing  nothing
+```
+"""
+Matrix{T}(::Void, m, n)
+
+"""
+    Matrix{T}(missing, m, n)
+
+Construct a [`Matrix{T}`](@ref) of size `m`×`n`, initialized with
+[`missing`](@ref) entries. Element type `T` must be able to hold
+these values, i.e. `Missing <: T`.
+
+# Examples
+```jldoctest
+julia> Matrix{Union{Missing, String}}(missing, 2, 3)
+2×3 Array{Union{Missing, String},2}:
+ missing  missing  missing
+ missing  missing  missing
+```
+"""
+Matrix{T}(::Missing, m, n)
 
 """
     Array{T}(uninitialized, dims)
@@ -1354,7 +1422,54 @@ julia> B = Array{Float64}(uninitialized, 2) # N determined by the input
  0.0
 ```
 """
-Array{T,N}(uninitialized, dims)
+Array{T,N}(::Uninitialized, dims)
+
+"""
+    Array{T}(nothing, dims)
+    Array{T,N}(nothing, dims)
+
+Construct an `N`-dimensional [`Array`](@ref) containing elements of type `T`,
+initialized with [`nothing`](@ref) entries. Element type `T` must be able
+to hold these values, i.e. `Void <: T`.
+
+# Examples
+```jldoctest
+julia> Array{Union{Void, String}}(nothing, 2)
+2-element Array{Union{Void, String},1}:
+ nothing
+ nothing
+
+julia> Array{Union{Void, Int}}(nothing, 2, 3)
+2×3 Array{Union{Void, Int64},2}:
+ nothing  nothing  nothing
+ nothing  nothing  nothing
+```
+"""
+Array{T,N}(::Void, dims)
+
+
+"""
+    Array{T}(missing, dims)
+    Array{T,N}(missing, dims)
+
+Construct an `N`-dimensional [`Array`](@ref) containing elements of type `T`,
+initialized with [`missing`](@ref) entries. Element type `T` must be able
+to hold these values, i.e. `Missing <: T`.
+
+# Examples
+```jldoctest
+julia> Array{Union{Missing, String}}(missing, 2)
+2-element Array{Union{Missing, String},1}:
+ missing
+ missing
+
+julia> Array{Union{Missing, Int}}(missing, 2, 3)
+2×3 Array{Union{Missing, Int64},2}:
+ missing  missing  missing
+ missing  missing  missing
+```
+"""
+Array{T,N}(::Missing, dims)
 
 """
     Uninitialized
