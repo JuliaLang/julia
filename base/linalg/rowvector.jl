@@ -216,36 +216,24 @@ end
     (rowvec2 = transrowvec2.parent; rowvec1*transpose(rowvec2))
 *(::AbstractVector, ::Transpose{<:Any,<:RowVector}) =
     throw(DimensionMismatch("Cannot multiply two vectors"))
-*(vec1::AbstractVector, transvec2::Transpose{<:Any,<:AbstractVector}) =
-    (vec2 = transvec2.parent; vec1 * transpose(vec2))
 *(mat::AbstractMatrix, transrowvec::Transpose{<:Any,<:RowVector}) =
     (rowvec = transrowvec.parent; mat * transpose(rowvec))
 
 *(transrowvec::Transpose{<:Any,<:RowVector}, transvec::Transpose{<:Any,<:AbstractVector}) =
     transpose(transrowvec.parent) * transpose(transvec.parent)
-*(transvec::Transpose{<:Any,<:AbstractVector}, transmat::Transpose{<:Any,<:AbstractMatrix}) =
-    transpose(transmat.parent * transvec.parent)
 *(transrowvec1::Transpose{<:Any,<:RowVector}, transrowvec2::Transpose{<:Any,<:RowVector}) =
     throw(DimensionMismatch("Cannot multiply two vectors"))
 *(transvec::Transpose{<:Any,<:AbstractVector}, transrowvec::Transpose{<:Any,<:RowVector}) =
     transpose(transvec.parent)*transpose(transrowvec.parent)
-*(transvec::Transpose{<:Any,<:AbstractVector}, transrowvec::Transpose{<:Any,<:AbstractVector}) =
-    throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 *(transmat::Transpose{<:Any,<:AbstractMatrix}, transrowvec::Transpose{<:Any,<:RowVector}) =
     (transmat.parent).' * transpose(transrowvec.parent)
 
 *(::Transpose{<:Any,<:RowVector}, ::AbstractVector) =
     throw(DimensionMismatch("Cannot multiply two vectors"))
-*(transvec::Transpose{<:Any,<:AbstractVector}, mat::AbstractMatrix) =
-    transpose(*(Transpose(mat), transvec.parent))
 *(transrowvec1::Transpose{<:Any,<:RowVector}, rowvec2::RowVector) =
     transpose(transrowvec1.parent) * rowvec2
 *(transvec::Transpose{<:Any,<:AbstractVector}, rowvec::RowVector) =
     throw(DimensionMismatch("Cannot multiply two transposed vectors"))
-*(transvec1::Transpose{<:Any,<:AbstractVector{T}}, vec2::AbstractVector{T}) where {T<:Real} =
-    reduce(+, map(*, transvec1.parent, vec2)) # Seems to be overloaded...
-*(transvec1::Transpose{<:Any,<:AbstractVector}, vec2::AbstractVector) =
-    transpose(transvec1.parent) * vec2
 
 # Conjugated forms
 *(::RowVector, ::Adjoint{<:Any,<:AbstractVector}) =
@@ -256,29 +244,21 @@ end
     rowvec1 * adjoint(adjrowvec2.parent)
 *(vec::AbstractVector, adjrowvec::Adjoint{<:Any,<:RowVector}) =
     throw(DimensionMismatch("Cannot multiply two vectors"))
-*(vec1::AbstractVector, adjvec2::Adjoint{<:Any,<:AbstractVector}) =
-    vec1 * adjoint(adjvec2.parent)
 *(mat::AbstractMatrix, adjrowvec::Adjoint{<:Any,<:RowVector}) =
     mat * adjoint(adjrowvec.parent)
 
 *(adjrowvec::Adjoint{<:Any,<:RowVector}, adjvec::Adjoint{<:Any,<:AbstractVector}) =
     adjoint(adjrowvec.parent) * adjoint(adjvec.parent)
-*(adjvec::Adjoint{<:Any,<:AbstractVector}, adjmat::Adjoint{<:Any,<:AbstractMatrix}) =
-    adjoint(adjmat.parent * adjvec.parent)
 *(adjrowvec1::Adjoint{<:Any,<:RowVector}, adjrowvec2::Adjoint{<:Any,<:RowVector}) =
     throw(DimensionMismatch("Cannot multiply two vectors"))
 *(adjvec::Adjoint{<:Any,<:AbstractVector}, adjrowvec::Adjoint{<:Any,<:RowVector}) =
     adjoint(adjvec.parent)*adjoint(adjrowvec.parent)
-*(adjvec::Adjoint{<:Any,<:AbstractVector}, adjrowvec::Adjoint{<:Any,<:AbstractVector}) =
-    throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 *(adjmat::Adjoint{<:Any,<:AbstractMatrix}, adjrowvec::Adjoint{<:Any,<:RowVector}) =
     (adjmat.parent)' * adjoint(adjrowvec.parent)
 
 *(::Adjoint{<:Any,<:RowVector}, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
-*(adjvec::Adjoint{<:Any,<:AbstractVector}, mat::AbstractMatrix) = adjoint(*(Adjoint(mat), adjvec.parent))
 *(adjrowvec1::Adjoint{<:Any,<:RowVector}, rowvec2::RowVector) = adjoint(adjrowvec1.parent) * rowvec2
 *(adjvec::Adjoint{<:Any,<:AbstractVector}, rowvec::RowVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
-*(adjvec1::Adjoint{<:Any,<:AbstractVector}, vec2::AbstractVector) = adjoint(adjvec1.parent)*vec2
 
 # Pseudo-inverse
 pinv(v::RowVector, tol::Real=0) = pinv(v', tol)'

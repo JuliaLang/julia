@@ -141,6 +141,29 @@ broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = Transpose(broadcast(Transp
 
 ### linear algebra
 
+# definitions not involving RowVector transferred from base/linalg/rowvector.jl
+*(vec1::AbstractVector, transvec2::Transpose{<:Any,<:AbstractVector}) =
+    (vec2 = transvec2.parent; vec1 * transpose(vec2))
+*(transvec::Transpose{<:Any,<:AbstractVector}, transmat::Transpose{<:Any,<:AbstractMatrix}) =
+    transpose(transmat.parent * transvec.parent)
+*(transvec::Transpose{<:Any,<:AbstractVector}, transrowvec::Transpose{<:Any,<:AbstractVector}) =
+    throw(DimensionMismatch("Cannot multiply two transposed vectors"))
+*(transvec::Transpose{<:Any,<:AbstractVector}, mat::AbstractMatrix) =
+    transpose(*(Transpose(mat), transvec.parent))
+*(transvec1::Transpose{<:Any,<:AbstractVector{T}}, vec2::AbstractVector{T}) where {T<:Real} =
+    reduce(+, map(*, transvec1.parent, vec2)) # Seems to be overloaded...
+*(transvec1::Transpose{<:Any,<:AbstractVector}, vec2::AbstractVector) =
+    transpose(transvec1.parent) * vec2
+*(vec1::AbstractVector, adjvec2::Adjoint{<:Any,<:AbstractVector}) =
+    vec1 * adjoint(adjvec2.parent)
+*(adjvec::Adjoint{<:Any,<:AbstractVector}, adjmat::Adjoint{<:Any,<:AbstractMatrix}) =
+    adjoint(adjmat.parent * adjvec.parent)
+*(adjvec::Adjoint{<:Any,<:AbstractVector}, adjrowvec::Adjoint{<:Any,<:AbstractVector}) =
+    throw(DimensionMismatch("Cannot multiply two transposed vectors"))
+*(adjvec::Adjoint{<:Any,<:AbstractVector}, mat::AbstractMatrix) = adjoint(*(Adjoint(mat), adjvec.parent))
+*(adjvec1::Adjoint{<:Any,<:AbstractVector}, vec2::AbstractVector) = adjoint(adjvec1.parent)*vec2
+
+
 # definitions necessary for test/linalg/rowvector.jl to pass
 # should be cleaned up / revised as necessary in the future
 /(A::Transpose{<:Any,<:Vector}, B::Matrix) = /(transpose(A.parent), B)
