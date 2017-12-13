@@ -2177,8 +2177,8 @@
 (define-macro (check-identifier ex)
   `(begin (if (or (syntactic-op? ,ex) (eq? ,ex '....))
               (error (string "invalid identifier name \"" ,ex "\"")))
-          (if (eq? ,ex '?)
-              (syntax-deprecation s "`?` used as an identifier" "")))) ; merge with above check in v1.0
+          (if (or (eq? ,ex '?) (eq? ,ex 'or) (eq? ,ex 'and) (eq? ,ex 'not))
+              (syntax-deprecation s (string "`" ,ex "` used as an identifier") "")))) ; merge with above check in v1.0
 
 ;; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s (checked #t))
