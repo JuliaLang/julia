@@ -99,31 +99,40 @@ function _find_package(name::String)
     # and query the user (if we are interactive) to install it.
     @label find_global
     if isinteractive()
-        env = Types.EnvCache()
-        pkgspec = [Types.PackageSpec(base)]
-
-        r = Operations.registry_resolve!(env, pkgspec)
-        Types.has_uuid(r[1]) || return nothing
-
-        GLOBAL_SETTINGS.load_error_choice == LOAD_ERROR_INSTALL && @goto install
-        GLOBAL_SETTINGS.load_error_choice == LOAD_ERROR_ERROR   && return nothing
-
-        choice = TerminalMenus.request("Could not find package \e[1m$(base)\e[22m, do you want to install it?",
-                       TerminalMenus.RadioMenu(["yes", "yes (remember)", "no", "no (remember)"]))
-
-        if choice == 3 || choice == 4
-            choice == 4 && (GLOBAL_SETTINGS.load_error_choice = LOAD_ERROR_ERROR)
-            return nothing
-        end
-
-        choice == 2 && (GLOBAL_SETTINGS.load_error_choice = LOAD_ERROR_INSTALL)
-        @label install
-        Pkg3.Operations.ensure_resolved(env, pkgspec, true)
-        Pkg3.Operations.add(env, pkgspec)
-        return _find_package(name)
+        # query_if_interactive is hidden from inference
+        # since it has a significant inference cost and is not used
+        # when e.g. precompiling modules
+        return query_if_interactive[](base, name)::Union{Void, String}
+    else
+        return nothing
     end
-    return nothing
 end
 
+function _query_if_interactive(base, name)
+    env = Types.EnvCache()
+    pkgspec = [Types.PackageSpec(base)]
+
+    r = Operations.registry_resolve!(env, pkgspec)
+    Types.has_uuid(r[1]) || return nothing
+
+    GLOBAL_SETTINGS.load_error_choice == LOAD_ERROR_INSTALL && @goto install
+    GLOBAL_SETTINGS.load_error_choice == LOAD_ERROR_ERROR   && return nothing
+
+    choice = TerminalMenus.request("Could not find package \e[1m$(base)\e[22m, do you want to install it?",
+                   TerminalMenus.RadioMenu(["yes", "yes (remember)", "no", "no (remember)"]))
+
+    if choice == 3 || choice == 4
+        choice == 4 && (GLOBAL_SETTINGS.load_error_choice = LOAD_ERROR_ERROR)
+        return nothing
+    end
+
+    choice == 2 && (GLOBAL_SETTINGS.load_error_choice = LOAD_ERROR_INSTALL)
+    @label install
+    Pkg3.Operations.ensure_resolved(env, pkgspec, true)
+    Pkg3.Operations.add(env, pkgspec)
+    return _find_package(name)
+end
+
+const query_if_interactive = Ref{Any}(_query_if_interactive)
 
 end # module

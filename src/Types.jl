@@ -559,7 +559,7 @@ function write_env_usage(manifest_file::AbstractString)
     !isfile(manifest_file) && return
     open(usage_file, "a") do io
         println(io, "[[\"", escape_string(manifest_file), "\"]]")
-        println(io, "time = ", Dates.format(now(), "YYYY-mm-ddTHH:MM:SS.sssZ"))
+        println(io, "time = ", now(), 'Z')
     end
 end
 
