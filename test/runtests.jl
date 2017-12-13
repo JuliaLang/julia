@@ -64,6 +64,30 @@ cd(dirname(@__FILE__)) do
     print_with_color(:white, rpad("Test (Worker)",name_align," "), " | ")
     print_with_color(:white, "Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n")
     results=[]
+    print_lock = ReentrantLock()
+
+    function print_testworker_stats(test, wrkr, resp)
+        lock(print_lock)
+        try
+            print_with_color(:white, rpad(test*" ($wrkr)", name_align, " "), " | ")
+            time_str = @sprintf("%7.2f",resp[2])
+            print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
+            gc_str = @sprintf("%5.2f",resp[5].total_time/10^9)
+            print_with_color(:white, rpad(gc_str,gc_align," "), " | ")
+
+            # since there may be quite a few digits in the percentage,
+            # the left-padding here is less to make sure everything fits
+            percent_str = @sprintf("%4.1f",100*resp[5].total_time/(10^9*resp[2]))
+            print_with_color(:white, rpad(percent_str,percent_align," "), " | ")
+            alloc_str = @sprintf("%5.2f",resp[3]/2^20)
+            print_with_color(:white, rpad(alloc_str,alloc_align," "), " | ")
+            rss_str = @sprintf("%5.2f",resp[6]/2^20)
+            print_with_color(:white, rpad(rss_str,rss_align," "), "\n")
+        finally
+            unlock(print_lock)
+        end
+    end
+
     @sync begin
         for p in workers()
             @async begin
@@ -91,22 +115,8 @@ cd(dirname(@__FILE__)) do
                             error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                         end
                     end
-                    if !isa(resp[1], Exception)
-                        print_with_color(:white, rpad(test*" ($wrkr)", name_align, " "), " | ")
-                        time_str = @sprintf("%7.2f",resp[2])
-                        print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
-                        gc_str = @sprintf("%5.2f",resp[5].total_time/10^9)
-                        print_with_color(:white, rpad(gc_str,gc_align," "), " | ")
 
-                        # since there may be quite a few digits in the percentage,
-                        # the left-padding here is less to make sure everything fits
-                        percent_str = @sprintf("%4.1f",100*resp[5].total_time/(10^9*resp[2]))
-                        print_with_color(:white, rpad(percent_str,percent_align," "), " | ")
-                        alloc_str = @sprintf("%5.2f",resp[3]/2^20)
-                        print_with_color(:white, rpad(alloc_str,alloc_align," "), " | ")
-                        rss_str = @sprintf("%5.2f",resp[6]/2^20)
-                        print_with_color(:white, rpad(rss_str,rss_align," "), "\n")
-                    end
+                    !isa(resp[1], Exception) && print_testworker_stats(test, wrkr, resp)
                 end
                 if p != 1
                     # Free up memory =)
@@ -115,18 +125,20 @@ cd(dirname(@__FILE__)) do
             end
         end
     end
+
+    n > 1 && length(node1_tests) > 1 && print("\nExecuting tests that run on node 1 only:\n")
     for t in node1_tests
         # As above, try to run each test
         # which must run on node 1. If
         # the test fails, catch the error,
         # and either way, append the results
         # to the overall aggregator
-        n > 1 && print("      From worker 1:\t")
         isolate = true
         t == "SharedArrays" && (isolate = false)
         local resp
         try
             resp = eval(Expr(:call, () -> runtests(t, test_path(t), isolate, seed=seed))) # runtests is defined by the include above
+            print_testworker_stats(t, 1, resp)
         catch e
             resp = [e]
         end
