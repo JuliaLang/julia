@@ -167,4 +167,6 @@ else
     end
 end
 
+Base.hascolor(t::TTYTerminal) = Base.have_color # use cached value
+
 end # module

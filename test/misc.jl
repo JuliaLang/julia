@@ -594,35 +594,21 @@ if Sys.iswindows()
     end
 end
 
-let
-    old_have_color = Base.have_color
-    try
-        @eval Base have_color = true
-        buf = IOBuffer()
-        print_with_color(:red, buf, "foo")
-        @test startswith(String(take!(buf)), Base.text_colors[:red])
-    finally
-        @eval Base have_color = $(old_have_color)
-    end
+let buf = IOBuffer()
+    print_with_color(:red, IOContext(buf, :color=>true), "foo")
+    @test startswith(String(take!(buf)), Base.text_colors[:red])
 end
 
 # Test that `print_with_color` accepts non-string values, just as `print` does
-let
-    old_have_color = Base.have_color
-    try
-        @eval Base have_color = true
-        buf_color = IOBuffer()
-        args = (3.2, "foo", :testsym)
-        print_with_color(:red, buf_color, args...)
-        buf_plain = IOBuffer()
-        print(buf_plain, args...)
-        expected_str = string(Base.text_colors[:red],
-                              String(take!(buf_plain)),
-                              Base.text_colors[:default])
-        @test expected_str == String(take!(buf_color))
-    finally
-        @eval Base have_color = $(old_have_color)
-    end
+let buf_color = IOBuffer()
+    args = (3.2, "foo", :testsym)
+    print_with_color(:red, IOContext(buf, :color=>true), args...)
+    buf_plain = IOBuffer()
+    print(buf_plain, args...)
+    expected_str = string(Base.text_colors[:red],
+                          String(take!(buf_plain)),
+                          Base.text_colors[:default])
+    @test expected_str == String(take!(buf_color))
 end
 
 let
@@ -635,21 +621,15 @@ let
     @test c_18711 == 1
 end
 
-let
-    old_have_color = Base.have_color
-    try
-        @eval Base have_color = true
-        buf = IOBuffer()
-        print_with_color(:red, buf, "foo")
-        # Check that we get back to normal text color in the end
-        @test String(take!(buf)) == "\e[31mfoo\e[39m"
+let buf = IOBuffer()
+    buf_color = IOContext(buf, :color => true)
+    print_with_color(:red, buf_color, "foo")
+    # Check that we get back to normal text color in the end
+    @test String(take!(buf)) == "\e[31mfoo\e[39m"
 
-        # Check that boldness is turned off
-        print_with_color(:red, buf, "foo"; bold = true)
-        @test String(take!(buf)) == "\e[1m\e[31mfoo\e[39m\e[22m"
-    finally
-        @eval Base have_color = $(old_have_color)
-    end
+    # Check that boldness is turned off
+    print_with_color(:red, buf_color, "foo"; bold = true)
+    @test String(take!(buf)) == "\e[1m\e[31mfoo\e[39m\e[22m"
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end

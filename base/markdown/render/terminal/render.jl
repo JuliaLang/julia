@@ -24,7 +24,7 @@ function term(io::IO, md::Paragraph, columns)
 end
 
 function term(io::IO, md::BlockQuote, columns)
-    s = sprint(term, md.content, columns - 10)
+    s = sprint(0, term, md.content, columns - 10; env=io)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
@@ -34,7 +34,7 @@ function term(io::IO, md::Admonition, columns)
     print(io, " "^margin, "| ")
     with_output_format(:bold, print, io, isempty(md.title) ? md.category : md.title)
     println(io, "\n", " "^margin, "|")
-    s = sprint(term, md.content, columns - 10)
+    s = sprint(0, term, md.content, columns - 10; env=io)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
@@ -44,7 +44,7 @@ function term(io::IO, f::Footnote, columns)
     print(io, " "^margin, "| ")
     with_output_format(:bold, print, io, "[^$(f.id)]")
     println(io, "\n", " "^margin, "|")
-    s = sprint(term, f.text, columns - 10)
+    s = sprint(0, term, f.text, columns - 10; env=io)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
@@ -61,7 +61,7 @@ function term(io::IO, md::List, columns)
 end
 
 function _term_header(io::IO, md, char, columns)
-    text = terminline(md.text)
+    text = terminline_string(md.text)
     with_output_format(:bold, io) do io
         print(io, " "^(margin))
         line_no, lastline_width = print_wrapped(io, text,
@@ -103,7 +103,7 @@ term(io::IO, x, _) = show(io, MIME"text/plain"(), x)
 
 # Inline Content
 
-terminline(md) = sprint(terminline, md)
+terminline_string(io::IO, md) = sprint(0, terminline, md; env=md)
 
 terminline(io::IO, content...) = terminline(io, collect(content))
 
@@ -137,7 +137,7 @@ terminline(io::IO, f::Footnote) = with_output_format(:bold, terminline, io, "[^$
 
 function terminline(io::IO, md::Link)
     url = !Base.startswith(md.url, "@ref") ? " ($(md.url))" : ""
-    text = terminline(md.text)
+    text = terminline(io, md.text)
     terminline(io, text, url)
 end
 
@@ -148,5 +148,4 @@ end
 terminline(io::IO, x) = show(io, MIME"text/plain"(), x)
 
 # Show in terminal
-
-Base.display(d::Base.REPL.REPLDisplay, md::MD) = term(Base.REPL.outstream(d.repl), md)
+Base.show(io::IO, ::MIME"text/plain", md::MD) = begin; term(io, md); nothing; end

@@ -18,13 +18,13 @@ const text_formats = Dict(
     :negative  => ("\e[7m", "\e[27m"))
 
 function with_output_format(f::Function, formats::Vector{Symbol}, io::IO, args...)
-    Base.have_color && for format in formats
+    Base.hascolor(io) && for format in formats
         haskey(text_formats, format) &&
             print(io, text_formats[format][1])
     end
     try f(io, args...)
     finally
-        Base.have_color && for format in formats
+        Base.hascolor(io) && for format in formats
             haskey(text_formats, format) &&
                 print(io, text_formats[format][2])
         end
@@ -58,7 +58,7 @@ words(s) = split(s, " ")
 lines(s) = split(s, "\n")
 
 # This could really be more efficient
-function wrapped_lines(s::AbstractString; width = 80, i = 0)
+function wrapped_lines(io::IO, s::AbstractString; width = 80, i = 0)
     if ismatch(r"\n", s)
         return vcat(map(s->wrapped_lines(s, width = width, i = i), split(s, "\n"))...)
     end
@@ -78,11 +78,11 @@ function wrapped_lines(s::AbstractString; width = 80, i = 0)
     return lines
 end
 
-wrapped_lines(f::Function, args...; width = 80, i = 0) =
-    wrapped_lines(sprint(f, args...), width = width, i = 0)
+wrapped_lines(io::IO, f::Function, args...; width = 80, i = 0) =
+    wrapped_lines(io, sprint(0, f, args...; env=io), width = width, i = 0)
 
 function print_wrapped(io::IO, s...; width = 80, pre = "", i = 0)
-    lines = wrapped_lines(s..., width = width, i = i)
+    lines = wrapped_lines(io, s..., width = width, i = i)
     println(io, lines[1])
     for line in lines[2:end]
         println(io, pre, line)
@@ -93,7 +93,7 @@ end
 print_wrapped(f::Function, io::IO, args...; kws...) = print_wrapped(io, f, args...; kws...)
 
 function print_centred(io::IO, s...; columns = 80, width = columns)
-    lines = wrapped_lines(s..., width = width)
+    lines = wrapped_lines(io, s..., width = width)
     for line in lines
         print(io, " "^(div(columns-ansi_length(line), 2)))
         println(io, line)

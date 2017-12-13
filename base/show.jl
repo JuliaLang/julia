@@ -20,7 +20,7 @@ struct IOContext{IO_t <: IO} <: AbstractPipe
     end
 end
 
-unwrapcontext(io::IO) = io, ImmutableDict{Symbol,Any}()
+unwrapcontext(io::IO) = io, hascolor(io) ? ImmutableDict{Symbol,Any}(:color, true) : ImmutableDict{Symbol,Any}()
 unwrapcontext(io::IOContext) = io.io, io.dict
 
 function IOContext(io::IO, dict::ImmutableDict)
@@ -67,6 +67,9 @@ The following properties are in common use:
    can be avoided (e.g. `[Float16(0)]` can be shown as "Float16[0.0]" instead
    of "Float16[Float16(0.0)]" : while displaying the elements of the array, the `:typeinfo`
    property will be set to `Float16`).
+ - `:color`: Boolean specifying whether ANSI color/escape codes are supported/expected.
+   By default, this is determined by whether `io` is a compatible terminal and by any
+   `--color` command-line flag when `julia` was launched.
 
 # Examples
 ```jldoctest
@@ -102,6 +105,20 @@ getindex(io::IOContext, key) = getindex(io.dict, key)
 getindex(io::IO, key) = throw(KeyError(key))
 get(io::IOContext, key, default) = get(io.dict, key, default)
 get(io::IO, key, default) = default
+
+"""
+    hascolor(io::IO)
+
+Return `true` if `io` supports/expects ANSI color codes.
+
+(This is determined when Julia is started for terminals, and can be
+overridden at startup using the `--color={yes|no}` command-line option.
+It can also be overridden by setting a `:color => {true,false}` option
+in an `IOContext`.)
+"""
+hascolor(io::IO) = get(io, :color, false)
+# stream.jl: hascolor(::TTY) = have_color
+# Terminals.jl: Base.hascolor(t::TTYTerminal) = Base.have_color
 
 displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
 
@@ -715,7 +732,7 @@ function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     end
 end
 
-emphasize(io, str::AbstractString) = have_color ?
+emphasize(io, str::AbstractString) = hascolor(io) ?
     print_with_color(Base.error_color(), io, str; bold = true) :
     print(io, Unicode.uppercase(str))
 
@@ -1253,7 +1270,7 @@ end
 
 function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     # print a method signature tuple for a lambda definition
-    color = have_color && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
+    color = hascolor(io) && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
     if sig === Tuple
         Base.print_with_color(color, io, name, "(...)")
         return
@@ -1274,7 +1291,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
         end
     end
     first = true
-    print_style = have_color && get(io, :backtrace, false) ? :bold : :nothing
+    print_style = hascolor(io) && get(io, :backtrace, false) ? :bold : :nothing
     print_with_color(print_style, io, "(")
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
