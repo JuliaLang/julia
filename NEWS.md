@@ -732,6 +732,9 @@ Deprecated or removed
   * `trues(A::AbstractArray)` and `falses(A::AbstractArray)` are deprecated in favor of
     `trues(size(A))` and `falses(size(A))` respectively ([#24595]).
 
+  * `workspace` is discontinued, check out [Revise.jl](https://github.com/timholy/Revise.jl)
+    for an alternative workflow ([#25046]).
+
   * `cumsum`, `cumprod`, `accumulate`, and their mutating versions now require a `dim`
     argument instead of defaulting to using the first dimension ([#24684]).
 

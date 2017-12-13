@@ -48,7 +48,6 @@ Base.methods
 Base.methodswith
 Base.@show
 Base.versioninfo
-Base.workspace
 ans
 ```
 

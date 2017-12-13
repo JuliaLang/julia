@@ -666,33 +666,6 @@ functionality instead.
 """
 download(url, filename)
 
-# workspace management
-
-"""
-    workspace()
-
-Replace the top-level module (`Main`) with a new one, providing a clean workspace. The
-previous `Main` module is made available as `LastMain`.
-
-If `Package` was previously loaded, `using Package` in the new `Main` will re-use the
-loaded copy. Run `reload("Package")` first to load a fresh copy.
-
-This function should only be used interactively.
-"""
-function workspace()
-    last = Core.Main # ensure to reference the current Main module
-    b = Base # this module
-    ccall(:jl_new_main_module, Any, ()) # make Core.Main a new baremodule
-    m = Core.Main # now grab a handle to the new Main module
-    ccall(:jl_add_standard_imports, Void, (Any,), m)
-    eval(m, Expr(:toplevel,
-                 :(const Base = $b),
-                 :(const LastMain = $last),
-                 :(using Base.MainInclude)))
-    empty!(package_locks)
-    return m
-end
-
 # testing
 
 """
