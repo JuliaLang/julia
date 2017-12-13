@@ -5,7 +5,12 @@ Methods for working with Iterators.
 """
 module Iterators
 
-import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, axes, ndims, pairs, last, first, get
+import Base:
+    start, done, next, first, last,
+    isempty, length, size, axes, ndims,
+    eltype, iteratorsize, iteratoreltype,
+    haskey, keys, values, pairs,
+    getindex, setindex!, get
 
 using Base: tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
             IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange
@@ -141,9 +146,16 @@ end
 end
 @inline done(r::Reverse{<:Enumerate}, state) = state[1] < 1
 
-struct IndexValue{I,A<:AbstractArray}
+"""
+    Iterators.IndexValue(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
+
+Transforms an indexable container into an Dictionary-view of the same data.
+Modifying the key-space of the underlying data may invalidate this object.
+"""
+struct IndexValue{K, V, I, A} <: AbstractDict{K, V}
     data::A
     itr::I
+    IndexValue(data::A, itr::I) where {A, I} = new{eltype(I), eltype(A), I, A}(data, itr)
 end
 
 """
@@ -162,6 +174,8 @@ Specifying `IndexLinear()` ensures that `i` will be an integer;
 specifying `IndexCartesian()` ensures that `i` will be a
 `CartesianIndex`; specifying `IndexStyle(A)` chooses whichever has
 been defined as the native indexing style for array `A`.
+
+Mutation of the bounds of the underlying array will invalidate this iterator.
 
 # Examples
 ```jldoctest
@@ -193,9 +207,13 @@ See also: [`IndexStyle`](@ref), [`axes`](@ref).
 pairs(::IndexLinear,    A::AbstractArray) = IndexValue(A, linearindices(A))
 pairs(::IndexCartesian, A::AbstractArray) = IndexValue(A, CartesianRange(axes(A)))
 
+# preserve indexing capabilities for known indexable types
 # faster than zip(keys(a), values(a)) for arrays
 pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
+pairs(tuple::Tuple) = IndexValue(tuple, keys(tuple))
+pairs(nt::NamedTuple) = IndexValue(nt, keys(nt))
+# pairs(v::IndexValue) = v # listed for reference, but already defined from being an AbstractDict
 
 length(v::IndexValue)  = length(v.itr)
 axes(v::IndexValue) = axes(v.itr)
@@ -208,12 +226,20 @@ size(v::IndexValue)    = size(v.itr)
 end
 @inline done(v::IndexValue, state) = done(v.itr, state)
 
-eltype(::Type{IndexValue{I,A}}) where {I,A} = Pair{eltype(I), eltype(A)}
+eltype(::Type{IndexValue{K, V}}) where {K, V} = Pair{K, V}
 
-iteratorsize(::Type{IndexValue{I}}) where {I} = iteratorsize(I)
-iteratoreltype(::Type{IndexValue{I}}) where {I} = iteratoreltype(I)
+iteratorsize(::Type{IndexValue{<:Any, <:Any, I}}) where {I} = iteratorsize(I)
+iteratoreltype(::Type{IndexValue{<:Any, <:Any, I}}) where {I} = iteratoreltype(I)
 
 reverse(v::IndexValue) = IndexValue(v.data, reverse(v.itr))
+
+haskey(v::IndexValue, key) = (key in v.itr)
+keys(v::IndexValue) = v.itr
+values(v::IndexValue) = v.data
+getindex(v::IndexValue, key) = v.data[key]
+setindex!(v::IndexValue, value, key) = (v.data[key] = value; v)
+get(v::IndexValue, key, default) = get(v.data, key, default)
+get(f::Base.Callable, collection::IndexValue, key) = get(f, v.data, key)
 
 # zip
 

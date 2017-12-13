@@ -187,6 +187,7 @@ for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for e
 Base.Dict
 Base.ObjectIdDict
 Base.WeakKeyDict
+Base.ImmutableDict
 Base.haskey
 Base.get(::Any, ::Any, ::Any)
 Base.get
@@ -219,6 +220,8 @@ Partially implemented by:
   * [`EnvDict`](@ref Base.EnvDict)
   * [`Array`](@ref)
   * [`BitArray`](@ref)
+  * [`ImmutableDict`](@ref Base.ImmutableDict)
+  * [`Iterators.IndexValue`](@ref)
 
 ## Set-Like Collections
 
@@ -271,4 +274,5 @@ Fully implemented by:
 
 ```@docs
 Base.Pair
+Iterators.IndexValue
 ```
