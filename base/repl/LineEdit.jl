@@ -2026,19 +2026,16 @@ AnyDict(
     "^W" => (s,o...)->edit_werase(s),
     # Meta D
     "\ed" => (s,o...)->edit_delete_next_word(s),
-    "^C" => function (s,o...)
-        if isempty(s)
-            try # raise the debugger if present
-                ccall(:jl_raise_debugger, Int, ())
-            end
-            cancel_beep(s)
-            refresh_line(s)
-            print(terminal(s), "^C\n\n")
-            transition(s, :reset)
-            refresh_line(s)
-        else
-            edit_clear(s)
+    "^C" => (s,o...)->begin
+        try # raise the debugger if present
+            ccall(:jl_raise_debugger, Int, ())
         end
+        cancel_beep(s)
+        move_input_end(s)
+        refresh_line(s)
+        print(terminal(s), "^C\n\n")
+        transition(s, :reset)
+        refresh_line(s)
     end,
     "^Z" => (s,o...)->(return :suspend),
     # Right Arrow
