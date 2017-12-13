@@ -286,7 +286,8 @@ let mt = MersenneTwister(0)
     @test rand!(mt, AF64)[end] == 0.957735065345398
     @test rand!(mt, AF64)[end] == 0.6492481059865669
     resize!(AF64, 2*length(mt.vals))
-    @test Base.Random.rand_AbstractArray_Float64!(mt, AF64, linearindices(AF64), Base.Random.CloseOpen())[end]  == 0.432757268470779
+    @test invoke(rand!, Tuple{MersenneTwister,AbstractArray{Float64},Base.Random.SamplerTrivial{Base.Random.CloseOpen_64}},
+                 mt, AF64, Base.Random.SamplerTrivial(Base.Random.CloseOpen()))[end]  == 0.432757268470779
 end
 
 # Issue #9037
