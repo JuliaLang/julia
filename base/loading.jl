@@ -68,8 +68,8 @@ elseif Sys.isapple()
 
         # If there is no match, it's possible that the file does exist but HFS+
         # performed unicode normalization. See  https://developer.apple.com/library/mac/qa/qa1235/_index.html.
-        isascii(path_basename) && return false
-        Vector{UInt8}(normalize_string(path_basename, :NFD)) == casepreserved_basename
+        Unicode.isascii(path_basename) && return false
+        Vector{UInt8}(Unicode.normalize(path_basename, :NFD)) == casepreserved_basename
     end
 else
     # Generic fallback that performs a slow directory listing.

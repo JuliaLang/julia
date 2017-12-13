@@ -186,17 +186,6 @@ end
     @test parse(Float32,"1\n") == 1.0
     @test [parse(Float32,x) for x in split("0,1\n",",")][2] == 1.0
     @test_throws ArgumentError parse(Float32,split("0,1 X\n",",")[2])
-
-    @test ucfirst("Hola")=="Hola"
-    @test ucfirst("hola")=="Hola"
-    @test ucfirst("")==""
-    @test ucfirst("*")=="*"
-    @test ucfirst("Ǆxx") == ucfirst("ǆxx") == "ǅxx"
-
-    @test lcfirst("Hola")=="hola"
-    @test lcfirst("hola")=="hola"
-    @test lcfirst("")==""
-    @test lcfirst("*")=="*"
 end
 # test AbstractString functions at beginning of string.jl
 struct tstStringType <: AbstractString
@@ -223,7 +212,7 @@ end
 
     @test done(eachindex("foobar"),7)
     @test eltype(Base.EachStringIndex) == Int
-    @test map(uppercase, "foó") == "FOÓ"
+    @test map(Base.Unicode.uppercase, "foó") == "FOÓ"
     @test chr2ind("fóobar",3) == 4
 
     @test Symbol(gstr)==Symbol("12")
@@ -289,7 +278,7 @@ end
     for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, Float64, Float32]
         @test isnull(tryparse(T, "1\0"))
     end
-    let s = normalize_string("tést",:NFKC)
+    let s = Base.Unicode.normalize("tést",:NFKC)
         @test unsafe_string(Base.unsafe_convert(Cstring, Base.cconvert(Cstring, s))) == s
         @test unsafe_string(convert(Cstring, Symbol(s))) == s
     end
@@ -417,62 +406,6 @@ end
     end
     # Check seven-byte sequences, should be invalid
     @test isvalid(String, UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
-end
-
-@testset "issue #11482" begin
-    @testset "uppercase/lowercase" begin
-        @test uppercase("aBc") == "ABC"
-        @test uppercase('A') == 'A'
-        @test uppercase('a') == 'A'
-        @test lowercase("AbC") == "abc"
-        @test lowercase('A') == 'a'
-        @test lowercase('a') == 'a'
-        @test uppercase('α') == '\u0391'
-        @test lowercase('Δ') == 'δ'
-        @test lowercase('\U118bf') == '\U118df'
-        @test uppercase('\U1044d') == '\U10425'
-    end
-    @testset "ucfirst/lcfirst" begin
-        @test ucfirst("Abc") == "Abc"
-        @test ucfirst("abc") == "Abc"
-        @test lcfirst("ABC") == "aBC"
-        @test lcfirst("aBC") == "aBC"
-        @test ucfirst(GenericString("")) == ""
-        @test lcfirst(GenericString("")) == ""
-        @test ucfirst(GenericString("a")) == "A"
-        @test lcfirst(GenericString("A")) == "a"
-        @test lcfirst(GenericString("a")) == "a"
-        @test ucfirst(GenericString("A")) == "A"
-    end
-    @testset "titlecase" begin
-        @test titlecase('ǉ') == 'ǈ'
-        @test titlecase("ǉubljana") == "ǈubljana"
-        @test titlecase("aBc ABC") == "ABc ABC"
-        @test titlecase("abcD   EFG\n\thij") == "AbcD   EFG\n\tHij"
-    end
-end
-
-@testset "issue # 11464: uppercase/lowercase of GenericString becomes a String" begin
-    str = "abcdef\uff\uffff\u10ffffABCDEF"
-    @test typeof(uppercase("abcdef")) == String
-    @test typeof(uppercase(GenericString(str))) == String
-    @test typeof(lowercase("ABCDEF")) == String
-    @test typeof(lowercase(GenericString(str))) == String
-
-    foomap(ch) = (ch > Char(65))
-    foobar(ch) = Char(0xd800)
-    foobaz(ch) = reinterpret(Char, typemax(UInt32))
-    @test_throws ArgumentError map(foomap, GenericString(str))
-    @test map(foobar, GenericString(str)) == String(repeat(b"\ud800", outer=[17]))
-    @test map(foobaz, GenericString(str)) == String(repeat(b"\ufffd", outer=[17]))
-
-    @test "a".*["b","c"] == ["ab","ac"]
-    @test ["b","c"].*"a" == ["ba","ca"]
-    @test ["a","b"].*["c" "d"] == ["ac" "ad"; "bc" "bd"]
-
-    @test one(String) == ""
-    @test prod(["*" for i in 1:3]) == "***"
-    @test prod(["*" for i in 1:0]) == ""
 end
 
 @testset "NULL pointers are handled consistently by String" begin

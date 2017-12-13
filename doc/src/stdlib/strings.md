@@ -19,12 +19,9 @@ Base.@r_str
 Base.@raw_str
 Base.Docs.@html_str
 Base.Docs.@text_str
-Base.UTF8proc.normalize_string
-Base.UTF8proc.graphemes
 Base.isvalid(::Any)
 Base.isvalid(::Any, ::Any)
 Base.isvalid(::AbstractString, ::Integer)
-Base.UTF8proc.is_assigned_char
 Base.ismatch
 Base.match
 Base.eachmatch
@@ -50,11 +47,6 @@ Base.startswith
 Base.endswith
 Base.first(::AbstractString, ::Integer)
 Base.last(::AbstractString, ::Integer)
-Base.uppercase
-Base.lowercase
-Base.titlecase
-Base.ucfirst
-Base.lcfirst
 Base.join
 Base.chop
 Base.chomp
@@ -64,20 +56,6 @@ Base.thisind
 Base.nextind
 Base.prevind
 Base.Random.randstring
-Base.UTF8proc.textwidth
-Base.UTF8proc.isalnum
-Base.UTF8proc.isalpha
-Base.isascii
-Base.UTF8proc.iscntrl
-Base.UTF8proc.isdigit
-Base.UTF8proc.isgraph
-Base.UTF8proc.islower
-Base.UTF8proc.isnumber
-Base.UTF8proc.isprint
-Base.UTF8proc.ispunct
-Base.UTF8proc.isspace
-Base.UTF8proc.isupper
-Base.isxdigit
 Core.Symbol
 Base.escape_string
 Base.unescape_string

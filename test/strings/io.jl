@@ -66,14 +66,14 @@
         cp, ch, st = cx[i,:]
         @test cp == convert(UInt32, ch)
         @test string(ch) == unescape_string(st)
-        if isascii(ch) || !isprint(ch)
+        if Base.Unicode.isascii(ch) || !Base.Unicode.isprint(ch)
             @test st == escape_string(string(ch))
         end
         for j = 1:size(cx,1)
             local str = string(ch, cx[j,2])
             @test str == unescape_string(escape_string(str))
         end
-        @test repr(ch) == "'$(isprint(ch) ? ch : st)'"
+        @test repr(ch) == "'$(Base.Unicode.isprint(ch) ? ch : st)'"
     end
 
     for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",

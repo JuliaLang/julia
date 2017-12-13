@@ -636,7 +636,7 @@ Gets all of the IP addresses of the `host`.
 Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
 """
 function getalladdrinfo(host::String)
-    isascii(host) || error("non-ASCII hostname: $host")
+    Unicode.isascii(host) || error("non-ASCII hostname: $host")
     req = Libc.malloc(_sizeof_uv_getaddrinfo)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     status = ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}, Ptr{Void}),

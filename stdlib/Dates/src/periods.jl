@@ -8,7 +8,7 @@ value(x::Period) = x.value
 # The following definitions are for Period-specific safety
 for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond)
     period_str = string(period)
-    accessor_str = lowercase(period_str)
+    accessor_str = Base.Unicode.lowercase(period_str)
     # Convenience method for show()
     @eval _units(x::$period) = " " * $accessor_str * (abs(value(x)) == 1 ? "" : "s")
     # periodisless

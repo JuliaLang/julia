@@ -738,6 +738,16 @@ Deprecated or removed
   * The `sum_kbn` and `cumsum_kbn` functions have been moved to the
     [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
 
+  * Unicode-related string functions have been moved to the new `Unicode` standard
+    library module ([#25021]). This applies to `normalize_string`, `graphemes`,
+    `is_assigned_char`, `textwidth`, `isascii`, `islower`, `isupper`, `isalpha`,
+    `isdigit`, `isxdigit`, `isnumber`, `isalnum`, `iscntrl`, `ispunct`, `isspace`,
+    `isprint`, `isgraph`, `lowercase`, `uppercase`, `titlecase`, `lcfirst` and `ucfirst`.
+
+  * `isnumber` has been deprecated in favor of `isnumeric`, `is_assigned_char`
+    in favor of `isassigned` and `normalize_string` in favor of `normalize`, all three
+    in the new `Unicode` standard library module ([#25021]).
+
 Command-line option changes
 ---------------------------
 
@@ -1711,3 +1721,4 @@ Command-line option changes
 [#24413]: https://github.com/JuliaLang/julia/issues/24413
 [#24653]: https://github.com/JuliaLang/julia/issues/24653
 [#24869]: https://github.com/JuliaLang/julia/issues/24869
+[#25021]: https://github.com/JuliaLang/julia/issues/25021

@@ -138,7 +138,7 @@ struct FileRedirect
     filename::AbstractString
     append::Bool
     function FileRedirect(filename, append)
-        if lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
+        if Unicode.lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
             warn_once("for portability use DevNull instead of a file redirect")
         end
         new(filename, append)

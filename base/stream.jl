@@ -1029,7 +1029,7 @@ for (x, writable, unix_fd, c_symbol) in
         ((:STDIN, false, 0, :jl_uv_stdin),
          (:STDOUT, true, 1, :jl_uv_stdout),
          (:STDERR, true, 2, :jl_uv_stderr))
-    f = Symbol("redirect_",lowercase(string(x)))
+    f = Symbol("redirect_",Unicode.lowercase(string(x)))
     _f = Symbol("_",f)
     @eval begin
         function ($_f)(stream)

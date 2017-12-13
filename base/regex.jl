@@ -338,11 +338,11 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
             if repl[next_i] == SUB_CHAR
                 write(io, SUB_CHAR)
                 i = nextind(repl, next_i)
-            elseif isnumber(repl[next_i])
+            elseif Unicode.isdigit(repl[next_i])
                 group = parse(Int, repl[next_i])
                 i = nextind(repl, next_i)
                 while i <= e
-                    if isnumber(repl[i])
+                    if Unicode.isdigit(repl[i])
                         group = 10group + parse(Int, repl[i])
                         i = nextind(repl, i)
                     else
@@ -364,7 +364,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                 end
                 #  TODO: avoid this allocation
                 groupname = SubString(repl, groupstart, prevind(repl, i))
-                if all(isnumber,groupname)
+                if all(Unicode.isdigit, groupname)
                     _write_capture(io, re, parse(Int, groupname))
                 else
                     group = PCRE.substring_number_from_name(re.regex, groupname)

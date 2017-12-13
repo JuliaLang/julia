@@ -282,7 +282,7 @@ end
             Base.show(io, MIME("text/plain"), d)
             out = split(String(take!(s)),'\n')
             for line in out[2:end]
-                @test textwidth(line) <= cols
+                @test Base.Unicode.textwidth(line) <= cols
             end
             @test length(out) <= rows
 
@@ -292,7 +292,7 @@ end
                 Base.show(io, MIME("text/plain"), f(d))
                 out = split(String(take!(s)),'\n')
                 for line in out[2:end]
-                    @test textwidth(line) <= cols
+                    @test Base.Unicode.textwidth(line) <= cols
                 end
                 @test length(out) <= rows
             end

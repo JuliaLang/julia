@@ -711,7 +711,9 @@ function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     end
 end
 
-emphasize(io, str::AbstractString) = have_color ? print_with_color(Base.error_color(), io, str; bold = true) : print(io, uppercase(str))
+emphasize(io, str::AbstractString) = have_color ?
+    print_with_color(Base.error_color(), io, str; bold = true) :
+    print(io, Unicode.uppercase(str))
 
 show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
 show_linenumber(io::IO, line, file) = print(io, "#= ", file, ":", line, " =#")

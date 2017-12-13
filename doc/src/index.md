@@ -73,6 +73,7 @@
   * [Base64](@ref)
   * [File Events](@ref lib-filewatching)
   * [Iterative Eigensolvers](@ref lib-itereigen)
+  * [Unicode](@ref)
 
 ## Developer Documentation
 

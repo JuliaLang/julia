@@ -128,8 +128,9 @@ end
 Reverses a string. Technically, this function reverses the codepoints in a string and its
 main utility is for reversed-order string processing, especially for reversed
 regular-expression searches. See also [`reverseind`](@ref) to convert indices in `s` to
-indices in `reverse(s)` and vice-versa, and [`graphemes`](@ref) to operate on user-visible
-"characters" (graphemes) rather than codepoints. See also [`Iterators.reverse`](@ref) for
+indices in `reverse(s)` and vice-versa, and [`Unicode.graphemes`](@ref Base.Unicode.graphemes) to
+operate on user-visible "characters" (graphemes) rather than codepoints.
+See also [`Iterators.reverse`](@ref) for
 reverse-order iteration without making a copy. Custom string types must implement the
 `reverse` function themselves and should typically return a string with the same type
 and encoding. If they return a string with a different encoding, they must also override
@@ -142,6 +143,8 @@ julia> reverse("JuliaLang")
 
 julia> reverse("ax̂e") # combining characters can lead to surprising results
 "êxa"
+
+julia> using Unicode
 
 julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
 "ex̂a"
