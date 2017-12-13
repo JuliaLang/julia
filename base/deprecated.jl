@@ -2990,6 +2990,18 @@ end
 # re. A_mul_B deprecation, don't forget to:
 # 1) delete function shims in base/linalg/linalg.jl
 
+# methods involving RowVector from base/linalg/bidiag.jl, to deprecate
+@eval Base.LinAlg begin
+    \(::Diagonal, ::RowVector) = _mat_ldiv_rowvec_error()
+    \(::Bidiagonal, ::RowVector) = _mat_ldiv_rowvec_error()
+    \(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = _mat_ldiv_rowvec_error()
+    \(::Adjoint{<:Any,<:Bidiagonal}, ::RowVector) = _mat_ldiv_rowvec_error()
+    \(::Transpose{<:Any,<:Bidiagonal}, ::RowVector) = _mat_ldiv_rowvec_error()
+    \(::Adjoint{<:Number,<:Bidiagonal{<:Number}}, ::RowVector{<:Number}) = _mat_ldiv_rowvec_error()
+    \(::Transpose{<:Number,<:Bidiagonal{<:Number}}, ::RowVector{<:Number}) = _mat_ldiv_rowvec_error()
+    _mat_ldiv_rowvec_error() = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 

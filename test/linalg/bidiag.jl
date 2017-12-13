@@ -180,11 +180,6 @@ srand(1)
             @test_throws DimensionMismatch T.' \ ones(elty,n+1,2)
             @test_throws DimensionMismatch T' \ ones(elty,n+1,2)
 
-            @test_throws DimensionMismatch T \ RowVector(ones(elty,n+1))
-            @test_throws DimensionMismatch T.' \ RowVector(ones(elty,n+1))
-            @test_throws DimensionMismatch T' \ RowVector(ones(elty,n+1))
-            @test_throws DimensionMismatch Transpose(T) \ RowVector(ones(elty,n+1))
-            @test_throws DimensionMismatch Adjoint(T) \ RowVector(ones(elty,n+1))
             let bb = b, cc = c
                 for atype in ("Array", "SubArray")
                     if atype == "Array"
@@ -206,10 +201,6 @@ srand(1)
                         @test T/b' ≈ Tfull/b'
                     end
                 end
-                # test DimensionMismatch for RowVectors
-                @test_throws DimensionMismatch T \ b'
-                @test_throws DimensionMismatch T.' \ b'
-                @test_throws DimensionMismatch T' \ b'
             end
         end
 
