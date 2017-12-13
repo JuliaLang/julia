@@ -393,3 +393,24 @@ end
     @test Adjoint(complexvec)\Adjoint(complexvec) ≈ conj(rowcomplexvec)\conj(rowcomplexvec)
     @test Transpose(complexvec)\Transpose(complexvec) ≈ rowcomplexvec\rowcomplexvec
 end
+
+@testset "Adjoint/Transpose-wrapped vector right-division" begin
+    realvec, realmat = [1, 2, 3], [1 0 0; 0 2 0; 0 0 3]
+    complexvec, complexmat = [1im, 2, -3im], [2im 0 0; 0 3 0; 0 0 -5im]
+    rowrealvec, rowcomplexvec = reshape(realvec, (1, 3)), reshape(complexvec, (1, 3))
+    # /(Adjoint/Transpose-vector, matrix)
+    @test (Adjoint(realvec) / realmat)::Adjoint ≈ rowrealvec / realmat
+    @test (Adjoint(complexvec) / complexmat)::Adjoint ≈ conj(rowcomplexvec) / complexmat
+    @test (Transpose(realvec) / realmat)::Transpose ≈ rowrealvec / realmat
+    @test (Transpose(complexvec) / complexmat)::Transpose ≈ rowcomplexvec / complexmat
+    # /(Adjoint/Transpose-vector, Adjoint matrix)
+    @test (Adjoint(realvec) / Adjoint(realmat))::Adjoint ≈ rowrealvec / adjoint(realmat)
+    @test (Adjoint(complexvec) / Adjoint(complexmat))::Adjoint ≈ conj(rowcomplexvec) / adjoint(complexmat)
+    @test (Transpose(realvec) / Adjoint(realmat))::Transpose ≈ rowrealvec / adjoint(realmat)
+    @test (Transpose(complexvec) / Adjoint(complexmat))::Transpose ≈ rowcomplexvec / adjoint(complexmat)
+    # /(Adjoint/Transpose-vector, Transpose matrix)
+    @test (Adjoint(realvec) / Transpose(realmat))::Adjoint ≈ rowrealvec / transpose(realmat)
+    @test (Adjoint(complexvec) / Transpose(complexmat))::Adjoint ≈ conj(rowcomplexvec) / transpose(complexmat)
+    @test (Transpose(realvec) / Transpose(realmat))::Transpose ≈ rowrealvec / transpose(realmat)
+    @test (Transpose(complexvec) / Transpose(complexmat))::Transpose ≈ rowcomplexvec / transpose(complexmat)
+end
