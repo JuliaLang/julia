@@ -41,8 +41,8 @@ function edit(path::AbstractString, line::Integer=0)
     line_unsupported = false
     if startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" ||
             name == "mvim" || name == "nano" ||
-            name == "emacs" && contains(in, command, ["-nw", "--no-window-system" ]) ||
-            name == "emacsclient" && contains(in, command, ["-nw", "-t", "-tty"])
+            name == "emacs" && any(c -> c in ["-nw", "--no-window-system" ], command) ||
+            name == "emacsclient" && any(c -> c in ["-nw", "-t", "-tty"], command)
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
         background = false
     elseif startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
