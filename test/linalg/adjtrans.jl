@@ -372,3 +372,14 @@ end
     @test (Transpose(complexvec) * Transpose(complexmat))::Transpose{Complex{Int},Vector{Complex{Int}}} ==
         reshape(complexmat * complexvec, (1, 3))
 end
+
+@testset "Adjoint/Transpose-wrapped vector pseudoinversion" begin
+    realvec, complexvec = [1., 2., 3., 4.], [1.0im, 2., 3.0im, 4.]
+    rowrealvec, rowcomplexvec = reshape(realvec, (1, 4)), reshape(complexvec, (1, 4))
+    # pinv(Adjoint/Transpose-vector) should match matrix equivalents
+    # TODO tighten type asserts once pinv yields Transpose/Adjoint
+    @test pinv(Adjoint(realvec))::Adjoint ≈ pinv(rowrealvec)
+    @test pinv(Transpose(realvec))::Transpose ≈ pinv(rowrealvec)
+    @test pinv(Adjoint(complexvec))::Adjoint ≈ pinv(conj(rowcomplexvec))
+    @test pinv(Transpose(complexvec))::Transpose ≈ pinv(rowcomplexvec)
+end

@@ -165,6 +165,11 @@ end
 *(u::TransposeAbsVec, A::Transpose{<:Any,<:AbstractMatrix}) = Transpose(A.parent * u.parent)
 
 
+## pseudoinversion
+pinv(v::AdjointAbsVec, tol::Real = 0) = Adjoint(pinv(v.parent, tol))
+pinv(v::TransposeAbsVec, tol::Real = 0) = Transpose(pinv(v.parent, tol))
+
+
 # definitions necessary for test/linalg/rowvector.jl to pass
 # should be cleaned up / revised as necessary in the future
 /(A::Transpose{<:Any,<:Vector}, B::Matrix) = /(transpose(A.parent), B)
