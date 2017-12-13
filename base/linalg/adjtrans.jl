@@ -170,6 +170,10 @@ pinv(v::AdjointAbsVec, tol::Real = 0) = Adjoint(pinv(v.parent, tol))
 pinv(v::TransposeAbsVec, tol::Real = 0) = Transpose(pinv(v.parent, tol))
 
 
+## left-division \
+\(u::AdjOrTransAbsVec, v::AdjOrTransAbsVec) = pinv(u) * v
+
+
 # definitions necessary for test/linalg/rowvector.jl to pass
 # should be cleaned up / revised as necessary in the future
 /(A::Transpose{<:Any,<:Vector}, B::Matrix) = /(transpose(A.parent), B)

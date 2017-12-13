@@ -383,3 +383,13 @@ end
     @test pinv(Adjoint(complexvec))::Adjoint ≈ pinv(conj(rowcomplexvec))
     @test pinv(Transpose(complexvec))::Transpose ≈ pinv(rowcomplexvec)
 end
+
+@testset "Adjoint/Transpose-wrapped vector left-division" begin
+    realvec, complexvec = [1., 2., 3., 4.,], [1.0im, 2., 3.0im, 4.]
+    rowrealvec, rowcomplexvec = reshape(realvec, (1, 4)), reshape(complexvec, (1, 4))
+    # \(Adjoint/Transpose-vector, Adjoint/Transpose-vector) should mat matrix equivalents
+    @test Adjoint(realvec)\Adjoint(realvec) ≈ rowrealvec\rowrealvec
+    @test Transpose(realvec)\Transpose(realvec) ≈ rowrealvec\rowrealvec
+    @test Adjoint(complexvec)\Adjoint(complexvec) ≈ conj(rowcomplexvec)\conj(rowcomplexvec)
+    @test Transpose(complexvec)\Transpose(complexvec) ≈ rowcomplexvec\rowcomplexvec
+end
