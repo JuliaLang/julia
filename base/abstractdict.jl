@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# generic operations on associative collections
+# generic operations on dictionaries
 
 """
     KeyError(key)
 
-An indexing operation into an `Associative` (`Dict`) or `Set` like object tried to access or
+An indexing operation into an `AbstractDict` (`Dict`) or `Set` like object tried to access or
 delete a non-existent element.
 """
 struct KeyError <: Exception
@@ -14,9 +14,9 @@ end
 
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
-haskey(d::Associative, k) = in(k, keys(d))
+haskey(d::AbstractDict, k) = in(k, keys(d))
 
-function in(p::Pair, a::Associative, valcmp=(==))
+function in(p::Pair, a::AbstractDict, valcmp=(==))
     v = get(a,p[1],secret_table_token)
     if v !== secret_table_token
         valcmp(v, p[2]) && return true
@@ -24,23 +24,23 @@ function in(p::Pair, a::Associative, valcmp=(==))
     return false
 end
 
-function in(p, a::Associative)
-    error("""Associative collections only contain Pairs;
+function in(p, a::AbstractDict)
+    error("""AbstractDict collections only contain Pairs;
              Either look for e.g. A=>B instead, or use the `keys` or `values`
              function if you are looking for a key or value respectively.""")
 end
 
-function summary(t::Associative)
+function summary(t::AbstractDict)
     n = length(t)
     return string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
 end
 
-struct KeySet{K, T <: Associative{K}} <: AbstractSet{K}
+struct KeySet{K, T <: AbstractDict{K}} <: AbstractSet{K}
     dict::T
 end
-KeySet(dict::Associative) = KeySet{keytype(dict), typeof(dict)}(dict)
+KeySet(dict::AbstractDict) = KeySet{keytype(dict), typeof(dict)}(dict)
 
-struct ValueIterator{T<:Associative}
+struct ValueIterator{T<:AbstractDict}
     dict::T
 end
 
@@ -78,9 +78,9 @@ return an iterator over the keys.
 function keys end
 
 """
-    keys(a::Associative)
+    keys(a::AbstractDict)
 
-Return an iterator over all keys in an associative collection.
+Return an iterator over all keys in a dictionary.
 `collect(keys(a))` returns an array of keys.
 Since the keys are stored internally in a hash table,
 the order in which they are returned may vary.
@@ -100,10 +100,10 @@ julia> collect(keys(a))
  'a'
 ```
 """
-keys(a::Associative) = KeySet(a)
+keys(a::AbstractDict) = KeySet(a)
 
 """
-    values(a::Associative)
+    values(a::AbstractDict)
 
 Return an iterator over all values in a collection.
 `collect(values(a))` returns an array of values.
@@ -125,7 +125,7 @@ julia> collect(values(a))
  2
 ```
 """
-values(a::Associative) = ValueIterator(a)
+values(a::AbstractDict) = ValueIterator(a)
 
 """
     pairs(collection)
@@ -136,24 +136,24 @@ This includes arrays, where the keys are the array indices.
 """
 pairs(collection) = Generator(=>, keys(collection), values(collection))
 
-pairs(a::Associative) = a
+pairs(a::AbstractDict) = a
 
 """
-    empty(a::Associative, [index_type=keytype(a)], [value_type=valtype(a)])
+    empty(a::AbstractDict, [index_type=keytype(a)], [value_type=valtype(a)])
 
-Create an empty `Associative` container which can accept indices of type `index_type` and
+Create an empty `AbstractDict` container which can accept indices of type `index_type` and
 values of type `value_type`. The second and third arguments are optional and default to the
 input's `keytype` and `valtype`, respectively. (If only one of the two types is specified,
 it is assumed to be the `value_type`, and the `index_type` we default to `keytype(a)`).
 
-Custom `Associative` subtypes may choose which specific associative type is best suited to
+Custom `AbstractDict` subtypes may choose which specific dictionary type is best suited to
 return for the given index and value types, by specializing on the three-argument signature.
 The default is to return an empty `Dict`.
 """
-empty(a::Associative) = empty(a, keytype(a), valtype(a))
-empty(a::Associative, ::Type{V}) where {V} = empty(a, keytype(a), V) # Note: this is the form which makes sense for `Vector`.
+empty(a::AbstractDict) = empty(a, keytype(a), valtype(a))
+empty(a::AbstractDict, ::Type{V}) where {V} = empty(a, keytype(a), V) # Note: this is the form which makes sense for `Vector`.
 
-function copy(a::Associative)
+function copy(a::AbstractDict)
     b = empty(a)
     for (k,v) in a
         b[k] = v
@@ -162,7 +162,7 @@ function copy(a::Associative)
 end
 
 """
-    merge!(d::Associative, others::Associative...)
+    merge!(d::AbstractDict, others::AbstractDict...)
 
 Update collection with pairs from the other collections.
 See also [`merge`](@ref).
@@ -182,7 +182,7 @@ Dict{Int64,Int64} with 3 entries:
   1 => 4
 ```
 """
-function merge!(d::Associative, others::Associative...)
+function merge!(d::AbstractDict, others::AbstractDict...)
     for other in others
         for (k,v) in other
             d[k] = v
@@ -192,7 +192,7 @@ function merge!(d::Associative, others::Associative...)
 end
 
 """
-    merge!(combine, d::Associative, others::Associative...)
+    merge!(combine, d::AbstractDict, others::AbstractDict...)
 
 Update collection with pairs from the other collections.
 Values with the same key will be combined using the
@@ -221,7 +221,7 @@ Dict{Int64,Int64} with 3 entries:
   1 => 0
 ```
 """
-function merge!(combine::Function, d::Associative, others::Associative...)
+function merge!(combine::Function, d::AbstractDict, others::AbstractDict...)
     for other in others
         for (k,v) in other
             d[k] = haskey(d, k) ? combine(d[k], v) : v
@@ -232,7 +232,7 @@ end
 
 # very similar to `merge!`, but accepts any iterable and extends code
 # that would otherwise only use `copy!` with arrays.
-function copy!(dest::Union{Associative,AbstractSet}, src)
+function copy!(dest::Union{AbstractDict,AbstractSet}, src)
     for x in src
         push!(dest, x)
     end
@@ -242,7 +242,7 @@ end
 """
     keytype(type)
 
-Get the key type of an associative collection type. Behaves similarly to [`eltype`](@ref).
+Get the key type of an dictionary type. Behaves similarly to [`eltype`](@ref).
 
 # Examples
 ```jldoctest
@@ -250,14 +250,14 @@ julia> keytype(Dict(Int32(1) => "foo"))
 Int32
 ```
 """
-keytype(::Type{Associative{K,V}}) where {K,V} = K
-keytype(a::Associative) = keytype(typeof(a))
-keytype(::Type{A}) where {A<:Associative} = keytype(supertype(A))
+keytype(::Type{AbstractDict{K,V}}) where {K,V} = K
+keytype(a::AbstractDict) = keytype(typeof(a))
+keytype(::Type{A}) where {A<:AbstractDict} = keytype(supertype(A))
 
 """
     valtype(type)
 
-Get the value type of an associative collection type. Behaves similarly to [`eltype`](@ref).
+Get the value type of an dictionary type. Behaves similarly to [`eltype`](@ref).
 
 # Examples
 ```jldoctest
@@ -265,12 +265,12 @@ julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
-valtype(::Type{Associative{K,V}}) where {K,V} = V
-valtype(::Type{A}) where {A<:Associative} = valtype(supertype(A))
-valtype(a::Associative) = valtype(typeof(a))
+valtype(::Type{AbstractDict{K,V}}) where {K,V} = V
+valtype(::Type{A}) where {A<:AbstractDict} = valtype(supertype(A))
+valtype(a::AbstractDict) = valtype(typeof(a))
 
 """
-    merge(d::Associative, others::Associative...)
+    merge(d::AbstractDict, others::AbstractDict...)
 
 Construct a merged collection from the given collections. If necessary, the
 types of the resulting collection will be promoted to accommodate the types of
@@ -302,11 +302,11 @@ Dict{String,Float64} with 3 entries:
   "foo" => 0.0
 ```
 """
-merge(d::Associative, others::Associative...) =
+merge(d::AbstractDict, others::AbstractDict...) =
     merge!(_typeddict(d, others...), others...)
 
 """
-    merge(combine, d::Associative, others::Associative...)
+    merge(combine, d::AbstractDict, others::AbstractDict...)
 
 Construct a merged collection from the given collections. If necessary, the
 types of the resulting collection will be promoted to accommodate the types of
@@ -332,21 +332,21 @@ Dict{String,Float64} with 3 entries:
   "foo" => 0.0
 ```
 """
-merge(combine::Function, d::Associative, others::Associative...) =
+merge(combine::Function, d::AbstractDict, others::AbstractDict...) =
     merge!(combine, _typeddict(d, others...), others...)
 
 promoteK(K) = K
 promoteV(V) = V
 promoteK(K, d, ds...) = promoteK(promote_type(K, keytype(d)), ds...)
 promoteV(V, d, ds...) = promoteV(promote_type(V, valtype(d)), ds...)
-function _typeddict(d::Associative, others::Associative...)
+function _typeddict(d::AbstractDict, others::AbstractDict...)
     K = promoteK(keytype(d), others...)
     V = promoteV(valtype(d), others...)
     Dict{K,V}(d)
 end
 
 """
-    filter!(f, d::Associative)
+    filter!(f, d::AbstractDict)
 
 Update `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
@@ -365,11 +365,11 @@ Dict{Int64,String} with 2 entries:
   1 => "a"
 ```
 """
-function filter!(f, d::Associative)
+function filter!(f, d::AbstractDict)
     badkeys = Vector{keytype(d)}()
     try
         for pair in d
-            # don't delete!(d, k) here, since associative types
+            # don't delete!(d, k) here, since dictionary types
             # may not support mutation during iteration
             f(pair) || push!(badkeys, pair.first)
         end
@@ -382,7 +382,7 @@ function filter!(f, d::Associative)
     return d
 end
 
-function filter_in_one_pass!(f, d::Associative)
+function filter_in_one_pass!(f, d::AbstractDict)
     try
         for pair in d
             if !f(pair)
@@ -395,12 +395,12 @@ function filter_in_one_pass!(f, d::Associative)
     return d
 end
 
-function filter!_dict_deprecation(e, f, d::Associative)
+function filter!_dict_deprecation(e, f, d::AbstractDict)
     if isa(e, MethodError) && e.f === f
         depwarn("In `filter!(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter!)
         badkeys = Vector{keytype(d)}()
         for (k,v) in d
-            # don't delete!(d, k) here, since associative types
+            # don't delete!(d, k) here, since dictionary types
             # may not support mutation during iteration
             f(k, v) || push!(badkeys, k)
         end
@@ -414,7 +414,7 @@ function filter!_dict_deprecation(e, f, d::Associative)
 end
 
 """
-    filter(f, d::Associative)
+    filter(f, d::AbstractDict)
 
 Return a copy of `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
@@ -431,7 +431,7 @@ Dict{Int64,String} with 1 entry:
   1 => "a"
 ```
 """
-function filter(f, d::Associative)
+function filter(f, d::AbstractDict)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
     df = empty(d)
     try
@@ -455,9 +455,9 @@ function filter(f, d::Associative)
     return df
 end
 
-eltype(::Type{Associative{K,V}}) where {K,V} = Pair{K,V}
+eltype(::Type{AbstractDict{K,V}}) where {K,V} = Pair{K,V}
 
-function isequal(l::Associative, r::Associative)
+function isequal(l::AbstractDict, r::AbstractDict)
     l === r && return true
     if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
         return false
@@ -471,7 +471,7 @@ function isequal(l::Associative, r::Associative)
     true
 end
 
-function ==(l::Associative, r::Associative)
+function ==(l::AbstractDict, r::AbstractDict)
     l === r && return true
     if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
         return false
@@ -486,7 +486,7 @@ function ==(l::Associative, r::Associative)
 end
 
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
-function hash(a::Associative, h::UInt)
+function hash(a::AbstractDict, h::UInt)
     hv = hasha_seed
     for (k,v) in a
         hv ⊻= hash(k, hash(v))
@@ -494,7 +494,7 @@ function hash(a::Associative, h::UInt)
     hash(hv, h)
 end
 
-function getindex(t::Associative, key)
+function getindex(t::AbstractDict, key)
     v = get(t, key, secret_table_token)
     if v === secret_table_token
         throw(KeyError(key))
@@ -504,12 +504,12 @@ end
 
 # t[k1,k2,ks...] is syntactic sugar for t[(k1,k2,ks...)].  (Note
 # that we need to avoid dispatch loops if setindex!(t,v,k) is not defined.)
-getindex(t::Associative, k1, k2, ks...) = getindex(t, tuple(k1,k2,ks...))
-setindex!(t::Associative, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...))
+getindex(t::AbstractDict, k1, k2, ks...) = getindex(t, tuple(k1,k2,ks...))
+setindex!(t::AbstractDict, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...))
 
-push!(t::Associative, p::Pair) = setindex!(t, p.second, p.first)
-push!(t::Associative, p::Pair, q::Pair) = push!(push!(t, p), q)
-push!(t::Associative, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
+push!(t::AbstractDict, p::Pair) = setindex!(t, p.second, p.first)
+push!(t::AbstractDict, p::Pair, q::Pair) = push!(push!(t, p), q)
+push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
 
 # hashing objects by identity
 
@@ -522,7 +522,7 @@ and value type and thus its `eltype` is always `Pair{Any,Any}`.
 
 See [`Dict`](@ref) for further help.
 """
-mutable struct ObjectIdDict <: Associative{Any,Any}
+mutable struct ObjectIdDict <: AbstractDict{Any,Any}
     ht::Vector{Any}
     ndel::Int
     ObjectIdDict() = new(Vector{Any}(uninitialized, 32), 0)
@@ -613,6 +613,6 @@ copy(o::ObjectIdDict) = ObjectIdDict(o)
 
 get!(o::ObjectIdDict, key, default) = (o[key] = get(o, key, default))
 
-# For some Associative types, it is safe to implement filter!
+# For some AbstractDict types, it is safe to implement filter!
 # by deleting keys during iteration.
 filter!(f, d::ObjectIdDict) = filter_in_one_pass!(f, d)

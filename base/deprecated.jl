@@ -1521,7 +1521,7 @@ export hex2num
 # remove code for `importall` in src/
 
 # issue #17886
-# deprecations for filter[!] with 2-arg functions are in associative.jl
+# deprecations for filter[!] with 2-arg functions are in abstractdict.jl
 
 # PR #23066
 @deprecate cfunction(f, r, a::Tuple) cfunction(f, r, Tuple{a...})
@@ -1601,7 +1601,7 @@ import .Iterators.enumerate
 @deprecate_binding Range AbstractRange
 
 # issue #5794
-@deprecate map(f, d::T) where {T<:Associative}  T( f(p) for p in pairs(d) )
+@deprecate map(f, d::T) where {T<:AbstractDict}  T( f(p) for p in pairs(d) )
 
 # issue #17086
 @deprecate isleaftype isconcrete
@@ -2951,8 +2951,8 @@ end
 @deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
 
 # issue #24019
-@deprecate similar(a::Associative) empty(a)
-@deprecate similar(a::Associative, ::Type{Pair{K,V}}) where {K, V} empty(a, K, V)
+@deprecate similar(a::AbstractDict) empty(a)
+@deprecate similar(a::AbstractDict, ::Type{Pair{K,V}}) where {K, V} empty(a, K, V)
 
 # PR #24594
 @eval LibGit2 begin
@@ -2995,6 +2995,9 @@ end
 # PR #24999
 @deprecate ind2chr(s::AbstractString, i::Integer) length(s, 1, i)
 @deprecate chr2ind(s::AbstractString, n::Integer) nextind(s, 0, n)
+
+# Associative -> AbstractDict (#25012)
+@deprecate_binding Associative AbstractDict
 
 # END 0.7 deprecations
 

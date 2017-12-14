@@ -25,7 +25,7 @@ import Base.haskey, Base.get
 import Base.setindex!, Base.getindex, Base.delete!, Base.empty!
 import Base.show
 
-abstract type LRU{K,V} <: Associative{K,V} end
+abstract type LRU{K,V} <: AbstractDict{K,V} end
 
 # Default cache size
 const __MAXCACHE = 1024

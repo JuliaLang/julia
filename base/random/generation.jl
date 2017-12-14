@@ -342,18 +342,18 @@ function rand(rng::AbstractRNG, sp::SamplerSimple{BitSet,<:Sampler})
     end
 end
 
-## random values from Associative/AbstractSet
+## random values from AbstractDict/AbstractSet
 
 # we defer to _Sampler to avoid ambiguities with a call like Sampler(rng, Set(1), Val(1))
-Sampler(rng::AbstractRNG, t::Union{Associative,AbstractSet}, n::Repetition) =
+Sampler(rng::AbstractRNG, t::Union{AbstractDict,AbstractSet}, n::Repetition) =
     _Sampler(rng, t, n)
 
 # avoid linear complexity for repeated calls
-_Sampler(rng::AbstractRNG, t::Union{Associative,AbstractSet}, n::Val{Inf}) =
+_Sampler(rng::AbstractRNG, t::Union{AbstractDict,AbstractSet}, n::Val{Inf}) =
     Sampler(rng, collect(t), n)
 
 # when generating only one element, avoid the call to collect
-_Sampler(::AbstractRNG, t::Union{Associative,AbstractSet}, ::Val{1}) =
+_Sampler(::AbstractRNG, t::Union{AbstractDict,AbstractSet}, ::Val{1}) =
     SamplerTrivial(t)
 
 function nth(iter, n::Integer)::eltype(iter)
@@ -362,7 +362,7 @@ function nth(iter, n::Integer)::eltype(iter)
     end
 end
 
-rand(rng::AbstractRNG, sp::SamplerTrivial{<:Union{Associative,AbstractSet}}) =
+rand(rng::AbstractRNG, sp::SamplerTrivial{<:Union{AbstractDict,AbstractSet}}) =
     nth(sp[], rand(rng, 1:length(sp[])))
 
 

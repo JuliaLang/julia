@@ -7,7 +7,7 @@ const Callable = Union{Function,Type}
 const Bottom = Union{}
 
 abstract type AbstractSet{T} end
-abstract type Associative{K,V} end
+abstract type AbstractDict{K,V} end
 
 # The real @inline macro is not available until after array.jl, so this
 # internal macro splices the meta Expr directly into the function body.

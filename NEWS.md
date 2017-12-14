@@ -754,6 +754,7 @@ Deprecated or removed
   * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`,
      `ComplexF32` and `ComplexF64` respectively (#24647).
 
+  * `Associative` has been deprecated in favor of `AbstractDict` ([#25012]).
 
 Command-line option changes
 ---------------------------

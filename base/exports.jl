@@ -30,7 +30,7 @@ export
     AbstractVector,
     AbstractVecOrMat,
     Array,
-    Associative,
+    AbstractDict,
     Bidiagonal,
     BigFloat,
     BigInt,

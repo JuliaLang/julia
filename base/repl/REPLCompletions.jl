@@ -464,7 +464,7 @@ function dict_identifier_key(str,tag)
     begin_of_key = first(search(str, r"\S", nextind(str, end_of_identifier) + 1)) # 1 for [
     begin_of_key==0 && return (true, nothing, nothing)
     partial_key = str[begin_of_key:end]
-    (isa(obj, Associative) && length(obj) < 1e6) || return (true, nothing, nothing)
+    (isa(obj, AbstractDict) && length(obj) < 1e6) || return (true, nothing, nothing)
     return (obj, partial_key, begin_of_key)
 end
 

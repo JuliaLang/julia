@@ -216,7 +216,7 @@ Pick a random element or array of random elements from the set of values specifi
 `S` can be
 
 * an indexable collection (for example `1:n` or `['x','y','z']`),
-* an `Associative` or `AbstractSet` object,
+* an `AbstractDict` or `AbstractSet` object,
 * a string (considered as a collection of characters), or
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
   integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
@@ -236,7 +236,7 @@ julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
 ```
 
 !!! note
-    The complexity of `rand(rng, s::Union{Associative,AbstractSet})`
+    The complexity of `rand(rng, s::Union{AbstractDict,AbstractSet})`
     is linear in the length of `s`, unless an optimized method with
     constant complexity is available, which is the case for `Dict`,
     `Set` and `BitSet`. For more than a few calls, use `rand(rng,

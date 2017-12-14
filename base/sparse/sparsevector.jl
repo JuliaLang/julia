@@ -238,7 +238,7 @@ julia> sparsevec(Dict(1 => 3, 2 => 2))
   [2]  =  2
 ```
 """
-function sparsevec(dict::Associative{Ti,Tv}) where {Tv,Ti<:Integer}
+function sparsevec(dict::AbstractDict{Ti,Tv}) where {Tv,Ti<:Integer}
     m = length(dict)
     nzind = Vector{Ti}(uninitialized, m)
     nzval = Vector{Tv}(uninitialized, m)
@@ -259,7 +259,7 @@ function sparsevec(dict::Associative{Ti,Tv}) where {Tv,Ti<:Integer}
     _sparsevector!(nzind, nzval, len)
 end
 
-function sparsevec(dict::Associative{Ti,Tv}, len::Integer) where {Tv,Ti<:Integer}
+function sparsevec(dict::AbstractDict{Ti,Tv}, len::Integer) where {Tv,Ti<:Integer}
     m = length(dict)
     nzind = Vector{Ti}(uninitialized, m)
     nzval = Vector{Tv}(uninitialized, m)
