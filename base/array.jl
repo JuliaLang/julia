@@ -585,7 +585,12 @@ function grow_to!(dest, itr, st)
             push!(dest, el::T)
         else
             new = similar(dest, typejoin(T, S))
-            copy!(new, dest)
+            if new isa AbstractSet
+                # TODO: merge back these two branches when copy! is re-enabled for sets
+                union!(new, dest)
+            else
+                copy!(new, dest)
+            end
             push!(new, el)
             return grow_to!(new, itr, st)
         end

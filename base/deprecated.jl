@@ -2984,6 +2984,10 @@ end
 
 @deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
 
+# #24844
+@deprecate copy!(dest::AbstractSet, src) union!(dest, src)
+@deprecate copy!(dest::AbstractDict, src) foldl(push!, dest, src)
+
 # issue #24019
 @deprecate similar(a::AbstractDict) empty(a)
 @deprecate similar(a::AbstractDict, ::Type{Pair{K,V}}) where {K, V} empty(a, K, V)
