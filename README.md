@@ -7,7 +7,7 @@ Next-generation package manager for Julia. Still quite alpha.
 First, `Pkg.clone` the `Pkg3` repo itself to install it:
 
 ```jl
-Pkg.clone("https://github.com/StefanKarpinski/Pkg3.jl.git")
+Pkg.clone("https://github.com/JuliaLang/Pkg3.jl.git")
 ```
 
 Now load `Pkg3` in Julia 0.6 to add packages and load them.
