@@ -468,7 +468,7 @@ end
     s = "julia"
     @test find(c -> c == 'l', s) == [3]
     g = Base.Unicode.graphemes("日本語")
-    @test find(Base.Unicode.isascii, g) == Int[]
+    @test find(isascii, g) == Int[]
     @test find(!iszero, (i % 2 for i in 1:10)) == collect(1:2:9)
 end
 @testset "findn" begin

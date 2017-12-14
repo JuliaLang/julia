@@ -139,7 +139,7 @@ function show(io::IO, ::MIME"text/plain", c::Char)
     show(io, c)
     if !ismalformed(c)
         u = UInt32(c)
-        print(io, ": ", Unicode.isascii(c) ? "ASCII/" : "", "Unicode U+", hex(u, u > 0xffff ? 6 : 4))
+        print(io, ": ", isascii(c) ? "ASCII/" : "", "Unicode U+", hex(u, u > 0xffff ? 6 : 4))
     else
         print(io, ": Malformed UTF-8")
     end

@@ -598,32 +598,6 @@ true
 isgraph(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_SO
 
 """
-    isascii(c::Union{Char,AbstractString}) -> Bool
-
-Test whether a character belongs to the ASCII character set, or whether this is true for
-all elements of a string.
-
-# Examples
-```jldoctest
-julia> using Unicode
-
-julia> isascii('a')
-true
-
-julia> isascii('α')
-false
-
-julia> isascii("abc")
-true
-
-julia> isascii("αβγ")
-false
-```
-"""
-isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
-isascii(s::AbstractString) = all(isascii, s)
-
-"""
     isxdigit(c::Char) -> Bool
 
 Test whether a character is a valid hexadecimal digit. Note that this does not

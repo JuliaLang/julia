@@ -953,7 +953,7 @@ julia> countlines(io, '.')
 ```
 """
 function countlines(io::IO, eol::Char='\n')
-    Unicode.isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
+    isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
     a = Vector{UInt8}(uninitialized, 8192)
     nl = 0

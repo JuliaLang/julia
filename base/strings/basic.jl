@@ -484,6 +484,30 @@ next(e::EachStringIndex, state) = (state, nextind(e.s, state))
 done(e::EachStringIndex, state) = done(e.s, state)
 eltype(::Type{EachStringIndex}) = Int
 
+"""
+    isascii(c::Union{Char,AbstractString}) -> Bool
+
+Test whether a character belongs to the ASCII character set, or whether this is true for
+all elements of a string.
+
+# Examples
+```jldoctest
+julia> isascii('a')
+true
+
+julia> isascii('α')
+false
+
+julia> isascii("abc")
+true
+
+julia> isascii("αβγ")
+false
+```
+"""
+isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
+isascii(s::AbstractString) = all(isascii, s)
+
 ## string map, filter, has ##
 
 function map(f, s::AbstractString)
