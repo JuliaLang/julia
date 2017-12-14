@@ -469,7 +469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Common Operations",
     "category": "section",
-    "text": "You can lexicographically compare strings using the standard comparison operators:julia> \"abracadabra\" < \"xylophone\"\ntrue\n\njulia> \"abracadabra\" == \"xylophone\"\nfalse\n\njulia> \"Hello, world.\" != \"Goodbye, world.\"\ntrue\n\njulia> \"1 + 2 = 3\" == \"1 + 2 = $(1 + 2)\"\ntrueYou can search for the index of a particular character using the search function:julia> search(\"xylophone\", 'x')\n1\n\njulia> search(\"xylophone\", 'p')\n5\n\njulia> search(\"xylophone\", 'z')\n0You can start the search for a character at a given offset by providing a third argument:julia> search(\"xylophone\", 'o')\n4\n\njulia> search(\"xylophone\", 'o', 5)\n7\n\njulia> search(\"xylophone\", 'o', 8)\n0You can use the contains function to check if a substring is contained in a string:julia> contains(\"Hello, world.\", \"world\")\ntrue\n\njulia> contains(\"Xylophon\", \"o\")\ntrue\n\njulia> contains(\"Xylophon\", \"a\")\nfalse\n\njulia> contains(\"Xylophon\", 'o')\ntrueThe last example shows that contains can also look for a character literal.Two other handy string functions are repeat and join:julia> repeat(\".:Z:.\", 10)\n\".:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:.\"\n\njulia> join([\"apples\", \"bananas\", \"pineapples\"], \", \", \" and \")\n\"apples, bananas and pineapples\"Some other useful functions include:endof(str) gives the maximal (byte) index that can be used to index into str.\nlength(str) the number of characters in str.\ni = start(str) gives the first valid index at which a character can be found in str (typically 1).\nc, j = next(str,i) returns next character at or after the index i and the next valid character index following that. With start and endof, can be used to iterate through the characters in str.\nind2chr(str,i) gives the number of characters in str up to and including any at index i.\nchr2ind(str,j) gives the index at which the jth character in str occurs."
+    "text": "You can lexicographically compare strings using the standard comparison operators:julia> \"abracadabra\" < \"xylophone\"\ntrue\n\njulia> \"abracadabra\" == \"xylophone\"\nfalse\n\njulia> \"Hello, world.\" != \"Goodbye, world.\"\ntrue\n\njulia> \"1 + 2 = 3\" == \"1 + 2 = $(1 + 2)\"\ntrueYou can search for the index of a particular character using the search function:julia> search(\"xylophone\", 'x')\n1\n\njulia> search(\"xylophone\", 'p')\n5\n\njulia> search(\"xylophone\", 'z')\n0You can start the search for a character at a given offset by providing a third argument:julia> search(\"xylophone\", 'o')\n4\n\njulia> search(\"xylophone\", 'o', 5)\n7\n\njulia> search(\"xylophone\", 'o', 8)\n0You can use the contains function to check if a substring is contained in a string:julia> contains(\"Hello, world.\", \"world\")\ntrue\n\njulia> contains(\"Xylophon\", \"o\")\ntrue\n\njulia> contains(\"Xylophon\", \"a\")\nfalse\n\njulia> contains(\"Xylophon\", 'o')\ntrueThe last example shows that contains can also look for a character literal.Two other handy string functions are repeat and join:julia> repeat(\".:Z:.\", 10)\n\".:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:.\"\n\njulia> join([\"apples\", \"bananas\", \"pineapples\"], \", \", \" and \")\n\"apples, bananas and pineapples\"Some other useful functions include:endof(str) gives the maximal (byte) index that can be used to index into str.\nlength(str) the number of characters in str.\nlength(str, i, j) the number of valid character indices in str from i to j.\ni = start(str) gives the first valid index at which a character can be found in str (typically 1).\nc, j = next(str,i) returns next character at or after the index i and the next valid character index following that. With start and endof, can be used to iterate through the characters in str.\nthisind(str, i) given an arbitrary index into a string find the first index of the character into which the index points.\nnextind(str, i, n=1) find the start of the nth character starting after index i.\nprevind(str, i, n=1) find the start of the nth character starting before index i."
 },
 
 {
@@ -6965,7 +6965,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.length",
     "category": "Function",
-    "text": "length(collection) -> Integer\n\nReturn the number of elements in the collection.\n\nUse endof to get the last valid index of an indexable collection.\n\nExamples\n\njulia> length(1:5)\n5\n\njulia> length([1, 2, 3, 4])\n4\n\njulia> length([1 2; 3 4])\n4\n\n\n\nlength(s::AbstractString)\n\nThe number of characters in string s.\n\nExamples\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n"
+    "text": "length(collection) -> Integer\n\nReturn the number of elements in the collection.\n\nUse endof to get the last valid index of an indexable collection.\n\nExamples\n\njulia> length(1:5)\n5\n\njulia> length([1, 2, 3, 4])\n4\n\njulia> length([1 2; 3 4])\n4\n\n\n\nlength(s::AbstractString) -> Int\nlength(s::AbstractString, i::Integer, j::Integer) -> Int\n\nThe number of characters in string s from indices i through j. This is computed as the number of code unit indices from i to j which are valid character indices. Without only a single string argument, this computes the number of characters in the entire string. With i and j arguments it computes the number of indices between i and j inclusive that are valid indices in the string s. In addition to in-bounds values, i may take the out-of-bounds value ncodeunits(s) + 1 and j may take the out-of-bounds value 0.\n\nSee also: isvalid, ncodeunits, endof, thisind, nextind, prevind\n\nExamples\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n"
 },
 
 {
@@ -7389,7 +7389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.first",
     "category": "Function",
-    "text": "first(coll)\n\nGet the first element of an iterable collection. Return the start point of an AbstractRange even if it is empty.\n\nExamples\n\njulia> first(2:2:10)\n2\n\njulia> first([1; 2; 3; 4])\n1\n\n\n\nfirst(str::AbstractString, nchar::Integer)\n\nGet a string consisting of the first nchar characters of str.\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 1)\n\"∀\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 3)\n\"∀ϵ≠\"\n\n\n\n"
+    "text": "first(coll)\n\nGet the first element of an iterable collection. Return the start point of an AbstractRange even if it is empty.\n\nExamples\n\njulia> first(2:2:10)\n2\n\njulia> first([1; 2; 3; 4])\n1\n\n\n\nfirst(s::AbstractString, n::Integer)\n\nGet a string consisting of the first n characters of s.\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 1)\n\"∀\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 3)\n\"∀ϵ≠\"\n\n\n\n"
 },
 
 {
@@ -7397,7 +7397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.last",
     "category": "Function",
-    "text": "last(coll)\n\nGet the last element of an ordered collection, if it can be computed in O(1) time. This is accomplished by calling endof to get the last index. Return the end point of an AbstractRange even if it is empty.\n\nExamples\n\njulia> last(1:2:10)\n9\n\njulia> last([1; 2; 3; 4])\n4\n\n\n\nlast(str::AbstractString, nchar::Integer)\n\nGet a string consisting of the last nchar characters of str.\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 1)\n\"0\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 3)\n\"²>0\"\n\n\n\n"
+    "text": "last(coll)\n\nGet the last element of an ordered collection, if it can be computed in O(1) time. This is accomplished by calling endof to get the last index. Return the end point of an AbstractRange even if it is empty.\n\nExamples\n\njulia> last(1:2:10)\n9\n\njulia> last([1; 2; 3; 4])\n4\n\n\n\nlast(s::AbstractString, n::Integer)\n\nGet a string consisting of the last n characters of s.\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 1)\n\"0\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 3)\n\"²>0\"\n\n\n\n"
 },
 
 {
@@ -7597,7 +7597,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
 },
 
 {
@@ -7901,7 +7901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n"
 },
 
 {
@@ -8157,7 +8157,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:==",
     "category": "Function",
-    "text": "==(x, y)\n\nGeneric equality operator, giving a single Bool result. Falls back to ===. Should be implemented for all types with a notion of equality, based on the abstract value that an instance represents. For example, all numeric types are compared by numeric value, ignoring type. Strings are compared as sequences of characters, ignoring encoding.\n\nFollows IEEE semantics for floating-point numbers.\n\nCollections should generally implement == by calling == recursively on all contents.\n\nNew numeric types should implement this function for two arguments of the new type, and handle comparison to other types via promotion rules where possible.\n\n\n\n==(a::AbstractString, b::AbstractString)\n\nTest whether two strings are equal character by character.\n\nExamples\n\njulia> \"abc\" == \"abc\"\ntrue\n\njulia> \"abc\" == \"αβγ\"\nfalse\n\n\n\n"
+    "text": "==(x, y)\n\nGeneric equality operator, giving a single Bool result. Falls back to ===. Should be implemented for all types with a notion of equality, based on the abstract value that an instance represents. For example, all numeric types are compared by numeric value, ignoring type. Strings are compared as sequences of characters, ignoring encoding.\n\nFollows IEEE semantics for floating-point numbers.\n\nCollections should generally implement == by calling == recursively on all contents.\n\nNew numeric types should implement this function for two arguments of the new type, and handle comparison to other types via promotion rules where possible.\n\n\n\n==(a::AbstractString, b::AbstractString) -> Bool\n\nTest whether two strings are equal character by character (technically, Unicode code point by code point).\n\nExamples\n\njulia> \"abc\" == \"abc\"\ntrue\n\njulia> \"abc\" == \"αβγ\"\nfalse\n\n\n\n"
 },
 
 {
@@ -8213,7 +8213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.cmp",
     "category": "Function",
-    "text": "cmp(x,y)\n\nReturn -1, 0, or 1 depending on whether x is less than, equal to, or greater than y, respectively. Uses the total order implemented by isless. For floating-point numbers, uses < but throws an error for unordered arguments.\n\nExamples\n\njulia> cmp(1, 2)\n-1\n\njulia> cmp(2, 1)\n1\n\njulia> cmp(2+im, 3-im)\nERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})\nStacktrace:\n[...]\n\n\n\ncmp(a::AbstractString, b::AbstractString)\n\nCompare two strings for equality.\n\nReturn 0 if both strings have the same length and the character at each index is the same in both strings. Return -1 if a is a substring of b, or if a comes before b in alphabetical order. Return 1 if b is a substring of a, or if b comes before a in alphabetical order.\n\nExamples\n\njulia> cmp(\"abc\", \"abc\")\n0\n\njulia> cmp(\"ab\", \"abc\")\n-1\n\njulia> cmp(\"abc\", \"ab\")\n1\n\njulia> cmp(\"ab\", \"ac\")\n-1\n\njulia> cmp(\"ac\", \"ab\")\n1\n\njulia> cmp(\"α\", \"a\")\n1\n\njulia> cmp(\"b\", \"β\")\n-1\n\n\n\n"
+    "text": "cmp(x,y)\n\nReturn -1, 0, or 1 depending on whether x is less than, equal to, or greater than y, respectively. Uses the total order implemented by isless. For floating-point numbers, uses < but throws an error for unordered arguments.\n\nExamples\n\njulia> cmp(1, 2)\n-1\n\njulia> cmp(2, 1)\n1\n\njulia> cmp(2+im, 3-im)\nERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})\nStacktrace:\n[...]\n\n\n\ncmp(a::AbstractString, b::AbstractString) -> Int\n\nCompare two strings for equality. Return 0 if both strings have the same length and the character at each index is the same in both strings. Return -1 if a is a substring of b, or if a comes before b in alphabetical order. Return 1 if b is a substring of a, or if b comes before a in alphabetical order (technically, lexicographical order by Unicode code points).\n\nExamples\n\njulia> cmp(\"abc\", \"abc\")\n0\n\njulia> cmp(\"ab\", \"abc\")\n-1\n\njulia> cmp(\"abc\", \"ab\")\n1\n\njulia> cmp(\"ab\", \"ac\")\n-1\n\njulia> cmp(\"ac\", \"ab\")\n1\n\njulia> cmp(\"α\", \"a\")\n1\n\njulia> cmp(\"b\", \"β\")\n-1\n\n\n\n"
 },
 
 {
@@ -9101,7 +9101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -10365,7 +10365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.length",
     "category": "Method",
-    "text": "length(s::AbstractString)\n\nThe number of characters in string s.\n\nExamples\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n"
+    "text": "length(s::AbstractString) -> Int\nlength(s::AbstractString, i::Integer, j::Integer) -> Int\n\nThe number of characters in string s from indices i through j. This is computed as the number of code unit indices from i to j which are valid character indices. Without only a single string argument, this computes the number of characters in the entire string. With i and j arguments it computes the number of indices between i and j inclusive that are valid indices in the string s. In addition to in-bounds values, i may take the out-of-bounds value ncodeunits(s) + 1 and j may take the out-of-bounds value 0.\n\nSee also: isvalid, ncodeunits, endof, thisind, nextind, prevind\n\nExamples\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n"
 },
 
 {
@@ -10373,7 +10373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.sizeof",
     "category": "Method",
-    "text": "sizeof(s::AbstractString)\n\nThe number of bytes in string s.\n\nExamples\n\njulia> sizeof(\"❤\")\n3\n\n\n\n"
+    "text": "sizeof(T)\n\nSize, in bytes, of the canonical binary representation of the given DataType T, if any.\n\nExamples\n\njulia> sizeof(Float32)\n4\n\njulia> sizeof(ComplexF64)\n16\n\nIf T does not have a specific size, an error is thrown.\n\njulia> sizeof(Base.LinAlg.LU)\nERROR: argument is an abstract type; size is indeterminate\nStacktrace:\n[...]\n\n\n\n"
 },
 
 {
@@ -10381,7 +10381,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.:*",
     "category": "Method",
-    "text": "*(s::Union{AbstractString, Char}, t::Union{AbstractString, Char}...)\n\nConcatenate strings and/or characters, producing a String. This is equivalent to calling the string function on the arguments.\n\nExamples\n\njulia> \"Hello \" * \"world\"\n\"Hello world\"\n\njulia> 'j' * \"ulia\"\n\"julia\"\n\n\n\n"
+    "text": "*(s::Union{AbstractString, Char}, t::Union{AbstractString, Char}...) -> AbstractString\n\nConcatenate strings and/or characters, producing a String. This is equivalent to calling the string function on the arguments. Concatenation of built-in string types always produces a value of type String but other string types may choose to return a string of a different type as appropriate.\n\nExamples\n\njulia> \"Hello \" * \"world\"\n\"Hello world\"\n\njulia> 'j' * \"ulia\"\n\"julia\"\n\n\n\n"
 },
 
 {
@@ -10389,7 +10389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.:^",
     "category": "Method",
-    "text": "^(s::Union{AbstractString,Char}, n::Integer)\n\nRepeat a string or character n times. The repeat function is an alias to this operator.\n\nExamples\n\njulia> \"Test \"^3\n\"Test Test Test \"\n\n\n\n"
+    "text": "^(s::Union{AbstractString,Char}, n::Integer)\n\nRepeat a string or character n times. This can also be written as repeat(s, n).\n\nSee also: repeat\n\nExamples\n\njulia> \"Test \"^3\n\"Test Test Test \"\n\n\n\n"
 },
 
 {
@@ -10405,7 +10405,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.repeat",
     "category": "Method",
-    "text": "repeat(s::AbstractString, r::Integer)\n\nRepeat a string r times. This can equivalently be accomplished by calling s^r.\n\nExamples\n\njulia> repeat(\"ha\", 3)\n\"hahaha\"\n\n\n\n"
+    "text": "repeat(s::AbstractString, r::Integer)\n\nRepeat a string r times. This can be written as s^r.\n\nSee also: ^\n\nExamples\n\njulia> repeat(\"ha\", 3)\n\"hahaha\"\n\n\n\n"
 },
 
 {
@@ -10457,11 +10457,19 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/strings/#Base.codeunit-Tuple{AbstractString,Integer}",
+    "location": "stdlib/strings/#Base.ncodeunits-Tuple{AbstractString}",
+    "page": "Strings",
+    "title": "Base.ncodeunits",
+    "category": "Method",
+    "text": "ncodeunits(s::AbstractString) -> Int\n\nReturn the number of code units in a string. Indices that are in bounds to access this string must satisfy 1 ≤ i ≤ ncodeunits(s). Not all such indices are valid – they may not be the start of a character, but they will return a code unit value when calling codeunit(s,i).\n\nSee also: codeunit, checkbounds, sizeof, length, endof\n\n\n\n"
+},
+
+{
+    "location": "stdlib/strings/#Base.codeunit",
     "page": "Strings",
     "title": "Base.codeunit",
-    "category": "Method",
-    "text": "codeunit(s::AbstractString, i::Integer)\n\nGet the ith code unit of an encoded string. For example, returns the ith byte of the representation of a UTF-8 string.\n\nExamples\n\njulia> s = \"δ=γ\"; [codeunit(s, i) for i in 1:sizeof(s)]\n5-element Array{UInt8,1}:\n 0xce\n 0xb4\n 0x3d\n 0xce\n 0xb3\n\n\n\n"
+    "category": "Function",
+    "text": "codeunit(s::AbstractString) -> Type{<:Union{UInt8, UInt16, UInt32}}\n\nReturn the code unit type of the given string object. For ASCII, Latin-1, or UTF-8 encoded strings, this would be UInt8; for UCS-2 and UTF-16 it would be UInt16; for UTF-32 it would be UInt32. The unit code type need not be limited to these three types, but it's hard to think of widely used string encodings that don't use one of these units. codeunit(s) is the same as typeof(codeunit(s,1)) when s is a non-empty string.\n\nSee also: ncodeunits\n\n\n\ncodeunit(s::AbstractString, i::Integer) -> Union{UInt8, UInt16, UInt32}\n\nReturn the code unit value in the string s at index i. Note that\n\ncodeunit(s, i) :: codeunit(s)\n\nI.e. the value returned by codeunit(s, i) is of the type returned by codeunit(s).\n\nSee also: ncodeunits, checkbounds\n\n\n\n"
 },
 
 {
@@ -10525,7 +10533,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.isvalid",
     "category": "Method",
-    "text": "isvalid(str::AbstractString, i::Integer)\n\nTell whether index i is valid for the given string.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> isvalid(str, 1)\ntrue\n\njulia> str[1]\n'α': Unicode U+03b1 (category Ll: Letter, lowercase)\n\njulia> isvalid(str, 2)\nfalse\n\njulia> str[2]\nERROR: UnicodeError: invalid character index\nStacktrace:\n[...]\n\n\n\n"
+    "text": "isvalid(s::AbstractString, i::Integer) -> Bool\n\nPredicate indicating whether the given index is the start of the encoding of a character in s or not. If isvalid(s, i) is true then s[i] will return the character whose encoding starts at that index, if it's false, then s[i] will raise an invalid index error or a bounds error depending on if i is in bounds. In order for isvalid(s, i) to be an O(1) function, the encoding of s must be self-synchronizing this is a basic assumption of Julia's generic string support.\n\nSee also: getindex, next, thisind, nextind, prevind, length\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> isvalid(str, 1)\ntrue\n\njulia> str[1]\n'α': Unicode U+03b1 (category Ll: Letter, lowercase)\n\njulia> isvalid(str, 2)\nfalse\n\njulia> str[2]\nERROR: StringIndexError: invalid character index\nStacktrace:\n[...]\n\n\n\n"
 },
 
 {
@@ -10565,7 +10573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.isless",
     "category": "Method",
-    "text": "isless(a::AbstractString, b::AbstractString)\n\nTest whether string a comes before string b in alphabetical order.\n\nExamples\n\njulia> isless(\"a\", \"b\")\ntrue\n\njulia> isless(\"β\", \"α\")\nfalse\n\njulia> isless(\"a\", \"a\")\nfalse\n\n\n\n"
+    "text": "isless(a::AbstractString, b::AbstractString) -> Bool\n\nTest whether string a comes before string b in alphabetical order (technically, in lexicographical order by Unicode code points).\n\nExamples\n\njulia> isless(\"a\", \"b\")\ntrue\n\njulia> isless(\"β\", \"α\")\nfalse\n\njulia> isless(\"a\", \"a\")\nfalse\n\n\n\n"
 },
 
 {
@@ -10573,7 +10581,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.:==",
     "category": "Method",
-    "text": "==(a::AbstractString, b::AbstractString)\n\nTest whether two strings are equal character by character.\n\nExamples\n\njulia> \"abc\" == \"abc\"\ntrue\n\njulia> \"abc\" == \"αβγ\"\nfalse\n\n\n\n"
+    "text": "==(a::AbstractString, b::AbstractString) -> Bool\n\nTest whether two strings are equal character by character (technically, Unicode code point by code point).\n\nExamples\n\njulia> \"abc\" == \"abc\"\ntrue\n\njulia> \"abc\" == \"αβγ\"\nfalse\n\n\n\n"
 },
 
 {
@@ -10581,7 +10589,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.cmp",
     "category": "Method",
-    "text": "cmp(a::AbstractString, b::AbstractString)\n\nCompare two strings for equality.\n\nReturn 0 if both strings have the same length and the character at each index is the same in both strings. Return -1 if a is a substring of b, or if a comes before b in alphabetical order. Return 1 if b is a substring of a, or if b comes before a in alphabetical order.\n\nExamples\n\njulia> cmp(\"abc\", \"abc\")\n0\n\njulia> cmp(\"ab\", \"abc\")\n-1\n\njulia> cmp(\"abc\", \"ab\")\n1\n\njulia> cmp(\"ab\", \"ac\")\n-1\n\njulia> cmp(\"ac\", \"ab\")\n1\n\njulia> cmp(\"α\", \"a\")\n1\n\njulia> cmp(\"b\", \"β\")\n-1\n\n\n\n"
+    "text": "cmp(a::AbstractString, b::AbstractString) -> Int\n\nCompare two strings for equality. Return 0 if both strings have the same length and the character at each index is the same in both strings. Return -1 if a is a substring of b, or if a comes before b in alphabetical order. Return 1 if b is a substring of a, or if b comes before a in alphabetical order (technically, lexicographical order by Unicode code points).\n\nExamples\n\njulia> cmp(\"abc\", \"abc\")\n0\n\njulia> cmp(\"ab\", \"abc\")\n-1\n\njulia> cmp(\"abc\", \"ab\")\n1\n\njulia> cmp(\"ab\", \"ac\")\n-1\n\njulia> cmp(\"ac\", \"ab\")\n1\n\njulia> cmp(\"α\", \"a\")\n1\n\njulia> cmp(\"b\", \"β\")\n-1\n\n\n\n"
 },
 
 {
@@ -10717,7 +10725,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.first",
     "category": "Method",
-    "text": "first(str::AbstractString, nchar::Integer)\n\nGet a string consisting of the first nchar characters of str.\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 1)\n\"∀\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 3)\n\"∀ϵ≠\"\n\n\n\n"
+    "text": "first(s::AbstractString, n::Integer)\n\nGet a string consisting of the first n characters of s.\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 1)\n\"∀\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 3)\n\"∀ϵ≠\"\n\n\n\n"
 },
 
 {
@@ -10725,7 +10733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.last",
     "category": "Method",
-    "text": "last(str::AbstractString, nchar::Integer)\n\nGet a string consisting of the last nchar characters of str.\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 1)\n\"0\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 3)\n\"²>0\"\n\n\n\n"
+    "text": "last(s::AbstractString, n::Integer)\n\nGet a string consisting of the last n characters of s.\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 1)\n\"0\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 3)\n\"²>0\"\n\n\n\n"
 },
 
 {
@@ -10753,27 +10761,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/strings/#Base.ind2chr",
-    "page": "Strings",
-    "title": "Base.ind2chr",
-    "category": "Function",
-    "text": "ind2chr(s::AbstractString, i::Integer)\n\nConvert a byte index i to a character index with respect to string s.\n\nSee also chr2ind.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> ind2chr(str, 3)\n2\n\njulia> chr2ind(str, 2)\n3\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.chr2ind",
-    "page": "Strings",
-    "title": "Base.chr2ind",
-    "category": "Function",
-    "text": "chr2ind(s::AbstractString, i::Integer)\n\nConvert a character index i to a byte index.\n\nSee also ind2chr.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> chr2ind(str, 2)\n3\n\njulia> ind2chr(str, 3)\n2\n\n\n\n"
-},
-
-{
     "location": "stdlib/strings/#Base.thisind",
     "page": "Strings",
     "title": "Base.thisind",
     "category": "Function",
-    "text": "thisind(s::AbstractString, i::Integer)\n\nIf i is the index into a character in s then thisind returns the index of the start of that character. If i < start(s) then it returns start(s) - 1. If i > ncodeunits(s) then it returns ncodeunits(s) + 1.\n\nExamples\n\n```jldoctest julia> thisind(\"αβγdef\", -5) 0\n\njulia> thisind(\"αβγdef\", 1) 1\n\njulia> thisind(\"αβγdef\", 3) 3\n\njulia> thisind(\"αβγdef\", 4) 3\n\njulia> thisind(\"αβγdef\", 9) 9\n\njulia> thisind(\"αβγdef\", 10) 10\n\njulia> thisind(\"αβγdef\", 20) 10\n\n\n\n"
+    "text": "thisind(s::AbstractString, i::Integer) -> Int\n\nIf i is in bounds in s return the index of the start of the character whose encoding code unit i is part of. In other words, if i is the start of a character, return i; if i is not the start of a character, rewind until the start of a character and return that index. If i is out of bounds in s return i.\n\nExamples\n\n```jldoctest julia> thisind(\"αβγdef\", -5) -5\n\njulia> thisind(\"αβγdef\", 1) 1\n\njulia> thisind(\"αβγdef\", 3) 3\n\njulia> thisind(\"αβγdef\", 4) 3\n\njulia> thisind(\"αβγdef\", 9) 9\n\njulia> thisind(\"αβγdef\", 10) 10\n\njulia> thisind(\"αβγdef\", 20) 20\n\n\n\n"
 },
 
 {
@@ -10781,7 +10773,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.nextind",
     "category": "Function",
-    "text": "nextind(str::AbstractString, i::Integer, nchar::Integer=1)\n\nGet the next valid string index after i. Returns a value greater than endof(str) at or after the end of the string. If the nchar argument is given the function goes forward nchar characters.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> nextind(str, 1)\n3\n\njulia> nextind(str, 1, 2)\n5\n\njulia> endof(str)\n9\n\njulia> nextind(str, 9)\n10\n\n\n\n"
+    "text": "nextind(str::AbstractString, i::Integer, n::Integer=1) -> Int\n\nIf i is in bounds in s return the index of the start of the character whose encoding starts after index i. If i is out of bounds in s return i + 1. If n == 0 return i.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> nextind(str, 1)\n3\n\njulia> nextind(str, 1, 2)\n5\n\njulia> endof(str)\n9\n\njulia> nextind(str, 9)\n10\n\n\n\n"
 },
 
 {
@@ -10789,7 +10781,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.prevind",
     "category": "Function",
-    "text": "prevind(str::AbstractString, i::Integer, nchar::Integer=1)\n\nGet the previous valid string index before i. Returns a value less than 1 at the beginning of the string. If the nchar argument is given the function goes back nchar characters.\n\nExamples\n\njulia> prevind(\"αβγdef\", 3)\n1\n\njulia> prevind(\"αβγdef\", 1)\n0\n\njulia> prevind(\"αβγdef\", 3, 2)\n0\n\n\n\n"
+    "text": "prevind(str::AbstractString, i::Integer, n::Integer=1) -> Int\n\nIf i is in bounds in s return the index of the start of the character whose encoding starts before index i. In other words, if i is the start of a character, return the start of the previous character; if i is not the start of a character, rewind until the start of a character and return that index. If i is out of bounds in s return i - 1. If n == 0 return i.\n\nExamples\n\njulia> prevind(\"αβγdef\", 3)\n1\n\njulia> prevind(\"αβγdef\", 1)\n0\n\njulia> prevind(\"αβγdef\", 0)\n-1\n\njulia> prevind(\"αβγdef\", 3, 2)\n0\n\n\n\n"
 },
 
 {
@@ -10829,7 +10821,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Strings",
     "category": "section",
-    "text": "Base.length(::AbstractString)\nBase.sizeof(::AbstractString)\nBase.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)\nBase.:^(::AbstractString, ::Integer)\nBase.string\nBase.repeat(::AbstractString, ::Integer)\nBase.repeat(::Char, ::Integer)\nBase.repr\nCore.String(::AbstractString)\nBase.SubString\nBase.transcode\nBase.unsafe_string\nBase.codeunit(::AbstractString, ::Integer)\nBase.ascii\nBase.@r_str\nBase.@raw_str\nBase.Docs.@html_str\nBase.Docs.@text_str\nBase.isvalid(::Any)\nBase.isvalid(::Any, ::Any)\nBase.isvalid(::AbstractString, ::Integer)\nBase.ismatch\nBase.match\nBase.eachmatch\nBase.matchall\nBase.isless(::AbstractString, ::AbstractString)\nBase.:(==)(::AbstractString, ::AbstractString)\nBase.cmp(::AbstractString, ::AbstractString)\nBase.lpad\nBase.rpad\nBase.search\nBase.rsearch\nBase.searchindex\nBase.rsearchindex\nBase.contains(::AbstractString, ::AbstractString)\nBase.reverse(::Union{String,SubString{String}})\nBase.replace\nBase.split\nBase.rsplit\nBase.strip\nBase.lstrip\nBase.rstrip\nBase.startswith\nBase.endswith\nBase.first(::AbstractString, ::Integer)\nBase.last(::AbstractString, ::Integer)\nBase.join\nBase.chop\nBase.chomp\nBase.ind2chr\nBase.chr2ind\nBase.thisind\nBase.nextind\nBase.prevind\nBase.Random.randstring\nCore.Symbol\nBase.escape_string\nBase.unescape_string"
+    "text": "Base.length(::AbstractString)\nBase.sizeof(::AbstractString)\nBase.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)\nBase.:^(::AbstractString, ::Integer)\nBase.string\nBase.repeat(::AbstractString, ::Integer)\nBase.repeat(::Char, ::Integer)\nBase.repr\nCore.String(::AbstractString)\nBase.SubString\nBase.transcode\nBase.unsafe_string\nBase.ncodeunits(::AbstractString)\nBase.codeunit\nBase.ascii\nBase.@r_str\nBase.@raw_str\nBase.Docs.@html_str\nBase.Docs.@text_str\nBase.isvalid(::Any)\nBase.isvalid(::Any, ::Any)\nBase.isvalid(::AbstractString, ::Integer)\nBase.ismatch\nBase.match\nBase.eachmatch\nBase.matchall\nBase.isless(::AbstractString, ::AbstractString)\nBase.:(==)(::AbstractString, ::AbstractString)\nBase.cmp(::AbstractString, ::AbstractString)\nBase.lpad\nBase.rpad\nBase.search\nBase.rsearch\nBase.searchindex\nBase.rsearchindex\nBase.contains(::AbstractString, ::AbstractString)\nBase.reverse(::Union{String,SubString{String}})\nBase.replace\nBase.split\nBase.rsplit\nBase.strip\nBase.lstrip\nBase.rstrip\nBase.startswith\nBase.endswith\nBase.first(::AbstractString, ::Integer)\nBase.last(::AbstractString, ::Integer)\nBase.join\nBase.chop\nBase.chomp\nBase.thisind\nBase.nextind\nBase.prevind\nBase.Random.randstring\nCore.Symbol\nBase.escape_string\nBase.unescape_string"
 },
 
 {
@@ -16373,7 +16365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.readchomp",
     "category": "Function",
-    "text": "readchomp(x)\n\nRead the entirety of x as a string and remove a single trailing newline. Equivalent to chomp!(read(x, String)).\n\nExamples\n\njulia> open(\"my_file.txt\", \"w\") do io\n           write(io, \"JuliaLang is a GitHub organization.\\nIt has many members.\\n\");\n       end;\n\njulia> readchomp(\"my_file.txt\")\n\"JuliaLang is a GitHub organization.\\nIt has many members.\"\n\njulia> rm(\"my_file.txt\");\n\n\n\n"
+    "text": "readchomp(x)\n\nRead the entirety of x as a string and remove a single trailing newline if there is one. Equivalent to chomp(read(x, String)).\n\nExamples\n\njulia> open(\"my_file.txt\", \"w\") do io\n           write(io, \"JuliaLang is a GitHub organization.\\nIt has many members.\\n\");\n       end;\n\njulia> readchomp(\"my_file.txt\")\n\"JuliaLang is a GitHub organization.\\nIt has many members.\"\n\njulia> rm(\"my_file.txt\");\n\n\n\n"
 },
 
 {
@@ -19445,7 +19437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unicode",
     "title": "Base.Unicode.titlecase",
     "category": "Function",
-    "text": "titlecase(s::AbstractString)\n\nCapitalize the first character of each word in s. See also ucfirst to capitalize only the first character in s.\n\nExamples\n\njulia> using Unicode\n\njulia> titlecase(\"the julia programming language\")\n\"The Julia Programming Language\"\n\n\n\n"
+    "text": "titlecase(s::AbstractString) -> String\n\nCapitalize the first character of each word in s. See also ucfirst to capitalize only the first character in s.\n\nExamples\n\njulia> titlecase(\"the Julia programming language\")\n\"The Julia Programming Language\"\n\n\n\n"
 },
 
 {
@@ -19453,7 +19445,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unicode",
     "title": "Base.Unicode.ucfirst",
     "category": "Function",
-    "text": "ucfirst(s::AbstractString)\n\nReturn string with the first character converted to uppercase (technically \"title case\" for Unicode). See also titlecase to capitalize the first character of every word in s.\n\nExamples\n\njulia> using Unicode\n\njulia> ucfirst(\"python\")\n\"Python\"\n\n\n\n"
+    "text": "ucfirst(s::AbstractString) -> String\n\nReturn s with the first character converted to uppercase (technically \"title case\" for Unicode). See also titlecase to capitalize the first character of every word in s.\n\nSee also: lcfirst, uppercase, lowercase, titlecase\n\nExamples\n\njulia> ucfirst(\"python\")\n\"Python\"\n\n\n\n"
 },
 
 {
@@ -19461,7 +19453,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unicode",
     "title": "Base.Unicode.lcfirst",
     "category": "Function",
-    "text": "lcfirst(s::AbstractString)\n\nReturn string with the first character converted to lowercase.\n\nExamples\n\njulia> using Unicode\n\njulia> lcfirst(\"Julia\")\n\"julia\"\n\n\n\n"
+    "text": "lcfirst(s::AbstractString)\n\nReturn s with the first character converted to lowercase.\n\nSee also: ucfirst, uppercase, lowercase, titlecase\n\nExamples\n\njulia> lcfirst(\"Julia\")\n\"julia\"\n\n\n\n"
 },
 
 {
