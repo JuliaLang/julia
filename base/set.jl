@@ -44,7 +44,7 @@ pop!(s::Set, x, deflt) = x in s ? pop!(s, x) : deflt
 function pop!(s::Set)
     isempty(s) && throw(ArgumentError("set must be non-empty"))
     idx = start(s.dict)
-    val = s.dict.keys[idx]
+    val = s.dict.ht.keys[idx] # TODO this should not fiddle with the internals of Dict
     _delete!(s.dict, idx)
     val
 end
@@ -60,7 +60,7 @@ rehash!(s::Set) = (rehash!(s.dict); s)
 start(s::Set)       = start(s.dict)
 done(s::Set, state) = done(s.dict, state)
 # NOTE: manually optimized to take advantage of Dict representation
-next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict, i+1))
+next(s::Set, i)     = (s.dict.ht.keys[i], skip_deleted(s.dict, i+1)) # TODO this should not fiddle with the internals of Dict
 
 """
     union(s1,s2...)
