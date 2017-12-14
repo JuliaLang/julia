@@ -1876,7 +1876,10 @@ static void jl_insert_backedges(jl_array_t *list, arraylist_t *dependent_worlds)
             if (jl_is_method_instance(callee)) {
                 sig = callee_mi->specTypes;
                 assert(!module_in_worklist(callee_mi->def.method->module));
-                assert(callee_mi->max_world == ~(size_t)0);
+                if (callee_mi->max_world != ~(size_t)0) {
+                    valid = 0;
+                    break;
+                }
             }
             else {
                 sig = callee;
@@ -2588,7 +2591,8 @@ static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t 
     jl_method_t *_new;
     while (1) {
         _new = (jl_method_t*)jl_methtable_lookup(mt, sig, world);
-        assert(_new && jl_is_method(_new));
+        if (!(_new && jl_is_method(_new)))
+            return NULL; // the method wasn't found, probably because it was disabled
         world = lowerbound_dependent_world_set(_new->min_world, dependent_worlds);
         if (world == _new->min_world)
             return _new;
@@ -2602,6 +2606,8 @@ static jl_method_t *jl_recache_method(jl_method_t *m, size_t start, arraylist_t 
     jl_methtable_t *mt = ftype->name->mt;
     jl_set_typeof(m, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
     jl_method_t *_new = jl_lookup_method_worldset(mt, sig, dependent_worlds);
+    if (!_new)
+        return NULL;
     jl_update_backref_list((jl_value_t*)m, (jl_value_t*)_new, start);
     return _new;
 }
@@ -2613,6 +2619,8 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li
     jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
     jl_methtable_t *mt = ftype->name->mt;
     jl_method_t *m = jl_lookup_method_worldset(mt, sig, dependent_worlds);
+    if (!m)
+        return NULL;
 
     jl_datatype_t *argtypes = (jl_datatype_t*)li->specTypes;
     jl_set_typeof(li, (void*)(intptr_t)0x40); // invalidate the old value to help catch errors
@@ -2645,10 +2653,12 @@ static void jl_recache_other(arraylist_t *dependent_worlds)
         else {
             abort();
         }
-        if (loc)
-            *loc = _new;
-        if (offs > 0)
-            backref_list.items[offs] = _new;
+        if (_new) {
+            if (loc)
+                *loc = _new;
+            if (offs > 0)
+                backref_list.items[offs] = _new;
+        }
     }
 }
 

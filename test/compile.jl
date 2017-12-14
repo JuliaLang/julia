@@ -623,4 +623,56 @@ let
     end
 end
 
+# Ensure that module-loading plays nicely with Base.delete_method
+dir = mktempdir()
+insert!(LOAD_PATH, 1, dir)
+insert!(Base.LOAD_CACHE_PATH, 1, dir)
+try
+    A_module = :Aedb164bd3a126418
+    B_module = :Bedb164bd3a126418
+    A_file = joinpath(dir, "$A_module.jl")
+    B_file = joinpath(dir, "$B_module.jl")
+
+    write(A_file,
+          """
+          __precompile__()
+
+          module $A_module
+
+          export afunc
+
+          afunc(::Int, ::Int) = 1
+          afunc(::Any, ::Any) = 2
+
+          end
+          """)
+    write(B_file,
+          """
+          __precompile__()
+
+          module $B_module
+
+          using $A_module
+          export bfunc
+
+          bfunc(x) = afunc(x, x)
+
+          precompile(bfunc, (Int,))
+          precompile(bfunc, (Float64,))
+
+          end
+          """)
+    Base.require(A_module)
+    A = root_module(A_module)
+    mths = collect(methods(A.afunc))
+    Base.delete_method(mths[1])
+    Base.require(B_module)
+    B = root_module(B_module)
+    @test Base.invokelatest(B.bfunc, 1) == Base.invokelatest(B.bfunc, 1.0) == 2
+finally
+    shift!(LOAD_PATH)
+    shift!(Base.LOAD_CACHE_PATH)
+    rm(dir, recursive=true)
 end
+
+end # !withenv
