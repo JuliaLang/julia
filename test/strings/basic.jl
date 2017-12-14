@@ -99,14 +99,14 @@ end
 end
 
 @testset "issue #7248" begin
-    @test_throws BoundsError ind2chr("hello", -1)
-    @test_throws BoundsError chr2ind("hello", -1)
-    @test_throws BoundsError ind2chr("hellø", -1)
-    @test_throws BoundsError chr2ind("hellø", -1)
-    @test_throws BoundsError ind2chr("hello", 10)
-    @test_throws BoundsError chr2ind("hello", 10)
-    @test_throws BoundsError ind2chr("hellø", 10)
-    @test_throws BoundsError chr2ind("hellø", 10)
+    @test_throws BoundsError length("hello", 1, -1)
+    @test_throws BoundsError prevind("hello", 0, 1)
+    @test_throws BoundsError length("hellø", 1, -1)
+    @test_throws BoundsError prevind("hellø", 0, 1)
+    @test_throws BoundsError length("hello", 1, 10)
+    @test nextind("hello", 0, 10) == 10
+    @test_throws BoundsError length("hellø", 1, 10) == 9
+    @test nextind("hellø", 0, 10) == 11
     @test_throws BoundsError checkbounds("hello", 0)
     @test_throws BoundsError checkbounds("hello", 6)
     @test_throws BoundsError checkbounds("hello", 0:3)
@@ -127,7 +127,6 @@ end
     @test SubString("hellø", 1, 5)[10:9] == ""
     @test SubString("hellø", 1, 0)[10:9] == ""
     @test SubString("", 1, 0)[10:9] == ""
-
     @test_throws BoundsError SubString("", 1, 6)
     @test_throws BoundsError SubString("", 1, 1)
 end
@@ -143,8 +142,8 @@ end
     @test get(utf8_str, -1, 'X') == 'X'
     @test get(utf8_str, 1000, 'X') == 'X'
 
-    # Test that indexing into the middle of a character returns the default
-    @test get(utf8_str, 2, 'X') == 'X'
+    # Test that indexing into the middle of a character throws
+    @test_throws StringIndexError get(utf8_str, 2, 'X')
 end
 
 #=
@@ -172,8 +171,10 @@ end
 
 # make sure substrings do not accept code unit if it is not start of codepoint
 let s = "x\u0302"
-    @test_throws UnicodeError s[1:3]
-    @test s[1:2]==s
+    @test s[1:2] == s
+    @test_throws BoundsError s[0:3]
+    @test_throws BoundsError s[1:4]
+    @test_throws StringIndexError s[1:3]
 end
 
 @testset "issue #9781" begin
@@ -193,8 +194,15 @@ struct tstStringType <: AbstractString
 end
 @testset "AbstractString functions" begin
     tstr = tstStringType(Vector{UInt8}("12"))
-    @test_throws ErrorException endof(tstr)
-    @test_throws ErrorException next(tstr, Bool(1))
+    @test_throws MethodError ncodeunits(tstr)
+    @test_throws MethodError codeunit(tstr)
+    @test_throws MethodError codeunit(tstr, 1)
+    @test_throws MethodError codeunit(tstr, true)
+    @test_throws MethodError isvalid(tstr, 1)
+    @test_throws MethodError isvalid(tstr, true)
+    @test_throws MethodError next(tstr, 1)
+    @test_throws MethodError next(tstr, true)
+    @test_throws MethodError endof(tstr)
 
     gstr = GenericString("12")
     @test string(gstr) isa GenericString
@@ -207,24 +215,25 @@ end
     @test gstr[[1]] == "1"
 
     @test s"∀∃"[big(1)] == '∀'
-    @test_throws UnicodeError GenericString("∀∃")[Int8(2)]
+    @test_throws StringIndexError GenericString("∀∃")[Int8(2)]
     @test_throws BoundsError GenericString("∀∃")[UInt16(10)]
 
     @test done(eachindex("foobar"),7)
     @test eltype(Base.EachStringIndex) == Int
     @test map(Base.Unicode.uppercase, "foó") == "FOÓ"
-    @test chr2ind("fóobar",3) == 4
+    @test nextind("fóobar", 0, 3) == 4
 
-    @test Symbol(gstr)==Symbol("12")
+    @test Symbol(gstr) == Symbol("12")
 
-    @test_throws ErrorException sizeof(gstr)
-
-    @test length(GenericString(""))==0
+    @test sizeof(gstr) == 2
+    @test ncodeunits(gstr) == 2
+    @test length(gstr) == 2
+    @test length(GenericString("")) == 0
 
     @test nextind(1:1, 1) == 2
     @test nextind([1], 1) == 2
 
-    @test ind2chr(gstr,2)==2
+    @test length(gstr, 1, 2) == 2
 
     # tests promote_rule
     let svec = [s"12", GenericString("12"), SubString("123", 1, 2)]
@@ -421,7 +430,7 @@ end
     @test_throws ArgumentError ascii(GenericString("Hello, ∀"))
 end
 @testset "issue #17271: endof() doesn't throw an error even with invalid strings" begin
-    @test endof(String(b"\x90")) == 0
+    @test endof(String(b"\x90")) == 1
     @test endof(String(b"\xce")) == 1
 end
 # issue #17624, missing getindex method for String
@@ -503,7 +512,8 @@ end
                    SubString("123∀α>β:α+1>β123", 4, 18),
                    SubString(s"123∀α>β:α+1>β123", 4, 18)]
         for s in strs
-            @test thisind(s, -2) == 0
+            @test_throws BoundsError thisind(s, -2)
+            @test_throws BoundsError thisind(s, -1)
             @test thisind(s, 0) == 0
             @test thisind(s, 1) == 1
             @test thisind(s, 2) == 1
@@ -514,85 +524,97 @@ end
             @test thisind(s, 15) == 15
             @test thisind(s, 16) == 15
             @test thisind(s, 17) == 17
-            @test thisind(s, 30) == 17
+            @test_throws BoundsError thisind(s, 18)
+            @test_throws BoundsError thisind(s, 19)
         end
     end
 
     let strs = Any["", s"", SubString("123", 2, 1), SubString(s"123", 2, 1)]
-        for s in strs, i in -2:2
-            @test thisind(s, i) == (i > 0)
+        for s in strs
+            @test_throws BoundsError thisind(s, -1)
+            @test thisind(s, 0) == 0
+            @test thisind(s, 1) == 1
+            @test_throws BoundsError thisind(s, 2)
         end
     end
 end
 
 @testset "prevind and nextind" begin
-    let strs = Any["∀α>β:α+1>β", GenericString("∀α>β:α+1>β")]
-        for i in 1:2
-            @test prevind(strs[i], 1) == 0
-            @test prevind(strs[i], 1, 1) == 0
-            @test prevind(strs[i], 2) == 1
-            @test prevind(strs[i], 2, 1) == 1
-            @test prevind(strs[i], 4) == 1
-            @test prevind(strs[i], 4, 1) == 1
-            @test prevind(strs[i], 5) == 4
-            @test prevind(strs[i], 5, 1) == 4
-            @test prevind(strs[i], 5, 2) == 1
-            @test prevind(strs[i], 5, 3) == 0
-            @test prevind(strs[i], 15) == 14
-            @test prevind(strs[i], 15, 1) == 14
-            @test prevind(strs[i], 15, 2) == 13
-            @test prevind(strs[i], 15, 3) == 12
-            @test prevind(strs[i], 15, 4) == 10
-            @test prevind(strs[i], 15, 10) == 0
-            @test prevind(strs[i], 15, 9) == 1
-            @test prevind(strs[i], 15, 10) == 0
-            @test prevind(strs[i], 16) == 15
-            @test prevind(strs[i], 16, 1) == 15
-            @test prevind(strs[i], 16, 2) == 14
-            @test prevind(strs[i], 20) == 15
-            @test prevind(strs[i], 20, 1) == 15
-            @test prevind(strs[i], 20, 10) == 1
-            @test_throws ArgumentError prevind(strs[i], 20, 0)
+    for s in Any["∀α>β:α+1>β", GenericString("∀α>β:α+1>β")]
+        @test_throws BoundsError prevind(s, 0)
+        @test_throws BoundsError prevind(s, 0, 0)
+        @test_throws BoundsError prevind(s, 0, 1)
+        @test prevind(s, 1) == 0
+        @test prevind(s, 1, 1) == 0
+        @test prevind(s, 1, 0) == 1
+        @test prevind(s, 2) == 1
+        @test prevind(s, 2, 1) == 1
+        @test prevind(s, 4) == 1
+        @test prevind(s, 4, 1) == 1
+        @test prevind(s, 5) == 4
+        @test prevind(s, 5, 1) == 4
+        @test prevind(s, 5, 2) == 1
+        @test prevind(s, 5, 3) == 0
+        @test prevind(s, 15) == 14
+        @test prevind(s, 15, 1) == 14
+        @test prevind(s, 15, 2) == 13
+        @test prevind(s, 15, 3) == 12
+        @test prevind(s, 15, 4) == 10
+        @test prevind(s, 15, 10) == 0
+        @test prevind(s, 15, 9) == 1
+        @test prevind(s, 16) == 15
+        @test prevind(s, 16, 1) == 15
+        @test prevind(s, 16, 2) == 14
+        @test prevind(s, 17) == 15
+        @test prevind(s, 17, 1) == 15
+        @test prevind(s, 17, 2) == 14
+        @test_throws BoundsError prevind(s, 18)
+        @test_throws BoundsError prevind(s, 18, 0)
+        @test_throws BoundsError prevind(s, 18, 1)
 
-            @test nextind(strs[i], -1) == 1
-            @test nextind(strs[i], -1, 1) == 1
-            @test nextind(strs[i], 0, 2) == 4
-            @test nextind(strs[i], 0, 20) == 26
-            @test nextind(strs[i], 0, 10) == 15
-            @test nextind(strs[i], 1) == 4
-            @test nextind(strs[i], 1, 1) == 4
-            @test nextind(strs[i], 1, 2) == 6
-            @test nextind(strs[i], 1, 9) == 15
-            @test nextind(strs[i], 1, 10) == 17
-            @test nextind(strs[i], 2) == 4
-            @test nextind(strs[i], 2, 1) == 4
-            @test nextind(strs[i], 3) == 4
-            @test nextind(strs[i], 3, 1) == 4
-            @test nextind(strs[i], 4) == 6
-            @test nextind(strs[i], 4, 1) == 6
-            @test nextind(strs[i], 14) == 15
-            @test nextind(strs[i], 14, 1) == 15
-            @test nextind(strs[i], 15) == 17
-            @test nextind(strs[i], 15, 1) == 17
-            @test nextind(strs[i], 20) == 21
-            @test nextind(strs[i], 20, 1) == 21
-            @test_throws ArgumentError nextind(strs[i], 20, 0)
+        @test_throws BoundsError nextind(s, -1)
+        @test_throws BoundsError nextind(s, -1, 0)
+        @test_throws BoundsError nextind(s, -1, 1)
+        @test nextind(s, 0, 2) == 4
+        @test nextind(s, 0, 20) == 26
+        @test nextind(s, 0, 10) == 15
+        @test nextind(s, 1) == 4
+        @test nextind(s, 1, 1) == 4
+        @test nextind(s, 1, 2) == 6
+        @test nextind(s, 1, 9) == 15
+        @test nextind(s, 1, 10) == 17
+        @test nextind(s, 2) == 4
+        @test nextind(s, 2, 1) == 4
+        @test nextind(s, 3) == 4
+        @test nextind(s, 3, 1) == 4
+        @test nextind(s, 4) == 6
+        @test nextind(s, 4, 1) == 6
+        @test nextind(s, 14) == 15
+        @test nextind(s, 14, 1) == 15
+        @test nextind(s, 15) == 17
+        @test nextind(s, 15, 1) == 17
+        @test nextind(s, 15, 2) == 18
+        @test nextind(s, 16) == 17
+        @test nextind(s, 16, 1) == 17
+        @test nextind(s, 16, 2) == 18
+        @test nextind(s, 16, 3) == 19
+        @test_throws BoundsError nextind(s, 17)
+        @test_throws BoundsError nextind(s, 17, 0)
+        @test_throws BoundsError nextind(s, 17, 1)
 
-            for x in -10:20
-                n = p = x
-                for j in 1:40
-                    p = prevind(strs[i], p)
-                    @test prevind(strs[i], x, j) == p
-                    n = nextind(strs[i], n)
-                    @test nextind(strs[i], x, j) == n
+        for x in 0:ncodeunits(s)+1
+            n = p = x
+            for j in 1:40
+                if 1 ≤ p
+                    p = prevind(s, p)
+                    @test prevind(s, x, j) == p
+                end
+                if n ≤ ncodeunits(s)
+                    n = nextind(s, n)
+                    @test nextind(s, x, j) == n
                 end
             end
         end
-        @test prevind(strs[1], -1) == -2
-        @test prevind(strs[1], -1, 1) == -2
-
-        @test prevind(strs[2], -1) == 0
-        @test prevind(strs[2], -1, 1) == 0
     end
 end
 
@@ -605,7 +627,7 @@ end
     @test first(s, 3) == "∀ϵ≠"
     @test first(s, 4) == "∀ϵ≠0"
     @test first(s, length(s)) == s
-    @test_throws BoundsError first(s, length(s)+1)
+    @test first(s, length(s)+1) == s
     @test_throws ArgumentError last(s, -1)
     @test last(s, 0) == ""
     @test last(s, 1) == "0"
@@ -613,21 +635,13 @@ end
     @test last(s, 3) == "²>0"
     @test last(s, 4) == "ϵ²>0"
     @test last(s, length(s)) == s
-    @test_throws BoundsError last(s, length(s)+1)
+    @test last(s, length(s)+1) == s
 end
 
 @testset "invalid code point" begin
     s = String([0x61, 0xba, 0x41])
     @test !isvalid(s)
-    @test_throws UnicodeError s[2]
-    e = try
-        s[2]
-    catch e
-        e
-    end
-    b = IOBuffer()
-    show(b, e)
-    @test String(take!(b)) == "UnicodeError: invalid character index 2 (0xba is a continuation byte)"
+    @test s[2] == reinterpret(Char, UInt32(0xba) << 24)
 end
 
 @testset "ncodeunits" begin

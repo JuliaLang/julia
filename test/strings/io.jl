@@ -172,8 +172,7 @@ myio = IOBuffer()
 join(myio, "", "", 1)
 @test isempty(take!(myio))
 
-@testset "unescape_chars" begin
-    @test Base.unescape_chars("\\t","t") == "t"
+@testset "unescape_string ArgumentErrors" begin
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"xZ"))
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"777"))
 end

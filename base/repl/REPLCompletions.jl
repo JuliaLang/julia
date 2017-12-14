@@ -106,7 +106,7 @@ const sorted_keywords = [
     "primitive type", "quote", "return", "struct",
     "true", "try", "using", "while"]
 
-function complete_keyword(s::String)
+function complete_keyword(s::Union{String,SubString{String}})
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)

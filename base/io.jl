@@ -535,25 +535,13 @@ function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
     end
 end
 
-
-function write(s::IO, ch::Char)
-    c = reinterpret(UInt32, ch)
-    if c < 0x80
-        return write(s, c%UInt8)
-    elseif c < 0x800
-        return (write(s, (( c >> 6          ) | 0xC0)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    elseif c < 0x10000
-        return (write(s, (( c >> 12         ) | 0xE0)%UInt8)) +
-               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    elseif c < 0x110000
-        return (write(s, (( c >> 18         ) | 0xF0)%UInt8)) +
-               (write(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    else
-        return write(s, '\ufffd')
+function write(io::IO, c::Char)
+    u = bswap(reinterpret(UInt32, c))
+    n = 1
+    while true
+        write(io, u % UInt8)
+        (u >>= 8) == 0 && return n
+        n += 1
     end
 end
 
@@ -596,23 +584,20 @@ function read!(s::IO, a::Array{T}) where T
     return a
 end
 
-function read(s::IO, ::Type{Char})
-    ch = read(s, UInt8)
-    if ch < 0x80
-        return Char(ch)
+function read(io::IO, ::Type{Char})
+    b0 = read(io, UInt8)
+    l = 8(4-leading_ones(b0))
+    c = UInt32(b0) << 24
+    if l < 24
+        s = 16
+        while s ≥ l && !eof(io)
+            peek(io) & 0xc0 == 0x80 || break
+            b = read(io, UInt8)
+            c |= UInt32(b) << s
+            s -= 8
+        end
     end
-
-    # mimic utf8.next function
-    trailing = Base.utf8_trailing[ch+1]
-    c::UInt32 = 0
-    for j = 1:trailing
-        c += ch
-        c <<= 6
-        ch = read(s, UInt8)
-    end
-    c += ch
-    c -= Base.utf8_offset[trailing+1]
-    return Char(c)
+    return reinterpret(Char, c)
 end
 
 # readuntil_string is useful below since it has
@@ -620,7 +605,7 @@ end
 readuntil_string(s::IO, delim::UInt8) = String(readuntil(s, delim))
 
 function readuntil(s::IO, delim::Char)
-    if delim < Char(0x80)
+    if delim ≤ '\x7f'
         return readuntil_string(s, delim % UInt8)
     end
     out = IOBuffer()
@@ -701,7 +686,7 @@ function readuntil(io::IO, target::AbstractString)
     i = start(target)
     done(target, i) && return ""
     c, i = next(target, start(target))
-    if done(target, i) && c < Char(0x80)
+    if done(target, i) && c <= '\x7f'
         return readuntil_string(io, c % UInt8)
     end
     # decide how we can index target
@@ -728,12 +713,11 @@ function readuntil(io::IO, target::AbstractVector{T}) where T
     return out
 end
 
-
 """
     readchomp(x)
 
-Read the entirety of `x` as a string and remove a single trailing newline.
-Equivalent to `chomp!(read(x, String))`.
+Read the entirety of `x` as a string and remove a single trailing newline
+if there is one. Equivalent to `chomp(read(x, String))`.
 
 # Examples
 ```jldoctest
@@ -747,7 +731,7 @@ julia> readchomp("my_file.txt")
 julia> rm("my_file.txt");
 ```
 """
-readchomp(x) = chomp!(read(x, String))
+readchomp(x) = chomp(read(x, String))
 
 # read up to nb bytes into nb, returning # bytes read
 

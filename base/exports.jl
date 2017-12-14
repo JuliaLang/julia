@@ -154,7 +154,7 @@ export
     NullException,
     ParseError,
     SystemError,
-    UnicodeError,
+    StringIndexError,
 
 # Global constants and variables
     ARGS,
@@ -716,7 +716,6 @@ export
     bytes2hex,
     chomp,
     chop,
-    chr2ind,
     codeunit,
     dec,
     digits,
@@ -728,7 +727,6 @@ export
     hex,
     hex2bytes,
     hex2bytes!,
-    ind2chr,
     info,
     ismatch,
     isvalid,

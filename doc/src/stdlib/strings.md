@@ -13,7 +13,8 @@ Core.String(::AbstractString)
 Base.SubString
 Base.transcode
 Base.unsafe_string
-Base.codeunit(::AbstractString, ::Integer)
+Base.ncodeunits(::AbstractString)
+Base.codeunit
 Base.ascii
 Base.@r_str
 Base.@raw_str
@@ -50,8 +51,6 @@ Base.last(::AbstractString, ::Integer)
 Base.join
 Base.chop
 Base.chomp
-Base.ind2chr
-Base.chr2ind
 Base.thisind
 Base.nextind
 Base.prevind

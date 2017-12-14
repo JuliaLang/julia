@@ -2992,6 +2992,10 @@ end
 @deprecate_binding Complex64  ComplexF32
 @deprecate_binding Complex128 ComplexF64
 
+# PR #24999
+@deprecate ind2chr(s::AbstractString, i::Integer) length(s, 1, i)
+@deprecate chr2ind(s::AbstractString, n::Integer) nextind(s, 0, n)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

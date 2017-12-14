@@ -1148,6 +1148,14 @@ unmark(x::LibuvStream)   = unmark(x.buffer)
 reset(x::LibuvStream)    = reset(x.buffer)
 ismarked(x::LibuvStream) = ismarked(x.buffer)
 
+function peek(s::LibuvStream)
+    mark(s)
+    try read(s, UInt8)
+    finally
+        reset(s)
+    end
+end
+
 # BufferStream's are non-OS streams, backed by a regular IOBuffer
 mutable struct BufferStream <: LibuvStream
     buffer::IOBuffer
