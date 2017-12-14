@@ -314,11 +314,11 @@ using Base.LinAlg: fillstored!, UnitLowerTriangular
 @testset "fill! and fillstored!" begin
     let # fillstored!
         A = Tridiagonal(randn(2), randn(3), randn(2))
-        @test fillstored!(A, 3) == Tridiagonal([3, 3.], [3, 3, 3.], [3, 3.])
+        @test fillstored!(A, 3) == Tridiagonal([3, 3], [3, 3, 3], [3, 3])
         B = Bidiagonal(randn(3), randn(2), :U)
-        @test fillstored!(B, 2) == Bidiagonal([2.,2,2], [2,2.], :U)
+        @test fillstored!(B, 2) == Bidiagonal([2,2,2], [2,2], :U)
         S = SymTridiagonal(randn(3), randn(2))
-        @test fillstored!(S, 1) == SymTridiagonal([1,1,1.], [1,1.])
+        @test fillstored!(S, 1) == SymTridiagonal([1,1,1], [1,1])
         Ult = UnitLowerTriangular(randn(3,3))
         @test fillstored!(Ult, 3) == UnitLowerTriangular([1 0 0; 3 1 0; 3 3 1])
     end
@@ -333,10 +333,7 @@ using Base.LinAlg: fillstored!, UnitLowerTriangular
         # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
         ]
         for A in exotic_arrays
-            fill!(A, 0)
-            for a in A
-                @test a == 0
-            end
+            @test iszero(fill!(A, 0))
         end
         # Diagonal and AbstractTriangular fill! were defined as fillstored!,
         # not matching the general behavior of fill!, and so have been deprecated.

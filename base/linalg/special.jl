@@ -142,5 +142,5 @@ function fill!(A::Union{Bidiagonal,Tridiagonal,SymTridiagonal}, x)
     xT = convert(eltype(A), x)
     (iszero(xT) || _small_enough(A)) && return fillstored!(A, xT)
     throw(ArgumentError("array of type $(typeof(A)) and size $(size(A)) can
-    not be filled with x=$x, since some of its entries are constrained."))
+    not be filled with $x, since some of its entries are constrained."))
 end
