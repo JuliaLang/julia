@@ -5,6 +5,8 @@
 
 A wrapper type used in `Union{Some{T}, Void}` to distinguish between the absence
 of a value ([`nothing`](@ref)) and the presence of a `nothing` value (i.e. `Some(nothing)`).
+
+Use [`coalesce`](@ref) to access the value wrapped by a `Some` object.
 """
 struct Some{T}
     value::T
@@ -21,7 +23,7 @@ convert(::Type{Void}, x::Any) = throw(MethodError(convert, (Void, x)))
 convert(::Type{Void}, x::Void) = nothing
 
 function show(io::IO, x::Some)
-    if get(io, :compact, false)
+    if get(io, :typeinfo, Any) == typeof(x)
         show(io, x.value)
     else
         print(io, "Some(")
@@ -31,41 +33,11 @@ function show(io::IO, x::Some)
 end
 
 """
-    get(x::Some[, y])
-    get(x::Void[, y])
-
-Attempt to access the value wrapped in `x`. Return the value if
-`x` is not [`nothing`](@ref) (i.e. it is a [`Some`](@ref) object).
-If `x` is `nothing`, return `y` if provided, or throw a `MethodError` if not.
-
-# Examples
-```jldoctest
-julia> get(Some(5))
-5
-
-julia> get(nothing)
-ERROR: MethodError()
-[...]
-
-julia> get(Some(1), 0)
-1
-
-julia> get(nothing, 0)
-0
-
-```
-"""
-function get end
-
-get(x::Some) = x.value
-get(x::Some, y) = x.value
-get(x::Void, y) = y
-
-"""
     coalesce(x, y...)
 
 Return the first value in the arguments which is not equal to `nothing`,
-or `nothing` if all arguments are `nothing`.
+or `nothing` if all arguments are `nothing`. Unwrap arguments of type
+[`Some`](@ref).
 
 # Examples
 
@@ -79,13 +51,20 @@ julia> coalesce(1, nothing)
 julia> coalesce(nothing, nothing)
 nothing
 
+julia> coalesce(Some(1))
+1
+
+julia> coalesce(nothing, Some(1))
+1
 ```
 """
 function coalesce end
 
 coalesce(x::Any) = x
+coalesce(x::Some) = x.value
 coalesce(x::Void) = nothing
 coalesce(x::Any, y...) = x
+coalesce(x::Some, y...) = x.value
 coalesce(x::Void, y...) = coalesce(y...)
 
 """

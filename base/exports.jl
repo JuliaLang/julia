@@ -862,6 +862,7 @@ export
     fetch,
 
 # missing values
+    coalesce,
     ismissing,
     missing,
     skipmissing,

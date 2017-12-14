@@ -629,7 +629,7 @@ would not otherwise have a value also yield `nothing`, for example `if false; en
 For situations where a value `x` of type `T` exists only sometimes, the `Union{T, Void}`
 type can be used. If the value itself can be `nothing` (notably, when `T` is `Any`),
 the `Union{Some{T}, Void}` type is more appropriate since `x == nothing` then indicates
-the absence of a value, and `get(x) == nothing` indicates the presence of a value equal
+the absence of a value, and `x == Some(nothing)` indicates the presence of a value equal
 to `nothing`.
 
 To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the

@@ -773,7 +773,8 @@ Deprecated or removed
   * `Nullable{T}` has been deprecated and moved to the Nullables package ([#23642]).
     Use `Union{T, Void}` instead, or `Union{Some{T}, Void}` if `nothing` is a possible value
     (i.e. `Void <: T`). `isnull(x)` can be replaced with `x === nothing`
-    and `unsafe_get(x)` with `get(x)`. `NullException` has been removed.
+    and `unsafe_get`/`get` can be dropped or replaced with `coalesce`.
+    `NullException` has been removed.
 
 Command-line option changes
 ---------------------------

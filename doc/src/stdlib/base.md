@@ -214,6 +214,7 @@ Base.@polly
 ```@docs
 Base.Missing
 Base.missing
+Base.coalesce
 Base.ismissing
 Base.skipmissing
 ```

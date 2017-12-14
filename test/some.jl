@@ -36,9 +36,9 @@
 ## show()
 
 @test sprint(show, Some(1)) == "Some(1)"
-@test sprint(showcompact, Some(1)) == "1"
 @test sprint(show, Some(Some(1))) == "Some(Some(1))"
-@test sprint(showcompact, Some(Some(1))) == "1"
+@test repr([Some(1)]) == "Some{$Int}[1]"
+@test repr([Some(Some(1))]) == "Some{Some{$Int}}[Some(1)]"
 
 ##  == and isequal nothing
 
@@ -47,17 +47,8 @@
 @test !isequal(Some(1), nothing)
 @test !isequal(Some(nothing), nothing)
 
-## get()
-@test get(Some(1)) === 1
-@test get(Some(nothing)) === nothing
-@test_throws MethodError get(nothing)
-
-@test get(Some(1), 0) === 1
-@test get(Some(nothing), 0) === nothing
-@test get(nothing, 0) === 0
-
 # coalesce()
-using Base.coalesce
+
 @test coalesce(1) === 1
 @test coalesce(nothing) === nothing
 @test coalesce(nothing, 1) === 1
@@ -68,7 +59,19 @@ using Base.coalesce
 @test coalesce(nothing, nothing, 2) === 2
 @test coalesce(nothing, nothing, nothing) === nothing
 
+@test coalesce(Some(1)) === 1
+@test coalesce(Some(nothing)) === nothing
+@test coalesce(Some(1), 0) === 1
+@test coalesce(Some(nothing), 0) === nothing
+@test coalesce(nothing, Some(nothing)) === nothing
+@test coalesce(Some(1), nothing) === 1
+@test coalesce(nothing, Some(1)) === 1
+@test coalesce(nothing, Some(1), nothing) === 1
+@test coalesce(nothing, Some(1), Some(2)) === 1
+@test coalesce(Some(1), nothing, Some(2)) === 1
+
 # notnothing()
+
 using Base: notnothing
 @test notnothing(1) === 1
 @test_throws ArgumentError notnothing(nothing)
