@@ -17,20 +17,22 @@ end
     @test reverse("abc") == "cba"
     @test reverse("xyz\uff\u800\uffff\U10ffff") == "\U10ffff\uffff\u800\uffzyx"
     for (s, r) in [
-        "xyz\xc1"          => "\xc1zyx",
-        "xyz\xd0"          => "\xd0zyx",
-        "xyz\xe0"          => "\xe0zyx",
-        "xyz\xed\x80"      => "\xed\x80zyx",
-        "xyz\xf0"          => "\xf0zyx",
-        "xyz\xf0\x80"      => "\xf0\x80zyx",
-        "xyz\xf0\x80\x80"  => "\xf0\x80\x80zyx",
+        "xyz\xc1"         => "\xc1zyx",
+        "xyz\xd0"         => "\xd0zyx",
+        "xyz\xe0"         => "\xe0zyx",
+        "xyz\xed\x80"     => "\xed\x80zyx",
+        "xyz\xf0"         => "\xf0zyx",
+        "xyz\xf0\x80"     => "\xf0\x80zyx",
+        "xyz\xf0\x80\x80" => "\xf0\x80\x80zyx",
     ]
         @test reverse(s) == r
     end
 end
 
 @testset "string convert" begin
-    @test "this is a test\xed\x80\x80" == "this is a test\ud000"
+    @test String(b"this is a test\xed\x80\x80") ==
+                  "this is a test\xed\x80\x80"  ==
+                  "this is a test\ud000"
     # Specifically check UTF-8 string whose lead byte is same as a surrogate
-    @test "\xed\x9f\xbf" == "\ud7ff"
+    @test String(b"\xed\x9f\xbf") == "\xed\x9f\xbf" == "\ud7ff"
 end

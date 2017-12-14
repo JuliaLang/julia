@@ -1154,6 +1154,7 @@ export
     @cmd,    # `commands`
 
     # notation for certain types
+    @b_str,    # byte vector
     @r_str,    # regex
     @s_str,    # regex substitution string
     @v_str,    # version number
