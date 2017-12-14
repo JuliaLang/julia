@@ -602,7 +602,7 @@ end
 # Test that `print_with_color` accepts non-string values, just as `print` does
 let buf_color = IOBuffer()
     args = (3.2, "foo", :testsym)
-    print_with_color(:red, IOContext(buf, :color=>true), args...)
+    print_with_color(:red, IOContext(buf_color, :color=>true), args...)
     buf_plain = IOBuffer()
     print(buf_plain, args...)
     expected_str = string(Base.text_colors[:red],
