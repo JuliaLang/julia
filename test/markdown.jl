@@ -308,23 +308,24 @@ table = md"""
 
 # mime output
 let out =
-    """
-    # Title
+    @test sprint(show, "text/plain", book) ==
+        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  |  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •    list1\n      \n    •    list2\n      \n"
+    @test sprint(show, "text/markdown", book) ==
+        """
+        # Title
 
-    Some discussion
+        Some discussion
 
-    > A quote
+        > A quote
 
 
-    ## Section *important*
+        ## Section *important*
 
-    Some **bolded**
+        Some **bolded**
 
-      * list1
-      * list2
-    """
-    @test sprint(show, "text/plain", book) == out
-    @test sprint(show, "text/markdown", book) == out
+          * list1
+          * list2
+        """
 end
 let out =
     """
@@ -1065,6 +1066,8 @@ end
 # different output depending on whether color is requested:
 let buf = IOBuffer()
     show(buf, "text/plain", md"*emph*")
+    @test String(take!(buf)) == "  emph\n"
+    show(buf, "text/markdown", md"*emph*")
     @test String(take!(buf)) == "*emph*\n"
     show(IOContext(buf, :color=>true), "text/plain", md"*emph*")
     @test String(take!(buf)) == "  \e[4memph\e[24m\n"

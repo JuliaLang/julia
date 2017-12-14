@@ -148,11 +148,4 @@ end
 terminline(io::IO, x) = show(io, MIME"text/plain"(), x)
 
 # Show in terminal
-function Base.show(io::IO, ::MIME"text/plain", md::MD)
-    if get(io, :color, false)
-        term(io, md)
-        nothing
-    else
-        show(io, md)
-    end
-end
+Base.show(io::IO, ::MIME"text/plain", md::MD) = (term(io, md); nothing)
