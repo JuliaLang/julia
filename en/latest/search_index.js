@@ -7605,7 +7605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
 },
 
 {
@@ -10605,7 +10605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.lpad",
     "category": "Function",
-    "text": "lpad(s, n::Integer, p::AbstractString=\" \")\n\nMake a string at least n columns wide when printed by padding s on the left with copies of p.\n\nExamples\n\njulia> lpad(\"March\",10)\n\"     March\"\n\n\n\n"
+    "text": "lpad(s, n::Integer, p::Union{Char,AbstractString}=' ') -> String\n\nStringify s and pad the resulting string on the left with p to make it n characters (code points) long. If s is already n characters long, an equal string is returned. Pad with spaces by default.\n\nExamples\n\njulia> lpad(\"March\", 10)\n\"     March\"\n\n\n\n"
 },
 
 {
@@ -10613,7 +10613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.rpad",
     "category": "Function",
-    "text": "rpad(s, n::Integer, p::AbstractString=\" \")\n\nMake a string at least n columns wide when printed by padding s on the right with copies of p.\n\nExamples\n\njulia> rpad(\"March\",20)\n\"March               \"\n\n\n\n"
+    "text": "rpad(s, n::Integer, p::Union{Char,AbstractString}=' ') -> String\n\nStringify s and pad the resulting string on the right with p to make it n characters (code points) long. If s is already n characters long, an equal string is returned. Pad with spaces by default.\n\nExamples\n\njulia> rpad(\"March\", 20)\n\"March               \"\n\n\n\n"
 },
 
 {
