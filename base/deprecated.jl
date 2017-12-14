@@ -3033,6 +3033,14 @@ end
 # Associative -> AbstractDict (#25012)
 @deprecate_binding Associative AbstractDict
 
+# PR #25073
+macro b_str(s)
+    r = repr(s)
+    depwarn("`b$r` is deprecated, use `Vector{UInt8}($r)` instead", Symbol("@b_str"))
+    :(Vector{UInt8}($(unescape_string(s))))
+end
+export @b_str
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

@@ -27,14 +27,14 @@ end
 # @test_throws BoundsError rsearchindex("foo", Char[], 5)
 
 # @test_throws ErrorException in("foobar","bar")
-@test_throws BoundsError search(b"\x1\x2",0x1,0)
-@test rsearchindex(b"foo",b"o",0) == 0
-@test rsearchindex(SubString("",1,0),SubString("",1,0)) == 1
+@test_throws BoundsError search(Vector{UInt8}("\x1\x2"), 0x1, 0)
+@test rsearchindex(Vector{UInt8}("foo"), Vector{UInt8}("o"), 0) == 0
+@test rsearchindex(SubString("", 1, 0), SubString("", 1, 0)) == 1
 
-@test search(b"foo",'o') == 2
-@test rsearch(b"foo",'o') == 3
-@test search(b"foó",'ó') == 3
-@test rsearch(b"foó",'ó') == 3
+@test search(Vector{UInt8}("foo"), 'o') == 2
+@test rsearch(Vector{UInt8}("foo"), 'o') == 3
+@test search(Vector{UInt8}("foó"), 'ó') == 3
+@test rsearch(Vector{UInt8}("foó"), 'ó') == 3
 
 # ascii search
 for str in [astr, GenericString(astr)]

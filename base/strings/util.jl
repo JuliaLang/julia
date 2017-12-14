@@ -449,7 +449,7 @@ julia> hex2bytes(s)
  0x30
  0x39
 
-julia> a = b"01abEF"
+julia> a = Vector{UInt8}("01abEF")
 6-element Array{UInt8,1}:
  0x30
  0x31

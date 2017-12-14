@@ -375,8 +375,6 @@ function unescape_string(io, s::AbstractString)
     end
 end
 
-macro b_str(s); :(Vector{UInt8}($(unescape_string(s)))); end
-
 """
     @raw_str -> String
 

@@ -138,7 +138,7 @@ write(io,[1,2,3])
 skip(io,1)
 @test write(io,UInt8(104)) === 1
 skip(io,3)
-@test write(io,b"apples") === 3
+@test write(io,Vector{UInt8}("apples")) === 3
 skip(io,71)
 @test write(io,'y') === 1
 @test read(io, String) == "happy"
@@ -190,7 +190,7 @@ end
 # pr #11554
 let a,
     io = IOBuffer(SubString("***αhelloworldω***", 4, 16)),
-    io2 = IOBuffer(b"goodnightmoon", true, true)
+    io2 = IOBuffer(Vector{UInt8}("goodnightmoon"), true, true)
 
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
@@ -204,7 +204,7 @@ let a,
     @test read(io, String) == "dω"
     @test bufcontents(io) == "αhelloworldω"
     @test_throws ArgumentError write(io,"!")
-    @test take!(io) == b"αhelloworldω"
+    @test take!(io) == Vector{UInt8}("αhelloworldω")
     seek(io, 2)
     seekend(io2)
     write(io2, io)

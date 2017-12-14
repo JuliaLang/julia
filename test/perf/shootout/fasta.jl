@@ -11,10 +11,10 @@ const alu = string(
    "AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC",
    "AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA")
 
-const iub1 = b"acgtBDHKMNRSVWY"
+const iub1 = Vector{UInt8}("acgtBDHKMNRSVWY")
 const iub2 = [0.27, 0.12, 0.12, 0.27, 0.02,0.02, 0.02, 0.02, 0.02, 0.02,0.02, 0.02, 0.02, 0.02, 0.02]
 
-const homosapiens1 = b"acgt"
+const homosapiens1 = Vector{UInt8}("acgt")
 const homosapiens2 = [0.3029549426680, 0.1979883004921,0.1975473066391, 0.3015094502008]
 
 const IM  = 139968.0

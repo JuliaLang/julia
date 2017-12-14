@@ -124,7 +124,7 @@ end
 
 # Module
 create_serialization_stream() do s # user-defined module
-    mod = b"SomeModule"
+    mod = Vector{UInt8}("SomeModule")
     modstring = String(mod)
     eval(Meta.parse("module $(modstring); end"))
     modtype = eval(Meta.parse("$(modstring)"))
@@ -505,7 +505,7 @@ let io = IOBuffer()
     seekstart(io)
     b = read(io)
     @test b[1] == Serializer.HEADER_TAG
-    @test b[2:3] == b"JL"
+    @test b[2:3] == Vector{UInt8}("JL")
     @test b[4] == Serializer.ser_version
     @test (b[5] & 0x3) == (ENDIAN_BOM == 0x01020304)
     @test ((b[5] & 0xc)>>2) == (sizeof(Int) == 8)
