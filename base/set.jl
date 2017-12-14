@@ -45,7 +45,7 @@ function pop!(s::Set)
     isempty(s) && throw(ArgumentError("set must be non-empty"))
     idx = start(s.dict)
     val = s.dict.ht.keys[idx] # TODO this should not fiddle with the internals of Dict
-    _delete!(s.dict, idx)
+    _delete!(s.dict.ht, idx)
     val
 end
 
