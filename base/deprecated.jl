@@ -3090,6 +3090,32 @@ end
     *(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Transpose{<:Any,<:RowVector}) = A.parent * B
 end
 
+
+# methods involving RowVector from base/linalg/triangular.jl, to deprecate
+@eval Base.LinAlg begin
+    *(rowvec::RowVector, A::AbstractTriangular) = transpose(transpose(A) * transpose(rowvec))
+    *(rowvec::RowVector, transA::Transpose{<:Any,<:AbstractTriangular}) = transpose(transA.parent * transpose(rowvec))
+    *(A::AbstractTriangular, transrowvec::Transpose{<:Any,<:RowVector}) = A * transpose(transrowvec.parent)
+    *(transA::Transpose{<:Any,<:AbstractTriangular}, transrowvec::Transpose{<:Any,<:RowVector}) = transA.parent.' * transpose(transrowvec.parent)
+    *(rowvec::RowVector, adjA::Adjoint{<:Any,<:AbstractTriangular}) = adjoint(adjA.parent * adjoint(rowvec))
+    *(A::AbstractTriangular, adjrowvec::Adjoint{<:Any,<:RowVector}) = A * adjoint(adjrowvec.parent)
+    *(adjA::Adjoint{<:Any,<:AbstractTriangular}, adjrowvec::Adjoint{<:Any,<:RowVector}) = adjA.parent' * adjoint(adjrowvec.parent)
+    \(::Union{UpperTriangular,LowerTriangular}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+    \(::Union{UnitUpperTriangular,UnitLowerTriangular}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+    \(::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+    \(::Adjoint{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+    \(::Transpose{<:Any,<:Union{UpperTriangular,LowerTriangular}}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+    \(::Transpose{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+    /(rowvec::RowVector, A::Union{UpperTriangular,LowerTriangular}) = transpose(transpose(A) \ transpose(rowvec))
+    /(rowvec::RowVector, A::Union{UnitUpperTriangular,UnitLowerTriangular}) = transpose(transpose(A) \ transpose(rowvec))
+    /(rowvec::RowVector, transA::Transpose{<:Any,<:Union{UpperTriangular,LowerTriangular}}) = transpose(transA.parent \ transpose(rowvec))
+    /(rowvec::RowVector, transA::Transpose{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}) = transpose(transA.parent \ transpose(rowvec))
+    /(rowvec::RowVector, adjA::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}}) = /(rowvec, adjoint(adjA.parent))
+    /(rowvec::RowVector, adjA::Adjoint{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}) = /(rowvec, adjoint(adjA.parent))
+    *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:RowVector}) = A * transpose(B.parent)
+    *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:RowVector}) = A * adjoint(B.parent)
+end
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 

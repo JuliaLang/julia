@@ -1861,42 +1861,6 @@ end
 *(transA::Transpose{<:Any,<:AbstractTriangular}, transB::Transpose{<:Any,<:AbstractMatrix}) = *(transA, transpose(transB.parent))
 *(transA::Transpose{<:Any,<:AbstractMatrix}, transB::Transpose{<:Any,<:AbstractTriangular}) = *(transpose(transA.parent), transB)
 
-# Specializations for RowVector
-*(rowvec::RowVector, A::AbstractTriangular) = transpose(transpose(A) * transpose(rowvec))
-*(rowvec::RowVector, transA::Transpose{<:Any,<:AbstractTriangular}) = transpose(transA.parent * transpose(rowvec))
-*(A::AbstractTriangular, transrowvec::Transpose{<:Any,<:RowVector}) = A * transpose(transrowvec.parent)
-*(transA::Transpose{<:Any,<:AbstractTriangular}, transrowvec::Transpose{<:Any,<:RowVector}) = transA.parent.' * transpose(transrowvec.parent)
-*(rowvec::RowVector, adjA::Adjoint{<:Any,<:AbstractTriangular}) = adjoint(adjA.parent * adjoint(rowvec))
-*(A::AbstractTriangular, adjrowvec::Adjoint{<:Any,<:RowVector}) = A * adjoint(adjrowvec.parent)
-*(adjA::Adjoint{<:Any,<:AbstractTriangular}, adjrowvec::Adjoint{<:Any,<:RowVector}) = adjA.parent' * adjoint(adjrowvec.parent)
-
-@inline /(rowvec::RowVector, A::Union{UpperTriangular,LowerTriangular}) = transpose(transpose(A) \ transpose(rowvec))
-@inline /(rowvec::RowVector, A::Union{UnitUpperTriangular,UnitLowerTriangular}) = transpose(transpose(A) \ transpose(rowvec))
-
-/(rowvec::RowVector, transA::Transpose{<:Any,<:Union{UpperTriangular,LowerTriangular}}) =
-    transpose(transA.parent \ transpose(rowvec))
-/(rowvec::RowVector, transA::Transpose{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}) =
-    transpose(transA.parent \ transpose(rowvec))
-# ambiguity resolution with definitions in linalg/rowvector.jl
-/(rowvec::RowVector, adjA::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}}) =
-    /(rowvec, adjoint(adjA.parent))
-/(rowvec::RowVector, adjA::Adjoint{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}) =
-    /(rowvec, adjoint(adjA.parent))
-
-rdiv(rowvec::RowVector, adjA::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}}) =
-    adjoint(adjA.parent \ adjoint(rowvec))
-rdiv(rowvec::RowVector, adjA::Adjoint{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}) =
-    adjoint(adjA.parent \ adjoint(rowvec))
-
-\(::Union{UpperTriangular,LowerTriangular}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-\(::Union{UnitUpperTriangular,UnitLowerTriangular}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-
-\(::Transpose{<:Any,<:Union{UpperTriangular,LowerTriangular}}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-\(::Transpose{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-
-\(::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-\(::Adjoint{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-
 # Complex matrix power for upper triangular factor, see:
 #   Higham and Lin, "A Schur-Padé algorithm for fractional powers of a Matrix",
 #     SIAM J. Matrix Anal. & Appl., 32 (3), (2011) 1056–1078.
@@ -2417,9 +2381,6 @@ factorize(A::AbstractTriangular) = A
 *(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractTriangular}) = adjoint(A.parent) * B
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractTriangular}) = transpose(A.parent) * B
 *(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractTriangular}) = transpose(A.parent) * B
-# dismabiguation methods: *(Adj/Trans of AbstractTriangular, Trans/Adj of RowVector)
-*(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:RowVector}) = A * transpose(B.parent)
-*(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:RowVector}) = A * adjoint(B.parent)
 
 # disambiguation methods: /(Adjoint of AbsVec, <:AbstractTriangular)
 /(u::AdjointAbsVec, A::Union{LowerTriangular,UpperTriangular}) = Adjoint(Adjoint(A) \ u.parent)
