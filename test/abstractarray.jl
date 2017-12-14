@@ -633,72 +633,6 @@ Base.getindex(A::TSlowNIndexes, index::Int...) = error("Must use $(ndims(A)) ind
 Base.getindex(A::TSlowNIndexes{T,2}, i::Int, j::Int) where {T} = A.data[i,j]
 
 
-mutable struct GenericIterator{N} end
-Base.start(::GenericIterator{N}) where {N} = 1
-Base.next(::GenericIterator{N}, i) where {N} = (i, i + 1)
-Base.done(::GenericIterator{N}, i) where {N} = i > N ? true : false
-Base.iteratorsize(::Type{GenericIterator{N}}) where {N} = Base.SizeUnknown()
-
-function test_map(::Type{TestAbstractArray})
-    empty_pool = WorkerPool([myid()])
-    pmap_fallback = (f, c...) -> pmap(empty_pool, f, c...)
-
-    for mapf in [map, asyncmap, pmap_fallback]
-        for typ in (Float16, Float32, Float64,
-                    Int8, Int16, Int32, Int64, Int128,
-                    UInt8, UInt16, UInt32, UInt64, UInt128),
-            arg_typ in (Integer,
-                        Signed,
-                        Unsigned)
-            X = typ[1:10...]
-            _typ = typeof(arg_typ(one(typ)))
-            @test mapf(arg_typ, X) == _typ[1:10...]
-        end
-
-        # generic map
-        f(x) = x + 1
-        I = GenericIterator{10}()
-        @test mapf(f, I) == Any[2:11...]
-
-        # AbstractArray map for 2 arg case
-        f(x, y) = x + y
-        B = Float64[1:10...]
-        C = Float64[1:10...]
-        @test mapf(f, convert(Vector{Int},B), C) == Float64[ 2 * i for i in 1:10 ]
-        @test mapf(f, Int[], Float64[]) == Union{}[]
-        # map with different result types
-        let m = mapf(x->x+1, Number[1, 2.0])
-            # FIXME why is this different for asyncmap?
-            @test mapf !== map || isa(m, Vector{Real})
-            @test m == Real[2, 3.0]
-        end
-
-        # AbstractArray map for N-arg case
-        A = Array{Int}(uninitialized, 10)
-        f(x, y, z) = x + y + z
-        D = Float64[1:10...]
-
-        @test map!(f, A, B, C, D) == Int[ 3 * i for i in 1:10 ]
-        @test mapf(f, B, C, D) == Float64[ 3 * i for i in 1:10 ]
-        @test mapf(f, Int[], Int[], Complex{Int}[]) == Union{}[]
-    end
-
-    # In-place map
-    A = Float64[1:10...]
-    map!(x -> x*x, A, A)
-    @test A == map(x -> x*x, Float64[1:10...])
-    B = Float64[1:10...]
-    Base.asyncmap!(x->x*x, B, B)
-    @test A == B
-
-    # Map to destination collection
-    map!((x,y,z)->x*y*z, A, Float64[1:10...], Float64[1:10...], Float64[1:10...])
-    @test A == map(x->x*x*x, Float64[1:10...])
-    C = Base.asyncmap!((x,y,z)->x*y*z, B, Float64[1:10...], Float64[1:10...], Float64[1:10...])
-    @test A == B
-    @test B === C
-end
-
 @testset "issue #15689, mapping an abstract type" begin
     @test isa(map(Set, Array[[1,2],[3,4]]), Vector{Set{Int}})
 end
@@ -751,7 +685,10 @@ test_setindex!_internals(TestAbstractArray)
 test_get(TestAbstractArray)
 test_cat(TestAbstractArray)
 test_ind2sub(TestAbstractArray)
-test_map(TestAbstractArray)
+
+include("generic_map_tests.jl")
+generic_map_tests(map, map!)
+
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)
 test_checksquare()

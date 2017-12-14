@@ -291,24 +291,10 @@ function process_options(opts::JLOptions)
     # remove filename from ARGS
     global PROGRAM_FILE = arg_is_program ? shift!(ARGS) : ""
 
-    # startup worker.
-    # opts.startupfile, opts.load, etc should should not be processed for workers.
-    if opts.worker == 1
-        # does not return
-        if opts.cookie != C_NULL
-            start_worker(unsafe_string(opts.cookie))
-        else
-            start_worker()
-        end
-    end
-
-    # add processors
-    if opts.nprocs > 0
-        addprocs(opts.nprocs)
-    end
-    # load processes from machine file
-    if opts.machinefile != C_NULL
-        addprocs(load_machine_file(unsafe_string(opts.machinefile)))
+    # Load Distributed module only if any of the Distributed options have been specified.
+    if (opts.worker == 1) || (opts.nprocs > 0) || (opts.machinefile != C_NULL)
+        eval(Main, :(using Distributed))
+        invokelatest(Main.Distributed.process_opts, opts)
     end
 
     # load ~/.juliarc file
@@ -323,8 +309,12 @@ function process_options(opts::JLOptions)
             println()
         elseif cmd == 'L'
             # load file immediately on all processors
-            @sync for p in procs()
-                @async remotecall_wait(include, p, Main, arg)
+            if nprocs() == 1
+                include(Main, arg)
+            else
+                @sync for p in invokelatest(Main.procs)
+                    @async invokelatest(Main.remotecall_wait, include, p, Main, arg)
+                end
             end
         end
     end
@@ -351,21 +341,6 @@ function load_juliarc()
     end
     try_include(Main, abspath(homedir(), ".juliarc.jl"))
     nothing
-end
-
-function load_machine_file(path::AbstractString)
-    machines = []
-    for line in split(read(path, String),'\n'; keep=false)
-        s = split(line, '*'; keep = false)
-        map!(strip, s, s)
-        if length(s) > 1
-            cnt = all(isdigit, s[1]) ? parse(Int,s[1]) : Symbol(s[1])
-            push!(machines,(s[2], cnt))
-        else
-            push!(machines,line)
-        end
-    end
-    return machines
 end
 
 import .Terminals

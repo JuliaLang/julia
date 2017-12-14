@@ -45,6 +45,7 @@ if Sys.isunix()
     end
 end
 
+using Distributed
 dc_path = joinpath(dir, "dictchannel.jl")
 # Run the remote on pid 1, since runtests may terminate workers
 # at any time depending on memory usage

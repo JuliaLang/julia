@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 """
 Tools for distributed parallel processing.
 """
@@ -27,6 +29,7 @@ export
     @everywhere,
     @parallel,
 
+    AbstractWorkerPool,
     addprocs,
     CachingPool,
     clear!,
@@ -36,8 +39,8 @@ export
     interrupt,
     launch,
     manage,
-    myid,
-    nprocs,
+#    myid,   # accessed via Base
+#    nprocs, # accessed via Base
     nworkers,
     pmap,
     procs,
@@ -55,8 +58,6 @@ export
     RemoteException,
     ProcessExitedException,
 
-# Add the following into Base as some Packages access them via Base.
-# Also documented as such.
     process_messages,
     remoteref_id,
     channel_from_id,
@@ -76,5 +77,8 @@ include("macros.jl")      # @spawn and friends
 include("workerpool.jl")
 include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
+include("precompile.jl")
+
+__init__() = init_parallel()
 
 end

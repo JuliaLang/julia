@@ -178,7 +178,7 @@ worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
     start_worker(cookie::AbstractString)
     start_worker(out::IO, cookie::AbstractString)
 
-`Base.start_worker` is an internal function which is the default entry point for
+`start_worker` is an internal function which is the default entry point for
 worker processes connecting via TCP/IP. It sets up the process as a Julia cluster
 worker.
 
@@ -642,14 +642,14 @@ end
 
 
 """
-    Base.cluster_cookie() -> cookie
+    cluster_cookie() -> cookie
 
 Return the cluster cookie.
 """
 cluster_cookie() = LPROC.cookie
 
 """
-    Base.cluster_cookie(cookie) -> cookie
+    cluster_cookie(cookie) -> cookie
 
 Set the passed cookie as the cluster cookie, then returns it.
 """
@@ -896,6 +896,8 @@ function _rmprocs(pids, waitfor)
 end
 
 
+struct ProcessExitedException <: Exception end
+
 """
     ProcessExitedException()
 
@@ -903,7 +905,6 @@ After a client Julia process has exited, further attempts to reference the dead 
 throw this exception.
 """
 ProcessExitedException()
-struct ProcessExitedException <: Exception end
 
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
@@ -924,7 +925,7 @@ function worker_from_id(pg::ProcessGroup, i)
 end
 
 """
-    Base.worker_id_from_socket(s) -> pid
+    worker_id_from_socket(s) -> pid
 
 A low-level API which, given a `IO` connection or a `Worker`,
 returns the `pid` of the worker it is connected to.
@@ -1129,3 +1130,43 @@ function init_parallel()
 end
 
 write_cookie(io::IO) = write(io.in, string(cluster_cookie(), "\n"))
+
+function process_opts(opts)
+    # startup worker.
+    # opts.startupfile, opts.load, etc should should not be processed for workers.
+    if opts.worker == 1
+        # does not return
+        if opts.cookie != C_NULL
+            start_worker(unsafe_string(opts.cookie))
+        else
+            start_worker()
+        end
+    end
+
+    # add processors
+    if opts.nprocs > 0
+        addprocs(opts.nprocs)
+    end
+
+    # load processes from machine file
+    if opts.machinefile != C_NULL
+        addprocs(load_machine_file(unsafe_string(opts.machinefile)))
+    end
+    return nothing
+end
+
+
+function load_machine_file(path::AbstractString)
+    machines = []
+    for line in split(read(path, String),'\n'; keep=false)
+        s = split(line, '*'; keep = false)
+        map!(strip, s, s)
+        if length(s) > 1
+            cnt = all(isdigit, s[1]) ? parse(Int,s[1]) : Symbol(s[1])
+            push!(machines,(s[2], cnt))
+        else
+            push!(machines,line)
+        end
+    end
+    return machines
+end

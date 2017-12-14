@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-
-import Base: launch, manage, connect, exit
+using Distributed
+import Distributed: launch, manage, connect, exit
 
 mutable struct UnixDomainCM <: ClusterManager
     np::Integer
@@ -8,7 +8,7 @@ end
 
 function launch(manager::UnixDomainCM, params::Dict, launched::Array, c::Condition)
 #    println("launch $(manager.np)")
-    cookie = Base.cluster_cookie()
+    cookie = cluster_cookie()
     for i in 1:manager.np
         sockname = tempname()
         try
@@ -61,12 +61,12 @@ end
 
 # WORKER
 function start_worker(sockname, cookie)
-    Base.init_worker(cookie, UnixDomainCM(0))
+    init_worker(cookie, UnixDomainCM(0))
 
     srvr = listen(sockname)
     while true
         sock = accept(srvr)
-        Base.process_messages(sock, sock)
+        process_messages(sock, sock)
     end
 end
 

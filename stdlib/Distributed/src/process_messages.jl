@@ -119,7 +119,7 @@ function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket, incoming:
 end
 
 """
-    Base.process_messages(r_stream::IO, w_stream::IO, incoming::Bool=true)
+    process_messages(r_stream::IO, w_stream::IO, incoming::Bool=true)
 
 Called by cluster managers using custom transports. It should be called when the custom
 transport implementation receives the first message from a remote worker. The custom

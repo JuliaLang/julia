@@ -23,9 +23,6 @@ end
 
 Block the current task until some event occurs, depending on the type of the argument:
 
-* [`RemoteChannel`](@ref) : Wait for a value to become available on the specified remote
-  channel.
-* [`Future`](@ref) : Wait for a value to become available for the specified future.
 * [`Channel`](@ref): Wait for a value to be appended to the channel.
 * [`Condition`](@ref): Wait for [`notify`](@ref) on a condition.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process

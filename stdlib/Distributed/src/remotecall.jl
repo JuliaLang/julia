@@ -12,6 +12,12 @@ const client_refs = WeakKeyDict{Any, Void}() # used as a WeakKeySet
 
 abstract type AbstractRemoteRef end
 
+"""
+    Future(pid::Integer=myid())
+
+Create a `Future` on process `pid`.
+The default `pid` is the current process.
+"""
 mutable struct Future <: AbstractRemoteRef
     where::Int
     whence::Int
@@ -24,6 +30,22 @@ mutable struct Future <: AbstractRemoteRef
     Future(t::Tuple) = new(t[1],t[2],t[3],t[4])  # Useful for creating dummy, zeroed-out instances
 end
 
+"""
+    RemoteChannel(pid::Integer=myid())
+
+Make a reference to a `Channel{Any}(1)` on process `pid`.
+The default `pid` is the current process.
+
+    RemoteChannel(f::Function, pid::Integer=myid())
+
+Create references to remote channels of a specific size and type. `f` is a function that
+when executed on `pid` must return an implementation of an `AbstractChannel`.
+
+For example, `RemoteChannel(()->Channel{Int}(10), pid)`, will return a reference to a
+channel of type `Int` and size 10 on `pid`.
+
+The default `pid` is the current process.
+"""
 mutable struct RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
     where::Int
     whence::Int
@@ -78,34 +100,10 @@ end
 
 Future(w::LocalProcess) = Future(w.id)
 Future(w::Worker) = Future(w.id)
-
-"""
-    Future(pid::Integer=myid())
-
-Create a `Future` on process `pid`.
-The default `pid` is the current process.
-"""
 Future(pid::Integer=myid()) = Future(pid, RRID())
 
-"""
-    RemoteChannel(pid::Integer=myid())
-
-Make a reference to a `Channel{Any}(1)` on process `pid`.
-The default `pid` is the current process.
-"""
 RemoteChannel(pid::Integer=myid()) = RemoteChannel{Channel{Any}}(pid, RRID())
 
-"""
-    RemoteChannel(f::Function, pid::Integer=myid())
-
-Create references to remote channels of a specific size and type. `f` is a function that
-when executed on `pid` must return an implementation of an `AbstractChannel`.
-
-For example, `RemoteChannel(()->Channel{Int}(10), pid)`, will return a reference to a
-channel of type `Int` and size 10 on `pid`.
-
-The default `pid` is the current process.
-"""
 function RemoteChannel(f::Function, pid::Integer=myid())
     remotecall_fetch(pid, f, RRID()) do f, rrid
         rv=lookup_ref(rrid, f)
@@ -117,7 +115,7 @@ hash(r::AbstractRemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
 ==(r::AbstractRemoteRef, s::AbstractRemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 """
-    Base.remoteref_id(r::AbstractRemoteRef) -> RRID
+    remoteref_id(r::AbstractRemoteRef) -> RRID
 
 `Future`s and `RemoteChannel`s are identified by fields:
 
@@ -134,13 +132,13 @@ hash(r::AbstractRemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
 
 Taken together,  `whence` and `id` uniquely identify a reference across all workers.
 
-`Base.remoteref_id` is a low-level API which returns a `Base.RRID`
+`remoteref_id` is a low-level API which returns a `RRID`
 object that wraps `whence` and `id` values of a remote reference.
 """
 remoteref_id(r::AbstractRemoteRef) = RRID(r.whence, r.id)
 
 """
-    Base.channel_from_id(id) -> c
+    channel_from_id(id) -> c
 
 A low-level API which returns the backing `AbstractChannel` for an `id` returned by
 [`remoteref_id`](@ref).
@@ -474,7 +472,19 @@ function wait_ref(rid, callee, args...)
     end
     nothing
 end
+
+"""
+    wait(r::Future)
+
+Wait for a value to become available for the specified future.
+"""
 wait(r::Future) = (!isnull(r.v) && return r; call_on_owner(wait_ref, r, myid()); r)
+
+"""
+    wait(r::RemoteChannel, args...)
+
+Wait for a value to become available on the specified remote channel.
+"""
 wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
 
 function fetch(r::Future)

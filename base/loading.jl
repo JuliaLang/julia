@@ -276,6 +276,9 @@ end
 # require always works in Main scope and loads files from node 1
 const toplevel_load = Ref(true)
 
+myid() = isdefined(Main, :Distributed) ? invokelatest(Main.Distributed.myid) : 1
+nprocs() = isdefined(Main, :Distributed) ? invokelatest(Main.Distributed.nprocs) : 1
+
 """
     require(module::Symbol)
 
@@ -301,12 +304,9 @@ function require(mod::Symbol)
         # After successfully loading, notify downstream consumers
         if toplevel_load[] && myid() == 1 && nprocs() > 1
             # broadcast top-level import/using from node 1 (only)
-            @sync for p in procs()
+            @sync for p in invokelatest(Main.procs)
                 p == 1 && continue
-                @async remotecall_wait(p) do
-                    require(mod)
-                    nothing
-                end
+                @async invokelatest(Main.remotecall_wait, ()->(require(mod); nothing), p)
             end
         end
         for callback in package_callbacks

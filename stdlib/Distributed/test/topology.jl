@@ -36,16 +36,16 @@ mutable struct TopoTestManager <: ClusterManager
     np::Integer
 end
 
-function Base.launch(manager::TopoTestManager, params::Dict, launched::Array, c::Condition)
+function launch(manager::TopoTestManager, params::Dict, launched::Array, c::Condition)
     dir = params[:dir]
     exename = params[:exename]
     exeflags = params[:exeflags]
 
-    cmd = `$exename $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) --worker`
+    cmd = `$exename $exeflags --bind-to $(Distributed.LPROC.bind_addr) --worker`
     cmd = pipeline(detach(setenv(cmd, dir=dir)))
     for i in 1:manager.np
         io = open(cmd, "r+")
-        Base.Distributed.write_cookie(io)
+        Distributed.write_cookie(io)
 
         wconfig = WorkerConfig()
         wconfig.process = io
@@ -59,7 +59,7 @@ function Base.launch(manager::TopoTestManager, params::Dict, launched::Array, c:
 end
 
 const map_pid_ident=Dict()
-function Base.manage(manager::TopoTestManager, id::Integer, config::WorkerConfig, op::Symbol)
+function manage(manager::TopoTestManager, id::Integer, config::WorkerConfig, op::Symbol)
     if op == :register
         map_pid_ident[id] = get(config.ident)
     elseif op == :interrupt
@@ -96,8 +96,8 @@ remove_workers_and_test()
 # test `lazy` connection setup
 function def_count_conn()
     @everywhere function count_connected_workers()
-        count(x -> isa(x, Base.Distributed.Worker) && isdefined(x, :r_stream) && isopen(x.r_stream),
-                Base.Distributed.PGRP.workers)
+        count(x -> isa(x, Distributed.Worker) && isdefined(x, :r_stream) && isopen(x.r_stream),
+                Distributed.PGRP.workers)
     end
 end
 
