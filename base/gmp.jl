@@ -256,7 +256,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
         raise && throw(ArgumentError("invalid BigInt: $(repr(bstr))"))
         return nothing
     end
-    Some(flipsign!(z, sgn))
+    flipsign!(z, sgn)
 end
 
 convert(::Type{BigInt}, x::Union{Clong,Int32}) = MPZ.set_si(x)

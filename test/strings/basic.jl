@@ -247,7 +247,7 @@ end
     for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
         for i in [typemax(T), typemin(T)]
             s = "$i"
-            @test get(tryparse(T, s)) == i
+            @test tryparse(T, s) == i
         end
     end
 
@@ -271,12 +271,12 @@ end
     @test unsafe_string(sp,5) == "abcde"
     @test typeof(unsafe_string(sp)) == String
 
-    @test get(tryparse(BigInt, "1234567890")) == BigInt(1234567890)
+    @test tryparse(BigInt, "1234567890") == BigInt(1234567890)
     @test tryparse(BigInt, "1234567890-") === nothing
 
-    @test get(tryparse(Float64, "64")) == 64.0
+    @test tryparse(Float64, "64") == 64.0
     @test tryparse(Float64, "64o") === nothing
-    @test get(tryparse(Float32, "32")) == 32.0f0
+    @test tryparse(Float32, "32") == 32.0f0
     @test tryparse(Float32, "32o") === nothing
 end
 

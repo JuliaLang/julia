@@ -27,8 +27,8 @@ the end of the string, `len`. When a directive cannot be parsed the returned val
 will be `nothing` if `raise` is false otherwise an exception will be thrown.
 
 Return a 3-element tuple `(values, pos, num_parsed)`:
-* `values::Union{Some{Tuple}, Void}`: Either `nothing`, or a `Some` object wrapping a tuple
-  which contains a value for each `DatePart` within the `DateFormat` in the order
+* `values::Union{Tuple, Void}`: Either `nothing`, or a tuple which contains a value
+  for each `DatePart` within the `DateFormat` in the order
   in which they occur. If the string ends before we finish parsing all the directives
   the missing values will be filled in with default values.
 * `pos::Int`: The character index at which parsing stopped.
@@ -43,7 +43,6 @@ Return a 3-element tuple `(values, pos, num_parsed)`:
     tokens = Type[CONVERSION_SPECIFIERS[letter] for letter in letters]
     value_names = Symbol[genvar(t) for t in tokens]
     value_defaults = Tuple(CONVERSION_DEFAULTS[t] for t in tokens)
-    R = typeof(value_defaults)
 
     # Pre-assign variables to defaults. Allows us to use `@goto done` without worrying about
     # unassigned variables.
@@ -65,7 +64,7 @@ Return a 3-element tuple `(values, pos, num_parsed)`:
                     pos > len && @goto done
                     $val, next_pos = tryparsenext(directives[$i], str, pos, len, locale)
                     $val === nothing && @goto error
-                    $name = get($val)
+                    $name = $val
                     pos = next_pos
                     num_parsed += 1
                     directive_index += 1
@@ -96,7 +95,7 @@ Return a 3-element tuple `(values, pos, num_parsed)`:
         pos > len || @goto error
 
         @label done
-        return Some{$R}($(Expr(:tuple, value_names...))), pos, num_parsed
+        return $(Expr(:tuple, value_names...)), pos, num_parsed
 
         @label error
         if raise
@@ -121,8 +120,8 @@ parsed the returned value tuple will be `nothing` if `raise` is false otherwise 
 be thrown.
 
 Return a 2-element tuple `(values, pos)`:
-* `values::Union{Some{Tuple}, Void}`: Either `nothing`, or a `Some` object wrapping a tuple
-  which contains a value for each token as specified by the passed in type.
+* `values::Union{Tuple, Void}`: Either `nothing`, or a tuple which contains a value
+  for each token as specified by the passed in type.
 * `pos::Int`: The character index at which parsing stopped.
 """
 @generated function tryparsenext_internal(::Type{T}, str::AbstractString, pos::Int, len::Int,
@@ -135,7 +134,6 @@ Return a 2-element tuple `(values, pos)`:
     output_tokens = CONVERSION_TRANSLATIONS[T]
     output_names = Symbol[genvar(t) for t in output_tokens]
     output_defaults = Tuple(CONVERSION_DEFAULTS[t] for t in output_tokens)
-    R = typeof(output_defaults)
 
     # Pre-assign output variables to defaults. Ensures that all output variables are
     # assigned as the value tuple returned from `tryparsenext_core` may not include all
@@ -154,8 +152,8 @@ Return a 2-element tuple `(values, pos)`:
         values, pos, num_parsed = tryparsenext_core(str, pos, len, df, raise)
         values === nothing && return nothing, pos
         $(assign_defaults...)
-        $value_tuple = get(values)
-        return Some{$R}($(Expr(:tuple, output_names...))), pos
+        $value_tuple = values
+        return $(Expr(:tuple, output_names...)), pos
     end
 end
 
@@ -176,7 +174,7 @@ end
     if i <= min_pos
         return nothing, i
     else
-        return Some(d), i
+        return d, i
     end
 end
 
@@ -195,7 +193,7 @@ end
     if word_end == 0
         return nothing, i
     else
-        return Some(SubString(str, word_start, word_end)), i
+        return SubString(str, word_start, word_end), i
     end
 end
 
@@ -206,7 +204,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     th = tm = ts = tms = Int64(0)
 
     val, i = tryparsenext_base10(s, i, end_pos, 1)
-    dy = val === nothing ? (@goto error) : get(val)
+    dy = val === nothing ? (@goto error) : val
     i > end_pos && @goto error
 
     c, i = next(s, i)
@@ -214,7 +212,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     i > end_pos && @goto done
 
     val, i = tryparsenext_base10(s, i, end_pos, 1, 2)
-    dm = val === nothing ? (@goto error) : get(val)
+    dm = val === nothing ? (@goto error) : val
     i > end_pos && @goto done
 
     c, i = next(s, i)
@@ -222,7 +220,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     i > end_pos && @goto done
 
     val, i = tryparsenext_base10(s, i, end_pos, 1, 2)
-    dd = val === nothing ? (@goto error) : get(val)
+    dd = val === nothing ? (@goto error) : val
     i > end_pos && @goto done
 
     c, i = next(s, i)
@@ -230,7 +228,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     i > end_pos && @goto done
 
     val, i = tryparsenext_base10(s, i, end_pos, 1, 2)
-    th = val === nothing ? (@goto error) : get(val)
+    th = val === nothing ? (@goto error) : val
     i > end_pos && @goto done
 
     c, i = next(s, i)
@@ -238,7 +236,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     i > end_pos && @goto done
 
     val, i = tryparsenext_base10(s, i, end_pos, 1, 2)
-    tm = val === nothing ? (@goto error) : get(val)
+    tm = val === nothing ? (@goto error) : val
     i > end_pos && @goto done
 
     c, i = next(s, i)
@@ -246,7 +244,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     i > end_pos && @goto done
 
     val, i = tryparsenext_base10(s, i, end_pos, 1, 2)
-    ts = val === nothing ? (@goto error) : get(val)
+    ts = val === nothing ? (@goto error) : val
     i > end_pos && @goto done
 
     c, i = next(s, i)
@@ -254,7 +252,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     i > end_pos && @goto done
 
     val, j = tryparsenext_base10(s, i, end_pos, 1, 3)
-    tms = val === nothing ? (@goto error) : get(val)
+    tms = val === nothing ? (@goto error) : val
     tms *= 10 ^ (3 - (j - i))
 
     j > end_pos || @goto error
@@ -269,7 +267,7 @@ end
 function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
     pos, len = start(str), endof(str)
     values, pos = tryparsenext_internal(T, str, pos, len, df, true)
-    T(get(values)...)
+    T(values...)
 end
 
 function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
@@ -277,9 +275,9 @@ function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_fo
     values, pos = tryparsenext_internal(T, str, pos, len, df, false)
     if values === nothing
         nothing
-    elseif validargs(T, get(values)...) === nothing
+    elseif validargs(T, values...) === nothing
         # TODO: validargs gets called twice, since it's called again in the T constructor
-        Some(T(get(values)...))
+        T(values...)
     else
         nothing
     end
@@ -300,7 +298,7 @@ number of components may be less than the total number of `DatePart`.
     quote
         pos, len = start(str), endof(str)
         values, pos, num_parsed = tryparsenext_core(str, pos, len, df, true)
-        t = get(values)
+        t = values
         types = $(Expr(:tuple, tokens...))
         result = Vector{Any}(uninitialized, num_parsed)
         for (i, typ) in enumerate(types)

@@ -121,7 +121,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
         n += d
         if i > endpos
             n *= sgn
-            return Some(n)
+            return n
         end
         c, i = next(s,i)
         Unicode.isspace(c) && break
@@ -143,7 +143,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
             raise && throw(OverflowError("overflow parsing $(repr(SubString(s,startpos,endpos)))"))
             return nothing
         end
-        (i > endpos) && return Some(n)
+        (i > endpos) && return n
         c, i = next(s,i)
     end
     while i <= endpos
@@ -153,7 +153,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
             return nothing
         end
     end
-    return Some(n)
+    return n
 end
 
 function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
@@ -178,9 +178,9 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
     p   = pointer(sbuff) + startpos - 1
     @gc_preserve sbuff begin
         (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                                  p, "true", 4)) && (return Some(true))
+                                  p, "true", 4)) && (return true)
         (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                                  p, "false", 5)) && (return Some(false))
+                                  p, "false", 5)) && (return false)
     end
 
     if raise
@@ -204,8 +204,8 @@ end
 """
     tryparse(type, str, [base])
 
-Like [`parse`](@ref), but returns either a [`Some`](@ref) object wrapping a value
-of the requested type, or [`nothing`](@ref) if the string does not contain a valid number.
+Like [`parse`](@ref), but returns either a value of the requested type,
+or [`nothing`](@ref) if the string does not contain a valid number.
 """
 tryparse(::Type{T}, s::AbstractString, base::Integer) where {T<:Integer} =
     tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), false)
@@ -213,11 +213,11 @@ tryparse(::Type{T}, s::AbstractString) where {T<:Integer} =
     tryparse_internal(T, s, start(s), endof(s), 0, false)
 
 function parse(::Type{T}, s::AbstractString, base::Integer) where T<:Integer
-    get(tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), true))
+    tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), true)
 end
 
 function parse(::Type{T}, s::AbstractString) where T<:Integer
-    get(tryparse_internal(T, s, start(s), endof(s), 0, true)) # Zero means, "figure it out"
+    tryparse_internal(T, s, start(s), endof(s), 0, true) # Zero means, "figure it out"
 end
 
 ## string to float functions ##
@@ -225,48 +225,48 @@ end
 function tryparse(::Type{Float64}, s::String)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
-    hasvalue ? Some(val) : nothing
+    hasvalue ? val : nothing
 end
 function tryparse(::Type{Float64}, s::SubString{String})
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits)
-    hasvalue ? Some(val) : nothing
+    hasvalue ? val : nothing
 end
 function tryparse_internal(::Type{Float64}, s::String, startpos::Int, endpos::Int)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
-    hasvalue ? Some(val) : nothing
+    hasvalue ? val : nothing
 end
 function tryparse_internal(::Type{Float64}, s::SubString{String}, startpos::Int, endpos::Int)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
-    hasvalue ? Some(val) : nothing
+    hasvalue ? val : nothing
 end
 function tryparse(::Type{Float32}, s::String)
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
-    hasvalue ? Some(val) : nothing
+    hasvalue ? val : nothing
 end
 function tryparse(::Type{Float32}, s::SubString{String})
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits)
-    hasvalue ? Some(val) : nothing
+    hasvalue ? val : nothing
 end
 function tryparse_internal(::Type{Float32}, s::String, startpos::Int, endpos::Int)
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
-    hasvalue ? Some(val) : nothing
+    hasvalue ? val : nothing
 end
 function tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int, endpos::Int)
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
-    hasvalue ? Some(val) : nothing
+    hasvalue ? val : nothing
 end
 tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s))
 tryparse(::Type{Float16}, s::AbstractString) =
-    convert(Union{Some{Float16}, Void}, tryparse(Float32, s))
+    convert(Union{Float16, Void}, tryparse(Float32, s))
 tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =
-    convert(Union{Some{Float16}, Void}, tryparse_internal(Float32, s, startpos, endpos))
+    convert(Union{Float16, Void}, tryparse_internal(Float32, s, startpos, endpos))
 
 ## string to complex functions ##
 
@@ -301,12 +301,11 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
 
     if i₊ == 0 # purely real or imaginary value
         if iᵢ > 0 # purely imaginary
-            x_ = tryparse_internal(T, s, i, iᵢ-1, raise)
-            x_ === nothing && return nothing
-            x = get(x_)
-            return Some(Complex{T}(zero(x),x))
+            x = tryparse_internal(T, s, i, iᵢ-1, raise)
+            x === nothing && return nothing
+            return Complex{T}(zero(x),x)
         else # purely real
-            return Some(tryparse_internal(T, s, i, e, raise))
+            return Complex{T}(tryparse_internal(T, s, i, e, raise))
         end
     end
 
@@ -323,7 +322,7 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     im = tryparse_internal(T, s, i₊+1, iᵢ-1, raise)
     im === nothing && return nothing
 
-    return Some(Complex{T}(get(re), s[i₊]=='-' ? -get(im) : get(im)))
+    return Complex{T}(re, s[i₊]=='-' ? -im : im)
 end
 
 # the ±1 indexing above for ascii chars is specific to String, so convert:
@@ -344,4 +343,4 @@ tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, rais
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
 parse(::Type{T}, s::AbstractString) where T<:Union{Real,Complex} =
-    get(tryparse_internal(T, s, start(s), endof(s), true))
+    tryparse_internal(T, s, start(s), endof(s), true)

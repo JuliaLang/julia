@@ -19,8 +19,7 @@ the argument out in the method definition.
 
 Return a tuple of 2 elements `(res, idx)`, where:
 
-* `res` is either a [`Some`](@ref) object holding the result of the parsing,
-   or `nothing` if parsing failed.
+* `res` is either the result of the parsing, or `nothing` if parsing failed.
 * `idx` is an `Int` - if parsing failed, the index at which it failed; if
    parsing succeeded, `idx` is the index _after_ the index at which parsing ended.
 """
@@ -100,11 +99,11 @@ end
 for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         word, i = tryparsenext_word(str, i, len, locale, max_width(d))
-        val = word === nothing ? 0 : $fn(get(word), locale)
+        val = word === nothing ? 0 : $fn(word, locale)
         if val == 0
             return nothing, i
         else
-            return Some(val), i
+            return val, i
         end
     end
 end
@@ -115,7 +114,7 @@ struct Decimal3 end
 @inline function tryparsenext(d::DatePart{'s'}, str, i, len)
     ms, ii = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
     if ms !== nothing
-        val0 = val = get(ms)
+        val0 = val = ms
         len = ii - i
         if len > 3
             val, r = divrem(val, Int64(10) ^ (len - 3))
@@ -123,7 +122,7 @@ struct Decimal3 end
         else
             val *= Int64(10) ^ (3 - len)
         end
-        ms = Some(val)
+        ms = val
     end
     return ms, ii
 end
@@ -192,7 +191,7 @@ Delim(d::String) = Delim{String, length(d)}(d)
         c, i = next(str, i)
         c != d.d && return (nothing, i)
     end
-    return Some(true), i
+    return true, i
 end
 
 @inline function tryparsenext(d::Delim{String, N}, str, i::Int, len) where N
@@ -208,7 +207,7 @@ end
             return nothing, i1
         end
     end
-    return Some(true), i1
+    return true, i1
 end
 
 @inline function format(io, d::Delim, dt, locale)
