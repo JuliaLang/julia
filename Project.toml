@@ -1,0 +1,9 @@
+authors = "Stefan Karpinski <stefan@karpinski.org>"
+desc = "The next-generation Julia package manager."
+keywords = ["package", "management"]
+license = "MIT"
+name = "Pkg3"
+repo = "https://github.com/StefanKarpinski/Pkg3.jl.git"
+
+[deps]
+SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
