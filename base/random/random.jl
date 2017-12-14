@@ -106,7 +106,7 @@ Sampler(rng::AbstractRNG, sp::Sampler, ::Repetition) =
 Sampler(rng::AbstractRNG, X) = Sampler(rng, X, Val(Inf))
 Sampler(rng::AbstractRNG, ::Type{X}) where {X} = Sampler(rng, X, Val(Inf))
 
-#### pre-defined useful Sampler subtypes
+#### pre-defined useful Sampler types
 
 # default fall-back for types
 struct SamplerType{T} <: Sampler end
@@ -137,6 +137,38 @@ struct SamplerTag{T,S} <: Sampler
     data::S
     SamplerTag{T}(s::S) where {T,S} = new{T,S}(s)
 end
+
+
+#### helper samplers
+
+##### Adapter to generate a randome value in [0, n]
+
+struct LessThan{T<:Integer,S} <: Sampler
+    sup::T
+    s::S    # the scalar specification/sampler to feed to rand
+end
+
+function rand(rng::AbstractRNG, sp::LessThan)
+    while true
+        x = rand(rng, sp.s)
+        x <= sp.sup && return x
+    end
+end
+
+struct Masked{T<:Integer,S} <: Sampler
+    mask::T
+    s::S
+end
+
+rand(rng::AbstractRNG, sp::Masked) = rand(rng, sp.s) & sp.mask
+
+##### Uniform
+
+struct UniformT{T} <: Sampler end
+
+uniform(::Type{T}) where {T} = UniformT{T}()
+
+rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
 
 
 ### machinery for generation with Sampler
