@@ -202,6 +202,7 @@ end
     @test Union{Int, Missing}[1] == Union{Float64, Missing}[1.0]
     @test Union{Int, Missing}[1] == [1.0]
     @test Union{Bool, Missing}[true] == BitArray([true])
+    @test !([missing, 1] == [missing, 2])
     @test !(Union{Int, Missing}[1] == [2])
     @test !([1] == Union{Int, Missing}[2])
     @test !(Union{Int, Missing}[1] == Union{Int, Missing}[2])
@@ -217,9 +218,24 @@ end
     @test !(Union{Int, Missing}[1] != Union{Float64, Missing}[1.0])
     @test !(Union{Int, Missing}[1] != [1.0])
     @test !(Union{Bool, Missing}[true] != BitArray([true]))
+    @test [missing, 1] != [missing, 2]
     @test Union{Int, Missing}[1] != [2]
     @test [1] != Union{Int, Missing}[2]
     @test Union{Int, Missing}[1] != Union{Int, Missing}[2]
+end
+
+@testset "== and != on tuples" begin
+    @test ismissing((1, missing) == (1, missing))
+    @test ismissing(("a", missing) == ("a", missing))
+    @test ismissing((missing,) == (missing,))
+    @test ismissing((missing, 2) == (1, missing))
+    @test !((missing, 1) == (missing, 2))
+
+    @test ismissing((1, missing) != (1, missing))
+    @test ismissing(("a", missing) != ("a", missing))
+    @test ismissing((missing,) != (missing,))
+    @test ismissing((missing, 2) != (1, missing))
+    @test (missing, 1) != (missing, 2)
 end
 
 @testset "any & all" begin
