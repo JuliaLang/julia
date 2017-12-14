@@ -647,3 +647,25 @@ end
     @test length(collect(d)) == 2
     @test length(collect(d)) == 0
 end
+
+@testset "only" begin
+    @test only([3]) === 3
+    @test_throws ErrorException only([])
+    @test_throws ErrorException only([3, 2])
+
+    @test @inferred(only((3,))) === 3
+    @test_throws ErrorException only(())
+    @test_throws ErrorException only((3, 2))
+
+    @test only(Dict(1=>3)) === (1=>3)
+    @test_throws ErrorException only(Dict{Int,Int}())
+    @test_throws ErrorException only(Dict(1=>3, 2=>2))
+
+    @test only(Set([3])) === 3
+    @test_throws ErrorException only(Set(Int[]))
+    @test_throws ErrorException only(Set([3,2]))
+
+    @test @inferred(only((;a=1))) === 1
+    @test_throws ErrorException only(NamedTuple())
+    @test_throws ErrorException only((a=3, b=2.0))
+end

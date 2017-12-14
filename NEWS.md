@@ -32,8 +32,9 @@ Standard library changes
 
 * The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
 
-#### Libdl
+* New function `only(x)` returns the one-and-only element of a collection `x`, and throws an error if `x` contains zero or multiple elements.
 
+#### Libdl
 
 #### LinearAlgebra
 

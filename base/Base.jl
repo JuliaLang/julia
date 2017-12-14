@@ -138,7 +138,7 @@ include("ntuple.jl")
 include("abstractdict.jl")
 
 include("iterators.jl")
-using .Iterators: zip, enumerate
+using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
 
 include("namedtuple.jl")

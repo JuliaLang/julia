@@ -929,7 +929,6 @@ julia> collect(Iterators.partition([1,2,3,4,5], 2))
 """
 partition(c::T, n::Integer) where {T} = PartitionIterator{T}(c, Int(n))
 
-
 struct PartitionIterator{T}
     c::T
     n::Int
@@ -1094,5 +1093,33 @@ IteratorSize(::Type{Stateful{T,VS}}) where {T,VS} = IteratorSize(T) isa HasShape
 eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)
 IteratorEltype(::Type{Stateful{T,VS}}) where {T,VS} = IteratorEltype(T)
 length(s::Stateful) = length(s.itr) - s.taken
+
+"""
+    only(x)
+
+Returns the one and only element of collection `x`, and throws an error if the collection
+has zero or multiple elements.
+"""
+Base.@propagate_inbounds function only(x)
+    i = start(x)
+    @boundscheck if done(x, i)
+        error("Collection is empty, must contain exactly 1 element")
+    end
+    (ret, i) = next(x, i)
+    @boundscheck if !done(x, i)
+        error("Collection has multiple elements, must contain exactly 1 element")
+    end
+    return ret
+end
+
+# Collections of known size
+only(x::Tuple{}) = error("Tuple is empty, must contain exactly 1 element")
+only(x::Tuple{Any}) = x[1]
+only(x::Tuple) = error("Tuple contains $(length(x)) elements, must contain exactly 1 element")
+
+only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
+
+only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
+only(x::NamedTuple) = error("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
 
 end
