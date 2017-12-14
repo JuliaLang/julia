@@ -79,7 +79,6 @@ export
     NTuple,
     Nullable,
     ObjectIdDict,
-    EgalDict,
     OrdinalRange,
     Pair,
     PartialQuickSort,
