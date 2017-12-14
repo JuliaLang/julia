@@ -319,13 +319,13 @@ end
 
 function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
-    color = get(io, :color, false)
-    color && bold && print(buf, text_colors[:bold])
-    color && print(buf, get(text_colors, color, color_normal))
+    iscolor = get(io, :color, false)
+    iscolor && bold && print(buf, text_colors[:bold])
+    iscolor && print(buf, get(text_colors, color, color_normal))
     try f(IOContext(buf, io), args...)
     finally
-        color && color != :nothing && print(buf, get(disable_text_style, color, text_colors[:default]))
-        color && (bold || color == :bold) && print(buf, disable_text_style[:bold])
+        iscolor && color != :nothing && print(buf, get(disable_text_style, color, text_colors[:default]))
+        iscolor && (bold || color == :bold) && print(buf, disable_text_style[:bold])
         print(io, String(take!(buf)))
     end
 end
