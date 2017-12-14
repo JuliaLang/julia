@@ -427,7 +427,7 @@ index_lengths() = ()
 @inline index_lengths(A::AbstractArray, rest...) = (length(A), index_lengths(rest...)...)
 @inline index_lengths(A::Slice, rest...) = (length(indices1(A)), index_lengths(rest...)...)
 
-# shape of array to create for getindex() with indexes I, dropping scalars
+# shape of array to create for getindex() with indices I, dropping scalars
 # returns a Tuple{Vararg{AbstractUnitRange}} of indices
 index_shape() = ()
 @inline index_shape(::Real, rest...) = index_shape(rest...)

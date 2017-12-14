@@ -5,5 +5,5 @@ SharedArrays.SharedArray
 SharedArrays.procs(::SharedArray)
 SharedArrays.sdata
 SharedArrays.indexpids
-SharedArrays.localindexes
+SharedArrays.localindices
 ```

@@ -780,6 +780,10 @@ Deprecated or removed
   * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`,
     `ComplexF32` and `ComplexF64` respectively ([#24647]).
 
+  * `Base.parentindexes` and `SharedArrays.localindexes` have been renamed to `parentindices`
+    and `localindices`, respectively. Similarly, the `indexes` field in the `SubArray` type
+    has been renamed to `indices` without deprecation ([#25088]).
+
   * `Associative` has been deprecated in favor of `AbstractDict` ([#25012]).
 
   * `Nullable{T}` has been deprecated and moved to the Nullables package ([#23642]).
@@ -1766,3 +1770,4 @@ Command-line option changes
 [#24714]: https://github.com/JuliaLang/julia/issues/24714
 [#24869]: https://github.com/JuliaLang/julia/issues/24869
 [#25021]: https://github.com/JuliaLang/julia/issues/25021
+[#25088]: https://github.com/JuliaLang/julia/issues/25088

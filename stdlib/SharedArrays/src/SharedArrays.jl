@@ -16,7 +16,7 @@ import Base.Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFR
 import Distributed: RRID, procs
 import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
 
-export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindexes
+export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindices
 
 mutable struct SharedArray{T,N} <: DenseArray{T,N}
     id::RRID
@@ -59,7 +59,7 @@ host.  If `N` is specified by calling `SharedArray{T,N}(dims)`, then
 `N` must match the length of `dims`.
 
 If `pids` is left unspecified, the shared array will be mapped across all processes on the
-current host, including the master. But, `localindexes` and `indexpids` will only refer to
+current host, including the master. But, `localindices` and `indexpids` will only refer to
 worker processes. This facilitates work distribution code to use workers for actual
 computation with the master process acting as a driver.
 
@@ -85,7 +85,7 @@ file is mmapped into the host memory, with the following consequences:
 
 If `pids` is left unspecified, the shared array will be mapped across
 all processes on the current host, including the master. But,
-`localindexes` and `indexpids` will only refer to worker
+`localindices` and `indexpids` will only refer to worker
 processes. This facilitates work distribution code to use workers for
 actual computation with the master process acting as a driver.
 
@@ -325,20 +325,20 @@ sdata(S::SharedArray) = S.s
 sdata(A::AbstractArray) = A
 
 """
-    localindexes(S::SharedArray)
+    localindices(S::SharedArray)
 
-Returns a range describing the "default" indexes to be handled by the
+Returns a range describing the "default" indices to be handled by the
 current process.  This range should be interpreted in the sense of
 linear indexing, i.e., as a sub-range of `1:length(S)`.  In
 multi-process contexts, returns an empty range in the parent process
 (or any process for which [`indexpids`](@ref) returns 0).
 
-It's worth emphasizing that `localindexes` exists purely as a
+It's worth emphasizing that `localindices` exists purely as a
 convenience, and you can partition work on the array among workers any
-way you wish. For a `SharedArray`, all indexes should be equally fast
+way you wish. For a `SharedArray`, all indices should be equally fast
 for each worker process.
 """
-localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
+localindices(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
 unsafe_convert(::Type{Ptr{T}}, S::SharedArray{T}) where {T} = unsafe_convert(Ptr{T}, sdata(S))
 unsafe_convert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = unsafe_convert(Ptr{T}, sdata(S))
@@ -557,12 +557,12 @@ reduce(f, S::SharedArray) =
 
 
 function map!(f, S::SharedArray, Q::SharedArray)
-    if (S !== Q) && (procs(S) != procs(Q) || localindexes(S) != localindexes(Q))
+    if (S !== Q) && (procs(S) != procs(Q) || localindices(S) != localindices(Q))
         throw(ArgumentError("incompatible source and destination arguments"))
     end
     @sync for p in procs(S)
         @spawnat p begin
-            for idx in localindexes(S)
+            for idx in localindices(S)
                 S.s[idx] = f(Q.s[idx])
             end
         end
@@ -690,5 +690,6 @@ end # os-test
            SharedArray{T}(filename, dims, offset; kwargs...))
 @deprecate(SharedArray(filename::AbstractString, ::Type{T}, dims::NTuple, offset; kwargs...) where {T},
            SharedArray{T}(filename, dims, offset; kwargs...))
+@deprecate localindexes localindices
 
 end # module

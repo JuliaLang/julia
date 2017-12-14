@@ -313,7 +313,7 @@ function start(itr::AsyncCollector)
     itr.batch_size = verify_batch_size(itr.batch_size)
     if itr.batch_size !== nothing
         exec_func = batch -> begin
-            # extract indexes from the input tuple
+            # extract indices from the input tuple
             batch_idxs = map(x->x[1], batch)
 
             # and the args tuple....

@@ -96,7 +96,7 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
     ndel::Int
     count::Int
     age::UInt
-    idxfloor::Int  # an index <= the indexes of all used slots
+    idxfloor::Int  # an index <= the indices of all used slots
     maxprobe::Int
 
     function Dict{K,V}() where V where K

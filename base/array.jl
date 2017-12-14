@@ -1683,7 +1683,7 @@ findlast(testf::Function, A) = findprev(testf, A, endof(A))
 """
     find(f::Function, A)
 
-Return a vector `I` of the linear indexes of `A` where `f(A[I])` returns `true`.
+Return a vector `I` of the linear indices of `A` where `f(A[I])` returns `true`.
 If there are no such elements of `A`, return an empty array.
 
 # Examples
@@ -1710,7 +1710,7 @@ julia> find(isodd, [2, 4])
 ```
 """
 function find(testf::Function, A)
-    # use a dynamic-length array to store the indexes, then copy to a non-padded
+    # use a dynamic-length array to store the indices, then copy to a non-padded
     # array for the return
     tmpI = Vector{Int}()
     inds = _index_remapper(A)
@@ -1775,7 +1775,7 @@ findn(A::AbstractVector) = find(A)
 """
     findn(A)
 
-Return a vector of indexes for each dimension giving the locations of the non-zeros in `A`
+Return a vector of indices for each dimension giving the locations of the non-zeros in `A`
 (determined by `A[i]!=0`).
 If there are no non-zero elements of `A`, return a 2-tuple of empty arrays.
 
@@ -1817,7 +1817,7 @@ end
 """
     findnz(A)
 
-Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of the non-zero
+Return a tuple `(I, J, V)` where `I` and `J` are the row and column indices of the non-zero
 values in matrix `A`, and `V` is a vector of the non-zero values.
 
 # Examples

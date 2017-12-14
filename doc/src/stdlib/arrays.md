@@ -101,7 +101,7 @@ Base.view
 Base.@view
 Base.@views
 Base.parent
-Base.parentindexes
+Base.parentindices
 Base.slicedim
 Base.reinterpret
 Base.reshape

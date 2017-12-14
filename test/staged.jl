@@ -67,10 +67,10 @@ splat3(A, 1:2, 1, 1:2)
 @test String(take!(stagediobuf)) == "(UnitRange{$intstr}, $intstr, UnitRange{$intstr})"
 
 B = view(A, 1:3, 2, 1:3)
-@generated function mygetindex(S::SubArray, indexes::Real...)
+@generated function mygetindex(S::SubArray, indices::Real...)
     T, N, A, I = S.parameters
-    if N != length(indexes)
-        error("Wrong number of indexes supplied")
+    if N != length(indices)
+        error("Wrong number of indices supplied")
     end
     Ip = I.parameters
     NP = length(Ip)
@@ -78,9 +78,9 @@ B = view(A, 1:3, 2, 1:3)
     j = 1
     for i = 1:NP
         if Ip[i] == Int
-            indexexprs[i] = :(S.indexes[$i])
+            indexexprs[i] = :(S.indices[$i])
         else
-            indexexprs[i] = :(S.indexes[$i][indexes[$j]])
+            indexexprs[i] = :(S.indices[$i][indices[$j]])
             j += 1
         end
     end

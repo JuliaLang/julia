@@ -2424,15 +2424,15 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
     else if (f == jl_builtin_arrayref && nargs >= 3) {
         const jl_cgval_t &ary = argv[2];
-        bool indexes_ok = true;
+        bool indices_ok = true;
         for (size_t i = 3; i <= nargs; i++) {
             if (argv[i].typ != (jl_value_t*)jl_long_type) {
-                indexes_ok = false;
+                indices_ok = false;
                 break;
             }
         }
         jl_value_t *aty_dt = jl_unwrap_unionall(ary.typ);
-        if (jl_is_array_type(aty_dt) && indexes_ok) {
+        if (jl_is_array_type(aty_dt) && indices_ok) {
             jl_value_t *ety = jl_tparam0(aty_dt);
             jl_value_t *ndp = jl_tparam1(aty_dt);
             if (!jl_has_free_typevars(ety) && (jl_is_long(ndp) || nargs == 3)) {
@@ -2479,15 +2479,15 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == jl_builtin_arrayset && nargs >= 4) {
         const jl_cgval_t &ary = argv[2];
         const jl_cgval_t &val = argv[3];
-        bool indexes_ok = true;
+        bool indices_ok = true;
         for (size_t i = 4; i <= nargs; i++) {
             if (argv[i].typ != (jl_value_t*)jl_long_type) {
-                indexes_ok = false;
+                indices_ok = false;
                 break;
             }
         }
         jl_value_t *aty_dt = jl_unwrap_unionall(ary.typ);
-        if (jl_is_array_type(aty_dt) && indexes_ok) {
+        if (jl_is_array_type(aty_dt) && indices_ok) {
             jl_value_t *ety = jl_tparam0(aty_dt);
             jl_value_t *ndp = jl_tparam1(aty_dt);
             if (!jl_has_free_typevars(ety) && (jl_is_long(ndp) || nargs == 4)) {

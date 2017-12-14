@@ -477,7 +477,7 @@ export
     nonzeros,
     ones,
     parent,
-    parentindexes,
+    parentindices,
     partialsort,
     partialsort!,
     partialsortperm,

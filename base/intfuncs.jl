@@ -752,7 +752,7 @@ bitstring(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
 
 Return an array with element type `T` (default `Int`) of the digits of `n` in the given
 base, optionally padded with zeros to a specified size. More significant digits are at
-higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
+higher indices, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
 
 # Examples
 ```jldoctest
@@ -796,7 +796,7 @@ hastypemax(::Type{T}) where {T} = applicable(typemax, T)
     digits!(array, n::Integer, base::Integer=10)
 
 Fills an array of the digits of `n` in the given base. More significant digits are at higher
-indexes. If the array length is insufficient, the least significant digits are filled up to
+indices. If the array length is insufficient, the least significant digits are filled up to
 the array length. If the array length is excessive, the excess portion is filled with zeros.
 
 # Examples
