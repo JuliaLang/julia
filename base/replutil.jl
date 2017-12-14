@@ -230,7 +230,7 @@ end
 
 function showerror(io::IO, ex, bt; backtrace=true)
     try
-        with_output_color(Base.hascolor(io) ? error_color() : :nothing, io) do io
+        with_output_color(get(io, :color, false) ? error_color() : :nothing, io) do io
             showerror(io, ex)
         end
     finally
@@ -529,7 +529,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::NamedTuple = Na
                 # the type of the first argument is not matched.
                 t_in === Union{} && special && i == 1 && break
                 if t_in === Union{}
-                    if Base.hascolor(io)
+                    if get(io, :color, false)
                         Base.with_output_color(Base.error_color(), buf) do buf
                             print(buf, "::$sigstr")
                         end
@@ -571,7 +571,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::NamedTuple = Na
                         if !((min(length(t_i), length(sig)) == 0) && k==1)
                             print(buf, ", ")
                         end
-                        if Base.hascolor(io)
+                        if get(io, :color, false)
                             Base.with_output_color(Base.error_color(), buf) do buf
                                 print(buf, "::$sigstr")
                             end

@@ -18,13 +18,13 @@ const text_formats = Dict(
     :negative  => ("\e[7m", "\e[27m"))
 
 function with_output_format(f::Function, formats::Vector{Symbol}, io::IO, args...)
-    Base.hascolor(io) && for format in formats
+    get(io, :color, false) && for format in formats
         haskey(text_formats, format) &&
             print(io, text_formats[format][1])
     end
     try f(io, args...)
     finally
-        Base.hascolor(io) && for format in formats
+        get(io, :color, false) && for format in formats
             haskey(text_formats, format) &&
                 print(io, text_formats[format][2])
         end

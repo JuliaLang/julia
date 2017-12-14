@@ -122,7 +122,7 @@ end
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     io = outstream(d.repl)
-    Base.hascolor(io) && write(io, answer_color(d.repl))
+    get(io, :color, false) && write(io, answer_color(d.repl))
     show(IOContext(io, :limit => true), mime, x)
     println(io)
 end

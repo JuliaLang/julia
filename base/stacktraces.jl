@@ -305,7 +305,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         elseif frame.func === top_level_scope_sym
             print(io, "top-level scope")
         else
-            print_with_color(Base.hascolor(io) && get(io, :backtrace, false) ? Base.stackframe_function_color() : :nothing, io, string(frame.func))
+            print_with_color(get(io, :color, false) && get(io, :backtrace, false) ? Base.stackframe_function_color() : :nothing, io, string(frame.func))
         end
     elseif frame.linfo isa Core.MethodInstance
         if isa(frame.linfo.def, Method)
@@ -323,7 +323,7 @@ function show(io::IO, frame::StackFrame; full_path::Bool=false)
     if frame.file !== empty_sym
         file_info = full_path ? string(frame.file) : basename(string(frame.file))
         print(io, " at ")
-        Base.with_output_color(Base.hascolor(io) && get(io, :backtrace, false) ? Base.stackframe_lineinfo_color() : :nothing, io) do io
+        Base.with_output_color(get(io, :color, false) && get(io, :backtrace, false) ? Base.stackframe_lineinfo_color() : :nothing, io) do io
             print(io, file_info, ":")
             if frame.line >= 0
                 print(io, frame.line)

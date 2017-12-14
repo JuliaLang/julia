@@ -167,6 +167,7 @@ else
     end
 end
 
-Base.hascolor(t::TTYTerminal) = Base.have_color # use cached value
+# use cached value of have_color
+Base.get(::TTYTerminal, k::Symbol, default) = k === :color ? Base.have_color : default
 
 end # module
