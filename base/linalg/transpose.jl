@@ -147,7 +147,11 @@ end
 """
     transpose(A::AbstractMatrix)
 
-The transposition operator (`.'`).
+The transposition operator (`.'`). Note that the transposition is applied recursively to
+elements.
+
+This operation is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref), which is non-recursive.
 
 # Examples
 ```jldoctest

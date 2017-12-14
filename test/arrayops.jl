@@ -577,6 +577,12 @@ end
         @test isequal(A,permutedims(permutedims(A,perm),invperm(perm)))
         @test isequal(A,permutedims(permutedims(A,invperm(perm)),perm))
     end
+
+    m = [1 2; 3 4]
+    @test permutedims(m) == [1 3; 2 4]
+
+    v = [1,2,3]
+    @test permutedims(v) == [1 2 3]
 end
 
 @testset "circshift" begin

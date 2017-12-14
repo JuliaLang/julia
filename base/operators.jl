@@ -744,7 +744,11 @@ fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 """
     adjoint(A)
 
-The conjugate transposition operator (`'`).
+The conjugate transposition operator (`'`). Note that `adjoint` is applied recursively to
+elements.
+
+This operation is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref).
 
 # Examples
 ```jldoctest
