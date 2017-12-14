@@ -29,7 +29,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Standard Library",
     "category": "section",
-    "text": "Essentials\nCollections and Data Structures\nMathematics\nNumbers\nStrings\nArrays\nTasks and Parallel Computing\nLinear Algebra\nConstants\nFilesystem\nDelimited Files\nI/O and Network\nPunctuation\nSorting and Related Functions\nPackage Manager Functions\nDates and Time\nIteration utilities\nUnit Testing\nC Interface\nC Standard Library\nDynamic Linker\nStackTraces\nSIMD Support\nProfiling\nMemory-mapped I/O\nShared Arrays\nBase64\nFile Events\nIterative Eigensolvers\nUnicode"
+    "text": "Essentials\nCollections and Data Structures\nMathematics\nNumbers\nStrings\nArrays\nTasks\nDistributed Computing\nMulti-Threading\nShared Arrays\nLinear Algebra\nConstants\nFilesystem\nDelimited Files\nI/O and Network\nPunctuation\nSorting and Related Functions\nPackage Manager Functions\nDates and Time\nIteration utilities\nUnit Testing\nC Interface\nC Standard Library\nDynamic Linker\nStackTraces\nSIMD Support\nProfiling\nMemory-mapped I/O\nBase64\nFile Events\nIterative Eigensolvers\nUnicode"
 },
 
 {
@@ -469,7 +469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Common Operations",
     "category": "section",
-    "text": "You can lexicographically compare strings using the standard comparison operators:julia> \"abracadabra\" < \"xylophone\"\ntrue\n\njulia> \"abracadabra\" == \"xylophone\"\nfalse\n\njulia> \"Hello, world.\" != \"Goodbye, world.\"\ntrue\n\njulia> \"1 + 2 = 3\" == \"1 + 2 = $(1 + 2)\"\ntrueYou can search for the index of a particular character using the search function:julia> search(\"xylophone\", 'x')\n1\n\njulia> search(\"xylophone\", 'p')\n5\n\njulia> search(\"xylophone\", 'z')\n0You can start the search for a character at a given offset by providing a third argument:julia> search(\"xylophone\", 'o')\n4\n\njulia> search(\"xylophone\", 'o', 5)\n7\n\njulia> search(\"xylophone\", 'o', 8)\n0You can use the contains function to check if a substring is contained in a string:julia> contains(\"Hello, world.\", \"world\")\ntrue\n\njulia> contains(\"Xylophon\", \"o\")\ntrue\n\njulia> contains(\"Xylophon\", \"a\")\nfalse\n\njulia> contains(\"Xylophon\", 'o')\ntrueThe last example shows that contains can also look for a character literal.Two other handy string functions are repeat and join:julia> repeat(\".:Z:.\", 10)\n\".:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:.\"\n\njulia> join([\"apples\", \"bananas\", \"pineapples\"], \", \", \" and \")\n\"apples, bananas and pineapples\"Some other useful functions include:endof(str) gives the maximal (byte) index that can be used to index into str.\nlength(str) the number of characters in str.\ni = start(str) gives the first valid index at which a character can be found in str (typically 1).\nc, j = next(str,i) returns next character at or after the index i and the next valid character index following that. With start and endof, can be used to iterate through the characters in str.\nind2chr(str,i) gives the number of characters in str up to and including any at index i.\nchr2ind(str,j) gives the index at which the jth character in str occurs."
+    "text": "You can lexicographically compare strings using the standard comparison operators:julia> \"abracadabra\" < \"xylophone\"\ntrue\n\njulia> \"abracadabra\" == \"xylophone\"\nfalse\n\njulia> \"Hello, world.\" != \"Goodbye, world.\"\ntrue\n\njulia> \"1 + 2 = 3\" == \"1 + 2 = $(1 + 2)\"\ntrueYou can search for the index of a particular character using the search function:julia> search(\"xylophone\", 'x')\n1\n\njulia> search(\"xylophone\", 'p')\n5\n\njulia> search(\"xylophone\", 'z')\n0You can start the search for a character at a given offset by providing a third argument:julia> search(\"xylophone\", 'o')\n4\n\njulia> search(\"xylophone\", 'o', 5)\n7\n\njulia> search(\"xylophone\", 'o', 8)\n0You can use the contains function to check if a substring is contained in a string:julia> contains(\"Hello, world.\", \"world\")\ntrue\n\njulia> contains(\"Xylophon\", \"o\")\ntrue\n\njulia> contains(\"Xylophon\", \"a\")\nfalse\n\njulia> contains(\"Xylophon\", 'o')\ntrueThe last example shows that contains can also look for a character literal.Two other handy string functions are repeat and join:julia> repeat(\".:Z:.\", 10)\n\".:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:.\"\n\njulia> join([\"apples\", \"bananas\", \"pineapples\"], \", \", \" and \")\n\"apples, bananas and pineapples\"Some other useful functions include:endof(str) gives the maximal (byte) index that can be used to index into str.\nlength(str) the number of characters in str.\nlength(str, i, j) the number of valid character indices in str from i to j.\ni = start(str) gives the first valid index at which a character can be found in str (typically 1).\nc, j = next(str,i) returns next character at or after the index i and the next valid character index following that. With start and endof, can be used to iterate through the characters in str.\nthisind(str, i) given an arbitrary index into a string find the first index of the character into which the index points.\nnextind(str, i, n=1) find the start of the nth character starting after index i.\nprevind(str, i, n=1) find the start of the nth character starting before index i."
 },
 
 {
@@ -2405,7 +2405,15 @@ var documenterSearchIndex = {"docs": [
     "page": "Parallel Computing",
     "title": "Parallel Computing",
     "category": "section",
-    "text": "Most modern computers possess more than one CPU, and several computers can be combined together in a cluster. Harnessing the power of these multiple CPUs allows many computations to be completed more quickly. There are two major factors that influence performance: the speed of the CPUs themselves, and the speed of their access to memory. In a cluster, it's fairly obvious that a given CPU will have fastest access to the RAM within the same computer (node). Perhaps more surprisingly, similar issues are relevant on a typical multicore laptop, due to differences in the speed of main memory and the cache. Consequently, a good multiprocessing environment should allow control over the \"ownership\" of a chunk of memory by a particular CPU. Julia provides a multiprocessing environment based on message passing to allow programs to run on multiple processes in separate memory domains at once.Julia's implementation of message passing is different from other environments such as MPI [1]. Communication in Julia is generally \"one-sided\", meaning that the programmer needs to explicitly manage only one process in a two-process operation. Furthermore, these operations typically do not look like \"message send\" and \"message receive\" but rather resemble higher-level operations like calls to user functions.Parallel programming in Julia is built on two primitives: remote references and remote calls. A remote reference is an object that can be used from any process to refer to an object stored on a particular process. A remote call is a request by one process to call a certain function on certain arguments on another (possibly the same) process.Remote references come in two flavors: Future and RemoteChannel.A remote call returns a Future to its result. Remote calls return immediately; the process that made the call proceeds to its next operation while the remote call happens somewhere else. You can wait for a remote call to finish by calling wait on the returned Future, and you can obtain the full value of the result using fetch.On the other hand, RemoteChannel s are rewritable. For example, multiple processes can co-ordinate their processing by referencing the same remote Channel.Each process has an associated identifier. The process providing the interactive Julia prompt always has an id equal to 1. The processes used by default for parallel operations are referred to as \"workers\". When there is only one process, process 1 is considered a worker. Otherwise, workers are considered to be all processes other than process 1.Let's try this out. Starting with julia -p n provides n worker processes on the local machine. Generally it makes sense for n to equal the number of CPU cores on the machine.$ ./julia -p 2\n\njulia> r = remotecall(rand, 2, 2, 2)\nFuture(2, 1, 4, Nullable{Any}())\n\njulia> s = @spawnat 2 1 .+ fetch(r)\nFuture(2, 1, 5, Nullable{Any}())\n\njulia> fetch(s)\n2×2 Array{Float64,2}:\n 1.18526  1.50912\n 1.16296  1.60607The first argument to remotecall is the function to call. Most parallel programming in Julia does not reference specific processes or the number of processes available, but remotecall is considered a low-level interface providing finer control. The second argument to remotecall is the id of the process that will do the work, and the remaining arguments will be passed to the function being called.As you can see, in the first line we asked process 2 to construct a 2-by-2 random matrix, and in the second line we asked it to add 1 to it. The result of both calculations is available in the two futures, r and s. The @spawnat macro evaluates the expression in the second argument on the process specified by the first argument.Occasionally you might want a remotely-computed value immediately. This typically happens when you read from a remote object to obtain data needed by the next local operation. The function remotecall_fetch exists for this purpose. It is equivalent to fetch(remotecall(...)) but is more efficient.julia> remotecall_fetch(getindex, 2, r, 1, 1)\n0.18526337335308085Remember that getindex(r,1,1) is equivalent to r[1,1], so this call fetches the first element of the future r.The syntax of remotecall is not especially convenient. The macro @spawn makes things easier. It operates on an expression rather than a function, and picks where to do the operation for you:julia> r = @spawn rand(2,2)\nFuture(2, 1, 4, Nullable{Any}())\n\njulia> s = @spawn 1 .+ fetch(r)\nFuture(3, 1, 5, Nullable{Any}())\n\njulia> fetch(s)\n2×2 Array{Float64,2}:\n 1.38854  1.9098\n 1.20939  1.57158Note that we used 1 .+ fetch(r) instead of 1 .+ r. This is because we do not know where the code will run, so in general a fetch might be required to move r to the process doing the addition. In this case, @spawn is smart enough to perform the computation on the process that owns r, so the fetch will be a no-op (no work is done).(It is worth noting that @spawn is not built-in but defined in Julia as a macro. It is possible to define your own such constructs.)An important thing to remember is that, once fetched, a Future will cache its value locally. Further fetch calls do not entail a network hop. Once all referencing Futures have fetched, the remote stored value is deleted."
+    "text": "This part of the manual details the following types of parallel programming available in Julia.Distributed memory using multiple processes on one or more nodes\nShared memory using multiple processes on a single node\nMulti-threading"
+},
+
+{
+    "location": "manual/parallel-computing/#Distributed-Memory-Parallelism-1",
+    "page": "Parallel Computing",
+    "title": "Distributed Memory Parallelism",
+    "category": "section",
+    "text": "An implementation of distributed memory parallel computing is provided by module Distributed as part of the standard library shipped with Julia.Most modern computers possess more than one CPU, and several computers can be combined together in a cluster. Harnessing the power of these multiple CPUs allows many computations to be completed more quickly. There are two major factors that influence performance: the speed of the CPUs themselves, and the speed of their access to memory. In a cluster, it's fairly obvious that a given CPU will have fastest access to the RAM within the same computer (node). Perhaps more surprisingly, similar issues are relevant on a typical multicore laptop, due to differences in the speed of main memory and the cache. Consequently, a good multiprocessing environment should allow control over the \"ownership\" of a chunk of memory by a particular CPU. Julia provides a multiprocessing environment based on message passing to allow programs to run on multiple processes in separate memory domains at once.Julia's implementation of message passing is different from other environments such as MPI [1]. Communication in Julia is generally \"one-sided\", meaning that the programmer needs to explicitly manage only one process in a two-process operation. Furthermore, these operations typically do not look like \"message send\" and \"message receive\" but rather resemble higher-level operations like calls to user functions.Distributed programming in Julia is built on two primitives: remote references and remote calls. A remote reference is an object that can be used from any process to refer to an object stored on a particular process. A remote call is a request by one process to call a certain function on certain arguments on another (possibly the same) process.Remote references come in two flavors: Future and RemoteChannel.A remote call returns a Future to its result. Remote calls return immediately; the process that made the call proceeds to its next operation while the remote call happens somewhere else. You can wait for a remote call to finish by calling wait on the returned Future, and you can obtain the full value of the result using fetch.On the other hand, RemoteChannel s are rewritable. For example, multiple processes can co-ordinate their processing by referencing the same remote Channel.Each process has an associated identifier. The process providing the interactive Julia prompt always has an id equal to 1. The processes used by default for parallel operations are referred to as \"workers\". When there is only one process, process 1 is considered a worker. Otherwise, workers are considered to be all processes other than process 1.Let's try this out. Starting with julia -p n provides n worker processes on the local machine. Generally it makes sense for n to equal the number of CPU cores on the machine. Note that the -p argument implicitly loads module Distributed.$ ./julia -p 2\n\njulia> r = remotecall(rand, 2, 2, 2)\nFuture(2, 1, 4, Nullable{Any}())\n\njulia> s = @spawnat 2 1 .+ fetch(r)\nFuture(2, 1, 5, Nullable{Any}())\n\njulia> fetch(s)\n2×2 Array{Float64,2}:\n 1.18526  1.50912\n 1.16296  1.60607The first argument to remotecall is the function to call. Most parallel programming in Julia does not reference specific processes or the number of processes available, but remotecall is considered a low-level interface providing finer control. The second argument to remotecall is the id of the process that will do the work, and the remaining arguments will be passed to the function being called.As you can see, in the first line we asked process 2 to construct a 2-by-2 random matrix, and in the second line we asked it to add 1 to it. The result of both calculations is available in the two futures, r and s. The @spawnat macro evaluates the expression in the second argument on the process specified by the first argument.Occasionally you might want a remotely-computed value immediately. This typically happens when you read from a remote object to obtain data needed by the next local operation. The function remotecall_fetch exists for this purpose. It is equivalent to fetch(remotecall(...)) but is more efficient.julia> remotecall_fetch(getindex, 2, r, 1, 1)\n0.18526337335308085Remember that getindex(r,1,1) is equivalent to r[1,1], so this call fetches the first element of the future r.The syntax of remotecall is not especially convenient. The macro @spawn makes things easier. It operates on an expression rather than a function, and picks where to do the operation for you:julia> r = @spawn rand(2,2)\nFuture(2, 1, 4, Nullable{Any}())\n\njulia> s = @spawn 1 .+ fetch(r)\nFuture(3, 1, 5, Nullable{Any}())\n\njulia> fetch(s)\n2×2 Array{Float64,2}:\n 1.38854  1.9098\n 1.20939  1.57158Note that we used 1 .+ fetch(r) instead of 1 .+ r. This is because we do not know where the code will run, so in general a fetch might be required to move r to the process doing the addition. In this case, @spawn is smart enough to perform the computation on the process that owns r, so the fetch will be a no-op (no work is done).(It is worth noting that @spawn is not built-in but defined in Julia as a macro. It is possible to define your own such constructs.)An important thing to remember is that, once fetched, a Future will cache its value locally. Further fetch calls do not entail a network hop. Once all referencing Futures have fetched, the remote stored value is deleted."
 },
 
 {
@@ -2413,7 +2421,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Parallel Computing",
     "title": "Code Availability and Loading Packages",
     "category": "section",
-    "text": "Your code must be available on any process that runs it. For example, type the following into the Julia prompt:julia> function rand2(dims...)\n           return 2*rand(dims...)\n       end\n\njulia> rand2(2,2)\n2×2 Array{Float64,2}:\n 0.153756  0.368514\n 1.15119   0.918912\n\njulia> fetch(@spawn rand2(2,2))\nERROR: RemoteException(2, CapturedException(UndefVarError(Symbol(\"#rand2\"))\nStacktrace:\n[...]Process 1 knew about the function rand2, but process 2 did not.Most commonly you'll be loading code from files or packages, and you have a considerable amount of flexibility in controlling which processes load code. Consider a file, DummyModule.jl, containing the following code:module DummyModule\n\nexport MyType, f\n\nmutable struct MyType\n    a::Int\nend\n\nf(x) = x^2+1\n\nprintln(\"loaded\")\n\nendStarting Julia with julia -p 2, you can use this to verify the following:include(\"DummyModule.jl\") loads the file on just a single process (whichever one executes the statement).\nusing DummyModule causes the module to be loaded on all processes; however, the module is brought into scope only on the one executing the statement.\nAs long as DummyModule is loaded on process 2, commands like\nrr = RemoteChannel(2)\nput!(rr, MyType(7))\nallow you to store an object of type MyType on process 2 even if DummyModule is not in scope on process 2.You can force a command to run on all processes using the @everywhere macro. For example, @everywhere can also be used to directly define a function on all processes:julia> @everywhere id = myid()\n\njulia> remotecall_fetch(()->id, 2)\n2A file can also be preloaded on multiple processes at startup, and a driver script can be used to drive the computation:julia -p <n> -L file1.jl -L file2.jl driver.jlThe Julia process running the driver script in the example above has an id equal to 1, just like a process providing an interactive prompt.The base Julia installation has in-built support for two types of clusters:A local cluster specified with the -p option as shown above.\nA cluster spanning machines using the --machinefile option. This uses a passwordless ssh login to start Julia worker processes (from the same path as the current host) on the specified machines.Functions addprocs, rmprocs, workers, and others are available as a programmatic means of adding, removing and querying the processes in a cluster.Note that workers do not run a .juliarc.jl startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.Other types of clusters can be supported by writing your own custom ClusterManager, as described below in the ClusterManagers section."
+    "text": "Your code must be available on any process that runs it. For example, type the following into the Julia prompt:julia> function rand2(dims...)\n           return 2*rand(dims...)\n       end\n\njulia> rand2(2,2)\n2×2 Array{Float64,2}:\n 0.153756  0.368514\n 1.15119   0.918912\n\njulia> fetch(@spawn rand2(2,2))\nERROR: RemoteException(2, CapturedException(UndefVarError(Symbol(\"#rand2\"))\nStacktrace:\n[...]Process 1 knew about the function rand2, but process 2 did not.Most commonly you'll be loading code from files or packages, and you have a considerable amount of flexibility in controlling which processes load code. Consider a file, DummyModule.jl, containing the following code:module DummyModule\n\nexport MyType, f\n\nmutable struct MyType\n    a::Int\nend\n\nf(x) = x^2+1\n\nprintln(\"loaded\")\n\nendStarting Julia with julia -p 2, you can use this to verify the following:include(\"DummyModule.jl\") loads the file on just a single process (whichever one executes the statement).\nusing DummyModule causes the module to be loaded on all processes; however, the module is brought into scope only on the one executing the statement.\nAs long as DummyModule is loaded on process 2, commands like\nrr = RemoteChannel(2)\nput!(rr, MyType(7))\nallow you to store an object of type MyType on process 2 even if DummyModule is not in scope on process 2.You can force a command to run on all processes using the @everywhere macro. For example, @everywhere can also be used to directly define a function on all processes:julia> @everywhere id = myid()\n\njulia> remotecall_fetch(()->id, 2)\n2A file can also be preloaded on multiple processes at startup, and a driver script can be used to drive the computation:julia -p <n> -L file1.jl -L file2.jl driver.jlThe Julia process running the driver script in the example above has an id equal to 1, just like a process providing an interactive prompt.The base Julia installation has in-built support for two types of clusters:A local cluster specified with the -p option as shown above.\nA cluster spanning machines using the --machinefile option. This uses a passwordless ssh login to start Julia worker processes (from the same path as the current host) on the specified machines.Functions addprocs, rmprocs, workers, and others are available as a programmatic means of adding, removing and querying the processes in a cluster.julia> using Distributed\n\njulia> addprocs(2)\n2-element Array{Int64,1}:\n 2\n 3Module Distributed must be explicitly loaded on the master process before invoking addprocs. It is automatically made available on the worker processes.Note that workers do not run a .juliarc.jl startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.Other types of clusters can be supported by writing your own custom ClusterManager, as described below in the ClusterManagers section."
 },
 
 {
@@ -2421,7 +2429,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Parallel Computing",
     "title": "Data Movement",
     "category": "section",
-    "text": "Sending messages and moving data constitute most of the overhead in a parallel program. Reducing the number of messages and the amount of data sent is critical to achieving performance and scalability. To this end, it is important to understand the data movement performed by Julia's various parallel programming constructs.fetch can be considered an explicit data movement operation, since it directly asks that an object be moved to the local machine. @spawn (and a few related constructs) also moves data, but this is not as obvious, hence it can be called an implicit data movement operation. Consider these two approaches to constructing and squaring a random matrix:Method 1:julia> A = rand(1000,1000);\n\njulia> Bref = @spawn A^2;\n\n[...]\n\njulia> fetch(Bref);Method 2:julia> Bref = @spawn rand(1000,1000)^2;\n\n[...]\n\njulia> fetch(Bref);The difference seems trivial, but in fact is quite significant due to the behavior of @spawn. In the first method, a random matrix is constructed locally, then sent to another process where it is squared. In the second method, a random matrix is both constructed and squared on another process. Therefore the second method sends much less data than the first.In this toy example, the two methods are easy to distinguish and choose from. However, in a real program designing data movement might require more thought and likely some measurement. For example, if the first process needs matrix A then the first method might be better. Or, if computing A is expensive and only the current process has it, then moving it to another process might be unavoidable. Or, if the current process has very little to do between the @spawn and fetch(Bref), it might be better to eliminate the parallelism altogether. Or imagine rand(1000,1000) is replaced with a more expensive operation. Then it might make sense to add another @spawn statement just for this step."
+    "text": "Sending messages and moving data constitute most of the overhead in a distributed program. Reducing the number of messages and the amount of data sent is critical to achieving performance and scalability. To this end, it is important to understand the data movement performed by Julia's various distributed programming constructs.fetch can be considered an explicit data movement operation, since it directly asks that an object be moved to the local machine. @spawn (and a few related constructs) also moves data, but this is not as obvious, hence it can be called an implicit data movement operation. Consider these two approaches to constructing and squaring a random matrix:Method 1:julia> A = rand(1000,1000);\n\njulia> Bref = @spawn A^2;\n\n[...]\n\njulia> fetch(Bref);Method 2:julia> Bref = @spawn rand(1000,1000)^2;\n\n[...]\n\njulia> fetch(Bref);The difference seems trivial, but in fact is quite significant due to the behavior of @spawn. In the first method, a random matrix is constructed locally, then sent to another process where it is squared. In the second method, a random matrix is both constructed and squared on another process. Therefore the second method sends much less data than the first.In this toy example, the two methods are easy to distinguish and choose from. However, in a real program designing data movement might require more thought and likely some measurement. For example, if the first process needs matrix A then the first method might be better. Or, if computing A is expensive and only the current process has it, then moving it to another process might be unavoidable. Or, if the current process has very little to do between the @spawn and fetch(Bref), it might be better to eliminate the parallelism altogether. Or imagine rand(1000,1000) is replaced with a more expensive operation. Then it might make sense to add another @spawn statement just for this step."
 },
 
 {
@@ -2437,7 +2445,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Parallel Computing",
     "title": "Parallel Map and Loops",
     "category": "section",
-    "text": "Fortunately, many useful parallel computations do not require data movement. A common example is a Monte Carlo simulation, where multiple processes can handle independent simulation trials simultaneously. We can use @spawn to flip coins on two processes. First, write the following function in count_heads.jl:function count_heads(n)\n    c::Int = 0\n    for i = 1:n\n        c += rand(Bool)\n    end\n    c\nendThe function count_heads simply adds together n random bits. Here is how we can perform some trials on two machines, and add together the results:julia> @everywhere include_string(Main, $(read(\"count_heads.jl\", String)), \"count_heads.jl\")\n\njulia> a = @spawn count_heads(100000000)\nFuture(2, 1, 6, Nullable{Any}())\n\njulia> b = @spawn count_heads(100000000)\nFuture(3, 1, 7, Nullable{Any}())\n\njulia> fetch(a)+fetch(b)\n100001564This example demonstrates a powerful and often-used parallel programming pattern. Many iterations run independently over several processes, and then their results are combined using some function. The combination process is called a reduction, since it is generally tensor-rank-reducing: a vector of numbers is reduced to a single number, or a matrix is reduced to a single row or column, etc. In code, this typically looks like the pattern x = f(x,v[i]), where x is the accumulator, f is the reduction function, and the v[i] are the elements being reduced. It is desirable for f to be associative, so that it does not matter what order the operations are performed in.Notice that our use of this pattern with count_heads can be generalized. We used two explicit @spawn statements, which limits the parallelism to two processes. To run on any number of processes, we can use a parallel for loop, which can be written in Julia using @parallel like this:nheads = @parallel (+) for i = 1:200000000\n    Int(rand(Bool))\nendThis construct implements the pattern of assigning iterations to multiple processes, and combining them with a specified reduction (in this case (+)). The result of each iteration is taken as the value of the last expression inside the loop. The whole parallel loop expression itself evaluates to the final answer.Note that although parallel for loops look like serial for loops, their behavior is dramatically different. In particular, the iterations do not happen in a specified order, and writes to variables or arrays will not be globally visible since iterations run on different processes. Any variables used inside the parallel loop will be copied and broadcast to each process.For example, the following code will not work as intended:a = zeros(100000)\n@parallel for i = 1:100000\n    a[i] = i\nendThis code will not initialize all of a, since each process will have a separate copy of it. Parallel for loops like these must be avoided. Fortunately, Shared Arrays can be used to get around this limitation:a = SharedArray{Float64}(10)\n@parallel for i = 1:10\n    a[i] = i\nendUsing \"outside\" variables in parallel loops is perfectly reasonable if the variables are read-only:a = randn(1000)\n@parallel (+) for i = 1:100000\n    f(a[rand(1:end)])\nendHere each iteration applies f to a randomly-chosen sample from a vector a shared by all processes.As you could see, the reduction operator can be omitted if it is not needed. In that case, the loop executes asynchronously, i.e. it spawns independent tasks on all available workers and returns an array of Future immediately without waiting for completion. The caller can wait for the Future completions at a later point by calling fetch on them, or wait for completion at the end of the loop by prefixing it with @sync, like @sync @parallel for.In some cases no reduction operator is needed, and we merely wish to apply a function to all integers in some range (or, more generally, to all elements in some collection). This is another useful operation called parallel map, implemented in Julia as the pmap function. For example, we could compute the singular values of several large random matrices in parallel as follows:julia> M = Matrix{Float64}[rand(1000,1000) for i = 1:10];\n\njulia> pmap(svd, M);Julia's pmap is designed for the case where each function call does a large amount of work. In contrast, @parallel for can handle situations where each iteration is tiny, perhaps merely summing two numbers. Only worker processes are used by both pmap and @parallel for for the parallel computation. In case of @parallel for, the final reduction is done on the calling process."
+    "text": "Fortunately, many useful parallel computations do not require data movement. A common example is a Monte Carlo simulation, where multiple processes can handle independent simulation trials simultaneously. We can use @spawn to flip coins on two processes. First, write the following function in count_heads.jl:function count_heads(n)\n    c::Int = 0\n    for i = 1:n\n        c += rand(Bool)\n    end\n    c\nendThe function count_heads simply adds together n random bits. Here is how we can perform some trials on two machines, and add together the results:julia> @everywhere include_string(Main, $(read(\"count_heads.jl\", String)), \"count_heads.jl\")\n\njulia> a = @spawn count_heads(100000000)\nFuture(2, 1, 6, Nullable{Any}())\n\njulia> b = @spawn count_heads(100000000)\nFuture(3, 1, 7, Nullable{Any}())\n\njulia> fetch(a)+fetch(b)\n100001564This example demonstrates a powerful and often-used parallel programming pattern. Many iterations run independently over several processes, and then their results are combined using some function. The combination process is called a reduction, since it is generally tensor-rank-reducing: a vector of numbers is reduced to a single number, or a matrix is reduced to a single row or column, etc. In code, this typically looks like the pattern x = f(x,v[i]), where x is the accumulator, f is the reduction function, and the v[i] are the elements being reduced. It is desirable for f to be associative, so that it does not matter what order the operations are performed in.Notice that our use of this pattern with count_heads can be generalized. We used two explicit @spawn statements, which limits the parallelism to two processes. To run on any number of processes, we can use a parallel for loop, which can be written in Julia using @parallel like this:nheads = @parallel (+) for i = 1:200000000\n    Int(rand(Bool))\nendThis construct implements the pattern of assigning iterations to multiple processes, and combining them with a specified reduction (in this case (+)). The result of each iteration is taken as the value of the last expression inside the loop. The whole parallel loop expression itself evaluates to the final answer.Note that although parallel for loops look like serial for loops, their behavior is dramatically different. In particular, the iterations do not happen in a specified order, and writes to variables or arrays will not be globally visible since iterations run on different processes. Any variables used inside the parallel loop will be copied and broadcast to each process.For example, the following code will not work as intended:a = zeros(100000)\n@parallel for i = 1:100000\n    a[i] = i\nendThis code will not initialize all of a, since each process will have a separate copy of it. Parallel for loops like these must be avoided. Fortunately, Shared Arrays can be used to get around this limitation:using SharedArrays\n\na = SharedArray{Float64}(10)\n@parallel for i = 1:10\n    a[i] = i\nendUsing \"outside\" variables in parallel loops is perfectly reasonable if the variables are read-only:a = randn(1000)\n@parallel (+) for i = 1:100000\n    f(a[rand(1:end)])\nendHere each iteration applies f to a randomly-chosen sample from a vector a shared by all processes.As you could see, the reduction operator can be omitted if it is not needed. In that case, the loop executes asynchronously, i.e. it spawns independent tasks on all available workers and returns an array of Future immediately without waiting for completion. The caller can wait for the Future completions at a later point by calling fetch on them, or wait for completion at the end of the loop by prefixing it with @sync, like @sync @parallel for.In some cases no reduction operator is needed, and we merely wish to apply a function to all integers in some range (or, more generally, to all elements in some collection). This is another useful operation called parallel map, implemented in Julia as the pmap function. For example, we could compute the singular values of several large random matrices in parallel as follows:julia> M = Matrix{Float64}[rand(1000,1000) for i = 1:10];\n\njulia> pmap(svd, M);Julia's pmap is designed for the case where each function call does a large amount of work. In contrast, @parallel for can handle situations where each iteration is tiny, perhaps merely summing two numbers. Only worker processes are used by both pmap and @parallel for for the parallel computation. In case of @parallel for, the final reduction is done on the calling process."
 },
 
 {
@@ -2493,7 +2501,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Parallel Computing",
     "title": "Shared Arrays",
     "category": "section",
-    "text": "Shared Arrays use system shared memory to map the same array across many processes. While there are some similarities to a DArray, the behavior of a SharedArray is quite different. In a DArray, each process has local access to just a chunk of the data, and no two processes share the same chunk; in contrast, in a SharedArray each \"participating\" process has access to the entire array.  A SharedArray is a good choice when you want to have a large amount of data jointly accessible to two or more processes on the same machine.SharedArray indexing (assignment and accessing values) works just as with regular arrays, and is efficient because the underlying memory is available to the local process. Therefore, most algorithms work naturally on SharedArrays, albeit in single-process mode. In cases where an algorithm insists on an Array input, the underlying array can be retrieved from a SharedArray by calling sdata. For other AbstractArray types, sdata just returns the object itself, so it's safe to use sdata on any Array-type object.The constructor for a shared array is of the form:SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])which creates an N-dimensional shared array of a bits type T and size dims across the processes specified by pids. Unlike distributed arrays, a shared array is accessible only from those participating workers specified by the pids named argument (and the creating process too, if it is on the same host).If an init function, of signature initfn(S::SharedArray), is specified, it is called on all the participating workers. You can specify that each worker runs the init function on a distinct portion of the array, thereby parallelizing initialization.Here's a brief example:julia> addprocs(3)\n3-element Array{Int64,1}:\n 2\n 3\n 4\n\njulia> @everywhere using SharedArrays\n\njulia> S = SharedArray{Int,2}((3,4), init = S -> S[localindexes(S)] = myid())\n3×4 SharedArray{Int64,2}:\n 2  2  3  4\n 2  3  3  4\n 2  3  4  4\n\njulia> S[3,2] = 7\n7\n\njulia> S\n3×4 SharedArray{Int64,2}:\n 2  2  3  4\n 2  3  3  4\n 2  7  4  4SharedArrays.localindexes provides disjoint one-dimensional ranges of indexes, and is sometimes convenient for splitting up tasks among processes. You can, of course, divide the work any way you wish:julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())\n3×4 SharedArray{Int64,2}:\n 2  2  2  2\n 3  3  3  3\n 4  4  4  4Since all processes have access to the underlying data, you do have to be careful not to set up conflicts. For example:@sync begin\n    for p in procs(S)\n        @async begin\n            remotecall_wait(fill!, p, S, p)\n        end\n    end\nendwould result in undefined behavior. Because each process fills the entire array with its own pid, whichever process is the last to execute (for any particular element of S) will have its pid retained.As a more extended and complex example, consider running the following \"kernel\" in parallel:q[i,j,t+1] = q[i,j,t] + u[i,j,t]In this case, if we try to split up the work using a one-dimensional index, we are likely to run into trouble: if q[i,j,t] is near the end of the block assigned to one worker and q[i,j,t+1] is near the beginning of the block assigned to another, it's very likely that q[i,j,t] will not be ready at the time it's needed for computing q[i,j,t+1]. In such cases, one is better off chunking the array manually. Let's split along the second dimension. Define a function that returns the (irange, jrange) indexes assigned to this worker:julia> @everywhere function myrange(q::SharedArray)\n           idx = indexpids(q)\n           if idx == 0 # This worker is not assigned a piece\n               return 1:0, 1:0\n           end\n           nchunks = length(procs(q))\n           splits = [round(Int, s) for s in linspace(0,size(q,2),nchunks+1)]\n           1:size(q,1), splits[idx]+1:splits[idx+1]\n       endNext, define the kernel:julia> @everywhere function advection_chunk!(q, u, irange, jrange, trange)\n           @show (irange, jrange, trange)  # display so we can see what's happening\n           for t in trange, j in jrange, i in irange\n               q[i,j,t+1] = q[i,j,t] + u[i,j,t]\n           end\n           q\n       endWe also define a convenience wrapper for a SharedArray implementationjulia> @everywhere advection_shared_chunk!(q, u) =\n           advection_chunk!(q, u, myrange(q)..., 1:size(q,3)-1)Now let's compare three different versions, one that runs in a single process:julia> advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1);one that uses @parallel:julia> function advection_parallel!(q, u)\n           for t = 1:size(q,3)-1\n               @sync @parallel for j = 1:size(q,2)\n                   for i = 1:size(q,1)\n                       q[i,j,t+1]= q[i,j,t] + u[i,j,t]\n                   end\n               end\n           end\n           q\n       end;and one that delegates in chunks:julia> function advection_shared!(q, u)\n           @sync begin\n               for p in procs(q)\n                   @async remotecall_wait(advection_shared_chunk!, p, q, u)\n               end\n           end\n           q\n       end;If we create SharedArrays and time these functions, we get the following results (with julia -p 4):julia> q = SharedArray{Float64,3}((500,500,500));\n\njulia> u = SharedArray{Float64,3}((500,500,500));Run the functions once to JIT-compile and @time them on the second run:julia> @time advection_serial!(q, u);\n(irange,jrange,trange) = (1:500,1:500,1:499)\n 830.220 milliseconds (216 allocations: 13820 bytes)\n\njulia> @time advection_parallel!(q, u);\n   2.495 seconds      (3999 k allocations: 289 MB, 2.09% gc time)\n\njulia> @time advection_shared!(q,u);\n        From worker 2:       (irange,jrange,trange) = (1:500,1:125,1:499)\n        From worker 4:       (irange,jrange,trange) = (1:500,251:375,1:499)\n        From worker 3:       (irange,jrange,trange) = (1:500,126:250,1:499)\n        From worker 5:       (irange,jrange,trange) = (1:500,376:500,1:499)\n 238.119 milliseconds (2264 allocations: 169 KB)The biggest advantage of advection_shared! is that it minimizes traffic among the workers, allowing each to compute for an extended time on the assigned piece."
+    "text": "Shared Arrays use system shared memory to map the same array across many processes. While there are some similarities to a DArray, the behavior of a SharedArray is quite different. In a DArray, each process has local access to just a chunk of the data, and no two processes share the same chunk; in contrast, in a SharedArray each \"participating\" process has access to the entire array.  A SharedArray is a good choice when you want to have a large amount of data jointly accessible to two or more processes on the same machine.Shared Array support is available via module SharedArrays which must be explicitly loaded on all participating workers.SharedArray indexing (assignment and accessing values) works just as with regular arrays, and is efficient because the underlying memory is available to the local process. Therefore, most algorithms work naturally on SharedArrays, albeit in single-process mode. In cases where an algorithm insists on an Array input, the underlying array can be retrieved from a SharedArray by calling sdata. For other AbstractArray types, sdata just returns the object itself, so it's safe to use sdata on any Array-type object.The constructor for a shared array is of the form:SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])which creates an N-dimensional shared array of a bits type T and size dims across the processes specified by pids. Unlike distributed arrays, a shared array is accessible only from those participating workers specified by the pids named argument (and the creating process too, if it is on the same host).If an init function, of signature initfn(S::SharedArray), is specified, it is called on all the participating workers. You can specify that each worker runs the init function on a distinct portion of the array, thereby parallelizing initialization.Here's a brief example:julia> using Distributed\n\njulia> addprocs(3)\n3-element Array{Int64,1}:\n 2\n 3\n 4\n\njulia> @everywhere using SharedArrays\n\njulia> S = SharedArray{Int,2}((3,4), init = S -> S[localindexes(S)] = myid())\n3×4 SharedArray{Int64,2}:\n 2  2  3  4\n 2  3  3  4\n 2  3  4  4\n\njulia> S[3,2] = 7\n7\n\njulia> S\n3×4 SharedArray{Int64,2}:\n 2  2  3  4\n 2  3  3  4\n 2  7  4  4SharedArrays.localindexes provides disjoint one-dimensional ranges of indexes, and is sometimes convenient for splitting up tasks among processes. You can, of course, divide the work any way you wish:julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())\n3×4 SharedArray{Int64,2}:\n 2  2  2  2\n 3  3  3  3\n 4  4  4  4Since all processes have access to the underlying data, you do have to be careful not to set up conflicts. For example:@sync begin\n    for p in procs(S)\n        @async begin\n            remotecall_wait(fill!, p, S, p)\n        end\n    end\nendwould result in undefined behavior. Because each process fills the entire array with its own pid, whichever process is the last to execute (for any particular element of S) will have its pid retained.As a more extended and complex example, consider running the following \"kernel\" in parallel:q[i,j,t+1] = q[i,j,t] + u[i,j,t]In this case, if we try to split up the work using a one-dimensional index, we are likely to run into trouble: if q[i,j,t] is near the end of the block assigned to one worker and q[i,j,t+1] is near the beginning of the block assigned to another, it's very likely that q[i,j,t] will not be ready at the time it's needed for computing q[i,j,t+1]. In such cases, one is better off chunking the array manually. Let's split along the second dimension. Define a function that returns the (irange, jrange) indexes assigned to this worker:julia> @everywhere function myrange(q::SharedArray)\n           idx = indexpids(q)\n           if idx == 0 # This worker is not assigned a piece\n               return 1:0, 1:0\n           end\n           nchunks = length(procs(q))\n           splits = [round(Int, s) for s in linspace(0,size(q,2),nchunks+1)]\n           1:size(q,1), splits[idx]+1:splits[idx+1]\n       endNext, define the kernel:julia> @everywhere function advection_chunk!(q, u, irange, jrange, trange)\n           @show (irange, jrange, trange)  # display so we can see what's happening\n           for t in trange, j in jrange, i in irange\n               q[i,j,t+1] = q[i,j,t] + u[i,j,t]\n           end\n           q\n       endWe also define a convenience wrapper for a SharedArray implementationjulia> @everywhere advection_shared_chunk!(q, u) =\n           advection_chunk!(q, u, myrange(q)..., 1:size(q,3)-1)Now let's compare three different versions, one that runs in a single process:julia> advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1);one that uses @parallel:julia> function advection_parallel!(q, u)\n           for t = 1:size(q,3)-1\n               @sync @parallel for j = 1:size(q,2)\n                   for i = 1:size(q,1)\n                       q[i,j,t+1]= q[i,j,t] + u[i,j,t]\n                   end\n               end\n           end\n           q\n       end;and one that delegates in chunks:julia> function advection_shared!(q, u)\n           @sync begin\n               for p in procs(q)\n                   @async remotecall_wait(advection_shared_chunk!, p, q, u)\n               end\n           end\n           q\n       end;If we create SharedArrays and time these functions, we get the following results (with julia -p 4):julia> q = SharedArray{Float64,3}((500,500,500));\n\njulia> u = SharedArray{Float64,3}((500,500,500));Run the functions once to JIT-compile and @time them on the second run:julia> @time advection_serial!(q, u);\n(irange,jrange,trange) = (1:500,1:500,1:499)\n 830.220 milliseconds (216 allocations: 13820 bytes)\n\njulia> @time advection_parallel!(q, u);\n   2.495 seconds      (3999 k allocations: 289 MB, 2.09% gc time)\n\njulia> @time advection_shared!(q,u);\n        From worker 2:       (irange,jrange,trange) = (1:500,1:125,1:499)\n        From worker 4:       (irange,jrange,trange) = (1:500,251:375,1:499)\n        From worker 3:       (irange,jrange,trange) = (1:500,126:250,1:499)\n        From worker 5:       (irange,jrange,trange) = (1:500,376:500,1:499)\n 238.119 milliseconds (2264 allocations: 169 KB)The biggest advantage of advection_shared! is that it minimizes traffic among the workers, allowing each to compute for an extended time on the assigned piece."
 },
 
 {
@@ -2533,7 +2541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Parallel Computing",
     "title": "Cluster Cookie",
     "category": "section",
-    "text": "All processes in a cluster share the same cookie which, by default, is a randomly generated string on the master process:Base.cluster_cookie() returns the cookie, while Base.cluster_cookie(cookie)() sets it and returns the new cookie.\nAll connections are authenticated on both sides to ensure that only workers started by the master are allowed to connect to each other.\nThe cookie may be passed to the workers at startup via argument --worker=<cookie>. If argument --worker is specified without the cookie, the worker tries to read the cookie from its standard input (STDIN). The STDIN is closed immediately after the cookie is retrieved.\nClusterManagers can retrieve the cookie on the master by calling Base.cluster_cookie(). Cluster managers not using the default TCP/IP transport (and hence not specifying --worker) must call init_worker(cookie, manager) with the same cookie as on the master.Note that environments requiring higher levels of security can implement this via a custom ClusterManager. For example, cookies can be pre-shared and hence not specified as a startup argument."
+    "text": "All processes in a cluster share the same cookie which, by default, is a randomly generated string on the master process:cluster_cookie() returns the cookie, while cluster_cookie(cookie)() sets it and returns the new cookie.\nAll connections are authenticated on both sides to ensure that only workers started by the master are allowed to connect to each other.\nThe cookie may be passed to the workers at startup via argument --worker=<cookie>. If argument --worker is specified without the cookie, the worker tries to read the cookie from its standard input (STDIN). The STDIN is closed immediately after the cookie is retrieved.\nClusterManagers can retrieve the cookie on the master by calling cluster_cookie(). Cluster managers not using the default TCP/IP transport (and hence not specifying --worker) must call init_worker(cookie, manager) with the same cookie as on the master.Note that environments requiring higher levels of security can implement this via a custom ClusterManager. For example, cookies can be pre-shared and hence not specified as a startup argument."
 },
 
 {
@@ -5049,14 +5057,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/base/#Base.Distributed",
-    "page": "Essentials",
-    "title": "Base.Distributed",
-    "category": "Module",
-    "text": "Tools for distributed parallel processing.\n\n\n\n"
-},
-
-{
     "location": "stdlib/base/#Base.Docs",
     "page": "Essentials",
     "title": "Base.Docs",
@@ -5181,7 +5181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base Modules",
     "category": "section",
-    "text": "Base.BLAS\nBase.Distributed\nBase.Docs\nBase.Iterators\nBase.LAPACK\nBase.LibGit2\nBase.Libc\nBase.Libdl\nBase.LinAlg\nBase.Markdown\nBase.Meta\nBase.Pkg\nBase.Serializer\nBase.SparseArrays\nBase.StackTraces\nBase.Sys\nBase.Threads"
+    "text": "Base.BLAS\nBase.Docs\nBase.Iterators\nBase.LAPACK\nBase.LibGit2\nBase.Libc\nBase.Libdl\nBase.LinAlg\nBase.Markdown\nBase.Meta\nBase.Pkg\nBase.Serializer\nBase.SparseArrays\nBase.StackTraces\nBase.Sys\nBase.Threads"
 },
 
 {
@@ -6373,7 +6373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.KeyError",
     "category": "Type",
-    "text": "KeyError(key)\n\nAn indexing operation into an Associative (Dict) or Set like object tried to access or delete a non-existent element.\n\n\n\n"
+    "text": "KeyError(key)\n\nAn indexing operation into an AbstractDict (Dict) or Set like object tried to access or delete a non-existent element.\n\n\n\n"
 },
 
 {
@@ -6438,14 +6438,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Base.ParseError",
     "category": "Type",
     "text": "ParseError(msg)\n\nThe expression passed to the parse function could not be interpreted as a valid Julia expression.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/base/#Base.Distributed.ProcessExitedException",
-    "page": "Essentials",
-    "title": "Base.Distributed.ProcessExitedException",
-    "category": "Type",
-    "text": "ProcessExitedException()\n\nAfter a client Julia process has exited, further attempts to reference the dead child will throw this exception.\n\n\n\n"
 },
 
 {
@@ -6517,7 +6509,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Errors",
     "category": "section",
-    "text": "Base.error\nCore.throw\nBase.rethrow\nBase.backtrace\nBase.catch_backtrace\nBase.assert\nBase.@assert\nBase.ArgumentError\nBase.AssertionError\nCore.BoundsError\nBase.DimensionMismatch\nCore.DivideError\nCore.DomainError\nBase.EOFError\nCore.ErrorException\nCore.InexactError\nCore.InterruptException\nBase.KeyError\nBase.LoadError\nBase.MethodError\nBase.MissingException\nBase.NullException\nCore.OutOfMemoryError\nCore.ReadOnlyMemoryError\nCore.OverflowError\nBase.ParseError\nBase.ProcessExitedException\nCore.StackOverflowError\nBase.SystemError\nCore.TypeError\nCore.UndefRefError\nCore.UndefVarError\nBase.InitError\nBase.retry\nBase.ExponentialBackOff"
+    "text": "Base.error\nCore.throw\nBase.rethrow\nBase.backtrace\nBase.catch_backtrace\nBase.assert\nBase.@assert\nBase.ArgumentError\nBase.AssertionError\nCore.BoundsError\nBase.DimensionMismatch\nCore.DivideError\nCore.DomainError\nBase.EOFError\nCore.ErrorException\nCore.InexactError\nCore.InterruptException\nBase.KeyError\nBase.LoadError\nBase.MethodError\nBase.MissingException\nBase.NullException\nCore.OutOfMemoryError\nCore.ReadOnlyMemoryError\nCore.OverflowError\nBase.ParseError\nCore.StackOverflowError\nBase.SystemError\nCore.TypeError\nCore.UndefRefError\nCore.UndefVarError\nBase.InitError\nBase.retry\nBase.ExponentialBackOff"
 },
 
 {
@@ -6965,7 +6957,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.length",
     "category": "Function",
-    "text": "length(collection) -> Integer\n\nReturn the number of elements in the collection.\n\nUse endof to get the last valid index of an indexable collection.\n\nExamples\n\njulia> length(1:5)\n5\n\njulia> length([1, 2, 3, 4])\n4\n\njulia> length([1 2; 3 4])\n4\n\n\n\nlength(s::AbstractString)\n\nThe number of characters in string s.\n\nExamples\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n"
+    "text": "length(collection) -> Integer\n\nReturn the number of elements in the collection.\n\nUse endof to get the last valid index of an indexable collection.\n\nExamples\n\njulia> length(1:5)\n5\n\njulia> length([1, 2, 3, 4])\n4\n\njulia> length([1 2; 3 4])\n4\n\n\n\nlength(s::AbstractString) -> Int\nlength(s::AbstractString, i::Integer, j::Integer) -> Int\n\nThe number of characters in string s from indices i through j. This is computed as the number of code unit indices from i to j which are valid character indices. Without only a single string argument, this computes the number of characters in the entire string. With i and j arguments it computes the number of indices between i and j inclusive that are valid indices in the string s. In addition to in-bounds values, i may take the out-of-bounds value ncodeunits(s) + 1 and j may take the out-of-bounds value 0.\n\nSee also: isvalid, ncodeunits, endof, thisind, nextind, prevind\n\nExamples\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n"
 },
 
 {
@@ -6989,7 +6981,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.eltype",
     "category": "Function",
-    "text": "eltype(type)\n\nDetermine the type of the elements generated by iterating a collection of the given type. For associative collection types, this will be a Pair{KeyType,ValType}. The definition eltype(x) = eltype(typeof(x)) is provided for convenience so that instances can be passed instead of types. However the form that accepts a type argument should be defined for new types.\n\nExamples\n\njulia> eltype(ones(Float32,2,2))\nFloat32\n\njulia> eltype(ones(Int8,2,2))\nInt8\n\n\n\n"
+    "text": "eltype(type)\n\nDetermine the type of the elements generated by iterating a collection of the given type. For dictionary types, this will be a Pair{KeyType,ValType}. The definition eltype(x) = eltype(typeof(x)) is provided for convenience so that instances can be passed instead of types. However the form that accepts a type argument should be defined for new types.\n\nExamples\n\njulia> eltype(ones(Float32,2,2))\nFloat32\n\njulia> eltype(ones(Int8,2,2))\nInt8\n\n\n\n"
 },
 
 {
@@ -7293,7 +7285,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "Function",
-    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n"
+    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n"
 },
 
 {
@@ -7325,7 +7317,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nmap(f, x::Nullable)\n\nReturn f applied to the value of x if it has one, as a Nullable. If x is null, then return a null value of type Nullable{S}. S is guaranteed to be either Union{} or a concrete type. Whichever of these is chosen is an implementation detail, but typically the choice that maximizes performance would be used. If x has a value, then the return type is guaranteed to be of type Nullable{typeof(f(x))}.\n\nExamples\n\njulia> map(isodd, Nullable(1))\nNullable{Bool}(true)\n\njulia> map(isodd, Nullable(2))\nNullable{Bool}(false)\n\njulia> map(isodd, Nullable{Int}())\nNullable{Bool}()\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n"
+    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nmap(f, x::Nullable)\n\nReturn f applied to the value of x if it has one, as a Nullable. If x is null, then return a null value of type Nullable{S}. S is guaranteed to be either Union{} or a concrete type. Whichever of these is chosen is an implementation detail, but typically the choice that maximizes performance would be used. If x has a value, then the return type is guaranteed to be of type Nullable{typeof(f(x))}.\n\nExamples\n\njulia> map(isodd, Nullable(1))\nNullable{Bool}(true)\n\njulia> map(isodd, Nullable(2))\nNullable{Bool}(false)\n\njulia> map(isodd, Nullable{Int}())\nNullable{Bool}()\n\n\n\n"
 },
 
 {
@@ -7389,7 +7381,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.first",
     "category": "Function",
-    "text": "first(coll)\n\nGet the first element of an iterable collection. Return the start point of an AbstractRange even if it is empty.\n\nExamples\n\njulia> first(2:2:10)\n2\n\njulia> first([1; 2; 3; 4])\n1\n\n\n\nfirst(str::AbstractString, nchar::Integer)\n\nGet a string consisting of the first nchar characters of str.\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 1)\n\"∀\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 3)\n\"∀ϵ≠\"\n\n\n\n"
+    "text": "first(coll)\n\nGet the first element of an iterable collection. Return the start point of an AbstractRange even if it is empty.\n\nExamples\n\njulia> first(2:2:10)\n2\n\njulia> first([1; 2; 3; 4])\n1\n\n\n\nfirst(s::AbstractString, n::Integer)\n\nGet a string consisting of the first n characters of s.\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 1)\n\"∀\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 3)\n\"∀ϵ≠\"\n\n\n\n"
 },
 
 {
@@ -7397,7 +7389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.last",
     "category": "Function",
-    "text": "last(coll)\n\nGet the last element of an ordered collection, if it can be computed in O(1) time. This is accomplished by calling endof to get the last index. Return the end point of an AbstractRange even if it is empty.\n\nExamples\n\njulia> last(1:2:10)\n9\n\njulia> last([1; 2; 3; 4])\n4\n\n\n\nlast(str::AbstractString, nchar::Integer)\n\nGet a string consisting of the last nchar characters of str.\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 1)\n\"0\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 3)\n\"²>0\"\n\n\n\n"
+    "text": "last(coll)\n\nGet the last element of an ordered collection, if it can be computed in O(1) time. This is accomplished by calling endof to get the last index. Return the end point of an AbstractRange even if it is empty.\n\nExamples\n\njulia> last(1:2:10)\n9\n\njulia> last([1; 2; 3; 4])\n4\n\n\n\nlast(s::AbstractString, n::Integer)\n\nGet a string consisting of the last n characters of s.\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 1)\n\"0\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 3)\n\"²>0\"\n\n\n\n"
 },
 
 {
@@ -7413,7 +7405,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.collect",
     "category": "Method",
-    "text": "collect(collection)\n\nReturn an Array of all items in a collection or iterator. For associative collections, returns Pair{KeyType, ValType}. If the argument is array-like or is an iterator with the HasShape() trait, the result will have the same shape and number of dimensions as the argument.\n\nExamples\n\njulia> collect(1:2:13)\n7-element Array{Int64,1}:\n  1\n  3\n  5\n  7\n  9\n 11\n 13\n\n\n\n"
+    "text": "collect(collection)\n\nReturn an Array of all items in a collection or iterator. For dictionaries, returns Pair{KeyType, ValType}. If the argument is array-like or is an iterator with the HasShape() trait, the result will have the same shape and number of dimensions as the argument.\n\nExamples\n\njulia> collect(1:2:13)\n7-element Array{Int64,1}:\n  1\n  3\n  5\n  7\n  9\n 11\n 13\n\n\n\n"
 },
 
 {
@@ -7437,7 +7429,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.filter",
     "category": "Function",
-    "text": "filter(f, a::AbstractArray)\n\nReturn a copy of a, removing elements for which f is false. The function f is passed one argument.\n\nExamples\n\njulia> a = 1:10\n1:10\n\njulia> filter(isodd, a)\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\n\n\nfilter(f, d::Associative)\n\nReturn a copy of d, removing elements for which f is false. The function f is passed key=>value pairs.\n\nExamples\n\njulia> d = Dict(1=>\"a\", 2=>\"b\")\nDict{Int64,String} with 2 entries:\n  2 => \"b\"\n  1 => \"a\"\n\njulia> filter(p->isodd(p.first), d)\nDict{Int64,String} with 1 entry:\n  1 => \"a\"\n\n\n\nfilter(p, x::Nullable)\n\nReturn null if either x is null or p(get(x)) is false, and x otherwise.\n\nExamples\n\njulia> filter(isodd, Nullable(5))\nNullable{Int64}(5)\n\njulia> filter(isodd, Nullable(4))\nNullable{Int64}()\n\njulia> filter(isodd, Nullable{Int}())\nNullable{Int64}()\n\n\n\n"
+    "text": "filter(f, a::AbstractArray)\n\nReturn a copy of a, removing elements for which f is false. The function f is passed one argument.\n\nExamples\n\njulia> a = 1:10\n1:10\n\njulia> filter(isodd, a)\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\n\n\nfilter(f, d::AbstractDict)\n\nReturn a copy of d, removing elements for which f is false. The function f is passed key=>value pairs.\n\nExamples\n\njulia> d = Dict(1=>\"a\", 2=>\"b\")\nDict{Int64,String} with 2 entries:\n  2 => \"b\"\n  1 => \"a\"\n\njulia> filter(p->isodd(p.first), d)\nDict{Int64,String} with 1 entry:\n  1 => \"a\"\n\n\n\nfilter(p, x::Nullable)\n\nReturn null if either x is null or p(get(x)) is false, and x otherwise.\n\nExamples\n\njulia> filter(isodd, Nullable(5))\nNullable{Int64}(5)\n\njulia> filter(isodd, Nullable(4))\nNullable{Int64}()\n\njulia> filter(isodd, Nullable{Int}())\nNullable{Int64}()\n\n\n\n"
 },
 
 {
@@ -7445,7 +7437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.filter!",
     "category": "Function",
-    "text": "filter!(f, a::AbstractVector)\n\nUpdate a, removing elements for which f is false. The function f is passed one argument.\n\nExamples\n\njulia> filter!(isodd, collect(1:10))\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\n\n\nfilter!(f, d::Associative)\n\nUpdate d, removing elements for which f is false. The function f is passed key=>value pairs.\n\nExample\n\njulia> d = Dict(1=>\"a\", 2=>\"b\", 3=>\"c\")\nDict{Int64,String} with 3 entries:\n  2 => \"b\"\n  3 => \"c\"\n  1 => \"a\"\n\njulia> filter!(p->isodd(p.first), d)\nDict{Int64,String} with 2 entries:\n  3 => \"c\"\n  1 => \"a\"\n\n\n\n"
+    "text": "filter!(f, a::AbstractVector)\n\nUpdate a, removing elements for which f is false. The function f is passed one argument.\n\nExamples\n\njulia> filter!(isodd, collect(1:10))\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\n\n\nfilter!(f, d::AbstractDict)\n\nUpdate d, removing elements for which f is false. The function f is passed key=>value pairs.\n\nExample\n\njulia> d = Dict(1=>\"a\", 2=>\"b\", 3=>\"c\")\nDict{Int64,String} with 3 entries:\n  2 => \"b\"\n  3 => \"c\"\n  1 => \"a\"\n\njulia> filter!(p->isodd(p.first), d)\nDict{Int64,String} with 2 entries:\n  3 => \"c\"\n  1 => \"a\"\n\n\n\n"
 },
 
 {
@@ -7589,7 +7581,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.values",
     "category": "Function",
-    "text": "values(iterator)\n\nFor an iterator or collection that has keys and values, return an iterator over the values. This function simply returns its argument by default, since the elements of a general iterator are normally considered its \"values\".\n\nExamples\n\njulia> d = Dict(\"a\"=>1, \"b\"=>2);\n\njulia> values(d)\nBase.ValueIterator for a Dict{String,Int64} with 2 entries. Values:\n  2\n  1\n\njulia> values([2])\n1-element Array{Int64,1}:\n 2\n\n\n\nvalues(a::Associative)\n\nReturn an iterator over all values in a collection. collect(values(a)) returns an array of values. Since the values are stored internally in a hash table, the order in which they are returned may vary. But keys(a) and values(a) both iterate a and return the elements in the same order.\n\nExamples\n\njulia> a = Dict('a'=>2, 'b'=>3)\nDict{Char,Int64} with 2 entries:\n  'b' => 3\n  'a' => 2\n\njulia> collect(values(a))\n2-element Array{Int64,1}:\n 3\n 2\n\n\n\n"
+    "text": "values(iterator)\n\nFor an iterator or collection that has keys and values, return an iterator over the values. This function simply returns its argument by default, since the elements of a general iterator are normally considered its \"values\".\n\nExamples\n\njulia> d = Dict(\"a\"=>1, \"b\"=>2);\n\njulia> values(d)\nBase.ValueIterator for a Dict{String,Int64} with 2 entries. Values:\n  2\n  1\n\njulia> values([2])\n1-element Array{Int64,1}:\n 2\n\n\n\nvalues(a::AbstractDict)\n\nReturn an iterator over all values in a collection. collect(values(a)) returns an array of values. Since the values are stored internally in a hash table, the order in which they are returned may vary. But keys(a) and values(a) both iterate a and return the elements in the same order.\n\nExamples\n\njulia> a = Dict('a'=>2, 'b'=>3)\nDict{Char,Int64} with 2 entries:\n  'b' => 3\n  'a' => 2\n\njulia> collect(values(a))\n2-element Array{Int64,1}:\n 3\n 2\n\n\n\n"
 },
 
 {
@@ -7605,23 +7597,23 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge",
     "category": "Function",
-    "text": "merge(d::Associative, others::Associative...)\n\nConstruct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections. If the same key is present in another collection, the value for that key will be the value it has in the last collection listed.\n\nExamples\n\njulia> a = Dict(\"foo\" => 0.0, \"bar\" => 42.0)\nDict{String,Float64} with 2 entries:\n  \"bar\" => 42.0\n  \"foo\" => 0.0\n\njulia> b = Dict(\"baz\" => 17, \"bar\" => 4711)\nDict{String,Int64} with 2 entries:\n  \"bar\" => 4711\n  \"baz\" => 17\n\njulia> merge(a, b)\nDict{String,Float64} with 3 entries:\n  \"bar\" => 4711.0\n  \"baz\" => 17.0\n  \"foo\" => 0.0\n\njulia> merge(b, a)\nDict{String,Float64} with 3 entries:\n  \"bar\" => 42.0\n  \"baz\" => 17.0\n  \"foo\" => 0.0\n\n\n\nmerge(combine, d::Associative, others::Associative...)\n\nConstruct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections. Values with the same key will be combined using the combiner function.\n\nExamples\n\njulia> a = Dict(\"foo\" => 0.0, \"bar\" => 42.0)\nDict{String,Float64} with 2 entries:\n  \"bar\" => 42.0\n  \"foo\" => 0.0\n\njulia> b = Dict(\"baz\" => 17, \"bar\" => 4711)\nDict{String,Int64} with 2 entries:\n  \"bar\" => 4711\n  \"baz\" => 17\n\njulia> merge(+, a, b)\nDict{String,Float64} with 3 entries:\n  \"bar\" => 4753.0\n  \"baz\" => 17.0\n  \"foo\" => 0.0\n\n\n\nmerge(a::NamedTuple, b::NamedTuple)\n\nConstruct a new named tuple by merging two existing ones. The order of fields in a is preserved, but values are taken from matching fields in b. Fields present only in b are appended at the end.\n\njulia> merge((a=1, b=2, c=3), (b=4, d=5))\n(a = 1, b = 4, c = 3, d = 5)\n\n\n\nmerge(a::NamedTuple, iterable)\n\nInterpret an iterable of key-value pairs as a named tuple, and perform a merge.\n\njulia> merge((a=1, b=2, c=3), [:b=>4, :d=>5])\n(a = 1, b = 4, c = 3, d = 5)\n\n\n\n"
+    "text": "merge(d::AbstractDict, others::AbstractDict...)\n\nConstruct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections. If the same key is present in another collection, the value for that key will be the value it has in the last collection listed.\n\nExamples\n\njulia> a = Dict(\"foo\" => 0.0, \"bar\" => 42.0)\nDict{String,Float64} with 2 entries:\n  \"bar\" => 42.0\n  \"foo\" => 0.0\n\njulia> b = Dict(\"baz\" => 17, \"bar\" => 4711)\nDict{String,Int64} with 2 entries:\n  \"bar\" => 4711\n  \"baz\" => 17\n\njulia> merge(a, b)\nDict{String,Float64} with 3 entries:\n  \"bar\" => 4711.0\n  \"baz\" => 17.0\n  \"foo\" => 0.0\n\njulia> merge(b, a)\nDict{String,Float64} with 3 entries:\n  \"bar\" => 42.0\n  \"baz\" => 17.0\n  \"foo\" => 0.0\n\n\n\nmerge(combine, d::AbstractDict, others::AbstractDict...)\n\nConstruct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections. Values with the same key will be combined using the combiner function.\n\nExamples\n\njulia> a = Dict(\"foo\" => 0.0, \"bar\" => 42.0)\nDict{String,Float64} with 2 entries:\n  \"bar\" => 42.0\n  \"foo\" => 0.0\n\njulia> b = Dict(\"baz\" => 17, \"bar\" => 4711)\nDict{String,Int64} with 2 entries:\n  \"bar\" => 4711\n  \"baz\" => 17\n\njulia> merge(+, a, b)\nDict{String,Float64} with 3 entries:\n  \"bar\" => 4753.0\n  \"baz\" => 17.0\n  \"foo\" => 0.0\n\n\n\nmerge(a::NamedTuple, b::NamedTuple)\n\nConstruct a new named tuple by merging two existing ones. The order of fields in a is preserved, but values are taken from matching fields in b. Fields present only in b are appended at the end.\n\njulia> merge((a=1, b=2, c=3), (b=4, d=5))\n(a = 1, b = 4, c = 3, d = 5)\n\n\n\nmerge(a::NamedTuple, iterable)\n\nInterpret an iterable of key-value pairs as a named tuple, and perform a merge.\n\njulia> merge((a=1, b=2, c=3), [:b=>4, :d=>5])\n(a = 1, b = 4, c = 3, d = 5)\n\n\n\n"
 },
 
 {
-    "location": "stdlib/collections/#Base.merge!-Tuple{Associative,Vararg{Associative,N} where N}",
+    "location": "stdlib/collections/#Base.merge!-Tuple{AbstractDict,Vararg{AbstractDict,N} where N}",
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Method",
-    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\nExamples\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 4\n\n\n\n"
+    "text": "merge!(d::AbstractDict, others::AbstractDict...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\nExamples\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 4\n\n\n\n"
 },
 
 {
-    "location": "stdlib/collections/#Base.merge!-Tuple{Function,Associative,Vararg{Associative,N} where N}",
+    "location": "stdlib/collections/#Base.merge!-Tuple{Function,AbstractDict,Vararg{AbstractDict,N} where N}",
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Method",
-    "text": "merge!(combine, d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. Values with the same key will be combined using the combiner function.\n\nExamples\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(+, d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 6\n\njulia> merge!(-, d1, d1);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 0\n  3 => 0\n  1 => 0\n\n\n\n"
+    "text": "merge!(combine, d::AbstractDict, others::AbstractDict...)\n\nUpdate collection with pairs from the other collections. Values with the same key will be combined using the combiner function.\n\nExamples\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(+, d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 6\n\njulia> merge!(-, d1, d1);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 0\n  3 => 0\n  1 => 0\n\n\n\n"
 },
 
 {
@@ -7637,7 +7629,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.keytype",
     "category": "Function",
-    "text": "keytype(type)\n\nGet the key type of an associative collection type. Behaves similarly to eltype.\n\nExamples\n\njulia> keytype(Dict(Int32(1) => \"foo\"))\nInt32\n\n\n\n"
+    "text": "keytype(type)\n\nGet the key type of an dictionary type. Behaves similarly to eltype.\n\nExamples\n\njulia> keytype(Dict(Int32(1) => \"foo\"))\nInt32\n\n\n\n"
 },
 
 {
@@ -7645,15 +7637,15 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.valtype",
     "category": "Function",
-    "text": "valtype(type)\n\nGet the value type of an associative collection type. Behaves similarly to eltype.\n\nExamples\n\njulia> valtype(Dict(Int32(1) => \"foo\"))\nString\n\n\n\n"
+    "text": "valtype(type)\n\nGet the value type of an dictionary type. Behaves similarly to eltype.\n\nExamples\n\njulia> valtype(Dict(Int32(1) => \"foo\"))\nString\n\n\n\n"
 },
 
 {
-    "location": "stdlib/collections/#Associative-Collections-1",
+    "location": "stdlib/collections/#Dictionaries-1",
     "page": "Collections and Data Structures",
-    "title": "Associative Collections",
+    "title": "Dictionaries",
     "category": "section",
-    "text": "Dict is the standard associative collection. Its implementation uses hash as the hashing function for the key, and isequal to determine equality. Define these two functions for custom types to override how they are stored in a hash table.ObjectIdDict is a special hash table where the keys are always object identities.WeakKeyDict is a hash table implementation where the keys are weak references to objects, and thus may be garbage collected even when referenced in a hash table.Dicts can be created by passing pair objects constructed with => to a Dict constructor: Dict(\"A\"=>1, \"B\"=>2). This call will attempt to infer type information from the keys and values (i.e. this example creates a Dict{String, Int64}). To explicitly specify types use the syntax Dict{KeyType,ValueType}(...). For example, Dict{String,Int32}(\"A\"=>1, \"B\"=>2).Associative collections may also be created with generators. For example, Dict(i => f(i) for i = 1:10).Given a dictionary D, the syntax D[x] returns the value of key x (if it exists) or throws an error, and D[x] = y stores the key-value pair x => y in D (replacing any existing value for the key x).  Multiple arguments to D[...] are converted to tuples; for example, the syntax D[x,y]  is equivalent to D[(x,y)], i.e. it refers to the value keyed by the tuple (x,y).Base.Dict\nBase.ObjectIdDict\nBase.WeakKeyDict\nBase.haskey\nBase.get(::Any, ::Any, ::Any)\nBase.get\nBase.get!(::Any, ::Any, ::Any)\nBase.get!(::Function, ::Any, ::Any)\nBase.getkey\nBase.delete!\nBase.pop!(::Any, ::Any, ::Any)\nBase.keys\nBase.values\nBase.pairs\nBase.merge\nBase.merge!(::Associative, ::Associative...)\nBase.merge!(::Function, ::Associative, ::Associative...)\nBase.sizehint!\nBase.keytype\nBase.valtypeFully implemented by:ObjectIdDict\nDict\nWeakKeyDictPartially implemented by:BitSet\nSet\nEnvDict\nArray\nBitArray"
+    "text": "Dict is the standard dictionary. Its implementation uses hash as the hashing function for the key, and isequal to determine equality. Define these two functions for custom types to override how they are stored in a hash table.ObjectIdDict is a special hash table where the keys are always object identities.WeakKeyDict is a hash table implementation where the keys are weak references to objects, and thus may be garbage collected even when referenced in a hash table.Dicts can be created by passing pair objects constructed with => to a Dict constructor: Dict(\"A\"=>1, \"B\"=>2). This call will attempt to infer type information from the keys and values (i.e. this example creates a Dict{String, Int64}). To explicitly specify types use the syntax Dict{KeyType,ValueType}(...). For example, Dict{String,Int32}(\"A\"=>1, \"B\"=>2).Dictionaries may also be created with generators. For example, Dict(i => f(i) for i = 1:10).Given a dictionary D, the syntax D[x] returns the value of key x (if it exists) or throws an error, and D[x] = y stores the key-value pair x => y in D (replacing any existing value for the key x).  Multiple arguments to D[...] are converted to tuples; for example, the syntax D[x,y]  is equivalent to D[(x,y)], i.e. it refers to the value keyed by the tuple (x,y).Base.Dict\nBase.ObjectIdDict\nBase.WeakKeyDict\nBase.haskey\nBase.get(::Any, ::Any, ::Any)\nBase.get\nBase.get!(::Any, ::Any, ::Any)\nBase.get!(::Function, ::Any, ::Any)\nBase.getkey\nBase.delete!\nBase.pop!(::Any, ::Any, ::Any)\nBase.keys\nBase.values\nBase.pairs\nBase.merge\nBase.merge!(::Associative, ::Associative...)\nBase.merge!(::Function, ::Associative, ::Associative...)\nBase.sizehint!\nBase.keytype\nBase.valtypeFully implemented by:ObjectIdDict\nDict\nWeakKeyDictPartially implemented by:BitSet\nSet\nEnvDict\nArray\nBitArray"
 },
 
 {
@@ -8157,7 +8149,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:==",
     "category": "Function",
-    "text": "==(x, y)\n\nGeneric equality operator, giving a single Bool result. Falls back to ===. Should be implemented for all types with a notion of equality, based on the abstract value that an instance represents. For example, all numeric types are compared by numeric value, ignoring type. Strings are compared as sequences of characters, ignoring encoding.\n\nFollows IEEE semantics for floating-point numbers.\n\nCollections should generally implement == by calling == recursively on all contents.\n\nNew numeric types should implement this function for two arguments of the new type, and handle comparison to other types via promotion rules where possible.\n\n\n\n==(a::AbstractString, b::AbstractString)\n\nTest whether two strings are equal character by character.\n\nExamples\n\njulia> \"abc\" == \"abc\"\ntrue\n\njulia> \"abc\" == \"αβγ\"\nfalse\n\n\n\n"
+    "text": "==(x, y)\n\nGeneric equality operator, giving a single Bool result. Falls back to ===. Should be implemented for all types with a notion of equality, based on the abstract value that an instance represents. For example, all numeric types are compared by numeric value, ignoring type. Strings are compared as sequences of characters, ignoring encoding.\n\nFollows IEEE semantics for floating-point numbers.\n\nCollections should generally implement == by calling == recursively on all contents.\n\nNew numeric types should implement this function for two arguments of the new type, and handle comparison to other types via promotion rules where possible.\n\n\n\n==(a::AbstractString, b::AbstractString) -> Bool\n\nTest whether two strings are equal character by character (technically, Unicode code point by code point).\n\nExamples\n\njulia> \"abc\" == \"abc\"\ntrue\n\njulia> \"abc\" == \"αβγ\"\nfalse\n\n\n\n"
 },
 
 {
@@ -8213,7 +8205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.cmp",
     "category": "Function",
-    "text": "cmp(x,y)\n\nReturn -1, 0, or 1 depending on whether x is less than, equal to, or greater than y, respectively. Uses the total order implemented by isless. For floating-point numbers, uses < but throws an error for unordered arguments.\n\nExamples\n\njulia> cmp(1, 2)\n-1\n\njulia> cmp(2, 1)\n1\n\njulia> cmp(2+im, 3-im)\nERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})\nStacktrace:\n[...]\n\n\n\ncmp(a::AbstractString, b::AbstractString)\n\nCompare two strings for equality.\n\nReturn 0 if both strings have the same length and the character at each index is the same in both strings. Return -1 if a is a substring of b, or if a comes before b in alphabetical order. Return 1 if b is a substring of a, or if b comes before a in alphabetical order.\n\nExamples\n\njulia> cmp(\"abc\", \"abc\")\n0\n\njulia> cmp(\"ab\", \"abc\")\n-1\n\njulia> cmp(\"abc\", \"ab\")\n1\n\njulia> cmp(\"ab\", \"ac\")\n-1\n\njulia> cmp(\"ac\", \"ab\")\n1\n\njulia> cmp(\"α\", \"a\")\n1\n\njulia> cmp(\"b\", \"β\")\n-1\n\n\n\n"
+    "text": "cmp(x,y)\n\nReturn -1, 0, or 1 depending on whether x is less than, equal to, or greater than y, respectively. Uses the total order implemented by isless. For floating-point numbers, uses < but throws an error for unordered arguments.\n\nExamples\n\njulia> cmp(1, 2)\n-1\n\njulia> cmp(2, 1)\n1\n\njulia> cmp(2+im, 3-im)\nERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})\nStacktrace:\n[...]\n\n\n\ncmp(a::AbstractString, b::AbstractString) -> Int\n\nCompare two strings for equality. Return 0 if both strings have the same length and the character at each index is the same in both strings. Return -1 if a is a substring of b, or if a comes before b in alphabetical order. Return 1 if b is a substring of a, or if b comes before a in alphabetical order (technically, lexicographical order by Unicode code points).\n\nExamples\n\njulia> cmp(\"abc\", \"abc\")\n0\n\njulia> cmp(\"ab\", \"abc\")\n-1\n\njulia> cmp(\"abc\", \"ab\")\n1\n\njulia> cmp(\"ab\", \"ac\")\n-1\n\njulia> cmp(\"ac\", \"ab\")\n1\n\njulia> cmp(\"α\", \"a\")\n1\n\njulia> cmp(\"b\", \"β\")\n-1\n\n\n\n"
 },
 
 {
@@ -10285,7 +10277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.rand",
     "category": "Function",
-    "text": "rand([rng=GLOBAL_RNG], [S], [dims...])\n\nPick a random element or array of random elements from the set of values specified by S; S can be\n\nan indexable collection (for example 1:n or ['x','y','z']),\nan Associative or AbstractSet object,\na string (considered as a collection of characters), or\na type: the set of values to pick from is then equivalent to typemin(S):typemax(S) for integers (this is not applicable to BigInt), and to 0 1) for floating point numbers;\n\nS defaults to Float64.\n\nExamples\n\njulia> rand(Int, 2)\n2-element Array{Int64,1}:\n 1339893410598768192\n 1575814717733606317\n\njulia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))\n1=>2\n\nnote: Note\nThe complexity of rand(rng, s::Union{Associative,AbstractSet}) is linear in the length of s, unless an optimized method with constant complexity is available, which is the case for Dict, Set and BitSet. For more than a few calls, use rand(rng, collect(s)) instead, or either rand(rng, Dict(s)) or rand(rng, Set(s)) as appropriate.\n\n\n\n"
+    "text": "rand([rng=GLOBAL_RNG], [S], [dims...])\n\nPick a random element or array of random elements from the set of values specified by S; S can be\n\nan indexable collection (for example 1:n or ['x','y','z']),\nan AbstractDict or AbstractSet object,\na string (considered as a collection of characters), or\na type: the set of values to pick from is then equivalent to typemin(S):typemax(S) for integers (this is not applicable to BigInt), and to 0 1) for floating point numbers;\n\nS defaults to Float64.\n\nExamples\n\njulia> rand(Int, 2)\n2-element Array{Int64,1}:\n 1339893410598768192\n 1575814717733606317\n\njulia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))\n1=>2\n\nnote: Note\nThe complexity of rand(rng, s::Union{AbstractDict,AbstractSet}) is linear in the length of s, unless an optimized method with constant complexity is available, which is the case for Dict, Set and BitSet. For more than a few calls, use rand(rng, collect(s)) instead, or either rand(rng, Dict(s)) or rand(rng, Set(s)) as appropriate.\n\n\n\n"
 },
 
 {
@@ -10365,7 +10357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.length",
     "category": "Method",
-    "text": "length(s::AbstractString)\n\nThe number of characters in string s.\n\nExamples\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n"
+    "text": "length(s::AbstractString) -> Int\nlength(s::AbstractString, i::Integer, j::Integer) -> Int\n\nThe number of characters in string s from indices i through j. This is computed as the number of code unit indices from i to j which are valid character indices. Without only a single string argument, this computes the number of characters in the entire string. With i and j arguments it computes the number of indices between i and j inclusive that are valid indices in the string s. In addition to in-bounds values, i may take the out-of-bounds value ncodeunits(s) + 1 and j may take the out-of-bounds value 0.\n\nSee also: isvalid, ncodeunits, endof, thisind, nextind, prevind\n\nExamples\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n"
 },
 
 {
@@ -10373,7 +10365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.sizeof",
     "category": "Method",
-    "text": "sizeof(s::AbstractString)\n\nThe number of bytes in string s.\n\nExamples\n\njulia> sizeof(\"❤\")\n3\n\n\n\n"
+    "text": "sizeof(T)\n\nSize, in bytes, of the canonical binary representation of the given DataType T, if any.\n\nExamples\n\njulia> sizeof(Float32)\n4\n\njulia> sizeof(ComplexF64)\n16\n\nIf T does not have a specific size, an error is thrown.\n\njulia> sizeof(Base.LinAlg.LU)\nERROR: argument is an abstract type; size is indeterminate\nStacktrace:\n[...]\n\n\n\n"
 },
 
 {
@@ -10381,7 +10373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.:*",
     "category": "Method",
-    "text": "*(s::Union{AbstractString, Char}, t::Union{AbstractString, Char}...)\n\nConcatenate strings and/or characters, producing a String. This is equivalent to calling the string function on the arguments.\n\nExamples\n\njulia> \"Hello \" * \"world\"\n\"Hello world\"\n\njulia> 'j' * \"ulia\"\n\"julia\"\n\n\n\n"
+    "text": "*(s::Union{AbstractString, Char}, t::Union{AbstractString, Char}...) -> AbstractString\n\nConcatenate strings and/or characters, producing a String. This is equivalent to calling the string function on the arguments. Concatenation of built-in string types always produces a value of type String but other string types may choose to return a string of a different type as appropriate.\n\nExamples\n\njulia> \"Hello \" * \"world\"\n\"Hello world\"\n\njulia> 'j' * \"ulia\"\n\"julia\"\n\n\n\n"
 },
 
 {
@@ -10389,7 +10381,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.:^",
     "category": "Method",
-    "text": "^(s::Union{AbstractString,Char}, n::Integer)\n\nRepeat a string or character n times. The repeat function is an alias to this operator.\n\nExamples\n\njulia> \"Test \"^3\n\"Test Test Test \"\n\n\n\n"
+    "text": "^(s::Union{AbstractString,Char}, n::Integer)\n\nRepeat a string or character n times. This can also be written as repeat(s, n).\n\nSee also: repeat\n\nExamples\n\njulia> \"Test \"^3\n\"Test Test Test \"\n\n\n\n"
 },
 
 {
@@ -10405,7 +10397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.repeat",
     "category": "Method",
-    "text": "repeat(s::AbstractString, r::Integer)\n\nRepeat a string r times. This can equivalently be accomplished by calling s^r.\n\nExamples\n\njulia> repeat(\"ha\", 3)\n\"hahaha\"\n\n\n\n"
+    "text": "repeat(s::AbstractString, r::Integer)\n\nRepeat a string r times. This can be written as s^r.\n\nSee also: ^\n\nExamples\n\njulia> repeat(\"ha\", 3)\n\"hahaha\"\n\n\n\n"
 },
 
 {
@@ -10457,11 +10449,19 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/strings/#Base.codeunit-Tuple{AbstractString,Integer}",
+    "location": "stdlib/strings/#Base.ncodeunits-Tuple{AbstractString}",
+    "page": "Strings",
+    "title": "Base.ncodeunits",
+    "category": "Method",
+    "text": "ncodeunits(s::AbstractString) -> Int\n\nReturn the number of code units in a string. Indices that are in bounds to access this string must satisfy 1 ≤ i ≤ ncodeunits(s). Not all such indices are valid – they may not be the start of a character, but they will return a code unit value when calling codeunit(s,i).\n\nSee also: codeunit, checkbounds, sizeof, length, endof\n\n\n\n"
+},
+
+{
+    "location": "stdlib/strings/#Base.codeunit",
     "page": "Strings",
     "title": "Base.codeunit",
-    "category": "Method",
-    "text": "codeunit(s::AbstractString, i::Integer)\n\nGet the ith code unit of an encoded string. For example, returns the ith byte of the representation of a UTF-8 string.\n\nExamples\n\njulia> s = \"δ=γ\"; [codeunit(s, i) for i in 1:sizeof(s)]\n5-element Array{UInt8,1}:\n 0xce\n 0xb4\n 0x3d\n 0xce\n 0xb3\n\n\n\n"
+    "category": "Function",
+    "text": "codeunit(s::AbstractString) -> Type{<:Union{UInt8, UInt16, UInt32}}\n\nReturn the code unit type of the given string object. For ASCII, Latin-1, or UTF-8 encoded strings, this would be UInt8; for UCS-2 and UTF-16 it would be UInt16; for UTF-32 it would be UInt32. The unit code type need not be limited to these three types, but it's hard to think of widely used string encodings that don't use one of these units. codeunit(s) is the same as typeof(codeunit(s,1)) when s is a non-empty string.\n\nSee also: ncodeunits\n\n\n\ncodeunit(s::AbstractString, i::Integer) -> Union{UInt8, UInt16, UInt32}\n\nReturn the code unit value in the string s at index i. Note that\n\ncodeunit(s, i) :: codeunit(s)\n\nI.e. the value returned by codeunit(s, i) is of the type returned by codeunit(s).\n\nSee also: ncodeunits, checkbounds\n\n\n\n"
 },
 
 {
@@ -10525,7 +10525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.isvalid",
     "category": "Method",
-    "text": "isvalid(str::AbstractString, i::Integer)\n\nTell whether index i is valid for the given string.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> isvalid(str, 1)\ntrue\n\njulia> str[1]\n'α': Unicode U+03b1 (category Ll: Letter, lowercase)\n\njulia> isvalid(str, 2)\nfalse\n\njulia> str[2]\nERROR: UnicodeError: invalid character index\nStacktrace:\n[...]\n\n\n\n"
+    "text": "isvalid(s::AbstractString, i::Integer) -> Bool\n\nPredicate indicating whether the given index is the start of the encoding of a character in s or not. If isvalid(s, i) is true then s[i] will return the character whose encoding starts at that index, if it's false, then s[i] will raise an invalid index error or a bounds error depending on if i is in bounds. In order for isvalid(s, i) to be an O(1) function, the encoding of s must be self-synchronizing this is a basic assumption of Julia's generic string support.\n\nSee also: getindex, next, thisind, nextind, prevind, length\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> isvalid(str, 1)\ntrue\n\njulia> str[1]\n'α': Unicode U+03b1 (category Ll: Letter, lowercase)\n\njulia> isvalid(str, 2)\nfalse\n\njulia> str[2]\nERROR: StringIndexError: invalid character index\nStacktrace:\n[...]\n\n\n\n"
 },
 
 {
@@ -10565,7 +10565,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.isless",
     "category": "Method",
-    "text": "isless(a::AbstractString, b::AbstractString)\n\nTest whether string a comes before string b in alphabetical order.\n\nExamples\n\njulia> isless(\"a\", \"b\")\ntrue\n\njulia> isless(\"β\", \"α\")\nfalse\n\njulia> isless(\"a\", \"a\")\nfalse\n\n\n\n"
+    "text": "isless(a::AbstractString, b::AbstractString) -> Bool\n\nTest whether string a comes before string b in alphabetical order (technically, in lexicographical order by Unicode code points).\n\nExamples\n\njulia> isless(\"a\", \"b\")\ntrue\n\njulia> isless(\"β\", \"α\")\nfalse\n\njulia> isless(\"a\", \"a\")\nfalse\n\n\n\n"
 },
 
 {
@@ -10573,7 +10573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.:==",
     "category": "Method",
-    "text": "==(a::AbstractString, b::AbstractString)\n\nTest whether two strings are equal character by character.\n\nExamples\n\njulia> \"abc\" == \"abc\"\ntrue\n\njulia> \"abc\" == \"αβγ\"\nfalse\n\n\n\n"
+    "text": "==(a::AbstractString, b::AbstractString) -> Bool\n\nTest whether two strings are equal character by character (technically, Unicode code point by code point).\n\nExamples\n\njulia> \"abc\" == \"abc\"\ntrue\n\njulia> \"abc\" == \"αβγ\"\nfalse\n\n\n\n"
 },
 
 {
@@ -10581,7 +10581,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.cmp",
     "category": "Method",
-    "text": "cmp(a::AbstractString, b::AbstractString)\n\nCompare two strings for equality.\n\nReturn 0 if both strings have the same length and the character at each index is the same in both strings. Return -1 if a is a substring of b, or if a comes before b in alphabetical order. Return 1 if b is a substring of a, or if b comes before a in alphabetical order.\n\nExamples\n\njulia> cmp(\"abc\", \"abc\")\n0\n\njulia> cmp(\"ab\", \"abc\")\n-1\n\njulia> cmp(\"abc\", \"ab\")\n1\n\njulia> cmp(\"ab\", \"ac\")\n-1\n\njulia> cmp(\"ac\", \"ab\")\n1\n\njulia> cmp(\"α\", \"a\")\n1\n\njulia> cmp(\"b\", \"β\")\n-1\n\n\n\n"
+    "text": "cmp(a::AbstractString, b::AbstractString) -> Int\n\nCompare two strings for equality. Return 0 if both strings have the same length and the character at each index is the same in both strings. Return -1 if a is a substring of b, or if a comes before b in alphabetical order. Return 1 if b is a substring of a, or if b comes before a in alphabetical order (technically, lexicographical order by Unicode code points).\n\nExamples\n\njulia> cmp(\"abc\", \"abc\")\n0\n\njulia> cmp(\"ab\", \"abc\")\n-1\n\njulia> cmp(\"abc\", \"ab\")\n1\n\njulia> cmp(\"ab\", \"ac\")\n-1\n\njulia> cmp(\"ac\", \"ab\")\n1\n\njulia> cmp(\"α\", \"a\")\n1\n\njulia> cmp(\"b\", \"β\")\n-1\n\n\n\n"
 },
 
 {
@@ -10661,7 +10661,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.split",
     "category": "Function",
-    "text": "split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)\n\nReturn an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by search's second argument (i.e. a single character, collection of characters, string, or regular expression). If chars is omitted, it defaults to the set of all space characters, and keep is taken to be false. The two keyword arguments are optional: they are a maximum size for the result and a flag determining whether empty fields should be kept in the result.\n\nExamples\n\njulia> a = \"Ma.rch\"\n\"Ma.rch\"\n\njulia> split(a,\".\")\n2-element Array{SubString{String},1}:\n \"Ma\"\n \"rch\"\n\n\n\nsplit(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}\n\nBreak the ConfigEntry up to the following pieces: section, subsection, name, and value.\n\nExamples\n\nGiven the git configuration file containing:\n\n[credential \"https://example.com\"]\n    username = me\n\nThe ConfigEntry would look like the following:\n\njulia> entry\nConfigEntry(\"credential.https://example.com.username\", \"me\")\n\njulia> split(entry)\n(\"credential\", \"https://example.com\", \"username\", \"me\")\n\nRefer to the git config syntax documenation for more details.\n\n\n\n"
+    "text": "split(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}\n\nBreak the ConfigEntry up to the following pieces: section, subsection, name, and value.\n\nExamples\n\nGiven the git configuration file containing:\n\n[credential \"https://example.com\"]\n    username = me\n\nThe ConfigEntry would look like the following:\n\njulia> entry\nConfigEntry(\"credential.https://example.com.username\", \"me\")\n\njulia> split(entry)\n(\"credential\", \"https://example.com\", \"username\", \"me\")\n\nRefer to the git config syntax documenation for more details.\n\n\n\nsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)\n\nReturn an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by search's second argument (i.e. a single character, collection of characters, string, or regular expression). If chars is omitted, it defaults to the set of all space characters, and keep is taken to be false. The two keyword arguments are optional: they are a maximum size for the result and a flag determining whether empty fields should be kept in the result.\n\nExamples\n\njulia> a = \"Ma.rch\"\n\"Ma.rch\"\n\njulia> split(a,\".\")\n2-element Array{SubString{String},1}:\n \"Ma\"\n \"rch\"\n\n\n\n"
 },
 
 {
@@ -10717,7 +10717,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.first",
     "category": "Method",
-    "text": "first(str::AbstractString, nchar::Integer)\n\nGet a string consisting of the first nchar characters of str.\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 1)\n\"∀\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 3)\n\"∀ϵ≠\"\n\n\n\n"
+    "text": "first(s::AbstractString, n::Integer)\n\nGet a string consisting of the first n characters of s.\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 1)\n\"∀\"\n\njulia> first(\"∀ϵ≠0: ϵ²>0\", 3)\n\"∀ϵ≠\"\n\n\n\n"
 },
 
 {
@@ -10725,7 +10725,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.last",
     "category": "Method",
-    "text": "last(str::AbstractString, nchar::Integer)\n\nGet a string consisting of the last nchar characters of str.\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 1)\n\"0\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 3)\n\"²>0\"\n\n\n\n"
+    "text": "last(s::AbstractString, n::Integer)\n\nGet a string consisting of the last n characters of s.\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 0)\n\"\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 1)\n\"0\"\n\njulia> last(\"∀ϵ≠0: ϵ²>0\", 3)\n\"²>0\"\n\n\n\n"
 },
 
 {
@@ -10753,27 +10753,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/strings/#Base.ind2chr",
-    "page": "Strings",
-    "title": "Base.ind2chr",
-    "category": "Function",
-    "text": "ind2chr(s::AbstractString, i::Integer)\n\nConvert a byte index i to a character index with respect to string s.\n\nSee also chr2ind.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> ind2chr(str, 3)\n2\n\njulia> chr2ind(str, 2)\n3\n\n\n\n"
-},
-
-{
-    "location": "stdlib/strings/#Base.chr2ind",
-    "page": "Strings",
-    "title": "Base.chr2ind",
-    "category": "Function",
-    "text": "chr2ind(s::AbstractString, i::Integer)\n\nConvert a character index i to a byte index.\n\nSee also ind2chr.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> chr2ind(str, 2)\n3\n\njulia> ind2chr(str, 3)\n2\n\n\n\n"
-},
-
-{
     "location": "stdlib/strings/#Base.thisind",
     "page": "Strings",
     "title": "Base.thisind",
     "category": "Function",
-    "text": "thisind(s::AbstractString, i::Integer)\n\nIf i is the index into a character in s then thisind returns the index of the start of that character. If i < start(s) then it returns start(s) - 1. If i > ncodeunits(s) then it returns ncodeunits(s) + 1.\n\nExamples\n\n```jldoctest julia> thisind(\"αβγdef\", -5) 0\n\njulia> thisind(\"αβγdef\", 1) 1\n\njulia> thisind(\"αβγdef\", 3) 3\n\njulia> thisind(\"αβγdef\", 4) 3\n\njulia> thisind(\"αβγdef\", 9) 9\n\njulia> thisind(\"αβγdef\", 10) 10\n\njulia> thisind(\"αβγdef\", 20) 10\n\n\n\n"
+    "text": "thisind(s::AbstractString, i::Integer) -> Int\n\nIf i is in bounds in s return the index of the start of the character whose encoding code unit i is part of. In other words, if i is the start of a character, return i; if i is not the start of a character, rewind until the start of a character and return that index. If i is out of bounds in s return i.\n\nExamples\n\n```jldoctest julia> thisind(\"αβγdef\", -5) -5\n\njulia> thisind(\"αβγdef\", 1) 1\n\njulia> thisind(\"αβγdef\", 3) 3\n\njulia> thisind(\"αβγdef\", 4) 3\n\njulia> thisind(\"αβγdef\", 9) 9\n\njulia> thisind(\"αβγdef\", 10) 10\n\njulia> thisind(\"αβγdef\", 20) 20\n\n\n\n"
 },
 
 {
@@ -10781,7 +10765,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.nextind",
     "category": "Function",
-    "text": "nextind(str::AbstractString, i::Integer, nchar::Integer=1)\n\nGet the next valid string index after i. Returns a value greater than endof(str) at or after the end of the string. If the nchar argument is given the function goes forward nchar characters.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> nextind(str, 1)\n3\n\njulia> nextind(str, 1, 2)\n5\n\njulia> endof(str)\n9\n\njulia> nextind(str, 9)\n10\n\n\n\n"
+    "text": "nextind(str::AbstractString, i::Integer, n::Integer=1) -> Int\n\nIf i is in bounds in s return the index of the start of the character whose encoding starts after index i. If i is out of bounds in s return i + 1. If n == 0 return i.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> nextind(str, 1)\n3\n\njulia> nextind(str, 1, 2)\n5\n\njulia> endof(str)\n9\n\njulia> nextind(str, 9)\n10\n\n\n\n"
 },
 
 {
@@ -10789,7 +10773,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.prevind",
     "category": "Function",
-    "text": "prevind(str::AbstractString, i::Integer, nchar::Integer=1)\n\nGet the previous valid string index before i. Returns a value less than 1 at the beginning of the string. If the nchar argument is given the function goes back nchar characters.\n\nExamples\n\njulia> prevind(\"αβγdef\", 3)\n1\n\njulia> prevind(\"αβγdef\", 1)\n0\n\njulia> prevind(\"αβγdef\", 3, 2)\n0\n\n\n\n"
+    "text": "prevind(str::AbstractString, i::Integer, n::Integer=1) -> Int\n\nIf i is in bounds in s return the index of the start of the character whose encoding starts before index i. In other words, if i is the start of a character, return the start of the previous character; if i is not the start of a character, rewind until the start of a character and return that index. If i is out of bounds in s return i - 1. If n == 0 return i.\n\nExamples\n\njulia> prevind(\"αβγdef\", 3)\n1\n\njulia> prevind(\"αβγdef\", 1)\n0\n\njulia> prevind(\"αβγdef\", 0)\n-1\n\njulia> prevind(\"αβγdef\", 3, 2)\n0\n\n\n\n"
 },
 
 {
@@ -10829,7 +10813,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Strings",
     "category": "section",
-    "text": "Base.length(::AbstractString)\nBase.sizeof(::AbstractString)\nBase.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)\nBase.:^(::AbstractString, ::Integer)\nBase.string\nBase.repeat(::AbstractString, ::Integer)\nBase.repeat(::Char, ::Integer)\nBase.repr\nCore.String(::AbstractString)\nBase.SubString\nBase.transcode\nBase.unsafe_string\nBase.codeunit(::AbstractString, ::Integer)\nBase.ascii\nBase.@r_str\nBase.@raw_str\nBase.Docs.@html_str\nBase.Docs.@text_str\nBase.isvalid(::Any)\nBase.isvalid(::Any, ::Any)\nBase.isvalid(::AbstractString, ::Integer)\nBase.ismatch\nBase.match\nBase.eachmatch\nBase.matchall\nBase.isless(::AbstractString, ::AbstractString)\nBase.:(==)(::AbstractString, ::AbstractString)\nBase.cmp(::AbstractString, ::AbstractString)\nBase.lpad\nBase.rpad\nBase.search\nBase.rsearch\nBase.searchindex\nBase.rsearchindex\nBase.contains(::AbstractString, ::AbstractString)\nBase.reverse(::Union{String,SubString{String}})\nBase.replace\nBase.split\nBase.rsplit\nBase.strip\nBase.lstrip\nBase.rstrip\nBase.startswith\nBase.endswith\nBase.first(::AbstractString, ::Integer)\nBase.last(::AbstractString, ::Integer)\nBase.join\nBase.chop\nBase.chomp\nBase.ind2chr\nBase.chr2ind\nBase.thisind\nBase.nextind\nBase.prevind\nBase.Random.randstring\nCore.Symbol\nBase.escape_string\nBase.unescape_string"
+    "text": "Base.length(::AbstractString)\nBase.sizeof(::AbstractString)\nBase.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)\nBase.:^(::AbstractString, ::Integer)\nBase.string\nBase.repeat(::AbstractString, ::Integer)\nBase.repeat(::Char, ::Integer)\nBase.repr\nCore.String(::AbstractString)\nBase.SubString\nBase.transcode\nBase.unsafe_string\nBase.ncodeunits(::AbstractString)\nBase.codeunit\nBase.ascii\nBase.@r_str\nBase.@raw_str\nBase.Docs.@html_str\nBase.Docs.@text_str\nBase.isvalid(::Any)\nBase.isvalid(::Any, ::Any)\nBase.isvalid(::AbstractString, ::Integer)\nBase.ismatch\nBase.match\nBase.eachmatch\nBase.matchall\nBase.isless(::AbstractString, ::AbstractString)\nBase.:(==)(::AbstractString, ::AbstractString)\nBase.cmp(::AbstractString, ::AbstractString)\nBase.lpad\nBase.rpad\nBase.search\nBase.rsearch\nBase.searchindex\nBase.rsearchindex\nBase.contains(::AbstractString, ::AbstractString)\nBase.reverse(::Union{String,SubString{String}})\nBase.replace\nBase.split\nBase.rsplit\nBase.strip\nBase.lstrip\nBase.rstrip\nBase.startswith\nBase.endswith\nBase.first(::AbstractString, ::Integer)\nBase.last(::AbstractString, ::Integer)\nBase.join\nBase.chop\nBase.chomp\nBase.thisind\nBase.nextind\nBase.prevind\nBase.Random.randstring\nCore.Symbol\nBase.escape_string\nBase.unescape_string"
 },
 
 {
@@ -12106,23 +12090,15 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#",
-    "page": "Tasks and Parallel Computing",
-    "title": "Tasks and Parallel Computing",
+    "page": "Tasks",
+    "title": "Tasks",
     "category": "page",
     "text": ""
 },
 
 {
-    "location": "stdlib/parallel/#Tasks-and-Parallel-Computing-1",
-    "page": "Tasks and Parallel Computing",
-    "title": "Tasks and Parallel Computing",
-    "category": "section",
-    "text": ""
-},
-
-{
     "location": "stdlib/parallel/#Core.Task",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Core.Task",
     "category": "Type",
     "text": "Task(func)\n\nCreate a Task (i.e. coroutine) to execute the given function func (which must be callable with no arguments). The task exits when this function returns.\n\nExamples\n\njulia> a() = det(rand(1000, 1000));\n\njulia> b = Task(a);\n\nIn this example, b is a runnable Task that hasn't started yet.\n\n\n\n"
@@ -12130,7 +12106,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.current_task",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.current_task",
     "category": "Function",
     "text": "current_task()\n\nGet the currently running Task.\n\n\n\n"
@@ -12138,7 +12114,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.istaskdone",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.istaskdone",
     "category": "Function",
     "text": "istaskdone(t::Task) -> Bool\n\nDetermine whether a task has exited.\n\njulia> a2() = det(rand(1000, 1000));\n\njulia> b = Task(a2);\n\njulia> istaskdone(b)\nfalse\n\njulia> schedule(b);\n\njulia> yield();\n\njulia> istaskdone(b)\ntrue\n\n\n\n"
@@ -12146,7 +12122,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.istaskstarted",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.istaskstarted",
     "category": "Function",
     "text": "istaskstarted(t::Task) -> Bool\n\nDetermine whether a task has started executing.\n\njulia> a3() = det(rand(1000, 1000));\n\njulia> b = Task(a3);\n\njulia> istaskstarted(b)\nfalse\n\n\n\n"
@@ -12154,7 +12130,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.yield",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.yield",
     "category": "Function",
     "text": "yield()\n\nSwitch to the scheduler to allow another scheduled task to run. A task that calls this function is still runnable, and will be restarted immediately if there are no other runnable tasks.\n\n\n\nyield(t::Task, arg = nothing)\n\nA fast, unfair-scheduling version of schedule(t, arg); yield() which immediately yields to t before calling the scheduler.\n\n\n\n"
@@ -12162,7 +12138,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.yieldto",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.yieldto",
     "category": "Function",
     "text": "yieldto(t::Task, arg = nothing)\n\nSwitch to the given task. The first time a task is switched to, the task's function is called with no arguments. On subsequent switches, arg is returned from the task's last call to yieldto. This is a low-level call that only switches tasks, not considering states or scheduling in any way. Its use is discouraged.\n\n\n\n"
@@ -12170,7 +12146,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.task_local_storage-Tuple{Any}",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.task_local_storage",
     "category": "Method",
     "text": "task_local_storage(key)\n\nLook up the value of a key in the current task's task-local storage.\n\n\n\n"
@@ -12178,7 +12154,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.task_local_storage-Tuple{Any,Any}",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.task_local_storage",
     "category": "Method",
     "text": "task_local_storage(key, value)\n\nAssign a value to a key in the current task's task-local storage.\n\n\n\n"
@@ -12186,7 +12162,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.task_local_storage-Tuple{Function,Any,Any}",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.task_local_storage",
     "category": "Method",
     "text": "task_local_storage(body, key, value)\n\nCall the function body with a modified task-local storage, in which value is assigned to key; the previous value of key, or lack thereof, is restored afterwards. Useful for emulating dynamic scoping.\n\n\n\n"
@@ -12194,7 +12170,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.Condition",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.Condition",
     "category": "Type",
     "text": "Condition()\n\nCreate an edge-triggered event source that tasks can wait for. Tasks that call wait on a Condition are suspended and queued. Tasks are woken up when notify is later called on the Condition. Edge triggering means that only tasks waiting at the time notify is called can be woken up. For level-triggered notifications, you must keep extra state to keep track of whether a notification has happened. The Channel type does this, and so can be used for level-triggered events.\n\n\n\n"
@@ -12202,7 +12178,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.notify",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.notify",
     "category": "Function",
     "text": "notify(condition, val=nothing; all=true, error=false)\n\nWake up tasks waiting for a condition, passing them val. If all is true (the default), all waiting tasks are woken, otherwise only one is. If error is true, the passed value is raised as an exception in the woken tasks.\n\nReturn the count of tasks woken up. Return 0 if no tasks are waiting on condition.\n\n\n\n"
@@ -12210,7 +12186,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.schedule",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.schedule",
     "category": "Function",
     "text": "schedule(t::Task, [val]; error=false)\n\nAdd a Task to the scheduler's queue. This causes the task to run constantly when the system is otherwise idle, unless the task performs a blocking operation such as wait.\n\nIf a second argument val is provided, it will be passed to the task (via the return value of yieldto) when it runs again. If error is true, the value is raised as an exception in the woken task.\n\njulia> a5() = det(rand(1000, 1000));\n\njulia> b = Task(a5);\n\njulia> istaskstarted(b)\nfalse\n\njulia> schedule(b);\n\njulia> yield();\n\njulia> istaskstarted(b)\ntrue\n\njulia> istaskdone(b)\ntrue\n\n\n\n"
@@ -12218,7 +12194,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.@schedule",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.@schedule",
     "category": "Macro",
     "text": "@schedule\n\nWrap an expression in a Task and add it to the local machine's scheduler queue. Similar to @async except that an enclosing @sync does NOT wait for tasks started with an @schedule.\n\n\n\n"
@@ -12226,7 +12202,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.@task",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.@task",
     "category": "Macro",
     "text": "@task\n\nWrap an expression in a Task without executing it, and return the Task. This only creates a task, and does not run it.\n\njulia> a1() = det(rand(1000, 1000));\n\njulia> b = @task a1();\n\njulia> istaskstarted(b)\nfalse\n\njulia> schedule(b);\n\njulia> yield();\n\njulia> istaskdone(b)\ntrue\n\n\n\n"
@@ -12234,7 +12210,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.sleep",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.sleep",
     "category": "Function",
     "text": "sleep(seconds)\n\nBlock the current task for a specified number of seconds. The minimum sleep time is 1 millisecond or input of 0.001.\n\n\n\n"
@@ -12242,7 +12218,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.Channel",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.Channel",
     "category": "Type",
     "text": "Channel{T}(sz::Int)\n\nConstructs a Channel with an internal buffer that can hold a maximum of sz objects of type T. put! calls on a full channel block until an object is removed with take!.\n\nChannel(0) constructs an unbuffered channel. put! blocks until a matching take! is called. And vice-versa.\n\nOther constructors:\n\nChannel(Inf): equivalent to Channel{Any}(typemax(Int))\nChannel(sz): equivalent to Channel{Any}(sz)\n\n\n\n"
@@ -12250,7 +12226,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.put!-Tuple{Channel,Any}",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.put!",
     "category": "Method",
     "text": "put!(c::Channel, v)\n\nAppend an item v to the channel c. Blocks if the channel is full.\n\nFor unbuffered channels, blocks until a take! is performed by a different task.\n\n\n\n"
@@ -12258,7 +12234,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.take!-Tuple{Channel}",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.take!",
     "category": "Method",
     "text": "take!(c::Channel)\n\nRemove and return a value from a Channel. Blocks until data is available.\n\nFor unbuffered channels, blocks until a put! is performed by a different task.\n\n\n\n"
@@ -12266,7 +12242,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.isready-Tuple{Channel}",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.isready",
     "category": "Method",
     "text": "isready(c::Channel)\n\nDetermine whether a Channel has a value stored to it. Returns immediately, does not block.\n\nFor unbuffered channels returns true if there are tasks waiting on a put!.\n\n\n\n"
@@ -12274,7 +12250,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.fetch-Tuple{Channel}",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.fetch",
     "category": "Method",
     "text": "fetch(c::Channel)\n\nWait for and get the first available item from the channel. Does not remove the item. fetch is unsupported on an unbuffered (0-size) channel.\n\n\n\n"
@@ -12282,7 +12258,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.close-Tuple{Channel}",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.close",
     "category": "Method",
     "text": "close(c::Channel)\n\nClose a channel. An exception is thrown by:\n\nput! on a closed channel.\ntake! and fetch on an empty, closed channel.\n\n\n\n"
@@ -12290,7 +12266,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.bind-Tuple{Channel,Task}",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.bind",
     "category": "Method",
     "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n"
@@ -12298,7 +12274,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.asyncmap",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.asyncmap",
     "category": "Function",
     "text": "asyncmap(f, c...; ntasks=0, batch_size=nothing)\n\nUses multiple concurrent tasks to map f over a collection (or multiple equal length collections). For multiple collection arguments, f is applied elementwise.\n\nntasks specifies the number of tasks to run concurrently. Depending on the length of the collections, if ntasks is unspecified, up to 100 tasks will be used for concurrent mapping.\n\nntasks can also be specified as a zero-arg function. In this case, the number of tasks to run in parallel is checked before processing every element and a new task started if the value of ntasks_func is less than the current number of tasks.\n\nIf batch_size is specified, the collection is processed in batch mode. f must then be a function that must accept a Vector of argument tuples and must return a vector of results. The input vector will have a length of batch_size or less.\n\nThe following examples highlight execution in different tasks by returning the object_id of the tasks in which the mapping function is executed.\n\nFirst, with ntasks undefined, each element is processed in a different task.\n\njulia> tskoid() = object_id(current_task());\n\njulia> asyncmap(x->tskoid(), 1:5)\n5-element Array{UInt64,1}:\n 0x6e15e66c75c75853\n 0x440f8819a1baa682\n 0x9fb3eeadd0c83985\n 0xebd3e35fe90d4050\n 0x29efc93edce2b961\n\njulia> length(unique(asyncmap(x->tskoid(), 1:5)))\n5\n\nWith ntasks=2 all elements are processed in 2 tasks.\n\njulia> asyncmap(x->tskoid(), 1:5; ntasks=2)\n5-element Array{UInt64,1}:\n 0x027ab1680df7ae94\n 0xa23d2f80cd7cf157\n 0x027ab1680df7ae94\n 0xa23d2f80cd7cf157\n 0x027ab1680df7ae94\n\njulia> length(unique(asyncmap(x->tskoid(), 1:5; ntasks=2)))\n2\n\nWith batch_size defined, the mapping function needs to be changed to accept an array of argument tuples and return an array of results. map is used in the modified mapping function to achieve this.\n\njulia> batch_func(input) = map(x->string(\"args_tuple: \", x, \", element_val: \", x[1], \", task: \", tskoid()), input)\nbatch_func (generic function with 1 method)\n\njulia> asyncmap(batch_func, 1:5; ntasks=2, batch_size=2)\n5-element Array{String,1}:\n \"args_tuple: (1,), element_val: 1, task: 9118321258196414413\"\n \"args_tuple: (2,), element_val: 2, task: 4904288162898683522\"\n \"args_tuple: (3,), element_val: 3, task: 9118321258196414413\"\n \"args_tuple: (4,), element_val: 4, task: 4904288162898683522\"\n \"args_tuple: (5,), element_val: 5, task: 9118321258196414413\"\n\nnote: Note\nCurrently, all tasks in Julia are executed in a single OS thread co-operatively. Consequently, ayncmap is beneficial only when the mapping function involves any I/O - disk, network, remote worker invocation, etc.\n\n\n\n"
@@ -12306,7 +12282,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Base.asyncmap!",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Base.asyncmap!",
     "category": "Function",
     "text": "asyncmap!(f, results, c...; ntasks=0, batch_size=nothing)\n\nLike asyncmap, but stores output in results rather than returning a collection.\n\n\n\n"
@@ -12314,722 +12290,730 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/parallel/#Tasks-1",
-    "page": "Tasks and Parallel Computing",
+    "page": "Tasks",
     "title": "Tasks",
     "category": "section",
     "text": "Core.Task\nBase.current_task\nBase.istaskdone\nBase.istaskstarted\nBase.yield\nBase.yieldto\nBase.task_local_storage(::Any)\nBase.task_local_storage(::Any, ::Any)\nBase.task_local_storage(::Function, ::Any, ::Any)\nBase.Condition\nBase.notify\nBase.schedule\nBase.@schedule\nBase.@task\nBase.sleep\nBase.Channel\nBase.put!(::Channel, ::Any)\nBase.take!(::Channel)\nBase.isready(::Channel)\nBase.fetch(::Channel)\nBase.close(::Channel)\nBase.bind(c::Channel, task::Task)\nBase.asyncmap\nBase.asyncmap!"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.addprocs",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.addprocs",
+    "location": "stdlib/distributed/#",
+    "page": "Distributed Computing",
+    "title": "Distributed Computing",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/distributed/#Distributed.addprocs",
+    "page": "Distributed Computing",
+    "title": "Distributed.addprocs",
     "category": "Function",
     "text": "addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers\n\nLaunches worker processes via the specified cluster manager.\n\nFor example, Beowulf clusters are supported via a custom cluster manager implemented in the package ClusterManagers.jl.\n\nThe number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable JULIA_WORKER_TIMEOUT in the worker process's environment. Relevant only when using TCP/IP as transport.\n\n\n\naddprocs(machines; tunnel=false, sshflags=``, max_parallel=10, kwargs...) -> List of process identifiers\n\nAdd processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.\n\nmachines is a vector of machine specifications. Workers are started for each specification.\n\nA machine specification is either a string machine_spec or a tuple - (machine_spec, count).\n\nmachine_spec is a string of the form [user@]host[:port] [bind_addr[:port]]. user defaults to current user, port to the standard ssh port. If [bind_addr[:port]] is specified, other workers will connect to this worker at the specified bind_addr and port.\n\ncount is the number of workers to be launched on the specified host. If specified as :auto it will launch as many workers as the number of cores on the specific host.\n\nKeyword arguments:\n\ntunnel: if true then SSH tunneling will be used to connect to the worker from the master process. Default is false.\nsshflags: specifies additional ssh options, e.g. sshflags=`-i /home/foo/bar.pem`\nmax_parallel: specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.\ndir: specifies the working directory on the workers. Defaults to the host's current directory (as found by pwd())\nenable_threaded_blas: if true then  BLAS will run on multiple threads in added processes. Default is false.\nexename: name of the julia executable. Defaults to \"$JULIA_HOME/julia\" or \"$JULIA_HOME/julia-debug\" as the case may be.\nexeflags: additional flags passed to the worker processes.\ntopology: Specifies how the workers connect to each other. Sending a message between unconnected workers results in an error.\ntopology=:all_to_all: All processes are connected to each other. The default.\ntopology=:master_slave: Only the driver process, i.e. pid 1 connects to the workers. The workers do not connect to each other.\ntopology=:custom: The launch method of the cluster manager specifies the connection topology via fields ident and connect_idents in WorkerConfig. A worker with a cluster manager identity ident will connect to all workers specified in connect_idents.\nlazy: Applicable only with topology=:all_to_all. If true, worker-worker connections are setup lazily, i.e. they are setup at the first instance of a remote call between workers. Default is true.\n\nEnvironment variables :\n\nIf the master process fails to establish a connection with a newly launched worker within 60.0 seconds, the worker treats it as a fatal situation and terminates. This timeout can be controlled via environment variable JULIA_WORKER_TIMEOUT. The value of JULIA_WORKER_TIMEOUT on the master process specifies the number of seconds a newly launched worker waits for connection establishment.\n\n\n\naddprocs(; kwargs...) -> List of process identifiers\n\nEquivalent to addprocs(Sys.CPU_CORES; kwargs...)\n\nNote that workers do not run a .juliarc.jl startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.\n\n\n\naddprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers\n\nLaunches workers using the in-built LocalManager which only launches workers on the local host. This can be used to take advantage of multiple cores. addprocs(4) will add 4 processes on the local machine. If restrict is true, binding is restricted to 127.0.0.1. Keyword args dir, exename, exeflags, topology, lazy and enable_threaded_blas have the same effect as documented for addprocs(machines).\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.nprocs",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.nprocs",
+    "location": "stdlib/distributed/#Distributed.nprocs",
+    "page": "Distributed Computing",
+    "title": "Distributed.nprocs",
     "category": "Function",
     "text": "nprocs()\n\nGet the number of available processes.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.nworkers",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.nworkers",
+    "location": "stdlib/distributed/#Distributed.nworkers",
+    "page": "Distributed Computing",
+    "title": "Distributed.nworkers",
     "category": "Function",
     "text": "nworkers()\n\nGet the number of available worker processes. This is one less than nprocs(). Equal to nprocs() if nprocs() == 1.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.procs-Tuple{}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.procs",
+    "location": "stdlib/distributed/#Distributed.procs-Tuple{}",
+    "page": "Distributed Computing",
+    "title": "Distributed.procs",
     "category": "Method",
     "text": "procs()\n\nReturn a list of all process identifiers.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.procs-Tuple{Integer}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.procs",
+    "location": "stdlib/distributed/#Distributed.procs-Tuple{Integer}",
+    "page": "Distributed Computing",
+    "title": "Distributed.procs",
     "category": "Method",
     "text": "procs(pid::Integer)\n\nReturn a list of all process identifiers on the same physical node. Specifically all workers bound to the same ip-address as pid are returned.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.workers",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.workers",
+    "location": "stdlib/distributed/#Distributed.workers",
+    "page": "Distributed Computing",
+    "title": "Distributed.workers",
     "category": "Function",
     "text": "workers()\n\nReturn a list of all worker process identifiers.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.rmprocs",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.rmprocs",
+    "location": "stdlib/distributed/#Distributed.rmprocs",
+    "page": "Distributed Computing",
+    "title": "Distributed.rmprocs",
     "category": "Function",
     "text": "rmprocs(pids...; waitfor=typemax(Int))\n\nRemove the specified workers. Note that only process 1 can add or remove workers.\n\nArgument waitfor specifies how long to wait for the workers to shut down:     - If unspecified, rmprocs will wait until all requested pids are removed.     - An ErrorException is raised if all workers cannot be terminated before       the requested waitfor seconds.     - With a waitfor value of 0, the call returns immediately with the workers       scheduled for removal in a different task. The scheduled Task object is       returned. The user should call wait on the task before invoking any other       parallel calls.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.interrupt",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.interrupt",
+    "location": "stdlib/distributed/#Distributed.interrupt",
+    "page": "Distributed Computing",
+    "title": "Distributed.interrupt",
     "category": "Function",
     "text": "interrupt(pids::Integer...)\n\nInterrupt the current executing task on the specified workers. This is equivalent to pressing Ctrl-C on the local machine. If no arguments are given, all workers are interrupted.\n\n\n\ninterrupt(pids::AbstractVector=workers())\n\nInterrupt the current executing task on the specified workers. This is equivalent to pressing Ctrl-C on the local machine. If no arguments are given, all workers are interrupted.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.myid",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.myid",
+    "location": "stdlib/distributed/#Distributed.myid",
+    "page": "Distributed Computing",
+    "title": "Distributed.myid",
     "category": "Function",
     "text": "myid()\n\nGet the id of the current process.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.pmap",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.pmap",
+    "location": "stdlib/distributed/#Distributed.pmap",
+    "page": "Distributed Computing",
+    "title": "Distributed.pmap",
     "category": "Function",
     "text": "pmap([::AbstractWorkerPool], f, c...; distributed=true, batch_size=1, on_error=nothing, retry_delays=[], retry_check=nothing) -> collection\n\nTransform collection c by applying f to each element using available workers and tasks.\n\nFor multiple collection arguments, apply f elementwise.\n\nNote that f must be made available to all worker processes; see Code Availability and Loading Packages for details.\n\nIf a worker pool is not specified, all available workers, i.e., the default worker pool is used.\n\nBy default, pmap distributes the computation over all specified workers. To use only the local process and distribute over tasks, specify distributed=false. This is equivalent to using asyncmap. For example, pmap(f, c; distributed=false) is equivalent to asyncmap(f,c; ntasks=()->nworkers())\n\npmap can also use a mix of processes and tasks via the batch_size argument. For batch sizes greater than 1, the collection is processed in multiple batches, each of length batch_size or less. A batch is sent as a single request to a free worker, where a local asyncmap processes elements from the batch using multiple concurrent tasks.\n\nAny error stops pmap from processing the remainder of the collection. To override this behavior you can specify an error handling function via argument on_error which takes in a single argument, i.e., the exception. The function can stop the processing by rethrowing the error, or, to continue, return any value which is then returned inline with the results to the caller.\n\nConsider the following two examples. The first one returns the exception object inline, the second a 0 in place of any exception:\n\njulia> pmap(x->iseven(x) ? error(\"foo\") : x, 1:4; on_error=identity)\n4-element Array{Any,1}:\n 1\n  ErrorException(\"foo\")\n 3\n  ErrorException(\"foo\")\n\njulia> pmap(x->iseven(x) ? error(\"foo\") : x, 1:4; on_error=ex->0)\n4-element Array{Int64,1}:\n 1\n 0\n 3\n 0\n\nErrors can also be handled by retrying failed computations. Keyword arguments retry_delays and retry_check are passed through to retry as keyword arguments delays and check respectively. If batching is specified, and an entire batch fails, all items in the batch are retried.\n\nNote that if both on_error and retry_delays are specified, the on_error hook is called before retrying. If on_error does not throw (or rethrow) an exception, the element will not be retried.\n\nExample: On errors, retry f on an element a maximum of 3 times without any delay between retries.\n\npmap(f, c; retry_delays = zeros(3))\n\nExample: Retry f only if the exception is not of type InexactError, with exponentially increasing delays up to 3 times. Return a NaN in place for all InexactError occurrences.\n\npmap(f, c; on_error = e->(isa(e, InexactError) ? NaN : rethrow(e)), retry_delays = ExponentialBackOff(n = 3))\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.RemoteException",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.RemoteException",
+    "location": "stdlib/distributed/#Distributed.RemoteException",
+    "page": "Distributed Computing",
+    "title": "Distributed.RemoteException",
     "category": "Type",
     "text": "RemoteException(captured)\n\nExceptions on remote computations are captured and rethrown locally.  A RemoteException wraps the pid of the worker and a captured exception. A CapturedException captures the remote exception and a serializable form of the call stack when the exception was raised.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.Future",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.Future",
+    "location": "stdlib/distributed/#Distributed.Future",
+    "page": "Distributed Computing",
+    "title": "Distributed.Future",
     "category": "Type",
     "text": "Future(pid::Integer=myid())\n\nCreate a Future on process pid. The default pid is the current process.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.RemoteChannel-Tuple{Integer}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.RemoteChannel",
-    "category": "Method",
-    "text": "RemoteChannel(pid::Integer=myid())\n\nMake a reference to a Channel{Any}(1) on process pid. The default pid is the current process.\n\n\n\n"
+    "location": "stdlib/distributed/#Distributed.RemoteChannel",
+    "page": "Distributed Computing",
+    "title": "Distributed.RemoteChannel",
+    "category": "Type",
+    "text": "RemoteChannel(pid::Integer=myid())\n\nMake a reference to a Channel{Any}(1) on process pid. The default pid is the current process.\n\nRemoteChannel(f::Function, pid::Integer=myid())\n\nCreate references to remote channels of a specific size and type. f is a function that when executed on pid must return an implementation of an AbstractChannel.\n\nFor example, RemoteChannel(()->Channel{Int}(10), pid), will return a reference to a channel of type Int and size 10 on pid.\n\nThe default pid is the current process.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.RemoteChannel-Tuple{Function,Integer}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.RemoteChannel",
-    "category": "Method",
-    "text": "RemoteChannel(f::Function, pid::Integer=myid())\n\nCreate references to remote channels of a specific size and type. f is a function that when executed on pid must return an implementation of an AbstractChannel.\n\nFor example, RemoteChannel(()->Channel{Int}(10), pid), will return a reference to a channel of type Int and size 10 on pid.\n\nThe default pid is the current process.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.wait",
-    "page": "Tasks and Parallel Computing",
+    "location": "stdlib/distributed/#Base.wait",
+    "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nRemoteChannel : Wait for a value to become available on the specified remote channel.\nFuture : Wait for a value to become available for the specified future.\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n"
+    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.fetch-Tuple{Any}",
-    "page": "Tasks and Parallel Computing",
+    "location": "stdlib/distributed/#Base.fetch-Tuple{Any}",
+    "page": "Distributed Computing",
     "title": "Base.fetch",
     "category": "Method",
     "text": "fetch(x)\n\nWaits and fetches a value from x depending on the type of x:\n\nFuture: Wait for and get the value of a Future. The fetched value is cached locally. Further calls to fetch on the same reference return the cached value. If the remote value is an exception, throws a RemoteException which captures the remote exception and backtrace.\nRemoteChannel: Wait for and get the value of a remote reference. Exceptions raised are same as for a Future .\n\nDoes not remove the item fetched.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.remotecall-Tuple{Any,Integer,Vararg{Any,N} where N}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.remotecall",
+    "location": "stdlib/distributed/#Distributed.remotecall-Tuple{Any,Integer,Vararg{Any,N} where N}",
+    "page": "Distributed Computing",
+    "title": "Distributed.remotecall",
     "category": "Method",
     "text": "remotecall(f, id::Integer, args...; kwargs...) -> Future\n\nCall a function f asynchronously on the given arguments on the specified process. Return a Future. Keyword arguments, if any, are passed through to f.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.remotecall_wait-Tuple{Any,Integer,Vararg{Any,N} where N}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.remotecall_wait",
+    "location": "stdlib/distributed/#Distributed.remotecall_wait-Tuple{Any,Integer,Vararg{Any,N} where N}",
+    "page": "Distributed Computing",
+    "title": "Distributed.remotecall_wait",
     "category": "Method",
     "text": "remotecall_wait(f, id::Integer, args...; kwargs...)\n\nPerform a faster wait(remotecall(...)) in one message on the Worker specified by worker id id. Keyword arguments, if any, are passed through to f.\n\nSee also wait and remotecall.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.remotecall_fetch-Tuple{Any,Integer,Vararg{Any,N} where N}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.remotecall_fetch",
+    "location": "stdlib/distributed/#Distributed.remotecall_fetch-Tuple{Any,Integer,Vararg{Any,N} where N}",
+    "page": "Distributed Computing",
+    "title": "Distributed.remotecall_fetch",
     "category": "Method",
     "text": "remotecall_fetch(f, id::Integer, args...; kwargs...)\n\nPerform fetch(remotecall(...)) in one message. Keyword arguments, if any, are passed through to f. Any remote exceptions are captured in a RemoteException and thrown.\n\nSee also fetch and remotecall.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.remote_do-Tuple{Any,Integer,Vararg{Any,N} where N}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.remote_do",
+    "location": "stdlib/distributed/#Distributed.remote_do-Tuple{Any,Integer,Vararg{Any,N} where N}",
+    "page": "Distributed Computing",
+    "title": "Distributed.remote_do",
     "category": "Method",
     "text": "remote_do(f, id::Integer, args...; kwargs...) -> nothing\n\nExecutes f on worker id asynchronously. Unlike remotecall, it does not store the result of computation, nor is there a way to wait for its completion.\n\nA successful invocation indicates that the request has been accepted for execution on the remote node.\n\nWhile consecutive remotecalls to the same worker are serialized in the order they are invoked, the order of executions on the remote worker is undetermined. For example, remote_do(f1, 2); remotecall(f2, 2); remote_do(f3, 2) will serialize the call to f1, followed by f2 and f3 in that order. However, it is not guaranteed that f1 is executed before f3 on worker 2.\n\nAny exceptions thrown by f are printed to STDERR on the remote worker.\n\nKeyword arguments, if any, are passed through to f.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.put!-Tuple{RemoteChannel,Vararg{Any,N} where N}",
-    "page": "Tasks and Parallel Computing",
+    "location": "stdlib/distributed/#Base.put!-Tuple{RemoteChannel,Vararg{Any,N} where N}",
+    "page": "Distributed Computing",
     "title": "Base.put!",
     "category": "Method",
     "text": "put!(rr::RemoteChannel, args...)\n\nStore a set of values to the RemoteChannel. If the channel is full, blocks until space is available. Return the first argument.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.put!-Tuple{Future,Any}",
-    "page": "Tasks and Parallel Computing",
+    "location": "stdlib/distributed/#Base.put!-Tuple{Future,Any}",
+    "page": "Distributed Computing",
     "title": "Base.put!",
     "category": "Method",
     "text": "put!(rr::Future, v)\n\nStore a value to a Future rr. Futures are write-once remote references. A put! on an already set Future throws an Exception. All asynchronous remote calls return Futures and set the value to the return value of the call upon completion.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.take!-Tuple{RemoteChannel,Vararg{Any,N} where N}",
-    "page": "Tasks and Parallel Computing",
+    "location": "stdlib/distributed/#Base.take!-Tuple{RemoteChannel,Vararg{Any,N} where N}",
+    "page": "Distributed Computing",
     "title": "Base.take!",
     "category": "Method",
     "text": "take!(rr::RemoteChannel, args...)\n\nFetch value(s) from a RemoteChannel rr, removing the value(s) in the process.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.isready-Tuple{RemoteChannel,Vararg{Any,N} where N}",
-    "page": "Tasks and Parallel Computing",
+    "location": "stdlib/distributed/#Base.isready-Tuple{RemoteChannel,Vararg{Any,N} where N}",
+    "page": "Distributed Computing",
     "title": "Base.isready",
     "category": "Method",
     "text": "isready(rr::RemoteChannel, args...)\n\nDetermine whether a RemoteChannel has a value stored to it. Note that this function can cause race conditions, since by the time you receive its result it may no longer be true. However, it can be safely used on a Future since they are assigned only once.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.isready-Tuple{Future}",
-    "page": "Tasks and Parallel Computing",
+    "location": "stdlib/distributed/#Base.isready-Tuple{Future}",
+    "page": "Distributed Computing",
     "title": "Base.isready",
     "category": "Method",
     "text": "isready(rr::Future)\n\nDetermine whether a Future has a value stored to it.\n\nIf the argument Future is owned by a different node, this call will block to wait for the answer. It is recommended to wait for rr in a separate task instead or to use a local Channel as a proxy:\n\nc = Channel(1)\n@async put!(c, remotecall_fetch(long_computation, p))\nisready(c)  # will not block\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.WorkerPool",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.WorkerPool",
+    "location": "stdlib/distributed/#Distributed.WorkerPool",
+    "page": "Distributed Computing",
+    "title": "Distributed.WorkerPool",
     "category": "Type",
     "text": "WorkerPool(workers::Vector{Int})\n\nCreate a WorkerPool from a vector of worker ids.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.CachingPool",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.CachingPool",
+    "location": "stdlib/distributed/#Distributed.CachingPool",
+    "page": "Distributed Computing",
+    "title": "Distributed.CachingPool",
     "category": "Type",
     "text": "CachingPool(workers::Vector{Int})\n\nAn implementation of an AbstractWorkerPool. remote, remotecall_fetch, pmap (and other remote calls which execute functions remotely) benefit from caching the serialized/deserialized functions on the worker nodes, especially closures (which may capture large amounts of data).\n\nThe remote cache is maintained for the lifetime of the returned CachingPool object. To clear the cache earlier, use clear!(pool).\n\nFor global variables, only the bindings are captured in a closure, not the data. let blocks can be used to capture global data.\n\nExamples\n\nconst foo = rand(10^8);\nwp = CachingPool(workers())\nlet foo = foo\n    pmap(wp, i -> sum(foo) + i, 1:100);\nend\n\nThe above would transfer foo only once to each worker.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.default_worker_pool",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.default_worker_pool",
+    "location": "stdlib/distributed/#Distributed.default_worker_pool",
+    "page": "Distributed Computing",
+    "title": "Distributed.default_worker_pool",
     "category": "Function",
     "text": "default_worker_pool()\n\nWorkerPool containing idle workers - used by remote(f) and pmap (by default).\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.clear!-Tuple{CachingPool}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.clear!",
+    "location": "stdlib/distributed/#Distributed.clear!-Tuple{CachingPool}",
+    "page": "Distributed Computing",
+    "title": "Distributed.clear!",
     "category": "Method",
     "text": "clear!(pool::CachingPool) -> pool\n\nRemoves all cached functions from all participating workers.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.remote",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.remote",
+    "location": "stdlib/distributed/#Distributed.remote",
+    "page": "Distributed Computing",
+    "title": "Distributed.remote",
     "category": "Function",
     "text": "remote([::AbstractWorkerPool], f) -> Function\n\nReturn an anonymous function that executes function f on an available worker using remotecall_fetch.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.remotecall-Tuple{Any,Base.Distributed.AbstractWorkerPool,Vararg{Any,N} where N}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.remotecall",
+    "location": "stdlib/distributed/#Distributed.remotecall-Tuple{Any,AbstractWorkerPool,Vararg{Any,N} where N}",
+    "page": "Distributed Computing",
+    "title": "Distributed.remotecall",
     "category": "Method",
     "text": "remotecall(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future\n\nWorkerPool variant of remotecall(f, pid, ....). Waits for and takes a free worker from pool and performs a remotecall on it.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.remotecall_wait-Tuple{Any,Base.Distributed.AbstractWorkerPool,Vararg{Any,N} where N}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.remotecall_wait",
+    "location": "stdlib/distributed/#Distributed.remotecall_wait-Tuple{Any,AbstractWorkerPool,Vararg{Any,N} where N}",
+    "page": "Distributed Computing",
+    "title": "Distributed.remotecall_wait",
     "category": "Method",
     "text": "remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future\n\nWorkerPool variant of remotecall_wait(f, pid, ....). Waits for and takes a free worker from pool and performs a remotecall_wait on it.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.remotecall_fetch-Tuple{Any,Base.Distributed.AbstractWorkerPool,Vararg{Any,N} where N}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.remotecall_fetch",
+    "location": "stdlib/distributed/#Distributed.remotecall_fetch-Tuple{Any,AbstractWorkerPool,Vararg{Any,N} where N}",
+    "page": "Distributed Computing",
+    "title": "Distributed.remotecall_fetch",
     "category": "Method",
     "text": "remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...) -> result\n\nWorkerPool variant of remotecall_fetch(f, pid, ....). Waits for and takes a free worker from pool and performs a remotecall_fetch on it.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.remote_do-Tuple{Any,Base.Distributed.AbstractWorkerPool,Vararg{Any,N} where N}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.remote_do",
+    "location": "stdlib/distributed/#Distributed.remote_do-Tuple{Any,AbstractWorkerPool,Vararg{Any,N} where N}",
+    "page": "Distributed Computing",
+    "title": "Distributed.remote_do",
     "category": "Method",
     "text": "remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) -> nothing\n\nWorkerPool variant of remote_do(f, pid, ....). Waits for and takes a free worker from pool and performs a remote_do on it.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.timedwait",
-    "page": "Tasks and Parallel Computing",
+    "location": "stdlib/distributed/#Base.timedwait",
+    "page": "Distributed Computing",
     "title": "Base.timedwait",
     "category": "Function",
     "text": "timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)\n\nWaits until testcb returns true or for secs seconds, whichever is earlier. testcb is polled every pollint seconds.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.@spawn",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.@spawn",
+    "location": "stdlib/distributed/#Distributed.@spawn",
+    "page": "Distributed Computing",
+    "title": "Distributed.@spawn",
     "category": "Macro",
     "text": "@spawn\n\nCreate a closure around an expression and run it on an automatically-chosen process, returning a Future to the result.\n\nExamples\n\njulia> addprocs(3);\n\njulia> f = @spawn myid()\nFuture(2, 1, 5, Nullable{Any}())\n\njulia> fetch(f)\n2\n\njulia> f = @spawn myid()\nFuture(3, 1, 7, Nullable{Any}())\n\njulia> fetch(f)\n3\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.@spawnat",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.@spawnat",
+    "location": "stdlib/distributed/#Distributed.@spawnat",
+    "page": "Distributed Computing",
+    "title": "Distributed.@spawnat",
     "category": "Macro",
     "text": "@spawnat\n\nCreate a closure around an expression and run the closure asynchronously on process p. Return a Future to the result. Accepts two arguments, p and an expression.\n\nExamples\n\njulia> addprocs(1);\n\njulia> f = @spawnat 2 myid()\nFuture(2, 1, 3, Nullable{Any}())\n\njulia> fetch(f)\n2\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.@fetch",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.@fetch",
+    "location": "stdlib/distributed/#Distributed.@fetch",
+    "page": "Distributed Computing",
+    "title": "Distributed.@fetch",
     "category": "Macro",
     "text": "@fetch\n\nEquivalent to fetch(@spawn expr). See fetch and @spawn.\n\nExamples\n\njulia> addprocs(3);\n\njulia> @fetch myid()\n2\n\njulia> @fetch myid()\n3\n\njulia> @fetch myid()\n4\n\njulia> @fetch myid()\n2\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.@fetchfrom",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.@fetchfrom",
+    "location": "stdlib/distributed/#Distributed.@fetchfrom",
+    "page": "Distributed Computing",
+    "title": "Distributed.@fetchfrom",
     "category": "Macro",
     "text": "@fetchfrom\n\nEquivalent to fetch(@spawnat p expr). See fetch and @spawnat.\n\nExamples\n\njulia> addprocs(3);\n\njulia> @fetchfrom 2 myid()\n2\n\njulia> @fetchfrom 4 myid()\n4\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.@async",
-    "page": "Tasks and Parallel Computing",
+    "location": "stdlib/distributed/#Base.@async",
+    "page": "Distributed Computing",
     "title": "Base.@async",
     "category": "Macro",
     "text": "@async\n\nLike @schedule, @async wraps an expression in a Task and adds it to the local machine's scheduler queue. Additionally it adds the task to the set of items that the nearest enclosing @sync waits for.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.@sync",
-    "page": "Tasks and Parallel Computing",
+    "location": "stdlib/distributed/#Base.@sync",
+    "page": "Distributed Computing",
     "title": "Base.@sync",
     "category": "Macro",
     "text": "@sync\n\nWait until all dynamically-enclosed uses of @async, @spawn, @spawnat and @parallel are complete. All exceptions thrown by enclosed async operations are collected and thrown as a CompositeException.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.@parallel",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.@parallel",
+    "location": "stdlib/distributed/#Distributed.@parallel",
+    "page": "Distributed Computing",
+    "title": "Distributed.@parallel",
     "category": "Macro",
     "text": "@parallel\n\nA parallel for loop of the form :\n\n@parallel [reducer] for var = range\n    body\nend\n\nThe specified range is partitioned and locally executed across all workers. In case an optional reducer function is specified, @parallel performs local reductions on each worker with a final reduction on the calling process.\n\nNote that without a reducer function, @parallel executes asynchronously, i.e. it spawns independent tasks on all available workers and returns immediately without waiting for completion. To wait for completion, prefix the call with @sync, like :\n\n@sync @parallel for var = range\n    body\nend\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.@everywhere",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.@everywhere",
+    "location": "stdlib/distributed/#Distributed.@everywhere",
+    "page": "Distributed Computing",
+    "title": "Distributed.@everywhere",
     "category": "Macro",
     "text": "@everywhere [procs()] expr\n\nExecute an expression under Main on all procs. Errors on any of the processes are collected into a CompositeException and thrown. For example:\n\n@everywhere bar = 1\n\nwill define Main.bar on all processes.\n\nUnlike @spawn and @spawnat, @everywhere does not capture any local variables. Instead, local variables can be broadcast using interpolation:\n\nfoo = 1\n@everywhere bar = $foo\n\nThe optional argument procs allows specifying a subset of all processes to have execute the expression.\n\nEquivalent to calling remotecall_eval(Main, procs, expr).\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.clear!-Tuple{Any,Any}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.clear!",
+    "location": "stdlib/distributed/#Distributed.clear!-Tuple{Any,Any}",
+    "page": "Distributed Computing",
+    "title": "Distributed.clear!",
     "category": "Method",
     "text": "clear!(syms, pids=workers(); mod=Main)\n\nClears global bindings in modules by initializing them to nothing. syms should be of type Symbol or a collection of Symbols . pids and mod identify the processes and the module in which global variables are to be reinitialized. Only those names found to be defined under mod are cleared.\n\nAn exception is raised if a global constant is requested to be cleared.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.remoteref_id",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.remoteref_id",
+    "location": "stdlib/distributed/#Distributed.remoteref_id",
+    "page": "Distributed Computing",
+    "title": "Distributed.remoteref_id",
     "category": "Function",
-    "text": "Base.remoteref_id(r::AbstractRemoteRef) -> RRID\n\nFutures and RemoteChannels are identified by fields:\n\nwhere - refers to the node where the underlying object/storage referred to by the reference actually exists.\nwhence - refers to the node the remote reference was created from. Note that this is different from the node where the underlying object referred to actually exists. For example calling RemoteChannel(2) from the master process would result in a where value of 2 and a whence value of 1.\nid is unique across all references created from the worker specified by whence.\n\nTaken together,  whence and id uniquely identify a reference across all workers.\n\nBase.remoteref_id is a low-level API which returns a Base.RRID object that wraps whence and id values of a remote reference.\n\n\n\n"
+    "text": "remoteref_id(r::AbstractRemoteRef) -> RRID\n\nFutures and RemoteChannels are identified by fields:\n\nwhere - refers to the node where the underlying object/storage referred to by the reference actually exists.\nwhence - refers to the node the remote reference was created from. Note that this is different from the node where the underlying object referred to actually exists. For example calling RemoteChannel(2) from the master process would result in a where value of 2 and a whence value of 1.\nid is unique across all references created from the worker specified by whence.\n\nTaken together,  whence and id uniquely identify a reference across all workers.\n\nremoteref_id is a low-level API which returns a RRID object that wraps whence and id values of a remote reference.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.channel_from_id",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.channel_from_id",
+    "location": "stdlib/distributed/#Distributed.channel_from_id",
+    "page": "Distributed Computing",
+    "title": "Distributed.channel_from_id",
     "category": "Function",
-    "text": "Base.channel_from_id(id) -> c\n\nA low-level API which returns the backing AbstractChannel for an id returned by remoteref_id. The call is valid only on the node where the backing channel exists.\n\n\n\n"
+    "text": "channel_from_id(id) -> c\n\nA low-level API which returns the backing AbstractChannel for an id returned by remoteref_id. The call is valid only on the node where the backing channel exists.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.worker_id_from_socket",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.worker_id_from_socket",
+    "location": "stdlib/distributed/#Distributed.worker_id_from_socket",
+    "page": "Distributed Computing",
+    "title": "Distributed.worker_id_from_socket",
     "category": "Function",
-    "text": "Base.worker_id_from_socket(s) -> pid\n\nA low-level API which, given a IO connection or a Worker, returns the pid of the worker it is connected to. This is useful when writing custom serialize methods for a type, which optimizes the data written out depending on the receiving process id.\n\n\n\n"
+    "text": "worker_id_from_socket(s) -> pid\n\nA low-level API which, given a IO connection or a Worker, returns the pid of the worker it is connected to. This is useful when writing custom serialize methods for a type, which optimizes the data written out depending on the receiving process id.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.cluster_cookie-Tuple{}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.cluster_cookie",
+    "location": "stdlib/distributed/#Distributed.cluster_cookie-Tuple{}",
+    "page": "Distributed Computing",
+    "title": "Distributed.cluster_cookie",
     "category": "Method",
-    "text": "Base.cluster_cookie() -> cookie\n\nReturn the cluster cookie.\n\n\n\n"
+    "text": "cluster_cookie() -> cookie\n\nReturn the cluster cookie.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.cluster_cookie-Tuple{Any}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.cluster_cookie",
+    "location": "stdlib/distributed/#Distributed.cluster_cookie-Tuple{Any}",
+    "page": "Distributed Computing",
+    "title": "Distributed.cluster_cookie",
     "category": "Method",
-    "text": "Base.cluster_cookie(cookie) -> cookie\n\nSet the passed cookie as the cluster cookie, then returns it.\n\n\n\n"
+    "text": "cluster_cookie(cookie) -> cookie\n\nSet the passed cookie as the cluster cookie, then returns it.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#General-Parallel-Computing-Support-1",
-    "page": "Tasks and Parallel Computing",
-    "title": "General Parallel Computing Support",
+    "location": "stdlib/distributed/#Distributed-Computing-1",
+    "page": "Distributed Computing",
+    "title": "Distributed Computing",
     "category": "section",
-    "text": "Base.addprocs\nBase.nprocs\nBase.nworkers\nBase.procs()\nBase.procs(::Integer)\nBase.workers\nBase.rmprocs\nBase.interrupt\nBase.myid\nBase.pmap\nBase.RemoteException\nBase.Future\nBase.RemoteChannel(::Integer)\nBase.RemoteChannel(::Function, ::Integer)\nBase.wait\nBase.fetch(::Any)\nBase.remotecall(::Any, ::Integer, ::Any...)\nBase.remotecall_wait(::Any, ::Integer, ::Any...)\nBase.remotecall_fetch(::Any, ::Integer, ::Any...)\nBase.remote_do(::Any, ::Integer, ::Any...)\nBase.put!(::RemoteChannel, ::Any...)\nBase.put!(::Future, ::Any)\nBase.take!(::RemoteChannel, ::Any...)\nBase.isready(::RemoteChannel, ::Any...)\nBase.isready(::Future)\nBase.WorkerPool\nBase.CachingPool\nBase.default_worker_pool\nBase.clear!(::CachingPool)\nBase.remote\nBase.remotecall(::Any, ::Base.Distributed.AbstractWorkerPool, ::Any...)\nBase.remotecall_wait(::Any, ::Base.Distributed.AbstractWorkerPool, ::Any...)\nBase.remotecall_fetch(::Any, ::Base.Distributed.AbstractWorkerPool, ::Any...)\nBase.remote_do(::Any, ::Base.Distributed.AbstractWorkerPool, ::Any...)\nBase.timedwait\nBase.@spawn\nBase.@spawnat\nBase.@fetch\nBase.@fetchfrom\nBase.@async\nBase.@sync\nBase.@parallel\nBase.@everywhere\nBase.clear!(::Any, ::Any; ::Any)\nBase.remoteref_id\nBase.channel_from_id\nBase.worker_id_from_socket\nBase.cluster_cookie()\nBase.cluster_cookie(::Any)"
+    "text": "Distributed.addprocs\nDistributed.nprocs\nDistributed.nworkers\nDistributed.procs()\nDistributed.procs(::Integer)\nDistributed.workers\nDistributed.rmprocs\nDistributed.interrupt\nDistributed.myid\nDistributed.pmap\nDistributed.RemoteException\nDistributed.Future\nDistributed.RemoteChannel\nDistributed.wait\nDistributed.fetch(::Any)\nDistributed.remotecall(::Any, ::Integer, ::Any...)\nDistributed.remotecall_wait(::Any, ::Integer, ::Any...)\nDistributed.remotecall_fetch(::Any, ::Integer, ::Any...)\nDistributed.remote_do(::Any, ::Integer, ::Any...)\nDistributed.put!(::RemoteChannel, ::Any...)\nDistributed.put!(::Future, ::Any)\nDistributed.take!(::RemoteChannel, ::Any...)\nDistributed.isready(::RemoteChannel, ::Any...)\nDistributed.isready(::Future)\nDistributed.WorkerPool\nDistributed.CachingPool\nDistributed.default_worker_pool\nDistributed.clear!(::CachingPool)\nDistributed.remote\nDistributed.remotecall(::Any, ::AbstractWorkerPool, ::Any...)\nDistributed.remotecall_wait(::Any, ::AbstractWorkerPool, ::Any...)\nDistributed.remotecall_fetch(::Any, ::AbstractWorkerPool, ::Any...)\nDistributed.remote_do(::Any, ::AbstractWorkerPool, ::Any...)\nDistributed.timedwait\nDistributed.@spawn\nDistributed.@spawnat\nDistributed.@fetch\nDistributed.@fetchfrom\nDistributed.@async\nDistributed.@sync\nDistributed.@parallel\nDistributed.@everywhere\nDistributed.clear!(::Any, ::Any; ::Any)\nDistributed.remoteref_id\nDistributed.channel_from_id\nDistributed.worker_id_from_socket\nDistributed.cluster_cookie()\nDistributed.cluster_cookie(::Any)"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Threads.threadid",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.threadid",
-    "category": "Function",
-    "text": "Threads.threadid()\n\nGet the ID number of the current thread of execution. The master thread has ID 1.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.nthreads",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.nthreads",
-    "category": "Function",
-    "text": "Threads.nthreads()\n\nGet the number of threads available to the Julia process. This is the inclusive upper bound on threadid().\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.@threads",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.@threads",
-    "category": "Macro",
-    "text": "Threads.@threads\n\nA macro to parallelize a for-loop to run with multiple threads. This spawns nthreads() number of threads, splits the iteration space amongst them, and iterates in parallel. A barrier is placed at the end of the loop which waits for all the threads to finish execution, and the loop returns.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.Atomic",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.Atomic",
-    "category": "Type",
-    "text": "Threads.Atomic{T}\n\nHolds a reference to an object of type T, ensuring that it is only accessed atomically, i.e. in a thread-safe manner.\n\nOnly certain \"simple\" types can be used atomically, namely the primitive integer and float-point types. These are Int8...Int128, UInt8...UInt128, and Float16...Float64.\n\nNew atomic objects can be created from a non-atomic values; if none is specified, the atomic object is initialized with zero.\n\nAtomic objects can be accessed using the [] notation:\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> x[] = 1\n1\n\njulia> x[]\n1\n\nAtomic operations use an atomic_ prefix, such as atomic_add!, atomic_xchg!, etc.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.atomic_cas!",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.atomic_cas!",
-    "category": "Function",
-    "text": "Threads.atomic_cas!(x::Atomic{T}, cmp::T, newval::T) where T\n\nAtomically compare-and-set x\n\nAtomically compares the value in x with cmp. If equal, write newval to x. Otherwise, leaves x unmodified. Returns the old value in x. By comparing the returned value to cmp (via ===) one knows whether x was modified and now holds the new value newval.\n\nFor further details, see LLVM's cmpxchg instruction.\n\nThis function can be used to implement transactional semantics. Before the transaction, one records the value in x. After the transaction, the new value is stored only if x has not been modified in the mean time.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_cas!(x, 4, 2);\n\njulia> x\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_cas!(x, 3, 2);\n\njulia> x\nBase.Threads.Atomic{Int64}(2)\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.atomic_xchg!",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.atomic_xchg!",
-    "category": "Function",
-    "text": "Threads.atomic_xchg!(x::Atomic{T}, newval::T) where T\n\nAtomically exchange the value in x\n\nAtomically exchanges the value in x with newval. Returns the old value.\n\nFor further details, see LLVM's atomicrmw xchg instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_xchg!(x, 2)\n3\n\njulia> x[]\n2\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.atomic_add!",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.atomic_add!",
-    "category": "Function",
-    "text": "Threads.atomic_add!(x::Atomic{T}, val::T) where T\n\nAtomically add val to x\n\nPerforms x[] += val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw add instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_add!(x, 2)\n3\n\njulia> x[]\n5\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.atomic_sub!",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.atomic_sub!",
-    "category": "Function",
-    "text": "Threads.atomic_sub!(x::Atomic{T}, val::T) where T\n\nAtomically subtract val from x\n\nPerforms x[] -= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw sub instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_sub!(x, 2)\n3\n\njulia> x[]\n1\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.atomic_and!",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.atomic_and!",
-    "category": "Function",
-    "text": "Threads.atomic_and!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-and x with val\n\nPerforms x[] &= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw and instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_and!(x, 2)\n3\n\njulia> x[]\n2\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.atomic_nand!",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.atomic_nand!",
-    "category": "Function",
-    "text": "Threads.atomic_nand!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-nand (not-and) x with val\n\nPerforms x[] = ~(x[] & val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw nand instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_nand!(x, 2)\n3\n\njulia> x[]\n-3\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.atomic_or!",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.atomic_or!",
-    "category": "Function",
-    "text": "Threads.atomic_or!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-or x with val\n\nPerforms x[] |= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw or instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_or!(x, 7)\n5\n\njulia> x[]\n7\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.atomic_xor!",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.atomic_xor!",
-    "category": "Function",
-    "text": "Threads.atomic_xor!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-xor (exclusive-or) x with val\n\nPerforms x[] $= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw xor instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_xor!(x, 7)\n5\n\njulia> x[]\n2\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.atomic_max!",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.atomic_max!",
-    "category": "Function",
-    "text": "Threads.atomic_max!(x::Atomic{T}, val::T) where T\n\nAtomically store the maximum of x and val in x\n\nPerforms x[] = max(x[], val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw max instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_max!(x, 7)\n5\n\njulia> x[]\n7\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.atomic_min!",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.atomic_min!",
-    "category": "Function",
-    "text": "Threads.atomic_min!(x::Atomic{T}, val::T) where T\n\nAtomically store the minimum of x and val in x\n\nPerforms x[] = min(x[], val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw min instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(7)\nBase.Threads.Atomic{Int64}(7)\n\njulia> Threads.atomic_min!(x, 5)\n7\n\njulia> x[]\n5\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.atomic_fence",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.atomic_fence",
-    "category": "Function",
-    "text": "Threads.atomic_fence()\n\nInsert a sequential-consistency memory fence\n\nInserts a memory fence with sequentially-consistent ordering semantics. There are algorithms where this is needed, i.e. where an acquire/release ordering is insufficient.\n\nThis is likely a very expensive operation. Given that all other atomic operations in Julia already have acquire/release semantics, explicit fences should not be necessary in most cases.\n\nFor further details, see LLVM's fence instruction.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Multi-Threading-1",
-    "page": "Tasks and Parallel Computing",
-    "title": "Multi-Threading",
-    "category": "section",
-    "text": "This experimental interface supports Julia's multi-threading capabilities. Types and functions described here might (and likely will) change in the future.Base.Threads.threadid\nBase.Threads.nthreads\nBase.Threads.@threads\nBase.Threads.Atomic\nBase.Threads.atomic_cas!\nBase.Threads.atomic_xchg!\nBase.Threads.atomic_add!\nBase.Threads.atomic_sub!\nBase.Threads.atomic_and!\nBase.Threads.atomic_nand!\nBase.Threads.atomic_or!\nBase.Threads.atomic_xor!\nBase.Threads.atomic_max!\nBase.Threads.atomic_min!\nBase.Threads.atomic_fence"
-},
-
-{
-    "location": "stdlib/parallel/#Base.@threadcall",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.@threadcall",
-    "category": "Macro",
-    "text": "@threadcall((cfunc, clib), rettype, (argtypes...), argvals...)\n\nThe @threadcall macro is called in the same way as ccall but does the work in a different thread. This is useful when you want to call a blocking C function without causing the main julia thread to become blocked. Concurrency is limited by size of the libuv thread pool, which defaults to 4 threads but can be increased by setting the UV_THREADPOOL_SIZE environment variable and restarting the julia process.\n\nNote that the called function should never call back into Julia.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#ccall-using-a-threadpool-(Experimental)-1",
-    "page": "Tasks and Parallel Computing",
-    "title": "ccall using a threadpool (Experimental)",
-    "category": "section",
-    "text": "Base.@threadcall"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.AbstractLock",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.AbstractLock",
-    "category": "Type",
-    "text": "AbstractLock\n\nAbstract supertype describing types that implement the thread-safe synchronization primitives: lock, trylock, unlock, and islocked\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.lock",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.lock",
-    "category": "Function",
-    "text": "lock(the_lock)\n\nAcquires the lock when it becomes available. If the lock is already locked by a different task/thread, it waits for it to become available.\n\nEach lock must be matched by an unlock.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.unlock",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.unlock",
-    "category": "Function",
-    "text": "unlock(the_lock)\n\nReleases ownership of the lock.\n\nIf this is a recursive lock which has been acquired before, it just decrements an internal counter and returns immediately.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.trylock",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.trylock",
-    "category": "Function",
-    "text": "trylock(the_lock) -> Success (Boolean)\n\nAcquires the lock if it is available, returning true if successful. If the lock is already locked by a different task/thread, returns false.\n\nEach successful trylock must be matched by an unlock.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.islocked",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.islocked",
-    "category": "Function",
-    "text": "islocked(the_lock) -> Status (Boolean)\n\nCheck whether the lock is held by any task/thread. This should not be used for synchronization (see instead trylock).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.ReentrantLock",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.ReentrantLock",
-    "category": "Type",
-    "text": "ReentrantLock()\n\nCreates a reentrant lock for synchronizing Tasks. The same task can acquire the lock as many times as required. Each lock must be matched with an unlock.\n\nThis lock is NOT threadsafe. See Threads.Mutex for a threadsafe lock.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.Mutex",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.Mutex",
-    "category": "Type",
-    "text": "Mutex()\n\nThese are standard system mutexes for locking critical sections of logic.\n\nOn Windows, this is a critical section object, on pthreads, this is a pthread_mutex_t.\n\nSee also SpinLock for a lighter-weight lock.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.SpinLock",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.SpinLock",
-    "category": "Type",
-    "text": "SpinLock()\n\nCreates a non-reentrant lock. Recursive use will result in a deadlock. Each lock must be matched with an unlock.\n\nTest-and-test-and-set spin locks are quickest up to about 30ish contending threads. If you have more contention than that, perhaps a lock is the wrong way to synchronize.\n\nSee also RecursiveSpinLock for a version that permits recursion.\n\nSee also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Threads.RecursiveSpinLock",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Threads.RecursiveSpinLock",
-    "category": "Type",
-    "text": "RecursiveSpinLock()\n\nCreates a reentrant lock. The same thread can acquire the lock as many times as required. Each lock must be matched with an unlock.\n\nSee also SpinLock for a slightly faster version.\n\nSee also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Semaphore",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Semaphore",
-    "category": "Type",
-    "text": "Semaphore(sem_size)\n\nCreates a counting semaphore that allows at most sem_size acquires to be in use at any time. Each acquire must be mached with a release.\n\nThis construct is NOT threadsafe.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.acquire",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.acquire",
-    "category": "Function",
-    "text": "acquire(s::Semaphore)\n\nWait for one of the sem_size permits to be available, blocking until one can be acquired.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.release",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.release",
-    "category": "Function",
-    "text": "release(s::Semaphore)\n\nReturn one permit to the pool, possibly allowing another task to acquire it and resume execution.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Synchronization-Primitives-1",
-    "page": "Tasks and Parallel Computing",
-    "title": "Synchronization Primitives",
-    "category": "section",
-    "text": "Base.Threads.AbstractLock\nBase.lock\nBase.unlock\nBase.trylock\nBase.islocked\nBase.ReentrantLock\nBase.Threads.Mutex\nBase.Threads.SpinLock\nBase.Threads.RecursiveSpinLock\nBase.Semaphore\nBase.acquire\nBase.release"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Distributed.launch",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.launch",
+    "location": "stdlib/distributed/#Distributed.launch",
+    "page": "Distributed Computing",
+    "title": "Distributed.launch",
     "category": "Function",
     "text": "launch(manager::ClusterManager, params::Dict, launched::Array, launch_ntfy::Condition)\n\nImplemented by cluster managers. For every Julia worker launched by this function, it should append a WorkerConfig entry to launched and notify launch_ntfy. The function MUST exit once all workers, requested by manager have been launched. params is a dictionary of all keyword arguments addprocs was called with.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.manage",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.manage",
+    "location": "stdlib/distributed/#Distributed.manage",
+    "page": "Distributed Computing",
+    "title": "Distributed.manage",
     "category": "Function",
     "text": "manage(manager::ClusterManager, id::Integer, config::WorkerConfig. op::Symbol)\n\nImplemented by cluster managers. It is called on the master process, during a worker's lifetime, with appropriate op values:\n\nwith :register/:deregister when a worker is added / removed from the Julia worker pool.\nwith :interrupt when interrupt(workers) is called. The ClusterManager should signal the appropriate worker with an interrupt signal.\nwith :finalize for cleanup purposes.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.kill-Tuple{ClusterManager,Int64,WorkerConfig}",
-    "page": "Tasks and Parallel Computing",
+    "location": "stdlib/distributed/#Base.kill-Tuple{ClusterManager,Int64,WorkerConfig}",
+    "page": "Distributed Computing",
     "title": "Base.kill",
     "category": "Method",
     "text": "kill(manager::ClusterManager, pid::Int, config::WorkerConfig)\n\nImplemented by cluster managers. It is called on the master process, by rmprocs. It should cause the remote worker specified by pid to exit. kill(manager::ClusterManager.....) executes a remote exit() on pid.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.connect-Tuple{ClusterManager,Int64,WorkerConfig}",
-    "page": "Tasks and Parallel Computing",
+    "location": "stdlib/distributed/#Base.connect-Tuple{ClusterManager,Int64,WorkerConfig}",
+    "page": "Distributed Computing",
     "title": "Base.connect",
     "category": "Method",
     "text": "connect(manager::ClusterManager, pid::Int, config::WorkerConfig) -> (instrm::IO, outstrm::IO)\n\nImplemented by cluster managers using custom transports. It should establish a logical connection to worker with id pid, specified by config and return a pair of IO objects. Messages from pid to current process will be read off instrm, while messages to be sent to pid will be written to outstrm. The custom transport implementation must ensure that messages are delivered and received completely and in order. connect(manager::ClusterManager.....) sets up TCP/IP socket connections in-between workers.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.init_worker",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.init_worker",
+    "location": "stdlib/distributed/#Distributed.init_worker",
+    "page": "Distributed Computing",
+    "title": "Distributed.init_worker",
     "category": "Function",
     "text": "init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClusterManager())\n\nCalled by cluster managers implementing custom transports. It initializes a newly launched process as a worker. Command line argument --worker[=<cookie>] has the effect of initializing a process as a worker using TCP/IP sockets for transport. cookie is a cluster_cookie.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.start_worker",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.start_worker",
+    "location": "stdlib/distributed/#Distributed.start_worker",
+    "page": "Distributed Computing",
+    "title": "Distributed.start_worker",
     "category": "Function",
-    "text": "start_worker(out::IO=STDOUT)\nstart_worker(cookie::AbstractString)\nstart_worker(out::IO, cookie::AbstractString)\n\nBase.start_worker is an internal function which is the default entry point for worker processes connecting via TCP/IP. It sets up the process as a Julia cluster worker.\n\nIf the cookie is unspecified, the worker tries to read it from its STDIN.\n\nhost:port information is written to stream out (defaults to STDOUT).\n\nThe function closes STDIN (after reading the cookie if required), redirects STDERR to STDOUT, listens on a free port (or if specified, the port in the --bind-to command line option) and schedules tasks to process incoming TCP connections and requests.\n\nIt does not return.\n\n\n\n"
+    "text": "start_worker(out::IO=STDOUT)\nstart_worker(cookie::AbstractString)\nstart_worker(out::IO, cookie::AbstractString)\n\nstart_worker is an internal function which is the default entry point for worker processes connecting via TCP/IP. It sets up the process as a Julia cluster worker.\n\nIf the cookie is unspecified, the worker tries to read it from its STDIN.\n\nhost:port information is written to stream out (defaults to STDOUT).\n\nThe function closes STDIN (after reading the cookie if required), redirects STDERR to STDOUT, listens on a free port (or if specified, the port in the --bind-to command line option) and schedules tasks to process incoming TCP connections and requests.\n\nIt does not return.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Base.Distributed.process_messages",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.process_messages",
+    "location": "stdlib/distributed/#Distributed.process_messages",
+    "page": "Distributed Computing",
+    "title": "Distributed.process_messages",
     "category": "Function",
-    "text": "Base.process_messages(r_stream::IO, w_stream::IO, incoming::Bool=true)\n\nCalled by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two IO objects, one for incoming messages and the other for messages addressed to the remote worker. If incoming is true, the remote peer initiated the connection. Whichever of the pair initiates the connection sends the cluster cookie and its Julia version number to perform the authentication handshake.\n\nSee also cluster_cookie.\n\n\n\n"
+    "text": "process_messages(r_stream::IO, w_stream::IO, incoming::Bool=true)\n\nCalled by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two IO objects, one for incoming messages and the other for messages addressed to the remote worker. If incoming is true, the remote peer initiated the connection. Whichever of the pair initiates the connection sends the cluster cookie and its Julia version number to perform the authentication handshake.\n\nSee also cluster_cookie.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel/#Cluster-Manager-Interface-1",
-    "page": "Tasks and Parallel Computing",
+    "location": "stdlib/distributed/#Cluster-Manager-Interface-1",
+    "page": "Distributed Computing",
     "title": "Cluster Manager Interface",
     "category": "section",
-    "text": "This interface provides a mechanism to launch and manage Julia workers on different cluster environments. There are two types of managers present in Base: LocalManager, for launching additional workers on the same host, and SSHManager, for launching on remote hosts via ssh. TCP/IP sockets are used to connect and transport messages between processes. It is possible for Cluster Managers to provide a different transport.Base.launch\nBase.manage\nBase.kill(::ClusterManager, ::Int, ::WorkerConfig)\nBase.connect(::ClusterManager, ::Int, ::WorkerConfig)\nBase.init_worker\nBase.start_worker\nBase.process_messages"
+    "text": "This interface provides a mechanism to launch and manage Julia workers on different cluster environments. There are two types of managers present in Base: LocalManager, for launching additional workers on the same host, and SSHManager, for launching on remote hosts via ssh. TCP/IP sockets are used to connect and transport messages between processes. It is possible for Cluster Managers to provide a different transport.Distributed.launch\nDistributed.manage\nDistributed.kill(::ClusterManager, ::Int, ::WorkerConfig)\nDistributed.connect(::ClusterManager, ::Int, ::WorkerConfig)\nDistributed.init_worker\nDistributed.start_worker\nDistributed.process_messages"
+},
+
+{
+    "location": "stdlib/multi-threading/#",
+    "page": "Multi-Threading",
+    "title": "Multi-Threading",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.threadid",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.threadid",
+    "category": "Function",
+    "text": "Threads.threadid()\n\nGet the ID number of the current thread of execution. The master thread has ID 1.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.nthreads",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.nthreads",
+    "category": "Function",
+    "text": "Threads.nthreads()\n\nGet the number of threads available to the Julia process. This is the inclusive upper bound on threadid().\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.@threads",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.@threads",
+    "category": "Macro",
+    "text": "Threads.@threads\n\nA macro to parallelize a for-loop to run with multiple threads. This spawns nthreads() number of threads, splits the iteration space amongst them, and iterates in parallel. A barrier is placed at the end of the loop which waits for all the threads to finish execution, and the loop returns.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.Atomic",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.Atomic",
+    "category": "Type",
+    "text": "Threads.Atomic{T}\n\nHolds a reference to an object of type T, ensuring that it is only accessed atomically, i.e. in a thread-safe manner.\n\nOnly certain \"simple\" types can be used atomically, namely the primitive integer and float-point types. These are Int8...Int128, UInt8...UInt128, and Float16...Float64.\n\nNew atomic objects can be created from a non-atomic values; if none is specified, the atomic object is initialized with zero.\n\nAtomic objects can be accessed using the [] notation:\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> x[] = 1\n1\n\njulia> x[]\n1\n\nAtomic operations use an atomic_ prefix, such as atomic_add!, atomic_xchg!, etc.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.atomic_cas!",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.atomic_cas!",
+    "category": "Function",
+    "text": "Threads.atomic_cas!(x::Atomic{T}, cmp::T, newval::T) where T\n\nAtomically compare-and-set x\n\nAtomically compares the value in x with cmp. If equal, write newval to x. Otherwise, leaves x unmodified. Returns the old value in x. By comparing the returned value to cmp (via ===) one knows whether x was modified and now holds the new value newval.\n\nFor further details, see LLVM's cmpxchg instruction.\n\nThis function can be used to implement transactional semantics. Before the transaction, one records the value in x. After the transaction, the new value is stored only if x has not been modified in the mean time.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_cas!(x, 4, 2);\n\njulia> x\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_cas!(x, 3, 2);\n\njulia> x\nBase.Threads.Atomic{Int64}(2)\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.atomic_xchg!",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.atomic_xchg!",
+    "category": "Function",
+    "text": "Threads.atomic_xchg!(x::Atomic{T}, newval::T) where T\n\nAtomically exchange the value in x\n\nAtomically exchanges the value in x with newval. Returns the old value.\n\nFor further details, see LLVM's atomicrmw xchg instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_xchg!(x, 2)\n3\n\njulia> x[]\n2\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.atomic_add!",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.atomic_add!",
+    "category": "Function",
+    "text": "Threads.atomic_add!(x::Atomic{T}, val::T) where T\n\nAtomically add val to x\n\nPerforms x[] += val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw add instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_add!(x, 2)\n3\n\njulia> x[]\n5\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.atomic_sub!",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.atomic_sub!",
+    "category": "Function",
+    "text": "Threads.atomic_sub!(x::Atomic{T}, val::T) where T\n\nAtomically subtract val from x\n\nPerforms x[] -= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw sub instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_sub!(x, 2)\n3\n\njulia> x[]\n1\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.atomic_and!",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.atomic_and!",
+    "category": "Function",
+    "text": "Threads.atomic_and!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-and x with val\n\nPerforms x[] &= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw and instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_and!(x, 2)\n3\n\njulia> x[]\n2\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.atomic_nand!",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.atomic_nand!",
+    "category": "Function",
+    "text": "Threads.atomic_nand!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-nand (not-and) x with val\n\nPerforms x[] = ~(x[] & val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw nand instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_nand!(x, 2)\n3\n\njulia> x[]\n-3\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.atomic_or!",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.atomic_or!",
+    "category": "Function",
+    "text": "Threads.atomic_or!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-or x with val\n\nPerforms x[] |= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw or instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_or!(x, 7)\n5\n\njulia> x[]\n7\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.atomic_xor!",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.atomic_xor!",
+    "category": "Function",
+    "text": "Threads.atomic_xor!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-xor (exclusive-or) x with val\n\nPerforms x[] $= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw xor instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_xor!(x, 7)\n5\n\njulia> x[]\n2\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.atomic_max!",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.atomic_max!",
+    "category": "Function",
+    "text": "Threads.atomic_max!(x::Atomic{T}, val::T) where T\n\nAtomically store the maximum of x and val in x\n\nPerforms x[] = max(x[], val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw max instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_max!(x, 7)\n5\n\njulia> x[]\n7\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.atomic_min!",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.atomic_min!",
+    "category": "Function",
+    "text": "Threads.atomic_min!(x::Atomic{T}, val::T) where T\n\nAtomically store the minimum of x and val in x\n\nPerforms x[] = min(x[], val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw min instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(7)\nBase.Threads.Atomic{Int64}(7)\n\njulia> Threads.atomic_min!(x, 5)\n7\n\njulia> x[]\n5\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.atomic_fence",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.atomic_fence",
+    "category": "Function",
+    "text": "Threads.atomic_fence()\n\nInsert a sequential-consistency memory fence\n\nInserts a memory fence with sequentially-consistent ordering semantics. There are algorithms where this is needed, i.e. where an acquire/release ordering is insufficient.\n\nThis is likely a very expensive operation. Given that all other atomic operations in Julia already have acquire/release semantics, explicit fences should not be necessary in most cases.\n\nFor further details, see LLVM's fence instruction.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Multi-Threading-1",
+    "page": "Multi-Threading",
+    "title": "Multi-Threading",
+    "category": "section",
+    "text": "This experimental interface supports Julia's multi-threading capabilities. Types and functions described here might (and likely will) change in the future.Base.Threads.threadid\nBase.Threads.nthreads\nBase.Threads.@threads\nBase.Threads.Atomic\nBase.Threads.atomic_cas!\nBase.Threads.atomic_xchg!\nBase.Threads.atomic_add!\nBase.Threads.atomic_sub!\nBase.Threads.atomic_and!\nBase.Threads.atomic_nand!\nBase.Threads.atomic_or!\nBase.Threads.atomic_xor!\nBase.Threads.atomic_max!\nBase.Threads.atomic_min!\nBase.Threads.atomic_fence"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.@threadcall",
+    "page": "Multi-Threading",
+    "title": "Base.@threadcall",
+    "category": "Macro",
+    "text": "@threadcall((cfunc, clib), rettype, (argtypes...), argvals...)\n\nThe @threadcall macro is called in the same way as ccall but does the work in a different thread. This is useful when you want to call a blocking C function without causing the main julia thread to become blocked. Concurrency is limited by size of the libuv thread pool, which defaults to 4 threads but can be increased by setting the UV_THREADPOOL_SIZE environment variable and restarting the julia process.\n\nNote that the called function should never call back into Julia.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#ccall-using-a-threadpool-(Experimental)-1",
+    "page": "Multi-Threading",
+    "title": "ccall using a threadpool (Experimental)",
+    "category": "section",
+    "text": "Base.@threadcall"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.AbstractLock",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.AbstractLock",
+    "category": "Type",
+    "text": "AbstractLock\n\nAbstract supertype describing types that implement the thread-safe synchronization primitives: lock, trylock, unlock, and islocked\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.lock",
+    "page": "Multi-Threading",
+    "title": "Base.lock",
+    "category": "Function",
+    "text": "lock(the_lock)\n\nAcquires the lock when it becomes available. If the lock is already locked by a different task/thread, it waits for it to become available.\n\nEach lock must be matched by an unlock.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.unlock",
+    "page": "Multi-Threading",
+    "title": "Base.unlock",
+    "category": "Function",
+    "text": "unlock(the_lock)\n\nReleases ownership of the lock.\n\nIf this is a recursive lock which has been acquired before, it just decrements an internal counter and returns immediately.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.trylock",
+    "page": "Multi-Threading",
+    "title": "Base.trylock",
+    "category": "Function",
+    "text": "trylock(the_lock) -> Success (Boolean)\n\nAcquires the lock if it is available, returning true if successful. If the lock is already locked by a different task/thread, returns false.\n\nEach successful trylock must be matched by an unlock.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.islocked",
+    "page": "Multi-Threading",
+    "title": "Base.islocked",
+    "category": "Function",
+    "text": "islocked(the_lock) -> Status (Boolean)\n\nCheck whether the lock is held by any task/thread. This should not be used for synchronization (see instead trylock).\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.ReentrantLock",
+    "page": "Multi-Threading",
+    "title": "Base.ReentrantLock",
+    "category": "Type",
+    "text": "ReentrantLock()\n\nCreates a reentrant lock for synchronizing Tasks. The same task can acquire the lock as many times as required. Each lock must be matched with an unlock.\n\nThis lock is NOT threadsafe. See Threads.Mutex for a threadsafe lock.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.Mutex",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.Mutex",
+    "category": "Type",
+    "text": "Mutex()\n\nThese are standard system mutexes for locking critical sections of logic.\n\nOn Windows, this is a critical section object, on pthreads, this is a pthread_mutex_t.\n\nSee also SpinLock for a lighter-weight lock.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.SpinLock",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.SpinLock",
+    "category": "Type",
+    "text": "SpinLock()\n\nCreates a non-reentrant lock. Recursive use will result in a deadlock. Each lock must be matched with an unlock.\n\nTest-and-test-and-set spin locks are quickest up to about 30ish contending threads. If you have more contention than that, perhaps a lock is the wrong way to synchronize.\n\nSee also RecursiveSpinLock for a version that permits recursion.\n\nSee also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Threads.RecursiveSpinLock",
+    "page": "Multi-Threading",
+    "title": "Base.Threads.RecursiveSpinLock",
+    "category": "Type",
+    "text": "RecursiveSpinLock()\n\nCreates a reentrant lock. The same thread can acquire the lock as many times as required. Each lock must be matched with an unlock.\n\nSee also SpinLock for a slightly faster version.\n\nSee also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.Semaphore",
+    "page": "Multi-Threading",
+    "title": "Base.Semaphore",
+    "category": "Type",
+    "text": "Semaphore(sem_size)\n\nCreates a counting semaphore that allows at most sem_size acquires to be in use at any time. Each acquire must be mached with a release.\n\nThis construct is NOT threadsafe.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.acquire",
+    "page": "Multi-Threading",
+    "title": "Base.acquire",
+    "category": "Function",
+    "text": "acquire(s::Semaphore)\n\nWait for one of the sem_size permits to be available, blocking until one can be acquired.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Base.release",
+    "page": "Multi-Threading",
+    "title": "Base.release",
+    "category": "Function",
+    "text": "release(s::Semaphore)\n\nReturn one permit to the pool, possibly allowing another task to acquire it and resume execution.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/multi-threading/#Synchronization-Primitives-1",
+    "page": "Multi-Threading",
+    "title": "Synchronization Primitives",
+    "category": "section",
+    "text": "Base.Threads.AbstractLock\nBase.lock\nBase.unlock\nBase.trylock\nBase.islocked\nBase.ReentrantLock\nBase.Threads.Mutex\nBase.Threads.SpinLock\nBase.Threads.RecursiveSpinLock\nBase.Semaphore\nBase.acquire\nBase.release"
 },
 
 {
@@ -16373,7 +16357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.readchomp",
     "category": "Function",
-    "text": "readchomp(x)\n\nRead the entirety of x as a string and remove a single trailing newline. Equivalent to chomp!(read(x, String)).\n\nExamples\n\njulia> open(\"my_file.txt\", \"w\") do io\n           write(io, \"JuliaLang is a GitHub organization.\\nIt has many members.\\n\");\n       end;\n\njulia> readchomp(\"my_file.txt\")\n\"JuliaLang is a GitHub organization.\\nIt has many members.\"\n\njulia> rm(\"my_file.txt\");\n\n\n\n"
+    "text": "readchomp(x)\n\nRead the entirety of x as a string and remove a single trailing newline if there is one. Equivalent to chomp(read(x, String)).\n\nExamples\n\njulia> open(\"my_file.txt\", \"w\") do io\n           write(io, \"JuliaLang is a GitHub organization.\\nIt has many members.\\n\");\n       end;\n\njulia> readchomp(\"my_file.txt\")\n\"JuliaLang is a GitHub organization.\\nIt has many members.\"\n\njulia> rm(\"my_file.txt\");\n\n\n\n"
 },
 
 {
@@ -19241,9 +19225,9 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/sharedarrays/#Base.Distributed.procs-Tuple{SharedArray}",
+    "location": "stdlib/sharedarrays/#Distributed.procs-Tuple{SharedArray}",
     "page": "Shared Arrays",
-    "title": "Base.Distributed.procs",
+    "title": "Distributed.procs",
     "category": "Method",
     "text": "procs(S::SharedArray)\n\nGet the vector of processes mapping the shared array.\n\n\n\n"
 },
@@ -19445,7 +19429,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unicode",
     "title": "Base.Unicode.titlecase",
     "category": "Function",
-    "text": "titlecase(s::AbstractString)\n\nCapitalize the first character of each word in s. See also ucfirst to capitalize only the first character in s.\n\nExamples\n\njulia> using Unicode\n\njulia> titlecase(\"the julia programming language\")\n\"The Julia Programming Language\"\n\n\n\n"
+    "text": "titlecase(s::AbstractString) -> String\n\nCapitalize the first character of each word in s. See also ucfirst to capitalize only the first character in s.\n\nExamples\n\njulia> titlecase(\"the Julia programming language\")\n\"The Julia Programming Language\"\n\n\n\n"
 },
 
 {
@@ -19453,7 +19437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unicode",
     "title": "Base.Unicode.ucfirst",
     "category": "Function",
-    "text": "ucfirst(s::AbstractString)\n\nReturn string with the first character converted to uppercase (technically \"title case\" for Unicode). See also titlecase to capitalize the first character of every word in s.\n\nExamples\n\njulia> using Unicode\n\njulia> ucfirst(\"python\")\n\"Python\"\n\n\n\n"
+    "text": "ucfirst(s::AbstractString) -> String\n\nReturn s with the first character converted to uppercase (technically \"title case\" for Unicode). See also titlecase to capitalize the first character of every word in s.\n\nSee also: lcfirst, uppercase, lowercase, titlecase\n\nExamples\n\njulia> ucfirst(\"python\")\n\"Python\"\n\n\n\n"
 },
 
 {
@@ -19461,7 +19445,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unicode",
     "title": "Base.Unicode.lcfirst",
     "category": "Function",
-    "text": "lcfirst(s::AbstractString)\n\nReturn string with the first character converted to lowercase.\n\nExamples\n\njulia> using Unicode\n\njulia> lcfirst(\"Julia\")\n\"julia\"\n\n\n\n"
+    "text": "lcfirst(s::AbstractString)\n\nReturn s with the first character converted to lowercase.\n\nSee also: ucfirst, uppercase, lowercase, titlecase\n\nExamples\n\njulia> lcfirst(\"Julia\")\n\"julia\"\n\n\n\n"
 },
 
 {
