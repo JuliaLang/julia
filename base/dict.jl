@@ -146,7 +146,7 @@ Dict{String,Int64} with 2 entries:
   "A" => 1
 ```
 """
-mutable struct Dict{K,V} <: HashDict{K,V}
+struct Dict{K,V} <: HashDict{K,V}
     ht::BaseDict{K,V}
 
     function Dict{K,V}() where V where K
@@ -191,7 +191,7 @@ EgalDict{String,Int64} with 2 entries:
   "A" => 1
 ```
 """
-mutable struct EgalDict{K,V} <: HashDict{K,V}
+struct EgalDict{K,V} <: HashDict{K,V}
     ht::BaseDict{K,V}
 
     function EgalDict{K,V}() where V where K
