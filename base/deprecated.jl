@@ -3074,6 +3074,12 @@ end
     \(A::Transpose{<:Any,<:Factorization{<:Real}}, B::RowVector) = transpose(A.parent) \ B
 end
 
+# methods involving RowVector from base/sparse/higherorderfns.jl, to deprecate
+@eval Base.SparseArrays.HigherOrderFns begin
+    BroadcastStyle(::Type{<:Base.RowVector{T,<:Vector}}) where T = Broadcast.MatrixStyle()
+end
+
+
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
