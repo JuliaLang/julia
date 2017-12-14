@@ -4,7 +4,7 @@ using Base: findprevnot, findnextnot
 
 tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
-tc(r1::RowVector{Bool,BitVector}, r2::Union{RowVector{Bool,BitVector},RowVector{Bool,Vector{Bool}}}) = true
+tc(r1::Transpose{Bool,BitVector}, r2::Union{Transpose{Bool,BitVector},Transpose{Bool,Vector{Bool}}}) = true
 tc(r1::T, r2::T) where {T} = true
 tc(r1,r2) = false
 
@@ -1308,7 +1308,7 @@ end
 
 @testset "Transpose" begin
     b1 = bitrand(v1)
-    @check_bit_operation transpose(b1) RowVector{Bool,BitVector}
+    @check_bit_operation transpose(b1) Transpose{Bool,BitVector}
 
     for m1 = 0:n1, m2 = 0:n2
         b1 = bitrand(m1, m2)

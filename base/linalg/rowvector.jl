@@ -100,26 +100,38 @@ convert(::Type{RowVector{T,V}}, rowvec::RowVector) where {T,V<:AbstractVector} =
 @inline similar(rowvec::RowVector, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(rowvec), T, dims)
 
 # Basic methods
-"""
-    transpose(v::AbstractVector)
 
-The transposition operator (`.'`).
+# replaced in the Adjoint/Transpose transition
+# """
+#     transpose(v::AbstractVector)
+#
+# The transposition operator (`.'`).
+#
+# # Examples
+# ```jldoctest
+# julia> v = [1,2,3]
+# 3-element Array{Int64,1}:
+#  1
+#  2
+#  3
+#
+# julia> transpose(v)
+# 1×3 RowVector{Int64,Array{Int64,1}}:
+#  1  2  3
+# ```
+# """
+# @inline transpose(vec::AbstractVector) = RowVector(vec)
+# @inline adjoint(vec::AbstractVector) = RowVector(_conj(vec))
 
-# Examples
-```jldoctest
-julia> v = [1,2,3]
-3-element Array{Int64,1}:
- 1
- 2
- 3
-
-julia> transpose(v)
-1×3 RowVector{Int64,Array{Int64,1}}:
- 1  2  3
-```
-"""
-@inline transpose(vec::AbstractVector) = RowVector(vec)
-@inline adjoint(vec::AbstractVector) = RowVector(_conj(vec))
+# methods necessary to preserve RowVector's behavior through the Adjoint/Transpose transition
+rvadjoint(v::AbstractVector) = RowVector(_conj(v))
+rvtranspose(v::AbstractVector) = RowVector(v)
+rvadjoint(v::RowVector) = conj(v.vec)
+rvadjoint(v::RowVector{<:Real}) = v.vec
+rvtranspose(v::RowVector) = v.vec
+rvtranspose(v::ConjRowVector) = copy(v.vec)
+rvadjoint(x) = adjoint(x)
+rvtranspose(x) = transpose(x)
 
 @inline transpose(rowvec::RowVector) = rowvec.vec
 @inline transpose(rowvec::ConjRowVector) = copy(rowvec.vec) # remove the ConjArray wrapper from any raw vector
@@ -157,22 +169,22 @@ julia> conj(v)
 IndexStyle(::RowVector) = IndexLinear()
 IndexStyle(::Type{<:RowVector}) = IndexLinear()
 
-@propagate_inbounds getindex(rowvec::RowVector, i::Int) = transpose(rowvec.vec[i])
-@propagate_inbounds setindex!(rowvec::RowVector, v, i::Int) = (setindex!(rowvec.vec, transpose(v), i); rowvec)
+@propagate_inbounds getindex(rowvec::RowVector, i::Int) = rvtranspose(rowvec.vec[i])
+@propagate_inbounds setindex!(rowvec::RowVector, v, i::Int) = (setindex!(rowvec.vec, rvtranspose(v), i); rowvec)
 
 # Keep a RowVector where appropriate
-@propagate_inbounds getindex(rowvec::RowVector, ::Colon, i::Int) = transpose.(rowvec.vec[i:i])
+@propagate_inbounds getindex(rowvec::RowVector, ::Colon, i::Int) = rvtranspose.(rowvec.vec[i:i])
 @propagate_inbounds getindex(rowvec::RowVector, ::Colon, inds::AbstractArray{Int}) = RowVector(rowvec.vec[inds])
 @propagate_inbounds getindex(rowvec::RowVector, ::Colon, ::Colon) = RowVector(rowvec.vec[:])
 
 # helper function for below
-@inline to_vec(rowvec::RowVector) = map(transpose, transpose(rowvec))
+@inline to_vec(rowvec::RowVector) = map(rvtranspose, rvtranspose(rowvec))
 @inline to_vec(x::Number) = x
 @inline to_vecs(rowvecs...) = (map(to_vec, rowvecs)...,)
 
 # map: Preserve the RowVector by un-wrapping and re-wrapping, but note that `f`
 # expects to operate within the transposed domain, so to_vec transposes the elements
-@inline map(f, rowvecs::RowVector...) = RowVector(map(transpose∘f, to_vecs(rowvecs...)...))
+@inline map(f, rowvecs::RowVector...) = RowVector(map(rvtranspose∘f, to_vecs(rowvecs...)...))
 
 # broacast (other combinations default to higher-dimensional array)
 @inline broadcast(f, rowvecs::Union{Number,RowVector}...) =
@@ -180,13 +192,13 @@ IndexStyle(::Type{<:RowVector}) = IndexLinear()
 
 # Horizontal concatenation #
 
-@inline hcat(X::RowVector...) = transpose(vcat(map(transpose, X)...))
-@inline hcat(X::Union{RowVector,Number}...) = transpose(vcat(map(transpose, X)...))
+@inline hcat(X::RowVector...) = rvtranspose(vcat(map(rvtranspose, X)...))
+@inline hcat(X::Union{RowVector,Number}...) = rvtranspose(vcat(map(rvtranspose, X)...))
 
 @inline typed_hcat(::Type{T}, X::RowVector...) where {T} =
-    transpose(typed_vcat(T, map(transpose, X)...))
+    rvtranspose(typed_vcat(T, map(rvtranspose, X)...))
 @inline typed_hcat(::Type{T}, X::Union{RowVector,Number}...) where {T} =
-    transpose(typed_vcat(T, map(transpose, X)...))
+    rvtranspose(typed_vcat(T, map(rvtranspose, X)...))
 
 # Multiplication #
 
@@ -202,7 +214,7 @@ IndexStyle(::Type{<:RowVector}) = IndexLinear()
     end
     sum(@inbounds(return rowvec[i]*vec[i]) for i = 1:length(vec))
 end
-@inline *(rowvec::RowVector, mat::AbstractMatrix) = transpose(mat.' * transpose(rowvec))
+@inline *(rowvec::RowVector, mat::AbstractMatrix) = rvtranspose(mat.' * rvtranspose(rowvec))
 *(::RowVector, ::RowVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 @inline *(vec::AbstractVector, rowvec::RowVector) = vec .* rowvec
 *(vec::AbstractVector, rowvec::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
@@ -211,27 +223,27 @@ end
 *(::RowVector, ::Transpose{<:Any,<:AbstractVector}) =
     throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 *(rowvec::RowVector, transmat::Transpose{<:Any,<:AbstractMatrix}) =
-    (mat = transmat.parent; transpose(mat * transpose(rowvec)))
+    (mat = transmat.parent; rvtranspose(mat * rvtranspose(rowvec)))
 *(rowvec1::RowVector, transrowvec2::Transpose{<:Any,<:RowVector}) =
-    (rowvec2 = transrowvec2.parent; rowvec1*transpose(rowvec2))
+    (rowvec2 = transrowvec2.parent; rowvec1*rvtranspose(rowvec2))
 *(::AbstractVector, ::Transpose{<:Any,<:RowVector}) =
     throw(DimensionMismatch("Cannot multiply two vectors"))
 *(mat::AbstractMatrix, transrowvec::Transpose{<:Any,<:RowVector}) =
-    (rowvec = transrowvec.parent; mat * transpose(rowvec))
+    (rowvec = transrowvec.parent; mat * rvtranspose(rowvec))
 
 *(transrowvec::Transpose{<:Any,<:RowVector}, transvec::Transpose{<:Any,<:AbstractVector}) =
-    transpose(transrowvec.parent) * transpose(transvec.parent)
+    rvtranspose(transrowvec.parent) * transpose(transvec.parent)
 *(transrowvec1::Transpose{<:Any,<:RowVector}, transrowvec2::Transpose{<:Any,<:RowVector}) =
     throw(DimensionMismatch("Cannot multiply two vectors"))
 *(transvec::Transpose{<:Any,<:AbstractVector}, transrowvec::Transpose{<:Any,<:RowVector}) =
-    transpose(transvec.parent)*transpose(transrowvec.parent)
+    transpose(transvec.parent)*rvtranspose(transrowvec.parent)
 *(transmat::Transpose{<:Any,<:AbstractMatrix}, transrowvec::Transpose{<:Any,<:RowVector}) =
-    (transmat.parent).' * transpose(transrowvec.parent)
+    (transmat.parent).' * rvtranspose(transrowvec.parent)
 
 *(::Transpose{<:Any,<:RowVector}, ::AbstractVector) =
     throw(DimensionMismatch("Cannot multiply two vectors"))
 *(transrowvec1::Transpose{<:Any,<:RowVector}, rowvec2::RowVector) =
-    transpose(transrowvec1.parent) * rowvec2
+    rvtranspose(transrowvec1.parent) * rowvec2
 *(transvec::Transpose{<:Any,<:AbstractVector}, rowvec::RowVector) =
     throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 
@@ -239,29 +251,29 @@ end
 *(::RowVector, ::Adjoint{<:Any,<:AbstractVector}) =
     throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 *(rowvec::RowVector, adjmat::Adjoint{<:Any,<:AbstractMatrix}) =
-    adjoint(adjmat.parent * adjoint(rowvec))
+    rvadjoint(adjmat.parent * rvadjoint(rowvec))
 *(rowvec1::RowVector, adjrowvec2::Adjoint{<:Any,<:RowVector}) =
-    rowvec1 * adjoint(adjrowvec2.parent)
+    rowvec1 * rvadjoint(adjrowvec2.parent)
 *(vec::AbstractVector, adjrowvec::Adjoint{<:Any,<:RowVector}) =
     throw(DimensionMismatch("Cannot multiply two vectors"))
 *(mat::AbstractMatrix, adjrowvec::Adjoint{<:Any,<:RowVector}) =
-    mat * adjoint(adjrowvec.parent)
+    mat * rvadjoint(adjrowvec.parent)
 
 *(adjrowvec::Adjoint{<:Any,<:RowVector}, adjvec::Adjoint{<:Any,<:AbstractVector}) =
-    adjoint(adjrowvec.parent) * adjoint(adjvec.parent)
+    rvadjoint(adjrowvec.parent) * adjoint(adjvec.parent)
 *(adjrowvec1::Adjoint{<:Any,<:RowVector}, adjrowvec2::Adjoint{<:Any,<:RowVector}) =
     throw(DimensionMismatch("Cannot multiply two vectors"))
 *(adjvec::Adjoint{<:Any,<:AbstractVector}, adjrowvec::Adjoint{<:Any,<:RowVector}) =
-    adjoint(adjvec.parent)*adjoint(adjrowvec.parent)
+    adjoint(adjvec.parent)*rvadjoint(adjrowvec.parent)
 *(adjmat::Adjoint{<:Any,<:AbstractMatrix}, adjrowvec::Adjoint{<:Any,<:RowVector}) =
-    (adjmat.parent)' * adjoint(adjrowvec.parent)
+    (adjmat.parent)' * rvadjoint(adjrowvec.parent)
 
 *(::Adjoint{<:Any,<:RowVector}, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
-*(adjrowvec1::Adjoint{<:Any,<:RowVector}, rowvec2::RowVector) = adjoint(adjrowvec1.parent) * rowvec2
+*(adjrowvec1::Adjoint{<:Any,<:RowVector}, rowvec2::RowVector) = rvadjoint(adjrowvec1.parent) * rowvec2
 *(adjvec::Adjoint{<:Any,<:AbstractVector}, rowvec::RowVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 
 # Pseudo-inverse
-pinv(v::RowVector, tol::Real=0) = pinv(v', tol)'
+pinv(v::RowVector, tol::Real=0) = rvadjoint(pinv(rvadjoint(v), tol))
 
 # Left Division #
 
@@ -274,19 +286,19 @@ pinv(v::RowVector, tol::Real=0) = pinv(v', tol)'
 
 # Right Division #
 
-@inline /(rowvec::RowVector, mat::AbstractMatrix) = transpose(transpose(mat) \ transpose(rowvec))
-/(rowvec::RowVector, transmat::Transpose{<:Any,<:AbstractMatrix}) = transpose(transmat.parent \ transpose(rowvec))
-/(rowvec::RowVector, adjmat::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(adjmat.parent \ adjoint(rowvec))
+@inline /(rowvec::RowVector, mat::AbstractMatrix) = rvtranspose(transpose(mat) \ rvtranspose(rowvec))
+/(rowvec::RowVector, transmat::Transpose{<:Any,<:AbstractMatrix}) = rvtranspose(transmat.parent \ rvtranspose(rowvec))
+/(rowvec::RowVector, adjmat::Adjoint{<:Any,<:AbstractMatrix}) = rvadjoint(adjmat.parent \ rvadjoint(rowvec))
 
 
 # definitions necessary for test/linalg/dense.jl to pass
 # should be cleaned up / revised as necessary in the future
-/(A::Number, B::Adjoint{<:Any,<:RowVector}) = /(A, adjoint(B.parent))
-/(A::Matrix, B::RowVector) = adjoint(adjoint(B) \ adjoint(A))
+/(A::Number, B::Adjoint{<:Any,<:RowVector}) = /(A, rvadjoint(B.parent))
+/(A::Matrix, B::RowVector) = rvadjoint(rvadjoint(B) \ adjoint(A))
 
 
 # dismabiguation methods
 *(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:RowVector}) = adjoint(A.parent) * B
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:RowVector}) = A * transpose(B.parent)
+*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:RowVector}) = A * rvtranspose(B.parent)
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:RowVector}) = transpose(A.parent) * B
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:RowVector}) = A * adjoint(B.parent)
+*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:RowVector}) = A * rvadjoint(B.parent)

@@ -1437,8 +1437,8 @@ vecnorm(x::SparseVectorUnion, p::Real=2) = vecnorm(nonzeros(x), p)
 
 # Transpose
 # (The only sparse matrix structure in base is CSC, so a one-row sparse matrix is worse than dense)
-@inline transpose(sv::SparseVector) = RowVector(sv)
-@inline adjoint(sv::SparseVector) = RowVector(conj(sv))
+transpose(sv::SparseVector) = Transpose(sv)
+adjoint(sv::SparseVector) = Adjoint(sv)
 
 ### BLAS Level-1
 

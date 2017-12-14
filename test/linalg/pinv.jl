@@ -133,9 +133,9 @@ end
             a = rand(eltya, m)
             apinv = @inferred pinv(a)
             @test pinv(hcat(a)) ≈ apinv
-            @test apinv isa RowVector{eltya}
+            @test isa(apinv, eltya <: Complex ? Adjoint{eltya} : Transpose{eltya})
         end
-        @testset "RowVector" begin
+        @testset "Adjoint/Transpose vector" begin
             a = rand(eltya, m)'
             apinv = @inferred pinv(a)
             @test pinv(vcat(a)) ≈ apinv

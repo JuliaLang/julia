@@ -49,9 +49,25 @@ Adjoint(x::Number) = adjoint(x)
 Transpose(x::Number) = transpose(x)
 
 # unwrapping constructors
-# perhaps slightly odd, but necessary (at least till adjoint and transpose names are free)
 Adjoint(A::Adjoint) = A.parent
 Transpose(A::Transpose) = A.parent
+# normalizing unwrapping constructors
+# technically suspect, but at least fine for now
+Adjoint(A::Transpose) = conj(A.parent)
+Transpose(A::Adjoint) = conj(A.parent)
+
+# eager lowercase quasi-constructors, unwrapping
+adjoint(A::Adjoint) = copy(A.parent)
+transpose(A::Transpose) = copy(A.parent)
+# eager lowercase quasi-constructors, normalizing
+# technically suspect, but at least fine for now
+adjoint(A::Transpose) = conj!(copy(A.parent))
+transpose(A::Adjoint) = conj!(copy(A.parent))
+
+# lowercase quasi-constructors for vectors, TODO: deprecate
+adjoint(sv::AbstractVector) = Adjoint(sv)
+transpose(sv::AbstractVector) = Transpose(sv)
+
 
 # some aliases for internal convenience use
 const AdjOrTrans{T,S} = Union{Adjoint{T,S},Transpose{T,S}} where {T,S}
@@ -173,8 +189,8 @@ end
 
 
 ## pseudoinversion
-pinv(v::AdjointAbsVec, tol::Real = 0) = Adjoint(pinv(v.parent, tol))
-pinv(v::TransposeAbsVec, tol::Real = 0) = Transpose(pinv(v.parent, tol))
+pinv(v::AdjointAbsVec, tol::Real = 0) = pinv(v.parent, tol).parent
+pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 
 
 ## left-division \
@@ -187,12 +203,14 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = Transpose(pinv(v.parent, tol))
 
 
 # dismabiguation methods
-*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractVector}) = transpose(A.parent) * B
-*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractMatrix}) = transpose(A.parent) * B
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractVector}) = A * adjoint(B.parent)
+*(A::AdjointAbsVec, B::Transpose{<:Any,<:AbstractMatrix}) = A * transpose(B.parent)
+*(A::TransposeAbsVec, B::Adjoint{<:Any,<:AbstractMatrix}) = A * adjoint(B.parent)
 *(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractMatrix}) = transpose(A.parent) * B
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractVector}) = adjoint(A.parent) * B
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractMatrix}) = adjoint(A.parent) * B
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractVector}) = A * adjoint(B.parent)
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractVector}) = A * transpose(B.parent)
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractMatrix}) = adjoint(A.parent) * B
+*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractMatrix}) = A * transpose(B.parent)
+# Adj/Trans-vector * Trans/Adj-vector, shouldn't exist, here for ambiguity resolution? TODO: test removal
+*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
+*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
+# Adj/Trans-matrix * Trans/Adj-vector, shouldn't exist, here for ambiguity resolution? TODO: test removal
+*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
+*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
+*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))

@@ -1839,10 +1839,10 @@ function *(A::AbstractMatrix, transB::Transpose{<:Any,<:AbstractTriangular})
     mul!(AA, Transpose(convert(AbstractArray{TAB}, B)))
 end
 # ambiguity resolution with definitions in linalg/rowvector.jl
-*(transA::Transpose{<:Any,<:AbstractVector}, B::AbstractTriangular) = *(transpose(transA.parent), B)
-*(adjA::Adjoint{<:Any,<:AbstractVector}, B::AbstractTriangular) = *(adjoint(adjA.parent), B)
-*(transA::Transpose{<:Any,<:AbstractVector}, transB::Transpose{<:Any,<:AbstractTriangular}) = *(transpose(transA.parent), transB)
-*(adjA::Adjoint{<:Any,<:AbstractVector}, adjB::Adjoint{<:Any,<:AbstractTriangular}) = *(adjoint(adjA.parent), adjB)
+*(v::AdjointAbsVec, A::AbstractTriangular) = Adjoint(Adjoint(A) * v.parent)
+*(v::TransposeAbsVec, A::AbstractTriangular) = Transpose(Transpose(A) * v.parent)
+*(v::AdjointAbsVec, A::Adjoint{<:Any,<:AbstractTriangular}) = Adjoint(A.parent * v.parent)
+*(v::TransposeAbsVec, A::Transpose{<:Any,<:AbstractTriangular}) = Transpose(A.parent * v.parent)
 
 
 # If these are not defined, they will fallback to the versions in matmul.jl
