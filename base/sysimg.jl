@@ -193,7 +193,7 @@ end
 include("dict.jl")
 include("set.jl")
 include("iterators.jl")
-using .Iterators: zip, enumerate
+using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, product  # for generators
 
 # Definition of StridedArray

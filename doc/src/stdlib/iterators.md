@@ -14,4 +14,5 @@ Base.Iterators.flatten
 Base.Iterators.partition
 Base.Iterators.filter
 Base.Iterators.reverse
+Base.Iterators.only
 ```

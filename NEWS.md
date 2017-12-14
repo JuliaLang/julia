@@ -436,6 +436,9 @@ Library improvements
     defined, linear-algebra function `transpose`. Similarly,
     `permutedims(v::AbstractVector)` will create a row matrix ([#24839]).
 
+  * New function `only(x)` returns the one-and-only element of a collection `x`, and throws
+    an error if `x` contains zero or multiple elements.
+
 Compiler/Runtime improvements
 -----------------------------
 
