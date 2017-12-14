@@ -242,6 +242,22 @@ function tril!(M::AbstractMatrix, k::Integer)
 end
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
+"""
+    fillband!(A::AbstractMatrix, x, l, u)
+
+Fill the band between diagonals `l` and `u` with the value `x`.
+"""
+function fillband!(A::AbstractMatrix{T}, x, l, u) where T
+    m, n = size(A)
+    xT = convert(T, x)
+    for j in 1:n
+        for i in max(1,j-u):min(m,j-l)
+            @inbounds A[i, j] = xT
+        end
+    end
+    return A
+end
+
 function diagind(m::Integer, n::Integer, k::Integer=0)
     if !(-m <= k <= n)
         throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) and ",

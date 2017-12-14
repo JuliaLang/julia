@@ -126,3 +126,21 @@ mul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}
     (B = adjB.parent; mul!(full!(A), Adjoint(B)))
 *(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
     (B = adjB.parent; *(copy!(similar(parent(A)), A), Adjoint(B)))
+
+# fill[stored]! methods
+fillstored!(A::Diagonal, x) = (fill!(A.diag, x); A)
+fillstored!(A::Bidiagonal, x) = (fill!(A.dv, x); fill!(A.ev, x); A)
+fillstored!(A::Tridiagonal, x) = (fill!(A.dl, x); fill!(A.d, x); fill!(A.du, x); A)
+fillstored!(A::SymTridiagonal, x) = (fill!(A.dv, x); fill!(A.ev, x); A)
+
+_small_enough(A::Bidiagonal) = size(A, 1) <= 1
+_small_enough(A::Tridiagonal) = size(A, 1) <= 2
+_small_enough(A::SymTridiagonal) = size(A, 1) <= 2
+
+# TODO: Add Diagonal to this method when 0.7 deprecations are removed
+function fill!(A::Union{Bidiagonal,Tridiagonal,SymTridiagonal}, x)
+    xT = convert(eltype(A), x)
+    (iszero(xT) || _small_enough(A)) && return fillstored!(A, xT)
+    throw(ArgumentError("array of type $(typeof(A)) and size $(size(A)) can
+    not be filled with $x, since some of its entries are constrained."))
+end
