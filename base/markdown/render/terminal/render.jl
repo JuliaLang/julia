@@ -61,7 +61,7 @@ function term(io::IO, md::List, columns)
 end
 
 function _term_header(io::IO, md, char, columns)
-    text = terminline_string(md.text)
+    text = terminline_string(io, md.text)
     with_output_format(:bold, io) do io
         print(io, " "^(margin))
         line_no, lastline_width = print_wrapped(io, text,
@@ -103,7 +103,7 @@ term(io::IO, x, _) = show(io, MIME"text/plain"(), x)
 
 # Inline Content
 
-terminline_string(io::IO, md) = sprint(0, terminline, md; env=md)
+terminline_string(io::IO, md) = sprint(0, terminline, md; env=io)
 
 terminline(io::IO, content...) = terminline(io, collect(content))
 
@@ -137,7 +137,7 @@ terminline(io::IO, f::Footnote) = with_output_format(:bold, terminline, io, "[^$
 
 function terminline(io::IO, md::Link)
     url = !Base.startswith(md.url, "@ref") ? " ($(md.url))" : ""
-    text = terminline(io, md.text)
+    text = terminline_string(io, md.text)
     terminline(io, text, url)
 end
 
@@ -148,4 +148,11 @@ end
 terminline(io::IO, x) = show(io, MIME"text/plain"(), x)
 
 # Show in terminal
-Base.show(io::IO, ::MIME"text/plain", md::MD) = begin; term(io, md); nothing; end
+function Base.show(io::IO, ::MIME"text/plain", md::MD)
+    if get(io, :color, false)
+        term(io, md)
+        nothing
+    else
+        show(io, md)
+    end
+end

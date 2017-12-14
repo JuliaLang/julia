@@ -60,7 +60,7 @@ lines(s) = split(s, "\n")
 # This could really be more efficient
 function wrapped_lines(io::IO, s::AbstractString; width = 80, i = 0)
     if ismatch(r"\n", s)
-        return vcat(map(s->wrapped_lines(s, width = width, i = i), split(s, "\n"))...)
+        return vcat(map(s->wrapped_lines(io, s, width = width, i = i), split(s, "\n"))...)
     end
     ws = words(s)
     lines = AbstractString[ws[1]]
