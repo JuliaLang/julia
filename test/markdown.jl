@@ -1061,3 +1061,11 @@ let text =
         @test expected == Markdown.latex(md)
     end
 end
+
+# different output depending on whether color is requested:
+let buf = IOBuffer()
+    show(buf, "text/plain", md"*emph*")
+    @test String(take!(buf)) == "*emph*\n"
+    show(IOContext(buf, :color=>true), "text/plain", md"*emph*")
+    @test String(take!(buf)) == "  \e[4memph\e[24m\n"
+end
