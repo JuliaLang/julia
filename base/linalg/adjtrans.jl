@@ -104,10 +104,17 @@ vec(v::AdjOrTransAbsVec) = v.parent
 ### concatenation
 # preserve Adjoint/Transpose wrapper around vectors
 # to retain the associated semantics post-concatenation
-hcat(avs::Union{Number,AdjointAbsVec}...) = Adjoint(vcat(map(Adjoint, avs)...))
-hcat(avs::Union{Number,TransposeAbsVec}...) = Transpose(vcat(map(Transpose, avs)...))
+hcat(avs::Union{Number,AdjointAbsVec}...) = _adjoint_hcat(avs...)
+hcat(tvs::Union{Number,TransposeAbsVec}...) = _transpose_hcat(tvs...)
+_adjoint_hcat(avs::Union{Number,AdjointAbsVec}...) = Adjoint(vcat(map(Adjoint, avs)...))
+_transpose_hcat(tvs::Union{Number,TransposeAbsVec}...) = Transpose(vcat(map(Transpose, tvs)...))
 typed_hcat(::Type{T}, avs::Union{Number,AdjointAbsVec}...) where {T} = Adjoint(typed_vcat(T, map(Adjoint, avs)...))
-typed_hcat(::Type{T}, avs::Union{Number,TransposeAbsVec}...) where {T} = Transpose(typed_vcat(T, map(Transpose, avs)...))
+typed_hcat(::Type{T}, tvs::Union{Number,TransposeAbsVec}...) where {T} = Transpose(typed_vcat(T, map(Transpose, tvs)...))
+# otherwise-redundant definitions necessary to prevent hitting the concat methods in sparse/sparsevector.jl
+hcat(avs::Adjoint{<:Any,<:Vector}...) = _adjoint_hcat(avs...)
+hcat(tvs::Transpose{<:Any,<:Vector}...) = _transpose_hcat(tvs...)
+hcat(avs::Adjoint{T,Vector{T}}...) where {T} = _adjoint_hcat(avs...)
+hcat(tvs::Transpose{T,Vector{T}}...) where {T} = _transpose_hcat(tvs...)
 
 
 ### higher order functions
