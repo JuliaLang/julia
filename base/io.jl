@@ -292,7 +292,7 @@ The text is assumed to be encoded in UTF-8.
 # Examples
 ```jldoctest
 julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\nIt has many members.\n");
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
        end
 57
 
@@ -321,7 +321,7 @@ line.
 # Examples
 ```jldoctest
 julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\nIt has many members.\n");
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
        end
 57
 
@@ -329,7 +329,7 @@ julia> readline("my_file.txt")
 "JuliaLang is a GitHub organization."
 
 julia> readline("my_file.txt", chomp=false)
-"JuliaLang is a GitHub organization.\n"
+"JuliaLang is a GitHub organization.\\n"
 
 julia> rm("my_file.txt")
 ```
@@ -363,7 +363,7 @@ arguments and saving the resulting lines as a vector of strings.
 # Examples
 ```jldoctest
 julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\nIt has many members.\n");
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
        end
 57
 
@@ -374,8 +374,8 @@ julia> readlines("my_file.txt")
 
 julia> readlines("my_file.txt", chomp=false)
 2-element Array{String,1}:
- "JuliaLang is a GitHub organization.\n"
- "It has many members.\n"
+ "JuliaLang is a GitHub organization.\\n"
+ "It has many members.\\n"
 
 julia> rm("my_file.txt")
 ```

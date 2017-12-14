@@ -50,7 +50,7 @@ end
     @dump expr
 
 Show every part of the representation of the given expression. Equivalent to
-`dump(:(expr))`.
+[`dump(:(expr))`](@ref dump).
 """
 macro dump(expr)
     dump(expr)
@@ -85,7 +85,7 @@ end
 """
     ParseError(msg)
 
-The expression passed to the `parse` function could not be interpreted as a valid Julia
+The expression passed to the [`parse`](@ref) function could not be interpreted as a valid Julia
 expression.
 """
 struct ParseError <: Exception
