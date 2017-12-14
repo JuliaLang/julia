@@ -113,9 +113,22 @@ end
     @test_throws BoundsError checkbounds("hello", 4:6)
     @test_throws BoundsError checkbounds("hello", [0:3;])
     @test_throws BoundsError checkbounds("hello", [4:6;])
-    @test checkbounds("hello", 2)
-    @test checkbounds("hello", 1:5)
-    @test checkbounds("hello", [1:5;])
+    @test checkbounds("hello", 1) === nothing
+    @test checkbounds("hello", 5) === nothing
+    @test checkbounds("hello", 1:3) === nothing
+    @test checkbounds("hello", 3:5) === nothing
+    @test checkbounds("hello", [1:3;]) === nothing
+    @test checkbounds("hello", [3:5;]) === nothing
+    @test checkbounds(Bool, "hello", 0) === false
+    @test checkbounds(Bool, "hello", 1) === true
+    @test checkbounds(Bool, "hello", 5) === true
+    @test checkbounds(Bool, "hello", 6) === false
+    @test checkbounds(Bool, "hello", 0:5) === false
+    @test checkbounds(Bool, "hello", 1:6) === false
+    @test checkbounds(Bool, "hello", 1:5) === true
+    @test checkbounds(Bool, "hello", [0:5;]) === false
+    @test checkbounds(Bool, "hello", [1:6;]) === false
+    @test checkbounds(Bool, "hello", [1:5;]) === true
 end
 
 @testset "issue #15624 (indexing with out of bounds empty range)" begin
