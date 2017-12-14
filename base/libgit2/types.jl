@@ -1323,14 +1323,15 @@ The `shred` keyword controls whether sensitive information in the payload creden
 should be destroyed. Should only be set to `false` during testing.
 """
 function approve(p::CredentialPayload; shred::Bool=true)
-    p.credential === nothing && return  # No credentials were used
+    cred = p.credential
+    cred === nothing && return  # No credentials were used
 
     if p.cache !== nothing
         approve(p.cache, cred, p.url)
         shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
     if p.allow_git_helpers
-        approve(p.config, p.credential, p.url)
+        approve(p.config, cred, p.url)
     end
 
     shred && securezero!(cred)
@@ -1347,14 +1348,15 @@ The `shred` keyword controls whether sensitive information in the payload creden
 should be destroyed. Should only be set to `false` during testing.
 """
 function reject(p::CredentialPayload; shred::Bool=true)
-    p.credential === nothing && return  # No credentials were used
+    cred = p.credential
+    cred === nothing && return  # No credentials were used
 
     if p.cache !== nothing
         reject(p.cache, cred, p.url)
         shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
     if p.allow_git_helpers
-        reject(p.config, p.credential, p.url)
+        reject(p.config, cred, p.url)
     end
 
     shred && securezero!(cred)

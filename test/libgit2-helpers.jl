@@ -76,12 +76,3 @@ function credential_loop(
         shred::Bool=true)
     credential_loop(valid_credential, url, user, 0x000046, payload, shred=shred)
 end
-
-function credential_loop(
-        valid_credential::AbstractCredential,
-        url::AbstractString,
-        user::AbstractString,
-        payload::CredentialPayload=DEFAULT_PAYLOAD;
-        shred::Bool=true)
-    credential_loop(valid_credential, url, user, payload, shred=shred)
-end
