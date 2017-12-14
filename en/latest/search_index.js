@@ -7589,7 +7589,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\n"
 },
 
 {
@@ -7893,7 +7893,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n"
 },
 
 {
@@ -9093,7 +9093,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -12413,7 +12413,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n"
 },
 
 {
@@ -16557,7 +16557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.readline",
     "category": "Function",
-    "text": "readline(io::IO=STDIN; chomp::Bool=true)\nreadline(filename::AbstractString; chomp::Bool=true)\n\nRead a single line of text from the given I/O stream or file (defaults to STDIN). When reading from a file, the text is assumed to be encoded in UTF-8. Lines in the input end with '\\n' or \"\\r\\n\" or the end of an input stream. When chomp is true (as it is by default), these trailing newline characters are removed from the line before it is returned. When chomp is false, they are returned as part of the line.\n\nExamples\n\njulia> open(\"my_file.txt\", \"w\") do io\n           write(io, \"JuliaLang is a GitHub organization.\nIt has many members.\n\");\n       end\n57\n\njulia> readline(\"my_file.txt\")\n\"JuliaLang is a GitHub organization.\"\n\njulia> readline(\"my_file.txt\", chomp=false)\n\"JuliaLang is a GitHub organization.\n\"\n\njulia> rm(\"my_file.txt\")\n\n\n\n"
+    "text": "readline(io::IO=STDIN; chomp::Bool=true)\nreadline(filename::AbstractString; chomp::Bool=true)\n\nRead a single line of text from the given I/O stream or file (defaults to STDIN). When reading from a file, the text is assumed to be encoded in UTF-8. Lines in the input end with '\\n' or \"\\r\\n\" or the end of an input stream. When chomp is true (as it is by default), these trailing newline characters are removed from the line before it is returned. When chomp is false, they are returned as part of the line.\n\nExamples\n\njulia> open(\"my_file.txt\", \"w\") do io\n           write(io, \"JuliaLang is a GitHub organization.\\nIt has many members.\\n\");\n       end\n57\n\njulia> readline(\"my_file.txt\")\n\"JuliaLang is a GitHub organization.\"\n\njulia> readline(\"my_file.txt\", chomp=false)\n\"JuliaLang is a GitHub organization.\\n\"\n\njulia> rm(\"my_file.txt\")\n\n\n\n"
 },
 
 {
@@ -16565,7 +16565,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.readuntil",
     "category": "Function",
-    "text": "readuntil(stream::IO, delim)\nreaduntil(filename::AbstractString, delim)\n\nRead a string from an I/O stream or a file, up to and including the given delimiter byte. The text is assumed to be encoded in UTF-8.\n\nExamples\n\njulia> open(\"my_file.txt\", \"w\") do io\n           write(io, \"JuliaLang is a GitHub organization.\nIt has many members.\n\");\n       end\n57\n\njulia> readuntil(\"my_file.txt\", 'L')\n\"JuliaL\"\n\njulia> readuntil(\"my_file.txt\", '.')\n\"JuliaLang is a GitHub organization.\"\n\njulia> rm(\"my_file.txt\")\n\n\n\n"
+    "text": "readuntil(stream::IO, delim)\nreaduntil(filename::AbstractString, delim)\n\nRead a string from an I/O stream or a file, up to and including the given delimiter byte. The text is assumed to be encoded in UTF-8.\n\nExamples\n\njulia> open(\"my_file.txt\", \"w\") do io\n           write(io, \"JuliaLang is a GitHub organization.\\nIt has many members.\\n\");\n       end\n57\n\njulia> readuntil(\"my_file.txt\", 'L')\n\"JuliaL\"\n\njulia> readuntil(\"my_file.txt\", '.')\n\"JuliaLang is a GitHub organization.\"\n\njulia> rm(\"my_file.txt\")\n\n\n\n"
 },
 
 {
@@ -16573,7 +16573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.readlines",
     "category": "Function",
-    "text": "readlines(io::IO=STDIN; chomp::Bool=true)\nreadlines(filename::AbstractString; chomp::Bool=true)\n\nRead all lines of an I/O stream or a file as a vector of strings. Behavior is equivalent to saving the result of reading readline repeatedly with the same arguments and saving the resulting lines as a vector of strings.\n\nExamples\n\njulia> open(\"my_file.txt\", \"w\") do io\n           write(io, \"JuliaLang is a GitHub organization.\nIt has many members.\n\");\n       end\n57\n\njulia> readlines(\"my_file.txt\")\n2-element Array{String,1}:\n \"JuliaLang is a GitHub organization.\"\n \"It has many members.\"\n\njulia> readlines(\"my_file.txt\", chomp=false)\n2-element Array{String,1}:\n \"JuliaLang is a GitHub organization.\n\"\n \"It has many members.\n\"\n\njulia> rm(\"my_file.txt\")\n\n\n\n"
+    "text": "readlines(io::IO=STDIN; chomp::Bool=true)\nreadlines(filename::AbstractString; chomp::Bool=true)\n\nRead all lines of an I/O stream or a file as a vector of strings. Behavior is equivalent to saving the result of reading readline repeatedly with the same arguments and saving the resulting lines as a vector of strings.\n\nExamples\n\njulia> open(\"my_file.txt\", \"w\") do io\n           write(io, \"JuliaLang is a GitHub organization.\\nIt has many members.\\n\");\n       end\n57\n\njulia> readlines(\"my_file.txt\")\n2-element Array{String,1}:\n \"JuliaLang is a GitHub organization.\"\n \"It has many members.\"\n\njulia> readlines(\"my_file.txt\", chomp=false)\n2-element Array{String,1}:\n \"JuliaLang is a GitHub organization.\\n\"\n \"It has many members.\\n\"\n\njulia> rm(\"my_file.txt\")\n\n\n\n"
 },
 
 {
