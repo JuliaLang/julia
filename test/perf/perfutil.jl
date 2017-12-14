@@ -16,7 +16,7 @@ if codespeed
 
     # Setup codespeed data dict for submissions to codespeed's JSON endpoint.  These parameters
     # are constant across all benchmarks, so we'll just let them sit here for now
-    csdata = Dict()
+    csdata = Dict{Any,Any}()
     csdata["commitid"] = Base.GIT_VERSION_INFO.commit
     csdata["project"] = "Julia"
     csdata["branch"] = Base.GIT_VERSION_INFO.branch

@@ -106,7 +106,7 @@ Language changes
     Linting in package tests is recommended to confirm that the set of methods
     which might throw `UndefVarError` when accessing the static parameters
     (`need_to_handle_undef_sparam = Set{Any}(m.sig for m in Test.detect_unbound_args(Base, recursive=true))`)
-    is equal (`==`) to some known set (`expected = Set()`). ([#23117])
+    is equal (`==`) to some known set (`expected = Set{Any}()`). ([#23117])
 
   * `const` declarations on local variables were previously ignored. They now give a
     warning, so that this syntax can be disallowed or given a new meaning in a
@@ -626,6 +626,11 @@ Deprecated or removed
 
   * `speye` has been deprecated in favor of `I`, `sparse`, and `SparseMatrixCSC`
     constructor methods ([#24356]).
+
+  * `Set()` has been deprecated in favor of `Set{Any}()` ([#TBD]).
+
+  * `Dict()` and `WeakKeyDict()` have been deprecated in favor of `Dict{Any,Any}()`
+    and `WeakKeyDict{Any,Any}()` ([#TBD]).
 
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).

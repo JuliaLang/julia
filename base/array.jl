@@ -2210,7 +2210,7 @@ end
 
 function union(vs...)
     ret = Vector{promote_eltype(vs...)}()
-    seen = Set()
+    seen = Set{Any}()
     for v in vs
         for v_elem in v
             if !in(v_elem, seen)

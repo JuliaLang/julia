@@ -3565,7 +3565,7 @@ end
 module I13636
 foo(x) = 1
 end
-let cache = Dict()
+let cache = Dict{Any,Any}()
     function I13636.foo(y::Int;k::Int=1)
         cache[1] = y+k
     end
@@ -4477,7 +4477,7 @@ end
 mutable struct A14878
     ext
 end
-A14878() = A14878(Dict())
+A14878() = A14878(Dict{Any,Any}())
 mutable struct B14878
 end
 B14878(ng) = B14878()

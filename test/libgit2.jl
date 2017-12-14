@@ -2401,7 +2401,7 @@ mktempdir() do dir
             @test err == exhausted_error
             @test auth_attempts == 2
             @test typeof(cache) == LibGit2.CachedCredentials
-            @test cache.cred == Dict()
+            @test cache.cred == Dict{Any,Any}()
             @test get(p.credential) != invalid_cred
         end
 

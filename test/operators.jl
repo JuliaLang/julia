@@ -3,12 +3,12 @@
 @test ifelse(true, 1, 2) == 1
 @test ifelse(false, 1, 2) == 2
 
-let s = Set()
+let s = Set{Any}()
     ifelse(true, push!(s, 1), push!(s, 2))
     @test s == Set([1, 2])
 end
 
-let s = Set()
+let s = Set{Any}()
     true ? push!(s, 1) : push!(s, 2)
     false ? push!(s, 3) : push!(s, 4)
     @test s == Set([1, 4])

@@ -33,7 +33,7 @@
 end
 
 @testset "Dict" begin
-    h = Dict()
+    h = Dict{Any,Any}()
     for i=1:10000
         h[i] = i+1
     end
@@ -99,7 +99,7 @@ let x = Dict(3=>3, 5=>5, 8=>8, 6=>6)
     end
 end
 
-let z = Dict()
+let z = Dict{Any,Any}()
     get_KeyError = false
     try
         z["a"]
@@ -146,7 +146,7 @@ _d = Dict("a"=>0)
     @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Any,Any}
 end
 
-@test_throws ArgumentError first(Dict())
+@test_throws ArgumentError first(Dict{Any,Any}())
 @test first(Dict(:f=>2)) == (:f=>2)
 
 @testset "constructing Dicts from iterators" begin
@@ -186,7 +186,7 @@ hash(x::I1438T, h::UInt) = hash(x.id, h)
     seq = [26, 28, 29, 30, 31, 32, 33, 34, 35, 36, -32, -35, -34, -28, 37, 38, 39, 40, -30,
            -31, 41, 42, 43, 44, -33, -36, 45, 46, 47, 48, -37, -38, 49, 50, 51, 52, -46, -50, 53]
     xs = [ I1438T(id) for id = 1:53 ]
-    s = Set()
+    s = Set{Any}()
     for id in seq
         if id > 0
             x = xs[id]
@@ -199,9 +199,9 @@ hash(x::I1438T, h::UInt) = hash(x.id, h)
 end
 
 @testset "isequal" begin
-    @test  isequal(Dict(), Dict())
+    @test  isequal(Dict{Any,Any}(), Dict{Any,Any}())
     @test  isequal(Dict(1 => 1), Dict(1 => 1))
-    @test !isequal(Dict(1 => 1), Dict())
+    @test !isequal(Dict(1 => 1), Dict{Any,Any}())
     @test !isequal(Dict(1 => 1), Dict(1 => 2))
     @test !isequal(Dict(1 => 1), Dict(2 => 1))
 
@@ -239,7 +239,7 @@ end
     d4[1001] = randstring(3)
     @test !isequal(d1, d4)
 
-    @test isequal(Dict(), sizehint!(Dict(),96))
+    @test isequal(Dict{Any,Any}(), sizehint!(Dict{Any,Any}(),96))
 
     # Here is what currently happens when dictionaries of different types
     # are compared. This is not necessarily desirable. These tests are
@@ -341,7 +341,7 @@ end
 end
 
 @testset "issue #5886" begin
-    d5886 = Dict()
+    d5886 = Dict{Any,Any}()
     for k5886 in 1:11
        d5886[k5886] = 1
     end
@@ -358,7 +358,7 @@ end
 end
 
 @testset "issue 9295" begin
-    d = Dict()
+    d = Dict{Any,Any}()
     @test push!(d, 'a' => 1) === d
     @test d['a'] == 1
     @test push!(d, 'b' => 2, 'c' => 3) === d
@@ -626,7 +626,7 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     finalizer(c->(z+=1), C)
 
     # construction
-    wkd = WeakKeyDict()
+    wkd = WeakKeyDict{Any,Any}()
     wkd[A] = 2
     wkd[B] = 3
     wkd[C] = 4

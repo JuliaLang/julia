@@ -10,7 +10,7 @@
 using LightXML
 xdoc = parse_file("unicode.xml")
 latexsym = []
-Ls = Set()
+Ls = Set{Any}()
 for c in child_nodes(root(xdoc))
     if name(c) == "character" && is_elementnode(c)
         ce = XMLElement(c)

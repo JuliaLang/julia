@@ -5,7 +5,7 @@
 """
     WeakKeyDict([itr])
 
-`WeakKeyDict()` constructs a hash table where the keys are weak
+`WeakKeyDict` constructs a hash table where the keys are weak
 references to objects, and thus may be garbage collected even when
 referenced in a hash table.
 
@@ -46,9 +46,8 @@ function WeakKeyDict{K,V}(ps::Pair...) where V where K
     end
     return h
 end
-WeakKeyDict() = WeakKeyDict{Any,Any}()
 
-WeakKeyDict(kv::Tuple{}) = WeakKeyDict()
+WeakKeyDict(kv::Tuple{}) = WeakKeyDict{Any,Any}()
 copy(d::WeakKeyDict) = WeakKeyDict(d)
 
 WeakKeyDict(ps::Pair{K,V}...)           where {K,V} = WeakKeyDict{K,V}(ps)

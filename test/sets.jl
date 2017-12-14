@@ -45,8 +45,8 @@ end
     @test hash(d1) != hash(d2)
 end
 @testset "isequal" begin
-    @test  isequal(Set(), Set())
-    @test !isequal(Set(), Set([1]))
+    @test  isequal(Set{Any}(), Set{Any}())
+    @test !isequal(Set{Any}(), Set([1]))
     @test  isequal(Set{Any}(Any[1,2]), Set{Int}([1,2]))
     @test !isequal(Set{Any}(Any[1,2]), Set{Int}([1,2,3]))
     # Comparison of unrelated types seems rather inconsistent
@@ -63,22 +63,22 @@ end
 end
 @testset "eltype, similar" begin
     s1 = similar(Set([1,"hello"]))
-    @test isequal(s1, Set())
+    @test isequal(s1, Set{Any}())
     @test ===(eltype(s1), Any)
     s2 = similar(Set{Float32}([2.0f0,3.0f0,4.0f0]))
-    @test isequal(s2, Set())
+    @test isequal(s2, Set{Any}())
     @test ===(eltype(s2), Float32)
     s3 = similar(Set([1,"hello"]),Float32)
-    @test isequal(s3, Set())
+    @test isequal(s3, Set{Any}())
     @test ===(eltype(s3), Float32)
 end
 @testset "show" begin
-    @test sprint(show, Set()) == "Set(Any[])"
+    @test sprint(show, Set{Any}()) == "Set(Any[])"
     @test sprint(show, Set(['a'])) == "Set(['a'])"
 end
 @testset "isempty, length, in, push, pop, delete" begin
     # also test for no duplicates
-    s = Set(); push!(s,1); push!(s,2); push!(s,3)
+    s = Set{Any}(); push!(s,1); push!(s,2); push!(s,3)
     @test !isempty(s)
     @test in(1,s)
     @test in(2,s)
@@ -116,7 +116,7 @@ end
 @testset "sizehint, empty" begin
     s = Set([1])
     @test isequal(sizehint!(s, 10), Set([1]))
-    @test isequal(empty!(s), Set())
+    @test isequal(empty!(s), Set{Any}())
 end
 @testset "rehash!" begin
     # Use a pointer type to have defined behavior for uninitialized
@@ -142,7 +142,7 @@ end
         local data_in, s, t
         s = Set(data_in)
 
-        s_new = Set()
+        s_new = Set{Any}()
         for el in s
             push!(s_new, el)
         end
@@ -173,7 +173,7 @@ end
 @testset "intersect" begin
     @test isequal(intersect(Set([1])),Set([1]))
     s = ∩(Set([1,2]), Set([3,4]))
-    @test isequal(s, Set())
+    @test isequal(s, Set{Any}())
     s = intersect(Set([5,6,7,8]), Set([7,8,9]))
     @test isequal(s, Set([7,8]))
     @test isequal(intersect(Set([2,3,1]), Set([4,2,3]), Set([5,4,3,2])), Set([2,3]))
@@ -183,10 +183,10 @@ end
     @test isequal(intersect(Set([1,2,3]), [2,3,4], 3:4), Set([3]))
 end
 @testset "setdiff" begin
-    @test isequal(setdiff(Set([1,2,3]), Set()),        Set([1,2,3]))
+    @test isequal(setdiff(Set([1,2,3]), Set{Any}()),        Set([1,2,3]))
     @test isequal(setdiff(Set([1,2,3]), Set([1])),     Set([2,3]))
     @test isequal(setdiff(Set([1,2,3]), Set([1,2])),   Set([3]))
-    @test isequal(setdiff(Set([1,2,3]), Set([1,2,3])), Set())
+    @test isequal(setdiff(Set([1,2,3]), Set([1,2,3])), Set{Any}())
     @test isequal(setdiff(Set([1,2,3]), Set([4])),     Set([1,2,3]))
     @test isequal(setdiff(Set([1,2,3]), Set([4,1])),   Set([2,3]))
     @test ===(typeof(setdiff(Set([1]), BitSet())), Set{Int})
@@ -201,7 +201,7 @@ end
     @test isequal(s,Set([1,3]))
 end
 @testset "ordering" begin
-    @test Set() < Set([1])
+    @test Set{Any}() < Set([1])
     @test Set([1]) < Set([1,2])
     @test !(Set([3]) < Set([1,2]))
     @test !(Set([3]) > Set([1,2]))
@@ -220,7 +220,7 @@ end
                   (Set([5,6,7,8]), Set([7,8,9])),
                   (Set([1,2]),     Set([3,4])),
                   (Set([5,6,7,8]), Set([7,8,9])),
-                  (Set([1,2,3]),   Set()),
+                  (Set([1,2,3]),   Set{Any}()),
                   (Set([1,2,3]),   Set([1])),
                   (Set([1,2,3]),   Set([1,2])),
                   (Set([1,2,3]),   Set([1,2,3])),
@@ -295,7 +295,7 @@ end
 
 @testset "allunique" begin
     @test allunique([])
-    @test allunique(Set())
+    @test allunique(Set{Any}())
     @test allunique([1,2,3])
     @test allunique([:a,:b,:c])
     @test allunique(Set([1,2,3]))
@@ -314,7 +314,7 @@ end
     @test isequal(s, Set([1,3]))
 end
 @testset "first" begin
-    @test_throws ArgumentError first(Set())
+    @test_throws ArgumentError first(Set{Any}())
     @test first(Set(2)) == 2
 end
 @testset "pop!" begin

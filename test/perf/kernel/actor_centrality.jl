@@ -39,7 +39,7 @@ end
 
 function read_graph()
     G = Graph()
-    actors = Set()
+    actors = Set{Any}()
 
     open(joinpath(@__DIR__, "imdb-1.tsv"), "r") do io
         while !eof(io)

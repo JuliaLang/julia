@@ -449,7 +449,7 @@ pmap_args = [
                 (:retry_check, [:default, (s,e) -> (s,endswith(e.msg,"foobar"))]),
             ]
 
-kwdict = Dict()
+kwdict = Dict{Any,Any}()
 function walk_args(i)
     if i > length(pmap_args)
         kwargs = []
@@ -1224,7 +1224,7 @@ v6 = FooModEverywhere
 # b) hash value has not changed.
 
 @everywhere begin
-    global testsercnt_d = Dict()
+    global testsercnt_d = Dict{Any,Any}()
     mutable struct TestSerCnt
         v
     end

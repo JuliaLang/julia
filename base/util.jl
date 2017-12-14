@@ -463,7 +463,7 @@ info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
 
 # print a warning only once
 
-const have_warned = Set()
+const have_warned = Set{Any}()
 
 warn_once(io::IO, msg...) = warn(io, msg..., once=true)
 warn_once(msg...) = warn(STDERR, msg..., once=true)

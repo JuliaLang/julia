@@ -297,7 +297,7 @@ let undefvar
     @test err_str == "UndefVarError: undefvar not defined"
     err_str = @except_str read(IOBuffer(), UInt8) EOFError
     @test err_str == "EOFError: read end of file"
-    err_str = @except_str Dict()[:doesnotexist] KeyError
+    err_str = @except_str Dict{Any,Any}()[:doesnotexist] KeyError
     @test err_str == "KeyError: key :doesnotexist not found"
     err_str = @except_str throw(InterruptException()) InterruptException
     @test err_str == "InterruptException:"

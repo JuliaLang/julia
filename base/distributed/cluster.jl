@@ -593,7 +593,7 @@ end
 # Called on the first worker on a remote host. Used to optimize launching
 # of multiple workers on a remote host (to leverage multi-core)
 
-additional_io_objs=Dict()
+additional_io_objs = Dict{Any,Any}()
 function launch_additional(np::Integer, cmd::Cmd)
     io_objs = Vector{Any}(uninitialized, np)
     addresses = Vector{Any}(uninitialized, np)
@@ -681,7 +681,7 @@ mutable struct ProcessGroup
     topology::Symbol
     lazy::Nullable{Bool}
 
-    ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Dict(), :all_to_all, Nullable{Bool}())
+    ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Dict{Any,Any}(), :all_to_all, Nullable{Bool}())
 end
 const PGRP = ProcessGroup([])
 

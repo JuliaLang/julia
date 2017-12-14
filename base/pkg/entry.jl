@@ -630,7 +630,7 @@ function build!(pkgs::Vector, seen::Set, errfile::AbstractString)
     end
 end
 
-function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
+function build!(pkgs::Vector, errs::Dict, seen::Set=Set{Any}())
     errfile = tempname()
     touch(errfile)  # create empty file
     try
@@ -648,7 +648,7 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
 end
 
 function build(pkgs::Vector)
-    errs = Dict()
+    errs = Dict{Any,Any}()
     build!(pkgs,errs)
     isempty(errs) && return
     println(STDERR)
@@ -662,7 +662,7 @@ function build(pkgs::Vector)
 end
 build() = build(sort!(collect(keys(installed()))))
 
-function updatehook!(pkgs::Vector, errs::Dict, seen::Set=Set())
+function updatehook!(pkgs::Vector, errs::Dict, seen::Set=Set{Any}())
     for pkg in pkgs
         pkg in seen && continue
         updatehook!(Read.requires_list(pkg),errs,push!(seen,pkg))
@@ -680,7 +680,7 @@ function updatehook!(pkgs::Vector, errs::Dict, seen::Set=Set())
 end
 
 function updatehook(pkgs::Vector)
-    errs = Dict()
+    errs = Dict{Any,Any}()
     updatehook!(pkgs,errs)
     isempty(errs) && return
     println(STDERR)

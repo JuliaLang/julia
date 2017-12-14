@@ -431,7 +431,7 @@ module DocVars
 struct __FIELDS__ end
 
 function Docs.formatdoc(buffer, docstr, ::Type{__FIELDS__})
-    fields = get(docstr.data, :fields, Dict())
+    fields = get(docstr.data, :fields, Dict{Any,Any}())
     if !isempty(fields)
         println(buffer, "# Fields")
         for (k, v) in sort!(collect(fields))

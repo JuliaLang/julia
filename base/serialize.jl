@@ -367,7 +367,7 @@ function serialize(s::AbstractSerializer, m::Module)
 end
 
 # TODO: make this bidirectional, so objects can be sent back via the same key
-const object_numbers = WeakKeyDict()
+const object_numbers = WeakKeyDict{Any,Any}()
 const obj_number_salt = Ref(0)
 function object_number(@nospecialize(l))
     global obj_number_salt, object_numbers

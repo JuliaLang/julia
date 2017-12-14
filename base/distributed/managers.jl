@@ -12,7 +12,7 @@ struct SSHManager <: ClusterManager
         # cnt => :auto or number
         # :auto launches NUM_CORES number of workers at address
         # number launches the specified number of workers at address
-        mhist = Dict()
+        mhist = Dict{Any,Any}()
         for m in machines
             if isa(m, Tuple)
                 host=m[1]
