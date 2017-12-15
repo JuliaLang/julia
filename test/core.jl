@@ -1013,15 +1013,15 @@ let
     @test_throws ErrorException("type LoadError is immutable") setfield!(strct, 4, "")
     @test_throws ErrorException("type is immutable") setfield!(strct, :line, 0)
     @test strct.file == "yofile"
-    @test strct.line == 0
+    @test strct.line === 0
     @test strct.error == "bad"
     @test getfield(strct, 1) == "yofile"
-    @test getfield(strct, 2) == 0
+    @test getfield(strct, 2) === 0
     @test getfield(strct, 3) == "bad"
 
     mstrct = TestMutable("melm", 1, nothing)
     Base.setproperty!(mstrct, :line, 8.0)
-    @test mstrct.line == 8
+    @test mstrct.line === 8
     @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, :line, 8.0)
     @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, 2, 8.0)
     setfield!(mstrct, 3, "hi")
@@ -1031,6 +1031,30 @@ let
     @test_throws BoundsError(mstrct, 10) getfield(mstrct, 10)
     @test_throws BoundsError(mstrct, 0) setfield!(mstrct, 0, "")
     @test_throws BoundsError(mstrct, 4) setfield!(mstrct, 4, "")
+end
+
+# test getfield-overloading
+function Base.getproperty(mstrct::TestMutable, p::Symbol)
+    return (p, getfield(mstrct, :error))
+end
+function Base.setproperty!(mstrct::TestMutable, p::Symbol, v)
+    setfield!(mstrct, :error, (p, v))
+end
+
+let
+    mstrct = TestMutable("melm", 1, nothing)
+    @test mstrct.line === (:line, nothing)
+    @test mstrct.bar === (:bar, nothing)
+    @test getfield(mstrct, 1) == "melm"
+    @test getfield(mstrct, :file) == "melm"
+    @test_throws MethodError Base.getproperty(mstrct, 1)
+    mstrct.error = 8.0
+    @test mstrct.bar === (:bar, (:error, 8.0))
+    mstrct.line = 8.0
+    @test getfield(mstrct, :line) === 1
+    @test getfield(mstrct, :error) === (:line, 8.0)
+    @test mstrct.bar === (:bar, (:line, 8.0))
+    @test mstrct.error === (:error, (:line, 8.0))
 end
 
 # allow typevar in Union to match as long as the arguments contain
