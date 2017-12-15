@@ -316,10 +316,11 @@ function require(mod::Symbol)
     return root_module(mod)
 end
 
-const loaded_modules = ObjectIdDict()
-const module_keys = ObjectIdDict()
+const loaded_modules = ObjectIdDict{Symbol,Module}()
+const module_keys = ObjectIdDict{Module,Symbol}()
 
 function register_root_module(key, m::Module)
+    Core.println("HHH ", key)
     if haskey(loaded_modules, key)
         oldm = loaded_modules[key]
         if oldm !== m

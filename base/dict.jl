@@ -348,8 +348,8 @@ julia> haskey(a,'c')
 false
 ```
 """
-haskey(h::HashDict, key) = (ht_keyindex(h.ht, keyhash(h), keycomparison(h), key) >= 0)
-in(key, v::KeySet{<:Any, <:HashDict}) = (ht_keyindex(v.dict.ht, keyhash(v.dict), keycomparison(v.dict), key) >= 0)
+haskey(h::HashDict, key) = ht_keyindex(h.ht, keyhash(h), keycomparison(h), key) > 0
+in(key, v::KeySet{<:Any, <:HashDict}) = ht_keyindex(v.dict.ht, keyhash(v.dict), keycomparison(v.dict), key) > 0
 
 """
     getkey(collection, key, default)
