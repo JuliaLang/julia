@@ -433,7 +433,7 @@ julia> collect(Float64, 1:2:5)
 collect(::Type{T}, itr) where {T} = _collect(T, itr, iteratorsize(itr))
 
 _collect(::Type{T}, itr, isz::HasLength) where {T} = copy!(Vector{T}(uninitialized, Int(length(itr)::Integer)), itr)
-_collect(::Type{T}, itr, isz::HasShape) where {T}  = copy!(similar(Array{T}, indices(itr)), itr)
+_collect(::Type{T}, itr, isz::HasShape) where {T}  = copy!(similar(Array{T}, axes(itr)), itr)
 function _collect(::Type{T}, itr, isz::SizeUnknown) where T
     a = Vector{T}()
     for x in itr
@@ -445,7 +445,7 @@ end
 # make a collection similar to `c` and appropriate for collecting `itr`
 _similar_for(c::AbstractArray, T, itr, ::SizeUnknown) = similar(c, T, 0)
 _similar_for(c::AbstractArray, T, itr, ::HasLength) = similar(c, T, Int(length(itr)::Integer))
-_similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, indices(itr))
+_similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, axes(itr))
 _similar_for(c, T, itr, isz) = similar(c, T)
 
 """
@@ -470,7 +470,7 @@ julia> collect(1:2:13)
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, iteratoreltype(itr), iteratorsize(itr))
 
-collect(A::AbstractArray) = _collect_indices(indices(A), A)
+collect(A::AbstractArray) = _collect_indices(axes(A), A)
 
 collect_similar(cont, itr) = _collect(cont, itr, iteratoreltype(itr), iteratorsize(itr))
 
@@ -490,7 +490,7 @@ _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
     copy!(Array{eltype(A)}(uninitialized, length.(indsA)), A)
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(uninitialized, length.(indsA))
-    copy!(B, CartesianRange(indices(B)), A, CartesianRange(indsA))
+    copy!(B, CartesianRange(axes(B)), A, CartesianRange(indsA))
 end
 
 # define this as a macro so that the call to Inference
@@ -510,7 +510,7 @@ else
 end
 
 _array_for(::Type{T}, itr, ::HasLength) where {T} = Vector{T}(uninitialized, Int(length(itr)::Integer))
-_array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, indices(itr))::Array{T}
+_array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, axes(itr))::Array{T}
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
@@ -1799,7 +1799,7 @@ function findn(A::AbstractMatrix)
     I = similar(A, Int, nnzA)
     J = similar(A, Int, nnzA)
     cnt = 1
-    for j=indices(A,2), i=indices(A,1)
+    for j=axes(A,2), i=axes(A,1)
         if A[i,j] != 0
             I[cnt] = i
             J[cnt] = j
@@ -1834,7 +1834,7 @@ function findnz(A::AbstractMatrix{T}) where T
     NZs = Vector{T}(uninitialized, nnzA)
     cnt = 1
     if nnzA > 0
-        for j=indices(A,2), i=indices(A,1)
+        for j=axes(A,2), i=axes(A,1)
             Aij = A[i,j]
             if Aij != 0
                 I[cnt] = i

@@ -288,7 +288,7 @@ _trimmedsubarray(A, V, newindexes, index::ViewIndex, indexes...) = _trimmedsubar
 trimmedindex(P, d, i::Real) = oftype(i, 1)
 trimmedindex(P, d, i::Colon) = i
 trimmedindex(P, d, i::Slice) = i
-trimmedindex(P, d, i::AbstractArray) = oftype(i, reshape(linearindices(i), indices(i)))
+trimmedindex(P, d, i::AbstractArray) = oftype(i, reshape(linearindices(i), axes(i)))
 
 function serialize(s::AbstractSerializer, ss::String)
     len = sizeof(ss)

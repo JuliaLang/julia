@@ -34,8 +34,8 @@ behavior, should take care to create a copy of inputs that it may modify.
 | [`ndims(A)`](@ref)     | the number of dimensions of `A`                                                  |
 | [`size(A)`](@ref)      | a tuple containing the dimensions of `A`                                         |
 | [`size(A,n)`](@ref)    | the size of `A` along dimension `n`                                              |
-| [`indices(A)`](@ref)   | a tuple containing the valid indices of `A`                                      |
-| [`indices(A,n)`](@ref) | a range expressing the valid indices along dimension `n`                         |
+| [`axes(A)`](@ref)   | a tuple containing the valid indices of `A`                                      |
+| [`axes(A,n)`](@ref) | a range expressing the valid indices along dimension `n`                         |
 | [`eachindex(A)`](@ref) | an efficient iterator for visiting each position in `A`                          |
 | [`stride(A,k)`](@ref)  | the stride (linear index distance between adjacent elements) along dimension `k` |
 | [`strides(A)`](@ref)   | a tuple of the strides in each dimension                                         |
@@ -403,14 +403,14 @@ first `page` from `A` as a separate step). It can even be combined with a `:`
 to extract both diagonals from the two pages at the same time:
 
 ```jldoctest cartesianindex
-julia> A[CartesianIndex.(indices(A, 1), indices(A, 2)), 1]
+julia> A[CartesianIndex.(axes(A, 1), axes(A, 2)), 1]
 4-element Array{Int64,1}:
   1
   6
  11
  16
 
-julia> A[CartesianIndex.(indices(A, 1), indices(A, 2)), :]
+julia> A[CartesianIndex.(axes(A, 1), axes(A, 2)), :]
 4×2 Array{Int64,2}:
   1  17
   6  22

@@ -54,11 +54,11 @@ The overall hierarchy is:
 
       * `checkbounds(Bool, A, I...)` which calls
 
-          * `checkbounds_indices(Bool, indices(A), I)` which recursively calls
+          * `checkbounds_indices(Bool, axes(A), I)` which recursively calls
 
               * `checkindex` for each dimension
 
-Here `A` is the array, and `I` contains the "requested" indices. `indices(A)` returns a tuple
+Here `A` is the array, and `I` contains the "requested" indices. `axes(A)` returns a tuple
 of "permitted" indices of `A`.
 
 `checkbounds(A, I...)` throws an error if the indices are invalid, whereas `checkbounds(Bool, A, I...)`

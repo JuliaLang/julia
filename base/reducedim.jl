@@ -3,10 +3,10 @@
 ## Functions to compute the reduced shape
 
 # for reductions that expand 0 dims to 1
-reduced_indices(a::AbstractArray, region) = reduced_indices(indices(a), region)
+reduced_indices(a::AbstractArray, region) = reduced_indices(axes(a), region)
 
 # for reductions that keep 0 dims as 0
-reduced_indices0(a::AbstractArray, region) = reduced_indices0(indices(a), region)
+reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
 
 function reduced_indices(inds::Indices{N}, d::Int, rd::AbstractUnitRange) where N
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
@@ -174,7 +174,7 @@ function check_reducedims(R, A)
     lsiz = 1
     had_nonreduc = false
     for i = 1:ndims(A)
-        Ri, Ai = indices(R, i), indices(A, i)
+        Ri, Ai = axes(R, i), axes(A, i)
         sRi, sAi = length(Ri), length(Ai)
         if sRi == 1
             if sAi > 1
@@ -185,7 +185,7 @@ function check_reducedims(R, A)
                 end
             end
         else
-            Ri == Ai || throw(DimensionMismatch("reduction on array with indices $(indices(A)) with output with indices $(indices(R))"))
+            Ri == Ai || throw(DimensionMismatch("reduction on array with indices $(axes(A)) with output with indices $(axes(R))"))
             had_nonreduc = true
         end
     end
@@ -199,8 +199,8 @@ copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
 
 function mapfirst!(f, R::AbstractArray, A::AbstractArray)
     lsiz = check_reducedims(R, A)
-    iA = indices(A)
-    iR = indices(R)
+    iA = axes(A)
+    iR = axes(R)
     t = []
     for i in 1:length(iR)
         iAi = iA[i]
@@ -223,7 +223,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
         end
         return R
     end
-    indsAt, indsRt = safe_tail(indices(A)), safe_tail(indices(R)) # handle d=1 manually
+    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
     keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
@@ -231,7 +231,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
         @inbounds for IA in CartesianRange(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
-            @simd for i in indices(A, 1)
+            @simd for i in axes(A, 1)
                 r = op(r, f(A[i, IA]))
             end
             R[i1,IR] = r
@@ -239,7 +239,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     else
         @inbounds for IA in CartesianRange(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            @simd for i in indices(A, 1)
+            @simd for i in axes(A, 1)
                 R[i,IR] = op(R[i,IR], f(A[i,IA]))
             end
         end
@@ -641,11 +641,11 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval) || isempty(A)) && return Rval, Rind
     lsiz = check_reducedims(Rval, A)
     for i = 1:N
-        indices(Rval, i) == indices(Rind, i) || throw(DimensionMismatch("Find-reduction: outputs must have the same indices"))
+        axes(Rval, i) == axes(Rind, i) || throw(DimensionMismatch("Find-reduction: outputs must have the same indices"))
     end
     # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
     # Otherwise, keep the result in Rval/Rind so that we traverse A in storage order.
-    indsAt, indsRt = safe_tail(indices(A)), safe_tail(indices(Rval))
+    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(Rval))
     keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
     ks = keys(A)
     k, kss = next(ks, start(ks))
@@ -656,7 +656,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             IR = Broadcast.newindex(IA, keep, Idefault)
             tmpRv = Rval[i1,IR]
             tmpRi = Rind[i1,IR]
-            for i in indices(A,1)
+            for i in axes(A,1)
                 tmpAv = A[i,IA]
                 if tmpRi == zi || (tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv)))
                     tmpRv = tmpAv
@@ -670,7 +670,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     else
         @inbounds for IA in CartesianRange(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            for i in indices(A, 1)
+            for i in axes(A, 1)
                 tmpAv = A[i,IA]
                 tmpRv = Rval[i,IR]
                 tmpRi = Rind[i,IR]

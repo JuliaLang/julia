@@ -1220,9 +1220,9 @@ end
 # Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
 # nothing.
 function test_approx_eq_modphase(a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
-                                 err = length(indices(a,1))^3*(eps(S)+eps(T))) where {S<:Real,T<:Real}
-    @test indices(a,1) == indices(b,1) && indices(a,2) == indices(b,2)
-    for i in indices(a,2)
+                                 err = length(axes(a,1))^3*(eps(S)+eps(T))) where {S<:Real,T<:Real}
+    @test axes(a,1) == axes(b,1) && axes(a,2) == axes(b,2)
+    for i in axes(a,2)
         v1, v2 = a[:, i], b[:, i]
         @test min(abs(norm(v1-v2)),abs(norm(v1+v2))) ≈ 0.0 atol=err
     end
@@ -1452,7 +1452,7 @@ GenericArray{T}(args...) where {T} = GenericArray(Array{T}(args...))
 GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(args...))
 
 Base.keys(a::GenericArray) = keys(a.a)
-Base.indices(a::GenericArray) = indices(a.a)
+Base.axes(a::GenericArray) = axes(a.a)
 Base.length(a::GenericArray) = length(a.a)
 Base.size(a::GenericArray) = size(a.a)
 Base.getindex(a::GenericArray, i...) = a.a[i...]

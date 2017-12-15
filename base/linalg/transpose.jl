@@ -75,26 +75,26 @@ julia> A
 """
 adjoint!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(adjoint, B, A)
 function transpose!(B::AbstractVector, A::AbstractMatrix)
-    indices(B,1) == indices(A,2) && indices(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
+    axes(B,1) == axes(A,2) && axes(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
     copy!(B, A)
 end
 function transpose!(B::AbstractMatrix, A::AbstractVector)
-    indices(B,2) == indices(A,1) && indices(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
+    axes(B,2) == axes(A,1) && axes(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
     copy!(B, A)
 end
 function adjoint!(B::AbstractVector, A::AbstractMatrix)
-    indices(B,1) == indices(A,2) && indices(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
+    axes(B,1) == axes(A,2) && axes(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
     ccopy!(B, A)
 end
 function adjoint!(B::AbstractMatrix, A::AbstractVector)
-    indices(B,2) == indices(A,1) && indices(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
+    axes(B,2) == axes(A,1) && axes(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
     ccopy!(B, A)
 end
 
 const transposebaselength=64
 function transpose_f!(f, B::AbstractMatrix, A::AbstractMatrix)
-    inds = indices(A)
-    indices(B,1) == inds[2] && indices(B,2) == inds[1] || throw(DimensionMismatch(string(f)))
+    inds = axes(A)
+    axes(B,1) == inds[2] && axes(B,2) == inds[1] || throw(DimensionMismatch(string(f)))
 
     m, n = length(inds[1]), length(inds[2])
     if m*n<=4*transposebaselength
@@ -169,12 +169,12 @@ julia> transpose(A)
 ```
 """
 function transpose(A::AbstractMatrix)
-    ind1, ind2 = indices(A)
+    ind1, ind2 = axes(A)
     B = similar(A, (ind2, ind1))
     transpose!(B, A)
 end
 function adjoint(A::AbstractMatrix)
-    ind1, ind2 = indices(A)
+    ind1, ind2 = axes(A)
     B = similar(A, (ind2, ind1))
     adjoint!(B, A)
 end

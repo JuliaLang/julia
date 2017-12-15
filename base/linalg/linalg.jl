@@ -31,12 +31,12 @@ module LinAlg
 import Base: \, /, *, ^, +, -, ==
 import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac_mul_B,
     Ac_ldiv_B, Ac_ldiv_Bc, At_mul_Bt, A_rdiv_Bt, At_mul_B
-import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech, asin,
-    asinh, atan, atanh, big, broadcast, ceil, conj, convert, copy, copy!, cos, cosh, cot, coth, csc,
-    csch, eltype, exp, findmax, findmin, fill!, floor, getindex, hcat, imag, indices,
-    inv, isapprox, isone, IndexStyle, kron, length, log, map, ndims, oneunit, parent,
-    power_by_squaring, print_matrix, promote_rule, real, round, sec, sech, setindex!, show, similar,
-    sin, sincos, sinh, size, sqrt, tan, tanh, transpose, trunc, typed_hcat, vec
+import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
+    asin, asinh, atan, atanh, axes, big, broadcast, ceil, conj, convert, copy, copy!, cos,
+    cosh, cot, coth, csc, csch, eltype, exp, findmax, findmin, fill!, floor, getindex, hcat,
+    imag, inv, isapprox, isone, IndexStyle, kron, length, log, map, ndims, oneunit, parent,
+    power_by_squaring, print_matrix, promote_rule, real, round, sec, sech, setindex!, show,
+    similar, sin, sincos, sinh, size, sqrt, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_vcat
 # We use `_length` because of non-1 indices; releases after julia 0.5

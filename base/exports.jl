@@ -412,6 +412,7 @@ export
     lbeta,
 
 # arrays
+    axes,
     broadcast!,
     broadcast,
     broadcast_getindex,
@@ -454,7 +455,6 @@ export
     hvcat,
     ind2sub,
     indexin,
-    indices,
     indmax,
     indmin,
     invperm,

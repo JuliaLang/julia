@@ -144,7 +144,7 @@ module IteratorsMD
 
     # nextind with CartesianIndex
     function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
-        _, ni = next(CartesianRange(indices(a)), i)
+        _, ni = next(CartesianRange(axes(a)), i)
         return ni
     end
 
@@ -226,7 +226,7 @@ module IteratorsMD
     ndims(::Type{CartesianRange{N}}) where {N} = N
     ndims(::Type{CartesianRange{N,TT}}) where {N,TT} = N
 
-    eachindex(::IndexCartesian, A::AbstractArray) = CartesianRange(indices(A))
+    eachindex(::IndexCartesian, A::AbstractArray) = CartesianRange(axes(A))
 
     @inline eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...) =
         CartesianRange(maxsize(A, B...))
@@ -356,7 +356,7 @@ using .IteratorsMD
 # Disallow linear indexing with CartesianIndex
 function checkbounds(::Type{Bool}, A::AbstractArray, i::Union{CartesianIndex, AbstractArray{<:CartesianIndex}})
     @_inline_meta
-    checkbounds_indices(Bool, indices(A), (i,))
+    checkbounds_indices(Bool, axes(A), (i,))
 end
 
 @inline checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple{CartesianIndex,Vararg{Any}}) =
@@ -435,7 +435,7 @@ index_lengths() = ()
 # returns a Tuple{Vararg{AbstractUnitRange}} of indices
 index_shape() = ()
 @inline index_shape(::Real, rest...) = index_shape(rest...)
-@inline index_shape(A::AbstractArray, rest...) = (indices(A)..., index_shape(rest...)...)
+@inline index_shape(A::AbstractArray, rest...) = (axes(A)..., index_shape(rest...)...)
 
 """
     LogicalIndex(mask)
@@ -467,7 +467,7 @@ show(io::IO, r::LogicalIndex) = print(io, "Base.LogicalIndex(", r.mask, ")")
     return (r, start(r), 1)
 end
 @inline function start(L::LogicalIndex{<:CartesianIndex})
-    r = CartesianRange(indices(L.mask))
+    r = CartesianRange(axes(L.mask))
     return (r, start(r), 1)
 end
 @propagate_inbounds function next(L::LogicalIndex, s)
@@ -498,15 +498,15 @@ end
 
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex{<:Any,<:AbstractArray{Bool,1}}) =
     linearindices(A) == linearindices(I.mask)
-@inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = indices(A) == indices(I.mask)
-@inline checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = (indx,) == indices(I.mask)
+@inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = axes(A) == axes(I.mask)
+@inline checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = (indx,) == axes(I.mask)
 checkindex(::Type{Bool}, inds::Tuple, I::LogicalIndex) = false
 
 ensure_indexable(I::Tuple{}) = ()
 @inline ensure_indexable(I::Tuple{Any, Vararg{Any}}) = (I[1], ensure_indexable(tail(I))...)
 @inline ensure_indexable(I::Tuple{LogicalIndex, Vararg{Any}}) = (collect(I[1]), ensure_indexable(tail(I))...)
 
-# In simple cases, we know that we don't need to use indices(A). Optimize those
+# In simple cases, we know that we don't need to use axes(A). Optimize those
 # until Julia gets smart enough to elide the call on its own:
 to_indices(A, I::Tuple{}) = ()
 @inline to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = to_indices(A, (), I)
@@ -560,7 +560,7 @@ function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Vararg{Union{Real, 
     # This is specifically not inlined to prevent excessive allocations in type unstable code
     shape = index_shape(I...)
     dest = similar(A, shape)
-    map(unsafe_length, indices(dest)) == map(unsafe_length, shape) || throw_checksize_error(dest, shape)
+    map(unsafe_length, axes(dest)) == map(unsafe_length, shape) || throw_checksize_error(dest, shape)
     _unsafe_getindex!(dest, A, I...) # usually a generated function, don't allow it to impact inference result
     return dest
 end
@@ -882,8 +882,8 @@ See also [`accumulate`](@ref).
 """
 function accumulate!(op, B, A, dim::Integer)
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
-    inds_t = indices(A)
-    indices(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))
+    inds_t = axes(A)
+    axes(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))
     dim > ndims(A) && return copy!(B, A)
     isempty(inds_t[dim]) && return B
     if dim == 1
@@ -899,8 +899,8 @@ function accumulate!(op, B, A, dim::Integer)
             end
         end
     else
-        R1 = CartesianRange(indices(A)[1:dim-1])   # not type-stable
-        R2 = CartesianRange(indices(A)[dim+1:end])
+        R1 = CartesianRange(axes(A)[1:dim-1])   # not type-stable
+        R2 = CartesianRange(axes(A)[dim+1:end])
         _accumulate!(op, B, A, R1, inds_t[dim], R2) # use function barrier
     end
     return B
@@ -1029,7 +1029,7 @@ Copy all elements from collection `src` to array `dest`.
 copy!(dest, src)
 
 function copy!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
-    @boundscheck checkbounds(dest, indices(src)...)
+    @boundscheck checkbounds(dest, axes(src)...)
     for I in eachindex(IndexStyle(src,dest), src)
         @inbounds dest[I] = src[I]
     end
@@ -1084,8 +1084,8 @@ See also [`circshift`](@ref).
 """
 @noinline function circshift!(dest::AbstractArray{T,N}, src, shiftamt::DimsInteger) where {T,N}
     dest === src && throw(ArgumentError("dest and src must be separate arrays"))
-    inds = indices(src)
-    indices(dest) == inds || throw(ArgumentError("indices of src and dest must match (got $inds and $(indices(dest)))"))
+    inds = axes(src)
+    axes(dest) == inds || throw(ArgumentError("indices of src and dest must match (got $inds and $(axes(dest)))"))
     _circshift!(dest, (), src, (), inds, fill_to_length(shiftamt, 0, Val(N)))
 end
 circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt...,))
@@ -1157,7 +1157,7 @@ true
 """
 function circcopy!(dest, src)
     dest === src && throw(ArgumentError("dest and src must be separate arrays"))
-    indssrc, indsdest = indices(src), indices(dest)
+    indssrc, indsdest = axes(src), axes(dest)
     if (szsrc = map(length, indssrc)) != (szdest = map(length, indsdest))
         throw(DimensionMismatch("src and dest must have the same sizes (got $szsrc and $szdest)"))
     end
@@ -1476,10 +1476,10 @@ function permutedims(B::StridedArray, perm)
 end
 
 function checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) where {TP,TB,N}
-    indsB = indices(B)
+    indsB = axes(B)
     length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
     isperm(perm) || throw(ArgumentError("input is not a permutation"))
-    indsP = indices(P)
+    indsP = axes(P)
     for i = 1:length(perm)
         indsP[i] == indsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
     end
@@ -1571,7 +1571,7 @@ julia> unique(A, 3)
     inds = inds -> zeros(UInt, inds)
     quote
         1 <= dim <= $N || return copy(A)
-        hashes = similar($inds, indices(A, dim))
+        hashes = similar($inds, axes(A, dim))
 
         # Compute hash for each row
         k = 0
@@ -1580,15 +1580,15 @@ julia> unique(A, 3)
         end
 
         # Collect index of first row for each hash
-        uniquerow = similar(Array{Int}, indices(A, dim))
+        uniquerow = similar(Array{Int}, axes(A, dim))
         firstrow = Dict{Prehashed,Int}()
-        for k = indices(A, dim)
+        for k = axes(A, dim)
             uniquerow[k] = get!(firstrow, Prehashed(hashes[k]), k)
         end
         uniquerows = collect(values(firstrow))
 
         # Check for collisions
-        collided = similar(falses, indices(A, dim))
+        collided = similar(falses, axes(A, dim))
         @inbounds begin
             @nloops $N i A d->(if d == dim
                 k = i_d
@@ -1603,11 +1603,11 @@ julia> unique(A, 3)
         end
 
         if any(collided)
-            nowcollided = similar(BitArray, indices(A, dim))
+            nowcollided = similar(BitArray, axes(A, dim))
             while any(collided)
                 # Collect index of first row for each collided hash
                 empty!(firstrow)
-                for j = indices(A, dim)
+                for j = axes(A, dim)
                     collided[j] || continue
                     uniquerow[j] = get!(firstrow, Prehashed(hashes[j]), j)
                 end
@@ -1634,7 +1634,7 @@ julia> unique(A, 3)
             end
         end
 
-        @nref $N A d->d == dim ? sort!(uniquerows) : (indices(A, d))
+        @nref $N A d->d == dim ? sort!(uniquerows) : (axes(A, d))
     end
 end
 

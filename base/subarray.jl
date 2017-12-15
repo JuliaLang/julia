@@ -53,7 +53,7 @@ viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = IndexCartesian()
 
 # Simple utilities
-size(V::SubArray) = (@_inline_meta; map(n->Int(unsafe_length(n)), indices(V)))
+size(V::SubArray) = (@_inline_meta; map(n->Int(unsafe_length(n)), axes(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
@@ -263,7 +263,7 @@ substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("st
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
 compute_stride1(parent::AbstractArray, I::NTuple{N,Any}) where {N} =
-    (@_inline_meta; compute_stride1(1, fill_to_length(indices(parent), OneTo(1), Val(N)), I))
+    (@_inline_meta; compute_stride1(1, fill_to_length(axes(parent), OneTo(1), Val(N)), I))
 compute_stride1(s, inds, I::Tuple{}) = s
 compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
     (@_inline_meta; compute_stride1(s*unsafe_length(inds[1]), tail(inds), tail(I)))
@@ -294,13 +294,13 @@ compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{AbstractRange
 compute_offset1(parent, stride1::Integer, I::Tuple) =
     (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(1, I...), find_extended_inds(I...), I))
 compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, I::Tuple) =
-    (@_inline_meta; compute_linindex(parent, I) - stride1*first(indices(parent, dims[1])))  # index-preserving case
+    (@_inline_meta; compute_linindex(parent, I) - stride1*first(axes(parent, dims[1])))  # index-preserving case
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
     (@_inline_meta; compute_linindex(parent, I) - stride1)  # linear indexing starts with 1
 
 function compute_linindex(parent, I::NTuple{N,Any}) where N
     @_inline_meta
-    IP = fill_to_length(indices(parent), OneTo(1), Val(N))
+    IP = fill_to_length(axes(parent), OneTo(1), Val(N))
     compute_linindex(1, 1, IP, I)
 end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{ScalarIndex, Vararg{Any}})
@@ -329,7 +329,7 @@ pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
 pointer(V::SubArray, i::Int) = _pointer(V, i)
 _pointer(V::SubArray{<:Any,1}, i::Int) = pointer(V, (i,))
-_pointer(V::SubArray, i::Int) = pointer(V, ind2sub(indices(V), i))
+_pointer(V::SubArray, i::Int) = pointer(V, ind2sub(axes(V), i))
 
 function pointer(V::SubArray{T,N,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::Tuple{Vararg{Int}}) where {T,N}
     index = first_index(V)
@@ -343,7 +343,7 @@ end
 # indices are taken from the range/vector
 # Since bounds-checking is performance-critical and uses
 # indices, it's worth optimizing these implementations thoroughly
-indices(S::SubArray) = (@_inline_meta; _indices_sub(S, S.indexes...))
+axes(S::SubArray) = (@_inline_meta; _indices_sub(S, S.indexes...))
 _indices_sub(S::SubArray) = ()
 _indices_sub(S::SubArray, ::Real, I...) = (@_inline_meta; _indices_sub(S, I...))
 function _indices_sub(S::SubArray, i1::AbstractArray, I...)

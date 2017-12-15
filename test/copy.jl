@@ -51,12 +51,12 @@ end
 
 @testset "with CartesianRange" begin
     let A = reshape(1:6, 3, 2), B = similar(A)
-        RA = CartesianRange(indices(A))
+        RA = CartesianRange(axes(A))
         copy!(B, RA, A, RA)
         @test B == A
     end
     let A = reshape(1:6, 3, 2), B = zeros(8,8)
-        RA = CartesianRange(indices(A))
+        RA = CartesianRange(axes(A))
         copy!(B, CartesianRange((5:7,2:3)), A, RA)
         @test B[5:7,2:3] == A
         B[5:7,2:3] = 0

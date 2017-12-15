@@ -1408,6 +1408,9 @@ Deprecated or removed
     `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
     `empty(::Associative, K, V)` ([#24390]).
 
+  * `indices(a)` and `indices(a,d)` have been deprecated in favor of `axes(a)` and
+    `axes(a, d)` ([#25057]).
+
 Command-line option changes
 ---------------------------
 
