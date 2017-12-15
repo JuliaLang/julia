@@ -95,7 +95,7 @@ bimg  = randn(n,2)/2
                         @test logabsdet(bc2)[1] ≈ log(abs(det(bc2)))
                         @test logabsdet(bc2)[2] == sign(det(bc2))
                         @test inv(bc2)*apd ≈ Matrix(I, n, n)
-                        @test apd*(bc2\b) ≈ b atol=150000ε
+                        @test apd*(bc2\b) ≈ b rtol=eps(cond(apd))
                         @test ishermitian(bc2) == !issymmetric(bc2)
                     end
                 end
