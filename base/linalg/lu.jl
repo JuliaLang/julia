@@ -590,7 +590,7 @@ function ldiv!(adjA::Adjoint{<:Any,LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat)
     return B
 end
 
-/(B::AbstractMatrix,A::LU) = \(Transpose(A),Transpose(B)).'
+/(B::AbstractMatrix,A::LU) = transpose(Transpose(A) \ Transpose(B))
 
 # Conversions
 convert(::Type{AbstractMatrix}, F::LU) = (F[:L] * F[:U])[invperm(F[:p]),:]

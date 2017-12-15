@@ -795,9 +795,9 @@ function mul!(transA::Transpose{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
     end
     for j = 1:n
         for i = m:-1:1
-            Bij = A.data[i,i].'B[i,j]
+            Bij = Transpose(A.data[i,i]) * B[i,j]
             for k = 1:i - 1
-                Bij += A.data[k,i].'B[k,j]
+                Bij += Transpose(A.data[k,i]) * B[k,j]
             end
             B[i,j] = Bij
         end
@@ -814,7 +814,7 @@ function mul!(transA::Transpose{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat
         for i = m:-1:1
             Bij = B[i,j]
             for k = 1:i - 1
-                Bij += A.data[k,i].'B[k,j]
+                Bij += Transpose(A.data[k,i]) * B[k,j]
             end
             B[i,j] = Bij
         end
@@ -830,9 +830,9 @@ function mul!(transA::Transpose{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
     end
     for j = 1:n
         for i = 1:m
-            Bij = A.data[i,i].'B[i,j]
+            Bij = Transpose(A.data[i,i]) * B[i,j]
             for k = i + 1:m
-                Bij += A.data[k,i].'B[k,j]
+                Bij += Transpose(A.data[k,i]) * B[k,j]
             end
             B[i,j] = Bij
         end
@@ -849,7 +849,7 @@ function mul!(transA::Transpose{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat
         for i = 1:m
             Bij = B[i,j]
             for k = i + 1:m
-                Bij += A.data[k,i].'B[k,j]
+                Bij += Transpose(A.data[k,i]) * B[k,j]
             end
             B[i,j] = Bij
         end
@@ -1001,9 +1001,9 @@ function mul!(A::StridedMatrix, transB::Transpose{<:Any,<:UpperTriangular})
     end
     for i = 1:m
         for j = 1:n
-            Aij = A[i,j]*B.data[j,j].'
+            Aij = A[i,j] * Transpose(B.data[j,j])
             for k = j + 1:n
-                Aij += A[i,k]*B.data[j,k].'
+                Aij += A[i,k] * Transpose(B.data[j,k])
             end
             A[i,j] = Aij
         end
@@ -1020,7 +1020,7 @@ function mul!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitUpperTriangular})
         for j = 1:n
             Aij = A[i,j]
             for k = j + 1:n
-                Aij += A[i,k]*B.data[j,k].'
+                Aij += A[i,k] * Transpose(B.data[j,k])
             end
             A[i,j] = Aij
         end
@@ -1036,9 +1036,9 @@ function mul!(A::StridedMatrix, transB::Transpose{<:Any,<:LowerTriangular})
     end
     for i = 1:m
         for j = n:-1:1
-            Aij = A[i,j]*B.data[j,j].'
+            Aij = A[i,j] * Transpose(B.data[j,j])
             for k = 1:j - 1
-                Aij += A[i,k]*B.data[j,k].'
+                Aij += A[i,k] * Transpose(B.data[j,k])
             end
             A[i,j] = Aij
         end
@@ -1055,7 +1055,7 @@ function mul!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitLowerTriangular})
         for j = n:-1:1
             Aij = A[i,j]
             for k = 1:j - 1
-                Aij += A[i,k]*B.data[j,k].'
+                Aij += A[i,k] * Transpose(B.data[j,k])
             end
             A[i,j] = Aij
         end
@@ -1398,9 +1398,9 @@ function rdiv!(A::StridedMatrix, transB::Transpose{<:Any,<:UpperTriangular})
         for j = n:-1:1
             Aij = A[i,j]
             for k = j + 1:n
-                Aij -= A[i,k]*B.data[j,k].'
+                Aij -= A[i,k] * Transpose(B.data[j,k])
             end
-            A[i,j] = Aij/B.data[j,j].'
+            A[i,j] = Aij / Transpose(B.data[j,j])
         end
     end
     A
@@ -1415,7 +1415,7 @@ function rdiv!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitUpperTriangular})
         for j = n:-1:1
             Aij = A[i,j]
             for k = j + 1:n
-                Aij -= A[i,k]*B.data[j,k].'
+                Aij -= A[i,k] * Transpose(B.data[j,k])
             end
             A[i,j] = Aij
         end
@@ -1433,9 +1433,9 @@ function rdiv!(A::StridedMatrix, transB::Transpose{<:Any,<:LowerTriangular})
         for j = 1:n
             Aij = A[i,j]
             for k = 1:j - 1
-                Aij -= A[i,k]*B.data[j,k].'
+                Aij -= A[i,k] * Transpose(B.data[j,k])
             end
-            A[i,j] = Aij/B.data[j,j].'
+            A[i,j] = Aij / Transpose(B.data[j,j])
         end
     end
     A
@@ -1450,7 +1450,7 @@ function rdiv!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitLowerTriangular})
         for j = 1:n
             Aij = A[i,j]
             for k = 1:j - 1
-                Aij -= A[i,k]*B.data[j,k].'
+                Aij -= A[i,k] * Transpose(B.data[j,k])
             end
             A[i,j] = Aij
         end
@@ -1928,7 +1928,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
     scale!(S, normA0^p)
     return S
 end
-powm(A::LowerTriangular, p::Real) = powm(A.', p::Real).'
+powm(A::LowerTriangular, p::Real) = transpose(powm(transpose(A), p::Real))
 
 # Complex matrix logarithm for the upper triangular factor, see:
 #   Al-Mohy and Higham, "Improved inverse  scaling and squaring algorithms for
@@ -2112,7 +2112,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
 
     return UpperTriangular(Y)
 end
-log(A::LowerTriangular) = log(A.').'
+log(A::LowerTriangular) = transpose(log(transpose(A)))
 
 # Auxiliary functions for matrix logarithm and matrix power
 
@@ -2320,8 +2320,8 @@ function sqrt(A::UnitUpperTriangular{T}) where T
     end
     return UnitUpperTriangular(R)
 end
-sqrt(A::LowerTriangular) = sqrt(A.').'
-sqrt(A::UnitLowerTriangular) = sqrt(A.').'
+sqrt(A::LowerTriangular) = transpose(sqrt(transpose(A)))
+sqrt(A::UnitLowerTriangular) = transpose(sqrt(transpose(A)))
 
 # Generic eigensystems
 eigvals(A::AbstractTriangular) = diag(A)

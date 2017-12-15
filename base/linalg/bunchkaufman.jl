@@ -118,7 +118,7 @@ end
     getindex(B::BunchKaufman, d::Symbol)
 
 Extract the factors of the Bunch-Kaufman factorization `B`. The factorization can take the
-two forms `L*D*L'` or `U*D*U'` (or `.'` in the complex symmetric case) where `L` is a
+two forms `L*D*L'` or `U*D*U'` (or `L*D*Transpose(L)` in the complex symmetric case) where `L` is a
 `UnitLowerTriangular` matrix, `U` is a `UnitUpperTriangular`, and `D` is a block diagonal
 symmetric or Hermitian matrix with 1x1 or 2x2 blocks. The argument `d` can be
 - `:D`: the block diagonal matrix
@@ -153,7 +153,7 @@ permutation:
  3
  2
 
-julia> F[:L]*F[:D]*F[:L].' - A[F[:p], F[:p]]
+julia> F[:L]*F[:D]*F[:L]' - A[F[:p], F[:p]]
 3×3 Array{Float64,2}:
  0.0  0.0  0.0
  0.0  0.0  0.0
@@ -161,7 +161,7 @@ julia> F[:L]*F[:D]*F[:L].' - A[F[:p], F[:p]]
 
 julia> F = bkfact(Symmetric(A));
 
-julia> F[:U]*F[:D]*F[:U].' - F[:P]*A*F[:P]'
+julia> F[:U]*F[:D]*F[:U]' - F[:P]*A*F[:P]'
 3×3 Array{Float64,2}:
  0.0  0.0  0.0
  0.0  0.0  0.0
@@ -192,13 +192,13 @@ function getindex(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
             if B.uplo == 'L'
                 return UnitLowerTriangular(LUD)
             else
-                throw(ArgumentError("factorization is U*D*U.' but you requested L"))
+                throw(ArgumentError("factorization is U*D*Transpose(U) but you requested L"))
             end
         else # :U
             if B.uplo == 'U'
                 return UnitUpperTriangular(LUD)
             else
-                throw(ArgumentError("factorization is L*D*L.' but you requested U"))
+                throw(ArgumentError("factorization is L*D*Transpose(L) but you requested U"))
             end
         end
     else

@@ -3098,7 +3098,7 @@ end
     *(rowvec::RowVector, A::AbstractTriangular) = rvtranspose(transpose(A) * rvtranspose(rowvec))
     *(rowvec::RowVector, transA::Transpose{<:Any,<:AbstractTriangular}) = rvtranspose(transA.parent * rvtranspose(rowvec))
     *(A::AbstractTriangular, transrowvec::Transpose{<:Any,<:RowVector}) = A * rvtranspose(transrowvec.parent)
-    *(transA::Transpose{<:Any,<:AbstractTriangular}, transrowvec::Transpose{<:Any,<:RowVector}) = transA.parent.' * rvtranspose(transrowvec.parent)
+    *(transA::Transpose{<:Any,<:AbstractTriangular}, transrowvec::Transpose{<:Any,<:RowVector}) = transA * rvtranspose(transrowvec.parent)
     *(rowvec::RowVector, adjA::Adjoint{<:Any,<:AbstractTriangular}) = rvadjoint(adjA.parent * rvadjoint(rowvec))
     *(A::AbstractTriangular, adjrowvec::Adjoint{<:Any,<:RowVector}) = A * rvadjoint(adjrowvec.parent)
     *(adjA::Adjoint{<:Any,<:AbstractTriangular}, adjrowvec::Adjoint{<:Any,<:RowVector}) = adjA.parent' * rvadjoint(adjrowvec.parent)

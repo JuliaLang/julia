@@ -38,7 +38,7 @@ julia> Slower = Symmetric(A, :L)
  2  0  3  0  4
 ```
 
-Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if `A == A.'`).
+Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if `A == Transpose(A)`).
 """
 Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (checksquare(A); Symmetric{eltype(A),typeof(A)}(A, char_uplo(uplo)))
 
@@ -261,13 +261,13 @@ end
 
 function tril(A::Symmetric, k::Integer=0)
     if A.uplo == 'U' && k <= 0
-        return tril!(A.data.',k)
+        return tril!(transpose(A.data),k)
     elseif A.uplo == 'U' && k > 0
-        return tril!(A.data.',-1) + tril!(triu(A.data),k)
+        return tril!(transpose(A.data),-1) + tril!(triu(A.data),k)
     elseif A.uplo == 'L' && k <= 0
         return tril(A.data,k)
     else
-        return tril(A.data,-1) + tril!(triu!(A.data.'),k)
+        return tril(A.data,-1) + tril!(triu!(transpose(A.data)),k)
     end
 end
 
@@ -287,11 +287,11 @@ function triu(A::Symmetric, k::Integer=0)
     if A.uplo == 'U' && k >= 0
         return triu(A.data,k)
     elseif A.uplo == 'U' && k < 0
-        return triu(A.data,1) + triu!(tril!(A.data.'),k)
+        return triu(A.data,1) + triu!(tril!(transpose(A.data)),k)
     elseif A.uplo == 'L' && k >= 0
-        return triu!(A.data.',k)
+        return triu!(transpose(A.data),k)
     else
-        return triu!(A.data.',1) + triu!(tril(A.data),k)
+        return triu!(transpose(A.data),1) + triu!(tril(A.data),k)
     end
 end
 
