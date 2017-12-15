@@ -605,7 +605,7 @@ if Sys.iswindows()
         @warn """No methods found in Base with backslashes in file name,
                  skipping test for `Base.url`"""
     else
-        @test !('\\' in Base.url(get(h16850)))
+        @test !('\\' in Base.url(h16850))
     end
 else
     @test h16850 === nothing
