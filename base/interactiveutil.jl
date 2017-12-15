@@ -41,8 +41,8 @@ function edit(path::AbstractString, line::Integer=0)
     line_unsupported = false
     if startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" ||
             name == "mvim" || name == "nano" ||
-            name == "emacs" && contains(in, command, ["-nw", "--no-window-system" ]) ||
-            name == "emacsclient" && contains(in, command, ["-nw", "-t", "-tty"])
+            name == "emacs" && any(c -> c in ["-nw", "--no-window-system" ], command) ||
+            name == "emacsclient" && any(c -> c in ["-nw", "-t", "-tty"], command)
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
         background = false
     elseif startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
@@ -51,7 +51,7 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
-    elseif name == "code" || (Sys.iswindows() && uppercase(name) == "CODE.EXE")
+    elseif name == "code" || (Sys.iswindows() && Unicode.uppercase(name) == "CODE.EXE")
         cmd = line != 0 ? `$command -g $path:$line` : `$command -g $path`
     elseif startswith(name, "notepad++")
         cmd = line != 0 ? `$command $path -n$line` : `$command $path`
@@ -665,33 +665,6 @@ situations in which more options are needed, please use a package that provides 
 functionality instead.
 """
 download(url, filename)
-
-# workspace management
-
-"""
-    workspace()
-
-Replace the top-level module (`Main`) with a new one, providing a clean workspace. The
-previous `Main` module is made available as `LastMain`.
-
-If `Package` was previously loaded, `using Package` in the new `Main` will re-use the
-loaded copy. Run `reload("Package")` first to load a fresh copy.
-
-This function should only be used interactively.
-"""
-function workspace()
-    last = Core.Main # ensure to reference the current Main module
-    b = Base # this module
-    ccall(:jl_new_main_module, Any, ()) # make Core.Main a new baremodule
-    m = Core.Main # now grab a handle to the new Main module
-    ccall(:jl_add_standard_imports, Void, (Any,), m)
-    eval(m, Expr(:toplevel,
-                 :(const Base = $b),
-                 :(const LastMain = $last),
-                 :(using Base.MainInclude)))
-    empty!(package_locks)
-    return m
-end
 
 # testing
 

@@ -857,7 +857,7 @@ timesofar("unary arithmetic")
         for (x1,t1) = [(f1, Float64),
                        (ci1, Complex{Int}),
                        (cu1, Complex{UInt8}),
-                       (cf1, Complex128)]
+                       (cf1, ComplexF64)]
             @check_bit_operation broadcast(+, x1, b2)  Matrix{t1}
             @check_bit_operation broadcast(-, x1, b2)  Matrix{t1}
             @check_bit_operation broadcast(*, x1, b2) Matrix{t1}
@@ -883,9 +883,9 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(div, f1, b2)  Matrix{Float64}
         @check_bit_operation broadcast(mod, f1, b2)  Matrix{Float64}
 
-        @check_bit_operation broadcast(/, ci1, b2) Matrix{Complex128}
-        @check_bit_operation broadcast(/, cu1, b2) Matrix{Complex128}
-        @check_bit_operation broadcast(/, cf1, b2) Matrix{Complex128}
+        @check_bit_operation broadcast(/, ci1, b2) Matrix{ComplexF64}
+        @check_bit_operation broadcast(/, cu1, b2) Matrix{ComplexF64}
+        @check_bit_operation broadcast(/, cf1, b2) Matrix{ComplexF64}
 
         b2 = bitrand(n1, n2)
         @check_bit_operation broadcast(^, false, b2) BitMatrix
@@ -897,8 +897,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(^, 1, b2)     Matrix{Int}
         @check_bit_operation broadcast(^, 0.0, b2)   Matrix{Float64}
         @check_bit_operation broadcast(^, 1.0, b2)   Matrix{Float64}
-        @check_bit_operation broadcast(^, 0.0im, b2) Matrix{Complex128}
-        @check_bit_operation broadcast(^, 1.0im, b2) Matrix{Complex128}
+        @check_bit_operation broadcast(^, 0.0im, b2) Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, 1.0im, b2) Matrix{ComplexF64}
         @check_bit_operation broadcast(^, 0im, b2)   Matrix{Complex{Int}}
         @check_bit_operation broadcast(^, 1im, b2)   Matrix{Complex{Int}}
         @check_bit_operation broadcast(^, 0x0*im, b2) Matrix{Complex{UInt8}}
@@ -976,17 +976,17 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(+, b1, ci2)  Matrix{Complex{Int}}
         @check_bit_operation broadcast(-, b1, ci2)  Matrix{Complex{Int}}
         @check_bit_operation broadcast(*, b1, ci2) Matrix{Complex{Int}}
-        @check_bit_operation broadcast(/, b1, ci2) Matrix{Complex128}
+        @check_bit_operation broadcast(/, b1, ci2) Matrix{ComplexF64}
 
         @check_bit_operation broadcast(+, b1, cu2)  Matrix{Complex{UInt8}}
         @check_bit_operation broadcast(-, b1, cu2)  Matrix{Complex{UInt8}}
         @check_bit_operation broadcast(*, b1, cu2) Matrix{Complex{UInt8}}
-        @check_bit_operation broadcast(/, b1, cu2) Matrix{Complex128}
+        @check_bit_operation broadcast(/, b1, cu2) Matrix{ComplexF64}
 
-        @check_bit_operation broadcast(+, b1, cf2)  Matrix{Complex128}
-        @check_bit_operation broadcast(-, b1, cf2)  Matrix{Complex128}
-        @check_bit_operation broadcast(*, b1, cf2) Matrix{Complex128}
-        @check_bit_operation broadcast(/, b1, cf2) Matrix{Complex128}
+        @check_bit_operation broadcast(+, b1, cf2)  Matrix{ComplexF64}
+        @check_bit_operation broadcast(-, b1, cf2)  Matrix{ComplexF64}
+        @check_bit_operation broadcast(*, b1, cf2) Matrix{ComplexF64}
+        @check_bit_operation broadcast(/, b1, cf2) Matrix{ComplexF64}
 
         @check_bit_operation broadcast(^, b1, false) BitMatrix
         @check_bit_operation broadcast(^, b1, true)  BitMatrix
@@ -997,17 +997,17 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(^, b1, -1.0)  Matrix{Float64}
         @check_bit_operation broadcast(^, b1, 0.0)   Matrix{Float64}
         @check_bit_operation broadcast(^, b1, 1.0)   Matrix{Float64}
-        @check_bit_operation broadcast(^, b1, 0.0im) Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 0x0*im) Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 0im)   Matrix{Complex128}
+        @check_bit_operation broadcast(^, b1, 0.0im) Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, b1, 0x0*im) Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, b1, 0im)   Matrix{ComplexF64}
         @test_throws DomainError broadcast(^, b1, -1)
 
         b1 = trues(n1, n2)
-        @check_bit_operation broadcast(^, b1, -1.0im) Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 1.0im)  Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, -1im)   Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 1im)    Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 0x1*im)  Matrix{Complex128}
+        @check_bit_operation broadcast(^, b1, -1.0im) Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, b1, 1.0im)  Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, b1, -1im)   Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, b1, 1im)    Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, b1, 0x1*im)  Matrix{ComplexF64}
     end
 end
 

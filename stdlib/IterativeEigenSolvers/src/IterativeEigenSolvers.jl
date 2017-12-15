@@ -7,7 +7,7 @@ Arnoldi and Lanczos iteration for computing eigenvalues
 """
 module IterativeEigenSolvers
 
-using Base.LinAlg: BlasFloat, BlasInt, SVD, checksquare
+using Base.LinAlg: BlasFloat, BlasInt, SVD, checksquare, mul!, Adjoint, Transpose
 
 export eigs, svds
 
@@ -78,7 +78,7 @@ function _eigs(A, B;
         throw(ArgumentError("input matrix A is too small. Use eigfact instead."))
     end
     if nev > nevmax
-        warn("Adjusting nev from $nev to $nevmax")
+        @warn "Adjusting nev from $nev to $nevmax"
         nev = nevmax
     end
     if nev <= 0
@@ -86,7 +86,7 @@ function _eigs(A, B;
     end
     ncvmin = nev + (sym ? 1 : 2)
     if ncv < ncvmin
-        warn("Adjusting ncv from $ncv to $ncvmin")
+        @warn "Adjusting ncv from $ncv to $ncvmin"
         ncv = ncvmin
     end
     ncv = BlasInt(min(ncv, n))
@@ -94,7 +94,7 @@ function _eigs(A, B;
     isshift = sigma !== nothing
 
     if isa(which,AbstractString)
-        warn("Use symbols instead of strings for specifying which eigenvalues to compute")
+        @warn "Use symbols instead of strings for specifying which eigenvalues to compute"
         which=Symbol(which)
     end
     if (which != :LM && which != :SM && which != :LR && which != :SR &&
@@ -104,7 +104,7 @@ function _eigs(A, B;
     if which == :BE && !sym
         throw(ArgumentError("which=:BE only possible for real symmetric problem"))
     end
-    isshift && which == :SM && warn("use of :SM in shift-and-invert mode is not recommended, use :LM to find eigenvalues closest to sigma")
+    isshift && which == :SM && @warn "Use of :SM in shift-and-invert mode is not recommended, use :LM to find eigenvalues closest to sigma"
 
     if which==:SM && !isshift # transform into shift-and-invert method with sigma = 0
         isshift=true
@@ -152,7 +152,7 @@ function _eigs(A, B;
     end
 
     # Refer to ex-*.doc files in ARPACK/DOCUMENTS for calling sequence
-    matvecA!(y, x) = A_mul_B!(y, A, x)
+    matvecA!(y, x) = mul!(y, A, x)
     if !isgeneral           # Standard problem
         matvecB = x -> x
         if !isshift         #    Regular mode
@@ -187,7 +187,7 @@ function _eigs(A, B;
     # Issue 10495, 10701: Check that all eigenvalues are converged
     nev = length(output[1])
     nconv = output[ritzvec ? 3 : 2]
-    nev ≤ nconv || warn("not all wanted Ritz pairs converged. Requested: $nev, converged: $nconv")
+    nev ≤ nconv || @warn "Not all wanted Ritz pairs converged. Requested: $nev, converged: $nconv"
 
     return output
 end
@@ -205,10 +205,10 @@ function SVDAugmented(A::AbstractMatrix{T}) where T
     SVDAugmented{Tnew,typeof(Anew)}(Anew)
 end
 
-function Base.A_mul_B!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
+function Base.LinAlg.mul!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
     m, mn = size(A.X, 1), length(x)
-    A_mul_B!( view(y, 1:m), A.X, view(x, m + 1:mn)) # left singular vector
-    Ac_mul_B!(view(y, m + 1:mn), A.X, view(x, 1:m)) # right singular vector
+    mul!( view(y, 1:m), A.X, view(x, m + 1:mn)) # left singular vector
+    mul!(view(y, m + 1:mn), Adjoint(A.X), view(x, 1:m)) # right singular vector
     return y
 end
 Base.size(A::SVDAugmented)  = ((+)(size(A.X)...), (+)(size(A.X)...))
@@ -225,13 +225,13 @@ function AtA_or_AAt(A::AbstractMatrix{T}) where T
     AtA_or_AAt{Tnew,typeof(Anew)}(Anew, Vector{Tnew}(uninitialized, max(size(A)...)))
 end
 
-function Base.A_mul_B!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
+function Base.LinAlg.mul!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
     if size(A.A, 1) >= size(A.A, 2)
-        A_mul_B!(A.buffer, A.A, x)
-        return Ac_mul_B!(y, A.A, A.buffer)
+        mul!(A.buffer, A.A, x)
+        return mul!(y, Adjoint(A.A), A.buffer)
     else
-        Ac_mul_B!(A.buffer, A.A, x)
-        return A_mul_B!(y, A.A, A.buffer)
+        mul!(A.buffer, Adjoint(A.A), x)
+        return mul!(y, A.A, A.buffer)
     end
 end
 Base.size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val(2))
@@ -330,5 +330,7 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
                     ex[2], ex[3], ex[4], ex[5])
     end
 end
+
+include("deprecated.jl")
 
 end # module

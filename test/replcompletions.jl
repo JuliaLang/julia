@@ -21,8 +21,8 @@ let ex = quote
             :()
         end
 
-        # Support non-Dict Associatives, #19441
-        mutable struct CustomDict{K, V} <: Associative{K, V}
+        # Support non-Dict AbstractDicts, #19441
+        mutable struct CustomDict{K, V} <: AbstractDict{K, V}
             mydict::Dict{K, V}
         end
 

@@ -40,9 +40,7 @@ function foundfunc(bt, funcname)
     end
     false
 end
-if inlining_on
-    @test !foundfunc(h_inlined(), :g_inlined)
-end
+@test foundfunc(h_inlined(), :g_inlined)
 @test foundfunc(h_noinlined(), :g_noinlined)
 
 using Base.pushmeta!, Base.popmeta!
@@ -130,7 +128,8 @@ show_sexpr(ioB,:(1+1))
 
 show_sexpr(ioB,QuoteNode(1),1)
 
-@test Base.Distributed.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
+using Distributed
+@test Distributed.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
       [:Foo, :Bar, :Baz]
 
 # test base/expr.jl

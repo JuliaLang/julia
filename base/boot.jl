@@ -110,10 +110,14 @@
 #mutable struct Task
 #    parent::Task
 #    storage::Any
-#    consumers
-#    started::Bool
-#    done::Bool
-#    runnable::Bool
+#    state::Symbol
+#    consumers::Any
+#    donenotify::Any
+#    result::Any
+#    exception::Any
+#    backtrace::Any
+#    logstate::Any
+#    code::Any
 #end
 
 export

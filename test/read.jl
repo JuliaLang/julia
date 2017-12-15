@@ -452,7 +452,7 @@ if !Sys.iswindows() && get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") !=
     @test_throws SystemError open(f)
     @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
 else
-    Sys.iswindows() || warn("file permissions tests skipped due to running tests as root (not recommended)")
+    Sys.iswindows() || @warn "File permissions tests skipped due to running tests as root (not recommended)"
     close(open(f))
 end
 chmod(f, 0o400)
@@ -500,7 +500,7 @@ if get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
     @test_throws SystemError open(f, "r+")
     @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
 else
-    warn("file permissions tests skipped due to running tests as root (not recommended)")
+    @warn "File permissions tests skipped due to running tests as root (not recommended)"
 end
 chmod(f, 0o600)
 f1 = open(f, "r+")

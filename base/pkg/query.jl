@@ -23,10 +23,10 @@ function check_fixed(reqs::Requires, fix::Dict{String,Fixed}, avail::Dict)
             haskey(avail, p2) || haskey(fix, p2) || throw(PkgError("unknown package $p2 required by $p1"))
         end
         satisfies(p1, f1.version, reqs) ||
-            warn("$p1 is fixed at $(f1.version) conflicting with top-level requirement: $(reqs[p1])")
+            @warn "$p1 is fixed at $(f1.version) conflicting with top-level requirement: $(reqs[p1])"
         for (p2,f2) in fix
             satisfies(p1, f1.version, f2.requires) ||
-                warn("$p1 is fixed at $(f1.version) conflicting with requirement for $p2: $(f2.requires[p1])")
+                @warn "$p1 is fixed at $(f1.version) conflicting with requirement for $p2: $(f2.requires[p1])"
         end
     end
 end
@@ -164,14 +164,14 @@ function check_partial_updates(reqs::Requires,
     for p in upkgs
         if !haskey(want, p)
             if !haskey(fixed, p)
-                warn("Something went wrong with the update of package $p, please submit a bug report")
+                @warn "Something went wrong with the update of package $p, please submit a bug report"
                 continue
             end
             v = fixed[p].version
         else
             v = want[p]
             if haskey(fixed, p) && v != fixed[p].version
-                warn("Something went wrong with the update of package $p, please submit a bug report")
+                @warn "Something went wrong with the update of package $p, please submit a bug report"
                 continue
             end
         end
@@ -200,17 +200,18 @@ function check_partial_updates(reqs::Requires,
         # Determine if the update of `p` is prevented by it being fixed (e.g. it's dirty, or pinned...)
         isfixed = haskey(fixed, p)
 
-        msg = "Package $p was set to version $v, but a higher version $(vers[end]) exists.\n"
-        if isfixed
-            msg *= "      The package is fixed. You can try using `Pkg.free(\"$p\")` to update it."
-        elseif blocking_reqs
-            msg *= "      The update is prevented by explicit requirements constraints. Edit your REQUIRE file to change this."
-        elseif !isempty(blocking_parents)
-            msg *= string("      To install the latest version, you could try updating these packages as well: ", join(blocking_parents, ", ", " and "), ".")
-        else
-            msg *= "      To install the latest version, you could try doing a full update with `Pkg.update()`."
+        @info begin
+            "Package $p was set to version $v, but a higher version $(vers[end]) exists.\n" *
+            if isfixed
+                "The package is fixed. You can try using `Pkg.free(\"$p\")` to update it."
+            elseif blocking_reqs
+                "The update is prevented by explicit requirements constraints. Edit your REQUIRE file to change this."
+            elseif !isempty(blocking_parents)
+                string("To install the latest version, you could try updating these packages as well: ", join(blocking_parents, ", ", " and "), ".")
+            else
+                "To install the latest version, you could try doing a full update with `Pkg.update()`."
+            end
         end
-        info(msg)
     end
 end
 

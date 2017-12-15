@@ -138,8 +138,8 @@ struct FileRedirect
     filename::AbstractString
     append::Bool
     function FileRedirect(filename, append)
-        if lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
-            warn_once("for portability use DevNull instead of a file redirect")
+        if Unicode.lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
+            @warn "For portability use DevNull instead of a file redirect" maxlog=1
         end
         new(filename, append)
     end
@@ -207,7 +207,7 @@ end
 # convert various env representations into an array of "key=val" strings
 byteenv(env::AbstractArray{<:AbstractString}) =
     String[cstr(x) for x in env]
-byteenv(env::Associative) =
+byteenv(env::AbstractDict) =
     String[cstr(string(k)*"="*string(v)) for (k,v) in env]
 byteenv(env::Void) = nothing
 byteenv(env::Union{AbstractVector{Pair{T}}, Tuple{Vararg{Pair{T}}}}) where {T<:AbstractString} =

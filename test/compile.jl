@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Distributed
 
 import Base: root_module
 
@@ -14,8 +14,8 @@ FooBase_module = :FooBase4b3a94a1a081a8cb
 end
 using .ConflictingBindings
 
-# this environment variable would affect some error messages being tested below
-# so we disable it for the tests below
+# FIXME: withenv() is a leftover from previous tests.  Oddly, one test below
+# fails without it, in a mysterious way.
 withenv( "JULIA_DEBUG_LOADING" => nothing ) do
 
 dir = mktempdir()
@@ -174,7 +174,7 @@ try
     cachefile = joinpath(dir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
-    @test_warn "WARNING: replacing module $Foo_module." begin
+    @test_logs (:warn,"Replacing module `$Foo_module`") begin
         ms = Base._require_from_serialized(Foo_module, cachefile)
         @test isa(ms, Array{Any,1})
         Base.register_all(ms)
@@ -219,8 +219,8 @@ try
                                # plus modules included in the system image
                                Dict(s => Base.module_uuid(Base.root_module(s)) for s in
                                     [:Base64, :CRC32c, :Dates, :DelimitedFiles, :FileWatching,
-                                     :IterativeEigenSolvers, :Mmap, :Profile, :SharedArrays,
-                                     :SuiteSparse, :Test]))
+                                     :IterativeEigenSolvers, :Logging, :Mmap, :Profile, :SharedArrays,
+                                     :SuiteSparse, :Test, :Unicode, :Distributed]))
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -477,7 +477,7 @@ let dir = mktempdir()
         let fname = tempname()
             try
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                @test Test.ismatch_warn("WARNING: replacing module $Test_module.\n", read(fname, String))
+                @test ismatch(Regex("Replacing module `$Test_module`"), read(fname, String))
             finally
                 rm(fname, force=true)
             end
@@ -604,7 +604,7 @@ let
             @eval using $ModuleB
             uuid = Base.module_uuid(root_module(ModuleB))
             for wid in test_workers
-                @test Base.Distributed.remotecall_eval(Main, wid, :( Base.module_uuid(Base.root_module($(QuoteNode(ModuleB)))) )) == uuid
+                @test Distributed.remotecall_eval(Main, wid, :( Base.module_uuid(Base.root_module($(QuoteNode(ModuleB)))) )) == uuid
                 if wid != myid() # avoid world-age errors on the local proc
                     @test remotecall_fetch(g, wid) == wid
                 end
@@ -623,4 +623,4 @@ let
     end
 end
 
-end # !withenv
+end

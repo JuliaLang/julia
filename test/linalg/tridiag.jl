@@ -16,7 +16,7 @@ end
 
 guardsrand(123) do
     n = 12 #Size of matrix problem to test
-    @testset for elty in (Float32, Float64, Complex64, Complex128, Int)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64, Int)
         if elty == Int
             srand(61516384)
             d = rand(1:100, n)
@@ -78,7 +78,7 @@ guardsrand(123) do
             @test Tridiagonal(dl, d, du) + Tridiagonal(du, d, dl) == SymTridiagonal(2d, dl+du)
             @test SymTridiagonal(d, dl) + Tridiagonal(dl, d, du) == Tridiagonal(dl + dl, d+d, dl+du)
             @test convert(SymTridiagonal,Tridiagonal(SymTridiagonal(d, dl))) == SymTridiagonal(d, dl)
-            @test Array(convert(SymTridiagonal{Complex64},Tridiagonal(SymTridiagonal(d, dl)))) == convert(Matrix{Complex64}, SymTridiagonal(d, dl))
+            @test Array(convert(SymTridiagonal{ComplexF32},Tridiagonal(SymTridiagonal(d, dl)))) == convert(Matrix{ComplexF32}, SymTridiagonal(d, dl))
         end
         @testset "tril/triu" begin
             zerosd = fill!(similar(d), 0)
@@ -118,7 +118,7 @@ guardsrand(123) do
 
         @testset for mat_type in (Tridiagonal, SymTridiagonal)
             A = mat_type == Tridiagonal ? mat_type(dl, d, du) : mat_type(d, dl)
-            fA = map(elty <: Complex ? Complex128 : Float64, Array(A))
+            fA = map(elty <: Complex ? ComplexF64 : Float64, Array(A))
             @testset "similar, size, and copy!" begin
                 B = similar(A)
                 @test size(B) == size(A)
@@ -199,7 +199,7 @@ guardsrand(123) do
             end
             @testset "Binary operations" begin
                 B = mat_type == Tridiagonal ? mat_type(a, b, c) : mat_type(b, a)
-                fB = map(elty <: Complex ? Complex128 : Float64, Array(B))
+                fB = map(elty <: Complex ? ComplexF64 : Float64, Array(B))
                 for op in (+, -, *)
                     @test Array(op(A, B)) ≈ op(fA, fB)
                 end
@@ -214,12 +214,12 @@ guardsrand(123) do
                     @test A*UpperTriangular(Matrix(1.0I, n, n)) ≈ fA
                     @test A*LowerTriangular(Matrix(1.0I, n, n)) ≈ fA
                 end
-                @testset "A_mul_B! errors" begin
-                    @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(similar(fA),A,ones(elty,n,n+1))
-                    @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(similar(fA),A,ones(elty,n+1,n))
-                    @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n),B,ones(elty,n+1,n))
-                    @test_throws DimensionMismatch A_mul_B!(zeros(elty,n+1,n),B,ones(elty,n,n))
-                    @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n+1),B,ones(elty,n,n))
+                @testset "mul! errors" begin
+                    @test_throws DimensionMismatch Base.LinAlg.mul!(similar(fA),A,ones(elty,n,n+1))
+                    @test_throws DimensionMismatch Base.LinAlg.mul!(similar(fA),A,ones(elty,n+1,n))
+                    @test_throws DimensionMismatch Base.LinAlg.mul!(zeros(elty,n,n),B,ones(elty,n+1,n))
+                    @test_throws DimensionMismatch Base.LinAlg.mul!(zeros(elty,n+1,n),B,ones(elty,n,n))
+                    @test_throws DimensionMismatch Base.LinAlg.mul!(zeros(elty,n,n+1),B,ones(elty,n,n))
                 end
             end
             if mat_type == SymTridiagonal

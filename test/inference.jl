@@ -657,7 +657,7 @@ end
 @test Base.return_types(i20343, ()) == [Int8]
 struct Foo20518 <: AbstractVector{Int}; end # issue #20518; inference assumed AbstractArrays
 Base.getindex(::Foo20518, ::Int) = "oops"      # not to lie about their element type
-Base.indices(::Foo20518) = (Base.OneTo(4),)
+Base.axes(::Foo20518) = (Base.OneTo(4),)
 foo20518(xs::Any...) = -1
 foo20518(xs::Int...) = [0]
 bar20518(xs) = sum(foo20518(xs...))
@@ -895,10 +895,11 @@ let f, m
     f() = 0
     m = first(methods(f))
     m.source = Base.uncompressed_ast(m)::CodeInfo
-    m.source.ssavaluetypes = 1
+    m.source.ssavaluetypes = 2
     m.source.code = Any[
         Expr(:(=), SSAValue(0), Expr(:call, GlobalRef(Core, :svec), 1, 2, 3)),
-        Expr(:return, Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(0)))
+        Expr(:(=), SSAValue(1), Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(0))),
+        Expr(:return, SSAValue(1))
     ]
     @test @inferred(f()) == 6
 end
@@ -916,19 +917,19 @@ let f(x) = isdefined(x, 2) ? 1 : ""
     @test Base.return_types(f, (Tuple{Int,},)) == Any[String]
 end
 let f(x) = isdefined(x, :re) ? 1 : ""
-    @test Base.return_types(f, (Complex64,)) == Any[Int]
+    @test Base.return_types(f, (ComplexF32,)) == Any[Int]
     @test Base.return_types(f, (Complex,)) == Any[Int]
 end
 let f(x) = isdefined(x, :NonExistentField) ? 1 : ""
-    @test Base.return_types(f, (Complex64,)) == Any[String]
+    @test Base.return_types(f, (ComplexF32,)) == Any[String]
     @test Union{Int,String} <: Base.return_types(f, (AbstractArray,))[1]
 end
 import Core.Inference: isdefined_tfunc
-@test isdefined_tfunc(Complex64, Const(())) === Union{}
-@test isdefined_tfunc(Complex64, Const(1)) === Const(true)
-@test isdefined_tfunc(Complex64, Const(2)) === Const(true)
-@test isdefined_tfunc(Complex64, Const(3)) === Const(false)
-@test isdefined_tfunc(Complex64, Const(0)) === Const(false)
+@test isdefined_tfunc(ComplexF32, Const(())) === Union{}
+@test isdefined_tfunc(ComplexF32, Const(1)) === Const(true)
+@test isdefined_tfunc(ComplexF32, Const(2)) === Const(true)
+@test isdefined_tfunc(ComplexF32, Const(3)) === Const(false)
+@test isdefined_tfunc(ComplexF32, Const(0)) === Const(false)
 mutable struct SometimesDefined
     x
     function SometimesDefined()
@@ -1127,7 +1128,7 @@ end
 push!(constvec, 10)
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 4
 
-test_const_return((x)->isdefined(x, :re), Tuple{Complex128}, true)
+test_const_return((x)->isdefined(x, :re), Tuple{ComplexF64}, true)
 isdefined_f3(x) = isdefined(x, 3)
 @test @inferred(isdefined_f3(())) == false
 @test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]).code, isdefined, 3)

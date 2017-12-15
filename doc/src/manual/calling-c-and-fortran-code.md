@@ -275,7 +275,7 @@ First, a review of some relevant Julia type terminology:
 |                               |                                             | "TypeVar" :: The `T` in the type parameter declaration is referred to as a TypeVar (short for type variable).                                                                                                                                                                  |
 | `primitive type`              | `Int`, `Float64`                            | "Primitive Type" :: A type with no fields, but a size. It is stored and defined by-value.                                                                                                                                                                                           |
 | `struct`                      | `Pair{Int, Int}`                            | "Struct" :: A type with all fields defined to be constant. It is defined by-value, and may be stored with a type-tag.                                                                                                                                                       |
-|                               | `Complex128` (`isbits`)                     | "Is-Bits"   :: A `primitive type`, or a `struct` type where all fields are other `isbits` types. It is defined by-value, and is stored without a type-tag.                                                                                                                       |
+|                               | `ComplexF64` (`isbits`)                     | "Is-Bits"   :: A `primitive type`, or a `struct` type where all fields are other `isbits` types. It is defined by-value, and is stored without a type-tag.                                                                                                                       |
 | `struct ...; end`             | `nothing`                                   | "Singleton" :: a Leaf Type or Struct with no fields.                                                                                                                                                                                                                        |
 | `(...)` or `tuple(...)`       | `(1, 2, 3)`                                 | "Tuple" :: an immutable data-structure similar to an anonymous struct type, or a constant array. Represented as either an array or a struct.                                                                                                                                |
 
@@ -292,11 +292,11 @@ same:
 
     Exactly corresponds to the `double` type in C (or `REAL*8` in Fortran).
 
-  * `Complex64`
+  * `ComplexF32`
 
     Exactly corresponds to the `complex float` type in C (or `COMPLEX*8` in Fortran).
 
-  * `Complex128`
+  * `ComplexF64`
 
     Exactly corresponds to the `complex double` type in C (or `COMPLEX*16` in Fortran).
 
@@ -350,8 +350,8 @@ an `Int` in Julia).
 | `uintmax_t`                                             |                          | `Cuintmax_t`         | `UInt64`                                                                                                       |
 | `float`                                                 | `REAL*4i`                | `Cfloat`             | `Float32`                                                                                                      |
 | `double`                                                | `REAL*8`                 | `Cdouble`            | `Float64`                                                                                                      |
-| `complex float`                                         | `COMPLEX*8`              | `Complex64`          | `Complex{Float32}`                                                                                             |
-| `complex double`                                        | `COMPLEX*16`             | `Complex128`         | `Complex{Float64}`                                                                                             |
+| `complex float`                                         | `COMPLEX*8`              | `ComplexF32`          | `Complex{Float32}`                                                                                             |
+| `complex double`                                        | `COMPLEX*16`             | `ComplexF64`         | `Complex{Float64}`                                                                                             |
 | `ptrdiff_t`                                             |                          | `Cptrdiff_t`         | `Int`                                                                                                          |
 | `ssize_t`                                               |                          | `Cssize_t`           | `Int`                                                                                                          |
 | `size_t`                                                |                          | `Csize_t`            | `UInt`                                                                                                         |

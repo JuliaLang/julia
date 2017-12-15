@@ -609,7 +609,11 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1 # position is zero-indexed
-    b = min(endof(response_str), prevind(response_str, a + sizeof(searchdata))) # ensure that b is valid
+    # FIXME: I'm pretty sure this is broken since it uses an index
+    # into the search data to index into the response string
+    b = a + sizeof(searchdata)
+    b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
+    b = min(endof(response_str), b) # ensure that b is valid
 
     !skip_current && searchdata == response_str[a:b] && return true
 
@@ -732,12 +736,14 @@ function mode_keymap(julia_prompt::Prompt)
         end
     end,
     "^C" => function (s,o...)
-        LineEdit.move_input_end(s)
-        LineEdit.refresh_line(s)
-        print(LineEdit.terminal(s), "^C\n\n")
-        transition(s, julia_prompt)
-        transition(s, :reset)
-        LineEdit.refresh_line(s)
+        if isempty(s)
+            print(LineEdit.terminal(s), "^C\n\n")
+            transition(s, julia_prompt)
+            transition(s, :reset)
+            LineEdit.refresh_line(s)
+        else
+            LineEdit.edit_clear(s)
+        end
     end)
 end
 
@@ -837,7 +843,7 @@ function setup_interface(
         catch e
             print_response(repl, e, catch_backtrace(), true, Base.have_color)
             println(outstream(repl))
-            info("Disabling history file for this session.")
+            @info "Disabling history file for this session"
             repl.history_file = false
         end
     end
@@ -1090,7 +1096,7 @@ function ends_with_semicolon(line::AbstractString)
             else
                 # outside of a comment, encountering anything but whitespace
                 # means the semi-colon was internal to the expression
-                isspace(c) || return false
+                Base.Unicode.isspace(c) || return false
             end
         end
         return true

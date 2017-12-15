@@ -1,5 +1,16 @@
 # Parallel Computing
 
+This part of the manual details the following types of parallel programming available in Julia.
+
+1. Distributed memory using multiple processes on one or more nodes
+2. Shared memory using multiple processes on a single node
+3. Multi-threading
+
+# Distributed Memory Parallelism
+
+An implementation of distributed memory parallel computing is provided by module `Distributed`
+as part of the standard library shipped with Julia.
+
 Most modern computers possess more than one CPU, and several computers can be combined together
 in a cluster. Harnessing the power of these multiple CPUs allows many computations to be completed
 more quickly. There are two major factors that influence performance: the speed of the CPUs themselves,
@@ -17,7 +28,7 @@ manage only one process in a two-process operation. Furthermore, these operation
 not look like "message send" and "message receive" but rather resemble higher-level operations
 like calls to user functions.
 
-Parallel programming in Julia is built on two primitives: *remote references* and *remote calls*.
+Distributed programming in Julia is built on two primitives: *remote references* and *remote calls*.
 A remote reference is an object that can be used from any process to refer to an object stored
 on a particular process. A remote call is a request by one process to call a certain function
 on certain arguments on another (possibly the same) process.
@@ -38,7 +49,9 @@ to as "workers". When there is only one process, process 1 is considered a worke
 workers are considered to be all processes other than process 1.
 
 Let's try this out. Starting with `julia -p n` provides `n` worker processes on the local machine.
-Generally it makes sense for `n` to equal the number of CPU cores on the machine.
+Generally it makes sense for `n` to equal the number of CPU cores on the machine. Note that the `-p`
+argument implicitly loads module `Distributed`.
+
 
 ```julia
 $ ./julia -p 2
@@ -196,6 +209,18 @@ The base Julia installation has in-built support for two types of clusters:
 Functions [`addprocs`](@ref), [`rmprocs`](@ref), [`workers`](@ref), and others are available
 as a programmatic means of adding, removing and querying the processes in a cluster.
 
+```julia-repl
+julia> using Distributed
+
+julia> addprocs(2)
+2-element Array{Int64,1}:
+ 2
+ 3
+```
+
+Module `Distributed` must be explicitly loaded on the master process before invoking [`addprocs`](@ref).
+It is automatically made available on the worker processes.
+
 Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global
 state (such as global variables, new method definitions, and loaded modules) with any of the other
 running processes.
@@ -205,9 +230,9 @@ below in the [ClusterManagers](@ref) section.
 
 ## Data Movement
 
-Sending messages and moving data constitute most of the overhead in a parallel program. Reducing
+Sending messages and moving data constitute most of the overhead in a distributed program. Reducing
 the number of messages and the amount of data sent is critical to achieving performance and scalability.
-To this end, it is important to understand the data movement performed by Julia's various parallel
+To this end, it is important to understand the data movement performed by Julia's various distributed
 programming constructs.
 
 [`fetch`](@ref) can be considered an explicit data movement operation, since it directly asks
@@ -402,6 +427,8 @@ Parallel for loops like these must be avoided. Fortunately, [Shared Arrays](@ref
 to get around this limitation:
 
 ```julia
+using SharedArrays
+
 a = SharedArray{Float64}(10)
 @parallel for i = 1:10
     a[i] = i
@@ -829,6 +856,9 @@ chunk; in contrast, in a [`SharedArray`](@ref) each "participating" process has 
 entire array.  A [`SharedArray`](@ref) is a good choice when you want to have a large amount of
 data jointly accessible to two or more processes on the same machine.
 
+Shared Array support is available via module `SharedArrays` which must be explicitly loaded on
+all participating workers.
+
 [`SharedArray`](@ref) indexing (assignment and accessing values) works just as with regular arrays,
 and is efficient because the underlying memory is available to the local process. Therefore,
 most algorithms work naturally on [`SharedArray`](@ref)s, albeit in single-process mode. In cases
@@ -854,6 +884,8 @@ portion of the array, thereby parallelizing initialization.
 Here's a brief example:
 
 ```julia-repl
+julia> using Distributed
+
 julia> addprocs(3)
 3-element Array{Int64,1}:
  2
@@ -1118,7 +1150,7 @@ unspecified, i.e, with the `--worker` option, the worker tries to read it from i
  `LocalManager` and `SSHManager` both pass the cookie to newly launched workers via their
  standard inputs.
 
-By default a worker will listen on a free port at the address returned by a call to `getipaddr()`.
+By default a worker will listen on a free port at the address returned by a call to [`getipaddr()`](@ref).
 A specific address to listen on may be specified by optional argument `--bind-to bind_addr[:port]`.
 This is useful for multi-homed hosts.
 
@@ -1213,7 +1245,7 @@ the other to write data that needs to be sent to worker `pid`. Custom cluster ma
 an in-memory `BufferStream` as the plumbing to proxy data between the custom, possibly non-`IO`
 transport and Julia's in-built parallel infrastructure.
 
-A `BufferStream` is an in-memory `IOBuffer` which behaves like an `IO`--it is a stream which can
+A `BufferStream` is an in-memory [`IOBuffer`](@ref) which behaves like an `IO`--it is a stream which can
 be handled asynchronously.
 
 Folder `examples/clustermanager/0mq` contains an example of using ZeroMQ to connect Julia workers
@@ -1228,7 +1260,7 @@ When using custom transports:
   * For every incoming logical connection with a worker, `Base.process_messages(rd::IO, wr::IO)()`
     must be called. This launches a new task that handles reading and writing of messages from/to
     the worker represented by the `IO` objects.
-  * `init_worker(cookie, manager::FooManager)` MUST be called as part of worker process initialization.
+  * `init_worker(cookie, manager::FooManager)` *must* be called as part of worker process initialization.
   * Field `connect_at::Any` in `WorkerConfig` can be set by the cluster manager when [`launch`](@ref)
     is called. The value of this field is passed in in all [`connect`](@ref) callbacks. Typically,
     it carries information on *how to connect* to a worker. For example, the TCP/IP socket transport
@@ -1272,21 +1304,21 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
     the ephemeral port range (varies by OS).
 
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
-    can be done via a custom ClusterManager.
+    can be done via a custom `ClusterManager`.
 
 ## Cluster Cookie
 
 All processes in a cluster share the same cookie which, by default, is a randomly generated string
 on the master process:
 
-  * [`Base.cluster_cookie()`](@ref) returns the cookie, while `Base.cluster_cookie(cookie)()` sets
+  * [`cluster_cookie()`](@ref) returns the cookie, while `cluster_cookie(cookie)()` sets
     it and returns the new cookie.
   * All connections are authenticated on both sides to ensure that only workers started by the master
     are allowed to connect to each other.
   * The cookie may be passed to the workers at startup via argument `--worker=<cookie>`. If argument
     `--worker` is specified without the cookie, the worker tries to read the cookie from its
-    standard input (STDIN). The STDIN is closed immediately after the cookie is retrieved.
-  * ClusterManagers can retrieve the cookie on the master by calling [`Base.cluster_cookie()`](@ref).
+    standard input ([`STDIN`](@ref)). The `STDIN` is closed immediately after the cookie is retrieved.
+  * `ClusterManager`s can retrieve the cookie on the master by calling [`cluster_cookie()`](@ref).
     Cluster managers not using the default TCP/IP transport (and hence not specifying `--worker`)
     must call `init_worker(cookie, manager)` with the same cookie as on the master.
 
@@ -1423,7 +1455,7 @@ Note that while Julia code runs on a single thread (by default), libraries used 
 their own internal threads. For example, the BLAS library may start as many threads as there are
 cores on a machine.
 
-The `@threadcall` macro addresses scenarios where we do not want a `ccall` to block the main Julia
+The [`@threadcall`](@ref) macro addresses scenarios where we do not want a [`ccall`](@ref) to block the main Julia
 event loop. It schedules a C function for execution in a separate thread. A threadpool with a
 default size of 4 is used for this. The size of the threadpool is controlled via environment variable
 `UV_THREADPOOL_SIZE`. While waiting for a free thread, and during function execution once a thread

@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
-import Base.LinAlg: BlasFloat, BlasComplex, SingularException, A_rdiv_B!, A_rdiv_Bt!,
-    A_rdiv_Bc!
+using Base.LinAlg: mul!, ldiv!, rdiv!, Adjoint, Transpose
+import Base.LinAlg: BlasFloat, BlasComplex, SingularException
 
 n=12 #Size of matrix problem to test
 srand(1)
@@ -30,8 +30,8 @@ srand(1)
 
     @testset "Basic properties" begin
         @test_throws ArgumentError size(D,0)
-        @test typeof(convert(Diagonal{Complex64},D)) <: Diagonal{Complex64}
-        @test typeof(convert(AbstractMatrix{Complex64},D)) <: Diagonal{Complex64}
+        @test typeof(convert(Diagonal{ComplexF32},D)) <: Diagonal{ComplexF32}
+        @test typeof(convert(AbstractMatrix{ComplexF32},D)) <: Diagonal{ComplexF32}
 
         @test Array(real(D)) == real(DM)
         @test Array(abs.(D)) == abs.(DM)
@@ -97,37 +97,37 @@ srand(1)
                 atol_three = 2n^3 * eps(relty) * (1 + (elty <: Complex))
                 @test D\v ≈ DM\v atol=atol_two
                 @test D\U ≈ DM\U atol=atol_three
-                @test A_ldiv_B!(D, copy(v)) ≈ DM\v atol=atol_two
-                @test At_ldiv_B!(D, copy(v)) ≈ DM\v atol=atol_two
-                @test Ac_ldiv_B!(conj(D), copy(v)) ≈ DM\v atol=atol_two
-                @test A_ldiv_B!(D, copy(U)) ≈ DM\U atol=atol_three
-                @test At_ldiv_B!(D, copy(U)) ≈ DM\U atol=atol_three
-                @test Ac_ldiv_B!(conj(D), copy(U)) ≈ DM\U atol=atol_three
+                @test ldiv!(D, copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(Transpose(D), copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(Adjoint(conj(D)), copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(D, copy(U)) ≈ DM\U atol=atol_three
+                @test ldiv!(Transpose(D), copy(U)) ≈ DM\U atol=atol_three
+                @test ldiv!(Adjoint(conj(D)), copy(U)) ≈ DM\U atol=atol_three
                 Uc = adjoint(U)
                 target = scale!(Uc, inv.(D.diag))
-                @test A_rdiv_B!(Uc, D) ≈ target atol=atol_three
-                @test_throws DimensionMismatch A_rdiv_B!(Matrix{elty}(I, n-1, n-1), D)
-                @test_throws SingularException A_rdiv_B!(Uc, Diagonal(fill!(similar(D.diag), 0)))
-                @test A_rdiv_Bt!(Uc, D) ≈ target atol=atol_three
-                @test A_rdiv_Bc!(Uc, conj(D)) ≈ target atol=atol_three
-                @test A_ldiv_B!(D, Matrix{eltype(D)}(I, size(D))) ≈ D \ Matrix{eltype(D)}(I, size(D)) atol=atol_three
-                @test_throws DimensionMismatch A_ldiv_B!(D, ones(elty, n + 1))
-                @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty, n)), copy(v))
+                @test rdiv!(Uc, D) ≈ target atol=atol_three
+                @test_throws DimensionMismatch rdiv!(Matrix{elty}(I, n-1, n-1), D)
+                @test_throws SingularException rdiv!(Uc, Diagonal(fill!(similar(D.diag), 0)))
+                @test rdiv!(Uc, Transpose(D)) ≈ target atol=atol_three
+                @test rdiv!(Uc, Adjoint(conj(D))) ≈ target atol=atol_three
+                @test ldiv!(D, Matrix{eltype(D)}(I, size(D))) ≈ D \ Matrix{eltype(D)}(I, size(D)) atol=atol_three
+                @test_throws DimensionMismatch ldiv!(D, ones(elty, n + 1))
+                @test_throws SingularException ldiv!(Diagonal(zeros(relty, n)), copy(v))
                 b = rand(elty, n, n)
                 b = sparse(b)
-                @test A_ldiv_B!(D, copy(b)) ≈ Array(D)\Array(b)
-                @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty, n)), copy(b))
+                @test ldiv!(D, copy(b)) ≈ Array(D)\Array(b)
+                @test_throws SingularException ldiv!(Diagonal(zeros(elty, n)), copy(b))
                 b = view(rand(elty, n), collect(1:n))
                 b2 = copy(b)
-                c = A_ldiv_B!(D, b)
+                c = ldiv!(D, b)
                 d = Array(D)\b2
                 @test c ≈ d
-                @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty, n)), b)
+                @test_throws SingularException ldiv!(Diagonal(zeros(elty, n)), b)
                 b = rand(elty, n+1, n+1)
                 b = sparse(b)
-                @test_throws DimensionMismatch A_ldiv_B!(D, copy(b))
+                @test_throws DimensionMismatch ldiv!(D, copy(b))
                 b = view(rand(elty, n+1), collect(1:n+1))
-                @test_throws DimensionMismatch A_ldiv_B!(D, b)
+                @test_throws DimensionMismatch ldiv!(D, b)
             end
         end
     end
@@ -146,9 +146,9 @@ srand(1)
             if relty <: BlasFloat
                 b = rand(elty,n,n)
                 b = sparse(b)
-                @test A_mul_B!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                @test At_mul_B!(copy(D), copy(b)) ≈ Array(D).'*Array(b)
-                @test Ac_mul_B!(copy(D), copy(b)) ≈ Array(D)'*Array(b)
+                @test mul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                @test mul!(Transpose(copy(D)), copy(b)) ≈ Array(D).'*Array(b)
+                @test mul!(Adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
             end
         end
 
@@ -164,26 +164,26 @@ srand(1)
 
         # Performance specialisations for A*_mul_B!
         vvv = similar(vv)
-        @test (r = Matrix(D) * vv   ; A_mul_B!(vvv, D, vv)  ≈ r ≈ vvv)
-        @test (r = Matrix(D)' * vv  ; Ac_mul_B!(vvv, D, vv) ≈ r ≈ vvv)
-        @test (r = Matrix(D).' * vv ; At_mul_B!(vvv, D, vv) ≈ r ≈ vvv)
+        @test (r = Matrix(D) * vv   ; mul!(vvv, D, vv)  ≈ r ≈ vvv)
+        @test (r = Matrix(D)' * vv  ; mul!(vvv, Adjoint(D), vv) ≈ r ≈ vvv)
+        @test (r = Matrix(D).' * vv ; mul!(vvv, Transpose(D), vv) ≈ r ≈ vvv)
 
         UUU = similar(UU)
-        @test (r = Matrix(D) * UU   ; A_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
-        @test (r = Matrix(D)' * UU  ; Ac_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
-        @test (r = Matrix(D).' * UU ; At_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
+        @test (r = Matrix(D) * UU   ; mul!(UUU, D, UU) ≈ r ≈ UUU)
+        @test (r = Matrix(D)' * UU  ; mul!(UUU, Adjoint(D), UU) ≈ r ≈ UUU)
+        @test (r = Matrix(D).' * UU ; mul!(UUU, Transpose(D), UU) ≈ r ≈ UUU)
 
-        # make sure that A_mul_B{c,t}! works with B as a Diagonal
+        # make sure that mul!(A, {Adj|Trans}(B)) works with B as a Diagonal
         VV = Array(D)
         DD = copy(D)
         r  = VV * Matrix(D)
-        @test Array(A_mul_B!(VV, DD)) ≈ r ≈ Array(D)*Array(D)
+        @test Array(mul!(VV, DD)) ≈ r ≈ Array(D)*Array(D)
         DD = copy(D)
         r  = VV * (Array(D).')
-        @test Array(A_mul_Bt!(VV, DD)) ≈ r
+        @test Array(mul!(VV, Transpose(DD))) ≈ r
         DD = copy(D)
         r  = VV * (Array(D)')
-        @test Array(A_mul_Bc!(VV, DD)) ≈ r
+        @test Array(mul!(VV, Adjoint(DD))) ≈ r
     end
     @testset "triu/tril" begin
         @test istriu(D)
@@ -347,9 +347,9 @@ end
 end
 
 let D1 = Diagonal(rand(5)), D2 = Diagonal(rand(5))
-    @test_throws MethodError A_mul_B!(D1,D2)
-    @test_throws MethodError At_mul_B!(D1,D2)
-    @test_throws MethodError Ac_mul_B!(D1,D2)
+    @test_throws MethodError mul!(D1,D2)
+    @test_throws MethodError mul!(Transpose(D1),D2)
+    @test_throws MethodError mul!(Adjoint(D1),D2)
 end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
@@ -357,7 +357,7 @@ end
     Q = qrfact(randn(5, 5))[:Q]
     @test D * Q' == Array(D) * Q'
     Q = qrfact(randn(5, 5), Val(true))[:Q]
-    @test_throws MethodError A_mul_B!(Q, D)
+    @test_throws MethodError mul!(Q, D)
 end
 
 @testset "block diagonal matrices" begin
@@ -389,16 +389,18 @@ end
 end
 
 @testset "multiplication with Symmetric/Hermitian" begin
-    for T in (Float64, Complex128)
+    for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, n))
         A = randn(T, n, n); A = A'A
         S = Symmetric(A)
         H = Hermitian(A)
-        for f in (*, Ac_mul_B, A_mul_Bc, Ac_mul_Bc, At_mul_B, A_mul_Bt, At_mul_Bt)
-            @test f(D, S) ≈ f(Matrix(D), Matrix(S))
-            @test f(D, H) ≈ f(Matrix(D), Matrix(H))
-            @test f(S, D) ≈ f(Matrix(S), Matrix(D))
-            @test f(S, H) ≈ f(Matrix(S), Matrix(H))
+        for (transform1, transform2) in ((identity,  identity),
+                (identity,  Adjoint  ), (Adjoint,   identity ), (Adjoint,   Adjoint  ),
+                (identity,  Transpose), (Transpose, identity ), (Transpose, Transpose) )
+            @test *(transform1(D), transform2(S)) ≈ *(transform1(Matrix(D)), transform2(Matrix(S)))
+            @test *(transform1(D), transform2(H)) ≈ *(transform1(Matrix(D)), transform2(Matrix(H)))
+            @test *(transform1(S), transform2(D)) ≈ *(transform1(Matrix(S)), transform2(Matrix(D)))
+            @test *(transform1(S), transform2(H)) ≈ *(transform1(Matrix(S)), transform2(Matrix(H)))
         end
     end
 end
@@ -411,9 +413,11 @@ end
         BB = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
         fullDD = copy!(Matrix{Matrix{T}}(uninitialized, 2, 2), DD)
         fullBB = copy!(Matrix{Matrix{T}}(uninitialized, 2, 2), BB)
-        for f in (*, Ac_mul_B, A_mul_Bc, Ac_mul_Bc, At_mul_B, A_mul_Bt, At_mul_Bt)
-            @test f(D, B)::typeof(D) ≈ f(Matrix(D), Matrix(B)) atol=2 * eps()
-            @test f(DD, BB)::typeof(DD) == f(fullDD, fullBB)
+        for (transform1, transform2) in ((identity,  identity),
+                (identity,  Adjoint  ), (Adjoint,   identity ), (Adjoint,   Adjoint  ),
+                (identity,  Transpose), (Transpose, identity ), (Transpose, Transpose) )
+            @test *(transform1(D), transform2(B))::typeof(D) ≈ *(transform1(Matrix(D)), transform2(Matrix(B))) atol=2 * eps()
+            @test *(transform1(DD), transform2(BB))::typeof(DD) == *(transform1(fullDD), transform2(fullBB))
         end
     end
 end

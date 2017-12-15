@@ -12,8 +12,8 @@ import Base.LinAlg.BlasInt
 @testset "syevr" begin
     guardsrand(123) do
         Ainit = randn(5,5)
-        @testset for elty in (Float32, Float64, Complex64, Complex128)
-            if elty == Complex64 || elty == Complex128
+        @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+            if elty == ComplexF32 || elty == ComplexF64
                 A = complex.(Ainit, Ainit)
             else
                 A = Ainit
@@ -34,7 +34,7 @@ end
 
 @testset "gglse" begin
     let
-        @testset for elty in (Float32, Float64, Complex64, Complex128)
+        @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
             A = convert(Array{elty, 2}, [1 1 1 1; 1 3 1 1; 1 -1 3 1; 1 1 1 3; 1 1 1 -1])
             c = convert(Array{elty, 1}, [2, 1, 6, 3, 1])
             B = convert(Array{elty, 2}, [1 1 1 -1; 1 -1 1 1; 1 1 -1 1])
@@ -80,7 +80,7 @@ end
 end
 
 @testset "geqrt(3)" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = copy(A)
         C,T = LAPACK.geqrt!(A,zeros(elty,10,10))
@@ -90,7 +90,7 @@ end
 end
 
 @testset "gbtrf and gbtrs" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         d = rand(elty,6)
         dl = rand(elty,5)
         du = rand(elty,5)
@@ -113,7 +113,7 @@ end
 
 
 @testset "geqp3, geqrt error handling" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         @test_throws DimensionMismatch LAPACK.geqlf!(A,zeros(elty,11))
         @test_throws DimensionMismatch LAPACK.gelqf!(A,zeros(elty,11))
@@ -128,7 +128,7 @@ end
 end
 
 @testset "gels, gesv, getrs, getri error handling" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = rand(elty,11,11)
         @test_throws DimensionMismatch LAPACK.gels!('N',A,B)
@@ -141,7 +141,7 @@ end
 end
 
 @testset "gelsy, gelsd" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = rand(elty,10,10)
         C, j = LAPACK.gelsd!(copy(A),copy(B))
@@ -153,7 +153,7 @@ end
 end
 
 @testset "gglse errors" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         @test_throws DimensionMismatch LAPACK.gglse!(A,zeros(elty,10),rand(elty,12,11),zeros(elty,12))
         @test_throws DimensionMismatch LAPACK.gglse!(A,zeros(elty,11),rand(elty,10,10),zeros(elty,10))
@@ -162,7 +162,7 @@ end
 end
 
 @testset "gesvd, ggsvd" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,5)
         U,S,V = svd(A)
         lU,lS,lVt = LAPACK.gesvd!('S','S',A)
@@ -180,7 +180,7 @@ end
 end
 
 @testset "geevx, ggev errors" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = rand(elty,10,10)
         @test_throws ArgumentError LAPACK.geevx!('M','N','N','N',A)
@@ -194,7 +194,7 @@ end
 end
 
 @testset "gebal/gebak" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10) * Diagonal(exp10.(linspace(-10,10,10)))
         B = copy(A)
         ilo, ihi, scale = LAPACK.gebal!('S',B)
@@ -206,7 +206,7 @@ end
 end
 
 @testset "gels" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         guardsrand(913) do
             A = rand(elty,10,10)
             X = rand(elty,10)
@@ -217,7 +217,7 @@ end
 end
 
 @testset "getrf/getri" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         iA = inv(A)
         A, ipiv = LAPACK.getrf!(A)
@@ -228,7 +228,7 @@ end
 
 @testset "geev" begin
     # complex is easier for now
-    @testset for elty in (Complex64, Complex128)
+    @testset for elty in (ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         Aw, Avl, Avr = LAPACK.geev!('N','V',copy(A))
         fA = eigfact(A)
@@ -238,7 +238,7 @@ end
 end
 
 @testset "gtsv" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         du = rand(elty,9)
         d  = rand(elty,10)
         dl = rand(elty,9)
@@ -254,7 +254,7 @@ end
 end
 
 @testset "gttrs,gttrf errors" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         du = rand(elty,9)
         d  = rand(elty,10)
         dl = rand(elty,9)
@@ -274,7 +274,7 @@ end
 end
 
 @testset "orglq and friends errors" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         A,tau = LAPACK.gelqf!(A)
         @test_throws DimensionMismatch LAPACK.orglq!(A,tau,11)
@@ -352,7 +352,7 @@ end
 end
 
 @testset "sytri, sytrs, and sytrf" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         A = A + A.' #symmetric!
         B = copy(A)
@@ -363,7 +363,7 @@ end
     end
 
     # Rook-pivoting variants
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         A = A + A.' #symmetric!
         B = copy(A)
@@ -390,7 +390,7 @@ end
 end
 
 @testset "hetrf, hetrs" begin
-    @testset for elty in (Complex64, Complex128)
+    @testset for elty in (ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         A = A + A' #hermitian!
         B = copy(A)
@@ -413,7 +413,7 @@ end
 end
 
 @testset "trtri & trtrs" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         A = triu(A)
         B = copy(A)
@@ -423,7 +423,7 @@ end
 end
 
 @testset "tgsen, tzrzf, & trsyl" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         Z = zeros(elty,10,10)
         @test_throws DimensionMismatch LAPACK.tgsen!(zeros(BlasInt,10),Z,zeros(elty,11,11),Z,Z)
         @test_throws DimensionMismatch LAPACK.tgsen!(zeros(BlasInt,10),Z,Z,zeros(elty,11,11),Z)
@@ -434,7 +434,7 @@ end
 end
 
 @testset "sysv" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         guardsrand(123) do
             A = rand(elty,10,10)
             A = A + A.' #symmetric!
@@ -448,7 +448,7 @@ end
 end
 
 @testset "hesv" begin
-    @testset for elty in (Complex64, Complex128)
+    @testset for elty in (ComplexF32, ComplexF64)
         guardsrand(935) do
             A = rand(elty,10,10)
             A = A + A' #hermitian!
@@ -469,7 +469,7 @@ end
 end
 
 @testset "ptsv" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         dv = ones(elty,10)
         ev = zeros(elty,9)
         rdv = real(dv)
@@ -486,7 +486,7 @@ end
 end
 
 @testset "pttrf and pttrs" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         dv = ones(elty,10)
         ev = zeros(elty,9)
         rdv = real(dv)
@@ -511,7 +511,7 @@ end
 end
 
 @testset "posv and some errors for friends" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)/100
         A += real(diagm(0 => 10*real(rand(elty,10))))
         if elty <: Complex
@@ -532,7 +532,7 @@ end
 end
 
 @testset "gesvx" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = rand(elty,10,5)
         C = copy(A)
@@ -543,7 +543,7 @@ end
 end
 
 @testset "gees, gges error throwing" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = rand(elty,11,11)
         @test_throws DimensionMismatch LAPACK.gges!('V','V',A,B)
@@ -551,7 +551,7 @@ end
 end
 
 @testset "trrfs & trevc" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         T = triu(rand(elty,10,10))
         S = copy(T)
         select = zeros(Base.LinAlg.BlasInt,10)
@@ -572,13 +572,13 @@ end
 end
 
 @testset "laic1" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         @test_throws DimensionMismatch LAPACK.laic1!(1,rand(elty,10),real(rand(elty)),rand(elty,11),rand(elty))
     end
 end
 
 @testset "trsen" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         for job in ('N', 'E', 'V', 'B')
             for c in ('V', 'N')
                 A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
@@ -605,7 +605,7 @@ end
 end
 
 @testset "trexc" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         for c in ('V', 'N')
             A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
             T,Q,d = schur(A)

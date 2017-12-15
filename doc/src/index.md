@@ -50,7 +50,10 @@
   * [Numbers](@ref lib-numbers)
   * [Strings](@ref lib-strings)
   * [Arrays](@ref lib-arrays)
-  * [Tasks and Parallel Computing](@ref)
+  * [Tasks](@ref)
+  * [Distributed Computing](@ref)
+  * [Multi-Threading](@ref)
+  * [Shared Arrays](@ref)
   * [Linear Algebra](@ref)
   * [Constants](@ref lib-constants)
   * [Filesystem](@ref)
@@ -69,10 +72,10 @@
   * [SIMD Support](@ref)
   * [Profiling](@ref lib-profiling)
   * [Memory-mapped I/O](@ref)
-  * [Shared Arrays](@ref)
   * [Base64](@ref)
   * [File Events](@ref lib-filewatching)
   * [Iterative Eigensolvers](@ref lib-itereigen)
+  * [Unicode](@ref)
 
 ## Developer Documentation
 

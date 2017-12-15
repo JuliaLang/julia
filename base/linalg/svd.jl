@@ -100,8 +100,7 @@ function svdfact(A::StridedVecOrMat{T}; full::Bool = false, thin::Union{Bool,Voi
             "e.g. `svdfact(A; full = $(!thin))`."), :svdfact)
         full::Bool = !thin
     end
-    S = promote_type(Float32, typeof(one(T)/norm(one(T))))
-    svdfact!(copy_oftype(A, S), full = full)
+    svdfact!(copy_oftype(A, eigtype(T)), full = full)
 end
 function svdfact(x::Number; full::Bool = false, thin::Union{Bool,Void} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
@@ -248,15 +247,12 @@ julia> svdvals(A)
  0.0
 ```
 """
-function svdvals(A::AbstractMatrix{T}) where T
-    S = promote_type(Float32, typeof(one(T)/norm(one(T))))
-    svdvals!(copy_oftype(A, S))
-end
+svdvals(A::AbstractMatrix{T}) where T = svdvals!(copy_oftype(A, eigtype(T)))
 svdvals(x::Number) = abs(x)
 svdvals(S::SVD{<:Any,T}) where {T} = (S[:S])::Vector{T}
 
 # SVD least squares
-function A_ldiv_B!(A::SVD{T}, B::StridedVecOrMat) where T
+function ldiv!(A::SVD{T}, B::StridedVecOrMat) where T
     k = searchsortedlast(A.S, eps(real(T))*A.S[1], rev=true)
     view(A.Vt,1:k,:)' * (view(A.S,1:k) .\ (view(A.U,:,1:k)' * B))
 end
@@ -383,7 +379,7 @@ julia> F[:V]*F[:D2]*F[:R0]*F[:Q]'
 ```
 """
 function svdfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
-    S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
+    S = promote_type(eigtype(TA),TB)
     return svdfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
 # This method can be heavily optimized but it is probably not critical
@@ -542,7 +538,7 @@ julia> svdvals(A, B)
 ```
 """
 function svdvals(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
-    S = promote_type(Float32, typeof(one(TA)/norm(one(TA))), TB)
+    S = promote_type(eigtype(TA), TB)
     return svdvals!(copy_oftype(A, S), copy_oftype(B, S))
 end
 svdvals(x::Number, y::Number) = abs(x/y)

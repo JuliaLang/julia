@@ -171,7 +171,7 @@ to do so).
 | `^G`                | De-activate the region (i.e. make it not highlighted)                                                      |
 | `^X^X`              | Exchange the current position with the mark                                                                |
 | **Editing**         |                                                                                                            |
-| Backspace, `^H`     | Delete the previous character                                                                              |
+| Backspace, `^H`     | Delete the previous character, or the whole region when it's active                                        |
 | Delete, `^D`        | Forward delete one character (when buffer has text)                                                        |
 | meta-Backspace      | Delete the previous word                                                                                   |
 | `meta-d`            | Forward delete the next word                                                                               |

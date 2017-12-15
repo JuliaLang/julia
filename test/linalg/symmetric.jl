@@ -30,7 +30,7 @@ end
     n = 10
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
-    @testset for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
+    @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
         asym = a.'+a                 # symmetric indefinite
         aherm = a'+a                 # Hermitian indefinite
@@ -104,7 +104,7 @@ end
                     end
                 end
                 if eltya <: Complex
-                    typs = [Complex64,Complex128]
+                    typs = [ComplexF32,ComplexF64]
                     for typ in typs
                         @test Symmetric(convert(Matrix{typ},asym)) == convert(Symmetric{typ,Matrix{typ}},Symmetric(asym))
                         @test Hermitian(convert(Matrix{typ},aherm)) == convert(Hermitian{typ,Matrix{typ}},Hermitian(aherm))
@@ -195,7 +195,7 @@ end
                 if eltya <: Base.LinAlg.BlasComplex
                     @testset "inverse edge case with complex Hermitian" begin
                         # Hermitian matrix, where inv(lufact(A)) generates non-real diagonal elements
-                        for T in (Complex64, Complex128)
+                        for T in (ComplexF32, ComplexF64)
                             A = T[0.650488+0.0im 0.826686+0.667447im; 0.826686-0.667447im 1.81707+0.0im]
                             H = Hermitian(A)
                             @test inv(H) ≈ inv(A)
@@ -307,14 +307,14 @@ end
                 @test a * Hermitian(aherm) ≈ a * aherm
                 @test Hermitian(aherm) * Hermitian(aherm) ≈ aherm*aherm
                 @test_throws DimensionMismatch Hermitian(aherm) * ones(eltya,n+1)
-                Base.LinAlg.A_mul_B!(C,a,Hermitian(aherm))
+                Base.LinAlg.mul!(C,a,Hermitian(aherm))
                 @test C ≈ a*aherm
 
                 @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
                 @test Symmetric(asym) * a ≈ asym * a
                 @test a * Symmetric(asym) ≈ a * asym
                 @test_throws DimensionMismatch Symmetric(asym) * ones(eltya,n+1)
-                Base.LinAlg.A_mul_B!(C,a,Symmetric(asym))
+                Base.LinAlg.mul!(C,a,Symmetric(asym))
                 @test C ≈ a*asym
 
                 tri_b = UpperTriangular(triu(b))
@@ -435,7 +435,7 @@ end
 
 @testset "$HS solver with $RHS RHS - $T" for HS in (Hermitian, Symmetric),
         RHS in (Hermitian, Symmetric, Diagonal, UpperTriangular, LowerTriangular),
-        T   in (Float64, Complex128)
+        T   in (Float64, ComplexF64)
     D = rand(T, 10, 10); D = D'D
     A = HS(D)
     B = RHS(D)
@@ -443,7 +443,7 @@ end
 end
 
 @testset "inversion of Hilbert matrix" begin
-    for T in (Float64, Complex128)
+    for T in (Float64, ComplexF64)
         H = T[1/(i + j - 1) for i in 1:8, j in 1:8]
         @test norm(inv(Symmetric(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
         @test norm(inv(Hermitian(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5

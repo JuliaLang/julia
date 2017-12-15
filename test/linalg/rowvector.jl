@@ -267,7 +267,7 @@ end
     @test (f20979.(v))[1] == f20979(v[1])
     @test f20979.(v) == f20979.(collect(v))
 
-    w = rand(Complex128, 3)
+    w = rand(ComplexF64, 3)
     @test f20979.(v') == f20979.(collect(v')) == (f20979.(v))'
 
     g20979(x, y) = [x[2,1] x[1,2]; y[1,2] y[2,1]]

@@ -15,7 +15,7 @@
 
 include("../perfutil.jl")
 
-words(text) = eachmatch(r"[a-z]+", lowercase(text))
+words(text) = eachmatch(r"[a-z]+", Base.Unicode.lowercase(text))
 
 function train(features)
     model = Dict{AbstractString, Int}()

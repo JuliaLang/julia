@@ -105,6 +105,13 @@ end
 @test_repr "(!x).a"
 @test_repr "(!x)::a"
 
+# invalid UTF-8 strings
+@test_repr "\"\\ud800\""
+@test_repr "\"\\udfff\""
+@test_repr "\"\\xc0\\xb0\""
+@test_repr "\"\\xe0\\xb0\\xb0\""
+@test_repr "\"\\xf0\\xb0\\xb0\\xb0\""
+
 # Complex
 
 # Meta.parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
@@ -469,7 +476,7 @@ let filename = tempname()
     @test chomp(read(filename, String)) == "hello"
     ret = open(filename, "w") do f
         redirect_stderr(f) do
-            warn("hello")
+            println(STDERR, "WARNING: hello")
             [2]
         end
     end
@@ -750,7 +757,7 @@ let a = Vector{Any}(uninitialized, 10000)
     a[2] = "elemA"
     a[4] = "elemB"
     a[11] = "elemC"
-    repr = sprint(0, dump, a; env= (:limit => true))
+    repr = sprint(dump, a; context=(:limit => true), sizehint=0)
     @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
 end
 
@@ -1041,4 +1048,7 @@ end
         # from eltype(x), so this must also be printed
         @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[1]]"
     end
+    # Issue #25038
+    A = [0.0, 1.0]
+    @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
 end

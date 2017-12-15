@@ -268,12 +268,16 @@ function ==(t1::Tuple, t2::Tuple)
     if length(t1) != length(t2)
         return false
     end
+    anymissing = false
     for i = 1:length(t1)
-        if !(t1[i] == t2[i])
-            return false
-        end
+        eq = (t1[i] == t2[i])
+        if ismissing(eq)
+            anymissing = true
+        elseif !eq
+           return false
+       end
     end
-    return true
+    return anymissing ? missing : true
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base.LinAlg: mul!, ldiv!, rdiv!, Adjoint, Transpose
+
 @testset "issparse" begin
     @test issparse(sparse(ones(5,5)))
     @test !issparse(ones(5,5))
@@ -188,13 +190,13 @@ end
         b = randn(5,3) + im*randn(5,3)
         c = randn(5) + im*randn(5)
         d = randn(5) + im*randn(5)
-        α = rand(Complex128)
-        β = rand(Complex128)
+        α = rand(ComplexF64)
+        β = rand(ComplexF64)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
-        @test (maximum(abs.(A_mul_B!(similar(b), a, b) - Array(a)*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(A_mul_B!(similar(c), a, c) - Array(a)*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(At_mul_B!(similar(b), a, b) - Array(a).'*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(At_mul_B!(similar(c), a, c) - Array(a).'*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(b), a, b) - Array(a)*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(c), a, c) - Array(a)*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(b), Transpose(a), b) - Array(a).'*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(c), Transpose(a), c) - Array(a).'*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
         @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
@@ -340,11 +342,11 @@ dA = Array(sA)
         bi = inv.(b)
         dAt = transpose(dA)
         sAt = transpose(sA)
-        @test scale!(copy(dAt), bi) ≈ Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(b))
-        @test scale!(copy(dAt), bi) ≈ Base.LinAlg.A_rdiv_Bt!(copy(sAt), Diagonal(b))
-        @test scale!(copy(dAt), conj(bi)) ≈ Base.LinAlg.A_rdiv_Bc!(copy(sAt), Diagonal(b))
-        @test_throws DimensionMismatch Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(ones(length(b) + 1)))
-        @test_throws LinAlg.SingularException Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(zeros(length(b))))
+        @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), Diagonal(b))
+        @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), Transpose(Diagonal(b)))
+        @test scale!(copy(dAt), conj(bi)) ≈ rdiv!(copy(sAt), Adjoint(Diagonal(b)))
+        @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(ones(length(b) + 1)))
+        @test_throws LinAlg.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
     end
 end
 
@@ -1135,14 +1137,19 @@ end
 A = sparse(["a", "b"])
 @test_throws MethodError findmin(A, 1)
 
-# Support the case, when user defined `zero` and `isless` for non-numerical type
-#
-Base.zero(::Type{T}) where T<:AbstractString = ""
-for (tup, rval, rind) in [((1,), ["a"], [1])]
+# Support the case when user defined `zero` and `isless` for non-numerical type
+struct CustomType
+    x::String
+end
+Base.zero(::Type{CustomType}) = CustomType("")
+Base.isless(x::CustomType, y::CustomType) = isless(x.x, y.x)
+A = sparse([CustomType("a"), CustomType("b")])
+
+for (tup, rval, rind) in [((1,), [CustomType("a")], [1])]
     @test isequal(findmin(A, tup), (rval, rind))
 end
 
-for (tup, rval, rind) in [((1,), ["b"], [2])]
+for (tup, rval, rind) in [((1,), [CustomType("b")], [2])]
     @test isequal(findmax(A, tup), (rval, rind))
 end
 
@@ -1458,7 +1465,7 @@ end
 end
 
 @testset "diag" begin
-    for T in (Float64, Complex128)
+    for T in (Float64, ComplexF64)
         S1 = sprand(T,  5,  5, 0.5)
         S2 = sprand(T, 10,  5, 0.5)
         S3 = sprand(T,  5, 10, 0.5)
@@ -1538,7 +1545,7 @@ end
     @test ishermitian(A) == false
     @test issymmetric(A) == false
 
-    A = sparse(Complex128(1)I, 5, 5)
+    A = sparse(ComplexF64(1)I, 5, 5)
     A[3,2] = 1.0 + im
     @test ishermitian(A) == false
     @test issymmetric(A) == false
@@ -1551,7 +1558,7 @@ end
     @test issymmetric(A) == true
 
     # explicit zeros
-    A = sparse(Complex128(1)I, 5, 5)
+    A = sparse(ComplexF64(1)I, 5, 5)
     A[3,1] = 2
     A.nzval[2] = 0.0
     @test ishermitian(A) == true
@@ -1842,7 +1849,7 @@ end
     m = 5
     intmat = fill(1, m, m)
     ltintmat = LowerTriangular(rand(1:5, m, m))
-    @test At_ldiv_B(ltintmat, sparse(intmat)) ≈ At_ldiv_B(ltintmat, intmat)
+    @test \(Transpose(ltintmat), sparse(intmat)) ≈ \(Transpose(ltintmat), intmat)
 end
 
 # Test temporary fix for issue #16548 in PR #16979. Somewhat brittle. Expect to remove with `\` revisions.
@@ -2082,11 +2089,11 @@ end
 
 @testset "similar with type conversion" begin
     local A = sparse(1.0I, 5, 5)
-    @test size(similar(A, Complex128, Int)) == (5, 5)
-    @test typeof(similar(A, Complex128, Int)) == SparseMatrixCSC{Complex128, Int}
-    @test size(similar(A, Complex128, Int8)) == (5, 5)
-    @test typeof(similar(A, Complex128, Int8)) == SparseMatrixCSC{Complex128, Int8}
-    @test similar(A, Complex128,(6, 6)) == spzeros(Complex128, 6, 6)
+    @test size(similar(A, ComplexF64, Int)) == (5, 5)
+    @test typeof(similar(A, ComplexF64, Int)) == SparseMatrixCSC{ComplexF64, Int}
+    @test size(similar(A, ComplexF64, Int8)) == (5, 5)
+    @test typeof(similar(A, ComplexF64, Int8)) == SparseMatrixCSC{ComplexF64, Int8}
+    @test similar(A, ComplexF64,(6, 6)) == spzeros(ComplexF64, 6, 6)
     @test convert(Matrix, A) == Array(A) # lolwut, are you lost, test?
 end
 

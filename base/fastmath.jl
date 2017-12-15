@@ -187,7 +187,7 @@ issubnormal_fast(x) = false
 
 # complex numbers
 
-ComplexTypes = Union{Complex64, Complex128}
+ComplexTypes = Union{ComplexF32, ComplexF64}
 
 @fastmath begin
     abs_fast(x::ComplexTypes) = hypot(real(x), imag(x))

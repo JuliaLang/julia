@@ -2,6 +2,7 @@
 
 module Printf
 using Base: Grisu, GMP
+using Base.Unicode: lowercase, textwidth, isupper
 export @printf, @sprintf
 
 ### printf formatter generation ###

@@ -27,11 +27,8 @@ import Base.Math.lgamma_r
 
 import Base.FastMath.sincos_fast
 
-function version()
-    version = unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ()))
-    build = replace(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())), ' ', '.')
-    isempty(build) ? VersionNumber(version) : VersionNumber(version * '+' * build)
-end
+version() = VersionNumber(unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ())))
+patches() = split(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())),' ')
 
 function __init__()
     try
@@ -125,7 +122,7 @@ convert(::Type{BigFloat}, x::Union{Float16,Float32}) = BigFloat(Float64(x))
 convert(::Type{BigFloat}, x::Rational) = BigFloat(numerator(x)) / BigFloat(denominator(x))
 
 function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
-    !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base)
+    !isempty(s) && Base.Unicode.isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base)
     z = BigFloat()
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ref{BigFloat}, Cstring, Int32, Int32), z, s, base, ROUNDING_MODE[])
     err == 0 ? Nullable(z) : Nullable{BigFloat}()

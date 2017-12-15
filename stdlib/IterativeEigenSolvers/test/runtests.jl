@@ -13,8 +13,8 @@ using Test
 
         testtol = 1e-6
 
-        @testset for elty in (Float64, Complex128)
-            if elty == Complex64 || elty == Complex128
+        @testset for elty in (Float64, ComplexF64)
+            if elty == ComplexF32 || elty == ComplexF64
                 a = acmplx
                 b = bcmplx
             else
@@ -36,9 +36,9 @@ using Test
             (d,v) = eigs(a, I, nev=3) # test eigs(A, B; kwargs...)
             @test a*v[:,2] ≈ d[2]*v[:,2]
             @test norm(v) > testtol # eigenvectors cannot be null vectors
-            @test_warn "Use symbols instead of strings for specifying which eigenvalues to compute" eigs(a, which="LM")
-            @test_warn "Adjusting ncv from 1 to 4" eigs(a, ncv=1, nev=2)
-            @test_warn "Adjusting nev from $n to $(n-2)" eigs(a, nev=n)
+            @test_logs (:warn,"Use symbols instead of strings for specifying which eigenvalues to compute") eigs(a, which="LM")
+            @test_logs (:warn,"Adjusting ncv from 1 to 4") eigs(a, ncv=1, nev=2)
+            @test_logs (:warn,"Adjusting nev from $n to $(n-2)") eigs(a, nev=n)
             # (d,v) = eigs(a, b, nev=3, tol=1e-8) # not handled yet
             # @test a*v[:,2] ≈ d[2]*b*v[:,2] atol=testtol
             # @test norm(v) > testtol # eigenvectors cannot be null vectors
@@ -90,7 +90,7 @@ using Test
                 if elty == Float64
                     @test_throws ArgumentError eigs(a+a.',which=:SI)
                     @test_throws ArgumentError eigs(a+a.',which=:LI)
-                    @test_throws ArgumentError eigs(a,sigma=rand(Complex64))
+                    @test_throws ArgumentError eigs(a,sigma=rand(ComplexF32))
                 end
             end
         end
@@ -105,7 +105,7 @@ using Test
     end
 end
 
-# Problematic example from #6965
+# Problematic example from #6965A
 let A6965 = [
          1.0   1.0   1.0   1.0   1.0   1.0   1.0  1.0
         -1.0   2.0   0.0   0.0   0.0   0.0   0.0  1.0
@@ -138,8 +138,7 @@ end
 size(Phi::CPM) = (size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
 issymmetric(Phi::CPM) = false
 ishermitian(Phi::CPM) = false
-import Base: A_mul_B!
-function A_mul_B!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:Base.LinAlg.BlasFloat}
+function Base.LinAlg.mul!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:Base.LinAlg.BlasFloat}
     rho = reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
     rho1 = zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
     for s = 1:size(Phi.kraus,2)
@@ -148,6 +147,8 @@ function A_mul_B!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) wher
     end
     return copy!(rho2,rho1)
 end
+Base.LinAlg.A_mul_B!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:Base.LinAlg.BlasFloat} = Base.LinAlg.mul!(rho2, Phi, rho)
+# after the A_mul_B! deprecation, remove this A_mul_B! def
 
 let
     # Generate random isometry

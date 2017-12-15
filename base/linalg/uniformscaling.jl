@@ -63,7 +63,9 @@ end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
 transpose(J::UniformScaling) = J
+Transpose(S::UniformScaling) = transpose(S)
 adjoint(J::UniformScaling) = UniformScaling(conj(J.λ))
+Adjoint(S::UniformScaling) = adjoint(S)
 
 one(::Type{UniformScaling{T}}) where {T} = UniformScaling(one(T))
 one(J::UniformScaling{T}) where {T} = one(UniformScaling{T})
@@ -223,7 +225,7 @@ function ==(A::StridedMatrix, J::UniformScaling)
     size(A, 1) == size(A, 2) || return false
     iszero(J.λ) && return iszero(A)
     isone(J.λ) && return isone(A)
-    for j in indices(A, 2), i in indices(A, 1)
+    for j in axes(A, 2), i in axes(A, 1)
         ifelse(i == j, A[i, j] == J.λ, iszero(A[i, j])) || return false
     end
     return true

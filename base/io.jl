@@ -33,10 +33,24 @@ buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
 """
     isopen(object) -> Bool
 
-Determine whether an object - such as a stream, timer, or mmap -- is not yet closed. Once an
-object is closed, it will never produce a new event. However, a closed stream may still have
-data to read in its buffer, use [`eof`](@ref) to check for the ability to read data.
+Determine whether an object - such as a stream, timer, or [`mmap`](@ref Mmap.mmap)
+-- is not yet closed. Once an object is closed, it will never produce a new event.
+However, since a closed stream may still have data to read in its buffer,
+use [`eof`](@ref) to check for the ability to read data.
 Use the `FileWatching` package to be notified when a stream might be writable or readable.
+
+# Examples
+```jldoctest
+julia> io = open("my_file.txt", "w+");
+
+julia> isopen(io)
+true
+
+julia> close(io)
+
+julia> isopen(io)
+false
+```
 """
 function isopen end
 
@@ -110,18 +124,31 @@ function copy end
 function eof end
 
 """
-    read(stream::IO, T)
+    read(io::IO, T)
 
-Read a single value of type `T` from `stream`, in canonical binary representation.
+Read a single value of type `T` from `io`, in canonical binary representation.
 
-    read(stream::IO, String)
+    read(io::IO, String)
 
-Read the entirety of `stream`, as a String.
+Read the entirety of `io`, as a `String`.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization");
+
+julia> read(io, Char)
+'J': ASCII/Unicode U+004a (category Lu: Letter, uppercase)
+
+julia> io = IOBuffer("JuliaLang is a GitHub organization");
+
+julia> read(io, String)
+"JuliaLang is a GitHub organization"
+```
 """
 read(stream, t)
 
 """
-    write(stream::IO, x)
+    write(io::IO, x)
     write(filename::AbstractString, x)
 
 Write the canonical binary representation of a value to the given I/O stream or file.
@@ -129,8 +156,25 @@ Return the number of bytes written into the stream.
 
 You can write multiple values with the same `write` call. i.e. the following are equivalent:
 
-    write(stream, x, y...)
-    write(stream, x) + write(stream, y...)
+    write(io, x, y...)
+    write(io, x) + write(io, y...)
+
+# Examples
+```jldoctest
+julia> io = IOBuffer();
+
+julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
+56
+
+julia> String(take!(io))
+"JuliaLang is a GitHub organization. It has many members."
+
+julia> write(io, "Sometimes those members") + write(io, " write documentation.")
+44
+
+julia> String(take!(io))
+"Sometimes those members write documentation."
+```
 """
 function write end
 
@@ -199,9 +243,17 @@ wait_readbyte(io::AbstractPipe, byte::UInt8) = wait_readbyte(pipe_reader(io), by
 wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_reader(io)))
 
 """
-    nb_available(stream)
+    nb_available(io)
 
 Return the number of bytes available for reading before a read from this stream or buffer will block.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization");
+
+julia> nb_available(io)
+34
+```
 """
 nb_available(io::AbstractPipe) = nb_available(pipe_reader(io))
 
@@ -250,11 +302,27 @@ read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
 
 Read a string from an I/O stream or a file, up to and including the given delimiter byte.
 The text is assumed to be encoded in UTF-8.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
+       end
+57
+
+julia> readuntil("my_file.txt", 'L')
+"JuliaL"
+
+julia> readuntil("my_file.txt", '.')
+"JuliaLang is a GitHub organization."
+
+julia> rm("my_file.txt")
+```
 """
 readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
 
 """
-    readline(stream::IO=STDIN; chomp::Bool=true)
+    readline(io::IO=STDIN; chomp::Bool=true)
     readline(filename::AbstractString; chomp::Bool=true)
 
 Read a single line of text from the given I/O stream or file (defaults to `STDIN`).
@@ -263,6 +331,22 @@ input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `chomp`
 true (as it is by default), these trailing newline characters are removed from the
 line before it is returned. When `chomp` is false, they are returned as part of the
 line.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
+       end
+57
+
+julia> readline("my_file.txt")
+"JuliaLang is a GitHub organization."
+
+julia> readline("my_file.txt", chomp=false)
+"JuliaLang is a GitHub organization.\\n"
+
+julia> rm("my_file.txt")
+```
 """
 function readline(filename::AbstractString; chomp::Bool=true)
     open(filename) do f
@@ -283,12 +367,32 @@ function readline(s::IO=STDIN; chomp::Bool=true)
 end
 
 """
-    readlines(stream::IO=STDIN; chomp::Bool=true)
+    readlines(io::IO=STDIN; chomp::Bool=true)
     readlines(filename::AbstractString; chomp::Bool=true)
 
 Read all lines of an I/O stream or a file as a vector of strings. Behavior is
-equivalent to saving the result of reading `readline` repeatedly with the same
+equivalent to saving the result of reading [`readline`](@ref) repeatedly with the same
 arguments and saving the resulting lines as a vector of strings.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
+       end
+57
+
+julia> readlines("my_file.txt")
+2-element Array{String,1}:
+ "JuliaLang is a GitHub organization."
+ "It has many members."
+
+julia> readlines("my_file.txt", chomp=false)
+2-element Array{String,1}:
+ "JuliaLang is a GitHub organization.\\n"
+ "It has many members.\\n"
+
+julia> rm("my_file.txt")
+```
 """
 function readlines(filename::AbstractString; chomp::Bool=true)
     open(filename) do f
@@ -358,9 +462,22 @@ htol(x)
 
 
 """
-    isreadonly(stream) -> Bool
+    isreadonly(io) -> Bool
 
 Determine whether a stream is read-only.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization");
+
+julia> isreadonly(io)
+true
+
+julia> io = IOBuffer();
+
+julia> isreadonly(io)
+false
+```
 """
 isreadonly(s) = isreadable(s) && !iswritable(s)
 
@@ -432,25 +549,13 @@ function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
     end
 end
 
-
-function write(s::IO, ch::Char)
-    c = reinterpret(UInt32, ch)
-    if c < 0x80
-        return write(s, c%UInt8)
-    elseif c < 0x800
-        return (write(s, (( c >> 6          ) | 0xC0)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    elseif c < 0x10000
-        return (write(s, (( c >> 12         ) | 0xE0)%UInt8)) +
-               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    elseif c < 0x110000
-        return (write(s, (( c >> 18         ) | 0xF0)%UInt8)) +
-               (write(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    else
-        return write(s, '\ufffd')
+function write(io::IO, c::Char)
+    u = bswap(reinterpret(UInt32, c))
+    n = 1
+    while true
+        write(io, u % UInt8)
+        (u >>= 8) == 0 && return n
+        n += 1
     end
 end
 
@@ -493,23 +598,20 @@ function read!(s::IO, a::Array{T}) where T
     return a
 end
 
-function read(s::IO, ::Type{Char})
-    ch = read(s, UInt8)
-    if ch < 0x80
-        return Char(ch)
+function read(io::IO, ::Type{Char})
+    b0 = read(io, UInt8)
+    l = 8(4-leading_ones(b0))
+    c = UInt32(b0) << 24
+    if l < 24
+        s = 16
+        while s ≥ l && !eof(io)
+            peek(io) & 0xc0 == 0x80 || break
+            b = read(io, UInt8)
+            c |= UInt32(b) << s
+            s -= 8
+        end
     end
-
-    # mimic utf8.next function
-    trailing = Base.utf8_trailing[ch+1]
-    c::UInt32 = 0
-    for j = 1:trailing
-        c += ch
-        c <<= 6
-        ch = read(s, UInt8)
-    end
-    c += ch
-    c -= Base.utf8_offset[trailing+1]
-    return Char(c)
+    return reinterpret(Char, c)
 end
 
 # readuntil_string is useful below since it has
@@ -517,7 +619,7 @@ end
 readuntil_string(s::IO, delim::UInt8) = String(readuntil(s, delim))
 
 function readuntil(s::IO, delim::Char)
-    if delim < Char(0x80)
+    if delim ≤ '\x7f'
         return readuntil_string(s, delim % UInt8)
     end
     out = IOBuffer()
@@ -598,7 +700,7 @@ function readuntil(io::IO, target::AbstractString)
     i = start(target)
     done(target, i) && return ""
     c, i = next(target, start(target))
-    if done(target, i) && c < Char(0x80)
+    if done(target, i) && c <= '\x7f'
         return readuntil_string(io, c % UInt8)
     end
     # decide how we can index target
@@ -625,14 +727,25 @@ function readuntil(io::IO, target::AbstractVector{T}) where T
     return out
 end
 
-
 """
     readchomp(x)
 
-Read the entirety of `x` as a string and remove a single trailing newline.
-Equivalent to `chomp!(read(x, String))`.
+Read the entirety of `x` as a string and remove a single trailing newline
+if there is one. Equivalent to `chomp(read(x, String))`.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
+       end;
+
+julia> readchomp("my_file.txt")
+"JuliaLang is a GitHub organization.\\nIt has many members."
+
+julia> rm("my_file.txt");
+```
 """
-readchomp(x) = chomp!(read(x, String))
+readchomp(x) = chomp(read(x, String))
 
 # read up to nb bytes into nb, returning # bytes read
 
@@ -689,15 +802,29 @@ mutable struct EachLine
 end
 
 """
-    eachline(stream::IO=STDIN; chomp::Bool=true)
+    eachline(io::IO=STDIN; chomp::Bool=true)
     eachline(filename::AbstractString; chomp::Bool=true)
 
 Create an iterable `EachLine` object that will yield each line from an I/O stream
-or a file. Iteration calls `readline` on the stream argument repeatedly with
+or a file. Iteration calls [`readline`](@ref) on the stream argument repeatedly with
 `chomp` passed through, determining whether trailing end-of-line characters are
 removed. When called with a file name, the file is opened once at the beginning of
 iteration and closed at the end. If iteration is interrupted, the file will be
 closed when the `EachLine` object is garbage collected.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\\n It has many members.\\n");
+       end;
+
+julia> for line in eachline("my_file.txt")
+           print(line)
+       end
+JuliaLang is a GitHub organization. It has many members.
+
+julia> rm("my_file.txt");
+```
 """
 eachline(stream::IO=STDIN; chomp::Bool=true) = EachLine(stream, chomp=chomp)::EachLine
 
@@ -789,9 +916,12 @@ Advance the stream `io` such that the next-read character will be the first rema
 which `predicate` returns `false`. If the keyword argument `linecomment` is specified, all
 characters from that character until the start of the next line are ignored.
 
+# Examples
 ```jldoctest
 julia> buf = IOBuffer("    text")
 IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=1, mark=-1)
+
+julia> using Unicode
 
 julia> skipchars(buf, isspace)
 IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=5, mark=-1)
@@ -819,9 +949,25 @@ end
 Read `io` until the end of the stream/file and count the number of lines. To specify a file
 pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
 passing them as the second argument.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.\n");
+
+julia> countlines(io)
+1
+
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
+julia> countlines(io)
+0
+
+julia> countlines(io, '.')
+1
+```
 """
 function countlines(io::IO, eol::Char='\n')
-    isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
+    Unicode.isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
     a = Vector{UInt8}(uninitialized, 8192)
     nl = 0

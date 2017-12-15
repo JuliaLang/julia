@@ -98,8 +98,7 @@ julia> F[:vectors]
 ```
 """
 function eigfact(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T
-    S = promote_type(Float32, typeof(one(T)/norm(one(T))))
-    AA = copy_oftype(A, S)
+    AA = copy_oftype(A, eigtype(T))
     isdiag(AA) && return eigfact(Diagonal(AA), permute = permute, scale = scale)
     return eigfact!(AA, permute = permute, scale = scale)
 end
@@ -199,6 +198,9 @@ function eigvals!(A::StridedMatrix{<:BlasComplex}; permute::Bool=true, scale::Bo
     return LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2]
 end
 
+# promotion type to use for eigenvalues of a Matrix{T}
+eigtype(T) = promote_type(Float32, typeof(zero(T)/sqrt(abs2(one(T)))))
+
 """
     eigvals(A; permute::Bool=true, scale::Bool=true) -> values
 
@@ -223,12 +225,10 @@ julia> eigvals(diag_matrix)
  4.0
 ```
 """
-function eigvals(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T
-    S = promote_type(Float32, typeof(one(T)/norm(one(T))))
-    return eigvals!(copy_oftype(A, S), permute = permute, scale = scale)
-end
+eigvals(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T =
+    eigvals!(copy_oftype(A, eigtype(T)), permute = permute, scale = scale)
 function eigvals(x::T; kwargs...) where T<:Number
-    val = convert(promote_type(Float32, typeof(one(T)/norm(one(T)))), x)
+    val = convert(eigtype(T), x)
     return imag(val) == 0 ? [real(val)] : [val]
 end
 
@@ -381,7 +381,7 @@ julia> F[:vectors]
 ```
 """
 function eigfact(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
-    S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
+    S = promote_type(eigtype(TA),TB)
     return eigfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
 
@@ -493,7 +493,7 @@ julia> eigvals(A,B)
 ```
 """
 function eigvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
-    S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
+    S = promote_type(eigtype(TA),TB)
     return eigvals!(copy_oftype(A, S), copy_oftype(B, S))
 end
 

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 """
 Tools for distributed parallel processing.
 """
@@ -13,8 +15,9 @@ import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
 using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connected,
             VERSION_STRING, sync_begin, sync_add, sync_end, async_run_thunk,
             binding_module, notify_error, atexit, julia_exename, julia_cmd,
-            AsyncGenerator, display_error, acquire, release, invokelatest, warn_once,
+            AsyncGenerator, acquire, release, invokelatest,
             shell_escape_posixly, uv_error
+using Base.Unicode: isascii, isdigit, isnumeric
 
 # NOTE: clusterserialize.jl imports additional symbols from Base.Serializer for use
 
@@ -26,6 +29,7 @@ export
     @everywhere,
     @parallel,
 
+    AbstractWorkerPool,
     addprocs,
     CachingPool,
     clear!,
@@ -35,8 +39,8 @@ export
     interrupt,
     launch,
     manage,
-    myid,
-    nprocs,
+#    myid,   # accessed via Base
+#    nprocs, # accessed via Base
     nworkers,
     pmap,
     procs,
@@ -54,8 +58,6 @@ export
     RemoteException,
     ProcessExitedException,
 
-# Add the following into Base as some Packages access them via Base.
-# Also documented as such.
     process_messages,
     remoteref_id,
     channel_from_id,
@@ -75,5 +77,8 @@ include("macros.jl")      # @spawn and friends
 include("workerpool.jl")
 include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
+include("precompile.jl")
+
+__init__() = init_parallel()
 
 end

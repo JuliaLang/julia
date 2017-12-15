@@ -190,7 +190,7 @@ if Base.libllvm_version >= v"3.6" # llvm 3.6 changed the syntax for a gep, so ju
     end
     code_llvm(DevNull, foo, ())
 else
-    println("INFO: skipping gep parentage test on llvm < 3.6")
+    @info "Skipping gep parentage test on llvm < 3.6"
 end
 
 module CcallableRetTypeTest

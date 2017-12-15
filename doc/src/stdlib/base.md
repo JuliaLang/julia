@@ -48,7 +48,6 @@ Base.methods
 Base.methodswith
 Base.@show
 Base.versioninfo
-Base.workspace
 ans
 ```
 
@@ -89,7 +88,6 @@ primitive type
 ## Base Modules
 ```@docs
 Base.BLAS
-Base.Distributed
 Base.Docs
 Base.Iterators
 Base.LAPACK
@@ -226,6 +224,7 @@ Base.unsafe_get
 Base.Missing
 Base.missing
 Base.ismissing
+Base.skipmissing
 ```
 
 ## System
@@ -298,7 +297,6 @@ Core.OutOfMemoryError
 Core.ReadOnlyMemoryError
 Core.OverflowError
 Base.ParseError
-Base.ProcessExitedException
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError

@@ -5,9 +5,10 @@ module CHOLMOD
 import Base: (*), convert, copy, eltype, getindex, show, size,
              IndexStyle, IndexLinear, IndexCartesian, adjoint
 
-import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
+import Base.LinAlg: (\),
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
-                 issuccess, issymmetric, ldltfact, ldltfact!, logdet
+                 issuccess, issymmetric, ldltfact, ldltfact!, logdet,
+                 Adjoint, Transpose
 
 using ..SparseArrays
 
@@ -85,8 +86,7 @@ function __init__()
 
 
         if current_version < CHOLMOD_MIN_VERSION
-            warn("""
-
+            @warn """
                 CHOLMOD version incompatibility
 
                 Julia was compiled with CHOLMOD version $build_version. It is
@@ -99,10 +99,9 @@ function __init__()
                 of CHOLMOD, or download the generic binaries
                 from www.julialang.org, which ship with the correct
                 versions of all dependencies.
-            """)
+                """
         elseif build_version_array[1] != current_version_array[1]
-            warn("""
-
+            @warn """
                 CHOLMOD version incompatibility
 
                 Julia was compiled with CHOLMOD version $build_version. It is
@@ -115,13 +114,12 @@ function __init__()
                 version of CHOLMOD as the one used during the build, or
                 download the generic binaries from www.julialang.org,
                 which ship with the correct versions of all dependencies.
-            """)
+                """
         end
 
         intsize = Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,()))
         if intsize != 4length(IndexTypes)
-            warn("""
-
+            @error """
                  CHOLMOD integer size incompatibility
 
                  Julia was compiled with a version of CHOLMOD that
@@ -135,7 +133,7 @@ function __init__()
                  configuration or by downloading the OS X or generic
                  Linux binary from www.julialang.org, which include
                  the correct versions of all dependencies.
-             """)
+                 """
         end
 
         ### Initiate CHOLMOD
@@ -165,8 +163,7 @@ function __init__()
         end
 
     catch ex
-        Base.showerror_nostdio(ex,
-            "WARNING: Error during initialization of module CHOLMOD")
+        @error "Error during initialization of module CHOLMOD" exception=ex
     end
 end
 
@@ -614,7 +611,7 @@ end
 
 ### cholmod_check.h ###
 function print_sparse(A::Sparse{Tv}, name::String) where Tv<:VTypes
-    isascii(name) || error("non-ASCII name: $name")
+    Unicode.isascii(name) || error("non-ASCII name: $name")
     set_print_level(common_struct, 3)
     @isok ccall((@cholmod_name("print_sparse", SuiteSparse_long),:libcholmod), Cint,
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}, Ptr{UInt8}),
@@ -701,7 +698,7 @@ function sdmult!(A::Sparse{Tv}, transpose::Bool,
     end
     @isok ccall((@cholmod_name("sdmult", SuiteSparse_long),:libcholmod), Cint,
             (Ptr{C_Sparse{Tv}}, Cint,
-             Ref{Complex128}, Ref{Complex128},
+             Ref{ComplexF64}, Ref{ComplexF64},
              Ptr{C_Dense{Tv}}, Ptr{C_Dense{Tv}}, Ptr{UInt8}),
                 A, transpose, α, β, X, Y, common_struct)
     Y
@@ -755,7 +752,7 @@ function factorize_p!(A::Sparse{Tv}, β::Real, F::Factor{Tv}, cmmn::Vector{UInt8
     # note that β is passed as a complex number (double beta[2]),
     # but the CHOLMOD manual says that only beta[0] (real part) is used
     @isok ccall((@cholmod_name("factorize_p", SuiteSparse_long),:libcholmod), Cint,
-        (Ptr{C_Sparse{Tv}}, Ref{Complex128}, Ptr{SuiteSparse_long}, Csize_t,
+        (Ptr{C_Sparse{Tv}}, Ref{ComplexF64}, Ptr{SuiteSparse_long}, Csize_t,
          Ptr{C_Factor{Tv}}, Ptr{UInt8}),
             A, β, C_NULL, 0, F, cmmn)
     F
@@ -1293,7 +1290,8 @@ end
 (*)(A::Sparse, B::Dense) = sdmult!(A, false, 1., 0., B, zeros(size(A, 1), size(B, 2)))
 (*)(A::Sparse, B::VecOrMat) = (*)(A, Dense(B))
 
-function A_mul_Bc(A::Sparse{Tv}, B::Sparse{Tv}) where Tv<:VRealTypes
+function *(A::Sparse{Tv}, adjB::Adjoint{Tv,Sparse{Tv}}) where Tv<:VRealTypes
+    B = adjB.parent
     if A !== B
         aa1 = transpose_(B, 2)
         ## result of ssmult will have stype==0, contain numerical values and be sorted
@@ -1312,17 +1310,20 @@ function A_mul_Bc(A::Sparse{Tv}, B::Sparse{Tv}) where Tv<:VRealTypes
     end
 end
 
-function Ac_mul_B(A::Sparse, B::Sparse)
+function *(adjA::Adjoint{<:Any,<:Sparse}, B::Sparse)
+    A = adjA.parent
     aa1 = transpose_(A, 2)
     if A === B
-        return A_mul_Bc(aa1, aa1)
+        return *(aa1, Adjoint(aa1))
     end
     ## result of ssmult will have stype==0, contain numerical values and be sorted
     return ssmult(aa1, B, 0, true, true)
 end
 
-Ac_mul_B(A::Sparse, B::Dense) = sdmult!(A, true, 1., 0., B, zeros(size(A, 2), size(B, 2)))
-Ac_mul_B(A::Sparse, B::VecOrMat) =  Ac_mul_B(A, Dense(B))
+*(adjA::Adjoint{<:Any,<:Sparse}, B::Dense) =
+    (A = adjA.parent; sdmult!(A, true, 1., 0., B, zeros(size(A, 2), size(B, 2))))
+*(adjA::Adjoint{<:Any,<:Sparse}, B::VecOrMat) =
+    (A = adjA.parent; *(Adjoint(A), Dense(B)))
 
 
 ## Factorization methods
@@ -1374,7 +1375,7 @@ See also [`cholfact`](@ref).
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
     doubles or complex doubles. Input matrices not of those element types will
-    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
+    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}`
     as appropriate.
 """
 cholfact!(F::Factor, A::Union{SparseMatrixCSC{T},
@@ -1427,7 +1428,7 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
     doubles or complex doubles. Input matrices not of those element types will
-    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
+    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}`
     as appropriate.
 
     Many other functions from CHOLMOD are wrapped but not exported from the
@@ -1466,7 +1467,7 @@ See also [`ldltfact`](@ref).
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
     doubles or complex doubles. Input matrices not of those element types will
-    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
+    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}`
     as appropriate.
 """
 ldltfact!(F::Factor, A::Union{SparseMatrixCSC{T},
@@ -1525,7 +1526,7 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
     doubles or complex doubles. Input matrices not of those element types will
-    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
+    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}`
     as appropriate.
 
     Many other functions from CHOLMOD are wrapped but not exported from the
@@ -1672,8 +1673,8 @@ function (\)(L::FactorComponent, B::SparseVecOrMat)
     sparse(L\Sparse(B,0))
 end
 
-Ac_ldiv_B(L::FactorComponent, B) = adjoint(L)\B
-Ac_ldiv_B(L::FactorComponent, B::RowVector) = adjoint(L)\B # ambiguity
+\(adjL::Adjoint{<:Any,<:FactorComponent}, B::Union{VecOrMat,SparseVecOrMat}) = (L = adjL.parent; adjoint(L)\B)
+\(adjL::Adjoint{<:Any,<:FactorComponent}, B::RowVector) = (L = adjL.parent; adjoint(L)\B) # ambiguity
 
 (\)(L::Factor{T}, B::Dense{T}) where {T<:VTypes} = solve(CHOLMOD_A, L, B)
 # Explicit typevars are necessary to avoid ambiguities with defs in linalg/factorizations.jl
@@ -1686,25 +1687,39 @@ Ac_ldiv_B(L::FactorComponent, B::RowVector) = adjoint(L)\B # ambiguity
 # When right hand side is sparse, we have to ensure that the rhs is not marked as symmetric.
 (\)(L::Factor, B::SparseVecOrMat) = sparse(spsolve(CHOLMOD_A, L, Sparse(B, 0)))
 
-Ac_ldiv_B(L::Factor, B::Dense) = solve(CHOLMOD_A, L, B)
-Ac_ldiv_B(L::Factor, B::VecOrMat) = convert(Matrix, solve(CHOLMOD_A, L, Dense(B)))
-Ac_ldiv_B(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
-Ac_ldiv_B(L::Factor, B::SparseVecOrMat) = Ac_ldiv_B(L, Sparse(B))
+\(adjL::Adjoint{<:Any,<:Factor}, B::Dense) = (L = adjL.parent; solve(CHOLMOD_A, L, B))
+\(adjL::Adjoint{<:Any,<:Factor}, B::VecOrMat) = (L = adjL.parent; convert(Matrix, solve(CHOLMOD_A, L, Dense(B))))
+\(adjL::Adjoint{<:Any,<:Factor}, B::Sparse) = (L = adjL.parent; spsolve(CHOLMOD_A, L, B))
+\(adjL::Adjoint{<:Any,<:Factor}, B::SparseVecOrMat) = (L = adjL.parent; \(Adjoint(L), Sparse(B)))
 
-for f in (:\, :Ac_ldiv_B)
-    @eval function ($f)(A::Union{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
-                          Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
-                          Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}, B::StridedVecOrMat)
-        F = cholfact(A)
+const RealHermSymComplexHermF64SSL = Union{
+    Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+    Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+    Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}
+function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMat)
+    F = cholfact(A)
+    if issuccess(F)
+        return \(F, B)
+    else
+        ldltfact!(F, A)
         if issuccess(F)
-            return ($f)(F, B)
+            return \(F, B)
         else
-            ldltfact!(F, A)
-            if issuccess(F)
-                return ($f)(F, B)
-            else
-                return ($f)(lufact(convert(SparseMatrixCSC{eltype(A), SuiteSparse_long}, A)), B)
-            end
+            return \(lufact(convert(SparseMatrixCSC{eltype(A), SuiteSparse_long}, A)), B)
+        end
+    end
+end
+function \(adjA::Adjoint{<:Any,<:RealHermSymComplexHermF64SSL}, B::StridedVecOrMat)
+    A = adjA.parent
+    F = cholfact(A)
+    if issuccess(F)
+        return \(Adjoint(F), B)
+    else
+        ldltfact!(F, A)
+        if issuccess(F)
+            return \(Adjoint(F), B)
+        else
+            return \(Adjoint(lufact(convert(SparseMatrixCSC{eltype(A), SuiteSparse_long}, A))), B)
         end
     end
 end

@@ -45,7 +45,7 @@ _z_z_z_(::Int, c...) = 3
 @test  args_morespecific(Tuple{T,Vararg{T}} where T<:Number,  Tuple{Number,Number,Vararg{Number}})
 @test !args_morespecific(Tuple{Number,Number,Vararg{Number}}, Tuple{T,Vararg{T}} where T<:Number)
 
-@test args_morespecific(Tuple{Array{T} where T<:Union{Float32,Float64,Complex64,Complex128}, Any},
+@test args_morespecific(Tuple{Array{T} where T<:Union{Float32,Float64,ComplexF32,ComplexF64}, Any},
                         Tuple{Array{T} where T<:Real, Any})
 
 @test  args_morespecific(Tuple{1,T} where T, Tuple{Any})
