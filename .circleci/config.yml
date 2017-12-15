@@ -11,9 +11,9 @@ jobs:
     docker:
       - image: circleci/python:2.7
         environment:
-          JULIA_CPU_CORES: 6
-          JULIA_TEST_MAXRSS_MB: 800
           ARCH: i686
+          JULIA_CPU_CORES: 4
+          JULIA_TEST_MAXRSS_MB: 800
     steps: &steps
       - run: | # install build dependencies
           sudo apt-get install -y g++-4.8-multilib gfortran-4.8-multilib \
@@ -40,9 +40,9 @@ jobs:
             - ccache-{{ arch }}-{{ checksum "/tmp/weeknumber" }}
       - run: | # compile julia deps
           contrib/download_cmake.sh &&
-          make -j8 -C deps || make
+          make -j3 -C deps || make
       - run: | # build julia, output ccache stats when done
-          make -j8 all &&
+          make -j3 all &&
           make prefix=/tmp/julia install &&
           ccache -s &&
           make build-stats
@@ -74,7 +74,7 @@ jobs:
     docker:
       - image: circleci/python:2.7
         environment:
-          JULIA_CPU_CORES: 6
-          JULIA_TEST_MAXRSS_MB: 800
           ARCH: x86_64
+          JULIA_CPU_CORES: 4
+          JULIA_TEST_MAXRSS_MB: 800
     steps: *steps
