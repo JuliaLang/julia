@@ -324,13 +324,13 @@ function Sampler(rng::AbstractRNG, t::Dict, ::Repetition)
     isempty(t) && throw(ArgumentError("collection must be non-empty"))
     # we use Val(Inf) below as rand is called repeatedly internally
     # even for generating only one random value from t
-    SamplerSimple(t, Sampler(rng, linearindices(t.slots), Val(Inf)))
+    SamplerSimple(t, Sampler(rng, linearindices(t.ht.slots), Val(Inf)))
 end
 
 function rand(rng::AbstractRNG, sp::SamplerSimple{<:Dict,<:Sampler})
     while true
         i = rand(rng, sp.data)
-        Base.isslotfilled(sp[], i) && @inbounds return (sp[].keys[i] => sp[].vals[i])
+        Base.isslotfilled(sp[], i) && @inbounds return (sp[].ht.keys[i] => sp[].ht.vals[i])
     end
 end
 

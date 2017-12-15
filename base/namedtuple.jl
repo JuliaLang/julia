@@ -188,7 +188,7 @@ julia> merge((a=1, b=2, c=3), [:b=>4, :d=>5])
 function merge(a::NamedTuple, itr)
     names = Symbol[]
     vals = Any[]
-    inds = ObjectIdDict()
+    inds = IdDict()
     for (k,v) in itr
         oldind = get(inds, k, 0)
         if oldind > 0

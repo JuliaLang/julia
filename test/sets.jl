@@ -123,14 +123,14 @@ end
     # array element
     s = Set(["a", "b", "c"])
     Base.rehash!(s)
-    k = s.dict.keys
+    k = s.dict.ht.keys
     Base.rehash!(s)
-    @test length(k) == length(s.dict.keys)
+    @test length(k) == length(s.dict.ht.keys)
     for i in 1:length(k)
         if isassigned(k, i)
-            @test k[i] == s.dict.keys[i]
+            @test k[i] == s.dict.ht.keys[i]
         else
-            @test !isassigned(s.dict.keys, i)
+            @test !isassigned(s.dict.ht.keys, i)
         end
     end
     @test s == Set(["a", "b", "c"])
