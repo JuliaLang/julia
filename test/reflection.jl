@@ -580,35 +580,35 @@ function has_backslashes(mod::Module)
             continue
         end
         h = has_backslashes(f)
-        isnull(h) || return h
+        h === nothing || return h
     end
-    return Nullable{Method}()
+    return nothing
 end
 function has_backslashes(f::Function)
     for m in methods(f)
         h = has_backslashes(m)
-        isnull(h) || return h
+        h === nothing || return h
     end
-    return Nullable{Method}()
+    return nothing
 end
 function has_backslashes(meth::Method)
     if '\\' in string(meth.file)
-        return Nullable{Method}(meth)
+        return meth
     else
-        return Nullable{Method}()
+        return nothing
     end
 end
-has_backslashes(x) = Nullable{Method}()
+has_backslashes(x) = nothing
 h16850 = has_backslashes(Base)
 if Sys.iswindows()
-    if isnull(h16850)
+    if h16850 === nothing
         @warn """No methods found in Base with backslashes in file name,
                  skipping test for `Base.url`"""
     else
-        @test !('\\' in Base.url(get(h16850)))
+        @test !('\\' in Base.url(h16850))
     end
 else
-    @test isnull(h16850)
+    @test h16850 === nothing
 end
 
 # Adds test for PR #17636

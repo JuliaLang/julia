@@ -22,12 +22,12 @@ mutable struct Future <: AbstractRemoteRef
     where::Int
     whence::Int
     id::Int
-    v::Nullable{Any}
+    v::Union{Some{Any}, Void}
 
-    Future(w::Int, rrid::RRID) = Future(w, rrid, Nullable{Any}())
-    Future(w::Int, rrid::RRID, v) = (r = new(w,rrid.whence,rrid.id,v); return test_existing_ref(r))
+    Future(w::Int, rrid::RRID, v::Union{Some, Void}=nothing) =
+        (r = new(w,rrid.whence,rrid.id,v); return test_existing_ref(r))
 
-    Future(t::Tuple) = new(t[1],t[2],t[3],t[4])  # Useful for creating dummy, zeroed-out instances
+    Future(t::NTuple{4, Any}) = new(t[1],t[2],t[3],t[4])  # Useful for creating dummy, zeroed-out instances
 end
 
 """
@@ -65,7 +65,7 @@ function test_existing_ref(r::AbstractRemoteRef)
     found = getkey(client_refs, r, nothing)
     if found !== nothing
         @assert r.where > 0
-        if isa(r, Future) && isnull(found.v) && !isnull(r.v)
+        if isa(r, Future) && found.v === nothing && r.v !== nothing
             # we have recd the value from another source, probably a deserialized ref, send a del_client message
             send_del_client(r)
             found.v = r.v
@@ -90,8 +90,8 @@ function finalize_ref(r::AbstractRemoteRef)
             send_del_client(r)
         else
             # send_del_client only if the reference has not been set
-            isnull(r.v) && send_del_client(r)
-            r.v = Nullable{Any}()
+            r.v === nothing && send_del_client(r)
+            r.v = nothing
         end
         r.where = 0
     end
@@ -182,7 +182,7 @@ or to use a local [`Channel`](@ref) as a proxy:
     isready(c)  # will not block
 """
 function isready(rr::Future)
-    !isnull(rr.v) && return true
+    rr.v === nothing || return true
 
     rid = remoteref_id(rr)
     return if rr.where == myid()
@@ -281,7 +281,7 @@ end
 
 channel_type(rr::RemoteChannel{T}) where {T} = T
 
-serialize(s::ClusterSerializer, f::Future) = serialize(s, f, isnull(f.v))
+serialize(s::ClusterSerializer, f::Future) = serialize(s, f, f.v === nothing)
 serialize(s::ClusterSerializer, rr::RemoteChannel) = serialize(s, rr, true)
 function serialize(s::ClusterSerializer, rr::AbstractRemoteRef, addclient)
     if addclient
@@ -315,7 +315,7 @@ end
 # Future and RemoteChannel are serializable only in a running cluster.
 # Serialize zeroed-out values to non ClusterSerializer objects
 function serialize(s::AbstractSerializer, ::Future)
-    zero_fut = Future((0,0,0,Nullable{Any}()))
+    zero_fut = Future((0,0,0,nothing))
     invoke(serialize, Tuple{AbstractSerializer, Any}, s, zero_fut)
 end
 
@@ -478,7 +478,7 @@ end
 
 Wait for a value to become available for the specified future.
 """
-wait(r::Future) = (!isnull(r.v) && return r; call_on_owner(wait_ref, r, myid()); r)
+wait(r::Future) = (r.v !== nothing && return r; call_on_owner(wait_ref, r, myid()); r)
 
 """
     wait(r::RemoteChannel, args...)
@@ -488,9 +488,9 @@ Wait for a value to become available on the specified remote channel.
 wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
 
 function fetch(r::Future)
-    !isnull(r.v) && return get(r.v)
-    v=call_on_owner(fetch_ref, r)
-    r.v=v
+    r.v !== nothing && return coalesce(r.v)
+    v = call_on_owner(fetch_ref, r)
+    r.v = Some(v)
     send_del_client(r)
     v
 end
@@ -525,9 +525,9 @@ All asynchronous remote calls return `Future`s and set the
 value to the return value of the call upon completion.
 """
 function put!(rr::Future, v)
-    !isnull(rr.v) && error("Future can be set only once")
+    rr.v !== nothing && error("Future can be set only once")
     call_on_owner(put_future, rr, v, myid())
-    rr.v = v
+    rr.v = Some(v)
     rr
 end
 function put_future(rid, v, callee)

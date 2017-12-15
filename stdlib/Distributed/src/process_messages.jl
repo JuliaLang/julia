@@ -309,7 +309,7 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
     end
 
     lazy = msg.lazy
-    PGRP.lazy = Nullable{Bool}(lazy)
+    PGRP.lazy = lazy
 
     wait_tasks = Task[]
     for (connect_at, rpid) in msg.other_workers
@@ -319,7 +319,7 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
         let rpid=rpid, wconfig=wconfig
             if lazy
                 # The constructor registers the object with a global registry.
-                Worker(rpid, Nullable{Function}(()->connect_to_peer(cluster_manager, rpid, wconfig)))
+                Worker(rpid, ()->connect_to_peer(cluster_manager, rpid, wconfig))
             else
                 t = @async connect_to_peer(cluster_manager, rpid, wconfig)
                 push!(wait_tasks, t)
@@ -348,7 +348,7 @@ end
 
 function handle_msg(msg::JoinCompleteMsg, header, r_stream, w_stream, version)
     w = map_sock_wrkr[r_stream]
-    environ = get(w.config.environ, Dict())
+    environ = coalesce(w.config.environ, Dict())
     environ[:cpu_cores] = msg.cpu_cores
     w.config.environ = environ
     w.config.ospid = msg.ospid

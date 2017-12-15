@@ -615,10 +615,10 @@ all/many future usages of the other functions in module Foo that depend on calli
 
 ### How does "null" or "nothingness" work in Julia?
 
-Unlike many languages (for example, C and Java), Julia does not have a "null" value. When a reference
-(variable, object field, or array element) is uninitialized, accessing it will immediately throw
-an error. This situation can be detected using the [`isdefined`](@ref) or
-[`isassigned`](@ref Base.isassigned) functions.
+Unlike many languages (for example, C and Java), Julia objects cannot be "null" by default.
+When a reference (variable, object field, or array element) is uninitialized, accessing it
+will immediately throw an error. This situation can be detected using the
+[`isdefined`](@ref) or [`isassigned`](@ref Base.isassigned) functions.
 
 Some functions are used only for their side effects, and do not need to return a value. In these
 cases, the convention is to return the value `nothing`, which is just a singleton object of type
@@ -626,16 +626,20 @@ cases, the convention is to return the value `nothing`, which is just a singleto
 this convention, and that the REPL does not print anything for it. Some language constructs that
 would not otherwise have a value also yield `nothing`, for example `if false; end`.
 
+For situations where a value `x` of type `T` exists only sometimes, the `Union{T, Void}`
+type can be used. If the value itself can be `nothing` (notably, when `T` is `Any`),
+the `Union{Some{T}, Void}` type is more appropriate since `x == nothing` then indicates
+the absence of a value, and `x == Some(nothing)` indicates the presence of a value equal
+to `nothing`.
+
 To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the
 [`missing`](@ref) object. See the [`Missing Values`](@ref missing) section for more details.
 
 The empty tuple (`()`) is another form of nothingness. But, it should not really be thought of
 as nothing but rather a tuple of zero values.
 
-In code written for Julia prior to version 0.4 you may occasionally see `None`, which is quite
-different. It is the empty (or "bottom") type, a type with no values and no subtypes (except itself).
-This is now written as `Union{}` (an empty union type). You will generally not need to use this
-type.
+The empty (or "bottom") type, written as `Union{}` (an empty union type), is a type with
+no values and no subtypes (except itself). You will generally not need to use this type.
 
 ## Memory
 
@@ -713,7 +717,7 @@ You can lock your writes with a `ReentrantLock` like this:
 
 ```jldoctest
 julia> l = ReentrantLock()
-ReentrantLock(Nullable{Task}(), Condition(Any[]), 0)
+ReentrantLock(nothing, Condition(Any[]), 0)
 
 julia> @sync for i in 1:3
            @async begin

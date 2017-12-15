@@ -426,7 +426,7 @@ getpass(prompt::AbstractString) = unsafe_string(ccall(:getpass, Cstring, (Cstrin
 end
 
 """
-    prompt(message; default="", password=false) -> Nullable{String}
+    prompt(message; default="", password=false) -> Union{String, Void}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
@@ -445,10 +445,10 @@ function prompt(message::AbstractString; default::AbstractString="", password::B
     else
         print(msg)
         uinput = readline(chomp=false)
-        isempty(uinput) && return Nullable{String}()  # Encountered an EOF
+        isempty(uinput) && return nothing  # Encountered an EOF
         uinput = chomp(uinput)
     end
-    Nullable{String}(isempty(uinput) ? default : uinput)
+    isempty(uinput) ? default : uinput
 end
 
 # Windows authentication prompt
@@ -501,9 +501,9 @@ if Sys.iswindows()
             outbuf_data, outbuf_size, pfSave, dwflags)
 
         #      2.3: If that failed for any reason other than the user canceling, error out.
-        #           If the user canceled, just return a nullable
+        #           If the user canceled, just return nothing
         if code == ERROR_CANCELLED
-            return Nullable{Tuple{String,String}}()
+            return nothing
         elseif code != ERROR_SUCCESS
             error(Base.Libc.FormatMessage(code))
         end
@@ -529,8 +529,8 @@ if Sys.iswindows()
 
         # Done.
         passbuf_ = passbuf[1:passlen[]-1]
-        result = Nullable((String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
-            String(transcode(UInt8, passbuf_))))
+        result = (String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
+                  String(transcode(UInt8, passbuf_)))
         securezero!(passbuf_)
         securezero!(passbuf)
 

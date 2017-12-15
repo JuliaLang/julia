@@ -83,10 +83,10 @@ end
 function testf(id)
     f=Future(id)
     @test isready(f) == false
-    @test isnull(f.v) == true
+    @test f.v === nothing
     put!(f, :OK)
     @test isready(f) == true
-    @test isnull(f.v) == false
+    @test f.v !== nothing
 
     @test_throws ErrorException put!(f, :OK) # Cannot put! to a already set future
     @test_throws MethodError take!(f) # take! is unsupported on a Future
@@ -104,9 +104,9 @@ function test_futures_dgc(id)
 
     # remote value should be deleted after a fetch
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == true
-    @test isnull(f.v) == true
+    @test f.v === nothing
     @test fetch(f) == id
-    @test isnull(f.v) == false
+    @test f.v !== nothing
     yield(); # flush gc msgs
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
 
@@ -115,7 +115,7 @@ function test_futures_dgc(id)
     f = remotecall(myid, id)
     fid = remoteref_id(f)
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == true
-    @test isnull(f.v) == true
+    @test f.v === nothing
     finalize(f)
     yield(); # flush gc msgs
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
@@ -260,9 +260,7 @@ function test_regular_io_ser(ref::Distributed.AbstractRemoteRef)
         v = getfield(ref2, fld)
         if isa(v, Number)
             @test v === zero(typeof(v))
-        elseif isa(v, Nullable)
-            @test v === Nullable{Any}()
-        else
+        elseif v !== nothing
             error(string("Add test for field ", fld))
         end
     end
@@ -604,7 +602,7 @@ if DoFullTest
     # error message but should not terminate.
     for w in Distributed.PGRP.workers
         if isa(w, Distributed.Worker)
-            local s = connect(get(w.config.host), get(w.config.port))
+            local s = connect(w.config.host, w.config.port)
             write(s, randstring(32))
         end
     end
@@ -943,7 +941,7 @@ end
 function test_blas_config(pid, expected)
     for worker in Distributed.PGRP.workers
         if worker.id == pid
-            @test get(worker.config.enable_threaded_blas) == expected
+            @test worker.config.enable_threaded_blas == expected
             return
         end
     end

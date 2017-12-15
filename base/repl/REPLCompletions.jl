@@ -372,7 +372,7 @@ function complete_methods(ex_org::Expr)
     t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
     na = length(args_ex)+1
     ml = methods(func)
-    kwtype = isdefined(ml.mt, :kwsorter) ? Nullable{DataType}(typeof(ml.mt.kwsorter)) : Nullable{DataType}()
+    kwtype = isdefined(ml.mt, :kwsorter) ? typeof(ml.mt.kwsorter) : nothing
     io = IOBuffer()
     for method in ml
         ms = method.sig

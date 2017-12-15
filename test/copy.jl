@@ -83,7 +83,13 @@ end
 end
 
 # issue #14027
-@test isnull(deepcopy(Nullable{Array}()))
+struct Nullable14027{T}
+    hasvalue::Bool
+    value::T
+
+    Nullable14027{T}() where {T} = new(false)
+end
+@test !deepcopy(Nullable14027{Array}()).hasvalue
 
 @testset "issue #15250" begin
     a1 = Core.svec(1, 2, 3, [])

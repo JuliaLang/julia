@@ -371,7 +371,7 @@ end
         @test cred.use_http_path
         cred.use_http_path = false
 
-        @test get(cred.path, "") == "dir/file"
+        @test cred.path == "dir/file"
         @test sprint(write, cred) == expected
     end
 
@@ -752,7 +752,7 @@ mktempdir() do dir
                     @test LibGit2.name(brref) == "refs/heads/master"
                     @test LibGit2.shortname(brref) == master_branch
                     @test LibGit2.ishead(brref)
-                    @test isnull(LibGit2.upstream(brref))
+                    @test LibGit2.upstream(brref) === nothing
 
                     # showing the GitReference to this branch
                     show_strs = split(sprint(show, brref), "\n")
@@ -766,19 +766,19 @@ mktempdir() do dir
                     # create a branch *without* setting its tip as HEAD
                     LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
                     # null because we are looking for a REMOTE branch
-                    @test isnull(LibGit2.lookup_branch(repo, test_branch, true))
-                    # not null because we are now looking for a LOCAL branch
-                    LibGit2.with(Base.get(LibGit2.lookup_branch(repo, test_branch, false))) do tbref
+                    @test LibGit2.lookup_branch(repo, test_branch, true) === nothing
+                    # not nothing because we are now looking for a LOCAL branch
+                    LibGit2.with(LibGit2.lookup_branch(repo, test_branch, false)) do tbref
                         @test LibGit2.shortname(tbref) == test_branch
-                        @test isnull(LibGit2.upstream(tbref))
+                        @test LibGit2.upstream(tbref) === nothing
                     end
-                    @test isnull(LibGit2.lookup_branch(repo, test_branch2, true))
+                    @test LibGit2.lookup_branch(repo, test_branch2, true) === nothing
                     # test deleting the branch
                     LibGit2.branch!(repo, test_branch2; set_head=false)
-                    LibGit2.with(Base.get(LibGit2.lookup_branch(repo, test_branch2, false))) do tbref
+                    LibGit2.with(LibGit2.lookup_branch(repo, test_branch2, false)) do tbref
                         @test LibGit2.shortname(tbref) == test_branch2
                         LibGit2.delete_branch(tbref)
-                        @test isnull(LibGit2.lookup_branch(repo, test_branch2, true))
+                        @test LibGit2.lookup_branch(repo, test_branch2, true) === nothing
                     end
                 end
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
@@ -1278,15 +1278,15 @@ mktempdir() do dir
             # check index for file
             LibGit2.with(LibGit2.GitIndex(repo)) do idx
                 i = find(test_file, idx)
-                @test !isnull(i)
-                idx_entry = idx[get(i)]
+                @test i !== nothing
+                idx_entry = idx[i]
                 @test idx_entry !== nothing
                 idx_entry_str = sprint(show, idx_entry)
                 @test idx_entry_str == "IndexEntry($(string(idx_entry.id)))"
                 @test LibGit2.stage(idx_entry) == 0
 
                 i = find("zzz", idx)
-                @test isnull(i)
+                @test i === nothing
                 idx_str = sprint(show, idx)
                 @test idx_str == "GitIndex:\nRepository: $(LibGit2.repository(idx))\nNumber of elements: 1\n"
 
@@ -1300,12 +1300,12 @@ mktempdir() do dir
 
             # check non-existent file status
             st = LibGit2.status(repo, "XYZ")
-            @test isnull(st)
+            @test st === nothing
 
             # check file status
             st = LibGit2.status(repo, test_file)
-            @test !isnull(st)
-            @test LibGit2.isset(get(st), LibGit2.Consts.STATUS_CURRENT)
+            @test st !== nothing
+            @test LibGit2.isset(st, LibGit2.Consts.STATUS_CURRENT)
 
             # modify file
             open(joinpath(test_repo, test_file), "a") do io
@@ -1314,28 +1314,28 @@ mktempdir() do dir
 
             # file modified but not staged
             st_mod = LibGit2.status(repo, test_file)
-            @test !LibGit2.isset(get(st_mod), LibGit2.Consts.STATUS_INDEX_MODIFIED)
-            @test LibGit2.isset(get(st_mod), LibGit2.Consts.STATUS_WT_MODIFIED)
+            @test !LibGit2.isset(st_mod, LibGit2.Consts.STATUS_INDEX_MODIFIED)
+            @test LibGit2.isset(st_mod, LibGit2.Consts.STATUS_WT_MODIFIED)
 
             # stage file
             LibGit2.add!(repo, test_file)
 
             # modified file staged
             st_stg = LibGit2.status(repo, test_file)
-            @test LibGit2.isset(get(st_stg), LibGit2.Consts.STATUS_INDEX_MODIFIED)
-            @test !LibGit2.isset(get(st_stg), LibGit2.Consts.STATUS_WT_MODIFIED)
+            @test LibGit2.isset(st_stg, LibGit2.Consts.STATUS_INDEX_MODIFIED)
+            @test !LibGit2.isset(st_stg, LibGit2.Consts.STATUS_WT_MODIFIED)
 
             # try to unstage to unknown commit
             @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, "XYZ", test_file)
 
             # status should not change
             st_new = LibGit2.status(repo, test_file)
-            @test get(st_new) == get(st_stg)
+            @test st_new == st_stg
 
             # try to unstage to HEAD
             new_head = LibGit2.reset!(repo, LibGit2.Consts.HEAD_FILE, test_file)
             st_uns = LibGit2.status(repo, test_file)
-            @test get(st_uns) == get(st_mod)
+            @test st_uns == st_mod
 
             # reset repo
             @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, LibGit2.GitHash(), LibGit2.Consts.RESET_HARD)
@@ -1353,38 +1353,38 @@ mktempdir() do dir
             remote_name = "test"
             url = "https://test.com/repo"
 
-            @test isnull(LibGit2.lookup_remote(repo, remote_name))
+            @test LibGit2.lookup_remote(repo, remote_name) === nothing
 
             for r in (repo, path)
                 # Set just the fetch URL
                 LibGit2.set_remote_fetch_url(r, remote_name, url)
-                remote = get(LibGit2.lookup_remote(repo, remote_name))
+                remote = LibGit2.lookup_remote(repo, remote_name)
                 @test LibGit2.name(remote) == remote_name
                 @test LibGit2.url(remote) == url
                 @test LibGit2.push_url(remote) == ""
 
                 LibGit2.remote_delete(repo, remote_name)
-                @test isnull(LibGit2.lookup_remote(repo, remote_name))
+                @test LibGit2.lookup_remote(repo, remote_name) === nothing
 
                 # Set just the push URL
                 LibGit2.set_remote_push_url(r, remote_name, url)
-                remote = get(LibGit2.lookup_remote(repo, remote_name))
+                remote = LibGit2.lookup_remote(repo, remote_name)
                 @test LibGit2.name(remote) == remote_name
                 @test LibGit2.url(remote) == ""
                 @test LibGit2.push_url(remote) == url
 
                 LibGit2.remote_delete(repo, remote_name)
-                @test isnull(LibGit2.lookup_remote(repo, remote_name))
+                @test LibGit2.lookup_remote(repo, remote_name) === nothing
 
                 # Set the fetch and push URL
                 LibGit2.set_remote_url(r, remote_name, url)
-                remote = get(LibGit2.lookup_remote(repo, remote_name))
+                remote = LibGit2.lookup_remote(repo, remote_name)
                 @test LibGit2.name(remote) == remote_name
                 @test LibGit2.url(remote) ==  url
                 @test LibGit2.push_url(remote) == url
 
                 LibGit2.remote_delete(repo, remote_name)
-                @test isnull(LibGit2.lookup_remote(repo, remote_name))
+                @test LibGit2.lookup_remote(repo, remote_name) === nothing
             end
             # Invalid remote name
             @test_throws LibGit2.GitError LibGit2.set_remote_url(repo, "", url)
@@ -1569,19 +1569,18 @@ mktempdir() do dir
                 # No credential settings in configuration.
                 cred = LibGit2.GitCredential("https", "github.com")
                 username = LibGit2.default_username(cfg, cred)
-                @test isnull(username)
+                @test username === nothing
 
                 # Add a credential setting for a specific for a URL
                 LibGit2.set!(cfg, "credential.https://github.com.username", "foo")
 
                 cred = LibGit2.GitCredential("https", "github.com")
                 username = LibGit2.default_username(cfg, cred)
-                @test !isnull(username)
-                @test get(username) == "foo"
+                @test username == "foo"
 
                 cred = LibGit2.GitCredential("https", "mygithost")
                 username = LibGit2.default_username(cfg, cred)
-                @test isnull(username)
+                @test username === nothing
 
                 # Add a global credential setting after the URL specific setting. The first
                 # setting to match will be the one that is used.
@@ -1589,13 +1588,11 @@ mktempdir() do dir
 
                 cred = LibGit2.GitCredential("https", "github.com")
                 username = LibGit2.default_username(cfg, cred)
-                @test !isnull(username)
-                @test get(username) == "foo"
+                @test username == "foo"
 
                 cred = LibGit2.GitCredential("https", "mygithost")
                 username = LibGit2.default_username(cfg, cred)
-                @test !isnull(username)
-                @test get(username) == "bar"
+                @test username == "bar"
             end
         end
 
@@ -1613,13 +1610,11 @@ mktempdir() do dir
 
                 cred = LibGit2.GitCredential("https", "github.com")
                 username = LibGit2.default_username(cfg, cred)
-                @test !isnull(username)
-                @test get(username) == ""
+                @test username == ""
 
                 cred = LibGit2.GitCredential("https", "mygithost", "path")
                 username = LibGit2.default_username(cfg, cred)
-                @test !isnull(username)
-                @test get(username) == "name"
+                @test username == "name"
             end
         end
     end
@@ -1753,7 +1748,7 @@ mktempdir() do dir
 
                     function without_path(cred)
                         c = deepcopy(cred)
-                        c.path = Nullable()
+                        c.path = nothing
                         c
                     end
 
@@ -1826,7 +1821,7 @@ mktempdir() do dir
                 url *= "github.com:test/package.jl"
                 quote
                     include($LIBGIT2_HELPER_PATH)
-                    credential_loop($cred, $url, Nullable{String}($username))
+                    credential_loop($cred, $url, $username)
                 end
             end
 
@@ -2124,7 +2119,7 @@ mktempdir() do dir
                     include($LIBGIT2_HELPER_PATH)
                     payload = CredentialPayload(allow_prompt=false, allow_ssh_agent=true,
                                                 allow_git_helpers=false)
-                    credential_loop($valid_cred, $url, Nullable{String}($username), payload)
+                    credential_loop($valid_cred, $url, $username, payload)
                 end
             end
 
@@ -2187,8 +2182,8 @@ mktempdir() do dir
                     err, auth_attempts, p = challenge_prompt(ex, [])
                     @test err == git_ok
                     @test auth_attempts == 1
-                    @test get(p.credential).prvkey == default_key
-                    @test get(p.credential).pubkey == default_key * ".pub"
+                    @test p.credential.prvkey == default_key
+                    @test p.credential.pubkey == default_key * ".pub"
 
                     # Confirm the private key if any other prompting is required
                     ex = gen_ex(valid_p_cred)
@@ -2230,7 +2225,7 @@ mktempdir() do dir
                 err, auth_attempts, p = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
                 @test auth_attempts == 1
-                @test get(p.credential).prvkey == abspath(valid_key)
+                @test p.credential.prvkey == abspath(valid_key)
             end
 
             withenv("SSH_KEY_PATH" => valid_key,
@@ -2246,7 +2241,7 @@ mktempdir() do dir
                 err, auth_attempts, p = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
                 @test auth_attempts == 2
-                @test get(p.credential).pubkey == abspath(valid_key * ".pub")
+                @test p.credential.pubkey == abspath(valid_key * ".pub")
             end
         end
 
@@ -2277,16 +2272,16 @@ mktempdir() do dir
             err, auth_attempts, p = challenge_prompt(ex, [])
             @test err == git_ok
             @test auth_attempts == 1
-            @test get(p.explicit) == valid_cred
-            @test get(p.credential) != valid_cred
+            @test p.explicit == valid_cred
+            @test p.credential != valid_cred
 
             # Explicitly provided credential is incorrect
             ex = gen_ex(invalid_cred, allow_prompt=false, allow_ssh_agent=false)
             err, auth_attempts, p = challenge_prompt(ex, [])
             @test err == exhausted_error
             @test auth_attempts == 3
-            @test get(p.explicit) == invalid_cred
-            @test get(p.credential) != invalid_cred
+            @test p.explicit == invalid_cred
+            @test p.credential != invalid_cred
         end
 
         @testset "HTTPS explicit credentials" begin
@@ -2309,16 +2304,16 @@ mktempdir() do dir
             err, auth_attempts, p = challenge_prompt(ex, [])
             @test err == git_ok
             @test auth_attempts == 1
-            @test get(p.explicit) == valid_cred
-            @test get(p.credential) != valid_cred
+            @test p.explicit == valid_cred
+            @test p.credential != valid_cred
 
             # Explicitly provided credential is incorrect
             ex = gen_ex(invalid_cred, allow_prompt=false)
             err, auth_attempts, p = challenge_prompt(ex, [])
             @test err == exhausted_error
             @test auth_attempts == 2
-            @test get(p.explicit) == invalid_cred
-            @test get(p.credential) != invalid_cred
+            @test p.explicit == invalid_cred
+            @test p.credential != invalid_cred
         end
 
         @testset "Cached credentials" begin
@@ -2358,12 +2353,12 @@ mktempdir() do dir
                 "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
             ]
             err, auth_attempts, p = challenge_prompt(ex, challenges)
-            cache = get(p.cache)
+            cache = p.cache
             @test err == git_ok
             @test auth_attempts == 1
             @test typeof(cache) == LibGit2.CachedCredentials
             @test cache.cred == Dict(cred_id => valid_cred)
-            @test get(p.credential) == valid_cred
+            @test p.credential == valid_cred
 
             # Replace a credential in the cache
             ex = gen_ex(cached_cred=invalid_cred)
@@ -2372,12 +2367,12 @@ mktempdir() do dir
                 "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
             ]
             err, auth_attempts, p = challenge_prompt(ex, challenges)
-            cache = get(p.cache)
+            cache = p.cache
             @test err == git_ok
             @test auth_attempts == 2
             @test typeof(cache) == LibGit2.CachedCredentials
             @test cache.cred == Dict(cred_id => valid_cred)
-            @test get(p.credential) == valid_cred
+            @test p.credential == valid_cred
 
             # Canceling a credential request should leave the cache unmodified
             ex = gen_ex(cached_cred=invalid_cred)
@@ -2387,22 +2382,22 @@ mktempdir() do dir
                 "Username for 'https://github.com' [foo]:" => "\x04",
             ]
             err, auth_attempts, p = challenge_prompt(ex, challenges)
-            cache = get(p.cache)
+            cache = p.cache
             @test err == abort_prompt
             @test auth_attempts == 3
             @test typeof(cache) == LibGit2.CachedCredentials
             @test cache.cred == Dict(cred_id => invalid_cred)
-            @test get(p.credential) != invalid_cred
+            @test p.credential != invalid_cred
 
             # An EAUTH error should remove credentials from the cache
             ex = gen_ex(cached_cred=invalid_cred, allow_prompt=false)
             err, auth_attempts, p = challenge_prompt(ex, [])
-            cache = get(p.cache)
+            cache = p.cache
             @test err == exhausted_error
             @test auth_attempts == 2
             @test typeof(cache) == LibGit2.CachedCredentials
             @test cache.cred == Dict()
-            @test get(p.credential) != invalid_cred
+            @test p.credential != invalid_cred
         end
 
         @testset "HTTPS git helper username" begin
@@ -2421,10 +2416,10 @@ mktempdir() do dir
             https_ex = quote
                 include($LIBGIT2_HELPER_PATH)
                 LibGit2.with(LibGit2.GitConfig($config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
-                    payload = CredentialPayload(Nullable{AbstractCredential}(),
-                                                Nullable{CachedCredentials}(), cfg,
+                    payload = CredentialPayload(nothing,
+                                                nothing, cfg,
                                                 allow_git_helpers=true)
-                    credential_loop($valid_cred, $url, Nullable{String}(), payload, shred=false)
+                    credential_loop($valid_cred, $url, nothing, payload, shred=false)
                 end
             end
 
@@ -2438,7 +2433,7 @@ mktempdir() do dir
             @test auth_attempts == 1
 
             # Verify credential wasn't accidentally zeroed (#24731)
-            @test get(p.credential) == valid_cred
+            @test p.credential == valid_cred
         end
 
         @testset "Incompatible explicit credentials" begin
@@ -2448,15 +2443,15 @@ mktempdir() do dir
                 include($LIBGIT2_HELPER_PATH)
                 payload = CredentialPayload($valid_cred, allow_ssh_agent=false,
                                             allow_git_helpers=false)
-                credential_loop($valid_cred, "ssh://github.com/repo", Nullable(""),
+                credential_loop($valid_cred, "ssh://github.com/repo", "",
                                 Cuint(LibGit2.Consts.CREDTYPE_SSH_KEY), payload)
             end
 
             err, auth_attempts, p = challenge_prompt(expect_ssh_ex, [])
             @test err == incompatible_error
             @test auth_attempts == 1
-            @test get(p.explicit) == valid_cred
-            @test get(p.credential) != valid_cred
+            @test p.explicit == valid_cred
+            @test p.credential != valid_cred
 
 
             # User provides a SSH credential where a user/password credential is required.
@@ -2465,15 +2460,15 @@ mktempdir() do dir
                 include($LIBGIT2_HELPER_PATH)
                 payload = CredentialPayload($valid_cred, allow_ssh_agent=false,
                                             allow_git_helpers=false)
-                credential_loop($valid_cred, "https://github.com/repo", Nullable(""),
+                credential_loop($valid_cred, "https://github.com/repo", "",
                                 Cuint(LibGit2.Consts.CREDTYPE_USERPASS_PLAINTEXT), payload)
             end
 
             err, auth_attempts, p = challenge_prompt(expect_https_ex, [])
             @test err == incompatible_error
             @test auth_attempts == 1
-            @test get(p.explicit) == valid_cred
-            @test get(p.credential) != valid_cred
+            @test p.explicit == valid_cred
+            @test p.credential != valid_cred
         end
 
         # A hypothetical scenario where the the allowed authentication can either be
@@ -2488,7 +2483,7 @@ mktempdir() do dir
                 valid_cred = LibGit2.UserPasswordCredential("foo", "bar")
                 payload = CredentialPayload(valid_cred, allow_ssh_agent=false,
                                             allow_git_helpers=false)
-                credential_loop(valid_cred, "foo://github.com/repo", Nullable(""),
+                credential_loop(valid_cred, "foo://github.com/repo", "",
                                 $allowed_types, payload)
             end
 
@@ -2510,7 +2505,7 @@ mktempdir() do dir
             ex = quote
                 include($LIBGIT2_HELPER_PATH)
                 valid_cred = LibGit2.UserPasswordCredential($valid_username, $valid_password)
-                user = Nullable{String}()
+                user = nothing
                 payload = CredentialPayload(allow_git_helpers=false)
                 first_result = credential_loop(valid_cred, $(urls[1]), user, payload)
                 LibGit2.reset!(payload)

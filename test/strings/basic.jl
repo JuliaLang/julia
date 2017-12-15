@@ -255,19 +255,19 @@ end
 end
 
 @testset "issue #10307" begin
-    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Int16}
+    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Union{Int16, Void}}
 
     for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
         for i in [typemax(T), typemin(T)]
             s = "$i"
-            @test get(tryparse(T, s)) == i
+            @test tryparse(T, s) == i
         end
     end
 
     for T in [Int8, Int16, Int32, Int64, Int128]
         for i in [typemax(T), typemin(T)]
             f = "$(i)0"
-            @test isnull(tryparse(T, f))
+            @test tryparse(T, f) === nothing
         end
     end
 end
@@ -284,13 +284,13 @@ end
     @test unsafe_string(sp,5) == "abcde"
     @test typeof(unsafe_string(sp)) == String
 
-    @test get(tryparse(BigInt, "1234567890")) == BigInt(1234567890)
-    @test isnull(tryparse(BigInt, "1234567890-"))
+    @test tryparse(BigInt, "1234567890") == BigInt(1234567890)
+    @test tryparse(BigInt, "1234567890-") === nothing
 
-    @test get(tryparse(Float64, "64")) == 64.0
-    @test isnull(tryparse(Float64, "64o"))
-    @test get(tryparse(Float32, "32")) == 32.0f0
-    @test isnull(tryparse(Float32, "32o"))
+    @test tryparse(Float64, "64") == 64.0
+    @test tryparse(Float64, "64o") === nothing
+    @test tryparse(Float32, "32") == 32.0f0
+    @test tryparse(Float32, "32o") === nothing
 end
 
 @testset "issue #10994: handle embedded NUL chars for string parsing" begin
@@ -298,7 +298,7 @@ end
         @test_throws ArgumentError parse(T, "1\0")
     end
     for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, Float64, Float32]
-        @test isnull(tryparse(T, "1\0"))
+        @test tryparse(T, "1\0") === nothing
     end
     let s = Base.Unicode.normalize("tést",:NFKC)
         @test unsafe_string(Base.unsafe_convert(Cstring, Base.cconvert(Cstring, s))) == s

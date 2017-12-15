@@ -6,6 +6,7 @@ Interface to [libgit2](https://libgit2.github.com/).
 module LibGit2
 
 import Base: ==
+using Base: coalesce, notnothing
 
 export with, GitRepo, GitConfig
 
@@ -262,7 +263,7 @@ Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
 function fetch(repo::GitRepo; remote::AbstractString="origin",
                remoteurl::AbstractString="",
                refspecs::Vector{<:AbstractString}=AbstractString[],
-               payload::Union{CredentialPayload,Nullable{<:Union{AbstractCredential, CachedCredentials}}}=CredentialPayload())
+               payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Void}=CredentialPayload())
     p = reset!(deprecate_nullable_creds(:fetch, "repo", payload), GitConfig(repo))
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
@@ -304,7 +305,7 @@ function push(repo::GitRepo; remote::AbstractString="origin",
               remoteurl::AbstractString="",
               refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
-              payload::Union{CredentialPayload,Nullable{<:Union{AbstractCredential, CachedCredentials}}}=CredentialPayload())
+              payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Void}=CredentialPayload())
     p = reset!(deprecate_nullable_creds(:push, "repo", payload), GitConfig(repo))
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
@@ -372,22 +373,22 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
                  force::Bool=false,           # force branch creation
                  set_head::Bool=true)         # set as head reference on exit
     # try to lookup branch first
-    branch_ref = force ? Nullable{GitReference}() : lookup_branch(repo, branch_name)
-    if isnull(branch_ref)
-        branch_rmt_ref = isempty(track) ? Nullable{GitReference}() : lookup_branch(repo, "$track/$branch_name", true)
+    branch_ref = force ? nothing : lookup_branch(repo, branch_name)
+    if branch_ref === nothing
+        branch_rmt_ref = isempty(track) ? nothing : lookup_branch(repo, "$track/$branch_name", true)
         # if commit is empty get head commit oid
         commit_id = if isempty(commit)
-            if isnull(branch_rmt_ref)
+            if branch_rmt_ref === nothing
                 with(head(repo)) do head_ref
                     with(peel(GitCommit, head_ref)) do hrc
                         GitHash(hrc)
                     end
                 end
             else
-                tmpcmt = with(peel(GitCommit, Base.get(branch_rmt_ref))) do hrc
+                tmpcmt = with(peel(GitCommit, branch_rmt_ref)) do hrc
                     GitHash(hrc)
                 end
-                close(Base.get(branch_rmt_ref))
+                close(branch_rmt_ref)
                 tmpcmt
             end
         else
@@ -397,10 +398,10 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
         cmt =  GitCommit(repo, commit_id)
         new_branch_ref = nothing
         try
-            new_branch_ref = Nullable(create_branch(repo, branch_name, cmt, force=force))
+            new_branch_ref = create_branch(repo, branch_name, cmt, force=force)
         finally
             close(cmt)
-            isnull(new_branch_ref) && throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
+            new_branch_ref === nothing && throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
             branch_ref = new_branch_ref
         end
     end
@@ -410,7 +411,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             try
                 with(GitConfig, repo) do cfg
                     set!(cfg, "branch.$branch_name.remote", Consts.REMOTE_ORIGIN)
-                    set!(cfg, "branch.$branch_name.merge", name(Base.get(branch_ref)))
+                    set!(cfg, "branch.$branch_name.merge", name(branch_ref))
                 end
             catch
                 @warn "Please provide remote tracking for branch '$branch_name' in '$(path(repo))'"
@@ -419,15 +420,15 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
 
         if set_head
             # checkout selected branch
-            with(peel(GitTree, Base.get(branch_ref))) do btree
+            with(peel(GitTree, branch_ref)) do btree
                 checkout_tree(repo, btree)
             end
 
             # switch head to the branch
-            head!(repo, Base.get(branch_ref))
+            head!(repo, branch_ref)
         end
     finally
-        close(Base.get(branch_ref))
+        close(branch_ref)
     end
     return
 end
@@ -520,7 +521,7 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Void} = C_NULL,
-               payload::Union{CredentialPayload,Nullable{<:Union{AbstractCredential, CachedCredentials}}}=CredentialPayload())
+               payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Void}=CredentialPayload())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
     @Base.gc_preserve lbranch begin
@@ -549,7 +550,7 @@ end
 function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractString...)
     obj = GitObject(repo, isempty(committish) ? Consts.HEAD_FILE : committish)
     # do not remove entries in the index matching the provided pathspecs with empty target commit tree
-    reset!(repo, Nullable(obj), pathspecs...)
+    reset!(repo, obj, pathspecs...)
 end
 
 """
@@ -721,14 +722,14 @@ function merge!(repo::GitRepo;
             else
                 with(head(repo)) do head_ref
                     tr_brn_ref = upstream(head_ref)
-                    if isnull(tr_brn_ref)
+                    if tr_brn_ref === nothing
                         throw(GitError(Error.Merge, Error.ERROR,
                                        "There is no tracking information for the current branch."))
                     end
                     try
-                        [GitAnnotated(repo, Base.get(tr_brn_ref))]
+                        [GitAnnotated(repo, tr_brn_ref)]
                     finally
-                        close(Base.get(tr_brn_ref))
+                        close(tr_brn_ref)
                     end
                 end
             end
@@ -765,19 +766,19 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
         head_ann = GitAnnotated(repo, head_ref)
         upst_ann = if isempty(upstream)
             brn_ref = LibGit2.upstream(head_ref)
-            if isnull(brn_ref)
+            if brn_ref === nothing
                 throw(GitError(Error.Rebase, Error.ERROR,
                                "There is no tracking information for the current branch."))
             end
             try
-                GitAnnotated(repo, Base.get(brn_ref))
+                GitAnnotated(repo, brn_ref)
             finally
                 close(brn_ref)
             end
         else
             GitAnnotated(repo, upstream)
         end
-        onto_ann  = Nullable{GitAnnotated}(isempty(newbase) ? nothing : GitAnnotated(repo, newbase))
+        onto_ann = isempty(newbase) ? nothing : GitAnnotated(repo, newbase)
         try
             sig = default_signature(repo)
             try
@@ -794,12 +795,12 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
                     close(rbs)
                 end
             finally
-                #!isnull(onto_ann) && close(get(onto_ann))
+                #onto_ann !== nothing && close(onto_ann)
                 close(sig)
             end
         finally
             if !isempty(newbase)
-                close(Base.get(onto_ann))
+                close(onto_ann)
             end
             close(upst_ann)
             close(head_ann)
@@ -885,7 +886,7 @@ function restore(s::State, repo::GitRepo)
         opts = CheckoutOptions(
                 checkout_strategy = Consts.CHECKOUT_FORCE |     # check the index out to work
                                     Consts.CHECKOUT_REMOVE_UNTRACKED) # remove everything else
-        checkout_index(repo, Nullable(idx), options = opts)
+        checkout_index(repo, idx, options = opts)
 
         read_tree!(idx, s.index)  # restore index
     end

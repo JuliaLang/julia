@@ -13,7 +13,11 @@ end
 @testset "convert" begin
     @test convert(Union{Int, Missing}, 1) === 1
     @test convert(Union{Int, Missing}, 1.0) === 1
+    @test convert(Union{Void, Missing}, missing) === missing
+    @test convert(Union{Void, Missing}, nothing) === nothing
+
     @test_throws MethodError convert(Missing, 1)
+    @test_throws MethodError convert(Union{Void, Missing}, 1)
     @test_throws MethodError convert(Union{Int, Missing}, "a")
 end
 

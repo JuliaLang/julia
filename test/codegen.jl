@@ -169,7 +169,6 @@ breakpoint_ptrstruct(a::RealStruct) =
     ccall(:jl_breakpoint, Void, (Ref{PtrStruct},), a)
 
 if opt_level > 0
-    @test !contains(get_llvm(isequal, Tuple{Nullable{BigFloat}, Nullable{BigFloat}}), "%gcframe")
     @test !contains(get_llvm(pointer_not_safepoint, Tuple{}), "%gcframe")
     compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})
     @test contains(compare_large_struct_ir, "call i32 @memcmp")

@@ -27,13 +27,13 @@ returning a [`Future`](@ref) to the result.
 julia> addprocs(3);
 
 julia> f = @spawn myid()
-Future(2, 1, 5, Nullable{Any}())
+Future(2, 1, 5, nothing)
 
 julia> fetch(f)
 2
 
 julia> f = @spawn myid()
-Future(3, 1, 7, Nullable{Any}())
+Future(3, 1, 7, nothing)
 
 julia> fetch(f)
 3
@@ -56,7 +56,7 @@ Accepts two arguments, `p` and an expression.
 julia> addprocs(1);
 
 julia> f = @spawnat 2 myid()
-Future(2, 1, 3, Nullable{Any}())
+Future(2, 1, 3, nothing)
 
 julia> fetch(f)
 2

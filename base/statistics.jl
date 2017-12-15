@@ -198,7 +198,7 @@ varm(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) where 
 
 
 var(A::AbstractArray{T}; corrected::Bool=true, mean=nothing) where {T} =
-    real(varm(A, mean === nothing ? Base.mean(A) : mean; corrected=corrected))
+    real(varm(A, coalesce(mean, Base.mean(A)); corrected=corrected))
 
 """
     var(v[, region]; corrected::Bool=true, mean=nothing)
@@ -217,7 +217,7 @@ The mean `mean` over the region may be provided.
     `DataArrays.jl` package is recommended.
 """
 var(A::AbstractArray, region; corrected::Bool=true, mean=nothing) =
-    varm(A, mean === nothing ? Base.mean(A, region) : mean, region; corrected=corrected)
+    varm(A, coalesce(mean, Base.mean(A, region)), region; corrected=corrected)
 
 varm(iterable, m; corrected::Bool=true) =
     var(iterable, corrected=corrected, mean=m)
