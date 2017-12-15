@@ -42,10 +42,10 @@ mutable struct Channel{T} <: AbstractChannel
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
-        ch = new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(0), sz, 0)
+        ch = new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(), sz, 0)
         if sz == 0
-            ch.takers = Vector{Task}(0)
-            ch.putters = Vector{Task}(0)
+            ch.takers = Vector{Task}()
+            ch.putters = Vector{Task}()
         end
         return ch
     end
@@ -65,15 +65,15 @@ Channel(sz) = Channel{Any}(sz)
 """
     Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
 
-Creates a new task from `func`, binds it to a new channel of type
-`ctype` and size `csize`, and schedules the task, all in a single call.
+Create a new task from `func`, bind it to a new channel of type
+`ctype` and size `csize`, and schedule the task, all in a single call.
 
 `func` must accept the bound channel as its only argument.
 
 If you need a reference to the created task, pass a `Ref{Task}` object via
 keyword argument `taskref`.
 
-Returns a Channel.
+Return a `Channel`.
 
 # Examples
 ```jldoctest
@@ -136,7 +136,7 @@ end
 """
     close(c::Channel)
 
-Closes a channel. An exception is thrown by:
+Close a channel. An exception is thrown by:
 
 * [`put!`](@ref) on a closed channel.
 * [`take!`](@ref) and [`fetch`](@ref) on an empty, closed channel.
@@ -152,12 +152,12 @@ isopen(c::Channel) = (c.state == :open)
 """
     bind(chnl::Channel, task::Task)
 
-Associates the lifetime of `chnl` with a task.
-Channel `chnl` is automatically closed when the task terminates.
+Associate the lifetime of `chnl` with a task.
+`Channel` `chnl` is automatically closed when the task terminates.
 Any uncaught exception in the task is propagated to all waiters on `chnl`.
 
 The `chnl` object can be explicitly closed independent of task termination.
-Terminating tasks have no effect on already closed Channel objects.
+Terminating tasks have no effect on already closed `Channel` objects.
 
 When a channel is bound to multiple tasks, the first task to terminate will
 close the channel. When multiple channels are bound to the same task,
@@ -253,7 +253,7 @@ end
 """
     put!(c::Channel, v)
 
-Appends an item `v` to the channel `c`. Blocks if the channel is full.
+Append an item `v` to the channel `c`. Blocks if the channel is full.
 
 For unbuffered channels, blocks until a [`take!`](@ref) is performed by a different
 task.
@@ -296,7 +296,7 @@ push!(c::Channel, v) = put!(c, v)
 """
     fetch(c::Channel)
 
-Waits for and gets the first available item from the channel. Does not
+Wait for and get the first available item from the channel. Does not
 remove the item. `fetch` is unsupported on an unbuffered (0-size) channel.
 """
 fetch(c::Channel) = isbuffered(c) ? fetch_buffered(c) : fetch_unbuffered(c)
@@ -310,7 +310,7 @@ fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on
 """
     take!(c::Channel)
 
-Removes and returns a value from a [`Channel`](@ref). Blocks until data is available.
+Remove and return a value from a [`Channel`](@ref). Blocks until data is available.
 
 For unbuffered channels, blocks until a [`put!`](@ref) is performed by a different
 task.

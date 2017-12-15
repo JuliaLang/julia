@@ -18,7 +18,7 @@ function IOStream(name::AbstractString, finalize::Bool)
     buf = zeros(UInt8,sizeof_ios_t)
     x = IOStream(name, buf)
     if finalize
-        finalizer(x, close)
+        finalizer(close, x)
     end
     return x
 end
@@ -30,7 +30,7 @@ show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
 """
     fd(stream)
 
-Returns the file descriptor backing the stream or file. Note that this function only applies
+Return the file descriptor backing the stream or file. Note that this function only applies
 to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 """
 fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
@@ -52,6 +52,29 @@ isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios)!=0
 
 Resize the file or buffer given by the first argument to exactly `n` bytes, filling
 previously unallocated space with '\\0' if the file or buffer is grown.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer();
+
+julia> write(io, "JuliaLang is a GitHub organization.")
+35
+
+julia> truncate(io, 15)
+IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=15, maxsize=Inf, ptr=16, mark=-1)
+
+julia> String(take!(io))
+"JuliaLang is a "
+
+julia> io = IOBuffer();
+
+julia> write(io, "JuliaLang is a GitHub organization.");
+
+julia> truncate(io, 40);
+
+julia> String(take!(io))
+"JuliaLang is a GitHub organization.\0\0\0\0\0"
+```
 """
 function truncate(s::IOStream, n::Integer)
     systemerror("truncate", ccall(:ios_trunc, Cint, (Ptr{Void}, Csize_t), s.ios, n) != 0)
@@ -62,6 +85,16 @@ end
     seek(s, pos)
 
 Seek a stream to the given position.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
+julia> seek(io, 5);
+
+julia> read(io, Char)
+'L': ASCII/Unicode U+004c (category Lu: Letter, uppercase)
+```
 """
 function seek(s::IOStream, n::Integer)
     ret = ccall(:ios_seek, Int64, (Ptr{Void}, Int64), s.ios, n)
@@ -74,6 +107,21 @@ end
     seekstart(s)
 
 Seek a stream to its beginning.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
+julia> seek(io, 5);
+
+julia> read(io, Char)
+'L': ASCII/Unicode U+004c (category Lu: Letter, uppercase)
+
+julia> seekstart(io);
+
+julia> read(io, Char)
+'J': ASCII/Unicode U+004a (category Lu: Letter, uppercase)
+```
 """
 seekstart(s::IO) = seek(s,0)
 
@@ -91,6 +139,18 @@ end
     skip(s, offset)
 
 Seek a stream relative to the current position.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
+julia> seek(io, 5);
+
+julia> skip(io, 10);
+
+julia> read(io, Char)
+'G': ASCII/Unicode U+0047 (category Lu: Letter, uppercase)
+```
 """
 function skip(s::IOStream, delta::Integer)
     ret = ccall(:ios_skip, Int64, (Ptr{Void}, Int64), s.ios, delta)
@@ -103,6 +163,26 @@ end
     position(s)
 
 Get the current position of a stream.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
+julia> seek(io, 5);
+
+julia> position(io)
+5
+
+julia> skip(io, 10);
+
+julia> position(io)
+15
+
+julia> seekend(io);
+
+julia> position(io)
+35
+```
 """
 function position(s::IOStream)
     pos = ccall(:ios_pos, Int64, (Ptr{Void},), s.ios)
@@ -136,7 +216,7 @@ fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
     open(filename::AbstractString, [read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool]) -> IOStream
 
 Open a file in a mode specified by five boolean arguments. The default is to open files for
-reading only. Returns a stream for accessing the file.
+reading only. Return a stream for accessing the file.
 """
 function open(fname::AbstractString, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream(string("<file ",fname,">"))
@@ -166,6 +246,35 @@ equivalent to setting the following boolean groups:
 | w+   | read, write, create, truncate |
 | a    | write, create, append         |
 | a+   | read, write, create, append   |
+
+# Examples
+```jldoctest
+julia> io = open("myfile.txt", "w");
+
+julia> write(io, "Hello world!");
+
+julia> close(io);
+
+julia> io = open("myfile.txt", "r");
+
+julia> read(io, String)
+"Hello world!"
+
+julia> write(io, "This file is read only")
+ERROR: ArgumentError: write failed, IOStream is not writeable
+[...]
+
+julia> close(io)
+
+julia> io = open("myfile.txt", "a");
+
+julia> write(io, "This stream is not read only")
+28
+
+julia> close(io)
+
+julia> rm("myfile.txt")
+```
 """
 function open(fname::AbstractString, mode::AbstractString)
     mode == "r"  ? open(fname, true , false, false, false, false) :
@@ -184,8 +293,15 @@ Apply the function `f` to the result of `open(args...)` and close the resulting 
 descriptor upon completion.
 
 # Examples
-```julia-repl
-open(f->read(f, String), "file.txt")
+```jldoctest
+julia> open("myfile.txt", "w") do io
+           write(io, "Hello world!");
+       end
+
+julia> open(f->read(f, String), "myfile.txt")
+"Hello world!"
+
+julia> rm("myfile.txt")
 ```
 """
 function open(f::Function, args...)
@@ -199,19 +315,20 @@ end
 
 ## low-level calls ##
 
-write(s::IOStream, b::UInt8) = Int(ccall(:ios_putc, Cint, (Cint, Ptr{Void}), b, s.ios))
+function write(s::IOStream, b::UInt8)
+    iswritable(s) || throw(ArgumentError("write failed, IOStream is not writeable"))
+    Int(ccall(:ios_putc, Cint, (Cint, Ptr{Void}), b, s.ios))
+end
 
 function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
-    if !iswritable(s)
-        throw(ArgumentError("write failed, IOStream is not writeable"))
-    end
+    iswritable(s) || throw(ArgumentError("write failed, IOStream is not writeable"))
     return Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, p, nb))
 end
 
 # num bytes available without blocking
 nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
 
-readavailable(s::IOStream) = read!(s, Vector{UInt8}(nb_available(s)))
+readavailable(s::IOStream) = read!(s, Vector{UInt8}(uninitialized, nb_available(s)))
 
 function read(s::IOStream, ::Type{UInt8})
     b = ccall(:ios_getc, Cint, (Ptr{Void},), s.ios)
@@ -236,14 +353,6 @@ function unsafe_read(s::IOStream, p::Ptr{UInt8}, nb::UInt)
 end
 
 ## text I/O ##
-
-function write(s::IOStream, c::Char)
-    if !iswritable(s)
-        throw(ArgumentError("write failed, IOStream is not writeable"))
-    end
-    Int(ccall(:ios_pututf8, Cint, (Ptr{Void}, UInt32), s.ios, c))
-end
-read(s::IOStream, ::Type{Char}) = Char(ccall(:jl_getutf8, UInt32, (Ptr{Void},), s.ios))
 
 take!(s::IOStream) =
     ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Void},), s.ios)
@@ -330,20 +439,29 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 all stream types support the `all` option.
 """
 function read(s::IOStream, nb::Integer; all::Bool=true)
-    b = Array{UInt8,1}(nb)
+    b = Vector{UInt8}(uninitialized, nb)
     nr = readbytes!(s, b, nb, all=all)
     resize!(b, nr)
 end
 
 ## Character streams ##
-const _chtmp = Ref{Char}()
+
 function peekchar(s::IOStream)
-    if ccall(:ios_peekutf8, Cint, (Ptr{Void}, Ptr{Char}), s, _chtmp) < 0
+    chref = Ref{UInt32}()
+    if ccall(:ios_peekutf8, Cint, (Ptr{Void}, Ptr{UInt32}), s, chref) < 0
         return typemax(Char)
     end
-    return _chtmp[]
+    return Char(chref[])
 end
 
 function peek(s::IOStream)
     ccall(:ios_peekc, Cint, (Ptr{Void},), s)
+end
+
+function peek(s::IO)
+    mark(s)
+    try read(s, UInt8)
+    finally
+        reset(s)
+    end
 end

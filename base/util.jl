@@ -96,21 +96,25 @@ function padded_nonzero_print(value,str)
     end
 end
 
+function format_bytes(bytes)
+    bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
+    if mb == 1
+        @sprintf("%d %s%s", bytes, _mem_units[mb], bytes==1 ? "" : "s")
+    else
+        @sprintf("%.3f %s", bytes, _mem_units[mb])
+    end
+end
+
 function time_print(elapsedtime, bytes, gctime, allocs)
     @printf("%10.6f seconds", elapsedtime/1e9)
     if bytes != 0 || allocs != 0
-        bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
         if ma == 1
             @printf(" (%d%s allocation%s: ", allocs, _cnt_units[ma], allocs==1 ? "" : "s")
         else
             @printf(" (%.2f%s allocations: ", allocs, _cnt_units[ma])
         end
-        if mb == 1
-            @printf("%d %s%s", bytes, _mem_units[mb], bytes==1 ? "" : "s")
-        else
-            @printf("%.3f %s", bytes, _mem_units[mb])
-        end
+        print(format_bytes(bytes))
         if gctime > 0
             @printf(", %.2f%% gc time", 100*gctime/elapsedtime)
         end
@@ -350,8 +354,8 @@ const log_warn_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
 const log_error_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
 
 function _redirect(io::IO, log_to::Dict, sf::StackTraces.StackFrame)
-    isnull(sf.linfo) && return io
-    mod = get(sf.linfo).def
+    (sf.linfo isa Core.MethodInstance) || return io
+    mod = sf.linfo.def
     isa(mod, Method) && (mod = mod.module)
     fun = sf.func
     if haskey(log_to, (mod,fun))
@@ -374,10 +378,10 @@ function _redirect(io::IO, log_to::Dict, fun::Symbol)
         stack::Vector{StackFrame} = StackTraces.lookup(trace)
         filter!(frame -> !frame.from_c, stack)
         for frame in stack
-            isnull(frame.linfo) && continue
+            (frame.linfo isa Core.MethodInstance) || continue
             sf = frame
             break_next_frame && (@goto skip)
-            mod = get(frame.linfo).def
+            mod = frame.linfo.def
             isa(mod, Method) && (mod = mod.module)
             mod === Base || continue
             sff = string(frame.func)
@@ -448,9 +452,11 @@ MY INFO: hello world
 See also [`logging`](@ref).
 """
 function info(io::IO, msg...; prefix="INFO: ")
-    io = redirect(io, log_info_to, :info)
-    print_with_color(info_color(), io, prefix; bold = true)
-    println_with_color(info_color(), io, chomp(string(msg...)))
+    buf = IOBuffer()
+    iob = redirect(IOContext(buf, io), log_info_to, :info)
+    print_with_color(info_color(), iob, prefix; bold = true)
+    println_with_color(info_color(), iob, chomp(string(msg...)))
+    print(io, String(take!(buf)))
     return
 end
 info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
@@ -483,16 +489,18 @@ function warn(io::IO, msg...;
         (key in have_warned) && return
         push!(have_warned, key)
     end
-    io = redirect(io, log_warn_to, :warn)
-    print_with_color(warn_color(), io, prefix; bold = true)
-    print_with_color(warn_color(), io, str)
+    buf = IOBuffer()
+    iob = redirect(IOContext(buf, io), log_warn_to, :warn)
+    print_with_color(warn_color(), iob, prefix; bold = true)
+    print_with_color(warn_color(), iob, str)
     if bt !== nothing
-        show_backtrace(io, bt)
+        show_backtrace(iob, bt)
     end
     if filename !== nothing
-        print(io, "\nin expression starting at $filename:$lineno")
+        print(iob, "\nin expression starting at $filename:$lineno")
     end
-    println(io)
+    println(iob)
+    print(io, String(take!(buf)))
     return
 end
 
@@ -571,7 +579,7 @@ if Sys.iswindows()
 function getpass(prompt::AbstractString)
     print(prompt)
     flush(STDOUT)
-    p = Vector{UInt8}(128) # mimic Unix getpass in ignoring more than 128-char passwords
+    p = Vector{UInt8}(uninitialized, 128) # mimic Unix getpass in ignoring more than 128-char passwords
                           # (also avoids any potential memory copies arising from push!)
     try
         plen = 0
@@ -583,7 +591,7 @@ function getpass(prompt::AbstractString)
                 ccall(:_getch, UInt8, ()) # ignore function/arrow keys
             elseif c == UInt8('\b') && plen > 0
                 plen -= 1 # delete last character on backspace
-            elseif !iscntrl(Char(c)) && plen < 128
+            elseif !Unicode.iscntrl(Char(c)) && plen < 128
                 p[plen += 1] = c
             end
         end
@@ -647,7 +655,7 @@ if Sys.iswindows()
     function winprompt(message, caption, default_username; prompt_username = true)
         # Step 1: Create an encrypted username/password bundle that will be used to set
         #         the default username (in theory could also provide a default password)
-        credbuf = Array{UInt8,1}(1024)
+        credbuf = Vector{UInt8}(uninitialized, 1024)
         credbufsize = Ref{UInt32}(sizeof(credbuf))
         succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
             (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
@@ -683,12 +691,12 @@ if Sys.iswindows()
         end
 
         # Step 3: Convert encrypted credentials back to plain text
-        passbuf = Array{UInt16,1}(1024)
+        passbuf = Vector{UInt16}(uninitialized, 1024)
         passlen = Ref{UInt32}(length(passbuf))
-        usernamebuf = Array{UInt16,1}(1024)
+        usernamebuf = Vector{UInt16}(uninitialized, 1024)
         usernamelen = Ref{UInt32}(length(usernamebuf))
         # Need valid buffers for domain, even though we don't care
-        dummybuf = Array{UInt16,1}(1024)
+        dummybuf = Vector{UInt16}(uninitialized, 1024)
         succeeded = ccall((:CredUnPackAuthenticationBufferW, "credui.dll"), Bool,
             (UInt32, Ptr{Void}, UInt32, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
             0, outbuf_data[], outbuf_size[], usernamebuf, usernamelen, dummybuf, Ref{UInt32}(1024), passbuf, passlen)
@@ -713,48 +721,18 @@ if Sys.iswindows()
 
 end
 
-"""
-    crc32c(data, crc::UInt32=0x00000000)
-
-Compute the CRC-32c checksum of the given `data`, which can be
-an `Array{UInt8}`, a contiguous subarray thereof, or a `String`.  Optionally, you can pass
-a starting `crc` integer to be mixed in with the checksum.  The `crc` parameter
-can be used to compute a checksum on data divided into chunks: performing
-`crc32c(data2, crc32c(data1))` is equivalent to the checksum of `[data1; data2]`.
-(Technically, a little-endian checksum is computed.)
-
-There is also a method `crc32c(io, nb, crc)` to checksum `nb` bytes from
-a stream `io`, or `crc32c(io, crc)` to checksum all the remaining bytes.
-Hence you can do [`open(crc32c, filename)`](@ref) to checksum an entire file,
-or `crc32c(seekstart(buf))` to checksum an [`IOBuffer`](@ref) without
-calling [`take!`](@ref).
-
-For a `String`, note that the result is specific to the UTF-8 encoding
-(a different checksum would be obtained from a different Unicode encoding).
-To checksum an `a::Array` of some other bitstype, you can do `crc32c(reinterpret(UInt8,a))`,
-but note that the result may be endian-dependent.
-"""
-function crc32c end
-
 unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)
 
-crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
+_crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
     unsafe_crc32c(a, length(a) % Csize_t, crc)
 
-crc32c(s::String, crc::UInt32=0x00000000) = unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
+_crc32c(s::String, crc::UInt32=0x00000000) = unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
 
-"""
-    crc32c(io::IO, [nb::Integer,] crc::UInt32=0x00000000)
-
-Read up to `nb` bytes from `io` and return the CRC-32c checksum, optionally
-mixed with a starting `crc` integer.  If `nb` is not supplied, then
-`io` will be read until the end of the stream.
-"""
-function crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
+function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
     # use block size 24576=8192*3, since that is the threshold for
     # 3-way parallel SIMD code in the underlying jl_crc32c C function.
-    buf = Vector{UInt8}(min(nb, 24576))
+    buf = Vector{UInt8}(uninitialized, min(nb, 24576))
     while !eof(io) && nb > 24576
         n = readbytes!(io, buf)
         crc = unsafe_crc32c(buf, n, crc)
@@ -762,8 +740,8 @@ function crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
     end
     return unsafe_crc32c(buf, readbytes!(io, buf, min(nb, length(buf))), crc)
 end
-crc32c(io::IO, crc::UInt32=0x00000000) = crc32c(io, typemax(Int64), crc)
-crc32c(io::IOStream, crc::UInt32=0x00000000) = crc32c(io, filesize(io)-position(io), crc)
+_crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
+_crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
 
 
 """

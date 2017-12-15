@@ -47,7 +47,7 @@ elseif Sys.isapple()
         path_basename = String(basename(path))
         local casepreserved_basename
         header_size = 12
-        buf = Vector{UInt8}(length(path_basename) + header_size + 1)
+        buf = Vector{UInt8}(uninitialized, length(path_basename) + header_size + 1)
         while true
             ret = ccall(:getattrlist, Cint,
                         (Cstring, Ptr{Void}, Ptr{Void}, Csize_t, Culong),
@@ -68,8 +68,8 @@ elseif Sys.isapple()
 
         # If there is no match, it's possible that the file does exist but HFS+
         # performed unicode normalization. See  https://developer.apple.com/library/mac/qa/qa1235/_index.html.
-        isascii(path_basename) && return false
-        Vector{UInt8}(normalize_string(path_basename, :NFD)) == casepreserved_basename
+        Unicode.isascii(path_basename) && return false
+        Vector{UInt8}(Unicode.normalize(path_basename, :NFD)) == casepreserved_basename
     end
 else
     # Generic fallback that performs a slow directory listing.
@@ -276,6 +276,9 @@ end
 # require always works in Main scope and loads files from node 1
 const toplevel_load = Ref(true)
 
+myid() = isdefined(Main, :Distributed) ? invokelatest(Main.Distributed.myid) : 1
+nprocs() = isdefined(Main, :Distributed) ? invokelatest(Main.Distributed.nprocs) : 1
+
 """
     require(module::Symbol)
 
@@ -301,12 +304,9 @@ function require(mod::Symbol)
         # After successfully loading, notify downstream consumers
         if toplevel_load[] && myid() == 1 && nprocs() > 1
             # broadcast top-level import/using from node 1 (only)
-            @sync for p in procs()
+            @sync for p in invokelatest(Main.procs)
                 p == 1 && continue
-                @async remotecall_wait(p) do
-                    require(mod)
-                    nothing
-                end
+                @async invokelatest(Main.remotecall_wait, ()->(require(mod); nothing), p)
             end
         end
         for callback in package_callbacks
@@ -631,7 +631,7 @@ function compilecache(name::String)
     if success(create_expr_cache(path, cachefile, concrete_deps))
         # append checksum to the end of the .ji file:
         open(cachefile, "a+") do f
-            write(f, hton(crc32c(seekstart(f))))
+            write(f, hton(_crc32c(seekstart(f))))
         end
     else
         error("Failed to precompile $name to $cachefile.")
@@ -756,6 +756,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             name = string(mod)
             path = find_package(name)
             if path === nothing
+                DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because dependency $name not found.")
                 return true # Won't be able to fullfill dependency
             end
         end
@@ -790,7 +791,7 @@ function stale_cachefile(modpath::String, cachefile::String)
         end
 
         # finally, verify that the cache file has a valid checksum
-        crc = crc32c(seekstart(io), filesize(io)-4)
+        crc = _crc32c(seekstart(io), filesize(io)-4)
         if crc != ntoh(read(io, UInt32))
             DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it has an invalid checksum.")
             return true

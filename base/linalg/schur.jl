@@ -12,7 +12,27 @@ Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty} =
 """
     schurfact!(A::StridedMatrix) -> F::Schur
 
-Same as [`schurfact`](@ref) but uses the input argument as workspace.
+Same as [`schurfact`](@ref) but uses the input argument `A` as workspace.
+
+# Examples
+```jldoctest
+julia> A = [5. 7.; -2. -4.]
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> F = schurfact!(A)
+Base.LinAlg.Schur{Float64,Array{Float64,2}} with factors T and Z:
+[3.0 9.0; 0.0 -2.0]
+[0.961524 0.274721; -0.274721 0.961524]
+and values:
+[3.0, -2.0]
+
+julia> A
+2×2 Array{Float64,2}:
+ 3.0   9.0
+ 0.0  -2.0
+```
 """
 schurfact!(A::StridedMatrix{<:BlasFloat}) = Schur(LinAlg.LAPACK.gees!('V', A)...)
 
@@ -45,10 +65,7 @@ julia> F[:vectors] * F[:Schur] * F[:vectors]'
 ```
 """
 schurfact(A::StridedMatrix{<:BlasFloat}) = schurfact!(copy(A))
-function schurfact(A::StridedMatrix{T}) where T
-    S = promote_type(Float32, typeof(one(T)/norm(one(T))))
-    return schurfact!(copy_oftype(A, S))
-end
+schurfact(A::StridedMatrix{T}) where T = schurfact!(copy_oftype(A, eigtype(T)))
 
 function getindex(F::Schur, d::Symbol)
     if d == :T || d == :Schur
@@ -195,7 +212,7 @@ generalized eigenvalues of `A` and `B` can be obtained with `F[:alpha]./F[:beta]
 """
 schurfact(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schurfact!(copy(A),copy(B))
 function schurfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
-    S = promote_type(Float32, typeof(one(TA)/norm(one(TA))), TB)
+    S = promote_type(eigtype(TA), TB)
     return schurfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
 

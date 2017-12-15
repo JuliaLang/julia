@@ -273,7 +273,7 @@ getdoc(x) = nothing
 """
     Docs.doc(binding, sig)
 
-Returns all documentation that matches both `binding` and `sig`.
+Return all documentation that matches both `binding` and `sig`.
 
 If `getdoc` returns a non-`nothing` result on the value of the binding, then a
 dynamic docstring is returned instead of one based on the binding itself.
@@ -330,7 +330,7 @@ doc(object, sig...)              = doc(object, Tuple{sig...})
 """
     Docs.fielddoc(binding, field)
 
-Returns documentation for a particular `field` of a type if it exists.
+Return documentation for a particular `field` of a type if it exists.
 """
 function fielddoc(binding::Binding, field::Symbol)
     for mod in modules
@@ -531,10 +531,8 @@ end
 function objectdoc(__source__, __module__, str, def, expr, sig = :(Union{}))
     binding = esc(bindingexpr(namify(expr)))
     docstr  = esc(docexpr(__source__, __module__, lazy_iterpolate(str), metadata(__source__, __module__, expr, false)))
-    quote
-        $(esc(def))
-        $(doc!)($__module__, $binding, $docstr, $(esc(sig)))
-    end
+    # Note: we want to avoid introducing line number nodes here (issue #24468)
+    Expr(:block, esc(def), :($(doc!)($__module__, $binding, $docstr, $(esc(sig)))))
 end
 
 function calldoc(__source__, __module__, str, def)

@@ -119,7 +119,7 @@ end
 There are three important standard modules: Main, Core, and Base.
 
 Main is the top-level module, and Julia starts with Main set as the current module.  Variables
-defined at the prompt go in Main, and `whos()` lists variables in Main.
+defined at the prompt go in Main, and `varinfo()` lists variables in Main.
 
 Core contains all identifiers considered "built in" to the language, i.e. part of the core language
 and not libraries. Every module implicitly specifies `using Core`, since you can't do anything
@@ -355,7 +355,7 @@ code to help the user avoid other wrong-behavior situations:
    emitted when the incremental precompile flag is set.
 2. `global const` statements from local scope after `__init__()` has been started (see issue #12010
    for plans to add an error for this)
-3. Replacing a module (or calling [`workspace()`](@ref)) is a runtime error while doing an incremental precompile.
+3. Replacing a module is a runtime error while doing an incremental precompile.
 
 A few other points to be aware of:
 

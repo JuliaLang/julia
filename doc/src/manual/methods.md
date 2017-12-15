@@ -717,7 +717,7 @@ function matmul(a::AbstractMatrix, b::AbstractMatrix)
 
     # this is wrong, since depending on the return value
     # of type-inference is very brittle (as well as not being optimizable):
-    # R = return_types(op, (eltype(a), eltype(b)))
+    # R = Base.return_types(op, (eltype(a), eltype(b)))
 
     ## but, finally, this works:
     R = promote_op(op, eltype(a), eltype(b))

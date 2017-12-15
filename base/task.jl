@@ -7,8 +7,8 @@ struct CapturedException <: Exception
     ex::Any
     processed_bt::Vector{Any}
 
-    function CapturedException(ex, bt_raw::Vector{Ptr{Void}})
-        # bt_raw MUST be an Array of code pointers than can be processed by jl_lookup_code_address
+    function CapturedException(ex, bt_raw::Vector)
+        # bt_raw MUST be a vector that can be processed by StackTraces.stacktrace
         # Typically the result of a catch_backtrace()
 
         # Process bt_raw so that it can be safely serialized

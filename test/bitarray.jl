@@ -40,7 +40,7 @@ let t0 = time()
 end
 
 @testset "empty bitvector" begin
-    @test BitVector() == BitVector(0)
+    @test BitVector() == BitVector(uninitialized, 0)
 end
 
 # vectors size
@@ -62,11 +62,11 @@ allsizes = [((), BitArray{0}), ((v1,), BitVector),
     @test b == trues(sz)
     @test all(b)
     @test sz == size(b)
-    c = trues(a)
+    c = trues(size(a))
     @test all(c)
     @test !any(a)
     @test sz == size(c)
-    d = falses(b)
+    d = falses(size(b))
     @test !any(d)
     @test all(b)
     @test sz == size(d)
@@ -156,8 +156,8 @@ timesofar("conversions")
     end
 
     @testset "sizeof (issue #7515)" begin
-        @test sizeof(BitArray(64)) == 8
-        @test sizeof(BitArray(65)) == 16
+        @test sizeof(BitVector(uninitialized, 64)) == 8
+        @test sizeof(BitVector(uninitialized, 65)) == 16
     end
 end
 
@@ -165,8 +165,8 @@ timesofar("utils")
 
 @testset "Constructors" begin
     @testset "non-Int dims constructors" begin
-        b1 = BitArray(Int32(v1))
-        b2 = BitArray(Int64(v1))
+        b1 = BitVector(uninitialized, Int32(v1))
+        b2 = BitVector(uninitialized, Int64(v1))
         @test size(b1) == size(b2)
 
         for c in [trues, falses]
@@ -187,14 +187,14 @@ timesofar("utils")
     end
 
     @testset "one" begin
-        @test Array(one(BitMatrix(2,2))) == eye(2,2)
-        @test_throws DimensionMismatch one(BitMatrix(2,3))
+        @test Array(one(BitMatrix(uninitialized, 2,2))) == Matrix(I, 2, 2)
+        @test_throws DimensionMismatch one(BitMatrix(uninitialized, 2,3))
     end
 
     # constructors should copy
     a = trues(3)
     @test BitArray(a) !== a
-    @test BitArray{1}(a) !== a
+    @test BitVector(a) !== a
 
     # issue #24062
     @test_throws InexactError BitArray([0, 1, 2, 3])
@@ -511,7 +511,7 @@ end
 timesofar("indexing")
 
 @testset "Deque Functionality" begin
-    b1 = BitArray(0)
+    b1 = BitVector()
     i1 = Bool[]
     for m = 1:v1
         x = rand(Bool)
@@ -553,7 +553,7 @@ timesofar("indexing")
 
     @test length(b1) == 0
 
-    b1 = BitArray(0)
+    b1 = BitVector()
     i1 = Bool[]
     for m = 1:v1
         x = rand(Bool)
@@ -574,7 +574,7 @@ timesofar("indexing")
     end
     @test length(b1) == 0
 
-    b1 = BitArray(0)
+    b1 = BitVector()
     @test_throws BoundsError insert!(b1, 2, false)
     @test_throws BoundsError insert!(b1, 0, false)
     i1 = Array(b1)
@@ -857,7 +857,7 @@ timesofar("unary arithmetic")
         for (x1,t1) = [(f1, Float64),
                        (ci1, Complex{Int}),
                        (cu1, Complex{UInt8}),
-                       (cf1, Complex128)]
+                       (cf1, ComplexF64)]
             @check_bit_operation broadcast(+, x1, b2)  Matrix{t1}
             @check_bit_operation broadcast(-, x1, b2)  Matrix{t1}
             @check_bit_operation broadcast(*, x1, b2) Matrix{t1}
@@ -883,9 +883,9 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(div, f1, b2)  Matrix{Float64}
         @check_bit_operation broadcast(mod, f1, b2)  Matrix{Float64}
 
-        @check_bit_operation broadcast(/, ci1, b2) Matrix{Complex128}
-        @check_bit_operation broadcast(/, cu1, b2) Matrix{Complex128}
-        @check_bit_operation broadcast(/, cf1, b2) Matrix{Complex128}
+        @check_bit_operation broadcast(/, ci1, b2) Matrix{ComplexF64}
+        @check_bit_operation broadcast(/, cu1, b2) Matrix{ComplexF64}
+        @check_bit_operation broadcast(/, cf1, b2) Matrix{ComplexF64}
 
         b2 = bitrand(n1, n2)
         @check_bit_operation broadcast(^, false, b2) BitMatrix
@@ -897,8 +897,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(^, 1, b2)     Matrix{Int}
         @check_bit_operation broadcast(^, 0.0, b2)   Matrix{Float64}
         @check_bit_operation broadcast(^, 1.0, b2)   Matrix{Float64}
-        @check_bit_operation broadcast(^, 0.0im, b2) Matrix{Complex128}
-        @check_bit_operation broadcast(^, 1.0im, b2) Matrix{Complex128}
+        @check_bit_operation broadcast(^, 0.0im, b2) Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, 1.0im, b2) Matrix{ComplexF64}
         @check_bit_operation broadcast(^, 0im, b2)   Matrix{Complex{Int}}
         @check_bit_operation broadcast(^, 1im, b2)   Matrix{Complex{Int}}
         @check_bit_operation broadcast(^, 0x0*im, b2) Matrix{Complex{UInt8}}
@@ -976,17 +976,17 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(+, b1, ci2)  Matrix{Complex{Int}}
         @check_bit_operation broadcast(-, b1, ci2)  Matrix{Complex{Int}}
         @check_bit_operation broadcast(*, b1, ci2) Matrix{Complex{Int}}
-        @check_bit_operation broadcast(/, b1, ci2) Matrix{Complex128}
+        @check_bit_operation broadcast(/, b1, ci2) Matrix{ComplexF64}
 
         @check_bit_operation broadcast(+, b1, cu2)  Matrix{Complex{UInt8}}
         @check_bit_operation broadcast(-, b1, cu2)  Matrix{Complex{UInt8}}
         @check_bit_operation broadcast(*, b1, cu2) Matrix{Complex{UInt8}}
-        @check_bit_operation broadcast(/, b1, cu2) Matrix{Complex128}
+        @check_bit_operation broadcast(/, b1, cu2) Matrix{ComplexF64}
 
-        @check_bit_operation broadcast(+, b1, cf2)  Matrix{Complex128}
-        @check_bit_operation broadcast(-, b1, cf2)  Matrix{Complex128}
-        @check_bit_operation broadcast(*, b1, cf2) Matrix{Complex128}
-        @check_bit_operation broadcast(/, b1, cf2) Matrix{Complex128}
+        @check_bit_operation broadcast(+, b1, cf2)  Matrix{ComplexF64}
+        @check_bit_operation broadcast(-, b1, cf2)  Matrix{ComplexF64}
+        @check_bit_operation broadcast(*, b1, cf2) Matrix{ComplexF64}
+        @check_bit_operation broadcast(/, b1, cf2) Matrix{ComplexF64}
 
         @check_bit_operation broadcast(^, b1, false) BitMatrix
         @check_bit_operation broadcast(^, b1, true)  BitMatrix
@@ -997,17 +997,17 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(^, b1, -1.0)  Matrix{Float64}
         @check_bit_operation broadcast(^, b1, 0.0)   Matrix{Float64}
         @check_bit_operation broadcast(^, b1, 1.0)   Matrix{Float64}
-        @check_bit_operation broadcast(^, b1, 0.0im) Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 0x0*im) Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 0im)   Matrix{Complex128}
+        @check_bit_operation broadcast(^, b1, 0.0im) Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, b1, 0x0*im) Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, b1, 0im)   Matrix{ComplexF64}
         @test_throws DomainError broadcast(^, b1, -1)
 
         b1 = trues(n1, n2)
-        @check_bit_operation broadcast(^, b1, -1.0im) Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 1.0im)  Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, -1im)   Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 1im)    Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 0x1*im)  Matrix{Complex128}
+        @check_bit_operation broadcast(^, b1, -1.0im) Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, b1, 1.0im)  Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, b1, -1im)   Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, b1, 1im)    Matrix{ComplexF64}
+        @check_bit_operation broadcast(^, b1, 0x1*im)  Matrix{ComplexF64}
     end
 end
 
@@ -1182,7 +1182,7 @@ timesofar("nnz&find")
     @test findlast(b1) == Base.findlastnot(b2) == 777
     @test findfirst(b1) == Base.findfirstnot(b2) == 77
 
-    b0 = BitVector(0)
+    b0 = BitVector()
     @test findprev(x->true, b0, -1) == 0
     @test_throws BoundsError findprev(x->true, b0, 1)
     @test_throws BoundsError findnext(x->true, b0, -1)
@@ -1267,7 +1267,7 @@ timesofar("reductions")
         @test map(!=, b1, b2) == map((x,y)->x!=y, b1, b2) == (b1 .!= b2)
 
         @testset "map! for length $l" begin
-            b = BitArray(l)
+            b = BitVector(uninitialized, l)
             @test map!(~, b, b1) == map!(x->~x, b, b1) == broadcast(~, b1) == b
             @test map!(!, b, b1) == map!(x->!x, b, b1) == broadcast(~, b1) == b
             @test map!(identity, b, b1) == map!(x->x, b, b1) == b1 == b
@@ -1468,11 +1468,11 @@ end
         @test_throws DimensionMismatch read!(fname, b2)
         @test bitcheck(b2)
 
-        b1 = BitArray(0)
+        b1 = BitVector()
         open(fname, "w") do f
             write(f, b1)
         end
-        b2 = BitArray(0)
+        b2 = BitVector()
         read!(fname, b2)
         @test b1 == b2
         @test bitcheck(b2)

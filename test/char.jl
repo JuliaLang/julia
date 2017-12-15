@@ -5,13 +5,10 @@
 @test typemin(Char) == Char(0)
 @test ndims(Char) == 0
 @test getindex('a', 1) == 'a'
-@test_throws BoundsError getindex('a',2)
-# This is current behavior, but it seems incorrect
-@test getindex('a',1,1,1) == 'a'
-@test_throws BoundsError getindex('a',1,1,2)
-# bswap of a Char should be removed, only the underlying codeunit (UInt32)
-# should be swapped
-@test bswap('\U10200') == '\U20100'
+@test_throws BoundsError getindex('a', 2)
+# This is current behavior, but it seems questionable
+@test getindex('a', 1, 1, 1) == 'a'
+@test_throws BoundsError getindex('a', 1, 1, 2)
 
 @test 'b' + 1 == 'c'
 @test typeof('b' + 1) == Char
@@ -198,3 +195,25 @@ end
 
 @test sprint(show, "text/plain", '$') == "'\$': ASCII/Unicode U+0024 (category Sc: Symbol, currency)"
 @test repr('$') == "'\$'"
+
+@testset "read incomplete character at end of stream or file" begin
+    local file = tempname()
+    local iob = IOBuffer([0xf0])
+    local bytes(c::Char) = Vector{UInt8}(string(c))
+    @test bytes(read(iob, Char)) == [0xf0]
+    @test eof(iob)
+    try
+        write(file, 0xf0)
+        open(file) do io
+            @test bytes(read(io, Char)) == [0xf0]
+            @test eof(io)
+        end
+        let io = Base.Filesystem.open(file, Base.Filesystem.JL_O_RDONLY)
+            @test bytes(read(io, Char)) == [0xf0]
+            @test eof(io)
+            close(io)
+        end
+   finally
+        rm(file, force=true)
+    end
+end

@@ -20,10 +20,10 @@ function uv_sizeof_req(req)
 end
 
 for h in uv_handle_types
-@eval const $(Symbol("_sizeof_",lowercase(string(h)))) = uv_sizeof_handle($h)
+@eval const $(Symbol("_sizeof_",Unicode.lowercase(string(h)))) = uv_sizeof_handle($h)
 end
 for r in uv_req_types
-@eval const $(Symbol("_sizeof_",lowercase(string(r)))) = uv_sizeof_req($r)
+@eval const $(Symbol("_sizeof_",Unicode.lowercase(string(r)))) = uv_sizeof_req($r)
 end
 
 uv_handle_data(handle) = ccall(:jl_uv_handle_data,Ptr{Void},(Ptr{Void},),handle)

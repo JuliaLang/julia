@@ -8,7 +8,7 @@ isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__),
 using Main.TestHelpers
 import Base: REPL, LineEdit
 
-function fake_repl(f)
+function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
@@ -19,7 +19,9 @@ function fake_repl(f)
     Base.link_pipe(stdout, julia_only_read=true, julia_only_write=true)
     Base.link_pipe(stderr, julia_only_read=true, julia_only_write=true)
 
-    repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin.out, stdout.in, stderr.in))
+    repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin.out, stdout.in, stderr.in), true)
+    repl.options = options
+
     f(stdin.in, stdout.out, repl)
     t = @async begin
         close(stdin.in)
@@ -164,6 +166,7 @@ fake_repl() do stdin_write, stdout_read, repl
             redirect_stdout(old_stdout)
         end
         close(proc_stdout)
+        @test contains(wait(get_stdout), "HI\n")
         @test wait(get_stdout) == "HI\n"
     end
 
@@ -833,4 +836,28 @@ for keys = [altkeys, merge(altkeys...)],
     finally
         rm(histfile, force=true)
     end
+end
+
+# Test that module prefix is omitted when type is reachable from Main (PR #23806)
+fake_repl() do stdin_write, stdout_read, repl
+    repl.specialdisplay = Base.REPL.REPLDisplay(repl)
+    repl.history_file = false
+
+    repltask = @async begin
+        Base.REPL.run_repl(repl)
+    end
+
+    @eval Main module TestShowTypeREPL; export TypeA; struct TypeA end; end
+    write(stdin_write, "TestShowTypeREPL.TypeA\n")
+    @test endswith(readline(stdout_read), "\r\e[7CTestShowTypeREPL.TypeA\r\e[29C")
+    readline(stdout_read)
+    readline(stdout_read)
+    @eval Main using .TestShowTypeREPL
+    write(stdin_write, "TypeA\n")
+    @test endswith(readline(stdout_read), "\r\e[7CTypeA\r\e[12C")
+    readline(stdout_read)
+
+    # Close REPL ^D
+    write(stdin_write, '\x04')
+    wait(repltask)
 end

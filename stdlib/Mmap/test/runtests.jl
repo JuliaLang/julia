@@ -11,12 +11,12 @@ gc(); gc()
 gc(); gc()
 @test Mmap.mmap(file, Array{UInt8,3}, (1,1,11)) == reshape(t,(1,1,11))
 gc(); gc()
-@test Mmap.mmap(file, Array{UInt8,3}, (11,0,1)) == Array{UInt8}((0,0,0))
+@test Mmap.mmap(file, Array{UInt8,3}, (11,0,1)) == Array{UInt8}(uninitialized, (0,0,0))
 @test Mmap.mmap(file, Vector{UInt8}, (11,)) == t
 gc(); gc()
 @test Mmap.mmap(file, Array{UInt8,2}, (1,11)) == t'
 gc(); gc()
-@test Mmap.mmap(file, Array{UInt8,2}, (0,12)) == Array{UInt8}((0,0))
+@test Mmap.mmap(file, Array{UInt8,2}, (0,12)) == Array{UInt8}(uninitialized, (0,0))
 m = Mmap.mmap(file, Array{UInt8,3}, (1,2,1))
 @test m == reshape(b"He",(1,2,1))
 finalize(m); m=nothing; gc()
@@ -48,8 +48,8 @@ close(s)
 gc(); gc()
 
 s = open(f->f,file,"w")
-@test Mmap.mmap(file) == Array{UInt8}(0) # requested len=0 on empty file
-@test Mmap.mmap(file,Vector{UInt8},0) == Array{UInt8}(0)
+@test Mmap.mmap(file) == Vector{UInt8}() # requested len=0 on empty file
+@test Mmap.mmap(file,Vector{UInt8},0) == Vector{UInt8}()
 s = open(file, "r+")
 m = Mmap.mmap(s,Vector{UInt8},12)
 m[:] = b"Hello World\n"

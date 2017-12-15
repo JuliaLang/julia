@@ -65,7 +65,7 @@ macro enum(T, syms...)
     elseif !isa(T, Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
-    vals = Vector{Tuple{Symbol,Integer}}(0)
+    vals = Vector{Tuple{Symbol,Integer}}()
     lo = hi = 0
     i = zero(basetype)
     hasexpr = false

@@ -64,6 +64,7 @@ Base.LinAlg.svdfact
 Base.LinAlg.svdfact!
 Base.LinAlg.svd
 Base.LinAlg.svdvals
+Base.LinAlg.svdvals!
 Base.LinAlg.Givens
 Base.LinAlg.givens
 Base.LinAlg.triu
@@ -136,10 +137,8 @@ Base.transpose
 Base.transpose!
 Base.adjoint
 Base.adjoint!
-Base.LinAlg.eigs(::Any)
-Base.LinAlg.eigs(::Any, ::Any)
-Base.LinAlg.svds
 Base.LinAlg.peakflops
+Base.LinAlg.stride1
 ```
 
 ## Low-level matrix operations
@@ -188,7 +187,7 @@ linear algebra routines it is useful to call the BLAS functions directly.
 
 `Base.LinAlg.BLAS` provides wrappers for some of the BLAS functions. Those BLAS functions
 that overwrite one of the input arrays have names ending in `'!'`.  Usually, a BLAS function has
-four methods defined, for [`Float64`](@ref), [`Float32`](@ref), `Complex128`, and `Complex64` arrays.
+four methods defined, for [`Float64`](@ref), [`Float32`](@ref), `ComplexF64`, and `ComplexF32` arrays.
 
 ### [BLAS Character Arguments](@id stdlib-blas-chars)
 Many BLAS functions accept arguments that determine whether to transpose an argument (`trans`),
@@ -273,7 +272,7 @@ Base.LinAlg.I
  Those functions that overwrite one of the input arrays have names ending in `'!'`.
 
 Usually a function has 4 methods defined, one each for [`Float64`](@ref), [`Float32`](@ref),
-`Complex128` and `Complex64` arrays.
+`ComplexF64` and `ComplexF32` arrays.
 
 Note that the LAPACK API provided by Julia can and will change in the future. Since this API is
 not user-facing, there is no commitment to support/deprecate this specific set of functions in

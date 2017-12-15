@@ -55,7 +55,6 @@ JL_DLLEXPORT const char* __asan_default_options() {
 }
 #endif
 
-int jl_boot_file_loaded = 0;
 size_t jl_page_size;
 
 void jl_init_stack_limits(int ismaster)
@@ -696,7 +695,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
         jl_load(jl_core_module, "boot.jl");
         jl_get_builtin_hooks();
-        jl_boot_file_loaded = 1;
         jl_init_box_caches();
     }
 

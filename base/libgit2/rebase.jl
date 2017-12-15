@@ -32,23 +32,29 @@ function Base.getindex(rb::GitRebase, i::Integer)
     if !(1 <= i <= count(rb))
         throw(BoundsError(rb, (i,)))
     end
-    rb_op_ptr = ccall((:git_rebase_operation_byindex, :libgit2),
-                      Ptr{RebaseOperation},
-                      (Ptr{Void}, Csize_t), rb.ptr, i-1)
-    return unsafe_load(rb_op_ptr)
+    Base.@gc_preserve rb begin
+        rb_op_ptr = ccall((:git_rebase_operation_byindex, :libgit2),
+                          Ptr{RebaseOperation},
+                          (Ptr{Void}, Csize_t), rb.ptr, i-1)
+        rb_op = unsafe_load(rb_op_ptr)
+    end
+    return rb_op
 end
 
 function Base.next(rb::GitRebase)
     rb_op_ptr_ptr = Ref{Ptr{RebaseOperation}}(C_NULL)
-    try
-        @check ccall((:git_rebase_next, :libgit2), Cint,
-                      (Ptr{Ptr{RebaseOperation}}, Ptr{Void}),
-                       rb_op_ptr_ptr, rb.ptr)
-    catch err
-        err.code == Error.ITEROVER && return nothing
-        rethrow(err)
+    Base.@gc_preserve rb begin
+        try
+            @check ccall((:git_rebase_next, :libgit2), Cint,
+                          (Ptr{Ptr{RebaseOperation}}, Ptr{Void}),
+                           rb_op_ptr_ptr, rb.ptr)
+        catch err
+            err.code == Error.ITEROVER && return nothing
+            rethrow(err)
+        end
+        rb_op_ptr = unsafe_load(rb_op_ptr_ptr[])
     end
-    return unsafe_load(rb_op_ptr_ptr[])
+    return rb_op_ptr
 end
 
 function Base.show(io::IO, rb::GitRebase)
@@ -82,7 +88,7 @@ end
 
 Cancel the in-progress rebase, undoing all changes made so far and returning
 the parent repository of `rb` and its working directory to their state before
-the rebase was initiated. Returns `0` if the abort is successful,
+the rebase was initiated. Return `0` if the abort is successful,
 `LibGit2.Error.ENOTFOUND` if no rebase is in progress (for example, if the
 rebase had completed), and `-1` for other errors.
 """
@@ -95,7 +101,7 @@ end
     finish(rb::GitRebase, sig::GitSignature) -> Csize_t
 
 Complete the rebase described by `rb`. `sig` is a [`GitSignature`](@ref)
-to specify the identity of the user finishing the rebase. Returns `0` if the
+to specify the identity of the user finishing the rebase. Return `0` if the
 rebase finishes successfully, `-1` if there is an error.
 """
 function finish(rb::GitRebase, sig::GitSignature)

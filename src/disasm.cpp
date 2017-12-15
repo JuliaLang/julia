@@ -712,7 +712,25 @@ static void jl_dump_asm_internal(
 
     DILineInfoTable di_lineinfo;
     if (di_ctx)
-         di_lineinfo = di_ctx->getLineInfoForAddressRange(Fptr+slide, Fsize);
+        di_lineinfo = di_ctx->getLineInfoForAddressRange(Fptr+slide, Fsize);
+    if (!di_lineinfo.empty()) {
+        auto cur_addr = di_lineinfo[0].first;
+        auto nlineinfo = di_lineinfo.size();
+        // filter out line infos that doesn't contain any instructions
+        unsigned j = 0;
+        for (unsigned i = 1; i < nlineinfo; i++) {
+            auto &info = di_lineinfo[i];
+            if (info.first != cur_addr)
+                j++;
+            cur_addr = info.first;
+            if (i != j) {
+                di_lineinfo[j] = std::move(info);
+            }
+        }
+        if (j + 1 < nlineinfo) {
+            di_lineinfo.resize(j + 1);
+        }
+    }
 
     // Take two passes: In the first pass we record all branch labels,
     // in the second we actually perform the output
@@ -739,15 +757,15 @@ static void jl_dump_asm_internal(
         DILineInfoTable::iterator di_lineEnd = di_lineinfo.end();
         DILineInfoPrinter dbgctx{';', true};
         if (pass != 0) {
-            if (di_ctx) {
+            if (di_ctx && di_lineIter != di_lineEnd) {
                 // Set up the line info
-                if (di_lineIter != di_lineEnd) {
+                nextLineAddr = di_lineIter->first;
+                if (nextLineAddr != Fptr + slide) {
                     std::string buf;
                     dbgctx.emit_lineinfo(buf, di_lineIter->second);
-                    Streamer->EmitRawText(buf);
-                    if (di_lineIter->second.Line <= 0)
-                        ++di_lineIter;
-                    nextLineAddr = di_lineIter->first;
+                    if (!buf.empty()) {
+                        Streamer->EmitRawText(buf);
+                    }
                 }
             }
         }
@@ -770,7 +788,8 @@ static void jl_dump_asm_internal(
                     else {
                         dbgctx.emit_lineinfo(buf, di_lineIter->second);
                     }
-                    Streamer->EmitRawText(buf);
+                    if (!buf.empty())
+                        Streamer->EmitRawText(buf);
                     nextLineAddr = (++di_lineIter)->first;
                 }
             }
@@ -844,7 +863,9 @@ static void jl_dump_asm_internal(
         if (pass != 0 && di_ctx) {
             std::string buf;
             dbgctx.emit_finish(buf);
-            Streamer->EmitRawText(buf);
+            if (!buf.empty()) {
+                Streamer->EmitRawText(buf);
+            }
         }
     }
 }

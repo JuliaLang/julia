@@ -23,7 +23,7 @@ Base.quit
 Base.atexit
 Base.atreplinit
 Base.isinteractive
-Base.whos
+Base.varinfo
 Base.summarysize
 Base.edit(::AbstractString, ::Integer)
 Base.edit(::Any)
@@ -48,7 +48,6 @@ Base.methods
 Base.methodswith
 Base.@show
 Base.versioninfo
-Base.workspace
 ans
 ```
 
@@ -89,8 +88,6 @@ primitive type
 ## Base Modules
 ```@docs
 Base.BLAS
-Base.Dates
-Base.Distributed
 Base.Docs
 Base.Iterators
 Base.LAPACK
@@ -211,8 +208,6 @@ Base.@gensym
 Base.@goto
 Base.@label
 Base.@polly
-Base.parse(::AbstractString, ::Int)
-Base.parse(::AbstractString)
 ```
 
 ## Nullables
@@ -222,6 +217,14 @@ Base.Nullable
 Base.get(::Nullable, ::Any)
 Base.isnull
 Base.unsafe_get
+```
+
+## Missing Values
+```@docs
+Base.Missing
+Base.missing
+Base.ismissing
+Base.skipmissing
 ```
 
 ## System
@@ -288,12 +291,12 @@ Core.InterruptException
 Base.KeyError
 Base.LoadError
 Base.MethodError
+Base.MissingException
 Base.NullException
 Core.OutOfMemoryError
 Core.ReadOnlyMemoryError
 Core.OverflowError
 Base.ParseError
-Base.ProcessExitedException
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError
@@ -342,6 +345,9 @@ Base.@functionloc
 Base.gc
 Base.gc_enable
 Meta.lower
+Meta.@lower
+Meta.parse(::AbstractString, ::Int)
+Meta.parse(::AbstractString)
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1

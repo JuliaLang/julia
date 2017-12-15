@@ -161,7 +161,7 @@ function latex(io::IO, md::Table)
             end
             println(io, " \\\\")
             if i == 1
-                println("\\hline")
+                println(io, "\\hline")
             end
         end
     end

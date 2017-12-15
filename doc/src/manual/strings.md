@@ -565,14 +565,15 @@ Some other useful functions include:
 
   * [`endof(str)`](@ref) gives the maximal (byte) index that can be used to index into `str`.
   * [`length(str)`](@ref) the number of characters in `str`.
+  * [`length(str, i, j)`](@ref) the number of valid character indices in `str` from `i` to `j`.
   * [`i = start(str)`](@ref start) gives the first valid index at which a character can be found in `str`
     (typically 1).
   * [`c, j = next(str,i)`](@ref next) returns next character at or after the index `i` and the next valid
     character index following that. With [`start`](@ref) and [`endof`](@ref), can be used to iterate
     through the characters in `str`.
-  * [`ind2chr(str,i)`](@ref) gives the number of characters in `str` up to and including any at index
-    `i`.
-  * [`chr2ind(str,j)`](@ref) gives the index at which the `j`th character in `str` occurs.
+  * [`thisind(str, i)`](@ref) given an arbitrary index into a string find the first index of the character into which the index points.
+  * [`nextind(str, i, n=1)`](@ref) find the start of the `n`th character starting after index `i`.
+  * [`prevind(str, i, n=1)`](@ref) find the start of the `n`th character starting before index `i`.
 
 ## [Non-Standard String Literals](@id non-standard-string-literals)
 
@@ -856,10 +857,9 @@ julia> b"\uff"
  0xbf
 ```
 
-In character literals, this distinction is glossed over and `\xff` is allowed to represent the
-code point 255, because characters *always* represent code points. In strings, however, `\x` escapes
-always represent bytes, not code points, whereas `\u` and `\U` escapes always represent code points,
-which are encoded in one or more bytes. For code points less than `\u80`, it happens that the
+Character literals use the same behavior.
+
+For code points less than `\u80`, it happens that the
 UTF-8 encoding of each code point is just the single byte produced by the corresponding `\x` escape,
 so the distinction can safely be ignored. For the escapes `\x80` through `\xff` as compared to
 `\u80` through `\uff`, however, there is a major difference: the former escapes all encode single
@@ -920,5 +920,19 @@ non-standard string literals of the form `raw"..."`. Raw string literals create
 ordinary `String` objects which contain the enclosed contents exactly as
 entered with no interpolation or unescaping. This is useful for strings which
 contain code or markup in other languages which use `$` or `\` as special
-characters. The exception is quotation marks that still must be
-escaped, e.g. `raw"\""` is equivalent to `"\""`.
+characters.
+
+The exception is that quotation marks still must be escaped, e.g. `raw"\""` is equivalent
+to `"\""`.
+To make it possible to express all strings, backslashes then also must be escaped, but
+only when appearing right before a quote character:
+
+```jldoctest
+julia> println(raw"\\ \\\"")
+\\ \"
+```
+
+Notice that the first two backslashes appear verbatim in the output, since they do not
+precede a quote character.
+However, the next backslash character escapes the backslash that follows it, and the
+last backslash escapes a quote, since these backslashes appear before a quote.

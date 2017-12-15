@@ -404,7 +404,7 @@
 
     function matmul(A,B,m,l,n) {
         var C, i, j, k, total;
-        C = new Array(m*n);
+        C = new Float64Array(m*n);
         i = 0;
         j = 0;
         k = 0;

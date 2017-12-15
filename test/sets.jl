@@ -40,6 +40,9 @@ end
     s3 = Set(["baz"])
     @test hash(s1) == hash(s2)
     @test hash(s1) != hash(s3)
+    d1 = Dict(Set([3]) => 33, Set([2]) => 22)
+    d2 = Dict(Set([2]) => 33, Set([3]) => 22)
+    @test hash(d1) != hash(d2)
 end
 @testset "isequal" begin
     @test  isequal(Set(), Set())
@@ -70,7 +73,7 @@ end
     @test ===(eltype(s3), Float32)
 end
 @testset "show" begin
-    @test sprint(show, Set()) == "Set{Any}()"
+    @test sprint(show, Set()) == "Set(Any[])"
     @test sprint(show, Set(['a'])) == "Set(['a'])"
 end
 @testset "isempty, length, in, push, pop, delete" begin

@@ -255,7 +255,7 @@ strides(V::SubArray) = substrides(V.parent, V.indexes)
 
 substrides(parent, I::Tuple) = substrides(1, parent, 1, I)
 substrides(s, parent, dim, ::Tuple{}) = ()
-substrides(s, parent, dim, I::Tuple{ScalarIndex, Vararg{Any}}) = (substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
+substrides(s, parent, dim, I::Tuple{ScalarIndex, Vararg{Any}}) = (substrides(s*size(parent, dim), parent, dim+1, tail(I))...,)
 substrides(s, parent, dim, I::Tuple{Slice, Vararg{Any}}) = (s, substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
 substrides(s, parent, dim, I::Tuple{AbstractRange, Vararg{Any}}) = (s*step(I[1]), substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
 substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(I[1]))"))
@@ -355,7 +355,7 @@ end
 # deprecate?
 function parentdims(s::SubArray)
     nd = ndims(s)
-    dimindex = Vector{Int}(nd)
+    dimindex = Vector{Int}(uninitialized, nd)
     sp = strides(s.parent)
     sv = strides(s)
     j = 1

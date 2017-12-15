@@ -132,8 +132,6 @@ function _chol!(x::Number, uplo)
     rx == abs(x) ? (rval, convert(BlasInt, 0)) : (rval, convert(BlasInt, 1))
 end
 
-chol!(x::Number, uplo) = ((C, info) = _chol!(x, uplo); @assertposdef C info)
-
 # chol!. Destructive methods for computing Cholesky factor of real symmetric or Hermitian
 # matrix
 function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
@@ -300,8 +298,12 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
  -16.0  -43.0   98.0
 
 julia> C = cholfact(A)
-Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
-[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]
+Base.LinAlg.Cholesky{Float64,Array{Float64,2}}
+U factor:
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 2.0  6.0  -8.0
+  ⋅   1.0   5.0
+  ⋅    ⋅    3.0
 
 julia> C[:U]
 3×3 UpperTriangular{Float64,Array{Float64,2}}:
@@ -401,31 +403,38 @@ end
 
 issuccess(C::Cholesky) = C.info == 0
 
-function show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix})
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
     if issuccess(C)
-        println(io, "$(typeof(C)) with factor:")
-        show(io, C[:UL])
+        println(io, summary(C), "\n$(C.uplo) factor:")
+        show(io, mime, C[:UL])
     else
-        print("Failed factorization of type $(typeof(C))")
+        print(io, "Failed factorization of type $(typeof(C))")
     end
 end
 
-A_ldiv_B!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any,<:AbstractMatrix})
+    println(io, summary(C), "\n$(C.uplo) factor with rank $(rank(C)):")
+    show(io, mime, C.uplo == 'U' ? C[:U] : C[:L])
+    println(io, "\npermutation:")
+    show(io, mime, C[:p])
+end
+
+ldiv!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     @assertposdef LAPACK.potrs!(C.uplo, C.factors, B) C.info
 
-function A_ldiv_B!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
+function ldiv!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
     if C.uplo == 'L'
-        return Ac_ldiv_B!(LowerTriangular(C.factors), A_ldiv_B!(LowerTriangular(C.factors), B))
+        return ldiv!(Adjoint(LowerTriangular(C.factors)), ldiv!(LowerTriangular(C.factors), B))
     else
-        return A_ldiv_B!(UpperTriangular(C.factors), Ac_ldiv_B!(UpperTriangular(C.factors), B))
+        return ldiv!(UpperTriangular(C.factors), ldiv!(Adjoint(UpperTriangular(C.factors)), B))
     end
 end
 
-function A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedVector{T}) where T<:BlasFloat
+function ldiv!(C::CholeskyPivoted{T}, B::StridedVector{T}) where T<:BlasFloat
     chkfullrank(C)
     ipermute!(LAPACK.potrs!(C.uplo, C.factors, permute!(B, C.piv)), C.piv)
 end
-function A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
+function ldiv!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
     chkfullrank(C)
     n = size(C, 1)
     for i=1:size(B, 2)
@@ -438,23 +447,23 @@ function A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloa
     B
 end
 
-function A_ldiv_B!(C::CholeskyPivoted, B::StridedVector)
+function ldiv!(C::CholeskyPivoted, B::StridedVector)
     if C.uplo == 'L'
-        Ac_ldiv_B!(LowerTriangular(C.factors),
-            A_ldiv_B!(LowerTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
+        ldiv!(Adjoint(LowerTriangular(C.factors)),
+            ldiv!(LowerTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
     else
-        A_ldiv_B!(UpperTriangular(C.factors),
-            Ac_ldiv_B!(UpperTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
+        ldiv!(UpperTriangular(C.factors),
+            ldiv!(Adjoint(UpperTriangular(C.factors)), B[C.piv]))[invperm(C.piv)]
     end
 end
 
-function A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix)
+function ldiv!(C::CholeskyPivoted, B::StridedMatrix)
     if C.uplo == 'L'
-        Ac_ldiv_B!(LowerTriangular(C.factors),
-            A_ldiv_B!(LowerTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
+        ldiv!(Adjoint(LowerTriangular(C.factors)),
+            ldiv!(LowerTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
     else
-        A_ldiv_B!(UpperTriangular(C.factors),
-            Ac_ldiv_B!(UpperTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
+        ldiv!(UpperTriangular(C.factors),
+            ldiv!(Adjoint(UpperTriangular(C.factors)), B[C.piv,:]))[invperm(C.piv),:]
     end
 end
 

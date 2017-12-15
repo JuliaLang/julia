@@ -447,7 +447,7 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test_throws DimensionMismatch reshape(B, (0, 1))
 
     # copy!(dest::AbstractArray, src::AbstractArray)
-    @test_throws BoundsError copy!(Array{Int}(10), [1:11...])
+    @test_throws BoundsError copy!(Vector{Int}(uninitialized, 10), [1:11...])
 
     # convert{T, N}(::Type{Array}, A::AbstractArray{T, N})
     X = [1:10...]
@@ -542,14 +542,14 @@ function test_cat(::Type{TestAbstractArray})
     A = T24Linear([1:24...])
     b_int = reshape([1:27...], 3, 3, 3)
     b_float = reshape(Float64[1:27...], 3, 3, 3)
-    b2hcat = Array{Float64}(3, 6, 3)
+    b2hcat = Array{Float64}(uninitialized, 3, 6, 3)
     b1 = reshape([1:9...], 3, 3)
     b2 = reshape([10:18...], 3, 3)
     b3 = reshape([19:27...], 3, 3)
     b2hcat[:, :, 1] = hcat(b1, b1)
     b2hcat[:, :, 2] = hcat(b2, b2)
     b2hcat[:, :, 3] = hcat(b3, b3)
-    b3hcat = Array{Float64}(3, 9, 3)
+    b3hcat = Array{Float64}(uninitialized, 3, 9, 3)
     b3hcat[:, :, 1] = hcat(b1, b1, b1)
     b3hcat[:, :, 2] = hcat(b2, b2, b2)
     b3hcat[:, :, 3] = hcat(b3, b3, b3)
@@ -633,72 +633,6 @@ Base.getindex(A::TSlowNIndexes, index::Int...) = error("Must use $(ndims(A)) ind
 Base.getindex(A::TSlowNIndexes{T,2}, i::Int, j::Int) where {T} = A.data[i,j]
 
 
-mutable struct GenericIterator{N} end
-Base.start(::GenericIterator{N}) where {N} = 1
-Base.next(::GenericIterator{N}, i) where {N} = (i, i + 1)
-Base.done(::GenericIterator{N}, i) where {N} = i > N ? true : false
-Base.iteratorsize(::Type{GenericIterator{N}}) where {N} = Base.SizeUnknown()
-
-function test_map(::Type{TestAbstractArray})
-    empty_pool = WorkerPool([myid()])
-    pmap_fallback = (f, c...) -> pmap(empty_pool, f, c...)
-
-    for mapf in [map, asyncmap, pmap_fallback]
-        for typ in (Float16, Float32, Float64,
-                    Int8, Int16, Int32, Int64, Int128,
-                    UInt8, UInt16, UInt32, UInt64, UInt128),
-            arg_typ in (Integer,
-                        Signed,
-                        Unsigned)
-            X = typ[1:10...]
-            _typ = typeof(arg_typ(one(typ)))
-            @test mapf(arg_typ, X) == _typ[1:10...]
-        end
-
-        # generic map
-        f(x) = x + 1
-        I = GenericIterator{10}()
-        @test mapf(f, I) == Any[2:11...]
-
-        # AbstractArray map for 2 arg case
-        f(x, y) = x + y
-        B = Float64[1:10...]
-        C = Float64[1:10...]
-        @test mapf(f, convert(Vector{Int},B), C) == Float64[ 2 * i for i in 1:10 ]
-        @test mapf(f, Int[], Float64[]) == Union{}[]
-        # map with different result types
-        let m = mapf(x->x+1, Number[1, 2.0])
-            # FIXME why is this different for asyncmap?
-            @test mapf !== map || isa(m, Vector{Real})
-            @test m == Real[2, 3.0]
-        end
-
-        # AbstractArray map for N-arg case
-        A = Array{Int}(10)
-        f(x, y, z) = x + y + z
-        D = Float64[1:10...]
-
-        @test map!(f, A, B, C, D) == Int[ 3 * i for i in 1:10 ]
-        @test mapf(f, B, C, D) == Float64[ 3 * i for i in 1:10 ]
-        @test mapf(f, Int[], Int[], Complex{Int}[]) == Union{}[]
-    end
-
-    # In-place map
-    A = Float64[1:10...]
-    map!(x -> x*x, A, A)
-    @test A == map(x -> x*x, Float64[1:10...])
-    B = Float64[1:10...]
-    Base.asyncmap!(x->x*x, B, B)
-    @test A == B
-
-    # Map to destination collection
-    map!((x,y,z)->x*y*z, A, Float64[1:10...], Float64[1:10...], Float64[1:10...])
-    @test A == map(x->x*x*x, Float64[1:10...])
-    C = Base.asyncmap!((x,y,z)->x*y*z, B, Float64[1:10...], Float64[1:10...], Float64[1:10...])
-    @test A == B
-    @test B === C
-end
-
 @testset "issue #15689, mapping an abstract type" begin
     @test isa(map(Set, Array[[1,2],[3,4]]), Vector{Set{Int}})
 end
@@ -751,7 +685,10 @@ test_setindex!_internals(TestAbstractArray)
 test_get(TestAbstractArray)
 test_cat(TestAbstractArray)
 test_ind2sub(TestAbstractArray)
-test_map(TestAbstractArray)
+
+include("generic_map_tests.jl")
+generic_map_tests(map, map!)
+
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)
 test_checksquare()
@@ -869,6 +806,23 @@ end
 @testset "ImageCore #40" begin
     Base.convert(::Type{Array{T,n}}, a::Array{T,n}) where {T<:Number,n} = a
     Base.convert(::Type{Array{T,n}}, a::Array) where {T<:Number,n} =
-        copy!(Array{T,n}(size(a)), a)
-    @test isa(similar(Dict(:a=>1, :b=>2.0), Pair{Union{},Union{}}), Dict{Union{}, Union{}})
+        copy!(Array{T,n}(uninitialized, size(a)), a)
+    @test isa(empty(Dict(:a=>1, :b=>2.0), Union{}, Union{}), Dict{Union{}, Union{}})
+end
+
+@testset "zero-dimensional copy" begin
+    Z = Array{Int,0}(uninitialized); Z[] = 17
+    @test Z == collect(Z) == copy(Z)
+end
+
+@testset "empty" begin
+    @test isempty([])
+    v = [1, 2, 3]
+    v2 = empty(v)
+    v3 = empty(v, Float64)
+    @test !isempty(v)
+    empty!(v)
+    @test isempty(v)
+    @test isempty(v2::Vector{Int})
+    @test isempty(v3::Vector{Float64})
 end

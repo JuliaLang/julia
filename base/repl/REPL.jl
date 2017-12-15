@@ -14,7 +14,7 @@ export
     StreamREPL
 
 import Base:
-    Display,
+    AbstractDisplay,
     display,
     show,
     AnyDict,
@@ -33,7 +33,8 @@ import ..LineEdit:
     history_last,
     history_search,
     accept_result,
-    terminal
+    terminal,
+    MIState
 
 abstract type AbstractREPL end
 
@@ -113,7 +114,7 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
-struct REPLDisplay{R<:AbstractREPL} <: Display
+struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
     repl::R
 end
 
@@ -246,15 +247,43 @@ end
 mutable struct Options
     hascolor::Bool
     extra_keymap::Union{Dict,Vector{<:Dict}}
+    # controls the presumed tab width of code pasted into the REPL.
+    # Must satisfy `0 < tabwidth <= 16`.
+    tabwidth::Int
+    # Maximum number of entries in the kill ring queue.
+    # Beyond this number, oldest entries are discarded first.
+    kill_ring_max::Int
+    region_animation_duration::Float64
+    beep_duration::Float64
+    beep_blink::Float64
+    beep_maxduration::Float64
+    beep_colors::Vector{String}
+    beep_use_current::Bool
     backspace_align::Bool
     backspace_adjust::Bool
+    confirm_exit::Bool # ^D must be repeated to confirm exit
 end
 
 Options(;
         hascolor = true,
         extra_keymap = AnyDict[],
-        backspace_align = true, backspace_adjust = backspace_align) =
-            Options(hascolor, extra_keymap, backspace_align, backspace_adjust)
+        tabwidth = 8,
+        kill_ring_max = 100,
+        region_animation_duration = 0.2,
+        beep_duration = 0.2, beep_blink = 0.2, beep_maxduration = 1.0,
+        beep_colors = ["\e[90m"], # gray (text_colors not yet available)
+        beep_use_current = true,
+        backspace_align = true, backspace_adjust = backspace_align,
+        confirm_exit = false) =
+            Options(hascolor, extra_keymap, tabwidth,
+                    kill_ring_max, region_animation_duration,
+                    beep_duration, beep_blink, beep_maxduration,
+                    beep_colors, beep_use_current,
+                    backspace_align, backspace_adjust, confirm_exit)
+
+# for use by REPLs not having an options field
+const GlobalOptions = Options()
+
 
 ## LineEditREPL ##
 
@@ -271,26 +300,27 @@ mutable struct LineEditREPL <: AbstractREPL
     in_help::Bool
     envcolors::Bool
     waserror::Bool
-    specialdisplay::Union{Void,Display}
+    specialdisplay::Union{Void,AbstractDisplay}
     options::Options
+    mistate::Union{MIState,Void}
     interface::ModalInterface
     backendref::REPLBackendRef
     LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
         new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, Options())
+            in_help,envcolors,false,nothing, Options(), nothing)
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
 
-LineEditREPL(t::TextTerminal, envcolors::Bool=false) =
-    LineEditREPL(t, true,
-        Base.text_colors[:green],
-        Base.input_color(),
-        Base.answer_color(),
-        Base.text_colors[:red],
-        Base.text_colors[:yellow],
+LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
+    LineEditREPL(t, hascolor,
+        hascolor ? Base.text_colors[:green] : "",
+        hascolor ? Base.input_color() : "",
+        hascolor ? Base.answer_color() : "",
+        hascolor ? Base.text_colors[:red] : "",
+        hascolor ? Base.text_colors[:yellow] : "",
         false, false, false, envcolors
     )
 
@@ -579,7 +609,11 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1 # position is zero-indexed
-    b = min(endof(response_str), prevind(response_str, a + sizeof(searchdata))) # ensure that b is valid
+    # FIXME: I'm pretty sure this is broken since it uses an index
+    # into the search data to index into the response string
+    b = a + sizeof(searchdata)
+    b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
+    b = min(endof(response_str), b) # ensure that b is valid
 
     !skip_current && searchdata == response_str[a:b] && return true
 
@@ -702,12 +736,14 @@ function mode_keymap(julia_prompt::Prompt)
         end
     end,
     "^C" => function (s,o...)
-        LineEdit.move_input_end(s)
-        LineEdit.refresh_line(s)
-        print(LineEdit.terminal(s), "^C\n\n")
-        transition(s, julia_prompt)
-        transition(s, :reset)
-        LineEdit.refresh_line(s)
+        if isempty(s)
+            print(LineEdit.terminal(s), "^C\n\n")
+            transition(s, julia_prompt)
+            transition(s, :reset)
+            LineEdit.refresh_line(s)
+        else
+            LineEdit.edit_clear(s)
+        end
     end)
 end
 
@@ -800,7 +836,9 @@ function setup_interface(
         try
             hist_path = find_hist_file()
             f = open(hist_path, true, true, true, false, false)
-            finalizer(replc, replc->close(f))
+            finalizer(replc) do replc
+                close(f)
+            end
             hist_from_file(hp, f, hist_path)
         catch e
             print_response(repl, e, catch_backtrace(), true, Base.have_color)
@@ -895,7 +933,7 @@ function setup_interface(
                     end
                 end
                 ast, pos = Base.syntax_deprecation_warnings(false) do
-                    Base.parse(input, oldpos, raise=false)
+                    Meta.parse(input, oldpos, raise=false)
                 end
                 if (isa(ast, Expr) && (ast.head == :error || ast.head == :continue || ast.head == :incomplete)) ||
                         (done(input, pos) && !endswith(input, '\n'))
@@ -983,7 +1021,8 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
         interface = repl.interface
     end
     repl.backendref = backend
-    run_interface(repl.t, interface)
+    repl.mistate = LineEdit.init_state(terminal(repl), interface)
+    run_interface(terminal(repl), interface, repl.mistate)
     dopushdisplay && popdisplay(d)
 end
 
@@ -1057,7 +1096,7 @@ function ends_with_semicolon(line::AbstractString)
             else
                 # outside of a comment, encountering anything but whitespace
                 # means the semi-colon was internal to the expression
-                isspace(c) || return false
+                Base.Unicode.isspace(c) || return false
             end
         end
         return true

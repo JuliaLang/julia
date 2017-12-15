@@ -246,8 +246,7 @@ julia> x, y # verify that global x and y are unchanged
 ```
 
 The reason to allow *modifying local* variables of parent scopes in
-nested functions is to allow constructing `closures
-<https://en.wikipedia.org/wiki/Closure_%28computer_programming%29>`_
+nested functions is to allow constructing [`closures`](https://en.wikipedia.org/wiki/Closure_%28computer_programming%29)
 which have a private state, for instance the ``state`` variable in the
 following example:
 
@@ -360,7 +359,7 @@ something like `let x = x` since the two `x` variables are distinct and have sep
 Here is an example where the behavior of `let` is needed:
 
 ```jldoctest
-julia> Fs = Array{Any}(2); i = 1;
+julia> Fs = Vector{Any}(uninitialized, 2); i = 1;
 
 julia> while i <= 2
            Fs[i] = ()->i
@@ -379,7 +378,7 @@ variable `i`, so the two closures behave identically. We can use `let` to create
 for `i`:
 
 ```jldoctest
-julia> Fs = Array{Any}(2); i = 1;
+julia> Fs = Vector{Any}(uninitialized, 2); i = 1;
 
 julia> while i <= 2
            let i = i
@@ -419,7 +418,7 @@ introduced in their body scopes are freshly allocated for each loop iteration, a
 were surrounded by a `let` block:
 
 ```jldoctest
-julia> Fs = Array{Any}(2);
+julia> Fs = Vector{Any}(uninitialized, 2);
 
 julia> for j = 1:2
            Fs[j] = ()->j

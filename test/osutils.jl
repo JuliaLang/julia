@@ -29,6 +29,11 @@ end
     @test (@static false && 1) === false
     @test (@static true || 1) === true
     @test (@static false || 1) === 1
+    @test (@static if false 1 elseif true 2 end) === 2
+    @test (@static if false 1 elseif false 2 end) === nothing
+    @test (@static if false 1 elseif false 2 else 3 end) === 3
+    @test (@static if false 1 elseif false 2 elseif true && false 3 else 4 end) === 4
+    @test (@static if false 1 elseif false 2 elseif true && false 3 end) === nothing
 end
 
 if Sys.iswindows()

@@ -15,11 +15,6 @@ function shell_escape(str)
     return "'$str'"
 end
 
-function imagePath()
-    opts = Base.JLOptions()
-    return unsafe_string(opts.image_file)
-end
-
 function libDir()
     return if ccall(:jl_is_debugbuild, Cint, ()) != 0
         dirname(abspath(Libdl.dlpath("libjulia-debug")))

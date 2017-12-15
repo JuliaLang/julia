@@ -944,7 +944,7 @@ for (typ, owntyp, sup, cname) in [
                 obj = new(ptr)
                 if fin
                     Threads.atomic_add!(REFCOUNT, UInt(1))
-                    finalizer(obj, Base.close)
+                    finalizer(Base.close, obj)
                 end
                 return obj
             end
@@ -958,7 +958,7 @@ for (typ, owntyp, sup, cname) in [
                 obj = new(owner, ptr)
                 if fin
                     Threads.atomic_add!(REFCOUNT, UInt(1))
-                    finalizer(obj, Base.close)
+                    finalizer(Base.close, obj)
                 end
                 return obj
             end
@@ -1000,7 +1000,7 @@ mutable struct GitSignature <: AbstractGitObject
     function GitSignature(ptr::Ptr{SignatureStruct})
         @assert ptr != C_NULL
         obj = new(ptr)
-        finalizer(obj, Base.close)
+        finalizer(Base.close, obj)
         return obj
     end
 end
@@ -1108,7 +1108,7 @@ Consts.OBJECT(ptr::Ptr{Void}) =
 """
     objtype(obj_type::Consts.OBJECT)
 
-Returns the type corresponding to the enum value.
+Return the type corresponding to the enum value.
 """
 function objtype(obj_type::Consts.OBJECT)
     if obj_type == Consts.OBJ_COMMIT
@@ -1128,77 +1128,76 @@ end
 
 import Base.securezero!
 
-"Abstract credentials payload"
-abstract type AbstractCredentials end
+abstract type AbstractCredential end
 
 """
-    isfilled(cred::AbstractCredentials) -> Bool
+    isfilled(cred::AbstractCredential) -> Bool
 
 Verifies that a credential is ready for use in authentication.
 """
-isfilled(::AbstractCredentials)
+isfilled(::AbstractCredential)
 
-"Credentials that support only `user` and `password` parameters"
-mutable struct UserPasswordCredentials <: AbstractCredentials
+"Credential that support only `user` and `password` parameters"
+mutable struct UserPasswordCredential <: AbstractCredential
     user::String
     pass::String
-    function UserPasswordCredentials(user::AbstractString="", pass::AbstractString="")
+    function UserPasswordCredential(user::AbstractString="", pass::AbstractString="")
         c = new(user, pass)
-        finalizer(c, securezero!)
+        finalizer(securezero!, c)
         return c
     end
 
     # Deprecated constructors
-    function UserPasswordCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool)
+    function UserPasswordCredential(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool)
         Base.depwarn(string(
-            "`UserPasswordCredentials` no longer supports the `prompt_if_incorrect` parameter. ",
+            "`UserPasswordCredential` no longer supports the `prompt_if_incorrect` parameter. ",
             "Use the `allow_prompt` keyword in supported by `LibGit2.CredentialPayload` ",
-            "instead."), :UserPasswordCredentials)
-        UserPasswordCredentials(u, p)
+            "instead."), :UserPasswordCredential)
+        UserPasswordCredential(u, p)
     end
-    UserPasswordCredentials(prompt_if_incorrect::Bool) = UserPasswordCredentials("","",prompt_if_incorrect)
+    UserPasswordCredential(prompt_if_incorrect::Bool) = UserPasswordCredential("","",prompt_if_incorrect)
 end
 
-function securezero!(cred::UserPasswordCredentials)
+function securezero!(cred::UserPasswordCredential)
     securezero!(cred.user)
     securezero!(cred.pass)
     return cred
 end
 
-function Base.:(==)(a::UserPasswordCredentials, b::UserPasswordCredentials)
+function Base.:(==)(a::UserPasswordCredential, b::UserPasswordCredential)
     a.user == b.user && a.pass == b.pass
 end
 
-function isfilled(cred::UserPasswordCredentials)
+function isfilled(cred::UserPasswordCredential)
     !isempty(cred.user) && !isempty(cred.pass)
 end
 
-"SSH credentials type"
-mutable struct SSHCredentials <: AbstractCredentials
+"SSH credential type"
+mutable struct SSHCredential <: AbstractCredential
     user::String
     pass::String
     prvkey::String
     pubkey::String
-    function SSHCredentials(user::AbstractString="", pass::AbstractString="",
+    function SSHCredential(user::AbstractString="", pass::AbstractString="",
                             prvkey::AbstractString="", pubkey::AbstractString="")
         c = new(user, pass, prvkey, pubkey)
-        finalizer(c, securezero!)
+        finalizer(securezero!, c)
         return c
     end
 
     # Deprecated constructors
-    function SSHCredentials(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool)
+    function SSHCredential(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool)
         Base.depwarn(string(
-            "`SSHCredentials` no longer supports the `prompt_if_incorrect` parameter. ",
+            "`SSHCredential` no longer supports the `prompt_if_incorrect` parameter. ",
             "Use the `allow_prompt` keyword in supported by `LibGit2.CredentialPayload` ",
-            "instead."), :SSHCredentials)
-        SSHCredentials(u, p, prvkey, pubkey)
+            "instead."), :SSHCredential)
+        SSHCredential(u, p, prvkey, pubkey)
     end
-    SSHCredentials(u::AbstractString, p::AbstractString, prompt_if_incorrect::Bool) = SSHCredentials(u,p,"","",prompt_if_incorrect)
-    SSHCredentials(prompt_if_incorrect::Bool) = SSHCredentials("","","","",prompt_if_incorrect)
+    SSHCredential(u::AbstractString, p::AbstractString, prompt_if_incorrect::Bool) = SSHCredential(u,p,"","",prompt_if_incorrect)
+    SSHCredential(prompt_if_incorrect::Bool) = SSHCredential("","","","",prompt_if_incorrect)
 end
 
-function securezero!(cred::SSHCredentials)
+function securezero!(cred::SSHCredential)
     securezero!(cred.user)
     securezero!(cred.pass)
     securezero!(cred.prvkey)
@@ -1206,19 +1205,19 @@ function securezero!(cred::SSHCredentials)
     return cred
 end
 
-function Base.:(==)(a::SSHCredentials, b::SSHCredentials)
+function Base.:(==)(a::SSHCredential, b::SSHCredential)
     a.user == b.user && a.pass == b.pass && a.prvkey == b.prvkey && a.pubkey == b.pubkey
 end
 
-function isfilled(cred::SSHCredentials)
+function isfilled(cred::SSHCredential)
     !isempty(cred.user) && isfile(cred.prvkey) && isfile(cred.pubkey) &&
     (!isempty(cred.pass) || !is_passphrase_required(cred.prvkey))
 end
 
-"Credentials that support caching"
-struct CachedCredentials <: AbstractCredentials
-    cred::Dict{String,AbstractCredentials}
-    CachedCredentials() = new(Dict{String,AbstractCredentials}())
+"Caches credential information for re-use"
+struct CachedCredentials
+    cred::Dict{String,AbstractCredential}
+    CachedCredentials() = new(Dict{String,AbstractCredential}())
 end
 
 Base.haskey(cache::CachedCredentials, cred_id) = Base.haskey(cache.cred, cred_id)
@@ -1230,16 +1229,15 @@ function securezero!(p::CachedCredentials)
     return p
 end
 
-function approve(cache::CachedCredentials, cred::AbstractCredentials, url::AbstractString)
+function approve(cache::CachedCredentials, cred::AbstractCredential, url::AbstractString)
     cred_id = credential_identifier(url)
     cache.cred[cred_id] = cred
     nothing
 end
 
-function reject(cache::CachedCredentials, cred::AbstractCredentials, url::AbstractString)
+function reject(cache::CachedCredentials, cred::AbstractCredential, url::AbstractString)
     cred_id = credential_identifier(url)
     if haskey(cache.cred, cred_id)
-        securezero!(cache.cred[cred_id])  # Wipe out invalid credentials
         delete!(cache.cred, cred_id)
     end
     nothing
@@ -1253,7 +1251,7 @@ A `CredentialPayload` instance is expected to be `reset!` whenever it will be us
 different URL.
 """
 mutable struct CredentialPayload <: Payload
-    explicit::Nullable{AbstractCredentials}
+    explicit::Nullable{AbstractCredential}
     cache::Nullable{CachedCredentials}
     allow_ssh_agent::Bool    # Allow the use of the SSH agent to get credentials
     allow_git_helpers::Bool  # Allow the use of git credential helpers
@@ -1262,7 +1260,7 @@ mutable struct CredentialPayload <: Payload
     config::GitConfig
 
     # Ephemeral state fields
-    credential::Nullable{AbstractCredentials}
+    credential::Nullable{AbstractCredential}
     first_pass::Bool
     use_ssh_agent::Bool
     use_env::Bool
@@ -1275,7 +1273,7 @@ mutable struct CredentialPayload <: Payload
     host::String
 
     function CredentialPayload(
-            credential::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}(),
+            credential::Nullable{<:AbstractCredential}=Nullable{AbstractCredential}(),
             cache::Nullable{CachedCredentials}=Nullable{CachedCredentials}(),
             config::GitConfig=GitConfig();
             allow_ssh_agent::Bool=true,
@@ -1287,12 +1285,12 @@ mutable struct CredentialPayload <: Payload
     end
 end
 
-function CredentialPayload(credential::AbstractCredentials; kwargs...)
+function CredentialPayload(credential::AbstractCredential; kwargs...)
     CredentialPayload(Nullable(credential), Nullable{CachedCredentials}(); kwargs...)
 end
 
 function CredentialPayload(cache::CachedCredentials; kwargs...)
-    CredentialPayload(Nullable{AbstractCredentials}(), Nullable(cache); kwargs...)
+    CredentialPayload(Nullable{AbstractCredential}(), Nullable(cache); kwargs...)
 end
 
 """
@@ -1303,7 +1301,7 @@ the credential callback. If a `config` is provided the configuration will also b
 """
 function reset!(p::CredentialPayload, config::GitConfig=p.config)
     p.config = config
-    p.credential = Nullable{AbstractCredentials}()
+    p.credential = Nullable{AbstractCredential}()
     p.first_pass = true
     p.use_ssh_agent = p.allow_ssh_agent
     p.use_env = true
@@ -1318,37 +1316,51 @@ function reset!(p::CredentialPayload, config::GitConfig=p.config)
 end
 
 """
-    approve(payload::CredentialPayload) -> Void
+    approve(payload::CredentialPayload; shred::Bool=true) -> Void
 
 Store the `payload` credential for re-use in a future authentication. Should only be called
 when authentication was successful.
+
+The `shred` keyword controls whether sensitive information in the payload credential field
+should be destroyed. Should only be set to `false` during testing.
 """
-function approve(p::CredentialPayload)
+function approve(p::CredentialPayload; shred::Bool=true)
     isnull(p.credential) && return  # No credentials were used
     cred = unsafe_get(p.credential)
 
     if !isnull(p.cache)
         approve(unsafe_get(p.cache), cred, p.url)
+        shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
     if p.allow_git_helpers
         approve(p.config, cred, p.url)
     end
+
+    shred && securezero!(cred)
+    nothing
 end
 
 """
-    reject(payload::CredentialPayload) -> Void
+    reject(payload::CredentialPayload; shred::Bool=true) -> Void
 
 Discard the `payload` credential from begin re-used in future authentication. Should only be
 called when authentication was unsuccessful.
+
+The `shred` keyword controls whether sensitive information in the payload credential field
+should be destroyed. Should only be set to `false` during testing.
 """
-function reject(p::CredentialPayload)
+function reject(p::CredentialPayload; shred::Bool=true)
     isnull(p.credential) && return  # No credentials were used
     cred = unsafe_get(p.credential)
 
     if !isnull(p.cache)
         reject(unsafe_get(p.cache), cred, p.url)
+        shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
     if p.allow_git_helpers
         reject(p.config, cred, p.url)
     end
+
+    shred && securezero!(cred)
+    nothing
 end

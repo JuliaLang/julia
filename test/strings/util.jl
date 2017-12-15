@@ -1,14 +1,46 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @testset "padding (lpad and rpad)" begin
+    @test lpad("foo", 2) == "foo"
+    @test rpad("foo", 2) == "foo"
     @test lpad("foo", 3) == "foo"
     @test rpad("foo", 3) == "foo"
+    @test lpad("foo", 4) == " foo"
+    @test rpad("foo", 4) == "foo "
     @test lpad("foo", 5) == "  foo"
     @test rpad("foo", 5) == "foo  "
-    @test lpad("foo", 5, "  ") == "  foo"
-    @test rpad("foo", 5, "  ") == "foo  "
-    @test lpad("foo", 6, "  ") == "   foo"
-    @test rpad("foo", 6, "  ") == "foo   "
+    @test lpad("foo", 2, "123") == "foo"
+    @test rpad("foo", 2, "123") == "foo"
+    @test lpad("foo", 3, "123") == "foo"
+    @test rpad("foo", 3, "123") == "foo"
+    @test lpad("foo", 4, "123") == "1foo"
+    @test rpad("foo", 4, "123") == "foo1"
+    @test lpad("foo", 5, "123") == "12foo"
+    @test rpad("foo", 5, "123") == "foo12"
+    @test lpad("foo", 6, "123") == "123foo"
+    @test rpad("foo", 6, "123") == "foo123"
+    @test lpad("foo", 7, "123") == "1231foo"
+    @test rpad("foo", 7, "123") == "foo1231"
+    @test lpad("foo", 8, "123") == "12312foo"
+    @test rpad("foo", 8, "123") == "foo12312"
+    @test lpad("foo", 9, "123") == "123123foo"
+    @test rpad("foo", 9, "123") == "foo123123"
+    @test lpad("αβ", 2, "¹₂³") == "αβ"
+    @test rpad("αβ", 2, "¹₂³") == "αβ"
+    @test lpad("αβ", 3, "¹₂³") == "¹αβ"
+    @test rpad("αβ", 3, "¹₂³") == "αβ¹"
+    @test lpad("αβ", 4, "¹₂³") == "¹₂αβ"
+    @test rpad("αβ", 4, "¹₂³") == "αβ¹₂"
+    @test lpad("αβ", 5, "¹₂³") == "¹₂³αβ"
+    @test rpad("αβ", 5, "¹₂³") == "αβ¹₂³"
+    @test lpad("αβ", 6, "¹₂³") == "¹₂³¹αβ"
+    @test rpad("αβ", 6, "¹₂³") == "αβ¹₂³¹"
+    @test lpad("αβ", 7, "¹₂³") == "¹₂³¹₂αβ"
+    @test rpad("αβ", 7, "¹₂³") == "αβ¹₂³¹₂"
+    @test lpad("αβ", 8, "¹₂³") == "¹₂³¹₂³αβ"
+    @test rpad("αβ", 8, "¹₂³") == "αβ¹₂³¹₂³"
+    @test lpad("αβ", 9, "¹₂³") == "¹₂³¹₂³¹αβ"
+    @test rpad("αβ", 9, "¹₂³") == "αβ¹₂³¹₂³¹"
 end
 
 # string manipulation
@@ -210,7 +242,7 @@ end
     @test replace("ḟøøƀäṙḟøø", r"(ḟø|ƀä)", "xx") == "xxøxxṙxxø"
     @test replace("ḟøøƀäṙḟøø", r"(ḟøø|ƀä)", "ƀäṙ") == "ƀäṙƀäṙṙƀäṙ"
 
-    @test replace("foo", "oo", uppercase) == "fOO"
+    @test replace("foo", "oo", Base.Unicode.uppercase) == "fOO"
 
     # Issue 13332
     @test replace("abc", 'b', 2.1) == "a2.1c"
@@ -283,7 +315,7 @@ end
 
     @testset "Issue 23161" begin
         arr = b"0123456789abcdefABCDEF"
-        arr1 = Vector{UInt8}(length(arr) >> 1)
+        arr1 = Vector{UInt8}(uninitialized, length(arr) >> 1)
         @test hex2bytes!(arr1, arr) === arr1 # check in-place
         @test "0123456789abcdefabcdef" == bytes2hex(arr1)
         @test hex2bytes("0123456789abcdefABCDEF") == hex2bytes(arr)

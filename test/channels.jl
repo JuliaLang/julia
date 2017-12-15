@@ -84,6 +84,7 @@ let s, c = Channel(32)
 end
 
 # Tests for channels bound to tasks.
+using Distributed
 for N in [0,10]
     # Normal exit of task
     c=Channel(N)
@@ -198,6 +199,7 @@ for N in [0,10]
 end
 
 # Testing timedwait on multiple channels
+using Dates
 @sync begin
     rr1 = Channel(1)
     rr2 = Channel(1)
@@ -226,7 +228,7 @@ end
 
 
 # test for yield/wait/event failures
-@noinline garbage_finalizer(f) = finalizer("gar" * "bage", f)
+@noinline garbage_finalizer(f) = finalizer(f, "gar" * "bage")
 let t, run = Ref(0)
     gc_enable(false)
     # test for finalizers trying to yield leading to failed attempts to context switch

@@ -134,7 +134,7 @@ end
 terminline(io::IO, f::Footnote) = with_output_format(:bold, terminline, io, "[^$(f.id)]")
 
 function terminline(io::IO, md::Link)
-    terminline(io, md.text)
+    terminline(io, "$(terminline(md.text)) ($(md.url))")
 end
 
 function terminline(io::IO, code::Code)

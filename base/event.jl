@@ -23,17 +23,13 @@ end
 
 Block the current task until some event occurs, depending on the type of the argument:
 
-* [`RemoteChannel`](@ref) : Wait for a value to become available on the specified remote
-  channel.
-* [`Future`](@ref) : Wait for a value to become available for the specified future.
 * [`Channel`](@ref): Wait for a value to be appended to the channel.
 * [`Condition`](@ref): Wait for [`notify`](@ref) on a condition.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
   can be used to determine success or failure.
 * [`Task`](@ref): Wait for a `Task` to finish, returning its result value. If the task fails
   with an exception, the exception is propagated (re-thrown in the task that called `wait`).
-* `RawFD`: Wait for changes on a file descriptor (see [`poll_fd`](@ref) for keyword
-  arguments and return code)
+* `RawFD`: Wait for changes on a file descriptor (see the `FileWatching` package).
 
 If no argument is passed, the task blocks for an undefined period. A task can only be
 restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
@@ -61,7 +57,7 @@ Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (t
 all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value
 is raised as an exception in the woken tasks.
 
-Returns the count of tasks woken up. Returns 0 if no tasks are waiting on `condition`.
+Return the count of tasks woken up. Return 0 if no tasks are waiting on `condition`.
 """
 notify(c::Condition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
 function notify(c::Condition, arg, all, error)
@@ -304,7 +300,7 @@ mutable struct AsyncCondition
     function AsyncCondition()
         this = new(Libc.malloc(_sizeof_uv_async), Condition(), true)
         associate_julia_struct(this.handle, this)
-        finalizer(this, uvfinalize)
+        finalizer(uvfinalize, this)
         err = ccall(:uv_async_init, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
             eventloop(), this, uv_jl_asynccb::Ptr{Void})
         if err != 0
@@ -373,7 +369,7 @@ mutable struct Timer
         end
 
         associate_julia_struct(this.handle, this)
-        finalizer(this, uvfinalize)
+        finalizer(uvfinalize, this)
 
         ccall(:uv_update_time, Void, (Ptr{Void},), eventloop())
         ccall(:uv_timer_start,  Cint,  (Ptr{Void}, Ptr{Void}, UInt64, UInt64),

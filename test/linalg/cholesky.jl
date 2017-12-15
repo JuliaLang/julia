@@ -5,15 +5,15 @@ using Test
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
 
 function unary_ops_tests(a, ca, tol; n=size(a, 1))
-    @test inv(ca)*a ≈ eye(n)
-    @test a*inv(ca) ≈ eye(n)
+    @test inv(ca)*a ≈ Matrix(I, n, n)
+    @test a*inv(ca) ≈ Matrix(I, n, n)
     @test abs((det(ca) - det(a))/det(ca)) <= tol # Ad hoc, but statistically verified, revisit
     @test logdet(ca) ≈ logdet(a)
     @test logdet(ca) ≈ log(det(ca))  # logdet is less likely to overflow
     @test isposdef(ca)
     @test_throws KeyError ca[:Z]
     @test size(ca) == size(a)
-    @test Matrix(copy(ca)) ≈ a
+    @test Array(copy(ca)) ≈ a
 end
 
 function factor_recreation_tests(a_U, a_L)
@@ -21,7 +21,7 @@ function factor_recreation_tests(a_U, a_L)
     c_L = cholfact(a_L)
     cl  = chol(a_L)
     ls = c_L[:L]
-    @test Matrix(c_U) ≈ Matrix(c_L) ≈ a_U
+    @test Array(c_U) ≈ Array(c_L) ≈ a_U
     @test ls*ls' ≈ a_U
     @test triu(c_U.factors) ≈ c_U[:U]
     @test tril(c_L.factors) ≈ c_L[:L]
@@ -46,7 +46,7 @@ end
     breal = randn(n,2)/2
     bimg  = randn(n,2)/2
 
-    for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
+    for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
         a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
 
@@ -73,7 +73,7 @@ end
         #Test error bound on reconstruction of matrix: LAWNS 14, Lemma 2.1
 
         #these tests were failing on 64-bit linux when inside the inner loop
-        #for eltya = Complex64 and eltyb = Int. The E[i,j] had NaN32 elements
+        #for eltya = ComplexF32 and eltyb = Int. The E[i,j] had NaN32 elements
         #but only with srand(1234321) set before the loops.
         E = abs.(apd - r'*r)
         for i=1:n, j=1:n
@@ -102,8 +102,8 @@ end
                 capds = cholfact!(copy(apds))
                 unary_ops_tests(apds, capds, ε*κ*n)
             end
-            ulstring = sprint(show, capds[:UL])
-            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
+            ulstring = sprint((t, s) -> show(t, "text/plain", s), capds[:UL])
+            @test sprint((t, s) -> show(t, "text/plain", s), capds) == "$(typeof(capds))\nU factor:\n$ulstring"
         else
             capdh = cholfact(apdh)
             unary_ops_tests(apdh, capdh, ε*κ*n)
@@ -111,8 +111,8 @@ end
             unary_ops_tests(apdh, capdh, ε*κ*n)
             capdh = cholfact!(copy(apd))
             unary_ops_tests(apd, capdh, ε*κ*n)
-            ulstring = sprint(show, capdh[:UL])
-            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
+            ulstring = sprint((t, s) -> show(t, "text/plain", s), capdh[:UL])
+            @test sprint((t, s) -> show(t, "text/plain", s), capdh) == "$(typeof(capdh))\nU factor:\n$ulstring"
         end
 
         # test chol of 2x2 Strang matrix
@@ -138,7 +138,7 @@ end
             @test cpapd[:P]*cpapd[:L]*cpapd[:U]*cpapd[:P]' ≈ apd
         end
 
-        for eltyb in (Float32, Float64, Complex64, Complex128, Int)
+        for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
             b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
             εb = eps(abs(float(one(eltyb))))
             ε = max(εa,εb)
@@ -180,6 +180,8 @@ end
                 C = cholfact(A)
                 @test !isposdef(C)
                 @test !LinAlg.issuccess(C)
+                Cstr = sprint((t, s) -> show(t, "text/plain", s), C)
+                @test Cstr == "Failed factorization of type $(typeof(C))"
                 @test_throws PosDefException C\B
                 @test_throws PosDefException det(C)
                 @test_throws PosDefException logdet(C)
@@ -251,7 +253,7 @@ end
     cholfact(Hermitian(apd, :L), Val(true)) \ b
     r = factorize(apd)[:U]
     E = abs.(apd - r'*r)
-    ε = eps(abs(float(one(Complex64))))
+    ε = eps(abs(float(one(ComplexF32))))
     n = 10
     for i=1:n, j=1:n
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))

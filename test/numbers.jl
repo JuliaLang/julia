@@ -1816,7 +1816,7 @@ end
     @test isa(0b00000000000000000000000000000000000000000000000000000000000000000,UInt128)
     @test isa(0b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+    @test_throws Meta.ParseError Meta.parse("0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
     @test isa(0b11111111,UInt8)
     @test isa(0b111111111,UInt16)
     @test isa(0b1111111111111111,UInt16)
@@ -1827,7 +1827,7 @@ end
     @test isa(0b11111111111111111111111111111111111111111111111111111111111111111,UInt128)
     @test isa(0b11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("0b111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111")
+    @test_throws Meta.ParseError Meta.parse("0b111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111")
 end
 @testset "octal literals" begin
     @test 0o10 == 0x8
@@ -1845,7 +1845,7 @@ end
     @test isa(0o0000000000000000000000,UInt128)
     @test isa(0o000000000000000000000000000000000000000000,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("0o0000000000000000000000000000000000000000000")
+    @test_throws Meta.ParseError Meta.parse("0o0000000000000000000000000000000000000000000")
     @test isa(0o11,UInt8)
     @test isa(0o111,UInt8)
     @test isa(0o11111,UInt16)
@@ -1857,7 +1857,7 @@ end
     @test isa(0o111111111111111111111111111111111111111111,UInt128)
     @test isa(0o1111111111111111111111111111111111111111111,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("0o11111111111111111111111111111111111111111111")
+    @test_throws Meta.ParseError Meta.parse("0o11111111111111111111111111111111111111111111")
 end
 @testset "hexadecimal literals" begin
     @test isa(0x00,UInt8)
@@ -1870,7 +1870,7 @@ end
     @test isa(0x00000000000000000,UInt128)
     @test isa(0x00000000000000000000000000000000,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("0x000000000000000000000000000000000")
+    @test_throws Meta.ParseError Meta.parse("0x000000000000000000000000000000000")
 
     @test isa(0x11,UInt8)
     @test isa(0x111,UInt16)
@@ -1882,7 +1882,7 @@ end
     @test isa(0x11111111111111111,UInt128)
     @test isa(0x11111111111111111111111111111111,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("0x111111111111111111111111111111111")
+    @test_throws Meta.ParseError Meta.parse("0x111111111111111111111111111111111")
 end
 @testset "minus sign and unsigned literals" begin
     # "-" is not part of unsigned literals
@@ -1902,7 +1902,7 @@ end
     @test isa(-0x00000000000000000,UInt128)
     @test isa(-0x00000000000000000000000000000000,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("-0x000000000000000000000000000000000")
+    @test_throws Meta.ParseError Meta.parse("-0x000000000000000000000000000000000")
 end
 @testset "Float32 literals" begin
     @test isa(1f0,Float32)
@@ -2421,8 +2421,8 @@ end
 
 @testset "issue #12832" begin
     @test_throws ErrorException reinterpret(Float64, Complex{Int64}(1))
-    @test_throws ErrorException reinterpret(Float64, Complex64(1))
-    @test_throws ErrorException reinterpret(Complex64, Float64(1))
+    @test_throws ErrorException reinterpret(Float64, ComplexF32(1))
+    @test_throws ErrorException reinterpret(ComplexF32, Float64(1))
     @test_throws ErrorException reinterpret(Int32, false)
 end
 # issue #41
@@ -2504,8 +2504,8 @@ end
     zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
                      0x40, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0xc0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-    z1 = read(zbuf, Complex64)
-    z2 = read(zbuf, Complex128)
+    z1 = read(zbuf, ComplexF32)
+    z2 = read(zbuf, ComplexF64)
     @test bswap(z1) === -1.5f0 + 2.5f0im
     @test bswap(z2) ===  3.5 - 4.5im
 end
@@ -2842,7 +2842,7 @@ end
     let types = (Base.BitInteger_types..., BigInt, Bool,
                  Rational{Int}, Rational{BigInt},
                  Float16, Float32, Float64, BigFloat,
-                 Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
+                 Complex{Int}, Complex{UInt}, ComplexF16, ComplexF32, ComplexF64)
         for S in types
             for op in (+, -)
                 T = @inferred Base.promote_op(op, S)
@@ -2965,6 +2965,14 @@ module M20889 # do we get the expected behavior without importing Base.^?
     Test.@test PR20889(2)^3 == 5
 end
 
+@testset "literal negative power accuracy" begin
+    @test 0.7130409001548401^-2 == 0.7130409001548401^-2.0
+    @test 0.09496527f0^-2 == 0.09496527f0^-2.0f0
+    @test 0.20675883960662367^-100 == 0.20675883960662367^-100.0
+    @test 0.6123676f0^-100 == 0.6123676f0^-100.0f0
+    @test 0.004155780785470562^-1 == 0.004155780785470562^-1.0
+end
+
 @testset "iszero & isone" begin
     # Numeric scalars
     for T in [Float16, Float32, Float64, BigFloat,
@@ -2995,14 +3003,16 @@ end
     @test !isone(tril(ones(Int, 5, 5)))
     @test !isone(triu(ones(Int, 5, 5)))
     @test !isone(zeros(Int, 5, 5))
-    @test isone(eye(Int, 5, 5))
-    @test isone(eye(Int, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
+    @test isone(Matrix(1I, 5, 5))
+    @test isone(Matrix(1I, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
 end
 
 f20065(B, i) = UInt8(B[i])
 @testset "issue 20065" begin
     # f20065 must be called from global scope to exhibit the buggy behavior
-    for B in (Array{Bool}(10), Array{Bool}(10,10), reinterpret(Bool, rand(UInt8, 10)))
+    for B in (Vector{Bool}(uninitialized, 10),
+                Matrix{Bool}(uninitialized, 10,10),
+                reinterpret(Bool, rand(UInt8, 10)))
         @test all(x-> x <= 1, (f20065(B, i) for i in eachindex(B)))
         for i in 1:length(B)
             @test (@eval f20065($B, $i) <= 1)
@@ -3060,14 +3070,22 @@ end
     end
 end
 
-@testset "printing non finite floats" for T in subtypes(AbstractFloat)
-    for (x, sx) in [(T(NaN), "NaN"),
-                    (-T(NaN), "NaN"),
-                    (T(Inf), "Inf"),
-                    (-T(Inf), "-Inf")]
-        @assert x isa T
-        @test string(x) == sx
-        @test sprint(io -> show(IOContext(io, :compact => true), x)) == sx
-        @test sprint(print, x) == sx
+@testset "printing non finite floats" begin
+    let float_types = Set()
+        allsubtypes!(Base, AbstractFloat, float_types)
+        allsubtypes!(Core, AbstractFloat, float_types)
+        @test !isempty(float_types)
+
+        for T in float_types
+            for (x, sx) in [(T(NaN), "NaN"),
+                            (-T(NaN), "NaN"),
+                            (T(Inf), "Inf"),
+                            (-T(Inf), "-Inf")]
+                @assert x isa T
+                @test string(x) == sx
+                @test sprint(io -> show(IOContext(io, :compact => true), x)) == sx
+                @test sprint(print, x) == sx
+            end
+        end
     end
 end

@@ -120,10 +120,10 @@ export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
     Tuple, Type, UnionAll, TypeName, TypeVar, Union, Void,
-    SimpleVector, AbstractArray, DenseArray,
+    SimpleVector, AbstractArray, DenseArray, NamedTuple,
     # special objects
     Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
-    Module, Symbol, Task, Array, WeakRef, VecElement,
+    Module, Symbol, Task, Array, Uninitialized, uninitialized, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,
@@ -148,8 +148,6 @@ export
     applicable, invoke,
     # constants
     nothing, Main
-
-const AnyVector = Array{Any,1}
 
 abstract type Number end
 abstract type Real     <: Number end
@@ -260,8 +258,6 @@ struct AssertionError <: Exception
 end
 AssertionError() = AssertionError("")
 
-#Generic wrapping of arbitrary exceptions
-#Subtypes should put the exception in an 'error' field
 abstract type WrappedException <: Exception end
 
 struct LoadError <: WrappedException
@@ -350,25 +346,31 @@ unsafe_convert(::Type{T}, x::T) where {T} = x
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 
-# primitive array constructors
-Array{T,N}(d::NTuple{N,Int}) where {T,N} =
-    ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
-Array{T,1}(d::NTuple{1,Int}) where {T} = Array{T,1}(getfield(d,1))
-Array{T,2}(d::NTuple{2,Int}) where {T} = Array{T,2}(getfield(d,1), getfield(d,2))
-Array{T,3}(d::NTuple{3,Int}) where {T} = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
-Array{T,N}(d::Vararg{Int,N}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
-Array{T,1}(m::Int) where {T} = ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
-Array{T,2}(m::Int, n::Int) where {T} =
+## primitive Array constructors
+struct Uninitialized end
+const uninitialized = Uninitialized()
+# type and dimensionality specified, accepting dims as series of Ints
+Array{T,1}(::Uninitialized, m::Int) where {T} =
+    ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
+Array{T,2}(::Uninitialized, m::Int, n::Int) where {T} =
     ccall(:jl_alloc_array_2d, Array{T,2}, (Any, Int, Int), Array{T,2}, m, n)
-Array{T,3}(m::Int, n::Int, o::Int) where {T} =
+Array{T,3}(::Uninitialized, m::Int, n::Int, o::Int) where {T} =
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any, Int, Int, Int), Array{T,3}, m, n, o)
+Array{T,N}(::Uninitialized, d::Vararg{Int,N}) where {T,N} =
+    ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+# type and dimensionality specified, accepting dims as tuples of Ints
+Array{T,1}(::Uninitialized, d::NTuple{1,Int}) where {T} = Array{T,1}(uninitialized, getfield(d,1))
+Array{T,2}(::Uninitialized, d::NTuple{2,Int}) where {T} = Array{T,2}(uninitialized, getfield(d,1), getfield(d,2))
+Array{T,3}(::Uninitialized, d::NTuple{3,Int}) where {T} = Array{T,3}(uninitialized, getfield(d,1), getfield(d,2), getfield(d,3))
+Array{T,N}(::Uninitialized, d::NTuple{N,Int}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+# type but not dimensionality specified
+Array{T}(::Uninitialized, m::Int) where {T} = Array{T,1}(uninitialized, m)
+Array{T}(::Uninitialized, m::Int, n::Int) where {T} = Array{T,2}(uninitialized, m, n)
+Array{T}(::Uninitialized, m::Int, n::Int, o::Int) where {T} = Array{T,3}(uninitialized, m, n, o)
+Array{T}(::Uninitialized, d::NTuple{N,Int}) where {T,N} = Array{T,N}(uninitialized, d)
+# empty vector constructor
+Array{T,1}() where {T} = Array{T,1}(uninitialized, 0)
 
-Array{T}(d::NTuple{N,Int}) where {T,N} = Array{T,N}(d)
-Array{T}(m::Int) where {T} = Array{T,1}(m)
-Array{T}(m::Int, n::Int) where {T} = Array{T,2}(m, n)
-Array{T}(m::Int, n::Int, o::Int) where {T} = Array{T,3}(m, n, o)
-
-Array{T,1}() where {T} = Array{T,1}(0)
 
 # primitive Symbol constructors
 function Symbol(s::String)
@@ -455,6 +457,44 @@ function (g::GeneratedFunctionStub)(@nospecialize args...)
         return lam
     else
         return Expr(Symbol("with-static-parameters"), lam, g.spnames...)
+    end
+end
+
+NamedTuple() = NamedTuple{(),Tuple{}}(())
+
+"""
+    NamedTuple{names}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
+"""
+NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
+
+using .Intrinsics: sle_int, add_int
+
+macro generated()
+    return Expr(:generated)
+end
+
+function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
+    if @generated
+        N = nfields(names)
+        flds = Array{Any,1}(uninitialized, N)
+        i = 1
+        while sle_int(i, N)
+            arrayset(false, flds, :(getfield(args, $i)), i)
+            i = add_int(i, 1)
+        end
+        Expr(:new, :(NamedTuple{names,T}), flds...)
+    else
+        N = nfields(names)
+        NT = NamedTuple{names,T}
+        flds = Array{Any,1}(uninitialized, N)
+        i = 1
+        while sle_int(i, N)
+            arrayset(false, flds, getfield(args, i), i)
+            i = add_int(i, 1)
+        end
+        ccall(:jl_new_structv, Any, (Any, Ptr{Void}, UInt32), NT, fields, N)::NT
     end
 end
 

@@ -101,17 +101,6 @@ for (i, T) in enumerate(types)
     show(io1, x3)
     showcompact(io2, get(x3))
     @test String(take!(io1)) == @sprintf("Nullable{%s}(%s)", T, String(take!(io2)))
-
-    a1 = [x2]
-    show(IOContext(io1, :compact => false), a1)
-    show(IOContext(io2, :compact => false), x2)
-    @test String(take!(io1)) ==
-        @sprintf("Nullable{%s}[%s]", string(T), String(take!(io2)))
-
-    show(io1, a1)
-    show(IOContext(io2, :compact => true), x2)
-    @test String(take!(io1)) ==
-        @sprintf("Nullable{%s}[%s]", string(T), String(take!(io2)))
 end
 
 module NullableTestEnum
@@ -388,6 +377,7 @@ end
 @test isequal(convert(Nullable, "a"), Nullable("a"))
 @test isequal(convert(Nullable, Nullable("a")), Nullable("a"))
 
+using Dates
 @test promote_type(Nullable{Int}, Int) === Nullable{Int}
 @test promote_type(Nullable{Union{}}, Int) === Nullable{Int}
 @test promote_type(Nullable{Float64}, Nullable{Int}) === Nullable{Float64}
@@ -398,7 +388,7 @@ end
 @test Base.promote_op(-, Nullable{Int}, Nullable{Int}) == Nullable{Int}
 @test Base.promote_op(+, Nullable{Float64}, Nullable{Int}) == Nullable{Float64}
 @test Base.promote_op(-, Nullable{Float64}, Nullable{Int}) == Nullable{Float64}
-@test Base.promote_op(-, Nullable{DateTime}, Nullable{DateTime}) == Nullable{Base.Dates.Millisecond}
+@test Base.promote_op(-, Nullable{DateTime}, Nullable{DateTime}) == Nullable{Dates.Millisecond}
 
 # tests for istypeequal (which uses filter, broadcast)
 @test istypeequal(Nullable(0), Nullable(0))

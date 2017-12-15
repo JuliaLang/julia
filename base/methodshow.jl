@@ -46,7 +46,7 @@ function method_argnames(m::Method)
     if !isdefined(m, :source) && isdefined(m, :generator)
         return m.generator.argnames
     end
-    argnames = Vector{Any}(m.nargs)
+    argnames = Vector{Any}(uninitialized, m.nargs)
     ccall(:jl_fill_argnames, Void, (Any, Any), m.source, argnames)
     return argnames
 end
@@ -75,7 +75,7 @@ function arg_decl_parts(m::Method)
 end
 
 function kwarg_decl(m::Method, kwtype::DataType)
-    sig = rewrap_unionall(Tuple{kwtype, Core.AnyVector, unwrap_unionall(m.sig).parameters...}, m.sig)
+    sig = rewrap_unionall(Tuple{kwtype, NamedTuple, unwrap_unionall(m.sig).parameters...}, m.sig)
     kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, typemax(UInt))
     if kwli !== nothing
         kwli = kwli::Method

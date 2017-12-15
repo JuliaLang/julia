@@ -18,7 +18,7 @@ module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 """
     module_parent(m::Module) -> Module
 
-Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` after `workspace()`.
+Get a module's enclosing `Module`. `Main` is its own parent.
 
 # Examples
 ```jldoctest
@@ -127,12 +127,14 @@ julia> fieldname(SparseMatrixCSC, 5)
 ```
 """
 function fieldname(t::DataType, i::Integer)
-    n_fields = length(t.name.names)
+    names = isdefined(t, :names) ? t.names : t.name.names
+    n_fields = length(names)
     field_label = n_fields == 1 ? "field" : "fields"
     i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
     i < 1 && throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
-    return t.name.names[i]::Symbol
+    return names[i]::Symbol
 end
+
 fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)
 fieldname(t::Type{<:Tuple}, i::Integer) =
     i < 1 || i > fieldcount(t) ? throw(BoundsError(t, i)) : Int(i)
@@ -460,8 +462,6 @@ function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
-type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (Any,), x))
-
 """
     fieldcount(t::Type)
 
@@ -481,7 +481,19 @@ function fieldcount(@nospecialize t)
     if !(t isa DataType)
         throw(TypeError(:fieldcount, "", Type, t))
     end
-    if t.abstract || (t.name === Tuple.name && isvatuple(t))
+    if t.name === NamedTuple.body.body.name
+        names, types = t.parameters
+        if names isa Tuple
+            return length(names)
+        end
+        if types isa DataType && types <: Tuple
+            return fieldcount(types)
+        end
+        abstr = true
+    else
+        abstr = t.abstract || (t.name === Tuple.name && isvatuple(t))
+    end
+    if abstr
         error("type does not have a definite number of fields")
     end
     return length(t.types)

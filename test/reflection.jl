@@ -22,7 +22,7 @@ end
 
 function test_code_reflection(freflect, f, types, tester)
     tester(freflect, f, types)
-    tester(freflect, f, (types.parameters...))
+    tester(freflect, f, (types.parameters...,))
     nothing
 end
 
@@ -342,13 +342,13 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
 
-import Base: isstructtype, type_alignment, return_types
+import Base: isstructtype, datatype_alignment, return_types
 @test !isstructtype(Union{})
 @test !isstructtype(Union{Int,Float64})
 @test !isstructtype(Int)
 @test isstructtype(TLayout)
-@test type_alignment(UInt16) == 2
-@test type_alignment(TLayout) == 4
+@test datatype_alignment(UInt16) == 2
+@test datatype_alignment(TLayout) == 4
 let rts = return_types(TLayout)
     @test length(rts) >= 3 # general constructor, specific constructor, and call-to-convert adapter(s)
     @test all(rts .== TLayout)
@@ -548,7 +548,7 @@ for i = 1:100; @eval fLargeTable(::Any, ::Val{$i}) = 2; end
 fLargeTable(::Any...) = 3
 @test length(methods(fLargeTable, Tuple{})) == 1
 fLargeTable(::Complex, ::Complex) = 4
-fLargeTable(::Union{Complex64, Complex128}...) = 5
+fLargeTable(::Union{ComplexF32, ComplexF64}...) = 5
 @test length(methods(fLargeTable, Tuple{})) == 1
 fLargeTable() = 4
 @test length(methods(fLargeTable)) == 204
@@ -707,7 +707,7 @@ struct B20086{T,N} <: A20086{T,N} end
 
 # sizeof and nfields
 @test sizeof(Int16) == 2
-@test sizeof(Complex128) == 16
+@test sizeof(ComplexF64) == 16
 primitive type ParameterizedByte__{A,B} 8 end
 @test sizeof(ParameterizedByte__) == 1
 @test sizeof(nothing) == 0
@@ -721,7 +721,7 @@ end
 @test sizeof(Symbol("")) == 0
 @test_throws(ErrorException("argument is an abstract type; size is indeterminate"),
              sizeof(Real))
-@test sizeof(Union{Complex64,Complex128}) == 16
+@test sizeof(Union{ComplexF32,ComplexF64}) == 16
 @test sizeof(Union{Int8,UInt8}) == 1
 @test_throws ErrorException sizeof(AbstractArray)
 @test_throws ErrorException sizeof(Tuple)
@@ -737,8 +737,8 @@ end
 @test nfields(1) == 0
 @test fieldcount(Union{}) == 0
 @test fieldcount(Tuple{Any,Any,T} where T) == 3
-@test fieldcount(Complex) == fieldcount(Complex64) == 2
-@test fieldcount(Union{Complex64,Complex128}) == 2
+@test fieldcount(Complex) == fieldcount(ComplexF32) == 2
+@test fieldcount(Union{ComplexF32,ComplexF64}) == 2
 @test fieldcount(Int) == 0
 @test_throws(ErrorException("type does not have a definite number of fields"),
              fieldcount(Union{Complex,Pair}))

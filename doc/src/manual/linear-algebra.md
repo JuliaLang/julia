@@ -221,6 +221,44 @@ operators are generic and match the other matrix in the binary operations [`+`](
 with the identity operator `I` is a noop (except for checking that the scaling factor is one)
 and therefore almost without overhead.
 
+To see the `UniformScaling` operator in action:
+
+```jldoctest
+julia> U = UniformScaling(2);
+
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> a + U
+2×2 Array{Int64,2}:
+ 3  2
+ 3  6
+
+julia> a * U
+2×2 Array{Int64,2}:
+ 2  4
+ 6  8
+
+julia> [a U]
+2×4 Array{Int64,2}:
+ 1  2  2  0
+ 3  4  0  2
+
+julia> b = [1 2 3; 4 5 6]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> b - U
+ERROR: DimensionMismatch("matrix is not square: dimensions are (2, 3)")
+Stacktrace:
+ [1] checksquare at ./linalg/linalg.jl:220 [inlined]
+ [2] -(::Array{Int64,2}, ::UniformScaling{Int64}) at ./linalg/uniformscaling.jl:156
+ [3] top-level scope
+```
+
 ## [Matrix factorizations](@id man-linalg-factorizations)
 
 [Matrix factorizations (a.k.a. matrix decompositions)](https://en.wikipedia.org/wiki/Matrix_decomposition)
@@ -237,7 +275,6 @@ of the standard library documentation.
 | `CholeskyPivoted` | [Pivoted](https://en.wikipedia.org/wiki/Pivot_element) Cholesky factorization                                  |
 | `LU`              | [LU factorization](https://en.wikipedia.org/wiki/LU_decomposition)                                             |
 | `LUTridiagonal`   | LU factorization for [`Tridiagonal`](@ref) matrices                                                            |
-| `UmfpackLU`       | LU factorization for sparse matrices (computed by UMFPack)                                                     |
 | `QR`              | [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                             |
 | `QRCompactWY`     | Compact WY form of the QR factorization                                                                        |
 | `QRPivoted`       | Pivoted [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                     |

@@ -34,33 +34,36 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         end
         ap, bp = a.parameters, b.parameters
         lar = length(ap)::Int; lbr = length(bp)::Int
+        if lar == 0
+            return Tuple{Vararg{tailjoin(bp,1)}}
+        end
+        if lbr == 0
+            return Tuple{Vararg{tailjoin(ap,1)}}
+        end
         laf, afixed = full_va_len(ap)
         lbf, bfixed = full_va_len(bp)
-        if lar==0 || lbr==0
-            return Tuple
-        end
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
-                c = Vector{Any}(laf)
+                c = Vector{Any}(uninitialized, laf)
                 c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp,laf))}
                 n = laf-1
             else
-                c = Vector{Any}(laf+1)
+                c = Vector{Any}(uninitialized, laf+1)
                 c[laf+1] = Vararg{tailjoin(bp,laf+1)}
                 n = laf
             end
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
-                c = Vector{Any}(lbf)
+                c = Vector{Any}(uninitialized, lbf)
                 c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap,lbf))}
                 n = lbf-1
             else
-                c = Vector{Any}(lbf+1)
+                c = Vector{Any}(uninitialized, lbf+1)
                 c[lbf+1] = Vararg{tailjoin(ap,lbf+1)}
                 n = lbf
             end
         else
-            c = Vector{Any}(laf)
+            c = Vector{Any}(uninitialized, laf)
             n = laf
         end
         for i = 1:n
@@ -83,7 +86,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             if n == 0
                 return aprimary
             end
-            p = Vector{Any}(n)
+            p = Vector{Any}(uninitialized, n)
             for i = 1:n
                 ai, bi = a.parameters[i], b.parameters[i]
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
@@ -130,11 +133,14 @@ end
 """
     promote_type(type1, type2)
 
-Determine a type big enough to hold values of each argument type without loss, whenever
-possible. In some cases, where no type exists to which both types can be promoted
-losslessly, some loss is tolerated; for example, `promote_type(Int64, Float64)` returns
-[`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be represented
-exactly as `Float64` values.
+Promotion refers to converting values of mixed types to a single common type.
+`promote_type` represents the default promotion behavior in Julia when
+operators (usually mathematical) are given arguments of differing types.
+`promote_type` generally tries to return a type which can at least approximate
+most values of either input type without excessively widening.  Some loss is
+tolerated; for example, `promote_type(Int64, Float64)` returns
+[`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be
+represented exactly as `Float64` values.
 
 ```jldoctest
 julia> promote_type(Int64, Float64)
@@ -145,6 +151,15 @@ Int64
 
 julia> promote_type(Float32, BigInt)
 BigFloat
+
+julia> promote_type(Int16, Float16)
+Float16
+
+julia> promote_type(Int64, Float16)
+Float16
+
+julia> promote_type(Int8, UInt16)
+UInt16
 ```
 """
 function promote_type end
@@ -200,21 +215,20 @@ function promote end
 
 function _promote(x::T, y::S) where {T,S}
     @_inline_meta
-    (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
+    R = promote_type(T, S)
+    return (convert(R, x), convert(R, y))
 end
 promote_typeof(x) = typeof(x)
 promote_typeof(x, xs...) = (@_inline_meta; promote_type(typeof(x), promote_typeof(xs...)))
 function _promote(x, y, z)
     @_inline_meta
-    (convert(promote_typeof(x,y,z), x),
-     convert(promote_typeof(x,y,z), y),
-     convert(promote_typeof(x,y,z), z))
+    R = promote_typeof(x, y, z)
+    return (convert(R, x), convert(R, y), convert(R, z))
 end
 function _promote(x, y, zs...)
     @_inline_meta
-    (convert(promote_typeof(x,y,zs...), x),
-     convert(promote_typeof(x,y,zs...), y),
-     convert(Tuple{Vararg{promote_typeof(x,y,zs...)}}, zs)...)
+    R = promote_typeof(x, y, zs...)
+    return (convert(R, x), convert(R, y), convert(Tuple{Vararg{R}}, zs)...)
 end
 # TODO: promote(x::T, ys::T...) where {T} here to catch all circularities?
 

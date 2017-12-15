@@ -11,7 +11,7 @@ struct ModInt{n} <: Integer
 end
 
 Base.show(io::IO, k::ModInt{n}) where {n} =
-    print(io, get(io, :compact, false) ? k.k : "$(k.k) mod $n")
+    print(io, get(io, :typeinfo, Any) == typeof(k) ? k.k : "$(k.k) mod $n")
 
 (+)(a::ModInt{n}, b::ModInt{n}) where {n} = ModInt{n}(a.k+b.k)
 (-)(a::ModInt{n}, b::ModInt{n}) where {n} = ModInt{n}(a.k-b.k)

@@ -18,7 +18,7 @@ function tohtml(m::MIME"image/svg+xml", img)
     show(io, m, img)
 end
 
-# Display infrastructure
+# AbstractDisplay infrastructure
 
 function bestmime(val)
     for mime in ("text/html", "image/svg+xml", "image/png", "text/plain")

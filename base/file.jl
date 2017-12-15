@@ -35,7 +35,7 @@ export
 Get the current working directory.
 """
 function pwd()
-    b = Vector{UInt8}(1024)
+    b = Vector{UInt8}(uninitialized, 1024)
     len = Ref{Csize_t}(length(b))
     uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
     String(b[1:len[]])
@@ -257,7 +257,7 @@ end
 if Sys.iswindows()
 
 function tempdir()
-    temppath = Vector{UInt16}(32767)
+    temppath = Vector{UInt16}(uninitialized, 32767)
     lentemppath = ccall(:GetTempPathW,stdcall,UInt32,(UInt32,Ptr{UInt16}),length(temppath),temppath)
     if lentemppath >= length(temppath) || lentemppath == 0
         error("GetTempPath failed: $(Libc.FormatMessage())")
@@ -269,7 +269,7 @@ tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
 const temp_prefix = cwstring("jl_")
 function tempname(temppath::AbstractString,uunique::UInt32)
     tempp = cwstring(temppath)
-    tname = Vector{UInt16}(32767)
+    tname = Vector{UInt16}(uninitialized, 32767)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}), tempp,temp_prefix,uunique,tname)
     lentname = findfirst(iszero,tname)-1
     if uunique == 0 || lentname <= 0
@@ -350,7 +350,7 @@ tempname()
 """
     mktemp(parent=tempdir())
 
-Returns `(path, io)`, where `path` is the path of a new temporary file in `parent` and `io`
+Return `(path, io)`, where `path` is the path of a new temporary file in `parent` and `io`
 is an open file object for this path.
 """
 mktemp(parent)
@@ -403,7 +403,7 @@ end
 """
     readdir(dir::AbstractString=".") -> Vector{String}
 
-Returns the files and directories in the directory `dir` (or the current working directory if not given).
+Return the files and directories in the directory `dir` (or the current working directory if not given).
 """
 function readdir(path::AbstractString)
     # Allocate space for uv_fs_t struct
@@ -433,7 +433,7 @@ readdir() = readdir(".")
 """
     walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
 
-The `walkdir` method returns an iterator that walks the directory tree of a directory.
+Return an iterator that walks the directory tree of a directory.
 The iterator returns a tuple containing `(rootpath, dirs, files)`.
 The directory tree can be traversed top-down or bottom-up.
 If `walkdir` encounters a [`SystemError`](@ref)
@@ -465,8 +465,8 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
         close(chnl)
         return chnl
     end
-    dirs = Vector{eltype(content)}(0)
-    files = Vector{eltype(content)}(0)
+    dirs = Vector{eltype(content)}()
+    files = Vector{eltype(content)}()
     for name in content
         if isdir(joinpath(root, name))
             push!(dirs, name)
@@ -574,7 +574,7 @@ end
 """
     readlink(path::AbstractString) -> AbstractString
 
-Returns the target location a symbolic link `path` points to.
+Return the target location a symbolic link `path` points to.
 """
 function readlink(path::AbstractString)
     req = Libc.malloc(_sizeof_uv_fs)

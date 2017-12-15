@@ -5,10 +5,10 @@ Methods for working with Iterators.
 """
 module Iterators
 
-import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, indices, ndims, pairs
+import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, indices, ndims, pairs, last, first
 
 using Base: tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
-            IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds
+            IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange
 
 export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
 
@@ -29,6 +29,62 @@ and_iteratorsize(a, b) = SizeUnknown()
 
 and_iteratoreltype(iel::T, ::T) where {T} = iel
 and_iteratoreltype(a, b) = EltypeUnknown()
+
+## Reverse-order iteration for arrays and other collections.  Collections
+## should implement start/next/done etcetera if possible/practical.
+"""
+    Iterators.reverse(itr)
+
+Given an iterator `itr`, then `reverse(itr)` is an iterator over the
+same collection but in the reverse order.
+
+This iterator is "lazy" in that it does not make a copy of the collection in
+order to reverse it; see [`Base.reverse`](@ref) for an eager implementation.
+
+Not all iterator types `T` support reverse-order iteration.  If `T`
+doesn't, then iterating over `Iterators.reverse(itr::T)` will throw a [`MethodError`](@ref)
+because of the missing [`start`](@ref), [`next`](@ref), and [`done`](@ref)
+methods for `Iterators.Reverse{T}`.  (To implement these methods, the original iterator
+`itr::T` can be obtained from `r = Iterators.reverse(itr)` by `r.itr`.)
+
+# Examples
+```jldoctest
+julia> foreach(println, Iterators.reverse(1:5))
+5
+4
+3
+2
+1
+```
+"""
+reverse(itr) = Reverse(itr)
+
+struct Reverse{T}
+    itr::T
+end
+eltype(r::Reverse) = eltype(r.itr)
+length(r::Reverse) = length(r.itr)
+size(r::Reverse) = size(r.itr)
+iteratorsize(r::Reverse) = iteratorsize(r.itr)
+iteratoreltype(r::Reverse) = iteratoreltype(r.itr)
+last(r::Reverse) = first(r.itr) # the first shall be last
+first(r::Reverse) = last(r.itr) # and the last shall be first
+
+# reverse-order array iterators: assumes more-specialized Reverse for eachindex
+@inline start(A::Reverse{<:AbstractArray}) = (itr = reverse(eachindex(A.itr)); (itr, start(itr)))
+@propagate_inbounds next(A::Reverse{<:AbstractArray}, i) = ((idx, s) = next(i[1], i[2]); (A.itr[idx], (i[1], s)))
+@propagate_inbounds done(A::Reverse{<:AbstractArray}, i) = done(i[1], i[2])
+
+reverse(R::AbstractRange) = Base.reverse(R) # copying ranges is cheap
+reverse(G::Generator) = Generator(G.f, reverse(G.iter))
+reverse(r::Reverse) = r.itr
+reverse(x::Union{Number,Char}) = x
+reverse(p::Pair) = Base.reverse(p) # copying pairs is cheap
+
+start(r::Reverse{<:Tuple}) = length(r.itr)
+done(r::Reverse{<:Tuple}, i::Int) = i < 1
+next(r::Reverse{<:Tuple}, i::Int) = (r.itr[i], i-1)
+
 
 # enumerate
 
@@ -64,7 +120,7 @@ enumerate(iter) = Enumerate(iter)
 length(e::Enumerate) = length(e.itr)
 size(e::Enumerate) = size(e.itr)
 @inline start(e::Enumerate) = (1, start(e.itr))
-@inline function next(e::Enumerate, state)
+@propagate_inbounds function next(e::Enumerate, state)
     n = next(e.itr,state[2])
     (state[1],n[1]), (state[1]+1,n[2])
 end
@@ -74,6 +130,16 @@ eltype(::Type{Enumerate{I}}) where {I} = Tuple{Int, eltype(I)}
 
 iteratorsize(::Type{Enumerate{I}}) where {I} = iteratorsize(I)
 iteratoreltype(::Type{Enumerate{I}}) where {I} = iteratoreltype(I)
+
+@inline function start(r::Reverse{<:Enumerate})
+    ri = reverse(r.itr.itr)
+    return (length(ri), ri, start(ri))
+end
+@inline function next(r::Reverse{<:Enumerate}, state)
+    n = next(state[2],state[3])
+    (state[1],n[1]), (state[1]-1,state[2],n[2])
+end
+@inline done(r::Reverse{<:Enumerate}, state) = state[1] < 1
 
 struct IndexValue{I,A<:AbstractArray}
     data::A
@@ -147,6 +213,8 @@ eltype(::Type{IndexValue{I,A}}) where {I,A} = Pair{eltype(I), eltype(A)}
 iteratorsize(::Type{IndexValue{I}}) where {I} = iteratorsize(I)
 iteratoreltype(::Type{IndexValue{I}}) where {I} = iteratoreltype(I)
 
+reverse(v::IndexValue) = IndexValue(v.data, reverse(v.itr))
+
 # zip
 
 abstract type AbstractZipIterator end
@@ -167,7 +235,7 @@ size(z::Zip1) = size(z.a)
 indices(z::Zip1) = indices(z.a)
 eltype(::Type{Zip1{I}}) where {I} = Tuple{eltype(I)}
 @inline start(z::Zip1) = start(z.a)
-@inline function next(z::Zip1, st)
+@propagate_inbounds function next(z::Zip1, st)
     n = next(z.a,st)
     return ((n[1],), n[2])
 end
@@ -186,7 +254,7 @@ size(z::Zip2) = promote_shape(size(z.a), size(z.b))
 indices(z::Zip2) = promote_shape(indices(z.a), indices(z.b))
 eltype(::Type{Zip2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
 @inline start(z::Zip2) = (start(z.a), start(z.b))
-@inline function next(z::Zip2, st)
+@propagate_inbounds function next(z::Zip2, st)
     n1 = next(z.a,st[1])
     n2 = next(z.b,st[2])
     return ((n1[1], n2[1]), (n1[2], n2[2]))
@@ -204,7 +272,7 @@ end
 """
     zip(iters...)
 
-For a set of iterable objects, returns an iterable of tuples, where the `i`th tuple contains
+For a set of iterable objects, return an iterable of tuples, where the `i`th tuple contains
 the `i`th component of each input iterable.
 
 # Examples
@@ -236,7 +304,7 @@ size(z::Zip) = promote_shape(size(z.a), size(z.z))
 indices(z::Zip) = promote_shape(indices(z.a), indices(z.z))
 eltype(::Type{Zip{I,Z}}) where {I,Z} = tuple_type_cons(eltype(I), eltype(Z))
 @inline start(z::Zip) = tuple(start(z.a), start(z.z))
-@inline function next(z::Zip, st)
+@propagate_inbounds function next(z::Zip, st)
     n1 = next(z.a, st[1])
     n2 = next(z.z, st[2])
     (tuple(n1[1], n2[1]...), (n1[2], n2[2]))
@@ -245,6 +313,10 @@ end
 
 iteratorsize(::Type{Zip{I1,I2}}) where {I1,I2} = zip_iteratorsize(iteratorsize(I1),iteratorsize(I2))
 iteratoreltype(::Type{Zip{I1,I2}}) where {I1,I2} = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
+
+reverse(z::Zip1) = Zip1(reverse(z.a))
+reverse(z::Zip2) = Zip2(reverse(z.a), reverse(z.b))
+reverse(z::Zip) = Zip(reverse(z.a), reverse(z.z))
 
 # filter
 
@@ -313,6 +385,8 @@ eltype(::Type{Filter{F,I}}) where {F,I} = eltype(I)
 iteratoreltype(::Type{Filter{F,I}}) where {F,I} = iteratoreltype(I)
 iteratorsize(::Type{<:Filter}) = SizeUnknown()
 
+reverse(f::Filter) = Filter(f.flt, reverse(f.itr))
+
 # Rest -- iterate starting at the given state
 
 struct Rest{I,S}
@@ -337,7 +411,7 @@ julia> collect(Iterators.rest([1,2,3,4], 2))
 rest(itr,state) = Rest(itr,state)
 
 start(i::Rest) = i.st
-next(i::Rest, st) = next(i.itr, st)
+@propagate_inbounds next(i::Rest, st) = next(i.itr, st)
 done(i::Rest, st) = done(i.itr, st)
 
 eltype(::Type{Rest{I}}) where {I} = eltype(I)
@@ -345,7 +419,6 @@ iteratoreltype(::Type{Rest{I,S}}) where {I,S} = iteratoreltype(I)
 rest_iteratorsize(a) = SizeUnknown()
 rest_iteratorsize(::IsInfinite) = IsInfinite()
 iteratorsize(::Type{Rest{I,S}}) where {I,S} = rest_iteratorsize(iteratorsize(I))
-
 
 # Count -- infinite counting
 
@@ -427,7 +500,7 @@ length(t::Take) = _min_length(t.xs, 1:t.n, iteratorsize(t.xs), HasLength())
 
 start(it::Take) = (it.n, start(it.xs))
 
-function next(it::Take, state)
+@propagate_inbounds function next(it::Take, state)
     n, xs_state = state
     v, xs_state = next(it.xs, xs_state)
     return v, (n - 1, xs_state)
@@ -494,7 +567,7 @@ function start(it::Drop)
     xs_state
 end
 
-next(it::Drop, state) = next(it.xs, state)
+@propagate_inbounds next(it::Drop, state) = next(it.xs, state)
 done(it::Drop, state) = done(it.xs, state)
 
 # Cycle an iterator forever
@@ -539,6 +612,7 @@ end
 
 done(it::Cycle, state) = state[2]
 
+reverse(it::Cycle) = Cycle(reverse(it.xs))
 
 # Repeated - repeat an object infinitely many times
 
@@ -576,6 +650,7 @@ done(it::Repeated, state) = false
 iteratorsize(::Type{<:Repeated}) = IsInfinite()
 iteratoreltype(::Type{<:Repeated}) = HasEltype()
 
+reverse(it::Union{Repeated,Take{<:Repeated}}) = it
 
 # Product -- cartesian product of iterators
 struct ProductIterator{T<:Tuple}
@@ -585,7 +660,7 @@ end
 """
     product(iters...)
 
-Returns an iterator over the product of several iterators. Each generated element is
+Return an iterator over the product of several iterators. Each generated element is
 a tuple whose `i`th element comes from the `i`th argument iterator. The first iterator
 changes the fastest.
 
@@ -706,6 +781,8 @@ function _prod_next(iterators, states, nvalues)
     end
 end
 
+reverse(p::ProductIterator) = ProductIterator(map(reverse, p.iterators))
+
 # flatten an iterator of iterators
 
 struct Flatten{I}
@@ -766,7 +843,7 @@ function start(f::Flatten)
     return s, inner, s2
 end
 
-@inline function next(f::Flatten, state)
+@propagate_inbounds function next(f::Flatten, state)
     s, inner, s2 = state
     val, s2 = next(inner, s2)
     while done(inner, s2) && !done(f.it, s)
@@ -781,6 +858,7 @@ end
     return done(f.it, s) && done(inner, s2)
 end
 
+reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
 
 """
     partition(collection, n)
@@ -827,7 +905,7 @@ function next(itr::PartitionIterator{<:Vector}, state)
 end
 
 function next(itr::PartitionIterator, state)
-    v = Vector{eltype(itr.c)}(itr.n)
+    v = Vector{eltype(itr.c)}(uninitialized, itr.n)
     i = 0
     while !done(itr.c, state) && i < itr.n
         i += 1

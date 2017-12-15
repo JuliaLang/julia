@@ -59,11 +59,11 @@ Returns the number of stored (filled) elements in a sparse array.
 
 # Examples
 ```jldoctest
-julia> A = speye(3)
-3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
+julia> A = sparse(2I, 3, 3)
+3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+  [1, 1]  =  2
+  [2, 2]  =  2
+  [3, 3]  =  2
 
 julia> nnz(A)
 3
@@ -83,17 +83,17 @@ modifications to the returned vector will mutate `A` as well. See
 
 # Examples
 ```jldoctest
-julia> A = speye(3)
-3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
+julia> A = sparse(2I, 3, 3)
+3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+  [1, 1]  =  2
+  [2, 2]  =  2
+  [3, 3]  =  2
 
 julia> nonzeros(A)
-3-element Array{Float64,1}:
- 1.0
- 1.0
- 1.0
+3-element Array{Int64,1}:
+ 2
+ 2
+ 2
 ```
 """
 nonzeros(S::SparseMatrixCSC) = S.nzval
@@ -108,11 +108,11 @@ nonzero values. See also [`nonzeros`](@ref) and [`nzrange`](@ref).
 
 # Examples
 ```jldoctest
-julia> A = speye(3)
-3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
+julia> A = sparse(2I, 3, 3)
+3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+  [1, 1]  =  2
+  [2, 2]  =  2
+  [3, 3]  =  2
 
 julia> rowvals(A)
 3-element Array{Int64,1}:
@@ -374,7 +374,7 @@ end
 # convert'ing from SparseMatrixCSC to other matrix types
 function convert(::Type{Matrix}, S::SparseMatrixCSC{Tv}) where Tv
     # Handle cases where zero(Tv) is not defined but the array is dense.
-    A = length(S) == nnz(S) ? Matrix{Tv}(S.m, S.n) : zeros(Tv, S.m, S.n)
+    A = length(S) == nnz(S) ? Matrix{Tv}(uninitialized, S.m, S.n) : zeros(Tv, S.m, S.n)
     for Sj in 1:S.n
         for Sk in nzrange(S, Sj)
             Si = S.rowval[Sk]
@@ -401,7 +401,7 @@ Convert an AbstractMatrix `A` into a sparse matrix.
 
 # Examples
 ```jldoctest
-julia> A = eye(3)
+julia> A = Matrix(1.0I, 3, 3)
 3×3 Array{Float64,2}:
  1.0  0.0  0.0
  0.0  1.0  0.0
@@ -514,13 +514,13 @@ function sparse(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{
         SparseMatrixCSC(m, n, ones(Ti, n+1), Vector{Ti}(), Vector{Tv}())
     else
         # Allocate storage for CSR form
-        csrrowptr = Vector{Ti}(m+1)
-        csrcolval = Vector{Ti}(coolen)
-        csrnzval = Vector{Tv}(coolen)
+        csrrowptr = Vector{Ti}(uninitialized, m+1)
+        csrcolval = Vector{Ti}(uninitialized, coolen)
+        csrnzval = Vector{Tv}(uninitialized, coolen)
 
         # Allocate storage for the CSC form's column pointers and a necessary workspace
-        csccolptr = Vector{Ti}(n+1)
-        klasttouch = Vector{Ti}(n)
+        csccolptr = Vector{Ti}(uninitialized, n+1)
+        klasttouch = Vector{Ti}(uninitialized, n)
 
         # Allocate empty arrays for the CSC form's row and nonzero value arrays
         # The parent method called below automagically resizes these arrays
@@ -699,7 +699,7 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         csrrowptr::Vector{Ti}, csrcolval::Vector{Ti}, csrnzval::Vector{Tv}) where {Tv,Ti<:Integer}
     sparse!(I, J, V, m, n, combine, klasttouch,
             csrrowptr, csrcolval, csrnzval,
-            Vector{Ti}(n+1), Vector{Ti}(), Vector{Tv}())
+            Vector{Ti}(uninitialized, n+1), Vector{Ti}(), Vector{Tv}())
 end
 
 dimlub(I) = isempty(I) ? 0 : Int(maximum(I)) #least upper bound on required sparse matrix dimension
@@ -829,7 +829,10 @@ transpose!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} =
 adjoint!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = ftranspose!(X, A, conj)
 
 function ftranspose(A::SparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
-    X = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m+1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
+    X = SparseMatrixCSC(A.n, A.m,
+                        Vector{Ti}(uninitialized, A.m+1),
+                        Vector{Ti}(uninitialized, nnz(A)),
+                        Vector{Tv}(uninitialized, nnz(A)))
     halfperm!(X, A, 1:A.n, f)
 end
 transpose(A::SparseMatrixCSC) = ftranspose(A, identity)
@@ -1036,7 +1039,10 @@ function permute!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
         p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer}) where {Tv,Ti}
     _checkargs_sourcecompatdest_permute!(A, X)
     _checkargs_sourcecompatperms_permute!(A, p, q)
-    C = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
+    C = SparseMatrixCSC(A.n, A.m,
+                        Vector{Ti}(uninitialized, A.m + 1),
+                        Vector{Ti}(uninitialized, nnz(A)),
+                        Vector{Tv}(uninitialized, nnz(A)))
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, X.colptr)
     unchecked_noalias_permute!(X, A, p, q, C)
 end
@@ -1052,8 +1058,11 @@ end
 function permute!(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
         q::AbstractVector{<:Integer}) where {Tv,Ti}
     _checkargs_sourcecompatperms_permute!(A, p, q)
-    C = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
-    workcolptr = Vector{Ti}(A.n + 1)
+    C = SparseMatrixCSC(A.n, A.m,
+                        Vector{Ti}(uninitialized, A.m + 1),
+                        Vector{Ti}(uninitialized, nnz(A)),
+                        Vector{Tv}(uninitialized, nnz(A)))
+    workcolptr = Vector{Ti}(uninitialized, A.n + 1)
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, workcolptr)
     unchecked_aliasing_permute!(A, p, q, C, workcolptr)
 end
@@ -1061,7 +1070,7 @@ function permute!(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
         q::AbstractVector{<:Integer}, C::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     _checkargs_sourcecompatperms_permute!(A, p, q)
     _checkargs_sourcecompatworkmat_permute!(A, C)
-    workcolptr = Vector{Ti}(A.n + 1)
+    workcolptr = Vector{Ti}(uninitialized, A.n + 1)
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, workcolptr)
     unchecked_aliasing_permute!(A, p, q, C, workcolptr)
 end
@@ -1120,8 +1129,14 @@ julia> permute(A, [1, 2, 3, 4], [4, 3, 2, 1])
 function permute(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
         q::AbstractVector{<:Integer}) where {Tv,Ti}
     _checkargs_sourcecompatperms_permute!(A, p, q)
-    X = SparseMatrixCSC(A.m, A.n, Vector{Ti}(A.n + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
-    C = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
+    X = SparseMatrixCSC(A.m, A.n,
+                        Vector{Ti}(uninitialized, A.n + 1),
+                        Vector{Ti}(uninitialized, nnz(A)),
+                        Vector{Tv}(uninitialized, nnz(A)))
+    C = SparseMatrixCSC(A.n, A.m,
+                        Vector{Ti}(uninitialized, A.m + 1),
+                        Vector{Ti}(uninitialized, nnz(A)),
+                        Vector{Tv}(uninitialized, nnz(A)))
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, X.colptr)
     unchecked_noalias_permute!(X, A, p, q, C)
 end
@@ -1267,12 +1282,12 @@ function find(p::Function, S::SparseMatrixCSC)
     return sub2ind(sz, I, J)
 end
 
-findn(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = _findn(x->x!=0, S)
+findn(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = _findn(x->true, S)
 
 function _findn(p::Function, S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
-    I = Vector{Ti}(numnz)
-    J = Vector{Ti}(numnz)
+    I = Vector{Ti}(uninitialized, numnz)
+    J = Vector{Ti}(uninitialized, numnz)
 
     count = 1
     @inbounds for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
@@ -1283,36 +1298,21 @@ function _findn(p::Function, S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
         end
     end
 
-    count -= 1
-    if numnz != count
-        deleteat!(I, (count+1):numnz)
-        deleteat!(J, (count+1):numnz)
-    end
-
     return (I, J)
 end
 
 function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
-    I = Vector{Ti}(numnz)
-    J = Vector{Ti}(numnz)
-    V = Vector{Tv}(numnz)
+    I = Vector{Ti}(uninitialized, numnz)
+    J = Vector{Ti}(uninitialized, numnz)
+    V = Vector{Tv}(uninitialized, numnz)
 
     count = 1
     @inbounds for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if S.nzval[k] != 0
-            I[count] = S.rowval[k]
-            J[count] = col
-            V[count] = S.nzval[k]
-            count += 1
-        end
-    end
-
-    count -= 1
-    if numnz != count
-        deleteat!(I, (count+1):numnz)
-        deleteat!(J, (count+1):numnz)
-        deleteat!(V, (count+1):numnz)
+        I[count] = S.rowval[k]
+        J[count] = col
+        V[count] = S.nzval[k]
+        count += 1
     end
 
     return (I, J, V)
@@ -1324,7 +1324,7 @@ function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloa
     0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
     N = n*m
 
-    I, J = Vector{Int}(0), Vector{Int}(0) # indices of nonzero elements
+    I, J = Vector{Int}(), Vector{Int}() # indices of nonzero elements
     sizehint!(I, round(Int,N*density))
     sizehint!(J, round(Int,N*density))
 
@@ -1334,7 +1334,7 @@ function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloa
     colsparsity = exp(m*L) # = 1 - coldensity
     iL = 1/L
 
-    rows = Vector{Int}(0)
+    rows = Vector{Int}()
     for j in randsubseq(r, 1:n, coldensity)
         # To get the right statistics, we *must* have a nonempty column j
         # even if p*m << 1.   To do this, we use an approach similar to
@@ -1453,8 +1453,6 @@ julia> spones(A)
   [3, 3]  =  1.0
   [2, 4]  =  1.0
 ```
-
-Note the difference from [`speye`](@ref).
 """
 spones(S::SparseMatrixCSC{T}) where {T} =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
@@ -1480,78 +1478,37 @@ spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
 spzeros(::Type{Tv}, m::Integer, n::Integer) where {Tv} = spzeros(Tv, Int, m, n)
 function spzeros(::Type{Tv}, ::Type{Ti}, m::Integer, n::Integer) where {Tv, Ti}
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
-    SparseMatrixCSC(m, n, ones(Ti, n+1), Vector{Ti}(0), Vector{Tv}(0))
+    SparseMatrixCSC(m, n, ones(Ti, n+1), Vector{Ti}(), Vector{Tv}())
 end
 # de-splatting variant
 function spzeros(::Type{Tv}, ::Type{Ti}, sz::Tuple{Integer,Integer}) where {Tv, Ti}
     spzeros(Tv, Ti, sz[1], sz[2])
 end
 
-speye(n::Integer) = speye(Float64, n)
-speye(::Type{T}, n::Integer) where {T} = speye(T, n, n)
-speye(m::Integer, n::Integer) = speye(Float64, m, n)
-
-"""
-    speye(S)
-
-Create a sparse identity matrix with the same size as `S`.
-
-# Examples
-```jldoctest
-julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
-4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
-  [4, 1]  =  2.0
-  [1, 2]  =  5.0
-  [3, 3]  =  3.0
-  [2, 4]  =  4.0
-
-julia> speye(A)
-4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
-  [4, 4]  =  1.0
-```
-
-Note the difference from [`spones`](@ref).
-"""
-speye(S::SparseMatrixCSC{T}) where {T} = speye(T, size(S, 1), size(S, 2))
-eye(S::SparseMatrixCSC) = speye(S)
-
-"""
-    speye([type,]m[,n])
-
-Create a sparse identity matrix of size `m x m`. When `n` is supplied,
-create a sparse identity matrix of size `m x n`. The type defaults to [`Float64`](@ref)
-if not specified.
-
-`sparse(I, m, n)` is equivalent to `speye(Int, m, n)`, and
-`sparse(α*I, m, n)` can be used to efficiently create a sparse
-multiple `α` of the identity matrix.
-"""
-speye(::Type{T}, m::Integer, n::Integer) where {T} = speye_scaled(T, oneunit(T), m, n)
+eye(S::SparseMatrixCSC{T}) where {T} = SparseMatrixCSC{T}(I, size(S))
 
 function one(S::SparseMatrixCSC{T}) where T
-    m,n = size(S)
-    if m != n; throw(DimensionMismatch("multiplicative identity only defined for square matrices")); end
-    speye(T, m)
+    S.m == S.n || throw(DimensionMismatch("multiplicative identity only defined for square matrices"))
+    return SparseMatrixCSC{T}(I, S.m, S.n)
 end
 
-speye_scaled(diag, m::Integer, n::Integer) = speye_scaled(typeof(diag), diag, m, n)
-
-function speye_scaled(::Type{T}, diag, m::Integer, n::Integer) where T
-    ((m < 0) || (n < 0)) && throw(ArgumentError("invalid array dimensions"))
-    if iszero(diag)
-        return SparseMatrixCSC(m, n, ones(Int, n+1), Vector{Int}(0), Vector{T}(0))
-    end
-    nnz = min(m,n)
-    colptr = Vector{Int}(1+n)
-    colptr[1:nnz+1] = 1:nnz+1
-    colptr[nnz+2:end] = nnz+1
-    SparseMatrixCSC(Int(m), Int(n), colptr, Vector{Int}(1:nnz), fill!(Vector{T}(nnz), diag))
+## SparseMatrixCSC construction from UniformScaling
+SparseMatrixCSC{Tv,Ti}(s::UniformScaling, m::Integer, n::Integer) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(s, Dims((m, n)))
+SparseMatrixCSC{Tv}(s::UniformScaling, m::Integer, n::Integer) where {Tv} = SparseMatrixCSC{Tv}(s, Dims((m, n)))
+SparseMatrixCSC(s::UniformScaling, m::Integer, n::Integer) = SparseMatrixCSC(s, Dims((m, n)))
+SparseMatrixCSC{Tv}(s::UniformScaling, dims::Dims{2}) where {Tv} = SparseMatrixCSC{Tv,Int}(s, dims)
+SparseMatrixCSC(s::UniformScaling, dims::Dims{2}) = SparseMatrixCSC{eltype(s)}(s, dims)
+function SparseMatrixCSC{Tv,Ti}(s::UniformScaling, dims::Dims{2}) where {Tv,Ti}
+    @boundscheck first(dims) < 0 && throw(ArgumentError("first dimension invalid ($(first(dims)) < 0)"))
+    @boundscheck last(dims) < 0 && throw(ArgumentError("second dimension invalid ($(last(dims)) < 0)"))
+    iszero(s.λ) && return spzeros(Tv, Ti, dims...)
+    m, n, k = dims..., min(dims...)
+    nzval = fill!(Vector{Tv}(uninitialized, k), Tv(s.λ))
+    rowval = copy!(Vector{Ti}(uninitialized, k), 1:k)
+    colptr = copy!(Vector{Ti}(uninitialized, n + 1), 1:(k + 1))
+    for i in (k + 2):(n + 1) colptr[i] = (k + 1) end
+    SparseMatrixCSC{Tv,Ti}(dims..., colptr, rowval, nzval)
 end
-
-sparse(S::UniformScaling, m::Integer, n::Integer=m) = speye_scaled(S.λ, m, n)
 
 Base.iszero(A::SparseMatrixCSC) = iszero(view(A.nzval, 1:(A.colptr[size(A, 2) + 1] - 1)))
 
@@ -1565,6 +1522,8 @@ function Base.isone(A::SparseMatrixCSC)
     return true
 end
 
+sparse(s::UniformScaling, dims::Dims{2}) = SparseMatrixCSC(s, dims)
+sparse(s::UniformScaling, m::Integer, n::Integer) = sparse(s, Dims((m, n)))
 
 # TODO: More appropriate location?
 conj!(A::SparseMatrixCSC) = (@inbounds broadcast!(conj, A.nzval, A.nzval); A)
@@ -1627,9 +1586,9 @@ end
 # and computing reductions along columns into SparseMatrixCSC is
 # non-trivial, so use Arrays for output
 Base.reducedim_initarray(A::SparseMatrixCSC, region, v0, ::Type{R}) where {R} =
-    fill!(similar(dims->Array{R}(dims), Base.reduced_indices(A,region)), v0)
+    fill!(similar(dims->Array{R}(uninitialized, dims), Base.reduced_indices(A,region)), v0)
 Base.reducedim_initarray0(A::SparseMatrixCSC, region, v0, ::Type{R}) where {R} =
-    fill!(similar(dims->Array{R}(dims), Base.reduced_indices0(A,region)), v0)
+    fill!(similar(dims->Array{R}(uninitialized, dims), Base.reduced_indices0(A,region)), v0)
 
 # General mapreduce
 function _mapreducezeros(f, op, ::Type{T}, nzeros::Int, v0) where T
@@ -1853,7 +1812,7 @@ function _findr(op, A, region, Tv)
 
     if region == 1 || region == (1,)
         (N == 0) && (return (fill(zval,1,n), fill(i1,1,n)))
-        S = Vector{Tv}(n); I = Vector{Ti}(n)
+        S = Vector{Tv}(uninitialized, n); I = Vector{Ti}(uninitialized, n)
         @inbounds for i = 1 : n
             Sc = zval; Ic = _findz(A, 1:m, i:i)
             if Ic == CartesianIndex(0, 0)
@@ -1872,7 +1831,8 @@ function _findr(op, A, region, Tv)
         return(reshape(S,1,n), reshape(I,1,n))
     elseif region == 2 || region == (2,)
         (N == 0) && (return (fill(zval,m,1), fill(i1,m,1)))
-        S = Vector{Tv}(m); I = Vector{Ti}(m)
+        S = Vector{Tv}(uninitialized, m)
+        I = Vector{Ti}(uninitialized, m)
         @inbounds for row in 1:m
             S[row] = zval; I[row] = _findz(A, row:row, 1:n)
             if I[row] == CartesianIndex(0, 0)
@@ -1945,7 +1905,7 @@ function getindex_cols(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector) where {Tv,T
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
 
-    colptrS = Vector{Ti}(nJ+1)
+    colptrS = Vector{Ti}(uninitialized, nJ+1)
     colptrS[1] = 1
     nnzS = 0
 
@@ -1956,8 +1916,8 @@ function getindex_cols(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector) where {Tv,T
         colptrS[j+1] = nnzS + 1
     end
 
-    rowvalS = Vector{Ti}(nnzS)
-    nzvalS  = Vector{Tv}(nnzS)
+    rowvalS = Vector{Ti}(uninitialized, nnzS)
+    nzvalS  = Vector{Tv}(uninitialized, nnzS)
     ptrS = 0
 
     @inbounds for j = 1:nJ
@@ -1986,7 +1946,7 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractRange, J::AbstractVector
     nI == 0 || (minimum(I) >= 1 && maximum(I) <= m) || throw(BoundsError())
     nJ = length(J)
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
-    colptrS = Vector{Ti}(nJ+1)
+    colptrS = Vector{Ti}(uninitialized, nJ+1)
     colptrS[1] = 1
     nnzS = 0
 
@@ -2001,8 +1961,8 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractRange, J::AbstractVector
     end
 
     # Populate the values in the result
-    rowvalS = Vector{Ti}(nnzS)
-    nzvalS  = Vector{Tv}(nnzS)
+    rowvalS = Vector{Ti}(uninitialized, nnzS)
+    nzvalS  = Vector{Tv}(uninitialized, nnzS)
     ptrS    = 1
 
     @inbounds for j = 1:nJ
@@ -2046,7 +2006,7 @@ function getindex_I_sorted_bsearch_A(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVecto
     nJ = length(J)
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
-    colptrS = Vector{Ti}(nJ+1)
+    colptrS = Vector{Ti}(uninitialized, nJ+1)
     colptrS[1] = 1
 
     ptrS = 1
@@ -2071,8 +2031,8 @@ function getindex_I_sorted_bsearch_A(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVecto
         colptrS[j+1] = ptrS
     end
 
-    rowvalS = Vector{Ti}(ptrS-1)
-    nzvalS  = Vector{Tv}(ptrS-1)
+    rowvalS = Vector{Ti}(uninitialized, ptrS-1)
+    nzvalS  = Vector{Tv}(uninitialized, ptrS-1)
 
     # fill the values
     ptrS = 1
@@ -2105,7 +2065,7 @@ function getindex_I_sorted_linear(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, 
     nJ = length(J)
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
-    colptrS = Vector{Ti}(nJ+1)
+    colptrS = Vector{Ti}(uninitialized, nJ+1)
     colptrS[1] = 1
     cacheI = zeros(Int, A.m)
 
@@ -2133,8 +2093,8 @@ function getindex_I_sorted_linear(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, 
         colptrS[j+1] = ptrS
     end
 
-    rowvalS = Vector{Ti}(ptrS-1)
-    nzvalS  = Vector{Tv}(ptrS-1)
+    rowvalS = Vector{Ti}(uninitialized, ptrS-1)
+    nzvalS  = Vector{Tv}(uninitialized, ptrS-1)
 
     # fill the values
     ptrS = 1
@@ -2164,7 +2124,7 @@ function getindex_I_sorted_bsearch_I(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVecto
     nJ = length(J)
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
-    colptrS = Vector{Ti}(nJ+1)
+    colptrS = Vector{Ti}(uninitialized, nJ+1)
     colptrS[1] = 1
 
     m = A.m
@@ -2198,8 +2158,8 @@ function getindex_I_sorted_bsearch_I(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVecto
             break
         end
     end
-    rowvalS = Vector{Ti}(ptrS)
-    nzvalS  = Vector{Tv}(ptrS)
+    rowvalS = Vector{Ti}(uninitialized, ptrS)
+    nzvalS  = Vector{Tv}(uninitialized, ptrS)
     colptrS[nJ+1] = ptrS+1
 
     # fill the values
@@ -2233,9 +2193,9 @@ function permute_rows!(S::SparseMatrixCSC{Tv,Ti}, pI::Vector{Int}) where {Tv,Ti}
     colptrS = S.colptr; rowvalS = S.rowval; nzvalS = S.nzval
     # preallocate temporary sort space
     nr = min(nnz(S), m)
-    rowperm = Vector{Int}(nr)
-    rowvalTemp = Vector{Ti}(nr)
-    nzvalTemp = Vector{Tv}(nr)
+    rowperm = Vector{Int}(uninitialized, nr)
+    rowvalTemp = Vector{Ti}(uninitialized, nr)
+    nzvalTemp = Vector{Tv}(uninitialized, nr)
 
     @inbounds for j in 1:n
         rowrange = colptrS[j]:(colptrS[j+1]-1)
@@ -2291,7 +2251,7 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVecto
     end
 end
 
-function getindex(A::SparseMatrixCSC{Tv}, I::AbstractArray) where Tv
+function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractArray) where {Tv,Ti}
     szA = size(A)
     nA = szA[1]*szA[2]
     colptrA = A.colptr
@@ -2302,9 +2262,9 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractArray) where Tv
     outm = size(I,1)
     outn = size(I,2)
     szB = (outm, outn)
-    colptrB = zeros(Int, outn+1)
-    rowvalB = Vector{Int}(n)
-    nzvalB = Vector{Tv}(n)
+    colptrB = zeros(Ti, outn+1)
+    rowvalB = Vector{Ti}(uninitialized, n)
+    nzvalB = Vector{Tv}(uninitialized, n)
 
     colB = 1
     rowB = 1
@@ -3051,9 +3011,9 @@ function vcat(X::SparseMatrixCSC...)
 
     nnzX = Int[ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
-    colptr = Vector{Ti}(n+1)
-    rowval = Vector{Ti}(nnz_res)
-    nzval  = Vector{Tv}(nnz_res)
+    colptr = Vector{Ti}(uninitialized, n+1)
+    rowval = Vector{Ti}(uninitialized, nnz_res)
+    nzval  = Vector{Tv}(uninitialized, nnz_res)
 
     colptr[1] = 1
     for c = 1:n
@@ -3101,11 +3061,11 @@ function hcat(X::SparseMatrixCSC...)
     Tv = promote_eltype(X...)
     Ti = promote_eltype(map(x->x.rowval, X)...)
 
-    colptr = Vector{Ti}(n+1)
+    colptr = Vector{Ti}(uninitialized, n+1)
     nnzX = Int[ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
-    rowval = Vector{Ti}(nnz_res)
-    nzval = Vector{Tv}(nnz_res)
+    rowval = Vector{Ti}(uninitialized, nnz_res)
+    nzval = Vector{Tv}(uninitialized, nnz_res)
 
     nnz_sofar = 0
     nX_sofar = 0
@@ -3133,13 +3093,13 @@ Concatenate matrices block-diagonally. Currently only implemented for sparse mat
 
 # Examples
 ```jldoctest
-julia> blkdiag(speye(3), 2*speye(2))
-5×5 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
-  [4, 4]  =  2.0
-  [5, 5]  =  2.0
+julia> blkdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
+5×5 SparseMatrixCSC{Int64,Int64} with 5 stored entries:
+  [1, 1]  =  2
+  [2, 2]  =  2
+  [3, 3]  =  2
+  [4, 4]  =  4
+  [5, 5]  =  4
 ```
 """
 function blkdiag(X::SparseMatrixCSC...)
@@ -3152,11 +3112,11 @@ function blkdiag(X::SparseMatrixCSC...)
     Tv = promote_type(map(x->eltype(x.nzval), X)...)
     Ti = promote_type(map(x->eltype(x.rowval), X)...)
 
-    colptr = Vector{Ti}(n+1)
+    colptr = Vector{Ti}(uninitialized, n+1)
     nnzX = Int[ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
-    rowval = Vector{Ti}(nnz_res)
-    nzval = Vector{Tv}(nnz_res)
+    rowval = Vector{Ti}(uninitialized, nnz_res)
+    nzval = Vector{Tv}(uninitialized, nnz_res)
 
     nnz_sofar = 0
     nX_sofar = 0
@@ -3298,9 +3258,9 @@ function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
     for p in kv
         ncoeffs += length(p.second)
     end
-    I = Vector{Int}(ncoeffs)
-    J = Vector{Int}(ncoeffs)
-    V = Vector{promote_type(map(x -> eltype(x.second), kv)...)}(ncoeffs)
+    I = Vector{Int}(uninitialized, ncoeffs)
+    J = Vector{Int}(uninitialized, ncoeffs)
+    V = Vector{promote_type(map(x -> eltype(x.second), kv)...)}(uninitialized, ncoeffs)
     i = 0
     for p in kv
         dia = p.first
@@ -3400,7 +3360,7 @@ end
 function sortSparseMatrixCSC!(A::SparseMatrixCSC{Tv,Ti}; sortindices::Symbol = :sortcols) where {Tv,Ti}
     if sortindices == :doubletranspose
         nB, mB = size(A)
-        B = SparseMatrixCSC(mB, nB, Vector{Ti}(nB+1), similar(A.rowval), similar(A.nzval))
+        B = SparseMatrixCSC(mB, nB, Vector{Ti}(uninitialized, nB+1), similar(A.rowval), similar(A.nzval))
         transpose!(B, A)
         transpose!(A, B)
         return A
@@ -3591,6 +3551,6 @@ end
 
 ## Uniform matrix arithmetic
 
-(+)(A::SparseMatrixCSC, J::UniformScaling) = A + J.λ * speye(A)
-(-)(A::SparseMatrixCSC, J::UniformScaling) = A - J.λ * speye(A)
-(-)(J::UniformScaling, A::SparseMatrixCSC) = J.λ * speye(A) - A
+(+)(A::SparseMatrixCSC, J::UniformScaling) = A + sparse(J, size(A)...)
+(-)(A::SparseMatrixCSC, J::UniformScaling) = A - sparse(J, size(A)...)
+(-)(J::UniformScaling, A::SparseMatrixCSC) = sparse(J, size(A)...) - A

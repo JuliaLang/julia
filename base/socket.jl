@@ -278,7 +278,7 @@ mutable struct TCPSocket <: LibuvStream
                 ReentrantLock(),
                 DEFAULT_READ_BUFFER_SZ)
         associate_julia_struct(tcp.handle, tcp)
-        finalizer(tcp, uvfinalize)
+        finalizer(uvfinalize, tcp)
         return tcp
     end
 end
@@ -308,7 +308,7 @@ mutable struct TCPServer <: LibuvServer
             Condition(),
             Condition())
         associate_julia_struct(tcp.handle, tcp)
-        finalizer(tcp, uvfinalize)
+        finalizer(uvfinalize, tcp)
         return tcp
     end
 end
@@ -370,7 +370,7 @@ mutable struct UDPSocket <: LibuvStream
             Condition(),
             Condition())
         associate_julia_struct(udp.handle, udp)
-        finalizer(udp, uvfinalize)
+        finalizer(uvfinalize, udp)
         return udp
     end
 end
@@ -636,7 +636,7 @@ Gets all of the IP addresses of the `host`.
 Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
 """
 function getalladdrinfo(host::String)
-    isascii(host) || error("non-ASCII hostname: $host")
+    Unicode.isascii(host) || error("non-ASCII hostname: $host")
     req = Libc.malloc(_sizeof_uv_getaddrinfo)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     status = ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}, Ptr{Void}),
@@ -812,7 +812,7 @@ function getipaddr()
             return rv
         # Uncomment to enbable IPv6
         #elseif ccall(:jl_sockaddr_in_is_ip6, Int32, (Ptr{Void},), sockaddr) == 1
-        #   host = Vector{UInt128}(1)
+        #   host = Vector{UInt128}(uninitialized, 1)
         #   ccall(:jl_sockaddr_host6, UInt32, (Ptr{Void}, Ptr{UInt128}), sockaddrr, host)
         #   return IPv6(ntoh(host[1]))
         end

@@ -40,6 +40,13 @@ for f in (:+, :-)
     end
 end
 
+function +(A::Array, Bs::Array...)
+    for B in Bs
+        promote_shape(A, B) # check size compatibility
+    end
+    broadcast(+, A, Bs...)
+end
+
 for f in (:/, :\, :*)
     if f != :/
         @eval ($f)(A::Number, B::AbstractArray) = broadcast($f, A, B)

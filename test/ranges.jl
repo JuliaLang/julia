@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Dates
+
 # Compare precision in a manner sensitive to subnormals, which lose
 # precision compared to widening.
 function cmp_sn(w, hi, lo, slopbits=0)
@@ -202,6 +204,9 @@ end
         @test L32[3] == 3 && L64[3] == 3
         @test L32[4] == 4 && L64[4] == 4
         @test @inferred(linspace(1.0, 2.0, 2.0f0)) === linspace(1.0, 2.0, 2)
+        @test @inferred(linspace(1.0, 2.0, 2))[1] === 1.0
+        @test @inferred(linspace(1.0f0, 2.0f0, 2))[1] === 1.0f0
+        @test @inferred(linspace(Float16(1.0), Float16(2.0), 2))[1] === Float16(1.0)
 
         let r = 5:-1:1
             @test r[1]==5
@@ -369,10 +374,10 @@ end
         @test !(π in 1.0:3.0)
         @test !("a" in 1:3)
         @test !("a" in 1.0:3.0)
-        @test !(1 in Date(2017, 01, 01):Date(2017, 01, 05))
-        @test !(Complex(1, 0) in Date(2017, 01, 01):Date(2017, 01, 05))
-        @test !(π in Date(2017, 01, 01):Date(2017, 01, 05))
-        @test !("a" in Date(2017, 01, 01):Date(2017, 01, 05))
+        @test !(1 in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+        @test !(Complex(1, 0) in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+        @test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+        @test !("a" in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
     end
 end
 @testset "indexing range with empty range (#4309)" begin
@@ -1134,7 +1139,7 @@ let r = @inferred(colon(big(1.0),big(2.0),big(5.0)))
 end
 
 @testset "issue #14420" begin
-    for r in (linspace(0.10000000000000045, 1), 0.10000000000000045:(1-0.10000000000000045)/49:1)
+    for r in (linspace(0.10000000000000045, 1, 50), 0.10000000000000045:(1-0.10000000000000045)/49:1)
         local r
         @test r[1] === 0.10000000000000045
         @test r[end] === 1.0
@@ -1186,11 +1191,11 @@ end
 
 @testset "logspace" begin
     n = 10; a = 2; b = 4
-    # test default values; n = 50, base = 10
-    @test logspace(a, b) == logspace(a, b, 50) == 10 .^ linspace(a, b, 50)
+    # test default values; base = 10
+    @test logspace(a, b, 50) == 10 .^ linspace(a, b, 50)
     @test logspace(a, b, n) == 10 .^ linspace(a, b, n)
     for base in (10, 2, ℯ)
-        @test logspace(a, b, base=base) == logspace(a, b, 50, base=base) == base.^linspace(a, b, 50)
+        @test logspace(a, b, 50, base=base) == base.^linspace(a, b, 50)
         @test logspace(a, b, n, base=base) == base.^linspace(a, b, n)
     end
 end

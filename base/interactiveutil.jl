@@ -5,7 +5,7 @@
 """
     editor()
 
-Determines the editor to use when running functions like `edit`. Returns an Array compatible
+Determine the editor to use when running functions like `edit`. Return an `Array` compatible
 for use within backticks. You can change the editor by setting `JULIA_EDITOR`, `VISUAL` or
 `EDITOR` as an environment variable.
 """
@@ -27,7 +27,7 @@ end
     edit(path::AbstractString, line::Integer=0)
 
 Edit a file or directory optionally providing a line number to edit the file at.
-Returns to the `julia` prompt when you quit the editor. The editor can be changed
+Return to the `julia` prompt when you quit the editor. The editor can be changed
 by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 """
 function edit(path::AbstractString, line::Integer=0)
@@ -41,8 +41,8 @@ function edit(path::AbstractString, line::Integer=0)
     line_unsupported = false
     if startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" ||
             name == "mvim" || name == "nano" ||
-            name == "emacs" && contains(in, command, ["-nw", "--no-window-system" ]) ||
-            name == "emacsclient" && contains(in, command, ["-nw", "-t", "-tty"])
+            name == "emacs" && any(c -> c in ["-nw", "--no-window-system" ], command) ||
+            name == "emacsclient" && any(c -> c in ["-nw", "-t", "-tty"], command)
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
         background = false
     elseif startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
@@ -51,7 +51,7 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
-    elseif name == "code" || (Sys.iswindows() && uppercase(name) == "CODE.EXE")
+    elseif name == "code" || (Sys.iswindows() && Unicode.uppercase(name) == "CODE.EXE")
         cmd = line != 0 ? `$command -g $path:$line` : `$command -g $path`
     elseif startswith(name, "notepad++")
         cmd = line != 0 ? `$command $path -n$line` : `$command $path`
@@ -406,7 +406,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
             return quote
                 local arg1 = $(esc(args[1]))
                 $(fcn)(Core.kwfunc(arg1),
-                       Tuple{Vector{Any}, Core.Typeof(arg1),
+                       Tuple{NamedTuple, Core.Typeof(arg1),
                              $(typesof)($(map(esc, args[2:end])...)).parameters...})
             end
         elseif ex0.head == :call
@@ -666,33 +666,6 @@ functionality instead.
 """
 download(url, filename)
 
-# workspace management
-
-"""
-    workspace()
-
-Replace the top-level module (`Main`) with a new one, providing a clean workspace. The
-previous `Main` module is made available as `LastMain`.
-
-If `Package` was previously loaded, `using Package` in the new `Main` will re-use the
-loaded copy. Run `reload("Package")` first to load a fresh copy.
-
-This function should only be used interactively.
-"""
-function workspace()
-    last = Core.Main # ensure to reference the current Main module
-    b = Base # this module
-    ccall(:jl_new_main_module, Any, ()) # make Core.Main a new baremodule
-    m = Core.Main # now grab a handle to the new Main module
-    ccall(:jl_add_standard_imports, Void, (Any,), m)
-    eval(m, Expr(:toplevel,
-                 :(const Base = $b),
-                 :(const LastMain = $last),
-                 :(using Base.MainInclude)))
-    empty!(package_locks)
-    return m
-end
-
 # testing
 
 """
@@ -731,54 +704,24 @@ end
 
 
 """
-    whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
+    varinfo(m::Module=Main, pattern::Regex=r"")
 
-Print information about exported global variables in a module, optionally restricted to those matching `pattern`.
+Return a markdown table giving information about exported global variables in a module, optionally restricted
+to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 """
-function whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
-    maxline = displaysize(io)[2]
-    line = zeros(UInt8, maxline)
-    head = PipeBuffer(maxline + 1)
-    for v in sort!(names(m))
-        s = string(v)
-        if isdefined(m, v) && ismatch(pattern, s)
-            value = getfield(m, v)
-            @printf head "%30s " s
-            try
-                if value ∈ (Base, Main, Core)
-                    print(head, "              ")
-                else
-                    bytes = summarysize(value)
-                    if bytes < 10_000
-                        @printf(head, "%6d bytes  ", bytes)
-                    else
-                        @printf(head, "%6d KB     ", bytes ÷ (1024))
-                    end
-                end
-                print(head, summary(value))
-            catch e
-                print(head, "#=ERROR: unable to show value=#")
-            end
-            newline = search(head, UInt8('\n')) - 1
-            if newline < 0
-                newline = nb_available(head)
-            end
-            if newline > maxline
-                newline = maxline - 1 # make space for ...
-            end
-            line = resize!(line, newline)
-            line = read!(head, line)
+function varinfo(m::Module=Main, pattern::Regex=r"")
+    rows =
+        Any[ let value = getfield(m, v)
+                 Any[string(v),
+                     (value ∈ (Base, Main, Core) ? "" : format_bytes(summarysize(value))),
+                     summary(value)]
+             end
+             for v in sort!(names(m)) if isdefined(m, v) && ismatch(pattern, string(v)) ]
 
-            write(io, line)
-            if nb_available(head) > 0 # more to read? replace with ...
-                print(io, '\u2026') # hdots
-            end
-            println(io)
-            seekend(head) # skip the rest of the text
-        end
-    end
+    unshift!(rows, Any["name", "size", "summary"])
+
+    return Markdown.MD(Any[Markdown.Table(rows, Symbol[:l, :r, :l])])
 end
-whos(m::Module, pat::Regex=r"") = whos(STDOUT, m, pat)
-whos(pat::Regex) = whos(STDOUT, Main, pat)
+varinfo(pat::Regex) = varinfo(Main, pat)

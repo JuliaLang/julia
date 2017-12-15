@@ -63,7 +63,7 @@ end
 """
     lookup_remote(repo::GitRepo, remote_name::AbstractString) -> Nullable{GitRemote}
 
-Determine if the `remote_name` specified exists within the `repo`. Returns a
+Determine if the `remote_name` specified exists within the `repo`. Return a
 [`Nullable`](@ref), which will be null if the requested remote does not exist. If the remote
 does exist, the `Nullable` contains a [`GitRemote`](@ref) to the remote name.
 

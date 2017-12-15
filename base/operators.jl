@@ -155,7 +155,7 @@ julia> "foo" ≠ "foo"
 false
 ```
 """
-!=(x, y) = !(x == y)::Bool
+!=(x, y) = !(x == y)
 const ≠ = !=
 
 """
@@ -744,7 +744,11 @@ fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 """
     adjoint(A)
 
-The conjugate transposition operator (`'`).
+The conjugate transposition operator (`'`). Note that `adjoint` is applied recursively to
+elements.
+
+This operation is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref).
 
 # Examples
 ```jldoctest
@@ -762,142 +766,6 @@ julia> adjoint(A)
 adjoint(x) = conj(transpose(x))
 conj(x) = x
 
-# transposed multiply
-
-"""
-    Ac_mul_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ⋅B``.
-"""
-Ac_mul_B(a,b)  = adjoint(a)*b
-
-"""
-    A_mul_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᴴ``.
-"""
-A_mul_Bc(a,b)  = a*adjoint(b)
-
-"""
-    Ac_mul_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ Bᴴ``.
-"""
-Ac_mul_Bc(a,b) = adjoint(a)*adjoint(b)
-
-"""
-    At_mul_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅B``.
-"""
-At_mul_B(a,b)  = transpose(a)*b
-
-"""
-    A_mul_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᵀ``.
-"""
-A_mul_Bt(a,b)  = a*transpose(b)
-
-"""
-    At_mul_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅Bᵀ``.
-"""
-At_mul_Bt(a,b) = transpose(a)*transpose(b)
-
-# transposed divide
-
-"""
-    Ac_rdiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / B``.
-"""
-Ac_rdiv_B(a,b)  = adjoint(a)/b
-
-"""
-    A_rdiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A / Bᴴ``.
-"""
-A_rdiv_Bc(a,b)  = a/adjoint(b)
-
-"""
-    Ac_rdiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / Bᴴ``.
-"""
-Ac_rdiv_Bc(a,b) = adjoint(a)/adjoint(b)
-
-"""
-    At_rdiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / B``.
-"""
-At_rdiv_B(a,b)  = transpose(a)/b
-
-"""
-    A_rdiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A / Bᵀ``.
-"""
-A_rdiv_Bt(a,b)  = a/transpose(b)
-
-"""
-    At_rdiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / Bᵀ``.
-"""
-At_rdiv_Bt(a,b) = transpose(a)/transpose(b)
-
-"""
-    Ac_ldiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``B``.
-"""
-Ac_ldiv_B(a,b)  = adjoint(a)\b
-
-"""
-    A_ldiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᴴ``.
-"""
-A_ldiv_Bc(a,b)  = a\adjoint(b)
-
-"""
-    Ac_ldiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᴴ``.
-"""
-Ac_ldiv_Bc(a,b) = adjoint(a)\adjoint(b)
-
-"""
-    At_ldiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``B``.
-"""
-At_ldiv_B(a,b)  = transpose(a)\b
-
-"""
-    A_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᵀ``.
-"""
-A_ldiv_Bt(a,b)  = a\transpose(b)
-
-"""
-    At_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``Bᵀ``.
-"""
-At_ldiv_Bt(a,b) = At_ldiv_B(a,transpose(b))
-
-"""
-    Ac_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᵀ``.
-"""
-Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 
 """
     widen(x)
@@ -942,6 +810,8 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> map(uppercase∘hex, 250:255)
 6-element Array{String,1}:
  "FA"

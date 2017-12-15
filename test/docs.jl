@@ -924,15 +924,15 @@ let x = Binding(curmod, :bindingdoesnotexist)
 end
 
 let x = Binding(Main, :+)
-    @test parse(string(x)) == :(Base.:+)
+    @test Meta.parse(string(x)) == :(Base.:+)
 end
 
-let x = Binding(Base, :parse)
-    @test parse(string(x)) == :(Base.parse)
+let x = Binding(Meta, :parse)
+    @test Meta.parse(string(x)) == :(Base.Meta.parse)
 end
 
 let x = Binding(Main, :⊕)
-    @test parse(string(x)) == :(⊕)
+    @test Meta.parse(string(x)) == :(⊕)
 end
 
 doc_util_path = Symbol(joinpath("docs", "utils.jl"))
@@ -952,7 +952,7 @@ for (line, expr) in Pair[
     "\"...\""      => "...",
     "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
     ]
-    @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(117, doc_util_path), STDOUT, expr)
+    @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(118, doc_util_path), STDOUT, expr)
     buf = IOBuffer()
     @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
 end
@@ -991,8 +991,8 @@ dynamic_test.x = "test 2"
 @test @doc(dynamic_test) == "test 2 Union{}"
 @test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
 
-@test Docs._repl(:(dynamic_test(1.0))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), :(dynamic_test(::typeof(1.0)))))
-@test Docs._repl(:(dynamic_test(::String))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), :(dynamic_test(::String))))
+@test Docs._repl(:(dynamic_test(1.0))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(207, doc_util_path), :(dynamic_test(::typeof(1.0)))))
+@test Docs._repl(:(dynamic_test(::String))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(207, doc_util_path), :(dynamic_test(::String))))
 
 
 # Equality testing
@@ -1072,3 +1072,19 @@ end
 "an empty macro"
 macro mdoc22098 end
 @test docstrings_equal(@doc(:@mdoc22098), doc"an empty macro")
+
+# issue #24468
+let ex = try
+    include_string(@__MODULE__, """
+
+    \"\"\"
+    an example
+    \"\"\"
+    function hello(param::Vector{In64_nOt_DeFiNeD__})
+    end
+    """)
+catch e
+    e
+end
+    @test ex.line == 2
+end

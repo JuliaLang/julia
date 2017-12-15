@@ -62,7 +62,7 @@ function exhausted_abort()
 end
 
 function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, username_ptr)
-    cred = Base.get(p.credential)::SSHCredentials
+    cred = Base.get(p.credential)::SSHCredential
     revised = false
 
     # Use a filled credential as-is on the first pass. Reset password on sucessive calls.
@@ -174,7 +174,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
 end
 
 function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload)
-    cred = Base.get(p.credential)::UserPasswordCredentials
+    cred = Base.get(p.credential)::UserPasswordCredential
     revised = false
 
     # Use a filled credential as-is on the first pass. Reset password on sucessive calls.
@@ -187,11 +187,11 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayl
     if p.use_git_helpers && (!revised || !isfilled(cred))
         git_cred = GitCredential(p.config, p.url)
 
-        if isfilled(git_cred)
-            cred.user = Base.get(git_cred.username, "")
-            cred.pass = Base.get(git_cred.password, "")
-            revised = true
-        end
+        # Use `deepcopy` to ensure zeroing the `git_cred` doesn't also zero the `cred`s copy
+        cred.user = deepcopy(Base.get(git_cred.username, ""))
+        cred.pass = deepcopy(Base.get(git_cred.password, ""))
+        securezero!(git_cred)
+        revised = true
 
         p.use_git_helpers = false
     end
@@ -288,9 +288,9 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
             # Copy explicit credentials to avoid mutating approved credentials.
             p.credential = Nullable(deepcopy(cred))
 
-            if isa(cred, SSHCredentials)
+            if isa(cred, SSHCredential)
                 allowed_types &= Cuint(Consts.CREDTYPE_SSH_KEY)
-            elseif isa(cred, UserPasswordCredentials)
+            elseif isa(cred, UserPasswordCredential)
                 allowed_types &= Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT)
             else
                 allowed_types &= Cuint(0)  # Unhandled credential type
@@ -312,16 +312,16 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     # use ssh key or ssh-agent
     if isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY))
-        if isnull(p.credential) || !isa(unsafe_get(p.credential), SSHCredentials)
-            p.credential = Nullable(SSHCredentials(p.username))
+        if isnull(p.credential) || !isa(unsafe_get(p.credential), SSHCredential)
+            p.credential = Nullable(SSHCredential(p.username))
         end
         err = authenticate_ssh(libgit2credptr, p, username_ptr)
         err == 0 && return err
     end
 
     if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
-        if isnull(p.credential) || !isa(unsafe_get(p.credential), UserPasswordCredentials)
-            p.credential = Nullable(UserPasswordCredentials(p.username))
+        if isnull(p.credential) || !isa(unsafe_get(p.credential), UserPasswordCredential)
+            p.credential = Nullable(UserPasswordCredential(p.username))
         end
         err = authenticate_userpass(libgit2credptr, p)
         err == 0 && return err

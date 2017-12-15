@@ -44,7 +44,7 @@ configure:
 endif
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,base test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia,$(link))))
+$(foreach link,base $(JULIAHOME)/test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia,$(notdir $(link)))))
 
 build_defaultpkgdir = $(build_datarootdir)/julia/site/$(shell echo $(VERSDIR))
 $(eval $(call symlink_target,$(JULIAHOME)/stdlib,$(build_datarootdir)/julia/site,$(shell echo $(VERSDIR))))
@@ -53,7 +53,7 @@ julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
 
 # Build the HTML docs (skipped if already exists, notably in tarballs)
-$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl \) -prune -o -type f -print)
+$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl -o -name version_git.jl \) -prune -o -type f -print)
 	@$(MAKE) docs
 
 # doc needs to live under $(build_docdir), not under $(build_datarootdir)/julia/
@@ -108,7 +108,7 @@ julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink ju
 debug release : % : julia-%
 
 docs: julia-sysimg-$(JULIA_BUILD_MODE)
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE='$(call spawn,$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE)))'
 
 check-whitespace:
 ifneq ($(NO_GIT), 1)
@@ -146,11 +146,12 @@ release-candidate: release testall
 	@echo 5. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
 	@echo 6. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
 	@echo 7. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist
-	@echo 8. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
-	@echo 9. Upload to AWS, update https://julialang.org/downloads and http://status.julialang.org/stable links
-	@echo 10. Update checksums on AWS for tarball and packaged binaries
-	@echo 11. Announce on mailing lists
-	@echo 12. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
+	@echo 8. Check that 'make && make install && make test' succeed with unpacked tarballs even without Internet access.
+	@echo 9. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
+	@echo 10. Upload to AWS, update https://julialang.org/downloads and http://status.julialang.org/stable links
+	@echo 11. Update checksums on AWS for tarball and packaged binaries
+	@echo 12. Announce on mailing lists
+	@echo 13. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
 
 $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)
@@ -178,7 +179,7 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/abstractarray.jl \
 		base/array.jl \
 		base/bool.jl \
-		base/associative.jl \
+		base/abstractdict.jl \
 		base/codevalidation.jl \
 		base/error.jl \
 		base/essentials.jl \
@@ -198,6 +199,7 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/reflection.jl \
 		base/tuple.jl)
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl) $(shell find $(BUILDROOT)/base -name \*.jl))
+STDLIB_SRCS := $(sort $(shell find $(JULIAHOME)/stdlib/*/src -name \*.jl))
 
 $(build_private_libdir)/inference.ji: $(CORE_SRCS) | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
@@ -207,7 +209,7 @@ $(build_private_libdir)/inference.ji: $(CORE_SRCS) | $(build_private_libdir)
 RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/")
 COMMA:=,
 define sysimg_builder
-$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS)
+$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS)
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
 	if $$(call spawn,$3) $2 -C "$$(JULIA_CPU_TARGET)" --output-o $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
 		--startup-file=no --warn-overwrite=yes --sysimage $$(call cygpath_w,$$<) sysimg.jl $$(RELBUILDROOT); then \
@@ -224,67 +226,50 @@ $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(buil
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
 
 julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir)/julia
-	@$(call exec,$(JULIA_EXECUTABLE) $(call cygpath_w,$(JULIAHOME)/etc/write_base_cache.jl) $(call cygpath_w,$(build_datarootdir)/julia/base.cache))
+	@$(call spawn,$(JULIA_EXECUTABLE) --startup-file=no $(call cygpath_w,$(JULIAHOME)/etc/write_base_cache.jl) $(call cygpath_w,$(build_datarootdir)/julia/base.cache))
 
 # public libraries, that are installed in $(prefix)/lib
 JL_LIBS := julia julia-debug
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS := ccalltest
+JL_PRIVATE_LIBS-0 := libccalltest
 ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS += suitesparse_wrapper
+JL_PRIVATE_LIBS-0 += libsuitesparse_wrapper
 endif
-ifeq ($(USE_SYSTEM_PCRE),0)
-JL_PRIVATE_LIBS += pcre
+JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
+JL_PRIVATE_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
+JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp
+JL_PRIVATE_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSSH2) += libssh2
+JL_PRIVATE_LIBS-$(USE_SYSTEM_MBEDTLS) += libmbedtls libmbedcrypto libmbedx509
+JL_PRIVATE_LIBS-$(USE_SYSTEM_CURL) += libcurl
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBGIT2) += libgit2
+JL_PRIVATE_LIBS-$(USE_SYSTEM_ARPACK) += libarpack
+ifeq ($(USE_LLVM_SHLIB),1)
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM
 endif
+
 ifeq ($(USE_SYSTEM_OPENLIBM),0)
 ifeq ($(USE_SYSTEM_LIBM),0)
-JL_PRIVATE_LIBS += openlibm
+JL_PRIVATE_LIBS-0 += $(LIBMNAME)
 endif
 endif
-ifeq ($(USE_SYSTEM_DSFMT),0)
-JL_PRIVATE_LIBS += dSFMT
+
+JL_PRIVATE_LIBS-$(USE_SYSTEM_BLAS) += $(LIBBLASNAME)
+ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LAPACK) += $(LIBLAPACKNAME)
 endif
-ifeq ($(USE_SYSTEM_BLAS),0)
-JL_PRIVATE_LIBS += openblas
-else ifeq ($(USE_SYSTEM_LAPACK),0)
-JL_PRIVATE_LIBS += lapack
-endif
-ifeq ($(USE_SYSTEM_GMP),0)
-JL_PRIVATE_LIBS += gmp
-endif
-ifeq ($(USE_SYSTEM_MPFR),0)
-JL_PRIVATE_LIBS += mpfr
-endif
-ifeq ($(USE_SYSTEM_MBEDTLS),0)
-JL_PRIVATE_LIBS += mbedtls mbedcrypto mbedx509
-endif
-ifeq ($(USE_SYSTEM_LIBSSH2),0)
-JL_PRIVATE_LIBS += ssh2
-endif
-ifeq ($(USE_SYSTEM_CURL),0)
-JL_PRIVATE_LIBS += curl
-endif
-ifeq ($(USE_SYSTEM_LIBGIT2),0)
-JL_PRIVATE_LIBS += git2
-endif
-ifeq ($(USE_SYSTEM_ARPACK),0)
-JL_PRIVATE_LIBS += arpack
-endif
-ifeq ($(USE_SYSTEM_SUITESPARSE),0)
+
 ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS += amd camd ccolamd cholmod colamd umfpack spqr suitesparseconfig
+ifeq ($(USE_SYSTEM_SUITESPARSE),0)
+JL_PRIVATE_LIBS-0 += libamd libcamd libccolamd libcholmod libcolamd libumfpack libspqr libsuitesparseconfig
 endif
 endif
-ifeq ($(USE_SYSTEM_LLVM),0)
-ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS += LLVM
-endif
-endif
+
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
 ifeq ($(USE_SYSTEM_LAPACK),0)
-JL_PRIVATE_LIBS += gfortblas
+JL_PRIVATE_LIBS-0 += libgfortblas
 endif
 endif
 endif
@@ -340,12 +325,16 @@ endif
 			fi \
 		done \
 	done
-	for suffix in $(JL_PRIVATE_LIBS) ; do \
-		for lib in $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)*; do \
+	for suffix in $(JL_PRIVATE_LIBS-0) ; do \
+		for lib in $(build_libdir)/$${suffix}*.$(SHLIB_EXT)*; do \
 			if [ "$${lib##*.}" != "dSYM" ]; then \
 				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
 			fi \
 		done \
+	done
+	for suffix in $(JL_PRIVATE_LIBS-1) ; do \
+		lib=$(build_private_libdir)/$${suffix}.$(SHLIB_EXT); \
+		$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
 	done
 endif
 
@@ -548,7 +537,7 @@ else
 JULIA_SYSIMG=$(build_private_libdir)/sys-$(JULIA_BUILD_MODE)$(JULIA_LIBSUFFIX)$(CPUID_TAG).$(SHLIB_EXT)
 endif
 testall: check-whitespace $(JULIA_BUILD_MODE)
-	cp $(JULIA_SYSIMG) $(BUILDROOT)/local.$(SHLIB_EXT) && $(JULIA_EXECUTABLE) -J $(call cygpath_w,$(BUILDROOT)/local.$(SHLIB_EXT)) -e 'true' && rm $(BUILDROOT)/local.$(SHLIB_EXT)
+	cp $(JULIA_SYSIMG) $(BUILDROOT)/local.$(SHLIB_EXT) && $(call spawn, $(JULIA_EXECUTABLE) -J $(call cygpath_w,$(BUILDROOT)/local.$(SHLIB_EXT)) -e 'true' && rm $(BUILDROOT)/local.$(SHLIB_EXT))
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test all JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 testall1: check-whitespace $(JULIA_BUILD_MODE)

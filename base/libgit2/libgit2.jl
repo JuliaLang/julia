@@ -5,7 +5,7 @@ Interface to [libgit2](https://libgit2.github.com/).
 """
 module LibGit2
 
-import Base: merge!, ==
+import Base: ==
 
 export with, GitRepo, GitConfig
 
@@ -62,7 +62,7 @@ end
 """
     need_update(repo::GitRepo)
 
-Equivalent to `git update-index`. Returns `true`
+Equivalent to `git update-index`. Return `true`
 if `repo` needs updating.
 """
 function need_update(repo::GitRepo)
@@ -75,7 +75,7 @@ end
 """
     iscommit(id::AbstractString, repo::GitRepo) -> Bool
 
-Checks if commit `id` (which is a [`GitHash`](@ref) in string form)
+Check if commit `id` (which is a [`GitHash`](@ref) in string form)
 is in the repository.
 
 # Examples
@@ -108,7 +108,7 @@ end
 """
     LibGit2.isdirty(repo::GitRepo, pathspecs::AbstractString=""; cached::Bool=false) -> Bool
 
-Checks if there have been any changes to tracked files in the working tree (if
+Check if there have been any changes to tracked files in the working tree (if
 `cached=false`) or the index (if `cached=true`).
 `pathspecs` are the specifications for options for the diff.
 
@@ -169,7 +169,7 @@ The keyword argument is:
   * `filter::Set{Consts.DELTA_STATUS}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))`,
     and it sets options for the diff. The default is to show files added, modified, or deleted.
 
-Returns only the *names* of the files which have changed, *not* their contents.
+Return only the *names* of the files which have changed, *not* their contents.
 
 # Examples
 ```julia
@@ -218,7 +218,7 @@ end
 """
     is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo) -> Bool
 
-Returns `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
+Return `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 `b`, a [`GitHash`](@ref) in string form.
 
 # Examples
@@ -262,7 +262,7 @@ Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
 function fetch(repo::GitRepo; remote::AbstractString="origin",
                remoteurl::AbstractString="",
                refspecs::Vector{<:AbstractString}=AbstractString[],
-               payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}=CredentialPayload())
+               payload::Union{CredentialPayload,Nullable{<:Union{AbstractCredential, CachedCredentials}}}=CredentialPayload())
     p = reset!(deprecate_nullable_creds(:fetch, "repo", payload), GitConfig(repo))
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
@@ -304,7 +304,7 @@ function push(repo::GitRepo; remote::AbstractString="origin",
               remoteurl::AbstractString="",
               refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
-              payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}=CredentialPayload())
+              payload::Union{CredentialPayload,Nullable{<:Union{AbstractCredential, CachedCredentials}}}=CredentialPayload())
     p = reset!(deprecate_nullable_creds(:push, "repo", payload), GitConfig(repo))
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
@@ -520,7 +520,7 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Void} = C_NULL,
-               payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}=CredentialPayload())
+               payload::Union{CredentialPayload,Nullable{<:Union{AbstractCredential, CachedCredentials}}}=CredentialPayload())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
     @Base.gc_preserve lbranch begin
@@ -642,7 +642,7 @@ end
     merge!(repo::GitRepo; kwargs...) -> Bool
 
 Perform a git merge on the repository `repo`, merging commits
-with diverging history into the current branch. Returns `true`
+with diverging history into the current branch. Return `true`
 if the merge succeeded, `false` if not.
 
 The keyword arguments are:
@@ -812,7 +812,7 @@ end
 """
     authors(repo::GitRepo) -> Vector{Signature}
 
-Returns all authors of commits to the `repo` repository.
+Return all authors of commits to the `repo` repository.
 
 # Examples
 ```julia

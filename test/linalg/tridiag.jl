@@ -16,7 +16,7 @@ end
 
 guardsrand(123) do
     n = 12 #Size of matrix problem to test
-    @testset for elty in (Float32, Float64, Complex64, Complex128, Int)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64, Int)
         if elty == Int
             srand(61516384)
             d = rand(1:100, n)
@@ -78,44 +78,47 @@ guardsrand(123) do
             @test Tridiagonal(dl, d, du) + Tridiagonal(du, d, dl) == SymTridiagonal(2d, dl+du)
             @test SymTridiagonal(d, dl) + Tridiagonal(dl, d, du) == Tridiagonal(dl + dl, d+d, dl+du)
             @test convert(SymTridiagonal,Tridiagonal(SymTridiagonal(d, dl))) == SymTridiagonal(d, dl)
-            @test Array(convert(SymTridiagonal{Complex64},Tridiagonal(SymTridiagonal(d, dl)))) == convert(Matrix{Complex64}, SymTridiagonal(d, dl))
+            @test Array(convert(SymTridiagonal{ComplexF32},Tridiagonal(SymTridiagonal(d, dl)))) == convert(Matrix{ComplexF32}, SymTridiagonal(d, dl))
         end
         @testset "tril/triu" begin
+            zerosd = fill!(similar(d), 0)
+            zerosdl = fill!(similar(dl), 0)
+            zerosdu = fill!(similar(du), 0)
             @test_throws ArgumentError tril!(SymTridiagonal(d, dl), -n - 2)
             @test_throws ArgumentError tril!(SymTridiagonal(d, dl), n)
             @test_throws ArgumentError tril!(Tridiagonal(dl, d, du), -n - 2)
             @test_throws ArgumentError tril!(Tridiagonal(dl, d, du), n)
-            @test tril(SymTridiagonal(d,dl))    == Tridiagonal(dl,d,zeros(dl))
+            @test tril(SymTridiagonal(d,dl))    == Tridiagonal(dl,d,zerosdl)
             @test tril(SymTridiagonal(d,dl),1)  == Tridiagonal(dl,d,dl)
-            @test tril(SymTridiagonal(d,dl),-1) == Tridiagonal(dl,zeros(d),zeros(dl))
-            @test tril(SymTridiagonal(d,dl),-2) == Tridiagonal(zeros(dl),zeros(d),zeros(dl))
-            @test tril(Tridiagonal(dl,d,du))    == Tridiagonal(dl,d,zeros(du))
+            @test tril(SymTridiagonal(d,dl),-1) == Tridiagonal(dl,zerosd,zerosdl)
+            @test tril(SymTridiagonal(d,dl),-2) == Tridiagonal(zerosdl,zerosd,zerosdl)
+            @test tril(Tridiagonal(dl,d,du))    == Tridiagonal(dl,d,zerosdu)
             @test tril(Tridiagonal(dl,d,du),1)  == Tridiagonal(dl,d,du)
-            @test tril(Tridiagonal(dl,d,du),-1) == Tridiagonal(dl,zeros(d),zeros(du))
-            @test tril(Tridiagonal(dl,d,du),-2) == Tridiagonal(zeros(dl),zeros(d),zeros(du))
+            @test tril(Tridiagonal(dl,d,du),-1) == Tridiagonal(dl,zerosd,zerosdu)
+            @test tril(Tridiagonal(dl,d,du),-2) == Tridiagonal(zerosdl,zerosd,zerosdu)
 
             @test_throws ArgumentError triu!(SymTridiagonal(d, dl), -n)
             @test_throws ArgumentError triu!(SymTridiagonal(d, dl), n + 2)
             @test_throws ArgumentError triu!(Tridiagonal(dl, d, du), -n)
             @test_throws ArgumentError triu!(Tridiagonal(dl, d, du), n + 2)
-            @test triu(SymTridiagonal(d,dl))    == Tridiagonal(zeros(dl),d,dl)
+            @test triu(SymTridiagonal(d,dl))    == Tridiagonal(zerosdl,d,dl)
             @test triu(SymTridiagonal(d,dl),-1) == Tridiagonal(dl,d,dl)
-            @test triu(SymTridiagonal(d,dl),1)  == Tridiagonal(zeros(dl),zeros(d),dl)
-            @test triu(SymTridiagonal(d,dl),2)  == Tridiagonal(zeros(dl),zeros(d),zeros(dl))
-            @test triu(Tridiagonal(dl,d,du))    == Tridiagonal(zeros(dl),d,du)
+            @test triu(SymTridiagonal(d,dl),1)  == Tridiagonal(zerosdl,zerosd,dl)
+            @test triu(SymTridiagonal(d,dl),2)  == Tridiagonal(zerosdl,zerosd,zerosdl)
+            @test triu(Tridiagonal(dl,d,du))    == Tridiagonal(zerosdl,d,du)
             @test triu(Tridiagonal(dl,d,du),-1) == Tridiagonal(dl,d,du)
-            @test triu(Tridiagonal(dl,d,du),1)  == Tridiagonal(zeros(dl),zeros(d),du)
-            @test triu(Tridiagonal(dl,d,du),2)  == Tridiagonal(zeros(dl),zeros(d),zeros(du))
+            @test triu(Tridiagonal(dl,d,du),1)  == Tridiagonal(zerosdl,zerosd,du)
+            @test triu(Tridiagonal(dl,d,du),2)  == Tridiagonal(zerosdl,zerosd,zerosdu)
 
             @test !istril(SymTridiagonal(d,dl))
             @test !istriu(SymTridiagonal(d,dl))
-            @test istriu(Tridiagonal(zeros(dl),d,du))
-            @test istril(Tridiagonal(dl,d,zeros(du)))
+            @test istriu(Tridiagonal(zerosdl,d,du))
+            @test istril(Tridiagonal(dl,d,zerosdu))
         end
 
         @testset for mat_type in (Tridiagonal, SymTridiagonal)
             A = mat_type == Tridiagonal ? mat_type(dl, d, du) : mat_type(d, dl)
-            fA = map(elty <: Complex ? Complex128 : Float64, Array(A))
+            fA = map(elty <: Complex ? ComplexF64 : Float64, Array(A))
             @testset "similar, size, and copy!" begin
                 B = similar(A)
                 @test size(B) == size(A)
@@ -196,7 +199,7 @@ guardsrand(123) do
             end
             @testset "Binary operations" begin
                 B = mat_type == Tridiagonal ? mat_type(a, b, c) : mat_type(b, a)
-                fB = map(elty <: Complex ? Complex128 : Float64, Array(B))
+                fB = map(elty <: Complex ? ComplexF64 : Float64, Array(B))
                 for op in (+, -, *)
                     @test Array(op(A, B)) ≈ op(fA, fB)
                 end
@@ -206,17 +209,17 @@ guardsrand(123) do
                 @test Array(A/α) ≈ Array(A)/α
 
                 @testset "Matmul with Triangular types" begin
-                    @test A*Base.LinAlg.UnitUpperTriangular(eye(n)) ≈ fA
-                    @test A*Base.LinAlg.UnitLowerTriangular(eye(n)) ≈ fA
-                    @test A*UpperTriangular(eye(n)) ≈ fA
-                    @test A*LowerTriangular(eye(n)) ≈ fA
+                    @test A*Base.LinAlg.UnitUpperTriangular(Matrix(1.0I, n, n)) ≈ fA
+                    @test A*Base.LinAlg.UnitLowerTriangular(Matrix(1.0I, n, n)) ≈ fA
+                    @test A*UpperTriangular(Matrix(1.0I, n, n)) ≈ fA
+                    @test A*LowerTriangular(Matrix(1.0I, n, n)) ≈ fA
                 end
-                @testset "A_mul_B! errors" begin
-                    @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(zeros(fA),A,ones(elty,n,n+1))
-                    @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(zeros(fA),A,ones(elty,n+1,n))
-                    @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n),B,ones(elty,n+1,n))
-                    @test_throws DimensionMismatch A_mul_B!(zeros(elty,n+1,n),B,ones(elty,n,n))
-                    @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n+1),B,ones(elty,n,n))
+                @testset "mul! errors" begin
+                    @test_throws DimensionMismatch Base.LinAlg.mul!(similar(fA),A,ones(elty,n,n+1))
+                    @test_throws DimensionMismatch Base.LinAlg.mul!(similar(fA),A,ones(elty,n+1,n))
+                    @test_throws DimensionMismatch Base.LinAlg.mul!(zeros(elty,n,n),B,ones(elty,n+1,n))
+                    @test_throws DimensionMismatch Base.LinAlg.mul!(zeros(elty,n+1,n),B,ones(elty,n,n))
+                    @test_throws DimensionMismatch Base.LinAlg.mul!(zeros(elty,n,n+1),B,ones(elty,n,n))
                 end
             end
             if mat_type == SymTridiagonal
@@ -261,7 +264,7 @@ guardsrand(123) do
                                 @inferred eig(A, 1.0, 2.0)
                                 D, Vecs = eig(fA)
                                 @test DT ≈ D
-                                @test abs.(VT'Vecs) ≈ eye(elty, n)
+                                @test abs.(VT'Vecs) ≈ Matrix(elty(1)I, n, n)
                                 Test.test_approx_eq_modphase(eigvecs(A), eigvecs(fA))
                                 #call to LAPACK.stein here
                                 Test.test_approx_eq_modphase(eigvecs(A,eigvals(A)),eigvecs(A))
@@ -288,7 +291,7 @@ guardsrand(123) do
                             invFsv = Fs\vv
                             x = Ts\vv
                             @test x ≈ invFsv
-                            @test Array(AbstractArray(Tldlt)) ≈ Fs
+                            @test Array(Tldlt) ≈ Fs
                         end
 
                         @testset "similar" begin

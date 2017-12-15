@@ -136,6 +136,25 @@ define an informal interface that enable many fancier behaviors. In some cases, 
 to additionally specialize those extra behaviors when they know a more efficient algorithm can
 be used in their specific case.
 
+It is also often useful to allow iteration over a collection in *reverse order*
+by iterating over [`Iterators.reverse(iterator)`](@ref).  To actually support
+reverse-order iteration, however, an iterator
+type `T` needs to implement `start`, `next`, and `done` methods for `Iterators.Reverse{T}`.
+(Given `r::Iterators.Reverse{T}`, the underling iterator of type `T` is `r.itr`.)
+In our `Squares` example, we would implement `Iterators.Reverse{Squares}` methods:
+
+```jldoctest squaretype
+julia> Base.start(rS::Iterators.Reverse{Squares}) = rS.itr.count
+
+julia> Base.next(::Iterators.Reverse{Squares}, state) = (state*state, state-1)
+
+julia> Base.done(::Iterators.Reverse{Squares}, state) = state < 1
+
+julia> collect(Iterators.reverse(Squares(10)))' # transposed to save space
+1×10 RowVector{Int64,Array{Int64,1}}:
+ 100  81  64  49  36  25  16  9  4  1
+```
+
 ## Indexing
 
 | Methods to implement | Brief description                |
@@ -207,7 +226,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `similar(A)`                                    | `similar(A, eltype(A), size(A))`       | Return a mutable array with the same shape and element type                           |
 | `similar(A, ::Type{S})`                         | `similar(A, S, size(A))`               | Return a mutable array with the same shape and the specified element type             |
 | `similar(A, dims::NTuple{Int})`                 | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
-| `similar(A, ::Type{S}, dims::NTuple{Int})`      | `Array{S}(dims)`                       | Return a mutable array with the specified element type and size                       |
+| `similar(A, ::Type{S}, dims::NTuple{Int})`      | `Array{S}(uninitialized, dims)`        | Return a mutable array with the specified element type and size                       |
 | **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
 | `indices(A)`                                    | `map(OneTo, size(A))`                  | Return the `AbstractUnitRange` of valid indices                                       |
 | `Base.similar(A, ::Type{S}, inds::NTuple{Ind})` | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
@@ -371,3 +390,204 @@ If you are defining an array type that allows non-traditional indexing (indices 
 something other than 1), you should specialize `indices`. You should also specialize [`similar`](@ref)
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
 perhaps range-types `Ind` of your own design. For more information, see [Arrays with custom indices](@ref).
+
+## [Broadcasting](@id man-interfaces-broadcasting)
+
+| Methods to implement | Brief description |
+|:-------------------- |:----------------- |
+| `Base.BroadcastStyle(::Type{SrcType}) = SrcStyle()` | Broadcasting behavior of `SrcType` |
+| `Base.broadcast_similar(f, ::DestStyle, ::Type{ElType}, inds, As...)` | Allocation of output container |
+| **Optional methods** | | |
+| `Base.BroadcastStyle(::Style1, ::Style2) = Style12()` | Precedence rules for mixing styles |
+| `Base.broadcast_indices(::StyleA, A)` | Declaration of the indices of `A` for broadcasting purposes (for AbstractArrays, defaults to `indices(A)`) |
+| **Bypassing default machinery** | |
+| `broadcast(f, As...)` | Complete bypass of broadcasting machinery |
+| `broadcast(f, ::DestStyle, ::Void, ::Void, As...)` | Bypass after container type is computed |
+| `broadcast(f, ::DestStyle, ::Type{ElType}, inds::Tuple, As...)` | Bypass after container type, eltype, and indices are computed |
+
+[Broadcasting](@ref) is triggered by an explicit call to `broadcast` or `broadcast!`, or implicitly by
+"dot" operations like `A .+ b`. Any `AbstractArray` type supports broadcasting,
+but the default result (output) type is `Array`. To specialize the result for specific input type(s),
+the main task is the allocation of an appropriate result object.
+(This is not an issue for `broadcast!`, where
+the result object is passed as an argument.) This process is split into two stages: computation
+of the behavior and type from the arguments ([`Base.BroadcastStyle`](@ref)), and allocation of the object
+given the resulting type with [`Base.broadcast_similar`](@ref).
+
+`Base.BroadcastStyle` is an abstract type from which all styles are
+derived. When used as a function it has two possible forms,
+unary (single-argument) and binary.
+The unary variant states that you intend to
+implement specific broadcasting behavior and/or output type,
+and do not wish to rely on the default fallback ([`Broadcast.Scalar`](@ref) or [`Broadcast.DefaultArrayStyle`](@ref)).
+To achieve this, you can define a custom `BroadcastStyle` for your object:
+
+```julia
+struct MyStyle <: Broadcast.BroadcastStyle end
+Base.BroadcastStyle(::Type{<:MyType}) = MyStyle()
+```
+
+In some cases it might be convenient not to have to define `MyStyle`, in which case you can
+leverage one of the general broadcast wrappers:
+
+  - `Base.BroadcastStyle(::Type{<:MyType}) = Broadcast.Style{MyType}()` can be
+    used for arbitrary types.
+  - `Base.BroadcastStyle(::Type{<:MyType}) = Broadcast.ArrayStyle{MyType}()` is preferred
+    if `MyType` is an `AbstractArray`.
+  - For `AbstractArrays` that only support a certain dimensionality, create a subtype of `Broadcast.AbstractArrayStyle{N}` (see below).
+
+When your broadcast operation involves several arguments, individual argument styles get
+combined to determine a single `DestStyle` that controls the type of the output container.
+For more detail, see [below](@ref writing-binary-broadcasting-rules).
+
+The actual allocation of the result array is handled by `Base.broadcast_similar`:
+
+```julia
+Base.broadcast_similar(f, ::DestStyle, ::Type{ElType}, inds, As...)
+```
+
+`f` is the operation being performed and `DestStyle` signals the final result from
+combining the input styles.
+`As...` is the list of input objects. You may not need to use `f` or `As...`
+unless they help you build the appropriate object; the fallback definition is
+
+```julia
+broadcast_similar(f, ::DefaultArrayStyle{N}, ::Type{ElType}, inds::Indices{N}, As...) where {N,ElType} =
+    similar(Array{ElType}, inds)
+```
+
+However, if needed you can specialize on any or all of these arguments.
+
+For a complete example, let's say you have created a type, `ArrayAndChar`, that stores an
+array and a single character:
+
+```jldoctest
+struct ArrayAndChar{T,N} <: AbstractArray{T,N}
+    data::Array{T,N}
+    char::Char
+end
+Base.size(A::ArrayAndChar) = size(A.data)
+Base.getindex(A::ArrayAndChar{T,N}, inds::Vararg{Int,N}) where {T,N} = A.data[inds...]
+Base.setindex!(A::ArrayAndChar{T,N}, val, inds::Vararg{Int,N}) where {T,N} = A.data[inds...] = val
+Base.showarg(io::IO, A::ArrayAndChar, toplevel) = print(io, typeof(A), " with char '", A.char, "'")
+```
+
+You might want broadcasting to preserve the `char` "metadata." First we define
+
+```jldoctest
+Base.BroadcastStyle(::Type{<:ArrayAndChar}) = Broadcast.ArrayStyle{ArrayAndChar}()
+```
+
+This forces us to also define a `broadcast_similar` method:
+```jldoctest
+function Base.broadcast_similar(f, ::Broadcast.ArrayStyle{ArrayAndChar}, ::Type{ElType}, inds, As...) where ElType
+    # Scan the inputs for the ArrayAndChar:
+    A = find_aac(As...)
+    # Use the char field of A to create the output
+    ArrayAndChar(similar(Array{ElType}, inds), A.char)
+end
+
+"`A = find_aac(As...)` returns the first ArrayAndChar among the arguments."
+find_aac(A::ArrayAndChar, B...) = A
+find_aac(A, B...) = find_aac(B...)
+```
+
+From these definitions, one obtains the following behavior:
+```jldoctest
+julia> a = ArrayAndChar([1 2; 3 4], 'x')
+2×2 ArrayAndChar{Int64,2} with char 'x':
+ 1  2
+ 3  4
+
+julia> a .+ 1
+2×2 ArrayAndChar{Int64,2} with char 'x':
+ 2  3
+ 4  5
+
+julia> a .+ [5,10]
+2×2 ArrayAndChar{Int64,2} with char 'x':
+  6   7
+ 13  14
+```
+
+Finally, it's worth noting that sometimes it's easier simply to bypass the machinery for
+computing result types and container sizes, and just do everything manually. For example,
+you can convert a `UnitRange{Int}` `r` to a `UnitRange{BigInt}` with `big.(r)`; the definition
+of this method is approximately
+
+```julia
+Broadcast.broadcast(::typeof(big), r::UnitRange) = big(first(r)):big(last(r))
+```
+
+This exploits Julia's ability to dispatch on a particular function type. (This kind of
+explicit definition can indeed be necessary if the output container does not support `setindex!`.)
+You can optionally choose to implement the actual broadcasting yourself, but allow
+the internal machinery to compute the container type, element type, and indices by specializing
+
+```julia
+Broadcast.broadcast(::typeof(somefunction), ::MyStyle, ::Type{ElType}, inds, As...)
+```
+
+### [Writing binary broadcasting rules](@id writing-binary-broadcasting-rules)
+
+The precedence rules are defined by binary `BroadcastStyle` calls:
+
+```julia
+Base.BroadcastStyle(::Style1, ::Style2) = Style12()
+```
+
+where `Style12` is the `BroadcastStyle` you want to choose for outputs involving
+arguments of `Style1` and `Style2`. For example,
+
+```julia
+Base.BroadcastStyle(::Broadcast.Style{Tuple}, ::Broadcast.Scalar) = Broadcast.Style{Tuple}()
+```
+
+indicates that `Tuple` "wins" over scalars (the output container will be a tuple).
+It is worth noting that you do not need to (and should not) define both argument orders
+of this call; defining one is sufficient no matter what order the user supplies the arguments in.
+
+For `AbstractArray` types, defining a `BroadcastStyle` supersedes the fallback choice,
+[`Broadcast.DefaultArrayStyle`](@ref). `DefaultArrayStyle` and the abstract supertype, `AbstractArrayStyle`, store the dimensionality as a type parameter to support specialized
+array types that have fixed dimensionality requirements.
+
+`DefaultArrayStyle` "loses" to any other
+`AbstractArrayStyle` that has been defined because of the following methods:
+
+```julia
+BroadcastStyle(a::AbstractArrayStyle{Any}, ::DefaultArrayStyle) = a
+BroadcastStyle(a::AbstractArrayStyle{N}, ::DefaultArrayStyle{N}) where N = a
+BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
+    typeof(a)(_max(Val(M),Val(N)))
+```
+
+You do not need to write binary `BroadcastStyle`
+rules unless you want to establish precedence for
+two or more non-`DefaultArrayStyle` types.
+
+If your array type does have fixed dimensionality requirements, then you should
+subtype `AbstractArrayStyle`. For example, the sparse array code has the following definitions:
+
+```julia
+struct SparseVecStyle <: Broadcast.AbstractArrayStyle{1} end
+struct SparseMatStyle <: Broadcast.AbstractArrayStyle{2} end
+Base.BroadcastStyle(::Type{<:SparseVector}) = SparseVecStyle()
+Base.BroadcastStyle(::Type{<:SparseMatrixCSC}) = SparseMatStyle()
+```
+
+Whenever you subtype `AbstractArrayStyle`, you also need to define rules for combining
+dimensionalities, by creating a constructor for your style that takes a `Val(N)` argument.
+For example:
+
+```julia
+SparseVecStyle(::Val{0}) = SparseVecStyle()
+SparseVecStyle(::Val{1}) = SparseVecStyle()
+SparseVecStyle(::Val{2}) = SparseMatStyle()
+SparseVecStyle(::Val{N}) where N = Broadcast.DefaultArrayStyle{N}()
+```
+
+These rules indicate that the combination of a `SparseVecStyle` with 0- or 1-dimensional arrays
+yields another `SparseVecStyle`, that its combination with a 2-dimensional array
+yields a `SparseMatStyle`, and anything of higher dimensionality falls back to the dense arbitrary-dimensional framework.
+These rules allow broadcasting to keep the sparse representation for operations that result
+in one or two dimensional outputs, but produce an `Array` for any other dimensionality.

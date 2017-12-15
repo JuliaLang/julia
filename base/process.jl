@@ -138,7 +138,7 @@ struct FileRedirect
     filename::AbstractString
     append::Bool
     function FileRedirect(filename, append)
-        if lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
+        if Unicode.lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
             warn_once("for portability use DevNull instead of a file redirect")
         end
         new(filename, append)
@@ -207,7 +207,7 @@ end
 # convert various env representations into an array of "key=val" strings
 byteenv(env::AbstractArray{<:AbstractString}) =
     String[cstr(x) for x in env]
-byteenv(env::Associative) =
+byteenv(env::AbstractDict) =
     String[cstr(string(k)*"="*string(v)) for (k,v) in env]
 byteenv(env::Void) = nothing
 byteenv(env::Union{AbstractVector{Pair{T}}, Tuple{Vararg{Pair{T}}}}) where {T<:AbstractString} =
@@ -328,7 +328,7 @@ mutable struct Process <: AbstractPipe
                    typemin(fieldtype(Process, :exitcode)),
                    typemin(fieldtype(Process, :termsignal)),
                    Condition(), Condition())
-        finalizer(this, uvfinalize)
+        finalizer(uvfinalize, this)
         return this
     end
 end
@@ -726,17 +726,21 @@ end
     kill(p::Process, signum=SIGTERM)
 
 Send a signal to a process. The default is to terminate the process.
+Returns successfully if the process has already exited, but throws an
+error if killing the process failed for other reasons (e.g. insufficient
+permissions).
 """
 function kill(p::Process, signum::Integer)
     if process_running(p)
         @assert p.handle != C_NULL
-        ccall(:uv_process_kill, Int32, (Ptr{Void}, Int32), p.handle, signum)
-    else
-        Int32(-1)
+        err = ccall(:uv_process_kill, Int32, (Ptr{Void}, Int32), p.handle, signum)
+        if err != 0 && err != UV_ESRCH
+            throw(UVError("kill", err))
+        end
     end
 end
-kill(ps::Vector{Process}) = map(kill, ps)
-kill(ps::ProcessChain) = map(kill, ps.processes)
+kill(ps::Vector{Process}) = foreach(kill, ps)
+kill(ps::ProcessChain) = foreach(kill, ps.processes)
 kill(p::Process) = kill(p, SIGTERM)
 
 function _contains_newline(bufptr::Ptr{Void}, len::Int32)

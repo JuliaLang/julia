@@ -45,7 +45,7 @@ function complete_symbol(sym, ffunc)
         lookup_name, name = rsplit(sym, ".", limit=2)
 
         ex = Base.syntax_deprecation_warnings(false) do
-            parse(lookup_name, raise=false)
+            Meta.parse(lookup_name, raise=false)
         end
 
         b, found = get_value(ex, context_module)
@@ -106,7 +106,7 @@ const sorted_keywords = [
     "primitive type", "quote", "return", "struct",
     "true", "try", "using", "while"]
 
-function complete_keyword(s::String)
+function complete_keyword(s::Union{String,SubString{String}})
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)
@@ -225,7 +225,7 @@ end
 # closed start brace from the end of the string.
 function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     braces = 0
-    r = RevString(s)
+    r = reverse(s)
     i = start(r)
     in_single_quotes = false
     in_double_quotes = false
@@ -245,18 +245,21 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
                 in_back_ticks = true
             end
         else
-            if !in_back_ticks && !in_double_quotes && c == '\'' && !done(r, i) && next(r, i)[1]!='\\'
+            if !in_back_ticks && !in_double_quotes &&
+                c == '\'' && !done(r, i) && next(r, i)[1] != '\\'
                 in_single_quotes = !in_single_quotes
-            elseif !in_back_ticks && !in_single_quotes && c == '"' && !done(r, i) && next(r, i)[1]!='\\'
+            elseif !in_back_ticks && !in_single_quotes &&
+                c == '"' && !done(r, i) && next(r, i)[1] != '\\'
                 in_double_quotes = !in_double_quotes
-            elseif !in_single_quotes && !in_double_quotes && c == '`' && !done(r, i) && next(r, i)[1]!='\\'
+            elseif !in_single_quotes && !in_double_quotes &&
+                c == '`' && !done(r, i) && next(r, i)[1] != '\\'
                 in_back_ticks = !in_back_ticks
             end
         end
         braces == 1 && break
     end
     braces != 1 && return 0:-1, -1
-    method_name_end = reverseind(r, i)
+    method_name_end = reverseind(s, i)
     startind = nextind(s, rsearch(s, non_identifier_chars, method_name_end))
     return (startind:endof(s), method_name_end)
 end
@@ -461,7 +464,7 @@ function dict_identifier_key(str,tag)
     begin_of_key = first(search(str, r"\S", nextind(str, end_of_identifier) + 1)) # 1 for [
     begin_of_key==0 && return (true, nothing, nothing)
     partial_key = str[begin_of_key:end]
-    (isa(obj, Associative) && length(obj) < 1e6) || return (true, nothing, nothing)
+    (isa(obj, AbstractDict) && length(obj) < 1e6) || return (true, nothing, nothing)
     return (obj, partial_key, begin_of_key)
 end
 
@@ -479,7 +482,7 @@ function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
     inc_tag = Base.syntax_deprecation_warnings(false) do
-        Base.incomplete_tag(parse(partial, raise=false))
+        Base.incomplete_tag(Meta.parse(partial, raise=false))
     end
 
     # if completing a key in a Dict
@@ -527,7 +530,7 @@ function completions(string, pos)
     if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         ex = Base.syntax_deprecation_warnings(false) do
-            parse(partial[frange] * ")", raise=false)
+            Meta.parse(partial[frange] * ")", raise=false)
         end
         if isa(ex, Expr) && ex.head==:call
             return complete_methods(ex), start(frange):method_name_end, false

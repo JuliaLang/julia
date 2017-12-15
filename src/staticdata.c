@@ -198,6 +198,20 @@ static uintptr_t jl_fptr_id(void *fptr)
         return *(uintptr_t*)pbp;
 }
 
+int32_t jl_jlcall_api(const char *fname)
+{
+    // give the function an index in the constant lookup table
+    if (fname == NULL)
+        return 0;
+    if (!strncmp(fname, "japi3_", 6)) // jlcall abi 3 from JIT
+        return JL_API_WITH_PARAMETERS;
+    assert(!strncmp(fname, "japi1_", 6) ||  // jlcall abi 1 from JIT
+           !strncmp(fname, "jsys1_", 6) ||  // jlcall abi 1 from sysimg
+           !strncmp(fname, "jlcall_", 7) || // jlcall abi 1 from JIT wrapping a specsig method
+           !strncmp(fname, "jlsysw_", 7));  // jlcall abi 1 from sysimg wrapping a specsig method
+    return JL_API_GENERIC;
+}
+
 
 #define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v))
 static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v);
@@ -648,7 +662,7 @@ static void jl_write_values(jl_serializer_state *s)
                 newm->unspecialized_ducttape = NULL;
                 if (jl_is_method(m->def.method)) {
                     uintptr_t fptr_id = jl_fptr_id((void*)(uintptr_t)m->fptr);
-                    if (m->jlcall_api == 2) {
+                    if (m->jlcall_api == JL_API_CONST) {
                     }
                     else if (fptr_id >= 2) {
                         //write_int8(s->s, -li->jlcall_api);
@@ -950,7 +964,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
             }
             else {
                 uintptr_t base = (uintptr_t)fvars.base;
-                assert(jl_is_method(li->def.method) && li->jlcall_api && li->jlcall_api != 2);
+                assert(jl_is_method(li->def.method) && li->jlcall_api && li->jlcall_api != JL_API_CONST);
                 linfos[i] = li;
                 int32_t offset = fvars.offsets[i];
                 for (; clone_idx < fvars.nclones; clone_idx++) {
@@ -1316,7 +1330,6 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname)
     JL_SIGATOMIC_END();
 }
 
-extern int jl_boot_file_loaded;
 extern void jl_get_builtins(void);
 extern void jl_get_builtin_hooks(void);
 extern void jl_gc_set_permalloc_region(void *start, void *end);
@@ -1473,7 +1486,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
     jl_get_builtins();
     jl_get_builtin_hooks();
-    jl_boot_file_loaded = 1;
     jl_init_box_caches();
 
     jl_update_all_gvars(&s);
@@ -1583,6 +1595,7 @@ static void jl_init_serializer2(int for_serialize)
                      jl_gotonode_type->name, jl_quotenode_type->name,
                      jl_globalref_type->name, jl_typeofbottom_type->name,
                      jl_string_type->name, jl_abstractstring_type->name,
+                     jl_namedtuple_type, jl_namedtuple_typename,
 
                      jl_int32_type, jl_int64_type, jl_bool_type, jl_uint8_type,
 
@@ -1649,6 +1662,7 @@ static void jl_init_serializer2(int for_serialize)
     arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_densearray_type))->name);
     arraylist_push(&builtin_typenames, jl_tuple_typename);
     arraylist_push(&builtin_typenames, jl_vararg_typename);
+    arraylist_push(&builtin_typenames, jl_namedtuple_typename);
 }
 
 static void jl_cleanup_serializer2(void)

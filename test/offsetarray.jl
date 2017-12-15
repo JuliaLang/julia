@@ -59,7 +59,7 @@ S4 = OffsetArray(view(reshape(collect(1:4*3*2), 4, 3, 2), 1:3, 1:2, :), (-1,-2,1
 @test A[1, [4,3]] == S[1, [4,3]] == [4,2]
 @test A[:, :] == S[:, :] == A
 
-A_3_3 = OffsetArray(Array{Int}(3,3), (-2,-1))
+A_3_3 = OffsetArray(Matrix{Int}(uninitialized, 3,3), (-2,-1))
 A_3_3[:, :] = reshape(1:9, 3, 3)
 for i = 1:9 @test A_3_3[i] == i end
 A_3_3[-1:1, 0:2] = reshape(1:9, 3, 3)
@@ -230,7 +230,7 @@ v = view(A0, 1:1, i1)
 @test indices(v) === (Base.OneTo(1), -4:-3)
 
 # copy! and fill!
-a = OffsetArray{Int}((-3:-1,))
+a = OffsetArray{Int}(uninitialized, (-3:-1,))
 fill!(a, -1)
 copy!(a, (1,2))   # non-array iterables
 @test a[-3] == 1
@@ -274,7 +274,7 @@ copy!(a, -3, b, 2)
 @test a[-3] == 2
 @test a[-2] == a[-1] == -1
 @test_throws BoundsError copy!(a, -3, b, 1, 4)
-am = OffsetArray{Int}((1:1, 7:9))  # for testing linear indexing
+am = OffsetArray{Int}(uninitialized, (1:1, 7:9))  # for testing linear indexing
 fill!(am, -1)
 copy!(am, b)
 @test am[1] == 1
@@ -383,14 +383,20 @@ I,J,N = findnz(z)
 @test vecnorm(A) ≈ vecnorm(parent(A))
 @test vecdot(v, v) ≈ vecdot(v0, v0)
 
-v  = OffsetArray([1,1e100,1,-1e100], (-3,))*1000
-v2 = OffsetArray([1,-1e100,1,1e100], (5,))*1000
-@test isa(v, OffsetArray)
-cv  = OffsetArray([1,1e100,1e100,2], (-3,))*1000
-cv2 = OffsetArray([1,-1e100,-1e100,2], (5,))*1000
-@test isequal(cumsum_kbn(v), cv)
-@test isequal(cumsum_kbn(v2), cv2)
-@test isequal(sum_kbn(v), sum_kbn(parent(v)))
+# Prior to its removal from Base, cumsum_kbn was used here. To achieve the same level of
+# accuracy in the tests, we need to use BigFloats with enlarged precision.
+@testset "high-precision array reduction" begin
+    setprecision(BigFloat, 500) do
+        v  = OffsetArray(BigFloat[1,1e100,1,-1e100], (-3,)) .* 1000
+        v2 = OffsetArray(BigFloat[1,-1e100,1,1e100], ( 5,)) .* 1000
+        @test isa(v, OffsetArray)
+        cv  = OffsetArray(BigFloat[1, 1e100, 1e100,2], (-3,)) .* 1000
+        cv2 = OffsetArray(BigFloat[1,-1e100,-1e100,2], ( 5,)) .* 1000
+        @test cumsum(v) ≈ cv
+        @test cumsum(v2) ≈ cv2
+        @test sum(v) ≈ sum(parent(v))
+    end
+end
 
 io = IOBuffer()
 writedlm(io, A)
@@ -425,7 +431,7 @@ v = OffsetArray(rand(8), (-2,))
 @test circshift(A, (-1,2)) == OffsetArray(circshift(parent(A), (-1,2)), A.offsets)
 
 src = reshape(collect(1:16), (4,4))
-dest = OffsetArray(Array{Int}(4,4), (-1,1))
+dest = OffsetArray(Matrix{Int}(uninitialized, 4,4), (-1,1))
 circcopy!(dest, src)
 @test parent(dest) == [8 12 16 4; 5 9 13 1; 6 10 14 2; 7 11 15 3]
 @test dest[1:3,2:4] == src[1:3,2:4]
@@ -442,7 +448,7 @@ module SimilarUR
         stop::Int
     end
     ur = MyURange(1,3)
-    a = Array{Int}(2)
+    a = Vector{Int}(uninitialized, 2)
     @test_throws MethodError similar(a, ur)
     @test_throws MethodError similar(a, Float64, ur)
     @test_throws MethodError similar(a, Float64, (ur,))

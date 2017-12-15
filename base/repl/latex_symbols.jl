@@ -56,7 +56,7 @@ open(fname) do f
                 split(replace(L, r"[{}\"]+", "\t"), "\t"))
         c = Char(parse(Int, x[2], 16))
         if (Base.is_id_char(c) || Base.isoperator(Symbol(c))) &&
-           string(c) ∉ latex_strings && !isascii(c)
+           string(c) ∉ latex_strings && !Unicode.isascii(c)
             tabcomname = escape_string(x[3])
             if startswith(tabcomname, "\\\\math")
                 tabcomname = string("\\\\", tabcomname[7:end])

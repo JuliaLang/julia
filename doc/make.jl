@@ -21,19 +21,31 @@ cp_q(src, dest) = isfile(dest) || cp(src, dest)
 
 # make links for stdlib package docs
 if Sys.iswindows()
-    cp_q("../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
-    cp_q("../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
-    cp_q("../stdlib/Mmap/docs/src/index.md", "src/stdlib/mmap.md")
-    cp_q("../stdlib/SharedArrays/docs/src/index.md", "src/stdlib/sharedarrays.md")
-    cp_q("../stdlib/Profile/docs/src/index.md", "src/stdlib/profile.md")
-    cp_q("../stdlib/Base64/docs/src/index.md", "src/stdlib/base64.md")
+    cp_q("../stdlib/DelimitedFiles/docs/src/index.md",        "src/stdlib/delimitedfiles.md")
+    cp_q("../stdlib/Test/docs/src/index.md",                  "src/stdlib/test.md")
+    cp_q("../stdlib/Mmap/docs/src/index.md",                  "src/stdlib/mmap.md")
+    cp_q("../stdlib/SharedArrays/docs/src/index.md",          "src/stdlib/sharedarrays.md")
+    cp_q("../stdlib/Profile/docs/src/index.md",               "src/stdlib/profile.md")
+    cp_q("../stdlib/Base64/docs/src/index.md",                "src/stdlib/base64.md")
+    cp_q("../stdlib/FileWatching/docs/src/index.md",          "src/stdlib/filewatching.md")
+    cp_q("../stdlib/CRC32c/docs/src/index.md",                "src/stdlib/crc32c.md")
+    cp_q("../stdlib/Dates/docs/src/index.md",                 "src/stdlib/dates.md")
+    cp_q("../stdlib/IterativeEigenSolvers/docs/src/index.md", "src/stdlib/iterativeeigensolvers.md")
+    cp_q("../stdlib/Unicode/docs/src/index.md",               "src/stdlib/unicode.md")
+    cp_q("../stdlib/Distributed/docs/src/index.md",           "src/stdlib/distributed.md")
 else
-    symlink_q("../../../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
-    symlink_q("../../../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
-    symlink_q("../../../stdlib/Mmap/docs/src/index.md", "src/stdlib/mmap.md")
-    symlink_q("../../../stdlib/SharedArrays/docs/src/index.md", "src/stdlib/sharedarrays.md")
-    symlink_q("../../../stdlib/Profile/docs/src/index.md", "src/stdlib/profile.md")
-    symlink_q("../../../stdlib/Base64/docs/src/index.md", "src/stdlib/base64.md")
+    symlink_q("../../../stdlib/DelimitedFiles/docs/src/index.md",        "src/stdlib/delimitedfiles.md")
+    symlink_q("../../../stdlib/Test/docs/src/index.md",                  "src/stdlib/test.md")
+    symlink_q("../../../stdlib/Mmap/docs/src/index.md",                  "src/stdlib/mmap.md")
+    symlink_q("../../../stdlib/SharedArrays/docs/src/index.md",          "src/stdlib/sharedarrays.md")
+    symlink_q("../../../stdlib/Profile/docs/src/index.md",               "src/stdlib/profile.md")
+    symlink_q("../../../stdlib/Base64/docs/src/index.md",                "src/stdlib/base64.md")
+    symlink_q("../../../stdlib/FileWatching/docs/src/index.md",          "src/stdlib/filewatching.md")
+    symlink_q("../../../stdlib/CRC32c/docs/src/index.md",                "src/stdlib/crc32c.md")
+    symlink_q("../../../stdlib/Dates/docs/src/index.md",                 "src/stdlib/dates.md")
+    symlink_q("../../../stdlib/IterativeEigenSolvers/docs/src/index.md", "src/stdlib/iterativeeigensolvers.md")
+    symlink_q("../../../stdlib/Unicode/docs/src/index.md",               "src/stdlib/unicode.md")
+    symlink_q("../../../stdlib/Distributed/docs/src/index.md",           "src/stdlib/distributed.md")
 end
 
 const PAGES = [
@@ -59,6 +71,7 @@ const PAGES = [
         "manual/metaprogramming.md",
         "manual/arrays.md",
         "manual/linear-algebra.md",
+        "manual/missing.md",
         "manual/networking-and-streams.md",
         "manual/parallel-computing.md",
         "manual/dates.md",
@@ -86,6 +99,8 @@ const PAGES = [
         "stdlib/strings.md",
         "stdlib/arrays.md",
         "stdlib/parallel.md",
+        "stdlib/distributed.md",
+        "stdlib/multi-threading.md",
         "stdlib/linalg.md",
         "stdlib/constants.md",
         "stdlib/file.md",
@@ -104,6 +119,12 @@ const PAGES = [
         "stdlib/stacktraces.md",
         "stdlib/simd-types.md",
         "stdlib/base64.md",
+        "stdlib/mmap.md",
+        "stdlib/sharedarrays.md",
+        "stdlib/filewatching.md",
+        "stdlib/crc32c.md",
+        "stdlib/iterativeeigensolvers.md",
+        "stdlib/unicode.md",
     ],
     "Developer Documentation" => [
         "devdocs/reflection.md",
@@ -138,11 +159,13 @@ const PAGES = [
     ],
 ]
 
-using DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64
+using DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, CRC32c,
+      Dates, IterativeEigenSolvers, Unicode, Distributed
 
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64],
+    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile,
+                 Base64, FileWatching, Dates, IterativeEigenSolvers, Unicode, Distributed],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,

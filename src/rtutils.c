@@ -124,6 +124,11 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname, jl_value_t *expec
     jl_type_error_rt(fname, "", expected, got);
 }
 
+JL_DLLEXPORT void JL_NORETURN jl_type_error_new_expr(jl_value_t *ty, jl_value_t *got)
+{
+    jl_type_error_rt("Type", "new", ty, got);
+}
+
 JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
 {
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));
@@ -241,9 +246,12 @@ JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, 
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *exc = ptls->exception_in_transit;
     jl_array_t *bt = NULL;
-    JL_GC_PUSH2(&exc, &bt);
-    if (ptls->bt_size > 0)
-        bt = (jl_array_t*)jl_get_backtrace();
+    jl_array_t *bt2 = NULL;
+    JL_GC_PUSH3(&exc, &bt, &bt2);
+    if (ptls->bt_size > 0) {
+        jl_get_backtrace(&bt, &bt2);
+        ptls->bt_size = 0;
+    }
     jl_value_t *v;
     JL_TRY {
         v = jl_apply(args, nargs);
@@ -259,8 +267,9 @@ JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, 
     }
     ptls->exception_in_transit = exc;
     if (bt != NULL) {
+        // This is sufficient because bt2 roots the gc-managed values
+        memcpy(ptls->bt_data, bt->data, jl_array_len(bt) * sizeof(void*));
         ptls->bt_size = jl_array_len(bt);
-        memcpy(ptls->bt_data, bt->data, ptls->bt_size * sizeof(void*));
     }
     JL_GC_POP();
     return v;
@@ -862,8 +871,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, ")");
     }
     else if (jl_is_datatype(vt)) {
-        int istuple = jl_is_tuple_type(vt);
-        if (!istuple)
+        int istuple = jl_is_tuple_type(vt), isnamedtuple = jl_is_namedtuple_type(vt);
+        if (!istuple && !isnamedtuple)
             n += jl_static_show_x(out, (jl_value_t*)vt, depth);
         n += jl_printf(out, "(");
         size_t nb = jl_datatype_size(vt);
@@ -896,7 +905,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                     }
                     n += jl_static_show_x_(out, (jl_value_t*)fld_ptr, ft, depth);
                 }
-                if (istuple && tlen == 1)
+                if ((istuple || isnamedtuple) && tlen == 1)
                     n += jl_printf(out, ",");
                 else if (i != tlen - 1)
                     n += jl_printf(out, ", ");

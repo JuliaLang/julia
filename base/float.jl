@@ -203,8 +203,8 @@ end
 #   "Fast Half Float Conversion" by Jeroen van der Zijp
 #   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
 
-const basetable = Vector{UInt16}(512)
-const shifttable = Vector{UInt8}(512)
+const basetable = Vector{UInt16}(uninitialized, 512)
+const shifttable = Vector{UInt8}(uninitialized, 512)
 
 for i = 0:255
     e = i - 127
@@ -266,7 +266,7 @@ float(x) = convert(AbstractFloat, x)
 """
     float(T::Type)
 
-Returns an appropriate type to represent a value of type `T` as a floating point value.
+Return an appropriate type to represent a value of type `T` as a floating point value.
 Equivalent to `typeof(float(zero(T)))`.
 
 ```jldoctest
@@ -283,7 +283,7 @@ float(::Type{T}) where {T<:AbstractFloat} = T
 """
     unsafe_trunc(T, x)
 
-`unsafe_trunc(T, x)` returns the nearest integral value of type `T` whose absolute value is
+Return the nearest integral value of type `T` whose absolute value is
 less than or equal to `x`. If the value is not representable by `T`, an arbitrary value will
 be returned.
 """
@@ -592,7 +592,7 @@ precision(::T) where {T<:AbstractFloat} = precision(T)
 """
     uabs(x::Integer)
 
-Returns the absolute value of `x`, possibly returning a different type should the
+Return the absolute value of `x`, possibly returning a different type should the
 operation be susceptible to overflow. This typically arises when `x` is a two's complement
 signed integer, so that `abs(typemin(x)) == typemin(x) < 0`, in which case the result of
 `uabs(x)` will be an unsigned integer of the same size.
@@ -648,16 +648,16 @@ end
 """
     nextfloat(x::AbstractFloat)
 
-Returns the smallest floating point number `y` of the same type as `x` such `x < y`. If no
-such `y` exists (e.g. if `x` is `Inf` or `NaN`), then returns `x`.
+Return the smallest floating point number `y` of the same type as `x` such `x < y`. If no
+such `y` exists (e.g. if `x` is `Inf` or `NaN`), then return `x`.
 """
 nextfloat(x::AbstractFloat) = nextfloat(x,1)
 
 """
     prevfloat(x::AbstractFloat)
 
-Returns the largest floating point number `y` of the same type as `x` such `y < x`. If no
-such `y` exists (e.g. if `x` is `-Inf` or `NaN`), then returns `x`.
+Return the largest floating point number `y` of the same type as `x` such `y < x`. If no
+such `y` exists (e.g. if `x` is `-Inf` or `NaN`), then return `x`.
 """
 prevfloat(x::AbstractFloat) = nextfloat(x,-1)
 
@@ -773,7 +773,7 @@ realmax() = realmax(Float64)
     eps(::Type{T}) where T<:AbstractFloat
     eps()
 
-Returns the *machine epsilon* of the floating point type `T` (`T = Float64` by
+Return the *machine epsilon* of the floating point type `T` (`T = Float64` by
 default). This is defined as the gap between 1 and the next largest value representable by
 `T`, and is equivalent to `eps(one(T))`.
 
@@ -796,7 +796,7 @@ eps(::Type{<:AbstractFloat})
 """
     eps(x::AbstractFloat)
 
-Returns the *unit in last place* (ulp) of `x`. This is the distance between consecutive
+Return the *unit in last place* (ulp) of `x`. This is the distance between consecutive
 representable floating point values at `x`. In most cases, if the distance on either side
 of `x` is different, then the larger of the two is taken, that is
 

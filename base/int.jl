@@ -51,7 +51,7 @@ inv(x::Integer) = float(one(x)) / float(x)
 """
     isodd(x::Integer) -> Bool
 
-Returns `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
+Return `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
 
 ```jldoctest
 julia> isodd(9)
@@ -66,7 +66,7 @@ isodd(n::Integer) = rem(n, 2) != 0
 """
     iseven(x::Integer) -> Bool
 
-Returns `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
+Return `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
 
 ```jldoctest
 julia> iseven(9)
@@ -207,7 +207,7 @@ function mod(x::T, y::T) where T<:Integer
     y == -1 && return T(0)   # avoid potential overflow in fld
     return x - fld(x, y) * y
 end
-mod(x::Signed, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
+mod(x::BitSigned, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
 mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
 mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 
@@ -593,10 +593,23 @@ macro uint128_str(s)
 end
 
 macro big_str(s)
-    n = tryparse(BigInt, s)
-    !isnull(n) && return get(n)
-    n = tryparse(BigFloat, s)
-    !isnull(n) && return get(n)
+    if '_' in s
+        # remove _ in s[2:end-1]
+        bf = IOBuffer(endof(s))
+        print(bf, s[1])
+        for c in SubString(s, 2, endof(s)-1)
+            c != '_' && print(bf, c)
+        end
+        print(bf, s[end])
+        seekstart(bf)
+        n = tryparse(BigInt, String(take!(bf)))
+        !isnull(n) && return get(n)
+    else
+        n = tryparse(BigInt, s)
+        !isnull(n) && return get(n)
+        n = tryparse(BigFloat, s)
+        !isnull(n) && return get(n)
+    end
     message = "invalid number format $s for BigInt or BigFloat"
     return :(throw(ArgumentError($message)))
 end

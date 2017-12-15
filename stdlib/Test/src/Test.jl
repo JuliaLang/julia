@@ -70,7 +70,7 @@ function Base.show(io::IO, t::Pass)
     if t.test_type == :test_throws
         # The correct type of exception was thrown
         print(io, "\n      Thrown: ", typeof(t.value))
-    elseif t.test_type == :test && isa(t.data, Expr)
+    elseif t.test_type == :test && t.data !== nothing
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.data)
@@ -103,7 +103,7 @@ function Base.show(io::IO, t::Fail)
         # An exception was expected, but no exception was thrown
         print(io, "\n    Expected: ", t.data)
         print(io, "\n  No exception thrown")
-    elseif t.test_type == :test && isa(t.data, Expr)
+    elseif t.test_type == :test && t.data !== nothing
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.data)
@@ -220,6 +220,17 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
         func_sym = quoted_args[1]
         if isempty(kwargs)
             quoted = Expr(:call, func_sym, args...)
+        elseif func_sym === :≈
+            # in case of `≈(x, y, atol = z)`
+            # make the display like `Evaluated: x ≈ y (atol=z)`
+            kws = [Symbol(Expr(:kw, k, v), ",") for (k, v) in kwargs]
+            kws[end] = Symbol(Expr(:kw, kwargs[end]...))
+            kws[1] = Symbol("(", kws[1])
+            kws[end] = Symbol(kws[end], ")")
+            quoted = Expr(:comparison, args[1], func_sym, args[2], kws...)
+            if length(quoted.args) & 1 == 0  # hack to fit `show_unquoted`
+                push!(quoted.args, Symbol())
+            end
         else
             kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
             quoted = Expr(:call, func_sym, kwargs_expr, args...)
@@ -227,7 +238,10 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
     else
         throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
     end
-    Returned(res, quoted, source)
+    Returned(res,
+             # stringify arguments in case of failure, for easy remote printing
+             res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted)),
+             source)
 end
 
 const comparison_prec = Base.operator_precedence(:(==))
@@ -336,7 +350,7 @@ function get_test_result(ex, source)
             Expr(:comparison, $(quoted_terms...)),
             $(QuoteNode(source)),
         ))
-    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox)
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox, :≈)
         escaped_func = esc(ex.args[1])
         quoted_func = QuoteNode(ex.args[1])
 
@@ -940,7 +954,7 @@ function testset_beginend(args, tests, source)
     # it to the task local storage, evaluates the test(s), before
     # finally removing the testset and giving it a chance to take
     # action (such as reporting the results)
-    quote
+    ex = quote
         ts = $(testsettype)($desc; $options...)
         # this empty loop is here to force the block to be compiled,
         # which is needed for backtrace scrubbing to work correctly.
@@ -956,6 +970,11 @@ function testset_beginend(args, tests, source)
         pop_testset()
         finish(ts)
     end
+    # preserve outer location if possible
+    if tests isa Expr && tests.head === :block && !isempty(tests.args) && tests.args[1] isa LineNumberNode
+        ex = Expr(:block, tests.args[1], ex)
+    end
+    return ex
 end
 
 
@@ -1016,7 +1035,7 @@ function testset_forloop(args, testloop, source)
         end
     end
     quote
-        arr = Array{Any,1}(0)
+        arr = Vector{Any}()
         local first_iteration = true
         local ts
         try
@@ -1377,8 +1396,14 @@ with string types besides the standard `String` type.
 struct GenericString <: AbstractString
     string::AbstractString
 end
-Base.endof(s::GenericString) = endof(s.string)
-Base.next(s::GenericString, i::Int) = next(s.string, i)
+Base.ncodeunits(s::GenericString) = ncodeunits(s.string)
+Base.codeunit(s::GenericString) = codeunit(s.string)
+Base.codeunit(s::GenericString, i::Integer) = codeunit(s.string, i)
+Base.isvalid(s::GenericString, i::Integer) = isvalid(s.string, i)
+Base.next(s::GenericString, i::Integer) = next(s.string, i)
+Base.reverse(s::GenericString) = GenericString(reverse(s.string))
+Base.reverse(s::SubString{GenericString}) =
+    GenericString(typeof(s.string)(reverse(String(s))))
 
 """
 The `GenericSet` can be used to test generic set APIs that program to
@@ -1391,15 +1416,15 @@ end
 
 """
 The `GenericDict` can be used to test generic dict APIs that program to
-the `Associative` interface, in order to ensure that functions can work
+the `AbstractDict` interface, in order to ensure that functions can work
 with associative types besides the standard `Dict` type.
 """
-struct GenericDict{K,V} <: Associative{K,V}
-    s::Associative{K,V}
+struct GenericDict{K,V} <: AbstractDict{K,V}
+    s::AbstractDict{K,V}
 end
 
 for (G, A) in ((GenericSet, AbstractSet),
-               (GenericDict, Associative))
+               (GenericDict, AbstractDict))
     @eval begin
         Base.convert(::Type{$G}, s::$A) = $G(s)
         Base.done(s::$G, state) = done(s.s, state)

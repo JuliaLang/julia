@@ -43,7 +43,7 @@ jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
-jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
+jl_sym_t *underscore_sym;
 jl_sym_t *abstracttype_sym; jl_sym_t *primtype_sym;
 jl_sym_t *structtype_sym; jl_sym_t *foreigncall_sym;
 jl_sym_t *global_sym; jl_sym_t *list_sym;
@@ -312,7 +312,6 @@ void jl_init_frontend(void)
     const_sym = jl_symbol("const");
     global_sym = jl_symbol("global");
     thunk_sym = jl_symbol("thunk");
-    anonymous_sym = jl_symbol("anonymous");
     underscore_sym = jl_symbol("_");
     amp_sym = jl_symbol("&");
     abstracttype_sym = jl_symbol("abstract_type");
@@ -558,7 +557,17 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         return (jl_value_t*)ex;
     }
     if (iscprim(e) && cp_class((cprim_t*)ptr(e)) == fl_ctx->wchartype) {
-        return jl_box32(jl_char_type, *(int32_t*)cp_data((cprim_t*)ptr(e)));
+        uint32_t c, u = *(uint32_t*)cp_data((cprim_t*)ptr(e));
+        if (u < 0x80) {
+            c = u << 24;
+        } else {
+            c = ((u << 0) & 0x0000003f) | ((u << 2) & 0x00003f00) |
+                ((u << 4) & 0x003f0000) | ((u << 6) & 0x3f000000);
+            c = u < 0x00000800 ? (c << 16) | 0xc0800000 :
+                u < 0x00010000 ? (c <<  8) | 0xe0808000 :
+                                 (c <<  0) | 0xf0808080 ;
+        }
+        return jl_box_char(c);
     }
     if (iscvalue(e) && cv_class((cvalue_t*)ptr(e)) == jl_ast_ctx(fl_ctx)->jvtype) {
         return *(jl_value_t**)cv_data((cvalue_t*)ptr(e));
@@ -786,16 +795,9 @@ jl_value_t *jl_parse_eval_all(const char *fname,
             }
             jl_get_ptls_states()->world_age = jl_world_counter;
             form = scm_to_julia(fl_ctx, expression, inmodule);
-            jl_sym_t *head = NULL;
-            if (jl_is_expr(form))
-                head = ((jl_expr_t*)form)->head;
             JL_SIGATOMIC_END();
             jl_get_ptls_states()->world_age = jl_world_counter;
-            if (head == jl_incomplete_sym)
-                jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form, 0)));
-            else if (head == error_sym)
-                jl_interpret_toplevel_expr_in(inmodule, form, NULL, NULL);
-            else if (jl_is_linenode(form))
+            if (jl_is_linenode(form))
                 jl_lineno = jl_linenode_line(form);
             else
                 result = jl_toplevel_eval_flex(inmodule, form, 1, 1);
@@ -865,35 +867,6 @@ jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module
     JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
     return result;
-}
-
-// wrap expr in a thunk AST
-jl_code_info_t *jl_wrap_expr(jl_value_t *expr)
-{
-    // `(lambda () (() () () ()) ,expr)
-    jl_expr_t *le=NULL, *bo=NULL; jl_value_t *vi=NULL;
-    jl_value_t *mt = jl_an_empty_vec_any;
-    jl_code_info_t *src = NULL;
-    JL_GC_PUSH4(&le, &vi, &bo, &src);
-    le = jl_exprn(lambda_sym, 3);
-    jl_array_ptr_set(le->args, 0, mt);
-    vi = (jl_value_t*)jl_alloc_vec_any(4);
-    jl_array_ptr_set(vi, 0, mt);
-    jl_array_ptr_set(vi, 1, mt);
-    // front end always wraps toplevel exprs with ssavalues in (thunk (lambda () ...))
-    jl_array_ptr_set(vi, 2, jl_box_long(0));
-    jl_array_ptr_set(vi, 3, mt);
-    jl_array_ptr_set(le->args, 1, vi);
-    if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
-        bo = jl_exprn(body_sym, 1);
-        jl_array_ptr_set(bo->args, 0, (jl_value_t*)jl_exprn(return_sym, 1));
-        jl_array_ptr_set(((jl_expr_t*)jl_exprarg(bo,0))->args, 0, expr);
-        expr = (jl_value_t*)bo;
-    }
-    jl_array_ptr_set(le->args, 2, expr);
-    src = jl_new_code_info_from_ast(le);
-    JL_GC_POP();
-    return src;
 }
 
 // syntax tree accessors

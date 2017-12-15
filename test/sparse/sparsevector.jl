@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base.LinAlg: mul!, ldiv!, Adjoint, Transpose
+
 ### Data
 
 spv_x1 = SparseVector(8, [2, 5, 6], [1.25, -0.75, 3.5])
@@ -176,7 +178,25 @@ end
             I = rand(1:length(x), 20)
             r = x[I]
             @test isa(r, SparseVector{Float64,Int})
-            @test all(nonzeros(r) .!= 0.0)
+            @test all(!iszero, nonzeros(r))
+            @test Array(r) == Array(x)[I]
+        end
+
+        # issue 24534
+        let x = convert(SparseVector{Float64,UInt32},sprandn(100,0.5))
+            I = rand(1:length(x), 20)
+            r = x[I]
+            @test isa(r, SparseVector{Float64,UInt32})
+            @test all(!iszero, nonzeros(r))
+            @test Array(r) == Array(x)[I]
+        end
+
+        # issue 24534
+        let x = convert(SparseVector{Float64,UInt32},sprandn(100,0.5))
+            I = rand(1:length(x), 20,1)
+            r = x[I]
+            @test isa(r, SparseMatrixCSC{Float64,UInt32})
+            @test all(!iszero, nonzeros(r))
             @test Array(r) == Array(x)[I]
         end
     end
@@ -187,7 +207,7 @@ end
             bI[I] = true
             r = x[1,bI]
             @test isa(r, SparseVector{Float64,Int})
-            @test all(nonzeros(r) .!= 0.0)
+            @test all(!iszero, nonzeros(r))
             @test Array(r) == Array(x)[1,bI]
         end
 
@@ -197,7 +217,7 @@ end
             bI[I] = true
             r = x[bI]
             @test isa(r, SparseVector{Float64,Int})
-            @test all(nonzeros(r) .!= 0.0)
+            @test all(!iszero, nonzeros(r))
             @test Array(r) == Array(x)[bI]
         end
     end
@@ -371,7 +391,7 @@ end
     # complex
     acp = complex(af)
     @test complex(acp) == acp
-    @test isa(acp, SparseVector{Complex128,Int})
+    @test isa(acp, SparseVector{ComplexF64,Int})
     @test exact_equal(acp, SparseVector(8, [2, 5, 6], complex([12., 35., 72.])))
     @test sparsevec(adjoint(adjoint(acp))) == acp
 end
@@ -408,7 +428,7 @@ end
 
 @testset "Concatenation" begin
     let m = 80, n = 100
-        A = Array{SparseVector{Float64,Int}}(n)
+        A = Vector{SparseVector{Float64,Int}}(uninitialized, n)
         tnnz = 0
         for i = 1:length(A)
             A[i] = sprand(m, 0.3)
@@ -784,8 +804,8 @@ end
 
     let x = complex.(sprand(32, 0.6), sprand(32, 0.6)),
         y = complex.(sprand(32, 0.6), sprand(32, 0.6))
-        xf = Array(x)::Vector{Complex128}
-        yf = Array(y)::Vector{Complex128}
+        xf = Array(x)::Vector{ComplexF64}
+        yf = Array(y)::Vector{ComplexF64}
         @test dot(x, x) ≈ dot(xf, xf)
         @test dot(x, y) ≈ dot(xf, yf)
     end
@@ -798,7 +818,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*A*xf + β*y
-                @test A_mul_B!(α, A, x, β, y) === y
+                @test mul!(α, A, x, β, y) === y
                 @test y ≈ rr
             end
             y = A*x
@@ -811,12 +831,12 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*A'xf + β*y
-                @test At_mul_B!(α, A, x, β, y) === y
+                @test mul!(α, Transpose(A), x, β, y) === y
                 @test y ≈ rr
             end
-            y = At_mul_B(A, x)
+            y = *(Transpose(A), x)
             @test isa(y, Vector{Float64})
-            @test y ≈ At_mul_B(A, xf)
+            @test y ≈ *(Transpose(A), xf)
         end
     end
     @testset "sparse A * sparse x -> dense y" begin
@@ -826,7 +846,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*Af*xf + β*y
-                @test A_mul_B!(α, A, x, β, y) === y
+                @test mul!(α, A, x, β, y) === y
                 @test y ≈ rr
             end
             y = SparseArrays.densemv(A, x)
@@ -840,12 +860,12 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*Af'xf + β*y
-                @test At_mul_B!(α, A, x, β, y) === y
+                @test mul!(α, Transpose(A), x, β, y) === y
                 @test y ≈ rr
             end
             y = SparseArrays.densemv(A, x; trans='T')
             @test isa(y, Vector{Float64})
-            @test y ≈ At_mul_B(Af, xf)
+            @test y ≈ *(Transpose(Af), xf)
         end
 
         let A = complex.(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
@@ -871,7 +891,7 @@ end
             @test all(nonzeros(y) .!= 0.0)
             @test Array(y) ≈ Af * xf
 
-            y = At_mul_B(A, x2)
+            y = *(Transpose(A), x2)
             @test isa(y, SparseVector{Float64,Int})
             @test all(nonzeros(y) .!= 0.0)
             @test Array(y) ≈ Af'x2f
@@ -885,15 +905,15 @@ end
             x2f = Array(x2)
 
             y = A*x
-            @test isa(y, SparseVector{Complex128,Int})
+            @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af * xf
 
-            y = At_mul_B(A, x2)
-            @test isa(y, SparseVector{Complex128,Int})
+            y = *(Transpose(A), x2)
+            @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af.' * x2f
 
-            y = Ac_mul_B(A, x2)
-            @test isa(y, SparseVector{Complex128,Int})
+            y = *(Adjoint(A), x2)
+            @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af'x2f
         end
     end
@@ -904,9 +924,9 @@ end
         sparsecomplexvecs = SparseVector[SparseVector(m, sprvec.nzind, complex.(sprvec.nzval, sprvec.nzval)) for sprvec in sparsefloatvecs]
 
         sprmat = sprand(m, m, 0.2)
-        sparsefloatmat = speye(m) + sprmat/(2m)
-        sparsecomplexmat = speye(m) + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex.(sprmat.nzval, sprmat.nzval)/(4m))
-        sparseintmat = speye(Int, m)*10m + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round.(Int, sprmat.nzval*10))
+        sparsefloatmat = I + sprmat/(2m)
+        sparsecomplexmat = I + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex.(sprmat.nzval, sprmat.nzval)/(4m))
+        sparseintmat = 10m*I + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round.(Int, sprmat.nzval*10))
 
         denseintmat = I*10m + rand(1:m, m, m)
         densefloatmat = I + randn(m, m)/(2m)
@@ -937,19 +957,25 @@ end
                 for spvec in spvecs
                     fspvec = convert(Array, spvec)
                     # test out-of-place left-division methods
-                    for mat in (trimats..., unittrimats...), func in (\, At_ldiv_B, Ac_ldiv_B)
-                        @test func(mat, spvec) ≈ func(mat, fspvec)
+                    for mat in (trimats..., unittrimats...)
+                        @test \(mat, spvec)            ≈ \(mat, fspvec)
+                        @test \(Adjoint(mat), spvec)   ≈ \(Adjoint(mat), fspvec)
+                        @test \(Transpose(mat), spvec) ≈ \(Transpose(mat), fspvec)
                     end
                     # test in-place left-division methods not involving quotients
                     if eltypevec == typeof(zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))
-                        for mat in unittrimats, func in (A_ldiv_B!, Base.LinAlg.At_ldiv_B!, Base.LinAlg.Ac_ldiv_B!)
-                            @test func(mat, copy(spvec)) ≈ func(mat, copy(fspvec))
+                        for mat in unittrimats
+                            @test ldiv!(mat, copy(spvec)) ≈ ldiv!(mat, copy(fspvec))
+                            @test ldiv!(Adjoint(mat), copy(spvec)) ≈ ldiv!(Adjoint(mat), copy(fspvec))
+                            @test ldiv!(Transpose(mat), copy(spvec)) ≈ ldiv!(Transpose(mat), copy(fspvec))
                         end
                     end
                     # test in-place left-division methods involving quotients
                     if eltypevec == typeof((zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))/one(eltypemat))
-                        for mat in trimats, func in (A_ldiv_B!, Base.LinAlg.At_ldiv_B!, Base.LinAlg.Ac_ldiv_B!)
-                            @test func(mat, copy(spvec)) ≈ func(mat, copy(fspvec))
+                        for mat in trimats
+                            @test ldiv!(mat, copy(spvec)) ≈ ldiv!(mat, copy(fspvec))
+                            @test ldiv!(Adjoint(mat), copy(spvec)) ≈ ldiv!(Adjoint(mat), copy(fspvec))
+                            @test ldiv!(Transpose(mat), copy(spvec)) ≈ ldiv!(Transpose(mat), copy(fspvec))
                         end
                     end
                 end
@@ -969,12 +995,12 @@ end
         zerodvec = zeros(Float64, 2)
 
         for mat in (utmat, ltmat, uutmat, ultmat)
-            for func in (\, At_ldiv_B, Ac_ldiv_B)
-                @test isequal((func)(mat, zerospvec), zerodvec)
-            end
-            for ipfunc in (A_ldiv_B!, Base.LinAlg.At_ldiv_B!, Base.LinAlg.Ac_ldiv_B!)
-                @test isequal((ipfunc)(mat, copy(zerospvec)), zerospvec)
-            end
+            @test isequal(\(mat, zerospvec), zerodvec)
+            @test isequal(\(Adjoint(mat), zerospvec), zerodvec)
+            @test isequal(\(Transpose(mat), zerospvec), zerodvec)
+            @test isequal(ldiv!(mat, copy(zerospvec)), zerospvec)
+            @test isequal(ldiv!(Adjoint(mat), copy(zerospvec)), zerospvec)
+            @test isequal(ldiv!(Transpose(mat), copy(zerospvec)), zerospvec)
         end
     end
 end
@@ -1103,7 +1129,7 @@ end
     end
 end
 @testset "fill!" begin
-    for Tv in [Float32, Float64, Int64, Int32, Complex128]
+    for Tv in [Float32, Float64, Int64, Int32, ComplexF64]
         for Ti in [Int16, Int32, Int64, BigInt]
             sptypes = (SparseMatrixCSC{Tv, Ti}, SparseVector{Tv, Ti})
             sizes = [(3, 4), (3,)]
@@ -1112,9 +1138,9 @@ end
                 sparr = Sp(arr)
                 fillval = rand(Tv)
                 fill!(sparr, fillval)
-                @test Array(sparr) == fillval * ones(arr)
+                @test Array(sparr) == fillval * ones(Tv, siz...)
                 fill!(sparr, 0)
-                @test Array(sparr) == zeros(arr)
+                @test Array(sparr) == zeros(Tv, siz...)
             end
         end
     end
@@ -1221,4 +1247,22 @@ end
     @test simA.colptr == ones(eltype(A.nzind), 6+1)
     @test length(simA.rowval) == length(A.nzind)
     @test length(simA.nzval) == length(A.nzval)
+end
+
+@testset "Fast operations on full column views" begin
+    n = 1000
+    A = sprandn(n, n, 0.01)
+    for j in 1:5:n
+        Aj, Ajview = A[:, j], view(A, :, j)
+        @test norm(Aj)          == norm(Ajview)
+        @test dot(Aj, copy(Aj)) == dot(Ajview, Aj) # don't alias since it takes a different code path
+        @test scale!(Aj, 0.1)   == scale!(Ajview, 0.1)
+        @test Aj*0.1            == Ajview*0.1
+        @test 0.1*Aj            == 0.1*Ajview
+        @test Aj/0.1            == Ajview/0.1
+        @test LinAlg.axpy!(1.0, Aj,     sparse(ones(n))) ==
+              LinAlg.axpy!(1.0, Ajview, sparse(ones(n)))
+        @test LinAlg.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Aj) ==
+              LinAlg.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Ajview)
+    end
 end

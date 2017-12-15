@@ -1,12 +1,7 @@
-using Test, SharedArrays
-include(joinpath(JULIA_HOME, "..", "share", "julia", "test", "testenv.jl"))
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Test a few "remote" invocations when no workers are present
-@test remote(myid)() == 1
-@test pmap(identity, 1:100) == [1:100...]
-@test 100 == @parallel (+) for i in 1:100
-        1
-    end
+using Test, Distributed, SharedArrays
+include(joinpath(JULIA_HOME, "..", "share", "julia", "test", "testenv.jl"))
 
 addprocs_with_testenv(4)
 @test nprocs() == 5
@@ -47,7 +42,7 @@ end
 d = SharedArrays.shmem_rand(1:100, dims)
 a = convert(Array, d)
 
-partsums = Array{Int}(length(procs(d)))
+partsums = Vector{Int}(uninitialized, length(procs(d)))
 @sync begin
     for (i, p) in enumerate(procs(d))
         @async partsums[i] = remotecall_fetch(p, d) do D
@@ -142,7 +137,7 @@ write(fn3, ones(UInt8, 4))
 S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->D[localindexes(D)]=0x02)
 len = prod(sz)+4
 @test filesize(fn3) == len
-filedata = Array{UInt8}(len)
+filedata = Vector{UInt8}(uninitialized, len)
 read!(fn3, filedata)
 @test all(filedata[1:4] .== 0x01)
 @test all(filedata[5:end] .== 0x02)
@@ -186,7 +181,7 @@ d = SharedArrays.shmem_fill(1.0, dims)
 
 # similar
 d = SharedArrays.shmem_rand(dims)
-@test size(similar(d, Complex128)) == dims
+@test size(similar(d, ComplexF64)) == dims
 @test size(similar(d, dims)) == dims
 
 # issue #6362

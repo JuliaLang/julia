@@ -24,5 +24,5 @@ end
     @test parse(Float64, lines[1]) ≈ sqrt(2)
     @test lines[8] == "called bar"
     @test lines[9] == "calling new bar"
-    @test lines[10] == "\tFrom worker 2:\tTaking over the world..."
+    @test lines[10] == "      From worker 2:\tTaking over the world..."
 end

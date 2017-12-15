@@ -566,12 +566,13 @@ julia> gvar_self = "Node1"
 julia> remotecall_fetch(()->gvar_self, 2)
 "Node1"
 
-julia> remotecall_fetch(whos, 2)
-	From worker 2:	                          Base  41762 KB     Module
-	From worker 2:	                          Core  27337 KB     Module
-	From worker 2:	                           Foo   2477 bytes  Module
-	From worker 2:	                          Main  46191 KB     Module
-	From worker 2:	                     gvar_self     13 bytes  String
+julia> remotecall_fetch(varinfo, 2)
+name          size summary
+––––––––– –––––––– –––––––
+Base               Module
+Core               Module
+Main               Module
+gvar_self 13 bytes String
 ```
 
 This does not apply to `function` or `type` declarations. However, anonymous functions bound to global
@@ -616,7 +617,8 @@ all/many future usages of the other functions in module Foo that depend on calli
 
 Unlike many languages (for example, C and Java), Julia does not have a "null" value. When a reference
 (variable, object field, or array element) is uninitialized, accessing it will immediately throw
-an error. This situation can be detected using the `isdefined` function.
+an error. This situation can be detected using the [`isdefined`](@ref) or
+[`isassigned`](@ref Base.isassigned) functions.
 
 Some functions are used only for their side effects, and do not need to return a value. In these
 cases, the convention is to return the value `nothing`, which is just a singleton object of type
@@ -624,8 +626,8 @@ cases, the convention is to return the value `nothing`, which is just a singleto
 this convention, and that the REPL does not print anything for it. Some language constructs that
 would not otherwise have a value also yield `nothing`, for example `if false; end`.
 
-For situations where a value exists only sometimes (for example, missing statistical data), it
-is best to use the `Nullable{T}` type, which allows specifying the type of a missing value.
+To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the
+[`missing`](@ref) object. See the [`Missing Values`](@ref missing) section for more details.
 
 The empty tuple (`()`) is another form of nothingness. But, it should not really be thought of
 as nothing but rather a tuple of zero values.

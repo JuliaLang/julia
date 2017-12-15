@@ -4,11 +4,11 @@ import Base.LinAlg, Base.LinAlg.BlasReal, Base.LinAlg.BlasComplex
 
 srand(100)
 ## BLAS tests - testing the interface code to BLAS routines
-@testset for elty in [Float32, Float64, Complex64, Complex128]
+@testset for elty in [Float32, Float64, ComplexF32, ComplexF64]
     @testset "syr2k!" begin
         U = randn(5,2)
         V = randn(5,2)
-        if elty == Complex64 || elty == Complex128
+        if elty == ComplexF32 || elty == ComplexF64
             U = complex.(U, U)
             V = complex.(V, V)
         end
@@ -20,7 +20,7 @@ srand(100)
         @test triu(LinAlg.BLAS.syr2k('U','T',U,V)) ≈ triu(U.'*V + V.'*U)
     end
 
-    if elty in (Complex64, Complex128)
+    if elty in (ComplexF32, ComplexF64)
         @testset "her2k!" begin
             U = randn(5,2)
             V = randn(5,2)
@@ -38,8 +38,8 @@ srand(100)
     o4 = ones(elty, 4)
     z4 = zeros(elty, 4)
 
-    I4 = eye(elty, 4)
-    I43 = eye(elty, 4, 3)
+    I4 = Matrix{elty}(I, 4, 4)
+    I43 = Matrix{elty}(I, 4, 3)
     L4 = tril(ones(elty, (4,4)))
     U4 = triu(ones(elty, (4,4)))
     Z4 = zeros(elty, (4,4))
@@ -274,7 +274,7 @@ srand(100)
         @test all(I4cp .== Z4)
         @test all(BLAS.gemm('N', 'N', I4, U4) .== U4)
         @test all(BLAS.gemm('N', 'T', I4, U4) .== L4)
-        @test_throws DimensionMismatch BLAS.gemm!('N','N', one(elty), I4, I4, elm1, eye(elty,5))
+        @test_throws DimensionMismatch BLAS.gemm!('N','N', one(elty), I4, I4, elm1, Matrix{elty}(I, 5, 5))
         @test_throws DimensionMismatch BLAS.gemm!('N','N', one(elty), I43, I4, elm1, I4)
         @test_throws DimensionMismatch BLAS.gemm!('T','N', one(elty), I43, I4, elm1, I43)
         @test_throws DimensionMismatch BLAS.gemm!('N','T', one(elty), I43, I43, elm1, I43)
@@ -293,7 +293,7 @@ srand(100)
             ans = similar(L4)
             @test all(tril(BLAS.herk('L','C', L4)) .== tril(BLAS.herk!('L', 'C', real(one(elty)), L4, real(zero(elty)), ans)))
             @test all(Base.LinAlg.copytri!(ans, 'L') .== LinAlg.BLAS.gemm('T', 'N', L4, L4))
-            @test_throws DimensionMismatch BLAS.herk!('L','N',real(one(elty)),eye(elty,5),real(one(elty)),eye(elty,6))
+            @test_throws DimensionMismatch BLAS.herk!('L','N',real(one(elty)),Matrix{elty}(I, 5, 5),real(one(elty)), Matrix{elty}(I, 6, 6))
         else
             @test all(triu(BLAS.syrk('U', 'N', U4)) .== triu(BLAS.gemm('N', 'T', U4, U4)))
             @test all(tril(BLAS.syrk('L', 'N', U4)) .== tril(BLAS.gemm('N', 'T', U4, U4)))
@@ -306,7 +306,7 @@ srand(100)
             ans = similar(L4)
             @test all(tril(BLAS.syrk('L','T', L4)) .== tril(BLAS.syrk!('L', 'T', one(elty), L4, zero(elty), ans)))
             @test all(Base.LinAlg.copytri!(ans, 'L') .== BLAS.gemm('T', 'N', L4, L4))
-            @test_throws DimensionMismatch BLAS.syrk!('L','N',one(elty),eye(elty,5),one(elty),eye(elty,6))
+            @test_throws DimensionMismatch BLAS.syrk!('L','N',one(elty), Matrix{elty}(I, 5, 5),one(elty), Matrix{elty}(I, 6, 6))
         end
     end
 end

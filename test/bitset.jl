@@ -298,6 +298,13 @@ end
     @test pop!(s, 99, 0) === 99
 end
 
+@testset "unsigned overflow" begin
+    @test BitSet(UInt8(2^8-1)) == BitSet(2^8-1)
+    @test [x for x in BitSet(UInt8(2^8-1))] == [UInt8(2^8-1)]
+    @test BitSet(UInt16(2^16-1)) == BitSet(2^16-1)
+    @test [x for x in BitSet(UInt16(2^16-1))] == [UInt16(2^16-1)]
+end
+
 @testset "order" begin
     a = rand(1:1000, 100)
     s = BitSet(a)

@@ -43,12 +43,15 @@
 #  define JL_NORETURN __attribute__ ((noreturn))
 #  define JL_CONST_FUNC __attribute__((const))
 #  define JL_USED_FUNC __attribute__((used))
+#  define JL_SECTION(name) __attribute__((section(name)))
 #elif defined(_COMPILER_MICROSOFT_)
 #  define JL_NORETURN __declspec(noreturn)
 // This is the closest I can find for __attribute__((const))
 #  define JL_CONST_FUNC __declspec(noalias)
 // Does MSVC have this?
 #  define JL_USED_FUNC
+// TODO: Figure out what to do on MSVC
+#  define JL_SECTION(x)
 #else
 #  define JL_NORETURN
 #  define JL_CONST_FUNC
@@ -191,11 +194,21 @@ union jl_typemap_t {
     struct _jl_value_t *unknown; // nothing
 };
 
+// calling conventions for externally-callable julia entry points.
+// this is used to set jlcall_api fields
+typedef enum {
+    JL_API_NOT_SET = 0,
+    JL_API_GENERIC = 1,         // (function, args ptr, arg count)
+    JL_API_CONST = 2,           // result is a constant value, no function pointer
+    JL_API_WITH_PARAMETERS = 3, // (svec of static parameter values, function, args ptr, arg count)
+    JL_API_INTERPRETED = 4,     // jl_interpret_call(method_instance, func and args ptr, arg count + 1, svec of sparam_vals)
+} jl_callingconv_t;
+
 // "jlcall" calling convention signatures.
 // This defines the default ABI used by compiled julia functions.
-typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
-typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t);
-typedef jl_value_t *(*jl_fptr_linfo_t)(struct _jl_method_instance_t*, jl_value_t**, uint32_t, jl_svec_t*);
+typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t); // JL_API_GENERIC
+typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t); // JL_API_WITH_PARAMETERS
+typedef jl_value_t *(*jl_fptr_linfo_t)(struct _jl_method_instance_t*, jl_value_t**, uint32_t, jl_svec_t*); // JL_API_INTERPRETED
 
 JL_EXTENSION typedef struct {
     union {
@@ -280,15 +293,15 @@ typedef struct _jl_method_instance_t {
     jl_value_t *rettype; // return type for fptr
     jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sparam_syms
     jl_array_t *backedges;
-    jl_value_t *inferred;  // inferred jl_code_info_t, or value of the function if jlcall_api == 2, or null
+    jl_value_t *inferred;  // inferred jl_code_info_t, or value of the function if jlcall_api == JL_API_CONST, or null
     jl_value_t *inferred_const; // inferred constant return value, or null
     size_t min_world;
     size_t max_world;
     uint8_t inInference; // flags to tell if inference is running on this function
-    uint8_t jlcall_api; // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t, 2 = constval
+    uint8_t jlcall_api;
     uint8_t compile_traced; // if set will notify callback if this linfo is compiled
     jl_fptr_t fptr; // jlcall entry point with api specified by jlcall_api
-    jl_fptr_t unspecialized_ducttape; // if template can't be compiled due to intrinsics, an un-inferred fptr may get stored here, jlcall_api = 1
+    jl_fptr_t unspecialized_ducttape; // if template can't be compiled due to intrinsics, an un-inferred fptr may get stored here, jlcall_api = JL_API_GENERIC
 
     // names of declarations in the JIT,
     // suitable for referencing in LLVM IR
@@ -374,6 +387,7 @@ typedef struct _jl_datatype_t {
     struct _jl_datatype_t *super;
     jl_svec_t *parameters;
     jl_svec_t *types;
+    jl_svec_t *names;
     jl_value_t *instance;  // for singletons
     const jl_datatype_layout_t *layout;
     int32_t size; // TODO: move to _jl_datatype_layout_t
@@ -556,6 +570,8 @@ extern JL_DLLEXPORT jl_datatype_t *jl_voidpointer_type;
 extern JL_DLLEXPORT jl_unionall_t *jl_pointer_type;
 extern JL_DLLEXPORT jl_unionall_t *jl_ref_type;
 extern JL_DLLEXPORT jl_typename_t *jl_pointer_typename;
+extern JL_DLLEXPORT jl_typename_t *jl_namedtuple_typename;
+extern JL_DLLEXPORT jl_unionall_t *jl_namedtuple_type;
 
 extern JL_DLLEXPORT jl_value_t *jl_array_uint8_type;
 extern JL_DLLEXPORT jl_value_t *jl_array_any_type;
@@ -759,6 +775,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_gotonode_label(x) (((intptr_t*)(x))[0])
 #define jl_globalref_mod(s) (*(jl_module_t**)(s))
 #define jl_globalref_name(s) (((jl_sym_t**)(s))[1])
+#define jl_quotenode_value(x) (((jl_value_t**)x)[0])
 
 #define jl_nparams(t)  jl_svec_len(((jl_datatype_t*)(t))->parameters)
 #define jl_tparam0(t)  jl_svecref(((jl_datatype_t*)(t))->parameters, 0)
@@ -778,7 +795,10 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 // struct type info
 STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st)
 {
-    return st->name->names;
+    jl_svec_t *names = st->names;
+    if (!names)
+        names = st->name->names;
+    return names;
 }
 STATIC_INLINE jl_sym_t *jl_field_name(jl_datatype_t *st, size_t i)
 {
@@ -962,6 +982,12 @@ STATIC_INLINE int jl_is_tuple_type(void *t)
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_tuple_typename);
+}
+
+STATIC_INLINE int jl_is_namedtuple_type(void *t)
+{
+    return (jl_is_datatype(t) &&
+            ((jl_datatype_t*)(t))->name == jl_namedtuple_typename);
 }
 
 STATIC_INLINE int jl_is_vecelement_type(jl_value_t* t)
@@ -1213,7 +1239,6 @@ JL_DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
 JL_DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
 JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz);
 JL_DLLEXPORT void jl_array_ptr_1d_push(jl_array_t *a, jl_value_t *item);
-JL_DLLEXPORT void jl_array_ptr_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c);
 JL_DLLEXPORT void jl_array_ptr_1d_append(jl_array_t *a, jl_array_t *a2);
 JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_value_t *type, size_t dim);
 // property access

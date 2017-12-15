@@ -161,14 +161,17 @@ to do so).
 | End, `^E`           | Move to end of line                                                                                        |
 | Up arrow, `^P`      | Move up one line (or change to the previous history entry that matches the text before the cursor)         |
 | Down arrow, `^N`    | Move down one line (or change to the next history entry that matches the text before the cursor)           |
+| Shift-Arrow Key     | Move cursor according to the direction of the Arrow key, while activating the region ("shift selection")   |
 | Page-up, `meta-P`   | Change to the previous history entry                                                                       |
 | Page-down, `meta-N` | Change to the next history entry                                                                           |
 | `meta-<`            | Change to the first history entry (of the current session if it is before the current position in history) |
 | `meta->`            | Change to the last history entry                                                                           |
-| `^-Space`           | Set the "mark" in the editing region                                                                       |
+| `^-Space`           | Set the "mark" in the editing region (and de-activate the region if it's active)                           |
+| `^-Space ^-Space`   | Set the "mark" in the editing region and make the region "active", i.e. highlighted                        |
+| `^G`                | De-activate the region (i.e. make it not highlighted)                                                      |
 | `^X^X`              | Exchange the current position with the mark                                                                |
 | **Editing**         |                                                                                                            |
-| Backspace, `^H`     | Delete the previous character                                                                              |
+| Backspace, `^H`     | Delete the previous character, or the whole region when it's active                                        |
 | Delete, `^D`        | Forward delete one character (when buffer has text)                                                        |
 | meta-Backspace      | Delete the previous word                                                                                   |
 | `meta-d`            | Forward delete the next word                                                                               |
@@ -179,12 +182,15 @@ to do so).
 | `^Y`                | "Yank" insert the text from the kill ring                                                                  |
 | `meta-y`            | Replace a previously yanked text with an older entry from the kill ring                                    |
 | `^T`                | Transpose the characters about the cursor                                                                  |
+| `meta-Up arrow`     | Transpose current line with line above                                                                     |
+| `meta-Down arrow`   | Transpose current line with line below                                                                     |
 | `meta-u`            | Change the next word to uppercase                                                                          |
 | `meta-c`            | Change the next word to titlecase                                                                          |
 | `meta-l`            | Change the next word to lowercase                                                                          |
 | `^/`, `^_`          | Undo previous editing action                                                                               |
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
-
+| `meta-Left Arrow`   | indent the current line on the left                                                                        |
+| `meta-Right Arrow`  | indent the current line on the right                                                                       |
 
 
 ### Customizing keybindings

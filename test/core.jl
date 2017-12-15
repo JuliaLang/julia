@@ -7,8 +7,8 @@ const Bottom = Union{}
 include("testenv.jl")
 
 f47(x::Vector{Vector{T}}) where {T} = 0
-@test_throws MethodError f47(Array{Vector}(0))
-@test f47(Array{Vector{Int}}(0)) == 0
+@test_throws MethodError f47(Vector{Vector}())
+@test f47(Vector{Vector{Int}}()) == 0
 
 # checking unionall and typevar components
 @test_throws TypeError ([] where T)
@@ -106,6 +106,7 @@ Type{Integer}  # cache this
                    Tuple{Int8,Vararg{Integer}})
 @test Base.typeseq(typejoin(Union{Int,AbstractString},Int), Union{Int,AbstractString})
 @test Base.typeseq(typejoin(Union{Int,AbstractString},Int8), Any)
+@test typejoin(Tuple{}, Tuple{Int}) == Tuple{Vararg{Int}}
 
 # typejoin associativity
 abstract type Foo____{K} end
@@ -255,7 +256,7 @@ end
 @test_throws TypeError typeassert_instead_of_decl()
 
 # type declarations on globals not implemented yet
-@test_throws ErrorException eval(parse("global x20327::Int"))
+@test_throws ErrorException eval(Meta.parse("global x20327::Int"))
 
 y20327 = 1
 @test_throws TypeError y20327::Float64
@@ -468,7 +469,7 @@ function const_implies_local()
 end
 @test const_implies_local() === (1, 0)
 
-a_global_closure_vector = Vector{Any}(3)
+a_global_closure_vector = Vector{Any}(uninitialized, 3)
 for i = 1:3
     let ii = i
         a_global_closure_vector[i] = x -> x + ii
@@ -586,11 +587,11 @@ end
 
 let
     local a
-    a = Vector{Any}(2)
+    a = Vector{Any}(uninitialized, 2)
     @test !isassigned(a,1) && !isassigned(a,2)
     a[1] = 1
     @test isassigned(a,1) && !isassigned(a,2)
-    a = Array{Float64}(1)
+    a = Vector{Float64}(uninitialized,1)
     @test isassigned(a,1)
     @test isassigned(a)
     @test !isassigned(a,2)
@@ -895,7 +896,7 @@ end
 # finalizers
 let A = [1]
     local x = 0
-    finalizer(A, a->(x+=1))
+    finalizer(a->(x+=1), A)
     finalize(A)
     @test x == 1
     A = 0
@@ -1255,7 +1256,7 @@ let
 
     # issue #1886
     X = [1:4;]
-    r = Array{UnitRange{Int}}(1)
+    r = Vector{UnitRange{Int}}(uninitialized, 1)
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
@@ -1320,7 +1321,7 @@ struct Foo2509; foo::Int; end
 # issue #2517
 struct Foo2517; end
 @test repr(Foo2517()) == "$(curmod_prefix)Foo2517()"
-@test repr(Array{Foo2517}(1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
+@test repr(Vector{Foo2517}(uninitialized, 1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
@@ -1397,7 +1398,7 @@ end
 
 # issue #3471
 function f3471(y)
-    convert(Array{typeof(y[1]),1}, y)
+    convert(Vector{typeof(y[1])}, y)
 end
 @test isa(f3471(Any[1.0,2.0]), Vector{Float64})
 
@@ -1449,13 +1450,13 @@ end
 # issue #3167
 let
     function foo(x)
-        ret=Array{typeof(x[1])}(length(x))
+        ret=Vector{typeof(x[1])}(uninitialized, length(x))
         for j = 1:length(x)
             ret[j] = x[j]
         end
         return ret
     end
-    x = Array{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void}}(3)
+    x = Vector{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void}}(uninitialized, 3)
     x[1] = 1.0
     x[2] = 2.0
     x[3] = 3.0
@@ -1703,8 +1704,8 @@ end
 @test invalid_tupleref()==true
 
 # issue #5150
-f5150(T) = Array{Rational{T}}(1)
-@test typeof(f5150(Int)) === Array{Rational{Int},1}
+f5150(T) = Vector{Rational{T}}(uninitialized, 1)
+@test typeof(f5150(Int)) === Vector{Rational{Int}}
 
 
 # issue #5165
@@ -1853,7 +1854,7 @@ mutable struct Polygon5884{T<:Real}
 end
 
 function test5884()
-    star = Array{Polygon5884}((3,))
+    star = Vector{Polygon5884}(uninitialized, (3,))
     star[1] = Polygon5884([Complex(1.0,1.0)])
     p1 = star[1].points[1]
     @test p1 == Complex(1.0,1.0)
@@ -1919,7 +1920,7 @@ test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
 # issue #6142
 import Base: +
 mutable struct A6142 <: AbstractMatrix{Float64}; end
-+(x::A6142, y::UniformScaling{TJ}) where {TJ} = "UniformScaling method called"
++(x::A6142, y::UniformScaling) = "UniformScaling method called"
 +(x::A6142, y::AbstractArray) = "AbstractArray method called"
 @test A6142() + I == "UniformScaling method called"
 +(x::A6142, y::AbstractRange) = "AbstractRange method called" #16324 ambiguity
@@ -2045,7 +2046,7 @@ end
 obj6387 = ObjMember(DateRange6387{Int64}())
 
 function v6387(r::AbstractRange{T}) where T
-    a = Array{T}(1)
+    a = Vector{T}(uninitialized, 1)
     a[1] = Core.Intrinsics.bitcast(Date6387{Int64}, Int64(1))
     return a
 end
@@ -2058,8 +2059,8 @@ end
 day_in(obj6387)
 
 # issue #6784
-@test ndims(Array{Array{Float64}}(3,5)) == 2
-@test ndims(Array{Array}(3,5)) == 2
+@test ndims(Array{Array{Float64}}(uninitialized, 3,5)) == 2
+@test ndims(Array{Array}(uninitialized, 3,5)) == 2
 
 # issue #6793
 function segfault6793(;gamma=1)
@@ -2294,7 +2295,7 @@ end
 
 # issue #9475
 module I9475
-    arr = Array{Any}(1)
+    arr = Vector{Any}(uninitialized, 1)
     @eval @eval $arr[1] = 1
 end
 
@@ -3183,7 +3184,7 @@ mutable struct D11597{T} <: C11597{T} d::T end
 @test_throws TypeError repr(D11597(1.0))
 
 # issue #11772
-@test_throws UndefRefError (Vector{Any}(5)...)
+@test_throws UndefRefError (Vector{Any}(uninitialized, 5)...,)
 
 # issue #11813
 let a = UInt8[1, 107, 66, 88, 2, 99, 254, 13, 0, 0, 0, 0]
@@ -3203,8 +3204,8 @@ let a = UInt8[0, 0, 0, 0, 0x66, 99, 254, 13, 0, 0, 0, 0]
     f11813(p) = ((Int32(3),UInt8(0x66)),Int32(0)) === unsafe_load(convert(Ptr{Tuple{Tuple{Int32,UInt8},Int32}},p))
     @test f11813(p) === true # redundant comparison test seems to make this test more reliable, don't remove
 end
-let a = (1:1000...),
-    b = (1:1000...)
+let a = (1:1000...,),
+    b = (1:1000...,)
     @test a == b
     @test a === b
     @test (a == b) === true
@@ -3224,7 +3225,7 @@ end
 
 g11858(x::Float64) = x
 f11858(a) = for Baz in a
-    (f::Baz)(x) = f(float(x))
+    @eval (f::$Baz)(x) = f(float(x))
 end
 f11858(Any[Type{Foo11858}, Type{Bar11858}, typeof(g11858)])
 
@@ -3305,6 +3306,7 @@ end
 @test Tuple{Int} === Tuple{Int, Vararg{Integer, 0}}
 
 # issue #12003
+using Dates
 const DATE12003 = DateTime(1917,1,1)
 failure12003(dt=DATE12003) = Dates.year(dt)
 @test isa(failure12003(), Integer)
@@ -3405,7 +3407,7 @@ end
 
 # issue #12394
 mutable struct Empty12394 end
-let x = Array{Empty12394}(1), y = [Empty12394()]
+let x = Vector{Empty12394}(uninitialized, 1), y = [Empty12394()]
     @test_throws UndefRefError x==y
     @test_throws UndefRefError y==x
 end
@@ -3543,7 +3545,7 @@ end
 #13433, read!(::IO, a::Vector{UInt8}) should return a
 mutable struct IO13433 <: IO end
 Base.read(::IO13433, ::Type{UInt8}) = 0x01
-@test read!(IO13433(), Array{UInt8}(4)) == [0x01, 0x01, 0x01, 0x01]
+@test read!(IO13433(), Array{UInt8}(uninitialized, 4)) == [0x01, 0x01, 0x01, 0x01]
 
 # issue #13647, comparing boxed isbits immutables
 struct X13647
@@ -3580,7 +3582,7 @@ f11327(::Type{T},x::T) where {T} = x
 
 # issue #8487
 @test [x for x in 1:3] == [x for x ∈ 1:3] == [x for x = 1:3]
-let A = Array{Int}(4,3)
+let A = Matrix{Int}(uninitialized, 4,3)
     for i ∈ 1:size(A,1), j ∈ 1:size(A,2)
         A[i,j] = 17*i + 51*j
     end
@@ -3592,7 +3594,7 @@ end
 let
     obj = Ref(1)
     finalized = 0
-    finalizer(obj, (obj) -> (finalized = 1))
+    finalizer((obj) -> (finalized = 1), obj)
     # obj should be marked for promotion after the second gc and be promoted
     # after the third GC
     # GC_CLEAN; age = 0
@@ -3622,10 +3624,10 @@ let
     obj1 = Ref(1)
     obj2 = Ref(1)
     finalized = 0
-    finalizer(obj1, (obj) -> (finalized += 1))
-    finalizer(obj1, (obj) -> (finalized += 1))
-    finalizer(obj2, (obj) -> (finalized += 1; finalize(obj1)))
-    finalizer(obj2, (obj) -> (finalized += 1; finalize(obj1)))
+    finalizer((obj) -> (finalized += 1), obj1)
+    finalizer((obj) -> (finalized += 1), obj1)
+    finalizer((obj) -> (finalized += 1; finalize(obj1)), obj2)
+    finalizer((obj) -> (finalized += 1; finalize(obj1)), obj2)
     finalize(obj2)
     @test finalized == 4
 end
@@ -3870,7 +3872,7 @@ end
 
 # issue #15180
 function f15180(x::T) where T
-    X = Array{T}(1)
+    X = Vector{T}(uninitialized, 1)
     X[1] = x
     @noinline ef(::J) where {J} = (J,X[1]) # Use T
     ef(::J, ::Int) where {J} = (T,J)
@@ -3878,7 +3880,7 @@ function f15180(x::T) where T
 end
 @test map(f15180(1), [1,2]) == [(Int,1),(Int,1)]
 
-let ary = Vector{Any}(10)
+let ary = Vector{Any}(uninitialized, 10)
     check_undef_and_fill(ary, rng) = for i in rng
         @test !isassigned(ary, i)
         ary[i] = (Float64(i), i) # some non-cached content
@@ -3896,20 +3898,20 @@ let ary = Vector{Any}(10)
     check_undef_and_fill(ary, 16:20)
 
     # Now check grow/del_end
-    ary = Vector{Any}(1010)
+    ary = Vector{Any}(uninitialized, 1010)
     check_undef_and_fill(ary, 1:1010)
     # This del_beg should move the buffer
     ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 1000)
     ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 1000)
     check_undef_and_fill(ary, 1:1000)
-    ary = Vector{Any}(1010)
+    ary = Vector{Any}(uninitialized, 1010)
     check_undef_and_fill(ary, 1:1010)
     # This del_beg should not move the buffer
     ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 10)
     ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 1:10)
 
-    ary = Vector{Any}(1010)
+    ary = Vector{Any}(uninitialized, 1010)
     check_undef_and_fill(ary, 1:1010)
     ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 1011:1020)
@@ -3922,7 +3924,7 @@ let ary = Vector{Any}(10)
     # we are malloc'ing the buffer after the grow_end and malloc is not using
     # mmap directly (which may return a zero'd new page).
     for n in [50, 51, 100, 101, 200, 201, 300, 301]
-        ary = Vector{Any}(n)
+        ary = Vector{Any}(uninitialized, n)
         # Try to free the previous buffer that was filled with random content
         # and to increase the chance of getting a non-zero'd buffer next time
         gc()
@@ -3935,7 +3937,7 @@ let ary = Vector{Any}(10)
         check_undef_and_fill(ary, 1:(2n + 4))
     end
 
-    ary = Vector{Any}(100)
+    ary = Vector{Any}(uninitialized, 100)
     ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10000)
     ary[:] = 1:length(ary)
     ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 10000)
@@ -3949,7 +3951,7 @@ let ary = Vector{Any}(10)
         end
     end
 
-    ary = Vector{Any}(100)
+    ary = Vector{Any}(uninitialized, 100)
     ary[:] = 1:length(ary)
     ccall(:jl_array_grow_at, Void, (Any, Csize_t, Csize_t), ary, 50, 10)
     for i in 51:60
@@ -3962,10 +3964,10 @@ end
 # doesn't keep the object alive.
 @noinline function create_dead_object13995(finalized)
     obj = Ref(1)
-    finalizer(obj, (x)->(finalized[1] = true))
-    finalizer(obj, (x)->(finalized[2] = true))
-    finalizer(obj, (x)->(finalized[3] = true))
-    finalizer(obj, (x)->(finalized[4] = true))
+    finalizer((x)->(finalized[1] = true), obj)
+    finalizer((x)->(finalized[2] = true), obj)
+    finalizer((x)->(finalized[3] = true), obj)
+    finalizer((x)->(finalized[4] = true), obj)
     nothing
 end
 # disable GC to make sure no collection/promotion happens
@@ -4006,14 +4008,14 @@ end
 @test M15455.partialsort(1,2)==0
 
 # check that medium-sized array is 64-byte aligned (#15139)
-@test Int(pointer(Vector{Float64}(1024))) % 64 == 0
+@test Int(pointer(Vector{Float64}(uninitialized, 1024))) % 64 == 0
 
 # PR #15413
 # Make sure arrayset can handle `Array{T}` (where `T` is a type and not a
 # `TypeVar`) without crashing
 let
     function arrayset_unknown_dim(::Type{T}, n) where T
-        Base.arrayset(true, reshape(Vector{T}(1), ones(Int, n)...), 2, 1)
+        Base.arrayset(true, reshape(Vector{T}(uninitialized, 1), ones(Int, n)...), 2, 1)
     end
     arrayset_unknown_dim(Any, 1)
     arrayset_unknown_dim(Any, 2)
@@ -4029,7 +4031,7 @@ using Test
 # not modify the original data
 function test_shared_array_resize(::Type{T}) where T
     len = 100
-    a = Vector{T}(len)
+    a = Vector{T}(uninitialized, len)
     function test_unshare(f)
         a′ = reshape(reshape(a, (len ÷ 2, 2)), len)
         a[:] = 1:length(a)
@@ -4106,7 +4108,7 @@ f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, true)
 end
 
 # Copy of `#undef`
-copy!(Vector{Any}(10), Vector{Any}(10))
+copy!(Vector{Any}(uninitialized, 10), Vector{Any}(uninitialized, 10))
 function test_copy_alias(::Type{T}) where T
     ary = T[1:100;]
     unsafe_copy!(ary, 1, ary, 11, 90)
@@ -4157,10 +4159,10 @@ end
 end
 @test f15425(1) === nothing
 
-# issue #15809 --- TODO: this code should be disallowed
+# issue #15809
+# but note, direct global method defs inside functions have since been disallowed
 function f15809()
-    global g15809
-    g15809(x::T) where {T} = T
+    @eval g15809(x::T) where {T} = T
 end
 f15809()
 @test g15809(2) === Int
@@ -4938,6 +4940,7 @@ mutable struct Sgnd <: Signed
     v::Int
 end
 using Test
+using Dates
 @test_throws ErrorException abs(Sgnd(1))       #12007
 io = IOBuffer()
 @test_throws ErrorException show(io, Sgnd(1))  #12007
@@ -5064,7 +5067,7 @@ end
     x::Array{T} where T<:Integer
 end
 
-let a = Array{Core.TypeofBottom, 1}(2)
+let a = Vector{Core.TypeofBottom}(uninitialized, 2)
     @test a[1] == Union{}
     @test a == [Union{}, Union{}]
 end
@@ -5105,7 +5108,7 @@ end
 let ni128 = sizeof(FP128test) ÷ sizeof(Int),
     ns128 = sizeof(FP128align) ÷ sizeof(Int),
     nbit = sizeof(Int) * 8,
-    arr = Vector{FP128align}(2),
+    arr = Vector{FP128align}(uninitialized, 2),
     offset = Base.datatype_alignment(FP128test) ÷ sizeof(Int),
     little,
     expected,
@@ -5149,8 +5152,7 @@ end
 f21568() = 0
 function foo21568()
     y = 1
-    global f21568
-    f21568(x::AbstractArray{T,1}) where {T<:Real} = y
+    @eval f21568(x::AbstractArray{T,1}) where {T<:Real} = $y
 end
 foo21568()
 @test f21568([0]) == 1
@@ -5482,6 +5484,7 @@ end
 module UnionOptimizations
 
 using Test
+using Dates
 
 const boxedunions = [Union{}, Union{String, Void}]
 const unboxedunions = [Union{Int8, Void},
@@ -5580,8 +5583,6 @@ let x5 = UnionField5(nothing, Int8(3))
     @test x5 == x5copy
     @test object_id(x5) === object_id(x5copy)
     @test hash(x5) === hash(x5copy)
-    @test pointer_from_objref(x5) === pointer_from_objref(x5)
-    @test pointer_from_objref(x5) !== pointer_from_objref(x5copy)
 end
 
 
@@ -5631,11 +5632,11 @@ end
 for U in boxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(ntuple(x->0, N)...)
+        A = Array{U}(uninitialized, ntuple(x->0, N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
-        A = Array{U}(ntuple(x->10, N)...)
+        A = Array{U}(uninitialized, ntuple(x->10, N)...)
         @test length(A) == 10^N
         @test sizeof(A) == sizeof(Int) * (10^N)
         @test !isassigned(A, 1)
@@ -5651,7 +5652,7 @@ let
 end
 
 # copy!
-A23567 = Vector{Union{Float64, Void}}(5)
+A23567 = Vector{Union{Float64, Void}}(uninitialized, 5)
 B23567 = collect(Union{Float64, Void}, 1.0:3.0)
 copy!(A23567, 2, B23567)
 @test A23567[1] === nothing
@@ -5670,13 +5671,13 @@ t4 = vcat(A23567, t2, t3)
 for U in unboxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(ntuple(x->0, N)...)
+        A = Array{U}(uninitialized, ntuple(x->0, N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
         len = ntuple(x->10, N)
         mxsz = maximum(sizeof, Base.uniontypes(U))
-        A = Array{U}(len)
+        A = Array{U}(uninitialized, len)
         @test length(A) == prod(len)
         @test sizeof(A) == prod(len) * mxsz
         @test isassigned(A, 1)
@@ -5868,3 +5869,14 @@ end
 macro m22098 end
 handle_on_m22098 = getfield(@__MODULE__, Symbol("@m22098"))
 @test isempty(methods(handle_on_m22098))
+
+# issue 24363
+mutable struct A24363
+    x::Union{Int,Void}
+end
+
+int24363 = A24363(65535)
+void24363 = A24363(nothing)
+f24363(a) = a.x
+@test f24363(int24363) === 65535
+@test f24363(void24363) === nothing
