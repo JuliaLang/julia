@@ -114,7 +114,7 @@ real(::Type{Complex{T}}) where {T<:Real} = T
     isreal(x) -> Bool
 
 Test whether `x` or all its elements are numerically equal to some real number
-including infinities and NaNs.`isreal(x)` is true if `isequal(x, real(x))`
+including infinities and NaNs. `isreal(x)` is true if `isequal(x, real(x))`
 is true.
 
 # Examples
