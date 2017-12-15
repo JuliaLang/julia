@@ -79,7 +79,7 @@ function wrapped_lines(io::IO, s::AbstractString; width = 80, i = 0)
 end
 
 wrapped_lines(io::IO, f::Function, args...; width = 80, i = 0) =
-    wrapped_lines(io, sprint(0, f, args...; env=io), width = width, i = 0)
+    wrapped_lines(io, sprint(f, args...; context=io), width = width, i = 0)
 
 function print_wrapped(io::IO, s...; width = 80, pre = "", i = 0)
     lines = wrapped_lines(io, s..., width = width, i = i)

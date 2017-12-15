@@ -24,7 +24,7 @@ function term(io::IO, md::Paragraph, columns)
 end
 
 function term(io::IO, md::BlockQuote, columns)
-    s = sprint(0, term, md.content, columns - 10; env=io)
+    s = sprint(term, md.content, columns - 10; context=io)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
@@ -34,7 +34,7 @@ function term(io::IO, md::Admonition, columns)
     print(io, " "^margin, "| ")
     with_output_format(:bold, print, io, isempty(md.title) ? md.category : md.title)
     println(io, "\n", " "^margin, "|")
-    s = sprint(0, term, md.content, columns - 10; env=io)
+    s = sprint(term, md.content, columns - 10; context=io)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
@@ -44,7 +44,7 @@ function term(io::IO, f::Footnote, columns)
     print(io, " "^margin, "| ")
     with_output_format(:bold, print, io, "[^$(f.id)]")
     println(io, "\n", " "^margin, "|")
-    s = sprint(0, term, f.text, columns - 10; env=io)
+    s = sprint(term, f.text, columns - 10; context=io)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
@@ -103,7 +103,7 @@ term(io::IO, x, _) = show(io, MIME"text/plain"(), x)
 
 # Inline Content
 
-terminline_string(io::IO, md) = sprint(0, terminline, md; env=io)
+terminline_string(io::IO, md) = sprint(terminline, md; context=io)
 
 terminline(io::IO, content...) = terminline(io, collect(content))
 
