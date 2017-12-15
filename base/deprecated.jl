@@ -3850,6 +3850,16 @@ end
 @deprecate rsearch(a::String, b::Union{Int8,UInt8}, i::Integer = endof(a)) findprev(equalto(Char(b)), a, i)
 @deprecate rsearch(a::ByteArray, b::Char, i::Integer = endof(a)) findprev(equalto(UInt8(b)), a, i)
 
+@deprecate searchindex(s::AbstractString, t::AbstractString) first(findfirst(t, s))
+@deprecate searchindex(s::AbstractString, t::AbstractString, i::Integer) first(findnext(t, s, i))
+@deprecate rsearchindex(s::AbstractString, t::AbstractString) first(findlast(t, s))
+@deprecate rsearchindex(s::AbstractString, t::AbstractString, i::Integer) first(findprev(t, s, i))
+
+@deprecate searchindex(s::AbstractString, c::Char) first(findfirst(equalto(c), s))
+@deprecate searchindex(s::AbstractString, c::Char, i::Integer) first(findnext(equalto(c), s, i))
+@deprecate rsearchindex(s::AbstractString, c::Char) first(findlast(equalto(c), s))
+@deprecate rsearchindex(s::AbstractString, c::Char, i::Integer) first(findprev(equalto(c), s, i))
+
 # END 0.7 deprecations
 # BEGIN 1.0 deprecations
 

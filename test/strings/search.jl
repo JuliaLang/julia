@@ -9,27 +9,18 @@ u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 for ind in (0, 5)
     @test_throws BoundsError findnext(SubString("",1,1), "foo", ind)
     @test_throws BoundsError findprev(SubString("",1,1), "foo", ind)
-    @test_throws BoundsError searchindex("foo", SubString("",1,1), ind)
-    @test_throws BoundsError rsearchindex("foo", SubString("",1,1), ind)
 end
 
-# Note: the commented out tests will be enabled after fixes to make
-# sure that findnext/findprev/searchindex/rsearchindex are consistent
+# Note: the commented out test will be enabled after fixes to make
+# sure that findnext/findprev are consistent
 # no matter what type of AbstractString the second argument is
 @test_throws BoundsError findnext(equalto('a'), "foo", 0)
 @test_throws BoundsError findnext(occursin(Char[]), "foo", 5)
 # @test_throws BoundsError findprev(occursin(Char[]), "foo", 0)
 @test_throws BoundsError findprev(occursin(Char[]), "foo", 5)
 
-# @test_throws BoundsError searchindex("foo", Char[], 0)
-# @test_throws BoundsError searchindex("foo", Char[], 5)
-# @test_throws BoundsError rsearchindex("foo", Char[], 0)
-# @test_throws BoundsError rsearchindex("foo", Char[], 5)
-
 # @test_throws ErrorException in("foobar","bar")
 @test_throws BoundsError findnext(equalto(0x1),b"\x1\x2",0)
-@test rsearchindex(b"foo",b"o",0) == 0
-@test rsearchindex(SubString("",1,0),SubString("",1,0)) == 1
 
 # ascii forward search
 for str in [astr, GenericString(astr)]
@@ -308,10 +299,6 @@ end
 @test findlast("az", "foo,bar,baz") == 10:11
 @test findprev("az", "foo,bar,baz", 10) == 0:-1
 
-# array backward search
-@test findprev(UInt8[2,3],UInt8[1,2,3],3) == 2:3
-@test findprev(UInt8[2,3],UInt8[1,2,3],1) == 0:-1
-
 # string search with a two-char regex
 @test findfirst(r"xx", "foo,bar,baz") == 0:-1
 @test findfirst(r"fo", "foo,bar,baz") == 1:2
@@ -326,52 +313,9 @@ end
 @test findfirst(r"az", "foo,bar,baz") == 10:11
 @test findnext(r"az", "foo,bar,baz", 12) == 0:-1
 
-@test searchindex("foo", 'o') == 2
-@test searchindex("foo", 'o', 3) == 3
-
-# string searchindex with a two-char UTF-8 (2 byte) string literal
-@test searchindex("ééé", "éé") == 1
-@test searchindex("ééé", "éé", 1) == 1
-# string searchindex with a two-char UTF-8 (3 byte) string literal
-@test searchindex("€€€", "€€") == 1
-@test searchindex("€€€", "€€", 1) == 1
-# string searchindex with a two-char UTF-8 (4 byte) string literal
-@test searchindex("\U1f596\U1f596\U1f596", "\U1f596\U1f596") == 1
-@test searchindex("\U1f596\U1f596\U1f596", "\U1f596\U1f596", 1) == 1
-
-# string searchindex with a two-char UTF-8 (2 byte) string literal
-@test searchindex("éé", "éé") == 1
-@test searchindex("éé", "éé", 1) == 1
-# string searchindex with a two-char UTF-8 (3 byte) string literal
-@test searchindex("€€", "€€") == 1
-@test searchindex("€€", "€€", 1) == 1
-# string searchindex with a two-char UTF-8 (4 byte) string literal
-@test searchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
-@test searchindex("\U1f596\U1f596", "\U1f596\U1f596", 1) == 1
-
 # contains with a String and Char needle
 @test contains("foo", "o")
 @test contains("foo", 'o')
-
-# string rsearchindex with a two-char UTF-8 (2 byte) string literal
-@test rsearchindex("ééé", "éé") == 3
-@test rsearchindex("ééé", "éé", endof("ééé")) == 3
-# string rsearchindex with a two-char UTF-8 (3 byte) string literal
-@test rsearchindex("€€€", "€€") == 4
-@test rsearchindex("€€€", "€€", endof("€€€")) == 4
-# string rsearchindex with a two-char UTF-8 (4 byte) string literal
-@test rsearchindex("\U1f596\U1f596\U1f596", "\U1f596\U1f596") == 5
-@test rsearchindex("\U1f596\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 5
-
-# string rsearchindex with a two-char UTF-8 (2 byte) string literal
-@test rsearchindex("éé", "éé") == 1
-@test rsearchindex("éé", "éé", endof("ééé")) == 1
-# string searchindex with a two-char UTF-8 (3 byte) string literal
-@test rsearchindex("€€", "€€") == 1
-@test rsearchindex("€€", "€€", endof("€€€")) == 1
-# string searchindex with a two-char UTF-8 (4 byte) string literal
-@test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
-@test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 1
 
 @test_throws ErrorException "ab" ∈ "abc"
 
