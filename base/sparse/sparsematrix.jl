@@ -70,6 +70,7 @@ julia> nnz(A)
 ```
 """
 nnz(S::SparseMatrixCSC)         = Int(S.colptr[S.n + 1] - 1)
+nnz(S::ReshapedArray{T,1,<:SparseMatrixCSC}) where T = nnz(parent(S))
 count(pred, S::SparseMatrixCSC) = count(pred, view(S.nzval, 1:nnz(S))) + pred(zero(eltype(S)))*(prod(size(S)) - nnz(S))
 
 """
@@ -388,11 +389,6 @@ convert(::Type{Array}, S::SparseMatrixCSC) = convert(Matrix, S)
 
 float(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), float.(S.nzval))
 complex(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), complex(copy(S.nzval)))
-
-# Construct a sparse vector
-
-# Note that unlike `vec` for arrays, this does not share data
-vec(S::SparseMatrixCSC) = S[:]
 
 """
     sparse(A)
