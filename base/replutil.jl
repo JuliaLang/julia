@@ -713,3 +713,10 @@ Such a method is usually undesirable to be displayed to the user in the REPL.
 function is_default_method(m::Method)
     return m.module == Base && m.file == Symbol("sysimg.jl") && m.sig == Tuple{Type{T},Any} where T
 end
+
+@noinline function throw_eachindex_mismatch(::IndexLinear, A...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(linearindices.(A), ", ", " and "))"))
+end
+@noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
+end

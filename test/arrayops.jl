@@ -1636,10 +1636,16 @@ R = CartesianRange((0,3))
 R = CartesianRange((3,0))
 @test done(R, start(R)) == true
 
-@test @inferred(eachindex(Base.IndexCartesian(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
-@test @inferred(eachindex(Base.IndexLinear(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
-@test @inferred(eachindex(zeros(3),view(zeros(3,3),1:2,1:2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
-@test @inferred(eachindex(zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
+@testset "multi-array eachindex" begin
+    local a = zeros(2,2)
+    local b = view(zeros(3,2), 1:2, :)
+    @test @inferred(eachindex(Base.IndexCartesian(), a, b)) == CartesianRange((2,2))
+    @test @inferred(eachindex(Base.IndexLinear(), a, b)) == 1:4
+    @test @inferred(eachindex(a, b)) == CartesianRange((2,2))
+    @test @inferred(eachindex(a, a)) == 1:4
+    @test_throws DimensionMismatch eachindex(a, rand(3,3))
+    @test_throws DimensionMismatch eachindex(b, rand(3,3))
+end
 
 @testset "rotates" begin
     a = [1 0 0; 0 0 0]

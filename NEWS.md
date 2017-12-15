@@ -324,6 +324,9 @@ This section lists changes that do not have deprecation warnings.
     points in reverse order; any string type overrides `reverse` to return a different
     type of string must also override `reverseind` to compute reversed indices correctly.
 
+  * `eachindex(A, B...)` now requires that all inputs have the same number of elements.
+    When the chosen indexing is Cartesian, they must have the same axes.
+
 Library improvements
 --------------------
 
