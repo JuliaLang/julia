@@ -26,7 +26,8 @@ docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
 @doc "Doc abstract type" ->
 abstract type C74685{T,N} <: AbstractArray{T,N} end
-@test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
+@test stringmime("text/plain", Docs.doc(C74685))=="  Doc abstract type\n"
+@test string(Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
 @doc "Helps test if macros can be documented with `@doc \"...\" -> @...`." ->
