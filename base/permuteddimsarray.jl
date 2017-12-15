@@ -47,7 +47,7 @@ end
 
 Base.parent(A::PermutedDimsArray) = A.parent
 Base.size(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}    = genperm(size(parent(A)),    perm)
-Base.indices(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(indices(parent(A)), perm)
+Base.axes(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(axes(parent(A)), perm)
 
 Base.unsafe_convert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.unsafe_convert(Ptr{T}, parent(A))
 
@@ -109,7 +109,7 @@ julia> permutedims(A, [3, 2, 1])
 ```
 """
 function permutedims(A::AbstractArray, perm)
-    dest = similar(A, genperm(indices(A), perm))
+    dest = similar(A, genperm(axes(A), perm))
     permutedims!(dest, A, perm)
 end
 
@@ -147,7 +147,7 @@ function permutedims!(dest, src::AbstractArray, perm)
 end
 
 function Base.copy!(dest::PermutedDimsArray{T,N}, src::AbstractArray{T,N}) where {T,N}
-    checkbounds(dest, indices(src)...)
+    checkbounds(dest, axes(src)...)
     _copy!(dest, src)
 end
 Base.copy!(dest::PermutedDimsArray, src::AbstractArray) = _copy!(dest, src)
@@ -162,17 +162,17 @@ function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
     if d == ndims(src)
         copy!(parent(P), src) # it's not permuted
     else
-        R1 = CartesianRange(indices(src)[1:d])
+        R1 = CartesianRange(axes(src)[1:d])
         d1 = findfirst(equalto(d+1), perm)  # first permuted dim of dest
-        R2 = CartesianRange(indices(src)[d+2:d1-1])
-        R3 = CartesianRange(indices(src)[d1+1:end])
+        R2 = CartesianRange(axes(src)[d+2:d1-1])
+        R3 = CartesianRange(axes(src)[d1+1:end])
         _permutedims!(P, src, R1, R2, R3, d+1, d1)
     end
     return P
 end
 
 @noinline function _permutedims!(P::PermutedDimsArray, src, R1::CartesianRange{0}, R2, R3, ds, dp)
-    ip, is = indices(src, dp), indices(src, ds)
+    ip, is = axes(src, dp), axes(src, ds)
     for jo in first(ip):8:last(ip), io in first(is):8:last(is)
         for I3 in R3, I2 in R2
             for j in jo:min(jo+7, last(ip))
@@ -186,7 +186,7 @@ end
 end
 
 @noinline function _permutedims!(P::PermutedDimsArray, src, R1, R2, R3, ds, dp)
-    ip, is = indices(src, dp), indices(src, ds)
+    ip, is = axes(src, dp), axes(src, ds)
     for jo in first(ip):8:last(ip), io in first(is):8:last(is)
         for I3 in R3, I2 in R2
             for j in jo:min(jo+7, last(ip))

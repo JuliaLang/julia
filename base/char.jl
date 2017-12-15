@@ -17,6 +17,11 @@ function ismalformed(c::Char)
     (((u & 0x00c0c0c0) ⊻ 0x00808080) >> t0 != 0)
 end
 
+function isoverlong(c::Char)
+    u = reinterpret(UInt32, c)
+    (u >> 24 == 0xc0) | (u >> 21 == 0x0704) | (u >> 20 == 0x0f08)
+end
+
 function convert(::Type{UInt32}, c::Char)
     # TODO: use optimized inline LLVM
     u = reinterpret(UInt32, c)
@@ -111,17 +116,7 @@ function show(io::IO, c::Char)
             return
         end
     end
-    if Unicode.isprint(c)
-        write(io, 0x27, c, 0x27)
-    elseif !ismalformed(c)
-        u = UInt32(c)
-        write(io, 0x27, 0x5c, c <= '\x7f' ? 0x78 : c <= '\uffff' ? 0x75 : 0x55)
-        d = max(2, 8 - (leading_zeros(u) >> 2))
-        while 0 < d
-            write(io, hex_chars[((u >> ((d -= 1) << 2)) & 0xf) + 1])
-        end
-        write(io, 0x27)
-    else # malformed
+    if isoverlong(c) || ismalformed(c)
         write(io, 0x27)
         u = reinterpret(UInt32, c)
         while true
@@ -131,6 +126,16 @@ function show(io::IO, c::Char)
             (u <<= 8) == 0 && break
         end
         write(io, 0x27)
+    elseif Unicode.isprint(c)
+        write(io, 0x27, c, 0x27)
+    else # unprintable, well-formed, non-overlong Unicode
+        u = UInt32(c)
+        write(io, 0x27, 0x5c, c <= '\x7f' ? 0x78 : c <= '\uffff' ? 0x75 : 0x55)
+        d = max(2, 8 - (leading_zeros(u) >> 2))
+        while 0 < d
+            write(io, hex_chars[((u >> ((d -= 1) << 2)) & 0xf) + 1])
+        end
+        write(io, 0x27)
     end
     return
 end
@@ -138,8 +143,11 @@ end
 function show(io::IO, ::MIME"text/plain", c::Char)
     show(io, c)
     if !ismalformed(c)
+        print(io, ": ")
+        isoverlong(c) && print(io, "[overlong] ")
         u = UInt32(c)
-        print(io, ": ", Unicode.isascii(c) ? "ASCII/" : "", "Unicode U+", hex(u, u > 0xffff ? 6 : 4))
+        h = hex(u, u ≤ 0xffff ? 4 : 6)
+        print(io, (Unicode.isascii(c) ? "ASCII/" : ""), "Unicode U+", h)
     else
         print(io, ": Malformed UTF-8")
     end

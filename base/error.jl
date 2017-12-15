@@ -36,8 +36,6 @@ error(s::AbstractString) = throw(ErrorException(s))
     error(msg...)
 
 Raise an `ErrorException` with the given message.
-
-See also [`logging`](@ref).
 """
 function error(s::Vararg{Any,N}) where {N}
     @_noinline_meta

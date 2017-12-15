@@ -412,6 +412,7 @@ export
     lbeta,
 
 # arrays
+    axes,
     broadcast!,
     broadcast,
     broadcast_getindex,
@@ -454,7 +455,6 @@ export
     hvcat,
     ind2sub,
     indexin,
-    indices,
     indmax,
     indmin,
     invperm,
@@ -768,6 +768,12 @@ export
     transcode,
     unescape_string,
     warn,
+
+# logging frontend
+    @debug,
+    @info,
+    @warn,
+    @error,
 
 # random numbers
     AbstractRNG,

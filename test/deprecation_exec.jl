@@ -70,8 +70,7 @@ end
     @noinline function f21972()
         T21972()
     end
-    @test_warn "deprecated" f21972()
-    @test_nowarn f21972()
+    @test_deprecated "something" f21972()
 end
 
 f24658() = depwarn24658()
@@ -80,5 +79,5 @@ depwarn24658() = Base.firstcaller(backtrace(), :_func_not_found_)
 
 @testset "firstcaller" begin
     # issue #24658
-    @test eval(:(if true; f24658(); end)) == StackTraces.UNKNOWN
+    @test eval(:(if true; f24658(); end)) == (Ptr{Void}(0),StackTraces.UNKNOWN)
 end

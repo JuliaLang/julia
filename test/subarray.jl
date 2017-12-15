@@ -352,7 +352,7 @@ sA = view(A, 2:2, 1:5, :)
 @test parentindexes(sA) == (2:2, 1:5, Base.Slice(1:8))
 @test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (1, 5, 8)
-@test indices(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
+@test axes(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
 @test sA[1, 2, 1:8][:] == [5:15:120;]
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
@@ -372,7 +372,7 @@ test_bounds(sA)
 sA = view(A, 1:3, 3:3, 2:5)
 @test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (3,1,4)
-@test indices(sA) === (Base.OneTo(3), Base.OneTo(1), Base.OneTo(4))
+@test axes(sA) === (Base.OneTo(3), Base.OneTo(1), Base.OneTo(4))
 @test sA == A[1:3,3:3,2:5]
 @test sA[:] == A[1:3,3,2:5][:]
 test_bounds(sA)
@@ -387,10 +387,10 @@ sA = view(A, 1:2:3, 1:3:5, 1:2:8)
 test_bounds(sA)
 sA = view(A, 1:1, 1:5, [1 3; 4 2])
 @test ndims(sA) == 4
-@test indices(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(2), Base.OneTo(2))
+@test axes(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(2), Base.OneTo(2))
 sA = view(A, 1:2, 3, [1 3; 4 2])
 @test ndims(sA) == 3
-@test indices(sA) === (Base.OneTo(2), Base.OneTo(2), Base.OneTo(2))
+@test axes(sA) === (Base.OneTo(2), Base.OneTo(2), Base.OneTo(2))
 
 # logical indexing #4763
 A = view([1:10;], 5:8)
@@ -408,7 +408,7 @@ sA = view(A, 2, :, 1:8)
 @test parentindexes(sA) == (2, Base.Slice(1:5), 1:8)
 @test Base.parentdims(sA) == [2:3;]
 @test size(sA) == (5, 8)
-@test indices(sA) === (Base.OneTo(5), Base.OneTo(8))
+@test axes(sA) === (Base.OneTo(5), Base.OneTo(8))
 @test strides(sA) == (3,15)
 @test sA[2, 1:8][:] == [5:15:120;]
 @test sA[:,1] == [2:3:14;]
@@ -420,13 +420,13 @@ test_bounds(sA)
 sA = view(A, 1:3, 1:5, 5)
 @test Base.parentdims(sA) == [1:2;]
 @test size(sA) == (3,5)
-@test indices(sA) === (Base.OneTo(3),Base.OneTo(5))
+@test axes(sA) === (Base.OneTo(3),Base.OneTo(5))
 @test strides(sA) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:2:3, 3, 1:2:8)
 @test Base.parentdims(sA) == [1,3]
 @test size(sA) == (2,4)
-@test indices(sA) === (Base.OneTo(2), Base.OneTo(4))
+@test axes(sA) === (Base.OneTo(2), Base.OneTo(4))
 @test strides(sA) == (2,30)
 @test sA[:] == A[sA.indexes...][:]
 test_bounds(sA)

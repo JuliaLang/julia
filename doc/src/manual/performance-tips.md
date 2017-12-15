@@ -844,7 +844,7 @@ do this in at least four ways (in addition to the recommended call to the built-
 
 ```julia
 function copy_cols(x::Vector{T}) where T
-    inds = indices(x, 1)
+    inds = axes(x, 1)
     out = similar(Array{T}, inds, inds)
     for i = inds
         out[:, i] = x
@@ -853,7 +853,7 @@ function copy_cols(x::Vector{T}) where T
 end
 
 function copy_rows(x::Vector{T}) where T
-    inds = indices(x, 1)
+    inds = axes(x, 1)
     out = similar(Array{T}, inds, inds)
     for i = inds
         out[i, :] = x
@@ -862,7 +862,7 @@ function copy_rows(x::Vector{T}) where T
 end
 
 function copy_col_row(x::Vector{T}) where T
-    inds = indices(x, 1)
+    inds = axes(x, 1)
     out = similar(Array{T}, inds, inds)
     for col = inds, row = inds
         out[row, col] = x[row]
@@ -871,7 +871,7 @@ function copy_col_row(x::Vector{T}) where T
 end
 
 function copy_row_col(x::Vector{T}) where T
-    inds = indices(x, 1)
+    inds = axes(x, 1)
     out = similar(Array{T}, inds, inds)
     for row = inds, col = inds
         out[row, col] = x[col]

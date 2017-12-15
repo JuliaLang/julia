@@ -11,14 +11,14 @@ let
 v0 = rand(4)
 v = OffsetArray(v0, (-3,))
 h = OffsetArray([-1,1,-2,2,0], (-3,))
-@test indices(v) == (-2:1,)
+@test axes(v) == (-2:1,)
 @test_throws ErrorException size(v)
 @test_throws ErrorException size(v, 1)
 
 A0 = [1 3; 2 4]
 A = OffsetArray(A0, (-1,2))                   # IndexLinear
 S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # IndexCartesian
-@test indices(A) == indices(S) == (0:1, 3:4)
+@test axes(A) == axes(S) == (0:1, 3:4)
 @test_throws ErrorException size(A)
 @test_throws ErrorException size(A, 1)
 
@@ -96,24 +96,24 @@ S = view(A, :, 3)
 @test S[0] == 1
 @test S[1] == 2
 @test_throws BoundsError S[2]
-@test indices(S) === (0:1,)
+@test axes(S) === (0:1,)
 S = view(A, 0, :)
 @test S == OffsetArray([1,3], (A.offsets[2],))
 @test S[3] == 1
 @test S[4] == 3
 @test_throws BoundsError S[1]
-@test indices(S) === (3:4,)
+@test axes(S) === (3:4,)
 S = view(A, 0:0, 4)
 @test S == [3]
 @test S[1] == 3
 @test_throws BoundsError S[0]
-@test indices(S) === (Base.OneTo(1),)
+@test axes(S) === (Base.OneTo(1),)
 S = view(A, 1, 3:4)
 @test S == [2,4]
 @test S[1] == 2
 @test S[2] == 4
 @test_throws BoundsError S[3]
-@test indices(S) === (Base.OneTo(2),)
+@test axes(S) === (Base.OneTo(2),)
 S = view(A, :, :)
 @test S == A
 @test S[0,3] == S[1] == 1
@@ -121,17 +121,17 @@ S = view(A, :, :)
 @test S[0,4] == S[3] == 3
 @test S[1,4] == S[4] == 4
 @test_throws BoundsError S[1,1]
-@test indices(S) === (0:1, 3:4)
+@test axes(S) === (0:1, 3:4)
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/27
 g = OffsetArray(collect(-2:3), (-3,))
 gv = view(g, -1:2)
-@test indices(gv, 1) === Base.OneTo(4)
+@test axes(gv, 1) === Base.OneTo(4)
 @test collect(gv) == collect(-1:2)
 gv = view(g, OffsetArray(-1:2, (-2,)))
-@test indices(gv, 1) === -1:2
+@test axes(gv, 1) === -1:2
 @test collect(gv) == collect(-1:2)
 gv = view(g, OffsetArray(-1:2, (-1,)))
-@test indices(gv, 1) === 0:3
+@test axes(gv, 1) === 0:3
 @test collect(gv) == collect(-1:2)
 
 # iteration
@@ -201,33 +201,33 @@ PV = view(P, 2:3, :)
 # Similar
 B = similar(A, Float32)
 @test isa(B, OffsetArray{Float32,2})
-@test indices(B) === indices(A)
+@test axes(B) === axes(A)
 B = similar(A, (3,4))
 @test isa(B, Array{Int,2})
 @test size(B) == (3,4)
-@test indices(B) === (Base.OneTo(3), Base.OneTo(4))
+@test axes(B) === (Base.OneTo(3), Base.OneTo(4))
 B = similar(A, (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test indices(B) === (-3:3, 1:4)
+@test axes(B) === (-3:3, 1:4)
 B = similar(parent(A), (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test indices(B) === (-3:3, 1:4)
+@test axes(B) === (-3:3, 1:4)
 
 # Indexing with OffsetArray indices
 i1 = OffsetArray([2,1], (-5,))
 i1 = OffsetArray([2,1], -5)
 b = A0[i1, 1]
-@test indices(b) === (-4:-3,)
+@test axes(b) === (-4:-3,)
 @test b[-4] == 2
 @test b[-3] == 1
 b = A0[1,i1]
-@test indices(b) === (-4:-3,)
+@test axes(b) === (-4:-3,)
 @test b[-4] == 3
 @test b[-3] == 1
 v = view(A0, i1, 1)
-@test indices(v) === (-4:-3,)
+@test axes(v) === (-4:-3,)
 v = view(A0, 1:1, i1)
-@test indices(v) === (Base.OneTo(1), -4:-3)
+@test axes(v) === (Base.OneTo(1), -4:-3)
 
 # copy! and fill!
 a = OffsetArray{Int}(uninitialized, (-3:-1,))
@@ -314,10 +314,10 @@ a = OffsetArray(a0, (-1,2,3,4,5))
 v = OffsetArray(v0, (-3,))
 @test endof(v) == 1
 @test v ≈ v
-@test indices(v') === (Base.OneTo(1),-2:1)
+@test axes(v') === (Base.OneTo(1),-2:1)
 @test parent(v) == collect(v)
 rv = reverse(v)
-@test indices(rv) == indices(v)
+@test axes(rv) == axes(v)
 @test rv[1] == v[-2]
 @test rv[0] == v[-1]
 @test rv[-1] == v[0]
@@ -327,7 +327,7 @@ cv = copy(v)
 
 A = OffsetArray(rand(4,4), (-3,5))
 @test A ≈ A
-@test indices(A') === (6:9, -2:1)
+@test axes(A') === (6:9, -2:1)
 @test parent(A') == parent(A)'
 @test collect(A) == parent(A)
 @test maximum(A) == maximum(parent(A))

@@ -1059,7 +1059,7 @@ for (gesvx, elty) in
               ldb, X, n, rcond, ferr, berr, work, iwork, info)
             chklapackerror(info[])
             if info[] == n + 1
-                warn("matrix is singular to working precision")
+                @warn "Matrix is singular to working precision"
             else
                 chknonsingular(info[])
             end
@@ -1128,7 +1128,7 @@ for (gesvx, elty, relty) in
               ldb, X, n, rcond, ferr, berr, work, rwork, info)
             chklapackerror(info[])
             if info[] == n + 1
-                warn("matrix is singular to working precision")
+                @warn "Matrix is singular to working precision"
             else
                 chknonsingular(info[])
             end
@@ -5273,7 +5273,7 @@ for (bdsdc, elty) in
             if compq == 'N'
                 lwork = 6*n
             elseif compq == 'P'
-                warn("COMPQ='P' is not tested")
+                @warn "COMPQ='P' is not tested"
                 #TODO turn this into an actual LAPACK call
                 #smlsiz=ilaenv(9, $elty==:Float64 ? 'dbdsqr' : 'sbdsqr', string(uplo, compq), n,n,n,n)
                 smlsiz=100 #For now, completely overkill

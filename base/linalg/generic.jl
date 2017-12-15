@@ -937,7 +937,7 @@ false
 ```
 """
 function issymmetric(A::AbstractMatrix)
-    indsm, indsn = indices(A)
+    indsm, indsn = axes(A)
     if indsm != indsn
         return false
     end
@@ -976,7 +976,7 @@ true
 ```
 """
 function ishermitian(A::AbstractMatrix)
-    indsm, indsn = indices(A)
+    indsm, indsn = axes(A)
     if indsm != indsn
         return false
     end

@@ -312,16 +312,12 @@ end
     # TODO: will throw MethodError after 0.6 deprecations are deleted
     dw = Base.JLOptions().depwarn
     if dw == 2
+        # FIXME: Remove this special case after deperror cleanup
         @test_throws ErrorException Matrix{Int}()
         @test_throws ErrorException Matrix()
-    elseif dw == 1
-        @test_warn "deprecated" Matrix{Int}()
-        @test_warn "deprecated" Matrix()
-    elseif dw == 0
-        @test size(Matrix{Int}()) == (0,0)
-        @test size(Matrix()) == (0,0)
     else
-        error("unexpected depwarn value")
+        @test size(@test_deprecated Matrix{Int}()) == (0,0)
+        @test size(@test_deprecated Matrix()) == (0,0)
     end
     @test_throws MethodError Array{Int,3}()
 end
@@ -1215,7 +1211,7 @@ end
 
 @testset "eachindexvalue" begin
     A14 = [11 13; 12 14]
-    R = CartesianRange(indices(A14))
+    R = CartesianRange(axes(A14))
     @test [a for (a,b) in pairs(IndexLinear(),    A14)] == [1,2,3,4]
     @test [a for (a,b) in pairs(IndexCartesian(), A14)] == vec(collect(R))
     @test [b for (a,b) in pairs(IndexLinear(),    A14)] == [11,12,13,14]
