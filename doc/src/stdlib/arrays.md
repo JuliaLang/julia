@@ -39,8 +39,8 @@ Base.Random.randsubseq!
 ```@docs
 Base.ndims
 Base.size
-Base.indices(::Any)
-Base.indices(::AbstractArray, ::Any)
+Base.axes(::Any)
+Base.axes(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
 Base.eachindex
 Base.linearindices

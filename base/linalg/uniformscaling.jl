@@ -225,7 +225,7 @@ function ==(A::StridedMatrix, J::UniformScaling)
     size(A, 1) == size(A, 2) || return false
     iszero(J.λ) && return iszero(A)
     isone(J.λ) && return isone(A)
-    for j in indices(A, 2), i in indices(A, 1)
+    for j in axes(A, 2), i in axes(A, 1)
         ifelse(i == j, A[i, j] == J.λ, iszero(A[i, j])) || return false
     end
     return true

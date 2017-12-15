@@ -98,10 +98,10 @@ end
         @test size(Transpose(intmat)) == reverse(size(intmat))
     end
     @testset "indices methods" begin
-        @test indices(Adjoint(intvec)) == (Base.OneTo(1), Base.OneTo(length(intvec)))
-        @test indices(Adjoint(intmat)) == reverse(indices(intmat))
-        @test indices(Transpose(intvec)) == (Base.OneTo(1), Base.OneTo(length(intvec)))
-        @test indices(Transpose(intmat)) == reverse(indices(intmat))
+        @test axes(Adjoint(intvec)) == (Base.OneTo(1), Base.OneTo(length(intvec)))
+        @test axes(Adjoint(intmat)) == reverse(axes(intmat))
+        @test axes(Transpose(intvec)) == (Base.OneTo(1), Base.OneTo(length(intvec)))
+        @test axes(Transpose(intmat)) == reverse(axes(intmat))
     end
     @testset "IndexStyle methods" begin
         @test IndexStyle(Adjoint(intvec)) == IndexLinear()

@@ -636,37 +636,3 @@ function eigvecs(M::Bidiagonal{T}) where T
     Q #Actually Triangular
 end
 eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
-
-# fill! methods
-_valuefields(::Type{<:Diagonal}) = [:diag]
-_valuefields(::Type{<:Bidiagonal}) = [:dv, :ev]
-_valuefields(::Type{<:Tridiagonal}) = [:dl, :d, :du]
-_valuefields(::Type{<:SymTridiagonal}) = [:dv, :ev]
-_valuefields(::Type{<:AbstractTriangular}) = [:data]
-
-const SpecialArrays = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal,AbstractTriangular}
-
-function fillslots!(A::SpecialArrays, x)
-    xT = convert(eltype(A), x)
-    if @generated
-        quote
-            $([ :(fill!(A.$field, xT)) for field in _valuefields(A) ]...)
-        end
-    else
-        for field in _valuefields(A)
-            fill!(getfield(A, field), xT)
-        end
-    end
-    return A
-end
-
-_small_enough(A::Bidiagonal) = size(A, 1) <= 1
-_small_enough(A::Tridiagonal) = size(A, 1) <= 2
-_small_enough(A::SymTridiagonal) = size(A, 1) <= 2
-
-function fill!(A::Union{Bidiagonal,Tridiagonal,SymTridiagonal}, x)
-    xT = convert(eltype(A), x)
-    (xT == zero(eltype(A)) || _small_enough(A)) && return fillslots!(A, xT)
-    throw(ArgumentError("array A of type $(typeof(A)) and size $(size(A)) can
-    not be filled with x=$x, since some of its entries are constrained."))
-end

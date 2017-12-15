@@ -52,7 +52,7 @@ function choosetests(choices = [])
         "checked", "bitset", "floatfuncs", "compile", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
         "channels", "iostream", "specificity", "codegen", "codevalidation",
-        "reinterpretarray", "syntax", "missing", "asyncmap"
+        "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]
 
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
@@ -149,12 +149,12 @@ function choosetests(choices = [])
     try
         ipa = getipaddr()
     catch
-        warn("Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]")
+        @warn "Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]"
         net_on = false
     end
 
     if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests
-        warn("Running under valgrind: Skipping rounding tests")
+        @warn "Running under valgrind: Skipping rounding tests"
         filter!(x -> x != "rounding", tests)
     end
 
@@ -172,7 +172,7 @@ function choosetests(choices = [])
     if startswith(string(Sys.ARCH), "arm")
         # Remove profile from default tests on ARM since it currently segfaults
         # Allow explicitly adding it for testing
-        warn("Skipping Profile tests")
+        @warn "Skipping Profile tests"
         filter!(x -> (x != "Profile"), tests)
     end
 

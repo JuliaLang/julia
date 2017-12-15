@@ -868,7 +868,7 @@ function _rmprocs(pids, waitfor)
         rmprocset = []
         for p in vcat(pids...)
             if p == 1
-                warn("rmprocs: process 1 not removed")
+                @warn "rmprocs: process 1 not removed"
             else
                 if haskey(map_pid_wrkr, p)
                     w = map_pid_wrkr[p]
@@ -1048,7 +1048,7 @@ function disable_nagle(sock)
     @static if Sys.islinux()
         # tcp_quickack is a linux only option
         if ccall(:jl_tcp_quickack, Cint, (Ptr{Void}, Cint), sock.handle, 1) < 0
-            warn_once("Networking unoptimized ( Error enabling TCP_QUICKACK : ", Libc.strerror(Libc.errno()), " )")
+            @warn "Networking unoptimized ( Error enabling TCP_QUICKACK : $(Libc.strerror(Libc.errno())) )" maxlog=1
         end
     end
 end
@@ -1076,13 +1076,13 @@ function terminate_all_workers()
         try
             rmprocs(workers(); waitfor=5.0)
         catch _ex
-            warn("Forcibly interrupting busy workers")
+            @warn "Forcibly interrupting busy workers" exception=_ex
             # Might be computation bound, interrupt them and try again
             interrupt(workers())
             try
                 rmprocs(workers(); waitfor=5.0)
             catch _ex2
-                warn("Unable to terminate all workers")
+                @error "Unable to terminate all workers" exception=_ex2
             end
         end
     end

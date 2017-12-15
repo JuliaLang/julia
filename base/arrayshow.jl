@@ -78,7 +78,7 @@ function alignment(io::IO, X::AbstractVecOrMat,
             break
         end
     end
-    if 1 < length(a) < length(indices(X,2))
+    if 1 < length(a) < length(axes(X,2))
         while sum(map(sum,a)) + sep*length(a) >= cols_otherwise
             pop!(a)
         end
@@ -96,7 +96,7 @@ is specified as string sep.
 function print_matrix_row(io::IO,
         X::AbstractVecOrMat, A::Vector,
         i::Integer, cols::AbstractVector, sep::AbstractString)
-    isempty(A) || first(indices(cols,1)) == 1 || throw(DimensionMismatch("indices of cols ($(indices(cols,1))) must start at 1"))
+    isempty(A) || first(axes(cols,1)) == 1 || throw(DimensionMismatch("indices of cols ($(axes(cols,1))) must start at 1"))
     for k = 1:length(A)
         j = cols[k]
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
@@ -168,7 +168,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     postsp = ""
     @assert Unicode.textwidth(hdots) == Unicode.textwidth(ddots)
     sepsize = length(sep)
-    rowsA, colsA = indices(X,1), indices(X,2)
+    rowsA, colsA = axes(X,1), axes(X,2)
     m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
@@ -259,7 +259,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
     if isempty(a)
         return
     end
-    tailinds = tail(tail(indices(a)))
+    tailinds = tail(tail(axes(a)))
     nd = ndims(a)-2
     for I in CartesianRange(tailinds)
         idxs = I.I
@@ -270,7 +270,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
                 if length(ind) > 10
                     if ii == ind[4] && all(d->idxs[d]==first(tailinds[d]),1:i-1)
                         for j=i+1:nd
-                            szj = length(indices(a, j+2))
+                            szj = length(axes(a, j+2))
                             indj = tailinds[j]
                             if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
                                 @goto skip
@@ -291,7 +291,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
             for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
             println(io, idxs[end], "] =")
         end
-        slice = view(a, indices(a,1), indices(a,2), idxs...)
+        slice = view(a, axes(a,1), axes(a,2), idxs...)
         print_matrix(io, slice)
         print(io, idxs == map(last,tailinds) ? "" : "\n\n")
         @label skip
@@ -314,7 +314,7 @@ print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 # implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
 function _display(io::IO, X::AbstractArray)
     # 0) compute new IOContext
-    if !haskey(io, :compact) && length(indices(X, 2)) > 1
+    if !haskey(io, :compact) && length(axes(X, 2)) > 1
         io = IOContext(io, :compact => true)
     end
     if get(io, :limit, false) && eltype(X) === Method
@@ -360,7 +360,7 @@ preceded by `prefix`, supposed to encode the type of the elements.
 function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
     @assert !isempty(X)
     limit = get(io, :limit, false)::Bool
-    indr, indc = indices(X,1), indices(X,2)
+    indr, indc = axes(X,1), axes(X,2)
     nr, nc = length(indr), length(indc)
     rdots, cdots = false, false
     rr1, rr2 = UnitRange{Int}(indr), 1:0

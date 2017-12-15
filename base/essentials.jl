@@ -550,9 +550,9 @@ start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
 done(v::SimpleVector,i) = (length(v) < i)
 isempty(v::SimpleVector) = (length(v) == 0)
-indices(v::SimpleVector) = (OneTo(length(v)),)
-linearindices(v::SimpleVector) = indices(v, 1)
-indices(v::SimpleVector, d) = d <= 1 ? indices(v)[d] : OneTo(1)
+axes(v::SimpleVector) = (OneTo(length(v)),)
+linearindices(v::SimpleVector) = axes(v, 1)
+axes(v::SimpleVector, d) = d <= 1 ? axes(v)[d] : OneTo(1)
 
 function ==(v1::SimpleVector, v2::SimpleVector)
     length(v1)==length(v2) || return false

@@ -657,7 +657,7 @@ end
 @test Base.return_types(i20343, ()) == [Int8]
 struct Foo20518 <: AbstractVector{Int}; end # issue #20518; inference assumed AbstractArrays
 Base.getindex(::Foo20518, ::Int) = "oops"      # not to lie about their element type
-Base.indices(::Foo20518) = (Base.OneTo(4),)
+Base.axes(::Foo20518) = (Base.OneTo(4),)
 foo20518(xs::Any...) = -1
 foo20518(xs::Int...) = [0]
 bar20518(xs) = sum(foo20518(xs...))

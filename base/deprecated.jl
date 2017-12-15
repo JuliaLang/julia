@@ -28,7 +28,7 @@ macro deprecate(old, new, ex=true)
             ex ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...)
                   $meta
-                  depwarn($"$old is deprecated, use $new instead.", $oldmtname)
+                  depwarn($"`$old` is deprecated, use `$new` instead.", $oldmtname)
                   $(esc(new))(args...)
               end),
             :(const $oldmtname = Core.Typeof($(esc(old))).name.mt.name))
@@ -53,7 +53,7 @@ macro deprecate(old, new, ex=true)
             ex ? Expr(:export, esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
-                  depwarn($"$oldcall is deprecated, use $newcall instead.", $oldmtname)
+                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", $oldmtname)
                   $(esc(new))
               end),
             :(const $oldmtname = Core.Typeof($(esc(oldsym))).name.mt.name))
@@ -64,21 +64,27 @@ end
 
 function depwarn(msg, funcsym)
     opts = JLOptions()
-    if opts.depwarn > 0
-        bt = backtrace()
-        _depwarn(msg, opts, bt, firstcaller(bt, funcsym))
-    end
-    nothing
-end
-function _depwarn(msg, opts, bt, caller)
-    ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
-    fn = unsafe_string(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
-    if opts.depwarn == 1 # raise a warning
-        warn(msg, once=(caller != StackTraces.UNKNOWN), key=(caller,fn,ln), bt=bt,
-             filename=fn, lineno=ln)
-    elseif opts.depwarn == 2 # raise an error
+    if opts.depwarn == 2
         throw(ErrorException(msg))
     end
+    deplevel = opts.depwarn == 1 ? CoreLogging.Warn : CoreLogging.BelowMinLevel
+    @logmsg(
+        deplevel,
+        msg,
+        _module=begin
+            bt = backtrace()
+            frame, caller = firstcaller(bt, funcsym)
+            # TODO: Is it reasonable to attribute callers without linfo to Core?
+            caller.linfo isa Core.MethodInstance ? caller.linfo.def.module : Core
+        end,
+        _file=String(caller.file),
+        _line=caller.line,
+        _id=(frame,funcsym),
+        _group=:depwarn,
+        caller=caller,
+        maxlog=1
+    )
+    nothing
 end
 
 firstcaller(bt::Vector, funcsym::Symbol) = firstcaller(bt, (funcsym,))
@@ -86,13 +92,17 @@ function firstcaller(bt::Vector, funcsyms)
     # Identify the calling line
     found = false
     lkup = StackTraces.UNKNOWN
+    found_frame = Ptr{Void}(0)
     for frame in bt
         lkups = StackTraces.lookup(frame)
         for outer lkup in lkups
             if lkup == StackTraces.UNKNOWN
                 continue
             end
-            found && @goto found
+            if found
+                found_frame = frame
+                @goto found
+            end
             found = lkup.func in funcsyms
             # look for constructor type name
             if !found && lkup.linfo isa Core.MethodInstance
@@ -105,9 +115,9 @@ function firstcaller(bt::Vector, funcsyms)
             end
         end
     end
-    return StackTraces.UNKNOWN
+    return found_frame, StackTraces.UNKNOWN
     @label found
-    return lkup
+    return found_frame, lkup
 end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Void, (Any, Any, Cint), m, s, flag)
@@ -536,8 +546,8 @@ function gen_broadcast_body_zpreserving(f::Function, is_first_sparse::Bool)
         op2 = :(val1)
     end
     quote
-        Base.Broadcast.check_broadcast_indices(indices(B), $A1)
-        Base.Broadcast.check_broadcast_indices(indices(B), $A2)
+        Base.Broadcast.check_broadcast_indices(axes(B), $A1)
+        Base.Broadcast.check_broadcast_indices(axes(B), $A2)
 
         nnzB = isempty(B) ? 0 :
                nnz($A1) * div(B.n, ($A1).n) * div(B.m, ($A1).m)
@@ -1882,8 +1892,11 @@ end
 # Also un-comment the new definition in base/indices.jl
 
 # deprecate odd fill! methods
-@deprecate fill!(D::Diagonal, x)                       LinAlg.fillslots!(D, x)
-@deprecate fill!(A::Base.LinAlg.AbstractTriangular, x) LinAlg.fillslots!(A, x)
+@deprecate fill!(D::Diagonal, x)                       LinAlg.fillstored!(D, x)
+@deprecate fill!(A::Base.LinAlg.AbstractTriangular, x) LinAlg.fillstored!(A, x)
+
+# PR #25030
+@eval LinAlg @deprecate fillslots! fillstored! false
 
 function diagm(v::BitVector)
     depwarn(string("diagm(v::BitVector) is deprecated, use diagm(0 => v) or ",
@@ -2984,6 +2997,193 @@ end
 
 @deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
 
+# 24490 - warnings and messages
+const log_info_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
+const log_warn_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
+const log_error_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
+
+function _redirect(io::IO, log_to::Dict, sf::StackTraces.StackFrame)
+    (sf.linfo isa Core.MethodInstance) || return io
+    mod = sf.linfo.def
+    isa(mod, Method) && (mod = mod.module)
+    fun = sf.func
+    if haskey(log_to, (mod,fun))
+        return log_to[(mod,fun)]
+    elseif haskey(log_to, (mod,nothing))
+        return log_to[(mod,nothing)]
+    elseif haskey(log_to, (nothing,nothing))
+        return log_to[(nothing,nothing)]
+    else
+        return io
+    end
+end
+
+function _redirect(io::IO, log_to::Dict, fun::Symbol)
+    clos = string("#",fun,"#")
+    kw = string("kw##",fun)
+    local sf
+    break_next_frame = false
+    for trace in backtrace()
+        stack::Vector{StackFrame} = StackTraces.lookup(trace)
+        filter!(frame -> !frame.from_c, stack)
+        for frame in stack
+            (frame.linfo isa Core.MethodInstance) || continue
+            sf = frame
+            break_next_frame && (@goto skip)
+            mod = frame.linfo.def
+            isa(mod, Method) && (mod = mod.module)
+            mod === Base || continue
+            sff = string(frame.func)
+            if frame.func == fun || startswith(sff, clos) || startswith(sff, kw)
+                break_next_frame = true
+            end
+        end
+    end
+    @label skip
+    _redirect(io, log_to, sf)
+end
+
+@inline function redirect(io::IO, log_to::Dict, arg::Union{Symbol,StackTraces.StackFrame})
+    if isempty(log_to)
+        return io
+    else
+        if length(log_to)==1 && haskey(log_to,(nothing,nothing))
+            return log_to[(nothing,nothing)]
+        else
+            return _redirect(io, log_to, arg)
+        end
+    end
+end
+
+"""
+    logging(io [, m [, f]][; kind=:all])
+    logging([; kind=:all])
+
+Stream output of informational, warning, and/or error messages to `io`,
+overriding what was otherwise specified.  Optionally, divert stream only for
+module `m`, or specifically function `f` within `m`.  `kind` can be `:all` (the
+default), `:info`, `:warn`, or `:error`.  See `Base.log_{info,warn,error}_to`
+for the current set of redirections.  Call `logging` with no arguments (or just
+the `kind`) to reset everything.
+"""
+function logging(io::IO, m::Union{Module,Void}=nothing, f::Union{Symbol,Void}=nothing;
+                 kind::Symbol=:all)
+    depwarn("""`logging()` is deprecated, use `with_logger` instead to capture
+               messages from `Base`""", :logging)
+    (kind==:all || kind==:info)  && (log_info_to[(m,f)] = io)
+    (kind==:all || kind==:warn)  && (log_warn_to[(m,f)] = io)
+    (kind==:all || kind==:error) && (log_error_to[(m,f)] = io)
+    nothing
+end
+
+function logging(;  kind::Symbol=:all)
+    depwarn("""`logging()` is deprecated, use `with_logger` instead to capture
+               messages from `Base`""", :logging)
+    (kind==:all || kind==:info)  && empty!(log_info_to)
+    (kind==:all || kind==:warn)  && empty!(log_warn_to)
+    (kind==:all || kind==:error) && empty!(log_error_to)
+    nothing
+end
+
+"""
+    info([io, ] msg..., [prefix="INFO: "])
+
+Display an informational message.
+Argument `msg` is a string describing the information to be displayed.
+The `prefix` keyword argument can be used to override the default
+prepending of `msg`.
+
+# Examples
+```jldoctest
+julia> info("hello world")
+INFO: hello world
+
+julia> info("hello world"; prefix="MY INFO: ")
+MY INFO: hello world
+```
+
+See also [`logging`](@ref).
+"""
+function info(io::IO, msg...; prefix="INFO: ")
+    depwarn("`info()` is deprecated, use `@info` instead.", :info)
+    buf = IOBuffer()
+    iob = redirect(IOContext(buf, io), log_info_to, :info)
+    print_with_color(info_color(), iob, prefix; bold = true)
+    println_with_color(info_color(), iob, chomp(string(msg...)))
+    print(io, String(take!(buf)))
+    return
+end
+info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
+
+# print a warning only once
+
+const have_warned = Set()
+
+warn_once(io::IO, msg...) = warn(io, msg..., once=true)
+warn_once(msg...) = warn(STDERR, msg..., once=true)
+
+"""
+    warn([io, ] msg..., [prefix="WARNING: ", once=false, key=nothing, bt=nothing, filename=nothing, lineno::Int=0])
+
+Display a warning. Argument `msg` is a string describing the warning to be
+displayed.  Set `once` to true and specify a `key` to only display `msg` the
+first time `warn` is called.  If `bt` is not `nothing` a backtrace is displayed.
+If `filename` is not `nothing` both it and `lineno` are displayed.
+
+See also [`logging`](@ref).
+"""
+function warn(io::IO, msg...;
+              prefix="WARNING: ", once=false, key=nothing, bt=nothing,
+              filename=nothing, lineno::Int=0)
+    depwarn("`warn()` is deprecated, use `@warn` instead.", :warn)
+    str = chomp(string(msg...))
+    if once
+        if key === nothing
+            key = str
+        end
+        (key in have_warned) && return
+        push!(have_warned, key)
+    end
+    buf = IOBuffer()
+    iob = redirect(IOContext(buf, io), log_warn_to, :warn)
+    print_with_color(warn_color(), iob, prefix; bold = true)
+    print_with_color(warn_color(), iob, str)
+    if bt !== nothing
+        show_backtrace(iob, bt)
+    end
+    if filename !== nothing
+        print(iob, "\nin expression starting at $filename:$lineno")
+    end
+    println(iob)
+    print(io, String(take!(buf)))
+    return
+end
+
+"""
+    warn(msg)
+
+Display a warning. Argument `msg` is a string describing the warning to be displayed.
+
+# Examples
+```jldoctest
+julia> warn("Beep Beep")
+WARNING: Beep Beep
+```
+"""
+warn(msg...; kw...) = warn(STDERR, msg...; kw...)
+
+warn(io::IO, err::Exception; prefix="ERROR: ", kw...) =
+    warn(io, sprint(showerror, err), prefix=prefix; kw...)
+
+warn(err::Exception; prefix="ERROR: ", kw...) =
+    warn(STDERR, err, prefix=prefix; kw...)
+
+info(io::IO, err::Exception; prefix="ERROR: ", kw...) =
+    info(io, sprint(showerror, err), prefix=prefix; kw...)
+
+info(err::Exception; prefix="ERROR: ", kw...) =
+    info(STDERR, err, prefix=prefix; kw...)
+
 # issue #24019
 @deprecate similar(a::AbstractDict) empty(a)
 @deprecate similar(a::AbstractDict, ::Type{Pair{K,V}}) where {K, V} empty(a, K, V)
@@ -3039,6 +3239,10 @@ end
 
 # issue #24868
 @deprecate sprint(size::Integer, f::Function, args...; env=nothing) sprint(f, args...; context=env, sizehint=size)
+
+# PR #25057
+@deprecate indices(a) axes(a)
+@deprecate indices(a, d) axes(a, d)
 
 # END 0.7 deprecations
 

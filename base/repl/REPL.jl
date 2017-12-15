@@ -843,7 +843,7 @@ function setup_interface(
         catch e
             print_response(repl, e, catch_backtrace(), true, Base.have_color)
             println(outstream(repl))
-            info("Disabling history file for this session.")
+            @info "Disabling history file for this session"
             repl.history_file = false
         end
     end

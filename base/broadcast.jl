@@ -226,7 +226,7 @@ broadcast_indices(::Scalar, A) = ()
 broadcast_indices(::Style{Nullable}, A) = ()
 broadcast_indices(::Style{Tuple}, A) = (OneTo(length(A)),)
 broadcast_indices(::DefaultArrayStyle{0}, A::Ref) = ()
-broadcast_indices(::AbstractArrayStyle, A) = Base.indices(A)
+broadcast_indices(::AbstractArrayStyle, A) = Base.axes(A)
 """
     Base.broadcast_indices(::SrcStyle, A)
 
@@ -243,7 +243,7 @@ broadcast_indices
 broadcast(f, x::Number...) = f(x...)
 @inline broadcast(f, t::NTuple{N,Any}, ts::Vararg{NTuple{N,Any}}) where {N} = map(f, t, ts...)
 @inline broadcast!(::typeof(identity), x::AbstractArray{T,N}, y::AbstractArray{S,N}) where {T,S,N} =
-    Base.indices(x) == Base.indices(y) ? copy!(x, y) : _broadcast!(identity, x, y)
+    Base.axes(x) == Base.axes(y) ? copy!(x, y) : _broadcast!(identity, x, y)
 
 # special cases for "X .= ..." (broadcast!) assignments
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
@@ -349,7 +349,7 @@ end
 # newindexer(shape, A) generates `keep` and `Idefault` (for use by
 # `newindex` above) for a particular array `A`, given the
 # broadcast indices `shape`
-# `keep` is equivalent to map(==, indices(A), shape) (but see #17126)
+# `keep` is equivalent to map(==, axes(A), shape) (but see #17126)
 @inline newindexer(shape, A) = shapeindexer(shape, broadcast_indices(A))
 @inline shapeindexer(shape, indsA::Tuple{}) = (), ()
 @inline function shapeindexer(shape, indsA::Tuple)
@@ -762,9 +762,9 @@ broadcast_getindex(src::AbstractArray, I::AbstractArray...) =
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
         @nexprs $N d->(I_d = I[d])
-        check_broadcast_indices(Base.indices(dest), $(Isplat...))  # unnecessary if this function is never called directly
+        check_broadcast_indices(Base.axes(dest), $(Isplat...))  # unnecessary if this function is never called directly
         checkbounds(src, $(Isplat...))
-        @nexprs $N d->(@nexprs $N k->(Ibcast_d_k = Base.indices(I_k, d) == OneTo(1)))
+        @nexprs $N d->(@nexprs $N k->(Ibcast_d_k = Base.axes(I_k, d) == OneTo(1)))
         @nloops $N i dest d->(@nexprs $N k->(j_d_k = Ibcast_d_k ? 1 : i_d)) begin
             @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
             @inbounds (@nref $N dest i) = (@nref $N src J)
@@ -795,7 +795,7 @@ See [`broadcast_getindex`](@ref) for examples of the treatment of `inds`.
         checkbounds(A, $(Isplat...))
         shape = combine_indices($(Isplat...))
         @nextract $N shape d->(length(shape) < d ? OneTo(1) : shape[d])
-        @nexprs $N d->(@nexprs $N k->(Ibcast_d_k = Base.indices(I_k, d) == 1:1))
+        @nexprs $N d->(@nexprs $N k->(Ibcast_d_k = Base.axes(I_k, d) == 1:1))
         if !isa(x, AbstractArray)
             xA = convert(eltype(A), x)
             @nloops $N i d->shape_d d->(@nexprs $N k->(j_d_k = Ibcast_d_k ? 1 : i_d)) begin

@@ -232,6 +232,12 @@ end
     Meta.parse("\"foo\r\nbar\"") == Meta.parse("\"foo\rbar\"") == Meta.parse("\"foo\nbar\"")
 @test '\r' == first("\r") == first("\r\n") # still allow explicit \r
 
+# allow invalid UTF-8 in string literals
+@test "\ud800"[1] == Char(0xd800)
+@test "\udfff"[1] == Char(0xdfff)
+@test length("\xc0\xb0") == 1
+@test "\xc0\xb0"[1] == reinterpret(Char, 0xc0b00000)
+
 # issue #14561 - generating 0-method generic function def
 let fname = :f
     @test :(function $fname end) == Expr(:function, :f)

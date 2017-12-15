@@ -78,7 +78,7 @@ function _eigs(A, B;
         throw(ArgumentError("input matrix A is too small. Use eigfact instead."))
     end
     if nev > nevmax
-        warn("Adjusting nev from $nev to $nevmax")
+        @warn "Adjusting nev from $nev to $nevmax"
         nev = nevmax
     end
     if nev <= 0
@@ -86,7 +86,7 @@ function _eigs(A, B;
     end
     ncvmin = nev + (sym ? 1 : 2)
     if ncv < ncvmin
-        warn("Adjusting ncv from $ncv to $ncvmin")
+        @warn "Adjusting ncv from $ncv to $ncvmin"
         ncv = ncvmin
     end
     ncv = BlasInt(min(ncv, n))
@@ -94,7 +94,7 @@ function _eigs(A, B;
     isshift = sigma !== nothing
 
     if isa(which,AbstractString)
-        warn("Use symbols instead of strings for specifying which eigenvalues to compute")
+        @warn "Use symbols instead of strings for specifying which eigenvalues to compute"
         which=Symbol(which)
     end
     if (which != :LM && which != :SM && which != :LR && which != :SR &&
@@ -104,7 +104,7 @@ function _eigs(A, B;
     if which == :BE && !sym
         throw(ArgumentError("which=:BE only possible for real symmetric problem"))
     end
-    isshift && which == :SM && warn("use of :SM in shift-and-invert mode is not recommended, use :LM to find eigenvalues closest to sigma")
+    isshift && which == :SM && @warn "Use of :SM in shift-and-invert mode is not recommended, use :LM to find eigenvalues closest to sigma"
 
     if which==:SM && !isshift # transform into shift-and-invert method with sigma = 0
         isshift=true
@@ -187,7 +187,7 @@ function _eigs(A, B;
     # Issue 10495, 10701: Check that all eigenvalues are converged
     nev = length(output[1])
     nconv = output[ritzvec ? 3 : 2]
-    nev ≤ nconv || warn("not all wanted Ritz pairs converged. Requested: $nev, converged: $nconv")
+    nev ≤ nconv || @warn "Not all wanted Ritz pairs converged. Requested: $nev, converged: $nconv"
 
     return output
 end

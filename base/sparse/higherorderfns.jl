@@ -108,7 +108,7 @@ function broadcast!(f::Tf, C::SparseVecOrMat) where Tf
 end
 function broadcast!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) where {Tf,N}
     _aresameshape(C, A, Bs...) && return _noshapecheck_map!(f, C, A, Bs...)
-    Base.Broadcast.check_broadcast_indices(indices(C), A, Bs...)
+    Base.Broadcast.check_broadcast_indices(axes(C), A, Bs...)
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = _iszero(fofzeros)
     return fpreszeros ? _broadcast_zeropres!(f, C, A, Bs...) :

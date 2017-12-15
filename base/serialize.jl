@@ -288,7 +288,7 @@ _trimmedsubarray(A, V, newindexes, index::ViewIndex, indexes...) = _trimmedsubar
 trimmedindex(P, d, i::Real) = oftype(i, 1)
 trimmedindex(P, d, i::Colon) = i
 trimmedindex(P, d, i::Slice) = i
-trimmedindex(P, d, i::AbstractArray) = oftype(i, reshape(linearindices(i), indices(i)))
+trimmedindex(P, d, i::AbstractArray) = oftype(i, reshape(linearindices(i), axes(i)))
 
 function serialize(s::AbstractSerializer, ss::String)
     len = sizeof(ss)
@@ -674,7 +674,7 @@ function writeheader(s::AbstractSerializer)
                sizeof(Int) == 8 ? 1 :
                error("unsupported word size in serializer"))
     write(io, UInt8(endianness) | (UInt8(machine) << 2))
-    write(io, b"\x00\x00\x00")  # 3 reserved bytes
+    write(io, [0x00,0x00,0x00]) # 3 reserved bytes
     nothing
 end
 

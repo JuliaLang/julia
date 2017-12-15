@@ -312,6 +312,12 @@ This section lists changes that do not have deprecation warnings.
     `AbstractArray` types that specialized broadcasting using the old internal API will
     need to switch to the new API. ([#20740])
 
+  * The logging system has been redesigned - `info` and `warn` are deprecated
+    and replaced with the logging macros `@info`, `@warn`, `@debug` and
+    `@error`.  The `logging` function is also deprecated and replaced with
+    `AbstractLogger` and the functions from the new standard `Logging` library.
+    ([#24490])
+
   * The `RevString` type has been removed from the language; `reverse(::String)` returns
     a `String` with code points (or fragments thereof) in reverse order. In general,
     `reverse(s)` should return a string of the same type and encoding as `s` with code
@@ -471,8 +477,10 @@ Deprecated or removed
     `Matrix{Int}(uninitialized, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
     `Array{Float32,3}(uninitialized, 11, 13, 17)` ([#24781]).
 
+  * `LinAlg.fillslots!` has been renamed `LinAlg.fillstored!` ([#25030]).
+
   * `fill!(A::Diagonal, x)` and `fill!(A::AbstractTriangular, x)` have been deprecated
-    in favor of `Base.LinAlg.fillslots!(A, x)` ([#24413]).
+    in favor of `Base.LinAlg.fillstored!(A, x)` ([#24413]).
 
   * `eye` has been deprecated in favor of `I` and `Matrix` constructors. Please see the
     deprecation warnings for replacement details ([#24438]).
@@ -1405,6 +1413,9 @@ Deprecated or removed
   * `similar(::Associative)` has been deprecated in favor of `empty(::Associative)`, and
     `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
     `empty(::Associative, K, V)` ([#24390]).
+
+  * `indices(a)` and `indices(a,d)` have been deprecated in favor of `axes(a)` and
+    `axes(a, d)` ([#25057]).
 
 Command-line option changes
 ---------------------------

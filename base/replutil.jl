@@ -139,17 +139,6 @@ end
 show(io::IO, ::MIME"text/plain", X::AbstractArray) = _display(io, X)
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
-# display something useful even for strings containing arbitrary
-# (non-UTF8) binary data:
-function show(io::IO, ::MIME"text/plain", s::String)
-    if isvalid(s)
-        show(io, s)
-    else
-        println(io, sizeof(s), "-byte String of invalid UTF-8 data:")
-        print_array(io, Vector{UInt8}(s))
-    end
-end
-
 function show(io::IO, ::MIME"text/plain", opt::JLOptions)
     println(io, "JLOptions(")
     fields = fieldnames(JLOptions)
@@ -172,7 +161,29 @@ end
 """
     showerror(io, e)
 
-Show a descriptive representation of an exception object.
+Show a descriptive representation of an exception object `e`.
+This method is used to display the exception after a call to [`throw`](@ref).
+
+# Examples
+```jldoctest
+julia> struct MyException <: Exception
+           msg::AbstractString
+       end
+
+julia> function Base.showerror(io::IO, err::MyException)
+           print(io, "MyException: ")
+           print(io, err.msg)
+       end
+
+julia> err = MyException("test exception")
+MyException("test exception")
+
+julia> sprint(showerror, err)
+"MyException: test exception"
+
+julia> throw(MyException("test exception"))
+ERROR: MyException: test exception
+```
 """
 showerror(io::IO, ex) = show(io, ex)
 
@@ -413,8 +424,8 @@ function showerror(io::IO, ex::MethodError)
     end
     try
         show_method_candidates(io, ex, kwargs)
-    catch
-        warn(io, "Error showing method candidates, aborted")
+    catch ex
+        @error "Error showing method candidates, aborted" exception=ex
     end
 end
 

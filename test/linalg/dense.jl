@@ -722,7 +722,7 @@ end
     @testset "Tests for $elty" for elty in (Int128, Int16, Int32, Int64, Int8,
                                             UInt128, UInt16, UInt32, UInt64, UInt8,
                                             BigInt)
-        info("Testing $elty")
+        #@info "Testing $elty"
         @test elty[1 1;1 0]^-1 == [0  1;  1 -1]
         @test elty[1 1;1 0]^-2 == [1 -1; -1  2]
         @test (@inferred elty[1 1;1 0]^2) == elty[2 1;1 1]

@@ -702,11 +702,11 @@ A = TSlowNIndexes(rand(2,2))
     @inferred size(rand(3,2,1), 2, 1)
     @inferred size(rand(3,2,1), 2, 1, 3)
 
-    @test @inferred(indices(rand(3,2)))    == (1:3,1:2)
-    @test @inferred(indices(rand(3,2,1)))  == (1:3,1:2,1:1)
-    @test @inferred(indices(rand(3,2), 1)) == 1:3
-    @test @inferred(indices(rand(3,2), 2)) == 1:2
-    @test @inferred(indices(rand(3,2), 3)) == 1:1
+    @test @inferred(axes(rand(3,2)))    == (1:3,1:2)
+    @test @inferred(axes(rand(3,2,1)))  == (1:3,1:2,1:1)
+    @test @inferred(axes(rand(3,2), 1)) == 1:3
+    @test @inferred(axes(rand(3,2), 2)) == 1:2
+    @test @inferred(axes(rand(3,2), 3)) == 1:1
 end
 
 @testset "#17088" begin

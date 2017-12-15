@@ -67,7 +67,7 @@ julia> squeeze(a,3)
 function squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
-        length(indices(A, dims[i])) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
+        length(axes(A, dims[i])) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
         for j = 1:i-1
             dims[j] == dims[i] && throw(ArgumentError("squeezed dims must be unique"))
         end
@@ -75,10 +75,10 @@ function squeeze(A::AbstractArray, dims::Dims)
     d = ()
     for i = 1:ndims(A)
         if !in(i, dims)
-            d = tuple(d..., indices(A, i))
+            d = tuple(d..., axes(A, i))
         end
     end
-    reshape(A, d::typeof(_sub(indices(A), dims)))
+    reshape(A, d::typeof(_sub(axes(A), dims)))
 end
 
 squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
@@ -120,7 +120,7 @@ function slicedim(A::AbstractArray, d::Integer, i)
     d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
     nd = ndims(A)
     d > nd && (i == 1 || throw_boundserror(A, (ntuple(k->Colon(),nd)..., ntuple(k->1,d-1-nd)..., i)))
-    A[setindex(indices(A), i, d)...]
+    A[setindex(axes(A), i, d)...]
 end
 
 """
@@ -149,7 +149,7 @@ function flipdim(A::AbstractArray, d::Integer)
     elseif nd == 1
         return reverse(A)
     end
-    inds = indices(A)
+    inds = axes(A)
     B = similar(A)
     nnd = 0
     for i = 1:nd
@@ -165,7 +165,7 @@ function flipdim(A::AbstractArray, d::Integer)
         return B
     end
     let B=B # workaround #15276
-        alli = [ indices(B,n) for n in 1:nd ]
+        alli = [ axes(B,n) for n in 1:nd ]
         for i in indsd
             B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] = slicedim(A, d, i)
         end
@@ -371,10 +371,10 @@ cat_fill!(R, X::AbstractArray, inds) = fill!(view(R, inds...), X)
 
     # fill the first inner block
     if all(x -> x == 1, inner)
-        R[indices(A)...] = A
+        R[axes(A)...] = A
     else
         inner_indices = [1:n for n in inner]
-        for c in CartesianRange(indices(A))
+        for c in CartesianRange(axes(A))
             for i in 1:ndims(A)
                 n = inner[i]
                 inner_indices[i] = (1:n) .+ ((c[i] - 1) * n)
