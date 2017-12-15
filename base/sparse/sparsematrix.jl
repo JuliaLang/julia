@@ -1279,7 +1279,7 @@ function find(p::Function, S::SparseMatrixCSC)
     end
     sz = size(S)
     I, J = _findn(p, S)
-    return sub2ind(sz, I, J)
+    return Base._sub2ind(sz, I, J)
 end
 
 findn(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = _findn(x->true, S)
@@ -2273,10 +2273,10 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractArray) where {Tv,Ti}
 
     for i in 1:n
         ((I[i] < 1) | (I[i] > nA)) && throw(BoundsError())
-        row,col = ind2sub(szA, I[i])
+        row,col = Base._ind2sub(szA, I[i])
         for r in colptrA[col]:(colptrA[col+1]-1)
             @inbounds if rowvalA[r] == row
-                rowB,colB = ind2sub(szB, i)
+                rowB,colB = Base._ind2sub(szB, i)
                 colptrB[colB+1] += 1
                 rowvalB[idxB] = rowB
                 nzvalB[idxB] = nzvalA[r]
@@ -2778,7 +2778,7 @@ function setindex!(A::SparseMatrixCSC, x, I::AbstractVector{<:Real})
         sxidx = S[xidx]
         (sxidx < n) && (I[sxidx] == I[sxidx+1]) && continue
 
-        row,col = ind2sub(szA, I[sxidx])
+        row,col = Base._ind2sub(szA, I[sxidx])
         v = isa(x, AbstractArray) ? x[sxidx] : x
 
         if col > lastcol
@@ -3471,7 +3471,7 @@ function hash(A::SparseMatrixCSC{T}, h::UInt) where T
         for j = colptr[col]:colptr[col+1]-1
             nz = nzval[j]
             isequal(nz, zero(T)) && continue
-            idx = sub2ind(sz, rowval[j], col)
+            idx = Base._sub2ind(sz, rowval[j], col)
             if idx != lastidx+1 || !isequal(nz, lastnz)  # Run is over
                 h = hashrun(lastnz, runlength, h)        # Hash previous run
                 h = hashrun(0, idx-lastidx-1, h)         # Hash intervening zeros

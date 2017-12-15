@@ -48,8 +48,6 @@ Base.IndexStyle
 Base.conj!
 Base.stride
 Base.strides
-Base.ind2sub
-Base.sub2ind
 Base.LinAlg.checksquare
 ```
 
@@ -89,6 +87,7 @@ Base.isassigned
 Base.Colon
 Base.CartesianIndex
 Base.CartesianRange
+Base.CartesianToLinear
 Base.to_indices
 Base.checkbounds
 Base.checkindex

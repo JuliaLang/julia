@@ -308,9 +308,8 @@ type:
 The default is `IndexCartesian()`.
 
 Julia's internal indexing machinery will automatically (and invisibly)
-convert all indexing operations into the preferred style using
-[`sub2ind`](@ref) or [`ind2sub`](@ref). This allows users to access
-elements of your array using any indexing style, even when explicit
+convert all indexing operations into the preferred style. This allows users
+to access elements of your array using any indexing style, even when explicit
 methods have not been provided.
 
 If you define both styles of indexing for your `AbstractArray`, this
@@ -962,7 +961,7 @@ end
 _to_linear_index(A::AbstractArray, i::Int) = i
 _to_linear_index(A::AbstractVector, i::Int, I::Int...) = i
 _to_linear_index(A::AbstractArray) = 1
-_to_linear_index(A::AbstractArray, I::Int...) = (@_inline_meta; sub2ind(A, I...))
+_to_linear_index(A::AbstractArray, I::Int...) = (@_inline_meta; _sub2ind(A, I...))
 
 ## IndexCartesian Scalar indexing: Canonical method is full dimensionality of Ints
 function _getindex(::IndexCartesian, A::AbstractArray, I::Vararg{Int,M}) where M
@@ -996,8 +995,8 @@ _to_subscript_indices(A, J::Tuple, Jrem::Tuple) = J # already bounds-checked, sa
 _to_subscript_indices(A::AbstractArray{T,N}, I::Vararg{Int,N}) where {T,N} = I
 _remaining_size(::Tuple{Any}, t::Tuple) = t
 _remaining_size(h::Tuple, t::Tuple) = (@_inline_meta; _remaining_size(tail(h), tail(t)))
-_unsafe_ind2sub(::Tuple{}, i) = () # ind2sub may throw(BoundsError()) in this case
-_unsafe_ind2sub(sz, i) = (@_inline_meta; ind2sub(sz, i))
+_unsafe_ind2sub(::Tuple{}, i) = () # _ind2sub may throw(BoundsError()) in this case
+_unsafe_ind2sub(sz, i) = (@_inline_meta; _ind2sub(sz, i))
 
 ## Setindex! is defined similarly. We first dispatch to an internal _setindex!
 # function that allows dispatch on array storage
@@ -1584,73 +1583,43 @@ function (==)(A::AbstractArray, B::AbstractArray)
     return anymissing ? missing : true
 end
 
-# sub2ind and ind2sub
+# _sub2ind and _ind2sub
 # fallbacks
-function sub2ind(A::AbstractArray, I...)
+function _sub2ind(A::AbstractArray, I...)
     @_inline_meta
-    sub2ind(axes(A), I...)
+    _sub2ind(axes(A), I...)
 end
 
-"""
-    ind2sub(a, index) -> subscripts
-
-Return a tuple of subscripts into array `a` corresponding to the linear index `index`.
-
-# Examples
-```jldoctest
-julia> A = ones(5,6,7);
-
-julia> ind2sub(A,35)
-(5, 1, 2)
-
-julia> ind2sub(A,70)
-(5, 2, 3)
-```
-"""
-function ind2sub(A::AbstractArray, ind)
+function _ind2sub(A::AbstractArray, ind)
     @_inline_meta
-    ind2sub(axes(A), ind)
+    _ind2sub(axes(A), ind)
 end
 
 # 0-dimensional arrays and indexing with []
-sub2ind(::Tuple{}) = 1
-sub2ind(::DimsInteger) = 1
-sub2ind(::Indices) = 1
-sub2ind(::Tuple{}, I::Integer...) = (@_inline_meta; _sub2ind((), 1, 1, I...))
+_sub2ind(::Tuple{}) = 1
+_sub2ind(::DimsInteger) = 1
+_sub2ind(::Indices) = 1
+_sub2ind(::Tuple{}, I::Integer...) = (@_inline_meta; _sub2ind_recurse((), 1, 1, I...))
+
 # Generic cases
-
-"""
-    sub2ind(dims, i, j, k...) -> index
-
-The inverse of [`ind2sub`](@ref), return the linear index corresponding to the provided subscripts.
-
-# Examples
-```jldoctest
-julia> sub2ind((5,6,7),1,2,3)
-66
-
-julia> sub2ind((5,6,7),1,6,3)
-86
-```
-"""
-sub2ind(dims::DimsInteger, I::Integer...) = (@_inline_meta; _sub2ind(dims, 1, 1, I...))
-sub2ind(inds::Indices, I::Integer...) = (@_inline_meta; _sub2ind(inds, 1, 1, I...))
+_sub2ind(dims::DimsInteger, I::Integer...) = (@_inline_meta; _sub2ind_recurse(dims, 1, 1, I...))
+_sub2ind(inds::Indices, I::Integer...) = (@_inline_meta; _sub2ind_recurse(inds, 1, 1, I...))
 # In 1d, there's a question of whether we're doing cartesian indexing
 # or linear indexing. Support only the former.
-sub2ind(inds::Indices{1}, I::Integer...) =
+_sub2ind(inds::Indices{1}, I::Integer...) =
     throw(ArgumentError("Linear indexing is not defined for one-dimensional arrays"))
-sub2ind(inds::Tuple{OneTo}, I::Integer...) = (@_inline_meta; _sub2ind(inds, 1, 1, I...)) # only OneTo is safe
-sub2ind(inds::Tuple{OneTo}, i::Integer)    = i
+_sub2ind(inds::Tuple{OneTo}, I::Integer...) = (@_inline_meta; _sub2ind_recurse(inds, 1, 1, I...)) # only OneTo is safe
+_sub2ind(inds::Tuple{OneTo}, i::Integer)    = i
 
-_sub2ind(::Any, L, ind) = ind
-function _sub2ind(::Tuple{}, L, ind, i::Integer, I::Integer...)
+_sub2ind_recurse(::Any, L, ind) = ind
+function _sub2ind_recurse(::Tuple{}, L, ind, i::Integer, I::Integer...)
     @_inline_meta
-    _sub2ind((), L, ind+(i-1)*L, I...)
+    _sub2ind_recurse((), L, ind+(i-1)*L, I...)
 end
-function _sub2ind(inds, L, ind, i::Integer, I::Integer...)
+function _sub2ind_recurse(inds, L, ind, i::Integer, I::Integer...)
     @_inline_meta
     r1 = inds[1]
-    _sub2ind(tail(inds), nextL(L, r1), ind+offsetin(i, r1)*L, I...)
+    _sub2ind_recurse(tail(inds), nextL(L, r1), ind+offsetin(i, r1)*L, I...)
 end
 
 nextL(L, l::Integer) = L*l
@@ -1658,42 +1627,23 @@ nextL(L, r::AbstractUnitRange) = L*unsafe_length(r)
 offsetin(i, l::Integer) = i-1
 offsetin(i, r::AbstractUnitRange) = i-first(r)
 
-ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsError()))
-
-"""
-    ind2sub(dims, index) -> subscripts
-
-Return a tuple of subscripts into an array with dimensions `dims`,
-corresponding to the linear index `index`.
-
-# Examples
-```jldoctest
-julia> ind2sub((3,4),2)
-(2, 1)
-
-julia> ind2sub((3,4),3)
-(3, 1)
-
-julia> ind2sub((3,4),4)
-(1, 2)
-```
-"""
-ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub(dims, ind-1))
-ind2sub(inds::Indices, ind::Integer)     = (@_inline_meta; _ind2sub(inds, ind-1))
-ind2sub(inds::Indices{1}, ind::Integer) =
+_ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsError()))
+_ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub_recurse(dims, ind-1))
+_ind2sub(inds::Indices, ind::Integer)     = (@_inline_meta; _ind2sub_recurse(inds, ind-1))
+_ind2sub(inds::Indices{1}, ind::Integer) =
     throw(ArgumentError("Linear indexing is not defined for one-dimensional arrays"))
-ind2sub(inds::Tuple{OneTo}, ind::Integer) = (ind,)
+_ind2sub(inds::Tuple{OneTo}, ind::Integer) = (ind,)
 
-_ind2sub(::Tuple{}, ind) = (ind+1,)
-function _ind2sub(indslast::NTuple{1}, ind)
+_ind2sub_recurse(::Tuple{}, ind) = (ind+1,)
+function _ind2sub_recurse(indslast::NTuple{1}, ind)
     @_inline_meta
     (_lookup(ind, indslast[1]),)
 end
-function _ind2sub(inds, ind)
+function _ind2sub_recurse(inds, ind)
     @_inline_meta
     r1 = inds[1]
     indnext, f, l = _div(ind, r1)
-    (ind-l*indnext+f, _ind2sub(tail(inds), indnext)...)
+    (ind-l*indnext+f, _ind2sub_recurse(tail(inds), indnext)...)
 end
 
 _lookup(ind, d::Integer) = ind+1
@@ -1702,12 +1652,12 @@ _div(ind, d::Integer) = div(ind, d), 1, d
 _div(ind, r::AbstractUnitRange) = (d = unsafe_length(r); (div(ind, d), first(r), d))
 
 # Vectorized forms
-function sub2ind(inds::Indices{1}, I1::AbstractVector{T}, I::AbstractVector{T}...) where T<:Integer
+function _sub2ind(inds::Indices{1}, I1::AbstractVector{T}, I::AbstractVector{T}...) where T<:Integer
     throw(ArgumentError("Linear indexing is not defined for one-dimensional arrays"))
 end
-sub2ind(inds::Tuple{OneTo}, I1::AbstractVector{T}, I::AbstractVector{T}...) where {T<:Integer} =
+_sub2ind(inds::Tuple{OneTo}, I1::AbstractVector{T}, I::AbstractVector{T}...) where {T<:Integer} =
     _sub2ind_vecs(inds, I1, I...)
-sub2ind(inds::Union{DimsInteger,Indices}, I1::AbstractVector{T}, I::AbstractVector{T}...) where {T<:Integer} =
+_sub2ind(inds::Union{DimsInteger,Indices}, I1::AbstractVector{T}, I::AbstractVector{T}...) where {T<:Integer} =
     _sub2ind_vecs(inds, I1, I...)
 function _sub2ind_vecs(inds, I::AbstractVector...)
     I1 = I[1]
@@ -1723,37 +1673,26 @@ end
 function _sub2ind!(Iout, inds, Iinds, I)
     @_noinline_meta
     for i in Iinds
-        # Iout[i] = sub2ind(inds, map(Ij -> Ij[i], I)...)
+        # Iout[i] = _sub2ind(inds, map(Ij -> Ij[i], I)...)
         Iout[i] = sub2ind_vec(inds, i, I)
     end
     Iout
 end
 
-sub2ind_vec(inds, i, I) = (@_inline_meta; sub2ind(inds, _sub2ind_vec(i, I...)...))
+sub2ind_vec(inds, i, I) = (@_inline_meta; _sub2ind(inds, _sub2ind_vec(i, I...)...))
 _sub2ind_vec(i, I1, I...) = (@_inline_meta; (I1[i], _sub2ind_vec(i, I...)...))
 _sub2ind_vec(i) = ()
 
-function ind2sub(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{<:Integer}) where N
+function _ind2sub(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{<:Integer}) where N
     M = length(ind)
     t = ntuple(n->similar(ind),Val(N))
     for (i,idx) in pairs(IndexLinear(), ind)
-        sub = ind2sub(inds, idx)
+        sub = _ind2sub(inds, idx)
         for j = 1:N
             t[j][i] = sub[j]
         end
     end
     t
-end
-
-function ind2sub!(sub::Array{T}, dims::Tuple{Vararg{T}}, ind::T) where T<:Integer
-    ndims = length(dims)
-    for i=1:ndims-1
-        ind2 = div(ind-1,dims[i])+1
-        sub[i] = ind - dims[i]*(ind2-1)
-        ind = ind2
-    end
-    sub[ndims] = ind
-    return sub
 end
 
 ## iteration utilities ##

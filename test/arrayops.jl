@@ -1358,7 +1358,7 @@ end
 # issue #7197
 function i7197()
     S = [1 2 3; 4 5 6; 7 8 9]
-    ind2sub(size(S), 5)
+    Base._ind2sub(size(S), 5)
 end
 @test i7197() == (2,2)
 

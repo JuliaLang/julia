@@ -618,8 +618,8 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
     rowvalB = Vector{Int}(uninitialized, nnzB)
     nzvalB = Vector{Tv}(uninitialized, nnzB)
 
-    rowstart,colstart = ind2sub(szA, first(I))
-    rowend,colend = ind2sub(szA, last(I))
+    rowstart,colstart = Base._ind2sub(szA, first(I))
+    rowend,colend = Base._ind2sub(szA, last(I))
 
     idxB = 1
     @inbounds for col in colstart:colend
@@ -628,7 +628,7 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
         for r in colptrA[col]:(colptrA[col+1]-1)
             rowA = rowvalA[r]
             if minrow <= rowA <= maxrow
-                rowvalB[idxB] = sub2ind(szA, rowA, col) - first(I) + 1
+                rowvalB[idxB] = Base._sub2ind(szA, rowA, col) - first(I) + 1
                 nzvalB[idxB] = nzvalA[r]
                 idxB += 1
             end
@@ -656,7 +656,7 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     idxB = 1
     for i in 1:n
         ((I[i] < 1) | (I[i] > nA)) && throw(BoundsError(A, I))
-        row,col = ind2sub(szA, I[i])
+        row,col = Base._ind2sub(szA, I[i])
         for r in colptrA[col]:(colptrA[col+1]-1)
             @inbounds if rowvalA[r] == row
                 if idxB <= nnzB
