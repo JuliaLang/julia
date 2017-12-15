@@ -88,9 +88,9 @@ using Test
             @test_throws DimensionMismatch eigs(a, v0=zeros(elty,n+2))
             @test_throws ArgumentError eigs(a, v0=zeros(Int,n))
             if elty == Float64
-                @test_throws ArgumentError eigs(a+a.',which=:SI)
-                @test_throws ArgumentError eigs(a+a.',which=:LI)
-                @test_throws ArgumentError eigs(a,sigma=rand(ComplexF32))
+                @test_throws ArgumentError eigs(a + transpose(a), which=:SI)
+                @test_throws ArgumentError eigs(a + transpose(a), which=:LI)
+                @test_throws ArgumentError eigs(a, sigma = rand(ComplexF32))
             end
         end
     end
