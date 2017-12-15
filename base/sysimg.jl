@@ -856,6 +856,9 @@ Base.require(Base, :Markdown)
     @eval @deprecate_stdlib $(Symbol("@code_native"))   InteractiveUtils true
 end
 
+Base.require(Base, :SHA)
+Base.require(Base, :Pkg3)
+
 empty!(DEPOT_PATH)
 empty!(LOAD_PATH)
 

@@ -82,6 +82,9 @@ endif
 julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_defaultpkgdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
+julia-stdlib:
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/stdlib
+
 julia-base: julia-deps $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/base
 
@@ -97,10 +100,10 @@ julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 julia-base-compiler : julia-base julia-ui-$(JULIA_BUILD_MODE) $(build_prefix)/.examples
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/basecompiler.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
-julia-sysimg-release : julia-base-compiler julia-ui-release
+julia-sysimg-release : julia-base-compiler julia-ui-release julia-stdlib
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys.$(SHLIB_EXT) JULIA_BUILD_MODE=release
 
-julia-sysimg-debug : julia-base-compiler julia-ui-debug
+julia-sysimg-debug : julia-base-compiler julia-ui-debug julia-stdlib
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) JULIA_BUILD_MODE=debug
 
 julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest julia-base-cache
@@ -499,6 +502,7 @@ clean: | $(CLEAN_TARGETS)
 	@-$(MAKE) -C $(BUILDROOT)/ui clean
 	@-$(MAKE) -C $(BUILDROOT)/test clean
 	@-$(MAKE) -C $(BUILDROOT)/examples clean
+	@-$(MAKE) -C $(BUILDROOT)/stdlib clean
 	-rm -f $(BUILDROOT)/julia
 	-rm -f $(BUILDROOT)/*.tar.gz
 	-rm -f $(build_depsbindir)/stringreplace \
