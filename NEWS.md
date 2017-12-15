@@ -716,6 +716,9 @@ Deprecated or removed
     have been deprecated in favor of `spdiagm(d => x)` and `spdiagm(d[1] => x[1], d[2] => x[2], ...)`
     respectively. The new `spdiagm` implementation now always returns a square matrix ([#23757]).
 
+  * `spones(A::AbstractSparseArray)` has been deprecated in favor of
+    `LinAlg.fillstored!(copy(A), 1)` ([#25037]).
+
   * Constructors for `LibGit2.UserPasswordCredentials` and `LibGit2.SSHCredentials` which take a
     `prompt_if_incorrect` argument are deprecated. Instead, prompting behavior is controlled using
     the `allow_prompt` keyword in the `LibGit2.CredentialPayload` constructor ([#23690]).

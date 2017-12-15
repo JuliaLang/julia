@@ -198,7 +198,6 @@ Base.SparseArrays.sparsevec
 Base.SparseArrays.issparse
 Base.SparseArrays.nnz
 Base.SparseArrays.spzeros
-Base.SparseArrays.spones
 Base.SparseArrays.spdiagm
 Base.SparseArrays.sprand
 Base.SparseArrays.sprandn

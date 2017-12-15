@@ -121,10 +121,9 @@ end
             @test exact_equal(sparsevec(d), SparseVector(3, [1, 2, 3], [0.0, 1.0, 2.0]))
         end
     end
-    @testset "spones" begin
-        # copies structure, but replaces nzvals with ones
+    @testset "fillstored!" begin
         x = SparseVector(8, [2, 3, 6], [12.0, 18.0, 25.0])
-        y = spones(x)
+        y = LinAlg.fillstored!(copy(x), 1)
         @test (x .!= 0) == (y .!= 0)
         @test y == SparseVector(8, [2, 3, 6], [1.0, 1.0, 1.0])
     end
