@@ -174,11 +174,11 @@ checkbounds(::Type{Bool}, s::AbstractString, i::Integer) =
 checkbounds(::Type{Bool}, s::AbstractString, r::AbstractRange{<:Integer}) =
     isempty(r) || (1 ≤ minimum(r) && maximum(r) ≤ ncodeunits(s))
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Real}) =
-    all(i -> checkbounds(s, i), I)
+    all(i -> checkbounds(Bool, s, i), I)
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Integer}) =
-    all(i -> checkbounds(s, i), I)
+    all(i -> checkbounds(Bool, s, i), I)
 checkbounds(s::AbstractString, I::Union{Integer,AbstractArray}) =
-    checkbounds(Bool, s, I) || throw(BoundsError(s, I))
+    checkbounds(Bool, s, I) ? nothing : throw(BoundsError(s, I))
 
 ## construction, conversion, promotion ##
 
