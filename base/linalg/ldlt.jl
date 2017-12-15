@@ -91,7 +91,7 @@ end
 
 factorize(S::SymTridiagonal) = ldltfact(S)
 
-function A_ldiv_B!(S::LDLt{T,M}, B::AbstractVecOrMat{T}) where {T,M<:SymTridiagonal{T}}
+function ldiv!(S::LDLt{T,M}, B::AbstractVecOrMat{T}) where {T,M<:SymTridiagonal{T}}
     n, nrhs = size(B, 1), size(B, 2)
     if size(S,1) != n
         throw(DimensionMismatch("Matrix has dimensions $(size(S)) but right hand side has first dimension $n"))

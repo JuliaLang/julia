@@ -296,6 +296,14 @@ Some **bolded**
 - list2
 """
 @test latex(book) == "\\section{Title}\nSome discussion\n\n\\begin{quote}\nA quote\n\n\\end{quote}\n\\subsection{Section \\emph{important}}\nSome \\textbf{bolded}\n\n\\begin{itemize}\n\\item list1\n\n\n\\item list2\n\n\\end{itemize}\n"
+table = md"""
+ a | b
+---|---
+ 1 | 2
+"""
+@test latex(table) ==
+    "\\begin{tabular}\n{r | r}\na & b \\\\\n\\hline\n1 & 2 \\\\\n\\end{tabular}\n"
+
 # mime output
 let out =
     """

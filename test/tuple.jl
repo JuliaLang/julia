@@ -83,6 +83,8 @@ end
         @test Tuple{Int,Vararg{Any}}.ninitialized == 1
         @test Tuple{Any,Any,Vararg{Any}}.ninitialized == 2
     end
+
+    @test empty((1, 2.0, "c")) === ()
 end
 
 @testset "size" begin
@@ -352,4 +354,8 @@ end
         (Complex(1), Complex(2))
     @test convert(Tuple{Complex, Complex}, (1, 2.0)) ===
         (Complex(1), Complex(2.0))
+end
+
+@testset "issue 24707" begin
+    @test eltype(Tuple{Vararg{T}} where T<:Integer) >: Integer
 end

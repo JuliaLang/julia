@@ -8,12 +8,13 @@
     # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
 
     using SuiteSparse.increment!
+    using Base.LinAlg: Adjoint, Transpose
 
     A0 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
                 increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
                 [2.,1.,3.,4.,-1.,-3.,3.,6.,2.,1.,4.,2.], 5, 5)
 
-    @testset "Core functionality for $Tv elements" for Tv in (Float64, Complex128)
+    @testset "Core functionality for $Tv elements" for Tv in (Float64, ComplexF64)
         # We might be able to support two index sizes one day
         for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
             A = convert(SparseMatrixCSC{Tv,Ti}, A0)
@@ -31,11 +32,11 @@
 
             @test A*x ≈ b
             z = complex.(b)
-            x = SuiteSparse.A_ldiv_B!(lua, z)
+            x = SuiteSparse.ldiv!(lua, z)
             @test x ≈ float([1:5;])
             @test z === x
             y = similar(z)
-            A_ldiv_B!(y, lua, complex.(b))
+            Base.LinAlg.ldiv!(y, lua, complex.(b))
             @test y ≈ x
 
             @test A*x ≈ b
@@ -46,11 +47,11 @@
 
             @test A'*x ≈ b
             z = complex.(b)
-            x = SuiteSparse.Ac_ldiv_B!(lua, z)
+            x = SuiteSparse.ldiv!(Adjoint(lua), z)
             @test x ≈ float([1:5;])
             @test x === z
             y = similar(x)
-            SuiteSparse.Ac_ldiv_B!(y, lua, complex.(b))
+            SuiteSparse.ldiv!(y, Adjoint(lua), complex.(b))
             @test y ≈ x
 
             @test A'*x ≈ b
@@ -58,10 +59,10 @@
             @test x ≈ float([1:5;])
 
             @test A.'*x ≈ b
-            x = SuiteSparse.At_ldiv_B!(lua,complex.(b))
+            x = SuiteSparse.ldiv!(Transpose(lua), complex.(b))
             @test x ≈ float([1:5;])
             y = similar(x)
-            SuiteSparse.At_ldiv_B!(y, lua,complex.(b))
+            SuiteSparse.ldiv!(y, Transpose(lua), complex.(b))
             @test y ≈ x
 
             @test A.'*x ≈ b
@@ -74,7 +75,7 @@
     @testset "More tests for complex cases" begin
         Ac0 = complex.(A0,A0)
         for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
-            Ac = convert(SparseMatrixCSC{Complex128,Ti}, Ac0)
+            Ac = convert(SparseMatrixCSC{ComplexF64,Ti}, Ac0)
             x  = complex.(ones(size(Ac, 1)), ones(size(Ac,1)))
             lua = lufact(Ac)
             L,U,p,q,Rs = lua[:(:)]
@@ -88,7 +89,7 @@
         end
     end
 
-    @testset "Rectangular cases" for elty in (Float64, Complex128)
+    @testset "Rectangular cases" for elty in (Float64, ComplexF64)
         for (m, n) in ((10,5), (5, 10))
             A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex.(randn(min(m, n) + 10), randn(min(m, n) + 10)))
             F = lufact(A)
@@ -109,9 +110,9 @@
     end
 
     @testset "Issue #15099" for (Tin, Tout) in (
-            (Complex32, Complex128),
-            (Complex64, Complex128),
-            (Complex128, Complex128),
+            (ComplexF16, ComplexF64),
+            (ComplexF32, ComplexF64),
+            (ComplexF64, ComplexF64),
             (Float16, Float64),
             (Float32, Float64),
             (Float64, Float64),
@@ -161,9 +162,9 @@
         X = zeros(Complex{Float64}, N, N)
         B = complex.(rand(N, N), rand(N, N))
         luA, lufA = lufact(A), lufact(Array(A))
-        @test A_ldiv_B!(copy(X), luA, B) ≈ A_ldiv_B!(copy(X), lufA, B)
-        @test At_ldiv_B!(copy(X), luA, B) ≈ At_ldiv_B!(copy(X), lufA, B)
-        @test Ac_ldiv_B!(copy(X), luA, B) ≈ Ac_ldiv_B!(copy(X), lufA, B)
+        @test Base.LinAlg.ldiv!(copy(X), luA, B) ≈ Base.LinAlg.ldiv!(copy(X), lufA, B)
+        @test Base.LinAlg.ldiv!(copy(X), Adjoint(luA), B) ≈ Base.LinAlg.ldiv!(copy(X), Adjoint(lufA), B)
+        @test Base.LinAlg.ldiv!(copy(X), Transpose(luA), B) ≈ Base.LinAlg.ldiv!(copy(X), Transpose(lufA), B)
     end
 
 end

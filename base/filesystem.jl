@@ -149,6 +149,26 @@ function read(f::File, ::Type{UInt8})
     return ret % UInt8
 end
 
+function read(f::File, ::Type{Char})
+    b0 = read(f, UInt8)
+    l = 8(4-leading_ones(b0))
+    c = UInt32(b0) << 24
+    if l < 24
+        s = 16
+        while s ≥ l && !eof(f)
+            p = position(f)
+            b = read(f, UInt8)
+            if b & 0xc0 != 0x80
+                seek(f, p)
+                break
+            end
+            c |= UInt32(b) << s
+            s -= 8
+        end
+    end
+    return reinterpret(Char, c)
+end
+
 function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)
     check_open(f)
     ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),

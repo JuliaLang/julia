@@ -42,7 +42,7 @@ function GitCredential(cfg::GitConfig, url::AbstractString)
     fill!(cfg, parse(GitCredential, url))
 end
 
-function GitCredential(cred::UserPasswordCredentials, url::AbstractString)
+function GitCredential(cred::UserPasswordCredential, url::AbstractString)
     git_cred = parse(GitCredential, url)
     git_cred.username = Nullable{String}(deepcopy(cred.user))
     git_cred.password = Nullable{String}(deepcopy(cred.pass))
@@ -237,8 +237,8 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
         # credential helpers avoids potential issues with using the wrong credentials or
         # writing credentials to the wrong helper.
         if isempty(value)
-            Base.warn_once("Resetting the helper list is currently unsupported: " *
-                 "ignoring all git credential helpers.")
+            @warn """Resetting the helper list is currently unsupported:
+                     ignoring all git credential helpers""" maxlog=1
             return GitCredentialHelper[]
         end
 
@@ -285,10 +285,10 @@ function use_http_path(cfg::GitConfig, cred::GitCredential)
     return use_path
 end
 
-approve(cfg::GitConfig, cred::AbstractCredentials, url::AbstractString) = nothing
-reject(cfg::GitConfig, cred::AbstractCredentials, url::AbstractString) = nothing
+approve(cfg::GitConfig, cred::AbstractCredential, url::AbstractString) = nothing
+reject(cfg::GitConfig, cred::AbstractCredential, url::AbstractString) = nothing
 
-function approve(cfg::GitConfig, cred::UserPasswordCredentials, url::AbstractString)
+function approve(cfg::GitConfig, cred::UserPasswordCredential, url::AbstractString)
     git_cred = GitCredential(cred, url)
     git_cred.use_http_path = use_http_path(cfg, git_cred)
 
@@ -297,11 +297,10 @@ function approve(cfg::GitConfig, cred::UserPasswordCredentials, url::AbstractStr
     end
 
     securezero!(git_cred)
-
     nothing
 end
 
-function reject(cfg::GitConfig, cred::UserPasswordCredentials, url::AbstractString)
+function reject(cfg::GitConfig, cred::UserPasswordCredential, url::AbstractString)
     git_cred = GitCredential(cred, url)
     git_cred.use_http_path = use_http_path(cfg, git_cred)
 
@@ -310,7 +309,5 @@ function reject(cfg::GitConfig, cred::UserPasswordCredentials, url::AbstractStri
     end
 
     securezero!(git_cred)
-    securezero!(cred)
-
     nothing
 end

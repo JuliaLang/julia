@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+eltype(::Type{AbstractSet{T}}) where {T} = T
+
 mutable struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Void}
 
@@ -23,19 +25,13 @@ function Set(g::Generator)
     return Set{T}(g)
 end
 
-eltype(::Type{Set{T}}) where {T} = T
 similar(s::Set{T}) where {T} = Set{T}()
 similar(s::Set, T::Type) = Set{T}()
 
 function show(io::IO, s::Set)
-    print(io, "Set")
-    if isempty(s)
-        print(io, "{", eltype(s), "}()")
-        return
-    end
-    print(io, "(")
-    show_vector(io, s, "[", "]")
-    print(io, ")")
+    print(io, "Set(")
+    show_vector(io, s)
+    print(io, ')')
 end
 
 isempty(s::Set) = isempty(s.dict)

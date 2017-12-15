@@ -18,7 +18,7 @@ module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 """
     module_parent(m::Module) -> Module
 
-Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` after `workspace()`.
+Get a module's enclosing `Module`. `Main` is its own parent.
 
 # Examples
 ```jldoctest

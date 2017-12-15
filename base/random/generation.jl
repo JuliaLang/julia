@@ -23,17 +23,17 @@ Sampler(rng::AbstractRNG, ::Type{T}, n::Repetition) where {T<:AbstractFloat} =
 # generic random generation function which can be used by RNG implementors
 # it is not defined as a fallback rand method as this could create ambiguities
 
-rand_generic(r::AbstractRNG, ::CloseOpen{Float16}) =
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen{Float16}}) =
     Float16(reinterpret(Float32,
-                        (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
+                        (rand(r, UInt10(UInt32)) << 13)  | 0x3f800000) - 1)
 
-rand_generic(r::AbstractRNG, ::CloseOpen{Float32}) =
-    reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen{Float32}}) =
+    reinterpret(Float32, rand(r, UInt23()) | 0x3f800000) - 1
 
-rand_generic(r::AbstractRNG, ::Close1Open2_64) =
-    reinterpret(Float64, 0x3ff0000000000000 | rand(r, UInt64) & 0x000fffffffffffff)
+rand(r::AbstractRNG, ::SamplerTrivial{Close1Open2_64}) =
+    reinterpret(Float64, 0x3ff0000000000000 | rand(r, UInt52()))
 
-rand_generic(r::AbstractRNG, ::CloseOpen_64) = rand(r, Close1Open2()) - 1.0
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen_64}) = rand(r, Close1Open2()) - 1.0
 
 #### BigFloat
 
@@ -101,11 +101,25 @@ rand(rng::AbstractRNG, sp::SamplerBigFloat{T}) where {T<:FloatInterval{BigFloat}
 
 ### random integers
 
-rand_ui10_raw(r::AbstractRNG) = rand(r, UInt16)
-rand_ui23_raw(r::AbstractRNG) = rand(r, UInt32)
+rand(r::AbstractRNG, ::SamplerTrivial{UInt10Raw{UInt16}}) = rand(r, UInt16)
+rand(r::AbstractRNG, ::SamplerTrivial{UInt23Raw{UInt32}}) = rand(r, UInt32)
 
-rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2()))
-rand_ui52(r::AbstractRNG) = rand_ui52_raw(r) & 0x000fffffffffffff
+rand(r::AbstractRNG, ::SamplerTrivial{UInt52Raw{UInt64}}) =
+    _rand52(r, rng_native_52(r))
+
+_rand52(r::AbstractRNG, ::Type{Float64}) = reinterpret(UInt64, rand(r, Close1Open2()))
+_rand52(r::AbstractRNG, ::Type{UInt64})  = rand(r, UInt64)
+
+rand(r::AbstractRNG, ::SamplerTrivial{UInt104Raw{UInt128}}) =
+    rand(r, UInt52Raw(UInt128)) << 52 ⊻ rand_inbounds(r, UInt52Raw(UInt128))
+
+rand(r::AbstractRNG, ::SamplerTrivial{UInt10{UInt16}})   = rand(r, UInt10Raw())  & 0x03ff
+rand(r::AbstractRNG, ::SamplerTrivial{UInt23{UInt32}})   = rand(r, UInt23Raw())  & 0x007fffff
+rand(r::AbstractRNG, ::SamplerTrivial{UInt52{UInt64}})   = rand(r, UInt52Raw())  & 0x000fffffffffffff
+rand(r::AbstractRNG, ::SamplerTrivial{UInt104{UInt128}}) = rand(r, UInt104Raw()) & 0x000000ffffffffffffffffffffffffff
+
+rand(r::AbstractRNG, sp::SamplerTrivial{<:UniformBits{T}}) where {T} =
+        rand(r, uint_default(sp[])) % T
 
 ### random complex numbers
 
@@ -125,76 +139,134 @@ end
 
 ### BitInteger
 
+# there are two implemented samplers for unit ranges, which assume that Float64 (i.e.
+# 52 random bits) is the native type for the RNG:
+# 1) "Fast", which is the most efficient when the underlying RNG produces rand(Float64)
+#     "fast enough". The tradeoff is faster creation of the sampler, but more
+#     consumption of entropy bits
+# 2) "Default" which tries to use as few entropy bits as possible, at the cost of a
+#    a bigger upfront price associated with the creation of the sampler
+
+#### helper functions
+
+uint_sup(::Type{<:Union{Bool,BitInteger}}) = UInt32
+uint_sup(::Type{<:Union{Int64,UInt64}}) = UInt64
+uint_sup(::Type{<:Union{Int128,UInt128}}) = UInt128
+
+#### Fast
+
+struct SamplerRangeFast{U<:BitUnsigned,T<:Union{BitInteger,Bool}} <: Sampler
+    a::T      # first element of the range
+    bw::UInt  # bit width
+    m::U      # range length - 1
+    mask::U   # mask generated values before threshold rejection
+end
+
+SamplerRangeFast(r::AbstractUnitRange{T}) where T<:Union{Bool,BitInteger} =
+    SamplerRangeFast(r, uint_sup(T))
+
+function SamplerRangeFast(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
+    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    m = (last(r) - first(r)) % U
+    bw = (sizeof(U) << 3 - leading_zeros(m)) % UInt # bit-width
+    mask = (1 % U << bw) - (1 % U)
+    SamplerRangeFast{U,T}(first(r), bw, m, mask)
+end
+
+function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt32,T}) where T
+    a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
+    x = rand(rng, LessThan(m, Masked(mask, uniform(UInt32))))
+    (x + a % UInt32) % T
+end
+
+function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt64,T}) where T
+    a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
+    x = bw <= 52 ? rand(rng, LessThan(m, Masked(mask, UInt52Raw()))) :
+                   rand(rng, LessThan(m, Masked(mask, uniform(UInt64))))
+    (x + a % UInt64) % T
+end
+
+function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt128,T}) where T
+    a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
+    x = bw <= 52  ?
+        rand(rng, LessThan(m % UInt64, Masked(mask % UInt64, UInt52Raw()))) % UInt128 :
+    bw <= 104 ?
+        rand(rng, LessThan(m, Masked(mask, UInt104Raw()))) :
+        rand(rng, LessThan(m, Masked(mask, uniform(UInt128))))
+    x % T + a
+end
+
+#### Default
+
 # remainder function according to Knuth, where rem_knuth(a, 0) = a
 rem_knuth(a::UInt, b::UInt) = a % (b + (b == 0)) + a * (b == 0)
 rem_knuth(a::T, b::T) where {T<:Unsigned} = b != 0 ? a % b : a
 
-# maximum multiple of k <= 2^bits(T) decremented by one,
-# that is 0xFFFF...FFFF if k = typemax(T) - typemin(T) with intentional underflow
+# maximum multiple of k <= sup decremented by one,
+# that is 0xFFFF...FFFF if k = (typemax(T) - typemin(T)) + 1 and sup == typemax(T) - 1
+# with intentional underflow
 # see http://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
-maxmultiple(k::T) where {T<:Unsigned} =
-    (div(typemax(T) - k + oneunit(k), k + (k == 0))*k + k - oneunit(k))::T
 
-# maximum multiple of k within 1:2^32 or 1:2^64 decremented by one, depending on size
-maxmultiplemix(k::UInt64) = k >> 32 != 0 ?
-    maxmultiple(k) :
-    (div(0x0000000100000000, k + (k == 0))*k - oneunit(k))::UInt64
+# sup == 0 means typemax(T) + 1
+maxmultiple(k::T, sup::T=zero(T)) where {T<:Unsigned} =
+    (div(sup - k, k + (k == 0))*k + k - one(k))::T
 
-struct SamplerRangeInt{T<:Integer,U<:Unsigned} <: Sampler
-    a::T   # first element of the range
-    k::U   # range length or zero for full range
-    u::U   # rejection threshold
+# similar but sup must not be equal to typemax(T)
+unsafe_maxmultiple(k::T, sup::T) where {T<:Unsigned} =
+    div(sup, k + (k == 0))*k - one(k)
+
+struct SamplerRangeInt{T<:Union{Bool,Integer},U<:Unsigned} <: Sampler
+    a::T      # first element of the range
+    bw::Int   # bit width
+    k::U      # range length or zero for full range
+    u::U      # rejection threshold
 end
 
-# generators with 32, 128 bits entropy
-SamplerRangeInt(a::T, k::U) where {T,U<:Union{UInt32,UInt128}} =
-    SamplerRangeInt{T,U}(a, k, maxmultiple(k))
 
-# mixed 32/64 bits entropy generator
-SamplerRangeInt(a::T, k::UInt64) where {T} =
-    SamplerRangeInt{T,UInt64}(a, k, maxmultiplemix(k))
+SamplerRangeInt(r::AbstractUnitRange{T}) where T<:Union{Bool,BitInteger} =
+    SamplerRangeInt(r, uint_sup(T))
 
-function Sampler(::AbstractRNG, r::UnitRange{T}, ::Repetition) where T<:Unsigned
+function SamplerRangeInt(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
     isempty(r) && throw(ArgumentError("range must be non-empty"))
-    SamplerRangeInt(first(r), last(r) - first(r) + oneunit(T))
-end
-
-for (T, U) in [(UInt8, UInt32), (UInt16, UInt32),
-               (Int8, UInt32), (Int16, UInt32), (Int32, UInt32),
-               (Int64, UInt64), (Int128, UInt128), (Bool, UInt32)]
-
-    @eval Sampler(::AbstractRNG, r::UnitRange{$T}, ::Repetition) = begin
-        isempty(r) && throw(ArgumentError("range must be non-empty"))
-        # overflow ok:
-        SamplerRangeInt(first(r), convert($U, unsigned(last(r) - first(r)) + one($U)))
+    a = first(r)
+    m = (last(r) - first(r)) % U
+    k = m + one(U)
+    bw = (sizeof(U) << 3 - leading_zeros(m)) % Int
+    mult = if U === UInt32
+        maxmultiple(k)
+    elseif U === UInt64
+        bw <= 52 ? unsafe_maxmultiple(k, one(UInt64) << 52) :
+                   maxmultiple(k)
+    else # U === UInt128
+        bw <= 52  ? unsafe_maxmultiple(k, one(UInt128) << 52) :
+        bw <= 104 ? unsafe_maxmultiple(k, one(UInt128) << 104) :
+                    maxmultiple(k)
     end
+
+    SamplerRangeInt{T,U}(a, bw, k, mult) # overflow ok
 end
 
-# this function uses 32 bit entropy for small ranges of length <= typemax(UInt32) + 1
-# SamplerRangeInt is responsible for providing the right value of k
-function rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt64}) where T<:Union{UInt64,Int64}
-    local x::UInt64
-    if (sp.k - 1) >> 32 == 0
-        x = rand(rng, UInt32)
-        while x > sp.u
-            x = rand(rng, UInt32)
-        end
-    else
-        x = rand(rng, UInt64)
-        while x > sp.u
-            x = rand(rng, UInt64)
-        end
-    end
-    return reinterpret(T, reinterpret(UInt64, sp.a) + rem_knuth(x, sp.k))
+Sampler(::AbstractRNG, r::AbstractUnitRange{T},
+        ::Repetition) where {T<:Union{Bool,BitInteger}} = SamplerRangeInt(r)
+
+rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt32}) where {T<:Union{Bool,BitInteger}} =
+    (unsigned(sp.a) + rem_knuth(rand(rng, LessThan(sp.u, uniform(UInt32))), sp.k)) % T
+
+
+# this function uses 52 bit entropy for small ranges of length <= 2^52
+function rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt64}) where T<:BitInteger
+    x = sp.bw <= 52 ? rand(rng, LessThan(sp.u, UInt52())) :
+                      rand(rng, LessThan(sp.u, uniform(UInt64)))
+    return ((sp.a % UInt64) + rem_knuth(x, sp.k)) % T
 end
 
-function rand(rng::AbstractRNG, sp::SamplerRangeInt{T,U}) where {T<:Integer,U<:Unsigned}
-    x = rand(rng, U)
-    while x > sp.u
-        x = rand(rng, U)
-    end
-    (unsigned(sp.a) + rem_knuth(x, sp.k)) % T
+function rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt128}) where T<:BitInteger
+    x = sp.bw <= 52  ? rand(rng, LessThan(sp.u, UInt52(UInt128))) :
+        sp.bw <= 104 ? rand(rng, LessThan(sp.u, UInt104(UInt128))) :
+                       rand(rng, LessThan(sp.u, uniform(UInt128)))
+    return ((sp.a % UInt128) + rem_knuth(x, sp.k)) % T
 end
+
 
 ### BigInt
 
@@ -206,7 +278,7 @@ struct SamplerBigInt <: Sampler
     mask::Limb        # applied to the highest limb
 end
 
-function Sampler(::AbstractRNG, r::UnitRange{BigInt}, ::Repetition)
+function Sampler(::AbstractRNG, r::AbstractUnitRange{BigInt}, ::Repetition)
     m = last(r) - first(r)
     m < 0 && throw(ArgumentError("range must be non-empty"))
     nd = ndigits(m, 2)
@@ -219,17 +291,19 @@ end
 
 function rand(rng::AbstractRNG, sp::SamplerBigInt)
     x = MPZ.realloc2(sp.nlimbsmax*8*sizeof(Limb))
-    limbs = unsafe_wrap(Array, x.d, sp.nlimbs)
-    while true
-        rand!(rng, limbs)
-        @inbounds limbs[end] &= sp.mask
-        MPZ.mpn_cmp(x, sp.m, sp.nlimbs) <= 0 && break
-    end
-    # adjust x.size (normally done by mpz_limbs_finish, in GMP version >= 6)
-    x.size = sp.nlimbs
-    while x.size > 0
-        @inbounds limbs[x.size] != 0 && break
-        x.size -= 1
+    @gc_preserve x begin
+        limbs = UnsafeView(x.d, sp.nlimbs)
+        while true
+            rand!(rng, limbs)
+            limbs[end] &= sp.mask
+            MPZ.mpn_cmp(x, sp.m, sp.nlimbs) <= 0 && break
+        end
+        # adjust x.size (normally done by mpz_limbs_finish, in GMP version >= 6)
+        x.size = sp.nlimbs
+        while x.size > 0
+            limbs[x.size] != 0 && break
+            x.size -= 1
+        end
     end
     MPZ.add!(x, sp.a)
 end
@@ -238,51 +312,61 @@ end
 ## random values from AbstractArray
 
 Sampler(rng::AbstractRNG, r::AbstractArray, n::Repetition) =
-    SamplerSimple(r, Sampler(rng, 1:length(r), n))
+    SamplerSimple(r, Sampler(rng, linearindices(r), n))
 
 rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractArray,<:Sampler}) =
     @inbounds return sp[][rand(rng, sp.data)]
 
 
-## random values from Dict, Set, BitSet
+## random values from Dict
 
-for x in (1, Inf) # eval because of ambiguity otherwise
-    for T in (Dict, Set, BitSet)
-        @eval Sampler(::AbstractRNG, t::$T, ::Val{$x}) = SamplerTrivial(t)
-    end
+function Sampler(rng::AbstractRNG, t::Dict, ::Repetition)
+    isempty(t) && throw(ArgumentError("collection must be non-empty"))
+    # we use Val(Inf) below as rand is called repeatedly internally
+    # even for generating only one random value from t
+    SamplerSimple(t, Sampler(rng, linearindices(t.slots), Val(Inf)))
 end
 
-function rand(rng::AbstractRNG, sp::SamplerTrivial{<:Dict})
-    isempty(sp[]) && throw(ArgumentError("collection must be non-empty"))
-    rsp = Sampler(rng, 1:length(sp[].slots))
+function rand(rng::AbstractRNG, sp::SamplerSimple{<:Dict,<:Sampler})
     while true
-        i = rand(rng, rsp)
+        i = rand(rng, sp.data)
         Base.isslotfilled(sp[], i) && @inbounds return (sp[].keys[i] => sp[].vals[i])
     end
 end
 
-rand(rng::AbstractRNG, sp::SamplerTrivial{<:Set}) = rand(rng, sp[].dict).first
+## random values from Set
 
-function rand(rng::AbstractRNG, sp::SamplerTrivial{BitSet})
-    isempty(sp[]) && throw(ArgumentError("collection must be non-empty"))
-    # sp[] can be empty while sp[].bits is not, so we cannot rely on the
-    # length check in Sampler below
-    rsp = Sampler(rng, 1:length(sp[].bits))
+Sampler(rng::AbstractRNG, t::Set, n::Repetition) = SamplerTag{Set}(Sampler(rng, t.dict, n))
+
+rand(rng::AbstractRNG, sp::SamplerTag{Set,<:Sampler}) = rand(rng, sp.data).first
+
+## random values from BitSet
+
+function Sampler(rng::AbstractRNG, t::BitSet, n::Repetition)
+    isempty(t) && throw(ArgumentError("collection must be non-empty"))
+    SamplerSimple(t, Sampler(rng, linearindices(t.bits), Val(Inf)))
+end
+
+function rand(rng::AbstractRNG, sp::SamplerSimple{BitSet,<:Sampler})
     while true
-        n = rand(rng, rsp)
+        n = rand(rng, sp.data)
         @inbounds b = sp[].bits[n]
         b && return n
     end
 end
 
-## random values from Associative/AbstractSet
+## random values from AbstractDict/AbstractSet
+
+# we defer to _Sampler to avoid ambiguities with a call like Sampler(rng, Set(1), Val(1))
+Sampler(rng::AbstractRNG, t::Union{AbstractDict,AbstractSet}, n::Repetition) =
+    _Sampler(rng, t, n)
 
 # avoid linear complexity for repeated calls
-Sampler(rng::AbstractRNG, t::Union{Associative,AbstractSet}, n::Repetition) =
+_Sampler(rng::AbstractRNG, t::Union{AbstractDict,AbstractSet}, n::Val{Inf}) =
     Sampler(rng, collect(t), n)
 
 # when generating only one element, avoid the call to collect
-Sampler(::AbstractRNG, t::Union{Associative,AbstractSet}, ::Val{1}) =
+_Sampler(::AbstractRNG, t::Union{AbstractDict,AbstractSet}, ::Val{1}) =
     SamplerTrivial(t)
 
 function nth(iter, n::Integer)::eltype(iter)
@@ -291,7 +375,7 @@ function nth(iter, n::Integer)::eltype(iter)
     end
 end
 
-rand(rng::AbstractRNG, sp::SamplerTrivial{<:Union{Associative,AbstractSet}}) =
+rand(rng::AbstractRNG, sp::SamplerTrivial{<:Union{AbstractDict,AbstractSet}}) =
     nth(sp[], rand(rng, 1:length(sp[])))
 
 
@@ -299,22 +383,22 @@ rand(rng::AbstractRNG, sp::SamplerTrivial{<:Union{Associative,AbstractSet}}) =
 
 # we use collect(str), which is most of the time more efficient than specialized methods
 # (except maybe for very small arrays)
-Sampler(rng::AbstractRNG, str::AbstractString, n::Repetition) = Sampler(rng, collect(str), n)
+Sampler(rng::AbstractRNG, str::AbstractString, n::Val{Inf}) = Sampler(rng, collect(str), n)
 
 # when generating only one char from a string, the specialized method below
 # is usually more efficient
-Sampler(::AbstractRNG, str::AbstractString, ::Val{1}) = SamplerTrivial(str)
+Sampler(rng::AbstractRNG, str::AbstractString, ::Val{1}) =
+    SamplerSimple(str, Sampler(rng, 1:_endof(str), Val(Inf)))
 
 isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(Base.@gc_preserve s unsafe_load(pointer(s), i))
 isvalid_unsafe(s::AbstractString, i) = isvalid(s, i)
 _endof(s::String) = sizeof(s)
 _endof(s::AbstractString) = endof(s)
 
-function rand(rng::AbstractRNG, sp::SamplerTrivial{<:AbstractString})::Char
+function rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractString,<:Sampler})::Char
     str = sp[]
-    sp_pos = Sampler(rng, 1:_endof(str))
     while true
-        pos = rand(rng, sp_pos)
+        pos = rand(rng, sp.data)
         isvalid_unsafe(str, pos) && return str[pos]
     end
 end

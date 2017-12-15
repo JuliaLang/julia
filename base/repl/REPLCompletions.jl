@@ -106,7 +106,7 @@ const sorted_keywords = [
     "primitive type", "quote", "return", "struct",
     "true", "try", "using", "while"]
 
-function complete_keyword(s::String)
+function complete_keyword(s::Union{String,SubString{String}})
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)
@@ -225,7 +225,7 @@ end
 # closed start brace from the end of the string.
 function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     braces = 0
-    r = RevString(s)
+    r = reverse(s)
     i = start(r)
     in_single_quotes = false
     in_double_quotes = false
@@ -245,18 +245,21 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
                 in_back_ticks = true
             end
         else
-            if !in_back_ticks && !in_double_quotes && c == '\'' && !done(r, i) && next(r, i)[1]!='\\'
+            if !in_back_ticks && !in_double_quotes &&
+                c == '\'' && !done(r, i) && next(r, i)[1] != '\\'
                 in_single_quotes = !in_single_quotes
-            elseif !in_back_ticks && !in_single_quotes && c == '"' && !done(r, i) && next(r, i)[1]!='\\'
+            elseif !in_back_ticks && !in_single_quotes &&
+                c == '"' && !done(r, i) && next(r, i)[1] != '\\'
                 in_double_quotes = !in_double_quotes
-            elseif !in_single_quotes && !in_double_quotes && c == '`' && !done(r, i) && next(r, i)[1]!='\\'
+            elseif !in_single_quotes && !in_double_quotes &&
+                c == '`' && !done(r, i) && next(r, i)[1] != '\\'
                 in_back_ticks = !in_back_ticks
             end
         end
         braces == 1 && break
     end
     braces != 1 && return 0:-1, -1
-    method_name_end = reverseind(r, i)
+    method_name_end = reverseind(s, i)
     startind = nextind(s, rsearch(s, non_identifier_chars, method_name_end))
     return (startind:endof(s), method_name_end)
 end
@@ -461,7 +464,7 @@ function dict_identifier_key(str,tag)
     begin_of_key = first(search(str, r"\S", nextind(str, end_of_identifier) + 1)) # 1 for [
     begin_of_key==0 && return (true, nothing, nothing)
     partial_key = str[begin_of_key:end]
-    (isa(obj, Associative) && length(obj) < 1e6) || return (true, nothing, nothing)
+    (isa(obj, AbstractDict) && length(obj) < 1e6) || return (true, nothing, nothing)
     return (obj, partial_key, begin_of_key)
 end
 

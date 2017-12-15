@@ -242,6 +242,22 @@ function tril!(M::AbstractMatrix, k::Integer)
 end
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
+"""
+    fillband!(A::AbstractMatrix, x, l, u)
+
+Fill the band between diagonals `l` and `u` with the value `x`.
+"""
+function fillband!(A::AbstractMatrix{T}, x, l, u) where T
+    m, n = size(A)
+    xT = convert(T, x)
+    for j in 1:n
+        for i in max(1,j-u):min(m,j-l)
+            @inbounds A[i, j] = xT
+        end
+    end
+    return A
+end
+
 function diagind(m::Integer, n::Integer, k::Integer=0)
     if !(-m <= k <= n)
         throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) and ",
@@ -1367,14 +1383,42 @@ _cond1Inf(A::AbstractMatrix, p::Real)             = norm(A, p)*norm(inv(A), p)
 
 Computes the solution `X` to the Sylvester equation `AX + XB + C = 0`, where `A`, `B` and
 `C` have compatible dimensions and `A` and `-B` have no eigenvalues with equal real part.
+
+# Examples
+```jldoctest
+julia> A = [3. 4.; 5. 6]
+2×2 Array{Float64,2}:
+ 3.0  4.0
+ 5.0  6.0
+
+julia> B = [1. 1.; 1. 2.]
+2×2 Array{Float64,2}:
+ 1.0  1.0
+ 1.0  2.0
+
+julia> C = [1. 2.; -2. 1]
+2×2 Array{Float64,2}:
+  1.0  2.0
+ -2.0  1.0
+
+julia> X = sylvester(A, B, C)
+2×2 Array{Float64,2}:
+ -4.46667   1.93333
+  3.73333  -1.8
+
+julia> A*X + X*B + C
+2×2 Array{Float64,2}:
+  2.66454e-15  1.77636e-15
+ -3.77476e-15  4.44089e-16
+```
 """
 function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) where T<:BlasFloat
     RA, QA = schur(A)
     RB, QB = schur(B)
 
-    D = -Ac_mul_B(QA,C*QB)
+    D = -(Adjoint(QA) * (C*QB))
     Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
-    scale!(QA*A_mul_Bc(Y,QB), inv(scale))
+    scale!(QA*(Y * Adjoint(QB)), inv(scale))
 end
 sylvester(A::StridedMatrix{T}, B::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = sylvester(float(A), float(B), float(C))
 
@@ -1388,13 +1432,36 @@ sylvester(a::Union{Real,Complex}, b::Union{Real,Complex}, c::Union{Real,Complex}
 Computes the solution `X` to the continuous Lyapunov equation `AX + XA' + C = 0`, where no
 eigenvalue of `A` has a zero real part and no two eigenvalues are negative complex
 conjugates of each other.
+
+# Examples
+```jldoctest
+julia> A = [3. 4.; 5. 6]
+2×2 Array{Float64,2}:
+ 3.0  4.0
+ 5.0  6.0
+
+julia> B = [1. 1.; 1. 2.]
+2×2 Array{Float64,2}:
+ 1.0  1.0
+ 1.0  2.0
+
+julia> X = lyap(A, B)
+2×2 Array{Float64,2}:
+  0.5  -0.5
+ -0.5   0.25
+
+julia> A*X + X*A' + B
+2×2 Array{Float64,2}:
+ 0.0          6.66134e-16
+ 6.66134e-16  8.88178e-16
+```
 """
 function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
     R, Q = schur(A)
 
-    D = -Ac_mul_B(Q,C*Q)
+    D = -(Adjoint(Q) * (C*Q))
     Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
-    scale!(Q*A_mul_Bc(Y,Q), inv(scale))
+    scale!(Q*(Y * Adjoint(Q)), inv(scale))
 end
 lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = lyap(float(A), float(C))
 lyap(a::T, c::T) where {T<:Number} = -c/(2a)

@@ -7,22 +7,10 @@ import Base.MPFR
         x = BigFloat(12)
     end
     x = BigFloat(12)
-    y = BigFloat(x)
-    @test x ≈ y
-    y = BigFloat(0xc)
-    @test x ≈ y
-    y = BigFloat(12.)
-    @test x ≈ y
-    y = BigFloat(BigInt(12))
-    @test x ≈ y
-    y = BigFloat(BigFloat(12))
-    @test x ≈ y
-    y = parse(BigFloat,"12")
-    @test x ≈ y
-    y = BigFloat(Float32(12.))
-    @test x ≈ y
-    y = BigFloat(12//1)
-    @test x ≈ y
+    @test x == BigFloat(x) == BigFloat(0xc) == BigFloat(12.) ==
+          BigFloat(BigInt(12)) == BigFloat(BigFloat(12)) == parse(BigFloat,"12") ==
+          parse(BigFloat,"12 ") == parse(BigFloat," 12") == parse(BigFloat," 12 ") ==
+          BigFloat(Float32(12.)) == BigFloat(12//1)
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat
@@ -877,7 +865,7 @@ end
     end
 end
 # issue #22758
-if MPFR.version() > v"3.1.5" || "r11590" in MPFR.version().build
+if MPFR.version() > v"3.1.5" || "r11590" in MPFR.patches()
     setprecision(2_000_000) do
         @test abs(sin(big(pi)/6) - 0.5) < ldexp(big(1.0),-1_999_000)
     end

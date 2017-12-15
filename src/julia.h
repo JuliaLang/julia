@@ -1239,7 +1239,6 @@ JL_DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
 JL_DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
 JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz);
 JL_DLLEXPORT void jl_array_ptr_1d_push(jl_array_t *a, jl_value_t *item);
-JL_DLLEXPORT void jl_array_ptr_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c);
 JL_DLLEXPORT void jl_array_ptr_1d_append(jl_array_t *a, jl_array_t *a2);
 JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_value_t *type, size_t dim);
 // property access
@@ -1519,6 +1518,7 @@ typedef struct _jl_task_t {
     jl_value_t *result;
     jl_value_t *exception;
     jl_value_t *backtrace;
+    jl_value_t *logstate;
     jl_function_t *start;
     jl_jmp_buf ctx;
     size_t bufsz;

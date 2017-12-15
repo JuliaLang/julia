@@ -84,6 +84,7 @@ let s, c = Channel(32)
 end
 
 # Tests for channels bound to tasks.
+using Distributed
 for N in [0,10]
     # Normal exit of task
     c=Channel(N)
@@ -220,7 +221,7 @@ using Dates
         @assert (et >= 1.0) && (et <= 1.5)
         @assert !isready(rr3)
     catch
-        warn("timedwait tests delayed. et=$et, isready(rr3)=$(isready(rr3))")
+        @warn "`timedwait` tests delayed. et=$et, isready(rr3)=$(isready(rr3))"
     end
     @test isready(rr1)
 end

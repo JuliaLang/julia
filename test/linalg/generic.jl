@@ -244,7 +244,7 @@ end
     @test q\qmat ≉ qmat/q
 end
 @testset "ops on Numbers" begin
-    @testset for elty in [Float32,Float64,Complex64,Complex128]
+    @testset for elty in [Float32,Float64,ComplexF32,ComplexF64]
         a = rand(elty)
         @test trace(a)         == a
         @test rank(zero(elty)) == 0
@@ -336,7 +336,7 @@ end
 
 @testset "Issue 19035" begin
     @test Base.LinAlg.promote_leaf_eltypes([1, 2, [3.0, 4.0]]) == Float64
-    @test Base.LinAlg.promote_leaf_eltypes([[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]) == Complex128
+    @test Base.LinAlg.promote_leaf_eltypes([[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]) == ComplexF64
     @test [1, 2, 3] ≈ [1, 2, 3]
     @test [[1, 2], [3, 4]] ≈ [[1, 2], [3, 4]]
     @test [[1, 2], [3, 4]] ≈ [[1.0-eps(), 2.0+eps()], [3.0+2eps(), 4.0-1e8eps()]]
@@ -361,7 +361,10 @@ Base.zero(::Type{ModInt{n}}) where {n} = ModInt{n}(0)
 Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
 Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
+Base.adjoint(a::ModInt{n}) where {n} = ModInt{n}(conj(a))
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
+Base.LinAlg.Adjoint(a::ModInt{n}) where {n} = adjoint(a)
+Base.LinAlg.Transpose(a::ModInt{n}) where {n} = transpose(a)
 
 @testset "Issue 22042" begin
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]

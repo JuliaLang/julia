@@ -228,7 +228,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `similar(A, dims::NTuple{Int})`                 | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
 | `similar(A, ::Type{S}, dims::NTuple{Int})`      | `Array{S}(uninitialized, dims)`        | Return a mutable array with the specified element type and size                       |
 | **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
-| `indices(A)`                                    | `map(OneTo, size(A))`                  | Return the `AbstractUnitRange` of valid indices                                       |
+| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return the `AbstractUnitRange` of valid indices                                       |
 | `Base.similar(A, ::Type{S}, inds::NTuple{Ind})` | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
 | `Base.similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
 
@@ -399,7 +399,7 @@ perhaps range-types `Ind` of your own design. For more information, see [Arrays 
 | `Base.broadcast_similar(f, ::DestStyle, ::Type{ElType}, inds, As...)` | Allocation of output container |
 | **Optional methods** | | |
 | `Base.BroadcastStyle(::Style1, ::Style2) = Style12()` | Precedence rules for mixing styles |
-| `Base.broadcast_indices(::StyleA, A)` | Declaration of the indices of `A` for broadcasting purposes (for AbstractArrays, defaults to `indices(A)`) |
+| `Base.broadcast_indices(::StyleA, A)` | Declaration of the indices of `A` for broadcasting purposes (for AbstractArrays, defaults to `axes(A)`) |
 | **Bypassing default machinery** | |
 | `broadcast(f, As...)` | Complete bypass of broadcasting machinery |
 | `broadcast(f, ::DestStyle, ::Void, ::Void, As...)` | Bypass after container type is computed |

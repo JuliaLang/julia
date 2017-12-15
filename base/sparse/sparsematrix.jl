@@ -46,7 +46,7 @@ const SparseMatrixCSCView{Tv,Ti} =
 const SparseMatrixCSCUnion{Tv,Ti} = Union{SparseMatrixCSC{Tv,Ti}, SparseMatrixCSCView{Tv,Ti}}
 
 getcolptr(S::SparseMatrixCSC)     = S.colptr
-getcolptr(S::SparseMatrixCSCView) = view(S.parent.colptr, first(indices(S, 2)):(last(indices(S, 2)) + 1))
+getcolptr(S::SparseMatrixCSCView) = view(S.parent.colptr, first(axes(S, 2)):(last(axes(S, 2)) + 1))
 getrowval(S::SparseMatrixCSC)     = S.rowval
 getrowval(S::SparseMatrixCSCView) = S.parent.rowval
 getnzval( S::SparseMatrixCSC)     = S.nzval

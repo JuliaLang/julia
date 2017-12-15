@@ -114,7 +114,7 @@ end
 
 reshape(parent::AbstractArray{T,N}, ndims::Val{N}) where {T,N} = parent
 function reshape(parent::AbstractArray, ndims::Val{N}) where N
-    reshape(parent, rdims(Val(N), indices(parent)))
+    reshape(parent, rdims(Val(N), axes(parent)))
 end
 
 # Move elements from inds to out until out reaches the desired

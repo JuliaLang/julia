@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
+using Main.TestHelpers.OAs
 
+using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt
 
 # Issue #6573
 guardsrand(0) do
@@ -18,7 +21,7 @@ end
 @test typeof(rand(false:true)) === Bool
 @test typeof(rand(Char)) === Char
 @test length(randn(4, 5)) == 20
-@test length(randn(Complex128, 4, 5)) == 20
+@test length(randn(ComplexF64, 4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
 @test rand(MersenneTwister(0)) == 0.8236475079774124
@@ -66,10 +69,10 @@ let A = zeros(2, 2)
                 -0.444383357109696  -0.29948409035891055]
 end
 
-let B = zeros(Complex128, 2)
+let B = zeros(ComplexF64, 2)
     randn!(MersenneTwister(42), B)
-    @test B == [Complex128(-0.5560268761463861,-0.444383357109696),
-                Complex128(0.027155338009193845,-0.29948409035891055)] * 0.7071067811865475244008
+    @test B == [ComplexF64(-0.5560268761463861,-0.444383357109696),
+                ComplexF64(0.027155338009193845,-0.29948409035891055)] * 0.7071067811865475244008
 end
 
 for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt,
@@ -99,12 +102,13 @@ if sizeof(Int32) < sizeof(Int)
     local r = rand(Int32(-1):typemax(Int32))
     @test typeof(r) == Int32
     @test -1 <= r <= typemax(Int32)
-    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RangeGenerator(map(UInt64,1:k)).u for k in 13 .+ Int64(2).^(32:62)])
-    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RangeGenerator(map(Int64,1:k)).u for k in 13 .+ Int64(2).^(32:61)])
+    for U = (Int64, UInt64)
+        @test all(div(one(UInt128) << 52, k)*k - 1 == SamplerRangeInt(map(U, 1:k)).u
+                  for k in 13 .+ Int64(2).^(32:51))
+        @test all(div(one(UInt128) << 64, k)*k - 1 == SamplerRangeInt(map(U, 1:k)).u
+                  for k in 13 .+ Int64(2).^(52:62))
+    end
 
-    @test Base.Random.maxmultiplemix(0x000100000000) === 0xffffffffffffffff
-    @test Base.Random.maxmultiplemix(0x0000FFFFFFFF) === 0x00000000fffffffe
-    @test Base.Random.maxmultiplemix(0x000000000000) === 0xffffffffffffffff
 end
 
 # BigInt specific
@@ -221,8 +225,11 @@ guardsrand() do
     @test r == rand(map(UInt64, 97:122))
 end
 
-@test all([div(0x000100000000,k)*k - 1 == Base.Random.RangeGenerator(map(UInt64,1:k)).u for k in 13 .+ Int64(2).^(1:30)])
-@test all([div(0x000100000000,k)*k - 1 == Base.Random.RangeGenerator(map(Int64,1:k)).u for k in 13 .+ Int64(2).^(1:30)])
+for U in (Int64, UInt64)
+    @test all(div(one(UInt64) << 52, k)*k - 1 == SamplerRangeInt(map(U, 1:k)).u
+              for k in 13 .+ Int64(2).^(1:30))
+end
+
 
 import Base.Random: uuid1, uuid4, UUID, uuid_version
 
@@ -283,7 +290,8 @@ let mt = MersenneTwister(0)
     @test rand!(mt, AF64)[end] == 0.957735065345398
     @test rand!(mt, AF64)[end] == 0.6492481059865669
     resize!(AF64, 2*length(mt.vals))
-    @test Base.Random.rand_AbstractArray_Float64!(mt, AF64)[end]  == 0.432757268470779
+    @test invoke(rand!, Tuple{MersenneTwister,AbstractArray{Float64},Base.Random.SamplerTrivial{Base.Random.CloseOpen_64}},
+                 mt, AF64, Base.Random.SamplerTrivial(Base.Random.CloseOpen()))[end]  == 0.432757268470779
 end
 
 # Issue #9037
@@ -318,21 +326,22 @@ end
 # test all rand APIs
 for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     ftypes = [Float16, Float32, Float64]
-    cftypes = [Complex32, Complex64, Complex128, ftypes...]
+    cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
     types = [Bool, Char, BigFloat, Base.BitInteger_types..., ftypes...]
     randset = Set(rand(Int, 20))
     randdict = Dict(zip(rand(Int,10), rand(Int, 10)))
-    collections = [BitSet(rand(1:100, 20)) => Int,
-                   randset                 => Int,
-                   GenericSet(randset)     => Int,
-                   randdict                => Pair{Int,Int},
-                   GenericDict(randdict)   => Pair{Int,Int},
-                   1:100                   => Int,
-                   rand(Int, 100)          => Int,
-                   Int                     => Int,
-                   Float64                 => Float64,
-                   "qwèrtï"                => Char,
-                   GenericString("qwèrtï") => Char]
+    collections = [BitSet(rand(1:100, 20))          => Int,
+                   randset                          => Int,
+                   GenericSet(randset)              => Int,
+                   randdict                         => Pair{Int,Int},
+                   GenericDict(randdict)            => Pair{Int,Int},
+                   1:100                            => Int,
+                   rand(Int, 100)                   => Int,
+                   Int                              => Int,
+                   Float64                          => Float64,
+                   "qwèrtï"                         => Char,
+                   GenericString("qwèrtï")          => Char,
+                   OffsetArray(rand(2, 3), (4, -5)) => Float64]
     functypes = Dict(rand  => types, randn  => cftypes, randexp  => ftypes,
                      rand! => types, randn! => cftypes, randexp! => ftypes)
 
@@ -358,18 +367,20 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         end
     end
     for (C, T) in collections
-        a0 = rand(rng..., C)                         ::T
-        a1 = rand(rng..., C, 5)                      ::Vector{T}
-        a2 = rand(rng..., C, 2, 3)                   ::Array{T, 2}
-        a3 = rand(rng..., C, (2, 3))                 ::Array{T, 2}
-        a4 = rand(rng..., C, b2, u3)                 ::Array{T, 2}
-        a5 = rand!(rng..., Array{T}(uninitialized, 5), C)           ::Vector{T}
-        a6 = rand!(rng..., Array{T}(uninitialized, 2, 3), C)        ::Array{T, 2}
-        a7 = rand!(rng..., GenericArray{T}(uninitialized, 5), C)    ::GenericArray{T, 1}
-        a8 = rand!(rng..., GenericArray{T}(uninitialized, 2, 3), C) ::GenericArray{T, 2}
+        a0  = rand(rng..., C)                                                       ::T
+        a1  = rand(rng..., C, 5)                                                    ::Vector{T}
+        a2  = rand(rng..., C, 2, 3)                                                 ::Array{T, 2}
+        a3  = rand(rng..., C, (2, 3))                                               ::Array{T, 2}
+        a4  = rand(rng..., C, b2, u3)                                               ::Array{T, 2}
+        a5  = rand!(rng..., Array{T}(uninitialized, 5), C)                          ::Vector{T}
+        a6  = rand!(rng..., Array{T}(uninitialized, 2, 3), C)                       ::Array{T, 2}
+        a7  = rand!(rng..., GenericArray{T}(uninitialized, 5), C)                   ::GenericArray{T, 1}
+        a8  = rand!(rng..., GenericArray{T}(uninitialized, 2, 3), C)                ::GenericArray{T, 2}
+        a9  = rand!(rng..., OffsetArray(Array{T}(uninitialized, 5), 9), C)          ::OffsetArray{T, 1}
+        a10 = rand!(rng..., OffsetArray(Array{T}(uninitialized, 2, 3), (-2, 4)), C) ::OffsetArray{T, 2}
         @test size(a1) == (5,)
         @test size(a2) == size(a3) == (2, 3)
-        for a in [a0, a1..., a2..., a3..., a4..., a5..., a6..., a7..., a8...]
+        for a in [a0, a1..., a2..., a3..., a4..., a5..., a6..., a7..., a8..., a9..., a10...]
             if C isa Type
                 @test a isa C
             else
@@ -387,9 +398,11 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         for T in functypes[f!]
             X = T == Bool ? T[0,1] : T[0,1,2]
             for A in (Vector{T}(uninitialized, 5),
-                        Matrix{T}(uninitialized, 2, 3),
-                        GenericArray{T}(uninitialized, 5),
-                        GenericArray{T}(uninitialized, 2, 3))
+                      Matrix{T}(uninitialized, 2, 3),
+                      GenericArray{T}(uninitialized, 5),
+                      GenericArray{T}(uninitialized, 2, 3),
+                      OffsetArray(Array{T}(uninitialized, 5), -3),
+                      OffsetArray(Array{T}(uninitialized, 2, 3), (4, 5)))
                 local A
                 f!(rng..., A)                    ::typeof(A)
                 if f! === rand!
@@ -640,4 +653,11 @@ struct RandomStruct23964 end
 @testset "error message when rand not defined for a type" begin
     @test_throws ArgumentError rand(nothing)
     @test_throws ArgumentError rand(RandomStruct23964())
+end
+
+@testset "rand(::$RNG, ::UnitRange{$T}" for RNG ∈ (MersenneTwister(), RandomDevice()),
+                                                 T ∈ (Int32, UInt32, Int64, Int128, UInt128)
+    RNG isa MersenneTwister && srand(RNG, rand(UInt128)) # for reproducibility
+    r = T(1):T(108)
+    @test rand(RNG, SamplerRangeFast(r)) ∈ r
 end

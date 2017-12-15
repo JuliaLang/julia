@@ -234,6 +234,12 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{2}) = x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
 
+# don't use the inv(x) transformation here since float^p is slightly more accurate
+@inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{p}) where {p} = x^p
+@inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{-1}) = inv(x)
+
+# for other types, define x^-n as inv(x)^n so that negative literal powers can
+# be computed in a type-stable way even for e.g. integers.
 @inline @generated function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
     if p < 0
         :(literal_pow(^, inv(x), $(Val{-p}())))
@@ -648,8 +654,8 @@ for sym in (:bin, :oct, :dec, :hex)
     @eval begin
         ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
         ($sym)(x::Unsigned)         = ($sym)(x,1,false)
-        ($sym)(x::Char, p::Int)     = ($sym)(unsigned(x),p,false)
-        ($sym)(x::Char)             = ($sym)(unsigned(x),1,false)
+        ($sym)(x::Char, p::Int)     = ($sym)(UInt32(x),p,false)
+        ($sym)(x::Char)             = ($sym)(UInt32(x),1,false)
         ($sym)(x::Integer, p::Int)  = ($sym)(unsigned(abs(x)),p,x<0)
         ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),1,x<0)
     end

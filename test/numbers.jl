@@ -2421,8 +2421,8 @@ end
 
 @testset "issue #12832" begin
     @test_throws ErrorException reinterpret(Float64, Complex{Int64}(1))
-    @test_throws ErrorException reinterpret(Float64, Complex64(1))
-    @test_throws ErrorException reinterpret(Complex64, Float64(1))
+    @test_throws ErrorException reinterpret(Float64, ComplexF32(1))
+    @test_throws ErrorException reinterpret(ComplexF32, Float64(1))
     @test_throws ErrorException reinterpret(Int32, false)
 end
 # issue #41
@@ -2504,8 +2504,8 @@ end
     zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
                      0x40, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0xc0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-    z1 = read(zbuf, Complex64)
-    z2 = read(zbuf, Complex128)
+    z1 = read(zbuf, ComplexF32)
+    z2 = read(zbuf, ComplexF64)
     @test bswap(z1) === -1.5f0 + 2.5f0im
     @test bswap(z2) ===  3.5 - 4.5im
 end
@@ -2822,9 +2822,9 @@ end
     @test ndims(Integer) == 0
     @test size(1,1) == 1
     @test_throws BoundsError size(1,-1)
-    @test indices(1) == ()
-    @test indices(1,1) == 1:1
-    @test_throws BoundsError indices(1,-1)
+    @test axes(1) == ()
+    @test axes(1,1) == 1:1
+    @test_throws BoundsError axes(1,-1)
     @test isinteger(Integer(2)) == true
     @test !isinteger(π)
     @test size(1) == ()
@@ -2842,7 +2842,7 @@ end
     let types = (Base.BitInteger_types..., BigInt, Bool,
                  Rational{Int}, Rational{BigInt},
                  Float16, Float32, Float64, BigFloat,
-                 Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
+                 Complex{Int}, Complex{UInt}, ComplexF16, ComplexF32, ComplexF64)
         for S in types
             for op in (+, -)
                 T = @inferred Base.promote_op(op, S)
@@ -2963,6 +2963,14 @@ module M20889 # do we get the expected behavior without importing Base.^?
     struct PR20889; x; end
     ^(t::PR20889, b) = t.x + b
     Test.@test PR20889(2)^3 == 5
+end
+
+@testset "literal negative power accuracy" begin
+    @test 0.7130409001548401^-2 == 0.7130409001548401^-2.0
+    @test 0.09496527f0^-2 == 0.09496527f0^-2.0f0
+    @test 0.20675883960662367^-100 == 0.20675883960662367^-100.0
+    @test 0.6123676f0^-100 == 0.6123676f0^-100.0f0
+    @test 0.004155780785470562^-1 == 0.004155780785470562^-1.0
 end
 
 @testset "iszero & isone" begin

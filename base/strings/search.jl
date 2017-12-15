@@ -1,5 +1,71 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+function search(s::String, c::Char, i::Integer = 1)
+    if i < 1 || i > sizeof(s)
+        i == sizeof(s) + 1 && return 0
+        throw(BoundsError(s, i))
+    end
+    @inbounds isvalid(s, i) || string_index_err(s, i)
+    c ≤ '\x7f' && return search(s, c % UInt8, i)
+    while true
+        i = search(s, first_utf8_byte(c), i)
+        (i == 0 || s[i] == c) && return i
+        i = next(s, i)[2]
+    end
+end
+
+function search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
+    if i < 1
+        throw(BoundsError(a, i))
+    end
+    n = sizeof(a)
+    if i > n
+        return i == n+1 ? 0 : throw(BoundsError(a, i))
+    end
+    p = pointer(a)
+    q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
+    q == C_NULL ? 0 : Int(q-p+1)
+end
+
+function search(a::ByteArray, b::Char, i::Integer = 1)
+    if Unicode.isascii(b)
+        search(a,UInt8(b),i)
+    else
+        search(a,Vector{UInt8}(string(b)),i).start
+    end
+end
+
+function rsearch(s::String, c::Char, i::Integer = sizeof(s))
+    c ≤ '\x7f' && return rsearch(s, c % UInt8, i)
+    b = first_utf8_byte(c)
+    while true
+        i = rsearch(s, b, i)
+        (i == 0 || s[i] == c) && return i
+        i = prevind(s, i)
+    end
+end
+
+function rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(s))
+    if i < 1
+        return i == 0 ? 0 : throw(BoundsError(a, i))
+    end
+    n = sizeof(a)
+    if i > n
+        return i == n+1 ? 0 : throw(BoundsError(a, i))
+    end
+    p = pointer(a)
+    q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
+    q == C_NULL ? 0 : Int(q-p+1)
+end
+
+function rsearch(a::ByteArray, b::Char, i::Integer = length(a))
+    if Unicode.isascii(b)
+        rsearch(a,UInt8(b),i)
+    else
+        rsearch(a,Vector{UInt8}(string(b)),i).start
+    end
+end
+
 const Chars = Union{Char,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
 
 """
@@ -26,13 +92,10 @@ julia> search("JuliaLang","Julia")
 ```
 """
 function search(s::AbstractString, c::Chars, i::Integer)
-    if isempty(c)
-        return 1 <= i <= nextind(s,endof(s)) ? i :
-               throw(BoundsError(s, i))
-    end
-    if i < 1 || i > nextind(s,endof(s))
-        throw(BoundsError(s, i))
-    end
+    z = ncodeunits(s) + 1
+    isempty(c) && return 1 ≤ i ≤ z ? i : throw(BoundsError(s, i))
+    1 ≤ i ≤ z || throw(BoundsError(s, i))
+    @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
     while !done(s,i)
         d, j = next(s,i)
         if d in c
@@ -194,12 +257,6 @@ end
 search(s::AbstractString, t::AbstractString, i::Integer=start(s)) = _search(s, t, i)
 search(s::ByteArray, t::ByteArray, i::Integer=start(s)) = _search(s, t, i)
 
-function rsearch(s::AbstractString, c::Chars)
-    j = search(RevString(s), c)
-    j == 0 && return 0
-    endof(s)-j+1
-end
-
 """
     rsearch(s::AbstractString, chars::Chars, [start::Integer])
 
@@ -212,44 +269,50 @@ julia> rsearch("aaabbb","b")
 6:6
 ```
 """
-function rsearch(s::AbstractString, c::Chars, i::Integer)
-    e = endof(s)
-    j = search(RevString(s), c, e-i+1)
-    j == 0 && return 0
-    e-j+1
+function rsearch(s::AbstractString, c::Chars, i::Integer=start(s))
+    if i < 1
+        return i == 0 ? 0 : throw(BoundsError(s, i))
+    end
+    n = ncodeunits(s)
+    if i > n
+        return i == n+1 ? 0 : throw(BoundsError(s, i))
+    end
+    # r[reverseind(r,i)] == reverse(r)[i] == s[i]
+    # s[reverseind(s,j)] == reverse(s)[j] == r[j]
+    r = reverse(s)
+    j = search(r, c, reverseind(r, i))
+    j == 0 ? 0 : reverseind(s, j)
 end
 
 function _rsearchindex(s, t, i)
     if isempty(t)
-        return 1 <= i <= nextind(s,endof(s)) ? i :
+        return 1 <= i <= nextind(s, endof(s)) ? i :
                throw(BoundsError(s, i))
     end
-    t = RevString(t)
-    rs = RevString(s)
+    t = reverse(t)
+    rs = reverse(s)
     l = endof(s)
-    t1, j2 = next(t,start(t))
+    t1, j2 = next(t, start(t))
     while true
-        i = rsearch(s,t1,i)
-        if i == 0 return 0 end
-        c, ii = next(rs,l-i+1)
+        i = rsearch(s, t1, i)
+        i == 0 && return 0
+        c, ii = next(rs, reverseind(rs, i))
         j = j2; k = ii
         matched = true
-        while !done(t,j)
-            if done(rs,k)
+        while !done(t, j)
+            if done(rs, k)
                 matched = false
                 break
             end
-            c, k = next(rs,k)
-            d, j = next(t,j)
+            c, k = next(rs, k)
+            d, j = next(t, j)
             if c != d
                 matched = false
                 break
             end
         end
-        if matched
-            return nextind(s,l-k+1)
-        end
-        i = l-ii+1
+        matched && return nextind(s, reverseind(s, k))
+        i = reverseind(s, ii)
     end
 end
 
@@ -349,7 +412,8 @@ function rsearchindex(s::String, t::String, i::Integer)
     if endof(t) == 1
         rsearch(s, t[1], i)
     elseif endof(t) != 0
-        _rsearchindex(s, t, nextind(s, i)-1)
+        j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
+        _rsearchindex(s, t, j)
     elseif i > sizeof(s)
         return 0
     elseif i == 0

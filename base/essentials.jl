@@ -7,7 +7,7 @@ const Callable = Union{Function,Type}
 const Bottom = Union{}
 
 abstract type AbstractSet{T} end
-abstract type Associative{K,V} end
+abstract type AbstractDict{K,V} end
 
 # The real @inline macro is not available until after array.jl, so this
 # internal macro splices the meta Expr directly into the function body.
@@ -284,6 +284,19 @@ convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
     oftype(x, y)
 
 Convert `y` to the type of `x` (`convert(typeof(x), y)`).
+
+# Examples
+```jldoctest
+julia> x = 4;
+
+julia> y = 3.;
+
+julia> oftype(x, y)
+3
+
+julia> oftype(y, x)
+4.0
+```
 """
 oftype(x, y) = convert(typeof(x), y)
 
@@ -351,7 +364,7 @@ Size, in bytes, of the canonical binary representation of the given DataType `T`
 julia> sizeof(Float32)
 4
 
-julia> sizeof(Complex128)
+julia> sizeof(ComplexF64)
 16
 ```
 
@@ -417,9 +430,11 @@ esc(@nospecialize(e)) = Expr(:escape, e)
 
 Annotates the expression `blk` as a bounds checking block, allowing it to be elided by [`@inbounds`](@ref).
 
-Note that the function in which `@boundscheck` is written must be inlined into
-its caller with [`@inline`](@ref) in order for `@inbounds` to have effect.
+!!! note
+    The function in which `@boundscheck` is written must be inlined into
+    its caller in order for `@inbounds` to have effect.
 
+# Examples
 ```jldoctest
 julia> @inline function g(A, i)
            @boundscheck checkbounds(A, i)
@@ -535,9 +550,9 @@ start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
 done(v::SimpleVector,i) = (length(v) < i)
 isempty(v::SimpleVector) = (length(v) == 0)
-indices(v::SimpleVector) = (OneTo(length(v)),)
-linearindices(v::SimpleVector) = indices(v, 1)
-indices(v::SimpleVector, d) = d <= 1 ? indices(v)[d] : OneTo(1)
+axes(v::SimpleVector) = (OneTo(length(v)),)
+linearindices(v::SimpleVector) = axes(v, 1)
+axes(v::SimpleVector, d) = d <= 1 ? axes(v)[d] : OneTo(1)
 
 function ==(v1::SimpleVector, v2::SimpleVector)
     length(v1)==length(v2) || return false
@@ -557,6 +572,7 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 Test whether the given array has a value associated with index `i`. Return `false`
 if the index is out of bounds, or has an undefined reference.
 
+# Examples
 ```jldoctest
 julia> isassigned(rand(3, 3), 5)
 true
@@ -632,26 +648,6 @@ function vector_any(@nospecialize xs...)
         Core.arrayset(false, a, xs[i], i)
     end
     a
-end
-
-function as_kwargs(xs::Union{AbstractArray,Associative})
-    n = length(xs)
-    to = Vector{Any}(uninitialized, n*2)
-    i = 1
-    for (k, v) in xs
-        to[i]   = k::Symbol
-        to[i+1] = v
-        i += 2
-    end
-    return to
-end
-
-function as_kwargs(xs)
-    to = Vector{Any}()
-    for (k, v) in xs
-        ccall(:jl_array_ptr_1d_push2, Void, (Any, Any, Any), to, k::Symbol, v)
-    end
-    return to
 end
 
 """
@@ -749,5 +745,42 @@ For an iterator or collection that has keys and values, return an iterator
 over the values.
 This function simply returns its argument by default, since the elements
 of a general iterator are normally considered its "values".
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2);
+
+julia> values(d)
+Base.ValueIterator for a Dict{String,Int64} with 2 entries. Values:
+  2
+  1
+
+julia> values([2])
+1-element Array{Int64,1}:
+ 2
+```
 """
 values(itr) = itr
+
+"""
+    Missing
+
+A type with no fields whose singleton instance [`missing`](@ref) is used
+to represent missing values.
+"""
+struct Missing end
+
+"""
+    missing
+
+The singleton instance of type [`Missing`](@ref) representing a missing value.
+"""
+const missing = Missing()
+
+"""
+    ismissing(x)
+
+Indicate whether `x` is [`missing`](@ref).
+"""
+ismissing(::Any) = false
+ismissing(::Missing) = true

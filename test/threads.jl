@@ -173,7 +173,7 @@ end
 # Ensure only LLVM-supported types can be atomic
 @test_throws TypeError Atomic{Bool}
 @test_throws TypeError Atomic{BigInt}
-@test_throws TypeError Atomic{Complex128}
+@test_throws TypeError Atomic{ComplexF64}
 
 # Test atomic memory ordering with load/store
 mutable struct CommBuf
@@ -451,3 +451,30 @@ function test_nested_loops()
     end
 end
 test_nested_loops()
+
+@testset "libatomic" begin
+    prog = """
+    using Base.Threads
+    function unaligned_setindex!(x::Atomic{UInt128}, v::UInt128)
+        Base.llvmcall(\"\"\"
+            %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i128*
+            store atomic i128 %1, i128* %ptr release, align 8
+            ret void
+        \"\"\", Void, Tuple{Ptr{UInt128}, UInt128}, unsafe_convert(Ptr{UInt128}, x), v)
+    end
+    code_native(STDOUT, unaligned_setindex!, Tuple{Atomic{UInt128}, UInt128})
+    """
+
+    mktempdir() do dir
+        file = joinpath(dir, "test23901.jl")
+        write(file, prog)
+        run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $file`),
+                     stdout=joinpath(dir, "out.txt"),
+                     stderr=joinpath(dir, "err.txt"),
+                     append=false))
+        out = readchomp(joinpath(dir, "out.txt"))
+        err = readchomp(joinpath(dir, "err.txt"))
+        @test contains(out, "libat_store") || contains(out, "atomic_store")
+        @test !contains(err, "__atomic_store")
+    end
+end

@@ -4,11 +4,13 @@
 include("testenv.jl")
 
 replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
+showstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), x), x)
+
 
 @test replstr(Array{Any}(uninitialized, 2)) == "2-element Array{Any,1}:\n #undef\n #undef"
 @test replstr(Array{Any}(uninitialized, 2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
 @test replstr(Array{Any}(uninitialized, 2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
-@test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0f10"
+@test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0e10"
 
 struct T5589
     names::Vector{String}
@@ -102,6 +104,13 @@ end
 @test_repr "(!x)↑!a"
 @test_repr "(!x).a"
 @test_repr "(!x)::a"
+
+# invalid UTF-8 strings
+@test_repr "\"\\ud800\""
+@test_repr "\"\\udfff\""
+@test_repr "\"\\xc0\\xb0\""
+@test_repr "\"\\xe0\\xb0\\xb0\""
+@test_repr "\"\\xf0\\xb0\\xb0\\xb0\""
 
 # Complex
 
@@ -467,7 +476,7 @@ let filename = tempname()
     @test chomp(read(filename, String)) == "hello"
     ret = open(filename, "w") do f
         redirect_stderr(f) do
-            warn("hello")
+            println(STDERR, "WARNING: hello")
             [2]
         end
     end
@@ -535,9 +544,9 @@ let repr = sprint(show, "text/html", methods(f16580))
 end
 
 if isempty(Base.GIT_VERSION_INFO.commit)
-    @test contains(Base.url(first(methods(sin))),"https://github.com/JuliaLang/julia/tree/v$VERSION/base/mpfr.jl#L")
+    @test contains(Base.url(first(methods(sin))),"https://github.com/JuliaLang/julia/tree/v$VERSION/base/missing.jl#L")
 else
-    @test contains(Base.url(first(methods(sin))),"https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/mpfr.jl#L")
+    @test contains(Base.url(first(methods(sin))),"https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/missing.jl#L")
 end
 
 # print_matrix should be able to handle small and large objects easily, test by
@@ -692,9 +701,9 @@ let io = IOBuffer()
 end
 
 # PR 17117
-# test show array
+# test print_array
 let s = IOBuffer(Vector{UInt8}(), true, true)
-    Base.showarray(s, [1, 2, 3], false, header = false)
+    Base.print_array(s, [1, 2, 3])
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
 end
 
@@ -748,7 +757,7 @@ let a = Vector{Any}(uninitialized, 10000)
     a[2] = "elemA"
     a[4] = "elemB"
     a[11] = "elemC"
-    repr = sprint(0, dump, a; env= (:limit => true))
+    repr = sprint(dump, a; context=(:limit => true), sizehint=0)
     @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
 end
 
@@ -926,8 +935,7 @@ end
 @testset "Array printing with limited rows" begin
     arrstr = let buf = IOBuffer()
         function (A, rows)
-            Base.showarray(IOContext(buf, :displaysize => (rows, 80), :limit => true),
-                           A, false, header=true)
+            Base._display(IOContext(buf, :displaysize => (rows, 80), :limit => true), A)
             String(take!(buf))
         end
     end
@@ -1024,4 +1032,23 @@ end
     b = IOBuffer()
     show(IOContext(b, :module => @__MODULE__), TypeA)
     @test String(take!(b)) == "TypeA"
+end
+
+@testset "typeinfo" begin
+    @test replstr([[Int16(1)]]) == "1-element Array{Array{Int16,1},1}:\n [1]"
+    @test showstr([[Int16(1)]]) == "Array{Int16,1}[[1]]"
+    @test showstr(Set([[Int16(1)]])) == "Set(Array{Int16,1}[[1]])"
+    @test showstr([Float16(1)]) == "Float16[1.0]"
+    @test showstr([[Float16(1)]]) == "Array{Float16,1}[[1.0]]"
+    @test replstr(Real[Float16(1)]) == "1-element Array{Real,1}:\n Float16(1.0)"
+    @test replstr(Array{Real}[Real[1]]) == "1-element Array{Array{Real,N} where N,1}:\n [1]"
+    @testset "nested Any eltype" begin
+        x = Any[Any[Any[1]]]
+        # The element of x (i.e. x[1]) has an eltype which can't be deduced
+        # from eltype(x), so this must also be printed
+        @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[1]]"
+    end
+    # Issue #25038
+    A = [0.0, 1.0]
+    @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
 end

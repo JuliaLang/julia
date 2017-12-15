@@ -517,14 +517,12 @@ function f(x; y=0, kwargs...)
 end
 ```
 
-Inside `f`, `kwargs` will be a collection of `(key,value)` tuples, where each `key` is a symbol.
-Such collections can be passed as keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
-Dictionaries can also be used for this purpose.
+Inside `f`, `kwargs` will be a named tuple. Named tuples (as well as dictionaries) can be passed as
+keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
 
-One can also pass `(key,value)` tuples, or any iterable expression (such as a `=>` pair) that
-can be assigned to such a tuple, explicitly after a semicolon. For example, `plot(x, y; (:width,2))`
-and `plot(x, y; :width => 2)` are equivalent to `plot(x, y, width=2)`. This is useful in situations
-where the keyword name is computed at runtime.
+One can also pass `key => value` expressions after a semicolon. For example, `plot(x, y; :width => 2)`
+is equivalent to `plot(x, y, width=2)`. This is useful in situations where the keyword name is computed
+at runtime.
 
 The nature of keyword arguments makes it possible to specify the same argument more than once.
 For example, in the call `plot(x, y; options..., width=2)` it is possible that the `options` structure

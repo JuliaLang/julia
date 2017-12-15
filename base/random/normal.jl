@@ -24,10 +24,10 @@ from the circularly symmetric complex normal distribution.
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> randn(rng, Complex128)
+julia> randn(rng, ComplexF64)
 0.6133070881429037 - 0.6376291670853887im
 
-julia> randn(rng, Complex64, (2, 3))
+julia> randn(rng, ComplexF32, (2, 3))
 2×3 Array{Complex{Float32},2}:
  -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im
   0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im
@@ -35,7 +35,7 @@ julia> randn(rng, Complex64, (2, 3))
 """
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
-        r = rand_ui52(rng)
+        r = rand(rng, UInt52())
         rabs = Int64(r>>1) # One bit for the sign
         idx = rabs & 0xFF
         x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
@@ -95,7 +95,7 @@ julia> randexp(rng, 3, 3)
 """
 function randexp(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
-        ri = rand_ui52(rng)
+        ri = rand(rng, UInt52())
         idx = ri & 0xFF
         x = ri*we[idx+1]
         ri < ke[idx+1] && return x # 98.9% of the time we return here 1st try

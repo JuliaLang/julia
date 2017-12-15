@@ -431,13 +431,13 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     }
     else if (head == new_sym) {
         jl_value_t *thetype = eval_value(args[0], s);
-        jl_value_t *v=NULL;
-        JL_GC_PUSH2(&thetype, &v);
+        jl_value_t *v=NULL, *fldv=NULL;
+        JL_GC_PUSH3(&thetype, &v, &fldv);
         assert(jl_is_structtype(thetype));
         v = jl_new_struct_uninit((jl_datatype_t*)thetype);
         for (size_t i = 1; i < nargs; i++) {
             jl_value_t *ft = jl_field_type(thetype, i - 1);
-            jl_value_t *fldv = eval_value(args[i], s);
+            fldv = eval_value(args[i], s);
             if (!jl_isa(fldv, ft))
                 jl_type_error("new", ft, fldv);
             jl_set_nth_field(v, i - 1, fldv);

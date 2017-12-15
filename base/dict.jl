@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
-    truncwidth = textwidth(truncmark)
+    truncwidth = Unicode.textwidth(truncmark)
     (width <= 0 || width < truncwidth) && return ""
 
     wid = truncidx = lastidx = 0
@@ -9,7 +9,7 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     while !done(str, idx)
         lastidx = idx
         c, idx = next(str, idx)
-        wid += textwidth(c)
+        wid += Unicode.textwidth(c)
         wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
         (wid >= width || c in chars) && break
     end
@@ -23,7 +23,7 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     end
 end
 
-function show(io::IO, t::Associative{K,V}) where V where K
+function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
     if !haskey(io, :compact)
@@ -89,7 +89,7 @@ Dict{String,Int64} with 2 entries:
   "A" => 1
 ```
 """
-mutable struct Dict{K,V} <: Associative{K,V}
+mutable struct Dict{K,V} <: AbstractDict{K,V}
     slots::Array{UInt8,1}
     keys::Array{K,1}
     vals::Array{V,1}
@@ -106,6 +106,9 @@ mutable struct Dict{K,V} <: Associative{K,V}
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
             d.idxfloor, d.maxprobe)
+    end
+    function Dict{K, V}(slots, keys, vals, ndel, count, age, idxfloor, maxprobe) where {K, V}
+        new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe)
     end
 end
 function Dict{K,V}(kv) where V where K
@@ -138,7 +141,7 @@ Dict(ps::Pair...)                            = Dict{Any,Any}(ps)
 
 function Dict(kv)
     try
-        associative_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
+        dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
     catch e
         if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
@@ -150,34 +153,34 @@ end
 
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 
-associative_with_eltype(DT_apply, kv, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
-associative_with_eltype(DT_apply, kv::Generator, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
-associative_with_eltype(DT_apply, ::Type{Pair{K,V}}) where {K,V} = DT_apply(K, V)()
-associative_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
-associative_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(associative_with_eltype(DT_apply, @default_eltype(typeof(kv))), kv)
-function associative_with_eltype(DT_apply::F, kv::Generator, t) where F
+dict_with_eltype(DT_apply, kv, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
+dict_with_eltype(DT_apply, kv::Generator, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
+dict_with_eltype(DT_apply, ::Type{Pair{K,V}}) where {K,V} = DT_apply(K, V)()
+dict_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
+dict_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(dict_with_eltype(DT_apply, @default_eltype(typeof(kv))), kv)
+function dict_with_eltype(DT_apply::F, kv::Generator, t) where F
     T = @default_eltype(typeof(kv))
     if T <: Union{Pair, Tuple{Any, Any}} && _isleaftype(T)
-        return associative_with_eltype(DT_apply, kv, T)
+        return dict_with_eltype(DT_apply, kv, T)
     end
-    return grow_to!(associative_with_eltype(DT_apply, T), kv)
+    return grow_to!(dict_with_eltype(DT_apply, T), kv)
 end
 
 # this is a special case due to (1) allowing both Pairs and Tuples as elements,
 # and (2) Pair being invariant. a bit annoying.
-function grow_to!(dest::Associative, itr)
-    out = grow_to!(similar(dest, Pair{Union{},Union{}}), itr, start(itr))
+function grow_to!(dest::AbstractDict, itr)
+    out = grow_to!(empty(dest, Union{}, Union{}), itr, start(itr))
     return isempty(out) ? dest : out
 end
 
-function grow_to!(dest::Associative{K,V}, itr, st) where V where K
+function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
     while !done(itr, st)
         (k,v), st = next(itr, st)
         if isa(k,K) && isa(v,V)
             dest[k] = v
         else
-            new = similar(dest, Pair{typejoin(K,typeof(k)), typejoin(V,typeof(v))})
-            copy!(new, dest)
+            new = empty(dest, typejoin(K,typeof(k)), typejoin(V,typeof(v)))
+            merge!(new, dest)
             new[k] = v
             return grow_to!(new, itr, st)
         end
@@ -185,11 +188,10 @@ function grow_to!(dest::Associative{K,V}, itr, st) where V where K
     return dest
 end
 
-similar(d::Dict{K,V}) where {K,V} = Dict{K,V}()
-similar(d::Dict, ::Type{Pair{K,V}}) where {K,V} = Dict{K,V}()
+empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
 # conversion between Dict types
-function convert(::Type{Dict{K,V}},d::Associative) where V where K
+function convert(::Type{Dict{K,V}},d::AbstractDict) where V where K
     h = Dict{K,V}()
     for (k,v) in d
         ck = convert(K,k)
@@ -584,7 +586,7 @@ false
 ```
 """
 haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
-in(key, v::KeyIterator{<:Dict}) = (ht_keyindex(v.dict, key) >= 0)
+in(key, v::KeySet{<:Any, <:Dict}) = (ht_keyindex(v.dict, key) >= 0)
 
 """
     getkey(collection, key, default)
@@ -716,7 +718,7 @@ end
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-@propagate_inbounds function next(v::KeyIterator{<:Dict}, i)
+@propagate_inbounds function next(v::KeySet{<:Any, <:Dict}, i)
     return (v.dict.keys[i], skip_deleted(v.dict,i+1))
 end
 @propagate_inbounds function next(v::ValueIterator{<:Dict}, i)
@@ -725,7 +727,7 @@ end
 
 filter!(f, d::Dict) = filter_in_one_pass!(f, d)
 
-struct ImmutableDict{K,V} <: Associative{K,V}
+struct ImmutableDict{K,V} <: AbstractDict{K,V}
     parent::ImmutableDict{K,V}
     key::K
     value::V
@@ -794,12 +796,7 @@ next(::ImmutableDict{K,V}, t) where {K,V} = (Pair{K,V}(t.key, t.value), t.parent
 done(::ImmutableDict, t) = !isdefined(t, :parent)
 length(t::ImmutableDict) = count(x->true, t)
 isempty(t::ImmutableDict) = done(t, start(t))
-function similar(t::ImmutableDict)
-    while isdefined(t, :parent)
-        t = t.parent
-    end
-    return t
-end
+empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
-_similar_for(c::Dict, ::Type{P}, itr, isz) where {P<:Pair} = similar(c, P)
-_similar_for(c::Associative, T, itr, isz) = throw(ArgumentError("for Associatives, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))
+_similar_for(c::Dict, ::Type{Pair{K,V}}, itr, isz) where {K, V} = empty(c, K, V)
+_similar_for(c::AbstractDict, T, itr, isz) = throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))

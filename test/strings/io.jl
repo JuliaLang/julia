@@ -53,18 +53,27 @@
         0x0010ffff      '\U10ffff'  "\\U10ffff"
     ]
 
+    buf = IOBuffer()
+    @test typeof(escape_string(buf, "test")) == Void
+    @test String(take!(buf)) == "test"
+    @test typeof(escape_string(buf, "hello", "l")) == Void
+    @test String(take!(buf)) == "he\\l\\lo"
+
+    @test typeof(escape_string("test", "t")) == String
+    @test escape_string("test", "t") == "\\tes\\t"
+
     for i = 1:size(cx,1)
         cp, ch, st = cx[i,:]
         @test cp == convert(UInt32, ch)
         @test string(ch) == unescape_string(st)
-        if isascii(ch) || !isprint(ch)
+        if Base.Unicode.isascii(ch) || !Base.Unicode.isprint(ch)
             @test st == escape_string(string(ch))
         end
         for j = 1:size(cx,1)
             local str = string(ch, cx[j,2])
             @test str == unescape_string(escape_string(str))
         end
-        @test repr(ch) == "'$(isprint(ch) ? ch : st)'"
+        @test repr(ch) == "'$(Base.Unicode.isprint(ch) ? ch : st)'"
     end
 
     for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
@@ -163,8 +172,7 @@ myio = IOBuffer()
 join(myio, "", "", 1)
 @test isempty(take!(myio))
 
-@testset "unescape_chars" begin
-    @test Base.unescape_chars("\\t","t") == "t"
+@testset "unescape_string ArgumentErrors" begin
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"xZ"))
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"777"))
 end

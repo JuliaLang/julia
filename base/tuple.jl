@@ -66,7 +66,6 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-eltype(::Type{Tuple{Vararg{E}}}) where {E} = E
 function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
     if @isdefined(E)
         return E
@@ -269,12 +268,16 @@ function ==(t1::Tuple, t2::Tuple)
     if length(t1) != length(t2)
         return false
     end
+    anymissing = false
     for i = 1:length(t1)
-        if !(t1[i] == t2[i])
-            return false
-        end
+        eq = (t1[i] == t2[i])
+        if ismissing(eq)
+            anymissing = true
+        elseif !eq
+           return false
+       end
     end
-    return true
+    return anymissing ? missing : true
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
@@ -328,3 +331,10 @@ any(x::Tuple{}) = false
 any(x::Tuple{Bool}) = x[1]
 any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
+
+"""
+    empty(x::Tuple)
+
+Returns an empty tuple, `()`.
+"""
+empty(x::Tuple) = ()

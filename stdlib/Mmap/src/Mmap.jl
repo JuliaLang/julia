@@ -17,10 +17,26 @@ mutable struct Anonymous <: IO
 end
 
 """
-    Mmap.Anonymous(name, readonly, create)
+    Mmap.Anonymous(name::AbstractString="", readonly::Bool=false, create::Bool=true)
 
 Create an `IO`-like object for creating zeroed-out mmapped-memory that is not tied to a file
-for use in `Mmap.mmap`. Used by `SharedArray` for creating shared memory arrays.
+for use in [`Mmap.mmap`](@ref Mmap.mmap). Used by `SharedArray` for creating shared memory arrays.
+
+# Examples
+```jldoctest
+julia> using Mmap
+
+julia> anon = Mmap.Anonymous();
+
+julia> isreadable(anon)
+true
+
+julia> iswritable(anon)
+true
+
+julia> isopen(anon)
+true
+```
 """
 Anonymous() = Anonymous("",false,true)
 
@@ -239,13 +255,39 @@ mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:Array} = mmap(Anonym
 """
     Mmap.mmap(io, BitArray, [dims, offset])
 
-Create a `BitArray` whose values are linked to a file, using memory-mapping; it has the same
+Create a [`BitArray`](@ref) whose values are linked to a file, using memory-mapping; it has the same
 purpose, works in the same way, and has the same arguments, as [`mmap`](@ref Mmap.mmap), but
 the byte representation is different.
 
-**Example**: `B = Mmap.mmap(s, BitArray, (25,30000))`
+# Examples
+```jldoctest
+julia> using Mmap
 
-This would create a 25-by-30000 `BitArray`, linked to the file associated with stream `s`.
+julia> io = open("mmap.bin", "w+");
+
+julia> B = Mmap.mmap(io, BitArray, (25,30000));
+
+julia> B[3, 4000] = true;
+
+julia> Mmap.sync!(B);
+
+julia> close(io);
+
+julia> io = open("mmap.bin", "r+");
+
+julia> C = Mmap.mmap(io, BitArray, (25,30000));
+
+julia> C[3, 4000]
+true
+
+julia> C[2, 4000]
+false
+
+julia> close(io)
+
+julia> rm("mmap.bin")
+```
+This creates a 25-by-30000 `BitArray`, linked to the file associated with stream `io`.
 """
 function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
               offset::Int64=position(io); grow::Bool=true, shared::Bool=true) where N
@@ -290,7 +332,7 @@ const MS_SYNC = 4
     Mmap.sync!(array)
 
 Forces synchronization between the in-memory version of a memory-mapped `Array` or
-`BitArray` and the on-disk version.
+[`BitArray`](@ref) and the on-disk version.
 """
 function sync!(m::Array{T}, flags::Integer=MS_SYNC) where T
     offset = rem(UInt(pointer(m)), PAGESIZE)

@@ -75,7 +75,7 @@ function arg_decl_parts(m::Method)
 end
 
 function kwarg_decl(m::Method, kwtype::DataType)
-    sig = rewrap_unionall(Tuple{kwtype, Core.AnyVector, unwrap_unionall(m.sig).parameters...}, m.sig)
+    sig = rewrap_unionall(Tuple{kwtype, NamedTuple, unwrap_unionall(m.sig).parameters...}, m.sig)
     kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, typemax(UInt))
     if kwli !== nothing
         kwli = kwli::Method

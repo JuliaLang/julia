@@ -267,7 +267,7 @@ end
     @test (f20979.(v))[1] == f20979(v[1])
     @test f20979.(v) == f20979.(collect(v))
 
-    w = rand(Complex128, 3)
+    w = rand(ComplexF64, 3)
     @test f20979.(v') == f20979.(collect(v')) == (f20979.(v))'
 
     g20979(x, y) = [x[2,1] x[1,2]; y[1,2] y[2,1]]
@@ -298,4 +298,7 @@ end
     @test rv[CartesianIndex()] == 2
     rv[CartesianIndex(1)] = 1
     @test rv[CartesianIndex(1)] == 1
+
+    # setindex!(v::RowVector, ...) should return v rather than v's parent
+    @test setindex!(RowVector([1, 2, 3]), 4, 1)::RowVector == [4 2 3]
 end

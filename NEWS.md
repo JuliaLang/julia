@@ -14,6 +14,11 @@ New language features
   * Named tuples, with the syntax `(a=1, b=2)`. These behave very similarly to tuples,
     except components can also be accessed by name using dot syntax `t.a` ([#22194]).
 
+  * Keyword argument containers (`kw` in `f(; kw...)`) are now named tuples. Dictionary
+    functions like `haskey` and indexing can be used on them, and name-value pairs can be
+    iterated using `pairs(kw)`. `kw` can no longer contain multiple entries for the same
+    argument name ([#4916]).
+
  * Custom infix operators can now be defined by appending Unicode
    combining marks, primes, and sub/superscripts to other operators.
    For example, `+̂ₐ″` is parsed as an infix operator with the same
@@ -25,6 +30,10 @@ New language features
   * The construct `if @generated ...; else ...; end` can be used to provide both
     `@generated` and normal implementations of part of a function. Surrounding code
     will be common to both versions ([#23168]).
+
+  * The `missing` singleton object (of type `Missing`) has been added to represent
+    missing values ([#24653]). It propagates through standard operators and mathematical functions,
+    and implements three-valued logic, similar to SQLs `NULL` and R's `NA`.
 
 Language changes
 ----------------
@@ -310,6 +319,18 @@ This section lists changes that do not have deprecation warnings.
     `AbstractArray` types that specialized broadcasting using the old internal API will
     need to switch to the new API. ([#20740])
 
+  * The logging system has been redesigned - `info` and `warn` are deprecated
+    and replaced with the logging macros `@info`, `@warn`, `@debug` and
+    `@error`.  The `logging` function is also deprecated and replaced with
+    `AbstractLogger` and the functions from the new standard `Logging` library.
+    ([#24490])
+
+  * The `RevString` type has been removed from the language; `reverse(::String)` returns
+    a `String` with code points (or fragments thereof) in reverse order. In general,
+    `reverse(s)` should return a string of the same type and encoding as `s` with code
+    points in reverse order; any string type overrides `reverse` to return a different
+    type of string must also override `reverseind` to compute reversed indices correctly.
+
 Library improvements
 --------------------
 
@@ -344,6 +365,8 @@ Library improvements
 
   * The function `randn` now accepts complex arguments (`Complex{T <: AbstractFloat}`)
     ([#21973]).
+
+  * `parse(Complex{T}, string)` can parse complex numbers in common formats ([#24713]).
 
   * The function `rand` can now pick up random elements from strings, associatives
     and sets ([#22228], [#21960], [#18155], [#22224]).
@@ -408,6 +431,24 @@ Library improvements
     This supersedes the old behavior of reinterpret on Arrays. As a result, reinterpreting
     arrays with different alignment requirements (removed in 0.6) is once again allowed ([#23750]).
 
+  * The `keys` of an `Associative` are now an `AbstractSet`. `Base.KeyIterator{<:Associative}`
+    has been changed to `KeySet{K, <:Associative{K}} <: AbstractSet{K}` ([#24580]).
+
+  * New function `ncodeunits(s::AbstractString)` gives the number of code units in a string.
+    The generic definition is constant time but calls `endof(s)` which may be inefficient.
+    Therefore custom string types may want to define direct `ncodeunits` methods.
+
+  * `reverseind(s::AbstractString, i::Integer)` now has an efficient generic fallback, so
+    custom string types do not need to provide their own efficient defintions. The generic
+    definition relies on `ncodeunits` however, so for optimal performance you may need to
+    define a custom method for that function.
+
+  * `permutedims(m::AbstractMatrix)` is now short for `permutedims(m, (2,1))`, and is now a
+    more convenient way of making a "shallow transpose" of a 2D array. This is the
+    recommended approach for manipulating arrays of data, rather than the recursively
+    defined, linear-algebra function `transpose`. Similarly,
+    `permutedims(v::AbstractVector)` will create a row matrix ([#24839]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -416,6 +457,13 @@ Compiler/Runtime improvements
     are inlined unless their estimated runtime cost substantially
     exceeds the cost of setting up and issuing a subroutine
     call. ([#22210], [#22732])
+
+  * Inference recursion-detection heuristics are now more precise,
+    allowing them to be triggered less often, but being more agressive when they
+    are triggered to drive the inference computation to a solution ([#23912]).
+
+  * Inference now propagates constants inter-procedurally, and can compute
+    various constants expressions at compile-time ([#24362]).
 
 Deprecated or removed
 ---------------------
@@ -436,8 +484,10 @@ Deprecated or removed
     `Matrix{Int}(uninitialized, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
     `Array{Float32,3}(uninitialized, 11, 13, 17)` ([#24781]).
 
+  * `LinAlg.fillslots!` has been renamed `LinAlg.fillstored!` ([#25030]).
+
   * `fill!(A::Diagonal, x)` and `fill!(A::AbstractTriangular, x)` have been deprecated
-    in favor of `Base.LinAlg.fillslots!(A, x)` ([#24413]).
+    in favor of `Base.LinAlg.fillstored!(A, x)` ([#24413]).
 
   * `eye` has been deprecated in favor of `I` and `Matrix` constructors. Please see the
     deprecation warnings for replacement details ([#24438]).
@@ -697,16 +747,40 @@ Deprecated or removed
 
   * `num2hex` and `hex2num` have been deprecated in favor of `reinterpret` combined with `parse`/`hex` ([#22088]).
 
+  * `copy!` is deprecated for `AbstractSet` and `AbstractDict`, with the intention to re-enable
+    it with a cleaner meaning in a future version ([#24844]).
+
   * `a:b` is deprecated for constructing a `StepRange` when `a` and `b` have physical units
     (Dates and Times). Use `a:s:b`, where `s = Dates.Day(1)` or `s = Dates.Second(1)`.
 
   * `trues(A::AbstractArray)` and `falses(A::AbstractArray)` are deprecated in favor of
     `trues(size(A))` and `falses(size(A))` respectively ([#24595]).
 
+  * `workspace` is discontinued, check out [Revise.jl](https://github.com/timholy/Revise.jl)
+    for an alternative workflow ([#25046]).
+
   * `cumsum`, `cumprod`, `accumulate`, and their mutating versions now require a `dim`
     argument instead of defaulting to using the first dimension ([#24684]).
 
   * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianRange` and `CartesianToLinear` ([#24715]).
+
+  * The `sum_kbn` and `cumsum_kbn` functions have been moved to the
+    [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
+
+  * Unicode-related string functions have been moved to the new `Unicode` standard
+    library module ([#25021]). This applies to `normalize_string`, `graphemes`,
+    `is_assigned_char`, `textwidth`, `isascii`, `islower`, `isupper`, `isalpha`,
+    `isdigit`, `isxdigit`, `isnumber`, `isalnum`, `iscntrl`, `ispunct`, `isspace`,
+    `isprint`, `isgraph`, `lowercase`, `uppercase`, `titlecase`, `lcfirst` and `ucfirst`.
+
+  * `isnumber` has been deprecated in favor of `isnumeric`, `is_assigned_char`
+    in favor of `isassigned` and `normalize_string` in favor of `normalize`, all three
+    in the new `Unicode` standard library module ([#25021]).
+
+  * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`,
+    `ComplexF32` and `ComplexF64` respectively ([#24647]).
+
+  * `Associative` has been deprecated in favor of `AbstractDict` ([#25012]).
 
 Command-line option changes
 ---------------------------
@@ -1345,6 +1419,16 @@ Deprecated or removed
 
   * `linspace` and `logspace` now require an explicit number of elements to be supplied rather than defaulting to `50`.
 
+  * Introduced the `empty` function, the functional pair to `empty!` which returns a new,
+    empty container ([#24390]).
+
+  * `similar(::Associative)` has been deprecated in favor of `empty(::Associative)`, and
+    `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
+    `empty(::Associative, K, V)` ([#24390]).
+
+  * `indices(a)` and `indices(a,d)` have been deprecated in favor of `axes(a)` and
+    `axes(a, d)` ([#25057]).
+
 Command-line option changes
 ---------------------------
 
@@ -1672,4 +1756,7 @@ Command-line option changes
 [#24320]: https://github.com/JuliaLang/julia/issues/24320
 [#24396]: https://github.com/JuliaLang/julia/issues/24396
 [#24413]: https://github.com/JuliaLang/julia/issues/24413
+[#24653]: https://github.com/JuliaLang/julia/issues/24653
 [#24715]: https://github.com/JuliaLang/julia/issues/24715
+[#24869]: https://github.com/JuliaLang/julia/issues/24869
+[#25021]: https://github.com/JuliaLang/julia/issues/25021

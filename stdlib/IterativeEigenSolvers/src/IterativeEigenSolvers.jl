@@ -7,7 +7,7 @@ Arnoldi and Lanczos iteration for computing eigenvalues
 """
 module IterativeEigenSolvers
 
-using Base.LinAlg: BlasFloat, BlasInt, SVD, checksquare
+using Base.LinAlg: BlasFloat, BlasInt, SVD, checksquare, mul!, Adjoint, Transpose
 
 export eigs, svds
 
@@ -20,43 +20,7 @@ using .ARPACK
     eigs(A; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
 Computes eigenvalues `d` of `A` using implicitly restarted Lanczos or Arnoldi iterations for real symmetric or
-general nonsymmetric matrices respectively.
-
-The following keyword arguments are supported:
-
-* `nev`: Number of eigenvalues
-* `ncv`: Number of Krylov vectors used in the computation; should satisfy `nev+1 <= ncv <= n`
-  for real symmetric problems and `nev+2 <= ncv <= n` for other problems, where `n` is the
-  size of the input matrix `A`. The default is `ncv = max(20,2*nev+1)`. Note that these
-  restrictions limit the input matrix `A` to be of dimension at least 2.
-* `which`: type of eigenvalues to compute. See the note below.
-
-| `which` | type of eigenvalues                                                                                                       |
-|:--------|:--------------------------------------------------------------------------------------------------------------------------|
-| `:LM`   | eigenvalues of largest magnitude (default)                                                                                |
-| `:SM`   | eigenvalues of smallest magnitude                                                                                         |
-| `:LR`   | eigenvalues of largest real part                                                                                          |
-| `:SR`   | eigenvalues of smallest real part                                                                                         |
-| `:LI`   | eigenvalues of largest imaginary part (nonsymmetric or complex `A` only)                                                  |
-| `:SI`   | eigenvalues of smallest imaginary part (nonsymmetric or complex `A` only)                                                 |
-| `:BE`   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric `A` only) |
-
-* `tol`: parameter defining the relative tolerance for convergence of Ritz values (eigenvalue estimates).
-     A Ritz value ``θ`` is considered converged when its associated residual
-     is less than or equal to the product of `tol` and ``max(ɛ^{2/3}, |θ|)``,
-     where `ɛ = eps(real(eltype(A)))/2` is LAPACK's machine epsilon.
-     The residual associated with ``θ`` and its corresponding Ritz vector ``v``
-     is defined as the norm ``||Av - vθ||``.
-     The specified value of `tol` should be positive; otherwise, it is ignored
-     and ``ɛ`` is used instead.
-     Default: ``ɛ``.
-
-* `maxiter`: Maximum number of iterations (default = 300)
-* `sigma`: Specifies the level shift used in inverse iteration. If `nothing` (default),
-  defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to `sigma`
-  using shift and invert iterations.
-* `ritzvec`: Returns the Ritz vectors `v` (eigenvectors) if `true`
-* `v0`: starting vector from which to start the iterations
+general nonsymmetric matrices respectively. See [the manual](@ref lib-itereigen) for more information.
 
 `eigs` returns the `nev` requested eigenvalues in `d`, the corresponding Ritz vectors `v`
 (only if `ritzvec=true`), the number of converged eigenvalues `nconv`, the number of
@@ -75,38 +39,7 @@ julia> λ
 2-element Array{Float64,1}:
  4.0
  3.0
-
-julia> λ, ϕ = eigs(A, nev = 2, which=:SM);
-
-julia> λ
-2-element Array{Float64,1}:
- 1.0000000000000002
- 2.0
 ```
-
-!!! note
-    The `sigma` and `which` keywords interact: the description of eigenvalues
-    searched for by `which` do *not* necessarily refer to the eigenvalues of
-    `A`, but rather the linear operator constructed by the specification of the
-    iteration mode implied by `sigma`.
-
-    | `sigma`         | iteration mode                   | `which` refers to eigenvalues of |
-    |:----------------|:---------------------------------|:---------------------------------|
-    | `nothing`       | ordinary (forward)               | ``A``                            |
-    | real or complex | inverse with level shift `sigma` | ``(A - \\sigma I )^{-1}``        |
-
-!!! note
-    Although `tol` has a default value, the best choice depends strongly on the
-    matrix `A`. We recommend that users _always_ specify a value for `tol`
-    which suits their specific needs.
-
-    For details of how the errors in the computed eigenvalues are estimated, see:
-
-    * B. N. Parlett, "The Symmetric Eigenvalue Problem", SIAM: Philadelphia, 2/e
-      (1998), Ch. 13.2, "Accessing Accuracy in Lanczos Problems", pp. 290-292 ff.
-    * R. B. Lehoucq and D. C. Sorensen, "Deflation Techniques for an Implicitly
-      Restarted Arnoldi Iteration", SIAM Journal on Matrix Analysis and
-      Applications (1996), 17(4), 789–821.  doi:10.1137/S0895479895281484
 """
 eigs(A; kwargs...) = eigs(A, I; kwargs...)
 eigs(A::AbstractMatrix{<:BlasFloat}, ::UniformScaling; kwargs...) = _eigs(A, I; kwargs...)
@@ -127,65 +60,7 @@ end
     eigs(A, B; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
 Computes generalized eigenvalues `d` of `A` and `B` using implicitly restarted Lanczos or Arnoldi iterations for
-real symmetric or general nonsymmetric matrices respectively.
-
-The following keyword arguments are supported:
-
-* `nev`: Number of eigenvalues
-* `ncv`: Number of Krylov vectors used in the computation; should satisfy `nev+1 <= ncv <= n`
-  for real symmetric problems and `nev+2 <= ncv <= n` for other problems, where `n` is the
-  size of the input matrices `A` and `B`. The default is `ncv = max(20,2*nev+1)`. Note that
-  these restrictions limit the input matrix `A` to be of dimension at least 2.
-* `which`: type of eigenvalues to compute. See the note below.
-
-| `which` | type of eigenvalues                                                                                                       |
-|:--------|:--------------------------------------------------------------------------------------------------------------------------|
-| `:LM`   | eigenvalues of largest magnitude (default)                                                                                |
-| `:SM`   | eigenvalues of smallest magnitude                                                                                         |
-| `:LR`   | eigenvalues of largest real part                                                                                          |
-| `:SR`   | eigenvalues of smallest real part                                                                                         |
-| `:LI`   | eigenvalues of largest imaginary part (nonsymmetric or complex `A` only)                                                  |
-| `:SI`   | eigenvalues of smallest imaginary part (nonsymmetric or complex `A` only)                                                 |
-| `:BE`   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric `A` only) |
-
-* `tol`: relative tolerance used in the convergence criterion for eigenvalues, similar to
-     `tol` in the [`eigs(A)`](@ref) method for the ordinary eigenvalue
-     problem, but effectively for the eigenvalues of ``B^{-1} A`` instead of ``A``.
-     See the documentation for the ordinary eigenvalue problem in
-     [`eigs(A)`](@ref) and the accompanying note about `tol`.
-* `maxiter`: Maximum number of iterations (default = 300)
-* `sigma`: Specifies the level shift used in inverse iteration. If `nothing` (default),
-  defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to `sigma`
-  using shift and invert iterations.
-* `ritzvec`: Returns the Ritz vectors `v` (eigenvectors) if `true`
-* `v0`: starting vector from which to start the iterations
-
-`eigs` returns the `nev` requested eigenvalues in `d`, the corresponding Ritz vectors `v`
-(only if `ritzvec=true`), the number of converged eigenvalues `nconv`, the number of
-iterations `niter` and the number of matrix vector multiplications `nmult`, as well as the
-final residual vector `resid`.
-
-# Examples
-```jldoctest
-julia> A = sparse(1.0I, 4, 4); B = Diagonal(1:4);
-
-julia> λ, ϕ = eigs(A, B, nev = 2);
-
-julia> λ
-2-element Array{Float64,1}:
- 1.0
- 0.4999999999999999
-```
-
-!!! note
-    The `sigma` and `which` keywords interact: the description of eigenvalues searched for by
-    `which` do *not* necessarily refer to the eigenvalue problem ``Av = Bv\\lambda``, but rather
-    the linear operator constructed by the specification of the iteration mode implied by `sigma`.
-
-    | `sigma`         | iteration mode                   | `which` refers to the problem      |
-    |:----------------|:---------------------------------|:-----------------------------------|
-    | `nothing`       | ordinary (forward)               | ``Av = Bv\\lambda``                |
-    | real or complex | inverse with level shift `sigma` | ``(A - \\sigma B )^{-1}B = v\\nu`` |
+real symmetric or general nonsymmetric matrices respectively. See [the manual](@ref lib-itereigen) for more information.
 """
 eigs(A, B; kwargs...) = _eigs(A, B; kwargs...)
 function _eigs(A, B;
@@ -203,7 +78,7 @@ function _eigs(A, B;
         throw(ArgumentError("input matrix A is too small. Use eigfact instead."))
     end
     if nev > nevmax
-        warn("Adjusting nev from $nev to $nevmax")
+        @warn "Adjusting nev from $nev to $nevmax"
         nev = nevmax
     end
     if nev <= 0
@@ -211,7 +86,7 @@ function _eigs(A, B;
     end
     ncvmin = nev + (sym ? 1 : 2)
     if ncv < ncvmin
-        warn("Adjusting ncv from $ncv to $ncvmin")
+        @warn "Adjusting ncv from $ncv to $ncvmin"
         ncv = ncvmin
     end
     ncv = BlasInt(min(ncv, n))
@@ -219,7 +94,7 @@ function _eigs(A, B;
     isshift = sigma !== nothing
 
     if isa(which,AbstractString)
-        warn("Use symbols instead of strings for specifying which eigenvalues to compute")
+        @warn "Use symbols instead of strings for specifying which eigenvalues to compute"
         which=Symbol(which)
     end
     if (which != :LM && which != :SM && which != :LR && which != :SR &&
@@ -229,7 +104,7 @@ function _eigs(A, B;
     if which == :BE && !sym
         throw(ArgumentError("which=:BE only possible for real symmetric problem"))
     end
-    isshift && which == :SM && warn("use of :SM in shift-and-invert mode is not recommended, use :LM to find eigenvalues closest to sigma")
+    isshift && which == :SM && @warn "Use of :SM in shift-and-invert mode is not recommended, use :LM to find eigenvalues closest to sigma"
 
     if which==:SM && !isshift # transform into shift-and-invert method with sigma = 0
         isshift=true
@@ -277,7 +152,7 @@ function _eigs(A, B;
     end
 
     # Refer to ex-*.doc files in ARPACK/DOCUMENTS for calling sequence
-    matvecA!(y, x) = A_mul_B!(y, A, x)
+    matvecA!(y, x) = mul!(y, A, x)
     if !isgeneral           # Standard problem
         matvecB = x -> x
         if !isshift         #    Regular mode
@@ -312,7 +187,7 @@ function _eigs(A, B;
     # Issue 10495, 10701: Check that all eigenvalues are converged
     nev = length(output[1])
     nconv = output[ritzvec ? 3 : 2]
-    nev ≤ nconv || warn("not all wanted Ritz pairs converged. Requested: $nev, converged: $nconv")
+    nev ≤ nconv || @warn "Not all wanted Ritz pairs converged. Requested: $nev, converged: $nconv"
 
     return output
 end
@@ -330,10 +205,10 @@ function SVDAugmented(A::AbstractMatrix{T}) where T
     SVDAugmented{Tnew,typeof(Anew)}(Anew)
 end
 
-function Base.A_mul_B!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
+function Base.LinAlg.mul!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
     m, mn = size(A.X, 1), length(x)
-    A_mul_B!( view(y, 1:m), A.X, view(x, m + 1:mn)) # left singular vector
-    Ac_mul_B!(view(y, m + 1:mn), A.X, view(x, 1:m)) # right singular vector
+    mul!( view(y, 1:m), A.X, view(x, m + 1:mn)) # left singular vector
+    mul!(view(y, m + 1:mn), Adjoint(A.X), view(x, 1:m)) # right singular vector
     return y
 end
 Base.size(A::SVDAugmented)  = ((+)(size(A.X)...), (+)(size(A.X)...))
@@ -350,13 +225,13 @@ function AtA_or_AAt(A::AbstractMatrix{T}) where T
     AtA_or_AAt{Tnew,typeof(Anew)}(Anew, Vector{Tnew}(uninitialized, max(size(A)...)))
 end
 
-function Base.A_mul_B!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
+function Base.LinAlg.mul!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
     if size(A.A, 1) >= size(A.A, 2)
-        A_mul_B!(A.buffer, A.A, x)
-        return Ac_mul_B!(y, A.A, A.buffer)
+        mul!(A.buffer, A.A, x)
+        return mul!(y, Adjoint(A.A), A.buffer)
     else
-        Ac_mul_B!(A.buffer, A.A, x)
-        return A_mul_B!(y, A.A, A.buffer)
+        mul!(A.buffer, Adjoint(A.A), x)
+        return mul!(y, A.A, A.buffer)
     end
 end
 Base.size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val(2))
@@ -455,5 +330,7 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
                     ex[2], ex[3], ex[4], ex[5])
     end
 end
+
+include("deprecated.jl")
 
 end # module

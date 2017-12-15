@@ -312,16 +312,12 @@ end
     # TODO: will throw MethodError after 0.6 deprecations are deleted
     dw = Base.JLOptions().depwarn
     if dw == 2
+        # FIXME: Remove this special case after deperror cleanup
         @test_throws ErrorException Matrix{Int}()
         @test_throws ErrorException Matrix()
-    elseif dw == 1
-        @test_warn "deprecated" Matrix{Int}()
-        @test_warn "deprecated" Matrix()
-    elseif dw == 0
-        @test size(Matrix{Int}()) == (0,0)
-        @test size(Matrix()) == (0,0)
     else
-        error("unexpected depwarn value")
+        @test size(@test_deprecated Matrix{Int}()) == (0,0)
+        @test size(@test_deprecated Matrix()) == (0,0)
     end
     @test_throws MethodError Array{Int,3}()
 end
@@ -467,8 +463,8 @@ end
 @testset "find with general iterables" begin
     s = "julia"
     @test find(c -> c == 'l', s) == [3]
-    g = graphemes("日本語")
-    @test find(isascii, g) == Int[]
+    g = Base.Unicode.graphemes("日本語")
+    @test find(Base.Unicode.isascii, g) == Int[]
     @test find(!iszero, (i % 2 for i in 1:10)) == collect(1:2:9)
 end
 @testset "findn" begin
@@ -577,6 +573,12 @@ end
         @test isequal(A,permutedims(permutedims(A,perm),invperm(perm)))
         @test isequal(A,permutedims(permutedims(A,invperm(perm)),perm))
     end
+
+    m = [1 2; 3 4]
+    @test permutedims(m) == [1 3; 2 4]
+
+    v = [1,2,3]
+    @test permutedims(v) == [1 2 3]
 end
 
 @testset "circshift" begin
@@ -869,29 +871,6 @@ end
         @test c[1,2] == A[1,1]+A[1,3]
         @test c[2,2] == A[3,1]+A[3,3]
     end
-
-    v   = [1,1e100,1,-1e100]*1000
-    v2  = [1,-1e100,1,1e100]*1000
-
-    cv  = [1,1e100,1e100,2]*1000
-    cv2 = [1,-1e100,-1e100,2]*1000
-
-    @test isequal(cumsum_kbn(v), cv)
-    @test isequal(cumsum_kbn(v2), cv2)
-
-    A = [v reverse(v) v2 reverse(v2)]
-
-    c = cumsum_kbn(A, 1)
-
-    @test isequal(c[:,1], cv)
-    @test isequal(c[:,3], cv2)
-    @test isequal(c[4,:], [2.0, 2.0, 2.0, 2.0]*1000)
-
-    c = cumsum_kbn(A, 2)
-
-    @test isequal(c[1,:], cv2)
-    @test isequal(c[3,:], cv)
-    @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
 
     @test repeat(BitMatrix(Matrix(I, 2, 2)), inner = (2,1), outer = (1,2)) ==
             repeat(Matrix(I, 2, 2), inner = (2,1), outer = (1,2))
@@ -1232,7 +1211,7 @@ end
 
 @testset "eachindexvalue" begin
     A14 = [11 13; 12 14]
-    R = CartesianRange(indices(A14))
+    R = CartesianRange(axes(A14))
     @test [a for (a,b) in pairs(IndexLinear(),    A14)] == [1,2,3,4]
     @test [a for (a,b) in pairs(IndexCartesian(), A14)] == vec(collect(R))
     @test [b for (a,b) in pairs(IndexLinear(),    A14)] == [11,12,13,14]
@@ -2240,3 +2219,7 @@ end
 #     @test_throws ArgumentError zeros(2)[false]
 #     @test_throws ArgumentError zeros(2)[true]
 # end
+
+@testset "issue 24707" begin
+    @test eltype(Vector{Tuple{V}} where V<:Integer) >: Tuple{Integer}
+end

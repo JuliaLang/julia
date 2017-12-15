@@ -7,13 +7,13 @@ Provide the [`SharedArray`](@ref) type. It represents an array, which is shared 
 """
 module SharedArrays
 
-using Mmap, Base.Distributed
+using Mmap, Distributed
 
 import Base: length, size, ndims, IndexStyle, reshape, convert, deepcopy_internal, serialize, deserialize,
              show, getindex, setindex!, fill!, rand!, similar, reduce, map!, copy!, unsafe_convert
 import Base.Random
 import Base.Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
-import Base.Distributed: RRID, procs
+import Distributed: RRID, procs
 import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
 
 export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindexes

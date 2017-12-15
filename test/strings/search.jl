@@ -84,16 +84,16 @@ for str in (u8str, GenericString(u8str))
     @test search(str, '\u80') == 0
     @test search(str, '∄') == 0
     @test search(str, '∀') == 1
-    @test_throws UnicodeError search(str, '∀', 2)
+    @test_throws StringIndexError search(str, '∀', 2)
     @test search(str, '∀', 4) == 0
     @test search(str, '∃') == 13
-    @test_throws UnicodeError search(str, '∃', 15)
+    @test_throws StringIndexError search(str, '∃', 15)
     @test search(str, '∃', 16) == 0
     @test search(str, 'x') == 26
     @test search(str, 'x', 27) == 43
     @test search(str, 'x', 44) == 0
     @test search(str, 'δ') == 17
-    @test_throws UnicodeError search(str, 'δ', 18)
+    @test_throws StringIndexError search(str, 'δ', 18)
     @test search(str, 'δ', nextind(str,17)) == 33
     @test search(str, 'δ', nextind(str,33)) == 0
     @test search(str, 'ε') == 5

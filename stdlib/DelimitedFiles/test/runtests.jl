@@ -290,3 +290,7 @@ let d = TextDisplay(IOBuffer())
     display(d, "text/csv", [3 1 4])
     @test String(take!(d.io)) == "3,1,4\n"
 end
+
+@testset "complex" begin
+    @test readdlm(IOBuffer("3+4im, 4+5im"), ',', Complex{Int}) == [3+4im 4+5im]
+end

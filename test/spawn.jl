@@ -459,7 +459,7 @@ if Sys.isunix()
                 push!(ps, p)
             end
             if isnull(ulimit_n)
-                warn("`ulimit -n` is set to unlimited, fd exhaustion cannot be tested")
+                @warn "`ulimit -n` is set to unlimited, fd exhaustion cannot be tested"
                 @test_broken false
             else
                 @test false

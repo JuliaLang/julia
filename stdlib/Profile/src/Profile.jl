@@ -307,9 +307,9 @@ function fetch()
     len = len_data()
     maxlen = maxlen_data()
     if (len == maxlen)
-        warn("""The profile data buffer is full; profiling probably terminated
-                before your program finished. To profile for longer runs, call Profile.init
-                with a larger buffer and/or larger delay.""")
+        @warn """The profile data buffer is full; profiling probably terminated
+                 before your program finished. To profile for longer runs, call
+                 `Profile.init()` with a larger buffer and/or larger delay."""
     end
     return unsafe_wrap(Array, get_data_pointer(), (len,))
 end
@@ -645,14 +645,14 @@ function rtruncto(str::String, w::Int)
     if length(str) <= w
         return str
     else
-        return string("...", str[chr2ind(str, length(str)-w+4):end])
+        return string("...", str[prevind(str, end, w-4):end])
     end
 end
 function ltruncto(str::String, w::Int)
     if length(str) <= w
         return str
     else
-        return string(str[1:chr2ind(str,w-4)], "...")
+        return string(str[1:nextind(str, 1, w-4)], "...")
     end
 end
 
@@ -673,10 +673,10 @@ function liperm(lilist::Vector{StackFrame})
     return sortperm(comb)
 end
 
-warning_empty() = warn("""
+warning_empty() = @warn """
             There were no samples collected. Run your program longer (perhaps by
             running it multiple times), or adjust the delay between samples with
-            Profile.init().""")
+            `Profile.init()`."""
 
 function purgeC(data::Vector{UInt64}, lidict::LineInfoFlatDict)
     keep = Bool[d == 0 || lidict[d].from_c == false for d in data]

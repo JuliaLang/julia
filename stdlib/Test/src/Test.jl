@@ -15,7 +15,9 @@ and summarize them at the end of the test set with `@testset`.
 """
 module Test
 
-export @test, @test_throws, @test_broken, @test_skip, @test_warn, @test_nowarn
+export @test, @test_throws, @test_broken, @test_skip,
+    @test_warn, @test_nowarn,
+    @test_logs, @test_deprecated
 export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
@@ -220,6 +222,17 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
         func_sym = quoted_args[1]
         if isempty(kwargs)
             quoted = Expr(:call, func_sym, args...)
+        elseif func_sym === :≈
+            # in case of `≈(x, y, atol = z)`
+            # make the display like `Evaluated: x ≈ y (atol=z)`
+            kws = [Symbol(Expr(:kw, k, v), ",") for (k, v) in kwargs]
+            kws[end] = Symbol(Expr(:kw, kwargs[end]...))
+            kws[1] = Symbol("(", kws[1])
+            kws[end] = Symbol(kws[end], ")")
+            quoted = Expr(:comparison, args[1], func_sym, args[2], kws...)
+            if length(quoted.args) & 1 == 0  # hack to fit `show_unquoted`
+                push!(quoted.args, Symbol())
+            end
         else
             kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
             quoted = Expr(:call, func_sym, kwargs_expr, args...)
@@ -339,7 +352,7 @@ function get_test_result(ex, source)
             Expr(:comparison, $(quoted_terms...)),
             $(QuoteNode(source)),
         ))
-    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox)
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox, :≈)
         escaped_func = esc(ex.args[1])
         quoted_func = QuoteNode(ex.args[1])
 
@@ -492,7 +505,9 @@ function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), @nosp
 end
 
 #-----------------------------------------------------------------------
-# Test for warning messages
+# Test for log messages
+
+# Test for warning messages (deprecated)
 
 ismatch_warn(s::AbstractString, output) = contains(output, s)
 ismatch_warn(s::Regex, output) = ismatch(s, output)
@@ -1209,9 +1224,9 @@ end
 # Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
 # nothing.
 function test_approx_eq_modphase(a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
-                                 err = length(indices(a,1))^3*(eps(S)+eps(T))) where {S<:Real,T<:Real}
-    @test indices(a,1) == indices(b,1) && indices(a,2) == indices(b,2)
-    for i in indices(a,2)
+                                 err = length(axes(a,1))^3*(eps(S)+eps(T))) where {S<:Real,T<:Real}
+    @test axes(a,1) == axes(b,1) && axes(a,2) == axes(b,2)
+    for i in axes(a,2)
         v1, v2 = a[:, i], b[:, i]
         @test min(abs(norm(v1-v2)),abs(norm(v1+v2))) ≈ 0.0 atol=err
     end
@@ -1385,8 +1400,14 @@ with string types besides the standard `String` type.
 struct GenericString <: AbstractString
     string::AbstractString
 end
-Base.endof(s::GenericString) = endof(s.string)
-Base.next(s::GenericString, i::Int) = next(s.string, i)
+Base.ncodeunits(s::GenericString) = ncodeunits(s.string)
+Base.codeunit(s::GenericString) = codeunit(s.string)
+Base.codeunit(s::GenericString, i::Integer) = codeunit(s.string, i)
+Base.isvalid(s::GenericString, i::Integer) = isvalid(s.string, i)
+Base.next(s::GenericString, i::Integer) = next(s.string, i)
+Base.reverse(s::GenericString) = GenericString(reverse(s.string))
+Base.reverse(s::SubString{GenericString}) =
+    GenericString(typeof(s.string)(reverse(String(s))))
 
 """
 The `GenericSet` can be used to test generic set APIs that program to
@@ -1399,15 +1420,15 @@ end
 
 """
 The `GenericDict` can be used to test generic dict APIs that program to
-the `Associative` interface, in order to ensure that functions can work
+the `AbstractDict` interface, in order to ensure that functions can work
 with associative types besides the standard `Dict` type.
 """
-struct GenericDict{K,V} <: Associative{K,V}
-    s::Associative{K,V}
+struct GenericDict{K,V} <: AbstractDict{K,V}
+    s::AbstractDict{K,V}
 end
 
 for (G, A) in ((GenericSet, AbstractSet),
-               (GenericDict, Associative))
+               (GenericDict, AbstractDict))
     @eval begin
         Base.convert(::Type{$G}, s::$A) = $G(s)
         Base.done(s::$G, state) = done(s.s, state)
@@ -1435,7 +1456,7 @@ GenericArray{T}(args...) where {T} = GenericArray(Array{T}(args...))
 GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(args...))
 
 Base.keys(a::GenericArray) = keys(a.a)
-Base.indices(a::GenericArray) = indices(a.a)
+Base.axes(a::GenericArray) = axes(a.a)
 Base.length(a::GenericArray) = length(a.a)
 Base.size(a::GenericArray) = size(a.a)
 Base.getindex(a::GenericArray, i...) = a.a[i...]
@@ -1529,5 +1550,7 @@ begin
     end
     export @test_approx_eq
 end
+
+include("logging.jl")
 
 end # module

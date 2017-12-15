@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+using Base.LinAlg: ldiv!, Adjoint, Transpose
 import Base.LinAlg.BlasInt, Base.LinAlg.BlasFloat
 
 n = 10
@@ -24,7 +25,7 @@ dlimg  = randn(n-1)/2
 dreal = randn(n)/2
 dimg  = randn(n)/2
 
-@testset for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
+@testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
     a = eltya == Int ? rand(1:7, n, n) :
         convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     d = if eltya == Int
@@ -92,7 +93,7 @@ dimg  = randn(n)/2
         @test lud[:L]*lud[:U] ≈ Array(d)[lud[:p],:]
         @test AbstractArray(lud) ≈ d
     end
-    @testset for eltyb in (Float32, Float64, Complex64, Complex128, Int)
+    @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         b  = eltyb == Int ? rand(1:5, n, 2) :
             convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         c  = eltyb == Int ? rand(1:5, n) :
@@ -119,18 +120,18 @@ dimg  = randn(n)/2
                 b_dest = similar(b, resultT)
                 c_dest = similar(c, resultT)
 
-                A_ldiv_B!(b_dest, lua, b)
-                A_ldiv_B!(c_dest, lua, c)
+                ldiv!(b_dest, lua, b)
+                ldiv!(c_dest, lua, c)
                 @test norm(b_dest - lua \ b, 1) < ε*κ*2n
                 @test norm(c_dest - lua \ c, 1) < ε*κ*n
 
-                At_ldiv_B!(b_dest, lua, b)
-                At_ldiv_B!(c_dest, lua, c)
+                ldiv!(b_dest, Transpose(lua), b)
+                ldiv!(c_dest, Transpose(lua), c)
                 @test norm(b_dest - lua.' \ b, 1) < ε*κ*2n
                 @test norm(c_dest - lua.' \ c, 1) < ε*κ*n
 
-                Ac_ldiv_B!(b_dest, lua, b)
-                Ac_ldiv_B!(c_dest, lua, c)
+                ldiv!(b_dest, Adjoint(lua), b)
+                ldiv!(c_dest, Adjoint(lua), c)
                 @test norm(b_dest - lua' \ b, 1) < ε*κ*2n
                 @test norm(c_dest - lua' \ c, 1) < ε*κ*n
             end
@@ -145,14 +146,14 @@ dimg  = randn(n)/2
             @test_throws DimensionMismatch lud\f
             @test_throws DimensionMismatch lud.'\f
             @test_throws DimensionMismatch lud'\f
-            @test_throws DimensionMismatch Base.LinAlg.At_ldiv_B!(lud, f)
+            @test_throws DimensionMismatch Base.LinAlg.ldiv!(Transpose(lud), f)
             let Bs = copy(b)
                 for bb in (Bs, view(Bs, 1:n, 1))
                     @test norm(d*(lud\bb) - bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                     if eltya <: Real
                         @test norm((lud.'\bb) - Array(d.')\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                         if eltya != Int && eltyb != Int
-                            @test norm(Base.LinAlg.At_ldiv_B!(lud, copy(bb)) - Array(d.')\bb, 1) < ε*κd*n*2
+                            @test norm(Base.LinAlg.ldiv!(Transpose(lud), copy(bb)) - Array(d.')\bb, 1) < ε*κd*n*2
                         end
                     end
                     if eltya <: Complex
@@ -235,7 +236,7 @@ end
 end
 
 @testset "logdet" begin
-    @test @inferred(logdet(Complex64[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
+    @test @inferred(logdet(ComplexF32[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
     @test_throws DomainError logdet([1 1; 1 -1])
 end
 

@@ -261,16 +261,15 @@ end
     # TODO: review this list and remove everything between test_broken and test
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Core; recursive=true))
-        pop!(need_to_handle_undef_sparam, which(Core.Inference.eltype, Tuple{Type{Tuple{Vararg{E}}} where E}))
         pop!(need_to_handle_undef_sparam, which(Core.Inference.eltype, Tuple{Type{Tuple{Any}}}))
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Core.Inference.cat, Tuple{Any, AbstractArray}))
+        pop!(need_to_handle_undef_sparam, first(methods(Core.Inference.same_names)))
         @test need_to_handle_undef_sparam == Set()
     end
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Base; recursive=true))
         pop!(need_to_handle_undef_sparam, which(Base._totuple, (Type{Tuple{Vararg{E}}} where E, Any, Any)))
-        pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Vararg{E}}} where E}))
         pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Any}}}))
         pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))
         @test_broken need_to_handle_undef_sparam == Set()
@@ -282,6 +281,13 @@ end
         pop!(need_to_handle_undef_sparam, which(Base.SparseArrays._absspvec_vcat, (AbstractSparseArray{Tv, Ti, 1} where {Tv, Ti},)))
         pop!(need_to_handle_undef_sparam, which(Base.SparseArrays._absspvec_hcat, (AbstractSparseArray{Tv, Ti, 1} where {Tv, Ti},)))
         pop!(need_to_handle_undef_sparam, which(Base.cat, (Any, Base.SparseArrays._TypedDenseConcatGroup{T} where T)))
+        pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
+        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Missing, T}} where T, Any}))
+        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Missing, S}} where S, Type{T} where T}))
+        pop!(need_to_handle_undef_sparam, which(Base.zero, Tuple{Type{Union{Missing, T}} where T}))
+        pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))
+        pop!(need_to_handle_undef_sparam, which(Base.oneunit, Tuple{Type{Union{Missing, T}} where T}))
+        pop!(need_to_handle_undef_sparam, which(Base.nonmissingtype, Tuple{Type{Union{Missing, T}} where T}))
         @test need_to_handle_undef_sparam == Set()
     end
 end

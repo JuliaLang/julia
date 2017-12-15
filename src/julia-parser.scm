@@ -2090,10 +2090,7 @@
 (define (tostr raw io)
   (if raw
       (io.tostring! io)
-      (let ((str (unescape-string (io.tostring! io))))
-        (if (not (string.isutf8 str))
-            (error "invalid UTF-8 sequence")
-            str))))
+      (let ((str (unescape-string (io.tostring! io)))) str)))
 
 ;; raw = raw string literal
 ;; when raw is #t, unescape only \\ and delimiter
