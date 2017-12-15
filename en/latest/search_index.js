@@ -2197,7 +2197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Multi-dimensional Arrays",
     "title": "Correspondence of dense and sparse methods",
     "category": "section",
-    "text": "The following table gives a correspondence between built-in methods on sparse matrices and their corresponding methods on dense matrix types. In general, methods that generate sparse matrices differ from their dense counterparts in that the resulting matrix follows the same sparsity pattern as a given sparse matrix S, or that the resulting sparse matrix has density d, i.e. each matrix element has a probability d of being non-zero.Details can be found in the Sparse Vectors and Matrices section of the standard library reference.Sparse Dense Description\nspzeros(m,n) zeros(m,n) Creates a m-by-n matrix of zeros. (spzeros(m,n) is empty.)\nspones(S) ones(m,n) Creates a matrix filled with ones. Unlike the dense version, spones has the same sparsity pattern as S.\nsparse(I, n, n) Matrix(I,n,n) Creates a n-by-n identity matrix.\nArray(S) sparse(A) Interconverts between dense and sparse formats.\nsprand(m,n,d) rand(m,n) Creates a m-by-n random matrix (of density d) with iid non-zero elements distributed uniformly on the half-open interval 0 1).\nsprandn(m,n,d) randn(m,n) Creates a m-by-n random matrix (of density d) with iid non-zero elements distributed according to the standard normal (Gaussian) distribution.\nsprandn(m,n,d,X) randn(m,n,X) Creates a m-by-n random matrix (of density d) with iid non-zero elements distributed according to the X distribution. (Requires the Distributions package.)"
+    "text": "The following table gives a correspondence between built-in methods on sparse matrices and their corresponding methods on dense matrix types. In general, methods that generate sparse matrices differ from their dense counterparts in that the resulting matrix follows the same sparsity pattern as a given sparse matrix S, or that the resulting sparse matrix has density d, i.e. each matrix element has a probability d of being non-zero.Details can be found in the Sparse Vectors and Matrices section of the standard library reference.Sparse Dense Description\nspzeros(m,n) zeros(m,n) Creates a m-by-n matrix of zeros. (spzeros(m,n) is empty.)\nsparse(I, n, n) Matrix(I,n,n) Creates a n-by-n identity matrix.\nArray(S) sparse(A) Interconverts between dense and sparse formats.\nsprand(m,n,d) rand(m,n) Creates a m-by-n random matrix (of density d) with iid non-zero elements distributed uniformly on the half-open interval 0 1).\nsprandn(m,n,d) randn(m,n) Creates a m-by-n random matrix (of density d) with iid non-zero elements distributed according to the standard normal (Gaussian) distribution.\nsprandn(m,n,d,X) randn(m,n,X) Creates a m-by-n random matrix (of density d) with iid non-zero elements distributed according to the X distribution. (Requires the Distributions package.)"
 },
 
 {
@@ -7901,7 +7901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n"
 },
 
 {
@@ -10037,7 +10037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.isreal",
     "category": "Function",
-    "text": "isreal(x) -> Bool\n\nTest whether x or all its elements are numerically equal to some real number.\n\nExamples\n\njulia> isreal(5.)\ntrue\n\njulia> isreal([4.; complex(0,1)])\nfalse\n\n\n\n"
+    "text": "isreal(x) -> Bool\n\nTest whether x or all its elements are numerically equal to some real number including infinities and NaNs. isreal(x) is true if isequal(x, real(x)) is true.\n\nExamples\n\njulia> isreal(5.)\ntrue\n\njulia> isreal(Inf + 0im)\ntrue\n\njulia> isreal([4.; complex(0,1)])\nfalse\n\n\n\n"
 },
 
 {
@@ -11985,14 +11985,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays/#Base.SparseArrays.spones",
-    "page": "Arrays",
-    "title": "Base.SparseArrays.spones",
-    "category": "Function",
-    "text": "spones(S)\n\nCreate a sparse array with the same structure as that of S, but with every nonzero element having the value 1.0.\n\nExamples\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  2.0\n  [1, 2]  =  5.0\n  [3, 3]  =  3.0\n  [2, 4]  =  4.0\n\njulia> spones(A)\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  1.0\n  [1, 2]  =  1.0\n  [3, 3]  =  1.0\n  [2, 4]  =  1.0\n\n\n\n"
-},
-
-{
     "location": "stdlib/arrays/#Base.SparseArrays.spdiagm",
     "page": "Arrays",
     "title": "Base.SparseArrays.spdiagm",
@@ -12093,7 +12085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Sparse Vectors and Matrices",
     "category": "section",
-    "text": "Sparse vectors and matrices largely support the same set of operations as their dense counterparts. The following functions are specific to sparse arrays.Base.SparseArrays.SparseVector\nBase.SparseArrays.SparseMatrixCSC\nBase.SparseArrays.sparse\nBase.SparseArrays.sparsevec\nBase.SparseArrays.issparse\nBase.SparseArrays.nnz\nBase.SparseArrays.spzeros\nBase.SparseArrays.spones\nBase.SparseArrays.spdiagm\nBase.SparseArrays.sprand\nBase.SparseArrays.sprandn\nBase.SparseArrays.nonzeros\nBase.SparseArrays.rowvals\nBase.SparseArrays.nzrange\nBase.SparseArrays.dropzeros!(::SparseMatrixCSC, ::Bool)\nBase.SparseArrays.dropzeros(::SparseMatrixCSC, ::Bool)\nBase.SparseArrays.dropzeros!(::SparseVector, ::Bool)\nBase.SparseArrays.dropzeros(::SparseVector, ::Bool)\nBase.SparseArrays.permute\nBase.permute!{Tv, Ti, Tp <: Integer, Tq <: Integer}(::SparseMatrixCSC{Tv,Ti}, ::SparseMatrixCSC{Tv,Ti}, ::AbstractArray{Tp,1}, ::AbstractArray{Tq,1})"
+    "text": "Sparse vectors and matrices largely support the same set of operations as their dense counterparts. The following functions are specific to sparse arrays.Base.SparseArrays.SparseVector\nBase.SparseArrays.SparseMatrixCSC\nBase.SparseArrays.sparse\nBase.SparseArrays.sparsevec\nBase.SparseArrays.issparse\nBase.SparseArrays.nnz\nBase.SparseArrays.spzeros\nBase.SparseArrays.spdiagm\nBase.SparseArrays.sprand\nBase.SparseArrays.sprandn\nBase.SparseArrays.nonzeros\nBase.SparseArrays.rowvals\nBase.SparseArrays.nzrange\nBase.SparseArrays.dropzeros!(::SparseMatrixCSC, ::Bool)\nBase.SparseArrays.dropzeros(::SparseMatrixCSC, ::Bool)\nBase.SparseArrays.dropzeros!(::SparseVector, ::Bool)\nBase.SparseArrays.dropzeros(::SparseVector, ::Bool)\nBase.SparseArrays.permute\nBase.permute!{Tv, Ti, Tp <: Integer, Tq <: Integer}(::SparseMatrixCSC{Tv,Ti}, ::SparseMatrixCSC{Tv,Ti}, ::AbstractArray{Tp,1}, ::AbstractArray{Tq,1})"
 },
 
 {
@@ -12421,7 +12413,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n"
+    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n"
 },
 
 {
