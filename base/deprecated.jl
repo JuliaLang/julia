@@ -1898,6 +1898,12 @@ end
 # PR #25030
 @eval LinAlg @deprecate fillslots! fillstored! false
 
+# PR #25037
+@eval SparseArrays @deprecate spones(A::SparseMatrixCSC) fillstored!(copy(A), 1)
+@eval SparseArrays @deprecate spones(A::SparseVector) fillstored!(copy(A), 1)
+using .SparseArrays.spones
+export spones
+
 function diagm(v::BitVector)
     depwarn(string("diagm(v::BitVector) is deprecated, use diagm(0 => v) or ",
         "BitMatrix(Diagonal(v)) instead"), :diagm)

@@ -1739,8 +1739,8 @@ end
     end
 end
 
-@testset "spones" begin
-    @test spones(sparse(2.0I, 5, 5)) == Matrix(I, 5, 5)
+@testset "fillstored!" begin
+    @test LinAlg.fillstored!(sparse(2.0I, 5, 5), 1) == Matrix(I, 5, 5)
 end
 
 @testset "factorization" begin
@@ -2016,7 +2016,7 @@ end
         sprand(5, 5, 1/5)
     end
     A = max.(A, A')
-    A = spones(A)
+    LinAlg.fillstored!(A, 1)
     B = A[5:-1:1, 5:-1:1]
     @test issymmetric(B)
 end

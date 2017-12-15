@@ -7,7 +7,7 @@ module SparseArrays
 
 using Base: ReshapedArray, promote_op, setindex_shape_check, to_shape, tail
 using Base.Sort: Forward
-using Base.LinAlg: AbstractTriangular, PosDefException
+using Base.LinAlg: AbstractTriangular, PosDefException, fillstored!
 
 import Base: +, -, *, \, /, &, |, xor, ==
 import Base: A_mul_B!, Ac_mul_B, Ac_mul_B!, At_mul_B, At_mul_B!
@@ -31,7 +31,7 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
 
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
     SparseMatrixCSC, SparseVector, blkdiag, droptol!, dropzeros!, dropzeros,
-    issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm, spones,
+    issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm,
     sprand, sprandn, spzeros, nnz, permute
 
 include("abstractsparse.jl")

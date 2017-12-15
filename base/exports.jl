@@ -1239,7 +1239,6 @@ export
     sparse,
     sparsevec,
     spdiagm,
-    spones,
     sprand,
     sprandn,
     spzeros,
