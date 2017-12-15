@@ -663,7 +663,7 @@ Base.sub_with_overflow(a::BigInt, b::BigInt) = a - b, false
 Base.mul_with_overflow(a::BigInt, b::BigInt) = a * b, false
 
 function Base.deepcopy_internal(x::BigInt, stackdict::ObjectIdDict)
-    if haskey(stackdict, x)
+    if hasindex(stackdict, x)
         return stackdict[x]
     end
     y = MPZ.set(x)

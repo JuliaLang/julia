@@ -78,7 +78,7 @@ get(::EnvDict, k::AbstractString, def) = access_env(k->def, k)
 get(f::Callable, ::EnvDict, k::AbstractString) = access_env(k->f(), k)
 in(k::AbstractString, ::KeySet{String, EnvDict}) = _hasenv(k)
 pop!(::EnvDict, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
-pop!(::EnvDict, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
+pop!(::EnvDict, k::AbstractString, def) = hasindex(ENV,k) ? pop!(ENV,k) : def
 delete!(::EnvDict, k::AbstractString) = (_unsetenv(k); ENV)
 setindex!(::EnvDict, v, k::AbstractString) = _setenv(k,string(v))
 push!(::EnvDict, k::AbstractString, v) = setindex!(ENV, v, k)

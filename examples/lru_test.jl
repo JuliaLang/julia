@@ -33,7 +33,7 @@ function lrutest()
             #print("    Lookup, random access: ")
             for i in 1:n
                 str = get_str(rand(1:n))
-                if haskey(lru, str) # the bounded LRUs can have cache misses
+                if hasindex(lru, str) # the bounded LRUs can have cache misses
                     blah = lru[str]
                     @assert lru.q[1].v == blah
                 end

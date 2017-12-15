@@ -45,7 +45,7 @@ function known_edits2(word::AbstractString)
     xs = Set{AbstractString}()
     for e1 in edits1(word)
         for e2 in edits1(e1)
-            haskey(NWORDS, e2) && push!(xs, e2)
+            hasindex(NWORDS, e2) && push!(xs, e2)
         end
     end
     xs
@@ -54,7 +54,7 @@ end
 function known(words)
     xs = Set{AbstractString}()
     for word in words
-        haskey(NWORDS, word) && push!(xs, word)
+        hasindex(NWORDS, word) && push!(xs, word)
     end
     xs
 end

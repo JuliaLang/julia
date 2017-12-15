@@ -1237,7 +1237,7 @@ function normalize_keys(keymap::Dict)
     ret = Dict{Any,Any}()
     for (k,v) in keymap
         normalized = normalize_key(k)
-        if haskey(ret,normalized)
+        if hasindex(ret,normalized)
             error("""Multiple spellings of a key in a single keymap
                      (\"$k\" conflicts with existing mapping)""")
         end
@@ -1290,7 +1290,7 @@ function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     # placeholder for the wildcard (see normalize_key("*"))
     c == wildcard && return keymap_fcn(nothing, "")
     push!(cs, c)
-    key = haskey(k, c) ? c : wildcard
+    key = hasindex(k, c) ? c : wildcard
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
     return match_input(get(k, key, nothing), s, term, cs, keymap)
 end
@@ -1353,7 +1353,7 @@ end
 # deep merge where target has higher precedence
 function keymap_merge!(target::Dict, source::Dict)
     for k in keys(source)
-        if !haskey(target, k)
+        if !hasindex(target, k)
             target[k] = source[k]
         elseif isa(target[k], Dict)
             keymap_merge!(target[k], source[k])
@@ -1370,7 +1370,7 @@ function fixup_keymaps!(dict::Dict, level, s, subkeymap)
             fixup_keymaps!(d, level-1, s, subkeymap)
         end
     else
-        if haskey(dict, s)
+        if hasindex(dict, s)
             if isa(dict[s], Dict) && isa(subkeymap, Dict)
                 keymap_merge!(dict[s], subkeymap)
             end
@@ -1395,7 +1395,7 @@ end
 postprocess!(others) = nothing
 function postprocess!(dict::Dict)
     # needs to be done first for every branch
-    if haskey(dict, wildcard)
+    if hasindex(dict, wildcard)
         add_specialisations(dict, dict, 1)
     end
     for (k,v) in dict
@@ -1407,7 +1407,7 @@ end
 function getEntry(keymap,key)
     v = keymap
     for c in key
-        if !haskey(v,c)
+        if !hasindex(v,c)
             return nothing
         end
         v = v[c]
@@ -1435,7 +1435,7 @@ function keymap_merge(target,source)
                 error("Eager redirection cycle detected for key " * escape_string(key))
             end
             push!(visited,value)
-            if !haskey(source,value)
+            if !hasindex(source,value)
                 break
             end
             value = source[value]
@@ -2157,7 +2157,7 @@ function transition(f::Function, s::MIState, newmode)
         reset_state(s)
         return
     end
-    if !haskey(s.mode_state, newmode)
+    if !hasindex(s.mode_state, newmode)
         s.mode_state[newmode] = init_state(terminal(s), newmode)
     end
     termbuf = TerminalBuffer(IOBuffer())

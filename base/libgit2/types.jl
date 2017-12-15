@@ -1220,7 +1220,7 @@ struct CachedCredentials
     CachedCredentials() = new(Dict{String,AbstractCredential}())
 end
 
-Base.haskey(cache::CachedCredentials, cred_id) = Base.haskey(cache.cred, cred_id)
+Base.hasindex(cache::CachedCredentials, cred_id) = Base.hasindex(cache.cred, cred_id)
 Base.getindex(cache::CachedCredentials, cred_id) = Base.getindex(cache.cred, cred_id)
 Base.get!(cache::CachedCredentials, cred_id, default) = Base.get!(cache.cred, cred_id, default)
 
@@ -1237,7 +1237,7 @@ end
 
 function reject(cache::CachedCredentials, cred::AbstractCredential, url::AbstractString)
     cred_id = credential_identifier(url)
-    if haskey(cache.cred, cred_id)
+    if hasindex(cache.cred, cred_id)
         delete!(cache.cred, cred_id)
     end
     nothing

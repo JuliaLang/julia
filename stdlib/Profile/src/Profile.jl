@@ -219,7 +219,7 @@ function flatten(data::Vector, lidict::LineInfoDict)
     newdata = UInt64[]
     for ip in data
         local ip::UInt64
-        if haskey(newmap, ip)
+        if hasindex(newmap, ip)
             append!(newdata, newmap[ip])
         else
             push!(newdata, ip)
@@ -525,7 +525,7 @@ function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int},
             ip = bt[i][level + 1]
             key = lidict[ip]
             indx = Base.ht_keyindex(d, key)
-            if haskey(d, key)
+            if hasindex(d, key)
                 push!(d[key], i)
             else
                 d[key] = [i]
@@ -548,7 +548,7 @@ function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int},
         d = Dict{UInt64,Vector{Int}}()
         for i = 1:length(bt)
             key = bt[i][level+1]
-            if haskey(d, key)
+            if hasindex(d, key)
                 push!(d[key], i)
             else
                 d[key] = [i]
@@ -626,7 +626,7 @@ function callersf(matchfunc::Function, bt::Vector, lidict::LineInfoDict)
         end
         li = lidict[id]
         if lastmatched
-            if haskey(counts, li)
+            if hasindex(counts, li)
                 counts[li] += 1
             else
                 counts[li] = 1

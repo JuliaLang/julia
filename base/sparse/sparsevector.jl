@@ -824,7 +824,7 @@ function show(io::IOContext, x::AbstractSparseVector)
     limit::Bool = get(io, :limit, false)
     half_screen_rows = limit ? div(displaysize(io)[1] - 8, 2) : typemax(Int)
     pad = ndigits(n)
-    if !haskey(io, :compact)
+    if !hasindex(io, :compact)
         io = IOContext(io, :compact => true)
     end
     for k = 1:length(nzind)

@@ -102,7 +102,7 @@ function parse(lines::Vector{Line})
                 if Sys.isbsd();     applies &= !("!bsd"     in line.system); end
                 applies || continue
             end
-            reqs[line.package] = haskey(reqs, line.package) ?
+            reqs[line.package] = hasindex(reqs, line.package) ?
                 intersect(reqs[line.package], line.versions) : line.versions
         end
     end
@@ -114,7 +114,7 @@ function dependents(packagename::AbstractString)
     pkgs = AbstractString[]
     cd(Pkg.dir()) do
         for (pkg,latest) in Pkg.Read.latest()
-            if haskey(latest.requires, packagename)
+            if hasindex(latest.requires, packagename)
                 push!(pkgs, pkg)
             end
         end

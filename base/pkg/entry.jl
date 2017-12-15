@@ -22,7 +22,7 @@ function edit(f::Function, pkg::AbstractString, args...)
     r = Reqs.read("REQUIRE")
     reqs = Reqs.parse(r)
     avail = Read.available()
-    !haskey(avail,pkg) && !haskey(reqs,pkg) && return false
+    !hasindex(avail,pkg) && !hasindex(reqs,pkg) && return false
     rʹ = f(r,pkg,args...)
     rʹ == r && return false
     reqsʹ = Reqs.parse(rʹ)
@@ -133,7 +133,7 @@ function status(io::IO; pkgname::AbstractString = "")
     if !isempty(required)
         showpkg("") && println(io, "$(length(required)) required packages:")
         for pkg in required
-            if !haskey(instd, pkg)
+            if !hasindex(instd, pkg)
                 showpkg(pkg) && status(io,pkg,"not found")
             else
                 ver,fix = pop!(instd,pkg)
@@ -346,7 +346,7 @@ function pin(pkg::AbstractString, ver::VersionNumber)
     Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be pinned – not an installed package"))
     avail = Read.available(pkg)
     isempty(avail) && throw(PkgError("$pkg cannot be pinned – not a registered package"))
-    haskey(avail,ver) || throw(PkgError("$pkg – $ver is not a registered version"))
+    hasindex(avail,ver) || throw(PkgError("$pkg – $ver is not a registered version"))
     pin(pkg, avail[ver].sha1)
 end
 
@@ -445,7 +445,7 @@ function update(branch::AbstractString, upkgs::Set{String})
                 end
             end
             stopupdate && break
-            if haskey(avail,pkg)
+            if hasindex(avail,pkg)
                 try
                     Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
                 catch err
@@ -483,7 +483,7 @@ function resolve(
     deps, conflicts = Query.dependencies(avail, fixed)
 
     for pkg in keys(reqs)
-        if !haskey(deps,pkg)
+        if !hasindex(deps,pkg)
             if "julia" in conflicts[pkg]
                 throw(PkgError("$pkg can't be installed because it has no versions that support $VERSION " *
                    "of julia. You may need to update METADATA by running `Pkg.update()`"))

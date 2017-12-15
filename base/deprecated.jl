@@ -163,7 +163,7 @@ const _oldstyle_array_vcat_ = false
 
 function delete!(::EnvDict, k::AbstractString, def)
     depwarn("`delete!(ENV, k, def)` should be replaced with `pop!(ENV, k, def)`. Be aware that `pop!` returns `k` or `def`, while `delete!` returns `ENV` or `def`.", :delete!)
-    haskey(ENV,k) ? delete!(ENV,k) : def
+    hasindex(ENV,k) ? delete!(ENV,k) : def
 end
 
 # Deprecate methods that convert Diagonal and Bidiagonal to <:AbstractTriangular.
@@ -3247,6 +3247,9 @@ end
 # PR #25057
 @deprecate indices(a) axes(a)
 @deprecate indices(a, d) axes(a, d)
+
+# PR #??
+@deprecate haskey(a, i) hasindex(a, i)
 
 # END 0.7 deprecations
 

@@ -371,7 +371,7 @@ const object_numbers = WeakKeyDict()
 const obj_number_salt = Ref(0)
 function object_number(@nospecialize(l))
     global obj_number_salt, object_numbers
-    if haskey(object_numbers, l)
+    if hasindex(object_numbers, l)
         return object_numbers[l]
     end
     # a hash function that always gives the same number to the same

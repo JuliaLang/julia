@@ -149,9 +149,9 @@ end
 function docstr(binding::Binding, @nospecialize typesig = Union{})
     for m in modules
         dict = meta(m)
-        if haskey(dict, binding)
+        if hasindex(dict, binding)
             docs = dict[binding].docs
-            if haskey(docs, typesig)
+            if hasindex(docs, typesig)
                 return docs[typesig]
             end
         end
@@ -232,7 +232,7 @@ Adds a new docstring `str` to the docsystem of `__module__` for `binding` and si
 function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = Union{})
     initmeta(__module__)
     m = get!(meta(__module__), b, MultiDoc())
-    if haskey(m.docs, sig)
+    if hasindex(m.docs, sig)
         # We allow for docstrings to be updated, but print a warning since it is possible
         # that over-writing a docstring *may* have been accidental.  The warning
         # is suppressed for symbols in Main, for interactive use (#23011).
@@ -287,7 +287,7 @@ function doc(binding::Binding, sig::Type = Union{})
     # Lookup `binding` and `sig` for matches in all modules of the docsystem.
     for mod in modules
         dict = meta(mod)
-        if haskey(dict, binding)
+        if hasindex(dict, binding)
             multidoc = dict[binding]
             push!(groups, multidoc)
             for msig in multidoc.order
@@ -335,11 +335,11 @@ Return documentation for a particular `field` of a type if it exists.
 function fielddoc(binding::Binding, field::Symbol)
     for mod in modules
         dict = meta(mod)
-        if haskey(dict, binding)
+        if hasindex(dict, binding)
             multidoc = dict[binding]
-            if haskey(multidoc.docs, Union{})
+            if hasindex(multidoc.docs, Union{})
                 fields = multidoc.docs[Union{}].data[:fields]
-                if haskey(fields, field)
+                if hasindex(fields, field)
                     doc = fields[field]
                     return isa(doc, Markdown.MD) ? doc : Markdown.parse(doc)
                 end
@@ -730,7 +730,7 @@ end
 function docm(source::LineNumberNode, mod::Module, ex)
     if isexpr(ex, :->)
         docm(source, mod, ex.args...)
-    elseif haskey(keywords, ex)
+    elseif hasindex(keywords, ex)
         parsedoc(keywords[ex])
     elseif isa(ex, Union{Expr, Symbol})
         binding = esc(bindingexpr(namify(ex)))

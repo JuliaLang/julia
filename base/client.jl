@@ -77,7 +77,7 @@ function repl_color(key, default)
     env_str = get(ENV, key, "")
     c = tryparse(Int, env_str)
     c_conv = isnull(c) ? Symbol(env_str) : get(c)
-    haskey(text_colors, c_conv) ? c_conv : default
+    hasindex(text_colors, c_conv) ? c_conv : default
 end
 
 error_color() = repl_color("JULIA_ERROR_COLOR", default_color_error)
@@ -103,7 +103,7 @@ function repl_cmd(cmd, out)
         elseif length(cmd.exec) == 2
             dir = cmd.exec[2]
             if dir == "-"
-                if !haskey(ENV, "OLDPWD")
+                if !hasindex(ENV, "OLDPWD")
                     error("cd: OLDPWD not set")
                 end
                 cd(ENV["OLDPWD"])

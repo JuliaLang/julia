@@ -391,11 +391,11 @@ function next(itr::AsyncGenerator, state::AsyncGeneratorState)
     state.i += 1
 
     results_dict = itr.collector.results
-    while !haskey(results_dict, state.i)
+    while !hasindex(results_dict, state.i)
         if done(itr.collector, state.collector_state)
             # `done` waits for async tasks to finish. if we do not have the index
             # we are looking for, it is an error.
-            !haskey(results_dict, state.i) && error("Error processing index ", i)
+            !hasindex(results_dict, state.i) && error("Error processing index ", i)
             break;
         end
         _, state.collector_state = next(itr.collector, state.collector_state)

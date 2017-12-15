@@ -86,7 +86,7 @@ mutable struct Worker
     Worker(id::Int) = Worker(id, Nullable{Function}())
     function Worker(id::Int, conn_func)
         @assert id > 0
-        if haskey(map_pid_wrkr, id)
+        if hasindex(map_pid_wrkr, id)
             return map_pid_wrkr[id]
         end
         w=new(id, [], [], false, W_CREATED, Condition(), time(), conn_func)
@@ -629,11 +629,11 @@ function check_master_connect()
     end
     @schedule begin
         start = time()
-        while !haskey(map_pid_wrkr, 1) && (time() - start) < timeout
+        while !hasindex(map_pid_wrkr, 1) && (time() - start) < timeout
             sleep(1.0)
         end
 
-        if !haskey(map_pid_wrkr, 1)
+        if !hasindex(map_pid_wrkr, 1)
             print(STDERR, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
             exit(1)
         end
@@ -870,7 +870,7 @@ function _rmprocs(pids, waitfor)
             if p == 1
                 @warn "rmprocs: process 1 not removed"
             else
-                if haskey(map_pid_wrkr, p)
+                if hasindex(map_pid_wrkr, p)
                     w = map_pid_wrkr[p]
                     set_worker_state(w, W_TERMINATING)
                     kill(w.manager, p, w.config)

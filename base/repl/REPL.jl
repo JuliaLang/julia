@@ -482,7 +482,7 @@ function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, his
         hist.last_mode = nothing
         hist.last_buffer = IOBuffer()
     else
-        if haskey(hist.mode_mapping, hist.modes[idx])
+        if hasindex(hist.mode_mapping, hist.modes[idx])
             LineEdit.transition(s, hist.mode_mapping[hist.modes[idx]]) do
                 LineEdit.replace_line(s, hist.history[idx])
             end
@@ -636,7 +636,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     for idx in idxs
         h = hist.history[idx]
         match = searchfunc(h, searchdata)
-        if match != 0:-1 && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
+        if match != 0:-1 && h != response_str && hasindex(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
             seek(response_buffer, first(match) - 1)
@@ -671,7 +671,7 @@ function find_hist_file()
     filename = ".julia_history"
     if isfile(filename)
         return filename
-    elseif haskey(ENV, "JULIA_HISTORY")
+    elseif hasindex(ENV, "JULIA_HISTORY")
         return ENV["JULIA_HISTORY"]
     else
         return joinpath(homedir(), filename)

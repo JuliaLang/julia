@@ -357,7 +357,7 @@ function convert(::Type{SharedArray{TS,N}}, A::Array{TA,N}) where {TS,TA,N}
 end
 
 function deepcopy_internal(S::SharedArray, stackdict::ObjectIdDict)
-    haskey(stackdict, S) && return stackdict[S]
+    hasindex(stackdict, S) && return stackdict[S]
     R = SharedArray{eltype(S),ndims(S)}(size(S); pids = S.pids)
     copy!(sdata(R), sdata(S))
     stackdict[S] = R

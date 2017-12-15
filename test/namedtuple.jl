@@ -96,9 +96,9 @@ end
 @test values((a=1, b=2, c=3)) == (1, 2, 3)
 @test values(NamedTuple()) == ()
 @test values((a=1,)) == (1,)
-@test haskey((a=1, b=2, c=3), :a)
-@test !haskey(NamedTuple(), :a)
-@test !haskey((a=1,), :b)
+@test hasindex(((a=1, b=2, c=3), :a)
+@test !hasindex(NamedTuple(), :a)
+@test !hasindex(((a=1,), :b)
 @test get((a=1, b=2, c=3), :a, 0) == 1
 @test get(NamedTuple(), :a, 0) == 0
 @test get((a=1,), :b, 0) == 0

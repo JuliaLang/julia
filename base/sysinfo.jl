@@ -68,7 +68,7 @@ const WORD_SIZE = Core.sizeof(Int) * 8
 function __init__()
     # set CPU core count
     global CPU_CORES =
-        haskey(ENV,"JULIA_CPU_CORES") ? parse(Int,ENV["JULIA_CPU_CORES"]) :
+        hasindex(ENV,"JULIA_CPU_CORES") ? parse(Int,ENV["JULIA_CPU_CORES"]) :
                                         Int(ccall(:jl_cpu_cores, Int32, ()))
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global cpu_name = ccall(:jl_get_cpu_name, Ref{String}, ())

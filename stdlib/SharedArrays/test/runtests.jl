@@ -290,9 +290,9 @@ let
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
     gc(); gc()
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-    @test haskey(SharedArrays.sa_refs, id)
+    @test hasindex(SharedArrays.sa_refs, id)
     finalize(a1)
-    @test !haskey(SharedArrays.sa_refs, id)
+    @test !hasindex(SharedArrays.sa_refs, id)
 end
 
 #14399

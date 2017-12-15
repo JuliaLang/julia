@@ -98,7 +98,7 @@ end
 function helpmode(io::IO, line::AbstractString)
     line = strip(line)
     expr =
-        if haskey(keywords, Symbol(line))
+        if hasindex(keywords, Symbol(line))
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
             Symbol(line)
@@ -158,7 +158,7 @@ function repl_latex(io::IO, s::String)
             print(io, latex, "<tab>")
         end
         println(io, '\n')
-    elseif any(c -> haskey(symbols_latex, string(c)), s)
+    elseif any(c -> hasindex(symbols_latex, string(c)), s)
         print(io, "\"")
         Markdown.with_output_format(:cyan, io) do io
             print(io, s)
@@ -167,7 +167,7 @@ function repl_latex(io::IO, s::String)
         Markdown.with_output_format(:cyan, io) do io
             for c in s
                 cstr = string(c)
-                if haskey(symbols_latex, cstr)
+                if hasindex(symbols_latex, cstr)
                     print(io, symbols_latex[cstr], "<tab>")
                 else
                     print(io, c)
@@ -187,7 +187,7 @@ function repl(io::IO, s::Symbol)
     quote
         repl_latex($io, $str)
         repl_search($io, $str)
-        $(if !isdefined(Main, s) && !haskey(keywords, s)
+        $(if !isdefined(Main, s) && !hasindex(keywords, s)
                :(repl_corrections($io, $str))
           end)
         $(_repl(s))
@@ -399,7 +399,7 @@ end
 
 function docsearch(haystack::DocStr, needle)
     docsearch(parsedoc(haystack), needle) && return true
-    if haskey(haystack.data, :fields)
+    if hasindex(haystack.data, :fields)
         for doc in values(haystack.data[:fields])
             docsearch(doc, needle) && return true
         end

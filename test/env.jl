@@ -27,7 +27,7 @@ end
 end
 @testset "non-existent keys" begin
     key = randstring(25)
-    @test !haskey(ENV,key)
+    @test !hasindex(ENV,key)
     @test_throws KeyError ENV[key]
     @test get(ENV,key,"default") == "default"
     @test get(() -> "default", ENV, key) == "default"
@@ -52,14 +52,14 @@ end
         @test contains(s, "$k2=$k2")
 
         @test pop!(ENV, k1) == k1
-        @test !haskey(ENV, k1)
+        @test !hasindex(ENV, k1)
         ENV[k1] = k1
         @test pop!(ENV, k1) == k1
         @test pop!(ENV, k1, "not_there") == "not_there"
 
         ENV[k1] = k1
         @test delete!(ENV, k1) == ENV
-        @test !haskey(ENV, k1)
+        @test !hasindex(ENV, k1)
     end
 end
 # Test for #10853

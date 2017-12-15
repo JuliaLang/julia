@@ -658,7 +658,7 @@ export
     get!,
     getindex,
     getkey,
-    haskey,
+    hasindex,
     in,
     intersect!,
     intersect,

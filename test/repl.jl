@@ -260,7 +260,7 @@ function AddCustomMode(repl, prompt)
     foobar_keymap = Dict{Any,Any}(
         '<' => function (s,args...)
             if isempty(s)
-                if !haskey(s.mode_state,foobar_mode)
+                if !hasindex(s.mode_state,foobar_mode)
                     s.mode_state[foobar_mode] = LineEdit.init_state(repl.t,foobar_mode)
                 end
                 LineEdit.transition(s,foobar_mode)

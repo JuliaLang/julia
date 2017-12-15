@@ -267,7 +267,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
             pdeps[p0][v0] = a.requires
             for (rp, rvs) in a.requires
                 p1 = pdict[rp]
-                if !haskey(prevdeps[p1], p0)
+                if !hasindex(prevdeps[p1], p0)
                     prevdeps[p1][p0] = Dict{Int,VersionSet}()
                 end
                 prevdeps[p1][p0][v0] = rvs

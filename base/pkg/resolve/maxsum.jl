@@ -391,7 +391,7 @@ function decimate1(p0::Int, graph::Graph, msgs::Messages)
     # only do the decimation if it is consistent with
     # the previously decimated nodes
     for p1 in find(decimated)
-        haskey(adjdict[p0], p1) || continue
+        hasindex(adjdict[p0], p1) || continue
         s1 = indmax(fld[p1])
         j1 = adjdict[p0][p1]
         gmsk[p1][j1][s0,s1] || return false

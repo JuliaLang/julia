@@ -127,7 +127,7 @@ function find_system_compiler()
         end
     end
 
-    if haskey(ENV, "CC")
+    if hasindex(ENV, "CC")
         if !success(`$(ENV["CC"]) -v`)
             push!(warn_msg, "Using compiler override $(ENV["CC"]), but unable to run `$(ENV["CC"]) -v`.")
         end

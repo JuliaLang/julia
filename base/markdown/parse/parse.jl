@@ -54,7 +54,7 @@ function parseinline(stream::IO, md::MD, config::Config)
         # FIXME: this is broken if we're looking for non-ASCII
         # characters because peek only returns a single byte.
         char = Char(peek(stream))
-        if haskey(config.inner, char) &&
+        if hasindex(config.inner, char) &&
                 (inner = parseinline(stream, md, config.inner[char])) !== nothing
             c = String(take!(buffer))
             !isempty(c) && push!(content, c)

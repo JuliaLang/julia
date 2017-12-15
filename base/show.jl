@@ -96,14 +96,14 @@ unlock(io::IOContext) = unlock(io.io)
 
 in(key_value::Pair, io::IOContext) = in(key_value, io.dict, ===)
 in(key_value::Pair, io::IO) = false
-haskey(io::IOContext, key) = haskey(io.dict, key)
-haskey(io::IO, key) = false
+hasindex(io::IOContext, key) = hasindex(io.dict, key)
+hasindex(io::IO, key) = false
 getindex(io::IOContext, key) = getindex(io.dict, key)
 getindex(io::IO, key) = throw(KeyError(key))
 get(io::IOContext, key, default) = get(io.dict, key, default)
 get(io::IO, key, default) = default
 
-displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
+displaysize(io::IOContext) = hasindex(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
 
 show_circular(io::IO, @nospecialize(x)) = false
 function show_circular(io::IOContext, @nospecialize(x))
@@ -458,7 +458,7 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
     print(io, op)
     if !show_circular(io, itr)
         recur_io = IOContext(io, :SHOWN_SET => itr)
-        if !haskey(io, :compact)
+        if !hasindex(io, :compact)
             recur_io = IOContext(recur_io, :compact => true)
         end
         first = true
@@ -917,7 +917,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # list (i.e. "(1, 2, 3)" or "[1, 2, 3]")
-    elseif haskey(expr_parens, head)               # :tuple/:vcat
+    elseif hasindex(expr_parens, head)               # :tuple/:vcat
         op, cl = expr_parens[head]
         if head === :vcat || head === :bracescat
             sep = "; "
@@ -1002,7 +1002,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
-    elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
+    elseif hasindex(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
         funcargslike = head == :(.) ? ex.args[2].args : ex.args[2:end]
         show_call(io, head, ex.args[1], funcargslike, indent)
 

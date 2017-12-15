@@ -10,7 +10,7 @@ if codespeed
     using HTTPClient.HTTPC
 
     # Ensure that we've got the environment variables we want:
-    if !haskey(ENV, "JULIA_FLAVOR")
+    if !hasindex(ENV, "JULIA_FLAVOR")
         error( "You must provide the JULIA_FLAVOR environment variable identifying this julia build!" )
     end
 

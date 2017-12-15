@@ -447,7 +447,7 @@ function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool
     dims = get(optsd, :dims, nothing)
 
     has_header = get(optsd, :header, get(optsd, :has_header, false))
-    haskey(optsd, :has_header) && (optsd[:has_header] != has_header) && throw(ArgumentError("conflicting values for header and has_header"))
+    hasindex(optsd, :has_header) && (optsd[:has_header] != has_header) && throw(ArgumentError("conflicting values for header and has_header"))
 
     skipstart = get(optsd, :skipstart, 0)
     (skipstart >= 0) || throw(ArgumentError("skipstart must be ≥ 0, got $skipstart"))

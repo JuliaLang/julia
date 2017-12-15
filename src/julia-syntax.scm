@@ -542,7 +542,7 @@
                                                            ,T)
                                                     T)))
                                       rval0)))
-                       `(if (call (top haskey) ,kw (quote ,k))
+                       `(if (call (top hasindex) ,kw (quote ,k))
                             ,rval
                             ,dflt)))
                    vars vals)

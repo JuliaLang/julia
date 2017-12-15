@@ -14,7 +14,7 @@ end
 
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
-haskey(d::AbstractDict, k) = in(k, keys(d))
+hasindex(d::AbstractDict, k) = in(k, keys(d))
 
 function in(p::Pair, a::AbstractDict, valcmp=(==))
     v = get(a,p[1],secret_table_token)
@@ -224,7 +224,7 @@ Dict{Int64,Int64} with 3 entries:
 function merge!(combine::Function, d::AbstractDict, others::AbstractDict...)
     for other in others
         for (k,v) in other
-            d[k] = haskey(d, k) ? combine(d[k], v) : v
+            d[k] = hasindex(d, k) ? combine(d[k], v) : v
         end
     end
     return d

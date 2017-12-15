@@ -34,7 +34,7 @@ deepcopy_internal(x::Tuple, stackdict::ObjectIdDict) =
 deepcopy_internal(x::Module, stackdict::ObjectIdDict) = error("deepcopy of Modules not supported")
 
 function deepcopy_internal(x::SimpleVector, stackdict::ObjectIdDict)
-    if haskey(stackdict, x)
+    if hasindex(stackdict, x)
         return stackdict[x]
     end
     y = Core.svec(Any[deepcopy_internal(x[i], stackdict) for i = 1:length(x)]...)
@@ -43,7 +43,7 @@ function deepcopy_internal(x::SimpleVector, stackdict::ObjectIdDict)
 end
 
 function deepcopy_internal(x::String, stackdict::ObjectIdDict)
-    if haskey(stackdict, x)
+    if hasindex(stackdict, x)
         return stackdict[x]
     end
     y = @gc_preserve x unsafe_string(pointer(x), sizeof(x))
@@ -55,7 +55,7 @@ function deepcopy_internal(@nospecialize(x), stackdict::ObjectIdDict)
     T = typeof(x)::DataType
     nf = nfields(x)
     (isbits(T) || nf == 0) && return x
-    if haskey(stackdict, x)
+    if hasindex(stackdict, x)
         return stackdict[x]
     end
     y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
@@ -72,7 +72,7 @@ function deepcopy_internal(@nospecialize(x), stackdict::ObjectIdDict)
 end
 
 function deepcopy_internal(x::Array, stackdict::ObjectIdDict)
-    if haskey(stackdict, x)
+    if hasindex(stackdict, x)
         return stackdict[x]
     end
     _deepcopy_array_t(x, eltype(x), stackdict)
@@ -97,7 +97,7 @@ function _deepcopy_array_t(@nospecialize(x), T, stackdict::ObjectIdDict)
 end
 
 function deepcopy_internal(x::Dict, stackdict::ObjectIdDict)
-    if haskey(stackdict, x)
+    if hasindex(stackdict, x)
         return stackdict[x]::typeof(x)
     end
 

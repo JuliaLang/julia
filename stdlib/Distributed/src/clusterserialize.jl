@@ -34,7 +34,7 @@ end
 
 function remember_object(s::ClusterSerializer, @nospecialize(o), n::UInt64)
     known_object_data[n] = o
-    if isa(o, TypeName) && !haskey(object_numbers, o)
+    if isa(o, TypeName) && !hasindex(object_numbers, o)
         # set up reverse mapping for serialize
         object_numbers[o] = n
     end
@@ -114,7 +114,7 @@ function syms_2b_sent(s::ClusterSerializer, identifier)
             push!(lst, sym)
         else
             oid = object_id(v)
-            if haskey(s.glbs_sent, oid)
+            if hasindex(s.glbs_sent, oid)
                 # We have sent this object before, see if it has changed.
                 s.glbs_sent[oid] != hash(sym, hash(v)) && push!(lst, sym)
             else
@@ -132,7 +132,7 @@ function serialize_global_from_main(s::ClusterSerializer, sym)
     record_v = true
     if isbits(v)
         record_v = false
-    elseif !haskey(s.glbs_sent, oid)
+    elseif !hasindex(s.glbs_sent, oid)
         # set up a finalizer the first time this object is sent
         try
             finalizer(v) do x
@@ -165,7 +165,7 @@ end
 
 function delete_global_tracker(s::ClusterSerializer, v)
     oid = object_id(v)
-    if haskey(s.glbs_sent, oid)
+    if hasindex(s.glbs_sent, oid)
         delete!(s.glbs_sent, oid)
     end
 

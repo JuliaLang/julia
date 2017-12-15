@@ -10,7 +10,7 @@ end
 const Graph = Dict{String, Node}
 
 function get(G::Graph, name)
-    if haskey(G, name)
+    if hasindex(G, name)
         return G[name]
     end
     G[name] = Node(name)
@@ -24,7 +24,7 @@ function centrality_mean(G::Graph, start_node)
     while !isempty(next)
         nnext = Set{Node}()
         for n in next
-            if !haskey(dists, n)
+            if !hasindex(dists, n)
                 dists[n] = cdist
                 for neigh in n.n
                     push!(nnext, neigh)

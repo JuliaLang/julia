@@ -141,7 +141,7 @@ extend(d::Dict, k, v) = (x = copy(d); x[k]=v; x)
 subst(t::TagT,    env) = t===AnyT ? t : TagT(t.name, map(x->subst(x,env), t.params), t.vararg)
 subst(t::UnionT,  env) = UnionT(subst(t.a,env), subst(t.b,env))
 subst(t::Var,     env) = get(env, t, t)
-subst(t::UnionAllT, env) = (assert(!haskey(env, t.var));
+subst(t::UnionAllT, env) = (assert(!hasindex(env, t.var));
                             newVar = Var(t.var.name, subst(t.var.lb, env), subst(t.var.ub, env));
                             UnionAllT(newVar, subst(t.T, extend(env, t.var, newVar))))
 subst(t, env) = t
@@ -345,7 +345,7 @@ end
 
 function issub_unionall(t::Ty, u::UnionAllT, env, R)
     outer = env.outer
-    haskey(env.vars, u.var) && (u = rename(u))
+    hasindex(env.vars, u.var) && (u = rename(u))
     env.vars[u.var] = Bounds(u.var.lb, u.var.ub, R)
     ans = R ? issub(t, u.T, env) : issub(u.T, t, env)
     !outer && delete!(env.vars, u.var)
@@ -431,7 +431,7 @@ function xlate(t::Tuple, env)
 end
 
 function xlate(t::TypeVar, env)
-    if haskey(env, t)
+    if hasindex(env, t)
         return env[t]
     end
     v = Var(t.name, xlate(t.lb,env), xlate(t.ub,env))
@@ -444,7 +444,7 @@ function xlate(t::DataType, env)
         return AnyT
     elseif t <: Tuple
         return xlate((t.parameters...,), env)
-    elseif !haskey(tndict,t.name)
+    elseif !hasindex(tndict,t.name)
         para = map(x->xlate(x,env), t.name.primary.parameters)  # adds tvars to env
         sup = xlate(t.name.primary.super, env)
         for i = length(para):-1:1

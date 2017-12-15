@@ -412,7 +412,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
         user = s[1]
         pubhost = s[2]
     else
-        if haskey(ENV, "USER")
+        if hasindex(ENV, "USER")
             user = ENV["USER"]
         elseif tunnel
             error("USER must be specified either in the environment ",
@@ -421,7 +421,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     end
 
     if tunnel
-        if !haskey(tunnel_hosts_map, pubhost)
+        if !hasindex(tunnel_hosts_map, pubhost)
             tunnel_hosts_map[pubhost] = Semaphore(get(config.max_parallel, typemax(Int)))
         end
         sem = tunnel_hosts_map[pubhost]

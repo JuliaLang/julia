@@ -5881,8 +5881,8 @@ end
 # Check if the use is still valid.
 # The code that invalidate this use is responsible for adding new use(s) if any.
 function check_valid(use::ValueUse, changes::ObjectIdDict)
-    haskey(changes, use.stmts=>use.stmtidx) && return false
-    isdefined(use, :expr) && haskey(changes, use.expr) && return false
+    hasindex(changes, use.stmts=>use.stmtidx) && return false
+    isdefined(use, :expr) && hasindex(changes, use.expr) && return false
     return true
 end
 
@@ -5899,7 +5899,7 @@ struct ValueDef
 end
 # Check if the use is still valid.
 # The code that invalidate this use is responsible for adding new def(s) if any.
-check_valid(def::ValueDef, changes::ObjectIdDict) = !haskey(changes, def.stmts=>def.stmtidx)
+check_valid(def::ValueDef, changes::ObjectIdDict) = !hasindex(changes, def.stmts=>def.stmtidx)
 
 # Allocation optimization, must not be mutated.
 const empty_uses = ValueUse[]
@@ -6778,7 +6778,7 @@ function split_struct_alloc!(ctx::AllocOptContext, info, key)
             return false
         end
         if use_kind == 2
-            if haskey(ctx.undef_fld, fld)
+            if hasindex(ctx.undef_fld, fld)
                 has_preserve && return false
                 has_setfield_undef = true
             end
@@ -6851,14 +6851,14 @@ function replace_struct_uses!(ctx, info, vars)
 
         if use_kind == 0
             # isdefined
-            if haskey(ctx.undef_fld, fld)
+            if hasindex(ctx.undef_fld, fld)
                 replace_use_expr_with!(ctx, use, SlotNumber(slot_id + 1), true, true)
             else
                 replace_use_expr_with!(ctx, use, quoted(true))
             end
         elseif use_kind == 1
             # getfield
-            if !haskey(ctx.undef_fld, fld)
+            if !hasindex(ctx.undef_fld, fld)
                 replace_use_expr_with!(ctx, use, SlotNumber(slot_id), true, true)
             else
                 replace_var = SlotNumber(slot_id)
@@ -6882,7 +6882,7 @@ function replace_struct_uses!(ctx, info, vars)
             replace_var = SlotNumber(slot_id)
             val = expr.args[4]
             stmts = Any[]
-            if haskey(ctx.undef_fld, fld)
+            if hasindex(ctx.undef_fld, fld)
                 flag_slot = SlotNumber(slot_id + 1)
                 assign_flag_ex = :($flag_slot = true)
                 push!(stmts, assign_flag_ex)
@@ -6926,16 +6926,16 @@ function replace_struct_defs!(ctx, info, vars)
             # First check field name
             if has_name
                 fname = si.names[fld_idx]
-                if haskey(vars, fname)
+                if hasindex(vars, fname)
                     slot_id = vars[fname]
-                    need_flag = haskey(ctx.undef_fld, fname)
+                    need_flag = hasindex(ctx.undef_fld, fname)
                 end
             end
             if !@isdefined(slot_id)
                 # Then check field index
-                if haskey(vars, fld_idx)
+                if hasindex(vars, fld_idx)
                     slot_id = vars[fld_idx]
-                    need_flag = haskey(ctx.undef_fld, fld_idx)
+                    need_flag = hasindex(ctx.undef_fld, fld_idx)
                 else
                     # The field is not used and we don't need to deal with any side effects
                     if has_def
@@ -6987,7 +6987,7 @@ end
 function create_struct_field_slots!(ctx, key, vars)
     slot_flag = var_has_static_undef(ctx.sv.src, key.first, key.second) * Slot_StaticUndef
     for fld in keys(ctx.all_fld)
-        haskey(vars, fld) && continue
+        hasindex(vars, fld) && continue
         local fldidx
         local slot_id
         slot_type = get(ctx.setfield_typ, fld, Union{})
@@ -7000,7 +7000,7 @@ function create_struct_field_slots!(ctx, key, vars)
                 # single field index
                 fldidx = last(v)
                 slot_type = Union{slot_type,get(ctx.setfield_typ, fldidx, Union{})}
-                if haskey(vars, fldidx)
+                if hasindex(vars, fldidx)
                     slot_id = first(vars[fldidx]::Int)
                     ctx.sv.src.slottypes[slot_id] = slot_type
                     ctx.sv.src.slotnames[slot_id] = slot_name
@@ -7013,7 +7013,7 @@ function create_struct_field_slots!(ctx, key, vars)
         if !@isdefined(slot_id)
             slot_id = add_slot!(ctx.sv.src, slot_type, false, slot_name).id
             add_allocopt_todo(ctx, slot_id, false)
-            if haskey(ctx.undef_fld, fld)
+            if hasindex(ctx.undef_fld, fld)
                 ctx.sv.src.slotflags[end] = Slot_StaticUndef
                 undef_slot = add_slot!(ctx.sv.src, Bool, false, :field_flag)
                 ctx.sv.src.slotflags[end] = slot_flag
@@ -7064,8 +7064,8 @@ function split_struct_alloc_single!(ctx::AllocOptContext, info, key, nf, has_pre
         if !isempty(si.names)
             fld_name = si.names[i]
         end
-        has_fld_use = haskey(ctx.all_fld, i) || (@isdefined(fld_name) &&
-                                                 haskey(ctx.all_fld, fld_name))
+        has_fld_use = hasindex(ctx.all_fld, i) || (@isdefined(fld_name) &&
+                                                 hasindex(ctx.all_fld, fld_name))
         has_def = isassigned(si.defs, i)
         has_setfld_use = false
         if has_def
@@ -7085,11 +7085,11 @@ function split_struct_alloc_single!(ctx::AllocOptContext, info, key, nf, has_pre
             field_typ = Union{}
         end
         if has_fld_use && !isempty(ctx.setfield_typ)
-            if haskey(ctx.setfield_typ, i)
+            if hasindex(ctx.setfield_typ, i)
                 has_setfld_use = true
                 field_typ = Union{field_typ,ctx.setfield_typ[i]}
             end
-            if @isdefined(fld_name) && haskey(ctx.setfield_typ, fld_name)
+            if @isdefined(fld_name) && hasindex(ctx.setfield_typ, fld_name)
                 has_setfld_use = true
                 field_typ = Union{field_typ,ctx.setfield_typ[fld_name]}
             end
@@ -7243,8 +7243,8 @@ function split_struct_alloc_single!(ctx::AllocOptContext, info, key, nf, has_pre
             if isassigned(si.defs, fld)
                 replace_var = vars[fld]
                 replace_use_expr_with!(ctx, use, replace_var, true, true)
-            elseif haskey(ctx.setfield_typ, fld) || (!isempty(si.names) &&
-                                                     haskey(ctx.setfield_typ, si.names[fld]))
+            elseif hasindex(ctx.setfield_typ, fld) || (!isempty(si.names) &&
+                                                     hasindex(ctx.setfield_typ, si.names[fld]))
                 replace_var = vars[fld]
                 flag_slot = flag_vars[fld]
                 check_expr = Expr(:call, throw_undefreferror_ifnot, flag_slot)
@@ -7338,7 +7338,7 @@ function verify_value_infomap(ctx::AllocOptContext)
         for def in info.defs
             check_valid(def, ctx.changes) || continue
             ndef += 1
-            @check_ast(ctx, !haskey(seen, def))
+            @check_ast(ctx, !hasindex(seen, def))
             seen[def] = nothing
             all_stmts[def.stmts] = nothing
 
@@ -7353,7 +7353,7 @@ function verify_value_infomap(ctx::AllocOptContext)
         for use in info.uses
             check_valid(use, ctx.changes) || continue
             nuse += 1
-            @check_ast(ctx, !haskey(seen, use))
+            @check_ast(ctx, !hasindex(seen, use))
             seen[use] = nothing
             all_stmts[use.stmts] = nothing
             stmt = use.stmts[use.stmtidx]
@@ -7401,7 +7401,7 @@ function verify_value_infomap(ctx::AllocOptContext)
         ndef = 0
         for def in info.defs
             check_valid(def, ctx.changes) || continue
-            @check_ast(ctx, !haskey(seen, def))
+            @check_ast(ctx, !hasindex(seen, def))
             seen[def] = nothing
             all_stmts[def.stmts] = nothing
 
@@ -7421,7 +7421,7 @@ function verify_value_infomap(ctx::AllocOptContext)
         end
         for use in info.uses
             check_valid(use, ctx.changes) || continue
-            @check_ast(ctx, !haskey(seen, use))
+            @check_ast(ctx, !hasindex(seen, use))
             seen[use] = nothing
             all_stmts[use.stmts] = nothing
             stmt = use.stmts[use.stmtidx]
@@ -7463,12 +7463,12 @@ function verify_value_infomap(ctx::AllocOptContext)
 end
 
 function verify_seen_info(ctx::AllocOptContext, seen, def_or_use)
-    @check_ast(ctx, haskey(seen, def_or_use))
+    @check_ast(ctx, hasindex(seen, def_or_use))
     delete!(seen, def_or_use)
 end
 
 function verify_value_infomap_rescan(ctx::AllocOptContext, stmts, seen, in_methods, all_stmts)
-    if haskey(all_stmts, stmts)
+    if hasindex(all_stmts, stmts)
         delete!(all_stmts, stmts)
     end
     for i in 1:length(stmts)
@@ -7517,7 +7517,7 @@ function verify_value_infomap_rescan(ctx::AllocOptContext, stmts, seen, in_metho
             ea = eargs[j]
             if j == 1 && head === :method
                 if isa(ea, Slot)
-                    @check_ast(ctx, haskey(in_methods, SlotNumber(slot_id(ea))))
+                    @check_ast(ctx, hasindex(in_methods, SlotNumber(slot_id(ea))))
                     continue
                 end
             end
@@ -7663,7 +7663,7 @@ function copy_expr_in_array!(ary, seen)
             end
             continue # No need to copy meta expressions
         end
-        if haskey(seen, ex)
+        if hasindex(seen, ex)
             newex = Expr(ex.head)
             append!(newex.args, ex.args)
             newex.typ = ex.typ
@@ -7672,7 +7672,7 @@ function copy_expr_in_array!(ary, seen)
             # version in the AST....
         else
             seen[ex] = nothing
-            if haskey(seen, ex.args)
+            if hasindex(seen, ex.args)
                 # Haven't actually seen this happen but it's pretty easy to check
                 ex.args = copy(ex.args)
             else

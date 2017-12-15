@@ -59,7 +59,7 @@ temp_pkg_dir() do
         avail = Pkg.Read.available()
         avail_copy = Pkg.Query.availcopy(avail);
         delete!(avail_copy["Example"][v"0.0.1"].requires, "julia")
-        @test haskey(avail["Example"][v"0.0.1"].requires, "julia")
+        @test hasindex(avail["Example"][v"0.0.1"].requires, "julia")
     end
 
     @test_throws PkgError Pkg.installed("MyFakePackage")

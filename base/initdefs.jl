@@ -61,7 +61,7 @@ const LOAD_CACHE_PATH = String[]
 
 function init_load_path(JULIA_HOME = JULIA_HOME)
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    if haskey(ENV, "JULIA_LOAD_PATH")
+    if hasindex(ENV, "JULIA_LOAD_PATH")
         prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @static Sys.iswindows() ? ';' : ':'))
     end
     push!(LOAD_PATH, abspath(JULIA_HOME, "..", "local", "share", "julia", "site", vers))

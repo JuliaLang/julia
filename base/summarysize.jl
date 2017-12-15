@@ -66,7 +66,7 @@ end
 # define the general case separately to make sure it is not specialized for every type
 @noinline function _summarysize(ss::SummarySize, @nospecialize obj)
     key = pointer_from_objref(obj)
-    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    hasindex(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
     if _nfields(obj) > 0
         push!(ss.frontier_x, obj)
         push!(ss.frontier_i, 1)
@@ -84,7 +84,7 @@ end
 
 function (ss::SummarySize)(obj::DataType)
     key = pointer_from_objref(obj)
-    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    hasindex(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
     size::Int = 7 * Core.sizeof(Int) + 6 * Core.sizeof(Int32)
     size += 4 * _nfields(obj) + ifelse(Sys.WORD_SIZE == 64, 4, 0)
     size += ss(obj.parameters)::Int
@@ -94,12 +94,12 @@ end
 
 function (ss::SummarySize)(obj::TypeName)
     key = pointer_from_objref(obj)
-    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    hasindex(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
     return Core.sizeof(obj) + (isdefined(obj, :mt) ? ss(obj.mt) : 0)
 end
 
 function (ss::SummarySize)(obj::Array)
-    haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
+    hasindex(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
     size::Int = Core.sizeof(obj)
     # TODO: add size of jl_array_t
     if !isbits(eltype(obj)) && !isempty(obj)
@@ -111,7 +111,7 @@ end
 
 function (ss::SummarySize)(obj::SimpleVector)
     key = pointer_from_objref(obj)
-    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    hasindex(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
     size::Int = Core.sizeof(obj)
     if !isempty(obj)
         push!(ss.frontier_x, obj)
@@ -121,7 +121,7 @@ function (ss::SummarySize)(obj::SimpleVector)
 end
 
 function (ss::SummarySize)(obj::Module)
-    haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
+    hasindex(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
     size::Int = Core.sizeof(obj)
     for binding in names(obj, true)
         if isdefined(obj, binding) && !isdeprecated(obj, binding)
@@ -142,7 +142,7 @@ function (ss::SummarySize)(obj::Module)
 end
 
 function (ss::SummarySize)(obj::Task)
-    haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
+    hasindex(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
     size::Int = Core.sizeof(obj)
     if isdefined(obj, :code)
         size += ss(obj.code)::Int

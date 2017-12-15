@@ -38,7 +38,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
-    if !haskey(io, :compact)
+    if !hasindex(io, :compact)
         recur_io = IOContext(recur_io, :compact => true)
     end
 

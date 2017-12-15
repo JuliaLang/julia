@@ -301,8 +301,8 @@ let d1 = @doc(DocsTest.t{S <: Integer}(::S)),
 end
 
 let fields = meta(DocsTest)[@var(DocsTest.FieldDocs)].docs[Union{}].data[:fields]
-    @test haskey(fields, :one) && fields[:one] == "one"
-    @test haskey(fields, :two) && fields[:two] == doc"two"
+    @test hasindex(fields, :one) && fields[:one] == "one"
+    @test hasindex(fields, :two) && fields[:two] == doc"two"
 end
 
 let a = @doc(DocsTest.multidoc),

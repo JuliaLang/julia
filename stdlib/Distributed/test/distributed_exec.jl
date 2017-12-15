@@ -103,22 +103,22 @@ function test_futures_dgc(id)
     fid = remoteref_id(f)
 
     # remote value should be deleted after a fetch
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == true
+    @test remotecall_fetch(k->(yield();hasindex(Distributed.PGRP.refs, k)), id, fid) == true
     @test isnull(f.v) == true
     @test fetch(f) == id
     @test isnull(f.v) == false
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
+    @test remotecall_fetch(k->(yield();hasindex(Distributed.PGRP.refs, k)), id, fid) == false
 
 
     # if unfetched, it should be deleted after a finalize
     f = remotecall(myid, id)
     fid = remoteref_id(f)
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == true
+    @test remotecall_fetch(k->(yield();hasindex(Distributed.PGRP.refs, k)), id, fid) == true
     @test isnull(f.v) == true
     finalize(f)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
+    @test remotecall_fetch(k->(yield();hasindex(Distributed.PGRP.refs, k)), id, fid) == false
 end
 
 test_futures_dgc(id_me)
@@ -134,23 +134,23 @@ fstore = RemoteChannel(wid2)
 put!(fstore, f)
 
 @test fetch(f) == wid1
-@test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == true
+@test remotecall_fetch(k->hasindex(Distributed.PGRP.refs, k), wid1, fid) == true
 remotecall_fetch(r->(fetch(fetch(r)); yield()), wid2, fstore)
 sleep(0.5) # to ensure that wid2 gc messages have been executed on wid1
-@test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == false
+@test remotecall_fetch(k->hasindex(Distributed.PGRP.refs, k), wid1, fid) == false
 
 # put! should release remote reference since it would have been cached locally
 f = Future(wid1)
 fid = remoteref_id(f)
 
 # should not be created remotely till accessed
-@test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == false
+@test remotecall_fetch(k->hasindex(Distributed.PGRP.refs, k), wid1, fid) == false
 # create it remotely
 isready(f)
 
-@test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == true
+@test remotecall_fetch(k->hasindex(Distributed.PGRP.refs, k), wid1, fid) == true
 put!(f, :OK)
-@test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == false
+@test remotecall_fetch(k->hasindex(Distributed.PGRP.refs, k), wid1, fid) == false
 @test fetch(f) == :OK
 
 # RemoteException should be thrown on a put! when another process has set the value
@@ -161,7 +161,7 @@ fstore = RemoteChannel(wid2)
 put!(fstore, f) # send f to wid2
 put!(f, :OK) # set value from master
 
-@test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == true
+@test remotecall_fetch(k->hasindex(Distributed.PGRP.refs, k), wid1, fid) == true
 
 testval = remotecall_fetch(wid2, fstore) do x
     try
@@ -184,12 +184,12 @@ function test_remoteref_dgc(id)
     rrid = remoteref_id(rr)
 
     # remote value should be deleted after finalizing the ref
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == true
+    @test remotecall_fetch(k->(yield();hasindex(Distributed.PGRP.refs, k)), id, rrid) == true
     @test fetch(rr) == :OK
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == true
+    @test remotecall_fetch(k->(yield();hasindex(Distributed.PGRP.refs, k)), id, rrid) == true
     finalize(rr)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == false
+    @test remotecall_fetch(k->(yield();hasindex(Distributed.PGRP.refs, k)), id, rrid) == false
 end
 test_remoteref_dgc(id_me)
 test_remoteref_dgc(id_other)
@@ -202,13 +202,13 @@ let wid1 = workers()[1],
     fstore = RemoteChannel(wid2)
 
     put!(fstore, rr)
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    @test remotecall_fetch(k -> hasindex(Distributed.PGRP.refs, k), wid1, rrid) == true
     finalize(rr) # finalize locally
     yield() # flush gc msgs
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    @test remotecall_fetch(k -> hasindex(Distributed.PGRP.refs, k), wid1, rrid) == true
     remotecall_fetch(r -> (finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
     sleep(0.5) # to ensure that wid2 messages have been executed on wid1
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == false
+    @test remotecall_fetch(k -> hasindex(Distributed.PGRP.refs, k), wid1, rrid) == false
 end
 
 # Tests for issue #23109 - should not hang.
@@ -1239,9 +1239,9 @@ global ids_func = ()->ids_cleanup
 clust_ser = (Distributed.worker_from_id(id_other)).w_serializer
 @test remotecall_fetch(ids_func, id_other) == ids_cleanup
 
-@test haskey(clust_ser.glbs_sent, object_id(ids_cleanup))
+@test hasindex(clust_ser.glbs_sent, object_id(ids_cleanup))
 finalize(ids_cleanup)
-@test !haskey(clust_ser.glbs_sent, object_id(ids_cleanup))
+@test !hasindex(clust_ser.glbs_sent, object_id(ids_cleanup))
 
 # TODO Add test for cleanup from `clust_ser.glbs_in_tnobj`
 

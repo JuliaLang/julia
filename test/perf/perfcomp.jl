@@ -13,7 +13,7 @@ end
 function main()
     baseline = readperf(open(ARGS[1]))
     torun = length(ARGS) > 1 ? ARGS[2] : "all"
-    e = haskey(ENV,"J") ? "JULIA_EXECUTABLE=$(ENV["J"])" : ""
+    e = hasindex(ENV,"J") ? "JULIA_EXECUTABLE=$(ENV["J"])" : ""
     io,p = open(`make $e -s $torun`, "r")
     newp = readperf(io)
 

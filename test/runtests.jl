@@ -9,7 +9,7 @@ include("testenv.jl")
 tests, net_on, exit_on_error, seed = choosetests(ARGS)
 tests = unique(tests)
 
-const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
+const max_worker_rss = if hasindex(ENV, "JULIA_TEST_MAXRSS_MB")
     parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
 else
     typemax(Csize_t)

@@ -20,7 +20,7 @@ end
 function check_fixed(reqs::Requires, fix::Dict{String,Fixed}, avail::Dict)
     for (p1,f1) in fix
         for p2 in keys(f1.requires)
-            haskey(avail, p2) || haskey(fix, p2) || throw(PkgError("unknown package $p2 required by $p1"))
+            hasindex(avail, p2) || hasindex(fix, p2) || throw(PkgError("unknown package $p2 required by $p1"))
         end
         satisfies(p1, f1.version, reqs) ||
             @warn "$p1 is fixed at $(f1.version) conflicting with top-level requirement: $(reqs[p1])"
@@ -77,10 +77,10 @@ function dependencies(avail::Dict, fix::Dict = Dict{String,Fixed}("julia"=>Fixed
 
     for (fp,fx) in fix
         delete!(avail, fp)
-        haskey(backdeps, fp) || continue
+        hasindex(backdeps, fp) || continue
         # for (ap,av) in avail
         for ap in backdeps[fp]
-            haskey(avail, ap) || continue
+            hasindex(avail, ap) || continue
             av = avail[ap]
             empty!(to_expunge)
             for (v,a) in av
@@ -108,13 +108,13 @@ function dependencies(avail::Dict, fix::Dict = Dict{String,Fixed}("julia"=>Fixed
         empty!(emptied)
 
         for dp in deleted_pkgs
-            haskey(backdeps, dp) || continue
+            hasindex(backdeps, dp) || continue
             for ap in backdeps[dp]
-                haskey(avail, ap) || continue
+                hasindex(avail, ap) || continue
                 av = avail[ap]
                 empty!(to_expunge)
                 for (v,a) in av
-                    haskey(a.requires, dp) || continue
+                    hasindex(a.requires, dp) || continue
                     conflicts_ap = get!(conflicts, ap) do; Set{String}() end
                     union!(conflicts_ap, conflicts[dp])
                     push!(to_expunge, v)
@@ -135,9 +135,9 @@ function partial_update_mask(instd::Dict{String,Tuple{VersionNumber,Bool}},
     isempty(upkgs) && return dont_update
     avail_new = deepcopy(avail)
     for p in upkgs
-        haskey(instd, p) || throw(PkgError("Package $p is not installed"))
+        hasindex(instd, p) || throw(PkgError("Package $p is not installed"))
         v = instd[p][1]
-        if haskey(avail, p)
+        if hasindex(avail, p)
             for vn in keys(avail[p])
                 vn < v && delete!(avail_new[p], vn)
             end
@@ -146,10 +146,10 @@ function partial_update_mask(instd::Dict{String,Tuple{VersionNumber,Bool}},
     avail_new = dependencies_subset(avail_new, upkgs)
 
     for p in keys(avail)
-        !haskey(avail_new, p) && push!(dont_update, p)
+        !hasindex(avail_new, p) && push!(dont_update, p)
     end
     for p in keys(instd)
-        !haskey(avail_new, p) && p ∉ upkgs && push!(dont_update, p)
+        !hasindex(avail_new, p) && p ∉ upkgs && push!(dont_update, p)
     end
     return dont_update
 end
@@ -162,20 +162,20 @@ function check_partial_updates(reqs::Requires,
                                fixed::Dict{String,Fixed},
                                upkgs::Set{String})
     for p in upkgs
-        if !haskey(want, p)
-            if !haskey(fixed, p)
+        if !hasindex(want, p)
+            if !hasindex(fixed, p)
                 @warn "Something went wrong with the update of package $p, please submit a bug report"
                 continue
             end
             v = fixed[p].version
         else
             v = want[p]
-            if haskey(fixed, p) && v != fixed[p].version
+            if hasindex(fixed, p) && v != fixed[p].version
                 @warn "Something went wrong with the update of package $p, please submit a bug report"
                 continue
             end
         end
-        haskey(deps, p) || continue
+        hasindex(deps, p) || continue
         vers = sort!(collect(keys(deps[p])))
         higher_vers = vers[vers .> v]
         isempty(higher_vers) && continue # package p has been set to the highest available version
@@ -185,9 +185,9 @@ function check_partial_updates(reqs::Requires,
         blocking_parents = Set{String}()
         for (p1,d1) in deps
             p1 in upkgs && continue # package `p1` is among the ones to be updated, skip the check
-            haskey(fixed, p1) || continue # if package `p1` is not fixed, it can't be blocking
+            hasindex(fixed, p1) || continue # if package `p1` is not fixed, it can't be blocking
             r1 = fixed[p1].requires # get `p1` requirements
-            haskey(r1, p) || continue # check if package `p1` requires `p`
+            hasindex(r1, p) || continue # check if package `p1` requires `p`
             vs1 = r1[p] # get the versions of `p` allowed by `p1` requirements
             any(hv in vs1 for hv in higher_vers) && continue # package `p1` would allow some of the higher versions,
                                                              # therefore it's not responsible for blocking `p`
@@ -195,10 +195,10 @@ function check_partial_updates(reqs::Requires,
         end
 
         # Determine if the update of `p` is prevented by explicit user-provided requirements
-        blocking_reqs = (haskey(reqs, p) && all(hv ∉ reqs[p] for hv in higher_vers))
+        blocking_reqs = (hasindex(reqs, p) && all(hv ∉ reqs[p] for hv in higher_vers))
 
         # Determine if the update of `p` is prevented by it being fixed (e.g. it's dirty, or pinned...)
-        isfixed = haskey(fixed, p)
+        isfixed = hasindex(fixed, p)
 
         @info begin
             "Package $p was set to version $v, but a higher version $(vers[end]) exists.\n" *
@@ -222,7 +222,7 @@ function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
     remove = Vector{Tuple{String,Tuple{PackageState,PackageState}}}()
 
     for pkg in collect(union(keys(have),keys(want)))
-        h, w = haskey(have,pkg), haskey(want,pkg)
+        h, w = hasindex(have,pkg), hasindex(want,pkg)
         if h && w
             if have[pkg] != want[pkg]
                 push!(change, (pkg,(have[pkg], want[pkg])))
@@ -244,7 +244,7 @@ function check_requirements(reqs::Requires, deps::Dict{String,Dict{VersionNumber
             available_list = sort!(collect(keys(deps[p])))
             for (p1,f1) in fix
                 f1r = f1.requires
-                haskey(f1r, p) || continue
+                hasindex(f1r, p) || continue
                 err_msg *= "         $p1 requires versions $(f1r[p])"
                 if !any([vn in f1r[p] for vn in available_list])
                     err_msg *= " [none of the available versions can satisfy this requirement]"
@@ -277,7 +277,7 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
         for (p,vs) in staged
             # Parse requirements and store allowed versions.
             depsp = deps[p]
-            if !haskey(allowed, p)
+            if !hasindex(allowed, p)
                 allowedp = Dict{VersionNumber,Bool}(vn=>true for vn in keys(depsp))
                 allowed[p] = allowedp
                 seen = false
@@ -312,7 +312,7 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
             isreq = Dict{String,Bool}(rp=>true for a in values(fdepsp) for rp in keys(a.requires))
             # Compute whether a required package appears in all requirements
             for rp in keys(isreq)
-                isreq[rp] = all(haskey(a.requires, rp) for a in values(fdepsp))
+                isreq[rp] = all(hasindex(a.requires, rp) for a in values(fdepsp))
             end
 
             # Create a list of candidates for new implicit requirements
@@ -321,7 +321,7 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
                 # Skip packages that may not be required
                 isreq[rp] || continue
                 # Compute the union of the version sets
-                if haskey(staged_next, rp)
+                if hasindex(staged_next, rp)
                     snvs = staged_next[rp]
                     union!(snvs, rvs)
                 else
@@ -398,7 +398,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
 
         # Grow the pattern by the number of classes
         luds = length(uniqdepssets)
-        @assert !haskey(vmask, p)
+        @assert !hasindex(vmask, p)
         vmask[p] = Dict{VersionNumber,BitVector}()
         vmaskp = vmask[p]
         for vn in keys(fdepsp)
@@ -420,7 +420,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
         (length(deps[p]) == 1 || vs == VersionSet()) && continue
 
         # Store the dependency info in the patterns
-        @assert haskey(vmask, p)
+        @assert hasindex(vmask, p)
         for (vn,vm) in vmask[p]
             push!(vm, vn in vs)
         end
@@ -449,7 +449,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
             if !isempty(cl)
                 vtop = maximum(cl)
                 push!(prunedp, vtop)
-                @assert !haskey(eqclassp, vtop)
+                @assert !hasindex(eqclassp, vtop)
                 eqclassp[vtop] = cl
             end
         end
@@ -457,7 +457,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
     end
     # Put non-allowed versions into eq_classes
     for (p, allowedp) in allowed
-        haskey(eq_classes, p) || continue
+        hasindex(eq_classes, p) || continue
         eqclassp = eq_classes[p]
         for (vn, a) in allowedp
             a && continue
@@ -466,7 +466,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
     end
     # Put all remaining packages into eq_classes
     for (p, depsp) in deps
-        haskey(eq_classes, p) && continue
+        hasindex(eq_classes, p) && continue
         eq_classes[p] = Dict{VersionNumber,Vector{VersionNumber}}()
         eqclassp = eq_classes[p]
         for vn in keys(depsp)
@@ -479,8 +479,8 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
     new_deps = Dict{String,Dict{VersionNumber,Available}}()
 
     for (p,depsp) in filtered_deps
-        @assert !haskey(new_deps, p)
-        if !haskey(pruned_vers, p)
+        @assert !hasindex(new_deps, p)
+        if !hasindex(pruned_vers, p)
             new_deps[p] = depsp
             continue
         end
@@ -524,7 +524,7 @@ prune_versions(deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveB
 function subdeps(deps::Dict{String,Dict{VersionNumber,Available}}, pkgs::Set{String})
     sub_deps = Dict{String,Dict{VersionNumber,Available}}()
     for p in pkgs
-        haskey(sub_deps, p) || (sub_deps[p] = Dict{VersionNumber,Available}())
+        hasindex(sub_deps, p) || (sub_deps[p] = Dict{VersionNumber,Available}())
         sub_depsp = sub_deps[p]
         for (vn,a) in deps[p]
             sub_depsp[vn] = a
@@ -557,10 +557,10 @@ function undirected_dependencies_subset(deps::Dict{String,Dict{VersionNumber,Ava
     graph = Dict{String, Set{String}}()
 
     for (p,d) in deps
-        haskey(graph, p) || (graph[p] = Set{String}())
+        hasindex(graph, p) || (graph[p] = Set{String}())
         for a in values(d), rp in keys(a.requires)
             push!(graph[p], rp)
-            haskey(graph, rp) || (graph[rp] = Set{String}())
+            hasindex(graph, rp) || (graph[rp] = Set{String}())
             push!(graph[rp], p)
         end
     end

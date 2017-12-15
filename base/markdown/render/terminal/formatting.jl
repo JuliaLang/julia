@@ -19,13 +19,13 @@ const text_formats = Dict(
 
 function with_output_format(f::Function, formats::Vector{Symbol}, io::IO, args...)
     Base.have_color && for format in formats
-        haskey(text_formats, format) &&
+        hasindex(text_formats, format) &&
             print(io, text_formats[format][1])
     end
     try f(io, args...)
     finally
         Base.have_color && for format in formats
-            haskey(text_formats, format) &&
+            hasindex(text_formats, format) &&
                 print(io, text_formats[format][2])
         end
     end

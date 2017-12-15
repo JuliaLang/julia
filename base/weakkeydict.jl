@@ -75,7 +75,7 @@ function convert(::Type{WeakKeyDict{K,V}},d::AbstractDict) where V where K
     h = WeakKeyDict{K,V}()
     for (k,v) in d
         ck = convert(K,k)
-        if !haskey(h,ck)
+        if !hasindex(h,ck)
             h[ck] = convert(V,v)
         else
             error("key collision during dictionary conversion")
@@ -114,7 +114,7 @@ pop!(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> pop!(wkh.ht, key), wkh)
 pop!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> pop!(wkh.ht, key, default), wkh)
 delete!(wkh::WeakKeyDict, key) = lock(() -> delete!(wkh.ht, key), wkh)
 empty!(wkh::WeakKeyDict) = (lock(() -> empty!(wkh.ht), wkh); wkh)
-haskey(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> haskey(wkh.ht, key), wkh)
+hasindex(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> hasindex(wkh.ht, key), wkh)
 getindex(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> getindex(wkh.ht, key), wkh)
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 length(t::WeakKeyDict) = length(t.ht)

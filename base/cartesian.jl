@@ -350,7 +350,7 @@ const exprresolve_cond_dict = Dict{Symbol,Function}(:(==) => ==,
     :(<) => <, :(>) => >, :(<=) => <=, :(>=) => >=)
 
 function exprresolve_arith(ex::Expr)
-    if ex.head == :call && haskey(exprresolve_arith_dict, ex.args[1]) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
+    if ex.head == :call && hasindex(exprresolve_arith_dict, ex.args[1]) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
         return true, exprresolve_arith_dict[ex.args[1]](ex.args[2:end]...)
     end
     false, 0

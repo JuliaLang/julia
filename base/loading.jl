@@ -315,7 +315,7 @@ const loaded_modules = ObjectIdDict()
 const module_keys = ObjectIdDict()
 
 function register_root_module(key, m::Module)
-    if haskey(loaded_modules, key)
+    if hasindex(loaded_modules, key)
         oldm = loaded_modules[key]
         if oldm !== m
             name = module_name(oldm)
@@ -331,7 +331,7 @@ register_root_module(:Core, Core)
 register_root_module(:Base, Base)
 register_root_module(:Main, Main)
 
-is_root_module(m::Module) = haskey(module_keys, m)
+is_root_module(m::Module) = hasindex(module_keys, m)
 
 root_module_key(m::Module) = module_keys[m]
 
@@ -346,12 +346,12 @@ end
 # for now keys can only be Symbols, but that will change
 root_module(key::Symbol) = loaded_modules[key]
 
-root_module_exists(key::Symbol) = haskey(loaded_modules, key)
+root_module_exists(key::Symbol) = hasindex(loaded_modules, key)
 
 loaded_modules_array() = collect(values(loaded_modules))
 
 function unreference_module(key)
-    if haskey(loaded_modules, key)
+    if hasindex(loaded_modules, key)
         m = pop!(loaded_modules, key)
         # need to ensure all modules are GC rooted; will still be referenced
         # in module_keys
@@ -475,7 +475,7 @@ function source_path(default::Union{AbstractString,Void}="")
     t = current_task()
     while true
         s = t.storage
-        if s !== nothing && haskey(s, :SOURCE_PATH)
+        if s !== nothing && hasindex(s, :SOURCE_PATH)
             return s[:SOURCE_PATH]
         end
         if t === t.parent

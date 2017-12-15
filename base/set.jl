@@ -36,7 +36,7 @@ end
 
 isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
-in(x, s::Set) = haskey(s.dict, x)
+in(x, s::Set) = hasindex(s.dict, x)
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
 pop!(s::Set, x, deflt) = x in s ? pop!(s, x) : deflt

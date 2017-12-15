@@ -122,7 +122,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
 
         # For SSH we need a private key location
         last_private_key = cred.prvkey
-        if !isfile(cred.prvkey) || !revised || !haskey(ENV, "SSH_KEY_PATH")
+        if !isfile(cred.prvkey) || !revised || !hasindex(ENV, "SSH_KEY_PATH")
             response = Base.prompt("Private key location for '$url'", default=cred.prvkey)
             isnull(response) && return user_abort()
             cred.prvkey = expanduser(unsafe_get(response))
@@ -300,7 +300,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
             cred_id = credential_identifier(p.scheme, p.host)
 
             # Perform a deepcopy as we do not want to mutate approved cached credentials
-            if haskey(cache, cred_id)
+            if hasindex(cache, cred_id)
                 p.credential = Nullable(deepcopy(cache[cred_id]))
             end
         end

@@ -26,7 +26,7 @@ end
 function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
-    if !haskey(io, :compact)
+    if !hasindex(io, :compact)
         recur_io = IOContext(recur_io, :compact => true)
     end
 
@@ -195,7 +195,7 @@ function convert(::Type{Dict{K,V}},d::AbstractDict) where V where K
     h = Dict{K,V}()
     for (k,v) in d
         ck = convert(K,k)
-        if !haskey(h,ck)
+        if !hasindex(h,ck)
             h[ck] = convert(V,v)
         else
             error("key collision during dictionary conversion")
@@ -568,7 +568,7 @@ function get(default::Callable, h::Dict{K,V}, key) where V where K
 end
 
 """
-    haskey(collection, key) -> Bool
+    hasindex(collection, key) -> Bool
 
 Determine whether a collection has a mapping for a given key.
 
@@ -578,14 +578,14 @@ Dict{Char,Int64} with 2 entries:
   'b' => 3
   'a' => 2
 
-julia> haskey(a,'a')
+julia> hasindex(a,'a')
 true
 
-julia> haskey(a,'c')
+julia> hasindex(a,'c')
 false
 ```
 """
-haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
+hasindex(h::Dict, key) = (ht_keyindex(h, key) >= 0)
 in(key, v::KeySet{<:Any, <:Dict}) = (ht_keyindex(v.dict, key) >= 0)
 
 """
@@ -767,7 +767,7 @@ function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
     return false
 end
 
-function haskey(dict::ImmutableDict, key)
+function hasindex(dict::ImmutableDict, key)
     while isdefined(dict, :parent)
         dict.key == key && return true
         dict = dict.parent

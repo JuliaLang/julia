@@ -21,7 +21,7 @@ function take!(D::DictChannel, k)
 end
 
 isready(D::DictChannel) = length(D.d) > 1
-isready(D::DictChannel, k) = haskey(D.d,k)
+isready(D::DictChannel, k) = hasindex(D.d,k)
 function fetch(D::DictChannel, k)
     wait(D,k)
     D.d[k]

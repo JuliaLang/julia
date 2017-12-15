@@ -62,10 +62,10 @@ function deps_from_data(deps_data)
     deps = Dict{String,Dict{VersionNumber,Available}}()
     for d in deps_data
         p = d[1]; vn = d[2]; r = d[3:end]
-        if !haskey(deps, p)
+        if !hasindex(deps, p)
             deps[p] = Dict{VersionNumber,Available}()
         end
-        if !haskey(deps[p], vn)
+        if !hasindex(deps[p], vn)
             deps[p][vn] = Available("$(p)_$(vn)_sha1", Dict{String,VersionSet}())
         end
         isempty(r) && continue

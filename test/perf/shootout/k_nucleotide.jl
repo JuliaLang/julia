@@ -13,7 +13,7 @@ function count(data::AbstractString, n::Int)
     top = length(data) - n + 1
     for i = 1:top
         s = data[i : i+n-1]
-        if haskey(counts, s)
+        if hasindex(counts, s)
             counts[s] += 1
         else
             counts[s] = 1

@@ -282,7 +282,7 @@ function print_range(io::IO, r::AbstractRange,
     # and should be called by show and display
     limit = get(io, :limit, false)
     sz = displaysize(io)
-    if !haskey(io, :compact)
+    if !hasindex(io, :compact)
         io = IOContext(io, :compact => true)
     end
     screenheight, screenwidth = sz[1] - 4, sz[2]

@@ -161,7 +161,7 @@ for emulating dynamic scoping.
 """
 function task_local_storage(body::Function, key, val)
     tls = task_local_storage()
-    hadkey = haskey(tls,key)
+    hadkey = hasindex(tls,key)
     old = get(tls,key,nothing)
     tls[key] = val
     try body()
@@ -213,7 +213,7 @@ function task_done_hook(t::Task)
     end
 
     # Execute any other hooks registered in the TLS
-    if isa(t.storage, ObjectIdDict) && haskey(t.storage, :TASKDONE_HOOKS)
+    if isa(t.storage, ObjectIdDict) && hasindex(t.storage, :TASKDONE_HOOKS)
         foreach(hook -> hook(t), t.storage[:TASKDONE_HOOKS])
         delete!(t.storage, :TASKDONE_HOOKS)
         handled = true

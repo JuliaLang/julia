@@ -21,7 +21,7 @@ module LRUExample
 
 import Base.isempty, Base.length, Base.sizeof
 import Base.start, Base.next, Base.done
-import Base.haskey, Base.get
+import Base.hasindex, Base.get
 import Base.setindex!, Base.getindex, Base.delete!, Base.empty!
 import Base.show
 
@@ -62,9 +62,9 @@ length(lru::LRU) = length(lru.q)
 ## associative ##
 
 # Should this check count as an access?
-haskey(lru::LRU, key) = haskey(lru.ht, key)
+hasindex(lru::LRU, key) = hasindex(lru.ht, key)
 
-get(lru::LRU, key, default) = haskey(lru, key) ? lru[key] : default
+get(lru::LRU, key, default) = hasindex(lru, key) ? lru[key] : default
 
 function empty!(lru::LRU)
     empty!(lru.ht)
@@ -96,7 +96,7 @@ function getindex(lru::LRU, key)
 end
 
 function setindex!(lru::LRU, v, key)
-    if haskey(lru, key)
+    if hasindex(lru, key)
         item = lru.ht[key]
         idx = locate(lru.q, item)
         item.v = v

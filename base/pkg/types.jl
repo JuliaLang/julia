@@ -130,13 +130,13 @@ const Requires = Dict{String,VersionSet}
 
 function merge_requires!(A::Requires, B::Requires)
     for (pkg,vers) in B
-        A[pkg] = haskey(A,pkg) ? intersect(A[pkg],vers) : vers
+        A[pkg] = hasindex(A,pkg) ? intersect(A[pkg],vers) : vers
     end
     return A
 end
 
 satisfies(pkg::AbstractString, ver::VersionNumber, reqs::Requires) =
-    !haskey(reqs, pkg) || in(ver, reqs[pkg])
+    !hasindex(reqs, pkg) || in(ver, reqs[pkg])
 
 struct Available
     sha1::String

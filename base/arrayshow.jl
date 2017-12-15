@@ -314,7 +314,7 @@ print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 # implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
 function _display(io::IO, X::AbstractArray)
     # 0) compute new IOContext
-    if !haskey(io, :compact) && length(axes(X, 2)) > 1
+    if !hasindex(io, :compact) && length(axes(X, 2)) > 1
         io = IOContext(io, :compact => true)
     end
     if get(io, :limit, false) && eltype(X) === Method
