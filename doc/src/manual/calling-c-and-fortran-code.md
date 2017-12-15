@@ -209,7 +209,7 @@ julia> A = [1.3, -2.7, 4.4, 3.1]
   4.4
   3.1
 
-julia> ccall(:qsort, Void, (Ptr{Cdouble}, Csize_t, Csize_t, Ptr{Cvoid}),
+julia> ccall(:qsort, Cvoid, (Ptr{Cdouble}, Csize_t, Csize_t, Ptr{Cvoid}),
              A, length(A), sizeof(eltype(A)), mycompare_c)
 
 julia> A
@@ -243,13 +243,13 @@ Julia automatically inserts calls to the [`Base.cconvert`](@ref) function to con
 to the specified type. For example, the following call:
 
 ```julia
-ccall((:foo, "libfoo"), Void, (Int32, Float64), x, y)
+ccall((:foo, "libfoo"), Cvoid, (Int32, Float64), x, y)
 ```
 
 will behave as if the following were written:
 
 ```julia
-ccall((:foo, "libfoo"), Void, (Int32, Float64),
+ccall((:foo, "libfoo"), Cvoid, (Int32, Float64),
       Base.unsafe_convert(Int32, Base.cconvert(Int32, x)),
       Base.unsafe_convert(Float64, Base.cconvert(Float64, y)))
 ```
@@ -666,7 +666,7 @@ as an argument, Julia will automatically pass a C pointer to the encapsulated da
 ```julia
 width = Ref{Cint}(0)
 range = Ref{Cfloat}(0)
-ccall(:foo, Void, (Ref{Cint}, Ref{Cfloat}), width, range)
+ccall(:foo, Cvoid, (Ref{Cint}, Ref{Cfloat}), width, range)
 ```
 
 Upon return, the contents of `width` and `range` can be retrieved (if they were changed by `foo`)
@@ -870,7 +870,7 @@ macro dlsym(func, lib)
 end
 
 mylibvar = Libdl.dlopen("mylib")
-ccall(@dlsym("myfunc", mylibvar), Void, ())
+ccall(@dlsym("myfunc", mylibvar), Cvoid, ())
 ```
 
 ## Closing a Library

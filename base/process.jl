@@ -359,7 +359,7 @@ function _jl_spawn(cmd, argv, loop::Ptr{Cvoid}, pp::Process,
         pp.cmd.flags, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir,
         uv_jl_return_spawn::Ptr{Cvoid})
     if error != 0
-        ccall(:jl_forceclose_uv, Void, (Ptr{Cvoid},), proc)
+        ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), proc)
         throw(UVError("could not spawn "*string(pp.cmd), error))
     end
     associate_julia_struct(proc, pp)
@@ -369,7 +369,7 @@ end
 function uvfinalize(proc::Process)
     if proc.handle != C_NULL
         disassociate_julia_struct(proc.handle)
-        ccall(:jl_close_uv, Void, (Ptr{Cvoid},), proc.handle)
+        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
         proc.handle = C_NULL
     end
     nothing
@@ -381,7 +381,7 @@ function uv_return_spawn(p::Ptr{Cvoid}, exit_status::Int64, termsignal::Int32)
     proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = exit_status
     proc.termsignal = termsignal
-    ccall(:jl_close_uv, Void, (Ptr{Cvoid},), proc.handle)
+    ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
     notify(proc.exitnotify)
     nothing
 end

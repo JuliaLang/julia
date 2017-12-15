@@ -57,9 +57,9 @@ function lock(l::TatasLock)
                 return
             end
         end
-        ccall(:jl_cpu_pause, Void, ())
+        ccall(:jl_cpu_pause, Cvoid, ())
         # Temporary solution before we have gc transition support in codegen.
-        ccall(:jl_gc_safepoint, Void, ())
+        ccall(:jl_gc_safepoint, Cvoid, ())
     end
 end
 
@@ -72,7 +72,7 @@ end
 
 function unlock(l::TatasLock)
     l.handle[] = 0
-    ccall(:jl_cpu_wake, Void, ())
+    ccall(:jl_cpu_wake, Cvoid, ())
     return
 end
 
@@ -117,9 +117,9 @@ function lock(l::RecursiveTatasLock)
                 return
             end
         end
-        ccall(:jl_cpu_pause, Void, ())
+        ccall(:jl_cpu_pause, Cvoid, ())
         # Temporary solution before we have gc transition support in codegen.
-        ccall(:jl_gc_safepoint, Void, ())
+        ccall(:jl_gc_safepoint, Cvoid, ())
     end
 end
 
@@ -144,7 +144,7 @@ function unlock(l::RecursiveTatasLock)
     if l.handle[] == 1
         l.ownertid[] = 0
         l.handle[] = 0
-        ccall(:jl_cpu_wake, Void, ())
+        ccall(:jl_cpu_wake, Cvoid, ())
     else
         l.handle[] -= 1
     end
@@ -184,7 +184,7 @@ mutable struct Mutex <: AbstractLock
     handle::Ptr{Cvoid}
     function Mutex()
         m = new(zero(Int16), Libc.malloc(UV_MUTEX_SIZE))
-        ccall(:uv_mutex_init, Void, (Ptr{Cvoid},), m.handle)
+        ccall(:uv_mutex_init, Cvoid, (Ptr{Cvoid},), m.handle)
         finalizer(_uv_hook_close, m)
         return m
     end
@@ -196,7 +196,7 @@ function _uv_hook_close(x::Mutex)
     h = x.handle
     if h != C_NULL
         x.handle = C_NULL
-        ccall(:uv_mutex_destroy, Void, (Ptr{Cvoid},), h)
+        ccall(:uv_mutex_destroy, Cvoid, (Ptr{Cvoid},), h)
         Libc.free(h)
         nothing
     end
@@ -209,8 +209,8 @@ function lock(m::Mutex)
     # Temporary solution before we have gc transition support in codegen.
     # This could mess up gc state when we add codegen support.
     gc_state = ccall(:jl_gc_safe_enter, Int8, ())
-    ccall(:uv_mutex_lock, Void, (Ptr{Cvoid},), m)
-    ccall(:jl_gc_safe_leave, Void, (Int8,), gc_state)
+    ccall(:uv_mutex_lock, Cvoid, (Ptr{Cvoid},), m)
+    ccall(:jl_gc_safe_leave, Cvoid, (Int8,), gc_state)
     m.ownertid = threadid()
     return
 end
@@ -229,7 +229,7 @@ end
 function unlock(m::Mutex)
     @assert(m.ownertid == threadid(), "unlock from wrong thread")
     m.ownertid = 0
-    ccall(:uv_mutex_unlock, Void, (Ptr{Cvoid},), m)
+    ccall(:uv_mutex_unlock, Cvoid, (Ptr{Cvoid},), m)
     return
 end
 

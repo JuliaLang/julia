@@ -89,7 +89,7 @@ Get the backtrace of the current exception, for use within `catch` blocks.
 function catch_backtrace()
     bt = Ref{Any}(nothing)
     bt2 = Ref{Any}(nothing)
-    ccall(:jl_get_backtrace, Void, (Ref{Any}, Ref{Any}), bt, bt2)
+    ccall(:jl_get_backtrace, Cvoid, (Ref{Any}, Ref{Any}), bt, bt2)
     return _reformat_bt(bt[], bt2[])
 end
 

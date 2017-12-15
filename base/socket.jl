@@ -336,7 +336,7 @@ _jl_connect_raw(sock::TCPSocket, sockaddr::Ptr{Cvoid}) =
 _jl_sockaddr_from_addrinfo(addrinfo::Ptr{Cvoid}) =
     ccall(:jl_sockaddr_from_addrinfo, Ptr{Cvoid}, (Ptr{Cvoid},), addrinfo)
 _jl_sockaddr_set_port(ptr::Ptr{Cvoid}, port::UInt16) =
-    ccall(:jl_sockaddr_set_port, Void, (Ptr{Cvoid}, UInt16), ptr, port)
+    ccall(:jl_sockaddr_set_port, Cvoid, (Ptr{Cvoid}, UInt16), ptr, port)
 
 """
     accept(server[,client])
@@ -619,7 +619,7 @@ function uv_getaddrinfocb(req::Ptr{Cvoid}, status::Cint, addrinfo::Ptr{Cvoid})
                 end
                 addrinfo = ccall(:jl_next_from_addrinfo, Ptr{Cvoid}, (Ptr{Cvoid},), addrinfo)
             end
-            ccall(:uv_freeaddrinfo, Void, (Ptr{Cvoid},), freeaddrinfo)
+            ccall(:uv_freeaddrinfo, Cvoid, (Ptr{Cvoid},), freeaddrinfo)
             schedule(t, addrs)
         end
     else
@@ -808,7 +808,7 @@ function getipaddr()
         sockaddr = ccall(:jl_uv_interface_address_sockaddr, Ptr{Cvoid}, (Ptr{UInt8},), current_addr)
         if ccall(:jl_sockaddr_in_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
             rv = IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), sockaddr)))
-            ccall(:uv_free_interface_addresses, Void, (Ptr{UInt8}, Int32), addr, count)
+            ccall(:uv_free_interface_addresses, Cvoid, (Ptr{UInt8}, Int32), addr, count)
             return rv
         # Uncomment to enbable IPv6
         #elseif ccall(:jl_sockaddr_in_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
@@ -817,7 +817,7 @@ function getipaddr()
         #   return IPv6(ntoh(host[1]))
         end
     end
-    ccall(:uv_free_interface_addresses, Void, (Ptr{UInt8}, Int32), addr, count)
+    ccall(:uv_free_interface_addresses, Cvoid, (Ptr{UInt8}, Int32), addr, count)
     return lo_present ? localhost : error("No networking interface available")
 end
 

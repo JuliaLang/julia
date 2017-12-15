@@ -747,7 +747,7 @@ function push!(B::BitVector, item)
 
     l = _mod64(length(B))
     if l == 0
-        ccall(:jl_array_grow_end, Void, (Any, UInt), Bc, 1)
+        ccall(:jl_array_grow_end, Cvoid, (Any, UInt), Bc, 1)
         Bc[end] = UInt64(0)
     end
     B.len += 1
@@ -765,7 +765,7 @@ function append!(B::BitVector, items::BitVector)
     k0 = length(Bc)
     k1 = num_bit_chunks(n0 + n1)
     if k1 > k0
-        ccall(:jl_array_grow_end, Void, (Any, UInt), Bc, k1 - k0)
+        ccall(:jl_array_grow_end, Cvoid, (Any, UInt), Bc, k1 - k0)
         Bc[end] = UInt64(0)
     end
     B.len += n1
@@ -784,7 +784,7 @@ function prepend!(B::BitVector, items::BitVector)
     k0 = length(Bc)
     k1 = num_bit_chunks(n0 + n1)
     if k1 > k0
-        ccall(:jl_array_grow_end, Void, (Any, UInt), Bc, k1 - k0)
+        ccall(:jl_array_grow_end, Cvoid, (Any, UInt), Bc, k1 - k0)
         Bc[end] = UInt64(0)
     end
     B.len += n1
@@ -797,7 +797,7 @@ prepend!(B::BitVector, items::AbstractVector{Bool}) = prepend!(B, BitArray(items
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, Array(items))
 
 function sizehint!(B::BitVector, sz::Integer)
-    ccall(:jl_array_sizehint, Void, (Any, UInt), B.chunks, num_bit_chunks(sz))
+    ccall(:jl_array_sizehint, Cvoid, (Any, UInt), B.chunks, num_bit_chunks(sz))
     return B
 end
 
@@ -813,7 +813,7 @@ function resize!(B::BitVector, n::Integer)
     k0 = length(Bc)
     k1 = num_bit_chunks(Int(n))
     if k1 > k0
-        ccall(:jl_array_grow_end, Void, (Any, UInt), Bc, k1 - k0)
+        ccall(:jl_array_grow_end, Cvoid, (Any, UInt), Bc, k1 - k0)
         Bc[end] = UInt64(0)
     end
     B.len = n
@@ -826,7 +826,7 @@ function pop!(B::BitVector)
     B[end] = false
 
     l = _mod64(length(B))
-    l == 1 && ccall(:jl_array_del_end, Void, (Any, UInt), B.chunks, 1)
+    l == 1 && ccall(:jl_array_del_end, Cvoid, (Any, UInt), B.chunks, 1)
     B.len -= 1
 
     return item
@@ -839,7 +839,7 @@ function unshift!(B::BitVector, item)
 
     l = _mod64(length(B))
     if l == 0
-        ccall(:jl_array_grow_end, Void, (Any, UInt), Bc, 1)
+        ccall(:jl_array_grow_end, Cvoid, (Any, UInt), Bc, 1)
         Bc[end] = UInt64(0)
     end
     B.len += 1
@@ -867,7 +867,7 @@ function shift!(B::BitVector)
 
         l = _mod64(length(B))
         if l == 1
-            ccall(:jl_array_del_end, Void, (Any, UInt), Bc, 1)
+            ccall(:jl_array_del_end, Cvoid, (Any, UInt), Bc, 1)
         else
             Bc[end] >>>= 1
         end
@@ -888,7 +888,7 @@ function insert!(B::BitVector, i::Integer, item)
 
     l = _mod64(length(B))
     if l == 0
-        ccall(:jl_array_grow_end, Void, (Any, UInt), Bc, 1)
+        ccall(:jl_array_grow_end, Cvoid, (Any, UInt), Bc, 1)
         Bc[end] = UInt64(0)
     end
     B.len += 1
@@ -926,7 +926,7 @@ function _deleteat!(B::BitVector, i::Integer)
         l = _mod64(length(B))
 
         if l == 1
-            ccall(:jl_array_del_end, Void, (Any, UInt), Bc, 1)
+            ccall(:jl_array_del_end, Cvoid, (Any, UInt), Bc, 1)
         elseif length(Bc) > k
             Bc[end] >>>= 1
         end
@@ -957,7 +957,7 @@ function deleteat!(B::BitVector, r::UnitRange{Int})
 
     copy_chunks!(Bc, i_f, Bc, i_l+1, n-i_l)
 
-    delta_k < 0 && ccall(:jl_array_del_end, Void, (Any, UInt), Bc, -delta_k)
+    delta_k < 0 && ccall(:jl_array_del_end, Cvoid, (Any, UInt), Bc, -delta_k)
 
     B.len = new_l
 
@@ -995,7 +995,7 @@ function deleteat!(B::BitVector, inds)
     q <= n && copy_chunks!(Bc, p, Bc, q, n-q+1)
 
     delta_k = num_bit_chunks(new_l) - length(Bc)
-    delta_k < 0 && ccall(:jl_array_del_end, Void, (Any, UInt), Bc, -delta_k)
+    delta_k < 0 && ccall(:jl_array_del_end, Cvoid, (Any, UInt), Bc, -delta_k)
 
     B.len = new_l
 
@@ -1042,12 +1042,12 @@ function splice!(B::BitVector, r::Union{UnitRange{Int}, Integer}, ins::AbstractA
     new_l = length(B) + lins - ldel
     delta_k = num_bit_chunks(new_l) - length(Bc)
 
-    delta_k > 0 && ccall(:jl_array_grow_end, Void, (Any, UInt), Bc, delta_k)
+    delta_k > 0 && ccall(:jl_array_grow_end, Cvoid, (Any, UInt), Bc, delta_k)
 
     copy_chunks!(Bc, i_f+lins, Bc, i_l+1, n-i_l)
     copy_chunks!(Bc, i_f, Bins.chunks, 1, lins)
 
-    delta_k < 0 && ccall(:jl_array_del_end, Void, (Any, UInt), Bc, -delta_k)
+    delta_k < 0 && ccall(:jl_array_del_end, Cvoid, (Any, UInt), Bc, -delta_k)
 
     B.len = new_l
 
@@ -1070,7 +1070,7 @@ end
 
 
 function empty!(B::BitVector)
-    ccall(:jl_array_del_end, Void, (Any, UInt), B.chunks, length(B.chunks))
+    ccall(:jl_array_del_end, Cvoid, (Any, UInt), B.chunks, length(B.chunks))
     B.len = 0
     return B
 end

@@ -87,7 +87,7 @@ function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argva
     thread_notifiers[idx] = Nullable{Condition}(Condition())
 
     # queue up the work to be done
-    ccall(:jl_queue_work, Void,
+    ccall(:jl_queue_work, Cvoid,
         (Ptr{Cvoid}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid}, Cint),
         fun_ptr, args_arr, ret_arr, c_notify_fun, idx)
 

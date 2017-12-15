@@ -389,14 +389,14 @@ function append_any(xs...)
     for x in xs
         for y in x
             if i > l
-                ccall(:jl_array_grow_end, Void, (Any, UInt), out, 16)
+                ccall(:jl_array_grow_end, Cvoid, (Any, UInt), out, 16)
                 l += 16
             end
             Core.arrayset(true, out, y, i)
             i += 1
         end
     end
-    ccall(:jl_array_del_end, Void, (Any, UInt), out, l-i+1)
+    ccall(:jl_array_del_end, Cvoid, (Any, UInt), out, l-i+1)
     out
 end
 

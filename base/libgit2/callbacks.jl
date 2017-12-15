@@ -41,21 +41,21 @@ end
 
 function user_abort()
     # Note: Potentially it could be better to just throw a Julia error.
-    ccall((:giterr_set_str, :libgit2), Void,
+    ccall((:giterr_set_str, :libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, user cancelled credential request.")
     return Cint(Error.EUSER)
 end
 
 function prompt_limit()
-    ccall((:giterr_set_str, :libgit2), Void,
+    ccall((:giterr_set_str, :libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, maximum number of prompts reached.")
     return Cint(Error.EAUTH)
 end
 
 function exhausted_abort()
-    ccall((:giterr_set_str, :libgit2), Void,
+    ccall((:giterr_set_str, :libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "All authentication methods have failed.")
     return Cint(Error.EAUTH)
@@ -332,7 +332,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
     # with the requested authentication method.
     if err == 0
         if !isnull(p.explicit)
-            ccall((:giterr_set_str, :libgit2), Void, (Cint, Cstring), Cint(Error.Callback),
+            ccall((:giterr_set_str, :libgit2), Cvoid, (Cint, Cstring), Cint(Error.Callback),
                   "The explicitly provided credential is incompatible with the requested " *
                   "authentication methods.")
         end

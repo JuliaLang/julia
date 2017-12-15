@@ -339,8 +339,8 @@ end
 # reennable_sigint is provided so that immediate ctrl-c handling is
 # re-enabled within a sigatomic region, e.g. inside a Julia callback function
 # within a long-running C routine.
-sigatomic_begin() = ccall(:jl_sigatomic_begin, Void, ())
-sigatomic_end() = ccall(:jl_sigatomic_end, Void, ())
+sigatomic_begin() = ccall(:jl_sigatomic_begin, Cvoid, ())
+sigatomic_end() = ccall(:jl_sigatomic_end, Cvoid, ())
 
 """
     disable_sigint(f::Function)
@@ -382,7 +382,7 @@ function reenable_sigint(f::Function)
 end
 
 function ccallable(f::Function, rt::Type, argt::Type, name::Union{AbstractString,Symbol}=string(f))
-    ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring), f, rt, argt, name)
+    ccall(:jl_extern_c, Cvoid, (Any, Any, Any, Cstring), f, rt, argt, name)
 end
 
 function expand_ccallable(rt, def)

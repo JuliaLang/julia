@@ -520,27 +520,27 @@ end
 tracefoo(x, y) = x+y
 didtrace = false
 tracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
-ccall(:jl_register_method_tracer, Void, (Ptr{Cvoid},), cfunction(tracer, Void, Tuple{Ptr{Cvoid}}))
+ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), cfunction(tracer, Cvoid, Tuple{Ptr{Cvoid}}))
 meth = which(tracefoo,Tuple{Any,Any})
-ccall(:jl_trace_method, Void, (Any,), meth)
+ccall(:jl_trace_method, Cvoid, (Any,), meth)
 @test tracefoo(1, 2) == 3
-ccall(:jl_untrace_method, Void, (Any,), meth)
+ccall(:jl_untrace_method, Cvoid, (Any,), meth)
 @test didtrace
 didtrace = false
 @test tracefoo(1.0, 2.0) == 3.0
 @test !didtrace
-ccall(:jl_register_method_tracer, Void, (Ptr{Cvoid},), C_NULL)
+ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # Method Tracing test
 methtracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
-ccall(:jl_register_newmeth_tracer, Void, (Ptr{Cvoid},), cfunction(methtracer, Void, Tuple{Ptr{Cvoid}}))
+ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cfunction(methtracer, Cvoid, Tuple{Ptr{Cvoid}}))
 tracefoo2(x, y) = x*y
 @test didtrace
 didtrace = false
 tracefoo(x::Int64, y::Int64) = x*y
 @test didtrace
 didtrace = false
-ccall(:jl_register_newmeth_tracer, Void, (Ptr{Cvoid},), C_NULL)
+ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # test for reflection over large method tables
 for i = 1:100; @eval fLargeTable(::Val{$i}, ::Any) = 1; end

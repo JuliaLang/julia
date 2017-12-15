@@ -47,7 +47,7 @@ function method_argnames(m::Method)
         return m.generator.argnames
     end
     argnames = Vector{Any}(uninitialized, m.nargs)
-    ccall(:jl_fill_argnames, Void, (Any, Any), m.source, argnames)
+    ccall(:jl_fill_argnames, Cvoid, (Any, Any), m.source, argnames)
     return argnames
 end
 

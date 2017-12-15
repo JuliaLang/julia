@@ -78,7 +78,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # Free memory allocated by SPQR. This call will make sure that the
         # correct deallocator function is called and that the memory count in
         # the common struct is updated
-        ccall((:cholmod_l_free, :libcholmod), Void,
+        ccall((:cholmod_l_free, :libcholmod), Cvoid,
             (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Cvoid}),
             n, sizeof(CHOLMOD.SuiteSparse_long), e, CHOLMOD.common_struct)
     end
@@ -93,7 +93,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # Free memory allocated by SPQR. This call will make sure that the
         # correct deallocator function is called and that the memory count in
         # the common struct is updated
-        ccall((:cholmod_l_free, :libcholmod), Void,
+        ccall((:cholmod_l_free, :libcholmod), Cvoid,
             (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Cvoid}),
             m, sizeof(CHOLMOD.SuiteSparse_long), hpinv, CHOLMOD.common_struct)
     end

@@ -20,7 +20,7 @@ function __init__()
                                  JIT_STACK_START_SIZE, JIT_STACK_MAX_SIZE, C_NULL)
         MATCH_CONTEXT[] = ccall((:pcre2_match_context_create_8, PCRE_LIB),
                                      Ptr{Cvoid}, (Ptr{Cvoid},), C_NULL)
-        ccall((:pcre2_jit_stack_assign_8, PCRE_LIB), Void,
+        ccall((:pcre2_jit_stack_assign_8, PCRE_LIB), Cvoid,
               (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), MATCH_CONTEXT[], C_NULL, JIT_STACK[])
     catch ex
         Base.showerror_nostdio(ex,
@@ -108,20 +108,20 @@ function jit_compile(regex::Ptr{Cvoid})
 end
 
 free_match_data(match_data) =
-    ccall((:pcre2_match_data_free_8, PCRE_LIB), Void, (Ptr{Cvoid},), match_data)
+    ccall((:pcre2_match_data_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), match_data)
 
 free_re(re) =
-    ccall((:pcre2_code_free_8, PCRE_LIB), Void, (Ptr{Cvoid},), re)
+    ccall((:pcre2_code_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), re)
 
 free_jit_stack(stack) =
-    ccall((:pcre2_jit_stack_free_8, PCRE_LIB), Void, (Ptr{Cvoid},), stack)
+    ccall((:pcre2_jit_stack_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), stack)
 
 free_match_context(context) =
-    ccall((:pcre2_match_context_free_8, PCRE_LIB), Void, (Ptr{Cvoid},), context)
+    ccall((:pcre2_match_context_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), context)
 
 function err_message(errno)
     buffer = Vector{UInt8}(uninitialized, 256)
-    ccall((:pcre2_get_error_message_8, PCRE_LIB), Void,
+    ccall((:pcre2_get_error_message_8, PCRE_LIB), Cvoid,
           (Int32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
     Base.@gc_preserve buffer unsafe_string(pointer(buffer))
 end

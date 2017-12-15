@@ -423,7 +423,7 @@ function readdir(path::AbstractString)
     end
 
     # Clean up the request string
-    ccall(:jl_uv_fs_req_cleanup, Void, (Ptr{UInt8},), uv_readdir_req)
+    ccall(:jl_uv_fs_req_cleanup, Cvoid, (Ptr{UInt8},), uv_readdir_req)
 
     return entries
 end
@@ -583,12 +583,12 @@ function readlink(path::AbstractString)
             (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
             eventloop(), req, path, C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Void, (Ptr{Cvoid},), req)
+            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
             uv_error("readlink", ret)
             assert(false)
         end
         tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Cvoid},), req))
-        ccall(:uv_fs_req_cleanup, Void, (Ptr{Cvoid},), req)
+        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
         return tgt
     finally
         Libc.free(req)

@@ -314,10 +314,10 @@ end
 
 function close(stream::Union{LibuvStream, LibuvServer})
     if stream.status == StatusInit
-        ccall(:jl_forceclose_uv, Void, (Ptr{Cvoid},), stream.handle)
+        ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
     elseif isopen(stream)
         if stream.status != StatusClosing
-            ccall(:jl_close_uv, Void, (Ptr{Cvoid},), stream.handle)
+            ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
             stream.status = StatusClosing
         end
         if uv_handle_data(stream) != C_NULL
@@ -458,7 +458,7 @@ alloc_buf_hook(stream::LibuvStream, size::UInt) = alloc_request(stream.buffer, U
 function uv_alloc_buf(handle::Ptr{Cvoid}, size::Csize_t, buf::Ptr{Cvoid})
     hd = uv_handle_data(handle)
     if hd == C_NULL
-        ccall(:jl_uv_buf_set_len, Void, (Ptr{Cvoid}, Csize_t), buf, 0)
+        ccall(:jl_uv_buf_set_len, Cvoid, (Ptr{Cvoid}, Csize_t), buf, 0)
         return nothing
     end
     stream = unsafe_pointer_to_objref(hd)::LibuvStream
@@ -474,8 +474,8 @@ function uv_alloc_buf(handle::Ptr{Cvoid}, size::Csize_t, buf::Ptr{Cvoid})
         end
     end
 
-    ccall(:jl_uv_buf_set_base, Void, (Ptr{Cvoid}, Ptr{Cvoid}), buf, data)
-    ccall(:jl_uv_buf_set_len, Void, (Ptr{Cvoid}, Csize_t), buf, newsize)
+    ccall(:jl_uv_buf_set_base, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), buf, data)
+    ccall(:jl_uv_buf_set_len, Cvoid, (Ptr{Cvoid}, Csize_t), buf, newsize)
     nothing
 end
 
@@ -494,13 +494,13 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
                     notify(stream.closenotify)
                 elseif stream.status != StatusClosing
                     # begin shutdown of the stream
-                    ccall(:jl_close_uv, Void, (Ptr{Cvoid},), stream.handle)
+                    ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                     stream.status = StatusClosing
                 end
             else
                 # This is a fatal connection error. Shutdown requests as per the usual
                 # close function won't work and libuv will fail with an assertion failure
-                ccall(:jl_forceclose_uv, Void, (Ptr{Cvoid},), stream)
+                ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), stream)
                 notify_error(stream.readnotify, UVError("read", nread))
             end
         else
@@ -661,13 +661,13 @@ function link_pipe(read_end::PipeEndpoint, readable_julia_only::Bool,
 end
 
 function close_pipe_sync(p::PipeEndpoint)
-    ccall(:uv_pipe_close_sync, Void, (Ptr{Cvoid},), p.handle)
+    ccall(:uv_pipe_close_sync, Cvoid, (Ptr{Cvoid},), p.handle)
     p.status = StatusClosed
     nothing
 end
 
 function close_pipe_sync(handle::Ptr{Cvoid})
-    return ccall(:uv_pipe_close_sync, Void, (Ptr{Cvoid},), handle)
+    return ccall(:uv_pipe_close_sync, Cvoid, (Ptr{Cvoid},), handle)
 end
 
 ## Functions for any LibuvStream ##
@@ -992,7 +992,7 @@ function connect!(sock::PipeEndpoint, path::AbstractString)
     @assert sock.status == StatusInit
     req = Libc.malloc(_sizeof_uv_connect)
     uv_req_set_data(req, C_NULL)
-    ccall(:uv_pipe_connect, Void, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}), req, sock.handle, path, uv_jl_connectcb::Ptr{Cvoid})
+    ccall(:uv_pipe_connect, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}), req, sock.handle, path, uv_jl_connectcb::Ptr{Cvoid})
     sock.status = StatusConnecting
     return sock
 end

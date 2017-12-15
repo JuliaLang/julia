@@ -100,7 +100,7 @@ Base.position(h::FILE) = ccall(:ftell, Clong, (Ptr{Cvoid},), h.ptr)
 
 Flushes the C `stdout` and `stderr` streams (which may have been written to by external C code).
 """
-flush_cstdio() = ccall(:jl_flush_cstdio, Void, ())
+flush_cstdio() = ccall(:jl_flush_cstdio, Cvoid, ())
 
 ## time-related functions ##
 
@@ -109,7 +109,7 @@ if Sys.isunix()
     systemsleep(s::Real) = ccall(:usleep, Int32, (UInt32,), round(UInt32, s*1e6))
 elseif Sys.iswindows()
     function systemsleep(s::Real)
-        ccall(:Sleep, stdcall, Void, (UInt32,), round(UInt32, s * 1e3))
+        ccall(:Sleep, stdcall, Cvoid, (UInt32,), round(UInt32, s * 1e3))
         return Int32(0)
     end
 else
@@ -268,7 +268,7 @@ sets it. Specifically, you cannot call `errno` at the next prompt in a REPL, bec
 code is executed between prompts.
 """
 errno() = ccall(:jl_errno, Cint, ())
-errno(e::Integer) = ccall(:jl_set_errno, Void, (Cint,), e)
+errno(e::Integer) = ccall(:jl_set_errno, Cvoid, (Cint,), e)
 
 """
     strerror(n=errno())
@@ -324,7 +324,7 @@ on pointers retrieved from other C libraries. `Ptr` objects obtained from C libr
 be freed by the free functions defined in that library, to avoid assertion failures if
 multiple `libc` libraries exist on the system.
 """
-free(p::Ptr) = ccall(:free, Void, (Ptr{Cvoid},), p)
+free(p::Ptr) = ccall(:free, Cvoid, (Ptr{Cvoid},), p)
 
 """
     malloc(size::Integer) -> Ptr{Cvoid}

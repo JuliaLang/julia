@@ -5,7 +5,7 @@ import Base.copy, Base.==
 const libccalltest = "libccalltest"
 
 const verbose = false
-ccall((:set_verbose, libccalltest), Void, (Int32,), verbose)
+ccall((:set_verbose, libccalltest), Cvoid, (Int32,), verbose)
 
 
 # Test for proper argument register truncation
@@ -879,7 +879,7 @@ end
 
 # Pointer finalizer (issue #15408)
 let A = [1]
-    ccall((:set_c_int, libccalltest), Void, (Cint,), 1)
+    ccall((:set_c_int, libccalltest), Cvoid, (Cint,), 1)
     @test ccall((:get_c_int, libccalltest), Cint, ()) == 1
     finalizer(cglobal((:finalizer_cptr, libccalltest), Void), A)
     finalize(A)
@@ -1238,11 +1238,11 @@ end
 
 # issue #20835
 @test_throws(ErrorException("could not evaluate ccall argument type (it might depend on a local variable)"),
-             eval(:(f20835(x) = ccall(:fn, Void, (Ptr{typeof(x)},), x))))
+             eval(:(f20835(x) = ccall(:fn, Cvoid, (Ptr{typeof(x)},), x))))
 @test_throws(UndefVarError(:Something_not_defined_20835),
              eval(:(f20835(x) = ccall(:fn, Something_not_defined_20835, (Ptr{typeof(x)},), x))))
 
-@noinline f21104at(::Type{T}) where {T} = ccall(:fn, Void, (Nullable{T},), 0)
+@noinline f21104at(::Type{T}) where {T} = ccall(:fn, Cvoid, (Nullable{T},), 0)
 @noinline f21104rt(::Type{T}) where {T} = ccall(:fn, Nullable{T}, ())
 @test code_llvm(DevNull, f21104at, (Type{Float64},)) === nothing
 @test code_llvm(DevNull, f21104rt, (Type{Float64},)) === nothing

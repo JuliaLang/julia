@@ -200,7 +200,7 @@ function test_atomic_read(commbuf::CommBuf, n::Int)
         correct &= var1 >= var2
         var1 == n && break
         # Temporary solution before we have gc transition support in codegen.
-        ccall(:jl_gc_safepoint, Void, ())
+        ccall(:jl_gc_safepoint, Cvoid, ())
     end
     commbuf.correct_read = correct
 end
@@ -245,7 +245,7 @@ function test_fence(p::Peterson, id::Int, n::Int)
         while p.flag[otherid][] != 0 && p.turn[] == otherid
             # busy wait
             # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Void, ())
+            ccall(:jl_gc_safepoint, Cvoid, ())
         end
         # critical section
         p.critical[id][] = 1
@@ -302,7 +302,7 @@ function test_atomic_cas!(var::Atomic{T}, range::StepRange{Int,Int}) where T
             old = atomic_cas!(var, T(i-1), T(i))
             old == T(i-1) && break
             # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Void, ())
+            ccall(:jl_gc_safepoint, Cvoid, ())
         end
     end
 end
@@ -357,12 +357,12 @@ for period in (0.06, Dates.Millisecond(60))
             wait(c)
             t = Timer(period)
             wait(t)
-            ccall(:uv_async_send, Void, (Ptr{Cvoid},), async)
-            ccall(:uv_async_send, Void, (Ptr{Cvoid},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
             wait(c)
             sleep(period)
-            ccall(:uv_async_send, Void, (Ptr{Cvoid},), async)
-            ccall(:uv_async_send, Void, (Ptr{Cvoid},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         end))
         wait(c)
         notify(c)

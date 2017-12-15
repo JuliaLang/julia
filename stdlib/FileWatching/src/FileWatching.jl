@@ -155,7 +155,7 @@ mutable struct _FDWatcher
         function Base.uvfinalize(t::_FDWatcher)
             if t.handle != C_NULL
                 disassociate_julia_struct(t)
-                ccall(:jl_close_uv, Void, (Ptr{Cvoid},), t.handle)
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
                 t.handle = C_NULL
             end
             t.refcount = (0, 0)
@@ -243,7 +243,7 @@ end
 
 function close(t::Union{FileMonitor, PollingFileWatcher})
     if t.handle != C_NULL
-        ccall(:jl_close_uv, Void, (Ptr{Cvoid},), t.handle)
+        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
     end
 end
 

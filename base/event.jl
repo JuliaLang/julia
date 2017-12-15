@@ -99,7 +99,7 @@ global const Workqueue = Task[]
 
 function enq_work(t::Task)
     t.state == :runnable || error("schedule: Task not runnable")
-    ccall(:uv_stop, Void, (Ptr{Cvoid},), eventloop())
+    ccall(:uv_stop, Cvoid, (Ptr{Cvoid},), eventloop())
     push!(Workqueue, t)
     t.state = :queued
     return t
@@ -196,7 +196,7 @@ end
 
 function try_yieldto(undo, reftask::Ref{Task})
     try
-        ccall(:jl_switchto, Void, (Any,), reftask)
+        ccall(:jl_switchto, Cvoid, (Any,), reftask)
     catch e
         undo(reftask[])
         rethrow(e)
@@ -244,7 +244,7 @@ end
         # probably broken now, but try discarding this switch and keep going
         # can't throw here, because it's probably not the fault of the caller to wait
         # and don't want to use print() here, because that may try to incur a task switch
-        ccall(:jl_safe_printf, Void, (Ptr{UInt8}, Int32...),
+        ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
             "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n")
         return
     end
@@ -275,9 +275,9 @@ function wait()
 end
 
 if Sys.iswindows()
-    pause() = ccall(:Sleep, stdcall, Void, (UInt32,), 0xffffffff)
+    pause() = ccall(:Sleep, stdcall, Cvoid, (UInt32,), 0xffffffff)
 else
-    pause() = ccall(:pause, Void, ())
+    pause() = ccall(:pause, Cvoid, ())
 end
 
 
@@ -371,7 +371,7 @@ mutable struct Timer
         associate_julia_struct(this.handle, this)
         finalizer(uvfinalize, this)
 
-        ccall(:uv_update_time, Void, (Ptr{Cvoid},), eventloop())
+        ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), eventloop())
         ccall(:uv_timer_start,  Cint,  (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
               this, uv_jl_timercb::Ptr{Cvoid},
               UInt64(round(timeout * 1000)) + 1, UInt64(round(repeat * 1000)))
@@ -393,7 +393,7 @@ function close(t::Union{Timer, AsyncCondition})
     if t.handle != C_NULL && isopen(t)
         t.isopen = false
         isa(t, Timer) && ccall(:uv_timer_stop, Cint, (Ptr{Cvoid},), t)
-        ccall(:jl_close_uv, Void, (Ptr{Cvoid},), t)
+        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
     end
     nothing
 end

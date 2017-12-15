@@ -3,7 +3,7 @@
 baremodule Base
 
 using Core.Intrinsics
-ccall(:jl_set_istopmod, Void, (Any, Bool), Base, true)
+ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, true)
 
 function include(mod::Module, path::AbstractString)
     local result

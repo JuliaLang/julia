@@ -100,7 +100,7 @@ function laplace3d(nx=290, ny=290, nz=290; iters=1000, verify=false)
         l3d_threadfor(u1, u3, nx, ny, nz)
         # @threads all l3d_threadfun(u1, u3, nx, ny, nz)
 	# l3d_threadblock(u1, u3, nx, ny, nz)
-        # ccall(:jl_threading_run, Void, (Any, Any), l3d_threadfun, (u1, u3, nx, ny, nz))
+        # ccall(:jl_threading_run, Cvoid, (Any, Any), l3d_threadfun, (u1, u3, nx, ny, nz))
         foo = u1
         u1 = u3
         u3 = foo
@@ -132,4 +132,4 @@ function laplace3d(nx=290, ny=290, nz=290; iters=1000, verify=false)
 end
 
 @time laplace3d()
-#ccall(:jl_threading_profile, Void, ())
+#ccall(:jl_threading_profile, Cvoid, ())

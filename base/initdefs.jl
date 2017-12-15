@@ -26,7 +26,7 @@ program completed successfully (see also [`quit`](@ref)). In an interactive sess
 `exit()` can be called with the keyboard shorcut `^D`.
 
 """
-exit(n) = ccall(:jl_exit, Void, (Int32,), n)
+exit(n) = ccall(:jl_exit, Cvoid, (Int32,), n)
 exit() = exit(0)
 
 """

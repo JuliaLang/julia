@@ -75,20 +75,20 @@ const UMFVTypes = Union{Float64,ComplexF64}
 
 # the control and info arrays
 const umf_ctrl = Vector{Float64}(uninitialized, UMFPACK_CONTROL)
-ccall((:umfpack_dl_defaults,:libumfpack), Void, (Ptr{Float64},), umf_ctrl)
+ccall((:umfpack_dl_defaults,:libumfpack), Cvoid, (Ptr{Float64},), umf_ctrl)
 const umf_info = Vector{Float64}(uninitialized, UMFPACK_INFO)
 
 function show_umf_ctrl(level::Real = 2.0)
     old_prt::Float64 = umf_ctrl[1]
     umf_ctrl[1] = Float64(level)
-    ccall((:umfpack_dl_report_control, :libumfpack), Void, (Ptr{Float64},), umf_ctrl)
+    ccall((:umfpack_dl_report_control, :libumfpack), Cvoid, (Ptr{Float64},), umf_ctrl)
     umf_ctrl[1] = old_prt
 end
 
 function show_umf_info(level::Real = 2.0)
     old_prt::Float64 = umf_ctrl[1]
     umf_ctrl[1] = Float64(level)
-    ccall((:umfpack_dl_report_info, :libumfpack), Void,
+    ccall((:umfpack_dl_report_info, :libumfpack), Cvoid,
           (Ptr{Float64}, Ptr{Float64}), umf_ctrl, umf_info)
     umf_ctrl[1] = old_prt
 end
@@ -471,7 +471,7 @@ for Tv in (:Float64, :ComplexF64), Ti in UmfpackIndexTypes
     @eval begin
         function ($f)(symb::Ptr{Cvoid})
             tmp = [symb]
-            ccall(($(string(f)), :libumfpack), Void, (Ptr{Cvoid},), tmp)
+            ccall(($(string(f)), :libumfpack), Cvoid, (Ptr{Cvoid},), tmp)
         end
 
         function umfpack_free_symbolic(lu::UmfpackLU{$Tv,$Ti})
@@ -487,7 +487,7 @@ for Tv in (:Float64, :ComplexF64), Ti in UmfpackIndexTypes
     @eval begin
         function ($f)(num::Ptr{Cvoid})
             tmp = [num]
-            ccall(($(string(f)), :libumfpack), Void, (Ptr{Cvoid},), tmp)
+            ccall(($(string(f)), :libumfpack), Cvoid, (Ptr{Cvoid},), tmp)
         end
         function umfpack_free_numeric(lu::UmfpackLU{$Tv,$Ti})
             if lu.numeric == C_NULL return lu end

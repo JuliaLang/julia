@@ -76,7 +76,7 @@ end
 
 Clear any existing backtraces from the internal buffer.
 """
-clear() = ccall(:jl_profile_clear_data, Void, ())
+clear() = ccall(:jl_profile_clear_data, Cvoid, ())
 
 const LineInfoDict = Dict{UInt64, Vector{StackFrame}}
 const LineInfoFlatDict = Dict{UInt64, StackFrame}
@@ -272,12 +272,12 @@ Execute the command(s) you want to test (to force JIT-compilation), then call
 [`clear_malloc_data`](@ref). Then execute your command(s) again, quit
 Julia, and examine the resulting `*.mem` files.
 """
-clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
+clear_malloc_data() = ccall(:jl_clear_malloc_data, Cvoid, ())
 
 # C wrappers
 start_timer() = ccall(:jl_profile_start_timer, Cint, ())
 
-stop_timer() = ccall(:jl_profile_stop_timer, Void, ())
+stop_timer() = ccall(:jl_profile_stop_timer, Cvoid, ())
 
 is_running() = ccall(:jl_profile_is_running, Cint, ())!=0
 

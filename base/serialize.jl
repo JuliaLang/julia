@@ -893,7 +893,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         end
         ftype = ccall(:jl_first_argument_datatype, Any, (Any,), sig)::DataType
         if isdefined(ftype.name, :mt) && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), ftype.name.mt, sig, typemax(UInt))
-            ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Cvoid}), ftype.name.mt, meth, C_NULL)
+            ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), ftype.name.mt, meth, C_NULL)
         end
         remember_object(s, meth, lnumber)
     end
@@ -1017,7 +1017,7 @@ function deserialize_typename(s::AbstractSerializer, number)
                     tn, tn.module, super, parameters, names, types,
                     abstr, mutabl, ninitialized)
         tn.wrapper = ndt.name.wrapper
-        ccall(:jl_set_const, Void, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
+        ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
         ty = tn.wrapper
         if has_instance && !isdefined(ty, :instance)
             # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
@@ -1036,7 +1036,7 @@ function deserialize_typename(s::AbstractSerializer, number)
             tn.mt.max_args = maxa
             for def in defs
                 if isdefined(def, :sig)
-                    ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Cvoid}), tn.mt, def, C_NULL)
+                    ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), tn.mt, def, C_NULL)
                 end
             end
         end
@@ -1165,7 +1165,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
         for i in 1:nf
             tag = Int32(read(s.io, UInt8)::UInt8)
             if tag != UNDEFREF_TAG
-                ccall(:jl_set_nth_field, Void, (Any, Csize_t, Any), x, i-1, handle_deserialize(s, tag))
+                ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), x, i-1, handle_deserialize(s, tag))
             end
         end
         return x

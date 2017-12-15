@@ -184,7 +184,7 @@ function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
               convert(Ptr{UInt8}, pointer(src)) + length(src) * Base.bitsunionsize(T) + soffs - 1,
               n)
     else
-        ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
+        ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
               dest, pointer(dest, doffs), src, pointer(src, soffs), n)
     end
     @_gc_preserve_end t2
@@ -716,20 +716,20 @@ setindex!(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) where {T, N} = fill!(A,
 # efficiently grow an array
 
 _growbeg!(a::Vector, delta::Integer) =
-    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, delta)
+    ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), a, delta)
 _growend!(a::Vector, delta::Integer) =
-    ccall(:jl_array_grow_end, Void, (Any, UInt), a, delta)
+    ccall(:jl_array_grow_end, Cvoid, (Any, UInt), a, delta)
 _growat!(a::Vector, i::Integer, delta::Integer) =
-    ccall(:jl_array_grow_at, Void, (Any, Int, UInt), a, i - 1, delta)
+    ccall(:jl_array_grow_at, Cvoid, (Any, Int, UInt), a, i - 1, delta)
 
 # efficiently delete part of an array
 
 _deletebeg!(a::Vector, delta::Integer) =
-    ccall(:jl_array_del_beg, Void, (Any, UInt), a, delta)
+    ccall(:jl_array_del_beg, Cvoid, (Any, UInt), a, delta)
 _deleteend!(a::Vector, delta::Integer) =
-    ccall(:jl_array_del_end, Void, (Any, UInt), a, delta)
+    ccall(:jl_array_del_end, Cvoid, (Any, UInt), a, delta)
 _deleteat!(a::Vector, i::Integer, delta::Integer) =
-    ccall(:jl_array_del_at, Void, (Any, Int, UInt), a, i - 1, delta)
+    ccall(:jl_array_del_at, Cvoid, (Any, Int, UInt), a, i - 1, delta)
 
 ## Dequeue functionality ##
 
@@ -907,7 +907,7 @@ julia> a[1:6]
 function resize!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
-        ccall(:jl_array_grow_end, Void, (Any, UInt), a, nl-l)
+        ccall(:jl_array_grow_end, Cvoid, (Any, UInt), a, nl-l)
     else
         if nl < 0
             throw(ArgumentError("new length must be ≥ 0"))
@@ -925,7 +925,7 @@ Suggest that collection `s` reserve capacity for at least `n` elements. This can
 function sizehint! end
 
 function sizehint!(a::Vector, sz::Integer)
-    ccall(:jl_array_sizehint, Void, (Any, UInt), a, sz)
+    ccall(:jl_array_sizehint, Cvoid, (Any, UInt), a, sz)
     a
 end
 
@@ -1437,7 +1437,7 @@ function vcat(arrays::Vector{T}...) where T
                   selptr, convert(Ptr{UInt8}, pointer(a)) + nba, na)
             selptr += na
         else
-            ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
+            ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
                   arr, ptr, a, pointer(a), na)
         end
         ptr += nba

@@ -2331,20 +2331,20 @@ let x = [1,2,3]
     @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Complex{Int}, x) === 1+2im
     @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), NTuple{3,Int}, x) === (1,2,3)
     @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Tuple{Int,Int,Int}, x) === (1,2,3)
-    @test (ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Tuple{Int16,Tuple{Void},Int8,Tuple{},Int,Void,Int}, x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
+    @test (ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Tuple{Int16,Tuple{Cvoid},Int8,Tuple{},Int,Cvoid,Int}, x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
 end
 
 # sig 2 is SIGINT per the POSIX.1-1990 standard
 if !Sys.iswindows()
-    ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
+    ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 0)
     @test_throws InterruptException begin
-        ccall(:kill, Void, (Cint, Cint,), getpid(), 2)
+        ccall(:kill, Cvoid, (Cint, Cint,), getpid(), 2)
         for i in 1:10
             Libc.systemsleep(0.1)
-            ccall(:jl_gc_safepoint, Void, ()) # wait for SIGINT to arrive
+            ccall(:jl_gc_safepoint, Cvoid, ()) # wait for SIGINT to arrive
         end
     end
-    ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+    ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
 end
 let
     # Exception frame automatically restores sigatomic counter.
@@ -3890,33 +3890,33 @@ let ary = Vector{Any}(uninitialized, 10)
     # to check if these values are not reused later.
     check_undef_and_fill(ary, 1:10)
     # Check if the memory grown at the end are zerod
-    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 11:20)
     # Make sure the content of the memory deleted at the end are not reused
-    ccall(:jl_array_del_end, Void, (Any, Csize_t), ary, 5)
-    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 5)
+    ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 5)
+    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 5)
     check_undef_and_fill(ary, 16:20)
 
     # Now check grow/del_end
     ary = Vector{Any}(uninitialized, 1010)
     check_undef_and_fill(ary, 1:1010)
     # This del_beg should move the buffer
-    ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 1000)
-    ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 1000)
+    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 1000)
+    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 1000)
     check_undef_and_fill(ary, 1:1000)
     ary = Vector{Any}(uninitialized, 1010)
     check_undef_and_fill(ary, 1:1010)
     # This del_beg should not move the buffer
-    ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 10)
-    ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 1:10)
 
     ary = Vector{Any}(uninitialized, 1010)
     check_undef_and_fill(ary, 1:1010)
-    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 1011:1020)
-    ccall(:jl_array_del_end, Void, (Any, Csize_t), ary, 10)
-    ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 1:10)
 
     # Make sure newly malloc'd buffers are filled with 0
@@ -3930,22 +3930,22 @@ let ary = Vector{Any}(uninitialized, 10)
         gc()
         gc()
         gc()
-        ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 4)
-        ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 4)
-        ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, n)
-        ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 4)
+        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
+        ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 4)
+        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, n)
+        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
         check_undef_and_fill(ary, 1:(2n + 4))
     end
 
     ary = Vector{Any}(uninitialized, 100)
-    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10000)
+    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10000)
     ary[:] = 1:length(ary)
-    ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 10000)
+    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10000)
     # grow on the back until a buffer reallocation happens
     cur_ptr = pointer(ary)
     while cur_ptr == pointer(ary)
         len = length(ary)
-        ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
+        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
         for i in (len + 1):(len + 10)
             @test !isassigned(ary, i)
         end
@@ -3953,7 +3953,7 @@ let ary = Vector{Any}(uninitialized, 10)
 
     ary = Vector{Any}(uninitialized, 100)
     ary[:] = 1:length(ary)
-    ccall(:jl_array_grow_at, Void, (Any, Csize_t, Csize_t), ary, 50, 10)
+    ccall(:jl_array_grow_at, Cvoid, (Any, Csize_t, Csize_t), ary, 50, 10)
     for i in 51:60
         @test !isassigned(ary, i)
     end
@@ -4048,16 +4048,16 @@ function test_shared_array_resize(::Type{T}) where T
         @test pointer(a) != pointer(a′)
     end
 
-    test_unshare(a->ccall(:jl_array_del_end, Void, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_del_end, Void, (Any, Csize_t), a, 1))
-    test_unshare(a->ccall(:jl_array_del_beg, Void, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_del_beg, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), a, 1))
     test_unshare(a->deleteat!(a, 10))
     test_unshare(a->deleteat!(a, 90))
-    test_unshare(a->ccall(:jl_array_grow_end, Void, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_grow_end, Void, (Any, Csize_t), a, 1))
-    test_unshare(a->ccall(:jl_array_grow_beg, Void, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_grow_beg, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), a, 1))
     test_unshare(a->insert!(a, 10, 10))
     test_unshare(a->insert!(a, 90, 90))
 end
@@ -4087,19 +4087,19 @@ push!(d, 0x3)
 @test check_nul(d)
 push!(d, 0x3)
 @test check_nul(d)
-ccall(:jl_array_del_end, Void, (Any, UInt), d, 2)
+ccall(:jl_array_del_end, Cvoid, (Any, UInt), d, 2)
 @test check_nul(d)
-ccall(:jl_array_grow_end, Void, (Any, UInt), d, 1)
+ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
 @test check_nul(d)
-ccall(:jl_array_grow_end, Void, (Any, UInt), d, 1)
+ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
 @test check_nul(d)
-ccall(:jl_array_grow_end, Void, (Any, UInt), d, 10)
+ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 10)
 @test check_nul(d)
-ccall(:jl_array_del_beg, Void, (Any, UInt), d, 8)
+ccall(:jl_array_del_beg, Cvoid, (Any, UInt), d, 8)
 @test check_nul(d)
-ccall(:jl_array_grow_beg, Void, (Any, UInt), d, 8)
+ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
 @test check_nul(d)
-ccall(:jl_array_grow_beg, Void, (Any, UInt), d, 8)
+ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
 @test check_nul(d)
 f = unsafe_wrap(Array, pointer(d), length(d))
 @test !check_nul(f)
@@ -4644,7 +4644,7 @@ cfunction(f18054, Cint, Tuple{})
 dummy18996() = return nothing
 function main18986()
     cfunction(dummy18986, Void, ())
-    ccall((:dummy2, "this_is_a_nonexisting_library"), Void, ())
+    ccall((:dummy2, "this_is_a_nonexisting_library"), Cvoid, ())
 end
 @test_throws ErrorException main18986()
 
@@ -4721,7 +4721,7 @@ end
 @test f18173() == false
 
 let _true = Ref(true), f, g, h
-    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Void, ()) # some expression that throws an error in codegen
+    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Cvoid, ()) # some expression that throws an error in codegen
     @noinline g() = _true[] ? 0 : h()
     @noinline h() = (g(); f())
     @test_throws ErrorException @code_native h() # due to a failure to compile f()
@@ -4956,11 +4956,11 @@ end # module SOE
 @test_nowarn begin
     local p15240
     p15240 = ccall(:jl_realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), C_NULL, 10)
-    ccall(:jl_free, Void, (Ptr{Cvoid},), p15240)
+    ccall(:jl_free, Cvoid, (Ptr{Cvoid},), p15240)
 end
 
 # issue #19963
-@test_nowarn ccall(:jl_free, Void, (Ptr{Cvoid},), C_NULL)
+@test_nowarn ccall(:jl_free, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # Wrong string size on 64bits for large string.
 if Sys.WORD_SIZE == 64

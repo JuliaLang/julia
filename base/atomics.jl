@@ -421,7 +421,7 @@ for op in [:+, :-, :max, :min]
             old = atomic_cas!(var, cmp, new)
             reinterpret(IT, old) == reinterpret(IT, cmp) && return new
             # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Void, ())
+            ccall(:jl_gc_safepoint, Cvoid, ())
         end
     end
 end

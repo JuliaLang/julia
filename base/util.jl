@@ -707,7 +707,7 @@ if Sys.iswindows()
         # Step 4: Free the encrypted buffer
         # ccall(:SecureZeroMemory, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), outbuf_data[], outbuf_size[]) - not an actual function
         unsafe_securezero!(outbuf_data[], outbuf_size[])
-        ccall((:CoTaskMemFree, "ole32.dll"), Void, (Ptr{Cvoid},), outbuf_data[])
+        ccall((:CoTaskMemFree, "ole32.dll"), Cvoid, (Ptr{Cvoid},), outbuf_data[])
 
         # Done.
         passbuf_ = passbuf[1:passlen[]-1]

@@ -12,7 +12,7 @@ function GitHash(ptr::Ptr{UInt8})
         throw(ArgumentError("NULL pointer passed to GitHash() constructor"))
     end
     oid_ptr = Ref(GitHash())
-    ccall((:git_oid_fromraw, :libgit2), Void, (Ptr{GitHash}, Ptr{UInt8}), oid_ptr, ptr)
+    ccall((:git_oid_fromraw, :libgit2), Cvoid, (Ptr{GitHash}, Ptr{UInt8}), oid_ptr, ptr)
     return oid_ptr[]
 end
 

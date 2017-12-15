@@ -463,7 +463,7 @@ code get triggered often--it will be easiest if you make the following definitio
 
 ```julia-repl
 julia> function mysubtype(a,b)
-           ccall(:jl_breakpoint, Void, (Any,), nothing)
+           ccall(:jl_breakpoint, Cvoid, (Any,), nothing)
            a <: b
        end
 ```

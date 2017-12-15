@@ -662,8 +662,8 @@ end
 
 function _delete!(h::Dict, index)
     h.slots[index] = 0x2
-    ccall(:jl_arrayunset, Void, (Any, UInt), h.keys, index-1)
-    ccall(:jl_arrayunset, Void, (Any, UInt), h.vals, index-1)
+    ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, index-1)
+    ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.vals, index-1)
     h.ndel += 1
     h.count -= 1
     h.age += 1

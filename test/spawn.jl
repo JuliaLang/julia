@@ -260,7 +260,7 @@ let fname = tempname(), p
     oldhandle = OLD_STDERR.handle
     OLD_STDERR.status = Base.StatusClosing
     OLD_STDERR.handle = C_NULL
-    ccall(:uv_close, Void, (Ptr{Cvoid}, Ptr{Cvoid}), oldhandle, cfunction(thrash, Void, Tuple{Ptr{Cvoid}}))
+    ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), oldhandle, cfunction(thrash, Cvoid, Tuple{Ptr{Cvoid}}))
     sleep(1)
     import Base.zzzInvalidIdentifier
     """

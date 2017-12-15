@@ -178,7 +178,7 @@ elseif Sys.iswindows()
         systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{Cvoid},), plock))
         pdata = ccall((:SetClipboardData, "user32"), stdcall, Ptr{UInt16}, (UInt32, Ptr{UInt16}), 13, p)
         systemerror(:SetClipboardData, pdata!=p)
-        ccall((:CloseClipboard, "user32"), stdcall, Void, ())
+        ccall((:CloseClipboard, "user32"), stdcall, Cvoid, ())
     end
     clipboard(x) = clipboard(sprint(print, x)::String)
     function clipboard()

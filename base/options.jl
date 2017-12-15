@@ -43,7 +43,7 @@ end
 # This runs early in the sysimage != is not defined yet
 if sizeof(JLOptions) === ccall(:jl_sizeof_jl_options, Int, ())
 else
-    ccall(:jl_throw, Void, (Any,), "Option structure mismatch")
+    ccall(:jl_throw, Cvoid, (Any,), "Option structure mismatch")
 end
 
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))

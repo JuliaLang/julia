@@ -29,7 +29,7 @@ end
 
 function cleanup(r::GitRepo)
     if r.ptr != C_NULL
-        ccall((:git_repository__cleanup, :libgit2), Void, (Ptr{Cvoid},), r.ptr)
+        ccall((:git_repository__cleanup, :libgit2), Cvoid, (Ptr{Cvoid},), r.ptr)
     end
 end
 

@@ -274,7 +274,7 @@ to run.  You could accomplish this by defining the following `__init__` function
 ```julia
 const foo_data_ptr = Ref{Ptr{Cvoid}}(0)
 function __init__()
-    ccall((:foo_init, :libfoo), Void, ())
+    ccall((:foo_init, :libfoo), Cvoid, ())
     foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Cvoid}, ())
     nothing
 end

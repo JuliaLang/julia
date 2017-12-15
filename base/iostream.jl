@@ -36,7 +36,7 @@ to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
 stat(s::IOStream) = stat(fd(s))
-close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Cvoid},), s.ios)
+close(s::IOStream) = ccall(:ios_close, Cvoid, (Ptr{Cvoid},), s.ios)
 isopen(s::IOStream) = ccall(:ios_isopen, Cint, (Ptr{Cvoid},), s.ios)!=0
 function flush(s::IOStream)
     sigatomic_begin()

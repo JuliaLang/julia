@@ -28,8 +28,8 @@ end
 
 uv_handle_data(handle) = ccall(:jl_uv_handle_data,Ptr{Cvoid},(Ptr{Cvoid},),handle)
 uv_req_data(handle) = ccall(:jl_uv_req_data,Ptr{Cvoid},(Ptr{Cvoid},),handle)
-uv_req_set_data(req,data) = ccall(:jl_uv_req_set_data,Void,(Ptr{Cvoid},Any),req,data)
-uv_req_set_data(req,data::Ptr{Cvoid}) = ccall(:jl_uv_req_set_data,Void,(Ptr{Cvoid},Ptr{Cvoid}),req,data)
+uv_req_set_data(req,data) = ccall(:jl_uv_req_set_data,Cvoid,(Ptr{Cvoid},Any),req,data)
+uv_req_set_data(req,data::Ptr{Cvoid}) = ccall(:jl_uv_req_set_data,Cvoid,(Ptr{Cvoid},Ptr{Cvoid}),req,data)
 
 macro handle_as(hand, typ)
     quote
@@ -40,10 +40,10 @@ macro handle_as(hand, typ)
 end
 
 associate_julia_struct(handle::Ptr{Cvoid}, @nospecialize(jlobj)) =
-    ccall(:jl_uv_associate_julia_struct, Void, (Ptr{Cvoid}, Any), handle, jlobj)
+    ccall(:jl_uv_associate_julia_struct, Cvoid, (Ptr{Cvoid}, Any), handle, jlobj)
 disassociate_julia_struct(uv) = disassociate_julia_struct(uv.handle)
 disassociate_julia_struct(handle::Ptr{Cvoid}) =
-    handle != C_NULL && ccall(:jl_uv_disassociate_julia_struct, Void, (Ptr{Cvoid},), handle)
+    handle != C_NULL && ccall(:jl_uv_disassociate_julia_struct, Cvoid, (Ptr{Cvoid},), handle)
 
 # A dict of all libuv handles that are being waited on somewhere in the system
 # and should thus not be garbage collected
@@ -74,7 +74,7 @@ eventloop() = uv_eventloop::Ptr{Cvoid}
 #mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Cvoid},()) # this would probably be fine, but is nowhere supported
 
 function run_event_loop()
-    ccall(:jl_run_event_loop,Void,(Ptr{Cvoid},),eventloop())
+    ccall(:jl_run_event_loop,Cvoid,(Ptr{Cvoid},),eventloop())
 end
 function process_events(block::Bool)
     loop = eventloop()
