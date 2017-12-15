@@ -228,15 +228,11 @@ module IteratorsMD
 
     eachindex(::IndexCartesian, A::AbstractArray) = CartesianRange(axes(A))
 
-    @inline eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...) =
-        CartesianRange(maxsize(A, B...))
-    maxsize() = ()
-    @inline maxsize(A) = size(A)
-    @inline maxsize(A, B...) = maxt(size(A), maxsize(B...))
-    @inline maxt(a::Tuple{}, b::Tuple{}) = ()
-    @inline maxt(a::Tuple{}, b::Tuple)   = b
-    @inline maxt(a::Tuple,   b::Tuple{}) = a
-    @inline maxt(a::Tuple,   b::Tuple)   = (max(a[1], b[1]), maxt(tail(a), tail(b))...)
+    @inline function eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...)
+        axsA = axes(A)
+        all(x->axes(x) == axsA, B) || Base.throw_eachindex_mismatch(IndexCartesian(), A, B...)
+        CartesianRange(axsA)
+    end
 
     eltype(R::CartesianRange) = eltype(typeof(R))
     eltype(::Type{CartesianRange{N}}) where {N} = CartesianIndex{N}

@@ -843,12 +843,9 @@ end
 eachindex(::IndexLinear, A::AbstractArray) = linearindices(A)
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
-    1:_maxlength(A, B...)
-end
-_maxlength(A) = length(A)
-function _maxlength(A, B, C...)
-    @_inline_meta
-    max(length(A), _maxlength(B, C...))
+    indsA = linearindices(A)
+    all(x->linearindices(x) == indsA, B) || throw_eachindex_mismatch(IndexLinear(), A, B...)
+    indsA
 end
 
 isempty(a::AbstractArray) = (_length(a) == 0)
