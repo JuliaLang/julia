@@ -271,8 +271,9 @@ end
 # require always works in Main scope and loads files from node 1
 const toplevel_load = Ref(true)
 
-myid() = isdefined(Main, :Distributed) ? invokelatest(Main.Distributed.myid) : 1
-nprocs() = isdefined(Main, :Distributed) ? invokelatest(Main.Distributed.nprocs) : 1
+# These function get replace later on in base/sysimg.jl
+myid() = 1
+nprocs() = 1
 
 """
     require(module::Symbol)
