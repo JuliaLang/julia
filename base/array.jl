@@ -561,7 +561,7 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
             @inbounds dest[i] = el::T
             i += 1
         else
-            R = typejoin(T, S)
+            R = promote_join(T, S)
             new = similar(dest, R)
             copy!(new,1, dest,1, i-1)
             @inbounds new[i] = el
@@ -584,7 +584,7 @@ function grow_to!(dest, itr, st)
         if S === T || S <: T
             push!(dest, el::T)
         else
-            new = similar(dest, typejoin(T, S))
+            new = similar(dest, promote_join(T, S))
             if new isa AbstractSet
                 # TODO: merge back these two branches when copy! is re-enabled for sets
                 union!(new, dest)

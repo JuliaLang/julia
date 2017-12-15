@@ -128,7 +128,7 @@ function union!(s::Set{T}, xs) where T
 end
 
 join_eltype() = Bottom
-join_eltype(v1, vs...) = typejoin(eltype(v1), join_eltype(vs...))
+join_eltype(v1, vs...) = promote_join(eltype(v1), join_eltype(vs...))
 
 """
     intersect(s1,s2...)
@@ -278,7 +278,7 @@ _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
         x, i = next(itr, i)
         S = typeof(x)
         if !(S === T || S <: T)
-            R = typejoin(S, T)
+            R = promote_join(S, T)
             seenR = convert(Set{R}, seen)
             outR = convert(Vector{R}, out)
             if !in(x, seenR)

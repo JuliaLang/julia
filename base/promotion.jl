@@ -5,7 +5,8 @@
 """
     typejoin(T, S)
 
-Compute a type that contains both `T` and `S`.
+Return the closest common ancestor of `T` and `S`, i.e. a type which
+contains both of them.
 """
 typejoin() = (@_pure_meta; Bottom)
 typejoin(@nospecialize(t)) = (@_pure_meta; t)
@@ -101,6 +102,27 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     end
     return Any
 end
+
+"""
+    promote_join(T, S)
+
+Compute a type that contains both `T` and `S`, which could be
+either a parent of both types, or a `Union` if appropriate.
+Falls back to [`typejoin`](@ref).
+"""
+promote_join(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
+promote_join(::Type{Void}, ::Type{T}) where {T} =
+    isconcrete(T) ? Union{T, Void} : Any
+promote_join(::Type{T}, ::Type{Void}) where {T} =
+    isconcrete(T) ? Union{T, Void} : Any
+promote_join(::Type{Missing}, ::Type{T}) where {T} =
+    isconcrete(T) ? Union{T, Missing} : Any
+promote_join(::Type{T}, ::Type{Missing}) where {T} =
+    isconcrete(T) ? Union{T, Missing} : Any
+promote_join(::Type{Void}, ::Type{Missing}) = Union{Void, Missing}
+promote_join(::Type{Missing}, ::Type{Void}) = Union{Void, Missing}
+promote_join(::Type{Void}, ::Type{Void}) = Void
+promote_join(::Type{Missing}, ::Type{Missing}) = Missing
 
 # Returns length, isfixed
 function full_va_len(p)
