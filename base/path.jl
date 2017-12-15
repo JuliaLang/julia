@@ -254,7 +254,7 @@ function normpath(path::String)
     end
     if isabs
         while !isempty(parts) && parts[1] == ".."
-            shift!(parts)
+            popfirst!(parts)
         end
     elseif isempty(parts)
         push!(parts, ".")

@@ -260,7 +260,7 @@ function dllist()
         callback = cfunction(dl_phdr_info_callback, Cint,
                              Tuple{Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}})
         ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
-        shift!(dynamic_libraries)
+        popfirst!(dynamic_libraries)
     end
 
     return dynamic_libraries

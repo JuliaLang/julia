@@ -859,7 +859,7 @@ function produce(v)
             empty = true
             break
         elseif isa(q,Condition) && !isempty(q.waitq)
-            t = shift!(q.waitq)
+            t = popfirst!(q.waitq)
             empty = isempty(q.waitq)
             break
         end
@@ -3427,6 +3427,11 @@ workspace() = error("workspace() is discontinued, check out Revise.jl for an alt
 # Issue #12902
 @deprecate parentindexes parentindices
 
+# Issue #23902
+@deprecate unshift! pushfirst!
+@deprecate shift! popfirst!
+
+# Issue #23642
 @deprecate_moved Nullable "Nullables"
 @deprecate_moved NullException "Nullables"
 @deprecate_moved isnull "Nullables"

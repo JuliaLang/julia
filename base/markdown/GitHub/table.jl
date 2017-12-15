@@ -10,7 +10,7 @@ function parserow(stream::IO)
         line = readline(stream)
         row = split(line, r"(?<!\\)\|")
         length(row) == 1 && return
-        isempty(row[1]) && shift!(row)
+        isempty(row[1]) && popfirst!(row)
         map!(x -> strip(replace(x, "\\|", "|")), row, row)
         isempty(row[end]) && pop!(row)
         return row

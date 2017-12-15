@@ -70,7 +70,7 @@ function notify(c::Condition, arg, all, error)
         empty!(c.waitq)
     elseif !isempty(c.waitq)
         cnt = 1
-        t = shift!(c.waitq)
+        t = popfirst!(c.waitq)
         error ? schedule(t, arg, error=error) : schedule(t, arg)
     end
     cnt
@@ -223,7 +223,7 @@ function ensure_rescheduled(othertask::Task)
     if ct !== othertask && othertask.state == :runnable
         # we failed to yield to othertask
         # return it to the head of the queue to be scheduled later
-        unshift!(Workqueue, othertask)
+        pushfirst!(Workqueue, othertask)
         othertask.state = :queued
     end
     if ct.state == :queued
@@ -238,14 +238,14 @@ function ensure_rescheduled(othertask::Task)
 end
 
 @noinline function poptask()
-    t = shift!(Workqueue)
+    t = popfirst!(Workqueue)
     if t.state != :queued
         # assume this somehow got queued twice,
         # probably broken now, but try discarding this switch and keep going
         # can't throw here, because it's probably not the fault of the caller to wait
         # and don't want to use print() here, because that may try to incur a task switch
         ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
-            "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n")
+            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n")
         return
     end
     t.state = :runnable

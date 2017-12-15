@@ -267,7 +267,7 @@ let t, run = Ref(0)
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test wait(errstream) == "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n"
+    @test wait(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n"
 end
 
 # schedule_and_wait tests

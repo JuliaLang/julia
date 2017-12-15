@@ -1166,9 +1166,9 @@ function _printf(macroname, io, fmt, args)
     for i = length(sym_args):-1:1
         var = sym_args[i].args[1]
         if has_splatting
-           unshift!(blk.args, :($var = G[$i]))
+           pushfirst!(blk.args, :($var = G[$i]))
         else
-           unshift!(blk.args, :($var = $(esc(args[i]))))
+           pushfirst!(blk.args, :($var = $(esc(args[i]))))
         end
     end
 
@@ -1178,7 +1178,7 @@ function _printf(macroname, io, fmt, args)
     #
     if has_splatting
        x = Expr(:call,:tuple,args...)
-       unshift!(blk.args,
+       pushfirst!(blk.args,
           quote
              G = $(esc(x))
              if length(G) != $(length(sym_args))
@@ -1188,7 +1188,7 @@ function _printf(macroname, io, fmt, args)
        )
     end
 
-    unshift!(blk.args, :(out = $io))
+    pushfirst!(blk.args, :(out = $io))
     Expr(:let, Expr(:block), blk)
 end
 

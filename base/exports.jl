@@ -631,8 +631,8 @@ export
     prepend!,
     push!,
     resize!,
-    shift!,
-    unshift!,
+    popfirst!,
+    pushfirst!,
 
 # collections
     all!,

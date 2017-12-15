@@ -4494,14 +4494,14 @@ function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::Opti
         ex.typ = etype
         ex.args = copy(argexprs)
         invoke_texpr === nothing || insert!(stmts, 2, invoke_texpr)
-        invoke_fexpr === nothing || unshift!(stmts, invoke_fexpr)
+        invoke_fexpr === nothing || pushfirst!(stmts, invoke_fexpr)
 
         local ret_var, merge, invoke_ex, spec_hit
         ret_var = add_slot!(sv.src, widenconst(etype), false)
         merge = genlabel(sv)
         invoke_ex = copy(ex)
         invoke_ex.head = :invoke
-        unshift!(invoke_ex.args, nothing)
+        pushfirst!(invoke_ex.args, nothing)
         spec_hit = false
 
         function splitunion(atypes::Vector{Any}, i::Int)
@@ -4532,8 +4532,8 @@ function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::Opti
                             isa_var = newvar!(sv, Bool)
                             isa_ty = Expr(:call, GlobalRef(Core, :isa), aei, ty)
                             isa_ty.typ = Bool
-                            unshift!(match, Expr(:gotoifnot, isa_var, after.label))
-                            unshift!(match, Expr(:(=), isa_var, isa_ty))
+                            pushfirst!(match, Expr(:gotoifnot, isa_var, after.label))
+                            pushfirst!(match, Expr(:(=), isa_var, isa_ty))
                             append!(stmts, match)
                             push!(stmts, after)
                         else
@@ -4574,7 +4574,7 @@ function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::Opti
         cache_linfo === nothing && return NF
         add_backedge!(cache_linfo, sv)
         argexprs = copy(argexprs)
-        unshift!(argexprs, cache_linfo)
+        pushfirst!(argexprs, cache_linfo)
         ex = Expr(:invoke)
         ex.args = argexprs
         ex.typ = etype
@@ -4666,8 +4666,8 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         argexpr0 = argexprs[2]
         atypes = atypes[4:end]
         argexprs = argexprs[4:end]
-        unshift!(atypes, atype0)
-        unshift!(argexprs, argexpr0)
+        pushfirst!(atypes, atype0)
+        pushfirst!(argexprs, argexpr0)
         f = isdefined(ft, :instance) ? ft.instance : nothing
     elseif isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction ||
             isa(f, Builtin) || ft ⊑ Builtin
@@ -4885,7 +4885,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         aei = argexprs[i]
         aeitype = argtype = widenconst(exprtype(aei, sv.src, sv.mod))
         if i == 1 && !(invoke_texpr === nothing)
-            unshift!(prelude_stmts, invoke_texpr)
+            pushfirst!(prelude_stmts, invoke_texpr)
         end
 
         # ok for argument to occur more than once if the actual argument
@@ -4912,15 +4912,15 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
             if occ != 0
                 vnew = newvar!(sv, aeitype)
                 argexprs[i] = vnew
-                unshift!(prelude_stmts, Expr(:(=), vnew, aei))
+                pushfirst!(prelude_stmts, Expr(:(=), vnew, aei))
                 stmts_free &= free
             elseif !free && !isType(aeitype)
-                unshift!(prelude_stmts, aei)
+                pushfirst!(prelude_stmts, aei)
                 stmts_free = false
             end
         end
     end
-    invoke_fexpr === nothing || unshift!(prelude_stmts, invoke_fexpr)
+    invoke_fexpr === nothing || pushfirst!(prelude_stmts, invoke_fexpr)
 
     # re-number the SSAValues and copy their type-info to the new ast
     ssavalue_types = src.ssavaluetypes
@@ -4985,7 +4985,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
                     retval = add_slot!(sv.src, rettype, false)
                 end
                 multiret = true
-                unshift!(a.args, retval)
+                pushfirst!(a.args, retval)
                 a.head = :(=)
                 push!(stmts, GotoNode(retstmt.label))
             end
@@ -4994,7 +4994,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
 
     if multiret
         if lastexpr !== nothing
-            unshift!(lastexpr.args, retval)
+            pushfirst!(lastexpr.args, retval)
             lastexpr.head = :(=)
             push!(stmts, lastexpr)
         end
@@ -5023,7 +5023,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         if !do_coverage && all(inlining_ignore, stmts)
             empty!(stmts)
         elseif isa(stmts[1], LineNumberNode)
-            linenode = shift!(stmts)::LineNumberNode
+            linenode = popfirst!(stmts)::LineNumberNode
             line = linenode.line
             isa(linenode.file, Symbol) && (file = linenode.file)
         end
@@ -5035,15 +5035,15 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         # function inlined in it
         mod = method.module
         if mod === sv.mod
-            unshift!(stmts, Expr(:meta, :push_loc, file,
+            pushfirst!(stmts, Expr(:meta, :push_loc, file,
                                  method.name, line))
         else
-            unshift!(stmts, Expr(:meta, :push_loc, file,
+            pushfirst!(stmts, Expr(:meta, :push_loc, file,
                                  method.name, line, mod))
         end
         push!(stmts, Expr(:meta, :pop_loc))
     elseif !isempty(stmts)
-        unshift!(stmts, Expr(:meta, :push_loc, file,
+        pushfirst!(stmts, Expr(:meta, :push_loc, file,
                              method.name, line))
         if isa(stmts[end], LineNumberNode)
             stmts[end] = Expr(:meta, :pop_loc)

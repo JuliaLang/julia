@@ -181,7 +181,7 @@ function lookup(ip::Base.InterpreterIP)
                 func = Symbol("macro expansion")
             end
             scopes = lookup(Base.InterpreterIP(ip.code, i-1))
-            unshift!(scopes, StackFrame(
+            pushfirst!(scopes, StackFrame(
                 func, file, line, nothing, false, true, 0
             ))
             return scopes
@@ -220,7 +220,7 @@ function Base.backtrace()
             else
                 deleteat!(bt, 1:3)
             end
-            unshift!(bt2)
+            pushfirst!(bt2)
         else
             @static if Base.Sys.iswindows() && Int === Int32
                 deleteat!(bt, 1)
@@ -251,10 +251,10 @@ function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_fun
     remove_frames!(stack, :stacktrace)
 
     # is there a better way?  the func symbol has a number suffix which changes.
-    # it's possible that no test is needed and we could just shift! all the time.
+    # it's possible that no test is needed and we could just popfirst! all the time.
     # this line was added to PR #16213 because otherwise stacktrace() != stacktrace(false).
     # not sure why.  possibly b/c of re-ordering of base/sysimg.jl
-    !isempty(stack) && startswith(string(stack[1].func),"jlcall_stacktrace") && shift!(stack)
+    !isempty(stack) && startswith(string(stack[1].func),"jlcall_stacktrace") && popfirst!(stack)
     stack
 end
 

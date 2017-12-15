@@ -10,7 +10,7 @@ precompile(Tuple{getfield(Distributed, Symbol("#kw##remote_do")), Array{Any, 1},
 precompile(Tuple{getfield(Distributed, Symbol("#kw##remote_do")), Array{Any, 1}, typeof(Distributed.remote_do), typeof(Distributed.set_valid_processes), Distributed.LocalProcess, Array{Int64, 1}})
 precompile(Tuple{typeof(Distributed.default_addprocs_params)})
 precompile(Tuple{typeof(Distributed.topology), Symbol})
-precompile(Tuple{typeof(Base.shift!), Array{Distributed.WorkerConfig, 1}})
+precompile(Tuple{typeof(Base.popfirst!), Array{Distributed.WorkerConfig, 1}})
 precompile(Tuple{typeof(Distributed.workers)})
 precompile(Tuple{getfield(Distributed, Symbol("#kw##addprocs_locked")), Array{Any, 1}, typeof(Distributed.addprocs_locked), Distributed.SSHManager})
 precompile(Tuple{typeof(Distributed.check_addprocs_args), Array{Any, 1}})

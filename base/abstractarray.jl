@@ -1933,12 +1933,12 @@ map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F} = map_n!(f, dest
 map(f) = f()
 map(f, iters...) = collect(Generator(f, iters...))
 
-# multi-item push!, unshift! (built on top of type-specific 1-item version)
+# multi-item push!, pushfirst! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
 push!(A, a, b) = push!(push!(A, a), b)
 push!(A, a, b, c...) = push!(push!(A, a, b), c...)
-unshift!(A, a, b) = unshift!(unshift!(A, b), a)
-unshift!(A, a, b, c...) = unshift!(unshift!(A, c...), a, b)
+pushfirst!(A, a, b) = pushfirst!(pushfirst!(A, b), a)
+pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 
 ## hashing collections ##
 

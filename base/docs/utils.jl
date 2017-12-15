@@ -231,11 +231,11 @@ function matchinds(needle, haystack; acronym = false)
     lastc = '\0'
     for (i, char) in enumerate(haystack)
         isempty(chars) && break
-        while chars[1] == ' ' shift!(chars) end # skip spaces
+        while chars[1] == ' ' popfirst!(chars) end # skip spaces
         if Unicode.lowercase(char) == Unicode.lowercase(chars[1]) &&
            (!acronym || !Unicode.isalpha(lastc))
             push!(is, i)
-            shift!(chars)
+            popfirst!(chars)
         end
         lastc = char
     end

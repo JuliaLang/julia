@@ -93,7 +93,7 @@ cd(dirname(@__FILE__)) do
         for p in workers()
             @async begin
                 while length(tests) > 0
-                    test = shift!(tests)
+                    test = popfirst!(tests)
                     local resp
                     wrkr = p
                     try

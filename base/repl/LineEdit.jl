@@ -868,7 +868,7 @@ function push_kill!(s::MIState, killed::String, concat = s.key_repeats > 0; rev=
             s.kill_ring[end] * killed
     else
         push!(s.kill_ring, killed)
-        length(s.kill_ring) > options(s).kill_ring_max && shift!(s.kill_ring)
+        length(s.kill_ring) > options(s).kill_ring_max && popfirst!(s.kill_ring)
     end
     s.kill_idx = endof(s.kill_ring)
     true

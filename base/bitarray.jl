@@ -813,7 +813,7 @@ function pop!(B::BitVector)
     return item
 end
 
-function unshift!(B::BitVector, item)
+function pushfirst!(B::BitVector, item)
     item = convert(Bool, item)
 
     Bc = B.chunks
@@ -835,7 +835,7 @@ function unshift!(B::BitVector, item)
     return B
 end
 
-function shift!(B::BitVector)
+function popfirst!(B::BitVector)
     isempty(B) && throw(ArgumentError("argument must not be empty"))
     @inbounds begin
         item = B[1]

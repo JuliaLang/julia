@@ -355,10 +355,10 @@ end
     @test length(l)==2
     m = Any[]
     @test_throws ArgumentError pop!(m)
-    @test_throws ArgumentError shift!(m)
-    unshift!(l,4,7,5)
+    @test_throws ArgumentError popfirst!(m)
+    pushfirst!(l,4,7,5)
     @test l[1]==4 && l[2]==7 && l[3]==5 && l[4]==1 && l[5]==2
-    v = shift!(l)
+    v = popfirst!(l)
     @test v == 4
     @test length(l)==4
 
@@ -1277,15 +1277,15 @@ end
 
     # iterators with length:
     @test append!([1,2], (9,8)) == [1,2,9,8] == push!([1,2], (9,8)...)
-    @test prepend!([1,2], (9,8)) == [9,8,1,2] == unshift!([1,2], (9,8)...)
+    @test prepend!([1,2], (9,8)) == [9,8,1,2] == pushfirst!([1,2], (9,8)...)
     @test append!([1,2], ()) == [1,2] == prepend!([1,2], ())
     # iterators without length:
     g = (i for i = 1:10 if iseven(i))
     @test append!([1,2], g) == [1,2,2,4,6,8,10] == push!([1,2], g...)
-    @test prepend!([1,2], g) == [2,4,6,8,10,1,2] == unshift!([1,2], g...)
+    @test prepend!([1,2], g) == [2,4,6,8,10,1,2] == pushfirst!([1,2], g...)
     g = (i for i = 1:2:10 if iseven(i)) # isempty(g) == true
     @test append!([1,2], g) == [1,2] == push!([1,2], g...)
-    @test prepend!([1,2], g) == [1,2] == unshift!([1,2], g...)
+    @test prepend!([1,2], g) == [1,2] == pushfirst!([1,2], g...)
 
     # offset array
     @test append!([1,2], OffsetArray([9,8], (-3,))) == [1,2,9,8]
@@ -1450,7 +1450,7 @@ end
         @test isa(Base.IndexStyle(B), Base.IteratorsMD.IndexCartesian)
         @test mdsum(B) == 15
         @test mdsum2(B) == 15
-        unshift!(shp, 1)
+        pushfirst!(shp, 1)
     end
 
     a = [1:10;]
