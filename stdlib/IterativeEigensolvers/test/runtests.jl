@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using IterativeEigenSolvers
+using IterativeEigensolvers
 using Test
 
 @testset "eigs" begin

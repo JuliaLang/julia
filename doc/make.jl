@@ -30,7 +30,7 @@ if Sys.iswindows()
     cp_q("../stdlib/FileWatching/docs/src/index.md",          "src/stdlib/filewatching.md")
     cp_q("../stdlib/CRC32c/docs/src/index.md",                "src/stdlib/crc32c.md")
     cp_q("../stdlib/Dates/docs/src/index.md",                 "src/stdlib/dates.md")
-    cp_q("../stdlib/IterativeEigenSolvers/docs/src/index.md", "src/stdlib/iterativeeigensolvers.md")
+    cp_q("../stdlib/IterativeEigensolvers/docs/src/index.md", "src/stdlib/iterativeeigensolvers.md")
     cp_q("../stdlib/Unicode/docs/src/index.md",               "src/stdlib/unicode.md")
     cp_q("../stdlib/Distributed/docs/src/index.md",           "src/stdlib/distributed.md")
 else
@@ -43,7 +43,7 @@ else
     symlink_q("../../../stdlib/FileWatching/docs/src/index.md",          "src/stdlib/filewatching.md")
     symlink_q("../../../stdlib/CRC32c/docs/src/index.md",                "src/stdlib/crc32c.md")
     symlink_q("../../../stdlib/Dates/docs/src/index.md",                 "src/stdlib/dates.md")
-    symlink_q("../../../stdlib/IterativeEigenSolvers/docs/src/index.md", "src/stdlib/iterativeeigensolvers.md")
+    symlink_q("../../../stdlib/IterativeEigensolvers/docs/src/index.md", "src/stdlib/iterativeeigensolvers.md")
     symlink_q("../../../stdlib/Unicode/docs/src/index.md",               "src/stdlib/unicode.md")
     symlink_q("../../../stdlib/Distributed/docs/src/index.md",           "src/stdlib/distributed.md")
 end
@@ -160,12 +160,12 @@ const PAGES = [
 ]
 
 using DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, CRC32c,
-      Dates, IterativeEigenSolvers, Unicode, Distributed
+      Dates, IterativeEigensolvers, Unicode, Distributed
 
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
     modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile,
-                 Base64, FileWatching, Dates, IterativeEigenSolvers, Unicode, Distributed],
+                 Base64, FileWatching, Dates, IterativeEigensolvers, Unicode, Distributed],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,

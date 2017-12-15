@@ -177,7 +177,7 @@ function choosetests(choices = [])
     end
 
     # The shift and invert solvers need SuiteSparse for sparse input
-    Base.USE_GPL_LIBS || filter!(x->x != "IterativeEigenSolvers", STDLIBS)
+    Base.USE_GPL_LIBS || filter!(x->x != "IterativeEigensolvers", STDLIBS)
 
     filter!(x -> !(x in skip_tests), tests)
 

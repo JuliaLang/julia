@@ -50,7 +50,7 @@ the following keyword arguments are supported:
 
 We can see the various keywords in action in the following examples:
 ```jldoctest
-julia> using IterativeEigenSolvers
+julia> using IterativeEigensolvers
 
 julia> A = Diagonal(1:4);
 
@@ -165,7 +165,7 @@ final residual vector `resid`.
 
 We can see the various keywords in action in the following examples:
 ```jldoctest
-julia> using IterativeEigenSolvers
+julia> using IterativeEigensolvers
 
 julia> A = sparse(1.0I, 4, 4); B = Diagonal(1:4);
 
@@ -203,7 +203,7 @@ julia> λ
 
 
 ```@docs
-IterativeEigenSolvers.eigs(::Any)
-IterativeEigenSolvers.eigs(::Any, ::Any)
-IterativeEigenSolvers.svds
+IterativeEigensolvers.eigs(::Any)
+IterativeEigensolvers.eigs(::Any, ::Any)
+IterativeEigensolvers.svds
 ```

@@ -5,7 +5,7 @@ __precompile__(true)
 """
 Arnoldi and Lanczos iteration for computing eigenvalues
 """
-module IterativeEigenSolvers
+module IterativeEigensolvers
 
 using Base.LinAlg: BlasFloat, BlasInt, SVD, checksquare, mul!, Adjoint, Transpose
 
@@ -29,7 +29,7 @@ final residual vector `resid`.
 
 # Examples
 ```jldoctest
-julia> using IterativeEigenSolvers
+julia> using IterativeEigensolvers
 
 julia> A = Diagonal(1:4);
 

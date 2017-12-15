@@ -1011,7 +1011,7 @@ end
 
 chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
 lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")
-eig(A::SparseMatrixCSC) = error("Use IterativeEigenSolvers.eigs() instead of eig() for sparse matrices.")
+eig(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eig() for sparse matrices.")
 
 function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
     a, b = size(X)
