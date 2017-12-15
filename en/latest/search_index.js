@@ -7901,7 +7901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n"
 },
 
 {
@@ -12917,7 +12917,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Multi-Threading",
     "title": "Base.Threads.AbstractLock",
     "category": "Type",
-    "text": "AbstractLock\n\nAbstract supertype describing types that implement the thread-safe synchronization primitives: lock, trylock, unlock, and islocked\n\n\n\n"
+    "text": "AbstractLock\n\nAbstract supertype describing types that implement the thread-safe synchronization primitives: lock, trylock, unlock, and islocked.\n\n\n\n"
 },
 
 {
@@ -12925,7 +12925,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Multi-Threading",
     "title": "Base.lock",
     "category": "Function",
-    "text": "lock(the_lock)\n\nAcquires the lock when it becomes available. If the lock is already locked by a different task/thread, it waits for it to become available.\n\nEach lock must be matched by an unlock.\n\n\n\n"
+    "text": "lock(lock)\n\nAcquire the lock when it becomes available. If the lock is already locked by a different task/thread, wait for it to become available.\n\nEach lock must be matched by an unlock.\n\n\n\n"
 },
 
 {
@@ -12933,7 +12933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Multi-Threading",
     "title": "Base.unlock",
     "category": "Function",
-    "text": "unlock(the_lock)\n\nReleases ownership of the lock.\n\nIf this is a recursive lock which has been acquired before, it just decrements an internal counter and returns immediately.\n\n\n\n"
+    "text": "unlock(lock)\n\nReleases ownership of the lock.\n\nIf this is a recursive lock which has been acquired before, decrement an internal counter and return immediately.\n\n\n\n"
 },
 
 {
@@ -12941,7 +12941,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Multi-Threading",
     "title": "Base.trylock",
     "category": "Function",
-    "text": "trylock(the_lock) -> Success (Boolean)\n\nAcquires the lock if it is available, returning true if successful. If the lock is already locked by a different task/thread, returns false.\n\nEach successful trylock must be matched by an unlock.\n\n\n\n"
+    "text": "trylock(lock) -> Success (Boolean)\n\nAcquire the lock if it is available, and return true if successful. If the lock is already locked by a different task/thread, return false.\n\nEach successful trylock must be matched by an unlock.\n\n\n\n"
 },
 
 {
@@ -12949,7 +12949,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Multi-Threading",
     "title": "Base.islocked",
     "category": "Function",
-    "text": "islocked(the_lock) -> Status (Boolean)\n\nCheck whether the lock is held by any task/thread. This should not be used for synchronization (see instead trylock).\n\n\n\n"
+    "text": "islocked(lock) -> Status (Boolean)\n\nCheck whether the lock is held by any task/thread. This should not be used for synchronization (see instead trylock).\n\n\n\n"
 },
 
 {
@@ -12973,7 +12973,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Multi-Threading",
     "title": "Base.Threads.SpinLock",
     "category": "Type",
-    "text": "SpinLock()\n\nCreates a non-reentrant lock. Recursive use will result in a deadlock. Each lock must be matched with an unlock.\n\nTest-and-test-and-set spin locks are quickest up to about 30ish contending threads. If you have more contention than that, perhaps a lock is the wrong way to synchronize.\n\nSee also RecursiveSpinLock for a version that permits recursion.\n\nSee also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.\n\n\n\n"
+    "text": "SpinLock()\n\nCreate a non-reentrant lock. Recursive use will result in a deadlock. Each lock must be matched with an unlock.\n\nTest-and-test-and-set spin locks are quickest up to about 30ish contending threads. If you have more contention than that, perhaps a lock is the wrong way to synchronize.\n\nSee also RecursiveSpinLock for a version that permits recursion.\n\nSee also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.\n\n\n\n"
 },
 
 {
@@ -12989,7 +12989,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Multi-Threading",
     "title": "Base.Semaphore",
     "category": "Type",
-    "text": "Semaphore(sem_size)\n\nCreates a counting semaphore that allows at most sem_size acquires to be in use at any time. Each acquire must be mached with a release.\n\nThis construct is NOT threadsafe.\n\n\n\n"
+    "text": "Semaphore(sem_size)\n\nCreate a counting semaphore that allows at most sem_size acquires to be in use at any time. Each acquire must be mached with a release.\n\nThis construct is NOT threadsafe.\n\n\n\n"
 },
 
 {
