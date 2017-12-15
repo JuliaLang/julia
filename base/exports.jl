@@ -77,7 +77,6 @@ export
     MergeSort,
     Missing,
     NTuple,
-    Nullable,
     ObjectIdDict,
     OrdinalRange,
     Pair,
@@ -100,6 +99,7 @@ export
     AbstractSerializer,
     SerializationState,
     Set,
+    Some,
     StepRange,
     StepRangeLen,
     StridedArray,
@@ -150,7 +150,6 @@ export
     InvalidStateException,
     KeyError,
     MissingException,
-    NullException,
     ParseError,
     SystemError,
     StringIndexError,
@@ -412,6 +411,7 @@ export
     lbeta,
 
 # arrays
+    axes,
     broadcast!,
     broadcast,
     broadcast_getindex,
@@ -454,7 +454,6 @@ export
     hvcat,
     ind2sub,
     indexin,
-    indices,
     indmax,
     indmin,
     invperm,
@@ -770,6 +769,12 @@ export
     unescape_string,
     warn,
 
+# logging frontend
+    @debug,
+    @info,
+    @warn,
+    @error,
+
 # random numbers
     AbstractRNG,
     MersenneTwister,
@@ -858,8 +863,10 @@ export
     fetch,
 
 # missing values
+    coalesce,
     ismissing,
     missing,
+    skipmissing,
 
 # time
     sleep,
@@ -1139,10 +1146,6 @@ export
     unsafe_store!,
     unsafe_write,
 
-# nullable types
-    isnull,
-    unsafe_get,
-
 # Macros
     # parser internal
     @__FILE__,
@@ -1233,7 +1236,6 @@ export
     sparse,
     sparsevec,
     spdiagm,
-    spones,
     sprand,
     sprandn,
     spzeros,

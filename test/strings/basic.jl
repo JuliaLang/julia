@@ -113,9 +113,22 @@ end
     @test_throws BoundsError checkbounds("hello", 4:6)
     @test_throws BoundsError checkbounds("hello", [0:3;])
     @test_throws BoundsError checkbounds("hello", [4:6;])
-    @test checkbounds("hello", 2)
-    @test checkbounds("hello", 1:5)
-    @test checkbounds("hello", [1:5;])
+    @test checkbounds("hello", 1) === nothing
+    @test checkbounds("hello", 5) === nothing
+    @test checkbounds("hello", 1:3) === nothing
+    @test checkbounds("hello", 3:5) === nothing
+    @test checkbounds("hello", [1:3;]) === nothing
+    @test checkbounds("hello", [3:5;]) === nothing
+    @test checkbounds(Bool, "hello", 0) === false
+    @test checkbounds(Bool, "hello", 1) === true
+    @test checkbounds(Bool, "hello", 5) === true
+    @test checkbounds(Bool, "hello", 6) === false
+    @test checkbounds(Bool, "hello", 0:5) === false
+    @test checkbounds(Bool, "hello", 1:6) === false
+    @test checkbounds(Bool, "hello", 1:5) === true
+    @test checkbounds(Bool, "hello", [0:5;]) === false
+    @test checkbounds(Bool, "hello", [1:6;]) === false
+    @test checkbounds(Bool, "hello", [1:5;]) === true
 end
 
 @testset "issue #15624 (indexing with out of bounds empty range)" begin
@@ -242,19 +255,19 @@ end
 end
 
 @testset "issue #10307" begin
-    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Int16}
+    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Union{Int16, Void}}
 
     for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
         for i in [typemax(T), typemin(T)]
             s = "$i"
-            @test get(tryparse(T, s)) == i
+            @test tryparse(T, s) == i
         end
     end
 
     for T in [Int8, Int16, Int32, Int64, Int128]
         for i in [typemax(T), typemin(T)]
             f = "$(i)0"
-            @test isnull(tryparse(T, f))
+            @test tryparse(T, f) === nothing
         end
     end
 end
@@ -271,13 +284,13 @@ end
     @test unsafe_string(sp,5) == "abcde"
     @test typeof(unsafe_string(sp)) == String
 
-    @test get(tryparse(BigInt, "1234567890")) == BigInt(1234567890)
-    @test isnull(tryparse(BigInt, "1234567890-"))
+    @test tryparse(BigInt, "1234567890") == BigInt(1234567890)
+    @test tryparse(BigInt, "1234567890-") === nothing
 
-    @test get(tryparse(Float64, "64")) == 64.0
-    @test isnull(tryparse(Float64, "64o"))
-    @test get(tryparse(Float32, "32")) == 32.0f0
-    @test isnull(tryparse(Float32, "32o"))
+    @test tryparse(Float64, "64") == 64.0
+    @test tryparse(Float64, "64o") === nothing
+    @test tryparse(Float32, "32") == 32.0f0
+    @test tryparse(Float32, "32o") === nothing
 end
 
 @testset "issue #10994: handle embedded NUL chars for string parsing" begin
@@ -285,7 +298,7 @@ end
         @test_throws ArgumentError parse(T, "1\0")
     end
     for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, Float64, Float32]
-        @test isnull(tryparse(T, "1\0"))
+        @test tryparse(T, "1\0") === nothing
     end
     let s = Base.Unicode.normalize("tést",:NFKC)
         @test unsafe_string(Base.unsafe_convert(Cstring, Base.cconvert(Cstring, s))) == s
@@ -316,31 +329,31 @@ end
         @test isvalid(Char, val) == pass
     end
     for (val, pass) in (
-            (b"\x00", true),
-            (b"\x7f", true),
-            (b"\x80", false),
-            (b"\xbf", false),
-            (b"\xc0", false),
-            (b"\xff", false),
-            (b"\xc0\x80", false),
-            (b"\xc1\x80", false),
-            (b"\xc2\x80", true),
-            (b"\xc2\xc0", false),
-            (b"\xed\x9f\xbf", true),
-            (b"\xed\xa0\x80", false),
-            (b"\xed\xbf\xbf", false),
-            (b"\xee\x80\x80", true),
-            (b"\xef\xbf\xbf", true),
-            (b"\xf0\x90\x80\x80", true),
-            (b"\xf4\x8f\xbf\xbf", true),
-            (b"\xf4\x90\x80\x80", false),
-            (b"\xf5\x80\x80\x80", false),
-            (b"\ud800\udc00", false),
-            (b"\udbff\udfff", false),
-            (b"\ud800\u0100", false),
-            (b"\udc00\u0100", false),
-            (b"\udc00\ud800", false)
-            )
+            ("\x00", true),
+            ("\x7f", true),
+            ("\x80", false),
+            ("\xbf", false),
+            ("\xc0", false),
+            ("\xff", false),
+            ("\xc0\x80", false),
+            ("\xc1\x80", false),
+            ("\xc2\x80", true),
+            ("\xc2\xc0", false),
+            ("\xed\x9f\xbf", true),
+            ("\xed\xa0\x80", false),
+            ("\xed\xbf\xbf", false),
+            ("\xee\x80\x80", true),
+            ("\xef\xbf\xbf", true),
+            ("\xf0\x90\x80\x80", true),
+            ("\xf4\x8f\xbf\xbf", true),
+            ("\xf4\x90\x80\x80", false),
+            ("\xf5\x80\x80\x80", false),
+            ("\ud800\udc00", false),
+            ("\udbff\udfff", false),
+            ("\ud800\u0100", false),
+            ("\udc00\u0100", false),
+            ("\udc00\ud800", false),
+        )
         @test isvalid(String, val) == pass == isvalid(String(val))
     end
 
@@ -430,8 +443,8 @@ end
     @test_throws ArgumentError ascii(GenericString("Hello, ∀"))
 end
 @testset "issue #17271: endof() doesn't throw an error even with invalid strings" begin
-    @test endof(String(b"\x90")) == 1
-    @test endof(String(b"\xce")) == 1
+    @test endof("\x90") == 1
+    @test endof("\xce") == 1
 end
 # issue #17624, missing getindex method for String
 @test "abc"[:] == "abc"
@@ -652,3 +665,36 @@ end
         @test ncodeunits(GenericString(s)) == n
     end
 end
+
+@testset "0-step nextind and prevind" begin
+    for T in [String, SubString, Base.SubstitutionString, GenericString]
+        e = convert(T, "")
+        @test nextind(e, 0, 0) == 0
+        @test_throws BoundsError nextind(e, 1, 0)
+        @test_throws BoundsError prevind(e, 0, 0)
+        @test prevind(e, 1, 0) == 1
+
+        s = convert(T, "∀x∃")
+        @test nextind(s, 0, 0) == 0
+        @test nextind(s, 1, 0) == 1
+        @test_throws StringIndexError nextind(s, 2, 0)
+        @test_throws StringIndexError nextind(s, 3, 0)
+        @test nextind(s, 4, 0) == 4
+        @test nextind(s, 5, 0) == 5
+        @test_throws StringIndexError nextind(s, 6, 0)
+        @test_throws StringIndexError nextind(s, 7, 0)
+        @test_throws BoundsError nextind(s, 8, 0)
+
+        @test_throws BoundsError prevind(s, 0, 0)
+        @test prevind(s, 1, 0) == 1
+        @test_throws StringIndexError prevind(s, 2, 0)
+        @test_throws StringIndexError prevind(s, 3, 0)
+        @test prevind(s, 4, 0) == 4
+        @test prevind(s, 5, 0) == 5
+        @test_throws StringIndexError prevind(s, 6, 0)
+        @test_throws StringIndexError prevind(s, 7, 0)
+        @test prevind(s, 8, 0) == 8
+    end
+end
+
+@test Vector{UInt8}("\xcc\xdd\xee\xff\x80") == [0xcc,0xdd,0xee,0xff,0x80]

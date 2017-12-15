@@ -146,7 +146,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
                    Ptr{MergeOptions}, Ptr{CheckoutOptions}),
                    repo.ptr, map(x->x.ptr, anns), anns_size,
                    Ref(merge_opts), Ref(checkout_opts))
-    info("Review and commit merged changes.")
+    @info "Review and commit merged changes"
     return true
 end
 
@@ -209,7 +209,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
     merge_result = if ffpref == Consts.MERGE_PREFERENCE_NONE
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
-                warn("Unable to perform Fast-Forward merge with mith multiple merge heads.")
+                @warn "Unable to perform Fast-Forward merge with mith multiple merge heads"
                 false
             else
                 ffmerge!(repo, anns[1])
@@ -222,13 +222,13 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
     elseif ffpref == Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
-                warn("Unable to perform Fast-Forward merge with mith multiple merge heads.")
+                @warn "Unable to perform Fast-Forward merge with mith multiple merge heads"
                 false
             else
                 ffmerge!(repo, anns[1])
             end
         else
-            warn("Cannot perform fast-forward merge.")
+            @warn "Cannot perform fast-forward merge"
             false
         end
     elseif ffpref == Consts.MERGE_PREFERENCE_NO_FASTFORWARD
@@ -259,7 +259,6 @@ function merge_base(repo::GitRepo, one::AbstractString, two::AbstractString)
                 moid_ptr, repo.ptr, oid1_ptr, oid2_ptr)
         moid_ptr[]
     catch e
-        #warn("Pkg:",path(repo),"=>",e.msg)
         GitHash()
     end
     return moid

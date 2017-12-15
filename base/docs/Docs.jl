@@ -142,7 +142,7 @@ linenumber, source code, and fielddocs.
 """
 mutable struct DocStr
     text   :: Core.SimpleVector
-    object :: Nullable
+    object :: Any
     data   :: Dict{Symbol, Any}
 end
 
@@ -160,9 +160,9 @@ function docstr(binding::Binding, @nospecialize typesig = Union{})
 end
 docstr(object, data = Dict()) = _docstr(object, data)
 
-_docstr(vec::Core.SimpleVector, data) = DocStr(vec,            Nullable(),       data)
-_docstr(str::AbstractString,    data) = DocStr(Core.svec(str), Nullable(),       data)
-_docstr(object,                 data) = DocStr(Core.svec(),    Nullable(object), data)
+_docstr(vec::Core.SimpleVector, data) = DocStr(vec,            nothing, data)
+_docstr(str::AbstractString,    data) = DocStr(Core.svec(str), nothing, data)
+_docstr(object,                 data) = DocStr(Core.svec(),     object, data)
 
 _docstr(doc::DocStr, data) = (doc.data = merge(data, doc.data); doc)
 
@@ -184,13 +184,13 @@ end
 @noinline formatdoc(buffer, d, part) = print(buffer, part)
 
 function parsedoc(d::DocStr)
-    if isnull(d.object)
+    if d.object === nothing
         md = formatdoc(d)
         md.meta[:module] = d.data[:module]
         md.meta[:path]   = d.data[:path]
-        d.object = Nullable(md)
+        d.object = md
     end
-    get(d.object)
+    d.object
 end
 
 """
@@ -236,7 +236,7 @@ function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = U
         # We allow for docstrings to be updated, but print a warning since it is possible
         # that over-writing a docstring *may* have been accidental.  The warning
         # is suppressed for symbols in Main, for interactive use (#23011).
-        __module__ == Main || warn("replacing docs for '$b :: $sig' in module '$(__module__)'.")
+        __module__ == Main || @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
         # are initially added. Replacing a specific docstring does not change it's ordering.

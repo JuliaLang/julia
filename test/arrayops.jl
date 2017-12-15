@@ -312,16 +312,12 @@ end
     # TODO: will throw MethodError after 0.6 deprecations are deleted
     dw = Base.JLOptions().depwarn
     if dw == 2
+        # FIXME: Remove this special case after deperror cleanup
         @test_throws ErrorException Matrix{Int}()
         @test_throws ErrorException Matrix()
-    elseif dw == 1
-        @test_warn "deprecated" Matrix{Int}()
-        @test_warn "deprecated" Matrix()
-    elseif dw == 0
-        @test size(Matrix{Int}()) == (0,0)
-        @test size(Matrix()) == (0,0)
     else
-        error("unexpected depwarn value")
+        @test size(@test_deprecated Matrix{Int}()) == (0,0)
+        @test size(@test_deprecated Matrix()) == (0,0)
     end
     @test_throws MethodError Array{Int,3}()
 end
@@ -1215,7 +1211,7 @@ end
 
 @testset "eachindexvalue" begin
     A14 = [11 13; 12 14]
-    R = CartesianRange(indices(A14))
+    R = CartesianRange(axes(A14))
     @test [a for (a,b) in pairs(IndexLinear(),    A14)] == [1,2,3,4]
     @test [a for (a,b) in pairs(IndexCartesian(), A14)] == vec(collect(R))
     @test [b for (a,b) in pairs(IndexLinear(),    A14)] == [11,12,13,14]
@@ -1640,10 +1636,16 @@ R = CartesianRange((0,3))
 R = CartesianRange((3,0))
 @test done(R, start(R)) == true
 
-@test @inferred(eachindex(Base.IndexCartesian(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
-@test @inferred(eachindex(Base.IndexLinear(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
-@test @inferred(eachindex(zeros(3),view(zeros(3,3),1:2,1:2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
-@test @inferred(eachindex(zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
+@testset "multi-array eachindex" begin
+    local a = zeros(2,2)
+    local b = view(zeros(3,2), 1:2, :)
+    @test @inferred(eachindex(Base.IndexCartesian(), a, b)) == CartesianRange((2,2))
+    @test @inferred(eachindex(Base.IndexLinear(), a, b)) == 1:4
+    @test @inferred(eachindex(a, b)) == CartesianRange((2,2))
+    @test @inferred(eachindex(a, a)) == 1:4
+    @test_throws DimensionMismatch eachindex(a, rand(3,3))
+    @test_throws DimensionMismatch eachindex(b, rand(3,3))
+end
 
 @testset "rotates" begin
     a = [1 0 0; 0 0 0]

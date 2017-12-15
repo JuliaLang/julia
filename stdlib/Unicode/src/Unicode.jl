@@ -9,7 +9,7 @@ using Base.Unicode: normalize, graphemes, isassigned, textwidth, isvalid,
                     iscntrl, ispunct, isspace, isprint, isgraph,
                     lowercase, uppercase, titlecase, lcfirst, ucfirst
 
-export normalize, graphemes, isassigned, textwidth, isvalid,
+export graphemes, textwidth, isvalid,
        islower, isupper, isalpha, isdigit, isxdigit, isnumeric, isalnum,
        iscntrl, ispunct, isspace, isprint, isgraph,
        lowercase, uppercase, titlecase, lcfirst, ucfirst

@@ -105,6 +105,13 @@ end
 @test_repr "(!x).a"
 @test_repr "(!x)::a"
 
+# invalid UTF-8 strings
+@test_repr "\"\\ud800\""
+@test_repr "\"\\udfff\""
+@test_repr "\"\\xc0\\xb0\""
+@test_repr "\"\\xe0\\xb0\\xb0\""
+@test_repr "\"\\xf0\\xb0\\xb0\\xb0\""
+
 # Complex
 
 # Meta.parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
@@ -469,7 +476,7 @@ let filename = tempname()
     @test chomp(read(filename, String)) == "hello"
     ret = open(filename, "w") do f
         redirect_stderr(f) do
-            warn("hello")
+            println(STDERR, "WARNING: hello")
             [2]
         end
     end
@@ -750,7 +757,7 @@ let a = Vector{Any}(uninitialized, 10000)
     a[2] = "elemA"
     a[4] = "elemB"
     a[11] = "elemC"
-    repr = sprint(0, dump, a; env= (:limit => true))
+    repr = sprint(dump, a; context=(:limit => true), sizehint=0)
     @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
 end
 
@@ -1035,6 +1042,9 @@ end
     @test showstr([[Float16(1)]]) == "Array{Float16,1}[[1.0]]"
     @test replstr(Real[Float16(1)]) == "1-element Array{Real,1}:\n Float16(1.0)"
     @test replstr(Array{Real}[Real[1]]) == "1-element Array{Array{Real,N} where N,1}:\n [1]"
+    # printing tuples (Issue #25042)
+    @test replstr(fill((Int64(1), zeros(Float16, 3)), 1)) ==
+                 "1-element Array{Tuple{Int64,Array{Float16,1}},1}:\n (1, [0.0, 0.0, 0.0])"
     @testset "nested Any eltype" begin
         x = Any[Any[Any[1]]]
         # The element of x (i.e. x[1]) has an eltype which can't be deduced

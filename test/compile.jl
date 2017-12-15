@@ -14,8 +14,8 @@ FooBase_module = :FooBase4b3a94a1a081a8cb
 end
 using .ConflictingBindings
 
-# this environment variable would affect some error messages being tested below
-# so we disable it for the tests below
+# FIXME: withenv() is a leftover from previous tests.  Oddly, one test below
+# fails without it, in a mysterious way.
 withenv( "JULIA_DEBUG_LOADING" => nothing ) do
 
 dir = mktempdir()
@@ -128,8 +128,8 @@ try
               struct Value18343{T, R}
                   pool::Pool18343{R, Value18343{T, R}}
               end
-              Base.convert(::Type{Nullable{S}}, ::Value18343{Nullable}) where {S} = 2
-              Base.convert(::Type{Nullable{Value18343}}, ::Value18343{Nullable}) = 2
+              Base.convert(::Type{Some{S}}, ::Value18343{Some}) where {S} = 2
+              Base.convert(::Type{Some{Value18343}}, ::Value18343{Some}) = 2
               Base.convert(::Type{Ref}, ::Value18343{T}) where {T} = 3
 
 
@@ -174,7 +174,7 @@ try
     cachefile = joinpath(dir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
-    @test_warn "WARNING: replacing module $Foo_module." begin
+    @test_logs (:warn,"Replacing module `$Foo_module`") begin
         ms = Base._require_from_serialized(Foo_module, cachefile)
         @test isa(ms, Array{Any,1})
         Base.register_all(ms)
@@ -219,7 +219,7 @@ try
                                # plus modules included in the system image
                                Dict(s => Base.module_uuid(Base.root_module(s)) for s in
                                     [:Base64, :CRC32c, :Dates, :DelimitedFiles, :FileWatching,
-                                     :IterativeEigenSolvers, :Mmap, :Profile, :SharedArrays,
+                                     :IterativeEigenSolvers, :Logging, :Mmap, :Profile, :SharedArrays,
                                      :SuiteSparse, :Test, :Unicode, :Distributed]))
         @test discard_module.(deps) == deps1
 
@@ -252,7 +252,7 @@ try
                     some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
-        PV = Foo.Value18343{Nullable}.body.types[1]
+        PV = Foo.Value18343{Some}.body.types[1]
         VR = PV.types[1].parameters[1]
         @test PV.types[1] === Array{VR,1}
         @test pointer_from_objref(PV.types[1]) ===
@@ -477,7 +477,7 @@ let dir = mktempdir()
         let fname = tempname()
             try
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                @test Test.ismatch_warn("WARNING: replacing module $Test_module.\n", read(fname, String))
+                @test ismatch(Regex("Replacing module `$Test_module`"), read(fname, String))
             finally
                 rm(fname, force=true)
             end
@@ -623,4 +623,4 @@ let
     end
 end
 
-end # !withenv
+end

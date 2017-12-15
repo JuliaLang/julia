@@ -12,9 +12,9 @@ All Julia streams expose at least a [`read`](@ref) and a [`write`](@ref) method,
 stream as their first argument, e.g.:
 
 ```julia-repl
-julia> write(STDOUT,"Hello World");  # suppress return value 11 with ;
+julia> write(STDOUT, "Hello World");  # suppress return value 11 with ;
 Hello World
-julia> read(STDIN,Char)
+julia> read(STDIN, Char)
 
 '\n': ASCII/Unicode U+000a (category Cc: Other, control)
 ```
@@ -49,7 +49,7 @@ However, since this is slightly cumbersome, there are several convenience method
 example, we could have written the above as:
 
 ```julia-repl
-julia> read(STDIN,4)
+julia> read(STDIN, 4)
 abcd
 4-element Array{UInt8,1}:
  0x61
@@ -92,7 +92,7 @@ Note that the [`write`](@ref) method mentioned above operates on binary streams.
 values do not get converted to any canonical text representation but are written out as is:
 
 ```jldoctest
-julia> write(STDOUT,0x61);  # suppress return value 1 with ;
+julia> write(STDOUT, 0x61);  # suppress return value 1 with ;
 a
 ```
 
@@ -167,7 +167,7 @@ julia> open(read_and_capitalize, "hello.txt")
 "HELLO AGAIN."
 ```
 
-to open `hello.txt`, call `read_and_capitalize on it`, close `hello.txt` and return the capitalized
+to open `hello.txt`, call `read_and_capitalize` on it, close `hello.txt` and return the capitalized
 contents.
 
 To avoid even having to define a named function, you can use the `do` syntax, which creates an
@@ -290,10 +290,10 @@ julia> close(clientside)
 
 One of the [`connect`](@ref) methods that does not follow the [`listen`](@ref) methods is
 `connect(host::String,port)`, which will attempt to connect to the host given by the `host` parameter
-on the port given by the port parameter. It allows you to do things like:
+on the port given by the `port` parameter. It allows you to do things like:
 
 ```julia-repl
-julia> connect("google.com",80)
+julia> connect("google.com", 80)
 TCPSocket(RawFD(30) open, 0 bytes waiting)
 ```
 

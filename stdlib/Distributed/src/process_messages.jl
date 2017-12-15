@@ -89,8 +89,7 @@ function deliver_result(sock::IO, msg, oid, value)
     catch e
         # terminate connection in case of serialization error
         # otherwise the reading end would hang
-        print(STDERR, "fatal error on ", myid(), ": ")
-        display_error(e, catch_backtrace())
+        @error "Fatal error on process $(myid())" exception=e
         wid = worker_id_from_socket(sock)
         close(sock)
         if myid()==1
@@ -211,8 +210,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
             # If unhandleable error occurred talking to pid 1, exit
             if wpid == 1
                 if isopen(w_stream)
-                    print(STDERR, "fatal error on ", myid(), ": ")
-                    display_error(e, catch_backtrace())
+                    @error "Fatal error on process $(myid())" exception=e
                 end
                 exit(1)
             end
@@ -311,7 +309,7 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
     end
 
     lazy = msg.lazy
-    PGRP.lazy = Nullable{Bool}(lazy)
+    PGRP.lazy = lazy
 
     wait_tasks = Task[]
     for (connect_at, rpid) in msg.other_workers
@@ -321,7 +319,7 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
         let rpid=rpid, wconfig=wconfig
             if lazy
                 # The constructor registers the object with a global registry.
-                Worker(rpid, Nullable{Function}(()->connect_to_peer(cluster_manager, rpid, wconfig)))
+                Worker(rpid, ()->connect_to_peer(cluster_manager, rpid, wconfig))
             else
                 t = @async connect_to_peer(cluster_manager, rpid, wconfig)
                 push!(wait_tasks, t)
@@ -343,15 +341,14 @@ function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConf
         send_connection_hdr(w, true)
         send_msg_now(w, MsgHeader(), IdentifySocketMsg(myid()))
     catch e
-        display_error(e, catch_backtrace())
-        println(STDERR, "Error [$e] on $(myid()) while connecting to peer $rpid. Exiting.")
+        @error "Error on $(myid()) while connecting to peer $rpid, exiting" exception=e
         exit(1)
     end
 end
 
 function handle_msg(msg::JoinCompleteMsg, header, r_stream, w_stream, version)
     w = map_sock_wrkr[r_stream]
-    environ = get(w.config.environ, Dict())
+    environ = coalesce(w.config.environ, Dict())
     environ[:cpu_cores] = msg.cpu_cores
     w.config.environ = environ
     w.config.ospid = msg.ospid

@@ -100,8 +100,7 @@ spzeros(len::Integer) = spzeros(Float64, len)
 spzeros(::Type{T}, len::Integer) where {T} = SparseVector(len, Int[], T[])
 spzeros(::Type{Tv}, ::Type{Ti}, len::Integer) where {Tv,Ti<:Integer} = SparseVector(len, Ti[], Tv[])
 
-# Construction of same structure, but with all ones
-spones(x::SparseVector{T}) where {T} = SparseVector(x.n, copy(x.nzind), ones(T, length(x.nzval)))
+LinAlg.fillstored!(x::SparseVector, y) = (fill!(x.nzval, y); x)
 
 ### Construction from lists of indices and values
 
@@ -1555,7 +1554,7 @@ function LinAlg.lowrankupdate!(A::StridedMatrix, x::StridedVector, y::SparseVect
     nzv = nonzeros(y)
     @inbounds for (j,v) in zip(nzi,nzv)
         αv = α*v'
-        for i in indices(x, 1)
+        for i in axes(x, 1)
             A[i,j] += x[i]*αv
         end
     end

@@ -153,10 +153,10 @@ function _require_search_from_serialized(mod::Symbol, sourcepath::String)
             if isa(restored, ErrorException) && endswith(restored.msg, " uuid did not match cache file.")
                 # can't use this cache due to a module uuid mismatch,
                 # defer reporting error until after trying all of the possible matches
-                DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Failed to load $path_to_try because $(restored.msg)")
+                @debug "Failed to load $path_to_try because $(restored.msg)"
                 continue
             end
-            warn("Deserialization checks failed while attempting to load cache from $path_to_try.")
+            @warn "Deserialization checks failed while attempting to load cache from $path_to_try"
             throw(restored)
         else
             return restored
@@ -164,11 +164,6 @@ function _require_search_from_serialized(mod::Symbol, sourcepath::String)
     end
     return !isempty(paths)
 end
-
-# this value is set by `require` based on whether JULIA_DEBUG_LOADING
-# is presently defined as an environment variable
-# and makes the logic in this file noisier about what it is doing and why
-const DEBUG_LOADING = Ref(false)
 
 # to synchronize multiple tasks trying to import/using something
 const package_locks = Dict{Symbol,Condition}()
@@ -324,7 +319,7 @@ function register_root_module(key, m::Module)
         oldm = loaded_modules[key]
         if oldm !== m
             name = module_name(oldm)
-            warn("replacing module $name.")
+            @warn "Replacing module `$name`"
         end
     end
     loaded_modules[key] = m
@@ -376,7 +371,6 @@ function _require(mod::Symbol)
     # and is not applied recursively to imported modules:
     old_track_dependencies = _track_dependencies[]
     _track_dependencies[] = false
-    DEBUG_LOADING[] = haskey(ENV, "JULIA_DEBUG_LOADING")
 
     # handle recursive calls to require
     loading = get(package_locks, mod, false)
@@ -411,8 +405,8 @@ function _require(mod::Symbol)
         # but it was not handled by the precompile loader, complain
         for (concrete_mod, concrete_uuid) in _concrete_dependencies
             if mod === concrete_mod
-                warn("""Module $mod with uuid $concrete_uuid is missing from the cache.
-                     This may mean module $mod does not support precompilation but is imported by a module that does.""")
+                @warn """Module $mod with uuid $concrete_uuid is missing from the cache.
+                     This may mean module $mod does not support precompilation but is imported by a module that does."""
                 if JLOptions().incremental != 0
                     # during incremental precompilation, this should be fail-fast
                     throw(PrecompilableError(false))
@@ -426,8 +420,7 @@ function _require(mod::Symbol)
             cachefile = compilecache(mod)
             m = _require_from_serialized(mod, cachefile)
             if isa(m, Exception)
-                warn("The call to compilecache failed to create a usable precompiled cache file for module $name. Got:")
-                warn(m, prefix="WARNING: ")
+                @warn "The call to compilecache failed to create a usable precompiled cache file for module $name" exception=m
                 # fall-through, TODO: disable __precompile__(true) error so that the normal include will succeed
             else
                 register_all(m)
@@ -448,7 +441,8 @@ function _require(mod::Symbol)
             cachefile = compilecache(mod)
             m = _require_from_serialized(mod, cachefile)
             if isa(m, Exception)
-                warn(m, prefix="WARNING: ")
+                @warn """Module `$mod` declares `__precompile__(true)` but `require` failed
+                         to create a usable precompiled cache file""" exception=m
                 # TODO: disable __precompile__(true) error and do normal include instead of error
                 error("Module $mod declares __precompile__(true) but require failed to create a usable precompiled cache file.")
             end
@@ -621,12 +615,11 @@ function compilecache(name::String)
         end
     end
     # run the expression and cache the result
-    if isinteractive() || DEBUG_LOADING[]
-        if isfile(cachefile)
-            info("Recompiling stale cache file $cachefile for module $name.")
-        else
-            info("Precompiling module $name.")
-        end
+    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+    if isfile(cachefile)
+        @logmsg verbosity "Recompiling stale cache file $cachefile for module $name"
+    else
+        @logmsg verbosity "Precompiling module $name"
     end
     if success(create_expr_cache(path, cachefile, concrete_deps))
         # append checksum to the end of the .ji file:
@@ -740,7 +733,7 @@ function stale_cachefile(modpath::String, cachefile::String)
     io = open(cachefile, "r")
     try
         if !isvalid_cache_header(io)
-            DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile due to it containing an invalid cache header.")
+            @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
         modules, files, required_modules = parse_cache_header(io)
@@ -756,7 +749,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             name = string(mod)
             path = find_package(name)
             if path === nothing
-                DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because dependency $name not found.")
+                @debug "Rejecting cache file $cachefile because dependency $name not found."
                 return true # Won't be able to fullfill dependency
             end
         end
@@ -770,14 +763,14 @@ function stale_cachefile(modpath::String, cachefile::String)
                 if uuid === uuid_req
                     return false # this is the file we want
                 end
-                DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it provides the wrong uuid (got $uuid) for $mod (want $uuid_req).")
+                @debug "Rejecting cache file $cachefile because it provides the wrong uuid (got $uuid) for $mod (want $uuid_req)"
                 return true # cachefile doesn't provide the required version of the dependency
             end
         end
 
         # now check if this file is fresh relative to its source files
         if !samefile(files[1][2], modpath)
-            DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it is for file $(files[1][2])) not file $modpath.")
+            @debug "Rejecting cache file $cachefile because it is for file $(files[1][2])) not file $modpath"
             return true # cache file was compiled from a different path
         end
         for (_, f, ftime_req) in files
@@ -785,7 +778,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
             ftime = mtime(f)
             if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, 6)
-                DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed.")
+                @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
                 return true
             end
         end
@@ -793,7 +786,7 @@ function stale_cachefile(modpath::String, cachefile::String)
         # finally, verify that the cache file has a valid checksum
         crc = _crc32c(seekstart(io), filesize(io)-4)
         if crc != ntoh(read(io, UInt32))
-            DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it has an invalid checksum.")
+            @debug "Rejecting cache file $cachefile because it has an invalid checksum"
             return true
         end
 

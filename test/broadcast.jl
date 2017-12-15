@@ -518,10 +518,10 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1
 end
 
 # broadcast should only "peel off" one container layer
-@test get.([Nullable(1), Nullable(2)]) == [1, 2]
+@test getindex.([Ref(1), Ref(2)]) == [1, 2]
 let io = IOBuffer()
-    broadcast(x -> print(io, x), [Nullable(1.0)])
-    @test String(take!(io)) == "Nullable{Float64}(1.0)"
+    broadcast(x -> print(io, x), [Ref(1.0)])
+    @test String(take!(io)) == "Base.RefValue{Float64}(1.0)"
 end
 
 # Test that broadcast's promotion mechanism handles closures accepting more than one argument.
@@ -575,9 +575,6 @@ end
     @test isequal(
         [Set([1]), Set([2])] .∪ Set([3]),
         [Set([1, 3]), Set([2, 3])])
-
-    @test isequal(@inferred(broadcast(foo, "world", Nullable(1))),
-                  Nullable("hello"))
 end
 
 @testset "broadcast resulting in tuples" begin
@@ -608,7 +605,7 @@ end
 # end
 
 # Issue #22180
-@test isequal(convert.(Nullable, [1,2]), [Nullable(1), Nullable(2)])
+@test convert.(Any, [1, 2]) == [1, 2]
 
 # Issue #24944
 let n = 1

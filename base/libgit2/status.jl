@@ -36,7 +36,7 @@ function Base.getindex(status::GitStatus, i::Integer)
 end
 
 """
-    LibGit2.status(repo::GitRepo, path::String)
+    LibGit2.status(repo::GitRepo, path::String) -> Union{Cuint, Void}
 
 Lookup the status of the file at `path` in the git
 repository `repo`. For instance, this can be used
@@ -48,6 +48,6 @@ function status(repo::GitRepo, path::String)
     ret =  ccall((:git_status_file, :libgit2), Cint,
                   (Ref{Cuint}, Ptr{Void}, Cstring),
                   status_ptr, repo.ptr, path)
-    (ret == Cint(Error.ENOTFOUND) || ret == Cint(Error.EAMBIGUOUS)) && return Nullable{Cuint}()
-    return Nullable(status_ptr[])
+    (ret == Cint(Error.ENOTFOUND) || ret == Cint(Error.EAMBIGUOUS)) && return nothing
+    return status_ptr[]
 end

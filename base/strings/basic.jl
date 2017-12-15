@@ -154,7 +154,7 @@ getindex(s::AbstractString, i::Colon) = s
 # TODO: add more @propagate_inbounds annotations?
 getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)
 getindex(s::AbstractString, v::AbstractVector{<:Integer}) =
-    sprint(length(v), io->(for i in v; write(io, s[i]) end))
+    sprint(io->(for i in v; write(io, s[i]) end), sizehint=length(v))
 getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 
@@ -174,11 +174,11 @@ checkbounds(::Type{Bool}, s::AbstractString, i::Integer) =
 checkbounds(::Type{Bool}, s::AbstractString, r::AbstractRange{<:Integer}) =
     isempty(r) || (1 ≤ minimum(r) && maximum(r) ≤ ncodeunits(s))
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Real}) =
-    all(i -> checkbounds(s, i), I)
+    all(i -> checkbounds(Bool, s, i), I)
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Integer}) =
-    all(i -> checkbounds(s, i), I)
+    all(i -> checkbounds(Bool, s, i), I)
 checkbounds(s::AbstractString, I::Union{Integer,AbstractArray}) =
-    checkbounds(Bool, s, I) || throw(BoundsError(s, I))
+    checkbounds(Bool, s, I) ? nothing : throw(BoundsError(s, I))
 
 ## construction, conversion, promotion ##
 
@@ -427,6 +427,7 @@ function prevind(s::AbstractString, i::Int, n::Int)
     n < 0 && throw(ArgumentError("n cannot be negative: $n"))
     z = ncodeunits(s) + 1
     @boundscheck 0 < i ≤ z || throw(BoundsError(s, i))
+    n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
     while n > 0 && 1 < i
         @inbounds n -= isvalid(s, i -= 1)
     end
@@ -465,6 +466,7 @@ function nextind(s::AbstractString, i::Int, n::Int)
     n < 0 && throw(ArgumentError("n cannot be negative: $n"))
     z = ncodeunits(s)
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
+    n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
     while n > 0 && i < z
         @inbounds n -= isvalid(s, i += 1)
     end

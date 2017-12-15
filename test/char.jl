@@ -217,3 +217,22 @@ end
         rm(file, force=true)
     end
 end
+
+function test_overlong(c::Char, n::Integer, rep::String)
+    @test Int(c) == n
+    @test sprint(show, c) == rep
+end
+
+# TODO: use char syntax once #25072 is fixed
+test_overlong('\0', 0, "'\\0'")
+test_overlong("\xc0\x80"[1], 0, "'\\xc0\\x80'")
+test_overlong("\xe0\x80\x80"[1], 0, "'\\xe0\\x80\\x80'")
+test_overlong("\xf0\x80\x80\x80"[1], 0, "'\\xf0\\x80\\x80\\x80'")
+
+test_overlong('\x30', 0x30, "'0'")
+test_overlong("\xc0\xb0"[1], 0x30, "'\\xc0\\xb0'")
+test_overlong("\xe0\x80\xb0"[1], 0x30, "'\\xe0\\x80\\xb0'")
+test_overlong("\xf0\x80\x80\xb0"[1], 0x30, "'\\xf0\\x80\\x80\\xb0'")
+
+test_overlong('\u8430', 0x8430, "'萰'")
+test_overlong("\xf0\x88\x90\xb0"[1], 0x8430, "'\\xf0\\x88\\x90\\xb0'")

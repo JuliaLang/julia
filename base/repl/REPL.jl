@@ -843,7 +843,7 @@ function setup_interface(
         catch e
             print_response(repl, e, catch_backtrace(), true, Base.have_color)
             println(outstream(repl))
-            info("Disabling history file for this session.")
+            @info "Disabling history file for this session"
             repl.history_file = false
         end
     end
@@ -980,8 +980,7 @@ function setup_interface(
             linfos = Base.LAST_SHOWN_LINE_INFOS
             str = String(take!(LineEdit.buffer(s)))
             n = tryparse(Int, str)
-            isnull(n) && @goto writeback
-            n = get(n)
+            n === nothing && @goto writeback
             if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "./REPL")
                 @goto writeback
             end

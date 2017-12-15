@@ -86,8 +86,7 @@ function __init__()
 
 
         if current_version < CHOLMOD_MIN_VERSION
-            warn("""
-
+            @warn """
                 CHOLMOD version incompatibility
 
                 Julia was compiled with CHOLMOD version $build_version. It is
@@ -100,10 +99,9 @@ function __init__()
                 of CHOLMOD, or download the generic binaries
                 from www.julialang.org, which ship with the correct
                 versions of all dependencies.
-            """)
+                """
         elseif build_version_array[1] != current_version_array[1]
-            warn("""
-
+            @warn """
                 CHOLMOD version incompatibility
 
                 Julia was compiled with CHOLMOD version $build_version. It is
@@ -116,13 +114,12 @@ function __init__()
                 version of CHOLMOD as the one used during the build, or
                 download the generic binaries from www.julialang.org,
                 which ship with the correct versions of all dependencies.
-            """)
+                """
         end
 
         intsize = Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,()))
         if intsize != 4length(IndexTypes)
-            warn("""
-
+            @error """
                  CHOLMOD integer size incompatibility
 
                  Julia was compiled with a version of CHOLMOD that
@@ -136,7 +133,7 @@ function __init__()
                  configuration or by downloading the OS X or generic
                  Linux binary from www.julialang.org, which include
                  the correct versions of all dependencies.
-             """)
+                 """
         end
 
         ### Initiate CHOLMOD
@@ -166,8 +163,7 @@ function __init__()
         end
 
     catch ex
-        Base.showerror_nostdio(ex,
-            "WARNING: Error during initialization of module CHOLMOD")
+        @error "Error during initialization of module CHOLMOD" exception=ex
     end
 end
 

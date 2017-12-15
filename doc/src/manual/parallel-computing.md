@@ -57,10 +57,10 @@ argument implicitly loads module `Distributed`.
 $ ./julia -p 2
 
 julia> r = remotecall(rand, 2, 2, 2)
-Future(2, 1, 4, Nullable{Any}())
+Future(2, 1, 4, nothing)
 
 julia> s = @spawnat 2 1 .+ fetch(r)
-Future(2, 1, 5, Nullable{Any}())
+Future(2, 1, 5, nothing)
 
 julia> fetch(s)
 2×2 Array{Float64,2}:
@@ -98,10 +98,10 @@ the operation for you:
 
 ```julia-repl
 julia> r = @spawn rand(2,2)
-Future(2, 1, 4, Nullable{Any}())
+Future(2, 1, 4, nothing)
 
 julia> s = @spawn 1 .+ fetch(r)
-Future(3, 1, 5, Nullable{Any}())
+Future(3, 1, 5, nothing)
 
 julia> fetch(s)
 2×2 Array{Float64,2}:
@@ -374,10 +374,10 @@ trials on two machines, and add together the results:
 julia> @everywhere include_string(Main, $(read("count_heads.jl", String)), "count_heads.jl")
 
 julia> a = @spawn count_heads(100000000)
-Future(2, 1, 6, Nullable{Any}())
+Future(2, 1, 6, nothing)
 
 julia> b = @spawn count_heads(100000000)
-Future(3, 1, 7, Nullable{Any}())
+Future(3, 1, 7, nothing)
 
 julia> fetch(a)+fetch(b)
 100001564
@@ -1164,26 +1164,27 @@ appropriate fields initialized) to `launched`
 ```julia
 mutable struct WorkerConfig
     # Common fields relevant to all cluster managers
-    io::Nullable{IO}
-    host::Nullable{AbstractString}
-    port::Nullable{Integer}
+    io::Union{IO, Void}
+    host::Union{AbstractString, Void}
+    port::Union{Integer, Void}
 
     # Used when launching additional workers at a host
-    count::Nullable{Union{Int, Symbol}}
-    exename::Nullable{AbstractString}
-    exeflags::Nullable{Cmd}
+    count::Union{Int, Symbol, Void}
+    exename::Union{AbstractString, Cmd, Void}
+    exeflags::Union{Cmd, Void}
 
     # External cluster managers can use this to store information at a per-worker level
     # Can be a dict if multiple fields need to be stored.
-    userdata::Nullable{Any}
+    userdata::Any
 
     # SSHManager / SSH tunnel connections to workers
-    tunnel::Nullable{Bool}
-    bind_addr::Nullable{AbstractString}
-    sshflags::Nullable{Cmd}
-    max_parallel::Nullable{Integer}
+    tunnel::Union{Bool, Void}
+    bind_addr::Union{AbstractString, Void}
+    sshflags::Union{Cmd, Void}
+    max_parallel::Union{Integer, Void}
 
-    connect_at::Nullable{Any}
+    # Used by Local/SSH managers
+    connect_at::Any
 
     [...]
 end

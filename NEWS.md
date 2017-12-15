@@ -312,11 +312,20 @@ This section lists changes that do not have deprecation warnings.
     `AbstractArray` types that specialized broadcasting using the old internal API will
     need to switch to the new API. ([#20740])
 
+  * The logging system has been redesigned - `info` and `warn` are deprecated
+    and replaced with the logging macros `@info`, `@warn`, `@debug` and
+    `@error`.  The `logging` function is also deprecated and replaced with
+    `AbstractLogger` and the functions from the new standard `Logging` library.
+    ([#24490])
+
   * The `RevString` type has been removed from the language; `reverse(::String)` returns
     a `String` with code points (or fragments thereof) in reverse order. In general,
     `reverse(s)` should return a string of the same type and encoding as `s` with code
     points in reverse order; any string type overrides `reverse` to return a different
     type of string must also override `reverseind` to compute reversed indices correctly.
+
+  * `eachindex(A, B...)` now requires that all inputs have the same number of elements.
+    When the chosen indexing is Cartesian, they must have the same axes.
 
 Library improvements
 --------------------
@@ -471,8 +480,10 @@ Deprecated or removed
     `Matrix{Int}(uninitialized, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
     `Array{Float32,3}(uninitialized, 11, 13, 17)` ([#24781]).
 
+  * `LinAlg.fillslots!` has been renamed `LinAlg.fillstored!` ([#25030]).
+
   * `fill!(A::Diagonal, x)` and `fill!(A::AbstractTriangular, x)` have been deprecated
-    in favor of `Base.LinAlg.fillslots!(A, x)` ([#24413]).
+    in favor of `Base.LinAlg.fillstored!(A, x)` ([#24413]).
 
   * `eye` has been deprecated in favor of `I` and `Matrix` constructors. Please see the
     deprecation warnings for replacement details ([#24438]).
@@ -708,6 +719,9 @@ Deprecated or removed
     have been deprecated in favor of `spdiagm(d => x)` and `spdiagm(d[1] => x[1], d[2] => x[2], ...)`
     respectively. The new `spdiagm` implementation now always returns a square matrix ([#23757]).
 
+  * `spones(A::AbstractSparseArray)` has been deprecated in favor of
+    `LinAlg.fillstored!(copy(A), 1)` ([#25037]).
+
   * Constructors for `LibGit2.UserPasswordCredentials` and `LibGit2.SSHCredentials` which take a
     `prompt_if_incorrect` argument are deprecated. Instead, prompting behavior is controlled using
     the `allow_prompt` keyword in the `LibGit2.CredentialPayload` constructor ([#23690]).
@@ -731,6 +745,9 @@ Deprecated or removed
   * `bits` has been deprecated in favor of `bitstring` ([#24281], [#24263]).
 
   * `num2hex` and `hex2num` have been deprecated in favor of `reinterpret` combined with `parse`/`hex` ([#22088]).
+
+  * `copy!` is deprecated for `AbstractSet` and `AbstractDict`, with the intention to re-enable
+    it with a cleaner meaning in a future version ([#24844]).
 
   * `a:b` is deprecated for constructing a `StepRange` when `a` and `b` have physical units
     (Dates and Times). Use `a:s:b`, where `s = Dates.Day(1)` or `s = Dates.Second(1)`.
@@ -758,9 +775,15 @@ Deprecated or removed
     in the new `Unicode` standard library module ([#25021]).
 
   * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`,
-     `ComplexF32` and `ComplexF64` respectively (#24647).
+    `ComplexF32` and `ComplexF64` respectively ([#24647]).
 
   * `Associative` has been deprecated in favor of `AbstractDict` ([#25012]).
+
+  * `Nullable{T}` has been deprecated and moved to the Nullables package ([#23642]).
+    Use `Union{T, Void}` instead, or `Union{Some{T}, Void}` if `nothing` is a possible value
+    (i.e. `Void <: T`). `isnull(x)` can be replaced with `x === nothing`
+    and `unsafe_get`/`get` can be dropped or replaced with `coalesce`.
+    `NullException` has been removed.
 
 Command-line option changes
 ---------------------------
@@ -1405,6 +1428,9 @@ Deprecated or removed
   * `similar(::Associative)` has been deprecated in favor of `empty(::Associative)`, and
     `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
     `empty(::Associative, K, V)` ([#24390]).
+
+  * `indices(a)` and `indices(a,d)` have been deprecated in favor of `axes(a)` and
+    `axes(a, d)` ([#25057]).
 
 Command-line option changes
 ---------------------------

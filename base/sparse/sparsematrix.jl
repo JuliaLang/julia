@@ -46,7 +46,7 @@ const SparseMatrixCSCView{Tv,Ti} =
 const SparseMatrixCSCUnion{Tv,Ti} = Union{SparseMatrixCSC{Tv,Ti}, SparseMatrixCSCView{Tv,Ti}}
 
 getcolptr(S::SparseMatrixCSC)     = S.colptr
-getcolptr(S::SparseMatrixCSCView) = view(S.parent.colptr, first(indices(S, 2)):(last(indices(S, 2)) + 1))
+getcolptr(S::SparseMatrixCSCView) = view(S.parent.colptr, first(axes(S, 2)):(last(axes(S, 2)) + 1))
 getrowval(S::SparseMatrixCSC)     = S.rowval
 getrowval(S::SparseMatrixCSCView) = S.parent.rowval
 getnzval( S::SparseMatrixCSC)     = S.nzval
@@ -1431,31 +1431,7 @@ julia> sprandn(rng, 2, 2, 0.75)
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
 sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
 
-"""
-    spones(S)
-
-Create a sparse array with the same structure as that of `S`, but with every nonzero
-element having the value `1.0`.
-
-# Examples
-```jldoctest
-julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
-4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
-  [4, 1]  =  2.0
-  [1, 2]  =  5.0
-  [3, 3]  =  3.0
-  [2, 4]  =  4.0
-
-julia> spones(A)
-4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
-  [4, 1]  =  1.0
-  [1, 2]  =  1.0
-  [3, 3]  =  1.0
-  [2, 4]  =  1.0
-```
-"""
-spones(S::SparseMatrixCSC{T}) where {T} =
-     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
+LinAlg.fillstored!(S::SparseMatrixCSC, x) = (fill!(view(S.nzval, 1:(S.colptr[S.n + 1] - 1)), x); S)
 
 """
     spzeros([type,]m[,n])

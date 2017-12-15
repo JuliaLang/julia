@@ -2,6 +2,7 @@
 
 import Base.LibGit2: AbstractCredential, UserPasswordCredential, SSHCredential,
     CachedCredentials, CredentialPayload, Payload
+using Base: coalesce
 
 const DEFAULT_PAYLOAD = CredentialPayload(allow_ssh_agent=false, allow_git_helpers=false)
 
@@ -12,7 +13,7 @@ without having to authenticate against a real server.
 function credential_loop(
         valid_credential::AbstractCredential,
         url::AbstractString,
-        user::Nullable{<:AbstractString},
+        user::Union{AbstractString, Void},
         allowed_types::UInt32,
         payload::CredentialPayload;
         shred::Bool=true)
@@ -28,11 +29,12 @@ function credential_loop(
     err = Cint(0)
     while err == 0
         err = ccall(cb, Cint, (Ptr{Ptr{Void}}, Cstring, Cstring, Cuint, Any),
-                    libgitcred_ptr_ptr, url, get(user, C_NULL), allowed_types, payload)
+                    libgitcred_ptr_ptr, url, coalesce(user, C_NULL),
+                    allowed_types, payload)
         num_authentications += 1
 
         # Check if the callback provided us with valid credentials
-        if !isnull(payload.credential) && get(payload.credential) == valid_credential
+        if payload.credential !== nothing && payload.credential == valid_credential
             LibGit2.approve(payload, shred=shred)
             break
         end
@@ -60,7 +62,7 @@ end
 function credential_loop(
         valid_credential::UserPasswordCredential,
         url::AbstractString,
-        user::Nullable{<:AbstractString}=Nullable{String}(),
+        user::Union{AbstractString, Void}=nothing,
         payload::CredentialPayload=DEFAULT_PAYLOAD;
         shred::Bool=true)
     credential_loop(valid_credential, url, user, 0x000001, payload, shred=shred)
@@ -69,17 +71,8 @@ end
 function credential_loop(
         valid_credential::SSHCredential,
         url::AbstractString,
-        user::Nullable{<:AbstractString}=Nullable{String}(),
+        user::Union{AbstractString, Void}=nothing,
         payload::CredentialPayload=DEFAULT_PAYLOAD;
         shred::Bool=true)
     credential_loop(valid_credential, url, user, 0x000046, payload, shred=shred)
-end
-
-function credential_loop(
-        valid_credential::AbstractCredential,
-        url::AbstractString,
-        user::AbstractString,
-        payload::CredentialPayload=DEFAULT_PAYLOAD;
-        shred::Bool=true)
-    credential_loop(valid_credential, url, Nullable(user), payload, shred=shred)
 end

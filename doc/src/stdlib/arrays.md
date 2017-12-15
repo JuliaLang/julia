@@ -39,8 +39,8 @@ Base.Random.randsubseq!
 ```@docs
 Base.ndims
 Base.size
-Base.indices(::Any)
-Base.indices(::AbstractArray, ::Any)
+Base.axes(::Any)
+Base.axes(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
 Base.eachindex
 Base.linearindices
@@ -198,7 +198,6 @@ Base.SparseArrays.sparsevec
 Base.SparseArrays.issparse
 Base.SparseArrays.nnz
 Base.SparseArrays.spzeros
-Base.SparseArrays.spones
 Base.SparseArrays.spdiagm
 Base.SparseArrays.sprand
 Base.SparseArrays.sprandn

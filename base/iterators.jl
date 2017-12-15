@@ -5,7 +5,7 @@ Methods for working with Iterators.
 """
 module Iterators
 
-import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, indices, ndims, pairs, last, first
+import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, axes, ndims, pairs, last, first, get
 
 using Base: tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
             IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange
@@ -188,17 +188,17 @@ CartesianIndex(1, 2) d
 CartesianIndex(2, 2) e
 ```
 
-See also: [`IndexStyle`](@ref), [`indices`](@ref).
+See also: [`IndexStyle`](@ref), [`axes`](@ref).
 """
 pairs(::IndexLinear,    A::AbstractArray) = IndexValue(A, linearindices(A))
-pairs(::IndexCartesian, A::AbstractArray) = IndexValue(A, CartesianRange(indices(A)))
+pairs(::IndexCartesian, A::AbstractArray) = IndexValue(A, CartesianRange(axes(A)))
 
 # faster than zip(keys(a), values(a)) for arrays
 pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 
 length(v::IndexValue)  = length(v.itr)
-indices(v::IndexValue) = indices(v.itr)
+axes(v::IndexValue) = axes(v.itr)
 size(v::IndexValue)    = size(v.itr)
 @inline start(v::IndexValue) = start(v.itr)
 @propagate_inbounds function next(v::IndexValue, state)
@@ -232,7 +232,7 @@ end
 zip(a) = Zip1(a)
 length(z::Zip1) = length(z.a)
 size(z::Zip1) = size(z.a)
-indices(z::Zip1) = indices(z.a)
+axes(z::Zip1) = axes(z.a)
 eltype(::Type{Zip1{I}}) where {I} = Tuple{eltype(I)}
 @inline start(z::Zip1) = start(z.a)
 @propagate_inbounds function next(z::Zip1, st)
@@ -251,7 +251,7 @@ end
 zip(a, b) = Zip2(a, b)
 length(z::Zip2) = _min_length(z.a, z.b, iteratorsize(z.a), iteratorsize(z.b))
 size(z::Zip2) = promote_shape(size(z.a), size(z.b))
-indices(z::Zip2) = promote_shape(indices(z.a), indices(z.b))
+axes(z::Zip2) = promote_shape(axes(z.a), axes(z.b))
 eltype(::Type{Zip2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
 @inline start(z::Zip2) = (start(z.a), start(z.b))
 @propagate_inbounds function next(z::Zip2, st)
@@ -301,7 +301,7 @@ julia> first(c)
 zip(a, b, c...) = Zip(a, zip(b, c...))
 length(z::Zip) = _min_length(z.a, z.z, iteratorsize(z.a), iteratorsize(z.z))
 size(z::Zip) = promote_shape(size(z.a), size(z.z))
-indices(z::Zip) = promote_shape(indices(z.a), indices(z.z))
+axes(z::Zip) = promote_shape(axes(z.a), axes(z.z))
 eltype(::Type{Zip{I,Z}}) where {I,Z} = tuple_type_cons(eltype(I), eltype(Z))
 @inline start(z::Zip) = tuple(start(z.a), start(z.z))
 @propagate_inbounds function next(z::Zip, st)
@@ -693,17 +693,17 @@ _prod_size1(a, ::HasLength) = (length(a),)
 _prod_size1(a, A) =
     throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
 
-indices(P::ProductIterator) = _prod_indices(P.iterators)
+axes(P::ProductIterator) = _prod_indices(P.iterators)
 _prod_indices(::Tuple{}) = ()
 _prod_indices(t::Tuple) = (_prod_indices1(t[1], iteratorsize(t[1]))..., _prod_indices(tail(t))...)
-_prod_indices1(a, ::HasShape)  = indices(a)
+_prod_indices1(a, ::HasShape)  = axes(a)
 _prod_indices1(a, ::HasLength) = (OneTo(length(a)),)
 _prod_indices1(a, A) =
     throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
 
-ndims(p::ProductIterator) = length(indices(p))
+ndims(p::ProductIterator) = length(axes(p))
 length(P::ProductIterator) = prod(size(P))
-_length(p::ProductIterator) = prod(map(unsafe_length, indices(p)))
+_length(p::ProductIterator) = prod(map(unsafe_length, axes(p)))
 
 iteratoreltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 iteratoreltype(::Type{ProductIterator{Tuple{I}}}) where {I} = iteratoreltype(I)
@@ -735,7 +735,7 @@ function next(P::ProductIterator, state)
     iter1 = first(iterators)
     value1, state1 = next(iter1, states[1])
     tailstates = tail(states)
-    values = (value1, map(unsafe_get, nvalues)...) # safe if not done(P, state)
+    values = (value1, map(get, nvalues)...) # safe if not done(P, state)
     if done(iter1, state1)
         d, tailstates, nvalues = _prod_next(tail(iterators), tailstates, nvalues)
         if !d # only restart iter1 if not completely done
@@ -746,6 +746,14 @@ function next(P::ProductIterator, state)
 end
 done(P::ProductIterator, state) = state[1]
 
+struct MaybeValue{T}
+    x::T
+    MaybeValue{T}() where {T} = new{T}()
+    MaybeValue{T}(x::T) where {T} = new{T}(x)
+end
+
+get(v::MaybeValue) = v.x
+
 _prod_start(iterators::Tuple{}) = false, (), ()
 function _prod_start(iterators)
     iter1 = first(iterators)
@@ -753,10 +761,10 @@ function _prod_start(iterators)
     d, tailstates, tailnvalues = _prod_start(tail(iterators))
     if done(iter1, state1)
         d = true
-        nvalue1 = Nullable{eltype(iter1)}()
+        nvalue1 = MaybeValue{eltype(iter1)}()
     else
         value1, state1 = next(iter1, state1)
-        nvalue1 = Nullable{eltype(iter1)}(value1)
+        nvalue1 = MaybeValue{eltype(iter1)}(value1)
     end
     return (d, (state1, tailstates...), (nvalue1, tailnvalues...))
 end
@@ -767,15 +775,15 @@ function _prod_next(iterators, states, nvalues)
     state1 = first(states)
     if !done(iter1, state1)
         value1, state1 = next(iter1, state1)
-        nvalue1 = Nullable{eltype(iter1)}(value1)
+        nvalue1 = MaybeValue{eltype(iter1)}(value1)
         return false, (state1, tail(states)...), (nvalue1, tail(nvalues)...)
     else
         d, tailstates, tailnvalues = _prod_next(tail(iterators), tail(states), tail(nvalues))
         if d # all iterators are done
-            nvalue1 = Nullable{eltype(iter1)}()
+            nvalue1 = MaybeValue{eltype(iter1)}()
         else
             value1, state1 = next(iter1, start(iter1)) # iter cannot be done immediately
-            nvalue1 = Nullable{eltype(iter1)}(value1)
+            nvalue1 = MaybeValue{eltype(iter1)}(value1)
         end
         return d, (state1, tailstates...), (nvalue1, tailnvalues...)
     end

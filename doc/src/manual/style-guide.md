@@ -139,8 +139,6 @@ some alternatives to consider:
   * Determine whether there is a simple rule for when `x` is `nothing`. For example, often the field
     will start as `nothing` but get initialized at some well-defined point. In that case, consider
     leaving it undefined at first.
-  * If `x` really needs to hold no value at some times, define it as `::Nullable{T}` instead, as this
-    guarantees type-stability in the code accessing this field (see [Nullable types](@ref man-nullable-types)).
 
 ## Avoid elaborate container types
 

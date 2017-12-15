@@ -310,58 +310,53 @@ end
     @test promote(C,A) isa Tuple{Tridiagonal, Tridiagonal}
 end
 
-import Base.LinAlg: fillslots!, UnitLowerTriangular
-@testset "fill! and fillslots!" begin
-    let #fill!
-        let # fillslots!
-            A = Tridiagonal(randn(2), randn(3), randn(2))
-            @test fillslots!(A, 3) == Tridiagonal([3, 3.], [3, 3, 3.], [3, 3.])
-            B = Bidiagonal(randn(3), randn(2), :U)
-            @test fillslots!(B, 2) == Bidiagonal([2.,2,2], [2,2.], :U)
-            S = SymTridiagonal(randn(3), randn(2))
-            @test fillslots!(S, 1) == SymTridiagonal([1,1,1.], [1,1.])
-            Ult = UnitLowerTriangular(randn(3,3))
-            @test fillslots!(Ult, 3) == UnitLowerTriangular([1 0 0; 3 1 0; 3 3 1])
+using Base.LinAlg: fillstored!, UnitLowerTriangular
+@testset "fill! and fillstored!" begin
+    let # fillstored!
+        A = Tridiagonal(randn(2), randn(3), randn(2))
+        @test fillstored!(A, 3) == Tridiagonal([3, 3], [3, 3, 3], [3, 3])
+        B = Bidiagonal(randn(3), randn(2), :U)
+        @test fillstored!(B, 2) == Bidiagonal([2,2,2], [2,2], :U)
+        S = SymTridiagonal(randn(3), randn(2))
+        @test fillstored!(S, 1) == SymTridiagonal([1,1,1], [1,1])
+        Ult = UnitLowerTriangular(randn(3,3))
+        @test fillstored!(Ult, 3) == UnitLowerTriangular([1 0 0; 3 1 0; 3 3 1])
+    end
+    let # fill!(exotic, 0)
+        exotic_arrays = Any[Tridiagonal(randn(3), randn(4), randn(3)),
+        Bidiagonal(randn(3), randn(2), rand([:U,:L])),
+        SymTridiagonal(randn(3), randn(2)),
+        sparse(randn(3,4)),
+        # Diagonal(randn(5)), # Diagonal fill! deprecated, see below
+        sparse(rand(3)),
+        # LowerTriangular(randn(3,3)), # AbstractTriangular fill! deprecated, see below
+        # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
+        ]
+        for A in exotic_arrays
+            @test iszero(fill!(A, 0))
         end
-        let # fill!(exotic, 0)
-            exotic_arrays = Any[Tridiagonal(randn(3), randn(4), randn(3)),
-            Bidiagonal(randn(3), randn(2), rand([:U,:L])),
-            SymTridiagonal(randn(3), randn(2)),
-            sparse(randn(3,4)),
-            # Diagonal(randn(5)), # Diagonal fill! deprecated, see below
-            sparse(rand(3)),
-            # LowerTriangular(randn(3,3)), # AbstractTriangular fill! deprecated, see below
-            # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
-            ]
-            for A in exotic_arrays
-                fill!(A, 0)
-                for a in A
-                    @test a == 0
-                end
-            end
-            # Diagonal and AbstractTriangular fill! were defined as fillslots!,
-            # not matching the general behavior of fill!, and so have been deprecated.
-            # In a future dev cycle, these fill! methods should probably be reintroduced
-            # with behavior matching that of fill! for other structured matrix types.
-            # In the interm, equivalently test fillslots! below
-            @test iszero(fillslots!(Diagonal(fill(1, 3)), 0))
-            @test iszero(fillslots!(LowerTriangular(fill(1, 3, 3)), 0))
-            @test iszero(fillslots!(UpperTriangular(fill(1, 3, 3)), 0))
+        # Diagonal and AbstractTriangular fill! were defined as fillstored!,
+        # not matching the general behavior of fill!, and so have been deprecated.
+        # In a future dev cycle, these fill! methods should probably be reintroduced
+        # with behavior matching that of fill! for other structured matrix types.
+        # In the interm, equivalently test fillstored! below
+        @test iszero(fillstored!(Diagonal(fill(1, 3)), 0))
+        @test iszero(fillstored!(LowerTriangular(fill(1, 3, 3)), 0))
+        @test iszero(fillstored!(UpperTriangular(fill(1, 3, 3)), 0))
+    end
+    let # fill!(small, x)
+        val = randn()
+        b = Bidiagonal(randn(1,1), :U)
+        st = SymTridiagonal(randn(1,1))
+        for x in (b, st)
+            @test Array(fill!(x, val)) == fill!(Array(x), val)
         end
-        let # fill!(small, x)
-            val = randn()
-            b = Bidiagonal(randn(1,1), :U)
-            st = SymTridiagonal(randn(1,1))
-            for x in (b, st)
-                @test Array(fill!(x, val)) == fill!(Array(x), val)
-            end
-            b = Bidiagonal(randn(2,2), :U)
-            st = SymTridiagonal(randn(3), randn(2))
-            t = Tridiagonal(randn(3,3))
-            for x in (b, t, st)
-                @test_throws ArgumentError fill!(x, val)
-                @test Array(fill!(x, 0)) == fill!(Array(x), 0)
-            end
+        b = Bidiagonal(randn(2,2), :U)
+        st = SymTridiagonal(randn(3), randn(2))
+        t = Tridiagonal(randn(3,3))
+        for x in (b, t, st)
+            @test_throws ArgumentError fill!(x, val)
+            @test Array(fill!(x, 0)) == fill!(Array(x), 0)
         end
     end
 end

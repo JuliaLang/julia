@@ -22,13 +22,13 @@ const META_BRANCH = "metadata-v2"
 
 struct PkgError <: Exception
     msg::AbstractString
-    ex::Nullable{Exception}
+    ex::Union{Exception, Void}
 end
-PkgError(msg::AbstractString) = PkgError(msg, Nullable{Exception}())
+PkgError(msg::AbstractString) = PkgError(msg, nothing)
 function Base.showerror(io::IO, pkgerr::PkgError)
     print(io, pkgerr.msg)
-    if !isnull(pkgerr.ex)
-        pkgex = get(pkgerr.ex)
+    if pkgerr.ex !== nothing
+        pkgex = pkgerr.ex
         if isa(pkgex, CompositeException)
             for cex in pkgex
                 print(io, "\n=> ")

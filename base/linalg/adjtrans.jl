@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: @pure, @propagate_inbounds, _return_type, _default_type, _isleaftype, @_inline_meta
-import Base: length, size, indices, IndexStyle, getindex, setindex!, parent, vec, convert, similar
+import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
 
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
 
@@ -68,8 +68,8 @@ wrappertype(::Type{<:Transpose}) = Transpose
 length(A::AdjOrTrans) = length(A.parent)
 size(v::AdjOrTransAbsVec) = (1, length(v.parent))
 size(A::AdjOrTransAbsMat) = reverse(size(A.parent))
-indices(v::AdjOrTransAbsVec) = (Base.OneTo(1), indices(v.parent)...)
-indices(A::AdjOrTransAbsMat) = reverse(indices(A.parent))
+axes(v::AdjOrTransAbsVec) = (Base.OneTo(1), axes(v.parent)...)
+axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
 IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 @propagate_inbounds getindex(v::AdjOrTransAbsVec, i::Int) = wrappertype(v)(v.parent[i])

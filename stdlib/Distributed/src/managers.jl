@@ -227,16 +227,16 @@ end
 
 function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symbol)
     if op == :interrupt
-        ospid = get(config.ospid, 0)
-        if ospid > 0
-            host = get(config.host)
-            sshflags = get(config.sshflags)
+        ospid = config.ospid
+        if ospid !== nothing
+            host = notnothing(config.host)
+            sshflags = notnothing(config.sshflags)
             if !success(`ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host "kill -2 $ospid"`)
-                warn(STDERR,"error sending a Ctrl-C to julia worker $id on $host")
+                @error "Error sending a Ctrl-C to julia worker $id on $host"
             end
         else
             # This state can happen immediately after an addprocs
-            warn(STDERR,"worker $id cannot be presently interrupted.")
+            @error "Worker $id cannot be presently interrupted."
         end
     end
 end
@@ -341,7 +341,7 @@ end
 
 function manage(manager::LocalManager, id::Integer, config::WorkerConfig, op::Symbol)
     if op == :interrupt
-        kill(get(config.process), 2)
+        kill(config.process, 2)
     end
 end
 
@@ -387,24 +387,24 @@ ensure that messages are delivered and received completely and in order.
 workers.
 """
 function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
-    if !isnull(config.connect_at)
+    if config.connect_at !== nothing
         # this is a worker-to-worker setup call.
         return connect_w2w(pid, config)
     end
 
     # master connecting to workers
-    if !isnull(config.io)
-        (bind_addr, port) = read_worker_host_port(get(config.io))
-        pubhost=get(config.host, bind_addr)
+    if config.io !== nothing
+        (bind_addr, port) = read_worker_host_port(config.io)
+        pubhost = coalesce(config.host, bind_addr)
         config.host = pubhost
         config.port = port
     else
-        pubhost=get(config.host)
-        port=get(config.port)
-        bind_addr=get(config.bind_addr, pubhost)
+        pubhost = notnothing(config.host)
+        port = notnothing(config.port)
+        bind_addr = coalesce(config.bind_addr, pubhost)
     end
 
-    tunnel = get(config.tunnel, false)
+    tunnel = coalesce(config.tunnel, false)
 
     s = split(pubhost,'@')
     user = ""
@@ -422,11 +422,11 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     if tunnel
         if !haskey(tunnel_hosts_map, pubhost)
-            tunnel_hosts_map[pubhost] = Semaphore(get(config.max_parallel, typemax(Int)))
+            tunnel_hosts_map[pubhost] = Semaphore(coalesce(config.max_parallel, typemax(Int)))
         end
         sem = tunnel_hosts_map[pubhost]
 
-        sshflags = get(config.sshflags)
+        sshflags = notnothing(config.sshflags)
         acquire(sem)
         try
             (s, bind_addr) = connect_to_worker(pubhost, bind_addr, port, user, sshflags)
@@ -442,9 +442,9 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     # write out a subset of the connect_at required for further worker-worker connection setups
     config.connect_at = (bind_addr, port)
 
-    if !isnull(config.io)
+    if config.io !== nothing
         let pid = pid
-            redirect_worker_output(pid, get(config.io))
+            redirect_worker_output(pid, notnothing(config.io))
         end
     end
 
@@ -452,7 +452,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 end
 
 function connect_w2w(pid::Int, config::WorkerConfig)
-    (rhost, rport) = get(config.connect_at)
+    (rhost, rport) = notnothing(config.connect_at)
     config.host = rhost
     config.port = rport
     (s, bind_addr) = connect_to_worker(rhost, rport)
@@ -472,7 +472,7 @@ function socket_reuse_port()
         rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)
         if rc < 0
             # This is an issue only on systems with lots of client connections, hence delay the warning
-            nworkers() > 128 && warn_once("Error trying to reuse client port number, falling back to regular socket.")
+            nworkers() > 128 && @warn "Error trying to reuse client port number, falling back to regular socket" maxlog=1
 
             # provide a clean new socket
             return TCPSocket()

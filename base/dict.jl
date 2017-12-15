@@ -180,7 +180,7 @@ function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
             dest[k] = v
         else
             new = empty(dest, typejoin(K,typeof(k)), typejoin(V,typeof(v)))
-            copy!(new, dest)
+            merge!(new, dest)
             new[k] = v
             return grow_to!(new, itr, st)
         end

@@ -33,10 +33,24 @@ buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
 """
     isopen(object) -> Bool
 
-Determine whether an object - such as a stream, timer, or mmap -- is not yet closed. Once an
-object is closed, it will never produce a new event. However, a closed stream may still have
-data to read in its buffer, use [`eof`](@ref) to check for the ability to read data.
+Determine whether an object - such as a stream, timer, or [`mmap`](@ref Mmap.mmap)
+-- is not yet closed. Once an object is closed, it will never produce a new event.
+However, since a closed stream may still have data to read in its buffer,
+use [`eof`](@ref) to check for the ability to read data.
 Use the `FileWatching` package to be notified when a stream might be writable or readable.
+
+# Examples
+```jldoctest
+julia> io = open("my_file.txt", "w+");
+
+julia> isopen(io)
+true
+
+julia> close(io)
+
+julia> isopen(io)
+false
+```
 """
 function isopen end
 
@@ -292,7 +306,7 @@ The text is assumed to be encoded in UTF-8.
 # Examples
 ```jldoctest
 julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\nIt has many members.\n");
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
        end
 57
 
@@ -321,7 +335,7 @@ line.
 # Examples
 ```jldoctest
 julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\nIt has many members.\n");
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
        end
 57
 
@@ -329,7 +343,7 @@ julia> readline("my_file.txt")
 "JuliaLang is a GitHub organization."
 
 julia> readline("my_file.txt", chomp=false)
-"JuliaLang is a GitHub organization.\n"
+"JuliaLang is a GitHub organization.\\n"
 
 julia> rm("my_file.txt")
 ```
@@ -363,7 +377,7 @@ arguments and saving the resulting lines as a vector of strings.
 # Examples
 ```jldoctest
 julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\nIt has many members.\n");
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
        end
 57
 
@@ -374,8 +388,8 @@ julia> readlines("my_file.txt")
 
 julia> readlines("my_file.txt", chomp=false)
 2-element Array{String,1}:
- "JuliaLang is a GitHub organization.\n"
- "It has many members.\n"
+ "JuliaLang is a GitHub organization.\\n"
+ "It has many members.\\n"
 
 julia> rm("my_file.txt")
 ```

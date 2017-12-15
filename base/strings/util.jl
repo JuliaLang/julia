@@ -204,49 +204,59 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 ## string padding functions ##
 
-function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
-    m = n - Unicode.textwidth(s)
-    m ≤ 0 && return s
-    l = Unicode.textwidth(p)
-    q, r = divrem(m, l)
-    string(p^q, first(p, r), s)
-end
-
-function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
-    m = n - Unicode.textwidth(s)
-    m ≤ 0 && return s
-    l = Unicode.textwidth(p)
-    q, r = divrem(m, l)
-    string(s, p^q, first(p, r))
-end
-
 """
-    lpad(s, n::Integer, p::AbstractString=" ")
+    lpad(s, n::Integer, p::Union{Char,AbstractString}=' ') -> String
 
-Make a string at least `n` columns wide when printed by padding `s` on the left
-with copies of `p`.
+Stringify `s` and pad the resulting string on the left with `p` to make it `n`
+characters (code points) long. If `s` is already `n` characters long, an equal
+string is returned. Pad with spaces by default.
 
 # Examples
 ```jldoctest
-julia> lpad("March",10)
+julia> lpad("March", 10)
 "     March"
 ```
 """
-lpad(s, n::Integer, p=" ") = lpad(string(s),n,string(p))
+lpad(s, n::Integer, p::Union{Char,AbstractString}=' ') = lpad(string(s), n, string(p))
+
+function lpad(
+    s::Union{Char,AbstractString},
+    n::Integer,
+    p::Union{Char,AbstractString}=' ',
+) :: String
+    m = n - length(s)
+    m ≤ 0 && return string(s)
+    l = length(p)
+    q, r = divrem(m, l)
+    r == 0 ? string(p^q, s) : string(p^q, first(p, r), s)
+end
 
 """
-    rpad(s, n::Integer, p::AbstractString=" ")
+    rpad(s, n::Integer, p::Union{Char,AbstractString}=' ') -> String
 
-Make a string at least `n` columns wide when printed by padding `s` on the right
-with copies of `p`.
+Stringify `s` and pad the resulting string on the right with `p` to make it `n`
+characters (code points) long. If `s` is already `n` characters long, an equal
+string is returned. Pad with spaces by default.
 
 # Examples
 ```jldoctest
-julia> rpad("March",20)
+julia> rpad("March", 20)
 "March               "
 ```
 """
-rpad(s, n::Integer, p=" ") = rpad(string(s),n,string(p))
+rpad(s, n::Integer, p::Union{Char,AbstractString}=' ') = rpad(string(s), n, string(p))
+
+function rpad(
+    s::Union{Char,AbstractString},
+    n::Integer,
+    p::Union{Char,AbstractString}=' ',
+) :: String
+    m = n - length(s)
+    m ≤ 0 && return string(s)
+    l = length(p)
+    q, r = divrem(m, l)
+    r == 0 ? string(s, p^q) : string(s, p^q, first(p, r))
+end
 
 # splitter can be a Char, Vector{Char}, AbstractString, Regex, ...
 # any splitter that provides search(s::AbstractString, splitter)

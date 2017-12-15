@@ -85,7 +85,6 @@ end
 include("essentials.jl")
 include("ctypes.jl")
 include("gcutils.jl")
-include("nullabletype.jl")
 include("generator.jl")
 include("reflection.jl")
 include("options.jl")
@@ -231,6 +230,10 @@ include("regex.jl")
 include("show.jl")
 include("arrayshow.jl")
 
+# Logging
+include("logging.jl")
+using .CoreLogging
+
 # multidimensional arrays
 include("cartesian.jl")
 using .Cartesian
@@ -238,8 +241,8 @@ include("multidimensional.jl")
 include("permuteddimsarray.jl")
 using .PermutedDimsArrays
 
-# nullable types
-include("nullable.jl")
+# Some type
+include("some.jl")
 
 include("broadcast.jl")
 using .Broadcast
@@ -454,6 +457,7 @@ isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
 function __init__()
     # Base library init
     reinit_stdio()
+    global_logger(SimpleLogger(STDERR))
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_load_path()
@@ -476,6 +480,7 @@ Base.require(:Dates)
 Base.require(:DelimitedFiles)
 Base.require(:FileWatching)
 Base.require(:IterativeEigenSolvers)
+Base.require(:Logging)
 Base.require(:Mmap)
 Base.require(:Profile)
 Base.require(:SharedArrays)

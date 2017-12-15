@@ -1130,7 +1130,7 @@ elseif Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
     (1024, 1023, 1022, 1021), (1025, 1024, 1023, 1022), (1026, 1025, 1024, 1023), (1027, 1026, 1025, 1024), (10028, 10027, 10026, 10025))
 
 elseif Sys.ARCH !== :i686 && Sys.ARCH !== :arm # TODO
-warn("ccall: no VecReg tests run for this platform")
+@warn "ccall: no VecReg tests run for this platform"
 
 end
 
@@ -1242,8 +1242,8 @@ end
 @test_throws(UndefVarError(:Something_not_defined_20835),
              eval(:(f20835(x) = ccall(:fn, Something_not_defined_20835, (Ptr{typeof(x)},), x))))
 
-@noinline f21104at(::Type{T}) where {T} = ccall(:fn, Void, (Nullable{T},), 0)
-@noinline f21104rt(::Type{T}) where {T} = ccall(:fn, Nullable{T}, ())
+@noinline f21104at(::Type{T}) where {T} = ccall(:fn, Void, (Some{T},), Some(0))
+@noinline f21104rt(::Type{T}) where {T} = ccall(:fn, Some{T}, ())
 @test code_llvm(DevNull, f21104at, (Type{Float64},)) === nothing
 @test code_llvm(DevNull, f21104rt, (Type{Float64},)) === nothing
 @test_throws(ErrorException("ccall: the type of argument 1 doesn't correspond to a C type"),

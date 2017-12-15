@@ -140,7 +140,7 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::Abstr
         end
         return R
     end
-    indsAt, indsRt = safe_tail(indices(A)), safe_tail(indices(R)) # handle d=1 manually
+    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
     keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
     if reducedim1(R, A)
         i1 = first(indices1(R))
@@ -148,7 +148,7 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::Abstr
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
             m = means[i1,IR]
-            @simd for i in indices(A, 1)
+            @simd for i in axes(A, 1)
                 r += abs2(A[i,IA] - m)
             end
             R[i1,IR] = r
@@ -156,7 +156,7 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::Abstr
     else
         @inbounds for IA in CartesianRange(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            @simd for i in indices(A, 1)
+            @simd for i in axes(A, 1)
                 R[i,IR] += abs2(A[i,IA] - means[i,IR])
             end
         end
@@ -198,7 +198,7 @@ varm(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) where 
 
 
 var(A::AbstractArray{T}; corrected::Bool=true, mean=nothing) where {T} =
-    real(varm(A, mean === nothing ? Base.mean(A) : mean; corrected=corrected))
+    real(varm(A, coalesce(mean, Base.mean(A)); corrected=corrected))
 
 """
     var(v[, region]; corrected::Bool=true, mean=nothing)
@@ -217,7 +217,7 @@ The mean `mean` over the region may be provided.
     `DataArrays.jl` package is recommended.
 """
 var(A::AbstractArray, region; corrected::Bool=true, mean=nothing) =
-    varm(A, mean === nothing ? Base.mean(A, region) : mean, region; corrected=corrected)
+    varm(A, coalesce(mean, Base.mean(A, region)), region; corrected=corrected)
 
 varm(iterable, m; corrected::Bool=true) =
     var(iterable, corrected=corrected, mean=m)
@@ -597,7 +597,7 @@ function median!(v::AbstractVector)
             isnan(x) && return x
         end
     end
-    inds = indices(v, 1)
+    inds = axes(v, 1)
     n = length(inds)
     mid = div(first(inds)+last(inds),2)
     if isodd(n)

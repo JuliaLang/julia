@@ -25,7 +25,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
         i == rows < length(iter) && (print(io, "⋮"); break)
 
         if limit
-            str = sprint(0, show, v, env=io)
+            str = sprint(show, v, context=io, sizehint=0)
             str = _truncate_at_width_or_chars(str, cols, "\r\n")
             print(io, str)
         else
@@ -61,8 +61,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         vallen = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
-            ks[i] = sprint(0, show, k, env=recur_io)
-            vs[i] = sprint(0, show, v, env=recur_io)
+            ks[i] = sprint(show, k, context=recur_io, sizehint=0)
+            vs[i] = sprint(show, v, context=recur_io, sizehint=0)
             keylen = clamp(length(ks[i]), keylen, cols)
             vallen = clamp(length(vs[i]), vallen, cols)
         end
@@ -80,7 +80,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
         else
-            key = sprint(0, show, k, env=recur_io)
+            key = sprint(show, k, context=recur_io, sizehint=0)
         end
         print(recur_io, key)
         print(io, " => ")
@@ -139,17 +139,6 @@ end
 show(io::IO, ::MIME"text/plain", X::AbstractArray) = _display(io, X)
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
-# display something useful even for strings containing arbitrary
-# (non-UTF8) binary data:
-function show(io::IO, ::MIME"text/plain", s::String)
-    if isvalid(s)
-        show(io, s)
-    else
-        println(io, sizeof(s), "-byte String of invalid UTF-8 data:")
-        print_array(io, Vector{UInt8}(s))
-    end
-end
-
 function show(io::IO, ::MIME"text/plain", opt::JLOptions)
     println(io, "JLOptions(")
     fields = fieldnames(JLOptions)
@@ -172,7 +161,29 @@ end
 """
     showerror(io, e)
 
-Show a descriptive representation of an exception object.
+Show a descriptive representation of an exception object `e`.
+This method is used to display the exception after a call to [`throw`](@ref).
+
+# Examples
+```jldoctest
+julia> struct MyException <: Exception
+           msg::AbstractString
+       end
+
+julia> function Base.showerror(io::IO, err::MyException)
+           print(io, "MyException: ")
+           print(io, err.msg)
+       end
+
+julia> err = MyException("test exception")
+MyException("test exception")
+
+julia> sprint(showerror, err)
+"MyException: test exception"
+
+julia> throw(MyException("test exception"))
+ERROR: MyException: test exception
+```
 """
 showerror(io::IO, ex) = show(io, ex)
 
@@ -413,8 +424,8 @@ function showerror(io::IO, ex::MethodError)
     end
     try
         show_method_candidates(io, ex, kwargs)
-    catch
-        warn(io, "Error showing method candidates, aborted")
+    catch ex
+        @error "Error showing method candidates, aborted" exception=ex
     end
 end
 
@@ -701,4 +712,11 @@ Such a method is usually undesirable to be displayed to the user in the REPL.
 """
 function is_default_method(m::Method)
     return m.module == Base && m.file == Symbol("sysimg.jl") && m.sig == Tuple{Type{T},Any} where T
+end
+
+@noinline function throw_eachindex_mismatch(::IndexLinear, A...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(linearindices.(A), ", ", " and "))"))
+end
+@noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
 end

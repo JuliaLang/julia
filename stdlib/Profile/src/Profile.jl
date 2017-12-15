@@ -307,9 +307,9 @@ function fetch()
     len = len_data()
     maxlen = maxlen_data()
     if (len == maxlen)
-        warn("""The profile data buffer is full; profiling probably terminated
-                before your program finished. To profile for longer runs, call Profile.init
-                with a larger buffer and/or larger delay.""")
+        @warn """The profile data buffer is full; profiling probably terminated
+                 before your program finished. To profile for longer runs, call
+                 `Profile.init()` with a larger buffer and/or larger delay."""
     end
     return unsafe_wrap(Array, get_data_pointer(), (len,))
 end
@@ -429,7 +429,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int},
         Base.print(io, rpad(rtruncto(string(li.file), wfile), wfile, " "), " ")
         Base.print(io, lpad(string(li.line), wline, " "), " ")
         fname = string(li.func)
-        if !li.from_c && !isnull(li.linfo)
+        if !li.from_c && li.linfo !== nothing
             fname = sprint(show_spec_linfo, li)
         end
         Base.print(io, rpad(ltruncto(fname, wfunc), wfunc, " "))
@@ -492,7 +492,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
                     ")")
             else
                 fname = string(li.func)
-                if !li.from_c && !isnull(li.linfo)
+                if !li.from_c && li.linfo !== nothing
                     fname = sprint(show_spec_linfo, li)
                 end
                 strs[i] = string(base,
@@ -673,10 +673,10 @@ function liperm(lilist::Vector{StackFrame})
     return sortperm(comb)
 end
 
-warning_empty() = warn("""
+warning_empty() = @warn """
             There were no samples collected. Run your program longer (perhaps by
             running it multiple times), or adjust the delay between samples with
-            Profile.init().""")
+            `Profile.init()`."""
 
 function purgeC(data::Vector{UInt64}, lidict::LineInfoFlatDict)
     keep = Bool[d == 0 || lidict[d].from_c == false for d in data]
