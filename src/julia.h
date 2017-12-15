@@ -182,7 +182,7 @@ struct _jl_method_instance_t;
 
 // TypeMap is an implicitly defined type
 // that can consist of any of the following nodes:
-//   typedef TypeMap Union{TypeMapLevel, TypeMapEntry, Void}
+//   typedef TypeMap Union{TypeMapLevel, TypeMapEntry, Nothing}
 // it forms a roughly tree-shaped structure, consisting of nodes of TypeMapLevels
 // which split the tree when possible, for example based on the key into the tuple type at `offs`
 // when key is a leaftype, (but only when the tree has enough entries for this to be

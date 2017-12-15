@@ -79,7 +79,7 @@ true
 ```
 """
 issorted(itr;
-    lt=isless, by=identity, rev::Union{Bool,Void}=nothing, order::Ordering=Forward) =
+    lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
@@ -140,7 +140,7 @@ julia> a
 ```
 """
 partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange};
-             lt=isless, by=identity, rev::Union{Bool,Void}=nothing, order::Ordering=Forward) =
+             lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
     partialsort!(v, k, ord(lt,by,rev,order))
 
 """
@@ -272,7 +272,7 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval begin
         $s(v::AbstractVector, x, o::Ordering) = (inds = axes(v, 1); $s(v,x,first(inds),last(inds),o))
         $s(v::AbstractVector, x;
-           lt=isless, by=identity, rev::Union{Bool,Void}=nothing, order::Ordering=Forward) =
+           lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
             $s(v,x,ord(lt,by,rev,order))
     end
 end
@@ -603,7 +603,7 @@ function sort!(v::AbstractVector;
                alg::Algorithm=defalg(v),
                lt=isless,
                by=identity,
-               rev::Union{Bool,Void}=nothing,
+               rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
@@ -694,7 +694,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                           k::Union{Int, OrdinalRange};
                           lt::Function=isless,
                           by::Function=identity,
-                          rev::Union{Bool,Void}=nothing,
+                          rev::Union{Bool,Nothing}=nothing,
                           order::Ordering=Forward,
                           initialized::Bool=false)
     if !initialized
@@ -745,7 +745,7 @@ function sortperm(v::AbstractVector;
                   alg::Algorithm=DEFAULT_UNSTABLE,
                   lt=isless,
                   by=identity,
-                  rev::Union{Bool,Void}=nothing,
+                  rev::Union{Bool,Nothing}=nothing,
                   order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
@@ -794,7 +794,7 @@ function sortperm!(x::AbstractVector{<:Integer}, v::AbstractVector;
                    alg::Algorithm=DEFAULT_UNSTABLE,
                    lt=isless,
                    by=identity,
-                   rev::Union{Bool,Void}=nothing,
+                   rev::Union{Bool,Nothing}=nothing,
                    order::Ordering=Forward,
                    initialized::Bool=false)
     if axes(x,1) != axes(v,1)
@@ -861,9 +861,9 @@ function sort(A::AbstractArray, dim::Integer;
               alg::Algorithm=DEFAULT_UNSTABLE,
               lt=isless,
               by=identity,
-              rev::Union{Bool,Void}=nothing,
+              rev::Union{Bool,Nothing}=nothing,
               order::Ordering=Forward,
-              initialized::Union{Bool,Void}=nothing)
+              initialized::Union{Bool,Nothing}=nothing)
     if initialized !== nothing
         Base.depwarn("`initialized` keyword argument is deprecated", :sort)
     end

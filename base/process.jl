@@ -11,7 +11,7 @@ struct Cmd <: AbstractCmd
     exec::Vector{String}
     ignorestatus::Bool
     flags::UInt32 # libuv process flags
-    env::Union{Array{String},Void}
+    env::Union{Array{String},Nothing}
     dir::String
     Cmd(exec::Vector{String}) =
         new(exec, false, 0x00, nothing, "")
@@ -209,7 +209,7 @@ byteenv(env::AbstractArray{<:AbstractString}) =
     String[cstr(x) for x in env]
 byteenv(env::AbstractDict) =
     String[cstr(string(k)*"="*string(v)) for (k,v) in env]
-byteenv(env::Void) = nothing
+byteenv(env::Nothing) = nothing
 byteenv(env::Union{AbstractVector{Pair{T}}, Tuple{Vararg{Pair{T}}}}) where {T<:AbstractString} =
     String[cstr(k*"="*string(v)) for (k,v) in env]
 

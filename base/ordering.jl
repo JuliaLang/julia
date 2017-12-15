@@ -69,7 +69,7 @@ _ord(lt::typeof(isless), by,                   order::Ordering) = By(by)
 _ord(lt,                 by::typeof(identity), order::Ordering) = Lt(lt)
 _ord(lt,                 by,                   order::Ordering) = Lt((x,y)->lt(by(x),by(y)))
 
-ord(lt, by, rev::Void, order::Ordering=Forward) = _ord(lt, by, order)
+ord(lt, by, rev::Nothing, order::Ordering=Forward) = _ord(lt, by, order)
 
 function ord(lt, by, rev::Bool, order::Ordering=Forward)
     o = _ord(lt, by, order)

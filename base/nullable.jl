@@ -64,8 +64,8 @@ convert(::Type{Nullable{T}}, x::T) where {T<:Nullable} = Nullable{T}(x)
 convert(::Type{Nullable{T}}, x::T) where {T} = Nullable{T}(x)
 convert(::Type{Nullable   }, x::T) where {T} = Nullable{T}(x)
 
-convert(::Type{Nullable{T}}, ::Void) where {T} = Nullable{T}()
-convert(::Type{Nullable   }, ::Void) = Nullable{Union{}}()
+convert(::Type{Nullable{T}}, ::Nothing) where {T} = Nullable{T}()
+convert(::Type{Nullable   }, ::Nothing) = Nullable{Union{}}()
 
 promote_rule(::Type{Nullable{S}}, ::Type{T}) where {S,T} = Nullable{promote_type(S, T)}
 promote_rule(::Type{Nullable{S}}, ::Type{Nullable{T}}) where {S,T} = Nullable{promote_type(S, T)}

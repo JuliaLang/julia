@@ -713,7 +713,7 @@ let repr = sprint(dump, Int64)
     @test repr == "Int64 <: Signed\n"
 end
 # Make sure a `TypeVar` in a `Union` doesn't break subtype dump.
-BreakDump17529{T} = Union{T, Void}
+BreakDump17529{T} = Union{T, Nothing}
 # make sure dependent parameters are represented correctly
 VectorVI{I, VI<:AbstractVector{I}} = Vector{VI}
 let repr = sprint(dump, Any)

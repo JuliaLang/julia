@@ -1105,7 +1105,7 @@ let
    b = C_NULL + 1
    c = C_NULL - 1
    d = 1 + C_NULL
-   @test eltype(a) == Void
+   @test eltype(a) == Nothing
 
    @test a != b != c
    @test b == d
@@ -1299,7 +1299,7 @@ end
 
 # issue #2365
 mutable struct B2365{T}
-     v::Union{T, Void}
+     v::Union{T, Nothing}
 end
 @test B2365{Int}(nothing).v === nothing
 @test B2365{Int}(0).v === 0
@@ -1456,7 +1456,7 @@ let
         end
         return ret
     end
-    x = Vector{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void}}(uninitialized, 3)
+    x = Vector{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Nothing}}(uninitialized, 3)
     x[1] = 1.0
     x[2] = 2.0
     x[3] = 3.0
@@ -1574,7 +1574,7 @@ try
 end
 
 # issue #4526
-f4526(x) = isa(x.a, Void)
+f4526(x) = isa(x.a, Nothing)
 @test_throws ErrorException f4526(1)
 @test_throws ErrorException f4526(im)
 @test_throws ErrorException f4526(1+2im)
@@ -1710,7 +1710,7 @@ f5150(T) = Vector{Rational{T}}(uninitialized, 1)
 
 # issue #5165
 primitive type T5165{S} 64 end
-make_t(x::Int64) = Core.Intrinsics.bitcast(T5165{Void}, x)
+make_t(x::Int64) = Core.Intrinsics.bitcast(T5165{Nothing}, x)
 xs5165 = T5165[make_t(Int64(1))]
 b5165 = IOBuffer()
 for x in xs5165
@@ -2111,7 +2111,7 @@ f6980(::Union{Int, Float64}, ::B6980) = true
 @test f6980(1, B6980())
 
 # issue #7049
-Maybe7049{T} = Union{T,Void}
+Maybe7049{T} = Union{T,Nothing}
 function ttt7049(;init::Maybe7049{Union{AbstractString,Tuple{Int,Char}}} = nothing)
     string("init=", init)
 end
@@ -2213,8 +2213,8 @@ end
 
 # issue #8184
 struct Foo8184
-    x::Void
-    y::Void
+    x::Nothing
+    y::Nothing
     z::Float64
 end
 let f = Foo8184(nothing,nothing,1.0)
@@ -3178,7 +3178,7 @@ f11715(x) = (x === Tuple{Any})
 
 # part of #11597
 # make sure invalid, partly-constructed types don't end up in the cache
-abstract type C11597{T<:Union{Void, Int}} end
+abstract type C11597{T<:Union{Nothing, Int}} end
 mutable struct D11597{T} <: C11597{T} d::T end
 @test_throws TypeError D11597(1.0)
 @test_throws TypeError repr(D11597(1.0))
@@ -3354,12 +3354,12 @@ struct Vec8010{T}
 end
 Vec8010(a::AbstractVector) = Vec8010(ntuple(x->a[x],2)...)
 Base.convert(::Type{Vec8010{T}},x::AbstractVector) where {T} = Vec8010(x)
-Base.convert(::Type{Void},x::AbstractVector) = Vec8010(x)
+Base.convert(::Type{Nothing},x::AbstractVector) = Vec8010(x)
 struct MyType8010
      m::Vec8010{Float32}
 end
 struct MyType8010_ghost
-     m::Void
+     m::Nothing
 end
 @test_throws TypeError MyType8010([3.0;4.0])
 @test_throws TypeError MyType8010_ghost([3.0;4.0])
@@ -3481,7 +3481,7 @@ foo12967(x, ::TupleType12967) = 2
 @test foo12967(1, Tuple{}) == 2
 
 # issue #13083
-@test Void() === nothing
+@test Nothing() === nothing
 
 # issue discovered in #11973
 for j = 1:1
@@ -3709,11 +3709,11 @@ let nometh = try; @eval @m8846(a, b, c); false; catch ex; ex; end
  end
 
 # a simple case of parametric dispatch with unions
-let foo(x::Union{T, Void}, y::Union{T, Void}) where {T} = 1
+let foo(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = 1
     @test foo(1, nothing) === 1
     @test foo(nothing, nothing) === 1
 end
-let foo(x::Union{T, Void}, y::Union{T, Void}) where {T} = T
+let foo(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = T
     @test foo(1, nothing) === Int
     @test_throws UndefVarError(:T) foo(nothing, nothing)
 end
@@ -4459,11 +4459,11 @@ let a = Val{Val{TypeVar(:_, Int)}},
     @test Base._isleaftype(b)
 end
 
-# A return type widened to Type{Union{T,Void}} should not confuse
+# A return type widened to Type{Union{T,Nothing}} should not confuse
 # codegen
-@noinline MaybeFunc(T) = Union{T, Void}
+@noinline MaybeFunc(T) = Union{T, Nothing}
 fMaybeFunc() = MaybeFunc(Int64)
-@test fMaybeFunc() == Union{Int64, Void}
+@test fMaybeFunc() == Union{Int64, Nothing}
 
 # issue #16431
 function f16431(x)
@@ -4533,7 +4533,7 @@ f1090()::Int = A1090()
 @test_throws TypeError f1090()
 
 # issue #19106
-function f19106()::Void end
+function f19106()::Nothing end
 @test f19106() === nothing
 
 # issue #16783
@@ -4574,7 +4574,7 @@ try
 catch
 end
 @test isa(T16793, Type)
-@test isa(abstract type T16793_2 end, Void)
+@test isa(abstract type T16793_2 end, Nothing)
 
 # issue #17147
 f17147(::Tuple) = 1
@@ -4643,7 +4643,7 @@ cfunction(f18054, Cint, Tuple{})
 # issue #18986: the ccall optimization of cfunction leaves JL_TRY stack in bad state
 dummy18996() = return nothing
 function main18986()
-    cfunction(dummy18986, Void, ())
+    cfunction(dummy18986, Nothing, ())
     ccall((:dummy2, "this_is_a_nonexisting_library"), Cvoid, ())
 end
 @test_throws ErrorException main18986()
@@ -5402,10 +5402,10 @@ m22929_2.x = m22929_1
 
 # Union type sorting
 for T in (
-        (Void, Int8),
-        (Void, Int64),
-        (Void, Tuple{Int64, String}),
-        (Void, Array),
+        (Nothing, Int8),
+        (Nothing, Int64),
+        (Nothing, Tuple{Int64, String}),
+        (Nothing, Array),
         (Float64, Int64),
         (Float64, String),
         (Float64, Array),
@@ -5416,7 +5416,7 @@ for T in (
     @test Base.uniontypes(Union{T...}) == collect(T)
     @test Base.uniontypes(Union{reverse(T)...}) == collect(T)
 end
-@test Base.uniontypes(Union{Void, Union{Int64, Float64}}) == Any[Void, Float64, Int64]
+@test Base.uniontypes(Union{Nothing, Union{Int64, Float64}}) == Any[Nothing, Float64, Int64]
 module AlternativeIntModule
     struct Int64
         val::UInt64
@@ -5486,9 +5486,9 @@ module UnionOptimizations
 using Test
 using Dates
 
-const boxedunions = [Union{}, Union{String, Void}]
-const unboxedunions = [Union{Int8, Void},
-                       Union{Int8, Float16, Void},
+const boxedunions = [Union{}, Union{String, Nothing}]
+const unboxedunions = [Union{Int8, Nothing},
+                       Union{Int8, Float16, Nothing},
                        Union{Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128},
                        Union{Char, Date, Int}]
 
@@ -5508,12 +5508,12 @@ const unboxedunions = [Union{Int8, Void},
 @test sizeof(unboxedunions[3]) == 16
 @test sizeof(unboxedunions[4]) == 8
 
-initvalue(::Type{Void}) = nothing
+initvalue(::Type{Nothing}) = nothing
 initvalue(::Type{Char}) = '\0'
 initvalue(::Type{Date}) = Date(0, 12, 31)
 initvalue(::Type{T}) where {T <: Number} = T(0)
 
-initvalue2(::Type{Void}) = nothing
+initvalue2(::Type{Nothing}) = nothing
 initvalue2(::Type{Char}) = Char(0x01)
 initvalue2(::Type{Date}) = Date(1)
 initvalue2(::Type{T}) where {T <: Number} = T(1)
@@ -5532,20 +5532,20 @@ x.u = initvalue(Base.uniontypes(U)[2])
 @test x.u === initvalue(Base.uniontypes(U)[2])
 
 mutable struct UnionField2
-    x::Union{Void, Int}
+    x::Union{Nothing, Int}
     @noinline UnionField2() = new()
 end
 @test UnionField2().x === nothing
 
 struct UnionField3
-    x::Union{Void, Int}
+    x::Union{Nothing, Int}
     @noinline UnionField3() = new()
 end
 @test UnionField3().x === nothing
 
 mutable struct UnionField4
-    x::Union{Void, Float64}
-    y::Union{Void, Int8}
+    x::Union{Nothing, Float64}
+    y::Union{Nothing, Int8}
     z::NTuple{8, UInt8}
     @noinline UnionField4() = new()
     @noinline UnionField4(x, y) = new(x, y, (0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88))
@@ -5564,8 +5564,8 @@ let x4 = UnionField4(nothing, Int8(3))
 end
 
 struct UnionField5
-    x::Union{Void, Float64}
-    y::Union{Void, Int8}
+    x::Union{Nothing, Float64}
+    y::Union{Nothing, Int8}
     z::NTuple{8, UInt8}
     @noinline UnionField5() = new()
     @noinline UnionField5(x, y) = new(x, y, (0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88))
@@ -5588,7 +5588,7 @@ end
 
 # PR #23367
 struct A23367
-    x::Union{Int8, Int16, NTuple{7, Int8}, Void}
+    x::Union{Int8, Int16, NTuple{7, Int8}, Nothing}
 end
 struct B23367
     x::Int8
@@ -5646,14 +5646,14 @@ end
 # unsafe_wrap
 let
     A4 = [1, 2, 3]
-    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A4)), 3)
+    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Nothing}}, pointer(A4)), 3)
     A5 = [1 2 3; 4 5 6]
-    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A5)), 6)
+    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Nothing}}, pointer(A5)), 6)
 end
 
 # copy!
-A23567 = Vector{Union{Float64, Void}}(uninitialized, 5)
-B23567 = collect(Union{Float64, Void}, 1.0:3.0)
+A23567 = Vector{Union{Float64, Nothing}}(uninitialized, 5)
+B23567 = collect(Union{Float64, Nothing}, 1.0:3.0)
 copy!(A23567, 2, B23567)
 @test A23567[1] === nothing
 @test A23567[2] === 1.0
@@ -5872,7 +5872,7 @@ handle_on_m22098 = getfield(@__MODULE__, Symbol("@m22098"))
 
 # issue 24363
 mutable struct A24363
-    x::Union{Int,Void}
+    x::Union{Int,Nothing}
 end
 
 int24363 = A24363(65535)

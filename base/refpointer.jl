@@ -75,11 +75,11 @@ unsafe_convert(::Type{Ptr{Cvoid}}, b::RefValue{T}) where {T} = convert(Ptr{Cvoid
 struct RefArray{T,A<:AbstractArray{T},R} <: Ref{T}
     x::A
     i::Int
-    roots::R # should be either ::Void or ::Any
+    roots::R # should be either ::Nothing or ::Any
     RefArray{T,A,R}(x,i,roots=nothing) where {T,A<:AbstractArray{T},R} = new(x,i,roots)
 end
 RefArray(x::AbstractArray{T}, i::Int, roots::Any) where {T} = RefArray{T,typeof(x),Any}(x, i, roots)
-RefArray(x::AbstractArray{T}, i::Int=1, roots::Void=nothing) where {T} = RefArray{T,typeof(x),Void}(x, i, nothing)
+RefArray(x::AbstractArray{T}, i::Int=1, roots::Nothing=nothing) where {T} = RefArray{T,typeof(x),Nothing}(x, i, nothing)
 convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 Ref(x::AbstractArray, i::Integer=1) = RefArray(x, i)
 

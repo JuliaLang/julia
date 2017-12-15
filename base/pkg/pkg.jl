@@ -137,7 +137,7 @@ package.
 installed() = cd(Entry.installed)
 
 """
-    installed(pkg) -> Void | VersionNumber
+    installed(pkg) -> Nothing | VersionNumber
 
 If `pkg` is installed, return the installed version number. If `pkg` is registered,
 but not installed, return `nothing`.

@@ -346,6 +346,6 @@ julia> rand(MersenneTwister(), Bool) # not reproducible either
 true
 ```
 """
-srand(rng::AbstractRNG, ::Void) = srand(rng)
+srand(rng::AbstractRNG, ::Nothing) = srand(rng)
 
 end # module

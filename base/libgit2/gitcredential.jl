@@ -25,11 +25,11 @@ mutable struct GitCredential
 end
 
 function GitCredential(
-        protocol::Union{AbstractString,Void}=nothing,
-        host::Union{AbstractString,Void}=nothing,
-        path::Union{AbstractString,Void}=nothing,
-        username::Union{AbstractString,Void}=nothing,
-        password::Union{AbstractString,Void}=nothing)
+        protocol::Union{AbstractString,Nothing}=nothing,
+        host::Union{AbstractString,Nothing}=nothing,
+        path::Union{AbstractString,Nothing}=nothing,
+        username::Union{AbstractString,Nothing}=nothing,
+        password::Union{AbstractString,Nothing}=nothing)
     GitCredential(
         Nullable{String}(protocol),
         Nullable{String}(host),

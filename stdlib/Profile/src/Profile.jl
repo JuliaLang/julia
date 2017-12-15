@@ -45,7 +45,7 @@ line of code; backtraces generally consist of a long list of instruction pointer
 settings can be obtained by calling this function with no arguments, and each can be set
 independently using keywords or in the order `(n, delay)`.
 """
-function init(; n::Union{Void,Integer} = nothing, delay::Union{Void,Float64} = nothing)
+function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Float64} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing

@@ -15,7 +15,7 @@ mutable struct InferenceResult
     linfo::MethodInstance
     args::Vector{Any}
     result # ::Type, or InferenceState if WIP
-    src::Union{CodeInfo, Void} # if inferred copy is available
+    src::Union{CodeInfo, Nothing} # if inferred copy is available
     function InferenceResult(linfo::MethodInstance)
         if isdefined(linfo, :inferred_const)
             result = Const(linfo.inferred_const)
@@ -235,7 +235,7 @@ mutable struct InferenceState
 
     backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
-    parent::Union{Void, InferenceState}
+    parent::Union{Nothing, InferenceState}
 
     const_api::Bool
     const_ret::Bool
@@ -1716,7 +1716,7 @@ function tuple_tfunc(@nospecialize(argtype))
 end
 
 function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
-                           sv::Union{InferenceState,Void}, params::InferenceParams = sv.params)
+                           sv::Union{InferenceState,Nothing}, params::InferenceParams = sv.params)
     isva = !isempty(argtypes) && isvarargtype(argtypes[end])
     if f === tuple
         for a in argtypes
@@ -2753,7 +2753,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
             end
         end
     elseif e.head === :method
-        t = (length(e.args) == 1) ? Any : Void
+        t = (length(e.args) == 1) ? Any : Nothing
     elseif e.head === :copyast
         t = abstract_eval(e.args[1], vtypes, sv)
     elseif e.head === :invoke
@@ -4775,7 +4775,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     end
 
     # see if the method has been previously inferred (and cached)
-    linfo = code_for_method(method, metharg, methsp, sv.params.world, true) # Union{Void, MethodInstance}
+    linfo = code_for_method(method, metharg, methsp, sv.params.world, true) # Union{Nothing, MethodInstance}
     isa(linfo, MethodInstance) || return invoke_NF(argexprs0, e.typ, atypes0, sv,
                                                    atype_unlimited, invoke_data)
     linfo = linfo::MethodInstance
@@ -4799,7 +4799,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         end
     end
     if haveconst
-        inf_result = cache_lookup(linfo, atypes, sv.params.cache) # Union{Void, InferenceResult}
+        inf_result = cache_lookup(linfo, atypes, sv.params.cache) # Union{Nothing, InferenceResult}
     else
         inf_result = nothing
     end
@@ -5748,7 +5748,7 @@ end
 function get_undef_flag_slot(src::CodeInfo, flagslots, id)
     flag_id = flagslots[id]
     flag_id != 0 && return SlotNumber(flag_id)
-    slot = add_slot!(src, Void, src.slotflags[id] & Slot_AssignedOnce != 0, src.slotnames[id])
+    slot = add_slot!(src, Nothing, src.slotflags[id] & Slot_AssignedOnce != 0, src.slotnames[id])
     flag_id = slot_id(slot)
     src.slotflags[flag_id] |= Slot_StaticUndef | Slot_UsedUndef
     flagslots[id] = flag_id

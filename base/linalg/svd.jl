@@ -42,7 +42,7 @@ julia> A
   0.0       0.0  -2.0  0.0  0.0
 ```
 """
-function svdfact!(A::StridedMatrix{T}; full::Bool = false, thin::Union{Bool,Void} = nothing) where T<:BlasFloat
+function svdfact!(A::StridedMatrix{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T<:BlasFloat
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `svdfact!(A; thin = $(thin))` has ",
@@ -92,7 +92,7 @@ julia> F[:U] * Diagonal(F[:S]) * F[:Vt]
  0.0  2.0  0.0  0.0  0.0
 ```
 """
-function svdfact(A::StridedVecOrMat{T}; full::Bool = false, thin::Union{Bool,Void} = nothing) where T
+function svdfact(A::StridedVecOrMat{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `svdfact(A; thin = $(thin))` has ",
@@ -102,7 +102,7 @@ function svdfact(A::StridedVecOrMat{T}; full::Bool = false, thin::Union{Bool,Voi
     end
     svdfact!(copy_oftype(A, eigtype(T)), full = full)
 end
-function svdfact(x::Number; full::Bool = false, thin::Union{Bool,Void} = nothing)
+function svdfact(x::Number; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `svdfact(A; thin = $(thin))` has ",
@@ -112,7 +112,7 @@ function svdfact(x::Number; full::Bool = false, thin::Union{Bool,Void} = nothing
     end
     return SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
 end
-function svdfact(x::Integer; full::Bool = false, thin::Union{Bool,Void} = nothing)
+function svdfact(x::Integer; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `svdfact(A; thin = $(thin))` has ",
@@ -156,7 +156,7 @@ julia> U * Diagonal(S) * V'
  0.0  2.0  0.0  0.0  0.0
 ```
 """
-function svd(A::AbstractArray; full::Bool = false, thin::Union{Bool,Void} = nothing)
+function svd(A::AbstractArray; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `svd(A; thin = $(thin))` has ",
@@ -167,7 +167,7 @@ function svd(A::AbstractArray; full::Bool = false, thin::Union{Bool,Void} = noth
     F = svdfact(A, full = full)
     F.U, F.S, F.Vt'
 end
-function svd(x::Number; full::Bool = false, thin::Union{Bool,Void} = nothing)
+function svd(x::Number; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `svd(A; thin = $(thin))` has ",

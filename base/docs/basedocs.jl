@@ -804,16 +804,16 @@ DevNull
 # doc strings for code in boot.jl and built-ins
 
 """
-    Void
+    Nothing
 
 A type with no fields that is the type [`nothing`](@ref).
 """
-Void
+Nothing
 
 """
     nothing
 
-The singleton instance of type `Void`, used by convention when there is no value to return
+The singleton instance of type `Nothing`, used by convention when there is no value to return
 (as in a C `void` function). Can be converted to an empty [`Nullable`](@ref) value.
 """
 nothing

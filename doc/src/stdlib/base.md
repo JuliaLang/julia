@@ -166,7 +166,7 @@ Base.instances
 ## Special Types
 
 ```@docs
-Core.Void
+Core.Nothing
 Core.Any
 Base.Enums.@enum
 Core.Union

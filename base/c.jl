@@ -5,7 +5,7 @@
 import Core.Intrinsics: cglobal, bitcast
 
 """
-    cglobal((symbol, library) [, type=Void])
+    cglobal((symbol, library) [, type=Nothing])
 
 Obtain a pointer to a global variable in a C-exported shared library, specified exactly as
 in [`ccall`](@ref).

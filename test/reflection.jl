@@ -733,7 +733,7 @@ end
 
 @test nfields((1,2)) == 2
 @test nfields(()) == 0
-@test nfields(nothing) == fieldcount(Void) == 0
+@test nfields(nothing) == fieldcount(Nothing) == 0
 @test nfields(1) == 0
 @test fieldcount(Union{}) == 0
 @test fieldcount(Tuple{Any,Any,T} where T) == 3

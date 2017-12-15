@@ -881,13 +881,13 @@ end
 let A = [1]
     ccall((:set_c_int, libccalltest), Cvoid, (Cint,), 1)
     @test ccall((:get_c_int, libccalltest), Cint, ()) == 1
-    finalizer(cglobal((:finalizer_cptr, libccalltest), Void), A)
+    finalizer(cglobal((:finalizer_cptr, libccalltest), Nothing), A)
     finalize(A)
     @test ccall((:get_c_int, libccalltest), Cint, ()) == -1
 end
 
 # Pointer finalizer at exit (PR #19911)
-let result = read(`$(Base.julia_cmd()) --startup-file=no -e "A = Ref{Cint}(42); finalizer(cglobal((:c_exit_finalizer, \"$libccalltest\"), Void), A)"`, String)
+let result = read(`$(Base.julia_cmd()) --startup-file=no -e "A = Ref{Cint}(42); finalizer(cglobal((:c_exit_finalizer, \"$libccalltest\"), Nothing), A)"`, String)
     @test result == "c_exit_finalizer: 42, 0"
 end
 

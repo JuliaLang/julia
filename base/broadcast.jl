@@ -615,7 +615,7 @@ Nullable{Complex{Float64}}()
 @inline broadcast(f, A, Bs...) =
     broadcast(f, combine_styles(A, Bs...), nothing, nothing, A, Bs...)
 
-@inline broadcast(f, s::BroadcastStyle, ::Void, ::Void, A, Bs...) =
+@inline broadcast(f, s::BroadcastStyle, ::Nothing, ::Nothing, A, Bs...) =
     broadcast(f, s, combine_eltypes(f, A, Bs...), combine_indices(A, Bs...),
               A, Bs...)
 
@@ -656,7 +656,7 @@ function broadcast_nonleaf(f, s::NonleafHandlingTypes, ::Type{ElType}, shape::In
     return _broadcast!(f, dest, keeps, Idefaults, As, Val(nargs), iter, st, 1)
 end
 
-@inline function broadcast(f, ::Style{Nullable}, ::Void, ::Void, a...)
+@inline function broadcast(f, ::Style{Nullable}, ::Nothing, ::Nothing, a...)
     nonnull = all(hasvalue, a)
     S = _nullable_eltype(f, a...)
     if Base._isleaftype(S) && null_safe_op(f, maptoTuple(_unsafe_get_eltype,
@@ -671,9 +671,9 @@ end
     end
 end
 
-broadcast(f, ::Union{Scalar,Unknown}, ::Void, ::Void, a...) = f(a...)
+broadcast(f, ::Union{Scalar,Unknown}, ::Nothing, ::Nothing, a...) = f(a...)
 
-@inline broadcast(f, ::Style{Tuple}, ::Void, ::Void, A, Bs...) =
+@inline broadcast(f, ::Style{Tuple}, ::Nothing, ::Nothing, A, Bs...) =
     tuplebroadcast(f, longest_tuple(A, Bs...), A, Bs...)
 @inline tuplebroadcast(f, ::NTuple{N,Any}, As...) where {N} =
     ntuple(k -> f(tuplebroadcast_getargs(As, k)...), Val(N))

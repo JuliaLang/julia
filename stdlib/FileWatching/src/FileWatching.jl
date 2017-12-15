@@ -269,9 +269,9 @@ function _uv_hook_close(uv::FileMonitor)
 end
 
 function __init__()
-    global uv_jl_pollcb        = cfunction(uv_pollcb, Void, Tuple{Ptr{Cvoid}, Cint, Cint})
-    global uv_jl_fspollcb      = cfunction(uv_fspollcb, Void, Tuple{Ptr{Cvoid}, Cint, Ptr{Cvoid}, Ptr{Cvoid}})
-    global uv_jl_fseventscb    = cfunction(uv_fseventscb, Void, Tuple{Ptr{Cvoid}, Ptr{Int8}, Int32, Int32})
+    global uv_jl_pollcb        = cfunction(uv_pollcb, Nothing, Tuple{Ptr{Cvoid}, Cint, Cint})
+    global uv_jl_fspollcb      = cfunction(uv_fspollcb, Nothing, Tuple{Ptr{Cvoid}, Cint, Ptr{Cvoid}, Ptr{Cvoid}})
+    global uv_jl_fseventscb    = cfunction(uv_fseventscb, Nothing, Tuple{Ptr{Cvoid}, Ptr{Int8}, Int32, Int32})
 end
 
 function uv_fseventscb(handle::Ptr{Cvoid}, filename::Ptr, events::Int32, status::Int32)

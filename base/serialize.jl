@@ -864,7 +864,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     line = deserialize(s)::Int32
     sig = deserialize(s)::DataType
     sparam_syms = deserialize(s)::SimpleVector
-    ambig = deserialize(s)::Union{Array{Any,1}, Void}
+    ambig = deserialize(s)::Union{Array{Any,1}, Nothing}
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     template = deserialize(s)

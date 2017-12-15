@@ -54,7 +54,7 @@ The entropy is obtained from the operating system.
 """
 RandomDevice
 
-RandomDevice(::Void) = RandomDevice()
+RandomDevice(::Nothing) = RandomDevice()
 srand(rng::RandomDevice) = rng
 
 

@@ -355,7 +355,7 @@ an `Int` in Julia).
 | `ptrdiff_t`                                             |                          | `Cptrdiff_t`         | `Int`                                                                                                          |
 | `ssize_t`                                               |                          | `Cssize_t`           | `Int`                                                                                                          |
 | `size_t`                                                |                          | `Csize_t`            | `UInt`                                                                                                         |
-| `void`                                                  |                          |                      | `Void`                                                                                                         |
+| `void`                                                  |                          |                      | `Nothing`                                                                                                         |
 | `void` and `[[noreturn]]` or `_Noreturn`                |                          |                      | `Union{}`                                                                                                      |
 | `void*`                                                 |                          |                      | `Ptr{Cvoid}`                                                                                                    |
 | `T*` (where T represents an appropriately defined type) |                          |                      | `Ref{T}`                                                                                                       |
@@ -401,7 +401,7 @@ checks and is only meant to improve readability of the call.
 !!! warning
     A return type of `Union{}` means the function will not return i.e. C++11 `[[noreturn]]` or C11
     `_Noreturn` (e.g. `jl_throw` or `longjmp`). Do not use this for functions that return no value
-    (`void`) but do return, use `Void` instead.
+    (`void`) but do return, use `Nothing` instead.
 
 !!! note
     For `wchar_t*` arguments, the Julia type should be `Cwstring` (if the C routine expects a NUL-terminated
@@ -426,7 +426,7 @@ checks and is only meant to improve readability of the call.
     ```
 
 !!! note
-    A C function declared to return `Void` will return the value `nothing` in Julia.
+    A C function declared to return `Nothing` will return the value `nothing` in Julia.
 
 ### Struct Type correspondences
 
@@ -563,7 +563,7 @@ types designed to mimic the internal structure of corresponding C structs.
 
 In Julia code wrapping calls to external Fortran routines, all input arguments should be declared
 as of type `Ref{T}`, as Fortran passes all variables by reference. The return type should either
-be `Void` for Fortran subroutines, or a `T` for Fortran functions returning the type `T`.
+be `Nothing` for Fortran subroutines, or a `T` for Fortran functions returning the type `T`.
 
 ## Mapping C Functions to Julia
 
@@ -617,7 +617,7 @@ For translating a C return type to Julia:
 
   * `void`
 
-      * `Void` (this will return the singleton instance `nothing::Void`)
+      * `Nothing` (this will return the singleton instance `nothing::Nothing`)
   * `T`, where `T` is one of the primitive types: `char`, `int`, `long`, `short`, `float`, `double`,
     `complex`, `enum` or any of their `typedef` equivalents
 
@@ -748,7 +748,7 @@ Here is a second example wrapping the corresponding destructor:
 function permutation_free(p::Ref{gsl_permutation})
     ccall(
         (:gsl_permutation_free, :libgsl), # name of C function and library
-        Void,                             # output type
+        Nothing,                             # output type
         (Ref{gsl_permutation},),          # tuple of input types
         p                                 # name of Julia variable to pass in
     )

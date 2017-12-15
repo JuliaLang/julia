@@ -213,7 +213,7 @@ Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/ty
 struct RemoteCallbacks
     cb::RemoteCallbacksStruct
     gcroot::Ref{Any}
-    function RemoteCallbacks(; payload::Union{Payload, Void}=nothing, kwargs...)
+    function RemoteCallbacks(; payload::Union{Payload, Nothing}=nothing, kwargs...)
         p = Ref{Any}(payload)
         if payload === nothing
             pp = C_NULL
@@ -1316,7 +1316,7 @@ function reset!(p::CredentialPayload, config::GitConfig=p.config)
 end
 
 """
-    approve(payload::CredentialPayload; shred::Bool=true) -> Void
+    approve(payload::CredentialPayload; shred::Bool=true) -> Nothing
 
 Store the `payload` credential for re-use in a future authentication. Should only be called
 when authentication was successful.
@@ -1341,7 +1341,7 @@ function approve(p::CredentialPayload; shred::Bool=true)
 end
 
 """
-    reject(payload::CredentialPayload; shred::Bool=true) -> Void
+    reject(payload::CredentialPayload; shred::Bool=true) -> Nothing
 
 Discard the `payload` credential from begin re-used in future authentication. Should only be
 called when authentication was unsuccessful.

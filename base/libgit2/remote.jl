@@ -313,7 +313,7 @@ function push(rmt::GitRemote, refspecs::Vector{<:AbstractString};
 end
 
 """
-    remote_delete(repo::GitRepo, remote_name::AbstractString) -> Void
+    remote_delete(repo::GitRepo, remote_name::AbstractString) -> Nothing
 
 Delete the `remote_name` from the git `repo`.
 """

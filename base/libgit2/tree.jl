@@ -105,7 +105,7 @@ function (::Type{T})(te::GitTreeEntry) where T<:GitObject
     repo = repository(te)
     obj_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_tree_entry_to_object, :libgit2), Cint,
-                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ref{Void}),
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ref{Nothing}),
                    obj_ptr_ptr, repo.ptr, te.ptr)
     return T(repo, obj_ptr_ptr[])
 end

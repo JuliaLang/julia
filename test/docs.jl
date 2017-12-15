@@ -954,7 +954,7 @@ for (line, expr) in Pair[
     ]
     @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(118, doc_util_path), STDOUT, expr)
     buf = IOBuffer()
-    @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
+    @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Nothing}
 end
 
 let save_color = Base.have_color

@@ -3811,7 +3811,7 @@ f(x) = yt(x)
                  (emit `(leave 1))
                  (if finally
                      (begin (emit `(= ,finally-exception (the_exception)))
-                            (leave-finally-block `(foreigncall 'jl_rethrow_other (core Void) (call (core svec) Any)
+                            (leave-finally-block `(foreigncall 'jl_rethrow_other (core Nothing) (call (core svec) Any)
                                                                'ccall 1 ,finally-exception)
                                                  #f))
                      (let ((v2 (compile (caddr e) break-labels value tail)))

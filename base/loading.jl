@@ -477,7 +477,7 @@ include_string(m::Module, txt::String, fname::String) =
 include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
     include_string(m, String(txt), String(fname))
 
-function source_path(default::Union{AbstractString,Void}="")
+function source_path(default::Union{AbstractString,Nothing}="")
     t = current_task()
     while true
         s = t.storage

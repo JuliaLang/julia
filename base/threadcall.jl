@@ -11,7 +11,7 @@ function notify_fun(idx)
 end
 
 function init_threadcall()
-    global c_notify_fun = cfunction(notify_fun, Void, Tuple{Cint})
+    global c_notify_fun = cfunction(notify_fun, Nothing, Tuple{Cint})
 end
 
 """

@@ -54,9 +54,9 @@
     ]
 
     buf = IOBuffer()
-    @test typeof(escape_string(buf, "test")) == Void
+    @test typeof(escape_string(buf, "test")) == Nothing
     @test String(take!(buf)) == "test"
-    @test typeof(escape_string(buf, "hello", "l")) == Void
+    @test typeof(escape_string(buf, "hello", "l")) == Nothing
     @test String(take!(buf)) == "he\\l\\lo"
 
     @test typeof(escape_string("test", "t")) == String

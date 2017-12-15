@@ -402,7 +402,7 @@ perhaps range-types `Ind` of your own design. For more information, see [Arrays 
 | `Base.broadcast_indices(::StyleA, A)` | Declaration of the indices of `A` for broadcasting purposes (for AbstractArrays, defaults to `axes(A)`) |
 | **Bypassing default machinery** | |
 | `broadcast(f, As...)` | Complete bypass of broadcasting machinery |
-| `broadcast(f, ::DestStyle, ::Void, ::Void, As...)` | Bypass after container type is computed |
+| `broadcast(f, ::DestStyle, ::Nothing, ::Nothing, As...)` | Bypass after container type is computed |
 | `broadcast(f, ::DestStyle, ::Type{ElType}, inds::Tuple, As...)` | Bypass after container type, eltype, and indices are computed |
 
 [Broadcasting](@ref) is triggered by an explicit call to `broadcast` or `broadcast!`, or implicitly by

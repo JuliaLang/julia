@@ -47,7 +47,7 @@ full/square form of `Q` is requested via `full = true`, `L` is not extended with
     rectangular factor `Q`. "Thin" factorizations more broadly are also
     referred to as "reduced" factorizatons.
 """
-function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Bool,Void} = nothing)
+function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `lq(A; thin = $(thin))` has ",

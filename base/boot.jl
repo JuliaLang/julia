@@ -45,9 +45,9 @@
 #    body
 #end
 
-#struct Void
+#struct Nothing
 #end
-#const nothing = Void()
+#const nothing = Nothing()
 
 #abstract type AbstractArray{T,N} end
 #abstract type DenseArray{T,N} <: AbstractArray{T,N} end
@@ -87,7 +87,7 @@
 
 #struct LineNumberNode
 #    line::Int
-#    file::Any # nominally Union{Symbol,Void}
+#    file::Any # nominally Union{Symbol,Nothing}
 #end
 
 #struct LabelNode
@@ -119,7 +119,7 @@
 export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
-    Tuple, Type, UnionAll, TypeName, TypeVar, Union, Void,
+    Tuple, Type, UnionAll, TypeName, TypeVar, Union, Nothing,
     SimpleVector, AbstractArray, DenseArray, NamedTuple,
     # special objects
     Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
@@ -309,8 +309,8 @@ TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) =
 
 UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
-const Cvoid = Void
-Void() = nothing
+const Cvoid = Nothing
+Nothing() = nothing
 
 (::Type{Tuple{}})() = () # Tuple{}()
 
@@ -436,7 +436,7 @@ println(@nospecialize a...) = println(STDOUT, a...)
 struct GeneratedFunctionStub
     gen
     argnames::Array{Any,1}
-    spnames::Union{Void, Array{Any,1}}
+    spnames::Union{Nothing, Array{Any,1}}
     line::Int
     file::Symbol
 end

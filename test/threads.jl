@@ -460,7 +460,7 @@ test_nested_loops()
             %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i128*
             store atomic i128 %1, i128* %ptr release, align 8
             ret void
-        \"\"\", Void, Tuple{Ptr{UInt128}, UInt128}, unsafe_convert(Ptr{UInt128}, x), v)
+        \"\"\", Nothing, Tuple{Ptr{UInt128}, UInt128}, unsafe_convert(Ptr{UInt128}, x), v)
     end
     code_native(STDOUT, unaligned_setindex!, Tuple{Atomic{UInt128}, UInt128})
     """

@@ -195,8 +195,8 @@ TypeName
   hash: Int64 -7900426068641098781
   mt: MethodTable
     name: Symbol Array
-    defs: Void nothing
-    cache: Void nothing
+    defs: Nothing nothing
+    cache: Nothing nothing
     max_args: Int64 0
     kwsorter: #undef
     module: Module Core
@@ -384,11 +384,11 @@ the type of `y` if `x` and `y` can have different types.
 The next complication is the interaction of unions and diagonal variables, e.g.
 
 ```julia
-f(x::Union{Void,T}, y::T) where {T} = ...
+f(x::Union{Nothing,T}, y::T) where {T} = ...
 ```
 
 Consider what this declaration means.
-`y` has type `T`. `x` then can have either the same type `T`, or else be of type `Void`.
+`y` has type `T`. `x` then can have either the same type `T`, or else be of type `Nothing`.
 So all of the following calls should match:
 
 ```julia
@@ -400,18 +400,18 @@ f(nothing, "")
 f(nothing, 2.0)
 ```
 
-These examples are telling us something: when `x` is `nothing::Void`, there are no
+These examples are telling us something: when `x` is `nothing::Nothing`, there are no
 extra constraints on `y`.
 It is as if the method signature had `y::Any`.
 This means that whether a variable is diagonal is not a static property based on
 where it appears in a type.
 Rather, it depends on where a variable appears when the subtyping algorithm *uses* it.
-When `x` has type `Void`, we don't need to use the `T` in `Union{Void,T}`, so `T`
+When `x` has type `Nothing`, we don't need to use the `T` in `Union{Nothing,T}`, so `T`
 does not "occur".
 Indeed, we have the following type equivalence:
 
 ```julia
-(Tuple{Union{Void,T},T} where T) == Union{Tuple{Void,Any}, Tuple{T,T} where T}
+(Tuple{Union{Nothing,T},T} where T) == Union{Tuple{Nothing,Any}, Tuple{T,T} where T}
 ```
 
 ## Subtyping diagonal variables

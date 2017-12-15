@@ -349,9 +349,9 @@ println_with_color(color::Union{Int, Symbol}, msg...; bold::Bool = false) =
 
 ## warnings and messages ##
 
-const log_info_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
-const log_warn_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
-const log_error_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
+const log_info_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
+const log_warn_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
+const log_error_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
 
 function _redirect(io::IO, log_to::Dict, sf::StackTraces.StackFrame)
     (sf.linfo isa Core.MethodInstance) || return io
@@ -417,7 +417,7 @@ default), `:info`, `:warn`, or `:error`.  See `Base.log_{info,warn,error}_to`
 for the current set of redirections.  Call `logging` with no arguments (or just
 the `kind`) to reset everything.
 """
-function logging(io::IO, m::Union{Module,Void}=nothing, f::Union{Symbol,Void}=nothing;
+function logging(io::IO, m::Union{Module,Nothing}=nothing, f::Union{Symbol,Nothing}=nothing;
                  kind::Symbol=:all)
     (kind==:all || kind==:info)  && (log_info_to[(m,f)] = io)
     (kind==:all || kind==:warn)  && (log_warn_to[(m,f)] = io)

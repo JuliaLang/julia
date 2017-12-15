@@ -60,21 +60,21 @@ const dsfmt_min_array_size = dsfmt_get_min_array_size()
 
 function dsfmt_init_gen_rand(s::DSFMT_state, seed::UInt32)
     ccall((:dsfmt_init_gen_rand,:libdSFMT),
-          Void,
+          Nothing,
           (Ptr{Cvoid}, UInt32,),
           s.val, seed)
 end
 
 function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{UInt32})
     ccall((:dsfmt_init_by_array,:libdSFMT),
-          Void,
+          Nothing,
           (Ptr{Cvoid}, Ptr{UInt32}, Int32),
           s.val, seed, length(seed))
 end
 
 function dsfmt_gv_init_by_array(seed::Vector{UInt32})
     ccall((:dsfmt_gv_init_by_array,:libdSFMT),
-          Void,
+          Nothing,
           (Ptr{UInt32}, Int32),
           seed, length(seed))
 end
@@ -83,7 +83,7 @@ function dsfmt_fill_array_close1_open2!(s::DSFMT_state, A::Ptr{Float64}, n::Int)
     @assert Csize_t(A) % 16 == 0 # the underlying C array must be 16-byte aligned
     @assert dsfmt_min_array_size <= n && iseven(n)
     ccall((:dsfmt_fill_array_close1_open2,:libdSFMT),
-          Void,
+          Nothing,
           (Ptr{Cvoid}, Ptr{Float64}, Int),
           s.val, A, n)
 end
@@ -92,7 +92,7 @@ function dsfmt_fill_array_close_open!(s::DSFMT_state, A::Ptr{Float64}, n::Int)
     @assert Csize_t(A) % 16 == 0 # the underlying C array must be 16-byte aligned
     @assert dsfmt_min_array_size <= n && iseven(n)
     ccall((:dsfmt_fill_array_close_open,:libdSFMT),
-          Void,
+          Nothing,
           (Ptr{Cvoid}, Ptr{Float64}, Int),
           s.val, A, n)
 end

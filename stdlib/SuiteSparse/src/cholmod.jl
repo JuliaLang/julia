@@ -44,7 +44,7 @@ const common_size = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,
 
 const cholmod_com_offsets = Vector{Csize_t}(uninitialized, 19)
 ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
-    Void, (Ptr{Csize_t},), cholmod_com_offsets)
+    Nothing, (Ptr{Csize_t},), cholmod_com_offsets)
 
 ## macro to generate the name of the C function according to the integer type
 macro cholmod_name(nm, typ)

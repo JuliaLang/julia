@@ -354,7 +354,7 @@ for typ in atomictypes
                  %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                  store atomic $lt %1, $lt* %ptr release, align $(alignment(typ))
                  ret void
-                 """, Void, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
+                 """, Nothing, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
 
     # Note: atomic_cas! succeeded (i.e. it stored "new") if and only if the result is "cmp"
     if typ <: Integer
@@ -444,4 +444,4 @@ For further details, see LLVM's `fence` instruction.
 atomic_fence() = llvmcall("""
                           fence seq_cst
                           ret void
-                          """, Void, Tuple{})
+                          """, Nothing, Tuple{})

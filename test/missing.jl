@@ -33,7 +33,7 @@ end
     @test promote_type(Union{Int, Missing}, Union{Int, Missing}) == Union{Int, Missing}
     @test promote_type(Union{Float64, Missing}, Union{String, Missing}) == Any
     @test promote_type(Union{Float64, Missing}, Union{Int, Missing}) == Union{Float64, Missing}
-    @test_broken promote_type(Union{Void, Missing, Int}, Float64) == Any
+    @test_broken promote_type(Union{Nothing, Missing, Int}, Float64) == Any
 end
 
 @testset "comparison operators" begin

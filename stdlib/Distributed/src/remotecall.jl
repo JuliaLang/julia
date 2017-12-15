@@ -8,7 +8,7 @@ Tracks whether a particular `AbstractRemoteRef`
 
 The `client_refs` lock is also used to synchronize access to `.refs` and associated `clientset` state.
 """
-const client_refs = WeakKeyDict{Any, Void}() # used as a WeakKeySet
+const client_refs = WeakKeyDict{Any, Nothing}() # used as a WeakKeySet
 
 abstract type AbstractRemoteRef end
 

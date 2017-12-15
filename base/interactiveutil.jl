@@ -681,7 +681,7 @@ global RNG in the context where the tests are run; otherwise the seed is chosen 
 """
 function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
                   exit_on_error=false,
-                  seed::Union{BitInteger,Void}=nothing)
+                  seed::Union{BitInteger,Nothing}=nothing)
     if isa(tests,AbstractString)
         tests = split(tests)
     end

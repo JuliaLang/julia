@@ -263,7 +263,7 @@ escape_string(s::AbstractString, esc::AbstractString) = sprint(endof(s), escape_
 escape_string(s::AbstractString) = sprint(endof(s), escape_string, s, "\"")
 
 """
-    escape_string(io, str::AbstractString[, esc::AbstractString]) -> Void
+    escape_string(io, str::AbstractString[, esc::AbstractString]) -> Nothing
 
 Escape sequences in `str` and print result to `io`. See also [`unescape_string`](@ref).
 """
@@ -311,7 +311,7 @@ General unescaping of traditional C and Unicode escape sequences. Reverse of
 unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
 
 """
-    unescape_string(io, str::AbstractString) -> Void
+    unescape_string(io, str::AbstractString) -> Nothing
 
 Unescapes sequences and prints result to `io`. See also [`escape_string`](@ref).
 """

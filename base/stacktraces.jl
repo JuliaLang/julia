@@ -20,7 +20,7 @@ Stack information representing execution context, with the following fields:
 
   The name of the function containing the execution context.
 
-- `linfo::Union{Core.MethodInstance, CodeInfo, Void}`
+- `linfo::Union{Core.MethodInstance, CodeInfo, Nothing}`
 
   The MethodInstance containing the execution context (if it could be found).
 
@@ -53,7 +53,7 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     "the line number in the file containing the execution context"
     line::Int
     "the MethodInstance or CodeInfo containing the execution context (if it could be found)"
-    linfo::Union{Core.MethodInstance, CodeInfo, Void}
+    linfo::Union{Core.MethodInstance, CodeInfo, Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
