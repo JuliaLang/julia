@@ -309,6 +309,7 @@ TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) =
 
 UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
+const Cvoid = Void
 Void() = nothing
 
 (::Type{Tuple{}})() = () # Tuple{}()
