@@ -67,7 +67,7 @@ function edit(path::AbstractString, line::Integer=0)
     if Sys.iswindows() && name == "open"
         @static Sys.iswindows() && # don't emit this ccall on other platforms
             systemerror(:edit, ccall((:ShellExecuteW, "shell32"), stdcall, Int,
-                                     (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
+                                     (Ptr{Cvoid}, Cwstring, Cwstring, Ptr{Cvoid}, Ptr{Cvoid}, Cint),
                                      C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
     elseif background
         spawn(pipeline(cmd, stderr=STDERR))
@@ -166,7 +166,7 @@ elseif Sys.iswindows()
         if containsnul(x)
             throw(ArgumentError("Windows clipboard strings cannot contain NUL character"))
         end
-        systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
+        systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL))
         systemerror(:EmptyClipboard, 0==ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()))
         x_u16 = cwstring(x)
         # copy data to locked, allocated space
@@ -175,14 +175,14 @@ elseif Sys.iswindows()
         plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{UInt16}, (Ptr{UInt16},), p)
         systemerror(:GlobalLock, plock==C_NULL)
         ccall(:memcpy, Ptr{UInt16}, (Ptr{UInt16},Ptr{UInt16},Int), plock, x_u16, sizeof(x_u16))
-        systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{Void},), plock))
+        systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{Cvoid},), plock))
         pdata = ccall((:SetClipboardData, "user32"), stdcall, Ptr{UInt16}, (UInt32, Ptr{UInt16}), 13, p)
         systemerror(:SetClipboardData, pdata!=p)
         ccall((:CloseClipboard, "user32"), stdcall, Void, ())
     end
     clipboard(x) = clipboard(sprint(print, x)::String)
     function clipboard()
-        systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
+        systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL))
         pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{UInt16}, (UInt32,), 13)
         systemerror(:SetClipboardData, pdata==C_NULL)
         systemerror(:CloseClipboard, 0==ccall((:CloseClipboard, "user32"), stdcall, Cint, ()))
@@ -616,7 +616,7 @@ downloadcmd = nothing
 if Sys.iswindows()
     function download(url::AbstractString, filename::AbstractString)
         res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
-                    (Ptr{Void},Cwstring,Cwstring,Cuint,Ptr{Void}),C_NULL,url,filename,0,C_NULL)
+                    (Ptr{Cvoid},Cwstring,Cwstring,Cuint,Ptr{Cvoid}),C_NULL,url,filename,0,C_NULL)
         if res != 0
             error("automatic download failed (error: $res): $url")
         end

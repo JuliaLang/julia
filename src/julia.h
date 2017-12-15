@@ -1840,17 +1840,17 @@ typedef struct {
     // hooks
 
     // module setup: prepare a module for code emission (data layout, DWARF version, ...)
-    // parameters: LLVMModuleRef as Ptr{Void}
+    // parameters: LLVMModuleRef as Ptr{Cvoid}
     // return value: none
     jl_value_t *module_setup;
 
     // module activation: registers debug info, adds module to JIT
-    // parameters: LLVMModuleRef as Ptr{Void}
+    // parameters: LLVMModuleRef as Ptr{Cvoid}
     // return value: none
     jl_value_t *module_activation;
 
     // exception raising: emit LLVM instructions to raise an exception
-    // parameters: LLVMBasicBlockRef as Ptr{Void}, LLVMValueRef as Ptr{Void}
+    // parameters: LLVMBasicBlockRef as Ptr{Cvoid}, LLVMValueRef as Ptr{Cvoid}
     // return value: none
     jl_value_t *raise_exception;
 } jl_cgparams_t;

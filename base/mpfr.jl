@@ -65,7 +65,7 @@ mutable struct BigFloat <: AbstractFloat
     end
 
     # Not recommended for general use:
-    function BigFloat(prec::Clong, sign::Cint, exp::Clong, d::Ptr{Void})
+    function BigFloat(prec::Clong, sign::Cint, exp::Clong, d::Ptr{Cvoid})
         new(prec, sign, exp, d)
     end
 end

@@ -274,7 +274,7 @@ end
 String(s::String) = s  # no constructor yet
 
 # This should always be inlined
-getptls() = ccall(:jl_get_ptls_states, Ptr{Void}, ())
+getptls() = ccall(:jl_get_ptls_states, Ptr{Cvoid}, ())
 
 include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
 
@@ -297,7 +297,7 @@ mutable struct WeakRef
     value
     WeakRef() = WeakRef(nothing)
     WeakRef(@nospecialize(v)) = ccall(:jl_gc_new_weakref_th, Ref{WeakRef},
-                                      (Ptr{Void}, Any), getptls(), v)
+                                      (Ptr{Cvoid}, Any), getptls(), v)
 end
 
 TypeVar(n::Symbol) =
@@ -406,23 +406,23 @@ mutable struct CoreSTDOUT <: IO end
 mutable struct CoreSTDERR <: IO end
 const STDOUT = CoreSTDOUT()
 const STDERR = CoreSTDERR()
-io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Void}), 1, 1)
-io_pointer(::CoreSTDERR) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stderr, Ptr{Void}), 1, 1)
+io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
+io_pointer(::CoreSTDERR) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
 
 unsafe_write(io::IO, x::Ptr{UInt8}, nb::UInt) =
-    (ccall(:jl_uv_puts, Void, (Ptr{Void}, Ptr{UInt8}, UInt), io_pointer(io), x, nb); nb)
+    (ccall(:jl_uv_puts, Void, (Ptr{Cvoid}, Ptr{UInt8}, UInt), io_pointer(io), x, nb); nb)
 unsafe_write(io::IO, x::Ptr{UInt8}, nb::Int) =
-    (ccall(:jl_uv_puts, Void, (Ptr{Void}, Ptr{UInt8}, Int), io_pointer(io), x, nb); nb)
+    (ccall(:jl_uv_puts, Void, (Ptr{Cvoid}, Ptr{UInt8}, Int), io_pointer(io), x, nb); nb)
 write(io::IO, x::UInt8) =
-    (ccall(:jl_uv_putb, Void, (Ptr{Void}, UInt8), io_pointer(io), x); 1)
+    (ccall(:jl_uv_putb, Void, (Ptr{Cvoid}, UInt8), io_pointer(io), x); 1)
 function write(io::IO, x::String)
     nb = sizeof(x)
     unsafe_write(io, ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), x), nb)
     return nb
 end
 
-show(io::IO, @nospecialize x) = ccall(:jl_static_show, Void, (Ptr{Void}, Any), io_pointer(io), x)
-print(io::IO, x::Char) = ccall(:jl_uv_putc, Void, (Ptr{Void}, Char), io_pointer(io), x)
+show(io::IO, @nospecialize x) = ccall(:jl_static_show, Void, (Ptr{Cvoid}, Any), io_pointer(io), x)
+print(io::IO, x::Char) = ccall(:jl_uv_putc, Void, (Ptr{Cvoid}, Char), io_pointer(io), x)
 print(io::IO, x::String) = (write(io, x); nothing)
 print(io::IO, @nospecialize x) = show(io, x)
 print(io::IO, @nospecialize(x), @nospecialize a...) = (print(io, x); print(io, a...))
@@ -495,7 +495,7 @@ function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
             arrayset(false, flds, getfield(args, i), i)
             i = add_int(i, 1)
         end
-        ccall(:jl_new_structv, Any, (Any, Ptr{Void}, UInt32), NT, fields, N)::NT
+        ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), NT, fields, N)::NT
     end
 end
 

@@ -1134,7 +1134,7 @@ let
     @test a2 == [101,102,909]
 end
 
-@test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Void}, (Any,Any),
+@test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Cvoid}, (Any,Any),
                                      x -> x+1, 314158)) == 314159
 @test unsafe_pointer_to_objref(pointer_from_objref(ℯ+pi)) == ℯ+pi
 
@@ -1615,7 +1615,7 @@ end
 # issue #4681
 # ccall should error if convert() returns something of the wrong type
 mutable struct Z4681
-    x::Ptr{Void}
+    x::Ptr{Cvoid}
     Z4681() = new(C_NULL)
 end
 Base.unsafe_convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
@@ -2327,11 +2327,11 @@ call_lambda7() = ((x...)->x)(1,2)
 
 # jl_new_bits testing
 let x = [1,2,3]
-    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Int, x) === 1
-    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Complex{Int}, x) === 1+2im
-    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), NTuple{3,Int}, x) === (1,2,3)
-    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Tuple{Int,Int,Int}, x) === (1,2,3)
-    @test (ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Tuple{Int16,Tuple{Void},Int8,Tuple{},Int,Void,Int}, x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Int, x) === 1
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Complex{Int}, x) === 1+2im
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), NTuple{3,Int}, x) === (1,2,3)
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Tuple{Int,Int,Int}, x) === (1,2,3)
+    @test (ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Tuple{Int16,Tuple{Void},Int8,Tuple{},Int,Void,Int}, x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
 end
 
 # sig 2 is SIGINT per the POSIX.1-1990 standard
@@ -4338,7 +4338,7 @@ function f4(a, p)
     end
     b[1]
 end
-code_llvm(DevNull, f4, Tuple{Bool,Ptr{Void}})
+code_llvm(DevNull, f4, Tuple{Bool,Ptr{Cvoid}})
 @test f4(true, C_NULL) == 2
 @test_throws UndefRefError f4(false, C_NULL)
 
@@ -4663,7 +4663,7 @@ ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
 @eval @noinline f18236(ptr) = ccall(ptr, VecElement{Float64},
                                     (VecElement{Float64},), $v18236)
 @test f18236(ptr18236) === v18236
-@test !contains(sprint(code_llvm, f18236, Tuple{Ptr{Void}}), "double undef")
+@test !contains(sprint(code_llvm, f18236, Tuple{Ptr{Cvoid}}), "double undef")
 # VecElement of struct, not necessarily useful but does have special
 # ABI so should be handled correctly
 # This struct should be small enough to be passed by value in C ABI
@@ -4955,12 +4955,12 @@ end # module SOE
 # issue #15240
 @test_nowarn begin
     local p15240
-    p15240 = ccall(:jl_realloc, Ptr{Void}, (Ptr{Void}, Csize_t), C_NULL, 10)
-    ccall(:jl_free, Void, (Ptr{Void},), p15240)
+    p15240 = ccall(:jl_realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), C_NULL, 10)
+    ccall(:jl_free, Void, (Ptr{Cvoid},), p15240)
 end
 
 # issue #19963
-@test_nowarn ccall(:jl_free, Void, (Ptr{Void},), C_NULL)
+@test_nowarn ccall(:jl_free, Void, (Ptr{Cvoid},), C_NULL)
 
 # Wrong string size on 64bits for large string.
 if Sys.WORD_SIZE == 64

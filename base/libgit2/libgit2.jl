@@ -499,7 +499,7 @@ The keyword arguments are:
     which will make `repo_path` itself the git directory instead of `repo_path/.git`.
     This means that a working tree cannot be checked out. Plays the role of the
     git CLI argument `--bare`.
-  * `remote_cb::Ptr{Void}=C_NULL`: a callback which will be used to create the remote
+  * `remote_cb::Ptr{Cvoid}=C_NULL`: a callback which will be used to create the remote
     before it is cloned. If `C_NULL` (the default), no attempt will be made to create
     the remote - it will be assumed to already exist.
   * `payload::CredentialPayload=CredentialPayload()`: provides credentials and/or settings
@@ -519,7 +519,7 @@ julia_repo = LibGit2.clone(julia_url, "julia_path", branch="release-0.6")
 function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
-               remote_cb::Ptr{Void} = C_NULL,
+               remote_cb::Ptr{Cvoid} = C_NULL,
                payload::Union{CredentialPayload,Nullable{<:Union{AbstractCredential, CachedCredentials}}}=CredentialPayload())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)

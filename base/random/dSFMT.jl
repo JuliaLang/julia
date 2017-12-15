@@ -61,14 +61,14 @@ const dsfmt_min_array_size = dsfmt_get_min_array_size()
 function dsfmt_init_gen_rand(s::DSFMT_state, seed::UInt32)
     ccall((:dsfmt_init_gen_rand,:libdSFMT),
           Void,
-          (Ptr{Void}, UInt32,),
+          (Ptr{Cvoid}, UInt32,),
           s.val, seed)
 end
 
 function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{UInt32})
     ccall((:dsfmt_init_by_array,:libdSFMT),
           Void,
-          (Ptr{Void}, Ptr{UInt32}, Int32),
+          (Ptr{Cvoid}, Ptr{UInt32}, Int32),
           s.val, seed, length(seed))
 end
 
@@ -84,7 +84,7 @@ function dsfmt_fill_array_close1_open2!(s::DSFMT_state, A::Ptr{Float64}, n::Int)
     @assert dsfmt_min_array_size <= n && iseven(n)
     ccall((:dsfmt_fill_array_close1_open2,:libdSFMT),
           Void,
-          (Ptr{Void}, Ptr{Float64}, Int),
+          (Ptr{Cvoid}, Ptr{Float64}, Int),
           s.val, A, n)
 end
 
@@ -93,7 +93,7 @@ function dsfmt_fill_array_close_open!(s::DSFMT_state, A::Ptr{Float64}, n::Int)
     @assert dsfmt_min_array_size <= n && iseven(n)
     ccall((:dsfmt_fill_array_close_open,:libdSFMT),
           Void,
-          (Ptr{Void}, Ptr{Float64}, Int),
+          (Ptr{Cvoid}, Ptr{Float64}, Int),
           s.val, A, n)
 end
 
@@ -107,7 +107,7 @@ function dsfmt_jump(s::DSFMT_state, jp::AbstractString)
     work = zeros(Int32, JN32)
     rwork = reinterpret(UInt64, work)
     dsfmt = Vector{UInt64}(uninitialized, nval >> 1)
-    ccall(:memcpy, Ptr{Void}, (Ptr{UInt64}, Ptr{Int32}, Csize_t),
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{UInt64}, Ptr{Int32}, Csize_t),
           dsfmt, val, (nval - 1) * sizeof(Int32))
     dsfmt[end] = UInt64(N*2)
 

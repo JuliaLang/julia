@@ -9,7 +9,7 @@ import Core.Intrinsics: cglobal, bitcast
 
 Obtain a pointer to a global variable in a C-exported shared library, specified exactly as
 in [`ccall`](@ref).
-Returns a `Ptr{Type}`, defaulting to `Ptr{Void}` if no `Type` argument is
+Returns a `Ptr{Type}`, defaulting to `Ptr{Cvoid}` if no `Type` argument is
 supplied.
 The values can be read or written by [`unsafe_load`](@ref) or [`unsafe_store!`](@ref),
 respectively.
@@ -17,7 +17,7 @@ respectively.
 cglobal
 
 """
-    cfunction(f::Function, returntype::Type, argtypes::Type) -> Ptr{Void}
+    cfunction(f::Function, returntype::Type, argtypes::Type) -> Ptr{Cvoid}
 
 Generate C-callable function pointer from the Julia function `f`. Type annotation of the return
 value in the callback function is a must for situations where Julia cannot infer the return
@@ -30,10 +30,10 @@ julia> function foo(x::Int, y::Int)
        end
 
 julia> cfunction(foo, Int, Tuple{Int,Int})
-Ptr{Void} @0x000000001b82fcd0
+Ptr{Cvoid} @0x000000001b82fcd0
 ```
 """
-cfunction(f, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
+cfunction(f, r, a) = ccall(:jl_function_ptr, Ptr{Cvoid}, (Any, Any, Any), f, r, a)
 
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
     const Cchar = Int8
@@ -97,7 +97,7 @@ convert(::Type{Ptr{T}}, p::Cstring) where {T<:Union{Int8,UInt8}} = bitcast(Ptr{T
 convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = bitcast(Ptr{Cwchar_t}, p)
 
 # construction from untyped pointers
-convert(::Type{T}, p::Ptr{Void}) where {T<:Union{Cstring,Cwstring}} = bitcast(T, p)
+convert(::Type{T}, p::Ptr{Cvoid}) where {T<:Union{Cstring,Cwstring}} = bitcast(T, p)
 
 """
     pointer(array [, index])

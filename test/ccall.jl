@@ -84,7 +84,7 @@ let a, ci_ary, x
 
     x = ccall((:cptest_static, libccalltest), Ptr{Complex{Int}}, (Ref{Complex{Int}},), a)
     @test unsafe_load(x) == a
-    Libc.free(convert(Ptr{Void}, x))
+    Libc.free(convert(Ptr{Cvoid}, x))
 end
 
 let a, b, x
@@ -844,7 +844,7 @@ foo13031p = cfunction(foo13031, Cint, Tuple{Ref{Tuple{}}, Ref{Tuple{}}, Cint})
 ccall(foo13031p, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint), (), (), 8)
 
 # issue 17219
-function ccall_reassigned_ptr(ptr::Ptr{Void})
+function ccall_reassigned_ptr(ptr::Ptr{Cvoid})
     ptr = Libdl.dlsym(Libdl.dlopen(libccalltest), "test_echo_p")
     ccall(ptr, Any, (Any,), "foo")
 end
@@ -1150,9 +1150,9 @@ end
 # Do not put these in a function.
 @noinline g17413() = rand()
 @inline f17413() = (g17413(); g17413())
-ccall((:test_echo_p, libccalltest), Ptr{Void}, (Any,), f17413())
+ccall((:test_echo_p, libccalltest), Ptr{Cvoid}, (Any,), f17413())
 for i in 1:3
-    ccall((:test_echo_p, libccalltest), Ptr{Void}, (Any,), f17413())
+    ccall((:test_echo_p, libccalltest), Ptr{Cvoid}, (Any,), f17413())
 end
 
 struct SpillPint
@@ -1291,12 +1291,12 @@ struct Bits22734 <: Abstract22734
     x::Int
     y::Float64
 end
-function cb22734(ptr::Ptr{Void})
+function cb22734(ptr::Ptr{Cvoid})
     gc()
     obj = unsafe_pointer_to_objref(ptr)::Bits22734
     obj.x + obj.y
 end
-ptr22734 = cfunction(cb22734, Float64, Tuple{Ptr{Void}})
+ptr22734 = cfunction(cb22734, Float64, Tuple{Ptr{Cvoid}})
 function caller22734(ptr)
     obj = Bits22734(12, 20)
     ccall(ptr, Float64, (Ref{Abstract22734},), obj)

@@ -90,7 +90,7 @@ function __init__()
         end
 
         ccall((:__gmp_set_memory_functions, :libgmp), Void,
-              (Ptr{Void},Ptr{Void},Ptr{Void}),
+              (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}),
               cglobal(:jl_gc_counted_malloc),
               cglobal(:jl_gc_counted_realloc_with_old_size),
               cglobal(:jl_gc_counted_free_with_size))
@@ -214,7 +214,7 @@ get_d(a::BigInt) = ccall((:__gmpz_get_d, :libgmp), Cdouble, (mpz_t,), a)
 limbs_write!(x::BigInt, a) = ccall((:__gmpz_limbs_write, :libgmp), Ptr{Limb}, (mpz_t, Clong), x, a)
 limbs_finish!(x::BigInt, a) = ccall((:__gmpz_limbs_finish, :libgmp), Void, (mpz_t, Clong), x, a)
 import!(x::BigInt, a, b, c, d, e, f) = ccall((:__gmpz_import, :libgmp), Void,
-    (mpz_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Void}), x, a, b, c, d, e, f)
+    (mpz_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Cvoid}), x, a, b, c, d, e, f)
 
 end # module MPZ
 

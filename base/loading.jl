@@ -50,7 +50,7 @@ elseif Sys.isapple()
         buf = Vector{UInt8}(uninitialized, length(path_basename) + header_size + 1)
         while true
             ret = ccall(:getattrlist, Cint,
-                        (Cstring, Ptr{Void}, Ptr{Void}, Csize_t, Culong),
+                        (Cstring, Ptr{Cvoid}, Ptr{Cvoid}, Csize_t, Culong),
                         path, attr_list, buf, sizeof(buf), FSOPT_NOFOLLOW)
             systemerror(:getattrlist, ret ≠ 0)
             filename_length = @gc_preserve buf unsafe_load(
@@ -641,7 +641,7 @@ end
 
 module_uuid(m::Module) = ccall(:jl_module_uuid, UInt64, (Any,), m)
 
-isvalid_cache_header(f::IOStream) = 0 != ccall(:jl_read_verify_header, Cint, (Ptr{Void},), f.ios)
+isvalid_cache_header(f::IOStream) = 0 != ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid},), f.ios)
 
 function parse_cache_header(f::IO)
     modules = Dict{Symbol,UInt64}()

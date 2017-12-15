@@ -11,10 +11,10 @@ mutable struct Regex
     pattern::String
     compile_options::UInt32
     match_options::UInt32
-    regex::Ptr{Void}
-    extra::Ptr{Void}
+    regex::Ptr{Cvoid}
+    extra::Ptr{Cvoid}
     ovec::Vector{Csize_t}
-    match_data::Ptr{Void}
+    match_data::Ptr{Cvoid}
 
     function Regex(pattern::AbstractString, compile_options::Integer,
                    match_options::Integer)

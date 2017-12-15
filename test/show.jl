@@ -19,7 +19,7 @@ end
 
 @test replstr(Meta.parse("mutable struct X end")) == ":(mutable struct X\n        #= none:1 =#\n    end)"
 @test replstr(Meta.parse("struct X end")) == ":(struct X\n        #= none:1 =#\n    end)"
-let s = "ccall(:f, Int, (Ptr{Void},), &x)"
+let s = "ccall(:f, Int, (Ptr{Cvoid},), &x)"
     @test replstr(Meta.parse(s)) == ":($s)"
 end
 
@@ -736,7 +736,7 @@ let repr = sprint(dump, Core.svec())
 end
 let sv = Core.svec(:a, :b, :c)
     # unsafe replacement of :c with #undef to test handling of incomplete SimpleVectors
-    unsafe_store!(convert(Ptr{Ptr{Void}}, Base.data_pointer_from_objref(sv)) + 3 * sizeof(Ptr), C_NULL)
+    unsafe_store!(convert(Ptr{Ptr{Cvoid}}, Base.data_pointer_from_objref(sv)) + 3 * sizeof(Ptr), C_NULL)
     repr = sprint(dump, sv)
     @test repr == "SimpleVector\n  1: Symbol a\n  2: Symbol b\n  3: #undef\n"
 end
@@ -822,7 +822,7 @@ end
 function static_shown(x)
     p = Pipe()
     Base.link_pipe(p; julia_only_read=true, julia_only_write=true)
-    ccall(:jl_static_show, Void, (Ptr{Void}, Any), p.in, x)
+    ccall(:jl_static_show, Void, (Ptr{Cvoid}, Any), p.in, x)
     @async close(p.in)
     return read(p.out, String)
 end

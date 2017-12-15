@@ -488,7 +488,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
                     rpad(string(counts[i]), ndigcounts, " "),
                     " ",
                     "unknown function (pointer: 0x",
-                    hex(li.pointer,2*sizeof(Ptr{Void})),
+                    hex(li.pointer,2*sizeof(Ptr{Cvoid})),
                     ")")
             else
                 fname = string(li.func)

@@ -155,7 +155,7 @@ segfault your program, in the same manner as C.
 function unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
-    ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+    ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
           dest, src, n*sizeof(T))
     return dest
 end
@@ -176,15 +176,15 @@ function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
     elseif isbitsunion(T)
-        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
               pointer(dest, doffs), pointer(src, soffs), n * Base.bitsunionsize(T))
         # copy selector bytes
-        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
               convert(Ptr{UInt8}, pointer(dest)) + length(dest) * Base.bitsunionsize(T) + doffs - 1,
               convert(Ptr{UInt8}, pointer(src)) + length(src) * Base.bitsunionsize(T) + soffs - 1,
               n)
     else
-        ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
+        ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
               dest, pointer(dest, doffs), src, pointer(src, soffs), n)
     end
     @_gc_preserve_end t2
@@ -298,7 +298,7 @@ end
 getindex(::Type{Any}) = Vector{Any}()
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
-    ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), a, x, length(a))
+    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, x, length(a))
     return a
 end
 
@@ -1302,14 +1302,14 @@ const BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where 
 # use memcmp for == on bit integer types
 function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray
     size(a) == size(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(Arr)) * length(a))
+        :memcmp, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, UInt), a, b, sizeof(eltype(Arr)) * length(a))
 end
 
 # this is ~20% faster than the generic implementation above for very small arrays
 function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
     len = length(a)
     len == length(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(Arr)) * len)
+        :memcmp, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, UInt), a, b, sizeof(eltype(Arr)) * len)
 end
 
 """
@@ -1420,24 +1420,24 @@ function vcat(arrays::Vector{T}...) where T
         elsz = bitsunionsize(T)
         selptr = convert(Ptr{UInt8}, ptr) + n * elsz
     else
-        elsz = Core.sizeof(Ptr{Void})
+        elsz = Core.sizeof(Ptr{Cvoid})
     end
     t = @_gc_preserve_begin arr
     for a in arrays
         na = length(a)
         nba = na * elsz
         if isbits(T)
-            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   ptr, a, nba)
         elseif isbitsunion(T)
-            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   ptr, a, nba)
             # copy selector bytes
-            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   selptr, convert(Ptr{UInt8}, pointer(a)) + nba, na)
             selptr += na
         else
-            ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
+            ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
                   arr, ptr, a, pointer(a), na)
         end
         ptr += nba

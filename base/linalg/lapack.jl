@@ -5571,10 +5571,10 @@ for (gees, gges, elty) in
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($gees), liblapack), Void,
-                    (Ref{UInt8}, Ref{UInt8}, Ptr{Void}, Ref{BlasInt},
+                    (Ref{UInt8}, Ref{UInt8}, Ptr{Cvoid}, Ref{BlasInt},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                        Ref{BlasInt}, Ptr{Void}, Ptr{BlasInt}),
+                        Ref{BlasInt}, Ptr{Cvoid}, Ptr{BlasInt}),
                     jobvs, 'N', C_NULL, n,
                         A, max(1, stride(A, 2)), sdim, wr,
                         wi, vs, ldvs, work,
@@ -5616,11 +5616,11 @@ for (gees, gges, elty) in
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($gges), liblapack), Void,
-                    (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ptr{Void},
+                    (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ptr{Cvoid},
                         Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                         Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                        Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{Void},
+                        Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{Cvoid},
                         Ptr{BlasInt}),
                     jobvsl, jobvsr, 'N', C_NULL,
                     n, A, max(1,stride(A, 2)), B,
@@ -5665,10 +5665,10 @@ for (gees, gges, elty, relty) in
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($gees), liblapack), Void,
-                    (Ref{UInt8}, Ref{UInt8}, Ptr{Void}, Ref{BlasInt},
+                    (Ref{UInt8}, Ref{UInt8}, Ptr{Cvoid}, Ref{BlasInt},
                         Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                        Ptr{$relty}, Ptr{Void}, Ptr{BlasInt}),
+                        Ptr{$relty}, Ptr{Cvoid}, Ptr{BlasInt}),
                     jobvs, sort, C_NULL, n,
                         A, max(1, stride(A, 2)), sdim, w,
                         vs, ldvs, work, lwork,
@@ -5711,11 +5711,11 @@ for (gees, gges, elty, relty) in
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($gges), liblapack), Void,
-                    (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ptr{Void},
+                    (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ptr{Cvoid},
                         Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                         Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                        Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ptr{Void},
+                        Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ptr{Cvoid},
                         Ptr{BlasInt}),
                     jobvsl, jobvsr, 'N', C_NULL,
                     n, A, max(1, stride(A, 2)), B,
@@ -5887,7 +5887,7 @@ for (trexc, trsen, tgsen, elty) in
                         Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                         Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                        Ref{BlasInt}, Ptr{Void}, Ptr{Void}, Ptr{Void},
+                        Ref{BlasInt}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt},
                         Ptr{BlasInt}),
                     0, 1, 1, select,
@@ -6031,7 +6031,7 @@ for (trexc, trsen, tgsen, elty, relty) in
                         Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                         Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                        Ref{BlasInt}, Ptr{Void}, Ptr{Void}, Ptr{Void},
+                        Ref{BlasInt}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt},
                         Ptr{BlasInt}),
                     0, 1, 1, select,

@@ -209,16 +209,16 @@ to make new `Array` types.
 
 ```julia-repl
 julia> pointer_from_objref(Array)
-Ptr{Void} @0x00007fcc7de64850
+Ptr{Cvoid} @0x00007fcc7de64850
 
 julia> pointer_from_objref(Array.body.body.name.wrapper)
-Ptr{Void} @0x00007fcc7de64850
+Ptr{Cvoid} @0x00007fcc7de64850
 
 julia> pointer_from_objref(Array{TV,NV})
-Ptr{Void} @0x00007fcc80c4d930
+Ptr{Cvoid} @0x00007fcc80c4d930
 
 julia> pointer_from_objref(Array{TV,NV}.name.wrapper)
-Ptr{Void} @0x00007fcc7de64850
+Ptr{Cvoid} @0x00007fcc7de64850
 ```
 
 The `wrapper` field of [`Array`](@ref) points to itself, but for `Array{TV,NV}` it points back
@@ -301,16 +301,16 @@ What is the "primary" tuple-type?
 
 ```julia-repl
 julia> pointer_from_objref(Tuple)
-Ptr{Void} @0x00007f5998a04370
+Ptr{Cvoid} @0x00007f5998a04370
 
 julia> pointer_from_objref(Tuple{})
-Ptr{Void} @0x00007f5998a570d0
+Ptr{Cvoid} @0x00007f5998a570d0
 
 julia> pointer_from_objref(Tuple.name.wrapper)
-Ptr{Void} @0x00007f5998a04370
+Ptr{Cvoid} @0x00007f5998a04370
 
 julia> pointer_from_objref(Tuple{}.name.wrapper)
-Ptr{Void} @0x00007f5998a04370
+Ptr{Cvoid} @0x00007f5998a04370
 ```
 
 so `Tuple == Tuple{Vararg{Any}}` is indeed the primary type.

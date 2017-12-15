@@ -166,42 +166,42 @@ The fields represent:
     file_open_flags::Cint
 
     notify_flags::Cuint         = Consts.CHECKOUT_NOTIFY_NONE
-    notify_cb::Ptr{Void}
-    notify_payload::Ptr{Void}
+    notify_cb::Ptr{Cvoid}
+    notify_payload::Ptr{Cvoid}
 
-    progress_cb::Ptr{Void}
-    progress_payload::Ptr{Void}
+    progress_cb::Ptr{Cvoid}
+    progress_payload::Ptr{Cvoid}
 
     paths::StrArrayStruct
 
-    baseline::Ptr{Void}
-    baseline_index::Ptr{Void}
+    baseline::Ptr{Cvoid}
+    baseline_index::Ptr{Cvoid}
 
     target_directory::Cstring
     ancestor_label::Cstring
     our_label::Cstring
     their_label::Cstring
 
-    perfdata_cb::Ptr{Void}
-    perfdata_payload::Ptr{Void}
+    perfdata_cb::Ptr{Cvoid}
+    perfdata_payload::Ptr{Cvoid}
 end
 
 abstract type Payload end
 
 @kwdef struct RemoteCallbacksStruct
     version::Cuint                    = 1
-    sideband_progress::Ptr{Void}
-    completion::Ptr{Void}
-    credentials::Ptr{Void}
-    certificate_check::Ptr{Void}
-    transfer_progress::Ptr{Void}
-    update_tips::Ptr{Void}
-    pack_progress::Ptr{Void}
-    push_transfer_progress::Ptr{Void}
-    push_update_reference::Ptr{Void}
-    push_negotiation::Ptr{Void}
-    transport::Ptr{Void}
-    payload::Ptr{Void}
+    sideband_progress::Ptr{Cvoid}
+    completion::Ptr{Cvoid}
+    credentials::Ptr{Cvoid}
+    certificate_check::Ptr{Cvoid}
+    transfer_progress::Ptr{Cvoid}
+    update_tips::Ptr{Cvoid}
+    pack_progress::Ptr{Cvoid}
+    push_transfer_progress::Ptr{Cvoid}
+    push_update_reference::Ptr{Cvoid}
+    push_negotiation::Ptr{Cvoid}
+    transport::Ptr{Cvoid}
+    payload::Ptr{Cvoid}
 end
 
 """
@@ -218,7 +218,7 @@ struct RemoteCallbacks
         if payload === nothing
             pp = C_NULL
         else
-            pp = unsafe_load(Ptr{Ptr{Void}}(Base.unsafe_convert(Ptr{Any}, p)))
+            pp = unsafe_load(Ptr{Ptr{Cvoid}}(Base.unsafe_convert(Ptr{Any}, p)))
         end
         return new(RemoteCallbacksStruct(; kwargs..., payload=pp), p)
     end
@@ -261,9 +261,9 @@ julia> fetch(remote, "master", options=fo)
     version::Cuint               = 1
     proxytype::Consts.GIT_PROXY  = Consts.PROXY_AUTO
     url::Cstring
-    credential_cb::Ptr{Void}
-    certificate_cb::Ptr{Void}
-    payload::Ptr{Void}
+    credential_cb::Ptr{Cvoid}
+    certificate_cb::Ptr{Cvoid}
+    payload::Ptr{Cvoid}
 end
 
 @kwdef struct FetchOptionsStruct
@@ -315,10 +315,10 @@ end
     bare::Cint
     localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
     checkout_branch::Cstring
-    repository_cb::Ptr{Void}
-    repository_cb_payload::Ptr{Void}
-    remote_cb::Ptr{Void}
-    remote_cb_payload::Ptr{Void}
+    repository_cb::Ptr{Cvoid}
+    repository_cb_payload::Ptr{Cvoid}
+    remote_cb::Ptr{Cvoid}
+    remote_cb_payload::Ptr{Cvoid}
 end
 
 """
@@ -389,11 +389,11 @@ The fields represent:
     # options controlling which files are in the diff
     ignore_submodules::GIT_SUBMODULE_IGNORE  = Consts.SUBMODULE_IGNORE_UNSPECIFIED
     pathspec::StrArrayStruct
-    notify_cb::Ptr{Void}
+    notify_cb::Ptr{Cvoid}
     @static if LibGit2.VERSION >= v"0.24.0"
-        progress_cb::Ptr{Void}
+        progress_cb::Ptr{Cvoid}
     end
-    payload::Ptr{Void}
+    payload::Ptr{Cvoid}
 
     # options controlling how the diff text is generated
     context_lines::UInt32                    = UInt32(3)
@@ -569,7 +569,7 @@ The fields represent:
     flags::Cint
     rename_threshold::Cuint           = 50
     target_limit::Cuint               = 200
-    metric::Ptr{Void}
+    metric::Ptr{Cvoid}
     @static if LibGit2.VERSION >= v"0.24.0"
         recursion_limit::Cuint
     end
@@ -856,8 +856,8 @@ Matches the [`git_config_entry`](https://libgit2.github.com/libgit2/#HEAD/type/g
     name::Cstring
     value::Cstring
     level::GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT
-    free::Ptr{Void}
-    payload::Ptr{Void}
+    free::Ptr{Cvoid}
+    payload::Ptr{Cvoid}
 end
 
 function Base.show(io::IO, ce::ConfigEntry)
@@ -936,8 +936,8 @@ for (typ, owntyp, sup, cname) in [
 
     if owntyp === nothing
         @eval mutable struct $typ <: $sup
-            ptr::Ptr{Void}
-            function $typ(ptr::Ptr{Void}, fin::Bool=true)
+            ptr::Ptr{Cvoid}
+            function $typ(ptr::Ptr{Cvoid}, fin::Bool=true)
                 # fin=false should only be used when the pointer should not be free'd
                 # e.g. from within callback functions which are passed a pointer
                 @assert ptr != C_NULL
@@ -952,8 +952,8 @@ for (typ, owntyp, sup, cname) in [
     else
         @eval mutable struct $typ <: $sup
             owner::$owntyp
-            ptr::Ptr{Void}
-            function $typ(owner::$owntyp, ptr::Ptr{Void}, fin::Bool=true)
+            ptr::Ptr{Cvoid}
+            function $typ(owner::$owntyp, ptr::Ptr{Cvoid}, fin::Bool=true)
                 @assert ptr != C_NULL
                 obj = new(owner, ptr)
                 if fin
@@ -965,15 +965,15 @@ for (typ, owntyp, sup, cname) in [
         end
         if isa(owntyp, Expr) && owntyp.args[1] == :Nullable
             @eval begin
-                $typ(ptr::Ptr{Void}, fin::Bool=true) = $typ($owntyp(), ptr, fin)
-                $typ(owner::$(owntyp.args[2]), ptr::Ptr{Void}, fin::Bool=true) =
+                $typ(ptr::Ptr{Cvoid}, fin::Bool=true) = $typ($owntyp(), ptr, fin)
+                $typ(owner::$(owntyp.args[2]), ptr::Ptr{Cvoid}, fin::Bool=true) =
                     $typ($owntyp(owner), ptr, fin)
             end
         end
     end
     @eval function Base.close(obj::$typ)
         if obj.ptr != C_NULL
-            ccall(($(string(cname, :_free)), :libgit2), Void, (Ptr{Void},), obj.ptr)
+            ccall(($(string(cname, :_free)), :libgit2), Void, (Ptr{Cvoid},), obj.ptr)
             obj.ptr = C_NULL
             if Threads.atomic_sub!(REFCOUNT, UInt(1)) == 1
                 # will the last finalizer please turn out the lights?
@@ -984,7 +984,7 @@ for (typ, owntyp, sup, cname) in [
 end
 
 ## Calling `GitObject(repo, ...)` will automatically resolve to the appropriate type.
-function GitObject(repo::GitRepo, ptr::Ptr{Void})
+function GitObject(repo::GitRepo, ptr::Ptr{Cvoid})
     T = objtype(Consts.OBJECT(ptr))
     T(repo, ptr)
 end
@@ -1102,8 +1102,8 @@ Consts.OBJECT(::Type{GitTag})           = Consts.OBJ_TAG
 Consts.OBJECT(::Type{GitUnknownObject}) = Consts.OBJ_ANY
 Consts.OBJECT(::Type{GitObject})        = Consts.OBJ_ANY
 
-Consts.OBJECT(ptr::Ptr{Void}) =
-    ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Void},), ptr)
+Consts.OBJECT(ptr::Ptr{Cvoid}) =
+    ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Cvoid},), ptr)
 
 """
     objtype(obj_type::Consts.OBJECT)

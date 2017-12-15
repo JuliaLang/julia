@@ -357,12 +357,12 @@ for period in (0.06, Dates.Millisecond(60))
             wait(c)
             t = Timer(period)
             wait(t)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            ccall(:uv_async_send, Void, (Ptr{Cvoid},), async)
+            ccall(:uv_async_send, Void, (Ptr{Cvoid},), async)
             wait(c)
             sleep(period)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            ccall(:uv_async_send, Void, (Ptr{Cvoid},), async)
+            ccall(:uv_async_send, Void, (Ptr{Cvoid},), async)
         end))
         wait(c)
         notify(c)
@@ -394,7 +394,7 @@ function test_thread_cfunction()
     @threads for i in 1:1000
         # Make sure this is not inferrable
         # and a runtime call to `jl_function_ptr` will be created
-        ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any),
+        ccall(:jl_function_ptr, Ptr{Cvoid}, (Any, Any, Any),
               complex_cfunction, Float64, Tuple{Ref{Vector{Float64}}})
     end
 end
@@ -428,7 +428,7 @@ function test_load_and_lookup_18020(n)
     @threads for i in 1:n
         try
             ccall(:jl_load_and_lookup,
-                  Ptr{Void}, (Cstring, Cstring, Ref{Ptr{Void}}),
+                  Ptr{Cvoid}, (Cstring, Cstring, Ref{Ptr{Cvoid}}),
                   "$i", :f, C_NULL)
         end
     end

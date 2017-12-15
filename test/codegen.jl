@@ -58,9 +58,9 @@ function test_jl_dump_compiles()
     tfile = tempname()
     io = open(tfile, "w")
     @eval(test_jl_dump_compiles_internal(x) = x)
-    ccall(:jl_dump_compiles, Void, (Ptr{Void},), io.handle)
+    ccall(:jl_dump_compiles, Void, (Ptr{Cvoid},), io.handle)
     @eval test_jl_dump_compiles_internal(1)
-    ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
+    ccall(:jl_dump_compiles, Void, (Ptr{Cvoid},), C_NULL)
     close(io)
     tstats = stat(tfile)
     tempty = tstats.size == 0
@@ -74,9 +74,9 @@ function test_jl_dump_compiles_toplevel_thunks()
     tfile = tempname()
     io = open(tfile, "w")
     topthunk = Meta.lower(Main, :(for i in 1:10; end))
-    ccall(:jl_dump_compiles, Void, (Ptr{Void},), io.handle)
+    ccall(:jl_dump_compiles, Void, (Ptr{Cvoid},), io.handle)
     Core.eval(Main, topthunk)
-    ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
+    ccall(:jl_dump_compiles, Void, (Ptr{Cvoid},), C_NULL)
     close(io)
     tstats = stat(tfile)
     tempty = tstats.size == 0
@@ -150,7 +150,7 @@ Base.unsafe_convert(::Type{Ptr{BadRef}}, ar::BadRef) = Ptr{BadRef}(pointer_from_
 breakpoint_badref(a::MutableStruct) = ccall(:jl_breakpoint, Void, (Ptr{BadRef},), a)
 
 struct PtrStruct
-    a::Ptr{Void}
+    a::Ptr{Cvoid}
     b::Int
 end
 

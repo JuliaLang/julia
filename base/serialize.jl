@@ -80,7 +80,7 @@ const NTAGS = length(TAGS)
 
 function sertag(@nospecialize(v))
     ptr = pointer_from_objref(v)
-    ptags = convert(Ptr{Ptr{Void}}, pointer(TAGS))
+    ptags = convert(Ptr{Ptr{Cvoid}}, pointer(TAGS))
     # note: constant ints & reserved slots never returned here
     @inbounds for i in 1:(NTAGS-(n_reserved_slots+2*n_int_literals))
         ptr == unsafe_load(ptags,i) && return i%Int32
@@ -893,7 +893,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         end
         ftype = ccall(:jl_first_argument_datatype, Any, (Any,), sig)::DataType
         if isdefined(ftype.name, :mt) && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), ftype.name.mt, sig, typemax(UInt))
-            ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Void}), ftype.name.mt, meth, C_NULL)
+            ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Cvoid}), ftype.name.mt, meth, C_NULL)
         end
         remember_object(s, meth, lnumber)
     end
@@ -901,7 +901,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
-    linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Void},), C_NULL)
+    linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Cvoid},), C_NULL)
     deserialize_cycle(s, linfo)
     linfo.inferred = deserialize(s)::CodeInfo
     tag = Int32(read(s.io, UInt8)::UInt8)
@@ -1036,7 +1036,7 @@ function deserialize_typename(s::AbstractSerializer, number)
             tn.mt.max_args = maxa
             for def in defs
                 if isdefined(def, :sig)
-                    ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Void}), tn.mt, def, C_NULL)
+                    ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Cvoid}), tn.mt, def, C_NULL)
                 end
             end
         end
@@ -1157,7 +1157,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
             return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2, f3)
         else
             flds = Any[ deserialize(s) for i = 1:nf ]
-            return ccall(:jl_new_structv, Any, (Any,Ptr{Void},UInt32), t, flds, nf)
+            return ccall(:jl_new_structv, Any, (Any,Ptr{Cvoid},UInt32), t, flds, nf)
         end
     else
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)

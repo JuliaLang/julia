@@ -152,11 +152,11 @@ uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM
 
 # Not actually a pointer, but that's how we pass it through the C API so it's fine
-uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd % UInt)
+uvhandle(x::RawFD) = convert(Ptr{Cvoid}, x.fd % UInt)
 uvtype(x::RawFD) = UV_RAW_FD
 
 const Redirectable = Union{IO, FileRedirect, RawFD}
-const StdIOSet = NTuple{3, Union{Redirectable, Ptr{Void}}} # XXX: remove Ptr{Void} once libuv is refactored to use upstream release
+const StdIOSet = NTuple{3, Union{Redirectable, Ptr{Cvoid}}} # XXX: remove Ptr{Cvoid} once libuv is refactored to use upstream release
 
 struct CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
@@ -302,7 +302,7 @@ pipeline(a, b, c, d...) = pipeline(pipeline(a,b), c, d...)
 
 mutable struct Process <: AbstractPipe
     cmd::Cmd
-    handle::Ptr{Void}
+    handle::Ptr{Cvoid}
     in::IO
     out::IO
     err::IO
@@ -311,10 +311,10 @@ mutable struct Process <: AbstractPipe
     exitnotify::Condition
     closenotify::Condition
     openstream::Symbol # for open(cmd) deprecation
-    function Process(cmd::Cmd, handle::Ptr{Void},
-                     in::Union{Redirectable, Ptr{Void}},
-                     out::Union{Redirectable, Ptr{Void}},
-                     err::Union{Redirectable, Ptr{Void}})
+    function Process(cmd::Cmd, handle::Ptr{Cvoid},
+                     in::Union{Redirectable, Ptr{Cvoid}},
+                     out::Union{Redirectable, Ptr{Cvoid}},
+                     err::Union{Redirectable, Ptr{Cvoid}})
         if !isa(in, IO)
             in = DevNull
         end
@@ -347,19 +347,19 @@ end
 pipe_reader(p::ProcessChain) = p.out
 pipe_writer(p::ProcessChain) = p.in
 
-function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
+function _jl_spawn(cmd, argv, loop::Ptr{Cvoid}, pp::Process,
                    in, out, err)
     proc = Libc.malloc(_sizeof_uv_process)
     disassociate_julia_struct(proc)
     error = ccall(:jl_spawn, Int32,
-        (Cstring, Ptr{Cstring}, Ptr{Void}, Ptr{Void}, Any, Int32,
-         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Cstring}, Cstring, Ptr{Void}),
+        (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid}, Any, Int32,
+         Ptr{Cvoid}, Int32, Ptr{Cvoid}, Int32, Ptr{Cvoid}, Int32, Ptr{Cstring}, Cstring, Ptr{Cvoid}),
         cmd, argv, loop, proc, pp, uvtype(in),
         uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
         pp.cmd.flags, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir,
-        uv_jl_return_spawn::Ptr{Void})
+        uv_jl_return_spawn::Ptr{Cvoid})
     if error != 0
-        ccall(:jl_forceclose_uv, Void, (Ptr{Void},), proc)
+        ccall(:jl_forceclose_uv, Void, (Ptr{Cvoid},), proc)
         throw(UVError("could not spawn "*string(pp.cmd), error))
     end
     associate_julia_struct(proc, pp)
@@ -369,19 +369,19 @@ end
 function uvfinalize(proc::Process)
     if proc.handle != C_NULL
         disassociate_julia_struct(proc.handle)
-        ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
+        ccall(:jl_close_uv, Void, (Ptr{Cvoid},), proc.handle)
         proc.handle = C_NULL
     end
     nothing
 end
 
-function uv_return_spawn(p::Ptr{Void}, exit_status::Int64, termsignal::Int32)
-    data = ccall(:jl_uv_process_data, Ptr{Void}, (Ptr{Void},), p)
+function uv_return_spawn(p::Ptr{Cvoid}, exit_status::Int64, termsignal::Int32)
+    data = ccall(:jl_uv_process_data, Ptr{Cvoid}, (Ptr{Cvoid},), p)
     data == C_NULL && return
     proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = exit_status
     proc.termsignal = termsignal
-    ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
+    ccall(:jl_close_uv, Void, (Ptr{Cvoid},), proc.handle)
     notify(proc.exitnotify)
     nothing
 end
@@ -482,11 +482,11 @@ function setup_stdio(io, readable::Bool)
     return io, false
 end
 
-function setup_stdio(stdio::Ptr{Void}, readable::Bool)
+function setup_stdio(stdio::Ptr{Cvoid}, readable::Bool)
     return (stdio, false)
 end
 
-function close_stdio(stdio::Ptr{Void})
+function close_stdio(stdio::Ptr{Cvoid})
     close_pipe_sync(stdio)
     Libc.free(stdio)
 end
@@ -733,7 +733,7 @@ permissions).
 function kill(p::Process, signum::Integer)
     if process_running(p)
         @assert p.handle != C_NULL
-        err = ccall(:uv_process_kill, Int32, (Ptr{Void}, Int32), p.handle, signum)
+        err = ccall(:uv_process_kill, Int32, (Ptr{Cvoid}, Int32), p.handle, signum)
         if err != 0 && err != UV_ESRCH
             throw(UVError("kill", err))
         end
@@ -743,8 +743,8 @@ kill(ps::Vector{Process}) = foreach(kill, ps)
 kill(ps::ProcessChain) = foreach(kill, ps.processes)
 kill(p::Process) = kill(p, SIGTERM)
 
-function _contains_newline(bufptr::Ptr{Void}, len::Int32)
-    return (ccall(:memchr, Ptr{Void}, (Ptr{Void},Int32,Csize_t), bufptr, '\n', len) != C_NULL)
+function _contains_newline(bufptr::Ptr{Cvoid}, len::Int32)
+    return (ccall(:memchr, Ptr{Cvoid}, (Ptr{Cvoid},Int32,Csize_t), bufptr, '\n', len) != C_NULL)
 end
 
 ## process status ##

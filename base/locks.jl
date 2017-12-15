@@ -181,22 +181,22 @@ See also SpinLock for a lighter-weight lock.
 """
 mutable struct Mutex <: AbstractLock
     ownertid::Int16
-    handle::Ptr{Void}
+    handle::Ptr{Cvoid}
     function Mutex()
         m = new(zero(Int16), Libc.malloc(UV_MUTEX_SIZE))
-        ccall(:uv_mutex_init, Void, (Ptr{Void},), m.handle)
+        ccall(:uv_mutex_init, Void, (Ptr{Cvoid},), m.handle)
         finalizer(_uv_hook_close, m)
         return m
     end
 end
 
-unsafe_convert(::Type{Ptr{Void}}, m::Mutex) = m.handle
+unsafe_convert(::Type{Ptr{Cvoid}}, m::Mutex) = m.handle
 
 function _uv_hook_close(x::Mutex)
     h = x.handle
     if h != C_NULL
         x.handle = C_NULL
-        ccall(:uv_mutex_destroy, Void, (Ptr{Void},), h)
+        ccall(:uv_mutex_destroy, Void, (Ptr{Cvoid},), h)
         Libc.free(h)
         nothing
     end
@@ -209,7 +209,7 @@ function lock(m::Mutex)
     # Temporary solution before we have gc transition support in codegen.
     # This could mess up gc state when we add codegen support.
     gc_state = ccall(:jl_gc_safe_enter, Int8, ())
-    ccall(:uv_mutex_lock, Void, (Ptr{Void},), m)
+    ccall(:uv_mutex_lock, Void, (Ptr{Cvoid},), m)
     ccall(:jl_gc_safe_leave, Void, (Int8,), gc_state)
     m.ownertid = threadid()
     return
@@ -219,7 +219,7 @@ function trylock(m::Mutex)
     if m.ownertid == threadid()
         return true
     end
-    r = ccall(:uv_mutex_trylock, Cint, (Ptr{Void},), m)
+    r = ccall(:uv_mutex_trylock, Cint, (Ptr{Cvoid},), m)
     if r == 0
         m.ownertid = threadid()
     end
@@ -229,7 +229,7 @@ end
 function unlock(m::Mutex)
     @assert(m.ownertid == threadid(), "unlock from wrong thread")
     m.ownertid = 0
-    ccall(:uv_mutex_unlock, Void, (Ptr{Void},), m)
+    ccall(:uv_mutex_unlock, Void, (Ptr{Cvoid},), m)
     return
 end
 
