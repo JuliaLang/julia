@@ -49,26 +49,33 @@
 
 # coalesce()
 
-@test coalesce(1) === 1
-@test coalesce(nothing) === nothing
-@test coalesce(nothing, 1) === 1
-@test coalesce(1, nothing) === 1
-@test coalesce(nothing, nothing) === nothing
-@test coalesce(nothing, 1, 2) === 1
-@test coalesce(1, nothing, 2) === 1
-@test coalesce(nothing, nothing, 2) === 2
-@test coalesce(nothing, nothing, nothing) === nothing
+for v in (nothing, missing)
+    @test coalesce(1) === 1
+    @test coalesce(v) === v
+    @test coalesce(v, 1) === 1
+    @test coalesce(1, v) === 1
+    @test coalesce(v, v) === v
+    @test coalesce(v, 1, 2) === 1
+    @test coalesce(1, v, 2) === 1
+    @test coalesce(v, v, 2) === 2
+    @test coalesce(v, v, v) === v
 
-@test coalesce(Some(1)) === 1
-@test coalesce(Some(nothing)) === nothing
-@test coalesce(Some(1), 0) === 1
-@test coalesce(Some(nothing), 0) === nothing
-@test coalesce(nothing, Some(nothing)) === nothing
-@test coalesce(Some(1), nothing) === 1
-@test coalesce(nothing, Some(1)) === 1
-@test coalesce(nothing, Some(1), nothing) === 1
-@test coalesce(nothing, Some(1), Some(2)) === 1
-@test coalesce(Some(1), nothing, Some(2)) === 1
+    @test coalesce(Some(1)) === 1
+    @test coalesce(Some(v)) === v
+    @test coalesce(Some(1), 0) === 1
+    @test coalesce(Some(v), 0) === v
+    @test coalesce(v, Some(v)) === v
+    @test coalesce(Some(1), v) === 1
+    @test coalesce(v, Some(1)) === 1
+    @test coalesce(v, Some(1), v) === 1
+    @test coalesce(v, Some(1), Some(2)) === 1
+    @test coalesce(Some(1), v, Some(2)) === 1
+
+    @test coalesce(v, missing) === missing
+    @test coalesce(v, nothing) === nothing
+    @test coalesce(v, missing, v) === v
+    @test coalesce(v, nothing, v) === v
+end
 
 # notnothing()
 

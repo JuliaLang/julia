@@ -33,7 +33,6 @@ promote_rule(::Type{Missing}, ::Type{Missing}) = Missing
 convert(::Type{Union{T, Missing}}, x) where {T} = convert(T, x)
 # To fix ambiguities
 convert(::Type{Missing}, ::Missing) = missing
-convert(::Type{Void}, ::Void) = nothing
 convert(::Type{Union{Void, Missing}}, x::Union{Void, Missing}) = x
 convert(::Type{Union{Void, Missing}}, x) =
     throw(MethodError(convert, (Union{Void, Missing}, x)))

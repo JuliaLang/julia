@@ -35,14 +35,17 @@ end
 """
     coalesce(x, y...)
 
-Return the first value in the arguments which is not equal to `nothing`,
-or `nothing` if all arguments are `nothing`. Unwrap arguments of type
-[`Some`](@ref).
+Return the first value in the arguments which is not equal to
+either [`nothing`](@ref) or [`missing`](@ref), or the last argument.
+Unwrap arguments of type [`Some`](@ref).
 
 # Examples
 
 ```jldoctest
 julia> coalesce(nothing, 1)
+1
+
+julia> coalesce(missing, 1)
 1
 
 julia> coalesce(1, nothing)
@@ -63,9 +66,10 @@ function coalesce end
 coalesce(x::Any) = x
 coalesce(x::Some) = x.value
 coalesce(x::Void) = nothing
+coalesce(x::Missing) = missing
 coalesce(x::Any, y...) = x
 coalesce(x::Some, y...) = x.value
-coalesce(x::Void, y...) = coalesce(y...)
+coalesce(x::Union{Void, Missing}, y...) = coalesce(y...)
 
 """
     notnothing(x)
