@@ -123,7 +123,7 @@
 export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
-    Tuple, Type, UnionAll, TypeName, TypeVar, Union, Void,
+    Tuple, Type, UnionAll, TypeName, TypeVar, Union, Void, Cvoid,
     SimpleVector, AbstractArray, DenseArray, NamedTuple,
     # special objects
     Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
@@ -280,6 +280,9 @@ end
 
 String(s::String) = s  # no constructor yet
 
+const Cvoid = Void
+Void() = nothing
+
 # This should always be inlined
 getptls() = ccall(:jl_get_ptls_states, Ptr{Void}, ())
 
@@ -315,8 +318,6 @@ TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) =
     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb, ub)
 
 UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
-
-Void() = nothing
 
 (::Type{Tuple{}})() = () # Tuple{}()
 
