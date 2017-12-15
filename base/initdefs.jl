@@ -59,18 +59,18 @@ code.
 const LOAD_PATH = String[]
 const LOAD_CACHE_PATH = String[]
 
-function init_load_path(JULIA_HOME = JULIA_HOME)
+function init_load_path(BINDIR = Sys.BINDIR)
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV, "JULIA_LOAD_PATH")
         prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @static Sys.iswindows() ? ';' : ':'))
     end
-    push!(LOAD_PATH, abspath(JULIA_HOME, "..", "local", "share", "julia", "site", vers))
-    push!(LOAD_PATH, abspath(JULIA_HOME, "..", "share", "julia", "site", vers))
-    #push!(LOAD_CACHE_PATH, abspath(JULIA_HOME, "..", "lib", "julia")) #TODO: add a builtin location?
+    push!(LOAD_PATH, abspath(BINDIR, "..", "local", "share", "julia", "site", vers))
+    push!(LOAD_PATH, abspath(BINDIR, "..", "share", "julia", "site", vers))
+    #push!(LOAD_CACHE_PATH, abspath(BINDIR, "..", "lib", "julia")) #TODO: add a builtin location?
 end
 
 function early_init()
-    global const JULIA_HOME = ccall(:jl_get_julia_home, Any, ())
+    eval(Sys, :(const BINDIR = ccall(:jl_get_julia_bindir, Any, ())))
     # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
     ENV["OPENBLAS_MAIN_FREE"] = get(ENV, "OPENBLAS_MAIN_FREE",
                                     get(ENV, "GOTOBLAS_MAIN_FREE", "1"))
@@ -79,13 +79,6 @@ function early_init()
         ENV["OPENBLAS_NUM_THREADS"] = 8
     end
 end
-
-"""
-    JULIA_HOME
-
-A string containing the full path to the directory containing the `julia` executable.
-"""
-:JULIA_HOME
 
 const atexit_hooks = []
 

@@ -100,7 +100,7 @@ end
 
 function find_source_file(path::String)
     (isabspath(path) || isfile(path)) && return path
-    base_path = joinpath(JULIA_HOME, DATAROOTDIR, "julia", "base", path)
+    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "base", path)
     return isfile(base_path) ? base_path : nothing
 end
 

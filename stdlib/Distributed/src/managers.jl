@@ -82,8 +82,8 @@ Keyword arguments:
 * `enable_threaded_blas`: if `true` then  BLAS will run on multiple threads in added
   processes. Default is `false`.
 
-* `exename`: name of the `julia` executable. Defaults to `"\$JULIA_HOME/julia"` or
-  `"\$JULIA_HOME/julia-debug"` as the case may be.
+* `exename`: name of the `julia` executable. Defaults to `"\$(Sys.BINDIR)/julia"` or
+  `"\$(Sys.BINDIR)/julia-debug"` as the case may be.
 
 * `exeflags`: additional flags passed to the worker processes.
 

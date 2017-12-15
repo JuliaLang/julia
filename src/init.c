@@ -491,7 +491,7 @@ static char *abspath(const char *in, int nprefix)
 
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 {   // this function resolves the paths in jl_options to absolute file locations as needed
-    // and it replaces the pointers to `julia_home`, `julia_bin`, `image_file`, and output file paths
+    // and it replaces the pointers to `julia_bindir`, `julia_bin`, `image_file`, and output file paths
     // it may fail, print an error, and exit(1) if any of these paths are longer than PATH_MAX
     //
     // note: if you care about lost memory, you should call the appropriate `free()` function
@@ -508,22 +508,22 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     jl_options.julia_bin = (char*)malloc(path_size+1);
     memcpy((char*)jl_options.julia_bin, free_path, path_size);
     ((char*)jl_options.julia_bin)[path_size] = '\0';
-    if (!jl_options.julia_home) {
-        jl_options.julia_home = getenv("JULIA_HOME");
-        if (!jl_options.julia_home) {
-            jl_options.julia_home = dirname(free_path);
+    if (!jl_options.julia_bindir) {
+        jl_options.julia_bindir = getenv("JULIA_BINDIR");
+        if (!jl_options.julia_bindir) {
+            jl_options.julia_bindir = dirname(free_path);
         }
     }
-    if (jl_options.julia_home)
-        jl_options.julia_home = abspath(jl_options.julia_home, 0);
+    if (jl_options.julia_bindir)
+        jl_options.julia_bindir = abspath(jl_options.julia_bindir, 0);
     free(free_path);
     free_path = NULL;
     if (jl_options.image_file) {
         if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_options.image_file)) {
-            // build time path, relative to JULIA_HOME
+            // build time path, relative to JULIA_BINDIR
             free_path = (char*)malloc(PATH_MAX);
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
-                             jl_options.julia_home, jl_options.image_file);
+                             jl_options.julia_bindir, jl_options.image_file);
             if (n >= PATH_MAX || n < 0) {
                 jl_error("fatal error: jl_options.image_file path too long");
             }

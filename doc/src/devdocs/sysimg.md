@@ -21,7 +21,7 @@ named `build_sysimg.jl` that lives in `DATAROOTDIR/julia/`.  That is, to include
 Julia session, type:
 
 ```julia
-include(joinpath(JULIA_HOME, Base.DATAROOTDIR, "julia", "build_sysimg.jl"))
+include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "build_sysimg.jl"))
 ```
 
 This will include a `build_sysimg` function:

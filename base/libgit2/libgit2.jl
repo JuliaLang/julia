@@ -939,7 +939,7 @@ function __init__()
             ENV["SSL_CERT_FILE"]
         else
             # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
-            abspath(ccall(:jl_get_julia_home, Any, ()), Base.DATAROOTDIR, "julia", "cert.pem")
+            abspath(ccall(:jl_get_julia_bindir, Any, ()), Base.DATAROOTDIR, "julia", "cert.pem")
         end
         set_ssl_cert_locations(cert_loc)
     end

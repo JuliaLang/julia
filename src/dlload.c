@@ -56,7 +56,7 @@ static int endswith_extension(const char *path)
 
 #define PATHBUF 512
 
-extern char *julia_home;
+extern char *julia_bindir;
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 

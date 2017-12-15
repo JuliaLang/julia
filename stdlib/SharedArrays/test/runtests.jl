@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Distributed, SharedArrays
-include(joinpath(JULIA_HOME, "..", "share", "julia", "test", "testenv.jl"))
+include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
 addprocs_with_testenv(4)
 @test nprocs() == 5

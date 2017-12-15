@@ -2,7 +2,7 @@
 
 catcmd = `cat`
 if Sys.iswindows()
-    busybox = joinpath(JULIA_HOME, "busybox.exe")
+    busybox = joinpath(Sys.BINDIR, "busybox.exe")
     havebb = try # use busybox-w32 on windows
         success(`$busybox`)
         true
@@ -41,8 +41,8 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     end
 
     # --home
-    @test success(`$exename -H $JULIA_HOME`)
-    @test success(`$exename --home=$JULIA_HOME`)
+    @test success(`$exename -H $Sys.BINDIR`)
+    @test success(`$exename --home=$Sys.BINDIR`)
 
     # --eval
     @test  success(`$exename -e "exit(0)"`)
@@ -386,7 +386,7 @@ end
 libjulia = abspath(Libdl.dlpath((ccall(:jl_is_debugbuild, Cint, ()) != 0) ? "libjulia-debug" : "libjulia"))
 
 # test error handling code paths of running --sysimage
-let exename = joinpath(JULIA_HOME, Base.julia_exename()),
+let exename = joinpath(Sys.BINDIR, Base.julia_exename()),
     sysname = unsafe_string(Base.JLOptions().image_file)
     for nonexist_image in (
             joinpath(@__DIR__, "nonexistent"),
@@ -434,10 +434,10 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes`
 end
 
 # Make sure `julia --lisp` doesn't break
-run(pipeline(DevNull, `$(joinpath(JULIA_HOME, Base.julia_exename())) --lisp`, DevNull))
+run(pipeline(DevNull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, DevNull))
 
 # Test that `julia [some other option] --lisp` is disallowed
-@test_throws ErrorException run(pipeline(DevNull, pipeline(`$(joinpath(JULIA_HOME,
+@test_throws ErrorException run(pipeline(DevNull, pipeline(`$(joinpath(Sys.BINDIR,
     Base.julia_exename())) -Cnative --lisp`, stderr=DevNull), DevNull))
 
 # --sysimage-native-code={yes|no}

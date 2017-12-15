@@ -461,6 +461,9 @@ Compiler/Runtime improvements
 Deprecated or removed
 ---------------------
 
+  * The `JULIA_HOME` environment variable has been renamed to `JULIA_BINDIR` and
+    `Base.JULIA_HOME` has been moved to `Sys.BINDIR` ([#20899]).
+
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
 
@@ -613,8 +616,8 @@ Deprecated or removed
     `serialize` ([#6466]).
 
   * The default `juliarc.jl` file on Windows has been removed. Now must explicitly include the
-    full path if you need access to executables or libraries in the `JULIA_HOME` directory, e.g.
-    `joinpath(JULIA_HOME, "7z.exe")` for `7z.exe` ([#21540]).
+    full path if you need access to executables or libraries in the `Sys.BINDIR` directory, e.g.
+    `joinpath(Sys.BINDIR, "7z.exe")` for `7z.exe` ([#21540]).
 
   * `sqrtm` has been deprecated in favor of `sqrt` ([#23504]).
 

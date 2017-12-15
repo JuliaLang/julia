@@ -5,7 +5,8 @@ module Sys
 Provide methods for retrieving information about hardware and the operating system.
 """ -> Sys
 
-export CPU_CORES,
+export BINDIR,
+       CPU_CORES,
        WORD_SIZE,
        ARCH,
        MACHINE,
@@ -25,6 +26,13 @@ export CPU_CORES,
        iswindows
 
 import ..Base: show
+
+"""
+    Sys.BINDIR
+
+A string containing the full path to the directory containing the `julia` executable.
+"""
+:BINDIR
 
 global CPU_CORES
 """
