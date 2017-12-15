@@ -860,6 +860,20 @@ if VERSION < v"0.7.0-DEV.1499"
     end
 end
 
+# 0.7.0-DEV.2919
+@static if !isdefined(Base, :ComplexF16)
+    const ComplexF16 = Complex{Float16}
+    export ComplexF16
+end
+@static if !isdefined(Base, :ComplexF32)
+    const ComplexF32 = Complex{Float32}
+    export ComplexF32
+end
+@static if !isdefined(Base, :ComplexF64)
+    const ComplexF64 = Complex{Float64}
+    export ComplexF64
+end
+
 include("deprecated.jl")
 
 end # module Compat

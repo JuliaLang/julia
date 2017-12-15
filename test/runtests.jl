@@ -616,8 +616,8 @@ end
 let zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
                      0x40, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0xc0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-    z1 = read(zbuf, Complex64)
-    z2 = read(zbuf, Complex128)
+    z1 = read(zbuf, ComplexF32)
+    z2 = read(zbuf, ComplexF64)
     @test bswap(z1) === -1.5f0 + 2.5f0im
     @test bswap(z2) ===  3.5 - 4.5im
 end
@@ -701,7 +701,7 @@ end
 @test logdet(0.5) == log(det(0.5))
 
 # PR 22633
-for T in (Float64, Complex64, BigFloat, Int)
+for T in (Float64, ComplexF32, BigFloat, Int)
     λ = T(4)
     @test chol(λ*I).λ ≈ √λ
     @test_throws Union{ArgumentError,LinAlg.PosDefException} chol(-λ*I)
@@ -909,7 +909,7 @@ let a = [1 0 0; 0 1 0; 0 0 1]
     @test SparseMatrixCSC{Int}(I, 3, 3)::SparseMatrixCSC{Int,Int} == a
     @test SparseMatrixCSC{Float64}(I, (3, 2))::SparseMatrixCSC{Float64,Int} == a[:,1:2]
     @test SparseMatrixCSC{Bool,Int16}(I, (3, 3))::SparseMatrixCSC{Bool,Int16} == a
-    @test SparseMatrixCSC{Complex128,Int8}(I, 3, 2)::SparseMatrixCSC{Complex128,Int8} == a[:,1:2]
+    @test SparseMatrixCSC{ComplexF64,Int8}(I, 3, 2)::SparseMatrixCSC{ComplexF64,Int8} == a[:,1:2]
 end
 
 # 0.7.0-DEV.2581
@@ -951,6 +951,11 @@ let key = "TEST_23412"
     @test !haskey(ENV, key)
     @test get(() -> "default", ENV, key) == "default"
 end
+
+# 0.7.0-DEV.2919
+@test ComplexF16 === Complex{Float16}
+@test ComplexF32 === Complex{Float32}
+@test ComplexF64 === Complex{Float64}
 
 if VERSION < v"0.6.0"
     include("deprecated.jl")

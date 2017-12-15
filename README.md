@@ -238,6 +238,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `strwidth` and `charwidth` are now merged into `textwidth` ([#23667]).
 
+* `Complex32`, `Complex64`, and `Complex128` are now `ComplexF16`, `ComplexF32`, and
+  `ComplexF64`, respectively ([#24647]).
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -382,6 +385,7 @@ includes this fix. Find the minimum version from there.
 [#24372]: https://github.com/JuliaLang/julia/issues/24372
 [#24459]: https://github.com/JuliaLang/julia/issues/24459
 [#24605]: https://github.com/JuliaLang/julia/issues/24605
+[#24647]: https://github.com/JuliaLang/julia/issues/24647
 [#24652]: https://github.com/JuliaLang/julia/issues/24652
 [#24657]: https://github.com/JuliaLang/julia/issues/24657
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
