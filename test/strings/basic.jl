@@ -316,31 +316,31 @@ end
         @test isvalid(Char, val) == pass
     end
     for (val, pass) in (
-            (b"\x00", true),
-            (b"\x7f", true),
-            (b"\x80", false),
-            (b"\xbf", false),
-            (b"\xc0", false),
-            (b"\xff", false),
-            (b"\xc0\x80", false),
-            (b"\xc1\x80", false),
-            (b"\xc2\x80", true),
-            (b"\xc2\xc0", false),
-            (b"\xed\x9f\xbf", true),
-            (b"\xed\xa0\x80", false),
-            (b"\xed\xbf\xbf", false),
-            (b"\xee\x80\x80", true),
-            (b"\xef\xbf\xbf", true),
-            (b"\xf0\x90\x80\x80", true),
-            (b"\xf4\x8f\xbf\xbf", true),
-            (b"\xf4\x90\x80\x80", false),
-            (b"\xf5\x80\x80\x80", false),
-            (b"\ud800\udc00", false),
-            (b"\udbff\udfff", false),
-            (b"\ud800\u0100", false),
-            (b"\udc00\u0100", false),
-            (b"\udc00\ud800", false)
-            )
+            ("\x00", true),
+            ("\x7f", true),
+            ("\x80", false),
+            ("\xbf", false),
+            ("\xc0", false),
+            ("\xff", false),
+            ("\xc0\x80", false),
+            ("\xc1\x80", false),
+            ("\xc2\x80", true),
+            ("\xc2\xc0", false),
+            ("\xed\x9f\xbf", true),
+            ("\xed\xa0\x80", false),
+            ("\xed\xbf\xbf", false),
+            ("\xee\x80\x80", true),
+            ("\xef\xbf\xbf", true),
+            ("\xf0\x90\x80\x80", true),
+            ("\xf4\x8f\xbf\xbf", true),
+            ("\xf4\x90\x80\x80", false),
+            ("\xf5\x80\x80\x80", false),
+            ("\ud800\udc00", false),
+            ("\udbff\udfff", false),
+            ("\ud800\u0100", false),
+            ("\udc00\u0100", false),
+            ("\udc00\ud800", false),
+        )
         @test isvalid(String, val) == pass == isvalid(String(val))
     end
 
@@ -430,8 +430,8 @@ end
     @test_throws ArgumentError ascii(GenericString("Hello, ∀"))
 end
 @testset "issue #17271: endof() doesn't throw an error even with invalid strings" begin
-    @test endof(String(b"\x90")) == 1
-    @test endof(String(b"\xce")) == 1
+    @test endof("\x90") == 1
+    @test endof("\xce") == 1
 end
 # issue #17624, missing getindex method for String
 @test "abc"[:] == "abc"
@@ -652,3 +652,5 @@ end
         @test ncodeunits(GenericString(s)) == n
     end
 end
+
+@test Vector{UInt8}("\xcc\xdd\xee\xff\x80") == [0xcc,0xdd,0xee,0xff,0x80]

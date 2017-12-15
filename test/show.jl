@@ -105,6 +105,13 @@ end
 @test_repr "(!x).a"
 @test_repr "(!x)::a"
 
+# invalid UTF-8 strings
+@test_repr "\"\\ud800\""
+@test_repr "\"\\udfff\""
+@test_repr "\"\\xc0\\xb0\""
+@test_repr "\"\\xe0\\xb0\\xb0\""
+@test_repr "\"\\xf0\\xb0\\xb0\\xb0\""
+
 # Complex
 
 # Meta.parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it

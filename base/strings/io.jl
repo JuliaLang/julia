@@ -271,17 +271,22 @@ function escape_string(io, s::AbstractString, esc::AbstractString="")
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        if !ismalformed(c)
+        if c in esc
+            print(io, '\\', c)
+        elseif Unicode.isascii(c)
             c == '\0'          ? print(io, escape_nul(s,j)) :
             c == '\e'          ? print(io, "\\e") :
             c == '\\'          ? print(io, "\\\\") :
             c in esc           ? print(io, '\\', c) :
             '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
             Unicode.isprint(c) ? print(io, c) :
+                                 print(io, "\\x", hex(c, 2))
+        elseif !isoverlong(c) && !ismalformed(c)
+            Unicode.isprint(c) ? print(io, c) :
             c <= '\x7f'        ? print(io, "\\x", hex(c, 2)) :
-            c <= '\uffff'      ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
-                                 print(io, "\\U", hex(c, need_full_hex(s,j) ? 8 : 4))
-        else # malformed
+            c <= '\uffff'      ? print(io, "\\u", hex(c, need_full_hex(s, j) ? 4 : 2)) :
+                                 print(io, "\\U", hex(c, need_full_hex(s, j) ? 8 : 4))
+        else # malformed or overlong
             u = bswap(reinterpret(UInt32, c))
             while true
                 print(io, "\\x", hex(u % UInt8, 2))
@@ -332,9 +337,10 @@ function unescape_string(io, s::AbstractString)
                         'A' <= c <= 'F' ? n<<4 + (c-'A'+10) : break
                     i = j
                 end
-                if k == 1
+                if k == 1 || n > 0x10ffff
+                    u = m == 4 ? 'u' : 'U'
                     throw(ArgumentError("invalid $(m == 2 ? "hex (\\x)" :
-                                        "unicode (\\u)") escape sequence used in $(repr(s))"))
+                                        "unicode (\\$u)") escape sequence"))
                 end
                 if m == 2 # \x escape sequence
                     write(io, UInt8(n))

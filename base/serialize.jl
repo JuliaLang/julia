@@ -674,7 +674,7 @@ function writeheader(s::AbstractSerializer)
                sizeof(Int) == 8 ? 1 :
                error("unsupported word size in serializer"))
     write(io, UInt8(endianness) | (UInt8(machine) << 2))
-    write(io, b"\x00\x00\x00")  # 3 reserved bytes
+    write(io, [0x00,0x00,0x00]) # 3 reserved bytes
     nothing
 end
 

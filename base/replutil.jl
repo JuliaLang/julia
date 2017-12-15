@@ -139,17 +139,6 @@ end
 show(io::IO, ::MIME"text/plain", X::AbstractArray) = _display(io, X)
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
-# display something useful even for strings containing arbitrary
-# (non-UTF8) binary data:
-function show(io::IO, ::MIME"text/plain", s::String)
-    if isvalid(s)
-        show(io, s)
-    else
-        println(io, sizeof(s), "-byte String of invalid UTF-8 data:")
-        print_array(io, Vector{UInt8}(s))
-    end
-end
-
 function show(io::IO, ::MIME"text/plain", opt::JLOptions)
     println(io, "JLOptions(")
     fields = fieldnames(JLOptions)
