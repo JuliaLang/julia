@@ -16,26 +16,26 @@ those for which `JULIA` appears in the name.
 
 ## File locations
 
-### `JULIA_BINDIR`
+### `JULIA_HOME`
 
 The absolute path of the directory containing the Julia executable, which sets
-the global variable [`Sys.BINDIR`](@ref). If `$JULIA_BINDIR` is not set, then
-Julia determines the value `Sys.BINDIR` at run-time.
+the global variable [`Base.JULIA_HOME`](@ref). If `$JULIA_HOME` is not set, then
+Julia determines the value `Base.JULIA_HOME` at run-time.
 
 The executable itself is one of
 
 ```
-$JULIA_BINDIR/julia
-$JULIA_BINDIR/julia-debug
+$JULIA_HOME/julia
+$JULIA_HOME/julia-debug
 ```
 
 by default.
 
 The global variable `Base.DATAROOTDIR` determines a relative path from
-`Sys.BINDIR` to the data directory associated with Julia. Then the path
+`Base.JULIA_HOME` to the data directory associated with Julia. Then the path
 
 ```
-$JULIA_BINDIR/$DATAROOTDIR/julia/base
+$JULIA_HOME/$DATAROOTDIR/julia/base
 ```
 
 determines the directory in which Julia initially searches for source files (via
@@ -45,15 +45,15 @@ Likewise, the global variable `Base.SYSCONFDIR` determines a relative path to th
 configuration file directory. Then Julia searches for a `juliarc.jl` file at
 
 ```
-$JULIA_BINDIR/$SYSCONFDIR/julia/juliarc.jl
-$JULIA_BINDIR/../etc/julia/juliarc.jl
+$JULIA_HOME/$SYSCONFDIR/julia/juliarc.jl
+$JULIA_HOME/../etc/julia/juliarc.jl
 ```
 
 by default (via `Base.load_juliarc()`).
 
 For example, a Linux installation with a Julia executable located at
 `/bin/julia`, a `DATAROOTDIR` of `../share`, and a `SYSCONFDIR` of `../etc` will
-have `JULIA_BINDIR` set to `/bin`, a source-file search path of
+have `JULIA_HOME` set to `/bin`, a source-file search path of
 
 ```
 /share/julia/base

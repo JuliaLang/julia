@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-dir = joinpath(Sys.BINDIR, Base.DOCDIR, "examples")
+dir = joinpath(JULIA_HOME, Base.DOCDIR, "examples")
 
 include(joinpath(dir, "bubblesort.jl"))
 a = rand(1:100,100)

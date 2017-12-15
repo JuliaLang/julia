@@ -160,6 +160,7 @@ export
     C_NULL,
     ENDIAN_BOM,
     ENV,
+    JULIA_HOME,
     LOAD_PATH,
     PROGRAM_FILE,
     STDERR,

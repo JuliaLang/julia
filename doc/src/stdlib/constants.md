@@ -7,7 +7,7 @@ Base.ARGS
 Base.C_NULL
 Base.VERSION
 Base.LOAD_PATH
-Base.Sys.BINDIR
+Base.JULIA_HOME
 Base.Sys.CPU_CORES
 Base.Sys.WORD_SIZE
 Base.Sys.KERNEL
