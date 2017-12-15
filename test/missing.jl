@@ -244,6 +244,30 @@ end
     @test (missing, 1) != (missing, 2)
 end
 
+@testset "< and isless on tuples" begin
+    @test ismissing((1, missing) < (1, 3))
+    @test ismissing((1, missing) < (1, missing))
+    @test ismissing((missing, 1) < (missing, 2))
+    @test ismissing((1, 2) < (1, missing))
+    @test ismissing((1, missing) < (1, 2))
+    @test ismissing((missing,) < (missing,))
+    @test ismissing((1,) < (missing,))
+    @test () < (missing,)
+    @test (1,) < (2, missing)
+    @test (1, missing,) < (2, missing)
+
+    @test !isless((1, missing), (1, 3))
+    @test !isless((1, missing), (1, missing))
+    @test isless((missing, 1), (missing, 2))
+    @test isless((1, 2), (1, missing))
+    @test !isless((1, missing), (1, 2))
+    @test !isless((missing,), (missing,))
+    @test isless((1,), (missing,))
+    @test isless((), (missing,))
+    @test isless((1,), (2, missing))
+    @test isless((1, missing,), (2, missing))
+end
+
 @testset "any & all" begin
     @test any([true, missing])
     @test any(x -> x == 1, [1, missing])

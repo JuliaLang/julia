@@ -286,6 +286,20 @@ hash(x::Tuple{Any,}, h::UInt)    = hash(x[1], hash((), h))
 hash(x::Tuple{Any,Any}, h::UInt) = hash(x[1], hash(x[2], hash((), h)))
 hash(x::Tuple, h::UInt)          = hash(x[1], hash(x[2], hash(tail(tail(x)), h)))
 
+function <(t1::Tuple, t2::Tuple)
+    n1, n2 = length(t1), length(t2)
+    for i = 1:min(n1, n2)
+        a, b = t1[i], t2[i]
+        eq = (a == b)
+        if ismissing(eq)
+            return missing
+        elseif !eq
+           return a < b
+        end
+    end
+    return n1 < n2
+end
+
 function isless(t1::Tuple, t2::Tuple)
     n1, n2 = length(t1), length(t2)
     for i = 1:min(n1, n2)
