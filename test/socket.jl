@@ -333,7 +333,7 @@ end
             end
         catch e
             if isa(e, Base.UVError) && Base.uverrorname(e) == "EPERM"
-                warn("UDP broadcast test skipped (permission denied upon send, restrictive firewall?)")
+                @warn "UDP broadcast test skipped (permission denied upon send, restrictive firewall?)"
             else
                 rethrow()
             end

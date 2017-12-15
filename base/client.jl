@@ -137,12 +137,6 @@ function repl_cmd(cmd, out)
 end
 
 function display_error(io::IO, er, bt)
-    if !isempty(bt)
-        st = stacktrace(bt)
-        if !isempty(st)
-            io = redirect(io, log_error_to, st[1])
-        end
-    end
     print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
     # remove REPL-related frames from interactive printing
     eval_ind = findlast(addr->Base.REPL.ip_matches_func(addr, :eval), bt)
@@ -284,7 +278,7 @@ function process_options(opts::JLOptions)
         elseif cmd == 'L'
             # nothing
         else
-            warn("unexpected command -$cmd'$arg'")
+            @warn "Unexpected command -$cmd'$arg'"
         end
     end
 
@@ -396,7 +390,7 @@ function _start()
                 banner && REPL.banner(term,term)
                 if term.term_type == "dumb"
                     active_repl = REPL.BasicREPL(term)
-                    quiet || warn("Terminal not fully functional")
+                    quiet || @warn "Terminal not fully functional"
                 else
                     active_repl = REPL.LineEditREPL(term, have_color, true)
                     active_repl.history_file = history_file

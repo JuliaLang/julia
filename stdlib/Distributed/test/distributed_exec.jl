@@ -951,7 +951,7 @@ end
 
 function test_add_procs_threaded_blas()
     if get_num_threads() === nothing
-        warn("Skipping blas num threads tests due to unsupported blas version")
+        @warn "Skipping blas num threads tests due to unsupported blas version"
         return
     end
     master_blas_thread_count = get_num_threads()
@@ -1472,7 +1472,7 @@ function reuseport_tests()
             @assert (length(ports_lower) + length(ports_higher)) == nworkers()
             for portset in [ports_lower, ports_higher]
                 if (length(portset) > 0) && (length(unique(portset)) != 1)
-                    warn("SO_REUSEPORT TESTS FAILED. UNSUPPORTED/OLDER UNIX VERSION?")
+                    @warn "SO_REUSEPORT TESTS FAILED. UNSUPPORTED/OLDER UNIX VERSION?"
                     return 0
                 end
             end
@@ -1491,7 +1491,7 @@ if ccall(:jl_has_so_reuseport, Int32, ()) == 1
     addprocs_with_testenv(4; lazy=false)
     reuseport_tests()
 else
-    info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
+    @info "SO_REUSEPORT is unsupported, skipping reuseport tests"
 end
 
 # Run topology tests last after removing all workers, since a given

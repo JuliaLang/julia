@@ -1130,7 +1130,7 @@ elseif Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
     (1024, 1023, 1022, 1021), (1025, 1024, 1023, 1022), (1026, 1025, 1024, 1023), (1027, 1026, 1025, 1024), (10028, 10027, 10026, 10025))
 
 elseif Sys.ARCH !== :i686 && Sys.ARCH !== :arm # TODO
-warn("ccall: no VecReg tests run for this platform")
+@warn "ccall: no VecReg tests run for this platform"
 
 end
 

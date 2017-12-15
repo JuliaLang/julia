@@ -237,8 +237,8 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
         # credential helpers avoids potential issues with using the wrong credentials or
         # writing credentials to the wrong helper.
         if isempty(value)
-            Base.warn_once("Resetting the helper list is currently unsupported: " *
-                 "ignoring all git credential helpers.")
+            @warn """Resetting the helper list is currently unsupported:
+                     ignoring all git credential helpers""" maxlog=1
             return GitCredentialHelper[]
         end
 

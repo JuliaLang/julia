@@ -413,7 +413,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
                     set!(cfg, "branch.$branch_name.merge", name(Base.get(branch_ref)))
                 end
             catch
-                warn("Please provide remote tracking for branch '$branch_name' in '$(path(repo))'")
+                @warn "Please provide remote tracking for branch '$branch_name' in '$(path(repo))'"
             end
         end
 

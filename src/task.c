@@ -611,6 +611,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->donenotify = jl_nothing;
     t->exception = jl_nothing;
     t->backtrace = jl_nothing;
+    // Inherit logger state from parent task
+    t->logstate = ptls->current_task->logstate;
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
     t->gcstack = NULL;
@@ -674,7 +676,7 @@ void jl_init_tasks(void)
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(9,
+                        jl_perm_symsvec(10,
                                         "parent",
                                         "storage",
                                         "state",
@@ -683,8 +685,9 @@ void jl_init_tasks(void)
                                         "result",
                                         "exception",
                                         "backtrace",
+                                        "logstate",
                                         "code"),
-                        jl_svec(9,
+                        jl_svec(10,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_sym_type,
@@ -693,8 +696,9 @@ void jl_init_tasks(void)
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
+                                jl_any_type,
                                 jl_any_type),
-                        0, 1, 8);
+                        0, 1, 9);
     jl_svecset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
 
     done_sym = jl_symbol("done");
@@ -731,6 +735,7 @@ void jl_init_root_task(void *stack, size_t ssize)
     ptls->current_task->donenotify = jl_nothing;
     ptls->current_task->exception = jl_nothing;
     ptls->current_task->backtrace = jl_nothing;
+    ptls->current_task->logstate = jl_nothing;
     ptls->current_task->eh = NULL;
     ptls->current_task->gcstack = NULL;
     ptls->current_task->tid = ptls->tid;
