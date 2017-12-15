@@ -59,8 +59,8 @@ julia> x[]
 1
 ```
 
-Atomic operations use an `atomic_` prefix, such as `atomic_add!`,
-`atomic_xchg!`, etc.
+Atomic operations use an `atomic_` prefix, such as [`atomic_add!`](@ref),
+[`atomic_xchg!`](@ref), etc.
 """
 mutable struct Atomic{T<:AtomicTypes}
     value::T

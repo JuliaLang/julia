@@ -1438,6 +1438,41 @@ julia> a
 
 Note that [`Threads.@threads`](@ref) does not have an optional reduction parameter like [`@parallel`](@ref).
 
+Julia supports accessing and modifying values *atomically*, that is, in a thread-safe way to avoid
+[race conditions](https://en.wikipedia.org/wiki/Race_condition). A value (which must be of a primitive
+type) can be wrapped as [`Threads.Atomic`](@ref) to indicate it must be accessed in this way.
+Here we can see an example:
+
+```julia-repl
+julia> i = Threads.Atomic{Int}(0);
+
+julia> ids = zeros(4);
+
+julia> old_is = zeros(4);
+
+julia> Threads.@threads for id in 1:4
+           old_is[id] = Threads.atomic_add!(i, id)
+           ids[id] = id
+       end
+
+julia> old_is
+4-element Array{Float64,1}:
+ 0.0
+ 1.0
+ 7.0
+ 3.0
+
+julia> ids
+4-element Array{Float64,1}:
+ 1.0
+ 2.0
+ 3.0
+ 4.0
+```
+
+Had we tried to do the addition without the atomic tag, we might have gotten the
+wrong answer due to a race condition.
+
 ## @threadcall (Experimental)
 
 All I/O tasks, timers, REPL commands, etc are multiplexed onto a single OS thread via an event
