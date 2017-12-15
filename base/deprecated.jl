@@ -3237,6 +3237,9 @@ end
 @deprecate lpad(s, n::Integer, p) lpad(string(s), n, string(p))
 @deprecate rpad(s, n::Integer, p) rpad(string(s), n, string(p))
 
+# issue #24868
+@deprecate sprint(size::Integer, f::Function, args...; env=nothing) sprint(f, args...; context=env, sizehint=size)
+
 # PR #25057
 @deprecate indices(a) axes(a)
 @deprecate indices(a, d) axes(a, d)
