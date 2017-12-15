@@ -31,7 +31,7 @@ New language features
     `@generated` and normal implementations of part of a function. Surrounding code
     will be common to both versions ([#23168]).
 
-  * Added `⟂` (perp) operator with comparison precedence ([#24404]).
+  * Added `⟂` (`\perp`) operator with comparison precedence ([#24404]).
 
   * The `missing` singleton object (of type `Missing`) has been added to represent
     missing values ([#24653]). It propagates through standard operators and mathematical functions,
