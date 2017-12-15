@@ -639,10 +639,13 @@ try
 
           module $A_module
 
-          export afunc
+          export apc, anopc
 
-          afunc(::Int, ::Int) = 1
-          afunc(::Any, ::Any) = 2
+          apc(::Int, ::Int) = 1
+          apc(::Any, ::Any) = 2
+
+          anopc(::Int, ::Int) = 1
+          anopc(::Any, ::Any) = 2
 
           end
           """)
@@ -653,22 +656,24 @@ try
           module $B_module
 
           using $A_module
-          export bfunc
 
-          bfunc(x) = afunc(x, x)
+          bpc(x) = apc(x, x)
+          bnopc(x) = anopc(x, x)
 
-          precompile(bfunc, (Int,))
-          precompile(bfunc, (Float64,))
+          precompile(bpc, (Int,))
+          precompile(bpc, (Float64,))
 
           end
           """)
     Base.require(A_module)
     A = root_module(A_module)
-    mths = collect(methods(A.afunc))
-    Base.delete_method(mths[1])
+    for mths in (collect(methods(A.apc)), collect(methods(A.anopc)))
+        Base.delete_method(mths[1])
+    end
     Base.require(B_module)
     B = root_module(B_module)
-    @test Base.invokelatest(B.bfunc, 1) == Base.invokelatest(B.bfunc, 1.0) == 2
+    @test Base.invokelatest(B.bpc, 1) == Base.invokelatest(B.bpc, 1.0) == 2
+    @test Base.invokelatest(B.bnopc, 1) == Base.invokelatest(B.bnopc, 1.0) == 2
 finally
     shift!(LOAD_PATH)
     shift!(Base.LOAD_CACHE_PATH)
