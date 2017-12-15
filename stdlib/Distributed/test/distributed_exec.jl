@@ -3,7 +3,7 @@
 using Test, Distributed
 import Distributed: launch, manage
 
-include(joinpath(JULIA_HOME, "..", "share", "julia", "test", "testenv.jl"))
+include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
@@ -524,7 +524,7 @@ end
 # Start test for various kw arg combinations
 walk_args(1)
 
-include(joinpath(JULIA_HOME, "..", "share", "julia", "test", "generic_map_tests.jl"))
+include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "generic_map_tests.jl"))
 empty_pool = WorkerPool([myid()])
 pmap_fallback = (f, c...) -> pmap(empty_pool, f, c...)
 generic_map_tests(pmap_fallback)
@@ -678,7 +678,7 @@ if Sys.isunix() # aka have ssh
     test_n_remove_pids(new_pids)
 
     print("\nkeyword arg exename\n")
-    for exename in [`$(joinpath(JULIA_HOME, Base.julia_exename()))`, "$(joinpath(JULIA_HOME, Base.julia_exename()))"]
+    for exename in [`$(joinpath(Sys.BINDIR, Base.julia_exename()))`, "$(joinpath(Sys.BINDIR, Base.julia_exename()))"]
         for addp_func in [()->addprocs_with_testenv(["localhost"]; exename=exename, exeflags=test_exeflags, sshflags=sshflags),
                           ()->addprocs_with_testenv(1; exename=exename, exeflags=test_exeflags)]
 

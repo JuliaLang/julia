@@ -20,7 +20,7 @@ SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 EXE := $(suffix $(abspath $(JULIA)))
 
 # get compiler and linker flags. (see: `contrib/julia-config.jl`)
-JULIA_CONFIG := $(JULIA) -e 'include(joinpath(JULIA_HOME, Base.DATAROOTDIR, "julia", "julia-config.jl"))' --
+JULIA_CONFIG := $(JULIA) -e 'include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "julia-config.jl"))' --
 CPPFLAGS_ADD :=
 CFLAGS_ADD = $(shell $(JULIA_CONFIG) --cflags)
 LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs)

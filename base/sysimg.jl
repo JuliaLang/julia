@@ -426,7 +426,7 @@ include("threadcall.jl")
 include("loading.jl")
 
 # set up load path to be able to find stdlib packages
-init_load_path(ccall(:jl_get_julia_home, Any, ()))
+init_load_path(ccall(:jl_get_julia_bindir, Any, ()))
 
 INCLUDE_STATE = 3 # include = include_relative
 

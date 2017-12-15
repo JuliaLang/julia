@@ -4,7 +4,7 @@
 struct JLOptions
     quiet::Int8
     banner::Int8
-    julia_home::Ptr{UInt8}
+    julia_bindir::Ptr{UInt8}
     julia_bin::Ptr{UInt8}
     commands::Ptr{Ptr{UInt8}} # (e)eval, (E)print, (L)load
     image_file::Ptr{UInt8}
