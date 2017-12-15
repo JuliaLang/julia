@@ -652,3 +652,34 @@ end
         @test ncodeunits(GenericString(s)) == n
     end
 end
+
+@testset "0-step nextind and prevind" begin
+    for T in [String, SubString, Base.SubstitutionString, GenericString]
+        e = convert(T, "")
+        @test nextind(e, 0, 0) == 0
+        @test_throws BoundsError nextind(e, 1, 0)
+        @test_throws BoundsError prevind(e, 0, 0)
+        @test prevind(e, 1, 0) == 1
+
+        s = convert(T, "∀x∃")
+        @test nextind(s, 0, 0) == 0
+        @test nextind(s, 1, 0) == 1
+        @test_throws StringIndexError nextind(s, 2, 0)
+        @test_throws StringIndexError nextind(s, 3, 0)
+        @test nextind(s, 4, 0) == 4
+        @test nextind(s, 5, 0) == 5
+        @test_throws StringIndexError nextind(s, 6, 0)
+        @test_throws StringIndexError nextind(s, 7, 0)
+        @test_throws BoundsError nextind(s, 8, 0)
+
+        @test_throws BoundsError prevind(s, 0, 0)
+        @test prevind(s, 1, 0) == 1
+        @test_throws StringIndexError prevind(s, 2, 0)
+        @test_throws StringIndexError prevind(s, 3, 0)
+        @test prevind(s, 4, 0) == 4
+        @test prevind(s, 5, 0) == 5
+        @test_throws StringIndexError prevind(s, 6, 0)
+        @test_throws StringIndexError prevind(s, 7, 0)
+        @test prevind(s, 8, 0) == 8
+    end
+end
