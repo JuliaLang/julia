@@ -29,7 +29,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Standard Library",
     "category": "section",
-    "text": "Essentials\nCollections and Data Structures\nMathematics\nNumbers\nStrings\nArrays\nTasks\nDistributed Computing\nMulti-Threading\nShared Arrays\nLinear Algebra\nConstants\nFilesystem\nDelimited Files\nI/O and Network\nPunctuation\nSorting and Related Functions\nPackage Manager Functions\nDates and Time\nIteration utilities\nUnit Testing\nC Interface\nC Standard Library\nDynamic Linker\nStackTraces\nSIMD Support\nProfiling\nMemory-mapped I/O\nBase64\nFile Events\nIterative Eigensolvers\nUnicode"
+    "text": "Essentials\nCollections and Data Structures\nMathematics\nNumbers\nStrings\nArrays\nTasks\nDistributed Computing\nMulti-Threading\nShared Arrays\nLinear Algebra\nConstants\nFilesystem\nDelimited Files\nI/O and Network\nPunctuation\nSorting and Related Functions\nPackage Manager Functions\nDates and Time\nIteration utilities\nUnit Testing\nC Interface\nC Standard Library\nDynamic Linker\nStackTraces\nSIMD Support\nProfiling\nMemory-mapped I/O\nBase64\nFile Events\nIterative Eigensolvers\nUnicode\nPrintf"
 },
 
 {
@@ -12357,7 +12357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n"
 },
 
 {
@@ -16425,22 +16425,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/io-network/#Base.Printf.@printf",
-    "page": "I/O and Network",
-    "title": "Base.Printf.@printf",
-    "category": "Macro",
-    "text": "@printf([io::IOStream], \"%Fmt\", args...)\n\nPrint args using C printf style format specification string, with some caveats: Inf and NaN are printed consistently as Inf and NaN for flags %a, %A, %e, %E, %f, %F, %g, and %G. Furthermore, if a floating point number is equally close to the numeric values of two possible output strings, the output string further away from zero is chosen.\n\nOptionally, an IOStream may be passed as the first argument to redirect output.\n\nExamples\n\njulia> @printf(\"%f %F %f %F\\n\", Inf, Inf, NaN, NaN)\nInf Inf NaN NaN\n\n\njulia> @printf \"%.0f %.1f %f\\n\" 0.5 0.025 -0.0078125\n1 0.0 -0.007813\n\n\n\n"
-},
-
-{
-    "location": "stdlib/io-network/#Base.Printf.@sprintf",
-    "page": "I/O and Network",
-    "title": "Base.Printf.@sprintf",
-    "category": "Macro",
-    "text": "@sprintf(\"%Fmt\", args...)\n\nReturn @printf formatted output as string.\n\nExamples\n\njulia> s = @sprintf \"this is a %s %15.1f\" \"test\" 34.567;\n\njulia> println(s)\nthis is a test            34.6\n\n\n\n"
-},
-
-{
     "location": "stdlib/io-network/#Base.sprint",
     "page": "I/O and Network",
     "title": "Base.sprint",
@@ -16517,7 +16501,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Text I/O",
     "category": "section",
-    "text": "Base.show(::Any)\nBase.showcompact\nBase.summary\nBase.print\nBase.println\nBase.print_with_color\nBase.Printf.@printf\nBase.Printf.@sprintf\nBase.sprint\nBase.showerror\nBase.dump\nMeta.@dump\nBase.readline\nBase.readuntil\nBase.readlines\nBase.eachline\nBase.displaysize"
+    "text": "Base.show(::Any)\nBase.showcompact\nBase.summary\nBase.print\nBase.println\nBase.print_with_color\nBase.sprint\nBase.showerror\nBase.dump\nMeta.@dump\nBase.readline\nBase.readuntil\nBase.readlines\nBase.eachline\nBase.displaysize"
 },
 
 {
@@ -19494,6 +19478,38 @@ var documenterSearchIndex = {"docs": [
     "title": "Unicode",
     "category": "section",
     "text": "Unicode.isassigned\nUnicode.normalize\nUnicode.graphemes\nUnicode.uppercase\nUnicode.lowercase\nUnicode.titlecase\nUnicode.ucfirst\nUnicode.lcfirst\nUnicode.textwidth\nUnicode.isalnum\nUnicode.isalpha\nUnicode.iscntrl\nUnicode.isdigit\nUnicode.isgraph\nUnicode.islower\nUnicode.isnumeric\nUnicode.isprint\nUnicode.ispunct\nUnicode.isspace\nUnicode.isupper\nUnicode.isxdigit"
+},
+
+{
+    "location": "stdlib/printf/#",
+    "page": "Printf",
+    "title": "Printf",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/printf/#Printf.@printf",
+    "page": "Printf",
+    "title": "Printf.@printf",
+    "category": "Macro",
+    "text": "@printf([io::IOStream], \"%Fmt\", args...)\n\nPrint args using C printf style format specification string, with some caveats: Inf and NaN are printed consistently as Inf and NaN for flags %a, %A, %e, %E, %f, %F, %g, and %G. Furthermore, if a floating point number is equally close to the numeric values of two possible output strings, the output string further away from zero is chosen.\n\nOptionally, an IOStream may be passed as the first argument to redirect output.\n\nExamples\n\njulia> @printf(\"%f %F %f %F\\n\", Inf, Inf, NaN, NaN)\nInf Inf NaN NaN\n\n\njulia> @printf \"%.0f %.1f %f\\n\" 0.5 0.025 -0.0078125\n1 0.0 -0.007813\n\n\n\n"
+},
+
+{
+    "location": "stdlib/printf/#Printf.@sprintf",
+    "page": "Printf",
+    "title": "Printf.@sprintf",
+    "category": "Macro",
+    "text": "@sprintf(\"%Fmt\", args...)\n\nReturn @printf formatted output as string.\n\nExamples\n\njulia> s = @sprintf \"this is a %s %15.1f\" \"test\" 34.567;\n\njulia> println(s)\nthis is a test            34.6\n\n\n\n"
+},
+
+{
+    "location": "stdlib/printf/#Printf-1",
+    "page": "Printf",
+    "title": "Printf",
+    "category": "section",
+    "text": "Printf.@printf\nPrintf.@sprintf"
 },
 
 {
