@@ -244,12 +244,12 @@ This kind of array uses an efficient memory storage equivalent to an `Array{T}`
 holding the actual values combined with an `Array{UInt8}` indicating the type
 of the entry (i.e. whether it is `Missing` or `T`).
 
-Uninitialized arrays allowing for missing values can be constructed with the
-standard syntax. By default, arrays with an [`isbits`](@ref) element type are
-filled with `missing` values
+Arrays allowing for missing values can be constructed with the standard syntax.
+Use `Array{Union{Missing, T}}(missing, dims)` to create arrays filled with
+missing values:
 ```jldoctest
-julia> Array{Union{Missing, Int}}(uninitialized, 2, 3)
-2×3 Array{Union{Missing, Int64},2}:
+julia> Array{Union{Missing, String}}(missing, 2, 3)
+2×3 Array{Union{Missing, String},2}:
  missing  missing  missing
  missing  missing  missing
 ```
