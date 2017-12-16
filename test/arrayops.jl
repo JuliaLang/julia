@@ -265,30 +265,30 @@ end
 
     a = [3, 5, -7, 6]
     b = [4, 6, 2, -7, 1]
-    ind = findin(a, b)
+    ind = find(occursin(b), a)
     @test ind == [3,4]
-    @test findin(a, Int[]) == Int[]
-    @test findin(Int[], a) == Int[]
+    @test find(occursin(Int[]), a) == Int[]
+    @test find(occursin(a), Int[]) == Int[]
 
     a = [1,2,3,4,5]
     b = [2,3,4,6]
-    @test findin(a, b) == [2,3,4]
-    @test findin(b, a) == [1,2,3]
-    @test findin(a, Int[]) == Int[]
-    @test findin(Int[], a) == Int[]
+    @test find(occursin(b), a) == [2,3,4]
+    @test find(occursin(a), b) == [1,2,3]
+    @test find(occursin(Int[]), a) == Int[]
+    @test find(occursin(a), Int[]) == Int[]
 
     a = collect(1:3:15)
     b = collect(2:4:10)
-    @test findin(a, b) == [4]
-    @test findin([a[1:4]; a[4:end]], b) == [4,5]
+    @test find(occursin(b), a) == [4]
+    @test find(occursin(b), [a[1:4]; a[4:end]]) == [4,5]
 
-    @test findin([1.0, NaN, 2.0], NaN) == [2]
-    @test findin([1.0, 2.0, NaN], NaN) == [3]
+    @test find(occursin(NaN), [1.0, NaN, 2.0]) == [2]
+    @test find(occursin(NaN), [1.0, 2.0, NaN]) == [3]
 
-    @testset "findin for uncomparable element types" begin
+    @testset "find(::OccursIn, b) for uncomparable element types" begin
         a = [1 + 1im, 1 - 1im]
-        @test findin(a, 1 + 1im) == [1]
-        @test findin(a, a)       == [1,2]
+        @test find(occursin(1 + 1im), a) == [1]
+        @test find(occursin(a), a)       == [1,2]
     end
 
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})

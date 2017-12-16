@@ -906,6 +906,8 @@ Deprecated or removed
 
   * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
 
+  * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
+
 Command-line option changes
 ---------------------------
 

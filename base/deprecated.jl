@@ -3862,6 +3862,8 @@ end
 
 @deprecate ismatch(r::Regex, s::AbstractString) contains(s, r)
 
+@deprecate findin(a, b) find(occursin(b), a)
+
 # END 0.7 deprecations
 # BEGIN 1.0 deprecations
 
