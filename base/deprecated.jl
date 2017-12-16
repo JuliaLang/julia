@@ -123,11 +123,10 @@ end
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Void, (Any, Any, Cint), m, s, flag)
 
 macro deprecate_binding(old, new, export_old=true, dep_message=nothing)
+    dep_message == nothing && (dep_message = ", use $new instead")
     return Expr(:toplevel,
          export_old ? Expr(:export, esc(old)) : nothing,
-         dep_message != nothing ? Expr(:const, Expr(:(=),
-             esc(Symbol(string("_dep_message_",old))), esc(dep_message))) :
-             nothing,
+         Expr(:const, Expr(:(=), esc(Symbol(string("_dep_message_",old))), esc(dep_message))),
          Expr(:const, Expr(:(=), esc(old), esc(new))),
          Expr(:call, :deprecate, __module__, Expr(:quote, old)))
 end
