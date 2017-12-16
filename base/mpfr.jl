@@ -16,7 +16,7 @@ import
         eps, signbit, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
-        setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
+        setrounding, maxintfloat, widen, significand, frexp, parse, iszero,
         isone, big
 
 import Base.Rounding: rounding_raw, setrounding_raw
@@ -121,8 +121,8 @@ convert(::Type{BigFloat}, x::Union{UInt8,UInt16,UInt32}) = BigFloat(convert(Culo
 convert(::Type{BigFloat}, x::Union{Float16,Float32}) = BigFloat(Float64(x))
 convert(::Type{BigFloat}, x::Rational) = BigFloat(numerator(x)) / BigFloat(denominator(x))
 
-function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
-    !isempty(s) && Base.Unicode.isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base)
+function parse(::Type{Union{BigFloat, Void}}, s::AbstractString, base::Int=0)
+    !isempty(s) && Base.Unicode.isspace(s[end]) && return parse(Union{BigFloat, Void}, rstrip(s), base)
     z = BigFloat()
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ref{BigFloat}, Cstring, Int32, Int32), z, s, base, ROUNDING_MODE[])
     err == 0 ? z : nothing

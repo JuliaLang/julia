@@ -804,6 +804,9 @@ Deprecated or removed
 
   * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianIndices` and `LinearIndices` ([#24715]).
 
+  * `tryparse(T, s[, base])` has been deprecated in favor of `parse(Union{T, Void}, s[, base])`
+    ([#25130]).
+
 Command-line option changes
 ---------------------------
 
@@ -1784,3 +1787,4 @@ Command-line option changes
 [#24869]: https://github.com/JuliaLang/julia/issues/24869
 [#25021]: https://github.com/JuliaLang/julia/issues/25021
 [#25088]: https://github.com/JuliaLang/julia/issues/25088
+[#25130]: https://github.com/JuliaLang/julia/issues/25130

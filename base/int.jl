@@ -602,12 +602,12 @@ macro big_str(s)
         end
         print(bf, s[end])
         seekstart(bf)
-        n = tryparse(BigInt, String(take!(bf)))
+        n = parse(Union{BigInt, Void}, String(take!(bf)))
         n === nothing || return n
     else
-        n = tryparse(BigInt, s)
+        n = parse(Union{BigInt, Void}, s)
         n === nothing || return n
-        n = tryparse(BigFloat, s)
+        n = parse(Union{BigFloat, Void}, s)
         n === nothing || return n
     end
     message = "invalid number format $s for BigInt or BigFloat"

@@ -316,7 +316,6 @@ export
     fldmod1,
     flipsign,
     float,
-    tryparse,
     floor,
     fma,
     frexp,

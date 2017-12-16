@@ -979,7 +979,7 @@ function setup_interface(
         "^Q" => (s, o...) -> begin
             linfos = Base.LAST_SHOWN_LINE_INFOS
             str = String(take!(LineEdit.buffer(s)))
-            n = tryparse(Int, str)
+            n = parse(Union{Int, Void}, str)
             n === nothing && @goto writeback
             if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "./REPL")
                 @goto writeback

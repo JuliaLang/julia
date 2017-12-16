@@ -202,14 +202,23 @@ end
 end
 
 """
-    tryparse(type, str, [base])
+    parse(::Type{Union{T, Void}}, str, [base])
 
-Like [`parse`](@ref), but returns either a value of the requested type,
+Like [`parse`](@ref), but returns either a value of the requested type `T`,
 or [`nothing`](@ref) if the string does not contain a valid number.
+
+# Examples
+```jldoctest
+julia> parse(Union{Int, Void}, "1")
+1
+
+julia> parse(Union{Int, Void}, "a") === nothing
+true
+```
 """
-tryparse(::Type{T}, s::AbstractString, base::Integer) where {T<:Integer} =
+parse(::Type{Union{T, Void}}, s::AbstractString, base::Integer) where {T<:Integer} =
     tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), false)
-tryparse(::Type{T}, s::AbstractString) where {T<:Integer} =
+parse(::Type{Union{T, Void}}, s::AbstractString) where {T<:Integer} =
     tryparse_internal(T, s, start(s), endof(s), 0, false)
 
 function parse(::Type{T}, s::AbstractString, base::Integer) where T<:Integer
@@ -222,12 +231,12 @@ end
 
 ## string to float functions ##
 
-function tryparse(::Type{Float64}, s::String)
+function parse(::Type{Union{Float64, Void}}, s::String)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
     hasvalue ? val : nothing
 end
-function tryparse(::Type{Float64}, s::SubString{String})
+function parse(::Type{Union{Float64, Void}}, s::SubString{String})
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits)
     hasvalue ? val : nothing
@@ -242,12 +251,12 @@ function tryparse_internal(::Type{Float64}, s::SubString{String}, startpos::Int,
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
     hasvalue ? val : nothing
 end
-function tryparse(::Type{Float32}, s::String)
+function parse(::Type{Union{Float32, Void}}, s::String)
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
     hasvalue ? val : nothing
 end
-function tryparse(::Type{Float32}, s::SubString{String})
+function parse(::Type{Union{Float32, Void}}, s::SubString{String})
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits)
     hasvalue ? val : nothing
@@ -262,9 +271,10 @@ function tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int,
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
     hasvalue ? val : nothing
 end
-tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s))
-tryparse(::Type{Float16}, s::AbstractString) =
-    convert(Union{Float16, Void}, tryparse(Float32, s))
+parse(::Type{Union{T, Void}}, s::AbstractString) where {T<:Union{Float32,Float64}} =
+    parse(Union{T, Void}, String(s))
+parse(::Type{Union{Float16, Void}}, s::AbstractString) =
+    convert(Union{Float16, Void}, parse(Union{Float32, Void}, s))
 tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =
     convert(Union{Float16, Void}, tryparse_internal(Float32, s, startpos, endpos))
 
@@ -331,7 +341,9 @@ tryparse_internal(T::Type{<:Complex}, s::AbstractString, i::Int, e::Int, raise::
 
 # fallback methods for tryparse_internal
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int) where T<:Real =
-    startpos == start(s) && endpos == endof(s) ? tryparse(T, s) : tryparse(T, SubString(s, startpos, endpos))
+    startpos == start(s) && endpos == endof(s) ?
+    parse(Union{T, Void}, s) :
+    parse(Union{T, Void}, SubString(s, startpos, endpos))
 function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Real
     result = tryparse_internal(T, s, startpos, endpos)
     if raise && result === nothing

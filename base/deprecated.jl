@@ -3411,6 +3411,9 @@ end
 # PR #25113
 @deprecate_binding CartesianRange CartesianIndices
 
+@deprecate tryparse(T::Type, str::AbstractString) parse(Union{T, Void}, str)
+@deprecate tryparse(T::Type, str::AbstractString, base::Integer) parse(Union{T, Void}, str, base)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

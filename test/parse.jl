@@ -212,22 +212,22 @@ end
 @test parse(Int, "2") === 2
 @test parse(Bool, "true") === true
 @test parse(Bool, "false") === false
-@test tryparse(Bool, "true") === true
-@test tryparse(Bool, "false") === false
+@test parse(Union{Bool, Void}, "true") === true
+@test parse(Union{Bool, Void}, "false") === false
 @test_throws ArgumentError parse(Int, "2", 1)
 @test_throws ArgumentError parse(Int, "2", 63)
 
-# issue #17333: tryparse should still throw on invalid base
+# issue #17333: parse(Union{T, Void}, ...) should still throw on invalid base
 for T in (Int32, BigInt), base in (0,1,100)
-    @test_throws ArgumentError tryparse(T, "0", base)
+    @test_throws ArgumentError parse(Union{T, Void}, "0", base)
 end
 
 # error throwing branch from #10560
 @test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
 
-@test tryparse(Float64, "1.23") === 1.23
-@test tryparse(Float32, "1.23") === 1.23f0
-@test tryparse(Float16, "1.23") === Float16(1.23)
+@test parse(Union{Float64, Void}, "1.23") === 1.23
+@test parse(Union{Float32, Void}, "1.23") === 1.23f0
+@test parse(Union{Float16, Void}, "1.23") === Float16(1.23)
 
 # parsing complex numbers (#22250)
 @testset "complex parsing" begin
