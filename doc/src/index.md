@@ -76,6 +76,7 @@
   * [File Events](@ref lib-filewatching)
   * [Iterative Eigensolvers](@ref lib-itereigen)
   * [Unicode](@ref)
+  * [Printf](@ref)
 
 ## Developer Documentation
 

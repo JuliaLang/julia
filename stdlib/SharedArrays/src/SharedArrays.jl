@@ -15,6 +15,7 @@ import Base.Random
 import Base.Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
 import Distributed: RRID, procs
 import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
+using Base.Printf.@sprintf
 
 export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindices
 

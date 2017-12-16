@@ -11,6 +11,7 @@ import Base.LinAlg: (\),
                  Adjoint, Transpose
 
 using ..SparseArrays
+using Base.Printf.@printf
 
 export
     Dense,

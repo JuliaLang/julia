@@ -245,20 +245,20 @@ function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::Abs
         println(io, info.model, ": ")
         print(io, " "^length(prefix))
         if tck > 0
-            @printf(io, "    %5s    %9s    %9s    %9s    %9s    %9s\n",
+            Printf.@printf(io, "    %5s    %9s    %9s    %9s    %9s    %9s\n",
                     "speed", "user", "nice", "sys", "idle", "irq")
         else
-            @printf(io, "    %5s    %9s  %9s  %9s  %9s  %9s ticks\n",
+            Printf.@printf(io, "    %5s    %9s  %9s  %9s  %9s  %9s ticks\n",
                     "speed", "user", "nice", "sys", "idle", "irq")
         end
     end
     print(io, prefix)
     if tck > 0
-        @printf(io, "%5d MHz  %9d s  %9d s  %9d s  %9d s  %9d s",
+        Printf.@printf(io, "%5d MHz  %9d s  %9d s  %9d s  %9d s  %9d s",
                 info.speed, info.cpu_times!user / tck, info.cpu_times!nice / tck,
                 info.cpu_times!sys / tck, info.cpu_times!idle / tck, info.cpu_times!irq / tck)
     else
-        @printf(io, "%5d MHz  %9d  %9d  %9d  %9d  %9d ticks",
+        Printf.@printf(io, "%5d MHz  %9d  %9d  %9d  %9d  %9d ticks",
                 info.speed, info.cpu_times!user, info.cpu_times!nice,
                 info.cpu_times!sys, info.cpu_times!idle, info.cpu_times!irq)
     end

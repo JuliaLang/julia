@@ -33,7 +33,7 @@ function choosetests(choices = [])
     testnames = [
         "linalg", "subarray", "core", "inference", "worlds",
         "keywordargs", "numbers", "subtype",
-        "printf", "char", "strings", "triplequote", "unicode", "intrinsics",
+        "char", "strings", "triplequote", "unicode", "intrinsics",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "sparse",

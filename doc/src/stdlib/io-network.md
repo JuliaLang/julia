@@ -63,8 +63,6 @@ Base.summary
 Base.print
 Base.println
 Base.print_with_color
-Base.Printf.@printf
-Base.Printf.@sprintf
 Base.sprint
 Base.showerror
 Base.dump

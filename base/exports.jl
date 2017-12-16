@@ -1173,8 +1173,6 @@ export
 
     # output
     @show,
-    @printf,
-    @sprintf,
 
     # profiling
     @time,

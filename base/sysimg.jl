@@ -368,7 +368,7 @@ import .Random: rand, rand!
 
 # (s)printf macros
 include("printf.jl")
-using .Printf
+# import .Printf
 
 # metaprogramming
 include("meta.jl")
@@ -495,6 +495,7 @@ Base.require(:SuiteSparse)
 Base.require(:Test)
 Base.require(:Unicode)
 Base.require(:Distributed)
+Base.require(:Printf)
 
 @eval Base begin
     @deprecate_binding Test root_module(:Test) true ", run `using Test` instead"
