@@ -325,7 +325,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         ptls->world_age = def->min_world;
 
         // invoke code generator
-        jl_value_t *ex = jl_call_staged(linfo->def.method, generator, linfo->sparam_vals, jl_svec_data(tt->parameters), jl_nparams(tt));
+        ex = jl_call_staged(linfo->def.method, generator, linfo->sparam_vals, jl_svec_data(tt->parameters), jl_nparams(tt));
 
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;
