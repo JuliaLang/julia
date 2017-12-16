@@ -36,6 +36,7 @@ module Dates
 
 import ..Base: ==, div, fld, mod, rem, gcd, lcm, +, -, *, /, %
 import ..Base.broadcast
+using Base.Printf.@sprintf
 
 using Base.Iterators
 

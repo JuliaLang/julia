@@ -781,6 +781,8 @@ Deprecated or removed
   * The functions `eigs` and `svds` have been moved to the `IterativeEigensolvers` standard
     library module ([#24714]).
 
+  * `@printf` and `@sprintf` have been moved to the `Printf` standard library ([#23929],[#25056]).
+
   * `isnumber` has been deprecated in favor of `isnumeric`, `is_assigned_char`
     in favor of `isassigned` and `normalize_string` in favor of `normalize`, all three
     in the new `Unicode` standard library module ([#25021]).

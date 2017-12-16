@@ -2,6 +2,7 @@
 
 using Test
 using Distributed
+using Base.Printf.@sprintf
 
 include("choosetests.jl")
 include("testenv.jl")
