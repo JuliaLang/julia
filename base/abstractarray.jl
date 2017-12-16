@@ -1952,9 +1952,34 @@ function hash_range(r::AbstractRange, h::UInt)
     length(r) == 2 && return hash(last(r), h)
 
     h += hashr_seed
-    h = hash(step(r), h)
+    h = hash(length(r), h)
     h = hash(last(r), h)
 end
+
+"""
+    Base.hash_sub(x, y)
+
+Compute the difference between `x` and `y` ensuring no overflow can happen.
+The returned value does not need to be of the same type as `x - y`, nor even
+equal to it.
+
+This method needs to be implemented by types which support subtraction
+(operator `-`) so that arrays with that element type can be hashed the same as
+their `AbstractRange` equivalents, allowing for O(1) hashing of such ranges.
+It is only required for hashing of heterogeneous arrays. Note that `hash_sub`
+methods should exist for any combination of arguments the `-` method accepts,
+or an error will be raised.
+
+The most straightforward way of implementing this function is to call `-` after
+converting `x` and `y` to a type with a higher precision, with which overflow
+cannot happen. A fallback based on [`widen`](@ref) is provided for `Number` types.
+"""
+hash_sub(x, y) =
+    throw(ArgumentError("cannot hash types ($(typeof(x)), $(typeof(y))) as they do not implement Base.hash_sub"))
+
+hash_sub(x::Number, y::Number) = widen(x) - widen(y)
+hash_sub(x::Number, y::Irrational) = -(promote(widen(x), y)...)
+hash_sub(x::Irrational, y::Number) = -(promote(x, widen(y))...)
 
 function hash(a::AbstractArray{T}, h::UInt) where T
     # O(1) hashing for types with regular step
@@ -1974,66 +1999,71 @@ function hash(a::AbstractArray{T}, h::UInt) where T
     # at the beginning of the array as such as long as they match this assumption
     # This needs to be done even for non-RangeStepRegular types since they may still be equal
     # to RangeStepRegular values (e.g. 1.0:3.0 == 1:3)
-    if isa(a, AbstractVector) && (!isleaftype(T) || method_exists(-, Tuple{T, T}))
-        firstval = x2
-        lastval = last(a)
+    if isa(a, AbstractVector) && (!isconcrete(T) || method_exists(-, Tuple{T, T}))
+        x1 = x2
         x2, state = next(a, state)
-        second = x2
         if length(a) == 2
-            h = hash(first, h)
+            h = hash(x1, h)
             return hash(x2, h)
         end
-        secondstate = state
 
-        # Try to compute the step between two subsequent elements.
-        # If this fails (e.g. type does not support subtraction, or overflow error
-        # for a checked arithmetic type), a cannot be equal to a range.
-        # promote() ensures no overflow can happen for heterogeneous arrays
-        # which are equal to a range
+        # Only types supporting subtraction can be used with ranges
+        applicable(-, x2, x1) || @goto nonrange
+
         local step
-        firstp, lastp = promote(firstval, lastval)
-        try
-            step = x2p - firstp
-        catch err
-            isa(err, OverflowError) || isa(err, MethodError) || rethrow(err)
-            @goto nonrange
+
+        # Try to compute the step between two first elements
+        if isconcrete(T)
+            # If overflow happens with entries of the same type, a cannot be equal
+            # to a range with more than two elements because more extreme values
+            # cannot be represented.
+            # If overflow happens without raising an exception, we can use the step
+            # anyway, since it cannot be equal to the next step.
+            try
+                step = x2 - x1
+            catch err
+                isa(err, OverflowError) || rethrow(err)
+                @goto nonrange
+            end
+        else
+            # hash_sub() ensures no overflow can happen.
+            # Overflow is only a problem if entries are of different types,
+            # since in that case the array could be equal to a range even in case of overflow.
+            step = hash_sub(x2, x1)
         end
-        iszero(step) && @goto nonrange
-        r = first:step:last(a)
-        state = start(a)
-        rstate = start(r)
-        while !done(a, state) && !done(r, rstate)
+
+        # Check whether all remaining steps are equal to the first one
+        n = 2
+        while !done(a, state)
+            x1 = x2
+            laststep = step
+            laststate = state
             x2, state = next(a, state)
-            y, rstate = next(r, rstate)
-            # When encountering an element with a wider type than previous ones, restart
-            # from first element using the widest type to avoid overflow
-            U = promote_type(typeof(x2), S)
-            if U !== S
-                first = convert(U, first)
-                state = secondstate
-                x2 = second
-                @goto first
+            if isconcrete(T)
+                try
+                    step = x2 - x1
+                catch err
+                    isa(err, OverflowError) || rethrow(err)
+                    break
+                end
+            else
+                step = hash_sub(x2, x1)
             end
-            isequal(x2, y) || break
-        end
-        # If overflow happened when computing step, loop can have failed to detect
-        # that next element was in a range if type changes
-        if !done(a, state)
-            x2, _ = next(a, state)
-            U = promote_type(typeof(x2), S)
-            if U !== S
-                first = convert(U, first)
-                state = secondstate
-                x2 = second
-                @goto first
+            # Implies breaking in first loop if the step is 0
+            if !isequal(step, laststep)
+                # Need to handle last element which is not part of a range
+                state = laststate
+                break
             end
+            n += 1
         end
-        # If at least one element in addition to the first one matched range,
-        # hash these elements as a range; else, leave them to the fallback below
-        if state != secondstate
-            h = hash(first, h)
+
+        # If at least three elements matched range, hash these elements as a range
+        # Else, leave them to the fallback below
+        if n > 2
+            h = hash(first(a), h)
             h += hashr_seed
-            h = hash(step, h)
+            h = hash(n, h)
             h = hash(x2, h)
         end
     end

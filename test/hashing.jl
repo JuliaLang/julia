@@ -86,7 +86,6 @@ vals = Any[
 ]
 
 for a in vals, b in vals
-@show a, b
     @test isequal(a,b) == (hash(a)==hash(b))
 end
 
@@ -118,7 +117,6 @@ vals = Any[
 ]
 
 for a in vals
-@show a
     b = Array(a)
     @test hash(convert(Array{Any}, a)) == hash(b)
     @test hash(convert(Array{supertype(eltype(a))}, a)) == hash(b)
