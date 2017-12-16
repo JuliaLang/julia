@@ -136,7 +136,7 @@ end
 terminline(io::IO, f::Footnote) = with_output_format(:bold, terminline, io, "[^$(f.id)]")
 
 function terminline(io::IO, md::Link)
-    url = md.url != "@ref" ? " ($(md.url))" : ""
+    url = !Base.startswith(md.url, "@ref") ? " ($(md.url))" : ""
     text = terminline(md.text)
     terminline(io, text, url)
 end
