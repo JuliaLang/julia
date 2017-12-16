@@ -1474,21 +1474,28 @@ Had we tried to do the addition without the atomic tag, we might have gotten the
 wrong answer due to a race condition. An example of what would happen if we didn't
 avoid the race:
 
-```julia
-using Base.Threads
-acc = Ref(0.0)
-@threads for i in 1:1000
-   acc[] += i
-end
-@show acc[]
-acc[] = 2509.0
+```julia-repl
+julia> using Base.Threads
 
-acc = Atomic{Float64}(0.0)
-@threads for i in 1:1000
-    atomic_add!(accm 1.0)
-end
-@show acc
-acc = Atomic{Float64}(1000.0)
+julia> acc = Ref(0)
+Base.RefValue{Int64}(0)
+
+julia> @threads for i in 1:1000
+          acc[] += i
+       end
+
+julia> acc[]
+93875
+
+julia> acc = Atomic{Int64}(0)
+Atomic{Int64}(0)
+
+julia> @threads for i in 1:1000
+          atomic_add!(acc, 1)
+       end
+
+julia> acc[]
+1000
 ```
 
 !!! note
