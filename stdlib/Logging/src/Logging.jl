@@ -35,7 +35,8 @@ export
     current_logger,
     global_logger,
     disable_logging,
-    SimpleLogger
+    SimpleLogger,
+    ConsoleLogger
 
 # The following are also part of the public API, but not exported:
 #
@@ -44,5 +45,8 @@ export
 #
 # 2. AbstractLogger message related functions:
 #  handle_message, shouldlog, min_enabled_level, catch_exceptions,
+
+include("config.jl")
+include("ConsoleLogger.jl")
 
 end
