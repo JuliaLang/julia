@@ -175,7 +175,7 @@ static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
     jl_datatype_t *dt = NULL;
     jl_value_t *w = NULL;
     jl_module_t *modu = s->module;
-    JL_GC_PUSH4(&para, &super, &temp, &w);
+    JL_GC_PUSH5(&para, &super, &temp, &w, &dt);
     if (jl_is_globalref(name)) {
         modu = jl_globalref_mod(name);
         name = (jl_value_t*)jl_globalref_name(name);
@@ -228,7 +228,7 @@ static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
     jl_datatype_t *dt = NULL;
     jl_value_t *w = NULL;
     jl_module_t *modu = s->module;
-    JL_GC_PUSH4(&para, &super, &temp, &w);
+    JL_GC_PUSH5(&para, &super, &temp, &w, &dt);
     if (jl_is_globalref(name)) {
         modu = jl_globalref_mod(name);
         name = (jl_value_t*)jl_globalref_name(name);
