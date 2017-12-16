@@ -454,7 +454,7 @@ as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
     shape = broadcast_indices(C)
     @boundscheck check_broadcast_indices(shape, A, Bs...)
     keeps, Idefaults = map_newindexer(shape, A, Bs)
-    iter = CartesianRange(shape)
+    iter = CartesianIndices(shape)
     _broadcast!(f, C, keeps, Idefaults, A, Bs, Val(N), iter)
     return C
 end
@@ -616,7 +616,7 @@ end
 # accommodate later values.
 function broadcast_nonleaf(f, s::NonleafHandlingTypes, ::Type{ElType}, shape::Indices, As...) where ElType
     nargs = length(As)
-    iter = CartesianRange(shape)
+    iter = CartesianIndices(shape)
     if isempty(iter)
         return Base.similar(Array{ElType}, shape)
     end

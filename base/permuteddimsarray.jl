@@ -162,16 +162,16 @@ function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
     if d == ndims(src)
         copy!(parent(P), src) # it's not permuted
     else
-        R1 = CartesianRange(axes(src)[1:d])
+        R1 = CartesianIndices(axes(src)[1:d])
         d1 = findfirst(equalto(d+1), perm)  # first permuted dim of dest
-        R2 = CartesianRange(axes(src)[d+2:d1-1])
-        R3 = CartesianRange(axes(src)[d1+1:end])
+        R2 = CartesianIndices(axes(src)[d+2:d1-1])
+        R3 = CartesianIndices(axes(src)[d1+1:end])
         _permutedims!(P, src, R1, R2, R3, d+1, d1)
     end
     return P
 end
 
-@noinline function _permutedims!(P::PermutedDimsArray, src, R1::CartesianRange{0}, R2, R3, ds, dp)
+@noinline function _permutedims!(P::PermutedDimsArray, src, R1::CartesianIndices{0}, R2, R3, ds, dp)
     ip, is = axes(src, dp), axes(src, ds)
     for jo in first(ip):8:last(ip), io in first(is):8:last(is)
         for I3 in R3, I2 in R2

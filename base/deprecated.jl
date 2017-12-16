@@ -1381,10 +1381,10 @@ import .LinAlg: lufact, lufact!, qrfact, qrfact!, cholfact, cholfact!
 @deprecate read(s::IO, t::Type, d1::Integer, dims::Integer...) read!(s, Array{t}(uninitialized, convert(Tuple{Vararg{Int}},tuple(d1,dims...))))
 @deprecate read(s::IO, t::Type, dims::Dims) read!(s, Array{t}(uninitialized, dims))
 
-function CartesianRange(start::CartesianIndex{N}, stop::CartesianIndex{N}) where N
+function CartesianIndices(start::CartesianIndex{N}, stop::CartesianIndex{N}) where N
     inds = map((f,l)->f:l, start.I, stop.I)
-    depwarn("the internal representation of CartesianRange has changed, use CartesianRange($inds) (or other more approriate AbstractUnitRange type) instead.", :CartesianRange)
-    CartesianRange(inds)
+    depwarn("the internal representation of CartesianIndices has changed, use CartesianIndices($inds) (or other more approriate AbstractUnitRange type) instead.", :CartesianIndices)
+    CartesianIndices(inds)
 end
 
 # PR #20005
@@ -3263,25 +3263,28 @@ end
 @deprecate_moved unsafe_get "Nullables"
 
 # sub2ind and ind2sub deprecation (PR #24715)
-@deprecate ind2sub(A::AbstractArray, ind) CartesianRange(A)[ind]
-@deprecate ind2sub(::Tuple{}, ind::Integer) CartesianRange()[ind]
-@deprecate ind2sub(dims::Tuple{Vararg{Integer,N}} where N, ind::Integer) CartesianRange(dims)[ind]
-@deprecate ind2sub(inds::Tuple{Base.OneTo}, ind::Integer) CartesianRange(inds)[ind]
-@deprecate ind2sub(inds::Tuple{AbstractUnitRange}, ind::Integer) CartesianRange(inds)[ind]
-@deprecate ind2sub(inds::Tuple{Vararg{AbstractUnitRange,N}} where N, ind::Integer) CartesianRange(inds)[ind]
-@deprecate ind2sub(inds::Union{DimsInteger{N},Indices{N}}  where N, ind::AbstractVector{<:Integer}) CartesianRange(inds)[ind]
+@deprecate ind2sub(A::AbstractArray, ind) CartesianIndices(A)[ind]
+@deprecate ind2sub(::Tuple{}, ind::Integer) CartesianIndices()[ind]
+@deprecate ind2sub(dims::Tuple{Vararg{Integer,N}} where N, ind::Integer) CartesianIndices(dims)[ind]
+@deprecate ind2sub(inds::Tuple{Base.OneTo}, ind::Integer) CartesianIndices(inds)[ind]
+@deprecate ind2sub(inds::Tuple{AbstractUnitRange}, ind::Integer) CartesianIndices(inds)[ind]
+@deprecate ind2sub(inds::Tuple{Vararg{AbstractUnitRange,N}} where N, ind::Integer) CartesianIndices(inds)[ind]
+@deprecate ind2sub(inds::Union{DimsInteger{N},Indices{N}}  where N, ind::AbstractVector{<:Integer}) CartesianIndices(inds)[ind]
 
-@deprecate sub2ind(A::AbstractArray, I...) CartesianToLinear(A)[I...]
-@deprecate sub2ind(dims::Tuple{}) CartesianToLinear(dims)[]
-@deprecate sub2ind(dims::DimsInteger) CartesianToLinear(dims)[]
-@deprecate sub2ind(dims::Indices) CartesianToLinear(dims)[]
-@deprecate sub2ind(dims::Tuple{}, I::Integer...) CartesianToLinear(dims)[I...]
-@deprecate sub2ind(dims::DimsInteger, I::Integer...) CartesianToLinear(dims)[I...]
-@deprecate sub2ind(inds::Indices, I::Integer...) CartesianToLinear(inds)[I...]
-@deprecate sub2ind(inds::Tuple{OneTo}, I::Integer...) CartesianToLinear(inds)[I...]
-@deprecate sub2ind(inds::Tuple{OneTo}, i::Integer) CartesianToLinear(inds)[i]
-@deprecate sub2ind(inds::Tuple{OneTo}, I1::AbstractVector{T}, I::AbstractVector{T}...) where {T<:Integer} CartesianToLinear(inds)[CartesianIndex.(I1, I...)]
-@deprecate sub2ind(inds::Union{DimsInteger,Indices}, I1::AbstractVector{T}, I::AbstractVector{T}...) where {T<:Integer} CartesianToLinear(inds)[CartesianIndex.(I1, I...)]
+@deprecate sub2ind(A::AbstractArray, I...) LinearIndices(A)[I...]
+@deprecate sub2ind(dims::Tuple{}) LinearIndices(dims)[]
+@deprecate sub2ind(dims::DimsInteger) LinearIndices(dims)[]
+@deprecate sub2ind(dims::Indices) LinearIndices(dims)[]
+@deprecate sub2ind(dims::Tuple{}, I::Integer...) LinearIndices(dims)[I...]
+@deprecate sub2ind(dims::DimsInteger, I::Integer...) LinearIndices(dims)[I...]
+@deprecate sub2ind(inds::Indices, I::Integer...) LinearIndices(inds)[I...]
+@deprecate sub2ind(inds::Tuple{OneTo}, I::Integer...) LinearIndices(inds)[I...]
+@deprecate sub2ind(inds::Tuple{OneTo}, i::Integer) LinearIndices(inds)[i]
+@deprecate sub2ind(inds::Tuple{OneTo}, I1::AbstractVector{T}, I::AbstractVector{T}...) where {T<:Integer} LinearIndices(inds)[CartesianIndex.(I1, I...)]
+@deprecate sub2ind(inds::Union{DimsInteger,Indices}, I1::AbstractVector{T}, I::AbstractVector{T}...) where {T<:Integer} LinearIndices(inds)[CartesianIndex.(I1, I...)]
+
+# PR #25113
+@deprecate_binding CartesianRange CartesianIndices
 
 # END 0.7 deprecations
 

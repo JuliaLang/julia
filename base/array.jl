@@ -490,7 +490,7 @@ _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
     copy!(Array{eltype(A)}(uninitialized, length.(indsA)), A)
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(uninitialized, length.(indsA))
-    copy!(B, CartesianRange(axes(B)), A, CartesianRange(indsA))
+    copy!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
 end
 
 # define this as a macro so that the call to Inference

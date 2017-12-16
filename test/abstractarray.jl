@@ -114,20 +114,20 @@ end
 
 @testset "index conversion" begin
     @testset "0-dimensional" begin
-        @test CartesianToLinear()[1] == 1
-        @test_throws BoundsError CartesianToLinear()[2]
-        @test CartesianToLinear()[1,1] == 1
-        @test CartesianRange()[1] == CartesianIndex()
-        @test_throws BoundsError CartesianRange()[2]
+        @test LinearIndices()[1] == 1
+        @test_throws BoundsError LinearIndices()[2]
+        @test LinearIndices()[1,1] == 1
+        @test CartesianIndices()[1] == CartesianIndex()
+        @test_throws BoundsError CartesianIndices()[2]
     end
 
     @testset "1-dimensional" begin
         for i = 1:3
-            @test CartesianToLinear((3,))[i] == i
-            @test CartesianRange((3,))[i] == CartesianIndex(i,)
+            @test LinearIndices((3,))[i] == i
+            @test CartesianIndices((3,))[i] == CartesianIndex(i,)
         end
-        @test CartesianToLinear((3,))[2,1] == 2
-        @test_throws BoundsError CartesianRange((3,))[2,2]
+        @test LinearIndices((3,))[2,1] == 2
+        @test_throws BoundsError CartesianIndices((3,))[2,2]
         #   ambiguity btw cartesian indexing and linear indexing in 1d when
         #   indices may be nontraditional
         @test_throws ArgumentError Base._sub2ind((1:3,), 2)
@@ -136,34 +136,34 @@ end
 
     @testset "2-dimensional" begin
         k = 0
-        cartesian = CartesianRange((4,3))
-        linear = CartesianToLinear(cartesian)
+        cartesian = CartesianIndices((4,3))
+        linear = LinearIndices(cartesian)
         for j = 1:3, i = 1:4
             @test linear[i,j] == (k+=1)
             @test cartesian[k] == CartesianIndex(i,j)
-            @test CartesianToLinear(0:3,3:5)[i-1,j+2] == k
-            @test CartesianRange(0:3,3:5)[k] == CartesianIndex(i-1,j+2)
+            @test LinearIndices(0:3,3:5)[i-1,j+2] == k
+            @test CartesianIndices(0:3,3:5)[k] == CartesianIndex(i-1,j+2)
         end
     end
 
     @testset "3-dimensional" begin
         l = 0
         for k = 1:2, j = 1:3, i = 1:4
-            @test CartesianToLinear((4,3,2))[i,j,k] == (l+=1)
-            @test CartesianRange((4,3,2))[l] == CartesianIndex(i,j,k)
-            @test CartesianToLinear(1:4,1:3,1:2)[i,j,k] == l
-            @test CartesianRange(1:4,1:3,1:2)[l] == CartesianIndex(i,j,k)
-            @test CartesianToLinear(0:3,3:5,-101:-100)[i-1,j+2,k-102] == l
-            @test CartesianRange(0:3,3:5,-101:-100)[l] == CartesianIndex(i-1, j+2, k-102)
+            @test LinearIndices((4,3,2))[i,j,k] == (l+=1)
+            @test CartesianIndices((4,3,2))[l] == CartesianIndex(i,j,k)
+            @test LinearIndices(1:4,1:3,1:2)[i,j,k] == l
+            @test CartesianIndices(1:4,1:3,1:2)[l] == CartesianIndex(i,j,k)
+            @test LinearIndices(0:3,3:5,-101:-100)[i-1,j+2,k-102] == l
+            @test CartesianIndices(0:3,3:5,-101:-100)[l] == CartesianIndex(i-1, j+2, k-102)
         end
 
         local A = reshape(collect(1:9), (3,3))
-        @test CartesianRange(size(A))[6] == CartesianIndex(3,2)
-        @test CartesianToLinear(size(A))[3, 2] == 6
-        @test CartesianRange(A)[6] == CartesianIndex(3,2)
-        @test CartesianToLinear(A)[3, 2] == 6
+        @test CartesianIndices(size(A))[6] == CartesianIndex(3,2)
+        @test LinearIndices(size(A))[3, 2] == 6
+        @test CartesianIndices(A)[6] == CartesianIndex(3,2)
+        @test LinearIndices(A)[3, 2] == 6
         for i in 1:length(A)
-            @test CartesianToLinear(A)[CartesianRange(A)[i]] == i
+            @test LinearIndices(A)[CartesianIndices(A)[i]] == i
         end
 
         @testset "PR #9256" begin
@@ -222,7 +222,7 @@ Base.convert(::Type{TSlow     }, X::AbstractArray{T,N}) where {T,N  } = convert(
 Base.convert(::Type{TSlow{T  }}, X::AbstractArray{_,N}) where {T,N,_} = convert(TSlow{T,N}, X)
 Base.convert(::Type{TSlow{T,N}}, X::AbstractArray     ) where {T,N  } = begin
     A = TSlow(T, size(X))
-    for I in CartesianRange(size(X))
+    for I in CartesianIndices(size(X))
         A[I.I...] = X[I.I...]
     end
     A
@@ -618,7 +618,7 @@ function test_ind2sub(::Type{TestAbstractArray})
     dims = tuple(rand(1:5, n)...)
     len = prod(dims)
     A = reshape(collect(1:len), dims...)
-    I = CartesianRange(dims)
+    I = CartesianIndices(dims)
     for i in 1:len
         @test A[I[i]] == A[i]
     end
@@ -828,10 +828,10 @@ end
     @test isempty(v3::Vector{Float64})
 end
 
-@testset "CartesianRange" begin
+@testset "CartesianIndices" begin
     xrng = 2:4
     yrng = 1:5
-    CR = CartesianRange((xrng,yrng))
+    CR = CartesianIndices((xrng,yrng))
 
     for (i,i_idx) in enumerate(xrng)
         for (j,j_idx) in enumerate(yrng)
@@ -845,6 +845,6 @@ end
         @test CR[i_lin] == CartesianIndex(xrng[i],yrng[j])
     end
 
-    @test CartesianRange(ones(2,3)) == CartesianRange((2,3))
-    @test CartesianToLinear((2,3)) == [1 3 5; 2 4 6]
+    @test CartesianIndices(ones(2,3)) == CartesianIndices((2,3))
+    @test LinearIndices((2,3)) == [1 3 5; 2 4 6]
 end

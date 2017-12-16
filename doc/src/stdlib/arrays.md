@@ -82,12 +82,12 @@ Base.Broadcast.DefaultArrayStyle
 ```@docs
 Base.getindex(::AbstractArray, ::Any...)
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
-Base.copy!(::AbstractArray, ::CartesianRange, ::AbstractArray, ::CartesianRange)
+Base.copy!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 Base.isassigned
 Base.Colon
 Base.CartesianIndex
-Base.CartesianRange
-Base.CartesianToLinear
+Base.CartesianIndices
+Base.LinearIndices
 Base.to_indices
 Base.checkbounds
 Base.checkindex

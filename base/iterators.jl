@@ -191,7 +191,7 @@ CartesianIndex(2, 2) e
 See also: [`IndexStyle`](@ref), [`axes`](@ref).
 """
 pairs(::IndexLinear,    A::AbstractArray) = IndexValue(A, linearindices(A))
-pairs(::IndexCartesian, A::AbstractArray) = IndexValue(A, CartesianRange(axes(A)))
+pairs(::IndexCartesian, A::AbstractArray) = IndexValue(A, CartesianIndices(axes(A)))
 
 # faster than zip(keys(a), values(a)) for arrays
 pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)

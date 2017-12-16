@@ -11,7 +11,7 @@ module IteratorsMD
     using Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
     using Base.Iterators: Reverse
 
-    export CartesianIndex, CartesianRange, CartesianToLinear
+    export CartesianIndex, CartesianIndices, LinearIndices
 
     """
         CartesianIndex(i, j, k...)   -> I
@@ -27,7 +27,7 @@ module IteratorsMD
     dimensionality.
 
     A `CartesianIndex` is sometimes produced by [`eachindex`](@ref), and
-    always when iterating with an explicit [`CartesianRange`](@ref).
+    always when iterating with an explicit [`CartesianIndices`](@ref).
 
     # Examples
     ```jldoctest
@@ -144,7 +144,7 @@ module IteratorsMD
 
     # nextind with CartesianIndex
     function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
-        _, ni = next(CartesianRange(axes(a)), i)
+        _, ni = next(CartesianIndices(axes(a)), i)
         return ni
     end
 
@@ -155,8 +155,8 @@ module IteratorsMD
 
     # Iteration
     """
-        CartesianRange(sz::Dims) -> R
-        CartesianRange(istart:istop, jstart:jstop, ...) -> R
+        CartesianIndices(sz::Dims) -> R
+        CartesianIndices(istart:istop, jstart:jstop, ...) -> R
 
     Define a region `R` spanning a multidimensional rectangular range
     of integer indices. These are most commonly encountered in the
@@ -172,14 +172,14 @@ module IteratorsMD
     Consequently these can be useful for writing algorithms that
     work in arbitrary dimensions.
 
-        CartesianRange(A::AbstractArray) -> R
+        CartesianIndices(A::AbstractArray) -> R
 
-    As a convenience, constructing a CartesianRange from an array makes a
+    As a convenience, constructing a CartesianIndices from an array makes a
     range of its indices.
 
     # Examples
     ```jldoctest
-    julia> foreach(println, CartesianRange((2, 2, 2)))
+    julia> foreach(println, CartesianIndices((2, 2, 2)))
     CartesianIndex(1, 1, 1)
     CartesianIndex(2, 1, 1)
     CartesianIndex(1, 2, 1)
@@ -189,8 +189,8 @@ module IteratorsMD
     CartesianIndex(1, 2, 2)
     CartesianIndex(2, 2, 2)
 
-    julia> CartesianRange(ones(2,3))
-    2×3 CartesianRange{2,Tuple{Base.OneTo{Int64},Base.OneTo{Int64}}}:
+    julia> CartesianIndices(ones(2,3))
+    2×3 CartesianIndices{2,Tuple{Base.OneTo{Int64},Base.OneTo{Int64}}}:
       CartesianIndex(1, 1)  CartesianIndex(1, 2)  CartesianIndex(1, 3)
       CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
     ```
@@ -198,11 +198,11 @@ module IteratorsMD
     ## Conversion between linear and cartesian indices
 
     Linear index to cartesian index conversion exploits the fact that a
-    `CartesianRange` is an `AbstractArray` and can be indexed linearly:
+    `CartesianIndices` is an `AbstractArray` and can be indexed linearly:
 
     ```jldoctest subarray
-    julia> cartesian = CartesianRange(1:3,1:2)
-    3×2 CartesianRange{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
+    julia> cartesian = CartesianIndices(1:3,1:2)
+    3×2 CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
      CartesianIndex(1, 1)  CartesianIndex(1, 2)
      CartesianIndex(2, 1)  CartesianIndex(2, 2)
      CartesianIndex(3, 1)  CartesianIndex(3, 2)
@@ -211,76 +211,76 @@ module IteratorsMD
     CartesianIndex(1, 2)
     ```
 
-    For cartesian to linear index conversion, see [`CartesianToLinear`](@ref).
+    For cartesian to linear index conversion, see [`LinearIndices`](@ref).
     """
-    struct CartesianRange{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{CartesianIndex{N},N}
+    struct CartesianIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{CartesianIndex{N},N}
         indices::R
     end
 
-    CartesianRange(::Tuple{}) = CartesianRange{0,typeof(())}(())
-    CartesianRange(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} =
-        CartesianRange{N,typeof(inds)}(inds)
-    CartesianRange(inds::Vararg{AbstractUnitRange{Int},N}) where {N} =
-        CartesianRange(inds)
-    CartesianRange(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
-        CartesianRange(map(r->convert(AbstractUnitRange{Int}, r), inds))
-    CartesianRange(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} =
-        CartesianRange(inds)
+    CartesianIndices(::Tuple{}) = CartesianIndices{0,typeof(())}(())
+    CartesianIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} =
+        CartesianIndices{N,typeof(inds)}(inds)
+    CartesianIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} =
+        CartesianIndices(inds)
+    CartesianIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
+        CartesianIndices(map(r->convert(AbstractUnitRange{Int}, r), inds))
+    CartesianIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} =
+        CartesianIndices(inds)
 
-    CartesianRange(index::CartesianIndex) = CartesianRange(index.I)
-    CartesianRange(sz::NTuple{N,<:Integer}) where {N} = CartesianRange(map(Base.OneTo, sz))
-    CartesianRange(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
-        CartesianRange(map(i->first(i):last(i), inds))
+    CartesianIndices(index::CartesianIndex) = CartesianIndices(index.I)
+    CartesianIndices(sz::NTuple{N,<:Integer}) where {N} = CartesianIndices(map(Base.OneTo, sz))
+    CartesianIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
+        CartesianIndices(map(i->first(i):last(i), inds))
 
-    CartesianRange(A::AbstractArray) = CartesianRange(axes(A))
+    CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 
-    convert(::Type{Tuple{}}, R::CartesianRange{0}) = ()
-    convert(::Type{NTuple{N,AbstractUnitRange{Int}}}, R::CartesianRange{N}) where {N} =
+    convert(::Type{Tuple{}}, R::CartesianIndices{0}) = ()
+    convert(::Type{NTuple{N,AbstractUnitRange{Int}}}, R::CartesianIndices{N}) where {N} =
         R.indices
-    convert(::Type{NTuple{N,AbstractUnitRange}}, R::CartesianRange{N}) where {N} =
+    convert(::Type{NTuple{N,AbstractUnitRange}}, R::CartesianIndices{N}) where {N} =
         convert(NTuple{N,AbstractUnitRange{Int}}, R)
-    convert(::Type{NTuple{N,UnitRange{Int}}}, R::CartesianRange{N}) where {N} =
+    convert(::Type{NTuple{N,UnitRange{Int}}}, R::CartesianIndices{N}) where {N} =
         UnitRange{Int}.(convert(NTuple{N,AbstractUnitRange}, R))
-    convert(::Type{NTuple{N,UnitRange}}, R::CartesianRange{N}) where {N} =
+    convert(::Type{NTuple{N,UnitRange}}, R::CartesianIndices{N}) where {N} =
         UnitRange.(convert(NTuple{N,AbstractUnitRange}, R))
-    convert(::Type{Tuple{Vararg{AbstractUnitRange{Int}}}}, R::CartesianRange{N}) where {N} =
+    convert(::Type{Tuple{Vararg{AbstractUnitRange{Int}}}}, R::CartesianIndices{N}) where {N} =
         convert(NTuple{N,AbstractUnitRange{Int}}, R)
-    convert(::Type{Tuple{Vararg{AbstractUnitRange}}}, R::CartesianRange) =
+    convert(::Type{Tuple{Vararg{AbstractUnitRange}}}, R::CartesianIndices) =
         convert(Tuple{Vararg{AbstractUnitRange{Int}}}, R)
-    convert(::Type{Tuple{Vararg{UnitRange{Int}}}}, R::CartesianRange{N}) where {N} =
+    convert(::Type{Tuple{Vararg{UnitRange{Int}}}}, R::CartesianIndices{N}) where {N} =
         convert(NTuple{N,UnitRange{Int}}, R)
-    convert(::Type{Tuple{Vararg{UnitRange}}}, R::CartesianRange) =
+    convert(::Type{Tuple{Vararg{UnitRange}}}, R::CartesianIndices) =
         convert(Tuple{Vararg{UnitRange{Int}}}, R)
 
     # AbstractArray implementation
-    Base.IndexStyle(::Type{CartesianRange{N,R}}) where {N,R} = IndexCartesian()
-    @inline Base.getindex(iter::CartesianRange{N,R}, I::Vararg{Int, N}) where {N,R} = CartesianIndex(first.(iter.indices) .- 1 .+ I)
+    Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
+    @inline Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R} = CartesianIndex(first.(iter.indices) .- 1 .+ I)
 
-    ndims(R::CartesianRange) = ndims(typeof(R))
-    ndims(::Type{CartesianRange{N}}) where {N} = N
-    ndims(::Type{CartesianRange{N,TT}}) where {N,TT} = N
+    ndims(R::CartesianIndices) = ndims(typeof(R))
+    ndims(::Type{CartesianIndices{N}}) where {N} = N
+    ndims(::Type{CartesianIndices{N,TT}}) where {N,TT} = N
 
-    eachindex(::IndexCartesian, A::AbstractArray) = CartesianRange(axes(A))
+    eachindex(::IndexCartesian, A::AbstractArray) = CartesianIndices(axes(A))
 
     @inline function eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...)
         axsA = axes(A)
         all(x->axes(x) == axsA, B) || Base.throw_eachindex_mismatch(IndexCartesian(), A, B...)
-        CartesianRange(axsA)
+        CartesianIndices(axsA)
     end
 
-    eltype(R::CartesianRange) = eltype(typeof(R))
-    eltype(::Type{CartesianRange{N}}) where {N} = CartesianIndex{N}
-    eltype(::Type{CartesianRange{N,TT}}) where {N,TT} = CartesianIndex{N}
-    iteratorsize(::Type{<:CartesianRange}) = Base.HasShape()
+    eltype(R::CartesianIndices) = eltype(typeof(R))
+    eltype(::Type{CartesianIndices{N}}) where {N} = CartesianIndex{N}
+    eltype(::Type{CartesianIndices{N,TT}}) where {N,TT} = CartesianIndex{N}
+    iteratorsize(::Type{<:CartesianIndices}) = Base.HasShape()
 
-    @inline function start(iter::CartesianRange)
+    @inline function start(iter::CartesianIndices)
         iterfirst, iterlast = first(iter), last(iter)
         if any(map(>, iterfirst.I, iterlast.I))
             return iterlast+1
         end
         iterfirst
     end
-    @inline function next(iter::CartesianRange, state)
+    @inline function next(iter::CartesianIndices, state)
         state, CartesianIndex(inc(state.I, first(iter).I, last(iter).I))
     end
     # increment & carry
@@ -293,37 +293,37 @@ module IteratorsMD
         newtail = inc(tail(state), tail(start), tail(stop))
         (start[1], newtail...)
     end
-    @inline done(iter::CartesianRange, state) = state.I[end] > last(iter.indices[end])
+    @inline done(iter::CartesianIndices, state) = state.I[end] > last(iter.indices[end])
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
-    start(iter::CartesianRange{0}) = false
-    next(iter::CartesianRange{0}, state) = CartesianIndex(), true
-    done(iter::CartesianRange{0}, state) = state
+    start(iter::CartesianIndices{0}) = false
+    next(iter::CartesianIndices{0}, state) = CartesianIndex(), true
+    done(iter::CartesianIndices{0}, state) = state
 
-    size(iter::CartesianRange) = map(dimlength, first(iter).I, last(iter).I)
+    size(iter::CartesianIndices) = map(dimlength, first(iter).I, last(iter).I)
     dimlength(start, stop) = stop-start+1
 
-    length(iter::CartesianRange) = prod(size(iter))
+    length(iter::CartesianIndices) = prod(size(iter))
 
-    first(iter::CartesianRange) = CartesianIndex(map(first, iter.indices))
-    last(iter::CartesianRange)  = CartesianIndex(map(last, iter.indices))
+    first(iter::CartesianIndices) = CartesianIndex(map(first, iter.indices))
+    last(iter::CartesianIndices)  = CartesianIndex(map(last, iter.indices))
 
-    @inline function in(i::CartesianIndex{N}, r::CartesianRange{N}) where {N}
+    @inline function in(i::CartesianIndex{N}, r::CartesianIndices{N}) where {N}
         _in(true, i.I, first(r).I, last(r).I)
     end
     _in(b, ::Tuple{}, ::Tuple{}, ::Tuple{}) = b
     @inline _in(b, i, start, stop) = _in(b & (start[1] <= i[1] <= stop[1]), tail(i), tail(start), tail(stop))
 
-    simd_outer_range(iter::CartesianRange{0}) = iter
-    function simd_outer_range(iter::CartesianRange)
-        CartesianRange(tail(iter.indices))
+    simd_outer_range(iter::CartesianIndices{0}) = iter
+    function simd_outer_range(iter::CartesianIndices)
+        CartesianIndices(tail(iter.indices))
     end
 
-    simd_inner_length(iter::CartesianRange{0}, ::CartesianIndex) = 1
-    simd_inner_length(iter::CartesianRange, I::CartesianIndex) = length(iter.indices[1])
+    simd_inner_length(iter::CartesianIndices{0}, ::CartesianIndex) = 1
+    simd_inner_length(iter::CartesianIndices, I::CartesianIndex) = length(iter.indices[1])
 
-    simd_index(iter::CartesianRange{0}, ::CartesianIndex, I1::Int) = first(iter)
-    @inline function simd_index(iter::CartesianRange, Ilast::CartesianIndex, I1::Int)
+    simd_index(iter::CartesianIndices{0}, ::CartesianIndex, I1::Int) = first(iter)
+    @inline function simd_index(iter::CartesianIndices, Ilast::CartesianIndex, I1::Int)
         CartesianIndex((I1+first(iter.indices[1]), Ilast.I...))
     end
 
@@ -346,20 +346,20 @@ module IteratorsMD
         i, j = split(I.I, V)
         CartesianIndex(i), CartesianIndex(j)
     end
-    function split(R::CartesianRange, V::Val)
+    function split(R::CartesianIndices, V::Val)
         i, j = split(R.indices, V)
-        CartesianRange(i), CartesianRange(j)
+        CartesianIndices(i), CartesianIndices(j)
     end
 
-    # reversed CartesianRange iteration
-    @inline function start(r::Reverse{<:CartesianRange})
+    # reversed CartesianIndices iteration
+    @inline function start(r::Reverse{<:CartesianIndices})
         iterfirst, iterlast = last(r.itr), first(r.itr)
         if any(map(<, iterfirst.I, iterlast.I))
             return iterlast-1
         end
         iterfirst
     end
-    @inline function next(r::Reverse{<:CartesianRange}, state)
+    @inline function next(r::Reverse{<:CartesianIndices}, state)
         state, CartesianIndex(dec(state.I, last(r.itr).I, first(r.itr).I))
     end
     # decrement & carry
@@ -372,26 +372,26 @@ module IteratorsMD
         newtail = dec(tail(state), tail(start), tail(stop))
         (start[1], newtail...)
     end
-    @inline done(r::Reverse{<:CartesianRange}, state) = state.I[end] < first(r.itr.indices[end])
+    @inline done(r::Reverse{<:CartesianIndices}, state) = state.I[end] < first(r.itr.indices[end])
     # 0-d cartesian ranges are special-cased to iterate once and only once
-    start(iter::Reverse{<:CartesianRange{0}}) = false
-    next(iter::Reverse{<:CartesianRange{0}}, state) = CartesianIndex(), true
-    done(iter::Reverse{<:CartesianRange{0}}, state) = state
+    start(iter::Reverse{<:CartesianIndices{0}}) = false
+    next(iter::Reverse{<:CartesianIndices{0}}, state) = CartesianIndex(), true
+    done(iter::Reverse{<:CartesianIndices{0}}, state) = state
 
     """
-        CartesianToLinear(inds::CartesianRange) -> R
-        CartesianToLinear(sz::Dims) -> R
-        CartesianToLinear(istart:istop, jstart:jstop, ...) -> R
+        LinearIndices(inds::CartesianIndices) -> R
+        LinearIndices(sz::Dims) -> R
+        LinearIndices(istart:istop, jstart:jstop, ...) -> R
 
-    Define a mapping between cartesian indices and the corresponding linear index into a CartesianRange
+    Define a mapping between cartesian indices and the corresponding linear index into a CartesianIndices
 
     # Example
 
     The main purpose of this type is intuitive conversion from cartesian to linear indexing:
 
     ```jldoctest subarray
-    julia> linear = CartesianToLinear(1:3,1:2)
-    CartesianToLinear{2,Tuple{UnitRange{Int64},UnitRange{Int64}}} with indices 1:3×1:2:
+    julia> linear = LinearIndices(1:3,1:2)
+    LinearIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}} with indices 1:3×1:2:
       1  4
       2  5
       3  6
@@ -400,25 +400,25 @@ module IteratorsMD
     4
     ```
     """
-    struct CartesianToLinear{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int,N}
+    struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int,N}
         indices::R
     end
 
-    CartesianToLinear(inds::CartesianRange{N,R}) where {N,R} = CartesianToLinear{N,R}(inds.indices)
-    CartesianToLinear(::Tuple{}) = CartesianToLinear(CartesianRange(()))
-    CartesianToLinear(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} = CartesianToLinear(CartesianRange(inds))
-    CartesianToLinear(inds::Vararg{AbstractUnitRange{Int},N}) where {N} = CartesianToLinear(CartesianRange(inds))
-    CartesianToLinear(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} = CartesianToLinear(CartesianRange(inds))
-    CartesianToLinear(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} = CartesianToLinear(CartesianRange(inds))
-    CartesianToLinear(index::CartesianIndex) = CartesianToLinear(CartesianRange(index))
-    CartesianToLinear(sz::NTuple{N,<:Integer}) where {N} = CartesianToLinear(CartesianRange(sz))
-    CartesianToLinear(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} = CartesianToLinear(CartesianRange(inds))
-    CartesianToLinear(A::AbstractArray) = CartesianToLinear(CartesianRange(A))
+    LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices{N,R}(inds.indices)
+    LinearIndices(::Tuple{}) = LinearIndices(CartesianIndices(()))
+    LinearIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} = LinearIndices(CartesianIndices(inds))
+    LinearIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} = LinearIndices(CartesianIndices(inds))
+    LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} = LinearIndices(CartesianIndices(inds))
+    LinearIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} = LinearIndices(CartesianIndices(inds))
+    LinearIndices(index::CartesianIndex) = LinearIndices(CartesianIndices(index))
+    LinearIndices(sz::NTuple{N,<:Integer}) where {N} = LinearIndices(CartesianIndices(sz))
+    LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} = LinearIndices(CartesianIndices(inds))
+    LinearIndices(A::AbstractArray) = LinearIndices(CartesianIndices(A))
 
     # AbstractArray implementation
-    Base.IndexStyle(::Type{CartesianToLinear{N,R}}) where {N,R} = IndexCartesian()
-    Base.axes(iter::CartesianToLinear{N,R}) where {N,R} = iter.indices
-    @inline function Base.getindex(iter::CartesianToLinear{N,R}, I::Vararg{Int, N}) where {N,R}
+    Base.IndexStyle(::Type{LinearIndices{N,R}}) where {N,R} = IndexCartesian()
+    Base.axes(iter::LinearIndices{N,R}) where {N,R} = iter.indices
+    @inline function Base.getindex(iter::LinearIndices{N,R}, I::Vararg{Int, N}) where {N,R}
         dims = length.(iter.indices)
         #without the inbounds, this is slower than Base._sub2ind(iter.indices, I...)
         @inbounds result = reshape(1:prod(dims), dims)[(I .- first.(iter.indices) .+ 1)...]
@@ -544,7 +544,7 @@ show(io::IO, r::LogicalIndex) = print(io, "Base.LogicalIndex(", r.mask, ")")
     return (r, start(r), 1)
 end
 @inline function start(L::LogicalIndex{<:CartesianIndex})
-    r = CartesianRange(axes(L.mask))
+    r = CartesianIndices(axes(L.mask))
     return (r, start(r), 1)
 end
 @propagate_inbounds function next(L::LogicalIndex, s)
@@ -967,7 +967,7 @@ function accumulate!(op, B, A, dim::Integer)
         # We can accumulate to a temporary variable, which allows
         # register usage and will be slightly faster
         ind1 = inds_t[1]
-        @inbounds for I in CartesianRange(tail(inds_t))
+        @inbounds for I in CartesianIndices(tail(inds_t))
             tmp = convert(eltype(B), A[first(ind1), I])
             B[first(ind1), I] = tmp
             for i_1 = first(ind1)+1:last(ind1)
@@ -976,8 +976,8 @@ function accumulate!(op, B, A, dim::Integer)
             end
         end
     else
-        R1 = CartesianRange(axes(A)[1:dim-1])   # not type-stable
-        R2 = CartesianRange(axes(A)[dim+1:end])
+        R1 = CartesianIndices(axes(A)[1:dim-1])   # not type-stable
+        R2 = CartesianIndices(axes(A)[dim+1:end])
         _accumulate!(op, B, A, R1, inds_t[dim], R2) # use function barrier
     end
     return B
@@ -1113,8 +1113,8 @@ function copy!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
     dest
 end
 
-function copy!(dest::AbstractArray{T1,N}, Rdest::CartesianRange{N},
-               src::AbstractArray{T2,N}, Rsrc::CartesianRange{N}) where {T1,T2,N}
+function copy!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
+               src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
     isempty(Rdest) && return dest
     if size(Rdest) != size(Rsrc)
         throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
@@ -1139,12 +1139,12 @@ function copy!(dest::AbstractArray{T1,N}, Rdest::CartesianRange{N},
 end
 
 """
-    copy!(dest, Rdest::CartesianRange, src, Rsrc::CartesianRange) -> dest
+    copy!(dest, Rdest::CartesianIndices, src, Rsrc::CartesianIndices) -> dest
 
 Copy the block of `src` in the range of `Rsrc` to the block of `dest`
 in the range of `Rdest`. The sizes of the two regions must match.
 """
-copy!(::AbstractArray, ::CartesianRange, ::AbstractArray, ::CartesianRange)
+copy!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 
 # circshift!
 circshift!(dest::AbstractArray, src, ::Tuple{}) = copy!(dest, src)
@@ -1197,7 +1197,7 @@ circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt
 end
 # At least one of inds, shiftamt is empty
 function _circshift!(dest, rdest, src, rsrc, inds, shiftamt)
-    copy!(dest, CartesianRange(rdest), src, CartesianRange(rsrc))
+    copy!(dest, CartesianIndices(rdest), src, CartesianIndices(rsrc))
 end
 
 # circcopy!
@@ -1260,7 +1260,7 @@ end
 
 # At least one of indsdest, indssrc are empty (and both should be, since we've checked)
 function _circcopy!(dest, rdest, indsdest, src, rsrc, indssrc)
-    copy!(dest, CartesianRange(rdest), src, CartesianRange(rsrc))
+    copy!(dest, CartesianIndices(rdest), src, CartesianIndices(rsrc))
 end
 
 ### BitArrays
@@ -1751,12 +1751,12 @@ end
 @noinline function extrema!(B, A)
     sA = size(A)
     sB = size(B)
-    for I in CartesianRange(sB)
+    for I in CartesianIndices(sB)
         AI = A[I]
         B[I] = (AI, AI)
     end
     Bmax = CartesianIndex(sB)
-    @inbounds @simd for I in CartesianRange(sA)
+    @inbounds @simd for I in CartesianIndices(sA)
         J = min(Bmax,I)
         BJ = B[J]
         AI = A[I]

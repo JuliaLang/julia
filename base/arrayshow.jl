@@ -261,7 +261,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
     end
     tailinds = tail(tail(axes(a)))
     nd = ndims(a)-2
-    for I in CartesianRange(tailinds)
+    for I in CartesianIndices(tailinds)
         idxs = I.I
         if limit
             for i = 1:nd

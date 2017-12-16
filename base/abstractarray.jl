@@ -104,7 +104,7 @@ julia> extrema(b)
 linearindices(A::AbstractArray) = (@_inline_meta; OneTo(_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
 
-keys(a::AbstractArray) = CartesianRange(axes(a))
+keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = linearindices(a)
 
 prevind(::AbstractArray, i::Integer) = Int(i)-1
@@ -773,7 +773,7 @@ zero(x::AbstractArray{T}) where {T} = fill!(similar(x), zero(T))
 # Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
 
 # While the definitions for IndexLinear are all simple enough to inline on their
-# own, IndexCartesian's CartesianRange is more complicated and requires explicit
+# own, IndexCartesian's CartesianIndices is more complicated and requires explicit
 # inlining.
 start(A::AbstractArray) = (@_inline_meta; itr = eachindex(A); (itr, start(itr)))
 next(A::AbstractArray, i) = (@_propagate_inbounds_meta; (idx, s) = next(i[1], i[2]); (A[idx], (i[1], s)))
@@ -824,7 +824,7 @@ A[iter] = 0
 
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
 iterable object that is fast for all arguments (a `UnitRange`
-if all inputs have fast linear indexing, a [`CartesianRange`](@ref)
+if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
 otherwise).
 If the arrays have different sizes and/or dimensionalities, `eachindex` will return an
 iterable that spans the largest range along each dimension.
@@ -1815,7 +1815,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     R[ridx...] = r1
 
     nidx = length(otherdims)
-    indices = Iterators.drop(CartesianRange(itershape), 1)
+    indices = Iterators.drop(CartesianIndices(itershape), 1)
     inner_mapslices!(safe_for_reuse, indices, nidx, idx, otherdims, ridx, Aslice, A, f, R)
 end
 

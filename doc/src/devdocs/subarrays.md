@@ -23,7 +23,7 @@ For these types, the underlying information is more naturally described in terms
 cartesian indices.
 
 The `getindex` and `setindex!` functions for `AbstractArray` types may include automatic conversion
-between indexing types. For explicit conversion, [`CartesianRange`](@ref) can be used.
+between indexing types. For explicit conversion, [`CartesianIndices`](@ref) can be used.
 
 While converting from a cartesian index to a linear index is fast (it's just multiplication and
 addition), converting from a linear index to a cartesian index is very slow: it relies on the

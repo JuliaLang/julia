@@ -65,7 +65,7 @@ end
 #11: 70600674
 function euler11(grid,n)
     m = typemin(eltype(grid))
-    tolinear = CartesianToLinear(size(grid))
+    tolinear = LinearIndices(size(grid))
     for i = n:size(grid,1)-n+1,
         j = n:size(grid,2)-n+1,
         di = -1:1, dj = -1:1
