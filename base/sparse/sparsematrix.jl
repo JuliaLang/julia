@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base.Sort: searchsortedfirst, searchsortedlast
+
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure
 # Assumes that row values in rowval for each column are sorted
