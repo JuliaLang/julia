@@ -1471,7 +1471,31 @@ julia> ids
 ```
 
 Had we tried to do the addition without the atomic tag, we might have gotten the
-wrong answer due to a race condition.
+wrong answer due to a race condition. An example of what would happen if we didn't
+avoid the race:
+
+```julia
+using Base.Threads
+acc = Ref(0.0)
+@threads for i in 1:1000
+   acc[] += i
+end
+@show acc[]
+acc[] = 2509.0
+
+acc = Atomic{Float64}(0.0)
+@threads for i in 1:1000
+    atomic_add!(accm 1.0)
+end
+@show acc
+acc = Atomic{Float64}(1000.0)
+```
+
+!!! note
+    Not *all* primitive types can be wrapped in an `Atomic` tag. Supported types
+    are `Int8`, `Int16`, `Int32`, `Int64`, `Int128`, `UInt8`, `UInt16`, `UInt32`,
+    `UInt64`, `UInt128`, `Float16`, `Float32`, and `Float128`. Additionally,
+    `Int128` and `UInt128` are not supported on AAarch32 and ppc64le.
 
 ## @threadcall (Experimental)
 
