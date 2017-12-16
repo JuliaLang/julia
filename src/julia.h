@@ -455,7 +455,7 @@ typedef struct _jl_typemap_entry_t {
 // one level in a TypeMap tree
 // indexed by key if it is a sublevel in an array
 struct jl_ordereddict_t {
-    jl_array_t *indexes; // Array{Int{8,16,32}}
+    jl_array_t *indices; // Array{Int{8,16,32}}
     jl_array_t *values; // Array{union jl_typemap_t}
 };
 typedef struct _jl_typemap_level_t {

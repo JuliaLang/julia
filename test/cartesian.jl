@@ -12,6 +12,6 @@ ex = Base.Cartesian.exprresolve(:(if 5 > 4; :x; else :y; end))
     @test convert(Int, CartesianIndex(42)) === 42
     @test convert(Float64, CartesianIndex(42)) === 42.0
     @test convert(Tuple, CartesianIndex(42, 1)) === (42, 1)
-    # can't convert higher-dimensional indexes to Int
+    # can't convert higher-dimensional indices to Int
     @test_throws MethodError convert(Int, CartesianIndex(42, 1))
 end

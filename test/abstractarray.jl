@@ -629,7 +629,7 @@ mutable struct TSlowNIndexes{T,N} <: AbstractArray{T,N}
 end
 Base.IndexStyle(::Type{A}) where {A<:TSlowNIndexes} = Base.IndexCartesian()
 Base.size(A::TSlowNIndexes) = size(A.data)
-Base.getindex(A::TSlowNIndexes, index::Int...) = error("Must use $(ndims(A)) indexes")
+Base.getindex(A::TSlowNIndexes, index::Int...) = error("Must use $(ndims(A)) indices")
 Base.getindex(A::TSlowNIndexes{T,2}, i::Int, j::Int) where {T} = A.data[i,j]
 
 

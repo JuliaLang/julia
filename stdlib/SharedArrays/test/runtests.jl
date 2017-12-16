@@ -31,7 +31,7 @@ function check_pids_all(S::SharedArray)
     pidtested = falses(size(S))
     for p in procs(S)
         idxes_in_p = remotecall_fetch(p, S) do D
-            parentindexes(D.loc_subarr_1d)[1]
+            parentindices(D.loc_subarr_1d)[1]
         end
         @test all(sdata(S)[idxes_in_p] .== p)
         pidtested[idxes_in_p] = true
@@ -55,7 +55,7 @@ end
 d = SharedArrays.shmem_rand(dims)
 for p in procs(d)
     idxes_in_p = remotecall_fetch(p, d) do D
-        parentindexes(D.loc_subarr_1d)[1]
+        parentindices(D.loc_subarr_1d)[1]
     end
     idxf = first(idxes_in_p)
     idxl = last(idxes_in_p)
@@ -84,7 +84,7 @@ a = rand(dims)
 d = SharedArray{Int}(dims, init = D->fill!(D.loc_subarr_1d, myid()))
 for p in procs(d)
     idxes_in_p = remotecall_fetch(p, d) do D
-        parentindexes(D.loc_subarr_1d)[1]
+        parentindices(D.loc_subarr_1d)[1]
     end
     idxf = first(idxes_in_p)
     idxl = last(idxes_in_p)
@@ -124,7 +124,7 @@ finalize(S)
 
 # Creating a new file
 fn2 = tempname()
-S = SharedArray{Int,2}(fn2, sz, init=D->D[localindexes(D)] = myid())
+S = SharedArray{Int,2}(fn2, sz, init=D->D[localindices(D)] = myid())
 @test S == filedata
 filedata2 = similar(Atrue)
 read!(fn2, filedata2)
@@ -134,7 +134,7 @@ finalize(S)
 # Appending to a file
 fn3 = tempname()
 write(fn3, ones(UInt8, 4))
-S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->D[localindexes(D)]=0x02)
+S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->D[localindices(D)]=0x02)
 len = prod(sz)+4
 @test filesize(fn3) == len
 filedata = Vector{UInt8}(uninitialized, len)
@@ -194,7 +194,7 @@ remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.
 @test ds != d
 @test s != d
 copy!(d, s)
-@everywhere setid!(A) = A[localindexes(A)] = myid()
+@everywhere setid!(A) = A[localindices(A)] = myid()
 @everywhere procs(ds) setid!($ds)
 @test d == s
 @test ds != s

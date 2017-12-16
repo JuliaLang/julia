@@ -249,7 +249,7 @@ union jl_typemap_t mtcache_hash_lookup(const struct jl_ordereddict_t *a, jl_valu
     ml.unknown = jl_nothing;
     if (!uid)
         return ml;
-    size_t idx = jl_intref(a->indexes, uid & (a->indexes->nrows-1));
+    size_t idx = jl_intref(a->indices, uid & (a->indices->nrows-1));
     if (idx > 0) {
         ml.unknown = jl_array_ptr_ref(a->values, idx - 1);
         if (ml.unknown == jl_nothing)
@@ -301,7 +301,7 @@ static void mtcache_rehash(struct jl_ordereddict_t *pa, size_t newlen, jl_value_
             n = jl_alloc_int_1d(nval + 1, newlen);
         }
     }
-    pa->indexes = n;
+    pa->indices = n;
     jl_gc_wb(parent, n);
 }
 
@@ -338,20 +338,20 @@ static union jl_typemap_t *mtcache_hash_bp(struct jl_ordereddict_t *pa, jl_value
             // since they should have a lower priority and need to go into the sorted list
             return NULL;
         if (pa->values == (void*)jl_nothing) {
-            pa->indexes = jl_alloc_int_1d(0, INIT_CACHE_SIZE);
-            jl_gc_wb(parent, pa->indexes);
+            pa->indices = jl_alloc_int_1d(0, INIT_CACHE_SIZE);
+            jl_gc_wb(parent, pa->indices);
             pa->values = jl_alloc_vec_any(0);
             jl_gc_wb(parent, pa->values);
         }
         while (1) {
-            size_t slot = uid & (pa->indexes->nrows - 1);
-            size_t idx = jl_intref(pa->indexes, slot);
+            size_t slot = uid & (pa->indices->nrows - 1);
+            size_t idx = jl_intref(pa->indices, slot);
             if (idx == 0) {
                 jl_array_ptr_1d_push(pa->values, jl_nothing);
                 idx = jl_array_len(pa->values);
-                if (idx > jl_max_int(pa->indexes))
-                    mtcache_rehash(pa, jl_array_len(pa->indexes), parent, tparam, offs);
-                jl_intset(pa->indexes, slot, idx);
+                if (idx > jl_max_int(pa->indices))
+                    mtcache_rehash(pa, jl_array_len(pa->indices), parent, tparam, offs);
+                jl_intset(pa->indices, slot, idx);
                 return &((union jl_typemap_t*)jl_array_data(pa->values))[idx - 1];
             }
             union jl_typemap_t *pml = &((union jl_typemap_t*)jl_array_data(pa->values))[idx - 1];
@@ -369,7 +369,7 @@ static union jl_typemap_t *mtcache_hash_bp(struct jl_ordereddict_t *pa, jl_value
             }
             if (t == ty)
                 return pml;
-            mtcache_rehash(pa, jl_array_len(pa->indexes) * 2, parent, tparam, offs);
+            mtcache_rehash(pa, jl_array_len(pa->indices) * 2, parent, tparam, offs);
         }
     }
     return NULL;
@@ -852,9 +852,9 @@ static jl_typemap_level_t *jl_new_typemap_level(void)
     cache->key = NULL;
     cache->linear = (jl_typemap_entry_t*)jl_nothing;
     cache->any.unknown = jl_nothing;
-    cache->targ.indexes = (jl_array_t*)jl_nothing;
+    cache->targ.indices = (jl_array_t*)jl_nothing;
     cache->targ.values = (jl_array_t*)jl_nothing;
-    cache->arg1.indexes = (jl_array_t*)jl_nothing;
+    cache->arg1.indices = (jl_array_t*)jl_nothing;
     cache->arg1.values = (jl_array_t*)jl_nothing;
     return cache;
 }

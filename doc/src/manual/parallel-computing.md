@@ -525,7 +525,7 @@ end
 
 [`@async`](@ref) is similar to [`@spawn`](@ref), but only runs tasks on the local process. We
 use it to create a "feeder" task for each process. Each task picks the next index that needs to
-be computed, then waits for its process to finish, then repeats until we run out of indexes. Note
+be computed, then waits for its process to finish, then repeats until we run out of indices. Note
 that the feeder tasks do not begin to execute until the main task reaches the end of the [`@sync`](@ref)
 block, at which point it surrenders control and waits for all the local tasks to complete before
 returning from the function. The feeder tasks are able to share state via `nextidx` because
@@ -894,7 +894,7 @@ julia> addprocs(3)
 
 julia> @everywhere using SharedArrays
 
-julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindexes(S)] = myid())
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindices(S)] = myid())
 3×4 SharedArray{Int64,2}:
  2  2  3  4
  2  3  3  4
@@ -910,7 +910,7 @@ julia> S
  2  7  4  4
 ```
 
-[`SharedArrays.localindexes`](@ref) provides disjoint one-dimensional ranges of indexes, and is sometimes
+[`SharedArrays.localindices`](@ref) provides disjoint one-dimensional ranges of indices, and is sometimes
 convenient for splitting up tasks among processes. You can, of course, divide the work any way
 you wish:
 
@@ -950,7 +950,7 @@ into trouble: if `q[i,j,t]` is near the end of the block assigned to one worker 
 is near the beginning of the block assigned to another, it's very likely that `q[i,j,t]` will
 not be ready at the time it's needed for computing `q[i,j,t+1]`. In such cases, one is better
 off chunking the array manually. Let's split along the second dimension.
-Define a function that returns the `(irange, jrange)` indexes assigned to this worker:
+Define a function that returns the `(irange, jrange)` indices assigned to this worker:
 
 ```julia-repl
 julia> @everywhere function myrange(q::SharedArray)

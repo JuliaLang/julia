@@ -528,7 +528,7 @@ end
 
 function sum(r::StepRangeLen)
     l = length(r)
-    # Compute the contribution of step over all indexes.
+    # Compute the contribution of step over all indices.
     # Indexes on opposite side of r.offset contribute with opposite sign,
     #    r.step * (sum(1:np) - sum(1:nn))
     np, nn = l - r.offset, r.offset - 1  # positive, negative

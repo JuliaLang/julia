@@ -1876,22 +1876,22 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     R[ridx...] = r1
 
     nidx = length(otherdims)
-    indexes = Iterators.drop(CartesianRange(itershape), 1)
-    inner_mapslices!(safe_for_reuse, indexes, nidx, idx, otherdims, ridx, Aslice, A, f, R)
+    indices = Iterators.drop(CartesianRange(itershape), 1)
+    inner_mapslices!(safe_for_reuse, indices, nidx, idx, otherdims, ridx, Aslice, A, f, R)
 end
 
-@noinline function inner_mapslices!(safe_for_reuse, indexes, nidx, idx, otherdims, ridx, Aslice, A, f, R)
+@noinline function inner_mapslices!(safe_for_reuse, indices, nidx, idx, otherdims, ridx, Aslice, A, f, R)
     if safe_for_reuse
         # when f returns an array, R[ridx...] = f(Aslice) line copies elements,
         # so we can reuse Aslice
-        for I in indexes # skip the first element, we already handled it
+        for I in indices # skip the first element, we already handled it
             replace_tuples!(nidx, idx, ridx, otherdims, I)
             _unsafe_getindex!(Aslice, A, idx...)
             R[ridx...] = f(Aslice)
         end
     else
         # we can't guarantee safety (#18524), so allocate new storage for each slice
-        for I in indexes
+        for I in indices
             replace_tuples!(nidx, idx, ridx, otherdims, I)
             R[ridx...] = f(A[idx...])
         end

@@ -5,7 +5,7 @@ using Test
 ######## Utilities ###########
 
 # Generate an array similar to A[indx1, indx2, ...], but only call
-# getindex with scalar-valued indexes. This will be safe even if
+# getindex with scalar-valued indices. This will be safe even if
 # `getindex` someday calls `view`.
 
 # The "nodrop" variant does not drop any dimensions (not even trailing ones)
@@ -72,10 +72,10 @@ function single_stride_dim(A::Array)
         Ar = reshape(A, shp...)
         # Compute the diff along dimension 1
         if size(Ar, 1) > 1
-            indexes = map(d->1:size(Ar,d), [1:ndims(Ar);])
-            indexesp = copy(indexes); indexesp[1] = 2:size(Ar,1)
-            indexesm = copy(indexes); indexesm[1] = 1:size(Ar,1)-1
-            dA = Ar[indexesp...] - Ar[indexesm...]
+            indices = map(d->1:size(Ar,d), [1:ndims(Ar);])
+            indicesp = copy(indices); indicesp[1] = 2:size(Ar,1)
+            indicesm = copy(indices); indicesm[1] = 1:size(Ar,1)-1
+            dA = Ar[indicesp...] - Ar[indicesm...]
             ustride = unique(dA[:])
             if length(ustride) == 1  # is it a single stride?
                 ld += 1
@@ -118,13 +118,13 @@ function test_linear(@nospecialize(A), @nospecialize(B))
     end
     if !isgood
         @show A
-        @show A.indexes
+        @show A.indices
         @show B
         error("Mismatch")
     end
 end
 
-# "mixed" means 2 indexes even for N-dimensional arrays
+# "mixed" means 2 indices even for N-dimensional arrays
 test_mixed(::AbstractArray{T,1}, ::Array) where {T} = nothing
 test_mixed(::AbstractArray{T,2}, ::Array) where {T} = nothing
 test_mixed(A, B::Array) = _test_mixed(A, reshape(B, size(A)))
@@ -212,9 +212,9 @@ function runsubarraytests(@nospecialize(A), I...)
     C = Agen_nodrop(AA, I...)
     Cld = ld = min(single_stride_dim(C), dim_break_linindex(I))
     Cdim = AIindex = 0
-    while Cdim <= Cld && AIindex < length(A.indexes)
+    while Cdim <= Cld && AIindex < length(A.indices)
         AIindex += 1
-        if isa(A.indexes[AIindex], Real)
+        if isa(A.indices[AIindex], Real)
             ld += 1
         else
             Cdim += 1
@@ -225,7 +225,7 @@ function runsubarraytests(@nospecialize(A), I...)
         S = view(A, I...)
     catch err
         @show typeof(A)
-        @show A.indexes
+        @show A.indices
         @show I
         rethrow(err)
     end
@@ -295,7 +295,7 @@ end
 
 ### Views from views ###
 
-# "outer" indexes create snips that have at least size 5 along each dimension,
+# "outer" indices create snips that have at least size 5 along each dimension,
 # with the exception of Int-slicing
 oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9])
 
@@ -349,7 +349,7 @@ A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2:2, 1:5, :)
 @test strides(sA) == (1, 3, 15)
 @test parent(sA) == A
-@test parentindexes(sA) == (2:2, 1:5, Base.Slice(1:8))
+@test parentindices(sA) == (2:2, 1:5, Base.Slice(1:8))
 @test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (1, 5, 8)
 @test axes(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
@@ -405,7 +405,7 @@ sB = view(B, 2:3, 2:3)
 A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2, :, 1:8)
 @test parent(sA) == A
-@test parentindexes(sA) == (2, Base.Slice(1:5), 1:8)
+@test parentindices(sA) == (2, Base.Slice(1:5), 1:8)
 @test Base.parentdims(sA) == [2:3;]
 @test size(sA) == (5, 8)
 @test axes(sA) === (Base.OneTo(5), Base.OneTo(8))
@@ -428,12 +428,12 @@ sA = view(A, 1:2:3, 3, 1:2:8)
 @test size(sA) == (2,4)
 @test axes(sA) === (Base.OneTo(2), Base.OneTo(4))
 @test strides(sA) == (2,30)
-@test sA[:] == A[sA.indexes...][:]
+@test sA[:] == A[sA.indices...][:]
 test_bounds(sA)
 
 let a = [5:8;]
     @test parent(a) == a
-    @test parentindexes(a) == (1:4,)
+    @test parentindices(a) == (1:4,)
 end
 
 # issue #6218 - logical indexing

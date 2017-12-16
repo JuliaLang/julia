@@ -70,7 +70,7 @@ module MyArray15367
     end
 
     Base.size(A::MyArray) = size(A.data)
-    Base.getindex(A::MyArray, indexes...) = A.data[indexes...]
+    Base.getindex(A::MyArray, indices...) = A.data[indices...]
 
     A = MyArray(rand(4,5))
     b = rand(5)

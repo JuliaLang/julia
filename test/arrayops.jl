@@ -104,7 +104,7 @@ end
         @test r[3,1] == 4
         @test r[Base.ReshapedIndex(CartesianIndex((1,2)))] == 3
         @test parent(reshape(r, (1,3))) === r.parent === s
-        @test parentindexes(r) == (1:1, 1:3)
+        @test parentindices(r) == (1:1, 1:3)
         @test reshape(r, (3,)) === r
         @test convert(Array{Int,1}, r) == [2,3,4]
         @test_throws MethodError convert(Array{Int,2}, r)
@@ -120,7 +120,7 @@ end
         @test r[3,1] == 5
         @test r[Base.ReshapedIndex(CartesianIndex((1,2)))] == 3
         @test parent(reshape(r, (1,3))) === r.parent === s
-        @test parentindexes(r) == (1:1, 1:3)
+        @test parentindices(r) == (1:1, 1:3)
         @test reshape(r, (3,)) === r
         @test convert(Array{Int,1}, r) == [2,3,5]
         @test_throws MethodError convert(Array{Int,2}, r)
@@ -1577,13 +1577,13 @@ end
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
     @test eltype(CartesianRange{2}) <: CartesianIndex{2}
-    indexes = collect(R)
-    @test indexes[1] == CartesianIndex{2}(2,3)
-    @test indexes[2] == CartesianIndex{2}(3,3)
-    @test indexes[4] == CartesianIndex{2}(5,3)
-    @test indexes[5] == CartesianIndex{2}(2,4)
-    @test indexes[12] == CartesianIndex{2}(5,5)
-    @test length(indexes) == 12
+    indices = collect(R)
+    @test indices[1] == CartesianIndex{2}(2,3)
+    @test indices[2] == CartesianIndex{2}(3,3)
+    @test indices[4] == CartesianIndex{2}(5,3)
+    @test indices[5] == CartesianIndex{2}(2,4)
+    @test indices[12] == CartesianIndex{2}(5,5)
+    @test length(indices) == 12
     @test length(R) == 12
     @test ndims(R) == 2
     @test in(CartesianIndex((2,3)), R)

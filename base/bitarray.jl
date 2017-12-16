@@ -1263,7 +1263,7 @@ end
 
 function reverse!(B::BitVector)
     # Basic idea: each chunk is divided into two blocks of size k = n % 64, and
-    # h = 64 - k. Walk from either end (with indexes i and j) reversing chunks
+    # h = 64 - k. Walk from either end (with indices i and j) reversing chunks
     # and separately ORing their two blocks into place.
     #
     #           chunk 3                  chunk 2                  chunk 1

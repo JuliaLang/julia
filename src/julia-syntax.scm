@@ -115,10 +115,10 @@
                     (cdr ex))))))
 
 ;; go through indices and replace the `end` symbol
-;; a = array being indexed, i = list of indexes
+;; a = array being indexed, i = list of indices
 ;; returns (values index-list stmts) where stmts are statements that need
 ;; to execute first.
-(define (process-indexes a i)
+(define (process-indices a i)
   (let loop ((lst i)
              (n   1)
              (stmts '())
@@ -1561,7 +1561,7 @@
            (arr   (if reuse (make-ssavalue) a))
            (stmts (if reuse `((= ,arr ,a)) '())))
       (receive
-       (new-idxs stuff) (process-indexes arr idxs)
+       (new-idxs stuff) (process-indices arr idxs)
        `(block
          ,@(append stmts stuff)
          (call getindex ,arr ,@new-idxs))))))
@@ -2098,7 +2098,7 @@
                    (r    (if rrhs (make-ssavalue) rhs))
                    (rini (if rrhs `((= ,r ,(expand-forms rhs))) '())))
               (receive
-               (new-idxs stuff) (process-indexes arr idxs)
+               (new-idxs stuff) (process-indices arr idxs)
                `(block
                  ,@stmts
                  ,.(map expand-forms stuff)

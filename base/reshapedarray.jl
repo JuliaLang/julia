@@ -177,7 +177,7 @@ size(A::ReshapedArray) = A.dims
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
-parentindexes(A::ReshapedArray) = map(s->1:s, size(parent(A)))
+parentindices(A::ReshapedArray) = map(s->1:s, size(parent(A)))
 reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
 
 @inline ind2sub_rs(::Tuple{}, i::Int) = i
@@ -193,9 +193,9 @@ end
     @inbounds ret = parent(A)[index]
     ret
 end
-@inline function getindex(A::ReshapedArray{T,N}, indexes::Vararg{Int,N}) where {T,N}
-    @boundscheck checkbounds(A, indexes...)
-    _unsafe_getindex(A, indexes...)
+@inline function getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
+    @boundscheck checkbounds(A, indices...)
+    _unsafe_getindex(A, indices...)
 end
 @inline function getindex(A::ReshapedArray, index::ReshapedIndex)
     @boundscheck checkbounds(parent(A), index.parentindex)
@@ -203,8 +203,8 @@ end
     ret
 end
 
-@inline function _unsafe_getindex(A::ReshapedArray{T,N}, indexes::Vararg{Int,N}) where {T,N}
-    i = sub2ind(size(A), indexes...)
+@inline function _unsafe_getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
+    i = sub2ind(size(A), indices...)
     I = ind2sub_rs(A.mi, i)
     _unsafe_getindex_rs(parent(A), I)
 end
@@ -216,9 +216,9 @@ _unsafe_getindex_rs(A, i::Integer) = (@inbounds ret = A[i]; ret)
     @inbounds parent(A)[index] = val
     val
 end
-@inline function setindex!(A::ReshapedArray{T,N}, val, indexes::Vararg{Int,N}) where {T,N}
-    @boundscheck checkbounds(A, indexes...)
-    _unsafe_setindex!(A, val, indexes...)
+@inline function setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
+    @boundscheck checkbounds(A, indices...)
+    _unsafe_setindex!(A, val, indices...)
 end
 @inline function setindex!(A::ReshapedArray, val, index::ReshapedIndex)
     @boundscheck checkbounds(parent(A), index.parentindex)
@@ -226,15 +226,15 @@ end
     val
 end
 
-@inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indexes::Vararg{Int,N}) where {T,N}
-    @inbounds parent(A)[ind2sub_rs(A.mi, sub2ind(size(A), indexes...))...] = val
+@inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
+    @inbounds parent(A)[ind2sub_rs(A.mi, sub2ind(size(A), indices...))...] = val
     val
 end
 
 # helpful error message for a common failure case
 const ReshapedRange{T,N,A<:AbstractRange} = ReshapedArray{T,N,A,Tuple{}}
 setindex!(A::ReshapedRange, val, index::Int) = _rs_setindex!_err()
-setindex!(A::ReshapedRange{T,N}, val, indexes::Vararg{Int,N}) where {T,N} = _rs_setindex!_err()
+setindex!(A::ReshapedRange{T,N}, val, indices::Vararg{Int,N}) where {T,N} = _rs_setindex!_err()
 setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
 @noinline _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
