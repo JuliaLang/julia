@@ -147,7 +147,7 @@ function show(io::IO, ::MIME"text/plain", c::Char)
         isoverlong(c) && print(io, "[overlong] ")
         u = UInt32(c)
         h = hex(u, u ≤ 0xffff ? 4 : 6)
-        print(io, (Unicode.isascii(c) ? "ASCII/" : ""), "Unicode U+", h)
+        print(io, (isascii(c) ? "ASCII/" : ""), "Unicode U+", h)
     else
         print(io, ": Malformed UTF-8")
     end

@@ -726,6 +726,7 @@ export
     hex2bytes,
     hex2bytes!,
     info,
+    isascii,
     ismatch,
     isvalid,
     join,

@@ -766,7 +766,7 @@ Deprecated or removed
 
   * Unicode-related string functions have been moved to the new `Unicode` standard
     library module ([#25021]). This applies to `normalize_string`, `graphemes`,
-    `is_assigned_char`, `textwidth`, `isascii`, `islower`, `isupper`, `isalpha`,
+    `is_assigned_char`, `textwidth`, `islower`, `isupper`, `isalpha`,
     `isdigit`, `isxdigit`, `isnumber`, `isalnum`, `iscntrl`, `ispunct`, `isspace`,
     `isprint`, `isgraph`, `lowercase`, `uppercase`, `titlecase`, `lcfirst` and `ucfirst`.
 
