@@ -607,10 +607,13 @@ JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)
         assert(jl_array_len(args) == 0);
         jl_array_grow_end(args, argc);
         int i;
+        jl_value_t *s = NULL;
+        JL_GC_PUSH1(&s);
         for (i=0; i < argc; i++) {
-            jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
+            s = (jl_value_t*)jl_cstr_to_string(argv[i]);
             jl_arrayset(args, s, i);
         }
+        JL_GC_POP();
     }
 }
 
