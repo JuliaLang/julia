@@ -739,6 +739,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
     if (type->instance != NULL) return type->instance;
     size_t nf = jl_datatype_nfields(type);
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
+    JL_GC_PUSH1(&jv);
     for (size_t i = 0; i < na; i++) {
         jl_value_t *ft = jl_field_type(type, i);
         if (!jl_isa(args[i], ft))
@@ -757,6 +758,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
             }
         }
     }
+    JL_GC_POP();
     return jv;
 }
 
