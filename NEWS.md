@@ -211,13 +211,6 @@ This section lists changes that do not have deprecation warnings.
     longer present. Use `first(R)` and `last(R)` to obtain
     start/stop. ([#20974])
 
-  * `CartesianRange` inherits from AbstractArray and construction with an
-    `AbstractArray` argument constructs the indices for that array. Consequently,
-    linear indexing can be used to provide linear-to-cartesian conversion ([#24715])
-
-  * The type `CartesianToLinear` has been added, providing conversion from
-    cartesian incices to linear indices using the normal indexing operation. ([#24715])
-
   * The `Diagonal`, `Bidiagonal`, `Tridiagonal` and `SymTridiagonal` type definitions have
     changed from `Diagonal{T}`, `Bidiagonal{T}`, `Tridiagonal{T}` and `SymTridiagonal{T}`
     to `Diagonal{T,V<:AbstractVector{T}}`, `Bidiagonal{T,V<:AbstractVector{T}}`,
@@ -453,9 +446,12 @@ Library improvements
     `permutedims(v::AbstractVector)` will create a row matrix ([#24839]).
 
   * `CartesianRange` changes ([#24715]):
-    - Inherits from `AbstractArray`
-    - Constructor taking an array
-    - `eachindex` returns the linear indices into a reshaped array, as `sub2ind` alternative
+    - Inherits from `AbstractArray`, and linear indexing can be used to provide
+      linear-to-cartesian conversion ([#24715])
+    - It has a new constructor taking an array
+
+  * The type `LinearIndices` has been added, providing conversion from
+    cartesian incices to linear indices using the normal indexing operation. ([#24715])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -804,7 +800,9 @@ Deprecated or removed
     and `unsafe_get`/`get` can be dropped or replaced with `coalesce`.
     `NullException` has been removed.
 
-  * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianRange` and `CartesianToLinear` ([#24715]).
+  * `CartesianRange` has been renamed `CartesianIndices` ([#24715]).
+
+  * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianIndices` and `LinearIndices` ([#24715]).
 
 Command-line option changes
 ---------------------------
