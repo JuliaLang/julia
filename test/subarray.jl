@@ -132,7 +132,7 @@ function _test_mixed(@nospecialize(A), @nospecialize(B))
     m = size(A, 1)
     n = size(A, 2)
     isgood = true
-    for J in CartesianRange(size(A)[2:end]), i in 1:m
+    for J in CartesianIndices(size(A)[2:end]), i in 1:m
         if A[i,J] != B[i,J]
             isgood = false
             break

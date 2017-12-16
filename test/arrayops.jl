@@ -1211,7 +1211,7 @@ end
 
 @testset "eachindexvalue" begin
     A14 = [11 13; 12 14]
-    R = CartesianRange(axes(A14))
+    R = CartesianIndices(axes(A14))
     @test [a for (a,b) in pairs(IndexLinear(),    A14)] == [1,2,3,4]
     @test [a for (a,b) in pairs(IndexCartesian(), A14)] == vec(collect(R))
     @test [b for (a,b) in pairs(IndexLinear(),    A14)] == [11,12,13,14]
@@ -1358,7 +1358,7 @@ end
 # issue #7197
 function i7197()
     S = [1 2 3; 4 5 6; 7 8 9]
-    ind2sub(size(S), 5)
+    Base._ind2sub(size(S), 5)
 end
 @test i7197() == (2,2)
 
@@ -1565,7 +1565,7 @@ end
     @test !isless(CartesianIndex((1,2)), CartesianIndex((2,1)))
 
     a = spzeros(2,3)
-    @test CartesianRange(size(a)) == eachindex(a)
+    @test CartesianIndices(size(a)) == eachindex(a)
     a[CartesianIndex{2}(2,3)] = 5
     @test a[2,3] == 5
     b = view(a, 1:2, 2:3)
@@ -1573,10 +1573,10 @@ end
     @test a[1,2] == 7
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
 
-    R = CartesianRange(2:5, 3:5)
+    R = CartesianIndices(2:5, 3:5)
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
-    @test eltype(CartesianRange{2}) <: CartesianIndex{2}
+    @test eltype(CartesianIndices{2}) <: CartesianIndex{2}
     indices = collect(R)
     @test indices[1] == CartesianIndex{2}(2,3)
     @test indices[2] == CartesianIndex{2}(3,3)
@@ -1598,8 +1598,8 @@ end
     @test @inferred(convert(NTuple{2,UnitRange}, R)) === (2:5, 3:5)
     @test @inferred(convert(Tuple{Vararg{UnitRange}}, R)) === (2:5, 3:5)
 
-    @test CartesianRange((3:5,-7:7)) == CartesianRange(3:5,-7:7)
-    @test CartesianRange((3,-7:7)) == CartesianRange(3:3,-7:7)
+    @test CartesianIndices((3:5,-7:7)) == CartesianIndices(3:5,-7:7)
+    @test CartesianIndices((3,-7:7)) == CartesianIndices(3:3,-7:7)
 end
 
 # All we really care about is that we have an optimized
@@ -1629,19 +1629,19 @@ end
     @test done(itr, state)
 end
 
-R = CartesianRange((1,3))
+R = CartesianIndices((1,3))
 @test done(R, start(R)) == false
-R = CartesianRange((0,3))
+R = CartesianIndices((0,3))
 @test done(R, start(R)) == true
-R = CartesianRange((3,0))
+R = CartesianIndices((3,0))
 @test done(R, start(R)) == true
 
 @testset "multi-array eachindex" begin
     local a = zeros(2,2)
     local b = view(zeros(3,2), 1:2, :)
-    @test @inferred(eachindex(Base.IndexCartesian(), a, b)) == CartesianRange((2,2))
+    @test @inferred(eachindex(Base.IndexCartesian(), a, b)) == CartesianIndices((2,2))
     @test @inferred(eachindex(Base.IndexLinear(), a, b)) == 1:4
-    @test @inferred(eachindex(a, b)) == CartesianRange((2,2))
+    @test @inferred(eachindex(a, b)) == CartesianIndices((2,2))
     @test @inferred(eachindex(a, a)) == 1:4
     @test_throws DimensionMismatch eachindex(a, rand(3,3))
     @test_throws DimensionMismatch eachindex(b, rand(3,3))

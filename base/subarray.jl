@@ -329,7 +329,7 @@ pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
 pointer(V::SubArray, i::Int) = _pointer(V, i)
 _pointer(V::SubArray{<:Any,1}, i::Int) = pointer(V, (i,))
-_pointer(V::SubArray, i::Int) = pointer(V, ind2sub(axes(V), i))
+_pointer(V::SubArray, i::Int) = pointer(V, Base._ind2sub(axes(V), i))
 
 function pointer(V::SubArray{T,N,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::Tuple{Vararg{Int}}) where {T,N}
     index = first_index(V)

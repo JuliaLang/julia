@@ -49,15 +49,15 @@ chnlprod(x) = Channel(c->for i in x; put!(c,i); end)
     end
 end
 
-@testset "with CartesianRange" begin
+@testset "with CartesianIndices" begin
     let A = reshape(1:6, 3, 2), B = similar(A)
-        RA = CartesianRange(axes(A))
+        RA = CartesianIndices(axes(A))
         copy!(B, RA, A, RA)
         @test B == A
     end
     let A = reshape(1:6, 3, 2), B = zeros(8,8)
-        RA = CartesianRange(axes(A))
-        copy!(B, CartesianRange((5:7,2:3)), A, RA)
+        RA = CartesianIndices(axes(A))
+        copy!(B, CartesianIndices((5:7,2:3)), A, RA)
         @test B[5:7,2:3] == A
         B[5:7,2:3] = 0
         @test all(x->x==0, B)

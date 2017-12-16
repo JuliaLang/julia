@@ -228,7 +228,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
         i1 = first(indices1(R))
-        @inbounds for IA in CartesianRange(indsAt)
+        @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
             @simd for i in axes(A, 1)
@@ -237,7 +237,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
             R[i1,IR] = r
         end
     else
-        @inbounds for IA in CartesianRange(indsAt)
+        @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             @simd for i in axes(A, 1)
                 R[i,IR] = op(R[i,IR], f(A[i,IA]))
@@ -652,7 +652,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     zi = zero(eltype(ks))
     if reducedim1(Rval, A)
         i1 = first(indices1(Rval))
-        @inbounds for IA in CartesianRange(indsAt)
+        @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             tmpRv = Rval[i1,IR]
             tmpRi = Rind[i1,IR]
@@ -668,7 +668,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             Rind[i1,IR] = tmpRi
         end
     else
-        @inbounds for IA in CartesianRange(indsAt)
+        @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             for i in axes(A, 1)
                 tmpAv = A[i,IA]

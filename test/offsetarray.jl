@@ -78,7 +78,7 @@ for i = 1:9 @test A_3_3[i] == i end
 @test_throws BoundsError A[CartesianIndex(1,1)]
 @test_throws BoundsError S[CartesianIndex(1,1)]
 @test eachindex(A) == 1:4
-@test eachindex(S) == CartesianRange((0:1,3:4))
+@test eachindex(S) == CartesianIndices((0:1,3:4))
 
 # logical indexing
 @test A[A .> 2] == [3,4]

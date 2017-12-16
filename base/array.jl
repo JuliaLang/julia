@@ -135,7 +135,7 @@ sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
     @_inline_meta
-    ii = (sub2ind(size(a), i...) % UInt) - 1
+    ii = (_sub2ind(size(a), i...) % UInt) - 1
     @boundscheck ii < length(a) % UInt || return false
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
@@ -490,7 +490,7 @@ _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
     copy!(Array{eltype(A)}(uninitialized, length.(indsA)), A)
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(uninitialized, length.(indsA))
-    copy!(B, CartesianRange(axes(B)), A, CartesianRange(indsA))
+    copy!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
 end
 
 # define this as a macro so that the call to Inference

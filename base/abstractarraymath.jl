@@ -374,7 +374,7 @@ cat_fill!(R, X::AbstractArray, inds) = fill!(view(R, inds...), X)
         R[axes(A)...] = A
     else
         inner_indices = [1:n for n in inner]
-        for c in CartesianRange(axes(A))
+        for c in CartesianIndices(axes(A))
             for i in 1:ndims(A)
                 n = inner[i]
                 inner_indices[i] = (1:n) .+ ((c[i] - 1) * n)

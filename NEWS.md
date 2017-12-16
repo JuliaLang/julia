@@ -445,6 +445,14 @@ Library improvements
     defined, linear-algebra function `transpose`. Similarly,
     `permutedims(v::AbstractVector)` will create a row matrix ([#24839]).
 
+  * `CartesianRange` changes ([#24715]):
+    - Inherits from `AbstractArray`, and linear indexing can be used to provide
+      linear-to-cartesian conversion ([#24715])
+    - It has a new constructor taking an array
+
+  * The type `LinearIndices` has been added, providing conversion from
+    cartesian incices to linear indices using the normal indexing operation. ([#24715])
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -791,6 +799,10 @@ Deprecated or removed
     (i.e. `Void <: T`). `isnull(x)` can be replaced with `x === nothing`
     and `unsafe_get`/`get` can be dropped or replaced with `coalesce`.
     `NullException` has been removed.
+
+  * `CartesianRange` has been renamed `CartesianIndices` ([#24715]).
+
+  * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianIndices` and `LinearIndices` ([#24715]).
 
 Command-line option changes
 ---------------------------
@@ -1768,6 +1780,7 @@ Command-line option changes
 [#24413]: https://github.com/JuliaLang/julia/issues/24413
 [#24653]: https://github.com/JuliaLang/julia/issues/24653
 [#24714]: https://github.com/JuliaLang/julia/issues/24714
+[#24715]: https://github.com/JuliaLang/julia/issues/24715
 [#24869]: https://github.com/JuliaLang/julia/issues/24869
 [#25021]: https://github.com/JuliaLang/julia/issues/25021
 [#25088]: https://github.com/JuliaLang/julia/issues/25088
