@@ -503,7 +503,6 @@ export
     findnext,
     findprev,
     findnz,
-    ismatch,
     occursin,
     match,
     matchall,

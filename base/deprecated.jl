@@ -3860,6 +3860,8 @@ end
 @deprecate rsearchindex(s::AbstractString, c::Char) first(findlast(equalto(c), s))
 @deprecate rsearchindex(s::AbstractString, c::Char, i::Integer) first(findprev(equalto(c), s, i))
 
+@deprecate ismatch(r::Regex, s::AbstractString) contains(s, r)
+
 # END 0.7 deprecations
 # BEGIN 1.0 deprecations
 

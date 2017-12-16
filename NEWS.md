@@ -904,6 +904,8 @@ Deprecated or removed
     `findlast`/`findprev` respectively, in combination with the new `equalto` and `occursin`
     predicates for some methods ([#24673]
 
+  * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
+
 Command-line option changes
 ---------------------------
 

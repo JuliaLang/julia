@@ -823,22 +823,23 @@ for keys = [altkeys, merge(altkeys...)],
 
             # Check the history file
             history = read(histfile, String)
-            @test ismatch(r"""
-                          ^\#\ time:\ .*\n
-                           \#\ mode:\ julia\n
-                           \t1\ \+\ 1;\n
-                           \#\ time:\ .*\n
-                           \#\ mode:\ julia\n
-                           \tmulti=2;\n
-                           \tline=2;\n
-                           \#\ time:\ .*\n
-                           \#\ mode:\ julia\n
-                           \tmulti=3;\n
-                           \tline=1;\n
-                           \#\ time:\ .*\n
-                           \#\ mode:\ julia\n
-                           \t1\ \*\ 1;\n$
-                          """xm, history)
+            @test contains(history,
+                           r"""
+                           ^\#\ time:\ .*\n
+                            \#\ mode:\ julia\n
+                            \t1\ \+\ 1;\n
+                            \#\ time:\ .*\n
+                            \#\ mode:\ julia\n
+                            \tmulti=2;\n
+                            \tline=2;\n
+                            \#\ time:\ .*\n
+                            \#\ mode:\ julia\n
+                            \tmulti=3;\n
+                            \tline=1;\n
+                            \#\ time:\ .*\n
+                            \#\ mode:\ julia\n
+                            \t1\ \*\ 1;\n$
+                           """xm)
         end
     finally
         rm(histfile, force=true)

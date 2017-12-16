@@ -458,7 +458,7 @@ let dir = mktempdir()
         let fname = tempname()
             try
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                @test ismatch(Regex("Replacing module `$Test_module`"), read(fname, String))
+                @test contains(read(fname, String), Regex("Replacing module `$Test_module`"))
             finally
                 rm(fname, force=true)
             end
@@ -470,7 +470,7 @@ let dir = mktempdir()
             try
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
                 # e.g `@test_nowarn`
-                @test Test.ismatch_warn(r"^(?!.)"s, read(fname, String))
+                @test Test.contains_warn(read(fname, String), r"^(?!.)"s)
             finally
                 rm(fname, force=true)
             end

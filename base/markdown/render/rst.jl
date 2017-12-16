@@ -115,7 +115,7 @@ rstinline(io::IO, md::Vector) = !isempty(md) && rstinline(io, md...)
 # rstinline(io::IO, md::Image) = rstinline(io, ".. image:: ", md.url)
 
 function rstinline(io::IO, md::Link)
-    if ismatch(r":(func|obj|ref|exc|class|const|data):`\.*", md.url)
+    if contains(md.url, r":(func|obj|ref|exc|class|const|data):`\.*")
         rstinline(io, md.url)
     else
         rstinline(io, "`", md.text, " <", md.url, ">`_")

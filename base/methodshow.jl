@@ -202,7 +202,7 @@ function url(m::Method)
     (m.file == :null || m.file == :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
+    line <= 0 || contains(file, r"In\[[0-9]+\]") && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
