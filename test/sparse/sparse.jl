@@ -2171,3 +2171,11 @@ end
     # count should run only over S.nzval[1:nnz(S)], not S.nzval in full
     @test count(SparseMatrixCSC(2, 2, Int[1, 2, 3], Int[1, 2], Bool[true, true, true])) == 2
 end
+
+# #20711
+@testset "vec returns a view" begin
+    local A = sparse(Matrix(1.0I, 3, 3))
+    local v = vec(A)
+    v[1] = 2
+    @test A[1,1] == 2
+end
