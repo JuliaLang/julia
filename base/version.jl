@@ -194,7 +194,7 @@ function check_new_version(existing::Vector{VersionNumber}, ver::VersionNumber)
         end
         error("$ver is not a valid initial version (try 0.0.0, 0.0.1, 0.1 or 1.0)")
     end
-    idx = searchsortedlast(existing, ver)
+    idx = Base.Sort.searchsortedlast(existing, ver)
     prv = existing[idx]
     ver == prv && error("version $ver already exists")
     nxt = thismajor(ver) != thismajor(prv) ? nextmajor(prv) :

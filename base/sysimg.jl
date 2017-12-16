@@ -495,6 +495,7 @@ Base.require(:SuiteSparse)
 Base.require(:Test)
 Base.require(:Unicode)
 Base.require(:Distributed)
+Base.require(:SortedSearch)
 
 @eval Base begin
     @deprecate_binding Test root_module(:Test) true ", run `using Test` instead"

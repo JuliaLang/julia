@@ -3411,6 +3411,10 @@ end
 # PR #25113
 @deprecate_binding CartesianRange CartesianIndices
 
+@deprecate_moved searchsorted "SortedSearch"
+@deprecate_moved searchsortedfirst "SortedSearch"
+@deprecate_moved searchsortedlast "SortedSearch"
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

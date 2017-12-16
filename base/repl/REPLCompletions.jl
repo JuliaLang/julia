@@ -107,7 +107,7 @@ const sorted_keywords = [
     "true", "try", "using", "while"]
 
 function complete_keyword(s::Union{String,SubString{String}})
-    r = searchsorted(sorted_keywords, s)
+    r = Base.Sort.searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)
     while i <= n && startswith(sorted_keywords[i],s)

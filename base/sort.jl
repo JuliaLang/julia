@@ -15,9 +15,6 @@ import
 export # also exported by Base
     # order-only:
     issorted,
-    searchsorted,
-    searchsortedfirst,
-    searchsortedlast,
     # order & algorithm:
     sort,
     sort!,
@@ -287,6 +284,8 @@ if `a` does not contain values equal to `x`.
 
 # Examples
 ```jldoctest
+julia> using SortedSearch
+
 julia> a = [4, 3, 2, 1]
 4-element Array{Int64,1}:
  4
@@ -311,6 +310,8 @@ specified order. Return `length(a) + 1` if `x` is greater than all values in `a`
 
 # Examples
 ```jldoctest
+julia> using SortedSearch
+
 julia> searchsortedfirst([1, 2, 4, 5, 14], 4)
 3
 
@@ -331,6 +332,8 @@ be sorted.
 
 # Examples
 ```jldoctest
+julia> using SortedSearch
+
 julia> searchsortedlast([1, 2, 4, 5, 14], 4)
 3
 
