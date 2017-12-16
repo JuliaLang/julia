@@ -2269,7 +2269,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Missing Values",
     "title": "Arrays With Missing Values",
     "category": "section",
-    "text": "Arrays containing missing values can be created like other arraysjulia> [1, missing]\n2-element Array{Union{Missing, Int64},1}:\n 1\n  missingAs this example shows, the element type of such arrays is Union{Missing, T}, with T the type of the non-missing values. This simply reflects the fact that array entries can be either of type T (here, Int64) or of type Missing. This kind of array uses an efficient memory storage equivalent to an Array{T} holding the actual values combined with an Array{UInt8} indicating the type of the entry (i.e. whether it is Missing or T).Uninitialized arrays allowing for missing values can be constructed with the standard syntax. By default, arrays with an isbits element type are filled with missing valuesjulia> Array{Union{Missing, Int}}(uninitialized, 2, 3)\n2×3 Array{Union{Missing, Int64},2}:\n missing  missing  missing\n missing  missing  missingAn array allowing for missing values but which does not contain any such value can be converted back to an array which does not allow for missing values using convert. If the array contains missing values, a MethodError is thrown during conversionjulia> x = Union{Missing, String}[\"a\", \"b\"]\n2-element Array{Union{Missing, String},1}:\n \"a\"\n \"b\"\n\njulia> convert(Array{String}, x)\n2-element Array{String,1}:\n \"a\"\n \"b\"\n\njulia> y = Union{Missing, String}[missing, \"b\"]\n2-element Array{Union{Missing, String},1}:\n missing\n \"b\"\n\njulia> convert(Array{String}, y)\nERROR: MethodError: Cannot `convert` an object of type Missing to an object of type String\nThis may have arisen from a call to the constructor String(...),\nsince type constructors fall back to convert methods.\nStacktrace:\n[..."
+    "text": "Arrays containing missing values can be created like other arraysjulia> [1, missing]\n2-element Array{Union{Missing, Int64},1}:\n 1\n  missingAs this example shows, the element type of such arrays is Union{Missing, T}, with T the type of the non-missing values. This simply reflects the fact that array entries can be either of type T (here, Int64) or of type Missing. This kind of array uses an efficient memory storage equivalent to an Array{T} holding the actual values combined with an Array{UInt8} indicating the type of the entry (i.e. whether it is Missing or T).Arrays allowing for missing values can be constructed with the standard syntax. Use Array{Union{Missing, T}}(missing, dims) to create arrays filled with missing values:julia> Array{Union{Missing, String}}(missing, 2, 3)\n2×3 Array{Union{Missing, String},2}:\n missing  missing  missing\n missing  missing  missingAn array allowing for missing values but which does not contain any such value can be converted back to an array which does not allow for missing values using convert. If the array contains missing values, a MethodError is thrown during conversionjulia> x = Union{Missing, String}[\"a\", \"b\"]\n2-element Array{Union{Missing, String},1}:\n \"a\"\n \"b\"\n\njulia> convert(Array{String}, x)\n2-element Array{String,1}:\n \"a\"\n \"b\"\n\njulia> y = Union{Missing, String}[missing, \"b\"]\n2-element Array{Union{Missing, String},1}:\n missing\n \"b\"\n\njulia> convert(Array{String}, y)\nERROR: MethodError: Cannot `convert` an object of type Missing to an object of type String\nThis may have arisen from a call to the constructor String(...),\nsince type constructors fall back to convert methods.\nStacktrace:\n[..."
 },
 
 {
@@ -7213,7 +7213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "Function",
-    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n"
+    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n"
 },
 
 {
@@ -7245,7 +7245,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n"
+    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n"
 },
 
 {
@@ -7821,7 +7821,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n"
 },
 
 {
@@ -10589,7 +10589,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.split",
     "category": "Function",
-    "text": "split(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}\n\nBreak the ConfigEntry up to the following pieces: section, subsection, name, and value.\n\nExamples\n\nGiven the git configuration file containing:\n\n[credential \"https://example.com\"]\n    username = me\n\nThe ConfigEntry would look like the following:\n\njulia> entry\nConfigEntry(\"credential.https://example.com.username\", \"me\")\n\njulia> split(entry)\n(\"credential\", \"https://example.com\", \"username\", \"me\")\n\nRefer to the git config syntax documenation for more details.\n\n\n\nsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)\n\nReturn an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by search's second argument (i.e. a single character, collection of characters, string, or regular expression). If chars is omitted, it defaults to the set of all space characters, and keep is taken to be false. The two keyword arguments are optional: they are a maximum size for the result and a flag determining whether empty fields should be kept in the result.\n\nExamples\n\njulia> a = \"Ma.rch\"\n\"Ma.rch\"\n\njulia> split(a,\".\")\n2-element Array{SubString{String},1}:\n \"Ma\"\n \"rch\"\n\n\n\n"
+    "text": "split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)\n\nReturn an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by search's second argument (i.e. a single character, collection of characters, string, or regular expression). If chars is omitted, it defaults to the set of all space characters, and keep is taken to be false. The two keyword arguments are optional: they are a maximum size for the result and a flag determining whether empty fields should be kept in the result.\n\nExamples\n\njulia> a = \"Ma.rch\"\n\"Ma.rch\"\n\njulia> split(a,\".\")\n2-element Array{SubString{String},1}:\n \"Ma\"\n \"rch\"\n\n\n\nsplit(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}\n\nBreak the ConfigEntry up to the following pieces: section, subsection, name, and value.\n\nExamples\n\nGiven the git configuration file containing:\n\n[credential \"https://example.com\"]\n    username = me\n\nThe ConfigEntry would look like the following:\n\njulia> entry\nConfigEntry(\"credential.https://example.com.username\", \"me\")\n\njulia> split(entry)\n(\"credential\", \"https://example.com\", \"username\", \"me\")\n\nRefer to the git config syntax documenation for more details.\n\n\n\n"
 },
 
 {
@@ -10793,7 +10793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays/#Core.Array-Tuple{Any}",
+    "location": "stdlib/arrays/#Core.Array-Tuple{Uninitialized,Any}",
     "page": "Arrays",
     "title": "Core.Array",
     "category": "Method",
@@ -10801,11 +10801,19 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays/#Core.Array-Tuple{Any,Any}",
+    "location": "stdlib/arrays/#Core.Array-Tuple{Void,Any}",
     "page": "Arrays",
     "title": "Core.Array",
     "category": "Method",
-    "text": "Array{T}(uninitialized, dims)\nArray{T,N}(uninitialized, dims)\n\nConstruct an uninitialized N-dimensional Array containing elements of type T. N can either be supplied explicitly, as in Array{T,N}(uninitialized, dims), or be determined by the length or number of dims. dims may be a tuple or a series of integer arguments corresponding to the lengths in each dimension. If the rank N is supplied explicitly, then it must match the length or number of dims. See uninitialized.\n\nExamples\n\njulia> A = Array{Float64,2}(uninitialized, 2, 3) # N given explicitly\n2×3 Array{Float64,2}:\n 6.90198e-310  6.90198e-310  6.90198e-310\n 6.90198e-310  6.90198e-310  0.0\n\njulia> B = Array{Float64}(uninitialized, 2) # N determined by the input\n2-element Array{Float64,1}:\n 1.87103e-320\n 0.0\n\n\n\n"
+    "text": "Array{T}(nothing, dims)\nArray{T,N}(nothing, dims)\n\nConstruct an N-dimensional Array containing elements of type T, initialized with nothing entries. Element type T must be able to hold these values, i.e. Void <: T.\n\nExamples\n\njulia> Array{Union{Void, String}}(nothing, 2)\n2-element Array{Union{Void, String},1}:\n nothing\n nothing\n\njulia> Array{Union{Void, Int}}(nothing, 2, 3)\n2×3 Array{Union{Void, Int64},2}:\n nothing  nothing  nothing\n nothing  nothing  nothing\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays/#Core.Array-Tuple{Missing,Any}",
+    "page": "Arrays",
+    "title": "Core.Array",
+    "category": "Method",
+    "text": "Array{T}(missing, dims)\nArray{T,N}(missing, dims)\n\nConstruct an N-dimensional Array containing elements of type T, initialized with missing entries. Element type T must be able to hold these values, i.e. Missing <: T.\n\nExamples\n\njulia> Array{Union{Missing, String}}(missing, 2)\n2-element Array{Union{Missing, String},1}:\n missing\n missing\n\njulia> Array{Union{Missing, Int}}(missing, 2, 3)\n2×3 Array{Union{Missing, Int64},2}:\n missing  missing  missing\n missing  missing  missing\n\n\n\n"
 },
 
 {
@@ -10833,7 +10841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays/#Base.Vector-Tuple{Any}",
+    "location": "stdlib/arrays/#Base.Vector-Tuple{Uninitialized,Any}",
     "page": "Arrays",
     "title": "Base.Vector",
     "category": "Method",
@@ -10841,11 +10849,19 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays/#Base.Vector-Tuple{Any,Any}",
+    "location": "stdlib/arrays/#Base.Vector-Tuple{Void,Any}",
     "page": "Arrays",
     "title": "Base.Vector",
     "category": "Method",
-    "text": "Vector{T}(uninitialized, n)\n\nConstruct an uninitialized Vector{T} of length n. See uninitialized.\n\nExamples\n\njulia> Vector{Float64}(uninitialized, 3)\n3-element Array{Float64,1}:\n 6.90966e-310\n 6.90966e-310\n 6.90966e-310\n\n\n\n"
+    "text": "Vector{T}(nothing, m)\n\nConstruct a Vector{T} of length m, initialized with nothing entries. Element type T must be able to hold these values, i.e. Void <: T.\n\nExamples\n\njulia> Vector{Union{Void, String}}(nothing, 2)\n2-element Array{Union{Void, String},1}:\n nothing\n nothing\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays/#Base.Vector-Tuple{Missing,Any}",
+    "page": "Arrays",
+    "title": "Base.Vector",
+    "category": "Method",
+    "text": "Vector{T}(missing, m)\n\nConstruct a Vector{T} of length m, initialized with missing entries. Element type T must be able to hold these values, i.e. Missing <: T.\n\nExamples\n\njulia> Vector{Union{Missing, String}}(missing, 2)\n2-element Array{Union{Missing, String},1}:\n missing\n missing\n\n\n\n"
 },
 
 {
@@ -10857,11 +10873,27 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays/#Base.Matrix-Tuple{Any,Any,Any}",
+    "location": "stdlib/arrays/#Base.Matrix-Tuple{Uninitialized,Any,Any}",
     "page": "Arrays",
     "title": "Base.Matrix",
     "category": "Method",
     "text": "Matrix{T}(uninitialized, m, n)\n\nConstruct an uninitialized Matrix{T} of size m×n. See uninitialized.\n\nExamples\n\njulia> Matrix{Float64}(uninitialized, 2, 3)\n2×3 Array{Float64,2}:\n 6.93517e-310  6.93517e-310  6.93517e-310\n 6.93517e-310  6.93517e-310  1.29396e-320\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays/#Base.Matrix-Tuple{Void,Any,Any}",
+    "page": "Arrays",
+    "title": "Base.Matrix",
+    "category": "Method",
+    "text": "Matrix{T}(nothing, m, n)\n\nConstruct a Matrix{T} of size m×n, initialized with nothing entries. Element type T must be able to hold these values, i.e. Void <: T.\n\nExamples\n\njulia> Matrix{Union{Void, String}}(nothing, 2, 3)\n2×3 Array{Union{Void, String},2}:\n nothing  nothing  nothing\n nothing  nothing  nothing\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays/#Base.Matrix-Tuple{Missing,Any,Any}",
+    "page": "Arrays",
+    "title": "Base.Matrix",
+    "category": "Method",
+    "text": "Matrix{T}(missing, m, n)\n\nConstruct a Matrix{T} of size m×n, initialized with missing entries. Element type T must be able to hold these values, i.e. Missing <: T.\n\nExamples\n\njulia> Matrix{Union{Missing, String}}(missing, 2, 3)\n2×3 Array{Union{Missing, String},2}:\n missing  missing  missing\n missing  missing  missing\n\n\n\n"
 },
 
 {
@@ -10997,7 +11029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Constructors and Types",
     "category": "section",
-    "text": "Core.AbstractArray\nBase.AbstractVector\nBase.AbstractMatrix\nCore.Array\nCore.Array(::Any)\nCore.Array(::Any, ::Any)\nCore.Uninitialized\nCore.uninitialized\nBase.Vector\nBase.Vector(::Any)\nBase.Vector(::Any, ::Any)\nBase.Matrix\nBase.Matrix(::Any, ::Any, ::Any)\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.BitArray(::Uninitialized, ::Integer...)\nBase.BitArray(::Any)\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.similar(::AbstractArray)\nBase.similar(::Any, ::Tuple)\nBase.linspace\nBase.logspace\nBase.Random.randsubseq\nBase.Random.randsubseq!"
+    "text": "Core.AbstractArray\nBase.AbstractVector\nBase.AbstractMatrix\nCore.Array\nCore.Array(::Uninitialized, ::Any)\nCore.Array(::Void, ::Any)\nCore.Array(::Missing, ::Any)\nCore.Uninitialized\nCore.uninitialized\nBase.Vector\nBase.Vector(::Uninitialized, ::Any)\nBase.Vector(::Void, ::Any)\nBase.Vector(::Missing, ::Any)\nBase.Matrix\nBase.Matrix(::Uninitialized, ::Any, ::Any)\nBase.Matrix(::Void, ::Any, ::Any)\nBase.Matrix(::Missing, ::Any, ::Any)\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.BitArray(::Uninitialized, ::Integer...)\nBase.BitArray(::Any)\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.similar(::AbstractArray)\nBase.similar(::Any, ::Tuple)\nBase.linspace\nBase.logspace\nBase.Random.randsubseq\nBase.Random.randsubseq!"
 },
 
 {
@@ -12333,7 +12365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n"
 },
 
 {
