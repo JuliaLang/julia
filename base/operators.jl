@@ -500,7 +500,7 @@ julia> inv(A) * x
   4.5
 ```
 """
-\(x,y) = (y'/x')'
+\(x,y) = adjoint(Adjoint(y)/Adjoint(x))
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
 # counts can shift in either direction, and are translated here to unsigned

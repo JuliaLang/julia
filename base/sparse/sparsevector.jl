@@ -1553,7 +1553,7 @@ function LinAlg.lowrankupdate!(A::StridedMatrix, x::StridedVector, y::SparseVect
     nzi = nonzeroinds(y)
     nzv = nonzeros(y)
     @inbounds for (j,v) in zip(nzi,nzv)
-        αv = α*v'
+        αv = α*conj(v)
         for i in axes(x, 1)
             A[i,j] += x[i]*αv
         end

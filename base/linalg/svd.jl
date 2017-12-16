@@ -165,7 +165,7 @@ function svd(A::AbstractArray; full::Bool = false, thin::Union{Bool,Void} = noth
         full::Bool = !thin
     end
     F = svdfact(A, full = full)
-    F.U, F.S, F.Vt'
+    F.U, F.S, adjoint(F.Vt)
 end
 function svd(x::Number; full::Bool = false, thin::Union{Bool,Void} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
@@ -186,7 +186,7 @@ function getindex(F::SVD, d::Symbol)
     elseif d == :Vt
         return F.Vt
     elseif d == :V
-        return F.Vt'
+        return adjoint(F.Vt)
     else
         throw(KeyError(d))
     end

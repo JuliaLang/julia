@@ -882,7 +882,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
-(/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
+(/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = adjoint(Adjoint(B) \ Adjoint(A))
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)
 /(x::Number, v::AbstractVector) = x*pinv(v)
@@ -1290,7 +1290,7 @@ end
                 vAj += x[i]'*A[i, j]
             end
 
-            vAj = τ'*vAj
+            vAj = conj(τ)*vAj
 
             # ger
             A[1, j] -= vAj

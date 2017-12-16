@@ -87,7 +87,7 @@ function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
                 return UpperTriangular(A), info
             end
             A[k,k] = Akk
-            AkkInv = inv(Akk')
+            AkkInv = inv(adjoint(Akk))
             for j = k + 1:n
                 for i = 1:k - 1
                     A[k,j] -= A[i,k]'A[i,j]
@@ -381,14 +381,14 @@ size(C::Union{Cholesky, CholeskyPivoted}) = size(C.factors)
 size(C::Union{Cholesky, CholeskyPivoted}, d::Integer) = size(C.factors, d)
 
 function getindex(C::Cholesky, d::Symbol)
-    d == :U && return UpperTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
-    d == :L && return LowerTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
+    d == :U && return UpperTriangular(Symbol(C.uplo) == d ? C.factors : adjoint(C.factors))
+    d == :L && return LowerTriangular(Symbol(C.uplo) == d ? C.factors : adjoint(C.factors))
     d == :UL && return Symbol(C.uplo) == :U ? UpperTriangular(C.factors) : LowerTriangular(C.factors)
     throw(KeyError(d))
 end
 function getindex(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
-    d == :U && return UpperTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
-    d == :L && return LowerTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
+    d == :U && return UpperTriangular(Symbol(C.uplo) == d ? C.factors : adjoint(C.factors))
+    d == :L && return LowerTriangular(Symbol(C.uplo) == d ? C.factors : adjoint(C.factors))
     d == :p && return C.piv
     if d == :P
         n = size(C, 1)

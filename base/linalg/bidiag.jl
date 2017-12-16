@@ -522,7 +522,7 @@ function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::A
     tmp = similar(B,size(B,1))
     n = size(B, 1)
     if mA != n
-        throw(DimensionMismatch("size of A' is ($mA,$nA), corresponding dimension of B is $n"))
+        throw(DimensionMismatch("size of adjoint of A is ($mA,$nA), corresponding dimension of B is $n"))
     end
     for i = 1:size(B,2)
         copyto!(tmp, 1, B, (i - 1)*n + 1, n)
@@ -537,7 +537,7 @@ function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, 
     tmp = similar(B,size(B,1))
     n = size(B, 1)
     if mA != n
-        throw(DimensionMismatch("size of A' is ($mA,$nA), corresponding dimension of B is $n"))
+        throw(DimensionMismatch("size of transpose of A is ($mA,$nA), corresponding dimension of B is $n"))
     end
     for i = 1:size(B,2)
         copyto!(tmp, 1, B, (i - 1)*n + 1, n)
