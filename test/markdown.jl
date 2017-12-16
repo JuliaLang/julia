@@ -225,6 +225,7 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 # multiple whitespace is ignored
 @test sprint(term, md"a  b") == "  a b\n"
 @test sprint(term, md"[x](https://julialang.org)") == "  x (https://julialang.org)\n"
+@test sprint(term, md"[x](@ref)") == "  x\n"
 @test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)\n"
 
 # enumeration is normalized
