@@ -22,9 +22,9 @@ bimg  = randn(n,2)/2
 @testset "$eltya argument A" for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
-    asym = a.'+ a                  # symmetric indefinite
-    aher = a' + a                  # Hermitian indefinite
-    apd  = a' * a                  # Positive-definite
+    asym = transpose(a) + a                  # symmetric indefinite
+    aher = adjoint(a) + a                  # Hermitian indefinite
+    apd  = adjoint(a) * a                  # Positive-definite
     for (a, a2, aher, apd) in ((a, a2, aher, apd),
                                (view(a, 1:n, 1:n),
                                 view(a2, 1:n, 1:n),
@@ -46,11 +46,11 @@ bimg  = randn(n,2)/2
             end
             @test inv(bc1)*aher ≈ Matrix(I, n, n)
             @testset for rook in (false, true)
-                @test inv(bkfact(Symmetric(a.' + a, uplo), rook))*(a.' + a) ≈ Matrix(I, n, n)
+                @test inv(bkfact(Symmetric(transpose(a) + a, uplo), rook))*(transpose(a) + a) ≈ Matrix(I, n, n)
                 if eltya <: BlasFloat
                     # test also bkfact! without explicit type tag
                     # no bkfact! method for Int ... yet
-                    @test inv(bkfact!(a.' + a, rook))*(a.' + a) ≈ Matrix(I, n, n)
+                    @test inv(bkfact!(transpose(a) + a, rook))*(transpose(a) + a) ≈ Matrix(I, n, n)
                 end
                 @test size(bc1) == size(bc1.LD)
                 @test size(bc1, 1) == size(bc1.LD, 1)
@@ -64,8 +64,8 @@ bimg  = randn(n,2)/2
                     @test bc1[uplo]*bc1[:D]*bc1[uplo]' ≈ bc1[:P]*aher*bc1[:P]'
                 end
                 bc1 = bkfact(Symmetric(asym, uplo))
-                @test bc1[uplo]*bc1[:D]*bc1[uplo].' ≈ asym[bc1[:p], bc1[:p]]
-                @test bc1[uplo]*bc1[:D]*bc1[uplo].' ≈ bc1[:P]*asym*bc1[:P].'
+                @test bc1[uplo]*bc1[:D]*Transpose(bc1[uplo]) ≈ asym[bc1[:p], bc1[:p]]
+                @test bc1[uplo]*bc1[:D]*Transpose(bc1[uplo]) ≈ bc1[:P]*asym*Transpose(bc1[:P])
                 @test_throws KeyError bc1[:Z]
                 @test_throws ArgumentError uplo == :L ? bc1[:U] : bc1[:L]
             end

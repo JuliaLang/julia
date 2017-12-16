@@ -89,7 +89,7 @@ srand(1)
             @test D*v ≈ DM*v atol=n*eps(relty)*(1+(elty<:Complex))
             @test D*U ≈ DM*U atol=n^2*eps(relty)*(1+(elty<:Complex))
 
-            @test U.'*D ≈ U.'*Array(D)
+            @test Transpose(U)*D ≈ Transpose(U)*Array(D)
             @test U'*D ≈ U'*Array(D)
 
             if relty != BigFloat
@@ -147,15 +147,15 @@ srand(1)
                 b = rand(elty,n,n)
                 b = sparse(b)
                 @test mul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                @test mul!(Transpose(copy(D)), copy(b)) ≈ Array(D).'*Array(b)
+                @test mul!(Transpose(copy(D)), copy(b)) ≈ Transpose(Array(D))*Array(b)
                 @test mul!(Adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
             end
         end
 
         #a few missing mults
         bd = Bidiagonal(D2)
-        @test D*D2.' ≈ Array(D)*Array(D2).'
-        @test D2*D.' ≈ Array(D2)*Array(D).'
+        @test D*Transpose(D2) ≈ Array(D)*Transpose(Array(D2))
+        @test D2*Transpose(D) ≈ Array(D2)*Transpose(Array(D))
         @test D2*D' ≈ Array(D2)*Array(D)'
 
         #division of two Diagonals
@@ -166,12 +166,12 @@ srand(1)
         vvv = similar(vv)
         @test (r = Matrix(D) * vv   ; mul!(vvv, D, vv)  ≈ r ≈ vvv)
         @test (r = Matrix(D)' * vv  ; mul!(vvv, Adjoint(D), vv) ≈ r ≈ vvv)
-        @test (r = Matrix(D).' * vv ; mul!(vvv, Transpose(D), vv) ≈ r ≈ vvv)
+        @test (r = Transpose(Matrix(D)) * vv ; mul!(vvv, Transpose(D), vv) ≈ r ≈ vvv)
 
         UUU = similar(UU)
         @test (r = Matrix(D) * UU   ; mul!(UUU, D, UU) ≈ r ≈ UUU)
         @test (r = Matrix(D)' * UU  ; mul!(UUU, Adjoint(D), UU) ≈ r ≈ UUU)
-        @test (r = Matrix(D).' * UU ; mul!(UUU, Transpose(D), UU) ≈ r ≈ UUU)
+        @test (r = Transpose(Matrix(D)) * UU ; mul!(UUU, Transpose(D), UU) ≈ r ≈ UUU)
 
         # make sure that mul!(A, {Adj|Trans}(B)) works with B as a Diagonal
         VV = Array(D)
@@ -179,7 +179,7 @@ srand(1)
         r  = VV * Matrix(D)
         @test Array(mul!(VV, DD)) ≈ r ≈ Array(D)*Array(D)
         DD = copy(D)
-        r  = VV * (Array(D).')
+        r  = VV * Transpose(Array(D))
         @test Array(mul!(VV, Transpose(DD))) ≈ r
         DD = copy(D)
         r  = VV * (Array(D)')
@@ -228,7 +228,7 @@ srand(1)
         end
         # Translates to Ac/t_mul_B, which is specialized after issue 21286
         @test(D' * vv == conj(D) * vv)
-        @test(D.' * vv == D * vv)
+        @test(Transpose(D) * vv == D * vv)
     end
 
     #logdet
@@ -339,9 +339,9 @@ end
         D = Diagonal(randn(5))
         @test T*D   == Array(T)*Array(D)
         @test T'D   == Array(T)'*Array(D)
-        @test T.'D  == Array(T).'*Array(D)
+        @test Transpose(T)*D  == Transpose(Array(T))*Array(D)
         @test D*T'  == Array(D)*Array(T)'
-        @test D*T.' == Array(D)*Array(T).'
+        @test D*Transpose(T) == Array(D)*Transpose(Array(T))
         @test D*T   == Array(D)*Array(T)
     end
 end
@@ -364,16 +364,16 @@ end
     D = Diagonal([[1 2; 3 4], [1 2; 3 4]])
     Dherm = Diagonal([[1 1+im; 1-im 1], [1 1+im; 1-im 1]])
     Dsym = Diagonal([[1 1+im; 1+im 1], [1 1+im; 1+im 1]])
-    @test D' == Diagonal([[1 3; 2 4], [1 3; 2 4]])
-    @test D.' == Diagonal([[1 3; 2 4], [1 3; 2 4]])
-    @test Dherm' == Dherm
-    @test Dherm.' == Diagonal([[1 1-im; 1+im 1], [1 1-im; 1+im 1]])
-    @test Dsym' == Diagonal([[1 1-im; 1-im 1], [1 1-im; 1-im 1]])
-    @test Dsym.' == Dsym
+    @test adjoint(D) == Diagonal([[1 3; 2 4], [1 3; 2 4]])
+    @test transpose(D) == Diagonal([[1 3; 2 4], [1 3; 2 4]])
+    @test adjoint(Dherm) == Dherm
+    @test transpose(Dherm) == Diagonal([[1 1-im; 1+im 1], [1 1-im; 1+im 1]])
+    @test adjoint(Dsym) == Diagonal([[1 1-im; 1-im 1], [1 1-im; 1-im 1]])
+    @test transpose(Dsym) == Dsym
 
     v = [[1, 2], [3, 4]]
     @test Dherm' * v == Dherm * v
-    @test D.' * v == [[7, 10], [15, 22]]
+    @test Transpose(D) * v == [[7, 10], [15, 22]]
 
     @test issymmetric(D) == false
     @test issymmetric(Dherm) == false

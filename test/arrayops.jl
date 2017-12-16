@@ -610,7 +610,7 @@ let A, B, C, D
     C = unique(B, 1)
     @test sortrows(C) == sortrows(A)
     @test unique(B, 2) == B
-    @test unique(B.', 2).' == C
+    @test transpose(unique(transpose(B), 2)) == C
 
     # Along third dimension
     D = cat(3, B, B)
@@ -1342,14 +1342,14 @@ end
 @test size([]') == (1,0)
 
 # issue #6996
-@test Any[ 1 2; 3 4 ]' == Any[ 1 2; 3 4 ].'
+@test adjoint(Any[ 1 2; 3 4 ]) == transpose(Any[ 1 2; 3 4 ])
 
 # map with promotion (issue #6541)
 @test map(join, ["z", "я"]) == ["z", "я"]
 
 # Handle block matrices
 let A = [randn(2, 2) for i = 1:2, j = 1:2]
-    @test issymmetric(A.'A)
+    @test issymmetric(Transpose(A)*A)
 end
 let A = [complex.(randn(2, 2), randn(2, 2)) for i = 1:2, j = 1:2]
     @test ishermitian(A'A)

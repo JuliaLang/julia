@@ -352,7 +352,7 @@ end
 @testset "sytri, sytrs, and sytrf" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
-        A = A + A.' #symmetric!
+        A = A + transpose(A) #symmetric!
         B = copy(A)
         B,ipiv = LAPACK.sytrf!('U',B)
         @test triu(inv(A)) ≈ triu(LAPACK.sytri!('U',B,ipiv)) rtol=eps(cond(A))
@@ -363,14 +363,14 @@ end
     # Rook-pivoting variants
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty, 10, 10)
-        A = A + A.' #symmetric!
+        A = A + transpose(A) #symmetric!
         B = copy(A)
         B,ipiv = LAPACK.sytrf_rook!('U', B)
         @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U', B, ipiv)) rtol=eps(cond(A))
         @test_throws DimensionMismatch LAPACK.sytrs_rook!('U', B, ipiv, rand(elty, 11, 5))
         @test LAPACK.sytrf_rook!('U',zeros(elty, 0, 0)) == (zeros(elty, 0, 0),zeros(BlasInt, 0))
         A = rand(elty, 10, 10)
-        A = A + A.' #symmetric!
+        A = A + transpose(A) #symmetric!
         b = rand(elty, 10)
         c = A \ b
         cnd = cond(A)
@@ -436,7 +436,7 @@ end
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         srand(123)
         A = rand(elty,10,10)
-        A = A + A.' #symmetric!
+        A = A + transpose(A) #symmetric!
         b = rand(elty,10)
         c = A \ b
         b,A = LAPACK.sysv!('U',A,b)
@@ -512,9 +512,9 @@ end
         A = rand(elty,10,10)/100
         A += real(diagm(0 => 10*real(rand(elty,10))))
         if elty <: Complex
-            A = A + A'
+            A = A + adjoint(A)
         else
-            A = A + A.'
+            A = A + transpose(A)
         end
         B = rand(elty,10,10)
         D = copy(A)
