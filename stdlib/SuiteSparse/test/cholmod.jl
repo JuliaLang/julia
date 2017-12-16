@@ -182,7 +182,7 @@ end
     @test sparse(cmA'*cmA) ≈ A'*A
 
     # A_mul_Ac for symmetric A
-    A = 0.5*(A + A')
+    A = 0.5*(A + adjoint(A))
     cmA = CHOLMOD.Sparse(A)
     @test sparse(cmA*cmA') ≈ A*A'
 end
@@ -373,14 +373,14 @@ end
     @test_throws ArgumentError cholfact(A1, shift=1.0)
     @test_throws ArgumentError ldltfact(A1)
     @test_throws ArgumentError ldltfact(A1, shift=1.0)
-    @test_throws LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))*I)\ones(size(A1, 1))
-    @test_throws LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1')))\ones(size(A1, 1))
-    @test_throws ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])*I)\ones(size(A1, 1))
-    @test_throws ArgumentError ldltfact(A1 + A1', shift=-2real(A1[1,1]))\ones(size(A1, 1))
-    @test !isposdef(cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))*I))
-    @test !isposdef(cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1'))))
-    @test !LinAlg.issuccess(ldltfact(A1 + A1' - 2real(A1[1,1])*I))
-    @test !LinAlg.issuccess(ldltfact(A1 + A1', shift=-2real(A1[1,1])))
+    @test_throws LinAlg.PosDefException cholfact(A1 + adjoint(A1) - 2eigmax(Array(A1 + adjoint(A1)))*I)\ones(size(A1, 1))
+    @test_throws LinAlg.PosDefException cholfact(A1 + adjoint(A1), shift=-2eigmax(Array(A1 + adjoint(A1))))\ones(size(A1, 1))
+    @test_throws ArgumentError ldltfact(A1 + adjoint(A1) - 2real(A1[1,1])*I)\ones(size(A1, 1))
+    @test_throws ArgumentError ldltfact(A1 + adjoint(A1), shift=-2real(A1[1,1]))\ones(size(A1, 1))
+    @test !isposdef(cholfact(A1 + adjoint(A1) - 2eigmax(Array(A1 + adjoint(A1)))*I))
+    @test !isposdef(cholfact(A1 + adjoint(A1), shift=-2eigmax(Array(A1 + adjoint(A1)))))
+    @test !LinAlg.issuccess(ldltfact(A1 + adjoint(A1) - 2real(A1[1,1])*I))
+    @test !LinAlg.issuccess(ldltfact(A1 + adjoint(A1), shift=-2real(A1[1,1])))
     F = cholfact(A1pd)
     tmp = IOBuffer()
     show(tmp, F)
@@ -402,7 +402,7 @@ end
     @test logdet(ldltfact(A1pd)) ≈ logdet(Array(A1pd))
     @test isposdef(A1pd)
     @test !isposdef(A1)
-    @test !isposdef(A1 + A1' |> t -> t - 2eigmax(Array(t))*I)
+    @test !isposdef(A1 + adjoint(A1) |> t -> t - 2eigmax(Array(t))*I)
 
     if elty <: Real
         @test CHOLMOD.issymmetric(Sparse(A1pd, 0))
@@ -685,7 +685,7 @@ end
 @testset "Make sure that ldltfact performs an LDLt (Issue #19032)" begin
     m, n = 400, 500
     A = sprandn(m, n, .2)
-    M = [I A'; A -I]
+    M = [I adjoint(A); A -I]
     b = M * ones(m + n)
     F = ldltfact(M)
     s = unsafe_load(pointer(F))
