@@ -576,13 +576,12 @@ This is equivalent to [`vecnorm`](@ref).
 """
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
-@inline norm(tv::RowVector) = norm(transpose(tv))
-
 """
-    norm(A::RowVector, q::Real=2)
+    norm(A::Adjoint{<:Any,<:AbstracVector}, q::Real=2)
+    norm(A::Transpose{<:Any,<:AbstracVector}, q::Real=2)
 
-For row vectors, return the ``q``-norm of `A`, which is equivalent to the p-norm with
-value `p = q/(q-1)`. They coincide at `p = q = 2`.
+For Adjoint/Transpose-wrapped vectors, return the ``q``-norm of `A`, which is
+equivalent to the p-norm with value `p = q/(q-1)`. They coincide at `p = q = 2`.
 
 The difference in norm between a vector space and its dual arises to preserve
 the relationship between duality and the inner product, and the result is
@@ -613,7 +612,10 @@ julia> norm(v, Inf)
 1.0
 ```
 """
-@inline norm(tv::RowVector, q::Real) = q == Inf ? norm(transpose(tv), 1) : norm(transpose(tv), q/(q-1))
+norm(v::TransposeAbsVec, q::Real) = q == Inf ? norm(v.parent, 1) : norm(v.parent, q/(q-1))
+norm(v::AdjointAbsVec, q::Real) = q == Inf ? norm(conj(v.parent), 1) : norm(conj(v.parent), q/(q-1))
+norm(v::AdjointAbsVec) = norm(conj(v.parent))
+norm(v::TransposeAbsVec) = norm(v.parent)
 
 function vecdot(x::AbstractArray, y::AbstractArray)
     lx = _length(x)

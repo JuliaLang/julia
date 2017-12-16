@@ -348,15 +348,6 @@ mul!(C::AbstractMatrix, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}) = A_mu
 mul!(C::AbstractMatrix, A::BiTri, B::Adjoint{<:Any,<:AbstractVecOrMat}) = A_mul_B_td!(C, A, B)
 mul!(C::AbstractVector, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 
-\(::Diagonal, ::RowVector) = _mat_ldiv_rowvec_error()
-\(::Bidiagonal, ::RowVector) = _mat_ldiv_rowvec_error()
-\(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = _mat_ldiv_rowvec_error()
-\(::Adjoint{<:Any,<:Bidiagonal}, ::RowVector) = _mat_ldiv_rowvec_error()
-\(::Transpose{<:Any,<:Bidiagonal}, ::RowVector) = _mat_ldiv_rowvec_error()
-\(::Adjoint{<:Number,<:Bidiagonal{<:Number}}, ::RowVector{<:Number}) = _mat_ldiv_rowvec_error()
-\(::Transpose{<:Number,<:Bidiagonal{<:Number}}, ::RowVector{<:Number}) = _mat_ldiv_rowvec_error()
-_mat_ldiv_rowvec_error() = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-
 function check_A_mul_B!_sizes(C, A, B)
     nA, mA = size(A)
     nB, mB = size(B)

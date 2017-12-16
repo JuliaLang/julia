@@ -941,7 +941,6 @@ function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
         return \(qrfact(A), B)
     end
 end
-\(::SparseMatrixCSC, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 for xform in (:Adjoint, :Transpose)
     @eval begin
         function \(xformA::($xform){<:Any,<:SparseMatrixCSC}, B::AbstractVecOrMat)
@@ -965,7 +964,6 @@ for xform in (:Adjoint, :Transpose)
                 return \($xform(qrfact(A)), B)
             end
         end
-        \(::($xform){<:Any,<:SparseMatrixCSC}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
     end
 end
 

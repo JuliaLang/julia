@@ -720,7 +720,7 @@ function *(A::StridedMatrix, adjB::Adjoint{<:Any,<:AbstractQ})
         throw(DimensionMismatch("matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(B))"))
     end
 end
-@inline *(rowvec::RowVector, adjB::Adjoint{<:Any,<:AbstractQ}) = (B = adjB.parent; adjoint(B*adjoint(rowvec)))
+*(u::AdjointAbsVec, A::Adjoint{<:Any,<:AbstractQ}) = Adjoint(A.parent * u.parent)
 
 
 ### AcQ/AcQc

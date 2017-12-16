@@ -49,12 +49,30 @@ Adjoint(x::Number) = adjoint(x)
 Transpose(x::Number) = transpose(x)
 
 # unwrapping constructors
-# perhaps slightly odd, but necessary (at least till adjoint and transpose names are free)
 Adjoint(A::Adjoint) = A.parent
 Transpose(A::Transpose) = A.parent
+# normalizing unwrapping constructors
+# technically suspect, but at least fine for now
+Adjoint(A::Transpose) = conj(A.parent)
+Transpose(A::Adjoint) = conj(A.parent)
+
+# eager lowercase quasi-constructors, unwrapping
+adjoint(A::Adjoint) = copy(A.parent)
+transpose(A::Transpose) = copy(A.parent)
+# eager lowercase quasi-constructors, normalizing
+# technically suspect, but at least fine for now
+adjoint(A::Transpose) = conj!(copy(A.parent))
+transpose(A::Adjoint) = conj!(copy(A.parent))
+
+# lowercase quasi-constructors for vectors, TODO: deprecate
+adjoint(sv::AbstractVector) = Adjoint(sv)
+transpose(sv::AbstractVector) = Transpose(sv)
+
 
 # some aliases for internal convenience use
 const AdjOrTrans{T,S} = Union{Adjoint{T,S},Transpose{T,S}} where {T,S}
+const AdjointAbsVec{T} = Adjoint{T,<:AbstractVector}
+const TransposeAbsVec{T} = Transpose{T,<:AbstractVector}
 const AdjOrTransAbsVec{T} = AdjOrTrans{T,<:AbstractVector}
 const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
 
@@ -99,22 +117,100 @@ parent(A::AdjOrTrans) = A.parent
 vec(v::AdjOrTransAbsVec) = v.parent
 
 
+### concatenation
+# preserve Adjoint/Transpose wrapper around vectors
+# to retain the associated semantics post-concatenation
+hcat(avs::Union{Number,AdjointAbsVec}...) = _adjoint_hcat(avs...)
+hcat(tvs::Union{Number,TransposeAbsVec}...) = _transpose_hcat(tvs...)
+_adjoint_hcat(avs::Union{Number,AdjointAbsVec}...) = Adjoint(vcat(map(Adjoint, avs)...))
+_transpose_hcat(tvs::Union{Number,TransposeAbsVec}...) = Transpose(vcat(map(Transpose, tvs)...))
+typed_hcat(::Type{T}, avs::Union{Number,AdjointAbsVec}...) where {T} = Adjoint(typed_vcat(T, map(Adjoint, avs)...))
+typed_hcat(::Type{T}, tvs::Union{Number,TransposeAbsVec}...) where {T} = Transpose(typed_vcat(T, map(Transpose, tvs)...))
+# otherwise-redundant definitions necessary to prevent hitting the concat methods in sparse/sparsevector.jl
+hcat(avs::Adjoint{<:Any,<:Vector}...) = _adjoint_hcat(avs...)
+hcat(tvs::Transpose{<:Any,<:Vector}...) = _transpose_hcat(tvs...)
+hcat(avs::Adjoint{T,Vector{T}}...) where {T} = _adjoint_hcat(avs...)
+hcat(tvs::Transpose{T,Vector{T}}...) where {T} = _transpose_hcat(tvs...)
+
+
+### higher order functions
+# preserve Adjoint/Transpose wrapper around vectors
+# to retain the associated semantics post-map/broadcast
+
+# vectorfy takes an Adoint/Transpose-wrapped vector and builds
+# an unwrapped vector with the entrywise-same contents
+vectorfy(x::Number) = x
+vectorfy(adjvec::AdjointAbsVec) = map(Adjoint, adjvec.parent)
+vectorfy(transvec::TransposeAbsVec) = map(Transpose, transvec.parent)
+vectorfyall(transformedvecs...) = (map(vectorfy, transformedvecs)...,)
+
+# map over collections of Adjoint/Transpose-wrapped vectors
+# note that the caller's operation `f` should be applied to the entries of the wrapped
+# vectors, rather than the entires of the wrapped vector's parents. so first we use vectorfy
+# to build unwrapped vectors with entrywise-same contents as the wrapped input vectors.
+# then we map the caller's operation over that set of unwrapped vectors. but now re-wrapping
+# the resulting vector would inappropriately transform the result vector's entries. so
+# instead of simply mapping the caller's operation over the set of unwrapped vectors,
+# we map Adjoint/Transpose composed with the caller's operationt over the set of unwrapped
+# vectors. then re-wrapping the result vector yields a wrapped vector with the correct entries.
+map(f, avs::AdjointAbsVec...) = Adjoint(map(Adjoint∘f, vectorfyall(avs...)...))
+map(f, tvs::TransposeAbsVec...) = Transpose(map(Transpose∘f, vectorfyall(tvs...)...))
+
+# broadcast over collections of Adjoint/Transpose-wrapped vectors and numbers
+# similar explanation for these definitions as for map above
+broadcast(f, avs::Union{Number,AdjointAbsVec}...) = Adjoint(broadcast(Adjoint∘f, vectorfyall(avs...)...))
+broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = Transpose(broadcast(Transpose∘f, vectorfyall(tvs...) ...))
+
+
 ### linear algebra
 
-# definitions necessary for test/linalg/rowvector.jl to pass
-# should be cleaned up / revised as necessary in the future
-/(A::Transpose{<:Any,<:Vector}, B::Matrix) = /(transpose(A.parent), B)
-/(A::Transpose{<:Any,<:Vector}, B::Transpose{<:Any,<:Matrix}) = /(transpose(A.parent), B)
-*(A::Adjoint{<:Any,<:Matrix}, B::Adjoint{<:Any,<:Vector}) = *(adjoint(A.parent), adjoint(B.parent))
+## multiplication *
+
+# Adjoint/Transpose-vector * vector
+*(u::AdjointAbsVec, v::AbstractVector) = dot(u.parent, v)
+*(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
+function *(u::TransposeAbsVec, v::AbstractVector)
+    @boundscheck length(u) == length(v) || throw(DimensionMismatch())
+    return sum(@inbounds(return u[k]*v[k]) for k in 1:length(u))
+end
+# vector * Adjoint/Transpose-vector
+*(u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, u, v)
+# Adjoint/Transpose-vector * Adjoint/Transpose-vector
+# (necessary for disambiguation with fallback methods in linalg/matmul)
+*(u::AdjointAbsVec, v::AdjointAbsVec) = throw(MethodError(*, (u, v)))
+*(u::TransposeAbsVec, v::TransposeAbsVec) = throw(MethodError(*, (u, v)))
+
+# Adjoint/Transpose-vector * matrix
+*(u::AdjointAbsVec, A::AbstractMatrix) = Adjoint(Adjoint(A) * u.parent)
+*(u::TransposeAbsVec, A::AbstractMatrix) = Transpose(Transpose(A) * u.parent)
+# Adjoint/Transpose-vector * Adjoint/Transpose-matrix
+*(u::AdjointAbsVec, A::Adjoint{<:Any,<:AbstractMatrix}) = Adjoint(A.parent * u.parent)
+*(u::TransposeAbsVec, A::Transpose{<:Any,<:AbstractMatrix}) = Transpose(A.parent * u.parent)
+
+
+## pseudoinversion
+pinv(v::AdjointAbsVec, tol::Real = 0) = pinv(v.parent, tol).parent
+pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
+
+
+## left-division \
+\(u::AdjOrTransAbsVec, v::AdjOrTransAbsVec) = pinv(u) * v
+
+
+## right-division \
+/(u::AdjointAbsVec, A::AbstractMatrix) = Adjoint(Adjoint(A) \ u.parent)
+/(u::TransposeAbsVec, A::AbstractMatrix) = Transpose(Transpose(A) \ u.parent)
 
 
 # dismabiguation methods
-*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractVector}) = transpose(A.parent) * B
-*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractMatrix}) = transpose(A.parent) * B
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractVector}) = A * adjoint(B.parent)
+*(A::AdjointAbsVec, B::Transpose{<:Any,<:AbstractMatrix}) = A * transpose(B.parent)
+*(A::TransposeAbsVec, B::Adjoint{<:Any,<:AbstractMatrix}) = A * adjoint(B.parent)
 *(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractMatrix}) = transpose(A.parent) * B
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractVector}) = adjoint(A.parent) * B
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractMatrix}) = adjoint(A.parent) * B
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractVector}) = A * adjoint(B.parent)
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractVector}) = A * transpose(B.parent)
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractMatrix}) = adjoint(A.parent) * B
+*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractMatrix}) = A * transpose(B.parent)
+# Adj/Trans-vector * Trans/Adj-vector, shouldn't exist, here for ambiguity resolution? TODO: test removal
+*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
+*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
+# Adj/Trans-matrix * Trans/Adj-vector, shouldn't exist, here for ambiguity resolution? TODO: test removal
+*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
+*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
+*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))

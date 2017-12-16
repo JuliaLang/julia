@@ -414,7 +414,7 @@ end
         @test broadcast!(+, Z, V, A, X) == sparse(broadcast(+, fV, fA, X))
         @test broadcast(*, s, V, A, X)::SparseMatrixCSC == sparse(broadcast(*, s, fV, fA, X))
         @test broadcast!(*, Z, s, V, A, X) == sparse(broadcast(*, s, fV, fA, X))
-        # Issue #20954 combinations of sparse arrays and RowVectors
+        # Issue #20954 combinations of sparse arrays and Adjoint/Transpose vectors
         @test broadcast(+, A, X')::SparseMatrixCSC == sparse(broadcast(+, fA, X'))
         @test broadcast(*, V, X')::SparseMatrixCSC == sparse(broadcast(*, fV, X'))
     end

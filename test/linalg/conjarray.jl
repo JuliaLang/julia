@@ -17,12 +17,24 @@
 end
 
 @testset "RowVector conjugates" begin
+    # these definitions are what adjoint(...) and transpose(...) meant
+    # meant prior to the Adjoint/Transpose transition, and the tests
+    # below are re-expressed in them to shield them against changes
+    # to adjoint(...), transpose(...), .', ', and A[ct]_(mul|ldiv|rdiv)_B[ct]
+    using Base.LinAlg: _conj, ConjRowVector
+    rvadjoint(v::AbstractVector) = RowVector(_conj(v))
+    rvtranspose(v::AbstractVector) = RowVector(v)
+    rvadjoint(v::RowVector) = conj(v.vec)
+    rvadjoint(v::RowVector{<:Real}) = v.vec
+    rvtranspose(v::RowVector) = v.vec
+    rvtranspose(v::ConjRowVector) = copy(v.vec)
+
     v = [1+im, 1-im]
-    rv = v'
+    rv = rvadjoint(v)
     @test (parent(rv) isa ConjArray)
-    @test rv' === v
+    @test rvadjoint(rv) === v
 
     # Currently, view behavior defaults to only RowVectors.
-    @test isa((v').', Vector)
-    @test isa((v.')', Vector)
+    @test isa(rvtranspose(rvadjoint(v)), Vector)
+    @test isa(rvadjoint(rvtranspose(v)), Vector)
 end

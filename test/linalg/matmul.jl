@@ -293,9 +293,12 @@ end
 struct RootInt
     i::Int
 end
-import Base: *, transpose
+import Base: *, adjoint, transpose, Adjoint, Transpose
 (*)(x::RootInt, y::RootInt) = x.i*y.i
+adjoint(x::RootInt) = x
+Adjoint(x::RootInt) = x
 transpose(x::RootInt) = x
+Transpose(x::RootInt) = x
 @test Base.promote_op(*, RootInt, RootInt) === Int
 
 @testset "#14293" begin

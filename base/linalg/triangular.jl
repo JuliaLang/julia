@@ -1839,10 +1839,10 @@ function *(A::AbstractMatrix, transB::Transpose{<:Any,<:AbstractTriangular})
     mul!(AA, Transpose(convert(AbstractArray{TAB}, B)))
 end
 # ambiguity resolution with definitions in linalg/rowvector.jl
-*(transA::Transpose{<:Any,<:AbstractVector}, B::AbstractTriangular) = *(transpose(transA.parent), B)
-*(adjA::Adjoint{<:Any,<:AbstractVector}, B::AbstractTriangular) = *(adjoint(adjA.parent), B)
-*(transA::Transpose{<:Any,<:AbstractVector}, transB::Transpose{<:Any,<:AbstractTriangular}) = *(transpose(transA.parent), transB)
-*(adjA::Adjoint{<:Any,<:AbstractVector}, adjB::Adjoint{<:Any,<:AbstractTriangular}) = *(adjoint(adjA.parent), adjB)
+*(v::AdjointAbsVec, A::AbstractTriangular) = Adjoint(Adjoint(A) * v.parent)
+*(v::TransposeAbsVec, A::AbstractTriangular) = Transpose(Transpose(A) * v.parent)
+*(v::AdjointAbsVec, A::Adjoint{<:Any,<:AbstractTriangular}) = Adjoint(A.parent * v.parent)
+*(v::TransposeAbsVec, A::Transpose{<:Any,<:AbstractTriangular}) = Transpose(A.parent * v.parent)
 
 
 # If these are not defined, they will fallback to the versions in matmul.jl
@@ -1860,42 +1860,6 @@ end
 *(transA::Transpose{<:Any,<:AbstractTriangular}, transB::Transpose{<:Any,<:AbstractTriangular}) = *(transA, transpose(transB.parent))
 *(transA::Transpose{<:Any,<:AbstractTriangular}, transB::Transpose{<:Any,<:AbstractMatrix}) = *(transA, transpose(transB.parent))
 *(transA::Transpose{<:Any,<:AbstractMatrix}, transB::Transpose{<:Any,<:AbstractTriangular}) = *(transpose(transA.parent), transB)
-
-# Specializations for RowVector
-*(rowvec::RowVector, A::AbstractTriangular) = transpose(transpose(A) * transpose(rowvec))
-*(rowvec::RowVector, transA::Transpose{<:Any,<:AbstractTriangular}) = transpose(transA.parent * transpose(rowvec))
-*(A::AbstractTriangular, transrowvec::Transpose{<:Any,<:RowVector}) = A * transpose(transrowvec.parent)
-*(transA::Transpose{<:Any,<:AbstractTriangular}, transrowvec::Transpose{<:Any,<:RowVector}) = transA.parent.' * transpose(transrowvec.parent)
-*(rowvec::RowVector, adjA::Adjoint{<:Any,<:AbstractTriangular}) = adjoint(adjA.parent * adjoint(rowvec))
-*(A::AbstractTriangular, adjrowvec::Adjoint{<:Any,<:RowVector}) = A * adjoint(adjrowvec.parent)
-*(adjA::Adjoint{<:Any,<:AbstractTriangular}, adjrowvec::Adjoint{<:Any,<:RowVector}) = adjA.parent' * adjoint(adjrowvec.parent)
-
-@inline /(rowvec::RowVector, A::Union{UpperTriangular,LowerTriangular}) = transpose(transpose(A) \ transpose(rowvec))
-@inline /(rowvec::RowVector, A::Union{UnitUpperTriangular,UnitLowerTriangular}) = transpose(transpose(A) \ transpose(rowvec))
-
-/(rowvec::RowVector, transA::Transpose{<:Any,<:Union{UpperTriangular,LowerTriangular}}) =
-    transpose(transA.parent \ transpose(rowvec))
-/(rowvec::RowVector, transA::Transpose{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}) =
-    transpose(transA.parent \ transpose(rowvec))
-# ambiguity resolution with definitions in linalg/rowvector.jl
-/(rowvec::RowVector, adjA::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}}) =
-    /(rowvec, adjoint(adjA.parent))
-/(rowvec::RowVector, adjA::Adjoint{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}) =
-    /(rowvec, adjoint(adjA.parent))
-
-rdiv(rowvec::RowVector, adjA::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}}) =
-    adjoint(adjA.parent \ adjoint(rowvec))
-rdiv(rowvec::RowVector, adjA::Adjoint{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}) =
-    adjoint(adjA.parent \ adjoint(rowvec))
-
-\(::Union{UpperTriangular,LowerTriangular}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-\(::Union{UnitUpperTriangular,UnitLowerTriangular}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-
-\(::Transpose{<:Any,<:Union{UpperTriangular,LowerTriangular}}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-\(::Transpose{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-
-\(::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-\(::Adjoint{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 
 # Complex matrix power for upper triangular factor, see:
 #   Higham and Lin, "A Schur-Padé algorithm for fractional powers of a Matrix",
@@ -2417,6 +2381,20 @@ factorize(A::AbstractTriangular) = A
 *(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractTriangular}) = adjoint(A.parent) * B
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractTriangular}) = transpose(A.parent) * B
 *(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractTriangular}) = transpose(A.parent) * B
-# dismabiguation methods: *(Adj/Trans of AbstractTriangular, Trans/Adj of RowVector)
-*(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:RowVector}) = A * transpose(B.parent)
-*(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:RowVector}) = A * adjoint(B.parent)
+
+# disambiguation methods: /(Adjoint of AbsVec, <:AbstractTriangular)
+/(u::AdjointAbsVec, A::Union{LowerTriangular,UpperTriangular}) = Adjoint(Adjoint(A) \ u.parent)
+/(u::AdjointAbsVec, A::Union{UnitLowerTriangular,UnitUpperTriangular}) = Adjoint(Adjoint(A) \ u.parent)
+# disambiguation methods: /(Adjoint of AbsVec, Adj/Trans of <:AbstractTriangular)
+/(u::AdjointAbsVec, A::Adjoint{<:Any,<:Union{LowerTriangular,UpperTriangular}}) = Adjoint(A.parent \ u.parent)
+/(u::AdjointAbsVec, A::Adjoint{<:Any,<:Union{UnitLowerTriangular,UnitUpperTriangular}}) = Adjoint(A.parent \ u.parent)
+/(u::AdjointAbsVec, A::Transpose{<:Any,<:Union{LowerTriangular,UpperTriangular}}) = Adjoint(conj(A.parent) \ u.parent)
+/(u::AdjointAbsVec, A::Transpose{<:Any,<:Union{UnitLowerTriangular,UnitUpperTriangular}}) = Adjoint(conj(A.parent) \ u.parent)
+# disambiguation methods: /(Transpose of AbsVec, <:AbstractTriangular)
+/(u::TransposeAbsVec, A::Union{LowerTriangular,UpperTriangular}) = Transpose(Transpose(A) \ u.parent)
+/(u::TransposeAbsVec, A::Union{UnitLowerTriangular,UnitUpperTriangular}) = Transpose(Transpose(A) \ u.parent)
+# disambiguation methods: /(Transpose of AbsVec, Adj/Trans of <:AbstractTriangular)
+/(u::TransposeAbsVec, A::Adjoint{<:Any,<:Union{LowerTriangular,UpperTriangular}}) = Transpose(conj(A.parent) \ u.parent)
+/(u::TransposeAbsVec, A::Adjoint{<:Any,<:Union{UnitLowerTriangular,UnitUpperTriangular}}) = Transpose(conj(A.parent) \ u.parent)
+/(u::TransposeAbsVec, A::Transpose{<:Any,<:Union{LowerTriangular,UpperTriangular}}) = Transpose(A.parent \ u.parent)
+/(u::TransposeAbsVec, A::Transpose{<:Any,<:Union{UnitLowerTriangular,UnitUpperTriangular}}) = Transpose(A.parent \ u.parent)
