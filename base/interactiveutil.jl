@@ -131,30 +131,49 @@ if is_apple()
     end
     clipboard() = readstring(`pbpaste`)
 
-elseif is_linux()
+elseif is_linux() || Sys.KERNEL === :FreeBSD
     _clipboardcmd = nothing
+    const _clipboardcmds = Dict(
+        :copy => Dict(
+            :xsel  => is_linux() ?
+                `xsel --nodetach --input --clipboard` : `xsel -c`,
+            :xclip => `xclip -silent -in -selection clipboard`,
+        ),
+        :paste => Dict(
+            :xsel  => is_linux() ?
+                `xsel --nodetach --output --clipboard` : `xsel -p`,
+            :xclip => `xclip -quiet -out -selection clipboard`,
+        )
+    )
     function clipboardcmd()
         global _clipboardcmd
         _clipboardcmd !== nothing && return _clipboardcmd
         for cmd in (:xclip, :xsel)
             success(pipeline(`which $cmd`, DevNull)) && return _clipboardcmd = cmd
         end
-        error("no clipboard command found, please install xsel or xclip")
+        pkgs = @static if is_linux()
+            "xsel or xclip"
+        elseif Sys.KERNEL === :FreeBSD
+            "x11/xsel or x11/xclip"
+        end
+        error("no clipboard command found, please install $pkgs")
     end
     function clipboard(x)
         c = clipboardcmd()
-        cmd = c == :xsel  ? `xsel --nodetach --input --clipboard` :
-              c == :xclip ? `xclip -silent -in -selection clipboard` :
+        cmd = get(_clipboardcmds[:copy], c, nothing)
+        if cmd === nothing
             error("unexpected clipboard command: $c")
+        end
         open(pipeline(cmd, stderr=STDERR), "w") do io
             print(io, x)
         end
     end
     function clipboard()
         c = clipboardcmd()
-        cmd = c == :xsel  ? `xsel --nodetach --output --clipboard` :
-              c == :xclip ? `xclip -quiet -out -selection clipboard` :
+        cmd = get(_clipboardcmds[:paste], c, nothing)
+        if cmd === nothing
             error("unexpected clipboard command: $c")
+        end
         readstring(pipeline(cmd, stderr=STDERR))
     end
 
