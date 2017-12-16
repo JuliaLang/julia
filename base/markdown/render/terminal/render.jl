@@ -105,6 +105,8 @@ term(io::IO, x, _) = show(io, MIME"text/plain"(), x)
 
 terminline(md) = sprint(terminline, md)
 
+terminline(io::IO, content...) = terminline(io, collect(content))
+
 function terminline(io::IO, content::Vector)
     for md in content
         terminline(io, md)
@@ -134,7 +136,9 @@ end
 terminline(io::IO, f::Footnote) = with_output_format(:bold, terminline, io, "[^$(f.id)]")
 
 function terminline(io::IO, md::Link)
-    terminline(io, "$(terminline(md.text)) ($(md.url))")
+    url = !Base.startswith(md.url, "@ref") ? " ($(md.url))" : ""
+    text = terminline(md.text)
+    terminline(io, text, url)
 end
 
 function terminline(io::IO, code::Code)
