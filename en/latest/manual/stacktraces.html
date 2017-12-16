@@ -44,7 +44,7 @@ julia&gt; example()
  eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:66
  macro expansion at REPL.jl:97 [inlined]
  (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73</code></pre><h2><a class="nav-anchor" id="Extracting-useful-information-1" href="#Extracting-useful-information-1">Extracting useful information</a></h2><p>Each <a href="../stdlib/stacktraces.html#Base.StackTraces.StackFrame"><code>StackFrame</code></a> contains the function name, file name, line number, lambda info, a flag indicating whether the frame has been inlined, a flag indicating whether it is a C function (by default C functions do not appear in the stack trace), and an integer representation of the pointer returned by <a href="../stdlib/base.html#Base.backtrace"><code>backtrace</code></a>:</p><pre><code class="language-julia-repl">julia&gt; top_frame = stacktrace()[1]
-eval(::Module, ::Any) at boot.jl:236
+eval(::Module, ::Expr) at REPL.jl:3
 
 julia&gt; top_frame.func
 :eval
@@ -56,7 +56,7 @@ julia&gt; top_frame.line
 236
 
 julia&gt; top_frame.linfo
-Nullable{Core.MethodInstance}(MethodInstance for eval(::Module, ::Any))
+MethodInstance for eval(::Module, ::Expr)
 
 julia&gt; top_frame.inlined
 false
