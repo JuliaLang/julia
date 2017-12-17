@@ -1477,15 +1477,18 @@ avoid the race:
 ```julia-repl
 julia> using Base.Threads
 
+julia> nthreads()
+4
+
 julia> acc = Ref(0)
 Base.RefValue{Int64}(0)
 
 julia> @threads for i in 1:1000
-          acc[] += i
+          acc[] += 1
        end
 
 julia> acc[]
-93875
+926
 
 julia> acc = Atomic{Int64}(0)
 Atomic{Int64}(0)
