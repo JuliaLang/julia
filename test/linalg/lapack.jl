@@ -375,8 +375,9 @@ end
         A = A + A.' #symmetric!
         b = rand(elty,10)
         c = A \ b
+        cnd = cond(A)
         b,A = LAPACK.sysv_rook!('U',A,b)
-        @test b ≈ c
+        @test b ≈ c rtol=eps(cnd)
         @test_throws DimensionMismatch LAPACK.sysv_rook!('U',A,rand(elty,11))
 
         # syconvf_rook error handling
