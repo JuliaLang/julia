@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Serializer: object_number, serialize_cycle, deserialize_cycle, writetag,
+using Base.Serializer: serialize_cycle, deserialize_cycle, writetag,
                       __deserialized_types__, serialize_typename, deserialize_typename,
-                      TYPENAME_TAG, object_numbers, reset_state, serialize_type
+                      TYPENAME_TAG, reset_state, serialize_type
 
-import Base.Serializer: lookup_object_number, remember_object
+import Base.Serializer: object_number, lookup_object_number, remember_object
 
 mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I
@@ -25,6 +25,21 @@ mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     end
 end
 ClusterSerializer(io::IO) = ClusterSerializer{typeof(io)}(io)
+
+const object_numbers = WeakKeyDict()
+const obj_number_salt = Ref(0)
+function object_number(s::ClusterSerializer, @nospecialize(l))
+    global obj_number_salt, object_numbers
+    if haskey(object_numbers, l)
+        return object_numbers[l]
+    end
+    # a hash function that always gives the same number to the same
+    # object on the same machine, and is unique over all machines.
+    ln = obj_number_salt[]+(UInt64(myid())<<44)
+    obj_number_salt[] += 1
+    object_numbers[l] = ln
+    return ln::UInt64
+end
 
 const known_object_data = Dict{UInt64,Any}()
 
@@ -61,7 +76,7 @@ function serialize(s::ClusterSerializer, t::TypeName)
     serialize_cycle(s, t) && return
     writetag(s.io, TYPENAME_TAG)
 
-    identifier = object_number(t)
+    identifier = object_number(s, t)
     send_whole = !(identifier in s.tn_obj_sent)
     serialize(s, send_whole)
     write(s.io, identifier)

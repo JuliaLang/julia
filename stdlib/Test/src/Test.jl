@@ -25,6 +25,8 @@ export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray
 export guardsrand
 
+import Distributed: myid
+
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions

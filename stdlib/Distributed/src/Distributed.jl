@@ -39,8 +39,8 @@ export
     interrupt,
     launch,
     manage,
-#    myid,   # accessed via Base
-#    nprocs, # accessed via Base
+    myid,
+    nprocs,
     nworkers,
     pmap,
     procs,
@@ -79,6 +79,19 @@ include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
 include("precompile.jl")
 
-__init__() = init_parallel()
+function _require_callback(mod::Symbol)
+    if Base.toplevel_load[] && myid() == 1 && nprocs() > 1
+        # broadcast top-level import/using from node 1 (only)
+        @sync for p in procs()
+            p == 1 && continue
+            @async remotecall_wait(()->(Base.require(mod); nothing), p)
+        end
+    end
+end
+
+function __init__()
+    push!(Base.package_callbacks, _require_callback)
+    init_parallel()
+end
 
 end
