@@ -266,15 +266,14 @@ end
 
 
 """
-    versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
+    versioninfo(io::IO=STDOUT; verbose::Bool=false)
 
 Print information about the version of Julia in use. The output is
 controlled with boolean keyword arguments:
 
-- `packages`: print information about installed packages
 - `verbose`: print all additional information
 """
-function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
+function versioninfo(io::IO=STDOUT; verbose::Bool=false)
     println(io, "Julia Version $VERSION")
     if !isempty(GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
@@ -343,17 +342,6 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
             if ismatch(r"PATH|FLAG|^TERM$|HOME", String(k))
                 println(io, "  $(k) = $(v)")
             end
-        end
-    end
-    if packages || verbose
-        println(io, "Packages:")
-        println(io, "  Package Directory: ", Pkg.dir())
-        print(io, "  Package Status:")
-        if isdir(Pkg.dir())
-            println(io, "")
-            Pkg.status(io)
-        else
-            println(io, " no packages installed")
         end
     end
 end
