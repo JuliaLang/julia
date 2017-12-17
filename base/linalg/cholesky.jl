@@ -132,8 +132,6 @@ function _chol!(x::Number, uplo)
     rx == abs(x) ? (rval, convert(BlasInt, 0)) : (rval, convert(BlasInt, 1))
 end
 
-chol!(x::Number, uplo) = ((C, info) = _chol!(x, uplo); @assertposdef C info)
-
 # chol!. Destructive methods for computing Cholesky factor of real symmetric or Hermitian
 # matrix
 function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
@@ -141,6 +139,7 @@ function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
     @assertposdef C info
 end
 function chol!(A::StridedMatrix)
+    checksquare(A)
     C, info = _chol!(A)
     @assertposdef C info
 end
@@ -236,6 +235,7 @@ ERROR: InexactError: convert(Int64, 6.782329983125268)
 ```
 """
 function cholfact!(A::StridedMatrix, ::Val{false}=Val(false))
+    checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         return Cholesky(A, 'U', convert(BlasInt, -1))
     else
@@ -267,6 +267,7 @@ factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
 function cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0)
+    checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         return CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
                                tol, convert(BlasInt, -1))
@@ -297,9 +298,12 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
  -16.0  -43.0   98.0
 
 julia> C = cholfact(A)
-Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
-[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]
-successful: true
+Base.LinAlg.Cholesky{Float64,Array{Float64,2}}
+U factor:
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 2.0  6.0  -8.0
+  ⋅   1.0   5.0
+  ⋅    ⋅    3.0
 
 julia> C[:U]
 3×3 UpperTriangular{Float64,Array{Float64,2}}:
@@ -361,7 +365,6 @@ convert(::Type{AbstractMatrix}, C::Cholesky) = C.uplo == 'U' ? C[:U]'C[:U] : C[:
 convert(::Type{AbstractArray}, C::Cholesky) = convert(AbstractMatrix, C)
 convert(::Type{Matrix}, C::Cholesky) = convert(Array, convert(AbstractArray, C))
 convert(::Type{Array}, C::Cholesky) = convert(Matrix, C)
-full(C::Cholesky) = convert(AbstractArray, C)
 
 function convert(::Type{AbstractMatrix}, F::CholeskyPivoted)
     ip = invperm(F[:p])
@@ -370,7 +373,6 @@ end
 convert(::Type{AbstractArray}, F::CholeskyPivoted) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::CholeskyPivoted) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::CholeskyPivoted) = convert(Matrix, F)
-full(F::CholeskyPivoted) = convert(AbstractArray, F)
 
 copy(C::Cholesky) = Cholesky(copy(C.factors), C.uplo, C.info)
 copy(C::CholeskyPivoted) = CholeskyPivoted(copy(C.factors), C.uplo, C.piv, C.rank, C.tol, C.info)
@@ -401,28 +403,38 @@ end
 
 issuccess(C::Cholesky) = C.info == 0
 
-function show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix})
-    println(io, "$(typeof(C)) with factor:")
-    show(io, C[:UL])
-    print(io, "\nsuccessful: $(issuccess(C))")
-end
-
-A_ldiv_B!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    @assertposdef LAPACK.potrs!(C.uplo, C.factors, B) C.info
-
-function A_ldiv_B!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
-    if C.uplo == 'L'
-        return Ac_ldiv_B!(LowerTriangular(C.factors), A_ldiv_B!(LowerTriangular(C.factors), B))
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
+    if issuccess(C)
+        println(io, summary(C), "\n$(C.uplo) factor:")
+        show(io, mime, C[:UL])
     else
-        return A_ldiv_B!(UpperTriangular(C.factors), Ac_ldiv_B!(UpperTriangular(C.factors), B))
+        print(io, "Failed factorization of type $(typeof(C))")
     end
 end
 
-function A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedVector{T}) where T<:BlasFloat
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any,<:AbstractMatrix})
+    println(io, summary(C), "\n$(C.uplo) factor with rank $(rank(C)):")
+    show(io, mime, C.uplo == 'U' ? C[:U] : C[:L])
+    println(io, "\npermutation:")
+    show(io, mime, C[:p])
+end
+
+ldiv!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+    @assertposdef LAPACK.potrs!(C.uplo, C.factors, B) C.info
+
+function ldiv!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
+    if C.uplo == 'L'
+        return ldiv!(Adjoint(LowerTriangular(C.factors)), ldiv!(LowerTriangular(C.factors), B))
+    else
+        return ldiv!(UpperTriangular(C.factors), ldiv!(Adjoint(UpperTriangular(C.factors)), B))
+    end
+end
+
+function ldiv!(C::CholeskyPivoted{T}, B::StridedVector{T}) where T<:BlasFloat
     chkfullrank(C)
     ipermute!(LAPACK.potrs!(C.uplo, C.factors, permute!(B, C.piv)), C.piv)
 end
-function A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
+function ldiv!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
     chkfullrank(C)
     n = size(C, 1)
     for i=1:size(B, 2)
@@ -435,27 +447,27 @@ function A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloa
     B
 end
 
-function A_ldiv_B!(C::CholeskyPivoted, B::StridedVector)
+function ldiv!(C::CholeskyPivoted, B::StridedVector)
     if C.uplo == 'L'
-        Ac_ldiv_B!(LowerTriangular(C.factors),
-            A_ldiv_B!(LowerTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
+        ldiv!(Adjoint(LowerTriangular(C.factors)),
+            ldiv!(LowerTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
     else
-        A_ldiv_B!(UpperTriangular(C.factors),
-            Ac_ldiv_B!(UpperTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
+        ldiv!(UpperTriangular(C.factors),
+            ldiv!(Adjoint(UpperTriangular(C.factors)), B[C.piv]))[invperm(C.piv)]
     end
 end
 
-function A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix)
+function ldiv!(C::CholeskyPivoted, B::StridedMatrix)
     if C.uplo == 'L'
-        Ac_ldiv_B!(LowerTriangular(C.factors),
-            A_ldiv_B!(LowerTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
+        ldiv!(Adjoint(LowerTriangular(C.factors)),
+            ldiv!(LowerTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
     else
-        A_ldiv_B!(UpperTriangular(C.factors),
-            Ac_ldiv_B!(UpperTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
+        ldiv!(UpperTriangular(C.factors),
+            ldiv!(Adjoint(UpperTriangular(C.factors)), B[C.piv,:]))[invperm(C.piv),:]
     end
 end
 
-isposdef(C::Cholesky) = C.info == 0
+isposdef(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
 
 function det(C::Cholesky)
     isposdef(C) || throw(PosDefException(C.info))

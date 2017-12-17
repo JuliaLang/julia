@@ -16,10 +16,16 @@ catcmd = `cat`
 shcmd = `sh`
 sleepcmd = `sleep`
 lscmd = `ls`
+havebb = false
 if Sys.iswindows()
     busybox = joinpath(JULIA_HOME, "busybox.exe")
-    try # use busybox-w32 on windows
+    havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
+        true
+    catch
+        false
+    end
+    if havebb
         yescmd = `$busybox yes`
         echocmd = `$busybox echo`
         sortcmd = `$busybox sort`
@@ -49,7 +55,7 @@ out = read(`$echocmd hello` & `$echocmd world`, String)
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
 Sys.isunix() && run(pipeline(yescmd, `head`, DevNull))
 
-begin
+let a, p
     a = Base.Condition()
     @schedule begin
         p = spawn(pipeline(yescmd,DevNull))
@@ -236,7 +242,7 @@ end
 end
 
 # Test that redirecting an IOStream does not crash the process
-let fname = tempname()
+let fname = tempname(), p
     cmd = """
     # Overwrite libuv memory before freeing it, to make sure that a use after free
     # triggers an assertion.
@@ -248,7 +254,7 @@ let fname = tempname()
         nothing
     end
     OLD_STDERR = STDERR
-    redirect_stderr(open("$(escape_string(fname))", "w"))
+    redirect_stderr(open($(repr(fname)), "w"))
     # Usually this would be done by GC. Do it manually, to make the failure
     # case more reliable.
     oldhandle = OLD_STDERR.handle
@@ -351,14 +357,11 @@ end
 let fname = tempname()
     write(fname, "test\n")
     code = """
-    cmd = pipeline(`echo asdf`,`cat`)
-    if Sys.iswindows()
-        try
-            busybox = joinpath(JULIA_HOME, "busybox.exe")
-            success(`\$busybox`)
-            cmd = pipeline(`\$busybox echo asdf`,`\$busybox cat`)
-        end
-    end
+    $(if havebb
+        "cmd = pipeline(`\$$(repr(busybox)) echo asdf`, `\$$(repr(busybox)) cat`)"
+    else
+        "cmd = pipeline(`echo asdf`, `cat`)"
+    end)
     for line in eachline(STDIN)
         run(cmd)
     end
@@ -384,10 +387,22 @@ let cmd = ["/Volumes/External HD/program", "-a"]
     @test Base.shell_split("\"/Volumes/External HD/program\" -a") == cmd
 end
 
+# Test shell_escape printing quoting
 # Backticks should automatically quote where necessary
-let cmd = ["foo bar", "baz"]
-    @test string(`$cmd`) == "`'foo bar' baz`"
+let cmd = ["foo bar", "baz", "a'b", "a\"b", "a\"b\"c", "-L/usr/+", "a=b", "``", "\$", "&&", "z"]
+    @test string(`$cmd`) ==
+        """`'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b \\`\\` '\$' '&&' z`"""
+    @test Base.shell_escape(`$cmd`) ==
+        """'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b `` '\$' && z"""
+    @test Base.shell_escape_posixly(`$cmd`) ==
+        """'foo bar' baz a\\'b a\\"b 'a"b"c' -L/usr/+ a=b '``' '\$' '&&' z"""
 end
+let cmd = ["foo=bar", "baz"]
+    @test string(`$cmd`) == "`foo=bar baz`"
+    @test Base.shell_escape(`$cmd`) == "foo=bar baz"
+    @test Base.shell_escape_posixly(`$cmd`) == "'foo=bar' baz"
+end
+
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
@@ -438,13 +453,13 @@ if Sys.isunix()
     let ps = Pipe[]
         ulimit_n = tryparse(Int, readchomp(`sh -c 'ulimit -n'`))
         try
-            for i = 1 : 100 * get(ulimit_n, 1000)
+            for i = 1 : 100 * coalesce(ulimit_n, 1000)
                 p = Pipe()
                 Base.link_pipe(p)
                 push!(ps, p)
             end
-            if isnull(ulimit_n)
-                warn("`ulimit -n` is set to unlimited, fd exhaustion cannot be tested")
+            if ulimit_n === nothing
+                @warn "`ulimit -n` is set to unlimited, fd exhaustion cannot be tested"
                 @test_broken false
             else
                 @test false
@@ -495,3 +510,14 @@ end
 #    @test sizeof(readstring(stdout)) == 1048576 * 2 # make sure we get all the data
 #    @test success(p)
 #end
+
+# `kill` error conditions
+let p = spawn(`$sleepcmd 100`)
+    # Should throw on invalid signals
+    @test_throws Base.UVError kill(p, typemax(Cint))
+    kill(p)
+    wait(p)
+    # Should not throw if already dead
+    kill(p)
+end
+

@@ -47,13 +47,13 @@ elseif Sys.isapple()
         path_basename = String(basename(path))
         local casepreserved_basename
         header_size = 12
-        buf = Vector{UInt8}(length(path_basename) + header_size + 1)
+        buf = Vector{UInt8}(uninitialized, length(path_basename) + header_size + 1)
         while true
             ret = ccall(:getattrlist, Cint,
                         (Cstring, Ptr{Void}, Ptr{Void}, Csize_t, Culong),
                         path, attr_list, buf, sizeof(buf), FSOPT_NOFOLLOW)
             systemerror(:getattrlist, ret ≠ 0)
-            filename_length = unsafe_load(
+            filename_length = @gc_preserve buf unsafe_load(
               convert(Ptr{UInt32}, pointer(buf) + 8))
             if (filename_length + header_size) > length(buf)
                 resize!(buf, filename_length + header_size)
@@ -69,7 +69,7 @@ elseif Sys.isapple()
         # If there is no match, it's possible that the file does exist but HFS+
         # performed unicode normalization. See  https://developer.apple.com/library/mac/qa/qa1235/_index.html.
         isascii(path_basename) && return false
-        Vector{UInt8}(normalize_string(path_basename, :NFD)) == casepreserved_basename
+        Vector{UInt8}(Unicode.normalize(path_basename, :NFD)) == casepreserved_basename
     end
 else
     # Generic fallback that performs a slow directory listing.
@@ -80,52 +80,28 @@ else
     end
 end
 
-function load_hook(prefix::String, name::String, ::Void)
-    name_jl = "$name.jl"
-    path = joinpath(prefix, name_jl)
-    isfile_casesensitive(path) && return abspath(path)
-    path = joinpath(prefix, name_jl, "src", name_jl)
-    isfile_casesensitive(path) && return abspath(path)
-    path = joinpath(prefix, name, "src", name_jl)
-    isfile_casesensitive(path) && return abspath(path)
+macro return_if_file(path)
+    quote
+        path = $(esc(path))
+        isfile_casesensitive(path) && return path
+    end
+end
+
+function find_package(name::String)
+    endswith(name, ".jl") && (name = chop(name, 0, 3))
+    for dir in [Pkg.dir(); LOAD_PATH]
+        dir = abspath(dir)
+        @return_if_file joinpath(dir, "$name.jl")
+        @return_if_file joinpath(dir, "$name.jl", "src", "$name.jl")
+        @return_if_file joinpath(dir,   name,     "src", "$name.jl")
+    end
     return nothing
 end
-load_hook(prefix::String, name::String, path::String) = path
-load_hook(prefix, name::String, ::Any) =
-    throw(ArgumentError("unrecognized custom loader in LOAD_PATH: $prefix"))
 
-_str(x::AbstractString) = String(x)
-_str(x) = x
-
-# `wd` is a working directory to search. defaults to current working directory.
-# if `wd === nothing`, no extra path is searched.
-function find_in_path(name::String, wd::Union{Void,String})
-    isabspath(name) && return name
-    base = name
-    if endswith(name,".jl")
-        base = name[1:end-3]
-    else
-        name = string(base,".jl")
-    end
-    if wd !== nothing
-        isfile_casesensitive(joinpath(wd,name)) && return joinpath(wd,name)
-    end
-    path = nothing
-    path = _str(load_hook(_str(Pkg.dir()), base, path))
-    for dir in LOAD_PATH
-        path = _str(load_hook(_str(dir), base, path))
-    end
-    return path
-end
-find_in_path(name::AbstractString, wd::AbstractString = pwd()) =
-    find_in_path(String(name), String(wd))
-
-function find_source_file(file::String)
-    (isabspath(file) || isfile(file)) && return file
-    file2 = find_in_path(file)
-    file2 !== nothing && return file2
-    file2 = joinpath(JULIA_HOME, DATAROOTDIR, "julia", "base", file)
-    return isfile(file2) ? file2 : nothing
+function find_source_file(path::String)
+    (isabspath(path) || isfile(path)) && return path
+    base_path = joinpath(JULIA_HOME, DATAROOTDIR, "julia", "base", path)
+    return isfile(base_path) ? base_path : nothing
 end
 
 function find_all_in_cache_path(mod::Symbol)
@@ -177,10 +153,10 @@ function _require_search_from_serialized(mod::Symbol, sourcepath::String)
             if isa(restored, ErrorException) && endswith(restored.msg, " uuid did not match cache file.")
                 # can't use this cache due to a module uuid mismatch,
                 # defer reporting error until after trying all of the possible matches
-                DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Failed to load $path_to_try because $(restored.msg)")
+                @debug "Failed to load $path_to_try because $(restored.msg)"
                 continue
             end
-            warn("Deserialization checks failed while attempting to load cache from $path_to_try.")
+            @warn "Deserialization checks failed while attempting to load cache from $path_to_try"
             throw(restored)
         else
             return restored
@@ -189,11 +165,6 @@ function _require_search_from_serialized(mod::Symbol, sourcepath::String)
     return !isempty(paths)
 end
 
-# this value is set by `require` based on whether JULIA_DEBUG_LOADING
-# is presently defined as an environment variable
-# and makes the logic in this file noisier about what it is doing and why
-const DEBUG_LOADING = Ref(false)
-
 # to synchronize multiple tasks trying to import/using something
 const package_locks = Dict{Symbol,Condition}()
 
@@ -201,12 +172,16 @@ const package_locks = Dict{Symbol,Condition}()
 # Callbacks take the form (mod::Symbol) -> nothing.
 # WARNING: This is an experimental feature and might change later, without deprecation.
 const package_callbacks = Any[]
+# to notify downstream consumers that a file has been included into a particular module
+# Callbacks take the form (mod::Module, filename::String) -> nothing
+# WARNING: This is an experimental feature and might change later, without deprecation.
+const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Any[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
-const _require_dependencies = Any[] # a list of (path, mtime) tuples that are the file dependencies of the module currently being precompiled
+const _require_dependencies = Any[] # a list of (mod, path, mtime) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
-function _include_dependency(_path::AbstractString)
+function _include_dependency(modstring::AbstractString, _path::AbstractString)
     prev = source_path(nothing)
     if prev === nothing
         path = abspath(_path)
@@ -214,7 +189,7 @@ function _include_dependency(_path::AbstractString)
         path = joinpath(dirname(prev), _path)
     end
     if _track_dependencies[]
-        push!(_require_dependencies, (path, mtime(path)))
+        push!(_require_dependencies, (modstring, normpath(path), mtime(path)))
     end
     return path, prev
 end
@@ -230,7 +205,7 @@ This is only needed if your module depends on a file that is not used via `inclu
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
-    _include_dependency(path)
+    _include_dependency("#__external__", path)
     return nothing
 end
 
@@ -288,12 +263,16 @@ function reload(name::AbstractString)
         error("use `include` instead of `reload` to load source files")
     else
         # reload("Package") is ok
+        unreference_module(Symbol(name))
         require(Symbol(name))
     end
 end
 
 # require always works in Main scope and loads files from node 1
 const toplevel_load = Ref(true)
+
+myid() = isdefined(Main, :Distributed) ? invokelatest(Main.Distributed.myid) : 1
+nprocs() = isdefined(Main, :Distributed) ? invokelatest(Main.Distributed.nprocs) : 1
 
 """
     require(module::Symbol)
@@ -315,21 +294,75 @@ all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
 """
 function require(mod::Symbol)
-    _require(mod)
-    # After successfully loading, notify downstream consumers
-    if toplevel_load[] && myid() == 1 && nprocs() > 1
-        # broadcast top-level import/using from node 1 (only)
-        @sync for p in procs()
-            p == 1 && continue
-            @async remotecall_wait(p) do
-                if !isbindingresolved(Main, mod) || !isdefined(Main, mod)
-                    _require(mod)
-                end
+    if !root_module_exists(mod)
+        _require(mod)
+        # After successfully loading, notify downstream consumers
+        if toplevel_load[] && myid() == 1 && nprocs() > 1
+            # broadcast top-level import/using from node 1 (only)
+            @sync for p in invokelatest(Main.procs)
+                p == 1 && continue
+                @async invokelatest(Main.remotecall_wait, ()->(require(mod); nothing), p)
             end
         end
+        for callback in package_callbacks
+            invokelatest(callback, mod)
+        end
     end
-    for callback in package_callbacks
-        invokelatest(callback, mod)
+    return root_module(mod)
+end
+
+const loaded_modules = ObjectIdDict()
+const module_keys = ObjectIdDict()
+
+function register_root_module(key, m::Module)
+    if haskey(loaded_modules, key)
+        oldm = loaded_modules[key]
+        if oldm !== m
+            name = module_name(oldm)
+            @warn "Replacing module `$name`"
+        end
+    end
+    loaded_modules[key] = m
+    module_keys[m] = key
+    nothing
+end
+
+register_root_module(:Core, Core)
+register_root_module(:Base, Base)
+register_root_module(:Main, Main)
+
+is_root_module(m::Module) = haskey(module_keys, m)
+
+root_module_key(m::Module) = module_keys[m]
+
+# This is used as the current module when loading top-level modules.
+# It has the special behavior that modules evaluated in it get added
+# to the loaded_modules table instead of getting bindings.
+baremodule __toplevel__
+using Base
+end
+
+# get a top-level Module from the given key
+# for now keys can only be Symbols, but that will change
+root_module(key::Symbol) = loaded_modules[key]
+
+root_module_exists(key::Symbol) = haskey(loaded_modules, key)
+
+loaded_modules_array() = collect(values(loaded_modules))
+
+function unreference_module(key)
+    if haskey(loaded_modules, key)
+        m = pop!(loaded_modules, key)
+        # need to ensure all modules are GC rooted; will still be referenced
+        # in module_keys
+    end
+end
+
+function register_all(a)
+    for m in a
+        if module_parent(m) === m
+            register_root_module(module_name(m), m)
+        end
     end
 end
 
@@ -338,7 +371,6 @@ function _require(mod::Symbol)
     # and is not applied recursively to imported modules:
     old_track_dependencies = _track_dependencies[]
     _track_dependencies[] = false
-    DEBUG_LOADING[] = haskey(ENV, "JULIA_DEBUG_LOADING")
 
     # handle recursive calls to require
     loading = get(package_locks, mod, false)
@@ -354,7 +386,7 @@ function _require(mod::Symbol)
         toplevel_load[] = false
         # perform the search operation to select the module file require intends to load
         name = string(mod)
-        path = find_in_path(name, nothing)
+        path = find_package(name)
         if path === nothing
             throw(ArgumentError("Module $name not found in current path.\nRun `Pkg.add(\"$name\")` to install the $name package."))
         end
@@ -364,7 +396,8 @@ function _require(mod::Symbol)
         if JLOptions().use_compiled_modules != 0
             doneprecompile = _require_search_from_serialized(mod, path)
             if !isa(doneprecompile, Bool)
-                return # success
+                register_all(doneprecompile)
+                return
             end
         end
 
@@ -372,8 +405,8 @@ function _require(mod::Symbol)
         # but it was not handled by the precompile loader, complain
         for (concrete_mod, concrete_uuid) in _concrete_dependencies
             if mod === concrete_mod
-                warn("""Module $mod with uuid $concrete_uuid is missing from the cache.
-                     This may mean module $mod does not support precompilation but is imported by a module that does.""")
+                @warn """Module $mod with uuid $concrete_uuid is missing from the cache.
+                     This may mean module $mod does not support precompilation but is imported by a module that does."""
                 if JLOptions().incremental != 0
                     # during incremental precompilation, this should be fail-fast
                     throw(PrecompilableError(false))
@@ -387,18 +420,19 @@ function _require(mod::Symbol)
             cachefile = compilecache(mod)
             m = _require_from_serialized(mod, cachefile)
             if isa(m, Exception)
-                warn("The call to compilecache failed to create a usable precompiled cache file for module $name. Got:")
-                warn(m, prefix="WARNING: ")
+                @warn "The call to compilecache failed to create a usable precompiled cache file for module $name" exception=m
                 # fall-through, TODO: disable __precompile__(true) error so that the normal include will succeed
             else
-                return # success
+                register_all(m)
+                return
             end
         end
 
         # just load the file normally via include
         # for unknown dependencies
         try
-            Base.include_relative(Main, path)
+            Base.include_relative(__toplevel__, path)
+            return
         catch ex
             if doneprecompile === true || JLOptions().use_compiled_modules == 0 || !precompilableerror(ex, true)
                 rethrow() # rethrow non-precompilable=true errors
@@ -407,10 +441,12 @@ function _require(mod::Symbol)
             cachefile = compilecache(mod)
             m = _require_from_serialized(mod, cachefile)
             if isa(m, Exception)
-                warn(m, prefix="WARNING: ")
+                @warn """Module `$mod` declares `__precompile__(true)` but `require` failed
+                         to create a usable precompiled cache file""" exception=m
                 # TODO: disable __precompile__(true) error and do normal include instead of error
                 error("Module $mod declares __precompile__(true) but require failed to create a usable precompiled cache file.")
             end
+            register_all(m)
         end
     finally
         toplevel_load[] = last
@@ -456,7 +492,10 @@ end
 
 include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
 function include_relative(mod::Module, _path::String)
-    path, prev = _include_dependency(_path)
+    path, prev = _include_dependency(string(mod), _path)
+    for callback in include_callbacks # to preserve order, must come before Core.include
+        invokelatest(callback, mod, path)
+    end
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
     local result
@@ -532,7 +571,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::Vector{
                       task_local_storage()[:SOURCE_PATH] = $(source)
                       end)
         end
-        serialize(in, :(Base.include(Main, $(abspath(input)))))
+        serialize(in, :(Base.include(Base.__toplevel__, $(abspath(input)))))
         if source !== nothing
             serialize(in, :(delete!(task_local_storage(), :SOURCE_PATH)))
         end
@@ -559,7 +598,7 @@ for important notes.
 """
 function compilecache(name::String)
     # decide where to get the source file from
-    path = find_in_path(name, nothing)
+    path = find_package(name)
     path === nothing && throw(ArgumentError("$name not found in path"))
     path = String(path)
     # decide where to put the resulting cache file
@@ -570,29 +609,22 @@ function compilecache(name::String)
     cachefile::String = abspath(cachepath, name*".ji")
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
-    for existing in names(Main)
-        if isdefined(Main, existing)
-            mod = getfield(Main, existing)
-            if isa(mod, Module) && !(mod === Main || mod === Core || mod === Base)
-                mod = mod::Module
-                if module_parent(mod) === Main && module_name(mod) === existing
-                    push!(concrete_deps, (existing, module_uuid(mod)))
-                end
-            end
+    for (key,mod) in loaded_modules
+        if !(mod === Main || mod === Core || mod === Base)
+            push!(concrete_deps, (key, module_uuid(mod)))
         end
     end
     # run the expression and cache the result
-    if isinteractive() || DEBUG_LOADING[]
-        if isfile(cachefile)
-            info("Recompiling stale cache file $cachefile for module $name.")
-        else
-            info("Precompiling module $name.")
-        end
+    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+    if isfile(cachefile)
+        @logmsg verbosity "Recompiling stale cache file $cachefile for module $name"
+    else
+        @logmsg verbosity "Precompiling module $name"
     end
     if success(create_expr_cache(path, cachefile, concrete_deps))
         # append checksum to the end of the .ji file:
         open(cachefile, "a+") do f
-            write(f, hton(crc32c(seekstart(f))))
+            write(f, hton(_crc32c(seekstart(f))))
         end
     else
         error("Failed to precompile $name to $cachefile.")
@@ -615,15 +647,20 @@ function parse_cache_header(f::IO)
     end
     totbytes = ntoh(read(f, Int64)) # total bytes for file dependencies
     # read the list of files
-    files = Tuple{String,Float64}[]
+    files = Tuple{String,String,Float64}[]
     while true
-        n = ntoh(read(f, Int32))
-        n == 0 && break
-        totbytes -= 4 + n + 8
-        @assert n >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
-        push!(files, (String(read(f, n)), ntoh(read(f, Float64))))
+        n1 = ntoh(read(f, Int32))
+        n1 == 0 && break
+        @assert n1 >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
+        modname = String(read(f, n1))
+        n2 = ntoh(read(f, Int32))
+        @assert n2 >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
+        filename = String(read(f, n2))
+        push!(files, (modname, filename, ntoh(read(f, Float64))))
+        totbytes -= 8 + n1 + n2 + 8
     end
-    @assert totbytes == 4 "header of cache file appears to be corrupt"
+    @assert totbytes == 12 "header of cache file appears to be corrupt"
+    srctextpos = ntoh(read(f, Int64))
     # read the list of modules that are required to be present during loading
     required_modules = Dict{Symbol,UInt64}()
     while true
@@ -633,7 +670,7 @@ function parse_cache_header(f::IO)
         uuid = ntoh(read(f, UInt64)) # module UUID
         required_modules[sym] = uuid
     end
-    return modules, files, required_modules
+    return modules, files, required_modules, srctextpos
 end
 
 function parse_cache_header(cachefile::String)
@@ -648,7 +685,7 @@ end
 
 function cache_dependencies(f::IO)
     defs, files, modules = parse_cache_header(f)
-    return modules, files
+    return modules, map(mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3]), files)  # discard the module
 end
 
 function cache_dependencies(cachefile::String)
@@ -661,11 +698,42 @@ function cache_dependencies(cachefile::String)
     end
 end
 
+function read_dependency_src(io::IO, filename::AbstractString)
+    modules, files, required_modules, srctextpos = parse_cache_header(io)
+    srctextpos == 0 && error("no source-text stored in cache file")
+    seek(io, srctextpos)
+    _read_dependency_src(io, filename)
+end
+
+function _read_dependency_src(io::IO, filename::AbstractString)
+    while !eof(io)
+        filenamelen = ntoh(read(io, Int32))
+        filenamelen == 0 && break
+        fn = String(read(io, filenamelen))
+        len = ntoh(read(io, UInt64))
+        if fn == filename
+            return String(read(io, len))
+        end
+        seek(io, position(io) + len)
+    end
+    error(filename, " is not stored in the source-text cache")
+end
+
+function read_dependency_src(cachefile::String, filename::AbstractString)
+    io = open(cachefile, "r")
+    try
+        !isvalid_cache_header(io) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        return read_dependency_src(io, filename)
+    finally
+        close(io)
+    end
+end
+
 function stale_cachefile(modpath::String, cachefile::String)
     io = open(cachefile, "r")
     try
         if !isvalid_cache_header(io)
-            DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile due to it containing an invalid cache header.")
+            @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
         modules, files, required_modules = parse_cache_header(io)
@@ -675,12 +743,13 @@ function stale_cachefile(modpath::String, cachefile::String)
             if mod == :Main || mod == :Core || mod == :Base
                 continue
             # Module is already loaded
-            elseif isbindingresolved(Main, mod)
+            elseif root_module_exists(mod)
                 continue
             end
             name = string(mod)
-            path = find_in_path(name, nothing)
+            path = find_package(name)
             if path === nothing
+                @debug "Rejecting cache file $cachefile because dependency $name not found."
                 return true # Won't be able to fullfill dependency
             end
         end
@@ -694,30 +763,30 @@ function stale_cachefile(modpath::String, cachefile::String)
                 if uuid === uuid_req
                     return false # this is the file we want
                 end
-                DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it provides the wrong uuid (got $uuid) for $mod (want $uuid_req).")
+                @debug "Rejecting cache file $cachefile because it provides the wrong uuid (got $uuid) for $mod (want $uuid_req)"
                 return true # cachefile doesn't provide the required version of the dependency
             end
         end
 
         # now check if this file is fresh relative to its source files
-        if !samefile(files[1][1], modpath)
-            DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it is for file $(files[1][1])) not file $modpath.")
+        if !samefile(files[1][2], modpath)
+            @debug "Rejecting cache file $cachefile because it is for file $(files[1][2])) not file $modpath"
             return true # cache file was compiled from a different path
         end
-        for (f, ftime_req) in files
+        for (_, f, ftime_req) in files
             # Issue #13606: compensate for Docker images rounding mtimes
             # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
             ftime = mtime(f)
             if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, 6)
-                DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed.")
+                @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
                 return true
             end
         end
 
         # finally, verify that the cache file has a valid checksum
-        crc = crc32c(seekstart(io), filesize(io)-4)
+        crc = _crc32c(seekstart(io), filesize(io)-4)
         if crc != ntoh(read(io, UInt32))
-            DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it has an invalid checksum.")
+            @debug "Rejecting cache file $cachefile because it has an invalid checksum"
             return true
         end
 

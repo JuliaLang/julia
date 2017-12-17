@@ -148,12 +148,12 @@ end
 
 c7line = @__LINE__() + 1
 method_c7(a, b; kargs...) = a
-Base.show_method_candidates(buf, MethodError(method_c7, (1, 1)), [(:x, 1), (:y, 2)])
+Base.show_method_candidates(buf, MethodError(method_c7, (1, 1)), (x = 1, y = 2))
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line\e[0m",
                      "\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line")
 c8line = @__LINE__() + 1
 method_c8(a, b; y=1, w=1) = a
-Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), [(:x, 1), (:y, 2), (:z, 1), (:w, 1)])
+Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), (x = 1, y = 2, z = 1, w = 1))
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line\e[1m\e[31m got unsupported keyword arguments \"x\", \"z\"\e[0m\e[0m",
                      "\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line got unsupported keyword arguments \"x\", \"z\"")
 
@@ -161,7 +161,7 @@ ac15639line = @__LINE__
 addConstraint_15639(c::Int32) = c
 addConstraint_15639(c::Int64; uncset=nothing) = addConstraint_15639(Int32(c), uncset=uncset)
 
-Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), [(:uncset, nothing)])
+Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), (uncset = nothing,))
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1)\e[1m\e[31m got unsupported keyword argument \"uncset\"\e[0m\n  addConstraint_15639(\e[1m\e[31m::Int64\e[0m; uncset)$cfile$(ac15639line + 2)\e[0m",
                      "\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1) got unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)$cfile$(ac15639line + 2)")
 
@@ -229,7 +229,7 @@ end
 
 module __tmp_replutil
 
-using Base.Test
+using Test
 import ..@except_str
 global +
 +() = nothing
@@ -256,7 +256,7 @@ struct TypeWithIntParam{T <: Integer} end
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
     @test contains(err_str, "Try sqrt(Complex(x)).")
-    err_str = @except_strbt 2^(-1) DomainError
+    err_str = @except_strbt 2^(1-2) DomainError
     @test contains(err_str, "Cannot raise an integer x to a negative power -1")
     err_str = @except_strbt (-1)^0.25 DomainError
     @test contains(err_str, "Exponentiation yielding a complex result requires a complex argument")
@@ -291,7 +291,7 @@ let undefvar
 
     err_str = @except_str mod(1,0) DivideError
     @test err_str == "DivideError: integer division error"
-    err_str = @except_str Array{Any,1}(1)[1] UndefRefError
+    err_str = @except_str Vector{Any}(uninitialized, 1)[1] UndefRefError
     @test err_str == "UndefRefError: access to undefined reference"
     err_str = @except_str undefvar UndefVarError
     @test err_str == "UndefVarError: undefvar not defined"
@@ -309,8 +309,7 @@ end
 
 
 # issue 11845
-let
-    buf = IOBuffer()
+let buf = IOBuffer()
     showerror(buf, MethodError(convert, (3, 1.0)))
     showerror(buf, MethodError(convert, (Int, 1.0)))
     showerror(buf, MethodError(convert, Tuple{Type, Float64}))
@@ -446,12 +445,12 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
 end
 
 # Issue #14684: `display` should print associative types in full.
-let d = Dict(1 => 2, 3 => 45)
-    buf = IOBuffer()
+let d = Dict(1 => 2, 3 => 45),
+    buf = IOBuffer(),
     td = TextDisplay(buf)
+
     display(td, d)
     result = String(take!(td.io))
-
     @test contains(result, summary(d))
 
     # Is every pair in the string?
@@ -537,7 +536,7 @@ foo_9965(x::Int) = 2x
     end
     @test typeof(ex) == MethodError
     io = IOBuffer()
-    Base.show_method_candidates(io, ex, [(:w,true)])
+    Base.show_method_candidates(io, ex, (w = true,))
     @test contains(String(take!(io)), "got unsupported keyword argument \"w\"")
 end
 
@@ -617,6 +616,7 @@ let buf = IOBuffer()
 end
 
 @testset "Dict printing with limited rows" begin
+    local buf
     buf = IOBuffer()
     io = IOContext(buf, :displaysize => (4, 80), :limit => true)
     d = Base.ImmutableDict(1=>2)
@@ -624,20 +624,20 @@ end
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
 
     io = IOContext(io, :displaysize => (5, 80))
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry:\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
     d = Base.ImmutableDict(d, 3=>4)
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
 
     io = IOContext(io, :displaysize => (6, 80))
     show(io, MIME"text/plain"(), d)
@@ -645,12 +645,12 @@ end
         "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  3 => 4\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
     d = Base.ImmutableDict(d, 5=>6)
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) ==
         "Base.ImmutableDict{$Int,$Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
 end

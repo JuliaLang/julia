@@ -180,6 +180,7 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     size_t ndims = jl_nfields(_dims);
     assert(is_ntuple_long(_dims));
     size_t *dims = (size_t*)_dims;
+    assert(jl_types_equal(jl_tparam0(jl_typeof(data)), jl_tparam0(atype)));
 
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords * sizeof(size_t) + sizeof(void*), JL_SMALL_BYTE_ALIGNMENT);
@@ -942,7 +943,9 @@ STATIC_INLINE void jl_array_del_at_beg(jl_array_t *a, size_t idx, size_t dec,
                 memset(newdata + nbtotal + idx, 0, dec);
             }
         }
-        memmove(newdata + nb1, olddata + nb1 + nbdec, nbtotal - nb1);
+        // Move the rest of the data if the offset changed
+        if (newoffs != offset)
+            memmove(newdata + nb1, olddata + nb1 + nbdec, nbtotal - nb1);
         if (isbitsunion) {
             memmove(newdata + nbtotal + idx, olddata + n * elsz + idx + dec, n - idx);
         }
@@ -1134,15 +1137,6 @@ JL_DLLEXPORT void jl_array_ptr_1d_append(jl_array_t *a, jl_array_t *a2)
     for (i = 0; i < n2; i++) {
         jl_array_ptr_set(a, n + i, jl_array_ptr_ref(a2, i));
     }
-}
-
-JL_DLLEXPORT void jl_array_ptr_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c)
-{
-    assert(jl_typeis(a, jl_array_any_type));
-    jl_array_grow_end(a, 2);
-    size_t n = jl_array_nrows(a);
-    jl_array_ptr_set(a, n - 2, b);
-    jl_array_ptr_set(a, n - 1, c);
 }
 
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a)

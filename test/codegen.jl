@@ -10,6 +10,12 @@ const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 get_llvm(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
     sprint(code_llvm, f, t, strip_ir_metadata, dump_module)
 
+get_llvm_noopt(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
+    Base._dump_function(f, t,
+                #=native=# false, #=wrapper=# false, #=strip=# strip_ir_metadata,
+                #=dump_module=# dump_module, #=syntax=#:att, #=optimize=#false)
+
+
 if opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
     @test !contains(get_llvm(identity, Tuple{String}), " call ")
@@ -67,7 +73,7 @@ end
 function test_jl_dump_compiles_toplevel_thunks()
     tfile = tempname()
     io = open(tfile, "w")
-    topthunk = expand(Main, :(for i in 1:10; end))
+    topthunk = Meta.lower(Main, :(for i in 1:10; end))
     ccall(:jl_dump_compiles, Void, (Ptr{Void},), io.handle)
     Core.eval(Main, topthunk)
     ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
@@ -163,7 +169,6 @@ breakpoint_ptrstruct(a::RealStruct) =
     ccall(:jl_breakpoint, Void, (Ref{PtrStruct},), a)
 
 if opt_level > 0
-    @test !contains(get_llvm(isequal, Tuple{Nullable{BigFloat}, Nullable{BigFloat}}), "%gcframe")
     @test !contains(get_llvm(pointer_not_safepoint, Tuple{}), "%gcframe")
     compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})
     @test contains(compare_large_struct_ir, "call i32 @memcmp")
@@ -188,6 +193,13 @@ function two_breakpoint(a::Float64)
     ccall(:jl_breakpoint, Void, (Ref{Float64},), a)
 end
 
+function load_dummy_ref(x::Int)
+    r = Ref{Int}(x)
+    Base.@gc_preserve r begin
+        unsafe_load(Ptr{Int}(pointer_from_objref(r)))
+    end
+end
+
 if opt_level > 0
     breakpoint_f64_ir = get_llvm((a)->ccall(:jl_breakpoint, Void, (Ref{Float64},), a),
                                  Tuple{Float64})
@@ -198,6 +210,12 @@ if opt_level > 0
     two_breakpoint_ir = get_llvm(two_breakpoint, Tuple{Float64})
     @test !contains(two_breakpoint_ir, "jl_gc_pool_alloc")
     @test contains(two_breakpoint_ir, "llvm.lifetime.end")
+
+    @test load_dummy_ref(1234) === 1234
+    load_dummy_ref_ir = get_llvm(load_dummy_ref, Tuple{Int})
+    @test !contains(load_dummy_ref_ir, "jl_gc_pool_alloc")
+    # Hopefully this is reliable enough. LLVM should be able to optimize this to a direct return.
+    @test contains(load_dummy_ref_ir, "ret $Iptr %0")
 end
 
 # Issue 22770
@@ -208,7 +226,7 @@ let was_gced = false
 
     function foo22770()
         b = Ref(2)
-        finalizer(b, x -> was_gced = true)
+        finalizer(x -> was_gced = true, b)
         y = make_tuple(b)
         x = y[1]
         a = Ref(1)
@@ -250,3 +268,57 @@ end
 @generated f23595(g, args...) = Expr(:call, :g, Expr(:(...), :args))
 x23595 = rand(1)
 @test f23595(Core.arrayref, true, x23595, 1) == x23595[]
+
+# Issue #22421
+@noinline f22421_1(x) = x[] + 1
+@noinline f22421_2(x) = x[] + 2
+@noinline f22421_3(x, y, z, v) = x[] + y[] + z[] + v
+function g22421_1(x, y, b)
+    # Most likely generates a branch with phi node
+    if b
+        z = x
+        v = f22421_1(y)
+    else
+        z = y
+        v = f22421_2(x)
+    end
+    return f22421_3(x, y, z, v)
+end
+function g22421_2(x, y, b)
+    # Most likely generates a select
+    return f22421_3(x, y, b ? x : y, 1)
+end
+
+struct A24108
+    x::Vector{Int}
+end
+struct B24108
+    x::A24108
+end
+@noinline f24108(x) = length(x)
+# Test no gcframe is allocated for `x.x.x` even though `x.x` isn't live at the call site
+g24108(x::B24108) = f24108(x.x.x)
+
+@test g22421_1(Ref(1), Ref(2), true) === 7
+@test g22421_1(Ref(3), Ref(4), false) === 16
+@test g22421_2(Ref(5), Ref(6), true) === 17
+@test g22421_2(Ref(7), Ref(8), false) === 24
+
+if opt_level > 0
+    @test !contains(get_llvm(g22421_1, Tuple{Base.RefValue{Int},Base.RefValue{Int},Bool}),
+                    "%gcframe")
+    @test !contains(get_llvm(g22421_2, Tuple{Base.RefValue{Int},Base.RefValue{Int},Bool}),
+                    "%gcframe")
+    @test !contains(get_llvm(g24108, Tuple{B24108}), "%gcframe")
+end
+
+# Issue 24632
+function foo24632(y::Bool)
+    x::Union{Int, String} = y ? "ABC" : 1
+    isa(x, Int) ? x : 0
+end
+
+# A bit coarse-grained perhaps, but ok for now. What we want to check is that the load from
+# the semi-boxed union on the if-branch of the `isa` is not annotated !nonnull
+@test contains(get_llvm_noopt(foo24632, (Bool,), false), "!dereferenceable_or_null")
+@test !contains(get_llvm_noopt(foo24632, (Bool,), false), "!nonnull")

@@ -12,7 +12,6 @@ Base.take!(::Base.GenericIOBuffer)
 Base.fdio
 Base.flush
 Base.close
-Base.crc32c(::IO, ::Integer, ::UInt32)
 Base.write
 Base.read
 Base.read!
@@ -35,6 +34,7 @@ Base.isreadable
 Base.isopen
 Base.Serializer.serialize
 Base.Serializer.deserialize
+Base.Serializer.writeheader
 Base.Grisu.print_shortest
 Base.fd
 Base.redirect_stdout
@@ -46,7 +46,7 @@ Base.redirect_stdin(::Function, ::Any)
 Base.readchomp
 Base.truncate
 Base.skipchars
-Base.DataFmt.countlines
+Base.countlines
 Base.PipeBuffer
 Base.readavailable
 Base.IOContext
@@ -63,9 +63,6 @@ Base.summary
 Base.print
 Base.println
 Base.print_with_color
-Base.info
-Base.warn
-Base.logging
 Base.Printf.@printf
 Base.Printf.@sprintf
 Base.sprint
@@ -76,17 +73,6 @@ Base.readline
 Base.readuntil
 Base.readlines
 Base.eachline
-Base.DataFmt.readdlm(::Any, ::Char, ::Type, ::Char)
-Base.DataFmt.readdlm(::Any, ::Char, ::Char)
-Base.DataFmt.readdlm(::Any, ::Char, ::Type)
-Base.DataFmt.readdlm(::Any, ::Char)
-Base.DataFmt.readdlm(::Any, ::Type)
-Base.DataFmt.readdlm(::Any)
-Base.DataFmt.writedlm
-Base.Base64.Base64EncodePipe
-Base.Base64.Base64DecodePipe
-Base.Base64.base64encode
-Base.Base64.base64decode
 Base.displaysize
 ```
 
@@ -100,7 +86,7 @@ output (such as images, formatted text, or even audio and video), consisting of 
     `x` (with a plain-text fallback).
   * Overloading [`show`](@ref) allows one to indicate arbitrary multimedia representations (keyed by standard
     MIME types) of user-defined types.
-  * Multimedia-capable display backends may be registered by subclassing a generic `Display` type
+  * Multimedia-capable display backends may be registered by subclassing a generic `AbstractDisplay` type
     and pushing them onto a stack of display backends via [`pushdisplay`](@ref).
 
 The base Julia runtime provides only plain-text display, but richer displays may be enabled by
@@ -122,7 +108,7 @@ PNG images in a window can register this capability with Julia, so that calling 
 types with PNG representations will automatically display the image using the module's window.
 
 In order to define a new display backend, one should first create a subtype `D` of the abstract
-class `Display`.  Then, for each MIME type (`mime` string) that can be displayed on `D`, one should
+class `AbstractDisplay`.  Then, for each MIME type (`mime` string) that can be displayed on `D`, one should
 define a function `display(d::D, ::MIME"mime", x) = ...` that displays `x` as that MIME type,
 usually by calling [`reprmime(mime, x)`](@ref).  A `MethodError` should be thrown if `x` cannot be displayed
 as that MIME type; this is automatic if one calls [`reprmime`](@ref). Finally, one should define a function
@@ -142,14 +128,6 @@ Base.Multimedia.TextDisplay
 Base.Multimedia.istextmime
 ```
 
-## Memory-mapped I/O
-
-```@docs
-Base.Mmap.Anonymous
-Base.Mmap.mmap
-Base.Mmap.sync!
-```
-
 ## Network I/O
 
 ```@docs
@@ -158,6 +136,8 @@ Base.connect(::AbstractString)
 Base.listen(::Any)
 Base.listen(::AbstractString)
 Base.getaddrinfo
+Base.getalladdrinfo
+Base.getnameinfo
 Base.getsockname
 Base.getpeername
 Base.IPv4
@@ -165,9 +145,6 @@ Base.IPv6
 Base.nb_available
 Base.accept
 Base.listenany
-Base.Filesystem.poll_fd
-Base.Filesystem.poll_file
-Base.Filesystem.watch_file
 Base.bind
 Base.send
 Base.recv

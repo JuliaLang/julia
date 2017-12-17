@@ -47,9 +47,6 @@ include("indices.jl")
 include("array.jl")
 include("abstractarray.jl")
 
-include("hashing.jl")
-include("nofloat_hashing.jl")
-
 # map-reduce operators
 macro simd(forloop)
     esc(forloop)
@@ -58,8 +55,9 @@ include("reduce.jl")
 
 ## core structures
 include("bitarray.jl")
-include("intset.jl")
-include("associative.jl")
+include("bitset.jl")
+include("abstractdict.jl")
+include("namedtuple.jl")
 
 # core docsystem
 include("docs/core.jl")

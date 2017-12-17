@@ -110,27 +110,31 @@
 #mutable struct Task
 #    parent::Task
 #    storage::Any
-#    consumers
-#    started::Bool
-#    done::Bool
-#    runnable::Bool
+#    state::Symbol
+#    consumers::Any
+#    donenotify::Any
+#    result::Any
+#    exception::Any
+#    backtrace::Any
+#    logstate::Any
+#    code::Any
 #end
 
 export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
     Tuple, Type, UnionAll, TypeName, TypeVar, Union, Void,
-    SimpleVector, AbstractArray, DenseArray,
+    SimpleVector, AbstractArray, DenseArray, NamedTuple,
     # special objects
     Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
-    Module, Symbol, Task, Array, WeakRef, VecElement,
+    Module, Symbol, Task, Array, Uninitialized, uninitialized, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,
     Signed, Int, Int8, Int16, Int32, Int64, Int128,
     Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
     # string types
-    Char, DirectIndexString, AbstractString, String, IO,
+    Char, AbstractString, String, IO,
     # errors
     ErrorException, BoundsError, DivideError, DomainError, Exception,
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
@@ -148,8 +152,6 @@ export
     applicable, invoke,
     # constants
     nothing, Main
-
-const AnyVector = Array{Any,1}
 
 abstract type Number end
 abstract type Real     <: Number end
@@ -195,39 +197,38 @@ end
 Expr(@nospecialize args...) = _expr(args...)
 
 abstract type Exception end
-mutable struct ErrorException <: Exception
+struct ErrorException <: Exception
     msg::AbstractString
-    ErrorException(msg::AbstractString) = new(msg)
 end
 
 macro _noinline_meta()
     Expr(:meta, :noinline)
 end
 
-struct BoundsError        <: Exception
+struct BoundsError <: Exception
     a::Any
     i::Any
     BoundsError() = new()
     BoundsError(@nospecialize(a)) = (@_noinline_meta; new(a))
     BoundsError(@nospecialize(a), i) = (@_noinline_meta; new(a,i))
 end
-struct DivideError        <: Exception end
-struct OutOfMemoryError   <: Exception end
-struct ReadOnlyMemoryError<: Exception end
-struct SegmentationFault  <: Exception end
-struct StackOverflowError <: Exception end
-struct UndefRefError      <: Exception end
-struct UndefVarError      <: Exception
+struct DivideError         <: Exception end
+struct OutOfMemoryError    <: Exception end
+struct ReadOnlyMemoryError <: Exception end
+struct SegmentationFault   <: Exception end
+struct StackOverflowError  <: Exception end
+struct UndefRefError       <: Exception end
+struct UndefVarError <: Exception
     var::Symbol
 end
 struct InterruptException <: Exception end
 struct DomainError <: Exception
     val
-    msg
-    DomainError(@nospecialize(val)) = (@_noinline_meta; new(val))
+    msg::AbstractString
+    DomainError(@nospecialize(val)) = (@_noinline_meta; new(val, ""))
     DomainError(@nospecialize(val), @nospecialize(msg)) = (@_noinline_meta; new(val, msg))
 end
-mutable struct TypeError <: Exception
+struct TypeError <: Exception
     func::Symbol
     context::AbstractString
     expected::Type
@@ -237,18 +238,17 @@ struct InexactError <: Exception
     func::Symbol
     T::Type
     val
-
     InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@_noinline_meta; new(f, T, val))
 end
 struct OverflowError <: Exception
-    msg
-end
-
-mutable struct ArgumentError <: Exception
     msg::AbstractString
 end
 
-mutable struct MethodError <: Exception
+struct ArgumentError <: Exception
+    msg::AbstractString
+end
+
+struct MethodError <: Exception
     f
     args
     world::UInt
@@ -257,28 +257,23 @@ end
 const typemax_UInt = ccall(:jl_typemax_uint, Any, (Any,), UInt)
 MethodError(@nospecialize(f), @nospecialize(args)) = MethodError(f, args, typemax_UInt)
 
-mutable struct AssertionError <: Exception
+struct AssertionError <: Exception
     msg::AbstractString
-    AssertionError() = new("")
-    AssertionError(msg) = new(msg)
 end
+AssertionError() = AssertionError("")
 
-#Generic wrapping of arbitrary exceptions
-#Subtypes should put the exception in an 'error' field
 abstract type WrappedException <: Exception end
 
-mutable struct LoadError <: WrappedException
+struct LoadError <: WrappedException
     file::AbstractString
     line::Int
     error
 end
 
-mutable struct InitError <: WrappedException
+struct InitError <: WrappedException
     mod::Symbol
     error
 end
-
-abstract type DirectIndexString <: AbstractString end
 
 String(s::String) = s  # no constructor yet
 
@@ -328,9 +323,6 @@ struct VecElement{T}
 end
 VecElement(arg::T) where {T} = VecElement{T}(arg)
 
-# used by lowering of splicing unquote
-splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
-
 _new(typ::Symbol, argty::Symbol) = eval(Core, :($typ(@nospecialize n::$argty) = $(Expr(:new, typ, :n))))
 _new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
@@ -358,25 +350,31 @@ unsafe_convert(::Type{T}, x::T) where {T} = x
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 
-# primitive array constructors
-Array{T,N}(d::NTuple{N,Int}) where {T,N} =
-    ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
-Array{T,1}(d::NTuple{1,Int}) where {T} = Array{T,1}(getfield(d,1))
-Array{T,2}(d::NTuple{2,Int}) where {T} = Array{T,2}(getfield(d,1), getfield(d,2))
-Array{T,3}(d::NTuple{3,Int}) where {T} = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
-Array{T,N}(d::Vararg{Int,N}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
-Array{T,1}(m::Int) where {T} = ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
-Array{T,2}(m::Int, n::Int) where {T} =
+## primitive Array constructors
+struct Uninitialized end
+const uninitialized = Uninitialized()
+# type and dimensionality specified, accepting dims as series of Ints
+Array{T,1}(::Uninitialized, m::Int) where {T} =
+    ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
+Array{T,2}(::Uninitialized, m::Int, n::Int) where {T} =
     ccall(:jl_alloc_array_2d, Array{T,2}, (Any, Int, Int), Array{T,2}, m, n)
-Array{T,3}(m::Int, n::Int, o::Int) where {T} =
+Array{T,3}(::Uninitialized, m::Int, n::Int, o::Int) where {T} =
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any, Int, Int, Int), Array{T,3}, m, n, o)
+Array{T,N}(::Uninitialized, d::Vararg{Int,N}) where {T,N} =
+    ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+# type and dimensionality specified, accepting dims as tuples of Ints
+Array{T,1}(::Uninitialized, d::NTuple{1,Int}) where {T} = Array{T,1}(uninitialized, getfield(d,1))
+Array{T,2}(::Uninitialized, d::NTuple{2,Int}) where {T} = Array{T,2}(uninitialized, getfield(d,1), getfield(d,2))
+Array{T,3}(::Uninitialized, d::NTuple{3,Int}) where {T} = Array{T,3}(uninitialized, getfield(d,1), getfield(d,2), getfield(d,3))
+Array{T,N}(::Uninitialized, d::NTuple{N,Int}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+# type but not dimensionality specified
+Array{T}(::Uninitialized, m::Int) where {T} = Array{T,1}(uninitialized, m)
+Array{T}(::Uninitialized, m::Int, n::Int) where {T} = Array{T,2}(uninitialized, m, n)
+Array{T}(::Uninitialized, m::Int, n::Int, o::Int) where {T} = Array{T,3}(uninitialized, m, n, o)
+Array{T}(::Uninitialized, d::NTuple{N,Int}) where {T,N} = Array{T,N}(uninitialized, d)
+# empty vector constructor
+Array{T,1}() where {T} = Array{T,1}(uninitialized, 0)
 
-Array{T}(d::NTuple{N,Int}) where {T,N} = Array{T,N}(d)
-Array{T}(m::Int) where {T} = Array{T,1}(m)
-Array{T}(m::Int, n::Int) where {T} = Array{T,2}(m, n)
-Array{T}(m::Int, n::Int, o::Int) where {T} = Array{T,3}(m, n, o)
-
-Array{T,1}() where {T} = Array{T,1}(0)
 
 # primitive Symbol constructors
 function Symbol(s::String)
@@ -438,6 +436,70 @@ show(@nospecialize a) = show(STDOUT, a)
 print(@nospecialize a...) = print(STDOUT, a...)
 println(@nospecialize a...) = println(STDOUT, a...)
 
-gcuse(@nospecialize a) = ccall(:jl_gc_use, Void, (Any,), a)
+struct GeneratedFunctionStub
+    gen
+    argnames::Array{Any,1}
+    spnames::Union{Void, Array{Any,1}}
+    line::Int
+    file::Symbol
+end
+
+# invoke and wrap the results of @generated
+function (g::GeneratedFunctionStub)(@nospecialize args...)
+    body = g.gen(args...)
+    if body isa CodeInfo
+        return body
+    end
+    lam = Expr(:lambda, g.argnames,
+               Expr(Symbol("scope-block"),
+                    Expr(:block,
+                         LineNumberNode(g.line, g.file),
+                         Expr(:meta, :push_loc, g.file, Symbol("@generated body")),
+                         Expr(:return, body),
+                         Expr(:meta, :pop_loc))))
+    if g.spnames === nothing
+        return lam
+    else
+        return Expr(Symbol("with-static-parameters"), lam, g.spnames...)
+    end
+end
+
+NamedTuple() = NamedTuple{(),Tuple{}}(())
+
+"""
+    NamedTuple{names}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
+"""
+NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
+
+using .Intrinsics: sle_int, add_int
+
+macro generated()
+    return Expr(:generated)
+end
+
+function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
+    if @generated
+        N = nfields(names)
+        flds = Array{Any,1}(uninitialized, N)
+        i = 1
+        while sle_int(i, N)
+            arrayset(false, flds, :(getfield(args, $i)), i)
+            i = add_int(i, 1)
+        end
+        Expr(:new, :(NamedTuple{names,T}), flds...)
+    else
+        N = nfields(names)
+        NT = NamedTuple{names,T}
+        flds = Array{Any,1}(uninitialized, N)
+        i = 1
+        while sle_int(i, N)
+            arrayset(false, flds, getfield(args, i), i)
+            i = add_int(i, 1)
+        end
+        ccall(:jl_new_structv, Any, (Any, Ptr{Void}, UInt32), NT, fields, N)::NT
+    end
+end
 
 ccall(:jl_set_istopmod, Void, (Any, Bool), Core, true)

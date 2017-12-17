@@ -9,6 +9,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "builtin_proto.h"
+#include "processor.h"
 
 #ifndef _OS_WINDOWS_
 #include <dlfcn.h>
@@ -129,26 +130,16 @@ static uint32_t read_uint32(ios_t *s)
 
 // --- Static Compile ---
 
-#ifdef HAVE_CPUID
-extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
-#endif
-
 extern int globalUnique;
 static void *jl_sysimg_handle = NULL;
 static uint64_t sysimage_base = 0;
 static uintptr_t *sysimg_gvars_base = NULL;
 static const int32_t *sysimg_gvars_offsets = NULL;
-static const char *sysimg_fvars_base = NULL;
-static const int32_t *sysimg_fvars_offsets = NULL;
+static jl_sysimg_fptrs_t sysimg_fptrs;
 
 static inline uintptr_t *sysimg_gvars(uintptr_t *base, size_t idx)
 {
     return base + sysimg_gvars_offsets[idx] / sizeof(base[0]);
-}
-
-static inline uintptr_t sysimg_fvars(const char *base, size_t idx)
-{
-    return (uintptr_t)(base + sysimg_fvars_offsets[idx]);
 }
 
 JL_DLLEXPORT int jl_running_on_valgrind(void)
@@ -158,54 +149,27 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
 
 static void jl_load_sysimg_so(void)
 {
-#ifndef _OS_WINDOWS_
-    Dl_info dlinfo;
-#endif
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
     // in --build mode only use sysimg data, not precompiled native code
     if (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
         sysimg_gvars_base = (uintptr_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_base");
         sysimg_gvars_offsets = (const int32_t*)jl_dlsym(jl_sysimg_handle,
                                                         "jl_sysimg_gvars_offsets");
-        sysimg_fvars_base = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_fvars_base");
-        sysimg_fvars_offsets = (const int32_t*)jl_dlsym(jl_sysimg_handle,
-                                                        "jl_sysimg_fvars_offsets");
+        sysimg_gvars_offsets += 1;
+        assert(sysimg_fptrs.base);
         globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
 #ifdef JULIA_ENABLE_THREADING
-        size_t tls_getter_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
-                                                   "jl_ptls_states_getter_idx");
-        *sysimg_gvars(sysimg_gvars_base, tls_getter_idx - 1) =
-            (uintptr_t)jl_get_ptls_states_getter();
-        size_t tls_offset_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
-                                                   "jl_tls_offset_idx");
-        *sysimg_gvars(sysimg_gvars_base, tls_offset_idx - 1) =
-            (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
-#endif
-        const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
-        if (strcmp(cpu_target,jl_options.cpu_target) != 0)
-            jl_error("Julia and the system image were compiled for different architectures.\n"
-                     "Please delete or regenerate sys.{so,dll,dylib}.");
-#ifdef HAVE_CPUID
-        uint32_t info[4];
-        jl_cpuid((int32_t*)info, 1);
-        if (strcmp(cpu_target, "native") == 0) {
-            if (!RUNNING_ON_VALGRIND) {
-                uint64_t saved_cpuid = *(uint64_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_cpuid");
-                if (saved_cpuid != (((uint64_t)info[2])|(((uint64_t)info[3])<<32)))
-                    jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.");
-            }
-        }
-        else if (strcmp(cpu_target,"core2") == 0) {
-            int HasSSSE3 = (info[2] & 1<<9);
-            if (!HasSSSE3)
-                jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
-                         "Please delete or regenerate sys.{so,dll,dylib}.");
-        }
+        uintptr_t *tls_getter_slot = (uintptr_t*)jl_dlsym(jl_sysimg_handle,
+                                                          "jl_get_ptls_states_slot");
+        *tls_getter_slot = (uintptr_t)jl_get_ptls_states_getter();
+        size_t *tls_offset_idx = (size_t*)jl_dlsym(jl_sysimg_handle, "jl_tls_offset");
+        *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
 #endif
 
 #ifdef _OS_WINDOWS_
         sysimage_base = (intptr_t)jl_sysimg_handle;
 #else
+        Dl_info dlinfo;
         if (dladdr((void*)sysimg_gvars_base, &dlinfo) != 0) {
             sysimage_base = (intptr_t)dlinfo.dli_fbase;
         }
@@ -213,6 +177,9 @@ static void jl_load_sysimg_so(void)
             sysimage_base = 0;
         }
 #endif
+    }
+    else {
+        memset(&sysimg_fptrs, 0, sizeof(sysimg_fptrs));
     }
     const char *sysimg_data = (const char*)jl_dlsym(jl_sysimg_handle, "jl_system_image_data");
     size_t len = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_system_image_size");
@@ -229,6 +196,20 @@ static uintptr_t jl_fptr_id(void *fptr)
         return 1;
     else
         return *(uintptr_t*)pbp;
+}
+
+int32_t jl_jlcall_api(const char *fname)
+{
+    // give the function an index in the constant lookup table
+    if (fname == NULL)
+        return 0;
+    if (!strncmp(fname, "japi3_", 6)) // jlcall abi 3 from JIT
+        return JL_API_WITH_PARAMETERS;
+    assert(!strncmp(fname, "japi1_", 6) ||  // jlcall abi 1 from JIT
+           !strncmp(fname, "jsys1_", 6) ||  // jlcall abi 1 from sysimg
+           !strncmp(fname, "jlcall_", 7) || // jlcall abi 1 from JIT wrapping a specsig method
+           !strncmp(fname, "jlsysw_", 7));  // jlcall abi 1 from sysimg wrapping a specsig method
+    return JL_API_GENERIC;
 }
 
 
@@ -681,7 +662,7 @@ static void jl_write_values(jl_serializer_state *s)
                 newm->unspecialized_ducttape = NULL;
                 if (jl_is_method(m->def.method)) {
                     uintptr_t fptr_id = jl_fptr_id((void*)(uintptr_t)m->fptr);
-                    if (m->jlcall_api == 2) {
+                    if (m->jlcall_api == JL_API_CONST) {
                     }
                     else if (fptr_id >= 2) {
                         //write_int8(s->s, -li->jlcall_api);
@@ -958,14 +939,15 @@ static jl_value_t *jl_read_value(jl_serializer_state *s)
 
 static void jl_update_all_fptrs(jl_serializer_state *s)
 {
-    const char *fvars_base = sysimg_fvars_base;
+    jl_sysimg_fptrs_t fvars = sysimg_fptrs;
     // make these NULL now so we skip trying to restore GlobalVariable pointers later
     sysimg_gvars_base = NULL;
-    sysimg_fvars_base = NULL;
+    sysimg_fptrs.base = NULL;
     int sysimg_fvars_max = s->fptr_record->size / sizeof(void*);
     size_t i;
     uintptr_t base = (uintptr_t)&s->s->buf[0];
     jl_method_instance_t **linfos = (jl_method_instance_t**)&s->fptr_record->buf[0];
+    uint32_t clone_idx = 0;
     for (i = 0; i < sysimg_fvars_max; i++) {
         uintptr_t val = (uintptr_t)&linfos[i];
         uint32_t offset = load_uint32_be(&val);
@@ -977,18 +959,28 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
                 offset = ~offset;
             }
             jl_method_instance_t *li = (jl_method_instance_t*)(base + offset);
-            if (fvars_base == NULL) {
+            if (fvars.base == NULL) {
                 li->jlcall_api = 0;
             }
             else {
-                assert(jl_is_method(li->def.method) && li->jlcall_api && li->jlcall_api != 2);
+                uintptr_t base = (uintptr_t)fvars.base;
+                assert(jl_is_method(li->def.method) && li->jlcall_api && li->jlcall_api != JL_API_CONST);
                 linfos[i] = li;
-                jl_fptr_to_llvm((jl_fptr_t)sysimg_fvars(fvars_base, i), li, cfunc);
+                int32_t offset = fvars.offsets[i];
+                for (; clone_idx < fvars.nclones; clone_idx++) {
+                    uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
+                    if (idx < i)
+                        continue;
+                    if (idx == i)
+                        offset = fvars.clone_offsets[clone_idx];
+                    break;
+                }
+                jl_fptr_to_llvm((jl_fptr_t)(base + offset), li, cfunc);
             }
         }
     }
-    if (fvars_base) {
-        jl_register_fptrs(sysimage_base, fvars_base, sysimg_fvars_offsets, linfos, sysimg_fvars_max);
+    if (fvars.base) {
+        jl_register_fptrs(sysimage_base, &fvars, linfos, sysimg_fvars_max);
     }
 }
 
@@ -1338,7 +1330,6 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname)
     JL_SIGATOMIC_END();
 }
 
-extern int jl_boot_file_loaded;
 extern void jl_get_builtins(void);
 extern void jl_get_builtin_hooks(void);
 extern void jl_gc_set_permalloc_region(void *start, void *end);
@@ -1360,14 +1351,13 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 // Allow passing in a module handle directly, rather than a path
 JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 {
-    // set cpu target if unspecified by user and available from sysimg
-    // otherwise default to native.
     void* *jl_RTLD_DEFAULT_handle_pointer = (void**)jl_dlsym_e(handle, "jl_RTLD_DEFAULT_handle_pointer");
     if (!jl_RTLD_DEFAULT_handle_pointer || (void*)&jl_RTLD_DEFAULT_handle != *jl_RTLD_DEFAULT_handle_pointer)
         jl_error("System image file failed consistency check: maybe opened the wrong version?");
     if (jl_options.cpu_target == NULL)
-        jl_options.cpu_target = (const char *)jl_dlsym(handle, "jl_sysimg_cpu_target");
+        jl_options.cpu_target = "native";
     jl_sysimg_handle = handle;
+    sysimg_fptrs = jl_init_processor_sysimg(handle);
 }
 
 static void jl_restore_system_image_from_stream(ios_t *f)
@@ -1496,7 +1486,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
     jl_get_builtins();
     jl_get_builtin_hooks();
-    jl_boot_file_loaded = 1;
     jl_init_box_caches();
 
     jl_update_all_gvars(&s);
@@ -1606,6 +1595,7 @@ static void jl_init_serializer2(int for_serialize)
                      jl_gotonode_type->name, jl_quotenode_type->name,
                      jl_globalref_type->name, jl_typeofbottom_type->name,
                      jl_string_type->name, jl_abstractstring_type->name,
+                     jl_namedtuple_type, jl_namedtuple_typename,
 
                      jl_int32_type, jl_int64_type, jl_bool_type, jl_uint8_type,
 
@@ -1672,6 +1662,7 @@ static void jl_init_serializer2(int for_serialize)
     arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_densearray_type))->name);
     arraylist_push(&builtin_typenames, jl_tuple_typename);
     arraylist_push(&builtin_typenames, jl_vararg_typename);
+    arraylist_push(&builtin_typenames, jl_namedtuple_typename);
 }
 
 static void jl_cleanup_serializer2(void)

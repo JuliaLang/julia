@@ -412,9 +412,10 @@ julia> for i = 1:5
 Here the `1:5` is a range object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
 loop iterates through these values, assigning each one in turn to the variable `i`. One rather
 important distinction between the previous `while` loop form and the `for` loop form is the scope
-during which the variable is visible. If the variable `i` has not been introduced in an other
-scope, in the `for` loop form, it is visible only inside of the `for` loop, and not afterwards.
-You'll either need a new interactive session instance or a different variable name to test this:
+during which the variable is visible. If the variable `i` has not been introduced in another
+scope, in the `for` loop form, it is visible only inside of the `for` loop, and not
+outside/afterwards. You'll either need a new interactive session instance or a different variable
+name to test this:
 
 ```jldoctest
 julia> for j = 1:5
@@ -476,9 +477,9 @@ julia> while true
 4
 5
 
-julia> for i = 1:1000
-           println(i)
-           if i >= 5
+julia> for j = 1:1000
+           println(j)
+           if j >= 5
                break
            end
        end
@@ -530,8 +531,8 @@ A `break` statement inside such a loop exits the entire nest of loops, not just 
 
 When an unexpected condition occurs, a function may be unable to return a reasonable value to
 its caller. In such cases, it may be best for the exceptional condition to either terminate the
-program, printing a diagnostic error message, or if the programmer has provided code to handle
-such exceptional circumstances, allow that code to take the appropriate action.
+program while printing a diagnostic error message, or if the programmer has provided code to handle
+such exceptional circumstances then allow that code to take the appropriate action.
 
 ### Built-in `Exception`s
 
@@ -573,9 +574,7 @@ julia> sqrt(-1)
 ERROR: DomainError with -1.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt(::Int64) at ./math.jl:472
+[...]
 ```
 
 You may define your own exceptions in the following way:
@@ -692,26 +691,6 @@ Stacktrace:
  [2] verbose_fussy_sqrt(::Int64) at ./none:3
 ```
 
-### Warnings and informational messages
-
-Julia also provides other functions that write messages to the standard error I/O, but do not
-throw any `Exception`s and hence do not interrupt execution:
-
-```jldoctest
-julia> info("Hi"); 1+1
-INFO: Hi
-2
-
-julia> warn("Hi"); 1+1
-WARNING: Hi
-2
-
-julia> error("Hi"); 1+1
-ERROR: Hi
-Stacktrace:
- [1] error(::String) at ./error.jl:21
-```
-
 ### The `try/catch` statement
 
 The `try/catch` statement allows for `Exception`s to be tested for. For example, a customized
@@ -765,10 +744,7 @@ julia> sqrt_second(-9)
 ERROR: DomainError with -9.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt at ./math.jl:472 [inlined]
- [4] sqrt_second(::Int64) at ./none:7
+[...]
 ```
 
 Note that the symbol following `catch` will always be interpreted as a name for the exception,

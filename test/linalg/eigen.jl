@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
@@ -15,7 +15,7 @@ srand(1234321)
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 
-@testset for eltya in (Float32, Float64, Complex64, Complex128, Int)
+@testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     asym = aa'+aa                  # symmetric indefinite
     apd  = aa'*aa                 # symmetric positive-definite
@@ -42,6 +42,7 @@ aimg  = randn(n,n)/2
             @test isposdef(a) == isposdef(f)
             @test eigvals(f) === f[:values]
             @test eigvecs(f) === f[:vectors]
+            @test Array(f) ≈ a
 
             num_fact = eigfact(one(eltya))
             @test num_fact.values[1] == one(eltya)
@@ -109,5 +110,13 @@ let aa = rand(200, 200)
     for a in (aa, view(aa, 1:n, 1:n))
         f = eigfact(a)
         @test a ≈ f[:vectors] * Diagonal(f[:values]) / f[:vectors]
+    end
+end
+
+@testset "rational promotion: issue #24935" begin
+    A = [1//2 0//1; 0//1 2//3]
+    for λ in (eigvals(A), @inferred(eigvals(Symmetric(A))))
+        @test λ isa Vector{Float64}
+        @test λ ≈ [0.5, 2/3]
     end
 end

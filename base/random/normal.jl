@@ -24,10 +24,10 @@ from the circularly symmetric complex normal distribution.
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> randn(rng, Complex128)
+julia> randn(rng, ComplexF64)
 0.6133070881429037 - 0.6376291670853887im
 
-julia> randn(rng, Complex64, (2, 3))
+julia> randn(rng, ComplexF32, (2, 3))
 2×3 Array{Complex{Float32},2}:
  -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im
   0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im
@@ -35,7 +35,7 @@ julia> randn(rng, Complex64, (2, 3))
 """
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
-        r = rand_ui52(rng)
+        r = rand(rng, UInt52())
         rabs = Int64(r>>1) # One bit for the sign
         idx = rabs & 0xFF
         x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
@@ -45,7 +45,7 @@ julia> randn(rng, Complex64, (2, 3))
 end
 
 # this unlikely branch is put in a separate function for better efficiency
-function randn_unlikely(rng, idx, rabs, x)
+@noinline function randn_unlikely(rng, idx, rabs, x)
     @inbounds if idx == 0
         while true
             xx = -ziggurat_nor_inv_r*log(rand(rng))
@@ -93,9 +93,9 @@ julia> randexp(rng, 3, 3)
  0.695867  0.693292  0.643644
 ```
 """
-@inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
+function randexp(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
-        ri = rand_ui52(rng)
+        ri = rand(rng, UInt52())
         idx = ri & 0xFF
         x = ri*we[idx+1]
         ri < ke[idx+1] && return x # 98.9% of the time we return here 1st try
@@ -103,7 +103,7 @@ julia> randexp(rng, 3, 3)
     end
 end
 
-function randexp_unlikely(rng, idx, x)
+@noinline function randexp_unlikely(rng, idx, x)
     @inbounds if idx == 0
         return ziggurat_exp_r - log(rand(rng))
     elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)
@@ -128,11 +128,11 @@ julia> rng = MersenneTwister(1234);
 
 julia> randn!(rng, zeros(5))
 5-element Array{Float64,1}:
-  0.867347
- -0.901744
- -0.494479
- -0.902914
-  0.864401
+  0.8673472019512456
+ -0.9017438158568171
+ -0.4944787535042339
+ -0.9029142938652416
+  0.8644013132535154
 ```
 """
 function randn! end
@@ -149,11 +149,11 @@ julia> rng = MersenneTwister(1234);
 
 julia> randexp!(rng, zeros(5))
 5-element Array{Float64,1}:
- 2.48351
- 1.5167
- 0.604436
- 0.695867
- 1.30652
+ 2.4835053723904896
+ 1.516703605376473
+ 0.6044364871025417
+ 0.6958665886385867
+ 1.3065196315496677
 ```
 """
 function randexp! end
@@ -176,10 +176,10 @@ for randfun in [:randn, :randexp]
         $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
 
         # generating arrays
-        $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(dims))
+        $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(uninitialized, dims))
         # Note that this method explicitly does not define $randfun(rng, T),
         # in order to prevent an infinite recursion.
-        $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(dim1, dims...))
+        $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(uninitialized, dim1, dims...))
         $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(GLOBAL_RNG, T, dims)
         $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(GLOBAL_RNG, T, dims...)
         $randfun(rng::AbstractRNG,            dims::Dims                     )           = $randfun(rng, Float64, dims)

@@ -16,7 +16,7 @@ let io = IOBuffer()
 @test eof(io)
 seek(io, 0)
 @test read(io,UInt8) == convert(UInt8, 'a')
-a = Array{UInt8}(2)
+a = Vector{UInt8}(uninitialized, 2)
 @test read!(io, a) == a
 @test a == UInt8['b','c']
 @test bufcontents(io) == "abc"
@@ -90,6 +90,25 @@ write(io,"\n\r\n\n\r \n") > 0
 @test readlines(IOBuffer(""), chomp=true) == []
 @test readlines(IOBuffer("first\nsecond"), chomp=false) == String["first\n", "second"]
 @test readlines(IOBuffer("first\nsecond"), chomp=true) == String["first", "second"]
+
+let fname = tempname()
+    for dochomp in [true, false],
+        endline in ["\n", "\r\n"],
+        i in -5:5
+
+        ref = ("1"^(2^17 - i)) * endline
+        open(fname, "w") do io
+            write(io, ref)
+        end
+        x = readlines(fname, chomp = dochomp)
+        if dochomp
+            ref = chomp(ref)
+        end
+        @test ref == x[1]
+    end
+    rm(fname)
+end
+
 Base.compact(io)
 @test position(io) == 0
 @test ioslength(io) == 0
@@ -143,10 +162,10 @@ close(io)
 end
 
 # issue 5453
-let io=IOBuffer("abcdef")
-a = Array{UInt8}(1024)
-@test_throws EOFError read!(io,a)
-@test eof(io)
+let io = IOBuffer("abcdef"),
+    a = Vector{UInt8}(uninitialized, 1024)
+    @test_throws EOFError read!(io,a)
+    @test eof(io)
 end
 
 @test isempty(readlines(IOBuffer(), chomp=false))
@@ -169,11 +188,14 @@ let io=IOBuffer("hello")
 end
 
 # pr #11554
-let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodnightmoon", true, true)
+let a,
+    io = IOBuffer(SubString("***αhelloworldω***", 4, 16)),
+    io2 = IOBuffer(b"goodnightmoon", true, true)
+
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
     @test_throws ArgumentError write(io,'β')
-    a = Array{UInt8}(10)
+    a = Vector{UInt8}(uninitialized, 10)
     @test read!(io, a) === a
     @test String(a) == "helloworld"
     @test read(io, Char) == 'ω'
@@ -236,6 +258,7 @@ let io = IOBuffer()
 end
 
 # skipchars
+using Base.Unicode: isspace
 let
     io = IOBuffer("")
     @test eof(skipchars(io, isspace))
@@ -256,7 +279,17 @@ let
 
     for char in ['@','߷','࿊','𐋺']
         io = IOBuffer("alphabeticalstuff$char")
-        @test !eof(skipchars(io, isalpha))
+        @test !eof(skipchars(io, Base.Unicode.isalpha))
         @test read(io, Char) == char
     end
+end
+
+let
+    # Test constructor with a generic type argument.
+    io = IOBuffer(Int16(10))
+    @test io isa IOBuffer
+    io = IOBuffer(Int32(10))
+    @test io isa IOBuffer
+    io = IOBuffer(Int64(10))
+    @test io isa IOBuffer
 end

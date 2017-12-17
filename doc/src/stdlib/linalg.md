@@ -6,8 +6,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
  Sparse factorizations call functions from [SuiteSparse](http://faculty.cse.tamu.edu/davis/suitesparse.html).
 
 ```@docs
-Base.:*(::AbstractArray, ::AbstractArray)
-Base.:\(::AbstractArray, ::Any)
+Base.:*(::AbstractMatrix, ::AbstractMatrix)
+Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
 Base.LinAlg.dot
 Base.LinAlg.vecdot
 Base.LinAlg.cross
@@ -64,6 +64,7 @@ Base.LinAlg.svdfact
 Base.LinAlg.svdfact!
 Base.LinAlg.svd
 Base.LinAlg.svdvals
+Base.LinAlg.svdvals!
 Base.LinAlg.Givens
 Base.LinAlg.givens
 Base.LinAlg.triu
@@ -92,6 +93,34 @@ Base.repmat
 Base.kron
 Base.SparseArrays.blkdiag
 Base.LinAlg.linreg
+Base.LinAlg.exp(::StridedMatrix{<:Base.LinAlg.BlasFloat})
+Base.LinAlg.log(::StridedMatrix)
+Base.LinAlg.sqrt(::StridedMatrix{<:Real})
+Base.LinAlg.cos(::StridedMatrix{<:Real})
+Base.LinAlg.sin(::StridedMatrix{<:Real})
+Base.LinAlg.sincos(::StridedMatrix{<:Real})
+Base.LinAlg.tan(::StridedMatrix{<:Real})
+Base.LinAlg.sec(::StridedMatrix)
+Base.LinAlg.csc(::StridedMatrix)
+Base.LinAlg.cot(::StridedMatrix)
+Base.LinAlg.cosh(::StridedMatrix)
+Base.LinAlg.sinh(::StridedMatrix)
+Base.LinAlg.tanh(::StridedMatrix)
+Base.LinAlg.sech(::StridedMatrix)
+Base.LinAlg.csch(::StridedMatrix)
+Base.LinAlg.coth(::StridedMatrix)
+Base.LinAlg.acos(::StridedMatrix)
+Base.LinAlg.asin(::StridedMatrix)
+Base.LinAlg.atan(::StridedMatrix)
+Base.LinAlg.asec(::StridedMatrix)
+Base.LinAlg.acsc(::StridedMatrix)
+Base.LinAlg.acot(::StridedMatrix)
+Base.LinAlg.acosh(::StridedMatrix)
+Base.LinAlg.asinh(::StridedMatrix)
+Base.LinAlg.atanh(::StridedMatrix)
+Base.LinAlg.asech(::StridedMatrix)
+Base.LinAlg.acsch(::StridedMatrix)
+Base.LinAlg.acoth(::StridedMatrix)
 Base.LinAlg.lyap
 Base.LinAlg.sylvester
 Base.LinAlg.issuccess
@@ -108,10 +137,8 @@ Base.transpose
 Base.transpose!
 Base.adjoint
 Base.adjoint!
-Base.LinAlg.eigs(::Any)
-Base.LinAlg.eigs(::Any, ::Any)
-Base.LinAlg.svds
 Base.LinAlg.peakflops
+Base.LinAlg.stride1
 ```
 
 ## Low-level matrix operations
@@ -160,7 +187,7 @@ linear algebra routines it is useful to call the BLAS functions directly.
 
 `Base.LinAlg.BLAS` provides wrappers for some of the BLAS functions. Those BLAS functions
 that overwrite one of the input arrays have names ending in `'!'`.  Usually, a BLAS function has
-four methods defined, for [`Float64`](@ref), [`Float32`](@ref), `Complex128`, and `Complex64` arrays.
+four methods defined, for [`Float64`](@ref), [`Float32`](@ref), `ComplexF64`, and `ComplexF32` arrays.
 
 ### [BLAS Character Arguments](@id stdlib-blas-chars)
 Many BLAS functions accept arguments that determine whether to transpose an argument (`trans`),
@@ -245,7 +272,7 @@ Base.LinAlg.I
  Those functions that overwrite one of the input arrays have names ending in `'!'`.
 
 Usually a function has 4 methods defined, one each for [`Float64`](@ref), [`Float32`](@ref),
-`Complex128` and `Complex64` arrays.
+`ComplexF64` and `ComplexF32` arrays.
 
 Note that the LAPACK API provided by Julia can and will change in the future. Since this API is
 not user-facing, there is no commitment to support/deprecate this specific set of functions in

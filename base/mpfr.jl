@@ -27,11 +27,8 @@ import Base.Math.lgamma_r
 
 import Base.FastMath.sincos_fast
 
-function version()
-    version = unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ()))
-    build = replace(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())), ' ', '.')
-    isempty(build) ? VersionNumber(version) : VersionNumber(version * '+' * build)
-end
+version() = VersionNumber(unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ())))
+patches() = split(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())),' ')
 
 function __init__()
     try
@@ -63,7 +60,7 @@ mutable struct BigFloat <: AbstractFloat
         prec = precision(BigFloat)
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
         ccall((:mpfr_init2,:libmpfr), Void, (Ref{BigFloat}, Clong), z, prec)
-        finalizer(z, cglobal((:mpfr_clear, :libmpfr)))
+        finalizer(cglobal((:mpfr_clear, :libmpfr)), z)
         return z
     end
 
@@ -86,7 +83,7 @@ constants from strings via [`parse`](@ref), or using the `big` string literal.
 
 ```jldoctest
 julia> BigFloat(2.1)
-2.100000000000000088817841970012523233890533447265625000000000000000000000000000
+2.100000000000000088817841970012523233890533447265625
 
 julia> big"2.1"
 2.099999999999999999999999999999999999999999999999999999999999999999999999999986
@@ -125,9 +122,10 @@ convert(::Type{BigFloat}, x::Union{Float16,Float32}) = BigFloat(Float64(x))
 convert(::Type{BigFloat}, x::Rational) = BigFloat(numerator(x)) / BigFloat(denominator(x))
 
 function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
+    !isempty(s) && Base.Unicode.isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base)
     z = BigFloat()
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ref{BigFloat}, Cstring, Int32, Int32), z, s, base, ROUNDING_MODE[])
-    err == 0 ? Nullable(z) : Nullable{BigFloat}()
+    err == 0 ? z : nothing
 end
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
@@ -969,7 +967,7 @@ function Base.deepcopy_internal(x::BigFloat, stackdict::ObjectIdDict)
     prec = precision(x)
     y = BigFloat(zero(Clong), zero(Cint), zero(Clong), C_NULL)
     ccall((:mpfr_init2,:libmpfr), Void, (Ref{BigFloat}, Clong), y, prec)
-    finalizer(y, cglobal((:mpfr_clear, :libmpfr)))
+    finalizer(cglobal((:mpfr_clear, :libmpfr)), y)
     ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Int32), y, x, ROUNDING_MODE[])
     stackdict[x] = y
     return y

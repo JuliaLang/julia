@@ -11,7 +11,13 @@ function completes_global(x, name)
 end
 
 function appendmacro!(syms, macros, needle, endchar)
-    append!(syms, s[2:end-sizeof(needle)]*endchar for s in filter(x -> endswith(x, needle), macros))
+    for s in macros
+        if endswith(s, needle)
+            from = nextind(s, start(s))
+            to = prevind(s, sizeof(s)-sizeof(needle)+1)
+            push!(syms, s[from:to]*endchar)
+        end
+    end
 end
 
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
@@ -39,7 +45,7 @@ function complete_symbol(sym, ffunc)
         lookup_name, name = rsplit(sym, ".", limit=2)
 
         ex = Base.syntax_deprecation_warnings(false) do
-            parse(lookup_name, raise=false)
+            Meta.parse(lookup_name, raise=false)
         end
 
         b, found = get_value(ex, context_module)
@@ -96,11 +102,11 @@ const sorted_keywords = [
     "abstract type", "baremodule", "begin", "break", "catch", "ccall",
     "const", "continue", "do", "else", "elseif", "end", "export", "false",
     "finally", "for", "function", "global", "if", "import",
-    "importall", "let", "local", "macro", "module", "mutable struct",
+    "let", "local", "macro", "module", "mutable struct",
     "primitive type", "quote", "return", "struct",
     "true", "try", "using", "while"]
 
-function complete_keyword(s::String)
+function complete_keyword(s::Union{String,SubString{String}})
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)
@@ -219,7 +225,7 @@ end
 # closed start brace from the end of the string.
 function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     braces = 0
-    r = RevString(s)
+    r = reverse(s)
     i = start(r)
     in_single_quotes = false
     in_double_quotes = false
@@ -239,18 +245,21 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
                 in_back_ticks = true
             end
         else
-            if !in_back_ticks && !in_double_quotes && c == '\'' && !done(r, i) && next(r, i)[1]!='\\'
+            if !in_back_ticks && !in_double_quotes &&
+                c == '\'' && !done(r, i) && next(r, i)[1] != '\\'
                 in_single_quotes = !in_single_quotes
-            elseif !in_back_ticks && !in_single_quotes && c == '"' && !done(r, i) && next(r, i)[1]!='\\'
+            elseif !in_back_ticks && !in_single_quotes &&
+                c == '"' && !done(r, i) && next(r, i)[1] != '\\'
                 in_double_quotes = !in_double_quotes
-            elseif !in_single_quotes && !in_double_quotes && c == '`' && !done(r, i) && next(r, i)[1]!='\\'
+            elseif !in_single_quotes && !in_double_quotes &&
+                c == '`' && !done(r, i) && next(r, i)[1] != '\\'
                 in_back_ticks = !in_back_ticks
             end
         end
         braces == 1 && break
     end
     braces != 1 && return 0:-1, -1
-    method_name_end = reverseind(r, i)
+    method_name_end = reverseind(s, i)
     startind = nextind(s, rsearch(s, non_identifier_chars, method_name_end))
     return (startind:endof(s), method_name_end)
 end
@@ -310,8 +319,7 @@ function get_type_call(expr::Expr)
 end
 
 # Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (String, true)
-function get_type(sym::Expr, fn::Module)
-    sym = expand(fn, sym)
+function try_get_type(sym::Expr, fn::Module)
     val, found = get_value(sym, fn)
     found && return Base.typesof(val).parameters[1], found
     if sym.head === :call
@@ -324,9 +332,28 @@ function get_type(sym::Expr, fn::Module)
             return found ? Base.typesof(val).parameters[1] : Any, found
         end
         return get_type_call(sym)
+    elseif sym.head === :thunk
+        thk = sym.args[1]
+        rt = ccall(:jl_infer_thunk, Any, (Any, Any), thk::CodeInfo, fn)
+        rt !== Any && return (rt, true)
+    elseif sym.head === :ref
+        # some simple cases of `expand`
+        return try_get_type(Expr(:call, GlobalRef(Base, :getindex), sym.args...), fn)
+    elseif sym.head === :.
+        return try_get_type(Expr(:call, GlobalRef(Core, :getfield), sym.args...), fn)
     end
     return (Any, false)
 end
+
+try_get_type(other, fn::Module) = get_type(other, fn)
+
+function get_type(sym::Expr, fn::Module)
+    # try to analyze nests of calls. if this fails, try using the expanded form.
+    val, found = try_get_type(sym, fn)
+    found && return val, found
+    return try_get_type(Meta.lower(fn, sym), fn)
+end
+
 function get_type(sym, fn::Module)
     val, found = get_value(sym, fn)
     return found ? Base.typesof(val).parameters[1] : Any, found
@@ -345,7 +372,7 @@ function complete_methods(ex_org::Expr)
     t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
     na = length(args_ex)+1
     ml = methods(func)
-    kwtype = isdefined(ml.mt, :kwsorter) ? Nullable{DataType}(typeof(ml.mt.kwsorter)) : Nullable{DataType}()
+    kwtype = isdefined(ml.mt, :kwsorter) ? typeof(ml.mt.kwsorter) : nothing
     io = IOBuffer()
     for method in ml
         ms = method.sig
@@ -437,7 +464,7 @@ function dict_identifier_key(str,tag)
     begin_of_key = first(search(str, r"\S", nextind(str, end_of_identifier) + 1)) # 1 for [
     begin_of_key==0 && return (true, nothing, nothing)
     partial_key = str[begin_of_key:end]
-    (isa(obj, Associative) && length(obj) < 1e6) || return (true, nothing, nothing)
+    (isa(obj, AbstractDict) && length(obj) < 1e6) || return (true, nothing, nothing)
     return (obj, partial_key, begin_of_key)
 end
 
@@ -455,7 +482,7 @@ function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
     inc_tag = Base.syntax_deprecation_warnings(false) do
-        Base.incomplete_tag(parse(partial, raise=false))
+        Base.incomplete_tag(Meta.parse(partial, raise=false))
     end
 
     # if completing a key in a Dict
@@ -482,9 +509,11 @@ function completions(string, pos)
         paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
 
         if inc_tag == :string &&
-           length(paths) == 1 &&                              # Only close if there's a single choice,
-           !isdir(expanduser(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " "))) &&  # except if it's a directory
-           (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
+           length(paths) == 1 &&  # Only close if there's a single choice,
+           !isdir(expanduser(replace(string[startpos:prevind(string, start(r))] * paths[1],
+                                     r"\\ ", " "))) &&  # except if it's a directory
+           (length(string) <= pos ||
+            string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
             paths[1] *= "\""
         end
 
@@ -501,7 +530,7 @@ function completions(string, pos)
     if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         ex = Base.syntax_deprecation_warnings(false) do
-            parse(partial[frange] * ")", raise=false)
+            Meta.parse(partial[frange] * ")", raise=false)
         end
         if isa(ex, Expr) && ex.head==:call
             return complete_methods(ex), start(frange):method_name_end, false
@@ -534,10 +563,11 @@ function completions(string, pos)
                         #   <Mod>/src/<Mod>.jl
                         #   <Mod>.jl/src/<Mod>.jl
                         if isfile(joinpath(dir, pname))
-                            endswith(pname, ".jl") && push!(suggestions, pname[1:end-3])
+                            endswith(pname, ".jl") && push!(suggestions,
+                                                            pname[1:prevind(pname, end-2)])
                         else
                             mod_name = if endswith(pname, ".jl")
-                                pname[1:end - 3]
+                                pname[1:prevind(pname, end-2)]
                             else
                                 pname
                             end
@@ -614,7 +644,7 @@ function shell_completions(string, pos)
         r = first(last_parse):prevind(last_parse, last(last_parse))
         partial = scs[r]
         ret, range = completions(partial, endof(partial))
-        range += first(r) - 1
+        range = range .+ (first(r) - 1)
         return ret, range, true
     end
     return String[], 0:-1, false

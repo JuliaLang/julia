@@ -67,7 +67,7 @@ end
 
 Lookup the name of the current HEAD of git
 repository `repo`. If `repo` is currently
-detached, returns the name of the HEAD it's
+detached, return the name of the HEAD it's
 detached from.
 """
 function headname(repo::GitRepo)
@@ -336,18 +336,18 @@ function checkout_tree(repo::GitRepo, obj::GitObject;
 end
 
 """
-    checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitIndex}(); options::CheckoutOptions = CheckoutOptions())
+    checkout_index(repo::GitRepo, idx::Union{GitIndex, Void} = nothing; options::CheckoutOptions = CheckoutOptions())
 
-Update the working tree of `repo` to match the index `idx`. If `idx` is null, the
+Update the working tree of `repo` to match the index `idx`. If `idx` is `nothing`, the
 index of `repo` will be used. `options` controls how the checkout will be performed.
 See [`CheckoutOptions`](@ref) for more information.
 """
-function checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitIndex}();
+function checkout_index(repo::GitRepo, idx::Union{GitIndex, Void} = nothing;
                         options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_index, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}, Ptr{CheckoutOptions}),
                  repo.ptr,
-                 isnull(idx) ? C_NULL : Base.get(idx).ptr,
+                 idx === nothing ? C_NULL : idx.ptr,
                  Ref(options))
 end
 
@@ -385,11 +385,11 @@ function cherrypick(repo::GitRepo, commit::GitCommit; options::CherrypickOptions
 end
 
 """Updates some entries, determined by the `pathspecs`, in the index from the target commit tree."""
-function reset!(repo::GitRepo, obj::Nullable{<:GitObject}, pathspecs::AbstractString...)
+function reset!(repo::GitRepo, obj::Union{GitObject, Void}, pathspecs::AbstractString...)
     @check ccall((:git_reset_default, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}, Ptr{StrArrayStruct}),
                  repo.ptr,
-                 isnull(obj) ? C_NULL : Base.get(obj).ptr,
+                 obj === nothing ? C_NULL : obj.ptr,
                  collect(pathspecs))
     return head_oid(repo)
 end
@@ -450,12 +450,12 @@ false
 ```
 """
 function fetchheads(repo::GitRepo)
-    fhr = Ref{Vector{FetchHead}}(FetchHead[])
+    fh = FetchHead[]
     ffcb = fetchhead_foreach_cb()
     @check ccall((:git_repository_fetchhead_foreach, :libgit2), Cint,
-                  (Ptr{Void}, Ptr{Void}, Ptr{Void}),
-                   repo.ptr, ffcb, fhr)
-    return fhr[]
+                 (Ptr{Void}, Ptr{Void}, Any),
+                 repo.ptr, ffcb, fh)
+    return fh
 end
 
 """

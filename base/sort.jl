@@ -79,18 +79,13 @@ true
 ```
 """
 issorted(itr;
-    lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
+    lt=isless, by=identity, rev::Union{Bool,Void}=nothing, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
-    inds = indices(v, 1)
+    inds = axes(v, 1)
     sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
-
-    if k isa Integer
-        return v[k]
-    else
-        return view(v, k)
-    end
+    @views v[k]
 end
 
 """
@@ -145,7 +140,7 @@ julia> a
 ```
 """
 partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange};
-             lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
+             lt=isless, by=identity, rev::Union{Bool,Void}=nothing, order::Ordering=Forward) =
     partialsort!(v, k, ord(lt,by,rev,order))
 
 """
@@ -275,11 +270,10 @@ searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval begin
-        $s(v::AbstractVector, x, o::Ordering) = (inds = indices(v, 1); $s(v,x,first(inds),last(inds),o))
+        $s(v::AbstractVector, x, o::Ordering) = (inds = axes(v, 1); $s(v,x,first(inds),last(inds),o))
         $s(v::AbstractVector, x;
-           lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
+           lt=isless, by=identity, rev::Union{Bool,Void}=nothing, order::Ordering=Forward) =
             $s(v,x,ord(lt,by,rev,order))
-        $s(v::AbstractVector, x) = $s(v, x, Forward)
     end
 end
 
@@ -562,7 +556,7 @@ defalg(v::AbstractArray) = DEFAULT_STABLE
 defalg(v::AbstractArray{<:Number}) = DEFAULT_UNSTABLE
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
-    inds = indices(v,1)
+    inds = axes(v,1)
     sort!(v,first(inds),last(inds),alg,order)
 end
 
@@ -609,7 +603,7 @@ function sort!(v::AbstractVector;
                alg::Algorithm=defalg(v),
                lt=isless,
                by=identity,
-               rev::Bool=false,
+               rev::Union{Bool,Void}=nothing,
                order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
@@ -688,7 +682,7 @@ these positions is returned.
 Note that this is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
 """
 partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
-    partialsortperm!(similar(Vector{eltype(k)}, indices(v,1)), v, k; kwargs..., initialized=false)
+    partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs..., initialized=false)
 
 """
     partialsortperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
@@ -700,11 +694,11 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                           k::Union{Int, OrdinalRange};
                           lt::Function=isless,
                           by::Function=identity,
-                          rev::Bool=false,
+                          rev::Union{Bool,Void}=nothing,
                           order::Ordering=Forward,
                           initialized::Bool=false)
     if !initialized
-        @inbounds for i = indices(ix,1)
+        @inbounds for i = axes(ix,1)
             ix[i] = i
         end
     end
@@ -712,11 +706,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
     # do partial quicksort
     sort!(ix, PartialQuickSort(k), Perm(ord(lt, by, rev, order), v))
 
-    if k isa Integer
-        return ix[k]
-    else
-        return view(ix, k)
-    end
+    @views ix[k]
 end
 
 ## sortperm: the permutation to sort an array ##
@@ -755,7 +745,7 @@ function sortperm(v::AbstractVector;
                   alg::Algorithm=DEFAULT_UNSTABLE,
                   lt=isless,
                   by=identity,
-                  rev::Bool=false,
+                  rev::Union{Bool,Void}=nothing,
                   order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
@@ -769,8 +759,8 @@ function sortperm(v::AbstractVector;
             end
         end
     end
-    p = similar(Vector{Int}, indices(v, 1))
-    for (i,ind) in zip(eachindex(p), indices(v, 1))
+    p = similar(Vector{Int}, axes(v, 1))
+    for (i,ind) in zip(eachindex(p), axes(v, 1))
         p[i] = ind
     end
     sort!(p, alg, Perm(ordr,v))
@@ -804,14 +794,14 @@ function sortperm!(x::AbstractVector{<:Integer}, v::AbstractVector;
                    alg::Algorithm=DEFAULT_UNSTABLE,
                    lt=isless,
                    by=identity,
-                   rev::Bool=false,
+                   rev::Union{Bool,Void}=nothing,
                    order::Ordering=Forward,
                    initialized::Bool=false)
-    if indices(x,1) != indices(v,1)
-        throw(ArgumentError("index vector must have the same indices as the source vector, $(indices(x,1)) != $(indices(v,1))"))
+    if axes(x,1) != axes(v,1)
+        throw(ArgumentError("index vector must have the same indices as the source vector, $(axes(x,1)) != $(axes(v,1))"))
     end
     if !initialized
-        @inbounds for i = indices(v,1)
+        @inbounds for i = axes(v,1)
             x[i] = i
         end
     end
@@ -830,7 +820,7 @@ function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
     end
     cumsum!(where, where)
 
-    P = Vector{Int}(n)
+    P = Vector{Int}(uninitialized, n)
     @inbounds for i = 1:n
         label = x[i] + offs
         P[where[label]] = i
@@ -843,7 +833,7 @@ end
 ## sorting multi-dimensional arrays ##
 
 """
-    sort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
+    sort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
@@ -871,11 +861,14 @@ function sort(A::AbstractArray, dim::Integer;
               alg::Algorithm=DEFAULT_UNSTABLE,
               lt=isless,
               by=identity,
-              rev::Bool=false,
+              rev::Union{Bool,Void}=nothing,
               order::Ordering=Forward,
-              initialized::Bool=false)
+              initialized::Union{Bool,Void}=nothing)
+    if initialized !== nothing
+        Base.depwarn("`initialized` keyword argument is deprecated", :sort)
+    end
     order = ord(lt,by,rev,order)
-    n = length(indices(A, dim))
+    n = length(axes(A, dim))
     if dim != 1
         pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
         Ap = permutedims(A, pdims)
@@ -885,7 +878,7 @@ function sort(A::AbstractArray, dim::Integer;
     else
         Av = A[:]
         sort_chunks!(Av, n, alg, order)
-        reshape(Av, indices(A))
+        reshape(Av, axes(A))
     end
 end
 
@@ -927,9 +920,9 @@ julia> sortrows([7 3 5; -1 6 4; 9 -2 8], rev=true)
 ```
 """
 function sortrows(A::AbstractMatrix; kws...)
-    inds = indices(A,1)
+    inds = axes(A,1)
     T = slicetypeof(A, inds, :)
-    rows = similar(Vector{T}, indices(A, 1))
+    rows = similar(A, T, axes(A, 1))
     for i in inds
         rows[i] = view(A, i, :)
     end
@@ -966,9 +959,9 @@ julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], rev=true)
 ```
 """
 function sortcols(A::AbstractMatrix; kws...)
-    inds = indices(A,2)
+    inds = axes(A,2)
     T = slicetypeof(A, :, inds)
-    cols = similar(Vector{T}, indices(A, 2))
+    cols = similar(A, T, axes(A, 2))
     for i in inds
         cols[i] = view(A, :, i)
     end
@@ -1011,7 +1004,7 @@ lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
 
-function nans2left!(v::AbstractVector, o::Ordering, lo::Int=first(indices(v,1)), hi::Int=last(indices(v,1)))
+function nans2left!(v::AbstractVector, o::Ordering, lo::Int=first(axes(v,1)), hi::Int=last(axes(v,1)))
     i = lo
     @inbounds while i <= hi && isnan(o,v[i])
         i += 1
@@ -1026,7 +1019,7 @@ function nans2left!(v::AbstractVector, o::Ordering, lo::Int=first(indices(v,1)),
     end
     return i, hi
 end
-function nans2right!(v::AbstractVector, o::Ordering, lo::Int=first(indices(v,1)), hi::Int=last(indices(v,1)))
+function nans2right!(v::AbstractVector, o::Ordering, lo::Int=first(axes(v,1)), hi::Int=last(axes(v,1)))
     i = hi
     @inbounds while lo <= i && isnan(o,v[i])
         i -= 1
@@ -1067,7 +1060,7 @@ end
 
 
 fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
-    sort!(v, first(indices(v,1)), last(indices(v,1)), a, o)
+    sort!(v, first(axes(v,1)), last(axes(v,1)), a, o)
 
 sort!(v::AbstractVector{<:Floats}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)
 sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{<:Floats}}) = fpsort!(v,a,o)

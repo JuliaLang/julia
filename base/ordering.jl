@@ -64,12 +64,16 @@ ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
 ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; Any end
 ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
 
+_ord(lt::typeof(isless), by::typeof(identity), order::Ordering) = order
+_ord(lt::typeof(isless), by,                   order::Ordering) = By(by)
+_ord(lt,                 by::typeof(identity), order::Ordering) = Lt(lt)
+_ord(lt,                 by,                   order::Ordering) = Lt((x,y)->lt(by(x),by(y)))
+
+ord(lt, by, rev::Void, order::Ordering=Forward) = _ord(lt, by, order)
+
 function ord(lt, by, rev::Bool, order::Ordering=Forward)
-    o = (lt===isless) & (by===identity) ? order  :
-        (lt===isless) & (by!==identity) ? By(by) :
-        (lt!==isless) & (by===identity) ? Lt(lt) :
-                                          Lt((x,y)->lt(by(x),by(y)))
-    rev ? ReverseOrdering(o) : o
+    o = _ord(lt, by, order)
+    return rev ? ReverseOrdering(o) : o
 end
 
 end

@@ -3,8 +3,13 @@
 catcmd = `cat`
 if Sys.iswindows()
     busybox = joinpath(JULIA_HOME, "busybox.exe")
-    try # use busybox-w32 on windows
+    havebb = try # use busybox-w32 on windows
         success(`$busybox`)
+        true
+    catch
+        false
+    end
+    if havebb
         catcmd = `$busybox cat`
     end
 end
@@ -59,11 +64,29 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     # --load
     let testfile = tempname()
         try
-            write(testfile, "testvar = :test\n")
-            @test split(readchomp(`$exename -i --load=$testfile -e "println(testvar)"`),
-                '\n')[end] == "test"
-            @test split(readchomp(`$exename -i -e "println(testvar)" -L $testfile`),
-                '\n')[end] == "test"
+            write(testfile, "testvar = :test\nprintln(\"loaded\")\n")
+            @test read(`$exename -i --load=$testfile -e "println(testvar)"`, String) == "loaded\ntest\n"
+            @test read(`$exename -i -L $testfile -e "println(testvar)"`, String) == "loaded\ntest\n"
+            # multiple, combined
+            @test read(```$exename
+                -e 'push!(ARGS, "hi")'
+                -E "1+1"
+                -E "2+2"
+                -L $testfile
+                -E '3+3'
+                -L $testfile
+                -E 'pop!(ARGS)'
+                -e 'show(ARGS); println()'
+                9 10
+                ```, String) == """
+                2
+                4
+                loaded
+                6
+                loaded
+                "hi"
+                ["9", "10"]
+                """
         finally
             rm(testfile)
         end
@@ -72,14 +95,9 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     @test !success(`$exename -L`)
     @test !success(`$exename --load`)
 
-    # --cpu-target
-    # NOTE: this test only holds true if image_file is a shared library.
-    if Libdl.dlopen_e(unsafe_string(Base.JLOptions().image_file)) != C_NULL
-        @test !success(`$exename -C invalidtarget --sysimage-native-code=yes`)
-        @test !success(`$exename --cpu-target=invalidtarget --sysimage-native-code=yes`)
-    else
-        warn("--cpu-target test not runnable")
-    end
+    # --cpu-target (requires LLVM enabled)
+    @test !success(`$exename -C invalidtarget`)
+    @test !success(`$exename --cpu-target=invalidtarget`)
 
     # --procs
     @test readchomp(`$exename -q -p 2 -e "println(nworkers())"`) == "2"
@@ -445,7 +463,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     for (mac, flag, pfix, msg) in [("@test_nowarn", ``, "_1", ""),
                                    ("@test_warn",   `--warn-overwrite=yes`, "_2", "\"WARNING: Method definition\"")]
         str = """
-        using Base.Test
+        using Test
         try
             # issue #18725
             $mac $msg @eval Main begin

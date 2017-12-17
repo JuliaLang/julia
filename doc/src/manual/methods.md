@@ -242,8 +242,11 @@ julia> g(2, 3.0)
 8.0
 
 julia> g(2.0, 3.0)
-ERROR: MethodError: g(::Float64, ::Float64) is ambiguous.
-[...]
+ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
+  g(x, y::Float64) in Main at none:1
+  g(x::Float64, y) in Main at none:1
+Possible fix, define
+  g(::Float64, ::Float64)
 ```
 
 Here the call `g(2.0, 3.0)` could be handled by either the `g(Float64, Any)` or the `g(Any, Float64)`
@@ -714,7 +717,7 @@ function matmul(a::AbstractMatrix, b::AbstractMatrix)
 
     # this is wrong, since depending on the return value
     # of type-inference is very brittle (as well as not being optimizable):
-    # R = return_types(op, (eltype(a), eltype(b)))
+    # R = Base.return_types(op, (eltype(a), eltype(b)))
 
     ## but, finally, this works:
     R = promote_op(op, eltype(a), eltype(b))
@@ -786,10 +789,10 @@ Closest candidates are:
 More usefully, it is possible to constrain varargs methods by a parameter. For example:
 
 ```julia
-function getindex(A::AbstractArray{T,N}, indexes::Vararg{Number,N}) where {T,N}
+function getindex(A::AbstractArray{T,N}, indices::Vararg{Number,N}) where {T,N}
 ```
 
-would be called only when the number of `indexes` matches the dimensionality of the array.
+would be called only when the number of `indices` matches the dimensionality of the array.
 
 When only the type of supplied arguments needs to be constrained `Vararg{T}` can be equivalently
 written as `T...`. For instance `f(x::Int...) = x` is a shorthand for `f(x::Vararg{Int}) = x`.

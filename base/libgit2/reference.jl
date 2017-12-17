@@ -21,7 +21,7 @@ end
 """
     LibGit2.isorphan(repo::GitRepo)
 
-Checks if the current branch is an "orphan" branch, i.e. has no commits. The first commit
+Check if the current branch is an "orphan" branch, i.e. has no commits. The first commit
 to this branch will have no parents.
 """
 function isorphan(repo::GitRepo)
@@ -33,7 +33,7 @@ end
 """
     LibGit2.head(repo::GitRepo) -> GitReference
 
-Returns a `GitReference` to the current HEAD of `repo`.
+Return a `GitReference` to the current HEAD of `repo`.
 """
 function head(repo::GitRepo)
     head_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -45,7 +45,7 @@ end
 """
     LibGit2.shortname(ref::GitReference)
 
-Returns a shortened version of the name of `ref` that's
+Return a shortened version of the name of `ref` that's
 "human-readable".
 
 ```julia-repl
@@ -62,15 +62,18 @@ julia> LibGit2.shortname(branch_ref)
 """
 function shortname(ref::GitReference)
     isempty(ref) && return ""
-    name_ptr = ccall((:git_reference_shorthand, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
-    name_ptr == C_NULL && return ""
-    return unsafe_string(name_ptr)
+    Base.@gc_preserve ref begin
+        name_ptr = ccall((:git_reference_shorthand, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
+        name_ptr == C_NULL && return ""
+        name = unsafe_string(name_ptr)
+    end
+    return name
 end
 
 """
     LibGit2.reftype(ref::GitReference) -> Cint
 
-Returns a `Cint` corresponding to the type of `ref`:
+Return a `Cint` corresponding to the type of `ref`:
   * `0` if the reference is invalid
   * `1` if the reference is an object id
   * `2` if the reference is symbolic
@@ -84,14 +87,17 @@ end
 
 Return the name of the reference pointed to by the
 symbolic reference `ref`. If `ref` is not a symbolic
-reference, returns an empty string.
+reference, return an empty string.
 """
 function fullname(ref::GitReference)
     isempty(ref) && return ""
     reftype(ref) == Consts.REF_OID && return ""
-    rname = ccall((:git_reference_symbolic_target, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
-    rname == C_NULL && return ""
-    return unsafe_string(rname)
+    Base.@gc_preserve ref begin
+        rname = ccall((:git_reference_symbolic_target, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
+        rname == C_NULL && return ""
+        name = unsafe_string(rname)
+    end
+    return name
 end
 
 """
@@ -101,17 +107,23 @@ Return the full name of `ref`.
 """
 function name(ref::GitReference)
     isempty(ref) && return ""
-    name_ptr = ccall((:git_reference_name, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
-    name_ptr == C_NULL && return ""
-    return unsafe_string(name_ptr)
+    Base.@gc_preserve ref begin
+        name_ptr = ccall((:git_reference_name, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
+        name_ptr == C_NULL && return ""
+        name = unsafe_string(name_ptr)
+    end
+    return name
 end
 
 function branch(ref::GitReference)
     isempty(ref) && return ""
     str_ptr_ptr = Ref{Cstring}()
-    @check ccall((:git_branch_name, :libgit2), Cint,
-                  (Ptr{Cstring}, Ptr{Void},), str_ptr_ptr, ref.ptr)
-    return unsafe_string(str_ptr_ptr[])
+    Base.@gc_preserve ref begin
+        @check ccall((:git_branch_name, :libgit2), Cint,
+                      (Ptr{Cstring}, Ptr{Void},), str_ptr_ptr, ref.ptr)
+        str = unsafe_string(str_ptr_ptr[])
+    end
+    return str
 end
 
 function ishead(ref::GitReference)
@@ -235,15 +247,14 @@ function head!(repo::GitRepo, ref::GitReference)
 end
 
 """
-    lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=false) -> Nullable{GitReference}
+    lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=false) -> Union{GitReference, Void}
 
 Determine if the branch specified by `branch_name` exists in the repository `repo`.
 If `remote` is `true`, `repo` is assumed to be a remote git repository. Otherwise, it
 is part of the local filesystem.
 
-`lookup_branch` returns a [`Nullable`](@ref), which will be null if the requested branch does
-not exist yet. If the branch does exist, the `Nullable` contains a `GitReference` to
-the branch.
+Return either a `GitReference` to the requested branch
+if it exists, or [`nothing`](@ref) if not.
 """
 function lookup_branch(repo::GitRepo,
                        branch_name::AbstractString,
@@ -255,24 +266,23 @@ function lookup_branch(repo::GitRepo,
                   ref_ptr_ptr, repo.ptr, branch_name, branch_type)
     if err != Int(Error.GIT_OK)
         if err == Int(Error.ENOTFOUND)
-            return Nullable{GitReference}()
+            return nothing
         end
         if ref_ptr_ptr[] != C_NULL
             close(GitReference(repo, ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return Nullable{GitReference}(GitReference(repo, ref_ptr_ptr[]))
+    return GitReference(repo, ref_ptr_ptr[])
 end
 
 """
-    upstream(ref::GitReference) -> Nullable{GitReference}
+    upstream(ref::GitReference) -> Union{GitReference, Void}
 
 Determine if the branch containing `ref` has a specified upstream branch.
 
-`upstream` returns a [`Nullable`](@ref), which will be null if the requested branch does
-not have an upstream counterpart. If the upstream branch does exist, the `Nullable`
-contains a `GitReference` to the upstream branch.
+Return either a `GitReference` to the upstream branch if it exists,
+or [`nothing`](@ref) if the requested branch does not have an upstream counterpart.
 """
 function upstream(ref::GitReference)
     isempty(ref) && return nothing
@@ -281,14 +291,14 @@ function upstream(ref::GitReference)
                   (Ref{Ptr{Void}}, Ptr{Void},), ref_ptr_ptr, ref.ptr)
     if err != Int(Error.GIT_OK)
         if err == Int(Error.ENOTFOUND)
-            return Nullable{GitReference}()
+            return nothing
         end
         if ref_ptr_ptr[] != C_NULL
             close(GitReference(ref.owner, ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return Nullable{GitReference}(GitReference(ref.owner, ref_ptr_ptr[]))
+    return GitReference(ref.owner, ref_ptr_ptr[])
 end
 
 repository(ref::GitReference) = ref.owner
@@ -338,7 +348,7 @@ function Base.map(f::Function, bi::GitBranchIter)
     while !done(bi, s)
         val = f(s[1:2])
         if res === nothing
-            res = Vector{typeof(val)}(0)
+            res = Vector{typeof(val)}()
         end
         push!(res, val)
         val, s = next(bi, s)

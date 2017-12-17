@@ -52,8 +52,7 @@ may trip up Julia users accustomed to MATLAB:
   * In Julia, functions such as [`sort`](@ref) that operate column-wise by default (`sort(A)` is
     equivalent to `sort(A,1)`) do not have special behavior for `1xN` arrays; the argument is returned
     unmodified since it still performs `sort(A,1)`. To sort a `1xN` matrix like a vector, use `sort(A,2)`.
-  * In Julia, parentheses must be used to call a function with zero arguments, like in [`tic()`](@ref)
-    and [`toc()`](@ref).
+  * In Julia, parentheses must be used to call a function with zero arguments, like in [`rand()`](@ref).
   * Julia discourages the used of semicolons to end statements. The results of statements are not
     automatically printed (except at the interactive prompt), and lines of code do not need to end
     with semicolons. [`println`](@ref) or [`@printf`](@ref) can be used to print specific output.
@@ -64,7 +63,7 @@ may trip up Julia users accustomed to MATLAB:
     bitwise operations equivalent to `and`, `or`, and `xor` respectively in MATLAB, and have precedence
     similar to Python's bitwise operators (unlike C). They can operate on scalars or element-wise
     across arrays and can be used to combine logical arrays, but note the difference in order of operations:
-    parentheses may be required (e.g., to select elements of `A` equal to 1 or 2 use `(A .== 1) | (A .== 2)`).
+    parentheses may be required (e.g., to select elements of `A` equal to 1 or 2 use `(A .== 1) .| (A .== 2)`).
   * In Julia, the elements of a collection can be passed as arguments to a function using the splat
     operator `...`, as in `xs=[1,2]; f(xs...)`.
   * Julia's [`svd`](@ref) returns singular values as a vector instead of as a dense diagonal matrix.
@@ -108,6 +107,10 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Like many languages, Julia does not always allow operations on vectors of different lengths, unlike
     R where the vectors only need to share a common index range.  For example, `c(1, 2, 3, 4) + c(1, 2)`
     is valid R but the equivalent `[1, 2, 3, 4] + [1, 2]` will throw an error in Julia.
+  * Julia allows an optional trailing comma when that comma does not change the meaning of code.
+    This can cause confusion among R users when indexing into arrays. For example, `x[1,]` in R
+    would return the first row of a matrix; in Julia, however, the comma is ignored, so
+    `x[1,] == x[1]`, and will return the first element. To extract a row, be sure to use `:`, as in `x[1,:]`.
   * Julia's [`map`](@ref) takes the function first, then its arguments, unlike `lapply(<structure>, function, ...)`
     in R. Similarly Julia's equivalent of `apply(X, MARGIN, FUN, ...)` in R is [`mapslices`](@ref)
     where the function is the first argument.
@@ -118,7 +121,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     of the form `if cond; statement; end`, `cond && statement` and `!cond || statement`. Assignment
     statements in the latter two syntaxes must be explicitly wrapped in parentheses, e.g. `cond && (x = value)`.
   * In Julia, `<-`, `<<-` and `->` are not assignment operators.
-  * Julia's `->` creates an anonymous function, like Python.
+  * Julia's `->` creates an anonymous function.
   * Julia constructs vectors using brackets. Julia's `[1, 2, 3]` is the equivalent of R's `c(1, 2, 3)`.
   * Julia's [`*`](@ref) operator can perform matrix multiplication, unlike in R. If `A` and `B` are
     matrices, then `A * B` denotes a matrix multiplication in Julia, equivalent to R's `A %*% B`.
@@ -134,8 +137,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Julia does not provide `nrow` and `ncol`. Instead, use `size(M, 1)` for `nrow(M)` and `size(M, 2)`
     for `ncol(M)`.
   * Julia is careful to distinguish scalars, vectors and matrices.  In R, `1` and `c(1)` are the same.
-    In Julia, they can not be used interchangeably. One potentially confusing result of this is that
-    `x' * y` for vectors `x` and `y` is a 1-element vector, not a scalar. To get a scalar, use [`dot(x, y)`](@ref).
+    In Julia, they cannot be used interchangeably.
   * Julia's [`diag`](@ref) and [`diagm`](@ref) are not like R's.
   * Julia cannot assign to the results of function calls on the left hand side of an assignment operation:
     you cannot write `diag(M) = ones(n)`.
@@ -178,7 +180,12 @@ For users coming to Julia from R, these are some noteworthy differences:
     code is often achieved by using devectorized loops.
   * Julia is eagerly evaluated and does not support R-style lazy evaluation. For most users, this
     means that there are very few unquoted expressions or column names.
-  * Julia does not support the `NULL` type.
+  * Julia does not support the `NULL` type. The closest equivalent is [`nothing`](@ref), but it
+    behaves like a scalar value rather than like a list. Use `x == nothing` instead of `is.null(x)`.
+  * In Julia, missing values are represented by the [`missing`](@ref) object rather than by `NA`.
+    Use [`ismissing(x)`](@ref) instead of `isna(x)`. The [`skipmissing`](@ref) function is generally
+    used instead of `na.rm=TRUE` (though in some particular cases functions take a `skipmissing`
+    argument).
   * Julia lacks the equivalent of R's `assign` or `get`.
   * In Julia, `return` does not require parentheses.
   * In R, an idiomatic way to remove unwanted values is to use logical indexing, like in the expression
@@ -193,7 +200,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
   * Julia's slice indexing includes the last element, unlike in Python. `a[2:3]` in Julia is `a[1:3]`
     in Python.
-  * Julia does not support negative indexes. In particular, the last element of a list or array is
+  * Julia does not support negative indices. In particular, the last element of a list or array is
     indexed with `end` in Julia, not `-1` as in Python.
   * Julia's `for`, `if`, `while`, etc. blocks are terminated by the `end` keyword. Indentation level
     is not significant as it is in Python.

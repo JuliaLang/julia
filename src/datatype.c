@@ -81,6 +81,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->hasfreetypevars = 0;
     t->isleaftype = 1;
     t->layout = NULL;
+    t->names = NULL;
     return t;
 }
 
@@ -288,7 +289,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             return;
         }
     }
-    if (st->types == NULL)
+    if (st->types == NULL || (jl_is_namedtuple_type(st) && !jl_is_leaf_type((jl_value_t*)st)))
         return;
     uint32_t nfields = jl_svec_len(st->types);
     if (nfields == 0) {
@@ -392,8 +393,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     jl_errorf("type %s has field offset %d that exceeds the page size", jl_symbol_name(st->name->name), descsz);
 }
 
-extern int jl_boot_file_loaded;
-
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
         jl_sym_t *name,
         jl_module_t *module,
@@ -485,33 +484,37 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
 
 // bits constructors ----------------------------------------------------------
 
-typedef struct {
-    int64_t a;
-    int64_t b;
-} bits128_t;
-
-// TODO: do we care that this has invalid alignment assumptions?
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, void *data)
 {
+    // data may not have the alignment required by the size
+    // but will always have the alignment required by the datatype
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(jl_is_datatype(dt));
     jl_datatype_t *bt = (jl_datatype_t*)dt;
     size_t nb = jl_datatype_size(bt);
+    // some types have special pools to minimize allocations
     if (nb == 0)               return jl_new_struct_uninit(bt); // returns bt->instance
+    if (bt == jl_bool_type)    return (1 & *(int8_t*)data) ? jl_true : jl_false;
     if (bt == jl_uint8_type)   return jl_box_uint8(*(uint8_t*)data);
     if (bt == jl_int64_type)   return jl_box_int64(*(int64_t*)data);
-    if (bt == jl_bool_type)    return (*(int8_t*)data) ? jl_true : jl_false;
     if (bt == jl_int32_type)   return jl_box_int32(*(int32_t*)data);
-    if (bt == jl_float64_type) return jl_box_float64(*(double*)data);
+    if (bt == jl_int8_type)    return jl_box_int8(*(int8_t*)data);
+    if (bt == jl_int16_type)   return jl_box_int16(*(int16_t*)data);
+    if (bt == jl_uint64_type)  return jl_box_uint64(*(uint64_t*)data);
+    if (bt == jl_uint32_type)  return jl_box_uint32(*(uint32_t*)data);
+    if (bt == jl_uint16_type)  return jl_box_uint16(*(uint16_t*)data);
+    if (bt == jl_char_type)    return jl_box_char(*(uint32_t*)data);
 
     jl_value_t *v = jl_gc_alloc(ptls, nb, bt);
     switch (nb) {
-    case  1: *(int8_t*)   jl_data_ptr(v) = *(int8_t*)data;    break;
-    case  2: *(int16_t*)  jl_data_ptr(v) = *(int16_t*)data;   break;
-    case  4: *(int32_t*)  jl_data_ptr(v) = *(int32_t*)data;   break;
-    case  8: *(int64_t*)  jl_data_ptr(v) = *(int64_t*)data;   break;
-    case 16: *(bits128_t*)jl_data_ptr(v) = *(bits128_t*)data; break;
-    default: memcpy(jl_data_ptr(v), data, nb);
+    case  1: *(uint8_t*) v = *(uint8_t*)data;    break;
+    case  2: *(uint16_t*)v = jl_load_unaligned_i16(data);   break;
+    case  4: *(uint32_t*)v = jl_load_unaligned_i32(data);   break;
+    case  8: *(uint64_t*)v = jl_load_unaligned_i64(data);   break;
+    case 16:
+        memcpy(jl_assume_aligned(v, 16), data, 16);
+        break;
+    default: memcpy(v, data, nb);
     }
     return v;
 }
@@ -521,21 +524,24 @@ JL_DLLEXPORT jl_value_t *jl_typemax_uint(jl_value_t *bt)
 {
     uint64_t data = 0xffffffffffffffffULL;
     jl_value_t *v = jl_gc_alloc(jl_get_ptls_states(), sizeof(size_t), bt);
-    memcpy(jl_data_ptr(v), &data, sizeof(size_t));
+    memcpy(v, &data, sizeof(size_t));
     return v;
 }
 
 void jl_assign_bits(void *dest, jl_value_t *bits)
 {
+    // bits must be a heap box.
     size_t nb = jl_datatype_size(jl_typeof(bits));
     if (nb == 0) return;
     switch (nb) {
-    case  1: *(int8_t*)dest    = *(int8_t*)jl_data_ptr(bits);    break;
-    case  2: *(int16_t*)dest   = *(int16_t*)jl_data_ptr(bits);   break;
-    case  4: *(int32_t*)dest   = *(int32_t*)jl_data_ptr(bits);   break;
-    case  8: *(int64_t*)dest   = *(int64_t*)jl_data_ptr(bits);   break;
-    case 16: *(bits128_t*)dest = *(bits128_t*)jl_data_ptr(bits); break;
-    default: memcpy(dest, jl_data_ptr(bits), nb);
+    case  1: *(uint8_t*)dest    = *(uint8_t*)bits;    break;
+    case  2: jl_store_unaligned_i16(dest, *(uint16_t*)bits); break;
+    case  4: jl_store_unaligned_i32(dest, *(uint32_t*)bits); break;
+    case  8: jl_store_unaligned_i64(dest, *(uint64_t*)bits); break;
+    case 16:
+        memcpy(dest, jl_assume_aligned(bits, 16), 16);
+        break;
+    default: memcpy(dest, bits, nb);
     }
 }
 
@@ -634,7 +640,6 @@ SIBOX_FUNC(int16,  int16_t, 1)
 SIBOX_FUNC(int32,  int32_t, 1)
 UIBOX_FUNC(uint16, uint16_t, 1)
 UIBOX_FUNC(uint32, uint32_t, 1)
-UIBOX_FUNC(char,   uint32_t, 1)
 UIBOX_FUNC(ssavalue, size_t, 1)
 UIBOX_FUNC(slotnumber, size_t, 1)
 #ifdef _P64
@@ -644,6 +649,17 @@ UIBOX_FUNC(uint64, uint64_t, 1)
 SIBOX_FUNC(int64,  int64_t, 2)
 UIBOX_FUNC(uint64, uint64_t, 2)
 #endif
+
+static jl_value_t *boxed_char_cache[128];
+JL_DLLEXPORT jl_value_t *jl_box_char(uint32_t x)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (0 < (int32_t)x)
+        return boxed_char_cache[x >> 24];
+    jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), jl_char_type);
+    *(uint32_t*)jl_data_ptr(v) = x;
+    return v;
+}
 
 static jl_value_t *boxed_int8_cache[256];
 JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x)
@@ -678,14 +694,16 @@ void jl_init_int32_int64_cache(void)
 void jl_init_box_caches(void)
 {
     int64_t i;
+    for(i=0; i < 128; i++) {
+        boxed_char_cache[i] = jl_permbox32(jl_char_type, i << 24);
+    }
     for(i=0; i < 256; i++) {
-        boxed_int8_cache[i]  = jl_permbox8(jl_int8_type, i);
+        boxed_int8_cache[i] = jl_permbox8(jl_int8_type, i);
     }
     for(i=0; i < NBOX_C; i++) {
         boxed_int16_cache[i]  = jl_permbox16(jl_int16_type, i-NBOX_C/2);
         boxed_uint16_cache[i] = jl_permbox16(jl_uint16_type, i);
         boxed_uint32_cache[i] = jl_permbox32(jl_uint32_type, i);
-        boxed_char_cache[i]   = jl_permbox32(jl_char_type, i);
         boxed_uint64_cache[i] = jl_permbox64(jl_uint64_type, i);
     }
 }
@@ -730,6 +748,13 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
     for(size_t i=na; i < nf; i++) {
         if (jl_field_isptr(type, i)) {
             *(jl_value_t**)((char*)jl_data_ptr(jv)+jl_field_offset(type,i)) = NULL;
+
+        } else {
+            jl_value_t *ft = jl_field_type(type, i);
+            if (jl_is_uniontype(ft)) {
+                uint8_t *psel = &((uint8_t *)jv)[jl_field_offset(type, i) + jl_field_size(type, i) - 1];
+                *psel = 0;
+            }
         }
     }
     return jv;
@@ -841,13 +866,6 @@ JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
     if (ty->layout == NULL || field > jl_datatype_nfields(ty) || field < 1)
         jl_bounds_error_int((jl_value_t*)ty, field);
     return jl_field_offset(ty, field - 1);
-}
-
-JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
-{
-    if (ty->layout == NULL)
-        jl_error("non-leaf type doesn't have an alignment");
-    return jl_datatype_align(ty);
 }
 
 #ifdef __cplusplus

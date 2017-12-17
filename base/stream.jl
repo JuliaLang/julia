@@ -16,8 +16,6 @@ abstract type LibuvStream <: IO end
 # .  +- Pipe
 # .  +- Process (not exported)
 # .  +- ProcessChain (not exported)
-# +- Base64DecodePipe
-# +- Base64EncodePipe
 # +- BufferStream
 # +- DevNullStream (not exported)
 # +- Filesystem.File
@@ -106,7 +104,7 @@ mutable struct PipeEndpoint <: LibuvStream
     readnotify::Condition
     connectnotify::Condition
     closenotify::Condition
-    sendbuf::Nullable{IOBuffer}
+    sendbuf::Union{IOBuffer, Void}
     lock::ReentrantLock
     throttle::Int
 
@@ -122,7 +120,7 @@ mutable struct PipeEndpoint <: LibuvStream
                 ReentrantLock(),
                 DEFAULT_READ_BUFFER_SZ)
         associate_julia_struct(handle, p)
-        finalizer(p, uvfinalize)
+        finalizer(uvfinalize, p)
         return p
     end
 end
@@ -138,7 +136,7 @@ mutable struct PipeServer <: LibuvServer
                 Condition(),
                 Condition())
         associate_julia_struct(p.handle, p)
-        finalizer(p, uvfinalize)
+        finalizer(uvfinalize, p)
         return p
     end
 end
@@ -156,7 +154,7 @@ mutable struct TTY <: LibuvStream
     buffer::IOBuffer
     readnotify::Condition
     closenotify::Condition
-    sendbuf::Nullable{IOBuffer}
+    sendbuf::Union{IOBuffer, Void}
     lock::ReentrantLock
     throttle::Int
     @static if Sys.iswindows(); ispty::Bool; end
@@ -168,10 +166,11 @@ mutable struct TTY <: LibuvStream
             PipeBuffer(),
             Condition(),
             Condition(),
-            nothing, ReentrantLock(),
+            nothing,
+            ReentrantLock(),
             DEFAULT_READ_BUFFER_SZ)
         associate_julia_struct(handle, tty)
-        finalizer(tty, uvfinalize)
+        finalizer(uvfinalize, tty)
         @static if Sys.iswindows()
             tty.ispty = ccall(:jl_ispty, Cint, (Ptr{Void},), handle) != 0
         end
@@ -348,8 +347,29 @@ if Sys.iswindows()
     ispty(s::IO) = false
 end
 
-"    displaysize(io) -> (lines, columns)
-Return the nominal size of the screen that may be used for rendering output to this io object"
+"""
+    displaysize([io::IO]) -> (lines, columns)
+
+Return the nominal size of the screen that may be used for rendering output to
+this `IO` object.
+If no input is provided, the environment variables `LINES` and `COLUMNS` are read.
+If those are not set, a default size of `(24, 80)` is returned.
+
+# Examples
+```jldoctest
+julia> withenv("LINES" => 30, "COLUMNS" => 100) do
+           displaysize()
+       end
+(30, 100)
+```
+
+To get your TTY size,
+
+```julia
+julia> displaysize(STDOUT)
+(34, 147)
+```
+"""
 displaysize(io::IO) = displaysize()
 displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
@@ -828,11 +848,11 @@ end
 # - large isbits arrays are unbuffered and written directly
 
 function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
-    if isnull(s.sendbuf)
+    if s.sendbuf === nothing
         return uv_write(s, p, UInt(n))
     end
 
-    buf = get(s.sendbuf)
+    buf = s.sendbuf
     totb = nb_available(buf) + n
     if totb < buf.maxsize
         nb = unsafe_write(buf, p, n)
@@ -848,10 +868,10 @@ function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
 end
 
 function flush(s::LibuvStream)
-    if isnull(s.sendbuf)
+    if s.sendbuf === nothing
         return
     end
-    buf = get(s.sendbuf)
+    buf = s.sendbuf
     if nb_available(buf) > 0
         arr = take!(buf)        # Array of UInt8s
         uv_write(s, arr)
@@ -864,8 +884,8 @@ buffer_writes(s::LibuvStream, bufsize) = (s.sendbuf=PipeBuffer(bufsize); s)
 ## low-level calls to libuv ##
 
 function write(s::LibuvStream, b::UInt8)
-    if !isnull(s.sendbuf)
-        buf = get(s.sendbuf)
+    if s.sendbuf !== nothing
+        buf = s.sendbuf
         if nb_available(buf) + 1 < buf.maxsize
             return write(buf, b)
         end
@@ -1010,7 +1030,7 @@ for (x, writable, unix_fd, c_symbol) in
         ((:STDIN, false, 0, :jl_uv_stdin),
          (:STDOUT, true, 1, :jl_uv_stdout),
          (:STDERR, true, 2, :jl_uv_stderr))
-    f = Symbol("redirect_",lowercase(string(x)))
+    f = Symbol("redirect_",Unicode.lowercase(string(x)))
     _f = Symbol("_",f)
     @eval begin
         function ($_f)(stream)
@@ -1128,6 +1148,14 @@ mark(x::LibuvStream)     = mark(x.buffer)
 unmark(x::LibuvStream)   = unmark(x.buffer)
 reset(x::LibuvStream)    = reset(x.buffer)
 ismarked(x::LibuvStream) = ismarked(x.buffer)
+
+function peek(s::LibuvStream)
+    mark(s)
+    try read(s, UInt8)
+    finally
+        reset(s)
+    end
+end
 
 # BufferStream's are non-OS streams, backed by a regular IOBuffer
 mutable struct BufferStream <: LibuvStream

@@ -29,7 +29,7 @@ end
 # @test_throws ErrorException in("foobar","bar")
 @test_throws BoundsError search(b"\x1\x2",0x1,0)
 @test rsearchindex(b"foo",b"o",0) == 0
-@test rsearchindex(SubString("",1,1),SubString("",1,1)) == 1
+@test rsearchindex(SubString("",1,0),SubString("",1,0)) == 1
 
 @test search(b"foo",'o') == 2
 @test rsearch(b"foo",'o') == 3
@@ -84,16 +84,16 @@ for str in (u8str, GenericString(u8str))
     @test search(str, '\u80') == 0
     @test search(str, '∄') == 0
     @test search(str, '∀') == 1
-    @test_throws UnicodeError search(str, '∀', 2)
+    @test_throws StringIndexError search(str, '∀', 2)
     @test search(str, '∀', 4) == 0
     @test search(str, '∃') == 13
-    @test_throws UnicodeError search(str, '∃', 15)
+    @test_throws StringIndexError search(str, '∃', 15)
     @test search(str, '∃', 16) == 0
     @test search(str, 'x') == 26
     @test search(str, 'x', 27) == 43
     @test search(str, 'x', 44) == 0
     @test search(str, 'δ') == 17
-    @test_throws UnicodeError search(str, 'δ', 18)
+    @test_throws StringIndexError search(str, 'δ', 18)
     @test search(str, 'δ', nextind(str,17)) == 33
     @test search(str, 'δ', nextind(str,33)) == 0
     @test search(str, 'ε') == 5
@@ -381,7 +381,7 @@ end
 @test_throws ErrorException "ab" ∈ "abc"
 
 # issue #15723
-@test findfirst("⨳(", '(') == 4
-@test findnext("(⨳(", '(', 2) == 5
-@test findlast("(⨳(", '(') == 5
-@test findprev("(⨳(", '(', 2) == 1
+@test findfirst(equalto('('), "⨳(") == 4
+@test findnext(equalto('('), "(⨳(", 2) == 5
+@test findlast(equalto('('), "(⨳(") == 5
+@test findprev(equalto('('), "(⨳(", 2) == 1

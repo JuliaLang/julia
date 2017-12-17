@@ -29,10 +29,10 @@ mutable struct Regex
         end
         re = compile(new(pattern, compile_options, match_options, C_NULL,
                          C_NULL, Csize_t[], C_NULL))
-        finalizer(re, re->begin
-                              re.regex == C_NULL || PCRE.free_re(re.regex)
-                              re.match_data == C_NULL || PCRE.free_match_data(re.match_data)
-                          end)
+        finalizer(re) do re
+            re.regex == C_NULL || PCRE.free_re(re.regex)
+            re.match_data == C_NULL || PCRE.free_match_data(re.match_data)
+        end
         re
     end
 end
@@ -145,6 +145,21 @@ getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
     ismatch(r::Regex, s::AbstractString) -> Bool
 
 Test whether a string contains a match of the given regular expression.
+
+# Examples
+```jldoctest
+julia> rx = r"a.a"
+r"a.a"
+
+julia> ismatch(rx, "aba")
+true
+
+julia> ismatch(rx, "abba")
+false
+
+julia> rx("aba")
+true
+```
 """
 function ismatch(r::Regex, s::AbstractString, offset::Integer=0)
     compile(r)
@@ -167,6 +182,25 @@ Search for the first match of the regular expression `r` in `s` and return a `Re
 object containing the match, or nothing if the match failed. The matching substring can be
 retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
 `m.captures` The optional `idx` argument specifies an index at which to start the search.
+
+# Examples
+```jldoctest
+julia> rx = r"a(.)a"
+r"a(.)a"
+
+julia> m = match(rx, "cabac")
+RegexMatch("aba", 1="b")
+
+julia> m.captures
+1-element Array{Union{Void, SubString{String}},1}:
+ "b"
+
+julia> m.match
+"aba"
+
+julia> match(rx, "cabac", 3) == nothing
+true
+```
 """
 function match end
 
@@ -178,9 +212,10 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, a
     end
     ovec = re.ovec
     n = div(length(ovec),2) - 1
-    mat = SubString(str, ovec[1]+1, ovec[2])
-    cap = Union{Void,SubString{String}}[
-            ovec[2i+1] == PCRE.UNSET ? nothing : SubString(str, ovec[2i+1]+1, ovec[2i+2]) for i=1:n ]
+    mat = SubString(str, ovec[1]+1, prevind(str, ovec[2]+1))
+    cap = Union{Void,SubString{String}}[ovec[2i+1] == PCRE.UNSET ? nothing :
+                                        SubString(str, ovec[2i+1]+1,
+                                                  prevind(str, ovec[2i+2]+1)) for i=1:n]
     off = Int[ ovec[2i+1]+1 for i=1:n ]
     RegexMatch(mat, cap, ovec[1]+1, off, re)
 end
@@ -194,6 +229,24 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
     matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
 
 Return a vector of the matching substrings from [`eachmatch`](@ref).
+
+
+# Examples
+```jldoctest
+julia> rx = r"a.a"
+r"a.a"
+
+julia> matchall(rx, "a1a2a3a")
+2-element Array{SubString{String},1}:
+ "a1a"
+ "a3a"
+
+julia> matchall(rx, "a1a2a3a", true)
+3-element Array{SubString{String},1}:
+ "a1a"
+ "a2a"
+ "a3a"
+```
 """
 function matchall(re::Regex, str::String, overlap::Bool=false)
     regex = compile(re).regex
@@ -250,8 +303,12 @@ struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end
 
-endof(s::SubstitutionString) = endof(s.string)
-next(s::SubstitutionString, idx::Int) = next(s.string, idx)
+ncodeunits(s::SubstitutionString) = ncodeunits(s.string)
+codeunit(s::SubstitutionString) = codeunit(s.string)
+codeunit(s::SubstitutionString, i::Integer) = codeunit(s.string, i)
+isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)
+next(s::SubstitutionString, i::Integer) = next(s.string, i)
+
 function show(io::IO, s::SubstitutionString)
     print(io, "s")
     show(io, s.string)
@@ -285,11 +342,11 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
             if repl[next_i] == SUB_CHAR
                 write(io, SUB_CHAR)
                 i = nextind(repl, next_i)
-            elseif isnumber(repl[next_i])
+            elseif Unicode.isdigit(repl[next_i])
                 group = parse(Int, repl[next_i])
                 i = nextind(repl, next_i)
                 while i <= e
-                    if isnumber(repl[i])
+                    if Unicode.isdigit(repl[i])
                         group = 10group + parse(Int, repl[i])
                         i = nextind(repl, i)
                     else
@@ -311,7 +368,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                 end
                 #  TODO: avoid this allocation
                 groupname = SubString(repl, groupstart, prevind(repl, i))
-                if all(isnumber,groupname)
+                if all(Unicode.isdigit, groupname)
                     _write_capture(io, re, parse(Int, groupname))
                 else
                     group = PCRE.substring_number_from_name(re.regex, groupname)
@@ -388,6 +445,26 @@ end
 Search for all matches of a the regular expression `r` in `s` and return a iterator over the
 matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from distinct character ranges.
+
+# Examples
+```jldoctest
+julia> rx = r"a.a"
+r"a.a"
+
+julia> m = eachmatch(rx, "a1a2a3a")
+Base.RegexMatchIterator(r"a.a", "a1a2a3a", false)
+
+julia> collect(m)
+2-element Array{RegexMatch,1}:
+ RegexMatch("a1a")
+ RegexMatch("a3a")
+
+julia> collect(eachmatch(rx, "a1a2a3a", true))
+3-element Array{RegexMatch,1}:
+ RegexMatch("a1a")
+ RegexMatch("a2a")
+ RegexMatch("a3a")
+```
 """
 eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
 

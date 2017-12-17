@@ -93,6 +93,9 @@ const rewrite_op =
 function make_fastmath(expr::Expr)
     if expr.head === :quote
         return expr
+    elseif expr.head == :call && expr.args[1] == :^ && expr.args[3] isa Integer
+        # mimic Julia's literal_pow lowering of literal integer powers
+        return Expr(:call, :(Base.FastMath.pow_fast), make_fastmath(expr.args[2]), Val{expr.args[3]}())
     end
     op = get(rewrite_op, expr.head, :nothing)
     if op !== :nothing
@@ -184,7 +187,7 @@ issubnormal_fast(x) = false
 
 # complex numbers
 
-ComplexTypes = Union{Complex64, Complex128}
+ComplexTypes = Union{ComplexF32, ComplexF64}
 
 @fastmath begin
     abs_fast(x::ComplexTypes) = hypot(real(x), imag(x))
@@ -263,6 +266,8 @@ end
 
 pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32", llvmcall, Float32, (Float32, Int32), x, y)
 pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Float64, Int32), x, y)
+pow_fast(x::FloatTypes, ::Val{p}) where {p} = pow_fast(x, p) # inlines already via llvm.powi
+@inline pow_fast(x, v::Val) = Base.literal_pow(^, x, v)
 
 sqrt_fast(x::FloatTypes) = sqrt_llvm(x)
 
@@ -270,7 +275,7 @@ sqrt_fast(x::FloatTypes) = sqrt_llvm(x)
 
 const libm = Base.libm_name
 
-for f in (:acos, :acosh, :asinh, :atan, :atanh, :cbrt, :cos,
+for f in (:acosh, :asinh, :atanh, :cbrt, :cos,
           :cosh, :exp2, :expm1, :lgamma, :log10, :log1p, :log2,
           :log, :sin, :sinh, :tan, :tanh)
     f_fast = fast_op[f]
@@ -293,6 +298,7 @@ atan2_fast(x::Float64, y::Float64) =
     ccall(("atan2",libm), Float64, (Float64,Float64), x, y)
 
 asin_fast(x::FloatTypes) = asin(x)
+acos_fast(x::FloatTypes) = acos(x)
 
 # explicit implementations
 

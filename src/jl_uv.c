@@ -118,7 +118,6 @@ JL_DLLEXPORT size_t jl_uv_buf_len(const uv_buf_t *buf) { return buf->len; }
 JL_DLLEXPORT void jl_uv_buf_set_base(uv_buf_t *buf, char *b) { buf->base = b; }
 JL_DLLEXPORT void jl_uv_buf_set_len(uv_buf_t *buf, size_t n) { buf->len = n; }
 JL_DLLEXPORT void *jl_uv_connect_handle(uv_connect_t *connect) { return connect->handle; }
-JL_DLLEXPORT void *jl_uv_getaddrinfo_data(uv_getaddrinfo_t *req) { return req->data; }
 JL_DLLEXPORT uv_file jl_uv_file_handle(jl_uv_file_t *f) { return f->file; }
 JL_DLLEXPORT void *jl_uv_req_data(uv_req_t *req) { return req->data; }
 JL_DLLEXPORT void jl_uv_req_set_data(uv_req_t *req, void *data) { req->data = data; }
@@ -383,9 +382,9 @@ JL_DLLEXPORT int jl_fs_read(int handle, char *data, size_t len)
 JL_DLLEXPORT int jl_fs_read_byte(int handle)
 {
     uv_fs_t req;
-    char c;
+    unsigned char c;
     uv_buf_t buf[1];
-    buf[0].base = &c;
+    buf[0].base = (char*)&c;
     buf[0].len = 1;
     int ret = uv_fs_read(jl_io_loop, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
@@ -491,10 +490,21 @@ JL_DLLEXPORT void jl_uv_putb(uv_stream_t *stream, uint8_t b)
     jl_uv_puts(stream, (char*)&b, 1);
 }
 
-JL_DLLEXPORT void jl_uv_putc(uv_stream_t *stream, uint32_t wchar)
+JL_DLLEXPORT void jl_uv_putc(uv_stream_t *stream, uint32_t c)
 {
     char s[4];
-    jl_uv_puts(stream, s, u8_wc_toutf8(s, wchar));
+    int n = 1;
+    s[0] = c >> 24;
+    if ((s[1] = c >> 16)) {
+        n++;
+        if ((s[2] = c >> 8)) {
+            n++;
+            if ((s[3] = c)) {
+                n++;
+            }
+        }
+    }
+    jl_uv_puts(stream, s, n);
 }
 
 extern int vasprintf(char **str, const char *fmt, va_list ap);
@@ -712,22 +722,45 @@ JL_DLLEXPORT struct sockaddr_in *jl_uv_interface_address_sockaddr(uv_interface_a
     return &ifa->address.address4;
 }
 
-JL_DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host,
-                                const char *service, jl_function_t *cb,
-                                uv_getaddrinfo_cb uvcb)
+JL_DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, uv_getaddrinfo_t *req,
+        const char *host, const char *service, uv_getaddrinfo_cb uvcb)
 {
-    uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
     struct addrinfo hints;
-
-    memset (&hints, 0, sizeof (hints));
+    memset(&hints, 0, sizeof(hints));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags |= AI_CANONNAME;
 
-    req->data = cb;
-
-    return uv_getaddrinfo(loop,req,uvcb,host,service,&hints);
+    req->data = NULL;
+    return uv_getaddrinfo(loop, req, uvcb, host, service, &hints);
 }
+
+JL_DLLEXPORT int jl_getnameinfo(uv_loop_t *loop, uv_getnameinfo_t *req,
+        uint32_t host, uint16_t port, int flags, uv_getnameinfo_cb uvcb)
+{
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = host;
+    addr.sin_port = port;
+
+    req->data = NULL;
+    return uv_getnameinfo(loop, req, uvcb, (struct sockaddr*)&addr, flags);
+}
+
+JL_DLLEXPORT int jl_getnameinfo6(uv_loop_t *loop, uv_getnameinfo_t *req,
+        void *host, uint16_t port, int flags, uv_getnameinfo_cb uvcb)
+{
+    struct sockaddr_in6 addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin6_family = AF_INET6;
+    memcpy(&addr.sin6_addr, host, 16);
+    addr.sin6_port = port;
+
+    req->data = NULL;
+    return uv_getnameinfo(loop, req, uvcb, (struct sockaddr*)&addr, flags);
+}
+
 
 JL_DLLEXPORT struct sockaddr *jl_sockaddr_from_addrinfo(struct addrinfo *addrinfo)
 {

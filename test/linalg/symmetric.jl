@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 srand(101)
 
 @testset "Pauli σ-matrices: $σ" for σ in map(Hermitian,
-        Any[ eye(2), [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
+        Any[ [1 0; 0 1], [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
     @test ishermitian(σ)
 end
 
@@ -30,7 +30,7 @@ end
     n = 10
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
-    @testset for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
+    @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
         asym = a.'+a                 # symmetric indefinite
         aherm = a'+a                 # Hermitian indefinite
@@ -72,14 +72,20 @@ end
                 @test isa(similar(Symmetric(asym), Int, (3,2)), Matrix{Int})
                 @test isa(similar(Hermitian(aherm), Int, (3,2)), Matrix{Int})
             end
-            @testset "full" begin
-                @test asym  == full(Symmetric(asym))
-                @test aherm == full(Hermitian(aherm))
+
+            @testset "Array/Matrix constructor from Symmetric/Hermitian" begin
+                @test asym  == Matrix(Symmetric(asym))  == Array(Symmetric(asym))
+                @test aherm == Matrix(Hermitian(aherm)) == Array(Hermitian(aherm))
             end
 
             @testset "parent" begin
                 @test asym === parent(Symmetric(asym))
                 @test aherm === parent(Hermitian(aherm))
+            end
+            # Unary minus for Symmetric/Hermitian matrices
+            @testset "Unary minus for Symmetric/Hermitian matrices" begin
+                @test (-Symmetric(asym))::typeof(Symmetric(asym)) == -asym
+                @test (-Hermitian(aherm))::typeof(Hermitian(aherm)) == -aherm
             end
 
             @testset "getindex and unsafe_getindex" begin
@@ -98,7 +104,7 @@ end
                     end
                 end
                 if eltya <: Complex
-                    typs = [Complex64,Complex128]
+                    typs = [ComplexF32,ComplexF64]
                     for typ in typs
                         @test Symmetric(convert(Matrix{typ},asym)) == convert(Symmetric{typ,Matrix{typ}},Symmetric(asym))
                         @test Hermitian(convert(Matrix{typ},aherm)) == convert(Hermitian{typ,Matrix{typ}},Hermitian(aherm))
@@ -111,6 +117,7 @@ end
                 @test ishermitian(Hermitian(aherm))
                 if eltya <: Real
                     @test ishermitian(Symmetric(asym))
+                    @test issymmetric(Hermitian(asym))
                 elseif eltya <: Complex
                     # test that zero imaginary component is
                     # handled properly
@@ -119,15 +126,15 @@ end
             end
 
             @testset "tril/triu" begin
-                for di in -n:n
-                    @test triu(Symmetric(asym), di) == triu(asym, di)
-                    @test tril(Symmetric(asym), di) == tril(asym, di)
-                    @test triu(Hermitian(aherm), di) == triu(aherm, di)
-                    @test tril(Hermitian(aherm), di) == tril(aherm, di)
-                    @test triu(Symmetric(asym, :L), di) == triu(asym, di)
-                    @test tril(Symmetric(asym, :L), di) == tril(asym, di)
-                    @test triu(Hermitian(aherm, :L), di) == triu(aherm, di)
-                    @test tril(Hermitian(aherm, :L), di) == tril(aherm, di)
+                for (op, validks) in (
+                        (triu, (-n + 1):(n + 1)),
+                        (tril, (-n - 1):(n - 1)) )
+                    for di in validks
+                        @test op(Symmetric(asym), di) == op(asym, di)
+                        @test op(Hermitian(aherm), di) == op(aherm, di)
+                        @test op(Symmetric(asym, :L), di) == op(asym, di)
+                        @test op(Hermitian(aherm, :L), di) == op(aherm, di)
+                    end
                 end
             end
 
@@ -185,6 +192,17 @@ end
                         @test inv(Hermitian(a, uplo))::Hermitian ≈ inv(Matrix(Hermitian(a, uplo)))
                     end
                 end
+                if eltya <: Base.LinAlg.BlasComplex
+                    @testset "inverse edge case with complex Hermitian" begin
+                        # Hermitian matrix, where inv(lufact(A)) generates non-real diagonal elements
+                        for T in (ComplexF32, ComplexF64)
+                            A = T[0.650488+0.0im 0.826686+0.667447im; 0.826686-0.667447im 1.81707+0.0im]
+                            H = Hermitian(A)
+                            @test inv(H) ≈ inv(A)
+                            @test ishermitian(Matrix(inv(H)))
+                        end
+                    end
+                end
             end
 
             # Revisit when implemented in julia
@@ -202,14 +220,14 @@ end
                         @test asym*v[:,1] ≈ d[1]*v[:,1]
                         @test v*Diagonal(d)*v.' ≈ asym
                         @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
-                        @test abs.(eigfact(Symmetric(asym), 1:2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+                        @test abs.(eigfact(Symmetric(asym), 1:2)[:vectors]'v[:,1:2]) ≈ Matrix(I, 2, 2)
                         eig(Symmetric(asym), 1:2) # same result, but checks that method works
-                        @test abs.(eigfact(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+                        @test abs.(eigfact(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ Matrix(I, 2, 2)
                         eig(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
                         @test eigvals(Symmetric(asym), 1:2) ≈ d[1:2]
                         @test eigvals(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
                         # eigfact doesn't support Symmetric{Complex}
-                        @test full(eigfact(asym)) ≈ asym
+                        @test Matrix(eigfact(asym)) ≈ asym
                         @test eigvecs(Symmetric(asym)) ≈ eigvecs(asym)
                     end
 
@@ -217,13 +235,13 @@ end
                     @test aherm*v[:,1] ≈ d[1]*v[:,1]
                     @test v*Diagonal(d)*v' ≈ aherm
                     @test isequal(eigvals(aherm[1]), eigvals(aherm[1:1,1:1]))
-                    @test abs.(eigfact(Hermitian(aherm), 1:2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+                    @test abs.(eigfact(Hermitian(aherm), 1:2)[:vectors]'v[:,1:2]) ≈ Matrix(I, 2, 2)
                     eig(Hermitian(aherm), 1:2) # same result, but checks that method works
-                    @test abs.(eigfact(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+                    @test abs.(eigfact(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ Matrix(I, 2, 2)
                     eig(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
                     @test eigvals(Hermitian(aherm), 1:2) ≈ d[1:2]
                     @test eigvals(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
-                    @test full(eigfact(aherm)) ≈ aherm
+                    @test Matrix(eigfact(aherm)) ≈ aherm
                     @test eigvecs(Hermitian(aherm)) ≈ eigvecs(aherm)
 
                     # relation to svdvals
@@ -245,18 +263,10 @@ end
                 @testset "pow" begin
                     # Integer power
                     @test (asym)^2   ≈ (Symmetric(asym)^2)::Symmetric
-                    if eltya <: Integer && !isone(asym) && !isone(-asym)
-                        @test_throws DomainError (asym)^-2
-                    else
-                        @test (asym)^-2  ≈ (Symmetric(asym)^-2)::Symmetric
-                    end
+                    @test (asym)^-2  ≈ (Symmetric(asym)^-2)::Symmetric
                     @test (aposs)^2  ≈ (Symmetric(aposs)^2)::Symmetric
                     @test (aherm)^2  ≈ (Hermitian(aherm)^2)::Hermitian
-                    if eltya <: Integer && !isone(aherm) && !isone(-aherm)
-                        @test_throws DomainError (aherm)^-2
-                    else
-                        @test (aherm)^-2 ≈ (Hermitian(aherm)^-2)::Hermitian
-                    end
+                    @test (aherm)^-2 ≈ (Hermitian(aherm)^-2)::Hermitian
                     @test (apos)^2   ≈ (Hermitian(apos)^2)::Hermitian
                     # integer floating point power
                     @test (asym)^2.0   ≈ (Symmetric(asym)^2.0)::Symmetric
@@ -279,10 +289,16 @@ end
         @testset "linalg binary ops" begin
             @testset "mat * vec" begin
                 @test Symmetric(asym)*x+y ≈ asym*x+y
+                # testing fallbacks for RowVector * SymHerm.'
+                xadj = x.'
+                @test xadj * Symmetric(asym).' ≈ xadj * asym
                 @test x' * Symmetric(asym) ≈ x' * asym
 
                 @test Hermitian(aherm)*x+y ≈ aherm*x+y
+                # testing fallbacks for RowVector * SymHerm'
+                xadj = x'
                 @test x' * Hermitian(aherm) ≈ x' * aherm
+                @test xadj * Hermitian(aherm)' ≈ xadj * aherm
             end
 
             @testset "mat * mat" begin
@@ -291,14 +307,14 @@ end
                 @test a * Hermitian(aherm) ≈ a * aherm
                 @test Hermitian(aherm) * Hermitian(aherm) ≈ aherm*aherm
                 @test_throws DimensionMismatch Hermitian(aherm) * ones(eltya,n+1)
-                Base.LinAlg.A_mul_B!(C,a,Hermitian(aherm))
+                Base.LinAlg.mul!(C,a,Hermitian(aherm))
                 @test C ≈ a*aherm
 
                 @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
                 @test Symmetric(asym) * a ≈ asym * a
                 @test a * Symmetric(asym) ≈ a * asym
                 @test_throws DimensionMismatch Symmetric(asym) * ones(eltya,n+1)
-                Base.LinAlg.A_mul_B!(C,a,Symmetric(asym))
+                Base.LinAlg.mul!(C,a,Symmetric(asym))
                 @test C ≈ a*asym
 
                 tri_b = UpperTriangular(triu(b))
@@ -324,19 +340,25 @@ end
 
 #Issue #7647: test xsyevr, xheevr, xstevr drivers.
 @testset "Eigenvalues in interval for $(typeof(Mi7647))" for Mi7647 in
-        (Symmetric(diagm(1.0:3.0)),
-         Hermitian(diagm(1.0:3.0)),
-         Hermitian(diagm(complex(1.0:3.0))),
+        (Symmetric(diagm(0 => 1.0:3.0)),
+         Hermitian(diagm(0 => 1.0:3.0)),
+         Hermitian(diagm(0 => complex(1.0:3.0))),
          SymTridiagonal([1.0:3.0;], zeros(2)))
     @test eigmin(Mi7647)  == eigvals(Mi7647, 0.5, 1.5)[1] == 1.0
     @test eigmax(Mi7647)  == eigvals(Mi7647, 2.5, 3.5)[1] == 3.0
     @test eigvals(Mi7647) == eigvals(Mi7647, 0.5, 3.5) == [1.0:3.0;]
 end
 
+@testset "Hermitian wrapper ignores imaginary parts on diagonal" begin
+    A = [1.0+im 2.0; 2.0 0.0]
+    @test !ishermitian(A)
+    @test Hermitian(A)[1,1] == 1
+end
+
 @testset "Issue #7933" begin
     A7933 = [1 2; 3 4]
     B7933 = copy(A7933)
-    C7933 = full(Symmetric(A7933))
+    C7933 = Matrix(Symmetric(A7933))
     @test A7933 == B7933
 end
 
@@ -347,19 +369,10 @@ end
     @test_throws ArgumentError f(A, 1:4)
 end
 
-@testset "Issue #10671" begin
+@testset "Ignore imaginary part of Hermitian diagonal" begin
     A = [1.0+im 2.0; 2.0 0.0]
     @test !ishermitian(A)
-    @test_throws ArgumentError Hermitian(A)
-end
-
-# Unary minus for Symmetric/Hermitian matrices
-@testset "Unary minus for Symmetric/Hermitian matrices" begin
-    A = randn(5, 5)
-    for SH in (Symmetric(A), Hermitian(A))
-        F = Matrix(SH)
-        @test (-SH)::typeof(SH) == -F
-    end
+    @test diag(Hermitian(A)) == real(diag(A))
 end
 
 @testset "Issue #17780" begin
@@ -373,7 +386,7 @@ end
     c = Hermitian(b + b')
     @test conj(c) == conj(Array(c))
     cc = copy(c)
-    @test conj!(c) == conj(Array(c))
+    @test conj!(c) == conj(Array(cc))
 end
 
 @testset "Issue # 19225" begin
@@ -397,12 +410,12 @@ end
         @test Y - I == T([0 -1; -1 0])
         @test Y * I == Y
 
-        @test Y + 1 == T([2 0; 0 2])
-        @test Y - 1 == T([0 -2; -2 0])
+        @test Y .+ 1 == T([2 0; 0 2])
+        @test Y .- 1 == T([0 -2; -2 0])
         @test Y * 2 == T([2 -2; -2 2])
         @test Y / 1 == Y
 
-        @test T([true false; false true]) + true == T([2 1; 1 2])
+        @test T([true false; false true]) .+ true == T([2 1; 1 2])
     end
 
     @test_throws ArgumentError Hermitian(X) + 2im*I
@@ -422,7 +435,7 @@ end
 
 @testset "$HS solver with $RHS RHS - $T" for HS in (Hermitian, Symmetric),
         RHS in (Hermitian, Symmetric, Diagonal, UpperTriangular, LowerTriangular),
-        T   in (Float64, Complex128)
+        T   in (Float64, ComplexF64)
     D = rand(T, 10, 10); D = D'D
     A = HS(D)
     B = RHS(D)
@@ -430,19 +443,29 @@ end
 end
 
 @testset "inversion of Hilbert matrix" begin
-    for T in (Float64, Complex128)
+    for T in (Float64, ComplexF64)
         H = T[1/(i + j - 1) for i in 1:8, j in 1:8]
-        @test norm(inv(Symmetric(H))*(H*ones(8))-1) ≈ 0 atol = 1e-5
-        @test norm(inv(Hermitian(H))*(H*ones(8))-1) ≈ 0 atol = 1e-5
+        @test norm(inv(Symmetric(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
+        @test norm(inv(Hermitian(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
     end
 end
 
-@testset "inverse edge case with complex Hermitian" begin
-    # Hermitian matrix, where inv(lufact(A)) generates non-real diagonal elements
-    for T in (Complex64, Complex128)
-        A = T[0.650488+0.0im 0.826686+0.667447im; 0.826686-0.667447im 1.81707+0.0im]
-        H = Hermitian(A)
-        @test inv(H) ≈ inv(A)
-        @test ishermitian(full(inv(H)))
+@testset "similar should preserve underlying storage type and uplo flag" begin
+    m, n = 4, 3
+    sparsemat = sprand(m, m, 0.5)
+    for SymType in (Symmetric, Hermitian)
+        symsparsemat = SymType(sparsemat)
+        @test isa(similar(symsparsemat), typeof(symsparsemat))
+        @test similar(symsparsemat).uplo == symsparsemat.uplo
+        @test isa(similar(symsparsemat, Float32), SymType{Float32,<:SparseMatrixCSC{Float32}})
+        @test similar(symsparsemat, Float32).uplo == symsparsemat.uplo
+        @test isa(similar(symsparsemat, (n, n)), typeof(sparsemat))
+        @test isa(similar(symsparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
     end
+end
+
+@testset "#24572: eltype(A::HermOrSym) === eltype(parent(A))" begin
+    A = rand(Float32, 3, 3)
+    @test_throws TypeError Symmetric{Float64,Matrix{Float32}}(A, 'U')
+    @test_throws TypeError Hermitian{Float64,Matrix{Float32}}(A, 'U')
 end

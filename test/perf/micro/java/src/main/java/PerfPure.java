@@ -44,7 +44,7 @@ public class PerfPure {
             t = (System.nanoTime())-t;
             if (t < tmin) tmin = t;
         }
-        print_perf("fib", tmin);
+        print_perf("recursion_fibonacci", tmin);
 
         // parse_bin
         tmin = Long.MAX_VALUE;
@@ -59,7 +59,7 @@ public class PerfPure {
             t = System.nanoTime()-t;
             if (t < tmin) tmin = t;
         }
-        print_perf("parse_int", tmin);
+        print_perf("parse_integers", tmin);
 
         // mandel
         int mandel_sum = 0;
@@ -71,7 +71,7 @@ public class PerfPure {
             if (t < tmin) tmin = t;
         }
         assert(mandel_sum == 14720) : "value was "+mandel_sum;
-        print_perf("mandel", tmin);
+        print_perf("userfunc_mandelbrot", tmin);
 
         // sort
         tmin = Long.MAX_VALUE;
@@ -86,7 +86,7 @@ public class PerfPure {
             t = System.nanoTime()-t;
             if (t < tmin) tmin = t;
         }
-        print_perf("quicksort", tmin);
+        print_perf("recursion_quicksort", tmin);
 
         // pi sum
         double pi = 0;
@@ -98,7 +98,7 @@ public class PerfPure {
             if (t < tmin) tmin = t;
         }
         assert(Math.abs(pi-1.644834071848065) < 1e-12);
-        print_perf("pi_sum", tmin);
+        print_perf("iteration_pi_sum", tmin);
 
         // rand mat stat
         double[] r;
@@ -109,7 +109,7 @@ public class PerfPure {
             t = System.nanoTime()-t;
             if (t < tmin) tmin = t;
         }
-        print_perf("rand_mat_stat", tmin);
+        print_perf("matrix_statistics", tmin);
 
         // rand mat mul
         tmin = Long.MAX_VALUE;
@@ -120,7 +120,7 @@ public class PerfPure {
             t = System.nanoTime()-t;
             if (t < tmin) tmin = t;
         }
-        print_perf("rand_mat_mul", tmin);
+        print_perf("matrix_multiply", tmin);
 
 
         tmin = Long.MAX_VALUE;
@@ -130,7 +130,7 @@ public class PerfPure {
             t = System.nanoTime()-t;
             if (t < tmin) tmin = t;
         }
-        print_perf("sinc_sum", tmin);
+        print_perf("iteration_sinc_sum", tmin);
 
         // printfd
         tmin = Long.MAX_VALUE;
@@ -140,7 +140,7 @@ public class PerfPure {
             t = System.nanoTime()-t;
             if (t < tmin) tmin = t;
         }
-        print_perf("printfd", tmin);
+        print_perf("print_to_file", tmin);
     }
 
     void printfd(int n) {
@@ -297,7 +297,7 @@ public class PerfPure {
         double cReal = zReal;
         double cImag = zImag;
         for (n=0; n<=79; ++n) {
-            if (complexAbs(zReal,zImag) > 2.0) {
+            if (complexAbs2(zReal,zImag) > 4.0) {
                 n -= 1;
                 break;
             }
@@ -318,6 +318,10 @@ public class PerfPure {
         return Math.sqrt(zReal*zReal + zImag*zImag);
     }
 
+    private double complexAbs2(double zReal, double zImag) {
+        return zReal*zReal + zImag*zImag;
+    }
+
     protected int mandelperf() {
         int mandel_sum = 0;
         for (double re=-2.0; re<=0.5; re+=0.1) {
@@ -330,7 +334,7 @@ public class PerfPure {
     }
 
     protected void print_perf(String name, long t) {
-        System.out.printf("javaPure,%s,%.6f\n", name, t/(double)1E6);
+        System.out.printf("java,%s,%.6f\n", name, t/(double)1E6);
     }
 
     protected int fib(int n) {

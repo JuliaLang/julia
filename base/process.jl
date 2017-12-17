@@ -94,6 +94,8 @@ hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
 
 shell_escape(cmd::Cmd; special::AbstractString="") =
     shell_escape(cmd.exec..., special=special)
+shell_escape_posixly(cmd::Cmd) =
+    shell_escape_posixly(cmd.exec...)
 
 function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing
@@ -136,8 +138,8 @@ struct FileRedirect
     filename::AbstractString
     append::Bool
     function FileRedirect(filename, append)
-        if lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
-            warn_once("for portability use DevNull instead of a file redirect")
+        if Unicode.lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
+            @warn "For portability use DevNull instead of a file redirect" maxlog=1
         end
         new(filename, append)
     end
@@ -205,7 +207,7 @@ end
 # convert various env representations into an array of "key=val" strings
 byteenv(env::AbstractArray{<:AbstractString}) =
     String[cstr(x) for x in env]
-byteenv(env::Associative) =
+byteenv(env::AbstractDict) =
     String[cstr(string(k)*"="*string(v)) for (k,v) in env]
 byteenv(env::Void) = nothing
 byteenv(env::Union{AbstractVector{Pair{T}}, Tuple{Vararg{Pair{T}}}}) where {T<:AbstractString} =
@@ -230,8 +232,6 @@ setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
 redir_err(src::AbstractCmd, dest::AbstractCmd) = ErrOrCmds(src, dest)
-Base.mr_empty(f, op::typeof(&), T::Type{<:Base.AbstractCmd}) =
-    throw(ArgumentError("reducing over an empty collection of type $T with operator & is not allowed"))
 
 # Stream Redirects
 redir_out(dest::Redirectable, src::AbstractCmd) = CmdRedirect(src, dest, STDIN_NO)
@@ -328,7 +328,7 @@ mutable struct Process <: AbstractPipe
                    typemin(fieldtype(Process, :exitcode)),
                    typemin(fieldtype(Process, :termsignal)),
                    Condition(), Condition())
-        finalizer(this, uvfinalize)
+        finalizer(uvfinalize, this)
         return this
     end
 end
@@ -391,7 +391,7 @@ function _uv_hook_close(proc::Process)
     notify(proc.closenotify)
 end
 
-function spawn(redirect::CmdRedirect, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+function spawn(redirect::CmdRedirect, stdios::StdIOSet; chain::Union{ProcessChain, Void}=nothing)
     spawn(redirect.cmd,
           (redirect.stream_no == STDIN_NO  ? redirect.handle : stdios[1],
            redirect.stream_no == STDOUT_NO ? redirect.handle : stdios[2],
@@ -399,12 +399,12 @@ function spawn(redirect::CmdRedirect, stdios::StdIOSet; chain::Nullable{ProcessC
            chain=chain)
 end
 
-function spawn(cmds::OrCmds, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+function spawn(cmds::OrCmds, stdios::StdIOSet; chain::Union{ProcessChain, Void}=nothing)
     out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
-    if isnull(chain)
-        chain = Nullable(ProcessChain(stdios))
+    if chain === nothing
+        chain = ProcessChain(stdios)
     end
     try
         spawn(cmds.a, (stdios[1], out_pipe, stdios[3]), chain=chain)
@@ -415,15 +415,15 @@ function spawn(cmds::OrCmds, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nul
         Libc.free(out_pipe)
         Libc.free(in_pipe)
     end
-    get(chain)
+    chain
 end
 
-function spawn(cmds::ErrOrCmds, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+function spawn(cmds::ErrOrCmds, stdios::StdIOSet; chain::Union{ProcessChain, Void}=nothing)
     out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
-    if isnull(chain)
-        chain = Nullable(ProcessChain(stdios))
+    if chain === nothing
+        chain = ProcessChain(stdios)
     end
     try
         spawn(cmds.a, (stdios[1], stdios[2], out_pipe), chain=chain)
@@ -434,7 +434,7 @@ function spawn(cmds::ErrOrCmds, stdios::StdIOSet; chain::Nullable{ProcessChain}=
         Libc.free(out_pipe)
         Libc.free(in_pipe)
     end
-    get(chain)
+    chain
 end
 
 function setup_stdio(stdio::PipeEndpoint, readable::Bool)
@@ -505,7 +505,7 @@ function setup_stdio(anon::Function, stdio::StdIOSet)
     close_err && close_stdio(err)
 end
 
-function spawn(cmd::Cmd, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+function spawn(cmd::Cmd, stdios::StdIOSet; chain::Union{ProcessChain, Void}=nothing)
     if isempty(cmd.exec)
         throw(ArgumentError("cannot spawn empty command"))
     end
@@ -515,21 +515,21 @@ function spawn(cmd::Cmd, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullabl
         pp.handle = _jl_spawn(cmd.exec[1], cmd.exec, loop, pp,
                               in, out, err)
     end
-    if !isnull(chain)
-        push!(get(chain).processes, pp)
+    if chain !== nothing
+        push!(chain.processes, pp)
     end
     pp
 end
 
-function spawn(cmds::AndCmds, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
-    if isnull(chain)
-        chain = Nullable(ProcessChain(stdios))
+function spawn(cmds::AndCmds, stdios::StdIOSet; chain::Union{ProcessChain, Void}=nothing)
+    if chain === nothing
+        chain = ProcessChain(stdios)
     end
     setup_stdio(stdios) do in, out, err
         spawn(cmds.a, (in,out,err), chain=chain)
         spawn(cmds.b, (in,out,err), chain=chain)
     end
-    get(chain)
+    chain
 end
 
 # INTERNAL
@@ -555,7 +555,7 @@ spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::R
 
 Run a command object asynchronously, returning the resulting `Process` object.
 """
-spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{ProcessChain}()) =
+spawn(cmds::AbstractCmd, args...; chain::Union{ProcessChain, Void}=nothing) =
     spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 
 function eachline(cmd::AbstractCmd; chomp::Bool=true)
@@ -726,17 +726,21 @@ end
     kill(p::Process, signum=SIGTERM)
 
 Send a signal to a process. The default is to terminate the process.
+Returns successfully if the process has already exited, but throws an
+error if killing the process failed for other reasons (e.g. insufficient
+permissions).
 """
 function kill(p::Process, signum::Integer)
     if process_running(p)
         @assert p.handle != C_NULL
-        ccall(:uv_process_kill, Int32, (Ptr{Void}, Int32), p.handle, signum)
-    else
-        Int32(-1)
+        err = ccall(:uv_process_kill, Int32, (Ptr{Void}, Int32), p.handle, signum)
+        if err != 0 && err != UV_ESRCH
+            throw(UVError("kill", err))
+        end
     end
 end
-kill(ps::Vector{Process}) = map(kill, ps)
-kill(ps::ProcessChain) = map(kill, ps.processes)
+kill(ps::Vector{Process}) = foreach(kill, ps)
+kill(ps::ProcessChain) = foreach(kill, ps.processes)
 kill(p::Process) = kill(p, SIGTERM)
 
 function _contains_newline(bufptr::Ptr{Void}, len::Int32)

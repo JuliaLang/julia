@@ -46,6 +46,16 @@
 // For C++, C++11 or MSVC is required. Both provide `static_assert`.
 #endif
 
+#ifndef alignof
+#  ifndef __cplusplus
+#    ifdef __GNUC__
+#      define alignof _Alignof
+#    else
+#      define alignof(...) 1
+#    endif
+#  endif
+#endif
+
 #if jl_has_builtin(__builtin_assume)
 #define jl_assume(cond) (__extension__ ({               \
                 __typeof__(cond) cond_ = (cond);        \
@@ -317,12 +327,16 @@ jl_llvm_functions_t jl_compile_linfo(
         const jl_cgparams_t *params);
 jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **li, size_t world);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
+jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs);
+jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam);
+int jl_code_requires_compiler(jl_code_info_t *src);
 jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast);
+JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
 
 STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
                                                      jl_method_instance_t *meth)
 {
-    if (meth->jlcall_api == 2)
+    if (meth->jlcall_api == JL_API_CONST)
         return jl_assume(meth->inferred_const);
     fptr->fptr = meth->fptr;
     fptr->jlcall_api = meth->jlcall_api;
@@ -332,12 +346,12 @@ STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
         const char *F = meth->functionObjectsDecls.functionObject;
         if (!F) // ask codegen to try to turn it into llvm code
             F = jl_compile_for_dispatch(&meth, world).functionObject;
-        if (meth->jlcall_api == 2)
+        if (meth->jlcall_api == JL_API_CONST)
             return jl_assume(meth->inferred_const);
         // if it hasn't been inferred, try using the unspecialized meth cache instead
         if (!meth->inferred) {
             fptr->fptr = meth->unspecialized_ducttape;
-            fptr->jlcall_api = 1;
+            fptr->jlcall_api = JL_API_GENERIC;
             if (!fptr->fptr) {
                 if (jl_is_method(meth->def.method) && meth->def.method->unspecialized) {
                     fptr->fptr = meth->def.method->unspecialized->fptr;
@@ -351,7 +365,7 @@ STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
         if (!fptr->fptr || fptr->jlcall_api == 0) {
             // ask codegen to make the fptr
             *fptr = jl_generate_fptr(meth, F, world);
-            if (fptr->jlcall_api == 2)
+            if (fptr->jlcall_api == JL_API_CONST)
                 return jl_assume(meth->inferred_const);
         }
     }
@@ -362,13 +376,13 @@ STATIC_INLINE jl_value_t *jl_call_fptr_internal(const jl_generic_fptr_t *fptr,
                                                 jl_method_instance_t *meth,
                                                 jl_value_t **args, uint32_t nargs)
 {
-    if (fptr->jlcall_api == 1)
+    if (fptr->jlcall_api == JL_API_GENERIC)
         return fptr->fptr1(args[0], &args[1], nargs-1);
-    else if (fptr->jlcall_api == 2)
+    else if (fptr->jlcall_api == JL_API_CONST)
         return meth->inferred;
-    else if (fptr->jlcall_api == 3)
+    else if (fptr->jlcall_api == JL_API_WITH_PARAMETERS)
         return fptr->fptr3(meth->sparam_vals, args[0], &args[1], nargs-1);
-    else if (fptr->jlcall_api == 4)
+    else if (fptr->jlcall_api == JL_API_INTERPRETED)
         return fptr->fptr4(meth, &args[0], nargs, meth->sparam_vals);
     else
         abort();
@@ -381,7 +395,7 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_method_instance_t *meth, jl
     jl_value_t *v = jl_compile_method_internal(&fptr, meth);
     if (v)
         return v;
-    (void)jl_assume(fptr.jlcall_api != 2);
+    (void)jl_assume(fptr.jlcall_api != JL_API_CONST);
     return jl_call_fptr_internal(&fptr, meth, args, nargs);
 }
 
@@ -485,10 +499,10 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
 jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw);
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
+jl_array_t *jl_get_loaded_modules(void);
 
 jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);
 
-jl_code_info_t *jl_wrap_expr(jl_value_t *expr);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen,
@@ -686,7 +700,7 @@ size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #endif
-JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
+JL_DLLEXPORT void jl_get_backtrace(jl_array_t **bt, jl_array_t **bt2);
 JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int drop_exceptions);
 void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size);
 JL_DLLEXPORT void jl_raise_debugger(void);
@@ -705,6 +719,9 @@ STATIC_INLINE char *jl_copy_str(char **to, const char *from)
     memcpy(*to, from, len);
     return *to;
 }
+JL_DLLEXPORT int jl_is_interpreter_frame(uintptr_t ip);
+JL_DLLEXPORT int jl_is_enter_interpreter_frame(uintptr_t ip);
+JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintptr_t fp, size_t space_remaining);
 
 // timers
 // Returns time in nanosec
@@ -733,10 +750,6 @@ void *jl_dlopen_soname(const char *pfx, size_t n, unsigned flags);
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
 
-#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
-#define HAVE_CPUID
-#endif
-
 #ifdef SEGV_EXCEPTION
 extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
 #endif
@@ -759,6 +772,9 @@ JL_DLLEXPORT jl_value_t *jl_sdiv_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_udiv_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_srem_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_urem_int(jl_value_t *a, jl_value_t *b);
+
+JL_DLLEXPORT jl_value_t *jl_add_ptr(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_sub_ptr(jl_value_t *a, jl_value_t *b);
 
 JL_DLLEXPORT jl_value_t *jl_neg_float(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_add_float(jl_value_t *a, jl_value_t *b);
@@ -985,7 +1001,7 @@ extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
 extern jl_sym_t *compiler_temp_sym; extern jl_sym_t *foreigncall_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
-extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
+extern jl_sym_t *underscore_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *primtype_sym;
 extern jl_sym_t *structtype_sym;
 extern jl_sym_t *global_sym; extern jl_sym_t *unused_sym;
@@ -999,11 +1015,80 @@ extern jl_sym_t *propagate_inbounds_sym;
 extern jl_sym_t *isdefined_sym;
 extern jl_sym_t *nospecialize_sym;
 extern jl_sym_t *boundscheck_sym;
+extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
+extern jl_sym_t *generated_sym;
+extern jl_sym_t *generated_only_sym;
 
-void jl_register_fptrs(uint64_t sysimage_base, const char *base, const int32_t *offsets,
+struct _jl_sysimg_fptrs_t;
+
+void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *fptrs,
                        jl_method_instance_t **linfos, size_t n);
 
 extern arraylist_t partial_inst;
+
+STATIC_INLINE uint64_t jl_load_unaligned_i64(const void *ptr)
+{
+    uint64_t val;
+    memcpy(&val, ptr, 8);
+    return val;
+}
+STATIC_INLINE uint32_t jl_load_unaligned_i32(const void *ptr)
+{
+    uint32_t val;
+    memcpy(&val, ptr, 4);
+    return val;
+}
+STATIC_INLINE uint16_t jl_load_unaligned_i16(const void *ptr)
+{
+    uint16_t val;
+    memcpy(&val, ptr, 2);
+    return val;
+}
+
+STATIC_INLINE void jl_store_unaligned_i64(void *ptr, uint64_t val)
+{
+    memcpy(ptr, &val, 8);
+}
+STATIC_INLINE void jl_store_unaligned_i32(void *ptr, uint32_t val)
+{
+    memcpy(ptr, &val, 4);
+}
+STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val)
+{
+    memcpy(ptr, &val, 2);
+}
+
+#if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
+#define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
+#elif defined(_COMPILER_INTEL_)
+#define jl_assume_aligned(ptr, align) (__extension__ ({         \
+                __typeof__(ptr) ptr_ = (ptr);                   \
+                __assume_aligned(ptr_, align);                  \
+                ptr_;                                           \
+            }))
+#elif defined(__GNUC__)
+#define jl_assume_aligned(ptr, align) (__extension__ ({         \
+                __typeof__(ptr) ptr_ = (ptr);                   \
+                jl_assume(((uintptr_t)ptr) % (align) == 0);     \
+                ptr_;                                           \
+            }))
+#elif defined(__cplusplus)
+template<typename T>
+static inline T
+jl_assume_aligned(T ptr, unsigned align)
+{
+    (void)jl_assume(((uintptr_t)ptr) % align == 0);
+    return ptr;
+}
+#else
+#define jl_assume_aligned(ptr, align) (ptr)
+#endif
+
+#if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
+#  define jl_unreachable() __builtin_unreachable()
+#else
+#  define jl_unreachable() ((void)jl_assume(0))
+#endif
 
 #ifdef __cplusplus
 }

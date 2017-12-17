@@ -53,7 +53,7 @@ local function fib(n)
     end
 end
 
-timeit(function() return fib(20) end, 'fib', function(x) assert(x == 6765) end)
+timeit(function() return fib(20) end, 'recursion_fibonacci', function(x) assert(x == 6765) end)
 
 local function parseint()
     local lmt = 2^32 - 1
@@ -67,13 +67,17 @@ local function parseint()
     return n, m
 end
 
-timeit(parseint, 'parse_int')
+timeit(parseint, 'parse_integers')
+
+local function cabs2( z )
+   return z[1]*z[1] + z[2]*z[2]
+end
 
 local function mandel(z)
     local c = z
     local maxiter = 80
     for n = 1, maxiter do
-        if cabs(z) > 2 then
+        if cabs2(z) > 4 then
             return n-1
         end
         z = z*z + c
@@ -91,7 +95,7 @@ local function mandelperf()
     return a
 end
 
-timeit(mandelperf, 'mandel', function(a) assert(sum(a) == 14791) end)
+timeit(mandelperf, 'userfunc_mandelbrot', function(a) assert(sum(a) == 14791) end)
 
 local function qsort(a, lo, hi)
     local i, j = lo, hi
@@ -120,7 +124,7 @@ local function sortperf()
     return qsort(v, 1, n)
 end
 
-timeit(sortperf, 'quicksort', function(x)
+timeit(sortperf, 'recursion_quicksort', function(x)
     for i=2,5000 do
         assert(x[i-1] <= x[i])
     end
@@ -138,7 +142,7 @@ local function pisum()
     return s
 end
 
-timeit(pisum, 'pi_sum', function(x) 
+timeit(pisum, 'iteration_pi_sum', function(x) 
     assert(abs(x - 1.644834071848065) < 1e-12)
 end)
 
@@ -171,7 +175,7 @@ local function randmatstat(t)
     return sqrt(var(v))/mean(v), sqrt(var(w))/mean(w)
 end
 
-timeit(function() return randmatstat(1000) end, 'rand_mat_stat', 
+timeit(function() return randmatstat(1000) end, 'matrix_statistics', 
     function(s1, s2)
         assert( 0.5 < s1 and s1 < 1.0 and 0.5 < s2 and s2 < 1.0 )
     end)
@@ -181,7 +185,7 @@ local function randmatmult(n)
     return a[]**b[]
 end
 
-timeit(function() return randmatmult(1000) end, 'rand_mat_mul')
+timeit(function() return randmatmult(1000) end, 'matrix_multiply')
 
 if jit.os ~= 'Windows' then
     local function printfd(n)
@@ -192,5 +196,5 @@ if jit.os ~= 'Windows' then
         f:close()
     end
 
-    timeit(function() return printfd(100000) end, 'printfd')
+    timeit(function() return printfd(100000) end, 'print_to_file')
 end

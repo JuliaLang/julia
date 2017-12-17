@@ -47,10 +47,8 @@ julia> F[:Q] * F[:H] * F[:Q]'
  4.0  3.0  2.0
 ```
 """
-function hessfact(A::StridedMatrix{T}) where T
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
-    return hessfact!(copy_oftype(A, S))
-end
+hessfact(A::StridedMatrix{T}) where T =
+    hessfact!(copy_oftype(A, eigtype(T)))
 
 struct HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::S
@@ -73,42 +71,42 @@ function getindex(A::HessenbergQ, i::Integer, j::Integer)
     x[i] = 1
     y = zeros(eltype(A), size(A, 2))
     y[j] = 1
-    return dot(x, A_mul_B!(A, y))
+    return dot(x, mul!(A, y))
 end
 
 ## reconstruct the original matrix
 convert(::Type{Matrix}, A::HessenbergQ{<:BlasFloat}) = LAPACK.orghr!(1, size(A.factors, 1), copy(A.factors), A.τ)
 convert(::Type{Array}, A::HessenbergQ) = convert(Matrix, A)
-full(A::HessenbergQ) = convert(Array, A)
 convert(::Type{AbstractMatrix}, F::Hessenberg) = (fq = Array(F[:Q]); (fq * F[:H]) * fq')
 convert(::Type{AbstractArray}, F::Hessenberg) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::Hessenberg) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::Hessenberg) = convert(Matrix, F)
-full(F::Hessenberg) = convert(AbstractArray, F)
 
-A_mul_B!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
+mul!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.ormhr!('L', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-A_mul_B!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat} =
+mul!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat} =
     LAPACK.ormhr!('R', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-Ac_mul_B!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    LAPACK.ormhr!('L', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-A_mul_Bc!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat} =
-    LAPACK.ormhr!('R', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X)
+mul!(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
+    (Q = adjQ.parent; LAPACK.ormhr!('L', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
+mul!(X::StridedMatrix{T}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T<:BlasFloat} =
+    (Q = adjQ.parent; LAPACK.ormhr!('R', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
 
 
 function (*)(Q::HessenbergQ{T}, X::StridedVecOrMat{S}) where {T,S}
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return A_mul_B!(Q, copy_oftype(X, TT))
+    return mul!(Q, copy_oftype(X, TT))
 end
 function (*)(X::StridedVecOrMat{S}, Q::HessenbergQ{T}) where {T,S}
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return A_mul_B!(copy_oftype(X, TT), Q)
+    return mul!(copy_oftype(X, TT), Q)
 end
-function Ac_mul_B(Q::HessenbergQ{T}, X::StridedVecOrMat{S}) where {T,S}
+function *(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::StridedVecOrMat{S}) where {T,S}
+    Q = adjQ.parent
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return Ac_mul_B!(Q, copy_oftype(X, TT))
+    return mul!(Adjoint(Q), copy_oftype(X, TT))
 end
-function A_mul_Bc(X::StridedVecOrMat{S}, Q::HessenbergQ{T}) where {T,S}
+function *(X::StridedVecOrMat{S}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T,S}
+    Q = adjQ.parent
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return A_mul_Bc!(copy_oftype(X, TT), Q)
+    return mul!(copy_oftype(X, TT), Adjoint(Q))
 end

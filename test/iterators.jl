@@ -210,7 +210,10 @@ let (a, b) = (1:3, [4 6;
 end
 
 # with 1D inputs
-let (a, b, c) = (1:2, 1.0:10.0, Int32(1):Int32(0))
+let a = 1:2,
+    b = 1.0:10.0,
+    c = Int32(1):Int32(0)
+
     # length
     @test length(product(a))       == 2
     @test length(product(a, b))    == 20
@@ -233,7 +236,10 @@ let (a, b, c) = (1:2, 1.0:10.0, Int32(1):Int32(0))
 end
 
 # with multidimensional inputs
-let (a, b, c) = (randn(4, 4), randn(3, 3, 3), randn(2, 2, 2, 2))
+let a = randn(4, 4),
+    b = randn(3, 3, 3),
+    c = randn(2, 2, 2, 2)
+
     args = Any[(a,),
                (a, a),
                (a, b),
@@ -275,11 +281,11 @@ let iters = (1:2,
 end
 
 # product of finite length and infinite length iterators
-let a = 1:2
-    b = countfrom(1)
-    ab = product(a, b)
-    ba = product(b, a)
-    abexp = [(1, 1), (2, 1), (1, 2), (2, 2), (1, 3), (2, 3)]
+let a = 1:2,
+    b = countfrom(1),
+    ab = product(a, b),
+    ba = product(b, a),
+    abexp = [(1, 1), (2, 1), (1, 2), (2, 2), (1, 3), (2, 3)],
     baexp = [(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1)]
     for (expected, actual) in zip([abexp, baexp], [ab, ba])
         for (i, el) in enumerate(actual)
@@ -422,4 +428,22 @@ end
     arr = filter(n -> true, 1:0)
     @test length(arr) == 0
     @test eltype(arr) == Int
+end
+
+@testset "reverse iterators" begin
+    squash(A) = reshape(A, length(A))
+    Z = Array{Int,0}(uninitialized); Z[] = 17 # zero-dimensional test case
+    for itr in (2:10, "∀ϵ>0", 1:0, "", (2,3,5,7,11), [2,3,5,7,11], rand(5,6), Z, 3, true, 'x', 4=>5,
+                eachindex("∀ϵ>0"), view(Z), view(rand(5,6),2:4,2:6), (x^2 for x in 1:10),
+                Iterators.Filter(isodd, 1:10), flatten((1:10, 50:60)), enumerate("foo"),
+                pairs(50:60), zip(1:10,21:30,51:60), product(1:3, 10:12), repeated(3.14159, 5))
+        @test squash(collect(Iterators.reverse(itr))) == reverse(squash(collect(itr)))
+    end
+    @test collect(take(Iterators.reverse(cycle(1:3)), 7)) == collect(take(cycle(3:-1:1), 7))
+    let r = repeated(3.14159)
+        @test Iterators.reverse(r) === r
+    end
+    let t = (2,3,5,7,11)
+        @test Iterators.reverse(Iterators.reverse(t)) === t
+    end
 end

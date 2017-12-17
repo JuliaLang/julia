@@ -155,7 +155,7 @@ julia> "foo" ≠ "foo"
 false
 ```
 """
-!=(x, y) = !(x == y)::Bool
+!=(x, y) = !(x == y)
 const ≠ = !=
 
 """
@@ -163,8 +163,9 @@ const ≠ = !=
     ≡(x,y) -> Bool
 
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
-them. Compares mutable objects by address in memory, and compares immutable objects (such as
-numbers) by contents at the bit level. This function is sometimes called `egal`.
+them. First it compares the types of `x` and `y`. If those are identical, it compares mutable
+objects by address in memory and immutable objects (such as numbers) by contents at the bit
+level. This function is sometimes called "egal".
 
 # Examples
 ```jldoctest
@@ -334,6 +335,7 @@ julia> cmp(2, 1)
 
 julia> cmp(2+im, 3-im)
 ERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})
+Stacktrace:
 [...]
 ```
 """
@@ -516,10 +518,10 @@ this is equivalent to `x >> -n`.
 julia> Int8(3) << 2
 12
 
-julia> bits(Int8(3))
+julia> bitstring(Int8(3))
 "00000011"
 
-julia> bits(Int8(12))
+julia> bitstring(Int8(12))
 "00001100"
 ```
 See also [`>>`](@ref), [`>>>`](@ref).
@@ -546,19 +548,19 @@ right by `n` bits, where `n >= 0`, filling with `0`s if `x >= 0`, `1`s if `x <
 julia> Int8(13) >> 2
 3
 
-julia> bits(Int8(13))
+julia> bitstring(Int8(13))
 "00001101"
 
-julia> bits(Int8(3))
+julia> bitstring(Int8(3))
 "00000011"
 
 julia> Int8(-14) >> 2
 -4
 
-julia> bits(Int8(-14))
+julia> bitstring(Int8(-14))
 "11110010"
 
-julia> bits(Int8(-4))
+julia> bitstring(Int8(-4))
 "11111100"
 ```
 See also [`>>>`](@ref), [`<<`](@ref).
@@ -587,10 +589,10 @@ For [`Unsigned`](@ref) integer types, this is equivalent to [`>>`](@ref). For
 julia> Int8(-14) >>> 2
 60
 
-julia> bits(Int8(-14))
+julia> bitstring(Int8(-14))
 "11110010"
 
-julia> bits(Int8(60))
+julia> bitstring(Int8(60))
 "00111100"
 ```
 
@@ -742,7 +744,11 @@ fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 """
     adjoint(A)
 
-The conjugate transposition operator (`'`).
+The conjugate transposition operator (`'`). Note that `adjoint` is applied recursively to
+elements.
+
+This operation is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref).
 
 # Examples
 ```jldoctest
@@ -760,142 +766,6 @@ julia> adjoint(A)
 adjoint(x) = conj(transpose(x))
 conj(x) = x
 
-# transposed multiply
-
-"""
-    Ac_mul_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ⋅B``.
-"""
-Ac_mul_B(a,b)  = adjoint(a)*b
-
-"""
-    A_mul_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᴴ``.
-"""
-A_mul_Bc(a,b)  = a*adjoint(b)
-
-"""
-    Ac_mul_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ Bᴴ``.
-"""
-Ac_mul_Bc(a,b) = adjoint(a)*adjoint(b)
-
-"""
-    At_mul_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅B``.
-"""
-At_mul_B(a,b)  = transpose(a)*b
-
-"""
-    A_mul_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᵀ``.
-"""
-A_mul_Bt(a,b)  = a*transpose(b)
-
-"""
-    At_mul_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅Bᵀ``.
-"""
-At_mul_Bt(a,b) = transpose(a)*transpose(b)
-
-# transposed divide
-
-"""
-    Ac_rdiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / B``.
-"""
-Ac_rdiv_B(a,b)  = adjoint(a)/b
-
-"""
-    A_rdiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A / Bᴴ``.
-"""
-A_rdiv_Bc(a,b)  = a/adjoint(b)
-
-"""
-    Ac_rdiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / Bᴴ``.
-"""
-Ac_rdiv_Bc(a,b) = adjoint(a)/adjoint(b)
-
-"""
-    At_rdiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / B``.
-"""
-At_rdiv_B(a,b)  = transpose(a)/b
-
-"""
-    A_rdiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A / Bᵀ``.
-"""
-A_rdiv_Bt(a,b)  = a/transpose(b)
-
-"""
-    At_rdiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / Bᵀ``.
-"""
-At_rdiv_Bt(a,b) = transpose(a)/transpose(b)
-
-"""
-    Ac_ldiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``B``.
-"""
-Ac_ldiv_B(a,b)  = adjoint(a)\b
-
-"""
-    A_ldiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᴴ``.
-"""
-A_ldiv_Bc(a,b)  = a\adjoint(b)
-
-"""
-    Ac_ldiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᴴ``.
-"""
-Ac_ldiv_Bc(a,b) = adjoint(a)\adjoint(b)
-
-"""
-    At_ldiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``B``.
-"""
-At_ldiv_B(a,b)  = transpose(a)\b
-
-"""
-    A_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᵀ``.
-"""
-A_ldiv_Bt(a,b)  = a\transpose(b)
-
-"""
-    At_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``Bᵀ``.
-"""
-At_ldiv_Bt(a,b) = At_ldiv_B(a,transpose(b))
-
-"""
-    Ac_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᵀ``.
-"""
-Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 
 """
     widen(x)
@@ -940,6 +810,8 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 
 # Examples
 ```jldoctest
+julia> using Unicode
+
 julia> map(uppercase∘hex, 250:255)
 6-element Array{String,1}:
  "FA"
@@ -972,3 +844,22 @@ julia> filter(!isalpha, str)
 ```
 """
 !(f::Function) = (x...)->!f(x...)
+
+struct EqualTo{T} <: Function
+    x::T
+
+    EqualTo(x::T) where {T} = new{T}(x)
+end
+
+(f::EqualTo)(y) = isequal(f.x, y)
+
+"""
+    equalto(x)
+
+Create a function that compares its argument to `x` using [`isequal`](@ref); i.e. returns
+`y->isequal(x,y)`.
+
+The returned function is of type `Base.EqualTo`. This allows dispatching to
+specialized methods by using e.g. `f::Base.EqualTo` in a method signature.
+"""
+const equalto = EqualTo

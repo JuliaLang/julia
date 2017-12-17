@@ -50,7 +50,7 @@ julia> ℯ
 Euler's constant.
 
 ```jldoctest
-julia> MathConstants.eulergamma
+julia> Base.MathConstants.eulergamma
 γ = 0.5772156649015...
 ```
 """
@@ -63,7 +63,7 @@ julia> MathConstants.eulergamma
 The golden ratio.
 
 ```jldoctest
-julia> MathConstants.golden
+julia> Base.MathConstants.golden
 φ = 1.6180339887498...
 ```
 """
@@ -75,16 +75,17 @@ julia> MathConstants.golden
 Catalan's constant.
 
 ```jldoctest
-julia> MathConstants.catalan
+julia> Base.MathConstants.catalan
 catalan = 0.9159655941772...
 ```
 """
 catalan
 
 # loop over types to prevent ambiguities for ^(::Number, x)
-for T in (Irrational, Rational, Integer, Number)
+for T in (AbstractIrrational, Rational, Integer, Number, Complex)
     Base.:^(::Irrational{:ℯ}, x::T) = exp(x)
 end
+Base.literal_pow(::typeof(^), ::Irrational{:ℯ}, ::Val{p}) where {p} = exp(p)
 
 Base.log(::Irrational{:ℯ}) = 1 # use 1 to correctly promote expressions like log(x)/log(ℯ)
 Base.log(::Irrational{:ℯ}, x::Number) = log(x)

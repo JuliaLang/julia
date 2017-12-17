@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module BLAS
+@doc """
+Interface to BLAS subroutines.
+""" -> BLAS
 
 import ..axpy!, ..axpby!
 import Base: copy!
@@ -65,16 +68,18 @@ import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, c
 # utility routines
 function vendor()
     lib = Libdl.dlopen_e(Base.libblas_name)
+    vend = :unknown
     if lib != C_NULL
         if Libdl.dlsym_e(lib, :openblas_set_num_threads) != C_NULL
-            return :openblas
+            vend = :openblas
         elseif Libdl.dlsym_e(lib, :openblas_set_num_threads64_) != C_NULL
-            return :openblas64
+            vend = :openblas64
         elseif Libdl.dlsym_e(lib, :MKL_Set_Num_Threads) != C_NULL
-            return :mkl
+            vend = :mkl
         end
+        Libdl.dlclose(lib)
     end
-    return :unknown
+    return vend
 end
 
 if vendor() == :openblas64
@@ -120,13 +125,15 @@ function check()
         openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
         if Base.USE_BLAS64 != openblas64
             if !openblas64
-                println("ERROR: OpenBLAS was not built with 64bit integer support.")
-                println("You're seeing this error because Julia was built with USE_BLAS64=1")
-                println("Please rebuild Julia with USE_BLAS64=0")
+                @error """
+                    OpenBLAS was not built with 64bit integer support.
+                    You're seeing this error because Julia was built with USE_BLAS64=1.
+                    Please rebuild Julia with USE_BLAS64=0"""
             else
-                println("ERROR: Julia was not built with support for OpenBLAS with 64bit integer support")
-                println("You're seeing this error because Julia was built with USE_BLAS64=0")
-                println("Please rebuild Julia with USE_BLAS64=1")
+                @error """
+                    Julia was not built with support for OpenBLAS with 64bit integer support.
+                    You're seeing this error because Julia was built with USE_BLAS64=0.
+                    Please rebuild Julia with USE_BLAS64=1"""
             end
             println("Quitting.")
             quit()
@@ -166,8 +173,8 @@ function blascopy! end
 
 for (fname, elty) in ((:dcopy_,:Float64),
                       (:scopy_,:Float32),
-                      (:zcopy_,:Complex128),
-                      (:ccopy_,:Complex64))
+                      (:zcopy_,:ComplexF64),
+                      (:ccopy_,:ComplexF32))
     @eval begin
         # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
         function blascopy!(n::Integer, DX::Union{Ptr{$elty},StridedArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},StridedArray{$elty}}, incy::Integer)
@@ -191,14 +198,14 @@ function scal! end
 """
     scal(n, a, X, incx)
 
-Returns `X` scaled by `a` for the first `n` elements of array `X` with stride `incx`.
+Return `X` scaled by `a` for the first `n` elements of array `X` with stride `incx`.
 """
 function scal end
 
 for (fname, elty) in ((:dscal_,:Float64),
                       (:sscal_,:Float32),
-                      (:zscal_,:Complex128),
-                      (:cscal_,:Complex64))
+                      (:zscal_,:ComplexF64),
+                      (:cscal_,:ComplexF32))
     @eval begin
         # SUBROUTINE DSCAL(N,DA,DX,INCX)
         function scal!(n::Integer, DA::$elty, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer)
@@ -272,8 +279,8 @@ for (fname, elty) in ((:ddot_,:Float64),
         end
     end
 end
-for (fname, elty) in ((:cblas_zdotc_sub,:Complex128),
-                      (:cblas_cdotc_sub,:Complex64))
+for (fname, elty) in ((:cblas_zdotc_sub,:ComplexF64),
+                      (:cblas_cdotc_sub,:ComplexF32))
     @eval begin
                 #       DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
                 # *     .. Scalar Arguments ..
@@ -290,8 +297,8 @@ for (fname, elty) in ((:cblas_zdotc_sub,:Complex128),
         end
     end
 end
-for (fname, elty) in ((:cblas_zdotu_sub,:Complex128),
-                      (:cblas_cdotu_sub,:Complex64))
+for (fname, elty) in ((:cblas_zdotu_sub,:ComplexF64),
+                      (:cblas_cdotu_sub,:ComplexF32))
     @eval begin
                 #       DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
                 # *     .. Scalar Arguments ..
@@ -313,21 +320,21 @@ function dot(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T},
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    dot(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    Base.@gc_preserve DX DY dot(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
 function dotc(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T},StridedVector{T}}) where T<:BlasComplex
     n = length(DX)
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    dotc(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    Base.@gc_preserve DX DY dotc(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
 function dotu(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T},StridedVector{T}}) where T<:BlasComplex
     n = length(DX)
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    dotu(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    Base.@gc_preserve DX DY dotu(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
 
 ## nrm2
@@ -353,8 +360,8 @@ function nrm2 end
 
 for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
                                 (:snrm2_,:Float32,:Float32),
-                                (:dznrm2_,:Complex128,:Float64),
-                                (:scnrm2_,:Complex64,:Float32))
+                                (:dznrm2_,:ComplexF64,:Float64),
+                                (:scnrm2_,:ComplexF32,:Float32))
     @eval begin
         # SUBROUTINE DNRM2(N,X,INCX)
         function nrm2(n::Integer, X::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer)
@@ -364,7 +371,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
         end
     end
 end
-nrm2(x::Union{StridedVector,Array}) = nrm2(length(x), pointer(x), stride1(x))
+nrm2(x::Union{StridedVector,Array}) = Base.@gc_preserve x nrm2(length(x), pointer(x), stride1(x))
 
 ## asum
 
@@ -386,8 +393,8 @@ function asum end
 
 for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
                                 (:sasum_,:Float32,:Float32),
-                                (:dzasum_,:Complex128,:Float64),
-                                (:scasum_,:Complex64,:Float32))
+                                (:dzasum_,:ComplexF64,:Float64),
+                                (:scasum_,:ComplexF32,:Float32))
     @eval begin
         # SUBROUTINE ASUM(N, X, INCX)
         function asum(n::Integer, X::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer)
@@ -397,14 +404,14 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
         end
     end
 end
-asum(x::Union{StridedVector,Array}) = asum(length(x), pointer(x), stride1(x))
+asum(x::Union{StridedVector,Array}) = Base.@gc_preserve x asum(length(x), pointer(x), stride1(x))
 
 ## axpy
 
 """
     axpy!(a, X, Y)
 
-Overwrite `Y` with `a*X + Y`, where `a` is a scalar. Returns `Y`.
+Overwrite `Y` with `a*X + Y`, where `a` is a scalar. Return `Y`.
 
 # Examples
 ```jldoctest
@@ -423,8 +430,8 @@ function axpy! end
 
 for (fname, elty) in ((:daxpy_,:Float64),
                       (:saxpy_,:Float32),
-                      (:zaxpy_,:Complex128),
-                      (:caxpy_,:Complex64))
+                      (:zaxpy_,:ComplexF64),
+                      (:caxpy_,:ComplexF32))
     @eval begin
                 # SUBROUTINE DAXPY(N,DA,DX,INCX,DY,INCY)
                 # DY <- DA*DX + DY
@@ -445,7 +452,7 @@ function axpy!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
-    axpy!(length(x), convert(T,alpha), pointer(x), stride(x, 1), pointer(y), stride(y, 1))
+    Base.@gc_preserve x y axpy!(length(x), convert(T,alpha), pointer(x), stride(x, 1), pointer(y), stride(y, 1))
     y
 end
 
@@ -460,7 +467,7 @@ function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange
     if minimum(ry) < 1 || maximum(ry) > length(y)
         throw(ArgumentError("range out of bounds for y, of length $(length(y))"))
     end
-    axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    Base.@gc_preserve x y axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
     y
 end
 
@@ -485,7 +492,7 @@ julia> Base.BLAS.axpby!(2., x, 3., y)
 function axpby! end
 
 for (fname, elty) in ((:daxpby_,:Float64), (:saxpby_,:Float32),
-                      (:zaxpby_,:Complex128), (:caxpby_,:Complex64))
+                      (:zaxpby_,:ComplexF64), (:caxpby_,:ComplexF32))
     @eval begin
         # SUBROUTINE DAXPBY(N,DA,DX,INCX,DB,DY,INCY)
         # DY <- DA*DX + DB*DY
@@ -509,15 +516,15 @@ function axpby!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, beta::N
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
-    axpby!(length(x), convert(T,alpha), pointer(x), stride(x, 1), convert(T,beta), pointer(y), stride(y, 1))
+    Base.@gc_preserve x y axpby!(length(x), convert(T,alpha), pointer(x), stride(x, 1), convert(T,beta), pointer(y), stride(y, 1))
     y
 end
 
 ## iamax
 for (fname, elty) in ((:idamax_,:Float64),
                       (:isamax_,:Float32),
-                      (:izamax_,:Complex128),
-                      (:icamax_,:Complex64))
+                      (:izamax_,:ComplexF64),
+                      (:icamax_,:ComplexF32))
     @eval begin
         function iamax(n::Integer, dx::Union{Ptr{$elty}, DenseArray{$elty}}, incx::Integer)
             ccall((@blasfunc($fname), libblas),BlasInt,
@@ -526,15 +533,15 @@ for (fname, elty) in ((:idamax_,:Float64),
         end
     end
 end
-iamax(dx::Union{StridedVector,Array}) = iamax(length(dx), pointer(dx), stride1(dx))
+iamax(dx::Union{StridedVector,Array}) = Base.@gc_preserve dx iamax(length(dx), pointer(dx), stride1(dx))
 
 # Level 2
 ## mv
 ### gemv
 for (fname, elty) in ((:dgemv_,:Float64),
                       (:sgemv_,:Float32),
-                      (:zgemv_,:Complex128),
-                      (:cgemv_,:Complex64))
+                      (:zgemv_,:ComplexF64),
+                      (:cgemv_,:ComplexF32))
     @eval begin
              #SUBROUTINE DGEMV(TRANS,M,N,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
              #*     .. Scalar Arguments ..
@@ -575,14 +582,14 @@ end
 
 Update the vector `y` as `alpha*A*x + beta*y` or `alpha*A'x + beta*y`
 according to [`tA`](@ref stdlib-blas-trans).
-`alpha` and `beta` are scalars. Returns the updated `y`.
+`alpha` and `beta` are scalars. Return the updated `y`.
 """
 gemv!
 
 """
     gemv(tA, alpha, A, x)
 
-Returns `alpha*A*x` or `alpha*A'x` according to [`tA`](@ref stdlib-blas-trans).
+Return `alpha*A*x` or `alpha*A'x` according to [`tA`](@ref stdlib-blas-trans).
 `alpha` is a scalar.
 """
 gemv(tA, alpha, A, x)
@@ -590,7 +597,7 @@ gemv(tA, alpha, A, x)
 """
     gemv(tA, A, x)
 
-Returns `A*x` or `A'x` according to [`tA`](@ref stdlib-blas-trans).
+Return `A*x` or `A'x` according to [`tA`](@ref stdlib-blas-trans).
 """
 gemv(tA, A, x)
 
@@ -601,14 +608,14 @@ gemv(tA, A, x)
 
 Update vector `y` as `alpha*A*x + beta*y` or `alpha*A'*x + beta*y` according to [`trans`](@ref stdlib-blas-trans).
 The matrix `A` is a general band matrix of dimension `m` by `size(A,2)` with `kl`
-sub-diagonals and `ku` super-diagonals. `alpha` and `beta` are scalars. Returns the updated `y`.
+sub-diagonals and `ku` super-diagonals. `alpha` and `beta` are scalars. Return the updated `y`.
 """
 function gbmv! end
 
 """
     gbmv(trans, m, kl, ku, alpha, A, x)
 
-Returns `alpha*A*x` or `alpha*A'*x` according to [`trans`](@ref stdlib-blas-trans).
+Return `alpha*A*x` or `alpha*A'*x` according to [`trans`](@ref stdlib-blas-trans).
 The matrix `A` is a general band matrix of dimension `m` by `size(A,2)` with `kl` sub-diagonals and `ku`
 super-diagonals, and `alpha` is a scalar.
 """
@@ -616,8 +623,8 @@ function gbmv end
 
 for (fname, elty) in ((:dgbmv_,:Float64),
                       (:sgbmv_,:Float32),
-                      (:zgbmv_,:Complex128),
-                      (:cgbmv_,:Complex64))
+                      (:zgbmv_,:ComplexF64),
+                      (:cgbmv_,:ComplexF32))
     @eval begin
              # SUBROUTINE DGBMV(TRANS,M,N,KL,KU,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
              # *     .. Scalar Arguments ..
@@ -655,14 +662,14 @@ end
 
 Update the vector `y` as `alpha*A*x + beta*y`. `A` is assumed to be symmetric.
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
-`alpha` and `beta` are scalars. Returns the updated `y`.
+`alpha` and `beta` are scalars. Return the updated `y`.
 """
 function symv! end
 
 for (fname, elty, lib) in ((:dsymv_,:Float64,libblas),
                            (:ssymv_,:Float32,libblas),
-                           (:zsymv_,:Complex128,liblapack),
-                           (:csymv_,:Complex64,liblapack))
+                           (:zsymv_,:ComplexF64,liblapack),
+                           (:csymv_,:ComplexF32,liblapack))
     # Note that the complex symv are not BLAS but auiliary functions in LAPACK
     @eval begin
              #      SUBROUTINE DSYMV(UPLO,N,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
@@ -704,7 +711,7 @@ end
 """
     symv(ul, alpha, A, x)
 
-Returns `alpha*A*x`. `A` is assumed to be symmetric.
+Return `alpha*A*x`. `A` is assumed to be symmetric.
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 `alpha` is a scalar.
 """
@@ -713,14 +720,14 @@ symv(ul, alpha, A, x)
 """
     symv(ul, A, x)
 
-Returns `A*x`. `A` is assumed to be symmetric.
+Return `A*x`. `A` is assumed to be symmetric.
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 """
 symv(ul, A, x)
 
 ### hemv
-for (fname, elty) in ((:zhemv_,:Complex128),
-                      (:chemv_,:Complex64))
+for (fname, elty) in ((:zhemv_,:ComplexF64),
+                      (:chemv_,:ComplexF32))
     @eval begin
         function hemv!(uplo::Char, α::$elty, A::StridedMatrix{$elty}, x::StridedVector{$elty}, β::$elty, y::StridedVector{$elty})
             m, n = size(A)
@@ -788,7 +795,7 @@ end
 """
     sbmv(uplo, k, alpha, A, x)
 
-Returns `alpha*A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k`
+Return `alpha*A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k`
 super-diagonals stored in the argument `A`.
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 """
@@ -797,7 +804,7 @@ sbmv(uplo, k, alpha, A, x)
 """
     sbmv(uplo, k, A, x)
 
-Returns `A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k`
+Return `A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k`
 super-diagonals stored in the argument `A`.
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 """
@@ -812,13 +819,13 @@ is described the reference BLAS module, level-2 BLAS at
 <http://www.netlib.org/lapack/explore-html/>.
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 
-Returns the updated `y`.
+Return the updated `y`.
 """
 sbmv!
 
 ### hbmv, (HB) Hermitian banded matrix-vector multiplication
-for (fname, elty) in ((:zhbmv_,:Complex128),
-                      (:chbmv_,:Complex64))
+for (fname, elty) in ((:zhbmv_,:ComplexF64),
+                      (:chbmv_,:ComplexF32))
     @eval begin
              #       SUBROUTINE ZHBMV(UPLO,N,K,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
              # *     .. Scalar Arguments ..
@@ -852,7 +859,7 @@ end
 """
     trmv(ul, tA, dA, A, b)
 
-Returns `op(A)*b`, where `op` is determined by [`tA`](@ref stdlib-blas-trans).
+Return `op(A)*b`, where `op` is determined by [`tA`](@ref stdlib-blas-trans).
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 [`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
 are assumed to be all ones.
@@ -862,7 +869,7 @@ function trmv end
 """
     trmv!(ul, tA, dA, A, b)
 
-Returns `op(A)*b`, where `op` is determined by [`tA`](@ref stdlib-blas-trans).
+Return `op(A)*b`, where `op` is determined by [`tA`](@ref stdlib-blas-trans).
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 [`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
 are assumed to be all ones.
@@ -872,8 +879,8 @@ function trmv! end
 
 for (fname, elty) in ((:dtrmv_,:Float64),
                         (:strmv_,:Float32),
-                        (:ztrmv_,:Complex128),
-                        (:ctrmv_,:Complex64))
+                        (:ztrmv_,:ComplexF64),
+                        (:ctrmv_,:ComplexF32))
     @eval begin
                 #       SUBROUTINE DTRMV(UPLO,TRANS,DIAG,N,A,LDA,X,INCX)
                 # *     .. Scalar Arguments ..
@@ -908,14 +915,14 @@ Overwrite `b` with the solution to `A*x = b` or one of the other two variants de
 [`tA`](@ref stdlib-blas-trans) and [`ul`](@ref stdlib-blas-uplo).
 [`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
 are assumed to be all ones.
-Returns the updated `b`.
+Return the updated `b`.
 """
 function trsv! end
 
 """
     trsv(ul, tA, dA, A, b)
 
-Returns the solution to `A*x = b` or one of the other two variants determined by
+Return the solution to `A*x = b` or one of the other two variants determined by
 [`tA`](@ref stdlib-blas-trans) and [`ul`](@ref stdlib-blas-uplo).
 [`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
 are assumed to be all ones.
@@ -924,8 +931,8 @@ function trsv end
 
 for (fname, elty) in ((:dtrsv_,:Float64),
                         (:strsv_,:Float32),
-                        (:ztrsv_,:Complex128),
-                        (:ctrsv_,:Complex64))
+                        (:ztrsv_,:ComplexF64),
+                        (:ctrsv_,:ComplexF32))
     @eval begin
                 #       SUBROUTINE DTRSV(UPLO,TRANS,DIAG,N,A,LDA,X,INCX)
                 #       .. Scalar Arguments ..
@@ -962,8 +969,8 @@ function ger! end
 
 for (fname, elty) in ((:dger_,:Float64),
                       (:sger_,:Float32),
-                      (:zgerc_,:Complex128),
-                      (:cgerc_,:Complex64))
+                      (:zgerc_,:ComplexF64),
+                      (:cgerc_,:ComplexF32))
     @eval begin
         function ger!(α::$elty, x::StridedVector{$elty}, y::StridedVector{$elty}, A::StridedMatrix{$elty})
             m, n = size(A)
@@ -994,8 +1001,8 @@ function syr! end
 
 for (fname, elty, lib) in ((:dsyr_,:Float64,libblas),
                            (:ssyr_,:Float32,libblas),
-                           (:zsyr_,:Complex128,liblapack),
-                           (:csyr_,:Complex64,liblapack))
+                           (:zsyr_,:ComplexF64,liblapack),
+                           (:csyr_,:ComplexF32,liblapack))
     @eval begin
         function syr!(uplo::Char, α::$elty, x::StridedVector{$elty}, A::StridedMatrix{$elty})
             n = checksquare(A)
@@ -1023,8 +1030,8 @@ as `alpha*x*x' + A`.
 """
 function her! end
 
-for (fname, elty, relty) in ((:zher_,:Complex128, :Float64),
-                             (:cher_,:Complex64, :Float32))
+for (fname, elty, relty) in ((:zher_,:ComplexF64, :Float64),
+                             (:cher_,:ComplexF32, :Float32))
     @eval begin
         function her!(uplo::Char, α::$relty, x::StridedVector{$elty}, A::StridedMatrix{$elty})
             n = checksquare(A)
@@ -1048,15 +1055,15 @@ end
     gemm!(tA, tB, alpha, A, B, beta, C)
 
 Update `C` as `alpha*A*B + beta*C` or the other three variants according to
-[`tA`](@ref stdlib-blas-trans) and `tB`. Returns the updated `C`.
+[`tA`](@ref stdlib-blas-trans) and `tB`. Return the updated `C`.
 """
 function gemm! end
 
 for (gemm, elty) in
         ((:dgemm_,:Float64),
          (:sgemm_,:Float32),
-         (:zgemm_,:Complex128),
-         (:cgemm_,:Complex64))
+         (:zgemm_,:ComplexF64),
+         (:cgemm_,:ComplexF32))
     @eval begin
              # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              # *     .. Scalar Arguments ..
@@ -1099,14 +1106,14 @@ end
 """
     gemm(tA, tB, alpha, A, B)
 
-Returns `alpha*A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
+Return `alpha*A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
 """
 gemm(tA, tB, alpha, A, B)
 
 """
     gemm(tA, tB, A, B)
 
-Returns `A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
+Return `A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
 """
 gemm(tA, tB, A, B)
 
@@ -1114,8 +1121,8 @@ gemm(tA, tB, A, B)
 ## (SY) symmetric matrix-matrix and matrix-vector multiplication
 for (mfname, elty) in ((:dsymm_,:Float64),
                        (:ssymm_,:Float32),
-                       (:zsymm_,:Complex128),
-                       (:csymm_,:Complex64))
+                       (:zsymm_,:ComplexF64),
+                       (:csymm_,:ComplexF32))
     @eval begin
              #     SUBROUTINE DSYMM(SIDE,UPLO,M,N,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              #     .. Scalar Arguments ..
@@ -1154,7 +1161,7 @@ end
 """
     symm(side, ul, alpha, A, B)
 
-Returns `alpha*A*B` or `alpha*B*A` according to [`side`](@ref stdlib-blas-side).
+Return `alpha*A*B` or `alpha*B*A` according to [`side`](@ref stdlib-blas-side).
 `A` is assumed to be symmetric. Only
 the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 """
@@ -1163,7 +1170,7 @@ symm(side, ul, alpha, A, B)
 """
     symm(side, ul, A, B)
 
-Returns `A*B` or `B*A` according to [`side`](@ref stdlib-blas-side).
+Return `A*B` or `B*A` according to [`side`](@ref stdlib-blas-side).
 `A` is assumed to be symmetric. Only the [`ul`](@ref stdlib-blas-uplo)
 triangle of `A` is used.
 """
@@ -1174,13 +1181,13 @@ symm(side, ul, A, B)
 
 Update `C` as `alpha*A*B + beta*C` or `alpha*B*A + beta*C` according to [`side`](@ref stdlib-blas-side).
 `A` is assumed to be symmetric. Only the [`ul`](@ref stdlib-blas-uplo) triangle of
-`A` is used. Returns the updated `C`.
+`A` is used. Return the updated `C`.
 """
 symm!
 
 ## (HE) Hermitian matrix-matrix and matrix-vector multiplication
-for (mfname, elty) in ((:zhemm_,:Complex128),
-                       (:chemm_,:Complex64))
+for (mfname, elty) in ((:zhemm_,:ComplexF64),
+                       (:chemm_,:ComplexF32))
     @eval begin
              #     SUBROUTINE DHEMM(SIDE,UPLO,M,N,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              #     .. Scalar Arguments ..
@@ -1239,8 +1246,8 @@ function syrk end
 
 for (fname, elty) in ((:dsyrk_,:Float64),
                       (:ssyrk_,:Float32),
-                      (:zsyrk_,:Complex128),
-                      (:csyrk_,:Complex64))
+                      (:zsyrk_,:ComplexF64),
+                      (:csyrk_,:ComplexF32))
    @eval begin
        # SUBROUTINE DSYRK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
        # *     .. Scalar Arguments ..
@@ -1293,8 +1300,8 @@ according to [`trans`](@ref stdlib-blas-trans).
 """
 function herk end
 
-for (fname, elty, relty) in ((:zherk_, :Complex128, :Float64),
-                             (:cherk_, :Complex64, :Float32))
+for (fname, elty, relty) in ((:zherk_, :ComplexF64, :Float64),
+                             (:cherk_, :ComplexF32, :Float32))
    @eval begin
        # SUBROUTINE CHERK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
        # *     .. Scalar Arguments ..
@@ -1332,8 +1339,8 @@ end
 ## syr2k
 for (fname, elty) in ((:dsyr2k_,:Float64),
                       (:ssyr2k_,:Float32),
-                      (:zsyr2k_,:Complex128),
-                      (:csyr2k_,:Complex64))
+                      (:zsyr2k_,:ComplexF64),
+                      (:csyr2k_,:ComplexF32))
     @eval begin
              #       SUBROUTINE DSYR2K(UPLO,TRANS,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              #
@@ -1369,7 +1376,7 @@ function syr2k(uplo::Char, trans::Char, alpha::Number, A::StridedVecOrMat, B::St
 end
 syr2k(uplo::Char, trans::Char, A::StridedVecOrMat, B::StridedVecOrMat) = syr2k(uplo, trans, one(eltype(A)), A, B)
 
-for (fname, elty1, elty2) in ((:zher2k_,:Complex128,:Float64), (:cher2k_,:Complex64,:Float32))
+for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:ComplexF32,:Float32))
    @eval begin
        # SUBROUTINE CHER2K(UPLO,TRANS,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
        #
@@ -1445,7 +1452,7 @@ function trsm! end
 """
     trsm(side, ul, tA, dA, alpha, A, B)
 
-Returns the solution to `A*X = alpha*B` or one of the other three variants determined by
+Return the solution to `A*X = alpha*B` or one of the other three variants determined by
 determined by [`side`](@ref stdlib-blas-side) and [`tA`](@ref stdlib-blas-trans).
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 [`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
@@ -1456,8 +1463,8 @@ function trsm end
 for (mmname, smname, elty) in
         ((:dtrmm_,:dtrsm_,:Float64),
          (:strmm_,:strsm_,:Float32),
-         (:ztrmm_,:ztrsm_,:Complex128),
-         (:ctrmm_,:ctrsm_,:Complex64))
+         (:ztrmm_,:ztrsm_,:ComplexF64),
+         (:ctrmm_,:ctrsm_,:ComplexF32))
     @eval begin
         #       SUBROUTINE DTRMM(SIDE,UPLO,TRANSA,DIAG,M,N,ALPHA,A,LDA,B,LDB)
         # *     .. Scalar Arguments ..
@@ -1526,7 +1533,10 @@ function copy!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
     if length(rdest) != length(rsrc)
         throw(DimensionMismatch("ranges must be of the same length"))
     end
-    BLAS.blascopy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
-                   pointer(dest)+(first(rdest)-1)*sizeof(T), step(rdest))
+    Base.@gc_preserve src dest BLAS.blascopy!(length(rsrc),
+                                              pointer(src) + (first(rsrc) - 1) * sizeof(T),
+                                              step(rsrc),
+                                              pointer(dest) + (first(rdest) - 1) * sizeof(T),
+                                              step(rdest))
     dest
 end

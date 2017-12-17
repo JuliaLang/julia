@@ -58,17 +58,22 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-startswith(a::String, b::String) =
-    (sizeof(a) >= sizeof(b) && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, sizeof(b)) == 0)
-startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
-    (length(a) >= length(b) && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
+# FIXME: check that end of `b` doesn't match a partial character in `a`
+startswith(a::String, b::String) = sizeof(a) ≥ sizeof(b) &&
+    ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, sizeof(b)) == 0
+
+startswith(a::Vector{UInt8}, b::Vector{UInt8}) = length(a) ≥ length(b) &&
+    ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0
 
 # TODO: fast endswith
 
 """
-    chop(s::AbstractString)
+    chop(s::AbstractString, head::Integer=0, tail::Integer=1)
 
-Remove the last character from `s`.
+Remove the first `head` and the last `tail` characters from `s`.
+The call `chop(s)` removes the last character from `s`.
+If it is requested to remove more characters than `length(s)`
+then an empty string is returned.
 
 # Examples
 ```jldoctest
@@ -77,9 +82,17 @@ julia> a = "March"
 
 julia> chop(a)
 "Marc"
+
+julia> chop(a, 1, 2)
+"ar"
+
+julia> chop(a, 5, 5)
+""
 ```
 """
-chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
+chop(s::AbstractString) = SubString(s, start(s), prevind(s, endof(s)))
+chop(s::AbstractString, head::Integer, tail::Integer) =
+    SubString(s, nextind(s, start(s), head), prevind(s, endof(s), tail))
 
 """
     chomp(s::AbstractString)
@@ -96,30 +109,19 @@ function chomp(s::AbstractString)
     i = endof(s)
     (i < 1 || s[i] != '\n') && (return SubString(s, 1, i))
     j = prevind(s,i)
-    (j < 1 || s[j] != '\r') && (return SubString(s, 1, i-1))
-    return SubString(s, 1, j-1)
+    (j < 1 || s[j] != '\r') && (return SubString(s, 1, j))
+    return SubString(s, 1, prevind(s,j))
 end
 function chomp(s::String)
     i = endof(s)
     if i < 1 || codeunit(s,i) != 0x0a
         SubString(s, 1, i)
     elseif i < 2 || codeunit(s,i-1) != 0x0d
-        SubString(s, 1, i-1)
+        SubString(s, 1, prevind(s, i))
     else
-        SubString(s, 1, i-2)
+        SubString(s, 1, prevind(s, i-1))
     end
 end
-
-# NOTE: use with caution -- breaks the immutable string convention!
-# TODO: this is hard to provide with the new representation
-#function chomp!(s::String)
-#    if !isempty(s) && codeunit(s,sizeof(s)) == 0x0a
-#        n = (endof(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
-#        ccall(:jl_array_del_end, Void, (Any, UInt), s.data, n)
-#    end
-#    return s
-#end
-chomp!(s::AbstractString) = chomp(s) # copying fallback for other string types
 
 const _default_delims = [' ','\t','\n','\v','\f','\r']
 
@@ -173,16 +175,15 @@ julia> rstrip(a)
 ```
 """
 function rstrip(s::AbstractString, chars::Chars=_default_delims)
-    r = RevString(s)
-    i = start(r)
-    while !done(r,i)
-        c, j = next(r,i)
-        if !(c in chars)
-            return SubString(s, 1, endof(s)-i+1)
-        end
+    a = start(s)
+    i = endof(s)
+    while a ≤ i
+        c = s[i]
+        j = prevind(s, i)
+        c in chars || return SubString(s, 1:i)
         i = j
     end
-    SubString(s, 1, 0)
+    SubString(s, a, a-1)
 end
 
 """
@@ -203,59 +204,59 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 ## string padding functions ##
 
-function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
-    m = n - strwidth(s)
-    (m <= 0) && (return s)
-    l = strwidth(p)
-    if l==1
-        return string(p^m, s)
-    end
-    q = div(m,l)
-    r = m - q*l
-    i = r != 0 ? chr2ind(p, r) : -1
-    string(p^q, p[1:i], s)
-end
-
-function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
-    m = n - strwidth(s)
-    (m <= 0) && (return s)
-    l = strwidth(p)
-    if l==1
-        return string(s, p^m)
-    end
-    q = div(m,l)
-    r = m - q*l
-    i = r != 0 ? chr2ind(p, r) : -1
-    string(s, p^q, p[1:i])
-end
-
 """
-    lpad(s, n::Integer, p::AbstractString=" ")
+    lpad(s, n::Integer, p::Union{Char,AbstractString}=' ') -> String
 
-Make a string at least `n` columns wide when printed by padding `s` on the left
-with copies of `p`.
+Stringify `s` and pad the resulting string on the left with `p` to make it `n`
+characters (code points) long. If `s` is already `n` characters long, an equal
+string is returned. Pad with spaces by default.
 
 # Examples
 ```jldoctest
-julia> lpad("March",10)
+julia> lpad("March", 10)
 "     March"
 ```
 """
-lpad(s, n::Integer, p=" ") = lpad(string(s),n,string(p))
+lpad(s, n::Integer, p::Union{Char,AbstractString}=' ') = lpad(string(s), n, string(p))
+
+function lpad(
+    s::Union{Char,AbstractString},
+    n::Integer,
+    p::Union{Char,AbstractString}=' ',
+) :: String
+    m = n - length(s)
+    m ≤ 0 && return string(s)
+    l = length(p)
+    q, r = divrem(m, l)
+    r == 0 ? string(p^q, s) : string(p^q, first(p, r), s)
+end
 
 """
-    rpad(s, n::Integer, p::AbstractString=" ")
+    rpad(s, n::Integer, p::Union{Char,AbstractString}=' ') -> String
 
-Make a string at least `n` columns wide when printed by padding `s` on the right
-with copies of `p`.
+Stringify `s` and pad the resulting string on the right with `p` to make it `n`
+characters (code points) long. If `s` is already `n` characters long, an equal
+string is returned. Pad with spaces by default.
 
 # Examples
 ```jldoctest
-julia> rpad("March",20)
+julia> rpad("March", 20)
 "March               "
 ```
 """
-rpad(s, n::Integer, p=" ") = rpad(string(s),n,string(p))
+rpad(s, n::Integer, p::Union{Char,AbstractString}=' ') = rpad(string(s), n, string(p))
+
+function rpad(
+    s::Union{Char,AbstractString},
+    n::Integer,
+    p::Union{Char,AbstractString}=' ',
+) :: String
+    m = n - length(s)
+    m ≤ 0 && return string(s)
+    l = length(p)
+    q, r = divrem(m, l)
+    r == 0 ? string(s, p^q) : string(s, p^q, first(p, r))
+end
 
 # splitter can be a Char, Vector{Char}, AbstractString, Regex, ...
 # any splitter that provides search(s::AbstractString, splitter)
@@ -290,17 +291,20 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
     i = start(str)
     n = endof(str)
     r = search(str,splitter,i)
-    j, k = first(r), nextind(str,last(r))
-    while 0 < j <= n && length(strs) != limit-1
-        if i < k
-            if keep_empty || i < j
-                push!(strs, SubString(str,i,prevind(str,j)))
-            end
-            i = k
-        end
-        (k <= j) && (k = nextind(str,j))
-        r = search(str,splitter,k)
+    if r != 0:-1
         j, k = first(r), nextind(str,last(r))
+        while 0 < j <= n && length(strs) != limit-1
+            if i < k
+                if keep_empty || i < j
+                    push!(strs, SubString(str,i,prevind(str,j)))
+                end
+                i = k
+            end
+            (k <= j) && (k = nextind(str,j))
+            r = search(str,splitter,k)
+            r == 0:-1 && break
+            j, k = first(r), nextind(str,last(r))
+        end
     end
     if keep_empty || !done(str,i)
         push!(strs, SubString(str,i))
@@ -386,18 +390,16 @@ function replace_new(str::String, pattern, repl, count::Integer)
             unsafe_write(out, pointer(str, i), UInt(j-i))
             _replace(out, repl, str, r, pattern)
         end
-        if k<j
+        if k < j
             i = j
+            j > e && break
             k = nextind(str, j)
         else
             i = k = nextind(str, k)
         end
-        if j > e
-            break
-        end
         r = search(str,pattern,k)
+        r == 0:-1 || n == count && break
         j, k = first(r), last(r)
-        n == count && break
         n += 1
     end
     write(out, SubString(str,i))
@@ -433,6 +435,7 @@ replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int)
 # replace(s::AbstractString, pat, f, count::Integer=typemax(Int)) =
 #     replace(String(s), pat, f, count)
 
+# TODO: allow transform as the first argument to replace?
 
 # hex <-> bytes conversion
 
@@ -475,7 +478,7 @@ julia> hex2bytes(a)
 function hex2bytes end
 
 hex2bytes(s::AbstractString) = hex2bytes(Vector{UInt8}(String(s)))
-hex2bytes(s::AbstractVector{UInt8}) = hex2bytes!(Vector{UInt8}(length(s) >> 1), s)
+hex2bytes(s::AbstractVector{UInt8}) = hex2bytes!(Vector{UInt8}(uninitialized, length(s) >> 1), s)
 
 """
     hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
@@ -522,7 +525,7 @@ julia> bytes2hex(b)
 ```
 """
 function bytes2hex(a::AbstractArray{UInt8})
-    b = Vector{UInt8}(2*length(a))
+    b = Vector{UInt8}(uninitialized, 2*length(a))
     i = 0
     for x in a
         b[i += 1] = hex_chars[1 + x >> 4]
@@ -534,7 +537,8 @@ end
 # check for pure ASCII-ness
 
 function ascii(s::String)
-    for (i, b) in enumerate(Vector{UInt8}(s))
+    for i = 1:sizeof(s)
+        b = codeunit(s,i)
         b < 0x80 || throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
     end
     return s
@@ -551,7 +555,7 @@ throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 julia> ascii("abcdeγfgh")
 ERROR: ArgumentError: invalid ASCII at index 6 in "abcdeγfgh"
 Stacktrace:
- [1] ascii(::String) at ./strings/util.jl:479
+[...]
 
 julia> ascii("abcdefgh")
 "abcdefgh"

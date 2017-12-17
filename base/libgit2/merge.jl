@@ -44,7 +44,10 @@ function GitAnnotated(repo::GitRepo, comittish::AbstractString)
 end
 
 function GitHash(ann::GitAnnotated)
-    unsafe_load(ccall((:git_annotated_commit_id, :libgit2), Ptr{GitHash}, (Ptr{Void},), ann.ptr))
+    Base.@gc_preserve ann begin
+        oid = unsafe_load(ccall((:git_annotated_commit_id, :libgit2), Ptr{GitHash}, (Ptr{Void},), ann.ptr))
+    end
+    return oid
 end
 
 """
@@ -55,7 +58,7 @@ determine under what circumstances they can be merged. For instance, if `anns[1]
 is simply an ancestor of `ann[2]`, then `merge_analysis` will report that a
 fast-forward merge is possible.
 
-`merge_analysis` returns two outputs. `analysis` has several possible values:
+Return two outputs, `analysis` and `preference`. `analysis` has several possible values:
     * `MERGE_ANALYSIS_NONE`: it is not possible to merge the elements of `anns`.
     * `MERGE_ANALYSIS_NORMAL`: a regular merge, when HEAD and the commits that the
       user wishes to merge have all diverged from a common ancestor. In this case the
@@ -143,7 +146,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
                    Ptr{MergeOptions}, Ptr{CheckoutOptions}),
                    repo.ptr, map(x->x.ptr, anns), anns_size,
                    Ref(merge_opts), Ref(checkout_opts))
-    info("Review and commit merged changes.")
+    @info "Review and commit merged changes"
     return true
 end
 
@@ -206,7 +209,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
     merge_result = if ffpref == Consts.MERGE_PREFERENCE_NONE
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
-                warn("Unable to perform Fast-Forward merge with mith multiple merge heads.")
+                @warn "Unable to perform Fast-Forward merge with mith multiple merge heads"
                 false
             else
                 ffmerge!(repo, anns[1])
@@ -219,13 +222,13 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
     elseif ffpref == Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
-                warn("Unable to perform Fast-Forward merge with mith multiple merge heads.")
+                @warn "Unable to perform Fast-Forward merge with mith multiple merge heads"
                 false
             else
                 ffmerge!(repo, anns[1])
             end
         else
-            warn("Cannot perform fast-forward merge.")
+            @warn "Cannot perform fast-forward merge"
             false
         end
     elseif ffpref == Consts.MERGE_PREFERENCE_NO_FASTFORWARD
@@ -256,7 +259,6 @@ function merge_base(repo::GitRepo, one::AbstractString, two::AbstractString)
                 moid_ptr, repo.ptr, oid1_ptr, oid2_ptr)
         moid_ptr[]
     catch e
-        #warn("Pkg:",path(repo),"=>",e.msg)
         GitHash()
     end
     return moid

@@ -1,10 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
+using Distributed
+
 include("choosetests.jl")
 include("testenv.jl")
 
-tests, net_on = choosetests(ARGS)
+tests, net_on, exit_on_error, seed = choosetests(ARGS)
 tests = unique(tests)
 
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
@@ -13,18 +15,33 @@ else
     typemax(Csize_t)
 end
 
+function test_path(test)
+    if test in STDLIBS
+        test_file = joinpath(STDLIB_DIR, test, "test", "runtests")
+        if !isfile(test_file * ".jl")
+            error("Standard library $test did not provide a `test/runtests.jl` file")
+        end
+        return test_file
+    else
+        return test
+    end
+end
+
 const node1_tests = String[]
 function move_to_node1(t)
     if t in tests
-        splice!(tests, findfirst(tests, t))
+        splice!(tests, findfirst(equalto(t), tests))
         push!(node1_tests, t)
     end
 end
+
 # Base.compile only works from node 1, so compile test is handled specially
 move_to_node1("compile")
+move_to_node1("SharedArrays")
+
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
-max_worker_rss != typemax(Csize_t) && move_to_node1("distributed")
+max_worker_rss != typemax(Csize_t) && move_to_node1("Distributed")
 
 cd(dirname(@__FILE__)) do
     n = 1
@@ -33,6 +50,7 @@ cd(dirname(@__FILE__)) do
         n > 1 && addprocs_with_testenv(n)
         BLAS.set_num_threads(1)
     end
+    skipped = 0
 
     @everywhere include("testdefs.jl")
 
@@ -46,6 +64,30 @@ cd(dirname(@__FILE__)) do
     print_with_color(:white, rpad("Test (Worker)",name_align," "), " | ")
     print_with_color(:white, "Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n")
     results=[]
+    print_lock = ReentrantLock()
+
+    function print_testworker_stats(test, wrkr, resp)
+        lock(print_lock)
+        try
+            print_with_color(:white, rpad(test*" ($wrkr)", name_align, " "), " | ")
+            time_str = @sprintf("%7.2f",resp[2])
+            print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
+            gc_str = @sprintf("%5.2f",resp[5].total_time/10^9)
+            print_with_color(:white, rpad(gc_str,gc_align," "), " | ")
+
+            # since there may be quite a few digits in the percentage,
+            # the left-padding here is less to make sure everything fits
+            percent_str = @sprintf("%4.1f",100*resp[5].total_time/(10^9*resp[2]))
+            print_with_color(:white, rpad(percent_str,percent_align," "), " | ")
+            alloc_str = @sprintf("%5.2f",resp[3]/2^20)
+            print_with_color(:white, rpad(alloc_str,alloc_align," "), " | ")
+            rss_str = @sprintf("%5.2f",resp[6]/2^20)
+            print_with_color(:white, rpad(rss_str,rss_align," "), "\n")
+        finally
+            unlock(print_lock)
+        end
+    end
+
     @sync begin
         for p in workers()
             @async begin
@@ -54,53 +96,49 @@ cd(dirname(@__FILE__)) do
                     local resp
                     wrkr = p
                     try
-                        resp = remotecall_fetch(runtests, wrkr, test)
+                        resp = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
                     catch e
                         resp = [e]
                     end
                     push!(results, (test, resp))
-                    if resp[1] isa Exception || resp[end] > max_worker_rss
+                    if resp[1] isa Exception
+                        if exit_on_error
+                            skipped = length(tests)
+                            empty!(tests)
+                        end
+                    elseif resp[end] > max_worker_rss
                         if n > 1
                             rmprocs(wrkr, waitfor=30)
                             p = addprocs_with_testenv(1)[1]
                             remotecall_fetch(include, p, "testdefs.jl")
-                        else
-                            # single process testing, bail if mem limit reached
-                            resp[1] isa Exception || error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
+                        else # single process testing
+                            error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                         end
                     end
-                    if !isa(resp[1], Exception)
-                        print_with_color(:white, rpad(test*" ($wrkr)", name_align, " "), " | ")
-                        time_str = @sprintf("%7.2f",resp[2])
-                        print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
-                        gc_str = @sprintf("%5.2f",resp[5].total_time/10^9)
-                        print_with_color(:white, rpad(gc_str,gc_align," "), " | ")
 
-                        # since there may be quite a few digits in the percentage,
-                        # the left-padding here is less to make sure everything fits
-                        percent_str = @sprintf("%4.1f",100*resp[5].total_time/(10^9*resp[2]))
-                        print_with_color(:white, rpad(percent_str,percent_align," "), " | ")
-                        alloc_str = @sprintf("%5.2f",resp[3]/2^20)
-                        print_with_color(:white, rpad(alloc_str,alloc_align," "), " | ")
-                        rss_str = @sprintf("%5.2f",resp[6]/2^20)
-                        print_with_color(:white, rpad(rss_str,rss_align," "), "\n")
-                    end
+                    !isa(resp[1], Exception) && print_testworker_stats(test, wrkr, resp)
+                end
+                if p != 1
+                    # Free up memory =)
+                    rmprocs(p, waitfor=30)
                 end
             end
         end
     end
-    # Free up memory =)
-    n > 1 && rmprocs(workers(), waitfor=30)
+
+    n > 1 && length(node1_tests) > 1 && print("\nExecuting tests that run on node 1 only:\n")
     for t in node1_tests
         # As above, try to run each test
         # which must run on node 1. If
         # the test fails, catch the error,
         # and either way, append the results
         # to the overall aggregator
-        n > 1 && print("\tFrom worker 1:\t")
+        isolate = true
+        t == "SharedArrays" && (isolate = false)
         local resp
         try
-            resp = eval(Expr(:call, () -> runtests(t))) # runtests is defined by the include above
+            resp = eval(Expr(:call, () -> runtests(t, test_path(t), isolate, seed=seed))) # runtests is defined by the include above
+            print_testworker_stats(t, 1, resp)
         catch e
             resp = [e]
         end
@@ -128,61 +166,64 @@ cd(dirname(@__FILE__)) do
     Errored, and execution continues until the summary at the end of the test
     run, where the test file is printed out as the "failed expression".
     =#
-    o_ts = Base.Test.DefaultTestSet("Overall")
-    Base.Test.push_testset(o_ts)
+    o_ts = Test.DefaultTestSet("Overall")
+    Test.push_testset(o_ts)
     for res in results
-        if isa(res[2][1], Base.Test.DefaultTestSet)
-            Base.Test.push_testset(res[2][1])
-            Base.Test.record(o_ts, res[2][1])
-            Base.Test.pop_testset()
+        if isa(res[2][1], Test.DefaultTestSet)
+            Test.push_testset(res[2][1])
+            Test.record(o_ts, res[2][1])
+            Test.pop_testset()
         elseif isa(res[2][1], Tuple{Int,Int})
-            fake = Base.Test.DefaultTestSet(res[1])
+            fake = Test.DefaultTestSet(res[1])
             for i in 1:res[2][1][1]
-                Base.Test.record(fake, Base.Test.Pass(:test, nothing, nothing, nothing))
+                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
             end
             for i in 1:res[2][1][2]
-                Base.Test.record(fake, Base.Test.Broken(:test, nothing))
+                Test.record(fake, Test.Broken(:test, nothing))
             end
-            Base.Test.push_testset(fake)
-            Base.Test.record(o_ts, fake)
-            Base.Test.pop_testset()
-        elseif isa(res[2][1], RemoteException) && isa(res[2][1].captured.ex, Base.Test.TestSetException)
+            Test.push_testset(fake)
+            Test.record(o_ts, fake)
+            Test.pop_testset()
+        elseif isa(res[2][1], RemoteException) && isa(res[2][1].captured.ex, Test.TestSetException)
             println("Worker $(res[2][1].pid) failed running test $(res[1]):")
             Base.showerror(STDOUT,res[2][1].captured)
-            fake = Base.Test.DefaultTestSet(res[1])
+            fake = Test.DefaultTestSet(res[1])
             for i in 1:res[2][1].captured.ex.pass
-                Base.Test.record(fake, Base.Test.Pass(:test, nothing, nothing, nothing))
+                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
             end
             for i in 1:res[2][1].captured.ex.broken
-                Base.Test.record(fake, Base.Test.Broken(:test, nothing))
+                Test.record(fake, Test.Broken(:test, nothing))
             end
             for t in res[2][1].captured.ex.errors_and_fails
-                Base.Test.record(fake, t)
+                Test.record(fake, t)
             end
-            Base.Test.push_testset(fake)
-            Base.Test.record(o_ts, fake)
-            Base.Test.pop_testset()
+            Test.push_testset(fake)
+            Test.record(o_ts, fake)
+            Test.pop_testset()
         elseif isa(res[2][1], Exception)
             # If this test raised an exception that is not a remote testset exception,
             # i.e. not a RemoteException capturing a TestSetException that means
             # the test runner itself had some problem, so we may have hit a segfault,
             # deserialization errors or something similar.  Record this testset as Errored.
-            fake = Base.Test.DefaultTestSet(res[1])
-            Base.Test.record(fake, Base.Test.Error(:test_error, res[1], res[2][1], []))
-            Base.Test.push_testset(fake)
-            Base.Test.record(o_ts, fake)
-            Base.Test.pop_testset()
+            fake = Test.DefaultTestSet(res[1])
+            Test.record(fake, Test.Error(:test_error, res[1], res[2][1], [], LineNumberNode(1)))
+            Test.push_testset(fake)
+            Test.record(o_ts, fake)
+            Test.pop_testset()
         else
             error(string("Unknown result type : ", typeof(res)))
         end
     end
     println()
-    Base.Test.print_test_results(o_ts,1)
+    Test.print_test_results(o_ts,1)
     if !o_ts.anynonpass
         println("    \033[32;1mSUCCESS\033[0m")
     else
-        println("    \033[31;1mFAILURE\033[0m")
-        Base.Test.print_test_errors(o_ts)
+        println("    \033[31;1mFAILURE\033[0m\n")
+        skipped > 0 &&
+            println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.")
+        println("The global RNG seed was 0x$(hex(seed)).\n")
+        Test.print_test_errors(o_ts)
         throw(Test.FallbackTestSetException("Test run finished with errors"))
     end
 end

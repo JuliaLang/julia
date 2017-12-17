@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests the output of the embedding example is correct
-using Base.Test
+using Test
 
 if Sys.iswindows()
     # libjulia needs to be in the same directory as the embedding executable or in path
@@ -24,5 +24,5 @@ end
     @test parse(Float64, lines[1]) ≈ sqrt(2)
     @test lines[8] == "called bar"
     @test lines[9] == "calling new bar"
-    @test lines[10] == "\tFrom worker 2:\tTaking over the world..."
+    @test lines[10] == "      From worker 2:\tTaking over the world..."
 end

@@ -11,8 +11,8 @@ struct Rational{T<:Integer} <: Real
 
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
-        g = den < 0 ? -gcd(den, num) : gcd(den, num)
-        new(div(num, g), div(den, g))
+        num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
+        new(num2, den2)
     end
 end
 Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n,d)
@@ -426,7 +426,7 @@ end
 
 ^(x::Number, y::Rational) = x^(y.num/y.den)
 ^(x::T, y::Rational) where {T<:AbstractFloat} = x^convert(T,y)
-^(x::Complex{T}, y::Rational) where {T<:AbstractFloat} = x^convert(T,y)
+^(z::Complex{T}, p::Rational) where {T<:Real} = z^convert(typeof(one(T)^p), p)
 
 ^(z::Complex{<:Rational}, n::Bool) = n ? z : one(z) # to resolve ambiguity
 function ^(z::Complex{<:Rational}, n::Integer)

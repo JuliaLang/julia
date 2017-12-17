@@ -18,13 +18,13 @@ Other constructors:
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 """
 mutable struct Channel{T} <: AbstractChannel
-    cond_take::Condition    # waiting for data to become available
-    cond_put::Condition     # waiting for a writeable slot
+    cond_take::Condition                 # waiting for data to become available
+    cond_put::Condition                  # waiting for a writeable slot
     state::Symbol
-    excp::Nullable{Exception} # Exception to be thrown when state != :open
+    excp::Union{Exception, Void}         # exception to be thrown when state != :open
 
     data::Vector{T}
-    sz_max::Int            # maximum size of channel
+    sz_max::Int                          # maximum size of channel
 
     # Used when sz_max == 0, i.e., an unbuffered channel.
     waiters::Int
@@ -42,10 +42,10 @@ mutable struct Channel{T} <: AbstractChannel
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
-        ch = new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(0), sz, 0)
+        ch = new(Condition(), Condition(), :open, nothing, Vector{T}(), sz, 0)
         if sz == 0
-            ch.takers = Vector{Task}(0)
-            ch.putters = Vector{Task}(0)
+            ch.takers = Vector{Task}()
+            ch.putters = Vector{Task}()
         end
         return ch
     end
@@ -65,15 +65,15 @@ Channel(sz) = Channel{Any}(sz)
 """
     Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
 
-Creates a new task from `func`, binds it to a new channel of type
-`ctype` and size `csize`, and schedules the task, all in a single call.
+Create a new task from `func`, bind it to a new channel of type
+`ctype` and size `csize`, and schedule the task, all in a single call.
 
 `func` must accept the bound channel as its only argument.
 
 If you need a reference to the created task, pass a `Ref{Task}` object via
 keyword argument `taskref`.
 
-Returns a Channel.
+Return a `Channel`.
 
 # Examples
 ```jldoctest
@@ -129,21 +129,21 @@ isbuffered(c::Channel) = c.sz_max==0 ? false : true
 
 function check_channel_state(c::Channel)
     if !isopen(c)
-        !isnull(c.excp) && throw(get(c.excp))
+        c.excp !== nothing && throw(c.excp)
         throw(closed_exception())
     end
 end
 """
     close(c::Channel)
 
-Closes a channel. An exception is thrown by:
+Close a channel. An exception is thrown by:
 
 * [`put!`](@ref) on a closed channel.
 * [`take!`](@ref) and [`fetch`](@ref) on an empty, closed channel.
 """
 function close(c::Channel)
     c.state = :closed
-    c.excp = Nullable{}(closed_exception())
+    c.excp = closed_exception()
     notify_error(c)
     nothing
 end
@@ -152,12 +152,12 @@ isopen(c::Channel) = (c.state == :open)
 """
     bind(chnl::Channel, task::Task)
 
-Associates the lifetime of `chnl` with a task.
-Channel `chnl` is automatically closed when the task terminates.
+Associate the lifetime of `chnl` with a task.
+`Channel` `chnl` is automatically closed when the task terminates.
 Any uncaught exception in the task is propagated to all waiters on `chnl`.
 
 The `chnl` object can be explicitly closed independent of task termination.
-Terminating tasks have no effect on already closed Channel objects.
+Terminating tasks have no effect on already closed `Channel` objects.
 
 When a channel is bound to multiple tasks, the first task to terminate will
 close the channel. When multiple channels are bound to the same task,
@@ -196,8 +196,7 @@ julia> take!(c)
 julia> put!(c,1);
 ERROR: foo
 Stacktrace:
- [1] check_channel_state at ./channels.jl:132 [inlined]
- [2] put!(::Channel{Any}, ::Int64) at ./channels.jl:263
+[...]
 ```
 """
 function bind(c::Channel, task::Task)
@@ -238,7 +237,7 @@ function close_chnl_on_taskdone(t::Task, ref::WeakRef)
         !isopen(c) && return
         if istaskfailed(t)
             c.state = :closed
-            c.excp = Nullable{Exception}(task_result(t))
+            c.excp = task_result(t)
             notify_error(c)
         else
             close(c)
@@ -246,7 +245,7 @@ function close_chnl_on_taskdone(t::Task, ref::WeakRef)
     end
 end
 
-mutable struct InvalidStateException <: Exception
+struct InvalidStateException <: Exception
     msg::AbstractString
     state::Symbol
 end
@@ -254,7 +253,7 @@ end
 """
     put!(c::Channel, v)
 
-Appends an item `v` to the channel `c`. Blocks if the channel is full.
+Append an item `v` to the channel `c`. Blocks if the channel is full.
 
 For unbuffered channels, blocks until a [`take!`](@ref) is performed by a different
 task.
@@ -297,7 +296,7 @@ push!(c::Channel, v) = put!(c, v)
 """
     fetch(c::Channel)
 
-Waits for and gets the first available item from the channel. Does not
+Wait for and get the first available item from the channel. Does not
 remove the item. `fetch` is unsupported on an unbuffered (0-size) channel.
 """
 fetch(c::Channel) = isbuffered(c) ? fetch_buffered(c) : fetch_unbuffered(c)
@@ -311,7 +310,7 @@ fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on
 """
     take!(c::Channel)
 
-Removes and returns a value from a [`Channel`](@ref). Blocks until data is available.
+Remove and return a value from a [`Channel`](@ref). Blocks until data is available.
 
 For unbuffered channels, blocks until a [`put!`](@ref) is performed by a different
 task.
@@ -388,7 +387,7 @@ function notify_error(c::Channel, err)
         foreach(t->schedule(t, err; error=true), waiters)
     end
 end
-notify_error(c::Channel) = notify_error(c, get(c.excp))
+notify_error(c::Channel) = notify_error(c, c.excp)
 
 eltype(::Type{Channel{T}}) where {T} = T
 

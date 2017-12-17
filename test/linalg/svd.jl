@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
@@ -19,10 +19,11 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
     @test sf1.S ≊ [2, 0]
     @test sf2.S ≊ [2, 1]
     # U & Vt are unitary
-    @test sf1.U*sf1.U'   ≊ eye(2)
-    @test sf1.Vt*sf1.Vt' ≊ eye(2)
-    @test sf2.U*sf2.U'   ≊ eye(2)
-    @test sf2.Vt*sf2.Vt' ≊ eye(2)
+    I22 = Matrix(I, 2, 2)
+    @test sf1.U*sf1.U'   ≊ I22
+    @test sf1.Vt*sf1.Vt' ≊ I22
+    @test sf2.U*sf2.U'   ≊ I22
+    @test sf2.Vt*sf2.Vt' ≊ I22
     # SVD not uniquely determined, so just test we can reconstruct the
     # matrices from the factorization as expected.
     @test sf1.U*Diagonal(sf1.S)*sf1.Vt' ≊ m1
@@ -42,7 +43,7 @@ aimg  = randn(n,n)/2
 a2real = randn(n,n)/2
 a2img  = randn(n,n)/2
 
-@testset for eltya in (Float32, Float64, Complex64, Complex128, Int)
+@testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     aa2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     asym = aa'+aa                  # symmetric indefinite
@@ -54,7 +55,7 @@ a2img  = randn(n,n)/2
         @testset "singular value decomposition" begin
             @test usv[:S] === svdvals(usv)
             @test usv[:U] * (Diagonal(usv[:S]) * usv[:Vt]) ≈ a
-            @test AbstractArray(usv) ≈ a
+            @test convert(Array, usv) ≈ a
             @test usv[:Vt]' ≈ usv[:V]
             @test_throws KeyError usv[:Z]
             b = rand(eltya,n)
@@ -62,9 +63,9 @@ a2img  = randn(n,n)/2
 
             if eltya <: BlasFloat
                 svdz = svdfact!(ones(eltya,0,0))
-                @test svdz[:U] ≈ eye(eltya,0,0)
+                @test svdz[:U] ≈ Matrix{eltya}(I, 0, 0)
                 @test svdz[:S] ≈ real(zeros(eltya,0))
-                @test svdz[:Vt] ≈ eye(eltya,0,0)
+                @test svdz[:Vt] ≈ Matrix{eltya}(I, 0, 0)
             end
         end
         @testset "Generalized svd" begin
@@ -96,26 +97,28 @@ a2img  = randn(n,n)/2
             @test gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' ≈ c
         end
     end
-end
-
-@testset "Number input" begin
-    x, y = randn(2)
-    @test svdfact(x)    == svdfact(      fill(x, 1, 1))
-    @test svdvals(x)    == first(svdvals(fill(x, 1, 1)))
-    @test svd(x)        == first.(svd(   fill(x, 1, 1)))
-    @test svdfact(x, y) == svdfact(      fill(x, 1, 1), fill(y, 1, 1))
-    @test svdvals(x, y) == first(svdvals(fill(x, 1, 1), fill(y, 1, 1)))
-    @test svd(x, y)     == first.(svd(   fill(x, 1, 1), fill(y, 1, 1)))
-end
-
-@testset "isequal, ==, and hash" begin
-    x, y   = rand(), NaN
-    Fx, Fy = svdfact(x), svdfact(y)
-    @test   Fx == Fx
-    @test !(Fy == Fy)
-    @test isequal(Fy, Fy)
-    @test hash(Fx)          == hash(Fx)
-    @test hash(Fx, UInt(1)) == hash(Fx, UInt(1))
-    @test hash(Fy)          == hash(Fy)
-    @test hash(Fy, UInt(1)) == hash(Fy, UInt(1))
+    if eltya <: Base.LinAlg.BlasReal
+        @testset "Number input" begin
+            x, y = randn(eltya, 2)
+            @test svdfact(x)    == svdfact(fill(x, 1, 1))
+            @test svdvals(x)    == first(svdvals(fill(x, 1, 1)))
+            @test svd(x)        == first.(svd(fill(x, 1, 1)))
+            @test svdfact(x, y) == svdfact(fill(x, 1, 1), fill(y, 1, 1))
+            @test svdvals(x, y) ≈  first(svdvals(fill(x, 1, 1), fill(y, 1, 1)))
+            @test svd(x, y)     == first.(svd(fill(x, 1, 1), fill(y, 1, 1)))
+        end
+    end
+    if eltya != Int
+        @testset "isequal, ==, and hash" begin
+            x, y   = rand(eltya), convert(eltya, NaN)
+            Fx, Fy = svdfact(x), svdfact(y)
+            @test   Fx == Fx
+            @test !(Fy == Fy)
+            @test isequal(Fy, Fy)
+            @test hash(Fx)          == hash(Fx)
+            @test hash(Fx, UInt(1)) == hash(Fx, UInt(1))
+            @test hash(Fy)          == hash(Fy)
+            @test hash(Fy, UInt(1)) == hash(Fy, UInt(1))
+        end
+    end
 end

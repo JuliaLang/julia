@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 # Tests for @__LINE__ inside and outside of macros
 @test (@__LINE__) == 6
@@ -31,7 +31,11 @@ end
 @test @nested_LINE_expansion() == ((@__LINE__() - 4, @__LINE__() - 12), @__LINE__())
 @test @nested_LINE_expansion2() == ((@__LINE__() - 5, @__LINE__() - 9), @__LINE__())
 
+loaded_files = String[]
+push!(Base.include_callbacks, (mod::Module, fn::String) -> push!(loaded_files, fn))
 include("test_sourcepath.jl")
+@test length(loaded_files) == 1 && endswith(loaded_files[1], "test_sourcepath.jl")
+pop!(Base.include_callbacks)
 thefname = "the fname!//\\&\1*"
 include_string_test_func = include_string(@__MODULE__, "include_string_test() = @__FILE__", thefname)
 @test include_string_test_func() == thefname
@@ -74,30 +78,3 @@ mktempdir() do dir
         end
     end
 end
-
-SAVED_LOAD_PATH = copy(LOAD_PATH)
-empty!(LOAD_PATH)
-dir = abspath(@__DIR__)
-push!(LOAD_PATH, dir)
-
-@test Base.find_in_path("test_sourcepath") == joinpath(dir, "test_sourcepath.jl")
-@test Base.find_in_path(GenericString("test_sourcepath")) == joinpath(dir, "test_sourcepath.jl")
-LOAD_PATH[end] = GenericString(LOAD_PATH[end])
-@test Base.find_in_path("test_sourcepath") == joinpath(dir, "test_sourcepath.jl")
-
-struct CustomLoader
-    path::String
-end
-push!(LOAD_PATH, CustomLoader("abc"))
-let name = randstring(20)
-    @test_throws ArgumentError Base.find_in_path(name, nothing)
-    Base.load_hook(prefix::CustomLoader, name::String, found) = joinpath(prefix.path, name)
-    @test Base.find_in_path(name, nothing) == joinpath("abc", name)
-end
-@test Base.find_in_path("test_sourcepath", nothing) == joinpath("abc", "test_sourcepath")
-Base.load_hook(prefix::CustomLoader, name::String, found::String) = found
-@test Base.find_in_path("test_sourcepath", nothing) == joinpath(dir, "test_sourcepath.jl")
-
-empty!(LOAD_PATH)
-append!(LOAD_PATH, SAVED_LOAD_PATH)
-@test LOAD_PATH == SAVED_LOAD_PATH

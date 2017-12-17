@@ -1,21 +1,24 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base.LibGit2: AbstractCredentials, UserPasswordCredentials, SSHCredentials,
+import Base.LibGit2: AbstractCredential, UserPasswordCredential, SSHCredential,
     CachedCredentials, CredentialPayload, Payload
+using Base: coalesce
+
+const DEFAULT_PAYLOAD = CredentialPayload(allow_ssh_agent=false, allow_git_helpers=false)
 
 """
 Emulates the LibGit2 credential loop to allows testing of the credential_callback function
 without having to authenticate against a real server.
 """
 function credential_loop(
-        valid_credential::AbstractCredentials,
+        valid_credential::AbstractCredential,
         url::AbstractString,
-        user::Nullable{<:AbstractString},
+        user::Union{AbstractString, Void},
         allowed_types::UInt32,
-        payload::CredentialPayload)
+        payload::CredentialPayload;
+        shred::Bool=true)
     cb = Base.LibGit2.credentials_cb()
     libgitcred_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    payload_ptr = Ref(payload)
 
     # Number of times credentials were authenticated against. With the real LibGit2
     # credential loop this would be how many times we sent credentials to the remote.
@@ -25,12 +28,14 @@ function credential_loop(
     # until we find valid credentials or an exception is raised.
     err = Cint(0)
     while err == 0
-        err = ccall(cb, Cint, (Ptr{Ptr{Void}}, Cstring, Cstring, Cuint, Ptr{Void}),
-            libgitcred_ptr_ptr, url, get(user, C_NULL), allowed_types, pointer_from_objref(payload_ptr))
+        err = ccall(cb, Cint, (Ptr{Ptr{Void}}, Cstring, Cstring, Cuint, Any),
+                    libgitcred_ptr_ptr, url, coalesce(user, C_NULL),
+                    allowed_types, payload)
         num_authentications += 1
 
         # Check if the callback provided us with valid credentials
-        if !isnull(payload.credential) && get(payload.credential) == valid_credential
+        if payload.credential !== nothing && payload.credential == valid_credential
+            LibGit2.approve(payload, shred=shred)
             break
         end
 
@@ -46,52 +51,28 @@ function credential_loop(
         LibGit2.GitError(err)
     end
 
-    return git_error, num_authentications
-end
-
-function credential_loop(
-        valid_credential::UserPasswordCredentials,
-        url::AbstractString,
-        user::Nullable{<:AbstractString}=Nullable{String}(),
-        payload::CredentialPayload=CredentialPayload())
-    credential_loop(valid_credential, url, user, 0x000001, payload)
-end
-
-function credential_loop(
-        valid_credential::SSHCredentials,
-        url::AbstractString,
-        user::Nullable{<:AbstractString}=Nullable{String}(),
-        payload::CredentialPayload=CredentialPayload();
-        use_ssh_agent::Bool=false)
-
-    if !use_ssh_agent
-        if isnull(payload.cache)
-            payload.cache = Nullable(CachedCredentials())
-        end
-        cache = get(payload.cache)
-
-        m = match(LibGit2.URL_REGEX, url)
-        default_cred = SSHCredentials(true)
-        default_cred.usesshagent = "N"
-        LibGit2.get_creds!(cache, "ssh://$(m[:host])", default_cred)
+    # Reject and shred the credential when an authentication error occurs
+    if git_error.code == LibGit2.Error.EAUTH
+        LibGit2.reject(payload, shred=shred)
     end
 
-    credential_loop(valid_credential, url, user, 0x000046, payload)
+    return git_error, num_authentications, payload
 end
 
 function credential_loop(
-        valid_credential::UserPasswordCredentials,
+        valid_credential::UserPasswordCredential,
         url::AbstractString,
-        user::AbstractString,
-        payload::CredentialPayload=CredentialPayload())
-    credential_loop(valid_credential, url, Nullable(user), payload)
+        user::Union{AbstractString, Void}=nothing,
+        payload::CredentialPayload=DEFAULT_PAYLOAD;
+        shred::Bool=true)
+    credential_loop(valid_credential, url, user, 0x000001, payload, shred=shred)
 end
 
 function credential_loop(
-        valid_credential::SSHCredentials,
+        valid_credential::SSHCredential,
         url::AbstractString,
-        user::AbstractString,
-        payload::CredentialPayload=CredentialPayload();
-        use_ssh_agent::Bool=false)
-    credential_loop(valid_credential, url, Nullable(user), payload, use_ssh_agent=use_ssh_agent)
+        user::Union{AbstractString, Void}=nothing,
+        payload::CredentialPayload=DEFAULT_PAYLOAD;
+        shred::Bool=true)
+    credential_loop(valid_credential, url, user, 0x000046, payload, shred=shred)
 end

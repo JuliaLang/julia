@@ -2,13 +2,13 @@
 
 # Factorials
 
-const _fact_table64 = Vector{Int64}(20)
+const _fact_table64 = Vector{Int64}(uninitialized, 20)
 _fact_table64[1] = 1
 for n in 2:20
     _fact_table64[n] = _fact_table64[n-1] * n
 end
 
-const _fact_table128 = Vector{UInt128}(34)
+const _fact_table128 = Vector{UInt128}(uninitialized, 34)
 _fact_table128[1] = 1
 for n in 2:34
     _fact_table128[n] = _fact_table128[n-1] * n
@@ -47,7 +47,7 @@ end
 """
     isperm(v) -> Bool
 
-Returns `true` if `v` is a valid permutation.
+Return `true` if `v` is a valid permutation.
 
 # Examples
 ```jldoctest
@@ -75,7 +75,7 @@ function permute!!(a, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(a)
-        ptr = start = findnext(p, start+1)
+        ptr = start = findnext(!iszero, p, start+1)
         temp = a[start]
         next = p[start]
         count += 1
@@ -125,7 +125,7 @@ function ipermute!!(a, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(a)
-        start = findnext(p, start+1)
+        start = findnext(!iszero, p, start+1)
         temp = a[start]
         next = p[start]
         count += 1

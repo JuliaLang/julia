@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Basic goto tests
-expand(x) = Base.expand(@__MODULE__, x)
 
 function goto_test1()
     @goto a
@@ -15,10 +14,10 @@ end
 @test eval(:(@label a)) === nothing
 
 @test Expr(:error, "label \"a\" referenced but not defined") ==
-    expand(:(@goto a))
+    Meta.lower(@__MODULE__, :(@goto a))
 
 @test Expr(:error, "label \"a\" defined multiple times") ==
-    expand(quote
+    Meta.lower(@__MODULE__, quote
         function goto_test2()
             @goto a
             @label a
@@ -29,7 +28,7 @@ end
 
 
 @test Expr(:error, "label \"a\" referenced but not defined") ==
-    expand(quote
+    Meta.lower(@__MODULE__, quote
         function goto_test3()
             @goto a
             return
@@ -37,7 +36,7 @@ end
     end)
 
 @test Expr(:error, "misplaced label") ==
-    expand(quote
+    Meta.lower(@__MODULE__, quote
         function goto_test4()
             @goto a
             try
@@ -60,7 +59,7 @@ macro goto_test5_macro3()
 end
 
 @test Expr(:error, "label \"a\" referenced but not defined") ==
-    expand(quote
+    Meta.lower(@__MODULE__, quote
         function goto_test5_1()
             @goto a
             @goto_test5_macro1
@@ -68,7 +67,7 @@ end
         end
     end)
 
-let e = expand(quote
+let e = Meta.lower(@__MODULE__, quote
         function goto_test5_2()
             @goto_test5_macro2
             @label a
@@ -89,7 +88,7 @@ end
 
 
 @test Expr(:error, "goto from a try/finally block is not permitted") ==
-    expand(quote
+    Meta.lower(@__MODULE__, quote
         function goto_test6()
             try
                 @goto a

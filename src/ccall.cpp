@@ -569,7 +569,8 @@ static Value *julia_to_address(
                     *needStackRestore = true;
                 }
                 ai->setAlignment(16);
-                ctx.builder.CreateMemCpy(ai, data_pointer(ctx, jvinfo, T_pint8), nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
+                // minimum gc-alignment in julia is pointer size
+                emit_memcpy(ctx, ai, jvinfo, nbytes, sizeof(void*));
                 return ctx.builder.CreatePtrToInt(ai, to);
             }
         }
@@ -588,7 +589,7 @@ static Value *julia_to_address(
         Value *nbytes = emit_datatype_size(ctx, jvt);
         AllocaInst *ai = ctx.builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
-        ctx.builder.CreateMemCpy(ai, data_pointer(ctx, jvinfo, T_pint8), nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
+        emit_memcpy(ctx, ai, jvinfo, nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
         Value *p2 = ctx.builder.CreatePtrToInt(ai, to);
         ctx.builder.CreateBr(afterBB);
         ctx.builder.SetInsertPoint(afterBB);
@@ -606,10 +607,7 @@ static Value *julia_to_address(
         ctx.builder.CreateStore(emit_unbox(ctx, slottype, jvinfo, ety), slot);
     }
     else {
-        ctx.builder.CreateMemCpy(slot,
-                             data_pointer(ctx, jvinfo, slot->getType()),
-                             (uint64_t)jl_datatype_size(ety),
-                             (uint64_t)jl_datatype_align(ety));
+        emit_memcpy(ctx, slot, jvinfo, jl_datatype_size(ety), jl_datatype_align(ety));
     }
     return ctx.builder.CreatePtrToInt(slot, to);
 }
@@ -644,10 +642,7 @@ static Value *julia_to_native(
         ctx.builder.CreateStore(emit_unbox(ctx, to, jvinfo, jlto), slot);
     }
     else {
-        ctx.builder.CreateMemCpy(slot,
-                             data_pointer(ctx, jvinfo, slot->getType()),
-                             (uint64_t)jl_datatype_size(jlto),
-                             (uint64_t)jl_datatype_align(jlto));
+        emit_memcpy(ctx, slot, jvinfo, jl_datatype_size(jlto), jl_datatype_align(jlto));
     }
     return slot;
 }
@@ -1067,17 +1062,22 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         << jl_string_data(ir) << "\n}";
         SMDiagnostic Err = SMDiagnostic();
         std::string ir_string = ir_stream.str();
-        Module *m = NULL;
-        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*jl_Module,Err);
-        if (!failed)
-            m = jl_Module;
-        if (m == NULL) {
+#if JL_LLVM_VERSION >= 60000
+        // Do not enable update debug info since it runs the verifier on the whole module
+        // and will error on the function we are currently emitting.
+        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"),
+                                        *jl_Module, Err, nullptr, /* UpdateDebugInfo */ false);
+#else
+        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"),
+                                        *jl_Module, Err);
+#endif
+        if (failed) {
             std::string message = "Failed to parse LLVM Assembly: \n";
             llvm::raw_string_ostream stream(message);
             Err.print("julia",stream,true);
             jl_error(stream.str().c_str());
         }
-        f = m->getFunction(ir_name);
+        f = jl_Module->getFunction(ir_name);
     }
     else {
         assert(isPtr);
@@ -1679,13 +1679,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         emit_signal_fence(ctx);
         return ghostValue(jl_void_type);
     }
-    else if (is_libjulia_func(jl_gc_use)) {
-        assert(lrt == T_void);
-        assert(!isVa && !llvmcall && nargt == 1);
-        ctx.builder.CreateCall(prepare_call(gc_use_func), {decay_derived(boxed(ctx, argv[0]))});
-        JL_GC_POP();
-        return ghostValue(jl_void_type);
-    }
     else if (_is_libjulia_func((uintptr_t)ptls_getter, "jl_get_ptls_states")) {
         assert(lrt == T_size);
         assert(!isVa && !llvmcall && nargt == 0);
@@ -2099,21 +2092,26 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 size_t rtsz = jl_datatype_size(rt);
                 assert(rtsz > 0);
                 Value *strct = emit_allocobj(ctx, rtsz, runtime_bt);
+                MDNode *tbaa = jl_is_mutable(rt) ? tbaa_mutab : tbaa_immut;
                 int boxalign = jl_datatype_align(rt);
-#ifndef JL_NDEBUG
+                // copy the data from the return value to the new struct
 #if JL_LLVM_VERSION >= 40000
                 const DataLayout &DL = jl_data_layout;
 #else
                 const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
 #endif
-                // ARM and AArch64 can use a LLVM type larger than the julia
-                // type. However, the LLVM type size should be no larger than
-                // the GC allocation size. (multiple of `sizeof(void*)`)
-                assert(DL.getTypeStoreSize(lrt) <= LLT_ALIGN(rtsz, boxalign));
-#endif
-                // copy the data from the return value to the new struct
-                MDNode *tbaa = jl_is_mutable(rt) ? tbaa_mutab : tbaa_immut;
-                init_bits_value(ctx, strct, result, tbaa, boxalign);
+                auto resultTy = result->getType();
+                if (DL.getTypeStoreSize(resultTy) > rtsz) {
+                    // ARM and AArch64 can use a LLVM type larger than the julia type.
+                    // When this happens, cast through memory.
+                    auto slot = emit_static_alloca(ctx, resultTy);
+                    slot->setAlignment(boxalign);
+                    ctx.builder.CreateAlignedStore(result, slot, boxalign);
+                    emit_memcpy(ctx, strct, slot, rtsz, boxalign, tbaa);
+                }
+                else {
+                    init_bits_value(ctx, strct, result, tbaa, boxalign);
+                }
                 return mark_julia_type(ctx, strct, true, rt);
             }
             jlretboxed = false; // trigger mark_or_box_ccall_result to build the runtime box

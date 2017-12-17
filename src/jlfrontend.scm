@@ -100,8 +100,8 @@
                   (or (memq (car e) '(toplevel line module import importall using export
                                                error incomplete))
                       (and (eq? (car e) 'global) (every symbol? (cdr e))))))
-         (if (eq? e '_)
-             (syntax-deprecation #f "_ as an rvalue" ""))
+         (if (underscore-symbol? e)
+             (syntax-deprecation #f "underscores as an rvalue" ""))
          e)
         (else
          (let ((last *in-expand*))

@@ -5,7 +5,7 @@
 # sufficient to catch segfault bugs.
 
 module ReflectionTest
-using Base.Test
+using Test
 
 function test_ast_reflection(freflect, f, types)
     @test !isempty(freflect(f, types))
@@ -22,7 +22,7 @@ end
 
 function test_code_reflection(freflect, f, types, tester)
     tester(freflect, f, types)
-    tester(freflect, f, (types.parameters...))
+    tester(freflect, f, (types.parameters...,))
     nothing
 end
 
@@ -55,7 +55,7 @@ end # module ReflectionTest
 
 # code_warntype
 module WarnType
-using Base.Test
+using Test
 
 function warntype_hastag(f, types, tag)
     iob = IOBuffer()
@@ -88,7 +88,7 @@ tag = Base.have_color ? Base.text_colors[Base.error_color()] : "ARRAY{FLOAT64,N}
 # Make sure emphasis is not used for other functions
 tag = Base.have_color ? Base.text_colors[Base.error_color()] : "ANY"
 iob = IOBuffer()
-show(iob, expand(Main, :(x -> x^2)))
+show(iob, Meta.lower(Main, :(x -> x^2)))
 str = String(take!(iob))
 @test isempty(search(str, tag))
 
@@ -139,11 +139,35 @@ end # module WarnType
 @test isbits(Tuple{Vararg{Any, 0}})
 
 # issue #16670
-@test isleaftype(Tuple{Int, Vararg{Int, 2}})
-@test !isleaftype(Tuple{Integer, Vararg{Int, 2}})
-@test !isleaftype(Tuple{Int, Vararg{Int}})
-@test isleaftype(Type{Tuple{Integer, Vararg{Int}}})
-@test isleaftype(Type{Vector})
+@test Base._isleaftype(Tuple{Int, Vararg{Int, 2}})
+@test !Base._isleaftype(Tuple{Integer, Vararg{Int, 2}})
+@test !Base._isleaftype(Tuple{Int, Vararg{Int}})
+@test Base._isleaftype(Type{Tuple{Integer, Vararg{Int}}})
+@test Base._isleaftype(Type{Vector})
+@test isconcrete(Int)
+@test isconcrete(Vector{Int})
+@test isconcrete(Tuple{Int, Vararg{Int, 2}})
+@test !isconcrete(Tuple{Any})
+@test !isconcrete(Tuple{Integer, Vararg{Int, 2}})
+@test !isconcrete(Tuple{Int, Vararg{Int}})
+@test !isconcrete(Type{Tuple{Integer, Vararg{Int}}})
+@test !isconcrete(Type{Vector})
+@test !isconcrete(Type{Int})
+@test !isconcrete(Tuple{Type{Int}})
+@test isconcrete(DataType)
+@test isconcrete(Union)
+@test !isconcrete(Union{})
+@test !isconcrete(Tuple{Union{}})
+@test !isconcrete(Complex)
+@test !isconcrete(Complex.body)
+@test !isconcrete(AbstractArray{Int,1})
+struct AlwaysHasLayout{T}
+    x
+end
+@test !isconcrete(AlwaysHasLayout) && !isconcrete(AlwaysHasLayout.body)
+@test isconcrete(AlwaysHasLayout{Any})
+@test isconcrete(Ptr{Void})
+@test !isconcrete(Ptr) && !isconcrete(Ptr.body)
 
 # issue #10165
 i10165(::Type) = 0
@@ -173,7 +197,7 @@ not_const = 1
 include("testenv.jl")
 
 module TestMod7648
-using Base.Test
+using Test
 import Base.convert
 import ..curmod_name, ..curmod
 export a9475, foo9475, c7648, foo7648, foo7648_nomethods, Foo7648
@@ -186,7 +210,7 @@ function foo7648_nomethods end
 mutable struct Foo7648 end
 
 module TestModSub9475
-    using Base.Test
+    using Test
     using ..TestMod7648
     import ..curmod_name
     export a9475, foo9475
@@ -253,7 +277,7 @@ end
 @test_throws ArgumentError("argument is not a generic function") Base.return_types(===, Tuple{Int, Int})
 
 module TestingExported
-using Base.Test
+using Test
 include("testenv.jl") # for curmod_str
 import Base.isexported
 global this_is_not_defined
@@ -304,10 +328,10 @@ tlayout = TLayout(5,7,11)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
 @test_throws BoundsError fieldtype(TLayout, 0)
-@test_throws BoundsError fieldname(TLayout, 0)
+@test_throws ArgumentError fieldname(TLayout, 0)
 @test_throws BoundsError fieldoffset(TLayout, 0)
 @test_throws BoundsError fieldtype(TLayout, 4)
-@test_throws BoundsError fieldname(TLayout, 4)
+@test_throws ArgumentError fieldname(TLayout, 4)
 @test_throws BoundsError fieldoffset(TLayout, 4)
 
 @test fieldtype(Tuple{Vararg{Int8}}, 1) === Int8
@@ -318,13 +342,13 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
 
-import Base: isstructtype, type_alignment, return_types
+import Base: isstructtype, datatype_alignment, return_types
 @test !isstructtype(Union{})
 @test !isstructtype(Union{Int,Float64})
 @test !isstructtype(Int)
 @test isstructtype(TLayout)
-@test type_alignment(UInt16) == 2
-@test type_alignment(TLayout) == 4
+@test datatype_alignment(UInt16) == 2
+@test datatype_alignment(TLayout) == 4
 let rts = return_types(TLayout)
     @test length(rts) >= 3 # general constructor, specific constructor, and call-to-convert adapter(s)
     @test all(rts .== TLayout)
@@ -524,7 +548,7 @@ for i = 1:100; @eval fLargeTable(::Any, ::Val{$i}) = 2; end
 fLargeTable(::Any...) = 3
 @test length(methods(fLargeTable, Tuple{})) == 1
 fLargeTable(::Complex, ::Complex) = 4
-fLargeTable(::Union{Complex64, Complex128}...) = 5
+fLargeTable(::Union{ComplexF32, ComplexF64}...) = 5
 @test length(methods(fLargeTable, Tuple{})) == 1
 fLargeTable() = 4
 @test length(methods(fLargeTable)) == 204
@@ -541,7 +565,7 @@ function f15280(x) end
 
 # bug found in #16850, Base.url with backslashes on Windows
 function module_depth(from::Module, to::Module)
-    if from === to
+    if from === to || module_parent(to) === to
         return 0
     else
         return 1 + module_depth(from, module_parent(to))
@@ -556,35 +580,35 @@ function has_backslashes(mod::Module)
             continue
         end
         h = has_backslashes(f)
-        isnull(h) || return h
+        h === nothing || return h
     end
-    return Nullable{Method}()
+    return nothing
 end
 function has_backslashes(f::Function)
     for m in methods(f)
         h = has_backslashes(m)
-        isnull(h) || return h
+        h === nothing || return h
     end
-    return Nullable{Method}()
+    return nothing
 end
 function has_backslashes(meth::Method)
     if '\\' in string(meth.file)
-        return Nullable{Method}(meth)
+        return meth
     else
-        return Nullable{Method}()
+        return nothing
     end
 end
-has_backslashes(x) = Nullable{Method}()
+has_backslashes(x) = nothing
 h16850 = has_backslashes(Base)
 if Sys.iswindows()
-    if isnull(h16850)
-        warn("No methods found in Base with backslashes in file name, ",
-             "skipping test for Base.url")
+    if h16850 === nothing
+        @warn """No methods found in Base with backslashes in file name,
+                 skipping test for `Base.url`"""
     else
-        @test !('\\' in Base.url(get(h16850)))
+        @test !('\\' in Base.url(h16850))
     end
 else
-    @test isnull(h16850)
+    @test h16850 === nothing
 end
 
 # Adds test for PR #17636
@@ -683,7 +707,7 @@ struct B20086{T,N} <: A20086{T,N} end
 
 # sizeof and nfields
 @test sizeof(Int16) == 2
-@test sizeof(Complex128) == 16
+@test sizeof(ComplexF64) == 16
 primitive type ParameterizedByte__{A,B} 8 end
 @test sizeof(ParameterizedByte__) == 1
 @test sizeof(nothing) == 0
@@ -697,7 +721,7 @@ end
 @test sizeof(Symbol("")) == 0
 @test_throws(ErrorException("argument is an abstract type; size is indeterminate"),
              sizeof(Real))
-@test sizeof(Union{Complex64,Complex128}) == 16
+@test sizeof(Union{ComplexF32,ComplexF64}) == 16
 @test sizeof(Union{Int8,UInt8}) == 1
 @test_throws ErrorException sizeof(AbstractArray)
 @test_throws ErrorException sizeof(Tuple)
@@ -713,8 +737,8 @@ end
 @test nfields(1) == 0
 @test fieldcount(Union{}) == 0
 @test fieldcount(Tuple{Any,Any,T} where T) == 3
-@test fieldcount(Complex) == fieldcount(Complex64) == 2
-@test fieldcount(Union{Complex64,Complex128}) == 2
+@test fieldcount(Complex) == fieldcount(ComplexF32) == 2
+@test fieldcount(Union{ComplexF32,ComplexF64}) == 2
 @test fieldcount(Int) == 0
 @test_throws(ErrorException("type does not have a definite number of fields"),
              fieldcount(Union{Complex,Pair}))
@@ -737,7 +761,7 @@ world = typemax(UInt)
 mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[]
 instance = Core.Inference.code_for_method(m, mtypes, msp, world, false)
 cinfo_generated = Core.Inference.get_staged(instance)
-cinfo_ungenerated = Base.uncompressed_ast(m)
+@test_throws ErrorException Base.uncompressed_ast(m)
 
 test_similar_codeinfo(@code_lowered(f22979(x22979...)), cinfo_generated)
 
@@ -746,7 +770,4 @@ cinfos = code_lowered(f22979, typeof.(x22979), true)
 cinfo = cinfos[]
 test_similar_codeinfo(cinfo, cinfo_generated)
 
-cinfos = code_lowered(f22979, typeof.(x22979), false)
-@test length(cinfos) == 1
-cinfo = cinfos[]
-test_similar_codeinfo(cinfo, cinfo_ungenerated)
+@test_throws ErrorException code_lowered(f22979, typeof.(x22979), false)

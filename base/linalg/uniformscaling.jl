@@ -47,7 +47,7 @@ julia> [1 2im 3; 1im 2 3] * I
  0+1im  2+0im  3+0im
 ```
 """
-const I = UniformScaling(1)
+const I = UniformScaling(true)
 
 eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
@@ -63,7 +63,9 @@ end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
 transpose(J::UniformScaling) = J
+Transpose(S::UniformScaling) = transpose(S)
 adjoint(J::UniformScaling) = UniformScaling(conj(J.λ))
+Adjoint(S::UniformScaling) = adjoint(S)
 
 one(::Type{UniformScaling{T}}) where {T} = UniformScaling(one(T))
 one(J::UniformScaling{T}) where {T} = one(UniformScaling{T})
@@ -76,6 +78,11 @@ istriu(::UniformScaling) = true
 istril(::UniformScaling) = true
 issymmetric(::UniformScaling) = true
 ishermitian(J::UniformScaling) = isreal(J.λ)
+
+(+)(J::UniformScaling, x::Number) = J.λ + x
+(+)(x::Number, J::UniformScaling) = x + J.λ
+(-)(J::UniformScaling, x::Number) = J.λ - x
+(-)(x::Number, J::UniformScaling) = x - J.λ
 
 (+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
 (+)(B::BitArray{2}, J::UniformScaling)      = Array(B) + J
@@ -94,7 +101,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
             ($op)(UL::$t2, J::UniformScaling) = ($t2)(($op)(UL.data, J))
 
             function ($op)(UL::$t1, J::UniformScaling)
-                ULnew = copy_oftype(UL.data, promote_type(eltype(UL), eltype(J)))
+                ULnew = copy_oftype(UL.data, Broadcast.combine_eltypes($op, UL, J))
                 for i = 1:size(ULnew, 1)
                     ULnew[i,i] = ($op)(1, J.λ)
                 end
@@ -105,7 +112,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
 end
 
 function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
-    ULnew = similar(full(UL), promote_type(eltype(J), eltype(UL)))
+    ULnew = similar(parent(UL), Broadcast.combine_eltypes(-, J, UL))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n
@@ -121,7 +128,7 @@ function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
     return UpperTriangular(ULnew)
 end
 function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
-    ULnew = similar(full(UL), promote_type(eltype(J), eltype(UL)))
+    ULnew = similar(parent(UL), Broadcast.combine_eltypes(-, J, UL))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n
@@ -137,9 +144,9 @@ function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
     return LowerTriangular(ULnew)
 end
 
-function (+)(A::AbstractMatrix{TA}, J::UniformScaling{TJ}) where {TA,TJ}
+function (+)(A::AbstractMatrix, J::UniformScaling)
     n = checksquare(A)
-    B = similar(A, promote_type(TA,TJ))
+    B = similar(A, Broadcast.combine_eltypes(+, A, J))
     copy!(B,A)
     @inbounds for i = 1:n
         B[i,i] += J.λ
@@ -147,18 +154,18 @@ function (+)(A::AbstractMatrix{TA}, J::UniformScaling{TJ}) where {TA,TJ}
     B
 end
 
-function (-)(A::AbstractMatrix{TA}, J::UniformScaling{TJ}) where {TA,TJ<:Number}
+function (-)(A::AbstractMatrix, J::UniformScaling)
     n = checksquare(A)
-    B = similar(A, promote_type(TA,TJ))
+    B = similar(A, Broadcast.combine_eltypes(-, A, J))
     copy!(B, A)
     @inbounds for i = 1:n
         B[i,i] -= J.λ
     end
     B
 end
-function (-)(J::UniformScaling{TJ}, A::AbstractMatrix{TA}) where {TA,TJ<:Number}
+function (-)(J::UniformScaling, A::AbstractMatrix)
     n = checksquare(A)
-    B = convert(AbstractMatrix{promote_type(TJ,TA)}, -A)
+    B = convert(AbstractMatrix{Broadcast.combine_eltypes(-, J, A)}, -A)
     @inbounds for j = 1:n
         B[j,j] += J.λ
     end
@@ -206,19 +213,39 @@ broadcast(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
 
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 
+## equality comparison with UniformScaling
+==(J::UniformScaling, A::AbstractMatrix) = A == J
+function ==(A::AbstractMatrix, J::UniformScaling)
+    size(A, 1) == size(A, 2) || return false
+    iszero(J.λ) && return iszero(A)
+    isone(J.λ) && return isone(A)
+    return A == J.λ*one(A)
+end
+function ==(A::StridedMatrix, J::UniformScaling)
+    size(A, 1) == size(A, 2) || return false
+    iszero(J.λ) && return iszero(A)
+    isone(J.λ) && return isone(A)
+    for j in axes(A, 2), i in axes(A, 1)
+        ifelse(i == j, A[i, j] == J.λ, iszero(A[i, j])) || return false
+    end
+    return true
+end
+
 function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
             atol::Real=0, rtol::Real=Base.rtoldefault(T,S,atol), nans::Bool=false) where {T<:Number,S<:Number}
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
 end
-function isapprox(J::UniformScaling,A::AbstractMatrix;
-                  atol::Real=0,
-                  rtol::Real=rtoldefault(promote_leaf_eltypes(A),eltype(J),atol),
-                  nans::Bool=false, norm::Function=vecnorm)
+function isapprox(J::UniformScaling, A::AbstractMatrix;
+                  atol::Real = 0,
+                  rtol::Real = Base.rtoldefault(promote_leaf_eltypes(A), eltype(J), atol),
+                  nans::Bool = false, norm::Function = vecnorm)
     n = checksquare(A)
-    Jnorm = norm === vecnorm ? abs(J.λ)*sqrt(n) : (norm === Base.norm ? abs(J.λ) : norm(diagm(fill(J.λ, n))))
-    return norm(A - J) <= max(atol, rtol*max(norm(A), Jnorm))
+    normJ = norm === Base.norm ? abs(J.λ) :
+            norm === vecnorm   ? abs(J.λ) * sqrt(n) :
+                                 norm(Diagonal(fill(J.λ, n)))
+    return norm(A - J) <= max(atol, rtol * max(norm(A), normJ))
 end
-isapprox(A::AbstractMatrix,J::UniformScaling;kwargs...) = isapprox(J,A;kwargs...)
+isapprox(A::AbstractMatrix, J::UniformScaling; kwargs...) = isapprox(J, A; kwargs...)
 
 function copy!(A::AbstractMatrix, J::UniformScaling)
     size(A,1)==size(A,2) || throw(DimensionMismatch("a UniformScaling can only be copied to a square matrix"))
@@ -239,7 +266,7 @@ end
 # in A to matrices of type T and sizes given by n[k:end].  n is an array
 # so that the same promotion code can be used for hvcat.  We pass the type T
 # so that we can re-use this code for sparse-matrix hcat etcetera.
-promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copy!(Matrix{T}(n,n), J)
+promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copy!(Matrix{T}(uninitialized, n,n), J)
 promote_to_arrays_(n::Int, ::Type, A::AbstractVecOrMat) = A
 promote_to_arrays(n,k, ::Type) = ()
 promote_to_arrays(n,k, ::Type{T}, A) where {T} = (promote_to_arrays_(n[k], T, A),)
@@ -346,3 +373,18 @@ UniformScaling{Float64}
 ```
 """
 chol(J::UniformScaling, args...) = ((C, info) = _chol!(J, nothing); @assertposdef C info)
+
+
+## Matrix construction from UniformScaling
+Matrix{T}(s::UniformScaling, dims::Dims{2}) where {T} = setindex!(zeros(T, dims), T(s.λ), diagind(dims...))
+Matrix{T}(s::UniformScaling, m::Integer, n::Integer) where {T} = Matrix{T}(s, Dims((m, n)))
+Matrix(s::UniformScaling, m::Integer, n::Integer) = Matrix(s, Dims((m, n)))
+Matrix(s::UniformScaling, dims::Dims{2}) = Matrix{eltype(s)}(s, dims)
+Array{T}(s::UniformScaling, dims::Dims{2}) where {T} = Matrix{T}(s, dims)
+Array{T}(s::UniformScaling, m::Integer, n::Integer) where {T} = Matrix{T}(s, m, n)
+Array(s::UniformScaling, m::Integer, n::Integer) = Matrix(s, m, n)
+Array(s::UniformScaling, dims::Dims{2}) = Matrix(s, dims)
+
+## Diagonal construction from UniformScaling
+Diagonal{T}(s::UniformScaling, m::Integer) where {T} = Diagonal{T}(fill(T(s.λ), m))
+Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)

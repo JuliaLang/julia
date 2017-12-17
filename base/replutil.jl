@@ -4,10 +4,10 @@
 show(io::IO, ::MIME"text/plain", x) = show(io, x)
 
 # multiline show functions for types defined before multimedia.jl:
-function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator})
+function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     print(io, summary(iter))
     isempty(iter) && return
-    print(io, ". ", isa(iter,KeyIterator) ? "Keys" : "Values", ":")
+    print(io, ". ", isa(iter,KeySet) ? "Keys" : "Values", ":")
     limit::Bool = get(io, :limit, false)
     if limit
         sz = displaysize(io)
@@ -25,7 +25,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator}
         i == rows < length(iter) && (print(io, "⋮"); break)
 
         if limit
-            str = sprint(0, show, v, env=io)
+            str = sprint(show, v, context=io, sizehint=0)
             str = _truncate_at_width_or_chars(str, cols, "\r\n")
             print(io, str)
         else
@@ -34,7 +34,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator}
     end
 end
 
-function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
+function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
@@ -55,14 +55,14 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
         rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
-        ks = Vector{AbstractString}(min(rows, length(t)))
-        vs = Vector{AbstractString}(min(rows, length(t)))
+        ks = Vector{AbstractString}(uninitialized, min(rows, length(t)))
+        vs = Vector{AbstractString}(uninitialized, min(rows, length(t)))
         keylen = 0
         vallen = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
-            ks[i] = sprint(0, show, k, env=recur_io)
-            vs[i] = sprint(0, show, v, env=recur_io)
+            ks[i] = sprint(show, k, context=recur_io, sizehint=0)
+            vs[i] = sprint(show, v, context=recur_io, sizehint=0)
             keylen = clamp(length(ks[i]), keylen, cols)
             vallen = clamp(length(vs[i]), vallen, cols)
         end
@@ -80,7 +80,7 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
         else
-            key = sprint(0, show, k, env=recur_io)
+            key = sprint(show, k, context=recur_io, sizehint=0)
         end
         print(recur_io, key)
         print(io, " => ")
@@ -136,19 +136,8 @@ function show(io::IO, ::MIME"text/plain", t::Task)
     end
 end
 
-show(io::IO, ::MIME"text/plain", X::AbstractArray) = showarray(io, X, false)
+show(io::IO, ::MIME"text/plain", X::AbstractArray) = _display(io, X)
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
-
-# display something useful even for strings containing arbitrary
-# (non-UTF8) binary data:
-function show(io::IO, ::MIME"text/plain", s::String)
-    if isvalid(s)
-        show(io, s)
-    else
-        println(io, sizeof(s), "-byte String of invalid UTF-8 data:")
-        showarray(io, Vector{UInt8}(s), false; header=false)
-    end
-end
 
 function show(io::IO, ::MIME"text/plain", opt::JLOptions)
     println(io, "JLOptions(")
@@ -158,6 +147,8 @@ function show(io::IO, ::MIME"text/plain", opt::JLOptions)
         v = getfield(opt, i)
         if isa(v, Ptr{UInt8})
             v = (v != C_NULL) ? unsafe_string(v) : ""
+        elseif isa(v, Ptr{Ptr{UInt8}})
+            v = unsafe_load_commands(v)
         end
         println(io, "  ", f, " = ", repr(v), i < nfields ? "," : "")
     end
@@ -170,7 +161,29 @@ end
 """
     showerror(io, e)
 
-Show a descriptive representation of an exception object.
+Show a descriptive representation of an exception object `e`.
+This method is used to display the exception after a call to [`throw`](@ref).
+
+# Examples
+```jldoctest
+julia> struct MyException <: Exception
+           msg::AbstractString
+       end
+
+julia> function Base.showerror(io::IO, err::MyException)
+           print(io, "MyException: ")
+           print(io, err.msg)
+       end
+
+julia> err = MyException("test exception")
+MyException("test exception")
+
+julia> sprint(showerror, err)
+"MyException: test exception"
+
+julia> throw(MyException("test exception"))
+ERROR: MyException: test exception
+```
 """
 showerror(io::IO, ex) = show(io, ex)
 
@@ -228,7 +241,7 @@ end
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
     print(io, "LoadError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)
-    print(io, "\nwhile loading $(ex.file), in expression starting on line $(ex.line)")
+    print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
@@ -309,14 +322,13 @@ function showerror(io::IO, ex::MethodError)
     ft = typeof(f)
     name = ft.name.mt.name
     f_is_function = false
-    kwargs = Any[]
+    kwargs = NamedTuple()
     if startswith(string(ft.name.name), "#kw#")
         f = ex.args[2]
         ft = typeof(f)
         name = ft.name.mt.name
         arg_types_param = arg_types_param[3:end]
-        temp = ex.args[1]
-        kwargs = Any[(temp[i*2-1], temp[i*2]) for i in 1:(length(temp) ÷ 2)]
+        kwargs = ex.args[1]
         ex = MethodError(f, ex.args[3:end])
     end
     if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
@@ -360,7 +372,7 @@ function showerror(io::IO, ex::MethodError)
         end
         if !isempty(kwargs)
             print(io, "; ")
-            for (i, (k, v)) in enumerate(kwargs)
+            for (i, (k, v)) in enumerate(pairs(kwargs))
                 print(io, k, "=")
                 show(IOContext(io, :limit => true), v)
                 i == length(kwargs) || print(io, ", ")
@@ -412,8 +424,8 @@ function showerror(io::IO, ex::MethodError)
     end
     try
         show_method_candidates(io, ex, kwargs)
-    catch
-        warn(io, "Error showing method candidates, aborted")
+    catch ex
+        @error "Error showing method candidates, aborted" exception=ex
     end
 end
 
@@ -450,7 +462,7 @@ function showerror_nostdio(err, msg::AbstractString)
     ccall(:jl_printf, Cint, (Ptr{Void},Cstring), stderr_stream, "\n")
 end
 
-function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
+function show_method_candidates(io::IO, ex::MethodError, kwargs::NamedTuple = NamedTuple())
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
     arg_types_param = Any[arg_types.parameters...]
@@ -468,7 +480,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && isleaftype(at1)
+        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && !Core.Inference.has_free_typevars(at1)
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end
@@ -580,7 +592,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 if !isempty(kwargs)
                     unexpected = Symbol[]
                     if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
-                        for (k, v) in kwargs
+                        for (k, v) in pairs(kwargs)
                             if !(k in kwords)
                                 push!(unexpected, k)
                             end
@@ -633,17 +645,26 @@ end
 global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
 
 function show_backtrace(io::IO, t::Vector)
-    n_frames = 0
-    frame_counter = 0
     resize!(LAST_SHOWN_LINE_INFOS, 0)
-    process_backtrace((a,b) -> n_frames += 1, t)
-    n_frames != 0 && print(io, "\nStacktrace:")
-    process_entry = (last_frame, n) -> begin
+    filtered = Any[]
+    process_backtrace((fr, count) -> push!(filtered, (fr, count)), t)
+    isempty(filtered) && return
+
+    if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
+        f = filtered[1][1]
+        if f.line == 0 && f.file == Symbol("")
+            # don't show a single top-level frame with no location info
+            return
+        end
+    end
+
+    print(io, "\nStacktrace:")
+    frame_counter = 0
+    for (last_frame, n) in filtered
         frame_counter += 1
         show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
         push!(LAST_SHOWN_LINE_INFOS, (string(last_frame.file), last_frame.line))
     end
-    process_backtrace(process_entry, t)
 end
 
 function show_backtrace(io::IO, t::Vector{Any})
@@ -669,7 +690,7 @@ function process_backtrace(process_func::Function, t::Vector, limit::Int=typemax
             count += 1
             if count > limit; break; end
 
-            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func
+            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== lkup.linfo
                 if n > 0
                     process_func(last_frame, n)
                 end
@@ -691,4 +712,11 @@ Such a method is usually undesirable to be displayed to the user in the REPL.
 """
 function is_default_method(m::Method)
     return m.module == Base && m.file == Symbol("sysimg.jl") && m.sig == Tuple{Type{T},Any} where T
+end
+
+@noinline function throw_eachindex_mismatch(::IndexLinear, A...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(linearindices.(A), ", ", " and "))"))
+end
+@noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
 end

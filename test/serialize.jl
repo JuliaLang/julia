@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 # Check that serializer hasn't gone out-of-frame
 @test Serializer.sertag(Symbol) == 1
-@test Serializer.sertag(()) == 55
-@test Serializer.sertag(false) == 63
+@test Serializer.sertag(()) == 68
+@test Serializer.sertag(false) == 76
 
 function create_serialization_stream(f::Function)
     s = IOBuffer()
@@ -29,6 +29,24 @@ create_serialization_stream() do s
     data = take!(s)
     @test data[end-1] == 0x00
     @test data[end] == UInt8(Serializer.sertag(Symbol))
+end
+
+# SubString
+
+create_serialization_stream() do s
+    ss = Any[SubString("12345", 2, 4),
+             SubString(GenericString("12345"), 2, 4),
+             SubString(s"12345", 2, 4),
+             SubString(GenericString(s"12345"), 2, 4),]
+    for x in ss
+        serialize(s, x)
+    end
+    seek(s, 0)
+    for x in ss
+        y = deserialize(s)
+        @test x == y
+        @test typeof(x) == typeof(y)
+    end
 end
 
 # Boolean & Empty & Nothing
@@ -108,8 +126,8 @@ end
 create_serialization_stream() do s # user-defined module
     mod = b"SomeModule"
     modstring = String(mod)
-    eval(parse("module $(modstring); end"))
-    modtype = eval(parse("$(modstring)"))
+    eval(Meta.parse("module $(modstring); end"))
+    modtype = eval(Meta.parse("$(modstring)"))
     serialize(s, modtype)
     seek(s, 0)
     @test deserialize(s) === modtype
@@ -129,8 +147,8 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType"
-    eval(parse("abstract type $(usertype) end"))
-    utype = eval(parse("$(usertype)"))
+    eval(Meta.parse("abstract type $(usertype) end"))
+    utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) === utype
@@ -138,8 +156,8 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType1"
-    eval(parse("mutable struct $(usertype); end"))
-    utype = eval(parse("$(usertype)"))
+    eval(Meta.parse("mutable struct $(usertype); end"))
+    utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) === utype
@@ -147,8 +165,8 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType2"
-    eval(parse("abstract type $(usertype){T} end"))
-    utype = eval(parse("$(usertype)"))
+    eval(Meta.parse("abstract type $(usertype){T} end"))
+    utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) == utype
@@ -156,8 +174,8 @@ end
 
 create_serialization_stream() do s # immutable struct with 1 field
     usertype = "SerializeSomeType3"
-    eval(parse("struct $(usertype){T}; a::T; end"))
-    utype = eval(parse("$(usertype)"))
+    eval(Meta.parse("struct $(usertype){T}; a::T; end"))
+    utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) == utype
@@ -165,8 +183,8 @@ end
 
 create_serialization_stream() do s # immutable struct with 2 field
     usertype = "SerializeSomeType4"
-    eval(parse("struct $(usertype){T}; a::T; b::T; end"))
-    utval = eval(parse("$(usertype)(1,2)"))
+    eval(Meta.parse("struct $(usertype){T}; a::T; b::T; end"))
+    utval = eval(Meta.parse("$(usertype)(1,2)"))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
@@ -174,8 +192,8 @@ end
 
 create_serialization_stream() do s # immutable struct with 3 field
     usertype = "SerializeSomeType5"
-    eval(parse("struct $(usertype){T}; a::T; b::T; c::T; end"))
-    utval = eval(parse("$(usertype)(1,2,3)"))
+    eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; end"))
+    utval = eval(Meta.parse("$(usertype)(1,2,3)"))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
@@ -183,8 +201,8 @@ end
 
 create_serialization_stream() do s # immutable struct with 4 field
     usertype = "SerializeSomeType6"
-    eval(parse("struct $(usertype){T}; a::T; b::T; c::T; d::T; end"))
-    utval = eval(parse("$(usertype)(1,2,3,4)"))
+    eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; d::T; end"))
+    utval = eval(Meta.parse("$(usertype)(1,2,3,4)"))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
@@ -192,10 +210,10 @@ end
 
 # Expression
 create_serialization_stream() do s
-    expr = parse("a = 1")
+    expr = Meta.parse("a = 1")
     serialize(s, expr)
 
-    expr2 = parse(repeat("a = 1;", 300))
+    expr2 = Meta.parse(repeat("a = 1;", 300))
     serialize(s, expr2)
 
     seek(s, 0)
@@ -217,7 +235,7 @@ create_serialization_stream() do s # small 1d array
     arr4 = reshape([true, false, false, false, true, false, false, false, true], 3, 3)
     serialize(s, arr4)       # boolean array
 
-    arr5 = Array{TA1}(3)
+    arr5 = Vector{TA1}(uninitialized, 3)
     arr5[2] = TA1(0x01)
     serialize(s, arr5)
 
@@ -339,11 +357,17 @@ create_serialization_stream() do s # user-defined type array
 end
 
 # corner case: undefined inside immutable struct
+struct MyNullable{T}
+    hasvalue::Bool
+    value::T
+
+    MyNullable{T}() where {T} = new(false)
+end
 create_serialization_stream() do s
-    serialize(s, Nullable{Any}())
+    serialize(s, MyNullable{Any}())
     seekstart(s)
     n = deserialize(s)
-    @test isa(n, Nullable)
+    @test isa(n, MyNullable)
     @test !isdefined(n, :value)
 end
 
@@ -401,7 +425,7 @@ end
 
 # issue #13452
 module Test13452
-using Base.Test
+using Test
 
 module Shell
 export foo
@@ -449,8 +473,10 @@ let b = IOBuffer()
 end
 
 # issue #1770
-let a = ['T', 'e', 's', 't']
+let a = ['T', 'e', 's', 't'],
     f = IOBuffer()
+
+    # issue #1770
     serialize(f, a)
     seek(f, 0)
     @test deserialize(f) == a
@@ -477,4 +503,18 @@ let x = T20324[T20324(1) for i = 1:2]
     y = deserialize(b)
     @test isa(y,Vector{T20324})
     @test y == x
+end
+
+# serializer header
+let io = IOBuffer()
+    serialize(io, ())
+    seekstart(io)
+    b = read(io)
+    @test b[1] == Serializer.HEADER_TAG
+    @test b[2:3] == b"JL"
+    @test b[4] == Serializer.ser_version
+    @test (b[5] & 0x3) == (ENDIAN_BOM == 0x01020304)
+    @test ((b[5] & 0xc)>>2) == (sizeof(Int) == 8)
+    @test (b[5] & 0xf0) == 0
+    @test all(b[6:8] .== 0)
 end

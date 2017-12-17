@@ -61,7 +61,7 @@ show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=0o$(oct(filemode(st),6
 
 # stat & lstat functions
 
-const stat_buf = Vector{UInt8}(ccall(:jl_sizeof_stat, Int32, ()))
+const stat_buf = Vector{UInt8}(uninitialized, ccall(:jl_sizeof_stat, Int32, ()))
 macro stat_call(sym, arg1type, arg)
     quote
         fill!(stat_buf,0)
@@ -165,26 +165,53 @@ Returns `true` if `path` is a FIFO, `false` otherwise.
 
 Returns `true` if `path` is a character device, `false` otherwise.
 """
- ischardev(st::StatStruct) = filemode(st) & 0xf000 == 0x2000
+ischardev(st::StatStruct) = filemode(st) & 0xf000 == 0x2000
 
- """
-     isdir(path) -> Bool
+"""
+    isdir(path) -> Bool
 
- Returns `true` if `path` is a directory, `false` otherwise.
- """
-     isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
+Returns `true` if `path` is a directory, `false` otherwise.
 
- """
-     isblockdev(path) -> Bool
+# Examples
+```jldoctest
+julia> isdir(homedir())
+true
 
- Returns `true` if `path` is a block device, `false` otherwise.
- """
+julia> f = open("test_file.txt", "w")
+IOStream(<file test_file.txt>)
+
+julia> isdir(f)
+false
+
+julia> close(f)
+```
+"""
+    isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
+
+"""
+    isblockdev(path) -> Bool
+
+Returns `true` if `path` is a block device, `false` otherwise.
+"""
 isblockdev(st::StatStruct) = filemode(st) & 0xf000 == 0x6000
 
 """
     isfile(path) -> Bool
 
 Returns `true` if `path` is a regular file, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> isfile(homedir())
+false
+
+julia> f = open("test_file.txt", "w");
+
+julia> isfile(f)
+true
+
+julia> close(f)
+```
 """
     isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
 

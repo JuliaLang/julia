@@ -142,7 +142,7 @@ linenumber, source code, and fielddocs.
 """
 mutable struct DocStr
     text   :: Core.SimpleVector
-    object :: Nullable
+    object :: Any
     data   :: Dict{Symbol, Any}
 end
 
@@ -160,9 +160,9 @@ function docstr(binding::Binding, @nospecialize typesig = Union{})
 end
 docstr(object, data = Dict()) = _docstr(object, data)
 
-_docstr(vec::Core.SimpleVector, data) = DocStr(vec,            Nullable(),       data)
-_docstr(str::AbstractString,    data) = DocStr(Core.svec(str), Nullable(),       data)
-_docstr(object,                 data) = DocStr(Core.svec(),    Nullable(object), data)
+_docstr(vec::Core.SimpleVector, data) = DocStr(vec,            nothing, data)
+_docstr(str::AbstractString,    data) = DocStr(Core.svec(str), nothing, data)
+_docstr(object,                 data) = DocStr(Core.svec(),     object, data)
 
 _docstr(doc::DocStr, data) = (doc.data = merge(data, doc.data); doc)
 
@@ -184,13 +184,13 @@ end
 @noinline formatdoc(buffer, d, part) = print(buffer, part)
 
 function parsedoc(d::DocStr)
-    if isnull(d.object)
+    if d.object === nothing
         md = formatdoc(d)
         md.meta[:module] = d.data[:module]
         md.meta[:path]   = d.data[:path]
-        d.object = Nullable(md)
+        d.object = md
     end
-    get(d.object)
+    d.object
 end
 
 """
@@ -236,7 +236,7 @@ function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = U
         # We allow for docstrings to be updated, but print a warning since it is possible
         # that over-writing a docstring *may* have been accidental.  The warning
         # is suppressed for symbols in Main, for interactive use (#23011).
-        __module__ == Main || warn("replacing docs for '$b :: $sig' in module '$(__module__)'.")
+        __module__ == Main || @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
         # are initially added. Replacing a specific docstring does not change it's ordering.
@@ -273,7 +273,7 @@ getdoc(x) = nothing
 """
     Docs.doc(binding, sig)
 
-Returns all documentation that matches both `binding` and `sig`.
+Return all documentation that matches both `binding` and `sig`.
 
 If `getdoc` returns a non-`nothing` result on the value of the binding, then a
 dynamic docstring is returned instead of one based on the binding itself.
@@ -330,7 +330,7 @@ doc(object, sig...)              = doc(object, Tuple{sig...})
 """
     Docs.fielddoc(binding, field)
 
-Returns documentation for a particular `field` of a type if it exists.
+Return documentation for a particular `field` of a type if it exists.
 """
 function fielddoc(binding::Binding, field::Symbol)
     for mod in modules
@@ -531,10 +531,8 @@ end
 function objectdoc(__source__, __module__, str, def, expr, sig = :(Union{}))
     binding = esc(bindingexpr(namify(expr)))
     docstr  = esc(docexpr(__source__, __module__, lazy_iterpolate(str), metadata(__source__, __module__, expr, false)))
-    quote
-        $(esc(def))
-        $(doc!)($__module__, $binding, $docstr, $(esc(sig)))
-    end
+    # Note: we want to avoid introducing line number nodes here (issue #24468)
+    Expr(:block, esc(def), :($(doc!)($__module__, $binding, $docstr, $(esc(sig)))))
 end
 
 function calldoc(__source__, __module__, str, def)
@@ -642,7 +640,7 @@ finddoc(λ, def) = false
 
 # Predicates and helpers for `docm` expression selection:
 
-const FUNC_HEADS    = [:function, :stagedfunction, :macro, :(=)]
+const FUNC_HEADS    = [:function, :macro, :(=)]
 const BINDING_HEADS = [:typealias, :const, :global, :(=)]  # deprecation: remove `typealias` post-0.6
 # For the special `:@mac` / `:(Base.@mac)` syntax for documenting a macro after definition.
 isquotedmacrocall(x) =
@@ -680,7 +678,7 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define = true)
     #   f(...)
     #
     isexpr(x, FUNC_HEADS) && is_signature(x.args[1])   ? objectdoc(source, mod, meta, def, x, signature(x)) :
-    isexpr(x, :function)  && !isexpr(x.args[1], :call) ? objectdoc(source, mod, meta, def, x) :
+    isexpr(x, [:function, :macro])  && !isexpr(x.args[1], :call) ? objectdoc(source, mod, meta, def, x) :
     isexpr(x, :call)                                   ? calldoc(source, mod, meta, x) :
 
     # Type definitions.

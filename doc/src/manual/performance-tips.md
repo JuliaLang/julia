@@ -73,8 +73,7 @@ julia> @time f(10^6)
 On the first call (`@time f(1)`), `f` gets compiled.  (If you've not yet used [`@time`](@ref)
 in this session, it will also compile functions needed for timing.)  You should not take the results
 of this run seriously. For the second run, note that in addition to reporting the time, it also
-indicated that a large amount of memory was allocated. This is the single biggest advantage of
-[`@time`](@ref) vs. functions like [`tic`](@ref) and [`toc`](@ref), which only report time.
+indicated that a large amount of memory was allocated.
 
 Unexpected memory allocation is almost always a sign of some problem with your code, usually a
 problem with type-stability. Consequently, in addition to the allocation itself, it's very likely
@@ -454,7 +453,10 @@ MyBetterContainer{Float64,UnitRange{Float64}}
 
 julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(UnitRange(1.3, 5.0));
 ERROR: MethodError: Cannot `convert` an object of type UnitRange{Float64} to an object of type MyBetterContainer{Int64,UnitRange{Float64}}
-[...]
+This may have arisen from a call to the constructor MyBetterContainer{Int64,UnitRange{Float64}}(...),
+since type constructors fall back to convert methods.
+Stacktrace:
+ [1] MyBetterContainer{Int64,UnitRange{Float64}}(::UnitRange{Float64}) at ./sysimg.jl:114
 ```
 
 The inner constructor requires that the element type of `A` be `T`.
@@ -637,14 +639,14 @@ This should be written as:
 
 ```jldoctest
 julia> function fill_twos!(a)
-           for i=1:length(a)
+           for i=eachindex(a)
                a[i] = 2
            end
        end
 fill_twos! (generic function with 1 method)
 
 julia> function strange_twos(n)
-           a = Array{rand(Bool) ? Int64 : Float64}(n)
+           a = Vector{rand(Bool) ? Int64 : Float64}(uninitialized, n)
            fill_twos!(a)
            return a
        end
@@ -842,36 +844,36 @@ do this in at least four ways (in addition to the recommended call to the built-
 
 ```julia
 function copy_cols(x::Vector{T}) where T
-    n = size(x, 1)
-    out = Array{T}(n, n)
-    for i = 1:n
+    inds = axes(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for i = inds
         out[:, i] = x
     end
     out
 end
 
 function copy_rows(x::Vector{T}) where T
-    n = size(x, 1)
-    out = Array{T}(n, n)
-    for i = 1:n
+    inds = axes(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for i = inds
         out[i, :] = x
     end
     out
 end
 
 function copy_col_row(x::Vector{T}) where T
-    n = size(x, 1)
-    out = Array{T}(n, n)
-    for col = 1:n, row = 1:n
+    inds = axes(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for col = inds, row = inds
         out[row, col] = x[row]
     end
     out
 end
 
 function copy_row_col(x::Vector{T}) where T
-    n = size(x, 1)
-    out = Array{T}(n, n)
-    for row = 1:n, col = 1:n
+    inds = axes(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for row = inds, col = inds
         out[row, col] = x[col]
     end
     out
@@ -931,7 +933,7 @@ function xinc!(ret::AbstractVector{T}, x::T) where T
 end
 
 function loopinc_prealloc()
-    ret = Array{Int}(3)
+    ret = Vector{Int}(uninitialized, 3)
     y = 0
     for i = 1:10^7
         xinc!(ret, i)
@@ -1169,6 +1171,10 @@ Sometimes you can enable better optimization by promising certain program proper
   * Write `@simd` in front of `for` loops that are amenable to vectorization. **This feature is experimental**
     and could change or disappear in future versions of Julia.
 
+The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
+and may cause a segmentation fault if bounds checking is turned off. Use `linearindices(x)` or `eachindex(x)`
+instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
+
 Note: While `@simd` needs to be placed directly in front of a loop, both `@inbounds` and `@fastmath`
 can be applied to several statements at once, e.g. using `begin` ... `end`, or even to a whole
 function.
@@ -1178,7 +1184,7 @@ Here is an example with both `@inbounds` and `@simd` markup:
 ```julia
 function inner(x, y)
     s = zero(eltype(x))
-    for i=1:length(x)
+    for i=eachindex(x)
         @inbounds s += x[i]*y[i]
     end
     s
@@ -1186,7 +1192,7 @@ end
 
 function innersimd(x, y)
     s = zero(eltype(x))
-    @simd for i=1:length(x)
+    @simd for i=eachindex(x)
         @inbounds s += x[i]*y[i]
     end
     s
@@ -1248,15 +1254,15 @@ Here is an example with all three kinds of markup. This program first calculates
 of a one-dimensional array, and then evaluates the L2-norm of the result:
 
 ```julia
-function init!(u)
+function init!(u::Vector)
     n = length(u)
     dx = 1.0 / (n-1)
-    @fastmath @inbounds @simd for i in 1:n
+    @fastmath @inbounds @simd for i in 1:n #by asserting that `u` is a `Vector` we can assume it has 1-based indexing
         u[i] = sin(2pi*dx*i)
     end
 end
 
-function deriv!(u, du)
+function deriv!(u::Vector, du)
     n = length(u)
     dx = 1.0 / (n-1)
     @fastmath @inbounds du[1] = (u[2] - u[1]) / dx
@@ -1266,7 +1272,7 @@ function deriv!(u, du)
     @fastmath @inbounds du[n] = (u[n] - u[n-1]) / dx
 end
 
-function norm(u)
+function norm(u::Vector)
     n = length(u)
     T = eltype(u)
     s = zero(T)
@@ -1278,7 +1284,7 @@ end
 
 function main()
     n = 2000
-    u = Array{Float64}(n)
+    u = Vector{Float64}(uninitialized, n)
     init!(u)
     du = similar(u)
 

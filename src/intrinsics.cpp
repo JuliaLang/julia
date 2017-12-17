@@ -161,7 +161,7 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
     Type *lt = julia_struct_to_llvm((jl_value_t*)bt, NULL, NULL);
 
     if (type_is_ghost(lt))
-        return UndefValue::get(NoopType);
+        return UndefValue::get(lt);
 
     if (jl_is_primitivetype(bt)) {
         if (lt->isFloatTy()) {
@@ -189,14 +189,18 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
 
     CompositeType *lct = cast<CompositeType>(lt);
     size_t nf = jl_datatype_nfields(bt);
-    std::vector<Constant*> fields(nf);
+    std::vector<Constant*> fields(0);
     for (size_t i = 0; i < nf; i++) {
         size_t offs = jl_field_offset(bt, i);
         assert(!jl_field_isptr(bt, i));
         jl_value_t *ft = jl_field_type(bt, i);
-        Type *lft = lct->getTypeAtIndex(i);
+        Type *lft = julia_type_to_llvm(ft);
+        if (type_is_ghost(lft))
+            continue;
+        unsigned llvm_idx = isa<StructType>(lt) ? convert_struct_offset(lt, offs) : i;
+        while (fields.size() < llvm_idx)
+            fields.push_back(UndefValue::get(lct->getTypeAtIndex(fields.size())));
         const uint8_t *ov = (const uint8_t*)ptr + offs;
-        Constant *val;
         if (jl_is_uniontype(ft)) {
             // compute the same type layout as julia_struct_to_llvm
             size_t fsz = jl_field_size(bt, i);
@@ -204,47 +208,50 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
             uint8_t sel = ((const uint8_t*)ptr)[offs + fsz - 1];
             jl_value_t *active_ty = jl_nth_union_component(ft, sel);
             size_t active_sz = jl_datatype_size(active_ty);
-            ArrayType *aty = cast<ArrayType>(cast<StructType>(lft)->getTypeAtIndex(0u));
-            assert(aty->getElementType() == IntegerType::get(jl_LLVMContext, 8 * al) &&
-                   aty->getNumElements() == (fsz - 1) / al);
-            std::vector<Constant*> ArrayElements(0);
-            for (unsigned j = 0; j < aty->getNumElements(); j++) {
-                APInt Elem(8 * al, 0);
-                void *bits = const_cast<uint64_t*>(Elem.getRawData());
-                if (active_sz > al) {
-                    memcpy(bits, ov, al);
-                    active_sz -= al;
-                }
-                else if (active_sz > 0) {
-                    memcpy(bits, ov, active_sz);
-                    active_sz = 0;
-                }
-                ov += al;
-                ArrayElements.push_back(ConstantInt::get(aty->getElementType(), Elem));
-            }
-            std::vector<Constant*> Elements(0);
-            Elements.push_back(ConstantArray::get(aty, ArrayElements));
+            Type *AlignmentType = IntegerType::get(jl_LLVMContext, 8 * al);
+            unsigned NumATy = (fsz - 1) / al;
             unsigned remainder = (fsz - 1) % al;
-            while (remainder--) {
-                uint8_t byte;
+            while (NumATy--) {
+                Constant *fld;
                 if (active_sz > 0) {
-                    byte = *ov;
-                    active_sz -= 1;
+                    APInt Elem(8 * al, 0);
+                    void *bits = const_cast<uint64_t*>(Elem.getRawData());
+                    if (active_sz > al) {
+                        memcpy(bits, ov, al);
+                        active_sz -= al;
+                    }
+                    else {
+                        memcpy(bits, ov, active_sz);
+                        active_sz = 0;
+                    }
+                    fld = ConstantInt::get(AlignmentType, Elem);
                 }
                 else {
-                    byte = 0;
+                    fld = UndefValue::get(AlignmentType);
+                }
+                ov += al;
+                fields.push_back(fld);
+            }
+            while (remainder--) {
+                Constant *fld;
+                if (active_sz > 0) {
+                    uint8_t byte = *ov;
+                    APInt Elem(8, byte);
+                    active_sz -= 1;
+                    fld = ConstantInt::get(T_int8, Elem);
+                }
+                else {
+                    fld = UndefValue::get(T_int8);
                 }
                 ov += 1;
-                APInt Elem(8, byte);
-                Elements.push_back(ConstantInt::get(T_int8, Elem));
+                fields.push_back(fld);
             }
-            Elements.push_back(ConstantInt::get(T_int8, sel));
-            val = ConstantStruct::get(cast<StructType>(lft), Elements);
+            fields.push_back(ConstantInt::get(T_int8, sel));
         }
         else {
-            val = julia_const_to_llvm(ov, (jl_datatype_t*)ft);
+            Constant *val = julia_const_to_llvm(ov, (jl_datatype_t*)ft);
+            fields.push_back(val);
         }
-        fields[i] = val;
     }
 
     if (lct->isVectorTy())
@@ -269,6 +276,37 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
 
 static jl_cgval_t ghostValue(jl_value_t *ty);
 
+static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
+{
+    Type *ty = unboxed->getType();
+    assert(ty != T_void);
+    bool frompointer = ty->isPointerTy();
+    bool topointer = to->isPointerTy();
+    if (frompointer && topointer) {
+        unboxed = emit_bitcast(ctx, unboxed, to);
+    }
+    else if (frompointer) {
+        Type *INTT_to = INTT(to);
+        unboxed = ctx.builder.CreatePtrToInt(unboxed, INTT_to);
+        if (INTT_to != to)
+            unboxed = ctx.builder.CreateBitCast(unboxed, to);
+    }
+    else if (topointer) {
+        Type *INTT_to = INTT(to);
+        if (to != INTT_to)
+            unboxed = ctx.builder.CreateBitCast(unboxed, INTT_to);
+        unboxed = ctx.builder.CreateIntToPtr(unboxed, to);
+    }
+    else if (ty == T_int1 && to == T_int8) {
+        // bools may be stored internally as int8
+        unboxed = ctx.builder.CreateZExt(unboxed, T_int8);
+    }
+    else if (ty != to) {
+        unboxed = ctx.builder.CreateBitCast(unboxed, to);
+    }
+    return unboxed;
+}
+
 // emit code to unpack a raw value from a box into registers or a stack slot
 static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *dest, bool volatile_store)
 {
@@ -287,33 +325,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
 
     Constant *c = x.constant ? julia_const_to_llvm(x.constant) : NULL;
     if (!x.ispointer() || c) { // already unboxed, but sometimes need conversion
-        Value *unboxed = c ? c : x.V;
-        Type *ty = unboxed->getType();
-        assert(ty != T_void);
-        bool frompointer = ty->isPointerTy();
-        bool topointer = to->isPointerTy();
-        if (frompointer && topointer) {
-            unboxed = emit_bitcast(ctx, unboxed, to);
-        }
-        else if (frompointer) {
-            Type *INTT_to = INTT(to);
-            unboxed = ctx.builder.CreatePtrToInt(unboxed, INTT_to);
-            if (INTT_to != to)
-                unboxed = ctx.builder.CreateBitCast(unboxed, to);
-        }
-        else if (topointer) {
-            Type *INTT_to = INTT(to);
-            if (to != INTT_to)
-                unboxed = ctx.builder.CreateBitCast(unboxed, INTT_to);
-            unboxed = ctx.builder.CreateIntToPtr(unboxed, to);
-        }
-        else if (ty == T_int1 && to == T_int8) {
-            // bools may be stored internally as int8
-            unboxed = ctx.builder.CreateZExt(unboxed, T_int8);
-        }
-        else if (ty != to) {
-            unboxed = ctx.builder.CreateBitCast(unboxed, to);
-        }
+        Value *unboxed = emit_unboxed_coercion(ctx, to, c ? c : x.V);
         if (!dest)
             return unboxed;
         Type *dest_ty = unboxed->getType()->getPointerTo();
@@ -326,14 +338,12 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     // bools stored as int8, so an extra Trunc is needed to get an int1
     Value *p = x.constant ? literal_pointer_val(ctx, x.constant) : x.V;
     Type *ptype = (to == T_int1 ? T_pint8 : to->getPointerTo());
-    if (p->getType() != ptype)
-        p = emit_bitcast(ctx, p, ptype);
 
     Value *unboxed = NULL;
     if (to == T_int1)
-        unboxed = ctx.builder.CreateTrunc(tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(p)), T_int1);
+        unboxed = ctx.builder.CreateTrunc(tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(maybe_bitcast(ctx, p, ptype))), T_int1);
     else if (jt == (jl_value_t*)jl_bool_type)
-        unboxed = ctx.builder.CreateZExt(ctx.builder.CreateTrunc(tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(p)), T_int1), to);
+        unboxed = ctx.builder.CreateZExt(ctx.builder.CreateTrunc(tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(maybe_bitcast(ctx, p, ptype))), T_int1), to);
     if (unboxed) {
         if (!dest)
             return unboxed;
@@ -341,17 +351,8 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         return NULL;
     }
 
-    int alignment;
-    if (jt) {
-        alignment = julia_alignment(p, jt, 0);
-    }
-    else {
-        // stack has default alignment
-        alignment = 0;
-    }
+    unsigned alignment = julia_alignment(jt, 0);
     if (dest) {
-        // callers using the dest argument only use it for a stack slot for now
-        alignment = 0;
         MDNode *tbaa = x.tbaa;
         // the memcpy intrinsic does not allow to specify different alias tags
         // for the load part (x.tbaa) and the store part (tbaa_stack).
@@ -359,15 +360,32 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         // x.tbaa ∪ tbaa_stack = tbaa_root if x.tbaa != tbaa_stack
         if (tbaa != tbaa_stack)
             tbaa = NULL;
-        ctx.builder.CreateMemCpy(dest, p, jl_datatype_size(jt), alignment, volatile_store, tbaa);
+        emit_memcpy(ctx, dest, p, jl_datatype_size(jt), alignment, volatile_store, tbaa);
         return NULL;
     }
     else {
-        Instruction *load;
-        if (alignment)
-            load = ctx.builder.CreateAlignedLoad(p, alignment);
-        else
-            load = ctx.builder.CreateLoad(p);
+        if (p->getType() != ptype && isa<AllocaInst>(p)) {
+            // LLVM's mem2reg can't handle coercion if the load/store type does
+            // not match the type of the alloca. As such, it is better to
+            // perform the load using the alloca's type and then perform the
+            // appropriate coercion manually.
+            AllocaInst *AI = cast<AllocaInst>(p);
+            Type *AllocType = AI->getAllocatedType();
+#if JL_LLVM_VERSION >= 40000
+            const DataLayout &DL = jl_data_layout;
+#else
+            const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
+#endif
+            if (!AI->isArrayAllocation() &&
+                    (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
+                    (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
+                    DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
+                Instruction *load = ctx.builder.CreateAlignedLoad(p, alignment);
+                return emit_unboxed_coercion(ctx, to, tbaa_decorate(x.tbaa, load));
+            }
+        }
+        p = maybe_bitcast(ctx, p, ptype);
+        Instruction *load = ctx.builder.CreateAlignedLoad(p, alignment);
         return tbaa_decorate(x.tbaa, load);
     }
 }
@@ -452,7 +470,8 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         if (isboxed)
             vxt = llvmt;
         vx = tbaa_decorate(v.tbaa, ctx.builder.CreateLoad(
-                    data_pointer(ctx, v, vxt == T_int1 ? T_pint8 : vxt->getPointerTo())));
+                    emit_bitcast(ctx, data_pointer(ctx, v),
+                        vxt == T_int1 ? T_pint8 : vxt->getPointerTo())));
     }
 
     vxt = vx->getType();
@@ -612,7 +631,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         Value *thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
         thePtr = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, thePtr, T_pint8), im1);
-        ctx.builder.CreateMemCpy(emit_bitcast(ctx, strct, T_pint8), thePtr, size, 1);
+        emit_memcpy(ctx, strct, thePtr, size, 1);
         return mark_julia_type(ctx, strct, true, ety);
     }
     else {
@@ -676,8 +695,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
-        ctx.builder.CreateMemCpy(ctx.builder.CreateGEP(T_int8, thePtr, im1),
-                             data_pointer(ctx, x, T_pint8), size, align_nb);
+        emit_memcpy(ctx, ctx.builder.CreateGEP(T_int8, thePtr, im1), x, size, align_nb);
     }
     else {
         bool isboxed;
@@ -912,6 +930,26 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case udiv_int: return ctx.builder.CreateUDiv(x, y);
     case srem_int: return ctx.builder.CreateSRem(x, y);
     case urem_int: return ctx.builder.CreateURem(x, y);
+
+    // LLVM will not fold ptrtoint+arithmetic+inttoptr to GEP. The reason for this
+    // has to do with alias analysis. When adding two integers, either one of them
+    // could be the pointer base. With getelementptr, it is clear which of the
+    // operands is the pointer base. We also have this information at the julia
+    // level. Thus, to not lose information, we need to have a separate intrinsic
+    // for pointer arithmetic which lowers to getelementptr.
+    case add_ptr: {
+        return ctx.builder.CreatePtrToInt(
+            ctx.builder.CreateGEP(T_int8,
+                ctx.builder.CreateIntToPtr(x, T_pint8), y), t);
+
+    }
+
+    case sub_ptr: {
+        return ctx.builder.CreatePtrToInt(
+            ctx.builder.CreateGEP(T_int8,
+                ctx.builder.CreateIntToPtr(x, T_pint8), ctx.builder.CreateNeg(y)), t);
+
+    }
 
 // Implements IEEE negate. See issue #7868
     case neg_float: return math_builder(ctx)().CreateFSub(ConstantFP::get(t, -0.0), x);

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
@@ -15,7 +15,7 @@ srand(1234321)
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 
-@testset for eltya in (Float32, Float64, Complex64, Complex128, Int)
+@testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     asym = a'+a                  # symmetric indefinite
     apd  = a'*a                 # symmetric positive-definite
@@ -31,7 +31,7 @@ aimg  = randn(n,n)/2
         @test sort(real(f[:values])) ≈ sort(real(d))
         @test sort(imag(f[:values])) ≈ sort(imag(d))
         @test istriu(f[:Schur]) || eltype(a)<:Real
-        @test AbstractArray(f) ≈ a
+        @test convert(Array, f) ≈ a
         @test_throws KeyError f[:A]
 
         sch, vecs, vals = schur(UpperTriangular(triu(a)))
@@ -42,6 +42,8 @@ aimg  = randn(n,n)/2
         @test vecs*sch*vecs' ≈ asym
         sch, vecs, vals = schur(Symmetric(a+a.'))
         @test vecs*sch*vecs' ≈ a + a.'
+        sch, vecs, vals = schur(Tridiagonal(a+a.'))
+        @test vecs*sch*vecs' ≈ Tridiagonal(a + a.')
 
         tstring = sprint(show,f[:T])
         zstring = sprint(show,f[:Z])

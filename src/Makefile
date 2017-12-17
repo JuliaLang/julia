@@ -41,7 +41,7 @@ SRCS := \
 	simplevector APInt-C runtime_intrinsics runtime_ccall precompile \
 	threadgroup threading stackwalk gc gc-debug gc-pages method \
 	jlapi signal-handling safepoint jloptions timing subtype rtutils \
-	crc32c
+	crc32c processor
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
@@ -52,7 +52,8 @@ LLVMLINK :=
 ifeq ($(JULIACODEGEN),LLVM)
 SRCS += codegen jitlayers disasm debuginfo llvm-simdloop llvm-ptls llvm-muladd \
 	llvm-late-gc-lowering llvm-lower-handlers llvm-gc-invariant-verifier \
-	llvm-propagate-addrspaces llvm-alloc-opt cgmemmgr
+	llvm-propagate-addrspaces llvm-multiversioning llvm-alloc-opt cgmemmgr \
+	llvm-api
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -87,6 +88,7 @@ PUBLIC_HEADERS += $(LIBUV_INC)/uv*
 endif
 PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLIC_HEADERS)))
 
+ifeq ($(JULIACODEGEN),LLVM)
 # In LLVM < 3.4, --ldflags includes both options and libraries, so use it both before and after --libs
 # In LLVM >= 3.4, --ldflags has only options, and --system-libs has the libraries.
 ifneq ($(USE_LLVM_SHLIB),1)
@@ -95,6 +97,7 @@ else
 LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
 FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
+endif
 
 COMMON_LIBS := -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS)
 DEBUG_LIBS := $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a $(COMMON_LIBS)
@@ -108,10 +111,6 @@ SHIPFLAGS += $(FLAGS)
 # if not absolute, then relative to the directory of the julia executable
 SHIPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.$(SHLIB_EXT)\""
 DEBUGFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys-debug.$(SHLIB_EXT)\""
-
-ifneq ($(CPUID_SPECIFIC_BINARIES), 0)
-override CPPFLAGS += "-DCPUID_SPECIFIC_BINARIES=1"
-endif
 
 FLISP_EXECUTABLE_debug := $(BUILDDIR)/flisp/flisp-debug
 FLISP_EXECUTABLE_release := $(BUILDDIR)/flisp/flisp
@@ -186,12 +185,16 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliase
 # additional dependency links
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
 $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,\
-	intrinsics.cpp jitlayers.h intrinsics.h debuginfo.h codegen_shared.h cgutils.cpp ccall.cpp abi_*.cpp)
+	intrinsics.cpp jitlayers.h intrinsics.h debuginfo.h codegen_shared.h cgutils.cpp ccall.cpp abi_*.cpp processor.h)
+$(BUILDDIR)/processor.o $(BUILDDIR)/processor.dbg.obj: $(addprefix $(SRCDIR)/,processor_*.cpp processor.h features_*.h)
+$(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj: $(SRCDIR)/interpreter-stacktrace.c
 $(BUILDDIR)/anticodegen.o $(BUILDDIR)/anticodegen.dbg.obj: $(SRCDIR)/intrinsics.h
-$(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: $(SRCDIR)/debuginfo.h
-$(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(SRCDIR)/debuginfo.h
+$(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: \
+	$(addprefix $(SRCDIR)/,debuginfo.h processor.h)
+$(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(SRCDIR)/debuginfo.h $(SRCDIR)/processor.h
 $(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/table.c
+$(BUILDDIR)/staticdata.o $(BUILDDIR)/staticdata.dbg.obj: $(SRCDIR)/processor.h
 $(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc.h
 $(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj: $(SRCDIR)/gc.h
 $(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj: $(SRCDIR)/gc.h

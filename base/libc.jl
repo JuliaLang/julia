@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Libc
+@doc """
+Interface to libc, the C standard library.
+""" -> Libc
 
 import Base: transcode
 
@@ -242,14 +245,14 @@ getpid() = ccall(:jl_getpid, Int32, ())
 Get the local machine's host name.
 """
 function gethostname()
-    hn = Vector{UInt8}(256)
+    hn = Vector{UInt8}(uninitialized, 256)
     err = @static if Sys.iswindows()
         ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
     else
         ccall(:gethostname, Int32, (Ptr{UInt8}, UInt), hn, length(hn))
     end
     systemerror("gethostname", err != 0)
-    return unsafe_string(pointer(hn))
+    return Base.@gc_preserve hn unsafe_string(pointer(hn))
 end
 
 ## system error handling ##
@@ -304,8 +307,8 @@ if Sys.iswindows()
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[]
         len == 0 && return ""
-        buf = Vector{UInt16}(len)
-        unsafe_copy!(pointer(buf), p, len)
+        buf = Vector{UInt16}(uninitialized, len)
+        Base.@gc_preserve buf unsafe_copy!(pointer(buf), p, len)
         ccall(:LocalFree, stdcall, Ptr{Void}, (Ptr{Void},), p)
         return transcode(String, buf)
     end

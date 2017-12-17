@@ -51,7 +51,7 @@ inv(x::Integer) = float(one(x)) / float(x)
 """
     isodd(x::Integer) -> Bool
 
-Returns `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
+Return `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
 
 ```jldoctest
 julia> isodd(9)
@@ -66,7 +66,7 @@ isodd(n::Integer) = rem(n, 2) != 0
 """
     iseven(x::Integer) -> Bool
 
-Returns `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
+Return `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
 
 ```jldoctest
 julia> iseven(9)
@@ -207,7 +207,7 @@ function mod(x::T, y::T) where T<:Integer
     y == -1 && return T(0)   # avoid potential overflow in fld
     return x - fld(x, y) * y
 end
-mod(x::Signed, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
+mod(x::BitSigned, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
 mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
 mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 
@@ -517,6 +517,7 @@ if module_name(@__MODULE__) === :Base
 end
 
 rem(x::T, ::Type{T}) where {T<:Integer} = x
+rem(x::Integer, T::Type{<:Integer}) = convert(T, x)  # `x % T` falls back to `convert`
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 
@@ -592,34 +593,44 @@ macro uint128_str(s)
 end
 
 macro big_str(s)
-    n = tryparse(BigInt, s)
-    !isnull(n) && return get(n)
-    n = tryparse(BigFloat, s)
-    !isnull(n) && return get(n)
+    if '_' in s
+        # remove _ in s[2:end-1]
+        bf = IOBuffer(endof(s))
+        print(bf, s[1])
+        for c in SubString(s, 2, endof(s)-1)
+            c != '_' && print(bf, c)
+        end
+        print(bf, s[end])
+        seekstart(bf)
+        n = tryparse(BigInt, String(take!(bf)))
+        n === nothing || return n
+    else
+        n = tryparse(BigInt, s)
+        n === nothing || return n
+        n = tryparse(BigFloat, s)
+        n === nothing || return n
+    end
     message = "invalid number format $s for BigInt or BigFloat"
     return :(throw(ArgumentError($message)))
 end
 
 ## integer promotions ##
 
-promote_rule(::Type{Int8}, ::Type{Int16})   = Int16
-promote_rule(::Type{UInt8}, ::Type{UInt16}) = UInt16
-promote_rule(::Type{Int32}, ::Type{<:Union{Int8,Int16}})    = Int32
-promote_rule(::Type{UInt32}, ::Type{<:Union{UInt8,UInt16}}) = UInt32
-promote_rule(::Type{Int64}, ::Type{<:Union{Int8,Int16,Int32}})     = Int64
-promote_rule(::Type{UInt64}, ::Type{<:Union{UInt8,UInt16,UInt32}}) = UInt64
-promote_rule(::Type{Int128}, ::Type{<:BitSigned64})    = Int128
-promote_rule(::Type{UInt128}, ::Type{<:BitUnsigned64}) = UInt128
-for T in BitSigned_types
-    @eval promote_rule(::Type{<:Union{UInt8,UInt16}}, ::Type{$T}) =
-        $(sizeof(T) < sizeof(Int) ? Int : T)
-end
-@eval promote_rule(::Type{UInt32}, ::Type{<:Union{Int8,Int16,Int32}}) =
-    $(Core.sizeof(Int) == 8 ? Int : UInt)
-promote_rule(::Type{UInt32}, ::Type{Int64}) = Int64
-promote_rule(::Type{UInt64}, ::Type{<:BitSigned64}) = UInt64
-promote_rule(::Type{<:Union{UInt32, UInt64}}, ::Type{Int128}) = Int128
-promote_rule(::Type{UInt128}, ::Type{<:BitSigned}) = UInt128
+# with different sizes, promote to larger type
+promote_rule(::Type{Int16}, ::Union{Type{Int8}, Type{UInt8}}) = Int16
+promote_rule(::Type{Int32}, ::Union{Type{Int16}, Type{Int8}, Type{UInt16}, Type{UInt8}}) = Int32
+promote_rule(::Type{Int64}, ::Union{Type{Int16}, Type{Int32}, Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt8}}) = Int64
+promote_rule(::Type{Int128}, ::Union{Type{Int16}, Type{Int32}, Type{Int64}, Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt8}}) = Int128
+promote_rule(::Type{UInt16}, ::Union{Type{Int8}, Type{UInt8}}) = UInt16
+promote_rule(::Type{UInt32}, ::Union{Type{Int16}, Type{Int8}, Type{UInt16}, Type{UInt8}}) = UInt32
+promote_rule(::Type{UInt64}, ::Union{Type{Int16}, Type{Int32}, Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt8}}) = UInt64
+promote_rule(::Type{UInt128}, ::Union{Type{Int16}, Type{Int32}, Type{Int64}, Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt8}}) = UInt128
+# with mixed signedness and same size, Unsigned wins
+promote_rule(::Type{UInt8},   ::Type{Int8}  ) = UInt8
+promote_rule(::Type{UInt16},  ::Type{Int16} ) = UInt16
+promote_rule(::Type{UInt32},  ::Type{Int32} ) = UInt32
+promote_rule(::Type{UInt64},  ::Type{Int64} ) = UInt64
+promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 _default_type(::Type{Unsigned}) = UInt
 _default_type(::Union{Type{Integer},Type{Signed}}) = Int
@@ -769,4 +780,12 @@ else
 
     rem(x::Int128,  y::Int128)  = checked_srem_int(x, y)
     rem(x::UInt128, y::UInt128) = checked_urem_int(x, y)
+end
+
+# issue #15489: since integer ops are unchecked, they shouldn't check promotion
+for op in (:+, :-, :*, :&, :|, :xor)
+    @eval function $op(a::Integer, b::Integer)
+        T = promote_typeof(a, b)
+        return $op(a % T, b % T)
+    end
 end

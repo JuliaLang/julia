@@ -61,17 +61,17 @@ function GitRemoteAnon(repo::GitRepo, url::AbstractString)
 end
 
 """
-    lookup_remote(repo::GitRepo, remote_name::AbstractString) -> Nullable{GitRemote}
+    lookup_remote(repo::GitRepo, remote_name::AbstractString) -> Union{GitRemote, Void}
 
-Determine if the `remote_name` specified exists within the `repo`. Returns a
-[`Nullable`](@ref), which will be null if the requested remote does not exist. If the remote
-does exist, the `Nullable` contains a [`GitRemote`](@ref) to the remote name.
+Determine if the `remote_name` specified exists within the `repo`. Return
+either a [`GitRemote`](@ref) to the remote name if it exists, or [`nothing`](@ref)
+if not.
 
 # Examples
 ```julia
 repo = LibGit2.GitRepo(path)
 remote_name = "test"
-isnull(LibGit2.lookup_remote(repo, remote_name)) # will return true
+LibGit2.lookup_remote(repo, remote_name) # will return nothing
 ```
 """
 function lookup_remote(repo::GitRepo, remote_name::AbstractString)
@@ -80,9 +80,9 @@ function lookup_remote(repo::GitRepo, remote_name::AbstractString)
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cstring),
                 rmt_ptr_ptr, repo.ptr, remote_name)
     if err == Int(Error.GIT_OK)
-        return Nullable{GitRemote}(GitRemote(repo, rmt_ptr_ptr[]))
+        return GitRemote(repo, rmt_ptr_ptr[])
     elseif err == Int(Error.ENOTFOUND)
-        return Nullable{GitRemote}()
+        return nothing
     else
         throw(Error.GitError(err))
     end

@@ -3,6 +3,7 @@
 # Text / HTML objects
 
 import Base: print, show, ==, hash
+using Base.Unicode
 
 export HTML, @html_str
 
@@ -103,7 +104,7 @@ function helpmode(io::IO, line::AbstractString)
             Symbol(line)
         else
             x = Base.syntax_deprecation_warnings(false) do
-                parse(line, raise = false)
+                Meta.parse(line, raise = false)
             end
             # Retrieving docs for macros requires us to make a distinction between the text
             # `@macroname` and `@macroname()`. These both parse the same, but are used by
@@ -231,7 +232,8 @@ function matchinds(needle, haystack; acronym = false)
     for (i, char) in enumerate(haystack)
         isempty(chars) && break
         while chars[1] == ' ' shift!(chars) end # skip spaces
-        if lowercase(char) == lowercase(chars[1]) && (!acronym || !isalpha(lastc))
+        if Unicode.lowercase(char) == Unicode.lowercase(chars[1]) &&
+           (!acronym || !Unicode.isalpha(lastc))
             push!(is, i)
             shift!(chars)
         end
@@ -271,7 +273,7 @@ function levenshtein(s1, s2)
     a, b = collect(s1), collect(s2)
     m = length(a)
     n = length(b)
-    d = Matrix{Int}(m+1, n+1)
+    d = Matrix{Int}(uninitialized, m+1, n+1)
 
     d[1:m+1, 1] = 0:m
     d[1, 1:n+1] = 0:n
@@ -353,7 +355,7 @@ print_correction(word) = print_correction(STDOUT, word)
 const builtins = ["abstract type", "baremodule", "begin", "break",
                   "catch", "ccall", "const", "continue", "do", "else",
                   "elseif", "end", "export", "finally", "for", "function",
-                  "global", "if", "import", "importall", "let",
+                  "global", "if", "import", "let",
                   "local", "macro", "module", "mutable struct", "primitive type",
                   "quote", "return", "struct", "try", "using", "while"]
 
@@ -383,7 +385,7 @@ function docsearch(haystack::Array, needle)
     false
 end
 function docsearch(haystack, needle)
-    Base.warn_once("unable to search documentation of type $(typeof(haystack))")
+    @warn "Unable to search documentation of type $(typeof(haystack))" maxlog=1
     false
 end
 

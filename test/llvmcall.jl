@@ -49,7 +49,7 @@ end
 # Test whether llvmcall escapes the function name correctly
 baremodule PlusTest
     using Base.llvmcall
-    using Base.Test
+    using Test
     using Base
 
     function +(x::Int32, y::Int32)
@@ -155,7 +155,8 @@ end
 call_jl_errno()
 
 module ObjLoadTest
-    using Base: Test, llvmcall, @ccallable
+    using Base: llvmcall, @ccallable
+    using Test
     didcall = false
     @ccallable Void function jl_the_callback()
         global didcall
@@ -189,11 +190,12 @@ if Base.libllvm_version >= v"3.6" # llvm 3.6 changed the syntax for a gep, so ju
     end
     code_llvm(DevNull, foo, ())
 else
-    println("INFO: skipping gep parentage test on llvm < 3.6")
+    @info "Skipping gep parentage test on llvm < 3.6"
 end
 
 module CcallableRetTypeTest
-    using Base: Test, llvmcall, @ccallable
+    using Base: llvmcall, @ccallable
+    using Test
     @ccallable function jl_test_returns_float()::Float64
         return 42
     end

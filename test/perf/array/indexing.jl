@@ -39,7 +39,7 @@ end
 function sumcartesian(A, n)
     s = zero(eltype(A)) + zero(eltype(A))
     for k = 1:n
-        for I in CartesianRange(size(A))
+        for I in CartesianIndices(size(A))
             val = unsafe_getindex(A, I)
             s += val
         end

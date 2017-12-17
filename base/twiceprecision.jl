@@ -309,6 +309,7 @@ end
 ## StepRangeLen
 
 # Use TwicePrecision only for Float64; use Float64 for T<:Union{Float16,Float32}
+# See also _linspace1
 # Ratio-of-integers constructors
 function steprangelen_hp(::Type{Float64}, ref::Tuple{Integer,Integer},
                          step::Tuple{Integer,Integer}, nb::Integer,
@@ -527,7 +528,7 @@ end
 
 function sum(r::StepRangeLen)
     l = length(r)
-    # Compute the contribution of step over all indexes.
+    # Compute the contribution of step over all indices.
     # Indexes on opposite side of r.offset contribute with opposite sign,
     #    r.step * (sum(1:np) - sum(1:nn))
     np, nn = l - r.offset, r.offset - 1  # positive, negative
@@ -651,7 +652,12 @@ function _linspace1(::Type{T}, start, stop, len::Integer) where T
     if len <= 1
         len == 1 && (start == stop || throw(ArgumentError("linspace($start, $stop, $len): endpoints differ")))
         # Ensure that first(r)==start and last(r)==stop even for len==0
-        return StepRangeLen(TwicePrecision(start, zero(T)), TwicePrecision(start, -stop), len, 1)
+        # The output type must be consistent with steprangelen_hp
+        if T<:Union{Float32,Float16}
+            return StepRangeLen{T}(Float64(start), Float64(start) - Float64(stop), len, 1)
+        else
+            return StepRangeLen(TwicePrecision(start, zero(T)), TwicePrecision(start, -stop), len, 1)
+        end
     end
     throw(ArgumentError("should only be called for len < 2, got $len"))
 end

@@ -27,23 +27,20 @@ julia> inv(A)
 As well as other useful operations, such as finding eigenvalues or eigenvectors:
 
 ```jldoctest
-julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]
-3×3 Array{Float64,2}:
-   1.5   2.0  -4.0
-   3.0  -1.0  -6.0
- -10.0   2.3   4.0
+julia> A = [-4. -17.; 2. 2.]
+2×2 Array{Float64,2}:
+ -4.0  -17.0
+  2.0    2.0
 
 julia> eigvals(A)
-3-element Array{Complex{Float64},1}:
-  9.31908+0.0im
- -2.40954+2.72095im
- -2.40954-2.72095im
+2-element Array{Complex{Float64},1}:
+ -1.0 + 5.0im
+ -1.0 - 5.0im
 
 julia> eigvecs(A)
-3×3 Array{Complex{Float64},2}:
- -0.488645+0.0im  0.182546-0.39813im   0.182546+0.39813im
- -0.540358+0.0im  0.692926+0.0im       0.692926-0.0im
-   0.68501+0.0im  0.254058-0.513301im  0.254058+0.513301im
+2×2 Array{Complex{Float64},2}:
+  0.945905+0.0im        0.945905-0.0im
+ -0.166924-0.278207im  -0.166924+0.278207im
 ```
 
 In addition, Julia provides many [factorizations](@ref man-linalg-factorizations) which can be used to
@@ -62,7 +59,6 @@ julia> factorize(A)
 Base.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:
 [1.0 0.0 0.0; -0.15 1.0 0.0; -0.3 -0.132196 1.0]
 [-10.0 2.3 4.0; 0.0 2.345 -3.4; 0.0 0.0 -5.24947]
-successful: true
 ```
 
 Since `A` is not Hermitian, symmetric, triangular, tridiagonal, or bidiagonal, an LU factorization may be the
@@ -78,7 +74,7 @@ julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
 julia> factorize(B)
 Base.LinAlg.BunchKaufman{Float64,Array{Float64,2}}
 D factor:
-3×3 Tridiagonal{Float64}:
+3×3 Tridiagonal{Float64,Array{Float64,1}}:
  -1.64286   0.0   ⋅
   0.0      -2.8  0.0
    ⋅        0.0  5.0
@@ -92,7 +88,6 @@ permutation:
  1
  2
  3
-successful: true
 ```
 
 Here, Julia was able to detect that `B` is in fact symmetric, and used a more appropriate factorization.
@@ -139,9 +134,9 @@ julia> x = [1; 2; 3]
 
 julia> sB\x
 3-element Array{Float64,1}:
- -1.73913
- -1.1087
- -1.45652
+ -1.7391304347826084
+ -1.1086956521739126
+ -1.4565217391304346
 ```
 The `\` operation here performs the linear solution. Julia's parser provides convenient dispatch
 to specialized methods for the *transpose* of a matrix left-divided by a vector, or for the various combinations
@@ -226,6 +221,44 @@ operators are generic and match the other matrix in the binary operations [`+`](
 with the identity operator `I` is a noop (except for checking that the scaling factor is one)
 and therefore almost without overhead.
 
+To see the `UniformScaling` operator in action:
+
+```jldoctest
+julia> U = UniformScaling(2);
+
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> a + U
+2×2 Array{Int64,2}:
+ 3  2
+ 3  6
+
+julia> a * U
+2×2 Array{Int64,2}:
+ 2  4
+ 6  8
+
+julia> [a U]
+2×4 Array{Int64,2}:
+ 1  2  2  0
+ 3  4  0  2
+
+julia> b = [1 2 3; 4 5 6]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> b - U
+ERROR: DimensionMismatch("matrix is not square: dimensions are (2, 3)")
+Stacktrace:
+ [1] checksquare at ./linalg/linalg.jl:220 [inlined]
+ [2] -(::Array{Int64,2}, ::UniformScaling{Int64}) at ./linalg/uniformscaling.jl:156
+ [3] top-level scope
+```
+
 ## [Matrix factorizations](@id man-linalg-factorizations)
 
 [Matrix factorizations (a.k.a. matrix decompositions)](https://en.wikipedia.org/wiki/Matrix_decomposition)
@@ -242,7 +275,6 @@ of the standard library documentation.
 | `CholeskyPivoted` | [Pivoted](https://en.wikipedia.org/wiki/Pivot_element) Cholesky factorization                                  |
 | `LU`              | [LU factorization](https://en.wikipedia.org/wiki/LU_decomposition)                                             |
 | `LUTridiagonal`   | LU factorization for [`Tridiagonal`](@ref) matrices                                                            |
-| `UmfpackLU`       | LU factorization for sparse matrices (computed by UMFPack)                                                     |
 | `QR`              | [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                             |
 | `QRCompactWY`     | Compact WY form of the QR factorization                                                                        |
 | `QRPivoted`       | Pivoted [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                     |

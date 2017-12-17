@@ -80,7 +80,7 @@ objects. For these problems, one needs *inner* constructor methods. An inner con
 is much like an outer constructor method, with two differences:
 
 1. It is declared inside the block of a type declaration, rather than outside of it like normal methods.
-2. It has access to a special locally existent function called `new` that creates objects of the
+2. It has access to a special locally existent function called [`new`](@ref) that creates objects of the
    block's type.
 
 For example, suppose one wants to declare a type that holds a pair of real numbers, subject to
@@ -93,7 +93,6 @@ julia> struct OrderedPair
            y::Real
            OrderedPair(x,y) = x > y ? error("out of order") : new(x,y)
        end
-
 ```
 
 Now `OrderedPair` objects can only be constructed such that `x <= y`:
@@ -190,7 +189,7 @@ for its `obj` field? The only solution is to allow creating an incompletely init
 of `SelfReferential` with an unassigned `obj` field, and using that incomplete instance as a valid
 value for the `obj` field of another instance, such as, for example, itself.
 
-To allow for the creation of incompletely initialized objects, Julia allows the `new` function
+To allow for the creation of incompletely initialized objects, Julia allows the [`new`](@ref) function
 to be called with fewer than the number of fields that the type has, returning an object with
 the unspecified fields uninitialized. The inner constructor method can then use the incomplete
 object, finishing its initialization before returning it. Here, for example, we take another crack
@@ -301,7 +300,7 @@ Point{Int64}(1, 2)
 julia> Point{Int64}(1.0,2.5) ## explicit T ##
 ERROR: InexactError: convert(Int64, 2.5)
 Stacktrace:
- [1] convert at ./float.jl:681 [inlined]
+ [1] convert at ./float.jl:703 [inlined]
  [2] Point{Int64}(::Float64, ::Float64) at ./none:2
 
 julia> Point{Float64}(1.0, 2.5) ## explicit T ##
@@ -525,7 +524,7 @@ one type to another, you should probably define a `convert` method instead.
 
 On the other hand, if your constructor does not represent a lossless conversion, or doesn't represent
 "conversion" at all, it is better to leave it as a constructor rather than a `convert` method.
-For example, the `Array{Int}()` constructor creates a zero-dimensional `Array` of the type `Int`,
+For example, the `Array{Int,0}(uninitialized)` constructor creates a zero-dimensional `Array` of the type `Int`,
 but is not really a "conversion" from `Int` to an `Array`.
 
 ## Outer-only constructors

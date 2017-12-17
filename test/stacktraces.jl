@@ -6,7 +6,7 @@ let
     @noinline child() = stacktrace()
     @noinline parent() = child()
     @noinline grandparent() = parent()
-    line_numbers = @__LINE__() - [3, 2, 1]
+    line_numbers = @__LINE__() .- [3, 2, 1]
     stack = grandparent()
 
     # Basic tests.
@@ -34,8 +34,8 @@ let
     frame2 = deserialize(b)
     @test frame !== frame2
     @test frame == frame2
-    @test !isnull(frame.linfo)
-    @test isnull(frame2.linfo)
+    @test frame.linfo !== nothing
+    @test frame2.linfo === nothing
 end
 
 # Test from_c
@@ -81,7 +81,7 @@ let ct = current_task()
 end
 
 module inlined_test
-using Base.Test
+using Test
 @inline g(x) = (y = throw("a"); y) # the inliner does not insert the proper markers when inlining a single expression
 @inline h(x) = (y = g(x); y)       # this test could be extended to check for that if we switch to linear representation
 f(x) = (y = h(x); y)
@@ -98,7 +98,7 @@ for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false
 end
 end
 
-let src = expand(Main, quote let x = 1 end end).args[1]::CodeInfo,
+let src = Meta.lower(Main, quote let x = 1 end end).args[1]::CodeInfo,
     li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
     sf
 
@@ -120,7 +120,7 @@ let ctestptr = cglobal((:ctest, "libccalltest")),
 
     @test length(ctest) == 1
     @test ctest[1].func === :ctest
-    @test isnull(ctest[1].linfo)
+    @test ctest[1].linfo === nothing
     @test ctest[1].from_c
     @test ctest[1].pointer === UInt64(ctestptr)
 end

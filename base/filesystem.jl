@@ -51,7 +51,6 @@ end
 include("path.jl")
 include("stat.jl")
 include("file.jl")
-include("poll.jl")
 include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
 
 ## Operations with File (fd) objects ##
@@ -148,6 +147,26 @@ function read(f::File, ::Type{UInt8})
     ret = ccall(:jl_fs_read_byte, Int32, (Int32,), f.handle)
     uv_error("read", ret)
     return ret % UInt8
+end
+
+function read(f::File, ::Type{Char})
+    b0 = read(f, UInt8)
+    l = 8(4-leading_ones(b0))
+    c = UInt32(b0) << 24
+    if l < 24
+        s = 16
+        while s ≥ l && !eof(f)
+            p = position(f)
+            b = read(f, UInt8)
+            if b & 0xc0 != 0x80
+                seek(f, p)
+                break
+            end
+            c |= UInt32(b) << s
+            s -= 8
+        end
+    end
+    return reinterpret(Char, c)
 end
 
 function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)

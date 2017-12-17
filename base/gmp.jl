@@ -55,7 +55,7 @@ mutable struct BigInt <: Signed
     function BigInt()
         b = new(zero(Cint), zero(Cint), C_NULL)
         MPZ.init!(b)
-        finalizer(b, cglobal((:__gmpz_clear, :libgmp)))
+        finalizer(cglobal((:__gmpz_clear, :libgmp)), b)
         return b
     end
 end
@@ -234,31 +234,29 @@ convert(::Type{Signed}, x::BigInt) = x
 hastypemax(::Type{BigInt}) = false
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
-    _n = Nullable{BigInt}()
-
     # don't make a copy in the common case where we are parsing a whole String
     bstr = startpos == start(s) && endpos == endof(s) ? String(s) : String(SubString(s,startpos,endpos))
 
     sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,start(bstr),endof(bstr))
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
-        return _n
+        return nothing
     end
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(bstr))"))
-        return _n
+        return nothing
     end
     z = BigInt()
     if Base.containsnul(bstr)
         err = -1 # embedded NUL char (not handled correctly by GMP)
     else
-        err = MPZ.set_str!(z, pointer(bstr)+(i-start(bstr)), base)
+        err = Base.@gc_preserve bstr MPZ.set_str!(z, pointer(bstr)+(i-start(bstr)), base)
     end
     if err != 0
         raise && throw(ArgumentError("invalid BigInt: $(repr(bstr))"))
-        return _n
+        return nothing
     end
-    Nullable(flipsign!(z, sgn))
+    flipsign!(z, sgn)
 end
 
 convert(::Type{BigInt}, x::Union{Clong,Int32}) = MPZ.set_si(x)
@@ -612,8 +610,8 @@ function base(b::Integer, n::BigInt, pad::Integer=1)
     nd1 = ndigits(n, b)
     nd  = max(nd1, pad)
     sv  = Base.StringVector(nd + isneg(n))
-    MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
-    @inbounds for i = (1:nd-nd1) + isneg(n)
+    Base.@gc_preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
+    @inbounds for i = (1:nd-nd1) .+ isneg(n)
         sv[i] = '0' % UInt8
     end
     isneg(n) && (sv[1] = '-' % UInt8)

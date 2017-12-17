@@ -2,25 +2,20 @@
 
 ## RandomDevice
 
-const BoolBitIntegerType = Union{Type{Bool},Base.BitIntegerType}
-const BoolBitIntegerArray = Union{Array{Bool},Base.BitIntegerArray}
+# SamplerUnion(Union{X,Y,...}) == Union{SamplerType{X},SamplerType{Y},...}
+SamplerUnion(U::Union) = Union{map(T->SamplerType{T}, Base.uniontypes(U))...}
+const SamplerBoolBitInteger = SamplerUnion(Union{Bool, BitInteger})
 
 if Sys.iswindows()
     struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
-        RandomDevice() = new(Vector{UInt128}(1))
+        RandomDevice() = new(Vector{UInt128}(uninitialized, 1))
     end
 
-    function rand(rd::RandomDevice, T::BoolBitIntegerType)
+    function rand(rd::RandomDevice, sp::SamplerBoolBitInteger)
         rand!(rd, rd.buffer)
-        @inbounds return rd.buffer[1] % T
-    end
-
-    function rand!(rd::RandomDevice, A::BoolBitIntegerArray)
-        ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Void}, UInt32),
-              A, sizeof(A))
-        A
+        @inbounds return rd.buffer[1] % sp[]
     end
 else # !windows
     struct RandomDevice <: AbstractRNG
@@ -31,9 +26,24 @@ else # !windows
             new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
     end
 
-    rand(rd::RandomDevice, T::BoolBitIntegerType)   = read( rd.file, T)
-    rand!(rd::RandomDevice, A::BoolBitIntegerArray) = read!(rd.file, A)
+    rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read( rd.file, sp[])
 end # os-test
+
+# NOTE: this can't be put within the if-else block above
+for T in (Bool, BitInteger_types...)
+    if Sys.iswindows()
+        @eval function rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T})
+            ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Void}, UInt32),
+                  A, sizeof(A))
+            A
+        end
+    else
+        @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = read!(rd.file, A)
+    end
+end
+
+# RandomDevice produces natively UInt64
+rng_native_52(::RandomDevice) = UInt64
 
 """
     RandomDevice()
@@ -46,10 +56,6 @@ RandomDevice
 
 RandomDevice(::Void) = RandomDevice()
 srand(rng::RandomDevice) = rng
-
-### generation of floats
-
-@inline rand(r::RandomDevice, I::FloatInterval) = rand_generic(r, I)
 
 
 ## MersenneTwister
@@ -93,15 +99,15 @@ julia> rng = MersenneTwister(1234);
 
 julia> x1 = rand(rng, 2)
 2-element Array{Float64,1}:
- 0.590845
- 0.766797
+ 0.5908446386657102
+ 0.7667970365022592
 
 julia> rng = MersenneTwister(1234);
 
 julia> x2 = rand(rng, 2)
 2-element Array{Float64,1}:
- 0.590845
- 0.766797
+ 0.5908446386657102
+ 0.7667970365022592
 
 julia> x1 == x2
 true
@@ -130,21 +136,21 @@ hash(r::MersenneTwister, h::UInt) = foldr(hash, h, (r.seed, r.state, r.vals, r.i
 
 ### low level API
 
-@inline mt_avail(r::MersenneTwister) = MTCacheLength - r.idx
-@inline mt_empty(r::MersenneTwister) = r.idx == MTCacheLength
-@inline mt_setfull!(r::MersenneTwister) = r.idx = 0
-@inline mt_setempty!(r::MersenneTwister) = r.idx = MTCacheLength
-@inline mt_pop!(r::MersenneTwister) = @inbounds return r.vals[r.idx+=1]
+mt_avail(r::MersenneTwister) = MTCacheLength - r.idx
+mt_empty(r::MersenneTwister) = r.idx == MTCacheLength
+mt_setfull!(r::MersenneTwister) = r.idx = 0
+mt_setempty!(r::MersenneTwister) = r.idx = MTCacheLength
+mt_pop!(r::MersenneTwister) = @inbounds return r.vals[r.idx+=1]
 
 function gen_rand(r::MersenneTwister)
-    dsfmt_fill_array_close1_open2!(r.state, pointer(r.vals), length(r.vals))
+    @gc_preserve r dsfmt_fill_array_close1_open2!(r.state, pointer(r.vals), length(r.vals))
     mt_setfull!(r)
 end
 
-@inline reserve_1(r::MersenneTwister) = (mt_empty(r) && gen_rand(r); nothing)
+reserve_1(r::MersenneTwister) = (mt_empty(r) && gen_rand(r); nothing)
 # `reserve` allows one to call `rand_inbounds` n times
 # precondition: n <= MTCacheLength
-@inline reserve(r::MersenneTwister, n::Int) = (mt_avail(r) < n && gen_rand(r); nothing)
+reserve(r::MersenneTwister, n::Int) = (mt_avail(r) < n && gen_rand(r); nothing)
 
 
 ### seeding
@@ -202,67 +208,73 @@ const GLOBAL_RNG = MersenneTwister(0)
 
 ### generation
 
+# MersenneTwister produces natively Float64
+rng_native_52(::MersenneTwister) = Float64
+
 #### helper functions
 
 # precondition: !mt_empty(r)
-@inline rand_inbounds(r::MersenneTwister, ::Close1Open2_64) = mt_pop!(r)
-@inline rand_inbounds(r::MersenneTwister, ::CloseOpen_64) =
+rand_inbounds(r::MersenneTwister, ::Close1Open2_64) = mt_pop!(r)
+rand_inbounds(r::MersenneTwister, ::CloseOpen_64=CloseOpen()) =
     rand_inbounds(r, Close1Open2()) - 1.0
-@inline rand_inbounds(r::MersenneTwister) = rand_inbounds(r, CloseOpen())
 
-@inline rand_ui52_raw_inbounds(r::MersenneTwister) =
-    reinterpret(UInt64, rand_inbounds(r, Close1Open2()))
-@inline rand_ui52_raw(r::MersenneTwister) = (reserve_1(r); rand_ui52_raw_inbounds(r))
+rand_inbounds(r::MersenneTwister, ::UInt52Raw{T}) where {T<:BitInteger} =
+    reinterpret(UInt64, rand_inbounds(r, Close1Open2())) % T
 
-@inline function rand_ui2x52_raw(r::MersenneTwister)
-    reserve(r, 2)
-    rand_ui52_raw_inbounds(r) % UInt128 << 64 | rand_ui52_raw_inbounds(r)
+function rand(r::MersenneTwister, x::SamplerTrivial{UInt52Raw{UInt64}})
+    reserve_1(r)
+    rand_inbounds(r, x[])
 end
 
-@inline function rand_ui104_raw(r::MersenneTwister)
+function rand(r::MersenneTwister, ::SamplerTrivial{UInt2x52Raw{UInt128}})
     reserve(r, 2)
-    rand_ui52_raw_inbounds(r) % UInt128 << 52 ⊻ rand_ui52_raw_inbounds(r)
+    rand_inbounds(r, UInt52Raw(UInt128)) << 64 | rand_inbounds(r, UInt52Raw(UInt128))
 end
 
-rand_ui10_raw(r::MersenneTwister) = rand_ui52_raw(r)
-rand_ui23_raw(r::MersenneTwister) = rand_ui52_raw(r)
+function rand(r::MersenneTwister, ::SamplerTrivial{UInt104Raw{UInt128}})
+    reserve(r, 2)
+    rand_inbounds(r, UInt52Raw(UInt128)) << 52 ⊻ rand_inbounds(r, UInt52Raw(UInt128))
+end
 
 #### floats
 
-@inline rand(r::MersenneTwister, I::FloatInterval_64) = (reserve_1(r); rand_inbounds(r, I))
-
-@inline rand(r::MersenneTwister, I::FloatInterval) = rand_generic(r, I)
+rand(r::MersenneTwister, sp::SamplerTrivial{Close1Open2_64}) =
+    (reserve_1(r); rand_inbounds(r, sp[]))
 
 #### integers
 
-@inline rand(r::MersenneTwister,
-             ::Type{T}) where {T<:Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}} =
-                 rand_ui52_raw(r) % T
+rand(r::MersenneTwister,
+     T::SamplerUnion(Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32})) =
+         rand(r, UInt52Raw()) % T[]
 
-function rand(r::MersenneTwister, ::Type{UInt64})
+function rand(r::MersenneTwister, ::SamplerType{UInt64})
     reserve(r, 2)
-    rand_ui52_raw_inbounds(r) << 32 ⊻ rand_ui52_raw_inbounds(r)
+    rand_inbounds(r, UInt52Raw()) << 32 ⊻ rand_inbounds(r, UInt52Raw())
 end
 
-function rand(r::MersenneTwister, ::Type{UInt128})
+function rand(r::MersenneTwister, ::SamplerType{UInt128})
     reserve(r, 3)
-    xor(rand_ui52_raw_inbounds(r) % UInt128 << 96,
-        rand_ui52_raw_inbounds(r) % UInt128 << 48,
-        rand_ui52_raw_inbounds(r))
+    xor(rand_inbounds(r, UInt52Raw(UInt128))  << 96,
+        rand_inbounds(r, UInt52Raw(UInt128))  << 48,
+        rand_inbounds(r, UInt52Raw(UInt128)))
 end
 
-rand(r::MersenneTwister, ::Type{Int64})  = reinterpret(Int64,  rand(r, UInt64))
-rand(r::MersenneTwister, ::Type{Int128}) = reinterpret(Int128, rand(r, UInt128))
+rand(r::MersenneTwister, ::SamplerType{Int64})  = rand(r, UInt64) % Int64
+rand(r::MersenneTwister, ::SamplerType{Int128}) = rand(r, UInt128) % Int128
 
 #### arrays of floats
 
-function rand_AbstractArray_Float64!(r::MersenneTwister, A::AbstractArray{Float64},
-                                     n=length(A), I::FloatInterval_64=CloseOpen())
+##### AbstractArray
+
+function rand!(r::MersenneTwister, A::AbstractArray{Float64},
+               I::SamplerTrivial{<:FloatInterval_64})
+    region = linearindices(A)
     # what follows is equivalent to this simple loop but more efficient:
-    # for i=1:n
-    #     @inbounds A[i] = rand(r, I)
+    # for i=region
+    #     @inbounds A[i] = rand(r, I[])
     # end
-    m = 0
+    m = Base.checked_sub(first(region), 1)
+    n = last(region)
     while m < n
         s = mt_avail(r)
         if s == 0
@@ -271,14 +283,54 @@ function rand_AbstractArray_Float64!(r::MersenneTwister, A::AbstractArray{Float6
         end
         m2 = min(n, m+s)
         for i=m+1:m2
-            @inbounds A[i] = rand_inbounds(r, I)
+            @inbounds A[i] = rand_inbounds(r, I[])
         end
         m = m2
     end
     A
 end
 
-rand!(r::MersenneTwister, A::AbstractArray{Float64}) = rand_AbstractArray_Float64!(r, A)
+
+##### Array : internal functions
+
+# internal array-like type to circumevent the lack of flexibility with reinterpret
+struct UnsafeView{T} <: DenseArray{T,1}
+    ptr::Ptr{T}
+    len::Int
+end
+
+Base.length(a::UnsafeView) = a.len
+Base.getindex(a::UnsafeView, i::Int) = unsafe_load(a.ptr, i)
+Base.setindex!(a::UnsafeView, x, i::Int) = unsafe_store!(a.ptr, x, i)
+Base.pointer(a::UnsafeView) = a.ptr
+Base.size(a::UnsafeView) = (a.len,)
+
+# this is essentially equivalent to rand!(r, ::AbstractArray{Float64}, I) above, but due to
+# optimizations which can't be done currently when working with pointers, we have to re-order
+# manually the computation flow to get the performance
+# (see https://discourse.julialang.org/t/unsafe-store-sometimes-slower-than-arrays-setindex)
+function _rand_max383!(r::MersenneTwister, A::UnsafeView{Float64}, I::FloatInterval_64)
+    n = length(A)
+    @assert n <= dsfmt_get_min_array_size()+1 # == 383
+    mt_avail(r) == 0 && gen_rand(r)
+    # from now on, at most one call to gen_rand(r) will be necessary
+    m = min(n, mt_avail(r))
+    @gc_preserve r unsafe_copy!(A.ptr, pointer(r.vals, r.idx+1), m)
+    if m == n
+        r.idx += m
+    else # m < n
+        gen_rand(r)
+        @gc_preserve r unsafe_copy!(A.ptr+m*sizeof(Float64), pointer(r.vals), n-m)
+        r.idx = n-m
+    end
+    if I isa CloseOpen
+        for i=1:n
+            A[i] -= 1.0
+        end
+    end
+    A
+end
+
 
 fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::CloseOpen_64) =
     dsfmt_fill_array_close_open!(s, A, n)
@@ -286,97 +338,102 @@ fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::CloseOpen_64) =
 fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::Close1Open2_64) =
     dsfmt_fill_array_close1_open2!(s, A, n)
 
-function rand!(r::MersenneTwister, A::Array{Float64}, n::Int=length(A),
-               I::FloatInterval_64=CloseOpen())
+
+function rand!(r::MersenneTwister, A::UnsafeView{Float64},
+               I::SamplerTrivial{<:FloatInterval_64})
     # depending on the alignment of A, the data written by fill_array! may have
     # to be left-shifted by up to 15 bytes (cf. unsafe_copy! below) for
     # reproducibility purposes;
     # so, even for well aligned arrays, fill_array! is used to generate only
     # the n-2 first values (or n-3 if n is odd), and the remaining values are
     # generated by the scalar version of rand
-    if n > length(A)
-        throw(BoundsError(A,n))
-    end
+    n = length(A)
     n2 = (n-2) ÷ 2 * 2
-    if n2 < dsfmt_get_min_array_size()
-        rand_AbstractArray_Float64!(r, A, n, I)
+    n2 < dsfmt_get_min_array_size() && return _rand_max383!(r, A, I[])
+
+    pA = A.ptr
+    align = Csize_t(pA) % 16
+    if align > 0
+        pA2 = pA + 16 - align
+        fill_array!(r.state, pA2, n2, I[]) # generate the data in-place, but shifted
+        unsafe_copy!(pA, pA2, n2) # move the data to the beginning of the array
     else
-        pA = pointer(A)
-        align = Csize_t(pA) % 16
-        if align > 0
-            pA2 = pA + 16 - align
-            fill_array!(r.state, pA2, n2, I) # generate the data in-place, but shifted
-            unsafe_copy!(pA, pA2, n2) # move the data to the beginning of the array
-        else
-            fill_array!(r.state, pA, n2, I)
-        end
-        for i=n2+1:n
-            @inbounds A[i] = rand(r, I)
-        end
+        fill_array!(r.state, pA, n2, I[])
+    end
+    for i=n2+1:n
+        A[i] = rand(r, I[])
     end
     A
 end
 
-@inline mask128(u::UInt128, ::Type{Float16}) =
+# fills up A reinterpreted as an array of Float64 with n64 values
+function _rand!(r::MersenneTwister, A::Array{T}, n64::Int, I::FloatInterval_64) where T
+    # n64 is the length in terms of `Float64` of the target
+    @assert sizeof(Float64)*n64 <= sizeof(T)*length(A) && isbits(T)
+    @gc_preserve A rand!(r, UnsafeView{Float64}(pointer(A), n64), SamplerTrivial(I))
+    A
+end
+
+##### Array: Float64, Float16, Float32
+
+rand!(r::MersenneTwister, A::Array{Float64}, I::SamplerTrivial{<:FloatInterval_64}) =
+    _rand!(r, A, length(A), I[])
+
+mask128(u::UInt128, ::Type{Float16}) =
     (u & 0x03ff03ff03ff03ff03ff03ff03ff03ff) | 0x3c003c003c003c003c003c003c003c00
 
-@inline mask128(u::UInt128, ::Type{Float32}) =
+mask128(u::UInt128, ::Type{Float32}) =
     (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
 
-function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}},
-               ::Close1Open2_64)
-    T = eltype(A)
-    n = length(A)
-    n128 = n * sizeof(T) ÷ 16
-    rand!(r, unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2*n128),
-          2*n128, Close1Open2())
-    A128 = unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128)
-    @inbounds for i in 1:n128
-        u = A128[i]
-        u ⊻= u << 26
-        # at this point, the 64 low bits of u, "k" being the k-th bit of A128[i] and "+"
-        # the bit xor, are:
-        # [..., 58+32,..., 53+27, 52+26, ..., 33+7, 32+6, ..., 27+1, 26, ..., 1]
-        # the bits needing to be random are
-        # [1:10, 17:26, 33:42, 49:58] (for Float16)
-        # [1:23, 33:55] (for Float32)
-        # this is obviously satisfied on the 32 low bits side, and on the high side,
-        # the entropy comes from bits 33:52 of A128[i] and then from bits 27:32
-        # (which are discarded on the low side)
-        # this is similar for the 64 high bits of u
-        A128[i] = mask128(u, T)
+for T in (Float16, Float32)
+    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{Close1Open2{$T}})
+        n = length(A)
+        n128 = n * sizeof($T) ÷ 16
+        _rand!(r, A, 2*n128, Close1Open2())
+        @gc_preserve A begin
+            A128 = UnsafeView{UInt128}(pointer(A), n128)
+            for i in 1:n128
+                u = A128[i]
+                u ⊻= u << 26
+                # at this point, the 64 low bits of u, "k" being the k-th bit of A128[i] and "+"
+                # the bit xor, are:
+                # [..., 58+32,..., 53+27, 52+26, ..., 33+7, 32+6, ..., 27+1, 26, ..., 1]
+                # the bits needing to be random are
+                # [1:10, 17:26, 33:42, 49:58] (for Float16)
+                # [1:23, 33:55] (for Float32)
+                # this is obviously satisfied on the 32 low bits side, and on the high side,
+                # the entropy comes from bits 33:52 of A128[i] and then from bits 27:32
+                # (which are discarded on the low side)
+                # this is similar for the 64 high bits of u
+                A128[i] = mask128(u, $T)
+            end
+        end
+        for i in 16*n128÷sizeof($T)+1:n
+            @inbounds A[i] = rand(r, $T) + one($T)
+        end
+        A
     end
-    for i in 16*n128÷sizeof(T)+1:n
-        @inbounds A[i] = rand(r, T) + oneunit(T)
-    end
-    A
-end
 
-function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}}, ::CloseOpen_64)
-    rand!(r, A, Close1Open2())
-    I32 = one(Float32)
-    for i in eachindex(A)
-        @inbounds A[i] = Float32(A[i])-I32 # faster than "A[i] -= one(T)" for T==Float16
+    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{CloseOpen{$T}})
+        rand!(r, A, Close1Open2($T))
+        I32 = one(Float32)
+        for i in eachindex(A)
+            @inbounds A[i] = Float32(A[i])-I32 # faster than "A[i] -= one(T)" for T==Float16
+        end
+        A
     end
-    A
 end
-
-rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}}) =
-    rand!(r, A, CloseOpen())
 
 #### arrays of integers
 
-function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
-    if n > length(A)
-        throw(BoundsError(A,n))
-    end
-    Af = unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2n)
+function rand!(r::MersenneTwister, A::UnsafeView{UInt128}, ::SamplerType{UInt128})
+    n::Int=length(A)
     i = n
     while true
-        rand!(r, Af, 2i, Close1Open2())
+        rand!(r, UnsafeView{Float64}(A.ptr, 2i), Close1Open2())
         n < 5 && break
         i = 0
-        @inbounds while n-i >= 5
+        while n-i >= 5
             u = A[i+=1]
             A[n]    ⊻= u << 48
             A[n-=1] ⊻= u << 36
@@ -386,54 +443,36 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
         end
     end
     if n > 0
-        u = rand_ui2x52_raw(r)
+        u = rand(r, UInt2x52Raw())
         for i = 1:n
-            @inbounds A[i] ⊻= u << (12*i)
+            A[i] ⊻= u << (12*i)
         end
     end
     A
 end
 
-# A::Array{UInt128} will match the specialized method above
-function rand!(r::MersenneTwister, A::Base.BitIntegerArray)
-    n = length(A)
-    T = eltype(A)
-    n128 = n * sizeof(T) ÷ 16
-    rand!(r, unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128))
-    for i = 16*n128÷sizeof(T)+1:n
-        @inbounds A[i] = rand(r, T)
+for T in BitInteger_types
+    @eval rand!(r::MersenneTwister, A::Array{$T}, sp::SamplerType{$T}) =
+        (@gc_preserve A rand!(r, UnsafeView(pointer(A), length(A)), sp); A)
+
+    T == UInt128 && continue
+
+    @eval function rand!(r::MersenneTwister, A::UnsafeView{$T}, ::SamplerType{$T})
+        n = length(A)
+        n128 = n * sizeof($T) ÷ 16
+        rand!(r, UnsafeView{UInt128}(pointer(A), n128))
+        for i = 16*n128÷sizeof($T)+1:n
+            @inbounds A[i] = rand(r, $T)
+        end
+        A
     end
-    A
 end
 
 #### from a range
 
-@inline function rand_lteq(r::AbstractRNG, randfun, u::U, mask::U) where U<:Integer
-    while true
-        x = randfun(r) & mask
-        x <= u && return x
-    end
-end
-
-function rand(rng::MersenneTwister, r::UnitRange{T}) where T<:Union{Base.BitInteger64,Bool}
-    isempty(r) && throw(ArgumentError("range must be non-empty"))
-    m = last(r) % UInt64 - first(r) % UInt64
-    bw = (64 - leading_zeros(m)) % UInt # bit-width
-    mask = (1 % UInt64 << bw) - (1 % UInt64)
-    x = bw <= 52 ? rand_lteq(rng, rand_ui52_raw, m, mask) :
-                   rand_lteq(rng, rng->rand(rng, UInt64), m, mask)
-    (x + first(r) % UInt64) % T
-end
-
-function rand(rng::MersenneTwister, r::UnitRange{T}) where T<:Union{Int128,UInt128}
-    isempty(r) && throw(ArgumentError("range must be non-empty"))
-    m = (last(r)-first(r)) % UInt128
-    bw = (128 - leading_zeros(m)) % UInt # bit-width
-    mask = (1 % UInt128 << bw) - (1 % UInt128)
-    x = bw <= 52  ? rand_lteq(rng, rand_ui52_raw, m % UInt64, mask % UInt64) % UInt128 :
-        bw <= 104 ? rand_lteq(rng, rand_ui104_raw, m, mask) :
-                    rand_lteq(rng, rng->rand(rng, UInt128), m, mask)
-    x % T + first(r)
+for T in (Bool, BitInteger_types...) # eval because of ambiguity otherwise
+    @eval Sampler(rng::MersenneTwister, r::UnitRange{$T}, ::Val{1}) =
+        SamplerRangeFast(r)
 end
 
 

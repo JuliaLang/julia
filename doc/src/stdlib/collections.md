@@ -40,13 +40,14 @@ Fully implemented by:
   * `Tuple`
   * `Number`
   * [`AbstractArray`](@ref)
-  * [`IntSet`](@ref)
+  * [`BitSet`](@ref)
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
   * `EachLine`
   * `AbstractString`
   * [`Set`](@ref)
+  * [`Pair`](@ref)
 
 ## General Collections
 
@@ -63,7 +64,7 @@ Fully implemented by:
   * `Tuple`
   * `Number`
   * [`AbstractArray`](@ref)
-  * [`IntSet`](@ref)
+  * [`BitSet`](@ref)
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
@@ -159,9 +160,9 @@ Partially implemented by:
   * [`ObjectIdDict`](@ref)
   * [`WeakKeyDict`](@ref)
 
-## Associative Collections
+## Dictionaries
 
-[`Dict`](@ref) is the standard associative collection. Its implementation uses [`hash`](@ref)
+[`Dict`](@ref) is the standard dictionary. Its implementation uses [`hash`](@ref)
 as the hashing function for the key, and [`isequal`](@ref) to determine equality. Define these
 two functions for custom types to override how they are stored in a hash table.
 
@@ -175,7 +176,7 @@ constructor: `Dict("A"=>1, "B"=>2)`. This call will attempt to infer type inform
 keys and values (i.e. this example creates a `Dict{String, Int64}`). To explicitly specify types
 use the syntax `Dict{KeyType,ValueType}(...)`. For example, `Dict{String,Int32}("A"=>1, "B"=>2)`.
 
-Associative collections may also be created with generators. For example, `Dict(i => f(i) for i = 1:10)`.
+Dictionaries may also be created with generators. For example, `Dict(i => f(i) for i = 1:10)`.
 
 Given a dictionary `D`, the syntax `D[x]` returns the value of key `x` (if it exists) or throws
 an error, and `D[x] = y` stores the key-value pair `x => y` in `D` (replacing any existing value
@@ -213,9 +214,9 @@ Fully implemented by:
 
 Partially implemented by:
 
-  * [`IntSet`](@ref)
+  * [`BitSet`](@ref)
   * [`Set`](@ref)
-  * [`EnvHash`](@ref Base.EnvHash)
+  * [`EnvDict`](@ref Base.EnvDict)
   * [`Array`](@ref)
   * [`BitArray`](@ref)
 
@@ -223,23 +224,23 @@ Partially implemented by:
 
 ```@docs
 Base.Set
-Base.IntSet
+Base.BitSet
 Base.union
 Base.union!
 Base.intersect
 Base.setdiff
 Base.setdiff!
 Base.symdiff
-Base.symdiff!(::IntSet, ::Integer)
-Base.symdiff!(::IntSet, ::Any)
-Base.symdiff!(::IntSet, ::IntSet)
+Base.symdiff!(::BitSet, ::Integer)
+Base.symdiff!(::BitSet, ::Any)
+Base.symdiff!(::BitSet, ::BitSet)
 Base.intersect!
 Base.issubset
 ```
 
 Fully implemented by:
 
-  * [`IntSet`](@ref)
+  * [`BitSet`](@ref)
   * [`Set`](@ref)
 
 Partially implemented by:
@@ -265,3 +266,9 @@ Fully implemented by:
 
   * `Vector` (a.k.a. 1-dimensional [`Array`](@ref))
   * `BitVector` (a.k.a. 1-dimensional [`BitArray`](@ref))
+
+## Utility Collections
+
+```@docs
+Base.Pair
+```

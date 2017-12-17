@@ -139,18 +139,16 @@ some alternatives to consider:
   * Determine whether there is a simple rule for when `x` is `nothing`. For example, often the field
     will start as `nothing` but get initialized at some well-defined point. In that case, consider
     leaving it undefined at first.
-  * If `x` really needs to hold no value at some times, define it as `::Nullable{T}` instead, as this
-    guarantees type-stability in the code accessing this field (see [Nullable types](@ref man-nullable-types)).
 
 ## Avoid elaborate container types
 
 It is usually not much help to construct arrays like the following:
 
 ```julia
-a = Array{Union{Int,AbstractString,Tuple,Array}}(n)
+a = Vector{Union{Int,AbstractString,Tuple,Array}}(uninitialized, n)
 ```
 
-In this case `Array{Any}(n)` is better. It is also more helpful to the compiler to annotate specific
+In this case `Vector{Any}(uninitialized, n)` is better. It is also more helpful to the compiler to annotate specific
 uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 
 ## Use naming conventions consistent with Julia's `base/`
@@ -159,7 +157,7 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
   * functions are lowercase ([`maximum`](@ref), [`convert`](@ref)) and, when readable, with multiple
     words squashed together ([`isequal`](@ref), [`haskey`](@ref)). When necessary, use underscores
     as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch`](@ref)
-    as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers ([`sum_kbn`](@ref)).
+    as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers.
   * conciseness is valued, but avoid abbreviation ([`indexin`](@ref) rather than `indxin`) as
     it becomes difficult to remember whether and how particular words are abbreviated.
 

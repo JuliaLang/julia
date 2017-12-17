@@ -21,10 +21,10 @@ include $(SRCDIR)/tools/git-external.mk
 # if you are adding a new target, it can help to copy an similar, existing target
 #
 # autoconf configure-driven scripts: llvm pcre arpack unwind gmp mpfr patchelf libuv curl
-# custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind
+# custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind libwhich
 # CMake libs: libgit2 libssh2 mbedtls
 #
-# downloaded from git: llvm-svn, libuv, libopenlibm, utf8proc, openspecfun, libgit2, libssh2
+# downloaded from git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2
 #
 # there are rules in this file with the . replaced by a %
 # this is some magic Makefile trick that tells make
@@ -77,10 +77,6 @@ ifeq ($(USE_SYSTEM_OPENLIBM), 0)
 ifeq ($(USE_SYSTEM_LIBM), 0)
 DEP_LIBS += openlibm
 endif
-endif
-
-ifeq ($(USE_SYSTEM_OPENSPECFUN), 0)
-DEP_LIBS += openspecfun
 endif
 
 ifeq ($(USE_SYSTEM_DSFMT), 0)
@@ -154,6 +150,10 @@ DEP_LIBS += lapack
 endif
 endif
 
+ifneq ($(OS), WINNT)
+DEP_LIBS += libwhich
+endif
+
 DEP_LIBS_STAGED := $(filter-out suitesparse suitesparse-wrapper osxunwind,$(DEP_LIBS)) # unlist targets that have not been converted to use the staged-install
 
 
@@ -172,13 +172,12 @@ uninstall: $(addprefix uninstall-, $(DEP_LIBS_STAGED))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-openblas get-lapack get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-curl get-libgit2
+getall: get-llvm get-libuv get-pcre get-openlibm get-dsfmt get-openblas get-lapack get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-curl get-libgit2 get-libwhich
 
 include $(SRCDIR)/llvm.mk
 include $(SRCDIR)/libuv.mk
 include $(SRCDIR)/pcre.mk
 include $(SRCDIR)/openlibm.mk
-include $(SRCDIR)/openspecfun.mk
 include $(SRCDIR)/dsfmt.mk
 include $(SRCDIR)/objconv.mk
 include $(SRCDIR)/blas.mk
@@ -193,3 +192,4 @@ include $(SRCDIR)/mbedtls.mk
 include $(SRCDIR)/libssh2.mk
 include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
+include $(SRCDIR)/libwhich.mk

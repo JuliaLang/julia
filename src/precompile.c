@@ -243,7 +243,7 @@ static void _compile_all_deq(jl_array_t *found)
             jl_gc_wb(m, linfo);
         }
 
-        if (linfo->jlcall_api == 2)
+        if (linfo->jlcall_api == JL_API_CONST)
             continue;
         src = m->source;
         // TODO: the `unspecialized` field is not yet world-aware, so we can't store
@@ -251,7 +251,7 @@ static void _compile_all_deq(jl_array_t *found)
         //src = jl_type_infer(&linfo, jl_world_counter, 1);
         //m->unspecialized = linfo;
         //jl_gc_wb(m, linfo);
-        //if (linfo->jlcall_api == 2)
+        //if (linfo->jlcall_api == JL_API_CONST)
         //    continue;
 
         // first try to create leaf signatures from the signature declaration and compile those
@@ -272,7 +272,7 @@ static int compile_all_enq__(jl_typemap_entry_t *ml, void *env)
     if (m->source &&
         (!m->unspecialized ||
          (m->unspecialized->functionObjectsDecls.functionObject == NULL &&
-          m->unspecialized->jlcall_api != 2 &&
+          m->unspecialized->jlcall_api != JL_API_CONST &&
           m->unspecialized->fptr == NULL))) {
         // found a lambda that still needs to be compiled
         jl_array_ptr_1d_push(found, (jl_value_t*)ml);
@@ -286,10 +286,7 @@ static void compile_all_enq_(jl_methtable_t *mt, void *env)
     jl_typemap_visitor(mt->defs, compile_all_enq__, env);
 }
 
-void jl_foreach_mtable_in_module(
-        jl_module_t *m,
-        void (*visit)(jl_methtable_t *mt, void *env),
-        void *env);
+void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), void *env);
 
 static void jl_compile_all_defs(void)
 {
@@ -298,7 +295,7 @@ static void jl_compile_all_defs(void)
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
     while (1) {
-        jl_foreach_mtable_in_module(jl_main_module, compile_all_enq_, m);
+        jl_foreach_reachable_mtable(compile_all_enq_, m);
         size_t changes = jl_array_len(m);
         if (!changes)
             break;
@@ -312,7 +309,7 @@ static int precompile_enq_specialization_(jl_typemap_entry_t *l, void *closure)
 {
     if (jl_is_method_instance(l->func.value) &&
             l->func.linfo->functionObjectsDecls.functionObject == NULL &&
-            l->func.linfo->jlcall_api != 2)
+            l->func.linfo->jlcall_api != JL_API_CONST)
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->sig);
     return 1;
 }
@@ -334,7 +331,7 @@ static void jl_compile_specializations(void)
     // type signatures that were inferred but haven't been compiled
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
-    jl_foreach_mtable_in_module(jl_main_module, precompile_enq_all_specializations_, m);
+    jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
     size_t i, l;
     for (i = 0, l = jl_array_len(m); i < l; i++) {
         jl_compile_hint((jl_tupletype_t*)jl_array_ptr_ref(m, i));

@@ -4,7 +4,8 @@
 const options = [
     "--cflags",
     "--ldflags",
-    "--ldlibs"
+    "--ldlibs",
+    "--allflags"
 ];
 
 threadingOn() = ccall(:jl_threading_enabled, Cint, ()) != 0
@@ -12,11 +13,6 @@ threadingOn() = ccall(:jl_threading_enabled, Cint, ()) != 0
 function shell_escape(str)
     str = replace(str, "'", "'\''")
     return "'$str'"
-end
-
-function imagePath()
-    opts = Base.JLOptions()
-    return unsafe_string(opts.image_file)
 end
 
 function libDir()
@@ -70,6 +66,10 @@ function cflags()
     return String(take!(flags))
 end
 
+function allflags()
+    return "$(cflags()) $(ldflags()) $(ldlibs())"
+end
+
 function check_args(args)
     checked = intersect(args, options)
     if length(checked) == 0 || length(checked) != length(args)
@@ -87,6 +87,8 @@ function main()
             println(cflags())
         elseif args == "--ldlibs"
             println(ldlibs())
+        elseif args == "--allflags"
+            println(allflags())
         end
     end
 end

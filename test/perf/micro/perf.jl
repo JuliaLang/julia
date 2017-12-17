@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 include("../perfutil.jl")
 
@@ -9,7 +9,7 @@ include("../perfutil.jl")
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 
 @test fib(20) == 6765
-@timeit fib(20) "fib" "Recursive fibonacci"
+@timeit fib(20) "recursion_fibonacci" "Recursive fibonacci"
 
 ## parse integer ##
 
@@ -24,7 +24,7 @@ function parseintperf(t)
     return n
 end
 
-@timeit parseintperf(1000) "parse_int" "Integer parsing"
+@timeit parseintperf(1000) "parse_integers" "Integer parsing"
 
 ## array constructors ##
 
@@ -39,11 +39,15 @@ A = ones(200,200)
 
 ## mandelbrot set: complex arithmetic and comprehensions ##
 
+function myabs2(z)
+    return real(z)*real(z) + imag(z)*imag(z)
+end
+
 function mandel(z)
     c = z
     maxiter = 80
     for n = 1:maxiter
-        if abs(z) > 2
+        if myabs2(z) > 4
             return n-1
         end
         z = z^2 + c
@@ -53,7 +57,7 @@ end
 
 mandelperf() = [ mandel(complex(r,i)) for i=-1.:.1:1., r=-2.0:.1:0.5 ]
 @test sum(mandelperf()) == 14791
-@timeit mandelperf() "mandel" "Calculation of mandelbrot set"
+@timeit mandelperf() "userfunc_mandelbrot" "Calculation of mandelbrot set"
 
 ## numeric vector sort ##
 
@@ -77,7 +81,7 @@ end
 
 sortperf(n) = qsort!(rand(n), 1, n)
 @test issorted(sortperf(5000))
-@timeit sortperf(5000) "quicksort" "Sorting of random numbers using quicksort"
+@timeit sortperf(5000) "recursion_quicksort" "Sorting of random numbers using quicksort"
 
 ## slow pi series ##
 
@@ -93,7 +97,7 @@ function pisum()
 end
 
 @test abs(pisum()-1.644834071848065) < 1e-12
-@timeit pisum() "pi_sum" "Summation of a power series"
+@timeit pisum() "iteration_pi_sum" "Summation of a power series"
 
 ## slow pi series, vectorized ##
 
@@ -130,11 +134,11 @@ end
 
 (s1, s2) = randmatstat(1000)
 @test 0.5 < s1 < 1.0 && 0.5 < s2 < 1.0
-@timeit randmatstat(1000) "rand_mat_stat" "Statistics on a random matrix"
+@timeit randmatstat(1000) "matrix_statistics" "Statistics on a random matrix"
 
 ## largish random number gen & matmul ##
 
-@timeit rand(1000,1000)*rand(1000,1000) "rand_mat_mul" "Multiplication of random matrices"
+@timeit rand(1000,1000)*rand(1000,1000) "matrix_multiply" "Multiplication of random matrices"
 
 ## printfd ##
 
@@ -148,7 +152,7 @@ if Sys.isunix()
     end
 
     printfd(1)
-    @timeit printfd(100000) "printfd" "Printing to a file descriptor"
+    @timeit printfd(100000) "print_to_file" "Printing to a file descriptor"
 end
 
-maxrss("micro")
+#maxrss("micro")

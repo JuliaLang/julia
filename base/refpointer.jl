@@ -55,7 +55,7 @@ convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
 function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
     if isbits(T) || isbitsunion(T)
         return convert(P, pointer_from_objref(b))
-    elseif isleaftype(T)
+    elseif _isleaftype(T)
         return convert(P, pointer_from_objref(b.x))
     else
         # If the slot is not leaf type, it could be either isbits or not.
@@ -104,8 +104,8 @@ function Ref{P}(a::Array{T}) where P<:Union{Ptr,Cwstring,Cstring} where T
         # this Array already has the right memory layout for the requested Ref
         return RefArray(a,1,false) # root something, so that this function is type-stable
     else
-        ptrs = Vector{P}(length(a)+1)
-        roots = Vector{Any}(length(a))
+        ptrs = Vector{P}(uninitialized, length(a)+1)
+        roots = Vector{Any}(uninitialized, length(a))
         for i = 1:length(a)
             root = cconvert(P, a[i])
             ptrs[i] = unsafe_convert(P, root)::P

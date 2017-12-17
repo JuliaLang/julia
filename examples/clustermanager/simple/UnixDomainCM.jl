@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-
-import Base: launch, manage, connect, exit
+using Distributed
+import Distributed: launch, manage, connect, exit
 
 mutable struct UnixDomainCM <: ClusterManager
     np::Integer
@@ -8,7 +8,7 @@ end
 
 function launch(manager::UnixDomainCM, params::Dict, launched::Array, c::Condition)
 #    println("launch $(manager.np)")
-    cookie = Base.cluster_cookie()
+    cookie = cluster_cookie()
     for i in 1:manager.np
         sockname = tempname()
         try
@@ -29,19 +29,20 @@ end
 function connect(manager::UnixDomainCM, pid::Int, config::WorkerConfig)
     if myid() == 1
 #        println("connect_m2w")
-        config.connect_at = get(config.userdata)[:sockname] # This will be useful in the worker-to-worker connection setup.
+        # This will be useful in the worker-to-worker connection setup.
+        config.connect_at = config.userdata[:sockname]
 
-        print_worker_stdout(get(config.userdata)[:io], pid)
+        print_worker_stdout(config.userdata[:io], pid)
     else
 #        println("connect_w2w")
-        sockname = get(config.connect_at)
+        sockname = config.connect_at
         config.userdata = Dict{Symbol, Any}(:sockname=>sockname)
     end
 
     t = time()
     while true
         try
-            address = get(config.userdata)[:sockname]
+            address = config.userdata[:sockname]
             if isa(address, Tuple)
                 sock = connect(address...)
             else
@@ -61,12 +62,12 @@ end
 
 # WORKER
 function start_worker(sockname, cookie)
-    Base.init_worker(cookie, UnixDomainCM(0))
+    init_worker(cookie, UnixDomainCM(0))
 
     srvr = listen(sockname)
     while true
         sock = accept(srvr)
-        Base.process_messages(sock, sock)
+        process_messages(sock, sock)
     end
 end
 
@@ -74,7 +75,7 @@ function manage(manager::UnixDomainCM, id::Int, config::WorkerConfig, op)
     # Does not seem to be required, filesystem entry cleanup is happening automatically on process exit
 #     if op == :deregister
 #         try
-#             rm(get(config.userdata)[:sockname])
+#             rm(config.userdata[:sockname])
 #         end
 #     end
     nothing
@@ -83,7 +84,7 @@ end
 function print_worker_stdout(io, pid)
     @schedule while !eof(io)
         line = readline(io)
-        println("\tFrom worker $(pid):\t$line")
+        println("      From worker $(pid):\t$line")
     end
 end
 

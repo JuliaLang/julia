@@ -47,3 +47,6 @@ end
 # Backcapture reference in substitution string
 @test replace("abcde", r"(..)(?P<byname>d)", s"\g<byname>xy\\\1") == "adxy\\bce"
 @test_throws ErrorException replace("a", r"(?P<x>)", s"\g<y>")
+
+# Proper unicode handling
+@test  match(r"∀∀", "∀x∀∀∀").match == "∀∀"

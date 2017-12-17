@@ -26,8 +26,9 @@ function simd_loop_with_multiple_reductions(x, y, z)
 end
 
 for T in [Int32,Int64,Float32,Float64]
-   # Try various lengths to make sure "remainder loop" works
-   for n in [0,1,2,3,4,255,256,257]
+    # Try various lengths to make sure "remainder loop" works
+    for n in [0,1,2,3,4,255,256,257]
+        local n, a, b, c, s, t
         # Dataset chosen so that results will be exact with only 24 bits of mantissa
         a = convert(Array{T},[2*j+1 for j in 1:n])
         b = convert(Array{T},[3*j+2 for j in 1:n])
@@ -107,32 +108,32 @@ end
 end
 
 # @simd with cartesian iteration
-function simd_cartesian_range!(indexes, crng)
+function simd_cartesian_range!(indices, crng)
     @simd for I in crng
-        push!(indexes, I)
+        push!(indices, I)
     end
-    indexes
+    indices
 end
 
-crng = CartesianRange(2:4, 0:1, 1:1, 3:5)
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
-@test indexes == vec(collect(crng))
+crng = CartesianIndices(2:4, 0:1, 1:1, 3:5)
+indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
+@test indices == vec(collect(crng))
 
-crng = CartesianRange(-1:1, 1:3)
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
-@test indexes == vec(collect(crng))
+crng = CartesianIndices(-1:1, 1:3)
+indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
+@test indices == vec(collect(crng))
 
-crng = CartesianRange(-1:-1, 1:3)
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
-@test indexes == vec(collect(crng))
+crng = CartesianIndices(-1:-1, 1:3)
+indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
+@test indices == vec(collect(crng))
 
-crng = CartesianRange(2:4)
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
-@test indexes == collect(crng)
+crng = CartesianIndices(2:4)
+indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
+@test indices == collect(crng)
 
-crng = CartesianRange()
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
-@test indexes == vec(collect(crng))
+crng = CartesianIndices()
+indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
+@test indices == vec(collect(crng))
 
 # @simd with array as "range"
 # issue #13869

@@ -20,7 +20,7 @@ for region in Any[
     1, 2, 3, 4, 5, (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4),
     (1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)]
     # println("region = $region")
-    r = fill(NaN, map(length, Base.reduced_indices(indices(Areduc), region)))
+    r = fill(NaN, map(length, Base.reduced_indices(axes(Areduc), region)))
     @test sum!(r, Areduc) ≈ safe_sum(Areduc, region)
     @test prod!(r, Areduc) ≈ safe_prod(Areduc, region)
     @test maximum!(r, Areduc) ≈ safe_maximum(Areduc, region)
@@ -33,7 +33,7 @@ for region in Any[
     # With init=false
     r2 = similar(r)
     fill!(r, 1)
-    @test sum!(r, Areduc, init=false) ≈ safe_sum(Areduc, region)+1
+    @test sum!(r, Areduc, init=false) ≈ safe_sum(Areduc, region) .+ 1
     fill!(r, 2.2)
     @test prod!(r, Areduc, init=false) ≈ safe_prod(Areduc, region)*2.2
     fill!(r, 1.8)
@@ -41,9 +41,9 @@ for region in Any[
     fill!(r, -0.2)
     @test minimum!(r, Areduc, init=false) ≈ fill!(r2, -0.2)
     fill!(r, 8.1)
-    @test sum!(abs, r, Areduc, init=false) ≈ safe_sumabs(Areduc, region)+8.1
+    @test sum!(abs, r, Areduc, init=false) ≈ safe_sumabs(Areduc, region) .+ 8.1
     fill!(r, 8.1)
-    @test sum!(abs2, r, Areduc, init=false) ≈ safe_sumabs2(Areduc, region)+8.1
+    @test sum!(abs2, r, Areduc, init=false) ≈ safe_sumabs2(Areduc, region) .+ 8.1
     fill!(r, 1.5)
     @test maximum!(abs, r, Areduc, init=false) ≈ fill!(r2, 1.5)
     fill!(r, -1.5)
@@ -62,7 +62,7 @@ end
 # Test reduction along first dimension; this is special-cased for
 # size(A, 1) >= 16
 Breduc = rand(64, 3)
-r = fill(NaN, map(length, Base.reduced_indices(indices(Breduc), 1)))
+r = fill(NaN, map(length, Base.reduced_indices(axes(Breduc), 1)))
 @test sum!(r, Breduc) ≈ safe_sum(Breduc, 1)
 @test sum!(abs, r, Breduc) ≈ safe_sumabs(Breduc, 1)
 @test sum!(abs2, r, Breduc) ≈ safe_sumabs2(Breduc, 1)
@@ -71,54 +71,58 @@ r = fill(NaN, map(length, Base.reduced_indices(indices(Breduc), 1)))
 @test sum(abs2, Breduc, 1) ≈ safe_sumabs2(Breduc, 1)
 
 fill!(r, 4.2)
-@test sum!(r, Breduc, init=false) ≈ safe_sum(Breduc, 1)+4.2
+@test sum!(r, Breduc, init=false) ≈ safe_sum(Breduc, 1) .+ 4.2
 fill!(r, -6.3)
-@test sum!(abs, r, Breduc, init=false) ≈ safe_sumabs(Breduc, 1)-6.3
+@test sum!(abs, r, Breduc, init=false) ≈ safe_sumabs(Breduc, 1) .- 6.3
 fill!(r, -1.1)
-@test sum!(abs2, r, Breduc, init=false) ≈ safe_sumabs2(Breduc, 1)-1.1
+@test sum!(abs2, r, Breduc, init=false) ≈ safe_sumabs2(Breduc, 1) .- 1.1
 
 # Small arrays with init=false
-A = reshape(1:15, 3, 5)
-R = ones(Int, 3)
-@test sum!(R, A, init=false) == [36,41,46]
-R = ones(Int, 1, 5)
-@test sum!(R, A, init=false) == [7 16 25 34 43]
-R = [2]
-A = reshape(1:6, 3, 2)
-@test prod!(R, A, init=false) == [1440]
+let A = reshape(1:15, 3, 5)
+    R = ones(Int, 3)
+    @test sum!(R, A, init=false) == [36,41,46]
+    R = ones(Int, 1, 5)
+    @test sum!(R, A, init=false) == [7 16 25 34 43]
+end
+let R = [2]
+    A = reshape(1:6, 3, 2)
+    @test prod!(R, A, init=false) == [1440]
+
+    # min/max
+    @test reducedim(max, A, 1) == [3 6]
+    @test reducedim(min, A, 2) == reshape([1,2,3], 3, 1)
+end
 
 # Small integers
 @test @inferred(sum(Int8[1], 1)) == [1]
 @test @inferred(sum(UInt8[1], 1)) == [1]
 
 # Complex types
-@test typeof(@inferred(sum([1.0+1.0im], 1))) == Vector{Complex128}
+@test typeof(@inferred(sum([1.0+1.0im], 1))) == Vector{ComplexF64}
 @test typeof(@inferred(Base.sum(abs, [1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(Base.sum(abs2, [1.0+1.0im], 1))) == Vector{Float64}
-@test typeof(@inferred(prod([1.0+1.0im], 1))) == Vector{Complex128}
+@test typeof(@inferred(prod([1.0+1.0im], 1))) == Vector{ComplexF64}
 @test typeof(@inferred(Base.prod(abs, [1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(Base.prod(abs2, [1.0+1.0im], 1))) == Vector{Float64}
-
-# min/max
-@test reducedim(max, A, 1) == [3 6]
-@test reducedim(min, A, 2) == reshape([1,2,3], 3, 1)
 
 # Heterogeneously typed arrays
 @test sum(Union{Float32, Float64}[1.0], 1) == [1.0]
 @test prod(Union{Float32, Float64}[1.0], 1) == [1.0]
 
 @test reducedim((a,b) -> a|b, [true false; false false], 1, false) == [true false]
-R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
-@test eltype(R) == Float64
-@test R ≈ [3,7]
+let R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
+    @test eltype(R) == Float64
+    @test R ≈ [3,7]
+end
 @test reducedim((a,b) -> a+b, [1 2; 3 4], 1, 0) == [4 6]
 
 # inferred return types
-rt = Base.return_types(reducedim, Tuple{Function, Array{Float64, 3}, Int, Float64})
-@test length(rt) == 1 && rt[1] == Array{Float64, 3}
+let rt = Base.return_types(reducedim, Tuple{Function, Array{Float64, 3}, Int, Float64})
+    @test length(rt) == 1 && rt[1] == Array{Float64, 3}
+end
 
 @testset "empty cases" begin
-    A = Array{Int}(0,1)
+    A = Matrix{Int}(uninitialized, 0,1)
     @test sum(A) === 0
     @test prod(A) === 1
     @test_throws ArgumentError minimum(A)
@@ -332,4 +336,12 @@ for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
     @test_throws ArgumentError sum(abs2, Areduc, region)
     @test_throws ArgumentError maximum(abs, Areduc, region)
     @test_throws ArgumentError minimum(abs, Areduc, region)
+end
+
+# check type of result
+under_test = [UInt8, Int8, Int32, Int64, BigInt]
+@testset "type of sum(::Array{$T}" for T in under_test
+    result = sum(T[1 2 3; 4 5 6; 7 8 9], 2)
+    @test result == hcat([6, 15, 24])
+    @test eltype(result) === typeof(Base.promote_sys_size_add(zero(T)))
 end

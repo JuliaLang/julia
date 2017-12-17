@@ -54,6 +54,28 @@ The following functions are available for
 
 [^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0/).
 
+# Examples
+```jldoctest
+julia> A = [1 2; 2 3]
+2×2 Array{Int64,2}:
+ 1  2
+ 2  3
+
+julia> bkfact(A)
+Base.LinAlg.BunchKaufman{Float64,Array{Float64,2}}
+D factor:
+2×2 Tridiagonal{Float64,Array{Float64,1}}:
+ -0.333333  0.0
+  0.0       3.0
+U factor:
+2×2 Base.LinAlg.UnitUpperTriangular{Float64,Array{Float64,2}}:
+ 1.0  0.666667
+ 0.0  1.0
+permutation:
+2-element Array{Int64,1}:
+ 1
+ 2
+```
 """
 bkfact(A::AbstractMatrix{T}, rook::Bool=false) where {T} =
     bkfact!(copy_oftype(A, typeof(sqrt(one(T)))), rook)
@@ -130,7 +152,6 @@ permutation:
  1
  3
  2
-successful: true
 
 julia> F[:L]*F[:D]*F[:L].' - A[F[:p], F[:p]]
 3×3 Array{Float64,2}:
@@ -152,12 +173,10 @@ function getindex(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
     if d == :p
         return _ipiv2perm_bk(B.ipiv, n, B.uplo)
     elseif d == :P
-        return eye(T, n)[:,invperm(B[:p])]
+        return Matrix{T}(I, n, n)[:,invperm(B[:p])]
     elseif d == :L || d == :U || d == :D
         if B.rook
-            # syconvf_rook just added to LAPACK 3.7.0. Uncomment and remove error when we distribute LAPACK 3.7.0
-            # LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', copy(B.LD), B.ipiv)
-            throw(ArgumentError("reconstruction rook pivoted Bunch-Kaufman factorization not implemented yet"))
+            LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', copy(B.LD), B.ipiv)
         else
             LUD, od = LAPACK.syconv!(B.uplo, copy(B.LD), B.ipiv)
         end
@@ -190,14 +209,17 @@ end
 issuccess(B::BunchKaufman) = B.info == 0
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, B::BunchKaufman)
-    println(io, summary(B))
-    println(io, "D factor:")
-    show(io, mime, B[:D])
-    println(io, "\n$(B.uplo) factor:")
-    show(io, mime, B[Symbol(B.uplo)])
-    println(io, "\npermutation:")
-    show(io, mime, B[:p])
-    print(io, "\nsuccessful: $(issuccess(B))")
+    if issuccess(B)
+        println(io, summary(B))
+        println(io, "D factor:")
+        show(io, mime, B[:D])
+        println(io, "\n$(B.uplo) factor:")
+        show(io, mime, B[Symbol(B.uplo)])
+        println(io, "\npermutation:")
+        show(io, mime, B[:p])
+    else
+        print(io, "Failed factorization of type $(typeof(B))")
+    end
 end
 
 function inv(B::BunchKaufman{<:BlasReal})
@@ -232,7 +254,7 @@ function inv(B::BunchKaufman{<:BlasComplex})
     end
 end
 
-function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasReal
+function ldiv!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasReal
     if !issuccess(B)
         throw(SingularException(B.info))
     end
@@ -243,7 +265,7 @@ function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasReal
         LAPACK.sytrs!(B.uplo, B.LD, B.ipiv, R)
     end
 end
-function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasComplex
+function ldiv!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasComplex
     if !issuccess(B)
         throw(SingularException(B.info))
     end
@@ -263,9 +285,9 @@ function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasCompl
     end
 end
 # There is no fallback solver for Bunch-Kaufman so we'll have to promote to same element type
-function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{S}) where {T,S}
+function ldiv!(B::BunchKaufman{T}, R::StridedVecOrMat{S}) where {T,S}
     TS = promote_type(T,S)
-    return A_ldiv_B!(convert(BunchKaufman{TS}, B), convert(AbstractArray{TS}, R))
+    return ldiv!(convert(BunchKaufman{TS}, B), convert(AbstractArray{TS}, R))
 end
 
 function logabsdet(F::BunchKaufman)

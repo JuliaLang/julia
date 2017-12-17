@@ -11,6 +11,7 @@ Core.AbstractFloat
 Core.Integer
 Core.Signed
 Core.Unsigned
+Base.AbstractIrrational
 ```
 
 ### Concrete number types
@@ -47,7 +48,7 @@ Base.oct
 Base.base
 Base.digits
 Base.digits!
-Base.bits
+Base.bitstring
 Base.parse(::Type, ::Any, ::Any)
 Base.tryparse
 Base.big

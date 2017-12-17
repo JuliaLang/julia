@@ -5,11 +5,18 @@
 </a>
 </div>
 
-Linux, OSX: [![Build Status](https://api.travis-ci.org/JuliaLang/julia.svg?branch=master)](https://travis-ci.org/JuliaLang/julia)
+Build status:
+[![travis][travis-img]](https://travis-ci.org/JuliaLang/julia)
+[![appveyor][appveyor-img]](https://ci.appveyor.com/project/JuliaLang/julia/branch/master)
 
-Windows: [![Build status](https://ci.appveyor.com/api/projects/status/dvial98s5vi6ealt/branch/master?svg=true)](https://ci.appveyor.com/project/JuliaLang/julia/branch/master)
+Code coverage:
+[![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
+[![codecov][codecov-img]](http://codecov.io/github/JuliaLang/julia?branch=master)
 
-Code Coverage: [![Coverage Status](https://coveralls.io/repos/JuliaLang/julia/badge.svg?branch=master)](https://coveralls.io/r/JuliaLang/julia?branch=master) [![codecov.io](http://codecov.io/github/JuliaLang/julia/coverage.svg?branch=master)](http://codecov.io/github/JuliaLang/julia?branch=master)
+[travis-img]: https://img.shields.io/travis/JuliaLang/julia/master.svg?label=Linux+/+macOS
+[appveyor-img]: https://img.shields.io/appveyor/ci/JuliaLang/julia/master.svg?label=Windows
+[coveralls-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=coveralls
+[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov
 
 ## The Julia Language
 
@@ -22,14 +29,14 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Homepage:** <https://julialang.org>
 - **Binaries:** <https://julialang.org/downloads/>
 - **Documentation:** <https://docs.julialang.org/>
-- **Packages:** <http://pkg.julialang.org/>
+- **Packages:** <https://pkg.julialang.org/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Discussion forum:** <https://discourse.julialang.org>
 - **Mailing lists:** <https://julialang.org/community/>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
 - **Gitter:** <https://gitter.im/JuliaLang/julia>
-- **IRC:** <http://webchat.freenode.net/?channels=julia>
+- **IRC:** <https://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
@@ -273,39 +280,38 @@ Julia can be developed in an isolated Vagrant environment. See [the Vagrant READ
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++
-- **[python]** (>=2.7)          - needed to build LLVM.
-- **[gfortran]**                — compiling and linking Fortran libraries
+- **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++.
+- **[libatomic][gcc]**          — provided by **[gcc]** and needed to support atomic operations.
+- **[python]** (>=2.7)          — needed to build LLVM.
+- **[gfortran]**                — compiling and linking Fortran libraries.
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
 - **[patch]**                   — for modifying source code.
-- **[cmake]**                   — needed to build `libgit2`.
-- **[pkg-config]**              - needed to build `libgit2` correctly, especially for proxy support
+- **[cmake]** (>= 3.4.3)        — needed to build `libgit2`.
+- **[pkg-config]**              — needed to build `libgit2` correctly, especially for proxy support.
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
 - **[LLVM]** (3.9)           — compiler infrastructure.
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
-- **[libuv]**                — portable, high-performance event-based I/O library
+- **[libuv]**                — portable, high-performance event-based I/O library.
 - **[OpenLibm]**             — portable libm library containing elementary math functions.
-- **[OpenSpecFun]** (>= 0.4) — library containing Bessel and error functions of complex arguments.
 - **[DSFMT]**                — fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](https://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](https://www.tacc.utexas.edu/research-development/tacc-software/gotoblas2).
 - **[LAPACK]** (>= 3.5)      — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
 - **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
-- **[AMOS]**                 — subroutines for computing Bessel and Airy functions.
 - **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices.
 - **[ARPACK]**               — collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[PCRE]** (>= 10.00)      — Perl-compatible regular expressions library.
 - **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
-- **[libgit2]** (>= 0.23)    — Git linkable library, used by Julia's package manager
-- **[curl]** (>= 7.50)       — libcurl provides download and proxy support for Julia's package manager
-- **[libssh2]** (>= 1.7)     — library for SSH transport, used by libgit2 for packages with SSH remotes
+- **[libgit2]** (>= 0.23)    — Git linkable library, used by Julia's package manager.
+- **[curl]** (>= 7.50)       — libcurl provides download and proxy support for Julia's package manager.
+- **[libssh2]** (>= 1.7)     — library for SSH transport, used by libgit2 for packages with SSH remotes.
 - **[mbedtls]** (>= 2.2)     — library used for cryptography and transport layer security, used by libssh2
-- **[utf8proc]** (>= 2.1)    — a library for processing UTF-8 encoded Unicode strings
-- **[libosxunwind]**         — clone of [libunwind], a library that determines the call-chain of a program
+- **[utf8proc]** (>= 2.1)    — a library for processing UTF-8 encoded Unicode strings.
+- **[libosxunwind]**         — clone of [libunwind], a library that determines the call-chain of a program.
 
 [GNU make]:     http://www.gnu.org/software/make
 [patch]:        http://www.gnu.org/software/patch
@@ -320,13 +326,11 @@ Julia uses the following external libraries, which are automatically downloaded 
 [perl]:         http://www.perl.org
 [cmake]:        http://www.cmake.org
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
-[OpenSpecFun]:  https://github.com/JuliaLang/openspecfun
 [DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS
 [LAPACK]:       http://www.netlib.org/lapack
 [MKL]:          http://software.intel.com/en-us/articles/intel-mkl
 [SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
-[AMOS]:         http://netlib.org/amos
 [ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng
 [PCRE]:         http://www.pcre.org
 [LLVM]:         http://www.llvm.org
@@ -376,11 +380,12 @@ It is highly recommended to start with a fresh clone of the Julia repository.
 
 The Julia source code is organized as follows:
 
-    base/          source code for Julia's standard library
+    base/          source code for the Base module (part of Julia's standard library)
+    stdlib/        source code for other standard library packages
     contrib/       editor support for Julia source, miscellaneous scripts
     deps/          external dependencies
-    doc/manual     source for the user manual
-    doc/stdlib     source for standard library function help text
+    doc/src/manual source for the user manual
+    doc/src/stdlib source for standard library function reference
     examples/      example Julia programs
     src/           source for Julia language core
     test/          test suites
@@ -405,8 +410,7 @@ On Windows, double-click `usr/bin/julia.exe`.
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](https://julialang.org/manual/getting-started) in the manual.
 
-**Note**: While some system package managers have Julia installers available,
-these are not maintained nor endorsed by the Julia project. They may be outdated
+**Note**: Although some system package managers provide Julia, such installations are neither maintained nor endorsed by the Julia project. They may be outdated
 and/or unmaintained. We recommend you use the official Julia binaries instead.
 
 ## Editor and Terminal Setup

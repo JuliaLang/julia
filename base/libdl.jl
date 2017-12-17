@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Libdl
+@doc """
+Interface to libdl. Provides dynamic linking support.
+""" -> Libdl
 
 export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL,
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
@@ -231,7 +234,7 @@ if Sys.isbsd() && !Sys.isapple()
 end # bsd family
 
 function dllist()
-    dynamic_libraries = Vector{AbstractString}(0)
+    dynamic_libraries = Vector{AbstractString}()
 
     @static if Sys.islinux()
         callback = cfunction(dl_phdr_info_callback, Cint,
