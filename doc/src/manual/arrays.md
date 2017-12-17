@@ -707,12 +707,12 @@ in space and execution time, compared to dense arrays.
 ### [Compressed Sparse Column (CSC) Sparse Matrix Storage](@id man-csc)
 
 In Julia, sparse matrices are stored in the [Compressed Sparse Column (CSC) format](https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_column_.28CSC_or_CCS.29).
-Julia sparse matrices have the type [`SparseMatrixCSC{Tv,Ti}`](@ref), where `Tv` is the
+Julia sparse matrices have the type [`SparseMatrix{Tv,Ti}`](@ref), where `Tv` is the
 type of the stored values, and `Ti` is the integer type for storing column pointers and
-row indices. The internal representation of `SparseMatrixCSC` is as follows:
+row indices. The internal representation of `SparseMatrix` is as follows:
 
 ```julia
-struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+struct SparseMatrix{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
@@ -732,10 +732,10 @@ for performance, and to avoid expensive operations.
 
 If you have data in CSC format from a different application or library, and wish to import it
 in Julia, make sure that you use 1-based indexing. The row indices in every column need to be
-sorted. If your `SparseMatrixCSC` object contains unsorted row indices, one quick way to sort
+sorted. If your `SparseMatrix` object contains unsorted row indices, one quick way to sort
 them is by doing a double transpose.
 
-In some applications, it is convenient to store explicit zero values in a `SparseMatrixCSC`. These
+In some applications, it is convenient to store explicit zero values in a `SparseMatrix`. These
 *are* accepted by functions in `Base` (but there is no guarantee that they will be preserved in
 mutating operations). Such explicitly stored zeros are treated as structural nonzeros by many
 routines. The [`nnz`](@ref) function returns the number of elements explicitly stored in the
@@ -746,13 +746,13 @@ remove stored zeros from the sparse matrix.
 
 ```jldoctest
 julia> A = sparse([1, 2, 3], [1, 2, 3], [0, 2, 0])
-3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+3×3 SparseMatrix{Int64,Int64} with 3 stored entries:
   [1, 1]  =  0
   [2, 2]  =  2
   [3, 3]  =  0
 
 julia> dropzeros(A)
-3×3 SparseMatrixCSC{Int64,Int64} with 1 stored entry:
+3×3 SparseMatrix{Int64,Int64} with 1 stored entry:
   [2, 2]  =  2
 ```
 
@@ -771,7 +771,7 @@ struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
 end
 ```
 
-As for [`SparseMatrixCSC`](@ref), the `SparseVector` type can also contain explicitly
+As for [`SparseMatrix`](@ref), the `SparseVector` type can also contain explicitly
 stored zeros. (See [Sparse Matrix Storage](@ref man-csc).).
 
 ### Sparse Vector and Matrix Constructors
@@ -798,7 +798,7 @@ such that `R[I[k]] = V[k]`.
 julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
-5×18 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
+5×18 SparseMatrix{Int64,Int64} with 4 stored entries:
   [1 ,  4]  =  1
   [4 ,  7]  =  2
   [5 ,  9]  =  3
@@ -839,7 +839,7 @@ the [`sparse`](@ref) function:
 
 ```jldoctest
 julia> sparse(Matrix(1.0I, 5, 5))
-5×5 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
+5×5 SparseMatrix{Float64,Int64} with 5 stored entries:
   [1, 1]  =  1.0
   [2, 2]  =  1.0
   [3, 3]  =  1.0

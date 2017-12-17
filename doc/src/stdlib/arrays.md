@@ -196,7 +196,7 @@ The following functions are specific to sparse arrays.
 
 ```@docs
 Base.SparseArrays.SparseVector
-Base.SparseArrays.SparseMatrixCSC
+Base.SparseArrays.SparseMatrix
 Base.SparseArrays.sparse
 Base.SparseArrays.sparsevec
 Base.SparseArrays.issparse
@@ -208,10 +208,10 @@ Base.SparseArrays.sprandn
 Base.SparseArrays.nonzeros
 Base.SparseArrays.rowvals
 Base.SparseArrays.nzrange
-Base.SparseArrays.dropzeros!(::SparseMatrixCSC, ::Bool)
-Base.SparseArrays.dropzeros(::SparseMatrixCSC, ::Bool)
+Base.SparseArrays.dropzeros!(::SparseMatrix, ::Bool)
+Base.SparseArrays.dropzeros(::SparseMatrix, ::Bool)
 Base.SparseArrays.dropzeros!(::SparseVector, ::Bool)
 Base.SparseArrays.dropzeros(::SparseVector, ::Bool)
 Base.SparseArrays.permute
-Base.permute!{Tv, Ti, Tp <: Integer, Tq <: Integer}(::SparseMatrixCSC{Tv,Ti}, ::SparseMatrixCSC{Tv,Ti}, ::AbstractArray{Tp,1}, ::AbstractArray{Tq,1})
+Base.permute!{Tv, Ti, Tp <: Integer, Tq <: Integer}(::SparseMatrix{Tv,Ti}, ::SparseMatrix{Tv,Ti}, ::AbstractArray{Tp,1}, ::AbstractArray{Tq,1})
 ```

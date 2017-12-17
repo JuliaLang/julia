@@ -75,7 +75,7 @@ vals = Any[
     [], [1], [2], [1, 1], [1, 2], [1, 3], [2, 2], [1, 2, 2], [1, 3, 3],
     zeros(2, 2), spzeros(2, 2), Matrix(1.0I, 2, 2), sparse(1.0I, 2, 2),
     sparse(ones(2, 2)), ones(2, 2), sparse([0 0; 1 0]), [0 0; 1 0],
-    [-0. 0; -0. 0.], SparseMatrixCSC(2, 2, [1, 3, 3], [1, 2], [-0., -0.])
+    [-0. 0; -0. 0.], SparseMatrix(2, 2, [1, 3, 3], [1, 2], [-0., -0.])
 ]
 
 for a in vals, b in vals
@@ -88,7 +88,7 @@ end
 
 @test hash([1,2]) == hash(view([1,2,3,4],1:2))
 
-# test explicit zeros in SparseMatrixCSC
+# test explicit zeros in SparseMatrix
 x = sprand(10, 10, 0.5)
 x[1] = 1
 x.nzval[1] = 0

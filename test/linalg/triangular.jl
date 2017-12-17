@@ -527,8 +527,8 @@ end
     for TriType in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
         trisparsemat = TriType(sparsemat)
         @test isa(similar(trisparsemat), typeof(trisparsemat))
-        @test isa(similar(trisparsemat, Float32), TriType{Float32,<:SparseMatrixCSC{Float32}})
+        @test isa(similar(trisparsemat, Float32), TriType{Float32,<:SparseMatrix{Float32}})
         @test isa(similar(trisparsemat, (n, n)), typeof(sparsemat))
-        @test isa(similar(trisparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
+        @test isa(similar(trisparsemat, Float32, (n, n)), SparseMatrix{Float32})
     end
 end

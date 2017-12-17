@@ -122,11 +122,11 @@ Similarly, if `T` is a composite type and `x` a related instance, the result of
 julia> x = sparse(1.0I, 5, 5);
 
 julia> typeof(x)
-SparseMatrixCSC{Float64,Int64}
+SparseMatrix{Float64,Int64}
 
-julia> y = convert(SparseMatrixCSC{Float64,Int64}, x);
+julia> y = convert(SparseMatrix{Float64,Int64}, x);
 
-julia> z = convert(SparseMatrixCSC{Float32,Int64}, y);
+julia> z = convert(SparseMatrix{Float32,Int64}, y);
 
 julia> y === x
 true

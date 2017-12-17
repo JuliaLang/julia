@@ -645,21 +645,21 @@ Deprecated or removed
 
   * `full` has been deprecated in favor of more specific, better defined alternatives.
     On structured matrices `A`, consider instead `Matrix(A)`, `Array(A)`,
-    `SparseMatrixCSC(A)`, or `sparse(A)`. On sparse arrays `S`, consider instead
+    `SparseMatrix(A)`, or `sparse(A)`. On sparse arrays `S`, consider instead
     `Vector(S)`, `Matrix(S)`, or `Array(S)` as appropriate. On factorizations `F`,
     consider instead `Matrix(F)`, `Array(F)`, `AbstractMatrix(F)`, or `AbstractArray(F)`.
     On implicit orthogonal factors `Q`, consider instead `Matrix(Q)` or `Array(Q)`; for
     implicit orthogonal factors that can be recovered in square or truncated form,
     see the deprecation message for square recovery instructions. On `Symmetric`,
     `Hermitian`, or `AbstractTriangular` matrices `A`, consider instead `Matrix(S)`,
-    `Array(S)`, `SparseMatrixCSC(S)`, or `sparse(S)`. On `Symmetric` matrices `A`
+    `Array(S)`, `SparseMatrix(S)`, or `sparse(S)`. On `Symmetric` matrices `A`
     particularly, consider instead `LinAlg.copytri!(copy(parent(A)), A.uplo)`. On
     `Hermitian` matrices `A` particularly, consider instead
     `LinAlg.copytri!(copy(parent(A)), A.uplo, true)`. On `UpperTriangular` matrices `A`
     particularly, consider instead `triu!(copy(parent(A)))`. On `LowerTriangular` matrices
     `A` particularly, consider instead `tril!(copy(parent(A)))` ([#24250]).
 
-  * `speye` has been deprecated in favor of `I`, `sparse`, and `SparseMatrixCSC`
+  * `speye` has been deprecated in favor of `I`, `sparse`, and `SparseMatrix`
     constructor methods ([#24356]).
 
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
@@ -690,7 +690,7 @@ Deprecated or removed
 
   * `diagm(x::Number)` has been deprecated in favor of `fill(x, 1, 1)` ([#24047]).
 
-  * `diagm(A::SparseMatrixCSC)` has been deprecated in favor of
+  * `diagm(A::SparseMatrix)` has been deprecated in favor of
     `spdiagm(sparsevec(A))` ([#23341]).
 
   * `diagm(A::BitMatrix)` has been deprecated, use `diagm(0 => vec(A))` or
@@ -809,6 +809,8 @@ Deprecated or removed
     has been renamed to `indices` without deprecation ([#25088]).
 
   * `Associative` has been deprecated in favor of `AbstractDict` ([#25012]).
+
+  * `SparseMatrixCSC` has been renamed `SparseMatrix` ([#25151]).
 
   * `Nullable{T}` has been deprecated and moved to the Nullables package ([#23642]).
     Use `Union{T, Void}` instead, or `Union{Some{T}, Void}` if `nothing` is a possible value
@@ -1248,7 +1250,7 @@ Library improvements
 
   * `map[!]` and `broadcast[!]` now have dedicated methods for sparse/structured
     vectors/matrices. Specifically, `map[!]` and `broadcast[!]` over combinations including
-    one or more `SparseVector`, `SparseMatrixCSC`, `Diagonal`, `Bidiagonal`, `Tridiagonal`,
+    one or more `SparseVector`, `SparseMatrix`, `Diagonal`, `Bidiagonal`, `Tridiagonal`,
     or `SymTridiagonal`, and any number of `broadcast` scalars, `Vector`s, or `Matrix`s,
     now efficiently yield `SparseVector`s or `SparseMatrix`s as appropriate ([#19239],
     [#19371], [#19518], [#19438], [#19690], [#19724], [#19926], [#19934], [#20009]).

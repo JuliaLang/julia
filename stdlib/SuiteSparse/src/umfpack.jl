@@ -105,7 +105,7 @@ mutable struct UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
 end
 
 """
-    lufact(A::SparseMatrixCSC) -> F::UmfpackLU
+    lufact(A::SparseMatrix) -> F::UmfpackLU
 
 Compute the LU factorization of a sparse matrix `A`.
 
@@ -135,12 +135,12 @@ The relation between `F` and `A` is
 - [`det`](@ref)
 
 !!! note
-    `lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
+    `lufact(A::SparseMatrix)` uses the UMFPACK library that is part of
     SuiteSparse. As this library only supports sparse matrices with [`Float64`](@ref) or
     `ComplexF64` elements, `lufact` converts `A` into a copy that is of type
-    `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
+    `SparseMatrix{Float64}` or `SparseMatrix{ComplexF64}` as appropriate.
 """
-function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
+function lufact(S::SparseMatrix{<:UMFVTypes,<:UMFITypes})
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
                     zerobased ? copy(S.colptr) : decrement(S.colptr),
@@ -149,16 +149,16 @@ function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
     finalizer(umfpack_free_symbolic, res)
     umfpack_numeric!(res)
 end
-lufact(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) where {Ti<:UMFITypes} =
-    lufact(convert(SparseMatrixCSC{Float64,Ti}, A))
-lufact(A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32},Ti}) where {Ti<:UMFITypes} =
-    lufact(convert(SparseMatrixCSC{ComplexF64,Ti}, A))
-lufact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) where {T<:AbstractFloat} =
+lufact(A::SparseMatrix{<:Union{Float16,Float32},Ti}) where {Ti<:UMFITypes} =
+    lufact(convert(SparseMatrix{Float64,Ti}, A))
+lufact(A::SparseMatrix{<:Union{ComplexF16,ComplexF32},Ti}) where {Ti<:UMFITypes} =
+    lufact(convert(SparseMatrix{ComplexF64,Ti}, A))
+lufact(A::Union{SparseMatrix{T},SparseMatrix{Complex{T}}}) where {T<:AbstractFloat} =
     throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
-    "Try lufact(convert(SparseMatrixCSC{Float64/ComplexF64,Int}, A)) for ",
+    "Try lufact(convert(SparseMatrix{Float64/ComplexF64,Int}, A)) for ",
     "sparse floating point LU using UMFPACK or lufact(Array(A)) for generic ",
     "dense LU.")))
-lufact(A::SparseMatrixCSC) = lufact(float(A))
+lufact(A::SparseMatrix) = lufact(float(A))
 
 
 size(F::UmfpackLU) = (F.m, F.n)
@@ -345,8 +345,8 @@ for itype in UmfpackIndexTypes
                         Up,Ui,Ux,
                         P, Q, C_NULL,
                         0, Rs, lu.numeric)
-            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), Lx)),
-             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), Ux),
+            (transpose(SparseMatrix(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), Lx)),
+             SparseMatrix(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), Ux),
              increment!(P), increment!(Q), Rs)
         end
         function umf_extract(lu::UmfpackLU{ComplexF64,$itype})
@@ -372,8 +372,8 @@ for itype in UmfpackIndexTypes
                         Up,Ui,Ux,Uz,
                         P, Q, C_NULL, C_NULL,
                         0, Rs, lu.numeric)
-            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex.(Lx, Lz))),
-             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex.(Ux, Uz)),
+            (transpose(SparseMatrix(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex.(Lx, Lz))),
+             SparseMatrix(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex.(Ux, Uz)),
              increment!(P), increment!(Q), Rs)
         end
     end

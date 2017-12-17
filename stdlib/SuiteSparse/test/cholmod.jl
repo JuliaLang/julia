@@ -162,11 +162,11 @@ end
 @testset "Issue 9160" begin
     local A, B
     A = sprand(10, 10, 0.1)
-    A = convert(SparseMatrixCSC{Float64,CHOLMOD.SuiteSparse_long}, A)
+    A = convert(SparseMatrix{Float64,CHOLMOD.SuiteSparse_long}, A)
     cmA = CHOLMOD.Sparse(A)
 
     B = sprand(10, 10, 0.1)
-    B = convert(SparseMatrixCSC{Float64,CHOLMOD.SuiteSparse_long}, B)
+    B = convert(SparseMatrix{Float64,CHOLMOD.SuiteSparse_long}, B)
     cmB = CHOLMOD.Sparse(B)
 
     # Ac_mul_B
@@ -342,11 +342,11 @@ end
     end #Construct Hermitian matrix properly
     @test CHOLMOD.sparse(CHOLMOD.Sparse(Hermitian(A1, :L))) == Hermitian(A1, :L)
     @test CHOLMOD.sparse(CHOLMOD.Sparse(Hermitian(A1, :U))) == Hermitian(A1, :U)
-    @test_throws ArgumentError convert(SparseMatrixCSC{elty,Int}, A1pdSparse)
+    @test_throws ArgumentError convert(SparseMatrix{elty,Int}, A1pdSparse)
     if elty <: Real
-        @test_throws ArgumentError convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, A1Sparse)
+        @test_throws ArgumentError convert(Symmetric{Float64,SparseMatrix{Float64,Int}}, A1Sparse)
     else
-        @test_throws ArgumentError convert(Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Int}}, A1Sparse)
+        @test_throws ArgumentError convert(Hermitian{Complex{Float64},SparseMatrix{Complex{Float64},Int}}, A1Sparse)
     end
     @test copy(A1Sparse) == A1Sparse
     @test size(A1Sparse, 3) == 1
@@ -698,7 +698,7 @@ end
     @test F2\b ≈ ones(m + n)
 end
 
-@testset "Test that imaginary parts in Hermitian{T,SparseMatrixCSC{T}} are ignored" begin
+@testset "Test that imaginary parts in Hermitian{T,SparseMatrix{T}} are ignored" begin
     A = sparse([1,2,3,4,1], [1,2,3,4,2], [complex(2.0,1),2,2,2,1])
     Fs = cholfact(Hermitian(A))
     Fd = cholfact(Hermitian(Array(A)))
@@ -722,7 +722,7 @@ end
     end
 end
 
-@testset "Check that Symmetric{SparseMatrixCSC} can be constructed from CHOLMOD.Sparse" begin
+@testset "Check that Symmetric{SparseMatrix} can be constructed from CHOLMOD.Sparse" begin
     Int === Int32 && srand(124)
     A = sprandn(10, 10, 0.1)
     B = CHOLMOD.Sparse(A)
@@ -731,15 +731,15 @@ end
     o = fieldoffset(CHOLMOD.C_Sparse{eltype(C)}, find(fieldnames(CHOLMOD.C_Sparse{eltype(C)}) .== :stype)[1])
     for uplo in (1, -1)
         unsafe_store!(Ptr{Int8}(pointer(C)), uplo, Int(o) + 1)
-        @test convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, C) == Symmetric(A'A)
+        @test convert(Symmetric{Float64,SparseMatrix{Float64,Int}}, C) == Symmetric(A'A)
     end
 end
 
 @testset "Check inputs to Sparse. Related to #20024" for A_ in (
-    SparseMatrixCSC(2, 2, [1, 2], CHOLMOD.SuiteSparse_long[], Float64[]),
-    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[]),
-    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[], Float64[1.0]),
-    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[1.0]))
+    SparseMatrix(2, 2, [1, 2], CHOLMOD.SuiteSparse_long[], Float64[]),
+    SparseMatrix(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[]),
+    SparseMatrix(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[], Float64[1.0]),
+    SparseMatrix(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[1.0]))
     @test_throws ArgumentError CHOLMOD.Sparse(size(A_)..., A_.colptr .- 1, A_.rowval .- 1, A_.nzval)
     @test_throws ArgumentError CHOLMOD.Sparse(A_)
 end
@@ -755,7 +755,7 @@ end
 end
 
 @testset "Test sparse low rank update for cholesky decomposion" begin
-    A = SparseMatrixCSC{Float64,CHOLMOD.SuiteSparse_long}(10, 5, [1,3,6,8,10,13], [6,7,1,2,9,3,5,1,7,6,7,9],
+    A = SparseMatrix{Float64,CHOLMOD.SuiteSparse_long}(10, 5, [1,3,6,8,10,13], [6,7,1,2,9,3,5,1,7,6,7,9],
         [-0.138843, 2.99571, -0.556814, 0.669704, -1.39252, 1.33814,
         1.02371, -0.502384, 1.10686, 0.262229, -1.6935, 0.525239])
     AtA = A'*A

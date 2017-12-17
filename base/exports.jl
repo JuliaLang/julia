@@ -1231,7 +1231,7 @@ export
     AbstractSparseArray,
     AbstractSparseMatrix,
     AbstractSparseVector,
-    SparseMatrixCSC,
+    SparseMatrix,
     SparseVector,
     issparse,
     sparse,

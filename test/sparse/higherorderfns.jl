@@ -2,7 +2,7 @@
 
 # These tests cover the higher order functions specialized for sparse arrays defined in
 # base/sparse/higherorderfns.jl, particularly map[!]/broadcast[!] for SparseVectors and
-# SparseMatrixCSCs at present.
+# SparseMatrixs at present.
 
 @testset "map[!] implementation specialized for a single (input) sparse vector/matrix" begin
     N, M = 10, 12
@@ -26,7 +26,7 @@ end
     f(x, y) = x + y + 1
     for shapeA in ((N,), (N, M))
         A, Bo = sprand(shapeA..., 0.3), sprand(shapeA..., 0.3)
-        B = ndims(Bo) == 1 ? SparseVector{Float32, Int32}(Bo) : SparseMatrixCSC{Float32,Int32}(Bo)
+        B = ndims(Bo) == 1 ? SparseVector{Float32, Int32}(Bo) : SparseMatrix{Float32,Int32}(Bo)
         # use different types to check internal type stability via allocation tests below
         fA, fB = map(Array, (A, B))
         # --> test map entry point
@@ -53,7 +53,7 @@ end
     f(x, y, z) = x + y + z + 1
     for shapeA in ((N,), (N, M))
         A, B, Co = sprand(shapeA..., 0.2), sprand(shapeA..., 0.2), sprand(shapeA..., 0.2)
-        C = ndims(Co) == 1 ? SparseVector{Float32,Int32}(Co) : SparseMatrixCSC{Float32,Int32}(Co)
+        C = ndims(Co) == 1 ? SparseVector{Float32,Int32}(Co) : SparseMatrix{Float32,Int32}(Co)
         # use different types to check internal type stability via allocation tests below
         fA, fB, fC = map(Array, (A, B, C))
         # --> test map entry point
@@ -104,7 +104,7 @@ end
     # --> test with matrix destination (Z/fZ)
     fZ = Array(first(mats))
     for Xo in (mats..., vecs...)
-        X = ndims(Xo) == 1 ? SparseVector{Float32,Int32}(Xo) : SparseMatrixCSC{Float32,Int32}(Xo)
+        X = ndims(Xo) == 1 ? SparseVector{Float32,Int32}(Xo) : SparseMatrix{Float32,Int32}(Xo)
         shapeX, fX = size(X), Array(X)
         # --> test broadcast! entry point / zero-preserving op
         broadcast!(sin, fZ, fX); Z = sparse(fZ)
@@ -166,7 +166,7 @@ end
     tens = (mats..., vecs...)
     fZ = Array(first(mats))
     for Xo in tens
-        X = ndims(Xo) == 1 ? SparseVector{Float32,Int32}(Xo) : SparseMatrixCSC{Float32,Int32}(Xo)
+        X = ndims(Xo) == 1 ? SparseVector{Float32,Int32}(Xo) : SparseMatrix{Float32,Int32}(Xo)
         # use different types to check internal type stability via allocation tests below
         shapeX, fX = size(X), Array(X)
         for Y in tens
@@ -217,7 +217,7 @@ end
     vecs = (sprand(N, p), sprand(1, 1.0), spzeros(1))
     tens = (mats..., vecs...)
     for Xo in tens
-        X = ndims(Xo) == 1 ? SparseVector{Float32,Int32}(Xo) : SparseMatrixCSC{Float32,Int32}(Xo)
+        X = ndims(Xo) == 1 ? SparseVector{Float32,Int32}(Xo) : SparseMatrix{Float32,Int32}(Xo)
         # use different types to check internal type stability via allocation tests below
         shapeX, fX = size(X), Array(X)
         for Y in tens, Z in tens
@@ -322,11 +322,11 @@ end
                 ((spargsl..., s, s, s, spargsr...), (dargsl..., s, s, s, dargsr...)), )
             # test broadcast entry point
             @test broadcast(*, sparseargs...) == sparse(broadcast(*, denseargs...))
-            @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
+            @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrix{elT})
             # test broadcast! entry point
             fX = broadcast(*, sparseargs...); X = sparse(fX)
             @test broadcast!(*, X, sparseargs...) == sparse(broadcast!(*, fX, denseargs...))
-            @test isa(@inferred(broadcast!(*, X, sparseargs...)), SparseMatrixCSC{elT})
+            @test isa(@inferred(broadcast!(*, X, sparseargs...)), SparseMatrix{elT})
             X = sparse(fX) # reset / warmup for @allocated test
             @test_broken (@allocated broadcast!(*, X, sparseargs...)) == 0
             # This test (and the analog below) fails for three reasons:
@@ -356,11 +356,11 @@ end
             ((V, A, V, A, s, V, A, V), (fV, fA, fV, fA, s, fV, fA, fV)) ) # one scalar, seven sparse vectors/matrices
         # test broadcast entry point
         @test broadcast(*, sparseargs...) == sparse(broadcast(*, denseargs...))
-        @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
+        @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrix{elT})
         # test broadcast! entry point
         fX = broadcast(*, sparseargs...); X = sparse(fX)
         @test broadcast!(*, X, sparseargs...) == sparse(broadcast!(*, fX, denseargs...))
-        @test isa(@inferred(broadcast!(*, X, sparseargs...)), SparseMatrixCSC{elT})
+        @test isa(@inferred(broadcast!(*, X, sparseargs...)), SparseMatrix{elT})
         X = sparse(fX) # reset / warmup for @allocated test
         @test_broken (@allocated broadcast!(*, X, sparseargs...)) == 0
         # please see the note a few lines above re. this @test_broken
@@ -382,20 +382,20 @@ end
     structuredarrays = (D, B, T, S)
     fstructuredarrays = map(Array, structuredarrays)
     for (X, fX) in zip(structuredarrays, fstructuredarrays)
-        @test (Q = broadcast(sin, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(sin, fX)))
+        @test (Q = broadcast(sin, X); Q isa SparseMatrix && Q == sparse(broadcast(sin, fX)))
         @test broadcast!(sin, Z, X) == sparse(broadcast(sin, fX))
-        @test (Q = broadcast(cos, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(cos, fX)))
+        @test (Q = broadcast(cos, X); Q isa SparseMatrix && Q == sparse(broadcast(cos, fX)))
         @test broadcast!(cos, Z, X) == sparse(broadcast(cos, fX))
-        @test (Q = broadcast(*, s, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, s, fX)))
+        @test (Q = broadcast(*, s, X); Q isa SparseMatrix && Q == sparse(broadcast(*, s, fX)))
         @test broadcast!(*, Z, s, X) == sparse(broadcast(*, s, fX))
-        @test (Q = broadcast(+, V, A, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fV, fA, fX)))
+        @test (Q = broadcast(+, V, A, X); Q isa SparseMatrix && Q == sparse(broadcast(+, fV, fA, fX)))
         @test broadcast!(+, Z, V, A, X) == sparse(broadcast(+, fV, fA, fX))
-        @test (Q = broadcast(*, s, V, A, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, s, fV, fA, fX)))
+        @test (Q = broadcast(*, s, V, A, X); Q isa SparseMatrix && Q == sparse(broadcast(*, s, fV, fA, fX)))
         @test broadcast!(*, Z, s, V, A, X) == sparse(broadcast(*, s, fV, fA, fX))
         for (Y, fY) in zip(structuredarrays, fstructuredarrays)
-            @test (Q = broadcast(+, X, Y); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fX, fY)))
+            @test (Q = broadcast(+, X, Y); Q isa SparseMatrix && Q == sparse(broadcast(+, fX, fY)))
             @test broadcast!(+, Z, X, Y) == sparse(broadcast(+, fX, fY))
-            @test (Q = broadcast(*, X, Y); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, fX, fY)))
+            @test (Q = broadcast(*, X, Y); Q isa SparseMatrix && Q == sparse(broadcast(*, fX, fY)))
             @test broadcast!(*, Z, X, Y) == sparse(broadcast(*, fX, fY))
         end
     end
@@ -404,19 +404,19 @@ end
     densearrays = (C, M)
     fD, fB = Array(D), Array(B)
     for X in densearrays
-        @test broadcast(+, D, X)::SparseMatrixCSC == sparse(broadcast(+, fD, X))
+        @test broadcast(+, D, X)::SparseMatrix == sparse(broadcast(+, fD, X))
         @test broadcast!(+, Z, D, X) == sparse(broadcast(+, fD, X))
-        @test broadcast(*, s, B, X)::SparseMatrixCSC == sparse(broadcast(*, s, fB, X))
+        @test broadcast(*, s, B, X)::SparseMatrix == sparse(broadcast(*, s, fB, X))
         @test broadcast!(*, Z, s, B, X) == sparse(broadcast(*, s, fB, X))
-        @test broadcast(+, V, B, X)::SparseMatrixCSC == sparse(broadcast(+, fV, fB, X))
+        @test broadcast(+, V, B, X)::SparseMatrix == sparse(broadcast(+, fV, fB, X))
         @test broadcast!(+, Z, V, B, X) == sparse(broadcast(+, fV, fB, X))
-        @test broadcast(+, V, A, X)::SparseMatrixCSC == sparse(broadcast(+, fV, fA, X))
+        @test broadcast(+, V, A, X)::SparseMatrix == sparse(broadcast(+, fV, fA, X))
         @test broadcast!(+, Z, V, A, X) == sparse(broadcast(+, fV, fA, X))
-        @test broadcast(*, s, V, A, X)::SparseMatrixCSC == sparse(broadcast(*, s, fV, fA, X))
+        @test broadcast(*, s, V, A, X)::SparseMatrix == sparse(broadcast(*, s, fV, fA, X))
         @test broadcast!(*, Z, s, V, A, X) == sparse(broadcast(*, s, fV, fA, X))
         # Issue #20954 combinations of sparse arrays and Adjoint/Transpose vectors
-        @test broadcast(+, A, X')::SparseMatrixCSC == sparse(broadcast(+, fA, X'))
-        @test broadcast(*, V, X')::SparseMatrixCSC == sparse(broadcast(*, fV, X'))
+        @test broadcast(+, A, X')::SparseMatrix == sparse(broadcast(+, fA, X'))
+        @test broadcast(*, V, X')::SparseMatrix == sparse(broadcast(*, fV, X'))
     end
     @test V .+ ntuple(identity, N) isa Vector
     @test A .+ ntuple(identity, N) isa Matrix
@@ -452,18 +452,18 @@ end
     structuredarrays = (D, B, T, S)
     fstructuredarrays = map(Array, structuredarrays)
     for (X, fX) in zip(structuredarrays, fstructuredarrays)
-        @test (Q = map(sin, X); Q isa SparseMatrixCSC && Q == sparse(map(sin, fX)))
+        @test (Q = map(sin, X); Q isa SparseMatrix && Q == sparse(map(sin, fX)))
         @test map!(sin, Z, X) == sparse(map(sin, fX))
-        @test (Q = map(cos, X); Q isa SparseMatrixCSC && Q == sparse(map(cos, fX)))
+        @test (Q = map(cos, X); Q isa SparseMatrix && Q == sparse(map(cos, fX)))
         @test map!(cos, Z, X) == sparse(map(cos, fX))
-        @test (Q = map(+, A, X); Q isa SparseMatrixCSC && Q == sparse(map(+, fA, fX)))
+        @test (Q = map(+, A, X); Q isa SparseMatrix && Q == sparse(map(+, fA, fX)))
         @test map!(+, Z, A, X) == sparse(map(+, fA, fX))
         for (Y, fY) in zip(structuredarrays, fstructuredarrays)
-            @test (Q = map(+, X, Y); Q isa SparseMatrixCSC && Q == sparse(map(+, fX, fY)))
+            @test (Q = map(+, X, Y); Q isa SparseMatrix && Q == sparse(map(+, fX, fY)))
             @test map!(+, Z, X, Y) == sparse(map(+, fX, fY))
-            @test (Q = map(*, X, Y); Q isa SparseMatrixCSC && Q == sparse(map(*, fX, fY)))
+            @test (Q = map(*, X, Y); Q isa SparseMatrix && Q == sparse(map(*, fX, fY)))
             @test map!(*, Z, X, Y) == sparse(map(*, fX, fY))
-            @test (Q = map(+, X, A, Y); Q isa SparseMatrixCSC && Q == sparse(map(+, fX, fA, fY)))
+            @test (Q = map(+, X, A, Y); Q isa SparseMatrix && Q == sparse(map(+, fX, fA, fY)))
             @test map!(+, Z, X, A, Y) == sparse(map(+, fX, fA, fY))
         end
     end

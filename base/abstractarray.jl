@@ -799,7 +799,7 @@ Example for a sparse 2-d array:
 
 ```jldoctest
 julia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])
-2×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+2×3 SparseMatrix{Int64,Int64} with 3 stored entries:
   [1, 1]  =  1
   [2, 1]  =  -5
   [1, 3]  =  2

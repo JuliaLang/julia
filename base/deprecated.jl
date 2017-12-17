@@ -226,14 +226,6 @@ end
 # Deprecate three-arg SubArray since the constructor doesn't need the dims tuple
 @deprecate SubArray(parent::AbstractArray, indices::Tuple, dims::Tuple) SubArray(parent, indices)
 
-# Deprecate vectorized unary functions over sparse matrices in favor of compact broadcast syntax (#17265).
-for f in (:sind, :asind, :tand, :atand, :sinpi, :cosc, :ceil, :floor, :trunc,
-        :round, :log1p, :expm1, :abs, :abs2, :log2, :log10, :exp2, :exp10,
-        :sinc, :cospi, :cosd, :acosd, :cotd, :acotd, :secd, :cscd)
-    @eval import .Math: $f
-    @eval @deprecate $f(A::SparseMatrixCSC) $f.(A)
-end
-
 # For deprecating vectorized functions in favor of compact broadcast syntax
 macro dep_vectorize_1arg(S, f)
     AbstractArray = GlobalRef(Base, :AbstractArray)
@@ -518,133 +510,6 @@ for (dep, f, op) in [(:sumabs!, :sum!, :abs),
         Base.depwarn("$dep(r, A; init=$init) is deprecated, use $f($op, r, A; init=$init) instead.", Symbol($dep))
         ($f)($op, r, A; init=init)
     end
-end
-
-## Deprecate broadcast_zpreserving[!] (wasn't exported, but might as well be friendly)
-function gen_broadcast_function_sparse(genbody::Function, f::Function, is_first_sparse::Bool)
-    body = genbody(f, is_first_sparse)
-    @eval let
-        local _F_
-        function _F_(B::SparseMatrixCSC{Tv,Ti}, A_1, A_2) where {Tv,Ti}
-            $body
-        end
-        _F_
-    end
-end
-function gen_broadcast_body_zpreserving(f::Function, is_first_sparse::Bool)
-    F = Expr(:quote, f)
-    if is_first_sparse
-        A1 = :(A_1)
-        A2 = :(A_2)
-        op1 = :(val1)
-        op2 = :(val2)
-    else
-        A1 = :(A_2)
-        A2 = :(A_1)
-        op1 = :(val2)
-        op2 = :(val1)
-    end
-    quote
-        Base.Broadcast.check_broadcast_indices(axes(B), $A1)
-        Base.Broadcast.check_broadcast_indices(axes(B), $A2)
-
-        nnzB = isempty(B) ? 0 :
-               nnz($A1) * div(B.n, ($A1).n) * div(B.m, ($A1).m)
-        if length(B.rowval) < nnzB
-            resize!(B.rowval, nnzB)
-        end
-        if length(B.nzval) < nnzB
-            resize!(B.nzval, nnzB)
-        end
-        z = zero(Tv)
-
-        ptrB = 1
-        B.colptr[1] = 1
-
-        @inbounds for col = 1:B.n
-            ptr1::Int  = ($A1).n == 1 ? ($A1).colptr[1] : ($A1).colptr[col]
-            stop1::Int = ($A1).n == 1 ? ($A1).colptr[2] : ($A1).colptr[col+1]
-            col2 = size($A2, 2) == 1 ? 1 : col
-            row = 1
-            while ptr1 < stop1 && row <= B.m
-                if ($A1).m != 1
-                    row = ($A1).rowval[ptr1]
-                end
-                row2 = size($A2, 1) == 1 ? 1 : row
-                val1 = ($A1).nzval[ptr1]
-                val2 = ($A2)[row2,col2]
-                res = ($F)($op1, $op2)
-                if res != z
-                    B.rowval[ptrB] = row
-                    B.nzval[ptrB] = res
-                    ptrB += 1
-                end
-                if ($A1).m != 1
-                    ptr1 += 1
-                else
-                    row += 1
-                end
-            end
-            B.colptr[col+1] = ptrB
-        end
-        deleteat!(B.rowval, B.colptr[end]:length(B.rowval))
-        deleteat!(B.nzval, B.colptr[end]:length(B.nzval))
-        nothing
-    end
-end
-for (Bsig, A1sig, A2sig, gbb, funcname) in
-    (
-     (SparseMatrixCSC   , SparseMatrixCSC  ,  Array,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
-     (SparseMatrixCSC   , Array  ,  SparseMatrixCSC,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
-     (SparseMatrixCSC   , Number  ,  SparseMatrixCSC,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
-     (SparseMatrixCSC   , SparseMatrixCSC  ,  Number,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
-     (SparseMatrixCSC   , BitArray  ,  SparseMatrixCSC,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
-     (SparseMatrixCSC   , SparseMatrixCSC  ,  BitArray,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
-     )
-    @eval let cache = Dict{Function,Function}()
-        global $funcname
-        function $funcname(f::Function, B::$Bsig, A1::$A1sig, A2::$A2sig)
-            func       = @get! cache  f  gen_broadcast_function_sparse($gbb, f, ($A1sig) <: SparseMatrixCSC)
-            # need eval because func was just created by gen_broadcast_function_sparse
-            # TODO: convert this to a generated function
-            eval(_current_module(), Expr(:body, Expr(:return, Expr(:call, QuoteNode(func), QuoteNode(B), QuoteNode(A1), QuoteNode(A2)))))
-            return B
-        end
-    end  # let broadcast_cache
-end
-_broadcast_zpreserving!(args...) = broadcast!(args...)
-# note: promote_eltype_op also deprecated, defined later in this file
-_broadcast_zpreserving(f, As...) =
-    broadcast!(f, similar(Array{_promote_eltype_op(f, As...)}, Base.Broadcast.broadcast_indices(As...)), As...)
-_broadcast_zpreserving(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) where {Tv1,Ti1,Tv2,Ti2} =
-    _broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
-_broadcast_zpreserving(f::Function, A_1::SparseMatrixCSC{<:Any,Ti}, A_2::Union{Array,BitArray,Number}) where {Ti} =
-    _broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
-_broadcast_zpreserving(f::Function, A_1::Union{Array,BitArray,Number}, A_2::SparseMatrixCSC{<:Any,Ti}) where {Ti} =
-    _broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
-
-function _depstring_bczpres()
-    return string("broadcast_zpreserving[!] is deprecated. Generic sparse broadcast[!] ",
-        "provides most of broadcast_zpreserving[!]'s functionality. If you have a use case ",
-        "that generic sparse broadcast[!] does not cover, please describe your use case in ",
-        " issue #19533 (https://github.com/JuliaLang/julia/issues/19533).")
-end
-function _depwarn_bczpres(f, args...)
-    depwarn(_depstring_bczpres(), :broadcast_zpreserving)
-    return _broadcast_zpreserving(f, args...)
-end
-function _depwarn_bczpres!(f, args...)
-    depwarn(_depstring_bczpres(), :broadcast_zpreserving!)
-    return _broadcast_zpreserving!(f, args...)
-end
-@eval SparseArrays begin
-    broadcast_zpreserving(f, args...) = Base._depwarn_bczpres(f, args...)
-    broadcast_zpreserving(f, A::SparseMatrixCSC, B::SparseMatrixCSC) = Base._depwarn_bczpres(f, A, B)
-    broadcast_zpreserving(f, A::SparseMatrixCSC, B::Union{Array,BitArray,Number}) = Base._depwarn_bczpres(f, A, B)
-    broadcast_zpreserving(f, A::Union{Array,BitArray,Number}, B::SparseMatrixCSC) = Base._depwarn_bczpres(f, A, B)
-    broadcast_zpreserving!(f, args...) = Base._depwarn_bczpres!(f, args...)
-    broadcast_zpreserving!(f, C::SparseMatrixCSC, A::SparseMatrixCSC, B::Union{Array,BitArray,Number}) = Base._depwarn_bczpres!(f, C, A, B)
-    broadcast_zpreserving!(f, C::SparseMatrixCSC, A::Union{Array,BitArray,Number}, B::SparseMatrixCSC) = Base._depwarn_bczpres!(f, C, A, B)
 end
 
 # #19719
@@ -1574,7 +1439,7 @@ export hex2num
 
 # PR 23341
 import .LinAlg: diagm
-@deprecate diagm(A::SparseMatrixCSC) sparse(Diagonal(sparsevec(A)))
+@deprecate diagm(A::SparseMatrix) sparse(Diagonal(sparsevec(A)))
 
 # PR #23373
 @deprecate diagm(A::BitMatrix) BitMatrix(Diagonal(vec(A)))
@@ -1901,7 +1766,7 @@ end
 @eval LinAlg @deprecate fillslots! fillstored! false
 
 # PR #25037
-@eval SparseArrays @deprecate spones(A::SparseMatrixCSC) fillstored!(copy(A), 1)
+@eval SparseArrays @deprecate spones(A::SparseMatrix) fillstored!(copy(A), 1)
 @eval SparseArrays @deprecate spones(A::SparseVector) fillstored!(copy(A), 1)
 using .SparseArrays.spones
 export spones
@@ -1949,16 +1814,16 @@ function full(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal})
     depwarn(string(
         "`full(A::$(mattypestr))` (and `full` in general) has been deprecated. ",
         "To replace `full(A::$(mattypestr))`, consider `Matrix(A)` or, if that ",
-        "option is too narrow, `Array(A)`. Also consider `SparseMatrixCSC(A)` ",
+        "option is too narrow, `Array(A)`. Also consider `SparseMatrix(A)` ",
         "or, if that option is too narrow, `sparse(A)`."),  :full)
     return Matrix(A)
 end
 
 # full for sparse arrays
-function full(S::Union{SparseVector,SparseMatrixCSC})
+function full(S::Union{SparseVector,SparseMatrix})
     (arrtypestr, desttypestr) =
         isa(S, SparseVector)    ? ("SparseVector",    "Vector") :
-        isa(S, SparseMatrixCSC) ? ("SparseMatrixCSC", "Matrix") :
+        isa(S, SparseMatrix) ? ("SparseMatrix", "Matrix") :
             error("should not be reachable!")
     depwarn(string(
         "`full(S::$(arrtypestr))` (and `full` in general) has been deprecated. ",
@@ -2024,7 +1889,7 @@ function full(A::Symmetric)
     depwarn(string(
         "`full(A::Symmetric)` (and `full` in general) has been deprecated. ",
         "To replace `full(A::Symmetric)`, as appropriate consider `Matrix(A)`, ",
-        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, `copyto!(similar(parent(A)), A)`, ",
+        "`Array(A)`, `SparseMatrix(A)`, `sparse(A)`, `copyto!(similar(parent(A)), A)`, ",
         "or `Base.LinAlg.copytri!(copy(parent(A)), A.uplo)`."), :full)
     return Matrix(A)
 end
@@ -2032,7 +1897,7 @@ function full(A::Hermitian)
     depwarn(string(
         "`full(A::Hermitian)` (and `full` in general) has been deprecated. ",
         "To replace `full(A::Hermitian)`, as appropriate consider `Matrix(A)`, ",
-        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, `copyto!(similar(parent(A)), A)`, ",
+        "`Array(A)`, `SparseMatrix(A)`, `sparse(A)`, `copyto!(similar(parent(A)), A)`, ",
         "or `Base.LinAlg.copytri!(copy(parent(A)), A.uplo, true)`."), :full)
     return Matrix(A)
 end
@@ -2044,7 +1909,7 @@ function full(A::Union{UpperTriangular,LowerTriangular})
     depwarn(string(
         "`full(A::$(tritypestr))` (and `full` in general) has been deprecated. ",
         "To replace `full(A::$(tritypestr))`, as appropriate consider `Matrix(A)`, ",
-        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, `copyto!(similar(parent(A)), A)`, ",
+        "`Array(A)`, `SparseMatrix(A)`, `sparse(A)`, `copyto!(similar(parent(A)), A)`, ",
         "or `$(tri!str)(copy(parent(A)))`."), :full)
     return Matrix(A)
 end
@@ -2055,7 +1920,7 @@ function full(A::Union{LinAlg.UnitUpperTriangular,LinAlg.UnitLowerTriangular})
     depwarn(string(
         "`full(A::$(tritypestr))` (and `full` in general) has been deprecated. ",
         "To replace `full(A::$(tritypestr))`, as appropriate consider `Matrix(A)`, ",
-        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, or `copyto!(similar(parent(A)), A)`."), :full)
+        "`Array(A)`, `SparseMatrix(A)`, `sparse(A)`, or `copyto!(similar(parent(A)), A)`."), :full)
     return Matrix(A)
 end
 
@@ -2079,7 +1944,7 @@ end
 
 # issue #22849
 @deprecate reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where {T, S, N} reshape(reinterpret(T, vec(a)), dims)
-@deprecate reinterpret(::Type{T}, a::SparseMatrixCSC{S}, dims::NTuple{N,Int}) where {T, S, N} reinterpret(T, reshape(a, dims))
+@deprecate reinterpret(::Type{T}, a::SparseMatrix{S}, dims::NTuple{N,Int}) where {T, S, N} reinterpret(T, reshape(a, dims))
 @deprecate reinterpret(::Type{T}, a::ReinterpretArray{S}, dims::NTuple{N,Int}) where {T, S, N} reshape(reinterpret(T, vec(a)), dims)
 
 # issue #24006
@@ -2120,49 +1985,49 @@ end
 export speye
 function speye(n::Integer)
     depwarn(string("`speye(n::Integer)` has been deprecated in favor of `I`, `sparse`, and ",
-                    "`SparseMatrixCSC` constructor methods. For a direct replacement, consider ",
-                    "`sparse(1.0I, n, n)`, `SparseMatrixCSC(1.0I, n, n)`, or `SparseMatrixCSC{Float64}(I, n, n)`. ",
+                    "`SparseMatrix` constructor methods. For a direct replacement, consider ",
+                    "`sparse(1.0I, n, n)`, `SparseMatrix(1.0I, n, n)`, or `SparseMatrix{Float64}(I, n, n)`. ",
                     "If `Float64` element type is not necessary, consider the shorter `sparse(I, n, n)` ",
-                    "or `SparseMatrixCSC(I, n, n)` (with default `eltype(I)` of `Bool`)."), :speye)
+                    "or `SparseMatrix(I, n, n)` (with default `eltype(I)` of `Bool`)."), :speye)
     return sparse(1.0I, n, n)
 end
 function speye(m::Integer, n::Integer)
     depwarn(string("`speye(m::Integer, n::Integer)` has been deprecated in favor of `I`, ",
-                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
-                    "replacement, consider `sparse(1.0I, m, n)`, `SparseMatrixCSC(1.0I, m, n)`, ",
-                    "or `SparseMatrixCSC{Float64}(I, m, n)`. If `Float64` element type is not ",
-                    " necessary, consider the shorter `sparse(I, m, n)` or `SparseMatrixCSC(I, m, n)` ",
+                    "`sparse`, and `SparseMatrix` constructor methods. For a direct ",
+                    "replacement, consider `sparse(1.0I, m, n)`, `SparseMatrix(1.0I, m, n)`, ",
+                    "or `SparseMatrix{Float64}(I, m, n)`. If `Float64` element type is not ",
+                    " necessary, consider the shorter `sparse(I, m, n)` or `SparseMatrix(I, m, n)` ",
                     "(with default `eltype(I)` of `Bool`)."), :speye)
     return sparse(1.0I, m, n)
 end
 function speye(::Type{T}, n::Integer) where T
     depwarn(string("`speye(T, n::Integer)` has been deprecated in favor of `I`, `sparse`, and ",
-                    "`SparseMatrixCSC` constructor methods. For a direct replacement, consider ",
-                    "`sparse(T(1)I, n, n)` if `T` is concrete or `SparseMatrixCSC{T}(I, n, n)` ",
+                    "`SparseMatrix` constructor methods. For a direct replacement, consider ",
+                    "`sparse(T(1)I, n, n)` if `T` is concrete or `SparseMatrix{T}(I, n, n)` ",
                     "if `T` is either concrete or abstract. If element type `T` is not necessary, ",
-                    "consider the shorter `sparse(I, n, n)` or `SparseMatrixCSC(I, n, n)` ",
+                    "consider the shorter `sparse(I, n, n)` or `SparseMatrix(I, n, n)` ",
                     "(with default `eltype(I)` of `Bool`)."), :speye)
-    return SparseMatrixCSC{T}(I, n, n)
+    return SparseMatrix{T}(I, n, n)
 end
 function speye(::Type{T}, m::Integer, n::Integer) where T
     depwarn(string("`speye(T, m::Integer, n::Integer)` has been deprecated in favor of `I`, ",
-                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
+                    "`sparse`, and `SparseMatrix` constructor methods. For a direct ",
                     "replacement, consider `sparse(T(1)I, m, n)` if `T` is concrete or ",
-                    "`SparseMatrixCSC{T}(I, m, n)` if `T` is either concrete or abstract. ",
+                    "`SparseMatrix{T}(I, m, n)` if `T` is either concrete or abstract. ",
                     "If element type `T` is not necessary, consider the shorter ",
-                    "`sparse(I, m, n)` or `SparseMatrixCSC(I, m, n)` (with default `eltype(I)` ",
+                    "`sparse(I, m, n)` or `SparseMatrix(I, m, n)` (with default `eltype(I)` ",
                     "of `Bool`)."), :speye)
-    return SparseMatrixCSC{T}(I, m, n)
+    return SparseMatrix{T}(I, m, n)
 end
-function speye(S::SparseMatrixCSC{T}) where T
-    depwarn(string("`speye(S::SparseMatrixCSC{T})` has been deprecated in favor of `I`, ",
-                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
+function speye(S::SparseMatrix{T}) where T
+    depwarn(string("`speye(S::SparseMatrix{T})` has been deprecated in favor of `I`, ",
+                    "`sparse`, and `SparseMatrix` constructor methods. For a direct ",
                     "replacement, consider `sparse(T(1)I, size(S)...)` if `T` is concrete or ",
-                    "`SparseMatrixCSC{eltype(S)}(I, size(S))` if `T` is either concrete or abstract. ",
+                    "`SparseMatrix{eltype(S)}(I, size(S))` if `T` is either concrete or abstract. ",
                     "If preserving element type `T` is not necessary, consider the shorter ",
-                    "`sparse(I, size(S)...)` or `SparseMatrixCSC(I, size(S))` (with default ",
+                    "`sparse(I, size(S)...)` or `SparseMatrix(I, size(S))` (with default ",
                     "`eltype(I)` of `Bool`)."), :speye)
-    return SparseMatrixCSC{T}(I, m, n)
+    return SparseMatrix{T}(I, m, n)
 end
 
 # issue #24167
@@ -2749,39 +2614,39 @@ end
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/sparse/linalg.jl, to deprecate
 @eval Base.SparseArrays begin
     using Base.LinAlg: Adjoint, Transpose
-    Ac_ldiv_B(A::SparseMatrixCSC, B::RowVector) = \(Adjoint(A), B)
-    At_ldiv_B(A::SparseMatrixCSC, B::RowVector) = \(Transpose(A), B)
-    Ac_ldiv_B(A::SparseMatrixCSC, B::AbstractVecOrMat) = \(Adjoint(A), B)
-    At_ldiv_B(A::SparseMatrixCSC, B::AbstractVecOrMat) = \(Transpose(A), B)
-    A_rdiv_Bc!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = rdiv!(A, Adjoint(D))
-    A_rdiv_Bt!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = rdiv!(A, Transpose(D))
-    A_rdiv_B!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = rdiv!(A, D)
-    A_ldiv_B!(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = ldiv!(L, B)
-    A_ldiv_B!(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = ldiv!(U, B)
-    A_mul_Bt(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = *(A, Transpose(B))
-    A_mul_Bc(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = *(A, Adjoint(B))
-    At_mul_B(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = *(Transpose(A), B)
-    Ac_mul_B(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = *(Adjoint(A), B)
-    At_mul_Bt(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = *(Transpose(A), Transpose(B))
-    Ac_mul_Bc(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = *(Adjoint(A), Adjoint(B))
-    A_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = mul!(C, A, B)
-    Ac_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = mul!(C, Adjoint(A), B)
-    At_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = mul!(C, Transpose(A), B)
-    A_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat) = mul!(α, A, B, β, C)
-    A_mul_B(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} = *(A, x)
-    A_mul_B(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} = *(A, B)
-    Ac_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat) = mul!(α, Adjoint(A), B, β, C)
-    Ac_mul_B(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} = *(Adjoint(A), x)
-    Ac_mul_B(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} = *(Adjoint(A), B)
-    At_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat) = mul!(α, Transpose(A), B, β, C)
-    At_mul_B(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} = *(Transpose(A), x)
-    At_mul_B(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} = *(Transpose(A), B)
-    A_mul_Bt(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(A, Transpose(B))
-    A_mul_Bc(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(A, Adjoint(B))
-    At_mul_B(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(Transpose(A), B)
-    Ac_mul_B(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(Adjoint(A),B)
-    At_mul_Bt(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(Transpose(A), Transpose(B))
-    Ac_mul_Bc(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(Adjoint(A), Adjoint(B))
+    Ac_ldiv_B(A::SparseMatrix, B::RowVector) = \(Adjoint(A), B)
+    At_ldiv_B(A::SparseMatrix, B::RowVector) = \(Transpose(A), B)
+    Ac_ldiv_B(A::SparseMatrix, B::AbstractVecOrMat) = \(Adjoint(A), B)
+    At_ldiv_B(A::SparseMatrix, B::AbstractVecOrMat) = \(Transpose(A), B)
+    A_rdiv_Bc!(A::SparseMatrix{T}, D::Diagonal{T}) where {T} = rdiv!(A, Adjoint(D))
+    A_rdiv_Bt!(A::SparseMatrix{T}, D::Diagonal{T}) where {T} = rdiv!(A, Transpose(D))
+    A_rdiv_B!(A::SparseMatrix{T}, D::Diagonal{T}) where {T} = rdiv!(A, D)
+    A_ldiv_B!(L::LowerTriangular{T,<:SparseMatrixUnion{T}}, B::StridedVecOrMat) where {T} = ldiv!(L, B)
+    A_ldiv_B!(U::UpperTriangular{T,<:SparseMatrixUnion{T}}, B::StridedVecOrMat) where {T} = ldiv!(U, B)
+    A_mul_Bt(A::SparseMatrix{Tv,Ti}, B::SparseMatrix{Tv,Ti}) where {Tv,Ti} = *(A, Transpose(B))
+    A_mul_Bc(A::SparseMatrix{Tv,Ti}, B::SparseMatrix{Tv,Ti}) where {Tv,Ti} = *(A, Adjoint(B))
+    At_mul_B(A::SparseMatrix{Tv,Ti}, B::SparseMatrix{Tv,Ti}) where {Tv,Ti} = *(Transpose(A), B)
+    Ac_mul_B(A::SparseMatrix{Tv,Ti}, B::SparseMatrix{Tv,Ti}) where {Tv,Ti} = *(Adjoint(A), B)
+    At_mul_Bt(A::SparseMatrix{Tv,Ti}, B::SparseMatrix{Tv,Ti}) where {Tv,Ti} = *(Transpose(A), Transpose(B))
+    Ac_mul_Bc(A::SparseMatrix{Tv,Ti}, B::SparseMatrix{Tv,Ti}) where {Tv,Ti} = *(Adjoint(A), Adjoint(B))
+    A_mul_B!(C::StridedVecOrMat, A::SparseMatrix, B::StridedVecOrMat) = mul!(C, A, B)
+    Ac_mul_B!(C::StridedVecOrMat, A::SparseMatrix, B::StridedVecOrMat) = mul!(C, Adjoint(A), B)
+    At_mul_B!(C::StridedVecOrMat, A::SparseMatrix, B::StridedVecOrMat) = mul!(C, Transpose(A), B)
+    A_mul_B!(α::Number, A::SparseMatrix, B::StridedVecOrMat, β::Number, C::StridedVecOrMat) = mul!(α, A, B, β, C)
+    A_mul_B(A::SparseMatrix{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} = *(A, x)
+    A_mul_B(A::SparseMatrix{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} = *(A, B)
+    Ac_mul_B!(α::Number, A::SparseMatrix, B::StridedVecOrMat, β::Number, C::StridedVecOrMat) = mul!(α, Adjoint(A), B, β, C)
+    Ac_mul_B(A::SparseMatrix{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} = *(Adjoint(A), x)
+    Ac_mul_B(A::SparseMatrix{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} = *(Adjoint(A), B)
+    At_mul_B!(α::Number, A::SparseMatrix, B::StridedVecOrMat, β::Number, C::StridedVecOrMat) = mul!(α, Transpose(A), B, β, C)
+    At_mul_B(A::SparseMatrix{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} = *(Transpose(A), x)
+    At_mul_B(A::SparseMatrix{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} = *(Transpose(A), B)
+    A_mul_Bt(A::SparseMatrix{TvA,TiA}, B::SparseMatrix{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(A, Transpose(B))
+    A_mul_Bc(A::SparseMatrix{TvA,TiA}, B::SparseMatrix{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(A, Adjoint(B))
+    At_mul_B(A::SparseMatrix{TvA,TiA}, B::SparseMatrix{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(Transpose(A), B)
+    Ac_mul_B(A::SparseMatrix{TvA,TiA}, B::SparseMatrix{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(Adjoint(A),B)
+    At_mul_Bt(A::SparseMatrix{TvA,TiA}, B::SparseMatrix{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(Transpose(A), Transpose(B))
+    Ac_mul_Bc(A::SparseMatrix{TvA,TiA}, B::SparseMatrix{TvB,TiB}) where {TvA,TiA,TvB,TiB} = *(Adjoint(A), Adjoint(B))
 end
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/sparse/sparsevector.jl, to deprecate
@@ -2804,14 +2669,14 @@ for isunittri in (true, false), islowertri in (true, false)
 end
 @eval Base.SparseArrays begin
     using Base.LinAlg: Adjoint, Transpose
-    Ac_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) = *(Adjoint(A), x)
-    At_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) = *(Transpose(A), x)
-    Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector) = mul!(α, Adjoint(A), x, β, y)
-    Ac_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} = mul!(y, Adjoint(A), x)
-    At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector) = mul!(α, Transpose(A), x, β, y)
-    At_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} = mul!(y, Transpose(A), x)
-    A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector) = mul!(α, A, x, β, y)
-    A_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} = mul!(y, A, x)
+    Ac_mul_B(A::SparseMatrix, x::AbstractSparseVector) = *(Adjoint(A), x)
+    At_mul_B(A::SparseMatrix, x::AbstractSparseVector) = *(Transpose(A), x)
+    Ac_mul_B!(α::Number, A::SparseMatrix, x::AbstractSparseVector, β::Number, y::StridedVector) = mul!(α, Adjoint(A), x, β, y)
+    Ac_mul_B!(y::StridedVector{Ty}, A::SparseMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} = mul!(y, Adjoint(A), x)
+    At_mul_B!(α::Number, A::SparseMatrix, x::AbstractSparseVector, β::Number, y::StridedVector) = mul!(α, Transpose(A), x, β, y)
+    At_mul_B!(y::StridedVector{Ty}, A::SparseMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} = mul!(y, Transpose(A), x)
+    A_mul_B!(α::Number, A::SparseMatrix, x::AbstractSparseVector, β::Number, y::StridedVector) = mul!(α, A, x, β, y)
+    A_mul_B!(y::StridedVector{Ty}, A::SparseMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} = mul!(y, A, x)
     At_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector) = mul!(α, Transpose(A), x, β, y)
     At_mul_B!(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} = mul!(y, Transpose(A), x)
     At_mul_B(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx} = *(Transpose(A), x)
@@ -3016,9 +2881,9 @@ end
 
 # methods involving RowVector from base/sparse/linalg.jl, to deprecate
 @eval Base.SparseArrays begin
-    \(::SparseMatrixCSC, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-    \(::Adjoint{<:Any,<:SparseMatrixCSC}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-    \(::Transpose{<:Any,<:SparseMatrixCSC}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+    \(::SparseMatrix, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+    \(::Adjoint{<:Any,<:SparseMatrix}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+    \(::Transpose{<:Any,<:SparseMatrix}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 end
 
 # methods involving RowVector from base/linalg/qr.jl, to deprecate
@@ -3337,6 +3202,10 @@ info(err::Exception; prefix="ERROR: ", kw...) =
     @deprecate UserPasswordCredentials UserPasswordCredential false
     @deprecate SSHCredentials SSHCredential false
 end
+
+# PR #25151
+@eval SparseArrays Base.@deprecate_binding SparseMatrixCSC SparseMatrix
+export SparseMatrixCSC
 
 # issue #24804
 @deprecate_moved sum_kbn "KahanSummation"

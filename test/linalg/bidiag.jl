@@ -82,8 +82,8 @@ srand(1)
         @test similar(ubd).uplo == ubd.uplo
         @test isa(similar(ubd, Int), Bidiagonal{Int})
         @test similar(ubd, Int).uplo == ubd.uplo
-        @test isa(similar(ubd, (3, 2)), SparseMatrixCSC)
-        @test isa(similar(ubd, Int, (3, 2)), SparseMatrixCSC{Int})
+        @test isa(similar(ubd, (3, 2)), SparseMatrix)
+        @test isa(similar(ubd, Int, (3, 2)), SparseMatrix{Int})
     end
 
     @testset "show" begin

@@ -194,7 +194,7 @@ end
         let x = convert(SparseVector{Float64,UInt32},sprandn(100,0.5))
             I = rand(1:length(x), 20,1)
             r = x[I]
-            @test isa(r, SparseMatrixCSC{Float64,UInt32})
+            @test isa(r, SparseMatrix{Float64,UInt32})
             @test all(!iszero, nonzeros(r))
             @test Array(r) == Array(x)[I]
         end
@@ -415,12 +415,12 @@ end
         @test isa(xc, SparseVector{Float32,Int})
         @test exact_equal(xc, xf32)
 
-        xm = convert(SparseMatrixCSC, x)
-        @test isa(xm, SparseMatrixCSC{Float64,Int})
+        xm = convert(SparseMatrix, x)
+        @test isa(xm, SparseMatrix{Float64,Int})
         @test Array(xm) == reshape(xf, 8, 1)
 
-        xm = convert(SparseMatrixCSC{Float32}, x)
-        @test isa(xm, SparseMatrixCSC{Float32,Int})
+        xm = convert(SparseMatrix{Float32}, x)
+        @test isa(xm, SparseMatrix{Float32,Int})
         @test Array(xm) == reshape(convert(Vector{Float32}, xf), 8, 1)
     end
 end
@@ -435,7 +435,7 @@ end
         end
 
         H = hcat(A...)
-        @test isa(H, SparseMatrixCSC{Float64,Int})
+        @test isa(H, SparseMatrix{Float64,Int})
         @test size(H) == (m, n)
         @test nnz(H) == tnnz
         Hr = zeros(m, n)
@@ -924,8 +924,8 @@ end
 
         sprmat = sprand(m, m, 0.2)
         sparsefloatmat = I + sprmat/(2m)
-        sparsecomplexmat = I + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex.(sprmat.nzval, sprmat.nzval)/(4m))
-        sparseintmat = 10m*I + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round.(Int, sprmat.nzval*10))
+        sparsecomplexmat = I + SparseMatrix(m, m, sprmat.colptr, sprmat.rowval, complex.(sprmat.nzval, sprmat.nzval)/(4m))
+        sparseintmat = 10m*I + SparseMatrix(m, m, sprmat.colptr, sprmat.rowval, round.(Int, sprmat.nzval*10))
 
         denseintmat = I*10m + rand(1:m, m, m)
         densefloatmat = I + randn(m, m)/(2m)
@@ -941,7 +941,7 @@ end
                                     eltypemat in floattypes ? (densefloatmat, sparsefloatmat) :
                                     eltypemat in complextypes && (densecomplexmat, sparsecomplexmat)
             densemat = convert(Matrix{eltypemat}, densemat)
-            sparsemat = convert(SparseMatrixCSC{eltypemat}, sparsemat)
+            sparsemat = convert(SparseMatrix{eltypemat}, sparsemat)
             trimats = (LowerTriangular(densemat), UpperTriangular(densemat),
                        LowerTriangular(sparsemat), UpperTriangular(sparsemat) )
             unittrimats = (Base.LinAlg.UnitLowerTriangular(densemat), Base.LinAlg.UnitUpperTriangular(densemat),
@@ -1072,7 +1072,7 @@ end
 # but if that's done, then modifications to one or the other will cause
 # an inconsistent state:
 sv = sparse(1:10)
-sm = convert(SparseMatrixCSC, sv)
+sm = convert(SparseMatrix, sv)
 sv[1] = 0
 @test Array(sm)[2:end] == collect(2:10)
 
@@ -1080,8 +1080,8 @@ sv[1] = 0
 @test sparsevec([1,2,3],[0,0,0]) == [0,0,0]
 
 @testset "stored zero semantics" begin
-    # Compare stored zero semantics between SparseVector and SparseMatrixCSC
-    let S = SparseMatrixCSC(10,1,[1,6],[1,3,5,6,7],[0,1,2,0,3]), x = SparseVector(10,[1,3,5,6,7],[0,1,2,0,3])
+    # Compare stored zero semantics between SparseVector and SparseMatrix
+    let S = SparseMatrix(10,1,[1,6],[1,3,5,6,7],[0,1,2,0,3]), x = SparseVector(10,[1,3,5,6,7],[0,1,2,0,3])
         @test nnz(S) == nnz(x) == 5
         for I = (:, 1:10, collect(1:10))
             @test S[I,1] == S[I] == x[I] == x
@@ -1130,7 +1130,7 @@ end
 @testset "fill!" begin
     for Tv in [Float32, Float64, Int64, Int32, ComplexF64]
         for Ti in [Int16, Int32, Int64, BigInt]
-            sptypes = (SparseMatrixCSC{Tv, Ti}, SparseVector{Tv, Ti})
+            sptypes = (SparseMatrix{Tv, Ti}, SparseVector{Tv, Ti})
             sizes = [(3, 4), (3,)]
             for (siz, Sp) in zip(sizes, sptypes)
                 arr = rand(Tv, siz...)
@@ -1227,21 +1227,21 @@ end
     @test similar(A, Float32, Int8, 6) == similar(A, Float32, Int8, (6,))
     # test similar with Dims{2} specification (preserves storage space only, not stored-entry structure)
     simA = similar(A, (6,6))
-    @test typeof(simA) == SparseMatrixCSC{eltype(A.nzval),eltype(A.nzind)}
+    @test typeof(simA) == SparseMatrix{eltype(A.nzval),eltype(A.nzind)}
     @test size(simA) == (6,6)
     @test simA.colptr == ones(eltype(A.nzind), 6+1)
     @test length(simA.rowval) == length(A.nzind)
     @test length(simA.nzval) == length(A.nzval)
     # test similar with entry type and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, (6,6))
-    @test typeof(simA) == SparseMatrixCSC{Float32,eltype(A.nzind)}
+    @test typeof(simA) == SparseMatrix{Float32,eltype(A.nzind)}
     @test size(simA) == (6,6)
     @test simA.colptr == ones(eltype(A.nzind), 6+1)
     @test length(simA.rowval) == length(A.nzind)
     @test length(simA.nzval) == length(A.nzval)
     # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, Int8, (6,6))
-    @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
+    @test typeof(simA) == SparseMatrix{Float32, Int8}
     @test size(simA) == (6,6)
     @test simA.colptr == ones(eltype(A.nzind), 6+1)
     @test length(simA.rowval) == length(A.nzind)

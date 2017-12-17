@@ -22,11 +22,11 @@ using Test
             b = breal
         end
         a_evs = eigvals(Array(a))
-        a     = convert(SparseMatrixCSC{elty}, a)
+        a     = convert(SparseMatrix{elty}, a)
         asym  = a' + a                  # symmetric indefinite
         apd   = a'*a                    # symmetric positive-definite
 
-        b     = convert(SparseMatrixCSC{elty}, b)
+        b     = convert(SparseMatrix{elty}, b)
         bsym  = b' + b
         bpd   = b'*b
 

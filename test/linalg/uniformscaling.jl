@@ -171,7 +171,7 @@ end
     @test_throws ArgumentError vcat(I)
     @test_throws ArgumentError [I; I]
     @test_throws ArgumentError [I I; I]
-    for T in (Matrix, SparseMatrixCSC)
+    for T in (Matrix, SparseMatrix)
         A = T(rand(3,4))
         B = T(rand(3,3))
         @test (hcat(A, 2I))::T == hcat(A, Matrix(2I, 3, 3))

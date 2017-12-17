@@ -119,10 +119,10 @@ Get the name of field `i` of a `DataType`.
 
 # Examples
 ```jldoctest
-julia> fieldname(SparseMatrixCSC, 1)
+julia> fieldname(SparseMatrix, 1)
 :m
 
-julia> fieldname(SparseMatrixCSC, 5)
+julia> fieldname(SparseMatrix, 5)
 :nzval
 ```
 """

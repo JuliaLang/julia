@@ -5,32 +5,32 @@ import Base.LinAlg: checksquare
 
 ## sparse matrix multiplication
 
-*(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
+*(A::SparseMatrix{TvA,TiA}, B::SparseMatrix{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
     *(sppromote(A, B)...)
-*(A::SparseMatrixCSC{TvA,TiA}, transB::Transpose{<:Any,<:SparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
+*(A::SparseMatrix{TvA,TiA}, transB::Transpose{<:Any,<:SparseMatrix{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
     (B = transB.parent; (pA, pB) = sppromote(A, B); *(pA, Transpose(pB)))
-*(A::SparseMatrixCSC{TvA,TiA}, adjB::Adjoint{<:Any,<:SparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
+*(A::SparseMatrix{TvA,TiA}, adjB::Adjoint{<:Any,<:SparseMatrix{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
     (B = adjB.parent; (pA, pB) = sppromote(A, B); *(pA, Adjoint(pB)))
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{TvA,TiA}}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
+*(transA::Transpose{<:Any,<:SparseMatrix{TvA,TiA}}, B::SparseMatrix{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
     (A = transA.parent; (pA, pB) = sppromote(A, B); *(Transpose(pA), pB))
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TvA,TiA}}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
+*(adjA::Adjoint{<:Any,<:SparseMatrix{TvA,TiA}}, B::SparseMatrix{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
     (A = adjA.parent; (pA, pB) = sppromote(A, B); *(Adjoint(pA), pB))
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{TvA,TiA}}, transB::Transpose{<:Any,<:SparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
+*(transA::Transpose{<:Any,<:SparseMatrix{TvA,TiA}}, transB::Transpose{<:Any,<:SparseMatrix{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
     (A = transA.parent; B = transB.parent; (pA, pB) = sppromote(A, B); *(Transpose(pA), Transpose(pB)))
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TvA,TiA}}, adjB::Adjoint{<:Any,<:SparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
+*(adjA::Adjoint{<:Any,<:SparseMatrix{TvA,TiA}}, adjB::Adjoint{<:Any,<:SparseMatrix{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
     (A = adjA.parent; B = adjB.parent; (pA, pB) = sppromote(A, B); *(Adjoint(pA), Adjoint(pB)))
 
-function sppromote(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
+function sppromote(A::SparseMatrix{TvA,TiA}, B::SparseMatrix{TvB,TiB}) where {TvA,TiA,TvB,TiB}
     Tv = promote_type(TvA, TvB)
     Ti = promote_type(TiA, TiB)
-    A  = convert(SparseMatrixCSC{Tv,Ti}, A)
-    B  = convert(SparseMatrixCSC{Tv,Ti}, B)
+    A  = convert(SparseMatrix{Tv,Ti}, A)
+    B  = convert(SparseMatrix{Tv,Ti}, B)
     A, B
 end
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 
-function mul!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
+function mul!(α::Number, A::SparseMatrix, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
     A.n == size(B, 1) || throw(DimensionMismatch())
     A.m == size(C, 1) || throw(DimensionMismatch())
     size(B, 2) == size(C, 2) || throw(DimensionMismatch())
@@ -49,12 +49,12 @@ function mul!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C:
     end
     C
 end
-*(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} =
+*(A::SparseMatrix{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} =
     (T = promote_type(TA, Tx); mul!(one(T), A, x, zero(T), similar(x, T, A.m)))
-*(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
+*(A::SparseMatrix{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
     (T = promote_type(TA, Tx); mul!(one(T), A, B, zero(T), similar(B, T, (A.m, size(B, 2)))))
 
-function mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
+function mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrix}, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
     A = adjA.parent
     A.n == size(C, 1) || throw(DimensionMismatch())
     A.m == size(B, 1) || throw(DimensionMismatch())
@@ -75,12 +75,12 @@ function mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecO
     end
     C
 end
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
+*(adjA::Adjoint{<:Any,<:SparseMatrix{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
     (A = adjA.parent; T = promote_type(TA, Tx); mul!(one(T), Adjoint(A), x, zero(T), similar(x, T, A.n)))
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
+*(adjA::Adjoint{<:Any,<:SparseMatrix{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
     (A = adjA.parent; T = promote_type(TA, Tx); mul!(one(T), Adjoint(A), B, zero(T), similar(B, T, (A.n, size(B, 2)))))
 
-function mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
+function mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrix}, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
     A = transA.parent
     A.n == size(C, 1) || throw(DimensionMismatch())
     A.m == size(B, 1) || throw(DimensionMismatch())
@@ -101,21 +101,21 @@ function mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::Strided
     end
     C
 end
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
+*(transA::Transpose{<:Any,<:SparseMatrix{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
     (A = transA.parent; T = promote_type(TA, Tx); mul!(one(T), Transpose(A), x, zero(T), similar(x, T, A.n)))
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
+*(transA::Transpose{<:Any,<:SparseMatrix{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
     (A = transA.parent; T = promote_type(TA, Tx); mul!(one(T), Transpose(A), B, zero(T), similar(B, T, (A.n, size(B, 2)))))
 
 # For compatibility with dense multiplication API. Should be deleted when dense multiplication
 # API is updated to follow BLAS API.
-mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) =
+mul!(C::StridedVecOrMat, A::SparseMatrix, B::StridedVecOrMat) =
     mul!(one(eltype(B)), A, B, zero(eltype(C)), C)
-mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat) =
+mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrix}, B::StridedVecOrMat) =
     (A = adjA.parent; mul!(one(eltype(B)), Adjoint(A), B, zero(eltype(C)), C))
-mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat) =
+mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrix}, B::StridedVecOrMat) =
     (A = transA.parent; mul!(one(eltype(B)), Transpose(A), B, zero(eltype(C)), C))
 
-function (*)(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA}
+function (*)(X::StridedMatrix{TX}, A::SparseMatrix{TvA,TiA}) where {TX,TvA,TiA}
     mX, nX = size(X)
     nX == A.m || throw(DimensionMismatch())
     Y = zeros(promote_type(TX,TvA), mX, A.n)
@@ -127,11 +127,11 @@ function (*)(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,Ti
     Y
 end
 
-function (*)(D::Diagonal, A::SparseMatrixCSC)
+function (*)(D::Diagonal, A::SparseMatrix)
     T = Base.promote_op(*, eltype(D), eltype(A))
     scale!(LinAlg.copy_oftype(A, T), D.diag, A)
 end
-function (*)(A::SparseMatrixCSC, D::Diagonal)
+function (*)(A::SparseMatrix, D::Diagonal)
     T = Base.promote_op(*, eltype(D), eltype(A))
     scale!(LinAlg.copy_oftype(A, T), A, D.diag)
 end
@@ -139,21 +139,21 @@ end
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://dl.acm.org/citation.cfm?id=355796
 
-(*)(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(A,B)
-*(A::SparseMatrixCSC{Tv,Ti}, transB::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} =
+(*)(A::SparseMatrix{Tv,Ti}, B::SparseMatrix{Tv,Ti}) where {Tv,Ti} = spmatmul(A,B)
+*(A::SparseMatrix{Tv,Ti}, transB::Transpose{<:Any,<:SparseMatrix{Tv,Ti}}) where {Tv,Ti} =
     (B = transB.parent; spmatmul(A, transpose(B)))
-*(A::SparseMatrixCSC{Tv,Ti}, adjB::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} =
+*(A::SparseMatrix{Tv,Ti}, adjB::Adjoint{<:Any,<:SparseMatrix{Tv,Ti}}) where {Tv,Ti} =
     (B = adjB.parent; spmatmul(A, adjoint(B)))
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} =
+*(transA::Transpose{<:Any,<:SparseMatrix{Tv,Ti}}, B::SparseMatrix{Tv,Ti}) where {Tv,Ti} =
     (A = transA.parent; spmatmul(tranpsose(A), B))
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} =
+*(adjA::Adjoint{<:Any,<:SparseMatrix{Tv,Ti}}, B::SparseMatrix{Tv,Ti}) where {Tv,Ti} =
     (A = adjA.parent; spmatmul(adjoint(A), B))
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}, transB::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} =
+*(transA::Transpose{<:Any,<:SparseMatrix{Tv,Ti}}, transB::Transpose{<:Any,<:SparseMatrix{Tv,Ti}}) where {Tv,Ti} =
     (A = transA.parent; B = transB.parent; spmatmul(transpose(A), transpose(B)))
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}, adjB::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} =
+*(adjA::Adjoint{<:Any,<:SparseMatrix{Tv,Ti}}, adjB::Adjoint{<:Any,<:SparseMatrix{Tv,Ti}}) where {Tv,Ti} =
     (A = adjA.parent; B = adjB.parent; spmatmul(adjoint(A), adjoint(B)))
 
-function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
+function spmatmul(A::SparseMatrix{Tv,Ti}, B::SparseMatrix{Tv,Ti};
                   sortindices::Symbol = :sortcols) where {Tv,Ti}
     mA, nA = size(A)
     mB, nB = size(B)
@@ -205,13 +205,13 @@ function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
     deleteat!(nzvalC, colptrC[end]:length(nzvalC))
 
     # The Gustavson algorithm does not guarantee the product to have sorted row indices.
-    Cunsorted = SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
-    C = SparseArrays.sortSparseMatrixCSC!(Cunsorted, sortindices=sortindices)
+    Cunsorted = SparseMatrix(mA, nB, colptrC, rowvalC, nzvalC)
+    C = SparseArrays.sortSparseMatrix!(Cunsorted, sortindices=sortindices)
     return C
 end
 
 ## solvers
-function fwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
+function fwdTriSolve!(A::SparseMatrixUnion, B::AbstractVecOrMat)
 # forward substitution for CSC matrices
     nrowB, ncolB  = size(B, 1), size(B, 2)
     ncol = LinAlg.checksquare(A)
@@ -256,7 +256,7 @@ function fwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
     B
 end
 
-function bwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
+function bwdTriSolve!(A::SparseMatrixUnion, B::AbstractVecOrMat)
 # backward substitution for CSC matrices
     nrowB, ncolB = size(B, 1), size(B, 2)
     ncol = LinAlg.checksquare(A)
@@ -301,16 +301,16 @@ function bwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
     B
 end
 
-ldiv!(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = fwdTriSolve!(L.data, B)
-ldiv!(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = bwdTriSolve!(U.data, B)
+ldiv!(L::LowerTriangular{T,<:SparseMatrixUnion{T}}, B::StridedVecOrMat) where {T} = fwdTriSolve!(L.data, B)
+ldiv!(U::UpperTriangular{T,<:SparseMatrixUnion{T}}, B::StridedVecOrMat) where {T} = bwdTriSolve!(U.data, B)
 
-(\)(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::SparseMatrixCSC) where {T} = ldiv!(L, Array(B))
-(\)(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::SparseMatrixCSC) where {T} = ldiv!(U, Array(B))
-\(A::Transpose{<:Real,<:Hermitian{<:Real,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
-\(A::Transpose{<:Complex,<:Hermitian{<:Complex,<:SparseMatrixCSC}}, B::Vector) = transpose(A.parent) \ B
-\(A::Transpose{<:Number,<:Symmetric{<:Number,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
+(\)(L::LowerTriangular{T,<:SparseMatrixUnion{T}}, B::SparseMatrix) where {T} = ldiv!(L, Array(B))
+(\)(U::UpperTriangular{T,<:SparseMatrixUnion{T}}, B::SparseMatrix) where {T} = ldiv!(U, Array(B))
+\(A::Transpose{<:Real,<:Hermitian{<:Real,<:SparseMatrix}}, B::Vector) = A.parent \ B
+\(A::Transpose{<:Complex,<:Hermitian{<:Complex,<:SparseMatrix}}, B::Vector) = transpose(A.parent) \ B
+\(A::Transpose{<:Number,<:Symmetric{<:Number,<:SparseMatrix}}, B::Vector) = A.parent \ B
 
-function rdiv!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
+function rdiv!(A::SparseMatrix{T}, D::Diagonal{T}) where T
     dd = D.diag
     if (k = length(dd)) ≠ A.n
         throw(DimensionMismatch("size(A, 2)=$(A.n) should be size(D, 1)=$k"))
@@ -328,14 +328,14 @@ function rdiv!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
     A
 end
 
-rdiv!(A::SparseMatrixCSC{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
+rdiv!(A::SparseMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
     (D = adjD.parent; rdiv!(A, conj(D)))
-rdiv!(A::SparseMatrixCSC{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
+rdiv!(A::SparseMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
 
 ## triu, tril
 
-function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
+function triu(S::SparseMatrix{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     m,n = size(S)
     if !(-m + 1 <= k <= n + 1)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
@@ -355,7 +355,7 @@ function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     end
     rowval = Vector{Ti}(uninitialized, nnz)
     nzval = Vector{Tv}(uninitialized, nnz)
-    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
+    A = SparseMatrix(m, n, colptr, rowval, nzval)
     for col = max(k+1,1) : n
         c1 = S.colptr[col]
         for c2 = A.colptr[col] : A.colptr[col+1]-1
@@ -367,7 +367,7 @@ function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     A
 end
 
-function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
+function tril(S::SparseMatrix{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     m,n = size(S)
     if !(-m - 1 <= k <= n - 1)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
@@ -389,7 +389,7 @@ function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     end
     rowval = Vector{Ti}(uninitialized, nnz)
     nzval = Vector{Tv}(uninitialized, nnz)
-    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
+    A = SparseMatrix(m, n, colptr, rowval, nzval)
     for col = 1 : min(n, m+k)
         c1 = S.colptr[col+1]-1
         l2 = A.colptr[col+1]-1
@@ -404,9 +404,9 @@ end
 
 ## diff
 
-function sparse_diff1(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+function sparse_diff1(S::SparseMatrix{Tv,Ti}) where {Tv,Ti}
     m,n = size(S)
-    m > 1 || return SparseMatrixCSC(0, n, ones(Ti,n+1), Ti[], Tv[])
+    m > 1 || return SparseMatrix(0, n, ones(Ti,n+1), Ti[], Tv[])
     colptr = Vector{Ti}(uninitialized, n+1)
     numnz = 2 * nnz(S) # upper bound; will shrink later
     rowval = Vector{Ti}(uninitialized, numnz)
@@ -441,10 +441,10 @@ function sparse_diff1(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     end
     deleteat!(rowval, numnz+1:length(rowval))
     deleteat!(nzval, numnz+1:length(nzval))
-    return SparseMatrixCSC(m-1, n, colptr, rowval, nzval)
+    return SparseMatrix(m-1, n, colptr, rowval, nzval)
 end
 
-function sparse_diff2(a::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+function sparse_diff2(a::SparseMatrix{Tv,Ti}) where {Tv,Ti}
     m,n = size(a)
     colptr = Vector{Ti}(uninitialized, max(n,1))
     numnz = 2 * nnz(a) # upper bound; will shrink later
@@ -460,7 +460,7 @@ function sparse_diff2(a::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     ptrS = 1
     colptr[1] = 1
 
-    n == 0 && return SparseMatrixCSC(m, n, colptr, rowval, nzval)
+    n == 0 && return SparseMatrix(m, n, colptr, rowval, nzval)
 
     startA = colptr_a[1]
     stopA = colptr_a[2]
@@ -530,15 +530,15 @@ function sparse_diff2(a::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     end
     deleteat!(rowval, ptrS:length(rowval))
     deleteat!(nzval, ptrS:length(nzval))
-    return SparseMatrixCSC(m, n-1, colptr, rowval, nzval)
+    return SparseMatrix(m, n-1, colptr, rowval, nzval)
 end
 
-diff(a::SparseMatrixCSC, dim::Integer)= dim==1 ? sparse_diff1(a) : sparse_diff2(a)
+diff(a::SparseMatrix, dim::Integer)= dim==1 ? sparse_diff1(a) : sparse_diff2(a)
 
 ## norm and rank
-vecnorm(A::SparseMatrixCSC, p::Real=2) = vecnorm(view(A.nzval, 1:nnz(A)), p)
+vecnorm(A::SparseMatrix, p::Real=2) = vecnorm(view(A.nzval, 1:nnz(A)), p)
 
-function norm(A::SparseMatrixCSC,p::Real=2)
+function norm(A::SparseMatrix,p::Real=2)
     m, n = size(A)
     if m == 0 || n == 0 || isempty(A)
         return float(real(zero(eltype(A))))
@@ -574,7 +574,7 @@ end
 # TODO rank
 
 # cond
-function cond(A::SparseMatrixCSC, p::Real=2)
+function cond(A::SparseMatrix, p::Real=2)
     if p == 1
         normAinv = normestinv(A)
         normA = norm(A, 1)
@@ -590,7 +590,7 @@ function cond(A::SparseMatrixCSC, p::Real=2)
     end
 end
 
-function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)))) where T
+function normestinv(A::SparseMatrix{T}, t::Integer = min(2,maximum(size(A)))) where T
     maxiter = 5
     # Check the input
     n = checksquare(A)
@@ -763,7 +763,7 @@ end
 
 # kron
 
-function kron(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+function kron(a::SparseMatrix{Tv,Ti}, b::SparseMatrix{Tv,Ti}) where {Tv,Ti}
     numnzA = nnz(a)
     numnzB = nnz(b)
 
@@ -815,19 +815,19 @@ function kron(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti
             end
         end
     end
-    SparseMatrixCSC(m, n, colptr, rowval, nzval)
+    SparseMatrix(m, n, colptr, rowval, nzval)
 end
 
-function kron(A::SparseMatrixCSC{Tv1,Ti1}, B::SparseMatrixCSC{Tv2,Ti2}) where {Tv1,Ti1,Tv2,Ti2}
+function kron(A::SparseMatrix{Tv1,Ti1}, B::SparseMatrix{Tv2,Ti2}) where {Tv1,Ti1,Tv2,Ti2}
     Tv_res = promote_type(Tv1, Tv2)
     Ti_res = promote_type(Ti1, Ti2)
-    A = convert(SparseMatrixCSC{Tv_res,Ti_res}, A)
-    B = convert(SparseMatrixCSC{Tv_res,Ti_res}, B)
+    A = convert(SparseMatrix{Tv_res,Ti_res}, A)
+    B = convert(SparseMatrix{Tv_res,Ti_res}, B)
     return kron(A,B)
 end
 
-kron(A::SparseMatrixCSC, B::VecOrMat) = kron(A, sparse(B))
-kron(A::VecOrMat, B::SparseMatrixCSC) = kron(sparse(A), B)
+kron(A::SparseMatrix, B::VecOrMat) = kron(A, sparse(B))
+kron(A::VecOrMat, B::SparseMatrix) = kron(sparse(A), B)
 
 function kron(x::SparseVector{Tv,Ti},y::SparseVector{Tv,Ti}) where {Tv,Ti}
     nnzx = nnz(x)
@@ -856,14 +856,14 @@ kron(x::AbstractVector, y::SparseVector{Tv,Ti}) where {Tv,Ti} = kron(sparse(x), 
 
 ## det, inv, cond
 
-inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be dense and can cause the computer to run out of memory. If you are sure you have enough memory, please convert your matrix to a dense matrix.")
+inv(A::SparseMatrix) = error("The inverse of a sparse matrix can often be dense and can cause the computer to run out of memory. If you are sure you have enough memory, please convert your matrix to a dense matrix.")
 
 # TODO
 
 ## scale methods
 
 # Copy colptr and rowval from one sparse matrix to another
-function copyinds!(C::SparseMatrixCSC, A::SparseMatrixCSC)
+function copyinds!(C::SparseMatrix, A::SparseMatrix)
     if C.colptr !== A.colptr
         resize!(C.colptr, length(A.colptr))
         copyto!(C.colptr, A.colptr)
@@ -875,7 +875,7 @@ function copyinds!(C::SparseMatrixCSC, A::SparseMatrixCSC)
 end
 
 # multiply by diagonal matrix as vector
-function scale!(C::SparseMatrixCSC, A::SparseMatrixCSC, b::Vector)
+function scale!(C::SparseMatrix, A::SparseMatrix, b::Vector)
     m, n = size(A)
     (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
     copyinds!(C, A)
@@ -888,7 +888,7 @@ function scale!(C::SparseMatrixCSC, A::SparseMatrixCSC, b::Vector)
     C
 end
 
-function scale!(C::SparseMatrixCSC, b::Vector, A::SparseMatrixCSC)
+function scale!(C::SparseMatrix, b::Vector, A::SparseMatrix)
     m, n = size(A)
     (m==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
     copyinds!(C, A)
@@ -902,7 +902,7 @@ function scale!(C::SparseMatrixCSC, b::Vector, A::SparseMatrixCSC)
     C
 end
 
-function scale!(C::SparseMatrixCSC, A::SparseMatrixCSC, b::Number)
+function scale!(C::SparseMatrix, A::SparseMatrix, b::Number)
     size(A)==size(C) || throw(DimensionMismatch())
     copyinds!(C, A)
     resize!(C.nzval, length(A.nzval))
@@ -910,7 +910,7 @@ function scale!(C::SparseMatrixCSC, A::SparseMatrixCSC, b::Number)
     C
 end
 
-function scale!(C::SparseMatrixCSC, b::Number, A::SparseMatrixCSC)
+function scale!(C::SparseMatrix, b::Number, A::SparseMatrix)
     size(A)==size(C) || throw(DimensionMismatch())
     copyinds!(C, A)
     resize!(C.nzval, length(A.nzval))
@@ -918,10 +918,10 @@ function scale!(C::SparseMatrixCSC, b::Number, A::SparseMatrixCSC)
     C
 end
 
-scale!(A::SparseMatrixCSC, b::Number) = (scale!(A.nzval, b); A)
-scale!(b::Number, A::SparseMatrixCSC) = (scale!(b, A.nzval); A)
+scale!(A::SparseMatrix, b::Number) = (scale!(A.nzval, b); A)
+scale!(b::Number, A::SparseMatrix) = (scale!(b, A.nzval); A)
 
-function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
+function \(A::SparseMatrix, B::AbstractVecOrMat)
     m, n = size(A)
     if m == n
         if istril(A)
@@ -943,7 +943,7 @@ function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
 end
 for xform in (:Adjoint, :Transpose)
     @eval begin
-        function \(xformA::($xform){<:Any,<:SparseMatrixCSC}, B::AbstractVecOrMat)
+        function \(xformA::($xform){<:Any,<:SparseMatrix}, B::AbstractVecOrMat)
             A = xformA.parent
             m, n = size(A)
             if m == n
@@ -967,7 +967,7 @@ for xform in (:Adjoint, :Transpose)
     end
 end
 
-function factorize(A::SparseMatrixCSC)
+function factorize(A::SparseMatrix)
     m, n = size(A)
     if m == n
         if istril(A)
@@ -988,7 +988,7 @@ function factorize(A::SparseMatrixCSC)
     end
 end
 
-# function factorize(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where Ti
+# function factorize(A::Symmetric{Float64,SparseMatrix{Float64,Ti}}) where Ti
 #     F = cholfact(A)
 #     if LinAlg.issuccess(F)
 #         return F
@@ -997,7 +997,7 @@ end
 #         return F
 #     end
 # end
-function factorize(A::LinAlg.RealHermSymComplexHerm{Float64,<:SparseMatrixCSC})
+function factorize(A::LinAlg.RealHermSymComplexHerm{Float64,<:SparseMatrix})
     F = cholfact(A)
     if LinAlg.issuccess(F)
         return F
@@ -1007,11 +1007,11 @@ function factorize(A::LinAlg.RealHermSymComplexHerm{Float64,<:SparseMatrixCSC})
     end
 end
 
-chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
-lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")
-eig(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eig() for sparse matrices.")
+chol(A::SparseMatrix) = error("Use cholfact() instead of chol() for sparse matrices.")
+lu(A::SparseMatrix) = error("Use lufact() instead of lu() for sparse matrices.")
+eig(A::SparseMatrix) = error("Use IterativeEigensolvers.eigs() instead of eig() for sparse matrices.")
 
-function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
+function Base.cov(X::SparseMatrix, vardim::Int=1; corrected::Bool=true)
     a, b = size(X)
     n, p = vardim == 1 ? (a, b) : (b, a)
 

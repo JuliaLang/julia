@@ -457,10 +457,10 @@ end
         symsparsemat = SymType(sparsemat)
         @test isa(similar(symsparsemat), typeof(symsparsemat))
         @test similar(symsparsemat).uplo == symsparsemat.uplo
-        @test isa(similar(symsparsemat, Float32), SymType{Float32,<:SparseMatrixCSC{Float32}})
+        @test isa(similar(symsparsemat, Float32), SymType{Float32,<:SparseMatrix{Float32}})
         @test similar(symsparsemat, Float32).uplo == symsparsemat.uplo
         @test isa(similar(symsparsemat, (n, n)), typeof(sparsemat))
-        @test isa(similar(symsparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
+        @test isa(similar(symsparsemat, Float32, (n, n)), SparseMatrix{Float32})
     end
 end
 

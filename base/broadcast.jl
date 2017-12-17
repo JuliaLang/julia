@@ -65,7 +65,7 @@ The `N` parameter is the dimensionality, which can be handy for AbstractArray ty
 that only support specific dimensionalities:
 
     struct SparseMatrixStyle <: Broadcast.AbstractArrayStyle{2} end
-    Base.BroadcastStyle(::Type{<:SparseMatrixCSC}) = SparseMatrixStyle()
+    Base.BroadcastStyle(::Type{<:SparseMatrix}) = SparseMatrixStyle()
 
 For AbstractArray types that support arbitrary dimensionality, `N` can be set to `Any`:
 

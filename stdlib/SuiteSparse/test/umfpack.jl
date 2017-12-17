@@ -17,7 +17,7 @@
     @testset "Core functionality for $Tv elements" for Tv in (Float64, ComplexF64)
         # We might be able to support two index sizes one day
         for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
-            A = convert(SparseMatrixCSC{Tv,Ti}, A0)
+            A = convert(SparseMatrix{Tv,Ti}, A0)
             lua = lufact(A)
             @test nnz(lua) == 18
             @test_throws KeyError lua[:Z]
@@ -75,7 +75,7 @@
     @testset "More tests for complex cases" begin
         Ac0 = complex.(A0,A0)
         for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
-            Ac = convert(SparseMatrixCSC{ComplexF64,Ti}, Ac0)
+            Ac = convert(SparseMatrix{ComplexF64,Ti}, Ac0)
             x  = complex.(ones(size(Ac, 1)), ones(size(Ac,1)))
             lua = lufact(Ac)
             L,U,p,q,Rs = lua[:(:)]

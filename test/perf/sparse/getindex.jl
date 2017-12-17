@@ -42,7 +42,7 @@ function sparse_getindex_perf()
     ## using uint32 (works up to 10^9)
     uus = []
     for u in us
-        push!(uus, SparseMatrixCSC(u.m, u.n, map(UInt32,u.colptr), map(UInt32,u.rowval), u.nzval))
+        push!(uus, SparseMatrix(u.m, u.n, map(UInt32,u.colptr), map(UInt32,u.rowval), u.nzval))
     end
 
     # test performance with matrices in us, uus and ts for

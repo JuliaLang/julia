@@ -22,7 +22,7 @@ const ORDERING_BESTAMD = Int32(9) # try COLAMD and AMD; pick best#
 # tried.  If there is a high fill-in with AMD then try METIS(A'A) and take
 # the best of AMD and METIS. METIS is not tried if it isn't installed.
 
-using ..SparseArrays: SparseMatrixCSC
+using ..SparseArrays: SparseMatrix
 using ..SuiteSparse.CHOLMOD
 using ..SuiteSparse.CHOLMOD: change_stype!, free!
 
@@ -105,9 +105,9 @@ end
 # A[invperm(rpivinv), cpiv] = (I - factors[:,1]*τ[1]*factors[:,1]')*...*(I - factors[:,k]*τ[k]*factors[:,k]')*R
 # with k = size(factors, 2).
 struct QRSparse{Tv,Ti} <: LinAlg.Factorization{Tv}
-    factors::SparseMatrixCSC{Tv,Ti}
+    factors::SparseMatrix{Tv,Ti}
     τ::Vector{Tv}
-    R::SparseMatrixCSC{Tv,Ti}
+    R::SparseMatrix{Tv,Ti}
     cpiv::Vector{Ti}
     rpivinv::Vector{Ti}
 end
@@ -126,17 +126,17 @@ function Base.size(F::QRSparse, i::Integer)
 end
 
 struct QRSparseQ{Tv<:CHOLMOD.VTypes,Ti<:Integer} <: LinAlg.AbstractQ{Tv}
-    factors::SparseMatrixCSC{Tv,Ti}
+    factors::SparseMatrix{Tv,Ti}
     τ::Vector{Tv}
 end
 
 Base.size(Q::QRSparseQ) = (size(Q.factors, 1), size(Q.factors, 1))
 
 # From SPQR manual p. 6
-_default_tol(A::SparseMatrixCSC) =
+_default_tol(A::SparseMatrix) =
     20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i))^2 for i in 1:size(A, 2))
 
-function Base.LinAlg.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
+function Base.LinAlg.qrfact(A::SparseMatrix{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
     R     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
     E     = Ref{Ptr{CHOLMOD.SuiteSparse_long}}()
     H     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
@@ -148,9 +148,9 @@ function Base.LinAlg.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where
         C_NULL, C_NULL, C_NULL, C_NULL,
         R, E, H, HPinv, HTau)
 
-    return QRSparse(SparseMatrixCSC(Sparse(H[])),
+    return QRSparse(SparseMatrix(Sparse(H[])),
                     vec(Array(CHOLMOD.Dense(HTau[]))),
-                    SparseMatrixCSC(Sparse(R[])),
+                    SparseMatrix(Sparse(R[])),
                     p, hpinv)
 end
 
@@ -164,7 +164,7 @@ solve least squares or underdetermined problems with [`\\`](@ref). The function 
 # Examples
 ```jldoctest
 julia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))
-4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
+4×2 SparseMatrix{Float64,Int64} with 4 stored entries:
   [1, 1]  =  1.0
   [2, 1]  =  1.0
   [3, 2]  =  1.0
@@ -179,7 +179,7 @@ Q factor:
   0.0       -0.707107   0.707107   0.0
  -0.707107   0.0        0.0        0.707107
 R factor:
-2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+2×2 SparseMatrix{Float64,Int64} with 2 stored entries:
   [1, 1]  =  -1.41421
   [2, 2]  =  -1.41421
 Row permutation:
@@ -194,9 +194,9 @@ Column permutation:
  2
 ```
 """
-Base.LinAlg.qrfact(A::SparseMatrixCSC; tol = _default_tol(A)) = qrfact(A, Val{true}, tol = tol)
+Base.LinAlg.qrfact(A::SparseMatrix; tol = _default_tol(A)) = qrfact(A, Val{true}, tol = tol)
 
-Base.LinAlg.qr(A::SparseMatrixCSC; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
+Base.LinAlg.qr(A::SparseMatrix; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
 
 function Base.LinAlg.mul!(Q::QRSparseQ, A::StridedVecOrMat)
     if size(A, 1) != size(Q, 1)
@@ -281,7 +281,7 @@ julia> F[:Q]
  0.0  0.0  0.0  1.0
 
 julia> F[:R]
-4×4 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
+4×4 SparseMatrix{Float64,Int64} with 5 stored entries:
   [1, 1]  =  3.0
   [2, 2]  =  4.0
   [3, 3]  =  5.0
@@ -402,7 +402,7 @@ when the problem is underdetermined.
 # Examples
 ```jldoctest
 julia> A = sparse([1,2,4], [1,1,1], ones(3), 4, 2)
-4×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+4×2 SparseMatrix{Float64,Int64} with 3 stored entries:
   [1, 1]  =  1.0
   [2, 1]  =  1.0
   [4, 1]  =  1.0
