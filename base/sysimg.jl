@@ -416,9 +416,6 @@ include("missing.jl")
 # libgit2 support
 include("libgit2/libgit2.jl")
 
-# package manager
-include("pkg/pkg.jl")
-
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")
 using .SparseArrays
@@ -427,6 +424,13 @@ include("asyncmap.jl")
 
 # worker threads
 include("threadcall.jl")
+
+# The package manager can plug into these to give some extra functionality
+baremodule __Pkg
+    const dir = Ref{Any}()
+    const installed = Ref{Any}()
+    const find_package = Ref{Any}()
+end
 
 # code loading
 include("loading.jl")
