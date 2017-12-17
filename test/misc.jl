@@ -753,11 +753,3 @@ end
 
 # PR #23664, make sure names don't get added to the default `Main` workspace
 @test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
-
-# issue #19682
-let buf = IOBuffer()
-    warn(buf, "foo")
-    @test String(take!(buf)) === "WARNING: foo\n"
-    warn(IOContext(buf, :color=>true), "foo")
-    @test String(take!(buf)) === "\e[1m\e[33mWARNING: \e[39m\e[22m\e[33mfoo\e[39m\n"
-end
