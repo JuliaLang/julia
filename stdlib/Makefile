@@ -11,7 +11,26 @@ get-pkg3:  checkout-pkg3
 clean-pkg3:
 	rm -rf Pkg3
 
-get: get-pkg3
-clean: clean-pkg3
+SHA_VERSION := 79bcc3fd79c1a6cc8678c39b74d721097c5cb2b0
+SHA_URL := https://github.com/staticfloat/SHA.jl
+
+SHA:
+	git clone $(SHA_URL) $@
+checkout-sha: SHA
+	git -C $< checkout $(SHA_VERSION)
+get-sha: checkout-sha
+clean-sha:
+	rm -rf SHA
+
+TOML_VERSION := cb1a26e354f5859192641f29396c291bce2b503f
+TOML_URL := https://github.com/StefanKarpinski/TOML.jl
+TOML:
+	git clone $(TOML_URL) $@
+checkout-toml: TOML
+	git -C $< checkout $(TOML_VERSION)
+get-toml: checkout-toml
+
+get: get-pkg3 get-sha get-toml
+clean: clean-pkg3 clean-sha clean-toml
 
 .PHONY: default get clean
