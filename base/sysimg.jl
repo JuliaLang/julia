@@ -494,7 +494,6 @@ Base.require(:Logging)
 Base.require(:IterativeEigensolvers)
 Base.require(:Mmap)
 Base.require(:Profile)
-Base.require(:Pkg3)
 Base.require(:SharedArrays)
 Base.require(:SuiteSparse)
 Base.require(:Test)
@@ -509,6 +508,8 @@ Base.require(:Printf)
     @deprecate_binding Dates root_module(:Dates) true ", run `using Dates` instead"
 #    @deprecate_binding Distributed root_module(:Distributed) true ", run `using Distributed` instead"
 end
+
+Base.require(:Pkg3)
 
 empty!(LOAD_PATH)
 
