@@ -93,9 +93,6 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
-  * The constructor of `SubString` now checks if the requsted view range
-    is defined by valid indices in the parent `AbstractString` ([#22511]).
-
   * `readline`, `readlines` and `eachline` return lines without line endings by default.
     You *must* use `readline(s, chomp=false)`, etc. to get the old behavior where
     returned lines include trailing end-of-line character(s) ([#19944]).
@@ -427,8 +424,6 @@ Library improvements
     `enumerate(IndexLinear, iterable)` yields linear indices and
     `enumerate(IndexCartesian, iterable)` yields cartesian indices ([#16378]).
 
-  * Jump to first/last history entries in the REPL via "Alt-<" and "Alt->" ([#22829]).
-
 Compiler/Runtime improvements
 -----------------------------
 
@@ -616,19 +611,11 @@ Deprecated or removed
   * Parsing string dates from a `Dates.DateFormat` object has been deprecated as part of a
     larger effort toward faster, more extensible date parsing ([#20952]).
 
-  * `EnvHash` has been renamed to `EnvDict` ([#24167]).
-
   * `linspace` and `logspace` now require an explicit number of elements to be supplied rather than defaulting to `50`.
-
-  * Introduced the `empty` function, the functional pair to `empty!` which returns a new,
-    empty container ([#24390]).
 
   * `similar(::Associative)` has been deprecated in favor of `empty(::Associative)`, and
     `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
     `empty(::Associative, K, V)` ([#24390]).
-
-  * `indices(a)` and `indices(a,d)` have been deprecated in favor of `axes(a)` and
-    `axes(a, d)` ([#25057]).
 
 Command-line option changes
 ---------------------------
@@ -3038,8 +3025,4 @@ Too numerous to mention.
 [#20952]: https://github.com/JuliaLang/julia/issues/20952
 [#21183]: https://github.com/JuliaLang/julia/issues/21183
 [#21818]: https://github.com/JuliaLang/julia/issues/21818
-[#22511]: https://github.com/JuliaLang/julia/issues/22511
-[#22829]: https://github.com/JuliaLang/julia/issues/22829
-[#24167]: https://github.com/JuliaLang/julia/issues/24167
 [#24390]: https://github.com/JuliaLang/julia/issues/24390
-[#25057]: https://github.com/JuliaLang/julia/issues/25057

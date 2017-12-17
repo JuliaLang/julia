@@ -170,6 +170,9 @@ This section lists changes that do not have deprecation warnings.
 
   * `finalizer(function, object)` now returns `object` rather than `nothing` ([#24679]).
 
+  * The constructor of `SubString` now checks if the requsted view range
+    is defined by valid indices in the parent `AbstractString` ([#22511]).
+
   * Macro calls with `for` expressions are now parsed as generators inside
     function argument lists ([#18650]). Examples:
 
@@ -335,6 +338,11 @@ Library improvements
 
   * `Irrational` is now a subtype of `AbstractIrrational` ([#24245]).
 
+  * Introduced the `empty` function, the functional pair to `empty!` which returns a new,
+    empty container ([#24390]).
+
+  * Jump to first/last history entries in the REPL via "Alt-<" and "Alt->" ([#22829]).
+
   * The function `chop` now accepts two arguments `head` and `tail` allowing to specify
     number of characters to remove from the head and tail of the string ([#24126]).
 
@@ -483,6 +491,11 @@ Deprecated or removed
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.
     Instead, reshape the array or add trailing indices so the dimensionality and number of indices
     match ([#14770], [#23628]).
+
+  * `indices(a)` and `indices(a,d)` have been deprecated in favor of `axes(a)` and
+    `axes(a, d)` ([#25057]).
+
+  * `EnvHash` has been renamed to `EnvDict` ([#24167]).
 
   * Uninitialized `Array` constructors of the form
     `Array[{T,N}](shape...)` have been deprecated in favor of equivalents
@@ -909,6 +922,7 @@ Command-line option changes
 [#22350]: https://github.com/JuliaLang/julia/issues/22350
 [#22390]: https://github.com/JuliaLang/julia/issues/22390
 [#22496]: https://github.com/JuliaLang/julia/issues/22496
+[#22511]: https://github.com/JuliaLang/julia/issues/22511
 [#22523]: https://github.com/JuliaLang/julia/issues/22523
 [#22532]: https://github.com/JuliaLang/julia/issues/22532
 [#22572]: https://github.com/JuliaLang/julia/issues/22572
@@ -933,6 +947,7 @@ Command-line option changes
 [#22801]: https://github.com/JuliaLang/julia/issues/22801
 [#22814]: https://github.com/JuliaLang/julia/issues/22814
 [#22825]: https://github.com/JuliaLang/julia/issues/22825
+[#22829]: https://github.com/JuliaLang/julia/issues/22829
 [#22847]: https://github.com/JuliaLang/julia/issues/22847
 [#22868]: https://github.com/JuliaLang/julia/issues/22868
 [#22880]: https://github.com/JuliaLang/julia/issues/22880
@@ -989,6 +1004,7 @@ Command-line option changes
 [#24047]: https://github.com/JuliaLang/julia/issues/24047
 [#24126]: https://github.com/JuliaLang/julia/issues/24126
 [#24153]: https://github.com/JuliaLang/julia/issues/24153
+[#24167]: https://github.com/JuliaLang/julia/issues/24167
 [#24187]: https://github.com/JuliaLang/julia/issues/24187
 [#24221]: https://github.com/JuliaLang/julia/issues/24221
 [#24240]: https://github.com/JuliaLang/julia/issues/24240
@@ -1000,6 +1016,7 @@ Command-line option changes
 [#24320]: https://github.com/JuliaLang/julia/issues/24320
 [#24356]: https://github.com/JuliaLang/julia/issues/24356
 [#24362]: https://github.com/JuliaLang/julia/issues/24362
+[#24390]: https://github.com/JuliaLang/julia/issues/24390
 [#24396]: https://github.com/JuliaLang/julia/issues/24396
 [#24413]: https://github.com/JuliaLang/julia/issues/24413
 [#24414]: https://github.com/JuliaLang/julia/issues/24414
@@ -1033,4 +1050,5 @@ Command-line option changes
 [#25037]: https://github.com/JuliaLang/julia/issues/25037
 [#25046]: https://github.com/JuliaLang/julia/issues/25046
 [#25056]: https://github.com/JuliaLang/julia/issues/25056
+[#25057]: https://github.com/JuliaLang/julia/issues/25057
 [#25088]: https://github.com/JuliaLang/julia/issues/25088
