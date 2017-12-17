@@ -615,7 +615,9 @@ will make sure that the stream is properly closed, regardless of whether your fu
 normally or threw an exception. (The `try/finally` construct will be described in [Control Flow](@ref).)
 
 With the `do` block syntax, it helps to check the documentation or implementation to know how
-the arguments of the user function are initialized.
+the arguments of the user function are initialized.  Note also that a `do ... end` block creates a
+[Hard Local Scope](@ref) (as with all nested functions), so variables defined outside the block
+cannot be modified inside the block unless they are declared [`global`](@ref).
 
 ## [Dot Syntax for Vectorizing Functions](@id man-vectorized)
 
