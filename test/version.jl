@@ -247,7 +247,7 @@ io = IOBuffer()
 
 # VersionSet tests
 
-import Base.Pkg.Types: VersionInterval, VersionSet
+import Pkg3.Types: VersionInterval, VersionSet
 
 function chkint(a::VersionSet)
     ints = a.intervals

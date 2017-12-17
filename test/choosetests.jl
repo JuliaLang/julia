@@ -40,7 +40,7 @@ function choosetests(choices = [])
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "path", "ccall", "parse", "loading", "bigint",
         "bigfloat", "sorting", "statistics", "spawn", "backtrace",
-        "file", "read", "version", "resolve", "namedtuple",
+        "file", "read", "version", "namedtuple",
         "mpfr", "broadcast", "complex", "socket",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",

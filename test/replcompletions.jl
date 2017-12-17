@@ -2,6 +2,9 @@
 
 using Base.REPLCompletions
 
+import Pkg3
+const Pkg = Pkg3
+
 let ex = quote
     module CompletionFoo
         mutable struct Test_y
@@ -202,7 +205,7 @@ let
 end
 
 # inexistent completion inside a string
-let s = "Pkg.add(\"lol"
+let s = "Base.print(\"lol"
     c, r, res = test_complete(s)
     @test res == false
 end
@@ -603,11 +606,11 @@ let s, c, r
         @test s[r] == ""
     end
 
-    s = "cd \$(Pk"
+    s = "cd \$(It"
     c,r = test_scomplete(s)
-    @test "Pkg" in c
+    @test "Iterators" in c
     @test r == 6:7
-    @test s[r] == "Pk"
+    @test s[r] == "It"
 
     # Pressing tab after having entered "/tmp " should not
     # attempt to complete "/tmp" but rather work on the current

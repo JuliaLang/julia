@@ -881,7 +881,7 @@ let x = Binding(Base, Symbol("@time"))
     @test defined(x) == true
     @test @var(@time) == x
     @test @var(Base.@time) == x
-    @test @var(Base.Pkg.@time) == x
+    @test @var(Base.Iterators.@time) == x
 end
 
 let x = Binding(Base.LinAlg, :norm)
@@ -889,7 +889,7 @@ let x = Binding(Base.LinAlg, :norm)
     @test @var(norm) == x
     @test @var(Base.norm) == x
     @test @var(Base.LinAlg.norm) == x
-    @test @var(Base.Pkg.Dir.norm) == x
+    @test @var(Base.LinAlg.BLAS.norm) == x
 end
 
 let x = Binding(Core, :Int)
@@ -897,14 +897,14 @@ let x = Binding(Core, :Int)
     @test @var(Int) == x
     @test @var(Base.Int) == x
     @test @var(Core.Int) == x
-    @test @var(Base.Pkg.Resolve.Int) == x
+    @test @var(Base.LinAlg.BLAS.Int) == x
 end
 
-let x = Binding(Base, :Pkg)
+let x = Binding(Base, :Iterators)
     @test defined(x) == true
-    @test @var(Pkg) == x
-    @test @var(Base.Pkg) == x
-    @test @var(Main.Pkg) == x
+    @test @var(Iterators) == x
+    @test @var(Base.Iterators) == x
+    @test @var(Main.Iterators) == x
 end
 
 let x = Binding(Base, :VERSION)
