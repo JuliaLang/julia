@@ -416,8 +416,8 @@ function summarize(io::IO, T::DataType, binding)
 end
 
 function summarize(io::IO, m::Module, binding)
-    readme = Pkg.dir(string(m), "README.md")
-    if isfile(readme)
+    pkgpath = isassigned(__Pkg.dir) ? invokelatest(Pkg.dir[], string(m)) : nothing
+    if pkgpath != nothing && isfile(joinpath(pkgpath, readme))
         println(io, "Displaying the `README.md` for the module instead.\n")
         println(io, "---\n")
         println(io, read(readme, String))

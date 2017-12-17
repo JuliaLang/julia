@@ -1,5 +1,8 @@
 # Install dependencies needed to build the documentation.
 ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
+import Pkg3
+# TODO: Decide if we want to rename Pkg3 to Pkg
+const Pkg = Pkg3
 Pkg.init()
 cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); remove_destination = true)
 Pkg.update()
@@ -34,6 +37,7 @@ if Sys.iswindows()
     cp_q("../stdlib/Unicode/docs/src/index.md",               "src/stdlib/unicode.md")
     cp_q("../stdlib/Distributed/docs/src/index.md",           "src/stdlib/distributed.md")
     cp_q("../stdlib/Printf/docs/src/index.md",                "src/stdlib/printf.md")
+    cp_q("../stdlib/Pkg3/docs/src/index.md",                  "src/stdlib/pkg.md")
 else
     symlink_q("../../../stdlib/DelimitedFiles/docs/src/index.md",        "src/stdlib/delimitedfiles.md")
     symlink_q("../../../stdlib/Test/docs/src/index.md",                  "src/stdlib/test.md")
@@ -48,6 +52,7 @@ else
     symlink_q("../../../stdlib/Unicode/docs/src/index.md",               "src/stdlib/unicode.md")
     symlink_q("../../../stdlib/Distributed/docs/src/index.md",           "src/stdlib/distributed.md")
     symlink_q("../../../stdlib/Printf/docs/src/index.md",                "src/stdlib/printf.md")
+    symlink_q("../../../stdlib/Pkg/docs/src/index.md",                   "src/stdlib/pkg.md")
 end
 
 const PAGES = [
@@ -163,12 +168,12 @@ const PAGES = [
 ]
 
 using DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, CRC32c,
-      Dates, IterativeEigensolvers, Unicode, Distributed, Printf
+      Dates, IterativeEigensolvers, Unicode, Distributed, Printf, Pkg3
 
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
     modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile,
-                 Base64, FileWatching, Dates, IterativeEigensolvers, Unicode, Distributed, Printf],
+                 Base64, FileWatching, Dates, IterativeEigensolvers, Unicode, Distributed, Printf, Pkg3],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,

@@ -177,7 +177,7 @@ i10165(::Type{AbstractArray{T,n}}) where {T,n} = 1
 
 # fullname
 @test fullname(Base) == (:Base,)
-@test fullname(Base.Pkg) == (:Base, :Pkg)
+@test fullname(Base.Iterators) == (:Base, :Iterators)
 
 const a_const = 1
 not_const = 1
