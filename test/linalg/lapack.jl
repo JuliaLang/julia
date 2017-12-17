@@ -364,19 +364,19 @@ end
 
     # Rook-pivoting variants
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        A = rand(elty,10,10)
+        A = rand(elty, 10, 10)
         A = A + A.' #symmetric!
         B = copy(A)
-        B,ipiv = LAPACK.sytrf_rook!('U',B)
-        @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U',B,ipiv)) rtol=eps(cond(A))
-        @test_throws DimensionMismatch LAPACK.sytrs_rook!('U',B,ipiv,rand(elty,11,5))
-        @test LAPACK.sytrf_rook!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0))
-        A = rand(elty,10,10)
+        B,ipiv = LAPACK.sytrf_rook!('U', B)
+        @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U', B, ipiv)) rtol=eps(cond(A))
+        @test_throws DimensionMismatch LAPACK.sytrs_rook!('U', B, ipiv, rand(elty, 11, 5))
+        @test LAPACK.sytrf_rook!('U',zeros(elty, 0, 0)) == (zeros(elty, 0, 0),zeros(BlasInt, 0))
+        A = rand(elty, 10, 10)
         A = A + A.' #symmetric!
-        b = rand(elty,10)
+        b = rand(elty, 10)
         c = A \ b
         cnd = cond(A)
-        b,A = LAPACK.sysv_rook!('U',A,b)
+        b,A = LAPACK.sysv_rook!('U', A, b)
         @test b ≈ c rtol=eps(cnd)
         @test_throws DimensionMismatch LAPACK.sysv_rook!('U',A,rand(elty,11))
 
