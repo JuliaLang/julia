@@ -27,7 +27,7 @@ rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
-    asym = a'+a                  # symmetric indefinite
+    asym = adjoint(a)+a                  # symmetric indefinite
     apd  = a'*a                 # symmetric positive-definite
     ε = εa = eps(abs(float(one(eltya))))
 
@@ -54,7 +54,7 @@ rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
                     @test size(lqa[:Q],3) == 1
                     @test Base.LinAlg.getq(lqa) == lqa[:Q]
                     @test_throws KeyError lqa[:Z]
-                    @test Array(lqa') ≈ a'
+                    @test Array(adjoint(lqa)) ≈ adjoint(a)
                     @test lqa * lqa' ≈ a * a'
                     @test lqa' * lqa ≈ a' * a
                     @test q*squareQ(q)' ≈ Matrix(I, n, n)

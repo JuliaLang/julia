@@ -182,7 +182,7 @@ srand(1)
         r  = VV * Transpose(Array(D))
         @test Array(mul!(VV, Transpose(DD))) ≈ r
         DD = copy(D)
-        r  = VV * (Array(D)')
+        r  = VV * Array(D)'
         @test Array(mul!(VV, Adjoint(DD))) ≈ r
     end
     @testset "triu/tril" begin

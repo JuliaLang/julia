@@ -48,7 +48,7 @@ using Main.TestHelpers.OAs
     a[1,2] = 2
     a[2,1] = 3
     a[2,2] = 4
-    b = a'
+    b = adjoint(a)
     @test a[1,1] == 1. && a[1,2] == 2. && a[2,1] == 3. && a[2,2] == 4.
     @test b[1,1] == 1. && b[2,1] == 2. && b[1,2] == 3. && b[2,2] == 4.
     a[[1 2 3 4]] = 0
@@ -624,7 +624,7 @@ end
 @testset "large matrices transpose" begin
     for i = 1 : 3
         a = rand(200, 300)
-        @test isequal(a', permutedims(a, [2, 1]))
+        @test isequal(adjoint(a), permutedims(a, [2, 1]))
     end
 end
 
@@ -2050,7 +2050,7 @@ end # module AutoRetType
     @test isa([[1,2,3]'; [1,2,3]'], Matrix{Int})
     @test isa([[1,2,3]' [1,2,3]'], Transpose{Int, Vector{Int}})
     @test isa([Any[1.0, 2]'; Any[2.0, 2]'], Matrix{Any})
-    @test isa([Any[1.0, 2]' Any[2.0, 2']'], Adjoint{Any, Vector{Any}})
+    @test isa([Any[1.0, 2]' Any[2.0, 2]'], Adjoint{Any, Vector{Any}})
     # Test that concatenations of heterogeneous Matrix-Vector pairs yield dense matrices
     @test isa(hcat(densemat, densevec), Array)
     @test isa(hcat(densevec, densemat), Array)
