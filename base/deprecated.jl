@@ -2025,7 +2025,7 @@ function full(A::Symmetric)
     depwarn(string(
         "`full(A::Symmetric)` (and `full` in general) has been deprecated. ",
         "To replace `full(A::Symmetric)`, as appropriate consider `Matrix(A)`, ",
-        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, `copy!(similar(parent(A)), A)`, ",
+        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, `copyto!(similar(parent(A)), A)`, ",
         "or `Base.LinAlg.copytri!(copy(parent(A)), A.uplo)`."), :full)
     return Matrix(A)
 end
@@ -2033,7 +2033,7 @@ function full(A::Hermitian)
     depwarn(string(
         "`full(A::Hermitian)` (and `full` in general) has been deprecated. ",
         "To replace `full(A::Hermitian)`, as appropriate consider `Matrix(A)`, ",
-        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, `copy!(similar(parent(A)), A)`, ",
+        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, `copyto!(similar(parent(A)), A)`, ",
         "or `Base.LinAlg.copytri!(copy(parent(A)), A.uplo, true)`."), :full)
     return Matrix(A)
 end
@@ -2045,7 +2045,7 @@ function full(A::Union{UpperTriangular,LowerTriangular})
     depwarn(string(
         "`full(A::$(tritypestr))` (and `full` in general) has been deprecated. ",
         "To replace `full(A::$(tritypestr))`, as appropriate consider `Matrix(A)`, ",
-        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, `copy!(similar(parent(A)), A)`, ",
+        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, `copyto!(similar(parent(A)), A)`, ",
         "or `$(tri!str)(copy(parent(A)))`."), :full)
     return Matrix(A)
 end
@@ -2056,7 +2056,7 @@ function full(A::Union{LinAlg.UnitUpperTriangular,LinAlg.UnitLowerTriangular})
     depwarn(string(
         "`full(A::$(tritypestr))` (and `full` in general) has been deprecated. ",
         "To replace `full(A::$(tritypestr))`, as appropriate consider `Matrix(A)`, ",
-        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, or `copy!(similar(parent(A)), A)`."), :full)
+        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, or `copyto!(similar(parent(A)), A)`."), :full)
     return Matrix(A)
 end
 
@@ -3321,6 +3321,9 @@ info(err::Exception; prefix="ERROR: ", kw...) =
 # #24844
 @deprecate copy!(dest::AbstractSet, src) union!(dest, src)
 @deprecate copy!(dest::AbstractDict, src) foldl(push!, dest, src)
+# 24808
+@deprecate copy!(dest::Union{AbstractArray,IndexStyle}, args...) copyto!(dest, args...)
+@deprecate unsafe_copy!(dest, args...) unsafe_copyto!(dest, args...)
 
 # issue #24019
 @deprecate similar(a::AbstractDict) empty(a)

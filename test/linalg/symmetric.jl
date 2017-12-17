@@ -394,11 +394,11 @@ end
     for T in (Symmetric, Hermitian)
         Y = T(copy(X))
         _Y = similar(Y)
-        copy!(_Y, Y)
+        copyto!(_Y, Y)
         @test _Y == Y
 
         W = T(copy(X), :L)
-        copy!(W, Y)
+        copyto!(W, Y)
         @test W.data == Y.data
         @test W.uplo != Y.uplo
 

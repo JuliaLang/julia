@@ -240,7 +240,7 @@ broadcast_indices
 broadcast(f, x::Number...) = f(x...)
 @inline broadcast(f, t::NTuple{N,Any}, ts::Vararg{NTuple{N,Any}}) where {N} = map(f, t, ts...)
 @inline broadcast!(::typeof(identity), x::AbstractArray{T,N}, y::AbstractArray{S,N}) where {T,S,N} =
-    Base.axes(x) == Base.axes(y) ? copy!(x, y) : _broadcast!(identity, x, y)
+    Base.axes(x) == Base.axes(y) ? copyto!(x, y) : _broadcast!(identity, x, y)
 
 # special cases for "X .= ..." (broadcast!) assignments
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)

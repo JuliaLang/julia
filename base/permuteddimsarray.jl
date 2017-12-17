@@ -146,11 +146,11 @@ function permutedims!(dest, src::AbstractArray, perm)
     return dest
 end
 
-function Base.copy!(dest::PermutedDimsArray{T,N}, src::AbstractArray{T,N}) where {T,N}
+function Base.copyto!(dest::PermutedDimsArray{T,N}, src::AbstractArray{T,N}) where {T,N}
     checkbounds(dest, axes(src)...)
     _copy!(dest, src)
 end
-Base.copy!(dest::PermutedDimsArray, src::AbstractArray) = _copy!(dest, src)
+Base.copyto!(dest::PermutedDimsArray, src::AbstractArray) = _copy!(dest, src)
 
 function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
     # If dest/src are "close to dense," then it pays to be cache-friendly.
@@ -160,7 +160,7 @@ function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
         d += 1
     end
     if d == ndims(src)
-        copy!(parent(P), src) # it's not permuted
+        copyto!(parent(P), src) # it's not permuted
     else
         R1 = CartesianIndices(axes(src)[1:d])
         d1 = findfirst(equalto(d+1), perm)  # first permuted dim of dest

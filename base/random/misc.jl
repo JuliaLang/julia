@@ -87,7 +87,7 @@ end
 function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
     0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
     n = length(A)
-    p == 1 && return copy!(resize!(S, n), A)
+    p == 1 && return copyto!(resize!(S, n), A)
     empty!(S)
     p == 0 && return S
     nexpected = p * length(A)

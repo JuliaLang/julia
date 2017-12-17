@@ -73,10 +73,10 @@ end
 
 d = SharedArrays.shmem_rand(dims)
 s = SharedArrays.shmem_rand(dims)
-copy!(s, d)
+copyto!(s, d)
 @test s == d
 s = SharedArrays.shmem_rand(dims)
-copy!(s, sdata(d))
+copyto!(s, sdata(d))
 @test s == d
 a = rand(dims)
 @test sdata(a) == a
@@ -193,7 +193,7 @@ pids_d = procs(d)
 remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.0, 1:10)
 @test ds != d
 @test s != d
-copy!(d, s)
+copyto!(d, s)
 @everywhere setid!(A) = A[localindices(A)] = myid()
 @everywhere procs(ds) setid!($ds)
 @test d == s

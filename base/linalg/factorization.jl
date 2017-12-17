@@ -64,23 +64,23 @@ end
 function \(F::Factorization, B::AbstractVecOrMat)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
     BB = similar(B, TFB, size(B))
-    copy!(BB, B)
+    copyto!(BB, B)
     ldiv!(F, BB)
 end
 function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
     F = adjF.parent
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
     BB = similar(B, TFB, size(B))
-    copy!(BB, B)
+    copyto!(BB, B)
     ldiv!(Adjoint(F), BB)
 end
 
 # support the same 3-arg idiom as in our other in-place A_*_B functions:
-ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) = ldiv!(A, copy!(Y, B))
+ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) = ldiv!(A, copyto!(Y, B))
 ldiv!(Y::AbstractVecOrMat, adjA::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat) =
-    (A = adjA.parent; ldiv!(Adjoint(A), copy!(Y, B)))
+    (A = adjA.parent; ldiv!(Adjoint(A), copyto!(Y, B)))
 ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) =
-    (A = transA.parent; ldiv!(Transpose(A), copy!(Y, B)))
+    (A = transA.parent; ldiv!(Transpose(A), copyto!(Y, B)))
 
 # fallback methods for transposed solves
 \(transF::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = (F = transF.parent; \(Adjoint(F), B))

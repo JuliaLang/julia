@@ -860,9 +860,9 @@ function Sparse(m::Integer, n::Integer,
     o = allocate_sparse(m, n, colptr0[n + 1], iss, true, stype, Tv)
     s = unsafe_load(o.p)
 
-    unsafe_copy!(s.p, pointer(colptr0), n + 1)
-    unsafe_copy!(s.i, pointer(rowval0), colptr0[n + 1])
-    unsafe_copy!(s.x, pointer(nzval) , colptr0[n + 1])
+    unsafe_copyto!(s.p, pointer(colptr0), n + 1)
+    unsafe_copyto!(s.i, pointer(rowval0), colptr0[n + 1])
+    unsafe_copyto!(s.x, pointer(nzval) , colptr0[n + 1])
 
     @isok check_sparse(o)
 
@@ -905,7 +905,7 @@ function Sparse(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where T
     for i = 1:nnz(A)
         unsafe_store!(s.i, A.rowval[i] - 1, i)
     end
-    unsafe_copy!(s.x, pointer(A.nzval), nnz(A))
+    unsafe_copyto!(s.x, pointer(A.nzval), nnz(A))
 
     @isok check_sparse(o)
 
@@ -1028,21 +1028,21 @@ end
 function convert(::Type{Matrix{T}}, D::Dense{T}) where T
     s = unsafe_load(D.p)
     a = Matrix{T}(uninitialized, s.nrow, s.ncol)
-    copy!(a, D)
+    copyto!(a, D)
 end
 
-Base.copy!(dest::Base.PermutedDimsArrays.PermutedDimsArray, src::Dense) = _copy!(dest, src) # ambig
-Base.copy!(dest::Dense{T}, D::Dense{T}) where {T<:VTypes} = _copy!(dest, D)
-Base.copy!(dest::AbstractArray{T}, D::Dense{T}) where {T<:VTypes} = _copy!(dest, D)
-Base.copy!(dest::AbstractArray{T,2}, D::Dense{T}) where {T<:VTypes} = _copy!(dest, D)
-Base.copy!(dest::AbstractArray, D::Dense) = _copy!(dest, D)
+Base.copyto!(dest::Base.PermutedDimsArrays.PermutedDimsArray, src::Dense) = _copy!(dest, src) # ambig
+Base.copyto!(dest::Dense{T}, D::Dense{T}) where {T<:VTypes} = _copy!(dest, D)
+Base.copyto!(dest::AbstractArray{T}, D::Dense{T}) where {T<:VTypes} = _copy!(dest, D)
+Base.copyto!(dest::AbstractArray{T,2}, D::Dense{T}) where {T<:VTypes} = _copy!(dest, D)
+Base.copyto!(dest::AbstractArray, D::Dense) = _copy!(dest, D)
 
 function _copy!(dest::AbstractArray, D::Dense)
     s = unsafe_load(D.p)
     n = s.nrow*s.ncol
     n <= length(dest) || throw(BoundsError(dest, n))
     if s.d == s.nrow && isa(dest, Array)
-        unsafe_copy!(pointer(dest), s.x, s.d*s.ncol)
+        unsafe_copyto!(pointer(dest), s.x, s.d*s.ncol)
     else
         k = 0
         for j = 1:s.ncol
@@ -1058,7 +1058,7 @@ function convert(::Type{Vector{T}}, D::Dense{T}) where T
     if size(D, 2) > 1
         throw(DimensionMismatch("input must be a vector but had $(size(D, 2)) columns"))
     end
-    copy!(Vector{T}(uninitialized, size(D, 1)), D)
+    copyto!(Vector{T}(uninitialized, size(D, 1)), D)
 end
 convert(::Type{Vector}, D::Dense{T}) where {T} = convert(Vector{T}, D)
 

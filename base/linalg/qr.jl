@@ -296,12 +296,12 @@ true
 """
 function qrfact(A::AbstractMatrix{T}, arg) where T
     AA = similar(A, _qreltype(T), size(A))
-    copy!(AA, A)
+    copyto!(AA, A)
     return qrfact!(AA, arg)
 end
 function qrfact(A::AbstractMatrix{T}) where T
     AA = similar(A, _qreltype(T), size(A))
-    copy!(AA, A)
+    copyto!(AA, A)
     return qrfact!(AA)
 end
 qrfact(x::Number) = qrfact(fill(x,1,1))
@@ -712,7 +712,7 @@ function *(A::StridedMatrix, adjB::Adjoint{<:Any,<:AbstractQ})
     BB = convert(AbstractMatrix{TAB}, B)
     if size(A,2) == size(B.factors, 1)
         AA = similar(A, TAB, size(A))
-        copy!(AA, A)
+        copyto!(AA, A)
         return mul!(AA, Adjoint(BB))
     elseif size(A,2) == size(B.factors,2)
         return mul!([A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))], Adjoint(BB))

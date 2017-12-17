@@ -99,7 +99,7 @@ function vect(X...)
     T = promote_typeof(X...)
     #T[ X[i] for i=1:length(X) ]
     # TODO: this is currently much faster. should figure out why. not clear.
-    return copy!(Vector{T}(uninitialized, length(X)), X)
+    return copyto!(Vector{T}(uninitialized, length(X)), X)
 end
 
 size(a::Array, d) = arraysize(a, d)
@@ -143,7 +143,7 @@ end
 ## copy ##
 
 """
-    unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
+    unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, N)
 
 Copy `N` elements from a source pointer to a destination, with no checking. The size of an
 element is determined by the type of the pointers.
@@ -152,7 +152,7 @@ The `unsafe` prefix on this function indicates that no validation is performed o
 pointers `dest` and `src` to ensure that they are valid. Incorrect usage may corrupt or
 segfault your program, in the same manner as C.
 """
-function unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, n) where T
+function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
     ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
@@ -161,7 +161,7 @@ function unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, n) where T
 end
 
 """
-    unsafe_copy!(dest::Array, do, src::Array, so, N)
+    unsafe_copyto!(dest::Array, do, src::Array, so, N)
 
 Copy `N` elements from a source array to a destination, starting at offset `so` in the
 source and `do` in the destination (1-indexed).
@@ -170,11 +170,11 @@ The `unsafe` prefix on this function indicates that no validation is performed t
 that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in
 the same manner as C.
 """
-function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
+function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     t1 = @_gc_preserve_begin dest
     t2 = @_gc_preserve_begin src
     if isbits(T)
-        unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
+        unsafe_copyto!(pointer(dest, doffs), pointer(src, soffs), n)
     elseif isbitsunion(T)
         ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
               pointer(dest, doffs), pointer(src, soffs), n * Base.bitsunionsize(T))
@@ -193,21 +193,21 @@ function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
 end
 
 """
-    copy!(dest, do, src, so, N)
+    copyto!(dest, do, src, so, N)
 
 Copy `N` elements from collection `src` starting at offset `so`, to array `dest` starting at
 offset `do`. Return `dest`.
 """
-function copy!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
+function copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
     n == 0 && return dest
     n > 0 || throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
     if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
         throw(BoundsError())
     end
-    unsafe_copy!(dest, doffs, src, soffs, n)
+    unsafe_copyto!(dest, doffs, src, soffs, n)
 end
 
-copy!(dest::Array{T}, src::Array{T}) where {T} = copy!(dest, 1, src, 1, length(src))
+copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
 
 """
     copy(x)
@@ -403,7 +403,7 @@ convert(::Type{Array{T}}, x::Array{T,n}) where {T,n} = x
 convert(::Type{Array{T,n}}, x::Array{T,n}) where {T,n} = x
 
 convert(::Type{Array{T}}, x::AbstractArray{S,n}) where {T,n,S} = convert(Array{T,n}, x)
-convert(::Type{Array{T,n}}, x::AbstractArray{S,n}) where {T,n,S} = copy!(Array{T,n}(uninitialized, size(x)), x)
+convert(::Type{Array{T,n}}, x::AbstractArray{S,n}) where {T,n,S} = copyto!(Array{T,n}(uninitialized, size(x)), x)
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -432,8 +432,8 @@ julia> collect(Float64, 1:2:5)
 """
 collect(::Type{T}, itr) where {T} = _collect(T, itr, iteratorsize(itr))
 
-_collect(::Type{T}, itr, isz::HasLength) where {T} = copy!(Vector{T}(uninitialized, Int(length(itr)::Integer)), itr)
-_collect(::Type{T}, itr, isz::HasShape) where {T}  = copy!(similar(Array{T}, axes(itr)), itr)
+_collect(::Type{T}, itr, isz::HasLength) where {T} = copyto!(Vector{T}(uninitialized, Int(length(itr)::Integer)), itr)
+_collect(::Type{T}, itr, isz::HasShape) where {T}  = copyto!(similar(Array{T}, axes(itr)), itr)
 function _collect(::Type{T}, itr, isz::SizeUnknown) where T
     a = Vector{T}()
     for x in itr
@@ -475,7 +475,7 @@ collect(A::AbstractArray) = _collect_indices(axes(A), A)
 collect_similar(cont, itr) = _collect(cont, itr, iteratoreltype(itr), iteratorsize(itr))
 
 _collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
-    copy!(_similar_for(cont, eltype(itr), itr, isz), itr)
+    copyto!(_similar_for(cont, eltype(itr), itr, isz), itr)
 
 function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     a = _similar_for(cont, eltype(itr), itr, isz)
@@ -485,12 +485,12 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copy!(Array{eltype(A),0}(uninitialized), A)
+_collect_indices(::Tuple{}, A) = copyto!(Array{eltype(A),0}(uninitialized), A)
 _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
-    copy!(Array{eltype(A)}(uninitialized, length.(indsA)), A)
+    copyto!(Array{eltype(A)}(uninitialized, length.(indsA)), A)
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(uninitialized, length.(indsA))
-    copy!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
+    copyto!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
 end
 
 # define this as a macro so that the call to Inference
@@ -563,7 +563,7 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
         else
             R = typejoin(T, S)
             new = similar(dest, R)
-            copy!(new,1, dest,1, i-1)
+            copyto!(new,1, dest,1, i-1)
             @inbounds new[i] = el
             return collect_to!(new, itr, i+1, st)
         end
@@ -589,7 +589,7 @@ function grow_to!(dest, itr, st)
                 # TODO: merge back these two branches when copy! is re-enabled for sets
                 union!(new, dest)
             else
-                copy!(new, dest)
+                copyto!(new, dest)
             end
             push!(new, el)
             return grow_to!(new, itr, st)
@@ -628,14 +628,14 @@ function getindex end
 @eval getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
 @eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
-# Faster contiguous indexing using copy! for UnitRange and Colon
+# Faster contiguous indexing using copyto! for UnitRange and Colon
 function getindex(A::Array, I::UnitRange{Int})
     @_inline_meta
     @boundscheck checkbounds(A, I)
     lI = length(I)
     X = similar(A, lI)
     if lI > 0
-        unsafe_copy!(X, 1, A, first(I), lI)
+        unsafe_copyto!(X, 1, A, first(I), lI)
     end
     return X
 end
@@ -643,7 +643,7 @@ function getindex(A::Array, c::Colon)
     lI = length(A)
     X = similar(A, lI)
     if lI > 0
-        unsafe_copy!(X, 1, A, 1, lI)
+        unsafe_copyto!(X, 1, A, 1, lI)
     end
     return X
 end
@@ -694,14 +694,14 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     return A
 end
 
-# Faster contiguous setindex! with copy!
+# Faster contiguous setindex! with copyto!
 function setindex!(A::Array{T}, X::Array{T}, I::UnitRange{Int}) where T
     @_inline_meta
     @boundscheck checkbounds(A, I)
     lI = length(I)
     @boundscheck setindex_shape_check(X, lI)
     if lI > 0
-        unsafe_copy!(A, first(I), X, 1, lI)
+        unsafe_copyto!(A, first(I), X, 1, lI)
     end
     return A
 end
@@ -710,7 +710,7 @@ function setindex!(A::Array{T}, X::Array{T}, c::Colon) where T
     lI = length(A)
     @boundscheck setindex_shape_check(X, lI)
     if lI > 0
-        unsafe_copy!(A, 1, X, 1, lI)
+        unsafe_copyto!(A, 1, X, 1, lI)
     end
     return A
 end
@@ -806,7 +806,7 @@ function append!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
     _growend!(a, n)
-    copy!(a, length(a)-n+1, items, first(itemindices), n)
+    copyto!(a, length(a)-n+1, items, first(itemindices), n)
     return a
 end
 
@@ -850,9 +850,9 @@ function prepend!(a::Array{<:Any,1}, items::AbstractVector)
     n = length(itemindices)
     _growbeg!(a, n)
     if a === items
-        copy!(a, 1, items, n+1, n)
+        copyto!(a, 1, items, n+1, n)
     else
-        copy!(a, 1, items, first(itemindices), n)
+        copyto!(a, 1, items, first(itemindices), n)
     end
     return a
 end
@@ -1720,7 +1720,7 @@ function find(testf::Function, A)
         end
     end
     I = Vector{Int}(uninitialized, length(tmpI))
-    copy!(I, tmpI)
+    copyto!(I, tmpI)
     return I
 end
 _index_remapper(A::AbstractArray) = linearindices(A)

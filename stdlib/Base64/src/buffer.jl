@@ -27,7 +27,7 @@ end
 
 function read_to_buffer(io::IO, buffer::Buffer)
     offset = buffer.ptr - pointer(buffer.data)
-    copy!(buffer.data, 1, buffer.data, offset, buffer.size)
+    copyto!(buffer.data, 1, buffer.data, offset, buffer.size)
     buffer.ptr = pointer(buffer.data) + buffer.size
     if !eof(io)
         n = min(nb_available(io), capacity(buffer) - buffer.size)

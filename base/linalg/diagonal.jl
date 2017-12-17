@@ -61,7 +61,7 @@ convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
 similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
 similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
-copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)
+copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (length(D.diag),length(D.diag))
 
@@ -368,7 +368,7 @@ function diag(D::Diagonal, k::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of k
     if k == 0
-        return copy!(similar(D.diag, length(D.diag)), D.diag)
+        return copyto!(similar(D.diag, length(D.diag)), D.diag)
     elseif -size(D,1) <= k <= size(D,1)
         return fill!(similar(D.diag, size(D,1)-abs(k)), 0)
     else

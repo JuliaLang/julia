@@ -145,7 +145,7 @@ function Base.LinAlg.mul!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{
         As = view(Phi.kraus,:,s,:)
         rho1 += As*rho*As'
     end
-    return copy!(rho2,rho1)
+    return copyto!(rho2,rho1)
 end
 Base.LinAlg.A_mul_B!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:Base.LinAlg.BlasFloat} = Base.LinAlg.mul!(rho2, Phi, rho)
 # after the A_mul_B! deprecation, remove this A_mul_B! def

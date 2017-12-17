@@ -150,11 +150,11 @@ srand(100)
         @testset "copy" begin
             x1 = convert(Vector{elty}, randn(n))
             x2 = convert(Vector{elty}, randn(n))
-            BLAS.copy!(x2, 1:n, x1, 1:n)
+            BLAS.copyto!(x2, 1:n, x1, 1:n)
             @test x2 == x1
-            @test_throws DimensionMismatch BLAS.copy!(x2, 1:n, x1, 1:(n - 1))
-            @test_throws ArgumentError BLAS.copy!(x1, 0:div(n, 2), x2, 1:(div(n, 2) + 1))
-            @test_throws ArgumentError BLAS.copy!(x1, 1:(div(n, 2) + 1), x2, 0:div(n, 2))
+            @test_throws DimensionMismatch BLAS.copyto!(x2, 1:n, x1, 1:(n - 1))
+            @test_throws ArgumentError BLAS.copyto!(x1, 0:div(n, 2), x2, 1:(div(n, 2) + 1))
+            @test_throws ArgumentError BLAS.copyto!(x1, 1:(div(n, 2) + 1), x2, 0:div(n, 2))
         end
         # trmv
         A = triu(rand(elty,n,n))

@@ -10,7 +10,7 @@ module SharedArrays
 using Mmap, Distributed
 
 import Base: length, size, ndims, IndexStyle, reshape, convert, deepcopy_internal, serialize, deserialize,
-             show, getindex, setindex!, fill!, rand!, similar, reduce, map!, copy!, unsafe_convert
+             show, getindex, setindex!, fill!, rand!, similar, reduce, map!, copyto!, unsafe_convert
 import Base.Random
 import Base.Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
 import Distributed: RRID, procs
@@ -346,21 +346,21 @@ unsafe_convert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = unsafe_convert(Ptr
 
 function convert(::Type{SharedArray}, A::Array)
     S = SharedArray{eltype(A),ndims(A)}(size(A))
-    copy!(S, A)
+    copyto!(S, A)
 end
 function convert(::Type{SharedArray{T}}, A::Array) where T
     S = SharedArray{T,ndims(A)}(size(A))
-    copy!(S, A)
+    copyto!(S, A)
 end
 function convert(::Type{SharedArray{TS,N}}, A::Array{TA,N}) where {TS,TA,N}
     S = SharedArray{TS,ndims(A)}(size(A))
-    copy!(S, A)
+    copyto!(S, A)
 end
 
 function deepcopy_internal(S::SharedArray, stackdict::ObjectIdDict)
     haskey(stackdict, S) && return stackdict[S]
     R = SharedArray{eltype(S),ndims(S)}(size(S); pids = S.pids)
-    copy!(sdata(R), sdata(S))
+    copyto!(sdata(R), sdata(S))
     stackdict[S] = R
     return R
 end
@@ -571,9 +571,9 @@ function map!(f, S::SharedArray, Q::SharedArray)
     return S
 end
 
-copy!(S::SharedArray, A::Array) = (copy!(S.s, A); S)
+copyto!(S::SharedArray, A::Array) = (copyto!(S.s, A); S)
 
-function copy!(S::SharedArray, R::SharedArray)
+function copyto!(S::SharedArray, R::SharedArray)
     length(S) == length(R) || throw(BoundsError())
     ps = intersect(procs(S), procs(R))
     isempty(ps) && throw(ArgumentError("source and destination arrays don't share any process"))

@@ -82,7 +82,7 @@ Base.abs(a::FieldValue) = FieldValue(abs(a.l0), abs(a.l1), abs(a.l2), abs(a.l3),
 
 Base.copy(a::FieldValue) = FieldValue(a.l0, copy(a.l1), copy(a.l2), a.l3, a.l4, a.l5)
 
-function Base.unsafe_copy!(dest::Field, doffs, src::Field, soffs, n)
+function Base.unsafe_copyto!(dest::Field, doffs, src::Field, soffs, n)
     for i = 1:n
         dest[doffs+i-1] = copy(src[soffs+i-1])
     end

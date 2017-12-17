@@ -1703,7 +1703,7 @@ end
 function copybuf!(dst::IOBuffer, src::IOBuffer)
     n = src.size
     ensureroom(dst, n)
-    copy!(dst.data, 1, src.data, 1, n)
+    copyto!(dst.data, 1, src.data, 1, n)
     dst.size = src.size
     dst.ptr = src.ptr
 end

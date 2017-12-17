@@ -116,8 +116,8 @@ for op in (:+, :-)
     end
     for matrixtype in (:SymTridiagonal,:Tridiagonal,:Bidiagonal,:Matrix)
         @eval begin
-            ($op)(A::AbstractTriangular, B::($matrixtype)) = ($op)(copy!(similar(parent(A)), A), B)
-            ($op)(A::($matrixtype), B::AbstractTriangular) = ($op)(A, copy!(similar(parent(B)), B))
+            ($op)(A::AbstractTriangular, B::($matrixtype)) = ($op)(copyto!(similar(parent(A)), A), B)
+            ($op)(A::($matrixtype), B::AbstractTriangular) = ($op)(A, copyto!(similar(parent(B)), B))
         end
     end
 end
@@ -125,7 +125,7 @@ end
 mul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
     (B = adjB.parent; mul!(full!(A), Adjoint(B)))
 *(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    (B = adjB.parent; *(copy!(similar(parent(A)), A), Adjoint(B)))
+    (B = adjB.parent; *(copyto!(similar(parent(A)), A), Adjoint(B)))
 
 # fill[stored]! methods
 fillstored!(A::Diagonal, x) = (fill!(A.diag, x); A)

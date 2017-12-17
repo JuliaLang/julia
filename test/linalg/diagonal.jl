@@ -411,8 +411,8 @@ end
         B = Diagonal(randn(T, 5, 5))
         DD = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
         BB = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
-        fullDD = copy!(Matrix{Matrix{T}}(uninitialized, 2, 2), DD)
-        fullBB = copy!(Matrix{Matrix{T}}(uninitialized, 2, 2), BB)
+        fullDD = copyto!(Matrix{Matrix{T}}(uninitialized, 2, 2), DD)
+        fullBB = copyto!(Matrix{Matrix{T}}(uninitialized, 2, 2), BB)
         for (transform1, transform2) in ((identity,  identity),
                 (identity,  Adjoint  ), (Adjoint,   identity ), (Adjoint,   Adjoint  ),
                 (identity,  Transpose), (Transpose, identity ), (Transpose, Transpose) )

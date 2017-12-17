@@ -32,7 +32,7 @@ import Base: \, /, *, ^, +, -, ==
 import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac_mul_B,
     Ac_ldiv_B, Ac_ldiv_Bc, At_mul_Bt, A_rdiv_Bt, At_mul_B
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
-    asin, asinh, atan, atanh, axes, big, broadcast, ceil, conj, convert, copy, copy!, cos,
+    asin, asinh, atan, atanh, axes, big, broadcast, ceil, conj, convert, copy, copyto!, cos,
     cosh, cot, coth, csc, csch, eltype, exp, findmax, findmin, fill!, floor, getindex, hcat,
     imag, inv, isapprox, isone, IndexStyle, kron, length, log, map, ndims, oneunit, parent,
     power_by_squaring, print_matrix, promote_rule, real, round, sec, sech, setindex!, show,
@@ -90,7 +90,7 @@ export
     cholfact!,
     cond,
     condskeel,
-    copy!,
+    copyto!,
     copy_transpose!,
     cross,
     adjoint,

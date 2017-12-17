@@ -351,17 +351,17 @@ dA = Array(sA)
     end
 end
 
-@testset "copy!" begin
+@testset "copyto!" begin
     A = sprand(5, 5, 0.2)
     B = sprand(5, 5, 0.2)
-    copy!(A, B)
+    copyto!(A, B)
     @test A == B
     @test pointer(A.nzval) != pointer(B.nzval)
     @test pointer(A.rowval) != pointer(B.rowval)
     @test pointer(A.colptr) != pointer(B.colptr)
     # Test size(A) != size(B), but length(A) == length(B)
     B = sprand(25, 1, 0.2)
-    copy!(A, B)
+    copyto!(A, B)
     @test A[:] == B[:]
     # Test various size(A) / size(B) combinations
     for mA in [5, 10, 20], nA in [5, 10, 20], mB in [5, 10, 20], nB in [5, 10, 20]
@@ -369,24 +369,24 @@ end
         Aorig = copy(A)
         B = sprand(mB,nB,0.4)
         if mA*nA >= mB*nB
-            copy!(A,B)
+            copyto!(A,B)
             @assert(A[1:length(B)] == B[:])
             @assert(A[length(B)+1:end] == Aorig[length(B)+1:end])
         else
-            @test_throws BoundsError copy!(A,B)
+            @test_throws BoundsError copyto!(A,B)
         end
     end
     # Test eltype(A) != eltype(B), size(A) != size(B)
     A = sprand(5, 5, 0.2)
     Aorig = copy(A)
     B = sparse(rand(Float32, 3, 3))
-    copy!(A, B)
+    copyto!(A, B)
     @test A[1:9] == B[:]
     @test A[10:end] == Aorig[10:end]
     # Test eltype(A) != eltype(B), size(A) == size(B)
     A = sparse(rand(Float64, 3, 3))
     B = sparse(rand(Float32, 3, 3))
-    copy!(A, B)
+    copyto!(A, B)
     @test A == B
 end
 
@@ -1877,11 +1877,11 @@ end
     for T in (Symmetric, Hermitian)
         Y = T(copy(X))
         _Y = similar(Y)
-        copy!(_Y, Y)
+        copyto!(_Y, Y)
         @test _Y == Y
 
         W = T(copy(X), :L)
-        copy!(W, Y)
+        copyto!(W, Y)
         @test W.data == Y.data
         @test W.uplo != Y.uplo
 

@@ -151,7 +151,7 @@ end
 function chol(A::RealHermSymComplexHerm)
     AA = similar(A, choltype(A), size(A))
     if A.uplo == 'U'
-        copy!(AA, A.data)
+        copyto!(AA, A.data)
     else
         Base.adjoint!(AA, A.data)
     end

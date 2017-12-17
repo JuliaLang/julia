@@ -6,7 +6,7 @@ Interface to BLAS subroutines.
 """ -> BLAS
 
 import ..axpy!, ..axpby!
-import Base: copy!
+import Base: copyto!
 
 export
 # Level 1
@@ -1522,8 +1522,8 @@ end
 
 end # module
 
-function copy!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
-               src::Array{T}, rsrc::Union{UnitRange{Ti},AbstractRange{Ti}}) where {T<:BlasFloat,Ti<:Integer}
+function copyto!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
+                 src::Array{T}, rsrc::Union{UnitRange{Ti},AbstractRange{Ti}}) where {T<:BlasFloat,Ti<:Integer}
     if minimum(rdest) < 1 || maximum(rdest) > length(dest)
         throw(ArgumentError("range out of bounds for dest, of length $(length(dest))"))
     end

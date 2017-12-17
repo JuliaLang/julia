@@ -428,9 +428,9 @@ end
 
 lapack_size(t::Char, M::AbstractVecOrMat) = (size(M, t=='N' ? 1 : 2), size(M, t=='N' ? 2 : 1))
 
-function copy!(B::AbstractVecOrMat, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::Char, M::AbstractVecOrMat, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
+function copyto!(B::AbstractVecOrMat, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::Char, M::AbstractVecOrMat, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
     if tM == 'N'
-        copy!(B, ir_dest, jr_dest, M, ir_src, jr_src)
+        copyto!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
         Base.copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
         tM == 'C' && conj!(B)
@@ -442,7 +442,7 @@ function copy_transpose!(B::AbstractMatrix, ir_dest::UnitRange{Int}, jr_dest::Un
     if tM == 'N'
         Base.copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
-        copy!(B, ir_dest, jr_dest, M, jr_src, ir_src)
+        copyto!(B, ir_dest, jr_dest, M, jr_src, ir_src)
         tM == 'C' && conj!(B)
     end
     B
@@ -568,7 +568,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
 
         if mA < tile_size && nA < tile_size && nB < tile_size
             Base.copy_transpose!(Atile, 1:nA, 1:mA, tA, A, 1:mA, 1:nA)
-            copy!(Btile, 1:mB, 1:nB, tB, B, 1:mB, 1:nB)
+            copyto!(Btile, 1:mB, 1:nB, tB, B, 1:mB, 1:nB)
             for j = 1:nB
                 boff = (j-1)*tile_size
                 for i = 1:mA
@@ -594,7 +594,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                         klim = min(kb+tile_size-1,mB)
                         klen = klim-kb+1
                         Base.copy_transpose!(Atile, 1:klen, 1:ilen, tA, A, ib:ilim, kb:klim)
-                        copy!(Btile, 1:klen, 1:jlen, tB, B, kb:klim, jb:jlim)
+                        copyto!(Btile, 1:klen, 1:jlen, tB, B, kb:klim, jb:jlim)
                         for j=1:jlen
                             bcoff = (j-1)*tile_size
                             for i = 1:ilen
@@ -607,7 +607,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                             end
                         end
                     end
-                    copy!(C, ib:ilim, jb:jlim, Ctile, 1:ilen, 1:jlen)
+                    copyto!(C, ib:ilim, jb:jlim, Ctile, 1:ilen, 1:jlen)
                 end
             end
         end

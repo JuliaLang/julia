@@ -183,18 +183,18 @@ convert(::Type{AbstractMatrix{T}}, A::Hermitian) where {T} = Hermitian(convert(A
 copy(A::Symmetric{T,S}) where {T,S} = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
 copy(A::Hermitian{T,S}) where {T,S} = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))
 
-function copy!(dest::Symmetric, src::Symmetric)
+function copyto!(dest::Symmetric, src::Symmetric)
     if src.uplo == dest.uplo
-        copy!(dest.data, src.data)
+        copyto!(dest.data, src.data)
     else
         transpose!(dest.data, src.data)
     end
     return dest
 end
 
-function copy!(dest::Hermitian, src::Hermitian)
+function copyto!(dest::Hermitian, src::Hermitian)
     if src.uplo == dest.uplo
-        copy!(dest.data, src.data)
+        copyto!(dest.data, src.data)
     else
         adjoint!(dest.data, src.data)
     end
@@ -319,7 +319,7 @@ mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T}) 
 mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) where {T<:BlasComplex} =
     BLAS.hemm!('R', B.uplo, one(T), B.data, A, zero(T), C)
 
-*(A::HermOrSym, B::HermOrSym) = A * copy!(similar(parent(B)), B)
+*(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
 
 # Fallbacks to avoid generic_matvecmul!/generic_matmatmul!
 ## Symmetric{<:Number} and Hermitian{<:Real} are invariant to transpose; peel off the t

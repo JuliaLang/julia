@@ -294,9 +294,9 @@ function diag(M::Bidiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     if n == 0
-        return copy!(similar(M.dv, length(M.dv)), M.dv)
+        return copyto!(similar(M.dv, length(M.dv)), M.dv)
     elseif (n == 1 && M.uplo == 'U') ||  (n == -1 && M.uplo == 'L')
-        return copy!(similar(M.ev, length(M.ev)), M.ev)
+        return copyto!(similar(M.ev, length(M.ev)), M.ev)
     elseif -size(M,1) <= n <= size(M,1)
         return fill!(similar(M.dv, size(M,1)-abs(n)), 0)
     else
@@ -510,9 +510,9 @@ function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
         throw(DimensionMismatch("size of A is ($nA,$mA), corresponding dimension of B is $n"))
     end
     for i = 1:size(B,2)
-        copy!(tmp, 1, B, (i - 1)*n + 1, n)
+        copyto!(tmp, 1, B, (i - 1)*n + 1, n)
         ldiv!(A, tmp)
-        copy!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
+        copyto!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
     end
     B
 end
@@ -525,9 +525,9 @@ function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::A
         throw(DimensionMismatch("size of A' is ($mA,$nA), corresponding dimension of B is $n"))
     end
     for i = 1:size(B,2)
-        copy!(tmp, 1, B, (i - 1)*n + 1, n)
+        copyto!(tmp, 1, B, (i - 1)*n + 1, n)
         ldiv!(Adjoint(A), tmp)
-        copy!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
+        copyto!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
     end
     B
 end
@@ -540,9 +540,9 @@ function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, 
         throw(DimensionMismatch("size of A' is ($mA,$nA), corresponding dimension of B is $n"))
     end
     for i = 1:size(B,2)
-        copy!(tmp, 1, B, (i - 1)*n + 1, n)
+        copyto!(tmp, 1, B, (i - 1)*n + 1, n)
         ldiv!(Transpose(A), tmp)
-        copy!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
+        copyto!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
     end
     B
 end

@@ -758,13 +758,13 @@ function cumsum!(out, v::AbstractVector, dim::Integer)
 end
 
 function _cumsum!(out, v, dim, ::ArithmeticRounds)
-    dim == 1 ? accumulate_pairwise!(+, out, v) : copy!(out, v)
+    dim == 1 ? accumulate_pairwise!(+, out, v) : copyto!(out, v)
 end
 function _cumsum!(out, v, dim, ::ArithmeticUnknown)
     _cumsum!(out, v, dim, ArithmeticRounds())
 end
 function _cumsum!(out, v, dim, ::TypeArithmetic)
-    dim == 1 ? accumulate!(+, out, v) : copy!(out, v)
+    dim == 1 ? accumulate!(+, out, v) : copyto!(out, v)
 end
 
 """
@@ -961,7 +961,7 @@ function accumulate!(op, B, A, dim::Integer)
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
     inds_t = axes(A)
     axes(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))
-    dim > ndims(A) && return copy!(B, A)
+    dim > ndims(A) && return copyto!(B, A)
     isempty(inds_t[dim]) && return B
     if dim == 1
         # We can accumulate to a temporary variable, which allows
@@ -1045,7 +1045,7 @@ function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
     inds = linearindices(A)
     inds == linearindices(B) || throw(DimensionMismatch("linearindices of A and B don't match"))
-    dim > 1 && return copy!(B, A)
+    dim > 1 && return copyto!(B, A)
     i1 = inds[1]
     cur_val = v1
     B[i1] = cur_val
@@ -1099,13 +1099,15 @@ function fill!(A::AbstractArray{T}, x) where T
 end
 
 """
-    copy!(dest, src) -> dest
+    copyto!(dest::AbstractArray, src) -> dest
 
-Copy all elements from collection `src` to array `dest`.
+Copy all elements from collection `src` to array `dest`, whose length must be greater than
+or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
+the other elements are left untouched.
 """
-copy!(dest, src)
+copyto!(dest, src)
 
-function copy!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
+function copyto!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
     @boundscheck checkbounds(dest, axes(src)...)
     for I in eachindex(IndexStyle(src,dest), src)
         @inbounds dest[I] = src[I]
@@ -1113,7 +1115,7 @@ function copy!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
     dest
 end
 
-function copy!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
+function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
                src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
     isempty(Rdest) && return dest
     if size(Rdest) != size(Rsrc)
@@ -1139,15 +1141,15 @@ function copy!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
 end
 
 """
-    copy!(dest, Rdest::CartesianIndices, src, Rsrc::CartesianIndices) -> dest
+    copyto!(dest, Rdest::CartesianIndices, src, Rsrc::CartesianIndices) -> dest
 
 Copy the block of `src` in the range of `Rsrc` to the block of `dest`
 in the range of `Rdest`. The sizes of the two regions must match.
 """
-copy!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
+copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 
 # circshift!
-circshift!(dest::AbstractArray, src, ::Tuple{}) = copy!(dest, src)
+circshift!(dest::AbstractArray, src, ::Tuple{}) = copyto!(dest, src)
 """
     circshift!(dest, src, shifts)
 
@@ -1173,16 +1175,16 @@ circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt
 # encoded by ranges, which means that we need only one call to `mod`
 # per dimension rather than one call per index.
 # `rdest` and `rsrc` are tuples-of-ranges that grow one dimension at a
-# time; when all the dimensions have been filled in, you call `copy!`
+# time; when all the dimensions have been filled in, you call `copyto!`
 # for that block. In other words, in two dimensions schematically we
 # have the following call sequence (--> means a call):
 #   circshift!(dest, src, shiftamt) -->
 #     _circshift!(dest, src, ("first half of dim1",)) -->
-#       _circshift!(dest, src, ("first half of dim1", "first half of dim2")) --> copy!
-#       _circshift!(dest, src, ("first half of dim1", "second half of dim2")) --> copy!
+#       _circshift!(dest, src, ("first half of dim1", "first half of dim2")) --> copyto!
+#       _circshift!(dest, src, ("first half of dim1", "second half of dim2")) --> copyto!
 #     _circshift!(dest, src, ("second half of dim1",)) -->
-#       _circshift!(dest, src, ("second half of dim1", "first half of dim2")) --> copy!
-#       _circshift!(dest, src, ("second half of dim1", "second half of dim2")) --> copy!
+#       _circshift!(dest, src, ("second half of dim1", "first half of dim2")) --> copyto!
+#       _circshift!(dest, src, ("second half of dim1", "second half of dim2")) --> copyto!
 @inline function _circshift!(dest, rdest, src, rsrc,
                              inds::Tuple{AbstractUnitRange,Vararg{Any}},
                              shiftamt::Tuple{Integer,Vararg{Any}})
@@ -1197,7 +1199,7 @@ circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt
 end
 # At least one of inds, shiftamt is empty
 function _circshift!(dest, rdest, src, rsrc, inds, shiftamt)
-    copy!(dest, CartesianIndices(rdest), src, CartesianIndices(rsrc))
+    copyto!(dest, CartesianIndices(rdest), src, CartesianIndices(rsrc))
 end
 
 # circcopy!
@@ -1239,7 +1241,7 @@ function circcopy!(dest, src)
         throw(DimensionMismatch("src and dest must have the same sizes (got $szsrc and $szdest)"))
     end
     shift = map((isrc, idest)->first(isrc)-first(idest), indssrc, indsdest)
-    all(x->x==0, shift) && return copy!(dest, src)
+    all(x->x==0, shift) && return copyto!(dest, src)
     _circcopy!(dest, (), indsdest, src, (), indssrc)
 end
 
@@ -1260,7 +1262,7 @@ end
 
 # At least one of indsdest, indssrc are empty (and both should be, since we've checked)
 function _circcopy!(dest, rdest, indsdest, src, rsrc, indssrc)
-    copy!(dest, CartesianIndices(rdest), src, CartesianIndices(rsrc))
+    copyto!(dest, CartesianIndices(rdest), src, CartesianIndices(rsrc))
 end
 
 ### BitArrays

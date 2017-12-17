@@ -105,11 +105,11 @@ timesofar("conversions")
 
         b2 = similar(b1)
         u1 = Array(b1)
-        @check_bit_operation copy!(b2, b1) T
-        @check_bit_operation copy!(b2, u1) T
+        @check_bit_operation copyto!(b2, b1) T
+        @check_bit_operation copyto!(b2, u1) T
     end
 
-    @testset "copy!" begin
+    @testset "copyto!" begin
         for n in [1; 1023:1025]
             b1 = falses(n)
             for m in [1; 10; 1023:1025]
@@ -121,10 +121,10 @@ timesofar("conversions")
                         for fb! in [b->fill!(b, false), b->rand!(b)]
                             fb!(b1)
                             if i1 < 1 || i1 > n || (i2 + l - 1 > m) || (i1 + l - 1 > n)
-                                @test_throws BoundsError copy!(b1, i1, u1, i2, l)
+                                @test_throws BoundsError copyto!(b1, i1, u1, i2, l)
                             else
-                                @check_bit_operation copy!(b1, i1, u1, i2, l) BitArray
-                                @check_bit_operation copy!(b1, i1, c1, i2, l) BitArray
+                                @check_bit_operation copyto!(b1, i1, u1, i2, l) BitArray
+                                @check_bit_operation copyto!(b1, i1, c1, i2, l) BitArray
                             end
                         end
                     end
@@ -286,7 +286,7 @@ timesofar("constructors")
         b1 = bitrand(n1, n2)
         m1, m2 = rand_m1m2()
         b2 = bitrand(m1, m2)
-        @check_bit_operation copy!(b1, b2) BitMatrix
+        @check_bit_operation copyto!(b1, b2) BitMatrix
 
         function gen_getindex_data(c)
             m1, m2 = rand_m1m2()
@@ -464,7 +464,7 @@ timesofar("constructors")
                 for n = 0 : min(v1 - p1 + 1, v1 - p2 + 1)
                     b1 = bitrand(v1)
                     b2 = bitrand(v1)
-                    @check_bit_operation copy!(b1, p1, b2, p2, n) BitVector
+                    @check_bit_operation copyto!(b1, p1, b2, p2, n) BitVector
                 end
             end
         end

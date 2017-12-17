@@ -757,6 +757,10 @@ Deprecated or removed
   * `copy!` is deprecated for `AbstractSet` and `AbstractDict`, with the intention to re-enable
     it with a cleaner meaning in a future version ([#24844]).
 
+  * `copy!` (resp. `unsafe_copy!`) is deprecated for `AbstractArray` and is renamed `copyto!`
+    (resp. `unsafe_copyto!`); it will be re-introduced with a different meaning in a future
+    version ([#24808]).
+
   * `a:b` is deprecated for constructing a `StepRange` when `a` and `b` have physical units
     (Dates and Times). Use `a:s:b`, where `s = Dates.Day(1)` or `s = Dates.Second(1)`.
 

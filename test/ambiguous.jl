@@ -220,9 +220,9 @@ end
 foo(::Type{Array{T,N}}, A::MyArray{T,N}) where {T,N} = A.data
 foo(::Type{Array{T,N}}, A::MyArray{T,N}) where {T<:AbstractFloat,N} = A.data
 foo(::Type{Array{S,N}}, A::MyArray{T,N}) where {S<:AbstractFloat,N,T<:AbstractFloat} =
-    copy!(Array{S}(uninitialized, unsize(A)), A.data)
+    copyto!(Array{S}(uninitialized, unsize(A)), A.data)
 foo(::Type{Array{S,N}}, A::AbstractArray{T,N}) where {S<:AbstractFloat,N,T<:AbstractFloat} =
-    copy!(Array{S}(uninitialized, size(A)), A)
+    copyto!(Array{S}(uninitialized, size(A)), A)
 end
 
 @test isempty(detect_ambiguities(Ambig17648))

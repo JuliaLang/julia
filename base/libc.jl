@@ -308,7 +308,7 @@ if Sys.iswindows()
         p = lpMsgBuf[]
         len == 0 && return ""
         buf = Vector{UInt16}(uninitialized, len)
-        Base.@gc_preserve buf unsafe_copy!(pointer(buf), p, len)
+        Base.@gc_preserve buf unsafe_copyto!(pointer(buf), p, len)
         ccall(:LocalFree, stdcall, Ptr{Void}, (Ptr{Void},), p)
         return transcode(String, buf)
     end

@@ -147,7 +147,7 @@ end
 function (+)(A::AbstractMatrix, J::UniformScaling)
     n = checksquare(A)
     B = similar(A, Broadcast.combine_eltypes(+, A, J))
-    copy!(B,A)
+    copyto!(B,A)
     @inbounds for i = 1:n
         B[i,i] += J.λ
     end
@@ -157,7 +157,7 @@ end
 function (-)(A::AbstractMatrix, J::UniformScaling)
     n = checksquare(A)
     B = similar(A, Broadcast.combine_eltypes(-, A, J))
-    copy!(B, A)
+    copyto!(B, A)
     @inbounds for i = 1:n
         B[i,i] -= J.λ
     end
@@ -247,7 +247,7 @@ function isapprox(J::UniformScaling, A::AbstractMatrix;
 end
 isapprox(A::AbstractMatrix, J::UniformScaling; kwargs...) = isapprox(J, A; kwargs...)
 
-function copy!(A::AbstractMatrix, J::UniformScaling)
+function copyto!(A::AbstractMatrix, J::UniformScaling)
     size(A,1)==size(A,2) || throw(DimensionMismatch("a UniformScaling can only be copied to a square matrix"))
     fill!(A, 0)
     λ = J.λ
@@ -266,7 +266,7 @@ end
 # in A to matrices of type T and sizes given by n[k:end].  n is an array
 # so that the same promotion code can be used for hvcat.  We pass the type T
 # so that we can re-use this code for sparse-matrix hcat etcetera.
-promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copy!(Matrix{T}(uninitialized, n,n), J)
+promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copyto!(Matrix{T}(uninitialized, n,n), J)
 promote_to_arrays_(n::Int, ::Type, A::AbstractVecOrMat) = A
 promote_to_arrays(n,k, ::Type) = ()
 promote_to_arrays(n,k, ::Type{T}, A) where {T} = (promote_to_arrays_(n[k], T, A),)

@@ -86,7 +86,7 @@ Base.Broadcast.DefaultArrayStyle
 ```@docs
 Base.getindex(::AbstractArray, ::Any...)
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
-Base.copy!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
+Base.copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 Base.isassigned
 Base.Colon
 Base.CartesianIndex
