@@ -741,6 +741,34 @@ let x = fill!(StringVector(5), 0x61)
     @test pointer(x) == pointer(String(x))
 end
 
+# PR 22907
+using Compat: pairs
+
+# keys, values, pairs
+for A in (rand(2), rand(2,3))
+    local A
+    for (i, v) in pairs(A)
+        @test A[i] == v
+    end
+    @test collect(values(A)) == collect(A)
+end
+
+let A = Dict(:foo=>1, :bar=>3)
+    for (k, v) in pairs(A)
+        @test A[k] == v
+    end
+    @test sort!(collect(pairs(A))) == sort!(collect(A))
+end
+
+let
+    A14 = [11 13; 12 14]
+    R = CartesianRange(indices(A14))
+    @test [a for (a,b) in pairs(IndexLinear(),    A14)] == [1,2,3,4]
+    @test [a for (a,b) in pairs(IndexCartesian(), A14)] == vec(collect(R))
+    @test [b for (a,b) in pairs(IndexLinear(),    A14)] == [11,12,13,14]
+    @test [b for (a,b) in pairs(IndexCartesian(), A14)] == [11,12,13,14]
+end
+
 # Val(x)
 # 0.7
 begin

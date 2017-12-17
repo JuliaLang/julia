@@ -673,6 +673,51 @@ end
     export partialsort, partialsort!, partialsortperm, partialsortperm!
 end
 
+# 0.7.0-DEV.1660
+@static if !isdefined(Base, :pairs)
+    pairs(collection) = Base.Generator(=>, keys(collection), values(collection))
+    pairs(a::Associative) = a
+
+    # 0.6.0-dev+2834
+    @static if !isdefined(Iterators, :IndexValue)
+        include_string(@__MODULE__, """
+            immutable IndexValue{I,A<:AbstractArray}
+                data::A
+                itr::I
+            end
+        """)
+
+        Base.length(v::IndexValue)  = length(v.itr)
+        Base.indices(v::IndexValue) = indices(v.itr)
+        Base.size(v::IndexValue)    = size(v.itr)
+        @inline Base.start(v::IndexValue) = start(v.itr)
+        Base.@propagate_inbounds function Base.next(v::IndexValue, state)
+            indx, n = next(v.itr, state)
+            item = v.data[indx]
+            (indx => item), n
+        end
+        @inline Base.done(v::IndexValue, state) = done(v.itr, state)
+
+        Base.eltype{I,A}(::Type{IndexValue{I,A}}) = Pair{eltype(I), eltype(A)}
+
+        Base.iteratorsize{I}(::Type{IndexValue{I}}) = iteratorsize(I)
+        Base.iteratoreltype{I}(::Type{IndexValue{I}}) = iteratoreltype(I)
+
+        Base.reverse(v::IndexValue) = IndexValue(v.data, reverse(v.itr))
+    else
+        const IndexValue = Iterators.IndexValue
+    end
+
+    pairs(::IndexLinear,    A::AbstractArray) = IndexValue(A, linearindices(A))
+    pairs(::IndexCartesian, A::AbstractArray) = IndexValue(A, CartesianRange(indices(A)))
+
+    Base.keys(a::AbstractArray) = CartesianRange(indices(a))
+    Base.keys(a::AbstractVector) = linearindices(a)
+    Base.keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
+
+    Base.values(itr) = itr
+end
+
 # 0.7.0-DEV.1721
 @static if !isdefined(Base, :AbstractRange)
     const AbstractRange = Range

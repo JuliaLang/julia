@@ -201,6 +201,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `IOContext` accepting key-value `Pair`s ([#23271]).
 
+* `pairs` for iterating over key-value `Pair`s ([#22907]).
+
 * `get` do-block syntax supported when using `ENV` ([#23412]).
 
 ## Renaming
@@ -368,6 +370,7 @@ includes this fix. Find the minimum version from there.
 [#22751]: https://github.com/JuliaLang/julia/issues/22751
 [#22761]: https://github.com/JuliaLang/julia/issues/22761
 [#22864]: https://github.com/JuliaLang/julia/issues/22864
+[#22907]: https://github.com/JuliaLang/julia/issues/22907
 [#23051]: https://github.com/JuliaLang/julia/issues/23051
 [#23235]: https://github.com/JuliaLang/julia/issues/23235
 [#23271]: https://github.com/JuliaLang/julia/issues/23271
