@@ -502,7 +502,9 @@ Base.require(:Printf)
     @deprecate_binding Mmap root_module(:Mmap) true ", run `using Mmap` instead"
     @deprecate_binding Profile root_module(:Profile) true ", run `using Profile` instead"
     @deprecate_binding Dates root_module(:Dates) true ", run `using Dates` instead"
-#    @deprecate_binding Distributed root_module(:Distributed) true ", run `using Distributed` instead"
+    @deprecate_binding Distributed root_module(:Distributed) true ", run `using Distributed` instead"
+    myid() = isdeprecated(Main, :Distributed) ? 1 : $(Base.root_module(:Distributed)).myid()
+    nprocs() = isdeprecated(Main, :Distributed) ? 1 : $(Base.root_module(:Distributed)).nprocs()
 end
 
 empty!(LOAD_PATH)
