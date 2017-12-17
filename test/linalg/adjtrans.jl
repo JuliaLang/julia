@@ -430,3 +430,10 @@ end
         @test norm(Transpose(v), Inf) ≈ 7
     end
 end
+
+@testset "adjoint!(a, b) return a" begin
+    a = fill(1.0+im, 5)
+    b = fill(1.0+im, 1, 5)
+    @test adjoint!(a, b) === a
+    @test adjoint!(b, a) === b
+end
