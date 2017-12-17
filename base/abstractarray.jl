@@ -1942,7 +1942,7 @@ const hashr_seed   = UInt === UInt64 ? 0x80707b6821b70087 : 0x21b70087
 
 # Efficient O(1) method equivalent to the O(N) AbstractArray fallback,
 # which works only for ranges with regular step (RangeStepRegular)
-function hash_range(r::Range, h::UInt)
+function hash_range(r::AbstractRange, h::UInt)
     h += hashaa_seed
     h += hash(size(r))
 
@@ -1958,7 +1958,7 @@ end
 
 function hash(a::AbstractArray{T}, h::UInt) where T
     # O(1) hashing for types with regular step
-    if isa(a, Range) && isa(TypeRangeStep(a), RangeStepRegular)
+    if isa(a, AbstractRange) && isa(TypeRangeStep(a), RangeStepRegular)
         return hash_range(a, h)
     end
 
@@ -2000,7 +2000,6 @@ function hash(a::AbstractArray{T}, h::UInt) where T
         end
         iszero(step) && @goto nonrange
         r = first:step:last(a)
-        @show r
         state = start(a)
         rstate = start(r)
         while !done(a, state) && !done(r, rstate)
@@ -2015,7 +2014,6 @@ function hash(a::AbstractArray{T}, h::UInt) where T
                 x2 = second
                 @goto first
             end
-            @show x2, y
             isequal(x2, y) || break
         end
         # If overflow happened when computing step, loop can have failed to detect
@@ -2037,7 +2035,6 @@ function hash(a::AbstractArray{T}, h::UInt) where T
             h += hashr_seed
             h = hash(step, h)
             h = hash(x2, h)
-            @show first, step, x2
         end
     end
 

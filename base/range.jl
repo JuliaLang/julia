@@ -79,8 +79,8 @@ range(a::AbstractFloat, st::Real, len::Integer) = range(a, float(st), len)
 
 abstract type AbstractRange{T} <: AbstractArray{T,1} end
 
-TypeRangeStep(::Type{<:Range}) = RangeStepIrregular()
-TypeRangeStep(::Type{<:Range{<:Integer}}) = RangeStepRegular()
+TypeRangeStep(::Type{<:AbstractRange}) = RangeStepIrregular()
+TypeRangeStep(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
 ## ordinal ranges
 

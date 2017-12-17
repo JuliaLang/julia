@@ -342,7 +342,7 @@ This section lists changes that do not have deprecation warnings.
   * `eachindex(A, B...)` now requires that all inputs have the same number of elements.
     When the chosen indexing is Cartesian, they must have the same axes.
 
-  * `Range` objects are now considered as equal to other `AbstractArray` objects
+  * `AbstractRange` objects are now considered as equal to other `AbstractArray` objects
     by `==` and `isequal` if all of their elements are equal ([#16401]).
     This has required changing the hashing algorithm: ranges now use an O(N) fallback
     instead of a O(1) specialized method unless they define the `Base.TypeRangeStep`

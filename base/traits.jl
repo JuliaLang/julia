@@ -29,7 +29,7 @@ TypeArithmetic(::Type{<:Any}) = ArithmeticUnknown()
 Indicate whether an instance or a type supports constructing a range with
 a perfectly regular step or not. A regular step means that
 [`step`](@ref) will always be exactly equal to the difference between two
-subsequent elements in a range, i.e. for a range `r::Range{T}`:
+subsequent elements in a range, i.e. for a range `r::AbstractRange{T}`:
 ```julia
 all(diff(r) .== step(r))
 ```
@@ -37,10 +37,10 @@ all(diff(r) .== step(r))
 When a type `T` always leads to ranges with regular steps, it should
 define the following method:
 ```julia
-Base.TypeRangeStep(::Type{<:Range{<:T}}) = Base.RangeStepRegular()
+Base.TypeRangeStep(::Type{<:AbstractRange{<:T}}) = Base.RangeStepRegular()
 ```
-This will allow [`hash`](@ref) to use an O(1) algorithm for `Range{T}` objects
-instead of the default O(N) algorithm (with N the length of the range).
+This will allow [`hash`](@ref) to use an O(1) algorithm for `AbstractRange{T}`
+objects instead of the default O(N) algorithm (with N the length of the range).
 
 In some cases, whether the step will be regular depends not only on the
 element type `T`, but also on the type of the step `S`. In that case, more

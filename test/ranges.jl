@@ -483,15 +483,15 @@ end
     @test sum(0:0.1:10) == 505.
 end
 @testset "broadcasted operations with scalars" begin
-    @test (1:3) - 2 == -1:1
-    @test (1:3) - 0.25 == 1-0.25:3-0.25
-    @test (1:3) + 2 == 3:5
-    @test (1:3) + 0.25 == 1+0.25:3+0.25
-    @test (1:2:6) + 1 == 2:2:6
-    @test (1:2:6) + 0.3 == 1+0.3:2:5+0.3
-    @test (1:2:6) - 1 == 0:2:4
-    @test (1:2:6) - 0.3 == 1-0.3:2:5-0.3
-    @test 2 - (1:3) == 1:-1:-1
+    @test broadcast(-, 1:3, 2) == -1:1
+    @test broadcast(-, 1:3, 0.25) == 1-0.25:3-0.25
+    @test broadcast(+, 1:3, 2) == 3:5
+    @test broadcast(+, 1:3, 0.25) == 1+0.25:3+0.25
+    @test broadcast(+, 1:2:6, 1) == 2:2:6
+    @test broadcast(+, 1:2:6, 0.3) == 1+0.3:2:5+0.3
+    @test broadcast(-, 1:2:6, 1) == 0:2:4
+    @test broadcast(-, 1:2:6, 0.3) == 1-0.3:2:5-0.3
+    @test broadcast(-, 2, 1:3) == 1:-1:-1
 end
 @testset "operations between ranges and arrays" begin
     @test all(([1:5;] + (5:-1:1)) .== 6)
@@ -689,10 +689,10 @@ end
 
 # comparing and hashing ranges
 @testset "comparing and hashing ranges" begin
-    Rs = Range[1:1, 1:2, map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 17:-3:0,
-               0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
-               1.:eps():1+10eps(), 9007199254740990.:1.0:9007199254740994,
-               linspace(0, 1, 20), map(Float32, linspace(0, 1, 20))]
+    Rs = AbstractRange[1:1, 1:2, map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 17:-3:0,
+                       0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
+                       1.:eps():1+10eps(), 9007199254740990.:1.0:9007199254740994,
+                       linspace(0, 1, 20), map(Float32, linspace(0, 1, 20))]
     for r in Rs
         local r
         ar = collect(r)
