@@ -22,15 +22,7 @@ get-sha: checkout-sha
 clean-sha:
 	rm -rf SHA
 
-TOML_VERSION := cb1a26e354f5859192641f29396c291bce2b503f
-TOML_URL := https://github.com/StefanKarpinski/TOML.jl
-TOML:
-	git clone $(TOML_URL) $@
-checkout-toml: TOML
-	git -C $< checkout $(TOML_VERSION)
-get-toml: checkout-toml
-
-get: get-pkg3 get-sha get-toml
-clean: clean-pkg3 clean-sha clean-toml
+get: get-pkg3 get-sha
+clean: clean-pkg3 clean-sha
 
 .PHONY: default get clean
