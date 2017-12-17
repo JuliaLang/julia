@@ -195,6 +195,7 @@ dimg  = randn(n)/2
 end
 
 @testset "conversion" begin
+    srand(3)
     a = Tridiagonal(rand(9),rand(10),rand(9))
     fa = Array(a)
     falu = lufact(fa)

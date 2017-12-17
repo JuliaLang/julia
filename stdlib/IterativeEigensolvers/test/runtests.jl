@@ -4,118 +4,118 @@ using IterativeEigensolvers
 using Test
 
 @testset "eigs" begin
-    guardsrand(1234) do
-        n = 10
-        areal  = sprandn(n,n,0.4)
-        breal  = sprandn(n,n,0.4)
-        acmplx = complex.(sprandn(n,n,0.4), sprandn(n,n,0.4))
-        bcmplx = complex.(sprandn(n,n,0.4), sprandn(n,n,0.4))
+    srand(1234)
+    n = 10
+    areal  = sprandn(n,n,0.4)
+    breal  = sprandn(n,n,0.4)
+    acmplx = complex.(sprandn(n,n,0.4), sprandn(n,n,0.4))
+    bcmplx = complex.(sprandn(n,n,0.4), sprandn(n,n,0.4))
 
-        testtol = 1e-6
+    testtol = 1e-6
 
-        @testset for elty in (Float64, ComplexF64)
-            if elty == ComplexF32 || elty == ComplexF64
-                a = acmplx
-                b = bcmplx
-            else
-                a = areal
-                b = breal
-            end
-            a_evs = eigvals(Array(a))
-            a     = convert(SparseMatrixCSC{elty}, a)
-            asym  = a' + a                  # symmetric indefinite
-            apd   = a'*a                    # symmetric positive-definite
+    @testset for elty in (Float64, ComplexF64)
+        if elty == ComplexF32 || elty == ComplexF64
+            a = acmplx
+            b = bcmplx
+        else
+            a = areal
+            b = breal
+        end
+        a_evs = eigvals(Array(a))
+        a     = convert(SparseMatrixCSC{elty}, a)
+        asym  = a' + a                  # symmetric indefinite
+        apd   = a'*a                    # symmetric positive-definite
 
-            b     = convert(SparseMatrixCSC{elty}, b)
-            bsym  = b' + b
-            bpd   = b'*b
+        b     = convert(SparseMatrixCSC{elty}, b)
+        bsym  = b' + b
+        bpd   = b'*b
 
-            (d,v) = eigs(a, nev=3)
-            @test a*v[:,2] ≈ d[2]*v[:,2]
-            @test norm(v) > testtol # eigenvectors cannot be null vectors
-            (d,v) = eigs(a, I, nev=3) # test eigs(A, B; kwargs...)
-            @test a*v[:,2] ≈ d[2]*v[:,2]
-            @test norm(v) > testtol # eigenvectors cannot be null vectors
-            @test_logs (:warn,"Use symbols instead of strings for specifying which eigenvalues to compute") eigs(a, which="LM")
-            @test_logs (:warn,"Adjusting ncv from 1 to 4") eigs(a, ncv=1, nev=2)
-            @test_logs (:warn,"Adjusting nev from $n to $(n-2)") eigs(a, nev=n)
-            # (d,v) = eigs(a, b, nev=3, tol=1e-8) # not handled yet
-            # @test a*v[:,2] ≈ d[2]*b*v[:,2] atol=testtol
-            # @test norm(v) > testtol # eigenvectors cannot be null vectors
-            if elty <: Base.LinAlg.BlasComplex
-                sr_ind = indmin(real.(a_evs))
-                (d, v) = eigs(a, nev=1, which=:SR)
-                @test d[1] ≈ a_evs[sr_ind]
-                si_ind = indmin(imag.(a_evs))
-                (d, v) = eigs(a, nev=1, which=:SI)
-                @test d[1] ≈ a_evs[si_ind]
-                lr_ind = indmax(real.(a_evs))
-                (d, v) = eigs(a, nev=1, which=:LR)
-                @test d[1] ≈ a_evs[lr_ind]
-                li_ind = indmax(imag.(a_evs))
-                (d, v) = eigs(a, nev=1, which=:LI)
-                @test d[1] ≈ a_evs[li_ind]
-            end
+        (d,v) = eigs(a, nev=3)
+        @test a*v[:,2] ≈ d[2]*v[:,2]
+        @test norm(v) > testtol # eigenvectors cannot be null vectors
+        (d,v) = eigs(a, I, nev=3) # test eigs(A, B; kwargs...)
+        @test a*v[:,2] ≈ d[2]*v[:,2]
+        @test norm(v) > testtol # eigenvectors cannot be null vectors
+        @test_logs (:warn,"Use symbols instead of strings for specifying which eigenvalues to compute") eigs(a, which="LM")
+        @test_logs (:warn,"Adjusting ncv from 1 to 4") eigs(a, ncv=1, nev=2)
+        @test_logs (:warn,"Adjusting nev from $n to $(n-2)") eigs(a, nev=n)
+        # (d,v) = eigs(a, b, nev=3, tol=1e-8) # not handled yet
+        # @test a*v[:,2] ≈ d[2]*b*v[:,2] atol=testtol
+        # @test norm(v) > testtol # eigenvectors cannot be null vectors
+        if elty <: Base.LinAlg.BlasComplex
+            sr_ind = indmin(real.(a_evs))
+            (d, v) = eigs(a, nev=1, which=:SR)
+            @test d[1] ≈ a_evs[sr_ind]
+            si_ind = indmin(imag.(a_evs))
+            (d, v) = eigs(a, nev=1, which=:SI)
+            @test d[1] ≈ a_evs[si_ind]
+            lr_ind = indmax(real.(a_evs))
+            (d, v) = eigs(a, nev=1, which=:LR)
+            @test d[1] ≈ a_evs[lr_ind]
+            li_ind = indmax(imag.(a_evs))
+            (d, v) = eigs(a, nev=1, which=:LI)
+            @test d[1] ≈ a_evs[li_ind]
+        end
 
-            (d,v) = eigs(asym, nev=3)
-            @test asym*v[:,1] ≈ d[1]*v[:,1]
-            @test eigs(asym; nev=1, sigma=d[3])[1][1] ≈ d[3]
-            @test norm(v) > testtol # eigenvectors cannot be null vectors
+        (d,v) = eigs(asym, nev=3)
+        @test asym*v[:,1] ≈ d[1]*v[:,1]
+        @test eigs(asym; nev=1, sigma=d[3])[1][1] ≈ d[3]
+        @test norm(v) > testtol # eigenvectors cannot be null vectors
 
-            (d,v) = eigs(apd, nev=3)
+        (d,v) = eigs(apd, nev=3)
+        @test apd*v[:,3] ≈ d[3]*v[:,3]
+        @test eigs(apd; nev=1, sigma=d[3])[1][1] ≈ d[3]
+
+        (d,v) = eigs(apd, bpd, nev=3, tol=1e-8)
+        @test apd*v[:,2] ≈ d[2]*bpd*v[:,2] atol=testtol
+        @test norm(v) > testtol # eigenvectors cannot be null vectors
+
+        @testset "(shift-and-)invert mode" begin
+            (d,v) = eigs(apd, nev=3, sigma=0)
             @test apd*v[:,3] ≈ d[3]*v[:,3]
-            @test eigs(apd; nev=1, sigma=d[3])[1][1] ≈ d[3]
-
-            (d,v) = eigs(apd, bpd, nev=3, tol=1e-8)
-            @test apd*v[:,2] ≈ d[2]*bpd*v[:,2] atol=testtol
             @test norm(v) > testtol # eigenvectors cannot be null vectors
 
-            @testset "(shift-and-)invert mode" begin
-                (d,v) = eigs(apd, nev=3, sigma=0)
-                @test apd*v[:,3] ≈ d[3]*v[:,3]
-                @test norm(v) > testtol # eigenvectors cannot be null vectors
-
-                (d,v) = eigs(apd, bpd, nev=3, sigma=0, tol=1e-8)
-                @test apd*v[:,1] ≈ d[1]*bpd*v[:,1] atol=testtol
-                @test norm(v) > testtol # eigenvectors cannot be null vectors
-            end
-
-            @testset "ArgumentErrors" begin
-                @test_throws ArgumentError eigs(rand(elty,2,2))
-                @test_throws ArgumentError eigs(a, nev=-1)
-                @test_throws ArgumentError eigs(a, which=:Z)
-                @test_throws ArgumentError eigs(a, which=:BE)
-                @test_throws DimensionMismatch eigs(a, v0=zeros(elty,n+2))
-                @test_throws ArgumentError eigs(a, v0=zeros(Int,n))
-                if elty == Float64
-                    @test_throws ArgumentError eigs(a+a.',which=:SI)
-                    @test_throws ArgumentError eigs(a+a.',which=:LI)
-                    @test_throws ArgumentError eigs(a,sigma=rand(ComplexF32))
-                end
-            end
+            (d,v) = eigs(apd, bpd, nev=3, sigma=0, tol=1e-8)
+            @test apd*v[:,1] ≈ d[1]*bpd*v[:,1] atol=testtol
+            @test norm(v) > testtol # eigenvectors cannot be null vectors
         end
 
-        @testset "Symmetric generalized with singular B" begin
-            n = 10
-            k = 3
-            A = randn(n,n); A = A'A
-            B = randn(n,k); B = B*B'
-            @test sort(eigs(A, B, nev = k, sigma = 1.0)[1]) ≈ sort(eigvals(A, B)[1:k])
+        @testset "ArgumentErrors" begin
+            @test_throws ArgumentError eigs(rand(elty,2,2))
+            @test_throws ArgumentError eigs(a, nev=-1)
+            @test_throws ArgumentError eigs(a, which=:Z)
+            @test_throws ArgumentError eigs(a, which=:BE)
+            @test_throws DimensionMismatch eigs(a, v0=zeros(elty,n+2))
+            @test_throws ArgumentError eigs(a, v0=zeros(Int,n))
+            if elty == Float64
+                @test_throws ArgumentError eigs(a+a.',which=:SI)
+                @test_throws ArgumentError eigs(a+a.',which=:LI)
+                @test_throws ArgumentError eigs(a,sigma=rand(ComplexF32))
+            end
         end
+    end
+
+    @testset "Symmetric generalized with singular B" begin
+        srand(127)
+        n = 10
+        k = 3
+        A = randn(n,n); A = A'A
+        B = randn(n,k); B = B*B'
+        @test sort(eigs(A, B, nev = k, sigma = 1.0)[1]) ≈ sort(eigvals(A, B)[1:k])
     end
 end
 
 # Problematic example from #6965A
 let A6965 = [
-         1.0   1.0   1.0   1.0   1.0   1.0   1.0  1.0
-        -1.0   2.0   0.0   0.0   0.0   0.0   0.0  1.0
-        -1.0   0.0   3.0   0.0   0.0   0.0   0.0  1.0
-        -1.0   0.0   0.0   4.0   0.0   0.0   0.0  1.0
-        -1.0   0.0   0.0   0.0   5.0   0.0   0.0  1.0
-        -1.0   0.0   0.0   0.0   0.0   6.0   0.0  1.0
-        -1.0   0.0   0.0   0.0   0.0   0.0   7.0  1.0
-        -1.0  -1.0  -1.0  -1.0  -1.0  -1.0  -1.0  8.0
-       ]
+    1.0   1.0   1.0   1.0   1.0   1.0   1.0  1.0
+    -1.0   2.0   0.0   0.0   0.0   0.0   0.0  1.0
+    -1.0   0.0   3.0   0.0   0.0   0.0   0.0  1.0
+    -1.0   0.0   0.0   4.0   0.0   0.0   0.0  1.0
+    -1.0   0.0   0.0   0.0   5.0   0.0   0.0  1.0
+    -1.0   0.0   0.0   0.0   0.0   6.0   0.0  1.0
+    -1.0   0.0   0.0   0.0   0.0   0.0   7.0  1.0
+    -1.0  -1.0  -1.0  -1.0  -1.0  -1.0  -1.0  8.0
+]
     d, = eigs(A6965,which=:SM,nev=2,ncv=4,tol=eps())
     @test d[1] ≈ 2.5346936860350002
     @test real(d[2]) ≈ 2.6159972444834976

@@ -287,10 +287,8 @@ end
                 end
             end
             @testset "some loops fail" begin
-                guardsrand(123) do
-                    @testset for i in 1:5
-                        @test i <= rand(1:10)
-                    end
+                @testset for i in 1:5
+                    @test i <= 4
                 end
                 # should add 3 errors and 3 passing tests
                 @testset for i in 1:6
@@ -738,4 +736,23 @@ end
         @warn """Omitting `@test_deprecated` tests which can't yet
                  be tested in --depwarn=error mode"""
     end
+end
+
+@testset "@testset preserves GLOBAL_RNG's state, and re-seeds it" begin
+    # i.e. it behaves as if it was wrapped in a `guardsrand(GLOBAL_RNG.seed)` block
+    seed = rand(UInt128)
+    srand(seed)
+    a = rand()
+    @testset begin
+        # global RNG must re-seeded at the beginning of @testset
+        @test a == rand()
+    end
+    @testset for i=1:3
+        @test a == rand()
+    end
+    # the @testset's above must have no consequence for rand() below
+    b = rand()
+    srand(seed)
+    @test a == rand()
+    @test b == rand()
 end

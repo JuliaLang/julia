@@ -10,25 +10,24 @@ import Base.LinAlg.BlasInt
 @test_throws ArgumentError Base.LinAlg.LAPACK.chktrans('Z')
 
 @testset "syevr" begin
-    guardsrand(123) do
-        Ainit = randn(5,5)
-        @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-            if elty == ComplexF32 || elty == ComplexF64
-                A = complex.(Ainit, Ainit)
-            else
-                A = Ainit
-            end
-            A = convert(Array{elty, 2}, A)
-            Asym = A'A
-            vals, Z = LAPACK.syevr!('V', copy(Asym))
-            @test Z*(Diagonal(vals)*Z') ≈ Asym
-            @test all(vals .> 0.0)
-            @test LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[vals .< 1.0]
-            @test LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[4:5]
-            @test vals ≈ LAPACK.syev!('N','U',copy(Asym))
-
-            @test_throws DimensionMismatch LAPACK.sygvd!(1,'V','U',copy(Asym),ones(elty,6,6))
+    srand(123)
+    Ainit = randn(5,5)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        if elty == ComplexF32 || elty == ComplexF64
+            A = complex.(Ainit, Ainit)
+        else
+            A = Ainit
         end
+        A = convert(Array{elty, 2}, A)
+        Asym = A'A
+        vals, Z = LAPACK.syevr!('V', copy(Asym))
+        @test Z*(Diagonal(vals)*Z') ≈ Asym
+        @test all(vals .> 0.0)
+        @test LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[vals .< 1.0]
+        @test LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[4:5]
+        @test vals ≈ LAPACK.syev!('N','U',copy(Asym))
+
+        @test_throws DimensionMismatch LAPACK.sygvd!(1,'V','U',copy(Asym),ones(elty,6,6))
     end
 end
 
@@ -207,12 +206,11 @@ end
 
 @testset "gels" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        guardsrand(913) do
-            A = rand(elty,10,10)
-            X = rand(elty,10)
-            B,Y,z = LAPACK.gels!('N',copy(A),copy(X))
-            @test A\X ≈ Y
-        end
+        srand(913)
+        A = rand(elty,10,10)
+        X = rand(elty,10)
+        B,Y,z = LAPACK.gels!('N',copy(A),copy(X))
+        @test A\X ≈ Y
     end
 end
 
@@ -435,36 +433,34 @@ end
 
 @testset "sysv" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        guardsrand(123) do
-            A = rand(elty,10,10)
-            A = A + A.' #symmetric!
-            b = rand(elty,10)
-            c = A \ b
-            b,A = LAPACK.sysv!('U',A,b)
-            @test b ≈ c
-            @test_throws DimensionMismatch LAPACK.sysv!('U',A,rand(elty,11))
-        end
+        srand(123)
+        A = rand(elty,10,10)
+        A = A + A.' #symmetric!
+        b = rand(elty,10)
+        c = A \ b
+        b,A = LAPACK.sysv!('U',A,b)
+        @test b ≈ c
+        @test_throws DimensionMismatch LAPACK.sysv!('U',A,rand(elty,11))
     end
 end
 
 @testset "hesv" begin
     @testset for elty in (ComplexF32, ComplexF64)
-        guardsrand(935) do
-            A = rand(elty,10,10)
-            A = A + A' #hermitian!
-            b = rand(elty,10)
-            c = A \ b
-            b,A = LAPACK.hesv!('U',A,b)
-            @test b ≈ c
-            @test_throws DimensionMismatch LAPACK.hesv!('U',A,rand(elty,11))
-            A = rand(elty,10,10)
-            A = A + A' #hermitian!
-            b = rand(elty,10)
-            c = A \ b
-            b,A = LAPACK.hesv_rook!('U',A,b)
-            @test b ≈ c
-            @test_throws DimensionMismatch LAPACK.hesv_rook!('U',A,rand(elty,11))
-        end
+        srand(935)
+        A = rand(elty,10,10)
+        A = A + A' #hermitian!
+        b = rand(elty,10)
+        c = A \ b
+        b,A = LAPACK.hesv!('U',A,b)
+        @test b ≈ c
+        @test_throws DimensionMismatch LAPACK.hesv!('U',A,rand(elty,11))
+        A = rand(elty,10,10)
+        A = A + A' #hermitian!
+        b = rand(elty,10)
+        c = A \ b
+        b,A = LAPACK.hesv_rook!('U',A,b)
+        @test b ≈ c
+        @test_throws DimensionMismatch LAPACK.hesv_rook!('U',A,rand(elty,11))
     end
 end
 

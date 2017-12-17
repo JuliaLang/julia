@@ -1691,21 +1691,20 @@ end
 end
 
 @testset "sparse matrix normestinv" begin
-    guardsrand(1234) do
-        Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
-        Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
-        Ar = sprandn(20,20,.5)
-        Ari = ceil.(Int64, 100*Ar)
-        if Base.USE_GPL_LIBS
-            # NOTE: normestinv is probabilistic, so must be included in the guardsrand block
-            @test Base.SparseArrays.normestinv(Ac,3) ≈ norm(inv(Array(Ac)),1) atol=1e-4
-            @test Base.SparseArrays.normestinv(Aci,3) ≈ norm(inv(Array(Aci)),1) atol=1e-4
-            @test Base.SparseArrays.normestinv(Ar) ≈ norm(inv(Array(Ar)),1) atol=1e-4
-            @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
-            @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
-        end
-        @test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
+    srand(1234)
+    Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
+    Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
+    Ar = sprandn(20,20,.5)
+    Ari = ceil.(Int64, 100*Ar)
+    if Base.USE_GPL_LIBS
+        # NOTE: normestinv is probabilistic, so requires a fixed seed (set above in srand(1234))
+        @test Base.SparseArrays.normestinv(Ac,3) ≈ norm(inv(Array(Ac)),1) atol=1e-4
+        @test Base.SparseArrays.normestinv(Aci,3) ≈ norm(inv(Array(Aci)),1) atol=1e-4
+        @test Base.SparseArrays.normestinv(Ar) ≈ norm(inv(Array(Ar)),1) atol=1e-4
+        @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
+        @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
     end
+    @test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
 end
 
 @testset "issue #13008" begin
@@ -1745,30 +1744,29 @@ end
 end
 
 @testset "factorization" begin
-    guardsrand(123) do
-        local A
-        A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
-        A = A + A'
-        @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
-        A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
-        A = A*A'
-        @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
-        A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2)
-        A = A + A.'
-        @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
-        A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2)
-        A = A*A.'
-        @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
-        @test factorize(triu(A)) == triu(A)
-        @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
-        @test factorize(tril(A)) == tril(A)
-        @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
-        @test !Base.USE_GPL_LIBS || factorize(A[:, 1:4])\ones(size(A, 1)) ≈ Array(A[:, 1:4])\ones(size(A, 1))
-        @test_throws ErrorException chol(A)
-        @test_throws ErrorException lu(A)
-        @test_throws ErrorException eig(A)
-        @test_throws ErrorException inv(A)
-    end
+    srand(123)
+    local A
+    A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
+    A = A + A'
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
+    A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
+    A = A*A'
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
+    A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2)
+    A = A + A.'
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
+    A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2)
+    A = A*A.'
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
+    @test factorize(triu(A)) == triu(A)
+    @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
+    @test factorize(tril(A)) == tril(A)
+    @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
+    @test !Base.USE_GPL_LIBS || factorize(A[:, 1:4])\ones(size(A, 1)) ≈ Array(A[:, 1:4])\ones(size(A, 1))
+    @test_throws ErrorException chol(A)
+    @test_throws ErrorException lu(A)
+    @test_throws ErrorException eig(A)
+    @test_throws ErrorException inv(A)
 end
 
 @testset "issue #13792, use sparse triangular solvers for sparse triangular solves" begin
