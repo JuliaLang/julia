@@ -3364,9 +3364,30 @@ info(err::Exception; prefix="ERROR: ", kw...) =
 
 # #24844
 @deprecate copy!(dest::AbstractSet, src) union!(dest, src)
+
+function copy!(dest::AbstractSet, src::AbstractSet)
+    depwarn("copy!(dst::AbstractSet, src::AbstractSet) is deprecated. " *
+            "You can either use union!(dst, src) of Future.copy!(dst, src) instead.", :copy!)
+    union!(dest, src)
+end
+
 @deprecate copy!(dest::AbstractDict, src) foldl(push!, dest, src)
+
+function copy!(dest::AbstractDict, src::AbstractDict)
+    depwarn("copy!(dst::AbstractDict, src::AbstractDict) is deprecated. " *
+            "You can either use merge!(dst, src) of Future.copy!(dst, src) instead.", :copy!)
+    foldl(push!, dest, src)
+end
+
 # 24808
 @deprecate copy!(dest::Union{AbstractArray,IndexStyle}, args...) copyto!(dest, args...)
+
+function copy!(dest::AbstractArray, src::AbstractArray)
+    depwarn("copy!(dst::AbstractArray, src::AbstractArray) is deprecated. " *
+            "You can either use copyto!(dst, src) of Future.copy!(dst, src) instead.", :copy!)
+    copyto!(dest, src)
+end
+
 @deprecate unsafe_copy!(dest, args...) unsafe_copyto!(dest, args...)
 
 # issue #24019
