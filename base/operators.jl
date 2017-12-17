@@ -739,7 +739,8 @@ fldmod1(x::T, y::T) where {T<:Real} = (fld1(x,y), mod1(x,y))
 # efficient version for integers
 fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 
-# transpose
+# postfix apostophre
+Core.postfixapostrophize(x) = Adjoint(x)
 
 """
     adjoint(A)
