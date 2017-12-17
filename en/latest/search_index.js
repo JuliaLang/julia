@@ -1093,7 +1093,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Methods",
     "title": "Building a similar type with a different type parameter",
     "category": "section",
-    "text": "When building generic code, there is often a need for constructing a similar object with some change made to the layout of the type, also necessitating a change of the type parameters. For instance, you might have some sort of abstract array with an arbitrary element type and want to write your computation on it with a specific element type. We must implement a method for each AbstractArray{T} subtype that describes how to compute this type transform. There is no general transform of one subtype into another subtype with a different parameter. (Quick review: do you see why this is?)The subtypes of AbstractArray typically implement two methods to achieve this: A method to convert the input array to a subtype of a specific AbstractArray{T, N} abstract type; and a method to make a new uninitialized array with a specific element type. Sample implementations of these can be found in the standard library. Here is a basic example usage of them, guaranteeing that input and output are of the same type:input = convert(AbstractArray{Eltype}, input)\noutput = similar(input, Eltype)As an extension of this, in cases where the algorithm needs a copy of the input array, convert is insufficient as the return value may alias the original input. Combining similar (to make the output array) and copy! (to fill it with the input data) is a generic way to express the requirement for a mutable copy of the input argument:copy_with_eltype(input, Eltype) = copy!(similar(input, Eltype), input)"
+    "text": "When building generic code, there is often a need for constructing a similar object with some change made to the layout of the type, also necessitating a change of the type parameters. For instance, you might have some sort of abstract array with an arbitrary element type and want to write your computation on it with a specific element type. We must implement a method for each AbstractArray{T} subtype that describes how to compute this type transform. There is no general transform of one subtype into another subtype with a different parameter. (Quick review: do you see why this is?)The subtypes of AbstractArray typically implement two methods to achieve this: A method to convert the input array to a subtype of a specific AbstractArray{T, N} abstract type; and a method to make a new uninitialized array with a specific element type. Sample implementations of these can be found in the standard library. Here is a basic example usage of them, guaranteeing that input and output are of the same type:input = convert(AbstractArray{Eltype}, input)\noutput = similar(input, Eltype)As an extension of this, in cases where the algorithm needs a copy of the input array, convert is insufficient as the return value may alias the original input. Combining similar (to make the output array) and copyto! (to fill it with the input data) is a generic way to express the requirement for a mutable copy of the input argument:copy_with_eltype(input, Eltype) = copyto!(similar(input, Eltype), input)"
 },
 
 {
@@ -3909,7 +3909,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Performance Tips",
     "title": "Copying data is not always bad",
     "category": "section",
-    "text": "Arrays are stored contiguously in memory, lending themselves to CPU vectorization and fewer memory accesses due to caching. These are the same reasons that it is recommended to access arrays in column-major order (see above). Irregular access patterns and non-contiguous views can drastically slow down computations on arrays because of non-sequential memory access.Copying irregularly-accessed data into a contiguous array before operating on it can result in a large speedup, such as in the example below. Here, a matrix and a vector are being accessed at 800,000 of their randomly-shuffled indices before being multiplied. Copying the views into plain arrays speeds the multiplication by more than a factor of 2 even with the cost of the copying operation.julia> x = randn(1_000_000);\n\njulia> inds = shuffle(1:1_000_000)[1:800000];\n\njulia> A = randn(50, 1_000_000);\n\njulia> xtmp = zeros(800_000);\n\njulia> Atmp = zeros(50, 800_000);\n\njulia> @time sum(view(A, :, inds) * view(x, inds))\n  0.640320 seconds (41 allocations: 1.391 KiB)\n7253.242699002263\n\njulia> @time begin\n           copy!(xtmp, view(x, inds))\n           copy!(Atmp, view(A, :, inds))\n           sum(Atmp * xtmp)\n       end\n  0.261294 seconds (41 allocations: 1.391 KiB)\n7253.242699002323Provided there is enough memory for the copies, the cost of copying the view to an array is far outweighed by the speed boost from doing the matrix multiplication on a contiguous array."
+    "text": "Arrays are stored contiguously in memory, lending themselves to CPU vectorization and fewer memory accesses due to caching. These are the same reasons that it is recommended to access arrays in column-major order (see above). Irregular access patterns and non-contiguous views can drastically slow down computations on arrays because of non-sequential memory access.Copying irregularly-accessed data into a contiguous array before operating on it can result in a large speedup, such as in the example below. Here, a matrix and a vector are being accessed at 800,000 of their randomly-shuffled indices before being multiplied. Copying the views into plain arrays speeds the multiplication by more than a factor of 2 even with the cost of the copying operation.julia> x = randn(1_000_000);\n\njulia> inds = shuffle(1:1_000_000)[1:800000];\n\njulia> A = randn(50, 1_000_000);\n\njulia> xtmp = zeros(800_000);\n\njulia> Atmp = zeros(50, 800_000);\n\njulia> @time sum(view(A, :, inds) * view(x, inds))\n  0.640320 seconds (41 allocations: 1.391 KiB)\n7253.242699002263\n\njulia> @time begin\n           copyto!(xtmp, view(x, inds))\n           copyto!(Atmp, view(A, :, inds))\n           sum(Atmp * xtmp)\n       end\n  0.261294 seconds (41 allocations: 1.391 KiB)\n7253.242699002323Provided there is enough memory for the copies, the cost of copying the view to an array is far outweighed by the speed boost from doing the matrix multiplication on a contiguous array."
 },
 
 {
@@ -7517,7 +7517,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n"
 },
 
 {
@@ -10213,7 +10213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.rand!",
     "category": "Function",
-    "text": "rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])\n\nPopulate the array A with random values. If S is specified (S can be a type or a collection, cf. rand for details), the values are picked randomly from S. This is equivalent to copy!(A, rand(rng, S, size(A))) but without allocating a new array.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> rand!(rng, zeros(5))\n5-element Array{Float64,1}:\n 0.5908446386657102\n 0.7667970365022592\n 0.5662374165061859\n 0.4600853424625171\n 0.7940257103317943\n\n\n\n"
+    "text": "rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])\n\nPopulate the array A with random values. If S is specified (S can be a type or a collection, cf. rand for details), the values are picked randomly from S. This is equivalent to copyto!(A, rand(rng, S, size(A))) but without allocating a new array.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> rand!(rng, zeros(5))\n5-element Array{Float64,1}:\n 0.5908446386657102\n 0.7667970365022592\n 0.5662374165061859\n 0.4600853424625171\n 0.7940257103317943\n\n\n\n"
 },
 
 {
@@ -11257,11 +11257,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays/#Base.copy!-Tuple{AbstractArray,CartesianIndices,AbstractArray,CartesianIndices}",
+    "location": "stdlib/arrays/#Base.copyto!-Tuple{AbstractArray,CartesianIndices,AbstractArray,CartesianIndices}",
     "page": "Arrays",
-    "title": "Base.copy!",
+    "title": "Base.copyto!",
     "category": "Method",
-    "text": "copy!(dest, Rdest::CartesianIndices, src, Rsrc::CartesianIndices) -> dest\n\nCopy the block of src in the range of Rsrc to the block of dest in the range of Rdest. The sizes of the two regions must match.\n\n\n\n"
+    "text": "copyto!(dest, Rdest::CartesianIndices, src, Rsrc::CartesianIndices) -> dest\n\nCopy the block of src in the range of Rsrc to the block of dest in the range of Rdest. The sizes of the two regions must match.\n\n\n\n"
 },
 
 {
@@ -11333,7 +11333,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Indexing and assignment",
     "category": "section",
-    "text": "Base.getindex(::AbstractArray, ::Any...)\nBase.setindex!(::AbstractArray, ::Any, ::Any...)\nBase.copy!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)\nBase.isassigned\nBase.Colon\nBase.CartesianIndex\nBase.CartesianIndices\nBase.LinearIndices\nBase.to_indices\nBase.checkbounds\nBase.checkindex"
+    "text": "Base.getindex(::AbstractArray, ::Any...)\nBase.setindex!(::AbstractArray, ::Any, ::Any...)\nBase.copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)\nBase.isassigned\nBase.Colon\nBase.CartesianIndex\nBase.CartesianIndices\nBase.LinearIndices\nBase.to_indices\nBase.checkbounds\nBase.checkindex"
 },
 
 {
@@ -12357,7 +12357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n"
 },
 
 {
@@ -18409,27 +18409,27 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/c/#Base.unsafe_copy!-Union{Tuple{T}, Tuple{Ptr{T},Ptr{T},Any}} where T",
+    "location": "stdlib/c/#Base.unsafe_copyto!-Union{Tuple{T}, Tuple{Ptr{T},Ptr{T},Any}} where T",
     "page": "C Interface",
-    "title": "Base.unsafe_copy!",
+    "title": "Base.unsafe_copyto!",
     "category": "Method",
-    "text": "unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)\n\nCopy N elements from a source pointer to a destination, with no checking. The size of an element is determined by the type of the pointers.\n\nThe unsafe prefix on this function indicates that no validation is performed on the pointers dest and src to ensure that they are valid. Incorrect usage may corrupt or segfault your program, in the same manner as C.\n\n\n\n"
+    "text": "unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, N)\n\nCopy N elements from a source pointer to a destination, with no checking. The size of an element is determined by the type of the pointers.\n\nThe unsafe prefix on this function indicates that no validation is performed on the pointers dest and src to ensure that they are valid. Incorrect usage may corrupt or segfault your program, in the same manner as C.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/c/#Base.unsafe_copy!-Union{Tuple{T}, Tuple{Array{T,N} where N,Any,Array{T,N} where N,Any,Any}} where T",
+    "location": "stdlib/c/#Base.unsafe_copyto!-Union{Tuple{T}, Tuple{Array{T,N} where N,Any,Array{T,N} where N,Any,Any}} where T",
     "page": "C Interface",
-    "title": "Base.unsafe_copy!",
+    "title": "Base.unsafe_copyto!",
     "category": "Method",
-    "text": "unsafe_copy!(dest::Array, do, src::Array, so, N)\n\nCopy N elements from a source array to a destination, starting at offset so in the source and do in the destination (1-indexed).\n\nThe unsafe prefix on this function indicates that no validation is performed to ensure that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in the same manner as C.\n\n\n\n"
+    "text": "unsafe_copyto!(dest::Array, do, src::Array, so, N)\n\nCopy N elements from a source array to a destination, starting at offset so in the source and do in the destination (1-indexed).\n\nThe unsafe prefix on this function indicates that no validation is performed to ensure that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in the same manner as C.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/c/#Base.copy!",
+    "location": "stdlib/c/#Base.copyto!",
     "page": "C Interface",
-    "title": "Base.copy!",
+    "title": "Base.copyto!",
     "category": "Function",
-    "text": "copy!(dest, do, src, so, N)\n\nCopy N elements from collection src starting at offset so, to array dest starting at offset do. Return dest.\n\n\n\ncopy!(dest, src) -> dest\n\nCopy all elements from collection src to array dest.\n\n\n\ncopy!(dest, Rdest::CartesianIndices, src, Rsrc::CartesianIndices) -> dest\n\nCopy the block of src in the range of Rsrc to the block of dest in the range of Rdest. The sizes of the two regions must match.\n\n\n\n"
+    "text": "copyto!(dest, do, src, so, N)\n\nCopy N elements from collection src starting at offset so, to array dest starting at offset do. Return dest.\n\n\n\ncopyto!(dest::AbstractArray, src) -> dest\n\nCopy all elements from collection src to array dest, whose length must be greater than or equal to the length n of src. The first n elements of dest are overwritten, the other elements are left untouched.\n\n\n\ncopyto!(dest, Rdest::CartesianIndices, src, Rsrc::CartesianIndices) -> dest\n\nCopy the block of src in the range of Rsrc to the block of dest in the range of Rdest. The sizes of the two regions must match.\n\n\n\n"
 },
 
 {
@@ -18653,7 +18653,7 @@ var documenterSearchIndex = {"docs": [
     "page": "C Interface",
     "title": "C Interface",
     "category": "section",
-    "text": "ccall\nCore.Intrinsics.cglobal\nBase.cfunction\nBase.unsafe_convert\nBase.cconvert\nBase.unsafe_load\nBase.unsafe_store!\nBase.unsafe_copy!{T}(::Ptr{T}, ::Ptr{T}, ::Any)\nBase.unsafe_copy!{T}(::Array{T}, ::Any, ::Array{T}, ::Any, ::Any)\nBase.copy!\nBase.pointer\nBase.unsafe_wrap{T,N}(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}}, ::Ptr{T}, ::NTuple{N,Int})\nBase.pointer_from_objref\nBase.unsafe_pointer_to_objref\nBase.disable_sigint\nBase.reenable_sigint\nBase.systemerror\nCore.Ptr\nCore.Ref\nBase.Cchar\nBase.Cuchar\nBase.Cshort\nBase.Cushort\nBase.Cint\nBase.Cuint\nBase.Clong\nBase.Culong\nBase.Clonglong\nBase.Culonglong\nBase.Cintmax_t\nBase.Cuintmax_t\nBase.Csize_t\nBase.Cssize_t\nBase.Cptrdiff_t\nBase.Cwchar_t\nBase.Cfloat\nBase.Cdouble"
+    "text": "ccall\nCore.Intrinsics.cglobal\nBase.cfunction\nBase.unsafe_convert\nBase.cconvert\nBase.unsafe_load\nBase.unsafe_store!\nBase.unsafe_copyto!{T}(::Ptr{T}, ::Ptr{T}, ::Any)\nBase.unsafe_copyto!{T}(::Array{T}, ::Any, ::Array{T}, ::Any, ::Any)\nBase.copyto!\nBase.pointer\nBase.unsafe_wrap{T,N}(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}}, ::Ptr{T}, ::NTuple{N,Int})\nBase.pointer_from_objref\nBase.unsafe_pointer_to_objref\nBase.disable_sigint\nBase.reenable_sigint\nBase.systemerror\nCore.Ptr\nCore.Ref\nBase.Cchar\nBase.Cuchar\nBase.Cshort\nBase.Cushort\nBase.Cint\nBase.Cuint\nBase.Clong\nBase.Culong\nBase.Clonglong\nBase.Culonglong\nBase.Cintmax_t\nBase.Cuintmax_t\nBase.Csize_t\nBase.Cssize_t\nBase.Cptrdiff_t\nBase.Cwchar_t\nBase.Cfloat\nBase.Cdouble"
 },
 
 {
