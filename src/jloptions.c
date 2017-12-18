@@ -29,7 +29,7 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
 
 jl_options_t jl_options = { 0,    // quiet
                             -1,   // banner
-                            NULL, // julia_home
+                            NULL, // julia_bindir
                             NULL, // julia_bin
                             NULL, // cmds
                             NULL, // image_file (will be filled in below)
@@ -302,8 +302,8 @@ restart_switch:
             }
             break;
         case 'H': // home
-            jl_options.julia_home = strdup(optarg);
-            if (!jl_options.julia_home)
+            jl_options.julia_bindir = strdup(optarg);
+            if (!jl_options.julia_bindir)
                 jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
             break;
         case 'e': // eval

@@ -5,14 +5,15 @@ module Sys
 Provide methods for retrieving information about hardware and the operating system.
 """ -> Sys
 
-export CPU_CORES,
+export BINDIR,
+       CPU_CORES,
+       CPU_NAME,
        WORD_SIZE,
        ARCH,
        MACHINE,
        KERNEL,
        JIT,
        cpu_info,
-       cpu_name,
        cpu_summary,
        uptime,
        loadavg,
@@ -25,6 +26,17 @@ export CPU_CORES,
        iswindows
 
 import ..Base: show
+
+"""
+    Sys.BINDIR
+
+A string containing the full path to the directory containing the `julia` executable.
+"""
+BINDIR = ccall(:jl_get_julia_bindir, Any, ())
+
+_early_init() = global BINDIR = ccall(:jl_get_julia_bindir, Any, ())
+
+# helper to avoid triggering precompile warnings
 
 global CPU_CORES
 """
@@ -66,12 +78,11 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 function __init__()
-    # set CPU core count
     global CPU_CORES =
         haskey(ENV,"JULIA_CPU_CORES") ? parse(Int,ENV["JULIA_CPU_CORES"]) :
                                         Int(ccall(:jl_cpu_cores, Int32, ()))
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
-    global cpu_name = ccall(:jl_get_cpu_name, Ref{String}, ())
+    global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
 end
 

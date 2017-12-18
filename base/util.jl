@@ -347,7 +347,7 @@ println_with_color(color::Union{Int, Symbol}, io::IO, msg...; bold::Bool = false
 println_with_color(color::Union{Int, Symbol}, msg...; bold::Bool = false) =
     println_with_color(color, STDOUT, msg...; bold = bold)
 
-function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
+function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
     image_file = unsafe_string(opts.image_file)

@@ -9,7 +9,7 @@ srand(123)
 
 @testset "based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/" begin
 
-# chm_rdsp(joinpath(JULIA_HOME, "../../deps/SuiteSparse-4.0.2/CHOLMOD/Demo/Matrix/bcsstk01.tri"))
+# chm_rdsp(joinpath(Sys.BINDIR, "../../deps/SuiteSparse-4.0.2/CHOLMOD/Demo/Matrix/bcsstk01.tri"))
 # because the file may not exist in binary distributions and when a system suitesparse library
 # is used
 

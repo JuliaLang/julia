@@ -327,11 +327,11 @@ end
 
 function load_juliarc()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a juliarc.jl file
-    #   If it is not found, then continue on to the relative path based on JULIA_HOME
-    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(JULIA_HOME, Base.SYSCONFDIR, "julia", "juliarc.jl"))
-        include(Main, abspath(JULIA_HOME, Base.SYSCONFDIR, "julia", "juliarc.jl"))
+    #   If it is not found, then continue on to the relative path based on Sys.BINDIR
+    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "juliarc.jl"))
+        include(Main, abspath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "juliarc.jl"))
     else
-        try_include(Main, abspath(JULIA_HOME, "..", "etc", "julia", "juliarc.jl"))
+        try_include(Main, abspath(Sys.BINDIR, "..", "etc", "julia", "juliarc.jl"))
     end
     try_include(Main, abspath(homedir(), ".juliarc.jl"))
     nothing

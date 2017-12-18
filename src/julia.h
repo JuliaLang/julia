@@ -1365,7 +1365,7 @@ typedef enum {
 #endif
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(void);
-JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
+JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
                                      const char *image_relative_path);
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void);
 JL_DLLEXPORT int jl_is_initialized(void);
@@ -1701,7 +1701,7 @@ JL_DLLEXPORT void jl_(void *jl_value);
 typedef struct {
     int8_t quiet;
     int8_t banner;
-    const char *julia_home;
+    const char *julia_bindir;
     const char *julia_bin;
     const char **cmds;
     const char *image_file;

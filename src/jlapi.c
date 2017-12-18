@@ -39,13 +39,13 @@ JL_DLLEXPORT int jl_is_initialized(void)
 // Second argument is the path of a system image file (*.ji) relative to the
 // first argument path, or relative to the default julia home dir.
 // The default is something like ../lib/julia/sys.ji
-JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
+JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
                                      const char *image_relative_path)
 {
     if (jl_is_initialized())
         return;
     libsupport_init();
-    jl_options.julia_home = julia_home_dir;
+    jl_options.julia_bindir = julia_bindir;
     if (image_relative_path != NULL)
         jl_options.image_file = image_relative_path;
     else
@@ -305,9 +305,9 @@ JL_DLLEXPORT int8_t jl_is_memdebug(void) {
 #endif
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_julia_home(void)
+JL_DLLEXPORT jl_value_t *jl_get_julia_bindir(void)
 {
-    return jl_cstr_to_string(jl_options.julia_home);
+    return jl_cstr_to_string(jl_options.julia_bindir);
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_julia_bin(void)

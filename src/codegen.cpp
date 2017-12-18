@@ -1680,7 +1680,7 @@ extern "C" int isabspath(const char *in);
 
 static void write_log_data(logdata_t &logData, const char *extension)
 {
-    std::string base = std::string(jl_options.julia_home);
+    std::string base = std::string(jl_options.julia_bindir);
     base = base + "/../share/julia/base/";
     logdata_t::iterator it = logData.begin();
     for (; it != logData.end(); it++) {
