@@ -1924,53 +1924,29 @@ static int size_isgreater(const void *a, const void *b)
     return *(size_t*)b - *(size_t*)a;
 }
 
-static jl_value_t *read_verify_mod_list(ios_t *s, arraylist_t *dependent_worlds)
+static jl_value_t *read_verify_mod_list(ios_t *s, arraylist_t *dependent_worlds, jl_array_t *mod_list)
 {
     if (!jl_main_module->uuid) {
         return jl_get_exceptionf(jl_errorexception_type,
                 "Main module uuid state is invalid for module deserialization.");
     }
-    jl_array_t *mod_array = jl_alloc_vec_any(0);
-    JL_GC_PUSH1(&mod_array);
-    while (1) {
+    size_t i, l = jl_array_len(mod_list);
+    for (i = 0; ; i++) {
         size_t len = read_int32(s);
-        if (len == 0) {
-            JL_GC_POP();
-            return (jl_value_t*)mod_array;
-        }
-        char *name = (char*)alloca(len+1);
+        if (len == 0 && i == l)
+            return NULL; // success
+        if (len == 0 || i == l)
+            return jl_get_exceptionf(jl_errorexception_type, "Wrong number of entries in module list.");
+        char *name = (char*)alloca(len + 1);
         ios_read(s, name, len);
         name[len] = '\0';
         uint64_t uuid = read_uint64(s);
-        jl_sym_t *sym = jl_symbol(name);
-        jl_module_t *m = NULL;
-        static jl_value_t *require_func = NULL;
-        if (!require_func)
-            require_func = jl_get_global(jl_base_module, jl_symbol("require"));
-        jl_value_t *reqargs[2] = {require_func, (jl_value_t*)sym};
-        JL_TRY {
-            m = (jl_module_t*)jl_apply(reqargs, 2);
-        }
-        JL_CATCH {
-            ios_close(s);
-            jl_rethrow();
-        }
-        if (!m) {
-            JL_GC_POP();
+        jl_sym_t *sym = jl_symbol_n(name, len);
+        jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_list, i);
+        if (!m || !jl_is_module(m) || m->name != sym || m->uuid != uuid) {
             return jl_get_exceptionf(jl_errorexception_type,
-                    "Requiring \"%s\" did not define a corresponding module.", name);
+                "Invalid input in module list: expected %s.", name);
         }
-        if (!jl_is_module(m)) {
-            JL_GC_POP();
-            return jl_get_exceptionf(jl_errorexception_type,
-                "Invalid module path (%s does not name a module).", name);
-        }
-        if (m->uuid != uuid) {
-            JL_GC_POP();
-            return jl_get_exceptionf(jl_errorexception_type,
-                "Module %s uuid did not match cache file.", name);
-        }
-        jl_array_ptr_1d_push(mod_array, (jl_value_t*)m);
         if (m->primary_world > jl_main_module->primary_world)
             arraylist_push(dependent_worlds, (void*)m->primary_world);
     }
@@ -2659,7 +2635,7 @@ static int trace_method(jl_typemap_entry_t *entry, void *closure)
     return 1;
 }
 
-static jl_value_t *_jl_restore_incremental(ios_t *f)
+static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ios_eof(f) || !jl_read_verify_header(f)) {
@@ -2682,13 +2658,12 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     arraylist_new(&dependent_worlds, 0);
 
     // verify that the system state is valid
-    jl_value_t *verify_result = read_verify_mod_list(f, &dependent_worlds);
-    if (!jl_is_array(verify_result)) {
+    jl_value_t *verify_fail = read_verify_mod_list(f, &dependent_worlds, mod_array);
+    if (verify_fail) {
         arraylist_free(&dependent_worlds);
         ios_close(f);
-        return verify_result;
+        return verify_fail;
     }
-    jl_array_t *mod_array = (jl_array_t*)verify_result;
 
     // prepare to deserialize
     int en = jl_gc_enable(0);
@@ -2751,21 +2726,21 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     return (jl_value_t*)restored;
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz, jl_array_t *mod_array)
 {
     ios_t f;
     ios_static_buffer(&f, (char*)buf, sz);
-    return _jl_restore_incremental(&f);
+    return _jl_restore_incremental(&f, mod_array);
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *mod_array)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
         return jl_get_exceptionf(jl_errorexception_type,
             "Cache file \"%s\" not found.\n", fname);
     }
-    return _jl_restore_incremental(&f);
+    return _jl_restore_incremental(&f, mod_array);
 }
 
 // --- init ---
