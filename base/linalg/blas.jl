@@ -555,9 +555,9 @@ for (fname, elty) in ((:dgemv_,:Float64),
             if trans == 'N' && (length(X) != n || length(Y) != m)
                 throw(DimensionMismatch("A has dimensions $(size(A)), X has length $(length(X)) and Y has length $(length(Y))"))
             elseif trans == 'C' && (length(X) != m || length(Y) != n)
-                throw(DimensionMismatch("A' has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
+                throw(DimensionMismatch("the adjoint of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
             elseif trans == 'T' && (length(X) != m || length(Y) != n)
-                throw(DimensionMismatch("A.' has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
+                throw(DimensionMismatch("the transpose of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
             end
             ccall((@blasfunc($fname), libblas), Void,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
@@ -994,7 +994,7 @@ end
 """
     syr!(uplo, alpha, x, A)
 
-Rank-1 update of the symmetric matrix `A` with vector `x` as `alpha*x*x.' + A`.
+Rank-1 update of the symmetric matrix `A` with vector `x` as `alpha*x*Transpose(x) + A`.
 [`uplo`](@ref stdlib-blas-uplo) controls which triangle of `A` is updated. Returns `A`.
 """
 function syr! end
@@ -1228,7 +1228,7 @@ end
 """
     syrk!(uplo, trans, alpha, A, beta, C)
 
-Rank-k update of the symmetric matrix `C` as `alpha*A*A.' + beta*C` or `alpha*A.'*A +
+Rank-k update of the symmetric matrix `C` as `alpha*A*Transpose(A) + beta*C` or `alpha*Transpose(A)*A +
 beta*C` according to [`trans`](@ref stdlib-blas-trans).
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
 """
@@ -1239,7 +1239,7 @@ function syrk! end
 
 Returns either the upper triangle or the lower triangle of `A`,
 according to [`uplo`](@ref stdlib-blas-uplo),
-of `alpha*A*A.'` or `alpha*A.'*A`,
+of `alpha*A*Transpose(A)` or `alpha*Transpose(A)*A`,
 according to [`trans`](@ref stdlib-blas-trans).
 """
 function syrk end

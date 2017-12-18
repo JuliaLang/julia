@@ -110,8 +110,8 @@ dimg  = randn(n)/2
                     @test norm(a*(lua\cc) - cc, 1) < ε*κ*n # cc is a vector
                     @test norm(a'*(lua'\cc) - cc, 1) < ε*κ*n # cc is a vector
                     @test AbstractArray(lua) ≈ a
-                    @test norm(a.'*(lua.'\bb) - bb,1) < ε*κ*n*2 # Two because the right hand side has two columns
-                    @test norm(a.'*(lua.'\cc) - cc,1) < ε*κ*n
+                    @test norm(Transpose(a)*(Transpose(lua)\bb) - bb,1) < ε*κ*n*2 # Two because the right hand side has two columns
+                    @test norm(Transpose(a)*(Transpose(lua)\cc) - cc,1) < ε*κ*n
                 end
 
                 # Test whether Ax_ldiv_B!(y, LU, x) indeed overwrites y
@@ -127,8 +127,8 @@ dimg  = randn(n)/2
 
                 ldiv!(b_dest, Transpose(lua), b)
                 ldiv!(c_dest, Transpose(lua), c)
-                @test norm(b_dest - lua.' \ b, 1) < ε*κ*2n
-                @test norm(c_dest - lua.' \ c, 1) < ε*κ*n
+                @test norm(b_dest - Transpose(lua) \ b, 1) < ε*κ*2n
+                @test norm(c_dest - Transpose(lua) \ c, 1) < ε*κ*n
 
                 ldiv!(b_dest, Adjoint(lua), b)
                 ldiv!(c_dest, Adjoint(lua), c)
@@ -144,16 +144,16 @@ dimg  = randn(n)/2
             lud   = factorize(d)
             f = zeros(eltyb, n+1)
             @test_throws DimensionMismatch lud\f
-            @test_throws DimensionMismatch lud.'\f
+            @test_throws DimensionMismatch Transpose(lud)\f
             @test_throws DimensionMismatch lud'\f
             @test_throws DimensionMismatch Base.LinAlg.ldiv!(Transpose(lud), f)
             let Bs = copy(b)
                 for bb in (Bs, view(Bs, 1:n, 1))
                     @test norm(d*(lud\bb) - bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                     if eltya <: Real
-                        @test norm((lud.'\bb) - Array(d.')\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+                        @test norm((Transpose(lud)\bb) - Array(transpose(d))\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                         if eltya != Int && eltyb != Int
-                            @test norm(Base.LinAlg.ldiv!(Transpose(lud), copy(bb)) - Array(d.')\bb, 1) < ε*κd*n*2
+                            @test norm(Base.LinAlg.ldiv!(Transpose(lud), copy(bb)) - Array(transpose(d))\bb, 1) < ε*κd*n*2
                         end
                     end
                     if eltya <: Complex
@@ -164,7 +164,7 @@ dimg  = randn(n)/2
             if eltya <: BlasFloat && eltyb <: BlasFloat
                 e = rand(eltyb,n,n)
                 @test norm(e/lud - e/d,1) < ε*κ*n^2
-                @test norm((lud.'\e') - Array(d.')\e',1) < ε*κd*n^2
+                @test norm((Transpose(lud)\e') - Array(transpose(d))\e',1) < ε*κd*n^2
                 #test singular
                 du = rand(eltya,n-1)
                 dl = rand(eltya,n-1)

@@ -972,7 +972,7 @@ end
 """
     gels!(trans, A, B) -> (F, B, ssr)
 
-Solves the linear equation `A * X = B`, `A.' * X =B`, or `A' * X = B` using
+Solves the linear equation `A * X = B`, `Transpose(A) * X = B`, or `Adjoint(A) * X = B` using
 a QR or LQ factorization. Modifies the matrix/vector `B` in place with the
 solution. `A` is overwritten with its `QR` or `LQ` factorization. `trans`
 may be one of `N` (no modification), `T` (transpose), or `C` (conjugate
@@ -994,7 +994,7 @@ gesv!(A::StridedMatrix, B::StridedVecOrMat)
 """
     getrs!(trans, A, ipiv, B)
 
-Solves the linear equation `A * X = B`, `A.' * X =B`, or `A' * X = B` for
+Solves the linear equation `A * X = B`, `Transpose(A) * X = B`, or `Adjoint(A) * X = B` for
 square `A`. Modifies the matrix/vector `B` in place with the solution. `A`
 is the `LU` factorization from `getrf!`, with `ipiv` the pivoting
 information. `trans` may be one of `N` (no modification), `T` (transpose),
@@ -1155,8 +1155,8 @@ end
 """
     gesvx!(fact, trans, A, AF, ipiv, equed, R, C, B) -> (X, equed, R, C, B, rcond, ferr, berr, work)
 
-Solves the linear equation `A * X = B` (`trans = N`), `A.' * X =B`
-(`trans = T`), or `A' * X = B` (`trans = C`) using the `LU` factorization
+Solves the linear equation `A * X = B` (`trans = N`), `Transpose(A) * X = B`
+(`trans = T`), or `Adjoint(A) * X = B` (`trans = C`) using the `LU` factorization
 of `A`. `fact` may be `E`, in which case `A` will be equilibrated and copied
 to `AF`; `F`, in which case `AF` and `ipiv` from a previous `LU` factorization
 are inputs; or `N`, in which case `A` will be copied to `AF` and then
@@ -2436,8 +2436,8 @@ gttrf!(dl::StridedVector, d::StridedVector, du::StridedVector)
 """
     gttrs!(trans, dl, d, du, du2, ipiv, B)
 
-Solves the equation `A * X = B` (`trans = N`), `A.' * X = B` (`trans = T`),
-or `A' * X = B` (`trans = C`) using the `LU` factorization computed by
+Solves the equation `A * X = B` (`trans = N`), `Transpose(A) * X = B` (`trans = T`),
+or `Adjoint(A) * X = B` (`trans = C`) using the `LU` factorization computed by
 `gttrf!`. `B` is overwritten with the solution `X`.
 """
 gttrs!(trans::Char, dl::StridedVector, d::StridedVector, du::StridedVector, du2::StridedVector,
@@ -2866,7 +2866,7 @@ orgrq!(A::StridedMatrix, tau::StridedVector, k::Integer = length(tau))
 """
     ormlq!(side, trans, A, tau, C)
 
-Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
+Computes `Q * C` (`trans = N`), `Transpose(Q) * C` (`trans = T`), `Adjoint(Q) * C`
 (`trans = C`) for `side = L` or the equivalent right-sided multiplication
 for `side = R` using `Q` from a `LQ` factorization of `A` computed using
 `gelqf!`. `C` is overwritten.
@@ -2876,7 +2876,7 @@ ormlq!(side::Char, trans::Char, A::StridedMatrix, tau::StridedVector, C::Strided
 """
     ormqr!(side, trans, A, tau, C)
 
-Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
+Computes `Q * C` (`trans = N`), `Transpose(Q) * C` (`trans = T`), `Adjoint(Q) * C`
 (`trans = C`) for `side = L` or the equivalent right-sided multiplication
 for `side = R` using `Q` from a `QR` factorization of `A` computed using
 `geqrf!`. `C` is overwritten.
@@ -2886,7 +2886,7 @@ ormqr!(side::Char, trans::Char, A::StridedMatrix, tau::StridedVector, C::Strided
 """
     ormql!(side, trans, A, tau, C)
 
-Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
+Computes `Q * C` (`trans = N`), `Transpose(Q) * C` (`trans = T`), `Adjoint(Q) * C`
 (`trans = C`) for `side = L` or the equivalent right-sided multiplication
 for `side = R` using `Q` from a `QL` factorization of `A` computed using
 `geqlf!`. `C` is overwritten.
@@ -2896,7 +2896,7 @@ ormql!(side::Char, trans::Char, A::StridedMatrix, tau::StridedVector, C::Strided
 """
     ormrq!(side, trans, A, tau, C)
 
-Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
+Computes `Q * C` (`trans = N`), `Transpose(Q) * C` (`trans = T`), `Adjoint(Q) * C`
 (`trans = C`) for `side = L` or the equivalent right-sided multiplication
 for `side = R` using `Q` from a `RQ` factorization of `A` computed using
 `gerqf!`. `C` is overwritten.
@@ -2906,7 +2906,7 @@ ormrq!(side::Char, trans::Char, A::StridedMatrix, tau::StridedVector, C::Strided
 """
     gemqrt!(side, trans, V, T, C)
 
-Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
+Computes `Q * C` (`trans = N`), `Transpose(Q) * C` (`trans = T`), `Adjoint(Q) * C`
 (`trans = C`) for `side = L` or the equivalent right-sided multiplication
 for `side = R` using `Q` from a `QR` factorization of `A` computed using
 `geqrt!`. `C` is overwritten.
@@ -3306,8 +3306,8 @@ trtri!(uplo::Char, diag::Char, A::StridedMatrix)
 """
     trtrs!(uplo, trans, diag, A, B)
 
-Solves `A * X = B` (`trans = N`), `A.' * X = B` (`trans = T`), or
-`A' * X = B` (`trans = C`) for (upper if `uplo = U`, lower if `uplo = L`)
+Solves `A * X = B` (`trans = N`), `Transpose(A) * X = B` (`trans = T`), or
+`Adjoint(A) * X = B` (`trans = C`) for (upper if `uplo = U`, lower if `uplo = L`)
 triangular matrix `A`. If `diag = N`, `A` has non-unit diagonal elements.
 If `diag = U`, all diagonal elements of `A` are one. `B` is overwritten
 with the solution `X`.
@@ -3601,7 +3601,7 @@ trevc!(side::Char, howmny::Char, select::StridedVector{BlasInt}, T::StridedMatri
     trrfs!(uplo, trans, diag, A, B, X, Ferr, Berr) -> (Ferr, Berr)
 
 Estimates the error in the solution to `A * X = B` (`trans = N`),
-`A.' * X = B` (`trans = T`), `A' * X = B` (`trans = C`) for `side = L`,
+`Transpose(A) * X = B` (`trans = T`), `Adjoint(A) * X = B` (`trans = C`) for `side = L`,
 or the equivalent equations a right-handed `side = R` `X * A` after
 computing `X` using `trtrs!`. If `uplo = U`, `A` is upper triangular.
 If `uplo = L`, `A` is lower triangular. If `diag = N`, `A` has non-unit

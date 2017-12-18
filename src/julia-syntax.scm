@@ -1525,17 +1525,8 @@
                       ,(expand-forms (cadr b)))
                `(call ,(aref ops 1) #;Ac_mul_B ,(expand-forms (cadr a))
                       ,(expand-forms b))))
-          ((trans? a)
-           (if (trans? b)
-               `(call ,(aref ops 2) #;At_mul_Bt ,(expand-forms (cadr a))
-                      ,(expand-forms (cadr b)))
-               `(call ,(aref ops 3) #;At_mul_B ,(expand-forms (cadr a))
-                      ,(expand-forms b))))
           ((ctrans? b)
-           `(call ,(aref ops 4) #;A_mul_Bc ,(expand-forms a)
-                  ,(expand-forms (cadr b))))
-          ((trans? b)
-           `(call ,(aref ops 5) #;A_mul_Bt ,(expand-forms a)
+           `(call ,(aref ops 2) #;A_mul_Bc ,(expand-forms a)
                   ,(expand-forms (cadr b))))
           (else
            `(call ,(cadr e) ,(expand-forms a) ,(expand-forms b))))))
@@ -2225,15 +2216,15 @@
                  ((and (eq? f '*) (length= e 4))
                   (expand-transposed-op
                    e
-                   #(Ac_mul_Bc Ac_mul_B At_mul_Bt At_mul_B A_mul_Bc A_mul_Bt)))
+                   #(Ac_mul_Bc Ac_mul_B A_mul_Bc)))
                  ((and (eq? f '/) (length= e 4))
                   (expand-transposed-op
                    e
-                   #(Ac_rdiv_Bc Ac_rdiv_B At_rdiv_Bt At_rdiv_B A_rdiv_Bc A_rdiv_Bt)))
+                   #(Ac_rdiv_Bc Ac_rdiv_B A_rdiv_Bc)))
                  ((and (eq? f '\\) (length= e 4))
                   (expand-transposed-op
                    e
-                   #(Ac_ldiv_Bc Ac_ldiv_B At_ldiv_Bt At_ldiv_B A_ldiv_Bc A_ldiv_Bt)))
+                   #(Ac_ldiv_Bc Ac_ldiv_B A_ldiv_Bc)))
                  (else
                   (map expand-forms e))))
          (map expand-forms e)))
@@ -2406,7 +2397,38 @@
             `(call (top typed_vcat) ,t ,@a)))))
 
    '|'|  (lambda (e) (expand-forms `(call adjoint ,(cadr e))))
-   '|.'| (lambda (e) (expand-forms `(call transpose ,(cadr e))))
+   '|.'| (lambda (e) (begin (deprecation-message (string "The syntax `.'` for transposition is deprecated, "
+                                             "and the special lowering of `.'` in multiplication "
+                                             "(`*`), left-division (`\\`), and right-division (`/`) "
+                                             "operations, for example `A.'*B` lowering to `At_mul_B(A, B)`, "
+                                             "`A\\B.'` lowering to `A_ldiv_Bt(A, B)`, and `A.'/B.'` "
+                                             "lowering to `At_rdiv_Bt(A, B)`, has been removed "
+                                             "in favor of a lazy `Transpose` wrapper type and "
+                                             "dispatch on that type. Two rewrites for `A.'` for "
+                                             "matrix `A` exist: eager or materializing `transpose(A)`, "
+                                             "which constructs a freshly allocated matrix of `A`'s type "
+                                             "and containing the transpose of `A`, and lazy "
+                                             "`Transpose(A)`, which wraps `A` in a `Transpose` "
+                                             "view type. Which rewrite is appropriate depends on "
+                                             "context: If `A.'` appears in a multiplication, "
+                                             "left-division, or right-division operation that "
+                                             "was formerly specially lowered to an `A_mul_B`-like "
+                                             "call, then the lazy `Tranpose(A)` is the correct "
+                                             "replacement and will result in dispatch to a method "
+                                             "equivalent to the former `A_mul_B`-like call. For "
+                                             "example, `A.'*B`, formerly yielding `At_mul_B(A, B)`, "
+                                             "should be rewritten `Transpose(A)*B`, which will "
+                                             "dispatch to a method equivalent to the former "
+                                             "`At_mul_B(A, B)` method. If `A.'` appears outside "
+                                             "such an operation, then `transpose(A)` is the "
+                                             "correct rewrite. For vector `A`, `A.'` already "
+                                             "transposed lazily to a `RowVector`, so `Transpose(A)`. "
+                                             "which now yields a `Transpose`-wrapped vector "
+                                             "behaviorally equivalent to the former `RowVector` "
+                                             "is always the correct rewrite for vectors. For "
+                                             "more information, see issue #5332 on Julia's "
+                                             "issue tracker on GitHub." #\newline))
+                            (return (expand-forms `(call transpose ,(cadr e))))))
 
    'generator
    (lambda (e)

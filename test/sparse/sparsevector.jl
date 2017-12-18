@@ -874,7 +874,7 @@ end
             xf = Array(x)
             x2f = Array(x2)
             @test SparseArrays.densemv(A, x; trans='N') ≈ Af * xf
-            @test SparseArrays.densemv(A, x2; trans='T') ≈ Af.' * x2f
+            @test SparseArrays.densemv(A, x2; trans='T') ≈ Transpose(Af) * x2f
             @test SparseArrays.densemv(A, x2; trans='C') ≈ Af'x2f
             @test_throws ArgumentError SparseArrays.densemv(A, x; trans='D')
         end
@@ -909,7 +909,7 @@ end
 
             y = *(Transpose(A), x2)
             @test isa(y, SparseVector{ComplexF64,Int})
-            @test Array(y) ≈ Af.' * x2f
+            @test Array(y) ≈ Transpose(Af) * x2f
 
             y = *(Adjoint(A), x2)
             @test isa(y, SparseVector{ComplexF64,Int})

@@ -475,7 +475,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
                 s = zero(A[aoffs + 1]*B[1] + A[aoffs + 1]*B[1])
             end
             for i = 1:nA
-                s += A[aoffs+i].'B[i]
+                s += Transpose(A[aoffs+i]) * B[i]
             end
             C[k] = s
         end
@@ -629,7 +629,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     z2 = zero(A[i, 1]*B[j, 1] + A[i, 1]*B[j, 1])
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
                     for k = 1:nA
-                        Ctmp += A[i, k]*B[j, k].'
+                        Ctmp += A[i, k] * Transpose(B[j, k])
                     end
                     C[i,j] = Ctmp
                 end
@@ -649,7 +649,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     z2 = zero(A[1, i]*B[1, j] + A[1, i]*B[1, j])
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
                     for k = 1:nA
-                        Ctmp += A[k, i].'B[k, j]
+                        Ctmp += Transpose(A[k, i]) * B[k, j]
                     end
                     C[i,j] = Ctmp
                 end
@@ -658,7 +658,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     z2 = zero(A[1, i]*B[j, 1] + A[1, i]*B[j, 1])
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
                     for k = 1:nA
-                        Ctmp += A[k, i].'B[j, k].'
+                        Ctmp += Transpose(A[k, i]) * Transpose(B[j, k])
                     end
                     C[i,j] = Ctmp
                 end
@@ -667,7 +667,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     z2 = zero(A[1, i]*B[j, 1] + A[1, i]*B[j, 1])
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
                     for k = 1:nA
-                        Ctmp += A[k, i].'B[j, k]'
+                        Ctmp += Transpose(A[k, i]) * Adjoint(B[j, k])
                     end
                     C[i,j] = Ctmp
                 end
@@ -687,7 +687,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     z2 = zero(A[1, i]*B[j, 1] + A[1, i]*B[j, 1])
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
                     for k = 1:nA
-                        Ctmp += A[k, i]'B[j, k].'
+                        Ctmp += Adjoint(A[k, i]) * Transpose(B[j, k])
                     end
                     C[i,j] = Ctmp
                 end

@@ -73,10 +73,10 @@ rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
                         @test Matrix{eltyb}(I, n, n)*q ≈ convert(AbstractMatrix{tab},q)
                     end
                     @test q*b ≈ squareQ(q)*b atol=100ε
-                    @test q.'*b ≈ squareQ(q).'*b atol=100ε
+                    @test Transpose(q)*b ≈ Transpose(squareQ(q))*b atol=100ε
                     @test q'*b ≈ squareQ(q)'*b atol=100ε
                     @test a*q ≈ a*squareQ(q) atol=100ε
-                    @test a*q.' ≈ a*squareQ(q).' atol=100ε
+                    @test a*Transpose(q) ≈ a*Transpose(squareQ(q)) atol=100ε
                     @test a*q' ≈ a*squareQ(q)' atol=100ε
                     @test a'*q ≈ a'*squareQ(q) atol=100ε
                     @test a'*q' ≈ a'*squareQ(q)' atol=100ε
@@ -88,7 +88,7 @@ rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
                         pad_a = vcat(I, a)
                         pad_b = hcat(I, b)
                         @test pad_a*q ≈ pad_a*squareQ(q) atol=100ε
-                        @test q.'*pad_b ≈ squareQ(q).'*pad_b atol=100ε
+                        @test Transpose(q)*pad_b ≈ Transpose(squareQ(q))*pad_b atol=100ε
                         @test q'*pad_b ≈ squareQ(q)'*pad_b atol=100ε
                     end
                 end

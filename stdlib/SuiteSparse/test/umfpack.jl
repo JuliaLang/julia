@@ -55,17 +55,17 @@
             @test y ≈ x
 
             @test A'*x ≈ b
-            x = lua.'\b
+            x = Transpose(lua) \ b
             @test x ≈ float([1:5;])
 
-            @test A.'*x ≈ b
+            @test Transpose(A) * x ≈ b
             x = SuiteSparse.ldiv!(Transpose(lua), complex.(b))
             @test x ≈ float([1:5;])
             y = similar(x)
             SuiteSparse.ldiv!(y, Transpose(lua), complex.(b))
             @test y ≈ x
 
-            @test A.'*x ≈ b
+            @test Transpose(A) * x ≈ b
 
             # Element promotion and type inference
             @inferred lua\ones(Int, size(A, 2))
@@ -84,8 +84,8 @@
             @test Ac\b ≈ x
             b  = Ac'*x
             @test Ac'\b ≈ x
-            b  = Ac.'*x
-            @test Ac.'\b ≈ x
+            b  = Transpose(Ac)*x
+            @test Transpose(Ac)\b ≈ x
         end
     end
 

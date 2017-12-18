@@ -148,7 +148,7 @@ end
 """
     transpose(A::AbstractMatrix)
 
-The transposition operator (`.'`). Note that the transposition is applied recursively to
+Eager matrix transpose. Note that the transposition is applied recursively to
 elements.
 
 This operation is intended for linear algebra usage - for general data manipulation see

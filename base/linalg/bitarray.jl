@@ -123,7 +123,7 @@ end
 
 ## Structure query functions
 
-issymmetric(A::BitMatrix) = size(A, 1)==size(A, 2) && count(!iszero, A - A.')==0
+issymmetric(A::BitMatrix) = size(A, 1)==size(A, 2) && count(!iszero, A - transpose(A))==0
 ishermitian(A::BitMatrix) = issymmetric(A)
 
 function nonzero_chunks(chunks::Vector{UInt64}, pos0::Int, pos1::Int)

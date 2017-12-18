@@ -100,7 +100,7 @@ end
         @test mul!(C, Transpose(A), B) == A'*B
         @test mul!(C, A, Transpose(B)) == A*B'
         @test mul!(C, Transpose(A), Transpose(B)) == A'*B'
-        @test Base.LinAlg.mul!(C, Adjoint(A), Transpose(B)) == A'*B.'
+        @test Base.LinAlg.mul!(C, Adjoint(A), Transpose(B)) == A'*Transpose(B)
 
         #test DimensionMismatch for generic_matmatmul
         @test_throws DimensionMismatch Base.LinAlg.mul!(C, Adjoint(A), Transpose(ones(Int,4,4)))
@@ -137,9 +137,9 @@ end
     BB = rand(Float64,6,6)
     CC = zeros(Float64,6,6)
     for A in (copy(AA), view(AA, 1:6, 1:6)), B in (copy(BB), view(BB, 1:6, 1:6)), C in (copy(CC), view(CC, 1:6, 1:6))
-        @test Base.LinAlg.mul!(C, Transpose(A), Transpose(B)) == A.'*B.'
-        @test Base.LinAlg.mul!(C, A, Adjoint(B)) == A*B.'
-        @test Base.LinAlg.mul!(C, Adjoint(A), B) == A.'*B
+        @test Base.LinAlg.mul!(C, Transpose(A), Transpose(B)) == Transpose(A)*Transpose(B)
+        @test Base.LinAlg.mul!(C, A, Adjoint(B)) == A*Transpose(B)
+        @test Base.LinAlg.mul!(C, Adjoint(A), B) == Transpose(A)*B
     end
 end
 
@@ -222,7 +222,7 @@ end
     @test_throws BoundsError dot(x, 1:4, y, 1:4)
     @test_throws BoundsError dot(x, 1:3, y, 2:4)
     @test dot(x, 1:2,y, 1:2) == convert(elty, 12.5)
-    @test x.'*y == convert(elty, 29.0)
+    @test Transpose(x)*y == convert(elty, 29.0)
     @test_throws MethodError dot(rand(elty, 2, 2), randn(elty, 2, 2))
     X = convert(Vector{Matrix{elty}},[reshape(1:4, 2, 2), ones(2, 2)])
     res = convert(Matrix{elty}, [7.0 13.0; 13.0 27.0])
@@ -276,7 +276,7 @@ end
     @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(I10x10,'N','N', I0x0, I0x0)
 
     A = rand(elty,3,3)
-    @test Base.LinAlg.matmul3x3('T','N',A, Matrix{elty}(I, 3, 3)) == A.'
+    @test Base.LinAlg.matmul3x3('T','N',A, Matrix{elty}(I, 3, 3)) == transpose(A)
 end
 
 @testset "#13593, #13488" begin
