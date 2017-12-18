@@ -183,6 +183,20 @@ let dl = C_NULL
     end
 end
 
+# test dlclose
+# If dl is NULL, jl_dlclose should return -1 and dlclose should return false
+# dlclose should return true on success and false on failure
+let dl = C_NULL
+    @test -1 == ccall(:jl_dlclose, Cint, (Ptr{Void},), dl)
+    @test !Libdl.dlclose(dl)
+
+    dl = Libdl.dlopen_e("libccalltest")
+    @test dl != C_NULL
+
+    @test Libdl.dlclose(dl)
+    @test !Libdl.dlclose(dl)
+end
+
 if Sys.KERNEL in (:Linux, :FreeBSD)
     ccall(:jl_read_sonames, Void, ())
 end
