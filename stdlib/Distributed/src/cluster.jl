@@ -194,7 +194,8 @@ function start_worker(out::IO, cookie::AbstractString=readline(STDIN))
     init_worker(cookie)
     interface = IPv4(LPROC.bind_addr)
     if LPROC.bind_port == 0
-        (port, sock) = listenany(interface, UInt16(0))
+        port_hint = 9000 + (getpid() % 1000)
+        (port, sock) = listenany(interface, UInt16(port_hint))
         LPROC.bind_port = port
     else
         sock = listen(interface, LPROC.bind_port)
