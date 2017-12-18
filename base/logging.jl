@@ -413,13 +413,14 @@ exists for the current task.
 
     global_logger(logger)
 
-Set the global logger to `logger`.
+Set the global logger to `logger`, and return the previous global logger.
 """
 global_logger() = _global_logstate.logger
 
 function global_logger(logger::AbstractLogger)
+    prev = _global_logstate.logger
     global _global_logstate = LogState(logger)
-    logger
+    prev
 end
 
 """
