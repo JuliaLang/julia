@@ -2089,19 +2089,28 @@ end
 
 const deprecated_sym = Symbol("deprecated.jl")
 
-function method_for_inference_heuristics(infstate::InferenceState)
-    m = infstate.src.method_for_inference_heuristics
-    return isa(m, Method) ? m : infstate.linfo.def
+function method_for_inference_heuristics(cinfo, default::Method)::Method
+    if isa(cinfo, CodeInfo)
+        # appropriate format for `sig` is svec(ftype, argtypes, world)
+        sig = cinfo.signature_for_inference_heuristics
+        if isa(sig, SimpleVector) && length(sig) == 3
+            methods = _methods(sig[1], sig[2], -1, sig[3])
+            if length(methods) == 1
+                _, _, m = methods[]
+                if isa(m, Method)
+                    return m
+                end
+            end
+        end
+    end
+    return default
 end
 
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams, world)
+function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams, world)::Method
     if isdefined(method, :generator) && method.generator.expand_early
         method_instance = code_for_method(method, sig, sparams, world, false)
         if isa(method_instance, MethodInstance)
-            cinfo = get_staged(method_instance)
-            if isa(cinfo, CodeInfo) && isa(cinfo.method_for_inference_heuristics, Method)
-                return cinfo.method_for_inference_heuristics
-            end
+            return method_for_inference_heuristics(get_staged(method_instance), method)
         end
     end
     return method
@@ -2130,7 +2139,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
             edgecycle = true
             break
         end
-        working_method = method_for_inference_heuristics(infstate)
+        working_method = method_for_inference_heuristics(infstate.src, infstate.linfo.def)
         if checked_method === working_method
             if topmost === nothing
                 # inspect the parent of this edge,
@@ -2150,7 +2159,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                     # then check the parent link
                     if topmost === nothing && parent !== nothing
                         parent = parent::InferenceState
-                        parent_method = method_for_inference_heuristics(parent)
+                        parent_method = method_for_inference_heuristics(parent.src, parent.linfo.def)
                         if parent.cached && parent_method === working_method
                             topmost = infstate
                             edgecycle = true
@@ -3416,7 +3425,7 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     method = linfo.def::Method
                     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
                     tree.code = Any[ Expr(:return, quoted(linfo.inferred_const)) ]
-                    tree.method_for_inference_heuristics = nothing
+                    tree.signature_for_inference_heuristics = nothing
                     tree.slotnames = Any[ compiler_temp_sym for i = 1:method.nargs ]
                     tree.slotflags = UInt8[ 0 for i = 1:method.nargs ]
                     tree.slottypes = nothing

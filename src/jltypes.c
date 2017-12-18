@@ -2048,7 +2048,7 @@ void jl_init_types(void)
                         jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(10,
                             "code",
-                            "method_for_inference_heuristics"
+                            "signature_for_inference_heuristics"
                             "slottypes",
                             "ssavaluetypes",
                             "slotflags",
