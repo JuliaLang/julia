@@ -109,10 +109,10 @@ let src = Meta.lower(Main, quote let x = 1 end end).args[1]::CodeInfo,
     repr = string(sf)
     @test repr == "Toplevel MethodInstance thunk at b:3"
 end
-let li = typeof(getfield).name.mt.cache.func::Core.MethodInstance,
+let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
     sf = StackFrame(:a, :b, 3, li, false, false, 0),
     repr = string(sf)
-    @test repr == "getfield(...) at b:3"
+    @test repr == "fieldtype(...) at b:3"
 end
 
 let ctestptr = cglobal((:ctest, "libccalltest")),

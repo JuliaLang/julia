@@ -163,21 +163,21 @@ srand(1)
             condT = cond(map(ComplexF64,Tfull))
             promty = typeof((zero(relty)*zero(relty) + zero(relty)*zero(relty))/one(relty))
             if relty != BigFloat
-                x = T.'\c.'
-                tx = Tfull.' \ c.'
+                x = Transpose(T)\Transpose(c)
+                tx = Transpose(Tfull) \ Transpose(c)
                 elty <: AbstractFloat && @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
-                @test_throws DimensionMismatch T.'\b.'
-                x = T'\c.'
-                tx = Tfull' \ c.'
+                @test_throws DimensionMismatch Transpose(T)\Transpose(b)
+                x = T'\transpose(c)
+                tx = Tfull'\transpose(c)
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
-                @test_throws DimensionMismatch T'\b.'
-                x = T\c.'
-                tx = Tfull\c.'
+                @test_throws DimensionMismatch T'\transpose(b)
+                x = T\Transpose(c)
+                tx = Tfull\Transpose(c)
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
-                @test_throws DimensionMismatch T\b.'
+                @test_throws DimensionMismatch T\Transpose(b)
             end
             @test_throws DimensionMismatch T \ ones(elty,n+1,2)
-            @test_throws DimensionMismatch T.' \ ones(elty,n+1,2)
+            @test_throws DimensionMismatch Transpose(T) \ ones(elty,n+1,2)
             @test_throws DimensionMismatch T' \ ones(elty,n+1,2)
 
             let bb = b, cc = c

@@ -123,11 +123,10 @@ end
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Void, (Any, Any, Cint), m, s, flag)
 
 macro deprecate_binding(old, new, export_old=true, dep_message=nothing)
+    dep_message == nothing && (dep_message = ", use $new instead")
     return Expr(:toplevel,
          export_old ? Expr(:export, esc(old)) : nothing,
-         dep_message != nothing ? Expr(:const, Expr(:(=),
-             esc(Symbol(string("_dep_message_",old))), esc(dep_message))) :
-             nothing,
+         Expr(:const, Expr(:(=), esc(Symbol(string("_dep_message_",old))), esc(dep_message))),
          Expr(:const, Expr(:(=), esc(old), esc(new))),
          Expr(:call, :deprecate, __module__, Expr(:quote, old)))
 end
@@ -2174,6 +2173,9 @@ end
 @deprecate parse(str::AbstractString, pos::Int, ; kwargs...) Meta.parse(str, pos; kwargs...)
 @deprecate_binding ParseError Meta.ParseError
 
+# issue #20899
+# TODO: delete JULIA_HOME deprecation in src/init.c
+
 @eval LinAlg begin
     @deprecate chol!(x::Number, uplo) chol(x) false
 end
@@ -3098,7 +3100,7 @@ end
     *(rowvec::RowVector, A::AbstractTriangular) = rvtranspose(transpose(A) * rvtranspose(rowvec))
     *(rowvec::RowVector, transA::Transpose{<:Any,<:AbstractTriangular}) = rvtranspose(transA.parent * rvtranspose(rowvec))
     *(A::AbstractTriangular, transrowvec::Transpose{<:Any,<:RowVector}) = A * rvtranspose(transrowvec.parent)
-    *(transA::Transpose{<:Any,<:AbstractTriangular}, transrowvec::Transpose{<:Any,<:RowVector}) = transA.parent.' * rvtranspose(transrowvec.parent)
+    *(transA::Transpose{<:Any,<:AbstractTriangular}, transrowvec::Transpose{<:Any,<:RowVector}) = transA * rvtranspose(transrowvec.parent)
     *(rowvec::RowVector, adjA::Adjoint{<:Any,<:AbstractTriangular}) = rvadjoint(adjA.parent * rvadjoint(rowvec))
     *(A::AbstractTriangular, adjrowvec::Adjoint{<:Any,<:RowVector}) = A * rvadjoint(adjrowvec.parent)
     *(adjA::Adjoint{<:Any,<:AbstractTriangular}, adjrowvec::Adjoint{<:Any,<:RowVector}) = adjA.parent' * rvadjoint(adjrowvec.parent)

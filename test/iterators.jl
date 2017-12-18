@@ -430,6 +430,50 @@ end
     @test eltype(arr) == Int
 end
 
+@testset "IndexValue type" begin
+    for A in ([4.0 5.0 6.0],
+              [],
+              (4.0, 5.0, 6.0),
+              (a=4.0, b=5.0, c=6.0),
+              (),
+              NamedTuple(),
+             )
+        d = pairs(A)
+        @test d === pairs(d)
+        @test isempty(d) == isempty(A)
+        @test length(d) == length(A)
+        @test keys(d) == keys(A)
+        @test values(d) == A
+        @test Base.iteratorsize(d) == Base.HasLength()
+        @test Base.iteratoreltype(d) == Base.HasEltype()
+        @test isempty(d) || haskey(d, first(keys(d)))
+        @test collect(v for (k, v) in d) == vec(collect(A))
+        if A isa NamedTuple
+            K = isempty(d) ? Union{} : Symbol
+            V = isempty(d) ? Union{} : Float64
+            @test isempty(d) || haskey(d, :a)
+            @test !haskey(d, :abc)
+            @test !haskey(d, 1)
+        elseif A isa Tuple
+            K = Int
+            V = isempty(d) ? Union{} : Float64
+        else
+            K = A isa AbstractVector ? Int : CartesianIndex{2}
+            V = isempty(d) ? Any : Float64
+            @test get(A, 4, "not found") === "not found"
+            if !isempty(A)
+                @test get(A, 2, "not found") === 5.0
+                @test getindex(d, 3) === 6.0
+                @test setindex!(d, 9, 3) === d
+                @test A[3] === 9.0
+            end
+        end
+        @test keytype(d) == K
+        @test valtype(d) == V
+        @test eltype(d) == Pair{K, V}
+    end
+end
+
 @testset "reverse iterators" begin
     squash(A) = reshape(A, length(A))
     Z = Array{Int,0}(uninitialized); Z[] = 17 # zero-dimensional test case

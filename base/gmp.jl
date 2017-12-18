@@ -216,6 +216,9 @@ limbs_finish!(x::BigInt, a) = ccall((:__gmpz_limbs_finish, :libgmp), Void, (mpz_
 import!(x::BigInt, a, b, c, d, e, f) = ccall((:__gmpz_import, :libgmp), Void,
     (mpz_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Void}), x, a, b, c, d, e, f)
 
+setbit!(x, a) = (ccall((:__gmpz_setbit, :libgmp), Void, (mpz_t, bitcnt_t), x, a); x)
+tstbit(a::BigInt, b) = ccall((:__gmpz_tstbit, :libgmp), Cint, (mpz_t, bitcnt_t), a, b) % Bool
+
 end # module MPZ
 
 const ZERO = BigInt()

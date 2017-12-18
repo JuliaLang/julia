@@ -35,24 +35,24 @@ end
 # expression printing
 
 macro test_repr(x)
-    quote
-        # Note: We can't just compare x1 and x2 because interpolated
-        # strings get converted to string Exprs by the first show().
-        # This could produce a few false positives, but until string
-        # interpolation works we don't really have a choice.
-        let
-            local x1 = Meta.parse($x)
-            local x2 = eval(Meta.parse(repr(x1)))
-            local x3 = eval(Meta.parse(repr(x2)))
-            if x3 != x1
-                error(string(
-                    "repr test failed:",
-                    "\noriginal: ", $x,
-                    "\n\nparsed: ", x2, "\n", sprint(dump, x2),
-                    "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
-                    ))
-            end
-        end
+    # this is a macro instead of function so we can avoid getting useful backtraces :)
+    return :(test_repr($(esc(x))))
+end
+function test_repr(x::String)
+    # Note: We can't just compare x1 and x2 because interpolated
+    # strings get converted to string Exprs by the first show().
+    # This could produce a few false positives, but until string
+    # interpolation works we don't really have a choice.
+    x1 = Meta.parse(x)
+    x2 = eval(Meta.parse(repr(x1)))
+    x3 = eval(Meta.parse(repr(x2)))
+    if x3 != x1
+        error(string(
+            "repr test failed:",
+            "\noriginal: ", x,
+            "\n\nparsed: ", x2, "\n", sprint(dump, x2),
+            "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
+            ))
     end
 end
 
@@ -83,7 +83,8 @@ end
 @test_repr "x^-(y+z)"
 @test_repr "x^-f(y+z)"
 @test_repr "+(w-x)^-f(y+z)"
-#@test_repr "w = (x = y) = z" # Doesn't pass, but it's an invalid assignment loc
+@test_repr "w = ((x = y) = z)" # parens aren't necessary, but not wrong
+@test_repr "w = ((x, y) = z)" # parens aren't necessary, but not wrong
 @test_repr "a & b && c"
 @test_repr "a & (b && c)"
 @test_repr "(a => b) in c"
@@ -781,6 +782,22 @@ end
 @test repr(:(f.(X, Y))) == ":(f.(X, Y))"
 @test repr(:(f.(X))) == ":(f.(X))"
 @test repr(:(f.())) == ":(f.())"
+
+# pretty-printing of other `.` exprs
+test_repr("a.b")
+test_repr("a.in")
+test_repr(":a.b")
+test_repr("a.:+")
+test_repr("(+).a")
+test_repr("(+).:-")
+test_repr("(!).:~")
+test_repr("a.:(begin
+        #= none:3 =#
+    end)")
+@test repr(Expr(:., :a, :b, :c)) == ":(\$(Expr(:., :a, :b, :c)))"
+@test repr(Expr(:., :a, :b)) == ":(\$(Expr(:., :a, :b)))"
+@test repr(Expr(:., :a)) == ":(\$(Expr(:., :a)))"
+@test repr(Expr(:.)) == ":(\$(Expr(:.)))"
 
 # Test compact printing of homogeneous tuples
 @test repr(NTuple{7,Int64}) == "NTuple{7,Int64}"

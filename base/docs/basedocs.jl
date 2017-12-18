@@ -1236,8 +1236,8 @@ tuple
 """
     getfield(value, name::Symbol)
 
-Extract a named field from a `value` of composite type. The syntax `a.b` calls
-`getfield(a, :b)`.
+Extract a named field from a `value` of composite type.
+See also [`getproperty`](@ref Base.getproperty).
 
 # Examples
 ```jldoctest
@@ -1256,8 +1256,9 @@ getfield
 """
     setfield!(value, name::Symbol, x)
 
-Assign `x` to a named field in `value` of composite type. The syntax `a.b = c` calls
-`setfield!(a, :b, c)`. `value` must be mutable.
+Assign `x` to a named field in `value` of composite type.
+The `value` must be mutable and `x` must be a subtype of `fieldtype(typeof(value), name)`.
+See also [`setproperty!`](@ref Base.setproperty!).
 
 # Examples
 ```jldoctest
@@ -1767,5 +1768,27 @@ Tuple
 The base library of Julia.
 """
 kw"Base"
+
+"""
+    typeassert(x, type)
+
+Throw a TypeError unless `x isa type`.
+The syntax `x::type` calls this function.
+"""
+typeassert
+
+"""
+    getproperty(value, name::Symbol)
+
+The syntax `a.b` calls `getproperty(a, :b)`.
+"""
+Base.getproperty
+
+"""
+    setproperty!(value, name::Symbol, x)
+
+The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
+"""
+Base.setproperty!
 
 end

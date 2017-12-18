@@ -167,6 +167,9 @@ else
     end
 end
 
+# use cached value of have_color
+Base.get(::TTYTerminal, k::Symbol, default) = k === :color ? Base.have_color : default
+
 Base.peek(t::TTYTerminal) = Base.peek(t.in_stream)
 
 end # module

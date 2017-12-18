@@ -82,8 +82,8 @@ Keyword arguments:
 * `enable_threaded_blas`: if `true` then  BLAS will run on multiple threads in added
   processes. Default is `false`.
 
-* `exename`: name of the `julia` executable. Defaults to `"\$JULIA_HOME/julia"` or
-  `"\$JULIA_HOME/julia-debug"` as the case may be.
+* `exename`: name of the `julia` executable. Defaults to `"\$(Sys.BINDIR)/julia"` or
+  `"\$(Sys.BINDIR)/julia-debug"` as the case may be.
 
 * `exeflags`: additional flags passed to the worker processes.
 
@@ -92,7 +92,7 @@ Keyword arguments:
 
     + `topology=:all_to_all`: All processes are connected to each other. The default.
 
-    + `topology=:master_slave`: Only the driver process, i.e. `pid` 1 connects to the
+    + `topology=:master_worker`: Only the driver process, i.e. `pid` 1 connects to the
       workers. The workers do not connect to each other.
 
     + `topology=:custom`: The `launch` method of the cluster manager specifies the

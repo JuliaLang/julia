@@ -20,7 +20,8 @@ struct IOContext{IO_t <: IO} <: AbstractPipe
     end
 end
 
-unwrapcontext(io::IO) = io, ImmutableDict{Symbol,Any}()
+# (Note that TTY and TTYTerminal io types have a :color property.)
+unwrapcontext(io::IO) = io, get(io,:color,false) ? ImmutableDict{Symbol,Any}(:color, true) : ImmutableDict{Symbol,Any}()
 unwrapcontext(io::IOContext) = io.io, io.dict
 
 function IOContext(io::IO, dict::ImmutableDict)
@@ -67,6 +68,9 @@ The following properties are in common use:
    can be avoided (e.g. `[Float16(0)]` can be shown as "Float16[0.0]" instead
    of "Float16[Float16(0.0)]" : while displaying the elements of the array, the `:typeinfo`
    property will be set to `Float16`).
+ - `:color`: Boolean specifying whether ANSI color/escape codes are supported/expected.
+   By default, this is determined by whether `io` is a compatible terminal and by any
+   `--color` command-line flag when `julia` was launched.
 
 # Examples
 ```jldoctest
@@ -146,7 +150,7 @@ function show_default(io::IO, @nospecialize(x))
                 if !isdefined(x, f)
                     print(io, undef_ref_str)
                 else
-                    show(recur_io, getfield(x, f))
+                    show(recur_io, getfield(x, i))
                 end
                 if i < nf
                     print(io, ", ")
@@ -715,7 +719,7 @@ function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     end
 end
 
-emphasize(io, str::AbstractString) = have_color ?
+emphasize(io, str::AbstractString) = get(io, :color, false) ?
     print_with_color(Base.error_color(), io, str; bold = true) :
     print(io, Unicode.uppercase(str))
 
@@ -809,7 +813,16 @@ show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ": ")
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
-show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
+function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
+    print(io, ex.mod)
+    print(io, '.')
+    quoted = !isidentifier(ex.name)
+    parens = quoted && !isoperator(ex.name)
+    quoted && print(io, ':')
+    parens && print(io, '(')
+    print(io, ex.name)
+    parens && print(io, ')')
+end
 
 function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
     typ = isa(ex,TypedSlot) ? ex.typ : Any
@@ -904,11 +917,29 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     if !emphstate && ex.typ === Any
         show_type = false
     end
+    unhandled = false
     # dot (i.e. "x.y"), but not compact broadcast exps
-    if head === :(.) && !is_expr(args[2], :tuple)
-        func_prec = operator_precedence(head)
-        args_ = (args[1], (is_quoted(arg) && !is_quoted(unquoted(arg)) ? unquoted(arg) : arg for arg in args[2:end])...)
-        show_list(io, args_, head, indent, func_prec)
+    if head === :(.) && (length(args) != 2 || !is_expr(args[2], :tuple))
+        if length(args) == 2 && is_quoted(args[2])
+            item = args[1]
+            # field
+            field = unquoted(args[2])
+            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item))
+            parens && print(io, '(')
+            show_unquoted(io, item, indent)
+            parens && print(io, ')')
+            # .
+            print(io, '.')
+            # item
+            parens = !(field isa Symbol)
+            quoted = parens || isoperator(field)
+            quoted && print(io, ':')
+            parens && print(io, '(')
+            show_unquoted(io, field, indent)
+            parens && print(io, ')')
+        else
+            unhandled = true
+        end
 
     # infix (i.e. "x <: y" or "x = y")
     elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
@@ -1232,6 +1263,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_type = false
     # print anything else as "Expr(head, args...)"
     else
+        unhandled = true
+    end
+    if unhandled
         if head !== :invoke
             show_type = false
         end
@@ -1253,7 +1287,7 @@ end
 
 function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     # print a method signature tuple for a lambda definition
-    color = have_color && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
+    color = get(io, :color, false) && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
     if sig === Tuple
         Base.print_with_color(color, io, name, "(...)")
         return
@@ -1274,7 +1308,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
         end
     end
     first = true
-    print_style = have_color && get(io, :backtrace, false) ? :bold : :nothing
+    print_style = get(io, :color, false) && get(io, :backtrace, false) ? :bold : :nothing
     print_with_color(print_style, io, "(")
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")

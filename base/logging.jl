@@ -485,16 +485,17 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
             level < Warn  ? :cyan :
             level < Error ? :yellow : :red
     buf = IOBuffer()
-    print_with_color(color, buf, first(levelstr), "- ", bold=true)
+    iob = IOContext(buf, logger.stream)
+    print_with_color(color, iob, first(levelstr), "- ", bold=true)
     msglines = split(string(message), '\n')
     for i in 1:length(msglines)-1
-        println(buf, msglines[i])
-        print_with_color(color, buf, "|  ", bold=true)
+        println(iob, msglines[i])
+        print_with_color(color, iob, "|  ", bold=true)
     end
-    println(buf, msglines[end], " -", levelstr, ":", _module, ":", basename(filepath), ":", line)
+    println(iob, msglines[end], " -", levelstr, ":", _module, ":", basename(filepath), ":", line)
     for (key,val) in pairs(kwargs)
-        print_with_color(color, buf, "|  ", bold=true)
-        println(buf, key, " = ", val)
+        print_with_color(color, iob, "|  ", bold=true)
+        println(iob, key, " = ", val)
     end
     write(logger.stream, take!(buf))
     nothing

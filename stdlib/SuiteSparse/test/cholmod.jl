@@ -9,7 +9,7 @@ srand(123)
 
 @testset "based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/" begin
 
-# chm_rdsp(joinpath(JULIA_HOME, "../../deps/SuiteSparse-4.0.2/CHOLMOD/Demo/Matrix/bcsstk01.tri"))
+# chm_rdsp(joinpath(Sys.BINDIR, "../../deps/SuiteSparse-4.0.2/CHOLMOD/Demo/Matrix/bcsstk01.tri"))
 # because the file may not exist in binary distributions and when a system suitesparse library
 # is used
 
@@ -391,7 +391,7 @@ end
     @test_throws DimensionMismatch F\CHOLMOD.Sparse(sparse(ones(elty, 4)))
     @test F'\ones(elty, 5) ≈ Array(A1pd)'\ones(5)
     @test F'\sparse(ones(elty, 5)) ≈ Array(A1pd)'\ones(5)
-    @test F.'\ones(elty, 5) ≈ conj(A1pd)'\ones(elty, 5)
+    @test Transpose(F)\ones(elty, 5) ≈ conj(A1pd)'\ones(elty, 5)
     @test logdet(F) ≈ logdet(Array(A1pd))
     @test det(F) == exp(logdet(F))
     let # to test supernodal, we must use a larger matrix
@@ -706,8 +706,8 @@ end
     @test Fs\ones(4) ≈ Fd\ones(4)
 end
 
-@testset "\\ '\\ and .'\\" begin
-    # Test that \ and '\ and .'\ work for Symmetric and Hermitian. This is just
+@testset "\\ '\\ and Transpose(...)\\" begin
+    # Test that \ and '\ and Transpose(...)\ work for Symmetric and Hermitian. This is just
     # a dispatch exercise so it doesn't matter that the complex matrix has
     # zero imaginary parts
     Apre = sprandn(10, 10, 0.2) - I
@@ -718,7 +718,7 @@ end
         x = ones(10)
         b = A*x
         @test x ≈ A\b
-        @test A.'\b ≈ A'\b
+        @test Transpose(A)\b ≈ A'\b
     end
 end
 

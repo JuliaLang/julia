@@ -18,7 +18,7 @@ sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
 if Sys.iswindows()
-    busybox = joinpath(JULIA_HOME, "busybox.exe")
+    busybox = joinpath(Sys.BINDIR, "busybox.exe")
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true

@@ -764,7 +764,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_globalref_type) {
         n += jl_static_show_x(out, (jl_value_t*)jl_globalref_mod(v), depth);
-        n += jl_printf(out, ".%s", jl_symbol_name(jl_globalref_name(v)));
+        char *name = jl_symbol_name(jl_globalref_name(v));
+        n += jl_printf(out, jl_is_identifier(name) ? ".%s" : ".:(%s)", name);
     }
     else if (vt == jl_labelnode_type) {
         n += jl_printf(out, "%" PRIuPTR ":", jl_labelnode_label(v));

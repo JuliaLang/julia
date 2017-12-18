@@ -194,7 +194,8 @@ function start_worker(out::IO, cookie::AbstractString=readline(STDIN))
     init_worker(cookie)
     interface = IPv4(LPROC.bind_addr)
     if LPROC.bind_port == 0
-        (port, sock) = listenany(interface, UInt16(0))
+        port_hint = 9000 + (getpid() % 1000)
+        (port, sock) = listenany(interface, UInt16(port_hint))
         LPROC.bind_port = port
     else
         sock = listen(interface, LPROC.bind_port)
@@ -436,7 +437,7 @@ end
 default_addprocs_params() = AnyDict(
     :topology => :all_to_all,
     :dir      => pwd(),
-    :exename  => joinpath(JULIA_HOME, julia_exename()),
+    :exename  => joinpath(Sys.BINDIR, julia_exename()),
     :exeflags => ``,
     :enable_threaded_blas => false,
     :lazy => true)
@@ -473,7 +474,7 @@ function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launch
 
             wconfig = WorkerConfig()
             for x in [:host, :tunnel, :sshflags, :exeflags, :exename, :enable_threaded_blas]
-                setfield!(wconfig, x, getfield(fromconfig, x))
+                Base.setproperty!(wconfig, x, Base.getproperty(fromconfig, x))
             end
             wconfig.bind_addr = bind_addr
             wconfig.port = port
@@ -679,7 +680,11 @@ end
 const PGRP = ProcessGroup([])
 
 function topology(t)
-    assert(t in [:all_to_all, :master_slave, :custom])
+    if t == :master_slave
+        Base.depwarn("The topology :master_slave is deprecated, use :master_worker instead.", :topology)
+        t = :master_worker
+    end
+    assert(t in [:all_to_all, :master_worker, :custom])
     if (PGRP.topology==t) || ((myid()==1) && (nprocs()==1)) || (myid() > 1)
         PGRP.topology = t
     else

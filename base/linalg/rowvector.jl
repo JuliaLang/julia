@@ -5,13 +5,12 @@
 
 A lazy-view wrapper of an [`AbstractVector`](@ref), which turns a length-`n` vector into a `1×n`
 shaped row vector and represents the transpose of a vector (the elements are also transposed
-recursively). This type is usually constructed (and unwrapped) via the [`transpose`](@ref)
-function or `.'` operator (or related [`adjoint`](@ref) or `'` operator).
+recursively).
 
 By convention, a vector can be multiplied by a matrix on its left (`A * v`) whereas a row
-vector can be multiplied by a matrix on its right (such that `v.' * A = (A.' * v).'`). It
+vector can be multiplied by a matrix on its right (such that `RowVector(v) * A = RowVector(Transpose(A) * v)`). It
 differs from a `1×n`-sized matrix by the facts that its transpose returns a vector and the
-inner product `v1.' * v2` returns a scalar, but will otherwise behave similarly.
+inner product `RowVector(v1) * v2` returns a scalar, but will otherwise behave similarly.
 
 # Examples
 ```jldoctest
@@ -26,21 +25,17 @@ julia> RowVector(a)
 1×4 RowVector{Int64,Array{Int64,1}}:
  1  2  3  4
 
-julia> a.'
-1×4 RowVector{Int64,Array{Int64,1}}:
- 1  2  3  4
-
-julia> a.'[3]
+julia> RowVector(a)[3]
 3
 
-julia> a.'[1,3]
+julia> RowVector(a)[1,3]
 3
 
-julia> a.'[3,1]
+julia> RowVector(a)[3,1]
 ERROR: BoundsError: attempt to access 1×4 RowVector{Int64,Array{Int64,1}} at index [3, 1]
 [...]
 
-julia> a.'*a
+julia> RowVector(a)*a
 30
 
 julia> B = [1 2; 3 4; 5 6; 7 8]
@@ -50,7 +45,7 @@ julia> B = [1 2; 3 4; 5 6; 7 8]
  5  6
  7  8
 
-julia> a.'*B
+julia> RowVector(a)*B
 1×2 RowVector{Int64,Array{Int64,1}}:
  50  60
 ```
@@ -148,7 +143,7 @@ Return a [`ConjArray`](@ref) lazy view of the input, where each element is conju
 
 # Examples
 ```jldoctest
-julia> v = [1+im, 1-im].'
+julia> v = RowVector([1+im, 1-im])
 1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:
  1+1im  1-1im
 
@@ -214,7 +209,7 @@ IndexStyle(::Type{<:RowVector}) = IndexLinear()
     end
     sum(@inbounds(return rowvec[i]*vec[i]) for i = 1:length(vec))
 end
-@inline *(rowvec::RowVector, mat::AbstractMatrix) = rvtranspose(mat.' * rvtranspose(rowvec))
+@inline *(rowvec::RowVector, mat::AbstractMatrix) = rvtranspose(Transpose(mat) * rvtranspose(rowvec))
 *(::RowVector, ::RowVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 @inline *(vec::AbstractVector, rowvec::RowVector) = vec .* rowvec
 *(vec::AbstractVector, rowvec::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
@@ -238,7 +233,7 @@ end
 *(transvec::Transpose{<:Any,<:AbstractVector}, transrowvec::Transpose{<:Any,<:RowVector}) =
     transpose(transvec.parent)*rvtranspose(transrowvec.parent)
 *(transmat::Transpose{<:Any,<:AbstractMatrix}, transrowvec::Transpose{<:Any,<:RowVector}) =
-    (transmat.parent).' * rvtranspose(transrowvec.parent)
+    transmat * rvtranspose(transrowvec.parent)
 
 *(::Transpose{<:Any,<:RowVector}, ::AbstractVector) =
     throw(DimensionMismatch("Cannot multiply two vectors"))

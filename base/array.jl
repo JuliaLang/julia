@@ -95,6 +95,12 @@ import Core: arraysize, arrayset, arrayref
 vect() = Vector{Any}()
 vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
 
+"""
+    vect(X...)
+
+Create a Vector with element type computed from the promote_typeof of the argument,
+containing the argument list.
+"""
 function vect(X...)
     T = promote_typeof(X...)
     #T[ X[i] for i=1:length(X) ]
@@ -1380,6 +1386,27 @@ end
     reverse!(v [, start=1 [, stop=length(v) ]]) -> v
 
 In-place version of [`reverse`](@ref).
+
+# Examples
+```jldoctest
+julia> A = collect(1:5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> reverse!(A);
+
+julia> A
+5-element Array{Int64,1}:
+ 5
+ 4
+ 3
+ 2
+ 1
+```
 """
 function reverse!(v::AbstractVector, s=first(linearindices(v)), n=last(linearindices(v)))
     liv = linearindices(v)

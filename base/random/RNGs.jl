@@ -479,18 +479,29 @@ end
 ### randjump
 
 """
-    randjump(r::MersenneTwister, jumps::Integer,
-             [jumppoly::AbstractString=dSFMT.JPOLY1e21]) -> Vector{MersenneTwister}
+    randjump(r::MersenneTwister, jumps, steps=10^20) -> Vector{MersenneTwister}
 
-Create an array of the size `jumps` of initialized `MersenneTwister` RNG objects. The
+Create an array of size `jumps` of initialized `MersenneTwister` RNG objects. The
 first RNG object given as a parameter and following `MersenneTwister` RNGs in the array are
 initialized such that a state of the RNG object in the array would be moved forward (without
-generating numbers) from a previous RNG object array element on a particular number of steps
-encoded by the jump polynomial `jumppoly`.
-
-Default jump polynomial moves forward `MersenneTwister` RNG state by `10^20` steps.
+generating numbers) from a previous RNG object array element by `steps` steps.
+One such step corresponds to the generation of two `Float64` numbers.
 """
-function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString)
+randjump(r::MersenneTwister, jumps::Integer, steps::Integer=big(10)^20) =
+    randjump(r, jumps, dSFMT.calc_jump(steps))
+
+"""
+    randjump(r::MersenneTwister, jumps, jumppoly::AbstractString) -> Vector{MersenneTwister}
+
+Similar to `randjump(r, jumps, steps)` where the number of steps is
+determined by a jump polynomial `jumppoly` with coefficients in
+``GF(2)`` (the field with two elements) encoded as an hexadecimal
+string.
+"""
+randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString) =
+    randjump(mt, jumps, dSFMT.GF2X(jumppoly))
+
+function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::dSFMT.GF2X)
     mts = MersenneTwister[]
     push!(mts, mt)
     for i in 1:jumps-1
@@ -499,5 +510,3 @@ function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString)
     end
     return mts
 end
-
-randjump(r::MersenneTwister, jumps::Integer) = randjump(r, jumps, dSFMT.JPOLY1e21)

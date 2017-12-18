@@ -162,7 +162,6 @@ export
     C_NULL,
     ENDIAN_BOM,
     ENV,
-    JULIA_HOME,
     LOAD_PATH,
     PROGRAM_FILE,
     STDERR,
@@ -899,6 +898,8 @@ export
 
 # types
     convert,
+    # getproperty,
+    # setproperty!,
     fieldoffset,
     fieldname,
     fieldnames,

@@ -230,7 +230,7 @@ end
 
 function showerror(io::IO, ex, bt; backtrace=true)
     try
-        with_output_color(have_color ? error_color() : :nothing, io) do io
+        with_output_color(get(io, :color, false) ? error_color() : :nothing, io) do io
             showerror(io, ex)
         end
     finally
@@ -488,6 +488,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::NamedTuple = Na
     for (func,arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
+            iob = IOContext(buf, io)
             tv = Any[]
             sig0 = method.sig
             if Base.is_default_method(method)
@@ -499,20 +500,20 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::NamedTuple = Na
             end
             s1 = sig0.parameters[1]
             sig = sig0.parameters[2:end]
-            print(buf, "  ")
+            print(iob, "  ")
             if !isa(func, s1)
                 # function itself doesn't match
                 return
             else
                 # TODO: use the methodshow logic here
                 use_constructor_syntax = isa(func, Type)
-                print(buf, use_constructor_syntax ? func : typeof(func).name.mt.name)
+                print(iob, use_constructor_syntax ? func : typeof(func).name.mt.name)
             end
-            print(buf, "(")
+            print(iob, "(")
             t_i = copy(arg_types_param)
             right_matches = 0
             for i = 1 : min(length(t_i), length(sig))
-                i > 1 && print(buf, ", ")
+                i > 1 && print(iob, ", ")
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
@@ -529,12 +530,12 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::NamedTuple = Na
                 # the type of the first argument is not matched.
                 t_in === Union{} && special && i == 1 && break
                 if t_in === Union{}
-                    if Base.have_color
-                        Base.with_output_color(Base.error_color(), buf) do buf
-                            print(buf, "::$sigstr")
+                    if get(io, :color, false)
+                        Base.with_output_color(Base.error_color(), iob) do iob
+                            print(iob, "::$sigstr")
                         end
                     else
-                        print(buf, "!Matched::$sigstr")
+                        print(iob, "!Matched::$sigstr")
                     end
                     # If there is no typeintersect then the type signature from the method is
                     # inserted in t_i this ensures if the type at the next i matches the type
@@ -542,7 +543,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::NamedTuple = Na
                     t_i[i] = sig[i]
                 else
                     right_matches += j==i ? 1 : 0
-                    print(buf, "::$sigstr")
+                    print(iob, "::$sigstr")
                 end
             end
             special && right_matches==0 && return # continue the do-block
@@ -569,14 +570,14 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::NamedTuple = Na
                             sigstr = string(sigtype)
                         end
                         if !((min(length(t_i), length(sig)) == 0) && k==1)
-                            print(buf, ", ")
+                            print(iob, ", ")
                         end
-                        if Base.have_color
-                            Base.with_output_color(Base.error_color(), buf) do buf
-                                print(buf, "::$sigstr")
+                        if get(io, :color, false)
+                            Base.with_output_color(Base.error_color(), iob) do iob
+                                print(iob, "::$sigstr")
                             end
                         else
-                            print(buf, "!Matched::$sigstr")
+                            print(iob, "!Matched::$sigstr")
                         end
                     end
                 end
@@ -584,11 +585,11 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::NamedTuple = Na
                 if isdefined(ft.name.mt, :kwsorter)
                     kwsorter_t = typeof(ft.name.mt.kwsorter)
                     kwords = kwarg_decl(method, kwsorter_t)
-                    length(kwords) > 0 && print(buf, "; ", join(kwords, ", "))
+                    length(kwords) > 0 && print(iob, "; ", join(kwords, ", "))
                 end
-                print(buf, ")")
-                show_method_params(buf, tv)
-                print(buf, " at ", method.file, ":", method.line)
+                print(iob, ")")
+                show_method_params(iob, tv)
+                print(iob, " at ", method.file, ":", method.line)
                 if !isempty(kwargs)
                     unexpected = Symbol[]
                     if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
@@ -599,14 +600,14 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::NamedTuple = Na
                         end
                     end
                     if !isempty(unexpected)
-                        Base.with_output_color(Base.error_color(), buf) do buf
+                        Base.with_output_color(Base.error_color(), iob) do iob
                             plur = length(unexpected) > 1 ? "s" : ""
-                            print(buf, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
+                            print(iob, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
                         end
                     end
                 end
                 if ex.world < min_world(method)
-                    print(buf, " (method too new to be called from this world context.)")
+                    print(iob, " (method too new to be called from this world context.)")
                 end
                 # TODO: indicate if it's in the wrong world
                 push!(lines, (buf, right_matches))

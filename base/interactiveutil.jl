@@ -330,7 +330,7 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
     end
     println(io, "  LAPACK: ",liblapack_name)
     println(io, "  LIBM: ",libm_name)
-    println(io, "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.cpu_name, ")")
+    println(io, "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
 
     println(io, "Environment:")
     for (k,v) in ENV
@@ -709,7 +709,7 @@ function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     try
-        run(setenv(`$(julia_cmd()) $(joinpath(JULIA_HOME,
+        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
     catch
         buf = PipeBuffer()

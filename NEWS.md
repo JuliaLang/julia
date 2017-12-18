@@ -19,13 +19,13 @@ New language features
     iterated using `pairs(kw)`. `kw` can no longer contain multiple entries for the same
     argument name ([#4916]).
 
- * Custom infix operators can now be defined by appending Unicode
-   combining marks, primes, and sub/superscripts to other operators.
-   For example, `+̂ₐ″` is parsed as an infix operator with the same
-   precedence as `+` ([#22089]).
+  * Custom infix operators can now be defined by appending Unicode
+    combining marks, primes, and sub/superscripts to other operators.
+    For example, `+̂ₐ″` is parsed as an infix operator with the same
+    precedence as `+` ([#22089]).
 
- * The macro call syntax `@macroname[args]` is now available and is parsed
-   as `@macroname([args])` ([#23519]).
+  * The macro call syntax `@macroname[args]` is now available and is parsed
+    as `@macroname([args])` ([#23519]).
 
   * The construct `if @generated ...; else ...; end` can be used to provide both
     `@generated` and normal implementations of part of a function. Surrounding code
@@ -34,6 +34,9 @@ New language features
   * The `missing` singleton object (of type `Missing`) has been added to represent
     missing values ([#24653]). It propagates through standard operators and mathematical functions,
     and implements three-valued logic, similar to SQLs `NULL` and R's `NA`.
+
+  * Field access via dot-syntax can now be overloaded by adding methods to
+    `Base.getproperty` and `Base.setproperty!` ([#1974]).
 
 Language changes
 ----------------
@@ -338,6 +341,10 @@ Library improvements
   * The function `chop` now accepts two arguments `head` and `tail` allowing to specify
     number of characters to remove from the head and tail of the string ([#24126]).
 
+  * `get(io, :color, false)` can now be used to query whether a stream `io` supports
+    [ANSI color codes](https://en.wikipedia.org/wiki/ANSI_escape_code) ([#25067]),
+    rather than using the undocumented `Base.have_color` global flag.
+
   * Functions `first` and `last` now accept `nchar` argument for `AbstractString`.
     If this argument is used they return a string consisting of first/last `nchar`
     characters from the original string ([#23960]).
@@ -475,6 +482,9 @@ Compiler/Runtime improvements
 
 Deprecated or removed
 ---------------------
+
+  * The `JULIA_HOME` environment variable has been renamed to `JULIA_BINDIR` and
+    `Base.JULIA_HOME` has been moved to `Sys.BINDIR` ([#20899]).
 
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
@@ -628,8 +638,8 @@ Deprecated or removed
     `serialize` ([#6466]).
 
   * The default `juliarc.jl` file on Windows has been removed. Now must explicitly include the
-    full path if you need access to executables or libraries in the `JULIA_HOME` directory, e.g.
-    `joinpath(JULIA_HOME, "7z.exe")` for `7z.exe` ([#21540]).
+    full path if you need access to executables or libraries in the `Sys.BINDIR` directory, e.g.
+    `joinpath(Sys.BINDIR, "7z.exe")` for `7z.exe` ([#21540]).
 
   * `sqrtm` has been deprecated in favor of `sqrt` ([#23504]).
 

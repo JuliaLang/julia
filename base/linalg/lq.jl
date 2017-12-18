@@ -37,7 +37,7 @@ lqfact(x::Number) = lqfact(fill(x,1,1))
 
 Perform an LQ factorization of `A` such that `A = L*Q`. The default (`full = false`)
 computes a factorization with possibly-rectangular `L` and `Q`, commonly the "thin"
-factorization. The LQ factorization is the QR factorization of `A.'`. If the explicit,
+factorization. The LQ factorization is the QR factorization of `Transpose(A)`. If the explicit,
 full/square form of `Q` is requested via `full = true`, `L` is not extended with zeros.
 
 !!! note

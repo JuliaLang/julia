@@ -163,7 +163,7 @@ end
         am = sprand(1, 20, 0.2)
         av = squeeze(am, 1)
         @test ndims(av) == 1
-        @test all(av.'.==am)
+        @test all(transpose(av) .== am)
     end
 end
 
@@ -196,73 +196,73 @@ end
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(mul!(similar(b), a, b) - Array(a)*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
         @test (maximum(abs.(mul!(similar(c), a, c) - Array(a)*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(mul!(similar(b), Transpose(a), b) - Array(a).'*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(mul!(similar(c), Transpose(a), c) - Array(a).'*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(b), Transpose(a), b) - Transpose(Array(a))*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(c), Transpose(a), c) - Transpose(Array(a))*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
         @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
+        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
         @test (maximum(abs.((a'*c + d) - (Array(a)'*c + d))) < 1000*eps())
-        @test (maximum(abs.((α*a.'*c + β*d) - (α*Array(a).'*c + β*d))) < 1000*eps())
-        @test (maximum(abs.((a.'*c + d) - (Array(a).'*c + d))) < 1000*eps())
+        @test (maximum(abs.((α*Transpose(a)*c + β*d) - (α*Transpose(Array(a))*c + β*d))) < 1000*eps())
+        @test (maximum(abs.((Transpose(a)*c + d) - (Transpose(Array(a))*c + d))) < 1000*eps())
         c = randn(6) + im*randn(6)
-        @test_throws DimensionMismatch α*a.'*c + β*c
-        @test_throws DimensionMismatch α*a.'*ones(5) + β*c
+        @test_throws DimensionMismatch α*Transpose(a)*c + β*c
+        @test_throws DimensionMismatch α*Transpose(a)*ones(5) + β*c
 
         a = I + 0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2)
         b = randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
         @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
+        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         a = I + tril(0.1*sprandn(5, 5, 0.2))
         b = randn(5,3) + im*randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
         @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
+        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         a = I + tril(0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2))
         b = randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
         @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
+        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         a = I + triu(0.1*sprandn(5, 5, 0.2))
         b = randn(5,3) + im*randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
         @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
+        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         a = I + triu(0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2))
         b = randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
         @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
+        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         a = I + triu(0.1*sprandn(5, 5, 0.2))
         b = randn(5,3) + im*randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
         @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
+        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         # UpperTriangular/LowerTriangular solve
         a = UpperTriangular(I + triu(0.1*sprandn(5, 5, 0.2)))
@@ -282,18 +282,18 @@ end
         b = randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
         @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
+        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         b = randn(5,3) + im*randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
         @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
+        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
     end
     end
 end
@@ -1747,16 +1747,16 @@ end
     srand(123)
     local A
     A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
-    A = A + A'
+    A = A + adjoint(A)
     @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
     A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
     A = A*A'
     @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
     A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2)
-    A = A + A.'
+    A = A + transpose(A)
     @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
     A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2)
-    A = A*A.'
+    A = A*Transpose(A)
     @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
     @test factorize(triu(A)) == triu(A)
     @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})

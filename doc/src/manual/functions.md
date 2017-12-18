@@ -158,16 +158,18 @@ Under the name `f`, the function does not support infix notation, however.
 
 A few special expressions correspond to calls to functions with non-obvious names. These are:
 
-| Expression        | Calls                  |
-|:----------------- |:---------------------- |
-| `[A B C ...]`     | [`hcat`](@ref)       |
-| `[A; B; C; ...]`  | [`vcat`](@ref)       |
-| `[A B; C D; ...]` | [`hvcat`](@ref)      |
-| `A'`              | [`adjoint`](@ref) |
-| `A.'`             | [`transpose`](@ref)  |
-| `1:n`             | [`colon`](@ref)      |
-| `A[i]`            | [`getindex`](@ref)   |
-| `A[i]=x`          | [`setindex!`](@ref)  |
+| Expression        | Calls                   |
+|:----------------- |:----------------------- |
+| `[A B C ...]`     | [`hcat`](@ref)          |
+| `[A; B; C; ...]`  | [`vcat`](@ref)          |
+| `[A B; C D; ...]` | [`hvcat`](@ref)         |
+| `A'`              | [`adjoint`](@ref)       |
+| `A.'`             | [`transpose`](@ref)     |
+| `1:n`             | [`colon`](@ref)         |
+| `A[i]`            | [`getindex`](@ref)      |
+| `A[i] = x`        | [`setindex!`](@ref)     |
+| `A.n`             | [`getproperty`](@ref Base.getproperty) |
+| `A.n = x`         | [`setproperty!`](@ref Base.setproperty!) |
 
 ## [Anonymous Functions](@id man-anonymous-functions)
 

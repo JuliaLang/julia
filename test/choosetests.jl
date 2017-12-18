@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const STDLIB_DIR = joinpath(JULIA_HOME, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
+const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
 const STDLIBS = readdir(STDLIB_DIR)
 
 @doc """
@@ -55,7 +55,7 @@ function choosetests(choices = [])
         "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]
 
-    if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
+    if isdir(joinpath(Sys.BINDIR, Base.DOCDIR, "examples"))
         push!(testnames, "examples")
     end
 

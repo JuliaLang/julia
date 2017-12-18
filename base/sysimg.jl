@@ -5,6 +5,17 @@ baremodule Base
 using Core.Intrinsics
 ccall(:jl_set_istopmod, Void, (Any, Bool), Base, true)
 
+getproperty(x, f::Symbol) = getfield(x, f)
+setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
+
+# Try to help prevent users from shooting them-selves in the foot
+# with ambiguities by defining a few common and critical operations
+# (and these don't need the extra convert code)
+getproperty(x::Module, f::Symbol) = getfield(x, f)
+setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
+getproperty(x::Type, f::Symbol) = getfield(x, f)
+setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
+
 function include(mod::Module, path::AbstractString)
     local result
     if INCLUDE_STATE === 1
@@ -432,7 +443,7 @@ include("threadcall.jl")
 include("loading.jl")
 
 # set up load path to be able to find stdlib packages
-init_load_path(ccall(:jl_get_julia_home, Any, ()))
+init_load_path(ccall(:jl_get_julia_bindir, Any, ()))
 
 INCLUDE_STATE = 3 # include = include_relative
 

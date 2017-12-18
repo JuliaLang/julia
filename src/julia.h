@@ -1365,7 +1365,7 @@ typedef enum {
 #endif
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(void);
-JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
+JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
                                      const char *image_relative_path);
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void);
 JL_DLLEXPORT int jl_is_initialized(void);
@@ -1381,8 +1381,8 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist);
-JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname);
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz);
+JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods);
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz, jl_array_t *depmods);
 
 // front end interface
 JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len,
@@ -1701,7 +1701,7 @@ JL_DLLEXPORT void jl_(void *jl_value);
 typedef struct {
     int8_t quiet;
     int8_t banner;
-    const char *julia_home;
+    const char *julia_bindir;
     const char *julia_bin;
     const char **cmds;
     const char *image_file;

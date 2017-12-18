@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-pids = addprocs_with_testenv(4; topology="master_slave")
+pids = addprocs_with_testenv(4; topology="master_worker")
 
 let p1 = pids[1], p2 = pids[2]
     @test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, p2), p1)
@@ -117,7 +117,7 @@ while length(combinations) < 10
     end
 end
 
-# Initially only master-slave connections ought to be setup
+# Initially only master-worker connections ought to be setup
 expected_num_conns = 8
 let num_conns = sum(asyncmap(p->remotecall_fetch(count_connected_workers,p), workers()))
     @test num_conns == expected_num_conns

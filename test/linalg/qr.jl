@@ -102,7 +102,7 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 @test (UpperTriangular(Matrix{eltya}(I, sq, sq))*q')*squareQ(q) ≈ Matrix(I, n1, n1)
                 @test q*r ≈ (isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:])
                 @test q*r[:,invperm(p)] ≈ a[1:n1,:]
-                @test q*r*qrpa[:P].' ≈ a[1:n1,:]
+                @test q*r*Transpose(qrpa[:P]) ≈ a[1:n1,:]
                 @test a[1:n1,:]*(qrpa\b[1:n1]) ≈ b[1:n1] atol=5000ε
                 @test Array(qrpa) ≈ a[1:5,:]
                 @test_throws DimensionMismatch q*b[1:n1+1]

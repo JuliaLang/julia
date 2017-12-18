@@ -319,12 +319,13 @@ end
 
 function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
-    have_color && bold && print(buf, text_colors[:bold])
-    have_color && print(buf, get(text_colors, color, color_normal))
+    iscolor = get(io, :color, false)
+    iscolor && bold && print(buf, text_colors[:bold])
+    iscolor && print(buf, get(text_colors, color, color_normal))
     try f(IOContext(buf, io), args...)
     finally
-        have_color && color != :nothing && print(buf, get(disable_text_style, color, text_colors[:default]))
-        have_color && (bold || color == :bold) && print(buf, disable_text_style[:bold])
+        iscolor && color != :nothing && print(buf, get(disable_text_style, color, text_colors[:default]))
+        iscolor && (bold || color == :bold) && print(buf, disable_text_style[:bold])
         print(io, String(take!(buf)))
     end
 end
@@ -347,7 +348,7 @@ println_with_color(color::Union{Int, Symbol}, io::IO, msg...; bold::Bool = false
 println_with_color(color::Union{Int, Symbol}, msg...; bold::Bool = false) =
     println_with_color(color, STDOUT, msg...; bold = bold)
 
-function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
+function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
     image_file = unsafe_string(opts.image_file)
