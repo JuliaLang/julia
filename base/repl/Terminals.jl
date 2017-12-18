@@ -167,4 +167,6 @@ else
     end
 end
 
+Base.peek(t::TTYTerminal) = Base.peek(t.in_stream)
+
 end # module
