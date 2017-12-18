@@ -26,7 +26,8 @@ docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
 @doc "Doc abstract type" ->
 abstract type C74685{T,N} <: AbstractArray{T,N} end
-@test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
+@test stringmime("text/plain", Docs.doc(C74685))=="  Doc abstract type\n"
+@test string(Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
 @doc "Helps test if macros can be documented with `@doc \"...\" -> @...`." ->
@@ -957,15 +958,8 @@ for (line, expr) in Pair[
     @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
 end
 
-let save_color = Base.have_color
-    try
-        @eval Base have_color = false
-        @test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
-        @test sprint(Base.Docs.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
-    finally
-        @eval Base have_color = $save_color
-    end
-end
+@test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
+@test sprint(Base.Docs.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
 
 # issue #15684
 begin

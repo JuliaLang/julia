@@ -255,7 +255,7 @@ function banner(io::IO = STDOUT)
     end
     commit_date = !isempty(GIT_VERSION_INFO.date_string) ? " ($(GIT_VERSION_INFO.date_string))" : ""
 
-    if have_color
+    if get(io, :color, false)
         c = text_colors
         tx = c[:normal] # text
         jl = c[:normal] # julia

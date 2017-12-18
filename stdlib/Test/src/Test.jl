@@ -527,20 +527,16 @@ See also [`@test_nowarn`](@ref) to check for the absence of error output.
 """
 macro test_warn(msg, expr)
     quote
-        let fname = tempname(), have_color = Base.have_color
+        let fname = tempname()
             try
-                @eval Base have_color = false
                 ret = open(fname, "w") do f
                     redirect_stderr(f) do
                         $(esc(expr))
                     end
                 end
-                eval(Base, Expr(:(=), :have_color, have_color))
                 @test ismatch_warn($(esc(msg)), read(fname, String))
-                eval(Base, Expr(:(=), :have_color, have_color))
                 ret
             finally
-                eval(Base, Expr(:(=), :have_color, have_color))
                 rm(fname, force=true)
             end
         end

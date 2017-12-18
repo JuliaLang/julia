@@ -341,6 +341,10 @@ Library improvements
   * The function `chop` now accepts two arguments `head` and `tail` allowing to specify
     number of characters to remove from the head and tail of the string ([#24126]).
 
+  * `get(io, :color, false)` can now be used to query whether a stream `io` supports
+    [ANSI color codes](https://en.wikipedia.org/wiki/ANSI_escape_code) ([#25067]),
+    rather than using the undocumented `Base.have_color` global flag.
+
   * Functions `first` and `last` now accept `nchar` argument for `AbstractString`.
     If this argument is used they return a string consisting of first/last `nchar`
     characters from the original string ([#23960]).

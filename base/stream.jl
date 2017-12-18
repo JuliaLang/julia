@@ -403,6 +403,7 @@ function displaysize(io::TTY)
     return h, w
 end
 
+get(::TTY, k::Symbol, default) = k === :color ? have_color : default
 
 ### Libuv callbacks ###
 

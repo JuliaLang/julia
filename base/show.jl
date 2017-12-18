@@ -20,7 +20,8 @@ struct IOContext{IO_t <: IO} <: AbstractPipe
     end
 end
 
-unwrapcontext(io::IO) = io, ImmutableDict{Symbol,Any}()
+# (Note that TTY and TTYTerminal io types have a :color property.)
+unwrapcontext(io::IO) = io, get(io,:color,false) ? ImmutableDict{Symbol,Any}(:color, true) : ImmutableDict{Symbol,Any}()
 unwrapcontext(io::IOContext) = io.io, io.dict
 
 function IOContext(io::IO, dict::ImmutableDict)
@@ -67,6 +68,9 @@ The following properties are in common use:
    can be avoided (e.g. `[Float16(0)]` can be shown as "Float16[0.0]" instead
    of "Float16[Float16(0.0)]" : while displaying the elements of the array, the `:typeinfo`
    property will be set to `Float16`).
+ - `:color`: Boolean specifying whether ANSI color/escape codes are supported/expected.
+   By default, this is determined by whether `io` is a compatible terminal and by any
+   `--color` command-line flag when `julia` was launched.
 
 # Examples
 ```jldoctest
@@ -715,7 +719,7 @@ function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     end
 end
 
-emphasize(io, str::AbstractString) = have_color ?
+emphasize(io, str::AbstractString) = get(io, :color, false) ?
     print_with_color(Base.error_color(), io, str; bold = true) :
     print(io, Unicode.uppercase(str))
 
@@ -1253,7 +1257,7 @@ end
 
 function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     # print a method signature tuple for a lambda definition
-    color = have_color && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
+    color = get(io, :color, false) && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
     if sig === Tuple
         Base.print_with_color(color, io, name, "(...)")
         return
@@ -1274,7 +1278,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
         end
     end
     first = true
-    print_style = have_color && get(io, :backtrace, false) ? :bold : :nothing
+    print_style = get(io, :color, false) && get(io, :backtrace, false) ? :bold : :nothing
     print_with_color(print_style, io, "(")
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
