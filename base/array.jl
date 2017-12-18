@@ -95,6 +95,12 @@ import Core: arraysize, arrayset, arrayref
 vect() = Vector{Any}()
 vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
 
+"""
+    vect(X...)
+
+Create a Vector with element type computed from the promote_typeof of the argument,
+containing the argument list.
+"""
 function vect(X...)
     T = promote_typeof(X...)
     #T[ X[i] for i=1:length(X) ]

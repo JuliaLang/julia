@@ -997,19 +997,21 @@ end
 
 let
     local z = complex(3, 4)
-    v = Int[0,0]
-    for i=1:2
+    v = Int[0, 0]
+    for i = 1:2
         v[i] = getfield(z, i)
     end
-    @test v == [3,4]
-    @test_throws BoundsError getfield(z, -1)
-    @test_throws BoundsError getfield(z, 0)
-    @test_throws BoundsError getfield(z, 3)
+    @test v == [3, 4]
+    @test_throws BoundsError(z, -1) getfield(z, -1)
+    @test_throws BoundsError(z, 0) getfield(z, 0)
+    @test_throws BoundsError(z, 3) getfield(z, 3)
 
     strct = LoadError("yofile", 0, "bad")
-    @test_throws BoundsError getfield(strct, 10)
-    @test_throws ErrorException setfield!(strct, 0, "")
-    @test_throws ErrorException setfield!(strct, 4, "")
+    @test nfields(strct) == 3 # sanity test
+    @test_throws BoundsError(strct, 10) getfield(strct, 10)
+    @test_throws ErrorException("type LoadError is immutable") setfield!(strct, 0, "")
+    @test_throws ErrorException("type LoadError is immutable") setfield!(strct, 4, "")
+    @test_throws ErrorException("type is immutable") setfield!(strct, :line, 0)
     @test strct.file == "yofile"
     @test strct.line == 0
     @test strct.error == "bad"
@@ -1018,15 +1020,17 @@ let
     @test getfield(strct, 3) == "bad"
 
     mstrct = TestMutable("melm", 1, nothing)
-    setfield!(mstrct, 2, 8)
+    Base.setproperty!(mstrct, :line, 8.0)
     @test mstrct.line == 8
+    @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, :line, 8.0)
+    @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, 2, 8.0)
     setfield!(mstrct, 3, "hi")
     @test mstrct.error == "hi"
     setfield!(mstrct, 1, "yo")
     @test mstrct.file == "yo"
-    @test_throws BoundsError getfield(mstrct, 10)
-    @test_throws BoundsError setfield!(mstrct, 0, "")
-    @test_throws BoundsError setfield!(mstrct, 4, "")
+    @test_throws BoundsError(mstrct, 10) getfield(mstrct, 10)
+    @test_throws BoundsError(mstrct, 0) setfield!(mstrct, 0, "")
+    @test_throws BoundsError(mstrct, 4) setfield!(mstrct, 4, "")
 end
 
 # allow typevar in Union to match as long as the arguments contain
@@ -2175,10 +2179,9 @@ g7652() = fieldtype(DataType, :types)
 h7652() = setfield!(a7652, 1, 2)
 h7652()
 @test a7652.a == 2
-# commented out due to issue #16195: setfield! does not perform conversions
-#   i7652() = setfield!(a7652, 1, 3.0)
-#   i7652()
-#   @test a7652.a == 3
+i7652() = Base.setproperty!(a7652, :a, 3.0)
+i7652()
+@test a7652.a == 3
 
 # issue #7679
 @test map(f->f(), Any[ ()->i for i=1:3 ]) == Any[1,2,3]
@@ -2358,49 +2361,53 @@ let
 end
 
 # pull request #9534
-@test try; a,b,c = 1,2; catch ex; (ex::BoundsError).a === (1,2) && ex.i == 3; end
-# @test try; [][]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (1,); end # TODO: Re-enable after PLI
-@test try; [][1,2]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (1,2); end
-@test try; [][10]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (10,); end
-f9534a() = (a=1+2im; getfield(a, -100))
-f9534a(x) = (a=1+2im; getfield(a, x))
-@test try; f9534a() catch ex; (ex::BoundsError).a === 1+2im && ex.i == -100; end
-@test try; f9534a(3) catch ex; (ex::BoundsError).a === 1+2im && ex.i == 3; end
-f9534b() = (a=(1,2.,""); a[5])
-f9534b(x) = (a=(1,2.,""); a[x])
-@test try; f9534b() catch ex; (ex::BoundsError).a == (1,2.,"") && ex.i == 5; end
-@test try; f9534b(4) catch ex; (ex::BoundsError).a == (1,2.,"") && ex.i == 4; end
-f9534c() = (a=(1,2.); a[3])
-f9534c(x) = (a=(1,2.); a[x])
-@test try; f9534c() catch ex; (ex::BoundsError).a === (1,2.) && ex.i == 3; end
-@test try; f9534c(0) catch ex; (ex::BoundsError).a === (1,2.) && ex.i == 0; end
-f9534d() = (a=(1,2,4,6,7); a[7])
-f9534d(x) = (a=(1,2,4,6,7); a[x])
-@test try; f9534d() catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == 7; end
-@test try; f9534d(-1) catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == -1; end
-f9534e(x) = (a=IOBuffer(); setfield!(a, x, 3))
-@test try; f9534e(-2) catch ex; isa((ex::BoundsError).a,Base.IOBuffer) && ex.i == -2; end
-f9534f() = (a=IOBuffer(); getfield(a, -2))
-f9534f(x) = (a=IOBuffer(); getfield(a, x))
-@test try; f9534f() catch ex; isa((ex::BoundsError).a,Base.IOBuffer) && ex.i == -2; end
-@test try; f9534f(typemin(Int)+2) catch ex; isa((ex::BoundsError).a,Base.IOBuffer) && ex.i == typemin(Int)+2; end
+@test_throws BoundsError((1, 2), 3) begin; a, b, c = 1, 2; end
+let a = []
+    @test_broken try; a[]; catch ex; (ex::BoundsError).a === a && ex.i == (1,); end # TODO: Re-enable after PLI
+    @test_throws BoundsError(a, (1, 2)) a[1, 2]
+    @test_throws BoundsError(a, (10,)) a[10]
+end
+f9534a() = (a = 1 + 2im; getfield(a, -100))
+f9534a(x) = (a = 1 + 2im; getfield(a, x))
+@test_throws BoundsError(1 + 2im, -100) f9534a()
+@test_throws BoundsError(1 + 2im, 3) f9534a(3)
+f9534b() = (a = (1, 2., ""); a[5])
+f9534b(x) = (a = (1, 2., ""); a[x])
+@test_throws BoundsError((1, 2., ""), 5) f9534b()
+@test_throws BoundsError((1, 2., ""), 4) f9534b(4)
+f9534c() = (a = (1, 2.); a[3])
+f9534c(x) = (a = (1, 2.); a[x])
+@test_throws BoundsError((1, 2.), 3) f9534c()
+@test_throws BoundsError((1, 2.), 0) f9534c(0)
+f9534d() = (a = (1, 2, 4, 6, 7); a[7])
+f9534d(x) = (a = (1, 2, 4, 6, 7); a[x])
+@test_throws BoundsError((1, 2, 4, 6, 7), 7) f9534d()
+@test_throws BoundsError((1, 2, 4, 6, 7), -1) f9534d(-1)
+let a = IOBuffer()
+    f9534e(x) = setfield!(a, x, 3)
+    @test_throws BoundsError(a, -2) f9534e(-2)
+    f9534f() = getfield(a, -2)
+    f9534f(x) = getfield(a, x)
+    @test_throws BoundsError(a, -2) f9534f()
+    @test_throws BoundsError(a, typemin(Int) + 2) f9534f(typemin(Int) + 2)
+end
 x9634 = 3
-@test try; getfield(1+2im, x9634); catch ex; (ex::BoundsError).a === 1+2im && ex.i == 3; end
-@test try; throw(BoundsError()) catch ex; !isdefined((ex::BoundsError), :a) && !isdefined((ex::BoundsError), :i); end
-@test try; throw(BoundsError(Int)) catch ex; (ex::BoundsError).a == Int && !isdefined((ex::BoundsError), :i); end
-@test try; throw(BoundsError(Int, typemin(Int))) catch ex; (ex::BoundsError).a == Int && (ex::BoundsError).i == typemin(Int); end
-@test try; throw(BoundsError(Int, (:a,))) catch ex; (ex::BoundsError).a == Int && (ex::BoundsError).i == (:a,); end
-f9534g(a,b,c...) = c[0]
-@test try; f9534g(1,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 0; end
-f9534h(a,b,c...) = c[a]
-@test f9534h(4,2,3,4,5,6) == 6
-@test try; f9534h(5,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 5; end
+@test_throws BoundsError(1 + 2im, 3) getfield(1 + 2im, x9634)
+@test try; throw(BoundsError()); catch ex; !isdefined((ex::BoundsError), :a) && !isdefined((ex::BoundsError), :i); end
+@test try; throw(BoundsError(Int)); catch ex; (ex::BoundsError).a == Int && !isdefined((ex::BoundsError), :i); end
+@test_throws BoundsError(Int, typemin(Int)) throw(BoundsError(Int, typemin(Int)))
+@test_throws BoundsError(Int, (:a,)) throw(BoundsError(Int, (:a,)))
+f9534g(a, b, c...) = c[0]
+@test_throws BoundsError((3, 4, 5, 6), 0) f9534g(1, 2, 3, 4, 5, 6)
+f9534h(a, b, c...) = c[a]
+@test f9534h(4, 2, 3, 4, 5, 6) == 6
+@test_throws BoundsError((3, 4, 5, 6), 5) f9534h(5, 2, 3, 4, 5, 6)
 
 # issue #7978, comment 332352438
 f7978a() = 1
-@test try; a, b = f7978a() catch ex; (ex::BoundsError).a == 1 && ex.i == 2; end
+@test_throws BoundsError(1, 2) begin; a, b = f7978a(); end
 f7978b() = 1, 2
-@test try; a, b, c = f7978b() catch ex; (ex::BoundsError).a == (1, 2) && ex.i == 3; end
+@test_throws BoundsError((1, 2), 3) begin; a, b, c = f7978b(); end
 
 # issue #9535
 counter9535 = 0
