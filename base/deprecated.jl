@@ -363,6 +363,9 @@ end
 
 @deprecate ipermutedims(A::AbstractArray,p) permutedims(A, invperm(p))
 
+# PR #25168
+@deprecate ipermute!(a, p::AbstractVector) invpermute!(a, p)
+
 # 18696
 function ($)(x, y)
     depwarn("`x \$ y` is deprecated.  use `xor(x, y)` or `x ⊻ y` instead.", :$)

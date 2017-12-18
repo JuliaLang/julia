@@ -459,7 +459,7 @@ export
     indmax,
     indmin,
     invperm,
-    ipermute!,
+    invpermute!,
     isassigned,
     isperm,
     issorted,

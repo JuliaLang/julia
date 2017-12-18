@@ -172,7 +172,7 @@ Base.step(r::ConstantRange) = 0
         permute!(c, ix)
         @test c == b
 
-        ipermute!(c, ix)
+        invpermute!(c, ix)
         @test c == a
 
         c = sort(a, alg=alg, lt=(>))
@@ -245,7 +245,7 @@ end
             c = copy(v)
             permute!(c, pi)
             @test c == si
-            ipermute!(c, pi)
+            invpermute!(c, pi)
             @test c == v
 
             # stable algorithms
@@ -256,7 +256,7 @@ end
                 s = copy(v)
                 permute!(s, p)
                 @test s == si
-                ipermute!(s, p)
+                invpermute!(s, p)
                 @test s == v
             end
 
@@ -269,7 +269,7 @@ end
                 s = copy(v)
                 permute!(s, p)
                 @test s == si
-                ipermute!(s, p)
+                invpermute!(s, p)
                 @test s == v
             end
         end
