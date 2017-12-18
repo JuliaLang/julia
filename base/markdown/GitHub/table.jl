@@ -11,7 +11,7 @@ function parserow(stream::IO)
         row = split(line, r"(?<!\\)\|")
         length(row) == 1 && return
         isempty(row[1]) && popfirst!(row)
-        map!(x -> strip(replace(x, "\\|", "|")), row, row)
+        map!(x -> strip(replace(x, "\\|" => "|")), row, row)
         isempty(row[end]) && pop!(row)
         return row
     end
@@ -104,7 +104,7 @@ _dash(width, align) =
 
 function plain(io::IO, md::Table)
     cells = mapmap(md.rows) do each
-        replace(plaininline(each), "|", "\\|")
+        replace(plaininline(each), "|" => "\\|")
     end
     padcells!(cells, md.align, len = length, min = 3)
     for i = axes(cells,1)

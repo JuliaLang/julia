@@ -1346,13 +1346,18 @@ end
 function replace(s::AbstractString, pat, f, n::Integer)
     if n <= 0
         depwarn(string("`replace(s, pat, r, count)` with `count <= 0` is deprecated, use ",
-                       "`replace(s, pat, r, typemax(Int))` or `replace(s, pat, r)` instead"),
+                       "`replace(s, pat=>r, count=typemax(Int))` or `replace(s, pat=>r)` instead"),
                 :replace)
-        replace(s, pat, f)
+        replace(s, pat=>f)
     else
-        replace_new(String(s), pat, f, n)
+        depwarn(string("`replace(s, pat, r, count)` is deprecated, use ",
+                       "`replace(s, pat=>r, count=count)`"),
+                :replace)
+        replace(String(s), pat=>f, count=n)
     end
 end
+
+@deprecate replace(s::AbstractString, pat, f) replace(s, pat=>f)
 
 # PR #22475
 @deprecate ntuple(f, ::Type{Val{N}}) where {N}  ntuple(f, Val(N))

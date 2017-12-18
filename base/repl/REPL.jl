@@ -450,7 +450,7 @@ function add_history(hist::REPLHistoryProvider, s)
     entry = """
     # time: $(Libc.strftime("%Y-%m-%d %H:%M:%S %Z", time()))
     # mode: $mode
-    $(replace(str, r"^"ms, "\t"))
+    $(replace(str, r"^"ms => "\t"))
     """
     # TODO: write-lock history file
     seekend(hist.history_file)
@@ -946,7 +946,7 @@ function setup_interface(
                         tail = lstrip(tail)
                     end
                     if isprompt_paste # remove indentation spaces corresponding to the prompt
-                        tail = replace(tail, r"^ {7}"m, "") # 7: jl_prompt_len
+                        tail = replace(tail, r"^ {7}"m => "") # 7: jl_prompt_len
                     end
                     LineEdit.replace_line(s, tail, true)
                     LineEdit.refresh_line(s)
@@ -956,7 +956,7 @@ function setup_interface(
                 line = strip(input[oldpos:prevind(input, pos)])
                 if !isempty(line)
                     if isprompt_paste # remove indentation spaces corresponding to the prompt
-                        line = replace(line, r"^ {7}"m, "") # 7: jl_prompt_len
+                        line = replace(line, r"^ {7}"m => "") # 7: jl_prompt_len
                     end
                     # put the line on the screen and history
                     LineEdit.replace_line(s, line)

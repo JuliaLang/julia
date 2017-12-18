@@ -319,7 +319,7 @@ end
 
 # issue #7921
 @test replace(sprint(show, Expr(:function, :(==(a, b)), Expr(:block,:(return a == b)))),
-              r"\s+", " ") == ":(function ==(a, b) return a == b end)"
+              r"\s+" => " ") == ":(function ==(a, b) return a == b end)"
 
 # unicode operator printing
 @test sprint(show, :(1 ⊕ (2 ⊗ 3))) == ":(1 ⊕ 2 ⊗ 3)"
@@ -598,7 +598,7 @@ let ex,
     @test string(l2)  == "#= myfile:42 =#"
     @test string(l1)  == string(l2n)
     ex = Expr(:block, l1, :x, l2, :y, l2n, :z)
-    @test replace(string(ex)," ","") == replace("""
+    @test replace(string(ex)," " => "") == replace("""
     begin
         #= line 42 =#
         x
@@ -606,7 +606,7 @@ let ex,
         y
         #= line 42 =#
         z
-    end""", " ", "")
+    end""", " " => "")
 end
 # Test the printing of whatever form of line number representation
 # that is used in the arguments to a macro looks the same as for

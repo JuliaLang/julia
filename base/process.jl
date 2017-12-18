@@ -107,7 +107,7 @@ function show(io::IO, cmd::Cmd)
             with_output_color(:underline, io) do io
                 print_shell_word(io, arg, shell_special)
             end
-        end, '`', "\\`")
+        end, '`' => "\\`")
     end, ' '))
     print(io, '`')
     print_env && (print(io, ","); show(io, cmd.env))

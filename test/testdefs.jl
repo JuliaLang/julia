@@ -9,7 +9,7 @@ function runtests(name, path, isolate=true; seed=nothing)
         if isolate
             # Simple enough to type and random enough so that no one will hard
             # code it in the test
-            mod_name = Symbol("Test", rand(1:100), "Main_", replace(name, '/', '_'))
+            mod_name = Symbol("Test", rand(1:100), "Main_", replace(name, '/' => '_'))
             m = @eval(Main, module $mod_name end)
         else
             m = Main

@@ -19,7 +19,7 @@ struct Requirement <: Line
     system::Vector{AbstractString}
 
     function Requirement(content::AbstractString)
-        fields = split(replace(content, r"#.*$", ""))
+        fields = split(replace(content, r"#.*$" => ""))
         system = AbstractString[]
         while !isempty(fields) && fields[1][1] == '@'
             push!(system,popfirst!(fields)[2:end])

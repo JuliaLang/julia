@@ -328,7 +328,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     letters = String(collect(keys(CONVERSION_SPECIFIERS)))
     for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
-        tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)", s"\1")
+        tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)" => s"\1")
 
         if !isempty(prev)
             letter, width = prev
@@ -348,7 +348,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
         prev_offset = m.offset + width
     end
 
-    tran = replace(f[prev_offset:endof(f)], r"\\(.)", s"\1")
+    tran = replace(f[prev_offset:endof(f)], r"\\(.)" => s"\1")
 
     if !isempty(prev)
         letter, width = prev

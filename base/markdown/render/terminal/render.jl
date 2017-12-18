@@ -114,7 +114,7 @@ function terminline(io::IO, content::Vector)
 end
 
 function terminline(io::IO, md::AbstractString)
-    print(io, replace(md, r"[\s\t\n]+", " "))
+    print(io, replace(md, r"[\s\t\n]+" => " "))
 end
 
 function terminline(io::IO, md::Bold)

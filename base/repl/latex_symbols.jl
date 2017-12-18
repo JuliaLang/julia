@@ -53,7 +53,7 @@ const latex_strings = Set(values(Base.REPLCompletions.latex_symbols))
 open(fname) do f
     for L in eachline(f)
         x = map(s -> rstrip(s, [' ','\t','\n']),
-                split(replace(L, r"[{}\"]+", "\t"), "\t"))
+                split(replace(L, r"[{}\"]+" => "\t"), "\t"))
         c = Char(parse(Int, x[2], 16))
         if (Base.is_id_char(c) || Base.isoperator(Symbol(c))) &&
            string(c) ∉ latex_strings && !isascii(c)

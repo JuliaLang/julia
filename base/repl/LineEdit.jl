@@ -1883,12 +1883,12 @@ function bracketed_paste(s; tabwidth=options(s).tabwidth)
     ps = state(s, mode(s))
     str = readuntil(ps.terminal, "\e[201~")
     input = str[1:prevind(str, end-5)]
-    input = replace(input, '\r', '\n')
+    input = replace(input, '\r' => '\n')
     if position(buffer(s)) == 0
         indent = Base.indentation(input; tabwidth=tabwidth)[1]
         input = Base.unindent(input, indent; tabwidth=tabwidth)
     end
-    return replace(input, '\t', " "^tabwidth)
+    return replace(input, '\t' => " "^tabwidth)
 end
 
 function tab_should_complete(s)
