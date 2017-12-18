@@ -122,6 +122,10 @@ for op in Symbol[:+, :-, :*, :/, :^]
 end
 *(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
 
+hash_sub(x::Number, y::Irrational) = widen(x) - y
+hash_sub(x::Irrational, y::Number) = x - widen(y)
+hash_sub(x::Irrational, y::Irrational) = x - y
+
 macro irrational(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))

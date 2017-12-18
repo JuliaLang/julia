@@ -1978,8 +1978,6 @@ hash_sub(x, y) =
     throw(ArgumentError("cannot hash types ($(typeof(x)), $(typeof(y))) as they do not implement Base.hash_sub"))
 
 hash_sub(x::Number, y::Number) = widen(x) - widen(y)
-hash_sub(x::Number, y::Irrational) = -(promote(widen(x), y)...)
-hash_sub(x::Irrational, y::Number) = -(promote(x, widen(y))...)
 
 function hash(a::AbstractArray{T}, h::UInt) where T
     # O(1) hashing for types with regular step
@@ -1992,16 +1990,15 @@ function hash(a::AbstractArray{T}, h::UInt) where T
 
     state = start(a)
     done(a, state) && return h
-    x2, state = next(a, state)
-    done(a, state) && return hash(x2, h)
+    x1, state = next(a, state)
+    done(a, state) && return hash(x1, h)
 
     # Check whether the array is equal to a range, and hash the elements
     # at the beginning of the array as such as long as they match this assumption
     # This needs to be done even for non-RangeStepRegular types since they may still be equal
     # to RangeStepRegular values (e.g. 1.0:3.0 == 1:3)
     if isa(a, AbstractVector) && (!isconcrete(T) || method_exists(-, Tuple{T, T}))
-        x1 = x2
-        x2, state = next(a, state)
+        x2, newstate = next(a, state)
         if length(a) == 2
             h = hash(x1, h)
             return hash(x2, h)
@@ -2032,13 +2029,16 @@ function hash(a::AbstractArray{T}, h::UInt) where T
             step = hash_sub(x2, x1)
         end
 
+        # Ranges cannot have zero step
+        iszero(step) && @goto nonrange
+
         # Check whether all remaining steps are equal to the first one
         n = 2
+        state = newstate
+        x1 = x2
         while !done(a, state)
-            x1 = x2
             laststep = step
-            laststate = state
-            x2, state = next(a, state)
+            x2, newstate = next(a, state)
             if isconcrete(T)
                 try
                     step = x2 - x1
@@ -2049,29 +2049,27 @@ function hash(a::AbstractArray{T}, h::UInt) where T
             else
                 step = hash_sub(x2, x1)
             end
-            # Implies breaking in first loop if the step is 0
             if !isequal(step, laststep)
                 # Need to handle last element which is not part of a range
-                state = laststate
                 break
             end
             n += 1
+            state = newstate
+            x1 = x2
         end
 
-        # If at least three elements matched range, hash these elements as a range
-        # Else, leave them to the fallback below
-        if n > 2
-            h = hash(first(a), h)
-            h += hashr_seed
-            h = hash(n, h)
-            h = hash(x2, h)
-        end
+        # Hash elements that are part of a range as a range
+        # Leave others to the fallback below
+        h = hash(first(a), h)
+        h += hashr_seed
+        h = hash(n, h)
+        h = hash(x1, h)
     end
 
     @label nonrange
 
     # Hash elements which do not correspond to a range (if any)
-    x1 = x2
+    x2 = x1
     while !done(a, state)
         x1 = x2
         x2, state = next(a, state)
