@@ -180,7 +180,7 @@ function atomic_sub! end
 
 Atomically bitwise-and `x` with `val`
 
-Performs `x[] = bitand(x[]mval` atomically. Returns the **old** value.
+Performs `x[] = bitand(x[], mval)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw and` instruction.
 
