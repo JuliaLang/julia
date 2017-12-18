@@ -1317,3 +1317,81 @@ bar_22708(x) = f_22708(x)
 
 @test bar_22708(1) == "x"
 
+# mechanism for spoofing work-limiting heuristics and early generator expansion (#24852)
+function _generated_stub(gen::Symbol, args::Vector{Any}, params::Vector{Any}, line, file, expand_early)
+    stub = Expr(:new, Core.GeneratedFunctionStub, gen, args, params, line, file, expand_early)
+    return Expr(:meta, :generated, stub)
+end
+
+f24852_kernel(x, y) = x * y
+
+function f24852_kernel_cinfo(x, y)
+    sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f24852_kernel),x,y}, -1, typemax(UInt))[1]
+    code_info = Base.uncompressed_ast(method)
+    body = Expr(:block, code_info.code...)
+    Base.Core.Inference.substitute!(body, 0, Any[], sig, Any[spvals...], 0, :propagate)
+    return method, code_info
+end
+
+function f24852_gen_cinfo_uninflated(X, Y, f, x, y)
+    _, code_info = f24852_kernel_cinfo(x, y)
+    return code_info
+end
+
+function f24852_gen_cinfo_inflated(X, Y, f, x, y)
+    method, code_info = f24852_kernel_cinfo(x, y)
+    code_info.method_for_inference_heuristics = method
+    return code_info
+end
+
+function f24852_gen_expr(X, Y, f, x, y)
+    return :(f24852_kernel(x::$X, y::$Y))
+end
+
+@eval begin
+    function f24852_late_expr(x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_expr, Any[:f24852_late_expr, :x, :y],
+                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+    end
+    function f24852_late_inflated(x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:f24852_late_inflated, :x, :y],
+                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+    end
+    function f24852_late_uninflated(x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:f24852_late_uninflated, :x, :y],
+                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+    end
+end
+
+@eval begin
+    function f24852_early_expr(x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_expr, Any[:f24852_early_expr, :x, :y],
+                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+    end
+    function f24852_early_inflated(x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:f24852_early_inflated, :x, :y],
+                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+    end
+    function f24852_early_uninflated(x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:f24852_early_uninflated, :x, :y],
+                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+    end
+end
+
+x, y = rand(), rand()
+result = f24852_kernel(x, y)
+
+# TODO: The commented out tests here are the ones where `method_for_inference_heuristics`
+# is inflated; these tests cause segfaults. Probably due to incorrect CodeInfo
+# construction/initialization happening somewhere...
+
+@test result === f24852_late_expr(x, y)
+@test result === f24852_late_uninflated(x, y)
+# @test result === f24852_late_inflated(x, y)
+
+@test result === f24852_early_expr(x, y)
+@test result === f24852_early_uninflated(x, y)
+# @test result === f24852_early_inflated(x, y)
+
+# TODO: test that `expand_early = true` + inflated `method_for_inference_heuristics`
+# can be used to tighten up some inference result.
