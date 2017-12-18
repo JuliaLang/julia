@@ -76,6 +76,7 @@ getindex(c::Char, i::Integer) = i == 1 ? c : throw(BoundsError())
 getindex(c::Char, I::Integer...) = all(x -> x == 1, I) ? c : throw(BoundsError())
 first(c::Char) = c
 last(c::Char) = c
+copy(c::Char) = c  # some code treats characters as collection-like
 eltype(::Type{Char}) = Char
 
 start(c::Char) = false
