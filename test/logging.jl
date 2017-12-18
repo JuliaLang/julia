@@ -249,20 +249,20 @@ end
     # Simple
     @test genmsg(Info, "msg", Main, "some/path.jl", 101) ==
     """
-    I- msg -Info:Main:path.jl:101
+    Info: msg - at Main:path.jl:101
     """
 
     # Multiline message
     @test genmsg(Warn, "line1\nline2", Main, "some/path.jl", 101) ==
     """
-    W- line1
-    |  line2 -Warn:Main:path.jl:101
+    Warn: line1
+    |  line2 - at Main:path.jl:101
     """
 
     # Keywords
     @test genmsg(Error, "msg", Base, "other.jl", 101, a=1, b="asdf") ==
     """
-    E- msg -Error:Base:other.jl:101
+    Error: msg - at Base:other.jl:101
     |  a = 1
     |  b = asdf
     """
