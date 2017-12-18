@@ -872,14 +872,15 @@ function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
 end
 
 function flush(s::LibuvStream)
-    if s.sendbuf === nothing
-        return
+    if s.sendbuf !== nothing
+        buf = s.sendbuf
+        if nb_available(buf) > 0
+            arr = take!(buf)        # Array of UInt8s
+            uv_write(s, arr)
+            return
+        end
     end
-    buf = s.sendbuf
-    if nb_available(buf) > 0
-        arr = take!(buf)        # Array of UInt8s
-        uv_write(s, arr)
-    end
+    uv_write(s, Ptr{UInt8}(Base.eventloop()), UInt(0)) # zero write from a random pointer to flush current queue
     return
 end
 
