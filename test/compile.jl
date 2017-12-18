@@ -207,7 +207,8 @@ try
         @test modules == [Foo_module => Base.module_uuid(Foo)]
         @test map(x -> x[1],  sort(discard_module.(deps))) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
         srctxt = Base.read_dependency_src(cachefile, Foo_file)
-        @test !isempty(srctxt) && srctxt == read(Foo_file, String)
+        @test !isempty(srctxt)
+        @test srctxt == read(Foo_file, String)
         @test_throws ErrorException Base.read_dependency_src(cachefile, "/tmp/nonexistent.txt")
         # dependencies declared with `include_dependency` should not be stored
         @test_throws ErrorException Base.read_dependency_src(cachefile, joinpath(dir, "foo.jl"))
@@ -477,7 +478,9 @@ let dir = mktempdir()
         let fname = tempname()
             try
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                @test ismatch(Regex("Replacing module `$Test_module`"), read(fname, String))
+                @test let s = read(fname, String)
+                        ismatch(Regex("Replacing module `$Test_module`"), s) || s
+                      end
             finally
                 rm(fname, force=true)
             end
@@ -489,7 +492,9 @@ let dir = mktempdir()
             try
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
                 # e.g `@test_nowarn`
-                @test Test.ismatch_warn(r"^(?!.)"s, read(fname, String))
+                @test let s = read(fname, String)
+                        Test.ismatch_warn(r"^(?!.)"s, s) || s
+                      end
             finally
                 rm(fname, force=true)
             end

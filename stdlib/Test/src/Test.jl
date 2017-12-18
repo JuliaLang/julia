@@ -526,7 +526,7 @@ Returns the result of evaluating `expr`.
 See also [`@test_nowarn`](@ref) to check for the absence of error output.
 """
 macro test_warn(msg, expr)
-    quote
+    return quote
         let fname = tempname()
             try
                 ret = open(fname, "w") do f
@@ -534,7 +534,9 @@ macro test_warn(msg, expr)
                         $(esc(expr))
                     end
                 end
-                @test ismatch_warn($(esc(msg)), read(fname, String))
+                @test let s = read(fname, String)::String
+                        ismatch_warn($(esc(msg)), s) || s
+                      end
                 ret
             finally
                 rm(fname, force=true)
