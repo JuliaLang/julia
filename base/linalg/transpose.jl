@@ -142,6 +142,7 @@ function ccopy!(B, A)
             B[i] = adjoint(A[j])
         end
     end
+    return B
 end
 
 """
