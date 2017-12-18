@@ -269,7 +269,7 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
 end
 
 max_values(::Type) = typemax(Int)
-max_values(T::Type{<:Union{Void,BitIntegerSmall}}) = 1 << (8*sizeof(T))
+max_values(T::Type{<:Union{Nothing,BitIntegerSmall}}) = 1 << (8*sizeof(T))
 max_values(T::Union) = max(max_values(T.a), max_values(T.b))
 max_values(::Type{Bool}) = 2
 
@@ -662,8 +662,8 @@ end
 
 function _delete!(h::Dict, index)
     h.slots[index] = 0x2
-    ccall(:jl_arrayunset, Void, (Any, UInt), h.keys, index-1)
-    ccall(:jl_arrayunset, Void, (Any, UInt), h.vals, index-1)
+    ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, index-1)
+    ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.vals, index-1)
     h.ndel += 1
     h.count -= 1
     h.age += 1

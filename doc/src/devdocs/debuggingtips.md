@@ -15,7 +15,7 @@ Similarly, if you're debugging some of Julia's internals (e.g., `inference.jl`),
 `obj` using
 
 ```julia
-ccall(:jl_, Void, (Any,), obj)
+ccall(:jl_, Cvoid, (Any,), obj)
 ```
 
 This is a good way to circumvent problems that arise from the order in which julia's output streams
@@ -64,7 +64,7 @@ In your `gdb` session, set a breakpoint in `jl_breakpoint` like so:
 Then within your Julia code, insert a call to `jl_breakpoint` by adding
 
 ```julia
-ccall(:jl_breakpoint, Void, (Any,), obj)
+ccall(:jl_breakpoint, Cvoid, (Any,), obj)
 ```
 
 where `obj` can be any variable or tuple you want to be accessible in the breakpoint.

@@ -166,7 +166,7 @@ struct AlwaysHasLayout{T}
 end
 @test !isconcrete(AlwaysHasLayout) && !isconcrete(AlwaysHasLayout.body)
 @test isconcrete(AlwaysHasLayout{Any})
-@test isconcrete(Ptr{Void})
+@test isconcrete(Ptr{Cvoid})
 @test !isconcrete(Ptr) && !isconcrete(Ptr.body)
 
 # issue #10165
@@ -384,9 +384,9 @@ for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
     world = typemax(UInt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     params = Base.CodegenParams()
-    llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
+    llvmf = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
     @test llvmf != C_NULL
-    @test ccall(:jl_get_llvm_fptr, Ptr{Void}, (Ptr{Void},), llvmf) != C_NULL
+    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf) != C_NULL
 end
 
 module MacroTest
@@ -519,28 +519,28 @@ end
 # Linfo Tracing test
 tracefoo(x, y) = x+y
 didtrace = false
-tracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
-ccall(:jl_register_method_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, Tuple{Ptr{Void}}))
+tracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
+ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), cfunction(tracer, Cvoid, Tuple{Ptr{Cvoid}}))
 meth = which(tracefoo,Tuple{Any,Any})
-ccall(:jl_trace_method, Void, (Any,), meth)
+ccall(:jl_trace_method, Cvoid, (Any,), meth)
 @test tracefoo(1, 2) == 3
-ccall(:jl_untrace_method, Void, (Any,), meth)
+ccall(:jl_untrace_method, Cvoid, (Any,), meth)
 @test didtrace
 didtrace = false
 @test tracefoo(1.0, 2.0) == 3.0
 @test !didtrace
-ccall(:jl_register_method_tracer, Void, (Ptr{Void},), C_NULL)
+ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # Method Tracing test
-methtracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
-ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), cfunction(methtracer, Void, Tuple{Ptr{Void}}))
+methtracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
+ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cfunction(methtracer, Cvoid, Tuple{Ptr{Cvoid}}))
 tracefoo2(x, y) = x*y
 @test didtrace
 didtrace = false
 tracefoo(x::Int64, y::Int64) = x*y
 @test didtrace
 didtrace = false
-ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), C_NULL)
+ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # test for reflection over large method tables
 for i = 1:100; @eval fLargeTable(::Val{$i}, ::Any) = 1; end
@@ -733,7 +733,7 @@ end
 
 @test nfields((1,2)) == 2
 @test nfields(()) == 0
-@test nfields(nothing) == fieldcount(Void) == 0
+@test nfields(nothing) == fieldcount(Nothing) == 0
 @test nfields(1) == 0
 @test fieldcount(Union{}) == 0
 @test fieldcount(Tuple{Any,Any,T} where T) == 3

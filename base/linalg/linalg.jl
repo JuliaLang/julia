@@ -314,7 +314,7 @@ function __init__()
     try
         BLAS.check()
         if BLAS.vendor() == :mkl
-            ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Void, (Cint,), USE_BLAS64 ? 1 : 0)
+            ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
         end
     catch ex
         Base.showerror_nostdio(ex,

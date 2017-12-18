@@ -317,7 +317,7 @@ function process_options(opts::JLOptions)
     if arg_is_program
         # program
         if !is_interactive
-            ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+            ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
         end
         include(Main, PROGRAM_FILE)
     end

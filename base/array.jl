@@ -161,7 +161,7 @@ segfault your program, in the same manner as C.
 function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
-    ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+    ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
           dest, src, n*sizeof(T))
     return dest
 end
@@ -182,15 +182,15 @@ function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     if isbits(T)
         unsafe_copyto!(pointer(dest, doffs), pointer(src, soffs), n)
     elseif isbitsunion(T)
-        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
               pointer(dest, doffs), pointer(src, soffs), n * Base.bitsunionsize(T))
         # copy selector bytes
-        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
               convert(Ptr{UInt8}, pointer(dest)) + length(dest) * Base.bitsunionsize(T) + doffs - 1,
               convert(Ptr{UInt8}, pointer(src)) + length(src) * Base.bitsunionsize(T) + soffs - 1,
               n)
     else
-        ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
+        ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
               dest, pointer(dest, doffs), src, pointer(src, soffs), n)
     end
     @_gc_preserve_end t2
@@ -304,7 +304,7 @@ end
 getindex(::Type{Any}) = Vector{Any}()
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
-    ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), a, x, length(a))
+    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, x, length(a))
     return a
 end
 
@@ -727,20 +727,20 @@ setindex!(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) where {T, N} = fill!(A,
 # efficiently grow an array
 
 _growbeg!(a::Vector, delta::Integer) =
-    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, delta)
+    ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), a, delta)
 _growend!(a::Vector, delta::Integer) =
-    ccall(:jl_array_grow_end, Void, (Any, UInt), a, delta)
+    ccall(:jl_array_grow_end, Cvoid, (Any, UInt), a, delta)
 _growat!(a::Vector, i::Integer, delta::Integer) =
-    ccall(:jl_array_grow_at, Void, (Any, Int, UInt), a, i - 1, delta)
+    ccall(:jl_array_grow_at, Cvoid, (Any, Int, UInt), a, i - 1, delta)
 
 # efficiently delete part of an array
 
 _deletebeg!(a::Vector, delta::Integer) =
-    ccall(:jl_array_del_beg, Void, (Any, UInt), a, delta)
+    ccall(:jl_array_del_beg, Cvoid, (Any, UInt), a, delta)
 _deleteend!(a::Vector, delta::Integer) =
-    ccall(:jl_array_del_end, Void, (Any, UInt), a, delta)
+    ccall(:jl_array_del_end, Cvoid, (Any, UInt), a, delta)
 _deleteat!(a::Vector, i::Integer, delta::Integer) =
-    ccall(:jl_array_del_at, Void, (Any, Int, UInt), a, i - 1, delta)
+    ccall(:jl_array_del_at, Cvoid, (Any, Int, UInt), a, i - 1, delta)
 
 ## Dequeue functionality ##
 
@@ -918,7 +918,7 @@ julia> a[1:6]
 function resize!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
-        ccall(:jl_array_grow_end, Void, (Any, UInt), a, nl-l)
+        ccall(:jl_array_grow_end, Cvoid, (Any, UInt), a, nl-l)
     else
         if nl < 0
             throw(ArgumentError("new length must be ≥ 0"))
@@ -936,7 +936,7 @@ Suggest that collection `s` reserve capacity for at least `n` elements. This can
 function sizehint! end
 
 function sizehint!(a::Vector, sz::Integer)
-    ccall(:jl_array_sizehint, Void, (Any, UInt), a, sz)
+    ccall(:jl_array_sizehint, Cvoid, (Any, UInt), a, sz)
     a
 end
 
@@ -1302,7 +1302,7 @@ function empty!(a::Vector)
     return a
 end
 
-_memcmp(a, b, len) = ccall(:memcmp, Int32, (Ptr{Void}, Ptr{Void}, Csize_t), a, b, len) % Int
+_memcmp(a, b, len) = ccall(:memcmp, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, len) % Int
 
 # use memcmp for lexcmp on byte arrays
 function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
@@ -1450,24 +1450,24 @@ function vcat(arrays::Vector{T}...) where T
         elsz = bitsunionsize(T)
         selptr = convert(Ptr{UInt8}, ptr) + n * elsz
     else
-        elsz = Core.sizeof(Ptr{Void})
+        elsz = Core.sizeof(Ptr{Cvoid})
     end
     t = @_gc_preserve_begin arr
     for a in arrays
         na = length(a)
         nba = na * elsz
         if isbits(T)
-            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   ptr, a, nba)
         elseif isbitsunion(T)
-            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   ptr, a, nba)
             # copy selector bytes
-            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   selptr, convert(Ptr{UInt8}, pointer(a)) + nba, na)
             selptr += na
         else
-            ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
+            ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
                   arr, ptr, a, pointer(a), na)
         end
         ptr += nba

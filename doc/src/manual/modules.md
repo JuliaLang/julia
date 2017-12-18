@@ -272,10 +272,10 @@ be initialized at runtime (not at compile time) because the pointer address will
 to run.  You could accomplish this by defining the following `__init__` function in your module:
 
 ```julia
-const foo_data_ptr = Ref{Ptr{Void}}(0)
+const foo_data_ptr = Ref{Ptr{Cvoid}}(0)
 function __init__()
-    ccall((:foo_init, :libfoo), Void, ())
-    foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Void}, ())
+    ccall((:foo_init, :libfoo), Cvoid, ())
+    foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Cvoid}, ())
     nothing
 end
 ```

@@ -79,5 +79,5 @@ depwarn24658() = Base.firstcaller(backtrace(), :_func_not_found_)
 
 @testset "firstcaller" begin
     # issue #24658
-    @test eval(:(if true; f24658(); end)) == (Ptr{Void}(0),StackTraces.UNKNOWN)
+    @test eval(:(if true; f24658(); end)) == (Ptr{Cvoid}(0),StackTraces.UNKNOWN)
 end

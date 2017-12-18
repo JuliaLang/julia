@@ -235,7 +235,7 @@ map!(x->1, d, d)
 
 # Shared arrays of singleton immutables
 @everywhere struct ShmemFoo end
-for T in [Void, ShmemFoo]
+for T in [Nothing, ShmemFoo]
     local s = @inferred(SharedArray{T}(10))
     @test T() === remotecall_fetch(x->x[3], workers()[1], s)
 end

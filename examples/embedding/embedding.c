@@ -142,7 +142,7 @@ int main()
                 "    nothing\n"
                 "end");
         typedef void (*Func_VOID__VOID)(void);
-        jl_value_t *pbar = jl_eval_string("cfunction(bar_from_c, Void, Tuple{})");
+        jl_value_t *pbar = jl_eval_string("cfunction(bar_from_c, Cvoid, Tuple{})");
         Func_VOID__VOID bar = (Func_VOID__VOID)jl_unbox_voidpointer(pbar);
         bar();
         checked_eval_string("bar() = println(\"calling new bar\")");

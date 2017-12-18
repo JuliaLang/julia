@@ -92,7 +92,7 @@ function firstcaller(bt::Vector, funcsyms)
     # Identify the calling line
     found = false
     lkup = StackTraces.UNKNOWN
-    found_frame = Ptr{Void}(0)
+    found_frame = Ptr{Cvoid}(0)
     for frame in bt
         lkups = StackTraces.lookup(frame)
         for outer lkup in lkups
@@ -120,7 +120,7 @@ function firstcaller(bt::Vector, funcsyms)
     return found_frame, lkup
 end
 
-deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Void, (Any, Any, Cint), m, s, flag)
+deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Cvoid, (Any, Any, Cint), m, s, flag)
 
 macro deprecate_binding(old, new, export_old=true, dep_message=nothing)
     dep_message == nothing && (dep_message = ", use $new instead")
@@ -1660,10 +1660,10 @@ import .Iterators.enumerate
 
 # PR #23640
 # when this deprecation is deleted, remove all calls to it, and replace all keywords of:
-# `payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Void}`
+# `payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}`
 #  with `payload::CredentialPayload` from base/libgit2/libgit2.jl
 @eval LibGit2 function deprecate_nullable_creds(f, sig, payload)
-    if isa(payload, Union{AbstractCredential, CachedCredentials, Void})
+    if isa(payload, Union{AbstractCredential, CachedCredentials, Nothing})
         # Note: Be careful not to show the contents of the credentials as it could reveal a
         # password.
         if payload === nothing
@@ -2192,12 +2192,12 @@ end
 # issue #16307
 @deprecate finalizer(o, f::Function) finalizer(f, o)
 # This misses other callables but they are very rare in the wild
-@deprecate finalizer(o, f::Ptr{Void}) finalizer(f, o)
+@deprecate finalizer(o, f::Ptr{Cvoid}) finalizer(f, o)
 
 # Avoid ambiguity, can remove when deprecations are removed:
 # This is almost certainly going to be a silent failure for code that is not updated.
-finalizer(f::Ptr{Void}, o::Ptr{Void}) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
-finalizer(f::Ptr{Void}, o::Function) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
+finalizer(f::Ptr{Cvoid}, o::Ptr{Cvoid}) = invoke(finalizer, Tuple{Ptr{Cvoid}, Any}, f, o)
+finalizer(f::Ptr{Cvoid}, o::Function) = invoke(finalizer, Tuple{Ptr{Cvoid}, Any}, f, o)
 
 # Broadcast extension API (#23939)
 @eval Broadcast begin
@@ -3134,9 +3134,9 @@ end
 @deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
 
 # 24490 - warnings and messages
-const log_info_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
-const log_warn_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
-const log_error_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
+const log_info_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
+const log_warn_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
+const log_error_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
 
 function _redirect(io::IO, log_to::Dict, sf::StackTraces.StackFrame)
     (sf.linfo isa Core.MethodInstance) || return io
@@ -3202,7 +3202,7 @@ default), `:info`, `:warn`, or `:error`.  See `Base.log_{info,warn,error}_to`
 for the current set of redirections.  Call `logging` with no arguments (or just
 the `kind`) to reset everything.
 """
-function logging(io::IO, m::Union{Module,Void}=nothing, f::Union{Symbol,Void}=nothing;
+function logging(io::IO, m::Union{Module,Nothing}=nothing, f::Union{Symbol,Nothing}=nothing;
                  kind::Symbol=:all)
     depwarn("""`logging()` is deprecated, use `with_logger` instead to capture
                messages from `Base`""", :logging)

@@ -64,6 +64,6 @@ end
 function default_signature(repo::GitRepo)
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)
     @check ccall((:git_signature_default, :libgit2), Cint,
-                 (Ptr{Ptr{SignatureStruct}}, Ptr{Void}), sig_ptr_ptr, repo.ptr)
+                 (Ptr{Ptr{SignatureStruct}}, Ptr{Cvoid}), sig_ptr_ptr, repo.ptr)
     return GitSignature(sig_ptr_ptr[])
 end

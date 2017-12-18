@@ -1835,7 +1835,7 @@ void jl_init_types(void)
     jl_simplevector_type->ninitialized = 0;
 
     // now they can be used to create the remaining base kinds and types
-    jl_void_type = jl_new_datatype(jl_symbol("Void"), core, jl_any_type, jl_emptysvec,
+    jl_void_type = jl_new_datatype(jl_symbol("Nothing"), core, jl_any_type, jl_emptysvec,
                                    jl_emptysvec, jl_emptysvec, 0, 0, 0);
     jl_astaggedvalue(jl_nothing)->header = ((uintptr_t)jl_void_type) | GC_OLD_MARKED;
     jl_void_type->instance = jl_nothing;
@@ -1956,7 +1956,7 @@ void jl_init_types(void)
                             "issimplesig",
                             "va"),
                         jl_svec(10,
-                            jl_any_type, // Union{TypeMapEntry, Void}
+                            jl_any_type, // Union{TypeMapEntry, Nothing}
                             jl_type_type, // TupleType
                             jl_any_type, // TupleType
                             jl_any_type, // SimpleVector{TupleType}
@@ -2096,7 +2096,7 @@ void jl_init_types(void)
                             jl_int32_type,
                             jl_type_type,
                             jl_long_type,
-                            jl_any_type, // Union{Array, Void}
+                            jl_any_type, // Union{Array, Nothing}
                             jl_any_type, // TypeMap
                             jl_simplevector_type,
                             jl_any_type,

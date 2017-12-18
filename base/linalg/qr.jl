@@ -315,7 +315,7 @@ The default is to compute a "thin" factorization. Note that `R` is not
 extended with zeros when a full/square orthogonal factor `Q` is requested (via `full = true`).
 """
 function qr(A::Union{Number,AbstractMatrix}, pivot::Union{Val{false},Val{true}} = Val(false);
-            full::Bool = false, thin::Union{Bool,Void} = nothing)
+            full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `qr(A, pivot; thin = $(thin))` has ",

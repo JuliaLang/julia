@@ -3,10 +3,10 @@
 eltype(::Type{AbstractSet{T}}) where {T} = T
 
 mutable struct Set{T} <: AbstractSet{T}
-    dict::Dict{T,Void}
+    dict::Dict{T,Nothing}
 
-    Set{T}() where {T} = new(Dict{T,Void}())
-    Set{T}(s::Set{T}) where {T} = new(Dict{T,Void}(s.dict))
+    Set{T}() where {T} = new(Dict{T,Nothing}())
+    Set{T}(s::Set{T}) where {T} = new(Dict{T,Nothing}(s.dict))
 end
 
 Set{T}(itr) where {T} = union!(Set{T}(), itr)

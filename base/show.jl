@@ -370,7 +370,7 @@ function show(io::IO, tn::TypeName)
     show_type_name(io, tn)
 end
 
-show(io::IO, ::Void) = print(io, "nothing")
+show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, b::Bool) = print(io, b ? "true" : "false")
 show(io::IO, n::Signed) = (write(io, dec(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
@@ -725,7 +725,7 @@ emphasize(io, str::AbstractString) = get(io, :color, false) ?
 
 show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
 show_linenumber(io::IO, line, file) = print(io, "#= ", file, ":", line, " =#")
-show_linenumber(io::IO, line, file::Void) = show_linenumber(io, line)
+show_linenumber(io::IO, line, file::Nothing) = show_linenumber(io, line)
 
 # show a block, e g if/for/etc
 function show_block(io::IO, head, args::Vector, body, indent::Int)

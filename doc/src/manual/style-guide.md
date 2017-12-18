@@ -126,11 +126,11 @@ When creating a type such as:
 ```julia
 mutable struct MyType
     ...
-    x::Union{Void,T}
+    x::Union{Nothing,T}
 end
 ```
 
-ask whether the option for `x` to be `nothing` (of type `Void`) is really necessary. Here are
+ask whether the option for `x` to be `nothing` (of type `Nothing`) is really necessary. Here are
 some alternatives to consider:
 
   * Find a safe default value to initialize `x` with

@@ -28,15 +28,15 @@ using ..SuiteSparse.CHOLMOD: change_stype!, free!
 
 function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         A::Sparse{Tv},
-        Bsparse::Union{Sparse{Tv}                      , Ptr{Void}} = C_NULL,
-        Bdense::Union{Dense{Tv}                        , Ptr{Void}} = C_NULL,
-        Zsparse::Union{Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}  , Ptr{Void}} = C_NULL,
-        Zdense::Union{Ref{Ptr{CHOLMOD.C_Dense{Tv}}}    , Ptr{Void}} = C_NULL,
-        R::Union{Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}        , Ptr{Void}} = C_NULL,
-        E::Union{Ref{Ptr{CHOLMOD.SuiteSparse_long}}    , Ptr{Void}} = C_NULL,
-        H::Union{Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}        , Ptr{Void}} = C_NULL,
-        HPinv::Union{Ref{Ptr{CHOLMOD.SuiteSparse_long}}, Ptr{Void}} = C_NULL,
-        HTau::Union{Ref{Ptr{CHOLMOD.C_Dense{Tv}}}      , Ptr{Void}} = C_NULL) where {Tv<:CHOLMOD.VTypes}
+        Bsparse::Union{Sparse{Tv}                      , Ptr{Cvoid}} = C_NULL,
+        Bdense::Union{Dense{Tv}                        , Ptr{Cvoid}} = C_NULL,
+        Zsparse::Union{Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}  , Ptr{Cvoid}} = C_NULL,
+        Zdense::Union{Ref{Ptr{CHOLMOD.C_Dense{Tv}}}    , Ptr{Cvoid}} = C_NULL,
+        R::Union{Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}        , Ptr{Cvoid}} = C_NULL,
+        E::Union{Ref{Ptr{CHOLMOD.SuiteSparse_long}}    , Ptr{Cvoid}} = C_NULL,
+        H::Union{Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}        , Ptr{Cvoid}} = C_NULL,
+        HPinv::Union{Ref{Ptr{CHOLMOD.SuiteSparse_long}}, Ptr{Cvoid}} = C_NULL,
+        HTau::Union{Ref{Ptr{CHOLMOD.C_Dense{Tv}}}      , Ptr{Cvoid}} = C_NULL) where {Tv<:CHOLMOD.VTypes}
 
     AA   = unsafe_load(pointer(A))
     m, n = AA.nrow, AA.ncol
@@ -45,7 +45,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
          Ptr{CHOLMOD.C_Sparse{Tv}}, Ptr{CHOLMOD.C_Sparse{Tv}}, Ptr{CHOLMOD.C_Dense{Tv}},
          Ptr{Ptr{CHOLMOD.C_Sparse{Tv}}}, Ptr{Ptr{CHOLMOD.C_Dense{Tv}}}, Ptr{Ptr{CHOLMOD.C_Sparse{Tv}}},
          Ptr{Ptr{CHOLMOD.SuiteSparse_long}}, Ptr{Ptr{CHOLMOD.C_Sparse{Tv}}}, Ptr{Ptr{CHOLMOD.SuiteSparse_long}},
-         Ptr{Ptr{CHOLMOD.C_Dense{Tv}}}, Ptr{Void}),
+         Ptr{Ptr{CHOLMOD.C_Dense{Tv}}}, Ptr{Cvoid}),
         ordering,       # all, except 3:given treated as 0:fixed
         tol,            # columns with 2-norm <= tol treated as 0
         econ,           # e = max(min(m,econ),rank(A))
@@ -78,8 +78,8 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # Free memory allocated by SPQR. This call will make sure that the
         # correct deallocator function is called and that the memory count in
         # the common struct is updated
-        ccall((:cholmod_l_free, :libcholmod), Void,
-            (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Void}),
+        ccall((:cholmod_l_free, :libcholmod), Cvoid,
+            (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Cvoid}),
             n, sizeof(CHOLMOD.SuiteSparse_long), e, CHOLMOD.common_struct)
     end
     hpinv = HPinv[]
@@ -93,8 +93,8 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # Free memory allocated by SPQR. This call will make sure that the
         # correct deallocator function is called and that the memory count in
         # the common struct is updated
-        ccall((:cholmod_l_free, :libcholmod), Void,
-            (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Void}),
+        ccall((:cholmod_l_free, :libcholmod), Cvoid,
+            (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Cvoid}),
             m, sizeof(CHOLMOD.SuiteSparse_long), hpinv, CHOLMOD.common_struct)
     end
 
