@@ -55,7 +55,17 @@ function eof(s::LibuvStream)
     return !isopen(s) && nb_available(s) <= 0
 end
 
-const DEFAULT_READ_BUFFER_SZ = 10485760           # 10 MB
+# Limit our default maximum read and buffer size,
+# to avoid DoS-ing ourself into an OOM situation
+const DEFAULT_READ_BUFFER_SZ = 10485760 # 10 MB
+
+# manually limit our write size, if the OS doesn't support full-size writes
+if Sys.iswindows()
+    const MAX_OS_WRITE = UInt(0x1FF0_0000) # 511 MB (determined semi-empirically, limited to 31 MB on XP)
+else
+    const MAX_OS_WRITE = UInt(typemax(Csize_t))
+end
+
 
 const StatusUninit      = 0 # handle is allocated, but not initialized
 const StatusInit        = 1 # handle is valid, but not connected/active
@@ -458,7 +468,10 @@ function notify_filled(buffer::IOBuffer, nread::Int)
     end
 end
 
-alloc_buf_hook(stream::LibuvStream, size::UInt) = alloc_request(stream.buffer, UInt(size))
+function alloc_buf_hook(stream::LibuvStream, size::UInt)
+    throttle = UInt(stream.throttle)
+    return alloc_request(stream.buffer, (size > throttle) ? throttle : size)
+end
 
 function uv_alloc_buf(handle::Ptr{Cvoid}, size::Csize_t, buf::Ptr{Cvoid})
     hd = uv_handle_data(handle)
@@ -477,6 +490,10 @@ function uv_alloc_buf(handle::Ptr{Cvoid}, size::Csize_t, buf::Ptr{Cvoid})
         if data == C_NULL
             newsize = 0
         end
+        # avoid aliasing of `nread` with `errno` in uv_readcb
+        # or exceeding the Win32 maximum uv_buf_t len
+        maxsize = @static Sys.iswindows() ? typemax(Cint) : typemax(Cssize_t)
+        newsize > maxsize && (newsize = maxsize)
     end
 
     ccall(:jl_uv_buf_set_base, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), buf, data)
@@ -815,28 +832,21 @@ function readuntil(this::LibuvStream, c::UInt8)
 end
 
 uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(sizeof(p)))
+
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
-    check_open(s)
-    uvw = Libc.malloc(_sizeof_uv_write)
-    uv_req_set_data(uvw, C_NULL) # in case we get interrupted before arriving at the wait call
-    err = ccall(:jl_uv_write,
-                Int32,
-                (Ptr{Cvoid}, Ptr{Cvoid}, UInt, Ptr{Cvoid}, Ptr{Cvoid}),
-                s, p, n, uvw,
-                uv_jl_writecb_task::Ptr{Cvoid})
-    if err < 0
-        Libc.free(uvw)
-        uv_error("write", err)
-    end
+    uvw = uv_write_async(s, p, n)
     ct = current_task()
     preserve_handle(ct)
     try
+        # wait for the last chunk to complete (or error)
+        # assume that any errors would be sticky,
+        # (so we don't need to monitor the error status of the intermediate writes)
         uv_req_set_data(uvw, ct)
         wait()
     finally
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
-            # so make sure we don't get spurious notifications later
+            # so make sure we won't get spurious notifications later
             uv_req_set_data(uvw, C_NULL)
         else
             # done with uvw
@@ -846,6 +856,33 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     end
     return Int(n)
 end
+
+# helper function for uv_write that returns the uv_write_t struct for the write
+# rather than waiting on it
+function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
+    check_open(s)
+    while true
+        uvw = Libc.malloc(_sizeof_uv_write)
+        uv_req_set_data(uvw, C_NULL) # in case we get interrupted before arriving at the wait call
+        nwrite = min(n, MAX_OS_WRITE) # split up the write into chunks the OS can handle.
+        # TODO: use writev, when that is added to uv-win
+        err = ccall(:jl_uv_write,
+                    Int32,
+                    (Ptr{Cvoid}, Ptr{Cvoid}, UInt, Ptr{Cvoid}, Ptr{Cvoid}),
+                    s, p, nwrite, uvw,
+                    uv_jl_writecb_task::Ptr{Cvoid})
+        if err < 0
+            Libc.free(uvw)
+            uv_error("write", err)
+        end
+        n -= nwrite
+        p += nwrite
+        if n == 0
+            return uvw
+        end
+    end
+end
+
 
 # Optimized send
 # - smaller writes are buffered, final uv write on flush or when buffer full
@@ -901,12 +938,13 @@ end
 function uv_writecb_task(req::Ptr{Cvoid}, status::Cint)
     d = uv_req_data(req)
     if d != C_NULL
-        uv_req_set_data(req, C_NULL)
+        uv_req_set_data(req, C_NULL) # let the Task know we got the writecb
+        t = unsafe_pointer_to_objref(d)::Task
         if status < 0
             err = UVError("write", status)
-            schedule(unsafe_pointer_to_objref(d)::Task, err, error=true)
+            schedule(t, err, error=true)
         else
-            schedule(unsafe_pointer_to_objref(d)::Task)
+            schedule(t)
         end
     else
         # no owner for this req, safe to just free it
