@@ -44,7 +44,7 @@ function pfd_tst_reads(idx, intvl)
 
     dout = Vector{UInt8}(uninitialized, 1)
     @static if Sys.iswindows()
-        1 == ccall(:recv, stdcall, Cint, (Ptr{Void}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][1], dout, 1, 0) || error(Libc.FormatMessage())
+        1 == ccall(:recv, stdcall, Cint, (Ptr{Cvoid}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][1], dout, 1, 0) || error(Libc.FormatMessage())
     else
         @test 1 == ccall(:read, Csize_t, (Cint, Ptr{UInt8}, Csize_t), pipe_fds[idx][1], dout, 1)
     end
@@ -99,7 +99,7 @@ for (i, intvl) in enumerate(intvls)
 
             if isodd(idx)
                 @static if Sys.iswindows()
-                    1 == ccall(:send, stdcall, Cint, (Ptr{Void}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][2], "A", 1, 0) || error(Libc.FormatMessage())
+                    1 == ccall(:send, stdcall, Cint, (Ptr{Cvoid}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][2], "A", 1, 0) || error(Libc.FormatMessage())
                 else
                     @test 1 == ccall(:write, Csize_t, (Cint, Ptr{UInt8}, Csize_t), pipe_fds[idx][2], "A", 1)
                 end
@@ -115,7 +115,7 @@ end
 for i in 1:n
     for j = 1:2
         @static if Sys.iswindows()
-            0 == ccall(:closesocket, stdcall, Cint, (Ptr{Void},), pipe_fds[i][j]) || error(Libc.FormatMessage())
+            0 == ccall(:closesocket, stdcall, Cint, (Ptr{Cvoid},), pipe_fds[i][j]) || error(Libc.FormatMessage())
         else
             @test 0 == ccall(:close, Cint, (Cint,), pipe_fds[i][j])
         end

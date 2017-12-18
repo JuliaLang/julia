@@ -1695,7 +1695,7 @@ end
 ## iteration utilities ##
 
 """
-    foreach(f, c...) -> Void
+    foreach(f, c...) -> Nothing
 
 Call function `f` on each element of iterable `c`.
 For multiple iterable arguments, `f` is called elementwise.

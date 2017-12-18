@@ -15,7 +15,7 @@ mutable struct InferenceResult
     linfo::MethodInstance
     args::Vector{Any}
     result # ::Type, or InferenceState if WIP
-    src::Union{CodeInfo, Void} # if inferred copy is available
+    src::Union{CodeInfo, Nothing} # if inferred copy is available
     function InferenceResult(linfo::MethodInstance)
         if isdefined(linfo, :inferred_const)
             result = Const(linfo.inferred_const)
@@ -235,7 +235,7 @@ mutable struct InferenceState
 
     backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
-    parent::Union{Void, InferenceState}
+    parent::Union{Nothing, InferenceState}
 
     const_api::Bool
     const_ret::Bool
@@ -734,7 +734,7 @@ add_tfunc(checked_umul_int, 2, 2, chk_tfunc, 10)
     ## other, misc intrinsics ##
 add_tfunc(Core.Intrinsics.llvmcall, 3, IInf,
           (@nospecialize(fptr), @nospecialize(rt), @nospecialize(at), a...) -> instanceof_tfunc(rt)[1], 10)
-cglobal_tfunc(@nospecialize(fptr)) = Ptr{Void}
+cglobal_tfunc(@nospecialize(fptr)) = Ptr{Cvoid}
 cglobal_tfunc(@nospecialize(fptr), @nospecialize(t)) = (isType(t) ? Ptr{t.parameters[1]} : Ptr)
 cglobal_tfunc(@nospecialize(fptr), t::Const) = (isa(t.val, Type) ? Ptr{t.val} : Ptr)
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
@@ -1716,7 +1716,7 @@ function tuple_tfunc(@nospecialize(argtype))
 end
 
 function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
-                           sv::Union{InferenceState,Void}, params::InferenceParams = sv.params)
+                           sv::Union{InferenceState,Nothing}, params::InferenceParams = sv.params)
     isva = !isempty(argtypes) && isvarargtype(argtypes[end])
     if f === tuple
         for a in argtypes
@@ -2707,7 +2707,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
             spsig = sv.linfo.def.sig
             if isa(spsig, UnionAll)
                 if !isempty(sv.linfo.sparam_vals)
-                    env = data_pointer_from_objref(sv.linfo.sparam_vals) + sizeof(Ptr{Void})
+                    env = data_pointer_from_objref(sv.linfo.sparam_vals) + sizeof(Ptr{Cvoid})
                     rt = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, env)
                 else
                     rt = rewrap_unionall(e.args[2], spsig)
@@ -2756,7 +2756,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
             end
         end
     elseif e.head === :method
-        t = (length(e.args) == 1) ? Any : Void
+        t = (length(e.args) == 1) ? Any : Nothing
     elseif e.head === :copyast
         t = abstract_eval(e.args[1], vtypes, sv)
     elseif e.head === :invoke
@@ -3199,12 +3199,12 @@ function finalize_backedges(frame::InferenceState)
             while i <= length(edges)
                 to = edges[i]
                 if isa(to, MethodInstance)
-                    ccall(:jl_method_instance_add_backedge, Void, (Any, Any), to, caller)
+                    ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
                     i += 1
                 else
                     typeassert(to, MethodTable)
                     typ = edges[i + 1]
-                    ccall(:jl_method_table_add_backedge, Void, (Any, Any, Any), to, typ, caller)
+                    ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
                     i += 2
                 end
             end
@@ -3373,7 +3373,7 @@ end
 function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                       params::InferenceParams)
     for i = 1:2 # test-and-lock-and-test
-        i == 2 && ccall(:jl_typeinf_begin, Void, ())
+        i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
         if cached && isdefined(linfo, :inferred)
             # see if this code already exists in the cache
             # staged functions make this hard since they have two "inferred" conditions,
@@ -3391,11 +3391,11 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     tree.inferred = true
                     tree.pure = true
                     tree.inlineable = true
-                    i == 2 && ccall(:jl_typeinf_end, Void, ())
+                    i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                     return svec(linfo, tree, linfo.rettype)
                 elseif isa(inf, CodeInfo)
                     if inf.inferred
-                        i == 2 && ccall(:jl_typeinf_end, Void, ())
+                        i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                         return svec(linfo, inf, linfo.rettype)
                     end
                 end
@@ -3403,7 +3403,7 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
         end
     end
     frame = typeinf_frame(linfo, optimize, cached, params)
-    ccall(:jl_typeinf_end, Void, ())
+    ccall(:jl_typeinf_end, Cvoid, ())
     frame === nothing && return svec(nothing, nothing, Any)
     frame = frame::InferenceState
     frame.inferred || return svec(nothing, nothing, Any)
@@ -3421,20 +3421,20 @@ function typeinf_type(method::Method, @nospecialize(atypes), sparams::SimpleVect
     code === nothing && return nothing
     code = code::MethodInstance
     for i = 1:2 # test-and-lock-and-test
-        i == 2 && ccall(:jl_typeinf_begin, Void, ())
+        i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
         if cached && isdefined(code, :inferred)
             # see if this rettype already exists in the cache
             # staged functions make this hard since they have two "inferred" conditions,
             # so need to check whether the code itself is also inferred
             inf = code.inferred
             if !isa(inf, CodeInfo) || (inf::CodeInfo).inferred
-                i == 2 && ccall(:jl_typeinf_end, Void, ())
+                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                 return code.rettype
             end
         end
     end
     frame = typeinf_frame(code, cached, cached, params)
-    ccall(:jl_typeinf_end, Void, ())
+    ccall(:jl_typeinf_end, Cvoid, ())
     frame === nothing && return nothing
     frame = frame::InferenceState
     frame.inferred || return nothing
@@ -3447,12 +3447,12 @@ function typeinf_ext(linfo::MethodInstance, world::UInt)
         return typeinf_code(linfo, true, true, InferenceParams(world))
     else
         # toplevel lambda - infer directly
-        ccall(:jl_typeinf_begin, Void, ())
+        ccall(:jl_typeinf_begin, Cvoid, ())
         result = InferenceResult(linfo)
         frame = InferenceState(result, linfo.inferred::CodeInfo,
                                true, true, InferenceParams(world))
         typeinf(frame)
-        ccall(:jl_typeinf_end, Void, ())
+        ccall(:jl_typeinf_end, Cvoid, ())
         @assert frame.inferred # TODO: deal with this better
         @assert frame.linfo === linfo
         linfo.rettype = widenconst(frame.bestguess)
@@ -4778,7 +4778,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     end
 
     # see if the method has been previously inferred (and cached)
-    linfo = code_for_method(method, metharg, methsp, sv.params.world, true) # Union{Void, MethodInstance}
+    linfo = code_for_method(method, metharg, methsp, sv.params.world, true) # Union{Nothing, MethodInstance}
     isa(linfo, MethodInstance) || return invoke_NF(argexprs0, e.typ, atypes0, sv,
                                                    atype_unlimited, invoke_data)
     linfo = linfo::MethodInstance
@@ -4802,7 +4802,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         end
     end
     if haveconst
-        inf_result = cache_lookup(linfo, atypes, sv.params.cache) # Union{Void, InferenceResult}
+        inf_result = cache_lookup(linfo, atypes, sv.params.cache) # Union{Nothing, InferenceResult}
     else
         inf_result = nothing
     end
@@ -5751,7 +5751,7 @@ end
 function get_undef_flag_slot(src::CodeInfo, flagslots, id)
     flag_id = flagslots[id]
     flag_id != 0 && return SlotNumber(flag_id)
-    slot = add_slot!(src, Void, src.slotflags[id] & Slot_AssignedOnce != 0, src.slotnames[id])
+    slot = add_slot!(src, Nothing, src.slotflags[id] & Slot_AssignedOnce != 0, src.slotnames[id])
     flag_id = slot_id(slot)
     src.slotflags[flag_id] |= Slot_StaticUndef | Slot_UsedUndef
     flagslots[id] = flag_id
@@ -5956,7 +5956,7 @@ end
 isassigned(infomap::ValueInfoMap, var) = isassigned(get_info_entry(infomap, var)...)
 function delete!(infomap::ValueInfoMap, var)
     infos, idx = get_info_entry(infomap, var)
-    ccall(:jl_arrayunset, Void, (Any, Csize_t), infos, (idx - 1) % UInt)
+    ccall(:jl_arrayunset, Cvoid, (Any, Csize_t), infos, (idx - 1) % UInt)
 end
 function getindex(infomap::ValueInfoMap, var)
     infos, idx = get_info_entry(infomap, var)

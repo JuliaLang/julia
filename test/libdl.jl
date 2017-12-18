@@ -184,7 +184,7 @@ let dl = C_NULL
 end
 
 if Sys.KERNEL in (:Linux, :FreeBSD)
-    ccall(:jl_read_sonames, Void, ())
+    ccall(:jl_read_sonames, Cvoid, ())
 end
 
 end

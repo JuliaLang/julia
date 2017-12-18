@@ -157,7 +157,7 @@ end
 
 """
     validate_code!(errors::Vector{>:InvalidCodeError}, mi::MethodInstance,
-                   c::Union{Void,CodeInfo} = Core.Inference.retrieve_code_info(mi))
+                   c::Union{Nothing,CodeInfo} = Core.Inference.retrieve_code_info(mi))
 
 Validate `mi`, logging any violation by pushing an `InvalidCodeError` into `errors`.
 
@@ -165,7 +165,7 @@ If `isa(c, CodeInfo)`, also call `validate_code!(errors, c)`. It is assumed that
 the `CodeInfo` instance associated with `mi`.
 """
 function validate_code!(errors::Vector{>:InvalidCodeError}, mi::Core.MethodInstance,
-                        c::Union{Void,CodeInfo} = Core.Inference.retrieve_code_info(mi))
+                        c::Union{Nothing,CodeInfo} = Core.Inference.retrieve_code_info(mi))
     is_top_level = mi.def isa Module
     if is_top_level
         mnargs = 0

@@ -568,7 +568,7 @@ let a = [1,2,3]
     @test unsafe_securezero!(pointer(a), length(a)) == pointer(a)
     @test a == [0,0,0]
     a[:] = 1:3
-    @test unsafe_securezero!(Ptr{Void}(pointer(a)), sizeof(a)) == Ptr{Void}(pointer(a))
+    @test unsafe_securezero!(Ptr{Cvoid}(pointer(a)), sizeof(a)) == Ptr{Cvoid}(pointer(a))
     @test a == [0,0,0]
 end
 let cache = Base.LibGit2.CachedCredentials()
@@ -588,7 +588,7 @@ if Sys.iswindows()
         PAGE_EXECUTE_READWRITE = 0x40
         oldPerm = Ref{UInt32}()
         err18083 = ccall(:VirtualProtect,stdcall,Cint,
-            (Ptr{Void}, Csize_t, UInt32, Ptr{UInt32}),
+            (Ptr{Cvoid}, Csize_t, UInt32, Ptr{UInt32}),
             addr, 4096, PAGE_EXECUTE_READWRITE, oldPerm)
         err18083 == 0 && error(Libc.GetLastError())
     end

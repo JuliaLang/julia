@@ -11,10 +11,10 @@ mutable struct Regex
     pattern::String
     compile_options::UInt32
     match_options::UInt32
-    regex::Ptr{Void}
-    extra::Ptr{Void}
+    regex::Ptr{Cvoid}
+    extra::Ptr{Cvoid}
     ovec::Vector{Csize_t}
-    match_data::Ptr{Void}
+    match_data::Ptr{Cvoid}
 
     function Regex(pattern::AbstractString, compile_options::Integer,
                    match_options::Integer)
@@ -106,7 +106,7 @@ end
 
 struct RegexMatch
     match::SubString{String}
-    captures::Vector{Union{Void,SubString{String}}}
+    captures::Vector{Union{Nothing,SubString{String}}}
     offset::Int
     offsets::Vector{Int}
     regex::Regex
@@ -192,7 +192,7 @@ julia> m = match(rx, "cabac")
 RegexMatch("aba", 1="b")
 
 julia> m.captures
-1-element Array{Union{Void, SubString{String}},1}:
+1-element Array{Union{Nothing, SubString{String}},1}:
  "b"
 
 julia> m.match
@@ -213,7 +213,7 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, a
     ovec = re.ovec
     n = div(length(ovec),2) - 1
     mat = SubString(str, ovec[1]+1, prevind(str, ovec[2]+1))
-    cap = Union{Void,SubString{String}}[ovec[2i+1] == PCRE.UNSET ? nothing :
+    cap = Union{Nothing,SubString{String}}[ovec[2i+1] == PCRE.UNSET ? nothing :
                                         SubString(str, ovec[2i+1]+1,
                                                   prevind(str, ovec[2i+2]+1)) for i=1:n]
     off = Int[ ovec[2i+1]+1 for i=1:n ]

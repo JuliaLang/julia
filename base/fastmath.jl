@@ -305,14 +305,14 @@ acos_fast(x::FloatTypes) = acos(x)
 @inline function sincos_fast(v::Float64)
      s = Ref{Cdouble}()
      c = Ref{Cdouble}()
-     ccall((:sincos, libm), Void, (Cdouble, Ptr{Cdouble}, Ptr{Cdouble}), v, s, c)
+     ccall((:sincos, libm), Cvoid, (Cdouble, Ptr{Cdouble}, Ptr{Cdouble}), v, s, c)
      return (s[], c[])
 end
 
 @inline function sincos_fast(v::Float32)
      s = Ref{Cfloat}()
      c = Ref{Cfloat}()
-     ccall((:sincosf, libm), Void, (Cfloat, Ptr{Cfloat}, Ptr{Cfloat}), v, s, c)
+     ccall((:sincosf, libm), Cvoid, (Cfloat, Ptr{Cfloat}, Ptr{Cfloat}), v, s, c)
      return (s[], c[])
 end
 

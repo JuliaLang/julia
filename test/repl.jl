@@ -35,7 +35,7 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
 end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
-ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
+ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 0)
 # These are integration tests. If you want to unit test test e.g. completion, or
 # exact LineEdit behavior, put them in the appropriate test files.
 # Furthermore since we are emulating an entire terminal, there may be control characters
@@ -643,7 +643,7 @@ fake_repl() do stdin_write, stdout_read, repl
     wait(repltask)
 end
 
-ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
 
 let exename = Base.julia_cmd()
     # Test REPL in dumb mode

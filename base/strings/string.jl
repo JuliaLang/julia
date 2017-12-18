@@ -314,7 +314,7 @@ function repeat(s::String, r::Integer)
     out = _string_n(n*r)
     if n == 1 # common case: repeating a single-byte string
         @inbounds b = codeunit(s, 1)
-        ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
     else
         for i = 0:r-1
             unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)
@@ -342,7 +342,7 @@ function repeat(c::Char, r::Integer)
     s = _string_n(n*r)
     p = pointer(s)
     if n == 1
-        ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), p, u % UInt8, r)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), p, u % UInt8, r)
     elseif n == 2
         p16 = reinterpret(Ptr{UInt16}, p)
         for i = 1:r

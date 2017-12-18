@@ -21,7 +21,7 @@ mutable struct Channel{T} <: AbstractChannel
     cond_take::Condition                 # waiting for data to become available
     cond_put::Condition                  # waiting for a writeable slot
     state::Symbol
-    excp::Union{Exception, Void}         # exception to be thrown when state != :open
+    excp::Union{Exception, Nothing}         # exception to be thrown when state != :open
 
     data::Vector{T}
     sz_max::Int                          # maximum size of channel

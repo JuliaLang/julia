@@ -469,7 +469,7 @@ function socket_reuse_port()
         bind_early = Sys.islinux()
 
         bind_early && bind_client_port(s)
-        rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)
+        rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), s.handle)
         if rc < 0
             # This is an issue only on systems with lots of client connections, hence delay the warning
             nworkers() > 128 && @warn "Error trying to reuse client port number, falling back to regular socket" maxlog=1
@@ -485,7 +485,7 @@ function socket_reuse_port()
 end
 
 function bind_client_port(s)
-    err = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, UInt16, UInt32, Cuint),
+    err = ccall(:jl_tcp_bind, Int32, (Ptr{Cvoid}, UInt16, UInt32, Cuint),
                             s.handle, hton(client_port[]), hton(UInt32(0)), 0)
     uv_error("bind() failed", err)
 

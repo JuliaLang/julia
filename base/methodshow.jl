@@ -47,7 +47,7 @@ function method_argnames(m::Method)
         return m.generator.argnames
     end
     argnames = Vector{Any}(uninitialized, m.nargs)
-    ccall(:jl_fill_argnames, Void, (Any, Any), m.source, argnames)
+    ccall(:jl_fill_argnames, Cvoid, (Any, Any), m.source, argnames)
     return argnames
 end
 
@@ -102,7 +102,7 @@ function show_method_params(io::IO, tv)
     end
 end
 
-function show(io::IO, m::Method; kwtype::Union{DataType, Void}=nothing)
+function show(io::IO, m::Method; kwtype::Union{DataType, Nothing}=nothing)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     ft0 = sig.parameters[1]
@@ -233,7 +233,7 @@ function url(m::Method)
     end
 end
 
-function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Void}=nothing)
+function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Nothing}=nothing)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     ft0 = sig.parameters[1]

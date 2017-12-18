@@ -2082,7 +2082,7 @@ end
 end
 
 @testset "type constructor Array{T, N}(nothing, d...) works (especially for N>3)" for T in (Int, String),
-                                                                                      U in (Void, Missing)
+                                                                                      U in (Nothing, Missing)
     a = Array{Union{T, U}}(U(), 10)
     b = Vector{Union{T, U}}(U(), 10)
     @test size(a) == size(b) == (10,)
