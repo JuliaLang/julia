@@ -557,7 +557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Functions",
     "title": "Operators With Special Names",
     "category": "section",
-    "text": "A few special expressions correspond to calls to functions with non-obvious names. These are:Expression Calls\n[A B C ...] hcat\n[A; B; C; ...] vcat\n[A B; C D; ...] hvcat\nA' adjoint\nA.' transpose\n1:n colon\nA[i] getindex\nA[i]=x setindex!"
+    "text": "A few special expressions correspond to calls to functions with non-obvious names. These are:Expression Calls\n[A B C ...] hcat\n[A; B; C; ...] vcat\n[A B; C D; ...] hvcat\nA' adjoint\nA.' transpose\n1:n colon\nA[i] getindex\nA[i] = x setindex!\nA.n getproperty\nA.n = x setproperty!"
 },
 
 {
@@ -3041,11 +3041,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables/#JULIA_HOME-1",
+    "location": "manual/environment-variables/#JULIA_BINDIR-1",
     "page": "Environment Variables",
-    "title": "JULIA_HOME",
+    "title": "JULIA_BINDIR",
     "category": "section",
-    "text": "The absolute path of the directory containing the Julia executable, which sets the global variable Base.JULIA_HOME. If $JULIA_HOME is not set, then Julia determines the value Base.JULIA_HOME at run-time.The executable itself is one of$JULIA_HOME/julia\n$JULIA_HOME/julia-debugby default.The global variable Base.DATAROOTDIR determines a relative path from Base.JULIA_HOME to the data directory associated with Julia. Then the path$JULIA_HOME/$DATAROOTDIR/julia/basedetermines the directory in which Julia initially searches for source files (via Base.find_source_file()).Likewise, the global variable Base.SYSCONFDIR determines a relative path to the configuration file directory. Then Julia searches for a juliarc.jl file at$JULIA_HOME/$SYSCONFDIR/julia/juliarc.jl\n$JULIA_HOME/../etc/julia/juliarc.jlby default (via Base.load_juliarc()).For example, a Linux installation with a Julia executable located at /bin/julia, a DATAROOTDIR of ../share, and a SYSCONFDIR of ../etc will have JULIA_HOME set to /bin, a source-file search path of/share/julia/baseand a global configuration search path of/etc/julia/juliarc.jl"
+    "text": "The absolute path of the directory containing the Julia executable, which sets the global variable Sys.BINDIR. If $JULIA_BINDIR is not set, then Julia determines the value Sys.BINDIR at run-time.The executable itself is one of$JULIA_BINDIR/julia\n$JULIA_BINDIR/julia-debugby default.The global variable Base.DATAROOTDIR determines a relative path from Sys.BINDIR to the data directory associated with Julia. Then the path$JULIA_BINDIR/$DATAROOTDIR/julia/basedetermines the directory in which Julia initially searches for source files (via Base.find_source_file()).Likewise, the global variable Base.SYSCONFDIR determines a relative path to the configuration file directory. Then Julia searches for a juliarc.jl file at$JULIA_BINDIR/$SYSCONFDIR/julia/juliarc.jl\n$JULIA_BINDIR/../etc/julia/juliarc.jlby default (via Base.load_juliarc()).For example, a Linux installation with a Julia executable located at /bin/julia, a DATAROOTDIR of ../share, and a SYSCONFDIR of ../etc will have JULIA_BINDIR set to /bin, a source-file search path of/share/julia/baseand a global configuration search path of/etc/julia/juliarc.jl"
 },
 
 {
@@ -3293,7 +3293,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Embedding Julia",
     "title": "High-Level Embedding",
     "category": "section",
-    "text": "We start with a simple C program that initializes Julia and calls some Julia code:#include <julia.h>\nJULIA_DEFINE_FAST_TLS() // only define this once, in an executable (not in a shared library) if you want fast code.\n\nint main(int argc, char *argv[])\n{\n    /* required: setup the Julia context */\n    jl_init();\n\n    /* run Julia commands */\n    jl_eval_string(\"print(sqrt(2.0))\");\n\n    /* strongly recommended: notify Julia that the\n         program is about to terminate. this allows\n         Julia time to cleanup pending write requests\n         and run all finalizers\n    */\n    jl_atexit_hook(0);\n    return 0;\n}In order to build this program you have to put the path to the Julia header into the include path and link against libjulia. For instance, when Julia is installed to $JULIA_DIR, one can compile the above test program test.c with gcc using:gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib test.c -ljulia $JULIA_DIR/lib/julia/libstdc++.so.6Then if the environment variable JULIA_HOME is set to $JULIA_DIR/bin, the output test program can be executed.Alternatively, look at the embedding.c program in the Julia source tree in the examples/ folder. The file ui/repl.c program is another simple example of how to set jl_options options while linking against libjulia.The first thing that has to be done before calling any other Julia C function is to initialize Julia. This is done by calling jl_init, which tries to automatically determine Julia's install location. If you need to specify a custom location, or specify which system image to load, use jl_init_with_image instead.The second statement in the test program evaluates a Julia statement using a call to jl_eval_string.Before the program terminates, it is strongly recommended to call jl_atexit_hook.  The above example program calls this before returning from main.note: Note\nCurrently, dynamically linking with the libjulia shared library requires passing the RTLD_GLOBAL option. In Python, this looks like:>>> julia=CDLL('./libjulia.dylib',RTLD_GLOBAL)\n>>> julia.jl_init.argtypes = []\n>>> julia.jl_init()\n250593296note: Note\nIf the julia program needs to access symbols from the main executable, it may be necessary to add -Wl,--export-dynamic linker flag at compile time on Linux in addition to the ones generated by julia-config.jl described below. This is not necessary when compiling a shared library."
+    "text": "We start with a simple C program that initializes Julia and calls some Julia code:#include <julia.h>\nJULIA_DEFINE_FAST_TLS() // only define this once, in an executable (not in a shared library) if you want fast code.\n\nint main(int argc, char *argv[])\n{\n    /* required: setup the Julia context */\n    jl_init();\n\n    /* run Julia commands */\n    jl_eval_string(\"print(sqrt(2.0))\");\n\n    /* strongly recommended: notify Julia that the\n         program is about to terminate. this allows\n         Julia time to cleanup pending write requests\n         and run all finalizers\n    */\n    jl_atexit_hook(0);\n    return 0;\n}In order to build this program you have to put the path to the Julia header into the include path and link against libjulia. For instance, when Julia is installed to $JULIA_DIR, one can compile the above test program test.c with gcc using:gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib test.c -ljulia $JULIA_DIR/lib/julia/libstdc++.so.6Then if the environment variable JULIA_BINDIR is set to $JULIA_DIR/bin, the output test program can be executed.Alternatively, look at the embedding.c program in the Julia source tree in the examples/ folder. The file ui/repl.c program is another simple example of how to set jl_options options while linking against libjulia.The first thing that has to be done before calling any other Julia C function is to initialize Julia. This is done by calling jl_init, which tries to automatically determine Julia's install location. If you need to specify a custom location, or specify which system image to load, use jl_init_with_image instead.The second statement in the test program evaluates a Julia statement using a call to jl_eval_string.Before the program terminates, it is strongly recommended to call jl_atexit_hook.  The above example program calls this before returning from main.note: Note\nCurrently, dynamically linking with the libjulia shared library requires passing the RTLD_GLOBAL option. In Python, this looks like:>>> julia=CDLL('./libjulia.dylib',RTLD_GLOBAL)\n>>> julia.jl_init.argtypes = []\n>>> julia.jl_init()\n250593296note: Note\nIf the julia program needs to access symbols from the main executable, it may be necessary to add -Wl,--export-dynamic linker flag at compile time on Linux in addition to the ones generated by julia-config.jl described below. This is not necessary when compiling a shared library."
 },
 
 {
@@ -3325,7 +3325,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Embedding Julia",
     "title": "Use in Makefiles",
     "category": "section",
-    "text": "But in general, embedding projects will be more complicated than the above, and so the following allows general makefile support as well – assuming GNU make because of the use of the shell macro expansions.  Additionally, though many times julia-config.jl may be found in the directory /usr/local, this is not necessarily the case, but Julia can be used to locate julia-config.jl too, and the makefile can be used to take advantage of that.  The above example is extended to use a Makefile:JL_SHARE = $(shell julia -e 'print(joinpath(JULIA_HOME,Base.DATAROOTDIR,\"julia\"))')\nCFLAGS   += $(shell $(JL_SHARE)/julia-config.jl --cflags)\nCXXFLAGS += $(shell $(JL_SHARE)/julia-config.jl --cflags)\nLDFLAGS  += $(shell $(JL_SHARE)/julia-config.jl --ldflags)\nLDLIBS   += $(shell $(JL_SHARE)/julia-config.jl --ldlibs)\n\nall: embed_exampleNow the build command is simply make."
+    "text": "But in general, embedding projects will be more complicated than the above, and so the following allows general makefile support as well – assuming GNU make because of the use of the shell macro expansions.  Additionally, though many times julia-config.jl may be found in the directory /usr/local, this is not necessarily the case, but Julia can be used to locate julia-config.jl too, and the makefile can be used to take advantage of that.  The above example is extended to use a Makefile:JL_SHARE = $(shell julia -e 'print(joinpath(Sys.BINDIR, Base.DATAROOTDIR, \"julia\"))')\nCFLAGS   += $(shell $(JL_SHARE)/julia-config.jl --cflags)\nCXXFLAGS += $(shell $(JL_SHARE)/julia-config.jl --cflags)\nLDFLAGS  += $(shell $(JL_SHARE)/julia-config.jl --ldflags)\nLDLIBS   += $(shell $(JL_SHARE)/julia-config.jl --ldlibs)\n\nall: embed_exampleNow the build command is simply make."
 },
 
 {
@@ -4485,7 +4485,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unicode Input",
     "title": "Unicode Input",
     "category": "section",
-    "text": "The following table lists Unicode characters that can be entered via tab completion of LaTeX-like abbreviations in the Julia REPL (and in various other editing environments).  You can also get information on how to type a symbol by entering it in the REPL help, i.e. by typing ? and then entering the symbol in the REPL (e.g., by copy-paste from somewhere you saw the symbol).warning: Warning\nThis table may appear to contain missing characters in the second column, or even show characters that are inconsistent with the characters as they are rendered in the Julia REPL. In these cases, users are strongly advised to check their choice of fonts in their browser and REPL environment, as there are known issues with glyphs in many fonts.#\n# Generate a table containing all LaTeX and Emoji tab completions available in the REPL.\n#\n\nconst NBSP = '\\u00A0'\n\nfunction tab_completions(symbols...)\n    completions = Dict{String, Vector{String}}()\n    for each in symbols, (k, v) in each\n        completions[v] = push!(get!(completions, v, String[]), k)\n    end\n    return completions\nend\n\nfunction unicode_data()\n    file = normpath(JULIA_HOME, \"..\", \"..\", \"doc\", \"UnicodeData.txt\")\n    names = Dict{UInt32, String}()\n    open(file) do unidata\n        for line in readlines(unidata)\n            id, name, desc = split(line, \";\")[[1, 2, 11]]\n            codepoint = parse(UInt32, \"0x$id\")\n            names[codepoint] = Base.Unicode.titlecase(Base.Unicode.lowercase(\n                name == \"\" ? desc : desc == \"\" ? name : \"$name / $desc\"))\n        end\n    end\n    return names\nend\n\n# Surround combining characters with no-break spaces (i.e '\\u00A0'). Follows the same format\n# for how unicode is displayed on the unicode.org website:\n# http://unicode.org/cldr/utility/character.jsp?a=0300\nfunction fix_combining_chars(char)\n    cat = Base.Unicode.category_code(char)\n    return cat == 6 || cat == 8 ? \"$NBSP$char$NBSP\" : \"$char\"\nend\n\n\nfunction table_entries(completions, unicode_dict)\n    entries = [[\n        \"Code point(s)\", \"Character(s)\",\n        \"Tab completion sequence(s)\", \"Unicode name(s)\"\n    ]]\n    for (chars, inputs) in sort!(collect(completions), by = first)\n        code_points, unicode_names, characters = String[], String[], String[]\n        for char in chars\n            push!(code_points, \"U+$(Base.Unicode.uppercase(hex(char, 5)))\")\n            push!(unicode_names, get(unicode_dict, UInt32(char), \"(No Unicode name)\"))\n            push!(characters, isempty(characters) ? fix_combining_chars(char) : \"$char\")\n        end\n        push!(entries, [\n            join(code_points, \" + \"), join(characters),\n            join(inputs, \", \"), join(unicode_names, \" + \")\n        ])\n    end\n    return Markdown.Table(entries, [:l, :l, :l, :l])\nend\n\ntable_entries(\n    tab_completions(\n        Base.REPLCompletions.latex_symbols,\n        Base.REPLCompletions.emoji_symbols\n    ),\n    unicode_data()\n)"
+    "text": "The following table lists Unicode characters that can be entered via tab completion of LaTeX-like abbreviations in the Julia REPL (and in various other editing environments).  You can also get information on how to type a symbol by entering it in the REPL help, i.e. by typing ? and then entering the symbol in the REPL (e.g., by copy-paste from somewhere you saw the symbol).warning: Warning\nThis table may appear to contain missing characters in the second column, or even show characters that are inconsistent with the characters as they are rendered in the Julia REPL. In these cases, users are strongly advised to check their choice of fonts in their browser and REPL environment, as there are known issues with glyphs in many fonts.#\n# Generate a table containing all LaTeX and Emoji tab completions available in the REPL.\n#\n\nconst NBSP = '\\u00A0'\n\nfunction tab_completions(symbols...)\n    completions = Dict{String, Vector{String}}()\n    for each in symbols, (k, v) in each\n        completions[v] = push!(get!(completions, v, String[]), k)\n    end\n    return completions\nend\n\nfunction unicode_data()\n    file = normpath(Sys.BINDIR, \"..\", \"..\", \"doc\", \"UnicodeData.txt\")\n    names = Dict{UInt32, String}()\n    open(file) do unidata\n        for line in readlines(unidata)\n            id, name, desc = split(line, \";\")[[1, 2, 11]]\n            codepoint = parse(UInt32, \"0x$id\")\n            names[codepoint] = Base.Unicode.titlecase(Base.Unicode.lowercase(\n                name == \"\" ? desc : desc == \"\" ? name : \"$name / $desc\"))\n        end\n    end\n    return names\nend\n\n# Surround combining characters with no-break spaces (i.e '\\u00A0'). Follows the same format\n# for how unicode is displayed on the unicode.org website:\n# http://unicode.org/cldr/utility/character.jsp?a=0300\nfunction fix_combining_chars(char)\n    cat = Base.Unicode.category_code(char)\n    return cat == 6 || cat == 8 ? \"$NBSP$char$NBSP\" : \"$char\"\nend\n\n\nfunction table_entries(completions, unicode_dict)\n    entries = [[\n        \"Code point(s)\", \"Character(s)\",\n        \"Tab completion sequence(s)\", \"Unicode name(s)\"\n    ]]\n    for (chars, inputs) in sort!(collect(completions), by = first)\n        code_points, unicode_names, characters = String[], String[], String[]\n        for char in chars\n            push!(code_points, \"U+$(Base.Unicode.uppercase(hex(char, 5)))\")\n            push!(unicode_names, get(unicode_dict, UInt32(char), \"(No Unicode name)\"))\n            push!(characters, isempty(characters) ? fix_combining_chars(char) : \"$char\")\n        end\n        push!(entries, [\n            join(code_points, \" + \"), join(characters),\n            join(inputs, \", \"), join(unicode_names, \" + \")\n        ])\n    end\n    return Markdown.Table(entries, [:l, :l, :l, :l])\nend\n\ntable_entries(\n    tab_completions(\n        Base.REPLCompletions.latex_symbols,\n        Base.REPLCompletions.emoji_symbols\n    ),\n    unicode_data()\n)"
 },
 
 {
@@ -5201,6 +5201,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/base/#Core.typeassert",
+    "page": "Essentials",
+    "title": "Core.typeassert",
+    "category": "Function",
+    "text": "typeassert(x, type)\n\nThrow a TypeError unless x isa type. The syntax x::type calls this function.\n\n\n\n"
+},
+
+{
     "location": "stdlib/base/#Core.typeof",
     "page": "Essentials",
     "title": "Core.typeof",
@@ -5273,6 +5281,38 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/base/#Base.getproperty",
+    "page": "Essentials",
+    "title": "Base.getproperty",
+    "category": "Function",
+    "text": "getproperty(value, name::Symbol)\n\nThe syntax a.b calls getproperty(a, :b).\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.setproperty!",
+    "page": "Essentials",
+    "title": "Base.setproperty!",
+    "category": "Function",
+    "text": "setproperty!(value, name::Symbol, x)\n\nThe syntax a.b = c calls setproperty!(a, :b, c).\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Core.getfield",
+    "page": "Essentials",
+    "title": "Core.getfield",
+    "category": "Function",
+    "text": "getfield(value, name::Symbol)\n\nExtract a named field from a value of composite type. See also getproperty.\n\nExamples\n\njulia> a = 1//2\n1//2\n\njulia> getfield(a, :num)\n1\n\njulia> a.num\n1\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Core.setfield!",
+    "page": "Essentials",
+    "title": "Core.setfield!",
+    "category": "Function",
+    "text": "setfield!(value, name::Symbol, x)\n\nAssign x to a named field in value of composite type. The value must be mutable and x must be a subtype of fieldtype(typeof(value), name). See also setproperty!.\n\nExamples\n\njulia> mutable struct MyMutableStruct\n           field::Int\n       end\n\njulia> a = MyMutableStruct(1);\n\njulia> setfield!(a, :field, 2);\n\njulia> getfield(a, :field)\n2\n\njulia> a = 1//2\n1//2\n\njulia> setfield!(a, :num, 3);\nERROR: type Rational is immutable\n\n\n\n"
+},
+
+{
     "location": "stdlib/base/#Core.isdefined",
     "page": "Essentials",
     "title": "Core.isdefined",
@@ -5333,7 +5373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "All Objects",
     "category": "section",
-    "text": "Core.:(===)\nCore.isa\nBase.isequal\nBase.isless\nBase.ifelse\nBase.lexcmp\nBase.lexless\nCore.typeof\nCore.tuple\nBase.ntuple\nBase.object_id\nBase.hash\nBase.finalizer\nBase.finalize\nBase.copy\nBase.deepcopy\nCore.isdefined\nBase.@isdefined\nBase.convert\nBase.promote\nBase.oftype\nBase.widen\nBase.identity"
+    "text": "Core.:(===)\nCore.isa\nBase.isequal\nBase.isless\nBase.ifelse\nBase.lexcmp\nBase.lexless\nCore.typeassert\nCore.typeof\nCore.tuple\nBase.ntuple\nBase.object_id\nBase.hash\nBase.finalizer\nBase.finalize\nBase.copy\nBase.deepcopy\nBase.getproperty\nBase.setproperty!\nCore.getfield\nCore.setfield!\nCore.isdefined\nBase.@isdefined\nBase.convert\nBase.promote\nBase.oftype\nBase.widen\nBase.identity"
 },
 
 {
@@ -5449,22 +5489,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/base/#Core.getfield",
-    "page": "Essentials",
-    "title": "Core.getfield",
-    "category": "Function",
-    "text": "getfield(value, name::Symbol)\n\nExtract a named field from a value of composite type. The syntax a.b calls getfield(a, :b).\n\nExamples\n\njulia> a = 1//2\n1//2\n\njulia> getfield(a, :num)\n1\n\njulia> a.num\n1\n\n\n\n"
-},
-
-{
-    "location": "stdlib/base/#Core.setfield!",
-    "page": "Essentials",
-    "title": "Core.setfield!",
-    "category": "Function",
-    "text": "setfield!(value, name::Symbol, x)\n\nAssign x to a named field in value of composite type. The syntax a.b = c calls setfield!(a, :b, c). value must be mutable.\n\nExamples\n\njulia> mutable struct MyMutableStruct\n           field::Int\n       end\n\njulia> a = MyMutableStruct(1);\n\njulia> setfield!(a, :field, 2);\n\njulia> getfield(a, :field)\n2\n\njulia> a = 1//2\n1//2\n\njulia> setfield!(a, :num, 3);\nERROR: type Rational is immutable\n\n\n\n"
-},
-
-{
     "location": "stdlib/base/#Base.fieldoffset",
     "page": "Essentials",
     "title": "Base.fieldoffset",
@@ -5529,11 +5553,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/base/#Dealing-with-Types-1",
+    "location": "stdlib/base/#Properties-of-Types-1",
     "page": "Essentials",
-    "title": "Dealing with Types",
+    "title": "Properties of Types",
     "category": "section",
-    "text": "Base.supertype\nCore.:(<:)\nBase.:(>:)\nBase.subtypes\nBase.typemin\nBase.typemax\nBase.realmin\nBase.realmax\nBase.maxintfloat\nBase.sizeof(::Type)\nBase.eps(::Type{<:AbstractFloat})\nBase.eps(::AbstractFloat)\nBase.promote_type\nBase.promote_rule\nCore.getfield\nCore.setfield!\nBase.fieldoffset\nCore.fieldtype\nBase.isimmutable\nBase.isbits\nBase.isconcrete\nBase.typejoin\nBase.typeintersect\nBase.instances"
+    "text": "Base.supertype\nCore.:(<:)\nBase.:(>:)\nBase.subtypes\nBase.typemin\nBase.typemax\nBase.realmin\nBase.realmax\nBase.maxintfloat\nBase.sizeof(::Type)\nBase.eps(::Type{<:AbstractFloat})\nBase.eps(::AbstractFloat)\nBase.promote_type\nBase.promote_rule\nBase.fieldoffset\nCore.fieldtype\nBase.isimmutable\nBase.isbits\nBase.isconcrete\nBase.typejoin\nBase.typeintersect\nBase.instances"
 },
 
 {
@@ -7517,7 +7541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n"
 },
 
 {
@@ -7821,7 +7845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n"
 },
 
 {
@@ -9021,7 +9045,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -11457,6 +11481,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/arrays/#Base.vect",
+    "page": "Arrays",
+    "title": "Base.vect",
+    "category": "Function",
+    "text": "vect(X...)\n\nCreate a Vector with element type computed from the promote_typeof of the argument, containing the argument list.\n\n\n\n"
+},
+
+{
     "location": "stdlib/arrays/#Base.flipdim",
     "page": "Arrays",
     "title": "Base.flipdim",
@@ -11589,7 +11621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.permutedims",
     "category": "Function",
-    "text": "permutedims(A::AbstractArray, perm)\n\nPermute the dimensions of array A. perm is a vector specifying a permutation of length ndims(A).\n\nSee also: PermutedDimsArray.\n\nExamples\n\njulia> A = reshape(collect(1:8), (2,2,2))\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n\n[:, :, 2] =\n 5  7\n 6  8\n\njulia> permutedims(A, [3, 2, 1])\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 5  7\n\n[:, :, 2] =\n 2  4\n 6  8\n\n\n\npermutedims(m::AbstractMatrix)\n\nPermute the dimensions of the matrix m, by flipping the elements across the diagonal of the matrix. Differs from transpose in that the operation is not recursive.\n\n\n\npermutedims(v::AbstractVector)\n\nReshape vector v into a 1 × length(v) row matrix.\n\n\n\n"
+    "text": "permutedims(A::AbstractArray, perm)\n\nPermute the dimensions of array A. perm is a vector specifying a permutation of length ndims(A).\n\nSee also: PermutedDimsArray.\n\nExamples\n\njulia> A = reshape(collect(1:8), (2,2,2))\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n\n[:, :, 2] =\n 5  7\n 6  8\n\njulia> permutedims(A, [3, 2, 1])\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 5  7\n\n[:, :, 2] =\n 2  4\n 6  8\n\n\n\npermutedims(m::AbstractMatrix)\n\nPermute the dimensions of the matrix m, by flipping the elements across the diagonal of the matrix. Differs from transpose in that the operation is not recursive.\n\nExamples\n\njulia> a = [1 2; 3 4];\n\njulia> b = [5 6; 7 8];\n\njulia> c = [9 10; 11 12];\n\njulia> d = [13 14; 15 16];\n\njulia> X = [[a] [b]; [c] [d]]\n2×2 Array{Array{Int64,2},2}:\n [1 2; 3 4]     [5 6; 7 8]\n [9 10; 11 12]  [13 14; 15 16]\n\njulia> permutedims(X)\n2×2 Array{Array{Int64,2},2}:\n [1 2; 3 4]  [9 10; 11 12]\n [5 6; 7 8]  [13 14; 15 16]\n\njulia> transpose(X)\n2×2 Array{Array{Int64,2},2}:\n [1 3; 2 4]  [9 11; 10 12]\n [5 7; 6 8]  [13 15; 14 16]\n\n\n\npermutedims(v::AbstractVector)\n\nReshape vector v into a 1 × length(v) row matrix.  Differs from transpose in that the operation is not recursive.\n\nExamples\n\njulia> permutedims(v)\n1×4 Array{Int64,2}:\n 1  2  3  4\n\njulia> a = [1 2; 3 4];\n\njulia> b = [5 6; 7 8];\n\njulia> V = [[a]; [b]]\n2-element Array{Array{Int64,2},1}:\n [1 2; 3 4]\n [5 6; 7 8]\n\njulia> permutedims(V)\n1×2 Array{Array{Int64,2},2}:\n [1 2; 3 4]  [5 6; 7 8]\n\njulia> transpose(V)\n1×2 Transpose{Transpose{Int64,Array{Int64,2}},Array{Array{Int64,2},1}}:\n [1 3; 2 4]  [5 7; 6 8]\n\n\n\n"
 },
 
 {
@@ -11621,7 +11653,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Concatenation and permutation",
     "category": "section",
-    "text": "Base.cat\nBase.vcat\nBase.hcat\nBase.hvcat\nBase.flipdim\nBase.circshift\nBase.circshift!\nBase.circcopy!\nBase.find(::Any)\nBase.find(::Function, ::Any)\nBase.findn\nBase.findnz\nBase.findfirst(::Any)\nBase.findfirst(::Function, ::Any)\nBase.findlast(::Any)\nBase.findlast(::Function, ::Any)\nBase.findnext(::Any, ::Integer)\nBase.findnext(::Function, ::Any, ::Integer)\nBase.findprev(::Any, ::Integer)\nBase.findprev(::Function, ::Any, ::Integer)\nBase.permutedims\nBase.permutedims!\nBase.PermutedDimsArray\nBase.promote_shape"
+    "text": "Base.cat\nBase.vcat\nBase.hcat\nBase.hvcat\nBase.vect\nBase.flipdim\nBase.circshift\nBase.circshift!\nBase.circcopy!\nBase.find(::Any)\nBase.find(::Function, ::Any)\nBase.findn\nBase.findnz\nBase.findfirst(::Any)\nBase.findfirst(::Function, ::Any)\nBase.findlast(::Any)\nBase.findlast(::Function, ::Any)\nBase.findnext(::Any, ::Integer)\nBase.findnext(::Function, ::Any, ::Integer)\nBase.findprev(::Any, ::Integer)\nBase.findprev(::Function, ::Any, ::Integer)\nBase.permutedims\nBase.permutedims!\nBase.PermutedDimsArray\nBase.promote_shape"
 },
 
 {
@@ -11845,7 +11877,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.reverse!",
     "category": "Function",
-    "text": "reverse!(v [, start=1 [, stop=length(v) ]]) -> v\n\nIn-place version of reverse.\n\n\n\n"
+    "text": "reverse!(v [, start=1 [, stop=length(v) ]]) -> v\n\nIn-place version of reverse.\n\nExamples\n\njulia> A = collect(1:5)\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n\njulia> reverse!(A);\n\njulia> A\n5-element Array{Int64,1}:\n 5\n 4\n 3\n 2\n 1\n\n\n\n"
 },
 
 {
@@ -11909,7 +11941,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.issparse",
     "category": "Function",
-    "text": "issparse(S)\n\nReturns true if S is sparse, and false otherwise.\n\n\n\n"
+    "text": "issparse(S)\n\nReturns true if S is sparse, and false otherwise.\n\nExamples\n\njulia> sv = sparsevec([1, 4], [2.3, 2.2], 10)\n10-element SparseVector{Float64,Int64} with 2 stored entries:\n  [1 ]  =  2.3\n  [4 ]  =  2.2\n\njulia> issparse(sv)\ntrue\n\njulia> issparse(Array(sv))\nfalse\n\n\n\n"
 },
 
 {
@@ -12253,7 +12285,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Distributed.addprocs",
     "category": "Function",
-    "text": "addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers\n\nLaunches worker processes via the specified cluster manager.\n\nFor example, Beowulf clusters are supported via a custom cluster manager implemented in the package ClusterManagers.jl.\n\nThe number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable JULIA_WORKER_TIMEOUT in the worker process's environment. Relevant only when using TCP/IP as transport.\n\n\n\naddprocs(machines; tunnel=false, sshflags=``, max_parallel=10, kwargs...) -> List of process identifiers\n\nAdd processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.\n\nmachines is a vector of machine specifications. Workers are started for each specification.\n\nA machine specification is either a string machine_spec or a tuple - (machine_spec, count).\n\nmachine_spec is a string of the form [user@]host[:port] [bind_addr[:port]]. user defaults to current user, port to the standard ssh port. If [bind_addr[:port]] is specified, other workers will connect to this worker at the specified bind_addr and port.\n\ncount is the number of workers to be launched on the specified host. If specified as :auto it will launch as many workers as the number of cores on the specific host.\n\nKeyword arguments:\n\ntunnel: if true then SSH tunneling will be used to connect to the worker from the master process. Default is false.\nsshflags: specifies additional ssh options, e.g. sshflags=`-i /home/foo/bar.pem`\nmax_parallel: specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.\ndir: specifies the working directory on the workers. Defaults to the host's current directory (as found by pwd())\nenable_threaded_blas: if true then  BLAS will run on multiple threads in added processes. Default is false.\nexename: name of the julia executable. Defaults to \"$JULIA_HOME/julia\" or \"$JULIA_HOME/julia-debug\" as the case may be.\nexeflags: additional flags passed to the worker processes.\ntopology: Specifies how the workers connect to each other. Sending a message between unconnected workers results in an error.\ntopology=:all_to_all: All processes are connected to each other. The default.\ntopology=:master_slave: Only the driver process, i.e. pid 1 connects to the workers. The workers do not connect to each other.\ntopology=:custom: The launch method of the cluster manager specifies the connection topology via fields ident and connect_idents in WorkerConfig. A worker with a cluster manager identity ident will connect to all workers specified in connect_idents.\nlazy: Applicable only with topology=:all_to_all. If true, worker-worker connections are setup lazily, i.e. they are setup at the first instance of a remote call between workers. Default is true.\n\nEnvironment variables :\n\nIf the master process fails to establish a connection with a newly launched worker within 60.0 seconds, the worker treats it as a fatal situation and terminates. This timeout can be controlled via environment variable JULIA_WORKER_TIMEOUT. The value of JULIA_WORKER_TIMEOUT on the master process specifies the number of seconds a newly launched worker waits for connection establishment.\n\n\n\naddprocs(; kwargs...) -> List of process identifiers\n\nEquivalent to addprocs(Sys.CPU_CORES; kwargs...)\n\nNote that workers do not run a .juliarc.jl startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.\n\n\n\naddprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers\n\nLaunches workers using the in-built LocalManager which only launches workers on the local host. This can be used to take advantage of multiple cores. addprocs(4) will add 4 processes on the local machine. If restrict is true, binding is restricted to 127.0.0.1. Keyword args dir, exename, exeflags, topology, lazy and enable_threaded_blas have the same effect as documented for addprocs(machines).\n\n\n\n"
+    "text": "addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers\n\nLaunches worker processes via the specified cluster manager.\n\nFor example, Beowulf clusters are supported via a custom cluster manager implemented in the package ClusterManagers.jl.\n\nThe number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable JULIA_WORKER_TIMEOUT in the worker process's environment. Relevant only when using TCP/IP as transport.\n\n\n\naddprocs(machines; tunnel=false, sshflags=``, max_parallel=10, kwargs...) -> List of process identifiers\n\nAdd processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.\n\nmachines is a vector of machine specifications. Workers are started for each specification.\n\nA machine specification is either a string machine_spec or a tuple - (machine_spec, count).\n\nmachine_spec is a string of the form [user@]host[:port] [bind_addr[:port]]. user defaults to current user, port to the standard ssh port. If [bind_addr[:port]] is specified, other workers will connect to this worker at the specified bind_addr and port.\n\ncount is the number of workers to be launched on the specified host. If specified as :auto it will launch as many workers as the number of cores on the specific host.\n\nKeyword arguments:\n\ntunnel: if true then SSH tunneling will be used to connect to the worker from the master process. Default is false.\nsshflags: specifies additional ssh options, e.g. sshflags=`-i /home/foo/bar.pem`\nmax_parallel: specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.\ndir: specifies the working directory on the workers. Defaults to the host's current directory (as found by pwd())\nenable_threaded_blas: if true then  BLAS will run on multiple threads in added processes. Default is false.\nexename: name of the julia executable. Defaults to \"$(Sys.BINDIR)/julia\" or \"$(Sys.BINDIR)/julia-debug\" as the case may be.\nexeflags: additional flags passed to the worker processes.\ntopology: Specifies how the workers connect to each other. Sending a message between unconnected workers results in an error.\ntopology=:all_to_all: All processes are connected to each other. The default.\ntopology=:master_slave: Only the driver process, i.e. pid 1 connects to the workers. The workers do not connect to each other.\ntopology=:custom: The launch method of the cluster manager specifies the connection topology via fields ident and connect_idents in WorkerConfig. A worker with a cluster manager identity ident will connect to all workers specified in connect_idents.\nlazy: Applicable only with topology=:all_to_all. If true, worker-worker connections are setup lazily, i.e. they are setup at the first instance of a remote call between workers. Default is true.\n\nEnvironment variables :\n\nIf the master process fails to establish a connection with a newly launched worker within 60.0 seconds, the worker treats it as a fatal situation and terminates. This timeout can be controlled via environment variable JULIA_WORKER_TIMEOUT. The value of JULIA_WORKER_TIMEOUT on the master process specifies the number of seconds a newly launched worker waits for connection establishment.\n\n\n\naddprocs(; kwargs...) -> List of process identifiers\n\nEquivalent to addprocs(Sys.CPU_CORES; kwargs...)\n\nNote that workers do not run a .juliarc.jl startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.\n\n\n\naddprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers\n\nLaunches workers using the in-built LocalManager which only launches workers on the local host. This can be used to take advantage of multiple cores. addprocs(4) will add 4 processes on the local machine. If restrict is true, binding is restricted to 127.0.0.1. Keyword args dir, exename, exeflags, topology, lazy and enable_threaded_blas have the same effect as documented for addprocs(machines).\n\n\n\n"
 },
 
 {
@@ -15337,11 +15369,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/constants/#Base.JULIA_HOME",
+    "location": "stdlib/constants/#Base.Sys.BINDIR",
     "page": "Constants",
-    "title": "Base.JULIA_HOME",
+    "title": "Base.Sys.BINDIR",
     "category": "Constant",
-    "text": "JULIA_HOME\n\nA string containing the full path to the directory containing the julia executable.\n\n\n\n"
+    "text": "Sys.BINDIR\n\nA string containing the full path to the directory containing the julia executable.\n\n\n\n"
 },
 
 {
@@ -15389,7 +15421,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Constants",
     "title": "Constants",
     "category": "section",
-    "text": "Core.nothing\nBase.PROGRAM_FILE\nBase.ARGS\nBase.C_NULL\nBase.VERSION\nBase.LOAD_PATH\nBase.JULIA_HOME\nBase.Sys.CPU_CORES\nBase.Sys.WORD_SIZE\nBase.Sys.KERNEL\nBase.Sys.ARCH\nBase.Sys.MACHINESee also:STDIN\nSTDOUT\nSTDERR\nENV\nENDIAN_BOM\nLibc.MS_ASYNC\nLibc.MS_INVALIDATE\nLibc.MS_SYNC\nLibdl.DL_LOAD_PATH\nLibdl.RTLD_DEEPBIND\nLibdl.RTLD_LOCAL\nLibdl.RTLD_NOLOAD\nLibdl.RTLD_LAZY\nLibdl.RTLD_NOW\nLibdl.RTLD_GLOBAL\nLibdl.RTLD_NODELETE\nLibdl.RTLD_FIRST"
+    "text": "Core.nothing\nBase.PROGRAM_FILE\nBase.ARGS\nBase.C_NULL\nBase.VERSION\nBase.LOAD_PATH\nBase.Sys.BINDIR\nBase.Sys.CPU_CORES\nBase.Sys.WORD_SIZE\nBase.Sys.KERNEL\nBase.Sys.ARCH\nBase.Sys.MACHINESee also:STDIN\nSTDOUT\nSTDERR\nENV\nENDIAN_BOM\nLibc.MS_ASYNC\nLibc.MS_INVALIDATE\nLibc.MS_SYNC\nLibdl.DL_LOAD_PATH\nLibdl.RTLD_DEEPBIND\nLibdl.RTLD_LOCAL\nLibdl.RTLD_NOLOAD\nLibdl.RTLD_LAZY\nLibdl.RTLD_NOW\nLibdl.RTLD_GLOBAL\nLibdl.RTLD_NODELETE\nLibdl.RTLD_FIRST"
 },
 
 {
@@ -16813,7 +16845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Punctuation",
     "title": "Punctuation",
     "category": "section",
-    "text": "Extended documentation for mathematical symbols & functions is here.symbol meaning\n@m invoke macro m; followed by space-separated expressions\n! prefix \"not\" operator\na!( ) at the end of a function name, ! indicates that a function modifies its argument(s)\n# begin single line comment\n#= begin multi-line comment (these are nestable)\n=# end multi-line comment\n$ string and expression interpolation\n% remainder operator\n^ exponent operator\n& bitwise and\n&& short-circuiting boolean and\n| bitwise or\n|| short-circuiting boolean or\n⊻ bitwise xor operator\n* multiply, or matrix multiply\n() the empty tuple\n~ bitwise not operator\n\\ backslash operator\n' complex transpose operator Aᴴ\na[] array indexing\n[,] vertical concatenation\n[;] also vertical concatenation\n[    ] with space-separated expressions, horizontal concatenation\nT{ } parametric type instantiation\n; statement separator\n, separate function arguments or tuple components\n? 3-argument conditional operator (conditional ? if_true : if_false)\n\"\" delimit string literals\n'' delimit character literals\n` ` delimit external process (command) specifications\n... splice arguments into a function call or declare a varargs function or type\n. access named fields in objects/modules, also prefixes elementwise operator/function calls\na:b range a, a+1, a+2, ..., b\na:s:b range a, a+s, a+2s, ..., b\n: index an entire dimension (1:end)\n:: type annotation, depending on context\n:( ) quoted expression\n:a symbol a\n<: subtype operator\n>: supertype operator (reverse of subtype operator)\n=== egal comparison operator"
+    "text": "Extended documentation for mathematical symbols & functions is here.symbol meaning\n@m invoke macro m; followed by space-separated expressions\n! prefix \"not\" (logical negation) operator\na!( ) at the end of a function name, ! is used as a convention to indicate that a function modifies its argument(s)\n# begin single line comment\n#= begin multi-line comment (these are nestable)\n=# end multi-line comment\n$ string and expression interpolation\n% remainder operator\n^ exponent operator\n& bitwise and\n&& short-circuiting boolean and\n| bitwise or\n|| short-circuiting boolean or\n⊻ bitwise xor operator\n* multiply, or matrix multiply\n() the empty tuple\n~ bitwise not operator\n\\ backslash operator\n' complex transpose operator Aᴴ\na[] array indexing (calling getindex or setindex!)\n[,] vector literal constructor (calling vect)\n[;] vertical concatenation (calling vcat or hvcat)\n[    ] with space-separated expressions, horizontal concatenation (calling hcat or hvcat)\nT{ } parametric type instantiation\n; statement separator\n, separate function arguments or tuple components\n? 3-argument conditional operator (used like: conditional ? if_true : if_false)\n\"\" delimit string literals\n'' delimit character literals\n` ` delimit external process (command) specifications\n... splice arguments into a function call or declare a varargs function\n. access named fields in objects/modules (calling getproperty or setproperty!), also prefixes elementwise function calls (calling broadcast)\na:b range a, a+1, a+2, ..., b (calling colon)\na:s:b range a, a+s, a+2s, ..., b (also calling colon)\n: index an entire dimension (1:endof), see Colon)\n:: type annotation or typeassert, depending on context\n:( ) quoted expression\n:a symbol a\n<: subtype operator\n>: supertype operator (reverse of subtype operator)\n=== egal comparison operator"
 },
 
 {
@@ -20405,7 +20437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "System Image Building",
     "title": "Main.BuildSysImg.build_sysimg",
     "category": "Function",
-    "text": "build_sysimg(sysimg_path=default_sysimg_path(), cpu_target=\"native\", userimg_path=nothing; force=false)\n\nRebuild the system image. Store it in sysimg_path, which defaults to a file named sys.ji that sits in the same folder as libjulia.{so,dylib}, except on Windows where it defaults to JULIA_HOME/../lib/julia/sys.ji.  Use the cpu instruction set given by cpu_target. Valid CPU targets are the same as for the -C option to julia, or the -march option to gcc.  Defaults to native, which means to use all CPU instructions available on the current processor. Include the user image file given by userimg_path, which should contain directives such as using MyPackage to include that package in the new system image. New system image will not replace an older image unless force is set to true.\n\n\n\n"
+    "text": "build_sysimg(sysimg_path=default_sysimg_path(), cpu_target=\"native\", userimg_path=nothing; force=false)\n\nRebuild the system image. Store it in sysimg_path, which defaults to a file named sys.ji that sits in the same folder as libjulia.{so,dylib}, except on Windows where it defaults to Sys.BINDIR/../lib/julia/sys.ji.  Use the cpu instruction set given by cpu_target. Valid CPU targets are the same as for the -C option to julia, or the -march option to gcc.  Defaults to native, which means to use all CPU instructions available on the current processor. Include the user image file given by userimg_path, which should contain directives such as using MyPackage to include that package in the new system image. New system image will not replace an older image unless force is set to true.\n\n\n\n"
 },
 
 {
@@ -20413,7 +20445,7 @@ var documenterSearchIndex = {"docs": [
     "page": "System Image Building",
     "title": "Building the Julia system image",
     "category": "section",
-    "text": "Julia ships with a preparsed system image containing the contents of the Base module, named sys.ji.  This file is also precompiled into a shared library called sys.{so,dll,dylib} on as many platforms as possible, so as to give vastly improved startup times.  On systems that do not ship with a precompiled system image file, one can be generated from the source files shipped in Julia's DATAROOTDIR/julia/base folder.This operation is useful for multiple reasons.  A user may:Build a precompiled shared library system image on a platform that did not ship with one, thereby improving startup times.\nModify Base, rebuild the system image and use the new Base next time Julia is started.\nInclude a userimg.jl file that includes packages into the system image, thereby creating a system image that has packages embedded into the startup environment.Julia now ships with a script that automates the tasks of building the system image, wittingly named build_sysimg.jl that lives in DATAROOTDIR/julia/.  That is, to include it into a current Julia session, type:include(joinpath(JULIA_HOME, Base.DATAROOTDIR, \"julia\", \"build_sysimg.jl\"))This will include a build_sysimg function:BuildSysImg.build_sysimgNote that this file can also be run as a script itself, with command line arguments taking the place of arguments passed to the build_sysimg function.  For example, to build a system image in /tmp/sys.{so,dll,dylib}, with the core2 CPU instruction set, a user image of ~/userimg.jl and force set to true, one would execute:julia build_sysimg.jl /tmp/sys core2 ~/userimg.jl --force"
+    "text": "Julia ships with a preparsed system image containing the contents of the Base module, named sys.ji.  This file is also precompiled into a shared library called sys.{so,dll,dylib} on as many platforms as possible, so as to give vastly improved startup times.  On systems that do not ship with a precompiled system image file, one can be generated from the source files shipped in Julia's DATAROOTDIR/julia/base folder.This operation is useful for multiple reasons.  A user may:Build a precompiled shared library system image on a platform that did not ship with one, thereby improving startup times.\nModify Base, rebuild the system image and use the new Base next time Julia is started.\nInclude a userimg.jl file that includes packages into the system image, thereby creating a system image that has packages embedded into the startup environment.Julia now ships with a script that automates the tasks of building the system image, wittingly named build_sysimg.jl that lives in DATAROOTDIR/julia/.  That is, to include it into a current Julia session, type:include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, \"julia\", \"build_sysimg.jl\"))This will include a build_sysimg function:BuildSysImg.build_sysimgNote that this file can also be run as a script itself, with command line arguments taking the place of arguments passed to the build_sysimg function.  For example, to build a system image in /tmp/sys.{so,dll,dylib}, with the core2 CPU instruction set, a user image of ~/userimg.jl and force set to true, one would execute:julia build_sysimg.jl /tmp/sys core2 ~/userimg.jl --force"
 },
 
 {
