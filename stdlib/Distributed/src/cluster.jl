@@ -680,7 +680,11 @@ end
 const PGRP = ProcessGroup([])
 
 function topology(t)
-    assert(t in [:all_to_all, :master_slave, :custom])
+    if t == :master_slave
+        Base.depwarn("The topology :master_slave is deprecated, use :master_worker instead.", :topology)
+        t = :master_worker
+    end
+    assert(t in [:all_to_all, :master_worker, :custom])
     if (PGRP.topology==t) || ((myid()==1) && (nprocs()==1)) || (myid() > 1)
         PGRP.topology = t
     else

@@ -1332,7 +1332,7 @@ The keyword argument `topology` passed to `addprocs` is used to specify how the 
 connected to each other:
 
   * `:all_to_all`, the default: all workers are connected to each other.
-  * `:master_slave`: only the driver process, i.e. `pid` 1, has connections to the workers.
+  * `:master_worker`: only the driver process, i.e. `pid` 1, has connections to the workers.
   * `:custom`: the `launch` method of the cluster manager specifies the connection topology via the
     fields `ident` and `connect_idents` in `WorkerConfig`. A worker with a cluster-manager-provided
     identity `ident` will connect to all workers specified in `connect_idents`.
