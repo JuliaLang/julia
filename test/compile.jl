@@ -200,8 +200,8 @@ try
         @test Foo.override(UInt(1)) == 2
 
         # issue #12284:
-        @test stringmime("text/plain", Base.Docs.doc(Foo.foo)) == "foo function\n"
-        @test stringmime("text/plain", Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
+        @test string(Base.Docs.doc(Foo.foo)) == "foo function\n"
+        @test string(Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
 
         modules, deps, required_modules = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3])
