@@ -92,7 +92,7 @@ Keyword arguments:
 
     + `topology=:all_to_all`: All processes are connected to each other. The default.
 
-    + `topology=:master_slave`: Only the driver process, i.e. `pid` 1 connects to the
+    + `topology=:master_worker`: Only the driver process, i.e. `pid` 1 connects to the
       workers. The workers do not connect to each other.
 
     + `topology=:custom`: The `launch` method of the cluster manager specifies the
