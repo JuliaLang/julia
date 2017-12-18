@@ -3320,6 +3320,9 @@ info(io::IO, err::Exception; prefix="ERROR: ", kw...) =
 info(err::Exception; prefix="ERROR: ", kw...) =
     info(STDERR, err, prefix=prefix; kw...)
 
+# issue #25082
+@deprecate_binding Void Nothing
+
 # #24844
 @deprecate copy!(dest::AbstractSet, src) union!(dest, src)
 @deprecate copy!(dest::AbstractDict, src) foldl(push!, dest, src)

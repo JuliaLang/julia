@@ -309,7 +309,7 @@ This section lists changes that do not have deprecation warnings.
     finalized as its second (rather than the reverse). For the majority of use cases
     deprecation warnings will be triggered. However, deprecation warnings will not trigger where
     (1) the callable argument is not a subtype of `Function`; or (2) both arguments are
-    `Function`s or `Ptr{Void}`s ([#24605]).
+    `Function`s or `Ptr{Cvoid}`s ([#24605]).
 
   * The `kill` function now throws errors on user error (e.g. on permission
     errors), but returns successfully if the process had previously exited.
@@ -844,10 +844,13 @@ Deprecated or removed
 
   * `Associative` has been deprecated in favor of `AbstractDict` ([#25012]).
 
-  * `Nullable{T}` has been deprecated and moved to the Nullables package ([#23642]).
-    Use `Union{T, Void}` instead, or `Union{Some{T}, Void}` if `nothing` is a possible value
-    (i.e. `Void <: T`). `isnull(x)` can be replaced with `x === nothing`
-    and `unsafe_get`/`get` can be dropped or replaced with `coalesce`.
+  * `Void` has been renamed back to `Nothing` with an alias `Cvoid` for use when calling C
+    with a return type of `Cvoid` or a return or argument type of `Ptr{Cvoid}` ([#25162]).
+
+  * `Nullable{T}` has been deprecated and moved to the Nullables package ([#23642]). Use
+    `Union{T, Nothing}` instead, or `Union{Some{T}, Nothing}` if `nothing` is a possible
+    value (i.e. `Nothing <: T`). `isnull(x)` can be replaced with `x === nothing` and
+    `unsafe_get`/`get` can be dropped or replaced with `coalesce`.
     `NullException` has been removed.
 
   * `CartesianRange` has been renamed `CartesianIndices` ([#24715]).
