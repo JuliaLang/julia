@@ -440,6 +440,7 @@ static int is_ast_node(jl_value_t *v)
         jl_is_svec(v) || jl_is_tuple(v) || ((jl_datatype_t*)jl_typeof(v))->instance ||
         jl_is_int32(v) || jl_is_int64(v) || jl_is_bool(v) ||
         jl_is_quotenode(v) || jl_is_gotonode(v) ||
+        jl_is_detachnode(v) || jl_is_reattachnode(v) || jl_is_syncnode(v) ||
         jl_is_labelnode(v) || jl_is_linenode(v) || jl_is_globalref(v);
 }
 
@@ -2817,6 +2818,7 @@ void jl_init_serializer(void)
                      jl_box_int64(33), jl_box_int64(34), jl_box_int64(35),
 #endif
                      jl_labelnode_type, jl_linenumbernode_type, jl_gotonode_type,
+                     jl_detachnode_type, jl_reattachnode_type, jl_syncnode_type,
                      jl_quotenode_type, jl_type_type, jl_bottom_type, jl_ref_type,
                      jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_void_type,
                      jl_densearray_type, jl_function_type, jl_unionall_type, jl_typename_type,

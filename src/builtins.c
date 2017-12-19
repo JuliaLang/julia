@@ -1280,6 +1280,9 @@ void jl_init_primitives(void)
     add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);
     add_builtin("LabelNode", (jl_value_t*)jl_labelnode_type);
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
+    add_builtin("DetachNode", (jl_value_t*)jl_detachnode_type);
+    add_builtin("ReattachNode", (jl_value_t*)jl_reattachnode_type);
+    add_builtin("SyncNode", (jl_value_t*)jl_syncnode_type);
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);

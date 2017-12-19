@@ -581,6 +581,9 @@ extern JL_DLLEXPORT jl_datatype_t *jl_globalref_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_linenumbernode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_labelnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_gotonode_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_detachnode_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_reattachnode_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_syncnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_quotenode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_newvarnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_intrinsic_type;
@@ -895,6 +898,9 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l)
 #define jl_is_globalref(v)   jl_typeis(v,jl_globalref_type)
 #define jl_is_labelnode(v)   jl_typeis(v,jl_labelnode_type)
 #define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
+#define jl_is_detachnode(v)  jl_typeis(v,jl_detachnode_type)
+#define jl_is_reattachnode(v)    jl_typeis(v,jl_reattachnode_type)
+#define jl_is_syncnode(v)    jl_typeis(v,jl_syncnode_type)
 #define jl_is_quotenode(v)   jl_typeis(v,jl_quotenode_type)
 #define jl_is_newvarnode(v)  jl_typeis(v,jl_newvarnode_type)
 #define jl_is_linenode(v)    jl_typeis(v,jl_linenumbernode_type)
