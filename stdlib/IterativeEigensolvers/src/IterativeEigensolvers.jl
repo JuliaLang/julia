@@ -280,7 +280,7 @@ julia> A = Diagonal(1:4);
 
 julia> s = svds(A, nsv = 2)[1];
 
-julia> s[:S]
+julia> s.S
 2-element Array{Float64,1}:
  4.0
  2.9999999999999996

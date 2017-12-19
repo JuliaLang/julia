@@ -709,8 +709,8 @@ function sqrt(A::StridedMatrix{<:Real})
         return triu!(parent(sqrt(UpperTriangular(A))))
     else
         SchurF = schurfact(complex(A))
-        R = triu!(parent(sqrt(UpperTriangular(SchurF[:T])))) # unwrapping unnecessary?
-        return SchurF[:vectors] * R * SchurF[:vectors]'
+        R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
+        return SchurF.vectors * R * SchurF.vectors'
     end
 end
 function sqrt(A::StridedMatrix{<:Complex})
@@ -723,8 +723,8 @@ function sqrt(A::StridedMatrix{<:Complex})
         return triu!(parent(sqrt(UpperTriangular(A))))
     else
         SchurF = schurfact(A)
-        R = triu!(parent(sqrt(UpperTriangular(SchurF[:T])))) # unwrapping unnecessary?
-        return SchurF[:vectors] * R * SchurF[:vectors]'
+        R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
+        return SchurF.vectors * R * SchurF.vectors'
     end
 end
 

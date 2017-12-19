@@ -3423,6 +3423,12 @@ workspace() = error("workspace() is discontinued, check out Revise.jl for an alt
 # PR #25113
 @deprecate_binding CartesianRange CartesianIndices
 
+# Use getproperty instead of getindex for Factorizations
+function getindex(F::Factorization, s::Symbol)
+    depwarn("F[:$s] is deprecated, use F.$s instead.", :getindex)
+    return getproperty(F, s)
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

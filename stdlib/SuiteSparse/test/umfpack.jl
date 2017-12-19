@@ -20,8 +20,8 @@
             A = convert(SparseMatrixCSC{Tv,Ti}, A0)
             lua = lufact(A)
             @test nnz(lua) == 18
-            @test_throws KeyError lua[:Z]
-            L,U,p,q,Rs = lua[:(:)]
+            @test_throws ErrorException lua.Z
+            L,U,p,q,Rs = lua.:(:)
             @test (Diagonal(Rs) * A)[p,q] ≈ L * U
 
             det(lua) ≈ det(Array(A))
@@ -78,7 +78,7 @@
             Ac = convert(SparseMatrixCSC{ComplexF64,Ti}, Ac0)
             x  = complex.(ones(size(Ac, 1)), ones(size(Ac,1)))
             lua = lufact(Ac)
-            L,U,p,q,Rs = lua[:(:)]
+            L,U,p,q,Rs = lua.:(:)
             @test (Diagonal(Rs) * Ac)[p,q] ≈ L * U
             b  = Ac*x
             @test Ac\b ≈ x
@@ -93,7 +93,7 @@
         for (m, n) in ((10,5), (5, 10))
             A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex.(randn(min(m, n) + 10), randn(min(m, n) + 10)))
             F = lufact(A)
-            L, U, p, q, Rs = F[:(:)]
+            L, U, p, q, Rs = F.:(:)
             @test (Diagonal(Rs) * A)[p,q] ≈ L * U
         end
     end
@@ -121,10 +121,10 @@
 
         F = lufact(sparse(ones(Tin, 1, 1)))
         L = sparse(ones(Tout, 1, 1))
-        @test F[:p] == F[:q] == [1]
-        @test F[:Rs] == [1.0]
-        @test F[:L] == F[:U] == L
-        @test F[:(:)] == (L, L, [1], [1], [1.0])
+        @test F.p == F.q == [1]
+        @test F.Rs == [1.0]
+        @test F.L == F.U == L
+        @test F.:(:) == (L, L, [1], [1], [1.0])
     end
 
     @testset "BigFloat not supported" for T in (BigFloat, Complex{BigFloat})
@@ -152,7 +152,7 @@
         A = sparse(1.0I, 4, 4)
         A[1:2,1:2] = [-.01 -200; 200 .001]
         F = lufact(A)
-        @test F[:p] == [3 ; 4 ; 2 ; 1]
+        @test F.p == [3 ; 4 ; 2 ; 1]
     end
 
     @testset "Test that A[c|t]_ldiv_B!{T<:Complex}(X::StridedMatrix{T}, lu::UmfpackLU{Float64}, B::StridedMatrix{T}) works as expected." begin

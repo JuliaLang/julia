@@ -51,9 +51,9 @@ dimg  = randn(n)/2
                                        -0.5     -0.5       0.1     1.0])
             F = eigfact(A, permute=false, scale=false)
             eig(A, permute=false, scale=false)
-            @test F[:vectors]*Diagonal(F[:values])/F[:vectors] ≈ A
+            @test F.vectors*Diagonal(F.values)/F.vectors ≈ A
             F = eigfact(A)
-            # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
+            # @test norm(F.vectors*Diagonal(F.values)/F.vectors - A) > 0.01
         end
     end
     @testset "Singular LU" begin
@@ -64,8 +64,8 @@ dimg  = randn(n)/2
     κ  = cond(a,1)
     @testset "(Automatic) Square LU decomposition" begin
         lua   = factorize(a)
-        @test_throws KeyError lua[:Z]
-        l,u,p = lua[:L], lua[:U], lua[:p]
+        @test_throws ErrorException lua.Z
+        l,u,p = lua.L, lua.U, lua.p
         ll,ul,pl = lu(a)
         @test ll * ul ≈ a[pl,:]
         @test l*u ≈ a[p,:]
@@ -76,7 +76,7 @@ dimg  = randn(n)/2
             # test conversion of LU factorization's numerical type
             bft = eltya <: Real ? Base.LinAlg.LU{BigFloat} : Base.LinAlg.LU{Complex{BigFloat}}
             bflua = convert(bft, lua)
-            @test bflua[:L]*bflua[:U] ≈ big.(a)[p,:] rtol=ε
+            @test bflua.L*bflua.U ≈ big.(a)[p,:] rtol=ε
         end
         # compact printing
         lstring = sprint(show,l)
@@ -88,9 +88,9 @@ dimg  = randn(n)/2
         lud   = lufact(d)
         @test LinAlg.issuccess(lud)
         @test lufact(lud) == lud
-        @test_throws KeyError lud[:Z]
-        @test lud[:L]*lud[:U] ≈ lud[:P]*Array(d)
-        @test lud[:L]*lud[:U] ≈ Array(d)[lud[:p],:]
+        @test_throws ErrorException lud.Z
+        @test lud.L*lud.U ≈ lud.P*Array(d)
+        @test lud.L*lud.U ≈ Array(d)[lud.p,:]
         @test AbstractArray(lud) ≈ d
     end
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
@@ -178,18 +178,18 @@ dimg  = randn(n)/2
         end
         @testset "Thin LU" begin
             lua   = @inferred lufact(a[:,1:n1])
-            @test lua[:L]*lua[:U] ≈ lua[:P]*a[:,1:n1]
+            @test lua.L*lua.U ≈ lua.P*a[:,1:n1]
         end
         @testset "Fat LU" begin
             lua   = lufact(a[1:n1,:])
-            @test lua[:L]*lua[:U] ≈ lua[:P]*a[1:n1,:]
+            @test lua.L*lua.U ≈ lua.P*a[1:n1,:]
         end
     end
 
     @testset "LU of Symmetric/Hermitian" begin
         for HS in (Hermitian(a'a), Symmetric(a'a))
             luhs = lufact(HS)
-            @test luhs[:L]*luhs[:U] ≈ luhs[:P]*Matrix(HS)
+            @test luhs.L*luhs.U ≈ luhs.P*Matrix(HS)
         end
     end
 end
@@ -210,7 +210,7 @@ end
     b = rand(1:10,n,2)
     @inferred lufact(a)
     lua   = factorize(a)
-    l,u,p = lua[:L], lua[:U], lua[:p]
+    l,u,p = lua.L, lua.U, lua.p
     @test l*u ≈ a[p,:]
     @test l[invperm(p),:]*u ≈ a
     @test a*inv(lua) ≈ Matrix(I, n, n)
