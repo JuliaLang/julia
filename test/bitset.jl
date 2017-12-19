@@ -55,9 +55,11 @@ end
     @test hash(BitSet([1])) != hash(BitSet([33]))
     @test hash(BitSet([1])) != hash(BitSet([65]))
     @test hash(BitSet([1])) != hash(BitSet([129]))
+    # test with a different internal structure
+    s = BitSet([129])
+    pop!(push!(s, 65), 65)
+    @test hash(BitSet([1])) != hash(s)
 
-    # issue #7851
-    @test_throws ArgumentError BitSet(-1)
     @test !(-1 in BitSet(1:10))
 end
 
@@ -79,7 +81,9 @@ end
     empty!(i)
     @test length(i) === 0
 
-    @test_throws ArgumentError symdiff!(i, -3)
+    @test symdiff!(i, -3) == BitSet([-3])
+    @test symdiff!(i, -3) == BitSet([])
+
     @test symdiff!(i, 3) == BitSet([3])
     @test symdiff!(i, 257) == BitSet([3, 257])
     @test symdiff!(i, [3, 6]) == BitSet([6, 257])
@@ -87,9 +91,8 @@ end
     i = BitSet(1:6)
     @test symdiff!(i, BitSet([6, 513])) == BitSet([1:5; 513])
 
-    # issue #23099 : these tests should not segfault
-    @test_throws ArgumentError symdiff!(BitSet(rand(1:100, 30)), 0)
-    @test_throws ArgumentError symdiff!(BitSet(rand(1:100, 30)), [0, 2, 4])
+    @test 0 ∈ symdiff!(BitSet(rand(1:100, 30)), 0)
+    @test BitSet(0:2:4) ⊆ symdiff!(BitSet(rand(5:100, 30)), [0, 2, 4])
 
     # issue #23557 :
     @test_throws MethodError symdiff!(BitSet([1]), ['a']) # should no stack-overflow
@@ -128,16 +131,17 @@ end
     @test union(i, j, k) == BitSet(1:9)
 
     s1 = BitSet()
-    @test_throws ArgumentError push!(s1, -1)
-    push!(s1, 1, 10, 100, 1000)
-    @test collect(s1) == [1, 10, 100, 1000]
+    @test push!(s1, -1) == BitSet([-1])
+    push!(s1, -10, 1, 10, 100, 1000)
+    @test collect(s1) == [-10, -1, 1, 10, 100, 1000]
     push!(s1, 606)
-    @test collect(s1) == [1, 10, 100, 606, 1000]
+    @test collect(s1) == [-10, -1, 1, 10, 100, 606, 1000]
+
     s2 = BitSet()
     @test s2 === union!(s2, s1)
-    s3 = BitSet([1, 10, 100])
-    union!(s3, [1, 606, 1000])
-    s4 = union(BitSet([1, 100, 1000]), BitSet([10, 100, 606]))
+    s3 = BitSet([-1, 1, 10, 100])
+    union!(s3, [-10, 1, 606, 1000])
+    s4 = union(BitSet([-1, 1, 100, 1000]), BitSet([-10, 10, 100, 606]))
     @test s1 == s2 == s3 == s4
 end
 
@@ -312,4 +316,17 @@ end
     @test m == first(s) == minimum(s) == minimum(a)
     @test M == last(s)  == maximum(s) == maximum(a)
     @test issorted(s)
+end
+
+@testset "extreme values" begin
+    @test pop!(BitSet(typemin(Int))) == typemin(Int)
+    @test pop!(BitSet(typemax(Int))) == typemax(Int)
+end
+
+@testset "sizehint! returns a BitSet" begin
+    # see #25029
+    @test sizehint!(BitSet(), 100) isa BitSet
+    # TODO: test that we don't delegate sizehint! to the underlying bits
+    # field without dividing by 64 (i.e. the 100 above should allocate
+    # only 2 UInt64 words
 end

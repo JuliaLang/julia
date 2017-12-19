@@ -82,7 +82,7 @@ IndexStyle(::Type{<:BitArray}) = IndexLinear()
 ## aux functions ##
 
 const _msk64 = ~UInt64(0)
-@inline _div64(l) = l >>> 6
+@inline _div64(l) = l >> 6
 @inline _mod64(l) = l & 63
 @inline _msk_end(l::Integer) = _msk64 >>> _mod64(-l)
 @inline _msk_end(B::BitArray) = _msk_end(length(B))
@@ -636,6 +636,10 @@ end
 
 @inline function unsafe_bitsetindex!(Bc::Array{UInt64}, x::Bool, i::Int)
     i1, i2 = get_chunks_id(i)
+    _unsafe_bitsetindex!(Bc, x, i1, i2)
+end
+
+@inline function _unsafe_bitsetindex!(Bc::Array{UInt64}, x::Bool, i1::Int, i2::Int)
     u = UInt64(1) << i2
     @inbounds begin
         c = Bc[i1]
@@ -1438,22 +1442,17 @@ circshift!(B::BitVector, i::Integer) = circshift!(B, B, i)
 
 ## count & find ##
 
-function count(B::BitArray)
+function bitcount(Bc::Vector{UInt64})
     n = 0
-    Bc = B.chunks
     @inbounds for i = 1:length(Bc)
         n += count_ones(Bc[i])
     end
     return n
 end
 
-# returns the index of the next non-zero element, or 0 if all zeros
-function findnext(B::BitArray, start::Integer)
-    start > 0 || throw(BoundsError(B, start))
-    start > length(B) && return 0
+count(B::BitArray) = bitcount(B.chunks)
 
-    Bc = B.chunks
-
+function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Integer)
     chunk_start = _div64(start-1)+1
     within_chunk_start = _mod64(start-1)
     mask = _msk64 << within_chunk_start
@@ -1471,6 +1470,14 @@ function findnext(B::BitArray, start::Integer)
     end
     return 0
 end
+
+# returns the index of the next non-zero element, or 0 if all zeros
+function findnext(B::BitArray, start::Integer)
+    start > 0 || throw(BoundsError(B, start))
+    start > length(B) && return 0
+    unsafe_bitfindnext(B.chunks, start)
+end
+
 #findfirst(B::BitArray) = findnext(B, 1)  ## defined in array.jl
 
 # aux function: same as findnext(~B, start), but performed without temporaries
@@ -1527,13 +1534,7 @@ function findnext(testf::Function, B::BitArray, start::Integer)
 end
 #findfirst(testf::Function, B::BitArray) = findnext(testf, B, 1)  ## defined in array.jl
 
-# returns the index of the previous non-zero element, or 0 if all zeros
-function findprev(B::BitArray, start::Integer)
-    start > 0 || return 0
-    start > length(B) && throw(BoundsError(B, start))
-
-    Bc = B.chunks
-
+function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Integer)
     chunk_start = _div64(start-1)+1
     mask = _msk_end(start)
 
@@ -1549,6 +1550,13 @@ function findprev(B::BitArray, start::Integer)
         end
     end
     return 0
+end
+
+# returns the index of the previous non-zero element, or 0 if all zeros
+function findprev(B::BitArray, start::Integer)
+    start > 0 || return 0
+    start > length(B) && throw(BoundsError(B, start))
+    unsafe_bitfindprev(B.chunks, start)
 end
 
 function findprevnot(B::BitArray, start::Integer)

@@ -344,3 +344,73 @@ end
     @test typeof(cssset) == Set{String}
     @test cssset == Set(["foo", "bar"])
 end
+
+@testset "fuzzy testing Set & BitSet" begin
+    b1, b2 = rand(-1000:1000, 2)
+    e1 = rand(b1-9:1000) # -9 to have an empty list sometimes
+    e2 = rand(b2-9:1000)
+    l1, l2 = rand(1:1000, 2)
+    a1 = b1 <= e1 ? rand(b1:e1, l1) : Int[]
+    a2 = b2 <= e2 ? rand(b2:e2, l2) : Int[]
+    s1, s2 = Set(a1), Set(a2)
+    t1, t2 = BitSet(a1), BitSet(a2)
+
+    for (s, t) = ((s1, t1), (s2, t2))
+        @test length(s) == length(t)
+        @test issubset(s, t)
+        @test issubset(t, s)
+        @test isempty(s) == isempty(t)
+        isempty(s) && continue
+        @test maximum(s) == maximum(t)
+        @test minimum(s) == minimum(t)
+        @test extrema(s) == extrema(t)
+        rs, rt = rand(s), rand(t)
+        @test rs in s
+        @test rt in s
+        @test rs in t
+        @test rt in t
+        for y in (rs, rt)
+            ss = copy(s)
+            tt = copy(t)
+            pop!(ss, y)
+            pop!(tt, y)
+            @test BitSet(ss) == tt
+            @test Set(tt) == ss
+            z = rand(1001:1100) # z ∉ s or t
+            push!(ss, z)
+            push!(tt, z)
+            @test BitSet(ss) == tt
+            @test Set(tt) == ss
+        end
+    end
+
+    res = Dict{String,Union{Bool,Vector{Int}}}()
+    function check(desc, val)
+        n = val isa Bool ? val : sort!(collect(val))
+        r = get!(res, desc, n)
+        if n isa Bool || r !== n
+            @test r == n
+        end
+    end
+    asbitset(x) = x isa BitSet ? x : BitSet(x)
+    asset(x) = x isa Set ? x : Set(x)
+
+    for x1 = (s1, t1), x2 = (s2, t2)
+        check("union", union(x1, x2))
+        check("intersect", intersect(x1, x2))
+        check("symdiff", symdiff(x1, x2))
+        check("setdiff", setdiff(x1, x2))
+        check("== as Bitset", asbitset(x1) == asbitset(x2))
+        check("== as Set", asset(x1) == asset(x2))
+        check("issubset", issubset(x1, x2))
+        if typeof(x1) == typeof(x2)
+            check("<", x1 < x2)
+            check("<=", x1 > x2)
+            check("union!", union!(copy(x1), x2))
+            check("setdiff!", setdiff!(copy(x1), x2))
+            x1 isa Set && continue
+            check("intersect!", intersect!(copy(x1), x2))
+            check("symdiff!", symdiff!(copy(x1), x2))
+        end
+    end
+end
