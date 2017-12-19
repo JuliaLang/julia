@@ -72,11 +72,11 @@ export doc
 const modules = Module[]
 const META    = gensym(:meta)
 
-meta(m::Module) = isdefined(m, META) ? getfield(m, META) : ObjectIdDict()
+meta(m::Module) = isdefined(m, META) ? getfield(m, META) : IdDict()
 
 function initmeta(m::Module)
     if !isdefined(m, META)
-        eval(m, :(const $META = $(ObjectIdDict())))
+        eval(m, :(const $META = $(IdDict())))
         push!(modules, m)
     end
     nothing
@@ -216,9 +216,9 @@ mutable struct MultiDoc
     "Ordered (via definition order) vector of object signatures."
     order::Vector{Type}
     "Documentation for each object. Keys are signatures."
-    docs::ObjectIdDict
+    docs::IdDict
 
-    MultiDoc() = new(Type[], ObjectIdDict())
+    MultiDoc() = new(Type[], IdDict())
 end
 
 # Docstring registration.
@@ -712,7 +712,7 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define = true)
 
     # All other expressions are undocumentable and should be handled on a case-by-case basis
     # with `@__doc__`. Unbound string literals are also undocumentable since they cannot be
-    # retrieved from the module's metadata `ObjectIdDict` without a reference to the string.
+    # retrieved from the module's metadata `IdDict` without a reference to the string.
     docerror(ex)
 end
 

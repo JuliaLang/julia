@@ -373,7 +373,7 @@ end
 
 mutable struct T10647{T}; x::T; end
 @testset "issue #10647" begin
-    a = ObjectIdDict()
+    a = IdDict()
     a[1] = a
     a[a] = 2
     a[3] = T10647(a)
@@ -384,14 +384,14 @@ mutable struct T10647{T}; x::T; end
     Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
 end
 
-@testset "ObjectIdDict" begin
-    a = ObjectIdDict()
+@testset "IdDict" begin
+    a = Base.ObjectIdDict()
     a[1] = a
     a[a] = 2
 
     sa = empty(a)
     @test isempty(sa)
-    @test isa(sa, ObjectIdDict)
+    @test isa(sa, Base.ObjectIdDict)
 
     @test length(a) == 2
     @test 1 in keys(a)
@@ -411,18 +411,59 @@ end
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test a != d
 
-    @test length(ObjectIdDict(1=>2, 1.0=>3)) == 2
+    @test length(Base.ObjectIdDict(1=>2, 1.0=>3)) == 2
     @test length(Dict(1=>2, 1.0=>3)) == 1
 
-    d = @inferred ObjectIdDict(i=>i for i=1:3)
-    @test isa(d, ObjectIdDict)
-    @test d == ObjectIdDict(1=>1, 2=>2, 3=>3)
+    d = @inferred Base.ObjectIdDict(i=>i for i=1:3)
+    @test isa(d, Base.ObjectIdDict)
+    @test d == Base.ObjectIdDict(1=>1, 2=>2, 3=>3)
 
-    d = @inferred ObjectIdDict(Pair(1,1), Pair(2,2), Pair(3,3))
-    @test isa(d, ObjectIdDict)
-    @test d == ObjectIdDict(1=>1, 2=>2, 3=>3)
+    d = @inferred Base.ObjectIdDict(Pair(1,1), Pair(2,2), Pair(3,3))
+    @test isa(d, Base.ObjectIdDict)
+    @test d == Base.ObjectIdDict(1=>1, 2=>2, 3=>3)
     @test eltype(d) == Pair{Any,Any}
 end
+
+@testset "IdDict" begin
+    a = IdDict()
+    a[1] = a
+    a[a] = 2
+
+    sa = empty(a)
+    @test isempty(sa)
+    @test isa(sa, IdDict)
+
+    @test length(a) == 2
+    @test 1 in keys(a)
+    @test a in keys(a)
+    @test a[1] === a
+    @test a[a] === 2
+
+    ca = copy(a)
+    @test length(ca) == length(a)
+    @test ca == a
+    @test ca !== a # make sure they are different objects
+
+    ca = empty!(ca)
+    @test length(ca) == 0
+    @test length(a) == 2
+
+    d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
+    @test a != d
+
+    @test length(IdDict(1=>2, 1.0=>3)) == 2
+    @test length(Dict(1=>2, 1.0=>3)) == 1
+
+    d = @inferred IdDict(i=>i for i=1:3)
+    @test isa(d, IdDict)
+    @test d == IdDict(1=>1, 2=>2, 3=>3)
+
+    d = @inferred IdDict(Pair(1,1), Pair(2,2), Pair(3,3))
+    @test isa(d, IdDict)
+    @test d == IdDict(1=>1, 2=>2, 3=>3)
+    @test eltype(d) == Pair{Int,Int}
+end
+
 
 @testset "Issue #7944" begin
     d = Dict{Int,Int}()
