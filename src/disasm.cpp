@@ -595,32 +595,18 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
                         int TagType, void *TagBuf)
 {
     SymbolTable *SymTab = (SymbolTable*)DisInfo;
-    PC += SymTab->getIP() - (uint64_t)(uintptr_t)SymTab->getMemoryObject().data(); // add offset from MemoryObject base
+    LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
+    memset(info, 0, sizeof(*info));
     if (TagType != 1)
         return 0;               // Unknown data format
-    LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
-    uint8_t *bytes = (uint8_t*) alloca(Size*sizeof(uint8_t));
-    if (PC+Offset+Size > SymTab->getMemoryObject().size())
-        return 0;              // Invalid memory location
-    for (uint64_t i=0; i<Size; ++i)
-        bytes[i] = SymTab->getMemoryObject()[PC+Offset+i];
-    size_t pointer;
-    switch (Size) {
-    case 1: { uint8_t  val; std::memcpy(&val, bytes, 1); pointer = val; break; }
-    case 2: { uint16_t val; std::memcpy(&val, bytes, 2); pointer = val; break; }
-    case 4: { uint32_t val; std::memcpy(&val, bytes, 4); pointer = val; break; }
-    case 8: { uint64_t val; std::memcpy(&val, bytes, 8); pointer = val; break; }
-    default: return 0;          // Cannot handle input address size
-    }
-    const char *name = SymTab->lookupLocalPC(pointer);
-    if (!name)
-        return 0;               // Did not find symbolic information
-    // Describe the symbol
-    info->AddSymbol.Present = 1;
-    info->AddSymbol.Name = name;
-    info->AddSymbol.Value = pointer; // unused by LLVM
-    info->Value = 0;                 // offset
-    return 1;                        // Success
+    PC += SymTab->getIP() - (uint64_t)(uintptr_t)SymTab->getMemoryObject().data(); // add offset from MemoryObject base
+    // TODO: see if we knew of a relocation applied at PC
+    // info->AddSymbol.Present = 1;
+    // info->AddSymbol.Name = name;
+    // info->AddSymbol.Value = pointer; // unused by LLVM
+    // info->Value = 0;                 // offset
+    // return 1;                        // Success
+    return 0;
 }
 } // namespace
 
@@ -760,7 +746,7 @@ static void jl_dump_asm_internal(
             if (di_ctx && di_lineIter != di_lineEnd) {
                 // Set up the line info
                 nextLineAddr = di_lineIter->first;
-                if (nextLineAddr != Fptr + slide) {
+                if (nextLineAddr != (uint64_t)(Fptr + slide)) {
                     std::string buf;
                     dbgctx.emit_lineinfo(buf, di_lineIter->second);
                     if (!buf.empty()) {
