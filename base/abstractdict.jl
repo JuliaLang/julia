@@ -450,7 +450,7 @@ eltype(::Type{AbstractDict{K,V}}) where {K,V} = Pair{K,V}
 
 function isequal(l::AbstractDict, r::AbstractDict)
     l === r && return true
-    if isa(l,IdDict) != isa(r,IdDict) || isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
+    if isa(l,IdDict) != isa(r,IdDict) || isa(l,_ObjectIdDict) != isa(r,_ObjectIdDict)
         return false
     end
     if length(l) != length(r) return false end
@@ -464,7 +464,7 @@ end
 
 function ==(l::AbstractDict, r::AbstractDict)
     l === r && return true
-    if isa(l,IdDict) != isa(r,IdDict) || isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
+    if isa(l,IdDict) != isa(r,IdDict) || isa(l,_ObjectIdDict) != isa(r,_ObjectIdDict)
         return false
     end
     if length(l) != length(r) return false end
@@ -505,44 +505,44 @@ push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), 
 # hashing objects by identity
 
 """
-    ObjectIdDict([itr])
+    _ObjectIdDict([itr])
 
 Internally used object-id dictionary, use [`IdDict`](@ref) instead.
 
-`ObjectIdDict()` constructs a hash table where the keys are (always)
+`_ObjectIdDict()` constructs a hash table where the keys are (always)
 object identities.  Unlike `Dict` it is not parameterized on its key
 and value type and thus its `eltype` is always `Pair{Any,Any}`.
 
 See [`Dict`](@ref) for further help.
 """
-mutable struct ObjectIdDict <: AbstractDict{Any,Any}
+mutable struct _ObjectIdDict <: AbstractDict{Any,Any}
     ht::Vector{Any}
     ndel::Int
-    ObjectIdDict() = new(Vector{Any}(uninitialized, 32), 0)
+    _ObjectIdDict() = new(Vector{Any}(uninitialized, 32), 0)
 
-    function ObjectIdDict(itr)
-        d = ObjectIdDict()
+    function _ObjectIdDict(itr)
+        d = _ObjectIdDict()
         for (k,v) in itr; d[k] = v; end
         d
     end
 
-    function ObjectIdDict(pairs::Pair...)
-        d = ObjectIdDict()
+    function _ObjectIdDict(pairs::Pair...)
+        d = _ObjectIdDict()
         for (k,v) in pairs; d[k] = v; end
         d
     end
 
-    ObjectIdDict(o::ObjectIdDict) = new(copy(o.ht))
+    _ObjectIdDict(o::_ObjectIdDict) = new(copy(o.ht))
 end
 
-empty(d::ObjectIdDict, ::Type{Any}, ::Type{Any}) = ObjectIdDict()
+empty(d::_ObjectIdDict, ::Type{Any}, ::Type{Any}) = _ObjectIdDict()
 
-function rehash!(t::ObjectIdDict, newsz = length(t.ht))
+function rehash!(t::_ObjectIdDict, newsz = length(t.ht))
     t.ht = ccall(:jl_idtable_rehash, Any, (Any, Csize_t), t.ht, newsz)
     t
 end
 
-function sizehint!(t::ObjectIdDict, newsz)
+function sizehint!(t::_ObjectIdDict, newsz)
     newsz = _tablesz(newsz*2)  # *2 for keys and values in same array
     oldsz = length(t.ht)
     # grow at least 25%
@@ -552,7 +552,7 @@ function sizehint!(t::ObjectIdDict, newsz)
     rehash!(t, newsz)
 end
 
-function setindex!(t::ObjectIdDict, @nospecialize(v), @nospecialize(k))
+function setindex!(t::_ObjectIdDict, @nospecialize(v), @nospecialize(k))
     if t.ndel >= ((3*length(t.ht))>>2)
         rehash!(t, max(length(t.ht)>>1, 32))
         t.ndel = 0
@@ -561,27 +561,27 @@ function setindex!(t::ObjectIdDict, @nospecialize(v), @nospecialize(k))
     return t
 end
 
-get(t::ObjectIdDict, @nospecialize(key), @nospecialize(default)) =
+get(t::_ObjectIdDict, @nospecialize(key), @nospecialize(default)) =
     ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
 
-function pop!(t::ObjectIdDict, @nospecialize(key), @nospecialize(default))
+function pop!(t::_ObjectIdDict, @nospecialize(key), @nospecialize(default))
     val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any), t.ht, key, default)
     # TODO: this can underestimate `ndel`
     val === default || (t.ndel += 1)
     return val
 end
 
-function pop!(t::ObjectIdDict, @nospecialize(key))
+function pop!(t::_ObjectIdDict, @nospecialize(key))
     val = pop!(t, key, secret_table_token)
     val !== secret_table_token ? val : throw(KeyError(key))
 end
 
-function delete!(t::ObjectIdDict, @nospecialize(key))
+function delete!(t::_ObjectIdDict, @nospecialize(key))
     pop!(t, key, secret_table_token)
     t
 end
 
-function empty!(t::ObjectIdDict)
+function empty!(t::_ObjectIdDict)
     resize!(t.ht, 32)
     ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), t.ht, 0, sizeof(t.ht))
     t.ndel = 0
@@ -590,11 +590,11 @@ end
 
 _oidd_nextind(a, i) = reinterpret(Int,ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
 
-start(t::ObjectIdDict) = _oidd_nextind(t.ht, 0)
-done(t::ObjectIdDict, i) = (i == -1)
-next(t::ObjectIdDict, i) = (Pair{Any,Any}(t.ht[i+1],t.ht[i+2]), _oidd_nextind(t.ht, i+2))
+start(t::_ObjectIdDict) = _oidd_nextind(t.ht, 0)
+done(t::_ObjectIdDict, i) = (i == -1)
+next(t::_ObjectIdDict, i) = (Pair{Any,Any}(t.ht[i+1],t.ht[i+2]), _oidd_nextind(t.ht, i+2))
 
-function length(d::ObjectIdDict)
+function length(d::_ObjectIdDict)
     n = 0
     for pair in d
         n+=1
@@ -602,10 +602,10 @@ function length(d::ObjectIdDict)
     n
 end
 
-copy(o::ObjectIdDict) = ObjectIdDict(o)
+copy(o::_ObjectIdDict) = _ObjectIdDict(o)
 
-get!(o::ObjectIdDict, key, default) = (o[key] = get(o, key, default))
+get!(o::_ObjectIdDict, key, default) = (o[key] = get(o, key, default))
 
 # For some AbstractDict types, it is safe to implement filter!
 # by deleting keys during iteration.
-filter!(f, d::ObjectIdDict) = filter_in_one_pass!(f, d)
+filter!(f, d::_ObjectIdDict) = filter_in_one_pass!(f, d)

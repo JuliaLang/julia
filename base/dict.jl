@@ -815,9 +815,9 @@ _similar_for(c::AbstractDict, T, itr, isz) = throw(ArgumentError("for AbstractDi
 See [`Dict`](@ref) for further help.
 """
 struct IdDict{K,V} <: AbstractDict{K,V}
-    ht::ObjectIdDict
+    ht::_ObjectIdDict
 
-    IdDict{K,V}() where {K, V} = new(ObjectIdDict())
+    IdDict{K,V}() where {K, V} = new(_ObjectIdDict())
     IdDict{K,V}(d::IdDict{K,V}) where {K, V} = new(copy(d.ht))
 end
 
@@ -867,7 +867,7 @@ rehash!(d::IdDict) = (rehash!(d.ht); d)
 sizehint!(d::IdDict, newsz) = (sizehint!(d.ht, newsz); d)
 
 function getindex(d::IdDict{K,V}, key::K) where {K, V}
-    v = get(d, key, secret_table_token)
+    v = get(d.ht, key, secret_table_token)
     v == secret_table_token ? throw(KeyError(key)) : v::V
 end
 setindex!(d::IdDict{K,V}, v, k::K) where {K, V} =  setindex!(d.ht, convert(V, v), k)

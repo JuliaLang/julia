@@ -385,13 +385,13 @@ mutable struct T10647{T}; x::T; end
 end
 
 @testset "IdDict" begin
-    a = Base.ObjectIdDict()
+    a = Base._ObjectIdDict()
     a[1] = a
     a[a] = 2
 
     sa = empty(a)
     @test isempty(sa)
-    @test isa(sa, Base.ObjectIdDict)
+    @test isa(sa, Base._ObjectIdDict)
 
     @test length(a) == 2
     @test 1 in keys(a)
@@ -411,16 +411,16 @@ end
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test a != d
 
-    @test length(Base.ObjectIdDict(1=>2, 1.0=>3)) == 2
+    @test length(Base._ObjectIdDict(1=>2, 1.0=>3)) == 2
     @test length(Dict(1=>2, 1.0=>3)) == 1
 
-    d = @inferred Base.ObjectIdDict(i=>i for i=1:3)
-    @test isa(d, Base.ObjectIdDict)
-    @test d == Base.ObjectIdDict(1=>1, 2=>2, 3=>3)
+    d = @inferred Base._ObjectIdDict(i=>i for i=1:3)
+    @test isa(d, Base._ObjectIdDict)
+    @test d == Base._ObjectIdDict(1=>1, 2=>2, 3=>3)
 
-    d = @inferred Base.ObjectIdDict(Pair(1,1), Pair(2,2), Pair(3,3))
-    @test isa(d, Base.ObjectIdDict)
-    @test d == Base.ObjectIdDict(1=>1, 2=>2, 3=>3)
+    d = @inferred Base._ObjectIdDict(Pair(1,1), Pair(2,2), Pair(3,3))
+    @test isa(d, Base._ObjectIdDict)
+    @test d == Base._ObjectIdDict(1=>1, 2=>2, 3=>3)
     @test eltype(d) == Pair{Any,Any}
 end
 

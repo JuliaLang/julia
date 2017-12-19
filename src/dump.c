@@ -2003,7 +2003,7 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
         switch (how) {
-            case 1: { // rehash ObjectIdDict
+            case 1: { // rehash _ObjectIdDict
                 jl_array_t **a = (jl_array_t**)v;
                 // Assume *a don't need a write barrier
                 *a = jl_idtable_rehash(*a, jl_array_len(*a));
@@ -2294,7 +2294,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     htable_new(&backref_table, 5000);
     ptrhash_put(&backref_table, jl_main_module, (char*)HT_NOTFOUND + 1);
     backref_table_numel = 1;
-    jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("ObjectIdDict")) : NULL;
+    jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("_ObjectIdDict")) : NULL;
 
     int en = jl_gc_enable(0); // edges map is not gc-safe
     jl_array_t *lambdas = jl_alloc_vec_any(0);
