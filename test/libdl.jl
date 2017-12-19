@@ -194,7 +194,7 @@ let dl = C_NULL
     @test dl != C_NULL
 
     @test Libdl.dlclose(dl)
-    @test !Libdl.dlclose(dl)
+    @test_skip !Libdl.dlclose(dl)   # Syscall doesn't fail on Win32
 end
 
 if Sys.KERNEL in (:Linux, :FreeBSD)
