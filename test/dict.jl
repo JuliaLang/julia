@@ -462,6 +462,23 @@ end
     @test isa(d, IdDict)
     @test d == IdDict(1=>1, 2=>2, 3=>3)
     @test eltype(d) == Pair{Int,Int}
+    @test_throws MethodError d[:a]
+    @test_throws MethodError d[:a] = 1
+    @test_throws MethodError d[1] = :a
+
+    # check that returned values are inferred
+    d = @inferred IdDict(Pair(1,1), Pair(2,2), Pair(3,3))
+    @test 1 == @inferred d[1]
+    @inferred setindex!(d, -1, 10)
+    @test d[10] == -1
+    @test 1 == @inferred d[1]
+    @test get(d, -111, nothing) == nothing
+    @test 1 == @inferred get(d, 1, 1)
+    @test pop!(d, -111, nothing) == nothing
+    @test 1 == @inferred pop!(d, 1)
+    i = @inferred start(d)
+    @inferred next(d, i)
+    @inferred done(d, i)
 end
 
 

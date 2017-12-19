@@ -806,6 +806,14 @@ _similar_for(c::AbstractDict, T, itr, isz) = throw(ArgumentError("for AbstractDi
 
 # Hashing by identify with parameters
 
+"""
+    IdDict([itr])
+
+`IdDict{K,V}()` constructs a hash table using object-id as hash and
+`===` as equality with keys of type `K` and values of type `V`.
+
+See [`Dict`](@ref) for further help.
+"""
 struct IdDict{K,V} <: AbstractDict{K,V}
     ht::ObjectIdDict
 
@@ -813,26 +821,25 @@ struct IdDict{K,V} <: AbstractDict{K,V}
     IdDict{K,V}(d::IdDict{K,V}) where {K, V} = new(copy(d.ht))
 end
 
-
 function IdDict{K,V}(kv) where {K, V}
-    h = IdDict{K,V}()
+    d = IdDict{K,V}()
     for (k,v) in kv
-        h[k] = v
+        d[k] = v
     end
-    return h
+    return d
 end
 IdDict{K,V}(p::Pair) where {K,V} = setindex!(IdDict{K,V}(), p.second, p.first)
 function IdDict{K,V}(ps::Pair...) where {K, V}
-    h = IdDict{K,V}()
-    sizehint!(h, length(ps))
+    d = IdDict{K,V}()
+    sizehint!(d, length(ps))
     for p in ps
-        h[p.first] = p.second
+        d[p.first] = p.second
     end
-    return h
+    return d
 end
 IdDict() = IdDict{Any,Any}()
 IdDict(kv::Tuple{}) = IdDict()
-copy(o::IdDict) = IdDict(o)
+copy(d::IdDict) = IdDict(d)
 
 IdDict(ps::Pair{K,V}...)           where {K,V} = IdDict{K,V}(ps)
 IdDict(ps::Pair{K}...)             where {K}   = IdDict{K,Any}(ps)
@@ -852,41 +859,43 @@ function IdDict(kv)
     end
 end
 
-# other inteface functions
 empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
+empty!(d::IdDict) = (empty!(d.ht); d)
 
-function rehash!(d::IdDict)
-    rehash!(d.ht)
-    d
+rehash!(d::IdDict) = (rehash!(d.ht); d)
+
+sizehint!(d::IdDict, newsz) = (sizehint!(d.ht, newsz); d)
+
+function getindex(d::IdDict{K,V}, key::K) where {K, V}
+    v = get(d, key, secret_table_token)
+    v == secret_table_token ? throw(KeyError(key)) : v::V
 end
-
-function sizehint!(d::IdDict, newsz)
-    sizehint!(d.ht, newsz)
-    d
-end
-
 setindex!(d::IdDict{K,V}, v, k::K) where {K, V} =  setindex!(d.ht, convert(V, v), k)
 
-get(d::IdDict{K}, key::K, default) where {K} = get(d.ht, key, default)
+function get(d::IdDict{K,V}, key::K, default) where {K, V}
+    v = get(d.ht, key, secret_table_token)
+    v == secret_table_token ? default : v::V
+end
+get!(d::IdDict{K,V}, key::K, default::V) where {K, V} =
+    (d[key] = get(d.ht, key, default))::V
 
-pop!(d::IdDict{K}, key::K, default) where {K} = pop!(d.ht, key, default)
-pop!(d::IdDict{K}, key::K) where {K} = pop!(d.ht, key)
+function pop!(d::IdDict{K,V}, key::K, default) where {K, V}
+    v = pop!(d.ht, key, secret_table_token)
+    v == secret_table_token ? default : v::V
+end
+pop!(d::IdDict{K,V}, key::K) where {K, V} = pop!(d.ht, key)::V
+
 function delete!(d::IdDict{K}, key::K) where {K}
     delete!(d.ht, key)
-    d
-end
-function empty!(d::IdDict)
-    empty!(d.ht)
     d
 end
 
 start(d::IdDict) = start(d.ht)
 done(d::IdDict, i) = done(d.ht, i)
-next(d::IdDict, i) = next(d.ht, i)
+next(d::IdDict{K,V}, i) where {K, V} =
+    (Pair{K,V}(d.ht.ht[i+1], d.ht.ht[i+2]), _oidd_nextind(d.ht.ht, i+2))
 
 length(d::IdDict) = length(d.ht)
-
-get!(o::IdDict{K}, key::K, default) where {K} = (o[key] = get(o, key, default))
 
 # For some AbstractDict types, it is safe to implement filter!
 # by deleting keys during iteration.
