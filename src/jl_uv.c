@@ -129,6 +129,41 @@ static void jl_uv_flush_close_callback(uv_write_t *req, int status)
     free(req);
 }
 
+static void uv_flush_callback(uv_write_t *req, int status)
+{
+    *(int*)(req->data) = 1;
+    uv_stop(req->handle->loop);
+    free(req);
+}
+
+// Turn a normal write into a blocking write (primarly for use from C and gdb).
+// Warning: This calls uv_run, so it can have unbounded side-effects.
+// Be care where you call it from! - the libuv loop is also not reentrant.
+void jl_uv_flush(uv_stream_t *stream)
+{
+    if (stream == (void*)STDIN_FILENO ||
+        stream == (void*)STDOUT_FILENO ||
+        stream == (void*)STDERR_FILENO)
+        return;
+    if (stream->type != UV_TTY &&
+        stream->type != UV_TCP &&
+        stream->type != UV_NAMED_PIPE)
+        return;
+    while (uv_is_writable(stream) && stream->write_queue_size != 0) {
+        int fired = 0;
+	uv_buf_t buf;
+	buf.base = (char*)(&buf + 1);
+	buf.len = 0;
+        uv_write_t *write_req = (uv_write_t*)malloc(sizeof(uv_write_t));
+        write_req->data = (void*)&fired;
+        if (uv_write(write_req, stream, &buf, 1, uv_flush_callback) != 0)
+            return;
+        while (!fired) {
+            uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+        }
+    }
+}
+
 // getters and setters
 JL_DLLEXPORT void *jl_uv_process_data(uv_process_t *p) { return p->data; }
 JL_DLLEXPORT void *jl_uv_buf_base(const uv_buf_t *buf) { return buf->base; }
