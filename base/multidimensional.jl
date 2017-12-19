@@ -174,7 +174,7 @@ module IteratorsMD
 
         CartesianIndices(A::AbstractArray) -> R
 
-    As a convenience, constructing a CartesianIndices from an array makes a
+    As a convenience, constructing a `CartesianIndices` from an array makes a
     range of its indices.
 
     # Examples
@@ -383,7 +383,7 @@ module IteratorsMD
         LinearIndices(sz::Dims) -> R
         LinearIndices(istart:istop, jstart:jstop, ...) -> R
 
-    Define a mapping between cartesian indices and the corresponding linear index into a CartesianIndices
+    Define a mapping between cartesian indices and the corresponding linear index into a `CartesianIndices`.
 
     # Example
 
@@ -520,7 +520,7 @@ index_shape() = ()
 The `LogicalIndex` type is a special vector that simply contains all indices I
 where `mask[I]` is true. This specialized type does not support indexing
 directly as doing so would require O(n) lookup time. `AbstractArray{Bool}` are
-wrapped with `LogicalIndex` upon calling `to_indices`.
+wrapped with `LogicalIndex` upon calling [`to_indices`](@ref).
 """
 struct LogicalIndex{T, A<:AbstractArray{Bool}} <: AbstractVector{T}
     mask::A
@@ -774,6 +774,7 @@ Cumulative sum along the dimension `dim`. See also [`cumsum!`](@ref)
 to use a preallocated output array, both for performance and to control the precision of the
 output (e.g. to avoid overflow).
 
+# Examples
 ```jldoctest
 julia> a = [1 2 3; 4 5 6]
 2×3 Array{Int64,2}:
@@ -803,6 +804,7 @@ Cumulative sum a vector. See also [`cumsum!`](@ref)
 to use a preallocated output array, both for performance and to control the precision of the
 output (e.g. to avoid overflow).
 
+# Examples
 ```jldoctest
 julia> cumsum([1, 1, 1])
 3-element Array{Int64,1}:
@@ -840,6 +842,7 @@ Cumulative product along the dimension `dim`. See also
 [`cumprod!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow).
 
+# Examples
 ```jldoctest
 julia> a = [1 2 3; 4 5 6]
 2×3 Array{Int64,2}:
@@ -866,6 +869,7 @@ Cumulative product of a vector. See also
 [`cumprod!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow).
 
+# Examples
 ```jldoctest
 julia> cumprod(fill(1//2, 3))
 3-element Array{Rational{Int64},1}:
@@ -907,6 +911,7 @@ to control the precision of the output (e.g. to avoid overflow). For common oper
 there are specialized variants of `accumulate`, see:
 [`cumsum`](@ref), [`cumprod`](@ref)
 
+# Examples
 ```jldoctest
 julia> accumulate(+, fill(1, 3, 3), 1)
 3×3 Array{Int64,2}:
@@ -935,6 +940,7 @@ to control the precision of the output (e.g. to avoid overflow). For common oper
 there are specialized variants of `accumulate`, see:
 [`cumsum`](@ref), [`cumprod`](@ref)
 
+# Examples
 ```jldoctest
 julia> accumulate(+, [1,2,3])
 3-element Array{Int64,1}:
@@ -956,6 +962,27 @@ accumulate(op, x::AbstractVector) = accumulate(op, x, 1)
 
 Cumulative operation `op` on `A` along the dimension `dim`, storing the result in `B`.
 See also [`accumulate`](@ref).
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4];
+
+julia> B = [0 0; 0 0];
+
+julia> accumulate!(-, B, A, 1);
+
+julia> B
+2×2 Array{Int64,2}:
+  1   2
+ -2  -2
+
+julia> accumulate!(-, B, A, 2);
+
+julia> B
+2×2 Array{Int64,2}:
+ 1  -1
+ 3  -1
+```
 """
 function accumulate!(op, B, A, dim::Integer)
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
@@ -988,6 +1015,25 @@ end
 
 Cumulative operation `op` on a vector `x`, storing the result in `y`.
 See also [`accumulate`](@ref).
+
+# Examples
+``jldoctest
+julia> x = SparseVector(7, [1, 3, 5], [2., 4., 5.]);
+
+julia> y = zeros(7);
+
+julia> accumulate!(+, y, x);
+
+julia> y
+7-element Array{Float64,1}:
+  2.0
+  2.0
+  6.0
+  6.0
+ 11.0
+ 11.0
+ 11.0
+```
 """
 function accumulate!(op::Op, y, x::AbstractVector) where Op
     isempty(x) && return y
@@ -1101,9 +1147,29 @@ end
 """
     copyto!(dest::AbstractArray, src) -> dest
 
+
 Copy all elements from collection `src` to array `dest`, whose length must be greater than
 or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
 the other elements are left untouched.
+
+# Examples
+```jldoctest
+julia> x = [1., 0., 3., 0., 5.];
+
+julia> y = zeros(7);
+
+julia> copyto!(y, x);
+
+julia> y
+7-element Array{Float64,1}:
+ 1.0
+ 0.0
+ 3.0
+ 0.0
+ 5.0
+ 0.0
+ 0.0
+```
 """
 copyto!(dest, src)
 
