@@ -796,7 +796,7 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
             for k = m:-1:1 # Trapezoid to triangular by elementary operation
                 x = view(R, k, [k; m + 1:n])
                 τk = reflector!(x)
-                τ[k] = τk'
+                τ[k] = adjoint(τk)
                 for i = 1:k - 1
                     vRi = R[i,k]
                     for j = m + 1:n

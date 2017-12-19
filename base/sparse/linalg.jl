@@ -580,7 +580,7 @@ function cond(A::SparseMatrixCSC, p::Real=2)
         normA = norm(A, 1)
         return normA * normAinv
     elseif p == Inf
-        normAinv = normestinv(A')
+        normAinv = normestinv(adjoint(A))
         normA = norm(A, Inf)
         return normA * normAinv
     elseif p == 2

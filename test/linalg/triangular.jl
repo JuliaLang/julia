@@ -136,14 +136,14 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test transpose(A1) == transpose(Matrix(A1))
             @test transpose(viewA1) == transpose(Matrix(viewA1))
             # adjoint
-            @test A1' == Matrix(A1)'
-            @test viewA1' == Matrix(viewA1)'
+            @test adjoint(A1) == adjoint(Matrix(A1))
+            @test adjoint(viewA1) == adjoint(Matrix(viewA1))
             # transpose!
             @test transpose!(copy(A1)) == transpose(A1)
             @test transpose!(t1(view(copy(A1).data, vrange, vrange))) == transpose(viewA1)
             # adjoint!
-            @test adjoint!(copy(A1)) == A1'
-            @test adjoint!(t1(view(copy(A1).data, vrange, vrange))) == viewA1'
+            @test adjoint!(copy(A1)) == adjoint(A1)
+            @test adjoint!(t1(view(copy(A1).data, vrange, vrange))) == adjoint(viewA1)
         end
 
         # diag

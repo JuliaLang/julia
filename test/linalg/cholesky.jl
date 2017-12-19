@@ -219,7 +219,7 @@ end
     for uplo in (:U, :L)
         AcA = A'A
         BcB = AcA + v*v'
-        BcB = (BcB + BcB')/2
+        BcB = (BcB + adjoint(BcB))/2
         F = cholfact(Hermitian(AcA, uplo))
         G = cholfact(Hermitian(BcB, uplo))
         @test LinAlg.lowrankupdate(F, v)[uplo] ≈ G[uplo]

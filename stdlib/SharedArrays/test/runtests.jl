@@ -212,7 +212,7 @@ d[5,1:2:4,8] = 19
 
 AA = rand(4,2)
 A = @inferred(convert(SharedArray, AA))
-B = @inferred(convert(SharedArray, AA'))
+B = @inferred(convert(SharedArray, adjoint(AA)))
 @test B*A == adjoint(AA)*AA
 
 d=SharedArray{Int64,2}((10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])

@@ -418,7 +418,7 @@ function cov2cor!(C::AbstractMatrix{T}, xsd::AbstractArray) where T
     size(C) == (nx, nx) || throw(DimensionMismatch("inconsistent dimensions"))
     for j = 1:nx
         for i = 1:j-1
-            C[i,j] = C[j,i]'
+            C[i,j] = adjoint(C[j,i])
         end
         C[j,j] = oneunit(T)
         for i = j+1:nx

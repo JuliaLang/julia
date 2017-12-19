@@ -590,13 +590,13 @@ function eigvecs(A::UnitUpperTriangular{<:BlasFloat,<:StridedMatrix})
     LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data))
 end
 function eigvecs(A::LowerTriangular{<:BlasFloat,<:StridedMatrix})
-    LAPACK.trevc!('L', 'A', BlasInt[], tril!(A.data)')
+    LAPACK.trevc!('L', 'A', BlasInt[], adjoint(tril!(A.data)))
 end
 function eigvecs(A::UnitLowerTriangular{<:BlasFloat,<:StridedMatrix})
     for i = 1:size(A, 1)
         A.data[i,i] = 1
     end
-    LAPACK.trevc!('L', 'A', BlasInt[], tril!(A.data)')
+    LAPACK.trevc!('L', 'A', BlasInt[], adjoint(tril!(A.data)))
 end
 
 ####################

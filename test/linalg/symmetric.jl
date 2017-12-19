@@ -11,15 +11,15 @@ end
 
 @testset "Hermitian matrix exponential/log" begin
     A1 = randn(4,4) + im*randn(4,4)
-    A2 = A1 + A1'
+    A2 = A1 + adjoint(A1)
     @test exp(A2) ≈ exp(Hermitian(A2))
     @test log(A2) ≈ log(Hermitian(A2))
-    A3 = A1 * A1' # posdef
+    A3 = A1 * adjoint(A1) # posdef
     @test exp(A3) ≈ exp(Hermitian(A3))
     @test log(A3) ≈ log(Hermitian(A3))
 
     A1 = randn(4,4)
-    A3 = A1 * A1'
+    A3 = A1 * adjoint(A1)
     A4 = A1 + transpose(A1)
     @test exp(A4) ≈ exp(Symmetric(A4))
     @test log(A3) ≈ log(Symmetric(A3))
@@ -121,7 +121,7 @@ end
                 elseif eltya <: Complex
                     # test that zero imaginary component is
                     # handled properly
-                    @test ishermitian(Symmetric(b + b'))
+                    @test ishermitian(Symmetric(b + adjoint(b)))
                 end
             end
 
@@ -255,7 +255,7 @@ end
                     let A = a[:,1:5]*a[:,1:5]'
                         # Make sure A is Hermitian even in the presence of rounding error
                         # xianyi/OpenBLAS#729
-                        A = (A' + A) / 2
+                        A = (adjoint(A) + A) / 2
                         @test rank(A) == rank(Hermitian(A))
                     end
                 end
@@ -383,7 +383,7 @@ end
     @test conj(c) == conj(Array(c))
     cc = copy(c)
     @test conj!(c) == conj(Array(cc))
-    c = Hermitian(b + b')
+    c = Hermitian(b + adjoint(b))
     @test conj(c) == conj(Array(c))
     cc = copy(c)
     @test conj!(c) == conj(Array(cc))

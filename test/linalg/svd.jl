@@ -46,7 +46,7 @@ a2img  = randn(n,n)/2
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     aa2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
-    asym = aa'+aa                  # symmetric indefinite
+    asym = adjoint(aa)+aa                  # symmetric indefinite
     apd  = aa'*aa                 # symmetric positive-definite
     for (a, a2) in ((aa, aa2), (view(aa, 1:n, 1:n), view(aa2, 1:n, 1:n)))
         ε = εa = eps(abs(float(one(eltya))))
@@ -56,7 +56,7 @@ a2img  = randn(n,n)/2
             @test usv[:S] === svdvals(usv)
             @test usv[:U] * (Diagonal(usv[:S]) * usv[:Vt]) ≈ a
             @test convert(Array, usv) ≈ a
-            @test usv[:Vt]' ≈ usv[:V]
+            @test adjoint(usv[:Vt]) ≈ usv[:V]
             @test_throws KeyError usv[:Z]
             b = rand(eltya,n)
             @test usv\b ≈ a\b
@@ -73,7 +73,7 @@ a2img  = randn(n,n)/2
             gsvd = svdfact(a,a_svd)
             @test gsvd[:U]*gsvd[:D1]*gsvd[:R]*gsvd[:Q]' ≈ a
             @test gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' ≈ a_svd
-            @test usv[:Vt]' ≈ usv[:V]
+            @test adjoint(usv[:Vt]) ≈ usv[:V]
             @test_throws KeyError usv[:Z]
             @test_throws KeyError gsvd[:Z]
             @test gsvd[:vals] ≈ svdvals(a,a_svd)

@@ -141,7 +141,7 @@ srand(100)
 
             if elty <: Complex
                 A = rand(elty,n,n)
-                A = A + A'
+                A = A + adjoint(A)
                 α = real(α)
                 @test triu(BLAS.her!('U',α,x,copy(A))) ≈ triu(A + α*x*x')
                 @test_throws DimensionMismatch BLAS.her!('U',α,ones(elty,n+1),copy(A))
@@ -278,7 +278,7 @@ srand(100)
         @test_throws DimensionMismatch BLAS.gemm!('N','N', one(elty), I43, I4, elm1, I4)
         @test_throws DimensionMismatch BLAS.gemm!('T','N', one(elty), I43, I4, elm1, I43)
         @test_throws DimensionMismatch BLAS.gemm!('N','T', one(elty), I43, I43, elm1, I43)
-        @test_throws DimensionMismatch BLAS.gemm!('T','T', one(elty), I43, I43, elm1, I43')
+        @test_throws DimensionMismatch BLAS.gemm!('T','T', one(elty), I43, I43, elm1, adjoint(I43))
     end
     @testset "gemm compared to (sy)(he)rk" begin
         if eltype(elm1) <: Complex

@@ -471,7 +471,7 @@ function svd(D::Diagonal{<:Number})
 end
 function svdfact(D::Diagonal)
     U, s, V = svd(D)
-    SVD(U, s, V')
+    SVD(U, s, adjoint(V))
 end
 
 # dismabiguation methods: * of Diagonal and Adj/Trans AbsVec

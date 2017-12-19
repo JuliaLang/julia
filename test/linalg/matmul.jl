@@ -179,7 +179,7 @@ end
     res = Float64[135228751 9979252 -115270247; 9979252 10481254 10983256; -115270247 10983256 137236759]
     for A in (copy(AA), view(AA, 1:501, 1:3))
         @test *(Transpose(A), A) == res
-        @test *(A', Transpose(A')) == res
+        @test *(Adjoint(A), Transpose(adjoint(A))) == res
     end
     cutoff = 501
     A = reshape(1:6*cutoff,2*cutoff,3).-(6*cutoff)/2

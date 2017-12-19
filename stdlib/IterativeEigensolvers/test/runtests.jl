@@ -23,11 +23,11 @@ using Test
         end
         a_evs = eigvals(Array(a))
         a     = convert(SparseMatrixCSC{elty}, a)
-        asym  = a' + a                  # symmetric indefinite
+        asym  = adjoint(a) + a                  # symmetric indefinite
         apd   = a'*a                    # symmetric positive-definite
 
         b     = convert(SparseMatrixCSC{elty}, b)
-        bsym  = b' + b
+        bsym  = adjoint(b) + b
         bpd   = b'*b
 
         (d,v) = eigs(a, nev=3)
@@ -167,7 +167,7 @@ let
     v = real(v)
     # @test vecnorm(v-v')/2 ≈ 0. # it should be Hermitian
     # Since this fails sometimes (numerical precision error),this test is commented out
-    v = (v+v')/2
+    v = (v+adjoint(v))/2
     @test isposdef(v)
 
     # Repeat with starting vector
