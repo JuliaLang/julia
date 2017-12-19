@@ -5765,6 +5765,21 @@ static std::unique_ptr<Module> emit_function(
             handle_label(lname, true);
             continue;
         }
+        if (jl_is_detachnode(stmt)) {
+            // CreateDetach(BasicBlock *Detached, BasicBlock *Continue,
+            //              Value *SyncRegion
+            // IIUC:
+            // Detached -> should point to the BB that contains the parallel region
+            // Continue -> Should point to the loop latch, e.g. the reattach? or post the reattach
+            continue;
+        }
+        if (jl_is_reattachnode(stmt)) {
+            // CreateReattach(BasicBlock *DetachContinue, Value *SyncRegion)
+            continue;
+        }
+        if (jl_is_syncnode(stmt)) {
+            // CreateSync(BasicBlock *Continue, Value *SyncRegion)
+        }
         if (expr && expr->head == goto_ifnot_sym) {
             jl_value_t **args = (jl_value_t**)jl_array_data(expr->args);
             jl_value_t *cond = args[0];
