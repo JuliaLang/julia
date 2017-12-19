@@ -178,6 +178,7 @@ function deps_graph(env::EnvCache, uuid_to_name::Dict{UUID,String}, reqs::Requir
     end
 
     for uuid in uuids
+        uuid_to_name[uuid] = registered_name(env, uuid)
         info = manifest_info(env, uuid)
         info ≡ nothing && continue
         uuid_to_name[UUID(info["uuid"])] = info["name"]
