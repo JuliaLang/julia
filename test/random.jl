@@ -38,7 +38,7 @@ let A = zeros(2, 2)
 end
 let A = zeros(2, 2)
     @test_throws ArgumentError rand!(MersenneTwister(0), A, 5)
-    @test rand(MersenneTwister(0), Int64, 1) == [5986602421100169002]
+    @test rand(MersenneTwister(0), Int64, 1) == [2118291759721269919]
 end
 let A = zeros(Int64, 2, 2)
     rand!(MersenneTwister(0), A)
@@ -278,10 +278,10 @@ let mt = MersenneTwister(0)
         B = Vector{T}(uninitialized, 31)
         rand!(mt, A)
         rand!(mt, B)
-        @test A[end] == Any[21, 0x4e, -3158, 0x0ded, 2132370312, 0x5e76d222, 1701112237820550475, 0xde7c8e58fb113739,
-                            -17260403799139981754163727590537874047, Float16(0.90234), 0.0909704f0][i]
-        @test B[end] == Any[94, 0xb8, 3111, 0xefa4, 411531475, 0xd8089c1d, -7344871485543005232, 0xedb4b5c61c037a43,
-                            -118178167582054157562031602894265066400, Float16(0.91211), 0.2516626f0][i]
+        @test A[end] == Any[21, 0x4e, -3158, 0x0ded, 2132370312, 0x5e76d222, 1701112237820550475, 0x552ac662d46426bf,
+                            -48946429529471164341432530784191877404, Float16(0.99805), 0.845204f0][i]
+        @test B[end] == Any[94, 0x14, 22684, 0x0278, -862240437, 0xc425026c, -7329373301769527751, 0x8a40806d8107ce23,
+                            37650272825719887492093881479739648820, Float16(0.14648), 0.5025569f0][i]
     end
 
     srand(mt, 0)
@@ -290,7 +290,7 @@ let mt = MersenneTwister(0)
     @test rand!(mt, AF64)[end] == 0.6492481059865669
     resize!(AF64, 2*length(mt.vals))
     @test invoke(rand!, Tuple{MersenneTwister,AbstractArray{Float64},Base.Random.SamplerTrivial{Base.Random.CloseOpen_64}},
-                 mt, AF64, Base.Random.SamplerTrivial(Base.Random.CloseOpen()))[end]  == 0.432757268470779
+                 mt, AF64, Base.Random.SamplerTrivial(Base.Random.CloseOpen()))[end]  == 0.1142787906708973
 end
 
 # Issue #9037
@@ -313,7 +313,7 @@ let mt = MersenneTwister(0)
         srand(mt, 0)
         rand(mt) # this is to fill mt.vals, cf. #9040
         rand!(mt, A) # must not segfault even if Int(pointer(A)) % 16 != 0
-        @test A[end-4:end] == [0.49508297796349776,0.3408340446375888,0.3211229457075784,0.9103565379264364,0.16456579813368521]
+        @test A[end-4:end] == [0.3371041633752143, 0.41147647589610803, 0.6063082992397912, 0.9103565379264364, 0.16456579813368521]
     end
 end
 
