@@ -3387,6 +3387,10 @@ end
 @deprecate indices(a) axes(a)
 @deprecate indices(a, d) axes(a, d)
 
+# PR #25046
+export workspace
+workspace() = error("workspace() is discontinued, check out Revise.jl for an alternative workflow")
+
 # Issue #12902
 @deprecate parentindexes parentindices
 
