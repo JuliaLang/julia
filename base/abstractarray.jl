@@ -1990,15 +1990,16 @@ function hash(a::AbstractArray{T}, h::UInt) where T
 
     state = start(a)
     done(a, state) && return h
-    x1, state = next(a, state)
-    done(a, state) && return hash(x1, h)
+    x2, state = next(a, state)
+    done(a, state) && return hash(x2, h)
 
     # Check whether the array is equal to a range, and hash the elements
     # at the beginning of the array as such as long as they match this assumption
     # This needs to be done even for non-RangeStepRegular types since they may still be equal
     # to RangeStepRegular values (e.g. 1.0:3.0 == 1:3)
     if isa(a, AbstractVector) && (!isconcrete(T) || method_exists(-, Tuple{T, T}))
-        x2, newstate = next(a, state)
+        x1 = x2
+        x2, state = next(a, state)
         if length(a) == 2
             h = hash(x1, h)
             return hash(x2, h)
@@ -2010,32 +2011,28 @@ function hash(a::AbstractArray{T}, h::UInt) where T
         local step
 
         # Try to compute the step between two first elements
+        n = 2
+        lastx = x1
+        x1 = x2
         if isconcrete(T)
             # If overflow happens with entries of the same type, a cannot be equal
             # to a range with more than two elements because more extreme values
-            # cannot be represented.
-            # If overflow happens without raising an exception, we can use the step
-            # anyway, since it cannot be equal to the next step.
+            # cannot be represented. We must still hash the two first values as a
+            # range since that's what will happen with a wider type which doesn't overflow
             try
-                step = x2 - x1
+                step = x1 - lastx
             catch err
                 isa(err, OverflowError) || rethrow(err)
-                @goto nonrange
+                @goto hashrange
             end
+            # If true, overflow happened
+            sign(step) == cmp(x1, lastx) || @goto hashrange
         else
-            # hash_sub() ensures no overflow can happen.
-            # Overflow is only a problem if entries are of different types,
-            # since in that case the array could be equal to a range even in case of overflow.
-            step = hash_sub(x2, x1)
+            # hash_sub() ensures no overflow can happen
+            step = hash_sub(x1, lastx)
         end
 
-        # Ranges cannot have zero step
-        iszero(step) && @goto nonrange
-
         # Check whether all remaining steps are equal to the first one
-        n = 2
-        state = newstate
-        x1 = x2
         while !done(a, state)
             laststep = step
             x2, newstate = next(a, state)
@@ -2046,30 +2043,33 @@ function hash(a::AbstractArray{T}, h::UInt) where T
                     isa(err, OverflowError) || rethrow(err)
                     break
                 end
+                sign(step) == cmp(x2, x1) || break
             else
                 step = hash_sub(x2, x1)
             end
+            # Implies breaking in first loop if the step is 0
             if !isequal(step, laststep)
-                # Need to handle last element which is not part of a range
                 break
             end
-            n += 1
             state = newstate
             x1 = x2
+            n += 1
         end
 
-        # Hash elements that are part of a range as a range
-        # Leave others to the fallback below
+        @label hashrange
+
+        # Hash at least two elements as a range
         h = hash(first(a), h)
         h += hashr_seed
         h = hash(n, h)
         h = hash(x1, h)
+        x2 = x1
     end
 
     @label nonrange
 
     # Hash elements which do not correspond to a range (if any)
-    x2 = x1
+    x1 = x2
     while !done(a, state)
         x1 = x2
         x2, state = next(a, state)

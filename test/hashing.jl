@@ -97,7 +97,7 @@ vals = Any[
     [2, 1], [3, 2, 1], [4, 3, 2, 1], [5, 4, 3, 2, 1], [5, 4, 3, 2, 1, 0, -1],
     # test vectors starting with ranges which trigger overflow with Int8
     [124, 125, 126, 127], [124, 125, 126, 127, -128], [-128, 127, -128],
-    [2^53, 2^53+1, 2^53+2], Float64[2^53, 2^53+1, 2^53+2],
+    [2^53, 2^53+2, 2^53+4],
     # test vectors including ranges
     [2, 1, 2, 3], [2, 3, 2, 1], [2, 1, 2, 3, 2], [2, 3, 2, 1, 2],
     # test various sparsity patterns
@@ -124,7 +124,9 @@ for a in vals
     @test hash(sparse(a)) == hash(b)
     if !any(x -> isequal(x, -0.0), a)
         @test hash(convert(Array{Int}, a)) == hash(b)
-        @test hash(convert(Array{Int8}, a)) == hash(b)
+        if all(x -> typemin(Int8) <= x <= typemax(Int8), a)
+            @test hash(convert(Array{Int8}, a)) == hash(b)
+        end
     end
 end
 
