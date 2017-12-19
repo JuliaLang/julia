@@ -1,26 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# shims to maintain existence of names in Base module in A_mul_B deprecation process
-function Ac_ldiv_Bt end
-function At_ldiv_Bt end
-function A_ldiv_Bt end
-function At_ldiv_B end
-function Ac_ldiv_Bc end
-function A_ldiv_Bc end
-function Ac_ldiv_B end
-function At_rdiv_Bt end
-function A_rdiv_Bt end
-function At_rdiv_B end
-function Ac_rdiv_Bc end
-function A_rdiv_Bc end
-function Ac_rdiv_B end
-function At_mul_Bt end
-function A_mul_Bt end
-function At_mul_B end
-function Ac_mul_Bc end
-function A_mul_Bc end
-function Ac_mul_B end
-
 """
 Linear algebra module. Provides array arithmetic,
 matrix factorizations and other linear algebra related
@@ -29,8 +8,6 @@ functionality.
 module LinAlg
 
 import Base: \, /, *, ^, +, -, ==
-import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac_mul_B,
-    Ac_ldiv_B, Ac_ldiv_Bc, At_mul_Bt, A_rdiv_Bt, At_mul_B
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
     asin, asinh, atan, atanh, axes, big, broadcast, ceil, conj, convert, copy, copyto!, cos,
     cosh, cot, coth, csc, csch, eltype, exp, findmax, findmin, fill!, floor, getindex, hcat,
@@ -171,34 +148,6 @@ export
 # Operators
     \,
     /,
-    A_ldiv_B!,
-    A_ldiv_Bc,
-    A_ldiv_Bt,
-    A_mul_B!,
-    A_mul_Bc,
-    A_mul_Bc!,
-    A_mul_Bt,
-    A_mul_Bt!,
-    A_rdiv_Bc,
-    A_rdiv_Bt,
-    Ac_ldiv_B,
-    Ac_ldiv_Bc,
-    Ac_ldiv_B!,
-    Ac_mul_B,
-    Ac_mul_B!,
-    Ac_mul_Bc,
-    Ac_mul_Bc!,
-    Ac_rdiv_B,
-    Ac_rdiv_Bc,
-    At_ldiv_B,
-    At_ldiv_Bt,
-    At_ldiv_B!,
-    At_mul_B,
-    At_mul_B!,
-    At_mul_Bt,
-    At_mul_Bt!,
-    At_rdiv_B,
-    At_rdiv_Bt,
 
 # Constants
     I
@@ -261,16 +210,37 @@ function char_uplo(uplo::Symbol)
     end
 end
 
-# shims to maintain existence of names in LinAlg module in A_mul_B deprecation process
-function A_mul_B! end
-function Ac_mul_B! end
-function Ac_mul_B! end
-function At_mul_B! end
-function A_ldiv_B! end
-function At_ldiv_B! end
-function Ac_ldiv_B! end
-function A_rdiv_B! end
-function A_rdiv_Bc! end
+"""
+    ldiv!([Y,] A, B) -> Y
+
+Compute `A \\ B` in-place and store the result in `Y`, returning the result.
+If only two arguments are passed, then `ldiv!(A, B)` overwrites `B` with
+the result.
+
+The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
+factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
+The reason for this is that factorization itself is both expensive and typically allocates memory
+(although it can also be done in-place via, e.g., [`lufact!`](@ref)),
+and performance-critical situations requiring `ldiv!` usually also require fine-grained
+control over the factorization of `A`.
+"""
+ldiv!(Y, A, B)
+
+"""
+    rdiv!([Y,] A, B) -> Y
+
+Compute `A / B` in-place and store the result in `Y`, returning the result.
+If only two arguments are passed, then `rdiv!(A, B)` overwrites `A` with
+the result.
+
+The argument `B` should *not* be a matrix.  Rather, instead of matrices it should be a
+factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
+The reason for this is that factorization itself is both expensive and typically allocates memory
+(although it can also be done in-place via, e.g., [`lufact!`](@ref)),
+and performance-critical situations requiring `rdiv!` usually also require fine-grained
+control over the factorization of `B`.
+"""
+rdiv!(Y, A, B)
 
 copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
 copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
