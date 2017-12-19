@@ -245,7 +245,7 @@ array with size `size(I)`. Its `i`th element is populated by `A[2, I[i], 3]`.
 
 As a special part of this syntax, the `end` keyword may be used to represent the last index of
 each dimension within the indexing brackets, as determined by the size of the innermost array
-being indexed. Indexing syntax without the `end` keyword is equivalent to a call to `getindex`:
+being indexed. Indexing syntax without the `end` keyword is equivalent to a call to [`getindex`](@ref):
 
 ```
 X = getindex(A, I_1, I_2, ..., I_n)
@@ -339,7 +339,7 @@ indices and can be converted to such by [`to_indices`](@ref):
 
 1. A scalar index. By default this includes:
     * Non-boolean integers
-    * `CartesianIndex{N}`s, which behave like an `N`-tuple of integers spanning multiple dimensions (see below for more details)
+    * [`CartesianIndex{N}`](@ref)s, which behave like an `N`-tuple of integers spanning multiple dimensions (see below for more details)
 2. An array of scalar indices. This includes:
     * Vectors and multidimensional arrays of integers
     * Empty arrays like `[]`, which select no elements
@@ -500,7 +500,7 @@ i = CartesianIndex(2, 2)
 i = CartesianIndex(3, 2)
 ```
 
-In contrast with `for i = 1:length(A)`, iterating with `eachindex` provides an efficient way to
+In contrast with `for i = 1:length(A)`, iterating with [`eachindex`](@ref) provides an efficient way to
 iterate over any array type.
 
 ### Array traits
@@ -541,8 +541,8 @@ Note that comparisons such as `==` operate on whole arrays, giving a single bool
 answer. Use dot operators like `.==` for elementwise comparisons. (For comparison
 operations like `<`, *only* the elementwise `.<` version is applicable to arrays.)
 
-Also notice the difference between `max.(a,b)`, which `broadcast`s [`max`](@ref)
-elementwise over `a` and `b`, and `maximum(a)`, which finds the largest value within
+Also notice the difference between `max.(a,b)`, which [`broadcast`](@ref)s [`max`](@ref)
+elementwise over `a` and `b`, and [`maximum(a)`](@ref), which finds the largest value within
 `a`. The same relationship holds for `min.(a,b)` and `minimum(a)`.
 
 ### Broadcasting
@@ -590,7 +590,8 @@ is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broad
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
 
 Additionally, [`broadcast`](@ref) is not limited to arrays (see the function documentation),
-it also handles tuples and treats any argument that is not an array, tuple or `Ref` (except for `Ptr`) as a "scalar".
+it also handles tuples and treats any argument that is not an array, tuple or [`Ref`](@ref)
+(except for [`Ptr`](@ref)) as a "scalar".
 
 ```jldoctest
 julia> convert.(Float32, [1, 2])
