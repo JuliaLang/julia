@@ -122,32 +122,30 @@ Stacktrace:
     throw(MethodError(isvalid, Tuple{typeof(s),Int})) : isvalid(s, Int(i))
 
 """
-    next(s::AbstractString, i::Integer) -> Tuple{Char, Int}
+    getindex(s::AbstractString, i::Integer) -> Char
 
-Return a tuple of the character in `s` at index `i` with the index of the start
-of the following character in `s`. This is the key method that allows strings to
-be iterated, yielding a sequences of characters. If `i` is out of bounds in `s`
-then a bounds error is raised. The `next` function, as part of the iteration
-protocoal may assume that `i` is the start of a character in `s`.
+Return the character in `s` at index `i`. This is the key method that allows
+character values to be extracted from strings. If `i` is out of bounds in `s`
+then a bounds error is raised. If `i` is the index of a code unit that starts
+the encoding of a character, then a `StringIndexError` is raised.
 
-See also: [`getindex`](@ref), [`start`](@ref), [`done`](@ref),
-[`checkbounds`](@ref)
+See also: [`checkbounds`](@ref), [`isvalid`](@ref)
 """
-@propagate_inbounds next(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(next, Tuple{typeof(s),Int})) : next(s, Int(i))
+@propagate_inbounds getindex(s::AbstractString, i::Integer) = typeof(i) === Int ?
+    throw(MethodError(getindex, Tuple{typeof(s),Int})) : getindex(s, Int(i))
+
+## default iteration definitions ##
+
+# can override these to not use the index as the state
+start(s::AbstractString) = 1
+done(s::AbstractString, i::Integer) = i > ncodeunits(s)
+@propagate_inbounds next(s::AbstractString, i::Integer) = (getindex(s, i), nextind(s, i))
 
 ## basic generic definitions ##
 
-start(s::AbstractString) = 1
-done(s::AbstractString, i::Integer) = i > ncodeunits(s)
 eltype(::Type{<:AbstractString}) = Char
 sizeof(s::AbstractString) = ncodeunits(s) * sizeof(codeunit(s))
 endof(s::AbstractString) = thisind(s, ncodeunits(s))
-
-function getindex(s::AbstractString, i::Integer)
-    @boundscheck checkbounds(s, i)
-    @inbounds return isvalid(s, i) ? next(s, i)[1] : string_index_err(s, i)
-end
 
 getindex(s::AbstractString, i::Colon) = s
 # TODO: handle other ranges with stride ±1 specially?

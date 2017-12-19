@@ -1423,7 +1423,7 @@ Base.ncodeunits(s::GenericString) = ncodeunits(s.string)
 Base.codeunit(s::GenericString) = codeunit(s.string)
 Base.codeunit(s::GenericString, i::Integer) = codeunit(s.string, i)
 Base.isvalid(s::GenericString, i::Integer) = isvalid(s.string, i)
-Base.next(s::GenericString, i::Integer) = next(s.string, i)
+Base.getindex(s::GenericString, i::Integer) = getindex(s.string, i)
 Base.reverse(s::GenericString) = GenericString(reverse(s.string))
 Base.reverse(s::SubString{GenericString}) =
     GenericString(typeof(s.string)(reverse(String(s))))
