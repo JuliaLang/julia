@@ -2,7 +2,7 @@
 
 module CHOLMOD
 
-import Base: (*), convert, copy, eltype, getindex, show, size,
+import Base: (*), convert, copy, eltype, getindex, getproperty, show, size,
              IndexStyle, IndexLinear, IndexCartesian, adjoint
 
 import Base.LinAlg: (\),
@@ -196,13 +196,13 @@ struct C_Dense{T<:VTypes} <: SuiteSparseStruct
 end
 
 mutable struct Dense{T<:VTypes} <: DenseMatrix{T}
-    p::Ptr{C_Dense{T}}
-    function Dense{Tv}(p::Ptr{C_Dense{Tv}}) where Tv<:VTypes
-        if p == C_NULL
+    ptr::Ptr{C_Dense{T}}
+    function Dense{Tv}(ptr::Ptr{C_Dense{Tv}}) where Tv<:VTypes
+        if ptr == C_NULL
             throw(ArgumentError("dense matrix construction failed for " *
                 "unknown reasons. Please submit a bug report."))
         end
-        A = new(p)
+        A = new(ptr)
         finalizer(free!, A)
         return A
     end
@@ -248,20 +248,20 @@ struct C_SparseVoid <: SuiteSparseStruct
 end
 
 mutable struct Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
-    p::Ptr{C_Sparse{Tv}}
-    function Sparse{Tv}(p::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
-        if p == C_NULL
+    ptr::Ptr{C_Sparse{Tv}}
+    function Sparse{Tv}(ptr::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
+        if ptr == C_NULL
             throw(ArgumentError("sparse matrix construction failed for " *
                 "unknown reasons. Please submit a bug report."))
         end
-        A = new(p)
+        A = new(ptr)
         finalizer(free!, A)
         return A
     end
 end
 Sparse(p::Ptr{C_Sparse{Tv}}) where {Tv<:VTypes} = Sparse{Tv}(p)
 
-Base.unsafe_convert(::Type{Ptr{Tv}}, A::Sparse{Tv}) where {Tv} = A.p
+Base.unsafe_convert(::Type{Ptr{Tv}}, A::Sparse{Tv}) where {Tv} = getfield(A, :ptr)
 
 # Factor
 
@@ -331,31 +331,32 @@ else
 end
 
 mutable struct Factor{Tv} <: Factorization{Tv}
-    p::Ptr{C_Factor{Tv}}
-    function Factor{Tv}(p::Ptr{C_Factor{Tv}}, register_finalizer = true) where Tv
-        if p == C_NULL
+    ptr::Ptr{C_Factor{Tv}}
+    function Factor{Tv}(ptr::Ptr{C_Factor{Tv}}, register_finalizer = true) where Tv
+        if ptr == C_NULL
             throw(ArgumentError("factorization construction failed for " *
                 "unknown reasons. Please submit a bug report."))
         end
-        F = new(p)
+        F = new(ptr)
         if register_finalizer
             finalizer(free!, F)
         end
         return F
     end
 end
-Factor(p::Ptr{C_Factor{Tv}}) where {Tv<:VTypes} = Factor{Tv}(p)
+Factor(ptr::Ptr{C_Factor{Tv}}) where {Tv<:VTypes} = Factor{Tv}(ptr)
 Factor(x::Factor) = x
 
 # All pointer loads should be checked to make sure that SuiteSparse is not called with
 # a C_NULL pointer which could cause a segfault. Pointers are set to null
 # when serialized so this can happen when mutiple processes are in use.
 function Base.unsafe_convert(::Type{Ptr{T}}, x::Union{Dense,Sparse,Factor}) where T<:SuiteSparseStruct
-    if x.p == C_NULL
+    xp = getfield(x, :ptr)
+    if xp == C_NULL
         throw(ArgumentError("pointer to the $T object is null. This can " *
             "happen if the object has been serialized."))
     else
-        return x.p
+        return xp
     end
 end
 Base.pointer(x::Dense{Tv}) where {Tv}  = Base.unsafe_convert(Ptr{C_Dense{Tv}}, x)
@@ -464,7 +465,7 @@ end
 function check_dense(A::Dense{T}) where T<:VTypes
     ccall((:cholmod_l_check_dense, :libcholmod), Cint,
           (Ptr{C_Dense{T}}, Ptr{UInt8}),
-          A.p, common_struct) != 0
+          pointer(A), common_struct) != 0
 end
 
 # Non-Dense wrappers
@@ -822,7 +823,7 @@ get_perm(FC::FactorComponent) = get_perm(Factor(FC))
 # Convertion/construction
 function Dense{T}(A::StridedVecOrMat) where T<:VTypes
     d = allocate_dense(size(A, 1), size(A, 2), stride(A, 2), T)
-    s = unsafe_load(d.p)
+    s = unsafe_load(pointer(d))
     for i in eachindex(A)
         unsafe_store!(s.x, A[i], i)
     end
@@ -859,7 +860,7 @@ function Sparse(m::Integer, n::Integer,
     end
 
     o = allocate_sparse(m, n, colptr0[n + 1], iss, true, stype, Tv)
-    s = unsafe_load(o.p)
+    s = unsafe_load(pointer(o))
 
     unsafe_copyto!(s.p, pointer(colptr0), n + 1)
     unsafe_copyto!(s.i, pointer(rowval0), colptr0[n + 1])
@@ -899,7 +900,7 @@ function Sparse(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where T
     end
 
     o = allocate_sparse(A.m, A.n, nnz(A), true, true, stype, Tv)
-    s = unsafe_load(o.p)
+    s = unsafe_load(pointer(o))
     for i = 1:(A.n + 1)
         unsafe_store!(s.p, A.colptr[i] - 1, i)
     end
@@ -937,7 +938,7 @@ function Sparse(AH::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) where {T
     # Here we allocate a Symmetric/Hermitian CHOLMOD.Sparse matrix so we only need to copy
     # a single triangle of AH
     o = allocate_sparse(A.m, A.n, length(A.nzval), true, true, AH.uplo == 'L' ? -1 : 1, Tv)
-    s = unsafe_load(o.p)
+    s = unsafe_load(pointer(o))
     for i = 1:length(A.colptr)
         unsafe_store!(s.p, A.colptr[i] - 1, i)
     end
@@ -1024,7 +1025,7 @@ end
 
 ## convertion back to base Julia types
 function Matrix{T}(D::Dense{T}) where T
-    s = unsafe_load(D.p)
+    s = unsafe_load(pointer(D))
     a = Matrix{T}(uninitialized, s.nrow, s.ncol)
     copyto!(a, D)
 end
@@ -1036,7 +1037,7 @@ Base.copyto!(dest::AbstractArray{T,2}, D::Dense{T}) where {T<:VTypes} = _copy!(d
 Base.copyto!(dest::AbstractArray, D::Dense) = _copy!(dest, D)
 
 function _copy!(dest::AbstractArray, D::Dense)
-    s = unsafe_load(D.p)
+    s = unsafe_load(pointer(D))
     n = s.nrow*s.ncol
     n <= length(dest) || throw(BoundsError(dest, n))
     if s.d == s.nrow && isa(dest, Array)
@@ -1061,7 +1062,7 @@ end
 Vector(D::Dense{T}) where {T} = Vector{T}(D)
 
 function SparseMatrixCSC{Tv,SuiteSparse_long}(A::Sparse{Tv}) where Tv
-    s = unsafe_load(A.p)
+    s = unsafe_load(pointer(A))
     if s.stype != 0
         throw(ArgumentError("matrix has stype != 0. Convert to matrix " *
             "with stype == 0 before converting to SparseMatrixCSC"))
@@ -1079,7 +1080,7 @@ function SparseMatrixCSC{Tv,SuiteSparse_long}(A::Sparse{Tv}) where Tv
     end
 end
 function (::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}})(A::Sparse{Float64})
-    s = unsafe_load(A.p)
+    s = unsafe_load(pointer(A))
     if !issymmetric(A)
         throw(ArgumentError("matrix is not symmetric"))
     end
@@ -1096,7 +1097,7 @@ function (::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}})(
     end
 end
 function Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}(A::Sparse{Tv}) where Tv<:VTypes
-    s = unsafe_load(A.p)
+    s = unsafe_load(pointer(A))
     if !ishermitian(A)
         throw(ArgumentError("matrix is not Hermitian"))
     end
@@ -1113,14 +1114,14 @@ function Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}(A::Sparse{Tv}) where
     end
 end
 function sparse(A::Sparse{Float64}) # Notice! Cannot be type stable because of stype
-    s = unsafe_load(A.p)
+    s = unsafe_load(pointer(A))
     if s.stype == 0
         return SparseMatrixCSC{Float64,SuiteSparse_long}(A)
     end
     return Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}(A)
 end
 function sparse(A::Sparse{Complex{Float64}}) # Notice! Cannot be type stable because of stype
-    s = unsafe_load(A.p)
+    s = unsafe_load(pointer(A))
     if s.stype == 0
         return SparseMatrixCSC{Complex{Float64},SuiteSparse_long}(A)
     end
@@ -1132,7 +1133,7 @@ function sparse(F::Factor)
         L = Sparse(F)
         A = sparse(L*L')
     else
-        LD = sparse(F[:LD])
+        LD = sparse(F.LD)
         L, d = getLd!(LD)
         A = (L * Diagonal(d)) * L'
     end
@@ -1165,7 +1166,7 @@ sparse(FC::FactorComponent{Tv,:LD}) where {Tv} = sparse(Sparse(Factor(FC)))
 let offset = fieldoffset(C_Sparse{Float64}, findfirst(name -> name === :stype, fieldnames(C_Sparse{Float64})))
     global change_stype!
     function change_stype!(A::Sparse, i::Integer)
-        unsafe_store!(convert(Ptr{Cint}, A.p), i, div(offset, 4) + 1)
+        unsafe_store!(convert(Ptr{Cint}, pointer(A)), i, div(offset, 4) + 1)
         return A
     end
 end
@@ -1263,9 +1264,14 @@ function getindex(A::Sparse{T}, i0::Integer, i1::Integer) where T
     ((r1 > r2) || (unsafe_load(s.i, r1) + 1 != i0)) ? zero(T) : unsafe_load(s.x, r1)
 end
 
-function getindex(F::Factor, sym::Symbol)
-    sym == :p && return get_perm(F)
-    FactorComponent(F, sym)
+@inline function getproperty(F::Factor, sym::Symbol)
+    if sym == :p
+        return get_perm(F)
+    elseif sym == :ptr
+        return getfield(F, :ptr)
+    else
+        return FactorComponent(F, sym)
+    end
 end
 
 function getLd!(S::SparseMatrixCSC)
@@ -1300,7 +1306,7 @@ function *(A::Sparse{Tv}, adjB::Adjoint{Tv,Sparse{Tv}}) where Tv<:VRealTypes
     ## The A*A' case is handled by cholmod_aat. This routine requires
     ## A->stype == 0 (storage of upper and lower parts). If neccesary
     ## the matrix A is first converted to stype == 0
-    s = unsafe_load(A.p)
+    s = unsafe_load(pointer(A))
     if s.stype != 0
         aa1 = copy(A, 0, 1)
         return aat(aa1, SuiteSparse_long[0:s.ncol-1;], 1)
@@ -1411,13 +1417,13 @@ A fill-reducing permutation is used.
 `F = cholfact(A)` is most frequently used to solve systems of equations with `F\\b`,
 but also the methods [`diag`](@ref), [`det`](@ref), and
 [`logdet`](@ref) are defined for `F`.
-You can also extract individual factors from `F`, using `F[:L]`.
+You can also extract individual factors from `F`, using `F.L`.
 However, since pivoting is on by default, the factorization is internally
 represented as `A == P'*L*L'*P` with a permutation matrix `P`;
 using just `L` without accounting for `P` will give incorrect answers.
 To include the effects of permutation,
-it's typically preferable to extract "combined" factors like `PtL = F[:PtL]`
-(the equivalent of `P'*L`) and `LtP = F[:UP]` (the equivalent of `L'*P`).
+it's typically preferable to extract "combined" factors like `PtL = F.PtL`
+(the equivalent of `P'*L`) and `LtP = F.UP` (the equivalent of `L'*P`).
 
 Setting the optional `shift` keyword argument computes the factorization of
 `A+shift*I` instead of `A`. If the `perm` argument is nonempty,
@@ -1508,13 +1514,13 @@ A fill-reducing permutation is used. `F = ldltfact(A)` is most frequently
 used to solve systems of equations `A*x = b` with `F\\b`. The returned
 factorization object `F` also supports the methods [`diag`](@ref),
 [`det`](@ref), [`logdet`](@ref), and [`inv`](@ref).
-You can extract individual factors from `F` using `F[:L]`.
+You can extract individual factors from `F` using `F.L`.
 However, since pivoting is on by default, the factorization is internally
 represented as `A == P'*L*D*L'*P` with a permutation matrix `P`;
 using just `L` without accounting for `P` will give incorrect answers.
 To include the effects of permutation, it is typically preferable to extract
-"combined" factors like `PtL = F[:PtL]` (the equivalent of
-`P'*L`) and `LtP = F[:UP]` (the equivalent of `L'*P`).
+"combined" factors like `PtL = F.PtL` (the equivalent of
+`P'*L`) and `LtP = F.UP` (the equivalent of `L'*P`).
 The complete list of supported factors is `:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP`.
 
 Setting the optional `shift` keyword argument computes the factorization of
@@ -1789,7 +1795,7 @@ function isposdef(F::Factor)
 end
 
 function ishermitian(A::Sparse{Float64})
-    s = unsafe_load(A.p)
+    s = unsafe_load(pointer(A))
     if s.stype != 0
         return true
     else
@@ -1802,7 +1808,7 @@ function ishermitian(A::Sparse{Float64})
     end
 end
 function ishermitian(A::Sparse{Complex{Float64}})
-    s = unsafe_load(A.p)
+    s = unsafe_load(pointer(A))
     if s.stype != 0
         return true
     else

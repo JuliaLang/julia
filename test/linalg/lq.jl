@@ -38,23 +38,22 @@ rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
 
         α = rand(eltya)
         aα = fill(α,1,1)
-        @test lqfact(α)[:L]*lqfact(α)[:Q] ≈ lqfact(aα)[:L]*lqfact(aα)[:Q]
-        @test lq(α)[1]*lq(α)[2] ≈ lqfact(aα)[:L]*lqfact(aα)[:Q]
-        @test abs(lqfact(α)[:Q][1,1]) ≈ one(eltya)
+        @test lqfact(α).L*lqfact(α).Q ≈ lqfact(aα).L*lqfact(aα).Q
+        @test lq(α)[1]*lq(α)[2] ≈ lqfact(aα).L*lqfact(aα).Q
+        @test abs(lqfact(α).Q[1,1]) ≈ one(eltya)
         tab = promote_type(eltya,eltyb)
 
         for i = 1:2
             let a = i == 1 ? a : view(a, 1:n - 1, 1:n - 1), b = i == 1 ? b : view(b, 1:n - 1), n = i == 1 ? n : n - 1
                 lqa   = lqfact(a)
-                l,q   = lqa[:L], lqa[:Q]
+                l,q   = lqa.L, lqa.Q
                 qra   = qrfact(a)
                 @testset "Basic ops" begin
                     @test size(lqa,1) == size(a,1)
                     @test size(lqa,3) == 1
-                    @test size(lqa[:Q],3) == 1
-                    @test Base.LinAlg.getq(lqa) == lqa[:Q]
-                    @test_throws KeyError lqa[:Z]
-                    @test Array(adjoint(lqa)) ≈ adjoint(a)
+                    @test size(lqa.Q,3) == 1
+                    @test_throws ErrorException lqa.Z
+                    @test Array(lqa') ≈ a'
                     @test lqa * lqa' ≈ a * a'
                     @test lqa' * lqa ≈ a' * a
                     @test q*squareQ(q)' ≈ Matrix(I, n, n)
@@ -67,7 +66,7 @@ rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
                 end
                 @testset "Binary ops" begin
                     @test a*(lqa\b) ≈ b atol=3000ε
-                    @test lqa*b ≈ qra[:Q]*qra[:R]*b atol=3000ε
+                    @test lqa*b ≈ qra.Q*qra.R*b atol=3000ε
                     @test (sq = size(q.factors, 2); *(Matrix{eltyb}(I, sq, sq), Adjoint(q))*squareQ(q)) ≈ Matrix(I, n, n) atol=5000ε
                     if eltya != Int
                         @test Matrix{eltyb}(I, n, n)*q ≈ convert(AbstractMatrix{tab},q)
@@ -97,7 +96,7 @@ rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
 
         @testset "Matmul with LQ factorizations" begin
             lqa = lqfact(a[:,1:n1])
-            l,q = lqa[:L], lqa[:Q]
+            l,q = lqa.L, lqa.Q
             @test rectangularQ(q)*rectangularQ(q)' ≈ Matrix(I, n1, n1)
             @test squareQ(q)'*squareQ(q) ≈ Matrix(I, n1, n1)
             @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1),q)
@@ -148,7 +147,7 @@ end
 @testset "getindex on LQPackedQ (#23733)" begin
     local m, n
     function getqs(F::Base.LinAlg.LQ)
-        implicitQ = F[:Q]
+        implicitQ = F.Q
         sq = size(implicitQ.factors, 2)
         explicitQ = mul!(implicitQ, Matrix{eltype(implicitQ)}(I, sq, sq))
         return implicitQ, explicitQ
@@ -184,13 +183,13 @@ end
         ((3, 3), 3), # A 3-by-3 => full/square Q 3-by-3
         ((3, 4), 4), # A 3-by-4 => full/square Q 4-by-4
         ((4, 3), 3) )# A 4-by-3 => full/square Q 3-by-3
-        @test size(lqfact(randn(mA, nA))[:Q]) == (nQ, nQ)
+        @test size(lqfact(randn(mA, nA)).Q) == (nQ, nQ)
     end
 end
 
 @testset "postmultiplication with / right-application of LQPackedQ (#23779)" begin
     function getqs(F::Base.LinAlg.LQ)
-        implicitQ = F[:Q]
+        implicitQ = F.Q
         explicitQ = mul!(implicitQ, Matrix{eltype(implicitQ)}(I, size(implicitQ)...))
         return implicitQ, explicitQ
     end

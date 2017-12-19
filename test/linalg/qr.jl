@@ -39,8 +39,8 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
         @testset "QR decomposition of a Number" begin
             α = rand(eltyb)
             aα = fill(α, 1, 1)
-            @test qrfact(α)[:Q] * qrfact(α)[:R] ≈ qrfact(aα)[:Q] * qrfact(aα)[:R]
-            @test abs(qrfact(α)[:Q][1,1]) ≈ one(eltyb)
+            @test qrfact(α).Q * qrfact(α).R ≈ qrfact(aα).Q * qrfact(aα).R
+            @test abs(qrfact(α).Q[1,1]) ≈ one(eltyb)
         end
 
         for (a, b) in ((raw_a, raw_b),
@@ -49,8 +49,8 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
             @testset "QR decomposition (without pivoting)" begin
                 qra   = @inferred qrfact(a)
                 @inferred qr(a)
-                q, r  = qra[:Q], qra[:R]
-                @test_throws KeyError qra[:Z]
+                q, r  = qra.Q, qra.R
+                @test_throws ErrorException qra.Z
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
                 @test q*squareQ(q)' ≈ Matrix(I, a_1, a_1)
                 @test q'*Matrix(1.0I, a_1, a_1)' ≈ adjoint(squareQ(q))
@@ -73,8 +73,8 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
             @testset "Thin QR decomposition (without pivoting)" begin
                 qra   = @inferred qrfact(a[:, 1:n1], Val(false))
                 @inferred qr(a[:, 1:n1], Val(false))
-                q,r   = qra[:Q], qra[:R]
-                @test_throws KeyError qra[:Z]
+                q,r   = qra.Q, qra.R
+                @test_throws ErrorException qra.Z
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
                 @test q'*rectangularQ(q) ≈ Matrix(I, a_1, n1)
                 @test q*r ≈ a[:, 1:n1]
@@ -93,16 +93,16 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 @inferred qr(a, Val(true))
 
                 qrpa  = factorize(a[1:n1,:])
-                q,r = qrpa[:Q], qrpa[:R]
-                @test_throws KeyError qrpa[:Z]
-                p = qrpa[:p]
+                q,r = qrpa.Q, qrpa.R
+                @test_throws ErrorException qrpa.Z
+                p = qrpa.p
                 @test q'*squareQ(q) ≈ Matrix(I, n1, n1)
                 @test q*squareQ(q)' ≈ Matrix(I, n1, n1)
                 sq = size(q, 2);
                 @test (UpperTriangular(Matrix{eltya}(I, sq, sq))*q')*squareQ(q) ≈ Matrix(I, n1, n1)
                 @test q*r ≈ (isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:])
                 @test q*r[:,invperm(p)] ≈ a[1:n1,:]
-                @test q*r*Transpose(qrpa[:P]) ≈ a[1:n1,:]
+                @test q*r*Transpose(qrpa.P) ≈ a[1:n1,:]
                 @test a[1:n1,:]*(qrpa\b[1:n1]) ≈ b[1:n1] atol=5000ε
                 @test Array(qrpa) ≈ a[1:5,:]
                 @test_throws DimensionMismatch q*b[1:n1+1]
@@ -113,9 +113,9 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
             end
             @testset "(Automatic) Thin (pivoted) QR decomposition" begin
                 qrpa  = factorize(a[:,1:n1])
-                q,r = qrpa[:Q], qrpa[:R]
-                @test_throws KeyError qrpa[:Z]
-                p = qrpa[:p]
+                q,r = qrpa.Q, qrpa.R
+                @test_throws ErrorException qrpa.Z
+                p = qrpa.p
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
                 @test q*squareQ(q)' ≈ Matrix(I, a_1, a_1)
                 @test q*r ≈ a[:,p]
@@ -134,8 +134,8 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
             @testset "Matmul with QR factorizations" begin
                 a = raw_a
                 qrpa = factorize(a[:,1:n1])
-                q, r = qrpa[:Q], qrpa[:R]
-                @test mul!(adjoint(squareQ(q)), q) ≈ Matrix(I, n, n)
+                q, r = qrpa.Q, qrpa.R
+                @test mul!(squareQ(q)', q) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1),q)
                 @test mul!(squareQ(q), Adjoint(q)) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1), Adjoint(q))
@@ -144,8 +144,8 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 @test_throws DimensionMismatch Base.LinAlg.mul!(Adjoint(q), zeros(eltya,n1+1))
 
                 qra = qrfact(a[:,1:n1], Val(false))
-                q, r = qra[:Q], qra[:R]
-                @test mul!(adjoint(squareQ(q)), q) ≈ Matrix(I, n, n)
+                q, r = qra.Q, qra.R
+                @test mul!(squareQ(q)', q) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1),q)
                 @test mul!(squareQ(q), Adjoint(q)) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1),Adjoint(q))
@@ -167,7 +167,7 @@ end
 
 @testset "Issue 7304" begin
     A = [-√.5 -√.5; -√.5 √.5]
-    Q = rectangularQ(qrfact(A)[:Q])
+    Q = rectangularQ(qrfact(A).Q)
     @test vecnorm(A-Q) < eps()
 end
 

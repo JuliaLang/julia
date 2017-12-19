@@ -25,8 +25,8 @@ hessfact(A::StridedMatrix{<:BlasFloat}) = hessfact!(copy(A))
     hessfact(A) -> Hessenberg
 
 Compute the Hessenberg decomposition of `A` and return a `Hessenberg` object. If `F` is the
-factorization object, the unitary matrix can be accessed with `F[:Q]` and the Hessenberg
-matrix with `F[:H]`. When `Q` is extracted, the resulting type is the `HessenbergQ` object,
+factorization object, the unitary matrix can be accessed with `F.Q` and the Hessenberg
+matrix with `F.H`. When `Q` is extracted, the resulting type is the `HessenbergQ` object,
 and may be converted to a regular matrix with [`convert(Array, _)`](@ref)
  (or `Array(_)` for short).
 
@@ -40,7 +40,7 @@ julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
 
 julia> F = hessfact(A);
 
-julia> F[:Q] * F[:H] * F[:Q]'
+julia> F.Q * F.H * F.Q'
 3×3 Array{Float64,2}:
  4.0  9.0  7.0
  4.0  4.0  1.0
@@ -60,10 +60,10 @@ HessenbergQ(A::Hessenberg) = HessenbergQ(A.factors, A.τ)
 size(A::HessenbergQ, d) = size(A.factors, d)
 size(A::HessenbergQ) = size(A.factors)
 
-function getindex(A::Hessenberg, d::Symbol)
-    d == :Q && return HessenbergQ(A)
-    d == :H && return triu(A.factors, -1)
-    throw(KeyError(d))
+function getproperty(F::Hessenberg, d::Symbol)
+    d == :Q && return HessenbergQ(F)
+    d == :H && return triu(getfield(F, :factors), -1)
+    return getfield(F, d)
 end
 
 function getindex(A::HessenbergQ, i::Integer, j::Integer)
@@ -77,7 +77,7 @@ end
 ## reconstruct the original matrix
 Matrix(A::HessenbergQ{<:BlasFloat}) = LAPACK.orghr!(1, size(A.factors, 1), copy(A.factors), A.τ)
 Array(A::HessenbergQ) = Matrix(A)
-AbstractMatrix(F::Hessenberg) = (fq = Array(F[:Q]); (fq * F[:H]) * fq')
+AbstractMatrix(F::Hessenberg) = (fq = Array(F.Q); (fq * F.H) * fq')
 AbstractArray(F::Hessenberg) = AbstractMatrix(F)
 Matrix(F::Hessenberg) = Array(AbstractArray(F))
 Array(F::Hessenberg) = Matrix(F)

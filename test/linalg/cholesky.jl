@@ -11,7 +11,7 @@ function unary_ops_tests(a, ca, tol; n=size(a, 1))
     @test logdet(ca) ≈ logdet(a)
     @test logdet(ca) ≈ log(det(ca))  # logdet is less likely to overflow
     @test isposdef(ca)
-    @test_throws KeyError ca[:Z]
+    @test_throws ErrorException ca.Z
     @test size(ca) == size(a)
     @test Array(copy(ca)) ≈ a
 end
@@ -20,11 +20,11 @@ function factor_recreation_tests(a_U, a_L)
     c_U = cholfact(a_U)
     c_L = cholfact(a_L)
     cl  = chol(a_L)
-    ls = c_L[:L]
+    ls = c_L.L
     @test Array(c_U) ≈ Array(c_L) ≈ a_U
     @test ls*ls' ≈ a_U
-    @test triu(c_U.factors) ≈ c_U[:U]
-    @test tril(c_L.factors) ≈ c_L[:L]
+    @test triu(c_U.factors) ≈ c_U.U
+    @test tril(c_L.factors) ≈ c_L.L
     @test istriu(cl)
     @test cl'cl ≈ a_U
     @test cl'cl ≈ a_L
@@ -57,7 +57,7 @@ end
         @inferred cholfact(apd)
         @inferred chol(apd)
         capd  = factorize(apd)
-        r     = capd[:U]
+        r     = capd.U
         κ     = cond(apd, 1) #condition number
 
         unary_ops_tests(apd, capd, ε*κ*n)
@@ -102,7 +102,7 @@ end
                 capds = cholfact!(copy(apds))
                 unary_ops_tests(apds, capds, ε*κ*n)
             end
-            ulstring = sprint((t, s) -> show(t, "text/plain", s), capds[:UL])
+            ulstring = sprint((t, s) -> show(t, "text/plain", s), capds.UL)
             @test sprint((t, s) -> show(t, "text/plain", s), capds) == "$(typeof(capds))\nU factor:\n$ulstring"
         else
             capdh = cholfact(apdh)
@@ -111,7 +111,7 @@ end
             unary_ops_tests(apdh, capdh, ε*κ*n)
             capdh = cholfact!(copy(apd))
             unary_ops_tests(apd, capdh, ε*κ*n)
-            ulstring = sprint((t, s) -> show(t, "text/plain", s), capdh[:UL])
+            ulstring = sprint((t, s) -> show(t, "text/plain", s), capdh.UL)
             @test sprint((t, s) -> show(t, "text/plain", s), capdh) == "$(typeof(capdh))\nU factor:\n$ulstring"
         end
 
@@ -135,7 +135,7 @@ end
             @test rank(cpapd) == n
             @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
 
-            @test cpapd[:P]*cpapd[:L]*cpapd[:U]*cpapd[:P]' ≈ apd
+            @test cpapd.P*cpapd.L*cpapd.U*cpapd.P' ≈ apd
         end
 
         for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
@@ -195,8 +195,8 @@ end
                     A = randn(5,5)
                 end
                 A = convert(Matrix{eltya}, A'A)
-                @test Matrix(cholfact(A)[:L]) ≈ Matrix(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular)[1])
-                @test Matrix(cholfact(A)[:U]) ≈ Matrix(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular)[1])
+                @test Matrix(cholfact(A).L) ≈ Matrix(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular)[1])
+                @test Matrix(cholfact(A).U) ≈ Matrix(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular)[1])
             end
         end
     end
@@ -217,14 +217,14 @@ end
     A = complex.(randn(10,5), randn(10, 5))
     v = complex.(randn(5), randn(5))
     for uplo in (:U, :L)
-        AcA = A'A
+        AcA = A'*A
         BcB = AcA + v*v'
         BcB = (BcB + adjoint(BcB))/2
         F = cholfact(Hermitian(AcA, uplo))
         G = cholfact(Hermitian(BcB, uplo))
-        @test LinAlg.lowrankupdate(F, v)[uplo] ≈ G[uplo]
-        @test_throws DimensionMismatch LinAlg.lowrankupdate(F, ones(eltype(v), length(v)+1))
-        @test LinAlg.lowrankdowndate(G, v)[uplo] ≈ F[uplo]
+        @test Base.getproperty(LinAlg.lowrankupdate(F, v), uplo) ≈ Base.getproperty(G, uplo)
+        @test_throws DimensionMismatch LinAlg.lowrankupdate(F, ones(eltype($v), length($v)+1))
+        @test Base.getproperty(LinAlg.lowrankdowndate(G, v), uplo) ≈ Base.getproperty(F, uplo)
         @test_throws DimensionMismatch LinAlg.lowrankdowndate(G, ones(eltype(v), length(v)+1))
     end
 end
@@ -251,7 +251,7 @@ end
         0.11192755545114 - 0.1603741874112385im 0.8439562576196216 + 1.0850814110398734im
         -1.0568488936791578 - 0.06025820467086475im 0.12696236014017806 - 0.09853584666755086im]
     cholfact(Hermitian(apd, :L), Val(true)) \ b
-    r = factorize(apd)[:U]
+    r = factorize(apd).U
     E = abs.(apd - r'*r)
     ε = eps(abs(float(one(ComplexF32))))
     n = 10

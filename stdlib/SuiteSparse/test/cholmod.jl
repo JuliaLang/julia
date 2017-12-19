@@ -499,114 +499,114 @@ end
 
     @testset "cholfact, no permutation" begin
         Fs = cholfact(As, perm=[1:3;])
-        @test Fs[:p] == [1:3;]
-        @test sparse(Fs[:L]) ≈ Lf
+        @test Fs.p == [1:3;]
+        @test sparse(Fs.L) ≈ Lf
         @test sparse(Fs) ≈ As
         b = rand(3)
         @test Fs\b ≈ Af\b
-        @test Fs[:UP]\(Fs[:PtL]\b) ≈ Af\b
-        @test Fs[:L]\b ≈ Lf\b
-        @test Fs[:U]\b ≈ Lf'\b
-        @test Fs[:L]'\b ≈ Lf'\b
-        @test Fs[:U]'\b ≈ Lf\b
-        @test Fs[:PtL]\b ≈ Lf\b
-        @test Fs[:UP]\b ≈ Lf'\b
-        @test Fs[:PtL]'\b ≈ Lf'\b
-        @test Fs[:UP]'\b ≈ Lf\b
-        @test_throws CHOLMOD.CHOLMODException Fs[:D]
-        @test_throws CHOLMOD.CHOLMODException Fs[:LD]
-        @test_throws CHOLMOD.CHOLMODException Fs[:DU]
-        @test_throws CHOLMOD.CHOLMODException Fs[:PLD]
-        @test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
+        @test Fs.UP\(Fs.PtL\b) ≈ Af\b
+        @test Fs.L\b ≈ Lf\b
+        @test Fs.U\b ≈ Lf'\b
+        @test Fs.L'\b ≈ Lf'\b
+        @test Fs.U'\b ≈ Lf\b
+        @test Fs.PtL\b ≈ Lf\b
+        @test Fs.UP\b ≈ Lf'\b
+        @test Fs.PtL'\b ≈ Lf'\b
+        @test Fs.UP'\b ≈ Lf\b
+        @test_throws CHOLMOD.CHOLMODException Fs.D
+        @test_throws CHOLMOD.CHOLMODException Fs.LD
+        @test_throws CHOLMOD.CHOLMODException Fs.DU
+        @test_throws CHOLMOD.CHOLMODException Fs.PLD
+        @test_throws CHOLMOD.CHOLMODException Fs.DUPt
     end
 
     @testset "cholfact, with permutation" begin
         Fs = cholfact(As, perm=p)
-        @test Fs[:p] == p
+        @test Fs.p == p
         Afp = Af[p,p]
-        Lfp = cholfact(Afp)[:L]
-        @test sparse(Fs[:L]) ≈ Lfp
+        Lfp = cholfact(Afp).L
+        @test sparse(Fs.L) ≈ Lfp
         @test sparse(Fs) ≈ As
         b = rand(3)
         @test Fs\b ≈ Af\b
-        @test Fs[:UP]\(Fs[:PtL]\b) ≈ Af\b
-        @test Fs[:L]\b ≈ Lfp\b
-        @test Fs[:U]'\b ≈ Lfp\b
-        @test Fs[:U]\b ≈ Lfp'\b
-        @test Fs[:L]'\b ≈ Lfp'\b
-        @test Fs[:PtL]\b ≈ Lfp\b[p]
-        @test Fs[:UP]\b ≈ (Lfp'\b)[p_inv]
-        @test Fs[:PtL]'\b ≈ (Lfp'\b)[p_inv]
-        @test Fs[:UP]'\b ≈ Lfp\b[p]
-        @test_throws CHOLMOD.CHOLMODException Fs[:PL]
-        @test_throws CHOLMOD.CHOLMODException Fs[:UPt]
-        @test_throws CHOLMOD.CHOLMODException Fs[:D]
-        @test_throws CHOLMOD.CHOLMODException Fs[:LD]
-        @test_throws CHOLMOD.CHOLMODException Fs[:DU]
-        @test_throws CHOLMOD.CHOLMODException Fs[:PLD]
-        @test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
+        @test Fs.UP\(Fs.PtL\b) ≈ Af\b
+        @test Fs.L\b ≈ Lfp\b
+        @test Fs.U'\b ≈ Lfp\b
+        @test Fs.U\b ≈ Lfp'\b
+        @test Fs.L'\b ≈ Lfp'\b
+        @test Fs.PtL\b ≈ Lfp\b[p]
+        @test Fs.UP\b ≈ (Lfp'\b)[p_inv]
+        @test Fs.PtL'\b ≈ (Lfp'\b)[p_inv]
+        @test Fs.UP'\b ≈ Lfp\b[p]
+        @test_throws CHOLMOD.CHOLMODException Fs.PL
+        @test_throws CHOLMOD.CHOLMODException Fs.UPt
+        @test_throws CHOLMOD.CHOLMODException Fs.D
+        @test_throws CHOLMOD.CHOLMODException Fs.LD
+        @test_throws CHOLMOD.CHOLMODException Fs.DU
+        @test_throws CHOLMOD.CHOLMODException Fs.PLD
+        @test_throws CHOLMOD.CHOLMODException Fs.DUPt
     end
 
     @testset "ldltfact, no permutation" begin
         Fs = ldltfact(As, perm=[1:3;])
-        @test Fs[:p] == [1:3;]
-        @test sparse(Fs[:LD]) ≈ LDf
+        @test Fs.p == [1:3;]
+        @test sparse(Fs.LD) ≈ LDf
         @test sparse(Fs) ≈ As
         b = rand(3)
         @test Fs\b ≈ Af\b
-        @test Fs[:UP]\(Fs[:PtLD]\b) ≈ Af\b
-        @test Fs[:DUP]\(Fs[:PtL]\b) ≈ Af\b
-        @test Fs[:L]\b ≈ L_f\b
-        @test Fs[:U]\b ≈ L_f'\b
-        @test Fs[:L]'\b ≈ L_f'\b
-        @test Fs[:U]'\b ≈ L_f\b
-        @test Fs[:PtL]\b ≈ L_f\b
-        @test Fs[:UP]\b ≈ L_f'\b
-        @test Fs[:PtL]'\b ≈ L_f'\b
-        @test Fs[:UP]'\b ≈ L_f\b
-        @test Fs[:D]\b ≈ D_f\b
-        @test Fs[:D]'\b ≈ D_f\b
-        @test Fs[:LD]\b ≈ D_f\(L_f\b)
-        @test Fs[:DU]'\b ≈ D_f\(L_f\b)
-        @test Fs[:LD]'\b ≈ L_f'\(D_f\b)
-        @test Fs[:DU]\b ≈ L_f'\(D_f\b)
-        @test Fs[:PtLD]\b ≈ D_f\(L_f\b)
-        @test Fs[:DUP]'\b ≈ D_f\(L_f\b)
-        @test Fs[:PtLD]'\b ≈ L_f'\(D_f\b)
-        @test Fs[:DUP]\b ≈ L_f'\(D_f\b)
+        @test Fs.UP\(Fs.PtLD\b) ≈ Af\b
+        @test Fs.DUP\(Fs.PtL\b) ≈ Af\b
+        @test Fs.L\b ≈ L_f\b
+        @test Fs.U\b ≈ L_f'\b
+        @test Fs.L'\b ≈ L_f'\b
+        @test Fs.U'\b ≈ L_f\b
+        @test Fs.PtL\b ≈ L_f\b
+        @test Fs.UP\b ≈ L_f'\b
+        @test Fs.PtL'\b ≈ L_f'\b
+        @test Fs.UP'\b ≈ L_f\b
+        @test Fs.D\b ≈ D_f\b
+        @test Fs.D'\b ≈ D_f\b
+        @test Fs.LD\b ≈ D_f\(L_f\b)
+        @test Fs.DU'\b ≈ D_f\(L_f\b)
+        @test Fs.LD'\b ≈ L_f'\(D_f\b)
+        @test Fs.DU\b ≈ L_f'\(D_f\b)
+        @test Fs.PtLD\b ≈ D_f\(L_f\b)
+        @test Fs.DUP'\b ≈ D_f\(L_f\b)
+        @test Fs.PtLD'\b ≈ L_f'\(D_f\b)
+        @test Fs.DUP\b ≈ L_f'\(D_f\b)
     end
 
     @testset "ldltfact, with permutation" begin
         Fs = ldltfact(As, perm=p)
-        @test Fs[:p] == p
+        @test Fs.p == p
         @test sparse(Fs) ≈ As
         b = rand(3)
         Asp = As[p,p]
-        LDp = sparse(ldltfact(Asp, perm=[1,2,3])[:LD])
-        # LDp = sparse(Fs[:LD])
+        LDp = sparse(ldltfact(Asp, perm=[1,2,3]).LD)
+        # LDp = sparse(Fs.LD)
         Lp, dp = SuiteSparse.CHOLMOD.getLd!(copy(LDp))
         Dp = sparse(Diagonal(dp))
         @test Fs\b ≈ Af\b
-        @test Fs[:UP]\(Fs[:PtLD]\b) ≈ Af\b
-        @test Fs[:DUP]\(Fs[:PtL]\b) ≈ Af\b
-        @test Fs[:L]\b ≈ Lp\b
-        @test Fs[:U]\b ≈ Lp'\b
-        @test Fs[:L]'\b ≈ Lp'\b
-        @test Fs[:U]'\b ≈ Lp\b
-        @test Fs[:PtL]\b ≈ Lp\b[p]
-        @test Fs[:UP]\b ≈ (Lp'\b)[p_inv]
-        @test Fs[:PtL]'\b ≈ (Lp'\b)[p_inv]
-        @test Fs[:UP]'\b ≈ Lp\b[p]
-        @test Fs[:LD]\b ≈ Dp\(Lp\b)
-        @test Fs[:DU]'\b ≈ Dp\(Lp\b)
-        @test Fs[:LD]'\b ≈ Lp'\(Dp\b)
-        @test Fs[:DU]\b ≈ Lp'\(Dp\b)
-        @test Fs[:PtLD]\b ≈ Dp\(Lp\b[p])
-        @test Fs[:DUP]'\b ≈ Dp\(Lp\b[p])
-        @test Fs[:PtLD]'\b ≈ (Lp'\(Dp\b))[p_inv]
-        @test Fs[:DUP]\b ≈ (Lp'\(Dp\b))[p_inv]
-        @test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
-        @test_throws CHOLMOD.CHOLMODException Fs[:PLD]
+        @test Fs.UP\(Fs.PtLD\b) ≈ Af\b
+        @test Fs.DUP\(Fs.PtL\b) ≈ Af\b
+        @test Fs.L\b ≈ Lp\b
+        @test Fs.U\b ≈ Lp'\b
+        @test Fs.L'\b ≈ Lp'\b
+        @test Fs.U'\b ≈ Lp\b
+        @test Fs.PtL\b ≈ Lp\b[p]
+        @test Fs.UP\b ≈ (Lp'\b)[p_inv]
+        @test Fs.PtL'\b ≈ (Lp'\b)[p_inv]
+        @test Fs.UP'\b ≈ Lp\b[p]
+        @test Fs.LD\b ≈ Dp\(Lp\b)
+        @test Fs.DU'\b ≈ Dp\(Lp\b)
+        @test Fs.LD'\b ≈ Lp'\(Dp\b)
+        @test Fs.DU\b ≈ Lp'\(Dp\b)
+        @test Fs.PtLD\b ≈ Dp\(Lp\b[p])
+        @test Fs.DUP'\b ≈ Dp\(Lp\b[p])
+        @test Fs.PtLD'\b ≈ (Lp'\(Dp\b))[p_inv]
+        @test Fs.DUP\b ≈ (Lp'\(Dp\b))[p_inv]
+        @test_throws CHOLMOD.CHOLMODException Fs.DUPt
+        @test_throws CHOLMOD.CHOLMODException Fs.PLD
     end
 
     @testset "Element promotion and type inference" begin
@@ -622,7 +622,7 @@ end
 gc()
 
 @testset "Issue 11747 - Wrong show method defined for FactorComponent" begin
-    v = cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))[:L]
+    v = cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10])).L
     for s in (sprint(show, MIME("text/plain"), v), sprint(show, v))
         @test contains(s, "method: simplicial")
         @test !contains(s, "#undef")

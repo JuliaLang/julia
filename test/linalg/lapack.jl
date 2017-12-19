@@ -230,8 +230,8 @@ end
         A = rand(elty,10,10)
         Aw, Avl, Avr = LAPACK.geev!('N','V',copy(A))
         fA = eigfact(A)
-        @test fA[:values] ≈ Aw
-        @test fA[:vectors] ≈ Avr
+        @test fA.values  ≈ Aw
+        @test fA.vectors ≈ Avr
     end
 end
 

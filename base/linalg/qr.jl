@@ -258,17 +258,17 @@ The returned object `F` stores the factorization in a packed format:
 
 The individual components of the factorization `F` can be accessed by indexing with a symbol:
 
- - `F[:Q]`: the orthogonal/unitary matrix `Q`
- - `F[:R]`: the upper triangular matrix `R`
- - `F[:p]`: the permutation vector of the pivot ([`QRPivoted`](@ref) only)
- - `F[:P]`: the permutation matrix of the pivot ([`QRPivoted`](@ref) only)
+ - `F.Q`: the orthogonal/unitary matrix `Q`
+ - `F.R`: the upper triangular matrix `R`
+ - `F.p`: the permutation vector of the pivot ([`QRPivoted`](@ref) only)
+ - `F.P`: the permutation matrix of the pivot ([`QRPivoted`](@ref) only)
 
 The following functions are available for the `QR` objects: [`inv`](@ref), [`size`](@ref),
 and [`\\`](@ref). When `A` is rectangular, `\\` will return a least squares
 solution and if the solution is not unique, the one with smallest norm is returned.
 
-Multiplication with respect to either full/square or non-full/square `Q` is allowed, i.e. both `F[:Q]*F[:R]`
-and `F[:Q]*A` are supported. A `Q` matrix can be converted into a regular matrix with
+Multiplication with respect to either full/square or non-full/square `Q` is allowed, i.e. both `F.Q*F.R`
+and `F.Q*A` are supported. A `Q` matrix can be converted into a regular matrix with
 [`Matrix`](@ref).
 
 # Examples
@@ -284,7 +284,7 @@ Base.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:
 [-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]
 [-5.0 10.0; 0.0 -1.0]
 
-julia> F[:Q] * F[:R] == A
+julia> F.Q * F.R == A
 true
 ```
 
@@ -327,13 +327,13 @@ function qr(A::Union{Number,AbstractMatrix}, pivot::Union{Val{false},Val{true}} 
 end
 function _qr(A::Union{Number,AbstractMatrix}, ::Val{false}; full::Bool = false)
     F = qrfact(A, Val(false))
-    Q, R = getq(F), F[:R]::Matrix{eltype(F)}
+    Q, R = F.Q, F.R
     sQf1 = size(Q.factors, 1)
     return (!full ? Array(Q) : mul!(Q, Matrix{eltype(Q)}(I, sQf1, sQf1))), R
 end
 function _qr(A::Union{Number, AbstractMatrix}, ::Val{true}; full::Bool = false)
     F = qrfact(A, Val(true))
-    Q, R, p = getq(F), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
+    Q, R, p = F.Q, F.R, F.p
     sQf1 = size(Q.factors, 1)
     return (!full ? Array(Q) : mul!(Q, Matrix{eltype(Q)}(I, sQf1, sQf1))), R, p
 end
@@ -410,55 +410,55 @@ Factorization{T}(A::QR) where {T} = QR{T}(A)
 QRCompactWY{T}(A::QRCompactWY) where {T} = QRCompactWY(convert(AbstractMatrix{T}, A.factors), convert(AbstractMatrix{T}, A.T))
 Factorization{T}(A::QRCompactWY{T}) where {T} = A
 Factorization{T}(A::QRCompactWY) where {T} = QRCompactWY{T}(A)
-AbstractMatrix(F::Union{QR,QRCompactWY}) = F[:Q] * F[:R]
+AbstractMatrix(F::Union{QR,QRCompactWY}) = F.Q * F.R
 AbstractArray(F::Union{QR,QRCompactWY}) = AbstractMatrix(F)
 Matrix(F::Union{QR,QRCompactWY}) = Array(AbstractArray(F))
 Array(F::Union{QR,QRCompactWY}) = Matrix(F)
 QRPivoted{T}(A::QRPivoted) where {T} = QRPivoted(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ), A.jpvt)
 Factorization{T}(A::QRPivoted{T}) where {T} = A
 Factorization{T}(A::QRPivoted) where {T} = QRPivoted{T}(A)
-AbstractMatrix(F::QRPivoted) = (F[:Q] * F[:R])[:,invperm(F[:p])]
+AbstractMatrix(F::QRPivoted) = (F.Q * F.R)[:,invperm(F.p)]
 AbstractArray(F::QRPivoted) = AbstractMatrix(F)
 Matrix(F::QRPivoted) = Array(AbstractArray(F))
 Array(F::QRPivoted) = Matrix(F)
 
 function show(io::IO, F::Union{QR, QRCompactWY, QRPivoted})
     println(io, "$(typeof(F)) with factors Q and R:")
-    show(io, F[:Q])
+    show(io, F.Q)
     println(io)
-    show(io, F[:R])
+    show(io, F.R)
 end
 
-function getindex(A::QR, d::Symbol)
-    m, n = size(A)
+function getproperty(F::QR, d::Symbol)
+    m, n = size(F)
     if d == :R
-        return triu!(A.factors[1:min(m,n), 1:n])
+        return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
     elseif d == :Q
-        return getq(A)
+        return QRPackedQ(getfield(F, :factors), F.τ)
     else
-        throw(KeyError(d))
+        getfield(F, d)
     end
 end
-function getindex(A::QRCompactWY, d::Symbol)
-    m, n = size(A)
+function getproperty(F::QRCompactWY, d::Symbol)
+    m, n = size(F)
     if d == :R
-        return triu!(A.factors[1:min(m,n), 1:n])
+        return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
     elseif d == :Q
-        return getq(A)
+        return QRCompactWYQ(getfield(F, :factors), F.T)
     else
-        throw(KeyError(d))
+        getfield(F, d)
     end
 end
-function getindex(A::QRPivoted{T}, d::Symbol) where T
-    m, n = size(A)
+function getproperty(F::QRPivoted{T}, d::Symbol) where T
+    m, n = size(F)
     if d == :R
-        return triu!(A.factors[1:min(m,n), 1:n])
+        return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
     elseif d == :Q
-        return getq(A)
+        return QRPackedQ(getfield(F, :factors), F.τ)
     elseif d == :p
-        return A.jpvt
+        return getfield(F, :jpvt)
     elseif d == :P
-        p = A[:p]
+        p = F.p
         n = length(p)
         P = zeros(T, n, n)
         for i in 1:n
@@ -466,15 +466,11 @@ function getindex(A::QRPivoted{T}, d::Symbol) where T
         end
         return P
     else
-        throw(KeyError(d))
+        getfield(F, d)
     end
 end
 
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
-
-# Type-stable interface to get Q
-getq(A::QRCompactWY) = QRCompactWYQ(A.factors,A.T)
-getq(A::Union{QR, QRPivoted}) = QRPackedQ(A.factors,A.τ)
 
 """
     QRPackedQ <: AbstractMatrix
@@ -511,9 +507,9 @@ AbstractMatrix{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ{S}(Q)
 Matrix(A::AbstractQ{T}) where {T} = mul!(A, Matrix{T}(I, size(A.factors, 1), min(size(A.factors)...)))
 Array(A::AbstractQ) = Matrix(A)
 
-size(A::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(A.factors, dim)
-size(A::Union{QR,QRCompactWY,QRPivoted}) = size(A.factors)
-size(A::AbstractQ, dim::Integer) = 0 < dim ? (dim <= 2 ? size(A.factors, 1) : 1) : throw(BoundsError())
+size(A::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(getfield(A, :factors), dim)
+size(A::Union{QR,QRCompactWY,QRPivoted}) = size(getfield(A, :factors))
+size(A::AbstractQ, dim::Integer) = 0 < dim ? (dim <= 2 ? size(getfield(A, :factors), 1) : 1) : throw(BoundsError())
 size(A::AbstractQ) = size(A, 1), size(A, 2)
 
 
@@ -740,9 +736,9 @@ function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:Abstrac
 end
 
 ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A[:R]), view(mul!(Adjoint(A[:Q]), b), 1:size(A, 2))); b)
+    (ldiv!(UpperTriangular(A.R), view(mul!(Adjoint(A.Q), b), 1:size(A, 2))); b)
 ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A[:R]), view(mul!(Adjoint(A[:Q]), B), 1:size(A, 2), 1:size(B, 2))); B)
+    (ldiv!(UpperTriangular(A.R), view(mul!(Adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2))); B)
 
 # Julia implementation similar to xgelsy
 function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasFloat
@@ -774,10 +770,10 @@ function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasF
         rnk += 1
     end
     C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
-    ldiv!(UpperTriangular(C[1:rnk,1:rnk]),view(mul!(Adjoint(getq(A)), view(B, 1:mA, 1:nrhs)), 1:rnk, 1:nrhs))
+    ldiv!(UpperTriangular(C[1:rnk,1:rnk]),view(mul!(Adjoint(A.Q), view(B, 1:mA, 1:nrhs)), 1:rnk, 1:nrhs))
     B[rnk+1:end,:] = zero(T)
     LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, view(B,1:nA,1:nrhs))
-    B[1:nA,:] = view(B, 1:nA, :)[invperm(A[:p]::Vector{BlasInt}),:]
+    B[1:nA,:] = view(B, 1:nA, :)[invperm(A.p),:]
     return B, rnk
 end
 ldiv!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} =
@@ -788,8 +784,8 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
-    mul!(Adjoint(A[:Q]), view(B, 1:m, :))
-    R = A[:R]
+    mul!(Adjoint(A.Q), view(B, 1:m, :))
+    R = A.R
     @inbounds begin
         if n > m # minimum norm solution
             τ = zeros(T,m)
