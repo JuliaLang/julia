@@ -38,10 +38,10 @@ function !(x::Bool)
     return not_int(x)
 end
 
-bitnot(x::Bool) = !x
-bitand(x::Bool, y::Bool) = and_int(x, y)
-bitor(x::Bool, y::Bool) = or_int(x, y)
-bitxor(x::Bool, y::Bool) = (x != y)
+not(x::Bool) = !x
+and(x::Bool, y::Bool) = and_int(x, y)
+or(x::Bool, y::Bool) = or_int(x, y)
+xor(x::Bool, y::Bool) = (x != y)
 (&)(x::Bool, y::Bool) = and_int(x, y)
 (|)(x::Bool, y::Bool) = or_int(x, y)
 

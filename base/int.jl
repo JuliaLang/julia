@@ -122,7 +122,7 @@ function abs end
 abs(x::Unsigned) = x
 abs(x::Signed) = flipsign(x,x)
 
-bitnot(n::Integer) = -n-1
+not(n::Integer) = -n-1
 
 unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 unsigned(x::Bool) = convert(Unsigned, x)
@@ -242,62 +242,62 @@ end
 ## integer bitwise operations ##
 
 """
-    bitnot(x)
+    not(x)
 
 Bitwise not.
 
 # Examples
 ```jldoctest
-julia> bitnot(4)
+julia> not(4)
 -5
 
-julia> bitnot(10)
+julia> not(10)
 -11
 
-julia> bitnot(true)
+julia> not(true)
 false
 ```
 """
-bitnot(x::BitInteger)             = not_int(x)
+not(x::BitInteger)             = not_int(x)
 
 """
-    bitand(x, y)
+    and(x, y)
 
 Bitwise and.
 
 # Examples
 ```jldoctest
-julia> bitand(4, 10)
+julia> and(4, 10)
 0
 
-julia> bitand(4, 12)
+julia> and(4, 12)
 4
 ```
 """
-bitand(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
+and(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
 
 """
-    bitor(x, y)
+    or(x, y)
 
 Bitwise or.
 
 # Examples
 ```jldoctest
-julia> bitor(4, 10)
+julia> or(4, 10)
 14
 
-julia> bitor(4, 1)
+julia> or(4, 1)
 5
 ```
 """
-bitor(x::T, y::T) where {T<:BitInteger} = or_int(x, y)
+or(x::T, y::T) where {T<:BitInteger} = or_int(x, y)
 
 """
-    bitxor(x, y)
+    xor(x, y)
     ⊻(x, y)
 
 Bitwise exclusive or of `x` and `y`.  The infix operation
-`a ⊻ b` is a synonym for `bitxor(a,b)`, and
+`a ⊻ b` is a synonym for `xor(a,b)`, and
 `⊻` can be typed by tab-completing `\\xor`
 or `\\veebar` in the Julia REPL.
 
@@ -309,14 +309,14 @@ julia> bitstring(Int8(3))
 julia> bitstring(Int8(5))
 "00000101"
 
-julia> bitstring(bitxor(Int8(3), Int8(5)))
+julia> bitstring(xor(Int8(3), Int8(5)))
 "00000110"
 
 julia> bitstring(Int8(3) ⊻ Int8(5))
 "00000110"
 ```
 """
-bitxor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
+xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
 
 
 """
@@ -389,7 +389,7 @@ julia> count_zeros(Int32(2 ^ 16 - 1))
 16
 ```
 """
-count_zeros(x::Integer) = count_ones(bitnot(x))
+count_zeros(x::Integer) = count_ones(not(x))
 
 """
     leading_ones(x::Integer) -> Integer
@@ -401,7 +401,7 @@ julia> leading_ones(UInt32(2 ^ 32 - 2))
 31
 ```
 """
-leading_ones(x::Integer) = leading_zeros(bitnot(x))
+leading_ones(x::Integer) = leading_zeros(not(x))
 
 """
     trailing_ones(x::Integer) -> Integer
@@ -413,7 +413,7 @@ julia> trailing_ones(3)
 2
 ```
 """
-trailing_ones(x::Integer) = trailing_zeros(bitnot(x))
+trailing_ones(x::Integer) = trailing_zeros(not(x))
 
 ## integer comparisons ##
 
@@ -491,7 +491,7 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
             @eval rem(x::($from), ::Type{$to}) = trunc_int($to, x)
         elseif from === Bool
             # Bools use i8 storage and may have garbage in their 7 high bits
-            @eval convert(::Type{$to}, x::($from)) = bitand(zext_int($to, x), $to(1))
+            @eval convert(::Type{$to}, x::($from)) = and(zext_int($to, x), $to(1))
             @eval rem(x::($from), ::Type{$to}) = convert($to, x)
         elseif from.size < to.size
             if from <: Signed
@@ -544,7 +544,7 @@ end
 
 rem(x::T, ::Type{T}) where {T<:Integer} = x
 rem(x::Integer, T::Type{<:Integer}) = convert(T, x)  # `x % T` falls back to `convert`
-rem(x::Integer, ::Type{Bool}) = !iszero(bitand(x, 1))
+rem(x::Integer, ::Type{Bool}) = !iszero(and(x, 1))
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
@@ -719,14 +719,14 @@ if Core.sizeof(Int) == 4
         local u0::UInt64, v0::UInt64, w0::UInt64
         local u1::Int64, v1::Int64, w1::UInt64, w2::Int64, t::UInt64
 
-        u0 = bitand(u, 0xffffffff); u1 = u >> 32
-        v0 = bitand(v, 0xffffffff); v1 = v >> 32
+        u0 = and(u, 0xffffffff); u1 = u >> 32
+        v0 = and(v, 0xffffffff); v1 = v >> 32
         w0 = u0 * v0
         t = reinterpret(UInt64, u1) * v0 + (w0 >>> 32)
         w2 = reinterpret(Int64, t) >> 32
-        w1 = u0 * reinterpret(UInt64, v1) + bitand(t, 0xffffffff)
+        w1 = u0 * reinterpret(UInt64, v1) + and(t, 0xffffffff)
         hi = u1 * v1 + w2 + (reinterpret(Int64, w1) >> 32)
-        lo = bitand(w0, 0xffffffff) + (w1 << 32)
+        lo = and(w0, 0xffffffff) + (w1 << 32)
         return Int128(hi) << 64 + Int128(lo)
     end
 
@@ -734,14 +734,14 @@ if Core.sizeof(Int) == 4
         local u0::UInt64, v0::UInt64, w0::UInt64
         local u1::UInt64, v1::UInt64, w1::UInt64, w2::UInt64, t::UInt64
 
-        u0 = bitand(u, 0xffffffff); u1 = u >>> 32
-        v0 = bitand(v, 0xffffffff); v1 = v >>> 32
+        u0 = and(u, 0xffffffff); u1 = u >>> 32
+        v0 = and(v, 0xffffffff); v1 = v >>> 32
         w0 = u0 * v0
         t = u1 * v0 + (w0 >>> 32)
         w2 = t >>> 32
-        w1 = u0 * v1 + bitand(t, 0xffffffff)
+        w1 = u0 * v1 + and(t, 0xffffffff)
         hi = u1 * v1 + w2 + (w1 >>> 32)
-        lo = bitand(w0, 0xffffffff) + (w1 << 32)
+        lo = and(w0, 0xffffffff) + (w1 << 32)
         return UInt128(hi) << 64 + UInt128(lo)
     end
 
@@ -752,8 +752,8 @@ if Core.sizeof(Int) == 4
         lohi = widemul(reinterpret(Int64, u0), v1)
         hilo = widemul(u1, reinterpret(Int64, v0))
         t = reinterpret(UInt128, hilo) + (lolo >>> 64)
-        w1 = reinterpret(UInt128, lohi) + bitand(t, 0xffffffffffffffff)
-        return Int128(bitand(lolo, 0xffffffffffffffff)) + reinterpret(Int128, w1) << 64
+        w1 = reinterpret(UInt128, lohi) + and(t, 0xffffffffffffffff)
+        return Int128(and(lolo, 0xffffffffffffffff)) + reinterpret(Int128, w1) << 64
     end
 
     function *(u::UInt128, v::UInt128)
@@ -763,8 +763,8 @@ if Core.sizeof(Int) == 4
         lohi = widemul(u0, v1)
         hilo = widemul(u1, v0)
         t = hilo + (lolo >>> 64)
-        w1 = lohi + bitand(t, 0xffffffffffffffff)
-        return bitand(lolo, 0xffffffffffffffff) + UInt128(w1) << 64
+        w1 = lohi + and(t, 0xffffffffffffffff)
+        return and(lolo, 0xffffffffffffffff) + UInt128(w1) << 64
     end
 
     function div(x::Int128, y::Int128)
@@ -796,7 +796,7 @@ else
 end
 
 # issue #15489: since integer ops are unchecked, they shouldn't check promotion
-for op in (:+, :-, :*, bitand, :bitor, :bitxor)
+for op in (:+, :-, :*, and, :or, :xor)
     @eval function $op(a::Integer, b::Integer)
         T = promote_typeof(a, b)
         return $op(a % T, b % T)

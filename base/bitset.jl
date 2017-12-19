@@ -116,7 +116,7 @@ union(s1::BitSet, ss::BitSet...) = union(s1, union(ss...))
 union(s::BitSet, ns) = union!(copy(s), ns)
 union!(s::BitSet, ns) = (for n in ns; push!(s, n); end; s)
 function union!(s1::BitSet, s2::BitSet)
-    _matched_map!(bitor, s1.bits, s2.bits)
+    _matched_map!(or, s1.bits, s2.bits)
     s1
 end
 
@@ -138,14 +138,14 @@ Intersects sets `s1` and `s2` and overwrites the set `s1` with the result. If ne
 will be expanded to the size of `s2`.
 """
 function intersect!(s1::BitSet, s2::BitSet)
-    _matched_map!(bitand, s1.bits, s2.bits)
+    _matched_map!(and, s1.bits, s2.bits)
     s1
 end
 
 setdiff(s::BitSet, ns) = setdiff!(copy(s), ns)
 setdiff!(s::BitSet, ns) = (for n in ns; delete!(s, n); end; s)
 function setdiff!(s1::BitSet, s2::BitSet)
-    _matched_map!((p, q) -> bitand(p, bitnot(q)), s1.bits, s2.bits)
+    _matched_map!((p, q) -> and(p, not(q)), s1.bits, s2.bits)
     s1
 end
 

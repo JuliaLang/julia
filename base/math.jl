@@ -542,14 +542,14 @@ julia> ldexp(5., 2)
 """
 function ldexp(x::T, e::Integer) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
-    xs = bitand(xu, bitnot(sign_mask(T)))
+    xs = and(xu, not(sign_mask(T)))
     xs >= exponent_mask(T) && return x # NaN or Inf
     k = Int(xs >> significand_bits(T))
     if k == 0 # x is subnormal
         xs == 0 && return x # +-0
         m = leading_zeros(xs) - exponent_bits(T)
         ys = xs << unsigned(m)
-        xu = bitor(ys, bitand(xu, sign_mask(T)))
+        xu = or(ys, and(xu, sign_mask(T)))
         k = 1 - m
         # underflow, otherwise may have integer underflow in the following n + k
         e < -50000 && return flipsign(T(0.0), x)
@@ -568,7 +568,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         return flipsign(T(Inf), x)
     end
     if k > 0 # normal case
-        xu = bitor(bitand(xu, bitnot(exponent_mask(T))), rem(k, uinttype(T)) << significand_bits(T))
+        xu = or(and(xu, not(exponent_mask(T))), rem(k, uinttype(T)) << significand_bits(T))
         return reinterpret(T, xu)
     else # subnormal case
         if k <= -significand_bits(T) # underflow
@@ -578,7 +578,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         end
         k += significand_bits(T)
         z = T(2.0)^-significand_bits(T)
-        xu = bitor(bitand(xu, bitnot(exponent_mask(T))), rem(k, uinttype(T)) << significand_bits(T))
+        xu = or(and(xu, not(exponent_mask(T))), rem(k, uinttype(T)) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
 end
@@ -592,7 +592,7 @@ Get the exponent of a normalized floating-point number.
 function exponent(x::T) where T<:IEEEFloat
     @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
     @noinline throw2(x) = throw(DomainError(x, "Cannot be subnormal converted to 0."))
-    xs = bitand(reinterpret(Unsigned, x), bitnot(sign_mask(T)))
+    xs = and(reinterpret(Unsigned, x), not(sign_mask(T)))
     xs >= exponent_mask(T) && throw1(x)
     k = Int(xs >> significand_bits(T))
     if k == 0 # x is subnormal
@@ -621,15 +621,15 @@ julia> significand(15.2)*8
 """
 function significand(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
-    xs = bitand(xu, bitnot(sign_mask(T)))
+    xs = and(xu, not(sign_mask(T)))
     xs >= exponent_mask(T) && return x # NaN or Inf
-    if xs <= bitand(bitnot(exponent_mask(T)), bitnot(sign_mask(T))) # x is subnormal
+    if xs <= and(not(exponent_mask(T)), not(sign_mask(T))) # x is subnormal
         xs == 0 && return x # +-0
         m = unsigned(leading_zeros(xs) - exponent_bits(T))
         xs <<= m
-        xu = bitor(xs, bitand(xu, sign_mask(T)))
+        xu = or(xs, and(xu, sign_mask(T)))
     end
-    xu = bitor(bitand(xu, bitnot(exponent_mask(T))), exponent_one(T))
+    xu = or(and(xu, not(exponent_mask(T))), exponent_one(T))
     return reinterpret(T, xu)
 end
 
@@ -641,18 +641,18 @@ and `val` is equal to ``x \\times 2^{exp}``.
 """
 function frexp(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
-    xs = bitand(xu, bitnot(sign_mask(T)))
+    xs = and(xu, not(sign_mask(T)))
     xs >= exponent_mask(T) && return x, 0 # NaN or Inf
     k = Int(xs >> significand_bits(T))
     if k == 0 # x is subnormal
         xs == 0 && return x, 0 # +-0
         m = leading_zeros(xs) - exponent_bits(T)
         xs <<= unsigned(m)
-        xu = bitor(xs, bitand(xu, sign_mask(T)))
+        xu = or(xs, and(xu, sign_mask(T)))
         k = 1 - m
     end
     k -= (exponent_bias(T) - 1)
-    xu = bitor(bitand(xu, bitnot(exponent_mask(T))), exponent_half(T))
+    xu = or(and(xu, not(exponent_mask(T))), exponent_half(T))
     return reinterpret(T, xu), k
 end
 
@@ -813,7 +813,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Nearest})
     n,y = rem_pio2_kernel(x)
 
     if iseven(n)
-        if bitand(n, 2) == 2 # n % 4 == 2: add/subtract pi
+        if and(n, 2) == 2 # n % 4 == 2: add/subtract pi
             if y.hi <= 0
                 return add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
             else
@@ -823,7 +823,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Nearest})
             return y.hi+y.lo
         end
     else
-        if bitand(n, 2) == 2 # n % 4 == 3: subtract pi/2
+        if and(n, 2) == 2 # n % 4 == 3: subtract pi/2
             return add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l)
         else          # n % 4 == 1: add pi/2
             return add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
@@ -837,7 +837,7 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
     n,y = rem_pio2_kernel(x)
 
     if iseven(n)
-        if bitand(n, 2) == 2 # n % 4 == 2: add pi
+        if and(n, 2) == 2 # n % 4 == 2: add pi
             z = add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
         else          # n % 4 == 0: add 0 or 2pi
             if y.hi > 0
@@ -847,7 +847,7 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
             end
         end
     else
-        if bitand(n, 2) == 2 # n % 4 == 3: add 3pi/2
+        if and(n, 2) == 2 # n % 4 == 3: add 3pi/2
             z = add22condh(y.hi,y.lo,pi3o2_h,pi3o2_l)
         else          # n % 4 == 1: add pi/2
             z = add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
@@ -867,7 +867,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
     n,y = rem_pio2_kernel(x)
 
     if iseven(n)
-        if bitand(n, 2) == 2 # n % 4 == 2: add pi
+        if and(n, 2) == 2 # n % 4 == 2: add pi
             return add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
         else          # n % 4 == 0: add 0 or 2pi
             if y.hi > 0
@@ -877,7 +877,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
             end
         end
     else
-        if bitand(n, 2) == 2 # n % 4 == 3: add 3pi/2
+        if and(n, 2) == 2 # n % 4 == 3: add 3pi/2
             return add22condh(y.hi,y.lo,pi3o2_h,pi3o2_l)
         else          # n % 4 == 1: add pi/2
             return add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
@@ -896,7 +896,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Up})
     n,y = rem_pio2_kernel(x)
 
     if iseven(n)
-        if bitand(n, 2) == 2 # n % 4 == 2: sub pi
+        if and(n, 2) == 2 # n % 4 == 2: sub pi
             return add22condh(y.hi,y.lo,-pi2o2_h,-pi2o2_l)
         else          # n % 4 == 0: sub 0 or 2pi
             if y.hi < 0
@@ -906,7 +906,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Up})
             end
         end
     else
-        if bitand(n, 2) == 2 # n % 4 == 3: sub pi/2
+        if and(n, 2) == 2 # n % 4 == 3: sub pi/2
             return add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l)
         else          # n % 4 == 1: sub 3pi/2
             return add22condh(y.hi,y.lo,-pi3o2_h,-pi3o2_l)

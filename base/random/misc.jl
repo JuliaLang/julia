@@ -6,7 +6,7 @@ function rand!(rng::AbstractRNG, B::BitArray)
     isempty(B) && return B
     Bc = B.chunks
     rand!(rng, Bc)
-    Bc[end] = bitand(Bc[end], Base._msk_end(B))
+    Bc[end] = and(Bc[end], Base._msk_end(B))
     return B
 end
 
@@ -148,7 +148,7 @@ randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
     # this duplicates the functionality of RangeGenerator objects,
     # to optimize this special case
     while true
-        x = bitand(rand_ui52_raw(r) % Int, mask)
+        x = and(rand_ui52_raw(r) % Int, mask)
         x < n && return x
     end
 end
@@ -378,21 +378,21 @@ function uuid1(rng::AbstractRNG=GLOBAL_RNG)
     u = rand(rng, UInt128)
 
     # mask off clock sequence and node
-    u = bitand(u, 0x00000000000000003fffffffffffffff)
+    u = and(u, 0x00000000000000003fffffffffffffff)
 
     # set the unicast/multicast bit and version
-    u = bitor(u, 0x00000000000010000000010000000000)
+    u = or(u, 0x00000000000010000000010000000000)
 
     # 0x01b21dd213814000 is the number of 100 nanosecond intervals
     # between the UUID epoch and Unix epoch
     timestamp = round(UInt64, time() * 1e7) + 0x01b21dd213814000
-    ts_low = bitand(timestamp, typemax(UInt32))
-    ts_mid = bitand(timestamp >> 32, typemax(UInt16))
-    ts_hi = bitand(timestamp >> 48, 0x0fff)
+    ts_low = and(timestamp, typemax(UInt32))
+    ts_mid = and(timestamp >> 32, typemax(UInt16))
+    ts_hi = and(timestamp >> 48, 0x0fff)
 
-    u = bitor(u, UInt128(ts_low) << 96)
-    u = bitor(u, UInt128(ts_mid) << 80)
-    u = bitor(u, UInt128(ts_hi) << 64)
+    u = or(u, UInt128(ts_low) << 96)
+    u = or(u, UInt128(ts_mid) << 80)
+    u = or(u, UInt128(ts_hi) << 64)
 
     UUID(u)
 end
@@ -413,8 +413,8 @@ julia> Base.Random.uuid4(rng)
 """
 function uuid4(rng::AbstractRNG=GLOBAL_RNG)
     u = rand(rng, UInt128)
-    u = bitand(u, 0xffffffffffff0fff3fffffffffffffff)
-    u = bitor(u, 0x00000000000040008000000000000000)
+    u = and(u, 0xffffffffffff0fff3fffffffffffffff)
+    u = or(u, 0x00000000000040008000000000000000)
     UUID(u)
 end
 
@@ -431,7 +431,7 @@ julia> Base.Random.uuid_version(Base.Random.uuid4(rng))
 4
 ```
 """
-uuid_version(u::UUID) = Int(bitand(u.value >> 76, 0xf))
+uuid_version(u::UUID) = Int(and(u.value >> 76, 0xf))
 
 Base.convert(::Type{UInt128}, u::UUID) = u.value
 
@@ -447,7 +447,7 @@ let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
         for i in groupings
             u <<= 4
             d = s[i] - '0'
-            u = bitor(u, bitand(0xf, d - 39*(d > 9)))
+            u = or(u, and(0xf, d - 39*(d > 9)))
         end
         return UUID(u)
     end
@@ -458,7 +458,7 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
         u = u.value
         a = Base.StringVector(36)
         for i in groupings
-            d = bitand(u, 0xf)
+            d = and(u, 0xf)
             a[i] = '0' + d + 39*(d > 9)
             u >>= 4
         end

@@ -47,13 +47,13 @@ const masks = zeros(UInt64, 10)
 const masksAtCell = Array{Any}(width*height, height)
 
 valid(x, y) = (0 <= x < width) && (0 <= y < height)
-legal(mask::UInt64, board::UInt64) = bitand(mask, board) == 0
+legal(mask::UInt64, board::UInt64) = and(mask, board) == 0
 zerocount(mask::UInt64) = 50 - count_ones(mask)
 
 function findFreeCell(board::UInt64)
     for y in 0:height-1
         for x in 0:width-1
-            if bitand(board, UInt64(1) << (x + width*y)) == 0
+            if and(board, UInt64(1) << (x + width*y)) == 0
                 return x, y
             end
         end
@@ -66,13 +66,13 @@ function floodFill(board::UInt64, fixme)
         return board
     end
 
-    if bitand(board, UInt64(1) << (x + width*y)) != 0
+    if and(board, UInt64(1) << (x + width*y)) != 0
         return board
     end
 
-    board = bitor(board, UInt64(1) << (x + width*y))
+    board = or(board, UInt64(1) << (x + width*y))
     for f in values(move)
-        board = bitor(board, floodFill(board, f(x, y)))
+        board = or(board, floodFill(board, f(x, y)))
     end
 
     return board
@@ -105,7 +105,7 @@ function getBitmask(x, y, piece)
     for cell_ in piece
         x, y = move[cell_](x,y)
         if valid(x, y)
-            mask = bitor(mask, UInt64(1) << (x + width*y))
+            mask = or(mask, UInt64(1) << (x + width*y))
         else
             return false, UInt64(0)
         end
@@ -148,7 +148,7 @@ function generateBitmasks()
         j = length(masks) - 1
 
         while j >= 0
-            if bitand(masks[j + 1], cellMask) == cellMask
+            if and(masks[j + 1], cellMask) == cellMask
                 push!(masksAtCell[cellCounter + 1, color + 1], masks[j + 1])
                 j -= 1
             else
@@ -173,7 +173,7 @@ function solveCell(cell_, board::UInt64, n)
         return
     end
 
-    if bitand(board, UInt64(1) << cell_) != 0
+    if and(board, UInt64(1) << cell_) != 0
         # Cell full
         solveCell(cell_ - 1, UInt64(board), n)
         return
@@ -189,7 +189,7 @@ function solveCell(cell_, board::UInt64, n)
             for mask in masksAtCell[cell_ + 1, color + 1]
                 if legal(mask, board)
                     masks[color + 1] = mask
-                    solveCell(cell_ - 1, UInt64(bitor(board, mask)), n)
+                    solveCell(cell_ - 1, UInt64(or(board, mask)), n)
                     masks[color + 1] = 0
                 end
             end
@@ -208,7 +208,7 @@ function stringOfMasks(masks)
     for y in 0:height-1
         for x in 0:width-1
             for color in 0:9
-                if bitand(masks[color+1], mask) != 0
+                if and(masks[color+1], mask) != 0
                     s = string(s, color)
                     break
                 elseif color == 9

@@ -4,7 +4,7 @@
 
 include("pcre.jl")
 
-const DEFAULT_COMPILER_OPTS = bitor(PCRE.UTF, PCRE.NO_UTF_CHECK, PCRE.ALT_BSUX)
+const DEFAULT_COMPILER_OPTS = or(PCRE.UTF, PCRE.NO_UTF_CHECK, PCRE.ALT_BSUX)
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
 mutable struct Regex
@@ -21,10 +21,10 @@ mutable struct Regex
         pattern = String(pattern)
         compile_options = UInt32(compile_options)
         match_options = UInt32(match_options)
-        if bitand(compile_options, bitnot(PCRE.COMPILE_MASK)) != 0
+        if and(compile_options, not(PCRE.COMPILE_MASK)) != 0
             throw(ArgumentError("invalid regex compile options: $compile_options"))
         end
-        if bitand(match_options, bitnot(PCRE.EXECUTE_MASK)) !=0
+        if and(match_options, not(PCRE.EXECUTE_MASK)) !=0
             throw(ArgumentError("invalid regex match options: $match_options"))
         end
         re = compile(new(pattern, compile_options, match_options, C_NULL,
@@ -45,7 +45,7 @@ function Regex(pattern::AbstractString, flags::AbstractString)
                    f=='s' ? PCRE.DOTALL    :
                    f=='x' ? PCRE.EXTENDED  :
                    throw(ArgumentError("unknown regex flag: $f"))
-       options = bitor(options, flagbits)
+       options = or(options, flagbits)
     end
     Regex(pattern, options, DEFAULT_MATCH_OPTS)
 end
@@ -84,15 +84,15 @@ RegexMatch("angry,\\nBad world")
 macro r_str(pattern, flags...) Regex(pattern, flags...) end
 
 function show(io::IO, re::Regex)
-    imsx = bitor(PCRE.CASELESS, PCRE.MULTILINE, PCRE.DOTALL, PCRE.EXTENDED)
+    imsx = or(PCRE.CASELESS, PCRE.MULTILINE, PCRE.DOTALL, PCRE.EXTENDED)
     opts = re.compile_options
-    if bitand(opts, bitnot(imsx)) == DEFAULT_COMPILER_OPTS
+    if and(opts, not(imsx)) == DEFAULT_COMPILER_OPTS
         print(io, 'r')
         print_quoted_literal(io, re.pattern)
-        if bitand(opts, PCRE.CASELESS ) != 0; print(io, 'i'); end
-        if bitand(opts, PCRE.MULTILINE) != 0; print(io, 'm'); end
-        if bitand(opts, PCRE.DOTALL   ) != 0; print(io, 's'); end
-        if bitand(opts, PCRE.EXTENDED ) != 0; print(io, 'x'); end
+        if and(opts, PCRE.CASELESS ) != 0; print(io, 'i'); end
+        if and(opts, PCRE.MULTILINE) != 0; print(io, 'm'); end
+        if and(opts, PCRE.DOTALL   ) != 0; print(io, 's'); end
+        if and(opts, PCRE.EXTENDED ) != 0; print(io, 'x'); end
     else
         print(io, "Regex(")
         show(io, re.pattern)
@@ -207,7 +207,7 @@ function match end
 
 function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, add_opts::UInt32=UInt32(0))
     compile(re)
-    opts = bitor(re.match_options, add_opts)
+    opts = or(re.match_options, add_opts)
     if !PCRE.exec(re.regex, str, idx-1, opts, re.match_data)
         return nothing
     end
@@ -255,7 +255,7 @@ function matchall(re::Regex, str::String, overlap::Bool=false)
     matches = SubString{String}[]
     offset = UInt32(0)
     opts = re.match_options
-    opts_nonempty = bitor(opts, PCRE.ANCHORED, PCRE.NOTEMPTY_ATSTART)
+    opts_nonempty = or(opts, PCRE.ANCHORED, PCRE.NOTEMPTY_ATSTART)
     prevempty = false
     ovec = re.ovec
     while true
@@ -412,7 +412,7 @@ function next(itr::RegexMatchIterator, prev_match)
         offset = prev_match.offset + endof(prev_match.match)
     end
 
-    opts_nonempty = UInt32(bitor(PCRE.ANCHORED, PCRE.NOTEMPTY_ATSTART))
+    opts_nonempty = UInt32(or(PCRE.ANCHORED, PCRE.NOTEMPTY_ATSTART))
     while true
         mat = match(itr.regex, itr.string, offset,
                     prevempty ? opts_nonempty : UInt32(0))

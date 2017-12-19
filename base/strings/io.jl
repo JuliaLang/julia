@@ -496,7 +496,7 @@ function convert(::Type{String}, chars::AbstractVector{Char})
             if '\ud7ff' < c && c + 1024 < '\ue000'
                 d, state = next(chars, state)
                 if '\ud7ff' < d - 1024 && d < '\ue000'
-                    c = Char(bitor(0x10000 + (bitand(UInt32(c), 0x03ff) << 10), bitand(UInt32(d), 0x03ff)))
+                    c = Char(or(0x10000 + (and(UInt32(c), 0x03ff) << 10), and(UInt32(d), 0x03ff)))
                 else
                     write(io, c)
                     c = d

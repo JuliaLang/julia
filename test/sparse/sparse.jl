@@ -65,9 +65,9 @@ do33 = ones(3)
         @test_throws DimensionMismatch map(min, sqrfloatmat, colfloatmat)
         @test_throws DimensionMismatch map(max, sqrfloatmat, colfloatmat)
         sqrboolmat, colboolmat = sprand(Bool, 4, 4, 0.5), sprand(Bool, 4, 1, 0.5)
-        @test_throws DimensionMismatch map(bitand, sqrboolmat, colboolmat)
-        @test_throws DimensionMismatch map(bitor, sqrboolmat, colboolmat)
-        @test_throws DimensionMismatch map(bitxor, sqrboolmat, colboolmat)
+        @test_throws DimensionMismatch map(and, sqrboolmat, colboolmat)
+        @test_throws DimensionMismatch map(or, sqrboolmat, colboolmat)
+        @test_throws DimensionMismatch map(xor, sqrboolmat, colboolmat)
     end
 end
 
@@ -1705,11 +1705,11 @@ end
     A13024 = sparse([1,2,3,4,5], [1,2,3,4,5], fill(true,5))
     B13024 = sparse([1,2,4,5],   [1,2,3,5],   fill(true,4))
 
-    @test broadcast(bitand, A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
-    @test typeof(broadcast(bitand, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+    @test broadcast(and, A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
+    @test typeof(broadcast(and, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
-    @test broadcast(bitor, A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
-    @test typeof(broadcast(bitor, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+    @test broadcast(or, A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
+    @test typeof(broadcast(or, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
     @test broadcast(⊻, A13024, B13024) == sparse([3,4,4], [3,3,4], fill(true,3), 5, 5)
     @test typeof(broadcast(⊻, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
@@ -1723,7 +1723,7 @@ end
     for op in (+, -)
         @test op(A13024, B13024) == op(Array(A13024), Array(B13024))
     end
-    for op in (max, min, bitand, bitor, bitxor)
+    for op in (max, min, and, or, xor)
         @test op.(A13024, B13024) == op.(Array(A13024), Array(B13024))
     end
 end

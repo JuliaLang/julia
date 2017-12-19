@@ -19,8 +19,8 @@ const ≣ = isequal # convenient for comparing NaNs
     @test true  != false
     @test false != true
 
-    @test bitnot(true) == false
-    @test bitnot(false) == true
+    @test not(true) == false
+    @test not(false) == true
 
     @test false & false == false
     @test true  & false == false
@@ -2059,9 +2059,9 @@ end
     @test signif(Float16(1.1), 70) === Float16(1.1)
 end
 @testset "issue #1308" begin
-    @test hex(bitnot(UInt128(0))) == "f"^32
-    @test(bitnot(0)%UInt128 == bitnot(UInt128(0))
-    @test Int128(bitnot(0)) == bitnot(Int128(0))
+    @test hex(not(UInt128(0))) == "f"^32
+    @test(not(0)%UInt128 == not(UInt128(0))
+    @test Int128(not(0)) == not(Int128(0))
 end
 @testset "issue 1552" begin
     @test isa(rationalize(Int8, float(pi)), Rational{Int8})
@@ -2289,7 +2289,7 @@ end
 @testset "ispow2" begin
     @test  ispow2(64)
     @test !ispow2(42)
-    @test !ispow2(bitnot(typemax(Int)))
+    @test !ispow2(not(typemax(Int)))
 end
 @testset "nextpow/prevpow" begin
     @test nextpow(2,1) == 1
@@ -2353,8 +2353,8 @@ end
 
 for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128)
     for n = 1:2:1000
-        @test bitand(n*(n^typemax(T)), typemax(T)) == 1
-        n = bitor(rand(T), one(T))
+        @test and(n*(n^typemax(T)), typemax(T)) == 1
+        n = or(rand(T), one(T))
         @test n*(n^typemax(T)) == 1
     end
 end
@@ -2874,12 +2874,12 @@ end
 
     let types = (Base.BitInteger_types..., BigInt, Bool)
         for S in types
-            T = @inferred Base.promote_op(bitnot, S)
-            t = @inferred bitnot(one(S))
+            T = @inferred Base.promote_op(not, S)
+            t = @inferred not(one(S))
             @test T === typeof(t)
 
             for R in types
-                for op in (bitand, bitor, <<, >>, (>>>), %, ÷)
+                for op in (and, or, <<, >>, (>>>), %, ÷)
                     T = @inferred Base.promote_op(op, S, R)
                     t = @inferred op(one(S), one(R))
                     @test T === typeof(t)
@@ -3051,7 +3051,7 @@ end
         sig = [11, 24, 53]
         for i = 1:length(F), j = 1:length(F)
             for _ = 1:100
-                nan = reinterpret(F[i], bitor(rand(U[i]), reinterpret(U[i], nans[i])))
+                nan = reinterpret(F[i], or(rand(U[i]), reinterpret(U[i], nans[i])))
                 z = sig[i] - sig[j]
                 nan′ = i <= j ? nan : reinterpret(F[i], reinterpret(U[i], nan) >> z << z)
                 @test convert(F[i], convert(F[j], nan)) === nan′

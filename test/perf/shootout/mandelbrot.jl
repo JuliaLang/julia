@@ -25,7 +25,7 @@ function draw_mandel(M::Array{UInt8, 2}, n::Int)
             c = complex(2x/n - 1.5, ci)
             if ismandel(c)
                 k = div(x, 8) + 1, y + 1
-                M[k] = bitor(M[k], 1 << UInt8(7 - x%8))
+                M[k] = or(M[k], 1 << UInt8(7 - x%8))
             end
         end
     end

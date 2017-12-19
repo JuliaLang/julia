@@ -49,7 +49,7 @@ true
 """
 isvalid(T,value)
 
-isvalid(::Type{Char}, ch::Unsigned) = !bitor((ch - 0xd800 < 0x800), (ch > 0x10ffff))
+isvalid(::Type{Char}, ch::Unsigned) = !or((ch - 0xd800 < 0x800), (ch > 0x10ffff))
 isvalid(::Type{Char}, ch::Integer) = isvalid(Char, Unsigned(ch))
 isvalid(::Type{Char}, ch::Char) = isvalid(Char, UInt32(ch))
 
@@ -129,7 +129,7 @@ const UTF8PROC_IGNORE    = (1<<5)
 const UTF8PROC_REJECTNA  = (1<<6)
 const UTF8PROC_NLF2LS    = (1<<7)
 const UTF8PROC_NLF2PS    = (1<<8)
-const UTF8PROC_NLF2LF    = bitor(UTF8PROC_NLF2LS, UTF8PROC_NLF2PS)
+const UTF8PROC_NLF2LF    = or(UTF8PROC_NLF2LS, UTF8PROC_NLF2PS)
 const UTF8PROC_STRIPCC   = (1<<9)
 const UTF8PROC_CASEFOLD  = (1<<10)
 const UTF8PROC_CHARBOUND = (1<<11)
@@ -157,25 +157,25 @@ utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(String(s), flags)
 
 function normalize_string(s::AbstractString; stable::Bool=false, compat::Bool=false, compose::Bool=true, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
     flags = 0
-    stable && (flags = bitor(flags, UTF8PROC_STABLE))
-    compat && (flags = bitor(flags, UTF8PROC_COMPAT))
+    stable && (flags = or(flags, UTF8PROC_STABLE))
+    compat && (flags = or(flags, UTF8PROC_COMPAT))
     if decompose
-        flags = bitor(flags, UTF8PROC_DECOMPOSE)
+        flags = or(flags, UTF8PROC_DECOMPOSE)
     elseif compose
-        flags = bitor(flags, UTF8PROC_COMPOSE)
+        flags = or(flags, UTF8PROC_COMPOSE)
     elseif compat || stripmark
         throw(ArgumentError("compat=true or stripmark=true require compose=true or decompose=true"))
     end
-    stripignore && (flags = bitor(flags, UTF8PROC_IGNORE))
-    rejectna && (flags = bitor(flags, UTF8PROC_REJECTNA))
+    stripignore && (flags = or(flags, UTF8PROC_IGNORE))
+    rejectna && (flags = or(flags, UTF8PROC_REJECTNA))
     newline2ls + newline2ps + newline2lf > 1 && throw(ArgumentError("only one newline conversion may be specified"))
-    newline2ls && (flags = bitor(flags, UTF8PROC_NLF2LS))
-    newline2ps && (flags = bitor(flags, UTF8PROC_NLF2PS))
-    newline2lf && (flags = bitor(flags, UTF8PROC_NLF2LF))
-    stripcc && (flags = bitor(flags, UTF8PROC_STRIPCC))
-    casefold && (flags = bitor(flags, UTF8PROC_CASEFOLD))
-    lump && (flags = bitor(flags, UTF8PROC_LUMP))
-    stripmark && (flags = bitor(flags, UTF8PROC_STRIPMARK))
+    newline2ls && (flags = or(flags, UTF8PROC_NLF2LS))
+    newline2ps && (flags = or(flags, UTF8PROC_NLF2PS))
+    newline2lf && (flags = or(flags, UTF8PROC_NLF2LF))
+    stripcc && (flags = or(flags, UTF8PROC_STRIPCC))
+    casefold && (flags = or(flags, UTF8PROC_CASEFOLD))
+    lump && (flags = or(flags, UTF8PROC_LUMP))
+    stripmark && (flags = or(flags, UTF8PROC_STRIPMARK))
     utf8proc_map(s, flags)
 end
 
@@ -227,10 +227,10 @@ julia> normalize_string("JúLiA", stripmark=true)
 ```
 """
 function normalize_string(s::AbstractString, nf::Symbol)
-    utf8proc_map(s, nf == :NFC ? bitor(UTF8PROC_STABLE, UTF8PROC_COMPOSE) :
-                    nf == :NFD ? bitor(UTF8PROC_STABLE, UTF8PROC_DECOMPOSE) :
-                    nf == :NFKC ? bitor(UTF8PROC_STABLE, UTF8PROC_COMPOSE, UTF8PROC_COMPAT) :
-                    nf == :NFKD ? bitor(UTF8PROC_STABLE, UTF8PROC_DECOMPOSE, UTF8PROC_COMPAT) :
+    utf8proc_map(s, nf == :NFC ? or(UTF8PROC_STABLE, UTF8PROC_COMPOSE) :
+                    nf == :NFD ? or(UTF8PROC_STABLE, UTF8PROC_DECOMPOSE) :
+                    nf == :NFKC ? or(UTF8PROC_STABLE, UTF8PROC_COMPOSE, UTF8PROC_COMPAT) :
+                    nf == :NFKD ? or(UTF8PROC_STABLE, UTF8PROC_DECOMPOSE, UTF8PROC_COMPAT) :
                     throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
 end
 

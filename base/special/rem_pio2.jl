@@ -57,8 +57,8 @@ Return the high word of `x` as a `UInt32`.
 
 Return positive part of the high word of `x` as a `UInt32`.
 """
-@inline poshighword(x::UInt64) = bitand(unsafe_trunc(UInt32,x >> 32), 0x7fffffff)
-@inline poshighword(x::Float32) = bitand(reinterpret(UInt32, x), 0x7fffffff)
+@inline poshighword(x::UInt64) = and(unsafe_trunc(UInt32,x >> 32), 0x7fffffff)
+@inline poshighword(x::Float32) = and(reinterpret(UInt32, x), 0x7fffffff)
 @inline poshighword(x::Float64) = poshighword(reinterpret(UInt64, x))
 
 @inline function cody_waite_2c_pio2(x::Float64, fn, n)
@@ -89,7 +89,7 @@ end
     j  = xhp>>20
     y1 = r-w
     high = highword(y1)
-    i = j - bitand(high >> 20, 0x7ff)
+    i = j - and(high >> 20, 0x7ff)
     if i>16  # 2nd iteration needed, good to 118
         t  = r
         w  = fn*pio2_2
@@ -97,7 +97,7 @@ end
         w  = muladd(fn, pio2_2t,-((t-r)-w))
         y1 = r-w
         high = highword(y1)
-        i = j - bitand(high >> 20, 0x7ff)
+        i = j - and(high >> 20, 0x7ff)
         if i>49 # 3rd iteration need, 151 bits acc
             t  = r # will cover all possible cases
             w  = fn*pio2_3
@@ -128,7 +128,7 @@ function fromfraction(f::Int128)
     n1 = 128-leading_zeros(x)         # ndigits0z(x,2)
     m1 = ((x >> (n1-26)) % UInt64) << 27
     d1 = ((n1-128+1021) % UInt64) << 52
-    z1 = reinterpret(Float64, bitor(s, d1 + m1))
+    z1 = reinterpret(Float64, or(s, d1 + m1))
 
     # 2. compute remaining term
     x2 = (x - (UInt128(m1) << (n1-53)))
@@ -138,7 +138,7 @@ function fromfraction(f::Int128)
     n2 = 128-leading_zeros(x2)
     m2 = (x2 >> (n2-53)) % UInt64
     d2 = ((n2-128+1021) % UInt64) << 52
-    z2 = reinterpret(Float64, bitor(s, d2 + m2))
+    z2 = reinterpret(Float64, or(s, d2 + m2))
     return (z1,z2)
 end
 
@@ -152,10 +152,10 @@ function paynehanek(x::Float64)
     # Computations are integer based, so reinterpret x as UInt64
     u = reinterpret(UInt64, x)
     # Strip x of exponent bits and replace with ^1
-    X = bitor(bitand(u, significand_mask(Float64)), one(UInt64) << significand_bits(Float64))
+    X = or(and(u, significand_mask(Float64)), one(UInt64) << significand_bits(Float64))
     # Get k from formula above
     # k = exponent(x)-52
-    k = Int(bitand(u, exponent_mask(Float64)) >> significand_bits(Float64)) - exponent_bias(Float64) - significand_bits(Float64)
+    k = Int(and(u, exponent_mask(Float64)) >> significand_bits(Float64)) - exponent_bias(Float64) - significand_bits(Float64)
 
     # 2. Let α = 1/2π, then:
     #
@@ -186,9 +186,9 @@ function paynehanek(x::Float64)
         @inbounds a3 = INV_2PI[idx+3]
     else
         # use shifts to extract the relevant 64 bit window
-        @inbounds a1 = bitor(idx < 0 ? zero(UInt64) : INV_2PI[idx+1] << shift, INV_2PI[idx+2] >> (64 - shift))
-        @inbounds a2 = bitor(INV_2PI[idx+2] << shift, INV_2PI[idx+3] >> (64 - shift))
-        @inbounds a3 = bitor(INV_2PI[idx+3] << shift, INV_2PI[idx+4] >> (64 - shift))
+        @inbounds a1 = or(idx < 0 ? zero(UInt64) : INV_2PI[idx+1] << shift, INV_2PI[idx+2] >> (64 - shift))
+        @inbounds a2 = or(INV_2PI[idx+2] << shift, INV_2PI[idx+3] >> (64 - shift))
+        @inbounds a3 = or(INV_2PI[idx+3] << shift, INV_2PI[idx+4] >> (64 - shift))
     end
 
     # 3. Perform the multiplication:
@@ -238,7 +238,7 @@ added for ``π/4<|x|<=π/2`` instead of simply returning `x`.
     if xhp <= 0x400f6a7a
         #  last five bits of xhp == last five bits of highword(pi/2) or
         #  highword(2pi/2) implies |x| ~= pi/2 or 2pi/2,
-        if bitand(xhp, 0xfffff) == 0x921fb # use precise Cody Waite scheme
+        if and(xhp, 0xfffff) == 0x921fb # use precise Cody Waite scheme
             return cody_waite_ext_pio2(x, xhp)
         end
         # use Cody Waite with two constants

@@ -37,7 +37,7 @@ julia> randn(rng, Complex64, (2, 3))
     @inbounds begin
         r = rand_ui52(rng)
         rabs = Int64(r>>1) # One bit for the sign
-        idx = bitand(rabs, 0xFF)
+        idx = and(rabs, 0xFF)
         x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
         rabs < ki[idx+1] && return x # 99.3% of the time we return here 1st try
         return randn_unlikely(rng, idx, rabs, x)
@@ -96,7 +96,7 @@ julia> randexp(rng, 3, 3)
 function randexp(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
         ri = rand_ui52(rng)
-        idx = bitand(ri, 0xFF)
+        idx = and(ri, 0xFF)
         x = ri*we[idx+1]
         ri < ke[idx+1] && return x # 98.9% of the time we return here 1st try
         return randexp_unlikely(rng, idx, x)

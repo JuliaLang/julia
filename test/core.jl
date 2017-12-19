@@ -567,7 +567,7 @@ let
 end
 
 # tricky space sensitive syntax cases
-@test [-1 bitnot(1)] == [(-1) (bitnot(1))]
+@test [-1 not(1)] == [(-1) (not(1))]
 
 # undefinedness
 mutable struct UndefField
@@ -1748,7 +1748,7 @@ f5254(a, b) = 1
 let i = 0, x = 65
     @test (i, i+=1, i+=1) === (0, 1, 2)
     @test i == 2
-    @test [x, x = bitor(x, 0x20)] == [65, 97]
+    @test [x, x = or(x, 0x20)] == [65, 97]
 end
 
 # issue #5312

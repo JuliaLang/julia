@@ -26,7 +26,7 @@ function splitprec(::Type{F}, i::Integer) where {F<:AbstractFloat}
 end
 
 function truncmask(x::F, mask) where {F<:IEEEFloat}
-    reinterpret(F, bitand(mask, reinterpret(uinttype(F), x)))
+    reinterpret(F, and(mask, reinterpret(uinttype(F), x)))
 end
 truncmask(x, mask) = x
 

@@ -1031,7 +1031,7 @@ end
         @test size(similar(r, size(r))) == size(similar(r, length(r)))
     end
 end
-@testset "sign, conj, bitnot (Issue #16067)" begin
+@testset "sign, conj, not (Issue #16067)" begin
     A = -1:1
     B = -1.0:1.0
     @test sign.(A) == [-1,0,1]
@@ -1042,8 +1042,8 @@ end
     @test conj(A) === A
     @test conj(B) === B
 
-    @test bitnot.(A) == [0,-1,-2]
-    @test typeof(bitnot.(A)) == Vector{Int}
+    @test not.(A) == [0,-1,-2]
+    @test typeof(not.(A)) == Vector{Int}
 end
 
 @testset "conversion to Array" begin

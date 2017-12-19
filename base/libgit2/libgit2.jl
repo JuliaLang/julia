@@ -883,7 +883,7 @@ function restore(s::State, repo::GitRepo)
     with(GitIndex, repo) do idx
         read_tree!(idx, s.work)            # move work tree to index
         opts = CheckoutOptions(
-                checkout_strategy = bitor(Consts.CHECKOUT_FORCE,             # check the index out to work
+                checkout_strategy = or(Consts.CHECKOUT_FORCE,             # check the index out to work
                                           Consts.CHECKOUT_REMOVE_UNTRACKED)) # remove everything else
         checkout_index(repo, Nullable(idx), options = opts)
 

@@ -102,7 +102,7 @@ end
 @test mod(123, UInt8) == 0x7b
 
 primitive type MyBitsType <: Integer 8 end
-@test_throws MethodError bitnot(reinterpret(MyBitsType, 0x7b))
+@test_throws MethodError not(reinterpret(MyBitsType, 0x7b))
 
 UItypes = Base.BitUnsigned_types
 SItypes = Base.BitSigned_types
@@ -227,8 +227,8 @@ end
 @test 0x00007ffea27edaa0 + (-40) === (-40) + 0x00007ffea27edaa0 === 0x00007ffea27eda78
 @test UInt64(1) * Int64(-1) === typemax(UInt64)
 @test UInt(1) - (-1) == 2
-@test bitand(UInt64(15), -4) === UInt64(12)
-@test bitor(UInt64(15), -4) === typemax(UInt64)
+@test and(UInt64(15), -4) === UInt64(12)
+@test or(UInt64(15), -4) === typemax(UInt64)
 @test UInt64(15) ⊻ -4 === 0xfffffffffffffff3
 
 

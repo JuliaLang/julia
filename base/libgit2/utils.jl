@@ -44,14 +44,14 @@ const VERSION = version()
 
 Test whether the bits of `val` indexed by `flag` are set (`1`) or unset (`0`).
 """
-isset(val::Integer, flag::Integer) = bitand(val, flag) == flag
+isset(val::Integer, flag::Integer) = and(val, flag) == flag
 
 """
     reset(val::Integer, flag::Integer)
 
 Unset the bits of `val` indexed by `flag`, returning them to `0`.
 """
-reset(val::Integer, flag::Integer) = bitand(val, bitnot(flag))
+reset(val::Integer, flag::Integer) = and(val, not(flag))
 
 """
     toggle(val::Integer, flag::Integer)
@@ -59,7 +59,7 @@ reset(val::Integer, flag::Integer) = bitand(val, bitnot(flag))
 Flip the bits of `val` indexed by `flag`, so that if a bit is `0` it
 will be `1` after the toggle, and vice-versa.
 """
-toggle(val::Integer, flag::Integer) = bitor(val, flag)
+toggle(val::Integer, flag::Integer) = or(val, flag)
 
 """
     features()

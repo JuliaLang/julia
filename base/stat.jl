@@ -151,56 +151,56 @@ Equivalent to `stat(file).ctime`
 
 Returns `true` if `path` is a valid filesystem path, `false` otherwise.
 """
-    ispath(st::StatStruct) = bitand(filemode(st), 0xf000) != 0x0000
+    ispath(st::StatStruct) = and(filemode(st), 0xf000) != 0x0000
 
 """
     isfifo(path) -> Bool
 
 Returns `true` if `path` is a FIFO, `false` otherwise.
 """
-    isfifo(st::StatStruct) = bitand(filemode(st), 0xf000) == 0x1000
+    isfifo(st::StatStruct) = and(filemode(st), 0xf000) == 0x1000
 
 """
     ischardev(path) -> Bool
 
 Returns `true` if `path` is a character device, `false` otherwise.
 """
- ischardev(st::StatStruct) = bitand(filemode(st), 0xf000) == 0x2000
+ ischardev(st::StatStruct) = and(filemode(st), 0xf000) == 0x2000
 
  """
      isdir(path) -> Bool
 
  Returns `true` if `path` is a directory, `false` otherwise.
  """
-     isdir(st::StatStruct) = bitand(filemode(st), 0xf000) == 0x4000
+     isdir(st::StatStruct) = and(filemode(st), 0xf000) == 0x4000
 
  """
      isblockdev(path) -> Bool
 
  Returns `true` if `path` is a block device, `false` otherwise.
  """
-isblockdev(st::StatStruct) = bitand(filemode(st), 0xf000) == 0x6000
+isblockdev(st::StatStruct) = and(filemode(st), 0xf000) == 0x6000
 
 """
     isfile(path) -> Bool
 
 Returns `true` if `path` is a regular file, `false` otherwise.
 """
-    isfile(st::StatStruct) = bitand(filemode(st), 0xf000) == 0x8000
+    isfile(st::StatStruct) = and(filemode(st), 0xf000) == 0x8000
 
 """
     islink(path) -> Bool
 
 Returns `true` if `path` is a symbolic link, `false` otherwise.
 """
-    islink(st::StatStruct) = bitand(filemode(st), 0xf000) == 0xa000
+    islink(st::StatStruct) = and(filemode(st), 0xf000) == 0xa000
 
 """
     issocket(path) -> Bool
 
 Returns `true` if `path` is a socket, `false` otherwise.
 """
-  issocket(st::StatStruct) = bitand(filemode(st), 0xf000) == 0xc000
+  issocket(st::StatStruct) = and(filemode(st), 0xf000) == 0xc000
 
 # mode permission predicates
 
@@ -209,21 +209,21 @@ Returns `true` if `path` is a socket, `false` otherwise.
 
 Returns `true` if `path` has the setuid flag set, `false` otherwise.
 """
-issetuid(st::StatStruct) = bitand(filemode(st), 0o4000) > 0
+issetuid(st::StatStruct) = and(filemode(st), 0o4000) > 0
 
 """
     issetgid(path) -> Bool
 
 Returns `true` if `path` has the setgid flag set, `false` otherwise.
 """
-issetgid(st::StatStruct) = bitand(filemode(st), 0o2000) > 0
+issetgid(st::StatStruct) = and(filemode(st), 0o2000) > 0
 
 """
     issticky(path) -> Bool
 
 Returns `true` if `path` has the sticky bit set, `false` otherwise.
 """
-issticky(st::StatStruct) = bitand(filemode(st), 0o1000) > 0
+issticky(st::StatStruct) = and(filemode(st), 0o1000) > 0
 
 """
     uperm(file)
@@ -238,14 +238,14 @@ Gets the permissions of the owner of the file as a bitfield of
 
 For allowed arguments, see [`stat`](@ref).
 """
-uperm(st::StatStruct) = UInt8(bitand(filemode(st) >> 6, 0x7))
+uperm(st::StatStruct) = UInt8(and(filemode(st) >> 6, 0x7))
 
 """
     gperm(file)
 
 Like [`uperm`](@ref) but gets the permissions of the group owning the file.
 """
-gperm(st::StatStruct) = UInt8(bitand(filemode(st) >> 3, 0x7))
+gperm(st::StatStruct) = UInt8(and(filemode(st) >> 3, 0x7))
 
 """
     operm(file)
@@ -253,7 +253,7 @@ gperm(st::StatStruct) = UInt8(bitand(filemode(st) >> 3, 0x7))
 Like [`uperm`](@ref) but gets the permissions for people who neither own the file nor are a member of
 the group owning the file
 """
-operm(st::StatStruct) = UInt8(bitand(filemode(st), 0x7))
+operm(st::StatStruct) = UInt8(and(filemode(st), 0x7))
 
 # mode predicate methods for file names
 

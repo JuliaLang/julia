@@ -44,7 +44,7 @@ struct InferenceParams
     end
 end
 
-# alloc_elim_pass! relies on `bitor(Slot_AssignedOnce, Slot_UsedUndef)` being
+# alloc_elim_pass! relies on `or(Slot_AssignedOnce, Slot_UsedUndef)` being
 # SSA. This should be true now but can break if we start to track conditional
 # constants. e.g.
 #
@@ -3610,7 +3610,7 @@ function optimize(me::InferenceState)
             end
             if proven_pure
                 for fl in me.src.slotflags
-                    if bitand(fl, Slot_UsedUndef) != 0
+                    if and(fl, Slot_UsedUndef) != 0
                         proven_pure = false
                         break
                     end
@@ -3691,7 +3691,7 @@ function finish(me::InferenceState)
 
         # don't store inferred code if we've decided to interpret this function
         if !already_inferred && me.linfo.jlcall_api != 4
-            const_flags = bitor((me.const_ret) << 1, me.const_api)
+            const_flags = or((me.const_ret) << 1, me.const_api)
             if me.const_ret
                 if isa(me.bestguess, Const)
                     inferred_const = (me.bestguess::Const).val
@@ -3870,7 +3870,7 @@ function type_annotate!(sv::InferenceState)
     # finish marking used-undef variables
     for j = 1:nslots
         if undefs[j]
-            src.slotflags[j] = bitor(src.slotflags[j], Slot_UsedUndef)
+            src.slotflags[j] or= Slot_UsedUndef
         end
     end
 
@@ -4111,7 +4111,7 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
     elseif isa(e, Symbol)
         return allow_volatile
     elseif isa(e, Slot)
-        return bitand(src.slotflags[slot_id(e)], Slot_UsedUndef) == 0
+        return and(src.slotflags[slot_id(e)], Slot_UsedUndef) == 0
     elseif isa(e, Expr)
         e = e::Expr
         head = e.head
@@ -5573,7 +5573,7 @@ function find_sa_vars(src::CodeInfo, nargs::Int)
                 # this transformation is not valid for vars used before def.
                 # we need to preserve the point of assignment to know where to
                 # throw errors (issue #4645).
-                if id > nargs && bitand(src.slotflags[id], Slot_UsedUndef) == 0
+                if id > nargs && and(src.slotflags[id], Slot_UsedUndef) == 0
                     if !haskey(av, lhs)
                         av[lhs] = e.args[2]
                     else
@@ -5636,7 +5636,7 @@ function occurs_outside_getfield(@nospecialize(e), @nospecialize(sym),
             end
         else
             if (head === :block && isa(sym, Slot) &&
-                    bitand(sv.src.slotflags[slot_id(sym)], Slot_UsedUndef) == 0)
+                    and(sv.src.slotflags[slot_id(sym)], Slot_UsedUndef) == 0)
                 ignore_void = true
             else
                 ignore_void = false
@@ -5662,7 +5662,7 @@ function void_use_elim_pass!(sv::OptimizationState)
             # Explicitly listed here for clarity
             return false
         elseif isa(ex, Slot)
-            return bitand(sv.src.slotflags[slot_id(ex)], Slot_UsedUndef) != 0
+            return and(sv.src.slotflags[slot_id(ex)], Slot_UsedUndef) != 0
         elseif isa(ex, GlobalRef)
             ex = ex::GlobalRef
             return !isdefined(ex.mod, ex.name)
@@ -5989,7 +5989,7 @@ function alloc_elim_pass!(sv::OptimizationState)
             rhs = e.args[2]
             # Need to make sure LLVM can recognize this as LLVM ssa value too
             is_ssa = (isa(var, SSAValue) ||
-                      bitand(sv.src.slotflags[slot_id(var)], Slot_UsedUndef) == 0)
+                      and(sv.src.slotflags[slot_id(var)], Slot_UsedUndef) == 0)
         else
             var = nothing
             rhs = e
@@ -6042,7 +6042,7 @@ function alloc_elim_pass!(sv::OptimizationState)
                                              sv.src.slotnames[slot_id(var)])
                             tmpv_id = slot_id(tmpv)
                             new_slots[j] = tmpv_id
-                            sv.src.slotflags[tmpv_id] = bitor(sv.src.slotflags[tmpv_id], Slot_UsedUndef)
+                            sv.src.slotflags[tmpv_id] or= Slot_UsedUndef
                         end
                         tmp = Expr(:(=), tmpv, tupelt)
                         insert!(body, i+n_ins, tmp)

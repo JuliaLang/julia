@@ -19,10 +19,10 @@ struct Cmd <: AbstractCmd
         new(cmd.exec, ignorestatus, flags, env,
             dir === cmd.dir ? dir : cstr(dir))
     function Cmd(cmd::Cmd; ignorestatus::Bool=cmd.ignorestatus, env=cmd.env, dir::AbstractString=cmd.dir,
-                 detach::Bool = !iszero(bitand(cmd.flags, UV_PROCESS_DETACHED)),
-                 windows_verbatim::Bool = !iszero(bitand(cmd.flags, UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS)),
-                 windows_hide::Bool = !iszero(bitand(cmd.flags, UV_PROCESS_WINDOWS_HIDE)))
-        flags = bitor(detach * UV_PROCESS_DETACHED,
+                 detach::Bool = !iszero(and(cmd.flags, UV_PROCESS_DETACHED)),
+                 windows_verbatim::Bool = !iszero(and(cmd.flags, UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS)),
+                 windows_hide::Bool = !iszero(and(cmd.flags, UV_PROCESS_WINDOWS_HIDE)))
+        flags = or(detach * UV_PROCESS_DETACHED,
                       windows_hide * UV_PROCESS_WINDOWS_HIDE,
                       windows_verbatim * UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS)
         new(cmd.exec, ignorestatus, flags, byteenv(env),
@@ -468,8 +468,8 @@ function setup_stdio(stdio::FileRedirect, readable::Bool)
         attr = JL_O_RDONLY
         perm = zero(S_IRUSR)
     else
-        attr = bitor(JL_O_WRONLY, JL_O_CREAT, stdio.append ? JL_O_APPEND : JL_O_TRUNC)
-        perm = bitor(S_IRUSR, S_IWUSR, S_IRGRP, S_IROTH)
+        attr = or(JL_O_WRONLY, JL_O_CREAT, stdio.append ? JL_O_APPEND : JL_O_TRUNC)
+        perm = or(S_IRUSR, S_IWUSR, S_IRGRP, S_IROTH)
     end
     io = Filesystem.open(stdio.filename, attr, perm)
     return (io, true)

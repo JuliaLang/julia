@@ -248,16 +248,16 @@ end
 
 # type predicates
 datatype_alignment(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    Int(bitand(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment, 0x1FF))
+    Int(and(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment, 0x1FF))
 
 datatype_haspadding(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    bitand(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 9, 1) == 1
+    and(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 9, 1) == 1
 
 datatype_pointerfree(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    bitand(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 10, 0xFFFFF) == 0
+    and(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 10, 0xFFFFF) == 0
 
 datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    bitand(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 30, 3)
+    and(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 30, 3)
 
 """
     isimmutable(v)

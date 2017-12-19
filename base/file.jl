@@ -138,7 +138,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         try
             @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
-                if bitand(filemode(path), 0o222) == 0
+                if and(filemode(path), 0o222) == 0
                     chmod(path, 0o777)
                 end
             end
@@ -245,7 +245,7 @@ end
 Update the last-modified timestamp on a file to the current time.
 """
 function touch(path::AbstractString)
-    f = open(path, bitor(JL_O_WRONLY, JL_O_CREAT), 0o0666)
+    f = open(path, or(JL_O_WRONLY, JL_O_CREAT), 0o0666)
     try
         t = time()
         futime(f,t,t)
@@ -287,7 +287,7 @@ end
 function mktempdir(parent=tempdir())
     seed::UInt32 = rand(UInt32)
     while true
-        if bitand(seed, typemax(UInt16)) == 0
+        if and(seed, typemax(UInt16)) == 0
             seed += 1
         end
         filename = tempname(parent, seed)
@@ -520,8 +520,8 @@ function sendfile(src::AbstractString, dst::AbstractString)
     try
         src_file = open(src, JL_O_RDONLY)
         src_open = true
-        dst_file = open(dst, bitor(JL_O_CREAT, JL_O_TRUNC, JL_O_WRONLY),
-                         bitor(S_IRUSR, S_IWUSR, S_IRGRP, S_IWGRP, S_IROTH, S_IWOTH))
+        dst_file = open(dst, or(JL_O_CREAT, JL_O_TRUNC, JL_O_WRONLY),
+                         or(S_IRUSR, S_IWUSR, S_IRGRP, S_IWGRP, S_IROTH, S_IWOTH))
         dst_open = true
 
         bytes = filesize(stat(src_file))
@@ -558,7 +558,7 @@ function symlink(p::AbstractString, np::AbstractString)
     flags = 0
     @static if Sys.iswindows()
         if isdir(p)
-            flags = bitor(flags, UV_FS_SYMLINK_JUNCTION)
+            flags or= UV_FS_SYMLINK_JUNCTION
             p = abspath(p)
         end
     end

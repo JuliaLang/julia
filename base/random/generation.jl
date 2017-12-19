@@ -19,13 +19,13 @@ rand(r::AbstractRNG=GLOBAL_RNG, ::Type{T}=Float64) where {T<:AbstractFloat} =
 
 rand_generic(r::AbstractRNG, ::CloseOpen{Float16}) =
     Float16(reinterpret(Float32,
-                        bitor(bitand(rand_ui10_raw(r) % UInt32 << 13, 0x007fe000), 0x3f800000) - 1)
+                        or(and(rand_ui10_raw(r) % UInt32 << 13, 0x007fe000), 0x3f800000) - 1)
 
 rand_generic(r::AbstractRNG, ::CloseOpen{Float32}) =
-    reinterpret(Float32, bitor(bitand(rand_ui23_raw(r) % UInt32, 0x007fffff), 0x3f800000) - 1
+    reinterpret(Float32, or(and(rand_ui23_raw(r) % UInt32, 0x007fffff), 0x3f800000) - 1
 
 rand_generic(r::AbstractRNG, ::Close1Open2_64) =
-    reinterpret(Float64, bitor(0x3ff0000000000000, bitand(rand(r, UInt64), 0x000fffffffffffff)))
+    reinterpret(Float64, or(0x3ff0000000000000, and(rand(r, UInt64), 0x000fffffffffffff)))
 
 rand_generic(r::AbstractRNG, ::CloseOpen_64) = rand(r, Close1Open2()) - 1.0
 
@@ -54,8 +54,8 @@ function _rand(rng::AbstractRNG, gen::BigFloatRandGenerator)
     rand!(rng, limbs)
     @inbounds begin
         limbs[1] <<= gen.shift
-        randbool = iszero(bitand(limbs[end], Limb_high_bit))
-        limbs[end] = bitor(limbs[end], Limb_high_bit)
+        randbool = iszero(and(limbs[end], Limb_high_bit))
+        limbs[end] = or(limbs[end], Limb_high_bit)
     end
     z.sign = 1
     Base.@gc_preserve limbs unsafe_copy!(z.d, pointer(limbs), gen.nlimbs)
@@ -96,7 +96,7 @@ rand_ui10_raw(r::AbstractRNG) = rand(r, UInt16)
 rand_ui23_raw(r::AbstractRNG) = rand(r, UInt32)
 
 rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2()))
-rand_ui52(r::AbstractRNG) = bitand(rand_ui52_raw(r), 0x000fffffffffffff)
+rand_ui52(r::AbstractRNG) = and(rand_ui52_raw(r), 0x000fffffffffffff)
 
 ### random complex numbers
 
@@ -233,7 +233,7 @@ function RangeGenerator(r::UnitRange{BigInt})
     nd = ndigits(m, 2)
     nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
     highbits > 0 && (nlimbs += 1)
-    mask = highbits == 0 ? bitnot(zero(Limb)) : one(Limb)<<highbits - one(Limb)
+    mask = highbits == 0 ? not(zero(Limb)) : one(Limb)<<highbits - one(Limb)
     nlimbsmax = max(nlimbs, abs(last(r).size), abs(first(r).size))
     return RangeGeneratorBigInt(first(r), m, nlimbs, nlimbsmax, mask)
 end
@@ -271,7 +271,7 @@ function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
     limbs = unsafe_wrap(Array, x.d, g.nlimbs)
     while true
         rand!(rng, limbs)
-        @inbounds limbs[end] = bitand(limbs[end], g.mask)
+        @inbounds limbs[end] = and(limbs[end], g.mask)
         MPZ.mpn_cmp(x, g.m, g.nlimbs) <= 0 && break
     end
     # adjust x.size (normally done by mpz_limbs_finish, in GMP version >= 6)

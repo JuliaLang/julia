@@ -10,7 +10,7 @@ struct IPv4 <: IPAddr
     host::UInt32
     IPv4(host::UInt32) = new(host)
     IPv4(a::UInt8,b::UInt8,c::UInt8,d::UInt8) =
-        new(bitor(UInt32(a) << 24, UInt32(b) << 16, UInt32(c) << 8, d))
+        new(or(UInt32(a) << 24, UInt32(b) << 16, UInt32(c) << 8, d))
     function IPv4(a::Integer,b::Integer,c::Integer,d::Integer)
         if !(0<=a<=255 && 0<=b<=255 && 0<=c<=255 && 0<=d<=255)
             throw(ArgumentError("IPv4 field out of range (must be 0-255)"))
@@ -43,16 +43,16 @@ end
 IPv4(str::AbstractString) = parse(IPv4, str)
 
 show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
-print(io::IO,ip::IPv4) = print(io, dec(bitand(ip.host, 0xFF000000) >> 24), ".",
-                                   dec(bitand(ip.host, 0xFF0000) >> 16), ".",
-                                   dec(bitand(ip.host, 0xFF00) >> 8), ".",
-                                   dec(bitand(ip.host, 0xFF)))
+print(io::IO,ip::IPv4) = print(io, dec(and(ip.host, 0xFF000000) >> 24), ".",
+                                   dec(and(ip.host, 0xFF0000) >> 16), ".",
+                                   dec(and(ip.host, 0xFF00) >> 8), ".",
+                                   dec(and(ip.host, 0xFF)))
 
 struct IPv6 <: IPAddr
     host::UInt128
     IPv6(host::UInt128) = new(host)
     IPv6(a::UInt16,b::UInt16,c::UInt16,d::UInt16,e::UInt16,f::UInt16,g::UInt16,h::UInt16) =
-        new(bitor(UInt128(a) << (7*16),
+        new(or(UInt128(a) << (7*16),
                     UInt128(b) << (6*16),
                     UInt128(c) << (5*16),
                     UInt128(d) << (4*16),
@@ -102,7 +102,7 @@ function ipv6_field(ip::IPv6,i)
     if i < 0 || i > 7
         throw(BoundsError())
     end
-    UInt16(bitand(ip.host, UInt128(0xFFFF) << (i*16)) >> (i*16))
+    UInt16(and(ip.host, UInt128(0xFFFF) << (i*16)) >> (i*16))
 end
 
 show(io::IO, ip::IPv6) = print(io,"ip\"",ip,"\"")
@@ -177,12 +177,12 @@ function parse(::Type{IPv4}, str::AbstractString)
             if r < 0 || r > 255
                 throw(ArgumentError("IPv4 field out of range (must be 0-255)"))
             end
-            ret = bitor(ret, UInt32(r) << ((4-i)*8))
+            ret = or(ret, UInt32(r) << ((4-i)*8))
         else
             if r > ((UInt64(1)<<((5-length(fields))*8))-1)
                 throw(ArgumentError("IPv4 field too large"))
             end
-            ret = bitor(ret, r)
+            ret = or(ret, r)
         end
         i+=1
     end
@@ -204,7 +204,7 @@ function parseipv6fields(fields,num_fields)
             cf -= 1
             continue
         end
-        ret = bitor(ret, UInt128(parse(Int,f,16))<<(cf*16))
+        ret = or(ret, UInt128(parse(Int,f,16))<<(cf*16))
         cf -= 1
     end
     ret
@@ -218,7 +218,7 @@ function parse(::Type{IPv6}, str::AbstractString)
     elseif length(fields) == 8
         return IPv6(parseipv6fields(fields))
     elseif in('.',fields[end])
-        return IPv6(bitor(parseipv6fields(fields[1:(end-1)], 6),
+        return IPv6(or(parseipv6fields(fields[1:(end-1)], 6),
                             parse(IPv4, fields[end]).host ))
     else
         return IPv6(parseipv6fields(fields))
@@ -436,10 +436,10 @@ function bind(sock::Union{TCPServer, UDPSocket}, host::IPAddr, port::Integer; ip
     end
     flags = 0
     if isa(host,IPv6) && ipv6only
-        flags = bitor(flags, isa(sock, UDPSocket) ? UV_UDP_IPV6ONLY : UV_TCP_IPV6ONLY)
+        flags = or(flags, isa(sock, UDPSocket) ? UV_UDP_IPV6ONLY : UV_TCP_IPV6ONLY)
     end
     if isa(sock, UDPSocket) && reuseaddr
-        flags = bitor(flags, UV_UDP_REUSEADDR)
+        flags = or(flags, UV_UDP_REUSEADDR)
     end
     err = _bind(sock, host, UInt16(port), UInt32(flags))
     if err < 0
@@ -523,7 +523,7 @@ function uv_recvcb(handle::Ptr{Void}, nread::Cssize_t, buf::Ptr{Void}, addr::Ptr
     if nread < 0
         Libc.free(buf_addr)
         notify_error(sock.recvnotify, UVError("recv", nread))
-    elseif bitand(flags, UV_UDP_PARTIAL) > 0
+    elseif and(flags, UV_UDP_PARTIAL) > 0
         Libc.free(buf_addr)
         notify_error(sock.recvnotify, "Partial message received")
     else

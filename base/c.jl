@@ -225,24 +225,24 @@ function transcode(::Type{UInt16}, src::Vector{UInt8})
                 push!(dst, a)
                 a = b; continue
             elseif a < 0xe0 # 2-byte UTF-8
-                push!(dst, bitxor(0x3080, UInt16(a) << 6, b))
+                push!(dst, xor(0x3080, UInt16(a) << 6, b))
             elseif i < n # 3/4-byte character
                 c = src[i += 1]
                 if -64 <= (c % Int8) # invalid UTF-8 (non-continuation)
                     push!(dst, a, b)
                     a = c; continue
                 elseif a < 0xf0 # 3-byte UTF-8
-                    push!(dst, bitxor(0x2080, UInt16(a) << 12, UInt16(b) << 6, c))
+                    push!(dst, xor(0x2080, UInt16(a) << 12, UInt16(b) << 6, c))
                 elseif i < n
                     d = src[i += 1]
                     if -64 <= (d % Int8) # invalid UTF-8 (non-continuation)
                         push!(dst, a, b, c)
                         a = d; continue
                     elseif a == 0xf0 && b < 0x90 # overlong encoding
-                        push!(dst, bitxor(0x2080, UInt16(b) << 12, UInt16(c) << 6, d))
+                        push!(dst, xor(0x2080, UInt16(b) << 12, UInt16(c) << 6, d))
                     else # 4-byte UTF-8
                         push!(dst, 0xe5b8 + (UInt16(a) << 8) + (UInt16(b) << 2) + (c >> 4),
-                                   bitxor(0xdc80, UInt16(bitand(c, 0xf)) << 6, d))
+                                   xor(0xdc80, UInt16(and(c, 0xf)) << 6, d))
                     end
                 else # too short
                     push!(dst, a, b, c)
@@ -278,9 +278,9 @@ function transcode(::Type{UInt8}, src::Vector{UInt16})
             m += 1
         elseif a < 0x800 # 2-byte UTF-8
             m += 2
-        elseif bitand(a, 0xfc00) == 0xd800 && i < length(src)
+        elseif and(a, 0xfc00) == 0xd800 && i < length(src)
             b = src[i += 1]
-            if bitand(b, 0xfc00) == 0xdc00 # 2-unit UTF-16 sequence => 4-byte UTF-8
+            if and(b, 0xfc00) == 0xdc00 # 2-unit UTF-16 sequence => 4-byte UTF-8
                 m += 4
             else
                 m += 3
@@ -302,29 +302,29 @@ function transcode(::Type{UInt8}, src::Vector{UInt16})
         if a < 0x80 # ASCII
             dst[j += 1] = a % UInt8
         elseif a < 0x800 # 2-byte UTF-8
-            dst[j += 1] = bitor(0xc0, (a >> 6) % UInt8)
-            dst[j += 1] = bitor(0x80, bitand(a % UInt8, 0x3f))
-        elseif bitand(a, 0xfc00) == 0xd800 && i < n
+            dst[j += 1] = or(0xc0, (a >> 6) % UInt8)
+            dst[j += 1] = or(0x80, and(a % UInt8, 0x3f))
+        elseif and(a, 0xfc00) == 0xd800 && i < n
             b = src[i += 1]
-            if bitand(b, 0xfc00) == 0xdc00
+            if and(b, 0xfc00) == 0xdc00
                 # 2-unit UTF-16 sequence => 4-byte UTF-8
                 a += 0x2840
-                dst[j += 1] = bitor(0xf0, (a >> 8) % UInt8)
-                dst[j += 1] = bitor(0x80, (a % UInt8) >> 2)
-                dst[j += 1] = bitxor(0xf0, bitand((a % UInt8) << 4, 0x3f), (b >> 6) % UInt8)
-                dst[j += 1] = bitor(0x80, bitand(b % UInt8, 0x3f))
+                dst[j += 1] = or(0xf0, (a >> 8) % UInt8)
+                dst[j += 1] = or(0x80, (a % UInt8) >> 2)
+                dst[j += 1] = xor(0xf0, and((a % UInt8) << 4, 0x3f), (b >> 6) % UInt8)
+                dst[j += 1] = or(0x80, and(b % UInt8, 0x3f))
             else
-                dst[j += 1] = bitor(0xe0, (a >> 12) % UInt8)
-                dst[j += 1] = bitor(0x80, bitand((a >> 6) % UInt8, 0x3f))
-                dst[j += 1] = bitor(0x80, bitand(a % UInt8, 0x3f))
+                dst[j += 1] = or(0xe0, (a >> 12) % UInt8)
+                dst[j += 1] = or(0x80, and((a >> 6) % UInt8, 0x3f))
+                dst[j += 1] = or(0x80, and(a % UInt8, 0x3f))
                 a = b; continue
             end
         else
             # 1-unit high UTF-16 or unpaired high surrogate
             # either way, encode as 3-byte UTF-8 code point
-            dst[j += 1] = bitor(0xe0, (a >> 12) % UInt8)
-            dst[j += 1] = bitor(0x80, bitand((a >> 6) % UInt8, 0x3f))
-            dst[j += 1] = bitor(0x80, bitand(a % UInt8, 0x3f))
+            dst[j += 1] = or(0xe0, (a >> 12) % UInt8)
+            dst[j += 1] = or(0x80, and((a >> 6) % UInt8, 0x3f))
+            dst[j += 1] = or(0x80, and(a % UInt8, 0x3f))
         end
         i < n || break
         a = src[i += 1]

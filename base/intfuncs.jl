@@ -558,7 +558,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
     a = StringVector(i)
     while i > neg
-        a[i] = '0' + bitand(x, 0x1)
+        a[i] = '0' + and(x, 0x1)
         x >>= 1
         i -= 1
     end
@@ -570,7 +570,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
     a = StringVector(i)
     while i > neg
-        a[i] = '0' + bitand(x, 0x7)
+        a[i] = '0' + and(x, 0x7)
         x >>= 3
         i -= 1
     end
@@ -594,7 +594,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
     a = StringVector(i)
     while i > neg
-        d = bitand(x, 0xf)
+        d = and(x, 0xf)
         a[i] = '0'+d+39*(d>9)
         x >>= 4
         i -= 1

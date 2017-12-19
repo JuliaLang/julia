@@ -80,7 +80,7 @@ end
 _searchindex(s, t::Char, i) = search(s, t, i)
 
 function _search_bloom_mask(c)
-    UInt64(1) << bitand(c, 63)
+    UInt64(1) << and(c, 63)
 end
 
 _nthbyte(s::String, i) = codeunit(s, i)
@@ -107,7 +107,7 @@ function _searchindex(s::Union{String,ByteArray}, t::Union{String,ByteArray}, i)
     skip = n - 1
     tlast = _nthbyte(t,n)
     for j in 1:n
-        bloom_mask = bitor(bloom_mask, _search_bloom_mask(_nthbyte(t,j)))
+        bloom_mask = or(bloom_mask, _search_bloom_mask(_nthbyte(t,j)))
         if _nthbyte(t,j) == tlast && j < n
             skip = n - j - 1
         end
@@ -131,13 +131,13 @@ function _searchindex(s::Union{String,ByteArray}, t::Union{String,ByteArray}, i)
             end
 
             # no match, try to rule out the next character
-            if i < w && bitand(bloom_mask, _search_bloom_mask(_nthbyte(s,i+n+1))) == 0
+            if i < w && and(bloom_mask, _search_bloom_mask(_nthbyte(s,i+n+1))) == 0
                 i += n
             else
                 i += skip
             end
         elseif i < w
-            if bitand(bloom_mask, _search_bloom_mask(_nthbyte(s,i+n+1))) == 0
+            if and(bloom_mask, _search_bloom_mask(_nthbyte(s,i+n+1))) == 0
                 i += n
             end
         end
@@ -274,7 +274,7 @@ function _rsearchindex(s::Union{String,ByteArray}, t::Union{String,ByteArray}, k
     skip = n - 1
     tfirst = _nthbyte(t,1)
     for j in n:-1:1
-        bloom_mask = bitor(bloom_mask, _search_bloom_mask(_nthbyte(t,j)))
+        bloom_mask = or(bloom_mask, _search_bloom_mask(_nthbyte(t,j)))
         if _nthbyte(t,j) == tfirst && j > 1
             skip = j - 2
         end
@@ -298,13 +298,13 @@ function _rsearchindex(s::Union{String,ByteArray}, t::Union{String,ByteArray}, k
             end
 
             # no match, try to rule out the next character
-            if i > 1 && bitand(bloom_mask, _search_bloom_mask(_nthbyte(s,i-1))) == 0
+            if i > 1 && and(bloom_mask, _search_bloom_mask(_nthbyte(s,i-1))) == 0
                 i -= n
             else
                 i -= skip
             end
         elseif i > 1
-            if bitand(bloom_mask, _search_bloom_mask(_nthbyte(s,i-1))) == 0
+            if and(bloom_mask, _search_bloom_mask(_nthbyte(s,i-1))) == 0
                 i -= n
             end
         end

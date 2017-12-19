@@ -394,7 +394,7 @@ for op in (+, -, abs, abs2)
     null_safe_op(::typeof(op), ::Type{Rational{S}}) where {S} = null_safe_op(op, S)
 end
 
-null_safe_op(::typeof(bitnot), ::NullSafeInts) = true
+null_safe_op(::typeof(not), ::NullSafeInts) = true
 null_safe_op(::typeof(!), ::Type{Bool}) = true
 
 # Binary operators
@@ -402,7 +402,7 @@ null_safe_op(::typeof(!), ::Type{Bool}) = true
 # Note this list does not include ^, ÷ and %
 # Operations between signed and unsigned types are not safe: promotion to unsigned
 # gives an InexactError for negative numbers
-for op in (+, -, *, /, bitand, bitor, <<, >>, >>>,
+for op in (+, -, *, /, and, or, <<, >>, >>>,
            scalarmin, scalarmax)
     # to fix ambiguities
     global null_safe_op

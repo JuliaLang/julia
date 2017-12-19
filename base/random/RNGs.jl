@@ -173,7 +173,7 @@ function make_seed(n::Integer)
     n < 0 && throw(DomainError(n, "`n` must be non-negative."))
     seed = UInt32[]
     while true
-        push!(seed, bitand(n, 0xffffffff))
+        push!(seed, and(n, 0xffffffff))
         n >>= 32
         if n == 0
             return seed
@@ -216,7 +216,7 @@ rand_ui52_raw(r::MersenneTwister) = (reserve_1(r); rand_ui52_raw_inbounds(r))
 
 function rand_ui2x52_raw(r::MersenneTwister)
     reserve(r, 2)
-    bitor(rand_ui52_raw_inbounds(r) % UInt128 << 64, rand_ui52_raw_inbounds(r))
+    or(rand_ui52_raw_inbounds(r) % UInt128 << 64, rand_ui52_raw_inbounds(r))
 end
 
 function rand_ui104_raw(r::MersenneTwister)
@@ -246,7 +246,7 @@ end
 
 function rand(r::MersenneTwister, ::Type{UInt128})
     reserve(r, 3)
-    bitxor(rand_ui52_raw_inbounds(r) % UInt128 << 96,
+    xor(rand_ui52_raw_inbounds(r) % UInt128 << 96,
            rand_ui52_raw_inbounds(r) % UInt128 << 48,
            rand_ui52_raw_inbounds(r))
 end
@@ -318,10 +318,10 @@ function rand!(r::MersenneTwister, A::Array{Float64}, n::Int=length(A),
 end
 
 mask128(u::UInt128, ::Type{Float16}) =
-    bitor(bitand(u, 0x03ff03ff03ff03ff03ff03ff03ff03ff), 0x3c003c003c003c003c003c003c003c00)
+    or(and(u, 0x03ff03ff03ff03ff03ff03ff03ff03ff), 0x3c003c003c003c003c003c003c003c00)
 
 mask128(u::UInt128, ::Type{Float32}) =
-    bitor(bitand(u, 0x007fffff007fffff007fffff007fffff), 0x3f8000003f8000003f8000003f800000)
+    or(and(u, 0x007fffff007fffff007fffff007fffff), 0x3f8000003f8000003f8000003f800000)
 
 function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}},
                ::Close1Open2_64)
@@ -413,7 +413,7 @@ end
 
 function rand_lteq(r::AbstractRNG, randfun, u::U, mask::U) where U<:Integer
     while true
-        x = bitand(randfun(r), mask)
+        x = and(randfun(r), mask)
         x <= u && return x
     end
 end

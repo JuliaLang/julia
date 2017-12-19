@@ -24,7 +24,7 @@ hash(@nospecialize(x), h::UInt) = hash_uint(3h - object_id(x))
 
 function hash_64_64(n::UInt64)
     local a::UInt64 = n
-    a = bitnot(a) + a << 21
+    a = not(a) + a << 21
     a =  a ⊻ a >> 24
     a =  a + a << 3 + a << 8
     a =  a ⊻ a >> 14
@@ -36,7 +36,7 @@ end
 
 function hash_64_32(n::UInt64)
     local a::UInt64 = n
-    a = bitnot(a) + a << 18
+    a = not(a) + a << 18
     a =  a ⊻ a >> 31
     a =  a * 21
     a =  a ⊻ a >> 11

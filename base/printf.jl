@@ -828,7 +828,7 @@ function decode_oct(d::Integer)
     @handle_zero x
     pt = i = div((sizeof(x)<<3)-leading_zeros(x)+2,3)
     while i > 0
-        DIGITS[i] = '0' + bitand(x, 0x7)
+        DIGITS[i] = '0' + and(x, 0x7)
         x >>= 3
         i -= 1
     end
@@ -840,7 +840,7 @@ function decode_0ct(d::Integer)
     # doesn't need special handling for zero
     pt = i = div((sizeof(x)<<3)-leading_zeros(x)+5,3)
     while i > 0
-        DIGITS[i] = '0' + bitand(x, 0x7)
+        DIGITS[i] = '0' + and(x, 0x7)
         x >>= 3
         i -= 1
     end
@@ -864,7 +864,7 @@ function decode_hex(d::Integer, symbols::Array{UInt8,1})
     @handle_zero x
     pt = i = (sizeof(x)<<1)-(leading_zeros(x)>>2)
     while i > 0
-        DIGITS[i] = symbols[bitand(x, 0xf) + 1]
+        DIGITS[i] = symbols[and(x, 0xf) + 1]
         x >>= 4
         i -= 1
     end
@@ -1046,13 +1046,13 @@ function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
         sigbits = 4*min(n-1,13)
         s = 0.25*round(ldexp(s,1+sigbits))
         # ensure last 2 exponent bits either 01 or 10
-        u = bitand(reinterpret(UInt64,s), 0x003f_ffff_ffff_ffff) >> (52-sigbits)
+        u = and(reinterpret(UInt64,s), 0x003f_ffff_ffff_ffff) >> (52-sigbits)
         if n > 14
             ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
         end
         i = (sizeof(u)<<1)-(leading_zeros(u)>>2)
         while i > 0
-            DIGITS[i] = symbols[bitand(u, 0xf) + 1]
+            DIGITS[i] = symbols[and(u, 0xf) + 1]
             u >>= 4
             i -= 1
         end
@@ -1069,12 +1069,12 @@ function ini_hex(x::SmallFloatingPoint, symbols::Array{UInt8,1})
     else
         s, p = frexp(x)
         s *= 2.0
-        u = bitand(reinterpret(UInt64,s), 0x001f_ffff_ffff_ffff)
+        u = and(reinterpret(UInt64,s), 0x001f_ffff_ffff_ffff)
         t = (trailing_zeros(u) >> 2)
         u >>= (t<<2)
         n = 14-t
         for i = n:-1:1
-            DIGITS[i] = symbols[bitand(u, 0xf) + 1]
+            DIGITS[i] = symbols[and(u, 0xf) + 1]
             u >>= 4
         end
         # pt is the binary exponent

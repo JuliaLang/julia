@@ -82,13 +82,13 @@ julia> exp10(0.2)
 ```
 """
 function exp10(x::T) where T<:Union{Float32,Float64}
-    xa = bitand(reinterpret(Unsigned, x), bitnot(sign_mask(T)))
+    xa = and(reinterpret(Unsigned, x), not(sign_mask(T)))
     xsb = signbit(x)
 
     # filter out non-finite arguments
     if xa > reinterpret(Unsigned, MAX_EXP10(T))
         if xa >= exponent_mask(T)
-            bitand(xa, significand_mask(T)) != 0 && return T(NaN)
+            and(xa, significand_mask(T)) != 0 && return T(NaN)
             return xsb ? T(0.0) : T(Inf) # exp10(+-Inf)
         end
         x > MAX_EXP10(T) && return T(Inf)

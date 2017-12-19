@@ -30,7 +30,7 @@ end
 
 # supported options for different use cases
 
-const COMPILE_MASK      = bitor(
+const COMPILE_MASK      = or(
       ANCHORED          ,
       CASELESS          ,
       DOLLAR_ENDONLY    ,
@@ -49,7 +49,7 @@ const COMPILE_MASK      = bitor(
       UNGREEDY          )
       UTF
 
-const EXECUTE_MASK      = bitor(
+const EXECUTE_MASK      = or(
       NEWLINE_ANY       ,
       NEWLINE_ANYCRLF   ,
       NEWLINE_CR        ,
@@ -65,9 +65,9 @@ const EXECUTE_MASK      = bitor(
       PARTIAL_SOFT      )
 
 
-const OPTIONS_MASK = bitor(COMPILE_MASK, EXECUTE_MASK)
+const OPTIONS_MASK = or(COMPILE_MASK, EXECUTE_MASK)
 
-const UNSET = bitnot(Csize_t(0))  # Indicates that an output vector element is unset
+const UNSET = not(Csize_t(0))  # Indicates that an output vector element is unset
 
 function info(regex::Ptr{Void}, what::Integer, ::Type{T}) where T
     buf = Ref{T}()
@@ -173,7 +173,7 @@ function capture_names(re)
         # big-endian 16-bit value.
         high_byte = UInt16(unsafe_load(nametable_ptr, offset))
         low_byte = UInt16(unsafe_load(nametable_ptr, offset+1))
-        idx = bitor(high_byte << 8, low_byte)
+        idx = or(high_byte << 8, low_byte)
         # The capture group name is a null-terminated string located directly
         # after the index.
         names[idx] = unsafe_string(nametable_ptr+offset+1)

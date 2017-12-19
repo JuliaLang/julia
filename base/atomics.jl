@@ -180,7 +180,7 @@ function atomic_sub! end
 
 Atomically bitwise-and `x` with `val`
 
-Performs `x[] = bitand(x[], mval)` atomically. Returns the **old** value.
+Performs `x[] and= mval` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw and` instruction.
 
@@ -203,7 +203,7 @@ function atomic_and! end
 
 Atomically bitwise-nand (not-and) `x` with `val`
 
-Performs `x[] = bitnot(bitand(x[], val))` atomically. Returns the **old** value.
+Performs `x[] = not(and(x[], val))` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw nand` instruction.
 
@@ -226,7 +226,7 @@ function atomic_nand! end
 
 Atomically bitwise-or `x` with `val`
 
-Performs `x[] = bitor(x[], val)` atomically. Returns the **old** value.
+Performs `x[] or= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw or` instruction.
 
@@ -249,7 +249,7 @@ function atomic_or! end
 
 Atomically bitwise-xor (exclusive-or) `x` with `val`
 
-Performs `x[] = bitxor(x[], val)` atomically. Returns the **old** value.
+Performs `x[] xor= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw xor` instruction.
 

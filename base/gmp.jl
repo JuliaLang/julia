@@ -4,7 +4,7 @@ module GMP
 
 export BigInt
 
-import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, bitnot, bitand, bitor, bitxor,
+import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, not, and, or, xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
@@ -288,7 +288,7 @@ function convert(::Type{BigInt}, x::Integer)
         b = BigInt(0)
         shift = 0
         while x < -1
-            b += BigInt(bitnot(UInt32(bitand(x, 0xffffffff)))) << shift
+            b += BigInt(not(UInt32(and(x, 0xffffffff)))) << shift
             x >>= 32
             shift += 32
         end
@@ -300,7 +300,7 @@ function convert(::Type{BigInt}, x::Integer)
         b = BigInt(0)
         shift = 0
         while x > 0
-            b += BigInt(UInt32(bitand(x, 0xffffffff))) << shift
+            b += BigInt(UInt32(and(x, 0xffffffff))) << shift
             x >>>= 32
             shift += 32
         end
@@ -405,7 +405,7 @@ big(::Type{<:Rational}) = Rational{BigInt}
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
                  (:fld, :fdiv_q), (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),
                  (:gcd, :gcd), (:lcm, :lcm),
-                 (:bitand, :and), (:bitor, :ior), (:bitxor, :xor))
+                 (:and, :and), (:or, :ior), (:xor, :xor))
     @eval begin
         ($fJ)(x::BigInt, y::BigInt) = MPZ.$fC(x, y)
     end
@@ -433,7 +433,7 @@ function invmod(x::BigInt, y::BigInt)
 end
 
 # More efficient commutative operations
-for (fJ, fC) in ((:+, :add), (:*, :mul), (:bitand, :and), (:bitor, :ior), (:bitxor, :xor))
+for (fJ, fC) in ((:+, :add), (:*, :mul), (:and, :and), (:or, :ior), (:xor, :xor))
     fC! = Symbol(fC, :!)
     @eval begin
         ($fJ)(a::BigInt, b::BigInt, c::BigInt) = MPZ.$fC!(MPZ.$fC(a, b), c)
@@ -465,7 +465,7 @@ end
 
 # unary ops
 (-)(x::BigInt) = MPZ.neg(x)
-bitnot(x::BigInt) = MPZ.com(x)
+not(x::BigInt) = MPZ.com(x)
 
 <<(x::BigInt, c::UInt) = c == 0 ? x : MPZ.mul_2exp(x, c)
 >>(x::BigInt, c::UInt) = c == 0 ? x : MPZ.fdiv_q_2exp(x, c)

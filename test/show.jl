@@ -66,7 +66,7 @@ end
 @test_repr "2e"
 @test_repr "!x"
 @test_repr "f(1, 2, 3)"
-@test_repr "x = bitnot(y)"
+@test_repr "x = not(y)"
 @test_repr ":(:x, :y)"
 @test_repr ":(:(:(x)))"
 
@@ -185,17 +185,17 @@ end"""
     # line meta
     if delta_kd == 0
         # line meta
-        msk_d0 = bitor(bitnot(u << ld0), u << ld1 << 1)
+        msk_d0 = or(not(u << ld0), u << ld1 << 1)
     else
         # line meta
-        msk_d0 = bitnot(u << ld0)
+        msk_d0 = not(u << ld0)
         # line meta
         msk_d1 = (u << ld1 << 1)
     end
     # line meta
     if delta_ks == 0
         # line meta
-        msk_s0 = bitand(u << ls0, bitnot(u << ls1 << 1))
+        msk_s0 = and(u << ls0, not(u << ls1 << 1))
     else
         # line meta
         msk_s0 = (u << ls0)
@@ -203,7 +203,7 @@ end"""
     # line meta
     chunk_s0 = glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
     # line meta
-    dest[kd0] = bitor(bitand(dest[kd0], msk_d0), bitand(chunk_s0 << ld0, bitnot(msk_d0)))
+    dest[kd0] = or(and(dest[kd0], msk_d0), and(chunk_s0 << ld0, not(msk_d0)))
     # line meta
     if delta_kd == 0
         # line meta
@@ -214,7 +214,7 @@ end"""
         # line meta
         chunk_s1 = glue_src_bitchunks(src, ks0 + i, ks1, msk_s0, ls0)
         # line meta
-        chunk_s = bitor(chunk_s0 >>> (63 - ld0) >>> 1, chunk_s1 << ld0)
+        chunk_s = or(chunk_s0 >>> (63 - ld0) >>> 1, chunk_s1 << ld0)
         # line meta
         dest[kd0 + i] = chunk_s
         # line meta
@@ -229,9 +229,9 @@ end"""
         chunk_s1 = UInt64(0)
     end
     # line meta
-    chunk_s = bitor(chunk_s0 >>> (63 - ld0) >>> 1, chunk_s1 << ld0)
+    chunk_s = or(chunk_s0 >>> (63 - ld0) >>> 1, chunk_s1 << ld0)
     # line meta
-    dest[kd1] = bitor(bitand(dest[kd1], msk_d1), bitand(chunk_s, bitnot(msk_d1)))
+    dest[kd1] = or(and(dest[kd1], msk_d1), and(chunk_s, not(msk_d1)))
     # line meta
     return
 end"""

@@ -48,11 +48,11 @@ const FloatSignificandSize = Int32(64)
 function normalize(v::Float)
     f = v.s
     e::Int32 = v.e
-    while bitand(f, Float10MSBits) == 0
+    while and(f, Float10MSBits) == 0
         f <<= 10
         e -= 10
     end
-    while bitand(f, FloatSignMask) == 0
+    while and(f, FloatSignMask) == 0
         f <<= 1
         e -= 1
     end
@@ -60,7 +60,7 @@ function normalize(v::Float)
 end
 function normalize(v::Float64)
     s = _significand(v); e = _exponent(v)
-    while bitand(s, HiddenBit(Float64)) == 0
+    while and(s, HiddenBit(Float64)) == 0
         s <<= UInt64(1)
         e -= Int32(1)
     end
@@ -108,14 +108,14 @@ uint_t(d::Float16) = reinterpret(UInt16,d)
 
 function _exponent(d::T) where T<:AbstractFloat
   isdenormal(d) && return DenormalExponent(T)
-  biased_e::Int32 = Int32(bitand(uint_t(d), ExponentMask(T)) >> PhysicalSignificandSize(T))
+  biased_e::Int32 = Int32(and(uint_t(d), ExponentMask(T)) >> PhysicalSignificandSize(T))
   return Int32(biased_e - ExponentBias(T))
 end
 function _significand(d::T) where T<:AbstractFloat
-  s = bitand(uint_t(d), SignificandMask(T))
+  s = and(uint_t(d), SignificandMask(T))
   return !isdenormal(d) ? s + HiddenBit(T) : s
 end
-isdenormal(d::T) where {T<:AbstractFloat} = bitand(uint_t(d), ExponentMask(T)) == 0
+isdenormal(d::T) where {T<:AbstractFloat} = and(uint_t(d), ExponentMask(T)) == 0
 
 function normalizedbound(f::AbstractFloat)
     v = Float(_significand(f),_exponent(f))
@@ -128,7 +128,7 @@ function normalizedbound(f::AbstractFloat)
     return Float(m_minus.s << (m_minus.e - m_plus.e), m_plus.e), m_plus
 end
 function lowerboundaryiscloser(f::T) where T<:AbstractFloat
-    physical_significand_is_zero = bitand(uint_t(f), SignificandMask(T)) == 0
+    physical_significand_is_zero = and(uint_t(f), SignificandMask(T)) == 0
     return physical_significand_is_zero && (_exponent(f) != DenormalExponent(T))
 end
 
@@ -138,14 +138,14 @@ const FloatM32 = 0xFFFFFFFF
 
 function (*)(this::Float,other::Float)
     a::UInt64 = this.s >> 32
-    b::UInt64 = bitand(this.s, FloatM32)
+    b::UInt64 = and(this.s, FloatM32)
     c::UInt64 = other.s >> 32
-    d::UInt64 = bitand(other.s, FloatM32)
+    d::UInt64 = and(other.s, FloatM32)
     ac::UInt64 = a * c
     bc::UInt64 = b * c
     ad::UInt64 = a * d
     bd::UInt64 = b * d
-    tmp::UInt64 = (bd >> 32) + bitand(ad, FloatM32) + bitand(bc, FloatM32)
+    tmp::UInt64 = (bd >> 32) + and(ad, FloatM32) + and(bc, FloatM32)
     # By adding 1U << 31 to tmp we round the final result.
     # Halfway cases will be round up.
     tmp += UInt64(1) << 31

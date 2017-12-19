@@ -2001,7 +2001,7 @@ end
 @test f15894(ones(Int, 100)) == 100
 end
 
-@testset "sign, conj, bitnot" begin
+@testset "sign, conj, not" begin
     local A, B, C
     A = [-10,0,3]
     B = [-10.0,0.0,3.0]
@@ -2019,8 +2019,8 @@ end
     @test typeof(conj(B)) == Vector{Float64}
     @test typeof(conj(C)) == Vector{Complex{Int}}
 
-    @test bitnot.(A) == [9,-1,-4]
-    @test typeof(bitnot.(A)) == Vector{Int}
+    @test not.(A) == [9,-1,-4]
+    @test typeof(not.(A)) == Vector{Int}
 end
 
 @testset "issue #16247" begin

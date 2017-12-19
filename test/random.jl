@@ -315,7 +315,7 @@ end
 
 # make sure reading 128-bit ints from RandomDevice works
 let a = [rand(RandomDevice(), UInt128) for i=1:10]
-    @test reduce(bitor, a)>>>64 != 0
+    @test reduce(or, a)>>>64 != 0
 end
 
 # test all rand APIs

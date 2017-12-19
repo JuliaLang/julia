@@ -48,8 +48,8 @@
 @test mapreduce(abs2, +, Float64[]) === 0.0
 @test mapreduce(abs2, Base.scalarmax, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
-@test_throws ArgumentError mapreduce(abs2, bitand, Float64[])
-@test_throws ArgumentError mapreduce(abs2, bitor, Float64[])
+@test_throws ArgumentError mapreduce(abs2, and, Float64[])
+@test_throws ArgumentError mapreduce(abs2, or, Float64[])
 
 # mapreduce() type stability
 @test typeof(mapreduce(*, +, Int8[10])) ===
@@ -401,6 +401,6 @@ test18695(r) = sum( t^2 for t in r )
 # issue #21107
 @test foldr(-,2:2) == 2
 
-# test neutral element not picked incorrectly for bitand, bitor
-@test @inferred(foldl(bitand, Int[1])) === 1
-@test_throws ArgumentError foldl(bitand, Int[])
+# test neutral element not picked incorrectly for and, or
+@test @inferred(foldl(and, Int[1])) === 1
+@test_throws ArgumentError foldl(and, Int[])

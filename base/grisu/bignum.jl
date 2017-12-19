@@ -30,7 +30,7 @@
 
 function normalizedexponent(significand, exponent::Int32)
     significand = UInt64(significand)
-    while bitand(significand, HiddenBit(Float64)) == 0
+    while and(significand, HiddenBit(Float64)) == 0
         significand <<= UInt64(1)
         exponent -= Int32(1)
     end
@@ -43,7 +43,7 @@ function bignumdtoa(v,mode,requested_digits::Int,buffer,bignums)
     lower_boundary_is_closer = lowerboundaryiscloser(v)
     need_boundary_deltas = mode == SHORTEST
 
-    is_even = bitand(significand, 1) == 0
+    is_even = and(significand, 1) == 0
     normalized_exponent = normalizedexponent(significand, exponent)
     estimated_power = estimatepower(Int(normalized_exponent))
 

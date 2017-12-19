@@ -75,7 +75,7 @@ function Base.push!(w::GitRevWalker, range::AbstractString)
 end
 
 function Base.sort!(w::GitRevWalker; by::Cint = Consts.SORT_NONE, rev::Bool=false)
-    rev && (by = bitor(by, Consts.SORT_REVERSE))
+    rev && (by or= Consts.SORT_REVERSE)
     ccall((:git_revwalk_sorting, :libgit2), Void, (Ptr{Void}, Cint), w.ptr, by)
     return w
 end

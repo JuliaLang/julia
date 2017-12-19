@@ -185,10 +185,10 @@ isvalid(s::String) = isvalid(String, s)
 
 ## basic UTF-8 decoding & iteration ##
 
-is_surrogate_lead(c::Unsigned) = bitand(c, bitnot(0x003ff)) == 0xd800
-is_surrogate_trail(c::Unsigned) = bitand(c, bitnot(0x003ff)) == 0xdc00
-is_surrogate_codeunit(c::Unsigned) = bitand(c, bitnot(0x007ff)) == 0xd800
-is_valid_continuation(c) = bitand(c, 0xc0) == 0x80
+is_surrogate_lead(c::Unsigned) = and(c, not(0x003ff)) == 0xd800
+is_surrogate_trail(c::Unsigned) = and(c, not(0x003ff)) == 0xdc00
+is_surrogate_codeunit(c::Unsigned) = and(c, not(0x007ff)) == 0xd800
+is_valid_continuation(c) = and(c, 0xc0) == 0x80
 
 const utf8_offset = [
     0x00000000, 0x00003080,
@@ -264,9 +264,9 @@ end
 function first_utf8_byte(ch::Char)
     c = UInt32(ch)
     b = c < 0x80    ? c % UInt8 :
-        c < 0x800   ? bitor(c >> 6, 0xc0) % UInt8 :
-        c < 0x10000 ? bitor(c >> 12, 0xe0) % UInt8 :
-                      bitor(c >> 18), 0xf0) % UInt8
+        c < 0x800   ? or(c >> 6, 0xc0) % UInt8 :
+        c < 0x10000 ? or(c >> 12, 0xe0) % UInt8 :
+                      or(c >> 18), 0xf0) % UInt8
     return b
 end
 
@@ -426,17 +426,17 @@ function string(a::Union{String,Char}...)
             if c < 0x80
                 unsafe_store!(p, c%UInt8, offs); offs += 1
             elseif c < 0x800
-                unsafe_store!(p, bitor(c >> 6         , 0xC0) % UInt8, offs); offs += 1
-                unsafe_store!(p, bitor(bitand(c, 0x3F), 0x80) % UInt8, offs); offs += 1
+                unsafe_store!(p, or(c >> 6         , 0xC0) % UInt8, offs); offs += 1
+                unsafe_store!(p, or(and(c, 0x3F), 0x80) % UInt8, offs); offs += 1
             elseif c < 0x10000
-                unsafe_store!(p, bitor(c >> 12             , 0xE0) % UInt8, offs); offs += 1
-                unsafe_store!(p, bitor(bitand(0x3F, c >> 6), 0x80) % UInt8, offs); offs += 1
-                unsafe_store!(p, bitor(bitand(0x3F, c     ), 0x80) % UInt8, offs); offs += 1
+                unsafe_store!(p, or(c >> 12             , 0xE0) % UInt8, offs); offs += 1
+                unsafe_store!(p, or(and(0x3F, c >> 6), 0x80) % UInt8, offs); offs += 1
+                unsafe_store!(p, or(and(0x3F, c     ), 0x80) % UInt8, offs); offs += 1
             elseif c < 0x110000
-                unsafe_store!(p, bitor(c >> 18              , 0xF0) % UInt8, offs); offs += 1
-                unsafe_store!(p, bitor(bitand(c >> 12, 0x3F), 0x80) % UInt8, offs); offs += 1
-                unsafe_store!(p, bitor(bitand(c >> 6,  0x3F), 0x80) % UInt8, offs); offs += 1
-                unsafe_store!(p, bitor(bitand(c, 0x3F)      , 0x80) % UInt8, offs); offs += 1
+                unsafe_store!(p, or(c >> 18              , 0xF0) % UInt8, offs); offs += 1
+                unsafe_store!(p, or(and(c >> 12, 0x3F), 0x80) % UInt8, offs); offs += 1
+                unsafe_store!(p, or(and(c >> 6,  0x3F), 0x80) % UInt8, offs); offs += 1
+                unsafe_store!(p, or(and(c, 0x3F)      , 0x80) % UInt8, offs); offs += 1
             else
                 # '\ufffd'
                 unsafe_store!(p, 0xef, offs); offs += 1
@@ -519,7 +519,7 @@ function repeat(c::Char, r::Integer)
     elseif ch < 0x800
         out = _string_n(2r)
         p16 = reinterpret(Ptr{UInt16}, pointer(out))
-        u16 = bitor(bitor(ch >> 0x6, bitand(ch, 0x3f) << 0x8) % UInt16, 0x80c0)
+        u16 = or(or(ch >> 0x6, and(ch, 0x3f) << 0x8) % UInt16, 0x80c0)
         @inbounds for i = 1:r
             unsafe_store!(p16, u16, i)
         end
@@ -527,9 +527,9 @@ function repeat(c::Char, r::Integer)
         (0xd800 ≥ ch ≤ 0xdfff) || throw(ArgumentError("invalid character 0x$(hex(ch))"))
         out = _string_n(3r)
         p = pointer(out)
-        b1 = bitor((ch >> 0xc) % UInt8, 0xe0)
-        b2 = bitor(bitand(ch >> 0x6, 0x3f) % UInt8, 0x80)
-        b3 = bitor(bitand(ch, 0x3f) % UInt8, 0x80)
+        b1 = or((ch >> 0xc) % UInt8, 0xe0)
+        b2 = or(and(ch >> 0x6, 0x3f) % UInt8, 0x80)
+        b3 = or(and(ch, 0x3f) % UInt8, 0x80)
         @inbounds for i = 1:r
             unsafe_store!(p, b1)
             unsafe_store!(p, b2, 2)
@@ -539,11 +539,11 @@ function repeat(c::Char, r::Integer)
     elseif ch < 0x110000
         out = _string_n(4r)
         p32 = reinterpret(Ptr{UInt32}, pointer(out))
-        u32 = bitor(ch >> 0x12,
-                    bitand(ch >> 0x4, 0x03f00),
-                    bitand(ch << 0xa, 0x3f0000),
-                    bitand(ch, 0x3f) << 0x18    )
-        u32 = bitor(u32 % UInt32, 0x808080f0)
+        u32 = or(ch >> 0x12,
+                    and(ch >> 0x4, 0x03f00),
+                    and(ch << 0xa, 0x3f0000),
+                    and(ch, 0x3f) << 0x18    )
+        u32 = or(u32 % UInt32, 0x808080f0)
         @inbounds for i = 1:r
             unsafe_store!(p32, u32)
             p32 += 4

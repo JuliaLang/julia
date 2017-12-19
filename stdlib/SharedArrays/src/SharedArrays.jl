@@ -113,12 +113,12 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
         shm_seg_name = @sprintf("/jl%06u%s", getpid() % 10^6, randstring(20))
         if onlocalhost
             shmmem_create_pid = myid()
-            s = shm_mmap_array(T, dims, shm_seg_name, bitor(JL_O_CREAT, JL_O_RDWR))
+            s = shm_mmap_array(T, dims, shm_seg_name, or(JL_O_CREAT, JL_O_RDWR))
         else
             # The shared array is created on a remote machine
             shmmem_create_pid = pids[1]
             remotecall_fetch(pids[1]) do
-                shm_mmap_array(T, dims, shm_seg_name, bitor(JL_O_CREAT, JL_O_RDWR))
+                shm_mmap_array(T, dims, shm_seg_name, or(JL_O_CREAT, JL_O_RDWR))
                 nothing
             end
         end
@@ -648,8 +648,8 @@ end
 
 if Sys.iswindows()
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
-    readonly = bitand(mode, JL_O_RDWR) != JL_O_RDWR
-    create = bitand(mode, JL_O_CREAT) == JL_O_CREAT
+    readonly = and(mode, JL_O_RDWR) != JL_O_RDWR
+    create = and(mode, JL_O_CREAT) == JL_O_CREAT
     s = Mmap.Anonymous(shm_seg_name, readonly, create)
     Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64))
 end
@@ -659,14 +659,14 @@ shm_unlink(shm_seg_name) = 0
 
 else # !windows
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
-    fd_mem = shm_open(shm_seg_name, mode, bitor(S_IRUSR, S_IWUSR))
+    fd_mem = shm_open(shm_seg_name, mode, or(S_IRUSR, S_IWUSR))
     systemerror("shm_open() failed for " * shm_seg_name, fd_mem < 0)
 
     s = fdio(fd_mem, true)
 
     # On OSX, ftruncate must to used to set size of segment, just lseek does not work.
     # and only at creation time
-    if bitand(mode, JL_O_CREAT) == JL_O_CREAT
+    if and(mode, JL_O_CREAT) == JL_O_CREAT
         rc = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd_mem, prod(dims)*sizeof(T))
         systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
     end

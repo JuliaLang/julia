@@ -181,9 +181,9 @@ end
     @test BigInt(-5) << -1 == -3
 end
 @testset "boolean ops" begin
-    @test bitnot(BigInt(123)) == -124
-    @test bitand(BigInt(123), BigInt(234)) == 106
-    @test bitor(BigInt(123), BigInt(234)) == 251
+    @test not(BigInt(123)) == -124
+    @test and(BigInt(123), BigInt(234)) == 106
+    @test or(BigInt(123), BigInt(234)) == 251
     @test BigInt(123) ⊻ BigInt(234) == 145
 
     @test gcd(BigInt(48), BigInt(180)) == 12
@@ -223,23 +223,23 @@ end
     @test *(a, b, c, d, f) == parse(BigInt,"-45258849200337190631492857400003938881995610529251881450243326128168934937055005474972396281351684800")
     @test *(a, b, c, d, f, g) == parse(BigInt,"45258849200337190631492857400003938881995610529251881450243326128168934937055005474972396281351684800")
 
-    @test bitxor(a, b) == parse(BigInt,"327299")
-    @test bitxor(a, b, c) == parse(BigInt,"3426495623485904783798472")
-    @test bitxor(a, b, c, d) == parse(BigInt,"-3426495623485906178489610")
-    @test bitxor(a, b, c, d, f) == parse(BigInt,"-2413804710837418037418307081437316711364709261074607933698")
-    @test bitxor(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437316711364709261074607933697")
+    @test xor(a, b) == parse(BigInt,"327299")
+    @test xor(a, b, c) == parse(BigInt,"3426495623485904783798472")
+    @test xor(a, b, c, d) == parse(BigInt,"-3426495623485906178489610")
+    @test xor(a, b, c, d, f) == parse(BigInt,"-2413804710837418037418307081437316711364709261074607933698")
+    @test xor(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437316711364709261074607933697")
 
-    @test bitand(a, b) == parse(BigInt,"124")
-    @test bitand(a, b, c) == parse(BigInt,"72")
-    @test bitand(a, b, c, d) == parse(BigInt,"8")
-    @test bitand(a, b, c, d, f) == parse(BigInt,"8")
-    @test bitand(a, b, c, d, f, g) == parse(BigInt,"8")
+    @test and(a, b) == parse(BigInt,"124")
+    @test and(a, b, c) == parse(BigInt,"72")
+    @test and(a, b, c, d) == parse(BigInt,"8")
+    @test and(a, b, c, d, f) == parse(BigInt,"8")
+    @test and(a, b, c, d, f, g) == parse(BigInt,"8")
 
-    @test bitor(a, b) == parse(BigInt,"327423")
-    @test bitor(a, b, c) == parse(BigInt,"3426495623485904783802111")
-    @test bitor(a, b, c, d) == parse(BigInt,"-1396834561")
-    @test bitor(a, b, c, d, f) == parse(BigInt,"-1358954753")
-    @test bitor(a, b, c, d, f, g) == parse(BigInt,"-1")
+    @test or(a, b) == parse(BigInt,"327423")
+    @test or(a, b, c) == parse(BigInt,"3426495623485904783802111")
+    @test or(a, b, c, d) == parse(BigInt,"-1396834561")
+    @test or(a, b, c, d, f) == parse(BigInt,"-1358954753")
+    @test or(a, b, c, d, f, g) == parse(BigInt,"-1")
 
     @test trailing_ones(a) == 8
     @test trailing_zeros(b) == 2
@@ -263,7 +263,7 @@ function bigfib(n)
     r = [BigInt(1), BigInt(1), BigInt(0)]
     s = [BigInt(1), BigInt(0), BigInt(1)]
     while true
-       bitand(n, 1) == 1 && (s = mul(s,r))
+       and(n, 1) == 1 && (s = mul(s,r))
        (n >>= 1) == 0 && return s[1]
        r = mul(r,r)
     end

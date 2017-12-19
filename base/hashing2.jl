@@ -100,9 +100,9 @@ function decompose(x::Float16)::NTuple{3,Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
     n = reinterpret(UInt16, x)
-    s = bitand(n, 0x03ff) % Int16
-    e = bitand(n, 0x7c00 >> 10) % Int
-    s = bitor(s, Int16(e != 0) << 10)
+    s = and(n, 0x03ff) % Int16
+    e = and(n, 0x7c00 >> 10) % Int
+    s or= Int16(e != 0) << 10
     d = ifelse(signbit(x), -1, 1)
     s, e - 25 + (e == 0), d
 end
@@ -111,9 +111,9 @@ function decompose(x::Float32)::NTuple{3,Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
     n = reinterpret(UInt32, x)
-    s = bitand(n, 0x007fffff) % Int32
-    e = bitand(n, 0x7f800000 >> 23) % Int
-    s = bitor(s, Int32(e != 0) << 23)
+    s = and(n, 0x007fffff) % Int32
+    e = and(n, 0x7f800000 >> 23) % Int
+    s or= Int32(e != 0) << 23
     d = ifelse(signbit(x), -1, 1)
     s, e - 150 + (e == 0), d
 end
@@ -122,9 +122,9 @@ function decompose(x::Float64)::Tuple{Int64, Int, Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
     n = reinterpret(UInt64, x)
-    s = bitand(n, 0x000fffffffffffff) % Int64
-    e = bitand(n, 0x7ff0000000000000 >> 52) % Int
-    s = bitor(s, Int64(e != 0) << 52)
+    s = and(n, 0x000fffffffffffff) % Int64
+    e = and(n, 0x7ff0000000000000 >> 52) % Int
+    s or= Int64(e != 0) << 52
     d = ifelse(signbit(x), -1, 1)
     s, e - 1075 + (e == 0), d
 end

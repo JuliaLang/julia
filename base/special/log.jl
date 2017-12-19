@@ -146,7 +146,7 @@ const FMA_NATIVE = muladd(nextfloat(1.0),nextfloat(1.0),-nextfloat(1.0,2)) == -4
 # truncate lower order bits (up to 26)
 # ideally, this should be able to use ANDPD instructions, see #9868.
 @inline function truncbits(x::Float64)
-    reinterpret(Float64, bitand(reinterpret(UInt64,x), 0xffff_ffff_f800_0000))
+    reinterpret(Float64, and(reinterpret(UInt64,x), 0xffff_ffff_f800_0000))
 end
 
 
@@ -262,14 +262,14 @@ function log(x::Float64)
 
         # Step 3
         xu = reinterpret(UInt64,x)
-        m = bitand(Int(xu >> 52), 0x07ff)
+        m = and(Int(xu >> 52), 0x07ff)
         if m == 0 # x is subnormal
             x *= 1.8014398509481984e16 # 0x1p54, normalise significand
             xu = reinterpret(UInt64,x)
-            m = bitand(Int(xu >> 52), 0x07ff) - 54
+            m = and(Int(xu >> 52), 0x07ff) - 54
         end
         m -= 1023
-        y = reinterpret(Float64, bitor(bitand(xu, 0x000f_ffff_ffff_ffff), 0x3ff0_0000_0000_0000))
+        y = reinterpret(Float64, or(and(xu, 0x000f_ffff_ffff_ffff), 0x3ff0_0000_0000_0000))
 
         mf = Float64(m)
         F = (y + 3.5184372088832e13) - 3.5184372088832e13 # 0x1p-7*round(0x1p7*y)
@@ -298,14 +298,14 @@ function log(x::Float32)
 
         # Step 3
         xu = reinterpret(UInt32,x)
-        m = bitand(Int(xu >> 23), 0x00ff)
+        m = and(Int(xu >> 23), 0x00ff)
         if m == 0 # x is subnormal
             x *= 3.3554432f7 # 0x1p25, normalise significand
             xu = reinterpret(UInt32,x)
-            m = bitand(Int(xu >> 23), 0x00ff) - 25
+            m = and(Int(xu >> 23), 0x00ff) - 25
         end
         m -= 127
-        y = reinterpret(Float32, bitor(bitand(xu, 0x007f_ffff), 0x3f80_0000))
+        y = reinterpret(Float32, or(and(xu, 0x007f_ffff), 0x3f80_0000))
 
         mf = Float32(m)
         F = (y + 65536.0f0) - 65536.0f0 # 0x1p-7*round(0x1p7*y)
@@ -337,10 +337,10 @@ function log1p(x::Float64)
         # Step 3
         z = 1.0 + x
         zu = reinterpret(UInt64,z)
-        s = reinterpret(Float64,0x7fe0_0000_0000_0000 - bitand(zu, 0xfff0_0000_0000_0000)) # 2^-m
-        m = bitand(Int(zu >> 52), 0x07ff) - 1023 # z cannot be subnormal
+        s = reinterpret(Float64,0x7fe0_0000_0000_0000 - and(zu, 0xfff0_0000_0000_0000)) # 2^-m
+        m = and(Int(zu >> 52), 0x07ff) - 1023 # z cannot be subnormal
         c = m > 0 ? 1.0-(z-x) : x-(z-1.0) # 1+x = z+c exactly
-        y = reinterpret(Float64, bitor(bitand(zu, 0x000f_ffff_ffff_ffff), 0x3ff0_0000_0000_0000))
+        y = reinterpret(Float64, or(and(zu, 0x000f_ffff_ffff_ffff), 0x3ff0_0000_0000_0000))
 
         mf = Float64(m)
         F = (y + 3.5184372088832e13) - 3.5184372088832e13 # 0x1p-7*round(0x1p7*y)
@@ -370,10 +370,10 @@ function log1p(x::Float32)
         # Step 3
         z = 1f0 + x
         zu = reinterpret(UInt32,z)
-        s = reinterpret(Float32,0x7f000000 - bitand(zu, 0xff80_0000)) # 2^-m
-        m = bitand(Int(zu >> 23), 0x00ff) - 127 # z cannot be subnormal
+        s = reinterpret(Float32,0x7f000000 - and(zu, 0xff80_0000)) # 2^-m
+        m = and(Int(zu >> 23), 0x00ff) - 127 # z cannot be subnormal
         c = m > 0 ? 1f0-(z-x) : x-(z-1f0) # 1+x = z+c
-        y = reinterpret(Float32, bitor(bitand(zu, 0x007f_ffff), 0x3f80_0000))
+        y = reinterpret(Float32, or(and(zu, 0x007f_ffff), 0x3f80_0000))
 
         mf = Float32(m)
         F = (y + 65536.0f0) - 65536.0f0 # 0x1p-7*round(0x1p7*y)

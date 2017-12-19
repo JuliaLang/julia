@@ -27,7 +27,7 @@ function open_fake_pty()
     O_RDWR = Base.Filesystem.JL_O_RDWR
     O_NOCTTY = Base.Filesystem.JL_O_NOCTTY
 
-    fdm = ccall(:posix_openpt, Cint, (Cint,), bitor(O_RDWR, O_NOCTTY))
+    fdm = ccall(:posix_openpt, Cint, (Cint,), or(O_RDWR, O_NOCTTY))
     fdm == -1 && error("Failed to open PTY master")
     rc = ccall(:grantpt, Cint, (Cint,), fdm)
     rc != 0 && error("grantpt failed")
@@ -35,7 +35,7 @@ function open_fake_pty()
     rc != 0 && error("unlockpt")
 
     fds = ccall(:open, Cint, (Ptr{UInt8}, Cint),
-        ccall(:ptsname, Ptr{UInt8}, (Cint,), fdm), bitor(O_RDWR, O_NOCTTY))
+        ccall(:ptsname, Ptr{UInt8}, (Cint,), fdm), or(O_RDWR, O_NOCTTY))
 
     # slave
     slave = RawFD(fds)

@@ -261,7 +261,7 @@ end
 if iswindows()
     function windows_version()
         verinfo = ccall(:GetVersion, UInt32, ())
-        VersionNumber(bitand(verinfo, 0xFF), bitand(verinfo >> 8, 0xFF), verinfo >> 16)
+        VersionNumber(and(verinfo, 0xFF), and(verinfo >> 8, 0xFF), verinfo >> 16)
     end
 else
     windows_version() = v"0.0"

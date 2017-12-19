@@ -487,7 +487,7 @@ done(L::LogicalIndex, s) = s[3] > length(L)
     i, n = s
     Bc = L.mask.chunks
     while true
-        if bitand(Bc[_div64(i)+1], UInt64(1) << _mod64(i)) != 0
+        if and(Bc[_div64(i)+1], UInt64(1) << _mod64(i)) != 0
             i += 1
             return (i, (i, n+1))
         end
@@ -1199,10 +1199,10 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
 
     u = _msk64
     if delta_kd == 0
-        msk_d0 = msk_d1 = bitor(bitnot(u << ld0), u << (ld1+1))
+        msk_d0 = msk_d1 = or(not(u << ld0), u << (ld1+1))
         lt0 = ld1
     else
-        msk_d0 = bitnot(u << ld0)
+        msk_d0 = not(u << ld0)
         msk_d1 = (u << (ld1+1))
         lt0 = 63
     end
@@ -1212,10 +1212,10 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
     @inbounds if ld0 > 0
         c = UInt64(0)
         for j = ld0:lt0
-            c = bitor(c, UInt64(unchecked_bool_convert(C[ind])) << j)
+            c or= UInt64(unchecked_bool_convert(C[ind])) << j
             ind += 1
         end
-        Bc[kd0] = bitor(bitand(Bc[kd0], msk_d0), bitand(c, bitnot(msk_d0)))
+        Bc[kd0] = or(and(Bc[kd0], msk_d0), and(c, not(msk_d0)))
         bind += 1
     end
 
@@ -1223,7 +1223,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
     @inbounds for i = 1:nc
         c = UInt64(0)
         for j = 0:63
-            c = bitor(c, UInt64(unchecked_bool_convert(C[ind])) << j)
+            c or= UInt64(unchecked_bool_convert(C[ind])) << j
             ind += 1
         end
         Bc[bind] = c
@@ -1234,10 +1234,10 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
         @assert bind == kd1
         c = UInt64(0)
         for j = 0:ld1
-            c = bitor(c, UInt64(unchecked_bool_convert(C[ind])) << j)
+            c or= UInt64(unchecked_bool_convert(C[ind])) << j
             ind += 1
         end
-        Bc[kd1] = bitor(bitand(Bc[kd1], msk_d1), bitand(c, bitnot(msk_d1)))
+        Bc[kd1] = or(and(Bc[kd1], msk_d1), and(c, not(msk_d1)))
     end
 end
 

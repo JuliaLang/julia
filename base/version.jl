@@ -171,8 +171,8 @@ function hash(v::VersionNumber, h::UInt)
     h = hash(v.major, h)
     h = hash(v.minor, h)
     h = hash(v.patch, h)
-    h = hash(v.prerelease, bitnot(h))
-    h = hash(v.build, bitnot(h))
+    h = hash(v.prerelease, not(h))
+    h = hash(v.build, not(h))
 end
 
 lowerbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, ("",), ())

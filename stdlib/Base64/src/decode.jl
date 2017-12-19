@@ -66,9 +66,9 @@ function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
     while true
         if b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 < 0x40 && p + 2 < p_end
             # fast path to decode
-            unsafe_store!(p    , bitor(b1 << 2, b2 >> 4))
-            unsafe_store!(p + 1, bitor(b2 << 4, b3 >> 2))
-            unsafe_store!(p + 2, bitor(b3 << 6, b4     ))
+            unsafe_store!(p    , or(b1 << 2, b2 >> 4))
+            unsafe_store!(p + 1, or(b2 << 4, b3 >> 2))
+            unsafe_store!(p + 2, or(b3 << 6, b4     ))
             p += 3
         else
             i, p, ended = decode_slow(b1, b2, b3, b4, buffer, i, pipe.io, p, p_end - p, pipe.rest)
@@ -177,9 +177,9 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
             push!(rest, b)
         end
     end
-    k ≥ 1 && output(bitor(b1 << 2, b2 >> 4))
-    k ≥ 2 && output(bitor(b2 << 4, b3 >> 2))
-    k ≥ 3 && output(bitor(b3 << 6, b4     ))
+    k ≥ 1 && output(or(b1 << 2, b2 >> 4))
+    k ≥ 2 && output(or(b2 << 4, b3 >> 2))
+    k ≥ 3 && output(or(b3 << 6, b4     ))
 
     return i, p, k == 0
 end

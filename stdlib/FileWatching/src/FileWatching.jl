@@ -30,9 +30,9 @@ struct FileEvent
     timedout::Bool
 end
 FileEvent() = FileEvent(false, false, false)
-FileEvent(flags::Integer) = FileEvent(bitand(flags, UV_RENAME) != 0,
-                                      bitand(flags, UV_CHANGE) != 0,
-                                      bitand(flags, FD_TIMEDOUT) != 0)
+FileEvent(flags::Integer) = FileEvent(and(flags, UV_RENAME) != 0,
+                                      and(flags, UV_CHANGE) != 0,
+                                      and(flags, FD_TIMEDOUT) != 0)
 fetimeout() = FileEvent(false, false, true)
 
 struct FDEvent
@@ -50,10 +50,10 @@ const FD_TIMEDOUT = 8
 isreadable(f::FDEvent) = f.readable
 iswritable(f::FDEvent) = f.writable
 FDEvent() = FDEvent(false, false, false, false)
-FDEvent(flags::Integer) = FDEvent(bitand(flags, UV_READABLE) != 0,
-                                  bitand(flags, UV_WRITABLE) != 0,
-                                  bitand(flags, UV_DISCONNECT) != 0,
-                                  bitand(flags, FD_TIMEDOUT) != 0)
+FDEvent(flags::Integer) = FDEvent(and(flags, UV_READABLE) != 0,
+                                  and(flags, UV_WRITABLE) != 0,
+                                  and(flags, UV_DISCONNECT) != 0,
+                                  and(flags, FD_TIMEDOUT) != 0)
 fdtimeout() = FDEvent(false, false, false, true)
 |(a::FDEvent, b::FDEvent) =
     FDEvent(a.readable | b.readable,
@@ -288,7 +288,7 @@ function uv_pollcb(handle::Ptr{Void}, status::Int32, events::Int32)
     if status != 0
         notify_error(t.notify, UVError("FDWatcher", status))
     else
-        t.events = bitor(t.events, events)
+        t.events = or(t.events, events)
         if t.active[1] || t.active[2]
             if isempty(t.notify.waitq)
                 # if we keep hearing about events when nobody appears to be listening,
@@ -322,7 +322,7 @@ function start_watching(t::_FDWatcher)
         uv_error("start_watching (File Handle)",
                  ccall(:uv_poll_start, Int32, (Ptr{Void}, Int32, Ptr{Void}),
                        t.handle,
-                       bitor(readable ? UV_READABLE : 0, writable ? UV_WRITABLE : 0),
+                       or(readable ? UV_READABLE : 0, writable ? UV_WRITABLE : 0),
                        uv_jl_pollcb::Ptr{Void}))
         t.active = (readable, writable)
     end
@@ -375,14 +375,14 @@ function wait(fdw::_FDWatcher; readable=true, writable=true)
     while true
         if isa(events, FDEvent)
             events = events::FDEvent
-            events = bitor(events, FDEvent(fdw.events))
+            events = or(events, FDEvent(fdw.events))
             haveevent = false
             if readable && isreadable(events)
-                fdw.events = bitand(fdw.events, bitnot(UV_READABLE))
+                fdw.events = and(fdw.events, not(UV_READABLE))
                 haveevent = true
             end
             if writable && iswritable(events)
-                fdw.events = bitand(fdw.events, bitnot(UV_WRITABLE))
+                fdw.events = and(fdw.events, not(UV_WRITABLE))
                 haveevent = true
             end
             if haveevent

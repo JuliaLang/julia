@@ -119,7 +119,7 @@ function lgamma(z::Complex{Float64})
     while x <= 7
         shiftprod *= Complex(x,yabs)
         sb′ = signbit(imag(shiftprod))
-        signflips += bitand(sb′, sb′ != sb)
+        signflips += and(sb′, sb′ != sb)
         sb = sb′
         x += 1
     end
