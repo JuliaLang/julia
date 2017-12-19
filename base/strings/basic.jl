@@ -22,18 +22,18 @@ about strings:
 
 Some string functions that extract code units, characters or substrings from
 strings error if you pass them out-of-bounds or invalid string indices. This
-includes `codeunit(s, i)`, `s[i]`, and `next(s, i)`. Functions that do string
-index arithmetic take a more relaxed approach to indexing and give you the
-closest valid string index when in-bounds, or when out-of-bounds, behave as if
-there were an infinite number of characters padding each side of the string.
-Usually these imaginary padding characters have code unit length `1` but string
-types may choose different "imaginary" character sizes as makes sense for their
-implementations (e.g. substrings may pass index arithmetic through to the
-underlying string they provide a view into). Relaxed indexing functions include
-those intended for index arithmetic: `thisind`, `nextind` and `prevind`. This
-model allows index arithmetic to work with out-of- bounds indices as
-intermediate values so long as one never uses them to retrieve a character,
-which often helps avoid needing to code around edge cases.
+includes `codeunit(s, i)` and `s[i]`. Functions that do string index arithmetic
+take a more relaxed approach to indexing and give you the closest valid string
+index when in-bounds, or when out-of-bounds, behave as if there were an infinite
+number of characters padding each side of the string. Usually these imaginary
+padding characters have code unit length `1` but string types may choose
+different "imaginary" character sizes as makes sense for their implementations
+(e.g. substrings may pass index arithmetic through to the underlying string they
+provide a view into). Relaxed indexing functions include those intended for
+index arithmetic: `thisind`, `nextind` and `prevind`. This model allows index
+arithmetic to work with out-of- bounds indices as intermediate values so long as
+one never uses them to retrieve a character, which often helps avoid needing to
+code around edge cases.
 
 See also: [`codeunit`](@ref), [`ncodeunits`](@ref), [`thisind`](@ref),
 [`nextind`](@ref), [`prevind`](@ref)
@@ -95,8 +95,8 @@ In order for `isvalid(s, i)` to be an O(1) function, the encoding of `s` must be
 [self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code) this
 is a basic assumption of Julia's generic string support.
 
-See also: [`getindex`](@ref), [`next`](@ref), [`thisind`](@ref),
-[`nextind`](@ref), [`prevind`](@ref), [`length`](@ref)
+See also: [`getindex`](@ref), [`thisind`](@ref), [`nextind`](@ref),
+[`prevind`](@ref), [`length`](@ref)
 
 # Examples
 
@@ -474,14 +474,14 @@ end
 ## string index iteration type ##
 
 struct EachStringIndex{T<:AbstractString}
-    s::T
+    string::T
 end
-keys(s::AbstractString) = EachStringIndex(s)
+keys(s::AbstractString) = EachStringIndex(string)
 
-length(e::EachStringIndex) = length(e.s)
-start(e::EachStringIndex) = start(e.s)
-next(e::EachStringIndex, state) = (state, nextind(e.s, state))
-done(e::EachStringIndex, state) = done(e.s, state)
+length(e::EachStringIndex) = length(e.string)
+start(e::EachStringIndex) = start(e.string)
+next(e::EachStringIndex, state) = (state, nextind(e.string, state))
+done(e::EachStringIndex, state) = done(e.string, state)
 eltype(::Type{EachStringIndex}) = Int
 
 """
@@ -622,8 +622,8 @@ julia> "Test "^3
 
 # reverse-order iteration for strings and indices thereof
 start(r::Iterators.Reverse{<:AbstractString}) = endof(r.itr)
-done(r::Iterators.Reverse{<:AbstractString}, i) = i < start(r.itr)
+done(r::Iterators.Reverse{<:AbstractString}, i) = i < 1
 next(r::Iterators.Reverse{<:AbstractString}, i) = (r.itr[i], prevind(r.itr, i))
-start(r::Iterators.Reverse{<:EachStringIndex}) = endof(r.itr.s)
-done(r::Iterators.Reverse{<:EachStringIndex}, i) = i < start(r.itr.s)
-next(r::Iterators.Reverse{<:EachStringIndex}, i) = (i, prevind(r.itr.s, i))
+start(r::Iterators.Reverse{<:EachStringIndex}) = endof(r.itr.string)
+done(r::Iterators.Reverse{<:EachStringIndex}, i) = i < 1
+next(r::Iterators.Reverse{<:EachStringIndex}, i) = (i, prevind(r.itr.string, i))

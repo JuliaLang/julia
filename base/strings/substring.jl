@@ -61,10 +61,12 @@ function codeunit(s::SubString, i::Integer)
     @inbounds return codeunit(s.string, s.offset + i)
 end
 
+start(s::SubString) = start(s.string)
+done(s::SubString, i::Integer) = done(s.string, i)
+
 function next(s::SubString, i::Integer)
     @boundscheck checkbounds(s, i)
-    @inbounds c, i = next(s.string, s.offset + i)
-    return c, i - s.offset
+    @inbounds next(s.string, s.offset + i)
 end
 
 function getindex(s::SubString, i::Integer)
