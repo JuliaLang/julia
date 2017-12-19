@@ -526,22 +526,21 @@ Returns the result of evaluating `expr`.
 See also [`@test_nowarn`](@ref) to check for the absence of error output.
 """
 macro test_warn(msg, expr)
-    return quote
-        let fname = tempname()
-            try
-                ret = open(fname, "w") do f
-                    redirect_stderr(f) do
-                        $(esc(expr))
-                    end
-                end
-                @test let s = read(fname, String)::String
-                        ismatch_warn($(esc(msg)), s) || s
-                      end
-                ret
-            finally
-                rm(fname, force=true)
-            end
+    return :(do_test_warn($(esc(msg)), () -> $(esc(expr))))
+end
+
+function do_test_warn(msg, @nospecialize test)
+    fname = tempname()
+    try
+        ret = open(fname, "w") do f
+            redirect_stderr(test, f)
         end
+        @test let s = read(fname, String)::String
+                ismatch_warn(msg, s) || repr(s)
+              end
+        return ret
+    finally
+        rm(fname, force=true)
     end
 end
 
@@ -552,9 +551,7 @@ Test whether evaluating `expr` results in empty [`STDERR`](@ref) output
 (no warnings or other messages).  Returns the result of evaluating `expr`.
 """
 macro test_nowarn(expr)
-    quote
-        @test_warn r"^(?!.)"s $(esc(expr))
-    end
+    return :(do_test_warn($(r"^(?!.)"s), () -> $(esc(expr))))
 end
 
 #-----------------------------------------------------------------------
