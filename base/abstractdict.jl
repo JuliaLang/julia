@@ -450,7 +450,7 @@ eltype(::Type{AbstractDict{K,V}}) where {K,V} = Pair{K,V}
 
 function isequal(l::AbstractDict, r::AbstractDict)
     l === r && return true
-    if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
+    if isa(l,IdDict) != isa(r,IdDict) || isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
         return false
     end
     if length(l) != length(r) return false end
@@ -464,7 +464,7 @@ end
 
 function ==(l::AbstractDict, r::AbstractDict)
     l === r && return true
-    if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
+    if isa(l,IdDict) != isa(r,IdDict) || isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
         return false
     end
     if length(l) != length(r) return false end
@@ -506,6 +506,8 @@ push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), 
 
 """
     ObjectIdDict([itr])
+
+Internally used object-id dictionary, use [`IdDict`](@ref) instead.
 
 `ObjectIdDict()` constructs a hash table where the keys are (always)
 object identities.  Unlike `Dict` it is not parameterized on its key

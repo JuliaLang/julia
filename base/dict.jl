@@ -800,3 +800,94 @@ empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
 _similar_for(c::Dict, ::Type{Pair{K,V}}, itr, isz) where {K, V} = empty(c, K, V)
 _similar_for(c::AbstractDict, T, itr, isz) = throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))
+
+#####
+# Hashing with Object-ID
+
+# Hashing by identify with parameters
+
+struct IdDict{K,V} <: AbstractDict{K,V}
+    ht::ObjectIdDict
+
+    IdDict{K,V}() where {K, V} = new(ObjectIdDict())
+    IdDict{K,V}(d::IdDict{K,V}) where {K, V} = new(copy(d.ht))
+end
+
+
+function IdDict{K,V}(kv) where {K, V}
+    h = IdDict{K,V}()
+    for (k,v) in kv
+        h[k] = v
+    end
+    return h
+end
+IdDict{K,V}(p::Pair) where {K,V} = setindex!(IdDict{K,V}(), p.second, p.first)
+function IdDict{K,V}(ps::Pair...) where {K, V}
+    h = IdDict{K,V}()
+    sizehint!(h, length(ps))
+    for p in ps
+        h[p.first] = p.second
+    end
+    return h
+end
+IdDict() = IdDict{Any,Any}()
+IdDict(kv::Tuple{}) = IdDict()
+copy(o::IdDict) = IdDict(o)
+
+IdDict(ps::Pair{K,V}...)           where {K,V} = IdDict{K,V}(ps)
+IdDict(ps::Pair{K}...)             where {K}   = IdDict{K,Any}(ps)
+IdDict(ps::(Pair{K,V} where K)...) where {V}   = IdDict{Any,V}(ps)
+IdDict(ps::Pair...)                            = IdDict{Any,Any}(ps)
+
+function IdDict(kv)
+    try
+        dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
+    catch e
+        if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
+            throw(ArgumentError(
+                "IdDict(kv): kv needs to be an iterator of tuples or pairs"))
+        else
+            rethrow(e)
+        end
+    end
+end
+
+# other inteface functions
+empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
+
+function rehash!(d::IdDict)
+    rehash!(d.ht)
+    d
+end
+
+function sizehint!(d::IdDict, newsz)
+    sizehint!(d.ht, newsz)
+    d
+end
+
+setindex!(d::IdDict{K,V}, v, k::K) where {K, V} =  setindex!(d.ht, convert(V, v), k)
+
+get(d::IdDict{K}, key::K, default) where {K} = get(d.ht, key, default)
+
+pop!(d::IdDict{K}, key::K, default) where {K} = pop!(d.ht, key, default)
+pop!(d::IdDict{K}, key::K) where {K} = pop!(d.ht, key)
+function delete!(d::IdDict{K}, key::K) where {K}
+    delete!(d.ht, key)
+    d
+end
+function empty!(d::IdDict)
+    empty!(d.ht)
+    d
+end
+
+start(d::IdDict) = start(d.ht)
+done(d::IdDict, i) = done(d.ht, i)
+next(d::IdDict, i) = next(d.ht, i)
+
+length(d::IdDict) = length(d.ht)
+
+get!(o::IdDict{K}, key::K, default) where {K} = (o[key] = get(o, key, default))
+
+# For some AbstractDict types, it is safe to implement filter!
+# by deleting keys during iteration.
+filter!(f, d::IdDict) = filter_in_one_pass!(f, d)
