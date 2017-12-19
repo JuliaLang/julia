@@ -74,7 +74,7 @@ p() = "p"
 end
 ```
 
-In this module we export the `x` and `y` functions (with the keyword `export`), and also have
+In this module we export the `x` and `y` functions (with the keyword [`export`](@ref)), and also have
 the non-exported function `p`. There are several different ways to load the Module and its inner
 functions into the current workspace:
 
@@ -121,6 +121,16 @@ There are three important standard modules:
 * [`Core`](@ref) contains all functionality "built into" the language.
 * [`Base`](@ref) contains basic functionality that is useful in almost all cases.
 * [`Main`](@ref) is the top-level module and the current module, when Julia is started.
+
+
+!!! note "Standard library modules"
+    By default Julia ships with some standard library modules. These behave like regular
+    Julia packages except that you don't need to install them explicitly. For example,
+    if you wanted to perform some unit testing, you could load the `Test` standard library
+    as follows:
+    ```julia
+    using Test
+    ```
 
 ### Default top-level definitions and bare modules
 
@@ -208,7 +218,7 @@ recompiled upon `using` or `import` whenever any of its dependencies change; dep
 imports, the Julia build, files it includes, or explicit dependencies declared by [`include_dependency(path)`](@ref)
 in the module file(s).
 
-For file dependencies, a change is determined by examining whether the modification time (mtime)
+For file dependencies, a change is determined by examining whether the modification time (`mtime`)
 of each file loaded by `include` or added explicitly by `include_dependency` is unchanged, or equal
 to the modification time truncated to the nearest second (to accommodate systems that can't copy
 mtime with sub-second accuracy). It also takes into account whether the path to the file chosen
@@ -273,7 +283,7 @@ in `__init__`: their definitions can be precompiled and loaded from the cached m
 includes complicated heap-allocated objects like arrays. However, any routine that returns a raw
 pointer value must be called at runtime for precompilation to work ([`Ptr`](@ref) objects will turn into
 null pointers unless they are hidden inside an [`isbits`](@ref) object). This includes the return values
-of the Julia functions `cfunction` and [`pointer`](@ref).
+of the Julia functions [`cfunction`](@ref) and [`pointer`](@ref).
 
 Dictionary and set types, or in general anything that depends on the output of a `hash(key)` method,
 are a trickier case.  In the common case where the keys are numbers, strings, symbols, ranges,
