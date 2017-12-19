@@ -227,6 +227,13 @@ function lu(A::AbstractMatrix, pivot::Union{Val{false}, Val{true}} = Val(true))
     F.L, F.U, F.p
 end
 
+Base.start(::LU) = Val(:L)
+Base.next(F::LU, ::Val{:L})    = (F.L, Val(:U))
+Base.next(F::LU, ::Val{:U})    = (F.U, Val(:p))
+Base.next(F::LU, ::Val{:p})    = (F.p, Val(:done))
+Base.done(F::LU, ::Any)        = false
+Base.done(F::LU, ::Val{:done}) = true
+
 function convert(::Type{LU{T}}, F::LU) where T
     M = convert(AbstractMatrix{T}, F.factors)
     LU{T,typeof(M)}(M, F.ipiv, F.info)
