@@ -1992,47 +1992,43 @@ function hash(a::AbstractArray{T}, h::UInt) where T
     done(a, state) && return h
     x2, state = next(a, state)
     done(a, state) && return hash(x2, h)
+    x1 = x2
+    x2, state = next(a, state)
+    done(a, state) && return hash(x2, hash(x1, h))
 
     # Check whether the array is equal to a range, and hash the elements
     # at the beginning of the array as such as long as they match this assumption
     # This needs to be done even for non-RangeStepRegular types since they may still be equal
     # to RangeStepRegular values (e.g. 1.0:3.0 == 1:3)
-    if isa(a, AbstractVector) && (!isconcrete(T) || method_exists(-, Tuple{T, T}))
-        x1 = x2
-        x2, state = next(a, state)
-        if length(a) == 2
-            h = hash(x1, h)
-            return hash(x2, h)
-        end
-
-        # Only types supporting subtraction can be used with ranges
-        applicable(-, x2, x1) || @goto nonrange
-
+    if isa(a, AbstractVector) && applicable(-, x2, x1)
         local step
 
         # Try to compute the step between two first elements
         n = 2
-        lastx = x1
-        x1 = x2
         if isconcrete(T)
             # If overflow happens with entries of the same type, a cannot be equal
             # to a range with more than two elements because more extreme values
             # cannot be represented. We must still hash the two first values as a
             # range since that's what will happen with a wider type which doesn't overflow
             try
-                step = x1 - lastx
+                step = x2 - x1
             catch err
                 isa(err, OverflowError) || rethrow(err)
+                x1 = x2
                 @goto hashrange
             end
-            # If true, overflow happened
-            sign(step) == cmp(x1, lastx) || @goto hashrange
+            # If true, wraparound overflow happened
+            if sign(step) != cmp(x2, x1)
+                x1 = x2
+                @goto hashrange
+            end
         else
             # hash_sub() ensures no overflow can happen
-            step = hash_sub(x1, lastx)
+            step = hash_sub(x2, x1)
         end
 
         # Check whether all remaining steps are equal to the first one
+        x1 = x2
         while !done(a, state)
             laststep = step
             x2, newstate = next(a, state)
@@ -2048,11 +2044,9 @@ function hash(a::AbstractArray{T}, h::UInt) where T
                 step = hash_sub(x2, x1)
             end
             # Implies breaking in first loop if the step is 0
-            if !isequal(step, laststep)
-                break
-            end
-            state = newstate
+            isequal(step, laststep) || break
             x1 = x2
+            state = newstate
             n += 1
         end
 
@@ -2063,16 +2057,13 @@ function hash(a::AbstractArray{T}, h::UInt) where T
         h += hashr_seed
         h = hash(n, h)
         h = hash(x1, h)
-        x2 = x1
+
+        done(a, state) && return h
+        x2, state = next(a, state)
     end
 
-    @label nonrange
-
     # Hash elements which do not correspond to a range (if any)
-    x1 = x2
-    while !done(a, state)
-        x1 = x2
-        x2, state = next(a, state)
+    while true
         if isequal(x2, x1)
             # For repeated elements, use run length encoding
             # This allows efficient hashing of sparse arrays
@@ -2086,6 +2077,9 @@ function hash(a::AbstractArray{T}, h::UInt) where T
             h = hash(runlength, h)
         end
         h = hash(x1, h)
+        done(a, state) && break
+        x1 = x2
+        x2, state = next(a, state)
     end
     !isequal(x2, x1) && (h = hash(x2, h))
     return h
