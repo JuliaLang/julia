@@ -469,3 +469,18 @@ end
     @test_throws TypeError Symmetric{Float64,Matrix{Float32}}(A, 'U')
     @test_throws TypeError Hermitian{Float64,Matrix{Float32}}(A, 'U')
 end
+
+@testset "fill[stored]!" begin
+    for uplo in (:U, :L)
+        # Hermitian
+        A = Hermitian(fill(1.0+0im, 2, 2), uplo)
+        @test fill!(A, 2) == fill(2, 2, 2)
+        @test A.data == (uplo == :U ? [2 2; 1.0+0im 2] : [2 1.0+0im; 2 2])
+        @test_throws ArgumentError fill!(A, 2+im)
+
+        # Symmetric
+        A = Symmetric(fill(1.0+im, 2, 2), uplo)
+        @test fill!(A, 2) == fill(2, 2, 2)
+        @test A.data == (uplo == :U ? [2 2; 1.0+im 2] : [2 1.0+im; 2 2])
+    end
+end

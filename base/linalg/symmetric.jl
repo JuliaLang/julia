@@ -201,6 +201,21 @@ function copyto!(dest::Hermitian, src::Hermitian)
     return dest
 end
 
+# fill[stored]!
+fill!(A::HermOrSym, x) = fillstored!(A, x)
+function fillstored!(A::HermOrSym{T}, x) where T
+    xT = convert(T, x)
+    if isa(A, Hermitian)
+        isreal(xT) || throw(ArgumentError("cannot fill Hermitian matrix with a nonreal value"))
+    end
+    if A.uplo == 'U'
+        fillband!(A.data, xT, 0, size(A,2)-1)
+    else # A.uplo == 'L'
+        fillband!(A.data, xT, 1-size(A,1), 0)
+    end
+    return A
+end
+
 function Base.isreal(A::HermOrSym)
     n = size(A, 1)
     @inbounds if A.uplo == 'U'
