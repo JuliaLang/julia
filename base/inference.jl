@@ -2759,6 +2759,10 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         t = (length(e.args) == 1) ? Any : Void
     elseif e.head === :copyast
         t = abstract_eval(e.args[1], vtypes, sv)
+        if t isa Const && t.val isa Expr
+            # `copyast` makes copies of Exprs
+            t = Expr
+        end
     elseif e.head === :invoke
         error("type inference data-flow error: tried to double infer a function")
     elseif e.head === :boundscheck
