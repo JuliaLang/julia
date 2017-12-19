@@ -27,12 +27,12 @@ aimg  = randn(n,n)/2
 
         d,v = eig(a)
         f   = schurfact(a)
-        @test f[:vectors]*f[:Schur]*f[:vectors]' ≈ a
-        @test sort(real(f[:values])) ≈ sort(real(d))
-        @test sort(imag(f[:values])) ≈ sort(imag(d))
-        @test istriu(f[:Schur]) || eltype(a)<:Real
+        @test f.vectors*f.Schur*f.vectors' ≈ a
+        @test sort(real(f.values)) ≈ sort(real(d))
+        @test sort(imag(f.values)) ≈ sort(imag(d))
+        @test istriu(f.Schur) || eltype(a)<:Real
         @test convert(Array, f) ≈ a
-        @test_throws KeyError f[:A]
+        @test_throws ErrorException f.A
 
         sch, vecs, vals = schur(UpperTriangular(triu(a)))
         @test vecs*sch*vecs' ≈ triu(a)
@@ -45,9 +45,9 @@ aimg  = randn(n,n)/2
         sch, vecs, vals = schur(Tridiagonal(a + transpose(a)))
         @test vecs*sch*vecs' ≈ Tridiagonal(a + transpose(a))
 
-        tstring = sprint(show,f[:T])
-        zstring = sprint(show,f[:Z])
-        vstring = sprint(show,f[:values])
+        tstring = sprint(show,f.T)
+        zstring = sprint(show,f.Z)
+        vstring = sprint(show,f.values)
         @test sprint(show,f) == "$(typeof(f)) with factors T and Z:\n$tstring\n$(zstring)\nand values:\n$vstring"
         @testset "Reorder Schur" begin
             # use asym for real schur to enforce tridiag structure
@@ -56,13 +56,13 @@ aimg  = randn(n,n)/2
             S = schurfact(ordschura)
             select = bitrand(n)
             O = ordschur(S, select)
-            sum(select) != 0 && @test S[:values][find(select)] ≈ O[:values][1:sum(select)]
-            @test O[:vectors]*O[:Schur]*O[:vectors]' ≈ ordschura
-            @test_throws KeyError f[:A]
+            sum(select) != 0 && @test S.values[find(select)] ≈ O.values[1:sum(select)]
+            @test O.vectors*O.Schur*O.vectors' ≈ ordschura
+            @test_throws ErrorException f.A
             Snew = Base.LinAlg.Schur(S.T, S.Z, S.values)
             SchurNew = ordschur!(copy(Snew), select)
-            @test O[:vectors] ≈ SchurNew[:vectors]
-            @test O[:Schur] ≈ SchurNew[:Schur]
+            @test O.vectors ≈ SchurNew.vectors
+            @test O.Schur ≈ SchurNew.Schur
         end
 
         if isa(a, Array)
@@ -74,37 +74,37 @@ aimg  = randn(n,n)/2
         end
         @testset "Generalized Schur" begin
             f = schurfact(a1_sf, a2_sf)
-            @test f[:Q]*f[:S]*f[:Z]' ≈ a1_sf
-            @test f[:Q]*f[:T]*f[:Z]' ≈ a2_sf
-            @test istriu(f[:S]) || eltype(a)<:Real
-            @test istriu(f[:T]) || eltype(a)<:Real
-            @test_throws KeyError f[:A]
+            @test f.Q*f.S*f.Z' ≈ a1_sf
+            @test f.Q*f.T*f.Z' ≈ a2_sf
+            @test istriu(f.S) || eltype(a)<:Real
+            @test istriu(f.T) || eltype(a)<:Real
+            @test_throws ErrorException f.A
         end
         @testset "Reorder Generalized Schur" begin
             NS = schurfact(a1_sf, a2_sf)
             # Currently just testing with selecting gen eig values < 1
-            select = abs2.(NS[:values]) .< 1
+            select = abs2.(NS.values) .< 1
             m = sum(select)
             S = ordschur(NS, select)
             # Make sure that the new factorization stil factors matrix
-            @test S[:Q]*S[:S]*S[:Z]' ≈ a1_sf
-            @test S[:Q]*S[:T]*S[:Z]' ≈ a2_sf
+            @test S.Q*S.S*S.Z' ≈ a1_sf
+            @test S.Q*S.T*S.Z' ≈ a2_sf
             # Make sure that we have sorted it correctly
-            @test NS[:values][find(select)] ≈ S[:values][1:m]
+            @test NS.values[find(select)] ≈ S.values[1:m]
 
             Snew = Base.LinAlg.GeneralizedSchur(NS.S, NS.T, NS.alpha, NS.beta, NS.Q, NS.Z)
             SchurNew = ordschur!(copy(Snew), select)
-            @test S[:Q] ≈ SchurNew[:Q]
-            @test S[:S] ≈ SchurNew[:S]
-            @test S[:T] ≈ SchurNew[:T]
-            @test S[:Z] ≈ SchurNew[:Z]
-            @test S[:alpha] ≈ SchurNew[:alpha]
-            @test S[:beta] ≈ SchurNew[:beta]
+            @test S.Q ≈ SchurNew.Q
+            @test S.S ≈ SchurNew.S
+            @test S.T ≈ SchurNew.T
+            @test S.Z ≈ SchurNew.Z
+            @test S.alpha ≈ SchurNew.alpha
+            @test S.beta  ≈ SchurNew.beta
             sS,sT,sQ,sZ = schur(a1_sf,a2_sf)
-            @test NS[:Q] ≈ sQ
-            @test NS[:T] ≈ sT
-            @test NS[:S] ≈ sS
-            @test NS[:Z] ≈ sZ
+            @test NS.Q ≈ sQ
+            @test NS.T ≈ sT
+            @test NS.S ≈ sS
+            @test NS.Z ≈ sZ
         end
     end
     @testset "0x0 matrix" for A in (zeros(eltya, 0, 0), view(rand(eltya, 2, 2), 1:0, 1:0))

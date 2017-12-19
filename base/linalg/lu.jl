@@ -130,14 +130,14 @@ The individual components of the factorization `F` can be accessed by indexing:
 
 | Component | Description                         |
 |:----------|:------------------------------------|
-| `F[:L]`   | `L` (lower triangular) part of `LU` |
-| `F[:U]`   | `U` (upper triangular) part of `LU` |
-| `F[:p]`   | (right) permutation `Vector`        |
-| `F[:P]`   | (right) permutation `Matrix`        |
+| `F.L`     | `L` (lower triangular) part of `LU` |
+| `F.U`     | `U` (upper triangular) part of `LU` |
+| `F.p`     | (right) permutation `Vector`        |
+| `F.P`     | (right) permutation `Matrix`        |
 
 The relationship between `F` and `A` is
 
-`F[:L]*F[:U] == A[F[:p], :]`
+`F.L*F.U == A[F.p, :]`
 
 `F` further supports the following functions:
 
@@ -169,7 +169,7 @@ U factor:
  4.0   3.0
  0.0  -1.5
 
-julia> F[:L] * F[:U] == A[F[:p], :]
+julia> F.L * F.U == A[F.p, :]
 true
 ```
 """
@@ -224,7 +224,7 @@ true
 """
 function lu(A::AbstractMatrix, pivot::Union{Val{false}, Val{true}} = Val(true))
     F = lufact(A, pivot)
-    F[:L], F[:U], F[:p]
+    F.L, F.U, F.p
 end
 
 function convert(::Type{LU{T}}, F::LU) where T
@@ -237,8 +237,8 @@ convert(::Type{Factorization{T}}, F::LU) where {T} = convert(LU{T}, F)
 
 copy(A::LU{T,S}) where {T,S} = LU{T,S}(copy(A.factors), copy(A.ipiv), A.info)
 
-size(A::LU) = size(A.factors)
-size(A::LU,n) = size(A.factors,n)
+size(A::LU)    = size(getfield(A, :factors))
+size(A::LU, i) = size(getfield(A, :factors), i)
 
 function ipiv2perm(v::AbstractVector{T}, maxi::Integer) where T
     p = T[1:maxi;]
@@ -248,20 +248,20 @@ function ipiv2perm(v::AbstractVector{T}, maxi::Integer) where T
     return p
 end
 
-function getindex(F::LU{T,<:StridedMatrix}, d::Symbol) where T
+function getproperty(F::LU{T,<:StridedMatrix}, d::Symbol) where T
     m, n = size(F)
     if d == :L
-        L = tril!(F.factors[1:m, 1:min(m,n)])
+        L = tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
         for i = 1:min(m,n); L[i,i] = one(T); end
         return L
     elseif d == :U
-        return triu!(F.factors[1:min(m,n), 1:n])
+        return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
     elseif d == :p
-        return ipiv2perm(F.ipiv, m)
+        return ipiv2perm(getfield(F, :ipiv), m)
     elseif d == :P
-        return Matrix{T}(I, m, m)[:,invperm(F[:p])]
+        return Matrix{T}(I, m, m)[:,invperm(F.p)]
     else
-        throw(KeyError(d))
+        getfield(F, d)
     end
 end
 
@@ -270,9 +270,9 @@ issuccess(F::LU) = F.info == 0
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LU)
     if issuccess(F)
         println(io, summary(F), "\nL factor:")
-        show(io, mime, F[:L])
+        show(io, mime, F.L)
         println(io, "\nU factor:")
-        show(io, mime, F[:U])
+        show(io, mime, F.U)
     else
         print(io, "Failed factorization of type $(typeof(F))")
     end
@@ -463,28 +463,28 @@ end
 
 factorize(A::Tridiagonal) = lufact(A)
 
-function getindex(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
+function getproperty(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
     m, n = size(F)
     if d == :L
-        L = Array(Bidiagonal(ones(T, n), F.factors.dl, d))
+        L = Array(Bidiagonal(ones(T, n), getfield(getfield(F, :factors), :dl), d))
         for i = 2:n
-            tmp = L[F.ipiv[i], 1:i - 1]
-            L[F.ipiv[i], 1:i - 1] = L[i, 1:i - 1]
+            tmp = L[getfield(F, :ipiv)[i], 1:i - 1]
+            L[getfield(F, :ipiv)[i], 1:i - 1] = L[i, 1:i - 1]
             L[i, 1:i - 1] = tmp
         end
         return L
     elseif d == :U
-        U = Array(Bidiagonal(F.factors.d, F.factors.du, d))
+        U = Array(Bidiagonal(getfield(getfield(F, :factors), :d), getfield(getfield(F, :factors), :du), d))
         for i = 1:n - 2
-            U[i,i + 2] = F.factors.du2[i]
+            U[i,i + 2] = getfield(getfield(F, :factors), :du2)[i]
         end
         return U
     elseif d == :p
-        return ipiv2perm(F.ipiv, m)
+        return ipiv2perm(getfield(F, :ipiv), m)
     elseif d == :P
-        return Matrix{T}(I, m, m)[:,invperm(F[:p])]
+        return Matrix{T}(I, m, m)[:,invperm(F.p)]
     end
-    throw(KeyError(d))
+    return getfield(F, d)
 end
 
 # See dgtts2.f
@@ -593,7 +593,7 @@ end
 /(B::AbstractMatrix,A::LU) = transpose(Transpose(A) \ Transpose(B))
 
 # Conversions
-convert(::Type{AbstractMatrix}, F::LU) = (F[:L] * F[:U])[invperm(F[:p]),:]
+convert(::Type{AbstractMatrix}, F::LU) = (F.L * F.U)[invperm(F.p),:]
 convert(::Type{AbstractArray}, F::LU) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::LU) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::LU) = convert(Matrix, F)
