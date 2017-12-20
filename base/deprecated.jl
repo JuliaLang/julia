@@ -2816,6 +2816,9 @@ function readandwrite(cmds::AbstractCmd)
 end
 export readandwrite
 
+# PR #25196
+@deprecate_binding ObjectIdDict IdDict{Any,Any}
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

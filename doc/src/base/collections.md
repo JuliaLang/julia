@@ -41,7 +41,7 @@ Fully implemented by:
   * `Number`
   * [`AbstractArray`](@ref)
   * [`BitSet`](@ref)
-  * [`ObjectIdDict`](@ref)
+  * [`IdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
   * `EachLine`
@@ -65,7 +65,7 @@ Fully implemented by:
   * `Number`
   * [`AbstractArray`](@ref)
   * [`BitSet`](@ref)
-  * [`ObjectIdDict`](@ref)
+  * [`IdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
   * `AbstractString`
@@ -160,7 +160,7 @@ Partially implemented by:
   * `Tuple`
   * `AbstractString`
   * [`Dict`](@ref)
-  * [`ObjectIdDict`](@ref)
+  * [`IdDict`](@ref)
   * [`WeakKeyDict`](@ref)
 
 ## Dictionaries
@@ -169,7 +169,7 @@ Partially implemented by:
 as the hashing function for the key, and [`isequal`](@ref) to determine equality. Define these
 two functions for custom types to override how they are stored in a hash table.
 
-[`ObjectIdDict`](@ref) is a special hash table where the keys are always object identities.
+[`IdDict`](@ref) is a special hash table where the keys are always object identities.
 
 [`WeakKeyDict`](@ref) is a hash table implementation where the keys are weak references to objects, and
 thus may be garbage collected even when referenced in a hash table.
@@ -188,7 +188,7 @@ for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for e
 
 ```@docs
 Base.Dict
-Base.ObjectIdDict
+Base.IdDict
 Base.WeakKeyDict
 Base.ImmutableDict
 Base.haskey
@@ -212,7 +212,7 @@ Base.valtype
 
 Fully implemented by:
 
-  * [`ObjectIdDict`](@ref)
+  * [`IdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
 
