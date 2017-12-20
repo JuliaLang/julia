@@ -1381,17 +1381,13 @@ end
 x, y = rand(), rand()
 result = f24852_kernel(x, y)
 
-# TODO: The commented out tests here are the ones where `signature_for_inference_heuristics`
-# is inflated; these tests cause segfaults. Probably due to incorrect CodeInfo
-# construction/initialization happening somewhere...
-
 @test result === f24852_late_expr(x, y)
 @test result === f24852_late_uninflated(x, y)
-# @test result === f24852_late_inflated(x, y)
+@test result === f24852_late_inflated(x, y)
 
 @test result === f24852_early_expr(x, y)
 @test result === f24852_early_uninflated(x, y)
-# @test result === f24852_early_inflated(x, y)
+@test result === f24852_early_inflated(x, y)
 
 # TODO: test that `expand_early = true` + inflated `signature_for_inference_heuristics`
 # can be used to tighten up some inference result.
