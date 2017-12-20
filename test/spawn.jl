@@ -223,6 +223,13 @@ end
 # issue #6310
 @test read(pipeline(`$echocmd "2+2"`, `$exename --startup-file=no`), String) == "4\n"
 
+# setup_stdio for AbstractPipe
+let out = Pipe(), proc = spawn(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,STDOUT)))
+    close(out.in)
+    @test read(out, String) == "Hello World\n"
+    @test success(proc)
+end
+
 # issue #5904
 @test run(pipeline(ignorestatus(falsecmd), truecmd)) === nothing
 
@@ -520,4 +527,3 @@ let p = spawn(`$sleepcmd 100`)
     # Should not throw if already dead
     kill(p)
 end
-
