@@ -117,7 +117,7 @@ should print a shorter output (if applicable).
 ## Working with Files
 
 Like many other environments, Julia has an [`open`](@ref) function, which takes a filename and
-returns an `IOStream` object that you can use to read and write things from the file. For example
+returns an `IOStream` object that you can use to read and write things from the file. For example,
 if we have a file, `hello.txt`, whose contents are `Hello, World!`:
 
 ```julia-repl

@@ -200,7 +200,7 @@ Stores a collection of docstrings for related objects, ie. a `Function`/`DataTyp
 associated `Method` objects.
 
 Each documented object in a `MultiDoc` is referred to by it's signature which is represented
-by a `Union` of `Tuple` types. For example the following `Method` definition
+by a `Union` of `Tuple` types. For example, the following `Method` definition
 
     f(x, y) = ...
 
