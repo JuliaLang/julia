@@ -208,8 +208,6 @@ macro _noinline_meta()
     Expr(:meta, :noinline)
 end
 
-function postfixapostrophize end
-
 struct BoundsError <: Exception
     a::Any
     i::Any
