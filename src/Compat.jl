@@ -769,6 +769,18 @@ else
     import Printf
 end
 
+if VERSION < v"0.7.0-DEV.2655"
+    @eval module IterativeEigensolvers
+        using Base: eigs, svds
+        export eigs, svds
+    end
+elseif VERSION < v"0.7.0-DEV.3019"
+    import IterativeEigenSolvers
+    const IterativeEigensolvers = IterativeEigenSolvers
+else
+    import IterativeEigensolvers
+end
+
 # 0.7.0-DEV.1993
 @static if !isdefined(Base, :EqualTo)
     if VERSION >= v"0.6.0"

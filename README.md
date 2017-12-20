@@ -101,6 +101,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `using Compat.Printf` is provided on versions older than 0.7, where this library is not
   yet a part of the standard library. ([#25056])
 
+* `using Compat.IterativeEigensolvers` is provided on versions older than 0.7, where this
+  library is not yet a part of the standard library. ([#24714])
+
 ## New functions, macros, and methods
 
 * `@views` takes an expression and converts all slices to views ([#20164]), while
@@ -396,6 +399,7 @@ includes this fix. Find the minimum version from there.
 [#24647]: https://github.com/JuliaLang/julia/issues/24647
 [#24652]: https://github.com/JuliaLang/julia/issues/24652
 [#24657]: https://github.com/JuliaLang/julia/issues/24657
+[#24714]: https://github.com/JuliaLang/julia/issues/24714
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
 [#25012]: https://github.com/JuliaLang/julia/issues/25012
 [#25021]: https://github.com/JuliaLang/julia/issues/25021
