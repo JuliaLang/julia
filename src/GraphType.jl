@@ -83,11 +83,6 @@ mutable struct GraphData
     # UUID to names
     uuid_to_name::Dict{UUID,String}
 
-    # requirements and fixed packages, passed at initialization
-    # (TODO: these are probably useless?)
-    reqs::Requires
-    fixed::Dict{UUID,Fixed}
-
     # pruned packages: during graph simplification, packages that
     #                  only have one allowed version are pruned.
     #                  This keeps track of them, so that they may
@@ -106,9 +101,7 @@ mutable struct GraphData
             versions::Dict{UUID,Set{VersionNumber}},
             deps::Dict{UUID,Dict{VersionRange,Dict{String,UUID}}},
             compat::Dict{UUID,Dict{VersionRange,Dict{String,VersionSpec}}},
-            uuid_to_name::Dict{UUID,String},
-            reqs::Requires,
-            fixed::Dict{UUID,Fixed}
+            uuid_to_name::Dict{UUID,String}
         )
         # generate pkgs
         pkgs = sort!(collect(keys(versions)))
@@ -134,7 +127,7 @@ mutable struct GraphData
         # the resolution log is actually initialized below
         rlog = ResolveLog()
 
-        data = new(pkgs, np, spp, pdict, pvers, vdict, uuid_to_name, reqs, fixed, pruned, eq_classes, rlog)
+        data = new(pkgs, np, spp, pdict, pvers, vdict, uuid_to_name, pruned, eq_classes, rlog)
 
         init_log!(data)
 
@@ -214,7 +207,7 @@ mutable struct Graph
         extra_uuids = union(keys(reqs), keys(fixed), map(fx->keys(fx.requires), values(fixed))...)
         extra_uuids ⊆ keys(versions) || error("unknown UUID found in reqs/fixed") # TODO?
 
-        data = GraphData(versions, deps, compat, uuid_to_name, reqs, fixed)
+        data = GraphData(versions, deps, compat, uuid_to_name)
         pkgs, np, spp, pdict, pvers, vdict, rlog = data.pkgs, data.np, data.spp, data.pdict, data.pvers, data.vdict, data.rlog
 
         extended_deps = [[Dict{Int,BitVector}() for v0 = 1:(spp[p0]-1)] for p0 = 1:np]
@@ -1149,7 +1142,7 @@ function prune_graph!(graph::Graph; verbose::Bool = false)
     data.pvers = new_pvers
     data.vdict = new_vdict
     # Notes:
-    #   * uuid_to_name, reqs, fixed, eq_classes are unchanged
+    #   * uuid_to_name, eq_classes are unchanged
     #   * pruned and rlog were updated in-place
 
     # Replace old structures with new ones
