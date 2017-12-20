@@ -597,6 +597,10 @@ function rm(env::EnvCache, pkgs::Vector{PackageSpec})
 end
 
 function add(env::EnvCache, pkgs::Vector{PackageSpec})
+    # if julia is passed as a package the solver gets tricked;
+    # this catches the error early on
+    any(pkg->(pkg.uuid == uuid_julia), pkgs) &&
+        error("Trying to add julia as a package")
     # copy added name/UUIDs into project
     for pkg in pkgs
         env.project["deps"][pkg.name] = string(pkg.uuid)
