@@ -188,8 +188,8 @@ julia> String(take!(io))
 "Haho"
 ```
 """
-IOBuffer(str::String) = IOBuffer(Vector{UInt8}(str))
-IOBuffer(s::SubString{String}) = IOBuffer(view(Vector{UInt8}(s.string), s.offset + 1 : s.offset + sizeof(s)))
+IOBuffer(str::String) = IOBuffer(Vector{UInt8}(str), true, false)
+IOBuffer(s::SubString{String}) = IOBuffer(view(Vector{UInt8}(s.string), s.offset + 1 : s.offset + sizeof(s)), true, false)
 
 # join is implemented using IO
 

@@ -32,7 +32,7 @@ StringVector(n::Integer) = Vector{UInt8}(_string_n(n))
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 
 """
-    IOBuffer([data, ][readable::Bool=true, writable::Bool=false[, maxsize::Int=typemax(Int)]])
+    IOBuffer([data, ][readable::Bool=true, writable::Bool=true[, maxsize::Int=typemax(Int)]])
 
 Create an `IOBuffer`, which may optionally operate on a pre-existing array. If the
 readable/writable arguments are given, they restrict whether or not the buffer may be read
@@ -60,7 +60,7 @@ julia> String(take!(io))
 "JuliaLang is a GitHub organization"
 ```
 """
-IOBuffer(data::AbstractVector{UInt8}, readable::Bool=true, writable::Bool=false, maxsize::Integer=typemax(Int)) =
+IOBuffer(data::AbstractVector{UInt8}, readable::Bool=true, writable::Bool=true, maxsize::Integer=typemax(Int)) =
     GenericIOBuffer(data, readable, writable, true, false, maxsize)
 function IOBuffer(readable::Bool, writable::Bool)
     b = IOBuffer(StringVector(32), readable, writable)
