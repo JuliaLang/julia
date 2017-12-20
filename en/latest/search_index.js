@@ -2333,7 +2333,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Networking and Streams",
     "title": "Working with Files",
     "category": "section",
-    "text": "Like many other environments, Julia has an open function, which takes a filename and returns an IOStream object that you can use to read and write things from the file. For example if we have a file, hello.txt, whose contents are Hello, World!:julia> f = open(\"hello.txt\")\nIOStream(<file hello.txt>)\n\njulia> readlines(f)\n1-element Array{String,1}:\n \"Hello, World!\"If you want to write to a file, you can open it with the write (\"w\") flag:julia> f = open(\"hello.txt\",\"w\")\nIOStream(<file hello.txt>)\n\njulia> write(f,\"Hello again.\")\n12If you examine the contents of hello.txt at this point, you will notice that it is empty; nothing has actually been written to disk yet. This is because the IOStream must be closed before the write is actually flushed to disk:julia> close(f)Examining hello.txt again will show its contents have been changed.Opening a file, doing something to its contents, and closing it again is a very common pattern. To make this easier, there exists another invocation of open which takes a function as its first argument and filename as its second, opens the file, calls the function with the file as an argument, and then closes it again. For example, given a function:function read_and_capitalize(f::IOStream)\n    return uppercase(read(f, String))\nendYou can call:julia> open(read_and_capitalize, \"hello.txt\")\n\"HELLO AGAIN.\"to open hello.txt, call read_and_capitalize on it, close hello.txt and return the capitalized contents.To avoid even having to define a named function, you can use the do syntax, which creates an anonymous function on the fly:julia> open(\"hello.txt\") do f\n           uppercase(read(f, String))\n       end\n\"HELLO AGAIN.\""
+    "text": "Like many other environments, Julia has an open function, which takes a filename and returns an IOStream object that you can use to read and write things from the file. For example, if we have a file, hello.txt, whose contents are Hello, World!:julia> f = open(\"hello.txt\")\nIOStream(<file hello.txt>)\n\njulia> readlines(f)\n1-element Array{String,1}:\n \"Hello, World!\"If you want to write to a file, you can open it with the write (\"w\") flag:julia> f = open(\"hello.txt\",\"w\")\nIOStream(<file hello.txt>)\n\njulia> write(f,\"Hello again.\")\n12If you examine the contents of hello.txt at this point, you will notice that it is empty; nothing has actually been written to disk yet. This is because the IOStream must be closed before the write is actually flushed to disk:julia> close(f)Examining hello.txt again will show its contents have been changed.Opening a file, doing something to its contents, and closing it again is a very common pattern. To make this easier, there exists another invocation of open which takes a function as its first argument and filename as its second, opens the file, calls the function with the file as an argument, and then closes it again. For example, given a function:function read_and_capitalize(f::IOStream)\n    return uppercase(read(f, String))\nendYou can call:julia> open(read_and_capitalize, \"hello.txt\")\n\"HELLO AGAIN.\"to open hello.txt, call read_and_capitalize on it, close hello.txt and return the capitalized contents.To avoid even having to define a named function, you can use the do syntax, which creates an anonymous function on the fly:julia> open(\"hello.txt\") do f\n           uppercase(read(f, String))\n       end\n\"HELLO AGAIN.\""
 },
 
 {
@@ -4837,7 +4837,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "do",
     "category": "Keyword",
-    "text": "do\n\nThe do keyword creates an anonymous function. For example:\n\nmap(1:10) do x\n    2x\nend\n\nis equivalent to map(x->2x, 1:10).\n\nUse multiple arguments like so:\n\nmap(1:10, 11:20) do x, y\n    x + y\nend\n\n\n\n"
+    "text": "do\n\nCreate an anonymous function. For example:\n\nmap(1:10) do x\n    2x\nend\n\nis equivalent to map(x->2x, 1:10).\n\nUse multiple arguments like so:\n\nmap(1:10, 11:20) do x, y\n    x + y\nend\n\n\n\n"
 },
 
 {
@@ -4893,7 +4893,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "break",
     "category": "Keyword",
-    "text": "break\n\nbreak breaks out of a loop immediately.\n\nExamples\n\njulia> i = 0\n0\n\njulia> while true\n           i += 1\n           i > 5 && break\n           println(i)\n       end\n1\n2\n3\n4\n5\n\n\n\n"
+    "text": "break\n\nBreak out of a loop immediately.\n\nExamples\n\njulia> i = 0\n0\n\njulia> while true\n           i += 1\n           i > 5 && break\n           println(i)\n       end\n1\n2\n3\n4\n5\n\n\n\n"
 },
 
 {
@@ -4901,7 +4901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "continue",
     "category": "Keyword",
-    "text": "continue\n\ncontinue skips the rest of the current loop, then carries on looping.\n\nExamples\n\njulia> for i = 1:6\n           iseven(i) && continue\n           println(i)\n       end\n1\n3\n5\n\n\n\n"
+    "text": "continue\n\nSkip the rest of the current loop, then carries on looping.\n\nExamples\n\njulia> for i = 1:6\n           iseven(i) && continue\n           println(i)\n       end\n1\n3\n5\n\n\n\n"
 },
 
 {
@@ -4917,7 +4917,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "finally",
     "category": "Keyword",
-    "text": "finally\n\nfinally provides a way to run some code when a given block of code exits, regardless of how it exits. For example, here is how we can guarantee that an opened file is closed:\n\nf = open(\"file\")\ntry\n    operate_on_file(f)\nfinally\n    close(f)\nend\n\nWhen control leaves the try block (for example due to a return, or just finishing normally), close(f) will be executed. If the try block exits due to an exception, the exception will continue propagating. A catch block may be combined with try and finally as well. In this case the finally block will run after catch has handled the error.\n\n\n\n"
+    "text": "finally\n\nRun some code when a given block of code exits, regardless of how it exits. For example, here is how we can guarantee that an opened file is closed:\n\nf = open(\"file\")\ntry\n    operate_on_file(f)\nfinally\n    close(f)\nend\n\nWhen control leaves the try block (for example, due to a return, or just finishing normally), close(f) will be executed. If the try block exits due to an exception, the exception will continue propagating. A catch block may be combined with try and finally as well. In this case the finally block will run after catch has handled the error.\n\n\n\n"
 },
 
 {
@@ -6021,7 +6021,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.pipeline",
     "category": "Method",
-    "text": "pipeline(from, to, ...)\n\nCreate a pipeline from a data source to a destination. The source and destination can be commands, I/O streams, strings, or results of other pipeline calls. At least one argument must be a command. Strings refer to filenames. When called with more than two arguments, they are chained together from left to right. For example pipeline(a,b,c) is equivalent to pipeline(pipeline(a,b),c). This provides a more concise way to specify multi-stage pipelines.\n\nExamples:\n\nrun(pipeline(`ls`, `grep xyz`))\nrun(pipeline(`ls`, \"out.txt\"))\nrun(pipeline(\"out.txt\", `grep xyz`))\n\n\n\n"
+    "text": "pipeline(from, to, ...)\n\nCreate a pipeline from a data source to a destination. The source and destination can be commands, I/O streams, strings, or results of other pipeline calls. At least one argument must be a command. Strings refer to filenames. When called with more than two arguments, they are chained together from left to right. For example, pipeline(a,b,c) is equivalent to pipeline(pipeline(a,b),c). This provides a more concise way to specify multi-stage pipelines.\n\nExamples:\n\nrun(pipeline(`ls`, `grep xyz`))\nrun(pipeline(`ls`, \"out.txt\"))\nrun(pipeline(\"out.txt\", `grep xyz`))\n\n\n\n"
 },
 
 {
@@ -6925,7 +6925,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.in",
     "category": "Function",
-    "text": "in(item, collection) -> Bool\n∈(item,collection) -> Bool\n∋(collection,item) -> Bool\n∉(item,collection) -> Bool\n∌(collection,item) -> Bool\n\nDetermine whether an item is in the given collection, in the sense that it is == to one of the values generated by iterating over the collection. Some collections need a slightly different definition; for example Sets check whether the item isequal to one of the elements. Dicts look for (key,value) pairs, and the key is compared using isequal. To test for the presence of a key in a dictionary, use haskey or k in keys(dict).\n\njulia> a = 1:3:20\n1:3:19\n\njulia> 4 in a\ntrue\n\njulia> 5 in a\nfalse\n\n\n\n"
+    "text": "in(item, collection) -> Bool\n∈(item,collection) -> Bool\n∋(collection,item) -> Bool\n∉(item,collection) -> Bool\n∌(collection,item) -> Bool\n\nDetermine whether an item is in the given collection, in the sense that it is == to one of the values generated by iterating over the collection. Some collections need a slightly different definition; for example, Sets check whether the item isequal to one of the elements. Dicts look for (key,value) pairs, and the key is compared using isequal. To test for the presence of a key in a dictionary, use haskey or k in keys(dict).\n\njulia> a = 1:3:20\n1:3:19\n\njulia> 4 in a\ntrue\n\njulia> 5 in a\nfalse\n\n\n\n"
 },
 
 {
@@ -7549,7 +7549,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
 },
 
 {
@@ -7621,7 +7621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.BitSet",
     "category": "Type",
-    "text": "BitSet([itr])\n\nConstruct a sorted set of Ints generated by the given iterable object, or an empty set. Implemented as a bit string, and therefore designed for dense integer sets. If the set will be sparse (for example holding a few very large integers), use Set instead.\n\n\n\n"
+    "text": "BitSet([itr])\n\nConstruct a sorted set of Ints generated by the given iterable object, or an empty set. Implemented as a bit string, and therefore designed for dense integer sets. If the set will be sparse (for example, holding a few very large integers), use Set instead.\n\n\n\n"
 },
 
 {
@@ -7861,7 +7861,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
 },
 
 {
@@ -9061,7 +9061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = RowVector([1+im, 1-im])\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = RowVector([1+im, 1-im])\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -12405,7 +12405,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n"
+    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n"
 },
 
 {
@@ -20301,7 +20301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@ncall",
     "category": "Macro",
-    "text": "@ncall N f sym...\n\nGenerate a function call expression. sym represents any number of function arguments, the last of which may be an anonymous-function expression and is expanded into N arguments.\n\nFor example @ncall 3 func a generates\n\nfunc(a_1, a_2, a_3)\n\nwhile @ncall 2 func a b i->c[i] yields\n\nfunc(a, b, c[1], c[2])\n\n\n\n"
+    "text": "@ncall N f sym...\n\nGenerate a function call expression. sym represents any number of function arguments, the last of which may be an anonymous-function expression and is expanded into N arguments.\n\nFor example, @ncall 3 func a generates\n\nfunc(a_1, a_2, a_3)\n\nwhile @ncall 2 func a b i->c[i] yields\n\nfunc(a, b, c[1], c[2])\n\n\n\n"
 },
 
 {
