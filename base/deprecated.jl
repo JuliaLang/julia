@@ -1138,13 +1138,13 @@ workspace() = error("`workspace()` is discontinued, consider Revise.jl for an al
 @deprecate_moved unsafe_get "Nullables"
 
 # sub2ind and ind2sub deprecation (PR #24715)
-@deprecate ind2sub(A::AbstractArray, ind) CartesianIndices(A)[ind]
-@deprecate ind2sub(::Tuple{}, ind::Integer) CartesianIndices()[ind]
-@deprecate ind2sub(dims::Tuple{Vararg{Integer,N}} where N, ind::Integer) CartesianIndices(dims)[ind]
-@deprecate ind2sub(inds::Tuple{Base.OneTo}, ind::Integer) CartesianIndices(inds)[ind]
-@deprecate ind2sub(inds::Tuple{AbstractUnitRange}, ind::Integer) CartesianIndices(inds)[ind]
-@deprecate ind2sub(inds::Tuple{Vararg{AbstractUnitRange,N}} where N, ind::Integer) CartesianIndices(inds)[ind]
-@deprecate ind2sub(inds::Union{DimsInteger{N},Indices{N}}  where N, ind::AbstractVector{<:Integer}) CartesianIndices(inds)[ind]
+@deprecate ind2sub(A::AbstractArray, ind) Tuple(CartesianIndices(A)[ind])
+@deprecate ind2sub(::Tuple{}, ind::Integer) Tuple(CartesianIndices()[ind])
+@deprecate ind2sub(dims::Tuple{Vararg{Integer,N}} where N, ind::Integer) Tuple(CartesianIndices(dims)[ind])
+@deprecate ind2sub(inds::Tuple{Base.OneTo}, ind::Integer) Tuple(CartesianIndices(inds)[ind])
+@deprecate ind2sub(inds::Tuple{AbstractUnitRange}, ind::Integer) Tuple(CartesianIndices(inds)[ind])
+@deprecate ind2sub(inds::Tuple{Vararg{AbstractUnitRange,N}} where N, ind::Integer) Tuple(CartesianIndices(inds)[ind])
+@deprecate ind2sub(inds::Union{DimsInteger{N},Indices{N}}  where N, ind::AbstractVector{<:Integer}) Tuple(CartesianIndices(inds)[ind])
 
 @deprecate sub2ind(A::AbstractArray, I...) LinearIndices(A)[I...]
 @deprecate sub2ind(dims::Tuple{}) LinearIndices(dims)[]
