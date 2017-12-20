@@ -711,7 +711,7 @@ const LPROC = LocalProcess()
 const HDR_VERSION_LEN=16
 const HDR_COOKIE_LEN=16
 const map_pid_wrkr = Dict{Int, Union{Worker, LocalProcess}}()
-const map_sock_wrkr = ObjectIdDict()
+const map_sock_wrkr = IdDict()
 const map_del_wrkr = Set{Int}()
 
 # cluster management related API

@@ -3423,6 +3423,9 @@ workspace() = error("workspace() is discontinued, check out Revise.jl for an alt
 # PR #25113
 @deprecate_binding CartesianRange CartesianIndices
 
+# ObjectIdDict -> IdDict
+@deprecate_binding ObjectIdDict IdDict{Any,Any} # true " use IdDict{Any,Any} instead" # TODO
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
