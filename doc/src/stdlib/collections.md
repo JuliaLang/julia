@@ -234,9 +234,7 @@ Base.intersect
 Base.setdiff
 Base.setdiff!
 Base.symdiff
-Base.symdiff!(::BitSet, ::Integer)
-Base.symdiff!(::BitSet, ::Any)
-Base.symdiff!(::BitSet, ::BitSet)
+Base.symdiff!
 Base.intersect!
 Base.issubset
 ```

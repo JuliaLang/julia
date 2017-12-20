@@ -580,8 +580,10 @@ julia> empty([1.0, 2.0, 3.0], String)
 0-element Array{String,1}
 ```
 """
-empty(a::AbstractVector) = empty(a, eltype(a))
-empty(a::AbstractVector, ::Type{T}) where {T} = Vector{T}()
+empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
+
+# like empty, but should return a mutable collection, a Vector by default
+emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
 
 ## from general iterable to any array
 

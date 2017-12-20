@@ -32,7 +32,12 @@ BitSet(itr) = union!(BitSet(), itr)
 
 eltype(::Type{BitSet}) = Int
 similar(s::BitSet) = BitSet()
+
+empty(s::BitSet, ::Type{Int}=Int) = BitSet()
+emptymutable(s::BitSet, ::Type{Int}=Int) = BitSet()
+
 copy(s1::BitSet) = copy!(BitSet(), s1)
+copymutable(s::BitSet) = copy(s)
 
 """
     copy!(dst, src)
@@ -253,49 +258,17 @@ isempty(s::BitSet) = _check0(s.bits, 1, length(s.bits))
 
 # Mathematical set functions: union!, intersect!, setdiff!, symdiff!
 
-union(s::BitSet) = copy(s)
-union(s1::BitSet, s2::BitSet) = union!(copy(s1), s2)
-union(s1::BitSet, ss::BitSet...) = union(s1, union(ss...))
-union(s::BitSet, ns) = union!(copy(s), ns)
-union!(s::BitSet, ns) = (for n in ns; push!(s, n); end; s)
+union(s::BitSet, sets...) = union!(copy(s), sets...)
 union!(s1::BitSet, s2::BitSet) = _matched_map!(|, s1, s2)
 
-intersect(s1::BitSet) = copy(s1)
-intersect(s1::BitSet, ss::BitSet...) = intersect(s1, intersect(ss...))
-function intersect(s1::BitSet, ns)
-    s = BitSet()
-    for n in ns
-        n in s1 && push!(s, n)
-    end
-    s
-end
 intersect(s1::BitSet, s2::BitSet) =
     length(s1.bits) < length(s2.bits) ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1)
-"""
-    intersect!(s1::BitSet, s2::BitSet)
 
-Intersects sets `s1` and `s2` and overwrites the set `s1` with the result. If needed, `s1`
-will be expanded to the size of `s2`.
-"""
 intersect!(s1::BitSet, s2::BitSet) = _matched_map!(&, s1, s2)
 
-setdiff(s::BitSet, ns) = setdiff!(copy(s), ns)
-setdiff!(s::BitSet, ns) = (for n in ns; delete!(s, n); end; s)
 setdiff!(s1::BitSet, s2::BitSet) = _matched_map!((p, q) -> p & ~q, s1, s2)
 
-symdiff(s::BitSet, ns) = symdiff!(copy(s), ns)
-"""
-    symdiff!(s, itr)
-
-For each element in `itr`, destructively toggle its inclusion in set `s`.
-"""
-symdiff!(s::BitSet, ns) = (for n in ns; int_symdiff!(s, n); end; s)
-"""
-    symdiff!(s, n)
-
-The set `s` is destructively modified to toggle the inclusion of integer `n`.
-"""
-symdiff!(s::BitSet, n::Integer) = int_symdiff!(s, n)
+symdiff!(s::BitSet, ns) = foldl(int_symdiff!, s, ns)
 
 function int_symdiff!(s::BitSet, n::Integer)
     n0 = _check_bitset_bounds(n)
@@ -305,6 +278,8 @@ function int_symdiff!(s::BitSet, n::Integer)
 end
 
 symdiff!(s1::BitSet, s2::BitSet) = _matched_map!(xor, s1, s2)
+
+filter!(f, s::BitSet) = unsafe_filter!(f, s)
 
 @inline in(n::Int, s::BitSet) = _bits_getindex(s.bits, n, s.offset)
 @inline in(n::Integer, s::BitSet) = _is_convertible_Int(n) ? in(Int(n), s) : false
