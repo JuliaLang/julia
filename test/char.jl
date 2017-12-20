@@ -106,6 +106,11 @@ let
         @test last(x) == x
     end
 
+    #copy(c::Char) = c
+    for x in testarrays
+        @test copy(x) == x
+    end
+
     #eltype(c::Char) = Char
     for x in testarrays
         @test eltype(x) == Char
