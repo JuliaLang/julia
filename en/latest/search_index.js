@@ -7629,7 +7629,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.union",
     "category": "Function",
-    "text": "union(s1,s2...)\n∪(s1,s2...)\n\nConstruct the union of two or more sets. Maintains order with arrays.\n\nExamples\n\njulia> union([1, 2], [3, 4])\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> union([1, 2], [2, 4])\n3-element Array{Int64,1}:\n 1\n 2\n 4\n\njulia> union([4, 2], [1, 2])\n3-element Array{Int64,1}:\n 4\n 2\n 1\n\n\n\n"
+    "text": "union(s, itrs...)\n∪(s, itrs...)\n\nConstruct the union of sets. Maintain order with arrays.\n\nExamples\n\njulia> union([1, 2], [3, 4])\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> union([1, 2], [2, 4])\n3-element Array{Int64,1}:\n 1\n 2\n 4\n\njulia> union([4, 2], 1:2)\n3-element Array{Int64,1}:\n 4\n 2\n 1\n\njulia> union(Set([1, 2]), 2:3)\nSet([2, 3, 1])\n\n\n\n"
 },
 
 {
@@ -7637,7 +7637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.union!",
     "category": "Function",
-    "text": "union!(s, iterable)\n\nUnion each element of iterable into set s in-place.\n\nExamples\n\njulia> a = Set([1, 3, 4, 5]);\n\njulia> union!(a, 1:2:8);\n\njulia> a\nSet([7, 4, 3, 5, 1])\n\n\n\n"
+    "text": "union!(s::Union{AbstractSet,AbstractVector}, itrs...)\n\nConstruct the union of passed in sets and overwrite s with the result. Maintain order with arrays.\n\nExamples\n\njulia> a = Set([1, 3, 4, 5]);\n\njulia> union!(a, 1:2:8);\n\njulia> a\nSet([7, 4, 3, 5, 1])\n\n\n\n"
 },
 
 {
@@ -7645,7 +7645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.intersect",
     "category": "Function",
-    "text": "intersect(s1,s2...)\n∩(s1,s2)\n\nConstruct the intersection of two or more sets. Maintains order and multiplicity of the first argument for arrays and ranges.\n\nExamples\n\njulia> intersect([1, 2, 3], [3, 4, 5])\n1-element Array{Int64,1}:\n 3\n\njulia> intersect([1, 4, 4, 5, 6], [4, 6, 6, 7, 8])\n3-element Array{Int64,1}:\n 4\n 4\n 6\n\n\n\n"
+    "text": "intersect(s, itrs...)\n∩(s, itrs...)\n\nConstruct the intersection of sets. Maintain order with arrays.\n\nExamples\n\njulia> intersect([1, 2, 3], [3, 4, 5])\n1-element Array{Int64,1}:\n 3\n\njulia> intersect([1, 4, 4, 5, 6], [4, 6, 6, 7, 8])\n2-element Array{Int64,1}:\n 4\n 6\n\njulia> intersect(Set([1, 2]), BitSet([2, 3]))\nSet([2])\n\n\n\n"
 },
 
 {
@@ -7653,7 +7653,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.setdiff",
     "category": "Function",
-    "text": "setdiff(a, b)\n\nConstruct the set of elements in a but not b. Maintains order with arrays. Note that both arguments must be collections, and both will be iterated over. In particular, setdiff(set,element) where element is a potential member of set, will not work in general.\n\nExamples\n\njulia> setdiff([1,2,3],[3,4,5])\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
+    "text": "setdiff(s, itrs...)\n\nConstruct the set of elements in s but not in any of the iterables in itrs. Maintain order with arrays.\n\nExamples\n\njulia> setdiff([1,2,3], [3,4,5])\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
 },
 
 {
@@ -7661,7 +7661,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.setdiff!",
     "category": "Function",
-    "text": "setdiff!(s, iterable)\n\nRemove each element of iterable from set s in-place.\n\nExamples\n\njulia> a = Set([1, 3, 4, 5]);\n\njulia> setdiff!(a, 1:2:6);\n\njulia> a\nSet([4])\n\n\n\n"
+    "text": "setdiff!(s, itrs...)\n\nRemove from set s (in-place) each element of each iterable from itrs. Maintain order with arrays.\n\nExamples\n\njulia> a = Set([1, 3, 4, 5]);\n\njulia> setdiff!(a, 1:2:6);\n\njulia> a\nSet([4])\n\n\n\n"
 },
 
 {
@@ -7669,31 +7669,15 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.symdiff",
     "category": "Function",
-    "text": "symdiff(a, b, rest...)\n\nConstruct the symmetric difference of elements in the passed in sets or arrays. Maintains order with arrays.\n\nExamples\n\njulia> symdiff([1,2,3],[3,4,5],[4,5,6])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\n\n\n"
+    "text": "symdiff(s, itrs...)\n\nConstruct the symmetric difference of elements in the passed in sets. When s is not an AbstractSet, the order is maintained. Note that in this case the multiplicity of elements matters.\n\nExamples\n\njulia> symdiff([1,2,3], [3,4,5], [4,5,6])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\njulia> symdiff([1,2,1], [2, 1, 2])\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> symdiff(unique([1,2,1]), unique([2, 1, 2]))\n0-element Array{Int64,1}\n\n\n\n"
 },
 
 {
-    "location": "stdlib/collections/#Base.symdiff!-Tuple{BitSet,Integer}",
+    "location": "stdlib/collections/#Base.symdiff!",
     "page": "Collections and Data Structures",
     "title": "Base.symdiff!",
-    "category": "Method",
-    "text": "symdiff!(s, n)\n\nThe set s is destructively modified to toggle the inclusion of integer n.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/collections/#Base.symdiff!-Tuple{BitSet,Any}",
-    "page": "Collections and Data Structures",
-    "title": "Base.symdiff!",
-    "category": "Method",
-    "text": "symdiff!(s, itr)\n\nFor each element in itr, destructively toggle its inclusion in set s.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/collections/#Base.symdiff!-Tuple{BitSet,BitSet}",
-    "page": "Collections and Data Structures",
-    "title": "Base.symdiff!",
-    "category": "Method",
-    "text": "symdiff!(s, itr)\n\nFor each element in itr, destructively toggle its inclusion in set s.\n\n\n\n"
+    "category": "Function",
+    "text": "symdiff!(s::Union{AbstractSet,AbstractVector}, itrs...)\n\nConstruct the symmetric difference of the passed in sets, and overwrite s with the result. When s is an array, the order is maintained. Note that in this case the multiplicity of elements matters.\n\n\n\n"
 },
 
 {
@@ -7701,7 +7685,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.intersect!",
     "category": "Function",
-    "text": "intersect!(s1::BitSet, s2::BitSet)\n\nIntersects sets s1 and s2 and overwrites the set s1 with the result. If needed, s1 will be expanded to the size of s2.\n\n\n\n"
+    "text": "intersect!(s::Union{AbstractSet,AbstractVector}, itrs...)\n\nIntersect all passed in sets and overwrite s with the result. Maintain order with arrays.\n\n\n\n"
 },
 
 {
@@ -7717,7 +7701,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Set-Like Collections",
     "category": "section",
-    "text": "Base.Set\nBase.BitSet\nBase.union\nBase.union!\nBase.intersect\nBase.setdiff\nBase.setdiff!\nBase.symdiff\nBase.symdiff!(::BitSet, ::Integer)\nBase.symdiff!(::BitSet, ::Any)\nBase.symdiff!(::BitSet, ::BitSet)\nBase.intersect!\nBase.issubsetFully implemented by:BitSet\nSetPartially implemented by:Array"
+    "text": "Base.Set\nBase.BitSet\nBase.union\nBase.union!\nBase.intersect\nBase.setdiff\nBase.setdiff!\nBase.symdiff\nBase.symdiff!\nBase.intersect!\nBase.issubsetFully implemented by:BitSet\nSetPartially implemented by:Array"
 },
 
 {
