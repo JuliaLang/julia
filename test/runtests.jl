@@ -1035,6 +1035,18 @@ end
 @test axes(1) == ()
 @test axes(1,1) == 1:1
 
+# 0.7.0-DEV.3017
+@test isa(Some(1), Some{Int})
+@test convert(Some{Float64}, Some(1)) == Some(1.0)
+@test convert(Void, nothing) == nothing
+@test_throws MethodError convert(Void, 1)
+@test Some(nothing) != nothing
+@test coalesce(Some(1)) == 1
+@test coalesce(nothing) == nothing
+@test coalesce(nothing, Some(1), Some(2)) == 1
+@test Compat.notnothing(1) == 1
+@test_throws ArgumentError Compat.notnothing(nothing)
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end

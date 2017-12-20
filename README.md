@@ -217,6 +217,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `get` do-block syntax supported when using `ENV` ([#23412]).
 
+* `Some{T}` wraps `T` to signify that a result of `T<:Void` is expected ([#23642]).
+
 ## Renaming
 
 
@@ -391,6 +393,7 @@ includes this fix. Find the minimum version from there.
 [#23412]: https://github.com/JuliaLang/julia/issues/23412
 [#23427]: https://github.com/JuliaLang/julia/issues/23427
 [#23570]: https://github.com/JuliaLang/julia/issues/23570
+[#23642]: https://github.com/JuliaLang/julia/issues/23642
 [#23666]: https://github.com/JuliaLang/julia/issues/23666
 [#23757]: https://github.com/JuliaLang/julia/issues/23757
 [#23812]: https://github.com/JuliaLang/julia/issues/23812

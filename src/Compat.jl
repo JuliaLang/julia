@@ -994,6 +994,48 @@ end
     export axes
 end
 
+@static if !isdefined(Base, :Some)
+    import Base: promote_rule, convert
+    if VERSION >= v"0.6.0"
+        include_string(@__MODULE__, """
+            struct Some{T}
+                value::T
+            end
+            promote_rule(::Type{Some{S}}, ::Type{Some{T}}) where {S,T} = Some{promote_type(S, T)}
+            promote_rule(::Type{Some{T}}, ::Type{Void}) where {T} = Union{Some{T}, Void}
+            convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
+            convert(::Type{Union{Some{T}, Void}}, x::Some) where {T} = convert(Some{T}, x)
+            convert(::Type{Union{T, Void}}, x::Any) where {T} = convert(T, x)
+        """)
+    else
+        include_string(@__MODULE__, """
+            immutable Some{T}
+                value::T
+            end
+            promote_rule{S,T}(::Type{Some{S}}, ::Type{Some{T}}) = Some{promote_type(S, T)}
+            promote_rule{T}(::Type{Some{T}}, ::Type{Void}) = Union{Some{T}, Void}
+            convert{T}(::Type{Some{T}}, x::Some) = Some{T}(convert(T, x.value))
+            convert{T}(::Type{Union{Some{T}, Void}}, x::Some) = convert(Some{T}, x)
+            convert{T}(::Type{Union{T, Void}}, x::Any) = convert(T, x)
+        """)
+    end
+    convert(::Type{Void}, x::Any) = throw(MethodError(convert, (Void, x)))
+    convert(::Type{Void}, x::Void) = nothing
+    coalesce(x::Any) = x
+    coalesce(x::Some) = x.value
+    coalesce(x::Void) = nothing
+    #coalesce(x::Missing) = missing
+    coalesce(x::Any, y...) = x
+    coalesce(x::Some, y...) = x.value
+    coalesce(x::Void, y...) = coalesce(y...)
+    #coalesce(x::Union{Void, Missing}, y...) = coalesce(y...)
+    notnothing(x::Any) = x
+    notnothing(::Void) = throw(ArgumentError("nothing passed to notnothing"))
+    export Some, coalesce
+else
+    import Base: notnothing
+end
+
 include("deprecated.jl")
 
 end # module Compat
