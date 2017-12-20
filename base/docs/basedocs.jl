@@ -476,7 +476,7 @@ kw"try", kw"catch"
 """
     finally
 
-`finally` provides a way to run some code when a given block of code exits, regardless
+Run some code when a given block of code exits, regardless
 of how it exits. For example, here is how we can guarantee that an opened file is
 closed:
 
@@ -489,8 +489,8 @@ finally
 end
 ```
 
-When control leaves the `try` block (for example due to a `return`, or just finishing
-normally), `close(f)` will be executed. If the `try` block exits due to an exception,
+When control leaves the [`try`](@ref) block (for example, due to a [`return`](@ref), or just finishing
+normally), [`close(f)`](@ref) will be executed. If the `try` block exits due to an exception,
 the exception will continue propagating. A `catch` block may be combined with `try` and
 `finally` as well. In this case the `finally` block will run after `catch` has handled
 the error.
@@ -500,7 +500,7 @@ kw"finally"
 """
     break
 
-`break` breaks out of a loop immediately.
+Break out of a loop immediately.
 
 # Examples
 ```jldoctest
@@ -524,7 +524,7 @@ kw"break"
 """
     continue
 
-`continue` skips the rest of the current loop, then carries on looping.
+Skip the rest of the current loop, then carries on looping.
 
 # Examples
 ```jldoctest
@@ -542,7 +542,7 @@ kw"continue"
 """
     do
 
-The `do` keyword creates an anonymous function. For example:
+Create an anonymous function. For example:
 
 ```julia
 map(1:10) do x
