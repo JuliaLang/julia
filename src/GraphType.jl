@@ -713,6 +713,8 @@ function log_event_eq_classes!(graph::Graph, p0::Int)
     return entry
 end
 
+showlog(graph::Graph, args...; kw...) = showlog(STDOUT, graph, args...; kw...)
+
 """
 Show the full resolution log. The `view` keyword controls how the events are displayed/grouped:
 
