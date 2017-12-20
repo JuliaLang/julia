@@ -1028,6 +1028,11 @@ end
 # 0.7.0-DEV.2951
 @test AbstractDict === (isdefined(Base, :AbstractDict) ? Base.AbstractDict : Base.Associative)
 
+# 0.7.0-DEV.2978
+@test axes === (isdefined(Base, :axes) ? Base.axes : Base.indices)
+@test axes(1) == ()
+@test axes(1,1) == 1:1
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end
