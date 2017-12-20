@@ -117,8 +117,8 @@ function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose::B
         length(gadj[pdict[p]]) == 0 && break
         checked[i] && (i += 1; continue)
 
-        sub_graph = deepcopy(graph)
         req = Requires(p => vn)
+        sub_graph = copy(graph)
         add_reqs!(sub_graph, req)
 
         try

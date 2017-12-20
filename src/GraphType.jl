@@ -133,7 +133,23 @@ mutable struct GraphData
 
         return data
     end
+
+    function Base.copy(data::GraphData)
+        pkgs = copy(data.pkgs)
+        np = data.np
+        spp = copy(data.spp)
+        pdict = copy(data.pdict)
+        pvers = [copy(data.pvers[p0]) for p0 = 1:np]
+        vdict = [copy(data.vdict[p0]) for p0 = 1:np]
+        uuid_to_name = copy(data.uuid_to_name)
+        pruned = copy(data.pruned)
+        eq_classes = Dict(p => copy(eq) for (p,eq) in data.eq_classes)
+        rlog = deepcopy(data.rlog)
+
+        return new(pkgs, np, spp, pdict, pvers, vdict, uuid_to_name, pruned, eq_classes, rlog)
+    end
 end
+
 
 @enum DepDir FORWARD BACKWARDS BIDIR NONE
 
@@ -303,7 +319,23 @@ mutable struct Graph
 
         return graph
     end
+
+    function Base.copy(graph::Graph)
+        data = copy(graph.data)
+        np = graph.np
+        spp = data.spp
+        gadj = [copy(graph.gadj[p0]) for p0 = 1:np]
+        gmsk = [[copy(graph.gmsk[p0][j0]) for j0 = 1:length(gadj[p0])] for p0 = 1:np]
+        gdir = [copy(graph.gdir[p0]) for p0 = 1:np]
+        gconstr = [copy(graph.gconstr[p0]) for p0 = 1:np]
+        adjdict = [copy(graph.adjdict[p0]) for p0 = 1:np]
+        req_inds = copy(graph.req_inds)
+        fix_inds = copy(graph.fix_inds)
+
+        return new(data, gadj, gmsk, gdir, gconstr, adjdict, req_inds, fix_inds, spp, np)
+    end
 end
+
 
 """
 Add explicit requirements to the graph.
