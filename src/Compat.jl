@@ -953,6 +953,12 @@ module Unicode
     end
 end
 
+# 0.7.0-DEV.2951
+@static if !isdefined(Base, :AbstractDict)
+    const AbstractDict = Associative
+    export AbstractDict
+end
+
 include("deprecated.jl")
 
 end # module Compat

@@ -997,6 +997,9 @@ module Test25021
     @test titlecase("firstname lastname") == "Firstname Lastname"
 end
 
+# 0.7.0-DEV.2951
+@test AbstractDict === (isdefined(Base, :AbstractDict) ? Base.AbstractDict : Base.Associative)
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end

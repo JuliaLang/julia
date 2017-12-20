@@ -244,6 +244,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `Complex32`, `Complex64`, and `Complex128` are now `ComplexF16`, `ComplexF32`, and
   `ComplexF64`, respectively ([#24647]).
 
+* `Associative` is now `AbstractDict` ([#25012]).
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -392,4 +394,5 @@ includes this fix. Find the minimum version from there.
 [#24652]: https://github.com/JuliaLang/julia/issues/24652
 [#24657]: https://github.com/JuliaLang/julia/issues/24657
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
+[#25012]: https://github.com/JuliaLang/julia/issues/25012
 [#25021]: https://github.com/JuliaLang/julia/issues/25021
