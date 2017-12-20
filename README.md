@@ -98,6 +98,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `using Compat.Unicode` is provided on versions older than 0.7, where this library is not
   yet a part of the standard library. ([#25021])
 
+* `using Compat.Printf` is provided on versions older than 0.7, where this library is not
+  yet a part of the standard library. ([#25056])
+
 ## New functions, macros, and methods
 
 * `@views` takes an expression and converts all slices to views ([#20164]), while
@@ -396,3 +399,4 @@ includes this fix. Find the minimum version from there.
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
 [#25012]: https://github.com/JuliaLang/julia/issues/25012
 [#25021]: https://github.com/JuliaLang/julia/issues/25021
+[#25056]: https://github.com/JuliaLang/julia/issues/25056

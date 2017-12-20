@@ -902,6 +902,16 @@ module Test24459
     @test isdefined(@__MODULE__, :Dates)
 end
 
+# 0.7
+module Test25056
+    using Compat
+    using Compat.Test
+    using Compat.Printf
+    @test isdefined(@__MODULE__, :Printf)
+    @test isdefined(@__MODULE__, Symbol("@printf"))
+    @test isdefined(@__MODULE__, Symbol("@sprintf"))
+end
+
 let a = [0,1,2,3,0,1,2,3]
     @test findfirst(equalto(3), [1,2,4,1,2,3,4]) == 6
     @test findfirst(!equalto(1), [1,2,4,1,2,3,4]) == 2
