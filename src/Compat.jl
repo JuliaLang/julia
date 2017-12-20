@@ -781,6 +781,17 @@ else
     import IterativeEigensolvers
 end
 
+if VERSION < v"0.7.0-DEV.2609"
+    @eval module SuiteSparse
+        if Base.USE_GPL_LIBS
+            using Base.SparseArrays: CHOLMOD, SPQR, UMFPACK
+        end
+        using Base.SparseArrays: increment, increment!, decrement, decrement!
+    end
+else
+    import SuiteSparse
+end
+
 # 0.7.0-DEV.1993
 @static if !isdefined(Base, :EqualTo)
     if VERSION >= v"0.6.0"

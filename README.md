@@ -104,6 +104,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `using Compat.IterativeEigensolvers` is provided on versions older than 0.7, where this
   library is not yet a part of the standard library. ([#24714])
 
+* `using Compat.SuiteSparse` is provided on versions older than 0.7, where this library is
+  not yet part of the standard library ([#24648]).
+
 ## New functions, macros, and methods
 
 * `@views` takes an expression and converts all slices to views ([#20164]), while
@@ -397,6 +400,7 @@ includes this fix. Find the minimum version from there.
 [#24459]: https://github.com/JuliaLang/julia/issues/24459
 [#24605]: https://github.com/JuliaLang/julia/issues/24605
 [#24647]: https://github.com/JuliaLang/julia/issues/24647
+[#24648]: https://github.com/JuliaLang/julia/issues/24648
 [#24652]: https://github.com/JuliaLang/julia/issues/24652
 [#24657]: https://github.com/JuliaLang/julia/issues/24657
 [#24714]: https://github.com/JuliaLang/julia/issues/24714
