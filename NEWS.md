@@ -336,6 +336,8 @@ This section lists changes that do not have deprecation warnings.
   * `eachindex(A, B...)` now requires that all inputs have the same number of elements.
     When the chosen indexing is Cartesian, they must have the same axes.
 
+  * Iterating over vararg keyword arguments, as in `f(; kw...)`, yields successive values rather than name-value tuples. Use pairs(kw) to iterate over name-value pairs instead. Older versions of Julia can use Compat.pairs(kw).
+
 Library improvements
 --------------------
 
