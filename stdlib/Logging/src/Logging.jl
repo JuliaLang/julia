@@ -1,3 +1,7 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+__precompile__(true)
+
 module Logging
 
 # For now, simply import most names from Base - we don't want to fully
