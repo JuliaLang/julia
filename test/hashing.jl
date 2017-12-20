@@ -64,6 +64,12 @@ vals = Any[
     [1,2,3,4], [1 3;2 4], Any[1,2,3,4], [1,3,2,4],
     [1.0, 2.0, 3.0, 4.0], BigInt[1, 2, 3, 4],
     [1,0], [true,false], BitArray([true,false]),
+    # Irrationals
+    Any[1, pi], [1, pi], [pi, pi], Any[pi, pi],
+    # Overflow with Int8
+    Any[Int8(127), Int8(-128), -383], 127:-255:-383,
+    # Loss of precision with Float64
+    Any[-2^53-1, 0.0, 2^53+1], [-2^53-1, 0, 2^53+1], (-2^53-1):2^53+1:(2^53+1),
     Set([1,2,3,4]),
     Set([1:10;]),                # these lead to different key orders
     Set([7,9,4,10,2,3,5,8,6,1]), #
@@ -87,6 +93,9 @@ vals = Any[
 
 for a in vals, b in vals
     @test isequal(a,b) == (hash(a)==hash(b))
+    if a isa AbstractArray
+        @test hash(a) == hash(collect(a)) == hash(collect(Any, a))
+    end
 end
 
 vals = Any[
@@ -97,7 +106,6 @@ vals = Any[
     [2, 1], [3, 2, 1], [4, 3, 2, 1], [5, 4, 3, 2, 1], [5, 4, 3, 2, 1, 0, -1],
     # test vectors starting with ranges which trigger overflow with Int8
     [124, 125, 126, 127], [124, 125, 126, 127, -128], [-128, 127, -128],
-    [2^53, 2^53+2, 2^53+4],
     # test vectors including ranges
     [2, 1, 2, 3], [2, 3, 2, 1], [2, 1, 2, 3, 2], [2, 3, 2, 1, 2],
     # test various sparsity patterns
@@ -130,7 +138,7 @@ for a in vals
     end
 end
 
-# Test that no overflows give inconsistent hashes with heterogeneous arrays
+# Test that overflow does not give inconsistent hashes with heterogeneous arrays
 @test hash(Any[Int8(1), Int8(2), 255]) == hash([1, 2, 255])
 @test hash(Any[Int8(127), Int8(-128), 129, 130]) ==
     hash([127, -128, 129, 130]) != hash([127,  128, 129, 130])

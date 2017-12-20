@@ -116,15 +116,13 @@ isone(::AbstractIrrational) = false
 
 hash(x::Irrational, h::UInt) = 3*object_id(x) - h
 
+widen(::Type{T}) where {T<:Irrational} = T
+
 -(x::AbstractIrrational) = -Float64(x)
 for op in Symbol[:+, :-, :*, :/, :^]
     @eval $op(x::AbstractIrrational, y::AbstractIrrational) = $op(Float64(x),Float64(y))
 end
 *(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
-
-hash_sub(x::Number, y::Irrational) = widen(x) - y
-hash_sub(x::Irrational, y::Number) = x - widen(y)
-hash_sub(x::Irrational, y::Irrational) = x - y
 
 macro irrational(sym, val, def)
     esym = esc(sym)

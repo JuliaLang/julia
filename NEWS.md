@@ -346,7 +346,8 @@ This section lists changes that do not have deprecation warnings.
     by `==` and `isequal` if all of their elements are equal ([#16401]).
     This has required changing the hashing algorithm: ranges now use an O(N) fallback
     instead of a O(1) specialized method unless they define the `Base.TypeRangeStep`
-    trait; see its documentation for details.
+    trait; see its documentation for details. Types which support subtraction (operator
+    `-`) must now implement `widen` for hashing to work inside heterogeneous arrays.
 
 Library improvements
 --------------------

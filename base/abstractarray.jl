@@ -1956,29 +1956,6 @@ function hash_range(r::AbstractRange, h::UInt)
     h = hash(last(r), h)
 end
 
-"""
-    Base.hash_sub(x, y)
-
-Compute the difference between `x` and `y` ensuring no overflow can happen.
-The returned value does not need to be of the same type as `x - y`, nor even
-equal to it.
-
-This method needs to be implemented by types which support subtraction
-(operator `-`) so that arrays with that element type can be hashed the same as
-their `AbstractRange` equivalents, allowing for O(1) hashing of such ranges.
-It is only required for hashing of heterogeneous arrays. Note that `hash_sub`
-methods should exist for any combination of arguments the `-` method accepts,
-or an error will be raised.
-
-The most straightforward way of implementing this function is to call `-` after
-converting `x` and `y` to a type with a higher precision, with which overflow
-cannot happen. A fallback based on [`widen`](@ref) is provided for `Number` types.
-"""
-hash_sub(x, y) =
-    throw(ArgumentError("cannot hash types ($(typeof(x)), $(typeof(y))) as they do not implement Base.hash_sub"))
-
-hash_sub(x::Number, y::Number) = widen(x) - widen(y)
-
 function hash(a::AbstractArray{T}, h::UInt) where T
     # O(1) hashing for types with regular step
     if isa(a, AbstractRange) && isa(TypeRangeStep(a), RangeStepRegular)
@@ -2023,8 +2000,8 @@ function hash(a::AbstractArray{T}, h::UInt) where T
                 @goto hashrange
             end
         else
-            # hash_sub() ensures no overflow can happen
-            step = hash_sub(x2, x1)
+            # widen() is here to ensure no overflow can happen
+            step = widen(x2) - widen(x1)
         end
 
         # Check whether all remaining steps are equal to the first one
@@ -2041,7 +2018,8 @@ function hash(a::AbstractArray{T}, h::UInt) where T
                 end
                 sign(step) == cmp(x2, x1) || break
             else
-                step = hash_sub(x2, x1)
+                # widen() is here to ensure no overflow can happen
+                step = widen(x2) - widen(x1)
             end
             # Implies breaking in first loop if the step is 0
             isequal(step, laststep) || break
