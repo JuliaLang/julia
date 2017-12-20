@@ -45,7 +45,7 @@ const common_size = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,
 
 const cholmod_com_offsets = Vector{Csize_t}(uninitialized, 19)
 ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
-    Void, (Ptr{Csize_t},), cholmod_com_offsets)
+    Nothing, (Ptr{Csize_t},), cholmod_com_offsets)
 
 ## macro to generate the name of the C function according to the integer type
 macro cholmod_name(nm, typ)
@@ -156,11 +156,11 @@ function __init__()
 
         # Register gc tracked allocator if CHOLMOD is new enough
         if current_version >= v"3.0.0"
-            cnfg = cglobal((:SuiteSparse_config, :libsuitesparseconfig), Ptr{Void})
-            unsafe_store!(cnfg, cglobal(:jl_malloc, Ptr{Void}), 1)
-            unsafe_store!(cnfg, cglobal(:jl_calloc, Ptr{Void}), 2)
-            unsafe_store!(cnfg, cglobal(:jl_realloc, Ptr{Void}), 3)
-            unsafe_store!(cnfg, cglobal(:jl_free, Ptr{Void}), 4)
+            cnfg = cglobal((:SuiteSparse_config, :libsuitesparseconfig), Ptr{Cvoid})
+            unsafe_store!(cnfg, cglobal(:jl_malloc, Ptr{Cvoid}), 1)
+            unsafe_store!(cnfg, cglobal(:jl_calloc, Ptr{Cvoid}), 2)
+            unsafe_store!(cnfg, cglobal(:jl_realloc, Ptr{Cvoid}), 3)
+            unsafe_store!(cnfg, cglobal(:jl_free, Ptr{Cvoid}), 4)
         end
 
     catch ex
@@ -190,7 +190,7 @@ struct C_Dense{T<:VTypes} <: SuiteSparseStruct
     nzmax::Csize_t
     d::Csize_t
     x::Ptr{T}
-    z::Ptr{Void}
+    z::Ptr{Cvoid}
     xtype::Cint
     dtype::Cint
 end
@@ -218,7 +218,7 @@ struct C_Sparse{Tv<:VTypes} <: SuiteSparseStruct
     i::Ptr{SuiteSparse_long}
     nz::Ptr{SuiteSparse_long}
     x::Ptr{Tv}
-    z::Ptr{Void}
+    z::Ptr{Cvoid}
     stype::Cint
     itype::Cint
     xtype::Cint
@@ -234,11 +234,11 @@ struct C_SparseVoid <: SuiteSparseStruct
     nrow::Csize_t
     ncol::Csize_t
     nzmax::Csize_t
-    p::Ptr{Void}
-    i::Ptr{Void}
-    nz::Ptr{Void}
-    x::Ptr{Void}
-    z::Ptr{Void}
+    p::Ptr{Cvoid}
+    i::Ptr{Cvoid}
+    nz::Ptr{Cvoid}
+    x::Ptr{Cvoid}
+    z::Ptr{Cvoid}
     stype::Cint
     itype::Cint
     xtype::Cint
@@ -276,7 +276,7 @@ if build_version >= v"2.1.0" # CHOLMOD version 2.1.0 or later
         p::Ptr{SuiteSparse_long}
         i::Ptr{SuiteSparse_long}
         x::Ptr{Tv}
-        z::Ptr{Void}
+        z::Ptr{Cvoid}
         nz::Ptr{SuiteSparse_long}
         next::Ptr{SuiteSparse_long}
         prev::Ptr{SuiteSparse_long}
@@ -307,7 +307,7 @@ else
         p::Ptr{SuiteSparse_long}
         i::Ptr{SuiteSparse_long}
         x::Ptr{Tv}
-        z::Ptr{Void}
+        z::Ptr{Cvoid}
         nz::Ptr{SuiteSparse_long}
         next::Ptr{SuiteSparse_long}
         prev::Ptr{SuiteSparse_long}
@@ -397,17 +397,17 @@ Factor(FC::FactorComponent) = Factor(FC.F)
 ### cholmod_core_h ###
 function allocate_dense(nrow::Integer, ncol::Integer, d::Integer, ::Type{Float64})
     Dense(ccall((:cholmod_l_allocate_dense, :libcholmod), Ptr{C_Dense{Float64}},
-        (Csize_t, Csize_t, Csize_t, Cint, Ptr{Void}),
+        (Csize_t, Csize_t, Csize_t, Cint, Ptr{Cvoid}),
         nrow, ncol, d, REAL, common_struct))
 end
 function allocate_dense(nrow::Integer, ncol::Integer, d::Integer, ::Type{Complex{Float64}})
     Dense(ccall((:cholmod_l_allocate_dense, :libcholmod), Ptr{C_Dense{Complex{Float64}}},
-        (Csize_t, Csize_t, Csize_t, Cint, Ptr{Void}),
+        (Csize_t, Csize_t, Csize_t, Cint, Ptr{Cvoid}),
         nrow, ncol, d, COMPLEX, common_struct))
 end
 
 free_dense!(p::Ptr{C_Dense{T}}) where {T} = ccall((:cholmod_l_free_dense, :libcholmod),
-    Cint, (Ref{Ptr{C_Dense{T}}}, Ptr{Void}), p, common_struct)
+    Cint, (Ref{Ptr{C_Dense{T}}}, Ptr{Cvoid}), p, common_struct)
 
 function zeros(m::Integer, n::Integer, ::Type{T}) where T<:VTypes
     Dense(ccall((:cholmod_l_zeros, :libcholmod), Ptr{C_Dense{T}},
@@ -473,7 +473,7 @@ function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
     Sparse(ccall((@cholmod_name("allocate_sparse", SuiteSparse_long), :libcholmod),
             Ptr{C_Sparse{Float64}},
                 (Csize_t, Csize_t, Csize_t, Cint,
-                 Cint, Cint, Cint, Ptr{Void}),
+                 Cint, Cint, Cint, Ptr{Cvoid}),
                 nrow, ncol, nzmax, sorted,
                 packed, stype, REAL, common_struct))
 end
@@ -482,7 +482,7 @@ function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
     Sparse(ccall((@cholmod_name("allocate_sparse", SuiteSparse_long), :libcholmod),
             Ptr{C_Sparse{Complex{Float64}}},
                 (Csize_t, Csize_t, Csize_t, Cint,
-                 Cint, Cint, Cint, Ptr{Void}),
+                 Cint, Cint, Cint, Ptr{Cvoid}),
                 nrow, ncol, nzmax, sorted,
                 packed, stype, COMPLEX, common_struct))
 end
@@ -501,7 +501,7 @@ end
 function free_factor!(ptr::Ptr{C_Factor{Tv}}) where Tv<:VTypes
     # Warning! Important that finalizer doesn't modify the global Common struct.
     @isok ccall((@cholmod_name("free_factor", SuiteSparse_long), :libcholmod), Cint,
-            (Ref{Ptr{C_Factor{Tv}}}, Ptr{Void}),
+            (Ref{Ptr{C_Factor{Tv}}}, Ptr{Cvoid}),
                 ptr, common_struct)
 end
 
@@ -792,7 +792,7 @@ end
 function read_sparse(file::Libc.FILE, ::Type{SuiteSparse_long})
     ptr = ccall((@cholmod_name("read_sparse", SuiteSparse_long), :libcholmod),
         Ptr{C_SparseVoid},
-            (Ptr{Void}, Ptr{UInt8}),
+            (Ptr{Cvoid}, Ptr{UInt8}),
                 file.ptr, common_struct)
     if ptr == C_NULL
         throw(ArgumentError("sparse matrix construction failed. Check that input file is valid."))
@@ -1558,7 +1558,7 @@ function lowrankupdowndate!(F::Factor{Tv}, C::Sparse{Tv}, update::Cint) where Tv
         throw(DimensionMismatch("matrix dimensions do not fit"))
     end
     @isok ccall((:cholmod_l_updown, :libcholmod), Cint,
-        (Cint, Ptr{C_Sparse{Tv}}, Ptr{C_Factor{Tv}}, Ptr{Void}),
+        (Cint, Ptr{C_Sparse{Tv}}, Ptr{C_Factor{Tv}}, Ptr{Cvoid}),
         update, C, F, common_struct)
     F
 end

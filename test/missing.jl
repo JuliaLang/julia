@@ -13,11 +13,11 @@ end
 @testset "convert" begin
     @test convert(Union{Int, Missing}, 1) === 1
     @test convert(Union{Int, Missing}, 1.0) === 1
-    @test convert(Union{Void, Missing}, missing) === missing
-    @test convert(Union{Void, Missing}, nothing) === nothing
+    @test convert(Union{Nothing, Missing}, missing) === missing
+    @test convert(Union{Nothing, Missing}, nothing) === nothing
 
     @test_throws MethodError convert(Missing, 1)
-    @test_throws MethodError convert(Union{Void, Missing}, 1)
+    @test_throws MethodError convert(Union{Nothing, Missing}, 1)
     @test_throws MethodError convert(Union{Int, Missing}, "a")
 end
 
@@ -37,7 +37,7 @@ end
     @test promote_type(Union{Int, Missing}, Union{Int, Missing}) == Union{Int, Missing}
     @test promote_type(Union{Float64, Missing}, Union{String, Missing}) == Any
     @test promote_type(Union{Float64, Missing}, Union{Int, Missing}) == Union{Float64, Missing}
-    @test_broken promote_type(Union{Void, Missing, Int}, Float64) == Any
+    @test_broken promote_type(Union{Nothing, Missing, Int}, Float64) == Any
 end
 
 @testset "comparison operators" begin

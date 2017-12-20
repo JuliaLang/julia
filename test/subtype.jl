@@ -539,7 +539,7 @@ function test_old()
     @test isequal_type(Tuple, Tuple{Vararg})
     #@test (Array{Tuple{Vararg{Any}}} <: Array{NTuple})
     #@test (Array{Tuple{Vararg}} <: Array{NTuple})
-    @test !(Type{Tuple{Void}} <: Tuple{Type{Void}})
+    @test !(Type{Tuple{Nothing}} <: Tuple{Type{Nothing}})
 end
 
 const menagerie =
@@ -924,13 +924,13 @@ function test_intersection()
 
     # issue #21118
     A = Tuple{Ref, Vararg{Any}}
-    B = Tuple{Vararg{Union{Z,Ref,Void}}} where Z<:Union{Ref,Void}
+    B = Tuple{Vararg{Union{Z,Ref,Nothing}}} where Z<:Union{Ref,Nothing}
     @test B <: _type_intersect(A, B)
     # TODO: this would be a better version of that test:
     #let T = _type_intersect(A, B)
     #    @test T <: A
     #    @test T <: B
-    #    @test Tuple{Ref, Vararg{Union{Ref,Void}}} <: T
+    #    @test Tuple{Ref, Vararg{Union{Ref,Nothing}}} <: T
     #end
     @testintersect(Tuple{Int,Any,Vararg{A}} where A>:Integer,
                    Tuple{Any,Int,Vararg{A}} where A>:Integer,
@@ -1208,8 +1208,8 @@ end
 
 # issue #23908
 @test Array{Union{Int128, Int16, Int32, Int8}, 1} <: Array{Union{Int128, Int32, Int8, _1}, 1} where _1
-let A = Pair{Void, Pair{Array{Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8}, 1}, Void}},
-    B = Pair{Void, Pair{Array{Union{Int8, UInt128, UInt16, UInt32, UInt64, UInt8, _1}, 1}, Void}} where _1
+let A = Pair{Nothing, Pair{Array{Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8}, 1}, Nothing}},
+    B = Pair{Nothing, Pair{Array{Union{Int8, UInt128, UInt16, UInt32, UInt64, UInt8, _1}, 1}, Nothing}} where _1
     @test A <: B
     @test !(B <: A)
 end
@@ -1233,8 +1233,8 @@ end
 struct A23764{T, N, S} <: AbstractArray{Union{T, S}, N}; end
 @test Tuple{A23764{Int, 1, T} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
 struct A23764_2{T, N, S} <: AbstractArray{Union{Ref{T}, S}, N}; end
-@test Tuple{A23764_2{T, 1, Void} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
-@test Tuple{A23764_2{T, 1, Void} where T} <: Tuple{AbstractArray{T,N} where {T,N}}
+@test Tuple{A23764_2{T, 1, Nothing} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
+@test Tuple{A23764_2{T, 1, Nothing} where T} <: Tuple{AbstractArray{T,N} where {T,N}}
 
 # issue #24305
 f24305(x) = [g24305(x) g24305(x) g24305(x) g24305(x); g24305(x) g24305(x) 0 0];

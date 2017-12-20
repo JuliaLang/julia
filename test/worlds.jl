@@ -66,10 +66,10 @@ A265(fld::Int) = A265(Float64(fld))
 mutable struct B265{T}
     field1::T
     # dummy arg is present to prevent (::Type{T}){T}(arg) from matching the test calls
-    B265{T}(field1::Any, dummy::Void) where T = new(field1) # prevent generation of outer ctor
+    B265{T}(field1::Any, dummy::Nothing) where T = new(field1) # prevent generation of outer ctor
 end
   # define some constructors
-B265(x::Int, dummy::Void) = B265{Int}(x, dummy)
+B265(x::Int, dummy::Nothing) = B265{Int}(x, dummy)
 let ty = Any[1, 2.0e0, 3.0f0]
     global B265_(i::Int) = B265(ty[i], nothing)
 end
@@ -81,8 +81,8 @@ end
 @test Core.Inference.return_type(B265_, (Int,)) == B265{Int}
 
   # add new constructors
-B265(x::Float64, dummy::Void) = B265{Float64}(x, dummy)
-B265(x::Any, dummy::Void) = B265{UInt8}(x, dummy)
+B265(x::Float64, dummy::Nothing) = B265{Float64}(x, dummy)
+B265(x::Any, dummy::Nothing) = B265{UInt8}(x, dummy)
 
   # make sure answers are updated
 @test (B265_(1)::B265{Int}).field1 === 1

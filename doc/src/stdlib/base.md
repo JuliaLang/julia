@@ -175,7 +175,7 @@ Core.UnionAll
 Core.Tuple
 Base.Val
 Core.Vararg
-Core.Void
+Core.Nothing
 Base.Some
 Base.Enums.@enum
 ```

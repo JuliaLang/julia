@@ -581,7 +581,7 @@ end
 
 function empty!(t::ObjectIdDict)
     resize!(t.ht, 32)
-    ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), t.ht, 0, sizeof(t.ht))
+    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), t.ht, 0, sizeof(t.ht))
     t.ndel = 0
     return t
 end

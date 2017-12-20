@@ -215,7 +215,7 @@ function check_partial_updates(reqs::Requires,
     end
 end
 
-const PackageState = Union{Void,VersionNumber}
+const PackageState = Union{Nothing,VersionNumber}
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
     change = Vector{Tuple{String,Tuple{PackageState,PackageState}}}()

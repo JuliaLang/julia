@@ -3,7 +3,7 @@
 baremodule Base
 
 using Core.Intrinsics
-ccall(:jl_set_istopmod, Void, (Any, Bool), Base, true)
+ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, true)
 
 getproperty(x, f::Symbol) = getfield(x, f)
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
@@ -158,10 +158,10 @@ Vector() = Vector{Any}(uninitialized, 0)
 
 # Array constructors for nothing and missing
 # type and dimensionality specified
-Array{T,N}(::Void, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), nothing)
+Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), nothing)
 Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), missing)
 # type but not dimensionality specified
-Array{T}(::Void, d...) where {T} = fill!(Array{T}(uninitialized, d...), nothing)
+Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(uninitialized, d...), nothing)
 Array{T}(::Missing, d...) where {T} = fill!(Array{T}(uninitialized, d...), missing)
 
 include("abstractdict.jl")

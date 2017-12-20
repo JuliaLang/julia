@@ -410,7 +410,7 @@ function readdir(path::AbstractString)
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
-    err = ccall(:uv_fs_scandir, Int32, (Ptr{Void}, Ptr{UInt8}, Cstring, Cint, Ptr{Void}),
+    err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
                 eventloop(), uv_readdir_req, path, 0, C_NULL)
     err < 0 && throw(SystemError("unable to read directory $path", -err))
     #uv_error("unable to read directory $path", err)
@@ -418,12 +418,12 @@ function readdir(path::AbstractString)
     # iterate the listing into entries
     entries = String[]
     ent = Ref{uv_dirent_t}()
-    while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Void}, Ptr{uv_dirent_t}), uv_readdir_req, ent)
+    while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), uv_readdir_req, ent)
         push!(entries, unsafe_string(ent[].name))
     end
 
     # Clean up the request string
-    ccall(:jl_uv_fs_req_cleanup, Void, (Ptr{UInt8},), uv_readdir_req)
+    ccall(:jl_uv_fs_req_cleanup, Cvoid, (Ptr{UInt8},), uv_readdir_req)
 
     return entries
 end
@@ -580,15 +580,15 @@ function readlink(path::AbstractString)
     req = Libc.malloc(_sizeof_uv_fs)
     try
         ret = ccall(:uv_fs_readlink, Int32,
-            (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}),
+            (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
             eventloop(), req, path, C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Void, (Ptr{Void},), req)
+            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
             uv_error("readlink", ret)
             assert(false)
         end
-        tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void},), req))
-        ccall(:uv_fs_req_cleanup, Void, (Ptr{Void},), req)
+        tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Cvoid},), req))
+        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
         return tgt
     finally
         Libc.free(req)

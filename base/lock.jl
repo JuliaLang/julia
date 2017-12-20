@@ -11,7 +11,7 @@ Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 This lock is NOT threadsafe. See [`Threads.Mutex`](@ref) for a threadsafe lock.
 """
 mutable struct ReentrantLock
-    locked_by::Union{Task, Void}
+    locked_by::Union{Task, Nothing}
     cond_wait::Condition
     reentrancy_cnt::Int
 

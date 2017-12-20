@@ -554,7 +554,7 @@ static Value *julia_to_address(
                 // no copy, just reference the data field
                 return ctx.builder.CreateBitCast(emit_pointer_from_objref(ctx, data_pointer(ctx, jvinfo)), to);
             }
-            else if (jl_is_immutable_datatype(ety) && jlto != (jl_value_t*)jl_voidpointer_type) { // anything declared `struct`, except Ptr{Void}
+            else if (jl_is_immutable_datatype(ety) && jlto != (jl_value_t*)jl_voidpointer_type) { // anything declared `struct`, except Ptr{Cvoid}
                 // yes copy
                 Value *nbytes;
                 AllocaInst *ai;

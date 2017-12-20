@@ -105,7 +105,7 @@ function maxrss(name)
     @static if Sys.islinux()
         rus = Vector{Int64}(uninitialized, div(144,8))
         fill!(rus, 0x0)
-        res = ccall(:getrusage, Int32, (Int32, Ptr{Void}), 0, rus)
+        res = ccall(:getrusage, Int32, (Int32, Ptr{Cvoid}), 0, rus)
         if res == 0
             mx = rus[5]/1024
             @printf "julia,%s.mem,%f,%f,%f,%f\n" name mx mx mx 0

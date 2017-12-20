@@ -59,13 +59,13 @@ mutable struct BigFloat <: AbstractFloat
     function BigFloat()
         prec = precision(BigFloat)
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
-        ccall((:mpfr_init2,:libmpfr), Void, (Ref{BigFloat}, Clong), z, prec)
+        ccall((:mpfr_init2,:libmpfr), Cvoid, (Ref{BigFloat}, Clong), z, prec)
         finalizer(cglobal((:mpfr_clear, :libmpfr)), z)
         return z
     end
 
     # Not recommended for general use:
-    function BigFloat(prec::Clong, sign::Cint, exp::Clong, d::Ptr{Void})
+    function BigFloat(prec::Clong, sign::Cint, exp::Clong, d::Ptr{Cvoid})
         new(prec, sign, exp, d)
     end
 end
@@ -959,14 +959,14 @@ get_emin() = ccall((:mpfr_get_emin, :libmpfr), Clong, ())
 get_emin_min() = ccall((:mpfr_get_emin_min, :libmpfr), Clong, ())
 get_emin_max() = ccall((:mpfr_get_emin_max, :libmpfr), Clong, ())
 
-set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Void, (Clong,), x)
-set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Void, (Clong,), x)
+set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Cvoid, (Clong,), x)
+set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Cvoid, (Clong,), x)
 
 function Base.deepcopy_internal(x::BigFloat, stackdict::ObjectIdDict)
     haskey(stackdict, x) && return stackdict[x]
     prec = precision(x)
     y = BigFloat(zero(Clong), zero(Cint), zero(Clong), C_NULL)
-    ccall((:mpfr_init2,:libmpfr), Void, (Ref{BigFloat}, Clong), y, prec)
+    ccall((:mpfr_init2,:libmpfr), Cvoid, (Ref{BigFloat}, Clong), y, prec)
     finalizer(cglobal((:mpfr_clear, :libmpfr)), y)
     ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Int32), y, x, ROUNDING_MODE[])
     stackdict[x] = y

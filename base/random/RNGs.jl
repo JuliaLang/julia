@@ -33,7 +33,7 @@ end # os-test
 for T in (Bool, BitInteger_types...)
     if Sys.iswindows()
         @eval function rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T})
-            ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Void}, UInt32),
+            ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
                   A, sizeof(A))
             A
         end
@@ -54,7 +54,7 @@ The entropy is obtained from the operating system.
 """
 RandomDevice
 
-RandomDevice(::Void) = RandomDevice()
+RandomDevice(::Nothing) = RandomDevice()
 srand(rng::RandomDevice) = rng
 
 

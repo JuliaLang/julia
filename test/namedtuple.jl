@@ -51,8 +51,8 @@ let NT = NamedTuple{(:a,:b),Tuple{Int8,Int16}}, nt = (x=3,y=4)
 end
 
 @test NamedTuple{(:a,:c)}((b=1,z=2,c=3,aa=4,a=5)) === (a=5, c=3)
-@test NamedTuple{(:a,)}(NamedTuple{(:b, :a), Tuple{Int, Union{Int,Void}}}((1, 2))) ===
-    NamedTuple{(:a,), Tuple{Union{Int,Void}}}((2,))
+@test NamedTuple{(:a,)}(NamedTuple{(:b, :a), Tuple{Int, Union{Int,Nothing}}}((1, 2))) ===
+    NamedTuple{(:a,), Tuple{Union{Int,Nothing}}}((2,))
 
 @test eltype((a=[1,2], b=[3,4])) === Vector{Int}
 
@@ -81,10 +81,10 @@ end
 @test merge((a=2, b=1), NamedTuple()) == (a=2, b=1)
 @test merge(NamedTuple(), NamedTuple()) == NamedTuple()
 # `merge` should preserve element types
-let nt = merge(NamedTuple{(:a,:b),Tuple{Int32,Union{Int32,Void}}}((1,Int32(2))),
-               NamedTuple{(:a,:c),Tuple{Union{Int8,Void},Float64}}((nothing,1.0)))
-    @test typeof(nt) == NamedTuple{(:a,:b,:c),Tuple{Union{Int8,Void},Union{Int32,Void},Float64}}
-    @test repr(nt) == "NamedTuple{(:a, :b, :c),Tuple{Union{Void, Int8},Union{Void, Int32},Float64}}((nothing, 2, 1.0))"
+let nt = merge(NamedTuple{(:a,:b),Tuple{Int32,Union{Int32,Nothing}}}((1,Int32(2))),
+               NamedTuple{(:a,:c),Tuple{Union{Int8,Nothing},Float64}}((nothing,1.0)))
+    @test typeof(nt) == NamedTuple{(:a,:b,:c),Tuple{Union{Int8,Nothing},Union{Int32,Nothing},Float64}}
+    @test repr(nt) == "NamedTuple{(:a, :b, :c),Tuple{Union{Nothing, Int8},Union{Nothing, Int32},Float64}}((nothing, 2, 1.0))"
 end
 
 @test merge(NamedTuple(), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (a=4, b=2, c=5)
@@ -157,7 +157,7 @@ function nt_from_abstractly_typed_array()
 end
 @test nt_from_abstractly_typed_array() === (3,5)
 
-let T = NamedTuple{(:a, :b), Tuple{Int64, Union{Float64, Void}}}, nt = T((1, nothing))
+let T = NamedTuple{(:a, :b), Tuple{Int64, Union{Float64, Nothing}}}, nt = T((1, nothing))
     @test nt == (a=1, b=nothing)
     @test typeof(nt) == T
     @test convert(T, (a=1, b=nothing)) == nt
@@ -206,5 +206,5 @@ abstr_nt_22194_3()
 @test Base.structdiff((a=1, b=2, z=20), (b=3, q=20, z=1)) == (a=1,)
 @test Base.structdiff((a=1, b=2, z=20), (b=3, q=20, z=1, a=0)) == NamedTuple()
 @test Base.structdiff((a=1, b=2, z=20), NamedTuple{(:b,)}) == (a=1, z=20)
-@test typeof(Base.structdiff(NamedTuple{(:a, :b), Tuple{Int32, Union{Int32, Void}}}((1, Int32(2))),
-                             (a=0,))) === NamedTuple{(:b,), Tuple{Union{Int32, Void}}}
+@test typeof(Base.structdiff(NamedTuple{(:a, :b), Tuple{Int32, Union{Int32, Nothing}}}((1, Int32(2))),
+                             (a=0,))) === NamedTuple{(:b,), Tuple{Union{Int32, Nothing}}}

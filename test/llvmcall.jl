@@ -139,7 +139,7 @@ function confuse_declname_parsing()
     llvmcall(
         ("""declare i64 addrspace(0)* @foobar()""",
          """ret void"""),
-    Void, Tuple{})
+    Cvoid, Tuple{})
 end
 confuse_declname_parsing()
 
@@ -158,7 +158,7 @@ module ObjLoadTest
     using Base: llvmcall, @ccallable
     using Test
     didcall = false
-    @ccallable Void function jl_the_callback()
+    @ccallable Cvoid function jl_the_callback()
         global didcall
         didcall = true
         nothing
@@ -171,7 +171,7 @@ module ObjLoadTest
         """
         call void @jl_the_callback()
         ret void
-        """),Void,Tuple{})
+        """),Cvoid,Tuple{})
     end
     do_the_call()
     @test didcall
@@ -186,7 +186,7 @@ if Base.libllvm_version >= v"3.6" # llvm 3.6 changed the syntax for a gep, so ju
         Base.llvmcall(
          """%1 = getelementptr i64, i64* null, i64 1
             ret void""",
-        Void, Tuple{})
+        Cvoid, Tuple{})
     end
     code_llvm(DevNull, foo, ())
 else
