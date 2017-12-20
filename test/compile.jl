@@ -623,4 +623,61 @@ let
     end
 end
 
+# Ensure that module-loading plays nicely with Base.delete_method
+dir = mktempdir()
+insert!(LOAD_PATH, 1, dir)
+insert!(Base.LOAD_CACHE_PATH, 1, dir)
+try
+    A_module = :Aedb164bd3a126418
+    B_module = :Bedb164bd3a126418
+    A_file = joinpath(dir, "$A_module.jl")
+    B_file = joinpath(dir, "$B_module.jl")
+
+    write(A_file,
+          """
+          __precompile__()
+
+          module $A_module
+
+          export apc, anopc
+
+          apc(::Int, ::Int) = 1
+          apc(::Any, ::Any) = 2
+
+          anopc(::Int, ::Int) = 1
+          anopc(::Any, ::Any) = 2
+
+          end
+          """)
+    write(B_file,
+          """
+          __precompile__()
+
+          module $B_module
+
+          using $A_module
+
+          bpc(x) = apc(x, x)
+          bnopc(x) = anopc(x, x)
+
+          precompile(bpc, (Int,))
+          precompile(bpc, (Float64,))
+
+          end
+          """)
+    Base.require(A_module)
+    A = root_module(A_module)
+    for mths in (collect(methods(A.apc)), collect(methods(A.anopc)))
+        Base.delete_method(mths[1])
+    end
+    Base.require(B_module)
+    B = root_module(B_module)
+    @test Base.invokelatest(B.bpc, 1) == Base.invokelatest(B.bpc, 1.0) == 2
+    @test Base.invokelatest(B.bnopc, 1) == Base.invokelatest(B.bnopc, 1.0) == 2
+finally
+    shift!(LOAD_PATH)
+    shift!(Base.LOAD_CACHE_PATH)
+    rm(dir, recursive=true)
 end
+
+end # !withenv

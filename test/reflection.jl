@@ -771,3 +771,129 @@ cinfo = cinfos[]
 test_similar_codeinfo(cinfo, cinfo_generated)
 
 @test_throws ErrorException code_lowered(f22979, typeof.(x22979), false)
+
+module MethodDeletion
+using Test
+
+# Deletion after compiling top-level call
+bar1(x) = 1
+bar1(x::Int) = 2
+foo1(x) = bar1(x)
+faz1(x) = foo1(x)
+@test faz1(1) == 2
+@test faz1(1.0) == 1
+m = first(methods(bar1, Tuple{Int}))
+Base.delete_method(m)
+@test bar1(1) == 1
+@test bar1(1.0) == 1
+@test foo1(1) == 1
+@test foo1(1.0) == 1
+@test faz1(1) == 1
+@test faz1(1.0) == 1
+
+# Deletion after compiling middle-level call
+bar2(x) = 1
+bar2(x::Int) = 2
+foo2(x) = bar2(x)
+faz2(x) = foo2(x)
+@test foo2(1) == 2
+@test foo2(1.0) == 1
+m = first(methods(bar2, Tuple{Int}))
+Base.delete_method(m)
+@test bar2(1.0) == 1
+@test bar2(1) == 1
+@test foo2(1) == 1
+@test foo2(1.0) == 1
+@test faz2(1) == 1
+@test faz2(1.0) == 1
+
+# Deletion after compiling low-level call
+bar3(x) = 1
+bar3(x::Int) = 2
+foo3(x) = bar3(x)
+faz3(x) = foo3(x)
+@test bar3(1) == 2
+@test bar3(1.0) == 1
+m = first(methods(bar3, Tuple{Int}))
+Base.delete_method(m)
+@test bar3(1) == 1
+@test bar3(1.0) == 1
+@test foo3(1) == 1
+@test foo3(1.0) == 1
+@test faz3(1) == 1
+@test faz3(1.0) == 1
+
+# Deletion before any compilation
+bar4(x) = 1
+bar4(x::Int) = 2
+foo4(x) = bar4(x)
+faz4(x) = foo4(x)
+m = first(methods(bar4, Tuple{Int}))
+Base.delete_method(m)
+@test bar4(1) == 1
+@test bar4(1.0) == 1
+@test foo4(1) == 1
+@test foo4(1.0) == 1
+@test faz4(1) == 1
+@test faz4(1.0) == 1
+
+# Methods with keyword arguments
+fookw(x; direction=:up) = direction
+fookw(y::Int) = 2
+@test fookw("string") == :up
+@test fookw(1) == 2
+m = collect(methods(fookw))[2]
+Base.delete_method(m)
+@test fookw(1) == 2
+@test_throws MethodError fookw("string")
+
+# functions with many methods
+types = (Float64, Int32, String)
+for T1 in types, T2 in types, T3 in types
+    @eval foomany(x::$T1, y::$T2, z::$T3) = y
+end
+@test foomany(Int32(5), "hello", 3.2) == "hello"
+m = first(methods(foomany, Tuple{Int32, String, Float64}))
+Base.delete_method(m)
+@test_throws MethodError foomany(Int32(5), "hello", 3.2)
+
+struct EmptyType end
+Base.convert(::Type{EmptyType}, x::Integer) = EmptyType()
+m = first(methods(convert, Tuple{Type{EmptyType}, Integer}))
+Base.delete_method(m)
+@test_throws MethodError convert(EmptyType, 1)
+
+# parametric methods
+parametric(A::Array{T,N}, i::Vararg{Int,N}) where {T,N} = N
+@test parametric(rand(2,2), 1, 1) == 2
+m = first(methods(parametric))
+Base.delete_method(m)
+@test_throws MethodError parametric(rand(2,2), 1, 1)
+
+# Deletion and ambiguity detection
+foo(::Int, ::Int) = 1
+foo(::Real, ::Int) = 2
+foo(::Int, ::Real) = 3
+@test all(map(g->g.ambig==nothing, methods(foo)))
+Base.delete_method(first(methods(foo)))
+@test !all(map(g->g.ambig==nothing, methods(foo)))
+@test_throws MethodError foo(1, 1)
+foo(::Int, ::Int) = 1
+foo(1, 1)
+@test map(g->g.ambig==nothing, methods(foo)) == [true, false, false]
+Base.delete_method(first(methods(foo)))
+@test_throws MethodError foo(1, 1)
+@test map(g->g.ambig==nothing, methods(foo)) == [false, false]
+
+# multiple deletions and ambiguities
+typeparam(::Type{T}, a::Array{T}) where T<:AbstractFloat = 1
+typeparam(::Type{T}, a::Array{T}) where T = 2
+for mth in collect(methods(typeparam))
+    Base.delete_method(mth)
+end
+typeparam(::Type{T}, a::AbstractArray{T}) where T<:AbstractFloat = 1
+typeparam(::Type{T}, a::AbstractArray{T}) where T = 2
+@test typeparam(Float64, rand(2))  == 1
+@test typeparam(Int, rand(Int, 2)) == 2
+
+end
