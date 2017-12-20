@@ -288,23 +288,6 @@ function __precompile__(isprecompilable::Bool=true)
     end
 end
 
-"""
-    reload(name::AbstractString)
-
-Force reloading of a package, even if it has been loaded before. This is intended for use
-during package development as code is modified.
-"""
-function reload(name::AbstractString)
-    if contains(name, Filesystem.path_separator) || contains(name, ".")
-        # for reload("path/file.jl") just ask for include instead
-        error("use `include` instead of `reload` to load source files")
-    else
-        # reload("Package") is ok
-        unreference_module(Symbol(name))
-        require(Symbol(name))
-    end
-end
-
 # require always works in Main scope and loads files from node 1
 const toplevel_load = Ref(true)
 

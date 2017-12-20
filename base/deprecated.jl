@@ -3388,7 +3388,8 @@ end
 @deprecate indices(a, d) axes(a, d)
 
 # PR #25046
-export workspace
+export reload, workspace
+reload(name::AbstractString) = error("reload($(repr(name))) is discontinued, check out Revise.jl for an alternative workflow")
 workspace() = error("workspace() is discontinued, check out Revise.jl for an alternative workflow")
 
 # Issue #12902

@@ -33,7 +33,6 @@ Base.less(::Any)
 Base.@less
 Base.clipboard(::Any)
 Base.clipboard()
-Base.reload
 Base.require
 Base.compilecache
 Base.__precompile__
