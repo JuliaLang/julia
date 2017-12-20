@@ -123,10 +123,12 @@ function nextind(s::String, i::Int)
     end
     # first continuation byte
     @inbounds b = codeunit(s, i += 1)
-    (b & 0xc0 ≠ 0x80) | ((i += 1) > n) | (l < 0xe0) && return i
+    b & 0xc0 ≠ 0x80 && return i
+    ((i += 1) > n) | (l < 0xe0) && return i
     # second continuation byte
     @inbounds b = codeunit(s, i)
-    (b & 0xc0 ≠ 0x80) | ((i += 1) > n) | (l < 0xf0) && return i
+    b & 0xc0 ≠ 0x80 && return i
+    ((i += 1) > n) | (l < 0xf0) && return i
     # third continuation byte
     @inbounds b = codeunit(s, i)
     ifelse(b & 0xc0 ≠ 0x80, i, i+1)
