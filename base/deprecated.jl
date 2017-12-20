@@ -2248,6 +2248,67 @@ finalizer(f::Ptr{Cvoid}, o::Function) = invoke(finalizer, Tuple{Ptr{Cvoid}, Any}
     Base.@deprecate_binding broadcast_t broadcast false ", broadcast_t(f, ::Type{ElType}, shape, iter, As...)` should become `broadcast(f, Broadcast.DefaultArrayStyle{N}(), ElType, shape, As...))` (see the manual chapter Interfaces)"
 end
 
+
+### deprecations for lazier, less jazzy linalg transition in the next several blocks ###
+
+# deprecate ConjArray
+# TODO: between 0.7 and 1.0 remove
+#       1) the type definitions in base/linalg/conjarray.jl
+#       2) the include("base/linalg/conjarray.jl") from base/linalg/linalg.jl
+#       3) the file base/linalg/conjarray.jl itself
+@eval Base.LinAlg begin
+    export ConjArray, ConjVector, ConjMatrix
+
+    function ConjArray(a::AbstractArray{T,N}) where {T,N}
+        Base.depwarn(_ConjArray_depstring(), :ConjArray)
+        return ConjArray{conj_type(T),N,typeof(a)}(a)
+    end
+    function ConjVector(v::AbstractVector{T}) where {T}
+        Base.depwarn(_ConjArray_depstring(), :ConjArray)
+        return ConjArray{conj_type(T),1,typeof(v)}(v)
+    end
+    function ConjMatrix(m::AbstractMatrix{T}) where {T}
+        Base.depwarn(_ConjArray_depstring(), :ConjArray)
+        return ConjArray{conj_type(T),2,typeof(m)}(m)
+    end
+
+    _ConjArray_depstring() = string("`ConjRowVector` and `RowVector` have been deprecated in favor ",
+            "of `Adjoint` and `Transpose`, and, as part of the implementation of `ConjRowVector`",
+            "/`RowVector`, `ConjArray`s have been deprecated as well. Please see 0.7's NEWS.md ",
+            "for a more detailed explanation of the associated changes.")
+
+    # This type can cause the element type to change under conjugation - e.g. an array of complex arrays.
+    @inline conj_type(x) = conj_type(typeof(x))
+    @inline conj_type(::Type{T}) where {T} = promote_op(conj, T)
+
+    @inline parent(c::ConjArray) = c.parent
+    @inline parent_type(c::ConjArray) = parent_type(typeof(c))
+    @inline parent_type(::Type{ConjArray{T,N,A}}) where {T,N,A} = A
+
+    @inline size(a::ConjArray) = size(a.parent)
+    IndexStyle(::CA) where {CA<:ConjArray} = IndexStyle(parent_type(CA))
+    IndexStyle(::Type{CA}) where {CA<:ConjArray} = IndexStyle(parent_type(CA))
+
+    @propagate_inbounds getindex(a::ConjArray{T,N}, i::Int) where {T,N} = conj(getindex(a.parent, i))
+    @propagate_inbounds getindex(a::ConjArray{T,N}, i::Vararg{Int,N}) where {T,N} = conj(getindex(a.parent, i...))
+    @propagate_inbounds setindex!(a::ConjArray{T,N}, v, i::Int) where {T,N} = setindex!(a.parent, conj(v), i)
+    @propagate_inbounds setindex!(a::ConjArray{T,N}, v, i::Vararg{Int,N}) where {T,N} = setindex!(a.parent, conj(v), i...)
+
+    @inline similar(a::ConjArray, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(a), T, dims)
+
+    # Currently, this is default behavior for RowVector only
+    @inline conj(a::ConjArray) = parent(a)
+
+    # Helper functions, currently used by RowVector
+    @inline _conj(a::AbstractArray) = ConjArray(a)
+    @inline _conj(a::AbstractArray{T}) where {T<:Real} = a
+    @inline _conj(a::ConjArray) = parent(a)
+    @inline _conj(a::ConjArray{T}) where {T<:Real} = parent(a)
+end
+@eval Base begin
+    export ConjArray
+end
+
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/operators.jl, to deprecate
 @deprecate Ac_ldiv_Bt(a,b)  (\)(Adjoint(a), Transpose(b))
 @deprecate At_ldiv_Bt(a,b)  (\)(Transpose(a), Transpose(b))

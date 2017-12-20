@@ -47,7 +47,6 @@ export
     ComplexF64,
     ComplexF32,
     ComplexF16,
-    ConjArray,
     ConjVector,
     ConjMatrix,
     DenseMatrix,

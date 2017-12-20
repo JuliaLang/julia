@@ -125,7 +125,7 @@ function choosetests(choices = [])
                    "linalg/diagonal", "linalg/pinv", "linalg/givens",
                    "linalg/cholesky", "linalg/lu", "linalg/symmetric",
                    "linalg/generic", "linalg/uniformscaling", "linalg/lq",
-                   "linalg/hessenberg", "linalg/rowvector", "linalg/conjarray",
+                   "linalg/hessenberg", "linalg/rowvector",
                    "linalg/blas", "linalg/adjtrans"]
 
     if "linalg" in skip_tests
