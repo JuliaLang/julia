@@ -147,9 +147,10 @@ daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 ### UTILITIES ###
 
 # These are necessary because the type constructors for TimeType subtypes can
-# throw, and we want to be able to use tryparse without requiring a try/catch.
+# throw, and we want to be able to use parse(Union{T, Void}, ...) without
+# requiring a try/catch.
 # This is made easier by providing a helper function that checks arguments, so
-# we can validate arguments in tryparse.
+# we can validate arguments in parse(Union{T, Void}, ...).
 
 """
     validargs(::Type{<:TimeType}, args...) -> Union{ArgumentError, Void}

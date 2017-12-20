@@ -260,14 +260,14 @@ end
     for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
         for i in [typemax(T), typemin(T)]
             s = "$i"
-            @test tryparse(T, s) == i
+            @test parse(Union{T, Void}, s) == i
         end
     end
 
     for T in [Int8, Int16, Int32, Int64, Int128]
         for i in [typemax(T), typemin(T)]
             f = "$(i)0"
-            @test tryparse(T, f) === nothing
+            @test parse(Union{T, Void}, f) === nothing
         end
     end
 end
@@ -284,13 +284,13 @@ end
     @test unsafe_string(sp,5) == "abcde"
     @test typeof(unsafe_string(sp)) == String
 
-    @test tryparse(BigInt, "1234567890") == BigInt(1234567890)
-    @test tryparse(BigInt, "1234567890-") === nothing
+    @test parse(Union{BigInt, Void}, "1234567890") == BigInt(1234567890)
+    @test parse(Union{BigInt, Void}, "1234567890-") === nothing
 
-    @test tryparse(Float64, "64") == 64.0
-    @test tryparse(Float64, "64o") === nothing
-    @test tryparse(Float32, "32") == 32.0f0
-    @test tryparse(Float32, "32o") === nothing
+    @test parse(Union{Float64, Void}, "64") == 64.0
+    @test parse(Union{Float64, Void}, "64o") === nothing
+    @test parse(Union{Float32, Void}, "32") == 32.0f0
+    @test parse(Union{Float32, Void}, "32o") === nothing
 end
 
 @testset "issue #10994: handle embedded NUL chars for string parsing" begin
@@ -298,7 +298,7 @@ end
         @test_throws ArgumentError parse(T, "1\0")
     end
     for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, Float64, Float32]
-        @test tryparse(T, "1\0") === nothing
+        @test parse(Union{T, Void}, "1\0") === nothing
     end
     let s = Base.Unicode.normalize("tést",:NFKC)
         @test unsafe_string(Base.unsafe_convert(Cstring, Base.cconvert(Cstring, s))) == s

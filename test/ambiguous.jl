@@ -290,6 +290,12 @@ end
         pop!(need_to_handle_undef_sparam, which(Base.nonmissingtype, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{Some{T}, Void}} where T, Some)))
         pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{T, Void}} where T, Some)))
+        using Dates
+        pop!(need_to_handle_undef_sparam, which(Base.parse, (Type{Union{Void, T}} where T<:Union{Float32, Float64}, AbstractString)))
+        pop!(need_to_handle_undef_sparam, which(Base.parse, (Type{Union{Void, T}} where T<:Dates.TimeType, AbstractString)))
+        pop!(need_to_handle_undef_sparam, which(Base.parse, (Type{Union{Void, T}} where T<:Integer, AbstractString, Integer)))
+        pop!(need_to_handle_undef_sparam, which(Base.parse, (Type{Union{Void, T}}  where T<:Dates.TimeType, AbstractString, Dates.DateFormat)))
+        pop!(need_to_handle_undef_sparam, which(Base.parse, (Type{Union{Void, T}} where T<:Integer, AbstractString)))
         @test need_to_handle_undef_sparam == Set()
     end
 end

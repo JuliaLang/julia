@@ -50,7 +50,7 @@ Base.digits
 Base.digits!
 Base.bitstring
 Base.parse(::Type, ::Any, ::Any)
-Base.tryparse
+Base.parse(::Type{Union{T, Void}}, ::AbstractString, ::Integer) where {T<:Integer}
 Base.big
 Base.signed
 Base.unsigned

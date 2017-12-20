@@ -451,7 +451,7 @@ end
 # test for proper handling of FD exhaustion
 if Sys.isunix()
     let ps = Pipe[]
-        ulimit_n = tryparse(Int, readchomp(`sh -c 'ulimit -n'`))
+        ulimit_n = parse(Union{Int, Void}, readchomp(`sh -c 'ulimit -n'`))
         try
             for i = 1 : 100 * coalesce(ulimit_n, 1000)
                 p = Pipe()

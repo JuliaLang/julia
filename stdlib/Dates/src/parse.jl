@@ -270,7 +270,9 @@ function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_forma
     T(values...)
 end
 
-function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
+function Base.parse(::Type{Union{T, Void}},
+                    str::AbstractString,
+                    df::DateFormat=default_format(T)) where T<:TimeType
     pos, len = start(str), endof(str)
     values, pos = tryparsenext_internal(T, str, pos, len, df, false)
     if values === nothing
