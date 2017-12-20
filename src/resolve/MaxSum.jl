@@ -52,9 +52,12 @@ mutable struct Messages
     # backup of the initial value of fld, to be used when resetting
     initial_fld::Vector{Field}
 
-    # keep track of which variables have been decimated
-    decimated::BitVector
+    # the solution is built progressively by a decimation process
+    solution::Vector{Int}
     num_nondecimated::Int
+
+    # try to build a trace
+    trace::Vector{Any}
 
     function Messages(graph::Graph)
         np = graph.np
@@ -103,26 +106,13 @@ mutable struct Messages
         gadj = graph.gadj
         msg = [[zeros(FieldValue, spp[p0]) for j1 = 1:length(gadj[p0])] for p0 = 1:np]
 
-        return new(msg, fld, initial_fld, falses(np), np)
-    end
-end
+        solution = zeros(Int, np)
+        num_nondecimated = np
 
-function getsolution(msgs::Messages)
-    # the solution is just the location of the maximum in
-    # each field
+        trace = []
 
-    fld = msgs.fld
-    np = length(fld)
-    sol = Vector{Int}(np)
-    for p0 = 1:np
-        fld0 = fld[p0]
-        s0 = indmax(fld0)
-        if !validmax(fld0[s0])
-            throw(UnsatError(p0))
-        end
-        sol[p0] = s0
+        return new(msg, fld, initial_fld, solution, num_nondecimated, trace)
     end
-    return sol
 end
 
 # This is the core of the max-sum solver:
@@ -137,7 +127,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
     np = graph.np
     msg = msgs.msg
     fld = msgs.fld
-    decimated = msgs.decimated
+    solution = msgs.solution
 
     maxdiff = zero(FieldValue)
 
@@ -151,7 +141,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
     for j0 in 1:length(gadj0)
 
         p1 = gadj0[j0]
-        decimated[p1] && continue
+        solution[p1] > 0 && continue # already decimated
         j1 = adjdict0[p1]
         #@assert j0 == adjdict[p1][p0]
         bm1 = gmsk[p1][j1]
@@ -196,7 +186,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         if !validmax(m)
             # No state available without violating some
             # hard constraint
-            throw(UnsatError(p1))
+            throw(UnsatError(msgs.trace))
         end
 
         # normalize the new message
@@ -254,17 +244,20 @@ function iterate(graph::Graph, msgs::Messages, perm::NodePerm)
 end
 
 function decimate1(p0::Int, graph::Graph, msgs::Messages)
-    decimated = msgs.decimated
+    solution = msgs.solution
     fld = msgs.fld
     adjdict = graph.adjdict
     gmsk = graph.gmsk
+    gconstr = graph.gconstr
 
-    @assert !decimated[p0]
+    @assert solution[p0] == 0
     fld0 = fld[p0]
     s0 = indmax(fld0)
     # only do the decimation if it is consistent with
-    # the previously decimated nodes
-    for p1 in find(decimated)
+    # the constraints...
+    gconstr[p0][s0] || return false
+    # ...and with the previously decimated nodes
+    for p1 in find(solution .> 0)
         haskey(adjdict[p0], p1) || continue
         s1 = indmax(fld[p1])
         j1 = adjdict[p0][p1]
@@ -275,8 +268,9 @@ function decimate1(p0::Int, graph::Graph, msgs::Messages)
         v0 == s0 && continue
         fld0[v0] = FieldValue(-1)
     end
-    msgs.decimated[p0] = true
+    msgs.solution[p0] = s0
     msgs.num_nondecimated -= 1
+    push!(msgs.trace, (p0,s0))
     return true
 end
 
@@ -284,11 +278,11 @@ function reset_messages!(msgs::Messages)
     msg = msgs.msg
     fld = msgs.fld
     initial_fld = msgs.initial_fld
-    decimated = msgs.decimated
+    solution = msgs.solution
     np = length(fld)
     for p0 = 1:np
         map(m->fill!(m, zero(FieldValue)), msg[p0])
-        decimated[p0] && continue
+        solution[p0] > 0 && continue
         fld[p0] = copy(initial_fld[p0])
     end
     return msgs
@@ -301,32 +295,31 @@ function decimate(n::Int, graph::Graph, msgs::Messages)
     #println("DECIMATING $n NODES")
     adjdict = graph.adjdict
     fld = msgs.fld
-    decimated = msgs.decimated
+    solution = msgs.solution
     fldorder = sortperm(fld, by=secondmax)
     did_dec = false
     for p0 in fldorder
-        decimated[p0] && continue
+        solution[p0] > 0 && continue
         did_dec |= decimate1(p0, graph, msgs)
         n -= 1
         n == 0 && break
     end
     @assert n == 0
-    if !did_dec
-        # did not succeed in decimating anything;
-        # try to decimate at least one node
-        for p0 in fldorder
-            decimated[p0] && continue
-            if decimate1(p0, graph, msgs)
-                did_dec = true
-                break
-            end
-        end
+
+    did_dec && @goto ok
+
+    # did not succeed in decimating anything;
+    # try to decimate at least one node
+    for p0 in fldorder
+        solution[p0] > 0 && continue
+        decimate1(p0, graph, msgs) && @goto ok
     end
-    if !did_dec
-        # still didn't succeed, give up
-        p0 = first(fldorder[.~(decimated)])
-        throw(UnsatError(p0))
-    end
+
+    # still didn't succeed, give up
+    p0 = findfirst(solution .== 0)
+    throw(UnsatError(msgs.trace))
+
+    @label ok
 
     reset_messages!(msgs)
     return
@@ -389,10 +382,12 @@ function maxsum(graph::Graph, msgs::Messages)
     # (old_numnondec is saved just to prevent
     # wrong messages about accuracy)
     old_numnondec = msgs.num_nondecimated
-    decimate(msgs.num_nondecimated, graph, msgs)
+    while msgs.num_nondecimated > 0
+        decimate(msgs.num_nondecimated, graph, msgs)
+    end
     msgs.num_nondecimated = old_numnondec
 
-    return getsolution(msgs)
+    return copy(msgs.solution)
 end
 
 end

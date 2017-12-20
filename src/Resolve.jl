@@ -32,16 +32,11 @@ function resolve(graph::Graph; verbose::Bool = false)
     catch err
         isa(err, UnsatError) || rethrow(err)
         verbose && info("resolve: maxsum failed")
-        p = graph.data.pkgs[err.info]
+        # p = graph.data.pkgs[err.info]
         # TODO: build tools to analyze the problem, and suggest to use them here.
         msg =
             """
             resolve is unable to satisfy package requirements.
-              The problem was detected when trying to find a feasible version
-              for package $(id(p)).
-              However, this only means that package $(id(p)) is involved in an
-              unsatisfiable or difficult dependency relation, and the root of
-              the problem may be elsewhere.
             """
         if msgs.num_nondecimated != graph.np
             msg *= """

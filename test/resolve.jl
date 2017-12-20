@@ -197,7 +197,9 @@ function resolve_tst(deps_data, reqs_data, want_data = nothing)
     simplify_graph!(graph, verbose = VERBOSE)
     want = resolve(graph, verbose = VERBOSE)
 
-    # info("BACKTRACE:\n" * sprint(showbacktrace, graph))
+    # info(sprint(io->showlog(io, graph)))
+    # println()
+    # info(sprint(io->showlog(io, graph, view=:chronological)))
 
     return want == wantuuids(want_data)
 end
