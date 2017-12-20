@@ -28,7 +28,6 @@ export
 # Types
     Adjoint,
     Transpose,
-    RowVector,
     SymTridiagonal,
     Tridiagonal,
     Bidiagonal,

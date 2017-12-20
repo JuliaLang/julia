@@ -97,7 +97,6 @@ export
     RoundUp,
     Adjoint,
     Transpose,
-    RowVector,
     AbstractSerializer,
     SerializationState,
     Set,
