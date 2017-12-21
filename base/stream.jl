@@ -403,7 +403,10 @@ function displaysize(io::TTY)
     return h, w
 end
 
-get(::TTY, k::Symbol, default) = k === :color ? have_color : default
+in(key_value::Pair{Symbol,Bool}, ::TTY) = key_value.first === :color && key_value.second === have_color
+haskey(::TTY, key::Symbol) = key === :color
+getindex(::TTY, key::Symbol) = key === :color ? have_color : throw(KeyError(key))
+get(::TTY, key::Symbol, default) = key === :color ? have_color : default
 
 ### Libuv callbacks ###
 
