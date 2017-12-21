@@ -262,7 +262,7 @@ function banner(io::IO = STDOUT)
         d4 = c[:bold] * c[:magenta] # fourth dot
 
         print(io,"""               $(d3)_$(tx)
-           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
+           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  By greedy hackers for greedy hackers.
           $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: https://docs.julialang.org
            $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?help\" for help.
           $(jl)| | | | | | |/ _` |$(tx)  |
@@ -274,7 +274,7 @@ function banner(io::IO = STDOUT)
     else
         print(io,"""
                        _
-           _       _ _(_)_     |  A fresh approach to technical computing
+           _       _ _(_)_     |  By greedy hackers for greedy hackers.
           (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
            _ _   _| |_  __ _   |  Type \"?help\" for help.
           | | | | | | |/ _` |  |
