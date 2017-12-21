@@ -96,7 +96,7 @@ function firstcaller(bt::Vector, funcsyms)
     for frame in bt
         lkups = StackTraces.lookup(frame)
         for outer lkup in lkups
-            if lkup == StackTraces.UNKNOWN
+            if lkup == StackTraces.UNKNOWN || lkup.from_c
                 continue
             end
             if found
