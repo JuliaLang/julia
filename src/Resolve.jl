@@ -64,7 +64,7 @@ end
 Scan the graph for (explicit or implicit) contradictions. Returns a list of problematic
 (package,version) combinations.
 """
-function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}())
+function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose = true)
     req_inds = graph.req_inds
     fix_inds = graph.fix_inds
 
@@ -107,8 +107,18 @@ function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}())
 
     checked = falses(nv)
 
+    last_str_len = 0
+
     i = 1
     for (p,vn) in vers
+        if verbose
+            frac_compl = i / nv
+            print("\r", " "^last_str_len)
+            progr_msg = @sprintf("\r%.3i/%.3i (%i%%) — problematic so far: %i", i, nv, round(Int, 100 * frac_compl), length(problematic))
+            print(progr_msg)
+            last_str_len = length(progr_msg)
+        end
+
         length(gadj[pdict[p]]) == 0 && break
         checked[i] && (i += 1; continue)
 
@@ -156,6 +166,7 @@ function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}())
 
         i += 1
     end
+    verbose && println()
 
     return sort!(problematic)
 end

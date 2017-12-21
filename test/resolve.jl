@@ -172,7 +172,7 @@ function sanity_tst(deps_data, expected_result; pkgs=[])
         @show deps_data
         @show pkgs
     end
-    result = sanity_check(graph, Set(pkguuid(p) for p in pkgs))
+    result = sanity_check(graph, Set(pkguuid(p) for p in pkgs), verbose = VERBOSE)
 
     length(result) == length(expected_result) || return false
     expected_result_uuid = [(id(p), vn) for (p,vn) in expected_result]
