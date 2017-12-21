@@ -135,6 +135,8 @@ Language changes
   * Prefix `&` for by-reference arguments to `ccall` has been deprecated in favor of
     `Ref` argument types ([#6080]).
 
+  * The constructor `Ref(x::T)` now always returns a `Ref{T}` ([#21527]).
+
   * All line numbers in ASTs are represented by `LineNumberNode`s; the `:line` expression
     head is no longer used. `QuoteNode`s are also consistently used for quoted symbols instead
     of the `:quote` expression head (though `:quote` `Expr`s are still used for quoted

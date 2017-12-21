@@ -81,7 +81,7 @@ Return two outputs, `analysis` and `preference`. `analysis` has several possible
 function merge_analysis(repo::GitRepo, anns::Vector{GitAnnotated})
     analysis = Ref{Cint}(0)
     preference = Ref{Cint}(0)
-    anns_ref = Ref(map(a->a.ptr, anns))
+    anns_ref = Ref(map(a->a.ptr, anns), 1)
     anns_size = Csize_t(length(anns))
     @check ccall((:git_merge_analysis, :libgit2), Cint,
                   (Ptr{Cint}, Ptr{Cint}, Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Csize_t),

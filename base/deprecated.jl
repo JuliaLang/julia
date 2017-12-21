@@ -3426,6 +3426,11 @@ workspace() = error("workspace() is discontinued, check out Revise.jl for an alt
 # PR #25113
 @deprecate_binding CartesianRange CartesianIndices
 
+# PR 21527
+@deprecate Ref(x::AbstractArray) Ref(x, 1)
+@deprecate Ref(x::Ptr) Ref(x, 1)
+@deprecate Ref(x::Ref) x # or perhaps, `convert(Ref, x)`
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

@@ -7,10 +7,16 @@ An object that safely references data of type `T`. This type is guaranteed to po
 valid, Julia-allocated memory of the correct type. The underlying data is protected from
 freeing by the garbage collector as long as the `Ref` itself is referenced.
 
+In Julia, `Ref` objects are dereferenced (loaded or stored) with `[]`.
+
+Creation of a `Ref` to a value `x` of type `T` is usually written `Ref(x)`.
+Additionally, for creating interior pointers to containers (such as Array or Ptr),
+it can be written `Ref(a, i)` for creating a reference to the `i`-th element of `a`.
+
 When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref` object will be
 converted to a native pointer to the data it references.
 
-There is no invalid (NULL) `Ref`.
+There is no invalid (NULL) `Ref` in Julia, but a `C_NULL` instance of `Ptr` can be passed to a `ccall` Ref argument.
 """
 Ref
 
@@ -44,13 +50,13 @@ end
 RefValue(x::T) where {T} = RefValue{T}(x)
 isassigned(x::RefValue) = isdefined(x, :x)
 
-Ref(x::Ref) = x
 Ref(x::Any) = RefValue(x)
-Ref(x::Ptr{T}, i::Integer=1) where {T} = x + (i-1)*Core.sizeof(T)
-Ref(x, i::Integer) = (i != 1 && error("Object only has one element"); Ref(x))
 Ref{T}() where {T} = RefValue{T}() # Ref{T}()
 Ref{T}(x) where {T} = RefValue{T}(x) # Ref{T}(x)
 convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
+
+Ref(x::Ref, i::Integer) = (i != 1 && error("Ref only has one element"); x)
+Ref(x::Ptr{T}, i::Integer) where {T} = x + (i - 1) * Core.sizeof(T)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
     if isbits(T) || isbitsunion(T)
@@ -81,7 +87,7 @@ end
 RefArray(x::AbstractArray{T}, i::Int, roots::Any) where {T} = RefArray{T,typeof(x),Any}(x, i, roots)
 RefArray(x::AbstractArray{T}, i::Int=1, roots::Nothing=nothing) where {T} = RefArray{T,typeof(x),Nothing}(x, i, nothing)
 convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
-Ref(x::AbstractArray, i::Integer=1) = RefArray(x, i)
+Ref(x::AbstractArray, i::Integer) = RefArray(x, i)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
     if isbits(T)
