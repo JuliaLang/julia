@@ -384,24 +384,24 @@ function manage(manager::LocalManager, id::Integer, config::WorkerConfig, op::Sy
     [...]
 end</code></pre><p>The <a href="../stdlib/distributed.html#Distributed.launch"><code>launch</code></a> method takes the following arguments:</p><ul><li><p><code>manager::ClusterManager</code>: the cluster manager that <a href="../stdlib/distributed.html#Distributed.addprocs"><code>addprocs</code></a> is called with</p></li><li><p><code>params::Dict</code>: all the keyword arguments passed to <a href="../stdlib/distributed.html#Distributed.addprocs"><code>addprocs</code></a></p></li><li><p><code>launched::Array</code>: the array to append one or more <code>WorkerConfig</code> objects to</p></li><li><p><code>c::Condition</code>: the condition variable to be notified as and when workers are launched</p></li></ul><p>The <a href="../stdlib/distributed.html#Distributed.launch"><code>launch</code></a> method is called asynchronously in a separate task. The termination of this task signals that all requested workers have been launched. Hence the <a href="../stdlib/distributed.html#Distributed.launch"><code>launch</code></a> function MUST exit as soon as all the requested workers have been launched.</p><p>Newly launched workers are connected to each other and the master process in an all-to-all manner. Specifying the command line argument <code>--worker[=&lt;cookie&gt;]</code> results in the launched processes initializing themselves as workers and connections being set up via TCP/IP sockets.</p><p>All workers in a cluster share the same <a href="#cluster-cookie">cookie</a> as the master. When the cookie is unspecified, i.e, with the <code>--worker</code> option, the worker tries to read it from its standard input.  <code>LocalManager</code> and <code>SSHManager</code> both pass the cookie to newly launched workers via their  standard inputs.</p><p>By default a worker will listen on a free port at the address returned by a call to <a href="../stdlib/base.html#Base.getipaddr"><code>getipaddr()</code></a>. A specific address to listen on may be specified by optional argument <code>--bind-to bind_addr[:port]</code>. This is useful for multi-homed hosts.</p><p>As an example of a non-TCP/IP transport, an implementation may choose to use MPI, in which case <code>--worker</code> must NOT be specified. Instead, newly launched workers should call <code>init_worker(cookie)</code> before using any of the parallel constructs.</p><p>For every worker launched, the <a href="../stdlib/distributed.html#Distributed.launch"><code>launch</code></a> method must add a <code>WorkerConfig</code> object (with appropriate fields initialized) to <code>launched</code></p><pre><code class="language-julia">mutable struct WorkerConfig
     # Common fields relevant to all cluster managers
-    io::Union{IO, Void}
-    host::Union{AbstractString, Void}
-    port::Union{Integer, Void}
+    io::Union{IO, Nothing}
+    host::Union{AbstractString, Nothing}
+    port::Union{Integer, Nothing}
 
     # Used when launching additional workers at a host
-    count::Union{Int, Symbol, Void}
-    exename::Union{AbstractString, Cmd, Void}
-    exeflags::Union{Cmd, Void}
+    count::Union{Int, Symbol, Nothing}
+    exename::Union{AbstractString, Cmd, Nothing}
+    exeflags::Union{Cmd, Nothing}
 
     # External cluster managers can use this to store information at a per-worker level
     # Can be a dict if multiple fields need to be stored.
     userdata::Any
 
     # SSHManager / SSH tunnel connections to workers
-    tunnel::Union{Bool, Void}
-    bind_addr::Union{AbstractString, Void}
-    sshflags::Union{Cmd, Void}
-    max_parallel::Union{Integer, Void}
+    tunnel::Union{Bool, Nothing}
+    bind_addr::Union{AbstractString, Nothing}
+    sshflags::Union{Cmd, Nothing}
+    max_parallel::Union{Integer, Nothing}
 
     # Used by Local/SSH managers
     connect_at::Any

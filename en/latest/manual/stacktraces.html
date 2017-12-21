@@ -113,29 +113,29 @@ ERROR: Whoops!
  child() at REPL[1]:1
  parent() at REPL[2]:1
  grandparent() at REPL[3]:3
-[...]</code></pre><h2><a class="nav-anchor" id="Comparison-with-[backtrace](@ref)-1" href="#Comparison-with-[backtrace](@ref)-1">Comparison with <a href="../stdlib/base.html#Base.backtrace"><code>backtrace</code></a></a></h2><p>A call to <a href="../stdlib/base.html#Base.backtrace"><code>backtrace</code></a> returns a vector of <code>Ptr{Void}</code>, which may then be passed into <a href="../stdlib/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace</code></a> for translation:</p><pre><code class="language-julia-repl">julia&gt; trace = backtrace()
-21-element Array{Ptr{Void},1}:
- Ptr{Void} @0x00007f10049d5b2f
- Ptr{Void} @0x00007f0ffeb4d29c
- Ptr{Void} @0x00007f0ffeb4d2a9
- Ptr{Void} @0x00007f1004993fe7
- Ptr{Void} @0x00007f10049a92be
- Ptr{Void} @0x00007f10049a823a
- Ptr{Void} @0x00007f10049a9fb0
- Ptr{Void} @0x00007f10049aa718
- Ptr{Void} @0x00007f10049c0d5e
- Ptr{Void} @0x00007f10049a3286
- Ptr{Void} @0x00007f0ffe9ba3ba
- Ptr{Void} @0x00007f0ffe9ba3d0
- Ptr{Void} @0x00007f1004993fe7
- Ptr{Void} @0x00007f0ded34583d
- Ptr{Void} @0x00007f0ded345a87
- Ptr{Void} @0x00007f1004993fe7
- Ptr{Void} @0x00007f0ded34308f
- Ptr{Void} @0x00007f0ded343320
- Ptr{Void} @0x00007f1004993fe7
- Ptr{Void} @0x00007f10049aeb67
- Ptr{Void} @0x0000000000000000
+[...]</code></pre><h2><a class="nav-anchor" id="Comparison-with-[backtrace](@ref)-1" href="#Comparison-with-[backtrace](@ref)-1">Comparison with <a href="../stdlib/base.html#Base.backtrace"><code>backtrace</code></a></a></h2><p>A call to <a href="../stdlib/base.html#Base.backtrace"><code>backtrace</code></a> returns a vector of <code>Ptr{Cvoid}</code>, which may then be passed into <a href="../stdlib/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace</code></a> for translation:</p><pre><code class="language-julia-repl">julia&gt; trace = backtrace()
+21-element Array{Ptr{Cvoid},1}:
+ Ptr{Cvoid} @0x00007f10049d5b2f
+ Ptr{Cvoid} @0x00007f0ffeb4d29c
+ Ptr{Cvoid} @0x00007f0ffeb4d2a9
+ Ptr{Cvoid} @0x00007f1004993fe7
+ Ptr{Cvoid} @0x00007f10049a92be
+ Ptr{Cvoid} @0x00007f10049a823a
+ Ptr{Cvoid} @0x00007f10049a9fb0
+ Ptr{Cvoid} @0x00007f10049aa718
+ Ptr{Cvoid} @0x00007f10049c0d5e
+ Ptr{Cvoid} @0x00007f10049a3286
+ Ptr{Cvoid} @0x00007f0ffe9ba3ba
+ Ptr{Cvoid} @0x00007f0ffe9ba3d0
+ Ptr{Cvoid} @0x00007f1004993fe7
+ Ptr{Cvoid} @0x00007f0ded34583d
+ Ptr{Cvoid} @0x00007f0ded345a87
+ Ptr{Cvoid} @0x00007f1004993fe7
+ Ptr{Cvoid} @0x00007f0ded34308f
+ Ptr{Cvoid} @0x00007f0ded343320
+ Ptr{Cvoid} @0x00007f1004993fe7
+ Ptr{Cvoid} @0x00007f10049aeb67
+ Ptr{Cvoid} @0x0000000000000000
 
 julia&gt; stacktrace(trace)
 5-element Array{StackFrame,1}:
