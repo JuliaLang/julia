@@ -178,7 +178,9 @@ function deps_graph(env::EnvCache, uuid_to_name::Dict{UUID,String}, reqs::Requir
     end
 
     for uuid in uuids
-        uuid_to_name[uuid] = registered_name(env, uuid)
+        try
+            uuid_to_name[uuid] = registered_name(env, uuid)
+        end
         info = manifest_info(env, uuid)
         info ≡ nothing && continue
         uuid_to_name[UUID(info["uuid"])] = info["name"]
@@ -202,7 +204,7 @@ function resolve_versions!(env::EnvCache, pkgs::Vector{PackageSpec})::Dict{UUID,
         push!(pkgs, PackageSpec(name, uuid, ver))
     end
     # construct data structures for resolver and call it
-    reqs = Requires(pkg.uuid => pkg.version for pkg in pkgs)
+    reqs = Requires(pkg.uuid => pkg.version for pkg in pkgs if pkg.uuid ≠ uuid_julia)
     fixed = Dict([uuid_julia => Fixed(VERSION)])
     graph = deps_graph(env, uuid_to_name, reqs, fixed)
 
