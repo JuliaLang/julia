@@ -305,7 +305,7 @@ function category_code(c::Char)
 end
 
 # more human-readable representations of the category code
-function category_abbrev(c)
+function category_abbrev(c::Char)
     ismalformed(c) && return "Ma"
     c ≤ '\U10ffff' || return "In"
     unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), c))
