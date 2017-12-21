@@ -98,6 +98,15 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `using Compat.Unicode` is provided on versions older than 0.7, where this library is not
   yet a part of the standard library. ([#25021])
 
+* `using Compat.Printf` is provided on versions older than 0.7, where this library is not
+  yet a part of the standard library. ([#25056])
+
+* `using Compat.IterativeEigensolvers` is provided on versions older than 0.7, where this
+  library is not yet a part of the standard library. ([#24714])
+
+* `using Compat.SuiteSparse` is provided on versions older than 0.7, where this library is
+  not yet part of the standard library ([#24648]).
+
 ## New functions, macros, and methods
 
 * `@views` takes an expression and converts all slices to views ([#20164]), while
@@ -208,6 +217,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `get` do-block syntax supported when using `ENV` ([#23412]).
 
+* `Some{T}` wraps `T` to signify that a result of `T<:Void` is expected ([#23642]).
+
 ## Renaming
 
 
@@ -243,6 +254,12 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Complex32`, `Complex64`, and `Complex128` are now `ComplexF16`, `ComplexF32`, and
   `ComplexF64`, respectively ([#24647]).
+
+* `Associative` is now `AbstractDict` ([#25012]).
+
+* `indices` is now `axes` ([#25057]).
+
+* `Void` is now `Nothing` with an alias `Cvoid` for C interop ([#25162]).
 
 ## New macros
 
@@ -378,6 +395,7 @@ includes this fix. Find the minimum version from there.
 [#23412]: https://github.com/JuliaLang/julia/issues/23412
 [#23427]: https://github.com/JuliaLang/julia/issues/23427
 [#23570]: https://github.com/JuliaLang/julia/issues/23570
+[#23642]: https://github.com/JuliaLang/julia/issues/23642
 [#23666]: https://github.com/JuliaLang/julia/issues/23666
 [#23757]: https://github.com/JuliaLang/julia/issues/23757
 [#23812]: https://github.com/JuliaLang/julia/issues/23812
@@ -389,7 +407,13 @@ includes this fix. Find the minimum version from there.
 [#24459]: https://github.com/JuliaLang/julia/issues/24459
 [#24605]: https://github.com/JuliaLang/julia/issues/24605
 [#24647]: https://github.com/JuliaLang/julia/issues/24647
+[#24648]: https://github.com/JuliaLang/julia/issues/24648
 [#24652]: https://github.com/JuliaLang/julia/issues/24652
 [#24657]: https://github.com/JuliaLang/julia/issues/24657
+[#24714]: https://github.com/JuliaLang/julia/issues/24714
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
+[#25012]: https://github.com/JuliaLang/julia/issues/25012
 [#25021]: https://github.com/JuliaLang/julia/issues/25021
+[#25056]: https://github.com/JuliaLang/julia/issues/25056
+[#25057]: https://github.com/JuliaLang/julia/issues/25057
+[#25162]: https://github.com/JuliaLang/julia/issues/25162

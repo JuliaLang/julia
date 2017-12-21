@@ -763,6 +763,35 @@ else
     import Dates
 end
 
+if VERSION < v"0.7.0-DEV.3052"
+    const Printf = Base.Printf
+else
+    import Printf
+end
+
+if VERSION < v"0.7.0-DEV.2655"
+    @eval module IterativeEigensolvers
+        using Base: eigs, svds
+        export eigs, svds
+    end
+elseif VERSION < v"0.7.0-DEV.3019"
+    import IterativeEigenSolvers
+    const IterativeEigensolvers = IterativeEigenSolvers
+else
+    import IterativeEigensolvers
+end
+
+if VERSION < v"0.7.0-DEV.2609"
+    @eval module SuiteSparse
+        if Base.USE_GPL_LIBS
+            using Base.SparseArrays: CHOLMOD, SPQR, UMFPACK
+        end
+        using Base.SparseArrays: increment, increment!, decrement, decrement!
+    end
+else
+    import SuiteSparse
+end
+
 # 0.7.0-DEV.1993
 @static if !isdefined(Base, :EqualTo)
     if VERSION >= v"0.6.0"
@@ -951,6 +980,67 @@ module Unicode
     else
         using Unicode
     end
+end
+
+# 0.7.0-DEV.2951
+@static if !isdefined(Base, :AbstractDict)
+    const AbstractDict = Associative
+    export AbstractDict
+end
+
+# 0.7.0-DEV.2978
+@static if !isdefined(Base, :axes)
+    const axes = Base.indices
+    export axes
+end
+
+# 0.7.0-DEV.3137
+@static if !isdefined(Base, :Nothing)
+    const Nothing = Void
+    const Cvoid = Void
+    export Nothing, Cvoid
+end
+
+@static if !isdefined(Base, :Some)
+    import Base: promote_rule, convert
+    if VERSION >= v"0.6.0"
+        include_string(@__MODULE__, """
+            struct Some{T}
+                value::T
+            end
+            promote_rule(::Type{Some{S}}, ::Type{Some{T}}) where {S,T} = Some{promote_type(S, T)}
+            promote_rule(::Type{Some{T}}, ::Type{Nothing}) where {T} = Union{Some{T}, Nothing}
+            convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
+            convert(::Type{Union{Some{T}, Nothing}}, x::Some) where {T} = convert(Some{T}, x)
+            convert(::Type{Union{T, Nothing}}, x::Any) where {T} = convert(T, x)
+        """)
+    else
+        include_string(@__MODULE__, """
+            immutable Some{T}
+                value::T
+            end
+            promote_rule{S,T}(::Type{Some{S}}, ::Type{Some{T}}) = Some{promote_type(S, T)}
+            promote_rule{T}(::Type{Some{T}}, ::Type{Nothing}) = Union{Some{T}, Nothing}
+            convert{T}(::Type{Some{T}}, x::Some) = Some{T}(convert(T, x.value))
+            convert{T}(::Type{Union{Some{T}, Nothing}}, x::Some) = convert(Some{T}, x)
+            convert{T}(::Type{Union{T, Nothing}}, x::Any) = convert(T, x)
+        """)
+    end
+    convert(::Type{Nothing}, x::Any) = throw(MethodError(convert, (Nothing, x)))
+    convert(::Type{Nothing}, x::Nothing) = nothing
+    coalesce(x::Any) = x
+    coalesce(x::Some) = x.value
+    coalesce(x::Nothing) = nothing
+    #coalesce(x::Missing) = missing
+    coalesce(x::Any, y...) = x
+    coalesce(x::Some, y...) = x.value
+    coalesce(x::Nothing, y...) = coalesce(y...)
+    #coalesce(x::Union{Nothing, Missing}, y...) = coalesce(y...)
+    notnothing(x::Any) = x
+    notnothing(::Nothing) = throw(ArgumentError("nothing passed to notnothing"))
+    export Some, coalesce
+else
+    import Base: notnothing
 end
 
 include("deprecated.jl")
