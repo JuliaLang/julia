@@ -30,7 +30,7 @@ end
     @test pop!(s) === 10002
     @test_throws KeyError pop!(s, -1)
     @test length(s) === 8
-    @test shift!(s) === 1
+    @test popfirst!(s) === 1
     @test length(s) === 7
     @test !in(0,s)
     @test !in(1,s)
@@ -167,8 +167,8 @@ end
     push!(s, 1:2:10...)
     @test pop!(s) === 9
     @test pop!(s) === 7
-    @test shift!(s) === 1
-    @test shift!(s) === 3
+    @test popfirst!(s) === 1
+    @test popfirst!(s) === 3
     @test collect(s) == [5]
     empty!(s)
     @test isempty(s)

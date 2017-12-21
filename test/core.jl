@@ -5763,11 +5763,11 @@ for U in unboxedunions
             end
             @test isempty(A)
 
-            # shift!
+            # popfirst!
             A = U[initvalue2(F2) for i = 1:len]
             for i = 1:len
                 @test A[1] === initvalue2(F2)
-                shift!(A)
+                popfirst!(A)
             end
             @test isempty(A)
 
@@ -5814,11 +5814,11 @@ for U in unboxedunions
             @test length(A) == len - 2
             @test all(A .== initvalue2(F2))
 
-            # unshift!
+            # pushfirst!
             A = U[initvalue2(F2) for i = 1:len]
             for i = 1:5
-                unshift!(A, initvalue2(F))
-                unshift!(A, initvalue(F2))
+                pushfirst!(A, initvalue2(F))
+                pushfirst!(A, initvalue(F2))
                 @test A[1] === initvalue(F2)
                 @test A[2] === initvalue2(F)
             end

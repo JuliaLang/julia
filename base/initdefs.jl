@@ -88,7 +88,7 @@ const atexit_hooks = []
 Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
 called in last in first out (LIFO) order and run before object finalizers.
 """
-atexit(f::Function) = (unshift!(atexit_hooks, f); nothing)
+atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
 
 function _atexit()
     for f in atexit_hooks

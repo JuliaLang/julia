@@ -563,8 +563,8 @@ let
             """)
 
         @everywhere test_workers begin
-            unshift!(LOAD_PATH, $load_path)
-            unshift!(Base.LOAD_CACHE_PATH, $load_cache_path)
+            pushfirst!(LOAD_PATH, $load_path)
+            pushfirst!(Base.LOAD_CACHE_PATH, $load_cache_path)
         end
         try
             @eval using $ModuleB
@@ -577,8 +577,8 @@ let
             end
         finally
             @everywhere test_workers begin
-                shift!(LOAD_PATH)
-                shift!(Base.LOAD_CACHE_PATH)
+                popfirst!(LOAD_PATH)
+                popfirst!(Base.LOAD_CACHE_PATH)
             end
         end
     finally
@@ -641,8 +641,8 @@ try
     @test Base.invokelatest(B.bpc, 1) == Base.invokelatest(B.bpc, 1.0) == 2
     @test Base.invokelatest(B.bnopc, 1) == Base.invokelatest(B.bnopc, 1.0) == 2
 finally
-    shift!(LOAD_PATH)
-    shift!(Base.LOAD_CACHE_PATH)
+    popfirst!(LOAD_PATH)
+    popfirst!(Base.LOAD_CACHE_PATH)
     rm(dir, recursive=true)
 end
 

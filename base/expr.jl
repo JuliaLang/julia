@@ -231,7 +231,7 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
         push!(exargs[idx].args, tag)
     else
         body::Expr = inner.args[2]
-        unshift!(body.args, Expr(:meta, tag))
+        pushfirst!(body.args, Expr(:meta, tag))
     end
     ex
 end

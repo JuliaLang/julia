@@ -485,7 +485,7 @@ end # baremodule Base
 using Base
 
 # Ensure this file is also tracked
-unshift!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
+pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
 # load some stdlib packages but don't put their names in Main
 Base.require(:Base64)

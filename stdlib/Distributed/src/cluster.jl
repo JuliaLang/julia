@@ -407,7 +407,7 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
             end
 
             if !isempty(launched)
-                wconfig = shift!(launched)
+                wconfig = popfirst!(launched)
                 let wconfig=wconfig
                     @async setup_launched_worker(manager, wconfig, launched_q)
                 end

@@ -739,7 +739,7 @@ function varinfo(m::Module=Main, pattern::Regex=r"")
              end
              for v in sort!(names(m)) if isdefined(m, v) && ismatch(pattern, string(v)) ]
 
-    unshift!(rows, Any["name", "size", "summary"])
+    pushfirst!(rows, Any["name", "size", "summary"])
 
     return Markdown.MD(Any[Markdown.Table(rows, Symbol[:l, :r, :l])])
 end

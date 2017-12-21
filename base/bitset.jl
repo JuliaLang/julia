@@ -246,7 +246,7 @@ end
 @inline delete!(s::BitSet, n::Int) = _setint!(s, n, false)
 @inline delete!(s::BitSet, n::Integer) = _is_convertible_Int(n) ? delete!(s, Int(n)) : s
 
-shift!(s::BitSet) = pop!(s, first(s))
+popfirst!(s::BitSet) = pop!(s, first(s))
 
 function empty!(s::BitSet)
     empty!(s.bits)

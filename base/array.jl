@@ -869,7 +869,7 @@ function prepend!(a::Array{<:Any,1}, items::AbstractVector)
 end
 
 prepend!(a::Vector, iter) = _prepend!(a, iteratorsize(iter), iter)
-unshift!(a::Vector, iter...) = prepend!(a, iter)
+pushfirst!(a::Vector, iter...) = prepend!(a, iter)
 
 function _prepend!(a, ::Union{HasLength,HasShape}, iter)
     n = length(iter)
@@ -884,7 +884,7 @@ function _prepend!(a, ::IteratorSize, iter)
     n = 0
     for item in iter
         n += 1
-        unshift!(a, item)
+        pushfirst!(a, item)
     end
     reverse!(a, 1, n)
     a
@@ -990,13 +990,13 @@ function pop!(a::Vector)
 end
 
 """
-    unshift!(collection, items...) -> collection
+    pushfirst!(collection, items...) -> collection
 
 Insert one or more `items` at the beginning of `collection`.
 
 # Examples
 ```jldoctest
-julia> unshift!([1, 2, 3, 4], 5, 6)
+julia> pushfirst!([1, 2, 3, 4], 5, 6)
 6-element Array{Int64,1}:
  5
  6
@@ -1006,7 +1006,7 @@ julia> unshift!([1, 2, 3, 4], 5, 6)
  4
 ```
 """
-function unshift!(a::Array{T,1}, item) where T
+function pushfirst!(a::Array{T,1}, item) where T
     item = convert(T, item)
     _growbeg!(a, 1)
     a[1] = item
@@ -1014,7 +1014,7 @@ function unshift!(a::Array{T,1}, item) where T
 end
 
 """
-    shift!(collection) -> item
+    popfirst!(collection) -> item
 
 Remove the first `item` from `collection`.
 
@@ -1029,7 +1029,7 @@ julia> A = [1, 2, 3, 4, 5, 6]
  5
  6
 
-julia> shift!(A)
+julia> popfirst!(A)
 1
 
 julia> A
@@ -1041,7 +1041,7 @@ julia> A
  6
 ```
 """
-function shift!(a::Vector)
+function popfirst!(a::Vector)
     if isempty(a)
         throw(ArgumentError("array must be non-empty"))
     end

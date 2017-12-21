@@ -286,7 +286,7 @@ function put_unbuffered(c::Channel, v)
             rethrow(ex)
         end
     end
-    taker = shift!(c.takers)
+    taker = popfirst!(c.takers)
     yield(taker, v) # immediately give taker a chance to run, but don't block the current task
     return v
 end
@@ -318,12 +318,12 @@ task.
 take!(c::Channel) = isbuffered(c) ? take_buffered(c) : take_unbuffered(c)
 function take_buffered(c::Channel)
     wait(c)
-    v = shift!(c.data)
+    v = popfirst!(c.data)
     notify(c.cond_put, nothing, false, false) # notify only one, since only one slot has become available for a put!.
     v
 end
 
-shift!(c::Channel) = take!(c)
+popfirst!(c::Channel) = take!(c)
 
 # 0-size channel
 function take_unbuffered(c::Channel{T}) where T
@@ -331,10 +331,10 @@ function take_unbuffered(c::Channel{T}) where T
     push!(c.takers, current_task())
     try
         if length(c.putters) > 0
-            let refputter = Ref(shift!(c.putters))
+            let refputter = Ref(popfirst!(c.putters))
                 return Base.try_yieldto(refputter) do putter
                     # if we fail to start putter, put it back in the queue
-                    putter === current_task || unshift!(c.putters, putter)
+                    putter === current_task || pushfirst!(c.putters, putter)
                 end::T
             end
         else

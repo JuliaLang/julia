@@ -56,7 +56,7 @@ function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
     p = ptr
     p_end = ptr + n
     while !isempty(pipe.rest) && p < p_end
-        unsafe_store!(p, shift!(pipe.rest))
+        unsafe_store!(p, popfirst!(pipe.rest))
         p += 1
     end
 
@@ -105,7 +105,7 @@ function Base.read(pipe::Base64DecodePipe, ::Type{UInt8})
             throw(EOFError())
         end
     end
-    return shift!(pipe.rest)
+    return popfirst!(pipe.rest)
 end
 
 function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb::Integer=length(data))

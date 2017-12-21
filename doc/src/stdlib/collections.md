@@ -253,8 +253,8 @@ Partially implemented by:
 ```@docs
 Base.push!
 Base.pop!
-Base.unshift!
-Base.shift!
+Base.pushfirst!
+Base.popfirst!
 Base.insert!
 Base.deleteat!
 Base.splice!

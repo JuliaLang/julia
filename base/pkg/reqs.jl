@@ -22,10 +22,10 @@ struct Requirement <: Line
         fields = split(replace(content, r"#.*$", ""))
         system = AbstractString[]
         while !isempty(fields) && fields[1][1] == '@'
-            push!(system,shift!(fields)[2:end])
+            push!(system,popfirst!(fields)[2:end])
         end
         isempty(fields) && throw(PkgError("invalid requires entry: $content"))
-        package = shift!(fields)
+        package = popfirst!(fields)
         all(field->ismatch(Base.VERSION_REGEX, field), fields) ||
             throw(PkgError("invalid requires entry for $package: $content"))
         versions = map(VersionNumber, fields)
