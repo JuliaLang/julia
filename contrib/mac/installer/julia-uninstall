@@ -1,0 +1,126 @@
+#!/bin/bash
+
+# This script will uninstall Julia from the location that the OS X Installer
+# placed the distribution.
+
+# Exit immediately on non-zero exit.
+set -e
+
+# return value of a  pipeline  is  the value  of  the  last (rightmost) command
+# to exit with a non-zero status, or zero if all  commands in the pipeline exit
+# successfully
+set -o pipefail
+
+SCRIPT="$(basename "$0")"
+SCRIPT_PATH="$(cd "$( dirname "$0" )" && pwd)"
+UNLINK=/bin/unlink
+RMDIR=/bin/rmdir
+ID=/usr/bin/id
+MKTEMP=/usr/bin/mktemp
+PKGUTIL=/usr/sbin/pkgutil
+SORT=/usr/bin/sort
+PLISTBUDDY=/usr/libexec/PlistBuddy
+SYSLOG=/usr/bin/syslog
+
+PACKAGE_ID="org.julialang.installer.distribution"
+
+# A simple function to echo and syslog important messages.
+function ulog {
+  if [ $# -lt 1 -o $# -gt 2 ]; then
+    ulog Error "Misused ulog."
+    exit 1
+  fi
+  level="notice"
+  if [ $# -ge 2 ]; then
+    pre="$1 - "
+    level="$1"
+    shift 1
+  fi
+  echo "$SCRIPT: $pre$1"
+  $SYSLOG -s -k Sender "$SCRIPT" Facility user Level "$level" Message "$1"
+}
+
+# Ensure running as root.
+
+if [ `$ID -u` -ne 0 ]; then
+  ulog Error "Must run as root (e.g. with sudo)."
+  exit 1
+fi
+
+ulog "Will uninstall package $PACKAGE_ID."
+
+# Dump the package info to determine the install prefix.
+
+PKGINFO="$($MKTEMP -t "$SCRIPT")"
+
+$PKGUTIL --pkg-info-plist "$PACKAGE_ID" > "$PKGINFO" ||
+  { ulog Error "Failed to obtain package info." ; $UNLINK "$PKGINFO" ; exit 1 ; }
+
+# Get the prefix in which the package was installed.
+
+INSTALLLOC=$($PLISTBUDDY -c "Print :install-location" "$PKGINFO")
+INSTALLVOL=$($PLISTBUDDY -c "Print :volume" "$PKGINFO")
+
+PREFIX="$INSTALLVOL$INSTALLLOC"
+
+$UNLINK "$PKGINFO" || true
+
+ulog "Package $PACKAGE_ID was installed in prefix \"$PREFIX\"."
+
+# Perform sanity checks before uninstalling.
+
+if [ ! -d "$PREFIX" ]; then
+  ulog Error "\"$PREFIX\" does not exist."
+  ulog "The Installer receipt $PACKAGE_ID will not be forgotten."
+  exit 1
+fi
+
+if [ "$1" != "-y" ]; then
+  while [[ ! ( $answer =~ ^(Y|YE|YES)$ ) && ! ( $answer =~ ^(n|no)$ ) ]]; do
+    echo -n "Proceed with uninstallation? [YES/no]  "
+    read answer
+  done
+  if [[ ! "$answer" =~ ^Y ]]; then
+    ulog Error "User chose to abort uninstall."
+    exit 1
+  fi
+fi
+
+ulog "Uninstalling package $PACKAGE_ID from \"$PREFIX\"."
+
+# Temporarily save the list of installed files.
+# Reverse sort the file list so that parent directories
+# are after regular files.
+
+PKGFILE=$($MKTEMP -t "$SCRIPT")
+
+{ $PKGUTIL --files "$PACKAGE_ID" | $SORT -r > "$PKGFILE" ; } ||
+  { ulog Error "Failed to list package files." ; $UNLINK "$PKGFILE" ; exit 1 ; }
+
+# Iterate over each installed file.
+while read file; do
+  # Create full path to file.
+  file="$PREFIX/$file"
+
+  if [ -f "$file" -o -L "$file" ]; then
+    # Unlink regular files (includes symlinks).
+    $UNLINK "$file"
+  elif [ -d "$file" ]; then
+    if [ ! "$(ls -A "$file")" ]; then
+      # Remove the empty directory.
+      $RMDIR "$file"
+    fi
+  elif [ ! -e "$file" ]; then
+    ulog Warning "File does not exist: \"$file\"."
+  else
+    ulog Error "Unhandled file type. \"$file\" is not a file or directory."
+    exit 1
+  fi
+done < "$PKGFILE"
+
+$UNLINK "$PKGFILE" || true
+
+# Forget that the package was ever installed.
+$PKGUTIL --forget "$PACKAGE_ID"
+
+ulog "Successfully uninstalled package $PACKAGE_ID."

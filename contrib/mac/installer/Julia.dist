@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Julia</title>
+    <background file="logo_hires.png" mime-type="image/png" alignment="bottomleft" scaling="proportional"/>
+    <license file="license.html" mime-type="text/html"/>
+    <readme file="readme.txt" mime-type="text/plain"/>
+    <conclusion file="conclusion.md" mime-type="text/markdown"/>
+    <pkg-ref id="org.julialang.installer.distribution">julia-distribution.pkg</pkg-ref>
+    <options require-scripts="false" hostArchitectures="x86_64"/>
+    <choices-outline>
+        <line choice="julia-distribution"/>
+    </choices-outline>
+    <choice id="julia-distribution" enabled="false" title="Julia Distribution" customLocation="/usr/local" customLocationAllowAlternateVolumes="true">
+        <pkg-ref id="org.julialang.installer.distribution"/>
+    </choice>
+    <volume-check>
+        <allowed-os-versions>
+            <os-version min="10.7"/>
+        </allowed-os-versions>
+    </volume-check>
+</installer-gui-script>

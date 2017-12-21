@@ -1,0 +1,30 @@
+#!/bin/bash
+
+set -e
+
+SCRIPT=$(basename $0)
+CODESIGN=/usr/bin/codesign
+SIGN_APP_IDENT=${SIGN_APP_IDENT:="Developer ID Application: "}
+ID_PREFIX=${ID_PREFIX:="org.julialang."}
+
+if [ ! -d "$DESTDIR" ]; then
+  echo "${SCRIPT}: ERROR - DESTDIR not set or not a directory."
+  exit 1
+fi  
+
+echo "Signing $DESTDIR:"
+echo "	signing identity  = \"$SIGN_APP_IDENT\""
+echo "	identifier prefix = $ID_PREFIX"
+
+function codesign_all_in_dir {
+  for file in "${DESTDIR}""$1/"* ; do
+    if [ -f "$file" -a ! -L "$file" -a -w "$file" -a -x "$file" ]; then
+      idsuffix=$(basename ${file%%.dylib*})
+      $CODESIGN -s "$SIGN_APP_IDENT" -v --timestamp -i $ID_PREFIX$idsuffix -f "$file"
+    fi 
+  done
+}
+
+for dir in /bin /lib /lib/julia ; do
+  codesign_all_in_dir "$dir"
+done
