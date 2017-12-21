@@ -1967,9 +1967,8 @@ function hash(a::AbstractArray{T}, h::UInt) where T
 
     state = start(a)
     done(a, state) && return h
-    x2, state = next(a, state)
-    done(a, state) && return hash(x2, h)
-    x1 = x2
+    x1, state = next(a, state)
+    done(a, state) && return hash(x1, h)
     x2, state = next(a, state)
     done(a, state) && return hash(x2, hash(x1, h))
 
@@ -1978,37 +1977,13 @@ function hash(a::AbstractArray{T}, h::UInt) where T
     # This needs to be done even for non-RangeStepRegular types since they may still be equal
     # to RangeStepRegular values (e.g. 1.0:3.0 == 1:3)
     if isa(a, AbstractVector) && applicable(-, x2, x1)
-        local step
-
-        # Try to compute the step between two first elements
-        n = 2
-        if isconcrete(T)
+        n = 1
+        local step, laststep, laststate
+        while true
             # If overflow happens with entries of the same type, a cannot be equal
             # to a range with more than two elements because more extreme values
             # cannot be represented. We must still hash the two first values as a
-            # range since that's what will happen with a wider type which doesn't overflow
-            try
-                step = x2 - x1
-            catch err
-                isa(err, OverflowError) || rethrow(err)
-                x1 = x2
-                @goto hashrange
-            end
-            # If true, wraparound overflow happened
-            if sign(step) != cmp(x2, x1)
-                x1 = x2
-                @goto hashrange
-            end
-        else
-            # widen() is here to ensure no overflow can happen
-            step = widen(x2) - widen(x1)
-        end
-
-        # Check whether all remaining steps are equal to the first one
-        x1 = x2
-        while !done(a, state)
-            laststep = step
-            x2, newstate = next(a, state)
+            # range since they can always be considered as such (in a wider type)
             if isconcrete(T)
                 try
                     step = x2 - x1
@@ -2016,28 +1991,35 @@ function hash(a::AbstractArray{T}, h::UInt) where T
                     isa(err, OverflowError) || rethrow(err)
                     break
                 end
+                # If true, wraparound overflow happened
                 sign(step) == cmp(x2, x1) || break
             else
                 # widen() is here to ensure no overflow can happen
                 step = widen(x2) - widen(x1)
             end
-            # Implies breaking in first loop if the step is 0
-            isequal(step, laststep) || break
-            x1 = x2
-            state = newstate
+            n > 1 && !isequal(step, laststep) && break
             n += 1
+            x1 = x2
+            laststep = step
+            laststate = state
+            done(a, state) && break
+            x2, state = next(a, state)
         end
 
-        @label hashrange
-
-        # Hash at least two elements as a range
         h = hash(first(a), h)
         h += hashr_seed
-        h = hash(n, h)
-        h = hash(x1, h)
-
-        done(a, state) && return h
-        x2, state = next(a, state)
+        # Always hash at least the two first elements as a range (even in case of overflow)
+        if n < 2
+            h = hash(2, h)
+            h = hash(x2, h)
+            done(a, state) && return h
+            x1 = x2
+            x2, state = next(a, state)
+        else
+            h = hash(n, h)
+            h = hash(x1, h)
+            done(a, laststate) && return h
+        end
     end
 
     # Hash elements which do not correspond to a range (if any)
