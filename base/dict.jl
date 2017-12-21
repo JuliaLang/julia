@@ -159,7 +159,7 @@ dict_with_eltype(DT_apply, ::Type{Pair{K,V}}) where {K,V} = DT_apply(K, V)()
 dict_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
 dict_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(dict_with_eltype(DT_apply, @default_eltype(typeof(kv))), kv)
 function dict_with_eltype(DT_apply::F, kv::Generator, t) where F
-    T = @default_eltype(typeof(kv))
+    T = @default_eltype(kv)
     if T <: Union{Pair, Tuple{Any, Any}} && _isleaftype(T)
         return dict_with_eltype(DT_apply, kv, T)
     end
@@ -189,21 +189,6 @@ function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
 end
 
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
-
-# conversion between Dict types
-function convert(::Type{Dict{K,V}},d::AbstractDict) where V where K
-    h = Dict{K,V}()
-    for (k,v) in d
-        ck = convert(K,k)
-        if !haskey(h,ck)
-            h[ck] = convert(V,v)
-        else
-            error("key collision during dictionary conversion")
-        end
-    end
-    return h
-end
-convert(::Type{Dict{K,V}},d::Dict{K,V}) where {K,V} = d
 
 hashindex(key, sz) = (((hash(key)%Int) & (sz-1)) + 1)::Int
 

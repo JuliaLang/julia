@@ -865,7 +865,7 @@ julia> p(3)
 ```
 
 This mechanism is also the key to how type constructors and closures (inner functions that refer
-to their surrounding environment) work in Julia, discussed [later in the manual](@ref constructors-and-conversion).
+to their surrounding environment) work in Julia.
 
 ## Empty generic functions
 

@@ -45,8 +45,13 @@ function det(F::Factorization)
     return exp(d)*s
 end
 
+convert(::Type{T}, f::T) where {T<:Factorization} = f
+convert(::Type{T}, f::Factorization) where {T<:Factorization} = T(f)
+
+convert(::Type{T}, f::Factorization) where {T<:AbstractArray} = T(f)
+
 ### General promotion rules
-convert(::Type{Factorization{T}}, F::Factorization{T}) where {T} = F
+Factorization{T}(F::Factorization{T}) where {T} = F
 inv(F::Factorization{T}) where {T} = (n = size(F, 1); ldiv!(F, Matrix{T}(I, n, n)))
 
 Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, h, 1:nfields(F))

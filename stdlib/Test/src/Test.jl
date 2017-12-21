@@ -1449,7 +1449,6 @@ end
 for (G, A) in ((GenericSet, AbstractSet),
                (GenericDict, AbstractDict))
     @eval begin
-        Base.convert(::Type{$G}, s::$A) = $G(s)
         Base.done(s::$G, state) = done(s.s, state)
         Base.next(s::$G, state) = next(s.s, state)
     end

@@ -58,7 +58,7 @@ Convert a string to a contiguous byte array representation encoded as UTF-8 byte
 This representation is often appropriate for passing strings to C.
 """
 String(s::AbstractString) = print_to_string(s)
-String(s::Symbol) = unsafe_string(Cstring(s))
+String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 (::Type{Vector{UInt8}})(s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 

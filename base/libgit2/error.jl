@@ -74,17 +74,17 @@ function last_error()
     err = ccall((:giterr_last, :libgit2), Ptr{ErrorStruct}, ())
     if err != C_NULL
         err_obj   = unsafe_load(err)
-        err_class = Class[err_obj.class][]
+        err_class = Class(err_obj.class)
         err_msg   = unsafe_string(err_obj.message)
     else
-        err_class = Class[0][]
+        err_class = Class(0)
         err_msg = "No errors"
     end
     return (err_class, err_msg)
 end
 
 function GitError(code::Integer)
-    err_code = Code[code][]
+    err_code = Code(code)
     err_class, err_msg = last_error()
     return GitError(err_class, err_code, err_msg)
 end
@@ -93,8 +93,7 @@ end # Error module
 
 macro check(git_func)
     quote
-        local err::Cint
-        err = $(esc(git_func::Expr))
+        err = Cint($(esc(git_func::Expr)))
         if err < 0
             throw(Error.GitError(err))
         end

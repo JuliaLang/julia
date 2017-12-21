@@ -24,11 +24,11 @@ promote_rule(::Type{<:AbstractIrrational}, ::Type{Float32}) = Float32
 promote_rule(::Type{<:AbstractIrrational}, ::Type{<:AbstractIrrational}) = Float64
 promote_rule(::Type{<:AbstractIrrational}, ::Type{T}) where {T<:Number} = promote_type(Float64, T)
 
-convert(::Type{AbstractFloat}, x::AbstractIrrational) = Float64(x)
-convert(::Type{Float16}, x::AbstractIrrational) = Float16(Float32(x))
-convert(::Type{Complex{T}}, x::AbstractIrrational) where {T<:Real} = convert(Complex{T}, convert(T,x))
+AbstractFloat(x::AbstractIrrational) = Float64(x)
+Float16(x::AbstractIrrational) = Float16(Float32(x))
+Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 
-@pure function convert(::Type{Rational{T}}, x::AbstractIrrational) where T<:Integer
+@pure function Rational{T}(x::AbstractIrrational) where T<:Integer
     o = precision(BigFloat)
     p = 256
     while true
@@ -42,7 +42,7 @@ convert(::Type{Complex{T}}, x::AbstractIrrational) where {T<:Real} = convert(Com
         p += 32
     end
 end
-convert(::Type{Rational{BigInt}}, x::AbstractIrrational) = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(Rational{BigInt}, x) instead"))
+(::Type{Rational{BigInt}})(x::AbstractIrrational) = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(Rational{BigInt}, x) instead"))
 
 @pure function (t::Type{T})(x::AbstractIrrational, r::RoundingMode) where T<:Union{Float32,Float64}
     setprecision(BigFloat, 256) do
@@ -126,27 +126,27 @@ macro irrational(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))
     bigconvert = isa(def,Symbol) ? quote
-        function Base.convert(::Type{BigFloat}, ::Irrational{$qsym})
+        function Base.BigFloat(::Irrational{$qsym})
             c = BigFloat()
             ccall(($(string("mpfr_const_", def)), :libmpfr),
                   Cint, (Ref{BigFloat}, Int32), c, MPFR.ROUNDING_MODE[])
             return c
         end
     end : quote
-        Base.convert(::Type{BigFloat}, ::Irrational{$qsym}) = $(esc(def))
+        Base.BigFloat(::Irrational{$qsym}) = $(esc(def))
     end
     quote
         const $esym = Irrational{$qsym}()
         $bigconvert
-        Base.convert(::Type{Float64}, ::Irrational{$qsym}) = $val
-        Base.convert(::Type{Float32}, ::Irrational{$qsym}) = $(Float32(val))
+        Base.Float64(::Irrational{$qsym}) = $val
+        Base.Float32(::Irrational{$qsym}) = $(Float32(val))
         @assert isa(big($esym), BigFloat)
         @assert Float64($esym) == Float64(big($esym))
         @assert Float32($esym) == Float32(big($esym))
     end
 end
 
-big(x::AbstractIrrational) = convert(BigFloat,x)
+big(x::AbstractIrrational) = BigFloat(x)
 big(::Type{<:AbstractIrrational}) = BigFloat
 
 # align along = for nice Array printing

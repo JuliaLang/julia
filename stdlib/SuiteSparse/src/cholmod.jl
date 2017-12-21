@@ -345,6 +345,7 @@ mutable struct Factor{Tv} <: Factorization{Tv}
     end
 end
 Factor(p::Ptr{C_Factor{Tv}}) where {Tv<:VTypes} = Factor{Tv}(p)
+Factor(x::Factor) = x
 
 # All pointer loads should be checked to make sure that SuiteSparse is not called with
 # a C_NULL pointer which could cause a segfault. Pointers are set to null
@@ -819,7 +820,7 @@ get_perm(FC::FactorComponent) = get_perm(Factor(FC))
 #########################
 
 # Convertion/construction
-function convert(::Type{Dense{T}}, A::StridedVecOrMat) where T<:VTypes
+function Dense{T}(A::StridedVecOrMat) where T<:VTypes
     d = allocate_dense(size(A, 1), size(A, 2), stride(A, 2), T)
     s = unsafe_load(d.p)
     for i in eachindex(A)
@@ -827,11 +828,11 @@ function convert(::Type{Dense{T}}, A::StridedVecOrMat) where T<:VTypes
     end
     d
 end
-function convert(::Type{Dense}, A::StridedVecOrMat)
+function Dense(A::StridedVecOrMat)
     T = promote_type(eltype(A), Float64)
-    return convert(Dense{T}, A)
+    return Dense{T}(A)
 end
-convert(::Type{Dense}, A::Sparse) = sparse_to_dense(A)
+Dense(A::Sparse) = sparse_to_dense(A)
 
 # This constructior assumes zero based colptr and rowval
 function Sparse(m::Integer, n::Integer,
@@ -913,9 +914,8 @@ function Sparse(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where T
 end
 
 # convert SparseVectors into CHOLMOD Sparse types through a mx1 CSC matrix
-convert(::Type{Sparse}, A::SparseVector{<:VTypes,SuiteSparse_long}) =
-    convert(Sparse, convert(SparseMatrixCSC, A))
-function convert(::Type{Sparse}, A::SparseMatrixCSC{<:VTypes,<:ITypes})
+Sparse(A::SparseVector{<:VTypes,SuiteSparse_long}) = Sparse(SparseMatrixCSC(A))
+function Sparse(A::SparseMatrixCSC{<:VTypes,<:ITypes})
     o = Sparse(A, 0)
     # check if array is symmetric and change stype if it is
     if ishermitian(o)
@@ -923,15 +923,15 @@ function convert(::Type{Sparse}, A::SparseMatrixCSC{<:VTypes,<:ITypes})
     end
     o
 end
-convert(::Type{Sparse}, A::SparseMatrixCSC{Complex{Float32},<:ITypes}) =
-    convert(Sparse, convert(SparseMatrixCSC{Complex{Float64},SuiteSparse_long}, A))
-convert(::Type{Sparse}, A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}) =
+Sparse(A::SparseMatrixCSC{Complex{Float32},<:ITypes}) =
+    Sparse(SparseMatrixCSC{Complex{Float64},SuiteSparse_long}(A))
+Sparse(A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}) =
     Sparse(A.data, A.uplo == 'L' ? -1 : 1)
 # The convert method for Hermitian is very similar to the general convert method, but we need to
 # remove any non real elements in the diagonal because, in contrast to BLAS/LAPACK these are not
 # ignored by CHOLMOD. If even tiny imaginary parts are present CHOLMOD will fail with a non-positive
 # definite/zero pivot error.
-function convert(::Type{Sparse}, AH::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) where {Tv<:VTypes}
+function Sparse(AH::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) where {Tv<:VTypes}
     A = AH.data
 
     # Here we allocate a Symmetric/Hermitian CHOLMOD.Sparse matrix so we only need to copy
@@ -955,23 +955,21 @@ function convert(::Type{Sparse}, AH::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse
 
     return o
 end
-function convert(::Type{Sparse},
-                 A::Union{SparseMatrixCSC{BigFloat,Ti},
-                          Symmetric{BigFloat,SparseMatrixCSC{BigFloat,Ti}},
-                          Hermitian{Complex{BigFloat},SparseMatrixCSC{Complex{BigFloat},Ti}}},
-                 args...) where Ti<:ITypes
-    throw(MethodError(convert, (Sparse, A)))
+function Sparse(A::Union{SparseMatrixCSC{BigFloat,Ti},
+                         Symmetric{BigFloat,SparseMatrixCSC{BigFloat,Ti}},
+                         Hermitian{Complex{BigFloat},SparseMatrixCSC{Complex{BigFloat},Ti}}},
+                args...) where Ti<:ITypes
+    throw(MethodError(Sparse, (A,)))
 end
-function convert(::Type{Sparse},
-    A::Union{SparseMatrixCSC{T,Ti},
-             Symmetric{T,SparseMatrixCSC{T,Ti}},
-             Hermitian{T,SparseMatrixCSC{T,Ti}}},
-    args...) where T where Ti<:ITypes
-    return Sparse(convert(AbstractMatrix{promote_type(Float64, T)}, A), args...)
+function Sparse(A::Union{SparseMatrixCSC{T,Ti},
+                         Symmetric{T,SparseMatrixCSC{T,Ti}},
+                         Hermitian{T,SparseMatrixCSC{T,Ti}}},
+                args...) where T where Ti<:ITypes
+    return Sparse(AbstractMatrix{promote_type(Float64, T)}(A), args...)
 end
 
 # Useful when reading in files, but not type stable
-function convert(::Type{Sparse}, p::Ptr{C_SparseVoid})
+function Sparse(p::Ptr{C_SparseVoid})
     if p == C_NULL
         throw(ArgumentError("sparse matrix construction failed for " *
             "unknown reasons. Please submit a bug report."))
@@ -1016,8 +1014,8 @@ function convert(::Type{Sparse}, p::Ptr{C_SparseVoid})
     return Sparse(convert(Ptr{C_Sparse{Tv}}, p))
 end
 
-convert(::Type{Sparse}, A::Dense) = dense_to_sparse(A, SuiteSparse_long)
-convert(::Type{Sparse}, L::Factor) = factor_to_sparse!(copy(L))
+Sparse(A::Dense) = dense_to_sparse(A, SuiteSparse_long)
+Sparse(L::Factor) = factor_to_sparse!(copy(L))
 function Sparse(filename::String)
     open(filename) do f
         return read_sparse(f, SuiteSparse_long)
@@ -1025,7 +1023,7 @@ function Sparse(filename::String)
 end
 
 ## convertion back to base Julia types
-function convert(::Type{Matrix{T}}, D::Dense{T}) where T
+function Matrix{T}(D::Dense{T}) where T
     s = unsafe_load(D.p)
     a = Matrix{T}(uninitialized, s.nrow, s.ncol)
     copyto!(a, D)
@@ -1053,16 +1051,16 @@ function _copy!(dest::AbstractArray, D::Dense)
     end
     dest
 end
-convert(::Type{Matrix}, D::Dense{T}) where {T} = convert(Matrix{T}, D)
-function convert(::Type{Vector{T}}, D::Dense{T}) where T
+Matrix(D::Dense{T}) where {T} = Matrix{T}(D)
+function Vector{T}(D::Dense{T}) where T
     if size(D, 2) > 1
         throw(DimensionMismatch("input must be a vector but had $(size(D, 2)) columns"))
     end
     copyto!(Vector{T}(uninitialized, size(D, 1)), D)
 end
-convert(::Type{Vector}, D::Dense{T}) where {T} = convert(Vector{T}, D)
+Vector(D::Dense{T}) where {T} = Vector{T}(D)
 
-function convert(::Type{SparseMatrixCSC{Tv,SuiteSparse_long}}, A::Sparse{Tv}) where Tv
+function SparseMatrixCSC{Tv,SuiteSparse_long}(A::Sparse{Tv}) where Tv
     s = unsafe_load(A.p)
     if s.stype != 0
         throw(ArgumentError("matrix has stype != 0. Convert to matrix " *
@@ -1080,7 +1078,7 @@ function convert(::Type{SparseMatrixCSC{Tv,SuiteSparse_long}}, A::Sparse{Tv}) wh
         return B
     end
 end
-function convert(::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}}, A::Sparse{Float64})
+function (::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}})(A::Sparse{Float64})
     s = unsafe_load(A.p)
     if !issymmetric(A)
         throw(ArgumentError("matrix is not symmetric"))
@@ -1097,7 +1095,7 @@ function convert(::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_lo
         return B
     end
 end
-function convert(::Type{Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}}, A::Sparse{Tv}) where Tv<:VTypes
+function Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}(A::Sparse{Tv}) where Tv<:VTypes
     s = unsafe_load(A.p)
     if !ishermitian(A)
         throw(ArgumentError("matrix is not Hermitian"))
@@ -1117,16 +1115,16 @@ end
 function sparse(A::Sparse{Float64}) # Notice! Cannot be type stable because of stype
     s = unsafe_load(A.p)
     if s.stype == 0
-        return convert(SparseMatrixCSC{Float64,SuiteSparse_long}, A)
+        return SparseMatrixCSC{Float64,SuiteSparse_long}(A)
     end
-    return convert(Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}, A)
+    return Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}(A)
 end
 function sparse(A::Sparse{Complex{Float64}}) # Notice! Cannot be type stable because of stype
     s = unsafe_load(A.p)
     if s.stype == 0
-        return convert(SparseMatrixCSC{Complex{Float64},SuiteSparse_long}, A)
+        return SparseMatrixCSC{Complex{Float64},SuiteSparse_long}(A)
     end
-    return convert(Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}, A)
+    return Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}(A)
 end
 function sparse(F::Factor)
     s = unsafe_load(pointer(F))
@@ -1665,10 +1663,10 @@ end
 SparseVecOrMat{Tv,Ti} = Union{SparseVector{Tv,Ti}, SparseMatrixCSC{Tv,Ti}}
 
 function (\)(L::FactorComponent, b::Vector)
-    reshape(convert(Matrix, L\Dense(b)), length(b))
+    reshape(Matrix(L\Dense(b)), length(b))
 end
 function (\)(L::FactorComponent, B::Matrix)
-    convert(Matrix, L\Dense(B))
+    Matrix(L\Dense(B))
 end
 function (\)(L::FactorComponent, B::SparseVecOrMat)
     sparse(L\Sparse(B,0))
@@ -1682,14 +1680,14 @@ end
 # Likewise the two following explicit Vector and Matrix defs (rather than a single VecOrMat)
 (\)(L::Factor{T}, B::Vector{Complex{T}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
 (\)(L::Factor{T}, B::Matrix{Complex{T}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
-(\)(L::Factor{T}, b::StridedVector) where {T<:VTypes} = Vector(L\convert(Dense{T}, b))
-(\)(L::Factor{T}, B::StridedMatrix) where {T<:VTypes} = Matrix(L\convert(Dense{T}, B))
+(\)(L::Factor{T}, b::StridedVector) where {T<:VTypes} = Vector(L\Dense{T}(b))
+(\)(L::Factor{T}, B::StridedMatrix) where {T<:VTypes} = Matrix(L\Dense{T}(B))
 (\)(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
 # When right hand side is sparse, we have to ensure that the rhs is not marked as symmetric.
 (\)(L::Factor, B::SparseVecOrMat) = sparse(spsolve(CHOLMOD_A, L, Sparse(B, 0)))
 
 \(adjL::Adjoint{<:Any,<:Factor}, B::Dense) = (L = adjL.parent; solve(CHOLMOD_A, L, B))
-\(adjL::Adjoint{<:Any,<:Factor}, B::VecOrMat) = (L = adjL.parent; convert(Matrix, solve(CHOLMOD_A, L, Dense(B))))
+\(adjL::Adjoint{<:Any,<:Factor}, B::VecOrMat) = (L = adjL.parent; Matrix(solve(CHOLMOD_A, L, Dense(B))))
 \(adjL::Adjoint{<:Any,<:Factor}, B::Sparse) = (L = adjL.parent; spsolve(CHOLMOD_A, L, B))
 \(adjL::Adjoint{<:Any,<:Factor}, B::SparseVecOrMat) = (L = adjL.parent; \(Adjoint(L), Sparse(B)))
 
@@ -1706,7 +1704,7 @@ function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMat)
         if issuccess(F)
             return \(F, B)
         else
-            return \(lufact(convert(SparseMatrixCSC{eltype(A), SuiteSparse_long}, A)), B)
+            return \(lufact(SparseMatrixCSC{eltype(A), SuiteSparse_long}(A)), B)
         end
     end
 end
@@ -1720,7 +1718,7 @@ function \(adjA::Adjoint{<:Any,<:RealHermSymComplexHermF64SSL}, B::StridedVecOrM
         if issuccess(F)
             return \(Adjoint(F), B)
         else
-            return \(Adjoint(lufact(convert(SparseMatrixCSC{eltype(A), SuiteSparse_long}, A))), B)
+            return \(Adjoint(lufact(SparseMatrixCSC{eltype(A), SuiteSparse_long}(A))), B)
         end
     end
 end

@@ -162,23 +162,23 @@ end
 similar(A::Union{Symmetric,Hermitian}, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(A), T, dims)
 
 # Conversion
-convert(::Type{Matrix}, A::Symmetric) = copytri!(convert(Matrix, copy(A.data)), A.uplo)
-function convert(::Type{Matrix}, A::Hermitian)
+Matrix(A::Symmetric) = copytri!(convert(Matrix, copy(A.data)), A.uplo)
+function Matrix(A::Hermitian)
     B = copytri!(convert(Matrix, copy(A.data)), A.uplo, true)
     for i = 1:size(A, 1)
         B[i,i] = real(B[i,i])
     end
     return B
 end
-convert(::Type{Array}, A::Union{Symmetric,Hermitian}) = convert(Matrix, A)
+Array(A::Union{Symmetric,Hermitian}) = convert(Matrix, A)
 
 parent(A::HermOrSym) = A.data
-convert(::Type{Symmetric{T,S}},A::Symmetric{T,S}) where {T,S<:AbstractMatrix} = A
-convert(::Type{Symmetric{T,S}},A::Symmetric) where {T,S<:AbstractMatrix} = Symmetric{T,S}(convert(S,A.data),A.uplo)
-convert(::Type{AbstractMatrix{T}}, A::Symmetric) where {T} = Symmetric(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
-convert(::Type{Hermitian{T,S}},A::Hermitian{T,S}) where {T,S<:AbstractMatrix} = A
-convert(::Type{Hermitian{T,S}},A::Hermitian) where {T,S<:AbstractMatrix} = Hermitian{T,S}(convert(S,A.data),A.uplo)
-convert(::Type{AbstractMatrix{T}}, A::Hermitian) where {T} = Hermitian(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
+Symmetric{T,S}(A::Symmetric{T,S}) where {T,S<:AbstractMatrix} = A
+Symmetric{T,S}(A::Symmetric) where {T,S<:AbstractMatrix} = Symmetric{T,S}(convert(S,A.data),A.uplo)
+AbstractMatrix{T}(A::Symmetric) where {T} = Symmetric(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
+Hermitian{T,S}(A::Hermitian{T,S}) where {T,S<:AbstractMatrix} = A
+Hermitian{T,S}(A::Hermitian) where {T,S<:AbstractMatrix} = Hermitian{T,S}(convert(S,A.data),A.uplo)
+AbstractMatrix{T}(A::Hermitian) where {T} = Hermitian(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
 
 copy(A::Symmetric{T,S}) where {T,S} = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
 copy(A::Hermitian{T,S}) where {T,S} = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))
