@@ -259,6 +259,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `indices` is now `axes` ([#25057]).
 
+* `Void` is now `Nothing` with an alias `Cvoid` for C interop ([#25162]).
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -414,3 +416,4 @@ includes this fix. Find the minimum version from there.
 [#25021]: https://github.com/JuliaLang/julia/issues/25021
 [#25056]: https://github.com/JuliaLang/julia/issues/25056
 [#25057]: https://github.com/JuliaLang/julia/issues/25057
+[#25162]: https://github.com/JuliaLang/julia/issues/25162
