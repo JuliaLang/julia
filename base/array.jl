@@ -583,7 +583,7 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
 end
 
 function grow_to!(dest, itr)
-    out = grow_to!(similar(dest,Union{}), itr, start(itr))
+    out = grow_to!(empty(dest, Union{}), itr, start(itr))
     return isempty(out) ? dest : out
 end
 
@@ -595,12 +595,12 @@ function grow_to!(dest, itr, st)
         if S === T || S <: T
             push!(dest, el::T)
         else
-            new = similar(dest, typejoin(T, S))
+            new = sizehint!(empty(dest, typejoin(T, S)), length(dest))
             if new isa AbstractSet
-                # TODO: merge back these two branches when copy! is re-enabled for sets
+                # TODO: merge back these two branches when copy! is re-enabled for sets/vectors
                 union!(new, dest)
             else
-                copyto!(new, dest)
+                append!(new, dest)
             end
             push!(new, el)
             return grow_to!(new, itr, st)
@@ -2214,7 +2214,7 @@ function filter!(f, a::AbstractVector)
     return a
 end
 
-filter(f, a::Vector) = mapfilter(f, push!, a, similar(a, 0))
+filter(f, a::Vector) = mapfilter(f, push!, a, empty(a))
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.

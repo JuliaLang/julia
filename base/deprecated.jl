@@ -3363,6 +3363,10 @@ info(err::Exception; prefix="ERROR: ", kw...) =
 @deprecate similar(a::AbstractDict) empty(a)
 @deprecate similar(a::AbstractDict, ::Type{Pair{K,V}}) where {K, V} empty(a, K, V)
 
+# 25224
+@deprecate similar(s::AbstractSet) empty(s)
+@deprecate similar(s::AbstractSet, ::Type{T}) where {T} empty(s, T)
+
 # PR #24594
 @eval LibGit2 begin
     @deprecate AbstractCredentials AbstractCredential false
