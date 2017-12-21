@@ -306,7 +306,7 @@ julia> diag(A,1)
  6
 ```
 """
-diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
+diag(A::AbstractMatrix, k::Integer=0) = vec(A[diagind(A,k)])
 
 """
     diagm(kv::Pair{<:Integer,<:AbstractVector}...)
