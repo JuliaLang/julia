@@ -58,7 +58,7 @@ function readKey(stream::IO=STDIN) ::UInt32
         stream.buffer.size < 3 && return '\x1b'
         esc_b = readNextChar(stream)
 
-		if esc_a == '['
+		if esc_a == '[' || esc_a == 'O'
 			if esc_b >= '0' && esc_b <= '9'
 				stream.buffer.size < 4 && return '\x1b'
                 esc_c = readNextChar(stream)
@@ -101,12 +101,10 @@ function readKey(stream::IO=STDIN) ::UInt32
                     return '\x1b'
                 end
 			end
-		elseif esc_a == 'O'
-            if esc_a == 'H'
-                return HOME_KEY
-            elseif esc_a == 'F'
-                return END_KEY
-            end
+		elseif esc_a == 'H'
+            return HOME_KEY
+        elseif esc_a == 'F'
+             return END_KEY
 		end
 
 		return '\x1b'
