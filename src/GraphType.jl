@@ -525,24 +525,23 @@ function log_event_req!(graph::Graph, rp::UUID, rvs::VersionSpec, reason)
     if reason isa Symbol
         @assert reason == :explicit_requirement
         other_entry = nothing
-        msg *= "an explicit requirement, "
+        msg *= "an explicit requirement"
     else
-        @assert reason isa Tuple{UUID,ResolveLogEntry}
-        other_p, other_entry = reason
+        other_p, other_entry = reason::Tuple{UUID,ResolveLogEntry}
         if other_p == uuid_julia
-            msg *= "julia compatibility requirements, "
-            other_entry = nothing
+            msg *= "julia compatibility requirements"
+            other_entry = nothing # don't propagate the log
         else
             other_id = pkgID(other_p, graph)
-            msg *= "$other_id, "
+            msg *= "$other_id"
         end
     end
     rp0 = pdict[rp]
     @assert !gconstr[rp0][end]
     if any(gconstr[rp0])
-        msg *= "leaving only versions $(VersionSpec(VersionRange.(pvers[rp0][gconstr[rp0][1:(end-1)]])))"
+        msg *= ", leaving only versions $(VersionSpec(VersionRange.(pvers[rp0][gconstr[rp0][1:(end-1)]])))"
     else
-        msg *= "leaving no versions left"
+        msg *= " — no versions left"
     end
     entry = rlog.pool[rp]
     push!(entry, (other_entry, msg))
@@ -559,10 +558,9 @@ function log_event_implicit_req!(graph::Graph, p1::Int, vmask::BitVector, p0::In
         if any(vmask[1:(end-1)])
             vns = string(VersionSpec(VersionRange.(pvers[p0][vmask[1:(end-1)]])))
             vmask[end] && (vns *= " or uninstalled")
-        elseif vmask[end]
-            vns = "uninstalled"
         else
-            vns = "no version"
+            @assert vmask[end]
+            vns = "uninstalled"
         end
         return vns
     end
@@ -582,11 +580,10 @@ function log_event_implicit_req!(graph::Graph, p1::Int, vmask::BitVector, p0::In
         end
         msg *= "to versions: $(vs_string(p1, vmask))"
         if vmask ≠ gconstr[p1]
-            msg *= ", leaving "
             if any(gconstr[p1])
-                msg *= "only versions: $(vs_string(p1, gconstr[p1]))"
+                msg *= ", leaving only versions: $(vs_string(p1, gconstr[p1]))"
             else
-                msg *= "no versions left"
+                msg *= " — no versions left"
             end
         end
     else
@@ -713,6 +710,22 @@ function log_event_eq_classes!(graph::Graph, p0::Int)
     return entry
 end
 
+function log_event_maxsumtrace!(graph::Graph, p0::Int, s0::Int)
+    rlog = graph.data.rlog
+    p = graph.data.pkgs[p0]
+    id = pkgID(p0, graph)
+    if s0 < graph.spp[p0]
+        msg = "fixed by the MaxSum heuristic to version $(graph.data.pvers[p0][s0])"
+    else
+        msg = "determined to be unneeded by the MaxSum heuristic"
+    end
+    entry = rlog.pool[p]
+    push!(entry, (nothing, msg))
+    return entry
+end
+
+const _logindent = " "
+
 showlog(graph::Graph, args...; kw...) = showlog(STDOUT, graph, args...; kw...)
 
 """
@@ -731,8 +744,8 @@ function showlog(io::IO, graph::Graph; view::Symbol = :plain)
     recursive = (view == :tree)
     initentries = [event[1] for event in graph.data.rlog.init.events]
     for entry in sort!(initentries, by=(entry->pkgID(entry.pkg, graph)))
-        _show(io, graph, entry, "", seen, recursive)
-        recursive && (seen[entry] = true)
+        seen[entry] = true
+        _show(io, graph, entry, _logindent, seen, recursive)
     end
 end
 
@@ -752,10 +765,11 @@ the same as for `showlog(io, graph)`); the default is `:tree`.
 function showlog(io::IO, graph::Graph, p::UUID; view::Symbol = :tree)
     view ∈ [:plain, :tree] || throw(ArgumentError("the view argument should be `:plain` or `:tree`"))
     rlog = graph.data.rlog
+    entry = rlog.pool[p]
     if view == :tree
-        _show(io, graph, rlog.pool[p], "", ObjectIdDict(), true)
+        _show(io, graph, entry, _logindent, ObjectIdDict(entry=>true), true)
     else
-        entries = ResolveLogEntry[rlog.pool[p]]
+        entries = ResolveLogEntry[entry]
         function getentries(entry)
             for (other_entry,_) in entry.events
                 (other_entry ≡ nothing || other_entry ∈ entries) && continue
@@ -763,16 +777,16 @@ function showlog(io::IO, graph::Graph, p::UUID; view::Symbol = :tree)
                 getentries(other_entry)
             end
         end
-        getentries(rlog.pool[p])
+        getentries(entry)
         for entry in entries
-            _show(io, graph, entry, "", ObjectIdDict(), false)
+            _show(io, graph, entry, _logindent, ObjectIdDict(), false)
         end
     end
 end
 
 # Show a recursive tree with requirements applied to a package, either directly or indirectly
 function _show(io::IO, graph::Graph, entry::ResolveLogEntry, indent::String, seen::ObjectIdDict, recursive::Bool)
-    toplevel = isempty(indent)
+    toplevel = (indent == _logindent)
     firstglyph = toplevel ? "" : "└─"
     pre = toplevel ? "" : "  "
     println(io, indent, firstglyph, entry.header)
@@ -799,7 +813,7 @@ end
 is_julia(graph::Graph, p0::Int) = graph.data.pkgs[p0] == uuid_julia
 
 "Check for contradictions in the constraints."
-function check_constraints(graph::Graph)
+function check_constraints(graph::Graph; arewesure::Bool = true)
     np = graph.np
     gconstr = graph.gconstr
     pkgs = graph.data.pkgs
@@ -809,7 +823,11 @@ function check_constraints(graph::Graph)
 
     for p0 = 1:np
         any(gconstr[p0]) && continue
-        err_msg = "Unsatisfiable requirements detected for package $(id(p0)):\n"
+        if arewesure
+            err_msg = "Unsatisfiable requirements detected for package $(id(p0)):\n"
+        else
+            err_msg = "Resolve failed to satisfy requirements for package $(id(p0)):\n"
+        end
         err_msg *= sprint(showlog, graph, pkgs[p0])
         throw(PkgError(err_msg))
     end
@@ -821,7 +839,7 @@ Propagates current constraints, determining new implicit constraints.
 Throws an error in case impossible requirements are detected, printing
 a log trace.
 """
-function propagate_constraints!(graph::Graph)
+function propagate_constraints!(graph::Graph; arewesure::Bool = true)
     np = graph.np
     spp = graph.spp
     gadj = graph.gadj
@@ -864,7 +882,11 @@ function propagate_constraints!(graph::Graph)
                     log_event_implicit_req!(graph, p1, added_constr1, p0)
                 end
                 if !any(gconstr1)
-                    err_msg = "Unsatisfiable requirements detected for package $(id(p1)):\n"
+                    if arewesure
+                        err_msg = "Unsatisfiable requirements detected for package $(id(p1)):\n"
+                    else
+                        err_msg = "Resolve failed to satisfy requirements for package $(id(p1)):\n"
+                    end
                     err_msg *= sprint(showlog, graph, pkgs[p1])
                     throw(PkgError(err_msg))
                 end
@@ -1199,8 +1221,8 @@ end
 Simplifies the graph by propagating constraints, disabling unreachable versions, pruning
 and grouping versions into equivalence classes.
 """
-function simplify_graph!(graph::Graph, sources::Set{Int} = Set{Int}(); verbose::Bool = false)
-    propagate_constraints!(graph)
+function simplify_graph!(graph::Graph, sources::Set{Int} = Set{Int}(); verbose::Bool = false, arewesure::Bool = true)
+    propagate_constraints!(graph, arewesure = arewesure)
     disable_unreachable!(graph, sources)
     prune_graph!(graph, verbose = verbose)
     compute_eq_classes!(graph, verbose = verbose)

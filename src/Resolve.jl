@@ -9,7 +9,7 @@ using ..Types
 using ..GraphType
 using .MaxSum
 import ..Types: uuid_julia
-import ..GraphType: is_julia, log_event_greedysolved!, log_event_maxsumsolved!
+import ..GraphType: is_julia, check_constraints, log_event_greedysolved!, log_event_maxsumsolved!, log_event_maxsumtrace!
 
 export resolve, sanity_check
 
@@ -29,24 +29,24 @@ function resolve(graph::Graph; verbose::Bool = false)
 
     try
         sol = maxsum(graph, msgs)
+        @goto check
     catch err
         isa(err, UnsatError) || rethrow(err)
-        verbose && info("resolve: maxsum failed")
-        # p = graph.data.pkgs[err.info]
-        # TODO: build tools to analyze the problem, and suggest to use them here.
-        msg =
-            """
-            resolve is unable to satisfy package requirements.
-            """
-        if msgs.num_nondecimated != graph.np
-            msg *= """
-                     (you may try increasing the value of the JULIA_PKGRESOLVE_ACCURACY
-                      environment variable)
-                   """
-        end
-        ## info("ERROR MESSAGE:\n" * msg)
-        throw(PkgError(msg))
+        apply_maxsum_trace!(graph, err.trace)
     end
+
+    verbose && info("resolve: maxsum failed")
+
+    check_constraints(graph, arewesure = false) # will throw if it fails
+    simplify_graph!(graph, arewesure = false)   # will throw if it fails
+    # NOTE: here it seems like there could be an infinite recursion loop.
+    #       However, if maxsum fails with an empty trace (which could lead to
+    #       the recursion) then the two above checks should be able to
+    #       detect an error. Nevertheless, it's probably better to put some
+    #       kind of failsafe here.
+    return resolve(graph, verbose = verbose)
+
+    @label check
 
     # verify solution (debug code) and enforce its optimality
     @assert verify_solution(sol, graph)
@@ -363,6 +363,20 @@ function enforce_optimality!(sol::Vector{Int}, graph::Graph)
 
     for p0 = 1:np
         log_event_maxsumsolved!(graph, p0, sol[p0], why[p0])
+    end
+end
+
+function apply_maxsum_trace!(graph::Graph, trace::Vector{Any})
+    np = graph.np
+    spp = graph.spp
+    gconstr = graph.gconstr
+
+    for (p0,s0) in trace
+        new_constr = falses(spp[p0])
+        new_constr[s0] = true
+        old_constr = copy(gconstr[p0])
+        gconstr[p0] .&= new_constr
+        gconstr[p0] ≠ old_constr && log_event_maxsumtrace!(graph, p0, s0)
     end
 end
 

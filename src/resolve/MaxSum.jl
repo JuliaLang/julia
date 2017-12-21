@@ -11,7 +11,7 @@ export UnsatError, Messages, maxsum
 # An exception type used internally to signal that an unsatisfiable
 # constraint was detected
 struct UnsatError <: Exception
-    info
+    trace
 end
 
 # Some parameters to drive the decimation process
