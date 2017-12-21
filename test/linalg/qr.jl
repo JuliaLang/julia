@@ -135,7 +135,7 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 a = raw_a
                 qrpa = factorize(a[:,1:n1])
                 q, r = qrpa.Q, qrpa.R
-                @test mul!(squareQ(q)', q) ≈ Matrix(I, n, n)
+                @test mul!(adjoint(squareQ(q)), q) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1),q)
                 @test mul!(squareQ(q), Adjoint(q)) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1), Adjoint(q))
@@ -145,7 +145,7 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
 
                 qra = qrfact(a[:,1:n1], Val(false))
                 q, r = qra.Q, qra.R
-                @test mul!(squareQ(q)', q) ≈ Matrix(I, n, n)
+                @test mul!(adjoint(squareQ(q)), q) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1),q)
                 @test mul!(squareQ(q), Adjoint(q)) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1),Adjoint(q))

@@ -53,7 +53,7 @@ rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
                     @test size(lqa,3) == 1
                     @test size(lqa.Q,3) == 1
                     @test_throws ErrorException lqa.Z
-                    @test Array(lqa') ≈ a'
+                    @test Array(adjoint(lqa)) ≈ a'
                     @test lqa * lqa' ≈ a * a'
                     @test lqa' * lqa ≈ a' * a
                     @test q*squareQ(q)' ≈ Matrix(I, n, n)
