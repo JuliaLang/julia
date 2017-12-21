@@ -775,8 +775,10 @@ if VERSION < v"0.7.0-DEV.2655"
         export eigs, svds
     end
 elseif VERSION < v"0.7.0-DEV.3019"
-    import IterativeEigenSolvers
-    const IterativeEigensolvers = IterativeEigenSolvers
+    @eval module IterativeEigensolvers
+        using IterativeEigenSolvers: eigs, svds
+        export eigs, svds
+    end
 else
     import IterativeEigensolvers
 end
