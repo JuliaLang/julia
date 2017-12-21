@@ -37,6 +37,7 @@ See also [`reshape`](@ref).
 """
 vec(a::AbstractArray) = reshape(a,_length(a))
 vec(a::AbstractVector) = a
+vec(a::RowVector) = a.vec
 
 _sub(::Tuple{}, ::Tuple{}) = ()
 _sub(t::Tuple, ::Tuple{}) = t
