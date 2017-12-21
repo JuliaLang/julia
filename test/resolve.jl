@@ -197,9 +197,10 @@ function resolve_tst(deps_data, reqs_data, want_data = nothing)
     simplify_graph!(graph)
     want = resolve(graph)
 
-    # info(sprint(io->showlog(io, graph)))
+    # rlog = get_resolve_log(graph)
+    # info(sprint(io->showlog(io, rlog)))
     # println()
-    # info(sprint(io->showlog(io, graph, view=:chronological)))
+    # info(sprint(io->showlog(io, rlog, view=:chronological)))
 
     return want == wantuuids(want_data)
 end

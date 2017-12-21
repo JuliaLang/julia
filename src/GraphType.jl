@@ -6,7 +6,7 @@ using ..Types
 import ..Types.uuid_julia
 import Pkg3.equalto
 
-export Graph, add_reqs!, add_fixed!, simplify_graph!, showlog
+export Graph, ResolveLog, add_reqs!, add_fixed!, simplify_graph!, get_resolve_log, showlog
 
 # The ResolveLog is used to keep track of events that take place during the
 # resolution process. We use one ResolveLogEntry per package, and record all events
@@ -39,20 +39,33 @@ function Base.push!(entry::ResolveLogEntry, reason::Tuple{Union{ResolveLogEntry,
     return entry
 end
 
-# Note: the `init` field is used to keep track of all package entries which were
-# created during intialization, since the `pool` can be pruned during the resolution
-# process.
 mutable struct ResolveLog
+    # init: used to keep track of all package entries which were created during
+    #       intialization, since the `pool` can be pruned during the resolution
+    #       process.
     init::ResolveLogEntry
+
+    # globals: records global events not associated to any particular package
     globals::ResolveLogEntry
+
+    # pool: records entries associated to each package
     pool::Dict{UUID,ResolveLogEntry}
+
+    # journal: record all messages in order (shared between all entries)
     journal::Vector{Tuple{UUID,String}}
+
+    # exact: keeps track of whether the resolve process is still exact, or
+    #        heuristics have been employed
     exact::Bool
-    function ResolveLog()
+
+    # UUID to names
+    uuid_to_name::Dict{UUID,String}
+
+    function ResolveLog(uuid_to_name::Dict{UUID,String})
         journal = ResolveJournal()
         init = ResolveLogEntry(journal, UUID0, "")
         globals = ResolveLogEntry(journal, UUID0, "Global events:")
-        return new(init, globals, Dict(), journal, true)
+        return new(init, globals, Dict(), journal, true, uuid_to_name)
     end
 end
 
@@ -132,7 +145,7 @@ mutable struct GraphData
         eq_classes = Dict(pkgs[p0] => Dict(eq_vn(v0,p0) => Set([eq_vn(v0,p0)]) for v0 = 1:spp[p0]) for p0 = 1:np)
 
         # the resolution log is actually initialized below
-        rlog = ResolveLog()
+        rlog = ResolveLog(uuid_to_name)
 
         data = new(pkgs, np, spp, pdict, pvers, vdict, uuid_to_name, pruned, eq_classes, rlog)
 
@@ -148,10 +161,10 @@ mutable struct GraphData
         pdict = copy(data.pdict)
         pvers = [copy(data.pvers[p0]) for p0 = 1:np]
         vdict = [copy(data.vdict[p0]) for p0 = 1:np]
-        uuid_to_name = copy(data.uuid_to_name)
         pruned = copy(data.pruned)
         eq_classes = Dict(p => copy(eq) for (p,eq) in data.eq_classes)
         rlog = deepcopy(data.rlog)
+        uuid_to_name = rlog.uuid_to_name
 
         return new(pkgs, np, spp, pdict, pvers, vdict, uuid_to_name, pruned, eq_classes, rlog)
     end
@@ -407,6 +420,7 @@ function _add_fixed!(graph::Graph, fixed::Dict{UUID,Fixed})
     return graph
 end
 
+Types.pkgID(p::UUID, rlog::ResolveLog) = pkgID(p, rlog.uuid_to_name)
 Types.pkgID(p::UUID, data::GraphData) = pkgID(p, data.uuid_to_name)
 Types.pkgID(p0::Int, data::GraphData) = pkgID(data.pkgs[p0], data)
 Types.pkgID(p, graph::Graph) = pkgID(p, graph.data)
@@ -515,7 +529,7 @@ end
 
 function log_event_fixed!(graph::Graph, fp::UUID, fx::Fixed)
     rlog = graph.data.rlog
-    id = pkgID(fp, graph)
+    id = pkgID(fp, rlog)
     msg = "$id is fixed to version $(fx.version)"
     entry = rlog.pool[fp]
     push!(entry, (nothing, msg))
@@ -527,7 +541,7 @@ function log_event_req!(graph::Graph, rp::UUID, rvs::VersionSpec, reason)
     gconstr = graph.gconstr
     pdict = graph.data.pdict
     pvers = graph.data.pvers
-    id = pkgID(rp, graph)
+    id = pkgID(rp, rlog)
     msg = "restricted to versions $rvs by "
     if reason isa Symbol
         @assert reason == :explicit_requirement
@@ -539,7 +553,7 @@ function log_event_req!(graph::Graph, rp::UUID, rvs::VersionSpec, reason)
             msg *= "julia compatibility requirements"
             other_entry = nothing # don't propagate the log
         else
-            other_id = pkgID(other_p, graph)
+            other_id = pkgID(other_p, rlog)
             msg *= "$other_id"
         end
     end
@@ -578,16 +592,16 @@ function log_event_implicit_req!(graph::Graph, p1::Int, vmask::BitVector, p0::In
     end
 
     p = pkgs[p1]
-    id = pkgID(p, graph)
+    id = pkgID(p, rlog)
     other_p, other_entry = pkgs[p0], rlog.pool[pkgs[p0]]
-    other_id = pkgID(other_p, graph)
+    other_id = pkgID(other_p, rlog)
     if any(vmask)
         msg = "restricted by "
         if other_p == uuid_julia
             msg *= "julia compatibility requirements "
             other_entry = nothing # don't propagate the log
         else
-            other_id = pkgID(other_p, graph)
+            other_id = pkgID(other_p, rlog)
             msg *= "compatibility requirements with $other_id "
         end
         msg *= "to versions: $(vs_string(p1, vmask))"
@@ -604,7 +618,7 @@ function log_event_implicit_req!(graph::Graph, p1::Int, vmask::BitVector, p0::In
             msg *= "julia"
             other_entry = nothing # don't propagate the log
         else
-            other_id = pkgID(other_p, graph)
+            other_id = pkgID(other_p, rlog)
             msg *= "$other_id "
         end
     end
@@ -620,7 +634,7 @@ function log_event_pruned!(graph::Graph, p0::Int, s0::Int)
     pvers = graph.data.pvers
 
     p = pkgs[p0]
-    id = pkgID(p, graph)
+    id = pkgID(p, rlog)
     if s0 == spp[p0]
         msg = "determined to be unneeded during graph pruning"
     else
@@ -638,7 +652,7 @@ function log_event_greedysolved!(graph::Graph, p0::Int, s0::Int)
     pvers = graph.data.pvers
 
     p = pkgs[p0]
-    id = pkgID(p, graph)
+    id = pkgID(p, rlog)
     if s0 == spp[p0]
         msg = "determined to be unneeded by the solver"
     else
@@ -660,7 +674,7 @@ function log_event_maxsumsolved!(graph::Graph, p0::Int, s0::Int, why::Symbol)
     pvers = graph.data.pvers
 
     p = pkgs[p0]
-    id = pkgID(p, graph)
+    id = pkgID(p, rlog)
     if s0 == spp[p0]
         @assert why == :uninst
         msg = "determined to be unneeded by the solver"
@@ -684,8 +698,8 @@ function log_event_maxsumsolved!(graph::Graph, p0::Int, s0::Int, p1::Int)
     pvers = graph.data.pvers
 
     p = pkgs[p0]
-    id = pkgID(p, graph)
-    other_id = pkgID(p1, graph)
+    id = pkgID(p, rlog)
+    other_id = pkgID(pkgs[p1], rlog)
     @assert s0 ≠ spp[p0]
     if s0 == spp[p0] - 1
         msg = "set by the solver to its maximum version: $(pvers[p0][s0]) (installation is required by $other_id)"
@@ -715,7 +729,7 @@ function log_event_eq_classes!(graph::Graph, p0::Int)
     end
 
     p = pkgs[p0]
-    id = pkgID(p, graph)
+    id = pkgID(p, rlog)
     msg = "versions reduced by equivalence to: $vns"
     entry = rlog.pool[p]
     push!(entry, (nothing, msg))
@@ -726,7 +740,7 @@ function log_event_maxsumtrace!(graph::Graph, p0::Int, s0::Int)
     rlog = graph.data.rlog
     rlog.exact = false
     p = graph.data.pkgs[p0]
-    id = pkgID(p0, graph)
+    id = pkgID(p, rlog)
     if s0 < graph.spp[p0]
         msg = "fixed by the MaxSum heuristic to version $(graph.data.pvers[p0][s0])"
     else
@@ -737,9 +751,14 @@ function log_event_maxsumtrace!(graph::Graph, p0::Int, s0::Int)
     return entry
 end
 
+"Get the resolution log, detached"
+get_resolve_log(graph::Graph) = deepcopy(graph.data.rlog)
+
 const _logindent = " "
 
 showlog(graph::Graph, args...; kw...) = showlog(STDOUT, graph, args...; kw...)
+showlog(io::IO, graph::Graph, args...; kw...) = showlog(io, graph.data.rlog, args...; kw...)
+showlog(rlog::ResolveLog, args...; kw...) = showlog(STDOUT, rlog, args...; kw...)
 
 """
 Show the full resolution log. The `view` keyword controls how the events are displayed/grouped:
@@ -749,25 +768,25 @@ Show the full resolution log. The `view` keyword controls how the events are dis
            in the process (the top-level is still grouped by package, alphabetically)
  * `:chronological` for a flat view of all events in chronological order
 """
-function showlog(io::IO, graph::Graph; view::Symbol = :plain)
+function showlog(io::IO, rlog::ResolveLog; view::Symbol = :plain)
     view ∈ [:plain, :tree, :chronological] || throw(ArgumentError("the view argument should be `:plain`, `:tree` or `:chronological`"))
     println(io, "Resolve log:")
-    view == :chronological && return showlogjournal(io, graph)
+    view == :chronological && return showlogjournal(io, rlog)
     seen = ObjectIdDict()
     recursive = (view == :tree)
-    _show(io, graph, graph.data.rlog.globals, _logindent, seen, false)
-    initentries = [event[1] for event in graph.data.rlog.init.events]
-    for entry in sort!(initentries, by=(entry->pkgID(entry.pkg, graph)))
+    _show(io, rlog, rlog.globals, _logindent, seen, false)
+    initentries = [event[1] for event in rlog.init.events]
+    for entry in sort!(initentries, by=(entry->pkgID(entry.pkg, rlog)))
         seen[entry] = true
-        _show(io, graph, entry, _logindent, seen, recursive)
+        _show(io, rlog, entry, _logindent, seen, recursive)
     end
 end
 
-function showlogjournal(io::IO, graph::Graph)
-    journal = graph.data.rlog.journal
-    id(p) = p == UUID0 ? "[global event]" : pkgID(p, graph)
+function showlogjournal(io::IO, rlog::ResolveLog)
+    journal = rlog.journal
+    id(p) = p == UUID0 ? "[global event]" : pkgID(p, rlog)
     padding = maximum(length(id(p)) for (p,_) in journal)
-    for (p, msg) in journal
+    for (p,msg) in journal
         println(io, ' ', rpad(id(p), padding), ": ", msg)
     end
 end
@@ -775,14 +794,13 @@ end
 """
 Show the resolution log for some package, and all the other packages that affected
 it during resolution. The `view` option can be either `:plain` or `:tree` (works
-the same as for `showlog(io, graph)`); the default is `:tree`.
+the same as for `showlog(io, rlog)`); the default is `:tree`.
 """
-function showlog(io::IO, graph::Graph, p::UUID; view::Symbol = :tree)
+function showlog(io::IO, rlog::ResolveLog, p::UUID; view::Symbol = :tree)
     view ∈ [:plain, :tree] || throw(ArgumentError("the view argument should be `:plain` or `:tree`"))
-    rlog = graph.data.rlog
     entry = rlog.pool[p]
     if view == :tree
-        _show(io, graph, entry, _logindent, ObjectIdDict(entry=>true), true)
+        _show(io, rlog, entry, _logindent, ObjectIdDict(entry=>true), true)
     else
         entries = ResolveLogEntry[entry]
         function getentries(entry)
@@ -794,13 +812,13 @@ function showlog(io::IO, graph::Graph, p::UUID; view::Symbol = :tree)
         end
         getentries(entry)
         for entry in entries
-            _show(io, graph, entry, _logindent, ObjectIdDict(), false)
+            _show(io, rlog, entry, _logindent, ObjectIdDict(), false)
         end
     end
 end
 
 # Show a recursive tree with requirements applied to a package, either directly or indirectly
-function _show(io::IO, graph::Graph, entry::ResolveLogEntry, indent::String, seen::ObjectIdDict, recursive::Bool)
+function _show(io::IO, rlog::ResolveLog, entry::ResolveLogEntry, indent::String, seen::ObjectIdDict, recursive::Bool)
     toplevel = (indent == _logindent)
     firstglyph = toplevel ? "" : "└─"
     pre = toplevel ? "" : "  "
@@ -821,7 +839,7 @@ function _show(io::IO, graph::Graph, entry::ResolveLogEntry, indent::String, see
             continue
         end
         seen[otheritem] = true
-        _show(io, graph, otheritem, newindent, seen, recursive)
+        _show(io, rlog, otheritem, newindent, seen, recursive)
     end
 end
 
@@ -833,6 +851,7 @@ function check_constraints(graph::Graph)
     gconstr = graph.gconstr
     pkgs = graph.data.pkgs
     pvers = graph.data.pvers
+    rlog = graph.data.rlog
     exact = graph.data.rlog.exact
 
     id(p0::Int) = pkgID(p0, graph)
@@ -844,7 +863,7 @@ function check_constraints(graph::Graph)
         else
             err_msg = "Resolve failed to satisfy requirements for package $(id(p0)):\n"
         end
-        err_msg *= sprint(showlog, graph, pkgs[p0])
+        err_msg *= sprint(showlog, rlog, pkgs[p0])
         throw(PkgError(err_msg))
     end
     return true
@@ -906,7 +925,7 @@ function propagate_constraints!(graph::Graph)
                     else
                         err_msg = "Resolve failed to satisfy requirements for package $(id(p1)):\n"
                     end
-                    err_msg *= sprint(showlog, graph, pkgs[p1])
+                    err_msg *= sprint(showlog, rlog, pkgs[p1])
                     throw(PkgError(err_msg))
                 end
             end
