@@ -169,11 +169,11 @@ static int never_id_char(uint32_t wc)
      return (
           // spaces and control characters:
           (cat >= UTF8PROC_CATEGORY_ZS && cat <= UTF8PROC_CATEGORY_CS) ||
-          
+
           // ASCII and Latin1 non-connector punctuation
           (wc < 0xff &&
            cat >= UTF8PROC_CATEGORY_PD && cat <= UTF8PROC_CATEGORY_PO) ||
-          
+
           wc == '`');
 }
 
