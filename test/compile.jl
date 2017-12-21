@@ -321,25 +321,6 @@ try
     fb_uuid1 = Base.module_uuid(FooBar1)
     @test fb_uuid != fb_uuid1
 
-    reload("FooBar")
-    @test fb_uuid != Base.module_uuid(root_module(:FooBar))
-    @test fb_uuid1 == Base.module_uuid(FooBar1)
-    fb_uuid = Base.module_uuid(root_module(:FooBar))
-    @test isfile(joinpath(dir2, "FooBar.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
-    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) isa Vector
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji")) isa Vector
-
-    reload("FooBar1")
-    @test fb_uuid == Base.module_uuid(root_module(:FooBar))
-    @test fb_uuid1 != Base.module_uuid(root_module(:FooBar1))
-
-    @test isfile(joinpath(dir2, "FooBar.ji"))
-    @test isfile(joinpath(dir2, "FooBar1.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji")) isa Vector
-    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) isa Vector
-
     # test checksum
     open(joinpath(dir2, "FooBar1.ji"), "a") do f
         write(f, 0x076cac96) # append 4 random bytes
@@ -545,21 +526,6 @@ let dir = mktempdir()
         splice!(Base.LOAD_CACHE_PATH, 1)
         splice!(LOAD_PATH, 1)
         rm(dir, recursive=true)
-    end
-end
-
-let module_name = string("a",randstring())
-    mktempdir() do path
-        unshift!(LOAD_PATH, path)
-        file_name = joinpath(path, string(module_name, ".jl"))
-        sleep(2)
-        touch(file_name)
-        code = """module $(module_name)\nend\n"""
-        write(file_name, code)
-        reload(module_name)
-        @test isa(root_module(Symbol(module_name)), Module)
-        @test shift!(LOAD_PATH) == path
-        rm(file_name)
     end
 end
 

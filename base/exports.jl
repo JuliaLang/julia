@@ -953,7 +953,6 @@ export
     evalfile,
     include_string,
     include_dependency,
-    reload,
 
 # RTS internals
     finalizer,
