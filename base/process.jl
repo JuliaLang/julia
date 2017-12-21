@@ -458,6 +458,9 @@ function setup_stdio(stdio::Pipe, readable::Bool)
     return (io, false)
 end
 
+setup_stdio(stdio::AbstractPipe, readable::Bool) =
+    setup_stdio(readable ? pipe_reader(stdio) : pipe_writer(stdio), readable)
+
 function setup_stdio(stdio::IOStream, readable::Bool)
     io = Filesystem.File(RawFD(fd(stdio)))
     return (io, false)
