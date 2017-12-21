@@ -320,10 +320,10 @@ let s = "Koala test: 🐨"
 end
 
 # julia#17155, tests from Base Julia
-@test (uppercase∘hex)(239487) == "3A77F"
+@test (Compat.Unicode.uppercase∘hex)(239487) == "3A77F"
 let str = randstring(20)
-    @test filter(!isupper, str) == replace(str, r"[A-Z]", "")
-    @test filter(!islower, str) == replace(str, r"[a-z]", "")
+    @test filter(!Compat.Unicode.isupper, str) == replace(str, r"[A-Z]", "")
+    @test filter(!Compat.Unicode.islower, str) == replace(str, r"[a-z]", "")
 end
 
 # julia#19950, tests from Base (#20028)
@@ -919,8 +919,8 @@ end
 @test 1 in BitSet(1:10)
 
 # 0.7.0-DEV.1930
-@test textwidth("A") == 1
-@test textwidth('A') == 1
+@test Compat.Unicode.textwidth("A") == 1
+@test Compat.Unicode.textwidth('A') == 1
 
 # 0.7
 @test diagm(0 => ones(2), -1 => ones(2)) == [1.0 0.0 0.0; 1.0 1.0 0.0; 0.0 1.0 0.0]
@@ -984,6 +984,18 @@ end
 @test ComplexF16 === Complex{Float16}
 @test ComplexF32 === Complex{Float32}
 @test ComplexF64 === Complex{Float64}
+
+# 0.7.0-DEV.2915
+module Test25021
+    using Compat
+    using Compat.Test
+    using Compat.Unicode
+    @test isdefined(@__MODULE__, :Unicode)
+
+    @test !isnumeric('a')
+    @test isnumeric('1')
+    @test titlecase("firstname lastname") == "Firstname Lastname"
+end
 
 if VERSION < v"0.6.0"
     include("deprecated.jl")

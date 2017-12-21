@@ -188,3 +188,7 @@ else
     import Base.@irrational
     import Base.LinAlg.BLAS.@blasfunc
 end
+
+if VERSION < v"0.7.0-DEV.2915"
+    Base.@deprecate textwidth Compat.Unicode.textwidth
+end
