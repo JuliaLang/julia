@@ -1547,9 +1547,6 @@ function isequal(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)
         return false
     end
-    if isa(A,AbstractRange) != isa(B,AbstractRange)
-        return false
-    end
     for (a, b) in zip(A, B)
         if !isequal(a, b)
             return false
@@ -1568,9 +1565,6 @@ end
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)
-        return false
-    end
-    if isa(A,AbstractRange) != isa(B,AbstractRange)
         return false
     end
     anymissing = false
@@ -1944,19 +1938,92 @@ unshift!(A, a, b, c...) = unshift!(unshift!(A, c...), a, b)
 
 const hashaa_seed = UInt === UInt64 ? 0x7f53e68ceb575e76 : 0xeb575e76
 const hashrle_seed = UInt === UInt64 ? 0x2aab8909bfea414c : 0xbfea414c
-function hash(a::AbstractArray, h::UInt)
+const hashr_seed   = UInt === UInt64 ? 0x80707b6821b70087 : 0x21b70087
+
+# Efficient O(1) method equivalent to the O(N) AbstractArray fallback,
+# which works only for ranges with regular step (RangeStepRegular)
+function hash_range(r::AbstractRange, h::UInt)
+    h += hashaa_seed
+    h += hash(size(r))
+
+    length(r) == 0 && return h
+    h = hash(first(r), h)
+    length(r) == 1 && return h
+    length(r) == 2 && return hash(last(r), h)
+
+    h += hashr_seed
+    h = hash(length(r), h)
+    h = hash(last(r), h)
+end
+
+function hash(a::AbstractArray{T}, h::UInt) where T
+    # O(1) hashing for types with regular step
+    if isa(a, AbstractRange) && isa(TypeRangeStep(a), RangeStepRegular)
+        return hash_range(a, h)
+    end
+
     h += hashaa_seed
     h += hash(size(a))
 
     state = start(a)
     done(a, state) && return h
+    x1, state = next(a, state)
+    done(a, state) && return hash(x1, h)
     x2, state = next(a, state)
-    done(a, state) && return hash(x2, h)
+    done(a, state) && return hash(x2, hash(x1, h))
 
-    x1 = x2
-    while !done(a, state)
-        x1 = x2
-        x2, state = next(a, state)
+    # Check whether the array is equal to a range, and hash the elements
+    # at the beginning of the array as such as long as they match this assumption
+    # This needs to be done even for non-RangeStepRegular types since they may still be equal
+    # to RangeStepRegular values (e.g. 1.0:3.0 == 1:3)
+    if isa(a, AbstractVector) && applicable(-, x2, x1)
+        n = 1
+        local step, laststep, laststate
+        while true
+            # If overflow happens with entries of the same type, a cannot be equal
+            # to a range with more than two elements because more extreme values
+            # cannot be represented. We must still hash the two first values as a
+            # range since they can always be considered as such (in a wider type)
+            if isconcrete(T)
+                try
+                    step = x2 - x1
+                catch err
+                    isa(err, OverflowError) || rethrow(err)
+                    break
+                end
+                # If true, wraparound overflow happened
+                sign(step) == cmp(x2, x1) || break
+            else
+                # widen() is here to ensure no overflow can happen
+                step = widen(x2) - widen(x1)
+            end
+            n > 1 && !isequal(step, laststep) && break
+            n += 1
+            x1 = x2
+            laststep = step
+            laststate = state
+            done(a, state) && break
+            x2, state = next(a, state)
+        end
+
+        h = hash(first(a), h)
+        h += hashr_seed
+        # Always hash at least the two first elements as a range (even in case of overflow)
+        if n < 2
+            h = hash(2, h)
+            h = hash(x2, h)
+            done(a, state) && return h
+            x1 = x2
+            x2, state = next(a, state)
+        else
+            h = hash(n, h)
+            h = hash(x1, h)
+            done(a, laststate) && return h
+        end
+    end
+
+    # Hash elements which do not correspond to a range (if any)
+    while true
         if isequal(x2, x1)
             # For repeated elements, use run length encoding
             # This allows efficient hashing of sparse arrays
@@ -1970,6 +2037,9 @@ function hash(a::AbstractArray, h::UInt)
             h = hash(runlength, h)
         end
         h = hash(x1, h)
+        done(a, state) && break
+        x1 = x2
+        x2, state = next(a, state)
     end
     !isequal(x2, x1) && (h = hash(x2, h))
     return h

@@ -413,7 +413,7 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int128, BigInt)
     @test length(take(1:6, T(3))) == 3
     @test length(drop(1:6, T(3))) == 3
     @test length(repeated(1, T(5))) == 5
-    @test collect(partition(1:5, T(5)))[1] == collect(1:5)
+    @test collect(partition(1:5, T(5)))[1] == 1:5
 end
 
 @testset "collect finite iterators issue #12009" begin

@@ -41,6 +41,7 @@ end
     @test Float16(3.0) < pi
     @test pi < Float16(4.0)
     @test contains(sprint(show,π),"3.14159")
+    @test widen(pi) === pi
 end
 
 @testset "frexp,ldexp,significand,exponent" begin

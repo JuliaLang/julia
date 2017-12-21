@@ -11,7 +11,9 @@ optional second argument `h` is a hash code to be mixed with the result.
 New types should implement the 2-argument form, typically by calling the 2-argument `hash`
 method recursively in order to mix hashes of the contents with each other (and with `h`).
 Typically, any type that implements `hash` should also implement its own `==` (hence
-`isequal`) to guarantee the property mentioned above.
+`isequal`) to guarantee the property mentioned above. Types supporting subtraction
+(operator `-`) should also implement [`widen`](@ref), which is required to hash
+values inside heterogeneous arrays.
 """
 hash(x::Any) = hash(x, zero(UInt))
 hash(w::WeakRef, h::UInt) = hash(w.value, h)
@@ -73,12 +75,3 @@ else
 end
 
 hash(x::QuoteNode, h::UInt) = hash(x.value, hash(QuoteNode, h))
-
-# hashing ranges by component at worst leads to collisions for very similar ranges
-const hashr_seed = UInt === UInt64 ? 0x80707b6821b70087 : 0x21b70087
-function hash(r::AbstractRange, h::UInt)
-    h += hashr_seed
-    h = hash(first(r), h)
-    h = hash(step(r), h)
-    h = hash(last(r), h)
-end

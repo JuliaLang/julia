@@ -771,9 +771,11 @@ conj(x) = x
 """
     widen(x)
 
-If `x` is a type, return a "larger" type (for numeric types, this will be
-a type with at least as much range and precision as the argument, and usually more).
-Otherwise `x` is converted to `widen(typeof(x))`.
+If `x` is a type, return a "larger" type, defined so that arithmetic operations
+`+` and `-` are guaranteed not to overflow nor lose precision for any combination
+of values that type `x` can hold.
+
+If `x` is a value, it is converted to `widen(typeof(x))`.
 
 # Examples
 ```jldoctest
@@ -784,7 +786,7 @@ julia> widen(1.5f0)
 1.5
 ```
 """
-widen(x::T) where {T<:Number} = convert(widen(T), x)
+widen(x::T) where {T} = convert(widen(T), x)
 
 # function pipelining
 

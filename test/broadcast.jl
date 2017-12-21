@@ -211,7 +211,7 @@ let a = sin.([1, 2])
 end
 
 # PR #17300: loop fusion
-@test (x->x+1).((x->x+2).((x->x+3).(1:10))) == collect(7:16)
+@test (x->x+1).((x->x+2).((x->x+3).(1:10))) == 7:16
 let A = [sqrt(i)+j for i = 1:3, j=1:4]
     @test atan2.(log.(A), sum(A,1)) == broadcast(atan2, broadcast(log, A), sum(A, 1))
 end
