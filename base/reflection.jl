@@ -1089,12 +1089,11 @@ end
 Make method `m` uncallable and force recompilation of any methods that use(d) it.
 """
 function delete_method(m::Method)
-    ccall(:jl_method_table_disable, Cvoid, (Any, Any), MethodTable(m), m)
+    ccall(:jl_method_table_disable, Cvoid, (Any, Any), get_methodtable(m), m)
 end
 
-function MethodTable(m::Method)
+function get_methodtable(m::Method)
     ft = ccall(:jl_first_argument_datatype, Any, (Any,), m.sig)
-    ft == C_NULL && error("Method ", m, " does not correspond to a function type")
     (ft::DataType).name.mt
 end
 
