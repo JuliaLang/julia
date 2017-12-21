@@ -21,6 +21,8 @@ export Graph, add_reqs!, add_fixed!, simplify_graph!, showlog
 # The `showlog` functions are used for display, and called to create messages
 # in case of resolution errors.
 
+const UUID0 = UUID(UInt128(0))
+
 const ResolveJournal = Vector{Tuple{UUID,String}}
 
 mutable struct ResolveLogEntry
@@ -28,24 +30,29 @@ mutable struct ResolveLogEntry
     pkg::UUID
     header::String
     events::Vector{Tuple{Any,String}} # here Any should ideally be Union{ResolveLogEntry,Void}
-    ResolveLogEntry(journal::ResolveJournal, pkg::UUID, msg::String = "") = new(journal, pkg, msg, [])
+    ResolveLogEntry(journal::ResolveJournal, pkg::UUID, header::String = "") = new(journal, pkg, header, [])
 end
 
-function Base.push!(entry::ResolveLogEntry, reason::Tuple{Union{ResolveLogEntry,Void},String})
+function Base.push!(entry::ResolveLogEntry, reason::Tuple{Union{ResolveLogEntry,Void},String}, to_journal::Bool = true)
     push!(entry.events, reason)
-    entry.pkg ≠ uuid_julia && push!(entry.journal, (entry.pkg, reason[2]))
+    to_journal && entry.pkg ≠ uuid_julia && push!(entry.journal, (entry.pkg, reason[2]))
     return entry
 end
 
-# Note: the `init` field is used to keep track of all entries which were there
-# at the beginning, since the `pool` can be pruned during the resolution process.
+# Note: the `init` field is used to keep track of all package entries which were
+# created during intialization, since the `pool` can be pruned during the resolution
+# process.
 mutable struct ResolveLog
     init::ResolveLogEntry
+    globals::ResolveLogEntry
     pool::Dict{UUID,ResolveLogEntry}
     journal::Vector{Tuple{UUID,String}}
+    exact::Bool
     function ResolveLog()
         journal = ResolveJournal()
-        return new(ResolveLogEntry(journal, uuid_julia), Dict(), journal)
+        init = ResolveLogEntry(journal, UUID0, "")
+        globals = ResolveLogEntry(journal, UUID0, "Global events:")
+        return new(init, globals, Dict(), journal, true)
     end
 end
 
@@ -500,7 +507,7 @@ function init_log!(data::GraphData)
 
         if p ≠ uuid_julia
             push!(first_entry, (nothing, msg))
-            push!(rlog.init, (first_entry, ""))
+            push!(rlog.init, (first_entry, ""), false)
         end
     end
     return data
@@ -546,6 +553,11 @@ function log_event_req!(graph::Graph, rp::UUID, rvs::VersionSpec, reason)
     entry = rlog.pool[rp]
     push!(entry, (other_entry, msg))
     return entry
+end
+
+function log_event_global!(graph::Graph, msg::String)
+    rlog = graph.data.rlog
+    push!(rlog.globals, (nothing, msg))
 end
 
 function log_event_implicit_req!(graph::Graph, p1::Int, vmask::BitVector, p0::Int)
@@ -712,6 +724,7 @@ end
 
 function log_event_maxsumtrace!(graph::Graph, p0::Int, s0::Int)
     rlog = graph.data.rlog
+    rlog.exact = false
     p = graph.data.pkgs[p0]
     id = pkgID(p0, graph)
     if s0 < graph.spp[p0]
@@ -742,6 +755,7 @@ function showlog(io::IO, graph::Graph; view::Symbol = :plain)
     view == :chronological && return showlogjournal(io, graph)
     seen = ObjectIdDict()
     recursive = (view == :tree)
+    _show(io, graph, graph.data.rlog.globals, _logindent, seen, false)
     initentries = [event[1] for event in graph.data.rlog.init.events]
     for entry in sort!(initentries, by=(entry->pkgID(entry.pkg, graph)))
         seen[entry] = true
@@ -751,9 +765,10 @@ end
 
 function showlogjournal(io::IO, graph::Graph)
     journal = graph.data.rlog.journal
-    padding = maximum(length(pkgID(p, graph)) for (p,_) in journal)
+    id(p) = p == UUID0 ? "[global event]" : pkgID(p, graph)
+    padding = maximum(length(id(p)) for (p,_) in journal)
     for (p, msg) in journal
-        println(io, ' ', rpad(pkgID(p, graph), padding), ": ", msg)
+        println(io, ' ', rpad(id(p), padding), ": ", msg)
     end
 end
 
@@ -813,17 +828,18 @@ end
 is_julia(graph::Graph, p0::Int) = graph.data.pkgs[p0] == uuid_julia
 
 "Check for contradictions in the constraints."
-function check_constraints(graph::Graph; arewesure::Bool = true)
+function check_constraints(graph::Graph)
     np = graph.np
     gconstr = graph.gconstr
     pkgs = graph.data.pkgs
     pvers = graph.data.pvers
+    exact = graph.data.rlog.exact
 
     id(p0::Int) = pkgID(p0, graph)
 
     for p0 = 1:np
         any(gconstr[p0]) && continue
-        if arewesure
+        if exact
             err_msg = "Unsatisfiable requirements detected for package $(id(p0)):\n"
         else
             err_msg = "Resolve failed to satisfy requirements for package $(id(p0)):\n"
@@ -839,7 +855,7 @@ Propagates current constraints, determining new implicit constraints.
 Throws an error in case impossible requirements are detected, printing
 a log trace.
 """
-function propagate_constraints!(graph::Graph; arewesure::Bool = true)
+function propagate_constraints!(graph::Graph)
     np = graph.np
     spp = graph.spp
     gadj = graph.gadj
@@ -849,8 +865,11 @@ function propagate_constraints!(graph::Graph; arewesure::Bool = true)
     pkgs = graph.data.pkgs
     pvers = graph.data.pvers
     rlog = graph.data.rlog
+    exact = rlog.exact
 
     id(p0::Int) = pkgID(pkgs[p0], graph)
+
+    log_event_global!(graph, "propagating constraints")
 
     # packages which are not allowed to be uninstalled
     staged = Set{Int}(p0 for p0 = 1:np if !gconstr[p0][end])
@@ -882,7 +901,7 @@ function propagate_constraints!(graph::Graph; arewesure::Bool = true)
                     log_event_implicit_req!(graph, p1, added_constr1, p0)
                 end
                 if !any(gconstr1)
-                    if arewesure
+                    if exact
                         err_msg = "Unsatisfiable requirements detected for package $(id(p1)):\n"
                     else
                         err_msg = "Resolve failed to satisfy requirements for package $(id(p1)):\n"
@@ -909,6 +928,8 @@ function disable_unreachable!(graph::Graph, sources::Set{Int} = Set{Int}())
     gconstr = graph.gconstr
     adjdict = graph.adjdict
     pkgs = graph.data.pkgs
+
+    log_event_global!(graph, "disabling unreachable nodes")
 
     # packages which are not allowed to be uninstalled
     staged = union(sources, Set{Int}(p0 for p0 = 1:np if !gconstr[p0][end]))
@@ -944,20 +965,16 @@ Reduce the number of versions in the graph by putting all the versions of
 a package that behave identically into equivalence classes, keeping only
 the highest version of the class as representative.
 """
-function compute_eq_classes!(graph::Graph; verbose::Bool = false)
+function compute_eq_classes!(graph::Graph)
+    log_event_global!(graph, "computing version equivalence classes")
+
     np = graph.np
     sumspp = sum(graph.spp)
     for p0 = 1:np
         build_eq_classes1!(graph, p0)
     end
 
-    if verbose
-        info("""
-             EQ CLASSES STATS:
-               before: $(sumspp)
-               after:  $(sum(graph.spp))
-             """)
-    end
+    log_event_global!(graph, "computed version equivalence classes, stats (total n. of states): before = $(sumspp) after = $(sum(graph.spp))")
 
     @assert check_consistency(graph)
 
@@ -1039,7 +1056,7 @@ end
 Prune away fixed and unnecessary packages, and the
 disallowed versions for the remaining packages.
 """
-function prune_graph!(graph::Graph; verbose::Bool = false)
+function prune_graph!(graph::Graph)
     np = graph.np
     spp = graph.spp
     gadj = graph.gadj
@@ -1182,13 +1199,7 @@ function prune_graph!(graph::Graph; verbose::Bool = false)
 
     # Done
 
-    if verbose
-        info("""
-             GRAPH SIMPLIFY STATS:
-               before: np = $np ⟨spp⟩ = $(mean(spp))
-               after:  np = $new_np ⟨spp⟩ = $(mean(new_spp))
-             """)
-    end
+    log_event_global!(graph, "pruned graph — stats (n. of packages, mean connectivity): before = ($np,$(mean(spp))) after = ($new_np,$(mean(new_spp)))")
 
     # Replace old data with new
     data.pkgs = new_pkgs
@@ -1221,11 +1232,11 @@ end
 Simplifies the graph by propagating constraints, disabling unreachable versions, pruning
 and grouping versions into equivalence classes.
 """
-function simplify_graph!(graph::Graph, sources::Set{Int} = Set{Int}(); verbose::Bool = false, arewesure::Bool = true)
-    propagate_constraints!(graph, arewesure = arewesure)
+function simplify_graph!(graph::Graph, sources::Set{Int} = Set{Int}())
+    propagate_constraints!(graph)
     disable_unreachable!(graph, sources)
-    prune_graph!(graph, verbose = verbose)
-    compute_eq_classes!(graph, verbose = verbose)
+    prune_graph!(graph)
+    compute_eq_classes!(graph)
     return graph
 end
 

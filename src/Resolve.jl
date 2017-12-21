@@ -9,12 +9,12 @@ using ..Types
 using ..GraphType
 using .MaxSum
 import ..Types: uuid_julia
-import ..GraphType: is_julia, check_constraints, log_event_greedysolved!, log_event_maxsumsolved!, log_event_maxsumtrace!
+import ..GraphType: is_julia, check_constraints, log_event_global!, log_event_greedysolved!, log_event_maxsumsolved!, log_event_maxsumtrace!
 
 export resolve, sanity_check
 
 "Resolve package dependencies."
-function resolve(graph::Graph; verbose::Bool = false)
+function resolve(graph::Graph)
     id(p) = pkgID(p, graph)
 
     # attempt trivial solution first
@@ -22,7 +22,7 @@ function resolve(graph::Graph; verbose::Bool = false)
 
     ok && @goto solved
 
-    verbose && info("resolve: greedy failed")
+    log_event_global!(graph, "greedy solver failed")
 
     # trivial solution failed, use maxsum solver
     msgs = Messages(graph)
@@ -35,16 +35,16 @@ function resolve(graph::Graph; verbose::Bool = false)
         apply_maxsum_trace!(graph, err.trace)
     end
 
-    verbose && info("resolve: maxsum failed")
+    log_event_global!(graph, "maxsum solver failed")
 
-    check_constraints(graph, arewesure = false) # will throw if it fails
-    simplify_graph!(graph, arewesure = false)   # will throw if it fails
+    check_constraints(graph) # will throw if it fails
+    simplify_graph!(graph)   # will throw if it fails
     # NOTE: here it seems like there could be an infinite recursion loop.
     #       However, if maxsum fails with an empty trace (which could lead to
     #       the recursion) then the two above checks should be able to
     #       detect an error. Nevertheless, it's probably better to put some
     #       kind of failsafe here.
-    return resolve(graph, verbose = verbose)
+    return resolve(graph)
 
     @label check
 
@@ -54,7 +54,7 @@ function resolve(graph::Graph; verbose::Bool = false)
 
     @label solved
 
-    verbose && info("resolve: succeeded")
+    log_event_global!(graph, "the solver found a feasible configuration")
 
     # return the solution as a Dict mapping UUID => VersionNumber
     return compute_output_dict(sol, graph)
@@ -64,7 +64,7 @@ end
 Scan the graph for (explicit or implicit) contradictions. Returns a list of problematic
 (package,version) combinations.
 """
-function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose::Bool = false)
+function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}())
     req_inds = graph.req_inds
     fix_inds = graph.fix_inds
 
@@ -83,7 +83,7 @@ function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose::B
         Set{Int}(1:graph.np) :
         Set{Int}(graph.data.pdict[p] for p in sources)
 
-    simplify_graph!(graph, isources, verbose = verbose)
+    simplify_graph!(graph, isources)
 
     np = graph.np
     spp = graph.spp
@@ -117,7 +117,7 @@ function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose::B
         add_reqs!(sub_graph, req)
 
         try
-            simplify_graph!(sub_graph, verbose = verbose)
+            simplify_graph!(sub_graph)
         catch err
             isa(err, PkgError) || rethrow(err)
             ## info("ERROR MESSAGE:\n" * err.msg)

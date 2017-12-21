@@ -172,7 +172,7 @@ function sanity_tst(deps_data, expected_result; pkgs=[])
         @show deps_data
         @show pkgs
     end
-    result = sanity_check(graph, Set(pkguuid(p) for p in pkgs), verbose = VERBOSE)
+    result = sanity_check(graph, Set(pkguuid(p) for p in pkgs))
 
     length(result) == length(expected_result) || return false
     expected_result_uuid = [(id(p), vn) for (p,vn) in expected_result]
@@ -194,8 +194,8 @@ function resolve_tst(deps_data, reqs_data, want_data = nothing)
     reqs = reqs_from_data(reqs_data, graph)
     add_reqs!(graph, reqs)
 
-    simplify_graph!(graph, verbose = VERBOSE)
-    want = resolve(graph, verbose = VERBOSE)
+    simplify_graph!(graph)
+    want = resolve(graph)
 
     # info(sprint(io->showlog(io, graph)))
     # println()
