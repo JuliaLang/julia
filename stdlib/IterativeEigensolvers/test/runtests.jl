@@ -2,6 +2,7 @@
 
 using IterativeEigensolvers
 using Test
+using SuiteSparse
 
 @testset "eigs" begin
     srand(1234)
