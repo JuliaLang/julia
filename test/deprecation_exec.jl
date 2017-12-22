@@ -109,6 +109,29 @@ global_logger(prev_logger)
 #-------------------------------------------------------------------------------
 # BEGIN 0.7 deprecations
 
+module LogTest
+    function bar(io)
+        info(io,"barinfo")
+        warn(io,"barwarn")
+        Base.display_error(io,"barerror",backtrace())
+    end
+    function pooh(io)
+        info(io,"poohinfo")
+        warn(io,"poohwarn")
+        Base.display_error(io,"pooherror",backtrace())
+    end
+end
+function foo(io)
+    info(io,"fooinfo")
+    warn(io,"foowarn")
+    Base.display_error(io,"fooerror",backtrace())
+end
+
+# Silence the flurry of depwarns for now.
+with_logger(NullLogger()) do
+
+@testset "Deprecated logging" begin
+
 # Test info
 @test contains(sprint(info, "test"), "INFO:")
 @test contains(sprint(info, "test"), "INFO: test")
@@ -136,24 +159,6 @@ let bt = backtrace()
 end
 
 # PR #16213
-@eval module LogTest
-    function bar(io)
-        info(io,"barinfo")
-        warn(io,"barwarn")
-        Base.display_error(io,"barerror",backtrace())
-    end
-    function pooh(io)
-        info(io,"poohinfo")
-        warn(io,"poohwarn")
-        Base.display_error(io,"pooherror",backtrace())
-    end
-end
-function foo(io)
-    info(io,"fooinfo")
-    warn(io,"foowarn")
-    Base.display_error(io,"fooerror",backtrace())
-end
-
 @test all(contains.(sprint(LogTest.bar), ["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -241,5 +246,9 @@ logging()
 @test all(contains.(sprint(LogTest.bar), ["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+
+end # @testset
+
+end
 
 # END 0.7 deprecations
