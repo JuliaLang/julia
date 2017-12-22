@@ -38,7 +38,7 @@ Base.searchindex
 Base.rsearchindex
 Base.contains(::AbstractString, ::AbstractString)
 Base.reverse(::Union{String,SubString{String}})
-Base.replace
+Base.replace(s::AbstractString, pat, f)
 Base.split
 Base.rsplit
 Base.strip

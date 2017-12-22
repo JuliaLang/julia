@@ -482,6 +482,10 @@ Library improvements
     defined, linear-algebra function `transpose`. Similarly,
     `permutedims(v::AbstractVector)` will create a row matrix ([#24839]).
 
+  * A new `replace(A, old=>new)` function is introduced to replace `old` by `new` in
+    collection `A`. There are also two other methods with a different API, and
+    a mutating variant, `replace!` ([#22324]).
+
   * `CartesianRange` changes ([#24715]):
     - Inherits from `AbstractArray`, and linear indexing can be used to provide
       linear-to-cartesian conversion ([#24715])

@@ -544,3 +544,241 @@ end
 
 convert(::Type{T}, s::T) where {T<:AbstractSet} = s
 convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
+
+
+## replace/replace! ##
+
+"""
+    replace!(A, old_new::Pair...; [count::Integer])
+
+For each pair `old=>new` in `old_new`, replace all occurrences
+of `old` in collection `A` by `new`.
+If `count` is specified, then replace at most `count` occurrences in total.
+See also [`replace`](@ref replace(A, old_new::Pair...)).
+
+# Examples
+```jldoctest
+julia> replace!([1, 2, 1, 3], 1=>0, 2=>4, count=2)
+4-element Array{Int64,1}:
+ 0
+ 4
+ 1
+ 3
+
+julia> replace!(Set([1, 2, 3]), 1=>0)
+Set([0, 2, 3])
+```
+"""
+replace!(A, old_new::Pair...; count::Integer=typemax(Int)) = _replace!(A, eltype(A), count, old_new)
+
+# we use this wrapper because using directly eltype(A) as the type
+# parameter below for Some degrades performance
+function _replace!(A, ::Type{K}, count::Integer, old_new::Tuple{Vararg{Pair}}) where K
+    @inline function prednew(x)
+        for o_n in old_new
+            first(o_n) == x && return Some{K}(last(o_n))
+        end
+    end
+    replace!(prednew, A, count=count)
+end
+
+"""
+    replace!(pred::Function, A, new; [count::Integer])
+
+Replace all occurrences `x` in collection `A` for which `pred(x)` is true
+by `new`.
+
+# Examples
+```jldoctest
+julia> A = [1, 2, 3, 1];
+
+julia> replace!(isodd, A, 0, count=2)
+4-element Array{Int64,1}:
+ 0
+ 2
+ 0
+ 1
+```
+"""
+replace!(pred::Callable, A, new; count::Integer=typemax(Int)) =
+    replace!(x -> if pred(x) Some(new) end, A, count=count)
+
+"""
+    replace!(prednew::Function, A; [count::Integer])
+
+For each value `x` in `A`, `prednew(x)` is called and must
+return either `nothing`, in which case no replacement occurs,
+or a value, possibly wrapped as a [`Some`](@ref) object, which
+will be used as a replacement for `x`.
+
+# Examples
+```jldoctest
+julia> replace!(x -> isodd(x) ? 2x : nothing, [1, 2, 3, 4])
+4-element Array{Int64,1}:
+ 2
+ 2
+ 6
+ 4
+
+julia> replace!(Union{Int,Nothing}[0, 1, 2, nothing, 4], count=2) do x
+           x !== nothing && iseven(x) ? Some(nothing) : nothing
+       end
+5-element Array{Union{Nothing,Int64},1}:
+  nothing
+ 1
+  nothing
+  nothing
+ 4
+
+julia> replace!(Dict(1=>2, 3=>4)) do kv
+           if first(kv) < 3; first(kv)=>3 end
+       end
+Dict{Int64,Int64} with 2 entries:
+  3 => 4
+  1 => 3
+
+julia> replace!(x->2x, Set([3, 6]))
+Set([6, 12])
+```
+"""
+replace!(prednew::Callable, A; count::Integer=typemax(Int)) =
+    replace!(prednew, A, count=clamp(count, typemin(Int), typemax(Int)) % Int)
+
+
+
+"""
+    replace(A, old_new::Pair...; [count::Integer])
+
+Return a copy of collection `A` where, for each pair `old=>new` in `old_new`,
+all occurrences of `old` are replaced by `new`.
+If `count` is specified, then replace at most `count` occurrences in total.
+See also [`replace!`](@ref).
+
+# Examples
+```jldoctest
+julia> replace([1, 2, 1, 3], 1=>0, 2=>4, count=2)
+4-element Array{Int64,1}:
+ 0
+ 4
+ 1
+ 3
+```
+"""
+replace(A, old_new::Pair...; count::Integer=typemax(Int)) =
+    _replace!(copy(A), eltype(A), count, old_new)
+
+"""
+    replace(pred::Function, A, new; [count::Integer])
+
+Return a copy of collection `A` where all occurrences `x` for which
+`pred(x)` is true are replaced by `new`.
+
+# Examples
+```jldoctest
+julia> replace(isodd, [1, 2, 3, 1], 0, count=2)
+4-element Array{Int64,1}:
+ 0
+ 2
+ 0
+ 1
+```
+"""
+replace(pred::Callable, A, new; count::Integer=typemax(Int)) =
+    replace!(x -> if pred(x) Some(new) end, copy(A), count=count)
+
+"""
+    replace(prednew::Function, A; [count::Integer])
+
+Return a copy of `A` where for each value `x` in `A`, `prednew(x)` is called
+and must return  either `nothing`, in which case no replacement occurs,
+or a value, possibly wrapped as a [`Some`](@ref) object, which
+will be used as a replacement for `x`.
+
+# Examples
+```jldoctest
+julia> replace(x -> isodd(x) ? 2x : nothing, [1, 2, 3, 4])
+4-element Array{Int64,1}:
+ 2
+ 2
+ 6
+ 4
+
+julia> replace(Union{Int,Nothing}[0, 1, 2, nothing, 4], count=2) do x
+           x !== nothing && iseven(x) ? Some(nothing) : nothing
+       end
+5-element Array{Union{Nothing,Int64},1}:
+  nothing
+ 1
+  nothing
+  nothing
+ 4
+
+julia> replace(Dict(1=>2, 3=>4)) do kv
+           if first(kv) < 3; first(kv)=>3 end
+       end
+Dict{Int64,Int64} with 2 entries:
+  3 => 4
+  1 => 3
+```
+"""
+replace(prednew::Callable, A; count::Integer=typemax(Int)) = replace!(prednew, copy(A), count=count)
+
+# Handle ambiguities
+replace!(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b)))
+replace!(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b, c)))
+replace(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace, (a, b)))
+replace(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(MethodError(replace, (a, b, c)))
+replace(a::AbstractString, b::Pair, c::Pair) = throw(MethodError(replace, (a, b, c)))
+
+
+### replace! for AbstractDict/AbstractSet
+
+askey(k, ::AbstractDict) = k.first
+askey(k, ::AbstractSet) = k
+
+function _replace_update_dict!(repl::Vector{<:Pair}, x, y::Some)
+    push!(repl, x => y.value)
+    true
+end
+
+_replace_update_dict!(repl::Vector{<:Pair}, x, ::Nothing) = false
+_replace_update_dict!(repl::Vector{<:Pair}, x, y) = _replace_update_dict!(repl, x, Some(y))
+
+function replace!(prednew::Callable, A::Union{AbstractDict,AbstractSet}; count::Int=typemax(Int))
+    count < 0 && throw(DomainError(count, "`count` must not be negative"))
+    count == 0 && return A
+    repl = Pair{eltype(A),eltype(A)}[]
+    c = 0
+    for x in A
+        c += _replace_update_dict!(repl, x, prednew(x))
+        c == count && break
+    end
+    for oldnew in repl
+        pop!(A, askey(first(oldnew), A))
+    end
+    for oldnew in repl
+        push!(A, last(oldnew))
+    end
+    A
+end
+
+### AbstractArray
+
+function _replace_update!(A::AbstractArray, i::Integer, y::Some)
+    @inbounds A[i] = y.value
+    true
+end
+
+_replace_update!(A::AbstractArray, i::Integer, ::Nothing) = false
+_replace_update!(A::AbstractArray, i::Integer, y) = _replace_update!(A, i, Some(y))
+
+function replace!(prednew::Callable, A::AbstractArray; count::Int=typemax(Int))
+    count < 0 && throw(DomainError(count, "`count` must not be negative"))
+    count == 0 && return A
+    c = 0
+    for i in eachindex(A)
+        c += _replace_update!(A, i, prednew(A[i]))
+        c == count && break
+    end
+    A
+end
