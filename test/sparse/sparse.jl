@@ -1672,8 +1672,8 @@ end
 
 @testset "sparse matrix cond" begin
     local A = sparse(reshape([1.0], 1, 1))
-    Ac = sprandn(20, 20,.5) + im* sprandn(20, 20,.5)
-    Ar = sprandn(20, 20,.5)
+    Ac = sprandn(20, 20,.5) + im*sprandn(20, 20,.5)
+    Ar = sprandn(20, 20,.5) + eps()*I
     @test cond(A, 1) == 1.0
     # For a discussion of the tolerance, see #14778
     if Base.USE_GPL_LIBS
