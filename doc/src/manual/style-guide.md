@@ -164,6 +164,66 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 If a function name requires multiple words, consider whether it might represent more than one
 concept and might be better split into pieces.
 
+## Write functions with argument ordering similar to Julia's Base
+
+As a general rule, the Base library uses the following order of arguments to functions,
+as applicable:
+
+1. **Function argument**.
+   Putting a function argument first permits the use of [`do`](@ref) blocks for passing
+   multiline anonymous functions.
+
+2. **I/O stream**.
+   Specifying the `IO` object first permits passing the function to functions such as
+   [`sprint`](@ref), e.g. `sprint(show, x)`.
+
+3. **Input being mutated**.
+   For example, in [`fill!(x, v)`](@ref fill!), `x` is the object being mutated and it
+   appears before the value to be inserted into `x`.
+
+4. **Type**.
+   Passing a type typically means that the output will have the given type.
+   In [`parse(Int, "1")`](@ref parse), the type comes before the string to parse.
+   There are many such examples where the type appears first, but it's useful to note that
+   in [`read(io, String)`](@ref read), the `IO` argument appears before the type, which is
+   in keeping with the order outlined here.
+
+5. **Input not being mutated**.
+   In `fill!(x, v)`, `v` is *not* being mutated and it comes after `x`.
+
+6. **Key**.
+   For associative collections, this is the key of the key-value pair(s).
+   For other indexed collections, this is the index.
+
+7. **Value**.
+   For associative collections, this is the value of the key-value pair(s).
+   In cases like `fill!(x, v)`, this is `v`.
+
+8. **Everything else**.
+   Any other arguments.
+
+9. **Varargs**.
+   This refers to arguments that can be listed indefinitely at the end of a function call.
+   For example, in `Matrix{T}(uninitialized, dims)`, the dimensions can be given as a
+   [`Tuple`](@ref), e.g. `Matrix{T}(uninitialized, (1,2))`, or as [`Vararg`](@ref)s,
+   e.g. `Matrix{T}(uninitialized, 1, 2)`.
+
+10. **Keyword arguments**.
+   In Julia keyword arguments have to come last anyway in function definitions; they're
+   listed here for the sake of completeness.
+
+The vast majority of functions will not take every kind of argument listed above; the
+numbers merely denote the precedence that should be used for any applicable arguments
+to a function.
+
+There are of course a few exceptions.
+For example, in [`convert`](@ref), the type should always come first.
+In [`setindex!`](@ref), the value comes before the indices so that the indices can be
+provided as varargs.
+
+When designing APIs, adhering to this general order as much as possible is likely to give
+users of your functions a more consistent experience.
+
 ## Don't overuse try-catch
 
 It is better to avoid errors than to rely on catching them.
