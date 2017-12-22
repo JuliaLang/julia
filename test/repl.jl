@@ -725,10 +725,17 @@ let ends_with_semicolon = Base.REPL.ends_with_semicolon
 end
 
 # PR #20794, TTYTerminal with other kinds of streams
-let term = Base.Terminals.TTYTerminal("dumb",IOBuffer("1+2\n"),IOBuffer(),IOBuffer())
+let term = Base.Terminals.TTYTerminal("dumb",IOBuffer("1+2\n"),IOContext(IOBuffer(),:foo=>true),IOBuffer())
     r = Base.REPL.BasicREPL(term)
     REPL.run_repl(r)
-    @test String(take!(term.out_stream)) == "julia> 3\n\njulia> \n"
+    @test String(take!(term.out_stream.io)) == "julia> 3\n\njulia> \n"
+    @test haskey(term, :foo) == true
+    @test haskey(term, :bar) == false
+    @test (:foo=>true) in term
+    @test (:foo=>false) ∉ term
+    @test term[:foo] == get(term, :foo, nothing) == true
+    @test get(term, :bar, nothing) === nothing
+    @test_throws KeyError term[:bar]
 end
 
 

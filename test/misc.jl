@@ -472,6 +472,16 @@ let buf_color = IOBuffer()
     @test expected_str == String(take!(buf_color))
 end
 
+if STDOUT isa Base.TTY
+    @test haskey(STDOUT, :color) == true
+    @test haskey(STDOUT, :bar) == false
+    @test (:color=>Base.have_color) in STDOUT
+    @test (:color=>!Base.have_color) ∉ STDOUT
+    @test STDOUT[:color] == get(STDOUT, :color, nothing) == Base.have_color
+    @test get(STDOUT, :bar, nothing) === nothing
+    @test_throws KeyError STDOUT[:bar]
+end
+
 let
     global c_18711 = 0
     buf = IOContext(IOBuffer(), :hascontext => true)

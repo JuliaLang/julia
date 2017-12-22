@@ -168,7 +168,10 @@ else
 end
 
 # use cached value of have_color
-Base.get(::TTYTerminal, k::Symbol, default) = k === :color ? Base.have_color : default
+Base.in(key_value::Pair, t::TTYTerminal) = in(key_value, pipe_writer(t))
+Base.haskey(t::TTYTerminal, key) = haskey(pipe_writer(t), key)
+Base.getindex(t::TTYTerminal, key) = getindex(pipe_writer(t), key)
+Base.get(t::TTYTerminal, key, default) = get(pipe_writer(t), key, default)
 
 Base.peek(t::TTYTerminal) = Base.peek(t.in_stream)
 
