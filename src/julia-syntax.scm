@@ -1581,7 +1581,8 @@
          (if (null? lhss)
              body
              (let* ((coll  (make-ssavalue))
-                    (state (gensy))
+                    (next  (gensy))
+                    (state (make-ssavalue))
                     (outer (outer? (car lhss)))
                     (lhs   (if outer (cadar lhss) (car lhss)))
                     (body
@@ -1591,8 +1592,7 @@
                        ,@(if (not outer)
                              (map (lambda (v) `(warn-if-existing ,v)) (lhs-vars lhs))
                              '())
-                       ,(lower-tuple-assignment (list lhs state)
-                                                `(call (top next) ,coll ,state))
+                       ,(lower-tuple-assignment (list lhs state) next)
                        ,(nest (cdr lhss) (cdr itrs))))
                     (body
                      (if (null? (cdr lhss))
@@ -1602,13 +1602,14 @@
                              ,body))
                          `(scope-block ,body))))
                `(block (= ,coll ,(car itrs))
-                       (= ,state (call (top start) ,coll))
+                       (= ,next (call (top iterate) ,coll))
                        ;; TODO avoid `local declared twice` error from this
                        ;;,@(if outer `((local ,lhs)) '())
                        ,@(if outer `((require-existing-local ,lhs)) '())
                        (_while
-                        (call (top not_int) (call (core typeassert) (call (top done) ,coll ,state) (core Bool)))
-                        ,body))))))))
+                        (call (|.| (core Intrinsics) 'not_int) (call (core ===) ,next (null)))
+                        (block ,body
+                               (= ,next (call (top iterate) ,coll ,state)))))))))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs flat outervars)
@@ -1978,13 +1979,12 @@
                        (st  (gensy)))
                   `(block
                     ,@ini
-                    (= ,st (call (top start) ,xx))
                     ,.(map (lambda (i lhs)
                              (expand-forms
                               (lower-tuple-assignment
                                (list lhs st)
-                               `(call (top indexed_next)
-                                      ,xx ,(+ i 1) ,st))))
+                               `(call (top indexed_iterate)
+                                      ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st))))))
                            (iota (length lhss))
                            lhss)
                     (unnecessary ,xx))))))
@@ -2329,32 +2329,25 @@
         (ri        (gensy))
         (oneresult (make-ssavalue))
         (lengths   (map (lambda (x) (make-ssavalue)) ranges))
-        (states    (map (lambda (x) (gensy)) ranges))
         (rv        (map (lambda (x) (make-ssavalue)) ranges)))
 
     ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges rv states lengths)
+    (define (construct-loops ranges rv lengths)
       (if (null? ranges)
           `(block (= ,oneresult ,expr)
                   (inbounds true)
                   (call (top setindex!) ,result ,oneresult ,ri)
                   (inbounds pop)
-                  (= ,ri (call (top add_int) ,ri 1)))
-          `(block
-            (= ,(car states) (call (top start) ,(car rv)))
-            (while (call (top not_int) (call (core typeassert) (call (top done) ,(car rv) ,(car states)) (core Bool)))
-                   (scope-block
-                   (block
-                    (= (tuple ,(cadr (car ranges)) ,(car states))
-                       (call (top next) ,(car rv) ,(car states)))
-                    ;; *** either this or force all for loop vars local
-                    ,.(map (lambda (r) `(local ,r))
-                           (lhs-vars (cadr (car ranges))))
-                    ,(construct-loops (cdr ranges) (cdr rv) (cdr states) (cdr lengths))))))))
+                  (= ,ri (call (|.| (core Intrinsics) 'add_int) ,ri 1)))
+          (expand-for (list (cadr (car ranges))) (list (car rv))
+            `(block
+                ;; *** either this or force all for loop vars local
+                ,.(map (lambda (r) `(local ,r))
+                  (lhs-vars (cadr (car ranges))))
+                ,(construct-loops (cdr ranges) (cdr rv) (cdr lengths))))))
 
     ;; Evaluate the comprehension
     `(block
-      ,.(map (lambda (v) `(local ,v)) states)
       (local ,ri)
       ,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
       ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
@@ -2362,7 +2355,7 @@
        (block
         (= ,result (call (curly Array ,atype ,(length lengths)) undef ,@lengths))
         (= ,ri 1)
-        ,(construct-loops (reverse ranges) (reverse rv) states (reverse lengths))
+        ,(construct-loops (reverse ranges) (reverse rv) (reverse lengths))
         ,result)))))
 
 (define (lhs-vars e)

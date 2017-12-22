@@ -6,15 +6,12 @@ using Random
     p = Pair(10,20)
     @test p == (10=>20)
     @test isequal(p,10=>20)
-    @test start(p) == 1
-    @test next(p, 1) == (10,2)
-    @test !done(p, 1)
-    @test !done(p,2)
-    @test done(p,3)
-    @test !done(p,0)
+    @test iterate(p)[1] == 10
+    @test iterate(p, iterate(p)[2])[1] == 20
+    @test iterate(p, iterate(p, iterate(p)[2])[2]) == nothing
     @test lastindex(p) == length(p) == 2
-    @test Base.indexed_next(p, 1, (1,2)) == (10,2)
-    @test Base.indexed_next(p, 2, (1,2)) == (20,3)
+    @test Base.indexed_iterate(p, 1, nothing) == (10,2)
+    @test Base.indexed_iterate(p, 2, nothing) == (20,3)
     @test (1=>2) < (2=>3)
     @test (2=>2) < (2=>3)
     @test !((2=>3) < (2=>3))
@@ -531,9 +528,6 @@ end
     @test 1 == @inferred get(d, 1, 1)
     @test pop!(d, -111, nothing) == nothing
     @test 1 == @inferred pop!(d, 1)
-    i = @inferred start(d)
-    @inferred next(d, i)
-    @inferred done(d, i)
 
     # get! and delete!
     d = @inferred IdDict(Pair(:a,1), Pair(:b,2), Pair(3,3))
@@ -713,13 +707,13 @@ const global hashoffset = [UInt(190)]
 
 Base.hash(s::MyString) = hash(s.str) + hashoffset[]
 Base.lastindex(s::MyString) = lastindex(s.str)
-Base.next(s::MyString, v::Int) = next(s.str, v)
+Base.iterate(s::MyString, v::Int=1) = iterate(s.str, v)
 Base.isequal(a::MyString, b::MyString) = isequal(a.str, b.str)
 ==(a::MyString, b::MyString) = (a.str == b.str)
 
 Base.hash(v::MyInt) = v.val + hashoffset[]
 Base.lastindex(v::MyInt) = lastindex(v.val)
-Base.next(v::MyInt, i::Int) = next(v.val, i)
+Base.iterate(v::MyInt, i...) = iterate(v.val, i...)
 Base.isequal(a::MyInt, b::MyInt) = isequal(a.val, b.val)
 ==(a::MyInt, b::MyInt) = (a.val == b.val)
 @testset "issue #15077" begin

@@ -562,7 +562,7 @@ function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Any,2}, 
 end
 function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{<:AbstractChar,2}, row::Int, col::Int)
     if startpos == endpos
-        cells[row, col] = next(sbuff, startpos)[1]
+        cells[row, col] = iterate(sbuff, startpos)[1]
         return false
     else
         return true
@@ -587,7 +587,7 @@ function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
         col_start_idx = 1
         was_cr = false
         while idx <= slen
-            val,idx = next(dbuff, idx)
+            val,idx = iterate(dbuff, idx)
             if (is_eol = (Char(val) == Char(eol)))
                 is_dlm = is_comment = is_cr = is_quote = false
             elseif (is_dlm = (is_default_dlm ? in(Char(val), _default_delims) : (Char(val) == Char(dlm))))
@@ -759,11 +759,12 @@ writedlm(io::IO, a::AbstractArray{<:Any,0}, dlm; opts...) = writedlm(io, reshape
 
 # write an iterable row as dlm-separated items
 function writedlm_row(io::IO, row, dlm, quotes)
-    state = start(row)
-    while !done(row, state)
-        (x, state) = next(row, state)
+    y = iterate(row)
+    while y !== nothing
+        (x, state) = y
+        y = iterate(row, state)
         writedlm_cell(io, x, dlm, quotes)
-        done(row, state) ? print(io,'\n') : print(io,dlm)
+        y === nothing ? print(io,'\n') : print(io,dlm)
     end
 end
 

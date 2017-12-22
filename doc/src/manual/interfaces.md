@@ -9,9 +9,8 @@ to generically build upon those behaviors.
 
 | Required methods               |                        | Brief description                                                                     |
 |:------------------------------ |:---------------------- |:------------------------------------------------------------------------------------- |
-| `start(iter)`                  |                        | Returns the initial iteration state                                                   |
-| `next(iter, state)`            |                        | Returns the current item and the next state                                           |
-| `done(iter, state)`            |                        | Tests if there are any items remaining                                                |
+| `iterate(iter)`                |                        | Returns either a tuple of the first item and initial state or `nothing` if empty        |
+| `iterate(iter, state)`         |                        | Returns either a tuple of the next item and next state or `nothing` if no items remain  |
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
 | `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape{N}()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
 | `IteratorEltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
@@ -31,15 +30,14 @@ to generically build upon those behaviors.
 | `HasEltype()`                                | `eltype(IterType)` |
 | `EltypeUnknown()`                            | (*none*)           |
 
-Sequential iteration is implemented by the methods [`start`](@ref), [`done`](@ref), and [`next`](@ref). Instead
-of mutating objects as they are iterated over, Julia provides these three methods to keep track
-of the iteration state externally from the object. The `start(iter)` method returns the initial
-state for the iterable object `iter`. That state gets passed along to `done(iter, state)`, which
-tests if there are any elements remaining, and `next(iter, state)`, which returns a tuple containing
-the current element and an updated `state`. The `state` object can be anything, and is generally
-considered to be an implementation detail private to the iterable object.
+Sequential iteration is implemented by the [`iterate`](@ref) function. Instead
+of mutating objects as they are iterated over, Julia iterators may keep track
+of the iteration state externally from the object. The return value from iterate
+is always either a tuple of a value and a state, or `nothing` if no elements remain.
+The state object will be passed back to the iterate function on the next iteration
+and is generally considered an implementation detail private to the iterable object.
 
-Any object that defines these three methods is iterable and can be used in the [many functions that rely upon iteration](@ref lib-collections-iteration).
+Any object that defines this function is iterable and can be used in the [many functions that rely upon iteration](@ref lib-collections-iteration).
 It can also be used directly in a `for` loop since the syntax:
 
 ```julia
@@ -51,10 +49,11 @@ end
 is translated into:
 
 ```julia
-state = start(iter)
-while !done(iter, state)
-    (i, state) = next(iter, state)
+next = iterate(iter)
+while next !== nothing
+    (i, state) = next
     # body
+    next = iterate(iter, state)
 end
 ```
 
@@ -65,18 +64,14 @@ julia> struct Squares
            count::Int
        end
 
-julia> Base.start(::Squares) = 1
-
-julia> Base.next(S::Squares, state) = (state*state, state+1)
-
-julia> Base.done(S::Squares, state) = state > S.count
+julia> Base.iterate(S::Squares, state=1) = state > S.count ? nothing : (state*state, state+1)
 
 julia> Base.eltype(::Type{Squares}) = Int # Note that this is defined for the type
 
 julia> Base.length(S::Squares) = S.count
 ```
 
-With only [`start`](@ref), [`next`](@ref), and [`done`](@ref) definitions, the `Squares` type is already pretty powerful.
+With only [`iterate`](@ref) definition, the `Squares` type is already pretty powerful.
 We can iterate over all the elements:
 
 ```jldoctest squaretype
@@ -142,16 +137,12 @@ be used in their specific case.
 It is also often useful to allow iteration over a collection in *reverse order*
 by iterating over [`Iterators.reverse(iterator)`](@ref).  To actually support
 reverse-order iteration, however, an iterator
-type `T` needs to implement `start`, `next`, and `done` methods for `Iterators.Reverse{T}`.
+type `T` needs to implement `iterate` for `Iterators.Reverse{T}`.
 (Given `r::Iterators.Reverse{T}`, the underling iterator of type `T` is `r.itr`.)
 In our `Squares` example, we would implement `Iterators.Reverse{Squares}` methods:
 
 ```jldoctest squaretype
-julia> Base.start(rS::Iterators.Reverse{Squares}) = rS.itr.count
-
-julia> Base.next(::Iterators.Reverse{Squares}, state) = (state*state, state-1)
-
-julia> Base.done(::Iterators.Reverse{Squares}, state) = state < 1
+julia> Base.iterate(::Iterators.Reverse{Squares}, state=rS.itr.count) = state < 1 ? nothing : (state*state, state-1)
 
 julia> collect(Iterators.reverse(Squares(4)))
 4-element Array{Int64,1}:
@@ -230,7 +221,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `IndexStyle(::Type)`                            | `IndexCartesian()`                     | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
 | `getindex(A, I...)`                             | defined in terms of scalar `getindex`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
 | `setindex!(A, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
-| `start`/`next`/`done`                           | defined in terms of scalar `getindex`  | Iteration                                                                             |
+| `iterate`                                       | defined in terms of scalar `getindex`  | Iteration                                                                             |
 | `length(A)`                                     | `prod(size(A))`                        | Number of elements                                                                    |
 | `similar(A)`                                    | `similar(A, eltype(A), size(A))`       | Return a mutable array with the same shape and element type                           |
 | `similar(A, ::Type{S})`                         | `similar(A, S, size(A))`               | Return a mutable array with the same shape and the specified element type             |

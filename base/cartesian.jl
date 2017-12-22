@@ -275,11 +275,11 @@ function lreplace!(str::AbstractString, r::LReplace)
     j = firstindex(pat)
     matching = false
     local istart::Int
-    while i <= lastindex(str)
+    while i <= ncodeunits(str)
         cstr = str[i]
         i = nextind(str, i)
         if !matching
-            if cstr != '_' || done(str, i)
+            if cstr != '_' || i > ncodeunits(str)
                 continue
             end
             istart = i
