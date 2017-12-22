@@ -1570,6 +1570,11 @@ function search(buf::IOBuffer, delim::UInt8)
     return Int(q-p+1)
 end
 
+# Special string deprecation
+@deprecate start(s::AbstractString) firstindex(s)
+@deprecate next(s::AbstractString, i::Integer) iterate(s, i)
+@deprecate done(s::AbstractString, i::Integer) i > ncodeunits(s)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

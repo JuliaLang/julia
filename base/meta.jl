@@ -165,7 +165,7 @@ function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
     if isa(ex,Expr) && ex.head === :error
         return ex
     end
-    if !done(str, pos)
+    if pos <= ncodeunits(str)
         raise && throw(ParseError("extra token after end of expression"))
         return Expr(:error, "extra token after end of expression")
     end

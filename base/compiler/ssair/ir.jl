@@ -28,9 +28,7 @@ struct StmtRange <: AbstractUnitRange{Int}
 end
 first(r::StmtRange) = r.first
 last(r::StmtRange) = r.last
-start(r::StmtRange) = 0
-done(r::StmtRange, state) = r.last - r.first < state
-next(r::StmtRange, state) = (r.first + state, state + 1)
+next(r::StmtRange, state=0) = (r.last - r.first < state) ? nothing : (r.first + state, state + 1)
 
 StmtRange(range::UnitRange{Int}) = StmtRange(first(range), last(range))
 
@@ -260,18 +258,12 @@ function userefs(@nospecialize(x))
     end
 end
 
-start(it::UseRefIterator) = 1
-function next(it::UseRefIterator, use)
+function iterate(it::UseRefIterator, use=1)
     x = UseRef(it, use)
     v = x[]
-    v === UndefToken() && return next(it, use + 1)
+    v === OOBToken() && return nothing
+    v === UndefToken() && return iterate(it, use + 1)
     x, use + 1
-end
-function done(it::UseRefIterator, use)
-    x, _ = next(it, use)
-    v = x[]
-    v === OOBToken() && return true
-    false
 end
 
 function scan_ssa_use!(used, @nospecialize(stmt))
@@ -420,12 +412,6 @@ function value_typ(ir::IncrementalCompact, value)
     return typeof(value)
 end
 
-
-start(compact::IncrementalCompact) = (1,1,1)
-function done(compact::IncrementalCompact, (idx, _a, _b)::Tuple{Int, Int, Int})
-    return idx > length(compact.ir.stmts) && (compact.new_nodes_idx > length(compact.perm))
-end
-
 function process_node!(result::Vector{Any}, result_idx::Int, ssa_rename::Vector{Any},
         late_fixup::Vector{Int}, used_ssas::Vector{Int}, @nospecialize(stmt),
         idx::Int, processed_idx::Int)
@@ -470,7 +456,10 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, @nospeciali
         compact.late_fixup, compact.used_ssas, stmt, idx, processed_idx)
 end
 
-function next(compact::IncrementalCompact, (idx, active_bb, old_result_idx)::Tuple{Int, Int, Int})
+function iterate(compact::IncrementalCompact, (idx, active_bb, old_result_idx)::Tuple{Int, Int, Int}=(1,1,1))
+    if idx > length(compact.ir.stmts) && (compact.new_nodes_idx > length(compact.perm))
+        return nothing
+    end
     if length(compact.result) < old_result_idx
         resize!(compact.result, old_result_idx)
         resize!(compact.result_types, old_result_idx)
@@ -578,10 +567,7 @@ end
 function compact!(code::IRCode)
     compact = IncrementalCompact(code)
     # Just run through the iterator without any processing
-    state = start(compact)
-    while !done(compact, state)
-        _, state = next(compact, state)
-    end
+    foreach((args...)->nothing, compact)
     return finish(compact)
 end
 
@@ -591,9 +577,8 @@ end
 
 bbidxstmt(ir) = BBIdxStmt(ir)
 
-start(x::BBIdxStmt) = (1,1)
-done(x::BBIdxStmt, (idx, bb)) = idx > length(x.ir.stmts)
-function next(x::BBIdxStmt, (idx, bb))
+function iterate(x::BBIdxStmt, (idx, bb)=(1,1))
+    idx > length(x.ir.stmts) && return nothing
     active_bb = x.ir.cfg.blocks[bb]
     next_bb = bb
     if idx == last(active_bb.stmts)

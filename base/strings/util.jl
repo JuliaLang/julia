@@ -296,7 +296,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
             j, k = first(r), nextind(str,last(r))
         end
     end
-    if keep_empty || !done(str,i)
+    if keep_empty || i <= ncodeunits(str)
         push!(strs, SubString(str,i))
     end
     return strs

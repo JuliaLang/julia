@@ -188,7 +188,7 @@ Delim(d::String) = Delim{String, length(d)}(d)
 @inline function tryparsenext(d::Delim{<:AbstractChar, N}, str, i::Int, len) where N
     for j=1:N
         i > len && return (nothing, i)
-        c, i = next(str, i)
+        c, i = iterate(str, i)
         c != d.d && return (nothing, i)
     end
     return true, i
@@ -196,13 +196,13 @@ end
 
 @inline function tryparsenext(d::Delim{String, N}, str, i::Int, len) where N
     i1 = i
-    i2 = start(d.d)
+    i2 = firstindex(d.d)
     for j = 1:N
         if i1 > len
             return nothing, i1
         end
-        c1, i1 = next(str, i1)
-        c2, i2 = next(d.d, i2)
+        c1, i1 = iterate(str, i1)
+        c2, i2 = iterate(d.d, i2)
         if c1 != c2
             return nothing, i1
         end

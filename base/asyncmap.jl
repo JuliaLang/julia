@@ -282,8 +282,8 @@ Keyword args `ntasks` and `batch_size` have the same behavior as in
 be a function which operates on an array of argument tuples.
 
 !!! note
-    `next(::AsyncCollector, state) -> (nothing, state)`. A successful return
-    from `next` indicates that the next element from the input collection is
+    `iterate(::AsyncCollector, state) -> (nothing, state)`. A successful return
+    from `iterate` indicates that the next element from the input collection is
     being processed asynchronously. It blocks until a free worker task becomes
     available.
 
@@ -299,9 +299,11 @@ mutable struct AsyncCollectorState
     chnl::Channel
     worker_tasks::Array{Task,1}
     enum_state      # enumerator state
+    AsyncCollectorState(chnl::Channel, worker_tasks::Vector) =
+        new(chnl, convert(Vector{Task}, worker_tasks))
 end
 
-function start(itr::AsyncCollector)
+function iterate(itr::AsyncCollector)
     itr.ntasks = verify_ntasks(itr.enumerator, itr.ntasks)
     itr.batch_size = verify_batch_size(itr.batch_size)
     if itr.batch_size !== nothing
@@ -319,29 +321,31 @@ function start(itr::AsyncCollector)
         exec_func = (i,args) -> (itr.results[i]=itr.f(args...))
     end
     chnl, worker_tasks = setup_chnl_and_tasks((i,args) -> (itr.results[i]=itr.f(args...)), itr.ntasks, itr.batch_size)
-    return AsyncCollectorState(chnl, worker_tasks, start(itr.enumerator))
+    return iterate(itr, AsyncCollectorState(chnl, worker_tasks))
 end
 
-function done(itr::AsyncCollector, state::AsyncCollectorState)
-    if !isopen(state.chnl) || done(itr.enumerator, state.enum_state)
-        close(state.chnl)
+function wait_done(itr::AsyncCollector, state::AsyncCollectorState)
+    close(state.chnl)
 
-        # wait for all tasks to finish
-        foreach(x->(v=fetch(x); isa(v, Exception) && throw(v)), state.worker_tasks)
-        empty!(state.worker_tasks)
-        return true
-    else
-        return false
-    end
+    # wait for all tasks to finish
+    foreach(x->(v=fetch(x); isa(v, Exception) && throw(v)), state.worker_tasks)
+    empty!(state.worker_tasks)
 end
 
-function next(itr::AsyncCollector, state::AsyncCollectorState)
+function iterate(itr::AsyncCollector, state::AsyncCollectorState)
     if itr.nt_check && (length(state.worker_tasks) < itr.ntasks())
         start_worker_task!(state.worker_tasks, itr.f, state.chnl)
     end
 
     # Get index and mapped function arguments from enumeration iterator.
-    (i, args), state.enum_state = next(itr.enumerator, state.enum_state)
+    y = isdefined(state, :enum_state) ?
+        iterate(itr.enumerator, state.enum_state) :
+        iterate(itr.enumerator)
+    if y === nothing
+        wait_done(itr, state)
+        return nothing
+    end
+    (i, args), state.enum_state = y
     put!(state.chnl, (i, args))
 
     return (nothing, state)
@@ -370,29 +374,28 @@ end
 
 mutable struct AsyncGeneratorState
     i::Int
+    collector_done::Bool
     collector_state::AsyncCollectorState
+    AsyncGeneratorState(i::Int) = new(i, false)
 end
 
-start(itr::AsyncGenerator) = AsyncGeneratorState(0, start(itr.collector))
-
-# Done when source async collector is done and all results have been consumed.
-function done(itr::AsyncGenerator, state::AsyncGeneratorState)
-    done(itr.collector, state.collector_state) && isempty(itr.collector.results)
-end
-
-function next(itr::AsyncGenerator, state::AsyncGeneratorState)
+function iterate(itr::AsyncGenerator, state::AsyncGeneratorState=AsyncGeneratorState(0))
     state.i += 1
 
     results_dict = itr.collector.results
-    while !haskey(results_dict, state.i)
-        if done(itr.collector, state.collector_state)
-            # `done` waits for async tasks to finish. if we do not have the index
+    while !state.collector_done && !haskey(results_dict, state.i)
+        y = isdefined(state, :collector_state) ?
+            iterate(itr.collector, state.collector_state) :
+            iterate(itr.collector)
+        if y === nothing
+            # `check_done` waits for async tasks to finish. if we do not have the index
             # we are looking for, it is an error.
-            !haskey(results_dict, state.i) && error("Error processing index ", i)
+            state.collector_done = true
             break;
         end
-        _, state.collector_state = next(itr.collector, state.collector_state)
+        _, state.collector_state = y
     end
+    state.collector_done && isempty(results_dict) && return nothing
     r = results_dict[state.i]
     delete!(results_dict, state.i)
 

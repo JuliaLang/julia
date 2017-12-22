@@ -161,7 +161,7 @@ end
     max_pos = max_width <= 0 ? len : min(i + max_width - 1, len)
     d::Int64 = 0
     @inbounds while i <= max_pos
-        c, ii = next(str, i)
+        c, ii = iterate(str, i)
         if '0' <= c <= '9'
             d = d * 10 + (c - '0')
         else
@@ -180,7 +180,7 @@ end
     word_start, word_end = i, 0
     max_pos = maxchars <= 0 ? len : min(len, nextind(str, i, maxchars-1))
     @inbounds while i <= max_pos
-        c, ii = next(str, i)
+        c, ii = iterate(str, i)
         if isalpha(c)
             word_end = i
         else
@@ -205,7 +205,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     dy = val === nothing ? (@goto error) : val
     i > end_pos && @goto error
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)
     c != '-' && @goto error
     i > end_pos && @goto done
 
@@ -213,7 +213,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     dm = val === nothing ? (@goto error) : val
     i > end_pos && @goto done
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)
     c != '-' && @goto error
     i > end_pos && @goto done
 
@@ -221,7 +221,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     dd = val === nothing ? (@goto error) : val
     i > end_pos && @goto done
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)
     c != 'T' && @goto error
     i > end_pos && @goto done
 
@@ -229,7 +229,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     th = val === nothing ? (@goto error) : val
     i > end_pos && @goto done
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)
     c != ':' && @goto error
     i > end_pos && @goto done
 
@@ -237,7 +237,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     tm = val === nothing ? (@goto error) : val
     i > end_pos && @goto done
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)
     c != ':' && @goto error
     i > end_pos && @goto done
 
@@ -245,7 +245,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     ts = val === nothing ? (@goto error) : val
     i > end_pos && @goto done
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)
     c != '.' && @goto error
     i > end_pos && @goto done
 

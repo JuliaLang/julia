@@ -41,20 +41,13 @@ function dominated(domtree::DomTree, root::Int)
     doms
 end
 
-function start(doms::DominatedBlocks)
-    nothing
-end
-
-function next(doms::DominatedBlocks, state::Nothing)
+function iterate(doms::DominatedBlocks, state::Nothing=nothing)
+    isempty(doms.worklist) && return nothing
     bb = pop!(doms.worklist)
     for dominated in doms.domtree.nodes[bb].children
         push!(doms.worklist, dominated)
     end
     (bb, nothing)
-end
-
-function done(doms::DominatedBlocks, state::Nothing)
-    isempty(doms.worklist)
 end
 
 # Construct Dom Tree

@@ -208,10 +208,10 @@ end
     :(for i in 1
       end)
 end
-let
-    ast12474 = code_typed(f12474, Tuple{Float64})
+
+let ast12474 = code_typed(f12474, Tuple{Float64})
     @test isconcretetype(ast12474[1][2])
-    @test all(isconcretetype, ast12474[1][1].slottypes)
+    @test all(x->isconcretetype(Core.Compiler.typesubtract(x, Nothing)), ast12474[1][1].slottypes)
 end
 
 
@@ -484,7 +484,7 @@ function g19348(x)
     a, b = x
     g = 1
     g = 2
-    c = Base.indexed_next(x, g, g)
+    c = Base.indexed_iterate(x, g, g)
     return a + b + c[1]
 end
 

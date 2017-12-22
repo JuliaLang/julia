@@ -318,40 +318,19 @@ function GitBranchIter(repo::GitRepo, flags::Cint=Cint(Consts.BRANCH_LOCAL))
     return GitBranchIter(repo, bi_ptr[])
 end
 
-function Base.start(bi::GitBranchIter)
+function Base.iterate(bi::GitBranchIter, state=nothing)
     ref_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     btype = Ref{Cint}()
     err = ccall((:git_branch_next, :libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Ptr{Cint}, Ptr{Cvoid}),
                   ref_ptr_ptr, btype, bi.ptr)
-    err != Int(Error.GIT_OK) && return (nothing, -1, true)
-    return (GitReference(bi.owner, ref_ptr_ptr[]), btype[], false)
-end
-
-Base.done(bi::GitBranchIter, state) = Bool(state[3])
-
-function Base.next(bi::GitBranchIter, state)
-    ref_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
-    btype = Ref{Cint}()
-    err = ccall((:git_branch_next, :libgit2), Cint,
-                 (Ptr{Ptr{Cvoid}}, Ptr{Cint}, Ptr{Cvoid}),
-                  ref_ptr_ptr, btype, bi.ptr)
-    err != Int(Error.GIT_OK) && return (state[1:2], (nothing, -1, true))
-    return (state[1:2], (GitReference(bi.owner, ref_ptr_ptr[]), btype[], false))
+    if err == Cint(Error.GIT_OK)
+        return ((GitReference(bi.owner, ref_ptr_ptr[]), btype[]), nothing)
+    elseif err == Cint(Error.ITEROVER)
+        return nothing
+    else
+        throw(GitError(err))
+    end
 end
 
 Base.IteratorSize(::Type{GitBranchIter}) = Base.SizeUnknown()
-
-function Base.map(f::Function, bi::GitBranchIter)
-    res = nothing
-    s = start(bi)
-    while !done(bi, s)
-        val = f(s[1:2])
-        if res === nothing
-            res = Vector{typeof(val)}()
-        end
-        Base.push!(res, val)
-        val, s = next(bi, s)
-    end
-    return res
-end

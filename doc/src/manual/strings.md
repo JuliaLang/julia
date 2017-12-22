@@ -571,11 +571,6 @@ Some other useful functions include:
   * [`lastindex(str)`](@ref) gives the maximal (byte) index that can be used to index into `str`.
   * [`length(str)`](@ref) the number of characters in `str`.
   * [`length(str, i, j)`](@ref) the number of valid character indices in `str` from `i` to `j`.
-  * [`i = start(str)`](@ref start) gives the first valid index at which a character can be found in `str`
-    (typically 1).
-  * [`c, j = next(str,i)`](@ref next) returns next character at or after the index `i` and the next valid
-    character index following that. With [`start`](@ref) and [`lastindex`](@ref), can be used to iterate
-    through the characters in `str`.
   * [`thisind(str, i)`](@ref) given an arbitrary index into a string find the first index of the character into which the index points.
   * [`nextind(str, i, n=1)`](@ref) find the start of the `n`th character starting after index `i`.
   * [`prevind(str, i, n=1)`](@ref) find the start of the `n`th character starting before index `i`.

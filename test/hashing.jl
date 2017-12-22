@@ -98,6 +98,9 @@ vals = Any[
 
 for a in vals, b in vals
     @test isequal(a,b) == (hash(a)==hash(b))
+end
+
+for a in vals
     if a isa AbstractArray
         @test hash(a) == hash(Array(a)) == hash(Array{Any}(a))
     end
