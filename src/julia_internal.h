@@ -981,6 +981,12 @@ JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a);
 JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n);
 void jl_depwarn(const char *msg, jl_value_t *sym);
 
+// Log `msg` to the current logger by calling CoreLogging.logmsg_thunk() on the
+// julia side.
+void jl_log(int level, jl_module_t *module, const char *group, const char *id,
+            const char *file, int line, jl_value_t **kwargs, int kwargs_len,
+            const char *msg);
+
 int isabspath(const char *in);
 
 extern jl_sym_t *call_sym;    extern jl_sym_t *invoke_sym;

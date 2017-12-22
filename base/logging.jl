@@ -269,10 +269,9 @@ function logmsg_code(_module, file, line, level, message, exs...)
             if k == :_id
                 # id may be overridden if you really want several log
                 # statements to share the same id (eg, several pertaining to
-                # the same progress step).
-                #
-                # TODO: Refine this - doing it as is, is probably a bad idea
-                # for consistency, and is hard to make unique between modules.
+                # the same progress step).  In those cases it may be wise to
+                # manually call log_record_id to get a unique id in the same
+                # format.
                 id = esc(v)
             elseif k == :_module
                 _module = esc(v)
@@ -358,6 +357,15 @@ end
         end
     end
     nothing
+end
+
+# Log a message. Called from the julia C code; kwargs is in the format
+# Any[key1,val1, ...] for simplicity in construction on the C side.
+function logmsg_thunk(level, message, _module, group, id, file, line, kwargs)
+    real_kws = Any[(kwargs[i],kwargs[i+1]) for i in 1:2:length(kwargs)]
+    @logmsg(convert(LogLevel, level), message,
+            _module=_module, _id=id, _group=group,
+            _file=file, _line=line, real_kws...)
 end
 
 # Global log limiting mechanism for super fast but inflexible global log

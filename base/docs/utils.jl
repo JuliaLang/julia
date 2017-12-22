@@ -103,9 +103,7 @@ function helpmode(io::IO, line::AbstractString)
             # keyword such as `function` would throw a parse error due to the missing `end`.
             Symbol(line)
         else
-            x = Base.syntax_deprecation_warnings(false) do
-                Meta.parse(line, raise = false)
-            end
+            x = Meta.parse(line, raise = false, depwarn = false)
             # Retrieving docs for macros requires us to make a distinction between the text
             # `@macroname` and `@macroname()`. These both parse the same, but are used by
             # the docsystem to return different results. The first returns all documentation
