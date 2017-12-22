@@ -35,9 +35,7 @@ _setindex(v, i::Integer) = ()
 
 ## iterating ##
 
-start(t::Tuple) = 1
-done(t::Tuple, i::Int) = (length(t) < i)
-next(t::Tuple, i::Int) = (t[i], i+1)
+iterate(t::Tuple, i::Int=1) = length(t) < i ? nothing : (t[i], i+1)
 
 keys(t::Tuple) = OneTo(length(t))
 
@@ -56,9 +54,18 @@ end
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
-indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
-indexed_next(a::Array, i::Int, state) = (a[i], i+1)
-indexed_next(I, i, state) = done(I,state) ? throw(BoundsError(I, i)) : next(I, state)
+indexed_iterate(t::Tuple, i::Int, state=1) = (@_inline_meta; (t[i], i+1))
+indexed_iterate(a::Array, i::Int, state=1) = (@_inline_meta; (a[i], i+1))
+function indexed_iterate(I, i)
+    x = iterate(I)
+    x === nothing && throw(BoundsError(I, i))
+    x
+end
+function indexed_iterate(I, i, state)
+    x = iterate(I, state)
+    x === nothing && throw(BoundsError(I, i))
+    x
+end
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
@@ -229,25 +236,25 @@ function (T::All16{E,N})(itr) where {E,N}
     (elts...,)
 end
 
-(::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr, start(itr))
+(::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
 
-_totuple(::Type{Tuple{}}, itr, s) = ()
+_totuple(::Type{Tuple{}}, itr, s...) = ()
 
 function _totuple_err(@nospecialize T)
     @_noinline_meta
     throw(ArgumentError("too few elements for tuple type $T"))
 end
 
-function _totuple(T, itr, s)
+function _totuple(T, itr, s...)
     @_inline_meta
-    done(itr, s) && _totuple_err(T)
-    v, s = next(itr, s)
-    (convert(tuple_type_head(T), v), _totuple(tuple_type_tail(T), itr, s)...)
+    y = iterate(itr, s...)
+    y === nothing && _totuple_err(T)
+    (convert(tuple_type_head(T), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
 end
 
-_totuple(::Type{Tuple{Vararg{E}}}, itr, s) where {E} = (collect(E, Iterators.rest(itr,s))...,)
+_totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.rest(itr,s...))...,)
 
-_totuple(::Type{Tuple}, itr, s) = (collect(Iterators.rest(itr,s))...,)
+_totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 
 end
 

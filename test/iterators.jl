@@ -65,7 +65,7 @@ end
 # rest
 # ----
 let s = "hello"
-    _, st = next(s, start(s))
+    _, st = iterate(s)
     c = collect(rest(s, st))
     @test c == ['e','l','l','o']
     @test c isa Vector{Char}
@@ -363,7 +363,7 @@ end
 @test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) == Int8
 @test length(flatten(zip(1:3, 4:6))) == 6
 @test length(flatten(1:6)) == 6
-@test_throws ArgumentError collect(flatten(Any[]))
+@test collect(flatten(Any[])) == Any[]
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
 
@@ -527,5 +527,12 @@ end
         for x in a; x == 1 || break; end
         @test Base.peek(a) == 3
         @test sum(a) == 7
+    end
+    # Interaction of zip/Stateful
+    let a = Iterators.Stateful("a"), b = ""
+	@test isempty(collect(zip(a,b)))
+	@test !isempty(a)
+	@test isempty(collect(zip(b,a)))
+	@test !isempty(a)
     end
 end

@@ -176,7 +176,7 @@ julia> m.captures
 julia> m.match
 "aba"
 
-julia> match(rx, "cabac", 3) == nothing
+julia> match(rx, "cabac", 3) === nothing
 true
 ```
 """
@@ -229,7 +229,7 @@ ncodeunits(s::SubstitutionString) = ncodeunits(s.string)
 codeunit(s::SubstitutionString) = codeunit(s.string)
 codeunit(s::SubstitutionString, i::Integer) = codeunit(s.string, i)
 isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)
-next(s::SubstitutionString, i::Integer) = next(s.string, i)
+iterate(s::SubstitutionString, i::Integer...) = iterate(s.string, i...)
 
 function show(io::IO, s::SubstitutionString)
     print(io, "s")
@@ -319,24 +319,9 @@ struct RegexMatchIterator
 end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(::Type{RegexMatchIterator}) = RegexMatch
-start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1, UInt32(0))
-done(itr::RegexMatchIterator, prev_match) = (prev_match === nothing)
 IteratorSize(::Type{RegexMatchIterator}) = SizeUnknown()
 
-# Assumes prev_match is not nothing
-function next(itr::RegexMatchIterator, prev_match)
-    prevempty = isempty(prev_match.match)
-
-    if itr.overlap
-        if !prevempty
-            offset = nextind(itr.string, prev_match.offset)
-        else
-            offset = prev_match.offset
-        end
-    else
-        offset = prev_match.offset + ncodeunits(prev_match.match)
-    end
-
+function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,false))
     opts_nonempty = UInt32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
     while true
         mat = match(itr.regex, itr.string, offset,
@@ -351,10 +336,19 @@ function next(itr::RegexMatchIterator, prev_match)
                 break
             end
         else
-            return (prev_match, mat)
+            if itr.overlap
+                if !isempty(mat.match)
+                    offset = nextind(itr.string, mat.offset)
+                else
+                    offset = mat.offset
+                end
+            else
+                offset = mat.offset + ncodeunits(mat.match)
+            end
+            return (mat, (offset, isempty(mat.match)))
         end
     end
-    (prev_match, nothing)
+    nothing
 end
 
 """

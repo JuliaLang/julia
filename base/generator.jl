@@ -39,12 +39,11 @@ Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
 
 Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(a->T(a...), zip(I1, I2, Is...))
 
-start(g::Generator) = (@_inline_meta; start(g.iter))
-done(g::Generator, s) = (@_inline_meta; done(g.iter, s))
-function next(g::Generator, s)
+function iterate(g::Generator, s...)
     @_inline_meta
-    v, s2 = next(g.iter, s)
-    g.f(v), s2
+    y = iterate(g.iter, s...)::Union{Tuple{Any, Any}, Nothing}
+    y === nothing && return nothing
+    g.f(y[1]), y[2]
 end
 
 length(g::Generator) = length(g.iter)

@@ -379,25 +379,28 @@ end
 # simulate iteration protocol on container type up to fixpoint
 function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::InferenceState)
     tm = _topmod(sv)
-    if !isdefined(tm, :start) || !isdefined(tm, :next) || !isconst(tm, :start) || !isconst(tm, :next)
+    if !isdefined(tm, :iterate) || !isconst(tm, :iterate)
         return Vararg{Any}
     end
-    startf = getfield(tm, :start)
-    nextf = getfield(tm, :next)
-    statetype = abstract_call(startf, (), Any[Const(startf), itertype], vtypes, sv)
-    statetype === Bottom && return Bottom
-    valtype = Bottom
+    iteratef = getfield(tm, :iterate)
+    stateordonet = abstract_call(iteratef, (), Any[Const(iteratef), itertype], vtypes, sv)
+    # Return Bottom if this is not an iterator.
+    # WARNING: Changes to the iteration protocol must be reflected here,
+    # this is not just an optimization.
+    stateordonet === Bottom && return Bottom
+    valtype = statetype = Bottom
     while valtype !== Any
-        nt = abstract_call(nextf, (), Any[Const(nextf), itertype, statetype], vtypes, sv)
-        nt = widenconst(nt)
-        if !isa(nt, DataType) || !(nt <: Tuple) || isvatuple(nt) || length(nt.parameters) != 2
+        stateordonet = widenconst(stateordonet)
+        nounion = Nothing <: stateordonet ? typesubtract(stateordonet, Nothing) : stateordonet
+        if !isa(nounion, DataType) || !(nounion <: Tuple) || isvatuple(nounion) || length(nounion.parameters) != 2
             return Vararg{Any}
         end
-        if nt.parameters[1] <: valtype && nt.parameters[2] <: statetype
+        if nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype
             break
         end
-        valtype = tmerge(valtype, nt.parameters[1])
-        statetype = tmerge(statetype, nt.parameters[2])
+        valtype = tmerge(valtype, nounion.parameters[1])
+        statetype = tmerge(statetype, nounion.parameters[2])
+        stateordonet = abstract_call(iteratef, (), Any[Const(iteratef), itertype, statetype], vtypes, sv)
     end
     return Vararg{valtype}
 end

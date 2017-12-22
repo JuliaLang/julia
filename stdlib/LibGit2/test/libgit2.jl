@@ -885,7 +885,7 @@ mktempdir() do dir
                         @test LibGit2.lookup_branch(repo, test_branch2, true) === nothing
                     end
                 end
-                branches = LibGit2.map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
+                branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
                 @test master_branch in branches
                 @test test_branch in branches
             end
@@ -1364,7 +1364,7 @@ mktempdir() do dir
                 @test tag2 in tags
 
                 # all tag in place
-                branches = LibGit2.map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
+                branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
                 @test master_branch in branches
                 @test test_branch in branches
 

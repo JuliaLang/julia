@@ -187,9 +187,7 @@ first(c::AbstractChar) = c
 last(c::AbstractChar) = c
 eltype(::Type{T}) where {T<:AbstractChar} = T
 
-start(c::AbstractChar) = false
-next(c::AbstractChar, state) = (c, true)
-done(c::AbstractChar, state) = state
+iterate(c::AbstractChar, done=false) = done ? nothing : (c, true)
 isempty(c::AbstractChar) = false
 in(x::AbstractChar, y::AbstractChar) = x == y
 

@@ -167,14 +167,13 @@ rate in the interval `factor` * (1 ± `jitter`).  The first element is
 """
 ExponentialBackOff(; n=1, first_delay=0.05, max_delay=10.0, factor=5.0, jitter=0.1) =
     ExponentialBackOff(n, first_delay, max_delay, factor, jitter)
-start(ebo::ExponentialBackOff) = (ebo.n, min(ebo.first_delay, ebo.max_delay))
-function next(ebo::ExponentialBackOff, state)
+function iterate(ebo::ExponentialBackOff, state= (ebo.n, min(ebo.first_delay, ebo.max_delay)))
+    state[1] < 1 && return nothing
     next_n = state[1]-1
     curr_delay = state[2]
     next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (rand(Float64) * 2.0 * ebo.jitter)))
     (curr_delay, (next_n, next_delay))
 end
-done(ebo::ExponentialBackOff, state) = state[1]<1
 length(ebo::ExponentialBackOff) = ebo.n
 eltype(::Type{ExponentialBackOff}) = Float64
 
@@ -197,20 +196,23 @@ retry(read, check=(s,e)->isa(e, UVError))(io, 128; all=false)
 """
 function retry(f::Function;  delays=ExponentialBackOff(), check=nothing)
     (args...; kwargs...) -> begin
-        state = start(delays)
-        while true
+        y = iterate(delays)
+        while y !== nothing
+            (delay, state) = y
             try
                 return f(args...; kwargs...)
             catch e
-                done(delays, state) && rethrow(e)
+                y === nothing && rethrow(e)
                 if check !== nothing
                     result = check(state, e)
                     state, retry_or_not = length(result) == 2 ? result : (state, result)
                     retry_or_not || rethrow(e)
                 end
             end
-            (delay, state) = next(delays, state)
             sleep(delay)
+            y = iterate(delays, state)
         end
+        # When delays is out, just run the function without try/catch
+        return f(args...; kwargs...)
     end
 end

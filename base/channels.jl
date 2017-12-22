@@ -381,28 +381,16 @@ eltype(::Type{Channel{T}}) where {T} = T
 
 show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
 
-mutable struct ChannelIterState{T}
-    hasval::Bool
-    val::T
-    ChannelIterState{T}(has::Bool) where {T} = new(has)
-end
-
-start(c::Channel{T}) where {T} = ChannelIterState{T}(false)
-function done(c::Channel, state::ChannelIterState)
+function iterate(c::Channel, state=nothing)
     try
-        # we are waiting either for more data or channel to be closed
-        state.hasval && return false
-        state.val = take!(c)
-        state.hasval = true
-        return false
+        return (take!(c), nothing)
     catch e
         if isa(e, InvalidStateException) && e.state==:closed
-            return true
+            return nothing
         else
             rethrow(e)
         end
     end
 end
-next(c::Channel, state) = (v=state.val; state.hasval=false; (v, state))
 
 IteratorSize(::Type{<:Channel}) = SizeUnknown()

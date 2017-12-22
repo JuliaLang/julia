@@ -153,16 +153,13 @@ end
 end
 
 @testset "iterating" begin
-    @test start((1,2,3)) === 1
-
-    @test done((), 1)
-    @test !done((1,2,3), 3)
-    @test done((1,2,3), 4)
-
-    @test next((5,6,7), 1) === (5, 2)
-    @test next((5,6,7), 3) === (7, 4)
-    @test_throws BoundsError next((5,6,7), 0)
-    @test_throws BoundsError next((), 1)
+    @test iterate(()) === nothing
+    t = (1,2,3)
+    y1 = iterate(t)
+    y2 = iterate(t, y1[2])
+    y3 = iterate(t, y2[2])
+    @test y3 !== nothing
+    @test iterate(t, y3[2]) === nothing
 
     @test eachindex((2,5,"foo")) === Base.OneTo(3)
     @test eachindex((2,5,"foo"), (1,2,5,7)) === Base.OneTo(4)
