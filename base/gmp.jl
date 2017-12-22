@@ -55,7 +55,7 @@ mutable struct BigInt <: Signed
     function BigInt()
         b = new(zero(Cint), zero(Cint), C_NULL)
         MPZ.init!(b)
-        finalizer(cglobal((:__gmpz_clear, :libgmp)), b)
+        finalizer(b, cglobal((:__gmpz_clear, :libgmp)))
         return b
     end
 end

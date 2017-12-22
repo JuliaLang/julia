@@ -836,9 +836,7 @@ function setup_interface(
         try
             hist_path = find_hist_file()
             f = open(hist_path, true, true, true, false, false)
-            finalizer(replc) do replc
-                close(f)
-            end
+            finalizer(replc, replc->close(f))
             hist_from_file(hp, f, hist_path)
         catch e
             print_response(repl, e, catch_backtrace(), true, Base.have_color)

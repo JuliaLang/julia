@@ -223,7 +223,7 @@ mutable struct CachingPool <: AbstractWorkerPool
 
     function CachingPool()
         wp = new(Channel{Int}(typemax(Int)), Set{Int}(), Dict{Int, Function}())
-        finalizer(clear!, wp)
+        finalizer(wp, clear!)
         wp
     end
 end

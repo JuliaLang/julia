@@ -133,7 +133,7 @@ end
 # make sure repeating timers work
 @noinline function make_unrooted_timer(a)
     t = Timer(0.0, 0.1)
-    finalizer(t -> a[] += 1, t)
+    finalizer(t, t -> a[] += 1)
     wait(t)
     e = @elapsed for i = 1:5
         wait(t)

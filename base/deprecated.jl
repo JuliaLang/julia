@@ -2218,16 +2218,6 @@ end
 @deprecate cumsum(A::AbstractArray)     cumsum(A, 1)
 @deprecate cumprod(A::AbstractArray)    cumprod(A, 1)
 
-# issue #16307
-@deprecate finalizer(o, f::Function) finalizer(f, o)
-# This misses other callables but they are very rare in the wild
-@deprecate finalizer(o, f::Ptr{Cvoid}) finalizer(f, o)
-
-# Avoid ambiguity, can remove when deprecations are removed:
-# This is almost certainly going to be a silent failure for code that is not updated.
-finalizer(f::Ptr{Cvoid}, o::Ptr{Cvoid}) = invoke(finalizer, Tuple{Ptr{Cvoid}, Any}, f, o)
-finalizer(f::Ptr{Cvoid}, o::Function) = invoke(finalizer, Tuple{Ptr{Cvoid}, Any}, f, o)
-
 # Broadcast extension API (#23939)
 @eval Broadcast begin
     Base.@deprecate_binding containertype combine_styles false

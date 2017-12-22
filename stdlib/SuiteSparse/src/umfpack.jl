@@ -146,7 +146,7 @@ function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
                     zerobased ? copy(S.colptr) : decrement(S.colptr),
                     zerobased ? copy(S.rowval) : decrement(S.rowval),
                     copy(S.nzval))
-    finalizer(umfpack_free_symbolic, res)
+    finalizer(res, umfpack_free_symbolic)
     umfpack_numeric!(res)
 end
 lufact(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) where {Ti<:UMFITypes} =
