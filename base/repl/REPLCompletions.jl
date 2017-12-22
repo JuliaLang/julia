@@ -192,7 +192,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
         end
     end
 
-    matchList = String[replace(s, r"\s", "\\ ") for s in matches]
+    matchList = String[replace(s, r"\s" => "\\ ") for s in matches]
     startpos = pos - endof(prefix) + 1 - length(matchall(r" ", prefix))
     # The pos - endof(prefix) + 1 is correct due to `endof(prefix)-endof(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
@@ -503,15 +503,15 @@ function completions(string, pos)
         startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
 
-        expanded = complete_expanduser(replace(string[r], r"\\ ", " "), r)
+        expanded = complete_expanduser(replace(string[r], r"\\ " => " "), r)
         expanded[3] && return expanded  # If user expansion available, return it
 
-        paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
+        paths, r, success = complete_path(replace(string[r], r"\\ " => " "), pos)
 
         if inc_tag == :string &&
            length(paths) == 1 &&  # Only close if there's a single choice,
            !isdir(expanduser(replace(string[startpos:prevind(string, start(r))] * paths[1],
-                                     r"\\ ", " "))) &&  # except if it's a directory
+                                     r"\\ " => " "))) &&  # except if it's a directory
            (length(string) <= pos ||
             string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
             paths[1] *= "\""

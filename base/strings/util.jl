@@ -373,8 +373,8 @@ _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
-# TODO: rename to `replace` when `replace` is removed from deprecated.jl
-function replace_new(str::String, pattern, repl, count::Integer)
+function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
+    pattern, repl = pat_repl
     count == 0 && return str
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
     n = 1
@@ -407,11 +407,11 @@ function replace_new(str::String, pattern, repl, count::Integer)
 end
 
 """
-    replace(s::AbstractString, pat, r, [count::Integer])
+    replace(s::AbstractString, pat=>r; [count::Integer])
 
 Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
 If `count` is provided, replace at most `count` occurrences.
-As with [`search`](@ref), the second argument may be a
+As with [`search`](@ref), `pat` may be a
 single character, a vector or a set of characters, a string, or a regular expression. If `r`
 is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
@@ -420,20 +420,18 @@ To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`)
 
 # Examples
 ```jldoctest
-julia> replace("Python is a programming language.", "Python", "Julia")
+julia> replace("Python is a programming language.", "Python" => "Julia")
 "Julia is a programming language."
 
-julia> replace("The quick foxes run quickly.", "quick", "slow", 1)
+julia> replace("The quick foxes run quickly.", "quick" => "slow", count=1)
 "The slow foxes run quickly."
 
-julia> replace("The quick foxes run quickly.", "quick", "", 1)
+julia> replace("The quick foxes run quickly.", "quick" => "", count=1)
 "The  foxes run quickly."
 ```
 """
-replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int))
-# TODO: change this to the following when `replace` is removed from deprecated.jl:
-# replace(s::AbstractString, pat, f, count::Integer=typemax(Int)) =
-#     replace(String(s), pat, f, count)
+replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =
+    replace(String(s), pat_f, count=count)
 
 # TODO: allow transform as the first argument to replace?
 

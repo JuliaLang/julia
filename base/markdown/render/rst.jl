@@ -124,7 +124,7 @@ end
 
 rstinline(io::IO, f::Footnote) = print(io, "[", f.id, "]_")
 
-rstescape(s) = replace(s, "\\", "\\\\")
+rstescape(s) = replace(s, "\\" => "\\\\")
 
 rstinline(io::IO, s::AbstractString) = print(io, rstescape(s))
 

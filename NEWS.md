@@ -632,8 +632,9 @@ Deprecated or removed
 
   * `?` can no longer be used as an identifier name ([#22712])
 
-  * The method `replace(s::AbstractString, pat, r, count)` with `count <= 0` is deprecated
-    in favor of `replace(s::AbstractString, pat, r, typemax(Int))` ([#22325]).
+  * The method `replace(s::AbstractString, pat, r, [count])` is deprecated
+    in favor of `replace(s::AbstractString, pat => r; [count])` ([#25165]).
+    Moreover, `count` cannot be negative anymore (use `typemax(Int)` instead ([#22325]).
 
   * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(dims))` ([#21450]).
 

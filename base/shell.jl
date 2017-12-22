@@ -222,11 +222,11 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
             return true
         end
         if all(isword, arg)
-            have_single && (arg = replace(arg, '\'', "\\'"))
-            have_double && (arg = replace(arg, '"', "\\\""))
+            have_single && (arg = replace(arg, '\'' => "\\'"))
+            have_double && (arg = replace(arg, '"' => "\\\""))
             print(io, arg)
         else
-            print(io, '\'', replace(arg, '\'', "'\\''"), '\'')
+            print(io, '\'', replace(arg, '\'' => "'\\''"), '\'')
         end
         first = false
     end

@@ -203,7 +203,7 @@ function url(m::Method)
     file = string(m.file)
     line = m.line
     line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
-    Sys.iswindows() && (file = replace(file, '\\', '/'))
+    Sys.iswindows() && (file = replace(file, '\\' => '/'))
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
             # this url will only work if we're on a tagged release

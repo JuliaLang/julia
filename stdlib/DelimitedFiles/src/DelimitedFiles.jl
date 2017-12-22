@@ -380,7 +380,7 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
 
         # fill data
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
-            unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"", "\"")
+            unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"" => "\"")
             fail = colval(unescaped, 1, endof(unescaped), cells, drow, col)
         else
             fail = colval(sbuff, startpos, endpos, cells, drow, col)
@@ -399,7 +399,7 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
     else
         # fill header
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
-            unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"", "\"")
+            unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"" => "\"")
             colval(unescaped, 1, endof(unescaped), dlmstore.hdr, 1, col)
         else
             colval(sbuff, startpos, endpos, dlmstore.hdr, 1, col)
@@ -733,7 +733,7 @@ end
 writedlm_cell(io::IO, elt::AbstractFloat, dlm, quotes) = print_shortest(io, elt)
 function writedlm_cell(io::IO, elt::AbstractString, dlm::T, quotes::Bool) where T
     if quotes && !isempty(elt) && (('"' in elt) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm)))
-        print(io, '"', replace(elt, r"\"", "\"\""), '"')
+        print(io, '"', replace(elt, r"\"" => "\"\""), '"')
     else
         print(io, elt)
     end

@@ -704,7 +704,7 @@ end
 let path = tempdir(),
     space_folder = randstring() * " α",
     dir = joinpath(path, space_folder),
-    dir_space = replace(space_folder, " ", "\\ ")
+    dir_space = replace(space_folder, " " => "\\ ")
 
     mkdir(dir)
     cd(path) do
