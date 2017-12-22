@@ -1555,8 +1555,19 @@ export hex2num
 @deprecate ctranspose adjoint
 @deprecate ctranspose! adjoint!
 
-@deprecate convert(::Type{Vector{UInt8}}, s::AbstractString)  Vector{UInt8}(s)
-@deprecate convert(::Type{Array{UInt8}}, s::AbstractString)   Vector{UInt8}(s)
+function convert(::Union{Type{Vector{UInt8}}, Type{Array{UInt8}}}, s::AbstractString)
+    depwarn("Strings can no longer be `convert`ed to byte arrays. Use `unsafe_wrap` or `codeunits` instead.", :Type)
+    unsafe_wrap(Vector{UInt8}, String(s))
+end
+function (::Type{Vector{UInt8}})(s::String)
+    depwarn("Vector{UInt8}(s::String) will copy data in the future. To avoid copying, use `unsafe_wrap` or `codeunits` instead.", :Type)
+    unsafe_wrap(Vector{UInt8}, s)
+end
+function (::Type{Array{UInt8}})(s::String)
+    depwarn("Array{UInt8}(s::String) will copy data in the future. To avoid copying, use `unsafe_wrap` or `codeunits` instead.", :Type)
+    unsafe_wrap(Vector{UInt8}, s)
+end
+
 @deprecate convert(::Type{Vector{Char}}, s::AbstractString)   Vector{Char}(s)
 @deprecate convert(::Type{Symbol}, s::AbstractString)         Symbol(s)
 @deprecate convert(::Type{String}, s::Symbol)                 String(s)

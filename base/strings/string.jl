@@ -60,7 +60,11 @@ This representation is often appropriate for passing strings to C.
 String(s::AbstractString) = print_to_string(s)
 String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
-(::Type{Vector{UInt8}})(s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
+unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
+
+(::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(uninitialized, length(s)), s)
+
+String(s::CodeUnits{UInt8,String}) = s.s
 
 ## low-level functions ##
 

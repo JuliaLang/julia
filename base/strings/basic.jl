@@ -152,7 +152,6 @@ end
 getindex(s::AbstractString, i::Colon) = s
 # TODO: handle other ranges with stride ±1 specially?
 # TODO: add more @propagate_inbounds annotations?
-getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)
 getindex(s::AbstractString, v::AbstractVector{<:Integer}) =
     sprint(io->(for i in v; write(io, s[i]) end), sizehint=length(v))
 getindex(s::AbstractString, v::AbstractVector{Bool}) =
@@ -185,8 +184,8 @@ checkbounds(s::AbstractString, I::Union{Integer,AbstractArray}) =
 string() = ""
 string(s::AbstractString) = s
 
-(::Type{Vector{UInt8}})(s::AbstractString) = Vector{UInt8}(String(s))
-(::Type{Array{UInt8}})(s::AbstractString) = Vector{UInt8}(s)
+(::Type{Vector{UInt8}})(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
+(::Type{Array{UInt8}})(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
 (::Type{Vector{Char}})(s::AbstractString) = collect(s)
 
 Symbol(s::AbstractString) = Symbol(String(s))
@@ -629,3 +628,40 @@ next(r::Iterators.Reverse{<:AbstractString}, i) = (r.itr[i], prevind(r.itr, i))
 start(r::Iterators.Reverse{<:EachStringIndex}) = endof(r.itr.s)
 done(r::Iterators.Reverse{<:EachStringIndex}, i) = i < start(r.itr.s)
 next(r::Iterators.Reverse{<:EachStringIndex}, i) = (i, prevind(r.itr.s, i))
+
+## code unit access ##
+
+"""
+    CodeUnits(s::AbstractString)
+
+Wrap a string (without copying) in an immutable vector-like object that accesses the code units
+of the string's representation.
+"""
+struct CodeUnits{T,S<:AbstractString} <: DenseVector{T}
+    s::S
+    CodeUnits(s::S) where {S<:AbstractString} = new{codeunit(s),S}(s)
+end
+
+length(s::CodeUnits) = ncodeunits(s.s)
+sizeof(s::CodeUnits{T}) where {T} = ncodeunits(s.s) * sizeof(T)
+size(s::CodeUnits) = (length(s),)
+strides(s::CodeUnits) = (1,)
+@propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
+IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
+start(s::CodeUnits) = 1
+next(s::CodeUnits, i) = (@_propagate_inbounds_meta; (s[i], i+1))
+done(s::CodeUnits, i) = (@_inline_meta; i == length(s)+1)
+
+write(io::IO, s::CodeUnits) = write(io, s.s)
+
+unsafe_convert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = unsafe_convert(Ptr{T}, s.s)
+unsafe_convert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = unsafe_convert(Ptr{Int8}, s.s)
+
+"""
+    codeunits(s::AbstractString)
+
+Obtain a vector-like object containing the code units of a string.
+Returns a `CodeUnits` wrapper by default, but `codeunits` may optionally be defined
+for new string types if necessary.
+"""
+codeunits(s::AbstractString) = CodeUnits(s)

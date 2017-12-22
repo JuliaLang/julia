@@ -155,3 +155,5 @@ function reverse(s::Union{String,SubString{String}})::String
         end
     end
 end
+
+getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)

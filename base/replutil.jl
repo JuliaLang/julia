@@ -283,7 +283,7 @@ function showerror(io::IO, ex::ErrorException)
     print(io, ex.msg)
     if ex.msg == "type String has no field data"
         println(io)
-        print(io, "Use `Vector{UInt8}(str)` instead.")
+        print(io, "Use `codeunits(str)` instead.")
     end
 end
 showerror(io::IO, ex::KeyError) = print(io, "KeyError: key $(repr(ex.key)) not found")

@@ -706,7 +706,7 @@ function readuntil(io::IO, target::AbstractString)
     # decide how we can index target
     if target isa String
         # convert String to a utf8-byte-iterator
-        target = Vector{UInt8}(target)
+        target = codeunits(target)
     #elseif applicable(codeunit, target)
     #   TODO: a more general version of above optimization
     #         would be to permit accessing any string via codeunit

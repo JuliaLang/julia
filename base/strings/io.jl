@@ -188,8 +188,8 @@ julia> String(take!(io))
 "Haho"
 ```
 """
-IOBuffer(str::String) = IOBuffer(Vector{UInt8}(str))
-IOBuffer(s::SubString{String}) = IOBuffer(view(Vector{UInt8}(s.string), s.offset + 1 : s.offset + sizeof(s)))
+IOBuffer(str::String) = IOBuffer(unsafe_wrap(Vector{UInt8}, str))
+IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.string), s.offset + 1 : s.offset + sizeof(s)))
 
 # join is implemented using IO
 
@@ -373,7 +373,10 @@ function unescape_string(io, s::AbstractString)
     end
 end
 
-macro b_str(s); :(Vector{UInt8}($(unescape_string(s)))); end
+macro b_str(s)
+    v = Vector{UInt8}(codeunits(unescape_string(s)))
+    QuoteNode(v)
+end
 
 """
     @raw_str -> String

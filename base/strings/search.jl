@@ -31,7 +31,7 @@ function search(a::ByteArray, b::Char, i::Integer = 1)
     if isascii(b)
         search(a,UInt8(b),i)
     else
-        search(a,Vector{UInt8}(string(b)),i).start
+        search(a,unsafe_wrap(Vector{UInt8},string(b)),i).start
     end
 end
 
@@ -62,7 +62,7 @@ function rsearch(a::ByteArray, b::Char, i::Integer = length(a))
     if isascii(b)
         rsearch(a,UInt8(b),i)
     else
-        rsearch(a,Vector{UInt8}(string(b)),i).start
+        rsearch(a,unsafe_wrap(Vector{UInt8},string(b)),i).start
     end
 end
 

@@ -183,9 +183,6 @@ macro MIME_str(s)
     :(MIME{$(Expr(:quote, Symbol(s)))})
 end
 
-include("char.jl")
-include("strings/string.jl")
-
 # SIMD loops
 include("simdloop.jl")
 using .SimdLoop
@@ -211,6 +208,10 @@ include("set.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate
 using .Iterators: Flatten, product  # for generators
+
+include("char.jl")
+include("strings/basic.jl")
+include("strings/string.jl")
 
 # Definition of StridedArray
 StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}

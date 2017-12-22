@@ -15,6 +15,7 @@ Base.transcode
 Base.unsafe_string
 Base.ncodeunits(::AbstractString)
 Base.codeunit
+Base.codeunits
 Base.ascii
 Base.@r_str
 Base.@raw_str
