@@ -234,12 +234,12 @@ end
 function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     braces = 0
     r = reverse(s)
-    i = start(r)
+    i = firstindex(r)
     in_single_quotes = false
     in_double_quotes = false
     in_back_ticks = false
-    while !done(r, i)
-        c, i = next(r, i)
+    while i <= ncodeunits(r)
+        c, i = iterate(r, i)
         if !in_single_quotes && !in_double_quotes && !in_back_ticks
             if c == c_start
                 braces += 1
@@ -254,13 +254,13 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
             end
         else
             if !in_back_ticks && !in_double_quotes &&
-                c == '\'' && !done(r, i) && next(r, i)[1] != '\\'
+                c == '\'' && i <= ncodeunits(r) && iterate(r, i)[1] != '\\'
                 in_single_quotes = !in_single_quotes
             elseif !in_back_ticks && !in_single_quotes &&
-                c == '"' && !done(r, i) && next(r, i)[1] != '\\'
+                c == '"' && i <= ncodeunits(r) && iterate(r, i)[1] != '\\'
                 in_double_quotes = !in_double_quotes
             elseif !in_single_quotes && !in_double_quotes &&
-                c == '`' && !done(r, i) && next(r, i)[1] != '\\'
+                c == '`' && i <= ncodeunits(r) && iterate(r, i)[1] != '\\'
                 in_back_ticks = !in_back_ticks
             end
         end
@@ -516,7 +516,7 @@ function completions(string, pos)
 
         if inc_tag == :string &&
            length(paths) == 1 &&  # Only close if there's a single choice,
-           !isdir(expanduser(replace(string[startpos:prevind(string, start(r))] * paths[1],
+           !isdir(expanduser(replace(string[startpos:prevind(string, first(r))] * paths[1],
                                      r"\\ " => " "))) &&  # except if it's a directory
            (length(string) <= pos ||
             string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
@@ -537,7 +537,7 @@ function completions(string, pos)
         frange, method_name_end = find_start_brace(partial)
         ex = Meta.parse(partial[frange] * ")", raise=false, depwarn=false)
         if isa(ex, Expr) && ex.head==:call
-            return complete_methods(ex), start(frange):method_name_end, false
+            return complete_methods(ex), first(frange):method_name_end, false
         end
     elseif inc_tag == :comment
         return String[], 0:-1, false
@@ -605,7 +605,7 @@ function completions(string, pos)
                     c_start='['; c_end=']'
                 end
                 frange, end_of_identifier = find_start_brace(string[1:prevind(string, i)], c_start=c_start, c_end=c_end)
-                startpos = start(frange)
+                startpos = first(frange)
                 i = prevind(string, startpos)
             elseif c in ["\'\"\`"...]
                 s = "$c$c"*string[startpos:pos]

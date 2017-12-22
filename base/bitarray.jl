@@ -323,9 +323,10 @@ dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool}) =
 
 
 ## custom iterator ##
-start(B::BitArray) = 0
-next(B::BitArray, i::Int) = (B.chunks[_div64(i)+1] & (UInt64(1)<<_mod64(i)) != 0, i+1)
-done(B::BitArray, i::Int) = i >= length(B)
+function iterate(B::BitArray, i::Int=0)
+    i >= length(B) && return nothing
+    (B.chunks[_div64(i)+1] & (UInt64(1)<<_mod64(i)) != 0, i+1)
+end
 
 ## similar, fill!, copy! etc ##
 
@@ -536,7 +537,7 @@ convert(T::Type{<:BitArray}, a::AbstractArray) = a isa T ? a : T(a)
 
 # generic constructor from an iterable without compile-time info
 # (we pass start(itr) explicitly to avoid a type-instability with filters)
-gen_bitarray(isz::IteratorSize, itr) = gen_bitarray_from_itr(itr, start(itr))
+gen_bitarray(isz::IteratorSize, itr) = gen_bitarray_from_itr(itr)
 
 # generic iterable with known shape
 function gen_bitarray(::HasShape, itr)
@@ -550,11 +551,11 @@ end
 # generator with known shape or length
 function gen_bitarray(::HasShape, itr::Generator)
     B = BitArray(undef, size(itr))
-    return fill_bitarray_from_itr!(B, itr, start(itr))
+    return fill_bitarray_from_itr!(B, itr)
 end
 function gen_bitarray(::HasLength, itr)
     b = BitVector(undef, length(itr))
-    return fill_bitarray_from_itr!(b, itr, start(itr))
+    return fill_bitarray_from_itr!(b, itr)
 end
 
 gen_bitarray(::IsInfinite, itr) =  throw(ArgumentError("infinite-size iterable used in BitArray constructor"))
@@ -562,14 +563,15 @@ gen_bitarray(::IsInfinite, itr) =  throw(ArgumentError("infinite-size iterable u
 # The aux functions gen_bitarray_from_itr and fill_bitarray_from_itr! both
 # use a Vector{Bool} cache for performance reasons
 
-function gen_bitarray_from_itr(itr, st)
+function gen_bitarray_from_itr(itr)
     B = empty!(BitVector(undef, bitcache_size))
     C = Vector{Bool}(undef, bitcache_size)
     Bc = B.chunks
     ind = 1
     cind = 1
-    while !done(itr, st)
-        x, st = next(itr, st)
+    y = iterate(itr)
+    while y !== nothing
+        x, st = y
         @inbounds C[ind] = x
         ind += 1
         if ind > bitcache_size
@@ -578,6 +580,7 @@ function gen_bitarray_from_itr(itr, st)
             cind += bitcache_chunks
             ind = 1
         end
+        y = iterate(itr, st)
     end
     if ind > 1
         @inbounds C[ind:bitcache_size] = false
@@ -587,14 +590,15 @@ function gen_bitarray_from_itr(itr, st)
     return B
 end
 
-function fill_bitarray_from_itr!(B::BitArray, itr, st)
+function fill_bitarray_from_itr!(B::BitArray, itr)
     n = length(B)
     C = Vector{Bool}(undef, bitcache_size)
     Bc = B.chunks
     ind = 1
     cind = 1
-    while !done(itr, st)
-        x, st = next(itr, st)
+    y = iterate(itr)
+    while y !== nothing
+        x, st = y
         @inbounds C[ind] = x
         ind += 1
         if ind > bitcache_size
@@ -602,6 +606,7 @@ function fill_bitarray_from_itr!(B::BitArray, itr, st)
             cind += bitcache_chunks
             ind = 1
         end
+        y = iterate(itr, st)
     end
     if ind > 1
         @inbounds C[ind:bitcache_size] = false
@@ -956,16 +961,17 @@ end
 
 function deleteat!(B::BitVector, inds)
     n = new_l = length(B)
-    s = start(inds)
-    done(inds, s) && return B
+    y = iterate(inds)
+    y === nothing && return B
 
     Bc = B.chunks
 
-    (p, s) = next(inds, s)
+    (p, s) = y
     q = p+1
     new_l -= 1
-    while !done(inds, s)
-        (i,s) = next(inds, s)
+    y = iterate(inds, s)
+    while y !== nothing
+        (i, s) = y
         if !(q <= i <= n)
             i < q && throw(ArgumentError("indices must be unique and sorted"))
             throw(BoundsError(B, i))
@@ -976,6 +982,7 @@ function deleteat!(B::BitVector, inds)
             p += i-q
         end
         q = i+1
+        y = iterate(inds, s)
     end
 
     q <= n && copy_chunks!(Bc, p, Bc, q, n-q+1)
@@ -1141,14 +1148,14 @@ end
 for f in (:+, :-)
     @eval function ($f)(A::BitArray, B::BitArray)
         r = Array{Int}(undef, promote_shape(size(A), size(B)))
-        ai = start(A)
-        bi = start(B)
+        ay, by = iterate(A), iterate(B)
         ri = 1
-        while !done(A, ai)
-            a, ai = next(A, ai)
-            b, bi = next(B, bi)
-            @inbounds r[ri] = ($f)(a, b)
+        # promote_shape guarantees that A and B have the
+        # same iteration space
+        while ay !== nothing
+            @inbounds r[ri] = ($f)(ay[1], by[1])
             ri += 1
+            ay, by = iterate(A, ay[2]), iterate(B, by[2])
         end
         return r
     end

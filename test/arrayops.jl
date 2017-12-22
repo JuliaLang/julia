@@ -1711,34 +1711,35 @@ end
 @test hash(CartesianIndex()) == Base.IteratorsMD.cartindexhash_seed
 @test hash(CartesianIndex(1, 2)) != hash((1, 2))
 
-@testset "itr, start, done, next" begin
+@testset "itr, iterate" begin
     r = 2:3
     itr = eachindex(r)
-    state = start(itr)
-    @test !done(itr, state)
-    _, state = next(itr, state)
-    @test !done(itr, state)
-    val, state = next(itr, state)
-    @test done(itr, state)
+    y = iterate(itr)
+    @test y !== nothing
+    y = iterate(itr, y[2])
+    @test y !== nothing
+    val, _ = y
+    y = iterate(itr, y[2])
+    @test y === nothing
     @test r[val] == 3
     r = sparse(2:3:8)
     itr = eachindex(r)
-    state = start(itr)
-    @test !done(itr, state)
-    _, state = next(itr, state)
-    _, state = next(itr, state)
-    @test !done(itr, state)
-    val, state = next(itr, state)
+    y = iterate(itr)
+    @test y !== nothing
+    y = iterate(itr, y[2])
+    y = iterate(itr, y[2])
+    @test y !== nothing
+    val, state = y
     @test r[val] == 8
-    @test done(itr, state)
+    @test iterate(itr, state) == nothing
 end
 
 R = CartesianIndices((1,3))
-@test done(R, start(R)) == false
+@test iterate(R) !== nothing
 R = CartesianIndices((0,3))
-@test done(R, start(R)) == true
+@test iterate(R) === nothing
 R = CartesianIndices((3,0))
-@test done(R, start(R)) == true
+@test iterate(R) === nothing
 
 @testset "multi-array eachindex" begin
     local a = zeros(2,2)

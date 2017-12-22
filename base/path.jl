@@ -338,13 +338,13 @@ if Sys.iswindows()
 expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
 else
 function expanduser(path::AbstractString)
-    i = start(path)
-    if done(path,i) return path end
-    c, i = next(path,i)
+    y = iterate(path)
+    y === nothing && return path
+    c, i = y
     if c != '~' return path end
-    if done(path,i) return homedir() end
-    c, j = next(path,i)
-    if c == '/' return homedir()*path[i:end] end
+    y = iterate(path, i)
+    if y == nothing return homedir() end
+    if y[1] == '/' return homedir()*path[i:end] end
     throw(ArgumentError("~user tilde expansion not yet implemented"))
 end
 end

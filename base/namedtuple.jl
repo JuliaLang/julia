@@ -92,14 +92,12 @@ end
 end # if Base
 
 length(t::NamedTuple) = nfields(t)
-start(t::NamedTuple) = 1
-done(t::NamedTuple, iter) = iter > nfields(t)
-next(t::NamedTuple, iter) = (getfield(t, iter), iter + 1)
+iterate(t::NamedTuple, iter=1) = iter > nfields(t) ? nothing : (getfield(t, iter), iter + 1)
 firstindex(t::NamedTuple) = 1
 lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
 getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
-indexed_next(t::NamedTuple, i::Int, state) = (getfield(t, i), i+1)
+indexed_iterate(t::NamedTuple, i::Int, state=1) = (getfield(t, i), i+1)
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
 

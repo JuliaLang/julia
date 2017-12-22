@@ -1585,6 +1585,11 @@ end
 # To remove this deprecation, remove the `keep` argument from the function signatures as well as
 # the internal logic that deals with the renaming. These live in base/strings/util.jl.
 
+# Special string deprecation
+@deprecate start(s::AbstractString) firstindex(s)
+@deprecate next(s::AbstractString, i::Integer) iterate(s, i)
+@deprecate done(s::AbstractString, i::Integer) i > ncodeunits(s)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

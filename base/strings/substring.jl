@@ -62,9 +62,12 @@ function codeunit(s::SubString, i::Integer)
     @inbounds return codeunit(s.string, s.offset + i)
 end
 
-function next(s::SubString, i::Integer)
+function iterate(s::SubString, i::Integer=firstindex(s))
+    i == ncodeunits(s)+1 && return nothing
     @boundscheck checkbounds(s, i)
-    @inbounds c, i = next(s.string, s.offset + i)
+    y = iterate(s.string, s.offset + i)
+    y === nothing && return nothing
+    c, i = y
     return c, i - s.offset
 end
 

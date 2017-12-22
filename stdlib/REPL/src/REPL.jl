@@ -937,7 +937,7 @@ function setup_interface(
                 end
                 ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
                 if (isa(ast, Expr) && (ast.head == :error || ast.head == :continue || ast.head == :incomplete)) ||
-                        (done(input, pos) && !endswith(input, '\n'))
+                        (pos > ncodeunits(input) && !endswith(input, '\n'))
                     # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
                     # Insert all the remaining text as one line (might be empty)
                     tail = input[oldpos:end]
