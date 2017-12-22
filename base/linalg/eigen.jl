@@ -20,13 +20,6 @@ end
 GeneralizedEigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
     GeneralizedEigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
-
-function getindex(A::Union{Eigen,GeneralizedEigen}, d::Symbol)
-    d == :values && return A.values
-    d == :vectors && return A.vectors
-    throw(KeyError(d))
-end
-
 isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
 
 """
@@ -69,8 +62,8 @@ end
     eigfact(A; permute::Bool=true, scale::Bool=true) -> Eigen
 
 Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
-which contains the eigenvalues in `F[:values]` and the eigenvectors in the columns of the
-matrix `F[:vectors]`. (The `k`th eigenvector can be obtained from the slice `F[:vectors][:, k]`.)
+which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
+matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
 The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
 
@@ -84,13 +77,13 @@ make rows and columns more equal in norm. The default is `true` for both options
 julia> F = eigfact([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
 
-julia> F[:values]
+julia> F.values
 3-element Array{Float64,1}:
   1.0
   3.0
  18.0
 
-julia> F[:vectors]
+julia> F.vectors
 3×3 Array{Float64,2}:
  1.0  0.0  0.0
  0.0  1.0  0.0
@@ -154,9 +147,9 @@ julia> eigvecs([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 """
 eigvecs(A::Union{Number, AbstractMatrix}; permute::Bool=true, scale::Bool=true) =
     eigvecs(eigfact(A, permute=permute, scale=scale))
-eigvecs(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) where {T,V,S,U} = F[:vectors]::S
+eigvecs(F::Union{Eigen, GeneralizedEigen}) = F.vectors
 
-eigvals(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) where {T,V,S,U} = F[:values]::U
+eigvals(F::Union{Eigen, GeneralizedEigen}) = F.values
 
 """
     eigvals!(A; permute::Bool=true, scale::Bool=true) -> values
@@ -352,8 +345,8 @@ end
 
 Computes the generalized eigenvalue decomposition of `A` and `B`, returning a
 `GeneralizedEigen` factorization object `F` which contains the generalized eigenvalues in
-`F[:values]` and the generalized eigenvectors in the columns of the matrix `F[:vectors]`.
-(The `k`th generalized eigenvector can be obtained from the slice `F[:vectors][:, k]`.)
+`F.values` and the generalized eigenvectors in the columns of the matrix `F.vectors`.
+(The `k`th generalized eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
 # Examples
 ```jldoctest
@@ -369,12 +362,12 @@ julia> B = [0 1; 1 0]
 
 julia> F = eigfact(A, B);
 
-julia> F[:values]
+julia> F.values
 2-element Array{Complex{Float64},1}:
  0.0 + 1.0im
  0.0 - 1.0im
 
-julia> F[:vectors]
+julia> F.vectors
 2×2 Array{Complex{Float64},2}:
   0.0-1.0im   0.0+1.0im
  -1.0-0.0im  -1.0+0.0im

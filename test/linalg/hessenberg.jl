@@ -19,15 +19,15 @@ let n = 10
 
         if eltya != BigFloat
             H = hessfact(A)
-            @test size(H[:Q], 1) == size(A, 1)
-            @test size(H[:Q], 2) == size(A, 2)
-            @test size(H[:Q]) == size(A)
-            @test_throws KeyError H[:Z]
+            @test size(H.Q, 1) == size(A, 1)
+            @test size(H.Q, 2) == size(A, 2)
+            @test size(H.Q) == size(A)
+            @test_throws ErrorException H.Z
             @test convert(Array, H) ≈ A
-            @test (H[:Q] * H[:H]) * H[:Q]' ≈ A
-            @test (H[:Q]' *A) * H[:Q] ≈ H[:H]
+            @test (H.Q * H.H) * H.Q' ≈ A
+            @test (H.Q' *A) * H.Q ≈ H.H
             #getindex for HessenbergQ
-            @test H[:Q][1,1] ≈ Array(H[:Q])[1,1]
+            @test H.Q[1,1] ≈ Array(H.Q)[1,1]
         end
     end
 end

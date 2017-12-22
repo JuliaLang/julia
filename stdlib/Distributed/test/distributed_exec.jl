@@ -554,9 +554,9 @@ bs = deepcopy(as)
 cs = collect(Distributed.pgenerate(x->(sleep(rand()*0.1); svdfact(x)), bs))
 svdas = map(svdfact, as)
 for i in 1:n
-    @test cs[i][:U] ≈ svdas[i][:U]
-    @test cs[i][:S] ≈ svdas[i][:S]
-    @test cs[i][:V] ≈ svdas[i][:V]
+    @test cs[i].U ≈ svdas[i].U
+    @test cs[i].S ≈ svdas[i].S
+    @test cs[i].V ≈ svdas[i].V
 end
 
 # Test that the default worker pool cycles through all workers

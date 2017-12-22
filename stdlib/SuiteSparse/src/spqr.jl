@@ -158,7 +158,7 @@ end
     qrfact(A) -> QRSparse
 
 Compute the `QR` factorization of a sparse matrix `A`. Fill-reducing row and column permutations
-are used such that `F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]`. The main application of this type is to
+are used such that `F.R = F.Q'*A[F.prow,F.pcol]`. The main application of this type is to
 solve least squares or underdetermined problems with [`\\`](@ref). The function calls the C library SPQR.
 
 # Examples
@@ -258,29 +258,27 @@ function Base.LinAlg.mul!(A::StridedMatrix, adjQ::Adjoint{<:Any,<:QRSparseQ})
     return A
 end
 
-Base.LinAlg.getq(F::QRSparse) = QRSparseQ(F.factors, F.τ)
-
 """
-    getindex(F::QRSparse, d::Symbol)
+    getproperty(F::QRSparse, d::Symbol)
 
 Extract factors of a QRSparse factorization. Possible values of `d` are
-- `:Q` : `QRSparseQ` matrix of the ``Q`` factor in Householder form
-- `:R` : `UpperTriangular` ``R`` factor
-- `:prow` : Vector of the row permutations applied to the factorized matrix
-- `:pcol` : Vector of the column permutations applied to the factorized matrix
+- `Q` : `QRSparseQ` matrix of the ``Q`` factor in Householder form
+- `R` : `UpperTriangular` ``R`` factor
+- `prow` : Vector of the row permutations applied to the factorized matrix
+- `pcol` : Vector of the column permutations applied to the factorized matrix
 
 # Examples
 ```jldoctest
 julia> F = qrfact(sparse([1,3,2,3,4], [1,1,2,3,4], [1.0,2.0,3.0,4.0,5.0]));
 
-julia> F[:Q]
+julia> F.Q
 4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:
  1.0  0.0  0.0  0.0
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
  0.0  0.0  0.0  1.0
 
-julia> F[:R]
+julia> F.R
 4×4 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
   [1, 1]  =  3.0
   [2, 2]  =  4.0
@@ -288,14 +286,14 @@ julia> F[:R]
   [2, 4]  =  2.0
   [4, 4]  =  1.0
 
-julia> F[:prow]
+julia> F.prow
 4-element Array{Int64,1}:
  2
  3
  4
  1
 
-julia> F[:pcol]
+julia> F.pcol
 4-element Array{Int64,1}:
  2
  3
@@ -303,30 +301,28 @@ julia> F[:pcol]
  1
 ```
 """
-function Base.getindex(F::QRSparse, d::Symbol)
+@inline function Base.getproperty(F::QRSparse, d::Symbol)
     if d == :Q
-        return LinAlg.getq(F)
-    elseif d == :R
-        return F.R
+        return QRSparseQ(F.factors, F.τ)
     elseif d == :prow
         return invperm(F.rpivinv)
     elseif d == :pcol
         return F.cpiv
     else
-        throw(KeyError(d))
+        getfield(F, d)
     end
 end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, F::QRSparse)
     println(io, summary(F))
     println(io, "Q factor:")
-    show(io, mime, F[:Q])
+    show(io, mime, F.Q)
     println(io, "\nR factor:")
-    show(io, mime, F[:R])
+    show(io, mime, F.R)
     println(io, "\nRow permutation:")
-    show(io, mime, F[:prow])
+    show(io, mime, F.prow)
     println(io, "\nColumn permutation:")
-    show(io, mime, F[:pcol])
+    show(io, mime, F.pcol)
 end
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret
@@ -379,7 +375,7 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     X0 = view(X, 1:size(B, 1), :)
 
     # Apply Q' to B
-    Base.LinAlg.mul!(Adjoint(LinAlg.getq(F)), X0)
+    Base.LinAlg.mul!(Adjoint(F.Q), X0)
 
     # Zero out to get basic solution
     X[rnk + 1:end, :] = 0

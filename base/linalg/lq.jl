@@ -56,7 +56,7 @@ function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Boo
         full::Bool = !thin
     end
     F = lqfact(A)
-    L, Q = F[:L], F[:Q]
+    L, Q = F.L, F.Q
     return L, !full ? Array(Q) : mul!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))
 end
 
@@ -65,34 +65,32 @@ copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 LQ{T}(A::LQ) where {T} = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
 Factorization{T}(A::LQ{T}) where {T} = A
 Factorization{T}(A::LQ) where {T} = LQ{T}(A)
-AbstractMatrix(A::LQ) = A[:L]*A[:Q]
+AbstractMatrix(A::LQ) = A.L*A.Q
 AbstractArray(A::LQ) = AbstractMatrix(A)
 Matrix(A::LQ) = Array(AbstractArray(A))
 Array(A::LQ) = Matrix(A)
 
 adjoint(A::LQ{T}) where {T} = QR{T,typeof(A.factors)}(adjoint(A.factors), A.τ)
 
-function getindex(A::LQ, d::Symbol)
-    m, n = size(A)
+function getproperty(F::LQ, d::Symbol)
+    m, n = size(F)
     if d == :L
-        return tril!(A.factors[1:m, 1:min(m,n)])
+        return tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
     elseif d == :Q
-        return LQPackedQ(A.factors,A.τ)
+        return LQPackedQ(getfield(F, :factors), getfield(F, :τ))
     else
-        throw(KeyError(d))
+        return getfield(F, d)
     end
 end
 
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
     mul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
-getq(A::LQ) = LQPackedQ(A.factors, A.τ)
-
 function show(io::IO, C::LQ)
     println(io, "$(typeof(C)) with factors L and Q:")
-    show(io, C[:L])
+    show(io, C.L)
     println(io)
-    show(io, C[:Q])
+    show(io, C.Q)
 end
 
 LQPackedQ{T}(Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
@@ -100,8 +98,8 @@ AbstractMatrix{T}(Q::LQPackedQ) where {T} = LQPackedQ{T}(Q)
 Matrix(A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
 Array(A::LQPackedQ) = Matrix(A)
 
-size(A::LQ, dim::Integer) = size(A.factors, dim)
-size(A::LQ) = size(A.factors)
+size(F::LQ, dim::Integer) = size(getfield(F, :factors), dim)
+size(F::LQ)               = size(getfield(F, :factors))
 
 # size(Q::LQPackedQ) yields the shape of Q's square form
 function size(Q::LQPackedQ)
@@ -121,9 +119,9 @@ end
 
 ## Multiplication by LQ
 mul!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    A[:L] * LAPACK.ormlq!('L', 'N', A.factors, A.τ, B)
+    A.L * LAPACK.ormlq!('L', 'N', A.factors, A.τ, B)
 mul!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat} =
-    A[:L] * LAPACK.ormlq!('L', 'N', A.factors, A.τ, Matrix(B))
+    A.L * LAPACK.ormlq!('L', 'N', A.factors, A.τ, Matrix(B))
 mul!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat} =
     mul!(zeros(eltype(A), size(A)), Matrix(A), Matrix(B))
 function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
@@ -289,6 +287,6 @@ end
 
 
 function ldiv!(A::LQ{T}, B::StridedVecOrMat{T}) where T
-    mul!(Adjoint(A[:Q]), ldiv!(LowerTriangular(A[:L]),B))
+    mul!(Adjoint(A.Q), ldiv!(LowerTriangular(A.L),B))
     return B
 end

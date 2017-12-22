@@ -3466,6 +3466,15 @@ workspace() = error("workspace() is discontinued, check out Revise.jl for an alt
 @deprecate Ref(x::Ptr) Ref(x, 1)
 @deprecate Ref(x::Ref) x # or perhaps, `convert(Ref, x)`
 
+# PR #25184. Use getproperty instead of getindex for Factorizations
+function getindex(F::Factorization, s::Symbol)
+    depwarn("`F[:$s]` is deprecated, use `F.$s` instead.", :getindex)
+    return getproperty(F, s)
+end
+@eval Base.LinAlg begin
+    @deprecate getq(F::Factorization) F.Q
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

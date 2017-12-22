@@ -35,7 +35,7 @@ using Base.LinAlg: mul!, Adjoint, Transpose
         G, _ = givens(one(elty),zero(elty),11,12)
         @test_throws DimensionMismatch mul!(G, A)
         @test_throws DimensionMismatch mul!(A, Adjoint(G))
-        @test abs.(A) ≈ abs.(hessfact(Ac)[:H])
+        @test abs.(A) ≈ abs.(hessfact(Ac).H)
         @test norm(R*Matrix{elty}(I, 10, 10)) ≈ one(elty)
 
         I10 = Matrix{elty}(I, 10, 10)

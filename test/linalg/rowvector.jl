@@ -187,7 +187,7 @@ end
 end
 
 @testset "QR ambiguity methods" begin
-    qrmat = Base.LinAlg.getq(qrfact(Matrix(1.0I, 3, 3)))
+    qrmat = qrfact(Matrix(1.0I, 3, 3)).Q
     v = [2,3,4]
     rv = rvtranspose(v)
 

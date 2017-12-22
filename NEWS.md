@@ -879,6 +879,10 @@ Deprecated or removed
 
   * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianIndices` and `LinearIndices` ([#24715]).
 
+  * `getindex(F::Factorizion, s::Symbol)` (usually seen as e.g. `F[:Q]`) is deprecated
+    in favor of dot overloading (`getproperty`) so factors should now be accessed as e.g.
+    `F.Q` instead of `F[:Q]` ([#25184]).
+
 Command-line option changes
 ---------------------------
 

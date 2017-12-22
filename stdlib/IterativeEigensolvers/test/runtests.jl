@@ -189,15 +189,15 @@ end
     S2 = svd(Array(A))
 
     ## singular values match:
-    @test S1[1][:S] ≈ S2[2][1:2]
+    @test S1[1].S ≈ S2[2][1:2]
     @testset "singular vectors" begin
         ## 1st left singular vector
-        s1_left = sign(S1[1][:U][3,1]) * S1[1][:U][:,1]
+        s1_left = sign(S1[1].U[3,1]) * S1[1].U[:,1]
         s2_left = sign(S2[1][3,1]) * S2[1][:,1]
         @test s1_left ≈ s2_left
 
         ## 1st right singular vector
-        s1_right = sign(S1[1][:V][3,1]) * S1[1][:V][:,1]
+        s1_right = sign(S1[1].V[3,1]) * S1[1].V[:,1]
         s2_right = sign(S2[3][3,1]) * S2[3][:,1]
         @test s1_right ≈ s2_right
     end
@@ -207,13 +207,13 @@ end
     @testset "singular values ordered correctly" begin
         B = sparse(Diagonal([1.0, 2.0, 34.0, 5.0, 6.0]))
         S3 = svds(B, ritzvec=false, nsv=2)
-        @test S3[1][:S] ≈ [34.0, 6.0]
+        @test S3[1].S ≈ [34.0, 6.0]
         S4 = svds(B, nsv=2)
-        @test S4[1][:S] ≈ [34.0, 6.0]
+        @test S4[1].S ≈ [34.0, 6.0]
     end
     @testset "passing guess for Krylov vectors" begin
         S1 = svds(A, nsv = 2, v0=rand(eltype(A),size(A,2)))
-        @test S1[1][:S] ≈ S2[2][1:2]
+        @test S1[1].S ≈ S2[2][1:2]
     end
 
     @test_throws ArgumentError svds(A,nsv=0)
@@ -231,15 +231,15 @@ end
         @testset "Number of singular values: $j" for j in 2:6
             # Default size of subspace
             F = svds(A, nsv = j, v0 = v0)
-            @test F[1][:U]'F[1][:U] ≈ Matrix(I, j, j)
-            @test F[1][:V]'F[1][:V] ≈ Matrix(I, j, j)
-            @test F[1][:S]          ≈ d[1:j]
+            @test F[1].U'F[1].U ≈ Matrix(I, j, j)
+            @test F[1].V'F[1].V ≈ Matrix(I, j, j)
+            @test F[1].S        ≈ d[1:j]
             for k in 3j:2:5j
                 # Custom size of subspace
                 F = svds(A, nsv = j, ncv = k, v0 = v0)
-                @test F[1][:U]'F[1][:U] ≈ Matrix(I, j, j)
-                @test F[1][:V]'F[1][:V] ≈ Matrix(I, j, j)
-                @test F[1][:S]          ≈ d[1:j]
+                @test F[1].U'F[1].U ≈ Matrix(I, j, j)
+                @test F[1].V'F[1].V ≈ Matrix(I, j, j)
+                @test F[1].S        ≈ d[1:j]
             end
         end
     end
@@ -251,21 +251,21 @@ end
     S2 = svd(Array(A))
 
     ## singular values match:
-    @test S1[1][:S] ≈ S2[2][1:2]
+    @test S1[1].S ≈ S2[2][1:2]
     @testset "singular vectors" begin
         ## left singular vectors
-        s1_left = abs.(S1[1][:U][:,1:2])
+        s1_left = abs.(S1[1].U[:,1:2])
         s2_left = abs.(S2[1][:,1:2])
         @test s1_left ≈ s2_left
 
         ## right singular vectors
-        s1_right = abs.(S1[1][:V][:,1:2])
+        s1_right = abs.(S1[1].V[:,1:2])
         s2_right = abs.(S2[3][:,1:2])
         @test s1_right ≈ s2_right
     end
     @testset "passing guess for Krylov vectors" begin
         S1 = svds(A, nsv = 2, v0=rand(eltype(A),size(A,2)))
-        @test S1[1][:S] ≈ S2[2][1:2]
+        @test S1[1].S ≈ S2[2][1:2]
     end
 
     @test_throws ArgumentError svds(A,nsv=0)

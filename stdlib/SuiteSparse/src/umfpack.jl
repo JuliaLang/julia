@@ -4,7 +4,7 @@ module UMFPACK
 
 export UmfpackLU
 
-import Base: (\), findnz, getindex, show, size
+import Base: (\), findnz, getproperty, show, size
 import Base.LinAlg: Factorization, det, lufact, ldiv!
 using Base.LinAlg: Adjoint, Transpose
 
@@ -117,16 +117,16 @@ The individual components of the factorization `F` can be accessed by indexing:
 
 | Component | Description                         |
 |:----------|:------------------------------------|
-| `F[:L]`   | `L` (lower triangular) part of `LU` |
-| `F[:U]`   | `U` (upper triangular) part of `LU` |
-| `F[:p]`   | right permutation `Vector`          |
-| `F[:q]`   | left permutation `Vector`           |
-| `F[:Rs]`  | `Vector` of scaling factors         |
-| `F[:(:)]` | `(L,U,p,q,Rs)` components           |
+| `L`       | `L` (lower triangular) part of `LU` |
+| `U`       | `U` (upper triangular) part of `LU` |
+| `p`       | right permutation `Vector`          |
+| `q`       | left permutation `Vector`           |
+| `Rs`      | `Vector` of scaling factors         |
+| `:`       | `(L,U,p,q,Rs)` components           |
 
 The relation between `F` and `A` is
 
-`F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]`
+`F.L*F.U == (F.Rs .* A)[F.p, F.q]`
 
 `F` further supports the following functions:
 
@@ -447,22 +447,25 @@ function _AqldivB_kernel!(X::StridedMatrix{Tb}, lu::UmfpackLU{Float64},
 end
 
 
-function getindex(lu::UmfpackLU, d::Symbol)
-    L,U,p,q,Rs = umf_extract(lu)
-    if d == :L
-        return L
-    elseif d == :U
-        return U
-    elseif d == :p
-        return p
-    elseif d == :q
-        return q
-    elseif d == :Rs
-        return Rs
-    elseif d == :(:)
-        return (L,U,p,q,Rs)
+@inline function getproperty(lu::UmfpackLU, d::Symbol)
+    if d == :L || d == :U || d == :p || d == :q || d == :Rs || d == :(:)
+        # Guard the call to umf_extract behaind a branch to avoid infinite recursion
+        L, U, p, q, Rs = umf_extract(lu)
+        if d == :L
+            return L
+        elseif d == :U
+            return U
+        elseif d == :p
+            return p
+        elseif d == :q
+            return q
+        elseif d == :Rs
+            return Rs
+        elseif d == :(:)
+            return (L, U, p, q, Rs)
+        end
     else
-        throw(KeyError(d))
+        getfield(lu, d)
     end
 end
 

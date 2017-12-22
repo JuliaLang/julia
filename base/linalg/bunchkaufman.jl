@@ -86,8 +86,8 @@ convert(::Type{BunchKaufman{T}}, B::BunchKaufman) where {T} =
 convert(::Type{Factorization{T}}, B::BunchKaufman{T}) where {T} = B
 convert(::Type{Factorization{T}}, B::BunchKaufman) where {T} = convert(BunchKaufman{T}, B)
 
-size(B::BunchKaufman) = size(B.LD)
-size(B::BunchKaufman, d::Integer) = size(B.LD, d)
+size(B::BunchKaufman) = size(getfield(B, :LD))
+size(B::BunchKaufman, d::Integer) = size(getfield(B, :LD), d)
 issymmetric(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
@@ -115,7 +115,7 @@ function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::Char) where T
 end
 
 """
-    getindex(B::BunchKaufman, d::Symbol)
+    getproperty(B::BunchKaufman, d::Symbol)
 
 Extract the factors of the Bunch-Kaufman factorization `B`. The factorization can take the
 two forms `L*D*L'` or `U*D*U'` (or `L*D*Transpose(L)` in the complex symmetric case) where `L` is a
@@ -153,7 +153,7 @@ permutation:
  3
  2
 
-julia> F[:L]*F[:D]*F[:L]' - A[F[:p], F[:p]]
+julia> F.L*F.D*F.L' - A[F.p, F.p]
 3×3 Array{Float64,2}:
  0.0  0.0  0.0
  0.0  0.0  0.0
@@ -161,35 +161,35 @@ julia> F[:L]*F[:D]*F[:L]' - A[F[:p], F[:p]]
 
 julia> F = bkfact(Symmetric(A));
 
-julia> F[:U]*F[:D]*F[:U]' - F[:P]*A*F[:P]'
+julia> F.U*F.D*F.U' - F.P*A*F.P'
 3×3 Array{Float64,2}:
  0.0  0.0  0.0
  0.0  0.0  0.0
  0.0  0.0  0.0
 ```
 """
-function getindex(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
+function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
     n = size(B, 1)
     if d == :p
-        return _ipiv2perm_bk(B.ipiv, n, B.uplo)
+        return _ipiv2perm_bk(getfield(B, :ipiv), n, getfield(B, :uplo))
     elseif d == :P
-        return Matrix{T}(I, n, n)[:,invperm(B[:p])]
+        return Matrix{T}(I, n, n)[:,invperm(B.p)]
     elseif d == :L || d == :U || d == :D
-        if B.rook
-            LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', copy(B.LD), B.ipiv)
+        if getfield(B, :rook)
+            LUD, od = LAPACK.syconvf_rook!(getfield(B, :uplo), 'C', copy(getfield(B, :LD)), getfield(B, :ipiv))
         else
-            LUD, od = LAPACK.syconv!(B.uplo, copy(B.LD), B.ipiv)
+            LUD, od = LAPACK.syconv!(getfield(B, :uplo), copy(getfield(B, :LD)), getfield(B, :ipiv))
         end
         if d == :D
-            if B.uplo == 'L'
+            if getfield(B, :uplo) == 'L'
                 odl = od[1:n - 1]
-                return Tridiagonal(odl, diag(LUD), B.symmetric ? odl : conj.(odl))
+                return Tridiagonal(odl, diag(LUD), getfield(B, :symmetric) ? odl : conj.(odl))
             else # 'U'
                 odu = od[2:n]
-                return Tridiagonal(B.symmetric ? odu : conj.(odu), diag(LUD), odu)
+                return Tridiagonal(getfield(B, :symmetric) ? odu : conj.(odu), diag(LUD), odu)
             end
         elseif d == :L
-            if B.uplo == 'L'
+            if getfield(B, :uplo) == 'L'
                 return UnitLowerTriangular(LUD)
             else
                 throw(ArgumentError("factorization is U*D*Transpose(U) but you requested L"))
@@ -202,7 +202,7 @@ function getindex(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
             end
         end
     else
-        throw(KeyError(d))
+        getfield(B, d)
     end
 end
 
@@ -212,11 +212,11 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, B::BunchKaufman)
     if issuccess(B)
         println(io, summary(B))
         println(io, "D factor:")
-        show(io, mime, B[:D])
+        show(io, mime, B.D)
         println(io, "\n$(B.uplo) factor:")
-        show(io, mime, B[Symbol(B.uplo)])
+        show(io, mime, B.uplo == 'L' ? B.L : B.U)
         println(io, "\npermutation:")
-        show(io, mime, B[:p])
+        show(io, mime, B.p)
     else
         print(io, "Failed factorization of type $(typeof(B))")
     end
