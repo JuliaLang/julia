@@ -161,27 +161,14 @@ end
 iteratorsize(::Type{<:SkipMissing}) = SizeUnknown()
 iteratoreltype(::Type{SkipMissing{T}}) where {T} = iteratoreltype(T)
 eltype(itr::SkipMissing) = nonmissingtype(eltype(itr.x))
-# Fallback implementation for general iterables: we cannot access a value twice,
-# so after finding the next non-missing element in start() or next(), we have to
-# pass it in the iterator state, which introduces a type instability since the value
-# is missing if the input does not contain any non-missing element.
-@inline function Base.start(itr::SkipMissing)
-    s = start(itr.x)
-    v = missing
-    @inbounds while !done(itr.x, s) && v isa Missing
-        v, s = next(itr.x, s)
+function Base.iterate(itr::SkipMissing, state...)
+    y = iterate(itr.x, state...)
+    while y !== nothing && y[1] isa Missing
+        y = iterate(itr.x, y[2])
     end
-    (v, s)
+    y
 end
-@inline Base.done(itr::SkipMissing, state) = ismissing(state[1]) && done(itr.x, state[2])
-@inline function Base.next(itr::SkipMissing, state)
-    v1, s = state
-    v2 = missing
-    @inbounds while !done(itr.x, s) && v2 isa Missing
-        v2, s = next(itr.x, s)
-    end
-    (v1, (v2, s))
-end
+
 # Optimized implementation for AbstractArray, relying on the ability to access x[i] twice:
 # once in done() to find the next non-missing entry, and once in next() to return it.
 # This works around the type instability problem of the generic fallback.

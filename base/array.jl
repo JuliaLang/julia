@@ -529,11 +529,11 @@ function collect(itr::Generator)
     if isa(isz, SizeUnknown)
         return grow_to!(Vector{et}(), itr)
     else
-        st = start(itr)
-        if done(itr,st)
+        y = iterate(itr)
+        if y == nothing
             return _array_for(et, itr.iter, isz)
         end
-        v1, st = next(itr, st)
+        v1, st = y
         collect_to_with_first!(_array_for(typeof(v1), itr.iter, isz), v1, itr, st)
     end
 end
@@ -542,11 +542,11 @@ _collect(c, itr, ::EltypeUnknown, isz::SizeUnknown) =
     grow_to!(_similar_for(c, @default_eltype(itr), itr, isz), itr)
 
 function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
-    st = start(itr)
-    if done(itr,st)
+    y = iterate(itr)
+    if y == nothing
         return _similar_for(c, @default_eltype(itr), itr, isz)
     end
-    v1, st = next(itr, st)
+    v1, st = y
     collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)
 end
 
@@ -565,8 +565,10 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     # collect to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
     i = offs
-    while !done(itr, st)
-        el, st = next(itr, st)
+    while true
+        y = iterate(itr, st)
+        y == nothing && break
+        el, st = y
         S = typeof(el)
         if S === T || S <: T
             @inbounds dest[i] = el::T
@@ -589,8 +591,10 @@ end
 
 function grow_to!(dest, itr, st)
     T = eltype(dest)
-    while !done(itr, st)
-        el, st = next(itr, st)
+    while true
+        y = iterate(itr, st)
+        y == nothing && break
+        el, st = y
         S = typeof(el)
         if S === T || S <: T
             push!(dest, el::T)
@@ -1136,12 +1140,14 @@ deleteat!(a::Vector, inds::AbstractVector) = _deleteat!(a, to_indices(a, (inds,)
 
 function _deleteat!(a::Vector, inds)
     n = length(a)
-    s = start(inds)
-    done(inds, s) && return a
-    (p, s) = next(inds, s)
+    y = iterate(inds)
+    y == nothing && return a
+    (p, s) = y
     q = p+1
-    while !done(inds, s)
-        (i,s) = next(inds, s)
+    while true
+        y = iterate(inds, s)
+        y == nothing && break
+        (i,s) = y
         if !(q <= i <= n)
             if i < q
                 throw(ArgumentError("indices must be unique and sorted"))
@@ -1905,16 +1911,18 @@ julia> findmax([1,7,7,NaN])
 ```
 """
 function findmax(a)
-    if isempty(a)
+    p = pairs(a)
+    y = iterate(p)
+    if y == nothing
         throw(ArgumentError("collection must be non-empty"))
     end
-    p = pairs(a)
-    s = start(p)
-    (mi, m), s = next(p, s)
+    (mi, m), s = y
     i = mi
-    while !done(p, s)
+    while true
+        y = iterate(p, s)
+        y == nothing && break
         m != m && break
-        (i, ai), s = next(p, s)
+        (i, ai), s = y
         if ai != ai || isless(m, ai)
             m = ai
             mi = i
@@ -1946,16 +1954,18 @@ julia> findmin([7,1,1,NaN])
 ```
 """
 function findmin(a)
-    if isempty(a)
+    p = pairs(a)
+    y = iterate(p)
+    if y == nothing
         throw(ArgumentError("collection must be non-empty"))
     end
-    p = pairs(a)
-    s = start(p)
-    (mi, m), s = next(p, s)
+    (mi, m), s = y
     i = mi
-    while !done(p, s)
+    while true
+        y = iterate(p, s)
+        y == nothing && break
         m != m && break
-        (i, ai), s = next(p, s)
+        (i, ai), s = y
         if ai != ai || isless(ai, m)
             m = ai
             mi = i
@@ -2058,35 +2068,38 @@ end
 function _sortedfindin(v, w)
     viter, witer = eachindex(v), eachindex(w)
     out  = eltype(viter)[]
-    i, j = start(viter), start(witer)
-    if done(viter, i) || done(witer, j)
+    vy, wy = iterate(viter), iterate(witer)
+    if vy == nothing || wy == nothing
         return out
     end
-    viteri, i = next(viter, i)
-    witerj, j = next(witer, j)
+    viteri, i = vy
+    witerj, j = wy
     @inbounds begin
         vi, wj = v[viteri], w[witerj]
         while true
             if isless(vi, wj)
-                if done(viter, i)
+                vy = iterate(viter, i)
+                if vy == nothing
                     break
                 end
-                viteri, i = next(viter, i)
+                viteri, i = vy
                 vi        = v[viteri]
             elseif isless(wj, vi)
-                if done(witer, j)
+                wy = iterate(witer, j)
+                if wy == nothing
                     break
                 end
-                witerj, j = next(witer, j)
+                witerj, j = wy
                 wj        = w[witerj]
             else
                 push!(out, viteri)
-                if done(viter, i)
+                vy = iterate(viter, i)
+                if vy == nothing
                     break
                 end
                 # We only increment the v iterator because v can have
                 # repeated matches to a single value in w
-                viteri, i = next(viter, i)
+                viteri, i = vy
                 vi        = v[viteri]
             end
         end
@@ -2196,16 +2209,17 @@ julia> filter!(isodd, collect(1:10))
 ```
 """
 function filter!(f, a::AbstractVector)
-    isempty(a) && return a
-
     idx = eachindex(a)
-    state = start(idx)
-    i, state = next(idx, state)
+    y = iterate(idx)
+    y == nothing && return a
+    i, state = y
 
     for acurr in a
         if f(acurr)
             a[i] = acurr
-            i, state = next(idx, state)
+            y = iterate(idx, state)
+            y == nothing && break
+            i, state = y
         end
     end
 
