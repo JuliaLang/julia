@@ -216,4 +216,4 @@ function lbm3d(n)
 end
 
 @time lbm3d(36)
-#ccall(:jl_threading_profile, Void, ())
+#ccall(:jl_threading_profile, Cvoid, ())

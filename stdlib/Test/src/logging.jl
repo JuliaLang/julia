@@ -57,7 +57,7 @@ end
 # Failure result type for log testing
 mutable struct LogTestFailure <: Result
     orig_expr
-    source::Union{Void,LineNumberNode}
+    source::Union{Nothing,LineNumberNode}
     patterns
     logs
 end

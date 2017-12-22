@@ -7,16 +7,13 @@ import Core: print, println, show, write, unsafe_write, STDOUT, STDERR
 const getproperty = getfield
 const setproperty! = setfield!
 
-ccall(:jl_set_istopmod, Void, (Any, Bool), Inference, false)
+ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Inference, false)
 
 eval(x) = Core.eval(Inference, x)
 eval(m, x) = Core.eval(m, x)
 
 include(x) = Core.include(Inference, x)
 include(mod, x) = Core.include(mod, x)
-
-# conditional to allow redefining Core.Inference after base exists
-isdefined(Main, :Base) || ((::Type{T})(arg) where {T} = convert(T, arg)::T)
 
 function return_type end
 
@@ -68,7 +65,7 @@ include("docs/core.jl")
 # compiler
 include("codevalidation.jl")
 include("inference.jl")
-ccall(:jl_set_typeinf_func, Void, (Any,), typeinf_ext)
+ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext)
 
 end # baremodule Inference
 ))

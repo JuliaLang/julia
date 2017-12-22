@@ -100,7 +100,7 @@ isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any
 isbindingresolved(m::Module, var::Symbol) = ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
 
 function binding_module(m::Module, s::Symbol)
-    p = ccall(:jl_get_module_of_binding, Ptr{Void}, (Any, Any), m, s)
+    p = ccall(:jl_get_module_of_binding, Ptr{Cvoid}, (Any, Any), m, s)
     p == C_NULL && return m
     return unsafe_pointer_to_objref(p)::Module
 end
@@ -818,9 +818,9 @@ function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::B
         throw(ArgumentError("'syntax' must be either :intel or :att"))
     end
     if native
-        llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, UInt, Bool, CodegenParams), linfo, world, wrapper, params)
+        llvmf = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, CodegenParams), linfo, world, wrapper, params)
     else
-        llvmf = ccall(:jl_get_llvmf_defn, Ptr{Void}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, optimize, params)
+        llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, optimize, params)
     end
     if llvmf == C_NULL
         error("could not compile the specified method")
@@ -828,10 +828,10 @@ function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::B
 
     if native
         str = ccall(:jl_dump_function_asm, Ref{String},
-                    (Ptr{Void}, Cint, Ptr{UInt8}), llvmf, 0, syntax)
+                    (Ptr{Cvoid}, Cint, Ptr{UInt8}), llvmf, 0, syntax)
     else
         str = ccall(:jl_dump_function_ir, Ref{String},
-                    (Ptr{Void}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)
+                    (Ptr{Cvoid}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)
     end
 
     # TODO: use jl_is_cacheable_sig instead of isleaftype
@@ -1081,6 +1081,20 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         end
     end
     return true
+end
+
+"""
+    delete_method(m::Method)
+
+Make method `m` uncallable and force recompilation of any methods that use(d) it.
+"""
+function delete_method(m::Method)
+    ccall(:jl_method_table_disable, Cvoid, (Any, Any), get_methodtable(m), m)
+end
+
+function get_methodtable(m::Method)
+    ft = ccall(:jl_first_argument_datatype, Any, (Any,), m.sig)
+    (ft::DataType).name.mt
 end
 
 """

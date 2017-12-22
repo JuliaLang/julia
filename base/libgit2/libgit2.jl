@@ -264,7 +264,7 @@ Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
 function fetch(repo::GitRepo; remote::AbstractString="origin",
                remoteurl::AbstractString="",
                refspecs::Vector{<:AbstractString}=AbstractString[],
-               payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Void}=CredentialPayload())
+               payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}=CredentialPayload())
     p = reset!(deprecate_nullable_creds(:fetch, "repo", payload), GitConfig(repo))
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
@@ -306,7 +306,7 @@ function push(repo::GitRepo; remote::AbstractString="origin",
               remoteurl::AbstractString="",
               refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
-              payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Void}=CredentialPayload())
+              payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}=CredentialPayload())
     p = reset!(deprecate_nullable_creds(:push, "repo", payload), GitConfig(repo))
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
@@ -501,7 +501,7 @@ The keyword arguments are:
     which will make `repo_path` itself the git directory instead of `repo_path/.git`.
     This means that a working tree cannot be checked out. Plays the role of the
     git CLI argument `--bare`.
-  * `remote_cb::Ptr{Void}=C_NULL`: a callback which will be used to create the remote
+  * `remote_cb::Ptr{Cvoid}=C_NULL`: a callback which will be used to create the remote
     before it is cloned. If `C_NULL` (the default), no attempt will be made to create
     the remote - it will be assumed to already exist.
   * `payload::CredentialPayload=CredentialPayload()`: provides credentials and/or settings
@@ -521,8 +521,8 @@ julia_repo = LibGit2.clone(julia_url, "julia_path", branch="release-0.6")
 function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
-               remote_cb::Ptr{Void} = C_NULL,
-               payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Void}=CredentialPayload())
+               remote_cb::Ptr{Cvoid} = C_NULL,
+               payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}=CredentialPayload())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
     @Base.gc_preserve lbranch begin

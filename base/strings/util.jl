@@ -356,7 +356,7 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool
     k = last(r)
     while((0 <= j < n) && (length(strs) != limit-1))
         if i <= k
-            (keep_empty || (k < n)) && unshift!(strs, SubString(str,k+1,n))
+            (keep_empty || (k < n)) && pushfirst!(strs, SubString(str,k+1,n))
             n = j
         end
         (k <= j) && (j = prevind(str,j))
@@ -364,7 +364,7 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool
         j = first(r)-1
         k = last(r)
     end
-    (keep_empty || (n > 0)) && unshift!(strs, SubString(str,1,n))
+    (keep_empty || (n > 0)) && pushfirst!(strs, SubString(str,1,n))
     return strs
 end
 #rsplit(str::AbstractString) = rsplit(str, _default_delims, 0, false)
@@ -561,4 +561,4 @@ julia> ascii("abcdefgh")
 "abcdefgh"
 ```
 """
-ascii(x::AbstractString) = ascii(convert(String, x))
+ascii(x::AbstractString) = ascii(String(x))

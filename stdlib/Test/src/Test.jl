@@ -1268,7 +1268,7 @@ function detect_ambiguities(mods...;
                             imported::Bool = false,
                             recursive::Bool = false,
                             ambiguous_bottom::Bool = false,
-                            allow_bottom::Union{Bool,Void} = nothing)
+                            allow_bottom::Union{Bool,Nothing} = nothing)
     if allow_bottom !== nothing
         Base.depwarn("the `allow_bottom` keyword to detect_ambiguities has been renamed to `ambiguous_bottom`", :detect_ambiguities)
         ambiguous_bottom = allow_bottom
@@ -1449,7 +1449,6 @@ end
 for (G, A) in ((GenericSet, AbstractSet),
                (GenericDict, AbstractDict))
     @eval begin
-        Base.convert(::Type{$G}, s::$A) = $G(s)
         Base.done(s::$G, state) = done(s.s, state)
         Base.next(s::$G, state) = next(s.s, state)
     end

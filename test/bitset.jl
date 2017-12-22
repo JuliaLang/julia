@@ -30,7 +30,7 @@ end
     @test pop!(s) === 10002
     @test_throws KeyError pop!(s, -1)
     @test length(s) === 8
-    @test shift!(s) === 1
+    @test popfirst!(s) === 1
     @test length(s) === 7
     @test !in(0,s)
     @test !in(1,s)
@@ -167,8 +167,8 @@ end
     push!(s, 1:2:10...)
     @test pop!(s) === 9
     @test pop!(s) === 7
-    @test shift!(s) === 1
-    @test shift!(s) === 3
+    @test popfirst!(s) === 1
+    @test popfirst!(s) === 3
     @test collect(s) == [5]
     empty!(s)
     @test isempty(s)
@@ -195,7 +195,7 @@ end
     @test intersect(BitSet([1,2,3])) == BitSet([1,2,3])
     @test intersect(BitSet(1:7), BitSet(3:10)) ==
     	  intersect(BitSet(3:10), BitSet(1:7)) == BitSet(3:7)
-    @test intersect(BitSet(1:10), BitSet(1:4), 1:5, [2,3,10]) == [2,3]
+    @test intersect(BitSet(1:10), BitSet(1:4), 1:5, [2,3,10]) == BitSet([2,3])
 end
 
 @testset "setdiff, symdiff" begin

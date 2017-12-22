@@ -27,7 +27,7 @@ the end of the string, `len`. When a directive cannot be parsed the returned val
 will be `nothing` if `raise` is false otherwise an exception will be thrown.
 
 Return a 3-element tuple `(values, pos, num_parsed)`:
-* `values::Union{Tuple, Void}`: Either `nothing`, or a tuple which contains a value
+* `values::Union{Tuple, Nothing}`: Either `nothing`, or a tuple which contains a value
   for each `DatePart` within the `DateFormat` in the order
   in which they occur. If the string ends before we finish parsing all the directives
   the missing values will be filled in with default values.
@@ -120,7 +120,7 @@ parsed the returned value tuple will be `nothing` if `raise` is false otherwise 
 be thrown.
 
 Return a 2-element tuple `(values, pos)`:
-* `values::Union{Tuple, Void}`: Either `nothing`, or a tuple which contains a value
+* `values::Union{Tuple, Nothing}`: Either `nothing`, or a tuple which contains a value
   for each token as specified by the passed in type.
 * `pos::Int`: The character index at which parsing stopped.
 """

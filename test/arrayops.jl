@@ -48,7 +48,7 @@ using Main.TestHelpers.OAs
     a[1,2] = 2
     a[2,1] = 3
     a[2,2] = 4
-    b = a'
+    b = adjoint(a)
     @test a[1,1] == 1. && a[1,2] == 2. && a[2,1] == 3. && a[2,2] == 4.
     @test b[1,1] == 1. && b[2,1] == 2. && b[1,2] == 3. && b[2,2] == 4.
     a[[1 2 3 4]] = 0
@@ -355,10 +355,10 @@ end
     @test length(l)==2
     m = Any[]
     @test_throws ArgumentError pop!(m)
-    @test_throws ArgumentError shift!(m)
-    unshift!(l,4,7,5)
+    @test_throws ArgumentError popfirst!(m)
+    pushfirst!(l,4,7,5)
     @test l[1]==4 && l[2]==7 && l[3]==5 && l[4]==1 && l[5]==2
-    v = shift!(l)
+    v = popfirst!(l)
     @test v == 4
     @test length(l)==4
 
@@ -624,7 +624,7 @@ end
 @testset "large matrices transpose" begin
     for i = 1 : 3
         a = rand(200, 300)
-        @test isequal(a', permutedims(a, [2, 1]))
+        @test isequal(adjoint(a), permutedims(a, [2, 1]))
     end
 end
 
@@ -932,7 +932,7 @@ end
     @test isequal(setdiff([1,2,3,4], [7,8,9]), [1,2,3,4])
     @test isequal(setdiff([1,2,3,4], Int64[]), Int64[1,2,3,4])
     @test isequal(setdiff([1,2,3,4], [1,2,3,4,5]), Int64[])
-    @test isequal(symdiff([1,2,3], [4,3,4]), [1,2,4])
+    @test isequal(symdiff([1,2,3], [4,3,4]), [1,2])
     @test isequal(symdiff(['e','c','a'], ['b','a','d']), ['e','c','b','d'])
     @test isequal(symdiff([1,2,3], [4,3], [5]), [1,2,4,5])
     @test isequal(symdiff([1,2,3,4,5], [1,2,3], [3,4]), [3,5])
@@ -1125,7 +1125,7 @@ end
     # base case w/ Vector
     a = collect(1:10)
     filter!(x -> x > 5, a)
-    @test a == collect(6:10)
+    @test a == 6:10
 
     # different subtype of AbstractVector
     ba = rand(10) .> 0.5
@@ -1277,15 +1277,15 @@ end
 
     # iterators with length:
     @test append!([1,2], (9,8)) == [1,2,9,8] == push!([1,2], (9,8)...)
-    @test prepend!([1,2], (9,8)) == [9,8,1,2] == unshift!([1,2], (9,8)...)
+    @test prepend!([1,2], (9,8)) == [9,8,1,2] == pushfirst!([1,2], (9,8)...)
     @test append!([1,2], ()) == [1,2] == prepend!([1,2], ())
     # iterators without length:
     g = (i for i = 1:10 if iseven(i))
     @test append!([1,2], g) == [1,2,2,4,6,8,10] == push!([1,2], g...)
-    @test prepend!([1,2], g) == [2,4,6,8,10,1,2] == unshift!([1,2], g...)
+    @test prepend!([1,2], g) == [2,4,6,8,10,1,2] == pushfirst!([1,2], g...)
     g = (i for i = 1:2:10 if iseven(i)) # isempty(g) == true
     @test append!([1,2], g) == [1,2] == push!([1,2], g...)
-    @test prepend!([1,2], g) == [1,2] == unshift!([1,2], g...)
+    @test prepend!([1,2], g) == [1,2] == pushfirst!([1,2], g...)
 
     # offset array
     @test append!([1,2], OffsetArray([9,8], (-3,))) == [1,2,9,8]
@@ -1450,7 +1450,7 @@ end
         @test isa(Base.IndexStyle(B), Base.IteratorsMD.IndexCartesian)
         @test mdsum(B) == 15
         @test mdsum2(B) == 15
-        unshift!(shp, 1)
+        pushfirst!(shp, 1)
     end
 
     a = [1:10;]
@@ -1761,8 +1761,8 @@ end
     for A in (reshape(collect(1:20), 4, 5),
               reshape(1:20, 4, 5))
         local A
-        @test slicedim(A, 1, 2) == collect(2:4:20)
-        @test slicedim(A, 2, 2) == collect(5:8)
+        @test slicedim(A, 1, 2) == 2:4:20
+        @test slicedim(A, 2, 2) == 5:8
         @test_throws ArgumentError slicedim(A,0,1)
         @test slicedim(A, 3, 1) == A
         @test_throws BoundsError slicedim(A, 3, 2)
@@ -2008,6 +2008,18 @@ end
     @test typeof(.~A) == Vector{Int}
 end
 
+# @inbounds is expression-like, returning its value; #15558
+@testset "expression-like inbounds" begin
+    local A = [1,2,3]
+    @test (@inbounds A[1]) == 1
+    f(A, i) = @inbounds i == 0 ? (return 0) : A[i]
+    @test f(A, 0) == 0
+    @test f(A, 1) == 1
+    g(A, i) = (i == 0 ? (@inbounds return 0) : (@inbounds A[i]))
+    @test g(A, 0) == 0
+    @test g(A, 1) == 1
+end
+
 @testset "issue #16247" begin
     local A = zeros(3,3)
     @test size(A[:,0x1:0x2]) == (3, 2)
@@ -2048,9 +2060,9 @@ end # module AutoRetType
         @test isa(cat((1,2), densearray, densearray), Array)
     end
     @test isa([[1,2,3]'; [1,2,3]'], Matrix{Int})
-    @test isa([[1,2,3]' [1,2,3]'], Transpose{Int, Vector{Int}})
+    @test isa([[1,2,3]' [1,2,3]'], Adjoint{Int, Vector{Int}})
     @test isa([Any[1.0, 2]'; Any[2.0, 2]'], Matrix{Any})
-    @test isa([Any[1.0, 2]' Any[2.0, 2']'], Adjoint{Any, Vector{Any}})
+    @test isa([Any[1.0, 2]' Any[2.0, 2]'], Adjoint{Any, Vector{Any}})
     # Test that concatenations of heterogeneous Matrix-Vector pairs yield dense matrices
     @test isa(hcat(densemat, densevec), Array)
     @test isa(hcat(densevec, densemat), Array)
@@ -2082,7 +2094,7 @@ end
 end
 
 @testset "type constructor Array{T, N}(nothing, d...) works (especially for N>3)" for T in (Int, String),
-                                                                                      U in (Void, Missing)
+                                                                                      U in (Nothing, Missing)
     a = Array{Union{T, U}}(U(), 10)
     b = Vector{Union{T, U}}(U(), 10)
     @test size(a) == size(b) == (10,)
@@ -2160,7 +2172,7 @@ end
 
 Base.TypeArithmetic(::Type{F21666{T}}) where {T} = T()
 Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
-Base.convert(::Type{Float64}, x::F21666) = Float64(x.x)
+Float64(x::F21666) = Float64(x.x)
 @testset "Exactness of cumsum # 21666" begin
     # test that cumsum uses more stable algorithm
     # for types with unknown/rounding arithmetic

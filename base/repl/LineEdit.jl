@@ -868,7 +868,7 @@ function push_kill!(s::MIState, killed::String, concat = s.key_repeats > 0; rev=
             s.kill_ring[end] * killed
     else
         push!(s.kill_ring, killed)
-        length(s.kill_ring) > options(s).kill_ring_max && shift!(s.kill_ring)
+        length(s.kill_ring) > options(s).kill_ring_max && popfirst!(s.kill_ring)
     end
     s.kill_idx = endof(s.kill_ring)
     true
@@ -1277,7 +1277,7 @@ function match_input(k::Function, s, term, cs, keymap)
     return keymap_fcn(k, String(cs))
 end
 
-match_input(k::Void, s, term, cs, keymap) = (s,p) -> return :ok
+match_input(k::Nothing, s, term, cs, keymap) = (s,p) -> return :ok
 match_input(k::KeyAlias, s, term, cs, keymap) =
     match_input(keymap, s, IOBuffer(k.seq), Char[], keymap)
 
@@ -1295,7 +1295,7 @@ function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     return match_input(get(k, key, nothing), s, term, cs, keymap)
 end
 
-keymap_fcn(f::Void, c) = (s, p) -> return :ok
+keymap_fcn(f::Nothing, c) = (s, p) -> return :ok
 function keymap_fcn(f::Function, c)
     return function (s, p)
         r = eval(Expr(:call,f,s, p, c))
@@ -1419,7 +1419,7 @@ end
 # source is the keymap specified by the user (with normalized keys)
 function keymap_merge(target,source)
     ret = copy(target)
-    direct_keys = filter(p -> isa(p.second, Union{Function, KeyAlias, Void}), source)
+    direct_keys = filter(p -> isa(p.second, Union{Function, KeyAlias, Nothing}), source)
     # first direct entries
     for key in keys(direct_keys)
         add_nested_key!(ret, key, source[key]; override = true)

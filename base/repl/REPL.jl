@@ -300,9 +300,9 @@ mutable struct LineEditREPL <: AbstractREPL
     in_help::Bool
     envcolors::Bool
     waserror::Bool
-    specialdisplay::Union{Void,AbstractDisplay}
+    specialdisplay::Union{Nothing,AbstractDisplay}
     options::Options
-    mistate::Union{MIState,Void}
+    mistate::Union{MIState,Nothing}
     interface::ModalInterface
     backendref::REPLBackendRef
     LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
@@ -354,12 +354,12 @@ end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
     history::Array{String,1}
-    history_file::Union{Void,IO}
+    history_file::Union{Nothing,IO}
     start_idx::Int
     cur_idx::Int
     last_idx::Int
     last_buffer::IOBuffer
-    last_mode::Union{Void,Prompt}
+    last_mode::Union{Nothing,Prompt}
     mode_mapping::Dict
     modes::Array{Symbol,1}
 end

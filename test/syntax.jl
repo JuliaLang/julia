@@ -1235,3 +1235,10 @@ end
 
 # issue #9972
 @test Meta.lower(@__MODULE__, :(f(;3))) == Expr(:error, "invalid keyword argument syntax \"3\"")
+
+# issue #25055, make sure quote makes new Exprs
+function f25055()
+    x = quote end
+    return x
+end
+@test f25055() !== f25055()

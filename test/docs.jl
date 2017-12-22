@@ -955,7 +955,7 @@ for (line, expr) in Pair[
     ]
     @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(118, doc_util_path), STDOUT, expr)
     buf = IOBuffer()
-    @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
+    @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Nothing}
 end
 
 @test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"

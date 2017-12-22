@@ -8,17 +8,17 @@ Base.AbstractVector
 Base.AbstractMatrix
 Core.Array
 Core.Array(::Uninitialized, ::Any)
-Core.Array(::Void, ::Any)
+Core.Array(::Nothing, ::Any)
 Core.Array(::Missing, ::Any)
 Core.Uninitialized
 Core.uninitialized
 Base.Vector
 Base.Vector(::Uninitialized, ::Any)
-Base.Vector(::Void, ::Any)
+Base.Vector(::Nothing, ::Any)
 Base.Vector(::Missing, ::Any)
 Base.Matrix
 Base.Matrix(::Uninitialized, ::Any, ::Any)
-Base.Matrix(::Void, ::Any, ::Any)
+Base.Matrix(::Nothing, ::Any, ::Any)
 Base.Matrix(::Missing, ::Any, ::Any)
 Base.getindex(::Type, ::Any...)
 Base.zeros

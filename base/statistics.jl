@@ -418,7 +418,7 @@ function cov2cor!(C::AbstractMatrix{T}, xsd::AbstractArray) where T
     size(C) == (nx, nx) || throw(DimensionMismatch("inconsistent dimensions"))
     for j = 1:nx
         for i = 1:j-1
-            C[i,j] = C[j,i]'
+            C[i,j] = adjoint(C[j,i])
         end
         C[j,j] = oneunit(T)
         for i = j+1:nx
@@ -708,14 +708,14 @@ end
     T  = promote_type(eltype(v), typeof(v[1]*h))
 
     if h == 0
-        return T(v[i])
+        return convert(T, v[i])
     else
         a = v[i]
         b = v[i+1]
         if isfinite(a) && isfinite(b)
-            return T(a + h*(b-a))
+            return convert(T, a + h*(b-a))
         else
-            return T((1-h)*a + h*b)
+            return convert(T, (1-h)*a + h*b)
         end
     end
 end

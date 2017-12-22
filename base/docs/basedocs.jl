@@ -476,7 +476,7 @@ kw"try", kw"catch"
 """
     finally
 
-`finally` provides a way to run some code when a given block of code exits, regardless
+Run some code when a given block of code exits, regardless
 of how it exits. For example, here is how we can guarantee that an opened file is
 closed:
 
@@ -489,8 +489,8 @@ finally
 end
 ```
 
-When control leaves the `try` block (for example due to a `return`, or just finishing
-normally), `close(f)` will be executed. If the `try` block exits due to an exception,
+When control leaves the [`try`](@ref) block (for example, due to a [`return`](@ref), or just finishing
+normally), [`close(f)`](@ref) will be executed. If the `try` block exits due to an exception,
 the exception will continue propagating. A `catch` block may be combined with `try` and
 `finally` as well. In this case the `finally` block will run after `catch` has handled
 the error.
@@ -500,7 +500,7 @@ kw"finally"
 """
     break
 
-`break` breaks out of a loop immediately.
+Break out of a loop immediately.
 
 # Examples
 ```jldoctest
@@ -524,7 +524,7 @@ kw"break"
 """
     continue
 
-`continue` skips the rest of the current loop, then carries on looping.
+Skip the rest of the current loop, then carries on looping.
 
 # Examples
 ```jldoctest
@@ -542,7 +542,7 @@ kw"continue"
 """
     do
 
-The `do` keyword creates an anonymous function. For example:
+Create an anonymous function. For example:
 
 ```julia
 map(1:10) do x
@@ -804,16 +804,16 @@ DevNull
 # doc strings for code in boot.jl and built-ins
 
 """
-    Void
+    Nothing
 
 A type with no fields that is the type [`nothing`](@ref).
 """
-Void
+Nothing
 
 """
     nothing
 
-The singleton instance of type `Void`, used by convention when there is no value to return
+The singleton instance of type `Nothing`, used by convention when there is no value to return
 (as in a C `void` function) or when a variable or field holds no value.
 """
 nothing
@@ -1321,17 +1321,17 @@ Vector{T}(::Uninitialized, n)
 
 Construct a [`Vector{T}`](@ref) of length `m`, initialized with
 [`nothing`](@ref) entries. Element type `T` must be able to hold
-these values, i.e. `Void <: T`.
+these values, i.e. `Nothing <: T`.
 
 # Examples
 ```jldoctest
-julia> Vector{Union{Void, String}}(nothing, 2)
-2-element Array{Union{Void, String},1}:
+julia> Vector{Union{Nothing, String}}(nothing, 2)
+2-element Array{Union{Nothing, String},1}:
  nothing
  nothing
 ```
 """
-Vector{T}(::Void, n)
+Vector{T}(::Nothing, n)
 
 """
     Vector{T}(missing, m)
@@ -1370,17 +1370,17 @@ Matrix{T}(::Uninitialized, m, n)
 
 Construct a [`Matrix{T}`](@ref) of size `m`×`n`, initialized with
 [`nothing`](@ref) entries. Element type `T` must be able to hold
-these values, i.e. `Void <: T`.
+these values, i.e. `Nothing <: T`.
 
 # Examples
 ```jldoctest
-julia> Matrix{Union{Void, String}}(nothing, 2, 3)
-2×3 Array{Union{Void, String},2}:
+julia> Matrix{Union{Nothing, String}}(nothing, 2, 3)
+2×3 Array{Union{Nothing, String},2}:
  nothing  nothing  nothing
  nothing  nothing  nothing
 ```
 """
-Matrix{T}(::Void, m, n)
+Matrix{T}(::Nothing, m, n)
 
 """
     Matrix{T}(missing, m, n)
@@ -1431,22 +1431,22 @@ Array{T,N}(::Uninitialized, dims)
 
 Construct an `N`-dimensional [`Array`](@ref) containing elements of type `T`,
 initialized with [`nothing`](@ref) entries. Element type `T` must be able
-to hold these values, i.e. `Void <: T`.
+to hold these values, i.e. `Nothing <: T`.
 
 # Examples
 ```jldoctest
-julia> Array{Union{Void, String}}(nothing, 2)
-2-element Array{Union{Void, String},1}:
+julia> Array{Union{Nothing, String}}(nothing, 2)
+2-element Array{Union{Nothing, String},1}:
  nothing
  nothing
 
-julia> Array{Union{Void, Int}}(nothing, 2, 3)
-2×3 Array{Union{Void, Int64},2}:
+julia> Array{Union{Nothing, Int}}(nothing, 2, 3)
+2×3 Array{Union{Nothing, Int64},2}:
  nothing  nothing  nothing
  nothing  nothing  nothing
 ```
 """
-Array{T,N}(::Void, dims)
+Array{T,N}(::Nothing, dims)
 
 
 """

@@ -306,7 +306,7 @@ signed(x::UInt) = reinterpret(Int, x)
 # conversions used by ccall
 ptr_arg_cconvert(::Type{Ptr{T}}, x) where {T} = cconvert(T, x)
 ptr_arg_unsafe_convert(::Type{Ptr{T}}, x) where {T} = unsafe_convert(T, x)
-ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
+ptr_arg_unsafe_convert(::Type{Ptr{Cvoid}}, x) = x
 
 """
     cconvert(T,x)
@@ -389,14 +389,14 @@ function append_any(xs...)
     for x in xs
         for y in x
             if i > l
-                ccall(:jl_array_grow_end, Void, (Any, UInt), out, 16)
+                ccall(:jl_array_grow_end, Cvoid, (Any, UInt), out, 16)
                 l += 16
             end
             Core.arrayset(true, out, y, i)
             i += 1
         end
     end
-    ccall(:jl_array_del_end, Void, (Any, UInt), out, l-i+1)
+    ccall(:jl_array_del_end, Cvoid, (Any, UInt), out, l-i+1)
     out
 end
 
@@ -499,8 +499,9 @@ end
 macro inbounds(blk)
     return Expr(:block,
         Expr(:inbounds, true),
-        esc(blk),
-        Expr(:inbounds, :pop))
+        Expr(:local, Expr(:(=), :val, esc(blk))),
+        Expr(:inbounds, :pop),
+        :val)
 end
 
 """
@@ -532,7 +533,7 @@ function getindex(v::SimpleVector, i::Int)
         throw(BoundsError(v,i))
     end
     t = @_gc_preserve_begin v
-    x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
     x == C_NULL && throw(UndefRefError())
     o = unsafe_pointer_to_objref(x)
     @_gc_preserve_end t
@@ -597,7 +598,7 @@ function isassigned end
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
     t = @_gc_preserve_begin v
-    x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
     @_gc_preserve_end t
     return x != C_NULL
 end

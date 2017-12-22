@@ -5,19 +5,19 @@ Git credential information used in communication with git credential helpers. Th
 named using the [input/output key specification](https://git-scm.com/docs/git-credential#IOFMT).
 """
 mutable struct GitCredential
-    protocol::Union{String, Void}
-    host::Union{String, Void}
-    path::Union{String, Void}
-    username::Union{String, Void}
-    password::Union{String, Void}
+    protocol::Union{String, Nothing}
+    host::Union{String, Nothing}
+    path::Union{String, Nothing}
+    username::Union{String, Nothing}
+    password::Union{String, Nothing}
     use_http_path::Bool
 
     function GitCredential(
-            protocol::Union{AbstractString, Void}=nothing,
-            host::Union{AbstractString, Void}=nothing,
-            path::Union{AbstractString, Void}=nothing,
-            username::Union{AbstractString, Void}=nothing,
-            password::Union{AbstractString, Void}=nothing)
+            protocol::Union{AbstractString, Nothing}=nothing,
+            host::Union{AbstractString, Nothing}=nothing,
+            path::Union{AbstractString, Nothing}=nothing,
+            username::Union{AbstractString, Nothing}=nothing,
+            password::Union{AbstractString, Nothing}=nothing)
         c = new(protocol, host, path, username, password, true)
         finalizer(securezero!, c)
         return c
@@ -235,7 +235,7 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
 end
 
 """
-    default_username(config, git_cred) -> Union{String, Void}
+    default_username(config, git_cred) -> Union{String, Nothing}
 
 Return the default username, if any, provided by the `config` which is valid for the
 specified `git_cred`.

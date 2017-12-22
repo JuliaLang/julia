@@ -46,7 +46,7 @@ line of code; backtraces generally consist of a long list of instruction pointer
 settings can be obtained by calling this function with no arguments, and each can be set
 independently using keywords or in the order `(n, delay)`.
 """
-function init(; n::Union{Void,Integer} = nothing, delay::Union{Void,Float64} = nothing)
+function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Float64} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
@@ -77,7 +77,7 @@ end
 
 Clear any existing backtraces from the internal buffer.
 """
-clear() = ccall(:jl_profile_clear_data, Void, ())
+clear() = ccall(:jl_profile_clear_data, Cvoid, ())
 
 const LineInfoDict = Dict{UInt64, Vector{StackFrame}}
 const LineInfoFlatDict = Dict{UInt64, StackFrame}
@@ -273,12 +273,12 @@ Execute the command(s) you want to test (to force JIT-compilation), then call
 [`clear_malloc_data`](@ref). Then execute your command(s) again, quit
 Julia, and examine the resulting `*.mem` files.
 """
-clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
+clear_malloc_data() = ccall(:jl_clear_malloc_data, Cvoid, ())
 
 # C wrappers
 start_timer() = ccall(:jl_profile_start_timer, Cint, ())
 
-stop_timer() = ccall(:jl_profile_stop_timer, Void, ())
+stop_timer() = ccall(:jl_profile_stop_timer, Cvoid, ())
 
 is_running() = ccall(:jl_profile_is_running, Cint, ())!=0
 
@@ -489,7 +489,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
                     rpad(string(counts[i]), ndigcounts, " "),
                     " ",
                     "unknown function (pointer: 0x",
-                    hex(li.pointer,2*sizeof(Ptr{Void})),
+                    hex(li.pointer,2*sizeof(Ptr{Cvoid})),
                     ")")
             else
                 fname = string(li.func)

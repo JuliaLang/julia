@@ -461,7 +461,7 @@ show(io::IO, X::AbstractVector) = show_vector(io, X)
 # not set to Any, then the problem would be similar one layer below
 # when printing an array like Any[Any[1]]; hence we must treat Any
 # specially
-function typeinfo_eltype(typeinfo::Type)::Union{Type,Void}
+function typeinfo_eltype(typeinfo::Type)::Union{Type,Nothing}
     if typeinfo == Any
         # the current context knows nothing about what is being displayed, not even
         # whether it's a collection or scalar

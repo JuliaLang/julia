@@ -234,9 +234,7 @@ Base.intersect
 Base.setdiff
 Base.setdiff!
 Base.symdiff
-Base.symdiff!(::BitSet, ::Integer)
-Base.symdiff!(::BitSet, ::Any)
-Base.symdiff!(::BitSet, ::BitSet)
+Base.symdiff!
 Base.intersect!
 Base.issubset
 ```
@@ -255,8 +253,8 @@ Partially implemented by:
 ```@docs
 Base.push!
 Base.pop!
-Base.unshift!
-Base.shift!
+Base.pushfirst!
+Base.popfirst!
 Base.insert!
 Base.deleteat!
 Base.splice!

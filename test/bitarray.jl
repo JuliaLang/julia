@@ -557,8 +557,8 @@ timesofar("indexing")
     i1 = Bool[]
     for m = 1:v1
         x = rand(Bool)
-        unshift!(b1, x)
-        unshift!(i1, x)
+        pushfirst!(b1, x)
+        pushfirst!(i1, x)
         @test isequal(Array(b1), i1)
         @test bitcheck(b1)
     end
@@ -566,8 +566,8 @@ timesofar("indexing")
     b1 = bitrand(v1)
     i1 = Array(b1)
     for m = 1:v1
-        jb = shift!(b1)
-        ji = shift!(i1)
+        jb = popfirst!(b1)
+        ji = popfirst!(i1)
         @test jb == ji
         @test isequal(Array(b1), i1)
         @test bitcheck(b1)

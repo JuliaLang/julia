@@ -200,7 +200,7 @@ function test_atomic_read(commbuf::CommBuf, n::Int)
         correct &= var1 >= var2
         var1 == n && break
         # Temporary solution before we have gc transition support in codegen.
-        ccall(:jl_gc_safepoint, Void, ())
+        ccall(:jl_gc_safepoint, Cvoid, ())
     end
     commbuf.correct_read = correct
 end
@@ -245,7 +245,7 @@ function test_fence(p::Peterson, id::Int, n::Int)
         while p.flag[otherid][] != 0 && p.turn[] == otherid
             # busy wait
             # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Void, ())
+            ccall(:jl_gc_safepoint, Cvoid, ())
         end
         # critical section
         p.critical[id][] = 1
@@ -302,7 +302,7 @@ function test_atomic_cas!(var::Atomic{T}, range::StepRange{Int,Int}) where T
             old = atomic_cas!(var, T(i-1), T(i))
             old == T(i-1) && break
             # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Void, ())
+            ccall(:jl_gc_safepoint, Cvoid, ())
         end
     end
 end
@@ -357,12 +357,12 @@ for period in (0.06, Dates.Millisecond(60))
             wait(c)
             t = Timer(period)
             wait(t)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
             wait(c)
             sleep(period)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         end))
         wait(c)
         notify(c)
@@ -394,7 +394,7 @@ function test_thread_cfunction()
     @threads for i in 1:1000
         # Make sure this is not inferrable
         # and a runtime call to `jl_function_ptr` will be created
-        ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any),
+        ccall(:jl_function_ptr, Ptr{Cvoid}, (Any, Any, Any),
               complex_cfunction, Float64, Tuple{Ref{Vector{Float64}}})
     end
 end
@@ -428,7 +428,7 @@ function test_load_and_lookup_18020(n)
     @threads for i in 1:n
         try
             ccall(:jl_load_and_lookup,
-                  Ptr{Void}, (Cstring, Cstring, Ref{Ptr{Void}}),
+                  Ptr{Cvoid}, (Cstring, Cstring, Ref{Ptr{Cvoid}}),
                   "$i", :f, C_NULL)
         end
     end
@@ -460,7 +460,7 @@ test_nested_loops()
             %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i128*
             store atomic i128 %1, i128* %ptr release, align 8
             ret void
-        \"\"\", Void, Tuple{Ptr{UInt128}, UInt128}, unsafe_convert(Ptr{UInt128}, x), v)
+        \"\"\", Cvoid, Tuple{Ptr{UInt128}, UInt128}, unsafe_convert(Ptr{UInt128}, x), v)
     end
     code_native(STDOUT, unaligned_setindex!, Tuple{Atomic{UInt128}, UInt128})
     """

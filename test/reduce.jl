@@ -280,10 +280,10 @@ end
 # 19151 - always short circuit
 let c = Int[], d = Int[], A = 1:9
     all((push!(c, x); x < 5) for x in A)
-    @test c == collect(1:5)
+    @test c == 1:5
 
     any((push!(d, x); x > 4) for x in A)
-    @test d == collect(1:5)
+    @test d == 1:5
 end
 
 # any/all with non-boolean collections

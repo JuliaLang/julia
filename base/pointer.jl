@@ -15,17 +15,15 @@ Ptr
 
 The C null pointer constant, sometimes used when calling external code.
 """
-const C_NULL = bitcast(Ptr{Void}, 0)
+const C_NULL = bitcast(Ptr{Cvoid}, 0)
 
 # TODO: deprecate these conversions. C doesn't even allow them.
 
 # pointer to integer
-convert(::Type{T}, x::Ptr) where {T<:Union{Int,UInt}} = bitcast(T, x)
-convert(::Type{T}, x::Ptr) where {T<:Integer} = convert(T, convert(UInt, x))
+convert(::Type{T}, x::Ptr) where {T<:Integer} = T(UInt(x))
 
 # integer to pointer
-convert(::Type{Ptr{T}}, x::UInt) where {T} = bitcast(Ptr{T}, x)
-convert(::Type{Ptr{T}}, x::Int) where {T} = bitcast(Ptr{T}, x)
+convert(::Type{Ptr{T}}, x::Union{Int,UInt}) where {T} = Ptr{T}(x)
 
 # pointer to pointer
 convert(::Type{Ptr{T}}, p::Ptr{T}) where {T} = p
@@ -83,13 +81,13 @@ a valid memory address to data of the requested length.
 """
 function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
                      p::Ptr{T}, dims::NTuple{N,Int}, own::Bool=false) where {T,N}
-    ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{Void}, Any, Int32),
+    ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{Cvoid}, Any, Int32),
           Array{T,N}, p, dims, own)
 end
 function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
                      p::Ptr{T}, d::Integer, own::Bool=false) where {T}
     ccall(:jl_ptr_to_array_1d, Array{T,1},
-          (Any, Ptr{Void}, Csize_t, Cint), Array{T,1}, p, d, own)
+          (Any, Ptr{Cvoid}, Csize_t, Cint), Array{T,1}, p, d, own)
 end
 unsafe_wrap(Atype::Type, p::Ptr, dims::NTuple{N,<:Integer}, own::Bool=false) where {N} =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own)
@@ -127,7 +125,7 @@ Convert a `Ptr` to an object reference. Assumes the pointer refers to a valid he
 Julia object. If this is not the case, undefined behavior results, hence this function is
 considered "unsafe" and should be used with care.
 """
-unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Void},), x)
+unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Cvoid},), x)
 
 """
     pointer_from_objref(x)
@@ -136,8 +134,8 @@ Get the memory address of a Julia object as a `Ptr`. The existence of the result
 will not protect the object from garbage collection, so you must ensure that the object
 remains referenced for the whole time that the `Ptr` will be used.
 """
-pointer_from_objref(@nospecialize(x)) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
-data_pointer_from_objref(@nospecialize(x)) = pointer_from_objref(x)::Ptr{Void}
+pointer_from_objref(@nospecialize(x)) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
+data_pointer_from_objref(@nospecialize(x)) = pointer_from_objref(x)::Ptr{Cvoid}
 
 eltype(::Type{Ptr{T}}) where {T} = T
 

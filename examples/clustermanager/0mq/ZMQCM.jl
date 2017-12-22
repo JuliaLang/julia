@@ -127,7 +127,7 @@ function start_broker()
     ZMQ.bind(xsub, "tcp://127.0.0.1:$(BROKER_SUB_PORT)")
     ZMQ.bind(xpub, "tcp://127.0.0.1:$(BROKER_PUB_PORT)")
 
-    ccall((:zmq_proxy, :libzmq), Cint,  (Ptr{Void}, Ptr{Void}, Ptr{Void}), xsub.data, xpub.data, C_NULL)
+    ccall((:zmq_proxy, :libzmq), Cint,  (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), xsub.data, xpub.data, C_NULL)
 #    proxy(xsub, xpub)
 
     # control never comes here

@@ -31,6 +31,8 @@ New language features
     `@generated` and normal implementations of part of a function. Surrounding code
     will be common to both versions ([#23168]).
 
+  * Added `⟂` (`\perp`) operator with comparison precedence ([#24404]).
+
   * The `missing` singleton object (of type `Missing`) has been added to represent
     missing values ([#24653]). It propagates through standard operators and mathematical functions,
     and implements three-valued logic, similar to SQLs `NULL` and R's `NA`.
@@ -43,6 +45,10 @@ Language changes
 
   * The syntax for parametric methods, `function f{T}(x::T)`, has been
     changed to `function f(x::T) where {T}` ([#11310]).
+
+  * The fallback constructor that calls `convert` is deprecated. Instead, new types should
+    prefer to define constructors, and add `convert` methods that call those constructors
+    only as necessary ([#15120]).
 
   * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
     `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
@@ -74,6 +80,9 @@ Language changes
   * `let` blocks now parse the same as `for` loops; the first argument is either an
     assignment or `block` of assignments, and the second argument is a block of
     statements ([#21774]).
+
+  * `do` syntax now parses to an expression with head `:do`, instead of as a function
+    call ([#21774]).
 
   * Parsed and lowered forms of type definitions have been synchronized with their
     new keywords ([#23157]). Expression heads are renamed as follows:
@@ -131,6 +140,8 @@ Language changes
 
   * Prefix `&` for by-reference arguments to `ccall` has been deprecated in favor of
     `Ref` argument types ([#6080]).
+
+  * The constructor `Ref(x::T)` now always returns a `Ref{T}` ([#21527]).
 
   * All line numbers in ASTs are represented by `LineNumberNode`s; the `:line` expression
     head is no longer used. `QuoteNode`s are also consistently used for quoted symbols instead
@@ -306,7 +317,7 @@ This section lists changes that do not have deprecation warnings.
     finalized as its second (rather than the reverse). For the majority of use cases
     deprecation warnings will be triggered. However, deprecation warnings will not trigger where
     (1) the callable argument is not a subtype of `Function`; or (2) both arguments are
-    `Function`s or `Ptr{Void}`s ([#24605]).
+    `Function`s or `Ptr{Cvoid}`s ([#24605]).
 
   * The `kill` function now throws errors on user error (e.g. on permission
     errors), but returns successfully if the process had previously exited.
@@ -332,6 +343,13 @@ This section lists changes that do not have deprecation warnings.
 
   * `eachindex(A, B...)` now requires that all inputs have the same number of elements.
     When the chosen indexing is Cartesian, they must have the same axes.
+
+  * `AbstractRange` objects are now considered as equal to other `AbstractArray` objects
+    by `==` and `isequal` if all of their elements are equal ([#16401]).
+    This has required changing the hashing algorithm: ranges now use an O(N) fallback
+    instead of a O(1) specialized method unless they define the `Base.TypeRangeStep`
+    trait; see its documentation for details. Types which support subtraction (operator
+    `-`) must now implement `widen` for hashing to work inside heterogeneous arrays.
 
 Library improvements
 --------------------
@@ -468,6 +486,20 @@ Library improvements
     - Inherits from `AbstractArray`, and linear indexing can be used to provide
       linear-to-cartesian conversion ([#24715])
     - It has a new constructor taking an array
+
+  * several missing set-like operations have been added ([#23528]):
+    `union`, `intersect`, `symdiff`, `setdiff` are now implemented for
+    all collections with arbitrary many arguments, as well as the
+    mutating counterparts (`union!` etc.). The performance is also
+    much better in many cases. Note that this change is slightly
+    breaking: all the non-mutating functions always return a new
+    object even if only one argument is passed. Moreover the semantics
+    of `intersect` and `symdiff` is changed for vectors:
+    + `intersect` doesn't preserve the multiplicity anymore (use `filter` for
+      the old behavior)
+    + `symdiff` has been made consistent with the corresponding methods for
+      other containers, by taking the multiplicity of the arguments into account.
+      Use `unique` to get the old behavior.
 
   * The type `LinearIndices` has been added, providing conversion from
     cartesian incices to linear indices using the normal indexing operation. ([#24715])
@@ -827,15 +859,29 @@ Deprecated or removed
 
   * `Associative` has been deprecated in favor of `AbstractDict` ([#25012]).
 
+  * `Void` has been renamed back to `Nothing` with an alias `Cvoid` for use when calling C
+    with a return type of `Cvoid` or a return or argument type of `Ptr{Cvoid}` ([#25162]).
+
+  * `Nullable{T}` has been deprecated and moved to the Nullables package ([#23642]). Use
+    `Union{T, Nothing}` instead, or `Union{Some{T}, Nothing}` if `nothing` is a possible
+    value (i.e. `Nothing <: T`). `isnull(x)` can be replaced with `x === nothing` and
+    `unsafe_get`/`get` can be dropped or replaced with `coalesce`.
+    `NullException` has been removed.
+
+  * `unshift!` and `shift!` have been renamed to `pushfirst!` and `popfirst!` ([#23902])
+
   * `Nullable{T}` has been deprecated and moved to the Nullables package ([#23642]).
     Use `Union{T, Void}` instead, or `Union{Some{T}, Void}` if `nothing` is a possible value
     (i.e. `Void <: T`). `isnull(x)` can be replaced with `x === nothing`
     and `unsafe_get`/`get` can be dropped or replaced with `coalesce`.
-    `NullException` has been removed.
 
   * `CartesianRange` has been renamed `CartesianIndices` ([#24715]).
 
   * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianIndices` and `LinearIndices` ([#24715]).
+
+  * `getindex(F::Factorizion, s::Symbol)` (usually seen as e.g. `F[:Q]`) is deprecated
+    in favor of dot overloading (`getproperty`) so factors should now be accessed as e.g.
+    `F.Q` instead of `F[:Q]` ([#25184]).
 
 Command-line option changes
 ---------------------------

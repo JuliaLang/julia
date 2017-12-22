@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const max_ccall_threads = parse(Int, get(ENV, "UV_THREADPOOL_SIZE", "4"))
-const thread_notifiers = Union{Condition, Void}[nothing for i in 1:max_ccall_threads]
+const thread_notifiers = Union{Condition, Nothing}[nothing for i in 1:max_ccall_threads]
 const threadcall_restrictor = Semaphore(max_ccall_threads)
 
 function notify_fun(idx)
@@ -11,7 +11,7 @@ function notify_fun(idx)
 end
 
 function init_threadcall()
-    global c_notify_fun = cfunction(notify_fun, Void, Tuple{Cint})
+    global c_notify_fun = cfunction(notify_fun, Cvoid, Tuple{Cint})
 end
 
 """
@@ -40,7 +40,7 @@ macro threadcall(f, rettype, argtypes, argvals...)
     argvals = map(esc, argvals)
 
     # construct non-allocating wrapper to call C function
-    wrapper = :(function wrapper(args_ptr::Ptr{Void}, retval_ptr::Ptr{Void})
+    wrapper = :(function wrapper(args_ptr::Ptr{Cvoid}, retval_ptr::Ptr{Cvoid})
         p = args_ptr
     end)
     body = wrapper.args[2].args
@@ -64,7 +64,7 @@ end
 
 function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argvals::Vector)
     # generate function pointer
-    fun_ptr = cfunction(wrapper, Int, Tuple{Ptr{Void}, Ptr{Void}})
+    fun_ptr = cfunction(wrapper, Int, Tuple{Ptr{Cvoid}, Ptr{Cvoid}})
 
     # cconvert, root and unsafe_convert arguments
     roots = Any[]
@@ -87,8 +87,8 @@ function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argva
     thread_notifiers[idx] = Condition()
 
     # queue up the work to be done
-    ccall(:jl_queue_work, Void,
-        (Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}, Cint),
+    ccall(:jl_queue_work, Cvoid,
+        (Ptr{Cvoid}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid}, Cint),
         fun_ptr, args_arr, ret_arr, c_notify_fun, idx)
 
     # wait for a result & return it

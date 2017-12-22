@@ -161,7 +161,7 @@ segfault your program, in the same manner as C.
 function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
-    ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+    ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
           dest, src, n*sizeof(T))
     return dest
 end
@@ -182,15 +182,15 @@ function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     if isbits(T)
         unsafe_copyto!(pointer(dest, doffs), pointer(src, soffs), n)
     elseif isbitsunion(T)
-        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
               pointer(dest, doffs), pointer(src, soffs), n * Base.bitsunionsize(T))
         # copy selector bytes
-        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
               convert(Ptr{UInt8}, pointer(dest)) + length(dest) * Base.bitsunionsize(T) + doffs - 1,
               convert(Ptr{UInt8}, pointer(src)) + length(src) * Base.bitsunionsize(T) + soffs - 1,
               n)
     else
-        ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
+        ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
               dest, pointer(dest, doffs), src, pointer(src, soffs), n)
     end
     @_gc_preserve_end t2
@@ -304,7 +304,7 @@ end
 getindex(::Type{Any}) = Vector{Any}()
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
-    ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), a, x, length(a))
+    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, x, length(a))
     return a
 end
 
@@ -381,7 +381,7 @@ function ones end
 
 for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     @eval begin
-        $fname(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(uninitialized, Dims(dims)), $felt(T))
+        $fname(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(uninitialized, convert(Dims, dims)::Dims), $felt(T))
         $fname(dims::Tuple) = ($fname)(Float64, dims)
         $fname(::Type{T}, dims...) where {T} = $fname(T, dims)
         $fname(dims...) = $fname(dims)
@@ -402,21 +402,14 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 # arises in similar(dest, Pair{Union{},Union{}}) where dest::Dict:
 convert(::Type{Vector{Union{}}}, a::Vector{Union{}}) = a
 
-convert(::Type{Vector}, x::AbstractVector{T}) where {T} = convert(Vector{T}, x)
-convert(::Type{Matrix}, x::AbstractMatrix{T}) where {T} = convert(Matrix{T}, x)
-
-convert(::Type{Array{T}}, x::Array{T,n}) where {T,n} = x
-convert(::Type{Array{T,n}}, x::Array{T,n}) where {T,n} = x
-
-convert(::Type{Array{T}}, x::AbstractArray{S,n}) where {T,n,S} = convert(Array{T,n}, x)
-convert(::Type{Array{T,n}}, x::AbstractArray{S,n}) where {T,n,S} = copyto!(Array{T,n}(uninitialized, size(x)), x)
-
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
-# constructors should make copies
+## Constructors ##
 
 if module_name(@__MODULE__) === :Base  # avoid method overwrite
-(::Type{T})(x::T) where {T<:Array} = copy(x)
+# constructors should make copies
+Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto!(Array{T,N}(uninitialized, size(x)), x)
+AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto!(similar(A,T), A)
 end
 
 ## copying iterators to containers
@@ -504,14 +497,26 @@ end
 # gets a chance to see it, so that recursive calls to the caller
 # don't trigger the inference limiter
 if isdefined(Core, :Inference)
-    macro default_eltype(itrt)
+    macro default_eltype(itr)
+        I = esc(itr)
         return quote
-            Core.Inference.return_type(first, Tuple{$(esc(itrt))})
+            if $I isa Generator && ($I).f isa Type
+                ($I).f
+            else
+                Core.Inference.return_type(first, Tuple{typeof($I)})
+            end
         end
     end
 else
-    macro default_eltype(itrt)
-        return :(Any)
+    macro default_eltype(itr)
+        I = esc(itr)
+        return quote
+            if $I isa Generator && ($I).f isa Type
+                ($I).f
+            else
+                Any
+            end
+        end
     end
 end
 
@@ -520,7 +525,7 @@ _array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, axes(itr)):
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
-    et = @default_eltype(typeof(itr))
+    et = @default_eltype(itr)
     if isa(isz, SizeUnknown)
         return grow_to!(Vector{et}(), itr)
     else
@@ -534,12 +539,12 @@ function collect(itr::Generator)
 end
 
 _collect(c, itr, ::EltypeUnknown, isz::SizeUnknown) =
-    grow_to!(_similar_for(c, @default_eltype(typeof(itr)), itr, isz), itr)
+    grow_to!(_similar_for(c, @default_eltype(itr), itr, isz), itr)
 
 function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
     st = start(itr)
     if done(itr,st)
-        return _similar_for(c, @default_eltype(typeof(itr)), itr, isz)
+        return _similar_for(c, @default_eltype(itr), itr, isz)
     end
     v1, st = next(itr, st)
     collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)
@@ -727,20 +732,20 @@ setindex!(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) where {T, N} = fill!(A,
 # efficiently grow an array
 
 _growbeg!(a::Vector, delta::Integer) =
-    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, delta)
+    ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), a, delta)
 _growend!(a::Vector, delta::Integer) =
-    ccall(:jl_array_grow_end, Void, (Any, UInt), a, delta)
+    ccall(:jl_array_grow_end, Cvoid, (Any, UInt), a, delta)
 _growat!(a::Vector, i::Integer, delta::Integer) =
-    ccall(:jl_array_grow_at, Void, (Any, Int, UInt), a, i - 1, delta)
+    ccall(:jl_array_grow_at, Cvoid, (Any, Int, UInt), a, i - 1, delta)
 
 # efficiently delete part of an array
 
 _deletebeg!(a::Vector, delta::Integer) =
-    ccall(:jl_array_del_beg, Void, (Any, UInt), a, delta)
+    ccall(:jl_array_del_beg, Cvoid, (Any, UInt), a, delta)
 _deleteend!(a::Vector, delta::Integer) =
-    ccall(:jl_array_del_end, Void, (Any, UInt), a, delta)
+    ccall(:jl_array_del_end, Cvoid, (Any, UInt), a, delta)
 _deleteat!(a::Vector, i::Integer, delta::Integer) =
-    ccall(:jl_array_del_at, Void, (Any, Int, UInt), a, i - 1, delta)
+    ccall(:jl_array_del_at, Cvoid, (Any, Int, UInt), a, i - 1, delta)
 
 ## Dequeue functionality ##
 
@@ -864,7 +869,7 @@ function prepend!(a::Array{<:Any,1}, items::AbstractVector)
 end
 
 prepend!(a::Vector, iter) = _prepend!(a, iteratorsize(iter), iter)
-unshift!(a::Vector, iter...) = prepend!(a, iter)
+pushfirst!(a::Vector, iter...) = prepend!(a, iter)
 
 function _prepend!(a, ::Union{HasLength,HasShape}, iter)
     n = length(iter)
@@ -879,7 +884,7 @@ function _prepend!(a, ::IteratorSize, iter)
     n = 0
     for item in iter
         n += 1
-        unshift!(a, item)
+        pushfirst!(a, item)
     end
     reverse!(a, 1, n)
     a
@@ -918,7 +923,7 @@ julia> a[1:6]
 function resize!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
-        ccall(:jl_array_grow_end, Void, (Any, UInt), a, nl-l)
+        ccall(:jl_array_grow_end, Cvoid, (Any, UInt), a, nl-l)
     else
         if nl < 0
             throw(ArgumentError("new length must be ≥ 0"))
@@ -936,7 +941,7 @@ Suggest that collection `s` reserve capacity for at least `n` elements. This can
 function sizehint! end
 
 function sizehint!(a::Vector, sz::Integer)
-    ccall(:jl_array_sizehint, Void, (Any, UInt), a, sz)
+    ccall(:jl_array_sizehint, Cvoid, (Any, UInt), a, sz)
     a
 end
 
@@ -985,13 +990,13 @@ function pop!(a::Vector)
 end
 
 """
-    unshift!(collection, items...) -> collection
+    pushfirst!(collection, items...) -> collection
 
 Insert one or more `items` at the beginning of `collection`.
 
 # Examples
 ```jldoctest
-julia> unshift!([1, 2, 3, 4], 5, 6)
+julia> pushfirst!([1, 2, 3, 4], 5, 6)
 6-element Array{Int64,1}:
  5
  6
@@ -1001,7 +1006,7 @@ julia> unshift!([1, 2, 3, 4], 5, 6)
  4
 ```
 """
-function unshift!(a::Array{T,1}, item) where T
+function pushfirst!(a::Array{T,1}, item) where T
     item = convert(T, item)
     _growbeg!(a, 1)
     a[1] = item
@@ -1009,7 +1014,7 @@ function unshift!(a::Array{T,1}, item) where T
 end
 
 """
-    shift!(collection) -> item
+    popfirst!(collection) -> item
 
 Remove the first `item` from `collection`.
 
@@ -1024,7 +1029,7 @@ julia> A = [1, 2, 3, 4, 5, 6]
  5
  6
 
-julia> shift!(A)
+julia> popfirst!(A)
 1
 
 julia> A
@@ -1036,7 +1041,7 @@ julia> A
  6
 ```
 """
-function shift!(a::Vector)
+function popfirst!(a::Vector)
     if isempty(a)
         throw(ArgumentError("array must be non-empty"))
     end
@@ -1302,7 +1307,7 @@ function empty!(a::Vector)
     return a
 end
 
-_memcmp(a, b, len) = ccall(:memcmp, Int32, (Ptr{Void}, Ptr{Void}, Csize_t), a, b, len) % Int
+_memcmp(a, b, len) = ccall(:memcmp, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, len) % Int
 
 # use memcmp for lexcmp on byte arrays
 function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
@@ -1450,24 +1455,24 @@ function vcat(arrays::Vector{T}...) where T
         elsz = bitsunionsize(T)
         selptr = convert(Ptr{UInt8}, ptr) + n * elsz
     else
-        elsz = Core.sizeof(Ptr{Void})
+        elsz = Core.sizeof(Ptr{Cvoid})
     end
     t = @_gc_preserve_begin arr
     for a in arrays
         na = length(a)
         nba = na * elsz
         if isbits(T)
-            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   ptr, a, nba)
         elseif isbitsunion(T)
-            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   ptr, a, nba)
             # copy selector bytes
-            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   selptr, convert(Ptr{UInt8}, pointer(a)) + nba, na)
             selptr += na
         else
-            ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
+            ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
                   arr, ptr, a, pointer(a), na)
         end
         ptr += nba
@@ -2209,99 +2214,53 @@ function filter!(f, a::AbstractVector)
     return a
 end
 
-function filter(f, a::Vector)
-    r = Vector{eltype(a)}()
-    for ai in a
-        if f(ai)
-            push!(r, ai)
-        end
-    end
-    return r
-end
+filter(f, a::Vector) = mapfilter(f, push!, a, similar(a, 0))
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
 
-function intersect(v1, vs...)
-    ret = Vector{promote_eltype(v1, vs...)}()
-    for v_elem in v1
-        inall = true
-        for vsi in vs
-            if !in(v_elem, vsi)
-                inall=false; break
-            end
-        end
-        if inall
-            push!(ret, v_elem)
-        end
+_unique_filter!(pred, update!, state) = function (x)
+    if pred(x, state)
+        update!(state, x)
+        true
+    else
+        false
     end
-    ret
 end
 
-function union(vs...)
-    ret = Vector{promote_eltype(vs...)}()
-    seen = Set()
-    for v in vs
-        for v_elem in v
-            if !in(v_elem, seen)
-                push!(ret, v_elem)
-                push!(seen, v_elem)
-            end
-        end
+_grow_filter!(seen) = _unique_filter!(∉, push!, seen)
+_shrink_filter!(keep) = _unique_filter!(∈, pop!, keep)
+
+function _grow!(pred!, v::AbstractVector, itrs)
+    filter!(pred!, v) # uniquify v
+    foldl(v, itrs) do v, itr
+        mapfilter(pred!, push!, itr, v)
     end
-    ret
 end
-# setdiff only accepts two args
 
-"""
-    setdiff(a, b)
+union!(v::AbstractVector{T}, itrs...) where {T} =
+    _grow!(_grow_filter!(sizehint!(Set{T}(), length(v))), v, itrs)
 
-Construct the set of elements in `a` but not `b`. Maintains order with arrays. Note that
-both arguments must be collections, and both will be iterated over. In particular,
-`setdiff(set,element)` where `element` is a potential member of `set`, will not work in
-general.
+symdiff!(v::AbstractVector{T}, itrs...) where {T} =
+    _grow!(_shrink_filter!(symdiff!(Set{T}(), v, itrs...)), v, itrs)
 
-# Examples
-```jldoctest
-julia> setdiff([1,2,3],[3,4,5])
-2-element Array{Int64,1}:
- 1
- 2
-```
-"""
-function setdiff(a, b)
-    args_type = promote_type(eltype(a), eltype(b))
-    bset = Set(b)
-    ret = Vector{args_type}()
-    seen = Set{eltype(a)}()
-    for a_elem in a
-        if !in(a_elem, seen) && !in(a_elem, bset)
-            push!(ret, a_elem)
-            push!(seen, a_elem)
-        end
-    end
-    ret
+function _shrink!(shrinker!, v::AbstractVector, itrs)
+    seen = Set{eltype(v)}()
+    filter!(_grow_filter!(seen), v)
+    shrinker!(seen, itrs...)
+    filter!(_in(seen), v)
 end
-# symdiff is associative, so a relatively clean
-# way to implement this is by using setdiff and union, and
-# recursing. Has the advantage of keeping order, too, but
-# not as fast as other methods that make a single pass and
-# store counts with a Dict.
-symdiff(a) = a
-symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
-"""
-    symdiff(a, b, rest...)
 
-Construct the symmetric difference of elements in the passed in sets or arrays.
-Maintains order with arrays.
+intersect!(v::AbstractVector, itrs...) = _shrink!(intersect!, v, itrs)
+setdiff!(  v::AbstractVector, itrs...) = _shrink!(setdiff!, v, itrs)
 
-# Examples
-```jldoctest
-julia> symdiff([1,2,3],[3,4,5],[4,5,6])
-3-element Array{Int64,1}:
- 1
- 2
- 6
-```
-"""
-symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
+vectorfilter(f, v::AbstractVector) = filter(f, v) # TODO: do we want this special case?
+vectorfilter(f, v) = [x for x in v if f(x)]
+
+function _shrink(shrinker!, itr, itrs)
+    keep = shrinker!(Set(itr), itrs...)
+    vectorfilter(_shrink_filter!(keep), itr)
+end
+
+intersect(itr, itrs...) = _shrink(intersect!, itr, itrs)
+setdiff(  itr, itrs...) = _shrink(setdiff!, itr, itrs)

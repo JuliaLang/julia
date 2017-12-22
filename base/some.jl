@@ -3,7 +3,7 @@
 """
     Some{T}
 
-A wrapper type used in `Union{Some{T}, Void}` to distinguish between the absence
+A wrapper type used in `Union{Some{T}, Nothing}` to distinguish between the absence
 of a value ([`nothing`](@ref)) and the presence of a `nothing` value (i.e. `Some(nothing)`).
 
 Use [`coalesce`](@ref) to access the value wrapped by a `Some` object.
@@ -13,14 +13,14 @@ struct Some{T}
 end
 
 promote_rule(::Type{Some{S}}, ::Type{Some{T}}) where {S,T} = Some{promote_type(S, T)}
-promote_rule(::Type{Some{T}}, ::Type{Void}) where {T} = Union{Some{T}, Void}
+promote_rule(::Type{Some{T}}, ::Type{Nothing}) where {T} = Union{Some{T}, Nothing}
 
 convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
-convert(::Type{Union{Some{T}, Void}}, x::Some) where {T} = convert(Some{T}, x)
+convert(::Type{Union{Some{T}, Nothing}}, x::Some) where {T} = convert(Some{T}, x)
 
-convert(::Type{Union{T, Void}}, x::Any) where {T} = convert(T, x)
-convert(::Type{Void}, x::Any) = throw(MethodError(convert, (Void, x)))
-convert(::Type{Void}, x::Void) = nothing
+convert(::Type{Union{T, Nothing}}, x::Any) where {T} = convert(T, x)
+convert(::Type{Nothing}, x::Any) = throw(MethodError(convert, (Nothing, x)))
+convert(::Type{Nothing}, x::Nothing) = nothing
 
 function show(io::IO, x::Some)
     if get(io, :typeinfo, Any) == typeof(x)
@@ -65,11 +65,11 @@ function coalesce end
 
 coalesce(x::Any) = x
 coalesce(x::Some) = x.value
-coalesce(x::Void) = nothing
+coalesce(x::Nothing) = nothing
 coalesce(x::Missing) = missing
 coalesce(x::Any, y...) = x
 coalesce(x::Some, y...) = x.value
-coalesce(x::Union{Void, Missing}, y...) = coalesce(y...)
+coalesce(x::Union{Nothing, Missing}, y...) = coalesce(y...)
 
 """
     notnothing(x)
@@ -77,4 +77,4 @@ coalesce(x::Union{Void, Missing}, y...) = coalesce(y...)
 Throw an error if `x == nothing`, and return `x` if not.
 """
 notnothing(x::Any) = x
-notnothing(::Void) = throw(ArgumentError("nothing passed to notnothing"))
+notnothing(::Nothing) = throw(ArgumentError("nothing passed to notnothing"))

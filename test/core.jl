@@ -1133,7 +1133,7 @@ let
    b = C_NULL + 1
    c = C_NULL - 1
    d = 1 + C_NULL
-   @test eltype(a) == Void
+   @test eltype(a) == Nothing
 
    @test a != b != c
    @test b == d
@@ -1162,7 +1162,7 @@ let
     @test a2 == [101,102,909]
 end
 
-@test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Void}, (Any,Any),
+@test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Cvoid}, (Any,Any),
                                      x -> x+1, 314158)) == 314159
 @test unsafe_pointer_to_objref(pointer_from_objref(ℯ+pi)) == ℯ+pi
 
@@ -1327,7 +1327,7 @@ end
 
 # issue #2365
 mutable struct B2365{T}
-     v::Union{T, Void}
+     v::Union{T, Nothing}
 end
 @test B2365{Int}(nothing).v === nothing
 @test B2365{Int}(0).v === 0
@@ -1484,7 +1484,7 @@ let
         end
         return ret
     end
-    x = Vector{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void}}(uninitialized, 3)
+    x = Vector{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Nothing}}(uninitialized, 3)
     x[1] = 1.0
     x[2] = 2.0
     x[3] = 3.0
@@ -1602,7 +1602,7 @@ try
 end
 
 # issue #4526
-f4526(x) = isa(x.a, Void)
+f4526(x) = isa(x.a, Nothing)
 @test_throws ErrorException f4526(1)
 @test_throws ErrorException f4526(im)
 @test_throws ErrorException f4526(1+2im)
@@ -1643,7 +1643,7 @@ end
 # issue #4681
 # ccall should error if convert() returns something of the wrong type
 mutable struct Z4681
-    x::Ptr{Void}
+    x::Ptr{Cvoid}
     Z4681() = new(C_NULL)
 end
 Base.unsafe_convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
@@ -1738,7 +1738,7 @@ f5150(T) = Vector{Rational{T}}(uninitialized, 1)
 
 # issue #5165
 primitive type T5165{S} 64 end
-make_t(x::Int64) = Core.Intrinsics.bitcast(T5165{Void}, x)
+make_t(x::Int64) = Core.Intrinsics.bitcast(T5165{Nothing}, x)
 xs5165 = T5165[make_t(Int64(1))]
 b5165 = IOBuffer()
 for x in xs5165
@@ -2139,7 +2139,7 @@ f6980(::Union{Int, Float64}, ::B6980) = true
 @test f6980(1, B6980())
 
 # issue #7049
-Maybe7049{T} = Union{T,Void}
+Maybe7049{T} = Union{T,Nothing}
 function ttt7049(;init::Maybe7049{Union{AbstractString,Tuple{Int,Char}}} = nothing)
     string("init=", init)
 end
@@ -2240,8 +2240,8 @@ end
 
 # issue #8184
 struct Foo8184
-    x::Void
-    y::Void
+    x::Nothing
+    y::Nothing
     z::Float64
 end
 let f = Foo8184(nothing,nothing,1.0)
@@ -2354,24 +2354,24 @@ call_lambda7() = ((x...)->x)(1,2)
 
 # jl_new_bits testing
 let x = [1,2,3]
-    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Int, x) === 1
-    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Complex{Int}, x) === 1+2im
-    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), NTuple{3,Int}, x) === (1,2,3)
-    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Tuple{Int,Int,Int}, x) === (1,2,3)
-    @test (ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Tuple{Int16,Tuple{Void},Int8,Tuple{},Int,Void,Int}, x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Int, x) === 1
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Complex{Int}, x) === 1+2im
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), NTuple{3,Int}, x) === (1,2,3)
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Tuple{Int,Int,Int}, x) === (1,2,3)
+    @test (ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Tuple{Int16,Tuple{Cvoid},Int8,Tuple{},Int,Cvoid,Int}, x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
 end
 
 # sig 2 is SIGINT per the POSIX.1-1990 standard
 if !Sys.iswindows()
-    ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
+    ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 0)
     @test_throws InterruptException begin
-        ccall(:kill, Void, (Cint, Cint,), getpid(), 2)
+        ccall(:kill, Cvoid, (Cint, Cint,), getpid(), 2)
         for i in 1:10
             Libc.systemsleep(0.1)
-            ccall(:jl_gc_safepoint, Void, ()) # wait for SIGINT to arrive
+            ccall(:jl_gc_safepoint, Cvoid, ()) # wait for SIGINT to arrive
         end
     end
-    ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+    ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
 end
 let
     # Exception frame automatically restores sigatomic counter.
@@ -3209,7 +3209,7 @@ f11715(x) = (x === Tuple{Any})
 
 # part of #11597
 # make sure invalid, partly-constructed types don't end up in the cache
-abstract type C11597{T<:Union{Void, Int}} end
+abstract type C11597{T<:Union{Nothing, Int}} end
 mutable struct D11597{T} <: C11597{T} d::T end
 @test_throws TypeError D11597(1.0)
 @test_throws TypeError repr(D11597(1.0))
@@ -3389,12 +3389,12 @@ struct Vec8010{T}
 end
 Vec8010(a::AbstractVector) = Vec8010(ntuple(x->a[x],2)...)
 Base.convert(::Type{Vec8010{T}},x::AbstractVector) where {T} = Vec8010(x)
-Base.convert(::Type{Void},x::AbstractVector) = Vec8010(x)
+Base.convert(::Type{Nothing},x::AbstractVector) = Vec8010(x)
 struct MyType8010
      m::Vec8010{Float32}
 end
 struct MyType8010_ghost
-     m::Void
+     m::Nothing
 end
 @test_throws TypeError MyType8010([3.0;4.0])
 @test_throws TypeError MyType8010_ghost([3.0;4.0])
@@ -3516,7 +3516,7 @@ foo12967(x, ::TupleType12967) = 2
 @test foo12967(1, Tuple{}) == 2
 
 # issue #13083
-@test Void() === nothing
+@test Nothing() === nothing
 
 # issue discovered in #11973
 for j = 1:1
@@ -3744,11 +3744,11 @@ let nometh = try; @eval @m8846(a, b, c); false; catch ex; ex; end
  end
 
 # a simple case of parametric dispatch with unions
-let foo(x::Union{T, Void}, y::Union{T, Void}) where {T} = 1
+let foo(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = 1
     @test foo(1, nothing) === 1
     @test foo(nothing, nothing) === 1
 end
-let foo(x::Union{T, Void}, y::Union{T, Void}) where {T} = T
+let foo(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = T
     @test foo(1, nothing) === Int
     @test_throws UndefVarError(:T) foo(nothing, nothing)
 end
@@ -3925,33 +3925,33 @@ let ary = Vector{Any}(uninitialized, 10)
     # to check if these values are not reused later.
     check_undef_and_fill(ary, 1:10)
     # Check if the memory grown at the end are zerod
-    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 11:20)
     # Make sure the content of the memory deleted at the end are not reused
-    ccall(:jl_array_del_end, Void, (Any, Csize_t), ary, 5)
-    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 5)
+    ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 5)
+    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 5)
     check_undef_and_fill(ary, 16:20)
 
     # Now check grow/del_end
     ary = Vector{Any}(uninitialized, 1010)
     check_undef_and_fill(ary, 1:1010)
     # This del_beg should move the buffer
-    ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 1000)
-    ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 1000)
+    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 1000)
+    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 1000)
     check_undef_and_fill(ary, 1:1000)
     ary = Vector{Any}(uninitialized, 1010)
     check_undef_and_fill(ary, 1:1010)
     # This del_beg should not move the buffer
-    ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 10)
-    ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 1:10)
 
     ary = Vector{Any}(uninitialized, 1010)
     check_undef_and_fill(ary, 1:1010)
-    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 1011:1020)
-    ccall(:jl_array_del_end, Void, (Any, Csize_t), ary, 10)
-    ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 1:10)
 
     # Make sure newly malloc'd buffers are filled with 0
@@ -3965,22 +3965,22 @@ let ary = Vector{Any}(uninitialized, 10)
         gc()
         gc()
         gc()
-        ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 4)
-        ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 4)
-        ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, n)
-        ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 4)
+        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
+        ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 4)
+        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, n)
+        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
         check_undef_and_fill(ary, 1:(2n + 4))
     end
 
     ary = Vector{Any}(uninitialized, 100)
-    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10000)
+    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10000)
     ary[:] = 1:length(ary)
-    ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 10000)
+    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10000)
     # grow on the back until a buffer reallocation happens
     cur_ptr = pointer(ary)
     while cur_ptr == pointer(ary)
         len = length(ary)
-        ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
+        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
         for i in (len + 1):(len + 10)
             @test !isassigned(ary, i)
         end
@@ -3988,7 +3988,7 @@ let ary = Vector{Any}(uninitialized, 10)
 
     ary = Vector{Any}(uninitialized, 100)
     ary[:] = 1:length(ary)
-    ccall(:jl_array_grow_at, Void, (Any, Csize_t, Csize_t), ary, 50, 10)
+    ccall(:jl_array_grow_at, Cvoid, (Any, Csize_t, Csize_t), ary, 50, 10)
     for i in 51:60
         @test !isassigned(ary, i)
     end
@@ -4083,16 +4083,16 @@ function test_shared_array_resize(::Type{T}) where T
         @test pointer(a) != pointer(a′)
     end
 
-    test_unshare(a->ccall(:jl_array_del_end, Void, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_del_end, Void, (Any, Csize_t), a, 1))
-    test_unshare(a->ccall(:jl_array_del_beg, Void, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_del_beg, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), a, 1))
     test_unshare(a->deleteat!(a, 10))
     test_unshare(a->deleteat!(a, 90))
-    test_unshare(a->ccall(:jl_array_grow_end, Void, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_grow_end, Void, (Any, Csize_t), a, 1))
-    test_unshare(a->ccall(:jl_array_grow_beg, Void, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_grow_beg, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), a, 1))
     test_unshare(a->insert!(a, 10, 10))
     test_unshare(a->insert!(a, 90, 90))
 end
@@ -4122,19 +4122,19 @@ push!(d, 0x3)
 @test check_nul(d)
 push!(d, 0x3)
 @test check_nul(d)
-ccall(:jl_array_del_end, Void, (Any, UInt), d, 2)
+ccall(:jl_array_del_end, Cvoid, (Any, UInt), d, 2)
 @test check_nul(d)
-ccall(:jl_array_grow_end, Void, (Any, UInt), d, 1)
+ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
 @test check_nul(d)
-ccall(:jl_array_grow_end, Void, (Any, UInt), d, 1)
+ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
 @test check_nul(d)
-ccall(:jl_array_grow_end, Void, (Any, UInt), d, 10)
+ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 10)
 @test check_nul(d)
-ccall(:jl_array_del_beg, Void, (Any, UInt), d, 8)
+ccall(:jl_array_del_beg, Cvoid, (Any, UInt), d, 8)
 @test check_nul(d)
-ccall(:jl_array_grow_beg, Void, (Any, UInt), d, 8)
+ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
 @test check_nul(d)
-ccall(:jl_array_grow_beg, Void, (Any, UInt), d, 8)
+ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
 @test check_nul(d)
 f = unsafe_wrap(Array, pointer(d), length(d))
 @test !check_nul(f)
@@ -4373,7 +4373,7 @@ function f4(a, p)
     end
     b[1]
 end
-code_llvm(DevNull, f4, Tuple{Bool,Ptr{Void}})
+code_llvm(DevNull, f4, Tuple{Bool,Ptr{Cvoid}})
 @test f4(true, C_NULL) == 2
 @test_throws UndefRefError f4(false, C_NULL)
 
@@ -4494,11 +4494,11 @@ let a = Val{Val{TypeVar(:_, Int)}},
     @test Base._isleaftype(b)
 end
 
-# A return type widened to Type{Union{T,Void}} should not confuse
+# A return type widened to Type{Union{T,Nothing}} should not confuse
 # codegen
-@noinline MaybeFunc(T) = Union{T, Void}
+@noinline MaybeFunc(T) = Union{T, Nothing}
 fMaybeFunc() = MaybeFunc(Int64)
-@test fMaybeFunc() == Union{Int64, Void}
+@test fMaybeFunc() == Union{Int64, Nothing}
 
 # issue #16431
 function f16431(x)
@@ -4568,7 +4568,7 @@ f1090()::Int = A1090()
 @test_throws TypeError f1090()
 
 # issue #19106
-function f19106()::Void end
+function f19106()::Nothing end
 @test f19106() === nothing
 
 # issue #16783
@@ -4609,7 +4609,7 @@ try
 catch
 end
 @test isa(T16793, Type)
-@test isa(abstract type T16793_2 end, Void)
+@test isa(abstract type T16793_2 end, Nothing)
 
 # issue #17147
 f17147(::Tuple) = 1
@@ -4678,8 +4678,8 @@ cfunction(f18054, Cint, Tuple{})
 # issue #18986: the ccall optimization of cfunction leaves JL_TRY stack in bad state
 dummy18996() = return nothing
 function main18986()
-    cfunction(dummy18986, Void, ())
-    ccall((:dummy2, "this_is_a_nonexisting_library"), Void, ())
+    cfunction(dummy18986, Cvoid, ())
+    ccall((:dummy2, "this_is_a_nonexisting_library"), Cvoid, ())
 end
 @test_throws ErrorException main18986()
 
@@ -4698,7 +4698,7 @@ ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
 @eval @noinline f18236(ptr) = ccall(ptr, VecElement{Float64},
                                     (VecElement{Float64},), $v18236)
 @test f18236(ptr18236) === v18236
-@test !contains(sprint(code_llvm, f18236, Tuple{Ptr{Void}}), "double undef")
+@test !contains(sprint(code_llvm, f18236, Tuple{Ptr{Cvoid}}), "double undef")
 # VecElement of struct, not necessarily useful but does have special
 # ABI so should be handled correctly
 # This struct should be small enough to be passed by value in C ABI
@@ -4756,7 +4756,7 @@ end
 @test f18173() == false
 
 let _true = Ref(true), f, g, h
-    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Void, ()) # some expression that throws an error in codegen
+    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Cvoid, ()) # some expression that throws an error in codegen
     @noinline g() = _true[] ? 0 : h()
     @noinline h() = (g(); f())
     @test_throws ErrorException @code_native h() # due to a failure to compile f()
@@ -4990,12 +4990,12 @@ end # module SOE
 # issue #15240
 @test_nowarn begin
     local p15240
-    p15240 = ccall(:jl_realloc, Ptr{Void}, (Ptr{Void}, Csize_t), C_NULL, 10)
-    ccall(:jl_free, Void, (Ptr{Void},), p15240)
+    p15240 = ccall(:jl_realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), C_NULL, 10)
+    ccall(:jl_free, Cvoid, (Ptr{Cvoid},), p15240)
 end
 
 # issue #19963
-@test_nowarn ccall(:jl_free, Void, (Ptr{Void},), C_NULL)
+@test_nowarn ccall(:jl_free, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # Wrong string size on 64bits for large string.
 if Sys.WORD_SIZE == 64
@@ -5437,10 +5437,10 @@ m22929_2.x = m22929_1
 
 # Union type sorting
 for T in (
-        (Void, Int8),
-        (Void, Int64),
-        (Void, Tuple{Int64, String}),
-        (Void, Array),
+        (Nothing, Int8),
+        (Nothing, Int64),
+        (Nothing, Tuple{Int64, String}),
+        (Nothing, Array),
         (Float64, Int64),
         (Float64, String),
         (Float64, Array),
@@ -5451,7 +5451,7 @@ for T in (
     @test Base.uniontypes(Union{T...}) == collect(T)
     @test Base.uniontypes(Union{reverse(T)...}) == collect(T)
 end
-@test Base.uniontypes(Union{Void, Union{Int64, Float64}}) == Any[Void, Float64, Int64]
+@test Base.uniontypes(Union{Nothing, Union{Int64, Float64}}) == Any[Nothing, Float64, Int64]
 module AlternativeIntModule
     struct Int64
         val::UInt64
@@ -5521,9 +5521,9 @@ module UnionOptimizations
 using Test
 using Dates
 
-const boxedunions = [Union{}, Union{String, Void}]
-const unboxedunions = [Union{Int8, Void},
-                       Union{Int8, Float16, Void},
+const boxedunions = [Union{}, Union{String, Nothing}]
+const unboxedunions = [Union{Int8, Nothing},
+                       Union{Int8, Float16, Nothing},
                        Union{Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128},
                        Union{Char, Date, Int}]
 
@@ -5543,12 +5543,12 @@ const unboxedunions = [Union{Int8, Void},
 @test sizeof(unboxedunions[3]) == 16
 @test sizeof(unboxedunions[4]) == 8
 
-initvalue(::Type{Void}) = nothing
+initvalue(::Type{Nothing}) = nothing
 initvalue(::Type{Char}) = '\0'
 initvalue(::Type{Date}) = Date(0, 12, 31)
 initvalue(::Type{T}) where {T <: Number} = T(0)
 
-initvalue2(::Type{Void}) = nothing
+initvalue2(::Type{Nothing}) = nothing
 initvalue2(::Type{Char}) = Char(0x01)
 initvalue2(::Type{Date}) = Date(1)
 initvalue2(::Type{T}) where {T <: Number} = T(1)
@@ -5567,20 +5567,20 @@ x.u = initvalue(Base.uniontypes(U)[2])
 @test x.u === initvalue(Base.uniontypes(U)[2])
 
 mutable struct UnionField2
-    x::Union{Void, Int}
+    x::Union{Nothing, Int}
     @noinline UnionField2() = new()
 end
 @test UnionField2().x === nothing
 
 struct UnionField3
-    x::Union{Void, Int}
+    x::Union{Nothing, Int}
     @noinline UnionField3() = new()
 end
 @test UnionField3().x === nothing
 
 mutable struct UnionField4
-    x::Union{Void, Float64}
-    y::Union{Void, Int8}
+    x::Union{Nothing, Float64}
+    y::Union{Nothing, Int8}
     z::NTuple{8, UInt8}
     @noinline UnionField4() = new()
     @noinline UnionField4(x, y) = new(x, y, (0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88))
@@ -5599,8 +5599,8 @@ let x4 = UnionField4(nothing, Int8(3))
 end
 
 struct UnionField5
-    x::Union{Void, Float64}
-    y::Union{Void, Int8}
+    x::Union{Nothing, Float64}
+    y::Union{Nothing, Int8}
     z::NTuple{8, UInt8}
     @noinline UnionField5() = new()
     @noinline UnionField5(x, y) = new(x, y, (0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88))
@@ -5623,7 +5623,7 @@ end
 
 # PR #23367
 struct A23367
-    x::Union{Int8, Int16, NTuple{7, Int8}, Void}
+    x::Union{Int8, Int16, NTuple{7, Int8}, Nothing}
 end
 struct B23367
     x::Int8
@@ -5681,14 +5681,14 @@ end
 # unsafe_wrap
 let
     A4 = [1, 2, 3]
-    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A4)), 3)
+    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Nothing}}, pointer(A4)), 3)
     A5 = [1 2 3; 4 5 6]
-    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A5)), 6)
+    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Nothing}}, pointer(A5)), 6)
 end
 
 # copyto!
-A23567 = Vector{Union{Float64, Void}}(uninitialized, 5)
-B23567 = collect(Union{Float64, Void}, 1.0:3.0)
+A23567 = Vector{Union{Float64, Nothing}}(uninitialized, 5)
+B23567 = collect(Union{Float64, Nothing}, 1.0:3.0)
 copyto!(A23567, 2, B23567)
 @test A23567[1] === nothing
 @test A23567[2] === 1.0
@@ -5763,11 +5763,11 @@ for U in unboxedunions
             end
             @test isempty(A)
 
-            # shift!
+            # popfirst!
             A = U[initvalue2(F2) for i = 1:len]
             for i = 1:len
                 @test A[1] === initvalue2(F2)
-                shift!(A)
+                popfirst!(A)
             end
             @test isempty(A)
 
@@ -5814,11 +5814,11 @@ for U in unboxedunions
             @test length(A) == len - 2
             @test all(A .== initvalue2(F2))
 
-            # unshift!
+            # pushfirst!
             A = U[initvalue2(F2) for i = 1:len]
             for i = 1:5
-                unshift!(A, initvalue2(F))
-                unshift!(A, initvalue(F2))
+                pushfirst!(A, initvalue2(F))
+                pushfirst!(A, initvalue(F2))
                 @test A[1] === initvalue(F2)
                 @test A[2] === initvalue2(F)
             end
@@ -5907,7 +5907,7 @@ handle_on_m22098 = getfield(@__MODULE__, Symbol("@m22098"))
 
 # issue 24363
 mutable struct A24363
-    x::Union{Int,Void}
+    x::Union{Int,Nothing}
 end
 
 int24363 = A24363(65535)

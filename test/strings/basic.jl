@@ -255,7 +255,7 @@ end
 end
 
 @testset "issue #10307" begin
-    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Union{Int16, Void}}
+    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Union{Int16, Nothing}}
 
     for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
         for i in [typemax(T), typemin(T)]
@@ -302,7 +302,7 @@ end
     end
     let s = Base.Unicode.normalize("tést",:NFKC)
         @test unsafe_string(Base.unsafe_convert(Cstring, Base.cconvert(Cstring, s))) == s
-        @test unsafe_string(convert(Cstring, Symbol(s))) == s
+        @test unsafe_string(Base.unsafe_convert(Cstring, Symbol(s))) == s
     end
     @test_throws ArgumentError Base.unsafe_convert(Cstring, Base.cconvert(Cstring, "ba\0d"))
 
@@ -698,3 +698,99 @@ end
 end
 
 @test Vector{UInt8}("\xcc\xdd\xee\xff\x80") == [0xcc,0xdd,0xee,0xff,0x80]
+
+@test next("a", 1)[2] == 2
+@test nextind("a", 1) == 2
+@test next("az", 1)[2] == 2
+@test nextind("az", 1) == 2
+@test next("a\xb1", 1)[2] == 2
+@test nextind("a\xb1", 1) == 2
+@test next("a\xb1z", 1)[2] == 2
+@test nextind("a\xb1z", 1) == 2
+@test next("a\xb1\x83", 1)[2] == 2
+@test nextind("a\xb1\x83", 1) == 2
+@test next("a\xb1\x83\x84", 1)[2] == 2
+@test nextind("a\xb1\x83\x84", 1) == 2
+@test next("a\xb1\x83\x84z", 1)[2] == 2
+@test nextind("a\xb1\x83\x84z", 1) == 2
+
+@test next("\x81", 1)[2] == 2
+@test nextind("\x81", 1) == 2
+@test next("\x81z", 1)[2] == 2
+@test nextind("\x81z", 1) == 2
+@test next("\x81\xb1", 1)[2] == 2
+@test nextind("\x81\xb1", 1) == 2
+@test next("\x81\xb1z", 1)[2] == 2
+@test nextind("\x81\xb1z", 1) == 2
+@test next("\x81\xb1\x83", 1)[2] == 2
+@test nextind("\x81\xb1\x83", 1) == 2
+@test next("\x81\xb1\x83\x84", 1)[2] == 2
+@test nextind("\x81\xb1\x83\x84", 1) == 2
+@test next("\x81\xb1\x83\x84z", 1)[2] == 2
+@test nextind("\x81\xb1\x83\x84z", 1) == 2
+
+@test next("\xce", 1)[2] == 2
+@test nextind("\xce", 1) == 2
+@test next("\xcez", 1)[2] == 2
+@test nextind("\xcez", 1) == 2
+@test next("\xce\xb1", 1)[2] == 3
+@test nextind("\xce\xb1", 1) == 3
+@test next("\xce\xb1z", 1)[2] == 3
+@test nextind("\xce\xb1z", 1) == 3
+@test next("\xce\xb1\x83", 1)[2] == 3
+@test nextind("\xce\xb1\x83", 1) == 3
+@test next("\xce\xb1\x83\x84", 1)[2] == 3
+@test nextind("\xce\xb1\x83\x84", 1) == 3
+@test next("\xce\xb1\x83\x84z", 1)[2] == 3
+@test nextind("\xce\xb1\x83\x84z", 1) == 3
+
+@test next("\xe2", 1)[2] == 2
+@test nextind("\xe2", 1) == 2
+@test next("\xe2z", 1)[2] == 2
+@test nextind("\xe2z", 1) == 2
+@test next("\xe2\x88", 1)[2] == 3
+@test nextind("\xe2\x88", 1) == 3
+@test next("\xe2\x88z", 1)[2] == 3
+@test nextind("\xe2\x88z", 1) == 3
+@test next("\xe2\x88\x83", 1)[2] == 4
+@test nextind("\xe2\x88\x83", 1) == 4
+@test next("\xe2\x88\x83z", 1)[2] == 4
+@test nextind("\xe2\x88\x83z", 1) == 4
+@test next("\xe2\x88\x83\x84", 1)[2] == 4
+@test nextind("\xe2\x88\x83\x84", 1) == 4
+@test next("\xe2\x88\x83\x84z", 1)[2] == 4
+@test nextind("\xe2\x88\x83\x84z", 1) == 4
+
+@test next("\xf0", 1)[2] == 2
+@test nextind("\xf0", 1) == 2
+@test next("\xf0z", 1)[2] == 2
+@test nextind("\xf0z", 1) == 2
+@test next("\xf0\x9f", 1)[2] == 3
+@test nextind("\xf0\x9f", 1) == 3
+@test next("\xf0\x9fz", 1)[2] == 3
+@test nextind("\xf0\x9fz", 1) == 3
+@test next("\xf0\x9f\x98", 1)[2] == 4
+@test nextind("\xf0\x9f\x98", 1) == 4
+@test next("\xf0\x9f\x98z", 1)[2] == 4
+@test nextind("\xf0\x9f\x98z", 1) == 4
+@test next("\xf0\x9f\x98\x84", 1)[2] == 5
+@test nextind("\xf0\x9f\x98\x84", 1) == 5
+@test next("\xf0\x9f\x98\x84z", 1)[2] == 5
+@test nextind("\xf0\x9f\x98\x84z", 1) == 5
+
+@test next("\xf8", 1)[2] == 2
+@test nextind("\xf8", 1) == 2
+@test next("\xf8z", 1)[2] == 2
+@test nextind("\xf8z", 1) == 2
+@test next("\xf8\x9f", 1)[2] == 2
+@test nextind("\xf8\x9f", 1) == 2
+@test next("\xf8\x9fz", 1)[2] == 2
+@test nextind("\xf8\x9fz", 1) == 2
+@test next("\xf8\x9f\x98", 1)[2] == 2
+@test nextind("\xf8\x9f\x98", 1) == 2
+@test next("\xf8\x9f\x98z", 1)[2] == 2
+@test nextind("\xf8\x9f\x98z", 1) == 2
+@test next("\xf8\x9f\x98\x84", 1)[2] == 2
+@test nextind("\xf8\x9f\x98\x84", 1) == 2
+@test next("\xf8\x9f\x98\x84z", 1)[2] == 2
+@test nextind("\xf8\x9f\x98\x84z", 1) == 2

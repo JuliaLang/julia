@@ -631,8 +631,8 @@ export
     prepend!,
     push!,
     resize!,
-    shift!,
-    unshift!,
+    popfirst!,
+    pushfirst!,
 
 # collections
     all!,
@@ -953,7 +953,6 @@ export
     evalfile,
     include_string,
     include_dependency,
-    reload,
 
 # RTS internals
     finalizer,

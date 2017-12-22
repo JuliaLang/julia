@@ -17,6 +17,8 @@
 @test 'b' - 1 == 'a'
 @test typeof('b' - 1) == Char
 
+@test widen('a') === 'a'
+
 let
     numberchars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
     lowerchars = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']

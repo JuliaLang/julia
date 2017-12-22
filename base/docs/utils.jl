@@ -231,11 +231,11 @@ function matchinds(needle, haystack; acronym = false)
     lastc = '\0'
     for (i, char) in enumerate(haystack)
         isempty(chars) && break
-        while chars[1] == ' ' shift!(chars) end # skip spaces
+        while chars[1] == ' ' popfirst!(chars) end # skip spaces
         if Unicode.lowercase(char) == Unicode.lowercase(chars[1]) &&
            (!acronym || !Unicode.isalpha(lastc))
             push!(is, i)
-            shift!(chars)
+            popfirst!(chars)
         end
         lastc = char
     end
@@ -377,7 +377,7 @@ completions(name::Symbol) = completions(string(name))
 # Docsearch simply returns true or false if an object contains the given needle
 docsearch(haystack::AbstractString, needle) = !isempty(search(haystack, needle))
 docsearch(haystack::Symbol, needle) = docsearch(string(haystack), needle)
-docsearch(::Void, needle) = false
+docsearch(::Nothing, needle) = false
 function docsearch(haystack::Array, needle)
     for elt in haystack
         docsearch(elt, needle) && return true
@@ -420,7 +420,7 @@ element searchable.
 """
 stripmd(@nospecialize x) = string(x) # for random objects interpolated into the docstring
 stripmd(x::AbstractString) = x  # base case
-stripmd(x::Void) = " "
+stripmd(x::Nothing) = " "
 stripmd(x::Vector) = string(map(stripmd, x)...)
 stripmd(x::Markdown.BlockQuote) = "$(stripmd(x.content))"
 stripmd(x::Markdown.Admonition) = "$(stripmd(x.content))"

@@ -4,41 +4,41 @@ abstract type ClusterManager end
 
 mutable struct WorkerConfig
     # Common fields relevant to all cluster managers
-    io::Union{IO, Void}
-    host::Union{AbstractString, Void}
-    port::Union{Integer, Void}
+    io::Union{IO, Nothing}
+    host::Union{AbstractString, Nothing}
+    port::Union{Integer, Nothing}
 
     # Used when launching additional workers at a host
-    count::Union{Int, Symbol, Void}
-    exename::Union{AbstractString, Cmd, Void}
-    exeflags::Union{Cmd, Void}
+    count::Union{Int, Symbol, Nothing}
+    exename::Union{AbstractString, Cmd, Nothing}
+    exeflags::Union{Cmd, Nothing}
 
     # External cluster managers can use this to store information at a per-worker level
     # Can be a dict if multiple fields need to be stored.
     userdata::Any
 
     # SSHManager / SSH tunnel connections to workers
-    tunnel::Union{Bool, Void}
-    bind_addr::Union{AbstractString, Void}
-    sshflags::Union{Cmd, Void}
-    max_parallel::Union{Integer, Void}
+    tunnel::Union{Bool, Nothing}
+    bind_addr::Union{AbstractString, Nothing}
+    sshflags::Union{Cmd, Nothing}
+    max_parallel::Union{Integer, Nothing}
 
     # Used by Local/SSH managers
     connect_at::Any
 
-    process::Union{Process, Void}
-    ospid::Union{Integer, Void}
+    process::Union{Process, Nothing}
+    ospid::Union{Integer, Nothing}
 
     # Private dictionary used to store temporary information by Local/SSH managers.
-    environ::Union{Dict, Void}
+    environ::Union{Dict, Nothing}
 
     # Connections to be setup depending on the network topology requested
     ident::Any      # Worker as identified by the Cluster Manager.
     # List of other worker idents this worker must connect with. Used with topology T_CUSTOM.
-    connect_idents::Union{Array, Void}
+    connect_idents::Union{Array, Nothing}
 
     # Run multithreaded blas on worker
-    enable_threaded_blas::Union{Bool, Void}
+    enable_threaded_blas::Union{Bool, Nothing}
 
     function WorkerConfig()
         wc = new()
@@ -67,10 +67,10 @@ mutable struct Worker
                                      # serializer as part of the Worker object
     manager::ClusterManager
     config::WorkerConfig
-    version::Union{VersionNumber, Void}   # Julia version of the remote process
+    version::Union{VersionNumber, Nothing}   # Julia version of the remote process
 
     function Worker(id::Int, r_stream::IO, w_stream::IO, manager::ClusterManager;
-                             version::Union{VersionNumber, Void}=nothing,
+                             version::Union{VersionNumber, Nothing}=nothing,
                              config::WorkerConfig=WorkerConfig())
         w = Worker(id)
         w.r_stream = r_stream
@@ -407,7 +407,7 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
             end
 
             if !isempty(launched)
-                wconfig = shift!(launched)
+                wconfig = popfirst!(launched)
                 let wconfig=wconfig
                     @async setup_launched_worker(manager, wconfig, launched_q)
                 end
@@ -673,7 +673,7 @@ mutable struct ProcessGroup
     workers::Array{Any,1}
     refs::Dict                  # global references
     topology::Symbol
-    lazy::Union{Bool, Void}
+    lazy::Union{Bool, Nothing}
 
     ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Dict(), :all_to_all, nothing)
 end
@@ -1036,10 +1036,10 @@ end
 
 function disable_nagle(sock)
     # disable nagle on all OSes
-    ccall(:uv_tcp_nodelay, Cint, (Ptr{Void}, Cint), sock.handle, 1)
+    ccall(:uv_tcp_nodelay, Cint, (Ptr{Cvoid}, Cint), sock.handle, 1)
     @static if Sys.islinux()
         # tcp_quickack is a linux only option
-        if ccall(:jl_tcp_quickack, Cint, (Ptr{Void}, Cint), sock.handle, 1) < 0
+        if ccall(:jl_tcp_quickack, Cint, (Ptr{Cvoid}, Cint), sock.handle, 1) < 0
             @warn "Networking unoptimized ( Error enabling TCP_QUICKACK : $(Libc.strerror(Libc.errno())) )" maxlog=1
         end
     end

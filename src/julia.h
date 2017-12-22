@@ -182,7 +182,7 @@ struct _jl_method_instance_t;
 
 // TypeMap is an implicitly defined type
 // that can consist of any of the following nodes:
-//   typedef TypeMap Union{TypeMapLevel, TypeMapEntry, Void}
+//   typedef TypeMap Union{TypeMapLevel, TypeMapEntry, Nothing}
 // it forms a roughly tree-shaped structure, consisting of nodes of TypeMapLevels
 // which split the tree when possible, for example based on the key into the tuple type at `offs`
 // when key is a leaftype, (but only when the tree has enough entries for this to be
@@ -1841,17 +1841,17 @@ typedef struct {
     // hooks
 
     // module setup: prepare a module for code emission (data layout, DWARF version, ...)
-    // parameters: LLVMModuleRef as Ptr{Void}
+    // parameters: LLVMModuleRef as Ptr{Cvoid}
     // return value: none
     jl_value_t *module_setup;
 
     // module activation: registers debug info, adds module to JIT
-    // parameters: LLVMModuleRef as Ptr{Void}
+    // parameters: LLVMModuleRef as Ptr{Cvoid}
     // return value: none
     jl_value_t *module_activation;
 
     // exception raising: emit LLVM instructions to raise an exception
-    // parameters: LLVMBasicBlockRef as Ptr{Void}, LLVMValueRef as Ptr{Void}
+    // parameters: LLVMBasicBlockRef as Ptr{Cvoid}, LLVMValueRef as Ptr{Cvoid}
     // return value: none
     jl_value_t *raise_exception;
 } jl_cgparams_t;

@@ -121,21 +121,6 @@ end
         end
     end
 
-    @testset "Log filtering, global logger" begin
-        old_logger = global_logger()
-        logs = let
-            logger = TestLogger(min_level=Warn)
-            global_logger(logger)
-            @info "b"
-            @warn "c"
-            logger.logs
-        end
-        global_logger(old_logger)
-
-        @test length(logs) == 1
-        @test ismatch((Warn , "c"), logs[1])
-    end
-
     @testset "Log level filtering - global flag" begin
         # Test utility: Log once at each standard level
         function log_each_level()
@@ -190,6 +175,19 @@ end
     )
 end
 
+
+#-------------------------------------------------------------------------------
+@testset "Logger installation and access" begin
+    @testset "Global logger" begin
+        logger1 = global_logger()
+        logger2 = TestLogger()
+        # global_logger() returns the previously installed logger
+        @test logger1 === global_logger(logger2)
+        # current logger looks up global logger by default.
+        @test current_logger() === logger2
+        global_logger(logger1) # Restore global logger
+    end
+end
 
 #-------------------------------------------------------------------------------
 

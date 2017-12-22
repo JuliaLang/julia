@@ -91,7 +91,7 @@ function getindex(lru::LRU, key)
     item = lru.ht[key]
     idx = locate(lru.q, item)
     splice!(lru.q, idx)
-    unshift!(lru.q, item)
+    pushfirst!(lru.q, item)
     item.v
 end
 
@@ -105,7 +105,7 @@ function setindex!(lru::LRU, v, key)
         item = CacheItem(key, v)
         lru.ht[key] = item
     end
-    unshift!(lru.q, item)
+    pushfirst!(lru.q, item)
 end
 
 # Eviction

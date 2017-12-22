@@ -254,3 +254,7 @@ end
     end
     @test_throws ArgumentError parse(Complex{Int}, "3 + 4.2im")
 end
+
+# added ⟂ to operator precedence (#24404)
+@test Meta.parse("a ⟂ b ⟂ c") == Expr(:comparison, :a, :⟂, :b, :⟂, :c)
+@test Meta.parse("a ⟂ b ∥ c") == Expr(:comparison, :a, :⟂, :b, :∥, :c)

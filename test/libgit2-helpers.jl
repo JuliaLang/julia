@@ -13,12 +13,12 @@ without having to authenticate against a real server.
 function credential_loop(
         valid_credential::AbstractCredential,
         url::AbstractString,
-        user::Union{AbstractString, Void},
+        user::Union{AbstractString, Nothing},
         allowed_types::UInt32,
         payload::CredentialPayload;
         shred::Bool=true)
     cb = Base.LibGit2.credentials_cb()
-    libgitcred_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    libgitcred_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
 
     # Number of times credentials were authenticated against. With the real LibGit2
     # credential loop this would be how many times we sent credentials to the remote.
@@ -28,7 +28,7 @@ function credential_loop(
     # until we find valid credentials or an exception is raised.
     err = Cint(0)
     while err == 0
-        err = ccall(cb, Cint, (Ptr{Ptr{Void}}, Cstring, Cstring, Cuint, Any),
+        err = ccall(cb, Cint, (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cuint, Any),
                     libgitcred_ptr_ptr, url, coalesce(user, C_NULL),
                     allowed_types, payload)
         num_authentications += 1
@@ -62,7 +62,7 @@ end
 function credential_loop(
         valid_credential::UserPasswordCredential,
         url::AbstractString,
-        user::Union{AbstractString, Void}=nothing,
+        user::Union{AbstractString, Nothing}=nothing,
         payload::CredentialPayload=DEFAULT_PAYLOAD;
         shred::Bool=true)
     credential_loop(valid_credential, url, user, 0x000001, payload, shred=shred)
@@ -71,7 +71,7 @@ end
 function credential_loop(
         valid_credential::SSHCredential,
         url::AbstractString,
-        user::Union{AbstractString, Void}=nothing,
+        user::Union{AbstractString, Nothing}=nothing,
         payload::CredentialPayload=DEFAULT_PAYLOAD;
         shred::Bool=true)
     credential_loop(valid_credential, url, user, 0x000046, payload, shred=shred)

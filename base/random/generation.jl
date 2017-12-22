@@ -89,7 +89,7 @@ end
 
 # alternative, with 1 bit less of precision
 # TODO: make an API for requesting full or not-full precision
-function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen{BigFloat}, ::Void)
+function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen{BigFloat}, ::Nothing)
     z = _rand(rng, sp, Close1Open2(BigFloat))
     ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, Int32),
           z, z, 1, Base.MPFR.ROUNDING_MODE[])

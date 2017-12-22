@@ -254,7 +254,7 @@ function normpath(path::String)
     end
     if isabs
         while !isempty(parts) && parts[1] == ".."
-            shift!(parts)
+            popfirst!(parts)
         end
     elseif isempty(parts)
         push!(parts, ".")
@@ -291,7 +291,7 @@ function realpath(path::AbstractString)
     buf = zeros(UInt16, length(p))
     while true
         n = ccall((:GetFullPathNameW, "kernel32"), stdcall,
-            UInt32, (Ptr{UInt16}, UInt32, Ptr{UInt16}, Ptr{Void}),
+            UInt32, (Ptr{UInt16}, UInt32, Ptr{UInt16}, Ptr{Cvoid}),
             p, length(buf), buf, C_NULL)
         systemerror(:realpath, n == 0)
         x = n < length(buf) # is the buffer big enough?

@@ -33,7 +33,6 @@ Base.less(::Any)
 Base.@less
 Base.clipboard(::Any)
 Base.clipboard()
-Base.reload
 Base.require
 Base.compilecache
 Base.__precompile__
@@ -175,7 +174,7 @@ Core.UnionAll
 Core.Tuple
 Base.Val
 Core.Vararg
-Core.Void
+Core.Nothing
 Base.Some
 Base.Enums.@enum
 ```

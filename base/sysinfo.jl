@@ -156,7 +156,7 @@ function cpu_info()
     for i = 1:length(cpus)
         cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
     end
-    ccall(:uv_free_cpu_info, Void, (Ptr{UV_cpu_info_t}, Int32), UVcpus[], count[])
+    ccall(:uv_free_cpu_info, Cvoid, (Ptr{UV_cpu_info_t}, Int32), UVcpus[], count[])
     return cpus
 end
 
@@ -178,7 +178,7 @@ Get the load average. See: https://en.wikipedia.org/wiki/Load_(computing).
 """
 function loadavg()
     loadavg_ = Vector{Float64}(uninitialized, 3)
-    ccall(:uv_loadavg, Void, (Ptr{Float64},), loadavg_)
+    ccall(:uv_loadavg, Cvoid, (Ptr{Float64},), loadavg_)
     return loadavg_
 end
 

@@ -370,7 +370,7 @@ function show(io::IO, tn::TypeName)
     show_type_name(io, tn)
 end
 
-show(io::IO, ::Void) = print(io, "nothing")
+show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, b::Bool) = print(io, b ? "true" : "false")
 show(io::IO, n::Signed) = (write(io, dec(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
@@ -725,7 +725,7 @@ emphasize(io, str::AbstractString) = get(io, :color, false) ?
 
 show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
 show_linenumber(io::IO, line, file) = print(io, "#= ", file, ":", line, " =#")
-show_linenumber(io::IO, line, file::Void) = show_linenumber(io, line)
+show_linenumber(io::IO, line, file::Nothing) = show_linenumber(io, line)
 
 # show a block, e g if/for/etc
 function show_block(io::IO, head, args::Vector, body, indent::Int)
@@ -876,7 +876,7 @@ function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
             print(io, "end")
         else
             print(io, ":(")
-            show_unquoted(io, value, indent+indent_width, -1)
+            show_unquoted(io, value, indent+2, -1)  # +2 for `:(`
             print(io, ")")
         end
     end
@@ -1080,6 +1080,17 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     elseif head === :function && nargs == 1
         print(io, "function ", args[1], " end")
+
+    elseif head === :do && nargs == 2
+        show_unquoted(io, args[1], indent, -1)
+        print(io, " do ")
+        show_list(io, args[2].args[1].args, ", ", 0)
+        for stmt in args[2].args[2].args
+            print(io, '\n', " "^(indent + indent_width))
+            show_unquoted(io, stmt, indent + indent_width, -1)
+        end
+        print(io, '\n', " "^indent)
+        print(io, "end")
 
     # block with argument
     elseif head in (:for,:while,:function,:if,:elseif,:let) && nargs==2

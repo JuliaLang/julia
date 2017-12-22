@@ -1002,7 +1002,7 @@ end
 
 function ini_dec(x::SmallFloatingPoint, n::Int)
     if x == 0.0
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
         return Int32(1), Int32(1), signbit(x)
     else
         len,pt,neg = grisu(x,Grisu.PRECISION,n)
@@ -1012,15 +1012,15 @@ end
 
 function ini_dec(x::BigInt, n::Int)
     if x.size == 0
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
         return Int32(1), Int32(1), false
     end
     d = Base.ndigits0z(x)
     if d <= n
         info = decode_dec(x)
         d == n && return info
-        p = convert(Ptr{Void}, DIGITS) + info[2]
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), p, '0', n - info[2])
+        p = convert(Ptr{Cvoid}, DIGITS) + info[2]
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, '0', n - info[2])
         return info
     end
     return (n, d, decode_dec(round(BigInt,x/big(10)^(d-n)))[3])
@@ -1039,7 +1039,7 @@ ini_hex(x::Real, symbols::Array{UInt8,1}) = ini_hex(float(x), symbols)
 function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
     x = Float64(x)
     if x == 0.0
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
         return Int32(1), Int32(0), signbit(x)
     else
         s, p = frexp(x)
@@ -1048,7 +1048,7 @@ function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
         # ensure last 2 exponent bits either 01 or 10
         u = (reinterpret(UInt64,s) & 0x003f_ffff_ffff_ffff) >> (52-sigbits)
         if n > 14
-            ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
+            ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
         end
         i = (sizeof(u)<<1)-(leading_zeros(u)>>2)
         while i > 0
@@ -1064,7 +1064,7 @@ end
 function ini_hex(x::SmallFloatingPoint, symbols::Array{UInt8,1})
     x = Float64(x)
     if x == 0.0
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', 1)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', 1)
         return Int32(1), Int32(0), signbit(x)
     else
         s, p = frexp(x)
@@ -1166,9 +1166,9 @@ function _printf(macroname, io, fmt, args)
     for i = length(sym_args):-1:1
         var = sym_args[i].args[1]
         if has_splatting
-           unshift!(blk.args, :($var = G[$i]))
+           pushfirst!(blk.args, :($var = G[$i]))
         else
-           unshift!(blk.args, :($var = $(esc(args[i]))))
+           pushfirst!(blk.args, :($var = $(esc(args[i]))))
         end
     end
 
@@ -1178,7 +1178,7 @@ function _printf(macroname, io, fmt, args)
     #
     if has_splatting
        x = Expr(:call,:tuple,args...)
-       unshift!(blk.args,
+       pushfirst!(blk.args,
           quote
              G = $(esc(x))
              if length(G) != $(length(sym_args))
@@ -1188,7 +1188,7 @@ function _printf(macroname, io, fmt, args)
        )
     end
 
-    unshift!(blk.args, :(out = $io))
+    pushfirst!(blk.args, :(out = $io))
     Expr(:let, Expr(:block), blk)
 end
 

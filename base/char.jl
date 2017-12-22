@@ -22,7 +22,7 @@ function isoverlong(c::Char)
     (u >> 24 == 0xc0) | (u >> 21 == 0x0704) | (u >> 20 == 0x0f08)
 end
 
-function convert(::Type{UInt32}, c::Char)
+function UInt32(c::Char)
     # TODO: use optimized inline LLVM
     u = reinterpret(UInt32, c)
     u < 0x80000000 && return reinterpret(UInt32, u >> 24)
@@ -37,7 +37,7 @@ function convert(::Type{UInt32}, c::Char)
     (u & 0x007f0000 >> 4) | (u & 0x7f000000 >> 6)
 end
 
-function convert(::Type{Char}, u::UInt32)
+function Char(u::UInt32)
     u < 0x80 && return reinterpret(Char, u << 24)
     u < 0x00200000 || code_point_err(u)::Union{}
     c = ((u << 0) & 0x0000003f) | ((u << 2) & 0x00003f00) |
@@ -48,17 +48,17 @@ function convert(::Type{Char}, u::UInt32)
     reinterpret(Char, c)
 end
 
-function convert(::Type{T}, c::Char) where T <: Union{Int8,UInt8}
+function (T::Union{Type{Int8},Type{UInt8}})(c::Char)
     i = reinterpret(Int32, c)
     i ≥ 0 ? ((i >>> 24) % T) : T(UInt32(c))
 end
 
-function convert(::Type{Char}, b::Union{Int8,UInt8})
+function Char(b::Union{Int8,UInt8})
     0 ≤ b ≤ 0x7f ? reinterpret(Char, (b % UInt32) << 24) : Char(UInt32(b))
 end
 
-convert(::Type{Char}, x::Number) = Char(UInt32(x))
-convert(::Type{T}, x::Char) where {T<:Number} = convert(T, UInt32(x))
+convert(::Type{Char}, x::Number) = Char(x)
+convert(::Type{T}, x::Char) where {T<:Number} = T(x)
 
 rem(x::Char, ::Type{T}) where {T<:Number} = rem(UInt32(x), T)
 
@@ -88,6 +88,7 @@ in(x::Char, y::Char) = x == y
 isless(x::Char, y::Char) = reinterpret(UInt32, x) < reinterpret(UInt32, y)
 hash(x::Char, h::UInt) =
     hash_uint64(((reinterpret(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
+widen(::Type{Char}) = Char
 
 -(x::Char, y::Char) = Int(x) - Int(y)
 -(x::Char, y::Integer) = Char(Int32(x) - Int32(y))

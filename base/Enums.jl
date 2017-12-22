@@ -9,8 +9,8 @@ function basetype end
 
 abstract type Enum{T<:Integer} end
 
-Base.convert(::Type{Integer}, x::Enum{T}) where {T<:Integer} = bitcast(T, x)
-Base.convert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = convert(T, bitcast(T2, x))
+(::Type{T})(x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
+Base.cconvert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(x)
 Base.write(io::IO, x::Enum{T}) where {T<:Integer} = write(io, T(x))
 Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, Enums.basetype(T)))
 
@@ -106,7 +106,7 @@ macro enum(T, syms...)
     blk = quote
         # enum definition
         Base.@__doc__(primitive type $(esc(typename)) <: Enum{$(basetype)} $(sizeof(basetype) * 8) end)
-        function Base.convert(::Type{$(esc(typename))}, x::Integer)
+        function $(esc(typename))(x::Integer)
             $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
             return bitcast($(esc(typename)), convert($(basetype), x))
         end

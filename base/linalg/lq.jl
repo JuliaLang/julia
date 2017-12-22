@@ -47,7 +47,7 @@ full/square form of `Q` is requested via `full = true`, `L` is not extended with
     rectangular factor `Q`. "Thin" factorizations more broadly are also
     referred to as "reduced" factorizatons.
 """
-function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Bool,Void} = nothing)
+function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `lq(A; thin = $(thin))` has ",
@@ -56,52 +56,50 @@ function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Boo
         full::Bool = !thin
     end
     F = lqfact(A)
-    L, Q = F[:L], F[:Q]
+    L, Q = F.L, F.Q
     return L, !full ? Array(Q) : mul!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))
 end
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 
-convert(::Type{LQ{T}},A::LQ) where {T} = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
-convert(::Type{Factorization{T}}, A::LQ{T}) where {T} = A
-convert(::Type{Factorization{T}}, A::LQ) where {T} = convert(LQ{T}, A)
-convert(::Type{AbstractMatrix}, A::LQ) = A[:L]*A[:Q]
-convert(::Type{AbstractArray}, A::LQ) = convert(AbstractMatrix, A)
-convert(::Type{Matrix}, A::LQ) = convert(Array, convert(AbstractArray, A))
-convert(::Type{Array}, A::LQ) = convert(Matrix, A)
+LQ{T}(A::LQ) where {T} = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
+Factorization{T}(A::LQ{T}) where {T} = A
+Factorization{T}(A::LQ) where {T} = LQ{T}(A)
+AbstractMatrix(A::LQ) = A.L*A.Q
+AbstractArray(A::LQ) = AbstractMatrix(A)
+Matrix(A::LQ) = Array(AbstractArray(A))
+Array(A::LQ) = Matrix(A)
 
-adjoint(A::LQ{T}) where {T} = QR{T,typeof(A.factors)}(A.factors', A.τ)
+adjoint(A::LQ{T}) where {T} = QR{T,typeof(A.factors)}(adjoint(A.factors), A.τ)
 
-function getindex(A::LQ, d::Symbol)
-    m, n = size(A)
+function getproperty(F::LQ, d::Symbol)
+    m, n = size(F)
     if d == :L
-        return tril!(A.factors[1:m, 1:min(m,n)])
+        return tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
     elseif d == :Q
-        return LQPackedQ(A.factors,A.τ)
+        return LQPackedQ(getfield(F, :factors), getfield(F, :τ))
     else
-        throw(KeyError(d))
+        return getfield(F, d)
     end
 end
 
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
     mul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
-getq(A::LQ) = LQPackedQ(A.factors, A.τ)
-
 function show(io::IO, C::LQ)
     println(io, "$(typeof(C)) with factors L and Q:")
-    show(io, C[:L])
+    show(io, C.L)
     println(io)
-    show(io, C[:Q])
+    show(io, C.Q)
 end
 
-convert(::Type{LQPackedQ{T}}, Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
-convert(::Type{AbstractMatrix{T}}, Q::LQPackedQ) where {T} = convert(LQPackedQ{T}, Q)
-convert(::Type{Matrix}, A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
-convert(::Type{Array}, A::LQPackedQ) = convert(Matrix, A)
+LQPackedQ{T}(Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
+AbstractMatrix{T}(Q::LQPackedQ) where {T} = LQPackedQ{T}(Q)
+Matrix(A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
+Array(A::LQPackedQ) = Matrix(A)
 
-size(A::LQ, dim::Integer) = size(A.factors, dim)
-size(A::LQ) = size(A.factors)
+size(F::LQ, dim::Integer) = size(getfield(F, :factors), dim)
+size(F::LQ)               = size(getfield(F, :factors))
 
 # size(Q::LQPackedQ) yields the shape of Q's square form
 function size(Q::LQPackedQ)
@@ -121,22 +119,22 @@ end
 
 ## Multiplication by LQ
 mul!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    A[:L] * LAPACK.ormlq!('L', 'N', A.factors, A.τ, B)
+    A.L * LAPACK.ormlq!('L', 'N', A.factors, A.τ, B)
 mul!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat} =
-    A[:L] * LAPACK.ormlq!('L', 'N', A.factors, A.τ, Matrix(B))
+    A.L * LAPACK.ormlq!('L', 'N', A.factors, A.τ, Matrix(B))
 mul!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat} =
     mul!(zeros(eltype(A), size(A)), Matrix(A), Matrix(B))
 function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
-    mul!(convert(Factorization{TAB},A), copy_oftype(B, TAB))
+    mul!(Factorization{TAB}(A), copy_oftype(B, TAB))
 end
 function *(A::LQ{TA},B::QR{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
-    mul!(convert(Factorization{TAB},A), convert(Factorization{TAB},B))
+    mul!(Factorization{TAB}(A), Factorization{TAB}(B))
 end
 function *(A::QR{TA},B::LQ{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
-    mul!(convert(Factorization{TAB},A), convert(Factorization{TAB},B))
+    mul!(Factorization{TAB}(A), Factorization{TAB}(B))
 end
 *(A::Adjoint{<:Any,<:LQ}, B::LQ) = adjoint(A.parent) * B
 *(A::LQ, B::Adjoint{<:Any,<:LQ}) = A * adjoint(B.parent)
@@ -146,7 +144,7 @@ end
 mul!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
 function (*)(A::LQPackedQ, B::StridedVecOrMat)
     TAB = promote_type(eltype(A), eltype(B))
-    mul!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
+    mul!(AbstractMatrix{TAB}(A), copy_oftype(B, TAB))
 end
 
 ### QcB
@@ -158,9 +156,9 @@ function *(adjA::Adjoint{<:Any,<:LQPackedQ}, B::StridedVecOrMat)
     A = adjA.parent
     TAB = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
-        mul!(Adjoint(convert(AbstractMatrix{TAB}, A)), copy_oftype(B, TAB))
+        mul!(Adjoint(AbstractMatrix{TAB}(A)), copy_oftype(B, TAB))
     elseif size(B,1) == size(A.factors,1)
-        mul!(Adjoint(convert(AbstractMatrix{TAB}, A)), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
+        mul!(Adjoint(AbstractMatrix{TAB}(A)), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
     else
         throw(DimensionMismatch("first dimension of B, $(size(B,1)), must equal one of the dimensions of A, $(size(A))"))
     end
@@ -209,13 +207,13 @@ mul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:LQPackedQ{T}}) where {T<:BlasCom
 function *(A::StridedVecOrMat, adjQ::Adjoint{<:Any,<:LQPackedQ})
     Q = adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
-    return mul!(copy_oftype(A, TR), Adjoint(convert(AbstractMatrix{TR}, Q)))
+    return mul!(copy_oftype(A, TR), Adjoint(AbstractMatrix{TR}(Q)))
 end
 function *(adjA::Adjoint{<:Any,<:StridedMatrix}, adjQ::Adjoint{<:Any,<:LQPackedQ})
     A, Q = adjA.parent, adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
     C = adjoint!(similar(A, TR, reverse(size(A))), A)
-    return mul!(C, Adjoint(convert(AbstractMatrix{TR}, Q)))
+    return mul!(C, Adjoint(AbstractMatrix{TR}(Q)))
 end
 #
 # (2) the inner dimension in the multiplication is the LQPackedQ's first dimension.
@@ -240,7 +238,7 @@ function *(A::StridedVecOrMat, Q::LQPackedQ)
     else
         _rightappdimmismatch("columns")
     end
-    return mul!(C, convert(AbstractMatrix{TR}, Q))
+    return mul!(C, AbstractMatrix{TR}(Q))
 end
 function *(adjA::Adjoint{<:Any,<:StridedMatrix}, Q::LQPackedQ)
     A = adjA.parent
@@ -253,7 +251,7 @@ function *(adjA::Adjoint{<:Any,<:StridedMatrix}, Q::LQPackedQ)
     else
         _rightappdimmismatch("rows")
     end
-    return mul!(C, convert(AbstractMatrix{TR}, Q))
+    return mul!(C, AbstractMatrix{TR}(Q))
 end
 _rightappdimmismatch(rowsorcols) =
     throw(DimensionMismatch(string("the number of $(rowsorcols) of the matrix on the left ",
@@ -266,7 +264,7 @@ function (\)(A::LQ{TA}, b::StridedVector{Tb}) where {TA,Tb}
     S = promote_type(TA,Tb)
     m = checksquare(A)
     m == length(b) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has length $(length(b))"))
-    AA = convert(Factorization{S}, A)
+    AA = Factorization{S}(A)
     x = ldiv!(AA, copy_oftype(b, S))
     return x
 end
@@ -274,7 +272,7 @@ function (\)(A::LQ{TA},B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(TA,TB)
     m = checksquare(A)
     m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
-    AA = convert(Factorization{S}, A)
+    AA = Factorization{S}(A)
     X = ldiv!(AA, copy_oftype(B, S))
     return X
 end
@@ -289,6 +287,6 @@ end
 
 
 function ldiv!(A::LQ{T}, B::StridedVecOrMat{T}) where T
-    mul!(Adjoint(A[:Q]), ldiv!(LowerTriangular(A[:L]),B))
+    mul!(Adjoint(A.Q), ldiv!(LowerTriangular(A.L),B))
     return B
 end

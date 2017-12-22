@@ -209,7 +209,7 @@ julia> A = [1.3, -2.7, 4.4, 3.1]
   4.4
   3.1
 
-julia> ccall(:qsort, Void, (Ptr{Cdouble}, Csize_t, Csize_t, Ptr{Void}),
+julia> ccall(:qsort, Cvoid, (Ptr{Cdouble}, Csize_t, Csize_t, Ptr{Cvoid}),
              A, length(A), sizeof(eltype(A)), mycompare_c)
 
 julia> A
@@ -243,13 +243,13 @@ Julia automatically inserts calls to the [`Base.cconvert`](@ref) function to con
 to the specified type. For example, the following call:
 
 ```julia
-ccall((:foo, "libfoo"), Void, (Int32, Float64), x, y)
+ccall((:foo, "libfoo"), Cvoid, (Int32, Float64), x, y)
 ```
 
 will behave as if the following were written:
 
 ```julia
-ccall((:foo, "libfoo"), Void, (Int32, Float64),
+ccall((:foo, "libfoo"), Cvoid, (Int32, Float64),
       Base.unsafe_convert(Int32, Base.cconvert(Int32, x)),
       Base.unsafe_convert(Float64, Base.cconvert(Float64, y)))
 ```
@@ -321,7 +321,7 @@ same:
 
     To pass an array `A` as a pointer of a different type *without* converting the data beforehand
     (for example, to pass a `Float64` array to a function that operates on uninterpreted bytes), you
-    can declare the argument as `Ptr{Void}`.
+    can declare the argument as `Ptr{Cvoid}`.
 
     If an array of eltype `Ptr{T}` is passed as a `Ptr{Ptr{T}}` argument, [`Base.cconvert`](@ref)
     will attempt to first make a null-terminated copy of the array with each element replaced by its
@@ -355,9 +355,9 @@ an `Int` in Julia).
 | `ptrdiff_t`                                             |                          | `Cptrdiff_t`         | `Int`                                                                                                          |
 | `ssize_t`                                               |                          | `Cssize_t`           | `Int`                                                                                                          |
 | `size_t`                                                |                          | `Csize_t`            | `UInt`                                                                                                         |
-| `void`                                                  |                          |                      | `Void`                                                                                                         |
+| `void`                                                  |                          |                      | `Cvoid`                                                                                                         |
 | `void` and `[[noreturn]]` or `_Noreturn`                |                          |                      | `Union{}`                                                                                                      |
-| `void*`                                                 |                          |                      | `Ptr{Void}`                                                                                                    |
+| `void*`                                                 |                          |                      | `Ptr{Cvoid}`                                                                                                    |
 | `T*` (where T represents an appropriately defined type) |                          |                      | `Ref{T}`                                                                                                       |
 | `char*` (or `char[]`, e.g. a string)                    | `CHARACTER*N`            |                      | `Cstring` if NUL-terminated, or `Ptr{UInt8}` if not                                                            |
 | `char**` (or `*char[]`)                                 |                          |                      | `Ptr{Ptr{UInt8}}`                                                                                              |
@@ -401,7 +401,7 @@ checks and is only meant to improve readability of the call.
 !!! warning
     A return type of `Union{}` means the function will not return i.e. C++11 `[[noreturn]]` or C11
     `_Noreturn` (e.g. `jl_throw` or `longjmp`). Do not use this for functions that return no value
-    (`void`) but do return, use `Void` instead.
+    (`void`) but do return, use `Cvoid` instead.
 
 !!! note
     For `wchar_t*` arguments, the Julia type should be `Cwstring` (if the C routine expects a NUL-terminated
@@ -426,7 +426,7 @@ checks and is only meant to improve readability of the call.
     ```
 
 !!! note
-    A C function declared to return `Void` will return the value `nothing` in Julia.
+    A C function declared to return `Cvoid` will return the value `nothing` in Julia.
 
 ### Struct Type correspondences
 
@@ -476,7 +476,7 @@ struct String {
 In Julia, we can access the parts independently to make a copy of that string:
 
 ```julia
-str = from_c::Ptr{Void}
+str = from_c::Ptr{Cvoid}
 len = unsafe_load(Ptr{Cint}(str))
 unsafe_string(str + Core.sizeof(Cint), len)
 ```
@@ -563,7 +563,7 @@ types designed to mimic the internal structure of corresponding C structs.
 
 In Julia code wrapping calls to external Fortran routines, all input arguments should be declared
 as of type `Ref{T}`, as Fortran passes all variables by reference. The return type should either
-be `Void` for Fortran subroutines, or a `T` for Fortran functions returning the type `T`.
+be `Cvoid` for Fortran subroutines, or a `T` for Fortran functions returning the type `T`.
 
 ## Mapping C Functions to Julia
 
@@ -585,7 +585,7 @@ For translating a C argument list to Julia:
 
       * depends on how this parameter is used, first translate this to the intended pointer type, then
         determine the Julia equivalent using the remaining rules in this list
-      * this argument may be declared as `Ptr{Void}`, if it really is just an unknown pointer
+      * this argument may be declared as `Ptr{Cvoid}`, if it really is just an unknown pointer
   * `jl_value_t*`
 
       * `Any`
@@ -603,7 +603,7 @@ For translating a C argument list to Julia:
         object
   * `(T*)(...)` (e.g. a pointer to a function)
 
-      * `Ptr{Void}` (you may need to use [`cfunction`](@ref) explicitly to create this pointer)
+      * `Ptr{Cvoid}` (you may need to use [`cfunction`](@ref) explicitly to create this pointer)
   * `...` (e.g. a vararg)
 
       * `T...`, where `T` is the Julia type
@@ -617,7 +617,7 @@ For translating a C return type to Julia:
 
   * `void`
 
-      * `Void` (this will return the singleton instance `nothing::Void`)
+      * `Cvoid` (this will return the singleton instance `nothing::Cvoid`)
   * `T`, where `T` is one of the primitive types: `char`, `int`, `long`, `short`, `float`, `double`,
     `complex`, `enum` or any of their `typedef` equivalents
 
@@ -632,7 +632,7 @@ For translating a C return type to Julia:
 
       * depends on how this parameter is used, first translate this to the intended pointer type, then
         determine the Julia equivalent using the remaining rules in this list
-      * this argument may be declared as `Ptr{Void}`, if it really is just an unknown pointer
+      * this argument may be declared as `Ptr{Cvoid}`, if it really is just an unknown pointer
   * `jl_value_t*`
 
       * `Any`
@@ -654,7 +654,7 @@ For translating a C return type to Julia:
           * `Ptr{T}`, where `T` is the Julia type corresponding to `T`
   * `(T*)(...)` (e.g. a pointer to a function)
 
-      * `Ptr{Void}` (you may need to use [`cfunction`](@ref) explicitly to create this pointer)
+      * `Ptr{Cvoid}` (you may need to use [`cfunction`](@ref) explicitly to create this pointer)
 
 ### Passing Pointers for Modifying Inputs
 
@@ -666,7 +666,7 @@ as an argument, Julia will automatically pass a C pointer to the encapsulated da
 ```julia
 width = Ref{Cint}(0)
 range = Ref{Cfloat}(0)
-ccall(:foo, Void, (Ref{Cint}, Ref{Cfloat}), width, range)
+ccall(:foo, Cvoid, (Ref{Cint}, Ref{Cfloat}), width, range)
 ```
 
 Upon return, the contents of `width` and `range` can be retrieved (if they were changed by `foo`)
@@ -748,7 +748,7 @@ Here is a second example wrapping the corresponding destructor:
 function permutation_free(p::Ref{gsl_permutation})
     ccall(
         (:gsl_permutation_free, :libgsl), # name of C function and library
-        Void,                             # output type
+        Cvoid,                             # output type
         (Ref{gsl_permutation},),          # tuple of input types
         p                                 # name of Julia variable to pass in
     )
@@ -857,11 +857,11 @@ then cache it in a shared reference for that session. For example:
 
 ```julia
 macro dlsym(func, lib)
-    z = Ref{Ptr{Void}}(C_NULL)
+    z = Ref{Ptr{Cvoid}}(C_NULL)
     quote
         let zlocal = $z[]
             if zlocal == C_NULL
-                zlocal = dlsym($(esc(lib))::Ptr{Void}, $(esc(func)))::Ptr{Void}
+                zlocal = dlsym($(esc(lib))::Ptr{Cvoid}, $(esc(func)))::Ptr{Cvoid}
                 $z[] = $zlocal
             end
             zlocal
@@ -870,7 +870,7 @@ macro dlsym(func, lib)
 end
 
 mylibvar = Libdl.dlopen("mylib")
-ccall(@dlsym("myfunc", mylibvar), Void, ())
+ccall(@dlsym("myfunc", mylibvar), Cvoid, ())
 ```
 
 ## Closing a Library
@@ -955,7 +955,7 @@ do not count, but the new reference does) to ensure the memory is not prematurel
 that if the object was not originally allocated by Julia, the new object will never be finalized
 by Julia's garbage collector.  If the `Ptr` itself is actually a `jl_value_t*`, it can be converted
 back to a Julia object reference by [`unsafe_pointer_to_objref(ptr)`](@ref). (Julia values `v`
-can be converted to `jl_value_t*` pointers, as `Ptr{Void}`, by calling [`pointer_from_objref(v)`](@ref).)
+can be converted to `jl_value_t*` pointers, as `Ptr{Cvoid}`, by calling [`pointer_from_objref(v)`](@ref).)
 
 The reverse operation (writing data to a `Ptr{T}`), can be performed using [`unsafe_store!(ptr, value, [index])`](@ref).
 Currently, this is only supported for primitive types or other pointer-free (`isbits`) immutable struct types.

@@ -816,15 +816,18 @@ function inv(A::AbstractMatrix{T}) where T
     ldiv!(factorize(convert(AbstractMatrix{S}, A)), dest)
 end
 
-function pinv(v::AbstractVector{T}, tol::Real=real(zero(T))) where T
-    res = similar(v, typeof(zero(T) / (abs2(one(T)) + abs2(one(T)))))'
+pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Real} = _vectorpinv(Transpose, v, tol)
+pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Complex} = _vectorpinv(Adjoint, v, tol)
+pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T} = _vectorpinv(Adjoint, v, tol)
+function _vectorpinv(dualfn::Tf, v::AbstractVector{Tv}, tol) where {Tv,Tf}
+    res = dualfn(similar(v, typeof(zero(Tv) / (abs2(one(Tv)) + abs2(one(Tv))))))
     den = sum(abs2, v)
     # as tol is the threshold relative to the maximum singular value, for a vector with
     # single singular value σ=√den, σ ≦ tol*σ is equivalent to den=0 ∨ tol≥1
     if iszero(den) || tol >= one(tol)
         fill!(res, zero(eltype(res)))
     else
-        res .= v' ./ den
+        res .= dualfn(v) ./ den
     end
     return res
 end
@@ -882,7 +885,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
-(/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
+(/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = adjoint(Adjoint(B) \ Adjoint(A))
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)
 /(x::Number, v::AbstractVector) = x*pinv(v)
@@ -1290,7 +1293,7 @@ end
                 vAj += x[i]'*A[i, j]
             end
 
-            vAj = τ'*vAj
+            vAj = conj(τ)*vAj
 
             # ger
             A[1, j] -= vAj

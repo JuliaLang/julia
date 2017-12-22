@@ -280,7 +280,7 @@ julia> A = Diagonal(1:4);
 
 julia> s = svds(A, nsv = 2)[1];
 
-julia> s[:S]
+julia> s.S
 2-element Array{Float64,1}:
  4.0
  2.9999999999999996
@@ -321,7 +321,7 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
         end
 
         # right_sv = sqrt(2) * ex[2][ size(X,1)+1:end, ind ]
-        return (SVD(U, svals, V'), ex[3], ex[4], ex[5], ex[6])
+        return (SVD(U, svals, adjoint(V)), ex[3], ex[4], ex[5], ex[6])
     else
         #The sort is necessary to work around #10329
         return (SVD(zeros(eltype(svals), n, 0),

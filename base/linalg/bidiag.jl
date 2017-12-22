@@ -93,6 +93,8 @@ function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
     Bidiagonal(diag(A, 0), diag(A, uplo == :U ? 1 : -1), uplo)
 end
 
+Bidiagonal(A::Bidiagonal) = A
+
 function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
         throw(BoundsError(A,(i,j)))
@@ -131,7 +133,7 @@ function Base.replace_in_print_matrix(A::Bidiagonal,i::Integer,j::Integer,s::Abs
 end
 
 #Converting from Bidiagonal to dense Matrix
-function convert(::Type{Matrix{T}}, A::Bidiagonal) where T
+function Matrix{T}(A::Bidiagonal) where T
     n = size(A, 1)
     B = zeros(T, n, n)
     for i = 1:n - 1
@@ -145,15 +147,14 @@ function convert(::Type{Matrix{T}}, A::Bidiagonal) where T
     B[n,n] = A.dv[n]
     return B
 end
-convert(::Type{Matrix}, A::Bidiagonal{T}) where {T} = convert(Matrix{T}, A)
-convert(::Type{Array}, A::Bidiagonal) = convert(Matrix, A)
+Matrix(A::Bidiagonal{T}) where {T} = Matrix{T}(A)
+Array(A::Bidiagonal) = Matrix(A)
 promote_rule(::Type{Matrix{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
     @isdefined(T) && @isdefined(S) ? Matrix{promote_type(T,S)} : Matrix
 promote_rule(::Type{Matrix}, ::Type{<:Bidiagonal}) = Matrix
 
 #Converting from Bidiagonal to Tridiagonal
-Tridiagonal(M::Bidiagonal{T}) where {T} = convert(Tridiagonal{T}, M)
-function convert(::Type{Tridiagonal{T}}, A::Bidiagonal) where T
+function Tridiagonal{T}(A::Bidiagonal) where T
     dv = convert(AbstractVector{T}, A.dv)
     ev = convert(AbstractVector{T}, A.ev)
     z = fill!(similar(ev), zero(T))
@@ -164,12 +165,12 @@ promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
 promote_rule(::Type{<:Tridiagonal}, ::Type{<:Bidiagonal}) = Tridiagonal
 
 # No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
-convert(::Type{Bidiagonal{T}}, A::Bidiagonal{T}) where {T} = A
+Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
 # Convert Bidiagonal to Bidiagonal{T} by constructing a new instance with converted elements
-convert(::Type{Bidiagonal{T}}, A::Bidiagonal) where {T} =
+Bidiagonal{T}(A::Bidiagonal) where {T} =
     Bidiagonal(convert(AbstractVector{T}, A.dv), convert(AbstractVector{T}, A.ev), A.uplo)
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
-convert(::Type{AbstractMatrix{T}}, A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
+AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 
 broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.uplo)
 
@@ -186,7 +187,7 @@ similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spze
 
 #Singular values
 svdvals!(M::Bidiagonal{<:BlasReal}) = LAPACK.bdsdc!(M.uplo, 'N', M.dv, M.ev)[1]
-function svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Void} = nothing)
+function svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `svdfact!(A; thin = $(thin))` has ",
@@ -197,7 +198,7 @@ function svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Boo
     d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.uplo, 'I', M.dv, M.ev)
     SVD(U, d, Vt)
 end
-function svdfact(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Void} = nothing)
+function svdfact(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `svdfact(A; thin = $(thin))` has ",
@@ -522,7 +523,7 @@ function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::A
     tmp = similar(B,size(B,1))
     n = size(B, 1)
     if mA != n
-        throw(DimensionMismatch("size of A' is ($mA,$nA), corresponding dimension of B is $n"))
+        throw(DimensionMismatch("size of adjoint of A is ($mA,$nA), corresponding dimension of B is $n"))
     end
     for i = 1:size(B,2)
         copyto!(tmp, 1, B, (i - 1)*n + 1, n)
@@ -537,7 +538,7 @@ function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, 
     tmp = similar(B,size(B,1))
     n = size(B, 1)
     if mA != n
-        throw(DimensionMismatch("size of A' is ($mA,$nA), corresponding dimension of B is $n"))
+        throw(DimensionMismatch("size of transpose of A is ($mA,$nA), corresponding dimension of B is $n"))
     end
     for i = 1:size(B,2)
         copyto!(tmp, 1, B, (i - 1)*n + 1, n)

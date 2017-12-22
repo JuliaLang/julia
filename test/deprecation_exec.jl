@@ -1,4 +1,5 @@
 using Test
+using Logging
 
 module DeprecationTests # to test @deprecate
     f() = true
@@ -79,5 +80,22 @@ depwarn24658() = Base.firstcaller(backtrace(), :_func_not_found_)
 
 @testset "firstcaller" begin
     # issue #24658
-    @test eval(:(if true; f24658(); end)) == (Ptr{Void}(0),StackTraces.UNKNOWN)
+    @test eval(:(if true; f24658(); end)) == (Ptr{Cvoid}(0),StackTraces.UNKNOWN)
 end
+
+# issue #25130
+f25130() = Base.depwarn("f25130 message", :f25130)
+# The following test is for the depwarn behavior of expressions evaluated at
+# top-level, so we can't use the usual `collect_test_logs()` / `with_logger()`
+testlogger = Test.TestLogger()
+prev_logger = global_logger(testlogger)
+# Each call at top level should be distinct. This won't be true if they're
+# attributed to internal C frames (including generic dispatch machinery)
+f25130()
+f25130()
+testlogs = testlogger.logs
+@test length(testlogs) == 2
+@test testlogs[1].id != testlogs[2].id
+@test testlogs[1].kwargs.caller.func == Symbol("top-level scope")
+@test all(l.message == "f25130 message" for l in testlogs)
+global_logger(prev_logger)

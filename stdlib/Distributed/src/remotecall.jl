@@ -8,7 +8,7 @@ Tracks whether a particular `AbstractRemoteRef`
 
 The `client_refs` lock is also used to synchronize access to `.refs` and associated `clientset` state.
 """
-const client_refs = WeakKeyDict{Any, Void}() # used as a WeakKeySet
+const client_refs = WeakKeyDict{Any, Nothing}() # used as a WeakKeySet
 
 abstract type AbstractRemoteRef end
 
@@ -22,9 +22,9 @@ mutable struct Future <: AbstractRemoteRef
     where::Int
     whence::Int
     id::Int
-    v::Union{Some{Any}, Void}
+    v::Union{Some{Any}, Nothing}
 
-    Future(w::Int, rrid::RRID, v::Union{Some, Void}=nothing) =
+    Future(w::Int, rrid::RRID, v::Union{Some, Nothing}=nothing) =
         (r = new(w,rrid.whence,rrid.id,v); return test_existing_ref(r))
 
     Future(t::NTuple{4, Any}) = new(t[1],t[2],t[3],t[4])  # Useful for creating dummy, zeroed-out instances

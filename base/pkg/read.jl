@@ -21,7 +21,7 @@ function available(names=readdir("METADATA"))
             ismatch(Base.VERSION_REGEX, ver) || continue
             isfile(versdir, ver, "sha1") || continue
             haskey(pkgs,pkg) || (pkgs[pkg] = Dict{VersionNumber,Available}())
-            pkgs[pkg][convert(VersionNumber,ver)] = Available(
+            pkgs[pkg][VersionNumber(ver)] = Available(
                 readchomp(joinpath(versdir,ver,"sha1")),
                 Reqs.parse(joinpath(versdir,ver,"requires"))
             )
@@ -41,7 +41,7 @@ function latest(names=readdir("METADATA"))
         for ver in readdir(versdir)
             ismatch(Base.VERSION_REGEX, ver) || continue
             isfile(versdir, ver, "sha1") || continue
-            push!(pkgversions, convert(VersionNumber,ver))
+            push!(pkgversions, VersionNumber(ver))
         end
         isempty(pkgversions) && continue
         ver = string(maximum(pkgversions))

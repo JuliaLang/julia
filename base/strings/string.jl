@@ -58,7 +58,7 @@ Convert a string to a contiguous byte array representation encoded as UTF-8 byte
 This representation is often appropriate for passing strings to C.
 """
 String(s::AbstractString) = print_to_string(s)
-String(s::Symbol) = unsafe_string(Cstring(s))
+String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 (::Type{Vector{UInt8}})(s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
@@ -123,10 +123,12 @@ function nextind(s::String, i::Int)
     end
     # first continuation byte
     @inbounds b = codeunit(s, i += 1)
-    (b & 0xc0 ≠ 0x80) | ((i += 1) > n) | (l < 0xe0) && return i
+    b & 0xc0 ≠ 0x80 && return i
+    ((i += 1) > n) | (l < 0xe0) && return i
     # second continuation byte
     @inbounds b = codeunit(s, i)
-    (b & 0xc0 ≠ 0x80) | ((i += 1) > n) | (l < 0xf0) && return i
+    b & 0xc0 ≠ 0x80 && return i
+    ((i += 1) > n) | (l < 0xf0) && return i
     # third continuation byte
     @inbounds b = codeunit(s, i)
     ifelse(b & 0xc0 ≠ 0x80, i, i+1)
@@ -314,7 +316,7 @@ function repeat(s::String, r::Integer)
     out = _string_n(n*r)
     if n == 1 # common case: repeating a single-byte string
         @inbounds b = codeunit(s, 1)
-        ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
     else
         for i = 0:r-1
             unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)
@@ -342,7 +344,7 @@ function repeat(c::Char, r::Integer)
     s = _string_n(n*r)
     p = pointer(s)
     if n == 1
-        ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), p, u % UInt8, r)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), p, u % UInt8, r)
     elseif n == 2
         p16 = reinterpret(Ptr{UInt16}, p)
         for i = 1:r

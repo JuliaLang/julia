@@ -92,7 +92,7 @@ end
 Generate a function call expression. `sym` represents any number of function arguments, the
 last of which may be an anonymous-function expression and is expanded into `N` arguments.
 
-For example `@ncall 3 func a` generates
+For example, `@ncall 3 func a` generates
 
     func(a_1, a_2, a_3)
 

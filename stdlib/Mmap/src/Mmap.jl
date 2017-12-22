@@ -207,18 +207,18 @@ function mmap(io::IO,
         prot, flags, iswrite = settings(file_desc, shared)
         iswrite && grow && grow!(io, offset, len)
         # mmap the file
-        ptr = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, Int64), C_NULL, mmaplen, prot, flags, file_desc, offset_page)
+        ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int64), C_NULL, mmaplen, prot, flags, file_desc, offset_page)
         systemerror("memory mapping failed", reinterpret(Int,ptr) == -1)
     else
         name, readonly, create = settings(io)
         szfile = convert(Csize_t, len + offset)
         readonly && szfile > filesize(io) && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
-        handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Cptrdiff_t, Ptr{Void}, DWORD, DWORD, DWORD, Cwstring),
+        handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (Cptrdiff_t, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
                                 file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
-                          ccall(:OpenFileMappingW, stdcall, Ptr{Void}, (DWORD, Cint, Cwstring),
+                          ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
                                 readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
         handle == C_NULL && error("could not create file mapping: $(Libc.FormatMessage())")
-        ptr = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, DWORD, DWORD, DWORD, Csize_t),
+        ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (Ptr{Cvoid}, DWORD, DWORD, DWORD, Csize_t),
                     handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), (offset - offset_page) + len)
         ptr == C_NULL && error("could not create mapping view: $(Libc.FormatMessage())")
     end # os-test
@@ -226,10 +226,10 @@ function mmap(io::IO,
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
     finalizer(A) do x
         @static if Sys.isunix()
-            systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Void}, Int), ptr, mmaplen) != 0)
+            systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen) != 0)
         else
-            status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), ptr)!=0
-            status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), handle)!=0
+            status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), ptr)!=0
+            status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Cvoid},), handle)!=0
             status || error("could not unmap view: $(Libc.FormatMessage())")
         end
     end
@@ -339,10 +339,10 @@ function sync!(m::Array{T}, flags::Integer=MS_SYNC) where T
     ptr = pointer(m) - offset
     Base.@gc_preserve m @static if Sys.isunix()
         systemerror("msync",
-                    ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), ptr, length(m) * sizeof(T), flags) != 0)
+                    ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, length(m) * sizeof(T), flags) != 0)
     else
         systemerror("could not FlushViewOfFile: $(Libc.FormatMessage())",
-                    ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), ptr, length(m)) == 0)
+                    ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, length(m)) == 0)
     end
 end
 sync!(B::BitArray, flags::Integer=MS_SYNC) = sync!(B.chunks, flags)

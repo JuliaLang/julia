@@ -924,7 +924,7 @@ Broadcast.BroadcastStyle(::SparseVecStyle, ::Broadcast.Style{Tuple}) = Broadcast
 Broadcast.BroadcastStyle(::SparseMatStyle, ::Broadcast.Style{Tuple}) = Broadcast.DefaultArrayStyle{2}()
 
 # broadcast entry points for combinations of sparse arrays and other (scalar) types
-function broadcast(f, ::SPVM, ::Void, ::Void, mixedargs::Vararg{Any,N}) where N
+function broadcast(f, ::SPVM, ::Nothing, ::Nothing, mixedargs::Vararg{Any,N}) where N
     parevalf, passedargstup = capturescalars(f, mixedargs)
     return broadcast(parevalf, passedargstup...)
 end
@@ -1003,7 +1003,7 @@ Broadcast.BroadcastStyle(::SparseMatStyle, ::Broadcast.DefaultArrayStyle{N}) whe
     Broadcast.DefaultArrayStyle(Broadcast._max(Val(N), Val(2)))
 # end FIXME
 
-broadcast(f, ::PromoteToSparse, ::Void, ::Void, As::Vararg{Any,N}) where {N} =
+broadcast(f, ::PromoteToSparse, ::Nothing, ::Nothing, As::Vararg{Any,N}) where {N} =
     broadcast(f, map(_sparsifystructured, As)...)
 
 # ambiguity resolution

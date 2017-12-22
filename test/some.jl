@@ -7,31 +7,31 @@
 ## convert()
 
 # These conversions must fail to prevent ambiguities
-# when a value to wrap is already a Some or a Void
+# when a value to wrap is already a Some or a Nothing
 @test_throws MethodError convert(Some, 1)
-@test_throws MethodError convert(Union{Some, Void}, 1)
+@test_throws MethodError convert(Union{Some, Nothing}, 1)
 @test_throws MethodError convert(Some{Int}, 1)
-@test_throws MethodError convert(Union{Some{Int}, Void}, 1)
+@test_throws MethodError convert(Union{Some{Int}, Nothing}, 1)
 
-@test convert(Some, Some(1)) === convert(Union{Some, Void}, Some(1)) === Some(1)
-@test convert(Some{Int}, Some(1)) === convert(Union{Some{Int}, Void}, Some(1)) === Some(1)
+@test convert(Some, Some(1)) === convert(Union{Some, Nothing}, Some(1)) === Some(1)
+@test convert(Some{Int}, Some(1)) === convert(Union{Some{Int}, Nothing}, Some(1)) === Some(1)
 @test convert(Some{Int}, Some(1.0)) === Some(1)
-@test convert(Union{Some{Int}, Void}, Some(1.0)) === Some(1)
+@test convert(Union{Some{Int}, Nothing}, Some(1.0)) === Some(1)
 
 @test_throws MethodError convert(Some, nothing)
 @test_throws MethodError convert(Some{Int}, nothing)
 
 @test convert(Some, Some(nothing)) === Some(nothing)
-@test convert(Some{Void}, Some(nothing)) === Some(nothing)
+@test convert(Some{Nothing}, Some(nothing)) === Some(nothing)
 
-@test convert(Union{Some, Void}, nothing) === nothing
-@test convert(Union{Some{Int}, Void}, nothing) === nothing
+@test convert(Union{Some, Nothing}, nothing) === nothing
+@test convert(Union{Some{Int}, Nothing}, nothing) === nothing
 
-@test convert(Union{Int, Void}, nothing) === nothing
-@test convert(Union{Int, Void}, 1) === 1
-@test convert(Union{Int, Void}, 1.0) === 1
-@test convert(Void, nothing) === nothing
-@test_throws MethodError convert(Void, 1)
+@test convert(Union{Int, Nothing}, nothing) === nothing
+@test convert(Union{Int, Nothing}, 1) === 1
+@test convert(Union{Int, Nothing}, 1.0) === 1
+@test convert(Nothing, nothing) === nothing
+@test_throws MethodError convert(Nothing, 1)
 
 ## show()
 

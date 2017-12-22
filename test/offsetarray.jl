@@ -327,8 +327,8 @@ cv = copy(v)
 
 A = OffsetArray(rand(4,4), (-3,5))
 @test A ≈ A
-@test axes(A') === (6:9, -2:1)
-@test parent(A') == parent(A)'
+@test axes(adjoint(A)) === (6:9, -2:1)
+@test parent(adjoint(A)) == adjoint(parent(A))
 @test collect(A) == parent(A)
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))

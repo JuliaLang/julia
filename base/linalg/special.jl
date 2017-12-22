@@ -6,58 +6,54 @@
 # Interconversion between special matrix types
 
 # conversions from Diagonal to other special matrix types
-convert(::Type{Bidiagonal}, A::Diagonal) =
-    Bidiagonal(A.diag, fill!(similar(A.diag, length(A.diag)-1), 0), :U)
-convert(::Type{SymTridiagonal}, A::Diagonal) =
-    SymTridiagonal(A.diag, fill!(similar(A.diag, length(A.diag)-1), 0))
-convert(::Type{Tridiagonal}, A::Diagonal) =
-    Tridiagonal(fill!(similar(A.diag, length(A.diag)-1), 0), A.diag,
-                fill!(similar(A.diag, length(A.diag)-1), 0))
+Bidiagonal(A::Diagonal) = Bidiagonal(A.diag, fill!(similar(A.diag, length(A.diag)-1), 0), :U)
+SymTridiagonal(A::Diagonal) = SymTridiagonal(A.diag, fill!(similar(A.diag, length(A.diag)-1), 0))
+Tridiagonal(A::Diagonal) = Tridiagonal(fill!(similar(A.diag, length(A.diag)-1), 0), A.diag,
+                                       fill!(similar(A.diag, length(A.diag)-1), 0))
 
 # conversions from Bidiagonal to other special matrix types
-convert(::Type{Diagonal}, A::Bidiagonal) =
+Diagonal(A::Bidiagonal) =
     iszero(A.ev) ? Diagonal(A.dv) :
         throw(ArgumentError("matrix cannot be represented as Diagonal"))
-convert(::Type{SymTridiagonal}, A::Bidiagonal) =
+SymTridiagonal(A::Bidiagonal) =
     iszero(A.ev) ? SymTridiagonal(A.dv, A.ev) :
         throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
-convert(::Type{Tridiagonal}, A::Bidiagonal) =
+Tridiagonal(A::Bidiagonal) =
     Tridiagonal(A.uplo == 'U' ? fill!(similar(A.ev), 0) : A.ev, A.dv,
                 A.uplo == 'U' ? A.ev : fill!(similar(A.ev), 0))
 
 # conversions from SymTridiagonal to other special matrix types
-convert(::Type{Diagonal}, A::SymTridiagonal) =
+Diagonal(A::SymTridiagonal) =
     iszero(A.ev) ? Diagonal(A.dv) :
         throw(ArgumentError("matrix cannot be represented as Diagonal"))
-convert(::Type{Bidiagonal}, A::SymTridiagonal) =
+Bidiagonal(A::SymTridiagonal) =
     iszero(A.ev) ? Bidiagonal(A.dv, A.ev, :U) :
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
-convert(::Type{Tridiagonal}, A::SymTridiagonal) =
+Tridiagonal(A::SymTridiagonal) =
     Tridiagonal(copy(A.ev), A.dv, A.ev)
 
 # conversions from Tridiagonal to other special matrix types
-convert(::Type{Diagonal}, A::Tridiagonal) =
+Diagonal(A::Tridiagonal) =
     iszero(A.dl) && iszero(A.du) ? Diagonal(A.d) :
         throw(ArgumentError("matrix cannot be represented as Diagonal"))
-convert(::Type{Bidiagonal}, A::Tridiagonal) =
+Bidiagonal(A::Tridiagonal) =
     iszero(A.dl) ? Bidiagonal(A.d, A.du, :U) :
     iszero(A.du) ? Bidiagonal(A.d, A.dl, :L) :
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
-convert(::Type{SymTridiagonal}, A::Tridiagonal) =
+SymTridiagonal(A::Tridiagonal) =
     A.dl == A.du ? SymTridiagonal(A.d, A.dl) :
         throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
 
 # conversions from AbstractTriangular to special matrix types
-convert(::Type{Diagonal}, A::AbstractTriangular) =
+Diagonal(A::AbstractTriangular) =
     isdiag(A) ? Diagonal(diag(A)) :
         throw(ArgumentError("matrix cannot be represented as Diagonal"))
-convert(::Type{Bidiagonal}, A::AbstractTriangular) =
+Bidiagonal(A::AbstractTriangular) =
     isbanded(A, 0, 1) ? Bidiagonal(diag(A, 0), diag(A,  1), :U) : # is upper bidiagonal
     isbanded(A, -1, 0) ? Bidiagonal(diag(A, 0), diag(A, -1), :L) : # is lower bidiagonal
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
-convert(::Type{SymTridiagonal}, A::AbstractTriangular) =
-    convert(SymTridiagonal, convert(Tridiagonal, A))
-convert(::Type{Tridiagonal}, A::AbstractTriangular) =
+SymTridiagonal(A::AbstractTriangular) = SymTridiagonal(Tridiagonal(A))
+Tridiagonal(A::AbstractTriangular) =
     isbanded(A, -1, 1) ? Tridiagonal(diag(A, -1), diag(A, 0), diag(A, 1)) : # is tridiagonal
         throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
 

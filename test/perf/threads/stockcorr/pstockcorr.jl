@@ -107,4 +107,4 @@ function pstockcorr(n)
 end
 
 @time pstockcorr(1000000)
-#ccall(:jl_threading_profile, Void, ())
+#ccall(:jl_threading_profile, Cvoid, ())

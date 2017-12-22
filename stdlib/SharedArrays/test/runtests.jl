@@ -212,7 +212,7 @@ d[5,1:2:4,8] = 19
 
 AA = rand(4,2)
 A = @inferred(convert(SharedArray, AA))
-B = @inferred(convert(SharedArray, AA'))
+B = @inferred(convert(SharedArray, adjoint(AA)))
 @test B*A == adjoint(AA)*AA
 
 d=SharedArray{Int64,2}((10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
@@ -235,7 +235,7 @@ map!(x->1, d, d)
 
 # Shared arrays of singleton immutables
 @everywhere struct ShmemFoo end
-for T in [Void, ShmemFoo]
+for T in [Nothing, ShmemFoo]
     local s = @inferred(SharedArray{T}(10))
     @test T() === remotecall_fetch(x->x[3], workers()[1], s)
 end

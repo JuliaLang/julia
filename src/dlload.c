@@ -109,7 +109,7 @@ JL_DLLEXPORT int jl_dlclose(void *handle)
 {
 #ifdef _OS_WINDOWS_
     if (!handle) return -1;
-    return FreeLibrary((HMODULE) handle);
+    return !FreeLibrary((HMODULE) handle);
 #else
     dlerror(); /* Reset error status. */
     if (!handle) return -1;

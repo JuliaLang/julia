@@ -62,7 +62,14 @@ end
 # hashing collections (e.g. issue #6870)
 vals = Any[
     [1,2,3,4], [1 3;2 4], Any[1,2,3,4], [1,3,2,4],
+    [1.0, 2.0, 3.0, 4.0], BigInt[1, 2, 3, 4],
     [1,0], [true,false], BitArray([true,false]),
+    # Irrationals
+    Any[1, pi], [1, pi], [pi, pi], Any[pi, pi],
+    # Overflow with Int8
+    Any[Int8(127), Int8(-128), -383], 127:-255:-383,
+    # Loss of precision with Float64
+    Any[-2^53-1, 0.0, 2^53+1], [-2^53-1, 0, 2^53+1], (-2^53-1):2^53+1:(2^53+1),
     Set([1,2,3,4]),
     Set([1:10;]),                # these lead to different key orders
     Set([7,9,4,10,2,3,5,8,6,1]), #
@@ -75,11 +82,89 @@ vals = Any[
     [], [1], [2], [1, 1], [1, 2], [1, 3], [2, 2], [1, 2, 2], [1, 3, 3],
     zeros(2, 2), spzeros(2, 2), Matrix(1.0I, 2, 2), sparse(1.0I, 2, 2),
     sparse(ones(2, 2)), ones(2, 2), sparse([0 0; 1 0]), [0 0; 1 0],
-    [-0. 0; -0. 0.], SparseMatrixCSC(2, 2, [1, 3, 3], [1, 2], [-0., -0.])
+    [-0. 0; -0. 0.], SparseMatrixCSC(2, 2, [1, 3, 3], [1, 2], [-0., -0.]),
+    # issue #16364
+    1:4, 1:1:4, 1:-1:0, 1.0:4.0, 1.0:1.0:4.0, linspace(1, 4, 4),
+    'a':'e', ['a', 'b', 'c', 'd', 'e'],
+    # check that hash is still consistent with heterogeneous arrays for which - is defined
+    # for some pairs and not others
+    ["a", "b", 1, 2], ["a", 1, 2], ["a", "b", 2, 2], ["a", "a", 1, 2], ["a", "b", 2, 3]
 ]
 
 for a in vals, b in vals
     @test isequal(a,b) == (hash(a)==hash(b))
+    if a isa AbstractArray
+        @test hash(a) == hash(collect(a)) == hash(collect(Any, a))
+    end
+end
+
+vals = Any[
+    Int[], Float64[],
+    [0], [1], [2],
+    # test vectors starting with ranges
+    [1, 2], [1, 2, 3], [1, 2, 3, 4], [1, 2, 3, 4, 5], [1, 2, 3, 4, 5, 6],
+    [2, 1], [3, 2, 1], [4, 3, 2, 1], [5, 4, 3, 2, 1], [5, 4, 3, 2, 1, 0, -1],
+    # test vectors starting with ranges which trigger overflow with Int8
+    [124, 125, 126, 127], [124, 125, 126, 127, -128], [-128, 127, -128],
+    # test vectors including ranges
+    [2, 1, 2, 3], [2, 3, 2, 1], [2, 1, 2, 3, 2], [2, 3, 2, 1, 2],
+    # test various sparsity patterns
+    [0, 0], [0, 0, 0], [0, 1], [1, 0],
+    [0, 0, 1], [0, 1, 0], [1, 0, 0], [0, 1, 2],
+    [0 0; 0 0], [1 0; 0 0], [0 1; 0 0], [0 0; 1 0], [0 0; 0 1],
+    [5 1; 0 0], [1 1; 0 1], [0 2; 3 0], [0 2; 4 6], [4 0; 0 1],
+    [0 0 0; 0 0 0], [1 0 0; 0 0 1], [0 0 2; 3 0 0], [0 0 7; 6 1 2],
+    [4 0 0; 3 0 1], [0 2 4; 6 0 0],
+    # various stored zeros patterns
+    sparse([1], [1], [0]), sparse([1], [1], [-0.0]),
+    sparse([1, 2], [1, 1], [-0.0, 0.0]), sparse([1, 2], [1, 1], [0.0, -0.0]),
+    sparse([1, 2], [1, 1], [-0.0, 0.0], 3, 1), sparse([1, 2], [1, 1], [0.0, -0.0], 3, 1),
+    sparse([1, 3], [1, 1], [-0.0, 0.0], 3, 1), sparse([1, 3], [1, 1], [0.0, -0.0], 3, 1),
+    sparse([1, 2, 3], [1, 1, 1], [-1, 0, 1], 3, 1), sparse([1, 2, 3], [1, 1, 1], [-1.0, -0.0, 1.0], 3, 1),
+    sparse([1, 3], [1, 1], [-1, 0], 3, 1), sparse([1, 2], [1, 1], [-1, 0], 3, 1)
+]
+
+for a in vals
+    b = Array(a)
+    @test hash(convert(Array{Any}, a)) == hash(b)
+    @test hash(convert(Array{supertype(eltype(a))}, a)) == hash(b)
+    @test hash(convert(Array{Float64}, a)) == hash(b)
+    @test hash(sparse(a)) == hash(b)
+    if !any(x -> isequal(x, -0.0), a)
+        @test hash(convert(Array{Int}, a)) == hash(b)
+        if all(x -> typemin(Int8) <= x <= typemax(Int8), a)
+            @test hash(convert(Array{Int8}, a)) == hash(b)
+        end
+    end
+end
+
+# Test that overflow does not give inconsistent hashes with heterogeneous arrays
+@test hash(Any[Int8(1), Int8(2), 255]) == hash([1, 2, 255])
+@test hash(Any[Int8(127), Int8(-128), 129, 130]) ==
+    hash([127, -128, 129, 130]) != hash([127,  128, 129, 130])
+
+# Test hashing sparse matrix with type which does not support -
+struct CustomHashReal
+    x::Float64
+end
+Base.hash(x::CustomHashReal, h::UInt) = hash(x.x, h)
+Base.:(==)(x::CustomHashReal, y::Number) = x.x == y
+Base.:(==)(x::Number, y::CustomHashReal) = x == y.x
+Base.zero(::Type{CustomHashReal}) = CustomHashReal(0.0)
+
+let a = sparse([CustomHashReal(0), CustomHashReal(3), CustomHashReal(3)])
+    @test hash(a) == hash(Array(a))
+end
+
+vals = Any[
+    0.0:0.1:0.3, 0.3:-0.1:0.0,
+    0:-1:1, 0.0:-1.0:1.0, 0.0:1.1:10.0, -4:10,
+    'a':'e', 'b':'a',
+    linspace(1, 1, 1), linspace(0.3, 1.0, 3),  linspace(1, 1.1, 20)
+]
+
+for a in vals
+    @test hash(collect(a)) == hash(a)
 end
 
 @test hash(SubString("--hello--",3,7)) == hash("hello")
@@ -87,12 +172,6 @@ end
 @test hash(:(X.x)) != hash(:(X.y))
 
 @test hash([1,2]) == hash(view([1,2,3,4],1:2))
-
-# test explicit zeros in SparseMatrixCSC
-x = sprand(10, 10, 0.5)
-x[1] = 1
-x.nzval[1] = 0
-@test hash(x) == hash(Array(x))
 
 let a = QuoteNode(1), b = QuoteNode(1.0)
     @test (hash(a)==hash(b)) == (a==b)

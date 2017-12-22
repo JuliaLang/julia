@@ -709,8 +709,8 @@ function sqrt(A::StridedMatrix{<:Real})
         return triu!(parent(sqrt(UpperTriangular(A))))
     else
         SchurF = schurfact(complex(A))
-        R = triu!(parent(sqrt(UpperTriangular(SchurF[:T])))) # unwrapping unnecessary?
-        return SchurF[:vectors] * R * SchurF[:vectors]'
+        R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
+        return SchurF.vectors * R * SchurF.vectors'
     end
 end
 function sqrt(A::StridedMatrix{<:Complex})
@@ -723,8 +723,8 @@ function sqrt(A::StridedMatrix{<:Complex})
         return triu!(parent(sqrt(UpperTriangular(A))))
     else
         SchurF = schurfact(A)
-        R = triu!(parent(sqrt(UpperTriangular(SchurF[:T])))) # unwrapping unnecessary?
-        return SchurF[:vectors] * R * SchurF[:vectors]'
+        R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
+        return SchurF.vectors * R * SchurF.vectors'
     end
 end
 
@@ -1350,7 +1350,7 @@ function nullspace(A::StridedMatrix{T}) where T
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
     SVD = svdfact(A, full = true)
     indstart = sum(SVD.S .> max(m,n)*maximum(SVD.S)*eps(eltype(SVD.S))) + 1
-    return SVD.Vt[indstart:end,:]'
+    return adjoint(SVD.Vt[indstart:end,:])
 end
 nullspace(a::StridedVector) = nullspace(reshape(a, length(a), 1))
 

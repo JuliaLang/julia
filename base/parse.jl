@@ -264,9 +264,9 @@ function tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int,
 end
 tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s))
 tryparse(::Type{Float16}, s::AbstractString) =
-    convert(Union{Float16, Void}, tryparse(Float32, s))
+    convert(Union{Float16, Nothing}, tryparse(Float32, s))
 tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =
-    convert(Union{Float16, Void}, tryparse_internal(Float32, s, startpos, endpos))
+    convert(Union{Float16, Nothing}, tryparse_internal(Float32, s, startpos, endpos))
 
 ## string to complex functions ##
 

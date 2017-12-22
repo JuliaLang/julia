@@ -26,7 +26,7 @@ program completed successfully (see also [`quit`](@ref)). In an interactive sess
 `exit()` can be called with the keyboard shorcut `^D`.
 
 """
-exit(n) = ccall(:jl_exit, Void, (Int32,), n)
+exit(n) = ccall(:jl_exit, Cvoid, (Int32,), n)
 exit() = exit(0)
 
 """
@@ -88,7 +88,7 @@ const atexit_hooks = []
 Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
 called in last in first out (LIFO) order and run before object finalizers.
 """
-atexit(f::Function) = (unshift!(atexit_hooks, f); nothing)
+atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
 
 function _atexit()
     for f in atexit_hooks

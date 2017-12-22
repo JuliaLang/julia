@@ -64,7 +64,7 @@ fdtimeout() = FDEvent(false, false, false, true)
             a.timedout | b.timedout)
 
 mutable struct FileMonitor
-    handle::Ptr{Void}
+    handle::Ptr{Cvoid}
     file::String
     notify::Condition
     active::Bool
@@ -72,7 +72,7 @@ mutable struct FileMonitor
         handle = Libc.malloc(_sizeof_uv_fs_event)
         this = new(handle, file, Condition(), false)
         associate_julia_struct(handle, this)
-        err = ccall(:uv_fs_event_init, Cint, (Ptr{Void}, Ptr{Void}), eventloop(), handle)
+        err = ccall(:uv_fs_event_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), handle)
         if err != 0
             Libc.free(handle)
             throw(UVError("FileMonitor", err))
@@ -83,7 +83,7 @@ mutable struct FileMonitor
 end
 
 mutable struct PollingFileWatcher
-    handle::Ptr{Void}
+    handle::Ptr{Cvoid}
     file::String
     interval::UInt32
     notify::Condition
@@ -93,7 +93,7 @@ mutable struct PollingFileWatcher
         handle = Libc.malloc(_sizeof_uv_fs_poll)
         this = new(handle, file, round(UInt32, interval * 1000), Condition(), false, 0)
         associate_julia_struct(handle, this)
-        err = ccall(:uv_fs_poll_init, Int32, (Ptr{Void}, Ptr{Void}), eventloop(), handle)
+        err = ccall(:uv_fs_poll_init, Int32, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), handle)
         if err != 0
             Libc.free(handle)
             throw(UVError("PollingFileWatcher", err))
@@ -104,7 +104,7 @@ mutable struct PollingFileWatcher
 end
 
 mutable struct _FDWatcher
-    handle::Ptr{Void}
+    handle::Ptr{Cvoid}
     fdnum::Int # this is NOT the file descriptor
     refcount::Tuple{Int, Int}
     notify::Condition
@@ -128,7 +128,7 @@ mutable struct _FDWatcher
                     this.refcount = (this.refcount[1] + Int(readable), this.refcount[2] + Int(writable))
                     return this
                 end
-                if ccall(:jl_uv_unix_fd_is_watched, Int32, (Int32, Ptr{Void}, Ptr{Void}), fd.fd, C_NULL, eventloop()) == 1
+                if ccall(:jl_uv_unix_fd_is_watched, Int32, (Int32, Ptr{Cvoid}, Ptr{Cvoid}), fd.fd, C_NULL, eventloop()) == 1
                     throw(ArgumentError("file descriptor $(fd.fd) is already being watched by libuv"))
                 end
 
@@ -141,7 +141,7 @@ mutable struct _FDWatcher
                     (false, false),
                     0)
                 associate_julia_struct(handle, this)
-                err = ccall(:uv_poll_init, Int32, (Ptr{Void}, Ptr{Void}, Int32), eventloop(), handle, fd.fd)
+                err = ccall(:uv_poll_init, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Int32), eventloop(), handle, fd.fd)
                 if err != 0
                     Libc.free(handle)
                     throw(UVError("FDWatcher", err))
@@ -155,7 +155,7 @@ mutable struct _FDWatcher
         function Base.uvfinalize(t::_FDWatcher)
             if t.handle != C_NULL
                 disassociate_julia_struct(t)
-                ccall(:jl_close_uv, Void, (Ptr{Void},), t.handle)
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
                 t.handle = C_NULL
             end
             t.refcount = (0, 0)
@@ -189,7 +189,7 @@ mutable struct _FDWatcher
                 (false, false),
                 0)
             associate_julia_struct(handle, this)
-            err = ccall(:uv_poll_init_socket, Int32, (Ptr{Void},   Ptr{Void}, Ptr{Void}),
+            err = ccall(:uv_poll_init_socket, Int32, (Ptr{Cvoid},   Ptr{Cvoid}, Ptr{Cvoid}),
                                                       eventloop(), handle,    fd.handle)
             if err != 0
                 Libc.free(handle)
@@ -243,7 +243,7 @@ end
 
 function close(t::Union{FileMonitor, PollingFileWatcher})
     if t.handle != C_NULL
-        ccall(:jl_close_uv, Void, (Ptr{Void},), t.handle)
+        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
     end
 end
 
@@ -269,12 +269,12 @@ function _uv_hook_close(uv::FileMonitor)
 end
 
 function __init__()
-    global uv_jl_pollcb        = cfunction(uv_pollcb, Void, Tuple{Ptr{Void}, Cint, Cint})
-    global uv_jl_fspollcb      = cfunction(uv_fspollcb, Void, Tuple{Ptr{Void}, Cint, Ptr{Void}, Ptr{Void}})
-    global uv_jl_fseventscb    = cfunction(uv_fseventscb, Void, Tuple{Ptr{Void}, Ptr{Int8}, Int32, Int32})
+    global uv_jl_pollcb        = cfunction(uv_pollcb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Cint})
+    global uv_jl_fspollcb      = cfunction(uv_fspollcb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Ptr{Cvoid}, Ptr{Cvoid}})
+    global uv_jl_fseventscb    = cfunction(uv_fseventscb, Cvoid, Tuple{Ptr{Cvoid}, Ptr{Int8}, Int32, Int32})
 end
 
-function uv_fseventscb(handle::Ptr{Void}, filename::Ptr, events::Int32, status::Int32)
+function uv_fseventscb(handle::Ptr{Cvoid}, filename::Ptr, events::Int32, status::Int32)
     t = @handle_as handle FileMonitor
     fname = filename == C_NULL ? "" : unsafe_string(convert(Ptr{UInt8}, filename))
     if status != 0
@@ -285,7 +285,7 @@ function uv_fseventscb(handle::Ptr{Void}, filename::Ptr, events::Int32, status::
     nothing
 end
 
-function uv_pollcb(handle::Ptr{Void}, status::Int32, events::Int32)
+function uv_pollcb(handle::Ptr{Cvoid}, status::Int32, events::Int32)
     t = @handle_as handle _FDWatcher
     if status != 0
         notify_error(t.notify, UVError("FDWatcher", status))
@@ -296,7 +296,7 @@ function uv_pollcb(handle::Ptr{Void}, status::Int32, events::Int32)
                 # if we keep hearing about events when nobody appears to be listening,
                 # stop the poll to save cycles
                 t.active = (false, false)
-                ccall(:uv_poll_stop, Int32, (Ptr{Void},), t.handle)
+                ccall(:uv_poll_stop, Int32, (Ptr{Cvoid},), t.handle)
             end
         end
         notify(t.notify, FDEvent(events))
@@ -304,7 +304,7 @@ function uv_pollcb(handle::Ptr{Void}, status::Int32, events::Int32)
     nothing
 end
 
-function uv_fspollcb(handle::Ptr{Void}, status::Int32, prev::Ptr, curr::Ptr)
+function uv_fspollcb(handle::Ptr{Cvoid}, status::Int32, prev::Ptr, curr::Ptr)
     t = @handle_as handle PollingFileWatcher
     if status == 0 || status != t.busy_polling
         t.busy_polling = status
@@ -322,10 +322,10 @@ function start_watching(t::_FDWatcher)
     if t.active[1] != readable || t.active[2] != writable
         # make sure the READABLE / WRITEABLE state is updated
         uv_error("start_watching (File Handle)",
-                 ccall(:uv_poll_start, Int32, (Ptr{Void}, Int32, Ptr{Void}),
+                 ccall(:uv_poll_start, Int32, (Ptr{Cvoid}, Int32, Ptr{Cvoid}),
                        t.handle,
                        (readable ? UV_READABLE : 0) | (writable ? UV_WRITABLE : 0),
-                       uv_jl_pollcb::Ptr{Void}))
+                       uv_jl_pollcb::Ptr{Cvoid}))
         t.active = (readable, writable)
     end
     nothing
@@ -334,8 +334,8 @@ end
 function start_watching(t::PollingFileWatcher)
     if !t.active
         uv_error("start_watching (File Path)",
-                 ccall(:uv_fs_poll_start, Int32, (Ptr{Void}, Ptr{Void}, Cstring, UInt32),
-                       t.handle, uv_jl_fspollcb::Ptr{Void}, t.file, t.interval))
+                 ccall(:uv_fs_poll_start, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, UInt32),
+                       t.handle, uv_jl_fspollcb::Ptr{Cvoid}, t.file, t.interval))
         t.active = true
     end
     nothing
@@ -345,7 +345,7 @@ function stop_watching(t::PollingFileWatcher)
     if t.active && isempty(t.notify.waitq)
         t.active = false
         uv_error("stop_watching (File Path)",
-                 ccall(:uv_fs_poll_stop, Int32, (Ptr{Void},), t.handle))
+                 ccall(:uv_fs_poll_stop, Int32, (Ptr{Cvoid},), t.handle))
     end
     nothing
 end
@@ -353,8 +353,8 @@ end
 function start_watching(t::FileMonitor)
     if !t.active
         uv_error("start_watching (File Monitor)",
-                 ccall(:uv_fs_event_start, Int32, (Ptr{Void}, Ptr{Void}, Cstring, Int32),
-                       t.handle, uv_jl_fseventscb::Ptr{Void}, t.file, 0))
+                 ccall(:uv_fs_event_start, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32),
+                       t.handle, uv_jl_fseventscb::Ptr{Cvoid}, t.file, 0))
         t.active = true
     end
     nothing
@@ -364,7 +364,7 @@ function stop_watching(t::FileMonitor)
     if t.active && isempty(t.notify.waitq)
         t.active = false
         uv_error("stop_watching (File Monitor)",
-                 ccall(:uv_fs_event_stop, Int32, (Ptr{Void},), t.handle))
+                 ccall(:uv_fs_event_stop, Int32, (Ptr{Cvoid},), t.handle))
     end
     nothing
 end

@@ -214,10 +214,10 @@ end
     end
 end
 # issue #9786
-let ptr = Ptr{Void}(typemax(UInt))
+let ptr = Ptr{Cvoid}(typemax(UInt))
     for T in (Int, Cssize_t)
         @test T(ptr) == -1
-        @test ptr == Ptr{Void}(T(ptr))
+        @test ptr == Ptr{Cvoid}(T(ptr))
         @test typeof(Ptr{Float64}(T(ptr))) == Ptr{Float64}
     end
 end

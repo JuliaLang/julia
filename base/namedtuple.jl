@@ -19,7 +19,7 @@ function NamedTuple{names,T}(args::Tuple) where {names, T <: Tuple}
             NT = NamedTuple{names,T}
             types = T.parameters
             fields = Any[ convert(types[i], args[i]) for i = 1:N ]
-            ccall(:jl_new_structv, Any, (Any, Ptr{Void}, UInt32), NT, fields, N)::NT
+            ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), NT, fields, N)::NT
         end
     else
         throw(ArgumentError("Wrong number of arguments to named tuple constructor."))

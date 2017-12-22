@@ -22,7 +22,7 @@ const META_BRANCH = "metadata-v2"
 
 struct PkgError <: Exception
     msg::AbstractString
-    ex::Union{Exception, Void}
+    ex::Union{Exception, Nothing}
 end
 PkgError(msg::AbstractString) = PkgError(msg, nothing)
 function Base.showerror(io::IO, pkgerr::PkgError)
@@ -86,7 +86,7 @@ init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Di
 
 function __init__()
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    unshift!(Base.LOAD_CACHE_PATH, abspath(Dir._pkgroot(), "lib", vers))
+    pushfirst!(Base.LOAD_CACHE_PATH, abspath(Dir._pkgroot(), "lib", vers))
 end
 
 """
@@ -137,7 +137,7 @@ package.
 installed() = cd(Entry.installed)
 
 """
-    installed(pkg) -> Void | VersionNumber
+    installed(pkg) -> Nothing | VersionNumber
 
 If `pkg` is installed, return the installed version number. If `pkg` is registered,
 but not installed, return `nothing`.

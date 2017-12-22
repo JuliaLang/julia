@@ -1876,7 +1876,10 @@ static void jl_insert_backedges(jl_array_t *list, arraylist_t *dependent_worlds)
             if (jl_is_method_instance(callee)) {
                 sig = callee_mi->specTypes;
                 assert(!module_in_worklist(callee_mi->def.method->module));
-                assert(callee_mi->max_world == ~(size_t)0);
+                if (callee_mi->max_world != ~(size_t)0) {
+                    valid = 0;
+                    break;
+                }
             }
             else {
                 sig = callee;
@@ -2558,17 +2561,31 @@ static void jl_update_backref_list(jl_value_t *old, jl_value_t *_new, size_t sta
 
 // repeatedly look up older methods until we come to one that existed
 // at the time this module was serialized
-static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t *sig, arraylist_t *dependent_worlds)
+static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t *sig, arraylist_t *dependent_worlds, size_t *max_world)
 {
     size_t world = jl_world_counter;
+    jl_typemap_entry_t *entry;
     jl_method_t *_new;
     while (1) {
-        _new = (jl_method_t*)jl_methtable_lookup(mt, sig, world);
-        assert(_new && jl_is_method(_new));
+        entry = jl_typemap_assoc_by_type(
+            mt->defs, sig, NULL, /*subtype*/0, /*offs*/0, world, /*max_world_mask*/0);
+        if (!entry)
+            break;
+        _new = (jl_method_t*)entry->func.value;
         world = lowerbound_dependent_world_set(_new->min_world, dependent_worlds);
-        if (world == _new->min_world)
+        if (world == _new->min_world) {
+            *max_world = entry->max_world;
             return _new;
+        }
     }
+    // If we failed to find a method (perhaps due to method deletion),
+    // grab anything
+    entry = jl_typemap_assoc_by_type(
+        mt->defs, sig, NULL, /*subtype*/0, /*offs*/0, /*world*/jl_world_counter, /*max_world_mask*/(~(size_t)0) >> 1);
+    assert(entry);
+    assert(entry->max_world != ~(size_t)0);
+    *max_world = entry->max_world;
+    return (jl_method_t*)entry->func.value;
 }
 
 static jl_method_t *jl_recache_method(jl_method_t *m, size_t start, arraylist_t *dependent_worlds)
@@ -2576,8 +2593,9 @@ static jl_method_t *jl_recache_method(jl_method_t *m, size_t start, arraylist_t 
     jl_datatype_t *sig = (jl_datatype_t*)m->sig;
     jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
     jl_methtable_t *mt = ftype->name->mt;
+    size_t max_world = 0;
     jl_set_typeof(m, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
-    jl_method_t *_new = jl_lookup_method_worldset(mt, sig, dependent_worlds);
+    jl_method_t *_new = jl_lookup_method_worldset(mt, sig, dependent_worlds, &max_world);
     jl_update_backref_list((jl_value_t*)m, (jl_value_t*)_new, start);
     return _new;
 }
@@ -2588,8 +2606,8 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li
     assert(jl_is_datatype(sig) || jl_is_unionall(sig));
     jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
     jl_methtable_t *mt = ftype->name->mt;
-    jl_method_t *m = jl_lookup_method_worldset(mt, sig, dependent_worlds);
-
+    size_t max_world = 0;
+    jl_method_t *m = jl_lookup_method_worldset(mt, sig, dependent_worlds, &max_world);
     jl_datatype_t *argtypes = (jl_datatype_t*)li->specTypes;
     jl_set_typeof(li, (void*)(intptr_t)0x40); // invalidate the old value to help catch errors
     jl_svec_t *env = jl_emptysvec;
@@ -2598,6 +2616,7 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li
     if (ti == jl_bottom_type)
         env = jl_emptysvec; // the intersection may fail now if the type system had made an incorrect subtype env in the past
     jl_method_instance_t *_new = jl_specializations_get_linfo(m, (jl_value_t*)argtypes, env, jl_world_counter);
+    _new->max_world = max_world;
     jl_update_backref_list((jl_value_t*)li, (jl_value_t*)_new, start);
     return _new;
 }

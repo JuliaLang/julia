@@ -2,6 +2,7 @@
 
 using Test
 
+using Base: getproperty
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
 n = 10
@@ -60,14 +61,15 @@ bimg  = randn(n,2)/2
                 end
                 # Test extraction of factors
                 if eltya <: Real
-                    @test bc1[uplo]*bc1[:D]*bc1[uplo]' ≈ aher[bc1[:p], bc1[:p]]
-                    @test bc1[uplo]*bc1[:D]*bc1[uplo]' ≈ bc1[:P]*aher*bc1[:P]'
+                    @test getproperty(bc1, uplo)*bc1.D*getproperty(bc1, uplo)' ≈ aher[bc1.p, bc1.p]
+                    @test getproperty(bc1, uplo)*bc1.D*getproperty(bc1, uplo)' ≈ bc1.P*aher*bc1.P'
                 end
+
                 bc1 = bkfact(Symmetric(asym, uplo))
-                @test bc1[uplo]*bc1[:D]*Transpose(bc1[uplo]) ≈ asym[bc1[:p], bc1[:p]]
-                @test bc1[uplo]*bc1[:D]*Transpose(bc1[uplo]) ≈ bc1[:P]*asym*Transpose(bc1[:P])
-                @test_throws KeyError bc1[:Z]
-                @test_throws ArgumentError uplo == :L ? bc1[:U] : bc1[:L]
+                @test getproperty(bc1, uplo)*bc1.D*Transpose(getproperty(bc1, uplo)) ≈ asym[bc1.p, bc1.p]
+                @test getproperty(bc1, uplo)*bc1.D*Transpose(getproperty(bc1, uplo)) ≈ bc1.P*asym*Transpose(bc1.P)
+                @test_throws ErrorException bc1.Z
+                @test_throws ArgumentError uplo == :L ? bc1.U : bc1.L
             end
         end
 

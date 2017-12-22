@@ -273,7 +273,7 @@ let
     @test ptr == cstring
     @test cstring == ptr
 
-    # convenient NULL string creation from Ptr{Void}
+    # convenient NULL string creation from Ptr{Cvoid}
     nullstr = Cstring(C_NULL)
 
     # Comparisons against NULL strings

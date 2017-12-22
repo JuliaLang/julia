@@ -15,7 +15,7 @@ mutable struct InferenceResult
     linfo::MethodInstance
     args::Vector{Any}
     result # ::Type, or InferenceState if WIP
-    src::Union{CodeInfo, Void} # if inferred copy is available
+    src::Union{CodeInfo, Nothing} # if inferred copy is available
     function InferenceResult(linfo::MethodInstance)
         if isdefined(linfo, :inferred_const)
             result = Const(linfo.inferred_const)
@@ -235,7 +235,7 @@ mutable struct InferenceState
 
     backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
-    parent::Union{Void, InferenceState}
+    parent::Union{Nothing, InferenceState}
 
     const_api::Bool
     const_ret::Bool
@@ -734,7 +734,7 @@ add_tfunc(checked_umul_int, 2, 2, chk_tfunc, 10)
     ## other, misc intrinsics ##
 add_tfunc(Core.Intrinsics.llvmcall, 3, IInf,
           (@nospecialize(fptr), @nospecialize(rt), @nospecialize(at), a...) -> instanceof_tfunc(rt)[1], 10)
-cglobal_tfunc(@nospecialize(fptr)) = Ptr{Void}
+cglobal_tfunc(@nospecialize(fptr)) = Ptr{Cvoid}
 cglobal_tfunc(@nospecialize(fptr), @nospecialize(t)) = (isType(t) ? Ptr{t.parameters[1]} : Ptr)
 cglobal_tfunc(@nospecialize(fptr), t::Const) = (isa(t.val, Type) ? Ptr{t.val} : Ptr)
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
@@ -1716,7 +1716,7 @@ function tuple_tfunc(@nospecialize(argtype))
 end
 
 function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
-                           sv::Union{InferenceState,Void}, params::InferenceParams = sv.params)
+                           sv::Union{InferenceState,Nothing}, params::InferenceParams = sv.params)
     isva = !isempty(argtypes) && isvarargtype(argtypes[end])
     if f === tuple
         for a in argtypes
@@ -2086,7 +2086,13 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     return result
 end
 
+const deprecated_sym = Symbol("deprecated.jl")
+
 function abstract_call_method(method::Method, @nospecialize(sig), sparams::SimpleVector, sv::InferenceState)
+    # TODO: remove with 0.7 deprecations
+    if method.file === deprecated_sym && method.sig == (Tuple{Type{T},Any} where T)
+        return Any, false
+    end
     topmost = nothing
     # Limit argument type tuple growth of functions:
     # look through the parents list to see if there's a call to the same method
@@ -2181,7 +2187,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
         recomputed = ccall(:jl_type_intersection_with_env, Any, (Any, Any), sig, method.sig)::SimpleVector
         sig = recomputed[1]
         if !isa(unwrap_unionall(sig), DataType) # probably Union{}
-            return Any
+            return Any, false
         end
         sparams = recomputed[2]::SimpleVector
     end
@@ -2707,7 +2713,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
             spsig = sv.linfo.def.sig
             if isa(spsig, UnionAll)
                 if !isempty(sv.linfo.sparam_vals)
-                    env = data_pointer_from_objref(sv.linfo.sparam_vals) + sizeof(Ptr{Void})
+                    env = data_pointer_from_objref(sv.linfo.sparam_vals) + sizeof(Ptr{Cvoid})
                     rt = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, env)
                 else
                     rt = rewrap_unionall(e.args[2], spsig)
@@ -2756,9 +2762,13 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
             end
         end
     elseif e.head === :method
-        t = (length(e.args) == 1) ? Any : Void
+        t = (length(e.args) == 1) ? Any : Nothing
     elseif e.head === :copyast
         t = abstract_eval(e.args[1], vtypes, sv)
+        if t isa Const && t.val isa Expr
+            # `copyast` makes copies of Exprs
+            t = Expr
+        end
     elseif e.head === :invoke
         error("type inference data-flow error: tried to double infer a function")
     elseif e.head === :boundscheck
@@ -3199,12 +3209,12 @@ function finalize_backedges(frame::InferenceState)
             while i <= length(edges)
                 to = edges[i]
                 if isa(to, MethodInstance)
-                    ccall(:jl_method_instance_add_backedge, Void, (Any, Any), to, caller)
+                    ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
                     i += 1
                 else
                     typeassert(to, MethodTable)
                     typ = edges[i + 1]
-                    ccall(:jl_method_table_add_backedge, Void, (Any, Any, Any), to, typ, caller)
+                    ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
                     i += 2
                 end
             end
@@ -3373,7 +3383,7 @@ end
 function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                       params::InferenceParams)
     for i = 1:2 # test-and-lock-and-test
-        i == 2 && ccall(:jl_typeinf_begin, Void, ())
+        i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
         if cached && isdefined(linfo, :inferred)
             # see if this code already exists in the cache
             # staged functions make this hard since they have two "inferred" conditions,
@@ -3391,11 +3401,11 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     tree.inferred = true
                     tree.pure = true
                     tree.inlineable = true
-                    i == 2 && ccall(:jl_typeinf_end, Void, ())
+                    i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                     return svec(linfo, tree, linfo.rettype)
                 elseif isa(inf, CodeInfo)
                     if inf.inferred
-                        i == 2 && ccall(:jl_typeinf_end, Void, ())
+                        i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                         return svec(linfo, inf, linfo.rettype)
                     end
                 end
@@ -3403,7 +3413,7 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
         end
     end
     frame = typeinf_frame(linfo, optimize, cached, params)
-    ccall(:jl_typeinf_end, Void, ())
+    ccall(:jl_typeinf_end, Cvoid, ())
     frame === nothing && return svec(nothing, nothing, Any)
     frame = frame::InferenceState
     frame.inferred || return svec(nothing, nothing, Any)
@@ -3421,20 +3431,20 @@ function typeinf_type(method::Method, @nospecialize(atypes), sparams::SimpleVect
     code === nothing && return nothing
     code = code::MethodInstance
     for i = 1:2 # test-and-lock-and-test
-        i == 2 && ccall(:jl_typeinf_begin, Void, ())
+        i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
         if cached && isdefined(code, :inferred)
             # see if this rettype already exists in the cache
             # staged functions make this hard since they have two "inferred" conditions,
             # so need to check whether the code itself is also inferred
             inf = code.inferred
             if !isa(inf, CodeInfo) || (inf::CodeInfo).inferred
-                i == 2 && ccall(:jl_typeinf_end, Void, ())
+                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                 return code.rettype
             end
         end
     end
     frame = typeinf_frame(code, cached, cached, params)
-    ccall(:jl_typeinf_end, Void, ())
+    ccall(:jl_typeinf_end, Cvoid, ())
     frame === nothing && return nothing
     frame = frame::InferenceState
     frame.inferred || return nothing
@@ -3447,12 +3457,12 @@ function typeinf_ext(linfo::MethodInstance, world::UInt)
         return typeinf_code(linfo, true, true, InferenceParams(world))
     else
         # toplevel lambda - infer directly
-        ccall(:jl_typeinf_begin, Void, ())
+        ccall(:jl_typeinf_begin, Cvoid, ())
         result = InferenceResult(linfo)
         frame = InferenceState(result, linfo.inferred::CodeInfo,
                                true, true, InferenceParams(world))
         typeinf(frame)
-        ccall(:jl_typeinf_end, Void, ())
+        ccall(:jl_typeinf_end, Cvoid, ())
         @assert frame.inferred # TODO: deal with this better
         @assert frame.linfo === linfo
         linfo.rettype = widenconst(frame.bestguess)
@@ -4484,14 +4494,14 @@ function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::Opti
         ex.typ = etype
         ex.args = copy(argexprs)
         invoke_texpr === nothing || insert!(stmts, 2, invoke_texpr)
-        invoke_fexpr === nothing || unshift!(stmts, invoke_fexpr)
+        invoke_fexpr === nothing || pushfirst!(stmts, invoke_fexpr)
 
         local ret_var, merge, invoke_ex, spec_hit
         ret_var = add_slot!(sv.src, widenconst(etype), false)
         merge = genlabel(sv)
         invoke_ex = copy(ex)
         invoke_ex.head = :invoke
-        unshift!(invoke_ex.args, nothing)
+        pushfirst!(invoke_ex.args, nothing)
         spec_hit = false
 
         function splitunion(atypes::Vector{Any}, i::Int)
@@ -4522,8 +4532,8 @@ function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::Opti
                             isa_var = newvar!(sv, Bool)
                             isa_ty = Expr(:call, GlobalRef(Core, :isa), aei, ty)
                             isa_ty.typ = Bool
-                            unshift!(match, Expr(:gotoifnot, isa_var, after.label))
-                            unshift!(match, Expr(:(=), isa_var, isa_ty))
+                            pushfirst!(match, Expr(:gotoifnot, isa_var, after.label))
+                            pushfirst!(match, Expr(:(=), isa_var, isa_ty))
                             append!(stmts, match)
                             push!(stmts, after)
                         else
@@ -4564,7 +4574,7 @@ function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::Opti
         cache_linfo === nothing && return NF
         add_backedge!(cache_linfo, sv)
         argexprs = copy(argexprs)
-        unshift!(argexprs, cache_linfo)
+        pushfirst!(argexprs, cache_linfo)
         ex = Expr(:invoke)
         ex.args = argexprs
         ex.typ = etype
@@ -4656,8 +4666,8 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         argexpr0 = argexprs[2]
         atypes = atypes[4:end]
         argexprs = argexprs[4:end]
-        unshift!(atypes, atype0)
-        unshift!(argexprs, argexpr0)
+        pushfirst!(atypes, atype0)
+        pushfirst!(argexprs, argexpr0)
         f = isdefined(ft, :instance) ? ft.instance : nothing
     elseif isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction ||
             isa(f, Builtin) || ft ⊑ Builtin
@@ -4778,7 +4788,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     end
 
     # see if the method has been previously inferred (and cached)
-    linfo = code_for_method(method, metharg, methsp, sv.params.world, true) # Union{Void, MethodInstance}
+    linfo = code_for_method(method, metharg, methsp, sv.params.world, true) # Union{Nothing, MethodInstance}
     isa(linfo, MethodInstance) || return invoke_NF(argexprs0, e.typ, atypes0, sv,
                                                    atype_unlimited, invoke_data)
     linfo = linfo::MethodInstance
@@ -4802,7 +4812,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         end
     end
     if haveconst
-        inf_result = cache_lookup(linfo, atypes, sv.params.cache) # Union{Void, InferenceResult}
+        inf_result = cache_lookup(linfo, atypes, sv.params.cache) # Union{Nothing, InferenceResult}
     else
         inf_result = nothing
     end
@@ -4875,7 +4885,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         aei = argexprs[i]
         aeitype = argtype = widenconst(exprtype(aei, sv.src, sv.mod))
         if i == 1 && !(invoke_texpr === nothing)
-            unshift!(prelude_stmts, invoke_texpr)
+            pushfirst!(prelude_stmts, invoke_texpr)
         end
 
         # ok for argument to occur more than once if the actual argument
@@ -4902,15 +4912,15 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
             if occ != 0
                 vnew = newvar!(sv, aeitype)
                 argexprs[i] = vnew
-                unshift!(prelude_stmts, Expr(:(=), vnew, aei))
+                pushfirst!(prelude_stmts, Expr(:(=), vnew, aei))
                 stmts_free &= free
             elseif !free && !isType(aeitype)
-                unshift!(prelude_stmts, aei)
+                pushfirst!(prelude_stmts, aei)
                 stmts_free = false
             end
         end
     end
-    invoke_fexpr === nothing || unshift!(prelude_stmts, invoke_fexpr)
+    invoke_fexpr === nothing || pushfirst!(prelude_stmts, invoke_fexpr)
 
     # re-number the SSAValues and copy their type-info to the new ast
     ssavalue_types = src.ssavaluetypes
@@ -4975,7 +4985,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
                     retval = add_slot!(sv.src, rettype, false)
                 end
                 multiret = true
-                unshift!(a.args, retval)
+                pushfirst!(a.args, retval)
                 a.head = :(=)
                 push!(stmts, GotoNode(retstmt.label))
             end
@@ -4984,7 +4994,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
 
     if multiret
         if lastexpr !== nothing
-            unshift!(lastexpr.args, retval)
+            pushfirst!(lastexpr.args, retval)
             lastexpr.head = :(=)
             push!(stmts, lastexpr)
         end
@@ -5013,7 +5023,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         if !do_coverage && all(inlining_ignore, stmts)
             empty!(stmts)
         elseif isa(stmts[1], LineNumberNode)
-            linenode = shift!(stmts)::LineNumberNode
+            linenode = popfirst!(stmts)::LineNumberNode
             line = linenode.line
             isa(linenode.file, Symbol) && (file = linenode.file)
         end
@@ -5025,15 +5035,15 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         # function inlined in it
         mod = method.module
         if mod === sv.mod
-            unshift!(stmts, Expr(:meta, :push_loc, file,
+            pushfirst!(stmts, Expr(:meta, :push_loc, file,
                                  method.name, line))
         else
-            unshift!(stmts, Expr(:meta, :push_loc, file,
+            pushfirst!(stmts, Expr(:meta, :push_loc, file,
                                  method.name, line, mod))
         end
         push!(stmts, Expr(:meta, :pop_loc))
     elseif !isempty(stmts)
-        unshift!(stmts, Expr(:meta, :push_loc, file,
+        pushfirst!(stmts, Expr(:meta, :push_loc, file,
                              method.name, line))
         if isa(stmts[end], LineNumberNode)
             stmts[end] = Expr(:meta, :pop_loc)
@@ -5751,7 +5761,7 @@ end
 function get_undef_flag_slot(src::CodeInfo, flagslots, id)
     flag_id = flagslots[id]
     flag_id != 0 && return SlotNumber(flag_id)
-    slot = add_slot!(src, Void, src.slotflags[id] & Slot_AssignedOnce != 0, src.slotnames[id])
+    slot = add_slot!(src, Nothing, src.slotflags[id] & Slot_AssignedOnce != 0, src.slotnames[id])
     flag_id = slot_id(slot)
     src.slotflags[flag_id] |= Slot_StaticUndef | Slot_UsedUndef
     flagslots[id] = flag_id
@@ -5956,7 +5966,7 @@ end
 isassigned(infomap::ValueInfoMap, var) = isassigned(get_info_entry(infomap, var)...)
 function delete!(infomap::ValueInfoMap, var)
     infos, idx = get_info_entry(infomap, var)
-    ccall(:jl_arrayunset, Void, (Any, Csize_t), infos, (idx - 1) % UInt)
+    ccall(:jl_arrayunset, Cvoid, (Any, Csize_t), infos, (idx - 1) % UInt)
 end
 function getindex(infomap::ValueInfoMap, var)
     infos, idx = get_info_entry(infomap, var)

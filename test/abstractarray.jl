@@ -199,9 +199,9 @@ end
 T24Linear(::Type{T}, dims::Int...) where T = T24Linear(T, dims)
 T24Linear(::Type{T}, dims::NTuple{N,Int}) where {T,N} = T24Linear{T,N,dims}()
 
-Base.convert(::Type{T24Linear     }, X::AbstractArray{T,N}) where {T,N  } = convert(T24Linear{T,N}, X)
-Base.convert(::Type{T24Linear{T  }}, X::AbstractArray{_,N}) where {T,N,_} = convert(T24Linear{T,N}, X)
-Base.convert(::Type{T24Linear{T,N}}, X::AbstractArray     ) where {T,N  } = T24Linear{T,N,size(X)}(X...)
+T24Linear(     X::AbstractArray{T,N}) where {T,N  } = T24Linear{T,N}(X)
+T24Linear{T  }(X::AbstractArray{_,N}) where {T,N,_} = T24Linear{T,N}(X)
+T24Linear{T,N}(X::AbstractArray     ) where {T,N  } = T24Linear{T,N,size(X)}(X...)
 
 Base.size(::T24Linear{T,N,dims}) where {T,N,dims} = dims
 import Base: IndexLinear
@@ -217,10 +217,10 @@ end
 TSlow(::Type{T}, dims::Int...) where {T} = TSlow(T, dims)
 TSlow(::Type{T}, dims::NTuple{N,Int}) where {T,N} = TSlow{T,N}(Dict{NTuple{N,Int}, T}(), dims)
 
-Base.convert(::Type{TSlow{T,N}}, X::TSlow{T,N})         where {T,N  } = X
-Base.convert(::Type{TSlow     }, X::AbstractArray{T,N}) where {T,N  } = convert(TSlow{T,N}, X)
-Base.convert(::Type{TSlow{T  }}, X::AbstractArray{_,N}) where {T,N,_} = convert(TSlow{T,N}, X)
-Base.convert(::Type{TSlow{T,N}}, X::AbstractArray     ) where {T,N  } = begin
+TSlow{T,N}(X::TSlow{T,N})         where {T,N  } = X
+TSlow(     X::AbstractArray{T,N}) where {T,N  } = TSlow{T,N}(X)
+TSlow{T  }(X::AbstractArray{_,N}) where {T,N,_} = TSlow{T,N}(X)
+TSlow{T,N}(X::AbstractArray     ) where {T,N  } = begin
     A = TSlow(T, size(X))
     for I in CartesianIndices(size(X))
         A[I.I...] = X[I.I...]
@@ -388,8 +388,8 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         idxs = rand(1:N, 3, 3, 3)
         @test B[idxs] == A[idxs] == idxs
         @test B[vec(idxs)] == A[vec(idxs)] == vec(idxs)
-        @test B[:] == A[:] == collect(1:N)
-        @test B[1:end] == A[1:end] == collect(1:N)
+        @test B[:] == A[:] == 1:N
+        @test B[1:end] == A[1:end] == 1:N
         @test B[:,:,trailing2] == A[:,:,trailing2] == B[:,:,1,trailing3] == A[:,:,1,trailing3]
             B[1:end,1:end,trailing2] == A[1:end,1:end,trailing2] == B[1:end,1:end,1,trailing3] == A[1:end,1:end,1,trailing3]
 

@@ -3,7 +3,7 @@
 baremodule Base
 
 using Core.Intrinsics
-ccall(:jl_set_istopmod, Void, (Any, Bool), Base, true)
+ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, true)
 
 getproperty(x, f::Symbol) = getfield(x, f)
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
@@ -119,10 +119,6 @@ include("refpointer.jl")
 include("checked.jl")
 using .Checked
 
-# buggy handling of ispure in type-inference means this should be
-# after re-defining the basic operations that they might try to call
-(::Type{T})(arg) where {T} = convert(T, arg)::T # Hidden from the REPL.
-
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
 
@@ -158,10 +154,10 @@ Vector() = Vector{Any}(uninitialized, 0)
 
 # Array constructors for nothing and missing
 # type and dimensionality specified
-Array{T,N}(::Void, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), nothing)
+Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), nothing)
 Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), missing)
 # type but not dimensionality specified
-Array{T}(::Void, d...) where {T} = fill!(Array{T}(uninitialized, d...), nothing)
+Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(uninitialized, d...), nothing)
 Array{T}(::Missing, d...) where {T} = fill!(Array{T}(uninitialized, d...), missing)
 
 include("abstractdict.jl")
@@ -489,7 +485,7 @@ end # baremodule Base
 using Base
 
 # Ensure this file is also tracked
-unshift!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
+pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
 # load some stdlib packages but don't put their names in Main
 Base.require(:Base64)

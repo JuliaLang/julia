@@ -261,7 +261,7 @@ escape_string(s::AbstractString, esc::AbstractString) = sprint(escape_string, s,
 escape_string(s::AbstractString) = sprint(escape_string, s, "\"", sizehint=endof(s))
 
 """
-    escape_string(io, str::AbstractString[, esc::AbstractString]) -> Void
+    escape_string(io, str::AbstractString[, esc::AbstractString]) -> Nothing
 
 Escape sequences in `str` and print result to `io`. See also [`unescape_string`](@ref).
 """
@@ -314,7 +314,7 @@ General unescaping of traditional C and Unicode escape sequences. Reverse of
 unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=endof(s))
 
 """
-    unescape_string(io, str::AbstractString) -> Void
+    unescape_string(io, str::AbstractString) -> Nothing
 
 Unescapes sequences and prints result to `io`. See also [`escape_string`](@ref).
 """
@@ -496,7 +496,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
     String(take!(buf))
 end
 
-function convert(::Type{String}, chars::AbstractVector{Char})
+function String(chars::AbstractVector{Char})
     sprint(sizehint=length(chars)) do io
         for c in chars
             write(io, c)

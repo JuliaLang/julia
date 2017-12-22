@@ -259,14 +259,14 @@ One important aspect missing from the discussion so far is the handling of
 do not coincide. As an example consider:
 ```julia
 A = randn(1024)
-ccall(:foo, Void, (Ptr{Float64},), A)
+ccall(:foo, Cvoid, (Ptr{Float64},), A)
 ```
 In lowering, the compiler will insert a conversion from the array to the
 pointer which drops the reference to the array value. However, we of course
 need to make sure that the array does stay alive while we're doing the `ccall`.
 To understand how this is done, first recall the lowering of the above code:
 ```julia
-return $(Expr(:foreigncall, :(:foo), Void, svec(Ptr{Float64}), :(:ccall), 1, :($(Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), :(:ccall), 1, :(A)))), :(A)))
+return $(Expr(:foreigncall, :(:foo), Cvoid, svec(Ptr{Float64}), :(:ccall), 1, :($(Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), :(:ccall), 1, :(A)))), :(A)))
 ```
 The last `:(A)`, is an extra argument list inserted during lowering that informs
 the code generator which Julia level values need to be kept alive for the

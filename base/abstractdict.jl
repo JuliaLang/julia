@@ -502,6 +502,17 @@ push!(t::AbstractDict, p::Pair) = setindex!(t, p.second, p.first)
 push!(t::AbstractDict, p::Pair, q::Pair) = push!(push!(t, p), q)
 push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
 
+# AbstractDicts are convertible
+convert(::Type{T}, x::T) where {T<:AbstractDict} = x
+
+function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
+    h = T(x)
+    if length(h) != length(x)
+        error("key collision during dictionary conversion")
+    end
+    return h
+end
+
 # hashing objects by identity
 
 """
@@ -581,7 +592,7 @@ end
 
 function empty!(t::ObjectIdDict)
     resize!(t.ht, 32)
-    ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), t.ht, 0, sizeof(t.ht))
+    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), t.ht, 0, sizeof(t.ht))
     t.ndel = 0
     return t
 end

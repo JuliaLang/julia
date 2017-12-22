@@ -84,7 +84,7 @@ const ConjRowVector{T,CV<:ConjVector} = RowVector{T,CV}
         error("RowVector expects 1×N size, got $n")
 
 # Conversion of underlying storage
-convert(::Type{RowVector{T,V}}, rowvec::RowVector) where {T,V<:AbstractVector} =
+RowVector{T,V}(rowvec::RowVector) where {T,V<:AbstractVector} =
     RowVector{T,V}(convert(V,rowvec.vec))
 
 # similar tries to maintain the RowVector wrapper and the parent type
@@ -199,8 +199,8 @@ IndexStyle(::Type{<:RowVector}) = IndexLinear()
 
 # inner product -> dot product specializations
 @inline *(rowvec::RowVector{T}, vec::AbstractVector{T}) where {T<:Real} = dot(parent(rowvec), vec)
-@inline *(rowvec::ConjRowVector{T}, vec::AbstractVector{T}) where {T<:Real} = dot(rowvec', vec)
-@inline *(rowvec::ConjRowVector, vec::AbstractVector) = dot(rowvec', vec)
+@inline *(rowvec::ConjRowVector{T}, vec::AbstractVector{T}) where {T<:Real} = dot(rvadjoint(rowvec), vec)
+@inline *(rowvec::ConjRowVector, vec::AbstractVector) = dot(rvadjoint(rowvec), vec)
 
 # Generic behavior
 @inline function *(rowvec::RowVector, vec::AbstractVector)
@@ -261,7 +261,7 @@ end
 *(adjvec::Adjoint{<:Any,<:AbstractVector}, adjrowvec::Adjoint{<:Any,<:RowVector}) =
     adjoint(adjvec.parent)*rvadjoint(adjrowvec.parent)
 *(adjmat::Adjoint{<:Any,<:AbstractMatrix}, adjrowvec::Adjoint{<:Any,<:RowVector}) =
-    (adjmat.parent)' * rvadjoint(adjrowvec.parent)
+    adjoint(adjmat.parent) * rvadjoint(adjrowvec.parent)
 
 *(::Adjoint{<:Any,<:RowVector}, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
 *(adjrowvec1::Adjoint{<:Any,<:RowVector}, rowvec2::RowVector) = rvadjoint(adjrowvec1.parent) * rowvec2

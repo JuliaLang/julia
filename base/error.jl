@@ -52,17 +52,17 @@ rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 
 struct InterpreterIP
-    code::Union{CodeInfo,Core.MethodInstance,Void}
+    code::Union{CodeInfo,Core.MethodInstance,Nothing}
     stmt::Csize_t
 end
 
 # convert dual arrays (ips, interpreter_frames) to a single array of locations
 function _reformat_bt(bt, bt2)
-    ret = Vector{Union{InterpreterIP,Ptr{Void}}}()
+    ret = Vector{Union{InterpreterIP,Ptr{Cvoid}}}()
     i, j = 1, 1
     while i <= length(bt)
-        ip = bt[i]::Ptr{Void}
-        if ip == Ptr{Void}(-1%UInt)
+        ip = bt[i]::Ptr{Cvoid}
+        if ip == Ptr{Cvoid}(-1%UInt)
             # The next one is really a CodeInfo
             push!(ret, InterpreterIP(
                 bt2[j],
@@ -70,7 +70,7 @@ function _reformat_bt(bt, bt2)
             j += 1
             i += 3
         else
-            push!(ret, Ptr{Void}(ip))
+            push!(ret, Ptr{Cvoid}(ip))
             i += 1
         end
     end
@@ -87,7 +87,7 @@ Get the backtrace of the current exception, for use within `catch` blocks.
 function catch_backtrace()
     bt = Ref{Any}(nothing)
     bt2 = Ref{Any}(nothing)
-    ccall(:jl_get_backtrace, Void, (Ref{Any}, Ref{Any}), bt, bt2)
+    ccall(:jl_get_backtrace, Cvoid, (Ref{Any}, Ref{Any}), bt, bt2)
     return _reformat_bt(bt[], bt2[])
 end
 

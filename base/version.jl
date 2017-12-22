@@ -47,6 +47,8 @@ VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
         map(x->x isa Integer ? UInt64(x) : String(x), pre),
         map(x->x isa Integer ? UInt64(x) : String(x), bld))
 
+VersionNumber(v::Tuple) = VersionNumber(v...)
+
 function print(io::IO, v::VersionNumber)
     v == typemax(VersionNumber) && return print(io, "∞")
     print(io, v.major)
@@ -64,9 +66,6 @@ function print(io::IO, v::VersionNumber)
     end
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
-
-convert(::Type{VersionNumber}, v::Integer) = VersionNumber(v)
-convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
 
 const VERSION_REGEX = r"^
     v?                                      # prefix        (optional)
@@ -103,8 +102,6 @@ function VersionNumber(v::AbstractString)
     build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
     return VersionNumber(major, minor, patch, prerl, build)
 end
-
-convert(::Type{VersionNumber}, v::AbstractString) = VersionNumber(v)
 
 macro v_str(v); VersionNumber(v); end
 
@@ -215,7 +212,7 @@ A `VersionNumber` object describing which version of Julia is in use. For detail
 [Version Number Literals](@ref man-version-number-literals).
 """
 const VERSION = try
-    ver = convert(VersionNumber, VERSION_STRING)
+    ver = VersionNumber(VERSION_STRING)
     if !isempty(ver.prerelease)
         if GIT_VERSION_INFO.build_number >= 0
             ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., GIT_VERSION_INFO.build_number), ver.build)
@@ -232,7 +229,7 @@ catch e
     VersionNumber(0)
 end
 
-const libllvm_version = convert(VersionNumber, libllvm_version_string)
+const libllvm_version = VersionNumber(libllvm_version_string)
 
 function banner(io::IO = STDOUT)
     if GIT_VERSION_INFO.tagged_commit

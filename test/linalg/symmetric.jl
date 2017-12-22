@@ -11,15 +11,15 @@ end
 
 @testset "Hermitian matrix exponential/log" begin
     A1 = randn(4,4) + im*randn(4,4)
-    A2 = A1 + A1'
+    A2 = A1 + adjoint(A1)
     @test exp(A2) ≈ exp(Hermitian(A2))
     @test log(A2) ≈ log(Hermitian(A2))
-    A3 = A1 * A1' # posdef
+    A3 = A1 * adjoint(A1) # posdef
     @test exp(A3) ≈ exp(Hermitian(A3))
     @test log(A3) ≈ log(Hermitian(A3))
 
     A1 = randn(4,4)
-    A3 = A1 * A1'
+    A3 = A1 * adjoint(A1)
     A4 = A1 + transpose(A1)
     @test exp(A4) ≈ exp(Symmetric(A4))
     @test log(A3) ≈ log(Symmetric(A3))
@@ -121,7 +121,7 @@ end
                 elseif eltya <: Complex
                     # test that zero imaginary component is
                     # handled properly
-                    @test ishermitian(Symmetric(b + b'))
+                    @test ishermitian(Symmetric(b + adjoint(b)))
                 end
             end
 
@@ -220,9 +220,9 @@ end
                         @test asym*v[:,1] ≈ d[1]*v[:,1]
                         @test v*Diagonal(d)*Transpose(v) ≈ asym
                         @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
-                        @test abs.(eigfact(Symmetric(asym), 1:2)[:vectors]'v[:,1:2]) ≈ Matrix(I, 2, 2)
+                        @test abs.(eigfact(Symmetric(asym), 1:2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                         eig(Symmetric(asym), 1:2) # same result, but checks that method works
-                        @test abs.(eigfact(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ Matrix(I, 2, 2)
+                        @test abs.(eigfact(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                         eig(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
                         @test eigvals(Symmetric(asym), 1:2) ≈ d[1:2]
                         @test eigvals(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
@@ -235,9 +235,9 @@ end
                     @test aherm*v[:,1] ≈ d[1]*v[:,1]
                     @test v*Diagonal(d)*v' ≈ aherm
                     @test isequal(eigvals(aherm[1]), eigvals(aherm[1:1,1:1]))
-                    @test abs.(eigfact(Hermitian(aherm), 1:2)[:vectors]'v[:,1:2]) ≈ Matrix(I, 2, 2)
+                    @test abs.(eigfact(Hermitian(aherm), 1:2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                     eig(Hermitian(aherm), 1:2) # same result, but checks that method works
-                    @test abs.(eigfact(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ Matrix(I, 2, 2)
+                    @test abs.(eigfact(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                     eig(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
                     @test eigvals(Hermitian(aherm), 1:2) ≈ d[1:2]
                     @test eigvals(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
@@ -255,7 +255,7 @@ end
                     let A = a[:,1:5]*a[:,1:5]'
                         # Make sure A is Hermitian even in the presence of rounding error
                         # xianyi/OpenBLAS#729
-                        A = (A' + A) / 2
+                        A = (adjoint(A) + A) / 2
                         @test rank(A) == rank(Hermitian(A))
                     end
                 end
@@ -383,7 +383,7 @@ end
     @test conj(c) == conj(Array(c))
     cc = copy(c)
     @test conj!(c) == conj(Array(cc))
-    c = Hermitian(b + b')
+    c = Hermitian(b + adjoint(b))
     @test conj(c) == conj(Array(c))
     cc = copy(c)
     @test conj!(c) == conj(Array(cc))

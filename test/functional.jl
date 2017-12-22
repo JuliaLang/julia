@@ -113,17 +113,17 @@ end
 let gen = (x * y for x in 1:10, y in 1:10)
     @test collect(gen) == collect(1:10) .* collect(1:10)'
     @test first(gen) == 1
-    @test collect(gen)[1:10] == collect(1:10)
+    @test collect(gen)[1:10] == 1:10
 end
 
 let gen = Base.Generator(+, 1:10, 1:10, 1:10)
     @test first(gen) == 3
-    @test collect(gen) == collect(3:3:30)
+    @test collect(gen) == 3:3:30
 end
 
 let gen = (x for x in 1:10 if x % 2 == 0), gen2 = Iterators.filter(x->x % 2 == 0, x for x in 1:10)
     @test collect(gen) == collect(gen2)
-    @test collect(gen) == collect(2:2:10)
+    @test collect(gen) == 2:2:10
 end
 
 let gen = ((x,y) for x in 1:10, y in 1:10 if x % 2 == 0 && y % 2 == 0),

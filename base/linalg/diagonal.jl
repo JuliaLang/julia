@@ -49,11 +49,11 @@ Diagonal(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
 Diagonal{T}(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
 Diagonal{T}(V::AbstractVector) where {T} = Diagonal{T}(convert(AbstractVector{T}, V))
 
-convert(::Type{Diagonal{T}}, D::Diagonal{T}) where {T} = D
-convert(::Type{Diagonal{T}}, D::Diagonal) where {T} = Diagonal{T}(convert(AbstractVector{T}, D.diag))
-convert(::Type{AbstractMatrix{T}}, D::Diagonal) where {T} = convert(Diagonal{T}, D)
-convert(::Type{Matrix}, D::Diagonal) = diagm(0 => D.diag)
-convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
+Diagonal{T}(D::Diagonal{T}) where {T} = D
+Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(convert(AbstractVector{T}, D.diag))
+AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
+Matrix(D::Diagonal) = diagm(0 => D.diag)
+Array(D::Diagonal) = Matrix(D)
 
 # For D<:Diagonal, similar(D[, neweltype]) should yield a Diagonal matrix.
 # On the other hand, similar(D, [neweltype,] shape...) should yield a sparse matrix.
@@ -471,7 +471,7 @@ function svd(D::Diagonal{<:Number})
 end
 function svdfact(D::Diagonal)
     U, s, V = svd(D)
-    SVD(U, s, V')
+    SVD(U, s, adjoint(V))
 end
 
 # dismabiguation methods: * of Diagonal and Adj/Trans AbsVec

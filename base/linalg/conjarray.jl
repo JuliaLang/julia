@@ -10,10 +10,6 @@ other arrays, the `ConjArray` constructor can be used directly.
 
 # Examples
 ```jldoctest
-julia> [1+im, 1-im]'
-1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:
- 1-1im  1+1im
-
 julia> ConjArray([1+im 0; 0 1-im])
 2×2 ConjArray{Complex{Int64},2,Array{Complex{Int64},2}}:
  1-1im  0+0im

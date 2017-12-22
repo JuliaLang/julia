@@ -92,11 +92,11 @@ function firstcaller(bt::Vector, funcsyms)
     # Identify the calling line
     found = false
     lkup = StackTraces.UNKNOWN
-    found_frame = Ptr{Void}(0)
+    found_frame = Ptr{Cvoid}(0)
     for frame in bt
         lkups = StackTraces.lookup(frame)
         for outer lkup in lkups
-            if lkup == StackTraces.UNKNOWN
+            if lkup == StackTraces.UNKNOWN || lkup.from_c
                 continue
             end
             if found
@@ -120,7 +120,7 @@ function firstcaller(bt::Vector, funcsyms)
     return found_frame, lkup
 end
 
-deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Void, (Any, Any, Cint), m, s, flag)
+deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Cvoid, (Any, Any, Cint), m, s, flag)
 
 macro deprecate_binding(old, new, export_old=true, dep_message=nothing)
     dep_message == nothing && (dep_message = ", use $new instead")
@@ -859,7 +859,7 @@ function produce(v)
             empty = true
             break
         elseif isa(q,Condition) && !isempty(q.waitq)
-            t = shift!(q.waitq)
+            t = popfirst!(q.waitq)
             empty = isempty(q.waitq)
             break
         end
@@ -1552,6 +1552,35 @@ export hex2num
 @deprecate convert(::Type{String}, s::Symbol)                 String(s)
 @deprecate convert(::Type{String}, v::Vector{UInt8})          String(v)
 @deprecate convert(::Type{S}, g::Unicode.GraphemeIterator) where {S<:AbstractString}  convert(S, g.s)
+@deprecate convert(::Type{String}, v::AbstractVector{Char})   String(v)
+
+@deprecate convert(::Type{UInt128},     u::Random.UUID)     UInt128(u)
+@deprecate convert(::Type{Random.UUID}, s::AbstractString)  Random.UUID(s)
+@deprecate convert(::Type{Libc.FILE}, s::IO)  Libc.FILE(s)
+@deprecate convert(::Type{VersionNumber}, v::Integer)         VersionNumber(v)
+@deprecate convert(::Type{VersionNumber}, v::Tuple)           VersionNumber(v)
+@deprecate convert(::Type{VersionNumber}, v::AbstractString)  VersionNumber(v)
+
+@deprecate (convert(::Type{Integer}, x::Enum{T}) where {T<:Integer})         Integer(x)
+@deprecate (convert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer})  T(x)
+
+@deprecate convert(dt::Type{<:Integer}, ip::IPAddr)  dt(ip)
+
+function (::Type{T})(arg) where {T}
+    if applicable(convert, T, arg)
+        sig = which(convert, (Type{T}, typeof(arg))).sig
+        if sig == (Tuple{typeof(convert),Type{S},Number} where S<:Number) ||
+           sig == (Tuple{typeof(convert),Type{S},AbstractArray} where S<:AbstractArray)
+            # matches a catch-all converter; will stack overflow
+            throw(MethodError(T, (arg,)))
+        end
+        # if `convert` call would not work, just let the method error happen
+        depwarn("Constructors no longer fall back to `convert`. A constructor `$T(::$(typeof(arg)))` should be defined instead.", :Type)
+    end
+    convert(T, arg)::T
+end
+# related items to remove in: abstractarray.jl, dates/periods.jl, inference.jl
+# also remove all uses of is_default_method
 
 # Issue #19923
 @deprecate ror                  circshift
@@ -1660,10 +1689,10 @@ import .Iterators.enumerate
 
 # PR #23640
 # when this deprecation is deleted, remove all calls to it, and replace all keywords of:
-# `payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Void}`
+# `payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}`
 #  with `payload::CredentialPayload` from base/libgit2/libgit2.jl
 @eval LibGit2 function deprecate_nullable_creds(f, sig, payload)
-    if isa(payload, Union{AbstractCredential, CachedCredentials, Void})
+    if isa(payload, Union{AbstractCredential, CachedCredentials, Nothing})
         # Note: Be careful not to show the contents of the credentials as it could reveal a
         # password.
         if payload === nothing
@@ -2192,12 +2221,12 @@ end
 # issue #16307
 @deprecate finalizer(o, f::Function) finalizer(f, o)
 # This misses other callables but they are very rare in the wild
-@deprecate finalizer(o, f::Ptr{Void}) finalizer(f, o)
+@deprecate finalizer(o, f::Ptr{Cvoid}) finalizer(f, o)
 
 # Avoid ambiguity, can remove when deprecations are removed:
 # This is almost certainly going to be a silent failure for code that is not updated.
-finalizer(f::Ptr{Void}, o::Ptr{Void}) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
-finalizer(f::Ptr{Void}, o::Function) = invoke(finalizer, Tuple{Ptr{Void}, Any}, f, o)
+finalizer(f::Ptr{Cvoid}, o::Ptr{Cvoid}) = invoke(finalizer, Tuple{Ptr{Cvoid}, Any}, f, o)
+finalizer(f::Ptr{Cvoid}, o::Function) = invoke(finalizer, Tuple{Ptr{Cvoid}, Any}, f, o)
 
 # Broadcast extension API (#23939)
 @eval Broadcast begin
@@ -3047,7 +3076,7 @@ end
     ```jldoctest
     julia> v = [1; im];
 
-    julia> vc = v';
+    julia> vc = RowVector(v);
 
     julia> norm(vc, 1)
     1.0
@@ -3103,7 +3132,7 @@ end
     *(transA::Transpose{<:Any,<:AbstractTriangular}, transrowvec::Transpose{<:Any,<:RowVector}) = transA * rvtranspose(transrowvec.parent)
     *(rowvec::RowVector, adjA::Adjoint{<:Any,<:AbstractTriangular}) = rvadjoint(adjA.parent * rvadjoint(rowvec))
     *(A::AbstractTriangular, adjrowvec::Adjoint{<:Any,<:RowVector}) = A * rvadjoint(adjrowvec.parent)
-    *(adjA::Adjoint{<:Any,<:AbstractTriangular}, adjrowvec::Adjoint{<:Any,<:RowVector}) = adjA.parent' * rvadjoint(adjrowvec.parent)
+    *(adjA::Adjoint{<:Any,<:AbstractTriangular}, adjrowvec::Adjoint{<:Any,<:RowVector}) = adjA * rvadjoint(adjrowvec.parent)
     \(::Union{UpperTriangular,LowerTriangular}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
     \(::Union{UnitUpperTriangular,UnitLowerTriangular}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
     \(::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
@@ -3134,9 +3163,9 @@ end
 @deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
 
 # 24490 - warnings and messages
-const log_info_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
-const log_warn_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
-const log_error_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
+const log_info_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
+const log_warn_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
+const log_error_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
 
 function _redirect(io::IO, log_to::Dict, sf::StackTraces.StackFrame)
     (sf.linfo isa Core.MethodInstance) || return io
@@ -3202,7 +3231,7 @@ default), `:info`, `:warn`, or `:error`.  See `Base.log_{info,warn,error}_to`
 for the current set of redirections.  Call `logging` with no arguments (or just
 the `kind`) to reset everything.
 """
-function logging(io::IO, m::Union{Module,Void}=nothing, f::Union{Symbol,Void}=nothing;
+function logging(io::IO, m::Union{Module,Nothing}=nothing, f::Union{Symbol,Nothing}=nothing;
                  kind::Symbol=:all)
     depwarn("""`logging()` is deprecated, use `with_logger` instead to capture
                messages from `Base`""", :logging)
@@ -3320,6 +3349,9 @@ info(io::IO, err::Exception; prefix="ERROR: ", kw...) =
 info(err::Exception; prefix="ERROR: ", kw...) =
     info(STDERR, err, prefix=prefix; kw...)
 
+# issue #25082
+@deprecate_binding Void Nothing
+
 # #24844
 @deprecate copy!(dest::AbstractSet, src) union!(dest, src)
 @deprecate copy!(dest::AbstractDict, src) foldl(push!, dest, src)
@@ -3388,12 +3420,18 @@ end
 @deprecate indices(a, d) axes(a, d)
 
 # PR #25046
-export workspace
+export reload, workspace
+reload(name::AbstractString) = error("reload($(repr(name))) is discontinued, check out Revise.jl for an alternative workflow")
 workspace() = error("workspace() is discontinued, check out Revise.jl for an alternative workflow")
 
 # Issue #12902
 @deprecate parentindexes parentindices
 
+# Issue #23902
+@deprecate unshift! pushfirst!
+@deprecate shift! popfirst!
+
+# Issue #23642
 @deprecate_moved Nullable "Nullables"
 @deprecate_moved NullException "Nullables"
 @deprecate_moved isnull "Nullables"
@@ -3422,6 +3460,20 @@ workspace() = error("workspace() is discontinued, check out Revise.jl for an alt
 
 # PR #25113
 @deprecate_binding CartesianRange CartesianIndices
+
+# PR 21527
+@deprecate Ref(x::AbstractArray) Ref(x, 1)
+@deprecate Ref(x::Ptr) Ref(x, 1)
+@deprecate Ref(x::Ref) x # or perhaps, `convert(Ref, x)`
+
+# PR #25184. Use getproperty instead of getindex for Factorizations
+function getindex(F::Factorization, s::Symbol)
+    depwarn("`F[:$s]` is deprecated, use `F.$s` instead.", :getindex)
+    return getproperty(F, s)
+end
+@eval Base.LinAlg begin
+    @deprecate getq(F::Factorization) F.Q
+end
 
 # END 0.7 deprecations
 

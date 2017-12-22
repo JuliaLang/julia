@@ -6,7 +6,7 @@
     @test cm[1,1] == 1-im
     @test cm[1] == 1-im
     @test trace(cm*m) == 27
-    @test cm' == m
+    @test adjoint(cm) == m
 
     cm[:,2] = [3; 3-im] #setindex! with a vector
     @test conj(cm) == [1+im 3; 2 3+im]

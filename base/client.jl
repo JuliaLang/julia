@@ -283,7 +283,7 @@ function process_options(opts::JLOptions)
     end
 
     # remove filename from ARGS
-    global PROGRAM_FILE = arg_is_program ? shift!(ARGS) : ""
+    global PROGRAM_FILE = arg_is_program ? popfirst!(ARGS) : ""
 
     # Load Distributed module only if any of the Distributed options have been specified.
     if (opts.worker == 1) || (opts.nprocs > 0) || (opts.machinefile != C_NULL)
@@ -317,7 +317,7 @@ function process_options(opts::JLOptions)
     if arg_is_program
         # program
         if !is_interactive
-            ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+            ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
         end
         include(Main, PROGRAM_FILE)
     end
@@ -350,7 +350,7 @@ interactive sessions; this is useful to customize the interface. The argument of
 REPL object. This function should be called from within the `.juliarc.jl` initialization
 file.
 """
-atreplinit(f::Function) = (unshift!(repl_hooks, f); nothing)
+atreplinit(f::Function) = (pushfirst!(repl_hooks, f); nothing)
 
 function __atreplinit(repl)
     for f in repl_hooks

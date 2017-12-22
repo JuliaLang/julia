@@ -248,14 +248,14 @@ end
                     @testset "stegr! call with index range" begin
                         F = eigfact(SymTridiagonal(b, a),1:2)
                         fF = eigfact(Symmetric(Array(SymTridiagonal(b, a))),1:2)
-                        Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
-                        @test F[:values] ≈ fF[:values]
+                        Test.test_approx_eq_modphase(F.vectors, fF.vectors)
+                        @test F.values ≈ fF.values
                     end
                     @testset "stegr! call with value range" begin
                         F = eigfact(SymTridiagonal(b, a),0.0,1.0)
                         fF = eigfact(Symmetric(Array(SymTridiagonal(b, a))),0.0,1.0)
-                        Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
-                        @test F[:values] ≈ fF[:values]
+                        Test.test_approx_eq_modphase(F.vectors, fF.vectors)
+                        @test F.values ≈ fF.values
                     end
                     @testset "eigenvalues/eigenvectors of symmetric tridiagonal" begin
                         if elty === Float32 || elty === Float64

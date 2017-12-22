@@ -12,16 +12,16 @@ subtree, traversing upwards through it, then traversing the next right subtree
 
 The function parameter `f` should have following signature:
 
-    (Cstring, Ptr{Void}, Ptr{Void}) -> Cint
+    (Cstring, Ptr{Cvoid}, Ptr{Cvoid}) -> Cint
 
 A negative value returned from `f` stops the tree walk. A positive value means
 that the entry will be skipped if `post` is `false`.
 """
 function treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool = false)
-    cbf = cfunction(f, Cint, Tuple{Cstring, Ptr{Void}, Ptr{Void}})
+    cbf = cfunction(f, Cint, Tuple{Cstring, Ptr{Cvoid}, Ptr{Cvoid}})
     cbf_payload = Ref{typeof(payload)}(payload)
     @check ccall((:git_tree_walk, :libgit2), Cint,
-                  (Ptr{Void}, Cint, Ptr{Void}, Ptr{Void}),
+                  (Ptr{Cvoid}, Cint, Ptr{Cvoid}, Ptr{Cvoid}),
                    tree.ptr, post, cbf, cbf_payload)
     return cbf_payload
 end
@@ -35,7 +35,7 @@ repository(te::GitTreeEntry) = repository(te.owner)
 Return the filename of the object on disk to which `te` refers.
 """
 function filename(te::GitTreeEntry)
-    str = ccall((:git_tree_entry_name, :libgit2), Cstring, (Ptr{Void},), te.ptr)
+    str = ccall((:git_tree_entry_name, :libgit2), Cstring, (Ptr{Cvoid},), te.ptr)
     str != C_NULL && return unsafe_string(str)
     return nothing
 end
@@ -46,7 +46,7 @@ end
 Return the UNIX filemode of the object on disk to which `te` refers as an integer.
 """
 function filemode(te::GitTreeEntry)
-    return ccall((:git_tree_entry_filemode, :libgit2), Cint, (Ptr{Void},), te.ptr)
+    return ccall((:git_tree_entry_filemode, :libgit2), Cint, (Ptr{Cvoid},), te.ptr)
 end
 
 """
@@ -56,7 +56,7 @@ Return the type of the object to which `te` refers. The result will be
 one of the types which [`objtype`](@ref) returns, e.g. a `GitTree` or `GitBlob`.
 """
 function entrytype(te::GitTreeEntry)
-    otype = ccall((:git_tree_entry_type, :libgit2), Cint, (Ptr{Void},), te.ptr)
+    otype = ccall((:git_tree_entry_type, :libgit2), Cint, (Ptr{Cvoid},), te.ptr)
     return objtype(Consts.OBJECT(otype))
 end
 
@@ -67,14 +67,14 @@ Return the [`GitHash`](@ref) of the object to which `te` refers.
 """
 function entryid(te::GitTreeEntry)
     Base.@gc_preserve te begin
-        oid_ptr = ccall((:git_tree_entry_id, :libgit2), Ptr{UInt8}, (Ptr{Void},), te.ptr)
+        oid_ptr = ccall((:git_tree_entry_id, :libgit2), Ptr{UInt8}, (Ptr{Cvoid},), te.ptr)
         oid = GitHash(oid_ptr)
     end
     return oid
 end
 
 function Base.count(tree::GitTree)
-    return ccall((:git_tree_entrycount, :libgit2), Csize_t, (Ptr{Void},), tree.ptr)
+    return ccall((:git_tree_entrycount, :libgit2), Csize_t, (Ptr{Cvoid},), tree.ptr)
 end
 
 function Base.getindex(tree::GitTree, i::Integer)
@@ -82,8 +82,8 @@ function Base.getindex(tree::GitTree, i::Integer)
         throw(BoundsError(tree, i))
     end
     te_ptr = ccall((:git_tree_entry_byindex, :libgit2),
-                   Ptr{Void},
-                   (Ptr{Void}, Csize_t), tree.ptr, i-1)
+                   Ptr{Cvoid},
+                   (Ptr{Cvoid}, Csize_t), tree.ptr, i-1)
     return GitTreeEntry(tree, te_ptr, false)
 end
 
@@ -103,9 +103,9 @@ blob = LibGit2.GitBlob(tree_entry)
 function GitObject(e::GitTreeEntry) end
 function (::Type{T})(te::GitTreeEntry) where T<:GitObject
     repo = repository(te)
-    obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    obj_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_tree_entry_to_object, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Ref{Void}),
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ref{Nothing}),
                    obj_ptr_ptr, repo.ptr, te.ptr)
     return T(repo, obj_ptr_ptr[])
 end

@@ -80,7 +80,7 @@ const NTAGS = length(TAGS)
 
 function sertag(@nospecialize(v))
     ptr = pointer_from_objref(v)
-    ptags = convert(Ptr{Ptr{Void}}, pointer(TAGS))
+    ptags = convert(Ptr{Ptr{Cvoid}}, pointer(TAGS))
     # note: constant ints & reserved slots never returned here
     @inbounds for i in 1:(NTAGS-(n_reserved_slots+2*n_int_literals))
         ptr == unsafe_load(ptags,i) && return i%Int32
@@ -864,7 +864,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     line = deserialize(s)::Int32
     sig = deserialize(s)::DataType
     sparam_syms = deserialize(s)::SimpleVector
-    ambig = deserialize(s)::Union{Array{Any,1}, Void}
+    ambig = deserialize(s)::Union{Array{Any,1}, Nothing}
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     template = deserialize(s)
@@ -893,7 +893,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         end
         ftype = ccall(:jl_first_argument_datatype, Any, (Any,), sig)::DataType
         if isdefined(ftype.name, :mt) && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), ftype.name.mt, sig, typemax(UInt))
-            ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Void}), ftype.name.mt, meth, C_NULL)
+            ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), ftype.name.mt, meth, C_NULL)
         end
         remember_object(s, meth, lnumber)
     end
@@ -901,7 +901,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
-    linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Void},), C_NULL)
+    linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Cvoid},), C_NULL)
     deserialize_cycle(s, linfo)
     linfo.inferred = deserialize(s)::CodeInfo
     tag = Int32(read(s.io, UInt8)::UInt8)
@@ -1017,7 +1017,7 @@ function deserialize_typename(s::AbstractSerializer, number)
                     tn, tn.module, super, parameters, names, types,
                     abstr, mutabl, ninitialized)
         tn.wrapper = ndt.name.wrapper
-        ccall(:jl_set_const, Void, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
+        ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
         ty = tn.wrapper
         if has_instance && !isdefined(ty, :instance)
             # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
@@ -1036,7 +1036,7 @@ function deserialize_typename(s::AbstractSerializer, number)
             tn.mt.max_args = maxa
             for def in defs
                 if isdefined(def, :sig)
-                    ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Void}), tn.mt, def, C_NULL)
+                    ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), tn.mt, def, C_NULL)
                 end
             end
         end
@@ -1157,7 +1157,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
             return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2, f3)
         else
             flds = Any[ deserialize(s) for i = 1:nf ]
-            return ccall(:jl_new_structv, Any, (Any,Ptr{Void},UInt32), t, flds, nf)
+            return ccall(:jl_new_structv, Any, (Any,Ptr{Cvoid},UInt32), t, flds, nf)
         end
     else
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
@@ -1165,7 +1165,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
         for i in 1:nf
             tag = Int32(read(s.io, UInt8)::UInt8)
             if tag != UNDEFREF_TAG
-                ccall(:jl_set_nth_field, Void, (Any, Csize_t, Any), x, i-1, handle_deserialize(s, tag))
+                ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), x, i-1, handle_deserialize(s, tag))
             end
         end
         return x

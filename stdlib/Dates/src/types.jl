@@ -152,7 +152,7 @@ daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 # we can validate arguments in tryparse.
 
 """
-    validargs(::Type{<:TimeType}, args...) -> Union{ArgumentError, Void}
+    validargs(::Type{<:TimeType}, args...) -> Union{ArgumentError, Nothing}
 
 Determine whether the given arguments consitute valid inputs for the given type.
 Returns either an `ArgumentError`, or [`nothing`](@ref) in case of success.
@@ -160,7 +160,7 @@ Returns either an `ArgumentError`, or [`nothing`](@ref) in case of success.
 function validargs end
 
 """
-    argerror([msg]) -> Union{ArgumentError, Void}
+    argerror([msg]) -> Union{ArgumentError, Nothing}
 
 Return an `ArgumentError` object with the given message,
 or [`nothing`](@ref) if no message is provided. For use by `validargs`.

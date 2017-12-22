@@ -4,12 +4,12 @@
 
 Function sets `+refs/*:refs/*` refspecs and `mirror` flag for remote reference.
 """
-function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void},
-                         name::Cstring, url::Cstring, payload::Ptr{Void})
+function mirror_callback(remote::Ptr{Ptr{Cvoid}}, repo_ptr::Ptr{Cvoid},
+                         name::Cstring, url::Cstring, payload::Ptr{Cvoid})
     # Create the remote with a mirroring url
     fetch_spec = "+refs/*:refs/*"
     err = ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Cstring),
+                (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Cstring),
                 remote, repo_ptr, name, url, fetch_spec)
     err != 0 && return Cint(err)
 
@@ -41,27 +41,27 @@ end
 
 function user_abort()
     # Note: Potentially it could be better to just throw a Julia error.
-    ccall((:giterr_set_str, :libgit2), Void,
+    ccall((:giterr_set_str, :libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, user cancelled credential request.")
     return Cint(Error.EUSER)
 end
 
 function prompt_limit()
-    ccall((:giterr_set_str, :libgit2), Void,
+    ccall((:giterr_set_str, :libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, maximum number of prompts reached.")
     return Cint(Error.EAUTH)
 end
 
 function exhausted_abort()
-    ccall((:giterr_set_str, :libgit2), Void,
+    ccall((:giterr_set_str, :libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "All authentication methods have failed.")
     return Cint(Error.EAUTH)
 end
 
-function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, username_ptr)
+function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload, username_ptr)
     cred = p.credential::SSHCredential
     revised = false
 
@@ -75,7 +75,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
     # first try ssh-agent if credentials support its usage
     if p.use_ssh_agent && username_ptr != Cstring(C_NULL) && (!revised || !isfilled(cred))
         err = ccall((:git_cred_ssh_key_from_agent, :libgit2), Cint,
-                    (Ptr{Ptr{Void}}, Cstring), libgit2credptr, username_ptr)
+                    (Ptr{Ptr{Cvoid}}, Cstring), libgit2credptr, username_ptr)
 
         p.use_ssh_agent = false  # use ssh-agent only one time
         err == 0 && return Cint(0)
@@ -169,11 +169,11 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
     end
 
     return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Cstring, Cstring, Cstring, Cstring),
+                 (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cstring, Cstring),
                  libgit2credptr, cred.user, cred.pubkey, cred.prvkey, cred.pass)
 end
 
-function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload)
+function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload)
     cred = p.credential::UserPasswordCredential
     revised = false
 
@@ -228,7 +228,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayl
     end
 
     return ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Cstring, Cstring),
+                 (Ptr{Ptr{Cvoid}}, Cstring, Cstring),
                  libgit2credptr, cred.user, cred.pass)
 end
 
@@ -259,9 +259,9 @@ using the same faulty credentials, we will keep track of state using the payload
 For addition details see the LibGit2 guide on
 [authenticating against a server](https://libgit2.github.com/docs/guides/authentication/).
 """
-function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
+function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
                               username_ptr::Cstring,
-                              allowed_types::Cuint, payload_ptr::Ptr{Void})
+                              allowed_types::Cuint, payload_ptr::Ptr{Cvoid})
     err = Cint(0)
 
     # get `CredentialPayload` object from payload pointer
@@ -331,7 +331,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
     # with the requested authentication method.
     if err == 0
         if p.explicit !== nothing
-            ccall((:giterr_set_str, :libgit2), Void, (Cint, Cstring), Cint(Error.Callback),
+            ccall((:giterr_set_str, :libgit2), Cvoid, (Cint, Cstring), Cint(Error.Callback),
                   "The explicitly provided credential is incompatible with the requested " *
                   "authentication methods.")
         end
@@ -341,7 +341,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
 end
 
 function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
-                        oid_ptr::Ptr{GitHash}, is_merge::Cuint, payload::Ptr{Void})
+                        oid_ptr::Ptr{GitHash}, is_merge::Cuint, payload::Ptr{Cvoid})
     fhead_vec = unsafe_pointer_to_objref(payload)::Vector{FetchHead}
     push!(fhead_vec, FetchHead(unsafe_string(ref_name), unsafe_string(remote_url),
         unsafe_load(oid_ptr), is_merge == 1))
@@ -349,8 +349,8 @@ function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
 end
 
 "C function pointer for `mirror_callback`"
-mirror_cb() = cfunction(mirror_callback, Cint, Tuple{Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Ptr{Void}})
+mirror_cb() = cfunction(mirror_callback, Cint, Tuple{Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{Cvoid}})
 "C function pointer for `credentials_callback`"
-credentials_cb() = cfunction(credentials_callback, Cint, Tuple{Ptr{Ptr{Void}}, Cstring, Cstring, Cuint, Ptr{Void}})
+credentials_cb() = cfunction(credentials_callback, Cint, Tuple{Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cuint, Ptr{Cvoid}})
 "C function pointer for `fetchhead_foreach_callback`"
-fetchhead_foreach_cb() = cfunction(fetchhead_foreach_callback, Cint, Tuple{Cstring, Cstring, Ptr{GitHash}, Cuint, Ptr{Void}})
+fetchhead_foreach_cb() = cfunction(fetchhead_foreach_callback, Cint, Tuple{Cstring, Cstring, Ptr{GitHash}, Cuint, Ptr{Cvoid}})

@@ -1164,24 +1164,24 @@ appropriate fields initialized) to `launched`
 ```julia
 mutable struct WorkerConfig
     # Common fields relevant to all cluster managers
-    io::Union{IO, Void}
-    host::Union{AbstractString, Void}
-    port::Union{Integer, Void}
+    io::Union{IO, Nothing}
+    host::Union{AbstractString, Nothing}
+    port::Union{Integer, Nothing}
 
     # Used when launching additional workers at a host
-    count::Union{Int, Symbol, Void}
-    exename::Union{AbstractString, Cmd, Void}
-    exeflags::Union{Cmd, Void}
+    count::Union{Int, Symbol, Nothing}
+    exename::Union{AbstractString, Cmd, Nothing}
+    exeflags::Union{Cmd, Nothing}
 
     # External cluster managers can use this to store information at a per-worker level
     # Can be a dict if multiple fields need to be stored.
     userdata::Any
 
     # SSHManager / SSH tunnel connections to workers
-    tunnel::Union{Bool, Void}
-    bind_addr::Union{AbstractString, Void}
-    sshflags::Union{Cmd, Void}
-    max_parallel::Union{Integer, Void}
+    tunnel::Union{Bool, Nothing}
+    bind_addr::Union{AbstractString, Nothing}
+    sshflags::Union{Cmd, Nothing}
+    max_parallel::Union{Integer, Nothing}
 
     # Used by Local/SSH managers
     connect_at::Any

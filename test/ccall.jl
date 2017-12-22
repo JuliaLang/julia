@@ -5,7 +5,7 @@ import Base.copy, Base.==
 const libccalltest = "libccalltest"
 
 const verbose = false
-ccall((:set_verbose, libccalltest), Void, (Int32,), verbose)
+ccall((:set_verbose, libccalltest), Cvoid, (Int32,), verbose)
 
 
 # Test for proper argument register truncation
@@ -84,7 +84,7 @@ let a, ci_ary, x
 
     x = ccall((:cptest_static, libccalltest), Ptr{Complex{Int}}, (Ref{Complex{Int}},), a)
     @test unsafe_load(x) == a
-    Libc.free(convert(Ptr{Void}, x))
+    Libc.free(convert(Ptr{Cvoid}, x))
 end
 
 let a, b, x
@@ -844,7 +844,7 @@ foo13031p = cfunction(foo13031, Cint, Tuple{Ref{Tuple{}}, Ref{Tuple{}}, Cint})
 ccall(foo13031p, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint), (), (), 8)
 
 # issue 17219
-function ccall_reassigned_ptr(ptr::Ptr{Void})
+function ccall_reassigned_ptr(ptr::Ptr{Cvoid})
     ptr = Libdl.dlsym(Libdl.dlopen(libccalltest), "test_echo_p")
     ccall(ptr, Any, (Any,), "foo")
 end
@@ -879,15 +879,15 @@ end
 
 # Pointer finalizer (issue #15408)
 let A = [1]
-    ccall((:set_c_int, libccalltest), Void, (Cint,), 1)
+    ccall((:set_c_int, libccalltest), Cvoid, (Cint,), 1)
     @test ccall((:get_c_int, libccalltest), Cint, ()) == 1
-    finalizer(cglobal((:finalizer_cptr, libccalltest), Void), A)
+    finalizer(cglobal((:finalizer_cptr, libccalltest), Cvoid), A)
     finalize(A)
     @test ccall((:get_c_int, libccalltest), Cint, ()) == -1
 end
 
 # Pointer finalizer at exit (PR #19911)
-let result = read(`$(Base.julia_cmd()) --startup-file=no -e "A = Ref{Cint}(42); finalizer(cglobal((:c_exit_finalizer, \"$libccalltest\"), Void), A)"`, String)
+let result = read(`$(Base.julia_cmd()) --startup-file=no -e "A = Ref{Cint}(42); finalizer(cglobal((:c_exit_finalizer, \"$libccalltest\"), Cvoid), A)"`, String)
     @test result == "c_exit_finalizer: 42, 0"
 end
 
@@ -1150,9 +1150,9 @@ end
 # Do not put these in a function.
 @noinline g17413() = rand()
 @inline f17413() = (g17413(); g17413())
-ccall((:test_echo_p, libccalltest), Ptr{Void}, (Any,), f17413())
+ccall((:test_echo_p, libccalltest), Ptr{Cvoid}, (Any,), f17413())
 for i in 1:3
-    ccall((:test_echo_p, libccalltest), Ptr{Void}, (Any,), f17413())
+    ccall((:test_echo_p, libccalltest), Ptr{Cvoid}, (Any,), f17413())
 end
 
 struct SpillPint
@@ -1238,11 +1238,11 @@ end
 
 # issue #20835
 @test_throws(ErrorException("could not evaluate ccall argument type (it might depend on a local variable)"),
-             eval(:(f20835(x) = ccall(:fn, Void, (Ptr{typeof(x)},), x))))
+             eval(:(f20835(x) = ccall(:fn, Cvoid, (Ptr{typeof(x)},), x))))
 @test_throws(UndefVarError(:Something_not_defined_20835),
              eval(:(f20835(x) = ccall(:fn, Something_not_defined_20835, (Ptr{typeof(x)},), x))))
 
-@noinline f21104at(::Type{T}) where {T} = ccall(:fn, Void, (Some{T},), Some(0))
+@noinline f21104at(::Type{T}) where {T} = ccall(:fn, Cvoid, (Some{T},), Some(0))
 @noinline f21104rt(::Type{T}) where {T} = ccall(:fn, Some{T}, ())
 @test code_llvm(DevNull, f21104at, (Type{Float64},)) === nothing
 @test code_llvm(DevNull, f21104rt, (Type{Float64},)) === nothing
@@ -1291,12 +1291,12 @@ struct Bits22734 <: Abstract22734
     x::Int
     y::Float64
 end
-function cb22734(ptr::Ptr{Void})
+function cb22734(ptr::Ptr{Cvoid})
     gc()
     obj = unsafe_pointer_to_objref(ptr)::Bits22734
     obj.x + obj.y
 end
-ptr22734 = cfunction(cb22734, Float64, Tuple{Ptr{Void}})
+ptr22734 = cfunction(cb22734, Float64, Tuple{Ptr{Cvoid}})
 function caller22734(ptr)
     obj = Bits22734(12, 20)
     ccall(ptr, Float64, (Ref{Abstract22734},), obj)

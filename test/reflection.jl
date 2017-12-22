@@ -166,7 +166,7 @@ struct AlwaysHasLayout{T}
 end
 @test !isconcrete(AlwaysHasLayout) && !isconcrete(AlwaysHasLayout.body)
 @test isconcrete(AlwaysHasLayout{Any})
-@test isconcrete(Ptr{Void})
+@test isconcrete(Ptr{Cvoid})
 @test !isconcrete(Ptr) && !isconcrete(Ptr.body)
 
 # issue #10165
@@ -384,9 +384,9 @@ for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
     world = typemax(UInt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     params = Base.CodegenParams()
-    llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
+    llvmf = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
     @test llvmf != C_NULL
-    @test ccall(:jl_get_llvm_fptr, Ptr{Void}, (Ptr{Void},), llvmf) != C_NULL
+    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf) != C_NULL
 end
 
 module MacroTest
@@ -519,28 +519,28 @@ end
 # Linfo Tracing test
 tracefoo(x, y) = x+y
 didtrace = false
-tracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
-ccall(:jl_register_method_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, Tuple{Ptr{Void}}))
+tracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
+ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), cfunction(tracer, Cvoid, Tuple{Ptr{Cvoid}}))
 meth = which(tracefoo,Tuple{Any,Any})
-ccall(:jl_trace_method, Void, (Any,), meth)
+ccall(:jl_trace_method, Cvoid, (Any,), meth)
 @test tracefoo(1, 2) == 3
-ccall(:jl_untrace_method, Void, (Any,), meth)
+ccall(:jl_untrace_method, Cvoid, (Any,), meth)
 @test didtrace
 didtrace = false
 @test tracefoo(1.0, 2.0) == 3.0
 @test !didtrace
-ccall(:jl_register_method_tracer, Void, (Ptr{Void},), C_NULL)
+ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # Method Tracing test
-methtracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
-ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), cfunction(methtracer, Void, Tuple{Ptr{Void}}))
+methtracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
+ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cfunction(methtracer, Cvoid, Tuple{Ptr{Cvoid}}))
 tracefoo2(x, y) = x*y
 @test didtrace
 didtrace = false
 tracefoo(x::Int64, y::Int64) = x*y
 @test didtrace
 didtrace = false
-ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), C_NULL)
+ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # test for reflection over large method tables
 for i = 1:100; @eval fLargeTable(::Val{$i}, ::Any) = 1; end
@@ -733,7 +733,7 @@ end
 
 @test nfields((1,2)) == 2
 @test nfields(()) == 0
-@test nfields(nothing) == fieldcount(Void) == 0
+@test nfields(nothing) == fieldcount(Nothing) == 0
 @test nfields(1) == 0
 @test fieldcount(Union{}) == 0
 @test fieldcount(Tuple{Any,Any,T} where T) == 3
@@ -771,3 +771,129 @@ cinfo = cinfos[]
 test_similar_codeinfo(cinfo, cinfo_generated)
 
 @test_throws ErrorException code_lowered(f22979, typeof.(x22979), false)
+
+module MethodDeletion
+using Test
+
+# Deletion after compiling top-level call
+bar1(x) = 1
+bar1(x::Int) = 2
+foo1(x) = bar1(x)
+faz1(x) = foo1(x)
+@test faz1(1) == 2
+@test faz1(1.0) == 1
+m = first(methods(bar1, Tuple{Int}))
+Base.delete_method(m)
+@test bar1(1) == 1
+@test bar1(1.0) == 1
+@test foo1(1) == 1
+@test foo1(1.0) == 1
+@test faz1(1) == 1
+@test faz1(1.0) == 1
+
+# Deletion after compiling middle-level call
+bar2(x) = 1
+bar2(x::Int) = 2
+foo2(x) = bar2(x)
+faz2(x) = foo2(x)
+@test foo2(1) == 2
+@test foo2(1.0) == 1
+m = first(methods(bar2, Tuple{Int}))
+Base.delete_method(m)
+@test bar2(1.0) == 1
+@test bar2(1) == 1
+@test foo2(1) == 1
+@test foo2(1.0) == 1
+@test faz2(1) == 1
+@test faz2(1.0) == 1
+
+# Deletion after compiling low-level call
+bar3(x) = 1
+bar3(x::Int) = 2
+foo3(x) = bar3(x)
+faz3(x) = foo3(x)
+@test bar3(1) == 2
+@test bar3(1.0) == 1
+m = first(methods(bar3, Tuple{Int}))
+Base.delete_method(m)
+@test bar3(1) == 1
+@test bar3(1.0) == 1
+@test foo3(1) == 1
+@test foo3(1.0) == 1
+@test faz3(1) == 1
+@test faz3(1.0) == 1
+
+# Deletion before any compilation
+bar4(x) = 1
+bar4(x::Int) = 2
+foo4(x) = bar4(x)
+faz4(x) = foo4(x)
+m = first(methods(bar4, Tuple{Int}))
+Base.delete_method(m)
+@test bar4(1) == 1
+@test bar4(1.0) == 1
+@test foo4(1) == 1
+@test foo4(1.0) == 1
+@test faz4(1) == 1
+@test faz4(1.0) == 1
+
+# Methods with keyword arguments
+fookw(x; direction=:up) = direction
+fookw(y::Int) = 2
+@test fookw("string") == :up
+@test fookw(1) == 2
+m = collect(methods(fookw))[2]
+Base.delete_method(m)
+@test fookw(1) == 2
+@test_throws MethodError fookw("string")
+
+# functions with many methods
+types = (Float64, Int32, String)
+for T1 in types, T2 in types, T3 in types
+    @eval foomany(x::$T1, y::$T2, z::$T3) = y
+end
+@test foomany(Int32(5), "hello", 3.2) == "hello"
+m = first(methods(foomany, Tuple{Int32, String, Float64}))
+Base.delete_method(m)
+@test_throws MethodError foomany(Int32(5), "hello", 3.2)
+
+struct EmptyType end
+Base.convert(::Type{EmptyType}, x::Integer) = EmptyType()
+m = first(methods(convert, Tuple{Type{EmptyType}, Integer}))
+Base.delete_method(m)
+@test_throws MethodError convert(EmptyType, 1)
+
+# parametric methods
+parametric(A::Array{T,N}, i::Vararg{Int,N}) where {T,N} = N
+@test parametric(rand(2,2), 1, 1) == 2
+m = first(methods(parametric))
+Base.delete_method(m)
+@test_throws MethodError parametric(rand(2,2), 1, 1)
+
+# Deletion and ambiguity detection
+foo(::Int, ::Int) = 1
+foo(::Real, ::Int) = 2
+foo(::Int, ::Real) = 3
+@test all(map(g->g.ambig==nothing, methods(foo)))
+Base.delete_method(first(methods(foo)))
+@test !all(map(g->g.ambig==nothing, methods(foo)))
+@test_throws MethodError foo(1, 1)
+foo(::Int, ::Int) = 1
+foo(1, 1)
+@test map(g->g.ambig==nothing, methods(foo)) == [true, false, false]
+Base.delete_method(first(methods(foo)))
+@test_throws MethodError foo(1, 1)
+@test map(g->g.ambig==nothing, methods(foo)) == [false, false]
+
+# multiple deletions and ambiguities
+typeparam(::Type{T}, a::Array{T}) where T<:AbstractFloat = 1
+typeparam(::Type{T}, a::Array{T}) where T = 2
+for mth in collect(methods(typeparam))
+    Base.delete_method(mth)
+end
+typeparam(::Type{T}, a::AbstractArray{T}) where T<:AbstractFloat = 1
+typeparam(::Type{T}, a::AbstractArray{T}) where T = 2
+@test typeparam(Float64, rand(2))  == 1
+@test typeparam(Int, rand(Int, 2)) == 2
+
+end

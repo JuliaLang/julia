@@ -116,11 +116,11 @@ end
         atri = typ(a)
         b = rand(n,n)
         qrb = qrfact(b,Val(true))
-        @test *(atri, Adjoint(qrb[:Q])) ≈ Matrix(atri) * qrb[:Q]'
-        @test mul!(copy(atri), Adjoint(qrb[:Q])) ≈ Matrix(atri) * qrb[:Q]'
+        @test *(atri, Adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
+        @test mul!(copy(atri), Adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
         qrb = qrfact(b,Val(false))
-        @test *(atri, Adjoint(qrb[:Q])) ≈ Matrix(atri) * qrb[:Q]'
-        @test mul!(copy(atri), Adjoint(qrb[:Q])) ≈ Matrix(atri) * qrb[:Q]'
+        @test *(atri, Adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
+        @test mul!(copy(atri), Adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
     end
 end
 

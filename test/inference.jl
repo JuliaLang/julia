@@ -299,7 +299,7 @@ end
 
 # === with singleton constants
 let f(x) = (x===nothing) ? 1 : 1.0
-    @test Base.return_types(f, (Void,)) == Any[Int]
+    @test Base.return_types(f, (Nothing,)) == Any[Int]
 end
 
 # issue #16530
@@ -614,7 +614,7 @@ function f_inferred_union()
         return f_inferred_union_int(b)
     end
 end
-f_inferred_union_nothing(::Void) = 1
+f_inferred_union_nothing(::Nothing) = 1
 f_inferred_union_nothing(::Any) = "broken"
 f_inferred_union_float(::Float64) = 2
 f_inferred_union_float(::Any) = "broken"
@@ -855,10 +855,10 @@ end
 
 # issue #21848
 @test Core.Inference.limit_type_depth(Ref{Complex{T} where T}, 0) == Ref
-let T = Tuple{Tuple{Int64, Void},
-              Tuple{Tuple{Int64, Void},
-                    Tuple{Int64, Tuple{Tuple{Int64, Void},
-                                       Tuple{Tuple{Int64, Void}, Tuple{Int64, Tuple{Tuple{Int64, Void}, Tuple{Tuple, Tuple}}}}}}}}
+let T = Tuple{Tuple{Int64, Nothing},
+              Tuple{Tuple{Int64, Nothing},
+                    Tuple{Int64, Tuple{Tuple{Int64, Nothing},
+                                       Tuple{Tuple{Int64, Nothing}, Tuple{Int64, Tuple{Tuple{Int64, Nothing}, Tuple{Tuple, Tuple}}}}}}}}
     @test Core.Inference.limit_type_depth(T, 0) >: T
     @test Core.Inference.limit_type_depth(T, 1) >: T
     @test Core.Inference.limit_type_depth(T, 2) >: T

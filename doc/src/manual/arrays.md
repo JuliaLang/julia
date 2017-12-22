@@ -5,7 +5,7 @@ technical computing languages pay a lot of attention to their array implementati
 of other containers. Julia does not treat arrays in any special way. The array library is implemented
 almost completely in Julia itself, and derives its performance from the compiler, just like any
 other code written in Julia. As such, it's also possible to define custom array types by inheriting
-from `AbstractArray.` See the [manual section on the AbstractArray interface](@ref man-interface-array) for more details
+from [`AbstractArray`](@ref). See the [manual section on the AbstractArray interface](@ref man-interface-array) for more details
 on implementing a custom array type.
 
 An array is a collection of objects stored in a multi-dimensional grid. In the most general case,
@@ -71,7 +71,7 @@ omitted it will default to [`Float64`](@ref).
 
 The syntax `[A, B, C, ...]` constructs a 1-d array (vector) of its arguments. If all
 arguments have a common [promotion type](@ref conversion-and-promotion) then they get
-converted to that type using `convert`.
+converted to that type using [`convert`](@ref).
 
 ### Concatenation
 
@@ -99,7 +99,7 @@ The concatenation functions are used so often that they have special syntax:
 
 An array with a specific element type can be constructed using the syntax `T[A, B, C, ...]`. This
 will construct a 1-d array with element type `T`, initialized to contain elements `A`, `B`, `C`,
-etc. For example `Any[x, y, z]` constructs a heterogeneous array that can contain any values.
+etc. For example, `Any[x, y, z]` constructs a heterogeneous array that can contain any values.
 
 Concatenation syntax can similarly be prefixed with a type to specify the element type of the
 result.
@@ -183,7 +183,7 @@ ERROR: syntax: invalid iteration specification
 ```
 
 All comma-separated expressions after `for` are interpreted as ranges. Adding parentheses lets
-us add a third argument to `map`:
+us add a third argument to [`map`](@ref):
 
 ```jldoctest
 julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
@@ -237,8 +237,73 @@ indices.
 
 If all indices are vectors, for example, then the shape of `X` would be `(length(I_1), length(I_2), ..., length(I_n))`,
 with location `(i_1, i_2, ..., i_n)` of `X` containing the value `A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]`.
+
+Example:
+
+```jldoctest
+julia> A = reshape(collect(1:16), (2, 2, 2, 2))
+2×2×2×2 Array{Int64,4}:
+[:, :, 1, 1] =
+ 1  3
+ 2  4
+
+[:, :, 2, 1] =
+ 5  7
+ 6  8
+
+[:, :, 1, 2] =
+  9  11
+ 10  12
+
+[:, :, 2, 2] =
+ 13  15
+ 14  16
+
+julia> A[1, 2, 1, 1] # all scalar indices
+3
+
+julia> A[[1, 2], [1], [1, 2], [1]] # all vector indices
+2×1×2×1 Array{Int64,4}:
+[:, :, 1, 1] =
+ 1
+ 2
+
+[:, :, 2, 1] =
+ 5
+ 6
+
+julia> A[[1, 2], [1], [1, 2], 1] # a mix of index types
+2×1×2 Array{Int64,3}:
+[:, :, 1] =
+ 1
+ 2
+
+[:, :, 2] =
+ 5
+ 6
+```
+
+Note how the size of the resulting array is different in the last two cases.
+
 If `I_1` is changed to a two-dimensional matrix, then `X` becomes an `n+1`-dimensional array of
 shape `(size(I_1, 1), size(I_1, 2), length(I_2), ..., length(I_n))`. The matrix adds a dimension.
+
+Example:
+
+```jldoctest
+julia> A = reshape(collect(1:16), (2, 2, 2, 2));
+
+julia> A[[1 2; 1 2]]
+2×2 Array{Int64,2}:
+ 1  2
+ 1  2
+
+julia> A[[1 2; 1 2], 1, 2, 1]
+2×2 Array{Int64,2}:
+ 5  6
+ 5  6
+```
+
 The location `(i_1, i_2, i_3, ..., i_{n+1})` contains the value at `A[I_1[i_1, i_2], I_2[i_3], ..., I_n[i_{n+1}]]`.
 All dimensions indexed with scalars are dropped. For example, the result of `A[2, I, 3]` is an
 array with size `size(I)`. Its `i`th element is populated by `A[2, I[i], 3]`.

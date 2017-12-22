@@ -11,6 +11,17 @@ Supertype for `N`-dimensional arrays (or array-like types) with elements of type
 """
 AbstractArray
 
+convert(::Type{T}, a::T) where {T<:AbstractArray} = a
+convert(::Type{T}, a::AbstractArray) where {T<:AbstractArray} = T(a)
+
+if module_name(@__MODULE__) === :Base  # avoid method overwrite
+# catch undefined constructors before the deprecation kicks in
+# TODO: remove when deprecation is removed
+function (::Type{T})(arg) where {T<:AbstractArray}
+    throw(MethodError(T, (arg,)))
+end
+end
+
 """
     size(A::AbstractArray, [dim...])
 
@@ -580,8 +591,10 @@ julia> empty([1.0, 2.0, 3.0], String)
 0-element Array{String,1}
 ```
 """
-empty(a::AbstractVector) = empty(a, eltype(a))
-empty(a::AbstractVector, ::Type{T}) where {T} = Vector{T}()
+empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
+
+# like empty, but should return a mutable collection, a Vector by default
+emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
 
 ## from general iterable to any array
 
@@ -851,14 +864,6 @@ isempty(a::AbstractArray) = (_length(a) == 0)
 
 # keys with an IndexStyle
 keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
-
-## Conversions ##
-
-convert(::Type{AbstractArray{T,N}}, A::AbstractArray{T,N}) where {T,N  } = A
-convert(::Type{AbstractArray{T,N}}, A::AbstractArray{S,N}) where {T,S,N} = copyto!(similar(A,T), A)
-convert(::Type{AbstractArray{T}},   A::AbstractArray{S,N}) where {T,S,N} = convert(AbstractArray{T,N}, A)
-
-convert(::Type{Array}, A::AbstractArray{T,N}) where {T,N} = convert(Array{T,N}, A)
 
 """
    of_indices(x, y)
@@ -1542,9 +1547,6 @@ function isequal(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)
         return false
     end
-    if isa(A,AbstractRange) != isa(B,AbstractRange)
-        return false
-    end
     for (a, b) in zip(A, B)
         if !isequal(a, b)
             return false
@@ -1563,9 +1565,6 @@ end
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)
-        return false
-    end
-    if isa(A,AbstractRange) != isa(B,AbstractRange)
         return false
     end
     anymissing = false
@@ -1695,7 +1694,7 @@ end
 ## iteration utilities ##
 
 """
-    foreach(f, c...) -> Void
+    foreach(f, c...) -> Nothing
 
 Call function `f` on each element of iterable `c`.
 For multiple iterable arguments, `f` is called elementwise.
@@ -1928,30 +1927,103 @@ map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F} = map_n!(f, dest
 map(f) = f()
 map(f, iters...) = collect(Generator(f, iters...))
 
-# multi-item push!, unshift! (built on top of type-specific 1-item version)
+# multi-item push!, pushfirst! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
 push!(A, a, b) = push!(push!(A, a), b)
 push!(A, a, b, c...) = push!(push!(A, a, b), c...)
-unshift!(A, a, b) = unshift!(unshift!(A, b), a)
-unshift!(A, a, b, c...) = unshift!(unshift!(A, c...), a, b)
+pushfirst!(A, a, b) = pushfirst!(pushfirst!(A, b), a)
+pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 
 ## hashing collections ##
 
 const hashaa_seed = UInt === UInt64 ? 0x7f53e68ceb575e76 : 0xeb575e76
 const hashrle_seed = UInt === UInt64 ? 0x2aab8909bfea414c : 0xbfea414c
-function hash(a::AbstractArray, h::UInt)
+const hashr_seed   = UInt === UInt64 ? 0x80707b6821b70087 : 0x21b70087
+
+# Efficient O(1) method equivalent to the O(N) AbstractArray fallback,
+# which works only for ranges with regular step (RangeStepRegular)
+function hash_range(r::AbstractRange, h::UInt)
+    h += hashaa_seed
+    h += hash(size(r))
+
+    length(r) == 0 && return h
+    h = hash(first(r), h)
+    length(r) == 1 && return h
+    length(r) == 2 && return hash(last(r), h)
+
+    h += hashr_seed
+    h = hash(length(r), h)
+    h = hash(last(r), h)
+end
+
+function hash(a::AbstractArray{T}, h::UInt) where T
+    # O(1) hashing for types with regular step
+    if isa(a, AbstractRange) && isa(TypeRangeStep(a), RangeStepRegular)
+        return hash_range(a, h)
+    end
+
     h += hashaa_seed
     h += hash(size(a))
 
     state = start(a)
     done(a, state) && return h
+    x1, state = next(a, state)
+    done(a, state) && return hash(x1, h)
     x2, state = next(a, state)
-    done(a, state) && return hash(x2, h)
+    done(a, state) && return hash(x2, hash(x1, h))
 
-    x1 = x2
-    while !done(a, state)
-        x1 = x2
-        x2, state = next(a, state)
+    # Check whether the array is equal to a range, and hash the elements
+    # at the beginning of the array as such as long as they match this assumption
+    # This needs to be done even for non-RangeStepRegular types since they may still be equal
+    # to RangeStepRegular values (e.g. 1.0:3.0 == 1:3)
+    if isa(a, AbstractVector) && applicable(-, x2, x1)
+        n = 1
+        local step, laststep, laststate
+        while true
+            # If overflow happens with entries of the same type, a cannot be equal
+            # to a range with more than two elements because more extreme values
+            # cannot be represented. We must still hash the two first values as a
+            # range since they can always be considered as such (in a wider type)
+            if isconcrete(T)
+                try
+                    step = x2 - x1
+                catch err
+                    isa(err, OverflowError) || rethrow(err)
+                    break
+                end
+                # If true, wraparound overflow happened
+                sign(step) == cmp(x2, x1) || break
+            else
+                # widen() is here to ensure no overflow can happen
+                step = widen(x2) - widen(x1)
+            end
+            n > 1 && !isequal(step, laststep) && break
+            n += 1
+            x1 = x2
+            laststep = step
+            laststate = state
+            done(a, state) && break
+            x2, state = next(a, state)
+        end
+
+        h = hash(first(a), h)
+        h += hashr_seed
+        # Always hash at least the two first elements as a range (even in case of overflow)
+        if n < 2
+            h = hash(2, h)
+            h = hash(x2, h)
+            done(a, state) && return h
+            x1 = x2
+            x2, state = next(a, state)
+        else
+            h = hash(n, h)
+            h = hash(x1, h)
+            done(a, laststate) && return h
+        end
+    end
+
+    # Hash elements which do not correspond to a range (if any)
+    while true
         if isequal(x2, x1)
             # For repeated elements, use run length encoding
             # This allows efficient hashing of sparse arrays
@@ -1965,6 +2037,9 @@ function hash(a::AbstractArray, h::UInt)
             h = hash(runlength, h)
         end
         h = hash(x1, h)
+        done(a, state) && break
+        x1 = x2
+        x2, state = next(a, state)
     end
     !isequal(x2, x1) && (h = hash(x2, h))
     return h

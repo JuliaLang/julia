@@ -344,15 +344,15 @@ localindices(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 unsafe_convert(::Type{Ptr{T}}, S::SharedArray{T}) where {T} = unsafe_convert(Ptr{T}, sdata(S))
 unsafe_convert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = unsafe_convert(Ptr{T}, sdata(S))
 
-function convert(::Type{SharedArray}, A::Array)
+function SharedArray(A::Array)
     S = SharedArray{eltype(A),ndims(A)}(size(A))
     copyto!(S, A)
 end
-function convert(::Type{SharedArray{T}}, A::Array) where T
+function SharedArray{T}(A::Array) where T
     S = SharedArray{T,ndims(A)}(size(A))
     copyto!(S, A)
 end
-function convert(::Type{SharedArray{TS,N}}, A::Array{TA,N}) where {TS,TA,N}
+function SharedArray{TS,N}(A::Array{TA,N}) where {TS,TA,N}
     S = SharedArray{TS,ndims(A)}(size(A))
     copyto!(S, A)
 end
@@ -491,7 +491,7 @@ function show(io::IO, mime::MIME"text/plain", S::SharedArray)
     end
 end
 
-convert(::Type{Array}, S::SharedArray) = S.s
+Array(S::SharedArray) = S.s
 
 # pass through getindex and setindex! - unlike DArrays, these always work on the complete array
 getindex(S::SharedArray, i::Real) = getindex(S.s, i)

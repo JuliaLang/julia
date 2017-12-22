@@ -321,25 +321,6 @@ try
     fb_uuid1 = Base.module_uuid(FooBar1)
     @test fb_uuid != fb_uuid1
 
-    reload("FooBar")
-    @test fb_uuid != Base.module_uuid(root_module(:FooBar))
-    @test fb_uuid1 == Base.module_uuid(FooBar1)
-    fb_uuid = Base.module_uuid(root_module(:FooBar))
-    @test isfile(joinpath(dir2, "FooBar.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
-    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) isa Vector
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji")) isa Vector
-
-    reload("FooBar1")
-    @test fb_uuid == Base.module_uuid(root_module(:FooBar))
-    @test fb_uuid1 != Base.module_uuid(root_module(:FooBar1))
-
-    @test isfile(joinpath(dir2, "FooBar.ji"))
-    @test isfile(joinpath(dir2, "FooBar1.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji")) isa Vector
-    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) isa Vector
-
     # test checksum
     open(joinpath(dir2, "FooBar1.ji"), "a") do f
         write(f, 0x076cac96) # append 4 random bytes
@@ -548,21 +529,6 @@ let dir = mktempdir()
     end
 end
 
-let module_name = string("a",randstring())
-    mktempdir() do path
-        unshift!(LOAD_PATH, path)
-        file_name = joinpath(path, string(module_name, ".jl"))
-        sleep(2)
-        touch(file_name)
-        code = """module $(module_name)\nend\n"""
-        write(file_name, code)
-        reload(module_name)
-        @test isa(root_module(Symbol(module_name)), Module)
-        @test shift!(LOAD_PATH) == path
-        rm(file_name)
-    end
-end
-
 # Issue #19960
 let
     test_workers = addprocs(1)
@@ -597,8 +563,8 @@ let
             """)
 
         @everywhere test_workers begin
-            unshift!(LOAD_PATH, $load_path)
-            unshift!(Base.LOAD_CACHE_PATH, $load_cache_path)
+            pushfirst!(LOAD_PATH, $load_path)
+            pushfirst!(Base.LOAD_CACHE_PATH, $load_cache_path)
         end
         try
             @eval using $ModuleB
@@ -611,8 +577,8 @@ let
             end
         finally
             @everywhere test_workers begin
-                shift!(LOAD_PATH)
-                shift!(Base.LOAD_CACHE_PATH)
+                popfirst!(LOAD_PATH)
+                popfirst!(Base.LOAD_CACHE_PATH)
             end
         end
     finally
@@ -623,4 +589,61 @@ let
     end
 end
 
+# Ensure that module-loading plays nicely with Base.delete_method
+dir = mktempdir()
+insert!(LOAD_PATH, 1, dir)
+insert!(Base.LOAD_CACHE_PATH, 1, dir)
+try
+    A_module = :Aedb164bd3a126418
+    B_module = :Bedb164bd3a126418
+    A_file = joinpath(dir, "$A_module.jl")
+    B_file = joinpath(dir, "$B_module.jl")
+
+    write(A_file,
+          """
+          __precompile__()
+
+          module $A_module
+
+          export apc, anopc
+
+          apc(::Int, ::Int) = 1
+          apc(::Any, ::Any) = 2
+
+          anopc(::Int, ::Int) = 1
+          anopc(::Any, ::Any) = 2
+
+          end
+          """)
+    write(B_file,
+          """
+          __precompile__()
+
+          module $B_module
+
+          using $A_module
+
+          bpc(x) = apc(x, x)
+          bnopc(x) = anopc(x, x)
+
+          precompile(bpc, (Int,))
+          precompile(bpc, (Float64,))
+
+          end
+          """)
+    Base.require(A_module)
+    A = root_module(A_module)
+    for mths in (collect(methods(A.apc)), collect(methods(A.anopc)))
+        Base.delete_method(mths[1])
+    end
+    Base.require(B_module)
+    B = root_module(B_module)
+    @test Base.invokelatest(B.bpc, 1) == Base.invokelatest(B.bpc, 1.0) == 2
+    @test Base.invokelatest(B.bnopc, 1) == Base.invokelatest(B.bnopc, 1.0) == 2
+finally
+    popfirst!(LOAD_PATH)
+    popfirst!(Base.LOAD_CACHE_PATH)
+    rm(dir, recursive=true)
 end
+
+end # !withenv

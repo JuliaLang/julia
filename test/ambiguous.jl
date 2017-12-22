@@ -288,8 +288,8 @@ end
         pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.oneunit, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.nonmissingtype, Tuple{Type{Union{Missing, T}} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{Some{T}, Void}} where T, Some)))
-        pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{T, Void}} where T, Some)))
+        pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{Some{T}, Nothing}} where T, Some)))
+        pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{T, Nothing}} where T, Some)))
         @test need_to_handle_undef_sparam == Set()
     end
 end

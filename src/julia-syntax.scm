@@ -1515,22 +1515,6 @@
            (kwcall-unless-empty f pa kw-container kw-container)
            `(call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))))
 
-;; convert e.g. A'*B to Ac_mul_B(A,B)
-(define (expand-transposed-op e ops)
-  (let ((a (caddr e))
-        (b (cadddr e)))
-    (cond ((ctrans? a)
-           (if (ctrans? b)
-               `(call ,(aref ops 0) #;Ac_mul_Bc ,(expand-forms (cadr a))
-                      ,(expand-forms (cadr b)))
-               `(call ,(aref ops 1) #;Ac_mul_B ,(expand-forms (cadr a))
-                      ,(expand-forms b))))
-          ((ctrans? b)
-           `(call ,(aref ops 2) #;A_mul_Bc ,(expand-forms a)
-                  ,(expand-forms (cadr b))))
-          (else
-           `(call ,(cadr e) ,(expand-forms a) ,(expand-forms b))))))
-
 ;; convert `a+=b` to `a=a+b`
 (define (expand-update-operator- op op= lhs rhs declT)
   (let ((e (remove-argument-side-effects lhs)))
@@ -2212,22 +2196,20 @@
                  ((and (eq? f '^) (length= e 4) (integer? (cadddr e)))
                   (expand-forms
                    `(call (top literal_pow) ^ ,(caddr e) (call (call (core apply_type) (top Val) ,(cadddr e))))))
-
-                 ((and (eq? f '*) (length= e 4))
-                  (expand-transposed-op
-                   e
-                   #(Ac_mul_Bc Ac_mul_B A_mul_Bc)))
-                 ((and (eq? f '/) (length= e 4))
-                  (expand-transposed-op
-                   e
-                   #(Ac_rdiv_Bc Ac_rdiv_B A_rdiv_Bc)))
-                 ((and (eq? f '\\) (length= e 4))
-                  (expand-transposed-op
-                   e
-                   #(Ac_ldiv_Bc Ac_ldiv_B A_ldiv_Bc)))
                  (else
                   (map expand-forms e))))
          (map expand-forms e)))
+
+   'do
+   (lambda (e)
+     (let* ((call (cadr e))
+            (f    (cadr call))
+            (argl (cddr call))
+            (af   (caddr e)))
+       (expand-forms
+        (if (has-parameters? argl)
+            `(call ,f ,(car argl) ,af ,@(cdr argl))
+            `(call ,f ,af ,@argl)))))
 
    'tuple
    (lambda (e)
@@ -2396,7 +2378,7 @@
                      ,.(apply append rows)))
             `(call (top typed_vcat) ,t ,@a)))))
 
-   '|'|  (lambda (e) (expand-forms `(call adjoint ,(cadr e))))
+   '|'|  (lambda (e) (expand-forms `(call (core postfixapostrophize) ,(cadr e))))
    '|.'| (lambda (e) (begin (deprecation-message (string "The syntax `.'` for transposition is deprecated, "
                                              "and the special lowering of `.'` in multiplication "
                                              "(`*`), left-division (`\\`), and right-division (`/`) "
@@ -3835,7 +3817,7 @@ f(x) = yt(x)
                  (emit `(leave 1))
                  (if finally
                      (begin (emit `(= ,finally-exception (the_exception)))
-                            (leave-finally-block `(foreigncall 'jl_rethrow_other (core Void) (call (core svec) Any)
+                            (leave-finally-block `(foreigncall 'jl_rethrow_other (core Nothing) (call (core svec) Any)
                                                                'ccall 1 ,finally-exception)
                                                  #f))
                      (let ((v2 (compile (caddr e) break-labels value tail)))
