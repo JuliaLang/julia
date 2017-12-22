@@ -43,12 +43,9 @@ end
 Pair(a::A, b::B) where {A, B} = Pair{A, B}(a, b)
 const => = Pair
 
-start(p::Pair) = 1
-done(p::Pair, i) = i>2
-next(p::Pair, i) = (getfield(p, i), i+1)
 eltype(p::Type{Pair{A, B}}) where {A, B} = Union{A, B}
-
-indexed_next(p::Pair, i::Int, state) = (getfield(p, i), i+1)
+iterate(p::Pair, i=1) = i > 2 ? nothing : (getfield(p, i), i + 1)
+indexed_iterate(p::Pair, i::Int, state=1) = (getfield(p, i), i + 1)
 
 hash(p::Pair, h::UInt) = hash(p.second, hash(p.first, h))
 

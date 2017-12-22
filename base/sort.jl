@@ -56,13 +56,15 @@ export # not exported by Base
 ## functions requiring only ordering ##
 
 function issorted(itr, order::Ordering)
-    state = start(itr)
-    done(itr,state) && return true
-    prev, state = next(itr, state)
-    while !done(itr, state)
-        this, state = next(itr, state)
+    y = iterate(itr)
+    y === nothing && return true
+    prev, state = y
+    y = iterate(itr, state)
+    while y !== nothing
+        this, state = y
         lt(order, this, prev) && return false
         prev = this
+        y = iterate(itr, state)
     end
     return true
 end

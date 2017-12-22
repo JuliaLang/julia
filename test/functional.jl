@@ -107,7 +107,7 @@ end
 # generators and guards
 let gen = (x for x in 1:10)
     @test gen.iter == 1:10
-    @test gen.f(first(1:10)) == next(gen, start(gen))[1]
+    @test gen.f(first(1:10)) == iterate(gen)[1]
     for (a,b) in zip(1:10,gen)
         @test a == b
     end

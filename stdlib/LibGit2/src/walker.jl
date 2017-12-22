@@ -25,22 +25,17 @@ function GitRevWalker(repo::GitRepo)
     return GitRevWalker(repo, w_ptr[])
 end
 
-function Base.start(w::GitRevWalker)
+function Base.iterate(w::GitRevWalker, state=nothing)
     id_ptr = Ref(GitHash())
     err = ccall((:git_revwalk_next, :libgit2), Cint,
                 (Ptr{GitHash}, Ptr{Cvoid}), id_ptr, w.ptr)
-    err != Int(Error.GIT_OK) && return (nothing, true)
-    return (id_ptr[], false)
-end
-
-Base.done(w::GitRevWalker, state) = Bool(state[2])
-
-function Base.next(w::GitRevWalker, state)
-    id_ptr = Ref(GitHash())
-    err = ccall((:git_revwalk_next, :libgit2), Cint,
-                (Ptr{GitHash}, Ptr{Cvoid}), id_ptr, w.ptr)
-    err != Int(Error.GIT_OK) && return (state[1], (nothing, true))
-    return (state[1], (id_ptr[], false))
+    if err == Cint(Error.GIT_OK)
+        return (id_ptr[], nothing)
+    elseif err == Cint(Error.ITEROVER)
+        return nothing
+    else
+        throw(GitError(err))
+    end
 end
 
 Base.IteratorSize(::Type{GitRevWalker}) = Base.SizeUnknown()
@@ -120,16 +115,10 @@ function map(f::Function, walker::GitRevWalker;
     else
         push_head!(walker)
     end
-    s = start(walker)
 
-    c = 0
     repo = repository(walker)
-    while !done(walker, s)
-        val = f(s[1], repo)
-        Base.push!(res, val)
-        val, s = next(walker, s)
-        c +=1
-        count == c && break
+    for val in (count == 0 ? walker : Iterators.take(walker, count))
+        Base.push!(res, f(val, repo))
     end
     return res
 end
@@ -169,13 +158,10 @@ function count(f::Function, walker::GitRevWalker;
     else
         push_head!(walker)
     end
-    s = start(walker)
 
     repo = repository(walker)
-    while !done(walker, s)
-        val = f(s[1], repo)
-        _, s = next(walker, s)
-        c += (val == true)
+    for val in walker
+        c += f(val, repo) == true
     end
     return c
 end

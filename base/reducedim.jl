@@ -669,7 +669,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(Rval))
     keep, Idefault = Broadcast.shapeindexer(indsRt)
     ks = keys(A)
-    kss = start(ks)
+    y = iterate(ks)
     zi = zero(eltype(ks))
     if reducedim1(Rval, A)
         i1 = first(indices1(Rval))
@@ -678,12 +678,13 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             tmpRv = Rval[i1,IR]
             tmpRi = Rind[i1,IR]
             for i in axes(A,1)
-                k, kss = next(ks, kss)
+                k, kss = y::Tuple
                 tmpAv = A[i,IA]
                 if tmpRi == zi || (tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv)))
                     tmpRv = tmpAv
                     tmpRi = k
                 end
+                y = iterate(ks, kss)
             end
             Rval[i1,IR] = tmpRv
             Rind[i1,IR] = tmpRi
@@ -692,7 +693,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             for i in axes(A, 1)
-                k, kss = next(ks, kss)
+                k, kss = y::Tuple
                 tmpAv = A[i,IA]
                 tmpRv = Rval[i,IR]
                 tmpRi = Rind[i,IR]
@@ -700,6 +701,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
                     Rval[i,IR] = tmpAv
                     Rind[i,IR] = k
                 end
+                y = iterate(ks, kss)
             end
         end
     end

@@ -34,20 +34,18 @@ mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
 
 ## foldl && mapfoldl
 
-@noinline function mapfoldl_impl(f, op, v0, itr, i)
+@noinline function mapfoldl_impl(f, op, v0, itr, i...)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
-    if done(itr, i)
-        return v0
-    else
-        (x, i) = next(itr, i)
-        v = op(v0, f(x))
-        while !done(itr, i)
-            @inbounds (x, i) = next(itr, i)
-            v = op(v, f(x))
-        end
-        return v
+    y = iterate(itr, i...)
+    y === nothing && return v0
+    v = op(v0, f(y[1]))
+    while true
+        y = iterate(itr, y[2])
+        y === nothing && break
+        v = op(v, f(y[1]))
     end
+    return v
 end
 
 """
@@ -56,7 +54,7 @@ end
 Like [`mapreduce`](@ref), but with guaranteed left associativity, as in [`foldl`](@ref).
 `v0` will be used exactly once.
 """
-mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
+mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr)
 
 """
     mapfoldl(f, op, itr)
@@ -67,11 +65,11 @@ Specifically, `mapfoldl(f, op, itr)` produces the same result as
 In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 """
 function mapfoldl(f, op, itr)
-    i = start(itr)
-    if done(itr, i)
+    y = iterate(itr)
+    if y === nothing
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
-    (x, i) = next(itr, i)
+    (x, i) = y
     v0 = mapreduce_first(f, op, x)
     mapfoldl_impl(f, op, v0, itr, i)
 end
@@ -553,12 +551,14 @@ julia> extrema([9,pi,4.5])
 ```
 """
 function extrema(itr)
-    s = start(itr)
-    done(itr, s) && throw(ArgumentError("collection must be non-empty"))
-    (v, s) = next(itr, s)
+    y = iterate(itr)
+    y === nothing && throw(ArgumentError("collection must be non-empty"))
+    (v, s) = y
     vmin = vmax = v
-    while !done(itr, s)
-        (x, s) = next(itr, s)
+    while true
+        y = iterate(itr, s)
+        y === nothing && break
+        (x, s) = y
         vmax = max(x, vmax)
         vmin = min(x, vmin)
     end

@@ -640,9 +640,8 @@ end
 struct SimpleCartesian
     ranges::Vector{UnitRange{Int}}
 end
-start(s::SimpleCartesian) = Int[1 for _ in 1:length(s.ranges)]
-done(s::SimpleCartesian, state) = state[end] > last(s.ranges[end])
-function next(s::SimpleCartesian, state)
+function iterate(s::SimpleCartesian, state::Vector{Int}=Int[1 for _ in 1:length(s.ranges)])
+    state[end] > last(s.ranges[end]) && return nothing
     vals = copy(state)
     any = false
     for i = 1:length(s.ranges)
@@ -673,10 +672,10 @@ function UnionSplitSignature(atypes::Vector{Any})
     UnionSplitSignature(SimpleCartesian(ranges), typs)
 end
 
-start(split::UnionSplitSignature) = start(split.it)
-done(split::UnionSplitSignature, state) = done(split.it, state)
-function next(split::UnionSplitSignature, state)
-    idxs, state = next(split.it, state)
+function iterate(split::UnionSplitSignature, state::Vector{Int}...)
+    y = iterate(split.it, state...)
+    y === nothing && return nothing
+    idxs, state = y
     sig = Any[split.typs[i][j] for (i,j) in enumerate(idxs)]
     sig, state
 end

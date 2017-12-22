@@ -250,7 +250,7 @@ function isinlineable(m::Method, src::CodeInfo, mod::Module, params::Params, bon
             isa(sig,DataType) &&
             sig == Tuple{sig.parameters[1],Any,Any,Any,Vararg{Any}})
             inlineable = true
-        elseif (name === :next || name === :done || name === :unsafe_convert ||
+        elseif (name === :iterate || name === :unsafe_convert ||
                 name === :cconvert)
             cost_threshold *= 4
         end

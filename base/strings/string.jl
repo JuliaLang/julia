@@ -171,7 +171,8 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
-@propagate_inbounds function next(s::String, i::Int)
+@propagate_inbounds function iterate(s::String, i::Int=firstindex(s))
+    i > ncodeunits(s) && return nothing
     b = codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1

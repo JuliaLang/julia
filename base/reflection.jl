@@ -687,9 +687,7 @@ end
 
 length(m::MethodList) = length(m.ms)
 isempty(m::MethodList) = isempty(m.ms)
-start(m::MethodList) = start(m.ms)
-done(m::MethodList, s) = done(m.ms, s)
-next(m::MethodList, s) = next(m.ms, s)
+iterate(m::MethodList, s...) = iterate(m.ms, s...)
 eltype(::Type{MethodList}) = Method
 
 function MethodList(mt::Core.MethodTable)
