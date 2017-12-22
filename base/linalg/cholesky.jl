@@ -445,7 +445,7 @@ end
 
 function ldiv!(C::CholeskyPivoted{T}, B::StridedVector{T}) where T<:BlasFloat
     chkfullrank(C)
-    ipermute!(LAPACK.potrs!(C.uplo, C.factors, permute!(B, C.piv)), C.piv)
+    invpermute!(LAPACK.potrs!(C.uplo, C.factors, permute!(B, C.piv)), C.piv)
 end
 function ldiv!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
     chkfullrank(C)
@@ -455,7 +455,7 @@ function ldiv!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
     end
     LAPACK.potrs!(C.uplo, C.factors, B)
     for i=1:size(B, 2)
-        ipermute!(view(B, 1:n, i), C.piv)
+        invpermute!(view(B, 1:n, i), C.piv)
     end
     B
 end

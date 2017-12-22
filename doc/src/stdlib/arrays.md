@@ -169,7 +169,7 @@ Base.Random.randperm!
 Base.invperm
 Base.isperm
 Base.permute!(::Any, ::AbstractVector)
-Base.ipermute!
+Base.invpermute!
 Base.Random.randcycle
 Base.Random.randcycle!
 Base.Random.shuffle

@@ -101,7 +101,7 @@ to verify that `p` is a permutation.
 To return a new permutation, use `v[p]`. Note that this is generally faster than
 `permute!(v,p)` for large vectors.
 
-See also [`ipermute!`](@ref).
+See also [`invpermute!`](@ref).
 
 # Examples
 ```jldoctest
@@ -121,7 +121,7 @@ julia> A
 """
 permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
 
-function ipermute!!(a, p::AbstractVector{<:Integer})
+function invpermute!!(a, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(a)
@@ -145,7 +145,7 @@ function ipermute!!(a, p::AbstractVector{<:Integer})
 end
 
 """
-    ipermute!(v, p)
+    invpermute!(v, p)
 
 Like [`permute!`](@ref), but the inverse of the given permutation is applied.
 
@@ -155,7 +155,7 @@ julia> A = [1, 1, 3, 4];
 
 julia> perm = [2, 4, 3, 1];
 
-julia> ipermute!(A, perm);
+julia> invpermute!(A, perm);
 
 julia> A
 4-element Array{Int64,1}:
@@ -165,7 +165,7 @@ julia> A
  1
 ```
 """
-ipermute!(a, p::AbstractVector) = ipermute!!(a, copymutable(p))
+invpermute!(a, p::AbstractVector) = invpermute!!(a, copymutable(p))
 
 """
     invperm(v)

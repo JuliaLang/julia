@@ -880,6 +880,8 @@ Deprecated or removed
     (i.e. `Void <: T`). `isnull(x)` can be replaced with `x === nothing`
     and `unsafe_get`/`get` can be dropped or replaced with `coalesce`.
 
+  * `ipermute!` has been deprecated in favor of `invpermute!` ([#25168]).
+
   * `CartesianRange` has been renamed `CartesianIndices` ([#24715]).
 
   * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianIndices` and `LinearIndices` ([#24715]).
