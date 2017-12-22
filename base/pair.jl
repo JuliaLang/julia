@@ -39,7 +39,7 @@ done(p::Pair, i) = i>2
 next(p::Pair, i) = (getfield(p,i), i+1)
 eltype(p::Pair{A,B}) where {A,B} = Union{A,B}
 
-indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
+indexed_iterate(p::Pair, i::Int, state=start(p)) = (getfield(p,i), i+1)
 
 hash(p::Pair, h::UInt) = hash(p.second, hash(p.first, h))
 

@@ -2047,13 +2047,12 @@
                        (st  (gensy)))
                   `(block
                     ,@ini
-                    (= ,st (call (top start) ,xx))
                     ,.(map (lambda (i lhs)
                              (expand-forms
                               (lower-tuple-assignment
                                (list lhs st)
-                               `(call (top indexed_next)
-                                      ,xx ,(+ i 1) ,st))))
+                               `(call (top indexed_iterate)
+                                      ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st))))))
                            (iota (length lhss))
                            lhss)
                     (unnecessary ,xx))))))
@@ -2467,32 +2466,25 @@
         (ri        (gensy))
         (oneresult (make-ssavalue))
         (lengths   (map (lambda (x) (make-ssavalue)) ranges))
-        (states    (map (lambda (x) (gensy)) ranges))
         (rv        (map (lambda (x) (make-ssavalue)) ranges)))
 
     ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges rv states lengths)
+    (define (construct-loops ranges rv lengths)
       (if (null? ranges)
           `(block (= ,oneresult ,expr)
                   (inbounds true)
                   (call (top setindex!) ,result ,oneresult ,ri)
                   (inbounds pop)
                   (= ,ri (call (top add_int) ,ri 1)))
-          `(block
-            (= ,(car states) (call (top start) ,(car rv)))
-            (while (call (top not_int) (call (core typeassert) (call (top done) ,(car rv) ,(car states)) (core Bool)))
-                   (scope-block
-                   (block
-                    (= (tuple ,(cadr (car ranges)) ,(car states))
-                       (call (top next) ,(car rv) ,(car states)))
-                    ;; *** either this or force all for loop vars local
-                    ,.(map (lambda (r) `(local ,r))
-                           (lhs-vars (cadr (car ranges))))
-                    ,(construct-loops (cdr ranges) (cdr rv) (cdr states) (cdr lengths))))))))
+          (expand-for 'while (cadr (car ranges)) (car rv)
+            `(block
+                ;; *** either this or force all for loop vars local
+                ,.(map (lambda (r) `(local ,r))
+                  (lhs-vars (cadr (car ranges))))
+                ,(construct-loops (cdr ranges) (cdr rv) (cdr lengths))))))
 
     ;; Evaluate the comprehension
     `(block
-      ,.(map (lambda (v) `(local ,v)) states)
       (local ,ri)
       ,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
       ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
@@ -2500,7 +2492,7 @@
        (block
         (= ,result (call (curly Array ,atype ,(length lengths)) uninitialized ,@lengths))
         (= ,ri 1)
-        ,(construct-loops (reverse ranges) (reverse rv) states (reverse lengths))
+        ,(construct-loops (reverse ranges) (reverse rv) (reverse lengths))
         ,result)))))
 
 (define (lhs-vars e)

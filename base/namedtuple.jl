@@ -51,7 +51,7 @@ next(t::NamedTuple, iter) = (getfield(t, iter), iter + 1)
 endof(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
 getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
-indexed_next(t::NamedTuple, i::Int, state) = (getfield(t, i), i+1)
+indexed_iterate(t::NamedTuple, i::Int, state=start(t)) = (getfield(t, i), i+1)
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
 
