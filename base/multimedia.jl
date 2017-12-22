@@ -15,7 +15,7 @@ export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay
 # struct MIME{mime} end
 # macro MIME_str(s)
 import Base: MIME, @MIME_str
-import Base64
+#import Base64
 import Base: show, print, string, convert
 MIME(s) = MIME{Symbol(s)}()
 show(io::IO, ::MIME{mime}) where {mime} = print(io, "MIME type ", string(mime))

@@ -355,7 +355,7 @@ end
 @test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) == Int8
 @test length(flatten(zip(1:3, 4:6))) == 6
 @test length(flatten(1:6)) == 6
-@test_throws ArgumentError collect(flatten(Any[]))
+@test collect(flatten(Any[])) == Any[]
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
 

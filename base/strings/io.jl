@@ -210,29 +210,26 @@ julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
 """
 function join(io::IO, strings, delim, last)
-    i = start(strings)
-    if done(strings,i)
-        return
-    end
-    str, i = next(strings,i)
+    y = iterate(strings)
+    y == nothing && return
+    str, i = y
     print(io, str)
-    is_done = done(strings,i)
-    while !is_done
-        str, i = next(strings,i)
-        is_done = done(strings,i)
-        print(io, is_done ? last : delim)
+    y = iterate(strings)
+    while y !== nothing
+        str, i = y
+        y = iterate(strings,i)
+        print(io, y == nothing ? last : delim)
         print(io, str)
     end
 end
 
 function join(io::IO, strings, delim)
-    i = start(strings)
-    is_done = done(strings,i)
-    while !is_done
-        str, i = next(strings,i)
-        is_done = done(strings,i)
+    y = iterate(strings)
+    while y !== nothing
+        str, i = y
+        y = iterate(strings, i)
         print(io, str)
-        if !is_done
+        if y !== nothing
             print(io, delim)
         end
     end

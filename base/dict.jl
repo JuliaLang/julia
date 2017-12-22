@@ -143,7 +143,7 @@ function Dict(kv)
     try
         dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
     catch e
-        if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
+        if (!applicable(start, kv) && !applicable(iterate, kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
         else
             rethrow(e)
@@ -168,14 +168,10 @@ end
 
 # this is a special case due to (1) allowing both Pairs and Tuples as elements,
 # and (2) Pair being invariant. a bit annoying.
-function grow_to!(dest::AbstractDict, itr)
-    out = grow_to!(empty(dest, Union{}, Union{}), itr, start(itr))
-    return isempty(out) ? dest : out
-end
-
-function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
-    while !done(itr, st)
-        (k,v), st = next(itr, st)
+function grow_to!(dest::AbstractDict{K,V}, itr, st...) where V where K
+    y = iterate(itr, st...)
+    while y !== nothing
+        (k,v), st = y
         if isa(k,K) && isa(v,V)
             dest[k] = v
         else
@@ -184,6 +180,7 @@ function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
             new[k] = v
             return grow_to!(new, itr, st)
         end
+        y = iterate(itr, st)
     end
     return dest
 end

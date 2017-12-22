@@ -139,7 +139,7 @@ See also: [`getindex`](@ref), [`start`](@ref), [`done`](@ref),
 ## basic generic definitions ##
 
 start(s::AbstractString) = 1
-done(s::AbstractString, i::Integer) = i > ncodeunits(s)
+done(s::AbstractString, i::Integer=1) = i > ncodeunits(s)
 eltype(::Type{<:AbstractString}) = Char
 sizeof(s::AbstractString) = ncodeunits(s) * sizeof(codeunit(s))
 endof(s::AbstractString) = thisind(s, ncodeunits(s))

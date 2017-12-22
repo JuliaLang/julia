@@ -351,9 +351,10 @@ size(r::AbstractRange) = (length(r),)
 
 isempty(r::StepRange) =
     (r.start != r.stop) & ((r.step > zero(r.step)) != (r.stop > r.start))
-isempty(r::AbstractUnitRange) = first(r) > last(r)
-isempty(r::StepRangeLen) = length(r) == 0
-isempty(r::LinSpace) = length(r) == 0
+done(r::StepRange) = isempty(r)
+done(r::AbstractUnitRange) = first(r) > last(r)
+done(r::StepRangeLen) = length(r) == 0
+done(r::LinSpace) = length(r) == 0
 
 """
     step(r)

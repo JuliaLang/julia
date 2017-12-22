@@ -600,7 +600,7 @@ end
 _oidd_nextind(a, i) = reinterpret(Int,ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
 
 start(t::ObjectIdDict) = _oidd_nextind(t.ht, 0)
-done(t::ObjectIdDict, i) = (i == -1)
+done(t::ObjectIdDict, i=start(t)) = (i == -1)
 next(t::ObjectIdDict, i) = (Pair{Any,Any}(t.ht[i+1],t.ht[i+2]), _oidd_nextind(t.ht, i+2))
 
 function length(d::ObjectIdDict)

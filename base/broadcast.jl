@@ -492,8 +492,10 @@ end
         @nexprs $nargs i->(A_i = As[i])
         @nexprs $nargs i->(keep_i = keeps[i])
         @nexprs $nargs i->(Idefault_i = Idefaults[i])
-        while !done(iter, st)
-            I, st = next(iter, st)
+        while true
+            x = iterate(iter, st)
+            x == nothing && break
+            I, st = x
             # reverse-broadcast the indices
             @nexprs $nargs i->(I_i = newindex(I, keep_i, Idefault_i))
             # extract array values
@@ -644,8 +646,7 @@ function broadcast_nonleaf(f, s::NonleafHandlingTypes, ::Type{ElType}, shape::In
         return Base.similar(Array{ElType}, shape)
     end
     keeps, Idefaults = map_newindexer(shape, As)
-    st = start(iter)
-    I, st = next(iter, st)
+    I, st = iterate(iter)
     val = f([ _broadcast_getindex(As[i], newindex(I, keeps[i], Idefaults[i])) for i=1:nargs ]...)
     if val isa Bool
         dest = Base.similar(BitArray, shape)
@@ -791,11 +792,11 @@ See [`broadcast_getindex`](@ref) for examples of the treatment of `inds`.
             X = x
             @nexprs $N d->(shapelen_d = length(shape_d))
             @ncall $N Base.setindex_shape_check X shapelen
-            Xstate = start(X)
+            Xit = iterate(X)
             @inbounds @nloops $N i d->shape_d d->(@nexprs $N k->(j_d_k = Ibcast_d_k ? 1 : i_d)) begin
                 @nexprs $N k->(J_k = @nref $N I_k d->j_d_k)
-                x_el, Xstate = next(X, Xstate)
-                (@nref $N A J) = x_el
+                (@nref $N A J) = Xit[1]
+                Xit = iterate(X, Xit[2])
             end
         end
         A

@@ -195,9 +195,9 @@ julia> first([1; 2; 3; 4])
 ```
 """
 function first(itr)
-    state = start(itr)
-    done(itr, state) && throw(ArgumentError("collection must be non-empty"))
-    next(itr, state)[1]
+    x = iterate(itr)
+    x === nothing && throw(ArgumentError("collection must be non-empty"))
+    x[1]
 end
 
 """
@@ -600,10 +600,12 @@ emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
 
 function copyto!(dest::AbstractArray, src)
     destiter = eachindex(dest)
-    state = start(destiter)
+    y = iterate(destiter)
     for x in src
-        i, state = next(destiter, state)
-        dest[i] = x
+        y == nothing &&
+            throw(ArgumentError(string("source has fewer elements than required")))
+        dest[y[1]] = x
+        y = iterate(destiter, y[2])
     end
     return dest
 end
@@ -622,25 +624,24 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer)
     if (sstart < 1)
         throw(ArgumentError(string("source start offset (",sstart,") is < 1")))
     end
-    st = start(src)
+    y = iterate(src)
     for j = 1:(sstart-1)
-        if done(src, st)
+        if y == nothing
             throw(ArgumentError(string("source has fewer elements than required, ",
                                        "expected at least ",sstart,", got ",j-1)))
         end
-        _, st = next(src, st)
+        y = iterate(src, y[2])
     end
-    dn = done(src, st)
-    if dn
+    if y == nothing
         throw(ArgumentError(string("source has fewer elements than required, ",
                                       "expected at least ",sstart,", got ",sstart-1)))
     end
     i = Int(dstart)
-    while !dn
-        val, st = next(src, st)
+    while y != nothing
+        val, st = y
         dest[i] = val
         i += 1
-        dn = done(src, st)
+        y = iterate(src, st)
     end
     return dest
 end
@@ -655,17 +656,17 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
         sstart < 1 && throw(ArgumentError(string("source start offset (",sstart,") is < 1")))
         throw(BoundsError(dest, dstart:dmax))
     end
-    st = start(src)
+    y = iterate(src)
     for j = 1:(sstart-1)
-        if done(src, st)
+        if y == nothing
             throw(ArgumentError(string("source has fewer elements than required, ",
                                        "expected at least ",sstart,", got ",j-1)))
         end
-        _, st = next(src, st)
+        y = iterate(src)
     end
     i = Int(dstart)
-    while i <= dmax && !done(src, st)
-        val, st = next(src, st)
+    while i <= dmax && y !== nothing
+        val, st = y
         @inbounds dest[i] = val
         i += 1
     end
@@ -1965,12 +1966,14 @@ function hash(a::AbstractArray{T}, h::UInt) where T
     h += hashaa_seed
     h += hash(size(a))
 
-    state = start(a)
-    done(a, state) && return h
-    x1, state = next(a, state)
-    done(a, state) && return hash(x1, h)
-    x2, state = next(a, state)
-    done(a, state) && return hash(x2, hash(x1, h))
+    y1 = iterate(a)
+    y1 == nothing && return h
+    y2 = iterate(a, y1[2])
+    y2 == nothing && return hash(y1[1], h)
+    y = iterate(a, y2[2])
+    y == nothing && return hash(y2[1], hash(y1[1], h))
+    x1 = y1[1]
+    x2, state = y
 
     # Check whether the array is equal to a range, and hash the elements
     # at the beginning of the array as such as long as they match this assumption
@@ -1979,7 +1982,8 @@ function hash(a::AbstractArray{T}, h::UInt) where T
     if isa(a, AbstractVector) && applicable(-, x2, x1)
         n = 1
         local step, laststep, laststate
-        while true
+        while y !== nothing
+            x2, state = y
             # If overflow happens with entries of the same type, a cannot be equal
             # to a range with more than two elements because more extreme values
             # cannot be represented. We must still hash the two first values as a
@@ -2002,8 +2006,7 @@ function hash(a::AbstractArray{T}, h::UInt) where T
             x1 = x2
             laststep = step
             laststate = state
-            done(a, state) && break
-            x2, state = next(a, state)
+            y = iterate(a, state)
         end
 
         h = hash(first(a), h)
@@ -2012,34 +2015,36 @@ function hash(a::AbstractArray{T}, h::UInt) where T
         if n < 2
             h = hash(2, h)
             h = hash(x2, h)
-            done(a, state) && return h
+            y = iterate(a, y[2])
+            y == nothing && return h
             x1 = x2
-            x2, state = next(a, state)
+            x2, state = y
         else
             h = hash(n, h)
             h = hash(x1, h)
-            done(a, laststate) && return h
+            y == nothing && return h
         end
     end
 
     # Hash elements which do not correspond to a range (if any)
-    while true
+    while y !== nothing
+        x2, state = y
         if isequal(x2, x1)
             # For repeated elements, use run length encoding
             # This allows efficient hashing of sparse arrays
             runlength = 2
-            while !done(a, state)
-                x2, state = next(a, state)
+            while y !== nothing
+                x2, state = y
                 isequal(x1, x2) || break
                 runlength += 1
+                y = iterate(a, state)
             end
             h += hashrle_seed
             h = hash(runlength, h)
         end
         h = hash(x1, h)
-        done(a, state) && break
         x1 = x2
-        x2, state = next(a, state)
+        y = iterate(a, state)
     end
     !isequal(x2, x1) && (h = hash(x2, h))
     return h

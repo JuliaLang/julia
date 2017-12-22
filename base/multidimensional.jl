@@ -4,7 +4,7 @@
 module IteratorsMD
     import Base: eltype, length, size, start, done, next, first, last, in, getindex,
                  setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
-                 ndims, iteratorsize, convert, show
+                 ndims, iteratorsize, convert, show, iterate
 
     import Base: +, -, *
     import Base: simd_outer_range, simd_inner_length, simd_index
@@ -283,6 +283,7 @@ module IteratorsMD
     @inline function next(iter::CartesianIndices, state)
         state, CartesianIndex(inc(state.I, first(iter).I, last(iter).I))
     end
+
     # increment & carry
     @inline inc(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
     @inline inc(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int}) = (state[1]+1,)
@@ -293,7 +294,7 @@ module IteratorsMD
         newtail = inc(tail(state), tail(start), tail(stop))
         (start[1], newtail...)
     end
-    @inline done(iter::CartesianIndices, state) = state.I[end] > last(iter.indices[end])
+    @inline done(iter::CartesianIndices, state=start(iter)) = state.I[end] > last(iter.indices[end])
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
     start(iter::CartesianIndices{0}) = false
@@ -362,6 +363,11 @@ module IteratorsMD
     @inline function next(r::Reverse{<:CartesianIndices}, state)
         state, CartesianIndex(dec(state.I, last(r.itr).I, first(r.itr).I))
     end
+    @inline function iterate(r::Reverse{<:CartesianIndices}, state=start(r))
+        done(r, state) && return nothing
+        next(r, state)
+    end
+
     # decrement & carry
     @inline dec(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
     @inline dec(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int}) = (state[1]-1,)
@@ -374,9 +380,8 @@ module IteratorsMD
     end
     @inline done(r::Reverse{<:CartesianIndices}, state) = state.I[end] < first(r.itr.indices[end])
     # 0-d cartesian ranges are special-cased to iterate once and only once
-    start(iter::Reverse{<:CartesianIndices{0}}) = false
-    next(iter::Reverse{<:CartesianIndices{0}}, state) = CartesianIndex(), true
-    done(iter::Reverse{<:CartesianIndices{0}}, state) = state
+    done(iter::Reverse{<:CartesianIndices{0}}, state=false) = false
+    iterate(iter::Reverse{<:CartesianIndices{0}}, state=false) = state ? nothing : (CartesianIndex(), true)
 
     """
         LinearIndices(inds::CartesianIndices) -> R
@@ -647,10 +652,10 @@ end
     quote
         @_inline_meta
         D = eachindex(dest)
-        Ds = start(D)
+        Dy = iterate(D)
         @inbounds @nloops $N j d->I[d] begin
-            d, Ds = next(D, Ds)
-            dest[d] = @ncall $N getindex src j
+            dest[Dy[1]] = @ncall $N getindex src j
+            Dy = iterate(D, Dy[2])
         end
         return dest
     end
@@ -675,10 +680,10 @@ _iterable(v) = Iterators.repeated(v)
         @nexprs $N d->(I_d = I[d])
         idxlens = @ncall $N index_lengths I
         @ncall $N setindex_shape_check X (d->idxlens[d])
-        Xs = start(X)
+        Xy = iterate(X)
         @inbounds @nloops $N i d->I_d begin
-            v, Xs = next(X, Xs)
-            @ncall $N setindex! A v i
+            @ncall $N setindex! A Xy[1] i
+            Xy = iterate(X, Xy[2])
         end
         A
     end

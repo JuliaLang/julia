@@ -737,7 +737,7 @@ julia> isempty([1 2 3])
 false
 ```
 """
-isempty(itr) = done(itr, start(itr))
+isempty(itr) = done(itr)
 
 """
     values(iterator)
@@ -793,3 +793,4 @@ function iterate(x, state)
     return next(x, state)
 end
 iterate(x) = (@_inline_meta; iterate(x, start(x)))
+#done(x) = done(x, start(x))
