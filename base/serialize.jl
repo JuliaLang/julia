@@ -368,17 +368,15 @@ end
 
 # TODO: make this bidirectional, so objects can be sent back via the same key
 const object_numbers = WeakKeyDict()
-const obj_number_salt = Ref(0)
-function object_number(@nospecialize(l))
+const obj_number_salt = Ref{UInt64}(0)
+function object_number(s::AbstractSerializer, @nospecialize(l))
     global obj_number_salt, object_numbers
     if haskey(object_numbers, l)
         return object_numbers[l]
     end
-    # a hash function that always gives the same number to the same
-    # object on the same machine, and is unique over all machines.
-    ln = obj_number_salt[]+(UInt64(myid())<<44)
-    obj_number_salt[] += 1
+    ln = obj_number_salt[]
     object_numbers[l] = ln
+    obj_number_salt[] += 1
     return ln::UInt64
 end
 
@@ -398,7 +396,7 @@ end
 function serialize(s::AbstractSerializer, meth::Method)
     serialize_cycle(s, meth) && return
     writetag(s.io, METHOD_TAG)
-    write(s.io, object_number(meth))
+    write(s.io, object_number(s, meth))
     serialize(s, meth.module)
     serialize(s, meth.name)
     serialize(s, meth.file)
@@ -476,7 +474,7 @@ end
 function serialize(s::AbstractSerializer, t::TypeName)
     serialize_cycle(s, t) && return
     writetag(s.io, TYPENAME_TAG)
-    write(s.io, object_number(t))
+    write(s.io, object_number(s, t))
     serialize_typename(s, t)
 end
 

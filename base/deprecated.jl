@@ -1286,6 +1286,8 @@ export conv, conv2, deconv, filt, filt!, xcorr
 @deprecate_moved interrupt "Distributed" true true
 @deprecate_moved launch "Distributed" true true
 @deprecate_moved manage "Distributed" true true
+@deprecate_moved myid "Distributed" true true
+@deprecate_moved nprocs "Distributed" true true
 @deprecate_moved nworkers "Distributed" true true
 @deprecate_moved pmap "Distributed" true true
 @deprecate_moved procs "Distributed" true true

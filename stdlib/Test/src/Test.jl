@@ -23,7 +23,9 @@ export @testset
 export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray
-export guardsrand
+export guardsrand, TestSetException
+
+import Distributed: myid
 
 #-----------------------------------------------------------------------
 
