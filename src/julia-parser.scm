@@ -2073,7 +2073,7 @@
   (string.join (string-split s a) b))
 
 (define (ends-interpolated-atom? c)
-  (or (opchar? c) (never-identifier-char? c)))
+  (or (eof-object? c) (opchar? c) (never-identifier-char? c)))
 
 (define (parse-interpolate s)
   (let* ((p (ts:port s))
