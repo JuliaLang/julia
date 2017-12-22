@@ -2400,6 +2400,9 @@ end
     @test typeof(widemul(UInt64(1),Int64(1))) == Int128
     @test typeof(widemul(Int128(1),UInt128(1))) == BigInt
     @test typeof(widemul(UInt128(1),Int128(1))) == BigInt
+
+    # Check that the widen() fallback doesn't trigger a StackOverflowError
+    @test_throws MethodError widen(String)
 end
 @testset ".//" begin
     @test [1,2,3] // 4 == [1//4, 2//4, 3//4]
