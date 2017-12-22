@@ -1255,8 +1255,13 @@ deprecate(Base, :DSP, 2)
 using .DSP
 export conv, conv2, deconv, filt, filt!, xcorr
 
+@deprecate_binding Test nothing true ", run `using Test` instead"
+
 @deprecate_moved SharedArray "SharedArrays" true true
 
+@deprecate_binding Mmap nothing true ", run `using Mmap` instead"
+
+@deprecate_binding Profile nothing true ", run `using Profile` instead"
 @eval @deprecate_moved $(Symbol("@profile")) "Profile" true true
 
 @deprecate_moved base64encode "Base64" true true
@@ -1277,6 +1282,7 @@ export conv, conv2, deconv, filt, filt!, xcorr
 @eval @deprecate_moved $(Symbol("@everywhere")) "Distributed" true true
 @eval @deprecate_moved $(Symbol("@parallel")) "Distributed" true true
 
+@deprecate_binding Distributed nothing true ", run `using Distributed` instead"
 @deprecate_moved addprocs "Distributed" true true
 @deprecate_moved CachingPool "Distributed" true true
 @deprecate_moved clear! "Distributed" true true
@@ -1308,6 +1314,7 @@ export conv, conv2, deconv, filt, filt!, xcorr
 
 @deprecate_moved crc32c "CRC32c" true true
 
+@deprecate_binding Dates nothing true ", run `using Dates` instead"
 @deprecate_moved DateTime "Dates" true true
 @deprecate_moved DateFormat "Dates" true true
 @eval @deprecate_moved $(Symbol("@dateformat_str")) "Dates" true true

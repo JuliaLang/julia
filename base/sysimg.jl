@@ -487,14 +487,6 @@ using Base
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
-# @eval Base begin
-#     @deprecate_binding Test root_module(:Test) true ", run `using Test` instead"
-#     @deprecate_binding Mmap root_module(:Mmap) true ", run `using Mmap` instead"
-#     @deprecate_binding Profile root_module(:Profile) true ", run `using Profile` instead"
-#     @deprecate_binding Dates root_module(:Dates) true ", run `using Dates` instead"
-#     @deprecate_binding Distributed root_module(:Distributed) true ", run `using Distributed` instead"
-# end
-
 empty!(LOAD_PATH)
 
 Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")
