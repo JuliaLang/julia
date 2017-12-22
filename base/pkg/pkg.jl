@@ -85,6 +85,9 @@ custom METADATA setup.
 init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Dir.init(meta,branch)
 
 function __init__()
+    if haskey(ENV, "JULIA_SKIP_PKGCACHE") && ENV["JULIA_SKIP_PKGCACHE"] == "1"
+	return
+    end
     vers = "v$(VERSION.major).$(VERSION.minor)"
     pushfirst!(Base.LOAD_CACHE_PATH, abspath(Dir._pkgroot(), "lib", vers))
 end

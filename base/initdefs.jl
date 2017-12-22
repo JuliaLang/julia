@@ -66,7 +66,7 @@ function init_load_path(BINDIR = Sys.BINDIR)
     end
     push!(LOAD_PATH, abspath(BINDIR, "..", "local", "share", "julia", "site", vers))
     push!(LOAD_PATH, abspath(BINDIR, "..", "share", "julia", "site", vers))
-    #push!(LOAD_CACHE_PATH, abspath(BINDIR, "..", "lib", "julia")) #TODO: add a builtin location?
+    push!(LOAD_CACHE_PATH, abspath(BINDIR, "..", "share", "julia", "lib", vers))
 end
 
 function early_init()

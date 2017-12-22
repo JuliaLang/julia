@@ -49,6 +49,10 @@ $(foreach link,base $(JULIAHOME)/test,$(eval $(call symlink_target,$(link),$(bui
 build_defaultpkgdir = $(build_datarootdir)/julia/site/$(shell echo $(VERSDIR))
 $(eval $(call symlink_target,$(JULIAHOME)/stdlib,$(build_datarootdir)/julia/site,$(shell echo $(VERSDIR))))
 
+build_defaultpkgcachedir = $(build_datarootdir)/julia/lib/$(shell echo $(VERSDIR))
+$(build_defaultpkgcachedir): | $(DIRS) $(build_defaultpkgdir)
+	mkdir -p $@
+
 julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
 
@@ -103,7 +107,7 @@ julia-sysimg-release : julia-inference julia-ui-release
 julia-sysimg-debug : julia-inference julia-ui-debug
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) JULIA_BUILD_MODE=debug
 
-julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest julia-base-cache
+julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest julia-base-cache stdlibcache
 
 debug release : % : julia-%
 
@@ -209,7 +213,7 @@ $(build_private_libdir)/inference.ji: $(CORE_SRCS) | $(build_private_libdir)
 RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/")
 COMMA:=,
 define sysimg_builder
-$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS)
+$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS)
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
 	if $$(call spawn,$3) $2 -C "$$(JULIA_CPU_TARGET)" --output-o $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
 		--startup-file=no --warn-overwrite=yes --sysimage $$(call cygpath_w,$$<) sysimg.jl $$(RELBUILDROOT); then \
@@ -221,6 +225,16 @@ $$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIA
 endef
 $(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
 $(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
+
+
+$(build_defaultpkgcachedir)/cache.compiled: $(build_defaultpkgdir) $(build_defaultpkgcachedir) $(STDLIB_SRCS) julia-sysimg-$(JULIA_BUILD_MODE) | julia-ui-$(JULIA_BUILD_MODE)
+	env JULIA_SKIP_PKGCACHE=1 $(JULIA_EXECUTABLE) contrib/stdlib_cache.jl $< $(word 2,$^)
+	echo 1 > $@
+
+stdlibcache: $(build_defaultpkgcachedir)/cache.compiled
+CLEAN_TARGETS += clean-stdlibcache
+clean-stdlibcache::
+	@-rm -fr $(build_defaultpkgcachedir)
 
 $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_depsbindir)
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
