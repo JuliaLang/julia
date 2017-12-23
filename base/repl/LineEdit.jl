@@ -214,8 +214,8 @@ const COMMAND_GROUPS =
          :replacement => [:edit_yank_pop, :edit_transpose_chars, :edit_transpose_words,
                           :edit_upper_case, :edit_lower_case, :edit_title_case, :edit_indent,
                           :edit_transpose_lines_up!, :edit_transpose_lines_down!],
-         :copy        => [:edit_copy_region])
-         :misc        => [:complete_line, :setmark, :edit_undo!, :edit_redo!],
+         :copy        => [:edit_copy_region],
+         :misc        => [:complete_line, :setmark, :edit_undo!, :edit_redo!])
 
 const COMMAND_GROUP = Dict(command=>group for (group, commands) in COMMAND_GROUPS for command in commands)
 command_group(command::Symbol) = get(COMMAND_GROUP, command, :nogroup)
