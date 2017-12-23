@@ -584,6 +584,12 @@ module Sys
     else
         import Base.Sys: isapple, isbsd, islinux, isunix, iswindows
     end
+
+    @static if VERSION < v"0.7.0-DEV.3073"
+        const BINDIR = JULIA_HOME
+    else
+        const BINDIR = Base.Sys.BINDIR
+    end
 end
 
 @static if VERSION < v"0.7.0-DEV.892"

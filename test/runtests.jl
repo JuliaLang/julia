@@ -1020,6 +1020,13 @@ end
 @test ComplexF32 === Complex{Float32}
 @test ComplexF64 === Complex{Float64}
 
+# 0.7.0-DEV.3073
+if VERSION < v"0.7.0-DEV.3073"
+    @test Compat.Sys.BINDIR == JULIA_HOME
+else
+    @test Compat.Sys.BINDIR == Sys.BINDIR
+end
+
 # 0.7.0-DEV.2915
 module Test25021
     using Compat
