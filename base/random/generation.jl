@@ -12,7 +12,6 @@
 # Note that the 1) is automated when the sampler is not intended to carry information,
 # i.e. the default fall-backs SamplerType and SamplerTrivial are used.
 
-
 ## from types: rand(::Type, [dims...])
 
 ### random floats
@@ -101,6 +100,8 @@ rand(rng::AbstractRNG, sp::SamplerBigFloat{T}) where {T<:FloatInterval{BigFloat}
 
 ### random integers
 
+#### UniformBits
+
 rand(r::AbstractRNG, ::SamplerTrivial{UInt10Raw{UInt16}}) = rand(r, UInt16)
 rand(r::AbstractRNG, ::SamplerTrivial{UInt23Raw{UInt32}}) = rand(r, UInt32)
 
@@ -111,7 +112,7 @@ _rand52(r::AbstractRNG, ::Type{Float64}) = reinterpret(UInt64, rand(r, Close1Ope
 _rand52(r::AbstractRNG, ::Type{UInt64})  = rand(r, UInt64)
 
 rand(r::AbstractRNG, ::SamplerTrivial{UInt104Raw{UInt128}}) =
-    rand(r, UInt52Raw(UInt128)) << 52 ⊻ rand_inbounds(r, UInt52Raw(UInt128))
+    rand(r, UInt52Raw(UInt128)) << 52 ⊻ rand(r, UInt52Raw(UInt128))
 
 rand(r::AbstractRNG, ::SamplerTrivial{UInt10{UInt16}})   = rand(r, UInt10Raw())  & 0x03ff
 rand(r::AbstractRNG, ::SamplerTrivial{UInt23{UInt32}})   = rand(r, UInt23Raw())  & 0x007fffff
@@ -120,6 +121,32 @@ rand(r::AbstractRNG, ::SamplerTrivial{UInt104{UInt128}}) = rand(r, UInt104Raw())
 
 rand(r::AbstractRNG, sp::SamplerTrivial{<:UniformBits{T}}) where {T} =
         rand(r, uint_default(sp[])) % T
+
+#### BitInteger
+
+# rand_generic methods are intended to help RNG implementors with common operations
+# we don't call them simply `rand` as this can easily contribute to create
+# amibuities with user-side methods (forcing the user to resort to @eval)
+
+rand_generic(r::AbstractRNG, T::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}) =
+    rand(r, UInt52Raw()) % T[]
+
+rand_generic(r::AbstractRNG, ::Type{UInt64}) =
+    rand(r, UInt52Raw()) << 32 ⊻ rand(r, UInt52Raw())
+
+rand_generic(r::AbstractRNG, ::Type{UInt128}) = _rand128(r, rng_native_52(r))
+
+_rand128(r::AbstractRNG, ::Type{UInt64}) =
+    ((rand(r, UInt64) % UInt128) << 64) ⊻ rand(r, UInt64)
+
+function _rand128(r::AbstractRNG, ::Type{Float64})
+    xor(rand(r, UInt52Raw(UInt128))  << 96,
+        rand(r, UInt52Raw(UInt128))  << 48,
+        rand(r, UInt52Raw(UInt128)))
+end
+
+rand_generic(r::AbstractRNG, ::Type{Int128}) = rand(r, UInt128) % Int128
+rand_generic(r::AbstractRNG, ::Type{Int64})  = rand(r, UInt64) % Int64
 
 ### random complex numbers
 
@@ -149,25 +176,25 @@ end
 
 #### helper functions
 
-uint_sup(::Type{<:Union{Bool,BitInteger}}) = UInt32
+uint_sup(::Type{<:Base.BitInteger32}) = UInt32
 uint_sup(::Type{<:Union{Int64,UInt64}}) = UInt64
 uint_sup(::Type{<:Union{Int128,UInt128}}) = UInt128
 
 #### Fast
 
-struct SamplerRangeFast{U<:BitUnsigned,T<:Union{BitInteger,Bool}} <: Sampler
+struct SamplerRangeFast{U<:BitUnsigned,T<:BitInteger} <: Sampler
     a::T      # first element of the range
     bw::UInt  # bit width
     m::U      # range length - 1
     mask::U   # mask generated values before threshold rejection
 end
 
-SamplerRangeFast(r::AbstractUnitRange{T}) where T<:Union{Bool,BitInteger} =
+SamplerRangeFast(r::AbstractUnitRange{T}) where T<:BitInteger =
     SamplerRangeFast(r, uint_sup(T))
 
 function SamplerRangeFast(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
     isempty(r) && throw(ArgumentError("range must be non-empty"))
-    m = (last(r) - first(r)) % U
+    m = (last(r) - first(r)) % unsigned(T) % U # % unsigned(T) to not propagate sign bit
     bw = (sizeof(U) << 3 - leading_zeros(m)) % UInt # bit-width
     mask = (1 % U << bw) - (1 % U)
     SamplerRangeFast{U,T}(first(r), bw, m, mask)
@@ -175,7 +202,8 @@ end
 
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt32,T}) where T
     a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
-    x = rand(rng, LessThan(m, Masked(mask, uniform(UInt32))))
+    # below, we don't use UInt32, to get reproducible values, whether Int is Int64 or Int32
+    x = rand(rng, LessThan(m, Masked(mask, UInt52Raw(UInt32))))
     (x + a % UInt32) % T
 end
 
@@ -215,7 +243,7 @@ maxmultiple(k::T, sup::T=zero(T)) where {T<:Unsigned} =
 unsafe_maxmultiple(k::T, sup::T) where {T<:Unsigned} =
     div(sup, k + (k == 0))*k - one(k)
 
-struct SamplerRangeInt{T<:Union{Bool,Integer},U<:Unsigned} <: Sampler
+struct SamplerRangeInt{T<:Integer,U<:Unsigned} <: Sampler
     a::T      # first element of the range
     bw::Int   # bit width
     k::U      # range length or zero for full range
@@ -223,13 +251,13 @@ struct SamplerRangeInt{T<:Union{Bool,Integer},U<:Unsigned} <: Sampler
 end
 
 
-SamplerRangeInt(r::AbstractUnitRange{T}) where T<:Union{Bool,BitInteger} =
+SamplerRangeInt(r::AbstractUnitRange{T}) where T<:BitInteger =
     SamplerRangeInt(r, uint_sup(T))
 
 function SamplerRangeInt(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
     isempty(r) && throw(ArgumentError("range must be non-empty"))
     a = first(r)
-    m = (last(r) - first(r)) % U
+    m = (last(r) - first(r)) % unsigned(T) % U
     k = m + one(U)
     bw = (sizeof(U) << 3 - leading_zeros(m)) % Int
     mult = if U === UInt32
@@ -247,11 +275,11 @@ function SamplerRangeInt(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
 end
 
 Sampler(::AbstractRNG, r::AbstractUnitRange{T},
-        ::Repetition) where {T<:Union{Bool,BitInteger}} = SamplerRangeInt(r)
+        ::Repetition) where {T<:BitInteger} = SamplerRangeInt(r)
 
-rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt32}) where {T<:Union{Bool,BitInteger}} =
-    (unsigned(sp.a) + rem_knuth(rand(rng, LessThan(sp.u, uniform(UInt32))), sp.k)) % T
 
+rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt32}) where {T<:BitInteger} =
+    (unsigned(sp.a) + rem_knuth(rand(rng, LessThan(sp.u, UInt52Raw(UInt32))), sp.k)) % T
 
 # this function uses 52 bit entropy for small ranges of length <= 2^52
 function rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt64}) where T<:BitInteger
