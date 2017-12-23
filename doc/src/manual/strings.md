@@ -746,14 +746,14 @@ to refer to the nth capture group and prefixing the substitution string with `s`
 with `g<groupname>`. For example:
 
 ```jldoctest
-julia> replace("first second", r"(\w+) (?<agroup>\w+)", s"\g<agroup> \1")
+julia> replace("first second", r"(\w+) (?<agroup>\w+)" => s"\g<agroup> \1")
 "second first"
 ```
 
 Numbered capture groups can also be referenced as `\g<n>` for disambiguation, as in:
 
 ```jldoctest
-julia> replace("a", r".", s"\g<0>1")
+julia> replace("a", r"." => s"\g<0>1")
 "a1"
 ```
 
