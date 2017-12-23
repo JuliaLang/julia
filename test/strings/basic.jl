@@ -810,3 +810,11 @@ let s = "∀x∃y", u = codeunits(s)
     @test_throws ErrorException (u[1] = 0x00)
     @test collect(u) == b"∀x∃y"
 end
+
+# issue #24388
+let v = unsafe_wrap(Vector{UInt8}, "abc")
+    s = String(v)
+    @test_throws BoundsError v[1]
+    push!(v, UInt8('x'))
+    @test s == "abc"
+end
