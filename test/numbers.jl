@@ -1836,16 +1836,16 @@ end
     @test 0o724 == 0x1d4
     @test isa(0o377,UInt8)
     @test isa(0o00,UInt8)
-    @test isa(0o000,UInt16)
+    @test isa(0o000,UInt8)
     @test isa(0o00000,UInt16)
-    @test isa(0o000000,UInt32)
+    @test isa(0o000000,UInt16)
     @test isa(0o0000000000,UInt32)
-    @test isa(0o00000000000,UInt64)
+    @test isa(0o00000000000,UInt32)
     @test isa(0o000000000000000000000,UInt64)
-    @test isa(0o0000000000000000000000,UInt128)
+    @test isa(0o0000000000000000000000,UInt64)
     @test isa(0o000000000000000000000000000000000000000000,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws Meta.ParseError Meta.parse("0o0000000000000000000000000000000000000000000")
+    @test_throws Meta.ParseError Meta.parse("0o00000000000000000000000000000000000000000000")
     @test isa(0o11,UInt8)
     @test isa(0o111,UInt8)
     @test isa(0o11111,UInt16)
@@ -1856,6 +1856,8 @@ end
     @test isa(0o1111111111111111111111,UInt64)
     @test isa(0o111111111111111111111111111111111111111111,UInt128)
     @test isa(0o1111111111111111111111111111111111111111111,UInt128)
+    @test isa(0o3777777777777777777777777777777777777777777,UInt128)
+    @test_throws Meta.ParseError Meta.parse("0o4000000000000000000000000000000000000000000")
     # remove BigInt unsigned integer literals #11105
     @test_throws Meta.ParseError Meta.parse("0o11111111111111111111111111111111111111111111")
 end
