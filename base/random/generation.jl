@@ -15,32 +15,41 @@
 
 ## from types: rand(::Type, [dims...])
 
+Sampler(rng::AbstractRNG, d::Union{UniformWrap,UniformType}, n::Repetition) =
+    Sampler(rng, d[], n)
+
 ### random floats
 
 Sampler(rng::AbstractRNG, ::Type{T}, n::Repetition) where {T<:AbstractFloat} =
-    Sampler(rng, CloseOpen(T), n)
+    Sampler(rng, CloseOpen01(T), n)
 
 # generic random generation function which can be used by RNG implementors
 # it is not defined as a fallback rand method as this could create ambiguities
 
-rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen{Float16}}) =
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01{Float16}}) =
     Float16(reinterpret(Float32,
                         (rand(r, UInt10(UInt32)) << 13)  | 0x3f800000) - 1)
 
-rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen{Float32}}) =
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01{Float32}}) =
     reinterpret(Float32, rand(r, UInt23()) | 0x3f800000) - 1
 
-rand(r::AbstractRNG, ::SamplerTrivial{Close1Open2_64}) =
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen12_64}) =
     reinterpret(Float64, 0x3ff0000000000000 | rand(r, UInt52()))
 
-rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen_64}) = rand(r, Close1Open2()) - 1.0
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01_64}) = rand(r, CloseOpen12()) - 1.0
+
+Sampler(rng::AbstractRNG, d::CloseOpenAB{T}, n::Repetition) where {T} =
+    SamplerTag{CloseOpenAB{T}}((a=d.a, d=d.b - d.a, sp=Sampler(rng, CloseOpen01{T}(), n)))
+
+rand(rng::AbstractRNG, sp::SamplerTag{CloseOpenAB{T}}) where {T} =
+    sp.data.a + sp.data.d  * rand(rng, sp.data.sp)
 
 #### BigFloat
 
 const bits_in_Limb = sizeof(Limb) << 3
 const Limb_high_bit = one(Limb) << (bits_in_Limb-1)
 
-struct SamplerBigFloat{I<:FloatInterval{BigFloat}} <: Sampler
+struct SamplerBigFloat{I<:FloatInterval{BigFloat}} <: Sampler{BigFloat}
     prec::Int
     nlimbs::Int
     limbs::Vector{Limb}
@@ -71,13 +80,13 @@ function _rand(rng::AbstractRNG, sp::SamplerBigFloat)
     (z, randbool)
 end
 
-function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::Close1Open2{BigFloat})
+function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen12{BigFloat})
     z = _rand(rng, sp)[1]
     z.exp = 1
     z
 end
 
-function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen{BigFloat})
+function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen01{BigFloat})
     z, randbool = _rand(rng, sp)
     z.exp = 0
     randbool &&
@@ -89,8 +98,8 @@ end
 
 # alternative, with 1 bit less of precision
 # TODO: make an API for requesting full or not-full precision
-function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen{BigFloat}, ::Nothing)
-    z = _rand(rng, sp, Close1Open2(BigFloat))
+function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen01{BigFloat}, ::Nothing)
+    z = _rand(rng, sp, CloseOpen12(BigFloat))
     ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, Int32),
           z, z, 1, Base.MPFR.ROUNDING_MODE[])
     z
@@ -107,7 +116,7 @@ rand(r::AbstractRNG, ::SamplerTrivial{UInt23Raw{UInt32}}) = rand(r, UInt32)
 rand(r::AbstractRNG, ::SamplerTrivial{UInt52Raw{UInt64}}) =
     _rand52(r, rng_native_52(r))
 
-_rand52(r::AbstractRNG, ::Type{Float64}) = reinterpret(UInt64, rand(r, Close1Open2()))
+_rand52(r::AbstractRNG, ::Type{Float64}) = reinterpret(UInt64, rand(r, CloseOpen12()))
 _rand52(r::AbstractRNG, ::Type{UInt64})  = rand(r, UInt64)
 
 rand(r::AbstractRNG, ::SamplerTrivial{UInt104Raw{UInt128}}) =
@@ -121,10 +130,25 @@ rand(r::AbstractRNG, ::SamplerTrivial{UInt104{UInt128}}) = rand(r, UInt104Raw())
 rand(r::AbstractRNG, sp::SamplerTrivial{<:UniformBits{T}}) where {T} =
         rand(r, uint_default(sp[])) % T
 
-### random complex numbers
+### sampler for pairs and complex numbers
 
-rand(r::AbstractRNG, ::SamplerType{Complex{T}}) where {T<:Real} =
-    complex(rand(r, T), rand(r, T))
+function Sampler(rng::AbstractRNG, u::Combine2{T}, n::Repetition) where T <: Union{Pair,Complex}
+    sp1 = Sampler(rng, u.x, n)
+    sp2 = u.x == u.y ? sp1 : Sampler(rng, u.y, n)
+    SamplerTag{Cont{T}}((sp1, sp2))
+end
+
+rand(rng::AbstractRNG, sp::SamplerTag{Cont{T}}) where {T<:Union{Pair,Complex}} =
+    T(rand(rng, sp.data[1]), rand(rng, sp.data[2]))
+
+#### additional methods for complex numbers
+
+Sampler(rng::AbstractRNG, u::Combine1{Complex}, n::Repetition) =
+    Sampler(rng, Combine(Complex, u.x, u.x), n)
+
+Sampler(rng::AbstractRNG, ::Type{Complex{T}}, n::Repetition) where {T<:Real} =
+    Sampler(rng, Combine(Complex, T, T), n)
+
 
 ### random characters
 
@@ -155,7 +179,7 @@ uint_sup(::Type{<:Union{Int128,UInt128}}) = UInt128
 
 #### Fast
 
-struct SamplerRangeFast{U<:BitUnsigned,T<:Union{BitInteger,Bool}} <: Sampler
+struct SamplerRangeFast{U<:BitUnsigned,T<:Union{BitInteger,Bool}} <: Sampler{T}
     a::T      # first element of the range
     bw::UInt  # bit width
     m::U      # range length - 1
@@ -215,7 +239,7 @@ maxmultiple(k::T, sup::T=zero(T)) where {T<:Unsigned} =
 unsafe_maxmultiple(k::T, sup::T) where {T<:Unsigned} =
     div(sup, k + (k == 0))*k - one(k)
 
-struct SamplerRangeInt{T<:Union{Bool,Integer},U<:Unsigned} <: Sampler
+struct SamplerRangeInt{T<:Union{Bool,Integer},U<:Unsigned} <: Sampler{T}
     a::T      # first element of the range
     bw::Int   # bit width
     k::U      # range length or zero for full range
@@ -270,7 +294,7 @@ end
 
 ### BigInt
 
-struct SamplerBigInt <: Sampler
+struct SamplerBigInt <: Sampler{BigInt}
     a::BigInt         # first
     m::BigInt         # range length - 1
     nlimbs::Int       # number of limbs in generated BigInt's (z ∈ [0, m])
@@ -336,9 +360,10 @@ end
 
 ## random values from Set
 
-Sampler(rng::AbstractRNG, t::Set, n::Repetition) = SamplerTag{Set}(Sampler(rng, t.dict, n))
+Sampler(rng::AbstractRNG, t::Set{T}, n::Repetition) where {T} =
+    SamplerTag{Set{T}}(Sampler(rng, t.dict, n))
 
-rand(rng::AbstractRNG, sp::SamplerTag{Set,<:Sampler}) = rand(rng, sp.data).first
+rand(rng::AbstractRNG, sp::SamplerTag{<:Set,<:Sampler}) = rand(rng, sp.data).first
 
 ## random values from BitSet
 

@@ -19,207 +19,8 @@ export srand,
        randperm, randperm!,
        randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice,
-       GLOBAL_RNG, randjump
-
-
-## general definitions
-
-abstract type AbstractRNG end
-
-### integers
-
-# we define types which encode the generation of a specific number of bits
-# the "raw" version means that the unused bits are not zeroed
-
-abstract type UniformBits{T<:BitInteger} end
-
-struct UInt10{T}    <: UniformBits{T} end
-struct UInt10Raw{T} <: UniformBits{T} end
-
-struct UInt23{T}    <: UniformBits{T} end
-struct UInt23Raw{T} <: UniformBits{T} end
-
-struct UInt52{T}    <: UniformBits{T} end
-struct UInt52Raw{T} <: UniformBits{T} end
-
-struct UInt104{T}    <: UniformBits{T} end
-struct UInt104Raw{T} <: UniformBits{T} end
-
-struct UInt2x52{T}    <: UniformBits{T} end
-struct UInt2x52Raw{T} <: UniformBits{T} end
-
-uint_sup(::Type{<:Union{UInt10,UInt10Raw}}) = UInt16
-uint_sup(::Type{<:Union{UInt23,UInt23Raw}}) = UInt32
-uint_sup(::Type{<:Union{UInt52,UInt52Raw}}) = UInt64
-uint_sup(::Type{<:Union{UInt104,UInt104Raw}}) = UInt128
-uint_sup(::Type{<:Union{UInt2x52,UInt2x52Raw}}) = UInt128
-
-for UI = (:UInt10, :UInt10Raw, :UInt23, :UInt23Raw, :UInt52, :UInt52Raw,
-          :UInt104, :UInt104Raw, :UInt2x52, :UInt2x52Raw)
-    @eval begin
-        $UI(::Type{T}=uint_sup($UI)) where {T} = $UI{T}()
-        # useful for defining rand generically:
-        uint_default(::$UI) = $UI{uint_sup($UI)}()
-    end
-end
-
-### floats
-
-abstract type FloatInterval{T<:AbstractFloat} end
-
-struct CloseOpen{  T<:AbstractFloat} <: FloatInterval{T} end # interval [0,1)
-struct Close1Open2{T<:AbstractFloat} <: FloatInterval{T} end # interval [1,2)
-
-const FloatInterval_64 = FloatInterval{Float64}
-const CloseOpen_64     = CloseOpen{Float64}
-const Close1Open2_64   = Close1Open2{Float64}
-
-CloseOpen(  ::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen{T}()
-Close1Open2(::Type{T}=Float64) where {T<:AbstractFloat} = Close1Open2{T}()
-
-Base.eltype(::Type{<:FloatInterval{T}}) where {T<:AbstractFloat} = T
-
-const BitFloatType = Union{Type{Float16},Type{Float32},Type{Float64}}
-
-### Sampler
-
-abstract type Sampler end
-
-# temporarily for BaseBenchmarks
-RangeGenerator(x) = Sampler(GLOBAL_RNG, x)
-
-# In some cases, when only 1 random value is to be generated,
-# the optimal sampler can be different than if multiple values
-# have to be generated. Hence a `Repetition` parameter is used
-# to choose the best one depending on the need.
-const Repetition = Union{Val{1},Val{Inf}}
-
-# these default fall-back for all RNGs would be nice,
-# but generate difficult-to-solve ambiguities
-# Sampler(::AbstractRNG, X, ::Val{Inf}) = Sampler(X)
-# Sampler(::AbstractRNG, ::Type{X}, ::Val{Inf}) where {X} = Sampler(X)
-
-Sampler(rng::AbstractRNG, sp::Sampler, ::Repetition) =
-    throw(ArgumentError("Sampler for this object is not defined"))
-
-# default shortcut for the general case
-Sampler(rng::AbstractRNG, X) = Sampler(rng, X, Val(Inf))
-Sampler(rng::AbstractRNG, ::Type{X}) where {X} = Sampler(rng, X, Val(Inf))
-
-#### pre-defined useful Sampler types
-
-# default fall-back for types
-struct SamplerType{T} <: Sampler end
-
-Sampler(::AbstractRNG, ::Type{T}, ::Repetition) where {T} = SamplerType{T}()
-
-Base.getindex(sp::SamplerType{T}) where {T} = T
-
-# default fall-back for values
-struct SamplerTrivial{T} <: Sampler
-    self::T
-end
-
-Sampler(::AbstractRNG, X, ::Repetition) = SamplerTrivial(X)
-
-Base.getindex(sp::SamplerTrivial) = sp.self
-
-# simple sampler carrying data (which can be anything)
-struct SamplerSimple{T,S} <: Sampler
-    self::T
-    data::S
-end
-
-Base.getindex(sp::SamplerSimple) = sp.self
-
-# simple sampler carrying a (type) tag T and data
-struct SamplerTag{T,S} <: Sampler
-    data::S
-    SamplerTag{T}(s::S) where {T,S} = new{T,S}(s)
-end
-
-
-#### helper samplers
-
-##### Adapter to generate a randome value in [0, n]
-
-struct LessThan{T<:Integer,S} <: Sampler
-    sup::T
-    s::S    # the scalar specification/sampler to feed to rand
-end
-
-function rand(rng::AbstractRNG, sp::LessThan)
-    while true
-        x = rand(rng, sp.s)
-        x <= sp.sup && return x
-    end
-end
-
-struct Masked{T<:Integer,S} <: Sampler
-    mask::T
-    s::S
-end
-
-rand(rng::AbstractRNG, sp::Masked) = rand(rng, sp.s) & sp.mask
-
-##### Uniform
-
-struct UniformT{T} <: Sampler end
-
-uniform(::Type{T}) where {T} = UniformT{T}()
-
-rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
-
-
-### machinery for generation with Sampler
-
-# This describes how to generate random scalars or arrays, by generating a Sampler
-# and calling rand on it (which should be defined in "generation.jl").
-# NOTE: this section could be moved into a separate file when more containers are supported.
-
-#### scalars
-
-rand(rng::AbstractRNG, X) = rand(rng, Sampler(rng, X, Val(1)))
-rand(rng::AbstractRNG=GLOBAL_RNG, ::Type{X}=Float64) where {X} =
-    rand(rng, Sampler(rng, X, Val(1)))
-
-rand(X) = rand(GLOBAL_RNG, X)
-rand(::Type{X}) where {X} = rand(GLOBAL_RNG, X)
-
-#### arrays
-
-rand!(A::AbstractArray{T}, X) where {T} = rand!(GLOBAL_RNG, A, X)
-rand!(A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(GLOBAL_RNG, A, X)
-
-rand!(rng::AbstractRNG, A::AbstractArray{T}, X) where {T} = rand!(rng, A, Sampler(rng, X))
-rand!(rng::AbstractRNG, A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(rng, A, Sampler(rng, X))
-
-function rand!(rng::AbstractRNG, A::AbstractArray{T}, sp::Sampler) where T
-    for i in eachindex(A)
-        @inbounds A[i] = rand(rng, sp)
-    end
-    A
-end
-
-rand(r::AbstractRNG, dims::Dims)       = rand(r, Float64, dims)
-rand(                dims::Dims)       = rand(GLOBAL_RNG, dims)
-rand(r::AbstractRNG, dims::Integer...) = rand(r, Dims(dims))
-rand(                dims::Integer...) = rand(Dims(dims))
-
-rand(r::AbstractRNG, X, dims::Dims)  = rand!(r, Array{eltype(X)}(uninitialized, dims), X)
-rand(                X, dims::Dims)  = rand(GLOBAL_RNG, X, dims)
-
-rand(r::AbstractRNG, X, d::Integer, dims::Integer...) = rand(r, X, Dims((d, dims...)))
-rand(                X, d::Integer, dims::Integer...) = rand(X, Dims((d, dims...)))
-# note: the above methods would trigger an ambiguity warning if d was not separated out:
-# rand(r, ()) would match both this method and rand(r, dims::Dims)
-# moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
-
-rand(r::AbstractRNG, ::Type{X}, dims::Dims) where {X} = rand!(r, Array{eltype(X)}(uninitialized, dims), X)
-rand(                ::Type{X}, dims::Dims) where {X} = rand(GLOBAL_RNG, X, dims)
-
-rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))
-rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))
+       GLOBAL_RNG, randjump,
+       Distribution, Combine, Uniform, Sampler
 
 
 ## __init__ & include
@@ -233,6 +34,8 @@ function __init__()
     end
 end
 
+include("definitions.jl")
+include("containers.jl")
 include("RNGs.jl")
 include("generation.jl")
 include("normal.jl")
@@ -242,9 +45,9 @@ include("misc.jl")
 ## rand & rand! & srand docstrings
 
 """
-    rand([rng=GLOBAL_RNG], [S], [dims...])
+    rand([rng=GLOBAL_RNG], [S], [C...])
 
-Pick a random element or array of random elements from the set of values specified by `S`;
+Pick a random element or collection of random elements from the set of values specified by `S`;
 `S` can be
 
 * an indexable collection (for example `1:n` or `['x','y','z']`),
@@ -253,8 +56,26 @@ Pick a random element or array of random elements from the set of values specifi
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
   integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
   point numbers;
+* a `Distribution` object, e.g. `Normal()` for a normal distribution (like `randn()`),
+  or `CloseOpen(10.0, 20.0)` for uniform `Float64` numbers in the range ``[10.0, 20.0)``;
+* a `Combine` object, which can be either `Combine(Pair, S1, S2)` or `Combine(Complex, S1, S2)`,
+  where `S1` and `S2` are one of the specifications above; `Pair` or `Complex` can optionally be
+  given as concrete types, e.g. `Combine(ComplexF64, 1:3, Int)` to generate `ComplexF64` instead
+  of `Complex{Int}`.
 
-`S` defaults to [`Float64`](@ref).
+`S` usually defaults to [`Float64`](@ref).
+
+If `C...` is not specified, `rand` produces a scalar. Otherwise, `C...` can be:
+
+* a set of integers, or a tuple of `Int`, which specify the dimensions of an `Array` to generate;
+* `(p::AbstractFloat, m::Integer, [n::Integer])`, which produces a sparse array of dimensions `(m, n)`,
+  in which the probability of any element being nonzero is independently given by `p`
+* `(String, [n=8])`, which produces a random `String` of length `n`; the generated string consists of `Char`
+  taken from a predefined set like `randstring`, and can be specified with the `S` parameter.
+* `(Dict, n)`, which produces a `Dict` of length `n`; `S` must then specify the type of its elements,
+  e.g. `Combine(Pair, Int, 2:3)`;
+* `(Set, n)`, which produces a `Set` of length `n`;
+* `(BitArray, dims...)`, which produces a `BitArray` with the specified dimensions.
 
 # Examples
 ```julia-repl
@@ -265,6 +86,12 @@ julia> rand(Int, 2)
 
 julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
 1=>2
+
+julia> rand("abc", String, 12)
+"bccaacaabaac"
+
+julia> rand(1:10, Set, 3)
+Set([3, 8, 6])
 ```
 
 !!! note

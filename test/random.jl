@@ -3,7 +3,7 @@
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using Main.TestHelpers.OAs
 
-using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt, dSFMT
+using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt, dSFMT, Combine, Normal, Uniform, Exponential, Rand
 
 @testset "Issue #6573" begin
     srand(0)
@@ -290,8 +290,8 @@ let mt = MersenneTwister(0)
     @test rand!(mt, AF64)[end] == 0.957735065345398
     @test rand!(mt, AF64)[end] == 0.6492481059865669
     resize!(AF64, 2*length(mt.vals))
-    @test invoke(rand!, Tuple{MersenneTwister,AbstractArray{Float64},Base.Random.SamplerTrivial{Base.Random.CloseOpen_64}},
-                 mt, AF64, Base.Random.SamplerTrivial(Base.Random.CloseOpen()))[end]  == 0.432757268470779
+    @test invoke(rand!, Tuple{MersenneTwister,AbstractArray{Float64},Base.Random.SamplerTrivial{Base.Random.CloseOpen01_64}},
+                 mt, AF64, Base.Random.SamplerTrivial(Base.Random.CloseOpen01()))[end]  == 0.432757268470779
 end
 
 # Issue #9037
@@ -661,4 +661,107 @@ end
     RNG isa MersenneTwister && srand(RNG, rand(UInt128)) # for reproducibility
     r = T(1):T(108)
     @test rand(RNG, SamplerRangeFast(r)) ∈ r
+end
+
+
+@testset "Distributions" begin
+    # Normal/Exponential
+    @test rand(Normal()) isa Float64
+    @test rand(Normal(0.0, 1.0)) isa Float64
+    @test rand(Exponential()) isa Float64
+    @test rand(Exponential(1.0)) isa Float64
+    @test rand(Normal(Float32)) isa Float32
+    @test rand(Exponential(Float32)) isa Float32
+    @test rand(Normal(ComplexF64)) isa ComplexF64
+
+    # pairs/complexes
+    @test rand(Combine(Pair, 1:3, Float64)) isa Pair{Int,Float64}
+    z = rand(Combine(Complex, 1:3, 6:9))
+    @test z.re ∈ 1:3
+    @test z.im ∈ 6:9
+    @test z isa Complex{Int}
+    z = rand(Combine(ComplexF64, 1:3, 6:9))
+    @test z.re ∈ 1:3
+    @test z.im ∈ 6:9
+    @test z isa ComplexF64
+
+    # Uniform
+    @test rand(Uniform(Float64)) isa Float64
+    @test rand(Uniform(1:10)) isa Int
+    @test rand(Uniform(1:10)) ∈ 1:10
+    @test rand(Uniform(Int)) isa Int
+end
+
+@testset "Containers" for rng in ([], [MersenneTwister(0)], [RandomDevice()])
+    # Set
+    for s = (rand(rng..., 1:99, Set{Int}, 10),
+             rand(rng..., 1:99, Set, 10))
+        @test s isa Set{Int}
+        @test length(s) == 10
+        @test rand(s) ∈ 1:99
+    end
+    s = Set([1, 2])
+    @test s === rand!(s)
+    @test first(s) ∉ (1, 2) # extremely unlikely
+    @test length(s) == 2
+    @test s === rand!(s, 3:9) <= Set(3:9)
+    @test length(s) == 2
+
+    # Dict
+    for s = (rand(rng..., Combine(Pair, 1:99, 1:99), Dict, 10),
+             rand(rng..., Combine(Pair, 1:99, 1:99), Dict{Int,Int}, 10))
+        @test s isa Dict{Int,Int}
+        @test length(s) == 10
+        p = rand(s)
+        @test p.first ∈ 1:99
+        @test p.second ∈ 1:99
+    end
+    s = Dict(1=>2, 2=>1)
+    @test s === rand!(s)
+    @test length(s) == 2
+    @test first(s).first ∉ (1, 2) # extremely unlikely
+    rand!(s, Combine(Pair, 3:9, Int))
+    @test length(s) == 2
+    @test first(s).first ∈ 3:9
+
+    # sparse
+    @test rand(rng..., Float64, .5, 10) isa SparseVector{Float64}
+    @test rand(rng..., .5, 10) isa SparseVector{Float64}
+    @test rand(rng..., Int, .5, 10) isa SparseVector{Int}
+    @test rand(rng..., Float64, .5, 10, 3) isa SparseMatrixCSC{Float64}
+    @test rand(rng..., .5, 10, 3) isa SparseMatrixCSC{Float64}
+    @test rand(rng..., Int, .5, 10, 3) isa SparseMatrixCSC{Int}
+
+    # BitArray
+    @test rand(rng..., BitArray, 10) isa BitVector
+    @test rand(rng..., BitVector, 10) isa BitVector
+    @test_throws MethodError rand(rng..., BitVector, 10, 20) isa BitVector
+    @test rand(rng..., BitArray, 10, 3) isa BitMatrix
+    @test rand(rng..., BitMatrix, 10, 3) isa BitMatrix
+    @test_throws MethodError rand(rng..., BitVector, 10, 3) isa BitMatrix
+
+    # String
+    s = rand(rng..., String)
+    @test s isa String
+    @test length(s) == 8
+    s = rand(rng..., String, 10)
+    @test s isa String
+    @test length(s) == 10
+    s = rand(rng..., "asd", String)
+    @test length(s) == 8
+    @test Set(s) <= Set("asd")
+end
+
+@testset "Rand" for rng in ([], [MersenneTwister(0)], [RandomDevice()])
+    for XT = zip(([Int], [1:3], []), (Int, Int, Float64))
+        X, T = XT
+        r = Rand(rng..., X...)
+        @test collect(Iterators.take(r, 10)) isa Vector{T}
+        @test r() isa T
+        @test r(2, 3) isa Matrix{T}
+        @test r(.3, 2, 3) isa SparseMatrixCSC{T}
+    end
+    for d = (Uniform(1:10), Uniform(Int))
+        @test collect(Iterators.take(d, 10)) isa Vector{Int}
+    end
 end
