@@ -79,8 +79,18 @@ lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
 gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 
-gcd(abc::AbstractArray{<:Integer}) = reduce(gcd,abc)
 lcm(abc::AbstractArray{<:Integer}) = reduce(lcm,abc)
+
+function gcd(abc::AbstractArray{<:Integer})
+    a = zero(eltype(abc))
+    for b in abc
+        a = gcd(a,b)
+        if a == 1
+            return a
+        end
+    end
+    return a
+end
 
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
 """
