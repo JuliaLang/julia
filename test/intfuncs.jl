@@ -35,6 +35,20 @@
         @test_throws OverflowError lcm(typemin(T), typemin(T))
     end
 end
+@testset "gcd for arrays" begin
+    for T in (Int32, Int64)
+        @test gcd(T[]) === T(0)
+        @test gcd(T[3, 5]) === T(1)
+        @test gcd(T[3, 15]) === T(3)
+        @test gcd(T[0, 15]) === T(15)
+        @test gcd(T[3,-15]) === T(3)
+        @test gcd(T[-3,-15]) === T(3)
+        @test gcd(T(0, 0)) === T(0)
+
+        @test gcd(T[2, 4, 6]) === T(2)
+        @test gcd(T[2, 4, 3, 5]) === T(1)
+    end
+end
 @testset "gcdx" begin
     @test gcdx(5, 12) == (1, 5, -2)
     @test gcdx(5, -12) == (1, 5, 2)
