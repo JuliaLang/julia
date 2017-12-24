@@ -239,12 +239,6 @@ broadcast_indices
 # special cases defined for performance
 broadcast(f, x::Number...) = f(x...)
 @inline broadcast(f, t::NTuple{N,Any}, ts::Vararg{NTuple{N,Any}}) where {N} = map(f, t, ts...)
-@inline broadcast!(::typeof(identity), x::AbstractArray{T,N}, y::AbstractArray{S,N}) where {T,S,N} =
-    Base.axes(x) == Base.axes(y) ? copyto!(x, y) : _broadcast!(identity, x, y)
-
-# special cases for "X .= ..." (broadcast!) assignments
-broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
-broadcast!(f, X::AbstractArray, x::Number...) = (@inbounds for I in eachindex(X); X[I] = f(x...); end; X)
 
 ## logic for deciding the BroadcastStyle
 # Dimensionality: computing max(M,N) in the type domain so we preserve inferrability
@@ -261,7 +255,7 @@ longest(::Tuple{}, ::Tuple{}) = ()
 # combine_styles operates on values (arbitrarily many)
 combine_styles(c) = result_style(BroadcastStyle(typeof(c)))
 combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
-combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
+@inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
 # result_style works on types (singletons and pairs), and leverages `BroadcastStyle`
 result_style(s::BroadcastStyle) = s
@@ -397,6 +391,7 @@ Base.@propagate_inbounds _broadcast_getindex(::Style{Tuple}, A::Tuple{Any}, I) =
             result = @ncall $nargs f val
             @inbounds B[I] = result
         end
+        return B
     end
 end
 
@@ -433,6 +428,7 @@ end
             @inbounds C[ind:bitcache_size] = false
             dumpbitcache(Bc, cind, C)
         end
+        return B
     end
 end
 
@@ -445,11 +441,38 @@ Note that `dest` is only used to store the result, and does not supply
 arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 """
-@inline broadcast!(f, C::AbstractArray, A, Bs::Vararg{Any,N}) where {N} =
-    _broadcast!(f, C, A, Bs...)
+@inline broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = broadcast!(f, dest, combine_styles(As...), As...)
+@inline broadcast!(f::Tf, dest, ::BroadcastStyle, As::Vararg{Any,N}) where {Tf,N} = broadcast!(f, dest, nothing, As...)
 
-# This indirection allows size-dependent implementations (e.g., see the copying `identity`
-# specialization above)
+# Default behavior (separated out so that it can be called by users who want to extend broadcast!).
+@inline function broadcast!(f, dest, ::Nothing, As::Vararg{Any, N}) where N
+    if f isa typeof(identity) && N == 1
+        A = As[1]
+        if A isa AbstractArray && Base.axes(dest) == Base.axes(A)
+            return copyto!(dest, A)
+        end
+    end
+    _broadcast!(f, dest, As...)
+    return dest
+end
+
+# Optimization for the all-Scalar case.
+@inline function broadcast!(f, dest, ::Scalar, As::Vararg{Any, N}) where N
+    if dest isa AbstractArray
+        if f isa typeof(identity) && N == 1
+            return fill!(dest, As[1])
+        else
+            @inbounds for I in eachindex(dest)
+                dest[I] = f(As...)
+            end
+            return dest
+        end
+    end
+    _broadcast!(f, dest, As...)
+    return dest
+end
+
+# This indirection allows size-dependent implementations.
 @inline function _broadcast!(f, C, A, Bs::Vararg{Any,N}) where N
     shape = broadcast_indices(C)
     @boundscheck check_broadcast_indices(shape, A, Bs...)
@@ -630,7 +653,7 @@ function broadcast_nonleaf(f, s::NonleafHandlingTypes, ::Type{ElType}, shape::In
         dest = Base.similar(Array{typeof(val)}, shape)
     end
     dest[I] = val
-    return _broadcast!(f, dest, keeps, Idefaults, As, Val(nargs), iter, st, 1)
+    _broadcast!(f, dest, keeps, Idefaults, As, Val(nargs), iter, st, 1)
 end
 
 broadcast(f, ::Union{Scalar,Unknown}, ::Nothing, ::Nothing, a...) = f(a...)
