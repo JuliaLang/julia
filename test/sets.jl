@@ -61,14 +61,14 @@ end
     @test !isequal(Set{Any}([1,2,3,4]), Set{Int}([1,2,3]))
     @test !isequal(Set{Int}([1,2,3,4]), Set{Any}([1,2,3]))
 end
-@testset "eltype, similar" begin
-    s1 = similar(Set([1,"hello"]))
+@testset "eltype, empty" begin
+    s1 = empty(Set([1,"hello"]))
     @test isequal(s1, Set())
     @test ===(eltype(s1), Any)
-    s2 = similar(Set{Float32}([2.0f0,3.0f0,4.0f0]))
+    s2 = empty(Set{Float32}([2.0f0,3.0f0,4.0f0]))
     @test isequal(s2, Set())
     @test ===(eltype(s2), Float32)
-    s3 = similar(Set([1,"hello"]),Float32)
+    s3 = empty(Set([1,"hello"]),Float32)
     @test isequal(s3, Set())
     @test ===(eltype(s3), Float32)
 end

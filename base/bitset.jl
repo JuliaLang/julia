@@ -31,7 +31,6 @@ BitSet(itr) = union!(BitSet(), itr)
 @inline intoffset(s::BitSet) = s.offset << 6
 
 eltype(::Type{BitSet}) = Int
-similar(s::BitSet) = BitSet()
 
 empty(s::BitSet, ::Type{Int}=Int) = BitSet()
 emptymutable(s::BitSet, ::Type{Int}=Int) = BitSet()
