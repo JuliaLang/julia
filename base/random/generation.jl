@@ -164,6 +164,35 @@ end
 
 ## Generate random integer within a range
 
+### Bool
+
+struct SamplerRangeBool <: Sampler
+    a::Bool
+    mask::Bool
+end
+
+function SamplerRangeBool(r::AbstractUnitRange{Bool})
+    s = last(r) - first(r)
+    s < 0 && throw(ArgumentError("range must be non-empty"))
+    SamplerRangeBool(first(r), s % Bool)
+end
+
+Sampler(rng::AbstractRNG, r::AbstractUnitRange{Bool}, ::Repetition) =
+    SamplerRangeBool(r)
+
+rand(rng::AbstractRNG, sp::SamplerRangeBool) =
+    _rand(rng, sp, rng_gen_bool(rng))
+
+rng_gen_bool(::AbstractRNG) = Val(:Default)
+
+_rand(rng::AbstractRNG, sp::SamplerRangeBool, ::Val{:FastBool}) =
+    sp.a ⊻ (rand(rng, Bool) & sp.mask)
+
+_rand(rng::AbstractRNG, sp::SamplerRangeBool, ::Val{:Default}) =
+    sp.mask ? rand(rng, Bool) : # sp.a == false
+              sp.a
+
+
 ### BitInteger
 
 # there are two implemented samplers for unit ranges, which assume that Float64 (i.e.
