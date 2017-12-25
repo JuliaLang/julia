@@ -52,6 +52,7 @@ Standard library changes
   * `Base.tail` now works on named tuples ([#29595]).
   * `randperm` and `randcycle` now use the type of their argument to determine the element type of
     the returned array ([#29670]).
+  * A new method `rand(::Tuple)` implements sampling from the values of a tuple ([#25278]).
 
 Compiler/Runtime improvements
 -----------------------------
