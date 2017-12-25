@@ -11,27 +11,16 @@ import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, c
 struct Adjoint{T,S} <: AbstractMatrix{T}
     parent::S
     function Adjoint{T,S}(A::S) where {T,S}
-        checkeltype(Adjoint, T, eltype(A))
         new(A)
     end
 end
 struct Transpose{T,S} <: AbstractMatrix{T}
     parent::S
     function Transpose{T,S}(A::S) where {T,S}
-        checkeltype(Transpose, T, eltype(A))
         new(A)
     end
 end
 
-@pure function checkeltype(::Type{Transform}, ::Type{ResultEltype}, ::Type{ParentEltype}) where {Transform, ResultEltype, ParentEltype}
-    if ResultEltype !== transformtype(Transform, ParentEltype)
-        error(string("Element type mismatch. Tried to create an `$Transform{$ResultEltype}` ",
-            "from an object with eltype `$ParentEltype`, but the element type of the ",
-            "`$Transform` of an object with eltype `$ParentEltype` must be ",
-            "`$(transformtype(Transform, ParentEltype))`"))
-    end
-    return nothing
-end
 function transformtype(::Type{O}, ::Type{S}) where {O,S}
     # similar to promote_op(::Any, ::Type)
     @_inline_meta
@@ -47,8 +36,9 @@ Transpose(A) = Transpose{transformtype(Transpose,eltype(A)),typeof(A)}(A)
 # numbers are the end of the line
 Adjoint(x::Number) = adjoint(x)
 Transpose(x::Number) = transpose(x)
-Adjoint(x::Char) = x
-Transpose(x::Char) = x
+
+Adjoint(x::Union{Char,AbstractString,Symbol}) = x
+Transpose(x::Union{Char,AbstractString,Symbol}) = x
 
 # unwrapping constructors
 Adjoint(A::Adjoint) = A.parent
