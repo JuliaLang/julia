@@ -2072,11 +2072,18 @@
 (define (string-replace s a b)
   (string.join (string-split s a) b))
 
+(define (ends-interpolated-atom? c)
+  (or (eof-object? c) (opchar? c) (never-identifier-char? c)))
+
 (define (parse-interpolate s)
   (let* ((p (ts:port s))
          (c (peek-char p)))
     (cond ((identifier-start-char? c)
-           (parse-atom s))
+           (let* ((atom (parse-atom s))
+                  (c (peek-char p)))
+             (if (ends-interpolated-atom? c)
+                 atom
+                 (error (string "interpolated variable $" atom " ends with invalid character \"" c "\"; use \"$(" atom ")\" instead.")))))
           ((eqv? c #\()
            (read-char p)
            (let ((ex (parse-eq* s))

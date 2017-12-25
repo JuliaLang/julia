@@ -167,7 +167,12 @@ Language changes
     backslashes and the end of the literal while 2n+1 backslashes followed by a quote encodes n
     backslashes followed by a quote character ([#22926]).
 
-  * The syntax `(x...)` for constructing a tuple is deprecated; use `(x...,)` instead (#24452).
+  * The syntax `(x...)` for constructing a tuple is deprecated; use `(x...,)` instead ([#24452]).
+
+  * Non-parenthesized interpolated variables in strings, e.g. `"$x"`, must be followed
+    by a character that will never be an allowed identifier character (currently
+    operators, space/control characters, or common punctuation characters) ([#25231]).
+
 
 Breaking changes
 ----------------

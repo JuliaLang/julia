@@ -162,6 +162,21 @@ int jl_op_suffix_char(uint32_t wc)
     return HT_NOTFOUND != wcharhash_get_r(&jl_opsuffs, (void*)((uintptr_t)wc), NULL);
 }
 
+// chars that we will never allow to be part of a valid non-operator identifier
+static int never_id_char(uint32_t wc)
+{
+     utf8proc_category_t cat = utf8proc_category((utf8proc_int32_t) wc);
+     return (
+          // spaces and control characters:
+          (cat >= UTF8PROC_CATEGORY_ZS && cat <= UTF8PROC_CATEGORY_CS) ||
+
+          // ASCII and Latin1 non-connector punctuation
+          (wc < 0xff &&
+           cat >= UTF8PROC_CATEGORY_PD && cat <= UTF8PROC_CATEGORY_PO) ||
+
+          wc == '`');
+}
+
 value_t fl_julia_identifier_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "identifier-char?", nargs, 1);
@@ -179,6 +194,16 @@ value_t fl_julia_identifier_start_char(fl_context_t *fl_ctx, value_t *args, uint
     uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
     return jl_id_start_char(wc) ? fl_ctx->T : fl_ctx->F;
 }
+
+value_t fl_julia_never_identifier_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "never-identifier-char?", nargs, 1);
+    if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != fl_ctx->wchartype)
+        type_error(fl_ctx, "never-identifier-char?", "wchar", args[0]);
+    uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
+    return never_id_char(wc) ? fl_ctx->T : fl_ctx->F;
+}
+
 
 value_t fl_julia_op_suffix_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
@@ -307,6 +332,7 @@ static const builtinspec_t julia_flisp_func_info[] = {
     { "accum-julia-symbol", fl_accum_julia_symbol },
     { "identifier-char?", fl_julia_identifier_char },
     { "identifier-start-char?", fl_julia_identifier_start_char },
+    { "never-identifier-char?", fl_julia_never_identifier_char },
     { "op-suffix-char?", fl_julia_op_suffix_char },
     { "strip-op-suffix", fl_julia_strip_op_suffix },
     { "underscore-symbol?", fl_julia_underscore_symbolp },
