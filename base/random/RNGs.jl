@@ -313,8 +313,11 @@ rand(r::MersenneTwister, sp::SamplerTrivial{Close1Open2_64}) =
 
 #### integers
 
-rand(r::MersenneTwister, T::SamplerUnion(BitInteger)) = mt_pop!(r, T[])
-rand(r::MersenneTwister, ::SamplerType{Bool}) = rand(r, UInt8) % Bool
+rand(r::MersenneTwister, T::SamplerUnion(Union{Int64,UInt64,Int128,UInt128})) =
+    mt_pop!(r, T[])
+
+rand(r::MersenneTwister, T::SamplerUnion(Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32})) =
+    rand(r, UInt52Raw()) % T[]
 
 #### arrays of floats
 
