@@ -237,7 +237,7 @@ function (T::All16{E,N})(itr) where {E,N}
     (elts...,)
 end
 
-(::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr, start(itr))
+(::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
 
 _totuple(::Type{Tuple{}}, itr, s) = ()
 
@@ -246,10 +246,11 @@ function _totuple_err(@nospecialize T)
     throw(ArgumentError("too few elements for tuple type $T"))
 end
 
-function _totuple(T, itr, s)
+function _totuple(T, itr, s...)
     @_inline_meta
-    done(itr, s) && _totuple_err(T)
-    v, s = next(itr, s)
+    y = iterate(itr, s...)
+    y === nothing && _totuple_err(T)
+    v, s = y
     (convert(tuple_type_head(T), v), _totuple(tuple_type_tail(T), itr, s)...)
 end
 
