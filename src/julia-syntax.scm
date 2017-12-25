@@ -1572,7 +1572,7 @@
 ;; If false, this will try to warn only for uses of the last value after the loop.
 (define *warn-all-loop-vars* #f)
 
-(define (expand-for while lhs X body)
+(define (expand-for first lhs X body)
   ;; (for (= lhs X) body)
   (let* ((coll   (make-ssavalue))
          (state  (make-ssavalue))
@@ -1581,23 +1581,26 @@
          (lhs    (if outer? (cadr lhs) lhs))
          (test   `(call (|.| (core Intrinsics) 'not_int) (call (core ===) ,next (null))))
          (cont   `(block
-                   (= ,state (call (core getfield) ,next 2))
                    (= ,next (call (top iterate) ,coll ,state))))
          (body   `(block
+                   ;; NOTE: enable this to force loop-local var
+                   #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
                    ,@(if (not outer?)
                          (map (lambda (v) `(warn-if-existing ,v)) (lhs-vars lhs))
                          '())
-                   (= ,lhs (call (core getfield) ,next 1))
-                   ,body)))
+                   ,(lower-tuple-assignment (list lhs state) next)
+                   ,body))
+         (loop    `(_while
+                    ,(expand-forms test)
+                    (block
+                     (break-block loop-cont
+                                      (scope-block ,(blockify (expand-forms body))))
+                     ,(expand-forms cont)))))
     `(block (= ,coll ,(expand-forms X))
             (= ,next (call (top iterate) ,coll))
-            (scope-block
-             (break-block loop-exit
-               (_while
-                 ,(expand-forms test)
-                 (block (break-block loop-cont
-                                     ,(expand-forms body))
-                        ,(expand-forms cont))))))))
+            ,@(if outer? `((require-existing-local ,lhs)) '())
+            ,(if first `(break-block loop-exit ,loop) loop))))
+
 
 ;; convert an operator parsed as (op a b) to (call op a b)
 (define (syntactic-op-to-call e)
@@ -2235,7 +2238,7 @@
                             (cdr (cadr e))
                             (list (cadr e))))
                 (first  #t))
-       (expand-for (if first 'while 'inner-while)
+       (expand-for first
                    (cadr (car ranges))
                    (caddr (car ranges))
                    (if (null? (cdr ranges))
@@ -2440,7 +2443,7 @@
                   (call (top setindex!) ,result ,oneresult ,ri)
                   (inbounds pop)
                   (= ,ri (call (top add_int) ,ri 1)))
-          (expand-for 'while (cadr (car ranges)) (car rv)
+          (expand-for #t (cadr (car ranges)) (car rv)
             `(block
                 ;; *** either this or force all for loop vars local
                 ,.(map (lambda (r) `(local ,r))
