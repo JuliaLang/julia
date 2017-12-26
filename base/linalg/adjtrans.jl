@@ -23,7 +23,7 @@ struct Transpose{T,S} <: AbstractMatrix{T}
     end
 end
 
-@pure function checkeltype(::Type{Transform}, ::Type{ResultEltype}, ::Type{ParentEltype}) where {Transform, ResultEltype, ParentEltype}
+function checkeltype(::Type{Transform}, ::Type{ResultEltype}, ::Type{ParentEltype}) where {Transform, ResultEltype, ParentEltype}
     if ResultEltype !== transformtype(Transform, ParentEltype)
         error(string("Element type mismatch. Tried to create an `$Transform{$ResultEltype}` ",
             "from an object with eltype `$ParentEltype`, but the element type of the ",
