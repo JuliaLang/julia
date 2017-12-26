@@ -47,6 +47,8 @@ Transpose(A) = Transpose{transformtype(Transpose,eltype(A)),typeof(A)}(A)
 # numbers are the end of the line
 Adjoint(x::Number) = adjoint(x)
 Transpose(x::Number) = transpose(x)
+Adjoint(x::Char) = x
+Transpose(x::Char) = x
 
 # unwrapping constructors
 Adjoint(A::Adjoint) = A.parent
