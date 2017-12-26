@@ -5,6 +5,9 @@ import Distributed: launch, manage
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
+@test Distributed.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
+      [:Foo, :Bar, :Baz]
+
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
 @test pmap(identity, 1:100) == [1:100...]

@@ -1888,7 +1888,7 @@
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta using import importall export)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex

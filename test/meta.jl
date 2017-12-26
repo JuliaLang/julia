@@ -128,10 +128,6 @@ show_sexpr(ioB,:(1+1))
 
 show_sexpr(ioB,QuoteNode(1),1)
 
-using Distributed
-@test Distributed.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
-      [:Foo, :Bar, :Baz]
-
 # test base/expr.jl
 baremodule B
     eval = 0

@@ -121,9 +121,16 @@ end
 extract_imports!(imports, x) = imports
 function extract_imports!(imports, ex::Expr)
     if Meta.isexpr(ex, (:import, :using))
-        return push!(imports, ex.args[1])
+        m = ex.args[1]
+        if isa(m, Expr) && m.head === :(:)
+            push!(imports, m.args[1].args[1])
+        else
+            for a in ex.args
+                push!(imports, a.args[1])
+            end
+        end
     elseif Meta.isexpr(ex, :let)
-        return extract_imports!(imports, ex.args[2])
+        extract_imports!(imports, ex.args[2])
     elseif Meta.isexpr(ex, (:toplevel, :block))
         for i in eachindex(ex.args)
             extract_imports!(imports, ex.args[i])

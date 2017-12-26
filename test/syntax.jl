@@ -114,42 +114,46 @@ macro test999_str(args...); args; end
 @test Meta.parse("1 + #= \0 =# 2") == :(1 + 2)
 
 # issue #10910
-@test Meta.parse(":(using A)") == Expr(:quote, Expr(:using, :A))
+@test Meta.parse(":(using A)") == Expr(:quote, Expr(:using, Expr(:., :A)))
 @test Meta.parse(":(using A.b, B)") == Expr(:quote,
-                                       Expr(:toplevel,
-                                            Expr(:using, :A, :b),
-                                            Expr(:using, :B)))
+                                       Expr(:using,
+                                            Expr(:., :A, :b),
+                                            Expr(:., :B)))
 @test Meta.parse(":(using A: b, c.d)") == Expr(:quote,
-                                          Expr(:toplevel,
-                                               Expr(:using, :A, :b),
-                                               Expr(:using, :A, :c, :d)))
+                                          Expr(:using,
+                                               Expr(:(:),
+                                                    Expr(:., :A),
+                                                    Expr(:., :b),
+                                                    Expr(:., :c, :d))))
 
-@test Meta.parse(":(import A)") == Expr(:quote, Expr(:import, :A))
+@test Meta.parse(":(import A)") == Expr(:quote, Expr(:import, Expr(:., :A)))
 @test Meta.parse(":(import A.b, B)") == Expr(:quote,
-                                        Expr(:toplevel,
-                                             Expr(:import, :A, :b),
-                                             Expr(:import, :B)))
+                                        Expr(:import,
+                                             Expr(:., :A, :b),
+                                             Expr(:., :B)))
 @test Meta.parse(":(import A: b, c.d)") == Expr(:quote,
-                                           Expr(:toplevel,
-                                                Expr(:import, :A, :b),
-                                                Expr(:import, :A, :c, :d)))
+                                           Expr(:import,
+                                                Expr(:(:),
+                                                     Expr(:., :A),
+                                                     Expr(:., :b),
+                                                     Expr(:., :c, :d))))
 
 # issue #11332
 @test Meta.parse("export \$(Symbol(\"A\"))") == :(export $(Expr(:$, :(Symbol("A")))))
 @test Meta.parse("export \$A") == :(export $(Expr(:$, :A)))
-@test Meta.parse("using \$a.\$b") == Expr(:using, Expr(:$, :a), Expr(:$, :b))
-@test Meta.parse("using \$a.\$b, \$c") == Expr(:toplevel, Expr(:using, Expr(:$, :a),
-                                                          Expr(:$, :b)),
-                                          Expr(:using, Expr(:$, :c)))
+@test Meta.parse("using \$a.\$b") == Expr(:using, Expr(:., Expr(:$, :a), Expr(:$, :b)))
+@test Meta.parse("using \$a.\$b, \$c") == Expr(:using,
+                                               Expr(:., Expr(:$, :a), Expr(:$, :b)),
+                                               Expr(:., Expr(:$, :c)))
 @test Meta.parse("using \$a: \$b, \$c.\$d") ==
-    Expr(:toplevel, Expr(:using, Expr(:$, :a), Expr(:$, :b)),
-         Expr(:using, Expr(:$, :a), Expr(:$, :c), Expr(:$, :d)))
+    Expr(:using,
+         Expr(:(:), Expr(:., Expr(:$, :a)), Expr(:., Expr(:$, :b)),
+              Expr(:., Expr(:$, :c), Expr(:$, :d))))
 
 # fix pr #11338 and test for #11497
-@test parseall("using \$\na") == Expr(:block, Expr(:using, :$), :a)
-@test parseall("using \$,\na") == Expr(:toplevel, Expr(:using, :$),
-                                       Expr(:using, :a))
-@test parseall("using &\na") == Expr(:block, Expr(:using, :&), :a)
+@test parseall("using \$\na") == Expr(:block, Expr(:using, Expr(:., :$)), :a)
+@test parseall("using \$,\na") == Expr(:using, Expr(:., :$), Expr(:., :a))
+@test parseall("using &\na") == Expr(:block, Expr(:using, Expr(:., :&)), :a)
 
 @test parseall("a = &\nb") == Expr(:block, Expr(:(=), :a, :&), :b)
 @test parseall("a = \$\nb") == Expr(:block, Expr(:(=), :a, :$), :b)
@@ -952,18 +956,18 @@ end
                         using ..x,
                               ..y
                     end").args[3].args)[1] ==
-      Expr(:toplevel,
-           Expr(:using, Symbol("."), Symbol("."), :x),
-           Expr(:using, Symbol("."), Symbol("."), :y))
+      Expr(:using,
+           Expr(:., :., :., :x),
+           Expr(:., :., :., :y))
 
 @test filter(!isline,
              Meta.parse("module A
                         using .B,
                               .C
                     end").args[3].args)[1] ==
-      Expr(:toplevel,
-           Expr(:using, Symbol("."), :B),
-           Expr(:using, Symbol("."), :C))
+      Expr(:using,
+           Expr(:., :., :B),
+           Expr(:., :., :C))
 
 # issue #21440
 @test Meta.parse("+(x::T,y::T) where {T} = 0") == Meta.parse("(+)(x::T,y::T) where {T} = 0")

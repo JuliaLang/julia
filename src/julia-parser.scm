@@ -1574,10 +1574,7 @@
               (error "invalid \"export\" statement"))
           `(export ,@es)))
        ((import using importall)
-        (let ((imports (parse-imports s word)))
-          (if (length= imports 1)
-              (car imports)
-              (cons 'toplevel imports))))
+        (parse-imports s word))
        ((do)
         (error "invalid \"do\" syntax"))
        (else (error "unhandled reserved word")))))))
@@ -1612,10 +1609,8 @@
                     (parse-comma-separated s (lambda (s)
                                                (parse-import s word))))))
     (if from
-        (map (lambda (x)
-               (cons (car x) (append (cdr first) (cdr x))))
-             rest)
-        (cons first rest))))
+        `(,word (|:| ,first ,@rest))
+        (list* word first rest))))
 
 (define (parse-import-dots s)
   (let loop ((l '())
@@ -1647,13 +1642,13 @@
         (loop (cons (macrocall-to-atsym (parse-unary-prefix s)) path)))
        ((or (memv nxt '(#\newline #\; #\, :))
             (eof-object? nxt))
-        `(,word ,@(reverse path)))
+        (cons '|.| (reverse path)))
        ((eqv? (string.sub (string nxt) 0 1) ".")
         (take-token s)
         (loop (cons (symbol (string.sub (string nxt) 1))
                     path)))
        (else
-        `(,word ,@(reverse path)))))))
+        (cons '|.| (reverse path)))))))
 
 ;; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated s what)
