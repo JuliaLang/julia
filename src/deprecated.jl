@@ -190,5 +190,6 @@ else
 end
 
 if VERSION < v"0.7.0-DEV.2915"
-    Base.@deprecate textwidth Compat.Unicode.textwidth
+    const textwidth = Compat.Unicode.textwidth
+    export textwidth
 end
