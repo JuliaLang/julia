@@ -483,23 +483,30 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return
     end
-    levelstr = string(level)
-    color = level < Info  ? :blue :
-            level < Warn  ? :cyan :
-            level < Error ? :yellow : :red
+    levelstr, color = level < Info  ? ("Debug", Base.debug_color()) :
+                      level < Warn  ? ("Info", Base.info_color()) :
+                      level < Error ? ("Warning", Base.warn_color()) :
+                                      ("Error", Base.error_color())
     buf = IOBuffer()
     iob = IOContext(buf, logger.stream)
-    print_with_color(color, iob, first(levelstr), "- ", bold=true)
-    msglines = split(string(message), '\n')
-    for i in 1:length(msglines)-1
-        println(iob, msglines[i])
-        print_with_color(color, iob, "|  ", bold=true)
+    msglines = split(chomp(string(message)), '\n')
+    if length(msglines) + length(kwargs) == 1
+        print_with_color(color, iob, "[ ", levelstr, ": ", bold=true)
+        print(iob, msglines[1], " ")
+    else
+        print_with_color(color, iob, "┌ ", levelstr, ": ", bold=true)
+        println(iob, msglines[1])
+        for i in 2:length(msglines)
+            print_with_color(color, iob, "│ ", bold=true)
+            println(iob, msglines[i])
+        end
+        for (key,val) in pairs(kwargs)
+            print_with_color(color, iob, "│ ", bold=true)
+            println(iob, "  ", key, " = ", val)
+        end
+        print_with_color(color, iob, "└ ", bold=true)
     end
-    println(iob, msglines[end], " -", levelstr, ":", _module, ":", basename(filepath), ":", line)
-    for (key,val) in pairs(kwargs)
-        print_with_color(color, iob, "|  ", bold=true)
-        println(iob, key, " = ", val)
-    end
+    print_with_color(:light_black, iob, "@ ", _module, " ", basename(filepath), ":", line, "\n")
     write(logger.stream, take!(buf))
     nothing
 end

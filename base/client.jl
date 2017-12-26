@@ -69,6 +69,7 @@ have_color = false
 default_color_warn = :yellow
 default_color_error = :light_red
 default_color_info = :cyan
+default_color_debug = :blue
 default_color_input = :normal
 default_color_answer = :normal
 color_normal = text_colors[:normal]
@@ -83,6 +84,7 @@ end
 error_color() = repl_color("JULIA_ERROR_COLOR", default_color_error)
 warn_color()  = repl_color("JULIA_WARN_COLOR" , default_color_warn)
 info_color()  = repl_color("JULIA_INFO_COLOR" , default_color_info)
+debug_color()  = repl_color("JULIA_DEBUG_COLOR" , default_color_debug)
 
 input_color()  = text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
 answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
