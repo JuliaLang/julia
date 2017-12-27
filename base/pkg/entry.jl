@@ -199,7 +199,11 @@ function clone(url::AbstractString, pkg::AbstractString)
         end
     catch err
         isdir(pkg) && Base.rm(pkg, recursive=true)
-        rethrow(err)
+        if isa(err, Base.LibGit2.Error.GitError) && err.msg == "Unexpected HTTP status code: 404"
+            throw(PkgError("Provided url $url is invalid"))
+        else
+            rethrow(err)
+        end
     end
     @info "Computing changes..."
     if !edit(Reqs.add, pkg)
