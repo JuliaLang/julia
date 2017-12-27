@@ -1834,18 +1834,17 @@ end
     @test 0o100 == 0x40
     @test 0o1000 == 0x200
     @test 0o724 == 0x1d4
-    @test isa(0o377,UInt8)
     @test isa(0o00,UInt8)
-    @test isa(0o000,UInt16)
+    @test isa(0o000,UInt8)
     @test isa(0o00000,UInt16)
-    @test isa(0o000000,UInt32)
+    @test isa(0o000000,UInt16)
     @test isa(0o0000000000,UInt32)
-    @test isa(0o00000000000,UInt64)
+    @test isa(0o00000000000,UInt32)
     @test isa(0o000000000000000000000,UInt64)
-    @test isa(0o0000000000000000000000,UInt128)
+    @test isa(0o0000000000000000000000,UInt64)
     @test isa(0o000000000000000000000000000000000000000000,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws Meta.ParseError Meta.parse("0o0000000000000000000000000000000000000000000")
+    @test_throws Meta.ParseError Meta.parse("0o00000000000000000000000000000000000000000000")
     @test isa(0o11,UInt8)
     @test isa(0o111,UInt8)
     @test isa(0o11111,UInt16)
@@ -1856,8 +1855,29 @@ end
     @test isa(0o1111111111111111111111,UInt64)
     @test isa(0o111111111111111111111111111111111111111111,UInt128)
     @test isa(0o1111111111111111111111111111111111111111111,UInt128)
+    @test isa(0o3777777777777777777777777777777777777777777,UInt128)
+    @test_throws Meta.ParseError Meta.parse("0o4000000000000000000000000000000000000000000")
     # remove BigInt unsigned integer literals #11105
     @test_throws Meta.ParseError Meta.parse("0o11111111111111111111111111111111111111111111")
+    @test isa(0o077, UInt8)
+    @test isa(0o377, UInt8)
+    @test isa(0o400, UInt16)
+    @test isa(0o077777, UInt16)
+    @test isa(0o177777, UInt16)
+    @test isa(0o200000, UInt32)
+    @test isa(0o00000000000, UInt32)
+    @test isa(0o17777777777, UInt32)
+    @test isa(0o40000000000, UInt64)
+    @test isa(0o0000000000000000000000, UInt64)
+    @test isa(0o1000000000000000000000, UInt64)
+    @test isa(0o2000000000000000000000, UInt128)
+    @test isa(0o0000000000000000000000000000000000000000000, UInt128)
+    @test isa(0o1000000000000000000000000000000000000000000, UInt128)
+    @test isa(0o2000000000000000000000000000000000000000000, UInt128)
+    @test_throws Meta.ParseError Meta.parse("0o4000000000000000000000000000000000000000000")
+
+    @test String([0o110, 0o145, 0o154, 0o154, 0o157, 0o054, 0o040, 0o127, 0o157, 0o162, 0o154, 0o144, 0o041]) == "Hello, World!"
+
 end
 @testset "hexadecimal literals" begin
     @test isa(0x00,UInt8)

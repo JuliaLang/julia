@@ -424,8 +424,8 @@
       n))
 
 (define (sized-uint-literal n s b)
-  (let* ((i (if (eqv? (string.char s 0) #\-) 3 2))
-         (l (* (- (length s) i) b)))
+  (let* ((i (if (eqv? (string.char s 0) #\-) 4 3))
+         (l (+ (* (- (length s) i) b) 1)))
     (cond ((<= l 8)   (numchk n s) (uint8  n))
           ((<= l 16)  (numchk n s) (uint16 n))
           ((<= l 32)  (numchk n s) (uint32 n))
