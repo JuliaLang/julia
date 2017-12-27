@@ -11,7 +11,7 @@ const options = [
 threadingOn() = ccall(:jl_threading_enabled, Cint, ()) != 0
 
 function shell_escape(str)
-    str = replace(str, "'", "'\''")
+    str = replace(str, "'" => "'\''")
     return "'$str'"
 end
 
