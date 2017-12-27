@@ -56,17 +56,33 @@ julia&gt; 0x123456789abcdef
 0x0123456789abcdef
 
 julia&gt; typeof(ans)
-UInt64</code></pre><p>This behavior is based on the observation that when one uses unsigned hex literals for integer values, one typically is using them to represent a fixed numeric byte sequence, rather than just an integer value.</p><p>Recall that the variable <a href="../../stdlib/base/#ans"><code>ans</code></a> is set to the value of the last expression evaluated in an interactive session. This does not occur when Julia code is run in other ways.</p><p>Binary and octal literals are also supported:</p><pre><code class="language-julia-repl">julia&gt; 0b10
+UInt64
+
+julia&gt; 0x11112222333344445555666677778888
+0x11112222333344445555666677778888
+
+julia&gt; typeof(ans)
+UInt128</code></pre><p>This behavior is based on the observation that when one uses unsigned hex literals for integer values, one typically is using them to represent a fixed numeric byte sequence, rather than just an integer value.</p><p>Recall that the variable <a href="../../stdlib/base/#ans"><code>ans</code></a> is set to the value of the last expression evaluated in an interactive session. This does not occur when Julia code is run in other ways.</p><p>Binary and octal literals are also supported:</p><pre><code class="language-julia-repl">julia&gt; 0b10
 0x02
 
 julia&gt; typeof(ans)
 UInt8
 
-julia&gt; 0o10
+julia&gt; 0o010
 0x08
 
 julia&gt; typeof(ans)
-UInt8</code></pre><p>The minimum and maximum representable values of primitive numeric types such as integers are given by the <a href="../../stdlib/base/#Base.typemin"><code>typemin</code></a> and <a href="../../stdlib/base/#Base.typemax"><code>typemax</code></a> functions:</p><pre><code class="language-julia-repl">julia&gt; (typemin(Int32), typemax(Int32))
+UInt8
+
+julia&gt; 0x00000000000000001111222233334444
+0x00000000000000001111222233334444
+
+julia&gt; typeof(ans)
+UInt128</code></pre><p>As for hexadecimal literals, binary and octal literals produce unsigned integer types. The size of the binary data item is the minimal needed size, if the leading digit of the literal is not <code>0</code>. In the case of leading zeros, the size is determined by the minimal needed size for a literal, which has the same length but leading digit <code>1</code>. That allows the user to control the size. Values, which cannot be stored in <code>UInt128</code> cannot be written as such literals.</p><p>Binary, octal, and hexadecimal literals may be signed by a <code>-</code> immediately preceding the unsigned literal. They produce an unsigned integer of the same size as the unsigned literal would do, with the two&#39;s complement of the value:</p><pre><code class="language-julia-repl">julia&gt; -0x2
+0xfe
+
+julia&gt; -0x0002
+0xfffe</code></pre><p>The minimum and maximum representable values of primitive numeric types such as integers are given by the <a href="../../stdlib/base/#Base.typemin"><code>typemin</code></a> and <a href="../../stdlib/base/#Base.typemax"><code>typemax</code></a> functions:</p><pre><code class="language-julia-repl">julia&gt; (typemin(Int32), typemax(Int32))
 (-2147483648, 2147483647)
 
 julia&gt; for T in [Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128]
