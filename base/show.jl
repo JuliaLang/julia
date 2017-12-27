@@ -1595,8 +1595,6 @@ end
 const DUMP_DEFAULT_MAXDEPTH = 8
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-dump(io::IO, x::DataType; maxdepth=DUMP_DEFAULT_MAXDEPTH) = ((x.abstract ? dumptype : dump)(io, x, maxdepth, ""); println(io))
-
 dump(io::IO, arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = (dump(io, arg, maxdepth, ""); println(io))
 
 """
