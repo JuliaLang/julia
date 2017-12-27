@@ -197,7 +197,9 @@ function sincos(x::T) where T<:Union{Float32, Float64}
         return -co, si
     end
 end
-sincos(x::Real) = sincos(float(x))
+sincos(x::T) where {T <: Union{Integer, Rational}} = sincos(float(x))
+sincos(x::Real) = (sin(x), cos(x))
+
 
 # There's no need to write specialized kernels, as inlining takes care of remo-
 # ving superfluous calculations.
