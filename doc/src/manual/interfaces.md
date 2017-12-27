@@ -391,6 +391,24 @@ something other than 1), you should specialize `indices`. You should also specia
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
 perhaps range-types `Ind` of your own design. For more information, see [Arrays with custom indices](@ref).
 
+## [Strided Arrays]
+
+| Methods to implement                            |                                        | Brief description                                                                     |
+|:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
+| `stride(A, i::Int)`                             |                                        | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
+| `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                         |
+
+
+A strided array is a sub-type of `AbstractArray` whose entries are stored in memory with fixed strides.
+Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines
+for more efficient linear algebra routines.
+
+A typical example of a user defined strided array is one that wraps a standard `Array`
+with additional structure. 
+
+
+
+
 ## [Broadcasting](@id man-interfaces-broadcasting)
 
 | Methods to implement | Brief description |

@@ -234,16 +234,7 @@ julia> stride(A,3)
 12
 ```
 """
-function stride(a::AbstractArray, i::Integer)
-    if i > ndims(a)
-        return length(a)
-    end
-    s = 1
-    for n = 1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-end
+function stride end
 
 """
     strides(A)
@@ -258,10 +249,7 @@ julia> strides(A)
 (1, 3, 12)
 ```
 """
-strides(A::AbstractArray) = size_to_strides(1, size(A)...)
-@inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
-size_to_strides(s, d) = (s,)
-size_to_strides(s) = ()
+function strides end
 
 
 function isassigned(a::AbstractArray, i::Int...)

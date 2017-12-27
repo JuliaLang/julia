@@ -142,6 +142,23 @@ julia> Base.LinAlg.stride1(B)
 stride1(x::Array) = 1
 stride1(x::StridedVector) = stride(x, 1)::Int
 
+function stride(a::StridedArray, i::Integer)
+    if i > ndims(a)
+        return length(a)
+    end
+    s = 1
+    for n = 1:(i-1)
+        s *= size(a, n)
+    end
+    return s
+end
+
+strides(A::StridedArray) = size_to_strides(1, size(A)...)
+@inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
+size_to_strides(s, d) = (s,)
+size_to_strides(s) = ()
+
+
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
