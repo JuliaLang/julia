@@ -10,28 +10,11 @@ import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, c
 # user-defined such objects. so do not restrict the wrapped type.
 struct Adjoint{T,S} <: AbstractMatrix{T}
     parent::S
-    function Adjoint{T,S}(A::S) where {T,S}
-        checkeltype(Adjoint, T, eltype(A))
-        new(A)
-    end
 end
 struct Transpose{T,S} <: AbstractMatrix{T}
     parent::S
-    function Transpose{T,S}(A::S) where {T,S}
-        checkeltype(Transpose, T, eltype(A))
-        new(A)
-    end
 end
 
-@pure function checkeltype(::Type{Transform}, ::Type{ResultEltype}, ::Type{ParentEltype}) where {Transform, ResultEltype, ParentEltype}
-    if ResultEltype !== transformtype(Transform, ParentEltype)
-        error(string("Element type mismatch. Tried to create an `$Transform{$ResultEltype}` ",
-            "from an object with eltype `$ParentEltype`, but the element type of the ",
-            "`$Transform` of an object with eltype `$ParentEltype` must be ",
-            "`$(transformtype(Transform, ParentEltype))`"))
-    end
-    return nothing
-end
 function transformtype(::Type{O}, ::Type{S}) where {O,S}
     # similar to promote_op(::Any, ::Type)
     @_inline_meta
@@ -90,8 +73,8 @@ axes(v::AdjOrTransAbsVec) = (Base.OneTo(1), axes(v.parent)...)
 axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
 IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
-@propagate_inbounds getindex(v::AdjOrTransAbsVec, i::Int) = wrappertype(v)(v.parent[i])
-@propagate_inbounds getindex(A::AdjOrTransAbsMat, i::Int, j::Int) = wrappertype(A)(A.parent[j, i])
+@propagate_inbounds getindex(v::AdjOrTransAbsVec{T}, i::Int) where {T} = wrappertype(v)(v.parent[i])::T
+@propagate_inbounds getindex(A::AdjOrTransAbsMat{T}, i::Int, j::Int) where{T} = wrappertype(A)(A.parent[j, i])::T
 @propagate_inbounds setindex!(v::AdjOrTransAbsVec, x, i::Int) = (setindex!(v.parent, wrappertype(v)(x), i); v)
 @propagate_inbounds setindex!(A::AdjOrTransAbsMat, x, i::Int, j::Int) = (setindex!(A.parent, wrappertype(A)(x), j, i); A)
 # AbstractArray interface, additional definitions to retain wrapper over vectors where appropriate
