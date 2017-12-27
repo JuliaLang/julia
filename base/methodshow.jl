@@ -66,8 +66,16 @@ function arg_decl_parts(m::Method)
         for t in tv
             show_env = ImmutableDict(show_env, :unionall_env => t)
         end
-        decls = Any[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
+        decls = begin
+            if startswith(string(m.name), "@")
+                Any[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
+                    for i = 1:m.nargs
+                    if argnames[i] ∉ (:__source__, :__module__)]
+            else
+                Any[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
                     for i = 1:m.nargs]
+            end
+        end
     else
         decls = Any[("", "") for i = 1:length(sig.parameters)]
     end
@@ -154,7 +162,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
         m = n==1 ? "method" : "methods"
         sname = string(name)
         ns = (isself || '#' in sname) ? sname : string("(::", name, ")")
-        what = startswith(ns, '@') ? "macro" : "generic function"
+        what = startswith(ns, '@') ? "macro" : "function"
         print(io, "# $n $m for ", what, " \"", ns, "\":")
     end
     kwtype = isdefined(mt, :kwsorter) ? typeof(mt.kwsorter) : nothing
