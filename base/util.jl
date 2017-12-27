@@ -320,13 +320,27 @@ end
 function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
     iscolor = get(io, :color, false)
-    iscolor && bold && print(buf, text_colors[:bold])
-    iscolor && print(buf, get(text_colors, color, color_normal))
     try f(IOContext(buf, io), args...)
     finally
-        iscolor && color != :nothing && print(buf, get(disable_text_style, color, text_colors[:default]))
-        iscolor && (bold || color == :bold) && print(buf, disable_text_style[:bold])
-        print(io, String(take!(buf)))
+        str = String(take!(buf))
+        if !iscolor
+            print(io, str)
+        else
+            lines = split(str, '\n')
+            first = true
+            iob = IOBuffer()
+            for line in lines
+                first || print(iob, '\n')
+                first = false
+                isempty(line) && continue
+                iscolor && bold && print(iob, text_colors[:bold])
+                iscolor && print(iob, get(text_colors, color, color_normal))
+                print(iob, line)
+                iscolor && color != :nothing && print(iob, get(disable_text_style, color, text_colors[:default]))
+                iscolor && (bold || color == :bold) && print(iob, disable_text_style[:bold])
+            end
+            print(io, String(take!(iob)))
+        end
     end
 end
 

@@ -472,6 +472,14 @@ let buf_color = IOBuffer()
     @test expected_str == String(take!(buf_color))
 end
 
+# Test that `print_with_color` on multiline input prints the ANSI codes
+# on each line
+let buf_color = IOBuffer()
+    str = "Two\nlines"
+    print_with_color(:red, IOContext(buf_color, :color=>true), str; bold=true)
+    @test String(take!(buf_color)) == "\e[1m\e[31mTwo\e[39m\e[22m\n\e[1m\e[31mlines\e[39m\e[22m"
+end
+
 if STDOUT isa Base.TTY
     @test haskey(STDOUT, :color) == true
     @test haskey(STDOUT, :bar) == false
