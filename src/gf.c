@@ -1301,6 +1301,7 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
             jl_printf(s, " in module %s", jl_symbol_name(newmod->name));
         print_func_loc(s, method);
         jl_printf(s, ".\n");
+        jl_uv_flush(s);
     }
 }
 

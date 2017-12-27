@@ -816,7 +816,7 @@ JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *fname)
     if (module->istopmod) {
         jl_printf(JL_STDOUT, "%s\r\n", fname);
 #ifdef _OS_WINDOWS_
-        uv_run(uv_default_loop(), (uv_run_mode)1);
+        jl_uv_flush(JL_STDOUT);
 #endif
     }
     uv_stat_t stbuf;

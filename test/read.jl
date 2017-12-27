@@ -537,3 +537,18 @@ end # mktempdir() do dir
     @test countlines(file,'\n') == 4
     rm(file)
 end
+
+let p = Pipe()
+    Base.link_pipe(p, julia_only_read=true, julia_only_write=true)
+    t = @schedule read(p)
+    @sync begin
+        @async write(p, zeros(UInt16, 660_000))
+        for i = 1:typemax(UInt16)
+            @async write(p, UInt16(i))
+        end
+        @async close(p.in)
+    end
+    s = reinterpret(UInt16, wait(t))
+    @test length(s) == 660_000 + typemax(UInt16)
+    @test s[(end - typemax(UInt16)):end] == UInt16.(0:typemax(UInt16))
+end
