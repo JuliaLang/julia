@@ -1082,3 +1082,7 @@ catch e
 end
     @test ex.line == 2
 end
+
+struct t_docs_abc end
+@test "t_docs_abc" in Docs.accessible(@__MODULE__)
+
