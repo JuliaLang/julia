@@ -5,15 +5,20 @@ Methods for working with Iterators.
 """
 module Iterators
 
-import Base:
+# small dance to make this work from Base or Intrinsics
+import ..@__MODULE__, ..module_parent
+const Base = module_parent(@__MODULE__)
+using .Base:
+    @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
+    tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
+    IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange
+
+import .Base:
     start, done, next, first, last,
     isempty, length, size, axes, ndims,
     eltype, iteratorsize, iteratoreltype,
     haskey, keys, values, pairs,
     getindex, setindex!, get
-
-using Base: tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
-            IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange
 
 export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
 
@@ -222,7 +227,7 @@ size(v::IndexValue)    = size(v.itr)
 @propagate_inbounds function next(v::IndexValue, state)
     indx, n = next(v.itr, state)
     item = v.data[indx]
-    (indx => item), n
+    return (Pair(indx, item), n)
 end
 @inline done(v::IndexValue, state) = done(v.itr, state)
 
