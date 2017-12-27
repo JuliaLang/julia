@@ -1876,7 +1876,7 @@ end
     @test isa(0o2000000000000000000000000000000000000000000, UInt128)
     @test_throws Meta.ParseError Meta.parse("0o4000000000000000000000000000000000000000000")
 
-    @test String([0o110, 0o145, 0o154, 0o154, 0o157, 0o054, 0o040, 0o127, 0o157, 0o162, 0o154, 0o144, 0o041]) == "Hello World!"
+    @test String([0o110, 0o145, 0o154, 0o154, 0o157, 0o054, 0o040, 0o127, 0o157, 0o162, 0o154, 0o144, 0o041]) == "Hello, World!"
 
 end
 @testset "hexadecimal literals" begin
