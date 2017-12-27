@@ -1,6 +1,7 @@
 module API
 
 import Pkg3
+using Pkg3.Display.DiffEntry
 import Pkg3: depots, logdir, TOML
 using Pkg3: Types, Dates
 using Base.Random.UUID
@@ -126,6 +127,20 @@ function test(env::EnvCache, pkgs::Vector{PackageSpec}; coverage=false, preview=
     Pkg3.Operations.test(env, pkgs; coverage=coverage)
 end
 
+
+function convert(::Type{Dict{String, VersionNumber}}, diffs::Union{Array{DiffEntry}, Void})    
+    version_status = Dict{String, VersionNumber}()
+    diffs == nothing && return version_status
+    for entry in diffs
+        version_status[entry.name] = entry.new.ver
+    end
+    return version_status
+end
+
+function installed(mode::Symbol=:manifest)::Dict{String, VersionNumber}
+    diff = Pkg3.Display.status(EnvCache(), mode, true)
+    convert(Dict{String, VersionNumber}, diff)
+end
 
 function recursive_dir_size(path)
     sz = 0

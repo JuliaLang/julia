@@ -16,9 +16,11 @@ const colors = Dict(
 )
 const color_dark = :light_black
 
-function status(env::EnvCache, mode::Symbol)
+function status(env::EnvCache, mode::Symbol, use_as_api=false)
     project₀ = project₁ = env.project
     manifest₀ = manifest₁ = env.manifest
+    diff = nothing
+    
     if env.git != nothing
         git_path = LibGit2.path(env.git)
         project_path = relpath(env.project_file, git_path)
@@ -31,21 +33,25 @@ function status(env::EnvCache, mode::Symbol)
         m₀ = filter_manifest(in_project(project₀["deps"]), manifest₀)
         m₁ = filter_manifest(in_project(project₁["deps"]), manifest₁)
         info("Status ", pathrepr(env, env.project_file))
-        print_diff(manifest_diff(m₀, m₁))
+        diff = manifest_diff(m₀, m₁)
+        use_as_api || print_diff(diff)
     end
     if mode == :manifest
         info("Status ", pathrepr(env, env.manifest_file))
-        print_diff(manifest_diff(manifest₀, manifest₁))
+        diff = manifest_diff(manifest₀, manifest₁)
+        use_as_api || print_diff(diff)
     elseif mode == :combined
         p = !in_project(merge(project₀["deps"], project₁["deps"]))
         m₀ = filter_manifest(p, manifest₀)
         m₁ = filter_manifest(p, manifest₁)
-        diff = filter!(x->x.old != x.new, manifest_diff(m₀, m₁))
-        if !isempty(diff)
+        c_diff = filter!(x->x.old != x.new, manifest_diff(m₀, m₁))
+        if !isempty(c_diff)
             info("Status ", pathrepr(env, env.manifest_file))
-            print_diff(diff)
+            use_as_api || print_diff(c_diff)
+            diff =  Base.vcat(c_diff, diff)
         end
     end
+    return diff
 end
 
 function print_project_diff(env₀::EnvCache, env₁::EnvCache)
