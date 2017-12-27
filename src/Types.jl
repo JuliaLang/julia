@@ -1009,7 +1009,7 @@ find_registered!(env::EnvCache)::Void =
 "Get registered uuids associated with a package name"
 function registered_uuids(env::EnvCache, name::String)::Vector{UUID}
     find_registered!(env, [name], UUID[])
-    return env.uuids[name]
+    return unique(env.uuids[name])
 end
 
 "Get registered paths associated with a package uuid"
@@ -1028,13 +1028,22 @@ end
 function registered_uuid(env::EnvCache, name::String)::UUID
     uuids = registered_uuids(env, name)
     length(uuids) == 0 && return UUID(zero(UInt128))
-    length(uuids) == 1 && return uuids[1]
+    choices::Vector{String} = []
+    choices_cache::Vector{Tuple{UUID, String}} = [] 
+    for uuid in uuids
+        values = registered_info(env, uuid, "repo")
+        for value in values
+            push!(choices, "Registry: $(split(value[1],"/")[end-2]) - Path: $(value[2])")
+            push!(choices_cache, (uuid, value[1]))
+        end
+    end
+    length(choices_cache) == 1 && return choices_cache[1][1]
     # prompt for which UUID was intended:
-    choices = ["$uuid – $(registered_info(env, uuid, "repo"))" for uuid in uuids]
     menu = RadioMenu(choices)
     choice = request("There are multiple registered `$name` packages, choose one:", menu)
     choice == -1 && return UUID(zero(UInt128))
-    return uuids[choice]
+    env.paths[choices_cache[choice][1]] = [choices_cache[choice][2]]
+    return choices_cache[choice][1]
 end
 
 "Determine current name for a given package UUID"
@@ -1042,7 +1051,13 @@ function registered_name(env::EnvCache, uuid::UUID)::String
     names = registered_names(env, uuid)
     length(names) == 0 && return ""
     length(names) == 1 && return names[1]
-    return registered_info(env, uuid, "name")
+    values = registered_info(env, uuid, "name")
+    name = nothing
+    for value in values
+        name  == nothing && (name = value[2])
+        name != value[2] && cmderror("package `$uuid` has multiple registered name values: $name, $(value[2])")
+    end
+    return name
 end
 
 "Return most current package info for a registered UUID"
@@ -1051,13 +1066,11 @@ function registered_info(env::EnvCache, uuid::UUID, key::String)
     isempty(paths) && cmderror("`$uuid` is not registered")
     values = []
     for path in paths
-        info = parse_toml(paths[1], "package.toml")
+        info = parse_toml(path, "package.toml")
         value = get(info, key, nothing)
-        value in values || push!(values, value)
+        push!(values, (path, value)) 
     end
-    length(values) > 1 &&
-        cmderror("package `$uuid` has multiple registered `$key` values: ", join(values, ", "))
-    return values[1]
+    return values
 end
 
 "Find package by UUID in the manifest file"
