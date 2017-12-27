@@ -138,7 +138,7 @@ function rst(io::IO, md::Table)
 end
 
 function term(io::IO, md::Table, columns)
-    cells = mapmap(terminline, md.rows)
+    cells = mapmap(x -> terminline_string(io, x), md.rows)
     padcells!(cells, md.align, len = ansi_length)
     for i = 1:length(cells)
         join(io, cells[i], " ")
