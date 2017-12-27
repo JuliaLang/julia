@@ -11,16 +11,16 @@ end
 
 @testset "Hermitian matrix exponential/log" begin
     A1 = randn(4,4) + im*randn(4,4)
-    A2 = A1 + adjoint(A1)
+    A2 = A1 + A1'
     @test exp(A2) ≈ exp(Hermitian(A2))
     @test log(A2) ≈ log(Hermitian(A2))
-    A3 = A1 * adjoint(A1) # posdef
+    A3 = A1 * A1' # posdef
     @test exp(A3) ≈ exp(Hermitian(A3))
     @test log(A3) ≈ log(Hermitian(A3))
 
     A1 = randn(4,4)
-    A3 = A1 * adjoint(A1)
-    A4 = A1 + transpose(A1)
+    A3 = A1 * A1'
+    A4 = A1 + Transpose(A1)
     @test exp(A4) ≈ exp(Symmetric(A4))
     @test log(A3) ≈ log(Symmetric(A3))
     @test log(A3) ≈ log(Hermitian(A3))
@@ -32,10 +32,10 @@ end
     aimg  = randn(n,n)/2
     @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-        asym = transpose(a)+a                 # symmetric indefinite
-        aherm = adjoint(a)+a                 # Hermitian indefinite
-        apos  = a'*a                 # Hermitian positive definite
-        aposs = apos + transpose(apos)        # Symmetric positive definite
+        asym = Transpose(a) + a                 # symmetric indefinite
+        aherm = a' + a                 # Hermitian indefinite
+        apos  = a' * a                 # Hermitian positive definite
+        aposs = apos + Transpose(apos)        # Symmetric positive definite
         ε = εa = eps(abs(float(one(eltya))))
 
         x = randn(n)
@@ -121,7 +121,7 @@ end
                 elseif eltya <: Complex
                     # test that zero imaginary component is
                     # handled properly
-                    @test ishermitian(Symmetric(b + adjoint(b)))
+                    @test ishermitian(Symmetric(b + b'))
                 end
             end
 
@@ -148,7 +148,7 @@ end
                     @test  transpose(H) === H == aherm
                 else
                     @test adjoint(S) ==  Symmetric(conj(asym))
-                    @test  transpose(H) ==  Hermitian(transpose(aherm))
+                    @test transpose(H) ==  Hermitian(copy(Transpose(aherm)))
                 end
             end
         end
@@ -255,7 +255,7 @@ end
                     let A = a[:,1:5]*a[:,1:5]'
                         # Make sure A is Hermitian even in the presence of rounding error
                         # xianyi/OpenBLAS#729
-                        A = (adjoint(A) + A) / 2
+                        A = (A + A') / 2
                         @test rank(A) == rank(Hermitian(A))
                     end
                 end
@@ -383,7 +383,7 @@ end
     @test conj(c) == conj(Array(c))
     cc = copy(c)
     @test conj!(c) == conj(Array(cc))
-    c = Hermitian(b + adjoint(b))
+    c = Hermitian(b + b')
     @test conj(c) == conj(Array(c))
     cc = copy(c)
     @test conj!(c) == conj(Array(cc))

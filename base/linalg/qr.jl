@@ -792,7 +792,7 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
             for k = m:-1:1 # Trapezoid to triangular by elementary operation
                 x = view(R, k, [k; m + 1:n])
                 τk = reflector!(x)
-                τ[k] = adjoint(τk)
+                τ[k] = conj(τk)
                 for i = 1:k - 1
                     vRi = R[i,k]
                     for j = m + 1:n
@@ -878,7 +878,7 @@ function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    B = reshape(transpose(reinterpret(T, reshape(BIn, (1, length(BIn))))), size(BIn, 1), 2*size(BIn, 2))
+    B = reshape(copy(Transpose(reinterpret(T, reshape(BIn, (1, length(BIn)))))), size(BIn, 1), 2*size(BIn, 2))
 
     X = _zeros(T, B, n)
     X[1:size(B, 1), :] = B
@@ -889,7 +889,7 @@ function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{
 # |z2|z4|      <-       |y1|y2|y3|y4|     <-      |x2|y2|     <-    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    XX = reshape(collect(reinterpret(Complex{T}, transpose(reshape(X, div(length(X), 2), 2)))), _ret_size(A, BIn))
+    XX = reshape(collect(reinterpret(Complex{T}, copy(Transpose(reshape(X, div(length(X), 2), 2))))), _ret_size(A, BIn))
     return _cut_B(XX, 1:n)
 end
 

@@ -139,19 +139,13 @@ end
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://dl.acm.org/citation.cfm?id=355796
 
-(*)(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(A,B)
-*(A::SparseMatrixCSC{Tv,Ti}, transB::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} =
-    (B = transB.parent; spmatmul(A, transpose(B)))
-*(A::SparseMatrixCSC{Tv,Ti}, adjB::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} =
-    (B = adjB.parent; spmatmul(A, adjoint(B)))
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} =
-    (A = transA.parent; spmatmul(tranpsose(A), B))
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} =
-    (A = adjA.parent; spmatmul(adjoint(A), B))
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}, transB::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} =
-    (A = transA.parent; B = transB.parent; spmatmul(transpose(A), transpose(B)))
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}, adjB::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} =
-    (A = adjA.parent; B = adjB.parent; spmatmul(adjoint(A), adjoint(B)))
+*(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(A,B)
+*(A::SparseMatrixCSC{Tv,Ti}, B::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(A, copy(B))
+*(A::SparseMatrixCSC{Tv,Ti}, B::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(A, copy(B))
+*(A::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(copy(A), B)
+*(A::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(copy(A), B)
+*(A::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(copy(A), copy(B))
+*(A::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(copy(A), copy(B))
 
 function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
                   sortindices::Symbol = :sortcols) where {Tv,Ti}
@@ -307,7 +301,7 @@ ldiv!(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where
 (\)(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::SparseMatrixCSC) where {T} = ldiv!(L, Array(B))
 (\)(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::SparseMatrixCSC) where {T} = ldiv!(U, Array(B))
 \(A::Transpose{<:Real,<:Hermitian{<:Real,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
-\(A::Transpose{<:Complex,<:Hermitian{<:Complex,<:SparseMatrixCSC}}, B::Vector) = transpose(A.parent) \ B
+\(A::Transpose{<:Complex,<:Hermitian{<:Complex,<:SparseMatrixCSC}}, B::Vector) = copy(A) \ B
 \(A::Transpose{<:Number,<:Symmetric{<:Number,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
 
 function rdiv!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
@@ -580,7 +574,7 @@ function cond(A::SparseMatrixCSC, p::Real=2)
         normA = norm(A, 1)
         return normA * normAinv
     elseif p == Inf
-        normAinv = normestinv(adjoint(A))
+        normAinv = normestinv(copy(A'))
         normA = norm(A, Inf)
         return normA * normAinv
     elseif p == 2

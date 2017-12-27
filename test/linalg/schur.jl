@@ -17,8 +17,8 @@ aimg  = randn(n,n)/2
 
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-    asym = adjoint(a)+a                  # symmetric indefinite
-    apd  = a'*a                 # symmetric positive-definite
+    asym = a' + a                 # symmetric indefinite
+    apd  = a' * a                 # symmetric positive-definite
     for (a, asym, apd) in ((a, asym, apd),
                            (view(a, 1:n, 1:n),
                             view(asym, 1:n, 1:n),
@@ -40,10 +40,10 @@ aimg  = randn(n,n)/2
         @test vecs*sch*vecs' ≈ tril(a)
         sch, vecs, vals = schur(Hermitian(asym))
         @test vecs*sch*vecs' ≈ asym
-        sch, vecs, vals = schur(Symmetric(a + transpose(a)))
-        @test vecs*sch*vecs' ≈ a + transpose(a)
-        sch, vecs, vals = schur(Tridiagonal(a + transpose(a)))
-        @test vecs*sch*vecs' ≈ Tridiagonal(a + transpose(a))
+        sch, vecs, vals = schur(Symmetric(a + Transpose(a)))
+        @test vecs*sch*vecs' ≈ a + Transpose(a)
+        sch, vecs, vals = schur(Tridiagonal(a + Transpose(a)))
+        @test vecs*sch*vecs' ≈ Tridiagonal(a + Transpose(a))
 
         tstring = sprint(show,f.T)
         zstring = sprint(show,f.Z)

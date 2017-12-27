@@ -24,7 +24,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                         (UnitLowerTriangular, :L))
 
         # Construct test matrix
-        A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't) |> t -> uplo1 == :U ? t : adjoint(t)))
+        A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't) |> t -> uplo1 == :U ? t : copy(t')))
 
 
         debug && println("elty1: $elty1, A1: $t1")
@@ -133,17 +133,17 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         # [c]transpose[!] (test views as well, see issue #14317)
         let vrange = 1:n-1, viewA1 = t1(view(A1.data, vrange, vrange))
             # transpose
-            @test transpose(A1) == transpose(Matrix(A1))
-            @test transpose(viewA1) == transpose(Matrix(viewA1))
+            @test copy(Transpose(A1)) == Transpose(Matrix(A1))
+            @test copy(Transpose(viewA1)) == Transpose(Matrix(viewA1))
             # adjoint
-            @test adjoint(A1) == adjoint(Matrix(A1))
-            @test adjoint(viewA1) == adjoint(Matrix(viewA1))
+            @test copy(A1') == Matrix(A1)'
+            @test copy(viewA1') == Matrix(viewA1)'
             # transpose!
-            @test transpose!(copy(A1)) == transpose(A1)
-            @test transpose!(t1(view(copy(A1).data, vrange, vrange))) == transpose(viewA1)
+            @test transpose!(copy(A1)) == Transpose(A1)
+            @test transpose!(t1(view(copy(A1).data, vrange, vrange))) == Transpose(viewA1)
             # adjoint!
-            @test adjoint!(copy(A1)) == adjoint(A1)
-            @test adjoint!(t1(view(copy(A1).data, vrange, vrange))) == adjoint(viewA1)
+            @test adjoint!(copy(A1)) == Adjoint(A1)
+            @test adjoint!(t1(view(copy(A1).data, vrange, vrange))) == Adjoint(viewA1)
         end
 
         # diag
@@ -166,15 +166,15 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             B = similar(A1)
             copyto!(B, A1)
             @test B == A1
-            B = similar(transpose(A1))
-            copyto!(B, transpose(A1))
-            @test B == transpose(A1)
+            B = similar(copy(Transpose(A1)))
+            copyto!(B, copy(Transpose(A1)))
+            @test B == copy(Transpose(A1))
             B = similar(viewA1)
             copyto!(B, viewA1)
             @test B == viewA1
-            B = similar(transpose(viewA1))
-            copyto!(B, transpose(viewA1))
-            @test B == transpose(viewA1)
+            B = similar(copy(Transpose(viewA1)))
+            copyto!(B, copy(Transpose(viewA1)))
+            @test B == Transpose(viewA1)
         end
 
         #exp/log
@@ -277,7 +277,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
 
                 debug && println("elty1: $elty1, A1: $t1, elty2: $elty2")
 
-                A2 = t2(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't) |> t -> uplo2 == :U ? t : adjoint(t)))
+                A2 = t2(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't) |> t -> uplo2 == :U ? t : copy(t')))
 
                 # Convert
                 if elty1 <: Real && !(elty2 <: Integer)

@@ -1336,7 +1336,7 @@ function nullspace(A::StridedMatrix{T}) where T
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
     SVD = svdfact(A, full = true)
     indstart = sum(SVD.S .> max(m,n)*maximum(SVD.S)*eps(eltype(SVD.S))) + 1
-    return adjoint(SVD.Vt[indstart:end,:])
+    return copy(SVD.Vt[indstart:end,:]')
 end
 nullspace(a::StridedVector) = nullspace(reshape(a, length(a), 1))
 

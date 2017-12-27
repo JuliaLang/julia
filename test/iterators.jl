@@ -475,6 +475,7 @@ end
 end
 
 @testset "reverse iterators" begin
+    squash(x::Number) = x
     squash(A) = reshape(A, length(A))
     Z = Array{Int,0}(uninitialized); Z[] = 17 # zero-dimensional test case
     for itr in (2:10, "∀ϵ>0", 1:0, "", (2,3,5,7,11), [2,3,5,7,11], rand(5,6), Z, 3, true, 'x', 4=>5,

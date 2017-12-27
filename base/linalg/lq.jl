@@ -70,7 +70,9 @@ AbstractArray(A::LQ) = AbstractMatrix(A)
 Matrix(A::LQ) = Array(AbstractArray(A))
 Array(A::LQ) = Matrix(A)
 
-adjoint(A::LQ{T}) where {T} = QR{T,typeof(A.factors)}(adjoint(A.factors), A.τ)
+adjoint(A::LQ) = Adjoint(A)
+Base.copy(F::Adjoint{T,<:LQ{T}}) where {T} =
+    QR{T,typeof(F.parent.factors)}(copy(Adjoint(F.parent.factors)), copy(F.parent.τ))
 
 function getproperty(F::LQ, d::Symbol)
     m, n = size(F)
@@ -136,8 +138,8 @@ function *(A::QR{TA},B::LQ{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
     mul!(Factorization{TAB}(A), Factorization{TAB}(B))
 end
-*(A::Adjoint{<:Any,<:LQ}, B::LQ) = adjoint(A.parent) * B
-*(A::LQ, B::Adjoint{<:Any,<:LQ}) = A * adjoint(B.parent)
+*(A::Adjoint{<:Any,<:LQ}, B::LQ) = copy(A) * B
+*(A::LQ, B::Adjoint{<:Any,<:LQ}) = A * copy(B)
 
 ## Multiplication by Q
 ### QB
@@ -279,9 +281,9 @@ end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
-    c2r = reshape(transpose(reinterpret(T, reshape(B, (1, length(B))))), size(B, 1), 2*size(B, 2))
+    c2r = reshape(copy(Transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = ldiv!(F, c2r)
-    return reshape(collect(reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)))),
+    return reshape(copy(reinterpret(Complex{T}, copy(Transpose(reshape(x, div(length(x), 2), 2))))),
                            isa(B, AbstractVector) ? (size(F,2),) : (size(F,2), size(B,2)))
 end
 

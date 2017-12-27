@@ -180,7 +180,7 @@ end
     res = Float64[135228751 9979252 -115270247; 9979252 10481254 10983256; -115270247 10983256 137236759]
     for A in (copy(AA), view(AA, 1:501, 1:3))
         @test *(Transpose(A), A) == res
-        @test *(Adjoint(A), Transpose(adjoint(A))) == res
+        @test *(Adjoint(A), Transpose(copy(A'))) == res
     end
     cutoff = 501
     A = reshape(1:6*cutoff,2*cutoff,3).-(6*cutoff)/2
@@ -277,7 +277,7 @@ end
     @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(I10x10,'N','N', I0x0, I0x0)
 
     A = rand(elty,3,3)
-    @test Base.LinAlg.matmul3x3('T','N',A, Matrix{elty}(I, 3, 3)) == transpose(A)
+    @test Base.LinAlg.matmul3x3('T','N',A, Matrix{elty}(I, 3, 3)) == Transpose(A)
 end
 
 @testset "#13593, #13488" begin

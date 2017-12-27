@@ -26,7 +26,7 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
     raw_a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     raw_a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
-    asym = adjoint(raw_a) + raw_a                  # symmetric indefinite
+    asym = raw_a' + raw_a                  # symmetric indefinite
     apd  = raw_a' * raw_a                 # symmetric positive-definite
     ε = εa = eps(abs(float(one(eltya))))
 
@@ -53,9 +53,9 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 @test_throws ErrorException qra.Z
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
                 @test q*squareQ(q)' ≈ Matrix(I, a_1, a_1)
-                @test q'*Matrix(1.0I, a_1, a_1)' ≈ adjoint(squareQ(q))
+                @test q'*Matrix(1.0I, a_1, a_1)' ≈ squareQ(q)'
                 @test squareQ(q)'q ≈ Matrix(I, a_1, a_1)
-                @test Matrix(1.0I, a_1, a_1)'q' ≈ adjoint(squareQ(q))
+                @test Matrix(1.0I, a_1, a_1)'q' ≈ squareQ(q)'
                 @test q*r ≈ a
                 @test a*(qra\b) ≈ b atol=3000ε
                 @test Array(qra) ≈ a
@@ -135,7 +135,7 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 a = raw_a
                 qrpa = factorize(a[:,1:n1])
                 q, r = qrpa.Q, qrpa.R
-                @test mul!(adjoint(squareQ(q)), q) ≈ Matrix(I, n, n)
+                @test mul!(copy(squareQ(q)'), q) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1),q)
                 @test mul!(squareQ(q), Adjoint(q)) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1), Adjoint(q))
@@ -145,7 +145,7 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
 
                 qra = qrfact(a[:,1:n1], Val(false))
                 q, r = qra.Q, qra.R
-                @test mul!(adjoint(squareQ(q)), q) ≈ Matrix(I, n, n)
+                @test mul!(copy(squareQ(q)'), q) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1),q)
                 @test mul!(squareQ(q), Adjoint(q)) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1),Adjoint(q))

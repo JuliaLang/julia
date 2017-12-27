@@ -61,9 +61,9 @@ Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F,
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::Factorization{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
-    c2r = reshape(transpose(reinterpret(T, reshape(B, (1, length(B))))), size(B, 1), 2*size(B, 2))
+    c2r = reshape(copy(Transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = ldiv!(F, c2r)
-    return reshape(collect(reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)))), _ret_size(F, B))
+    return reshape(copy(reinterpret(Complex{T}, copy(Transpose(reshape(x, div(length(x), 2), 2))))), _ret_size(F, B))
 end
 
 function \(F::Factorization, B::AbstractVecOrMat)
@@ -88,5 +88,5 @@ ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::Abstract
     (A = transA.parent; ldiv!(Transpose(A), copyto!(Y, B)))
 
 # fallback methods for transposed solves
-\(transF::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = (F = transF.parent; \(Adjoint(F), B))
-\(transF::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) = (F = transF.parent; conj.(\(Adjoint(F), conj.(B))))
+\(F::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = Adjoint(F.parent) \ B
+\(F::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) = conj.(Adjoint(F.parent) \ conj.(B))

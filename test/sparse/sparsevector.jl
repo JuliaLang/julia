@@ -385,14 +385,14 @@ end
     @test float(af) == af
     @test isa(af, SparseVector{Float64,Int})
     @test exact_equal(af, SparseVector(8, [2, 5, 6], [12., 35., 72.]))
-    @test sparsevec(transpose(transpose(af))) == af
+    @test sparsevec(Transpose(Transpose(af))) == af
 
     # complex
     acp = complex(af)
     @test complex(acp) == acp
     @test isa(acp, SparseVector{ComplexF64,Int})
     @test exact_equal(acp, SparseVector(8, [2, 5, 6], complex([12., 35., 72.])))
-    @test sparsevec(adjoint(adjoint(acp))) == acp
+    @test sparsevec((acp')') == acp
 end
 
 @testset "Type conversion" begin
@@ -984,7 +984,7 @@ end
     @testset "#16716" begin
         # The preceding tests miss the edge case where the sparse vector is empty
         origmat = [-1.5 -0.7; 0.0 1.0]
-        transmat = transpose(origmat)
+        transmat = copy(origmat')
         utmat = UpperTriangular(origmat)
         ltmat = LowerTriangular(transmat)
         uutmat = Base.LinAlg.UnitUpperTriangular(origmat)

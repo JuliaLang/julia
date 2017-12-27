@@ -247,7 +247,7 @@ mul!(C::StridedMatrix{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, transB:
     (A = transA.parent; B = transB.parent; gemm_wrapper!(C, 'T', 'T', A, B))
 mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
     (A = transA.parent; B = transB.parent; generic_matmatmul!(C, 'T', 'T', A, B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, adjoint(B.parent))
+mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
 
 *(adjA::Adjoint{<:Any,<:StridedMatrix{T}}, B::StridedMatrix{T}) where {T<:BlasReal} =
     (A = adjA.parent; *(Transpose(A), B))
@@ -719,18 +719,27 @@ function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
     end
     @inbounds begin
     if tA == 'T'
-        A11 = transpose(A[1,1]); A12 = transpose(A[2,1]); A21 = transpose(A[1,2]); A22 = transpose(A[2,2])
+        # TODO making these lazy could improve perf
+        A11 = copy(Transpose(A[1,1])); A12 = copy(Transpose(A[2,1]))
+        A21 = copy(Transpose(A[1,2])); A22 = copy(Transpose(A[2,2]))
     elseif tA == 'C'
-        A11 = adjoint(A[1,1]); A12 = adjoint(A[2,1]); A21 = adjoint(A[1,2]); A22 = adjoint(A[2,2])
+        # TODO making these lazy could improve perf
+        A11 = copy(A[1,1]'); A12 = copy(A[2,1]')
+        A21 = copy(A[1,2]'); A22 = copy(A[2,2]')
     else
         A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
     end
     if tB == 'T'
-        B11 = transpose(B[1,1]); B12 = transpose(B[2,1]); B21 = transpose(B[1,2]); B22 = transpose(B[2,2])
+        # TODO making these lazy could improve perf
+        B11 = copy(Transpose(B[1,1])); B12 = copy(Transpose(B[2,1]))
+        B21 = copy(Transpose(B[1,2])); B22 = copy(Transpose(B[2,2]))
     elseif tB == 'C'
-        B11 = adjoint(B[1,1]); B12 = adjoint(B[2,1]); B21 = adjoint(B[1,2]); B22 = adjoint(B[2,2])
+        # TODO making these lazy could improve perf
+        B11 = copy(B[1,1]'); B12 = copy(B[2,1]')
+        B21 = copy(B[1,2]'); B22 = copy(B[2,2]')
     else
-        B11 = B[1,1]; B12 = B[1,2]; B21 = B[2,1]; B22 = B[2,2]
+        B11 = B[1,1]; B12 = B[1,2];
+        B21 = B[2,1]; B22 = B[2,2]
     end
     C[1,1] = A11*B11 + A12*B21
     C[1,2] = A11*B12 + A12*B22
@@ -751,13 +760,15 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
     end
     @inbounds begin
     if tA == 'T'
-        A11 = transpose(A[1,1]); A12 = transpose(A[2,1]); A13 = transpose(A[3,1])
-        A21 = transpose(A[1,2]); A22 = transpose(A[2,2]); A23 = transpose(A[3,2])
-        A31 = transpose(A[1,3]); A32 = transpose(A[2,3]); A33 = transpose(A[3,3])
+        # TODO making these lazy could improve perf
+        A11 = copy(Transpose(A[1,1])); A12 = copy(Transpose(A[2,1])); A13 = copy(Transpose(A[3,1]))
+        A21 = copy(Transpose(A[1,2])); A22 = copy(Transpose(A[2,2])); A23 = copy(Transpose(A[3,2]))
+        A31 = copy(Transpose(A[1,3])); A32 = copy(Transpose(A[2,3])); A33 = copy(Transpose(A[3,3]))
     elseif tA == 'C'
-        A11 = adjoint(A[1,1]); A12 = adjoint(A[2,1]); A13 = adjoint(A[3,1])
-        A21 = adjoint(A[1,2]); A22 = adjoint(A[2,2]); A23 = adjoint(A[3,2])
-        A31 = adjoint(A[1,3]); A32 = adjoint(A[2,3]); A33 = adjoint(A[3,3])
+        # TODO making these lazy could improve perf
+        A11 = copy(A[1,1]'); A12 = copy(A[2,1]'); A13 = copy(A[3,1]')
+        A21 = copy(A[1,2]'); A22 = copy(A[2,2]'); A23 = copy(A[3,2]')
+        A31 = copy(A[1,3]'); A32 = copy(A[2,3]'); A33 = copy(A[3,3]')
     else
         A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3]
         A21 = A[2,1]; A22 = A[2,2]; A23 = A[2,3]
@@ -765,13 +776,15 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
     end
 
     if tB == 'T'
-        B11 = transpose(B[1,1]); B12 = transpose(B[2,1]); B13 = transpose(B[3,1])
-        B21 = transpose(B[1,2]); B22 = transpose(B[2,2]); B23 = transpose(B[3,2])
-        B31 = transpose(B[1,3]); B32 = transpose(B[2,3]); B33 = transpose(B[3,3])
+        # TODO making these lazy could improve perf
+        B11 = copy(Transpose(B[1,1])); B12 = copy(Transpose(B[2,1])); B13 = copy(Transpose(B[3,1]))
+        B21 = copy(Transpose(B[1,2])); B22 = copy(Transpose(B[2,2])); B23 = copy(Transpose(B[3,2]))
+        B31 = copy(Transpose(B[1,3])); B32 = copy(Transpose(B[2,3])); B33 = copy(Transpose(B[3,3]))
     elseif tB == 'C'
-        B11 = adjoint(B[1,1]); B12 = adjoint(B[2,1]); B13 = adjoint(B[3,1])
-        B21 = adjoint(B[1,2]); B22 = adjoint(B[2,2]); B23 = adjoint(B[3,2])
-        B31 = adjoint(B[1,3]); B32 = adjoint(B[2,3]); B33 = adjoint(B[3,3])
+        # TODO making these lazy could improve perf
+        B11 = copy(B[1,1]'); B12 = copy(B[2,1]'); B13 = copy(B[3,1]')
+        B21 = copy(B[1,2]'); B22 = copy(B[2,2]'); B23 = copy(B[3,2]')
+        B31 = copy(B[1,3]'); B32 = copy(B[2,3]'); B33 = copy(B[3,3]')
     else
         B11 = B[1,1]; B12 = B[1,2]; B13 = B[1,3]
         B21 = B[2,1]; B22 = B[2,2]; B23 = B[2,3]

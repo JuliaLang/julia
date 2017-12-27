@@ -11,6 +11,9 @@ struct LU{T,S<:AbstractMatrix} <: Factorization{T}
 end
 LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T} = LU{T,typeof(factors)}(factors, ipiv, info)
 
+adjoint(F::LU) = Adjoint(F)
+transpose(F::LU) = Transpose(F)
+
 # StridedMatrix
 function lufact!(A::StridedMatrix{T}, pivot::Union{Val{false}, Val{true}} = Val(true)) where T<:BlasFloat
     if pivot === Val(false)
@@ -330,21 +333,12 @@ function ldiv!(adjA::Adjoint{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOr
     _apply_inverse_ipiv!(A, B)
 end
 
-function \(transA::Transpose{T,<:LU{T,<:StridedMatrix}},
-           transB::Transpose{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat}
-    A, B = transA.parent, transB.parent
-    @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, transpose(B)) A.info
-end
-\(transA::Transpose{<:Any,<:LU}, transB::Transpose{<:Any,<:StridedVecOrMat}) =
-    (A = transA.parent; B = transB.parent; \(Transpose(A), transpose(B)))
-
-function \(adjA::Adjoint{T,<:LU{T,<:StridedMatrix}},
-           adjB::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasComplex}
-    A, B = adjA.parent, adjB.parent
-    @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, adjoint(B)) A.info
-end
-\(adjA::Adjoint{<:Any,<:LU}, adjB::Adjoint{<:Any,<:StridedVecOrMat}) =
-    (A = adjA.parent; B = adjB.parent; \(Adjoint(A), adjoint(B)))
+\(A::Adjoint{<:Any,<:LU}, B::Adjoint{<:Any,<:StridedVecOrMat}) = A \ copy(B)
+\(A::Transpose{<:Any,<:LU}, B::Transpose{<:Any,<:StridedVecOrMat}) = A \ copy(B)
+\(A::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasComplex} =
+    @assertnonsingular LAPACK.getrs!('C', A.parent.factors, A.parent.ipiv, copy(B)) A.parent.info
+\(A::Transpose{T,<:LU{T,<:StridedMatrix}}, B::Transpose{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat} =
+    @assertnonsingular LAPACK.getrs!('T', A.parent.factors, A.parent.ipiv, copy(B)) A.parent.info
 
 function det(F::LU{T}) where T
     n = checksquare(F)
@@ -590,7 +584,7 @@ function ldiv!(adjA::Adjoint{<:Any,LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat)
     return B
 end
 
-/(B::AbstractMatrix,A::LU) = transpose(Transpose(A) \ Transpose(B))
+/(B::AbstractMatrix, A::LU) = copy(Transpose(Transpose(A) \ Transpose(B)))
 
 # Conversions
 AbstractMatrix(F::LU) = (F.L * F.U)[invperm(F.p),:]

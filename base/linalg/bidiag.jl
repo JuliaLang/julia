@@ -247,8 +247,14 @@ broadcast(::typeof(trunc), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiag
 broadcast(::typeof(floor), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(floor.(T, M.dv), floor.(T, M.ev), M.uplo)
 broadcast(::typeof(ceil), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(ceil.(T, M.dv), ceil.(T, M.ev), M.uplo)
 
-transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, M.uplo == 'U' ? :L : :U)
-adjoint(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), M.uplo == 'U' ? :L : :U)
+adjoint(B::Bidiagonal) = Adjoint(B)
+transpose(B::Bidiagonal) = Transpose(B)
+adjoint(B::Bidiagonal{<:Real}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
+transpose(B::Bidiagonal{<:Number}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
+Base.copy(aB::Adjoint{<:Any,<:Bidiagonal}) =
+    (B = aB.parent; Bidiagonal(map(x -> copy.(Adjoint.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U))
+Base.copy(tB::Transpose{<:Any,<:Bidiagonal}) =
+    (B = tB.parent; Bidiagonal(map(x -> copy.(Transpose.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U))
 
 istriu(M::Bidiagonal) = M.uplo == 'U' || iszero(M.ev)
 istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)
@@ -501,8 +507,8 @@ const SpecialMatrix = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
 
 #Linear solvers
 ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
-ldiv!(transA::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(transpose(transA.parent), b)
-ldiv!(adjA::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(adjoint(adjA.parent), b)
+ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
+ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
 function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     nA,mA = size(A)
     tmp = similar(B,size(B,1))

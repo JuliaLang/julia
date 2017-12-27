@@ -365,13 +365,13 @@ end
     @test complexvec * Transpose(complexvec) == broadcast(*, complexvec, reshape(complexvec, (1, 3)))
     # Adjoint/Transpose-vector * matrix
     @test (Adjoint(realvec) * realmat)::Adjoint{Int,Vector{Int}} ==
-        reshape(adjoint(realmat) * realvec, (1, 3))
+        reshape(copy(Adjoint(realmat)) * realvec, (1, 3))
     @test (Transpose(realvec) * realmat)::Transpose{Int,Vector{Int}} ==
-        reshape(transpose(realmat) * realvec, (1, 3))
+        reshape(copy(Transpose(realmat)) * realvec, (1, 3))
     @test (Adjoint(complexvec) * complexmat)::Adjoint{Complex{Int},Vector{Complex{Int}}} ==
-        reshape(conj(adjoint(complexmat) * complexvec), (1, 3))
+        reshape(conj(copy(Adjoint(complexmat)) * complexvec), (1, 3))
     @test (Transpose(complexvec) * complexmat)::Transpose{Complex{Int},Vector{Complex{Int}}} ==
-        reshape(transpose(complexmat) * complexvec, (1, 3))
+        reshape(copy(Transpose(complexmat)) * complexvec, (1, 3))
     # Adjoint/Transpose-vector * Adjoint/Transpose-matrix
     @test (Adjoint(realvec) * Adjoint(realmat))::Adjoint{Int,Vector{Int}} ==
         reshape(realmat * realvec, (1, 3))
@@ -414,15 +414,15 @@ end
     @test (Transpose(realvec) / realmat)::Transpose ≈ rowrealvec / realmat
     @test (Transpose(complexvec) / complexmat)::Transpose ≈ rowcomplexvec / complexmat
     # /(Adjoint/Transpose-vector, Adjoint matrix)
-    @test (Adjoint(realvec) / Adjoint(realmat))::Adjoint ≈ rowrealvec / adjoint(realmat)
-    @test (Adjoint(complexvec) / Adjoint(complexmat))::Adjoint ≈ conj(rowcomplexvec) / adjoint(complexmat)
-    @test (Transpose(realvec) / Adjoint(realmat))::Transpose ≈ rowrealvec / adjoint(realmat)
-    @test (Transpose(complexvec) / Adjoint(complexmat))::Transpose ≈ rowcomplexvec / adjoint(complexmat)
+    @test (Adjoint(realvec) / Adjoint(realmat))::Adjoint ≈ rowrealvec / copy(Adjoint(realmat))
+    @test (Adjoint(complexvec) / Adjoint(complexmat))::Adjoint ≈ conj(rowcomplexvec) / copy(Adjoint(complexmat))
+    @test (Transpose(realvec) / Adjoint(realmat))::Transpose ≈ rowrealvec / copy(Adjoint(realmat))
+    @test (Transpose(complexvec) / Adjoint(complexmat))::Transpose ≈ rowcomplexvec / copy(Adjoint(complexmat))
     # /(Adjoint/Transpose-vector, Transpose matrix)
-    @test (Adjoint(realvec) / Transpose(realmat))::Adjoint ≈ rowrealvec / transpose(realmat)
-    @test (Adjoint(complexvec) / Transpose(complexmat))::Adjoint ≈ conj(rowcomplexvec) / transpose(complexmat)
-    @test (Transpose(realvec) / Transpose(realmat))::Transpose ≈ rowrealvec / transpose(realmat)
-    @test (Transpose(complexvec) / Transpose(complexmat))::Transpose ≈ rowcomplexvec / transpose(complexmat)
+    @test (Adjoint(realvec) / Transpose(realmat))::Adjoint ≈ rowrealvec / copy(Transpose(realmat))
+    @test (Adjoint(complexvec) / Transpose(complexmat))::Adjoint ≈ conj(rowcomplexvec) / copy(Transpose(complexmat))
+    @test (Transpose(realvec) / Transpose(realmat))::Transpose ≈ rowrealvec / copy(Transpose(realmat))
+    @test (Transpose(complexvec) / Transpose(complexmat))::Transpose ≈ rowcomplexvec / copy(Transpose(complexmat))
 end
 
 @testset "norm of Adjoint/Transpose-wrapped vectors" begin

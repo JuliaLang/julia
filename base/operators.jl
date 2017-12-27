@@ -475,7 +475,7 @@ julia> inv(A) * x
   4.5
 ```
 """
-\(x,y) = adjoint(Adjoint(y)/Adjoint(x))
+\(x,y) = adjoint(adjoint(y)/adjoint(x))
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
 # counts can shift in either direction, and are translated here to unsigned
@@ -717,29 +717,6 @@ fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 # postfix apostophre
 Core.postfixapostrophize(x) = Adjoint(x)
 
-"""
-    adjoint(A)
-
-The conjugate transposition operator (`'`). Note that `adjoint` is applied recursively to
-elements.
-
-This operation is intended for linear algebra usage - for general data manipulation see
-[`permutedims`](@ref).
-
-# Examples
-```jldoctest
-julia> A =  [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
- 3+2im  9+2im
- 8+7im  4+6im
-
-julia> adjoint(A)
-2×2 Array{Complex{Int64},2}:
- 3-2im  8-7im
- 9-2im  4-6im
-```
-"""
-adjoint(x) = conj(transpose(x))
 conj(x) = x
 
 

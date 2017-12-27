@@ -134,14 +134,14 @@ srand(100)
             @test_throws DimensionMismatch BLAS.ger!(α,Vector{elty}(uninitialized,n+1),y,copy(A))
 
             A = rand(elty,n,n)
-            A = A + transpose(A)
+            A = A + Transpose(A)
             @test issymmetric(A)
             @test triu(BLAS.syr!('U',α,x,copy(A))) ≈ triu(A + α*x*Transpose(x))
             @test_throws DimensionMismatch BLAS.syr!('U',α,Vector{elty}(uninitialized,n+1),copy(A))
 
             if elty <: Complex
                 A = rand(elty,n,n)
-                A = A + adjoint(A)
+                A = A + A'
                 α = real(α)
                 @test triu(BLAS.her!('U',α,x,copy(A))) ≈ triu(A + α*x*x')
                 @test_throws DimensionMismatch BLAS.her!('U',α,Vector{elty}(uninitialized,n+1),copy(A))
@@ -163,8 +163,8 @@ srand(100)
         @testset "symmetric/Hermitian multiplication" begin
             x = rand(elty,n)
             A = rand(elty,n,n)
-            Aherm = A + adjoint(A)
-            Asymm = A + transpose(A)
+            Aherm = A + A'
+            Asymm = A + Transpose(A)
             @testset "symv and hemv" begin
                 @test BLAS.symv('U',Asymm,x) ≈ Asymm*x
                 offsizevec, offsizemat = Array{elty}.(uninitialized,(n+1, (n,n+1)))
@@ -281,7 +281,7 @@ srand(100)
         @test_throws DimensionMismatch BLAS.gemm!('N','N', one(elty), I43, I4, elm1, I4)
         @test_throws DimensionMismatch BLAS.gemm!('T','N', one(elty), I43, I4, elm1, I43)
         @test_throws DimensionMismatch BLAS.gemm!('N','T', one(elty), I43, I43, elm1, I43)
-        @test_throws DimensionMismatch BLAS.gemm!('T','T', one(elty), I43, I43, elm1, adjoint(I43))
+        @test_throws DimensionMismatch BLAS.gemm!('T','T', one(elty), I43, I43, elm1, Matrix{elty}(I, 3, 4))
     end
     @testset "gemm compared to (sy)(he)rk" begin
         if eltype(elm1) <: Complex

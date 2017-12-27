@@ -48,7 +48,7 @@ using Main.TestHelpers.OAs
     a[1,2] = 2
     a[2,1] = 3
     a[2,2] = 4
-    b = adjoint(a)
+    b = copy(a')
     @test a[1,1] == 1. && a[1,2] == 2. && a[2,1] == 3. && a[2,2] == 4.
     @test b[1,1] == 1. && b[2,1] == 2. && b[1,2] == 3. && b[2,2] == 4.
     a[[1 2 3 4]] = 0
@@ -609,7 +609,7 @@ let A, B, C, D
     C = unique(B, 1)
     @test sortrows(C) == sortrows(A)
     @test unique(B, 2) == B
-    @test transpose(unique(transpose(B), 2)) == C
+    @test unique(B', 2)' == C
 
     # Along third dimension
     D = cat(3, B, B)
@@ -623,7 +623,7 @@ end
 @testset "large matrices transpose" begin
     for i = 1 : 3
         a = rand(200, 300)
-        @test isequal(adjoint(a), permutedims(a, [2, 1]))
+        @test isequal(copy(a'), permutedims(a, [2, 1]))
     end
 end
 
@@ -1350,7 +1350,7 @@ end
 @test size([]') == (1,0)
 
 # issue #6996
-@test adjoint(Any[ 1 2; 3 4 ]) == transpose(Any[ 1 2; 3 4 ])
+@test copy(Adjoint(Any[ 1 2; 3 4 ])) == copy(Transpose(Any[ 1 2; 3 4 ]))
 
 # map with promotion (issue #6541)
 @test map(join, ["z", "я"]) == ["z", "я"]

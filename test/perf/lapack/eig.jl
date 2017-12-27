@@ -14,7 +14,7 @@ end
 function symeigtest(n, iter)
     local d, v
     A = rand(n,n)
-    A = A + adjoint(A)
+    A = A + A'
     for i = 1:iter
         d,v = eig(A)
     end
@@ -25,7 +25,7 @@ end
 function hermitianeigtest(n, iter)
     local d, v
     A = rand(ComplexF64, n, n)
-    A = A + adjoint(A)
+    A = A + A'
     for i = 1:iter
         d,v = eig(A)
     end

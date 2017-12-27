@@ -576,8 +576,7 @@ function test_cat(::Type{TestAbstractArray})
 
     # hvcat
     for nbc in (1, 2, 3, 4, 5, 6)
-        @test hvcat(nbc, 1:120...) ==
-              transpose(reshape([1:120...], nbc, round(Int, 120 / nbc)))
+        @test hvcat(nbc, 1:120...) == reshape([1:120...], nbc, round(Int, 120 / nbc))'
     end
 
     @test_throws ArgumentError hvcat(7, 1:20...)

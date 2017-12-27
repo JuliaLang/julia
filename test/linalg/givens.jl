@@ -23,8 +23,8 @@ using Base.LinAlg: mul!, Adjoint, Transpose
                 @test mul!(G,Matrix{elty}(I, 10, 10)) == [G[i,j] for i=1:10,j=1:10]
 
                 @testset "transposes" begin
-                    @test adjoint(G)*G*Matrix(elty(1)I, 10, 10) ≈ Matrix(I, 10, 10)
-                    @test adjoint(R)*(R*Matrix(elty(1)I, 10, 10)) ≈ Matrix(I, 10, 10)
+                    @test copy(G')*G*Matrix(elty(1)I, 10, 10) ≈ Matrix(I, 10, 10)
+                    @test copy(R')*(R*Matrix(elty(1)I, 10, 10)) ≈ Matrix(I, 10, 10)
                     @test_throws ErrorException transpose(G)
                     @test_throws ErrorException transpose(R)
                 end
@@ -40,9 +40,9 @@ using Base.LinAlg: mul!, Adjoint, Transpose
 
         I10 = Matrix{elty}(I, 10, 10)
         G, _ = givens(one(elty),zero(elty),9,10)
-        @test adjoint(G*I10) * (G*I10) ≈ I10
+        @test (G*I10)' * (G*I10) ≈ I10
         K, _ = givens(zero(elty),one(elty),9,10)
-        @test adjoint(K*I10) * (K*I10) ≈ I10
+        @test (K*I10)' * (K*I10) ≈ I10
 
         @testset "Givens * vectors" begin
             if isa(A, Array)

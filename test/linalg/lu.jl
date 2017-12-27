@@ -106,7 +106,7 @@ dimg  = randn(n)/2
                 for (bb, cc) in ((Bs, Cs), (view(Bs, 1:n, 1), view(Cs, 1:n)))
                     @test norm(a*(lua\bb) - bb, 1) < ε*κ*n*2 # Two because the right hand side has two columns
                     @test norm(a'*(lua'\bb) - bb, 1) < ε*κ*n*2 # Two because the right hand side has two columns
-                    @test norm(a'*(lua'\a') - adjoint(a), 1) < ε*κ*n^2
+                    @test norm(a'*(lua'\a') - a', 1) < ε*κ*n^2
                     @test norm(a*(lua\cc) - cc, 1) < ε*κ*n # cc is a vector
                     @test norm(a'*(lua'\cc) - cc, 1) < ε*κ*n # cc is a vector
                     @test AbstractArray(lua) ≈ a
@@ -151,9 +151,9 @@ dimg  = randn(n)/2
                 for bb in (Bs, view(Bs, 1:n, 1))
                     @test norm(d*(lud\bb) - bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                     if eltya <: Real
-                        @test norm((Transpose(lud)\bb) - Array(transpose(d))\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+                        @test norm((Transpose(lud)\bb) - Array(Transpose(d))\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                         if eltya != Int && eltyb != Int
-                            @test norm(Base.LinAlg.ldiv!(Transpose(lud), copy(bb)) - Array(transpose(d))\bb, 1) < ε*κd*n*2
+                            @test norm(Base.LinAlg.ldiv!(Transpose(lud), copy(bb)) - Array(Transpose(d))\bb, 1) < ε*κd*n*2
                         end
                     end
                     if eltya <: Complex
@@ -164,7 +164,7 @@ dimg  = randn(n)/2
             if eltya <: BlasFloat && eltyb <: BlasFloat
                 e = rand(eltyb,n,n)
                 @test norm(e/lud - e/d,1) < ε*κ*n^2
-                @test norm((Transpose(lud)\e') - Array(transpose(d))\e',1) < ε*κd*n^2
+                @test norm((Transpose(lud)\e') - Array(Transpose(d))\e',1) < ε*κd*n^2
                 #test singular
                 du = rand(eltya,n-1)
                 dl = rand(eltya,n-1)

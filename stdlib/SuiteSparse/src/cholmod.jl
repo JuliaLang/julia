@@ -347,6 +347,8 @@ end
 Factor(ptr::Ptr{C_Factor{Tv}}) where {Tv<:VTypes} = Factor{Tv}(ptr)
 Factor(x::Factor) = x
 
+Base.LinAlg.adjoint(F::Factor) = Adjoint(F)
+
 # All pointer loads should be checked to make sure that SuiteSparse is not called with
 # a C_NULL pointer which could cause a segfault. Pointers are set to null
 # when serialized so this can happen when mutiple processes are in use.

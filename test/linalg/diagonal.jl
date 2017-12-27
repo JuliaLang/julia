@@ -103,7 +103,7 @@ srand(1)
                 @test ldiv!(D, copy(U)) ≈ DM\U atol=atol_three
                 @test ldiv!(Transpose(D), copy(U)) ≈ DM\U atol=atol_three
                 @test ldiv!(Adjoint(conj(D)), copy(U)) ≈ DM\U atol=atol_three
-                Uc = adjoint(U)
+                Uc = copy(U')
                 target = scale!(Uc, inv.(D.diag))
                 @test rdiv!(Uc, D) ≈ target atol=atol_three
                 @test_throws DimensionMismatch rdiv!(Matrix{elty}(I, n-1, n-1), D)
