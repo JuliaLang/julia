@@ -1072,3 +1072,10 @@ let buf = IOBuffer()
     show(IOContext(buf, :color=>true), "text/plain", md"*emph*")
     @test String(take!(buf)) == "  \e[4memph\e[24m\n"
 end
+
+# table rendering with term #25213
+t = """
+    a   |   b
+    :-- | --:
+    1   |   2"""
+@test sprint(Markdown.term, Markdown.parse(t), 0) == "a b\n– –\n1 2\n"
