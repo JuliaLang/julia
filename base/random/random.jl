@@ -3,7 +3,8 @@
 module Random
 
 using Base.dSFMT
-using Base.GMP: Limb, MPZ
+using Base.GMP.MPZ
+using Base.GMP: Limb
 using Base: BitInteger, BitInteger_types, BitUnsigned, @gc_preserve
 
 import Base: copymutable, copy, copy!, ==, hash

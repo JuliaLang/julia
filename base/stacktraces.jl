@@ -8,7 +8,7 @@ module StackTraces
 
 import Base: hash, ==, show
 import Base.Serializer: serialize, deserialize
-using Base.Printf.@printf
+using Base.Printf: @printf
 
 export StackTrace, StackFrame, stacktrace, catch_stacktrace
 

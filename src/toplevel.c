@@ -638,6 +638,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
                 if (name != NULL)
                     u = (jl_module_t*)jl_eval_global_var(import, name);
                 if (jl_is_module(u)) {
+                    if (from) {
+                        jl_depwarn("`using A: B` will only be allowed for single bindings, not modules. Use "
+                                   "`using A.B` instead",
+                                   (jl_value_t*)jl_symbol("using"));
+                    }
                     jl_module_using(m, u);
                     if (m == jl_main_module && name == NULL) {
                         // TODO: for now, `using A` in Main also creates an explicit binding for `A`
@@ -646,6 +651,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
                     }
                 }
                 else {
+                    if (!from) {
+                        jl_depwarn("`using A.B` will only be allowed for modules, not single bindings. Use "
+                                   "`using A: B` instead",
+                                   (jl_value_t*)jl_symbol("using"));
+                    }
                     jl_module_t *replacement = deprecation_replacement_module(import, name);
                     if (replacement)
                         jl_module_using(m, replacement);

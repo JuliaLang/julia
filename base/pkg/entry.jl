@@ -7,7 +7,7 @@ import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
 using ...LibGit2
 import ...Pkg.PkgError
 using ..Types
-using Base.Printf.@printf
+using Base.Printf: @printf
 
 macro recover(ex)
     quote

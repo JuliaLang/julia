@@ -7,7 +7,7 @@ module LibGit2
 
 import Base: ==
 using Base: coalesce, notnothing
-using Base.Printf.@printf
+using Base.Printf: @printf
 
 export with, GitRepo, GitConfig
 

@@ -43,7 +43,7 @@ end
 @test foundfunc(h_inlined(), :g_inlined)
 @test foundfunc(h_noinlined(), :g_noinlined)
 
-using Base.pushmeta!, Base.popmeta!
+using Base: pushmeta!, popmeta!
 
 macro attach(val, ex)
     esc(_attach(val, ex))

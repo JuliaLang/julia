@@ -25,7 +25,7 @@ using Base: sign_mask, exponent_mask, exponent_one,
 
 using Core.Intrinsics: sqrt_llvm
 
-using Base.IEEEFloat
+using Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f, x)
     throw(DomainError(x, string("$f will only return a complex result if called with a ",
