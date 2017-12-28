@@ -1032,17 +1032,24 @@ JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
 // logging tools --------------------------------------------------------------
 
 void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
-            jl_value_t *file, jl_value_t *line, jl_value_t *kwargs,
+            jl_value_t *file, jl_value_t *line, jl_value_t *kwargs, int async,
             jl_value_t *msg)
 {
     static jl_value_t *logmsg_func = NULL;
+    jl_array_t *Workqueue = NULL;
     if (!logmsg_func && jl_base_module) {
         jl_value_t *corelogging = jl_get_global(jl_base_module, jl_symbol("CoreLogging"));
         if (corelogging && jl_is_module(corelogging)) {
             logmsg_func = jl_get_global((jl_module_t*)corelogging, jl_symbol("logmsg_shim"));
         }
     }
-    if (!logmsg_func) {
+    if (!Workqueue) {
+        jl_value_t *wq = jl_get_global(jl_base_module, jl_symbol("Workqueue"));
+        if (wq && jl_is_array(wq) && jl_array_eltype(wq) == jl_task_type) {
+            Workqueue = (jl_array_t*)wq;
+        }
+    }
+    if (!logmsg_func || (async && !Workqueue)) {
         ios_t str_;
         ios_mem(&str_, 300);
         uv_stream_t* str = (uv_stream_t*)&str_;
@@ -1075,14 +1082,24 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
     args[0] = logmsg_func;
     args[1] = jl_box_long(level);
     args[2] = msg;
-    // Would some of the jl_nothing here be better as `missing` instead?
+    // Some of the jl_nothing here would perhaps be better as `missing` instead.
     args[3] = module ? module  : jl_nothing;
     args[4] = group  ? group   : jl_nothing;
     args[5] = id     ? id      : jl_nothing;
     args[6] = file   ? file    : jl_nothing;
     args[7] = line   ? line    : jl_nothing;
     args[8] = kwargs ? kwargs  : (jl_value_t*)jl_alloc_vec_any(0);
-    jl_apply(args, nargs);
+    if (async) {
+        jl_task_t *task = jl_apply_in_new_task(args, nargs);
+        // The following duplicates Base.enq_work() without calling into julia.
+        uv_stop(jl_global_event_loop());
+        jl_array_grow_end(Workqueue, 1);
+        jl_array_ptr_set(Workqueue, jl_array_len(Workqueue)-1, (jl_value_t*)task);
+        task->state = jl_symbol("queued");
+    }
+    else {
+        jl_apply(args, nargs);
+    }
     JL_GC_POP();
 }
 
@@ -1123,6 +1140,19 @@ JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n)
     depwarn_args[1] = jl_box_long(n);
     jl_apply(depwarn_args, 2);
     JL_GC_POP();
+}
+
+JL_DLLEXPORT jl_task_t *jl_apply_in_new_task(jl_value_t **args0, uint32_t nargs)
+{
+    jl_array_t *args = jl_alloc_vec_any(nargs);
+    jl_value_t *closure = NULL;
+    JL_GC_PUSH2(&args, &closure);
+    for (uint32_t i = 0; i < nargs; ++i)
+        jl_array_ptr_set(args, i, args0[i]);
+    closure = jl_new_struct(jl_deferredcall_type, args);
+    jl_task_t* task = jl_new_task(closure, 0);
+    JL_GC_POP();
+    return task;
 }
 
 #ifdef __cplusplus

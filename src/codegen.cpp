@@ -1743,20 +1743,9 @@ extern "C" void jl_write_malloc_log(void)
 
 // --- constant determination ---
 
-static void show_source_loc(jl_codectx_t &ctx, JL_STREAM *out)
-{
-    jl_printf(out, "in %s at %s", ctx.name, ctx.file.str().c_str());
-}
-
-extern "C" void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
-
 static void cg_bdw(jl_codectx_t &ctx, jl_binding_t *b)
 {
-    jl_binding_deprecation_warning(ctx.module, b);
-    if (b->deprecated == 1 && jl_options.depwarn) {
-        show_source_loc(ctx, JL_STDERR);
-        jl_printf(JL_STDERR, "\n");
-    }
+    jl_binding_deprecation_warning(b, ctx.module);
 }
 
 static jl_value_t *static_apply_type(jl_codectx_t &ctx, const jl_cgval_t *args, size_t nargs)

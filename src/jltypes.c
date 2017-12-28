@@ -112,6 +112,7 @@ jl_unionall_t *jl_pointer_type;
 jl_typename_t *jl_pointer_typename;
 jl_datatype_t *jl_void_type;
 jl_datatype_t *jl_voidpointer_type;
+jl_datatype_t *jl_deferredcall_type=NULL;
 jl_typename_t *jl_namedtuple_typename;
 jl_unionall_t *jl_namedtuple_type;
 jl_value_t *jl_an_empty_vec_any=NULL;

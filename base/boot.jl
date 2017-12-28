@@ -450,6 +450,12 @@ show(@nospecialize a) = show(STDOUT, a)
 print(@nospecialize a...) = print(STDOUT, a...)
 println(@nospecialize a...) = println(STDOUT, a...)
 
+# Unspecialized closure
+struct DeferredCall
+    args::Array{Any,1}
+end
+(d::DeferredCall)() = ccall(:jl_apply_generic, Any, (Ptr{Any}, UInt32), ccall(:jl_array_ptr, Ptr{Any}, (Any,), d.args), UInt32(Intrinsics.arraylen(d.args)))
+
 struct GeneratedFunctionStub
     gen
     argnames::Array{Any,1}

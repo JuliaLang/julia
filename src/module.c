@@ -229,15 +229,13 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
     return jl_get_binding_(m, var, NULL);
 }
 
-void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
-
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
     if (b == NULL)
         jl_undefined_var_error(var);
     if (b->deprecated)
-        jl_binding_deprecation_warning(m, b);
+        jl_binding_deprecation_warning(b, m);
     return b;
 }
 
@@ -292,10 +290,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                 /* with #22763, external packages wanting to replace
                    deprecated Base bindings should simply export the new
                    binding */
-                jl_printf(JL_STDERR,
-                          "WARNING: importing deprecated binding %s.%s into %s.\n",
-                          jl_symbol_name(from->name), jl_symbol_name(s),
-                          jl_symbol_name(to->name));
+                jl_binding_deprecation_warning(b, to);
             }
         }
 
@@ -451,7 +446,7 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
     if (b == NULL) return NULL;
-    if (b->deprecated) jl_binding_deprecation_warning(m, b);
+    if (b->deprecated) jl_binding_deprecation_warning(b, m);
     return b->value;
 }
 
@@ -510,63 +505,78 @@ jl_binding_t *jl_get_dep_message_binding(jl_module_t *m, jl_binding_t *deprecate
     return jl_get_binding(m, jl_symbol(dep_binding_name));
 }
 
-void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
+// Emit a deprecation warning for the use of deprecated binding `b`, as
+// ascessed in `from_module`.
+void jl_binding_deprecation_warning(jl_binding_t *b, jl_module_t* from_module)
 {
     // Only print a warning for deprecated == 1 (renamed).
     // For deprecated == 2 (moved to a package) the binding is to a function
     // that throws an error, so we don't want to print a warning too.
-    if (b->deprecated == 1 && jl_options.depwarn) {
-        if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR)
-            jl_printf(JL_STDERR, "WARNING: ");
+    if (b->deprecated == 1 && jl_options.depwarn != JL_OPTIONS_DEPWARN_OFF) {
+        ios_t str_;
+        ios_mem(&str_, 300);
+        uv_stream_t* str = (uv_stream_t*)&str_;
         jl_binding_t *dep_message_binding = NULL;
         if (b->owner) {
-            jl_printf(JL_STDERR, "%s.%s is deprecated",
+            jl_printf(str, "%s.%s is deprecated",
                       jl_symbol_name(b->owner->name), jl_symbol_name(b->name));
             dep_message_binding = jl_get_dep_message_binding(b->owner, b);
         }
-        else
-            jl_printf(JL_STDERR, "%s is deprecated", jl_symbol_name(b->name));
+        else {
+            jl_printf(str, "%s is deprecated", jl_symbol_name(b->name));
+        }
 
         if (dep_message_binding && dep_message_binding->value) {
             if (jl_isa(dep_message_binding->value, (jl_value_t*)jl_string_type)) {
-                jl_uv_puts(JL_STDERR, jl_string_data(dep_message_binding->value),
-                    jl_string_len(dep_message_binding->value));
+                jl_uv_puts(str, jl_string_data(dep_message_binding->value),
+                           jl_string_len(dep_message_binding->value));
             } else {
-                jl_static_show(JL_STDERR, dep_message_binding->value);
+                jl_static_show(str, dep_message_binding->value);
             }
         } else {
             jl_value_t *v = b->value;
             if (v) {
                 if (jl_is_type(v) || jl_is_module(v)) {
-                    jl_printf(JL_STDERR, ", use ");
-                    jl_static_show(JL_STDERR, v);
-                    jl_printf(JL_STDERR, " instead");
+                    jl_printf(str, ", use ");
+                    jl_static_show(str, v);
+                    jl_printf(str, " instead");
                 }
                 else {
                     jl_methtable_t *mt = jl_gf_mtable(v);
                     if (mt != NULL && (mt->defs.unknown != jl_nothing ||
                                        jl_isa(v, (jl_value_t*)jl_builtin_type))) {
-                        jl_printf(JL_STDERR, ", use ");
+                        jl_printf(str, ", use ");
                         if (mt->module != jl_core_module) {
-                            jl_static_show(JL_STDERR, (jl_value_t*)mt->module);
-                            jl_printf(JL_STDERR, ".");
+                            jl_static_show(str, (jl_value_t*)mt->module);
+                            jl_printf(str, ".");
                         }
-                        jl_printf(JL_STDERR, "%s", jl_symbol_name(mt->name));
-                        jl_printf(JL_STDERR, " instead");
+                        jl_printf(str, "%s", jl_symbol_name(mt->name));
+                        jl_printf(str, " instead");
                     }
                 }
             }
         }
-        jl_printf(JL_STDERR, ".\n");
+        jl_printf(str, ".\n  In module %s", jl_symbol_name(from_module->name));
+        jl_printf(str, " (maybe near %s:%d)", jl_filename, jl_lineno);
 
-        if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR) {
-            if (jl_lineno == 0) {
-                jl_printf(JL_STDERR, " in module %s\n", jl_symbol_name(m->name));
-            }
-            else {
-                jl_printf(JL_STDERR, "  likely near %s:%d\n", jl_filename, jl_lineno);
-            }
-        }
+        jl_value_t *file=NULL, *line=NULL, *msg=NULL, *id=NULL;
+        jl_array_t *kwargs=NULL;
+        JL_GC_PUSH5(&file, &line, &msg, &kwargs, &id);
+        file = jl_cstr_to_string(jl_filename);
+        line = jl_box_long(jl_lineno);
+        msg = jl_pchar_to_string(str_.buf, str_.size);
+        // Crude id for limiting log printing; with this we'll see the message
+        // once per (module,binding).
+        jl_value_t *id_parts[] = {(jl_value_t*)from_module, (jl_value_t*)b->name};
+        id = jl_f_tuple(NULL, id_parts, sizeof(id_parts)/sizeof(id_parts[0]));
+        kwargs = jl_alloc_vec_any(2);
+        jl_array_ptr_set(kwargs, 0, jl_symbol("maxlog"));
+        jl_array_ptr_set(kwargs, 1, jl_box_long(1));
+        ios_close(&str_);
+        jl_log(JL_LOGLEVEL_WARN, (jl_value_t*)from_module,
+               (jl_value_t*)jl_symbol("depwarn"), id, file, line,
+               (jl_value_t*)kwargs, 1, msg);
+        JL_GC_POP();
 
         if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR) {
             if (b->owner)
