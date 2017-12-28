@@ -140,9 +140,9 @@ julia> Base.LinAlg.stride1(B)
 ```
 """
 stride1(x::Array) = 1
-stride1(x::StridedVector) = stride(x, 1)::Int
+stride1(x::DenseArray) = stride(x, 1)::Int
 
-function stride(a::StridedArray, i::Integer)
+function stride(a::DenseArray, i::Integer)
     if i > ndims(a)
         return length(a)
     end
@@ -153,7 +153,8 @@ function stride(a::StridedArray, i::Integer)
     return s
 end
 
-strides(A::StridedArray) = size_to_strides(1, size(A)...)
+strides(A::DenseArray) = size_to_strides(1, size(A)...)
+
 
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)

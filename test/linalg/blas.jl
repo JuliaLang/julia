@@ -333,7 +333,7 @@ end
 
 Base.size(A::WrappedArray) = size(A.A)
 Base.getindex(A::WrappedArray, i::Int) = A.A[i]
-Base.getindex(A::WrappedArray, I::Vararg{Int, N}) = A.A[I...]
+Base.getindex(A::WrappedArray{T, N}, I::Vararg{Int, N}) where {T, N} = A.A[I...]
 Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_convert(Ptr{T}, A.A)
 Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
 
@@ -348,21 +348,19 @@ Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
         @test BLAS.nrm2(1, x, 2) == elty(2)
         @test BLAS.nrm2(x) == BLAS.nrm2(x.A)
         BLAS.asum(x) == elty(13)
-        axpy!,
-        axpby!,
-        blascopy!,
-        dot,
-        dotc,
-        dotu,
-        scal!,
-        scal,
-        nrm2,
-        iamax,
+        BLAS.axpy!(elty(2), x, y)
+        @test y == WrappedArray(elty[5, 14, 8, 16])
+        BLAS.axpby!(elty(2), x, elty(3), y)
+        @test y == WrappedArray(elty[19, 50, 30, 56])
+        @test BLAS.iamax(x) == 2
     # Level 2
+        A = WrappedArray(elty[1 2; 3 4])
+        x = WrappedArray(elty[1, 2])
+        y = WrappedArray(elty[3, 4])
+        @test BLAS.gemv!('N', elty(2), A, x, elty(1), y) isa WrappedArray
+        @test y == WrappedArray(elty[13, 26])
         gbmv!,
         gbmv,
-        gemv!,
-        gemv,
         hemv!,
         hemv,
         sbmv!,
