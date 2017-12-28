@@ -2181,7 +2181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear algebra",
     "title": "Linear algebra",
     "category": "section",
-    "text": "In addition to (and as part of) its support for multi-dimensional arrays, Julia provides native implementations of many common and useful linear algebra operations. Basic operations, such as trace, det, and inv are all supported:julia> A = [1 2 3; 4 1 6; 7 8 1]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  1  6\n 7  8  1\n\njulia> trace(A)\n3\n\njulia> det(A)\n104.0\n\njulia> inv(A)\n3×3 Array{Float64,2}:\n -0.451923   0.211538    0.0865385\n  0.365385  -0.192308    0.0576923\n  0.240385   0.0576923  -0.0673077As well as other useful operations, such as finding eigenvalues or eigenvectors:julia> A = [-4. -17.; 2. 2.]\n2×2 Array{Float64,2}:\n -4.0  -17.0\n  2.0    2.0\n\njulia> eigvals(A)\n2-element Array{Complex{Float64},1}:\n -1.0 + 5.0im\n -1.0 - 5.0im\n\njulia> eigvecs(A)\n2×2 Array{Complex{Float64},2}:\n  0.945905+0.0im        0.945905-0.0im\n -0.166924-0.278207im  -0.166924+0.278207imIn addition, Julia provides many factorizations which can be used to speed up problems such as linear solve or matrix exponentiation by pre-factorizing a matrix into a form more amenable (for performance or memory reasons) to the problem. See the documentation on factorize for more information. As an example:julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]\n3×3 Array{Float64,2}:\n   1.5   2.0  -4.0\n   3.0  -1.0  -6.0\n -10.0   2.3   4.0\n\njulia> factorize(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0 0.0; -0.15 1.0 0.0; -0.3 -0.132196 1.0]\n[-10.0 2.3 4.0; 0.0 2.345 -3.4; 0.0 0.0 -5.24947]Since A is not Hermitian, symmetric, triangular, tridiagonal, or bidiagonal, an LU factorization may be the best we can do. Compare with:julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]\n3×3 Array{Float64,2}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> factorize(B)\nBase.LinAlg.BunchKaufman{Float64,Array{Float64,2}}\nD factor:\n3×3 Tridiagonal{Float64,Array{Float64,1}}:\n -1.64286   0.0   ⋅\n  0.0      -2.8  0.0\n   ⋅        0.0  5.0\nU factor:\n3×3 Base.LinAlg.UnitUpperTriangular{Float64,Array{Float64,2}}:\n 1.0  0.142857  -0.8\n 0.0  1.0       -0.6\n 0.0  0.0        1.0\npermutation:\n3-element Array{Int64,1}:\n 1\n 2\n 3Here, Julia was able to detect that B is in fact symmetric, and used a more appropriate factorization. Often it's possible to write more efficient code for a matrix that is known to have certain properties e.g. it is symmetric, or tridiagonal. Julia provides some special types so that you can \"tag\" matrices as having these properties. For instance:julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]\n3×3 Array{Float64,2}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> sB = Symmetric(B)\n3×3 Symmetric{Float64,Array{Float64,2}}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0sB has been tagged as a matrix that's (real) symmetric, so for later operations we might perform on it, such as eigenfactorization or computing matrix-vector products, efficiencies can be found by only referencing half of it. For example:julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]\n3×3 Array{Float64,2}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> sB = Symmetric(B)\n3×3 Symmetric{Float64,Array{Float64,2}}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> x = [1; 2; 3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> sB\\x\n3-element Array{Float64,1}:\n -1.7391304347826084\n -1.1086956521739126\n -1.4565217391304346The \\ operation here performs the linear solution. Julia's parser provides convenient dispatch to specialized methods for the transpose of a matrix left-divided by a vector, or for the various combinations of transpose operations in matrix-matrix solutions. Many of these are further specialized for certain special matrix types. For example, A\\B will end up calling Base.LinAlg.A_ldiv_B! while A'\\B will end up calling Base.LinAlg.Ac_ldiv_B, even though we used the same left-division operator. This works for matrices too: A.'\\B.' would call Base.LinAlg.At_ldiv_Bt. The left-division operator is pretty powerful and it's easy to write compact, readable code that is flexible enough to solve all sorts of systems of linear equations."
+    "text": "In addition to (and as part of) its support for multi-dimensional arrays, Julia provides native implementations of many common and useful linear algebra operations. Basic operations, such as trace, det, and inv are all supported:julia> A = [1 2 3; 4 1 6; 7 8 1]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  1  6\n 7  8  1\n\njulia> trace(A)\n3\n\njulia> det(A)\n104.0\n\njulia> inv(A)\n3×3 Array{Float64,2}:\n -0.451923   0.211538    0.0865385\n  0.365385  -0.192308    0.0576923\n  0.240385   0.0576923  -0.0673077As well as other useful operations, such as finding eigenvalues or eigenvectors:julia> A = [-4. -17.; 2. 2.]\n2×2 Array{Float64,2}:\n -4.0  -17.0\n  2.0    2.0\n\njulia> eigvals(A)\n2-element Array{Complex{Float64},1}:\n -1.0 + 5.0im\n -1.0 - 5.0im\n\njulia> eigvecs(A)\n2×2 Array{Complex{Float64},2}:\n  0.945905+0.0im        0.945905-0.0im\n -0.166924-0.278207im  -0.166924+0.278207imIn addition, Julia provides many factorizations which can be used to speed up problems such as linear solve or matrix exponentiation by pre-factorizing a matrix into a form more amenable (for performance or memory reasons) to the problem. See the documentation on factorize for more information. As an example:julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]\n3×3 Array{Float64,2}:\n   1.5   2.0  -4.0\n   3.0  -1.0  -6.0\n -10.0   2.3   4.0\n\njulia> factorize(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0 0.0; -0.15 1.0 0.0; -0.3 -0.132196 1.0]\n[-10.0 2.3 4.0; 0.0 2.345 -3.4; 0.0 0.0 -5.24947]Since A is not Hermitian, symmetric, triangular, tridiagonal, or bidiagonal, an LU factorization may be the best we can do. Compare with:julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]\n3×3 Array{Float64,2}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> factorize(B)\nBase.LinAlg.BunchKaufman{Float64,Array{Float64,2}}\nD factor:\n3×3 Tridiagonal{Float64,Array{Float64,1}}:\n -1.64286   0.0   ⋅\n  0.0      -2.8  0.0\n   ⋅        0.0  5.0\nU factor:\n3×3 Base.LinAlg.UnitUpperTriangular{Float64,Array{Float64,2}}:\n 1.0  0.142857  -0.8\n 0.0  1.0       -0.6\n 0.0  0.0        1.0\npermutation:\n3-element Array{Int64,1}:\n 1\n 2\n 3Here, Julia was able to detect that B is in fact symmetric, and used a more appropriate factorization. Often it's possible to write more efficient code for a matrix that is known to have certain properties e.g. it is symmetric, or tridiagonal. Julia provides some special types so that you can \"tag\" matrices as having these properties. For instance:julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]\n3×3 Array{Float64,2}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> sB = Symmetric(B)\n3×3 Symmetric{Float64,Array{Float64,2}}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0sB has been tagged as a matrix that's (real) symmetric, so for later operations we might perform on it, such as eigenfactorization or computing matrix-vector products, efficiencies can be found by only referencing half of it. For example:julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]\n3×3 Array{Float64,2}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> sB = Symmetric(B)\n3×3 Symmetric{Float64,Array{Float64,2}}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> x = [1; 2; 3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> sB\\x\n3-element Array{Float64,1}:\n -1.7391304347826084\n -1.1086956521739126\n -1.4565217391304346The \\ operation here performs the linear solution. The left-division operator is pretty powerful and it's easy to write compact, readable code that is flexible enough to solve all sorts of systems of linear equations."
 },
 
 {
@@ -7245,7 +7245,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "Function",
-    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n"
+    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n"
 },
 
 {
@@ -7277,7 +7277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n"
+    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n"
 },
 
 {
@@ -7589,7 +7589,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n"
 },
 
 {
@@ -9085,7 +9085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = RowVector([1+im, 1-im])\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = RowVector([1+im, 1-im])\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -10653,7 +10653,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.split",
     "category": "Function",
-    "text": "split(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}\n\nBreak the ConfigEntry up to the following pieces: section, subsection, name, and value.\n\nExamples\n\nGiven the git configuration file containing:\n\n[credential \"https://example.com\"]\n    username = me\n\nThe ConfigEntry would look like the following:\n\njulia> entry\nConfigEntry(\"credential.https://example.com.username\", \"me\")\n\njulia> split(entry)\n(\"credential\", \"https://example.com\", \"username\", \"me\")\n\nRefer to the git config syntax documenation for more details.\n\n\n\nsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)\n\nReturn an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by search's second argument (i.e. a single character, collection of characters, string, or regular expression). If chars is omitted, it defaults to the set of all space characters, and keep is taken to be false. The two keyword arguments are optional: they are a maximum size for the result and a flag determining whether empty fields should be kept in the result.\n\nExamples\n\njulia> a = \"Ma.rch\"\n\"Ma.rch\"\n\njulia> split(a,\".\")\n2-element Array{SubString{String},1}:\n \"Ma\"\n \"rch\"\n\n\n\n"
+    "text": "split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)\n\nReturn an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by search's second argument (i.e. a single character, collection of characters, string, or regular expression). If chars is omitted, it defaults to the set of all space characters, and keep is taken to be false. The two keyword arguments are optional: they are a maximum size for the result and a flag determining whether empty fields should be kept in the result.\n\nExamples\n\njulia> a = \"Ma.rch\"\n\"Ma.rch\"\n\njulia> split(a,\".\")\n2-element Array{SubString{String},1}:\n \"Ma\"\n \"rch\"\n\n\n\nsplit(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}\n\nBreak the ConfigEntry up to the following pieces: section, subsection, name, and value.\n\nExamples\n\nGiven the git configuration file containing:\n\n[credential \"https://example.com\"]\n    username = me\n\nThe ConfigEntry would look like the following:\n\njulia> entry\nConfigEntry(\"credential.https://example.com.username\", \"me\")\n\njulia> split(entry)\n(\"credential\", \"https://example.com\", \"username\", \"me\")\n\nRefer to the git config syntax documenation for more details.\n\n\n\n"
 },
 
 {
@@ -12429,7 +12429,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n"
 },
 
 {
@@ -14121,179 +14121,27 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/linalg/#Base.LinAlg.A_ldiv_B!",
+    "location": "stdlib/linalg/#Base.LinAlg.mul!",
     "page": "Linear Algebra",
-    "title": "Base.LinAlg.A_ldiv_B!",
+    "title": "Base.LinAlg.mul!",
     "category": "Function",
-    "text": "A_ldiv_B!([Y,] A, B) -> Y\n\nCompute A \\ B in-place and store the result in Y, returning the result. If only two arguments are passed, then A_ldiv_B!(A, B) overwrites B with the result.\n\nThe argument A should not be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by factorize or cholfact). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., lufact!), and performance-critical situations requiring A_ldiv_B! usually also require fine-grained control over the factorization of A.\n\n\n\n"
+    "text": "mul!(Y, A, B) -> Y\n\nCalculates the matrix-matrix or matrix-vector product AB and stores the result in Y, overwriting the existing value of Y. Note that Y must not be aliased with either A or B.\n\nExamples\n\njulia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); mul!(Y, A, B);\n\njulia> Y\n2×2 Array{Float64,2}:\n 3.0  3.0\n 7.0  7.0\n\n\n\nmul!(A, B)\n\nCalculate the matrix-matrix product AB, overwriting one of A or B (but not both), and return the result (the overwritten argument).\n\n\n\n"
 },
 
 {
-    "location": "stdlib/linalg/#Base.A_ldiv_Bc",
+    "location": "stdlib/linalg/#Base.LinAlg.ldiv!",
     "page": "Linear Algebra",
-    "title": "Base.A_ldiv_Bc",
+    "title": "Base.LinAlg.ldiv!",
     "category": "Function",
-    "text": "A_ldiv_Bc(A, B)\n\nFor matrices or vectors A and B, calculates A \\ B.\n\n\n\n"
+    "text": "ldiv!([Y,] A, B) -> Y\n\nCompute A \\ B in-place and store the result in Y, returning the result. If only two arguments are passed, then ldiv!(A, B) overwrites B with the result.\n\nThe argument A should not be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by factorize or cholfact). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., lufact!), and performance-critical situations requiring ldiv! usually also require fine-grained control over the factorization of A.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/linalg/#Base.A_ldiv_Bt",
+    "location": "stdlib/linalg/#Base.LinAlg.rdiv!",
     "page": "Linear Algebra",
-    "title": "Base.A_ldiv_Bt",
+    "title": "Base.LinAlg.rdiv!",
     "category": "Function",
-    "text": "A_ldiv_Bt(A, B)\n\nFor matrices or vectors A and B, calculates A \\ B.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.LinAlg.A_mul_B!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.A_mul_B!",
-    "category": "Function",
-    "text": "A_mul_B!(A, B)\n\nCalculate the matrix-matrix product AB, overwriting one of A or B (but not both), and return the result (the overwritten argument).\n\n\n\nA_mul_B!(Y, A, B) -> Y\n\nCalculates the matrix-matrix or matrix-vector product AB and stores the result in Y, overwriting the existing value of Y. Note that Y must not be aliased with either A or B.\n\nExamples\n\njulia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);\n\njulia> Y\n2×2 Array{Float64,2}:\n 3.0  3.0\n 7.0  7.0\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.A_mul_Bc",
-    "page": "Linear Algebra",
-    "title": "Base.A_mul_Bc",
-    "category": "Function",
-    "text": "A_mul_Bc(A, B)\n\nFor matrices or vectors A and B, calculates AB.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.A_mul_Bt",
-    "page": "Linear Algebra",
-    "title": "Base.A_mul_Bt",
-    "category": "Function",
-    "text": "A_mul_Bt(A, B)\n\nFor matrices or vectors A and B, calculates AB.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.A_rdiv_Bc",
-    "page": "Linear Algebra",
-    "title": "Base.A_rdiv_Bc",
-    "category": "Function",
-    "text": "A_rdiv_Bc(A, B)\n\nFor matrices or vectors A and B, calculates A  B.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.A_rdiv_Bt",
-    "page": "Linear Algebra",
-    "title": "Base.A_rdiv_Bt",
-    "category": "Function",
-    "text": "A_rdiv_Bt(A, B)\n\nFor matrices or vectors A and B, calculates A  B.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.Ac_ldiv_B",
-    "page": "Linear Algebra",
-    "title": "Base.Ac_ldiv_B",
-    "category": "Function",
-    "text": "Ac_ldiv_B(A, B)\n\nFor matrices or vectors A and B, calculates A \\ B.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.LinAlg.Ac_ldiv_B!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.Ac_ldiv_B!",
-    "category": "Function",
-    "text": "Ac_ldiv_B!([Y,] A, B) -> Y\n\nSimilar to A_ldiv_B!, but return A \\ B, computing the result in-place in Y (or overwriting B if Y is not supplied).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.Ac_ldiv_Bc",
-    "page": "Linear Algebra",
-    "title": "Base.Ac_ldiv_Bc",
-    "category": "Function",
-    "text": "Ac_ldiv_Bc(A, B)\n\nFor matrices or vectors A and B, calculates A \\ B.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.Ac_mul_B",
-    "page": "Linear Algebra",
-    "title": "Base.Ac_mul_B",
-    "category": "Function",
-    "text": "Ac_mul_B(A, B)\n\nFor matrices or vectors A and B, calculates AB.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.Ac_mul_Bc",
-    "page": "Linear Algebra",
-    "title": "Base.Ac_mul_Bc",
-    "category": "Function",
-    "text": "Ac_mul_Bc(A, B)\n\nFor matrices or vectors A and B, calculates A B.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.Ac_rdiv_B",
-    "page": "Linear Algebra",
-    "title": "Base.Ac_rdiv_B",
-    "category": "Function",
-    "text": "Ac_rdiv_B(A, B)\n\nFor matrices or vectors A and B, calculates A  B.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.Ac_rdiv_Bc",
-    "page": "Linear Algebra",
-    "title": "Base.Ac_rdiv_Bc",
-    "category": "Function",
-    "text": "Ac_rdiv_Bc(A, B)\n\nFor matrices or vectors A and B, calculates A  B.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.At_ldiv_B",
-    "page": "Linear Algebra",
-    "title": "Base.At_ldiv_B",
-    "category": "Function",
-    "text": "At_ldiv_B(A, B)\n\nFor matrices or vectors A and B, calculates A \\ B.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.LinAlg.At_ldiv_B!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.At_ldiv_B!",
-    "category": "Function",
-    "text": "At_ldiv_B!([Y,] A, B) -> Y\n\nSimilar to A_ldiv_B!, but return A \\ B, computing the result in-place in Y (or overwriting B if Y is not supplied).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.At_ldiv_Bt",
-    "page": "Linear Algebra",
-    "title": "Base.At_ldiv_Bt",
-    "category": "Function",
-    "text": "At_ldiv_Bt(A, B)\n\nFor matrices or vectors A and B, calculates A \\ B.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.At_mul_B",
-    "page": "Linear Algebra",
-    "title": "Base.At_mul_B",
-    "category": "Function",
-    "text": "At_mul_B(A, B)\n\nFor matrices or vectors A and B, calculates AB.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.At_mul_Bt",
-    "page": "Linear Algebra",
-    "title": "Base.At_mul_Bt",
-    "category": "Function",
-    "text": "At_mul_Bt(A, B)\n\nFor matrices or vectors A and B, calculates AB.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.At_rdiv_B",
-    "page": "Linear Algebra",
-    "title": "Base.At_rdiv_B",
-    "category": "Function",
-    "text": "At_rdiv_B(A, B)\n\nFor matrices or vectors A and B, calculates A  B.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/linalg/#Base.At_rdiv_Bt",
-    "page": "Linear Algebra",
-    "title": "Base.At_rdiv_Bt",
-    "category": "Function",
-    "text": "At_rdiv_Bt(A, B)\n\nFor matrices or vectors A and B, calculates A  B.\n\n\n\n"
+    "text": "rdiv!([Y,] A, B) -> Y\n\nCompute A / B in-place and store the result in Y, returning the result. If only two arguments are passed, then rdiv!(A, B) overwrites A with the result.\n\nThe argument B should not be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by factorize or cholfact). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., lufact!), and performance-critical situations requiring rdiv! usually also require fine-grained control over the factorization of B.\n\n\n\n"
 },
 
 {
@@ -14301,7 +14149,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Low-level matrix operations",
     "category": "section",
-    "text": "Matrix operations involving transpositions operations like A' \\ B are converted by the Julia parser into calls to specially named functions like Ac_ldiv_B. If you want to overload these operations for your own types, then it is useful to know the names of these functions.Also, in many cases there are in-place versions of matrix operations that allow you to supply a pre-allocated output vector or matrix.  This is useful when optimizing critical code in order to avoid the overhead of repeated allocations. These in-place operations are suffixed with ! below (e.g. A_mul_B!) according to the usual Julia convention.Base.LinAlg.A_ldiv_B!\nBase.A_ldiv_Bc\nBase.A_ldiv_Bt\nBase.LinAlg.A_mul_B!\nBase.A_mul_Bc\nBase.A_mul_Bt\nBase.A_rdiv_Bc\nBase.A_rdiv_Bt\nBase.Ac_ldiv_B\nBase.LinAlg.Ac_ldiv_B!\nBase.Ac_ldiv_Bc\nBase.Ac_mul_B\nBase.Ac_mul_Bc\nBase.Ac_rdiv_B\nBase.Ac_rdiv_Bc\nBase.At_ldiv_B\nBase.LinAlg.At_ldiv_B!\nBase.At_ldiv_Bt\nBase.At_mul_B\nBase.At_mul_Bt\nBase.At_rdiv_B\nBase.At_rdiv_Bt"
+    "text": "In many cases there are in-place versions of matrix operations that allow you to supply a pre-allocated output vector or matrix.  This is useful when optimizing critical code in order to avoid the overhead of repeated allocations. These in-place operations are suffixed with ! below (e.g. mul!) according to the usual Julia convention.Base.LinAlg.mul!\nBase.LinAlg.ldiv!\nBase.LinAlg.rdiv!"
 },
 
 {
