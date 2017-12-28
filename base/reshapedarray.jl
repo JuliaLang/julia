@@ -180,6 +180,9 @@ parent(A::ReshapedArray) = A.parent
 parentindices(A::ReshapedArray) = map(s->1:s, size(parent(A)))
 reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
 
+stride(A::StridedReshapedArray, i::Int) = _cumsumprodsizes(A, i)
+strides(A::StridedReshapedArray) = size_to_strides(A)
+
 @inline ind2sub_rs(::Tuple{}, i::Int) = i
 @inline ind2sub_rs(strds, i) = _ind2sub_rs(strds, i - 1)
 @inline _ind2sub_rs(::Tuple{}, ind) = (ind + 1,)

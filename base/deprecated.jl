@@ -3495,12 +3495,19 @@ end
 #     if i > ndims(a)
 #         return length(a)
 #     end
-#     s = 1         
+#     s = 1
 #     for n = 1:(i-1)
 #         s *= size(a, n)
 #     end
 #     return s
+#     _stride(a, i)
 # end
+
+# BLAS-like in-place y = x*α+y function (see also the version in blas.jl
+#                                          for BlasFloat Arrays)
+# @deprecate Base.axpy!(α, x::AbstractArray, y::AbstractArray) (y .= α .* x)
+# @deprecate Base.axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer}) (view(y, ry) .= α .* view(x, rx))
+# @deprecate Base.axpby!(α, x::AbstractArray, β, y::AbstractArray) (y .= α .* x .+ β .* y)
 
 # END 0.7 deprecations
 

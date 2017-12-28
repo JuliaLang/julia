@@ -449,7 +449,7 @@ for (fname, elty) in ((:daxpy_,:Float64),
         end
     end
 end
-function axpy!(alpha::Number, x::Union{DenseArray{T},AbstractVector{T}}, y::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasFloat
+function axpy!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where T<:BlasFloat
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
@@ -1282,7 +1282,6 @@ for (fname, elty) in ((:dsyrk_,:Float64),
            if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
            k  = size(A, trans == 'N' ? 2 : 1)
            chkstride1(A)
-           chkstride1(B)
            chkstride1(C)
            ccall((@blasfunc($fname), libblas), Cvoid,
                  (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},

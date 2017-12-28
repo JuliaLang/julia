@@ -1354,8 +1354,8 @@ for (vop, fun, mode) in [(:_vadd, :+, 1),
                          (:_vmul, :*, 0)]
     @eval begin
         $(vop)(x::AbstractSparseVector, y::AbstractSparseVector) = _binarymap($(fun), x, y, $mode)
-        $(vop)(x::StridedVector, y::AbstractSparseVector) = _binarymap($(fun), x, y, $mode)
-        $(vop)(x::AbstractSparseVector, y::StridedVector) = _binarymap($(fun), x, y, $mode)
+        $(vop)(x::AbstractVector, y::AbstractSparseVector) = _binarymap($(fun), x, y, $mode)
+        $(vop)(x::AbstractSparseVector, y::AbstractVector) = _binarymap($(fun), x, y, $mode)
     end
 end
 
@@ -1368,13 +1368,13 @@ broadcast(::typeof(*), x::AbstractSparseVector{Bool}, y::BitVector) = _vmul(x, y
 for (op, vop) in [(:+, :_vadd), (:-, :_vsub), (:*, :_vmul)]
     op != :* && @eval begin
         $(op)(x::AbstractSparseVector, y::AbstractSparseVector) = $(vop)(x, y)
-        $(op)(x::StridedVector, y::AbstractSparseVector) = $(vop)(x, y)
-        $(op)(x::AbstractSparseVector, y::StridedVector) = $(vop)(x, y)
+        $(op)(x::AbstractVector, y::AbstractSparseVector) = $(vop)(x, y)
+        $(op)(x::AbstractSparseVector, y::AbstractVector) = $(vop)(x, y)
     end
     @eval begin
         broadcast(::typeof($op), x::AbstractSparseVector, y::AbstractSparseVector) = $(vop)(x, y)
-        broadcast(::typeof($op), x::StridedVector, y::AbstractSparseVector) = $(vop)(x, y)
-        broadcast(::typeof($op), x::AbstractSparseVector, y::StridedVector) = $(vop)(x, y)
+        broadcast(::typeof($op), x::AbstractVector, y::AbstractSparseVector) = $(vop)(x, y)
+        broadcast(::typeof($op), x::AbstractSparseVector, y::AbstractVector) = $(vop)(x, y)
     end
 end
 
@@ -1382,17 +1382,17 @@ end
 
 broadcast(::typeof(min), x::SparseVector{<:Real}, y::SparseVector{<:Real}) = _binarymap(min, x, y, 2)
 broadcast(::typeof(min), x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(min, x, y, 2)
-broadcast(::typeof(min), x::StridedVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(min, x, y, 2)
-broadcast(::typeof(min), x::AbstractSparseVector{<:Real}, y::StridedVector{<:Real}) = _binarymap(min, x, y, 2)
+broadcast(::typeof(min), x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(min, x, y, 2)
+broadcast(::typeof(min), x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) = _binarymap(min, x, y, 2)
 
 broadcast(::typeof(max), x::SparseVector{<:Real}, y::SparseVector{<:Real}) = _binarymap(max, x, y, 2)
 broadcast(::typeof(max), x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(max, x, y, 2)
-broadcast(::typeof(max), x::StridedVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(max, x, y, 2)
-broadcast(::typeof(max), x::AbstractSparseVector{<:Real}, y::StridedVector{<:Real}) = _binarymap(max, x, y, 2)
+broadcast(::typeof(max), x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(max, x, y, 2)
+broadcast(::typeof(max), x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) = _binarymap(max, x, y, 2)
 
 complex(x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(complex, x, y, 1)
-complex(x::StridedVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(complex, x, y, 1)
-complex(x::AbstractSparseVector{<:Real}, y::StridedVector{<:Real}) = _binarymap(complex, x, y, 1)
+complex(x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(complex, x, y, 1)
+complex(x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) = _binarymap(complex, x, y, 1)
 
 ### Reduction
 
@@ -1438,7 +1438,7 @@ adjoint(sv::SparseVector) = Adjoint(sv)
 
 # axpy
 
-function LinAlg.axpy!(a::Number, x::SparseVectorUnion, y::StridedVector)
+function LinAlg.axpy!(a::Number, x::SparseVectorUnion, y::AbstractVector)
     length(x) == length(y) || throw(DimensionMismatch())
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
@@ -1479,7 +1479,7 @@ scale!(a::Complex, x::SparseVectorUnion) = (scale!(nonzeros(x), a); x)
 (/)(x::SparseVectorUnion, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
 
 # dot
-function dot(x::StridedVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
+function dot(x::AbstractVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
     nzind = nonzeroinds(y)
@@ -1543,7 +1543,7 @@ end
 ### BLAS-2 / dense A * sparse x -> dense y
 
 # lowrankupdate (BLAS.ger! like)
-function LinAlg.lowrankupdate!(A::StridedMatrix, x::StridedVector, y::SparseVectorUnion, α::Number = 1)
+function LinAlg.lowrankupdate!(A::StridedMatrix, x::AbstractVector, y::SparseVectorUnion, α::Number = 1)
     nzi = nonzeroinds(y)
     nzv = nonzeros(y)
     @inbounds for (j,v) in zip(nzi,nzv)
@@ -1565,10 +1565,10 @@ function (*)(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     mul!(y, A, x)
 end
 
-mul!(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     mul!(one(Tx), A, x, zero(Ty), y)
 
-function mul!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector)
+function mul!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::AbstractVector)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
@@ -1603,10 +1603,10 @@ function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector
     mul!(y, Transpose(A), x)
 end
 
-mul!(y::StridedVector{Ty}, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     (A = transA.parent; mul!(one(Tx), Transpose(A), x, zero(Ty), y))
 
-function mul!(α::Number, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, β::Number, y::StridedVector)
+function mul!(α::Number, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, β::Number, y::AbstractVector)
     A = transA.parent
     m, n = size(A)
     length(x) == m && length(y) == n || throw(DimensionMismatch())
@@ -1662,10 +1662,10 @@ end
 
 # * and mul!
 
-mul!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     mul!(one(Tx), A, x, zero(Ty), y)
 
-function mul!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)
+function mul!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::AbstractVector)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
@@ -1695,21 +1695,21 @@ end
 
 # * and *(Tranpose(A), B)
 
-mul!(y::StridedVector{Ty}, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     (A = transA.parent; mul!(one(Tx), Transpose(A), x, zero(Ty), y))
 
-mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, β::Number, y::StridedVector) =
+mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, β::Number, y::AbstractVector) =
     (A = transA.parent; _At_or_Ac_mul_B!(*, α, A, x, β, y))
 
-mul!(y::StridedVector{Ty}, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     (A = adjA.parent; mul!(one(Tx), Adjoint(A), x, zero(Ty), y))
 
-mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, β::Number, y::StridedVector) =
+mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, β::Number, y::AbstractVector) =
     (A = adjA.parent; _At_or_Ac_mul_B!(dot, α, A, x, β, y))
 
 function _At_or_Ac_mul_B!(tfun::Function,
                           α::Number, A::SparseMatrixCSC, x::AbstractSparseVector,
-                          β::Number, y::StridedVector)
+                          β::Number, y::AbstractVector)
     m, n = size(A)
     length(x) == m && length(y) == n || throw(DimensionMismatch())
     n == 0 && return y
