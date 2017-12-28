@@ -868,26 +868,19 @@ struct FloatWrapper <: Real
     x::Float64
 end
 
-import Base: +, -, *, /, ^, sin, cos, exp, sinh, cosh, convert, isfinite, float, promote_rule
+import Base: +, -, *, /, ^, sin, cos, exp, convert, isfinite
 
 for op in (:+, :-, :*, :/, :^)
-    @eval $op(x::FloatWrapper, y::FloatWrapper) = FloatWrapper($op(x.x, y.x))
+    @eval $op(x::FloatWrapper, y::FloatWrapper) = $op(x.x, y.x)
 end
 
-for op in (:sin, :cos, :exp, :sinh, :cosh, :-)
-    @eval $op(x::FloatWrapper) = FloatWrapper($op(x.x))
-end
-
-for op in (:isfinite,)
+for op in (:sin, :cos, :exp, :isfinite)
     @eval $op(x::FloatWrapper) = $op(x.x)
 end
 
 convert(::Type{FloatWrapper}, x::Int) = FloatWrapper(float(x))
-promote_rule(::Type{FloatWrapper}, ::Type{Int}) = FloatWrapper
 
-float(x::FloatWrapper) = x
-
-@testset "exp(Complex(a, b)) for a and b of non-standard real type #25292" begin
+@testset "exp(Complex(a, b)) for a and b of non-standard real type" begin
 
     x = FloatWrapper(3.1)
     y = FloatWrapper(4.1)
