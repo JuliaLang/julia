@@ -326,3 +326,85 @@ end
     @test triu(A[1,:] * A[1,:]') ≈ BLAS.her!('U', one(real(elty)), view(A, 1, :), zeros(elty, 5, 5))
     @test tril(A[1,:] * A[1,:]') ≈ BLAS.her!('L', one(real(elty)), view(A, 1, :), zeros(elty, 5, 5))
 end
+
+struct WrappedArray{T,N} <: AbstractArray{T,N}
+    A::Array{T,N}
+end
+
+Base.size(A::WrappedArray) = size(A.A)
+Base.getindex(A::WrappedArray, i::Int) = A.A[i]
+Base.getindex(A::WrappedArray, I::Vararg{Int, N}) = A.A[I...]
+Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_convert(Ptr{T}, A.A)
+Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
+
+@testset "strided interface blas for eltype $elty" begin
+    for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        x = WrappedArray(elty[1, 2, 3, 4])
+        y = WrappedArray(elty[5, 6, 7, 8])
+        BLAS.blascopy!(2, x, 1, y, 2)
+        @test y == WrappedArray(elty[1, 6, 2, 8])
+        BLAS.scal!(2, elty(2), x, 1)
+        @test x == WrappedArray(elty[2, 4, 3, 4])
+        @test BLAS.nrm2(1, x, 2) == elty(2)
+        @test BLAS.nrm2(x) == BLAS.nrm2(x.A)
+        BLAS.asum(x) == elty(13)
+        axpy!,
+        axpby!,
+        blascopy!,
+        dot,
+        dotc,
+        dotu,
+        scal!,
+        scal,
+        nrm2,
+        iamax,
+    # Level 2
+        gbmv!,
+        gbmv,
+        gemv!,
+        gemv,
+        hemv!,
+        hemv,
+        sbmv!,
+        sbmv,
+        symv!,
+        symv,
+        trsv!,
+        trsv,
+        trmv!,
+        trmv,
+        ger!,
+        syr!,
+        her!,
+    # Level 3
+        herk!,
+        herk,
+        her2k!,
+        her2k,
+        gemm!,
+        gemm,
+        symm!,
+        symm,
+        hemm!,
+        hemm,
+        syrk!,
+        syrk,
+        syr2k!,
+        syr2k,
+        trmm!,
+        trmm,
+        trsm!,
+        trsm
+    end
+    for elty in (Float32, Float64)
+        x = WrappedArray(elty[1, 2, 3, 4])
+        y = WrappedArray(elty[5, 6, 7, 8])
+        @test BLAS.dot(2, x, 1, y, 2) == elty(6)
+    end
+    for elty in (ComplexF32, ComplexF64)
+        x = WrappedArray(elty[1+im, 2+2im, 3+3im, 4+im])
+        y = WrappedArray(elty[5-im, 6-2im, 7-3im, 8-im])
+        @test BLAS.dotc(2, x, 1, y, 2) == elty(6)
+        dotu
+    end
+end

@@ -3490,17 +3490,17 @@ end
 end
 
 # PR #25247? Remove default stride implementation
-function stride(a::AbstractArray, i::Integer)
-    depwarn("`stride(a::AbstractArray, i)` is deprecated for general arrays. Override `stride` for custom array types that implement the strided array interface.", :stride)
-    if i > ndims(a)
-        return length(a)
-    end
-    s = 1
-    for n = 1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-end
+# function stride(a::AbstractArray, i::Integer)
+#     depwarn("`stride(a::AbstractArray, i)` is deprecated for general arrays. Override `stride` for custom array types that implement the strided array interface.", :stride)
+#     if i > ndims(a)
+#         return length(a)
+#     end
+#     s = 1         
+#     for n = 1:(i-1)
+#         s *= size(a, n)
+#     end
+#     return s
+# end
 
 # END 0.7 deprecations
 

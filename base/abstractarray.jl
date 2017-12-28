@@ -250,6 +250,9 @@ julia> strides(A)
 ```
 """
 function strides end
+@inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
+size_to_strides(s, d) = (s,)
+size_to_strides(s) = ()
 
 
 function isassigned(a::AbstractArray, i::Int...)

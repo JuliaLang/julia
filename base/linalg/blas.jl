@@ -208,7 +208,7 @@ for (fname, elty) in ((:dscal_,:Float64),
                       (:cscal_,:ComplexF32))
     @eval begin
         # SUBROUTINE DSCAL(N,DA,DX,INCX)
-        function scal!(n::Integer, DA::$elty, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer)
+        function scal!(n::Integer, DA::$elty, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer)
             ccall((@blasfunc($fname), libblas), Cvoid,
                   (Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
                   n, DA, DX, incx)
@@ -272,7 +272,7 @@ for (fname, elty) in ((:ddot_,:Float64),
                 # *     ..
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION DX(*),DY(*)
-        function dot(n::Integer, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},DenseArray{$elty}}, incy::Integer)
+        function dot(n::Integer, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},AbstractArray{$elty}}, incy::Integer)
             ccall((@blasfunc($fname), libblas), $elty,
                 (Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
                  n, DX, incx, DY, incy)
@@ -288,7 +288,7 @@ for (fname, elty) in ((:cblas_zdotc_sub,:ComplexF64),
                 # *     ..
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION DX(*),DY(*)
-        function dotc(n::Integer, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},DenseArray{$elty}}, incy::Integer)
+        function dotc(n::Integer, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},AbstractArray{$elty}}, incy::Integer)
             result = Ref{$elty}()
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
@@ -306,7 +306,7 @@ for (fname, elty) in ((:cblas_zdotu_sub,:ComplexF64),
                 # *     ..
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION DX(*),DY(*)
-        function dotu(n::Integer, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},DenseArray{$elty}}, incy::Integer)
+        function dotu(n::Integer, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},AbstractArray{$elty}}, incy::Integer)
             result = Ref{$elty}()
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
@@ -503,7 +503,7 @@ for (fname, elty) in ((:daxpby_,:Float64), (:saxpby_,:Float32),
         #*     .. Array Arguments ..
         #      DOUBLE PRECISION DX(*),DY(*)
         function axpby!(n::Integer, alpha::($elty), dx::Union{Ptr{$elty},
-                        DenseArray{$elty}}, incx::Integer, beta::($elty),
+                        AbstractArray{$elty}}, incx::Integer, beta::($elty),
                         dy::Union{Ptr{$elty}, AbstractArray{$elty}}, incy::Integer)
             ccall((@blasfunc($fname), libblas), Cvoid, (Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                 Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
