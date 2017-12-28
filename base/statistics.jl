@@ -278,6 +278,9 @@ then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `correc
     `DataArrays.jl` package is recommended.
 """
 std(A::AbstractArray, region; corrected::Bool=true, mean=nothing) =
+    sqrt.(var(A, region; corrected=corrected, mean=mean))
+
+std(A::AbstractArray{<:AbstractFloat}, region; corrected::Bool=true, mean=nothing) =
     sqrt!(var(A, region; corrected=corrected, mean=mean))
 
 std(iterable; corrected::Bool=true, mean=nothing) =
