@@ -1031,9 +1031,9 @@ JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
 
 // logging tools --------------------------------------------------------------
 
-void jl_log(int level, jl_module_t *module, const char *group, const char *id,
-            const char *file, int line, jl_value_t **kwargs, int kwargs_len,
-            const char *msg)
+void jl_log(int level, jl_module_t *module, jl_value_t *group, jl_value_t *id,
+            jl_value_t *file, jl_value_t *line, jl_value_t *kwargs,
+            jl_value_t *msg)
 {
     static jl_value_t *logmsg_func = NULL;
     if (!logmsg_func && jl_base_module) {
@@ -1043,11 +1043,20 @@ void jl_log(int level, jl_module_t *module, const char *group, const char *id,
         }
     }
     if (!logmsg_func) {
-        const char *levelstr = level < JL_LOGLEVEL_INFO ? "DEBUG" :
-                               level < JL_LOGLEVEL_WARN ? "INFO" :
-                               level < JL_LOGLEVEL_ERROR ? "WARNING" :
-                               "ERROR";
-        jl_safe_printf("%s: %s:%d - %s\n", levelstr, file, line, msg);
+        ios_t str_;
+        ios_mem(&str_, 300);
+        uv_stream_t* str = (uv_stream_t*)&str_;
+        jl_static_show(str, file);
+        jl_printf(str, ":");
+        jl_static_show(str, line);
+        jl_printf(str, " - ");
+        jl_static_show(str, msg);
+        jl_safe_printf("%s [Fallback logging]: %.*s\n",
+                       level < JL_LOGLEVEL_INFO ? "DEBUG" :
+                       level < JL_LOGLEVEL_WARN ? "INFO" :
+                       level < JL_LOGLEVEL_ERROR ? "WARNING" : "ERROR",
+                       (int)str_.size, str_.buf);
+        ios_close(&str_);
         return;
     }
     jl_value_t **args;
@@ -1055,23 +1064,14 @@ void jl_log(int level, jl_module_t *module, const char *group, const char *id,
     JL_GC_PUSHARGS(args, nargs);
     args[0] = logmsg_func;
     args[1] = jl_box_long(level);
-    args[2] = jl_cstr_to_string(msg);
+    args[2] = msg;
     args[3] = (jl_value_t*)(module ? module : jl_core_module);
-    if (group) {
-        args[4] = (jl_value_t*)jl_symbol(group);
-    }
-    else {
-        // set group to file basename without extension by default
-        group = strrchr(file, PATHSEPSTRING[0]);
-        group = group ? group + 1 : file;
-        const char *dot = strchr(group, '.');
-        args[4] = (jl_value_t*)(dot ? jl_symbol_n(group, dot-group) : jl_symbol(group));
-    }
-    args[5] = (jl_value_t*)jl_symbol(id);
-    args[6] = jl_cstr_to_string(file);
-    args[7] = jl_box_long(line);
-    args[8] = (jl_value_t*)jl_ptr_to_array_1d((jl_value_t*)jl_array_any_type,
-                                              kwargs, kwargs_len, 0);
+    // Would some of the jl_nothing here be better as `missing` instead?
+    args[4] = group  ? group   : jl_nothing;
+    args[5] = id     ? id      : jl_nothing;
+    args[6] = file   ? file    : jl_nothing;
+    args[7] = line   ? line    : jl_nothing;
+    args[8] = kwargs ? kwargs  : (jl_value_t*)jl_alloc_vec_any(0);
     jl_apply(args, nargs);
     JL_GC_POP();
 }

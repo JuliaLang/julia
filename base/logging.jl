@@ -365,7 +365,7 @@ function logmsg_thunk(level, message, _module, group, id, file, line, kwargs)
     real_kws = Any[(kwargs[i],kwargs[i+1]) for i in 1:2:length(kwargs)]
     @logmsg(convert(LogLevel, level), message,
             _module=_module, _id=id, _group=group,
-            _file=file, _line=line, real_kws...)
+            _file=String(file), _line=line, real_kws...)
 end
 
 # Global log limiting mechanism for super fast but inflexible global log

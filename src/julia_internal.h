@@ -983,9 +983,9 @@ void jl_depwarn(const char *msg, jl_value_t *sym);
 
 // Log `msg` to the current logger by calling CoreLogging.logmsg_thunk() on the
 // julia side.
-void jl_log(int level, jl_module_t *module, const char *group, const char *id,
-            const char *file, int line, jl_value_t **kwargs, int kwargs_len,
-            const char *msg);
+void jl_log(int level, jl_module_t *module, jl_value_t *group, jl_value_t *id,
+            jl_value_t *file, jl_value_t *line, jl_value_t *kwargs,
+            jl_value_t *msg);
 
 int isabspath(const char *in);
 
