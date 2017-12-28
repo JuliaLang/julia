@@ -881,7 +881,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
         end
         return lufact(A) \ B
     end
-    return qrfact(A,Val(true)) \ B
+    return qrfact(A, :colnorm) \ B
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b

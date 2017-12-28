@@ -193,15 +193,26 @@ function qrfactPivotedUnblocked!(A::StridedMatrix)
     return LinAlg.QRPivoted{eltype(A), typeof(A)}(A, τ, piv)
 end
 
+# For some reason constant propagation doesn't work well enough to make
+# qrfact! type table unless these two helper functions are used.
+tmpWY(A)    = QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), 36))...)
+tmpPivot(A) = QRPivoted(LAPACK.geqp3!(A)...)
+
 # LAPACK version
-qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), 36))...)
-qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
-qrfact!(A::StridedMatrix{<:BlasFloat}) = qrfact!(A, Val(false))
+function qrfact!(A::StridedMatrix{<:BlasFloat}, pivot::Symbol = :none)
+    if pivot == :none
+        return tmpWY(A)
+    elseif pivot == :colnorm
+        return tmpPivot(A)
+    else
+        throw(ArgumentError("only `colnorm` and `none` are supported as `pivot` argument but you supplied `$pivot`"))
+    end
+end
 
 # Generic fallbacks
 
 """
-    qrfact!(A, pivot=Val(false))
+    qrfact!(A, pivot = :none)
 
 `qrfact!` is the same as [`qrfact`](@ref) when `A` is a subtype of
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
@@ -231,14 +242,20 @@ Stacktrace:
 [...]
 ```
 """
-qrfact!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
-qrfact!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
-qrfact!(A::StridedMatrix) = qrfact!(A, Val(false))
+function qrfact!(A::StridedMatrix, pivot = :none)
+    if pivot == :none
+        return qrfactUnblocked!(A)
+    elseif pivot == :colnorm
+        return qrfactPivotedUnblocked!(A)
+    else
+        throw(ArgumentError("only `colnorm` and `none` are supported as `pivot` argument but you supplied `$pivot`"))
+    end
+end
 
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
 """
-    qrfact(A, pivot=Val(false)) -> F
+    qrfact(A, pivot = :none) -> F
 
 Compute the QR factorization of the matrix `A`: an orthogonal (or unitary if `A` is
 complex-valued) matrix `Q`, and an upper triangular matrix `R` such that
@@ -249,7 +266,7 @@ A = Q R
 
 The returned object `F` stores the factorization in a packed format:
 
- - if `pivot == Val(true)` then `F` is a [`QRPivoted`](@ref) object,
+ - if `pivot == :colnorm` then `F` is a [`QRPivoted`](@ref) object,
 
  - otherwise if the element type of `A` is a BLAS type ([`Float32`](@ref), [`Float64`](@ref),
    `ComplexF32` or `ComplexF64`), then `F` is a [`QRCompactWY`](@ref) object,
@@ -294,7 +311,7 @@ true
     elementary reflectors, so that the `Q` and `R` matrices can be stored
     compactly rather as two separate dense matrices.
 """
-function qrfact(A::AbstractMatrix{T}, arg) where T
+@inline function qrfact(A::AbstractMatrix{T}, arg) where T
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
     return qrfact!(AA, arg)
@@ -307,15 +324,19 @@ end
 qrfact(x::Number) = qrfact(fill(x,1,1))
 
 """
-    qr(A, pivot=Val(false); full::Bool = false) -> Q, R, [p]
+    qr(A, pivot = :none; full::Bool = false) -> Q, R, [p]
 
 Compute the (pivoted) QR factorization of `A` such that either `A = Q*R` or `A[:,p] = Q*R`.
 Also see [`qrfact`](@ref).
 The default is to compute a "thin" factorization. Note that `R` is not
 extended with zeros when a full/square orthogonal factor `Q` is requested (via `full = true`).
 """
-function qr(A::Union{Number,AbstractMatrix}, pivot::Union{Val{false},Val{true}} = Val(false);
+@inline function qr(A::Union{Number,AbstractMatrix}, pivot = :none;
             full::Bool = false, thin::Union{Bool,Nothing} = nothing)
+    # As of 28 Dec 2017 inlining is required for constant propagation to work
+    # sufficiently to make the function type stable. Hopefully, it should be
+    # possible to remove the inlining macro eventually.
+
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `qr(A, pivot; thin = $(thin))` has ",
@@ -323,16 +344,23 @@ function qr(A::Union{Number,AbstractMatrix}, pivot::Union{Val{false},Val{true}} 
             "e.g. `qr(A, pivot; full = $(!thin))`."), :qr)
         full::Bool = !thin
     end
-    return _qr(A, pivot, full = full)
+    if pivot == :none
+        return _qrNoPivot(A, full = full)
+    elseif pivot == :colnorm
+        return _qrColnormPivot(A, full = full)
+    else
+        throw(ArgumentError("only `colnorm` and `none` are supported as `pivot` argument but you supplied `$pivot`"))
+    end
 end
-function _qr(A::Union{Number,AbstractMatrix}, ::Val{false}; full::Bool = false)
-    F = qrfact(A, Val(false))
+
+function _qrNoPivot(A::Union{Number,AbstractMatrix}; full::Bool = false)
+    F = qrfact(A, :none)
     Q, R = F.Q, F.R
     sQf1 = size(Q.factors, 1)
     return (!full ? Array(Q) : mul!(Q, Matrix{eltype(Q)}(I, sQf1, sQf1))), R
 end
-function _qr(A::Union{Number, AbstractMatrix}, ::Val{true}; full::Bool = false)
-    F = qrfact(A, Val(true))
+function _qrColnormPivot(A::Union{Number, AbstractMatrix}; full::Bool = false)
+    F = qrfact(A, :colnorm)
     Q, R, p = F.Q, F.R, F.p
     sQf1 = size(Q.factors, 1)
     return (!full ? Array(Q) : mul!(Q, Matrix{eltype(Q)}(I, sQf1, sQf1))), R, p

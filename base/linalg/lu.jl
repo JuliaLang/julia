@@ -19,7 +19,7 @@ function lufact!(A::StridedMatrix{T}; pivot = :rowmax) where T<:BlasFloat
         lpt = LAPACK.getrf!(A)
         return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
     else
-        throw(ArgumentError("only `row` and `none` are supported as `pivot` argument but you supplied `$pivot`"))
+        throw(ArgumentError("only `rowmax` and `none` are supported as `pivot` argument but you supplied `$pivot`"))
     end
 end
 function lufact!(A::HermOrSym, pivot = :rowmax)
@@ -72,7 +72,7 @@ function generic_lufact!(A::StridedMatrix{T}, pivot = :rowmax) where {T}
 
     # Check arguments
     if pivot != :rowmax && pivot != :none
-        throw(ArgumentError("only `row` and `none` are supported as `pivot` argument but you supplied `$pivot`"))
+        throw(ArgumentError("only `rowmax` and `none` are supported as `pivot` argument but you supplied `$pivot`"))
     end
 
     # Initialize variables

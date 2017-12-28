@@ -71,8 +71,9 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 @test sprint(show, qra) == "$(typeof(qra)) with factors Q and R:\n$qstring\n$rstring"
             end
             @testset "Thin QR decomposition (without pivoting)" begin
-                qra   = @inferred qrfact(a[:, 1:n1], Val(false))
-                @inferred qr(a[:, 1:n1], Val(false))
+                # wrap in closure to propagate the constant
+                qra   = @inferred (t -> qrfact(t, :none))(a[:, 1:n1])
+                @inferred (t -> qr(t, :none))(a[:, 1:n1])
                 q,r   = qra.Q, qra.R
                 @test_throws ErrorException qra.Z
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
@@ -89,8 +90,9 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 end
             end
             @testset "(Automatic) Fat (pivoted) QR decomposition" begin
-                @inferred qrfact(a, Val(true))
-                @inferred qr(a, Val(true))
+                # wrap in closure to propagate the constant
+                @inferred (t -> qrfact(t, :colnorm))(a)
+                @inferred (t -> qr(t, :colnorm))(a)
 
                 qrpa  = factorize(a[1:n1,:])
                 q,r = qrpa.Q, qrpa.R
@@ -143,7 +145,7 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 @test_throws DimensionMismatch Base.LinAlg.mul!(q,zeros(eltya,n1+1))
                 @test_throws DimensionMismatch Base.LinAlg.mul!(Adjoint(q), zeros(eltya,n1+1))
 
-                qra = qrfact(a[:,1:n1], Val(false))
+                qra = qrfact(a[:,1:n1], :none)
                 q, r = qra.Q, qra.R
                 @test mul!(adjoint(squareQ(q)), q) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1),q)
@@ -159,8 +161,8 @@ end
 @testset "transpose errors" begin
     @test_throws ErrorException transpose(qrfact(randn(3,3)))
     @test_throws ErrorException adjoint(qrfact(randn(3,3)))
-    @test_throws ErrorException transpose(qrfact(randn(3,3), Val(false)))
-    @test_throws ErrorException adjoint(qrfact(randn(3,3), Val(false)))
+    @test_throws ErrorException transpose(qrfact(randn(3,3), :none))
+    @test_throws ErrorException adjoint(qrfact(randn(3,3), :none))
     @test_throws ErrorException transpose(qrfact(big.(randn(3,3))))
     @test_throws ErrorException adjoint(qrfact(big.(randn(3,3))))
 end
@@ -199,7 +201,7 @@ end
     A = zeros(1, 2)
     B = zeros(1, 1)
     @test A \ B == zeros(2, 1)
-    @test qrfact(A, Val(true)) \ B == zeros(2, 1)
+    @test qrfact(A, :colnorm) \ B == zeros(2, 1)
 end
 
 @testset "Issue 24107" begin
