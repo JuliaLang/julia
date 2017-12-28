@@ -862,3 +862,33 @@ end
         @test isnan_type(T, acos(T(NaN)))
     end
 end
+
+# Define simple wrapper of a Float type:
+struct FloatWrapper <: Real
+    x::Float64
+end
+
+import Base: +, -, *, /, ^, sin, cos, exp, convert, isfinite
+
+for op in (:+, :-, :*, :/, :^)
+    @eval $op(x::FloatWrapper, y::FloatWrapper) = $op(x.x, y.x)
+end
+
+for op in (:sin, :cos, :exp, :isfinite)
+    @eval $op(x::FloatWrapper) = $op(x.x)
+end
+
+convert(::Type{FloatWrapper}, x::Int) = FloatWrapper(float(x))
+
+@testset "exp(Complex(a, b)) for a and b of non-standard real type" begin
+
+    x = FloatWrapper(3.1)
+    y = FloatWrapper(4.1)
+
+    @test sincos(x) == (sin(x), cos(x))
+
+    z = Complex(x, y)
+    z2 = exp(z)
+
+    @test isa(z2, Complex)
+end
