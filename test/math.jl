@@ -871,10 +871,14 @@ end
 import Base: +, -, *, /, ^, sin, cos, exp, convert, isfinite
 
 for op in (:+, :-, :*, :/, :^)
-    @eval $op(x::FloatWrapper, y::FloatWrapper) = $op(x.x, y.x)
+    @eval $op(x::FloatWrapper, y::FloatWrapper) = FloatWrapper($op(x.x, y.x))
 end
 
-for op in (:sin, :cos, :exp, :isfinite)
+for op in (:sin, :cos, :exp)
+    @eval $op(x::FloatWrapper) = FloatWrapper($op(x.x))
+end
+
+for op in (:isfinite,)
     @eval $op(x::FloatWrapper) = $op(x.x)
 end
 
