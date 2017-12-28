@@ -21,6 +21,13 @@ srand(123)
     @test norm(UniformScaling(1+im)) ≈ sqrt(2)
 end
 
+@testset "conjugation of UniformScaling" begin
+    @test conj(UniformScaling(1))::UniformScaling{Int} == UniformScaling(1)
+    @test conj(UniformScaling(1.0))::UniformScaling{Float64} == UniformScaling(1.0)
+    @test conj(UniformScaling(1+1im))::UniformScaling{Complex{Int}} == UniformScaling(1-1im)
+    @test conj(UniformScaling(1.0+1.0im))::UniformScaling{Complex{Float64}} == UniformScaling(1.0-1.0im)
+end
+
 @testset "istriu, istril, issymmetric, ishermitian, isapprox" begin
     @test istriu(I)
     @test istril(I)
