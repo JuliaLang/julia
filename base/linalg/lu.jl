@@ -12,20 +12,23 @@ end
 LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T} = LU{T,typeof(factors)}(factors, ipiv, info)
 
 # StridedMatrix
-function lufact!(A::StridedMatrix{T}, pivot::Union{Val{false}, Val{true}} = Val(true)) where T<:BlasFloat
-    if pivot === Val(false)
+function lufact!(A::StridedMatrix{T}; pivot = :rowmax) where T<:BlasFloat
+    if pivot === :none
         return generic_lufact!(A, pivot)
+    elseif pivot === :rowmax
+        lpt = LAPACK.getrf!(A)
+        return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
+    else
+        throw(ArgumentError("only `row` and `none` are supported as `pivot` argument but you supplied `$pivot`"))
     end
-    lpt = LAPACK.getrf!(A)
-    return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
 end
-function lufact!(A::HermOrSym, pivot::Union{Val{false}, Val{true}} = Val(true))
+function lufact!(A::HermOrSym, pivot = :rowmax)
     copytri!(A.data, A.uplo, isa(A, Hermitian))
     lufact!(A.data, pivot)
 end
 
 """
-    lufact!(A, pivot=Val(true)) -> LU
+    lufact!(A, pivot = :rowmax) -> LU
 
 `lufact!` is the same as [`lufact`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy. An [`InexactError`](@ref)
@@ -61,17 +64,26 @@ Stacktrace:
 [...]
 ```
 """
-lufact!(A::StridedMatrix, pivot::Union{Val{false}, Val{true}} = Val(true)) = generic_lufact!(A, pivot)
-function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true)) where {T,Pivot}
+lufact!(A::StridedMatrix, pivot = :rowmax) = generic_lufact!(A, pivot)
+function generic_lufact!(A::StridedMatrix{T}, pivot = :rowmax) where {T}
+    # Extract values
     m, n = size(A)
     minmn = min(m,n)
+
+    # Check arguments
+    if pivot != :rowmax && pivot != :none
+        throw(ArgumentError("only `row` and `none` are supported as `pivot` argument but you supplied `$pivot`"))
+    end
+
+    # Initialize variables
     info = 0
     ipiv = Vector{BlasInt}(uninitialized, minmn)
+
     @inbounds begin
         for k = 1:minmn
             # find index max
             kp = k
-            if Pivot
+            if pivot == :rowmax
                 amax = abs(zero(T))
                 for i = k:m
                     absi = abs(A[i,k])
@@ -112,12 +124,12 @@ end
 
 # floating point types doesn't have to be promoted for LU, but should default to pivoting
 lufact(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}},
-    pivot::Union{Val{false}, Val{true}} = Val(true)) where {T<:AbstractFloat} =
+    pivot = :rowmax) where {T<:AbstractFloat} =
         lufact!(copy(A), pivot)
 
 # for all other types we must promote to a type which is stable under division
 """
-    lufact(A, pivot=Val(true)) -> F::LU
+    lufact(A, pivot = :rowmax) -> F::LU
 
 Compute the LU factorization of `A`.
 
@@ -173,7 +185,7 @@ julia> F.L * F.U == A[F.p, :]
 true
 ```
 """
-function lufact(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}) where T
+function lufact(A::AbstractMatrix{T}, pivot = :rowmax) where T
     S = typeof(zero(T)/one(T))
     AA = similar(A, S)
     copyto!(AA, A)
@@ -184,13 +196,13 @@ function lufact(A::AbstractMatrix{T}) where T
     S = typeof(zero(T)/one(T))
     AA = similar(A, S)
     copyto!(AA, A)
-    F = lufact!(AA, Val(false))
+    F = lufact!(AA, :none)
     if issuccess(F)
         return F
     else
         AA = similar(A, S)
         copyto!(AA, A)
-        return lufact!(AA, Val(true))
+        return lufact!(AA, :rowmax)
     end
 end
 
@@ -200,11 +212,11 @@ lufact(F::LU) = F
 lu(x::Number) = (one(x), x, 1)
 
 """
-    lu(A, pivot=Val(true)) -> L, U, p
+    lu(A, pivot = :rowmax) -> L, U, p
 
 Compute the LU factorization of `A`, such that `A[p,:] = L*U`.
 By default, pivoting is used. This can be overridden by passing
-`Val(false)` for the second argument.
+`:none` for the second argument.
 
 See also [`lufact`](@ref).
 
@@ -222,7 +234,7 @@ julia> A[p, :] == L * U
 true
 ```
 """
-function lu(A::AbstractMatrix, pivot::Union{Val{false}, Val{true}} = Val(true))
+function lu(A::AbstractMatrix, pivot = :rowmax)
     F = lufact(A, pivot)
     F.L, F.U, F.p
 end
@@ -395,8 +407,16 @@ end
 # Tridiagonal
 
 # See dgttrf.f
-function lufact!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T,V}
+function lufact!(A::Tridiagonal{T,V}, pivot = :rowmax) where {T,V}
+    # Extract values
     n = size(A, 1)
+
+    # Check arguments
+    if pivot != :rowmax && pivot != :none
+        throw(ArgumentError("only `row` and `none` are supported as `pivot` argument but you supplied `$pivot`"))
+    end
+
+    # Initialize variable
     info = 0
     ipiv = Vector{BlasInt}(uninitialized, n)
     dl = A.dl
@@ -410,7 +430,7 @@ function lufact!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(
         end
         for i = 1:n-2
             # pivot or not?
-            if pivot === Val(false) || abs(d[i]) >= abs(dl[i])
+            if pivot == :none || abs(d[i]) >= abs(dl[i])
                 # No interchange
                 if d[i] != 0
                     fact = dl[i]/d[i]
@@ -433,7 +453,7 @@ function lufact!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(
         end
         if n > 1
             i = n-1
-            if pivot === Val(false) || abs(d[i]) >= abs(dl[i])
+            if pivot == :none || abs(d[i]) >= abs(dl[i])
                 if d[i] != 0
                     fact = dl[i]/d[i]
                     dl[i] = fact
