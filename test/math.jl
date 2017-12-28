@@ -892,7 +892,8 @@ convert(::Type{FloatWrapper}, x::Int) = FloatWrapper(float(x))
     @test sincos(x) == (sin(x), cos(x))
 
     z = Complex(x, y)
-    z2 = exp(z)
 
-    @test isa(z2, Complex)
+    @test isa(exp(z), Complex)
+    @test isa(sin(z), Complex)
+    @test isa(cos(z), Complex)
 end
