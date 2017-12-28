@@ -1046,11 +1046,21 @@ void jl_log(int level, jl_module_t *module, jl_value_t *group, jl_value_t *id,
         ios_t str_;
         ios_mem(&str_, 300);
         uv_stream_t* str = (uv_stream_t*)&str_;
-        jl_static_show(str, file);
+        if (jl_is_string(file)) {
+            jl_uv_puts(str, jl_string_data(file), jl_string_len(file));
+        }
+        else {
+            jl_static_show(str, file);
+        }
         jl_printf(str, ":");
         jl_static_show(str, line);
         jl_printf(str, " - ");
-        jl_static_show(str, msg);
+        if (jl_is_string(msg)) {
+            jl_uv_puts(str, jl_string_data(msg), jl_string_len(msg));
+        }
+        else {
+            jl_static_show(str, msg);
+        }
         jl_safe_printf("%s [Fallback logging]: %.*s\n",
                        level < JL_LOGLEVEL_INFO ? "DEBUG" :
                        level < JL_LOGLEVEL_WARN ? "INFO" :
