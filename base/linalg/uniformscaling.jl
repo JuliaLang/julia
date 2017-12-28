@@ -62,6 +62,8 @@ function show(io::IO, J::UniformScaling)
 end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
+conj(J::UniformScaling) = UniformScaling(conj(J.λ))
+
 transpose(J::UniformScaling) = J
 Transpose(S::UniformScaling) = transpose(S)
 adjoint(J::UniformScaling) = UniformScaling(conj(J.λ))
