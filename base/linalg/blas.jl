@@ -467,7 +467,7 @@ function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange
     if minimum(ry) < 1 || maximum(ry) > length(y)
         throw(ArgumentError("range out of bounds for y, of length $(length(y))"))
     end
-    Base.@gc_preserve x y axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    Base.@gc_preserve x y axpy!(length(rx), convert(T, alpha), pointer(x)+(rangestart(rx)-1)*sizeof(T), step(rx), pointer(y)+(rangestart(ry)-1)*sizeof(T), step(ry))
     y
 end
 
@@ -1534,9 +1534,9 @@ function copyto!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
         throw(DimensionMismatch("ranges must be of the same length"))
     end
     Base.@gc_preserve src dest BLAS.blascopy!(length(rsrc),
-                                              pointer(src) + (first(rsrc) - 1) * sizeof(T),
+                                              pointer(src) + (rangestart(rsrc) - 1) * sizeof(T),
                                               step(rsrc),
-                                              pointer(dest) + (first(rdest) - 1) * sizeof(T),
+                                              pointer(dest) + (rangestart(rdest) - 1) * sizeof(T),
                                               step(rdest))
     dest
 end

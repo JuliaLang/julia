@@ -551,7 +551,7 @@ function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
 end
 
 function collect_to_with_first!(dest::AbstractArray, v1, itr, st)
-    i1 = first(linearindices(dest))
+    i1 = rangestart(linearindices(dest))
     dest[i1] = v1
     return collect_to!(dest, itr, i1+1, st)
 end
@@ -646,7 +646,7 @@ function getindex(A::Array, I::UnitRange{Int})
     lI = length(I)
     X = similar(A, lI)
     if lI > 0
-        unsafe_copyto!(X, 1, A, first(I), lI)
+        unsafe_copyto!(X, 1, A, rangestart(I), lI)
     end
     return X
 end
@@ -712,7 +712,7 @@ function setindex!(A::Array{T}, X::Array{T}, I::UnitRange{Int}) where T
     lI = length(I)
     @boundscheck setindex_shape_check(X, lI)
     if lI > 0
-        unsafe_copyto!(A, first(I), X, 1, lI)
+        unsafe_copyto!(A, rangestart(I), X, 1, lI)
     end
     return A
 end
@@ -817,7 +817,7 @@ function append!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
     _growend!(a, n)
-    copyto!(a, length(a)-n+1, items, first(itemindices), n)
+    copyto!(a, length(a)-n+1, items, rangestart(itemindices), n)
     return a
 end
 
@@ -863,7 +863,7 @@ function prepend!(a::Array{<:Any,1}, items::AbstractVector)
     if a === items
         copyto!(a, 1, items, n+1, n)
     else
-        copyto!(a, 1, items, first(itemindices), n)
+        copyto!(a, 1, items, rangestart(itemindices), n)
     end
     return a
 end
@@ -1098,7 +1098,7 @@ deleteat!(a::Vector, i::Integer) = (_deleteat!(a, i, 1); a)
 
 function deleteat!(a::Vector, r::UnitRange{<:Integer})
     n = length(a)
-    isempty(r) || _deleteat!(a, first(r), length(r))
+    isempty(r) || _deleteat!(a, rangestart(r), length(r))
     return a
 end
 
@@ -1283,8 +1283,8 @@ function splice!(a::Vector, r::UnitRange{<:Integer}, ins=_default_splice)
     end
 
     n = length(a)
-    f = first(r)
-    l = last(r)
+    f = rangestart(r)
+    l = rangestop(r)
     d = length(r)
 
     if m < d
@@ -1367,22 +1367,24 @@ julia> reverse(A, 3, 5)
  3
 ```
 """
-function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))
+function reverse(A::AbstractVector,
+                 s=rangestart(linearindices(A)),
+                 n=rangestop(linearindices(A)))
     B = similar(A)
-    for i = first(linearindices(A)):s-1
+    for i = rangestart(linearindices(A)):s-1
         B[i] = A[i]
     end
     for i = s:n
         B[i] = A[n+s-i]
     end
-    for i = n+1:last(linearindices(A))
+    for i = n+1:rangestop(linearindices(A))
         B[i] = A[i]
     end
     return B
 end
 function reverseind(a::AbstractVector, i::Integer)
     li = linearindices(a)
-    first(li) + last(li) - i
+    rangestart(li) + rangestop(li) - i
 end
 
 """
@@ -1411,12 +1413,14 @@ julia> A
  1
 ```
 """
-function reverse!(v::AbstractVector, s=first(linearindices(v)), n=last(linearindices(v)))
+function reverse!(v::AbstractVector,
+                  s=rangestart(linearindices(v)),
+                  n=rangestop(linearindices(v)))
     liv = linearindices(v)
     if n <= s  # empty case; ok
-    elseif !(first(liv) ≤ s ≤ last(liv))
+    elseif !(rangestart(liv) ≤ s ≤ rangestop(liv))
         throw(BoundsError(v, s))
-    elseif !(first(liv) ≤ n ≤ last(liv))
+    elseif !(rangestart(liv) ≤ n ≤ rangestop(liv))
         throw(BoundsError(v, n))
     end
     r = n
@@ -2209,7 +2213,7 @@ function filter!(f, a::AbstractVector)
         end
     end
 
-    deleteat!(a, i:last(idx))
+    deleteat!(a, i:rangestop(idx))
 
     return a
 end

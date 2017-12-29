@@ -133,7 +133,7 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::Abstr
 
     if has_fast_linear_indexing(A) && lsiz > 16
         nslices = div(_length(A), lsiz)
-        ibase = first(linearindices(A))-1
+        ibase = rangestart(linearindices(A))-1
         for i = 1:nslices
             @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
             ibase += lsiz
@@ -143,7 +143,7 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::Abstr
     indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
     keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
     if reducedim1(R, A)
-        i1 = first(indices1(R))
+        i1 = rangestart(indices1(R))
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
@@ -225,7 +225,7 @@ varm(iterable, m; corrected::Bool=true) =
 ## variances over ranges
 
 function varm(v::AbstractRange, m)
-    f  = first(v) - m
+    f  = rangestart(v) - m
     s  = step(v)
     l  = length(v)
     vv = f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
@@ -602,7 +602,7 @@ function median!(v::AbstractVector)
     end
     inds = axes(v, 1)
     n = length(inds)
-    mid = div(first(inds)+last(inds),2)
+    mid = div(rangestart(inds)+rangestop(inds),2)
     if isodd(n)
         return middle(partialsort!(v,mid))
     else

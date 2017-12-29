@@ -2,7 +2,8 @@
 
 ### Multidimensional iterators
 module IteratorsMD
-    import Base: eltype, length, size, start, done, next, first, last, in, getindex,
+    import Base: eltype, length, size, start, done, next, first, last, rangestart, rangestop,
+                 in, getindex,
                  setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
                  ndims, iteratorsize, convert, show
 
@@ -230,7 +231,7 @@ module IteratorsMD
     CartesianIndices(index::CartesianIndex) = CartesianIndices(index.I)
     CartesianIndices(sz::NTuple{N,<:Integer}) where {N} = CartesianIndices(map(Base.OneTo, sz))
     CartesianIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
-        CartesianIndices(map(i->first(i):last(i), inds))
+        CartesianIndices(map(i->rangestart(i):rangestop(i), inds))
 
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 
@@ -274,14 +275,14 @@ module IteratorsMD
     iteratorsize(::Type{<:CartesianIndices}) = Base.HasShape()
 
     @inline function start(iter::CartesianIndices)
-        iterfirst, iterlast = first(iter), last(iter)
+        iterfirst, iterlast = rangestart(iter), rangestop(iter)
         if any(map(>, iterfirst.I, iterlast.I))
             return iterlast+1
         end
         iterfirst
     end
     @inline function next(iter::CartesianIndices, state)
-        state, CartesianIndex(inc(state.I, first(iter).I, last(iter).I))
+        state, CartesianIndex(inc(state.I, rangestart(iter).I, rangestop(iter).I))
     end
     # increment & carry
     @inline inc(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
@@ -293,23 +294,25 @@ module IteratorsMD
         newtail = inc(tail(state), tail(start), tail(stop))
         (start[1], newtail...)
     end
-    @inline done(iter::CartesianIndices, state) = state.I[end] > last(iter.indices[end])
+    @inline done(iter::CartesianIndices, state) = state.I[end] > rangestop(iter.indices[end])
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
     start(iter::CartesianIndices{0}) = false
     next(iter::CartesianIndices{0}, state) = CartesianIndex(), true
     done(iter::CartesianIndices{0}, state) = state
 
-    size(iter::CartesianIndices) = map(dimlength, first(iter).I, last(iter).I)
+    size(iter::CartesianIndices) = map(dimlength, rangestart(iter).I, rangestop(iter).I)
     dimlength(start, stop) = stop-start+1
 
     length(iter::CartesianIndices) = prod(size(iter))
 
-    first(iter::CartesianIndices) = CartesianIndex(map(first, iter.indices))
-    last(iter::CartesianIndices)  = CartesianIndex(map(last, iter.indices))
+    first(iter::CartesianIndices) = CartesianIndex(map(rangestart, iter.indices))
+    last(iter::CartesianIndices)  = CartesianIndex(map(rangestop, iter.indices))
+    rangestart(iter::CartesianIndices) = CartesianIndex(map(rangestart, iter.indices))
+    rangestop(iter::CartesianIndices)  = CartesianIndex(map(rangestop, iter.indices))
 
     @inline function in(i::CartesianIndex{N}, r::CartesianIndices{N}) where {N}
-        _in(true, i.I, first(r).I, last(r).I)
+        _in(true, i.I, rangestart(r).I, rangestop(r).I)
     end
     _in(b, ::Tuple{}, ::Tuple{}, ::Tuple{}) = b
     @inline _in(b, i, start, stop) = _in(b & (start[1] <= i[1] <= stop[1]), tail(i), tail(start), tail(stop))
@@ -322,9 +325,9 @@ module IteratorsMD
     simd_inner_length(iter::CartesianIndices{0}, ::CartesianIndex) = 1
     simd_inner_length(iter::CartesianIndices, I::CartesianIndex) = length(iter.indices[1])
 
-    simd_index(iter::CartesianIndices{0}, ::CartesianIndex, I1::Int) = first(iter)
+    simd_index(iter::CartesianIndices{0}, ::CartesianIndex, I1::Int) = rangestart(iter)
     @inline function simd_index(iter::CartesianIndices, Ilast::CartesianIndex, I1::Int)
-        CartesianIndex((I1+first(iter.indices[1]), Ilast.I...))
+        CartesianIndex((I1+rangestart(iter.indices[1]), Ilast.I...))
     end
 
     # Split out the first N elements of a tuple
@@ -353,14 +356,14 @@ module IteratorsMD
 
     # reversed CartesianIndices iteration
     @inline function start(r::Reverse{<:CartesianIndices})
-        iterfirst, iterlast = last(r.itr), first(r.itr)
+        iterfirst, iterlast = rangestop(r.itr), rangestart(r.itr)
         if any(map(<, iterfirst.I, iterlast.I))
             return iterlast-1
         end
         iterfirst
     end
     @inline function next(r::Reverse{<:CartesianIndices}, state)
-        state, CartesianIndex(dec(state.I, last(r.itr).I, first(r.itr).I))
+        state, CartesianIndex(dec(state.I, rangestop(r.itr).I, rangestart(r.itr).I))
     end
     # decrement & carry
     @inline dec(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
@@ -372,7 +375,7 @@ module IteratorsMD
         newtail = dec(tail(state), tail(start), tail(stop))
         (start[1], newtail...)
     end
-    @inline done(r::Reverse{<:CartesianIndices}, state) = state.I[end] < first(r.itr.indices[end])
+    @inline done(r::Reverse{<:CartesianIndices}, state) = state.I[end] < rangestart(r.itr.indices[end])
     # 0-d cartesian ranges are special-cased to iterate once and only once
     start(iter::Reverse{<:CartesianIndices{0}}) = false
     next(iter::Reverse{<:CartesianIndices{0}}, state) = CartesianIndex(), true
@@ -740,7 +743,7 @@ function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector)
     li != linearindices(result) && throw(DimensionMismatch("input and output array sizes and indices must match"))
     n = length(li)
     n == 0 && return result
-    i1 = first(li)
+    i1 = rangestart(li)
     @inbounds result[i1] = v1 = v[i1]
     n == 1 && return result
     _accumulate_pairwise!(op, result, v, v1, i1+1, n-1)
@@ -995,9 +998,9 @@ function accumulate!(op, B, A, dim::Integer)
         # register usage and will be slightly faster
         ind1 = inds_t[1]
         @inbounds for I in CartesianIndices(tail(inds_t))
-            tmp = convert(eltype(B), A[first(ind1), I])
-            B[first(ind1), I] = tmp
-            for i_1 = first(ind1)+1:last(ind1)
+            tmp = convert(eltype(B), A[rangestart(ind1), I])
+            B[rangestart(ind1), I] = tmp
+            for i_1 = rangestart(ind1)+1:rangestop(ind1)
                 tmp = op(tmp, A[i_1, I])
                 B[i_1, I] = tmp
             end
@@ -1043,12 +1046,12 @@ end
 
 @noinline function _accumulate!(op, B, A, R1, ind, R2)
     # Copy the initial element in each 1d vector along dimension `dim`
-    ii = first(ind)
+    ii = rangestart(ind)
     @inbounds for J in R2, I in R1
         B[I, ii, J] = A[I, ii, J]
     end
     # Accumulate
-    @inbounds for J in R2, i in first(ind)+1:last(ind), I in R1
+    @inbounds for J in R2, i in rangestart(ind)+1:rangestop(ind), I in R1
         B[I, i, J] = op(B[I, i-1, J], A[I, i, J])
     end
     B
@@ -1187,11 +1190,11 @@ function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
     if size(Rdest) != size(Rsrc)
         throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
     end
-    @boundscheck checkbounds(dest, first(Rdest))
-    @boundscheck checkbounds(dest, last(Rdest))
-    @boundscheck checkbounds(src, first(Rsrc))
-    @boundscheck checkbounds(src, last(Rsrc))
-    ΔI = first(Rdest) - first(Rsrc)
+    @boundscheck checkbounds(dest, rangestart(Rdest))
+    @boundscheck checkbounds(dest, rangestop(Rdest))
+    @boundscheck checkbounds(src, rangestart(Rsrc))
+    @boundscheck checkbounds(src, rangestop(Rsrc))
+    ΔI = rangestart(Rdest) - rangestart(Rsrc)
     if @generated
         quote
             @nloops $N i (n->Rsrc.indices[n]) begin
@@ -1256,9 +1259,9 @@ circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt
                              shiftamt::Tuple{Integer,Vararg{Any}})
     ind1, d = inds[1], shiftamt[1]
     s = mod(d, length(ind1))
-    sf, sl = first(ind1)+s, last(ind1)-s
-    r1, r2 = first(ind1):sf-1, sf:last(ind1)
-    r3, r4 = first(ind1):sl, sl+1:last(ind1)
+    sf, sl = rangestart(ind1)+s, rangestop(ind1)-s
+    r1, r2 = rangestart(ind1):sf-1, sf:rangestop(ind1)
+    r3, r4 = rangestart(ind1):sl, sl+1:rangestop(ind1)
     tinds, tshiftamt = tail(inds), tail(shiftamt)
     _circshift!(dest, (rdest..., r1), src, (rsrc..., r4), tinds, tshiftamt)
     _circshift!(dest, (rdest..., r2), src, (rsrc..., r3), tinds, tshiftamt)
@@ -1306,7 +1309,7 @@ function circcopy!(dest, src)
     if (szsrc = map(length, indssrc)) != (szdest = map(length, indsdest))
         throw(DimensionMismatch("src and dest must have the same sizes (got $szsrc and $szdest)"))
     end
-    shift = map((isrc, idest)->first(isrc)-first(idest), indssrc, indsdest)
+    shift = map((isrc, idest)->rangestart(isrc)-rangestart(idest), indssrc, indsdest)
     all(x->x==0, shift) && return copyto!(dest, src)
     _circcopy!(dest, (), indsdest, src, (), indssrc)
 end
@@ -1316,11 +1319,11 @@ end
                             src,  rsrc,  indssrc::Tuple{AbstractUnitRange,Vararg{Any}})
     indd1, inds1 = indsdest[1], indssrc[1]
     l = length(indd1)
-    s = mod(first(inds1)-first(indd1), l)
-    sdf = first(indd1)+s
-    rd1, rd2 = first(indd1):sdf-1, sdf:last(indd1)
-    ssf = last(inds1)-s
-    rs1, rs2 = first(inds1):ssf, ssf+1:last(inds1)
+    s = mod(rangestart(inds1)-rangestart(indd1), l)
+    sdf = rangestart(indd1)+s
+    rd1, rd2 = rangestart(indd1):sdf-1, sdf:rangestop(indd1)
+    ssf = rangestop(inds1)-s
+    rs1, rs2 = rangestart(inds1):ssf, ssf+1:rangestop(inds1)
     tindsd, tindss = tail(indsdest), tail(indssrc)
     _circcopy!(dest, (rdest..., rd1), tindsd, src, (rsrc..., rs2), tindss)
     _circcopy!(dest, (rdest..., rd2), tindsd, src, (rsrc..., rs1), tindss)

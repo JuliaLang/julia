@@ -20,8 +20,8 @@ let
                 @test len == 0
                 @test isa(len, Int64)
                 @test isempty(dr)
-                @test first(dr) == f1
-                @test last(dr) < f1
+                @test rangestart(dr) == f1
+                @test rangestop(dr) < f1
                 @test length([i for i in dr]) == 0
                 @test_throws ArgumentError minimum(dr)
                 @test_throws ArgumentError maximum(dr)
@@ -30,8 +30,8 @@ let
                 @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
-                @test first(reverse(dr)) < f1
-                @test last(reverse(dr)) >= f1
+                @test rangestart(reverse(dr)) < f1
+                @test rangestop(reverse(dr)) >= f1
                 @test issorted(dr)
                 @test sortperm(dr) == 1:1:0
                 @test !(f1 in dr)
@@ -78,8 +78,8 @@ let
                 @test len == 0
                 @test isa(len, Int64)
                 @test isempty(dr)
-                @test first(dr) == l1
-                @test last(dr) > l1
+                @test rangestart(dr) == l1
+                @test rangestop(dr) > l1
                 @test length([i for i in dr]) == 0
                 @test_throws ArgumentError minimum(dr)
                 @test_throws ArgumentError maximum(dr)
@@ -88,8 +88,8 @@ let
                 @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
-                @test first(reverse(dr)) > l1
-                @test last(reverse(dr)) <= l1
+                @test rangestart(reverse(dr)) > l1
+                @test rangestop(reverse(dr)) <= l1
                 @test issorted(dr)
                 @test sortperm(dr) == 1:1:0
                 @test !(l1 in dr)
@@ -138,8 +138,8 @@ let
                     @test len == 0
                     @test isa(len, Int64)
                     @test isempty(dr)
-                    @test first(dr) == f1
-                    @test last(dr) < f1
+                    @test rangestart(dr) == f1
+                    @test rangestop(dr) < f1
                     @test length([i for i in dr]) == 0
                     @test_throws ArgumentError minimum(dr)
                     @test_throws ArgumentError maximum(dr)
@@ -148,8 +148,8 @@ let
                     @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
-                    @test first(reverse(dr)) < f1
-                    @test last(reverse(dr)) >= f1
+                    @test rangestart(reverse(dr)) < f1
+                    @test rangestop(reverse(dr)) >= f1
                     @test issorted(dr)
                     @test sortperm(dr) == 1:1:0
                     @test !(f1 in dr)
@@ -196,8 +196,8 @@ let
                     @test len == 0
                     @test isa(len, Int64)
                     @test isempty(dr)
-                    @test first(dr) == l1
-                    @test last(dr) > l1
+                    @test rangestart(dr) == l1
+                    @test rangestop(dr) > l1
                     @test length([i for i in dr]) == 0
                     @test_throws ArgumentError minimum(dr)
                     @test_throws ArgumentError maximum(dr)
@@ -206,8 +206,8 @@ let
                     @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
-                    @test first(reverse(dr)) > l1
-                    @test last(reverse(dr)) <= l1
+                    @test rangestart(reverse(dr)) > l1
+                    @test rangestop(reverse(dr)) <= l1
                     @test issorted(dr)
                     @test sortperm(dr) == 1:1:0
                     @test !(l1 in dr)
@@ -288,19 +288,19 @@ dr20 = typemin(Dates.DateTime):Dates.Day(2):typemax(Dates.DateTime)
 
 drs = Any[dr, dr1, dr2, dr3, dr4, dr5, dr6, dr7, dr8, dr9, dr10,
           dr11, dr12, dr13, dr14, dr15, dr16, dr17, dr18, dr19, dr20]
-drs2 = map(x->Dates.Date(first(x)):step(x):Dates.Date(last(x)), drs)
+drs2 = map(x->Dates.Date(rangestart(x)):step(x):Dates.Date(rangestop(x)), drs)
 
 @test map(length, drs) == map(x->size(x)[1], drs)
-@test map(length, drs) == map(x->length(Dates.Date(first(x)):step(x):Dates.Date(last(x))), drs)
+@test map(length, drs) == map(x->length(Dates.Date(rangestart(x)):step(x):Dates.Date(rangestop(x))), drs)
 @test map(length, drs) == map(x->length(reverse(x)), drs)
 @test all(x->findin(x, x)==[1:length(x);], drs[1:4])
 @test isempty(dr2)
-@test all(x->reverse(x) == range(last(x), -step(x), length(x)), drs)
-@test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])
-@test all(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)), drs[4:end])
+@test all(x->reverse(x) == range(rangestop(x), -step(x), length(x)), drs)
+@test all(x->minimum(x) == (step(x) < zero(step(x)) ? rangestop(x) : rangestart(x)), drs[4:end])
+@test all(x->maximum(x) == (step(x) < zero(step(x)) ? rangestart(x) : rangestop(x)), drs[4:end])
 @test all(drs[1:3]) do dd
     for (i, d) in enumerate(dd)
-        @test d == (first(dd) + Dates.Day(i - 1))
+        @test d == (rangestart(dd) + Dates.Day(i - 1))
     end
     true
 end
@@ -373,12 +373,12 @@ drs = Any[dr, dr1, dr2, dr3, dr4, dr5, dr6, dr7, dr8, dr9, dr10,
 @test map(length, drs) == map(x->size(x)[1], drs)
 @test all(x->findin(x, x) == [1:length(x);], drs[1:4])
 @test isempty(dr2)
-@test all(x->reverse(x) == last(x): - step(x):first(x), drs)
-@test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])
-@test all(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)), drs[4:end])
+@test all(x->reverse(x) == rangestop(x): - step(x):rangestart(x), drs)
+@test all(x->minimum(x) == (step(x) < zero(step(x)) ? rangestop(x) : rangestart(x)), drs[4:end])
+@test all(x->maximum(x) == (step(x) < zero(step(x)) ? rangestart(x) : rangestop(x)), drs[4:end])
 @test all(drs[1:3]) do dd
     for (i, d) in enumerate(dd)
-        @test d == (first(dd) + Dates.Day(i - 1))
+        @test d == (rangestart(dd) + Dates.Day(i - 1))
     end
     true
 end
@@ -559,9 +559,9 @@ drs = Any[dr, dr1, dr2, dr3, dr8, dr9, dr10,
 @test map(length, drs) == map(x->size(x)[1], drs)
 @test all(x->findin(x, x) == [1:length(x);], drs[1:4])
 @test isempty(dr2)
-@test all(x->reverse(x) == last(x): - step(x):first(x), drs)
-@test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])
-@test all(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)), drs[4:end])
+@test all(x->reverse(x) == rangestop(x): - step(x):rangestart(x), drs)
+@test all(x->minimum(x) == (step(x) < zero(step(x)) ? rangestop(x) : rangestart(x)), drs[4:end])
+@test all(x->maximum(x) == (step(x) < zero(step(x)) ? rangestart(x) : rangestop(x)), drs[4:end])
 @test_throws MethodError dr .+ 1
 
 a = Dates.Time(23, 1, 1)

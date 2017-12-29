@@ -289,14 +289,14 @@ end
 # The running sum is `f`; the cumulative stride product is `s`.
 # If the parent is a vector, then we offset the parent's own indices with parameters of I
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{AbstractRange}) =
-    (@_inline_meta; first(I[1]) - first(indices1(I[1]))*stride1)
+    (@_inline_meta; rangestart(I[1]) - rangestart(indices1(I[1]))*stride1)
 # If the result is one-dimensional and it's a Colon, then linear
 # indexing uses the indices along the given dimension. Otherwise
 # linear indexing always starts with 1.
 compute_offset1(parent, stride1::Integer, I::Tuple) =
     (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(1, I...), find_extended_inds(I...), I))
 compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, I::Tuple) =
-    (@_inline_meta; compute_linindex(parent, I) - stride1*first(axes(parent, dims[1])))  # index-preserving case
+    (@_inline_meta; compute_linindex(parent, I) - stride1*rangestart(axes(parent, dims[1])))  # index-preserving case
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
     (@_inline_meta; compute_linindex(parent, I) - stride1)  # linear indexing starts with 1
 
@@ -307,12 +307,12 @@ function compute_linindex(parent, I::NTuple{N,Any}) where N
 end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{ScalarIndex, Vararg{Any}})
     @_inline_meta
-    Δi = I[1]-first(IP[1])
+    Δi = I[1]-rangestart(IP[1])
     compute_linindex(f + Δi*s, s*unsafe_length(IP[1]), tail(IP), tail(I))
 end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{Any, Vararg{Any}})
     @_inline_meta
-    Δi = first(I[1])-first(IP[1])
+    Δi = rangestart(I[1])-rangestart(IP[1])
     compute_linindex(f + Δi*s, s*unsafe_length(IP[1]), tail(IP), tail(I))
 end
 compute_linindex(f, s, IP::Tuple, I::Tuple{}) = f

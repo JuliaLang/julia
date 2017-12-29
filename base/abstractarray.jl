@@ -167,7 +167,7 @@ _length(A) = (@_inline_meta; length(A))
 """
     endof(collection) -> Integer
 
-Return the last index of the collection.
+Return the last index of the collection, or an invalid index if it is empty.
 
 # Examples
 ```jldoctest
@@ -175,15 +175,14 @@ julia> endof([1,2,4])
 3
 ```
 """
-endof(a::AbstractArray) = (@_inline_meta; last(linearindices(a)))
+endof(a::AbstractArray) = (@_inline_meta; rangestop(linearindices(a)))
 
-first(a::AbstractArray) = a[first(eachindex(a))]
+first(a::AbstractArray) = a[rangestart(eachindex(a))]
 
 """
     first(coll)
 
-Get the first element of an iterable collection. Return the start point of an
-`AbstractRange` even if it is empty.
+Get the first element of an iterable collection.
 
 # Examples
 ```jldoctest
@@ -204,8 +203,7 @@ end
     last(coll)
 
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
-accomplished by calling [`endof`](@ref) to get the last index. Return the end
-point of an `AbstractRange` even if it is empty.
+accomplished by calling [`endof`](@ref) to get the last index.
 
 # Examples
 ```jldoctest
@@ -463,12 +461,14 @@ false
 """
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i) =
     throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
-checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
+checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) =
+    (rangestart(inds) <= i) & (i <= rangestop(inds))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Slice) = true
 function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::AbstractRange)
     @_propagate_inbounds_meta
-    isempty(r) | (checkindex(Bool, inds, first(r)) & checkindex(Bool, inds, last(r)))
+    isempty(r) | (checkindex(Bool, inds, rangestart(r)) &
+                  checkindex(Bool, inds, rangestop(r)))
 end
 checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractVector{Bool}) = indx == indices1(I)
 checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractArray{Bool}) = false
@@ -543,7 +543,7 @@ to_shape(dims::DimsOrInds) = map(to_shape, dims)::DimsOrInds
 # each dimension
 to_shape(i::Int) = i
 to_shape(i::Integer) = Int(i)
-to_shape(r::OneTo) = Int(last(r))
+to_shape(r::OneTo) = Int(rangestop(r))
 to_shape(r::AbstractUnitRange) = r
 
 """
@@ -682,7 +682,7 @@ copyto!(dest::AbstractArray, src::AbstractArray) =
 
 function copyto!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
     destinds, srcinds = linearindices(dest), linearindices(src)
-    isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) ||
+    isempty(srcinds) || (rangestart(srcinds) ∈ destinds && rangestop(srcinds) ∈ destinds) ||
         throw(BoundsError(dest, srcinds))
     @inbounds for i in srcinds
         dest[i] = src[i]
@@ -692,7 +692,7 @@ end
 
 function copyto!(::IndexStyle, dest::AbstractArray, ::IndexCartesian, src::AbstractArray)
     destinds, srcinds = linearindices(dest), linearindices(src)
-    isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) ||
+    isempty(srcinds) || (rangestart(srcinds) ∈ destinds && rangestop(srcinds) ∈ destinds) ||
         throw(BoundsError(dest, srcinds))
     i = 0
     @inbounds for a in src
@@ -702,13 +702,13 @@ function copyto!(::IndexStyle, dest::AbstractArray, ::IndexCartesian, src::Abstr
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
-    copyto!(dest, dstart, src, first(linearindices(src)), _length(src))
+    copyto!(dest, dstart, src, rangestart(linearindices(src)), _length(src))
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
     srcinds = linearindices(src)
     sstart ∈ srcinds || throw(BoundsError(src, sstart))
-    copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
+    copyto!(dest, dstart, src, sstart, rangestop(srcinds)-sstart+1)
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer,
@@ -742,9 +742,9 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     end
     @boundscheck checkbounds(B, ir_dest, jr_dest)
     @boundscheck checkbounds(A, ir_src, jr_src)
-    jdest = first(jr_dest)
+    jdest = rangestart(jr_dest)
     for jsrc in jr_src
-        idest = first(ir_dest)
+        idest = rangestart(ir_dest)
         for isrc in ir_src
             B[idest,jdest] = A[isrc,jsrc]
             idest += step(ir_dest)
@@ -876,8 +876,8 @@ of_indices(x, y) = similar(dims->y, oftype(axes(x), axes(y)))
 
 ## range conversions ##
 
-map(::Type{T}, r::StepRange) where {T<:Real} = T(r.start):T(r.step):T(last(r))
-map(::Type{T}, r::UnitRange) where {T<:Real} = T(r.start):T(last(r))
+map(::Type{T}, r::StepRange) where {T<:Real} = T(r.start):T(r.step):T(rangestop(r))
+map(::Type{T}, r::UnitRange) where {T<:Real} = T(r.start):T(rangestop(r))
 map(::Type{T}, r::StepRangeLen) where {T<:AbstractFloat} = convert(StepRangeLen{T}, r)
 function map(::Type{T}, r::LinSpace) where T<:AbstractFloat
     LinSpace(T(r.start), T(r.stop), length(r))
@@ -891,7 +891,7 @@ end
 pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @_inline_meta
-    unsafe_convert(Ptr{T}, x) + (i - first(linearindices(x)))*elsize(x)
+    unsafe_convert(Ptr{T}, x) + (i - rangestart(linearindices(x)))*elsize(x)
 end
 
 ## Approach:
@@ -1058,7 +1058,7 @@ function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,Ab
     ind = findin(I, indices1(A))
     X[ind] = A[I[ind]]
     Xind = indices1(X)
-    X[first(Xind):first(ind)-1] = default
+    X[rangestart(Xind):first(ind)-1] = default
     X[last(ind)+1:last(Xind)] = default
     X
 end
@@ -1622,7 +1622,7 @@ end
 nextL(L, l::Integer) = L*l
 nextL(L, r::AbstractUnitRange) = L*unsafe_length(r)
 offsetin(i, l::Integer) = i-1
-offsetin(i, r::AbstractUnitRange) = i-first(r)
+offsetin(i, r::AbstractUnitRange) = i-rangestart(r)
 
 _ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsError()))
 _ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub_recurse(dims, ind-1))
@@ -1644,9 +1644,9 @@ function _ind2sub_recurse(inds, ind)
 end
 
 _lookup(ind, d::Integer) = ind+1
-_lookup(ind, r::AbstractUnitRange) = ind+first(r)
+_lookup(ind, r::AbstractUnitRange) = ind+rangestart(r)
 _div(ind, d::Integer) = div(ind, d), 1, d
-_div(ind, r::AbstractUnitRange) = (d = unsafe_length(r); (div(ind, d), first(r), d))
+_div(ind, r::AbstractUnitRange) = (d = unsafe_length(r); (div(ind, d), rangestart(r), d))
 
 # Vectorized forms
 function _sub2ind(inds::Indices{1}, I1::AbstractVector{T}, I::AbstractVector{T}...) where T<:Integer
@@ -1777,7 +1777,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
 
     otherdims = setdiff(alldims, dims)
 
-    idx = Any[first(ind) for ind in axes(A)]
+    idx = Any[rangestart(ind) for ind in axes(A)]
     itershape   = tuple(dimsA[otherdims]...)
     for d in dims
         idx[d] = Slice(axes(A, d))
@@ -1948,13 +1948,13 @@ function hash_range(r::AbstractRange, h::UInt)
     h += hash(size(r))
 
     length(r) == 0 && return h
-    h = hash(first(r), h)
+    h = hash(rangestart(r), h)
     length(r) == 1 && return h
-    length(r) == 2 && return hash(last(r), h)
+    length(r) == 2 && return hash(rangestop(r), h)
 
     h += hashr_seed
     h = hash(length(r), h)
-    h = hash(last(r), h)
+    h = hash(rangestop(r), h)
 end
 
 function hash(a::AbstractArray{T}, h::UInt) where T

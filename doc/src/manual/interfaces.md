@@ -518,7 +518,7 @@ you can convert a `UnitRange{Int}` `r` to a `UnitRange{BigInt}` with `big.(r)`; 
 of this method is approximately
 
 ```julia
-Broadcast.broadcast(::typeof(big), r::UnitRange) = big(first(r)):big(last(r))
+Broadcast.broadcast(::typeof(big), r::UnitRange) = big(rangestart(r)):big(rangestop(r))
 ```
 
 This exploits Julia's ability to dispatch on a particular function type. (This kind of

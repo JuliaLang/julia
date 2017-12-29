@@ -330,8 +330,8 @@ function rand!(r::MersenneTwister, A::AbstractArray{Float64},
     # for i=region
     #     @inbounds A[i] = rand(r, I[])
     # end
-    m = Base.checked_sub(first(region), 1)
-    n = last(region)
+    m = Base.checked_sub(rangestart(region), 1)
+    n = rangestop(region)
     while m < n
         s = mt_avail(r)
         if s == 0

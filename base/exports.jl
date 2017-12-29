@@ -468,6 +468,8 @@ export
     randsubseq!,
     randsubseq,
     range,
+    rangestart,
+    rangestop,
     reducedim,
     repmat,
     reshape,

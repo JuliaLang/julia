@@ -4,6 +4,11 @@
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using Main.TestHelpers.OAs
 
+_start(x::Number) = x
+_stop(x::Number) = x
+_start(x::AbstractRange) = rangestart(x)
+_stop(x::AbstractRange) = rangestop(x)
+
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
     @test count(!iszero, [1, 2, 3]) == 3
@@ -1125,7 +1130,7 @@ end
             a = [1:10;]
             acopy = copy(a)
             @test splice!(a, idx, repl) == acopy[idx]
-            @test a == [acopy[1:(first(idx)-1)]; repl; acopy[(last(idx)+1):end]]
+            @test a == [acopy[1:(_start(idx)-1)]; repl; acopy[(_stop(idx)+1):end]]
         end
     end
 end
@@ -1163,15 +1168,15 @@ end
                    8:9, 9:10, 6:9, 7:10]
         # integer indexing with AbstractArray
         a = [1:10;]; acopy = copy(a)
-        @test deleteat!(a, idx) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
+        @test deleteat!(a, idx) == [acopy[1:(_start(idx)-1)]; acopy[(_stop(idx)+1):end]]
 
         # integer indexing with non-AbstractArray iterable
         a = [1:10;]; acopy = copy(a)
-        @test deleteat!(a, (i for i in idx)) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
+        @test deleteat!(a, (i for i in idx)) == [acopy[1:(_start(idx)-1)]; acopy[(_stop(idx)+1):end]]
 
         # logical indexing
         a = [1:10;]; acopy = copy(a)
-        @test deleteat!(a, map(i -> i in idx, 1:length(a))) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
+        @test deleteat!(a, map(i -> i in idx, 1:length(a))) == [acopy[1:(_start(idx)-1)]; acopy[(_stop(idx)+1):end]]
     end
     a = [1:10;]
     @test deleteat!(a, 11:10) == [1:10;]

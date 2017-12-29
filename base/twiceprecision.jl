@@ -458,9 +458,9 @@ end
 
 function getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::OrdinalRange{<:Integer}) where T
     @boundscheck checkbounds(r, s)
-    soffset = 1 + round(Int, (r.offset - first(s))/step(s))
+    soffset = 1 + round(Int, (r.offset - rangestart(s))/step(s))
     soffset = clamp(soffset, 1, length(s))
-    ioffset = first(s) + (soffset-1)*step(s)
+    ioffset = rangestart(s) + (soffset-1)*step(s)
     if step(s) == 1 || length(s) < 2
         newstep = r.step
     else
@@ -499,13 +499,13 @@ function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{<:Integer}) wh
 end
 
 function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::AbstractRange{<:Integer}) where {T,R,S}
-    StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
+    StepRangeLen{T,R,S}(R(rangestart(r)), S(step(r)), length(r))
 end
 
 function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::AbstractRange{U}) where {T,R,S,U}
     # if start and step have a rational approximation in the old type,
     # then we transfer that rational approximation to the new type
-    f, s = first(r), step(r)
+    f, s = rangestart(r), step(r)
     start_n, start_d = rat(f)
     step_n, step_d = rat(s)
     if start_d != 0 && step_d != 0 &&
@@ -526,7 +526,7 @@ function __convertSRL(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{U}) where {T,
     StepRangeLen{T,R,S}(R(r.ref), S(r.step), length(r), r.offset)
 end
 function __convertSRL(::Type{StepRangeLen{T,R,S}}, r::AbstractRange{U}) where {T,R,S,U}
-    StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
+    StepRangeLen{T,R,S}(R(rangestart(r)), S(step(r)), length(r))
 end
 
 function sum(r::StepRangeLen)
@@ -654,7 +654,7 @@ function _linspace1(::Type{T}, start, stop, len::Integer) where T
     len >= 0 || throw(ArgumentError("linspace($start, $stop, $len): negative length"))
     if len <= 1
         len == 1 && (start == stop || throw(ArgumentError("linspace($start, $stop, $len): endpoints differ")))
-        # Ensure that first(r)==start and last(r)==stop even for len==0
+        # Ensure that rangestart(r)==start and rangestop(r)==stop even for len==0
         # The output type must be consistent with steprangelen_hp
         if T<:Union{Float32,Float16}
             return StepRangeLen{T}(Float64(start), Float64(start) - Float64(stop), len, 1)

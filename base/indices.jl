@@ -238,12 +238,15 @@ end
 axes(S::Slice) = (S.indices,)
 unsafe_indices(S::Slice) = (S.indices,)
 indices1(S::Slice) = S.indices
+# TODO: remove?
 first(S::Slice) = first(S.indices)
 last(S::Slice) = last(S.indices)
+rangestart(S::Slice) = rangestart(S.indices)
+rangestop(S::Slice) = rangestop(S.indices)
 errmsg(A) = error("size not supported for arrays with indices $(axes(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
-size(S::Slice) = first(S.indices) == 1 ? (length(S.indices),) : errmsg(S)
-length(S::Slice) = first(S.indices) == 1 ? length(S.indices) : errmsg(S)
-unsafe_length(S::Slice) = first(S.indices) == 1 ? unsafe_length(S.indices) : errmsg(S)
+size(S::Slice) = rangestart(S.indices) == 1 ? (length(S.indices),) : errmsg(S)
+length(S::Slice) = rangestart(S.indices) == 1 ? length(S.indices) : errmsg(S)
+unsafe_length(S::Slice) = rangestart(S.indices) == 1 ? unsafe_length(S.indices) : errmsg(S)
 getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
 start(S::Slice) = start(S.indices)

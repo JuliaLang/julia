@@ -217,11 +217,11 @@ function getindex_continued(s::String, i::Int, u::UInt32)
     return reinterpret(Char, u)
 end
 
-getindex(s::String, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
+getindex(s::String, r::UnitRange{<:Integer}) = s[Int(rangestart(r)):Int(rangestop(r))]
 
 function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""
-    i, j = first(r), last(r)
+    i, j = rangestart(r), rangestop(r)
     @boundscheck begin
         checkbounds(s, r)
         @inbounds isvalid(s, i) || string_index_err(s, i)

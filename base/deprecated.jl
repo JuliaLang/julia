@@ -415,7 +415,7 @@ end
 reduced_dims(::Tuple{}, region) = ()
 function reduced_dims(dims::Dims, region)
     Base.depwarn("`reduced_dims` is deprecated for Dims-tuples; pass `indices` to `reduced_indices` instead", :reduced_dims)
-    map(last, reduced_indices(map(OneTo, dims), region))
+    map(rangestop, reduced_indices(map(OneTo, dims), region))
 end
 
 function reduced_dims0(::Tuple{}, d::Int)
@@ -425,7 +425,7 @@ end
 reduced_dims0(::Tuple{}, region) = ()
 function reduced_dims0(dims::Dims, region)
     Base.depwarn("`reduced_dims0` is deprecated for Dims-tuples; pass `indices` to `reduced_indices0` instead", :reduced_dims0)
-    map(last, reduced_indices0(map(OneTo, dims), region))
+    map(rangestop, reduced_indices0(map(OneTo, dims), region))
 end
 
 function reduced_dims(a::AbstractArray, region)
@@ -1027,7 +1027,7 @@ end
 function getindex(r::Use_StepRangeLen_Instead, s::OrdinalRange)
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    Use_StepRangeLen_Instead(r.start + (first(s)-1)*r.step, step(s)*r.step, length(s), r.divisor)
+    Use_StepRangeLen_Instead(r.start + (rangestart(s)-1)*r.step, step(s)*r.step, length(s), r.divisor)
 end
 
 -(r::Use_StepRangeLen_Instead)   = Use_StepRangeLen_Instead(-r.start, -r.step, r.len, r.divisor)
@@ -1046,14 +1046,14 @@ convert(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead) where 
 promote_rule(::Type{Use_StepRangeLen_Instead{F}}, ::Type{OR}) where {F,OR<:OrdinalRange} =
     Use_StepRangeLen_Instead{promote_type(F,eltype(OR))}
 convert(::Type{Use_StepRangeLen_Instead{T}}, r::OrdinalRange) where {T<:AbstractFloat} =
-    Use_StepRangeLen_Instead{T}(first(r), step(r), length(r), one(T))
+    Use_StepRangeLen_Instead{T}(rangestart(r), step(r), length(r), one(T))
 convert(::Type{Use_StepRangeLen_Instead}, r::OrdinalRange{T}) where {T} =
-    Use_StepRangeLen_Instead{typeof(float(first(r)))}(first(r), step(r), length(r), one(T))
+    Use_StepRangeLen_Instead{typeof(float(rangestart(r)))}(rangestart(r), step(r), length(r), one(T))
 
 promote_rule(::Type{LinSpace{F}}, ::Type{OR}) where {F,OR<:Use_StepRangeLen_Instead} =
     LinSpace{promote_type(F,eltype(OR))}
 convert(::Type{LinSpace{T}}, r::Use_StepRangeLen_Instead) where {T<:AbstractFloat} =
-    linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))
+    linspace(convert(T, rangestart(r)), convert(T, last(r)), convert(T, length(r)))
 convert(::Type{LinSpace}, r::Use_StepRangeLen_Instead{T}) where {T<:AbstractFloat} =
     convert(LinSpace{T}, r)
 
@@ -3804,6 +3804,22 @@ function getindex(F::Factorization, s::Symbol)
 end
 @eval Base.LinAlg begin
     @deprecate getq(F::Factorization) F.Q
+end
+
+# PR #25385
+function first(r::AbstractRange)
+    if isempty(r)
+        depwarn("calling `first` on an empty range will throw an error in the future, use `rangestart` instead",
+                :first)
+    end
+    rangestart(r)
+end
+function last(r::AbstractRange)
+    if isempty(r)
+        depwarn("calling `last` on an empty range will throw an error in the future, use `rangestop` instead",
+                :first)
+    end
+    rangestop(r)
 end
 
 # END 0.7 deprecations

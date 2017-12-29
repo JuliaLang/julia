@@ -292,7 +292,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
     n = endof(str)
     r = search(str,splitter,i)
     if r != 0:-1
-        j, k = first(r), nextind(str,last(r))
+        j, k = rangestart(r), nextind(str,rangestop(r))
         while 0 < j <= n && length(strs) != limit-1
             if i < k
                 if keep_empty || i < j
@@ -303,7 +303,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
             (k <= j) && (k = nextind(str,j))
             r = search(str,splitter,k)
             r == 0:-1 && break
-            j, k = first(r), nextind(str,last(r))
+            j, k = rangestart(r), nextind(str,rangestop(r))
         end
     end
     if keep_empty || !done(str,i)
@@ -352,8 +352,8 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool
     i = start(str)
     n = endof(str)
     r = rsearch(str,splitter)
-    j = first(r)-1
-    k = last(r)
+    j = rangestart(r)-1
+    k = rangestop(r)
     while((0 <= j < n) && (length(strs) != limit-1))
         if i <= k
             (keep_empty || (k < n)) && pushfirst!(strs, SubString(str,k+1,n))
@@ -361,8 +361,8 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool
         end
         (k <= j) && (j = prevind(str,j))
         r = rsearch(str,splitter,j)
-        j = first(r)-1
-        k = last(r)
+        j = rangestart(r)-1
+        k = rangestop(r)
     end
     (keep_empty || (n > 0)) && pushfirst!(strs, SubString(str,1,n))
     return strs
@@ -371,7 +371,7 @@ end
 
 _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
-    print(io, repl(SubString(str, first(r), last(r))))
+    print(io, repl(SubString(str, rangestart(r), rangestop(r))))
 
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = pat_repl
@@ -381,7 +381,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     e = endof(str)
     i = a = start(str)
     r = search(str,pattern,i)
-    j, k = first(r), last(r)
+    j, k = rangestart(r), rangestop(r)
     out = IOBuffer(StringVector(floor(Int, 1.2sizeof(str))), true, true)
     out.size = 0
     out.ptr = 1
@@ -399,7 +399,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
         end
         r = search(str,pattern,k)
         r == 0:-1 || n == count && break
-        j, k = first(r), last(r)
+        j, k = rangestart(r), rangestop(r)
         n += 1
     end
     write(out, SubString(str,i))
@@ -479,7 +479,7 @@ hex2bytes(s::AbstractString) = hex2bytes(String(s))
 hex2bytes(s::Union{String,AbstractVector{UInt8}}) = hex2bytes!(Vector{UInt8}(uninitialized, length(s) >> 1), s)
 
 _firstbyteidx(s::String) = 1
-_firstbyteidx(s::AbstractVector{UInt8}) = first(eachindex(s))
+_firstbyteidx(s::AbstractVector{UInt8}) = rangestart(eachindex(s))
 _lastbyteidx(s::String) = sizeof(s)
 _lastbyteidx(s::AbstractVector{UInt8}) = endof(s)
 
@@ -495,7 +495,7 @@ function hex2bytes!(d::AbstractVector{UInt8}, s::Union{String,AbstractVector{UIn
         isodd(sizeof(s)) && throw(ArgumentError("input hex array must have even length"))
         throw(ArgumentError("output array must be half length of input array"))
     end
-    j = first(eachindex(d)) - 1
+    j = rangestart(eachindex(d)) - 1
     for i = _firstbyteidx(s):2:_lastbyteidx(s)
         @inbounds d[j += 1] = number_from_hex(_nthbyte(s,i)) << 4 + number_from_hex(_nthbyte(s,i+1))
     end

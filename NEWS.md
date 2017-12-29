@@ -233,7 +233,7 @@ This section lists changes that do not have deprecation warnings.
 
   * The representation of `CartesianRange` has changed to a
     tuple-of-AbstractUnitRanges; the `start` and `stop` fields are no
-    longer present. Use `first(R)` and `last(R)` to obtain
+    longer present. Use `rangestart(R)` and `rangestop(R)` to obtain
     start/stop. ([#20974])
 
   * The `Diagonal`, `Bidiagonal`, `Tridiagonal` and `SymTridiagonal` type definitions have
@@ -897,6 +897,10 @@ Deprecated or removed
     in favor of dot overloading (`getproperty`) so factors should now be accessed as e.g.
     `F.Q` instead of `F[:Q]` ([#25184]).
 
+  * Calling `first` and `last` on empty ranges has been deprecated in favor of `rangestart`
+    and `rangestop` (respectively). An error will be thrown in the future, for consistency
+    with other `AbstractArray` types ([#25385]).
+
 Command-line option changes
 ---------------------------
 
@@ -1140,3 +1144,4 @@ Command-line option changes
 [#25168]: https://github.com/JuliaLang/julia/issues/25168
 [#25184]: https://github.com/JuliaLang/julia/issues/25184
 [#25231]: https://github.com/JuliaLang/julia/issues/25231
+[#25385]: https://github.com/JuliaLang/julia/issues/25385

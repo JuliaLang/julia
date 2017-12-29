@@ -146,7 +146,7 @@ function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) w
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
     end
-    Base.@gc_preserve x BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
+    Base.@gc_preserve x BLAS.nrm2(length(rx), pointer(x)+(rangestart(rx)-1)*sizeof(T), step(rx))
 end
 
 vecnorm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =

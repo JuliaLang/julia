@@ -76,7 +76,7 @@ function compile(x)
                             end
                         end
                         # Set index to last value just like a regular for loop would
-                        $var = last($r)
+                        $var = rangestop($r)
                     end
                 end
             end

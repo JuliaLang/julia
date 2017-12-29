@@ -118,18 +118,18 @@ Note also that `similar(Array{Int}, (axes(A, 2),))` would allocate an `AbstractV
 ### Deprecations
 
 In generalizing Julia's code base, at least one deprecation was unavoidable: earlier versions
-of Julia defined `first(::Colon) = 1`, meaning that the first index along a dimension indexed
+of Julia defined `rangestart(::Colon) = 1`, meaning that the first index along a dimension indexed
 by `:` is 1. This definition can no longer be justified, so it was deprecated. There is no provided
 replacement, because the proper replacement depends on what you are doing and might need to know
-more about the array. However, it appears that many uses of `first(::Colon)` are really about
+more about the array. However, it appears that many uses of `rangestart(::Colon)` are really about
 computing an index offset; when that is the case, a candidate replacement is:
 
 ```julia
-indexoffset(r::AbstractVector) = first(r) - 1
+indexoffset(r::AbstractVector) = rangestart(r) - 1
 indexoffset(::Colon) = 0
 ```
 
-In other words, while `first(:)` does not itself make sense, in general you can say that the offset
+In other words, while `rangestart(:)` does not itself make sense, in general you can say that the offset
 associated with a colon-index is zero.
 
 ## Writing custom array types with non-1 indexing

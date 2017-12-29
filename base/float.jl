@@ -885,8 +885,8 @@ function float(A::AbstractArray{T}) where T
     convert(AbstractArray{typeof(float(zero(T)))}, A)
 end
 
-float(r::StepRange) = float(r.start):float(r.step):float(last(r))
-float(r::UnitRange) = float(r.start):float(last(r))
+float(r::StepRange) = float(r.start):float(r.step):float(rangestop(r))
+float(r::UnitRange) = float(r.start):float(rangestop(r))
 float(r::StepRangeLen{T}) where {T} =
     StepRangeLen{typeof(float(T(r.ref)))}(float(r.ref), float(r.step), length(r), r.offset)
 function float(r::LinSpace)
@@ -896,8 +896,8 @@ end
 # big, broadcast over arrays
 # TODO: do the definitions below primarily pertaining to integers belong in float.jl?
 function big end # no prior definitions of big in sysimg.jl, necessitating this
-broadcast(::typeof(big), r::UnitRange) = big(r.start):big(last(r))
-broadcast(::typeof(big), r::StepRange) = big(r.start):big(r.step):big(last(r))
+broadcast(::typeof(big), r::UnitRange) = big(r.start):big(rangestop(r))
+broadcast(::typeof(big), r::StepRange) = big(r.start):big(r.step):big(rangestop(r))
 broadcast(::typeof(big), r::StepRangeLen) = StepRangeLen(big(r.ref), big(r.step), length(r), r.offset)
 function broadcast(::typeof(big), r::LinSpace)
     LinSpace(big(r.start), big(r.stop), length(r))

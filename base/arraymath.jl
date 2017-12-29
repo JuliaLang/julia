@@ -140,7 +140,7 @@ julia> rotl90(a)
 function rotl90(A::AbstractMatrix)
     ind1, ind2 = axes(A)
     B = similar(A, (ind2,ind1))
-    n = first(ind2)+last(ind2)
+    n = rangestart(ind2)+rangestop(ind2)
     for i=axes(A,1), j=ind2
         B[n-j,i] = A[i,j]
     end
@@ -168,7 +168,7 @@ julia> rotr90(a)
 function rotr90(A::AbstractMatrix)
     ind1, ind2 = axes(A)
     B = similar(A, (ind2,ind1))
-    m = first(ind1)+last(ind1)
+    m = rangestart(ind1)+rangestop(ind1)
     for i=ind1, j=axes(A,2)
         B[j,m-i] = A[i,j]
     end
@@ -195,7 +195,8 @@ julia> rot180(a)
 function rot180(A::AbstractMatrix)
     B = similar(A)
     ind1, ind2 = axes(A,1), axes(A,2)
-    m, n = first(ind1)+last(ind1), first(ind2)+last(ind2)
+    m = rangestart(ind1)+rangestop(ind1)
+    n = rangestart(ind2)+rangestop(ind2)
     for j=ind2, i=ind1
         B[m-i,n-j] = A[i,j]
     end

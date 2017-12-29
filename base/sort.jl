@@ -85,7 +85,7 @@ issorted(itr;
 
 function partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
     inds = axes(v, 1)
-    sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
+    sort!(v, rangestart(inds), rangestop(inds), PartialQuickSort(k), o)
     @views v[k]
 end
 
@@ -212,44 +212,44 @@ end
 
 function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     if step(a) == 0
-        lt(o, x, first(a)) ? 0 : length(a)
+        lt(o, x, rangestart(a)) ? 0 : length(a)
     else
-        n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
+        n = round(Integer, clamp((x - rangestart(a)) / step(a) + 1, 1, length(a)))
         lt(o, x, a[n]) ? n - 1 : n
     end
 end
 
 function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     if step(a) == 0
-        lt(o, first(a), x) ? length(a) + 1 : 1
+        lt(o, rangestart(a), x) ? length(a) + 1 : 1
     else
-        n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
+        n = round(Integer, clamp((x - rangestart(a)) / step(a) + 1, 1, length(a)))
         lt(o, a[n] ,x) ? n + 1 : n
     end
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
     if step(a) == 0
-        lt(o, x, first(a)) ? 0 : length(a)
+        lt(o, x, rangestart(a)) ? 0 : length(a)
     else
-        clamp( fld(floor(Integer, x) - first(a), step(a)) + 1, 0, length(a))
+        clamp( fld(floor(Integer, x) - rangestart(a), step(a)) + 1, 0, length(a))
     end
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
     if step(a) == 0
-        lt(o, first(a), x) ? length(a)+1 : 1
+        lt(o, rangestart(a), x) ? length(a)+1 : 1
     else
-        clamp(-fld(floor(Integer, -x) + first(a), step(a)) + 1, 1, length(a) + 1)
+        clamp(-fld(floor(Integer, -x) + rangestart(a), step(a)) + 1, 1, length(a) + 1)
     end
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
-    if lt(o, first(a), x)
+    if lt(o, rangestart(a), x)
         if step(a) == 0
             length(a) + 1
         else
-            min(cld(x - first(a), step(a)), length(a)) + 1
+            min(cld(x - rangestart(a), step(a)), length(a)) + 1
         end
     else
         1
@@ -257,12 +257,12 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOr
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
-    if lt(o, x, first(a))
+    if lt(o, x, rangestart(a))
         0
     elseif step(a) == 0
         length(a)
     else
-        min(fld(x - first(a), step(a)) + 1, length(a))
+        min(fld(x - rangestart(a), step(a)) + 1, length(a))
     end
 end
 
@@ -271,7 +271,8 @@ searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval begin
-        $s(v::AbstractVector, x, o::Ordering) = (inds = axes(v, 1); $s(v,x,first(inds),last(inds),o))
+        $s(v::AbstractVector, x, o::Ordering) =
+            (inds = axes(v, 1); $s(v,x,rangestart(inds),rangestop(inds),o))
         $s(v::AbstractVector, x;
            lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
             $s(v,x,ord(lt,by,rev,order))
@@ -358,8 +359,8 @@ end
 
 Base.first(a::PartialQuickSort{Int}) = 1
 Base.last(a::PartialQuickSort{Int}) = a.k
-Base.first(a::PartialQuickSort) = first(a.k)
-Base.last(a::PartialQuickSort) = last(a.k)
+Base.first(a::PartialQuickSort) = rangestart(a.k)
+Base.last(a::PartialQuickSort) = rangestop(a.k)
 
 const InsertionSort = InsertionSortAlg()
 const QuickSort     = QuickSortAlg()
@@ -558,7 +559,7 @@ defalg(v::AbstractArray{<:Number}) = DEFAULT_UNSTABLE
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
     inds = axes(v,1)
-    sort!(v,first(inds),last(inds),alg,order)
+    sort!(v,rangestart(inds),rangestop(inds),alg,order)
 end
 
 """
@@ -885,7 +886,7 @@ end
 
 @noinline function sort_chunks!(Av, n, alg, order)
     inds = linearindices(Av)
-    for s = first(inds):n:last(inds)
+    for s = rangestart(inds):n:rangestop(inds)
         sort!(Av, s, s+n-1, alg, order)
     end
     Av
@@ -1005,7 +1006,8 @@ lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
 
-function nans2left!(v::AbstractVector, o::Ordering, lo::Int=first(axes(v,1)), hi::Int=last(axes(v,1)))
+function nans2left!(v::AbstractVector, o::Ordering,
+                    lo::Int=rangestart(axes(v,1)), hi::Int=rangestop(axes(v,1)))
     i = lo
     @inbounds while i <= hi && isnan(o,v[i])
         i += 1
@@ -1020,7 +1022,8 @@ function nans2left!(v::AbstractVector, o::Ordering, lo::Int=first(axes(v,1)), hi
     end
     return i, hi
 end
-function nans2right!(v::AbstractVector, o::Ordering, lo::Int=first(axes(v,1)), hi::Int=last(axes(v,1)))
+function nans2right!(v::AbstractVector, o::Ordering,
+                     lo::Int=rangestart(axes(v,1)), hi::Int=rangestop(axes(v,1)))
     i = hi
     @inbounds while lo <= i && isnan(o,v[i])
         i -= 1
@@ -1061,7 +1064,7 @@ end
 
 
 fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
-    sort!(v, first(axes(v,1)), last(axes(v,1)), a, o)
+    sort!(v, rangestart(axes(v,1)), rangestop(axes(v,1)), a, o)
 
 sort!(v::AbstractVector{<:Floats}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)
 sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{<:Floats}}) = fpsort!(v,a,o)
