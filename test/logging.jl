@@ -5,7 +5,7 @@ import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
     handle_message, shouldlog, min_enabled_level
 
 import Test: collect_test_logs, TestLogger
-using Base.Printf.@sprintf
+using Base.Printf: @sprintf
 
 #-------------------------------------------------------------------------------
 @testset "Logging" begin

@@ -173,6 +173,9 @@ Language changes
     by a character that will never be an allowed identifier character (currently
     operators, space/control characters, or common punctuation characters) ([#25231]).
 
+  * The syntax `using A.B` can now only be used when `A.B` is a module, and the syntax
+    `using A: B` can only be used for adding single bindings ([#8000]).
+
 
 Breaking changes
 ----------------

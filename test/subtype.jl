@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Bottom
+using Base: Bottom
 using Test
 
 macro UnionAll(var, expr)

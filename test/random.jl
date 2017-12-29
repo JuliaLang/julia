@@ -3,7 +3,8 @@
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using Main.TestHelpers.OAs
 
-using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt, dSFMT, MT_CACHE_F, MT_CACHE_I
+using Base.Random.dSFMT
+using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt, MT_CACHE_F, MT_CACHE_I
 
 @testset "Issue #6573" begin
     srand(0)
