@@ -160,11 +160,11 @@ end
         @test varm(A, mean(A)) ≈ var(A)
     end
 
-    @test typeof(var([1//1, 2//1])) == Rational{Int}
-    @test typeof(var([1//1, 2//1], 1)) == Vector{Rational{Int}}
+    @test var([1//1, 2//1]) isa Rational{Int}
+    @test var([1//1, 2//1], 1) isa Vector{Rational{Int}}
 
-    @test typeof(std([1//1, 2//1])) == Float64
-    @test typeof(std([1//1, 2//1], 1)) == Vector{Float64}
+    @test std([1//1, 2//1]) isa Float64
+    @test std([1//1, 2//1], 1) isa Vector{Float64}
 end
 
 function safe_cov(x, y, zm::Bool, cr::Bool)
