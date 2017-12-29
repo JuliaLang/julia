@@ -1089,7 +1089,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_unquoted(io, args[1], indent)
 
     # comparison (i.e. "x < y < z")
-    elseif head === :comparison && nargs >= 3 && (nargs&1==1)
+    elseif head === :comparison && nargs >= 3 && isodd(nargs)
         comp_prec = minimum(operator_precedence, args[2:2:end])
         if comp_prec <= prec
             show_enclosed_list(io, '(', args, " ", ')', indent, comp_prec)
@@ -1860,7 +1860,7 @@ function print_bit_chunk(io::IO, c::UInt64, l::Integer = 64)
     for s = 0:l-1
         d = (c >>> s) & 1
         print(io, "01"[d + 1])
-        if (s + 1) & 7 == 0
+        if ((s + 1) & 7) == 0
             print(io, " ")
         end
     end

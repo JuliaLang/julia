@@ -281,7 +281,7 @@ function transcode(::Type{UInt8}, src::Vector{UInt16})
             m += 1
         elseif a < 0x800 # 2-byte UTF-8
             m += 2
-        elseif a & 0xfc00 == 0xd800 && i < length(src)
+        elseif (a & 0xfc00) == 0xd800 && i < length(src)
             b = src[i += 1]
             if (b & 0xfc00) == 0xdc00 # 2-unit UTF-16 sequence => 4-byte UTF-8
                 m += 4
@@ -307,7 +307,7 @@ function transcode(::Type{UInt8}, src::Vector{UInt16})
         elseif a < 0x800 # 2-byte UTF-8
             dst[j += 1] = 0xc0 | ((a >> 6) % UInt8)
             dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
-        elseif a & 0xfc00 == 0xd800 && i < n
+        elseif (a & 0xfc00) == 0xd800 && i < n
             b = src[i += 1]
             if (b & 0xfc00) == 0xdc00
                 # 2-unit UTF-16 sequence => 4-byte UTF-8

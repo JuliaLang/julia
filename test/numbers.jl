@@ -22,15 +22,15 @@ const ≣ = isequal # convenient for comparing NaNs
     @test ~true == false
     @test ~false == true
 
-    @test false & false == false
-    @test true  & false == false
-    @test false & true  == false
-    @test true  & true  == true
+    @test (false & false) == false
+    @test (true  & false) == false
+    @test (false & true)  == false
+    @test (true  & true)  == true
 
-    @test false | false == false
-    @test true  | false == true
-    @test false | true  == true
-    @test true  | true  == true
+    @test (false | false) == false
+    @test (true  | false) == true
+    @test (false | true)  == true
+    @test (true  | true)  == true
 
     @test false ⊻ false == false
     @test true  ⊻ false == true
@@ -833,9 +833,9 @@ end
         @test (-x==-y)==(-y==-x)
         @test (-x!=-y)==!(-x==-y)
 
-        @test (x<y)==(x<=y)&(x!=y)
-        @test (x<=y)==(x<y)|(x==y)
-        @test (x==y)==(x<=y)&!(x<y)
+        @test (x<y)==((x<=y)&(x!=y))
+        @test (x<=y)==((x<y)|(x==y))
+        @test (x==y)==((x<=y)&!(x<y))
 
         @test -x != x
         @test -y != y
@@ -2373,7 +2373,7 @@ end
 
 for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128)
     for n = 1:2:1000
-        @test n*(n^typemax(T)) & typemax(T) == 1
+        @test (n*(n^typemax(T)) & typemax(T)) == 1
         n = rand(T) | one(T)
         @test n*(n^typemax(T)) == 1
     end

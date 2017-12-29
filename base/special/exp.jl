@@ -76,7 +76,7 @@ function exp(x::T) where T<:Union{Float32,Float64}
     # filter out non-finite arguments
     if xa > reinterpret(Unsigned, MAX_EXP(T))
         if xa >= exponent_mask(T)
-            xa & significand_mask(T) != 0 && return T(NaN)
+            (xa & significand_mask(T)) != 0 && return T(NaN)
             return xsb ? T(0.0) : T(Inf) # exp(+-Inf)
         end
         x > MAX_EXP(T) && return T(Inf)

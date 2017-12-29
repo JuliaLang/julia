@@ -677,7 +677,7 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
     nc = length(Bc)
     nc == num_bit_chunks(n) || (@warn("Incorrect chunks length for length $n: expected=$(num_bit_chunks(n)) actual=$nc"); return false)
     n == 0 && return true
-    Bc[end] & _msk_end(n) == Bc[end] || (@warn("Nonzero bits in chunk after `BitArray` end"); return false)
+    (Bc[end] & _msk_end(n)) == Bc[end] || (@warn("Nonzero bits in chunk after `BitArray` end"); return false)
     return true
 end
 

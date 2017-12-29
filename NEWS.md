@@ -69,6 +69,9 @@ Language changes
   * The parsing of `1<<2*3` as `1<<(2*3)` is deprecated, and will change to
     `(1<<2)*3` in a future version ([#13079]).
 
+  * The precedence of `&` and `|` is deprecated, and will change to match that of
+    `&&` and `||`. In the meantime, such expressions should be parenthesized ([#5187]).
+
   * The parsing of `<|` is now right associative. `|>` remains left associative ([#24153]).
 
   * `{ }` expressions now use `braces` and `bracescat` as expression heads instead

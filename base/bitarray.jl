@@ -324,7 +324,7 @@ dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool}) =
 
 ## custom iterator ##
 start(B::BitArray) = 0
-next(B::BitArray, i::Int) = (B.chunks[_div64(i)+1] & (UInt64(1)<<_mod64(i)) != 0, i+1)
+next(B::BitArray, i::Int) = ((B.chunks[_div64(i)+1] & (UInt64(1)<<_mod64(i))) != 0, i+1)
 done(B::BitArray, i::Int) = i >= length(B)
 
 ## similar, fill!, copy! etc ##
@@ -702,7 +702,7 @@ function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
         @inbounds C = Bc[i]
         u = UInt64(1)
         for j = 1:(i < lc ? 64 : last_chunk_len)
-            if Imsk & u != 0
+            if (Imsk & u) != 0
                 lx < c && throw_setindex_mismatch(X, c)
                 @inbounds x = convert(Bool, X[c])
                 C = ifelse(x, C | u, C & ~u)
@@ -1068,7 +1068,7 @@ function (-)(B::BitArray)
         u = UInt64(1)
         c = Bc[i]
         for j = 1:64
-            if c & u != 0
+            if (c & u) != 0
                 A[ind] = -1
             end
             ind += 1
@@ -1078,7 +1078,7 @@ function (-)(B::BitArray)
     u = UInt64(1)
     c = Bc[end]
     for j = 0:_mod64(l-1)
-        if c & u != 0
+        if (c & u) != 0
             A[ind] = -1
         end
         ind += 1
@@ -1449,7 +1449,7 @@ function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Integer)
     mask = _msk64 << within_chunk_start
 
     @inbounds begin
-        if Bc[chunk_start] & mask != 0
+        if (Bc[chunk_start] & mask) != 0
             return (chunk_start-1) << 6 + trailing_zeros(Bc[chunk_start] & mask) + 1
         end
 
@@ -1485,7 +1485,7 @@ function findnextnot(B::BitArray, start::Integer)
     mask = ~(_msk64 << within_chunk_start)
 
     @inbounds if chunk_start < l
-        if Bc[chunk_start] | mask != _msk64
+        if (Bc[chunk_start] | mask) != _msk64
             return (chunk_start-1) << 6 + trailing_ones(Bc[chunk_start] | mask) + 1
         end
         for i = chunk_start+1:l-1
@@ -1496,7 +1496,7 @@ function findnextnot(B::BitArray, start::Integer)
         if Bc[l] != _msk_end(B)
             return (l-1) << 6 + trailing_ones(Bc[l]) + 1
         end
-    elseif Bc[l] | mask != _msk_end(B)
+    elseif (Bc[l] | mask) != _msk_end(B)
         return (l-1) << 6 + trailing_ones(Bc[l] | mask) + 1
     end
     return 0
@@ -1530,7 +1530,7 @@ function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Integer)
     mask = _msk_end(start)
 
     @inbounds begin
-        if Bc[chunk_start] & mask != 0
+        if (Bc[chunk_start] & mask) != 0
             return (chunk_start-1) << 6 + (64 - leading_zeros(Bc[chunk_start] & mask))
         end
 
@@ -1560,7 +1560,7 @@ function findprevnot(B::BitArray, start::Integer)
     mask = ~_msk_end(start)
 
     @inbounds begin
-        if Bc[chunk_start] | mask != _msk64
+        if (Bc[chunk_start] | mask) != _msk64
             return (chunk_start-1) << 6 + (64 - leading_ones(Bc[chunk_start] | mask))
         end
 
@@ -1608,7 +1608,7 @@ function find(B::BitArray)
         u = UInt64(1)
         c = Bc[i]
         for j = 1:64
-            if c & u != 0
+            if (c & u) != 0
                 I[Icount] = Bcount
                 Icount += 1
             end
@@ -1619,7 +1619,7 @@ function find(B::BitArray)
     u = UInt64(1)
     c = Bc[end]
     for j = 0:_mod64(l-1)
-        if c & u != 0
+        if (c & u) != 0
             I[Icount] = Bcount
             Icount += 1
         end
@@ -1839,7 +1839,7 @@ function read!(s::IO, B::BitArray)
     n = length(B)
     Bc = B.chunks
     nc = length(read!(s, Bc))
-    if length(Bc) > 0 && Bc[end] & _msk_end(n) ≠ Bc[end]
+    if length(Bc) > 0 && (Bc[end] & _msk_end(n)) ≠ Bc[end]
         Bc[end] &= _msk_end(n) # ensure that the BitArray is not broken
         throw(DimensionMismatch("read mismatch, found non-zero bits after BitArray length"))
     end

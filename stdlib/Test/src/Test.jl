@@ -232,7 +232,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
             kws[1] = Symbol("(", kws[1])
             kws[end] = Symbol(kws[end], ")")
             quoted = Expr(:comparison, args[1], func_sym, args[2], kws...)
-            if length(quoted.args) & 1 == 0  # hack to fit `show_unquoted`
+            if iseven(length(quoted.args))  # hack to fit `show_unquoted`
                 push!(quoted.args, Symbol())
             end
         else

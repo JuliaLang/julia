@@ -158,7 +158,7 @@ function read(f::File, ::Type{Char})
         while s ≥ l && !eof(f)
             p = position(f)
             b = read(f, UInt8)
-            if b & 0xc0 != 0x80
+            if (b & 0xc0) != 0x80
                 seek(f, p)
                 break
             end

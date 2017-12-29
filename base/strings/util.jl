@@ -527,7 +527,7 @@ function bytes2hex(a::AbstractArray{UInt8})
     i = 0
     for x in a
         b[i += 1] = hex_chars[1 + x >> 4]
-        b[i += 1] = hex_chars[1 + x & 0xf]
+        b[i += 1] = hex_chars[1 + (x & 0xf)]
     end
     return String(b)
 end

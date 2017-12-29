@@ -71,7 +71,7 @@ function settings(s::Int, shared::Bool)
         systemerror("fcntl F_GETFL", mode == -1)
         mode = mode & 3
         prot = mode == 0 ? PROT_READ : mode == 1 ? PROT_WRITE : PROT_READ | PROT_WRITE
-        if prot & PROT_READ == 0
+        if (prot & PROT_READ) == 0
             throw(ArgumentError("mmap requires read permissions on the file (open with \"r+\" mode to override)"))
         end
     end
@@ -297,7 +297,7 @@ function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
     if !isreadonly(io)
         chunks[end] &= Base._msk_end(n)
     else
-        if chunks[end] != chunks[end] & Base._msk_end(n)
+        if chunks[end] != (chunks[end] & Base._msk_end(n))
             throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
         end
     end

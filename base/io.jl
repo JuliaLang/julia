@@ -605,7 +605,7 @@ function read(io::IO, ::Type{Char})
     if l < 24
         s = 16
         while s ≥ l && !eof(io)
-            peek(io) & 0xc0 == 0x80 || break
+            (peek(io) & 0xc0) == 0x80 || break
             b = read(io, UInt8)
             c |= UInt32(b) << s
             s -= 8
