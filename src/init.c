@@ -528,6 +528,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     free(free_path);
     free_path = NULL;
     if (jl_options.image_file) {
+        char *homedir_path = NULL;
         if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_options.image_file)) {
             // build time path, relative to JULIA_BINDIR
             free_path = (char*)malloc(PATH_MAX);
@@ -536,13 +537,37 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
             if (n >= PATH_MAX || n < 0) {
                 jl_error("fatal error: jl_options.image_file path too long");
             }
-            jl_options.image_file = free_path;
+            // Now we have the path to the bindir sysimg we can check whether
+            // the homedir is more up to date.
+            homedir_path = jl_get_homedir_sysimg_path();
+            uv_stat_t stbuf;
+            // check if file exists.
+            if (jl_stat(homedir_path, (char*)&stbuf) == 0 && (stbuf.st_mode & S_IFMT) == S_IFREG) {
+                // get modtime
+                double mtime_homedir = (double)stbuf.st_mtim.tv_sec + (double)stbuf.st_mtim.tv_nsec * 1e-9;
+                double mtime_bindir  = 0.0;
+                if (jl_stat(free_path, (char*)&stbuf) == 0 && (stbuf.st_mode & S_IFMT) == S_IFREG) {
+                    mtime_bindir = (double)stbuf.st_mtim.tv_sec + (double)stbuf.st_mtim.tv_nsec * 1e-9;
+                }
+                if (mtime_bindir >= mtime_homedir) {
+                    // sysimg in bindir is newer
+                    jl_options.image_file = free_path;
+                } else {
+                    jl_options.image_file = homedir_path;
+                }
+            } else {
+                jl_options.image_file = free_path;
+            }
         }
         if (jl_options.image_file)
             jl_options.image_file = abspath(jl_options.image_file, 0);
         if (free_path) {
             free(free_path);
             free_path = NULL;
+        }
+        if (homedir_path) {
+            free(homedir_path);
+            homedir_path = NULL;
         }
     }
     if (jl_options.outputo)

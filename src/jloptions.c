@@ -26,6 +26,23 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
     return &system_image_path[1];
 }
 
+JL_DLLEXPORT char *jl_get_homedir_sysimg_path(void)
+{
+    size_t size = PATH_MAX;
+    char *homedir = (char*) malloc(size);
+    if (uv_os_homedir(homedir, &size) != 0) {
+        free(homedir);
+        jl_error("fatal error: path of home dir is to large.");
+    }
+    char *path = (char*) malloc(PATH_MAX);
+    int n = snprintf(path, PATH_MAX, "%s" PATHSEPSTRING "%s" PATHSEPSTRING "v%s" PATHSEPSTRING "%s%s", homedir, ".julia", JULIA_VERSION_STRING , "sys", shlib_ext);
+    if (n >= PATH_MAX || n < 0) {
+        jl_error("fatal error: Can't construct sysimage path");
+    }
+    free(homedir);
+    return path;
+}
+
 
 jl_options_t jl_options = { 0,    // quiet
                             -1,   // banner
