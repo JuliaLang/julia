@@ -18,7 +18,9 @@ module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 """
     module_parent(m::Module) -> Module
 
-Get a module's enclosing `Module`. `Main` is its own parent.
+Get a module's enclosing `m`. Modules loaded by `import` or `using` are their
+own parent. The parent of a module created by the `module ... end` syntax is
+the modules in which the `module` syntax is evaluated.
 
 # Examples
 ```jldoctest
@@ -30,6 +32,30 @@ Base.LinAlg
 ```
 """
 module_parent(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
+
+"""
+    module_root(m::Module) -> Module
+
+Get the root module enclosing `m`: this is the top-level module loaded by
+`import` or `using` which ultimately create `m`. This root module is found by
+iteratively taking a module's parent until self-parented module is found.
+
+# Examples
+```jldoctest
+julia> module_root(Main)
+Main
+
+julia> module_root(Base.LinAlg.BLAS)
+Base
+```
+"""
+function module_root(m::Module)
+    while true
+        p = module_parent(m)
+        p == m && return m
+        m = p
+    end
+end
 
 """
     @__MODULE__ -> Module

@@ -165,6 +165,10 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     jl_module_t *newm = jl_new_module(name);
     jl_value_t *defaultdefs = NULL, *form = NULL;
     JL_GC_PUSH4(&last_module, &defaultdefs, &form, &newm);
+    jl_sym_t *envinfo_sym = jl_symbol("#ENVINFO");
+    jl_value_t *envinfo = jl_get_global(parent_module, envinfo_sym);
+    if (envinfo && envinfo != jl_nothing)
+        jl_set_const(newm, envinfo_sym, envinfo);
     if (jl_base_module &&
         (jl_value_t*)parent_module == jl_get_global(jl_base_module, jl_symbol("__toplevel__"))) {
         newm->parent = newm;
@@ -186,6 +190,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
         newm->parent = parent_module;
         b->value = (jl_value_t*)newm;
         jl_gc_wb_binding(b, newm);
+        // copy parent environment into submodule
     }
     // Assume `newm` is globally reachable at this point.
 

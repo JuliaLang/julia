@@ -80,25 +80,331 @@ else
     end
 end
 
-macro return_if_file(path)
-    quote
-        path = $(esc(path))
-        isfile_casesensitive(path) && return path
+## SHA1 ##
+
+struct SHA1
+    bytes::Vector{UInt8}
+    function SHA1(bytes::Vector{UInt8})
+        length(bytes) == 20 ||
+            throw(ArgumentError("wrong number of bytes for SHA1 hash: $(length(bytes))"))
+        return new(bytes)
+    end
+end
+SHA1(s::Union{String,SubString{String}}) = SHA1(hex2bytes(s))
+
+convert(::Type{String}, hash::SHA1) = bytes2hex(convert(Vector{UInt8}, hash))
+convert(::Type{Vector{UInt8}}, hash::SHA1) = hash.bytes
+
+string(hash::SHA1) = String(hash)
+show(io::IO, hash::SHA1) = print(io, "SHA1(", convert(String, hash), ")")
+isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
+hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
+==(a::SHA1, b::SHA1) = a.bytes == b.bytes
+
+## package path slugs ##
+
+import Base.Random: UUID
+
+const SlugInt = UInt32 # max p = 4
+const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+const nchars = SlugInt(length(chars))
+const max_p = floor(Int, log(nchars, typemax(SlugInt) >>> 8))
+
+function slug(x::SlugInt, p::Int)
+    1 ≤ p ≤ max_p || # otherwise previous steps are wrong
+        error("invalid slug size: $p (need 1 ≤ p ≤ $max_p)")
+    return sprint() do io
+        for i = 1:p
+            x, d = divrem(x, nchars)
+            write(io, chars[1+d])
+        end
+    end
+end
+slug(x::Integer, p::Int) = slug(SlugInt(x), p)
+
+function slug(bytes::Vector{UInt8}, p::Int)
+    n = nchars^p
+    x = zero(SlugInt)
+    for (i, b) in enumerate(bytes)
+        x = (x + b*powermod(2, 8(i-1), n)) % n
+    end
+    slug(x, p)
+end
+
+slug(uuid::UUID, p::Int=4) = slug(uuid.value % nchars^p, p)
+slug(sha1::SHA1, p::Int=4) = slug(sha1.bytes, p)
+
+version_slug(uuid::UUID, sha1::SHA1) = joinpath(slug(uuid), slug(sha1))
+
+function find_installed(uuid::UUID, sha1::SHA1, name::AbstractString)
+    slug = version_slug(uuid, sha1)
+    for depot in DEPOT_PATH
+        file = abspath(depot, "packages", slug, "src", "$name.jl")
+        isfile_casesensitive(file) && return file
     end
 end
 
-function find_package(name::String)
+## finding packages ##
+
+const ENVINFO = Symbol("#ENVINFO")
+
+const project_names = ["JuliaProject.toml", "Project.toml"]
+const manifest_names = ["JuliaManifest.toml", "Manifest.toml"]
+
+function find_env(envs::Vector)
+    for env in envs
+        path = find_env(env)
+        path != nothing && return path
+    end
+end
+
+function find_env(env::AbstractString)
+    path = abspath(env)
+    if isdir(path)
+        # directory with a project file?
+        for name in project_names
+            file = abspath(path, name)
+            isfile_casesensitive(file) && return file
+        end
+    end
+    # package dir or path to project file
+    return path
+end
+
+function find_env(env::NamedEnv)
+    # look for named env in each depot
+    for depot in DEPOT_PATH
+        isdir(depot) || continue
+        file = nothing
+        for name in project_names
+            file = abspath(depot, "environments", env.name, name)
+            isfile_casesensitive(file) && return file
+        end
+        file != nothing && env.create && return file
+    end
+end
+
+function find_env(env::CurrentEnv, dir::AbstractString = pwd())
+    # look for project file in current dir and parents
+    home = homedir()
+    while true
+        for name in project_names
+            file = joinpath(dir, name)
+            isfile_casesensitive(file) && return file
+        end
+        # bail at home directory or top of git repo
+        (dir == home || ispath(joinpath(dir, ".git"))) && break
+        old, dir = dir, dirname(dir)
+        dir == old && break
+    end
+end
+
+load_path() = filter(env -> env != nothing, map(find_env, LOAD_PATH))
+
+package_entry_points(path::AbstractString, name::AbstractString) = [
+    joinpath(path, "$name.jl"),
+    joinpath(path, "$name.jl", "src", "$name.jl"),
+    joinpath(path,   name,     "src", "$name.jl"),
+]
+
+function find_package(into::Module, name::AbstractString)
+    # Core.println("$(getpid()): find_package($into, $name)")
     endswith(name, ".jl") && (name = chop(name, 0, 3))
-    for dir in [Pkg.dir(); LOAD_PATH]
-        dir = abspath(dir)
-        @return_if_file joinpath(dir, "$name.jl")
-        @return_if_file joinpath(dir, "$name.jl", "src", "$name.jl")
-        @return_if_file joinpath(dir,   name,     "src", "$name.jl")
+    if isdefined(into, ENVINFO)
+        manifest_file, into_uuid = getfield(into, ENVINFO)::Tuple{String,UUID}
+        return find_package_in_manifest(manifest_file, into_uuid, name)
+    end
+    for path in load_path()
+        if isdir(path) # package directory
+            for file in package_entry_points(path, name)
+                isfile_casesensitive(file) && return file
+            end
+        elseif endswith(path, ".toml") # project file
+            info = find_package_in_project(path, name)
+            info != nothing && return info
+        end
+    end
+end
+
+function find_package_in_project(project_file::AbstractString, name::AbstractString)
+    # Core.println("$(getpid()): find_package_in_project($project_file, $name)")
+    isfile_casesensitive(project_file) || return nothing
+    open(project_file) do io
+        for line in eachline(io)
+            # look for the [deps] section
+            ismatch(r"^\s*\[\s*deps\s*\]\s*$", line) && break
+            # TODO: look for `manifest = "$manifest_file"` entry?
+        end
+        uuid = nothing
+        for line in eachline(io)
+            # look for `$name = "$uuid"` entry
+            m = match(r"^(?:\s*(?:#.*)?|\s*(\w+)\s*=\s*\"(.*)\"\s*)$", line)
+            m == nothing && return nothing
+            m.captures[1] != name && continue
+            uuid = UUID(m.captures[2]) # TODO: allow path?
+        end
+        uuid == nothing && return nothing
+        # TODO: manifest path from project file
+        dir = dirname(project_file)
+        manifest_file = nothing
+        for mfst in manifest_names
+            file = abspath(dir, mfst)
+            isfile_casesensitive(file) || continue
+            manifest_file = file
+            break
+        end
+        manifest_file != nothing &&
+            return find_package_in_manifest(manifest_file, uuid)
+        @warn """
+            $name/$uuid in project file but not in manifest
+             - project = $(repr(project_file))
+             - manifest = $(repr(manifest_file))
+            """
+    end
+end
+
+function find_package_in_manifest(
+    manifest_file::AbstractString, into_uuid::UUID, name::AbstractString)
+    # Core.println("$(getpid()): find_package_in_manifest($manifest_file, $into_uuid, $name)")
+    isfile_casesensitive(manifest_file) || return nothing
+    open(manifest_file) do io
+        # scan manifest for stanza with `uuid = "$into_uuid"`
+        found = in_deps = false
+        deps_str = uuid = nothing
+        for line in eachline(io)
+            if !in_deps
+                if ismatch(r"^\s*\[\s*\[\s*\w+\s*\]\s*\]\s*$", line)
+                    found = in_deps = false
+                    deps_str = uuid = nothing
+                elseif (m = match(r"^\s*uuid\s*=\s*\"(.*)\"\s*$", line)) != nothing
+                    found = into_uuid == UUID(m.captures[1])
+                elseif (m = match(r"^\s*deps\s*=\s*(.*?)\s*$", line)) != nothing
+                    deps_str = m.captures[1]
+                elseif (m = match(r"^\s*\[\s*\w+\s*\.\s*deps\s*\]\s*$", line)) != nothing
+                    in_deps = true
+                end
+            else # in_deps
+                if (m = match(r"^\s*(\w+)\s*=\"(.*)\"\s*$")) != nothing
+                    m.captures[1] == name && (uuid = UUID(m.captures[2]))
+                end
+            end
+            if found && uuid == nothing && deps_str != nothing
+                if deps_str[1] != '[' || deps_str[end] != ']'
+                    @warn "Unexpected TOML deps format:\n$deps_str"
+                    return nothing
+                end
+                # TODO: give better feedback on unregistered dependency
+                isempty(search(deps_str, repr(name))) && return nothing
+                # name should be unique in manifest, so find by name
+                return find_package_in_manifest(manifest_file, name, seekstart(io))
+            end
+            found && uuid != nothing && break
+        end
+        found && uuid != nothing || return nothing
+        return find_package_in_manifest(manifest_file, uuid, seekstart(io))
+    end
+end
+
+function find_package_in_manifest(
+    manifest_file::AbstractString, name::AbstractString, io::IO)
+    # Core.println("$(getpid()): find_package_in_manifest($manifest_file, $name, $io)")
+    found = false
+    path = uuid = hash = nothing
+    for line in eachline(io)
+        if (m = match(r"^\s*\[\s*\[\s*(\w+)\s*\]\s*\]\s*$", line)) != nothing
+            found && break
+            found = m.captures[1] == name
+        elseif (m = match(r"^\s*path\s*=\s*\"(.*)\"\s*$", line)) != nothing
+            found && (path = m.captures[1])
+        elseif (m = match(r"^\s*hash-sha1\s*=\s*\"(.*)\"\s*$", line)) != nothing
+            found && (hash = SHA1(m.captures[1]))
+        elseif (m = match(r"^\s*uuid\s*=\s*\"(.*)\"\s*$", line)) != nothing
+            found && (uuid = UUID(m.captures[1]))
+        end
+    end
+    if !found
+        @warn """
+            $name referenced in manifest but not found
+             - manifest = $(repr(manifest_file))
+            """
+        return nothing
+    end
+    if uuid == nothing
+        @warn """
+            $name appears in manifest with no UUID
+             - manifest = $(repr(manifest_file))
+            """
+        return nothing
+    end
+    if path != nothing
+        path = abspath(dirname(manifest_file), path)
+        ispath(path) && return path, manifest_file, uuid
+        @warn """
+            $name/$uuid not installed at $(repr(path))
+             - manifest = $(repr(manifest_file))
+            """
+        return nothing
+    end
+    if uuid != nothing && hash != nothing
+        path = find_installed(uuid, hash, name)
+        path != nothing && return path, manifest_file, uuid
+        # TODO: prompt for installation
+        @warn "$name/$uuid not installed at $hash"
     end
     return nothing
 end
 
-function find_source_file(path::String)
+function find_package_in_manifest(
+    manifest_file::AbstractString, uuid::UUID, io::IO)
+    # Core.println("$(getpid()): find_package_in_manifest($manifest_file, $uuid, $io)")
+    # uuid of package to be loaded
+    uuid′ = name = path = hash = nothing
+    for line in eachline(io)
+        if (m = match(r"^\s*\[\s*\[\s*(\w+)\s*\]\s*\]\s*$", line)) != nothing
+            uuid′ == uuid && break
+            name = m.captures[1]
+            path = hash = nothing
+        elseif (m = match(r"^\s*path\s*=\s*\"(.*)\"\s*$", line)) != nothing
+            path = m.captures[1]
+        elseif (m = match(r"^\s*hash-sha1\s*=\s*\"(.*)\"\s*$", line)) != nothing
+            hash = SHA1(m.captures[1])
+        elseif (m = match(r"^\s*uuid\s*=\s*\"(.*)\"\s*$", line)) != nothing
+            uuid′ = UUID(m.captures[1])
+        end
+    end
+    if uuid != uuid′
+        @warn """
+            $uuid referenced in manifest but not found
+             - manifest = $(repr(manifest_file))
+            """
+        return nothing
+    end
+    if path != nothing
+        path = abspath(dirname(manifest_file), path)
+        ispath(path) && return path, manifest_file, uuid
+        @warn """
+            $name/$uuid not installed at $(repr(path))
+             - manifest = $(repr(manifest_file))
+            """
+        return nothing
+    end
+    if hash != nothing
+        path = find_installed(uuid, hash, name)
+        path != nothing && return path, manifest_file, uuid
+        # TODO: prompt for installation
+        @warn "$name/$uuid not installed at $hash"
+    end
+    return nothing
+end
+
+function find_package_in_manifest(manifest_file::AbstractString, uuid::UUID)
+    isfile_casesensitive(manifest_file) || return nothing
+    open(manifest_file) do io
+        find_package_in_manifest(manifest_file, uuid, io)
+    end
+end
+
+function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
     base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "base", path)
     return isfile(base_path) ? base_path : nothing
@@ -145,8 +451,9 @@ function _require_from_serialized(into::Module, mod::Symbol, path_to_try::String
                 depmods[i] = M
             end
         else
-            modpath = find_package(string(modname))
-            modpath === nothing && return ErrorException("Required dependency $modname not found in current path.")
+            info = find_package(into, string(modname))
+            info === nothing && return ErrorException("Required dependency $modname not found in current path.")
+            modpath = info isa String ? info : info[1]
             mod = _require_search_from_serialized(into, modname, String(modpath))
             if !isa(mod, Bool)
                 for M in mod::Vector{Any}
@@ -184,7 +491,7 @@ end
 function _require_search_from_serialized(into::Module, mod::Symbol, sourcepath::String)
     paths = find_all_in_cache_path(mod)
     for path_to_try in paths::Vector{String}
-        deps = stale_cachefile(sourcepath, path_to_try)
+        deps = stale_cachefile(into, sourcepath, path_to_try)
         if deps === true
             continue
         end
@@ -314,14 +621,28 @@ all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
 """
 function require(into::Module, mod::Symbol)
+    info = nothing
     if !root_module_exists(mod)
-        # @info "@$(getpid()): require($into, $mod)"
-        _require(into, mod)
+        info = _require(into, mod)
         for callback in package_callbacks
             invokelatest(callback, mod)
         end
     end
-    return root_module(mod)
+    m = root_module(mod)
+    if info isa Tuple
+        envinfo = info[2:end]
+        if !isdefined(m, ENVINFO)
+            ccall(:jl_set_const, Cvoid, (Any, Any, Any), m, ENVINFO, envinfo)
+        else
+            envinfo == (oldinfo = getfield(m, ENVINFO)) ||
+                @warn """
+                require($into, $mod) environment info mismatch:
+                 - old = $(oldinfo)
+                 - new = $(envinfo)
+                """
+        end
+    end
+    return m
 end
 
 const loaded_modules = ObjectIdDict()
@@ -391,18 +712,19 @@ function _require(into::Module, mod::Symbol)
         toplevel_load[] = false
         # perform the search operation to select the module file require intends to load
         name = string(mod)
-        path = find_package(name)
-        if path === nothing
+        info = find_package(into, name)
+        if info === nothing
+            # TODO: package autoloading hooks go here
             throw(ArgumentError("Module $name not found in current path.\nRun `Pkg.add(\"$name\")` to install the $name package."))
         end
-        path = String(path)
+        path = info isa String ? info : String(info[1])
 
         # attempt to load the module file via the precompile cache locations
         doneprecompile = false
         if JLOptions().use_compiled_modules != 0
             doneprecompile = _require_search_from_serialized(into, mod, path)
             if !isa(doneprecompile, Bool)
-                return
+                return info
             end
         end
 
@@ -422,33 +744,41 @@ function _require(into::Module, mod::Symbol)
         if doneprecompile === true || JLOptions().incremental != 0
             # spawn off a new incremental pre-compile task for recursive `require` calls
             # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
-            cachefile = compilecache(mod)
+            cachefile = compilecache(into, mod)
             m = _require_from_serialized(into, mod, cachefile)
             if isa(m, Exception)
                 @warn "The call to compilecache failed to create a usable precompiled cache file for module $name" exception=m
                 # fall-through, TODO: disable __precompile__(true) error so that the normal include will succeed
             else
-                return
+                return info
             end
         end
 
         # just load the file normally via include
         # for unknown dependencies
+        if info isa Tuple{String,String,UUID}
+            # horrible hack, but since we don't control module creation, ¯\_(ツ)_/¯
+            ccall(:jl_set_global, Cvoid, (Any, Any, Any), __toplevel__, ENVINFO, info[2:end])
+        end
         try
             Base.include_relative(__toplevel__, path)
-            return
+            return info
         catch ex
             if doneprecompile === true || JLOptions().use_compiled_modules == 0 || !precompilableerror(ex, true)
                 rethrow() # rethrow non-precompilable=true errors
             end
             # the file requested `__precompile__`, so try to build a cache file and use that
-            cachefile = compilecache(mod)
+            cachefile = compilecache(into, mod)
             m = _require_from_serialized(into, mod, cachefile)
             if isa(m, Exception)
                 @warn """Module `$mod` declares `__precompile__(true)` but `require` failed
                          to create a usable precompiled cache file""" exception=m
                 # TODO: disable __precompile__(true) error and do normal include instead of error
                 error("Module $mod declares __precompile__(true) but require failed to create a usable precompiled cache file.")
+            end
+        finally
+            if info isa Tuple{String,String,UUID}
+                ccall(:jl_set_global, Cvoid, (Any, Any, Any), __toplevel__, ENVINFO, nothing)
             end
         end
     finally
@@ -457,7 +787,7 @@ function _require(into::Module, mod::Symbol)
         notify(loading, all=true)
         _track_dependencies[] = old_track_dependencies
     end
-    nothing
+    return info
 end
 
 # relative-path load
@@ -474,26 +804,23 @@ include_string(m::Module, txt::String, fname::String) =
 include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
     include_string(m, String(txt), String(fname))
 
-function source_path(default::Union{AbstractString,Nothing}="")
+function tls_recurse(key::Symbol, default=nothing)
     t = current_task()
     while true
         s = t.storage
-        if s !== nothing && haskey(s, :SOURCE_PATH)
-            return s[:SOURCE_PATH]
-        end
-        if t === t.parent
-            return default
-        end
+        s !== nothing && haskey(s, key) && return s[key]
+        t === t.parent && return default
         t = t.parent
     end
 end
+
+source_path(default="") = tls_recurse(:SOURCE_PATH, default)
 
 function source_dir()
     p = source_path(nothing)
     p === nothing ? pwd() : dirname(p)
 end
 
-include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
 function include_relative(mod::Module, _path::String)
     path, prev = _include_dependency(string(mod), _path)
     for callback in include_callbacks # to preserve order, must come before Core.include
@@ -513,6 +840,7 @@ function include_relative(mod::Module, _path::String)
     end
     return result
 end
+include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
 
 """
     include(m::Module, path::AbstractString)
@@ -542,7 +870,10 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
-function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies))
+function create_expr_cache(
+    input::String, output::String,
+    concrete_deps::typeof(_concrete_dependencies),
+    envinfo::Union{Nothing,Tuple})
     rm(output, force=true)   # Remove file if it exists
     code_object = """
         while !eof(STDIN)
@@ -567,6 +898,10 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
                   empty!(Base._concrete_dependencies)
                   append!(Base._concrete_dependencies, $concrete_deps)
                   Base._track_dependencies[] = true
+                  const $ENVINFO = $envinfo
+                  # same horrible hack as in _require
+                  ccall(:jl_set_global, Cvoid, (Any, Any, Any),
+                        Base.__toplevel__, $(Meta.quot(ENVINFO)), $envinfo)
                   end)
         source = source_path(nothing)
         if source !== nothing
@@ -587,10 +922,10 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     return io
 end
 
-compilecache(mod::Symbol) = compilecache(string(mod))
+compilecache(into::Module, mod::Symbol) = compilecache(into, string(mod))
 
 """
-    Base.compilecache(module::String)
+    Base.compilecache(into::Module, module::String)
 
 Creates a precompiled cache file for
 a module and all of its dependencies.
@@ -599,11 +934,11 @@ This can be used to reduce package load times. Cache files are stored in
 [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(name::String)
+function compilecache(into::Module, name::String)
     # decide where to get the source file from
-    path = find_package(name)
-    path === nothing && throw(ArgumentError("$name not found in path"))
-    path = String(path)
+    info = find_package(into, name)
+    info === nothing && throw(ArgumentError("$name not found in path"))
+    path = info isa String ? info : String(info[1])
     # decide where to put the resulting cache file
     cachepath = LOAD_CACHE_PATH[1]
     if !isdir(cachepath)
@@ -624,7 +959,8 @@ function compilecache(name::String)
     else
         @logmsg verbosity "Precompiling module $name"
     end
-    if success(create_expr_cache(path, cachefile, concrete_deps))
+    envinfo = info isa Tuple ? info[2:end] : nothing
+    if success(create_expr_cache(path, cachefile, concrete_deps, envinfo))
         # append checksum to the end of the .ji file:
         open(cachefile, "a+") do f
             write(f, hton(_crc32c(seekstart(f))))
@@ -734,7 +1070,7 @@ end
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl"
 # otherwise returns the list of dependencies to also check
-function stale_cachefile(modpath::String, cachefile::String)
+function stale_cachefile(into::Module, modpath::String, cachefile::String)
     io = open(cachefile, "r")
     try
         if !isvalid_cache_header(io)
@@ -751,8 +1087,8 @@ function stale_cachefile(modpath::String, cachefile::String)
                 continue
             end
             name = string(mod)
-            path = find_package(name)
-            if path === nothing
+            info = find_package(into, name)
+            if info === nothing
                 @debug "Rejecting cache file $cachefile because dependency $name not found."
                 return true # Won't be able to fullfill dependency
             end

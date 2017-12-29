@@ -270,7 +270,7 @@ try
           """)
 
     @test_warn "ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\nStacktrace:\n [1] __precompile__" try
-        Base.compilecache("Baz") # from __precompile__(false)
+        Base.compilecache(Main, "Baz") # from __precompile__(false)
         error("__precompile__ disabled test failed")
     catch exc
         isa(exc, ErrorException) || rethrow(exc)
@@ -295,28 +295,28 @@ try
           end
           """)
 
-    Base.compilecache("FooBar")
+    Base.compilecache(Main, "FooBar")
     @test isfile(joinpath(dir, "FooBar.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) isa Vector
+    @test Base.stale_cachefile(Main, FooBar_file, joinpath(dir, "FooBar.ji")) isa Vector
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
 
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) isa (Sys.iswindows() ? Vector : Bool) # `..` is not a symlink on Windows
+    @test Base.stale_cachefile(Main, relFooBar_file, joinpath(dir, "FooBar.ji")) isa (Sys.iswindows() ? Vector : Bool) # `..` is not a symlink on Windows
     mkdir(joinpath(dir, "subfolder"))
-    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) isa Vector
+    @test Base.stale_cachefile(Main, relFooBar_file, joinpath(dir, "FooBar.ji")) isa Vector
 
     @eval using FooBar
     fb_uuid = Base.module_uuid(FooBar)
     sleep(2); touch(FooBar_file)
     insert!(Base.LOAD_CACHE_PATH, 1, dir2)
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(Main, FooBar_file, joinpath(dir, "FooBar.ji")) === true
     @eval using FooBar1
     @test !isfile(joinpath(dir2, "FooBar.ji"))
     @test !isfile(joinpath(dir, "FooBar1.ji"))
     @test isfile(joinpath(dir2, "FooBar1.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
-    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) isa Vector
+    @test Base.stale_cachefile(Main, FooBar_file, joinpath(dir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(Main, FooBar1_file, joinpath(dir2, "FooBar1.ji")) isa Vector
     @test fb_uuid == Base.module_uuid(FooBar)
     fb_uuid1 = Base.module_uuid(FooBar1)
     @test fb_uuid != fb_uuid1
@@ -325,7 +325,7 @@ try
     open(joinpath(dir2, "FooBar1.ji"), "a") do f
         write(f, 0x076cac96) # append 4 random bytes
     end
-    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) === true
+    @test Base.stale_cachefile(Main, FooBar1_file, joinpath(dir2, "FooBar1.ji")) === true
 
     # test behavior of precompile modules that throw errors
     FooBar2_file = joinpath(dir, "FooBar2.jl")
@@ -368,7 +368,7 @@ try
               using FooBarT1
           end
           """)
-    Base.compilecache("FooBarT2")
+    Base.compilecache(Main, "FooBarT2")
     write(FooBarT1_file,
           """
           __precompile__(true)
@@ -376,7 +376,7 @@ try
           end
           """)
     rm(FooBarT_file)
-    @test Base.stale_cachefile(FooBarT2_file, joinpath(dir2, "FooBarT2.ji")) === true
+    @test Base.stale_cachefile(Main, FooBarT2_file, joinpath(dir2, "FooBarT2.ji")) === true
     @test Base.require(Main, :FooBarT2) isa Module
 finally
     splice!(Base.LOAD_CACHE_PATH, 1:2)
@@ -401,7 +401,7 @@ let dir = mktempdir(),
         eval(quote
             insert!(LOAD_PATH, 1, $(dir))
             insert!(Base.LOAD_CACHE_PATH, 1, $(dir))
-            Base.compilecache(:Time4b3a94a1a081a8cb)
+            Base.compilecache(Main, :Time4b3a94a1a081a8cb)
         end)
 
         exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`
@@ -500,7 +500,7 @@ let dir = mktempdir()
               end
               """)
 
-        Base.compilecache("$(Test1_module)")
+        Base.compilecache(Main, "$(Test1_module)")
         write(joinpath(dir, "$(Test2_module).jl"),
               """
               module $(Test2_module)
@@ -508,7 +508,7 @@ let dir = mktempdir()
                   using $(Test1_module)
               end
               """)
-        Base.compilecache("$(Test2_module)")
+        Base.compilecache(Main, "$(Test2_module)")
         @test !Base.isbindingresolved(Main, Test2_module)
         Base.require(Main, Test2_module)
         @test take!(loaded_modules) == Test1_module
@@ -632,12 +632,12 @@ try
 
           end
           """)
-    Base.require(A_module)
+    Base.require(Main, A_module)
     A = root_module(A_module)
     for mths in (collect(methods(A.apc)), collect(methods(A.anopc)))
         Base.delete_method(mths[1])
     end
-    Base.require(B_module)
+    Base.require(Main, B_module)
     B = root_module(B_module)
     @test Base.invokelatest(B.bpc, 1) == Base.invokelatest(B.bpc, 1.0) == 2
     @test Base.invokelatest(B.bnopc, 1) == Base.invokelatest(B.bnopc, 1.0) == 2
