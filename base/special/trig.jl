@@ -198,8 +198,18 @@ function sincos(x::T) where T<:Union{Float32, Float64}
     end
 end
 
-sincos(x::T) where {T <: Union{Integer, Rational, Irrational}} = sincos(float(x))
+function sincos(v::Real)
+    vf = float(v)
+
+    if isa(vf, AbstractFloat)
+        sincos(vf)  # any subtype of AbstractFloat must implement sincos
+    else
+        return (sin(vf), cos(vf))
+    end
+end
+
 sincos(x) = (sin(x), cos(x))
+
 
 
 # There's no need to write specialized kernels, as inlining takes care of remo-
