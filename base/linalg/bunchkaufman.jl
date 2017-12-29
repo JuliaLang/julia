@@ -17,7 +17,7 @@ BunchKaufman(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric:
         BunchKaufman{T,typeof(A)}(A, ipiv, uplo, symmetric, rook, info)
 
 """
-    bkfact!(A, uplo::Symbol=:U, symmetric::Bool=issymmetric(A), rook::Bool=false) -> BunchKaufman
+    bkfact!(A, rook::Bool=false) -> BunchKaufman
 
 `bkfact!` is the same as [`bkfact`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy.
@@ -43,13 +43,11 @@ end
 """
     bkfact(A, rook::Bool=false) -> BunchKaufman
 
-Compute the Bunch-Kaufman [^Bunch1977] factorization of a symmetric or Hermitian matrix `A` as ``PUDU'P`` or ``PLDL'P``, depending on which triangle is stored in `A`, and return a `BunchKaufman` object.
+Compute the Bunch-Kaufman [^Bunch1977] factorization of a symmetric or Hermitian matrix `A` as ``P'*U*D*U'*P`` or ``P'*L*D*L'*P``, depending on which triangle is stored in `A`, and return a `BunchKaufman` object. Note that if `A` is complex symmetric then `U'` and `L'` denote the unconjugated transposes, i.e. `Transpose(U)` and `Transpose(L)`.
 
 If `rook` is `true`, rook pivoting is used. If `rook` is false, rook pivoting is not used.
 
 The following functions are available for `BunchKaufman` objects: [`size`](@ref), `\\`, [`inv`](@ref), [`issymmetric`](@ref), [`ishermitian`](@ref), [`getindex`](@ref).
-
-Note that  `P` is symmetric, so ``P=P⁻¹=P'``.
 
 [^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0/).
 
@@ -117,7 +115,7 @@ end
     getproperty(B::BunchKaufman, d::Symbol)
 
 Extract the factors of the Bunch-Kaufman factorization `B`. The factorization can take the
-two forms `P*L*D*L'*P` or `P*U*D*U'*P` (or `L*D*Transpose(L)` in the complex symmetric case)
+two forms `P'*L*D*L'*P` or `P'*U*D*U'*P` (or `L*D*Transpose(L)` in the complex symmetric case)
 where `P` is a (symmetric) permutation matrix, `L` is a `UnitLowerTriangular` matrix, `U` is a
 `UnitUpperTriangular`, and `D` is a block diagonal symmetric or Hermitian matrix with
 1x1 or 2x2 blocks. The argument `d` can be
