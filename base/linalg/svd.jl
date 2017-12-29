@@ -186,6 +186,8 @@ function getproperty(F::SVD, d::Symbol)
     end
 end
 
+Base.propertynames(F::SVD) = append!([:V], fieldnames(typeof(F)))
+
 """
     svdvals!(A)
 
@@ -460,6 +462,8 @@ svd(x::Number, y::Number) = first.(svd(fill(x, 1, 1), fill(y, 1, 1)))
         getfield(F, d)
     end
 end
+
+Base.propertynames(F::GeneralizedSVD) = append!([:alpha,:beta,:vals,:S,:D1,:D2,:R0], fieldnames(typeof(F)))
 
 """
     svdvals!(A, B)

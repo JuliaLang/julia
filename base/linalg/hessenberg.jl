@@ -66,6 +66,8 @@ function getproperty(F::Hessenberg, d::Symbol)
     return getfield(F, d)
 end
 
+Base.propertynames(F::Hessenberg) = append!([:Q,:H], fieldnames(typeof(F)))
+
 function getindex(A::HessenbergQ, i::Integer, j::Integer)
     x = zeros(eltype(A), size(A, 1))
     x[i] = 1

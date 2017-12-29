@@ -1119,3 +1119,14 @@ min_world(m::Method) = reinterpret(UInt, m.min_world)
 max_world(m::Method) = typemax(UInt)
 min_world(m::Core.MethodInstance) = reinterpret(UInt, m.min_world)
 max_world(m::Core.MethodInstance) = reinterpret(UInt, m.max_world)
+
+"""
+    propertynames(x)
+
+Get an array of the properties (`x.property`) of an object `x`.   This
+is typically the same as [`fieldnames(typeof(x))`](@ref), but types
+that overload [`getproperty`](@ref) should generally overload `propertynames`
+as well to get the properties of an instance of the type.
+"""
+propertynames(x) = fieldnames(typeof(x))
+propertynames(m::Module) = names(m)

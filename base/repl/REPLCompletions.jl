@@ -5,6 +5,7 @@ module REPLCompletions
 export completions, shell_completions, bslash_completions
 
 using Base.Meta
+using Base: propertynames
 
 function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
@@ -40,6 +41,7 @@ function complete_symbol(sym, ffunc)
 
     lookup_module = true
     t = Union{}
+    val = nothing
     if findlast(occursin(non_identifier_chars), sym) < findlast(equalto('.'), sym)
         # Find module
         lookup_name, name = rsplit(sym, ".", limit=2)
@@ -48,6 +50,7 @@ function complete_symbol(sym, ffunc)
 
         b, found = get_value(ex, context_module)
         if found
+            val = b
             if isa(b, Module)
                 mod = b
                 lookup_module = true
@@ -80,6 +83,13 @@ function complete_symbol(sym, ffunc)
             append!(suggestions, filtered_mod_names(p, mod, name, true, true))
         else
             append!(suggestions, filtered_mod_names(p, mod, name, true, false))
+        end
+    elseif val !== nothing # looking for a property of an instance
+        for property in propertynames(val)
+            s = string(property)
+            if startswith(s, name)
+                push!(suggestions, s)
+            end
         end
     else
         # Looking for a member of a type
