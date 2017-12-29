@@ -49,14 +49,6 @@ mutable struct Channel{T} <: AbstractChannel
         end
         return ch
     end
-
-    # deprecated empty constructor
-    function Channel{T}() where T
-        depwarn(string("The empty constructor Channel() is deprecated. ",
-                        "The channel size needs to be specified explictly. ",
-                        "Defaulting to Channel{$T}(32)."), :Channel)
-        Channel(32)
-    end
 end
 
 Channel(sz) = Channel{Any}(sz)
@@ -118,10 +110,6 @@ function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
     return chnl
 end
 
-
-
-# deprecated empty constructor
-Channel() = Channel{Any}()
 
 closed_exception() = InvalidStateException("Channel is closed.", :closed)
 
