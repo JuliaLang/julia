@@ -334,11 +334,14 @@ end
 Base.size(A::WrappedArray) = size(A.A)
 Base.getindex(A::WrappedArray, i::Int) = A.A[i]
 Base.getindex(A::WrappedArray{T, N}, I::Vararg{Int, N}) where {T, N} = A.A[I...]
+Base.setindex!(A::WrappedArray, v, i::Int) = setindex!(A.A, v, i)
+Base.setindex!(A::WrappedArray{T, N}, v, I::Vararg{Int, N}) where {T, N} = setindex!(A.A, v, I...)
 Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_convert(Ptr{T}, A.A)
 Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
 
-@testset "strided interface blas for eltype $elty" begin
+@testset "strided interface blas" begin
     for elty in (Float32, Float64, ComplexF32, ComplexF64)
+    # Level 1
         x = WrappedArray(elty[1, 2, 3, 4])
         y = WrappedArray(elty[5, 6, 7, 8])
         BLAS.blascopy!(2, x, 1, y, 2)
@@ -348,7 +351,7 @@ Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
         @test BLAS.nrm2(1, x, 2) == elty(2)
         @test BLAS.nrm2(x) == BLAS.nrm2(x.A)
         BLAS.asum(x) == elty(13)
-        BLAS.axpy!(elty(2), x, y)
+        BLAS.axpy!(4, elty(2), x, 1, y, 1)
         @test y == WrappedArray(elty[5, 14, 8, 16])
         BLAS.axpby!(elty(2), x, elty(3), y)
         @test y == WrappedArray(elty[19, 50, 30, 56])
@@ -357,52 +360,74 @@ Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
         A = WrappedArray(elty[1 2; 3 4])
         x = WrappedArray(elty[1, 2])
         y = WrappedArray(elty[3, 4])
-        @test BLAS.gemv!('N', elty(2), A, x, elty(1), y) isa WrappedArray
+        @test BLAS.gemv!('N', elty(2), A, x, elty(1), y) isa WrappedArray{elty,1}
         @test y == WrappedArray(elty[13, 26])
-        gbmv!,
-        gbmv,
-        hemv!,
-        hemv,
-        sbmv!,
-        sbmv,
-        symv!,
-        symv,
-        trsv!,
-        trsv,
-        trmv!,
-        trmv,
-        ger!,
-        syr!,
-        her!,
+        @test BLAS.gbmv!('N', 2, 1, 0, elty(2), A, x, elty(1), y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[15, 40])
+        @test BLAS.symv!('U', elty(2), A, x, elty(1), y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[25, 60])
+        @test BLAS.trmv!('U', 'N', 'N', A, y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[145, 240])
+        @test BLAS.trsv!('U', 'N', 'N', A, y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[25,60])
+        @test BLAS.ger!(elty(2), x, y, A) isa WrappedArray{elty,2}
+        @test A == WrappedArray(elty[51 122; 103 244])
+        @test BLAS.syr!('L', elty(2), x, A) isa WrappedArray{elty,2}
+        @test A == WrappedArray(elty[53 122; 107 252])
     # Level 3
-        herk!,
-        herk,
-        her2k!,
-        her2k,
-        gemm!,
-        gemm,
-        symm!,
-        symm,
-        hemm!,
-        hemm,
-        syrk!,
-        syrk,
-        syr2k!,
-        syr2k,
-        trmm!,
-        trmm,
-        trsm!,
-        trsm
+        A = WrappedArray(elty[1 2; 3 4])
+        B = WrappedArray(elty[5 6; 7 8])
+        C = WrappedArray(elty[9 10; 11 12])
+        BLAS.gemm!('N', 'N', elty(2), A, B, elty(1), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([47 54; 97 112])
+        BLAS.symm!('L', 'U', elty(2), A, B, elty(1), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([85 98; 173 200])
+        BLAS.syrk!('U', 'N', elty(2), A, elty(1), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([95 120; 173 250])
+        BLAS.syr2k!('U', 'N', elty(2), A, B, elty(1), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([163 244; 173 462])
+        BLAS.trmm!('L', 'U', 'N', 'N', elty(2), A, B) isa WrappedArray{elty,2}
+        @test B == WrappedArray([38 44; 56 64])
+        BLAS.trsm!('L', 'U', 'N', 'N', elty(2), A, B) isa WrappedArray{elty,2}
+        @test B == WrappedArray([20 24; 28 32])
     end
     for elty in (Float32, Float64)
+    # Level 1
         x = WrappedArray(elty[1, 2, 3, 4])
         y = WrappedArray(elty[5, 6, 7, 8])
-        @test BLAS.dot(2, x, 1, y, 2) == elty(6)
+        @test BLAS.dot(2, x, 1, y, 2) == elty(19)
+    # Level 2
+        A = WrappedArray(elty[1 2; 3 4])
+        x = WrappedArray(elty[1, 2])
+        y = WrappedArray(elty[3, 4])
+        BLAS.sbmv!('U', 1, elty(2), A, x, elty(1), y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[17,24])
     end
     for elty in (ComplexF32, ComplexF64)
+    # Level 1
         x = WrappedArray(elty[1+im, 2+2im, 3+3im, 4+im])
         y = WrappedArray(elty[5-im, 6-2im, 7-3im, 8-im])
-        @test BLAS.dotc(2, x, 1, y, 2) == elty(6)
-        dotu
+        @test BLAS.dotc(2, x, 1, y, 2) == elty(12-26im)
+        @test BLAS.dotu(2, x, 1, y, 2) == elty(26+12im)
+    # Level 2
+        A = WrappedArray(elty[1+im 2+2im; 3+3im 4+4im])
+        x = WrappedArray(elty[1+im, 2+2im])
+        y = WrappedArray(elty[5-im, 6-2im])
+        @test BLAS.hemv!('U', elty(2), A, x, elty(1), y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[7+17im, 30+14im])
+        BLAS.hbmv!('U', 1, elty(2), A, x, elty(1), y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[13+39im, 54+30im])
+        @test BLAS.her!('L', real(elty(2)), x, A) isa WrappedArray{elty,2}
+        @test A == WrappedArray(elty[5 2+2im; 11+3im 20])
+    # Level 3
+        A = WrappedArray(elty[1+im 2+2im; 3+3im 4+4im])
+        B = WrappedArray(elty[1+im 2+2im; 3+3im 4+4im])
+        C = WrappedArray(elty[1+im 2+2im; 3+3im 4+4im])
+        @test BLAS.hemm!('L', 'U', elty(2), A, B, elty(1), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([3+27im 6+38im; 35+27im 52+36im])
+        @test BLAS.herk!('U', 'N', real(elty(2)), A, real(elty(1)), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([23 50+38im; 35+27im 152])
+        @test BLAS.her2k!('U', 'N', elty(2), A, B, real(elty(1)), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([63 138+38im; 35+27im 352])
     end
 end

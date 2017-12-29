@@ -63,7 +63,7 @@ export
 const libblas = Base.libblas_name
 const liblapack = Base.liblapack_name
 
-import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, chkstride1, axpy!
+import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1, axpy!
 
 # utility routines
 function vendor()
@@ -339,9 +339,6 @@ function dotu(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T
 end
 
 ## nrm2
-
-stride1(x) = stride(x,1)
-stride1(x::Array) = 1
 
 """
     nrm2(n, X, incx)
