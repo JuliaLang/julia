@@ -533,34 +533,29 @@ end
 ### randjump
 
 """
-    randjump(r::MersenneTwister, jumps, steps=10^20) -> Vector{MersenneTwister}
+    randjump(r::MersenneTwister, steps::Integer, len::Integer) -> Vector{MersenneTwister}
 
-Create an array of size `jumps` of initialized `MersenneTwister` RNG objects. The
+Create an array of size `len` of initialized `MersenneTwister` RNG objects. The
 first RNG object given as a parameter and following `MersenneTwister` RNGs in the array are
 initialized such that a state of the RNG object in the array would be moved forward (without
 generating numbers) from a previous RNG object array element by `steps` steps.
 One such step corresponds to the generation of two `Float64` numbers.
+For each different value of `steps`, a large polynomial has to be generated internally.
+One is already pre-computed for `steps=big(10)^20`.
 """
-randjump(r::MersenneTwister, jumps::Integer, steps::Integer=big(10)^20) =
-    randjump(r, jumps, dSFMT.calc_jump(steps))
+randjump(r::MersenneTwister, steps::Integer, len::Integer) =
+    _randjump(r, dSFMT.calc_jump(steps), len)
 
-"""
-    randjump(r::MersenneTwister, jumps, jumppoly::AbstractString) -> Vector{MersenneTwister}
 
-Similar to `randjump(r, jumps, steps)` where the number of steps is
-determined by a jump polynomial `jumppoly` with coefficients in
-``GF(2)`` (the field with two elements) encoded as an hexadecimal
-string.
-"""
-randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString) =
-    randjump(mt, jumps, dSFMT.GF2X(jumppoly))
+_randjump(r::MersenneTwister, jumppoly::dSFMT.GF2X) =
+    MersenneTwister(copy(r.seed), dSFMT.dsfmt_jump(r.state, jumppoly))
 
-function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::dSFMT.GF2X)
+function _randjump(mt::MersenneTwister, jumppoly::dSFMT.GF2X, len::Integer)
     mts = MersenneTwister[]
     push!(mts, mt)
-    for i in 1:jumps-1
+    for i in 1:len-1
         cmt = mts[end]
-        push!(mts, MersenneTwister(copy(cmt.seed), dSFMT.dsfmt_jump(cmt.state, jumppoly)))
+        push!(mts, _randjump(cmt, jumppoly))
     end
     return mts
 end

@@ -524,10 +524,10 @@ let seed = rand(UInt)
 
     # test PRNG jump
 
-    mts = randjump(mta, size, jump25000)
+    mts = randjump(mta, 25000, size)
     @test length(mts) == 4
 
-for x in (rand(mts[k], Float64) for j=1:step, k=1:size)
+    for x in (rand(mts[k], Float64) for j=1:step, k=1:size)
         @test rand(mtb, Float64) == x
     end
 end
@@ -578,7 +578,7 @@ let seed = rand(UInt32, 10)
     r = MersenneTwister(seed)
     @test r.seed == seed && r.seed !== seed
     # RNGs do not share their seed in randjump
-    let rs = randjump(r, 2)
+    let rs = randjump(r, big(10)^20, 2)
         @test  rs[1].seed !== rs[2].seed
         srand(rs[2])
         @test seed == rs[1].seed != rs[2].seed
