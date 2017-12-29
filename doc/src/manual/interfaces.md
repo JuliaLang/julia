@@ -399,12 +399,12 @@ perhaps range-types `Ind` of your own design. For more information, see [Arrays 
 | `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                         |
 
 
-A strided array is a sub-type of `AbstractArray` whose entries are stored in memory with fixed strides.
+A strided array is a subtype of `AbstractArray` whose entries are stored in memory with fixed strides.
 Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines
 for more efficient linear algebra routines.
 
-A typical example of a user defined strided array is one that wraps a standard `Array`
-with additional structure. 
+A typical example of a user-defined strided array is one that wraps a standard `Array`
+with additional structure.
 
 
 

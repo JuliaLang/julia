@@ -251,8 +251,8 @@ julia> strides(A)
 """
 function strides end
 
-# the definition of strides for Array is the cumsum of the product of sizes
-function _cumsumprodsizes(a::AbstractArray, i)
+# the definition of strides for Array is cumprod([1;collect(size(A))[1:end-1]])
+function _defaultstride(a::AbstractArray, i)
     if i > ndims(a)
         return length(a)
     end

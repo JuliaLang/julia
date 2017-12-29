@@ -112,7 +112,7 @@ true
 isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact(Hermitian(A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
-stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int) = Base._cumsumprodsizes(A, i)
+stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int) = Base._defaultstride(A, i)
 strides(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(A)...)
 
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
