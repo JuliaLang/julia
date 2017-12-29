@@ -1079,3 +1079,17 @@ t = """
     :-- | --:
     1   |   2"""
 @test sprint(Markdown.term, Markdown.parse(t), 0) == "a b\n– –\n1 2\n"
+
+# test Base.copy
+let
+  md = doc"test"
+  md′ = copy(md)
+  @test length(md) == length(md′) == 1
+  push!(md, "new")
+  @test length(md) == 2
+  @test length(md′) == 1
+
+  @test !haskey(md.meta, :foo)
+  md.meta[:foo] = 42
+  @test !haskey(md′.meta, :foo)
+end
