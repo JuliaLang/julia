@@ -231,6 +231,7 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     jl_parse_opts(&argc, (char***)&argv);
     julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
     if (lisp_prompt) {
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         jl_lisp_prompt();
         return 0;
     }

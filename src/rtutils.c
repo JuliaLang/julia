@@ -1039,32 +1039,32 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
     if (!logmsg_func && jl_base_module) {
         jl_value_t *corelogging = jl_get_global(jl_base_module, jl_symbol("CoreLogging"));
         if (corelogging && jl_is_module(corelogging)) {
-            logmsg_func = jl_get_global((jl_module_t*)corelogging, jl_symbol("logmsg_thunk"));
+            logmsg_func = jl_get_global((jl_module_t*)corelogging, jl_symbol("logmsg_shim"));
         }
     }
     if (!logmsg_func) {
         ios_t str_;
         ios_mem(&str_, 300);
         uv_stream_t* str = (uv_stream_t*)&str_;
-        if (jl_is_string(file)) {
-            jl_uv_puts(str, jl_string_data(file), jl_string_len(file));
-        }
-        else {
-            jl_static_show(str, file);
-        }
-        jl_printf(str, ":");
-        jl_static_show(str, line);
-        jl_printf(str, " - ");
         if (jl_is_string(msg)) {
             jl_uv_puts(str, jl_string_data(msg), jl_string_len(msg));
         }
-        else {
-            jl_static_show(str, msg);
+        else if (jl_is_symbol(msg)) {
+            jl_printf(str, "%s", jl_symbol_name((jl_sym_t*)msg));
         }
+        jl_printf(str, "\n@ ");
+        if (jl_is_string(file)) {
+            jl_uv_puts(str, jl_string_data(file), jl_string_len(file));
+        }
+        else if (jl_is_symbol(file)) {
+            jl_printf(str, "%s", jl_symbol_name((jl_sym_t*)file));
+        }
+        jl_printf(str, ":");
+        jl_static_show(str, line);
         jl_safe_printf("%s [Fallback logging]: %.*s\n",
-                       level < JL_LOGLEVEL_INFO ? "DEBUG" :
-                       level < JL_LOGLEVEL_WARN ? "INFO" :
-                       level < JL_LOGLEVEL_ERROR ? "WARNING" : "ERROR",
+                       level < JL_LOGLEVEL_INFO ? "Debug" :
+                       level < JL_LOGLEVEL_WARN ? "Info" :
+                       level < JL_LOGLEVEL_ERROR ? "Warning" : "Error",
                        (int)str_.size, str_.buf);
         ios_close(&str_);
         return;
