@@ -259,7 +259,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Associative` is now `AbstractDict` ([#25012]).
 
-* `indices` is now `axes` ([#25057]).
+* `indices` is now `axes` ([#25057]). This function is not exported from Compat to avoid
+  conflicts with AxisArrays and other such packages.
 
 * `Void` is now `Nothing` with an alias `Cvoid` for C interop ([#25162]).
 

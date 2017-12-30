@@ -999,7 +999,8 @@ end
 # 0.7.0-DEV.2978
 @static if !isdefined(Base, :axes)
     const axes = Base.indices
-    export axes
+    # NOTE: Intentionally not exported to avoid conflicts with AxisArrays
+    #export axes
 end
 
 # 0.7.0-DEV.3137

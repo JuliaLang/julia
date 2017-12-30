@@ -1043,9 +1043,9 @@ end
 @test AbstractDict === (isdefined(Base, :AbstractDict) ? Base.AbstractDict : Base.Associative)
 
 # 0.7.0-DEV.2978
-@test axes === (isdefined(Base, :axes) ? Base.axes : Base.indices)
-@test axes(1) == ()
-@test axes(1,1) == 1:1
+@test Compat.axes === (isdefined(Base, :axes) ? Base.axes : Base.indices)
+@test Compat.axes(1) == ()
+@test Compat.axes(1,1) == 1:1
 
 # 0.7.0-DEV.3137
 @test Nothing === (isdefined(Base, :Nothing) ? Base.Nothing : Base.Void)
