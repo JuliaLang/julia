@@ -255,12 +255,12 @@ IndexStyle(::Type{<:SubArray}) = IndexCartesian()
 # so they are well-defined even for non-linear memory layouts
 strides(V::SubArray) = substrides(V.parent, V.indices)
 
-substrides(parent, I::Tuple) = substrides(stride(parent, 1), parent, 1, I)
-substrides(s, parent, dim, ::Tuple{}) = ()
-substrides(s, parent, dim, I::Tuple{ScalarIndex, Vararg{Any}}) = (substrides(stride(parent, dim+1), parent, dim+1, tail(I))...,)
-substrides(s, parent, dim, I::Tuple{Slice, Vararg{Any}}) = (s, substrides(stride(parent, dim+1), parent, dim+1, tail(I))...)
-substrides(s, parent, dim, I::Tuple{AbstractRange, Vararg{Any}}) = (s*step(I[1]), substrides(stride(parent, dim+1), parent, dim+1, tail(I))...)
-substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(I[1]))"))
+substrides(parent, I::Tuple) = substrides(parent, strides(parent), I)
+substrides(parent, strds, ::Tuple{}) = ()
+substrides(parent, strds, I::Tuple{ScalarIndex, Vararg{Any}}) = (substrides(parent, tail(strds), tail(I))...,)
+substrides(parent, strds, I::Tuple{Slice, Vararg{Any}}) = (first(strds), substrides(parent, tail(strds), tail(I))...)
+substrides(parent, strds, I::Tuple{AbstractRange, Vararg{Any}}) = (first(strds)*step(I[1]), substrides(parent, tail(strds), tail(I))...)
+substrides(parent, strds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(I[1]))"))
 
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
