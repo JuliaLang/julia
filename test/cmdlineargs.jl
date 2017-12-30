@@ -196,10 +196,8 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     @test !success(`$exename -E "exit(0)" --check-bounds=false`)
 
     # --depwarn
-    @test readchomp(`$exename --depwarn=no -E
-        "Base.syntax_deprecation_warnings(true)"`) == "false"
-    @test readchomp(`$exename --depwarn=yes -E
-        "Base.syntax_deprecation_warnings(false)"`) == "true"
+    @test readchomp(`$exename --depwarn=no  -E "Base.JLOptions().depwarn"`) == "0"
+    @test readchomp(`$exename --depwarn=yes -E "Base.JLOptions().depwarn"`) == "1"
     @test !success(`$exename --depwarn=false`)
     # test deprecated syntax
     @test !success(`$exename -e "foo (x::Int) = x * x" --depwarn=error`)

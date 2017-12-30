@@ -200,19 +200,7 @@ function eval_user_input(@nospecialize(ast), show_value)
     isa(STDIN,TTY) && println()
 end
 
-syntax_deprecation_warnings(warn::Bool) =
-    ccall(:jl_parse_depwarn, Cint, (Cint,), warn) == 1
-
-function syntax_deprecation_warnings(f::Function, warn::Bool)
-    prev = syntax_deprecation_warnings(warn)
-    try
-        f()
-    finally
-        syntax_deprecation_warnings(prev)
-    end
-end
-
-function parse_input_line(s::String; filename::String="none")
+function parse_input_line(s::String; filename::String="none", depwarn=true)
     # (expr, pos) = Meta.parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
     #                   (Ptr{UInt8},Csize_t,Int32,Int32),
@@ -221,8 +209,11 @@ function parse_input_line(s::String; filename::String="none")
     #     throw(Meta.ParseError("extra input after end of expression"))
     # end
     # expr
-    ex = ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
-               s, sizeof(s), filename, sizeof(filename))
+    # For now, assume all parser warnings are depwarns
+    ex = with_logger(depwarn ? current_logger() : NullLogger()) do
+        ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+              s, sizeof(s), filename, sizeof(filename))
+    end
     if ex isa Symbol && all(equalto('_'), string(ex))
         # remove with 0.7 deprecation
         Meta.lower(Main, ex)  # to get possible warning about using _ as an rvalue

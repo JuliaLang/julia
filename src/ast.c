@@ -169,15 +169,55 @@ value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return fl_ctx->F;
 }
 
+static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
+
+value_t fl_julia_logmsg(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    int kwargs_len = (int)nargs - 6;
+    if (nargs < 6 || kwargs_len % 2 != 0) {
+        lerror(fl_ctx, fl_ctx->ArgError, "julia-logmsg: bad argument list - expected "
+               "level (symbol) group (symbol) id file line msg . kwargs");
+    }
+    value_t arg_level = args[0];
+    value_t arg_group = args[1];
+    value_t arg_id    = args[2];
+    value_t arg_file  = args[3];
+    value_t arg_line  = args[4];
+    value_t arg_msg   = args[5];
+    value_t *arg_kwargs = args + 6;
+    if (!isfixnum(arg_level) || !issymbol(arg_group) || !issymbol(arg_id) ||
+        !issymbol(arg_file) || !isfixnum(arg_line) || !fl_isstring(fl_ctx, arg_msg)) {
+        lerror(fl_ctx, fl_ctx->ArgError,
+               "julia-logmsg: Unexpected type in argument list");
+    }
+
+    // Abuse scm_to_julia here to convert arguments.  This is meant for `Expr`s
+    // but should be good enough provided we're only passing simple numbers,
+    // symbols and strings.
+    jl_value_t *group=NULL, *id=NULL, *file=NULL, *line=NULL, *msg=NULL;
+    jl_array_t *kwargs=NULL;
+    JL_GC_PUSH6(&group, &id, &file, &line, &msg, &kwargs);
+    group = scm_to_julia(fl_ctx, arg_group, NULL);
+    id    = scm_to_julia(fl_ctx, arg_id, NULL);
+    file  = scm_to_julia(fl_ctx, arg_file, NULL);
+    line  = scm_to_julia(fl_ctx, arg_line, NULL);
+    msg   = scm_to_julia(fl_ctx, arg_msg, NULL);
+    kwargs = jl_alloc_vec_any(kwargs_len);
+    for (int i = 0; i < kwargs_len; ++i) {
+        jl_array_ptr_set(kwargs, i, scm_to_julia(fl_ctx, arg_kwargs[i], NULL));
+    }
+    jl_log(numval(arg_level), NULL, group, id, file, line, (jl_value_t*)kwargs, msg);
+    JL_GC_POP();
+    return fl_ctx->T;
+}
+
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
+    { "julia-logmsg", fl_julia_logmsg },
     { NULL, NULL }
 };
-
-static int jl_parse_deperror(fl_context_t *fl_ctx, int err);
-static int jl_parse_depwarn_(fl_context_t *fl_ctx, int warn);
 
 static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
 {
@@ -202,12 +242,7 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
     ctx->slot_sym = symbol(fl_ctx, "slot");
     ctx->task = NULL;
     ctx->module = NULL;
-
-    // Enable / disable syntax deprecation warnings
-    if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
-        jl_parse_deperror(fl_ctx, 1);
-    else
-        jl_parse_depwarn_(fl_ctx, (int)jl_options.depwarn);
+    set(symbol(fl_ctx, "*depwarn-opt*"), fixnum(jl_options.depwarn));
 }
 
 // There should be no GC allocation while holding this lock
@@ -399,8 +434,6 @@ static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
     }
     return jl_symbol(symbol_name(fl_ctx, s));
 }
-
-static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
 
 static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod)
 {
@@ -832,28 +865,6 @@ JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
                                              char *filename, jl_module_t *inmodule)
 {
     return jl_parse_eval_all(filename, text, len, inmodule);
-}
-
-JL_DLLEXPORT int jl_parse_depwarn(int warn)
-{
-    jl_ast_context_t *ctx = jl_ast_ctx_enter();
-    int res = jl_parse_depwarn_(&ctx->fl, warn);
-    jl_ast_ctx_leave(ctx);
-    return res;
-}
-
-static int jl_parse_depwarn_(fl_context_t *fl_ctx, int warn)
-{
-    value_t prev = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parser-depwarn")),
-                             warn ? fl_ctx->T : fl_ctx->F);
-    return prev == fl_ctx->T ? 1 : 0;
-}
-
-static int jl_parse_deperror(fl_context_t *fl_ctx, int err)
-{
-    value_t prev = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parser-deperror")),
-                             err ? fl_ctx->T : fl_ctx->F);
-    return prev == fl_ctx->T ? 1 : 0;
 }
 
 // returns either an expression or a thunk
