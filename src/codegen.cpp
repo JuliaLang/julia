@@ -5794,7 +5794,7 @@ static std::unique_ptr<Module> emit_function(
             int lsyncregion = jl_syncregion_label(stmt);
             int lname = jl_gotonode_label(stmt);
             Value *syncregion = get_syncregion(lsyncregion);
-            BasicBlock *label = BasicBlock::create(jl_LLVMContext, "TODO"); // TODO: get continue label
+            BasicBlock *label = BasicBlock::Create(jl_LLVMContext, "TODO"); // TODO: get continue label
             BasicBlock *entry = BasicBlock::Create(jl_LLVMContext, "pfor.body.entry");
             ctx.builder.CreateDetach(entry, label, syncregion);
             ctx.builder.SetInsertPoint(entry);
@@ -5809,7 +5809,7 @@ static std::unique_ptr<Module> emit_function(
             int lsyncregion = jl_syncregion_label(stmt);
             int lname = jl_gotonode_label(stmt);
             Value *syncregion = get_syncregion(lsyncregion);
-            BasicBlock *label = BasicBlock::create(jl_LLVMContext, "TODO"); // TODO: get continue label
+            BasicBlock *label = BasicBlock::Create(jl_LLVMContext, "TODO"); // TODO: get continue label
             ctx.builder.CreateReattach(label, syncregion);
             // CreateReattach(BasicBlock *DetachContinue, Value *SyncRegion)
             continue;

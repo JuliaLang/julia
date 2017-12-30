@@ -774,13 +774,13 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "goto %" PRIuPTR, jl_gotonode_label(v));
     }
     else if (vt == jl_detachnode_type) {
-        n += jl_printf(out, "detach %" PRIuPTR, jl_gotonode_label(v));
+        n += jl_printf(out, "detach %" PRIuPTR " syncregion %" PRIuPTR, jl_gotonode_label(v), jl_syncregion_label(v));
     }
     else if (vt == jl_reattachnode_type) {
-        n += jl_printf(out, "reattach %" PRIuPTR, jl_gotonode_label(v));
+        n += jl_printf(out, "reattach %" PRIuPTR " syncregion %" PRIuPTR, jl_gotonode_label(v), jl_syncregion_label(v));
     }
     else if (vt == jl_syncnode_type) {
-        n += jl_printf(out, "sync %" PRIuPTR, jl_gotonode_label(v));
+        n += jl_printf(out, "sync %" PRIuPTR, jl_syncregion_label(v));
     }
     else if (vt == jl_quotenode_type) {
         jl_value_t *qv = *(jl_value_t**)v;
