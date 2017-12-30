@@ -194,7 +194,8 @@ value_t fl_julia_logmsg(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     // Abuse scm_to_julia here to convert arguments.  This is meant for `Expr`s
     // but should be good enough provided we're only passing simple numbers,
     // symbols and strings.
-    jl_value_t *group=NULL, *id=NULL, *file=NULL, *line=NULL, *msg=NULL, *kwargs=NULL;
+    jl_value_t *group=NULL, *id=NULL, *file=NULL, *line=NULL, *msg=NULL;
+    jl_array_t *kwargs=NULL;
     JL_GC_PUSH6(&group, &id, &file, &line, &msg, &kwargs);
     group = scm_to_julia(fl_ctx, arg_group, NULL);
     id    = scm_to_julia(fl_ctx, arg_id, NULL);
@@ -203,10 +204,9 @@ value_t fl_julia_logmsg(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     msg   = scm_to_julia(fl_ctx, arg_msg, NULL);
     kwargs = jl_alloc_vec_any(kwargs_len);
     for (int i = 0; i < kwargs_len; ++i) {
-        jl_array_ptr_set((jl_array_t*)kwargs, i,
-                         scm_to_julia(fl_ctx, arg_kwargs[i], NULL));
+        jl_array_ptr_set(kwargs, i, scm_to_julia(fl_ctx, arg_kwargs[i], NULL));
     }
-    jl_log(numval(arg_level), jl_nothing, group, id, file, line, kwargs, msg);
+    jl_log(numval(arg_level), NULL, group, id, file, line, (jl_value_t*)kwargs, msg);
     JL_GC_POP();
     return fl_ctx->T;
 }

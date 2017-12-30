@@ -1031,7 +1031,7 @@ JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
 
 // logging tools --------------------------------------------------------------
 
-void jl_log(int level, jl_module_t *module, jl_value_t *group, jl_value_t *id,
+void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
             jl_value_t *file, jl_value_t *line, jl_value_t *kwargs,
             jl_value_t *msg)
 {
@@ -1075,8 +1075,8 @@ void jl_log(int level, jl_module_t *module, jl_value_t *group, jl_value_t *id,
     args[0] = logmsg_func;
     args[1] = jl_box_long(level);
     args[2] = msg;
-    args[3] = (jl_value_t*)(module ? module : jl_core_module);
     // Would some of the jl_nothing here be better as `missing` instead?
+    args[3] = module ? module  : jl_nothing;
     args[4] = group  ? group   : jl_nothing;
     args[5] = id     ? id      : jl_nothing;
     args[6] = file   ? file    : jl_nothing;
