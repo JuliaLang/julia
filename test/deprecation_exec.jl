@@ -136,11 +136,6 @@ global_logger(prev_logger)
           remove_linenums!(:(struct A; end))
     @test remove_linenums!(@test_deprecated Meta.parse("type A; end")) ==
           remove_linenums!(:(mutable struct A; end))
-    @test (@test_deprecated Meta.parse("abstract A")) == :(abstract type A end)
-    @test (@test_deprecated Meta.parse("bitstype 32 A")) == :(primitive type A 32 end)
-
-    # #20500
-    @test (@test_deprecated Meta.parse("typealias A B")) == Expr(:typealias, :A, :B)
 
     # #19987
     @test remove_linenums!(@test_deprecated Meta.parse("try ; catch f() ; end")) ==
@@ -163,7 +158,6 @@ end
     @test_deprecated Meta.lower(@__MODULE__, :(A.(:+)(a,b) = 1))
 
     # #11310
-    @test_deprecated r"inner constructor" Meta.lower(@__MODULE__, :(struct A{T}; A() = new(); end))
     @test_deprecated r"parametric method syntax" Meta.lower(@__MODULE__, :(f{T}(x::T) = 1))
 
     # #17623
@@ -179,9 +173,6 @@ end
 
     # #15032
     @test_deprecated Meta.lower(@__MODULE__, :(a.(b) = 1))
-
-    # #20610
-    @test_deprecated Meta.lower(@__MODULE__, Expr(:(=>), :a, :b))
 
     # #5332
     @test_deprecated Meta.lower(@__MODULE__, :(a.'))

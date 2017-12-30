@@ -147,8 +147,8 @@
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const do
                          struct
-                         abstract typealias bitstype type immutable  ;; to be deprecated
-                         module baremodule using import export importall))
+                         type immutable importall  ;; to be deprecated
+                         module baremodule using import export))
 
 (define initial-reserved-word? (Set initial-reserved-words))
 
@@ -700,7 +700,7 @@
 ;; symbol tokens that do not simply parse to themselves when appearing alone as
 ;; an element of an argument list
 (define non-standalone-symbol-token?
-  (Set (append operators reserved-words '(.... mutable primitive))))
+  (Set (append operators reserved-words '(.... mutable primitive abstract))))
 
 ; parse-eq* is used where commas are special, for example in an argument list
 (define (parse-eq* s)
@@ -1111,7 +1111,7 @@
 ;; also handles looking for syntactic reserved words
 (define (parse-call s)
   (let ((ex (parse-unary-prefix s)))
-    (if (or (initial-reserved-word? ex) (eq? ex 'mutable) (eq? ex 'primitive))
+    (if (or (initial-reserved-word? ex) (eq? ex 'mutable) (eq? ex 'primitive) (eq? ex 'abstract))
         (parse-resword s ex)
         (parse-call-chain s ex #f))))
 
@@ -1433,15 +1433,12 @@
                 (list word def body)))))
 
        ((abstract)
-        (let ((ty (eq? (peek-token s) 'type)))
-          (if ty
-              (take-token s))
-          (let ((spec (parse-subtype-spec s)))
-            (if (not ty)
-                (parser-depwarn s (string "abstract " (deparse spec))
-                                (string "abstract type " (deparse spec) " end")))
-            (begin0 (list 'abstract spec)
-                    (if ty (expect-end (take-lineendings s) "abstract type"))))))
+        (if (not (eq? (peek-token s) 'type))
+            (parse-call-chain s word #f)
+            (begin (take-token s)
+                   (let ((spec (parse-subtype-spec s)))
+                     (begin0 (list 'abstract spec)
+                             (expect-end (take-lineendings s) "abstract type"))))))
        ((struct)
         (begin (take-token s)
                (parse-struct-def s #f word)))
@@ -1465,19 +1462,6 @@
        ((immutable)
         (parser-depwarn s "immutable" "struct")  ;; retain in 0.7
         (parse-struct-def s #f word))
-       ((bitstype)
-        (let* ((nb   (with-space-sensitive (parse-cond s)))
-               (spec (parse-subtype-spec s)))
-          (parser-depwarn s (string "bitstype " (deparse nb) " " (deparse spec))
-                          (string "primitive type " (deparse spec) " " (deparse nb) " end"))
-          (list 'primitive spec nb)))
-       ((typealias)
-        (let ((lhs (with-space-sensitive (parse-call s)))
-              (rhs (parse-where s parse-call)))
-          (parser-depwarn s (string "typealias " (deparse lhs) " " (deparse rhs))
-                          (string (if (symbol? lhs) "const " "")
-                                  (deparse lhs) " = " (deparse rhs)))
-          (list 'typealias lhs rhs)))
 
        ((try)
         (let ((try-block (if (memq (require-token s) '(catch finally))
