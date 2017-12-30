@@ -1099,12 +1099,10 @@
                  (syntax-deprecation #f
                                      (string "parametric method syntax " (deparse (cadr e))
                                              (linenode-string (function-body-lineno body)))
-                                     (deparse `(where (call ,(or name
-                                                                 (cadr (cadr (cadr e))))
-                                                            ,@(if (has-parameters? argl)
-                                                                  (cons (car argl) (cddr argl))
-                                                                  (cdr argl)))
-                                                      ,@raw-typevars))))
+                                     (deparse `(where (call ,name ,@(if (has-parameters? argl)
+                                                                       (cons (car argl) (cddr argl))
+                                                                       (cdr argl)))
+                                                     ,@raw-typevars))))
              (expand-forms
               (method-def-expr name sparams argl body rett))))
           (else
@@ -1662,129 +1660,108 @@
 ; fuse nested calls to expr == f.(args...) into a single broadcast call,
 ; or a broadcast! call if lhs is non-null.
 (define (expand-fuse-broadcast lhs rhs)
-  (define (fuse? e) (and (pair? e) (eq? (car e) 'fuse)))
-  (define (anyfuse? exprs)
-    (if (null? exprs) #f (if (fuse? (car exprs)) #t (anyfuse? (cdr exprs)))))
-  (define (to-lambda f args kwargs) ; convert f to anonymous function with hygienic tuple args
-    (define (genarg arg) (if (vararg? arg) (list '... (gensy)) (gensy)))
-    ; (To do: optimize the case where f is already an anonymous function, in which
-    ;  case we only need to hygienicize the arguments?   But it is quite tricky
-    ;  to fully handle splatted args, typed args, keywords, etcetera.  And probably
-    ;  the extra function call is harmless because it will get inlined anyway.)
-    (let ((genargs (map genarg args))) ; hygienic formal parameters
-      (if (null? kwargs)
-          `(-> ,(cons 'tuple genargs) (call ,f ,@genargs)) ; no keyword args
-          `(-> ,(cons 'tuple genargs) (call ,f (parameters ,@kwargs) ,@genargs)))))
-  (define (from-lambda f) ; convert (-> (tuple args...) (call func args...)) back to func
-    (if (and (pair? f) (eq? (car f) '->) (pair? (cadr f)) (eq? (caadr f) 'tuple)
-             (pair? (caddr f)) (eq? (caaddr f) 'call) (equal? (cdadr f) (cdr (cdaddr f))))
-        (car (cdaddr f))
-        f))
-  (define (fuse-args oldargs) ; replace (fuse f args) with args in oldargs list
-    (define (fargs newargs oldargs)
-      (if (null? oldargs)
-          newargs
-          (fargs (if (fuse? (car oldargs))
-                     (append (reverse (caddar oldargs)) newargs)
-                     (cons (car oldargs) newargs))
-                 (cdr oldargs))))
-    (reverse (fargs '() oldargs)))
-  (define (fuse-funcs f args) ; for (fuse g a) in args, merge/inline g into f
-    ; any argument A of f that is (fuse g a) gets replaced by let A=(body of g):
-    (define (fuse-lets fargs args lets)
-      (if (null? args)
-          lets
-          (if (fuse? (car args))
-              (fuse-lets (cdr fargs) (cdr args) (cons (list '= (car fargs) (caddr (cadar args))) lets))
-              (fuse-lets (cdr fargs) (cdr args) lets))))
-    (let ((fargs (cdadr f))
-          (fbody (caddr f)))
-      `(->
-        (tuple ,@(fuse-args (map (lambda (oldarg arg) (if (fuse? arg)
-                                                 `(fuse _ ,(cdadr (cadr arg)))
-                                                 oldarg))
-                                 fargs args)))
-        (let (block ,@(reverse (fuse-lets fargs args '()))) ,fbody))))
-  (define (dot-to-fuse e) ; convert e == (. f (tuple args)) to (fuse f args)
-    (define (make-fuse f args) ; check for nested (fuse f args) exprs and combine
-      (define (split-kwargs args) ; return (cons keyword-args positional-args) extracted from args
-        (define (sk args kwargs pargs)
-          (if (null? args)
-              (cons kwargs pargs)
-              (if (kwarg? (car args))
-                  (sk (cdr args) (cons (car args) kwargs) pargs)
-                  (sk (cdr args) kwargs (cons (car args) pargs)))))
-        (if (has-parameters? args)
-            (sk (reverse (cdr args)) (cdar args) '())
-            (sk (reverse args) '() '())))
-      (let* ((kws.args (split-kwargs args))
-             (kws (car kws.args))
-             (args (cdr kws.args)) ; fusing occurs on positional args only
-             (args_ (map dot-to-fuse args)))
-        (if (anyfuse? args_)
-            `(fuse ,(fuse-funcs (to-lambda f args kws) args_) ,(fuse-args args_))
-            `(fuse ,(to-lambda f args kws) ,args_))))
+  (define nparams 0)
+  (define arglist '())
+  (define vararg #f)
+  (define (dot-to-fuse e) ; convert e == (. f (tuple args)) to Fusion
     (if (and (pair? e) (eq? (car e) '|.|))
-        (let ((f (cadr e)) (x (caddr e)))
+        (let ((f (cadr e))
+              (x (caddr e)))
           (cond ((or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
                  `(call (top getproperty) ,f ,x))
                 ((eq? (car x) 'tuple)
-                 (make-fuse f (cdr x)))
+                 (make-fusion f (cdr x)))
                 (else
                  (error (string "invalid syntax " (deparse e))))))
         (if (and (pair? e) (eq? (car e) 'call) (dotop? (cadr e)))
-            (make-fuse (undotop (cadr e)) (cddr e))
+            (make-fusion (undotop (cadr e)) (cddr e))
             e)))
-  ; given e == (fuse lambda args), compress the argument list by removing (pure)
-  ; duplicates in args, inlining literals, and moving any varargs to the end:
-  (define (compress-fuse e)
-    (define (findfarg arg args fargs) ; for arg in args, return corresponding farg
-      (if (eq? arg (car args))
-          (car fargs)
-          (findfarg arg (cdr args) (cdr fargs))))
-    (if (fuse? e)
+  (define (will-fuse e)
+    (or (and (pair? e) (eq? (car e) '|.|) (eq? (car (caddr e)) 'tuple))
+        (and (pair? e) (eq? (car e) 'call) (dotop? (cadr e)))
+        (kwarg? e)
+        (julia-scalar? e)))
+  (define (make-fusion f args)
+    (if (or (has-parameters? args) (any will-fuse args))
+        (begin
+          (define fuse (make-fuse-call f args))
+          (if vararg (begin
+              (define argn (+ nparams 1))
+              (set! arglist (cons (cons `(... ,vararg) argn) arglist))
+              (set! fuse (insert-vararg fuse argn))))
+          (define fusion_type `(curly (|.| (top Broadcast) 'Fusion) ,nparams ,(if vararg 'true 'false)))
+          (define fusion `(call ,fusion_type ,fuse))
+          `(fuse ,fusion ,(reverse! (map car arglist))))
+        `(fuse ,f ,args)))
+  (define (insert-vararg form argn)
+     (cond ((vararg? form)
+            `(call (curly (|.| (top Broadcast) 'FusionArg) ,argn)))
+           ((and (pair? form) (contains vararg? (cdr form)))
+            (cons (car form) (map (lambda (x) (insert-vararg x argn)) (cdr form))))
+           (else
+             form)))
+  (define (make-fuse-arg e)
+    (cond ((vararg? e) ; TODO: this is sloppy at order-of-execution handling
+           (if (and vararg (not (eq? vararg (cadr e)))) (error "multiple splatted args cannot be fused into a single broadcast"))
+           (set! vararg (cadr e))
+           `(...)) ; return a placeholder token
+          ((julia-scalar? e)
+           `(call (|.| (top Broadcast) 'FusionConstant) ,e))
+          (else
+           (let ((argn (memq e arglist)))
+                (if (not argn) (begin
+                    (set! nparams (+ nparams 1))
+                    (set! argn nparams)
+                    (set! arglist (cons (cons e argn) arglist))))
+                `(call (curly (|.| (top Broadcast) 'FusionArg) ,argn))))))
+  (define (make-fuse-call f args)
+    (define (split-kwargs args) ; return (cons keyword-args positional-args) extracted from args
+      (define (sk args kwargs pargs)
+        (if (null? args)
+            (cons kwargs pargs)
+            (if (kwarg? (car args))
+                (sk (cdr args) (cons (car args) kwargs) pargs)
+                (sk (cdr args) kwargs (cons (car args) pargs)))))
+      (if (has-parameters? args)
+          (sk (reverse (cdr args)) (cdar args) '())
+          (sk (reverse args) '() '())))
+    (let* ((kws+args (split-kwargs args))
+           (kws (car kws+args))
+           (args (cdr kws+args))
+           (args (map fuse-arg args)) ; fusing occurs on positional args only
+           (apply-call (any vararg? args))
+           (call-head (if apply-call
+                          (if (null? kws) 'FusionApply 'FusionKWApply)
+                          (if (null? kws) 'FusionCall 'FusionKWCall)))
+           (args (if apply-call ; if calling apply, need to wrap each non-vararg args in a 1-tuple
+                     (map (lambda (x) (if (vararg? x)
+                                          x
+                                          `(call (|.| (top Broadcast) 'FusionCall) (core tuple) (call (core tuple) ,x))))
+                          args)
+                     args))
+           (kws (if (null? kws) kws (list (cons 'parameters kws)))))
+      `(call (|.| (top Broadcast) ',call-head) ,@kws ,f (call (core tuple) ,@args))))
+  (define (fuse-arg e) ; convert e into an argument for Fusion
+    ; examine syntax for `(. (tuple f) ...)` or `(call .op ...)`
+    ; or just `(. m 'field) and call appropriate lowering
+    (if (and (pair? e) (eq? (car e) '|.|))
         (let ((f (cadr e))
-              (args (caddr e)))
-          (define (cf old-fargs old-args new-fargs new-args renames varfarg vararg)
-            (if (null? old-args)
-                (let ((nfargs (if (null? varfarg) new-fargs (cons varfarg new-fargs)))
-                      (nargs (if (null? vararg) new-args (cons vararg new-args))))
-                  `(fuse (-> (tuple ,@(reverse nfargs)) ,(replace-vars (caddr f) renames))
-                         ,(reverse nargs)))
-                (let ((farg (car old-fargs)) (arg (car old-args)))
-                  (cond
-                   ((and (vararg? farg) (vararg? arg)) ; arg... must be the last argument
-                    (if (null? varfarg)
-                        (cf (cdr old-fargs) (cdr old-args)
-                            new-fargs new-args renames farg arg)
-                        (if (eq? (cadr vararg) (cadr arg))
-                            (cf (cdr old-fargs) (cdr old-args)
-                                new-fargs new-args (cons (cons (cadr farg) (cadr varfarg)) renames)
-                                varfarg vararg)
-                            (error "multiple splatted args cannot be fused into a single broadcast"))))
-                   ((julia-scalar? arg) ; inline numeric literals etc.
-                    (cf (cdr old-fargs) (cdr old-args)
-                        new-fargs new-args
-                        (cons (cons farg arg) renames)
-                        varfarg vararg))
-                   ((and (symbol? arg) (memq arg new-args)) ; combine duplicate args
-                                        ; (note: calling memq for every arg is O(length(args)^2) ...
-                                        ;  ... would be better to replace with a hash table if args is long)
-                    (cf (cdr old-fargs) (cdr old-args)
-                        new-fargs new-args
-                        (cons (cons farg (findfarg arg new-args new-fargs)) renames)
-                        varfarg vararg))
-                   (else
-                    (cf (cdr old-fargs) (cdr old-args)
-                        (cons farg new-fargs) (cons arg new-args) renames varfarg vararg))))))
-          (cf (cdadr f) args '() '() '() '() '()))
-        e)) ; (not (fuse? e))
-  (let ((e (compress-fuse (dot-to-fuse rhs))) ; an expression '(fuse func args) if expr is a dot call
-        (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
-    (if (fuse? e)
+              (x (caddr e)))
+          (cond ((or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
+                 (make-fuse-arg `(call (core getfield) ,f ,x)))
+                ((eq? (car x) 'tuple)
+                 (make-fuse-call f (cdr x)))
+                (else
+                 (error (string "invalid syntax " (deparse e))))))
+        (if (and (pair? e) (eq? (car e) 'call) (dotop? (cadr e)))
+            (make-fuse-call (undotop (cadr e)) (cddr e))
+            (make-fuse-arg e))))
+  (let* ((lhs-view (ref-to-view lhs)) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
+         (e (dot-to-fuse rhs)))
+    (if (and (pair? e) (eq? (car e) 'fuse))
         (if (null? lhs)
-            (expand-forms `(call (top broadcast) ,(from-lambda (cadr e)) ,@(caddr e)))
-            (expand-forms `(call (top broadcast!) ,(from-lambda (cadr e)) ,lhs-view ,@(caddr e))))
+            (expand-forms `(call (top broadcast) ,(cadr e) ,@(caddr e)))
+            (expand-forms `(call (top broadcast!) ,(cadr e) ,lhs-view ,@(caddr e))))
         (if (null? lhs)
             (expand-forms e)
             (expand-forms `(call (top broadcast!) (top identity) ,lhs-view ,e))))))
