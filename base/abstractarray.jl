@@ -219,6 +219,21 @@ julia> last([1; 2; 3; 4])
 last(a) = a[end]
 
 """
+    strides(A)
+
+Return a tuple of the memory strides in each dimension.
+
+# Examples
+```jldoctest
+julia> A = ones(3,4,5);
+
+julia> strides(A)
+(1, 3, 12)
+```
+"""
+function strides end
+
+"""
     stride(A, k::Integer)
 
 Return the distance in memory (in number of elements) between adjacent elements in dimension `k`.
@@ -234,22 +249,7 @@ julia> stride(A,3)
 12
 ```
 """
-function stride end
-
-"""
-    strides(A)
-
-Return a tuple of the memory strides in each dimension.
-
-# Examples
-```jldoctest
-julia> A = ones(3,4,5);
-
-julia> strides(A)
-(1, 3, 12)
-```
-"""
-function strides end
+stride(A::AbstractArray, k::Integer) = strides(A)[k]
 
 @inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
 size_to_strides(s, d) = (s,)

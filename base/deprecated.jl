@@ -3490,17 +3490,14 @@ end
 end
 
 # Issues #17812 Remove default stride implementation
-function stride(a::AbstractArray, i::Integer)
-    depwarn("`stride(a::AbstractArray, i)` is deprecated for general arrays. Override `stride` for custom array types that implement the strided array interface.", :stride)
-    if i > ndims(a)
-        return length(a)
-    end
-    s = 1
-    for n = 1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-    _stride(a, i)
+function strides(a::AbstractArray)
+    depwarn("""
+    `strides(a::AbstractArray)` is deprecated for general arrays.
+    Specialize `strides` for custom array types that have the appropriate representation in memory.
+    Warning: inappropriately implementing this method for an array type that does not use strided
+    storage may lead to incorrect results or segfaults.
+    """, :strides)
+    size_to_strides(1, size(a)...)
 end
 
 # END 0.7 deprecations
