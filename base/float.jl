@@ -101,7 +101,7 @@ function Float64(x::Int128)
         y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
     end
     d = ((n+1022) % UInt64) << 52
-    reinterpret(Float64, s | d + y)
+    reinterpret(Float64, (s | d) + y)
 end
 
 function Float32(x::UInt128)
@@ -131,7 +131,7 @@ function Float32(x::Int128)
         y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
     end
     d = ((n+126) % UInt32) << 23
-    reinterpret(Float32, s | d + y)
+    reinterpret(Float32, (s | d) + y)
 end
 
 function Float16(val::Float32)
@@ -140,7 +140,7 @@ function Float16(val::Float32)
         t = 0x8000 ⊻ (0x8000 & ((f >> 0x10) % UInt16))
         return reinterpret(Float16, t ⊻ ((f >> 0xd) % UInt16))
     end
-    i = (f >> 23) & 0x1ff + 1
+    i = ((f >> 23) & 0x1ff) + 1
     sh = shifttable[i]
     f &= 0x007fffff
     h::UInt16 = basetable[i] + (f >> sh)
@@ -150,7 +150,7 @@ function Float16(val::Float32)
     nextbit = (f >> (sh-1)) & 1
     if nextbit != 0
         # Round halfway to even or check lower bits
-        if h&1 == 1 || (f & ((1<<(sh-1))-1)) != 0
+        if (h&1) == 1 || (f & ((1<<(sh-1))-1)) != 0
             h += 1
         end
     end
@@ -209,30 +209,30 @@ const shifttable = Vector{UInt8}(uninitialized, 512)
 for i = 0:255
     e = i - 127
     if e < -24  # Very small numbers map to zero
-        basetable[i|0x000+1] = 0x0000
-        basetable[i|0x100+1] = 0x8000
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
+        basetable[(i|0x000)+1] = 0x0000
+        basetable[(i|0x100)+1] = 0x8000
+        shifttable[(i|0x000)+1] = 24
+        shifttable[(i|0x100)+1] = 24
     elseif e < -14  # Small numbers map to denorms
-        basetable[i|0x000+1] = (0x0400>>(-e-14))
-        basetable[i|0x100+1] = (0x0400>>(-e-14)) | 0x8000
-        shifttable[i|0x000+1] = -e-1
-        shifttable[i|0x100+1] = -e-1
+        basetable[(i|0x000)+1] = (0x0400>>(-e-14))
+        basetable[(i|0x100)+1] = (0x0400>>(-e-14)) | 0x8000
+        shifttable[(i|0x000)+1] = -e-1
+        shifttable[(i|0x100)+1] = -e-1
     elseif e <= 15  # Normal numbers just lose precision
-        basetable[i|0x000+1] = ((e+15)<<10)
-        basetable[i|0x100+1] = ((e+15)<<10) | 0x8000
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
+        basetable[(i|0x000)+1] = ((e+15)<<10)
+        basetable[(i|0x100)+1] = ((e+15)<<10) | 0x8000
+        shifttable[(i|0x000)+1] = 13
+        shifttable[(i|0x100)+1] = 13
     elseif e < 128  # Large numbers map to Infinity
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
+        basetable[(i|0x000)+1] = 0x7C00
+        basetable[(i|0x100)+1] = 0xFC00
+        shifttable[(i|0x000)+1] = 24
+        shifttable[(i|0x100)+1] = 24
     else  # Infinity and NaN's stay Infinity and NaN's
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
+        basetable[(i|0x000)+1] = 0x7C00
+        basetable[(i|0x100)+1] = 0xFC00
+        shifttable[(i|0x000)+1] = 13
+        shifttable[(i|0x100)+1] = 13
     end
 end
 
@@ -309,7 +309,7 @@ end
 
 function unsafe_trunc(::Type{UInt128}, x::Float64)
     xu = reinterpret(UInt64,x)
-    k = Int(xu >> 52) & 0x07ff - 1075
+    k = (Int(xu >> 52) & 0x07ff) - 1075
     xu = (xu & 0x000f_ffff_ffff_ffff) | 0x0010_0000_0000_0000
     if k <= 0
         UInt128(xu >> -k)
@@ -323,7 +323,7 @@ end
 
 function unsafe_trunc(::Type{UInt128}, x::Float32)
     xu = reinterpret(UInt32,x)
-    k = Int(xu >> 23) & 0x00ff - 150
+    k = (Int(xu >> 23) & 0x00ff) - 150
     xu = (xu & 0x007f_ffff) | 0x0080_0000
     if k <= 0
         UInt128(xu >> -k)
@@ -435,10 +435,10 @@ end
 function ==(x::Float16, y::Float16)
     ix = reinterpret(UInt16,x)
     iy = reinterpret(UInt16,y)
-    if (ix|iy)&0x7fff > 0x7c00 #isnan(x) || isnan(y)
+    if ((ix|iy)&0x7fff) > 0x7c00 #isnan(x) || isnan(y)
         return false
     end
-    if (ix|iy)&0x7fff == 0x0000
+    if ((ix|iy)&0x7fff) == 0x0000
         return true
     end
     return ix == iy
@@ -539,7 +539,7 @@ abs(x::Float64) = abs_float(x)
 Test whether a floating point number is not a number (NaN).
 """
 isnan(x::AbstractFloat) = x != x
-isnan(x::Float16) = reinterpret(UInt16,x)&0x7fff > 0x7c00
+isnan(x::Float16) = (reinterpret(UInt16,x) & 0x7fff) > 0x7c00
 isnan(x::Real) = false
 
 """
@@ -556,7 +556,7 @@ false
 ```
 """
 isfinite(x::AbstractFloat) = x - x == 0
-isfinite(x::Float16) = reinterpret(UInt16,x)&0x7c00 != 0x7c00
+isfinite(x::Float16) = (reinterpret(UInt16,x) & 0x7c00) != 0x7c00
 isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
@@ -718,7 +718,7 @@ Test whether a floating point number is subnormal.
 """
 function issubnormal(x::T) where {T<:IEEEFloat}
     y = reinterpret(Unsigned, x)
-    (y & exponent_mask(T) == 0) & (y & significand_mask(T) != 0)
+    ((y & exponent_mask(T)) == 0) & ((y & significand_mask(T)) != 0)
 end
 
 @eval begin
@@ -873,7 +873,7 @@ uinttype(::Type{Float64}) = UInt64
 uinttype(::Type{Float32}) = UInt32
 uinttype(::Type{Float16}) = UInt16
 
-Base.iszero(x::Float16) = reinterpret(UInt16, x) & ~sign_mask(Float16) == 0x0000
+Base.iszero(x::Float16) = (reinterpret(UInt16, x) & ~sign_mask(Float16)) == 0x0000
 
 ## Array operations on floating point numbers ##
 

@@ -564,7 +564,7 @@ done(L::LogicalIndex, s) = s[3] > length(L)
     i, n = s
     Bc = L.mask.chunks
     while true
-        if Bc[_div64(i)+1] & (UInt64(1)<<_mod64(i)) != 0
+        if (Bc[_div64(i)+1] & (UInt64(1)<<_mod64(i))) != 0
             i += 1
             return (i, (i, n+1))
         end

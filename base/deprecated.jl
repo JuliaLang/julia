@@ -1429,10 +1429,11 @@ end
 # ::ANY is deprecated in src/method.c
 # also remove all instances of `jl_ANY_flag` in src/
 
-# issue #13079
+# issue #13079, #5187
 # in julia-parser.scm:
 #     move prec-bitshift after prec-rational
-#     remove parse-with-chains-warn and bitshift-warn
+#     move & and | to && and || level
+#     remove dep-check and related code
 # update precedence table in doc/src/manual/mathematical-operations.md
 
 # deprecate remaining vectorized methods over SparseVectors (zero-preserving)

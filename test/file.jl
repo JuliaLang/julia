@@ -60,23 +60,23 @@ end
 @test isfile(file)
 @test !islink(file)
 
-@test filemode(file) & 0o444 > 0 # readable
-@test filemode(file) & 0o222 > 0 # writable
+@test (filemode(file) & 0o444) > 0 # readable
+@test (filemode(file) & 0o222) > 0 # writable
 chmod(file, filemode(file) & 0o7555)
-@test filemode(file) & 0o222 == 0
+@test (filemode(file) & 0o222) == 0
 chmod(file, filemode(file) | 0o222)
-@test filemode(file) & 0o111 == 0
+@test (filemode(file) & 0o111) == 0
 @test filesize(file) == 0
 
 if Sys.iswindows()
     permissions = 0o444
-    @test filemode(dir) & 0o777 != permissions
-    @test filemode(subdir) & 0o777 != permissions
-    @test filemode(file) & 0o777 != permissions
+    @test (filemode(dir) & 0o777) != permissions
+    @test (filemode(subdir) & 0o777) != permissions
+    @test (filemode(file) & 0o777) != permissions
     chmod(dir, permissions, recursive=true)
-    @test filemode(dir) & 0o777 == permissions
-    @test filemode(subdir) & 0o777 == permissions
-    @test filemode(file) & 0o777 == permissions
+    @test (filemode(dir) & 0o777) == permissions
+    @test (filemode(subdir) & 0o777) == permissions
+    @test (filemode(file) & 0o777) == permissions
     chmod(dir, 0o666, recursive=true)  # Reset permissions in case someone wants to use these later
 else
     mktempdir() do tmpdir
@@ -86,18 +86,18 @@ else
         linkfile=joinpath(dir, "tempfile.txt")
         symlink(tmpfile, linkfile)
         permissions=0o776
-        @test filemode(dir) & 0o777 != permissions
-        @test filemode(subdir) & 0o777 != permissions
-        @test filemode(file) & 0o777 != permissions
-        @test filemode(linkfile) & 0o777 != permissions
-        @test filemode(tmpfile) & 0o777 != permissions
+        @test (filemode(dir) & 0o777) != permissions
+        @test (filemode(subdir) & 0o777) != permissions
+        @test (filemode(file) & 0o777) != permissions
+        @test (filemode(linkfile) & 0o777) != permissions
+        @test (filemode(tmpfile) & 0o777) != permissions
         chmod(dir, permissions, recursive=true)
-        @test filemode(dir) & 0o777 == permissions
-        @test filemode(subdir) & 0o777 == permissions
-        @test filemode(file) & 0o777 == permissions
-        @test lstat(link).mode & 0o777 != permissions  # Symbolic links are not modified.
-        @test filemode(linkfile) & 0o777 != permissions  # Symbolic links are not followed.
-        @test filemode(tmpfile) & 0o777 != permissions
+        @test (filemode(dir) & 0o777) == permissions
+        @test (filemode(subdir) & 0o777) == permissions
+        @test (filemode(file) & 0o777) == permissions
+        @test (lstat(link).mode & 0o777) != permissions  # Symbolic links are not modified.
+        @test (filemode(linkfile) & 0o777) != permissions  # Symbolic links are not followed.
+        @test (filemode(tmpfile) & 0o777) != permissions
         rm(linkfile)
     end
 end

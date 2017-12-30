@@ -227,8 +227,8 @@ end
 @test 0x00007ffea27edaa0 + (-40) === (-40) + 0x00007ffea27edaa0 === 0x00007ffea27eda78
 @test UInt64(1) * Int64(-1) === typemax(UInt64)
 @test UInt(1) - (-1) == 2
-@test UInt64(15) & -4 === UInt64(12)
-@test UInt64(15) | -4 === typemax(UInt64)
+@test (UInt64(15) & -4) === UInt64(12)
+@test (UInt64(15) | -4) === typemax(UInt64)
 @test UInt64(15) ⊻ -4 === 0xfffffffffffffff3
 
 

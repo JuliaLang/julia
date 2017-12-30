@@ -88,7 +88,7 @@ function exp10(x::T) where T<:Union{Float32,Float64}
     # filter out non-finite arguments
     if xa > reinterpret(Unsigned, MAX_EXP10(T))
         if xa >= exponent_mask(T)
-            xa & significand_mask(T) != 0 && return T(NaN)
+            (xa & significand_mask(T)) != 0 && return T(NaN)
             return xsb ? T(0.0) : T(Inf) # exp10(+-Inf)
         end
         x > MAX_EXP10(T) && return T(Inf)

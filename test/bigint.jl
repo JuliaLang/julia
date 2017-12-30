@@ -182,8 +182,8 @@ end
 end
 @testset "boolean ops" begin
     @test ~BigInt(123) == -124
-    @test BigInt(123) & BigInt(234) == 106
-    @test BigInt(123) | BigInt(234) == 251
+    @test (BigInt(123) & BigInt(234)) == 106
+    @test (BigInt(123) | BigInt(234)) == 251
     @test BigInt(123) ⊻ BigInt(234) == 145
 
     @test gcd(BigInt(48), BigInt(180)) == 12

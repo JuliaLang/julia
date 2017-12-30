@@ -375,7 +375,7 @@ function assignpoweruint16!(x::Bignum,base::UInt16,power_exponent::Int)
     end
     zero!(x)
     shifts::Int = 0
-    while base & UInt16(1) == UInt16(0)
+    while (base & UInt16(1)) == UInt16(0)
         base >>= UInt16(1)
         shifts += 1
     end

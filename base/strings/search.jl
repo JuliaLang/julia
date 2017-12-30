@@ -194,13 +194,13 @@ function _searchindex(s::Union{String,ByteArray}, t::Union{String,ByteArray}, i)
             end
 
             # no match, try to rule out the next character
-            if i < w && bloom_mask & _search_bloom_mask(_nthbyte(s,i+n+1)) == 0
+            if i < w && (bloom_mask & _search_bloom_mask(_nthbyte(s,i+n+1))) == 0
                 i += n
             else
                 i += skip
             end
         elseif i < w
-            if bloom_mask & _search_bloom_mask(_nthbyte(s,i+n+1)) == 0
+            if (bloom_mask & _search_bloom_mask(_nthbyte(s,i+n+1))) == 0
                 i += n
             end
         end
@@ -361,13 +361,13 @@ function _rsearchindex(s::Union{String,ByteArray}, t::Union{String,ByteArray}, k
             end
 
             # no match, try to rule out the next character
-            if i > 1 && bloom_mask & _search_bloom_mask(_nthbyte(s,i-1)) == 0
+            if i > 1 && (bloom_mask & _search_bloom_mask(_nthbyte(s,i-1))) == 0
                 i -= n
             else
                 i -= skip
             end
         elseif i > 1
-            if bloom_mask & _search_bloom_mask(_nthbyte(s,i-1)) == 0
+            if (bloom_mask & _search_bloom_mask(_nthbyte(s,i-1))) == 0
                 i -= n
             end
         end

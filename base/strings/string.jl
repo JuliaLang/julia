@@ -99,13 +99,13 @@ function thisind(s::String, i::Int)
     i == n + 1 && return i
     @boundscheck between(i, 0, n) || throw(BoundsError(s, i))
     @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || return i
+    (b & 0xc0) == 0x80 || return i
     @inbounds b = codeunit(s, i-1)
     between(b, 0b11000000, 0b11110111) && return i-1
-    (b & 0xc0 == 0x80) & (i-2 > 0) || return i
+    ((b & 0xc0) == 0x80) & (i-2 > 0) || return i
     @inbounds b = codeunit(s, i-2)
     between(b, 0b11100000, 0b11110111) && return i-2
-    (b & 0xc0 == 0x80) & (i-3 > 0) || return i
+    ((b & 0xc0) == 0x80) & (i-3 > 0) || return i
     @inbounds b = codeunit(s, i-3)
     between(b, 0b11110000, 0b11110111) && return i-3
     return i
@@ -123,15 +123,15 @@ function nextind(s::String, i::Int)
     end
     # first continuation byte
     @inbounds b = codeunit(s, i += 1)
-    b & 0xc0 ≠ 0x80 && return i
+    (b & 0xc0) ≠ 0x80 && return i
     ((i += 1) > n) | (l < 0xe0) && return i
     # second continuation byte
     @inbounds b = codeunit(s, i)
-    b & 0xc0 ≠ 0x80 && return i
+    (b & 0xc0) ≠ 0x80 && return i
     ((i += 1) > n) | (l < 0xf0) && return i
     # third continuation byte
     @inbounds b = codeunit(s, i)
-    ifelse(b & 0xc0 ≠ 0x80, i, i+1)
+    ifelse((b & 0xc0) ≠ 0x80, i, i+1)
 end
 
 ## checking UTF-8 & ACSII validity ##
@@ -147,7 +147,7 @@ byte_string_classify(s::String) =
 isvalid(::Type{String}, s::Union{Vector{UInt8},String}) = byte_string_classify(s) ≠ 0
 isvalid(s::String) = isvalid(String, s)
 
-is_valid_continuation(c) = c & 0xc0 == 0x80
+is_valid_continuation(c) = (c & 0xc0) == 0x80
 
 ## required core functionality ##
 
@@ -164,17 +164,17 @@ function next_continued(s::String, i::Int, u::UInt32)
     # first continuation byte
     (i += 1) > n && @goto ret
     @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
+    (b & 0xc0) == 0x80 || @goto ret
     u |= UInt32(b) << 16
     # second continuation byte
     ((i += 1) > n) | (u < 0xe0000000) && @goto ret
     @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
+    (b & 0xc0) == 0x80 || @goto ret
     u |= UInt32(b) << 8
     # third continuation byte
     ((i += 1) > n) | (u < 0xf0000000) && @goto ret
     @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
+    (b & 0xc0) == 0x80 || @goto ret
     u |= UInt32(b); i += 1
 @label ret
     return reinterpret(Char, u), i
@@ -197,17 +197,17 @@ function getindex_continued(s::String, i::Int, u::UInt32)
 
     (i += 1) > n && @goto ret
     @inbounds b = codeunit(s, i) # cont byte 1
-    b & 0xc0 == 0x80 || @goto ret
+    (b & 0xc0) == 0x80 || @goto ret
     u |= UInt32(b) << 16
 
     ((i += 1) > n) | (u < 0xe0000000) && @goto ret
     @inbounds b = codeunit(s, i) # cont byte 2
-    b & 0xc0 == 0x80 || @goto ret
+    (b & 0xc0) == 0x80 || @goto ret
     u |= UInt32(b) << 8
 
     ((i += 1) > n) | (u < 0xf0000000) && @goto ret
     @inbounds b = codeunit(s, i) # cont byte 3
-    b & 0xc0 == 0x80 || @goto ret
+    (b & 0xc0) == 0x80 || @goto ret
     u |= UInt32(b)
 @label ret
     return reinterpret(Char, u)
@@ -258,17 +258,17 @@ length(s::String) = _length(s, 1, ncodeunits(s), ncodeunits(s))
         end
         l = b
         b = codeunit(s, i) # cont byte 1
-        c -= (x = b & 0xc0 == 0x80)
+        c -= (x = (b & 0xc0) == 0x80)
         x & (l ≥ 0xe0) || continue
 
         (i += 1) ≤ n || return c
         b = codeunit(s, i) # cont byte 2
-        c -= (x = b & 0xc0 == 0x80)
+        c -= (x = (b & 0xc0) == 0x80)
         x & (l ≥ 0xf0) || continue
 
         (i += 1) ≤ n || return c
         b = codeunit(s, i) # cont byte 3
-        c -= (b & 0xc0 == 0x80)
+        c -= ((b & 0xc0) == 0x80)
     end
 end
 

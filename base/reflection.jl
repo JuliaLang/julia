@@ -251,10 +251,10 @@ datatype_alignment(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) 
     Int(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment & 0x1FF)
 
 datatype_haspadding(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 9) & 1 == 1
+    ((unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 9) & 1) == 1
 
 datatype_pointerfree(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 10) & 0xFFFFF == 0
+    ((unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 10) & 0xFFFFF) == 0
 
 datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
     (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 30) & 3

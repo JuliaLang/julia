@@ -44,7 +44,7 @@ const VERSION = version()
 
 Test whether the bits of `val` indexed by `flag` are set (`1`) or unset (`0`).
 """
-isset(val::Integer, flag::Integer) = (val & flag == flag)
+isset(val::Integer, flag::Integer) = ((val & flag) == flag)
 
 """
     reset(val::Integer, flag::Integer)

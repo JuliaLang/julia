@@ -308,11 +308,11 @@ end
     elseif x <= -1023
         # if -1073 < x <= -1023 then Result will be a subnormal number
         # Hex literal with padding must be used to work on 32bit machine
-        reinterpret(Float64, 0x0000_0000_0000_0001 << ((x + 1074)) % UInt)
+        reinterpret(Float64, 0x0000_0000_0000_0001 << (((x + 1074)) % UInt))
     else
         # We will cast everything to Int64 to avoid errors in case of Int128
         # If x is a Int128, and is outside the range of Int64, then it is not -1023<x<=1023
-        reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64)) % UInt)
+        reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << ((significand_bits(Float64)) % UInt))
     end
 end
 
@@ -813,7 +813,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Nearest})
     n,y = rem_pio2_kernel(x)
 
     if iseven(n)
-        if n & 2 == 2 # n % 4 == 2: add/subtract pi
+        if (n & 2) == 2 # n % 4 == 2: add/subtract pi
             if y.hi <= 0
                 return add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
             else
@@ -823,7 +823,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Nearest})
             return y.hi+y.lo
         end
     else
-        if n & 2 == 2 # n % 4 == 3: subtract pi/2
+        if (n & 2) == 2 # n % 4 == 3: subtract pi/2
             return add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l)
         else          # n % 4 == 1: add pi/2
             return add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
@@ -837,7 +837,7 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
     n,y = rem_pio2_kernel(x)
 
     if iseven(n)
-        if n & 2 == 2 # n % 4 == 2: add pi
+        if (n & 2) == 2 # n % 4 == 2: add pi
             z = add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
         else          # n % 4 == 0: add 0 or 2pi
             if y.hi > 0
@@ -847,7 +847,7 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
             end
         end
     else
-        if n & 2 == 2 # n % 4 == 3: add 3pi/2
+        if (n & 2) == 2 # n % 4 == 3: add 3pi/2
             z = add22condh(y.hi,y.lo,pi3o2_h,pi3o2_l)
         else          # n % 4 == 1: add pi/2
             z = add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
@@ -867,7 +867,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
     n,y = rem_pio2_kernel(x)
 
     if iseven(n)
-        if n & 2 == 2 # n % 4 == 2: add pi
+        if (n & 2) == 2 # n % 4 == 2: add pi
             return add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
         else          # n % 4 == 0: add 0 or 2pi
             if y.hi > 0
@@ -877,7 +877,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
             end
         end
     else
-        if n & 2 == 2 # n % 4 == 3: add 3pi/2
+        if (n & 2) == 2 # n % 4 == 3: add 3pi/2
             return add22condh(y.hi,y.lo,pi3o2_h,pi3o2_l)
         else          # n % 4 == 1: add pi/2
             return add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
@@ -896,7 +896,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Up})
     n,y = rem_pio2_kernel(x)
 
     if iseven(n)
-        if n & 2 == 2 # n % 4 == 2: sub pi
+        if (n & 2) == 2 # n % 4 == 2: sub pi
             return add22condh(y.hi,y.lo,-pi2o2_h,-pi2o2_l)
         else          # n % 4 == 0: sub 0 or 2pi
             if y.hi < 0
@@ -906,7 +906,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Up})
             end
         end
     else
-        if n & 2 == 2 # n % 4 == 3: sub pi/2
+        if (n & 2) == 2 # n % 4 == 3: sub pi/2
             return add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l)
         else          # n % 4 == 1: sub 3pi/2
             return add22condh(y.hi,y.lo,-pi3o2_h,-pi3o2_l)

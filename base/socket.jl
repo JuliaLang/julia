@@ -105,7 +105,7 @@ function ipv6_field(ip::IPv6,i)
     if i < 0 || i > 7
         throw(BoundsError())
     end
-    UInt16(ip.host&(UInt128(0xFFFF)<<(i*16))>>(i*16))
+    UInt16((ip.host&(UInt128(0xFFFF)<<(i*16)))>>(i*16))
 end
 
 show(io::IO, ip::IPv6) = print(io,"ip\"",ip,"\"")
@@ -526,7 +526,7 @@ function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::P
     if nread < 0
         Libc.free(buf_addr)
         notify_error(sock.recvnotify, UVError("recv", nread))
-    elseif flags & UV_UDP_PARTIAL > 0
+    elseif (flags & UV_UDP_PARTIAL) > 0
         Libc.free(buf_addr)
         notify_error(sock.recvnotify, "Partial message received")
     else

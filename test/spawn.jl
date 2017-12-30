@@ -453,7 +453,7 @@ end
 # tests for reducing over collection of Cmd
 @test_throws ArgumentError reduce(&, Base.AbstractCmd[])
 @test_throws ArgumentError reduce(&, Base.Cmd[])
-@test reduce(&, [`$echocmd abc`, `$echocmd def`, `$echocmd hij`]) == `$echocmd abc` & `$echocmd def` & `$echocmd hij`
+@test reduce(&, [`$echocmd abc`, `$echocmd def`, `$echocmd hij`]) == (`$echocmd abc` & `$echocmd def` & `$echocmd hij`)
 
 # test for proper handling of FD exhaustion
 if Sys.isunix()

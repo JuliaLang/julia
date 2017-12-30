@@ -4329,7 +4329,7 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
     elseif isa(e, Symbol)
         return allow_volatile
     elseif isa(e, Slot)
-        return src.slotflags[slot_id(e)] & Slot_UsedUndef == 0
+        return (src.slotflags[slot_id(e)] & Slot_UsedUndef) == 0
     elseif isa(e, Expr)
         e = e::Expr
         head = e.head
@@ -5513,7 +5513,7 @@ function void_use_elim_pass!(sv::OptimizationState)
             # Explicitly listed here for clarity
             return false
         elseif isa(ex, Slot)
-            return sv.src.slotflags[slot_id(ex)] & Slot_UsedUndef != 0
+            return (sv.src.slotflags[slot_id(ex)] & Slot_UsedUndef) != 0
         elseif isa(ex, GlobalRef)
             ex = ex::GlobalRef
             return !isdefined(ex.mod, ex.name)
@@ -5761,7 +5761,7 @@ end
 function get_undef_flag_slot(src::CodeInfo, flagslots, id)
     flag_id = flagslots[id]
     flag_id != 0 && return SlotNumber(flag_id)
-    slot = add_slot!(src, Nothing, src.slotflags[id] & Slot_AssignedOnce != 0, src.slotnames[id])
+    slot = add_slot!(src, Nothing, (src.slotflags[id] & Slot_AssignedOnce) != 0, src.slotnames[id])
     flag_id = slot_id(slot)
     src.slotflags[flag_id] |= Slot_StaticUndef | Slot_UsedUndef
     flagslots[id] = flag_id
@@ -5991,20 +5991,20 @@ add_use(infomap::ValueInfoMap, var, use::ValueUse) = add_use(infomap[var], use)
     ssa && return false
     flags = src.slotflags[id]
     # The check for `UsedUndef` shouldn't be necessary but doesn't hurt
-    return flags & Slot_UsedUndef != 0 || flags & Slot_StaticUndef != 0
+    return (flags & Slot_UsedUndef) != 0 || (flags & Slot_StaticUndef) != 0
 end
 
 @inline function var_has_undef(src, id, ssa=false)
     ssa && return false
     flags = src.slotflags[id]
-    return flags & Slot_UsedUndef != 0
+    return (flags & Slot_UsedUndef) != 0
 end
 
 @inline function var_is_ssa(src, id, ssa=false)
     ssa && return true
     flags = src.slotflags[id]
     # The check for `UsedUndef` shouldn't be necessary but doesn't hurt
-    return flags & (Slot_UsedUndef | Slot_StaticUndef) == 0 && flags & Slot_AssignedOnce != 0
+    return (flags & (Slot_UsedUndef | Slot_StaticUndef)) == 0 && (flags & Slot_AssignedOnce) != 0
 end
 
 function scan_expr_use!(infomap, body, i, ex, src)
@@ -7429,7 +7429,7 @@ function verify_value_infomap(ctx::AllocOptContext)
                 @check_ast(ctx, assign.args[1] === slotv)
             end
         end
-        if ctx.sv.src.slotflags[i] & Slot_AssignedOnce != 0
+        if (ctx.sv.src.slotflags[i] & Slot_AssignedOnce) != 0
             @check_ast(ctx, ndef <= 1)
         end
         for use in info.uses

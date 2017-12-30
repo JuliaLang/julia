@@ -657,7 +657,7 @@ if Core.sizeof(Int) == 4
         w2 = reinterpret(Int64, t) >> 32
         w1 = u0 * reinterpret(UInt64, v1) + (t & 0xffffffff)
         hi = u1 * v1 + w2 + (reinterpret(Int64, w1) >> 32)
-        lo = w0 & 0xffffffff + (w1 << 32)
+        lo = (w0 & 0xffffffff) + (w1 << 32)
         return Int128(hi) << 64 + Int128(lo)
     end
 
@@ -672,7 +672,7 @@ if Core.sizeof(Int) == 4
         w2 = t >>> 32
         w1 = u0 * v1 + (t & 0xffffffff)
         hi = u1 * v1 + w2 + (w1 >>> 32)
-        lo = w0 & 0xffffffff + (w1 << 32)
+        lo = (w0 & 0xffffffff) + (w1 << 32)
         return UInt128(hi) << 64 + UInt128(lo)
     end
 
