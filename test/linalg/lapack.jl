@@ -4,6 +4,8 @@ using Test
 
 import Base.LinAlg.BlasInt
 
+
+
 @test_throws ArgumentError Base.LinAlg.LAPACK.chkuplo('Z')
 @test_throws ArgumentError Base.LinAlg.LAPACK.chkside('Z')
 @test_throws ArgumentError Base.LinAlg.LAPACK.chkdiag('Z')
@@ -429,6 +431,11 @@ end
         @test_throws DimensionMismatch LAPACK.tgsen!(zeros(BlasInt,10),Z,Z,Z,zeros(elty,11,11))
         @test_throws DimensionMismatch LAPACK.trsyl!('N','N',Z,Z,zeros(elty,11,11))
         @test_throws DimensionMismatch LAPACK.tzrzf!(zeros(elty,10,5))
+
+        A = triu(rand(elty,4,4))
+        V = view(A, 1:2, :)
+        M = Matrix(V)
+        @test LAPACK.tzrzf!(V) == LAPACK.tzrzf!(M)
     end
 end
 
