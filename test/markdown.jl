@@ -1082,14 +1082,14 @@ t = """
 
 # test Base.copy
 let
-  md = doc"test"
-  md′ = copy(md)
-  @test length(md) == length(md′) == 1
-  push!(md, "new")
-  @test length(md) == 2
-  @test length(md′) == 1
+    md = doc"test"
+    md′ = copy(md)
+    @test length(md) == length(md′) == 1
+    push!(md, "new")
+    @test length(md) == 2
+    @test length(md′) == 1
 
-  @test !haskey(md.meta, :foo)
-  md.meta[:foo] = 42
-  @test !haskey(md′.meta, :foo)
+    @test !haskey(md.meta, :foo)
+    md.meta[:foo] = 42
+    @test !haskey(md′.meta, :foo)
 end
