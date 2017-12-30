@@ -883,11 +883,11 @@ for op in (:isfinite,)
 end
 
 convert(::Type{FloatWrapper}, x::Int) = FloatWrapper(float(x))
-promote_rule(::Type{FloatWrapper}, ::Type{Int64}) = FloatWrapper
+promote_rule(::Type{FloatWrapper}, ::Type{Int}) = FloatWrapper
 
 float(x::FloatWrapper) = x
 
-@testset "exp(Complex(a, b)) for a and b of non-standard real type" begin
+@testset "exp(Complex(a, b)) for a and b of non-standard real type #25292" begin
 
     x = FloatWrapper(3.1)
     y = FloatWrapper(4.1)
