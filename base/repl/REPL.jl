@@ -734,14 +734,12 @@ function mode_keymap(julia_prompt::Prompt)
         end
     end,
     "^C" => function (s,o...)
-        if isempty(s)
-            print(LineEdit.terminal(s), "^C\n\n")
-            transition(s, julia_prompt)
-            transition(s, :reset)
-            LineEdit.refresh_line(s)
-        else
-            LineEdit.edit_clear(s)
-        end
+        LineEdit.move_input_end(s)
+        LineEdit.refresh_line(s)
+        print(LineEdit.terminal(s), "^C\n\n")
+        transition(s, julia_prompt)
+        transition(s, :reset)
+        LineEdit.refresh_line(s)
     end)
 end
 
