@@ -3500,6 +3500,8 @@ function strides(a::AbstractArray)
     size_to_strides(1, size(a)...)
 end
 
+@deprecate substrides(s, parent, dim, I::Tuple) substrides(parent, strides(parent), I)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
