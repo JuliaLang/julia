@@ -34,6 +34,39 @@ function cleanup(r::GitRepo)
 end
 
 """
+    LibGit2.discover(
+        start_path::AbstractString = pwd();
+        ceiling::Union{AbstractString,Vector} = "",
+        across_fs::Bool = false,
+    )
+
+Look for a git repository starting with `start_path` (by default the current
+working directory), walk across parent directories. Lookup ends when the
+repository is found, or when reaching a directory referenced in `ceiling` or
+when the filesystem changes (in case `across_fs` is `false`). The `ceiling`
+keyword argument can be passed as an array of path strings or as a single string
+which is interpreted as a `:`-separated list of paths (on Windows the path
+separator is `;` instead of `:`). No ceiling directory is the default.
+"""
+function discover(
+    start_path::AbstractString = pwd();
+    ceiling::Union{AbstractString,Vector} = "",
+    across_fs::Bool = false,
+)
+    sep = @static is_windows() ? ";" : ":"
+    ceil = ceiling isa AbstractString ? ceiling :
+        join(convert(Vector{String}, ceiling), sep)
+    buf_ref = Ref(Buffer())
+    @check ccall((:git_repository_discover, :libgit2), Cint,
+                 (Ptr{Buffer}, Cstring, Cint, Cstring),
+                 buf_ref, start_path, across_fs, ceil)
+    buf = buf_ref[]
+    str = unsafe_string(buf.ptr, buf.size)
+    free(buf_ref)
+    return str
+end
+
+"""
     LibGit2.init(path::AbstractString, bare::Bool=false) -> GitRepo
 
 Open a new git repository at `path`. If `bare` is `false`,
