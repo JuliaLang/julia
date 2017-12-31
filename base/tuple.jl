@@ -239,7 +239,7 @@ end
 
 (::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
 
-_totuple(::Type{Tuple{}}, itr, s) = ()
+_totuple(::Type{Tuple{}}, itr, s...) = ()
 
 function _totuple_err(@nospecialize T)
     @_noinline_meta
@@ -250,13 +250,12 @@ function _totuple(T, itr, s...)
     @_inline_meta
     y = iterate(itr, s...)
     y === nothing && _totuple_err(T)
-    v, s = y
-    (convert(tuple_type_head(T), v), _totuple(tuple_type_tail(T), itr, s)...)
+    (convert(tuple_type_head(T), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
 end
 
-_totuple(::Type{Tuple{Vararg{E}}}, itr, s) where {E} = (collect(E, Iterators.rest(itr,s))...,)
+_totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.rest(itr,s...))...,)
 
-_totuple(::Type{Tuple}, itr, s) = (collect(Iterators.rest(itr,s))...,)
+_totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 
 end
 

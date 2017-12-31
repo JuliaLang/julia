@@ -429,6 +429,7 @@ julia> collect(Iterators.rest([1,2,3,4], 2))
 ```
 """
 rest(itr,state) = Rest(itr,state)
+rest(itr) = itr
 
 @propagate_inbounds iterate(i::Rest, st=i.st) = iterate(i.itr, st)
 done(i::Rest, st) = done(i.itr, st)

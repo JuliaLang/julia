@@ -534,7 +534,7 @@ BitArray(itr) = gen_bitarray(iteratorsize(itr), itr)
 
 # generic constructor from an iterable without compile-time info
 # (we pass start(itr) explicitly to avoid a type-instability with filters)
-gen_bitarray(isz::IteratorSize, itr) = gen_bitarray_from_itr(itr, start(itr))
+gen_bitarray(isz::IteratorSize, itr) = gen_bitarray_from_itr(itr)
 
 # generic iterable with known shape
 function gen_bitarray(::HasShape, itr)
@@ -548,11 +548,11 @@ end
 # generator with known shape or length
 function gen_bitarray(::HasShape, itr::Generator)
     B = BitArray(uninitialized, size(itr))
-    return fill_bitarray_from_itr!(B, itr, start(itr))
+    return fill_bitarray_from_itr!(B, itr)
 end
 function gen_bitarray(::HasLength, itr)
     b = BitVector(uninitialized, length(itr))
-    return fill_bitarray_from_itr!(b, itr, start(itr))
+    return fill_bitarray_from_itr!(b, itr)
 end
 
 gen_bitarray(::IsInfinite, itr) =  throw(ArgumentError("infinite-size iterable used in BitArray constructor"))
@@ -560,14 +560,15 @@ gen_bitarray(::IsInfinite, itr) =  throw(ArgumentError("infinite-size iterable u
 # The aux functions gen_bitarray_from_itr and fill_bitarray_from_itr! both
 # use a Vector{Bool} cache for performance reasons
 
-function gen_bitarray_from_itr(itr, st)
+function gen_bitarray_from_itr(itr)
     B = empty!(BitVector(uninitialized, bitcache_size))
     C = Vector{Bool}(uninitialized, bitcache_size)
     Bc = B.chunks
     ind = 1
     cind = 1
-    while !done(itr, st)
-        x, st = next(itr, st)
+    y = iterate(itr)
+    while y !== nothing
+        x, st = y
         @inbounds C[ind] = x
         ind += 1
         if ind > bitcache_size
@@ -576,6 +577,7 @@ function gen_bitarray_from_itr(itr, st)
             cind += bitcache_chunks
             ind = 1
         end
+        y = iterate(x, st)
     end
     if ind > 1
         @inbounds C[ind:bitcache_size] = false
@@ -585,14 +587,15 @@ function gen_bitarray_from_itr(itr, st)
     return B
 end
 
-function fill_bitarray_from_itr!(B::BitArray, itr, st)
+function fill_bitarray_from_itr!(B::BitArray, itr)
     n = length(B)
     C = Vector{Bool}(uninitialized, bitcache_size)
     Bc = B.chunks
     ind = 1
     cind = 1
-    while !done(itr, st)
-        x, st = next(itr, st)
+    y = iterate(itr)
+    while y !== nothing
+        x, st = y
         @inbounds C[ind] = x
         ind += 1
         if ind > bitcache_size
@@ -600,6 +603,7 @@ function fill_bitarray_from_itr!(B::BitArray, itr, st)
             cind += bitcache_chunks
             ind = 1
         end
+        y = iterate(itr, st)
     end
     if ind > 1
         @inbounds C[ind:bitcache_size] = false

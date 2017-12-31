@@ -697,7 +697,7 @@ f20267(x::T20267{T}, y::T) where (T) = f20267(Any[1][1], x.inds)
 # issue #20615
 let A = 1:2, z = zip(A, A, A, A, A, A, A, A, A, A, A, A)
     @test z isa Core.Inference.limit_type_depth(typeof(z), 0)
-    @test start(z) == (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, 1)))))))))))
+    @test iterate(z)[2] == (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, 1)))))))))))
 end
 # introduce TypeVars in Unions in invariant position
 let T = Val{Val{Val{Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64}}}}

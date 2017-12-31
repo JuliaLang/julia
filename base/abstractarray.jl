@@ -1972,8 +1972,7 @@ function hash(a::AbstractArray{T}, h::UInt) where T
     y2 == nothing && return hash(y1[1], h)
     y = iterate(a, y2[2])
     y == nothing && return hash(y2[1], hash(y1[1], h))
-    x1 = y1[1]
-    x2, state = y
+    x1, x2 = y1[1], y2[1]
 
     # Check whether the array is equal to a range, and hash the elements
     # at the beginning of the array as such as long as they match this assumption
@@ -1983,7 +1982,6 @@ function hash(a::AbstractArray{T}, h::UInt) where T
         n = 1
         local step, laststep, laststate
         while y !== nothing
-            x2, state = y
             # If overflow happens with entries of the same type, a cannot be equal
             # to a range with more than two elements because more extreme values
             # cannot be represented. We must still hash the two first values as a
@@ -2003,48 +2001,46 @@ function hash(a::AbstractArray{T}, h::UInt) where T
             end
             n > 1 && !isequal(step, laststep) && break
             n += 1
-            x1 = x2
             laststep = step
-            laststate = state
-            y = iterate(a, state)
+            x1, x2 = x2, y[1]
+            y = iterate(a, y[2])
         end
 
-        h = hash(first(a), h)
+        h = hash(y1[1], h)
         h += hashr_seed
         # Always hash at least the two first elements as a range (even in case of overflow)
         if n < 2
             h = hash(2, h)
-            h = hash(x2, h)
-            y = iterate(a, y[2])
-            y == nothing && return h
+            h = hash(y2[1], h)
+            @assert y !== nothing
             x1 = x2
             x2, state = y
         else
-            h = hash(n, h)
-            h = hash(x1, h)
+            h = hash(n+1, h)
+            h = hash(x2, h)
             y == nothing && return h
         end
     end
 
     # Hash elements which do not correspond to a range (if any)
     while y !== nothing
-        x2, state = y
         if isequal(x2, x1)
             # For repeated elements, use run length encoding
             # This allows efficient hashing of sparse arrays
             runlength = 2
             while y !== nothing
-                x2, state = y
+                x2 = y[1]
                 isequal(x1, x2) || break
                 runlength += 1
-                y = iterate(a, state)
+                y = iterate(a, y[2])
             end
             h += hashrle_seed
             h = hash(runlength, h)
         end
         h = hash(x1, h)
-        x1 = x2
-        y = iterate(a, state)
+        y == nothing && break
+        x1, x2 = x2, y[1]
+        y = iterate(a, y[2])
     end
     !isequal(x2, x1) && (h = hash(x2, h))
     return h

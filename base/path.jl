@@ -337,8 +337,9 @@ if Sys.iswindows()
 expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
 else
 function expanduser(path::AbstractString)
-    if done(path) return path end
-    c, i = iterate(path,i)
+    y = iterate(path)
+    y === nothing && return path
+    c, i = y
     if c != '~' return path end
     y = iterate(path, i)
     if y == nothing return homedir() end

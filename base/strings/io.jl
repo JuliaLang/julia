@@ -214,10 +214,10 @@ function join(io::IO, strings, delim, last)
     y == nothing && return
     str, i = y
     print(io, str)
-    y = iterate(strings)
+    y = iterate(strings, i)
     while y !== nothing
         str, i = y
-        y = iterate(strings,i)
+        y = iterate(strings, i)
         print(io, y == nothing ? last : delim)
         print(io, str)
     end

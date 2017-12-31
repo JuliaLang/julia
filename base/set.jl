@@ -332,11 +332,9 @@ function unique(itr)
     T = @default_eltype(itr)
     out = Vector{T}()
     seen = Set{T}()
-    i = start(itr)
-    if done(itr, i)
-        return out
-    end
-    x, i = next(itr, i)
+    y = iterate(itr)
+    y === nothing && return out
+    x, i = y
     if !_isleaftype(T) && iteratoreltype(itr) == EltypeUnknown()
         S = typeof(x)
         return _unique_from(itr, S[x], Set{S}((x,)), i)
@@ -348,8 +346,10 @@ end
 
 _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
 @inline function unique_from(itr, out::Vector{T}, seen, i) where T
-    while !done(itr, i)
-        x, i = next(itr, i)
+    while true
+        y = iterate(itr, i)
+        y === nothing && break
+        x, i = y
         S = typeof(x)
         if !(S === T || S <: T)
             R = typejoin(S, T)
