@@ -491,3 +491,22 @@ end
         @test Iterators.reverse(Iterators.reverse(t)) === t
     end
 end
+
+struct Itr18823
+    pred::Function
+    rng::AbstractRNG
+    Itr18823(pred::Function) = new(pred, MersenneTwister())
+end
+
+Base.start(itr::Itr18823) = nothing
+Base.done(itr::Itr18823, state::Void) = false
+
+function Base.next(itr::Itr18823, state::Void)
+    x = rand(itr.rng)
+    itr.pred(x) || return nothing
+    return x, nothing
+end
+
+@testset "zero look-ahead iterators" begin
+    @test all(x -> x ≥ 0.01, Itr18823(x -> x ≥ 0.01))
+end
