@@ -903,6 +903,31 @@ function show_generator(io, ex, indent)
     end
 end
 
+function show_import_path(io::IO, ex)
+    if !isa(ex, Expr)
+        print(io, ex)
+    elseif ex.head === :(:)
+        show_import_path(io, ex.args[1])
+        print(io, ": ")
+        for i = 2:length(ex.args)
+            if i > 2
+                print(io, ", ")
+            end
+            show_import_path(io, ex.args[i])
+        end
+    elseif ex.head === :(.)
+        print(io, ex.args[1])
+        for i = 2:length(ex.args)
+            if ex.args[i-1] != :(.)
+                print(io, '.')
+            end
+            print(io, ex.args[i])
+        end
+    else
+        show_unquoted(io, ex)
+    end
+end
+
 # TODO: implement interpolated strings
 function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     head, args, nargs = ex.head, ex.args, length(ex.args)
@@ -1251,17 +1276,14 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     elseif head === :import || head === :using
         print(io, head)
+        print(io, ' ')
         first = true
-        for a = args
-            if first
-                print(io, ' ')
-                first = false
-            else
-                print(io, '.')
+        for a in args
+            if !first
+                print(io, ", ")
             end
-            if a !== :.
-                print(io, a)
-            end
+            first = false
+            show_import_path(io, a)
         end
     elseif head === :meta && length(args) >= 2 && args[1] === :push_loc
         print(io, "# meta: location ", join(args[2:end], " "))
@@ -1573,8 +1595,6 @@ end
 const DUMP_DEFAULT_MAXDEPTH = 8
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-dump(io::IO, x::DataType; maxdepth=DUMP_DEFAULT_MAXDEPTH) = ((x.abstract ? dumptype : dump)(io, x, maxdepth, ""); println(io))
-
 dump(io::IO, arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = (dump(io, arg, maxdepth, ""); println(io))
 
 """

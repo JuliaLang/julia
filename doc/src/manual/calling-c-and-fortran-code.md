@@ -259,7 +259,7 @@ arbitrary new object more appropriate for passing to C.
 This should be used to perform all allocations of memory that will be accessed by the C code.
 For example, this is used to convert an `Array` of objects (e.g. strings) to an array of pointers.
 
-[`Base.unsafe_convert`](@ref) handles conversion to `Ptr` types. It is considered unsafe because
+[`Base.unsafe_convert`](@ref) handles conversion to [`Ptr`](@ref) types. It is considered unsafe because
 converting an object to a native pointer can hide the object from the garbage collector, causing
 it to be freed prematurely.
 
@@ -483,7 +483,7 @@ unsafe_string(str + Core.sizeof(Cint), len)
 
 ### Type Parameters
 
-The type arguments to `ccall` are evaluated statically, when the method containing the ccall is defined.
+The type arguments to `ccall` are evaluated statically, when the method containing the `ccall` is defined.
 They therefore must take the form of a literal tuple, not a variable, and cannot reference local variables.
 
 This may sound like a strange restriction,
@@ -546,7 +546,7 @@ work on hosts without AVX support.
 
 Memory allocation and deallocation of such objects must be handled by calls to the appropriate
 cleanup routines in the libraries being used, just like in any C program. Do not try to free an
-object received from a C library with `Libc.free` in Julia, as this may result in the `free` function
+object received from a C library with [`Libc.free`](@ref) in Julia, as this may result in the `free` function
 being called via the wrong `libc` library and cause Julia to crash. The reverse (passing an object
 allocated in Julia to be freed by an external library) is equally invalid.
 
@@ -554,10 +554,10 @@ allocated in Julia to be freed by an external library) is equally invalid.
 
 In Julia code wrapping calls to external C routines, ordinary (non-pointer) data should be declared
 to be of type `T` inside the [`ccall`](@ref), as they are passed by value.  For C code accepting
-pointers, `Ref{T}` should generally be used for the types of input arguments, allowing the use
+pointers, [`Ref{T}`](@ref) should generally be used for the types of input arguments, allowing the use
 of pointers to memory managed by either Julia or C through the implicit call to [`Base.cconvert`](@ref).
  In contrast, pointers returned by the C function called should be declared to be of output type
-`Ptr{T}`, reflecting that the memory pointed to is managed by C only. Pointers contained in C
+[`Ptr{T}`](@ref), reflecting that the memory pointed to is managed by C only. Pointers contained in C
 structs should be represented as fields of type `Ptr{T}` within the corresponding Julia struct
 types designed to mimic the internal structure of corresponding C structs.
 
@@ -660,7 +660,7 @@ For translating a C return type to Julia:
 
 Because C doesn't support multiple return values, often C functions will take pointers to data
 that the function will modify. To accomplish this within a [`ccall`](@ref), you need to first
-encapsulate the value inside an `Ref{T}` of the appropriate type. When you pass this `Ref` object
+encapsulate the value inside a [`Ref{T}`](@ref) of the appropriate type. When you pass this `Ref` object
 as an argument, Julia will automatically pass a C pointer to the encapsulated data:
 
 ```julia
@@ -831,7 +831,7 @@ it must be handled in other ways.
 ## Non-constant Function Specifications
 
 A `(name, library)` function specification must be a constant expression. However, it is possible
-to use computed values as function names by staging through `eval` as follows:
+to use computed values as function names by staging through [`eval`](@ref) as follows:
 
 ```
 @eval ccall(($(string("a", "b")), "lib"), ...
@@ -907,7 +907,7 @@ err = ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
 
 For more information, please see the [LLVM Language Reference](http://llvm.org/docs/LangRef.html#calling-conventions).
 
-There is one additional special calling convention `llvmcall`,
+There is one additional special calling convention [`llvmcall`](@ref Base.llvmcall),
 which allows inserting calls to LLVM intrinsics directly.
 This can be especially useful when targeting unusual platforms such as GPGPUs.
 For example, for [CUDA](http://llvm.org/docs/NVPTXUsage.html), we need to be able to read the thread index:
@@ -979,7 +979,7 @@ on the element types of pointers.
 Some C libraries execute their callbacks from a different thread, and since Julia isn't thread-safe
 you'll need to take some extra precautions. In particular, you'll need to set up a two-layered
 system: the C callback should only *schedule* (via Julia's event loop) the execution of your "real"
-callback. To do this, create a `AsyncCondition` object and wait on it:
+callback. To do this, create an [`AsyncCondition`](@ref Base.AsyncCondition) object and [`wait`](@ref) on it:
 
 ```julia
 cond = Base.AsyncCondition()

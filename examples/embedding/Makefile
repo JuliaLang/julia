@@ -46,7 +46,7 @@ $(BIN)/LocalModule.jl: $(SRCDIR)/LocalModule.jl
 endif
 
 check: $(BIN)/embedding$(EXE) $(BIN)/LocalModule.jl
-	$(JULIA) $(SRCDIR)/embedding-test.jl $<
+	$(JULIA) --depwarn=error $(SRCDIR)/embedding-test.jl $<
 	@echo SUCCESS
 
 clean:

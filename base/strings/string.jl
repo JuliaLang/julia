@@ -162,7 +162,7 @@ function next_continued(s::String, i::Int, u::UInt32)
     u < 0xc0000000 && (i += 1; @goto ret)
     n = ncodeunits(s)
     # first continuation byte
-    (i += 1) > n && @goto ret
+    (i += 1) > n && @goto ret
     @inbounds b = codeunit(s, i)
     b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b) << 16

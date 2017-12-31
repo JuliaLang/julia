@@ -953,7 +953,7 @@ for (line, expr) in Pair[
     "\"...\""      => "...",
     "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
     ]
-    @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(118, doc_util_path), STDOUT, expr)
+    @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(116, doc_util_path), STDOUT, expr)
     buf = IOBuffer()
     @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Nothing}
 end
@@ -987,6 +987,7 @@ dynamic_test.x = "test 2"
 
 @test Docs._repl(:(dynamic_test(1.0))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(199, doc_util_path), :(dynamic_test(::typeof(1.0)))))
 @test Docs._repl(:(dynamic_test(::String))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(199, doc_util_path), :(dynamic_test(::String))))
+
 
 
 # Equality testing
@@ -1082,3 +1083,7 @@ catch e
 end
     @test ex.line == 2
 end
+
+struct t_docs_abc end
+@test "t_docs_abc" in Docs.accessible(@__MODULE__)
+

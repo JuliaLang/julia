@@ -57,6 +57,7 @@ include("reduce.jl")
 include("bitarray.jl")
 include("bitset.jl")
 include("abstractdict.jl")
+include("iterators.jl")
 include("namedtuple.jl")
 
 # core docsystem

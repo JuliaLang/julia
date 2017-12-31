@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Iterators.Enumerate
+using Base.Iterators: Enumerate
 
 """
     asyncmap(f, c...; ntasks=0, batch_size=nothing)

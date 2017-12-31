@@ -2,7 +2,8 @@
 
 module Sort
 
-using Base: Order, Checked, copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length
+using Base.Order, Base.Checked
+using Base: copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length
 
 import
     Base.sort,

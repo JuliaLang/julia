@@ -103,9 +103,7 @@ function helpmode(io::IO, line::AbstractString)
             # keyword such as `function` would throw a parse error due to the missing `end`.
             Symbol(line)
         else
-            x = Base.syntax_deprecation_warnings(false) do
-                Meta.parse(line, raise = false)
-            end
+            x = Meta.parse(line, raise = false, depwarn = false)
             # Retrieving docs for macros requires us to make a distinction between the text
             # `@macroname` and `@macroname()`. These both parse the same, but are used by
             # the docsystem to return different results. The first returns all documentation
@@ -354,7 +352,7 @@ moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 filtervalid(names) = filter(x->!ismatch(r"#", x), map(string, names))
 
 accessible(mod::Module) =
-    [filter!(s->Base.isdeprecated(mod, s), names(mod, true, true));
+    [filter!(s -> !Base.isdeprecated(mod, s), names(mod, true, true));
      map(names, moduleusings(mod))...;
      builtins] |> unique |> filtervalid
 

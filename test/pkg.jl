@@ -63,6 +63,7 @@ temp_pkg_dir() do
     end
 
     @test_throws PkgError Pkg.installed("MyFakePackage")
+    @test_throws PkgError Pkg.status("MyFakePackage")
     @test Pkg.installed("Example") === nothing
 
     # Check that setprotocol! works.

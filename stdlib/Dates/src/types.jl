@@ -94,13 +94,15 @@ machine instant. `Time`, `DateTime` and `Date` are subtypes of `TimeType`.
 """
 abstract type TimeType <: AbstractTime end
 
+abstract type AbstractDateTime <: TimeType end
+
 """
     DateTime
 
 `DateTime` wraps a `UTInstant{Millisecond}` and interprets it according to the proleptic
 Gregorian calendar.
 """
-struct DateTime <: TimeType
+struct DateTime <: AbstractDateTime
     instant::UTInstant{Millisecond}
     DateTime(instant::UTInstant{Millisecond}) = new(instant)
 end

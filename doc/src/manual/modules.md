@@ -42,11 +42,13 @@ the system will search for it among variables exported by `Lib` and import it if
 This means that all uses of that global within the current module will resolve to the definition
 of that variable in `Lib`.
 
-The statement `using BigLib: thing1, thing2` is a syntactic shortcut for `using BigLib.thing1, BigLib.thing2`.
+The statement `using BigLib: thing1, thing2` brings just the identifiers `thing1` and `thing2`
+into scope from module `BigLib`. If these names refer to functions, adding methods to them
+will not be allowed (you may only "use" them, not extend them).
 
-The `import` keyword supports all the same syntax as `using`, but only operates on a single name
+The `import` keyword supports the same syntax as `using`, but only operates on a single name
 at a time. It does not add modules to be searched the way `using` does. `import` also differs
-from `using` in that functions must be imported using `import` to be extended with new methods.
+from `using` in that functions imported using `import` can be extended with new methods.
 
 In `MyModule` above we wanted to add a method to the standard `show` function, so we had to write
 `import Base.show`. Functions whose names are only visible via `using` cannot be extended.
@@ -79,7 +81,6 @@ functions into the current workspace:
 | Import Command                  | What is brought into scope                                                      | Available for method extension              |
 |:------------------------------- |:------------------------------------------------------------------------------- |:------------------------------------------- |
 | `using MyModule`                | All `export`ed names (`x` and `y`), `MyModule.x`, `MyModule.y` and `MyModule.p` | `MyModule.x`, `MyModule.y` and `MyModule.p` |
-| `using MyModule.x, MyModule.p`  | `x` and `p`                                                                     |                                             |
 | `using MyModule: x, p`          | `x` and `p`                                                                     |                                             |
 | `import MyModule`               | `MyModule.x`, `MyModule.y` and `MyModule.p`                                     | `MyModule.x`, `MyModule.y` and `MyModule.p` |
 | `import MyModule.x, MyModule.p` | `x` and `p`                                                                     | `x` and `p`                                 |

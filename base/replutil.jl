@@ -322,7 +322,7 @@ function showerror(io::IO, ex::MethodError)
     ft = typeof(f)
     name = ft.name.mt.name
     f_is_function = false
-    kwargs = NamedTuple()
+    kwargs = ()
     if startswith(string(ft.name.name), "#kw#")
         f = ex.args[2]
         ft = typeof(f)
@@ -372,7 +372,7 @@ function showerror(io::IO, ex::MethodError)
         end
         if !isempty(kwargs)
             print(io, "; ")
-            for (i, (k, v)) in enumerate(pairs(kwargs))
+            for (i, (k, v)) in enumerate(kwargs)
                 print(io, k, "=")
                 show(IOContext(io, :limit => true), v)
                 i == length(kwargs) || print(io, ", ")
@@ -452,7 +452,7 @@ function showerror_nostdio(err, msg::AbstractString)
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, "\n")
 end
 
-function show_method_candidates(io::IO, ex::MethodError, kwargs::NamedTuple = NamedTuple())
+function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
     arg_types_param = Any[arg_types.parameters...]
@@ -583,7 +583,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::NamedTuple = Na
                 if !isempty(kwargs)
                     unexpected = Symbol[]
                     if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
-                        for (k, v) in pairs(kwargs)
+                        for (k, v) in kwargs
                             if !(k in kwords)
                                 push!(unexpected, k)
                             end

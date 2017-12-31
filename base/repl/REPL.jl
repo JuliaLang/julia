@@ -657,9 +657,7 @@ end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 function return_callback(s)
-    ast = Base.syntax_deprecation_warnings(false) do
-        Base.parse_input_line(String(take!(copy(LineEdit.buffer(s)))))
-    end
+    ast = Base.parse_input_line(String(take!(copy(LineEdit.buffer(s)))), depwarn=false)
     if  !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
         return true
     else
@@ -736,14 +734,12 @@ function mode_keymap(julia_prompt::Prompt)
         end
     end,
     "^C" => function (s,o...)
-        if isempty(s)
-            print(LineEdit.terminal(s), "^C\n\n")
-            transition(s, julia_prompt)
-            transition(s, :reset)
-            LineEdit.refresh_line(s)
-        else
-            LineEdit.edit_clear(s)
-        end
+        LineEdit.move_input_end(s)
+        LineEdit.refresh_line(s)
+        print(LineEdit.terminal(s), "^C\n\n")
+        transition(s, julia_prompt)
+        transition(s, :reset)
+        LineEdit.refresh_line(s)
     end)
 end
 
@@ -932,9 +928,7 @@ function setup_interface(
                         continue
                     end
                 end
-                ast, pos = Base.syntax_deprecation_warnings(false) do
-                    Meta.parse(input, oldpos, raise=false)
-                end
+                ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
                 if (isa(ast, Expr) && (ast.head == :error || ast.head == :continue || ast.head == :incomplete)) ||
                         (done(input, pos) && !endswith(input, '\n'))
                     # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):

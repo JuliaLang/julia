@@ -462,6 +462,7 @@ extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle,
                                                jl_value_t *data);
 JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f);
+void jl_uv_flush(uv_stream_t *stream);
 
 typedef struct _typeenv {
     jl_tvar_t *var;
@@ -980,6 +981,14 @@ JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a);
 JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n);
 void jl_depwarn(const char *msg, jl_value_t *sym);
 
+// Log `msg` to the current logger by calling CoreLogging.logmsg_shim() on the
+// julia side. If any of module, group, id, file or line are NULL, these will
+// be passed to the julia side as `nothing`.  If `kwargs` is NULL an empty set
+// of keyword arguments will be passed.
+void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
+            jl_value_t *file, jl_value_t *line, jl_value_t *kwargs,
+            jl_value_t *msg);
+
 int isabspath(const char *in);
 
 extern jl_sym_t *call_sym;    extern jl_sym_t *invoke_sym;
@@ -1001,7 +1010,7 @@ extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
 extern jl_sym_t *compiler_temp_sym; extern jl_sym_t *foreigncall_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
-extern jl_sym_t *underscore_sym;
+extern jl_sym_t *underscore_sym; extern jl_sym_t *colon_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *primtype_sym;
 extern jl_sym_t *structtype_sym;
 extern jl_sym_t *global_sym; extern jl_sym_t *unused_sym;

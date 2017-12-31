@@ -3,7 +3,7 @@
 module dSFMT
 
 import Base: copy, copy!, ==, hash
-using Base.GMP: MPZ
+using Base.GMP.MPZ
 
 export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_init_gen_rand, dsfmt_init_by_array, dsfmt_gv_init_by_array,
