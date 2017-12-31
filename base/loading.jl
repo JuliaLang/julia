@@ -199,6 +199,8 @@ function find_env(env::CurrentEnv, dir::AbstractString = pwd())
     end
 end
 
+find_env(env::Function) = find_env(env())
+
 load_path() = filter(env -> env != nothing, map(find_env, LOAD_PATH))
 
 package_entry_points(path::AbstractString, name::AbstractString) = [
