@@ -120,7 +120,7 @@ clean-libgit2:
 	-rm $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
 
-get-libgit2: $(LIBGIT2_SRC_FILE)
+get-libgit2: $(LIBGIT2_SRC_FILE) $(build_datarootdir)/julia/cert.pem
 extract-libgit2: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted
 configure-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
 compile-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
