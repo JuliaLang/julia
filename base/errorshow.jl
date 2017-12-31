@@ -227,6 +227,10 @@ function showerror(io::IO, ex::MethodError)
         end
         print(io, ")")
     end
+    if f_is_function && ( name == :length || name == :size )
+        print(io, "\nYou may consider implementing additional iterator methods",
+                  "\nsuch as a specialized `length` or `size`.")
+    end
     if ft <: AbstractArray
         print(io, "\nUse square brackets [] for indexing an Array.")
     end
