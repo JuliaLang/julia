@@ -331,17 +331,12 @@ function iterate(itr::AsyncCollector)
     return iterate(itr, AsyncCollectorState(chnl, worker_tasks))
 end
 
-function check_done(itr::AsyncCollector, state::AsyncCollectorState)
-    if !isopen(state.chnl) || done(itr.enumerator, state.enum_state)
-        close(state.chnl)
+function wait_done(itr::AsyncCollector, state::AsyncCollectorState)
+    close(state.chnl)
 
-        # wait for all tasks to finish
-        foreach(x->(v=wait(x); isa(v, Exception) && throw(v)), state.worker_tasks)
-        empty!(state.worker_tasks)
-        return true
-    else
-        return false
-    end
+    # wait for all tasks to finish
+    foreach(x->(v=wait(x); isa(v, Exception) && throw(v)), state.worker_tasks)
+    empty!(state.worker_tasks)
 end
 
 function iterate(itr::AsyncCollector, state::AsyncCollectorState)
@@ -353,7 +348,10 @@ function iterate(itr::AsyncCollector, state::AsyncCollectorState)
     y = isdefined(state, :enum_state) ?
         iterate(itr.enumerator, state.enum_state) :
         iterate(itr.enumerator)
-    y == nothing && return nothing
+    if y == nothing
+        wait_done(itr, state)
+        return nothing
+    end
     (i, args), state.enum_state = y
     put!(state.chnl, (i, args))
 
@@ -383,25 +381,28 @@ end
 
 mutable struct AsyncGeneratorState
     i::Int
+    collector_done::Bool
     collector_state::AsyncCollectorState
-    AsyncGeneratorState(i::Int) = new(0)
+    AsyncGeneratorState(i::Int) = new(i, false)
 end
 
 function iterate(itr::AsyncGenerator, state::AsyncGeneratorState=AsyncGeneratorState(0))
     state.i += 1
 
     results_dict = itr.collector.results
-    while !haskey(results_dict, state.i)
-        if check_done(itr.collector, state.collector_state)
-            # `check_done` waits for async tasks to finish. if we do not have the index
-            # we are looking for, it is an error.
-            !haskey(results_dict, state.i) && error("Error processing index ", i)
-            break;
-        end
-        _, state.collector_state = isdefined(state, :collector_state) ?
+    while !state.collector_done && !haskey(results_dict, state.i)
+        y = isdefined(state, :collector_state) ?
             iterate(itr.collector, state.collector_state) :
             iterate(itr.collector)
+        if y == nothing
+            # `check_done` waits for async tasks to finish. if we do not have the index
+            # we are looking for, it is an error.
+            state.collector_done = true
+            break;
+        end
+        _, state.collector_state = y
     end
+    state.collector_done && isempty(results_dict) && return nothing
     r = results_dict[state.i]
     delete!(results_dict, state.i)
 

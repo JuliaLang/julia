@@ -256,13 +256,18 @@ julia> collect(c)
 """
 function head_and_tail(c, n)
     head = Vector{eltype(c)}(uninitialized, n)
-    s = start(c)
-    i = 0
-    while i < n && !done(c, s)
+    n == 0 && return (head, c)
+    i = 1
+    y = iterate(c)
+    y == nothing && return (resize!(head, 0), ())
+    head[i] = y[1]
+    while i < n
+        y = iterate(c, y[2])
+        y == nothing && return (resize!(head, i), ())
         i += 1
-        head[i], s = next(c, s)
+        head[i] = y[1]
     end
-    return resize!(head, i), Iterators.rest(c, s)
+    return head, Iterators.rest(c, s)
 end
 
 """
