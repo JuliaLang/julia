@@ -361,7 +361,7 @@ end
 
 # Log a message. Called from the julia C code; kwargs is in the format
 # Any[key1,val1, ...] for simplicity in construction on the C side.
-function logmsg_thunk(level, message, _module, group, id, file, line, kwargs)
+function logmsg_shim(level, message, _module, group, id, file, line, kwargs)
     real_kws = Any[(kwargs[i],kwargs[i+1]) for i in 1:2:length(kwargs)]
     @logmsg(convert(LogLevel, level), message,
             _module=_module, _id=id, _group=group,
