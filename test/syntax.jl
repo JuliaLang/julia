@@ -837,7 +837,7 @@ let f = function (x; kw...)
     g = function (x; a = 2)
             return (x, a)
         end
-    @test f(1) == (1, NamedTuple())
+    @test f(1) == (1, pairs(NamedTuple()))
     @test g(1) == (1, 2)
 end
 
