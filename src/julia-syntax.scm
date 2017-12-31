@@ -687,7 +687,10 @@
          (any-ctor
           ;; definition with Any for all arguments
           `(function ,(with-wheres
-                       `(call (curly ,name ,@params) ,@field-names)
+                       `(call ,(if (pair? params)
+                                   `(curly ,name ,@params)
+                                   name)
+                              ,@field-names)
                        (map (lambda (b) (cons 'var-bounds b)) bounds))
                      (block
                       ,@locs
@@ -768,29 +771,6 @@
         ((length= lno 3) (string " around " (caddr lno) ":" (cadr lno)))
         (else "")))
 
-(define (ctor-signature name params bounds method-params sig)
-  (if (null? params)
-      (if (null? method-params)
-          (cons `(call (|::| (curly (core Type) ,name)) ,@sig)
-                params)
-          (cons `(call (curly (|::| (curly (core Type) ,name)) ,@method-params) ,@sig)
-                params))
-      (if (null? method-params)
-          (cons `(call (curly (|::| (curly (core Type) (curly ,name ,@params)))
-                              ,@(map (lambda (b) (cons 'var-bounds b)) bounds))
-                       ,@sig)
-                params)
-          ;; rename parameters that conflict with user-written method parameters
-          (let ((new-params (map (lambda (p) (if (memq p method-params)
-                                                 (gensy)
-                                                 p))
-                                 params)))
-            (cons `(call (curly (|::| (curly (core Type) (curly ,name ,@new-params)))
-                                ,@(map (lambda (n b) (list* 'var-bounds n (cdr b))) new-params bounds)
-                                ,@method-params)
-                         ,@sig)
-                  new-params)))))
-
 (define (ctor-def name Tname params bounds sig ctor-body body wheres)
   (let* ((curly?     (and (pair? name) (eq? (car name) 'curly)))
          (curlyargs  (if curly? (cddr name) '()))
@@ -804,22 +784,13 @@
                       ;; pass '() in order to require user-specified parameters with
                       ;; new{...} inside a non-ctor inner definition.
                       ,(ctor-body body '())))
-          (wheres
+          (else
            `(function ,(with-wheres `(call ,(if curly?
                                                 `(curly ,name ,@curlyargs)
                                                 name)
                                            ,@sig)
                                     wheres)
-                      ,(ctor-body body curlyargs)))
-          (else
-           (let* ((temp   (ctor-signature name params bounds curlyargs sig))
-                  (sig    (car temp))
-                  (params (cdr temp)))
-             (if (pair? params)
-                 (syntax-deprecation (string "inner constructor " name "(...)" )
-                                     (deparse `(where (call (curly ,name ,@params) ...) ,@params))
-                                     (function-body-lineno body)))
-             `(function ,sig ,(ctor-body body params)))))))
+                      ,(ctor-body body curlyargs))))))
 
 (define (function-body-lineno body)
   (let ((lnos (filter (lambda (e) (and (pair? e) (eq? (car e) 'line)))
@@ -1315,7 +1286,7 @@
           (else
            (error "invalid \"try\" form")))))
 
-(define (expand-typealias name type-ex)
+(define (expand-unionall-def name type-ex)
   (if (and (pair? name)
            (eq? (car name) 'curly))
       (let ((name   (cadr name))
@@ -1908,8 +1879,6 @@
      (syntax-deprecation ":type expression head" ":struct" #f)
      (expand-struct-def e))
    'try            expand-try
-   ;; deprecated in 0.6
-   'typealias      (lambda (e) (expand-typealias (cadr e) (caddr e)))
 
    'lambda
    (lambda (e)
@@ -1964,7 +1933,7 @@
        (expand-forms (assignment-to-function lhs e)))
       ((and (pair? lhs)
             (eq? (car lhs) 'curly))
-       (expand-typealias (cadr e) (caddr e)))
+       (expand-unionall-def (cadr e) (caddr e)))
       ((assignment? (caddr e))
        ;; chain of assignments - convert a=b=c to `b=c; a=c`
        (let loop ((lhss (list lhs))
@@ -2220,11 +2189,6 @@
             (expand-forms (lower-named-tuple (cdr e))))
            (else
             (expand-forms `(call (core tuple) ,@(cdr e))))))
-
-   '=>
-   (lambda (e)
-     (syntax-deprecation "Expr(:(=>), ...)" "Expr(:call, :(=>), ...)" #f)
-     (expand-forms `(call => ,@(cdr e))))
 
    'braces    (lambda (e) (error "{ } vector syntax is discontinued"))
    'bracescat (lambda (e) (error "{ } matrix syntax is discontinued"))
