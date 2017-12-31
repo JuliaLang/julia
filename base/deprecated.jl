@@ -1767,14 +1767,56 @@ end
 # are deprecated in base/libgit2/types.jl.
 
 # deprecate ones/zeros methods accepting an array as first argument
-@deprecate ones(a::AbstractArray, ::Type{T}, dims::Tuple) where {T} fill!(similar(a, T, dims), one(T))
-@deprecate ones(a::AbstractArray, ::Type{T}, dims...) where {T}     fill!(similar(a, T, dims...), one(T))
-@deprecate ones(a::AbstractArray, ::Type{T}) where {T}              fill!(similar(a, T), one(T))
-@deprecate ones(a::AbstractArray)                                   fill!(similar(a), one(eltype(a)))
-@deprecate zeros(a::AbstractArray, ::Type{T}, dims::Tuple) where {T}  fill!(similar(a, T, dims), zero(T))
-@deprecate zeros(a::AbstractArray, ::Type{T}, dims...) where {T}      fill!(similar(a, T, dims...), zero(T))
-@deprecate zeros(a::AbstractArray, ::Type{T}) where {T}               fill!(similar(a, T), zero(T))
-@deprecate zeros(a::AbstractArray)                                    fill!(similar(a), zero(eltype(a)))
+function ones(a::AbstractArray, ::Type{T}, dims::Tuple) where {T}
+    depwarn(string("`ones(a::AbstractArray, ::Type{T}, dims::Tuple) where T` is ",
+        "deprecated, use `fill!(similar(a, T, dims), 1)` instead, or ",
+        "`fill!(similar(a, T, dims), one(T))` where necessary."), :ones)
+    return fill!(similar(a, T, dims), one(T))
+end
+function ones(a::AbstractArray, ::Type{T}, dims...) where {T}
+    depwarn(string("`ones(a::AbstractArray, ::Type{T}, dims...) where T` is ",
+        "deprecated, use `fill!(similar(a, T, dims...), 1)` instead, or ",
+        "`fill!(similar(a, T, dims...), one(T))` where necessary."), :ones)
+    return fill!(similar(a, T, dims...), one(T))
+end
+function ones(a::AbstractArray, ::Type{T}) where {T}
+    depwarn(string("`ones(a::AbstractArray, ::Type{T}) where T` is deprecated, ",
+        "use `fill!(similar(a, T), 1)` instead, or `fill!(similar(a, T), one(T))` ",
+        "where necessary."), :ones)
+    return fill!(similar(a, T), one(T))
+end
+function ones(a::AbstractArray)
+    depwarn(string("`ones(a::AbstractArray)` is deprecated, consider ",
+        "`fill(1, size(a))`, `fill!(copy(a), 1)`, or `fill!(similar(a), 1)`. Where ",
+        "necessary, use `fill!(similar(a), one(eltype(a)))`."), :ones)
+    return fill!(similar(a), one(eltype(a)))
+end
+
+function zeros(a::AbstractArray, ::Type{T}, dims::Tuple) where {T}
+    depwarn(string("`zeros(a::AbstractArray, ::Type{T}, dims::Tuple) where T` is ",
+        "deprecated, use `fill!(similar(a, T, dims), 0)` instead, or ",
+        "`fill!(similar(a, T, dims), zero(T))` where necessary."), :zeros)
+    return fill!(similar(a, T, dims), zero(T))
+end
+function zeros(a::AbstractArray, ::Type{T}, dims...) where {T}
+    depwarn(string("`zeros(a::AbstractArray, ::Type{T}, dims...) where T` is ",
+        "deprecated, use `fill!(similar(a, T, dims...), 0)` instead, or ",
+        "`fill!(similar(a, T, dims...), zero(T))` where necessary."), :zeros)
+    return fill!(similar(a, T, dims...), zero(T))
+end
+function zeros(a::AbstractArray, ::Type{T}) where {T}
+    depwarn(string("`zeros(a::AbstractArray, ::Type{T}) where T` is deprecated, ",
+        "use `fill!(similar(a, T), 0)` instead, or `fill!(similar(a, T), zero(T))` ",
+        "where necessary."), :zeros)
+    return fill!(similar(a, T), zero(T))
+end
+function zeros(a::AbstractArray)
+    depwarn(string("`zeros(a::AbstractArray)` is deprecated, consider `zero(a)`, ",
+        "`fill(0, size(a))`, `fill!(copy(a), 0)`, or ",
+        "`fill!(similar(a), 0)`. Where necessary, use ",
+        "`fill!(similar(a), zero(eltype(a)))`."), :zeros)
+    return fill!(similar(a), zero(eltype(a)))
+end
 
 # PR #23711
 @eval LibGit2 begin
