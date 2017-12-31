@@ -106,7 +106,7 @@ hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 import Base.Random: UUID
 
 const SlugInt = UInt32 # max p = 4
-const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+const chars = String(['A':'Z'; 'a':'z'; '0':'9'])
 const nchars = SlugInt(length(chars))
 const max_p = floor(Int, log(nchars, typemax(SlugInt) >>> 8))
 
