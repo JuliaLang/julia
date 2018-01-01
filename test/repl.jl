@@ -60,6 +60,14 @@ fake_repl() do stdin_write, stdout_read, repl
     notify(b)
     wait(c)
 
+    # Give ourselves a generous timer here, just to prevent
+    # this causing e.g. a CI hang when there's something unexpected
+    # in the output.
+    t = Timer(200) do t
+        isopen(t) || return
+        error("Stuck waiting for repl test")
+    end
+
     # Latex completions
     write(stdin_write, "\x32\\alpha\t")
     readuntil(stdout_read, "α")
@@ -212,10 +220,6 @@ fake_repl() do stdin_write, stdout_read, repl
     # Test down arrow to go back to history
     # populate history with a trivial input
 
-    t = Timer(10) do t
-        isopen(t) || return
-        error("Stuck waiting for history test")
-    end
     s1 = "12345678"; s2 = "23456789"
     write(stdin_write, s1, '\n')
     readuntil(stdout_read, s1)
