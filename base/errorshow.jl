@@ -227,7 +227,7 @@ function showerror(io::IO, ex::MethodError)
         end
         print(io, ")")
     end
-    if f_is_function && applicable(start, ex.args) && !method_exists(ex.f, arg_types)
+    if f_is_function && applicable(start, ex.args) && !method_exists(f, arg_types)
         if Base.iteratorsize(ex.args) == Base.HasLength()
             print(io, "\nYou may consider implementing an additional",
                   "\nspecialized iterator method called `length`.")
