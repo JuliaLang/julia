@@ -227,12 +227,14 @@ function showerror(io::IO, ex::MethodError)
         end
         print(io, ")")
     end
-    if f_is_function && applicable(start, ex.args) && Base.iteratorsize(ex.args) == Base.HasLength() && !method_exists(ex.f, arg_types)
-        print(io, "\nYou may consider implementing an additional",
+    if f_is_function && applicable(start, ex.args) && !method_exists(ex.f, arg_types)
+        if Base.iteratorsize(ex.args) == Base.HasLength()
+            print(io, "\nYou may consider implementing an additional",
                   "\nspecialized iterator method called `length`.")
-    elseif f_is_function && applicable(start, ex.args) && Base.iteratorsize(ex.args) == Base.HasShape() && !method_exists(ex.f, arg_types)
-        print(io, "\nYou may consider implementing additional specialized iterator methods",
+        elseif Base.iteratorsize(ex.args) == Base.HasShape()
+            print(io, "\nYou may consider implementing additional specialized iterator methods",
                   "\nsuch as a `length` and `size`.")
+        end
     end
     if ft <: AbstractArray
         print(io, "\nUse square brackets [] for indexing an Array.")
