@@ -1974,6 +1974,10 @@ function hash(a::AbstractArray{T}, h::UInt) where T
     y == nothing && return hash(y2[1], hash(y1[1], h))
     x1, x2 = y1[1], y2[1]
 
+    # For the rest of the function, we keep three elements worth of state,
+    # x1, x2, y[1], with `y` potentially being `nothing` if there's only
+    # two elements remaining
+
     # Check whether the array is equal to a range, and hash the elements
     # at the beginning of the array as such as long as they match this assumption
     # This needs to be done even for non-RangeStepRegular types since they may still be equal
@@ -1981,7 +1985,11 @@ function hash(a::AbstractArray{T}, h::UInt) where T
     if isa(a, AbstractVector) && applicable(-, x2, x1)
         n = 1
         local step, laststep, laststate
-        while y !== nothing
+
+        h = hash(x1, h)
+        h += hashr_seed
+
+        while true
             # If overflow happens with entries of the same type, a cannot be equal
             # to a range with more than two elements because more extreme values
             # cannot be represented. We must still hash the two first values as a
@@ -2002,37 +2010,39 @@ function hash(a::AbstractArray{T}, h::UInt) where T
             n > 1 && !isequal(step, laststep) && break
             n += 1
             laststep = step
+            if y == nothing
+                # The array matches a range exactly
+                return hash(x2, hash(n, h))
+            end
             x1, x2 = x2, y[1]
             y = iterate(a, y[2])
         end
 
-        h = hash(y1[1], h)
-        h += hashr_seed
         # Always hash at least the two first elements as a range (even in case of overflow)
         if n < 2
             h = hash(2, h)
             h = hash(y2[1], h)
             @assert y !== nothing
-            x1 = x2
-            x2, state = y
+            x1, x2 = x2, y[1]
+            y = iterate(a, y[2])
         else
-            h = hash(n+1, h)
-            h = hash(x2, h)
-            y == nothing && return h
+            h = hash(n, h)
+            h = hash(x1, h)
         end
     end
 
-    # Hash elements which do not correspond to a range (if any)
-    while y !== nothing
+    # Hash elements which do not correspond to a range
+    while true
         if isequal(x2, x1)
             # For repeated elements, use run length encoding
             # This allows efficient hashing of sparse arrays
             runlength = 2
             while y !== nothing
+                # No need to update x1 (it's isequal x2)
                 x2 = y[1]
+                y = iterate(a, y[2])
                 isequal(x1, x2) || break
                 runlength += 1
-                y = iterate(a, y[2])
             end
             h += hashrle_seed
             h = hash(runlength, h)
