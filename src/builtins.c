@@ -186,6 +186,8 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
     }
     if (dt->mutabl)
         return 0;
+    if (dt == jl_symbol_type)
+        return 0;
     size_t sz = jl_datatype_size(dt);
     if (sz == 0)
         return 1;

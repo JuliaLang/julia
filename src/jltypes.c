@@ -1818,7 +1818,7 @@ void jl_init_types(void)
     jl_sym_type->ditype = NULL;
     jl_sym_type->size = 0;
     jl_sym_type->abstract = 0;
-    jl_sym_type->mutabl = 1;
+    jl_sym_type->mutabl = 0;
     jl_sym_type->ninitialized = 0;
 
     jl_simplevector_type->name = jl_new_typename_in(jl_symbol("SimpleVector"), core);
