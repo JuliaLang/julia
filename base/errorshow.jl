@@ -227,10 +227,10 @@ function showerror(io::IO, ex::MethodError)
         end
         print(io, ")")
     end
-    if applicable(start, ex.args) && Base.iteratorsize(ex.args) == Base.HasLength()
+    if f_is_function && applicable(start, ex.args) && Base.iteratorsize(ex.args) == Base.HasLength() && !method_exists(ex.f, arg_types)
         print(io, "\nYou may consider implementing an additional",
                   "\nspecialized iterator method called `length`.")
-    elseif applicable(start, ex.args) && Base.iteratorsize(ex.args) == Base.HasShape()
+    elseif f_is_function && applicable(start, ex.args) && Base.iteratorsize(ex.args) == Base.HasShape() && !method_exists(ex.f, arg_types)
         print(io, "\nYou may consider implementing additional specialized iterator methods",
                   "\nsuch as a `length` and `size`.")
     end
