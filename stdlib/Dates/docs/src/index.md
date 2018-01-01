@@ -1,8 +1,8 @@
 # [Dates and Time](@id stdlib-dates)
 
-Functionality to handle time and dates are defined in the standard library module `Dates`.
+Functionality to handle time and dates is defined in the standard library module `Dates`.
 You'll need to import the module using `import Dates` and prefix each
-function call with an explicit `Dates.`, e.g. `Dates.dayofweek(dt)`. Alternatively, You can write
+function call with an explicit `Dates.`, e.g. `Dates.dayofweek(dt)`. Alternatively, you can write
 `using Dates` to bring all exported functions into `Main` to be used without the `Dates.`
 prefix.
 
