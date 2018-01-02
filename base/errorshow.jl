@@ -229,11 +229,9 @@ function showerror(io::IO, ex::MethodError)
     end
     if f_is_function && applicable(start, ex.args) && !method_exists(f, arg_types)
         if Base.iteratorsize(ex.args) == Base.HasLength()
-            print(io, "\nYou may consider implementing an additional",
-                      "\nspecialized iterator method called `length`.")
+            print(io, "\nYou may consider implementing the `length` method.")
         elseif Base.iteratorsize(ex.args) == Base.HasShape()
-            print(io, "\nYou may consider implementing additional",
-                      "\nspecialized iterator methods such as `length` and `size`.")
+            print(io, "\nYou may consider implementing the `length` and `size` methods.")
         end
     end
     if ft <: AbstractArray
