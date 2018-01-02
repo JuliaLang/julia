@@ -13,7 +13,8 @@ to generically build upon those behaviors.
 | `next(iter, state)`            |                        | Returns the current item and the next state                                           |
 | `done(iter, state)`            |                        | Tests if there are any items remaining                                                |
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `iteratorsize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
+| `TypeIterable`                 | `
+| `iteratorsize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape{N}()`, `IsInfinite()`, or `SizeUnknown()` as appropriate     |
 | `iteratoreltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
 | `eltype(IterType)`             | `Any`                  | The type of the items returned by `next()`                                            |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
@@ -22,7 +23,7 @@ to generically build upon those behaviors.
 | Value returned by `iteratorsize(IterType)` | Required Methods                           |
 |:------------------------------------------ |:------------------------------------------ |
 | `HasLength()`                              | `length(iter)`                             |
-| `HasShape()`                               | `length(iter)`  and `size(iter, [dim...])` |
+| `HasShape{N}()`                            | `length(iter)`  and `size(iter, [dim...])` |
 | `IsInfinite()`                             | (*none*)                                   |
 | `SizeUnknown()`                            | (*none*)                                   |
 

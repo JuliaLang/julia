@@ -57,3 +57,20 @@ struct RangeStepRegular   <: TypeRangeStep end # range with regular step
 struct RangeStepIrregular <: TypeRangeStep end # range with rounding error
 
 TypeRangeStep(instance) = TypeRangeStep(typeof(instance))
+
+## iterable trait
+"""
+    TypeIterable(instance)
+    TypeIterable(T::Type)
+
+Return `IsIterable()` if object `instance`` or type `T` is iterable, and
+`NotIterable()` if it is not. By default, types implementing the [`start`](@ref)
+function are considered as iterable.
+"""
+abstract type TypeIterable end
+struct IsIterable <: TypeOrder end
+struct NotIterable <: TypeOrder end
+
+TypeIterable(instance) = TypeIterable(typeof(instance))
+TypeIterable(::Type{T}) where {T} =
+    method_exists(start, Tuple{T}) ? IsIterable() : NotIterable()

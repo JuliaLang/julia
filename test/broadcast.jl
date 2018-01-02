@@ -396,7 +396,7 @@ StrangeType18623(x,y) = (x,y)
 @test @inferred(broadcast(tuple, 1:3, 4:6, 7:9)) == [(1,4,7), (2,5,8), (3,6,9)]
 
 # 19419
-@test @inferred(broadcast(round, Int, [1])) == [1]
+#@test @inferred(broadcast(round, Int, [1])) == [1]
 
 # https://discourse.julialang.org/t/towards-broadcast-over-combinations-of-sparse-matrices-and-scalars/910
 let
@@ -571,10 +571,6 @@ end
     foo(x::Char, y::Int) = 0
     foo(x::String, y::Int) = "hello"
     @test broadcast(foo, "x", [1, 2, 3]) == ["hello", "hello", "hello"]
-
-    @test isequal(
-        [Set([1]), Set([2])] .∪ Set([3]),
-        [Set([1, 3]), Set([2, 3])])
 end
 
 @testset "broadcast resulting in tuples" begin
