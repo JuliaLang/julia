@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @pure, @propagate_inbounds, _return_type, _default_type, _isleaftype, @_inline_meta
+using Base: @propagate_inbounds, _return_type, _default_type, _isleaftype, @_inline_meta
 import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
 
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
@@ -10,15 +10,15 @@ import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, c
 # user-defined such objects. so do not restrict the wrapped type.
 struct Adjoint{T,S} <: AbstractMatrix{T}
     parent::S
-    function Adjoint{T,S}(A::S) where {T,S}
-        checkeltype(Adjoint, T, eltype(A))
+    function Adjoint{T,S}(A::S, check::Bool=true) where {T,S}
+        check && checkeltype(Adjoint, T, eltype(A))
         new(A)
     end
 end
 struct Transpose{T,S} <: AbstractMatrix{T}
     parent::S
-    function Transpose{T,S}(A::S) where {T,S}
-        checkeltype(Transpose, T, eltype(A))
+    function Transpose{T,S}(A::S, check::Bool=true) where {T,S}
+        check && checkeltype(Transpose, T, eltype(A))
         new(A)
     end
 end
@@ -32,6 +32,7 @@ function checkeltype(::Type{Transform}, ::Type{ResultEltype}, ::Type{ParentEltyp
     end
     return nothing
 end
+
 function transformtype(::Type{O}, ::Type{S}) where {O,S}
     # similar to promote_op(::Any, ::Type)
     @_inline_meta
@@ -41,12 +42,15 @@ function transformtype(::Type{O}, ::Type{S}) where {O,S}
 end
 
 # basic outer constructors
-Adjoint(A) = Adjoint{transformtype(Adjoint,eltype(A)),typeof(A)}(A)
-Transpose(A) = Transpose{transformtype(Transpose,eltype(A)),typeof(A)}(A)
+Adjoint(A) = Adjoint{transformtype(Adjoint,eltype(A)),typeof(A)}(A, false)
+Transpose(A) = Transpose{transformtype(Transpose,eltype(A)),typeof(A)}(A, false)
 
 # numbers are the end of the line
 Adjoint(x::Number) = adjoint(x)
 Transpose(x::Number) = transpose(x)
+
+Adjoint(x::Union{Char,AbstractString,Symbol}) = x
+Transpose(x::Union{Char,AbstractString,Symbol}) = x
 
 # unwrapping constructors
 Adjoint(A::Adjoint) = A.parent

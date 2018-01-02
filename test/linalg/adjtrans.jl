@@ -73,6 +73,15 @@ end
     @test Transpose(1.0im) == 1.0im
 end
 
+@testset "Adjoint and Transpose of Char, String, Symbol" begin
+    @test Adjoint('A') === 'A'
+    @test Adjoint("hello") === "hello"
+    @test Adjoint(:testsym) === :testsym
+    @test Transpose('A') === 'A'
+    @test Transpose("hello") === "hello"
+    @test Transpose(:testsym) === :testsym
+end
+
 @testset "Adjoint and Transpose unwrapping" begin
     intvec, intmat = [1, 2], [1 2; 3 4]
     @test Adjoint(Adjoint(intvec)) === intvec
