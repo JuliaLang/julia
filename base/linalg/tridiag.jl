@@ -270,9 +270,9 @@ function tril!(M::SymTridiagonal, k::Integer=0)
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     elseif k == -1
         fill!(M.dv,0)
-        return Tridiagonal(M.ev,M.dv,fill!(similar(M.ev), 0))
+        return Tridiagonal(M.ev,M.dv,zero(M.ev))
     elseif k == 0
-        return Tridiagonal(M.ev,M.dv,fill!(similar(M.ev), 0))
+        return Tridiagonal(M.ev,M.dv,zero(M.ev))
     elseif k >= 1
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     end
@@ -289,9 +289,9 @@ function triu!(M::SymTridiagonal, k::Integer=0)
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     elseif k == 1
         fill!(M.dv,0)
-        return Tridiagonal(fill!(similar(M.ev), 0),M.dv,M.ev)
+        return Tridiagonal(zero(M.ev),M.dv,M.ev)
     elseif k == 0
-        return Tridiagonal(fill!(similar(M.ev), 0),M.dv,M.ev)
+        return Tridiagonal(zero(M.ev),M.dv,M.ev)
     elseif k <= -1
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     end
