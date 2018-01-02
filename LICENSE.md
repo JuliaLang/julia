@@ -4,9 +4,9 @@ and some utilities (most of the rest of the files in this repository). See below
 for exceptions.
 
 > Copyright (c) 2009-2018: Jeff Bezanson, Stefan Karpinski, Viral B. Shah,
-> and other contributors:
->
-> https://github.com/JuliaLang/julia/contributors
+> and other contributors.
+> A list of contributors may be found at https://github.com/JuliaLang/julia/contributors
+> or by running `git shortlog -s` on this git repository commit history.
 >
 > Permission is hereby granted, free of charge, to any person obtaining
 > a copy of this software and associated documentation files (the
