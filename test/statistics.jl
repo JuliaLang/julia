@@ -159,6 +159,12 @@ end
         @test varm(A, 0.) ≈ sum(map(abs2, A)) / (length(A) - 1)
         @test varm(A, mean(A)) ≈ var(A)
     end
+
+    @test var([1//1, 2//1]) isa Rational{Int}
+    @test var([1//1, 2//1], 1) isa Vector{Rational{Int}}
+
+    @test std([1//1, 2//1]) isa Float64
+    @test std([1//1, 2//1], 1) isa Vector{Float64}
 end
 
 function safe_cov(x, y, zm::Bool, cr::Bool)
@@ -422,7 +428,7 @@ using Main.TestHelpers: Furlong
     A = [Furlong{1}(rand(-5:5)) for i in 1:2, j in 1:2]
     @test mean(mean(A, 1), 2)[1] === mean(A)
     @test var(A, 1)[1] === var(A[:, 1])
-    @test_broken std(A, 1)[1] === std(A[:, 1])
+    @test std(A, 1)[1] === std(A[:, 1])
 end
 
 # Issue #22901
