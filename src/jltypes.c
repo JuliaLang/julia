@@ -367,7 +367,12 @@ static jl_value_t *nth_union_component(jl_value_t *v, int *pi)
 
 jl_value_t *jl_nth_union_component(jl_value_t *v, int i)
 {
-    return nth_union_component(v, &i);
+    jl_value_t *ret = nth_union_component(v, &i);
+    if (!ret) {
+        jl_uniontype_t *u = (jl_uniontype_t *)v;
+        return u->a;
+    }
+    return ret;
 }
 
 // inverse of jl_nth_union_component
