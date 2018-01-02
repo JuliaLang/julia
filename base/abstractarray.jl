@@ -595,6 +595,7 @@ empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
 
 # like empty, but should return a mutable collection, a Vector by default
 emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
+emptymutable(itr, ::Type{U}) where {U} = Vector{U}()
 
 ## from general iterable to any array
 
