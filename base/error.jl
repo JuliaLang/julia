@@ -233,8 +233,8 @@ current state and the `Exception`.
 retry(f, delays=fill(5.0, 3))
 retry(f, delays=rand(5:10, 2))
 retry(f, delays=Base.ExponentialBackOff(n=3, first_delay=5, max_delay=1000))
-retry(http_get, check=(s,e)->e.status == "503")(url)
-retry(read, check=(s,e)->isa(e, IOError))(io, 128; all=false)
+retry(http_get, check=(s,e)->(s,e.status == "503"))(url)
+retry(read, check=(s,e)->(s,isa(e, UVError)))(io, 128; all=false)
 ```
 """
 function retry(f::Function;  delays=ExponentialBackOff(), check=nothing)
