@@ -57,7 +57,7 @@ try
           __precompile__(true)
 
           module $Foo_module
-              using $FooBase_module, $FooBase_module.typeA
+              import $FooBase_module, $FooBase_module.typeA
               import $Foo2_module: $Foo2_module, override
               import $FooBase_module.hash
               import Test
@@ -174,8 +174,8 @@ try
     cachefile = joinpath(dir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
-    @test_logs (:warn,"Replacing module `$Foo_module`") begin
-        ms = Base._require_from_serialized(Foo_module, cachefile)
+    @test_logs (:warn, "Replacing module `$Foo_module`") begin
+        ms = Base._require_from_serialized(cachefile)
         @test isa(ms, Array{Any,1})
     end
 
