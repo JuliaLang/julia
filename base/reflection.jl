@@ -275,7 +275,8 @@ julia> isimmutable([1,2])
 false
 ```
 """
-isimmutable(@nospecialize(x)) = (@_pure_meta; (isa(x,Tuple) || !typeof(x).mutable))
+isimmutable(@nospecialize(x)) = (@_pure_meta; !typeof(x).mutable)
+
 isstructtype(t::DataType) = (@_pure_meta; length(t.types) != 0 || (t.size==0 && !t.abstract))
 isstructtype(x) = (@_pure_meta; false)
 
