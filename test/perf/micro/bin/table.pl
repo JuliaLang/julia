@@ -1,5 +1,8 @@
 #!/usr/bin/env perl
 
+# This script generates the table published at https://julialang.org/benchmarks/
+# (file _includes/benchmarks.html in the JuliaLang/julialang.github.com repository)
+
 use strict;
 use warnings;
 
