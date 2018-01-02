@@ -17,7 +17,7 @@ end
     close(err.in)
     out_task = @async readlines(out)
     err = read(err, String)
-    @test err == "MethodError: no method matching this_function_has_no_methods()\n"
+    @test contains(err, "MethodError: no method matching this_function_has_no_methods()")
     @test success(p)
     lines = fetch(out_task)
     @test length(lines) == 10
