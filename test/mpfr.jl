@@ -490,6 +490,13 @@ end
     # total ordering
     @test isless(big(-0.0), big(0.0))
     @test isless(big(1.0), big(NaN))
+    @test isless(big(Inf), big(NaN))
+    @test isless(big(Inf), -big(NaN))
+    @test !isless(big(NaN), big(NaN))
+    @test !isless(big(-NaN), big(NaN))
+    @test !isless(-big(NaN), big(NaN))
+    @test !isless(-big(NaN), big(1.0))
+    @test !isless(-big(NaN), 1.0)
 
     # cmp
     @test cmp(big(-0.0), big(0.0)) == 0
