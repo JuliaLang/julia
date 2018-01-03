@@ -657,7 +657,7 @@ function edit_splice!(s, r::Region=region(s), ins::AbstractString = ""; rigid_ma
     elseif buf.mark >= B
         buf.mark += sizeof(ins) - B + A
     end
-    ret = splice!(buf.data, A+1:B, Vector{UInt8}(ins)) # position(), etc, are 0-indexed
+    ret = splice!(buf.data, A+1:B, codeunits(String(ins))) # position(), etc, are 0-indexed
     buf.size = buf.size + sizeof(ins) - B + A
     adjust_pos && seek(buf, position(buf) + sizeof(ins))
     String(ret)

@@ -686,6 +686,7 @@ export
     chomp,
     chop,
     codeunit,
+    codeunits,
     dec,
     digits,
     digits!,

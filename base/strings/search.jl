@@ -31,7 +31,7 @@ function search(a::ByteArray, b::Char, i::Integer = 1)
     if isascii(b)
         search(a,UInt8(b),i)
     else
-        search(a,Vector{UInt8}(string(b)),i).start
+        search(a,unsafe_wrap(Vector{UInt8},string(b)),i).start
     end
 end
 
@@ -62,7 +62,7 @@ function rsearch(a::ByteArray, b::Char, i::Integer = length(a))
     if isascii(b)
         rsearch(a,UInt8(b),i)
     else
-        rsearch(a,Vector{UInt8}(string(b)),i).start
+        rsearch(a,unsafe_wrap(Vector{UInt8},string(b)),i).start
     end
 end
 
@@ -147,7 +147,7 @@ function _search_bloom_mask(c)
 end
 
 _nthbyte(s::String, i) = codeunit(s, i)
-_nthbyte(a::ByteArray, i) = a[i]
+_nthbyte(a::Union{AbstractVector{UInt8},AbstractVector{Int8}}, i) = a[i]
 
 function _searchindex(s::Union{String,ByteArray}, t::Union{String,ByteArray}, i)
     n = sizeof(t)

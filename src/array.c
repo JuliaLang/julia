@@ -441,6 +441,11 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
         if (jl_is_string(o)) {
             a->flags.isshared = 1;
             *(size_t*)o = jl_array_len(a);
+            a->nrows = 0;
+#ifdef STORE_ARRAY_LEN
+            a->length = 0;
+#endif
+            a->maxsize = 0;
             return o;
         }
     }

@@ -27,7 +27,7 @@ function GenericIOBuffer(data::T, readable::Bool, writable::Bool, seekable::Bool
 end
 
 # allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
-StringVector(n::Integer) = Vector{UInt8}(_string_n(n))
+StringVector(n::Integer) = unsafe_wrap(Vector{UInt8}, _string_n(n))
 
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 

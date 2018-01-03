@@ -165,7 +165,7 @@ for (name, f) in l
         @test readuntil(io(t), s) == m
         @test readuntil(io(t), SubString(s, start(s), endof(s))) == m
         @test readuntil(io(t), GenericString(s)) == m
-        @test readuntil(io(t), Vector{UInt8}(s)) == Vector{UInt8}(m)
+        @test readuntil(io(t), unsafe_wrap(Vector{UInt8},s)) == unsafe_wrap(Vector{UInt8},m)
         @test readuntil(io(t), collect(s)::Vector{Char}) == Vector{Char}(m)
     end
     cleanup()
@@ -223,7 +223,7 @@ for (name, f) in l
 
 
         verbose && println("$name read...")
-        @test read(io()) == Vector{UInt8}(text)
+        @test read(io()) == unsafe_wrap(Vector{UInt8},text)
 
         @test read(io()) == read(filename)
 
@@ -331,7 +331,7 @@ for (name, f) in l
     @test read("$filename.to", String) == text
 
     verbose && println("$name write(::IOBuffer, ...)")
-    to = IOBuffer(copy(Vector{UInt8}(text)), false, true)
+    to = IOBuffer(Vector{UInt8}(codeunits(text)), false, true)
     write(to, io())
     @test String(take!(to)) == text
 
@@ -400,14 +400,14 @@ test_read_nbyte()
 
 
 let s = "qwerty"
-    @test read(IOBuffer(s)) == Vector{UInt8}(s)
-    @test read(IOBuffer(s), 10) == Vector{UInt8}(s)
-    @test read(IOBuffer(s), 1) == Vector{UInt8}(s)[1:1]
+    @test read(IOBuffer(s)) == codeunits(s)
+    @test read(IOBuffer(s), 10) == codeunits(s)
+    @test read(IOBuffer(s), 1) == codeunits(s)[1:1]
 
     # Test growing output array
     x = UInt8[]
     n = readbytes!(IOBuffer(s), x, 10)
-    @test x == Vector{UInt8}(s)
+    @test x == codeunits(s)
     @test n == length(x)
 end
 

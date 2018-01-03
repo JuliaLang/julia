@@ -613,7 +613,7 @@ let b = ['0':'9';'A':'Z';'a':'z']
         @test length(randstring(rng...)) == 8
         @test length(randstring(rng..., 20)) == 20
         @test issubset(randstring(rng...), b)
-        for c = ['a':'z', "qwèrtï", Set(Vector{UInt8}("gcat"))],
+        for c = ['a':'z', "qwèrtï", Set(codeunits("gcat"))],
                 len = [8, 20]
             s = len == 8 ? randstring(rng..., c) : randstring(rng..., c, len)
             @test length(s) == len
