@@ -61,6 +61,11 @@ try
               import $Foo2_module: $Foo2_module, override
               import $FooBase_module.hash
               import Test
+              module Inner
+                  import $FooBase_module.hash
+                  using ..$Foo_module
+                  import ..$Foo2_module
+              end
 
               struct typeB
                   y::typeA
@@ -202,10 +207,14 @@ try
         @test string(Base.Docs.doc(Foo.foo)) == "foo function\n"
         @test string(Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
 
-        modules, deps, required_modules = Base.parse_cache_header(cachefile)
+        modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3])
         @test modules == [Foo_module => Base.module_uuid(Foo)]
-        @test map(x -> x[1],  sort(discard_module.(deps))) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
+        @test map(x -> x[2], deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
+        @test requires == [ string(Foo_module) => string(FooBase_module),
+                            string(Foo_module) => string(Foo2_module),
+                            string(Foo_module) => "Test",
+                            string(Foo_module, ".Inner") => string(FooBase_module) ]
         srctxt = Base.read_dependency_src(cachefile, Foo_file)
         @test !isempty(srctxt) && srctxt == read(Foo_file, String)
         @test_throws ErrorException Base.read_dependency_src(cachefile, "/tmp/nonexistent.txt")

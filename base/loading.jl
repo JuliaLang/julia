@@ -530,7 +530,7 @@ const include_callbacks = Any[]
 const _concrete_dependencies = Pair{Symbol, UInt64}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
 const _require_dependencies = Any[] # a list of (mod, path, mtime) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
-function _include_dependency(modstring::AbstractString, _path::AbstractString)
+function _include_dependency(mod::Module, _path::AbstractString)
     prev = source_path(nothing)
     if prev === nothing
         path = abspath(_path)
@@ -538,7 +538,7 @@ function _include_dependency(modstring::AbstractString, _path::AbstractString)
         path = joinpath(dirname(prev), _path)
     end
     if _track_dependencies[]
-        push!(_require_dependencies, (modstring, normpath(path), mtime(path)))
+        push!(_require_dependencies, (mod, normpath(path), mtime(path)))
     end
     return path, prev
 end
@@ -554,7 +554,7 @@ This is only needed if your module depends on a file that is not used via `inclu
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
-    _include_dependency("#__external__", path)
+    _include_dependency(Main, path)
     return nothing
 end
 
@@ -623,6 +623,9 @@ all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
 """
 function require(into::Module, mod::Symbol)
+    if _track_dependencies[]
+        push!(_require_dependencies, (into, "\0$mod", 0.0))
+    end
     info = nothing
     if !root_module_exists(mod)
         info = _require(into, mod)
@@ -695,11 +698,6 @@ function unreference_module(key)
 end
 
 function _require(into::Module, mod::Symbol)
-    # dependency-tracking is only used for one top-level include(path),
-    # and is not applied recursively to imported modules:
-    old_track_dependencies = _track_dependencies[]
-    _track_dependencies[] = false
-
     # handle recursive calls to require
     loading = get(package_locks, mod, false)
     if loading !== false
@@ -787,7 +785,6 @@ function _require(into::Module, mod::Symbol)
         toplevel_load[] = last
         loading = pop!(package_locks, mod)
         notify(loading, all=true)
-        _track_dependencies[] = old_track_dependencies
     end
     return info
 end
@@ -824,7 +821,7 @@ function source_dir()
 end
 
 function include_relative(mod::Module, _path::String)
-    path, prev = _include_dependency(string(mod), _path)
+    path, prev = _include_dependency(mod, _path)
     for callback in include_callbacks # to preserve order, must come before Core.include
         invokelatest(callback, mod, path)
     end
@@ -987,19 +984,37 @@ function parse_cache_header(f::IO)
         push!(modules, sym => uuid)
     end
     totbytes = ntoh(read(f, Int64)) # total bytes for file dependencies
-    # read the list of files
-    files = Tuple{String,String,Float64}[]
+    # read the list of requirements
+    # and split the list into include and requires statements
+    includes = Tuple{String, String, Float64}[]
+    requires = Pair{String, String}[]
     while true
-        n1 = ntoh(read(f, Int32))
-        n1 == 0 && break
-        @assert n1 >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
-        modname = String(read(f, n1))
         n2 = ntoh(read(f, Int32))
-        @assert n2 >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
-        filename = String(read(f, n2))
-        push!(files, (modname, filename, ntoh(read(f, Float64))))
-        totbytes -= 8 + n1 + n2 + 8
+        n2 == 0 && break
+        depname = String(read(f, n2))
+        mtime = ntoh(read(f, Float64))
+        n1 = ntoh(read(f, Int32))
+        if n1 == 0
+            modname = "Main" # remap anything loaded outside this cache files modules to have occurred in `Main`
+        else
+            modname = String(modules[n1][1])
+            while true
+                n1 = ntoh(read(f, Int32))
+                totbytes -= 4
+                n1 == 0 && break
+                modname = string(modname, ".", String(read(f, n1)))
+                totbytes -= n1
+            end
+        end
+        if depname[1] == '\0'
+            push!(requires, modname => depname[2:end])
+        else
+            push!(includes, (modname, depname, mtime))
+        end
+        totbytes -= 4 + 4 + n2 + 8
     end
+    @show includes
+    @show requires
     @assert totbytes == 12 "header of cache file appears to be corrupt"
     srctextpos = ntoh(read(f, Int64))
     # read the list of modules that are required to be present during loading
@@ -1011,7 +1026,7 @@ function parse_cache_header(f::IO)
         uuid = ntoh(read(f, UInt64)) # module UUID
         push!(required_modules, sym => uuid)
     end
-    return modules, files, required_modules, srctextpos
+    return modules, (includes, requires), required_modules, srctextpos
 end
 
 function parse_cache_header(cachefile::String)
@@ -1025,8 +1040,8 @@ function parse_cache_header(cachefile::String)
 end
 
 function cache_dependencies(f::IO)
-    defs, files, modules = parse_cache_header(f)
-    return modules, map(mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3]), files)  # discard the module
+    defs, (includes, requires), modules = parse_cache_header(f)
+    return modules, map(mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3]), includes)  # discard the module
 end
 
 function cache_dependencies(cachefile::String)
@@ -1040,10 +1055,10 @@ function cache_dependencies(cachefile::String)
 end
 
 function read_dependency_src(io::IO, filename::AbstractString)
-    modules, files, required_modules, srctextpos = parse_cache_header(io)
+    modules, (includes, requires), required_modules, srctextpos = parse_cache_header(io)
     srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
-    _read_dependency_src(io, filename)
+    return _read_dependency_src(io, filename)
 end
 
 function _read_dependency_src(io::IO, filename::AbstractString)
@@ -1079,7 +1094,7 @@ function stale_cachefile(into::Module, modpath::String, cachefile::String)
             @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
-        modules, files, required_modules = parse_cache_header(io)
+        (modules, (includes, requires), required_modules) = parse_cache_header(io)
         modules = Dict{Symbol, UInt64}(modules)
 
         # Check if transitive dependencies can be fullfilled
@@ -1111,11 +1126,11 @@ function stale_cachefile(into::Module, modpath::String, cachefile::String)
         end
 
         # now check if this file is fresh relative to its source files
-        if !samefile(files[1][2], modpath)
-            @debug "Rejecting cache file $cachefile because it is for file $(files[1][2])) not file $modpath"
+        if !samefile(includes[1][2], modpath)
+            @debug "Rejecting cache file $cachefile because it is for file $(includes[1][2])) not file $modpath"
             return true # cache file was compiled from a different path
         end
-        for (_, f, ftime_req) in files
+        for (_, f, ftime_req) in includes
             # Issue #13606: compensate for Docker images rounding mtimes
             # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
             ftime = mtime(f)
