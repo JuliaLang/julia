@@ -1052,6 +1052,13 @@ else
     import Base: notnothing
 end
 
+# 0.7.0-DEV.3155
+@static if !isdefined(Base, :pushfirst!)
+    const pushfirst! = unshift!
+    const popfirst! = shift!
+    export pushfirst!, popfirst!
+end
+
 # 0.7.0-DEV.3173
 @static if !isdefined(Base, :invpermute!)
     const invpermute! = ipermute!
