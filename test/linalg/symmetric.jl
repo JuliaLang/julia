@@ -20,7 +20,7 @@ end
 
     A1 = randn(4,4)
     A3 = A1 * A1'
-    A4 = A1 + Transpose(A1)
+    A4 = A1 + transpose(A1)
     @test exp(A4) ≈ exp(Symmetric(A4))
     @test log(A3) ≈ log(Symmetric(A3))
     @test log(A3) ≈ log(Hermitian(A3))
@@ -32,10 +32,10 @@ end
     aimg  = randn(n,n)/2
     @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-        asym = Transpose(a) + a                 # symmetric indefinite
+        asym = transpose(a) + a                 # symmetric indefinite
         aherm = a' + a                 # Hermitian indefinite
         apos  = a' * a                 # Hermitian positive definite
-        aposs = apos + Transpose(apos)        # Symmetric positive definite
+        aposs = apos + transpose(apos)        # Symmetric positive definite
         ε = εa = eps(abs(float(one(eltya))))
 
         x = randn(n)
@@ -148,7 +148,7 @@ end
                     @test  transpose(H) === H == aherm
                 else
                     @test adjoint(S) ==  Symmetric(conj(asym))
-                    @test transpose(H) ==  Hermitian(copy(Transpose(aherm)))
+                    @test transpose(H) ==  Hermitian(copy(transpose(aherm)))
                 end
             end
         end
@@ -218,7 +218,7 @@ end
                     if eltya <: Real # the eigenvalues are only real and ordered for Hermitian matrices
                         d, v = eig(asym)
                         @test asym*v[:,1] ≈ d[1]*v[:,1]
-                        @test v*Diagonal(d)*Transpose(v) ≈ asym
+                        @test v*Diagonal(d)*transpose(v) ≈ asym
                         @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
                         @test abs.(eigfact(Symmetric(asym), 1:2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                         eig(Symmetric(asym), 1:2) # same result, but checks that method works
@@ -289,13 +289,13 @@ end
         @testset "linalg binary ops" begin
             @testset "mat * vec" begin
                 @test Symmetric(asym)*x+y ≈ asym*x+y
-                # testing fallbacks for Transpose-vector * Transpose(SymHerm)
-                xadj = Transpose(x)
-                @test xadj * Transpose(Symmetric(asym)) ≈ xadj * asym
+                # testing fallbacks for transpose-vector * transpose(SymHerm)
+                xadj = transpose(x)
+                @test xadj * transpose(Symmetric(asym)) ≈ xadj * asym
                 @test x' * Symmetric(asym) ≈ x' * asym
 
                 @test Hermitian(aherm)*x+y ≈ aherm*x+y
-                # testing fallbacks for Adjoint-vector * SymHerm'
+                # testing fallbacks for adjoint-vector * SymHerm'
                 xadj = x'
                 @test x' * Hermitian(aherm) ≈ x' * aherm
                 @test xadj * Hermitian(aherm)' ≈ xadj * aherm
@@ -318,13 +318,13 @@ end
                 @test C ≈ a*asym
 
                 tri_b = UpperTriangular(triu(b))
-                @test Array(Transpose(Hermitian(aherm)) * tri_b) ≈ Transpose(aherm) * Array(tri_b)
-                @test Array(tri_b * Transpose(Hermitian(aherm))) ≈ Array(tri_b) * Transpose(aherm)
+                @test Array(transpose(Hermitian(aherm)) * tri_b) ≈ transpose(aherm) * Array(tri_b)
+                @test Array(tri_b * transpose(Hermitian(aherm))) ≈ Array(tri_b) * transpose(aherm)
                 @test Array(Hermitian(aherm)' * tri_b) ≈ aherm' * Array(tri_b)
                 @test Array(tri_b * Hermitian(aherm)') ≈ Array(tri_b) * aherm'
 
-                @test Array(Transpose(Symmetric(asym)) * tri_b) ≈ Transpose(asym) * Array(tri_b)
-                @test Array(tri_b * Transpose(Symmetric(asym))) ≈ Array(tri_b) * Transpose(asym)
+                @test Array(transpose(Symmetric(asym)) * tri_b) ≈ transpose(asym) * Array(tri_b)
+                @test Array(tri_b * transpose(Symmetric(asym))) ≈ Array(tri_b) * transpose(asym)
                 @test Array(Symmetric(asym)' * tri_b) ≈ asym' * Array(tri_b)
                 @test Array(tri_b * Symmetric(asym)') ≈ Array(tri_b) * asym'
             end

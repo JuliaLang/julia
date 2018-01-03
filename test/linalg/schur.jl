@@ -40,10 +40,10 @@ aimg  = randn(n,n)/2
         @test vecs*sch*vecs' ≈ tril(a)
         sch, vecs, vals = schur(Hermitian(asym))
         @test vecs*sch*vecs' ≈ asym
-        sch, vecs, vals = schur(Symmetric(a + Transpose(a)))
-        @test vecs*sch*vecs' ≈ a + Transpose(a)
-        sch, vecs, vals = schur(Tridiagonal(a + Transpose(a)))
-        @test vecs*sch*vecs' ≈ Tridiagonal(a + Transpose(a))
+        sch, vecs, vals = schur(Symmetric(a + transpose(a)))
+        @test vecs*sch*vecs' ≈ a + transpose(a)
+        sch, vecs, vals = schur(Tridiagonal(a + transpose(a)))
+        @test vecs*sch*vecs' ≈ Tridiagonal(a + transpose(a))
 
         tstring = sprint(show,f.T)
         zstring = sprint(show,f.Z)

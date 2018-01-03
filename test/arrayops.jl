@@ -1350,14 +1350,14 @@ end
 @test size([]') == (1,0)
 
 # issue #6996
-@test copy(Adjoint(Any[ 1 2; 3 4 ])) == copy(Transpose(Any[ 1 2; 3 4 ]))
+@test copy(adjoint(Any[ 1 2; 3 4 ])) == copy(transpose(Any[ 1 2; 3 4 ]))
 
 # map with promotion (issue #6541)
 @test map(join, ["z", "я"]) == ["z", "я"]
 
 # Handle block matrices
 let A = [randn(2, 2) for i = 1:2, j = 1:2]
-    @test issymmetric(Transpose(A)*A)
+    @test issymmetric(A'A)
 end
 let A = [complex.(randn(2, 2), randn(2, 2)) for i = 1:2, j = 1:2]
     @test ishermitian(A'A)

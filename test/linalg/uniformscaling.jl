@@ -76,7 +76,7 @@ let
     @testset "transpose, conj, inv" begin
         @test ndims(J) == 2
         @test transpose(J) == J
-        @test J * [1 0; 0 1] == conj(*(Base.LinAlg.Adjoint(J), [1 0; 0 1])) # ctranpose (and A(c)_mul_B)
+        @test J * [1 0; 0 1] == conj(*(adjoint(J), [1 0; 0 1])) # ctranpose (and A(c)_mul_B)
         @test I + I === UniformScaling(2) # +
         @test inv(I) == I
         @test inv(J) == UniformScaling(inv(λ))

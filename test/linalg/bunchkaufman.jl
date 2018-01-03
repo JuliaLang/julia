@@ -23,7 +23,7 @@ bimg  = randn(n,2)/2
 @testset "$eltya argument A" for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
-    asym = Transpose(a) + a                  # symmetric indefinite
+    asym = transpose(a) + a                  # symmetric indefinite
     aher = a' + a                  # Hermitian indefinite
     apd  = a' * a                  # Positive-definite
     for (a, a2, aher, apd) in ((a, a2, aher, apd),
@@ -47,11 +47,11 @@ bimg  = randn(n,2)/2
             end
             @test inv(bc1)*aher ≈ Matrix(I, n, n)
             @testset for rook in (false, true)
-                @test inv(bkfact(Symmetric(Transpose(a) + a, uplo), rook))*(Transpose(a) + a) ≈ Matrix(I, n, n)
+                @test inv(bkfact(Symmetric(transpose(a) + a, uplo), rook))*(transpose(a) + a) ≈ Matrix(I, n, n)
                 if eltya <: BlasFloat
                     # test also bkfact! without explicit type tag
                     # no bkfact! method for Int ... yet
-                    @test inv(bkfact!(Transpose(a) + a, rook))*(Transpose(a) + a) ≈ Matrix(I, n, n)
+                    @test inv(bkfact!(transpose(a) + a, rook))*(transpose(a) + a) ≈ Matrix(I, n, n)
                 end
                 @test size(bc1) == size(bc1.LD)
                 @test size(bc1, 1) == size(bc1.LD, 1)
@@ -66,8 +66,8 @@ bimg  = randn(n,2)/2
                 end
 
                 bc1 = bkfact(Symmetric(asym, uplo))
-                @test getproperty(bc1, uplo)*bc1.D*Transpose(getproperty(bc1, uplo)) ≈ asym[bc1.p, bc1.p]
-                @test getproperty(bc1, uplo)*bc1.D*Transpose(getproperty(bc1, uplo)) ≈ bc1.P*asym*Transpose(bc1.P)
+                @test getproperty(bc1, uplo)*bc1.D*transpose(getproperty(bc1, uplo)) ≈ asym[bc1.p, bc1.p]
+                @test getproperty(bc1, uplo)*bc1.D*transpose(getproperty(bc1, uplo)) ≈ bc1.P*asym*transpose(bc1.P)
                 @test_throws ErrorException bc1.Z
                 @test_throws ArgumentError uplo == :L ? bc1.U : bc1.L
             end

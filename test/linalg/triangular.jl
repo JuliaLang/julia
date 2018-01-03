@@ -4,7 +4,7 @@ debug = false
 using Test
 using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!,
                     UnitUpperTriangular, UnitLowerTriangular,
-                    mul!, rdiv!, Adjoint, Transpose
+                    mul!, rdiv!
 
 debug && println("Triangular matrices")
 
@@ -133,17 +133,17 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         # [c]transpose[!] (test views as well, see issue #14317)
         let vrange = 1:n-1, viewA1 = t1(view(A1.data, vrange, vrange))
             # transpose
-            @test copy(Transpose(A1)) == Transpose(Matrix(A1))
-            @test copy(Transpose(viewA1)) == Transpose(Matrix(viewA1))
+            @test copy(transpose(A1)) == transpose(Matrix(A1))
+            @test copy(transpose(viewA1)) == transpose(Matrix(viewA1))
             # adjoint
             @test copy(A1') == Matrix(A1)'
             @test copy(viewA1') == Matrix(viewA1)'
             # transpose!
-            @test transpose!(copy(A1)) == Transpose(A1)
-            @test transpose!(t1(view(copy(A1).data, vrange, vrange))) == Transpose(viewA1)
+            @test transpose!(copy(A1)) == transpose(A1)
+            @test transpose!(t1(view(copy(A1).data, vrange, vrange))) == transpose(viewA1)
             # adjoint!
-            @test adjoint!(copy(A1)) == Adjoint(A1)
-            @test adjoint!(t1(view(copy(A1).data, vrange, vrange))) == Adjoint(viewA1)
+            @test adjoint!(copy(A1)) == adjoint(A1)
+            @test adjoint!(t1(view(copy(A1).data, vrange, vrange))) == adjoint(viewA1)
         end
 
         # diag
@@ -166,15 +166,15 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             B = similar(A1)
             copyto!(B, A1)
             @test B == A1
-            B = similar(copy(Transpose(A1)))
-            copyto!(B, copy(Transpose(A1)))
-            @test B == copy(Transpose(A1))
+            B = similar(copy(transpose(A1)))
+            copyto!(B, copy(transpose(A1)))
+            @test B == copy(transpose(A1))
             B = similar(viewA1)
             copyto!(B, viewA1)
             @test B == viewA1
-            B = similar(copy(Transpose(viewA1)))
-            copyto!(B, copy(Transpose(viewA1)))
-            @test B == Transpose(viewA1)
+            B = similar(copy(transpose(viewA1)))
+            copyto!(B, copy(transpose(viewA1)))
+            @test B == transpose(viewA1)
         end
 
         #exp/log
@@ -292,22 +292,22 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
 
                 # Triangular-Triangualar multiplication and division
                 @test A1*A2 ≈ Matrix(A1)*Matrix(A2)
-                @test Transpose(A1)*A2 ≈ Transpose(Matrix(A1))*Matrix(A2)
+                @test transpose(A1)*A2 ≈ transpose(Matrix(A1))*Matrix(A2)
                 @test A1'A2 ≈ Matrix(A1)'Matrix(A2)
-                @test A1*Transpose(A2) ≈ Matrix(A1)*Transpose(Matrix(A2))
+                @test A1*transpose(A2) ≈ Matrix(A1)*transpose(Matrix(A2))
                 @test A1*A2' ≈ Matrix(A1)*Matrix(A2)'
-                @test Transpose(A1)*Transpose(A2) ≈ Transpose(Matrix(A1))*Transpose(Matrix(A2))
+                @test transpose(A1)*transpose(A2) ≈ transpose(Matrix(A1))*transpose(Matrix(A2))
                 @test A1'A2' ≈ Matrix(A1)'Matrix(A2)'
                 @test A1/A2 ≈ Matrix(A1)/Matrix(A2)
                 @test A1\A2 ≈ Matrix(A1)\Matrix(A2)
                 offsizeA = Matrix{Float64}(I, n+1, n+1)
                 @test_throws DimensionMismatch offsizeA / A2
-                @test_throws DimensionMismatch offsizeA / Transpose(A2)
+                @test_throws DimensionMismatch offsizeA / transpose(A2)
                 @test_throws DimensionMismatch offsizeA / A2'
                 @test_throws DimensionMismatch offsizeA * A2
-                @test_throws DimensionMismatch offsizeA * Transpose(A2)
+                @test_throws DimensionMismatch offsizeA * transpose(A2)
                 @test_throws DimensionMismatch offsizeA * A2'
-                @test_throws DimensionMismatch Transpose(A2) * offsizeA
+                @test_throws DimensionMismatch transpose(A2) * offsizeA
                 @test_throws DimensionMismatch A2'  * offsizeA
                 @test_throws DimensionMismatch A2   * offsizeA
             end
@@ -326,69 +326,69 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             # Triangular-dense Matrix/vector multiplication
             @test A1*B[:,1] ≈ Matrix(A1)*B[:,1]
             @test A1*B ≈ Matrix(A1)*B
-            @test Transpose(A1)*B[:,1] ≈ Transpose(Matrix(A1))*B[:,1]
+            @test transpose(A1)*B[:,1] ≈ transpose(Matrix(A1))*B[:,1]
             @test A1'B[:,1] ≈ Matrix(A1)'B[:,1]
-            @test Transpose(A1)*B ≈ Transpose(Matrix(A1))*B
+            @test transpose(A1)*B ≈ transpose(Matrix(A1))*B
             @test A1'B ≈ Matrix(A1)'B
-            @test A1*Transpose(B) ≈ Matrix(A1)*Transpose(B)
+            @test A1*transpose(B) ≈ Matrix(A1)*transpose(B)
             @test A1*B' ≈ Matrix(A1)*B'
             @test B*A1 ≈ B*Matrix(A1)
-            @test Transpose(B[:,1])*A1 ≈ Transpose(B[:,1])*Matrix(A1)
+            @test transpose(B[:,1])*A1 ≈ transpose(B[:,1])*Matrix(A1)
             @test B[:,1]'A1 ≈ B[:,1]'Matrix(A1)
-            @test Transpose(B)*A1 ≈ Transpose(B)*Matrix(A1)
+            @test transpose(B)*A1 ≈ transpose(B)*Matrix(A1)
             @test B'A1 ≈ B'Matrix(A1)
-            @test B*Transpose(A1) ≈ B*Transpose(Matrix(A1))
+            @test B*transpose(A1) ≈ B*transpose(Matrix(A1))
             @test B*A1' ≈ B*Matrix(A1)'
-            @test Transpose(B[:,1])*Transpose(A1) ≈ Transpose(B[:,1])*Transpose(Matrix(A1))
+            @test transpose(B[:,1])*transpose(A1) ≈ transpose(B[:,1])*transpose(Matrix(A1))
             @test B[:,1]'A1' ≈ B[:,1]'Matrix(A1)'
-            @test Transpose(B)*Transpose(A1) ≈ Transpose(B)*Transpose(Matrix(A1))
+            @test transpose(B)*transpose(A1) ≈ transpose(B)*transpose(Matrix(A1))
             @test B'A1' ≈ B'Matrix(A1)'
 
             if eltyB == elty1
                 @test mul!(similar(B),A1,B)  ≈ A1*B
-                @test mul!(similar(B), A1, Adjoint(B)) ≈ A1*B'
-                @test mul!(similar(B), A1, Transpose(B)) ≈ A1*Transpose(B)
-                @test mul!(similar(B), Adjoint(A1), B) ≈ A1'*B
-                @test mul!(similar(B), Transpose(A1), B) ≈ Transpose(A1)*B
+                @test mul!(similar(B), A1, adjoint(B)) ≈ A1*B'
+                @test mul!(similar(B), A1, transpose(B)) ≈ A1*transpose(B)
+                @test mul!(similar(B), adjoint(A1), B) ≈ A1'*B
+                @test mul!(similar(B), transpose(A1), B) ≈ transpose(A1)*B
                 # test also vector methods
                 B1 = vec(B[1,:])
                 @test mul!(similar(B1),A1,B1)  ≈ A1*B1
-                @test mul!(similar(B1), Adjoint(A1), B1) ≈ A1'*B1
-                @test mul!(similar(B1), Transpose(A1), B1) ≈ Transpose(A1)*B1
+                @test mul!(similar(B1), adjoint(A1), B1) ≈ A1'*B1
+                @test mul!(similar(B1), transpose(A1), B1) ≈ transpose(A1)*B1
             end
             #error handling
             Ann, Bmm, bm = A1, Matrix{eltyB}(uninitialized, n+1, n+1), Vector{eltyB}(uninitialized, n+1)
             @test_throws DimensionMismatch mul!(Ann, bm)
             @test_throws DimensionMismatch mul!(Bmm, Ann)
-            @test_throws DimensionMismatch mul!(Transpose(Ann), bm)
-            @test_throws DimensionMismatch mul!(Adjoint(Ann), bm)
-            @test_throws DimensionMismatch mul!(Bmm, Adjoint(Ann))
-            @test_throws DimensionMismatch mul!(Bmm, Transpose(Ann))
+            @test_throws DimensionMismatch mul!(transpose(Ann), bm)
+            @test_throws DimensionMismatch mul!(adjoint(Ann), bm)
+            @test_throws DimensionMismatch mul!(Bmm, adjoint(Ann))
+            @test_throws DimensionMismatch mul!(Bmm, transpose(Ann))
 
             # ... and division
             @test A1\B[:,1] ≈ Matrix(A1)\B[:,1]
             @test A1\B ≈ Matrix(A1)\B
-            @test Transpose(A1)\B[:,1] ≈ Transpose(Matrix(A1))\B[:,1]
+            @test transpose(A1)\B[:,1] ≈ transpose(Matrix(A1))\B[:,1]
             @test A1'\B[:,1] ≈ Matrix(A1)'\B[:,1]
-            @test Transpose(A1)\B ≈ Transpose(Matrix(A1))\B
+            @test transpose(A1)\B ≈ transpose(Matrix(A1))\B
             @test A1'\B ≈ Matrix(A1)'\B
-            @test A1\Transpose(B) ≈ Matrix(A1)\Transpose(B)
+            @test A1\transpose(B) ≈ Matrix(A1)\transpose(B)
             @test A1\B' ≈ Matrix(A1)\B'
-            @test Transpose(A1)\Transpose(B) ≈ Transpose(Matrix(A1))\Transpose(B)
+            @test transpose(A1)\transpose(B) ≈ transpose(Matrix(A1))\transpose(B)
             @test A1'\B' ≈ Matrix(A1)'\B'
             Ann, bm = A1, Vector{elty1}(uninitialized,n+1)
             @test_throws DimensionMismatch Ann\bm
             @test_throws DimensionMismatch Ann'\bm
-            @test_throws DimensionMismatch Transpose(Ann)\bm
+            @test_throws DimensionMismatch transpose(Ann)\bm
             if t1 == UpperTriangular || t1 == LowerTriangular
                 @test_throws Base.LinAlg.SingularException naivesub!(t1(zeros(elty1,n,n)),fill(eltyB(1),n))
             end
             @test B/A1 ≈ B/Matrix(A1)
-            @test B/Transpose(A1) ≈ B/Transpose(Matrix(A1))
+            @test B/transpose(A1) ≈ B/transpose(Matrix(A1))
             @test B/A1' ≈ B/Matrix(A1)'
-            @test Transpose(B)/A1 ≈ Transpose(B)/Matrix(A1)
+            @test transpose(B)/A1 ≈ transpose(B)/Matrix(A1)
             @test B'/A1 ≈ B'/Matrix(A1)
-            @test Transpose(B)/Transpose(A1) ≈ Transpose(B)/Transpose(Matrix(A1))
+            @test transpose(B)/transpose(A1) ≈ transpose(B)/transpose(Matrix(A1))
             @test B'/A1' ≈ B'/Matrix(A1)'
 
             # Error bounds
@@ -498,15 +498,15 @@ let n = 5
     @test_throws DimensionMismatch rdiv!(A, UnitLowerTriangular(B))
     @test_throws DimensionMismatch rdiv!(A, UnitUpperTriangular(B))
 
-    @test_throws DimensionMismatch rdiv!(A, Adjoint(LowerTriangular(B)))
-    @test_throws DimensionMismatch rdiv!(A, Adjoint(UpperTriangular(B)))
-    @test_throws DimensionMismatch rdiv!(A, Adjoint(UnitLowerTriangular(B)))
-    @test_throws DimensionMismatch rdiv!(A, Adjoint(UnitUpperTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, adjoint(LowerTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, adjoint(UpperTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, adjoint(UnitLowerTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, adjoint(UnitUpperTriangular(B)))
 
-    @test_throws DimensionMismatch rdiv!(A, Transpose(LowerTriangular(B)))
-    @test_throws DimensionMismatch rdiv!(A, Transpose(UpperTriangular(B)))
-    @test_throws DimensionMismatch rdiv!(A, Transpose(UnitLowerTriangular(B)))
-    @test_throws DimensionMismatch rdiv!(A, Transpose(UnitUpperTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, transpose(LowerTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, transpose(UpperTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, transpose(UnitLowerTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, transpose(UnitUpperTriangular(B)))
 end
 
 # Test that UpperTriangular(LowerTriangular) throws. See #16201

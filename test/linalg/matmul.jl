@@ -2,7 +2,7 @@
 
 using Test
 
-using Base.LinAlg: mul!, Adjoint, Transpose
+using Base.LinAlg: mul!
 
 ## Test Julia fallbacks to BLAS routines
 
@@ -29,15 +29,15 @@ end
     BBi = BB+(2.5*im).*AA[[2,1],[2,1]]
     for A in (copy(AA), view(AA, 1:2, 1:2)), B in (copy(BB), view(BB, 1:2, 1:2))
         @test A*B == [19 22; 43 50]
-        @test *(Transpose(A), B) == [26 30; 38 44]
-        @test *(A, Transpose(B)) == [17 23; 39 53]
-        @test *(Transpose(A), Transpose(B)) == [23 31; 34 46]
+        @test *(transpose(A), B) == [26 30; 38 44]
+        @test *(A, transpose(B)) == [17 23; 39 53]
+        @test *(transpose(A), transpose(B)) == [23 31; 34 46]
     end
     for Ai in (copy(AAi), view(AAi, 1:2, 1:2)), Bi in (copy(BBi), view(BBi, 1:2, 1:2))
         @test Ai*Bi == [-21+53.5im -4.25+51.5im; -12+95.5im 13.75+85.5im]
-        @test *(Adjoint(Ai), Bi) == [68.5-12im 57.5-28im; 88-3im 76.5-25im]
-        @test *(Ai, Adjoint(Bi)) == [64.5+5.5im 43+31.5im; 104-18.5im 80.5+31.5im]
-        @test *(Adjoint(Ai), Adjoint(Bi)) == [-28.25-66im 9.75-58im; -26-89im 21-73im]
+        @test *(adjoint(Ai), Bi) == [68.5-12im 57.5-28im; 88-3im 76.5-25im]
+        @test *(Ai, adjoint(Bi)) == [64.5+5.5im 43+31.5im; 104-18.5im 80.5+31.5im]
+        @test *(adjoint(Ai), adjoint(Bi)) == [-28.25-66im 9.75-58im; -26-89im 21-73im]
         @test_throws DimensionMismatch [1 2; 0 0; 0 0] * [1 2]
     end
     @test_throws DimensionMismatch mul!(Matrix{Float64}(uninitialized,3,3), AA, BB)
@@ -49,15 +49,15 @@ end
     BBi = BB+(2.5*im).*AA[[2,1,3],[2,3,1]]
     for A in (copy(AA), view(AA, 1:3, 1:3)), B in (copy(BB), view(BB, 1:3, 1:3))
         @test A*B == [-26 38 -27; 1 -4 -6; 28 -46 15]
-        @test *(Adjoint(A), B) == [-6 2 -25; 3 -12 -18; 12 -26 -11]
-        @test *(A, Adjoint(B)) == [-14 0 6; 4 -3 -3; 22 -6 -12]
-        @test *(Adjoint(A), Adjoint(B)) == [6 -8 -6; 12 -9 -9; 18 -10 -12]
+        @test *(adjoint(A), B) == [-6 2 -25; 3 -12 -18; 12 -26 -11]
+        @test *(A, adjoint(B)) == [-14 0 6; 4 -3 -3; 22 -6 -12]
+        @test *(adjoint(A), adjoint(B)) == [6 -8 -6; 12 -9 -9; 18 -10 -12]
     end
     for Ai in (copy(AAi), view(AAi, 1:3, 1:3)), Bi in (copy(BBi), view(BBi, 1:3, 1:3))
         @test Ai*Bi == [-44.75+13im 11.75-25im -38.25+30im; -47.75-16.5im -51.5+51.5im -56+6im; 16.75-4.5im -53.5+52im -15.5im]
-        @test *(Adjoint(Ai), Bi) == [-21+2im -1.75+49im -51.25+19.5im; 25.5+56.5im -7-35.5im 22+35.5im; -3+12im -32.25+43im -34.75-2.5im]
-        @test *(Ai, Adjoint(Bi)) == [-20.25+15.5im -28.75-54.5im 22.25+68.5im; -12.25+13im -15.5+75im -23+27im; 18.25+im 1.5+94.5im -27-54.5im]
-        @test *(Adjoint(Ai), Adjoint(Bi)) == [1+2im 20.75+9im -44.75+42im; 19.5+17.5im -54-36.5im 51-14.5im; 13+7.5im 11.25+31.5im -43.25-14.5im]
+        @test *(adjoint(Ai), Bi) == [-21+2im -1.75+49im -51.25+19.5im; 25.5+56.5im -7-35.5im 22+35.5im; -3+12im -32.25+43im -34.75-2.5im]
+        @test *(Ai, adjoint(Bi)) == [-20.25+15.5im -28.75-54.5im 22.25+68.5im; -12.25+13im -15.5+75im -23+27im; 18.25+im 1.5+94.5im -27-54.5im]
+        @test *(adjoint(Ai), adjoint(Bi)) == [1+2im 20.75+9im -44.75+42im; 19.5+17.5im -54-36.5im 51-14.5im; 13+7.5im 11.25+31.5im -43.25-14.5im]
         @test_throws DimensionMismatch [1 2 3; 0 0 0; 0 0 0] * [1 2 3]
     end
     @test_throws DimensionMismatch mul!(Matrix{Float64}(uninitialized,4,4), AA, BB)
@@ -83,7 +83,7 @@ end
     BB = [2 -2; 3 -5; -4 7]
     for A in (copy(AA), view(AA, 1:2, 1:3)), B in (copy(BB), view(BB, 1:3, 1:2))
         @test A*B == [-7 9; -4 9]
-        @test *(Transpose(A), Transpose(B)) == [-6 -11 15; -6 -13 18; -6 -15 21]
+        @test *(transpose(A), transpose(B)) == [-6 -11 15; -6 -13 18; -6 -15 21]
     end
     AA = fill(1, 2, 100)
     BB = fill(1, 100, 3)
@@ -94,23 +94,23 @@ end
     BB = rand(1:20, 5, 5) .- 10
     CC = Matrix{Int}(uninitialized, size(AA, 1), size(BB, 2))
     for A in (copy(AA), view(AA, 1:5, 1:5)), B in (copy(BB), view(BB, 1:5, 1:5)), C in (copy(CC), view(CC, 1:5, 1:5))
-        @test *(Transpose(A), B) == A'*B
-        @test *(A, Transpose(B)) == A*B'
+        @test *(transpose(A), B) == A'*B
+        @test *(A, transpose(B)) == A*B'
         # Preallocated
         @test mul!(C, A, B) == A*B
-        @test mul!(C, Transpose(A), B) == A'*B
-        @test mul!(C, A, Transpose(B)) == A*B'
-        @test mul!(C, Transpose(A), Transpose(B)) == A'*B'
-        @test Base.LinAlg.mul!(C, Adjoint(A), Transpose(B)) == A'*Transpose(B)
+        @test mul!(C, transpose(A), B) == A'*B
+        @test mul!(C, A, transpose(B)) == A*B'
+        @test mul!(C, transpose(A), transpose(B)) == A'*B'
+        @test Base.LinAlg.mul!(C, adjoint(A), transpose(B)) == A'*transpose(B)
 
         #test DimensionMismatch for generic_matmatmul
-        @test_throws DimensionMismatch Base.LinAlg.mul!(C, Adjoint(A), Transpose(fill(1,4,4)))
-        @test_throws DimensionMismatch Base.LinAlg.mul!(C, Adjoint(fill(1,4,4)), Transpose(B))
+        @test_throws DimensionMismatch Base.LinAlg.mul!(C, adjoint(A), transpose(fill(1,4,4)))
+        @test_throws DimensionMismatch Base.LinAlg.mul!(C, adjoint(fill(1,4,4)), transpose(B))
     end
     vv = [1,2]
     CC = Matrix{Int}(uninitialized, 2, 2)
     for v in (copy(vv), view(vv, 1:2)), C in (copy(CC), view(CC, 1:2, 1:2))
-        @test @inferred(mul!(C, v, Adjoint(v))) == [1 2; 2 4]
+        @test @inferred(mul!(C, v, adjoint(v))) == [1 2; 2 4]
     end
 end
 
@@ -124,12 +124,12 @@ end
     vv = [1,2,3]
     CC = Matrix{Int}(uninitialized, 3, 3)
     for v in (copy(vv), view(vv, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
-        @test mul!(C, v, Transpose(v)) == v*v'
+        @test mul!(C, v, transpose(v)) == v*v'
     end
     vvf = map(Float64,vv)
     CC = Matrix{Float64}(uninitialized, 3, 3)
     for vf in (copy(vvf), view(vvf, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
-        @test mul!(C, vf, Transpose(vf)) == vf*vf'
+        @test mul!(C, vf, transpose(vf)) == vf*vf'
     end
 end
 
@@ -138,9 +138,9 @@ end
     BB = rand(Float64,6,6)
     CC = zeros(Float64,6,6)
     for A in (copy(AA), view(AA, 1:6, 1:6)), B in (copy(BB), view(BB, 1:6, 1:6)), C in (copy(CC), view(CC, 1:6, 1:6))
-        @test Base.LinAlg.mul!(C, Transpose(A), Transpose(B)) == Transpose(A)*Transpose(B)
-        @test Base.LinAlg.mul!(C, A, Adjoint(B)) == A*Transpose(B)
-        @test Base.LinAlg.mul!(C, Adjoint(A), B) == Transpose(A)*B
+        @test Base.LinAlg.mul!(C, transpose(A), transpose(B)) == transpose(A)*transpose(B)
+        @test Base.LinAlg.mul!(C, A, adjoint(B)) == A*transpose(B)
+        @test Base.LinAlg.mul!(C, adjoint(A), B) == transpose(A)*B
     end
 end
 
@@ -150,13 +150,13 @@ end
     Asub = view(A, 1:2:5, 1:2:4)
     b = [1.2,-2.5]
     @test (Aref*b) == (Asub*b)
-    @test *(Transpose(Asub), Asub) == *(Transpose(Aref), Aref)
-    @test *(Asub, Transpose(Asub)) == *(Aref, Transpose(Aref))
+    @test *(transpose(Asub), Asub) == *(transpose(Aref), Aref)
+    @test *(Asub, transpose(Asub)) == *(Aref, transpose(Aref))
     Ai = A .+ im
     Aref = Ai[1:2:end,1:2:end]
     Asub = view(Ai, 1:2:5, 1:2:4)
-    @test *(Adjoint(Asub), Asub) == *(Adjoint(Aref), Aref)
-    @test *(Asub, Adjoint(Asub)) == *(Aref, Adjoint(Aref))
+    @test *(adjoint(Asub), Asub) == *(adjoint(Aref), Aref)
+    @test *(Asub, adjoint(Asub)) == *(Aref, adjoint(Aref))
 end
 
 @testset "issue #15286" begin
@@ -164,33 +164,33 @@ end
     C = zeros(8, 8)
     sC = view(C, 1:2:8, 1:2:8)
     B = reshape(map(Float64,-9:10),5,4)
-    @test mul!(sC, Transpose(A), A) == A'*A
-    @test mul!(sC, Transpose(A), B) == A'*B
+    @test mul!(sC, transpose(A), A) == A'*A
+    @test mul!(sC, transpose(A), B) == A'*B
 
     Aim = A .- im
     C = zeros(ComplexF64,8,8)
     sC = view(C, 1:2:8, 1:2:8)
     B = reshape(map(Float64,-9:10),5,4) .+ im
-    @test mul!(sC, Adjoint(Aim), Aim) == Aim'*Aim
-    @test mul!(sC, Adjoint(Aim), B) == Aim'*B
+    @test mul!(sC, adjoint(Aim), Aim) == Aim'*Aim
+    @test mul!(sC, adjoint(Aim), B) == Aim'*B
 end
 
 @testset "syrk & herk" begin
     AA = reshape(1:1503, 501, 3).-750.0
     res = Float64[135228751 9979252 -115270247; 9979252 10481254 10983256; -115270247 10983256 137236759]
     for A in (copy(AA), view(AA, 1:501, 1:3))
-        @test *(Transpose(A), A) == res
-        @test *(Adjoint(A), Transpose(copy(A'))) == res
+        @test *(transpose(A), A) == res
+        @test *(adjoint(A), transpose(copy(A'))) == res
     end
     cutoff = 501
     A = reshape(1:6*cutoff,2*cutoff,3).-(6*cutoff)/2
     Asub = view(A, 1:2:2*cutoff, 1:3)
     Aref = A[1:2:2*cutoff, 1:3]
-    @test *(Transpose(Asub), Asub) == *(Transpose(Aref), Aref)
+    @test *(transpose(Asub), Asub) == *(transpose(Aref), Aref)
     Ai = A .- im
     Asub = view(Ai, 1:2:2*cutoff, 1:3)
     Aref = Ai[1:2:2*cutoff, 1:3]
-    @test *(Adjoint(Asub), Asub) == *(Adjoint(Aref), Aref)
+    @test *(adjoint(Asub), Asub) == *(adjoint(Aref), Aref)
 
     A5x5, A6x5 = Matrix{Float64}.(uninitialized, ((5, 5), (6, 5)))
     @test_throws DimensionMismatch Base.LinAlg.syrk_wrapper!(A5x5,'N',A6x5)
@@ -222,7 +222,7 @@ end
     @test_throws BoundsError dot(x, 1:4, y, 1:4)
     @test_throws BoundsError dot(x, 1:3, y, 2:4)
     @test dot(x, 1:2,y, 1:2) == convert(elty, 12.5)
-    @test Transpose(x)*y == convert(elty, 29.0)
+    @test transpose(x)*y == convert(elty, 29.0)
     @test_throws MethodError dot(rand(elty, 2, 2), randn(elty, 2, 2))
     X = convert(Vector{Matrix{elty}},[reshape(1:4, 2, 2), fill(1, 2, 2)])
     res = convert(Matrix{elty}, [7.0 13.0; 13.0 27.0])
@@ -277,7 +277,7 @@ end
     @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(I10x10,'N','N', I0x0, I0x0)
 
     A = rand(elty,3,3)
-    @test Base.LinAlg.matmul3x3('T','N',A, Matrix{elty}(I, 3, 3)) == Transpose(A)
+    @test Base.LinAlg.matmul3x3('T','N',A, Matrix{elty}(I, 3, 3)) == transpose(A)
 end
 
 @testset "#13593, #13488" begin
@@ -297,18 +297,21 @@ end
 import Base: *, adjoint, transpose, Adjoint, Transpose
 (*)(x::RootInt, y::RootInt) = x.i*y.i
 adjoint(x::RootInt) = x
-Adjoint(x::RootInt) = x
 transpose(x::RootInt) = x
+Adjoint(x::RootInt) = x
 Transpose(x::RootInt) = x
+# TODO once Adjoint/Transpose constructors call adjoint/transpose recursively
+# rather than Adjoint/Transpose, the additional definitions should become unnecessary
+
 @test Base.promote_op(*, RootInt, RootInt) === Int
 
 @testset "#14293" begin
     a = [RootInt(3)]
     C = [0]
-    mul!(C, a, Transpose(a))
+    mul!(C, a, transpose(a))
     @test C[1] == 9
     a = [RootInt(2),RootInt(10)]
-    @test a*a' == [4 20; 20 100]
+    @test a*adjoint(a) == [4 20; 20 100]
     A = [RootInt(3) RootInt(5)]
     @test A*a == [56]
 end

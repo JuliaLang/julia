@@ -125,8 +125,8 @@ function randmatstat(t)
         d = randn(n,n)
         P = [a b c d]
         Q = [a b; c d]
-        v[i] = trace((Transpose(P)*P)^4)
-        w[i] = trace((Transpose(Q)*Q)^4)
+        v[i] = trace((P'*P)^4)
+        w[i] = trace((Q'*Q)^4)
     end
     return (std(v)/mean(v), std(w)/mean(w))
 end
