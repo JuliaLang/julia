@@ -219,6 +219,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Some{T}` wraps `T` to signify that a result of `T<:Void` is expected ([#23642]).
 
+* `replace` accepts a pair of pattern and replacement, with the number of replacements as
+  a keyword argument ([#25165]).
+
 ## Renaming
 
 
@@ -423,4 +426,5 @@ includes this fix. Find the minimum version from there.
 [#25057]: https://github.com/JuliaLang/julia/issues/25057
 [#25102]: https://github.com/JuliaLang/julia/issues/25102
 [#25162]: https://github.com/JuliaLang/julia/issues/25162
+[#25165]: https://github.com/JuliaLang/julia/issues/25165
 [#25168]: https://github.com/JuliaLang/julia/issues/25168
