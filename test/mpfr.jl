@@ -353,6 +353,7 @@ end
     y = BigFloat(-1)
     @test copysign(x, y) == y
     @test copysign(y, x) == x
+    @test copysign(1.0, BigFloat(NaN)) == 1.0
 end
 @testset "isfinite / isinf / isnan" begin
     x = BigFloat(Inf)
@@ -380,6 +381,9 @@ end
     @test typeof(convert(BigFloat, parse(BigInt,"9223372036854775808"))) == BigFloat
     @test convert(AbstractFloat, parse(BigInt,"9223372036854775808")) == parse(BigFloat,"9223372036854775808")
     @test typeof(convert(AbstractFloat, parse(BigInt,"9223372036854775808"))) == BigFloat
+
+    @test signbit(BigFloat(NaN)) == 0
+    @test signbit(BigFloat(-NaN)) == 1
 end
 @testset "convert from BigFloat" begin
     @test convert(Float64, BigFloat(0.5)) == 0.5
@@ -388,6 +392,9 @@ end
     @test convert(Bool, BigFloat(0.0)) == false
     @test convert(Bool, BigFloat(1.0)) == true
     @test_throws InexactError convert(Bool, BigFloat(0.1))
+
+    @test signbit(Float64(BigFloat(NaN))) == 0
+    @test signbit(Float64(-BigFloat(NaN))) == 1
 end
 @testset "exponent, frexp, significand" begin
     x = BigFloat(0)
