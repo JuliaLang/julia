@@ -481,6 +481,8 @@ end
         z[a[1][i],a[2][i],a[3][i]] = 10
     end
     @test isequal(a,findn(z))
+
+    @test findn([1, 0, 2]) == ([1, 3], )
 end
 
 @testset "findmin findmax indmin indmax" begin

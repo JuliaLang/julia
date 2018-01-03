@@ -1800,50 +1800,6 @@ end
 find(x::Bool) = x ? [1] : Vector{Int}()
 find(testf::Function, x::Number) = !testf(x) ? Vector{Int}() : [1]
 
-findn(A::AbstractVector) = find(A)
-
-"""
-    findn(A)
-
-Return a vector of indices for each dimension giving the locations of the non-zeros in `A`
-(determined by `A[i]!=0`).
-If there are no non-zero elements of `A`, return a 2-tuple of empty arrays.
-
-# Examples
-```jldoctest
-julia> A = [1 2 0; 0 0 3; 0 4 0]
-3×3 Array{Int64,2}:
- 1  2  0
- 0  0  3
- 0  4  0
-
-julia> findn(A)
-([1, 1, 3, 2], [1, 2, 2, 3])
-
-julia> A = zeros(2,2)
-2×2 Array{Float64,2}:
- 0.0  0.0
- 0.0  0.0
-
-julia> findn(A)
-(Int64[], Int64[])
-```
-"""
-function findn(A::AbstractMatrix)
-    nnzA = count(t -> t != 0, A)
-    I = similar(A, Int, nnzA)
-    J = similar(A, Int, nnzA)
-    cnt = 1
-    for j=axes(A,2), i=axes(A,1)
-        if A[i,j] != 0
-            I[cnt] = i
-            J[cnt] = j
-            cnt += 1
-        end
-    end
-    return (I, J)
-end
-
 """
     findnz(A)
 
