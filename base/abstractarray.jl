@@ -1995,6 +1995,7 @@ function hash(a::AbstractArray{T}, h::UInt) where T
                 # If true, wraparound overflow happened
                 sign(step) == cmp(x2, x1) || break
             else
+                applicable(-, x2, x1) || break
                 # widen() is here to ensure no overflow can happen
                 step = widen(x2) - widen(x1)
             end
