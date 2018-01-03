@@ -1300,3 +1300,8 @@ g_test_constant() = (f_constant(3) == 3 && f_constant(4) == 4 ? true : "BAD")
 
 f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test @inferred f_pure_add()
+
+# inference of `T.mutable`
+@test Core.Inference.getfield_tfunc(Const(Int), Const(:mutable)) == Const(false)
+@test Core.Inference.getfield_tfunc(Const(Vector{Int}), Const(:mutable)) == Const(true)
+@test Core.Inference.getfield_tfunc(DataType, Const(:mutable)) == Bool

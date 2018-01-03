@@ -1331,6 +1331,7 @@ const DataType_name_fieldindex = fieldindex(DataType, :name)
 const DataType_parameters_fieldindex = fieldindex(DataType, :parameters)
 const DataType_types_fieldindex = fieldindex(DataType, :types)
 const DataType_super_fieldindex = fieldindex(DataType, :super)
+const DataType_mutable_fieldindex = fieldindex(DataType, :mutable)
 
 const TypeName_name_fieldindex = fieldindex(TypeName, :name)
 const TypeName_module_fieldindex = fieldindex(TypeName, :module)
@@ -1340,7 +1341,8 @@ function const_datatype_getfield_tfunc(sv, fld)
     if (fld == DataType_name_fieldindex ||
             fld == DataType_parameters_fieldindex ||
             fld == DataType_types_fieldindex ||
-            fld == DataType_super_fieldindex)
+            fld == DataType_super_fieldindex ||
+            fld == DataType_mutable_fieldindex)
         return abstract_eval_constant(getfield(sv, fld))
     end
     return nothing
