@@ -746,3 +746,14 @@ end
     @test pop!(d) == (3=>4)
     @test_throws ArgumentError pop!(d)
 end
+
+@testset "keys as a set" begin
+    d = Dict(1=>2, 3=>4)
+    @test keys(d) isa AbstractSet
+    @test empty(keys(d)) isa AbstractSet
+    let i = keys(d) ∩ Set([1,2])
+        @test i isa AbstractSet
+        @test i == Set([1])
+    end
+    @test map(string, keys(d)) == Set(["1","3"])
+end

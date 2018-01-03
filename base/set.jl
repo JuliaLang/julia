@@ -27,7 +27,7 @@ function Set(g::Generator)
     return Set{T}(g)
 end
 
-empty(s::Set{T}, ::Type{U}=T) where {T,U} = Set{U}()
+empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 
 # return an empty set with eltype T, which is mutable (can be grown)
 # by default, a Set is returned
