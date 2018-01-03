@@ -391,3 +391,6 @@ test18695(r) = sum( t^2 for t in r )
 # test neutral element not picked incorrectly for &, |
 @test @inferred(foldl(&, Int[1])) === 1
 @test_throws ArgumentError foldl(&, Int[])
+
+# issue #24823
+@test foldr(Pair, 0, Iterators.filter(iseven, 1:6)) === foldr(Pair, 0, 2:2:6) === (2=>(4=>(6=>0)))
