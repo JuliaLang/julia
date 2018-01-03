@@ -326,7 +326,7 @@ function _check0(a::Vector{UInt64}, b::Int, e::Int)
     true
 end
 
-function ==(s1::BitSet, s2::BitSet)
+function issetequal(s1::BitSet, s2::BitSet)
     # Swap so s1 has always the smallest offset
     if s1.offset > s2.offset
         s1, s2 = s2, s1
@@ -356,33 +356,9 @@ function ==(s1::BitSet, s2::BitSet)
     return true
 end
 
-issubset(a::BitSet, b::BitSet) = isequal(a, intersect(a,b))
-<(a::BitSet, b::BitSet) = (a<=b) && !isequal(a,b)
-<=(a::BitSet, b::BitSet) = issubset(a, b)
+⊆(a::BitSet, b::BitSet) = a == intersect(a,b)
+⊊(a::BitSet, b::BitSet) = a <= b && a != b
 
-const hashis_seed = UInt === UInt64 ? 0x88989f1fc7dea67d : 0xc7dea67d
-function hash(s::BitSet, h::UInt)
-    h ⊻= hashis_seed
-    bc = s.bits
-    i = 1
-    j = length(bc)
-
-    while j > 0 && bc[j] == CHK0
-        # Skip trailing empty bytes to prevent extra space from changing the hash
-        j -= 1
-    end
-    while i <= j && bc[i] == CHK0
-        # Skip leading empty bytes to prevent extra space from changing the hash
-        i += 1
-    end
-    i > j && return h # empty
-    h = hash(i+s.offset, h) # normalized offset
-    while j >= i
-        h = hash(bc[j], h)
-        j -= 1
-    end
-    h
-end
 
 minimum(s::BitSet) = first(s)
 maximum(s::BitSet) = last(s)

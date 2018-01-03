@@ -261,9 +261,11 @@ function symdiff!(s::AbstractSet, itr)
     s
 end
 
-==(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
-<( l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
-<=(l::Set, r::Set) = issubset(l, r)
+# convenience functions for AbstractSet
+# (if needed, only their synonyms issetequal, ⊊ and ⊆ must be specialized)
+==(l::AbstractSet, r::AbstractSet) = issetequal(l, r)
+<( l::AbstractSet, r::AbstractSet) = l ⊊ r
+<=(l::AbstractSet, r::AbstractSet) = l ⊆ r
 
 """
     issubset(a, b)
@@ -282,7 +284,7 @@ julia> issubset([1, 2, 3], [1, 2])
 false
 ```
 """
-function issubset(l, r)
+function ⊆(l, r)
     for elt in l
         if !in(elt, r)
             return false
@@ -290,21 +292,34 @@ function issubset(l, r)
     end
     return true
 end
-
 # use the implementation below when it becoms as efficient
 # issubset(l, r) = all(_in(r), l)
 
-const ⊆ = issubset
-⊊(l::Set, r::Set) = <(l, r)
-⊈(l::Set, r::Set) = !⊆(l, r)
-⊇(l, r) = issubset(r, l)
-⊉(l::Set, r::Set) = !⊇(l, r)
-⊋(l::Set, r::Set) = <(r, l)
+const issubset = ⊆
 
-⊊(l::T, r::T) where {T<:AbstractSet} = <(l, r)
-⊈(l::T, r::T) where {T<:AbstractSet} = !⊆(l, r)
-⊉(l::T, r::T) where {T<:AbstractSet} = !⊇(l, r)
-⊋(l::T, r::T) where {T<:AbstractSet} = <(r, l)
+"""
+    issetequal(a, b)
+
+Determine whether `a` and `b` have the same elements. Equivalent
+to `a ⊆ b && b ⊆ a`.
+
+# Examples
+```jldoctest
+julia> issetequal([1, 2], [1, 2, 3])
+false
+
+julia> issetequal([1, 2], [2, 1])
+true
+```
+"""
+issetequal(l, r) = length(l) == length(r) && l ⊆ r
+
+⊊(l, r) = length(l) < length(r) && l ⊆ r
+⊈(l, r) = !⊆(l, r)
+
+⊇(l, r) = r ⊆ l
+⊉(l, r) = r ⊈ l
+⊋(l, r) = r ⊊ l
 
 """
     unique(itr)
@@ -534,7 +549,7 @@ function mapfilter(pred, f, itr, res)
 end
 
 const hashs_seed = UInt === UInt64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
-function hash(s::Set, h::UInt)
+function hash(s::AbstractSet, h::UInt)
     hv = hashs_seed
     for x in s
         hv ⊻= hash(x)

@@ -642,6 +642,7 @@ export
     intersect,
     isempty,
     issubset,
+    issetequal,
     keys,
     keytype,
     length,
