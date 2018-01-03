@@ -681,6 +681,12 @@ tuplebroadcast_getargs(::Tuple{}, k) = ()
 @inline tuplebroadcast_getargs(As, k) =
     (_broadcast_getindex(first(As), k), tuplebroadcast_getargs(tail(As), k)...)
 
+# \ is not available at the time of range.jl
+broadcast(::typeof(\), x::Number, r::AbstractRange) = range(x\first(r), x\step(r), x\length(r))
+broadcast(::typeof(\), x::Number, r::StepRangeLen) = StepRangeLen(x\r.ref, x\r.step, length(r), r.offset)
+broadcast(::typeof(\), x::Number, r::LinSpace) = LinSpace(x \ r.start, x \ r.stop, r.len)
+broadcast(::typeof(\), r::AbstractRange, x::Number) = [(y\x) for y in r]
+
 
 """
     broadcast_getindex(A, inds...)

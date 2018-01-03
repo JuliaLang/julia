@@ -478,15 +478,15 @@ end
     @test sum(0:0.1:10) == 505.
 end
 @testset "broadcasted operations with scalars" begin
-    @test broadcast(-, 1:3, 2) == -1:1
-    @test broadcast(-, 1:3, 0.25) == 1-0.25:3-0.25
-    @test broadcast(+, 1:3, 2) == 3:5
-    @test broadcast(+, 1:3, 0.25) == 1+0.25:3+0.25
-    @test broadcast(+, 1:2:6, 1) == 2:2:6
-    @test broadcast(+, 1:2:6, 0.3) == 1+0.3:2:5+0.3
-    @test broadcast(-, 1:2:6, 1) == 0:2:4
-    @test broadcast(-, 1:2:6, 0.3) == 1-0.3:2:5-0.3
-    @test broadcast(-, 2, 1:3) == 1:-1:-1
+    @test broadcast(-, 1:3, 2) === -1:1
+    @test broadcast(-, 1:3, 0.25) === 1-0.25:3-0.25
+    @test broadcast(+, 1:3, 2) === 3:5
+    @test broadcast(+, 1:3, 0.25) === 1+0.25:3+0.25
+    @test broadcast(+, 1:2:6, 1) === 2:2:6
+    @test broadcast(+, 1:2:6, 0.3) === 1+0.3:2:5+0.3
+    @test broadcast(-, 1:2:6, 1) === 0:2:4
+    @test broadcast(-, 1:2:6, 0.3) === 1-0.3:2:5-0.3
+    @test broadcast(-, 2, 1:3) === 1:-1:-1
 end
 @testset "operations between ranges and arrays" begin
     @test all(([1:5;] + (5:-1:1)) .== 6)
