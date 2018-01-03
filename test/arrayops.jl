@@ -941,6 +941,15 @@ end
     @test isequal(symdiff([1,2,3], Float64[]), Float64[1.0,2,3])
     @test isequal(symdiff(Int64[], [1,2,3]), Int64[1,2,3])
     @test isequal(symdiff(Int64[]), Int64[])
+    @testset "tuples" begin # Issue #25338
+        @test union((1, 2), (3)) == [1, 2, 3]
+        u = union((1, 0x2), [3])
+        @test eltype(u) == Integer
+        @test u == [1, 2, 3]
+        @test intersect((1, 2), (3, 2)) == [2]
+        @test setdiff((1, 2), (3, 2)) == [1]
+        @test symdiff((1, 2), (3, 2)) == [1, 3]
+    end
 end
 
 @testset "mapslices" begin
