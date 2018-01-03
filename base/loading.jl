@@ -104,10 +104,11 @@ function find_source_file(path::String)
     return isfile(base_path) ? base_path : nothing
 end
 
-function find_all_in_cache_path(name::String)
+function find_all_in_cache_path(mod::Symbol)
+    name = string(mod)
     paths = String[]
     for prefix in LOAD_CACHE_PATH
-        path = joinpath(prefix, name * ".ji")
+        path = joinpath(prefix, name*".ji")
         if isfile_casesensitive(path)
             push!(paths, path)
         end
@@ -117,38 +118,22 @@ end
 
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
-# and it reconnects the Base.Docs.META
-function _include_from_serialized(path::String, depmods::Vector{Any})
-    restored = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
-    if !isa(restored, Exception)
-        for M in restored::Vector{Any}
-            M = M::Module
-            if isdefined(M, Base.Docs.META)
-                push!(Base.Docs.modules, M)
-            end
-            if module_parent(M) === M
-                register_root_module(module_name(M), M)
-            end
-        end
-    end
-    return restored
+function _include_from_serialized(content::Vector{UInt8}, depmods::Vector{Module})
+    return ccall(:jl_restore_incremental_from_buf, Any, (Ptr{UInt8}, Int, Any), content, sizeof(content), depmods)
+end
+function _include_from_serialized(path::String, depmods::Vector{Module})
+    return ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
 end
 
-
-function _require_from_serialized(path::String)
-    # loads a precompile cache file, ignoring stale_cachfile tests
-    # load all of the dependent modules first
-    local depmodnames
-    io = open(path, "r")
-    try
-        isvalid_cache_header(io) || return ArgumentError("Invalid header in cache file $path.")
-        depmodnames = parse_cache_header(io)[3]
-        isvalid_file_crc(io) || return ArgumentError("Invalid checksum in cache file $path.")
-    finally
-        close(io)
-    end
+# returns an array of modules loaded, or an Exception that describes why it failed
+# and it reconnects the Base.Docs.META
+function _require_from_serialized(mod::Symbol, path_to_try::String)
+    return _require_from_serialized(mod, path_to_try, parse_cache_header(path_to_try)[3])
+end
+function _require_from_serialized(mod::Symbol, path_to_try::String, depmodnames::Vector{Pair{Symbol, UInt64}})
+    # load all of the dependent modules
     ndeps = length(depmodnames)
-    depmods = Vector{Any}(uninitialized, ndeps)
+    depmods = Vector{Module}(uninitialized, ndeps)
     for i in 1:ndeps
         modname, uuid = depmodnames[i]
         if root_module_exists(modname)
@@ -174,45 +159,42 @@ function _require_from_serialized(path::String)
         end
         isassigned(depmods, i) || return ErrorException("Required dependency $modname failed to load from a cache file.")
     end
-    # then load the file
-    return _include_from_serialized(path, depmods)
+    # now load the path_to_try.ji file
+    restored = _include_from_serialized(path_to_try, depmods)
+    if !isa(restored, Exception)
+        for M in restored::Vector{Any}
+            M = M::Module
+            if isdefined(M, Base.Docs.META)
+                push!(Base.Docs.modules, M)
+            end
+            if module_parent(M) === M
+                register_root_module(module_name(M), M)
+            end
+        end
+    end
+    return restored
 end
 
-# returns `true` if require found a precompile cache for this sourcepath, but couldn't load it
+# returns `true` if require found a precompile cache for this mod, but couldn't load it
 # returns `false` if the module isn't known to be precompilable
 # returns the set of modules restored if the cache load succeeded
 function _require_search_from_serialized(mod::Symbol, sourcepath::String)
-    paths = find_all_in_cache_path(String(mod)) # cache files for sourcepath are stored keyed by the `mod` symbol name
+    paths = find_all_in_cache_path(mod)
     for path_to_try in paths::Vector{String}
         deps = stale_cachefile(sourcepath, path_to_try)
         if deps === true
             continue
         end
-        # finish loading module graph into deps
-        for i in 1:length(deps)
-            dep = deps[i]
-            dep isa Module && continue
-            modpath, modname, uuid = dep::Tuple{String, Symbol, UInt64}
-            reqmod = _require_search_from_serialized(modname, modpath)
-            if !isa(reqmod, Bool)
-                for M in reqmod::Vector{Any}
-                    if module_name(M) === modname && module_uuid(M) === uuid
-                        deps[i] = M
-                        break
-                    end
-                end
-                for callback in package_callbacks
-                    invokelatest(callback, modname)
-                end
-            end
-            if !isa(deps[i], Module)
-                @debug "Required dependency $modname failed to load from cache file for $modpath."
+        restored = _require_from_serialized(mod, path_to_try, deps)
+        if isa(restored, Exception)
+            if isa(restored, ErrorException)
+                # can't use this cache due to a module uuid mismatch,
+                # defer reporting error until after trying all of the possible matches
+                @debug "Failed to load $path_to_try because $(restored.msg)"
                 continue
             end
-        end
-        restored = _include_from_serialized(path_to_try, deps)
-        if isa(restored, Exception)
-            @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
+            @warn "Deserialization checks failed while attempting to load cache from $path_to_try"
+            throw(restored)
         else
             return restored
         end
@@ -438,7 +420,7 @@ function _require(mod::Symbol)
             # spawn off a new incremental pre-compile task for recursive `require` calls
             # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
             cachefile = compilecache(mod)
-            m = _require_from_serialized(cachefile)
+            m = _require_from_serialized(mod, cachefile)
             if isa(m, Exception)
                 @warn "The call to compilecache failed to create a usable precompiled cache file for module $name" exception=m
                 # fall-through, TODO: disable __precompile__(true) error so that the normal include will succeed
@@ -458,7 +440,7 @@ function _require(mod::Symbol)
             end
             # the file requested `__precompile__`, so try to build a cache file and use that
             cachefile = compilecache(mod)
-            m = _require_from_serialized(cachefile)
+            m = _require_from_serialized(mod, cachefile)
             if isa(m, Exception)
                 @warn """Module `$mod` declares `__precompile__(true)` but `require` failed
                          to create a usable precompiled cache file""" exception=m
@@ -652,8 +634,7 @@ end
 
 module_uuid(m::Module) = ccall(:jl_module_uuid, UInt64, (Any,), m)
 
-isvalid_cache_header(f::IOStream) = (0 != ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid},), f.ios))
-isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == ntoh(read(f, UInt32)))
+isvalid_cache_header(f::IOStream) = 0 != ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid},), f.ios)
 
 function parse_cache_header(f::IO)
     modules = Vector{Pair{Symbol, UInt64}}()
@@ -757,45 +738,31 @@ function stale_cachefile(modpath::String, cachefile::String)
             @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
-
         modules, files, required_modules = parse_cache_header(io)
         modules = Dict{Symbol, UInt64}(modules)
 
         # Check if transitive dependencies can be fullfilled
-        ndeps = length(required_modules)
-        depmods = Vector{Any}(uninitialized, ndeps)
-        for i in 1:ndeps
-            mod, uuid_req = required_modules[i]
+        for (mod, uuid_req) in required_modules
             # Module is already loaded
             if root_module_exists(mod)
-                M = root_module(mod)
-                if module_name(M) === mod && module_uuid(M) === uuid_req
-                    depmods[i] = M
-                else
-                    @debug "Rejecting cache file $cachefile because module $name is already loaded and incompatible."
-                    return true # Won't be able to fulfill dependency
-                end
-            else
-                name = string(mod)
-                path = find_package(name)
-                if path === nothing
-                    @debug "Rejecting cache file $cachefile because dependency $name not found."
-                    return true # Won't be able to fulfill dependency
-                end
-                depmods[i] = (String(path), mod, uuid_req)
+                continue
+            end
+            name = string(mod)
+            path = find_package(name)
+            if path === nothing
+                @debug "Rejecting cache file $cachefile because dependency $name not found."
+                return true # Won't be able to fullfill dependency
             end
         end
 
         # check if this file is going to provide one of our concrete dependencies
         # or if it provides a version that conflicts with our concrete dependencies
         # or neither
-        skip_timecheck = false
         for (mod, uuid_req) in _concrete_dependencies
             uuid = get(modules, mod, UInt64(0))
             if uuid !== UInt64(0)
                 if uuid === uuid_req
-                    skip_timecheck = true
-                    break
+                    return required_modules # this is the file we want
                 end
                 @debug "Rejecting cache file $cachefile because it provides the wrong uuid (got $uuid) for $mod (want $uuid_req)"
                 return true # cachefile doesn't provide the required version of the dependency
@@ -803,28 +770,28 @@ function stale_cachefile(modpath::String, cachefile::String)
         end
 
         # now check if this file is fresh relative to its source files
-        if !skip_timecheck
-            if !samefile(files[1][2], modpath)
-                @debug "Rejecting cache file $cachefile because it is for file $(files[1][2])) not file $modpath"
-                return true # cache file was compiled from a different path
-            end
-            for (_, f, ftime_req) in files
-                # Issue #13606: compensate for Docker images rounding mtimes
-                # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
-                ftime = mtime(f)
-                if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, 6)
-                    @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
-                    return true
-                end
+        if !samefile(files[1][2], modpath)
+            @debug "Rejecting cache file $cachefile because it is for file $(files[1][2])) not file $modpath"
+            return true # cache file was compiled from a different path
+        end
+        for (_, f, ftime_req) in files
+            # Issue #13606: compensate for Docker images rounding mtimes
+            # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
+            ftime = mtime(f)
+            if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, 6)
+                @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
+                return true
             end
         end
 
-        if !isvalid_file_crc(io)
+        # finally, verify that the cache file has a valid checksum
+        crc = _crc32c(seekstart(io), filesize(io)-4)
+        if crc != ntoh(read(io, UInt32))
             @debug "Rejecting cache file $cachefile because it has an invalid checksum"
             return true
         end
 
-        return depmods # fresh cachefile
+        return required_modules # fresh cachefile
     finally
         close(io)
     end
