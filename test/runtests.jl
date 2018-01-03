@@ -1063,6 +1063,9 @@ end
 @test Compat.notnothing(1) == 1
 @test_throws ArgumentError Compat.notnothing(nothing)
 
+# 0.7.0-DEV.3173
+@test invpermute!(permute!([1, 2], 2:-1:1), 2:-1:1) == [1, 2]
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end

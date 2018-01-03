@@ -264,6 +264,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Void` is now `Nothing` with an alias `Cvoid` for C interop ([#25162]).
 
+* `ipermute!` is now `invpermute!` ([#25168]).
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -421,3 +423,4 @@ includes this fix. Find the minimum version from there.
 [#25057]: https://github.com/JuliaLang/julia/issues/25057
 [#25102]: https://github.com/JuliaLang/julia/issues/25102
 [#25162]: https://github.com/JuliaLang/julia/issues/25162
+[#25168]: https://github.com/JuliaLang/julia/issues/25168

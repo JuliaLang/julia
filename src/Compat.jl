@@ -1052,6 +1052,12 @@ else
     import Base: notnothing
 end
 
+# 0.7.0-DEV.3173
+@static if !isdefined(Base, :invpermute!)
+    const invpermute! = ipermute!
+    export invpermute!
+end
+
 include("deprecated.jl")
 
 end # module Compat
