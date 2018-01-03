@@ -73,7 +73,7 @@ function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
     end
 end
 function unsafe_convert(P::Type{Ptr{Any}}, b::RefValue{Any})
-    return convert(P, data_pointer_from_objref(b))
+    return convert(P, pointer_from_objref(b))
 end
 unsafe_convert(::Type{Ptr{Cvoid}}, b::RefValue{T}) where {T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))
 
@@ -93,7 +93,7 @@ function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
     if isbits(T)
         convert(P, pointer(b.x, b.i))
     else
-        convert(P, data_pointer_from_objref(b.x[b.i]))
+        convert(P, pointer_from_objref(b.x[b.i]))
     end
 end
 function unsafe_convert(P::Type{Ptr{Any}}, b::RefArray{Any})

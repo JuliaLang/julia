@@ -135,7 +135,6 @@ will not protect the object from garbage collection, so you must ensure that the
 remains referenced for the whole time that the `Ptr` will be used.
 """
 pointer_from_objref(@nospecialize(x)) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
-data_pointer_from_objref(@nospecialize(x)) = pointer_from_objref(x)::Ptr{Cvoid}
 
 eltype(::Type{Ptr{T}}) where {T} = T
 

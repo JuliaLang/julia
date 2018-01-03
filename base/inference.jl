@@ -2715,7 +2715,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
             spsig = sv.linfo.def.sig
             if isa(spsig, UnionAll)
                 if !isempty(sv.linfo.sparam_vals)
-                    env = data_pointer_from_objref(sv.linfo.sparam_vals) + sizeof(Ptr{Cvoid})
+                    env = pointer_from_objref(sv.linfo.sparam_vals) + sizeof(Ptr{Cvoid})
                     rt = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, env)
                 else
                     rt = rewrap_unionall(e.args[2], spsig)
