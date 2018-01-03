@@ -1262,6 +1262,11 @@ export conv, conv2, deconv, filt, filt!, xcorr
 
 @eval @deprecate_moved $(Symbol("@profile")) "Profile" true true
 
+@deprecate_moved readdlm  "DelimitedFiles" true true
+@deprecate_moved writedlm "DelimitedFiles" true true
+@deprecate_moved readcsv  "DelimitedFiles" true true
+@deprecate_moved writecsv "DelimitedFiles" true true
+
 @deprecate_moved base64encode "Base64" true true
 @deprecate_moved base64decode "Base64" true true
 @deprecate_moved Base64EncodePipe "Base64" true true
