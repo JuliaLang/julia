@@ -264,6 +264,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Void` is now `Nothing` with an alias `Cvoid` for C interop ([#25162]).
 
+* `unshift!` and `shift!` are now `pushfirst!` and `popfirst!` ([#25100]).
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -419,5 +421,6 @@ includes this fix. Find the minimum version from there.
 [#25021]: https://github.com/JuliaLang/julia/issues/25021
 [#25056]: https://github.com/JuliaLang/julia/issues/25056
 [#25057]: https://github.com/JuliaLang/julia/issues/25057
+[#25100]: https://github.com/JuliaLang/julia/issues/25100
 [#25102]: https://github.com/JuliaLang/julia/issues/25102
 [#25162]: https://github.com/JuliaLang/julia/issues/25162

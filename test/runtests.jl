@@ -1063,6 +1063,12 @@ end
 @test Compat.notnothing(1) == 1
 @test_throws ArgumentError Compat.notnothing(nothing)
 
+# 0.7.0-DEV.3155
+let coolvec = [1,2,3]
+    @test pushfirst!(coolvec, 0) == [0,1,2,3]
+    @test popfirst!(coolvec) == 0
+end
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end
