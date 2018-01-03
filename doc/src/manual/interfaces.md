@@ -427,25 +427,28 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 | Methods to implement | Brief description |
 |:-------------------- |:----------------- |
 | `Base.BroadcastStyle(::Type{SrcType}) = SrcStyle()` | Broadcasting behavior of `SrcType` |
-| `Base.broadcast_similar(f, ::DestStyle, ::Type{ElType}, inds, As...)` | Allocation of output container |
+| `Base.broadcast_similar(::DestStyle, ::Type{ElType}, inds, bc)` | Allocation of output container |
 | **Optional methods** | | |
 | `Base.BroadcastStyle(::Style1, ::Style2) = Style12()` | Precedence rules for mixing styles |
 | `Base.broadcast_indices(::StyleA, A)` | Declaration of the indices of `A` for broadcasting purposes (for AbstractArrays, defaults to `axes(A)`) |
 | **Bypassing default machinery** | |
-| `broadcast(f, As...)` | Complete bypass of broadcasting machinery |
-| `broadcast(f, ::DestStyle, ::Nothing, ::Nothing, As...)` | Bypass after container type is computed |
-| `broadcast(f, ::DestStyle, ::Type{ElType}, inds::Tuple, As...)` | Bypass after container type, eltype, and indices are computed |
-| `broadcast!(f, dest::DestType, ::Nothing, As...)` | Bypass in-place broadcast, specialization on destination type |
-| `broadcast!(f, dest, ::BroadcastStyle, As...)` | Bypass in-place broadcast, specialization on `BroadcastStyle` |
+| `Base.copy(bc::Broadcasted{DestStyle})` | Custom implementation of `broadcast` |
+| `Base.copyto!(dest, bc::Broadcasted{DestStyle})` | Custom implementation of `broadcast!`, specializing on `DestStyle` |
+| `Base.copyto!(dest::DestType, bc::Broadcasted{Nothing})` | Custom implementation of `broadcast!`, specializing on `DestType` |
+| `Base.is_broadcast_incremental(bc::Broadcasted{DestStyle})` | Indicate that nested broadcasting should be implemented eagerly |
+| `Base.broadcast_skip_axes_instantiation(::Broadcasted{DestStyle})` | Define to return `true` if `DestStyle` doesn't benefit from computing the axes of the output |
 
 [Broadcasting](@ref) is triggered by an explicit call to `broadcast` or `broadcast!`, or implicitly by
 "dot" operations like `A .+ b`. Any `AbstractArray` type supports broadcasting,
 but the default result (output) type is `Array`. To specialize the result for specific input type(s),
 the main task is the allocation of an appropriate result object.
 (This is not an issue for `broadcast!`, where
-the result object is passed as an argument.) This process is split into two stages: computation
-of the behavior and type from the arguments ([`Base.BroadcastStyle`](@ref)), and allocation of the object
-given the resulting type with [`Base.broadcast_similar`](@ref).
+the result object is passed as an argument.) Internally, this process is split into two stages:
+ - creation of a `Broadcasted{DestStyle}(args...)` wrapper, where `DestStyle` is computed by combining
+   the results of ([`Base.BroadcastStyle`](@ref)) applied to the argument types
+ - execution of `copy(bc::Broadcasted{DestStyle})`, which in simple cases only requires that
+   you allocate the output with [`Base.broadcast_similar`](@ref). In more complex cases, you may
+   wish to specialize `copy` and/or `copy!` for `DestStyle`.
 
 `Base.BroadcastStyle` is an abstract type from which all styles are
 derived. When used as a function it has two possible forms,
@@ -476,20 +479,22 @@ For more detail, see [below](@ref writing-binary-broadcasting-rules).
 The actual allocation of the result array is handled by `Base.broadcast_similar`:
 
 ```julia
-Base.broadcast_similar(f, ::DestStyle, ::Type{ElType}, inds, As...)
+Base.broadcast_similar(::DestStyle, ::Type{ElType}, inds, bc)
 ```
 
-`f` is the operation being performed and `DestStyle` signals the final result from
-combining the input styles.
-`As...` is the list of input objects. You may not need to use `f` or `As...`
-unless they help you build the appropriate object; the fallback definition is
+`DestStyle` signals the final result from combining the input styles.
+The fallback definition is
 
 ```julia
-broadcast_similar(f, ::DefaultArrayStyle{N}, ::Type{ElType}, inds::Indices{N}, As...) where {N,ElType} =
+broadcast_similar(::DefaultArrayStyle{N}, ::Type{ElType}, inds::Indices{N}, bc) where {N,ElType} =
     similar(Array{ElType}, inds)
 ```
 
 However, if needed you can specialize on any or all of these arguments.
+`bc` is the overall `Broadcasted` wrapper, available in case allocation of the output requires
+access to some of the inputs. For these purposes, the important field of `Broadcasted` is called
+`args`, which stores the inputs as a linked list (a `TupleLL`). `ll.head` extracts the first
+element, while `ll.rest` retrieves the remaining list. The list is terminated by a `TupleLL{Nothing,Nothing}`.
 
 For a complete example, let's say you have created a type, `ArrayAndChar`, that stores an
 array and a single character:
@@ -513,16 +518,16 @@ Base.BroadcastStyle(::Type{<:ArrayAndChar}) = Broadcast.ArrayStyle{ArrayAndChar}
 
 This forces us to also define a `broadcast_similar` method:
 ```jldoctest
-function Base.broadcast_similar(f, ::Broadcast.ArrayStyle{ArrayAndChar}, ::Type{ElType}, inds, As...) where ElType
+function Base.broadcast_similar(::Broadcast.ArrayStyle{ArrayAndChar}, ::Type{ElType}, inds, bc) where ElType
     # Scan the inputs for the ArrayAndChar:
-    A = find_aac(As...)
+    A = find_aac(bc.args)
     # Use the char field of A to create the output
     ArrayAndChar(similar(Array{ElType}, inds), A.char)
 end
 
 "`A = find_aac(As...)` returns the first ArrayAndChar among the arguments."
-find_aac(A::ArrayAndChar, B...) = A
-find_aac(A, B...) = find_aac(B...)
+find_aac(ll::Base.TupleLL{<:ArrayAndChar}) = ll.head
+find_aac(ll::Base.TupleLL) = find_aac(ll.rest)
 ```
 
 From these definitions, one obtains the following behavior:
@@ -543,23 +548,61 @@ julia> a .+ [5,10]
  13  14
 ```
 
-Finally, it's worth noting that sometimes it's easier simply to bypass the machinery for
-computing result types and container sizes, and just do everything manually. For example,
-you can convert a `UnitRange{Int}` `r` to a `UnitRange{BigInt}` with `big.(r)`; the definition
-of this method is approximately
+## Eager evaluation of nested broadcasting
+
+For some types, the machinery to "fuse" operations across nested levels of broadcasting
+is not available. In such cases, you may need to evaluate `x .* (x .+ 1)` as if it had been
+written `broadcast(*, x, broadcast(+, x, 1))`, where the inner operation is evaluated before
+tackling the outer operation. You can force eager evaluation by defining
 
 ```julia
-Broadcast.broadcast(::typeof(big), r::UnitRange) = big(first(r)):big(last(r))
+is_broadcast_incremental(bc::Broadcasted{DestStyle}) = true
 ```
+In such cases you need to supply specific methods
+```julia
+broadcast(f, arg1::ArgType1, ...)
+```
+for all operations that might be triggered, otherwise the result will be circular and a
+`StackOverflowError` will result.
 
-This exploits Julia's ability to dispatch on a particular function type. (This kind of
-explicit definition can indeed be necessary if the output container does not support `setindex!`.)
-You can optionally choose to implement the actual broadcasting yourself, but allow
-the internal machinery to compute the container type, element type, and indices by specializing
+Your definition of `is_broadcast_incremental` can be more sophisticated, if necessary;
+in particular, you can examine the types of `bc.args` if you need to make a more nuanced decision.
+As an example, here is the implementation that allows Julia to return `AbstractRange` objects
+from broadcasting:
 
 ```julia
-Broadcast.broadcast(::typeof(somefunction), ::MyStyle, ::Type{ElType}, inds, As...)
+is_broadcast_incremental(bc::Broadcasted{DefaultArrayStyle{1}}) = maybe_range_safe(bc)
+
+# Support incremental evaluation only for 1- or 2-argument broadcasting
+# Broadcast.broadcast_all(f_filter, arg_filter, bc) is a function that checks all
+# inputs to a nested broadcasting operation, ensuring that the function `f` and
+# arguments return `true` for their respective filter functions.
+const Args1{T} = TupleLL{T,Nothing}
+const Args2{S,T} = TupleLL{S,TupleLL{T,Nothing}}
+@inline maybe_range_safe(bc::Broadcasted{Style}) where {Style<:AbstractArrayStyle{1}} =
+    Broadcast.broadcast_all(maybe_range_safe_f, maybe_range_safe_arg, bc) && bc.args isa Union{Args1,Args2}
+
+# Support incremental evaluation only for operations that might return an AbstractRange
+maybe_range_safe_f(::typeof(+)) = true
+maybe_range_safe_f(::typeof(-)) = true
+maybe_range_safe_f(::typeof(*)) = true
+maybe_range_safe_f(::typeof(/)) = true
+maybe_range_safe_f(::typeof(\)) = true
+maybe_range_safe_f(f)           = false
+
+maybe_range_safe_arg(::AbstractRange) = true
+maybe_range_safe_arg(::Number)        = true
+maybe_range_safe_arg(x)               = false
 ```
+
+It's then necessary to write `broadcast` methods for all 1- and 2-argument versions of operations
+involving at least one `AbstractRange` and the supported operations `+`, `-`, `*`, `/`, and `\`.
+For example,
+
+```julia
+broadcast(::typeof(-), r::OrdinalRange) = range(-first(r), -step(r), length(r))
+```
+to define negation of a range.
 
 ### [Writing binary broadcasting rules](@id writing-binary-broadcasting-rules)
 
@@ -625,36 +668,25 @@ yields a `SparseMatStyle`, and anything of higher dimensionality falls back to t
 These rules allow broadcasting to keep the sparse representation for operations that result
 in one or two dimensional outputs, but produce an `Array` for any other dimensionality.
 
-### [Extending `broadcast!`](@id extending-in-place-broadcast)
+### [Extending in-place broadcasting](@id extending-in-place-broadcast)
 
-Extending `broadcast!` (in-place broadcast) should be done with care, as it is easy to introduce
-ambiguities between packages. To avoid these ambiguities, we adhere to the following conventions.
+In-place broadcasting can be supported by defining the appropriate `copyto!(dest, bc::Broadcasted)`
+method. Because you might want to specialize either on `dest` or the specific subtype of `bc`,
+to avoid ambiguities between packages we recommend the following convention.
 
-First, if you want to specialize on the destination type, say `DestType`, then you should
-define a method with the following signature:
+If you wish to specialize on a particular style `DestStyle`, define a method for
+```julia
+copyto!(dest, bc::Broadcasted{DestStyle})
+```
+Optionally, with this form you can also specialize on the type of `dest`.
+
+If instead you want to specialize on the destination type `DestType` without specializing
+on `DestStyle`, then you should define a method with the following signature:
 
 ```julia
-broadcast!(f, dest::DestType, ::Nothing, As...)
+copyto!(dest::DestType, bc::Broadcasted{Nothing})
 ```
 
-Note that no bounds should be placed on the types of `f` and `As...`.
-
-Second, if specialized `broadcast!` behavior is desired depending on the input types,
-you should write [binary broadcasting rules](@ref writing-binary-broadcasting-rules) to
-determine a custom `BroadcastStyle` given the input types, say `MyBroadcastStyle`, and you should define a method with the following
-signature:
-
-```julia
-broadcast!(f, dest, ::MyBroadcastStyle, As...)
-```
-
-Note the lack of bounds on `f`, `dest`, and `As...`.
-
-Third, simultaneously specializing on both the type of `dest` and the `BroadcastStyle` is fine. In this case,
-it is also allowed to specialize on the types of the source arguments (`As...`). For example, these method signatures are OK:
-
-```julia
-broadcast!(f, dest::DestType, ::MyBroadcastStyle, As...)
-broadcast!(f, dest::DestType, ::MyBroadcastStyle, As::AbstractArray...)
-broadcast!(f, dest::DestType, ::Broadcast.Scalar, As::Number...)
-```
+This leverages a fallback implementation of `copyto!` that converts the wrapper into a
+`Broadcasted{Nothing}`. Consequently, specializing on `DestType` has lower precedence than
+methods that specialize on `DestStyle`.

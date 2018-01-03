@@ -1237,3 +1237,19 @@ end
     @test map(Float16, x) === Float16(-5.0):Float16(1.0):Float16(5.0)
     @test map(BigFloat, x) === x
 end
+
+@testset "broadcasting returns ranges" begin
+    x, r = 2, 1:5
+    @test @inferred(x .+ r) === 3:7
+    @test @inferred(r .+ x) === 3:7
+    @test @inferred(r .- x) === -1:3
+    @test @inferred(x .- r) === 1:-1:-3
+    @test @inferred(x .* r) === 2:2:10
+    @test @inferred(r .* x) === 2:2:10
+    @test @inferred(r ./ x) === 0.5:0.5:2.5
+    @test @inferred(x ./ r) == 2 ./ [r;] && isa(x ./ r, Vector{Float64})
+    @test @inferred(r .\ x) == 2 ./ [r;] && isa(x ./ r, Vector{Float64})
+    @test @inferred(x .\ r) === 0.5:0.5:2.5
+
+    @test @inferred(2 .* (r .+ 1) .+ 2) === 6:2:14
+end

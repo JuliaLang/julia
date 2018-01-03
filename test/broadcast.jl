@@ -404,7 +404,7 @@ StrangeType18623(x,y) = (x,y)
 let
     f(A, n) = broadcast(x -> +(x, n), A)
     @test @inferred(f([1.0], 1)) == [2.0]
-    g() = (a = 1; Broadcast.combine_eltypes(x -> x + a, 1.0))
+    g() = (a = 1; Broadcast.combine_eltypes(x -> x + a, Base.make_TupleLL(1.0)))
     @test @inferred(g()) === Float64
 end
 
@@ -424,7 +424,7 @@ abstract type ArrayData{T,N} <: AbstractArray{T,N} end
 Base.getindex(A::ArrayData, i::Integer...) = A.data[i...]
 Base.setindex!(A::ArrayData, v::Any, i::Integer...) = setindex!(A.data, v, i...)
 Base.size(A::ArrayData) = size(A.data)
-Base.broadcast_similar(f, ::Broadcast.ArrayStyle{A}, ::Type{T}, inds::Tuple, As...) where {A,T} =
+Base.broadcast_similar(::Broadcast.ArrayStyle{A}, ::Type{T}, inds::Tuple, bc) where {A,T} =
     A(Array{T}(uninitialized, length.(inds)))
 
 struct Array19745{T,N} <: ArrayData{T,N}
@@ -530,7 +530,7 @@ end
 
 # Test that broadcast's promotion mechanism handles closures accepting more than one argument.
 # (See issue #19641 and referenced issues and pull requests.)
-let f() = (a = 1; Broadcast.combine_eltypes((x, y) -> x + y + a, 1.0, 1.0))
+let f() = (a = 1; Broadcast.combine_eltypes((x, y) -> x + y + a, Base.make_TupleLL(1.0, 1.0)))
     @test @inferred(f()) == Float64
 end
 
@@ -625,4 +625,34 @@ let x = [[1, 4], [2, 5], [3, 6]]
     z = zeros(2)
     z .= .+(x..., .*(x..., x...)..., x[1]..., x[2]..., x[3]...)
     @test z == Float64[14463, 14472]
+end
+
+# Issue #21094
+@generated function foo21094(out, x)
+    quote
+        out .= x .+ x
+    end
+end
+@test foo21094([0.0], [1.0]) == [2.0]
+
+# Issue #22053
+struct T22053
+    t
+end
+Broadcast.BroadcastStyle(::Type{T22053}) = Broadcast.Style{T22053}()
+Broadcast.broadcast_indices(::Broadcast.Style{T22053}, ::T22053) = ()
+function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{T22053}})
+    all(x->isa(x, T22053), bc.args) && return 1
+    return 0
+end
+Base.:*(::T22053, ::T22053) = 2
+let x = T22053(1)
+    @test x*x == 2
+    @test x.*x == 1
+end
+
+# Issue https://github.com/JuliaLang/julia/pull/25377#discussion_r159956996
+let X = Any[1,2]
+    X .= nothing
+    @test X[1] == X[2] == nothing
 end

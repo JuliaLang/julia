@@ -179,7 +179,6 @@ Language changes
   * The syntax `using A.B` can now only be used when `A.B` is a module, and the syntax
     `using A: B` can only be used for adding single bindings ([#8000]).
 
-
 Breaking changes
 ----------------
 
@@ -335,11 +334,6 @@ This section lists changes that do not have deprecation warnings.
     Its return value has been removed. Use the `process_running` function
     to determine if a process has already exited.
 
-  * Broadcasting has been redesigned with an extensible public interface. The new API is
-    documented at https://docs.julialang.org/en/latest/manual/interfaces/#Interfaces-1.
-    `AbstractArray` types that specialized broadcasting using the old internal API will
-    need to switch to the new API. ([#20740])
-
   * The logging system has been redesigned - `info` and `warn` are deprecated
     and replaced with the logging macros `@info`, `@warn`, `@debug` and
     `@error`.  The `logging` function is also deprecated and replaced with
@@ -364,6 +358,14 @@ This section lists changes that do not have deprecation warnings.
 
   * `findn(x::AbstractVector)` now return a 1-tuple with the vector of indices, to be
     consistent with higher order arrays ([#25365]).
+
+  * Broadcasting operations are no longer fused into a single operation by Julia's parser.
+    Instead, a lazy `Broadcasted` wrapper is created, and the parser will call
+    `copy(bc::Broadcasted)` or `copyto!(dest, bc::Broadcasted)`
+    to evaluate the wrapper. Consequently, package authors generally need to specialize
+    `copy` and `copyto!` methods rather than `broadcast` and `broadcast!`.
+    See the [Interfaces chapter](https://docs.julialang.org/en/latest/manual/interfaces/#Interfaces-1)
+    for more information.
 
 Library improvements
 --------------------
