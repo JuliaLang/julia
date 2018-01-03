@@ -7885,7 +7885,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n"
 },
 
 {
@@ -12429,7 +12429,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n"
 },
 
 {
@@ -13349,7 +13349,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.bkfact",
     "category": "Function",
-    "text": "bkfact(A, rook::Bool=false) -> BunchKaufman\n\nCompute the Bunch-Kaufman [Bunch1977] factorization of a symmetric or Hermitian matrix A as PUDUP or PLDLP, depending on which triangle is stored in A, and return a BunchKaufman object.\n\nIf rook is true, rook pivoting is used. If rook is false, rook pivoting is not used.\n\nThe following functions are available for BunchKaufman objects: size, \\, inv, issymmetric, ishermitian, getindex.\n\nNote that  P is symmetric, so P=P=P.\n\n[Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. url.\n\nExamples\n\njulia> A = [1 2; 2 3]\n2×2 Array{Int64,2}:\n 1  2\n 2  3\n\njulia> bkfact(A)\nBase.LinAlg.BunchKaufman{Float64,Array{Float64,2}}\nD factor:\n2×2 Tridiagonal{Float64,Array{Float64,1}}:\n -0.333333  0.0\n  0.0       3.0\nU factor:\n2×2 Base.LinAlg.UnitUpperTriangular{Float64,Array{Float64,2}}:\n 1.0  0.666667\n 0.0  1.0\npermutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
+    "text": "bkfact(A, rook::Bool=false) -> BunchKaufman\n\nCompute the Bunch-Kaufman [Bunch1977] factorization of a symmetric or Hermitian matrix A as P*U*D*U*P or P*L*D*L*P, depending on which triangle is stored in A, and return a BunchKaufman object. Note that if A is complex symmetric then U' and L' denote the unconjugated transposes, i.e. Transpose(U) and Transpose(L).\n\nIf rook is true, rook pivoting is used. If rook is false, rook pivoting is not used.\n\nThe following functions are available for BunchKaufman objects: size, \\, inv, issymmetric, ishermitian, getindex.\n\n[Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. url.\n\nExamples\n\njulia> A = [1 2; 2 3]\n2×2 Array{Int64,2}:\n 1  2\n 2  3\n\njulia> bkfact(A)\nBase.LinAlg.BunchKaufman{Float64,Array{Float64,2}}\nD factor:\n2×2 Tridiagonal{Float64,Array{Float64,1}}:\n -0.333333  0.0\n  0.0       3.0\nU factor:\n2×2 Base.LinAlg.UnitUpperTriangular{Float64,Array{Float64,2}}:\n 1.0  0.666667\n 0.0  1.0\npermutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
 },
 
 {
@@ -13357,7 +13357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.bkfact!",
     "category": "Function",
-    "text": "bkfact!(A, uplo::Symbol=:U, symmetric::Bool=issymmetric(A), rook::Bool=false) -> BunchKaufman\n\nbkfact! is the same as bkfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\n"
+    "text": "bkfact!(A, rook::Bool=false) -> BunchKaufman\n\nbkfact! is the same as bkfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\n"
 },
 
 {
