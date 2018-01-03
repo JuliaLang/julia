@@ -100,11 +100,16 @@ end
 
 function (ss::SummarySize)(obj::Array)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
-    size::Int = Core.sizeof(obj)
-    # TODO: add size of jl_array_t
-    if !isbits(eltype(obj)) && !isempty(obj)
-        push!(ss.frontier_x, obj)
-        push!(ss.frontier_i, 1)
+    headersize = 4*sizeof(Int) + 8 + max(0, ndims(obj)-2)*sizeof(Int)
+    size::Int = headersize
+    datakey = unsafe_convert(Ptr{Cvoid}, obj)
+    if !haskey(ss.seen, datakey)
+        ss.seen[datakey] = true
+        size += Core.sizeof(obj)
+        if !isbits(eltype(obj)) && !isempty(obj)
+            push!(ss.frontier_x, obj)
+            push!(ss.frontier_i, 1)
+        end
     end
     return size
 end

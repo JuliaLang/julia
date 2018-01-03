@@ -194,6 +194,14 @@ let R = Ref{Any}(nothing), depth = 10^6
     @test summarysize(R) == (depth + 4) * sizeof(Ptr)
 end
 
+# issue #25367 - summarysize with reshaped arrays
+let A = zeros(1000), B = reshape(A, (1,1000))
+    @test summarysize((A,B)) < 2 * sizeof(A)
+
+    # check that object header is accounted for
+    @test summarysize(A) > sizeof(A)
+end
+
 module _test_varinfo_
 export x
 x = 1.0
