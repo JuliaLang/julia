@@ -231,7 +231,7 @@ module IteratorsMD
     CartesianIndices(index::CartesianIndex) = CartesianIndices(index.I)
     CartesianIndices(sz::NTuple{N,<:Integer}) where {N} = CartesianIndices(map(Base.OneTo, sz))
     CartesianIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
-        CartesianIndices(map(i->rangestart(i):rangestop(i), inds))
+        CartesianIndices(map(i-> i isa Integer ? (i:i) : (rangestart(i):rangestop(i)), inds))
 
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 

@@ -76,7 +76,7 @@ function compile(x)
                             end
                         end
                         # Set index to last value just like a regular for loop would
-                        $var = rangestop($r)
+                        $var = $r isa AbstractRange ? rangestop($r) : $r
                     end
                 end
             end

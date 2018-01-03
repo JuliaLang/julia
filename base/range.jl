@@ -434,12 +434,10 @@ rangestart(r::OrdinalRange{T}) where {T} = convert(T, r.start)
 rangestart(r::OneTo{T}) where {T} = oneunit(T)
 rangestart(r::StepRangeLen) = unsafe_getindex(r, 1)
 rangestart(r::LinSpace) = r.start
-rangestart(a) = first(a)
 
 rangestop(r::OrdinalRange{T}) where {T} = convert(T, r.stop)
 rangestop(r::StepRangeLen) = unsafe_getindex(r, length(r))
 rangestop(r::LinSpace) = r.stop
-rangestop(a) = last(a)
 
 minimum(r::AbstractUnitRange) =
     isempty(r) ? throw(ArgumentError("range must be non-empty")) : rangestart(r)

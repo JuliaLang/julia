@@ -291,6 +291,8 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
     i = start(str)
     n = endof(str)
     r = search(str,splitter,i)
+    # FIXME
+    r isa Integer && (r = r:r)
     if r != 0:-1
         j, k = rangestart(r), nextind(str,rangestop(r))
         while 0 < j <= n && length(strs) != limit-1
@@ -303,6 +305,8 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
             (k <= j) && (k = nextind(str,j))
             r = search(str,splitter,k)
             r == 0:-1 && break
+            # FIXME
+            r isa Integer && (r = r:r)
             j, k = rangestart(r), nextind(str,rangestop(r))
         end
     end
@@ -352,6 +356,8 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool
     i = start(str)
     n = endof(str)
     r = rsearch(str,splitter)
+    # FIXME
+    r isa Integer && (r = r:r)
     j = rangestart(r)-1
     k = rangestop(r)
     while((0 <= j < n) && (length(strs) != limit-1))
@@ -361,6 +367,8 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool
         end
         (k <= j) && (j = prevind(str,j))
         r = rsearch(str,splitter,j)
+        # FIXME
+        r isa Integer && (r = r:r)
         j = rangestart(r)-1
         k = rangestop(r)
     end
@@ -381,7 +389,11 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     e = endof(str)
     i = a = start(str)
     r = search(str,pattern,i)
-    j, k = rangestart(r), rangestop(r)
+    if r isa Integer
+        j = k = r
+    else
+        j, k = rangestart(r), rangestop(r)
+    end
     out = IOBuffer(StringVector(floor(Int, 1.2sizeof(str))), true, true)
     out.size = 0
     out.ptr = 1
@@ -398,6 +410,8 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
             i = k = nextind(str, k)
         end
         r = search(str,pattern,k)
+        # FIXME
+        r isa Integer && (r = r:r)
         r == 0:-1 || n == count && break
         j, k = rangestart(r), rangestop(r)
         n += 1
