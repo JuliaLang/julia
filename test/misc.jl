@@ -313,7 +313,7 @@ for s in [map(first,V8); X8],
     ss = s[i:j]
     ss in X8 || push!(X8, ss)
 end
-sort!(X8, lt=lexless)
+sort!(X8, lt=isless)
 sort!(X8, by=length)
 
 I8 = [(s,map(UInt16,s)) for s in X8]

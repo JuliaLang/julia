@@ -82,7 +82,7 @@ import Base.<
 @test isequal(minmax(TO23094(2), TO23094(1))[1], TO23094(1))
 @test isequal(minmax(TO23094(2), TO23094(1))[2], TO23094(2))
 
-@test lexless('a','b')
+@test isless('a','b')
 
 @test 1 .!= 2
 @test 1 .== 1

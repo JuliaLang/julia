@@ -1556,13 +1556,16 @@ function isequal(A::AbstractArray, B::AbstractArray)
     return true
 end
 
-function lexcmp(A::AbstractArray, B::AbstractArray)
+function cmp(A::AbstractArray, B::AbstractArray)
     for (a, b) in zip(A, B)
-        res = lexcmp(a, b)
-        res == 0 || return res
+        if !isequal(a, b)
+            return isless(a, b) ? -1 : 1
+        end
     end
     return cmp(length(A), length(B))
 end
+
+isless(A::AbstractArray, B::AbstractArray) = cmp(A, B) < 0
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)

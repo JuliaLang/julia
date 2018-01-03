@@ -1033,27 +1033,27 @@ end
 end
 
 @testset "lexicographic comparison" begin
-    @test lexcmp([1.0], [1]) == 0
-    @test lexcmp([1], [1.0]) == 0
-    @test lexcmp([1, 1], [1, 1]) == 0
-    @test lexcmp([1, 1], [2, 1]) == -1
-    @test lexcmp([2, 1], [1, 1]) == 1
-    @test lexcmp([1, 1], [1, 2]) == -1
-    @test lexcmp([1, 2], [1, 1]) == 1
-    @test lexcmp([1], [1, 1]) == -1
-    @test lexcmp([1, 1], [1]) == 1
+    @test cmp([1.0], [1]) == 0
+    @test cmp([1], [1.0]) == 0
+    @test cmp([1, 1], [1, 1]) == 0
+    @test cmp([1, 1], [2, 1]) == -1
+    @test cmp([2, 1], [1, 1]) == 1
+    @test cmp([1, 1], [1, 2]) == -1
+    @test cmp([1, 2], [1, 1]) == 1
+    @test cmp([1], [1, 1]) == -1
+    @test cmp([1, 1], [1]) == 1
 end
 
 @testset "sort on arrays" begin
     local a = rand(3,3)
 
     asr = sortrows(a)
-    @test lexless(asr[1,:],asr[2,:])
-    @test lexless(asr[2,:],asr[3,:])
+    @test isless(asr[1,:],asr[2,:])
+    @test isless(asr[2,:],asr[3,:])
 
     asc = sortcols(a)
-    @test lexless(asc[:,1],asc[:,2])
-    @test lexless(asc[:,2],asc[:,3])
+    @test isless(asc[:,1],asc[:,2])
+    @test isless(asc[:,2],asc[:,3])
 
     # mutating functions
     o = ones(3, 4)
@@ -1062,12 +1062,12 @@ end
     @test o == ones(3, 4)
 
     asr = sortrows(a, rev=true)
-    @test lexless(asr[2,:],asr[1,:])
-    @test lexless(asr[3,:],asr[2,:])
+    @test isless(asr[2,:],asr[1,:])
+    @test isless(asr[3,:],asr[2,:])
 
     asc = sortcols(a, rev=true)
-    @test lexless(asc[:,2],asc[:,1])
-    @test lexless(asc[:,3],asc[:,2])
+    @test isless(asc[:,2],asc[:,1])
+    @test isless(asc[:,3],asc[:,2])
 
     as = sort(a, 1)
     @test issorted(as[:,1])

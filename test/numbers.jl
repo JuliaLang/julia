@@ -729,11 +729,11 @@ end
     @test  !isless(   0,-0.0)
 
     @test isless(-0.0, 0.0f0)
-    @test lexcmp(-0.0, 0.0f0) == -1
-    @test lexcmp(0.0, -0.0f0) == 1
-    @test lexcmp(NaN, 1) == 1
-    @test lexcmp(1, NaN) == -1
-    @test lexcmp(NaN, NaN) == 0
+    @test cmp(isless, -0.0, 0.0f0) == -1
+    @test cmp(isless, 0.0, -0.0f0) == 1
+    @test cmp(isless, NaN, 1) == 1
+    @test cmp(isless, 1, NaN) == -1
+    @test cmp(isless, NaN, NaN) == 0
 end
 @testset "Float vs Integer comparison" begin
     for x=-5:5, y=-5:5
