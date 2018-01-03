@@ -219,6 +219,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Some{T}` wraps `T` to signify that a result of `T<:Void` is expected ([#23642]).
 
+* `replace` accepts a pair of pattern and replacement, with the number of replacements as
+  a keyword argument ([#25165]).
+
 ## Renaming
 
 
@@ -265,6 +268,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `Void` is now `Nothing` with an alias `Cvoid` for C interop ([#25162]).
 
 * `unshift!` and `shift!` are now `pushfirst!` and `popfirst!` ([#25100]).
+
+* `ipermute!` is now `invpermute!` ([#25168]).
 
 ## New macros
 
@@ -424,3 +429,5 @@ includes this fix. Find the minimum version from there.
 [#25100]: https://github.com/JuliaLang/julia/issues/25100
 [#25102]: https://github.com/JuliaLang/julia/issues/25102
 [#25162]: https://github.com/JuliaLang/julia/issues/25162
+[#25165]: https://github.com/JuliaLang/julia/issues/25165
+[#25168]: https://github.com/JuliaLang/julia/issues/25168

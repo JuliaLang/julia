@@ -1059,6 +1059,17 @@ end
     export pushfirst!, popfirst!
 end
 
+# 0.7.0-DEV.3173
+@static if !isdefined(Base, :invpermute!)
+    const invpermute! = ipermute!
+    export invpermute!
+end
+
+@static if VERSION < v"0.7.0-DEV.3172"
+    Base.replace(s::AbstractString, pat_rep::Pair; count::Integer=typemax(Int)) =
+        replace(s, first(pat_rep), last(pat_rep), count)
+end
+
 include("deprecated.jl")
 
 end # module Compat
