@@ -860,7 +860,7 @@ function decode_dec(d::Integer)
     return Int32(pt), Int32(pt), neg
 end
 
-function decode_hex(d::Integer, symbols::Array{UInt8,1})
+function decode_hex(d::Integer, symbols::AbstractArray{UInt8,1})
     neg, x = handlenegative(d)
     @handle_zero x
     pt = i = (sizeof(x)<<1)-(leading_zeros(x)>>2)
@@ -1034,10 +1034,10 @@ ini_HEX(x::Real, n::Int) = ini_hex(x,n,HEX_symbols)
 ini_hex(x::Real) = ini_hex(x,hex_symbols)
 ini_HEX(x::Real) = ini_hex(x,HEX_symbols)
 
-ini_hex(x::Real, n::Int, symbols::Array{UInt8,1}) = ini_hex(float(x), n, symbols)
-ini_hex(x::Real, symbols::Array{UInt8,1}) = ini_hex(float(x), symbols)
+ini_hex(x::Real, n::Int, symbols::AbstractArray{UInt8,1}) = ini_hex(float(x), n, symbols)
+ini_hex(x::Real, symbols::AbstractArray{UInt8,1}) = ini_hex(float(x), symbols)
 
-function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
+function ini_hex(x::SmallFloatingPoint, n::Int, symbols::AbstractArray{UInt8,1})
     x = Float64(x)
     if x == 0.0
         ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
@@ -1062,7 +1062,7 @@ function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
     end
 end
 
-function ini_hex(x::SmallFloatingPoint, symbols::Array{UInt8,1})
+function ini_hex(x::SmallFloatingPoint, symbols::AbstractArray{UInt8,1})
     x = Float64(x)
     if x == 0.0
         ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', 1)
