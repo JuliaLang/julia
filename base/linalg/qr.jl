@@ -754,8 +754,8 @@ function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasF
         return B, 0
     end
     rnk = 1
-    xmin = ones(T, 1)
-    xmax = ones(T, 1)
+    xmin = T[1]
+    xmax = T[1]
     tmin = tmax = ar
     while rnk < nr
         tmin, smin, cmin = LAPACK.laic1!(2, xmin, tmin, view(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])

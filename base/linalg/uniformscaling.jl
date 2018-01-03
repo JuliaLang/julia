@@ -38,7 +38,7 @@ An object of type [`UniformScaling`](@ref), representing an identity matrix of a
 
 # Examples
 ```jldoctest
-julia> ones(5, 6) * I == ones(5, 6)
+julia> fill(1, (5,6)) * I == fill(1, (5,6))
 true
 
 julia> [1 2im 3; 1im 2 3] * I

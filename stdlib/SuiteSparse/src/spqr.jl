@@ -163,7 +163,7 @@ solve least squares or underdetermined problems with [`\\`](@ref). The function 
 
 # Examples
 ```jldoctest
-julia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))
+julia> A = sparse([1,2,3,4], [1,1,2,2], [1.0,1.0,1.0,1.0])
 4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
   [1, 1]  =  1.0
   [2, 1]  =  1.0
@@ -397,13 +397,13 @@ when the problem is underdetermined.
 
 # Examples
 ```jldoctest
-julia> A = sparse([1,2,4], [1,1,1], ones(3), 4, 2)
+julia> A = sparse([1,2,4], [1,1,1], [1.0,1.0,1.0], 4, 2)
 4×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
   [1, 1]  =  1.0
   [2, 1]  =  1.0
   [4, 1]  =  1.0
 
-julia> qrfact(A)\\ones(4)
+julia> qrfact(A)\\fill(1.0, 4)
 2-element Array{Float64,1}:
  1.0
  0.0

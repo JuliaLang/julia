@@ -592,7 +592,7 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
             end
             @testset "Arrays" begin
                 @test foo(zeros(2)) == 4
-                @test foo(ones(4)) == 15
+                @test foo(fill(1., 4)) == 15
             end
         end'`), stderr=DevNull), String)
     @test contains(msg,

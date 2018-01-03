@@ -253,9 +253,9 @@ end
 
 # SubArray
 create_serialization_stream() do s # slices
-    slc1 = view(ones(UInt8, 4), 2:3)
+    slc1 = view(UInt8[1,1,1,1], 2:3)
     serialize(s, slc1)
-    slc2 = view(ones(UInt8, 4, 4) .+ [0x00, 0x01, 0x02, 0x03], 1, 2:4)
+    slc2 = view(repmat(UInt8[1,2,3,4], 1, 4), 1, 2:4)
     serialize(s, slc2)
 
     seek(s, 0)

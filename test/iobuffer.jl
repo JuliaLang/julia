@@ -223,7 +223,7 @@ end
 # issue #11917
 # (previous tests triggered this sometimes, but this should trigger nearly all the time)
 let io = IOBuffer(0)
-   write(io, ones(UInt8, 1048577))
+   write(io, fill(0x01, 1048577))
 end
 
 let bstream = BufferStream()

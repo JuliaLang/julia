@@ -1812,7 +1812,7 @@ function vcat(A::BitMatrix...)
     nrowsA = [size(a, 1) for a in A]
     Ac = [a.chunks for a in A]
     pos_d = 1
-    pos_s = ones(Int, nargs)
+    pos_s = fill(1, nargs)
     for j = 1:ncols, k = 1:nargs
         copy_chunks!(Bc, pos_d, Ac[k], pos_s[k], nrowsA[k])
         pos_s[k] += nrowsA[k]

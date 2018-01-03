@@ -38,9 +38,9 @@ Check two array shapes for compatibility, allowing trailing singleton dimensions
 whichever shape has more dimensions.
 
 ```jldoctest
-julia> a = ones(3,4,1,1,1);
+julia> a = fill(1, (3,4,1,1,1));
 
-julia> b = ones(3,4);
+julia> b = fill(1, (3,4));
 
 julia> promote_shape(a,b)
 (Base.OneTo(3), Base.OneTo(4), Base.OneTo(1), Base.OneTo(1), Base.OneTo(1))

@@ -22,7 +22,7 @@ end
 
 @testset "Log message formatting" begin
     @test_logs (Info, "sum(A) = 16.0") @info begin
-        A = ones(4,4)
+        A = fill(1.0, 4, 4)
         "sum(A) = $(sum(A))"
     end
     x = 10.50

@@ -28,12 +28,11 @@ end
 
 ## array constructors ##
 
-@test all(ones(200,200) .== 1)
-# @timeit ones(200,200) "ones" "description"
+@test all(fill(1.,200,200) .== 1)
 
 ## matmul and transpose ##
 
-A = ones(200,200)
+A = fill(1.,200,200)
 @test all(A*A' .== 200)
 # @timeit A*A' "AtA" "description"
 

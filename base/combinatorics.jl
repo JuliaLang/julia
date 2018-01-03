@@ -239,7 +239,7 @@ function nextprod(a::Vector{Int}, x)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
-    v = ones(Int, k)                  # current value of each counter
+    v = fill(1, k)                    # current value of each counter
     mx = [nextpow(ai,x) for ai in a]  # maximum value of each counter
     v[1] = mx[1]                      # start at first case that is >= x
     p::widen(Int) = mx[1]             # initial value of product in this case

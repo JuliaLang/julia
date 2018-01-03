@@ -2,7 +2,7 @@
 
 @testset "UMFPACK wrappers" begin
     se33 = sparse(1.0I, 3, 3)
-    do33 = ones(3)
+    do33 = fill(1., 3)
     @test isequal(se33 \ do33, do33)
 
     # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
@@ -68,7 +68,7 @@
             @test Transpose(A) * x ≈ b
 
             # Element promotion and type inference
-            @inferred lua\ones(Int, size(A, 2))
+            @inferred lua\fill(1, size(A, 2))
         end
     end
 
@@ -76,7 +76,7 @@
         Ac0 = complex.(A0,A0)
         for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
             Ac = convert(SparseMatrixCSC{ComplexF64,Ti}, Ac0)
-            x  = complex.(ones(size(Ac, 1)), ones(size(Ac,1)))
+            x  = fill(1.0 + im, size(Ac,1))
             lua = lufact(Ac)
             L,U,p,q,Rs = lua.:(:)
             @test (Diagonal(Rs) * Ac)[p,q] ≈ L * U
@@ -99,8 +99,8 @@
     end
 
     @testset "Issue #4523 - complex sparse \\" begin
-        x = sparse((1.0 + 1.0im)I, 2, 2)
-        @test (x*(lufact(x) \ ones(2))) ≈ ones(2)
+        A, b = sparse((1.0 + im)I, 2, 2), fill(1., 2)
+        @test A * (lufact(A)\b) ≈ b
 
         @test det(sparse([1,3,3,1], [1,1,3,3], [1,1,1,1])) == 0
     end
@@ -119,8 +119,8 @@
             (Int, Float64),
         )
 
-        F = lufact(sparse(ones(Tin, 1, 1)))
-        L = sparse(ones(Tout, 1, 1))
+        F = lufact(sparse(fill(Tin(1), 1, 1)))
+        L = sparse(fill(Tout(1), 1, 1))
         @test F.p == F.q == [1]
         @test F.Rs == [1.0]
         @test F.L == F.U == L
@@ -128,12 +128,12 @@
     end
 
     @testset "BigFloat not supported" for T in (BigFloat, Complex{BigFloat})
-        @test_throws ArgumentError lufact(sparse(ones(T, 1, 1)))
+        @test_throws ArgumentError lufact(sparse(fill(T(1), 1, 1)))
     end
 
     @testset "size(::UmfpackLU)" begin
         m = n = 1
-        F = lufact(sparse(ones(m, n)))
+        F = lufact(sparse(fill(1., m, n)))
         @test size(F) == (m, n)
         @test size(F, 1) == m
         @test size(F, 2) == n

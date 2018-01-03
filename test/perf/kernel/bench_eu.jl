@@ -11,7 +11,7 @@ function bench_eu_devec(numPaths)
     dt = T/(steps)
     K = 100
 
-    S = 100 * ones(numPaths,1)
+    S = fill(100.,numPaths,1)
 
     t1 = (r-0.5*sigma.^2)*dt
     t2 = sigma*sqrt(dt)
@@ -32,7 +32,7 @@ function bench_eu_vec(numPaths)
     dt = T/(steps)
     K = 100
 
-    S = 100 * ones(numPaths,1)
+    S = fill(100.,numPaths,1)
 
     t1 = (r-0.5*sigma.^2)*dt
     t2 = sigma*sqrt(dt)

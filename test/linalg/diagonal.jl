@@ -111,7 +111,7 @@ srand(1)
                 @test rdiv!(Uc, Transpose(D)) ≈ target atol=atol_three
                 @test rdiv!(Uc, Adjoint(conj(D))) ≈ target atol=atol_three
                 @test ldiv!(D, Matrix{eltype(D)}(I, size(D))) ≈ D \ Matrix{eltype(D)}(I, size(D)) atol=atol_three
-                @test_throws DimensionMismatch ldiv!(D, ones(elty, n + 1))
+                @test_throws DimensionMismatch ldiv!(D, fill(elty(1), n + 1))
                 @test_throws SingularException ldiv!(Diagonal(zeros(relty, n)), copy(v))
                 b = rand(elty, n, n)
                 b = sparse(b)
@@ -251,7 +251,7 @@ srand(1)
         @test issymmetric(D2)
         @test ishermitian(D2)
         if elty <: Complex
-            dc = d + im*convert(Vector{elty}, ones(n))
+            dc = d .+ elty(1im)
             D3 = Diagonal(dc)
             @test issymmetric(D3)
             @test !ishermitian(D3)
@@ -328,11 +328,11 @@ end
 
 # Issue 12803
 for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})
-    @test Diagonal(Matrix{t}[ones(t, 2, 2), ones(t, 3, 3)])[2,1] == zeros(t, 3, 2)
+    @test Diagonal(Matrix{t}[fill(t(1), 2, 2), fill(t(1), 3, 3)])[2,1] == zeros(t, 3, 2)
 end
 
 # Issue 15401
-@test Matrix(1.0I, 5, 5) \ Diagonal(ones(5)) == Matrix(I, 5, 5)
+@test Matrix(1.0I, 5, 5) \ Diagonal(fill(1.,5)) == Matrix(I, 5, 5)
 
 @testset "Triangular and Diagonal" begin
     for T in (LowerTriangular(randn(5,5)), LinAlg.UnitLowerTriangular(randn(5,5)))

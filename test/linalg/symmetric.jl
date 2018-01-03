@@ -306,14 +306,14 @@ end
                 @test Hermitian(aherm) * a ≈ aherm * a
                 @test a * Hermitian(aherm) ≈ a * aherm
                 @test Hermitian(aherm) * Hermitian(aherm) ≈ aherm*aherm
-                @test_throws DimensionMismatch Hermitian(aherm) * ones(eltya,n+1)
+                @test_throws DimensionMismatch Hermitian(aherm) * Vector{eltya}(uninitialized, n+1)
                 Base.LinAlg.mul!(C,a,Hermitian(aherm))
                 @test C ≈ a*aherm
 
                 @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
                 @test Symmetric(asym) * a ≈ asym * a
                 @test a * Symmetric(asym) ≈ a * asym
-                @test_throws DimensionMismatch Symmetric(asym) * ones(eltya,n+1)
+                @test_throws DimensionMismatch Symmetric(asym) * Vector{eltya}(uninitialized, n+1)
                 Base.LinAlg.mul!(C,a,Symmetric(asym))
                 @test C ≈ a*asym
 
@@ -445,8 +445,8 @@ end
 @testset "inversion of Hilbert matrix" begin
     for T in (Float64, ComplexF64)
         H = T[1/(i + j - 1) for i in 1:8, j in 1:8]
-        @test norm(inv(Symmetric(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
-        @test norm(inv(Hermitian(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
+        @test norm(inv(Symmetric(H))*(H*fill(1., 8)) .- 1) ≈ 0 atol = 1e-5
+        @test norm(inv(Hermitian(H))*(H*fill(1., 8)) .- 1) ≈ 0 atol = 1e-5
     end
 end
 

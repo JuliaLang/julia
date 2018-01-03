@@ -35,13 +35,13 @@ srand(100)
         end
     end
 
-    o4 = ones(elty, 4)
+    o4 = fill(elty(1), 4)
     z4 = zeros(elty, 4)
 
     I4 = Matrix{elty}(I, 4, 4)
     I43 = Matrix{elty}(I, 4, 3)
-    L4 = tril(ones(elty, (4,4)))
-    U4 = triu(ones(elty, (4,4)))
+    L4 = tril(fill(elty(1), 4,4))
+    U4 = triu(fill(elty(1), 4,4))
     Z4 = zeros(elty, (4,4))
 
     elm1 = convert(elty, -1)
@@ -121,7 +121,7 @@ srand(100)
             A = triu(rand(elty,n,n))
             @testset "Vector and SubVector" for x in (rand(elty, n), view(rand(elty,2n),1:2:2n))
                 @test A\x ≈ BLAS.trsv('U','N','N',A,x)
-                @test_throws DimensionMismatch BLAS.trsv('U','N','N',A,ones(elty,n+1))
+                @test_throws DimensionMismatch BLAS.trsv('U','N','N',A,Vector{elty}(uninitialized,n+1))
             end
         end
         @testset "ger, her, syr" for x in (rand(elty, n), view(rand(elty,2n), 1:2:2n)),
@@ -131,20 +131,20 @@ srand(100)
             α = rand(elty)
 
             @test BLAS.ger!(α,x,y,copy(A)) ≈ A + α*x*y'
-            @test_throws DimensionMismatch BLAS.ger!(α,ones(elty,n+1),y,copy(A))
+            @test_throws DimensionMismatch BLAS.ger!(α,Vector{elty}(uninitialized,n+1),y,copy(A))
 
             A = rand(elty,n,n)
             A = A + transpose(A)
             @test issymmetric(A)
             @test triu(BLAS.syr!('U',α,x,copy(A))) ≈ triu(A + α*x*Transpose(x))
-            @test_throws DimensionMismatch BLAS.syr!('U',α,ones(elty,n+1),copy(A))
+            @test_throws DimensionMismatch BLAS.syr!('U',α,Vector{elty}(uninitialized,n+1),copy(A))
 
             if elty <: Complex
                 A = rand(elty,n,n)
                 A = A + adjoint(A)
                 α = real(α)
                 @test triu(BLAS.her!('U',α,x,copy(A))) ≈ triu(A + α*x*x')
-                @test_throws DimensionMismatch BLAS.her!('U',α,ones(elty,n+1),copy(A))
+                @test_throws DimensionMismatch BLAS.her!('U',α,Vector{elty}(uninitialized,n+1),copy(A))
             end
         end
         @testset "copy" begin
@@ -167,31 +167,34 @@ srand(100)
             Asymm = A + transpose(A)
             @testset "symv and hemv" begin
                 @test BLAS.symv('U',Asymm,x) ≈ Asymm*x
-                @test_throws DimensionMismatch BLAS.symv!('U',one(elty),Asymm,x,one(elty),ones(elty,n+1))
-                @test_throws DimensionMismatch BLAS.symv('U',ones(elty,n,n+1),x)
+                offsizevec, offsizemat = Array{elty}.(uninitialized,(n+1, (n,n+1)))
+                @test_throws DimensionMismatch BLAS.symv!('U',one(elty),Asymm,x,one(elty),offsizevec)
+                @test_throws DimensionMismatch BLAS.symv('U',offsizemat,x)
                 if elty <: BlasComplex
                     @test BLAS.hemv('U',Aherm,x) ≈ Aherm*x
-                    @test_throws DimensionMismatch BLAS.hemv('U',ones(elty,n,n+1),x)
-                    @test_throws DimensionMismatch BLAS.hemv!('U',one(elty),Aherm,x,one(elty),ones(elty,n+1))
+                    @test_throws DimensionMismatch BLAS.hemv('U',offsizemat,x)
+                    @test_throws DimensionMismatch BLAS.hemv!('U',one(elty),Aherm,x,one(elty),offsizevec)
                 end
             end
 
             @testset "symm error throwing" begin
-                @test_throws DimensionMismatch BLAS.symm('L','U',ones(elty,n,n-1),rand(elty,n,n))
-                @test_throws DimensionMismatch BLAS.symm('R','U',ones(elty,n-1,n),rand(elty,n,n))
-                @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,ones(elty,n,n),one(elty),rand(elty,n-1,n))
-                @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,ones(elty,n,n),one(elty),rand(elty,n,n-1))
+                Cnn, Cnm, Cmn = Matrix{elty}.(uninitialized,((n,n), (n,n-1), (n-1,n)))
+                @test_throws DimensionMismatch BLAS.symm('L','U',Cnm,Cnn)
+                @test_throws DimensionMismatch BLAS.symm('R','U',Cmn,Cnn)
+                @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,Cnn,one(elty),Cmn)
+                @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,Cnn,one(elty),Cnm)
                 if elty <: BlasComplex
-                    @test_throws DimensionMismatch BLAS.hemm('L','U',ones(elty,n,n-1),rand(elty,n,n))
-                    @test_throws DimensionMismatch BLAS.hemm('R','U',ones(elty,n-1,n),rand(elty,n,n))
-                    @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,ones(elty,n,n),one(elty),rand(elty,n-1,n))
-                    @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,ones(elty,n,n),one(elty),rand(elty,n,n-1))
+                    @test_throws DimensionMismatch BLAS.hemm('L','U',Cnm,Cnn)
+                    @test_throws DimensionMismatch BLAS.hemm('R','U',Cmn,Cnn)
+                    @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,Cnn,one(elty),Cmn)
+                    @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,Cnn,one(elty),Cnm)
                 end
             end
         end
         @testset "trmm error throwing" begin
-            @test_throws DimensionMismatch BLAS.trmm('L','U','N','N',one(elty),triu(rand(elty,n,n)),ones(elty,n+1,n))
-            @test_throws DimensionMismatch BLAS.trmm('R','U','N','N',one(elty),triu(rand(elty,n,n)),ones(elty,n,n+1))
+            Cnn, Cmn, Cnm = Matrix{elty}.(uninitialized,((n,n), (n+1,n), (n,n+1)))
+            @test_throws DimensionMismatch BLAS.trmm('L','U','N','N',one(elty),triu(Cnn),Cmn)
+            @test_throws DimensionMismatch BLAS.trmm('R','U','N','N',one(elty),triu(Cnn),Cnm)
         end
 
         #trsm

@@ -77,11 +77,11 @@ types.
 
 # Examples
 ```jldoctest
-julia> eltype(ones(Float32,2,2))
+julia> eltype(fill(1f0, (2,2)))
 Float32
 
-julia> eltype(ones(Int8,2,2))
-Int8
+julia> eltype(fill(0x1, (2,2)))
+UInt8
 ```
 """
 eltype(::Type) = Any
@@ -343,7 +343,7 @@ fill(v, dims::Integer...) = fill!(Array{typeof(v)}(uninitialized, dims...), v)
     zeros([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all zeros with size specified by `dims`.
-See also [`ones`](@ref), [`similar`](@ref).
+See also [`fill`](@ref), [`ones`](@ref).
 
 # Examples
 ```jldoctest
@@ -363,7 +363,7 @@ function zeros end
     ones([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all ones with size specified by `dims`.
-See also [`zeros`](@ref), [`similar`](@ref).
+See also: [`fill`](@ref), [`zeros`](@ref).
 
 # Examples
 ```jldoctest

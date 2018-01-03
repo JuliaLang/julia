@@ -784,7 +784,8 @@ end
 end
 
 @testset "dispatch loop introduced in #19305" begin
-    @test [(1:2) zeros(2,2); ones(3,3)] == [[1,2] zeros(2,2); ones(3,3)] == [reshape([1,2],2,1) zeros(2,2); ones(3,3)]
+    Z22, O33 = fill(0, 2, 2), fill(1, 3, 3)
+    @test [(1:2) Z22; O33] == [[1,2] Z22; O33] == [[1 2]' Z22; O33]
 end
 
 @testset "checkbounds_indices method ambiguities #20989" begin
@@ -845,6 +846,6 @@ end
         @test CR[i_lin] == CartesianIndex(xrng[i],yrng[j])
     end
 
-    @test CartesianIndices(ones(2,3)) == CartesianIndices((2,3))
+    @test CartesianIndices(fill(1., 2, 3)) == CartesianIndices((2,3))
     @test LinearIndices((2,3)) == [1 3 5; 2 4 6]
 end

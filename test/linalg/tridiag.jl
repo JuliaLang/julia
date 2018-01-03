@@ -42,14 +42,14 @@ end
             c += im*convert(Vector{elty}, randn(n - 1))
         end
     end
-    @test_throws DimensionMismatch SymTridiagonal(dl, ones(elty, n + 1))
+    @test_throws DimensionMismatch SymTridiagonal(dl, fill(elty(1), n+1))
     @test_throws ArgumentError SymTridiagonal(rand(n, n))
     @test_throws ArgumentError Tridiagonal(dl, dl, dl)
     @test_throws ArgumentError convert(SymTridiagonal{elty}, Tridiagonal(dl, d, du))
 
     if elty != Int
         @testset "issue #1490" begin
-            @test det(ones(elty,3,3)) ≈ zero(elty) atol=3*eps(real(one(elty)))
+            @test det(fill(elty(1),3,3)) ≈ zero(elty) atol=3*eps(real(one(elty)))
             @test det(SymTridiagonal(elty[],elty[])) == one(elty)
         end
     end
@@ -194,8 +194,8 @@ end
         fds = [abs.(d) for d in ds]
         @test abs.(A)::mat_type == mat_type(fds...)
         @testset "Multiplication with strided matrix/vector" begin
-            @test A*ones(n) ≈ Array(A)*ones(n)
-            @test A*ones(n, 2) ≈ Array(A)*ones(n, 2)
+            @test (x = fill(1.,n); A*x ≈ Array(A)*x)
+            @test (X = fill(1.,n,2); A*X ≈ Array(A)*X)
         end
         @testset "Binary operations" begin
             B = mat_type == Tridiagonal ? mat_type(a, b, c) : mat_type(b, a)
@@ -215,11 +215,12 @@ end
                 @test A*LowerTriangular(Matrix(1.0I, n, n)) ≈ fA
             end
             @testset "mul! errors" begin
-                @test_throws DimensionMismatch Base.LinAlg.mul!(similar(fA),A,ones(elty,n,n+1))
-                @test_throws DimensionMismatch Base.LinAlg.mul!(similar(fA),A,ones(elty,n+1,n))
-                @test_throws DimensionMismatch Base.LinAlg.mul!(zeros(elty,n,n),B,ones(elty,n+1,n))
-                @test_throws DimensionMismatch Base.LinAlg.mul!(zeros(elty,n+1,n),B,ones(elty,n,n))
-                @test_throws DimensionMismatch Base.LinAlg.mul!(zeros(elty,n,n+1),B,ones(elty,n,n))
+                Cnn, Cnm, Cmn = Matrix{elty}.(uninitialized, ((n,n), (n,n+1), (n+1,n)))
+                @test_throws DimensionMismatch Base.LinAlg.mul!(Cnn,A,Cnm)
+                @test_throws DimensionMismatch Base.LinAlg.mul!(Cnn,A,Cmn)
+                @test_throws DimensionMismatch Base.LinAlg.mul!(Cnn,B,Cmn)
+                @test_throws DimensionMismatch Base.LinAlg.mul!(Cmn,B,Cnn)
+                @test_throws DimensionMismatch Base.LinAlg.mul!(Cnm,B,Cnn)
             end
         end
         if mat_type == SymTridiagonal
@@ -331,8 +332,9 @@ end
 end
 
 @testset "convert for SymTridiagonal" begin
-    @test convert(SymTridiagonal{Float64},SymTridiagonal(ones(Float32,5),ones(Float32,4))) == SymTridiagonal(ones(Float64,5),ones(Float64,4))
-    @test convert(AbstractMatrix{Float64},SymTridiagonal(ones(Float32,5),ones(Float32,4))) == SymTridiagonal(ones(Float64,5),ones(Float64,4))
+    STF32 = SymTridiagonal{Float32}(fill(1f0, 5), fill(1f0, 4))
+    @test convert(SymTridiagonal{Float64}, STF32)::SymTridiagonal{Float64} == STF32
+    @test convert(AbstractMatrix{Float64}, STF32)::SymTridiagonal{Float64} == STF32
 end
 
 @testset "constructors from matrix" begin

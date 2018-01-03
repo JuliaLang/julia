@@ -121,7 +121,7 @@ Upper triangle of a matrix.
 
 # Examples
 ```jldoctest
-julia> a = ones(4,4)
+julia> a = fill(1.0, (4,4))
 4×4 Array{Float64,2}:
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
@@ -145,7 +145,7 @@ Lower triangle of a matrix.
 
 # Examples
 ```jldoctest
-julia> a = ones(4,4)
+julia> a = fill(1.0, (4,4))
 4×4 Array{Float64,2}:
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
@@ -169,7 +169,7 @@ Returns the upper triangle of `M` starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
-julia> a = ones(4,4)
+julia> a = fill(1.0, (4,4))
 4×4 Array{Float64,2}:
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
@@ -200,7 +200,7 @@ Returns the lower triangle of `M` starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
-julia> a = ones(4,4)
+julia> a = fill(1.0, (4,4))
 4×4 Array{Float64,2}:
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
@@ -1209,9 +1209,9 @@ running in parallel, only 1 BLAS thread is used. The argument `n` still refers t
 of the problem that is solved on each processor.
 """
 function peakflops(n::Integer=2000; parallel::Bool=false)
-    a = ones(Float64,100,100)
+    a = fill(1.,100,100)
     t = @elapsed a2 = a*a
-    a = ones(Float64,n,n)
+    a = fill(1.,n,n)
     t = @elapsed a2 = a*a
     @assert a2[1,1] == n
     parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*Float64(n)^3/t)

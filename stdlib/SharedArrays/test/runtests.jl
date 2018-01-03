@@ -68,7 +68,7 @@ for p in procs(d)
     @test d[idxl] == rv
 end
 
-@test ones(10, 10, 10) == SharedArrays.shmem_fill(1.0, (10,10,10))
+@test fill(1., 10, 10, 10) == SharedArrays.shmem_fill(1.0, (10,10,10))
 @test zeros(Int32, 10, 10, 10) == SharedArrays.shmem_fill(0, (10,10,10))
 
 d = SharedArrays.shmem_rand(dims)
@@ -133,7 +133,7 @@ finalize(S)
 
 # Appending to a file
 fn3 = tempname()
-write(fn3, ones(UInt8, 4))
+write(fn3, fill(0x1, 4))
 S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->D[localindices(D)]=0x02)
 len = prod(sz)+4
 @test filesize(fn3) == len
@@ -169,7 +169,7 @@ S = @inferred(SharedArray{Int}(1,2,3))
 # reshape
 
 d = SharedArrays.shmem_fill(1.0, (10,10,10))
-@test ones(100, 10) == reshape(d,(100,10))
+@test fill(1., 100, 10) == reshape(d,(100,10))
 d = SharedArrays.shmem_fill(1.0, (10,10,10))
 @test_throws DimensionMismatch reshape(d,(50,))
 
@@ -223,7 +223,7 @@ d2 = map(x->1, d)
 map!(x->1, d, d)
 @test reduce(+, d) == 100
 
-@test fill!(d, 1) == ones(10, 10)
+@test fill!(d, 1) == fill(1., 10, 10)
 @test fill!(d, 2.) == fill(2, 10, 10)
 @test d[:] == fill(2, 100)
 @test d[:,1] == fill(2, 10)

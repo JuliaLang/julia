@@ -173,7 +173,7 @@ For multiple arguments, return a vector.
 
 # Examples
 ```jldoctest
-julia> A = ones(4,4); B = zeros(5,5);
+julia> A = fill(1, (4,4)); B = fill(1, (5,5));
 
 julia> LinAlg.checksquare(A, B)
 2-element Array{Int64,1}:

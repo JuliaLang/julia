@@ -301,9 +301,10 @@ end
     STAA = Symmetric(TAA)
     @test Array(atanh.(STAA)) == atanh.(TAA)
     @test Array(asinh.(STAA)) == asinh.(TAA)
-    @test Array(acosh.(STAA+Symmetric(ones(2,2)))) == acosh.(TAA+ones(2,2))
-    @test Array(acsch.(STAA+Symmetric(ones(2,2)))) == acsch.(TAA+ones(2,2))
-    @test Array(acoth.(STAA+Symmetric(ones(2,2)))) == acoth.(TAA+ones(2,2))
+    TAA .+= 1
+    @test Array(acosh.(STAA)) == acosh.(TAA)
+    @test Array(acsch.(STAA)) == acsch.(TAA)
+    @test Array(acoth.(STAA)) == acoth.(TAA)
 end
 
 @testset "check exp2(::Integer) matches exp2(::Float)" begin

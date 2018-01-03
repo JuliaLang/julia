@@ -176,9 +176,10 @@ srand(1)
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 @test_throws DimensionMismatch T\Transpose(b)
             end
-            @test_throws DimensionMismatch T \ ones(elty,n+1,2)
-            @test_throws DimensionMismatch Transpose(T) \ ones(elty,n+1,2)
-            @test_throws DimensionMismatch T' \ ones(elty,n+1,2)
+            offsizemat = Matrix{elty}(uninitialized, n+1, 2)
+            @test_throws DimensionMismatch T \ offsizemat
+            @test_throws DimensionMismatch Transpose(T) \ offsizemat
+            @test_throws DimensionMismatch T' \ offsizemat
 
             let bb = b, cc = c
                 for atype in ("Array", "SubArray")
@@ -192,7 +193,7 @@ srand(1)
                 end
                 x = T \ b
                 tx = Tfull \ b
-                @test_throws DimensionMismatch Base.LinAlg.naivesub!(T,ones(elty,n+1))
+                @test_throws DimensionMismatch Base.LinAlg.naivesub!(T,Vector{elty}(uninitialized,n+1))
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 @testset "Generic Mat-vec ops" begin
                     @test T*b ≈ Tfull*b
@@ -291,7 +292,7 @@ end
 @test Bidiagonal(1:3, 1:2, :U) == [1 1 0; 0 2 2; 0 0 3]
 
 @testset "promote_rule" begin
-    A = Bidiagonal(ones(Float32,10),ones(Float32,9),:U)
+    A = Bidiagonal(fill(1f0,10),fill(1f0,9),:U)
     B = rand(Float64,10,10)
     C = Tridiagonal(rand(Float64,9),rand(Float64,10),rand(Float64,9))
     @test promote_rule(Matrix{Float64}, Bidiagonal{Float64}) == Matrix{Float64}

@@ -221,9 +221,9 @@ end
         F = cholfact(Hermitian(AcA, uplo))
         G = cholfact(Hermitian(BcB, uplo))
         @test Base.getproperty(LinAlg.lowrankupdate(F, v), uplo) ≈ Base.getproperty(G, uplo)
-        @test_throws DimensionMismatch LinAlg.lowrankupdate(F, ones(eltype(v), length(v)+1))
+        @test_throws DimensionMismatch LinAlg.lowrankupdate(F, Vector{eltype(v)}(uninitialized,length(v)+1))
         @test Base.getproperty(LinAlg.lowrankdowndate(G, v), uplo) ≈ Base.getproperty(F, uplo)
-        @test_throws DimensionMismatch LinAlg.lowrankdowndate(G, ones(eltype(v), length(v)+1))
+        @test_throws DimensionMismatch LinAlg.lowrankdowndate(G, Vector{eltype(v)}(uninitialized,length(v)+1))
     end
 end
 

@@ -457,9 +457,9 @@ end
         let N = 4
             spvec = spzeros(N)
             spmat = spzeros(N, 1)
-            densevec = ones(N)
-            densemat = ones(N, 1)
-            diagmat = Diagonal(ones(4))
+            densevec = fill(1., N)
+            densemat = fill(1., N, 1)
+            diagmat = Diagonal(densevec)
             # Test that concatenations of pairwise combinations of sparse vectors with dense
             # vectors/matrices, sparse matrices, or special matrices yield sparse arrays
             for othervecormat in (densevec, densemat, spmat)
@@ -1135,11 +1135,9 @@ end
             for (siz, Sp) in zip(sizes, sptypes)
                 arr = rand(Tv, siz...)
                 sparr = Sp(arr)
-                fillval = rand(Tv)
-                fill!(sparr, fillval)
-                @test Array(sparr) == fillval * ones(Tv, siz...)
-                fill!(sparr, 0)
-                @test Array(sparr) == zeros(Tv, siz...)
+                x = rand(Tv)
+                @test fill!(sparr, x) == fill(x, siz)
+                @test fill!(sparr, 0) == fill(0, siz)
             end
         end
     end
@@ -1229,21 +1227,21 @@ end
     simA = similar(A, (6,6))
     @test typeof(simA) == SparseMatrixCSC{eltype(A.nzval),eltype(A.nzind)}
     @test size(simA) == (6,6)
-    @test simA.colptr == ones(eltype(A.nzind), 6+1)
+    @test simA.colptr == fill(1, 6+1)
     @test length(simA.rowval) == length(A.nzind)
     @test length(simA.nzval) == length(A.nzval)
     # test similar with entry type and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32,eltype(A.nzind)}
     @test size(simA) == (6,6)
-    @test simA.colptr == ones(eltype(A.nzind), 6+1)
+    @test simA.colptr == fill(1, 6+1)
     @test length(simA.rowval) == length(A.nzind)
     @test length(simA.nzval) == length(A.nzval)
     # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, Int8, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
     @test size(simA) == (6,6)
-    @test simA.colptr == ones(eltype(A.nzind), 6+1)
+    @test simA.colptr == fill(1, 6+1)
     @test length(simA.rowval) == length(A.nzind)
     @test length(simA.nzval) == length(A.nzval)
 end
@@ -1259,8 +1257,8 @@ end
         @test Aj*0.1            == Ajview*0.1
         @test 0.1*Aj            == 0.1*Ajview
         @test Aj/0.1            == Ajview/0.1
-        @test LinAlg.axpy!(1.0, Aj,     sparse(ones(n))) ==
-              LinAlg.axpy!(1.0, Ajview, sparse(ones(n)))
+        @test LinAlg.axpy!(1.0, Aj,     sparse(fill(1., n))) ==
+              LinAlg.axpy!(1.0, Ajview, sparse(fill(1., n)))
         @test LinAlg.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Aj) ==
               LinAlg.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Ajview)
     end
