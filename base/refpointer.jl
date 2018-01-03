@@ -61,7 +61,7 @@ Ref(x::Ptr{T}, i::Integer) where {T} = x + (i - 1) * Core.sizeof(T)
 function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
     if isbits(T) || isbitsunion(T)
         return convert(P, pointer_from_objref(b))
-    elseif _isleaftype(T)
+    elseif _isleaftype(T) && T.mutable
         return convert(P, pointer_from_objref(b.x))
     else
         # If the slot is not leaf type, it could be either isbits or not.

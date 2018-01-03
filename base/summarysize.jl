@@ -65,7 +65,9 @@ end
 (ss::SummarySize)(@nospecialize obj) = _summarysize(ss, obj)
 # define the general case separately to make sure it is not specialized for every type
 @noinline function _summarysize(ss::SummarySize, @nospecialize obj)
-    key = pointer_from_objref(obj)
+    # NOTE: this attempts to discover multiple copies of the same immutable value,
+    # and so is somewhat approximate.
+    key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
     if _nfields(obj) > 0
         push!(ss.frontier_x, obj)
