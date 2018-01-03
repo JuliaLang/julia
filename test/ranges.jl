@@ -552,27 +552,33 @@ end
     @test [0.0:prevfloat(0.1):0.3;] == [0.0, prevfloat(0.1), prevfloat(0.2), 0.3]
     @test [0.0:nextfloat(0.1):0.3;] == [0.0, nextfloat(0.1), nextfloat(0.2)]
 end
-@testset "issue #7420 for type $T" for T = (Float32, Float64,), # BigFloat),
-    a = -5:25,
-    s = [-5:-1; 1:25; ],
-    d = 1:25,
-    n = -1:15
 
-    denom = convert(T, d)
-    strt = convert(T, a)/denom
-    Δ     = convert(T, s)/denom
-    stop  = convert(T, (a + (n - 1) * s)) / denom
-    vals  = T[a:s:(a + (n - 1) * s); ] ./ denom
-    r = strt:Δ:stop
-    @test [r;] == vals
-    @test [linspace(strt, stop, length(r));] == vals
-    n = length(r)
-    @test [r[1:n];] == [r;]
-    @test [r[2:n];] == [r;][2:end]
-    @test [r[1:3:n];] == [r;][1:3:n]
-    @test [r[2:2:n];] == [r;][2:2:n]
-    @test [r[n:-1:2];] == [r;][n:-1:2]
-    @test [r[n:-2:1];] == [r;][n:-2:1]
+function loop_range_values(::Type{T}) where T
+    for a = -5:25,
+        s = [-5:-1; 1:25; ],
+        d = 1:25,
+        n = -1:15
+
+        denom = convert(T, d)
+        strt = convert(T, a)/denom
+        Δ     = convert(T, s)/denom
+        stop  = convert(T, (a + (n - 1) * s)) / denom
+        vals  = T[a:s:(a + (n - 1) * s); ] ./ denom
+        r = strt:Δ:stop
+        @test [r;] == vals
+        @test [linspace(strt, stop, length(r));] == vals
+        n = length(r)
+        @test [r[1:n];] == [r;]
+        @test [r[2:n];] == [r;][2:end]
+        @test [r[1:3:n];] == [r;][1:3:n]
+        @test [r[2:2:n];] == [r;][2:2:n]
+        @test [r[n:-1:2];] == [r;][n:-1:2]
+        @test [r[n:-2:1];] == [r;][n:-2:1]
+    end
+end
+
+@testset "issue #7420 for type $T" for T = (Float32, Float64,) # BigFloat),
+    loop_range_values(T)
 end
 
 @testset "issue #20373 (unliftable ranges with exact end points)" begin
