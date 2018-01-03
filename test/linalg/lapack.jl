@@ -148,7 +148,7 @@ end
         B = rand(elty, 10, 10)
         C, j = LAPACK.gelsd!(copy(A),copy(B))
         D, k = LAPACK.gelsy!(copy(A),copy(B))
-        @test C ≈ D rtol=eps(cond(A))
+        @test C ≈ D rtol=4*eps(cond(A))
         @test_throws DimensionMismatch LAPACK.gelsd!(A,rand(elty,12,10))
         @test_throws DimensionMismatch LAPACK.gelsy!(A,rand(elty,12,10))
     end
