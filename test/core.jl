@@ -1896,11 +1896,11 @@ test5884()
 
 # issue #5924
 let
-    function Test()
+    function test5924()
         func = function () end
         func
     end
-    @test Test()() === nothing
+    @test test5924()() === nothing
 end
 
 # issue #6031
