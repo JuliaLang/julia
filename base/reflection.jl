@@ -854,15 +854,15 @@ code_llvm(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, t
 code_llvm_raw(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, types, false)
 
 """
-    code_native([io=STDOUT,], f, types, syntax=:att)
+    code_native([io=STDOUT,], f, types; syntax = :att)
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io`.
 Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax.
 """
-code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple), syntax::Symbol=:att) =
+code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple); syntax::Symbol = :att) =
     print(io, _dump_function(f, types, true, false, false, false, syntax))
-code_native(@nospecialize(f), @nospecialize(types=Tuple), syntax::Symbol=:att) = code_native(STDOUT, f, types, syntax)
+code_native(@nospecialize(f), @nospecialize(types=Tuple); syntax::Symbol = :att) = code_native(STDOUT, f, types, syntax = syntax)
 code_native(::IO, ::Any, ::Symbol) = error("illegal code_native call") # resolve ambiguous call
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types

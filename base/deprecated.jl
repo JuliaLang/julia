@@ -3811,6 +3811,8 @@ end
 @deprecate Timer(callback, delay, repeat) Time(callback, delay, repeat = repeat)
 @deprecate names(m, all) names(m, all = all)
 @deprecate names(m, all, imported) names(m, all = all, imported = imported)
+@deprecate code_native(io, f, types, syntax) code_native(io, f, types, syntax = syntax)
+@deprecate code_native(f, types, syntax) code_native(f, types, syntax = syntax)
 
 # END 0.7 deprecations
 
