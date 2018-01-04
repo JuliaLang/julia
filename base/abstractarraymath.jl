@@ -156,7 +156,7 @@ function flipdim(A::AbstractArray, d::Integer)
         nnd += Int(length(inds[i])==1 || i==d)
     end
     indsd = inds[d]
-    sd = first(indsd)+last(indsd)
+    sd = rangestart(indsd)+rangestop(indsd)
     if nnd==nd
         # flip along the only non-singleton dimension
         for i in indsd

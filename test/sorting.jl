@@ -105,6 +105,8 @@ end
 Base.length(r::ConstantRange) = r.len
 Base.getindex(r::ConstantRange, i::Int) = (1 <= i <= r.len || throw(BoundsError(r,i)); r.val)
 Base.step(r::ConstantRange) = 0
+Base.rangestart(r::ConstantRange) = r.val
+Base.rangestop(r::ConstantRange) = r.val
 
 @testset "searchsorted method with ranges which check for zero step range" begin
     r = ConstantRange(1, 5)

@@ -346,7 +346,7 @@ end
 @inline function shapeindexer(shape, indsA::Tuple)
     ind1 = indsA[1]
     keep, Idefault = shapeindexer(tail(shape), tail(indsA))
-    (shape[1] == ind1, keep...), (first(ind1), Idefault...)
+    (shape[1] == ind1, keep...), (rangestart(ind1), Idefault...)
 end
 
 # Equivalent to map(x->newindexer(shape, x), As) (but see #17126)

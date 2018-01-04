@@ -96,7 +96,8 @@ is specified as string sep.
 function print_matrix_row(io::IO,
         X::AbstractVecOrMat, A::Vector,
         i::Integer, cols::AbstractVector, sep::AbstractString)
-    isempty(A) || first(axes(cols,1)) == 1 || throw(DimensionMismatch("indices of cols ($(axes(cols,1))) must start at 1"))
+    isempty(A) || rangestart(axes(cols,1)) == 1 ||
+        throw(DimensionMismatch("indices of cols ($(axes(cols,1))) must start at 1"))
     for k = 1:length(A)
         j = cols[k]
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
@@ -268,11 +269,11 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
                 ii = idxs[i]
                 ind = tailinds[i]
                 if length(ind) > 10
-                    if ii == ind[4] && all(d->idxs[d]==first(tailinds[d]),1:i-1)
+                    if ii == ind[4] && all(d->idxs[d]==rangestart(tailinds[d]),1:i-1)
                         for j=i+1:nd
                             szj = length(axes(a, j+2))
                             indj = tailinds[j]
-                            if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
+                            if szj>10 && rangestart(indj)+2 < idxs[j] <= rangestop(indj)-3
                                 @goto skip
                             end
                         end
@@ -293,7 +294,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
         end
         slice = view(a, axes(a,1), axes(a,2), idxs...)
         print_matrix(io, slice)
-        print(io, idxs == map(last,tailinds) ? "" : "\n\n")
+        print(io, idxs == map(rangestop,tailinds) ? "" : "\n\n")
         @label skip
     end
 end
@@ -380,7 +381,7 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
         for i in rr
             for cr in (cr1, cr2)
                 for j in cr
-                    j > first(cr) && print(io, " ")
+                    j > rangestart(cr) && print(io, " ")
                     if !isassigned(X,i,j)
                         print(io, undef_ref_str)
                     else
@@ -388,14 +389,14 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
                         show(io, el)
                     end
                 end
-                if last(cr) == last(indc)
-                    i < last(indr) && print(io, "; ")
+                if rangestop(cr) == rangestop(indc)
+                    i < rangestop(indr) && print(io, "; ")
                 elseif cdots
                     print(io, " \u2026 ")
                 end
             end
         end
-        last(rr) != nr && rdots && print(io, "\u2026 ; ")
+        rangestop(rr) != nr && rdots && print(io, "\u2026 ; ")
     end
     print(io, "]")
 end

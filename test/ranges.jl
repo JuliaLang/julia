@@ -623,18 +623,18 @@ end
 @testset "linspace & ranges with very small endpoints for type $T" for T = (Float32, Float64)
     z = zero(T)
     u = eps(z)
-    @test first(linspace(u,u,0)) == u
-    @test last(linspace(u,u,0)) == u
-    @test first(linspace(-u,u,0)) == -u
-    @test last(linspace(-u,u,0)) == u
+    @test rangestart(linspace(u,u,0)) == u
+    @test rangestop(linspace(u,u,0)) == u
+    @test rangestart(linspace(-u,u,0)) == -u
+    @test rangestop(linspace(-u,u,0)) == u
     @test [linspace(-u,u,0);] == []
     @test [linspace(-u,-u,1);] == [-u]
     @test [linspace(-u,u,2);] == [-u,u]
     @test [linspace(-u,u,3);] == [-u,0,u]
-    @test first(linspace(-u,-u,0)) == -u
-    @test last(linspace(-u,-u,0)) == -u
-    @test first(linspace(u,-u,0)) == u
-    @test last(linspace(u,-u,0)) == -u
+    @test rangestart(linspace(-u,-u,0)) == -u
+    @test rangestop(linspace(-u,-u,0)) == -u
+    @test rangestart(linspace(u,-u,0)) == u
+    @test rangestop(linspace(u,-u,0)) == -u
     @test [linspace(u,-u,0);] == []
     @test [linspace(u,u,1);] == [u]
     @test [linspace(u,-u,2);] == [u,-u]

@@ -513,9 +513,9 @@ function getindex(x::SparseMatrixCSC, I::AbstractUnitRange, j::Integer)
     c1 = convert(Int, x.colptr[j])
     c2 = convert(Int, x.colptr[j+1]) - 1
     # Restrict to the selected rows
-    r1 = searchsortedfirst(x.rowval, first(I), c1, c2, Forward)
-    r2 = searchsortedlast(x.rowval, last(I), c1, c2, Forward)
-    SparseVector(length(I), [x.rowval[i] - first(I) + 1 for i = r1:r2], x.nzval[r1:r2])
+    r1 = searchsortedfirst(x.rowval, rangestart(I), c1, c2, Forward)
+    r2 = searchsortedlast(x.rowval, rangestop(I), c1, c2, Forward)
+    SparseVector(length(I), [x.rowval[i] - rangestart(I) + 1 for i = r1:r2], x.nzval[r1:r2])
 end
 
 # In the general case, we piggy back upon SparseMatrixCSC's optimized solution
@@ -613,8 +613,8 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
     rowvalB = Vector{Int}(uninitialized, nnzB)
     nzvalB = Vector{Tv}(uninitialized, nnzB)
 
-    rowstart,colstart = Base._ind2sub(szA, first(I))
-    rowend,colend = Base._ind2sub(szA, last(I))
+    rowstart,colstart = Base._ind2sub(szA, rangestart(I))
+    rowend,colend = Base._ind2sub(szA, rangestop(I))
 
     idxB = 1
     @inbounds for col in colstart:colend
@@ -623,7 +623,7 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
         for r in colptrA[col]:(colptrA[col+1]-1)
             rowA = rowvalA[r]
             if minrow <= rowA <= maxrow
-                rowvalB[idxB] = Base._sub2ind(szA, rowA, col) - first(I) + 1
+                rowvalB[idxB] = Base._sub2ind(szA, rowA, col) - rangestart(I) + 1
                 nzvalB[idxB] = nzvalA[r]
                 idxB += 1
             end
@@ -750,8 +750,8 @@ end
 function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractUnitRange) where {Tv,Ti}
     checkbounds(x, I)
     xlen = length(x)
-    i0 = first(I)
-    i1 = last(I)
+    i0 = rangestart(I)
+    i1 = rangestop(I)
 
     xnzind = nonzeroinds(x)
     xnzval = nonzeros(x)

@@ -204,7 +204,7 @@ function mapfirst!(f, R::AbstractArray, A::AbstractArray)
     t = []
     for i in 1:length(iR)
         iAi = iA[i]
-        push!(t, iAi == iR[i] ? iAi : first(iAi))
+        push!(t, iAi == iR[i] ? iAi : rangestart(iAi))
     end
     map!(f, R, view(A, t...))
 end
@@ -216,7 +216,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     if has_fast_linear_indexing(A) && lsiz > 16
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
         nslices = div(_length(A), lsiz)
-        ibase = first(linearindices(A))-1
+        ibase = rangestart(linearindices(A))-1
         for i = 1:nslices
             @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
             ibase += lsiz
@@ -227,7 +227,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
-        i1 = first(indices1(R))
+        i1 = rangestart(indices1(R))
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
@@ -651,7 +651,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     k, kss = next(ks, start(ks))
     zi = zero(eltype(ks))
     if reducedim1(Rval, A)
-        i1 = first(indices1(Rval))
+        i1 = rangestart(indices1(Rval))
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             tmpRv = Rval[i1,IR]

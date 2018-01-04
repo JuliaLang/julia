@@ -410,7 +410,7 @@ function _unique!(A::AbstractVector)
             A[i] = x
         end
     end
-    resize!(A, i - first(idxs) + 1)
+    resize!(A, i - rangestart(idxs) + 1)
 end
 
 # If A is grouped, so that each unique element is in a contiguous group, then we only
@@ -429,7 +429,7 @@ function _groupedunique!(A::AbstractVector)
             y = A[i] = x
         end
     end
-    resize!(A, i - first(idxs) + 1)
+    resize!(A, i - rangestart(idxs) + 1)
 end
 
 """

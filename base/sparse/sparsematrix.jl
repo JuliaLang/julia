@@ -46,7 +46,7 @@ const SparseMatrixCSCView{Tv,Ti} =
 const SparseMatrixCSCUnion{Tv,Ti} = Union{SparseMatrixCSC{Tv,Ti}, SparseMatrixCSCView{Tv,Ti}}
 
 getcolptr(S::SparseMatrixCSC)     = S.colptr
-getcolptr(S::SparseMatrixCSCView) = view(S.parent.colptr, first(axes(S, 2)):(last(axes(S, 2)) + 1))
+getcolptr(S::SparseMatrixCSCView) = view(S.parent.colptr, rangestart(axes(S, 2)):(rangestop(axes(S, 2)) + 1))
 getrowval(S::SparseMatrixCSC)     = S.rowval
 getrowval(S::SparseMatrixCSCView) = S.parent.rowval
 getnzval( S::SparseMatrixCSC)     = S.nzval
@@ -1520,9 +1520,9 @@ function ==(A1::SparseMatrixCSC, A2::SparseMatrixCSC)
     m, n = size(A1)
     @inbounds for i = 1:n
         nz1,nz2 = nzrange(A1,i), nzrange(A2,i)
-        j1,j2 = first(nz1), first(nz2)
+        j1,j2 = rangestart(nz1), rangestart(nz2)
         # step through the rows of both matrices at once:
-        while j1 <= last(nz1) && j2 <= last(nz2)
+        while j1 <= rangestop(nz1) && j2 <= rangestop(nz2)
             r1,r2 = rows1[j1], rows2[j2]
             if r1==r2
                 vals1[j1]!=vals2[j2] && return false
@@ -1539,10 +1539,10 @@ function ==(A1::SparseMatrixCSC, A2::SparseMatrixCSC)
             end
         end
         # finish off any left-overs:
-        for j = j1:last(nz1)
+        for j = j1:rangestop(nz1)
             vals1[j]!=0 && return false
         end
-        for j = j2:last(nz2)
+        for j = j2:rangestop(nz2)
             vals2[j]!=0 && return false
         end
     end
@@ -1847,7 +1847,7 @@ indmax(A::SparseMatrixCSC) = findmax(A)[2]
 
 ## getindex
 function rangesearch(haystack::AbstractRange, needle)
-    (i,rem) = divrem(needle - first(haystack), step(haystack))
+    (i,rem) = divrem(needle - rangestart(haystack), step(haystack))
     (rem==0 && 1<=i+1<=length(haystack)) ? i+1 : 0
 end
 

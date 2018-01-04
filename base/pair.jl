@@ -56,6 +56,8 @@ endof(p::Pair) = 2
 length(p::Pair) = 2
 first(p::Pair) = p.first
 last(p::Pair) = p.second
+rangestart(p::Pair) = p.first
+rangestop(p::Pair) = p.second
 
 convert(::Type{Pair{A,B}}, x::Pair{A,B}) where {A,B} = x
 function convert(::Type{Pair{A,B}}, x::Pair) where {A,B}

@@ -281,13 +281,13 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
         @inbounds a1 = A[i]
         @inbounds a2 = A[i+=1]
         s = op(f(a1), f(a2))
-        while i < last(inds)
+        while i < rangestop(inds)
             @inbounds Ai = A[i+=1]
             s = op(s, f(Ai))
         end
         return s
     else
-        return mapreduce_impl(f, op, A, first(inds), last(inds))
+        return mapreduce_impl(f, op, A, rangestart(inds), rangestop(inds))
     end
 end
 

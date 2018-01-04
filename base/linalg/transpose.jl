@@ -106,7 +106,7 @@ function transpose_f!(f, B::AbstractMatrix, A::AbstractMatrix)
             end
         end
     else
-        transposeblock!(f,B,A,m,n,first(inds[1])-1,first(inds[2])-1)
+        transposeblock!(f,B,A,m,n,rangestart(inds[1])-1,rangestart(inds[2])-1)
     end
     return B
 end
@@ -195,9 +195,9 @@ function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_de
     end
     @boundscheck checkbounds(B, ir_dest, jr_dest)
     @boundscheck checkbounds(A, ir_src, jr_src)
-    idest = first(ir_dest)
+    idest = rangestart(ir_dest)
     for jsrc in jr_src
-        jdest = first(jr_dest)
+        jdest = rangestart(jr_dest)
         for isrc in ir_src
             B[idest,jdest] = A[isrc,jsrc]
             jdest += step(jr_dest)

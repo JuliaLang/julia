@@ -106,10 +106,10 @@ const sorted_keywords = [
 
 function complete_keyword(s::Union{String,SubString{String}})
     r = searchsorted(sorted_keywords, s)
-    i = first(r)
+    i = rangestart(r)
     n = length(sorted_keywords)
     while i <= n && startswith(sorted_keywords[i],s)
-        r = first(r):i
+        r = rangestart(r):i
         i += 1
     end
     sorted_keywords[r]
@@ -408,7 +408,7 @@ function afterusing(string::String, startpos::Int)
     rstr = reverse(str)
     r = search(rstr, r"\s(gnisu|tropmi)\b")
     isempty(r) && return false
-    fr = reverseind(str, last(r))
+    fr = reverseind(str, rangestop(r))
     return ismatch(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
 end
 
@@ -635,10 +635,10 @@ function shell_completions(string, pos)
 
         return complete_path(prefix, pos, use_envpath=use_envpath)
     elseif isexpr(arg, :incomplete) || isexpr(arg, :error)
-        r = first(last_parse):prevind(last_parse, last(last_parse))
+        r = rangestart(last_parse):prevind(last_parse, rangestop(last_parse))
         partial = scs[r]
         ret, range = completions(partial, endof(partial))
-        range = range .+ (first(r) - 1)
+        range = range .+ (rangestart(r) - 1)
         return ret, range, true
     end
     return String[], 0:-1, false

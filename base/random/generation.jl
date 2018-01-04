@@ -194,10 +194,10 @@ SamplerRangeFast(r::AbstractUnitRange{T}) where T<:BitInteger =
 
 function SamplerRangeFast(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
     isempty(r) && throw(ArgumentError("range must be non-empty"))
-    m = (last(r) - first(r)) % unsigned(T) % U # % unsigned(T) to not propagate sign bit
+    m = (rangestop(r) - rangestart(r)) % unsigned(T) % U # % unsigned(T) to not propagate sign bit
     bw = (sizeof(U) << 3 - leading_zeros(m)) % UInt # bit-width
     mask = (1 % U << bw) - (1 % U)
-    SamplerRangeFast{U,T}(first(r), bw, m, mask)
+    SamplerRangeFast{U,T}(rangestart(r), bw, m, mask)
 end
 
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt32,T}) where T
@@ -256,8 +256,8 @@ SamplerRangeInt(r::AbstractUnitRange{T}) where T<:BitInteger =
 
 function SamplerRangeInt(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
     isempty(r) && throw(ArgumentError("range must be non-empty"))
-    a = first(r)
-    m = (last(r) - first(r)) % unsigned(T) % U
+    a = rangestart(r)
+    m = (rangestop(r) - rangestart(r)) % unsigned(T) % U
     k = m + one(U)
     bw = (sizeof(U) << 3 - leading_zeros(m)) % Int
     mult = if U === UInt32
@@ -307,14 +307,14 @@ struct SamplerBigInt <: Sampler
 end
 
 function Sampler(::AbstractRNG, r::AbstractUnitRange{BigInt}, ::Repetition)
-    m = last(r) - first(r)
+    m = rangestop(r) - rangestart(r)
     m < 0 && throw(ArgumentError("range must be non-empty"))
     nd = ndigits(m, 2)
     nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
     highbits > 0 && (nlimbs += 1)
     mask = highbits == 0 ? ~zero(Limb) : one(Limb)<<highbits - one(Limb)
-    nlimbsmax = max(nlimbs, abs(last(r).size), abs(first(r).size))
-    return SamplerBigInt(first(r), m, nlimbs, nlimbsmax, mask)
+    nlimbsmax = max(nlimbs, abs(rangestop(r).size), abs(rangestart(r).size))
+    return SamplerBigInt(rangestart(r), m, nlimbs, nlimbsmax, mask)
 end
 
 function rand(rng::AbstractRNG, sp::SamplerBigInt)

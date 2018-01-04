@@ -27,7 +27,7 @@ Base.steprem(a::T, b::T, c) where {T<:TimeType} = b - (a + c * len(a, b, c))
 
 import Base.in
 function in(x::T, r::StepRange{T}) where T<:TimeType
-    n = len(first(r), x, step(r)) + 1
+    n = len(rangestart(r), x, step(r)) + 1
     n >= 1 && n <= length(r) && r[n] == x
 end
 
@@ -35,9 +35,9 @@ Base.start(r::StepRange{<:TimeType}) = 0
 Base.next(r::StepRange{<:TimeType}, i::Int) = (r.start + r.step*i, i + 1)
 Base.done(r::StepRange{<:TimeType,<:Period}, i::Integer) = length(r) <= i
 
-+(x::Period, r::AbstractRange{<:TimeType}) = (x + first(r)):step(r):(x + last(r))
++(x::Period, r::AbstractRange{<:TimeType}) = (x + rangestart(r)):step(r):(x + rangestop(r))
 +(r::AbstractRange{<:TimeType}, x::Period) = x + r
--(r::AbstractRange{<:TimeType}, x::Period) = (first(r)-x):step(r):(last(r)-x)
+-(r::AbstractRange{<:TimeType}, x::Period) = (rangestart(r)-x):step(r):(rangestop(r)-x)
 
 # Combinations of types and periods for which the range step is regular
 Base.TypeRangeStep(::Type{<:OrdinalRange{<:TimeType, <:FixedPeriod}}) =

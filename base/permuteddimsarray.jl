@@ -224,10 +224,10 @@ end
 
 @noinline function _permutedims!(P::PermutedDimsArray, src, R1::CartesianIndices{0}, R2, R3, ds, dp)
     ip, is = axes(src, dp), axes(src, ds)
-    for jo in first(ip):8:last(ip), io in first(is):8:last(is)
+    for jo in rangestart(ip):8:rangestop(ip), io in rangestart(is):8:rangestop(is)
         for I3 in R3, I2 in R2
-            for j in jo:min(jo+7, last(ip))
-                for i in io:min(io+7, last(is))
+            for j in jo:min(jo+7, rangestop(ip))
+                for i in io:min(io+7, rangestop(is))
                     @inbounds P[i, I2, j, I3] = src[i, I2, j, I3]
                 end
             end
@@ -238,10 +238,10 @@ end
 
 @noinline function _permutedims!(P::PermutedDimsArray, src, R1, R2, R3, ds, dp)
     ip, is = axes(src, dp), axes(src, ds)
-    for jo in first(ip):8:last(ip), io in first(is):8:last(is)
+    for jo in rangestart(ip):8:rangestop(ip), io in rangestart(is):8:rangestop(is)
         for I3 in R3, I2 in R2
-            for j in jo:min(jo+7, last(ip))
-                for i in io:min(io+7, last(is))
+            for j in jo:min(jo+7, rangestop(ip))
+                for i in io:min(io+7, rangestop(is))
                     for I1 in R1
                         @inbounds P[I1, i, I2, j, I3] = src[I1, i, I2, j, I3]
                     end

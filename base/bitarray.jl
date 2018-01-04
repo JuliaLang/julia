@@ -644,7 +644,8 @@ end
     return B
 end
 
-indexoffset(i) = first(i)-1
+indexoffset(i::Integer) = i-1
+indexoffset(i::AbstractRange) = rangestart(i)-1
 indexoffset(::Colon) = 0
 
 @inline function setindex!(B::BitArray, x, J0::Union{Colon,UnitRange{Int}})
@@ -927,8 +928,8 @@ end
 
 function deleteat!(B::BitVector, r::UnitRange{Int})
     n = length(B)
-    i_f = first(r)
-    i_l = last(r)
+    i_f = rangestart(r)
+    i_l = rangestop(r)
     1 <= i_f || throw(BoundsError(B, i_f))
     i_l <= n || throw(BoundsError(B, n+1))
 
@@ -1000,8 +1001,12 @@ const _default_bit_splice = BitVector()
 
 function splice!(B::BitVector, r::Union{UnitRange{Int}, Integer}, ins::AbstractArray = _default_bit_splice)
     n = length(B)
-    i_f = first(r)
-    i_l = last(r)
+    if r isa Integer
+        i_f = i_l = r
+    else
+        i_f = rangestart(r)
+        i_l = rangestop(r)
+    end
 
     1 <= i_f <= n+1 || throw(BoundsError(B, i_f))
     i_l <= n || throw(BoundsError(B, n+1))
@@ -1013,7 +1018,7 @@ function splice!(B::BitVector, r::Union{UnitRange{Int}, Integer}, ins::AbstractA
         return BitVector()
     end
 
-    v = B[r]  # TODO: change to a copy if/when subscripting becomes an ArrayView
+    v = B[r]
 
     Bc = B.chunks
 
