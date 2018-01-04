@@ -353,7 +353,8 @@ end
 
 import Base: sleep, Timer, timedwait
 sleep(time::Period) = sleep(toms(time) / 1000)
-Timer(time::Period, repeat::Period=Second(0)) = Timer(toms(time) / 1000, toms(repeat) / 1000)
+Timer(time::Period; interval::Period = Second(0)) =
+    Timer(toms(time) / 1000, interval = toms(interval) / 1000)
 timedwait(testcb::Function, time::Period) = timedwait(testcb, toms(time) / 1000)
 
 Base.OrderStyle(::Type{<:AbstractTime}) = Base.Ordered()

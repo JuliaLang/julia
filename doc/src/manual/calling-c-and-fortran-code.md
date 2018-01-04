@@ -963,7 +963,7 @@ Currently, this is only supported for primitive types or other pointer-free (`is
 Any operation that throws an error is probably currently unimplemented and should be posted as
 a bug so that it can be resolved.
 
-If the pointer of interest is a plain-data array (primitive type or immutable struct), the function [`unsafe_wrap(Array, ptr,dims,[own])`](@ref)
+If the pointer of interest is a plain-data array (primitive type or immutable struct), the function [`unsafe_wrap(Array, ptr,dims, own = false)`](@ref)
 may be more useful. The final parameter should be true if Julia should "take ownership" of the
 underlying buffer and call `free(ptr)` when the returned `Array` object is finalized.  If the
 `own` parameter is omitted or false, the caller must ensure the buffer remains in existence until

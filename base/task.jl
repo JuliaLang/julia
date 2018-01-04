@@ -357,7 +357,7 @@ function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     end
 
     if !testcb()
-        t = Timer(timercb, pollint, pollint)
+        t = Timer(timercb, pollint, interval = pollint)
         ret = fetch(done)
         close(t)
     else

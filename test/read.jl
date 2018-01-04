@@ -527,15 +527,15 @@ end # mktempdir() do dir
 
 @testset "countlines" begin
     @test countlines(IOBuffer("\n")) == 1
-    @test countlines(IOBuffer("\n"),'\r') == 0
+    @test countlines(IOBuffer("\n"), eol = '\r') == 0
     @test countlines(IOBuffer("\n\n\n\n\n\n\n\n\n\n")) == 10
     @test countlines(IOBuffer("\n \n \n \n \n \n \n \n \n \n")) == 10
     @test countlines(IOBuffer("\r\n \r\n \r\n \r\n \r\n")) == 5
     file = tempname()
     write(file,"Spiffy header\nspectacular first row\neven better 2nd row\nalmost done\n")
     @test countlines(file) == 4
-    @test countlines(file,'\r') == 0
-    @test countlines(file,'\n') == 4
+    @test countlines(file, eol = '\r') == 0
+    @test countlines(file, eol = '\n') == 4
     rm(file)
 end
 

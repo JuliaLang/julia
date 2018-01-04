@@ -351,7 +351,7 @@ moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 filtervalid(names) = filter(x->!contains(x, r"#"), map(string, names))
 
 accessible(mod::Module) =
-    [filter!(s -> !Base.isdeprecated(mod, s), names(mod, true, true));
+    [filter!(s -> !Base.isdeprecated(mod, s), names(mod, all = true, imported = true));
      map(names, moduleusings(mod))...;
      builtins] |> unique |> filtervalid
 

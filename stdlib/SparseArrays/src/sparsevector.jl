@@ -1982,10 +1982,10 @@ function fkeep!(x::SparseVector, f, trim::Bool = true)
     x
 end
 
-droptol!(x::SparseVector, tol, trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) > tol, trim)
+droptol!(x::SparseVector, tol; trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) > tol, trim)
 
 """
-    dropzeros!(x::SparseVector, trim::Bool = true)
+    dropzeros!(x::SparseVector; trim::Bool = true)
 
 Removes stored numerical zeros from `x`, optionally trimming resulting excess space from
 `x.nzind` and `x.nzval` when `trim` is `true`.
@@ -1993,9 +1993,10 @@ Removes stored numerical zeros from `x`, optionally trimming resulting excess sp
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
 """
-dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, (i, x) -> x != 0, trim)
+dropzeros!(x::SparseVector; trim::Bool = true) = fkeep!(x, (i, x) -> x != 0, trim)
+
 """
-    dropzeros(x::SparseVector, trim::Bool = true)
+    dropzeros(x::SparseVector; trim::Bool = true)
 
 Generates a copy of `x` and removes numerical zeros from that copy, optionally trimming
 excess space from the result's `nzind` and `nzval` arrays when `trim` is `true`.
@@ -2016,7 +2017,7 @@ julia> dropzeros(A)
   [3]  =  1.0
 ```
 """
-dropzeros(x::SparseVector, trim::Bool = true) = dropzeros!(copy(x), trim)
+dropzeros(x::SparseVector; trim::Bool = true) = dropzeros!(copy(x), trim = trim)
 
 
 function _fillnonzero!(arr::SparseMatrixCSC{Tv, Ti}, val) where {Tv,Ti}
