@@ -388,25 +388,31 @@ _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
+# replace Char with function that compares with this Char
+pairmap(p::Pair{Char}) = equalto(p.first) => p.second
+
+# replace collection of Char with function that checks occurrence in this collection
+function pairmap(p::Pair{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}})
+    occursin(p.first) => p.second
+end
+pairmap(p::Pair) = p
+
 # find the first of a list of patterns.
 # if several match at the same start position prefer the longer one
 # if also the length is equal, prefer the first in list
 # return value of the successful search and the pair
 
-findnext2(c::Char, a, b) = findnext(equalto(c), a, b)
-findnext2(c, a, b) = findnext(c, a, b)
-
 function findnextall(pairs::NTuple{N,Pair}, s::AbstractString, st::Integer=1) where N
     ps = start(pairs)
     while !done(pairs, ps)
         p, ps = next(pairs, ps)
-        r = findnext2(p.first, s, st)
+        r = findnext(p.first, s, st)
         fr = first(r)
         if fr > 0
             minstart, minend, minp = fr, last(r), p
             while !done(pairs, ps)
                 p, ps = next(pairs, ps)
-                r = findnext2(p.first, s, st)
+                r = findnext(p.first, s, st)
                 i, k = first(r), last(r)
                 if i > 0 && ( i < minstart || i == minstart && k > minend)
                     minstart, minend, minp = i, k, p
@@ -425,6 +431,7 @@ function replace(str::String, pat_repls::Pair...; count::Integer=typemax(Int))
         return str
     end
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
+    pat_repls = pairmap.(pat_repls)
     n = 1
     e = endof(str)
     i = a = start(str)
@@ -454,22 +461,10 @@ function replace(str::String, pat_repls::Pair...; count::Integer=typemax(Int))
     String(take!(out))
 end
 
-replace(str::String, pat_repl::Pair{Char}; count::Integer=typemax(Int)) =
-    replace(str, equalto(first(pat_repl)) => last(pat_repl); count=count)
-replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}};
-        count::Integer=typemax(Int)) =
-    replace(str, occursin(first(pat_repl)) => last(pat_repl), count)
-
 # the case of a single pair has twice better performance
 
-replace(str::String, pat_repl::Pair{Char}; count::Integer=typemax(Int)) =
-    replace(str, equalto(first(pat_repl)) => last(pat_repl); count=count)
-replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}};
-        count::Integer=typemax(Int)) =
-    replace(str, occursin(first(pat_repl)) => last(pat_repl), count)
-
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
-    pattern, repl = pat_repl
+    pattern, repl = pairmap(pat_repl)
     count == 0 && return str
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
     n = 1
