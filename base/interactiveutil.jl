@@ -334,13 +334,13 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
 
     println(io, "Environment:")
     for (k,v) in ENV
-        if ismatch(r"JULIA", String(k))
+        if contains(String(k), r"JULIA")
             println(io, "  $(k) = $(v)")
         end
     end
     if verbose
         for (k,v) in ENV
-            if ismatch(r"PATH|FLAG|^TERM$|HOME", String(k))
+            if contains(String(k), r"PATH|FLAG|^TERM$|HOME")
                 println(io, "  $(k) = $(v)")
             end
         end
@@ -431,6 +431,12 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
         elseif ex0.head == :call
             return Expr(:call, fcn, esc(ex0.args[1]),
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...))
+        elseif ex0.head == :(.)
+            return Expr(:call, fcn, :getproperty,
+                        Expr(:call, typesof, map(esc, ex0.args)...))
+        elseif ex0.head == :(=) && length(ex0.args) == 2 && ex0.args[1].head == :(.)
+            return Expr(:call, fcn, :(setproperty!),
+                        Expr(:call, typesof, map(esc, [ex0.args[1].args..., ex0.args[2]])...))
         end
     end
     if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
@@ -737,7 +743,7 @@ function varinfo(m::Module=Main, pattern::Regex=r"")
                      (value ∈ (Base, Main, Core) ? "" : format_bytes(summarysize(value))),
                      summary(value)]
              end
-             for v in sort!(names(m)) if isdefined(m, v) && ismatch(pattern, string(v)) ]
+             for v in sort!(names(m)) if isdefined(m, v) && contains(string(v), pattern) ]
 
     pushfirst!(rows, Any["name", "size", "summary"])
 

@@ -133,9 +133,15 @@ unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Cvoid},), x)
 Get the memory address of a Julia object as a `Ptr`. The existence of the resulting `Ptr`
 will not protect the object from garbage collection, so you must ensure that the object
 remains referenced for the whole time that the `Ptr` will be used.
+
+This function may not be called on immutable objects, since they do not have
+stable memory addresses.
 """
-pointer_from_objref(@nospecialize(x)) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
-data_pointer_from_objref(@nospecialize(x)) = pointer_from_objref(x)::Ptr{Cvoid}
+function pointer_from_objref(@nospecialize(x))
+    @_inline_meta
+    typeof(x).mutable || error("pointer_from_objref cannot be used on immutable objects")
+    ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
+end
 
 eltype(::Type{Ptr{T}}) where {T} = T
 

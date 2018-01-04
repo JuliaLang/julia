@@ -1164,7 +1164,10 @@ end
 
 @test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Cvoid}, (Any,Any),
                                      x -> x+1, 314158)) == 314159
-@test unsafe_pointer_to_objref(pointer_from_objref(ℯ+pi)) == ℯ+pi
+let x = [1,2,3]
+    @test unsafe_pointer_to_objref(pointer_from_objref(x)) == x
+    @test unsafe_pointer_to_objref(pointer_from_objref(x)) === x
+end
 
 let
     local a, aa
@@ -3467,11 +3470,12 @@ end
 struct HasHasPadding
     x::HasPadding
 end
-hashaspadding = HasHasPadding(HasPadding(true,1))
-hashaspadding2 = HasHasPadding(HasPadding(true,1))
-unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding)), 0x12, 2)
-unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding2)), 0x21, 2)
-@test object_id(hashaspadding) == object_id(hashaspadding2)
+let hashaspadding = Ref(HasHasPadding(HasPadding(true,1))),
+    hashaspadding2 = Ref(HasHasPadding(HasPadding(true,1)))
+    unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding)), 0x12, 2)
+    unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding2)), 0x21, 2)
+    @test object_id(hashaspadding[]) == object_id(hashaspadding2[])
+end
 
 # issue #12517
 let x = (1,2)
@@ -5638,10 +5642,11 @@ let
     @eval @noinline constant23367(a, b) = (a ? b : $b)
     b2 = Ref(b)[] # copy b via field assignment
     b3 = B23367[b][1] # copy b via array assignment
-    @test pointer_from_objref(b) == pointer_from_objref(b)
-    @test pointer_from_objref(b) != pointer_from_objref(b2)
-    @test pointer_from_objref(b) != pointer_from_objref(b3)
-    @test pointer_from_objref(b2) != pointer_from_objref(b3)
+    addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
+    @test addr(b)  == addr(b)
+    @test addr(b)  != addr(b2)
+    @test addr(b)  != addr(b3)
+    @test addr(b2) != addr(b3)
 
     @test b === b2 === b3
     @test compare(b, b2)

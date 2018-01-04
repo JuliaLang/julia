@@ -720,6 +720,8 @@ end
     @test !isless(+NaN,+Inf)
     @test !isless(+NaN,-NaN)
     @test !isless(+NaN,+NaN)
+    @test !isless(+NaN,1)
+    @test !isless(-NaN,1)
 
     @test  isequal(   0, 0.0)
     @test  isequal( 0.0,   0)

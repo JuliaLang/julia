@@ -122,7 +122,7 @@ function check()
     blas = vendor()
     if blas == :openblas || blas == :openblas64
         openblas_config = openblas_get_config()
-        openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
+        openblas64 = contains(openblas_config, r".*USE64BITINT.*")
         if Base.USE_BLAS64 != openblas64
             if !openblas64
                 @error """

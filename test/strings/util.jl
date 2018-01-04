@@ -250,6 +250,7 @@ end
     # test replace with a count for String and GenericString
     # check that replace is a no-op if count==0
     for s in ["aaa", Test.GenericString("aaa")]
+        @test_throws DomainError replace(s, 'a' => "", count = -1)
         @test replace(s, 'a' => 'z', count=0) === s
         @test replace(s, 'a' => 'z', count=1) == "zaa"
         @test replace(s, 'a' => 'z', count=2) == "zza"
@@ -258,7 +259,7 @@ end
         @test replace(s, 'a' => 'z', count=typemax(Int)) == "zzz"
         @test replace(s, 'a' => 'z')    == "zzz"
     end
-    for s in ["abc", Test.GenericString("abc")]
+    for s in ["abc"]
         @test replace(s) === s
         @test replace(s, 'a' => 'z') === "zbc"
         @test replace(s, 'a' => 'z', 'b' => 'y') == "zyc"
@@ -266,7 +267,7 @@ end
         @test replace(s, '1' => 'z') == s
         @test replace(s, 'b' => "BbB", count=1) == "aBbBc"
     end
-    for s in ["quick quicker quickest", Test.GenericString("quick quicker quickest")]
+    for s in ["quick quicker quickest"], cnt in [99, big"99"]
         @test replace(s) === s
         @test replace(s, "quick" => 'a', "quicker" => Base.Unicode.uppercase, "quickest" => 'z') == "a QUICKER z"
         @test replace(s, "" => '1') == "1q1u1i1c1k1 1q1u1i1c1k1e1r1 1q1u1i1c1k1e1s1t1"
@@ -275,8 +276,6 @@ end
         @test replace(s, r"[aeiou]" => "ä", "ui" => "ki", "i" => "I") == "qkick qkickär qkickäst"
         @test replace(s, r"[^ ]+" => "word", "quicker " => "X") == "word Xword"
     end
-
-
 
 end
 

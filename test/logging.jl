@@ -59,7 +59,7 @@ end
     @test record.file == Base.source_path()
     @test record.line == kwargs[:real_line]
     @test record.id isa Symbol
-    @test ismatch(r"^.*logging_[[:xdigit:]]{8}$", String(record.id))
+    @test contains(String(record.id), r"^.*logging_[[:xdigit:]]{8}$")
 
     # User-defined metadata
     @test kwargs[:bar_val] === bar_val
@@ -69,13 +69,13 @@ end
 
     # Keyword values accessible from message block
     record2 = logs[2]
-    @test ismatch((Info,"test2"), record2)
+    @test contains(record2, (Info,"test2"))
     kwargs = record2.kwargs
     @test kwargs[:value_in_msg_block] === 1000.0
 
     # Splatting of keywords
     record3 = logs[3]
-    @test ismatch((Info,"test3"), record3)
+    @test contains(record3, (Info,"test3"))
     kwargs = record3.kwargs
     @test sort(collect(keys(kwargs))) == [:a, :b]
     @test kwargs[:a] === 1

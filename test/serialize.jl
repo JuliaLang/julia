@@ -441,8 +441,8 @@ using .Shell, .Instance1
 io = IOBuffer()
 serialize(io, foo)
 str = String(take!(io))
-@test isempty(search(str, "Instance1"))
-@test !isempty(search(str, "Shell"))
+@test !contains(str, "Instance1")
+@test contains(str, "Shell")
 
 end  # module Test13452
 

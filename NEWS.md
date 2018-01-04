@@ -900,6 +900,14 @@ Deprecated or removed
     in favor of dot overloading (`getproperty`) so factors should now be accessed as e.g.
     `F.Q` instead of `F[:Q]` ([#25184]).
 
+  * `search` and `rsearch` have been deprecated in favor of `findfirst`/`findnext` and
+    `findlast`/`findprev` respectively, in combination with the new `equalto` and `occursin`
+    predicates for some methods ([#24673]
+
+  * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
+
+  * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
+
 Command-line option changes
 ---------------------------
 
