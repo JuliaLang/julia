@@ -3825,6 +3825,7 @@ end
 @deprecate reverse(v, start, stop) reverse(v, start = start, stop = stop)
 @deprecate dropzeros(x, trim) dropzeros(x, trim = trim)
 @deprecate dropzeros!(x, trim) dropzeros!(x, trim = trim)
+@deprecate mkdir(path, mode) mkdir(path, mode = mode)
 
 # END 0.7 deprecations
 
