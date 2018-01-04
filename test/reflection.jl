@@ -765,12 +765,12 @@ cinfo_generated = Core.Inference.get_staged(instance)
 
 test_similar_codeinfo(@code_lowered(f22979(x22979...)), cinfo_generated)
 
-cinfos = code_lowered(f22979, typeof.(x22979), true)
+cinfos = code_lowered(f22979, typeof.(x22979), expand_generated = true)
 @test length(cinfos) == 1
 cinfo = cinfos[]
 test_similar_codeinfo(cinfo, cinfo_generated)
 
-@test_throws ErrorException code_lowered(f22979, typeof.(x22979), false)
+@test_throws ErrorException code_lowered(f22979, typeof.(x22979), expand_generated = false)
 
 module MethodDeletion
 using Test
