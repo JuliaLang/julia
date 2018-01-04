@@ -3806,6 +3806,14 @@ end
     @deprecate getq(F::Factorization) F.Q
 end
 
+# issue #5290
+@deprecate lexcmp(x::AbstractArray, y::AbstractArray) cmp(x, y)
+@deprecate lexcmp(x::Real, y::Real)                   cmp(isless, x, y)
+@deprecate lexcmp(x::Complex, y::Complex)             cmp((real(x),imag(x)), (real(y),imag(y)))
+@deprecate lexcmp(x, y)                               cmp(x, y)
+
+@deprecate lexless isless
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

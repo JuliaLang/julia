@@ -804,8 +804,6 @@ export
     isimmutable,
     isless,
     ifelse,
-    lexless,
-    lexcmp,
     object_id,
     sizeof,
 

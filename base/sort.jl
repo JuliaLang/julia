@@ -927,7 +927,7 @@ function sortrows(A::AbstractMatrix; kws...)
     for i in inds
         rows[i] = view(A, i, :)
     end
-    p = sortperm(rows; kws..., order=Lexicographic)
+    p = sortperm(rows; kws...)
     A[p,:]
 end
 
@@ -966,7 +966,7 @@ function sortcols(A::AbstractMatrix; kws...)
     for i in inds
         cols[i] = view(A, :, i)
     end
-    p = sortperm(cols; kws..., order=Lexicographic)
+    p = sortperm(cols; kws...)
     A[:,p]
 end
 
