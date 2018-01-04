@@ -262,7 +262,6 @@ Bool(x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, 
     float(x)
 
 Convert a number or array to a floating point data type.
-When passed a string, this function is equivalent to `parse(Float64, x)`.
 """
 float(x) = AbstractFloat(x)
 
