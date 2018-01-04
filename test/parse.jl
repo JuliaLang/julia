@@ -219,7 +219,7 @@ end
 
 # issue #17333: tryparse should still throw on invalid base
 for T in (Int32, BigInt), base in (0,1,100)
-    @test_throws ArgumentError tryparse(T, "0", base)
+    @test_throws ArgumentError tryparse(T, "0", base = base)
 end
 
 # error throwing branch from #10560

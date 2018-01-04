@@ -195,29 +195,23 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
 end
 
 @inline function check_valid_base(base)
-    if 2 <= base <= 62
+    if (2 <= base <= 62) || (base == 0)
         return base
     end
     throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
 end
 
 """
-    tryparse(type, str, [base])
+    tryparse(type, str, base = base)
 
 Like [`parse`](@ref), but returns either a value of the requested type,
 or [`nothing`](@ref) if the string does not contain a valid number.
 """
-tryparse(::Type{T}, s::AbstractString, base::Integer) where {T<:Integer} =
+tryparse(::Type{T}, s::AbstractString; base::Integer = 0) where {T<:Integer} =
     tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), false)
-tryparse(::Type{T}, s::AbstractString) where {T<:Integer} =
-    tryparse_internal(T, s, start(s), endof(s), 0, false)
 
-function parse(::Type{T}, s::AbstractString, base::Integer) where T<:Integer
-    tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), true)
-end
-
-function parse(::Type{T}, s::AbstractString) where T<:Integer
-    tryparse_internal(T, s, start(s), endof(s), 0, true) # Zero means, "figure it out"
+function parse(::Type{T}, s::AbstractString; base::Integer = 0) where T<:Integer
+    tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), true) # Zero means, "figure it out"
 end
 
 ## string to float functions ##
