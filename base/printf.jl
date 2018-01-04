@@ -641,6 +641,7 @@ function gen_s(flags::String, width::Int, precision::Int, c::Char)
     #
     # flags:
     #  (-): left justify
+    #  (#): use `show`/`repr` instead of `print`/`string`
     #
     @gensym x
     blk = Expr(:block)
@@ -683,6 +684,9 @@ end
 function gen_p(flags::String, width::Int, precision::Int, c::Char)
     # print pointer:
     #  [p]: the only option
+    #
+    # flags:
+    #  (-): left justify
     #
     @gensym x
     blk = Expr(:block)
@@ -1183,7 +1187,7 @@ function _printf(macroname, io, fmt, args)
           quote
              G = $(esc(x))
              if length(G) != $(length(sym_args))
-                throw(ArgumentError($macroname,": wrong number of arguments (",length(G),") should be (",$(length(sym_args)),")"))
+                 throw(ArgumentError(string($macroname,": wrong number of arguments (",length(G),") should be (",$(length(sym_args)),")")))
              end
           end
        )
