@@ -3814,7 +3814,9 @@ end
 @deprecate code_native(io, f, types, syntax) code_native(io, f, types, syntax = syntax)
 @deprecate code_native(f, types, syntax) code_native(f, types, syntax = syntax)
 @deprecate eachmatch(re, str, overlap) eachmatch(re, str, overlap = overlap)
-@deprecaate matchall(re, str, overlap) matchall(re, str, overlap = overlap)
+@deprecate matchall(re, str, overlap) matchall(re, str, overlap = overlap)
+@deprecate chop(s, head) chop(s, head = head)
+@deprecate chop(s, head, tail) chop(s, head = head, tail = tail)
 
 # END 0.7 deprecations
 

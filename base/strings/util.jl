@@ -68,7 +68,7 @@ startswith(a::Vector{UInt8}, b::Vector{UInt8}) = length(a) ≥ length(b) &&
 # TODO: fast endswith
 
 """
-    chop(s::AbstractString, head::Integer=0, tail::Integer=1)
+    chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
 
 Remove the first `head` and the last `tail` characters from `s`.
 The call `chop(s)` removes the last character from `s`.
@@ -83,15 +83,15 @@ julia> a = "March"
 julia> chop(a)
 "Marc"
 
-julia> chop(a, 1, 2)
+julia> chop(a, head = 1, tail = 2)
 "ar"
 
-julia> chop(a, 5, 5)
+julia> chop(a, head = 5, tail = 5)
 ""
 ```
 """
 chop(s::AbstractString) = SubString(s, start(s), prevind(s, endof(s)))
-chop(s::AbstractString, head::Integer, tail::Integer) =
+chop(s::AbstractString; head::Integer, tail::Integer) =
     SubString(s, nextind(s, start(s), head), prevind(s, endof(s), tail))
 
 """
