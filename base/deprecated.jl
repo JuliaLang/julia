@@ -3813,7 +3813,6 @@ end
     @deprecate getq(F::Factorization) F.Q
 end
 
-# issue #5290
 @deprecate lexcmp(x::AbstractArray, y::AbstractArray) cmp(x, y)
 @deprecate lexcmp(x::Real, y::Real)                   cmp(isless, x, y)
 @deprecate lexcmp(x::Complex, y::Complex)             cmp((real(x),imag(x)), (real(y),imag(y)))
@@ -3821,8 +3820,58 @@ end
 
 @deprecate lexless isless
 
-# END 0.7 deprecations
+@deprecate search(str::Union{String,SubString}, re::Regex, idx::Integer) findnext(re, str, idx)
+@deprecate search(s::AbstractString, r::Regex, idx::Integer) findnext(r, s, idx)
+@deprecate search(s::AbstractString, r::Regex) findfirst(r, s)
+@deprecate search(s::AbstractString, c::Char, i::Integer) findnext(equalto(c), s, i)
+@deprecate search(s::AbstractString, c::Char) findfirst(equalto(c), s)
+@deprecate search(a::ByteArray, b::Union{Int8,UInt8}, i::Integer) findnext(equalto(b), a, i)
+@deprecate search(a::ByteArray, b::Union{Int8,UInt8}) findfirst(equalto(b), a)
+@deprecate search(a::String, b::Union{Int8,UInt8}, i::Integer) findnext(equalto(b), unsafe_wrap(Vector{UInt8}, a), i)
+@deprecate search(a::String, b::Union{Int8,UInt8}) findfirst(equalto(b), unsafe_wrap(Vector{UInt8}, a))
+@deprecate search(a::ByteArray, b::Char, i::Integer) findnext(equalto(UInt8(b)), a, i)
+@deprecate search(a::ByteArray, b::Char) findfirst(equalto(UInt8(b)), a)
 
+@deprecate search(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}, i::Integer) findnext(occursin(c), s, i)
+@deprecate search(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}) findfirst(occursin(c), s)
+@deprecate search(s::AbstractString, t::AbstractString, i::Integer) findnext(t, s, i)
+@deprecate search(s::AbstractString, t::AbstractString) findfirst(t, s)
+
+@deprecate search(buf::IOBuffer, delim::UInt8) findfirst(equalto(delim), buf)
+@deprecate search(buf::Base.GenericIOBuffer, delim::UInt8) findfirst(equalto(delim), buf)
+
+@deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}, i::Integer) findprev(occursin(c), s, i)
+@deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}) findlast(occursin(c), s)
+@deprecate rsearch(s::AbstractString, t::AbstractString, i::Integer) findprev(t, s, i)
+@deprecate rsearch(s::AbstractString, t::AbstractString) findlast(t, s)
+@deprecate rsearch(s::ByteArray, t::ByteArray, i::Integer) findprev(t, s, i)
+@deprecate rsearch(s::ByteArray, t::ByteArray) findlast(t, s)
+
+@deprecate rsearch(str::Union{String,SubString}, re::Regex, idx::Integer) findprev(re, str, idx)
+@deprecate rsearch(str::Union{String,SubString}, re::Regex) findlast(re, str)
+@deprecate rsearch(s::AbstractString, r::Regex, idx::Integer) findprev(r, s, idx)
+@deprecate rsearch(s::AbstractString, r::Regex) findlast(r, s)
+@deprecate rsearch(s::AbstractString, c::Char, i::Integer) findprev(equalto(c), s, i)
+@deprecate rsearch(s::AbstractString, c::Char) findlast(equalto(c), s)
+@deprecate rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = endof(a)) findprev(equalto(b), a, i)
+@deprecate rsearch(a::String, b::Union{Int8,UInt8}, i::Integer = endof(a)) findprev(equalto(Char(b)), a, i)
+@deprecate rsearch(a::ByteArray, b::Char, i::Integer = endof(a)) findprev(equalto(UInt8(b)), a, i)
+
+@deprecate searchindex(s::AbstractString, t::AbstractString) first(findfirst(t, s))
+@deprecate searchindex(s::AbstractString, t::AbstractString, i::Integer) first(findnext(t, s, i))
+@deprecate rsearchindex(s::AbstractString, t::AbstractString) first(findlast(t, s))
+@deprecate rsearchindex(s::AbstractString, t::AbstractString, i::Integer) first(findprev(t, s, i))
+
+@deprecate searchindex(s::AbstractString, c::Char) first(findfirst(equalto(c), s))
+@deprecate searchindex(s::AbstractString, c::Char, i::Integer) first(findnext(equalto(c), s, i))
+@deprecate rsearchindex(s::AbstractString, c::Char) first(findlast(equalto(c), s))
+@deprecate rsearchindex(s::AbstractString, c::Char, i::Integer) first(findprev(equalto(c), s, i))
+
+@deprecate ismatch(r::Regex, s::AbstractString) contains(s, r)
+
+@deprecate findin(a, b) find(occursin(b), a)
+
+# END 0.7 deprecations
 # BEGIN 1.0 deprecations
 
 # END 1.0 deprecations

@@ -408,7 +408,7 @@ let a = Expr(:quote,Expr(:$,:x8d003))
 end
 
 # issue #9865
-@test ismatch(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
+@test contains(replstr(Set(1:100)), r"^Set\(\[.+….+\]\)$")
 
 # issue #11413
 @test string(:(*{1, 2})) == "*{1, 2}"
@@ -752,7 +752,7 @@ let repr = sprint(dump, Int64)
 end
 let repr = sprint(dump, Any)
     @test length(repr) == 4
-    @test ismatch(r"^Any\n", repr)
+    @test contains(repr, r"^Any\n")
     @test endswith(repr, '\n')
 end
 let repr = sprint(dump, Integer)

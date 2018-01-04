@@ -1799,6 +1799,7 @@ end
 
 find(x::Bool) = x ? [1] : Vector{Int}()
 find(testf::Function, x::Number) = !testf(x) ? Vector{Int}() : [1]
+find(p::OccursIn, x::Number) = x in p.x ? Vector{Int}() : [1]
 
 """
     findnz(A)
@@ -2008,7 +2009,7 @@ function _findin(a, b)
     ind
 end
 
-# If two collections are already sorted, findin can be computed with
+# If two collections are already sorted, _findin can be computed with
 # a single traversal of the two collections. This is much faster than
 # using a hash table (although it has the same complexity).
 function _sortedfindin(v, w)
@@ -2050,42 +2051,16 @@ function _sortedfindin(v, w)
     return out
 end
 
-"""
-    findin(a, b)
-
-Return the indices of elements in collection `a` that appear in collection `b`.
-
-# Examples
-```jldoctest
-julia> a = collect(1:3:15)
-5-element Array{Int64,1}:
-  1
-  4
-  7
- 10
- 13
-
-julia> b = collect(2:4:10)
-3-element Array{Int64,1}:
-  2
-  6
- 10
-
-julia> findin(a,b) # 10 is the only common element
-1-element Array{Int64,1}:
- 4
-```
-"""
-function findin(a::Array{<:Real}, b::Union{Array{<:Real},Real})
-    if issorted(a, Sort.Forward) && issorted(b, Sort.Forward)
-        return _sortedfindin(a, b)
+function find(pred::OccursIn{<:Union{Array{<:Real},Real}}, x::Array{<:Real})
+    if issorted(x, Sort.Forward) && issorted(pred.x, Sort.Forward)
+        return _sortedfindin(x, pred.x)
     else
-        return _findin(a, b)
+        return _findin(x, pred.x)
     end
 end
 # issorted fails for some element types so the method above has to be restricted
 # to element with isless/< defined.
-findin(a, b) = _findin(a, b)
+find(pred::OccursIn, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
 
 # Copying subregions
 function indcopy(sz::Dims, I::Vector)
@@ -2094,8 +2069,8 @@ function indcopy(sz::Dims, I::Vector)
     for i = n+1:length(sz)
         s *= sz[i]
     end
-    dst = eltype(I)[findin(I[i], i < n ? (1:sz[i]) : (1:s)) for i = 1:n]
-    src = eltype(I)[I[i][findin(I[i], i < n ? (1:sz[i]) : (1:s))] for i = 1:n]
+    dst = eltype(I)[_findin(I[i], i < n ? (1:sz[i]) : (1:s)) for i = 1:n]
+    src = eltype(I)[I[i][_findin(I[i], i < n ? (1:sz[i]) : (1:s))] for i = 1:n]
     dst, src
 end
 
@@ -2105,8 +2080,8 @@ function indcopy(sz::Dims, I::Tuple{Vararg{RangeIndex}})
     for i = n+1:length(sz)
         s *= sz[i]
     end
-    dst::typeof(I) = ntuple(i-> findin(I[i], i < n ? (1:sz[i]) : (1:s)), n)::typeof(I)
-    src::typeof(I) = ntuple(i-> I[i][findin(I[i], i < n ? (1:sz[i]) : (1:s))], n)::typeof(I)
+    dst::typeof(I) = ntuple(i-> _findin(I[i], i < n ? (1:sz[i]) : (1:s)), n)::typeof(I)
+    src::typeof(I) = ntuple(i-> I[i][_findin(I[i], i < n ? (1:sz[i]) : (1:s))], n)::typeof(I)
     dst, src
 end
 

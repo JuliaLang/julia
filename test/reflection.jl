@@ -27,8 +27,8 @@ function test_code_reflection(freflect, f, types, tester)
 end
 
 function test_code_reflections(tester, freflect)
-    test_code_reflection(freflect, ismatch,
-                         Tuple{Regex, AbstractString}, tester) # abstract type
+    test_code_reflection(freflect, contains,
+                         Tuple{AbstractString, Regex}, tester) # abstract type
     test_code_reflection(freflect, +, Tuple{Int, Int}, tester) # leaftype signature
     test_code_reflection(freflect, +,
                          Tuple{Array{Float32}, Array{Float32}}, tester) # incomplete types
@@ -61,7 +61,7 @@ function warntype_hastag(f, types, tag)
     iob = IOBuffer()
     code_warntype(iob, f, types)
     str = String(take!(iob))
-    return !isempty(search(str, tag))
+    return contains(str, tag)
 end
 
 pos_stable(x) = x > 0 ? x : zero(x)
@@ -90,7 +90,7 @@ tag = "ANY"
 iob = IOBuffer()
 show(iob, Meta.lower(Main, :(x -> x^2)))
 str = String(take!(iob))
-@test isempty(search(str, tag))
+@test !contains(str, tag)
 
 # Make sure non used variables are not emphasized
 has_unused() = (a = rand(5))
@@ -475,12 +475,12 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
         for i in 1:length(src.slotnames)
             name = src.slotnames[i]
             if name in dupnames
-                if name in must_used_vars && ismatch(Regex("_$i\\b"), str)
+                if name in must_used_vars && contains(str, Regex("_$i\\b"))
                     must_used_checked[name] = true
                     global used_dup_var_tested15714 = true
                 end
             else
-                @test !ismatch(Regex("_$i\\b"), str)
+                @test !contains(str, Regex("_$i\\b"))
                 if name in must_used_vars
                     global used_unique_var_tested15714 = true
                 end
@@ -499,7 +499,7 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     # Use the variable names that we know should be present in the optimized AST
     for i in 2:length(src.slotnames)
         name = src.slotnames[i]
-        if name in must_used_vars && ismatch(Regex("_$i\\b"), str)
+        if name in must_used_vars && contains(str, Regex("_$i\\b"))
             must_used_checked[name] = true
         end
     end

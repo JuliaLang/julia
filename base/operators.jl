@@ -843,3 +843,22 @@ The returned function is of type `Base.EqualTo`. This allows dispatching to
 specialized methods by using e.g. `f::Base.EqualTo` in a method signature.
 """
 const equalto = EqualTo
+
+struct OccursIn{T} <: Function
+    x::T
+
+    OccursIn(x::T) where {T} = new{T}(x)
+end
+
+(f::OccursIn)(y) = y in f.x
+
+"""
+    occursin(x)
+
+Create a function that checks whether its argument is [`in`](@ref) `x`; i.e. returns
+`y -> y in x`.
+
+The returned function is of type `Base.OccursIn`. This allows dispatching to
+specialized methods by using e.g. `f::Base.OccursIn` in a method signature.
+"""
+const occursin = OccursIn

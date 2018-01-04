@@ -705,7 +705,7 @@ function intersect(r1::AbstractRange, r2::AbstractRange, r3::AbstractRange, r::A
     i
 end
 
-# findin (the index of intersection)
+# _findin (the index of intersection)
 function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer})
     local ifirst
     local ilast
@@ -724,17 +724,7 @@ function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer}
         ifirst = fr >= fspan ? 1 : length(r)+1
         ilast = fr <= lspan ? length(r) : 0
     end
-    ifirst, ilast
-end
-
-function findin(r::AbstractUnitRange{<:Integer}, span::AbstractUnitRange{<:Integer})
-    ifirst, ilast = _findin(r, span)
-    ifirst:ilast
-end
-
-function findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer})
-    ifirst, ilast = _findin(r, span)
-    ifirst:1:ilast
+    r isa AbstractUnitRange ? (ifirst:ilast) : (ifirst:1:ilast)
 end
 
 ## linear operations on ranges ##

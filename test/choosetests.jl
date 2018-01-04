@@ -150,7 +150,7 @@ function choosetests(choices = [])
     end
 
     if !net_on
-        filter!(x -> !(x in net_required_for), tests)
+        filter!(!occursin(net_required_for), tests)
     end
 
     if "stdlib" in skip_tests
@@ -178,7 +178,7 @@ function choosetests(choices = [])
     # The shift and invert solvers need SuiteSparse for sparse input
     Base.USE_GPL_LIBS || filter!(x->x != "IterativeEigensolvers", STDLIBS)
 
-    filter!(x -> !(x in skip_tests), tests)
+    filter!(!occursin(skip_tests), tests)
 
     tests, net_on, exit_on_error, seed
 end

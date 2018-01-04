@@ -349,7 +349,7 @@ const builtins = ["abstract type", "baremodule", "begin", "break",
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
-filtervalid(names) = filter(x->!ismatch(r"#", x), map(string, names))
+filtervalid(names) = filter(x->!contains(x, r"#"), map(string, names))
 
 accessible(mod::Module) =
     [filter!(s -> !Base.isdeprecated(mod, s), names(mod, true, true));
@@ -363,7 +363,7 @@ completions(name::Symbol) = completions(string(name))
 # Searching and apropos
 
 # Docsearch simply returns true or false if an object contains the given needle
-docsearch(haystack::AbstractString, needle) = !isempty(search(haystack, needle))
+docsearch(haystack::AbstractString, needle) = !isempty(findfirst(needle, haystack))
 docsearch(haystack::Symbol, needle) = docsearch(string(haystack), needle)
 docsearch(::Nothing, needle) = false
 function docsearch(haystack::Array, needle)
