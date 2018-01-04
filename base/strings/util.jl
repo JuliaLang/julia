@@ -373,6 +373,71 @@ _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
+# search the first of a list of patterns.
+# if several match at the same start position prefer the longer one
+# if also the length is equal, prefer the first in list
+# return value of the successful search and the pair
+
+function searchall(s::AbstractString, pairs::NTuple{N,Pair}, st::Integer=1) where N
+    ps = start(pairs)
+    while !done(pairs, ps)
+        p, ps = next(pairs, ps)
+        r = search(s, p.first, st)
+        fr = first(r)
+        if fr > 0
+            minstart, minend, minp = fr, last(r), p
+            while !done(pairs, ps)
+                p, ps = next(pairs, ps)
+                r = search(s, p.first, st)
+                i, k = first(r), last(r)
+                if i > 0 && ( i < minstart || i == minstart && k > minend)
+                    minstart, minend, minp = i, k, p
+                end
+            end
+            return minstart:minend, minp
+        end
+    end
+    0:-1, (""=>"")
+end
+
+# cover the multiple pairs case
+
+function replace(str::String, pat_repls::Pair...; count::Integer=typemax(Int))
+    if count == 0 || length(pat_repls) == 0
+        return str
+    end
+    count < 0 && throw(DomainError(count, "`count` must be non-negative."))
+    n = 1
+    e = endof(str)
+    i = a = start(str)
+    r, (pattern, repl) = searchall(str, pat_repls, i)
+    j, k = first(r), last(r)
+    out = IOBuffer(StringVector(floor(Int, 1.2sizeof(str))), true, true)
+    out.size = 0
+    out.ptr = 1
+    while j != 0
+        if i == a || i <= k
+            unsafe_write(out, pointer(str, i), UInt(j-i))
+            _replace(out, repl, str, r, pattern)
+        end
+        if k < j
+            i = j
+            j > e && break
+            k = nextind(str, j)
+        else
+            i = k = nextind(str, k)
+        end
+        r, (pattern, repl) = searchall(str, pat_repls, k)
+        r == 0:-1 || n == count && break
+        j, k = first(r), last(r)
+        n += 1
+    end
+    write(out, SubString(str, i))
+    String(take!(out))
+end
+
+# the case of a single pair has twice better performance
+
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = pat_repl
     count == 0 && return str
@@ -407,16 +472,19 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
 end
 
 """
-    replace(s::AbstractString, pat=>r; [count::Integer])
+    replace(s::AbstractString, pat=>r[, pat=>r ...]; [count::Integer])
 
-Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
+Search for any of the given patterns `pat` in `s`, and replace each occurrence with
+corresponding `r`.
 If `count` is provided, replace at most `count` occurrences.
-As with [`search`](@ref), `pat` may be a
+As with [`search`](@ref), each `pat` may be a
 single character, a vector or a set of characters, a string, or a regular expression. If `r`
 is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
+In the case of multiple patterns, the precedence is by low start position of matched pattern,
+then longer pattern, then order of the input list.
 
 # Examples
 ```jldoctest
@@ -428,10 +496,17 @@ julia> replace("The quick foxes run quickly.", "quick" => "slow", count=1)
 
 julia> replace("The quick foxes run quickly.", "quick" => "", count=1)
 "The  foxes run quickly."
+
+julia> replace("The quicky quick fox", "quick"=>"slow", "quicky"=>"elegant")
+"The elegant slow fox"
 ```
 """
-replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =
-    replace(String(s), pat_f, count=count)
+function replace(s::AbstractString, pat_f::Pair...; count=typemax(Int))
+    if count == 0 || length(pat_f) == 0
+        return s
+    end
+    replace(String(s), pat_f..., count=count)
+end
 
 # TODO: allow transform as the first argument to replace?
 

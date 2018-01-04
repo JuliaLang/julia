@@ -250,7 +250,7 @@ end
     # test replace with a count for String and GenericString
     # check that replace is a no-op if count==0
     for s in ["aaa", Test.GenericString("aaa")]
-        # @test replace("aaa", 'a' => 'z', count=0) == "aaa" # enable when undeprecated
+        @test replace(s, 'a' => 'z', count=0) === s
         @test replace(s, 'a' => 'z', count=1) == "zaa"
         @test replace(s, 'a' => 'z', count=2) == "zza"
         @test replace(s, 'a' => 'z', count=3) == "zzz"
@@ -258,6 +258,26 @@ end
         @test replace(s, 'a' => 'z', count=typemax(Int)) == "zzz"
         @test replace(s, 'a' => 'z')    == "zzz"
     end
+    for s in ["abc", Test.GenericString("abc")]
+        @test replace(s) === s
+        @test replace(s, 'a' => 'z') === "zbc"
+        @test replace(s, 'a' => 'z', 'b' => 'y') == "zyc"
+        @test replace(s, 'a' => 'z', 'c' => 'x', "b" => 'y') == "zyx"
+        @test replace(s, '1' => 'z') == s
+        @test replace(s, 'b' => "BbB", count=1) == "aBbBc"
+    end
+    for s in ["quick quicker quickest", Test.GenericString("quick quicker quickest")]
+        @test replace(s) === s
+        @test replace(s, "quick" => 'a', "quicker" => Base.Unicode.uppercase, "quickest" => 'z') == "a QUICKER z"
+        @test replace(s, "" => '1') == "1q1u1i1c1k1 1q1u1i1c1k1e1r1 1q1u1i1c1k1e1s1t1"
+        @test replace(s, "qu" => "QU", "qu" => "never happens", "ick" => "") == "QU QUer QUest"
+        @test replace(s, " " => '_', "r " => "r-") == "quick_quicker-quickest"
+        @test replace(s, r"[aeiou]" => "ä", "ui" => "ki", "i" => "I") == "qkick qkickär qkickäst"
+        @test replace(s, r"[^ ]+" => "word", "quicker " => "X") == "word Xword"
+    end
+
+
+
 end
 
 @testset "chomp/chop" begin
