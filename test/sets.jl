@@ -523,4 +523,7 @@ end
     @test replace(x -> x !== nothing ? Some(nothing) : nothing, s) == Set([nothing])
     @test replace(iseven, Set(Any[1, 2, 3, 4]), nothing) == Set([1, nothing, 3, nothing])
     @test replace(Set(Any[1, 2, 3, 4]), 1=>nothing, 3=>nothing) == Set([nothing, 2, nothing, 4])
+
+    # avoid recursive call issue #25384
+    @test_throws MethodError replace!("")
 end
