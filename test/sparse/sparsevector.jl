@@ -1052,7 +1052,7 @@ end
                 @test dropzeros!(copy(vwithzeros), false) == v
                 # Basic functionality / dropzeros
                 @test dropzeros(vwithzeros) == v
-                @test dropzeros(vwithzeros, false) == v
+                @test dropzeros(vwithzeros, trim = false) == v
                 # Check trimming works as expected
                 @test length(dropzeros!(copy(vwithzeros)).nzval) == length(v.nzval)
                 @test length(dropzeros!(copy(vwithzeros)).nzind) == length(v.nzind)

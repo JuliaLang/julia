@@ -1425,7 +1425,7 @@ end
             @test dropzeros!(copy(Awithzeros), false) == A
             # Basic functionality / dropzeros
             @test dropzeros(Awithzeros) == A
-            @test dropzeros(Awithzeros, false) == A
+            @test dropzeros(Awithzeros, trim = false) == A
             # Check trimming works as expected
             @test length(dropzeros!(copy(Awithzeros)).nzval) == length(A.nzval)
             @test length(dropzeros!(copy(Awithzeros)).rowval) == length(A.rowval)
