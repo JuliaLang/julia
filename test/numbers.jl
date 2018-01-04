@@ -2460,11 +2460,11 @@ ndigf(n) = Float64(log(Float32(n)))
 @test sum([Int128(1) Int128(2)]) == Int128(3)
 
 @testset "digits and digits!" begin
-    @test digits(24, 2) == [0, 0, 0, 1, 1]
-    @test digits(24, 2, 3) == [0, 0, 0, 1, 1]
-    @test digits(24, 2, 7) == [0, 0, 0, 1, 1, 0, 0]
+    @test digits(24, base = 2) == [0, 0, 0, 1, 1]
+    @test digits(24, base = 2, pad = 3) == [0, 0, 0, 1, 1]
+    @test digits(24, base = 2, pad = 7) == [0, 0, 0, 1, 1, 0, 0]
     @test digits(100) == [0, 0, 1]
-    @test digits(BigInt(2)^128, 2) == [zeros(128); 1]
+    @test digits(BigInt(2)^128, base = 2) == [zeros(128); 1]
     let a = zeros(Int, 3)
         digits!(a, 50)
         @test a == [0, 5, 0]
