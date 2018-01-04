@@ -905,8 +905,8 @@ let A = [1]
 end
 
 # Module() constructor
-@test names(Module(:anonymous), true, true) == [:anonymous]
-@test names(Module(:anonymous, false), true, true) == [:anonymous]
+@test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
+@test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]
 
 # exception from __init__()
 let didthrow =

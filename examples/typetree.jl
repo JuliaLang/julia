@@ -74,7 +74,7 @@ end
 
 # examine all symbols in module and store those that are types
 function store_all_from(m::Module)
-    for s in names(m, true)
+    for s in names(m, all = true)
         if isdefined(m, s) && !Base.isdeprecated(m, s)
             t = getfield(m, s)
             if isa(t, Type) && t !== Union{}

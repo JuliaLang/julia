@@ -2539,7 +2539,7 @@ for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
 end
 
 function allsubtypes!(m::Module, x::DataType, sts::Set)
-    for s in names(m, true)
+    for s in names(m, all = true)
         if isdefined(m, s) && !Base.isdeprecated(m, s)
             t = getfield(m, s)
             if isa(t, Type) && t <: x && t != Union{}

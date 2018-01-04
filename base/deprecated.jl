@@ -1246,7 +1246,7 @@ module DFT
     export FFTW
 end
 using .DFT
-for f in filter(s -> isexported(DFT, s), names(DFT, true))
+for f in filter(s -> isexported(DFT, s), names(DFT, all = true))
     @eval export $f
 end
 module DSP
@@ -3809,6 +3809,8 @@ end
 @deprecate method_exists(f, t, world) method_exists(f, t, world = world)
 @deprecate Timer(timeout, repeat) Timer(timeout, repeat = repeat)
 @deprecate Timer(callback, delay, repeat) Time(callback, delay, repeat = repeat)
+@deprecate names(m, all) names(m, all = all)
+@deprecate names(m, all, imported) names(m, all = all, imported = imported)
 
 # END 0.7 deprecations
 

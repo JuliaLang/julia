@@ -1538,7 +1538,7 @@ directsubtype(a::Union, b::DataType) = directsubtype(a.a, b) || directsubtype(a.
 # Fallback to handle TypeVar's
 directsubtype(a, b::DataType) = false
 function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
-    for s in names(m, true)
+    for s in names(m, all = true)
         if isdefined(m, s) && !isdeprecated(m, s)
             t = getfield(m, s)
             if t === x || t === m

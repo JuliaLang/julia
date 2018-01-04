@@ -82,7 +82,7 @@ function fullname(m::Module)
 end
 
 """
-    names(x::Module, all::Bool=false, imported::Bool=false)
+    names(x::Module; all::Bool = false, imported::Bool = false)
 
 Get an array of the names exported by a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-exported names defined in the module,
@@ -93,7 +93,8 @@ are also included.
 As a special case, all names defined in `Main` are considered \"exported\",
 since it is not idiomatic to explicitly export names from `Main`.
 """
-names(m::Module, all::Bool=false, imported::Bool=false) = sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
+names(m::Module; all::Bool = false, imported::Bool = false) =
+    sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
@@ -526,7 +527,7 @@ function _subtypes(m::Module, x::Union{DataType,UnionAll},
         return sts
     end
     xt = xt::DataType
-    for s in names(m, true)
+    for s in names(m, all = true)
         if isdefined(m, s) && !isdeprecated(m, s)
             t = getfield(m, s)
             if isa(t, DataType)
