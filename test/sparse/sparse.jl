@@ -1422,7 +1422,7 @@ end
         for Awithzeros in (Aposzeros, Anegzeros, Abothsigns)
             # Basic functionality / dropzeros!
             @test dropzeros!(copy(Awithzeros)) == A
-            @test dropzeros!(copy(Awithzeros), false) == A
+            @test dropzeros!(copy(Awithzeros), trim = false) == A
             # Basic functionality / dropzeros
             @test dropzeros(Awithzeros) == A
             @test dropzeros(Awithzeros, trim = false) == A

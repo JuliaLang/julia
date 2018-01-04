@@ -1226,7 +1226,7 @@ droptol!(A::SparseMatrixCSC, tol, trim::Bool = true) =
     fkeep!(A, (i, j, x) -> abs(x) > tol, trim)
 
 """
-    dropzeros!(A::SparseMatrixCSC, trim::Bool = true)
+    dropzeros!(A::SparseMatrixCSC; trim::Bool = true)
 
 Removes stored numerical zeros from `A`, optionally trimming resulting excess space from
 `A.rowval` and `A.nzval` when `trim` is `true`.
@@ -1234,7 +1234,7 @@ Removes stored numerical zeros from `A`, optionally trimming resulting excess sp
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
 """
-dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 0, trim)
+dropzeros!(A::SparseMatrixCSC; trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 0, trim)
 """
     dropzeros(A::SparseMatrixCSC; trim::Bool = true)
 
@@ -1257,7 +1257,7 @@ julia> dropzeros(A)
   [3, 3]  =  1.0
 ```
 """
-dropzeros(A::SparseMatrixCSC; trim::Bool = true) = dropzeros!(copy(A), trim)
+dropzeros(A::SparseMatrixCSC; trim::Bool = true) = dropzeros!(copy(A), trim = trim)
 
 ## Find methods
 

@@ -1049,7 +1049,7 @@ end
             for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
                 # Basic functionality / dropzeros!
                 @test dropzeros!(copy(vwithzeros)) == v
-                @test dropzeros!(copy(vwithzeros), false) == v
+                @test dropzeros!(copy(vwithzeros), trim = false) == v
                 # Basic functionality / dropzeros
                 @test dropzeros(vwithzeros) == v
                 @test dropzeros(vwithzeros, trim = false) == v

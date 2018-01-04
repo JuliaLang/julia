@@ -3823,7 +3823,8 @@ end
 @deprecate reverse!(v, start, stop) reverse!(v, start = start, stop = stop)
 @deprecate reverse(v, start) reverse(v, start = start)
 @deprecate reverse(v, start, stop) reverse(v, start = start, stop = stop)
-@deprecate dropzeros(x, trim) dropzeros(x, trim = trime)
+@deprecate dropzeros(x, trim) dropzeros(x, trim = trim)
+@deprecate dropzeros!(x, trim) dropzeros!(x, trim = trim)
 
 # END 0.7 deprecations
 
