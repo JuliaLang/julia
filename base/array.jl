@@ -1327,7 +1327,7 @@ function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
 end
 
 """
-    reverse(v [, start=1 [, stop=length(v) ]] )
+    reverse(v; start = 1, stop = length(v))
 
 Return a copy of `v` reversed from start to stop.  See also [`Iterators.reverse`](@ref)
 for reverse-order iteration without making a copy.
@@ -1350,7 +1350,7 @@ julia> reverse(A)
  2
  1
 
-julia> reverse(A, 1, 4)
+julia> reverse(A, start = 1, stop = 4)
 5-element Array{Int64,1}:
  4
  3
@@ -1358,7 +1358,7 @@ julia> reverse(A, 1, 4)
  1
  5
 
-julia> reverse(A, 3, 5)
+julia> reverse(A, start = 3, stop = 5)
 5-element Array{Int64,1}:
  1
  2
@@ -1367,15 +1367,15 @@ julia> reverse(A, 3, 5)
  3
 ```
 """
-function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))
+function reverse(A::AbstractVector; start = first(linearindices(A)), stop = last(linearindices(A)))
     B = similar(A)
-    for i = first(linearindices(A)):s-1
+    for i = first(linearindices(A)):start-1
         B[i] = A[i]
     end
-    for i = s:n
-        B[i] = A[n+s-i]
+    for i = start:stop
+        B[i] = A[start + stop - i]
     end
-    for i = n+1:last(linearindices(A))
+    for i = stop+1:last(linearindices(A))
         B[i] = A[i]
     end
     return B

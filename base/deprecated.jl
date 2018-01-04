@@ -3821,6 +3821,8 @@ end
 @deprecate parse(T, s, base) parse(T, s, base = base)
 @deprecate reverse!(v, start) reverse!(v, start = start)
 @deprecate reverse!(v, start, stop) reverse!(v, start = start, stop = stop)
+@deprecate reverse(v, start) reverse(v, start = start)
+@deprecate reverse(v, start, stop) reverse(v, start = start, stop = stop)
 
 # END 0.7 deprecations
 
