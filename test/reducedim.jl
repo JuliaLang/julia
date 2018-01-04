@@ -339,9 +339,10 @@ for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
 end
 
 # check type of result
-under_test = [UInt8, Int8, Int32, Int64, BigInt]
-@testset "type of sum(::Array{$T}" for T in under_test
+@testset "type of sum(::Array{$T}" for T in [UInt8, Int8, Int32, Int64, BigInt]
     result = sum(T[1 2 3; 4 5 6; 7 8 9], 2)
     @test result == hcat([6, 15, 24])
-    @test eltype(result) === typeof(Base.promote_sys_size_add(zero(T)))
+    @test eltype(result) === (T <: Base.SmallSigned ? Int :
+                              T <: Base.SmallUnsigned ? UInt :
+                              T)
 end

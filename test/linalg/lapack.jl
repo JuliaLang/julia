@@ -143,11 +143,11 @@ end
 
 @testset "gelsy, gelsd" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        A = rand(elty,10,10)
-        B = rand(elty,10,10)
+        A = rand(elty, 10, 10)
+        B = rand(elty, 10, 10)
         C, j = LAPACK.gelsd!(copy(A),copy(B))
         D, k = LAPACK.gelsy!(copy(A),copy(B))
-        @test C ≈ D
+        @test C ≈ D rtol=eps(cond(A))
         @test_throws DimensionMismatch LAPACK.gelsd!(A,rand(elty,12,10))
         @test_throws DimensionMismatch LAPACK.gelsy!(A,rand(elty,12,10))
     end

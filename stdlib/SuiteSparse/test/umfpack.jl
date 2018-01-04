@@ -7,7 +7,7 @@
 
     # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
 
-    using SuiteSparse.increment!
+    using SuiteSparse: increment!
     using Base.LinAlg: Adjoint, Transpose
 
     A0 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),

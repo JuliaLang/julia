@@ -159,9 +159,12 @@ function show_default(io::IO, @nospecialize(x))
         end
     else
         print(io, "0x")
-        p = data_pointer_from_objref(x)
-        for i in (nb - 1):-1:0
-            print(io, hex(unsafe_load(convert(Ptr{UInt8}, p + i)), 2))
+        r = Ref(x)
+        @gc_preserve r begin
+            p = unsafe_convert(Ptr{Cvoid}, r)
+            for i in (nb - 1):-1:0
+                print(io, hex(unsafe_load(convert(Ptr{UInt8}, p + i)), 2))
+            end
         end
     end
     print(io,')')
@@ -1595,8 +1598,6 @@ end
 const DUMP_DEFAULT_MAXDEPTH = 8
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-dump(io::IO, x::DataType; maxdepth=DUMP_DEFAULT_MAXDEPTH) = ((x.abstract ? dumptype : dump)(io, x, maxdepth, ""); println(io))
-
 dump(io::IO, arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = (dump(io, arg, maxdepth, ""); println(io))
 
 """

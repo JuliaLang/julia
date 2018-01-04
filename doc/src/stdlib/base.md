@@ -112,8 +112,6 @@ Core.isa
 Base.isequal
 Base.isless
 Base.ifelse
-Base.lexcmp
-Base.lexless
 Core.typeassert
 Core.typeof
 Core.tuple

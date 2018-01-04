@@ -27,7 +27,7 @@ function GenericIOBuffer(data::T, readable::Bool, writable::Bool, seekable::Bool
 end
 
 # allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
-StringVector(n::Integer) = Vector{UInt8}(_string_n(n))
+StringVector(n::Integer) = unsafe_wrap(Vector{UInt8}, _string_n(n))
 
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 
@@ -426,18 +426,18 @@ read(io::GenericIOBuffer) = read!(io,StringVector(nb_available(io)))
 readavailable(io::GenericIOBuffer) = read(io)
 read(io::GenericIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, nb_available(io))))
 
-function search(buf::IOBuffer, delim::UInt8)
+function findfirst(delim::EqualTo{UInt8}, buf::IOBuffer)
     p = pointer(buf.data, buf.ptr)
-    q = @gc_preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim,nb_available(buf))
+    q = @gc_preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim.x,nb_available(buf))
     nb::Int = (q == C_NULL ? 0 : q-p+1)
     return nb
 end
 
-function search(buf::GenericIOBuffer, delim::UInt8)
+function findfirst(delim::EqualTo{UInt8}, buf::GenericIOBuffer)
     data = buf.data
     for i = buf.ptr : buf.size
         @inbounds b = data[i]
-        if b == delim
+        if b == delim.x
             return i - buf.ptr + 1
         end
     end

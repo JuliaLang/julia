@@ -194,6 +194,14 @@ let R = Ref{Any}(nothing), depth = 10^6
     @test summarysize(R) == (depth + 4) * sizeof(Ptr)
 end
 
+# issue #25367 - summarysize with reshaped arrays
+let A = zeros(1000), B = reshape(A, (1,1000))
+    @test summarysize((A,B)) < 2 * sizeof(A)
+
+    # check that object header is accounted for
+    @test summarysize(A) > sizeof(A)
+end
+
 module _test_varinfo_
 export x
 x = 1.0
@@ -313,7 +321,7 @@ for s in [map(first,V8); X8],
     ss = s[i:j]
     ss in X8 || push!(X8, ss)
 end
-sort!(X8, lt=lexless)
+sort!(X8, lt=isless)
 sort!(X8, by=length)
 
 I8 = [(s,map(UInt16,s)) for s in X8]
@@ -394,7 +402,7 @@ end
 
 let s = "abcα🐨\0x\0"
     for T in (UInt8, UInt16, UInt32, Int32)
-        @test transcode(T, s) == transcode(T, Vector{UInt8}(s))
+        @test transcode(T, s) == transcode(T, codeunits(s))
         @test transcode(String, transcode(T, s)) == s
     end
 end

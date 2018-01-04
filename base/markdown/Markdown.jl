@@ -5,7 +5,7 @@ Tools for working with the Markdown file format. Mainly for documentation.
 """
 module Markdown
 
-import Base: show, ==
+import Base: show, ==, with_output_color
 import Core: @doc_str
 using Base.Unicode: lowercase, ucfirst, isspace
 

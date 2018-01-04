@@ -6,7 +6,7 @@
     data_in = (1,5,100)
     s = BitSet(data_in)
     data_out = collect(s)
-    @test all(map(d->in(d,data_out), data_in))
+    @test all(map(occursin(data_out), data_in))
     @test length(data_out) === length(data_in)
 end
 

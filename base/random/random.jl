@@ -3,7 +3,8 @@
 module Random
 
 using Base.dSFMT
-using Base.GMP: Limb, MPZ
+using Base.GMP.MPZ
+using Base.GMP: Limb
 using Base: BitInteger, BitInteger_types, BitUnsigned, @gc_preserve
 
 import Base: copymutable, copy, copy!, ==, hash
@@ -25,6 +26,7 @@ export srand,
 ## general definitions
 
 abstract type AbstractRNG end
+
 
 ### integers
 
@@ -67,15 +69,15 @@ end
 
 abstract type FloatInterval{T<:AbstractFloat} end
 
-struct CloseOpen{  T<:AbstractFloat} <: FloatInterval{T} end # interval [0,1)
-struct Close1Open2{T<:AbstractFloat} <: FloatInterval{T} end # interval [1,2)
+struct CloseOpen01{T<:AbstractFloat} <: FloatInterval{T} end # interval [0,1)
+struct CloseOpen12{T<:AbstractFloat} <: FloatInterval{T} end # interval [1,2)
 
 const FloatInterval_64 = FloatInterval{Float64}
-const CloseOpen_64     = CloseOpen{Float64}
-const Close1Open2_64   = Close1Open2{Float64}
+const CloseOpen01_64   = CloseOpen01{Float64}
+const CloseOpen12_64   = CloseOpen12{Float64}
 
-CloseOpen(  ::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen{T}()
-Close1Open2(::Type{T}=Float64) where {T<:AbstractFloat} = Close1Open2{T}()
+CloseOpen01(::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen01{T}()
+CloseOpen12(::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen12{T}()
 
 Base.eltype(::Type{<:FloatInterval{T}}) where {T<:AbstractFloat} = T
 
@@ -83,7 +85,9 @@ const BitFloatType = Union{Type{Float16},Type{Float32},Type{Float64}}
 
 ### Sampler
 
-abstract type Sampler end
+abstract type Sampler{E} end
+
+Base.eltype(::Sampler{E}) where {E} = E
 
 # temporarily for BaseBenchmarks
 RangeGenerator(x) = Sampler(GLOBAL_RNG, x)
@@ -109,41 +113,48 @@ Sampler(rng::AbstractRNG, ::Type{X}) where {X} = Sampler(rng, X, Val(Inf))
 #### pre-defined useful Sampler types
 
 # default fall-back for types
-struct SamplerType{T} <: Sampler end
+struct SamplerType{T} <: Sampler{T} end
 
 Sampler(::AbstractRNG, ::Type{T}, ::Repetition) where {T} = SamplerType{T}()
 
-Base.getindex(sp::SamplerType{T}) where {T} = T
+Base.getindex(::SamplerType{T}) where {T} = T
 
 # default fall-back for values
-struct SamplerTrivial{T} <: Sampler
+struct SamplerTrivial{T,E} <: Sampler{E}
     self::T
 end
 
-Sampler(::AbstractRNG, X, ::Repetition) = SamplerTrivial(X)
+SamplerTrivial(x::T) where {T} = SamplerTrivial{T,eltype(T)}(x)
+
+Sampler(::AbstractRNG, x, ::Repetition) = SamplerTrivial(x)
 
 Base.getindex(sp::SamplerTrivial) = sp.self
 
 # simple sampler carrying data (which can be anything)
-struct SamplerSimple{T,S} <: Sampler
+struct SamplerSimple{T,S,E} <: Sampler{E}
     self::T
     data::S
 end
 
+SamplerSimple(x::T, data::S) where {T,S} = SamplerSimple{T,S,eltype(T)}(x, data)
+
 Base.getindex(sp::SamplerSimple) = sp.self
 
 # simple sampler carrying a (type) tag T and data
-struct SamplerTag{T,S} <: Sampler
+struct SamplerTag{T,S,E} <: Sampler{E}
     data::S
-    SamplerTag{T}(s::S) where {T,S} = new{T,S}(s)
+    SamplerTag{T}(s::S) where {T,S} = new{T,S,eltype(T)}(s)
 end
 
 
 #### helper samplers
 
+# TODO: make constraining constructors to enforce that those
+# types are <: Sampler{T}
+
 ##### Adapter to generate a randome value in [0, n]
 
-struct LessThan{T<:Integer,S} <: Sampler
+struct LessThan{T<:Integer,S} <: Sampler{T}
     sup::T
     s::S    # the scalar specification/sampler to feed to rand
 end
@@ -155,7 +166,7 @@ function rand(rng::AbstractRNG, sp::LessThan)
     end
 end
 
-struct Masked{T<:Integer,S} <: Sampler
+struct Masked{T<:Integer,S} <: Sampler{T}
     mask::T
     s::S
 end
@@ -164,7 +175,7 @@ rand(rng::AbstractRNG, sp::Masked) = rand(rng, sp.s) & sp.mask
 
 ##### Uniform
 
-struct UniformT{T} <: Sampler end
+struct UniformT{T} <: Sampler{T} end
 
 uniform(::Type{T}) where {T} = UniformT{T}()
 

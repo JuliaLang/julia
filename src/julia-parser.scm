@@ -12,7 +12,7 @@
 (define prec-conditional '(?))
 (define prec-arrow       (append!
                           '(-- -->)
-                          (add-dots '(← → ↔ ↚ ↛ ↠ ↣ ↦ ↤ ↮ ⇎ ⇏ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫))))
+                          (add-dots '(← → ↔ ↚ ↛ ↞ ↠ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫ ⇜ ⇝ ↜ ↝ ↩ ↪ ↫ ↬ ↼ ↽ ⇀ ⇁ ⇄ ⇆ ⇇ ⇉ ⇋ ⇌ ⇚ ⇛ ⇠ ⇢))))
 (define prec-lazy-or     '(|\|\||))
 (define prec-lazy-and    '(&&))
 (define prec-comparison
@@ -147,8 +147,8 @@
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const do
                          struct
-                         abstract typealias bitstype type immutable  ;; to be deprecated
-                         module baremodule using import export importall))
+                         type immutable importall  ;; to be deprecated
+                         module baremodule using import export))
 
 (define initial-reserved-word? (Set initial-reserved-words))
 
@@ -348,9 +348,9 @@
                    (begin
                      (if (not (eqv? (peek-char port) #\.))
                          (let ((num (get-output-string str)))
-                           (syntax-deprecation port
-                                               (string num #\. (peek-char port))
-                                               (string num " ." (peek-char port)))))
+                           (parser-depwarn port
+                                           (string num #\. (peek-char port))
+                                           (string num " ." (peek-char port)))))
                      (io.ungetc port #\.))
                    (begin (write-char #\. str)
                           (read-digs #f #t)
@@ -378,9 +378,9 @@
                    (and (eq? pred char-hex?) (not is-hex-float-literal)))
                (or (char-numeric? c)
                    (and (identifier-start-char? c)
-                        (syntax-deprecation port  ;; remove after v0.7
-                                            (string (get-output-string str) c)
-                                            (string (get-output-string str) " * " c))
+                        (parser-depwarn port  ;; remove after v0.7
+                                        (string (get-output-string str) c)
+                                        (string (get-output-string str) " * " c))
                         #f)))  ;; remove after v0.7
           ;; disallow digits after binary or octal literals, e.g., 0b12
           ;; and disallow identifier chars after hex literals.
@@ -424,8 +424,8 @@
       n))
 
 (define (sized-uint-literal n s b)
-  (let* ((i (if (eqv? (string.char s 0) #\-) 3 2))
-         (l (* (- (length s) i) b)))
+  (let* ((i (if (eqv? (string.char s 0) #\-) 4 3))
+         (l (+ (* (- (length s) i) b) 1)))
     (cond ((<= l 8)   (numchk n s) (uint8  n))
           ((<= l 16)  (numchk n s) (uint16 n))
           ((<= l 32)  (numchk n s) (uint32 n))
@@ -596,24 +596,12 @@
 
 ;; --- misc ---
 
-(define (syntax-deprecation s what instead)
-  (if (or *depwarn* *deperror*)
-      (let ((msg (string
-                  #\newline
-                  (if *deperror* "ERROR:" "WARNING:") " deprecated syntax \"" what "\""
-                  (if (or (not s) (eq? current-filename 'none))
-                      ""
-                      (string " at " current-filename ":" (if (number? s)
-                                                              s
-                                                              (input-port-line (if (port? s) s (ts:port s))))))
-                  "."
-                  (if (equal? instead "")
-                      ""
-                      (string #\newline "Use \"" instead "\" instead."))
-                  #\newline)))
-        (if *deperror*
-            (error msg)
-            (io.write *stderr* msg)))))
+; Log a syntax deprecation, attributing it to current-filename and the line
+; number of the stream `s`
+(define (parser-depwarn s what instead)
+  (let ((line (if (number? s) s (input-port-line (if (port? s) s (ts:port s)))))
+        (file current-filename))
+    (frontend-depwarn (format-syntax-deprecation what instead file line #t) file line)))
 
 ;; --- parser ---
 
@@ -712,7 +700,7 @@
 ;; symbol tokens that do not simply parse to themselves when appearing alone as
 ;; an element of an argument list
 (define non-standalone-symbol-token?
-  (Set (append operators reserved-words '(.... mutable primitive))))
+  (Set (append operators reserved-words '(.... mutable primitive abstract))))
 
 ; parse-eq* is used where commas are special, for example in an argument list
 (define (parse-eq* s)
@@ -785,20 +773,20 @@
   (let ((ex (parse-arrow s)))
     (cond ((eq? (peek-token s) '?)
            (begin (if (not (ts:space? s))
-                      (syntax-deprecation s (string (deparse ex) "?") (string (deparse ex) " ?")))
+                      (parser-depwarn s (string (deparse ex) "?") (string (deparse ex) " ?")))
                   (take-token s) ; take the ?
                   (let ((t (with-whitespace-newline (without-range-colon (peek-token s)))))
                     (if (not (ts:space? s))
-                        (syntax-deprecation s (string (deparse ex) " ?" (deparse t)) (string (deparse ex) " ? " (deparse t)))))
+                        (parser-depwarn s (string (deparse ex) " ?" (deparse t)) (string (deparse ex) " ? " (deparse t)))))
                   (let ((then (without-range-colon (parse-eq* s))))
                     (if (not (eq? (peek-token s) ':))
                         (error "colon expected in \"?\" expression"))
                     (if (not (ts:space? s))
-                        (syntax-deprecation s (string (deparse ex) " ? " (deparse then) ":") (string (deparse ex) " ? " (deparse then) " :")))
+                        (parser-depwarn s (string (deparse ex) " ? " (deparse then) ":") (string (deparse ex) " ? " (deparse then) " :")))
                     (take-token s) ; take the :
                     (let ((t (with-whitespace-newline (peek-token s))))
                       (if (not (ts:space? s))
-                          (syntax-deprecation s (string (deparse ex) " ? " (deparse then) " :" t) (string (deparse ex) " ? " (deparse then) " : " t))))
+                          (parser-depwarn s (string (deparse ex) " ? " (deparse then) " :" t) (string (deparse ex) " ? " (deparse then) " : " t))))
                     (list 'if ex then (parse-eq* s)))))
           (else ex))))
 
@@ -938,8 +926,8 @@
 (define (parse-expr s)     (parse-with-chains s parse-shift         is-prec-plus? '(+ ++)))
 
 (define (bitshift-warn s)
-  (syntax-deprecation s (string "call to `*` inside call to bitshift operator")
-                      "parenthesized call to `*`"))
+  (parser-depwarn s (string "call to `*` inside call to bitshift operator")
+                  "parenthesized call to `*`"))
 
 (define (parse-shift s)    #;(parse-LtoR        s parse-term          is-prec-bitshift?)
   (let loop ((ex (parse-term s))
@@ -1123,7 +1111,7 @@
 ;; also handles looking for syntactic reserved words
 (define (parse-call s)
   (let ((ex (parse-unary-prefix s)))
-    (if (or (initial-reserved-word? ex) (eq? ex 'mutable) (eq? ex 'primitive))
+    (if (or (initial-reserved-word? ex) (eq? ex 'mutable) (eq? ex 'primitive) (eq? ex 'abstract))
         (parse-resword s ex)
         (parse-call-chain s ex #f))))
 
@@ -1445,15 +1433,12 @@
                 (list word def body)))))
 
        ((abstract)
-        (let ((ty (eq? (peek-token s) 'type)))
-          (if ty
-              (take-token s))
-          (let ((spec (parse-subtype-spec s)))
-            (if (not ty)
-                (syntax-deprecation s (string "abstract " (deparse spec))
-                                    (string "abstract type " (deparse spec) " end")))
-            (begin0 (list 'abstract spec)
-                    (if ty (expect-end (take-lineendings s) "abstract type"))))))
+        (if (not (eq? (peek-token s) 'type))
+            (parse-call-chain s word #f)
+            (begin (take-token s)
+                   (let ((spec (parse-subtype-spec s)))
+                     (begin0 (list 'abstract spec)
+                             (expect-end (take-lineendings s) "abstract type"))))))
        ((struct)
         (begin (take-token s)
                (parse-struct-def s #f word)))
@@ -1472,24 +1457,11 @@
                              (expect-end (take-lineendings s) "primitive type"))))))
        ;; deprecated type keywords
        ((type)
-        (syntax-deprecation s "type" "mutable struct")  ;; retain in 0.7
+        (parser-depwarn s "type" "mutable struct")  ;; retain in 0.7
         (parse-struct-def s #t word))
        ((immutable)
-        (syntax-deprecation s "immutable" "struct")  ;; retain in 0.7
+        (parser-depwarn s "immutable" "struct")  ;; retain in 0.7
         (parse-struct-def s #f word))
-       ((bitstype)
-        (let* ((nb   (with-space-sensitive (parse-cond s)))
-               (spec (parse-subtype-spec s)))
-          (syntax-deprecation s (string "bitstype " (deparse nb) " " (deparse spec))
-                              (string "primitive type " (deparse spec) " " (deparse nb) " end"))
-          (list 'primitive spec nb)))
-       ((typealias)
-        (let ((lhs (with-space-sensitive (parse-call s)))
-              (rhs (parse-where s parse-call)))
-          (syntax-deprecation s (string "typealias " (deparse lhs) " " (deparse rhs))
-                              (string (if (symbol? lhs) "const " "")
-                                      (deparse lhs) " = " (deparse rhs)))
-          (list 'typealias lhs rhs)))
 
        ((try)
         (let ((try-block (if (memq (require-token s) '(catch finally))
@@ -1521,8 +1493,8 @@
                            (var? (and (not nl) (or (and (symbol? var) (not (eq? var 'false))
                                                         (not (eq? var 'true)))
                                                    (and (length= var 2) (eq? (car var) '$))
-                                                   (and (syntax-deprecation s (string "catch " (deparse var) "")
-                                                                            (string "catch; " (deparse var) ""))
+                                                   (and (parser-depwarn s (string "catch " (deparse var) "")
+                                                                        (string "catch; " (deparse var) ""))
                                                         #f))))
                            (catch-block (if (eq? (require-token s) 'finally)
                                             `(block ,(line-number-node s))
@@ -1684,8 +1656,8 @@
                   (t   (peek-token s)))
              #;(if (not (or (closing-token? t) (newline? t)))
                  ;; should be: (error "invalid iteration specification")
-                 (syntax-deprecation s (string "for " (deparse `(= ,lhs ,rhs)) " " t)
-                                     (string "for " (deparse `(= ,lhs ,rhs)) "; " t)))
+                 (parser-depwarn s (string "for " (deparse `(= ,lhs ,rhs)) " " t)
+                                 (string "for " (deparse `(= ,lhs ,rhs)) "; " t)))
              (if outer?
                  `(= (outer ,lhs) ,rhs)
                  `(= ,lhs ,rhs))))
@@ -1799,8 +1771,8 @@
                  (loop lst nxt)
                  (let ((params (parse-call-arglist s closer)))
                    (if (null? params)
-                       (begin (syntax-deprecation s (deparse `(vect (parameters) ,@(reverse lst) ,nxt))
-                                                  (deparse `(vcat ,@(reverse lst) ,nxt)))
+                       (begin (parser-depwarn s (deparse `(vect (parameters) ,@(reverse lst) ,nxt))
+                                              (deparse `(vcat ,@(reverse lst) ,nxt)))
                               ;; TODO: post 0.7, remove deprecation and change parsing to 'vect
                               `(vcat ,@(reverse lst) ,nxt))
                        `(vect ,@params ,@(reverse lst) ,nxt)))))
@@ -2177,7 +2149,7 @@
   `(begin (if (or (syntactic-op? ,ex) (eq? ,ex '....))
               (error (string "invalid identifier name \"" ,ex "\"")))
           (if (eq? ,ex '?)
-              (syntax-deprecation s "`?` used as an identifier" "")))) ; merge with above check in v1.0
+              (parser-depwarn s "`?` used as an identifier" "")))) ; merge with above check in v1.0
 
 ;; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s (checked #t))
@@ -2273,9 +2245,9 @@
                                                                                     (peek-token s))
                                                                      '->))
                                   ex
-                                  (begin (syntax-deprecation lineno
-                                                             (string "(" (deparse (cadr ex)) "...)")
-                                                             (string "(" (deparse (cadr ex)) "...,)"))
+                                  (begin (parser-depwarn lineno
+                                                         (string "(" (deparse (cadr ex)) "...)")
+                                                         (string "(" (deparse (cadr ex)) "...,)"))
                                          `(tuple ,ex))))
                             ex))
                        ((eq? t 'for)

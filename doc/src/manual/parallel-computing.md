@@ -1505,7 +1505,7 @@ julia> acc[]
 !!! note
     Not *all* primitive types can be wrapped in an `Atomic` tag. Supported types
     are `Int8`, `Int16`, `Int32`, `Int64`, `Int128`, `UInt8`, `UInt16`, `UInt32`,
-    `UInt64`, `UInt128`, `Float16`, `Float32`, and `Float128`. Additionally,
+    `UInt64`, `UInt128`, `Float16`, `Float32`, and `Float64`. Additionally,
     `Int128` and `UInt128` are not supported on AAarch32 and ppc64le.
 
 ## @threadcall (Experimental)

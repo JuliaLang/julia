@@ -265,30 +265,30 @@ end
 
     a = [3, 5, -7, 6]
     b = [4, 6, 2, -7, 1]
-    ind = findin(a, b)
+    ind = find(occursin(b), a)
     @test ind == [3,4]
-    @test findin(a, Int[]) == Int[]
-    @test findin(Int[], a) == Int[]
+    @test find(occursin(Int[]), a) == Int[]
+    @test find(occursin(a), Int[]) == Int[]
 
     a = [1,2,3,4,5]
     b = [2,3,4,6]
-    @test findin(a, b) == [2,3,4]
-    @test findin(b, a) == [1,2,3]
-    @test findin(a, Int[]) == Int[]
-    @test findin(Int[], a) == Int[]
+    @test find(occursin(b), a) == [2,3,4]
+    @test find(occursin(a), b) == [1,2,3]
+    @test find(occursin(Int[]), a) == Int[]
+    @test find(occursin(a), Int[]) == Int[]
 
     a = collect(1:3:15)
     b = collect(2:4:10)
-    @test findin(a, b) == [4]
-    @test findin([a[1:4]; a[4:end]], b) == [4,5]
+    @test find(occursin(b), a) == [4]
+    @test find(occursin(b), [a[1:4]; a[4:end]]) == [4,5]
 
-    @test findin([1.0, NaN, 2.0], NaN) == [2]
-    @test findin([1.0, 2.0, NaN], NaN) == [3]
+    @test find(occursin(NaN), [1.0, NaN, 2.0]) == [2]
+    @test find(occursin(NaN), [1.0, 2.0, NaN]) == [3]
 
-    @testset "findin for uncomparable element types" begin
+    @testset "find(::OccursIn, b) for uncomparable element types" begin
         a = [1 + 1im, 1 - 1im]
-        @test findin(a, 1 + 1im) == [1]
-        @test findin(a, a)       == [1,2]
+        @test find(occursin(1 + 1im), a) == [1]
+        @test find(occursin(a), a)       == [1,2]
     end
 
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
@@ -459,6 +459,10 @@ end
     @test findprev(equalto(1),a,8) == 6
     @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
     @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
+    @test findfirst(equalto(0x00), [0x01, 0x00]) == 2
+    @test findlast(equalto(0x00), [0x01, 0x00]) == 2
+    @test findnext(equalto(0x00), [0x00, 0x01, 0x00], 2) == 3
+    @test findprev(equalto(0x00), [0x00, 0x01, 0x00], 2) == 1
 end
 @testset "find with general iterables" begin
     s = "julia"
@@ -481,6 +485,8 @@ end
         z[a[1][i],a[2][i],a[3][i]] = 10
     end
     @test isequal(a,findn(z))
+
+    @test findn([1, 0, 2]) == ([1, 3], )
 end
 
 @testset "findmin findmax indmin indmax" begin
@@ -941,6 +947,15 @@ end
     @test isequal(symdiff([1,2,3], Float64[]), Float64[1.0,2,3])
     @test isequal(symdiff(Int64[], [1,2,3]), Int64[1,2,3])
     @test isequal(symdiff(Int64[]), Int64[])
+    @testset "tuples" begin # Issue #25338
+        @test union((1, 2), (3)) == [1, 2, 3]
+        u = union((1, 0x2), [3])
+        @test eltype(u) == Integer
+        @test u == [1, 2, 3]
+        @test intersect((1, 2), (3, 2)) == [2]
+        @test setdiff((1, 2), (3, 2)) == [1]
+        @test symdiff((1, 2), (3, 2)) == [1, 3]
+    end
 end
 
 @testset "mapslices" begin
@@ -1024,27 +1039,27 @@ end
 end
 
 @testset "lexicographic comparison" begin
-    @test lexcmp([1.0], [1]) == 0
-    @test lexcmp([1], [1.0]) == 0
-    @test lexcmp([1, 1], [1, 1]) == 0
-    @test lexcmp([1, 1], [2, 1]) == -1
-    @test lexcmp([2, 1], [1, 1]) == 1
-    @test lexcmp([1, 1], [1, 2]) == -1
-    @test lexcmp([1, 2], [1, 1]) == 1
-    @test lexcmp([1], [1, 1]) == -1
-    @test lexcmp([1, 1], [1]) == 1
+    @test cmp([1.0], [1]) == 0
+    @test cmp([1], [1.0]) == 0
+    @test cmp([1, 1], [1, 1]) == 0
+    @test cmp([1, 1], [2, 1]) == -1
+    @test cmp([2, 1], [1, 1]) == 1
+    @test cmp([1, 1], [1, 2]) == -1
+    @test cmp([1, 2], [1, 1]) == 1
+    @test cmp([1], [1, 1]) == -1
+    @test cmp([1, 1], [1]) == 1
 end
 
 @testset "sort on arrays" begin
     local a = rand(3,3)
 
     asr = sortrows(a)
-    @test lexless(asr[1,:],asr[2,:])
-    @test lexless(asr[2,:],asr[3,:])
+    @test isless(asr[1,:],asr[2,:])
+    @test isless(asr[2,:],asr[3,:])
 
     asc = sortcols(a)
-    @test lexless(asc[:,1],asc[:,2])
-    @test lexless(asc[:,2],asc[:,3])
+    @test isless(asc[:,1],asc[:,2])
+    @test isless(asc[:,2],asc[:,3])
 
     # mutating functions
     o = ones(3, 4)
@@ -1053,12 +1068,12 @@ end
     @test o == ones(3, 4)
 
     asr = sortrows(a, rev=true)
-    @test lexless(asr[2,:],asr[1,:])
-    @test lexless(asr[3,:],asr[2,:])
+    @test isless(asr[2,:],asr[1,:])
+    @test isless(asr[3,:],asr[2,:])
 
     asc = sortcols(a, rev=true)
-    @test lexless(asc[:,2],asc[:,1])
-    @test lexless(asc[:,3],asc[:,2])
+    @test isless(asc[:,2],asc[:,1])
+    @test isless(asc[:,3],asc[:,2])
 
     as = sort(a, 1)
     @test issorted(as[:,1])
@@ -1162,7 +1177,7 @@ end
 
         # logical indexing
         a = [1:10;]; acopy = copy(a)
-        @test deleteat!(a, map(i -> i in idx, 1:length(a))) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
+        @test deleteat!(a, map(occursin(idx), 1:length(a))) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
     end
     a = [1:10;]
     @test deleteat!(a, 11:10) == [1:10;]

@@ -15,6 +15,7 @@ Base.transcode
 Base.unsafe_string
 Base.ncodeunits(::AbstractString)
 Base.codeunit
+Base.codeunits
 Base.ascii
 Base.@r_str
 Base.@raw_str
@@ -23,7 +24,6 @@ Base.Docs.@text_str
 Base.isvalid(::Any)
 Base.isvalid(::Any, ::Any)
 Base.isvalid(::AbstractString, ::Integer)
-Base.ismatch
 Base.match
 Base.eachmatch
 Base.matchall
@@ -32,11 +32,11 @@ Base.:(==)(::AbstractString, ::AbstractString)
 Base.cmp(::AbstractString, ::AbstractString)
 Base.lpad
 Base.rpad
-Base.search
-Base.rsearch
-Base.searchindex
-Base.rsearchindex
-Base.contains(::AbstractString, ::AbstractString)
+Base.findfirst(::AbstractString, ::AbstractString)
+Base.findnext(::AbstractString, ::AbstractString, ::Integer)
+Base.findlast(::AbstractString, ::AbstractString)
+Base.findprev(::AbstractString, ::AbstractString, ::Integer)
+Base.contains
 Base.reverse(::Union{String,SubString{String}})
 Base.replace(s::AbstractString, ::Pair)
 Base.split

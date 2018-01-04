@@ -79,7 +79,9 @@ const ser_version = 7 # do not make changes without bumping the version #!
 const NTAGS = length(TAGS)
 
 function sertag(@nospecialize(v))
-    ptr = pointer_from_objref(v)
+    # NOTE: we use jl_value_ptr directly since we know at least one of the arguments
+    # in the comparison below is a singleton.
+    ptr = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), v)
     ptags = convert(Ptr{Ptr{Cvoid}}, pointer(TAGS))
     # note: constant ints & reserved slots never returned here
     @inbounds for i in 1:(NTAGS-(n_reserved_slots+2*n_int_literals))

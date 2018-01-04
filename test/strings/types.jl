@@ -118,9 +118,9 @@ end
 # search and SubString (issue #5679)
 let str = "Hello, world!"
     u = SubString(str, 1, 5)
-    @test rsearch(u, "World") == 0:-1
-    @test rsearch(u, 'z') == 0
-    @test rsearch(u, "ll") == 3:4
+    @test findlast("World", u) == 0:-1
+    @test findlast(equalto('z'), u) == 0
+    @test findlast("ll", u) == 3:4
 end
 
 # SubString created from SubString
@@ -154,8 +154,8 @@ end
 @test parse(Float32, SubString("10",1,1)) === 1.0f0
 
 # issue #5870
-@test !ismatch(Regex("aa"), SubString("",1,0))
-@test ismatch(Regex(""), SubString("",1,0))
+@test !contains(SubString("",1,0), Regex("aa"))
+@test contains(SubString("",1,0), Regex(""))
 
 # isvalid, length, prevind, nextind for SubString{String}
 let s = "lorem ipsum", sdict = Dict(
@@ -237,14 +237,14 @@ end
             for c in ('X', 'δ', '\U0001d6a5')
                 s = convert(T, string(prefix, c, suffix))
                 r = reverse(s)
-                ri = search(r, c)
+                ri = findfirst(equalto(c), r)
                 @test c == s[reverseind(s, ri)] == r[ri]
                 s = convert(T, string(prefix, prefix, c, suffix, suffix))
                 pre = convert(T, prefix)
                 sb = SubString(s, nextind(pre, endof(pre)),
                                endof(convert(T, string(prefix, prefix, c, suffix))))
                 r = reverse(sb)
-                ri = search(r, c)
+                ri = findfirst(equalto(c), r)
                 @test c == sb[reverseind(sb, ri)] == r[ri]
             end
         end

@@ -408,7 +408,7 @@ let a = Expr(:quote,Expr(:$,:x8d003))
 end
 
 # issue #9865
-@test ismatch(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
+@test contains(replstr(Set(1:100)), r"^Set\(\[.+….+\]\)$")
 
 # issue #11413
 @test string(:(*{1, 2})) == "*{1, 2}"
@@ -750,20 +750,13 @@ end
 let repr = sprint(dump, Int64)
     @test repr == "Int64 <: Signed\n"
 end
-# Make sure a `TypeVar` in a `Union` doesn't break subtype dump.
-BreakDump17529{T} = Union{T, Nothing}
-# make sure dependent parameters are represented correctly
-VectorVI{I, VI<:AbstractVector{I}} = Vector{VI}
 let repr = sprint(dump, Any)
-    @test length(repr) > 100000
-    @test ismatch(r"^Any\n  [^ \t\n]", repr)
+    @test length(repr) == 4
+    @test contains(repr, r"^Any\n")
     @test endswith(repr, '\n')
-    @test contains(repr, "     Base.Vector{T} = Array{T,1}\n")
-    @test contains(repr, ".VectorVI{I, VI<:AbstractArray{I,1}} = Array{VI,1}\n")
-    @test !contains(repr, "Core.Vector{T}")
 end
 let repr = sprint(dump, Integer)
-    @test contains(repr, "UInt128")
+    @test contains(repr, "Integer <: Real")
     @test !contains(repr, "Any")
 end
 let repr = sprint(dump, Union{Integer, Float32})
@@ -774,7 +767,7 @@ let repr = sprint(dump, Core.svec())
 end
 let sv = Core.svec(:a, :b, :c)
     # unsafe replacement of :c with #undef to test handling of incomplete SimpleVectors
-    unsafe_store!(convert(Ptr{Ptr{Cvoid}}, Base.data_pointer_from_objref(sv)) + 3 * sizeof(Ptr), C_NULL)
+    unsafe_store!(convert(Ptr{Ptr{Cvoid}}, Base.pointer_from_objref(sv)) + 3 * sizeof(Ptr), C_NULL)
     repr = sprint(dump, sv)
     @test repr == "SimpleVector\n  1: Symbol a\n  2: Symbol b\n  3: #undef\n"
 end

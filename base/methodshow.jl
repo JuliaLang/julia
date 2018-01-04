@@ -11,7 +11,7 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
         n = n.args[1]  # handle n::T in arg list
     end
     s = string(n)
-    i = search(s,'#')
+    i = findfirst(equalto('#'), s)
     if i > 0
         s = s[1:i-1]
     end
@@ -75,7 +75,7 @@ function arg_decl_parts(m::Method)
 end
 
 function kwarg_decl(m::Method, kwtype::DataType)
-    sig = rewrap_unionall(Tuple{kwtype, NamedTuple, unwrap_unionall(m.sig).parameters...}, m.sig)
+    sig = rewrap_unionall(Tuple{kwtype, Any, unwrap_unionall(m.sig).parameters...}, m.sig)
     kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, typemax(UInt))
     if kwli !== nothing
         kwli = kwli::Method
@@ -202,7 +202,7 @@ function url(m::Method)
     (m.file == :null || m.file == :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
+    line <= 0 || contains(file, r"In\[[0-9]+\]") && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)

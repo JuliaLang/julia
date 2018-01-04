@@ -7,7 +7,7 @@ import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
 using ...LibGit2
 import ...Pkg.PkgError
 using ..Types
-using Base.Printf.@printf
+using Base.Printf: @printf
 
 macro recover(ex)
     quote
@@ -127,6 +127,9 @@ function installed(pkg::AbstractString)
 end
 
 function status(io::IO; pkgname::AbstractString = "")
+    if !isempty(pkgname) && !ispath(pkgname)
+        throw(PkgError("Package $pkgname does not exist"))
+    end
     showpkg(pkg) = isempty(pkgname) ? true : (pkg == pkgname)
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
@@ -158,6 +161,9 @@ end
 status(io::IO, pkg::AbstractString) = status(io, pkgname = pkg)
 
 function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
+    if !isempty(pkg) && !ispath(pkg)
+        throw(PkgError("Package $pkg does not exist"))
+    end
     @printf io " - %-29s " pkg
     fix || return println(io,ver)
     @printf io "%-19s" ver

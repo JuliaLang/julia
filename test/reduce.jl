@@ -391,3 +391,8 @@ test18695(r) = sum( t^2 for t in r )
 # test neutral element not picked incorrectly for &, |
 @test @inferred(foldl(&, Int[1])) === 1
 @test_throws ArgumentError foldl(&, Int[])
+
+# prod on Chars
+@test prod(Char[]) == ""
+@test prod(Char['a']) == "a"
+@test prod(Char['a','b']) == "ab"

@@ -55,12 +55,14 @@ getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ)
 
 function show(io::IO, J::UniformScaling)
     s = "$(J.λ)"
-    if ismatch(r"\w+\s*[\+\-]\s*\w+", s)
+    if contains(s, r"\w+\s*[\+\-]\s*\w+")
         s = "($s)"
     end
     print(io, "$(typeof(J))\n$s*I")
 end
 copy(J::UniformScaling) = UniformScaling(J.λ)
+
+conj(J::UniformScaling) = UniformScaling(conj(J.λ))
 
 transpose(J::UniformScaling) = J
 Transpose(S::UniformScaling) = transpose(S)

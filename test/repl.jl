@@ -195,10 +195,10 @@ fake_repl() do stdin_write, stdout_read, repl
     # Issue #10222
     # Test ignoring insert key in standard and prefix search modes
     write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
-    @test search(readline(stdout_read), "[2h") == 0:-1
+    @test findfirst("[2h", readline(stdout_read)) == 0:-1
     readline(stdout_read)
     write(stdin_write, "\e[2~\e[2~\n") # insert (VT220-style)
-    @test search(readline(stdout_read), "[2~") == 0:-1
+    @test findfirst("[2~", readline(stdout_read)) == 0:-1
     readline(stdout_read)
     write(stdin_write, "1+1\n") # populate history with a trivial input
     readline(stdout_read)
@@ -818,27 +818,28 @@ for keys = [altkeys, merge(altkeys...)],
 
             # Check that the correct prompt was displayed
             output = readuntil(stdout_read, "1 * 1;")
-            @test !isempty(search(output, LineEdit.prompt_string(altprompt)))
-            @test isempty(search(output, "julia> "))
+            @test !contains(LineEdit.prompt_string(altprompt), output)
+            @test !contains("julia> ", output)
 
             # Check the history file
             history = read(histfile, String)
-            @test ismatch(r"""
-                          ^\#\ time:\ .*\n
-                           \#\ mode:\ julia\n
-                           \t1\ \+\ 1;\n
-                           \#\ time:\ .*\n
-                           \#\ mode:\ julia\n
-                           \tmulti=2;\n
-                           \tline=2;\n
-                           \#\ time:\ .*\n
-                           \#\ mode:\ julia\n
-                           \tmulti=3;\n
-                           \tline=1;\n
-                           \#\ time:\ .*\n
-                           \#\ mode:\ julia\n
-                           \t1\ \*\ 1;\n$
-                          """xm, history)
+            @test contains(history,
+                           r"""
+                           ^\#\ time:\ .*\n
+                            \#\ mode:\ julia\n
+                            \t1\ \+\ 1;\n
+                            \#\ time:\ .*\n
+                            \#\ mode:\ julia\n
+                            \tmulti=2;\n
+                            \tline=2;\n
+                            \#\ time:\ .*\n
+                            \#\ mode:\ julia\n
+                            \tmulti=3;\n
+                            \tline=1;\n
+                            \#\ time:\ .*\n
+                            \#\ mode:\ julia\n
+                            \t1\ \*\ 1;\n$
+                           """xm)
         end
     finally
         rm(histfile, force=true)

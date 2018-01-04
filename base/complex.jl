@@ -938,12 +938,6 @@ function atanh(z::Complex{T}) where T<:AbstractFloat
 end
 atanh(z::Complex) = atanh(float(z))
 
-function lexcmp(a::Complex, b::Complex)
-    c = cmp(real(a), real(b))
-    c == 0 || return c
-    cmp(imag(a), imag(b))
-end
-
 #Rounding complex numbers
 #Requires two different RoundingModes for the real and imaginary components
 """

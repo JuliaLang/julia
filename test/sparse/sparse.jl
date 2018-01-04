@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.LinAlg: mul!, ldiv!, rdiv!, Adjoint, Transpose
-using Base.Printf.@printf
+using Base.Printf: @printf
 
 @testset "issparse" begin
     @test issparse(sparse(ones(5,5)))

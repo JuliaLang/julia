@@ -774,12 +774,6 @@ end
     @test isequal(atan(complex( NaN, NaN)),complex( NaN, NaN))
 end
 
-@testset "lexcmp" begin
-    @test lexcmp(1.0-1.0im, 1.0+0.0im) == -1
-    @test lexcmp(0.0+0.0im, 0.0+0.0im) == 0
-    @test lexcmp(1.0-1.0im, 0.0+0.0im) == 1
-end
-
 # misc.
 
 @test complex(1//2,1//3)^2 === complex(5//36, 1//3)

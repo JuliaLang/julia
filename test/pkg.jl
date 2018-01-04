@@ -63,6 +63,7 @@ temp_pkg_dir() do
     end
 
     @test_throws PkgError Pkg.installed("MyFakePackage")
+    @test_throws PkgError Pkg.status("MyFakePackage")
     @test Pkg.installed("Example") === nothing
 
     # Check that setprotocol! works.
@@ -515,9 +516,9 @@ temp_pkg_dir() do
         logs,_ = Test.collect_test_logs() do
             Pkg.update("ColorTypes")
         end
-        @test any(ismatch((:info,r"Upgrading ColorTypes: v0\.2\.2 => v\d+\.\d+\.\d+"), l) for l in logs)
-        @test any(ismatch((:info,r"Upgrading Compat: v0\.7\.18 => v\d+\.\d+\.\d+"), l) for l in logs)
-        @test !any(ismatch((:info,r"Upgrading Colors"),l) for l in logs)
+        @test any(contains(l, (:info,r"Upgrading ColorTypes: v0\.2\.2 => v\d+\.\d+\.\d+")) for l in logs)
+        @test any(contains(l, (:info,r"Upgrading Compat: v0\.7\.18 => v\d+\.\d+\.\d+")) for l in logs)
+        @test !any(contains(l, (:info,r"Upgrading Colors")) for l in logs)
 
         @test Pkg.installed("Colors") == v"0.6.4"
 
@@ -540,7 +541,7 @@ temp_pkg_dir() do
         Pkg.add(package)
         msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
             "redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); using Example; Pkg.update(\"$package\")"`), String)
-        @test ismatch(Regex("- $package.*Restart Julia to use the updated versions","s"), msg)
+        @test contains(msg, Regex("- $package.*Restart Julia to use the updated versions","s"))
     end
 
     # Verify that the --startup-file flag is respected by Pkg.build / Pkg.test

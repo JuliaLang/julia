@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+const Chars = Union{Char,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
+
 # starts with and ends with predicates
 
 """
@@ -258,18 +260,15 @@ function rpad(
     r == 0 ? string(s, p^q) : string(s, p^q, first(p, r))
 end
 
-# splitter can be a Char, Vector{Char}, AbstractString, Regex, ...
-# any splitter that provides search(s::AbstractString, splitter)
-split(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:SubString} =
-    _split(str, splitter, limit, keep, T[])
-
 """
     split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
 
 Return an array of substrings by splitting the given string on occurrences of the given
-character delimiters, which may be specified in any of the formats allowed by `search`'s
-second argument (i.e. a single character, collection of characters, string, or regular
-expression). If `chars` is omitted, it defaults to the set of all space characters, and
+character delimiters, which may be specified in any of the formats allowed by
+[`findnext`](@ref)'s first argument (i.e. as a string, regular expression or a function),
+or as a single character or collection of characters.
+
+If `chars` is omitted, it defaults to the set of all space characters, and
 `keep` is taken to be `false`. The two keyword arguments are optional: they are a
 maximum size for the result and a flag determining whether empty fields should be kept in
 the result.
@@ -285,12 +284,22 @@ julia> split(a,".")
  "rch"
 ```
 """
-split(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _split(str, splitter, limit, keep, SubString{T}[])
+function split end
+
+split(str::T, splitter;
+      limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+    _split(str, splitter, limit, keep, T <: SubString ? T[] : SubString{T}[])
+split(str::T, splitter::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}};
+      limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+    _split(str, occursin(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+split(str::T, splitter::Char;
+      limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+    _split(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+
 function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
-    r = search(str,splitter,i)
+    r = findfirst(splitter,str)
     if r != 0:-1
         j, k = first(r), nextind(str,last(r))
         while 0 < j <= n && length(strs) != limit-1
@@ -301,7 +310,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
                 i = k
             end
             (k <= j) && (k = nextind(str,j))
-            r = search(str,splitter,k)
+            r = findnext(splitter,str,k)
             r == 0:-1 && break
             j, k = first(r), nextind(str,last(r))
         end
@@ -314,9 +323,6 @@ end
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::AbstractString) = split(str, _default_delims; limit=0, keep=false)
-
-rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:SubString} =
-    _rsplit(str, splitter, limit, keep, T[])
 
 """
     rsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
@@ -346,12 +352,21 @@ julia> rsplit(a,".";limit=2)
  "h"
 ```
 """
+function rsplit end
+
 rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _rsplit(str, splitter, limit, keep, SubString{T}[])
+    _rsplit(str, splitter, limit, keep, T <: SubString ? T[] : SubString{T}[])
+rsplit(str::T, splitter::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}};
+       limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+  _rsplit(str, occursin(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+rsplit(str::T, splitter::Char;
+       limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+  _rsplit(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+
 function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
-    r = rsearch(str,splitter)
+    r = findlast(splitter, str)
     j = first(r)-1
     k = last(r)
     while((0 <= j < n) && (length(strs) != limit-1))
@@ -360,7 +375,7 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool
             n = j
         end
         (k <= j) && (j = prevind(str,j))
-        r = rsearch(str,splitter,j)
+        r = findprev(splitter,str,j)
         j = first(r)-1
         k = last(r)
     end
@@ -373,6 +388,11 @@ _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
+replace(str::String, pat_repl::Pair{Char}; count::Integer=typemax(Int)) =
+    replace(str, equalto(first(pat_repl)) => last(pat_repl); count=count)
+replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}};
+        count::Integer=typemax(Int)) =
+    replace(str, occursin(first(pat_repl)) => last(pat_repl), count)
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = pat_repl
     count == 0 && return str
@@ -380,7 +400,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     n = 1
     e = endof(str)
     i = a = start(str)
-    r = search(str,pattern,i)
+    r = findnext(pattern,str,i)
     j, k = first(r), last(r)
     out = IOBuffer(StringVector(floor(Int, 1.2sizeof(str))), true, true)
     out.size = 0
@@ -397,7 +417,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
         else
             i = k = nextind(str, k)
         end
-        r = search(str,pattern,k)
+        r = findnext(pattern,str,k)
         r == 0:-1 || n == count && break
         j, k = first(r), last(r)
         n += 1
@@ -411,8 +431,8 @@ end
 
 Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
 If `count` is provided, replace at most `count` occurrences.
-As with [`search`](@ref), `pat` may be a
-single character, a vector or a set of characters, a string, or a regular expression. If `r`
+`pat` may be a single character, a vector or a set of characters, a string,
+or a regular expression. If `r`
 is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.
@@ -475,24 +495,29 @@ julia> hex2bytes(a)
 """
 function hex2bytes end
 
-hex2bytes(s::AbstractString) = hex2bytes(Vector{UInt8}(String(s)))
-hex2bytes(s::AbstractVector{UInt8}) = hex2bytes!(Vector{UInt8}(uninitialized, length(s) >> 1), s)
+hex2bytes(s::AbstractString) = hex2bytes(String(s))
+hex2bytes(s::Union{String,AbstractVector{UInt8}}) = hex2bytes!(Vector{UInt8}(uninitialized, length(s) >> 1), s)
+
+_firstbyteidx(s::String) = 1
+_firstbyteidx(s::AbstractVector{UInt8}) = first(eachindex(s))
+_lastbyteidx(s::String) = sizeof(s)
+_lastbyteidx(s::AbstractVector{UInt8}) = endof(s)
 
 """
-    hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
+    hex2bytes!(d::AbstractVector{UInt8}, s::Union{String,AbstractVector{UInt8}})
 
 Convert an array `s` of bytes representing a hexadecimal string to its binary
 representation, similar to [`hex2bytes`](@ref) except that the output is written in-place
 in `d`.   The length of `s` must be exactly twice the length of `d`.
 """
-function hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
-    if 2length(d) != length(s)
-        isodd(length(s)) && throw(ArgumentError("input hex array must have even length"))
+function hex2bytes!(d::AbstractVector{UInt8}, s::Union{String,AbstractVector{UInt8}})
+    if 2length(d) != sizeof(s)
+        isodd(sizeof(s)) && throw(ArgumentError("input hex array must have even length"))
         throw(ArgumentError("output array must be half length of input array"))
     end
     j = first(eachindex(d)) - 1
-    for i = first(eachindex(s)):2:endof(s)
-        @inbounds d[j += 1] = number_from_hex(s[i]) << 4 + number_from_hex(s[i+1])
+    for i = _firstbyteidx(s):2:_lastbyteidx(s)
+        @inbounds d[j += 1] = number_from_hex(_nthbyte(s,i)) << 4 + number_from_hex(_nthbyte(s,i+1))
     end
     return d
 end

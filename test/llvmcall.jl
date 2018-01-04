@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.llvmcall
+using Base: llvmcall
 
 #function add1234(x::Tuple{Int32,Int32,Int32,Int32})
 #    llvmcall("""%3 = add <4 x i32> %1, %0
@@ -48,7 +48,7 @@ end
 
 # Test whether llvmcall escapes the function name correctly
 baremodule PlusTest
-    using Base.llvmcall
+    using Base: llvmcall
     using Test
     using Base
 

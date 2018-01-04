@@ -125,8 +125,7 @@ function choosetests(choices = [])
                    "linalg/diagonal", "linalg/pinv", "linalg/givens",
                    "linalg/cholesky", "linalg/lu", "linalg/symmetric",
                    "linalg/generic", "linalg/uniformscaling", "linalg/lq",
-                   "linalg/hessenberg", "linalg/rowvector", "linalg/conjarray",
-                   "linalg/blas", "linalg/adjtrans"]
+                   "linalg/hessenberg", "linalg/blas", "linalg/adjtrans"]
 
     if "linalg" in skip_tests
         filter!(x -> (x != "linalg" && !(x in linalgtests)), tests)
@@ -151,7 +150,7 @@ function choosetests(choices = [])
     end
 
     if !net_on
-        filter!(x -> !(x in net_required_for), tests)
+        filter!(!occursin(net_required_for), tests)
     end
 
     if "stdlib" in skip_tests
@@ -179,7 +178,7 @@ function choosetests(choices = [])
     # The shift and invert solvers need SuiteSparse for sparse input
     Base.USE_GPL_LIBS || filter!(x->x != "IterativeEigensolvers", STDLIBS)
 
-    filter!(x -> !(x in skip_tests), tests)
+    filter!(!occursin(skip_tests), tests)
 
     tests, net_on, exit_on_error, seed
 end

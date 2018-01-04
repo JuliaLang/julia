@@ -114,18 +114,18 @@ error_out3 = String(take!(buf))
 
 c7line = @__LINE__() + 1
 method_c7(a, b; kargs...) = a
-Base.show_method_candidates(buf, MethodError(method_c7, (1, 1)), (x = 1, y = 2))
+Base.show_method_candidates(buf, MethodError(method_c7, (1, 1)), pairs((x = 1, y = 2)))
 @test String(take!(buf)) == "\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line"
 c8line = @__LINE__() + 1
 method_c8(a, b; y=1, w=1) = a
-Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), (x = 1, y = 2, z = 1, w = 1))
+Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), pairs((x = 1, y = 2, z = 1, w = 1)))
 @test String(take!(buf)) == "\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line got unsupported keyword arguments \"x\", \"z\""
 
 ac15639line = @__LINE__
 addConstraint_15639(c::Int32) = c
 addConstraint_15639(c::Int64; uncset=nothing) = addConstraint_15639(Int32(c), uncset=uncset)
 
-Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), (uncset = nothing,))
+Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), pairs((uncset = nothing,)))
 @test String(take!(buf)) == "\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1) got unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)$cfile$(ac15639line + 2)"
 
 macro except_str(expr, err_type)
@@ -310,7 +310,7 @@ let err_str,
     @test contains(err_str, "MethodError: objects of type Array{Float64,1} are not callable")
 end
 @test stringmime("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 0 methods)"
-@test ismatch(r"^@doc \(macro with \d+ method[s]?\)$", stringmime("text/plain", getfield(Base, Symbol("@doc"))))
+@test contains(stringmime("text/plain", getfield(Base, Symbol("@doc"))), r"^@doc \(macro with \d+ method[s]?\)$")
 
 method_defs_lineno = @__LINE__() + 1
 Base.Symbol() = throw(ErrorException("1"))
@@ -499,7 +499,7 @@ foo_9965(x::Int) = 2x
     end
     @test typeof(ex) == MethodError
     io = IOBuffer()
-    Base.show_method_candidates(io, ex, (w = true,))
+    Base.show_method_candidates(io, ex, pairs((w = true,)))
     @test contains(String(take!(io)), "got unsupported keyword argument \"w\"")
 end
 

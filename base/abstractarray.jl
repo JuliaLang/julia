@@ -587,6 +587,7 @@ empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
 
 # like empty, but should return a mutable collection, a Vector by default
 emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
+emptymutable(itr, ::Type{U}) where {U} = Vector{U}()
 
 ## from general iterable to any array
 
@@ -1046,7 +1047,7 @@ get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] :
 
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # 1d is not linear indexing
-    ind = findin(I, indices1(A))
+    ind = find(occursin(indices1(A)), I)
     X[ind] = A[I[ind]]
     Xind = indices1(X)
     X[first(Xind):first(ind)-1] = default
@@ -1055,7 +1056,7 @@ function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,Ab
 end
 function get!(X::AbstractArray{T}, A::AbstractArray, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # Linear indexing
-    ind = findin(I, 1:length(A))
+    ind = find(occursin(1:length(A)), I)
     X[ind] = A[I[ind]]
     X[1:first(ind)-1] = default
     X[last(ind)+1:length(X)] = default
@@ -1228,7 +1229,7 @@ _cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
     "mismatch in dimension $d (expected $a got $b)")))
 
 dims2cat(::Val{n}) where {n} = ntuple(i -> (i == n), Val(n))
-dims2cat(dims) = ntuple(i -> (i in dims), maximum(dims))
+dims2cat(dims) = ntuple(occursin(dims), maximum(dims))
 
 cat(dims, X...) = cat_t(dims, promote_eltypeof(X...), X...)
 
@@ -1547,13 +1548,16 @@ function isequal(A::AbstractArray, B::AbstractArray)
     return true
 end
 
-function lexcmp(A::AbstractArray, B::AbstractArray)
+function cmp(A::AbstractArray, B::AbstractArray)
     for (a, b) in zip(A, B)
-        res = lexcmp(a, b)
-        res == 0 || return res
+        if !isequal(a, b)
+            return isless(a, b) ? -1 : 1
+        end
     end
     return cmp(length(A), length(B))
 end
+
+isless(A::AbstractArray, B::AbstractArray) = cmp(A, B) < 0
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)
@@ -1986,6 +1990,7 @@ function hash(a::AbstractArray{T}, h::UInt) where T
                 # If true, wraparound overflow happened
                 sign(step) == cmp(x2, x1) || break
             else
+                applicable(-, x2, x1) || break
                 # widen() is here to ensure no overflow can happen
                 step = widen(x2) - widen(x1)
             end

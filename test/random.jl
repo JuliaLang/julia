@@ -3,7 +3,8 @@
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using Main.TestHelpers.OAs
 
-using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt, dSFMT, MT_CACHE_F, MT_CACHE_I
+using Base.Random.dSFMT
+using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt, MT_CACHE_F, MT_CACHE_I
 
 @testset "Issue #6573" begin
     srand(0)
@@ -278,10 +279,10 @@ let mt = MersenneTwister(0)
         B = Vector{T}(uninitialized, 31)
         rand!(mt, A)
         rand!(mt, B)
-        @test A[end] == Any[21, 0x4e, -3158, 0x0ded, 2132370312, 0x5e76d222, 1701112237820550475, 0x552ac662d46426bf,
-                            -48946429529471164341432530784191877404, Float16(0.99805), 0.845204f0][i]
-        @test B[end] == Any[94, 0x14, 22684, 0x0278, -862240437, 0xc425026c, -7329373301769527751, 0x8a40806d8107ce23,
-                            37650272825719887492093881479739648820, Float16(0.14648), 0.5025569f0][i]
+        @test A[end] == Any[21, 0x7b, 17385, 0x3086, -1574090021, 0xadcb4460, 6797283068698303107, 0xc8e6453e139271f3,
+                            69855512850528774484795047199183096941, Float16(0.16895), 0.21086597f0][i]
+        @test B[end] == Any[49, 0x65, -3725, 0x719d, 814246081, 0xdf61843a, 2120308604158549401, 0xcb28c236e9c0f608,
+                            61881313582466480231846019869039259750, Float16(0.38672), 0.20027375f0][i]
     end
 
     srand(mt, 0)
@@ -289,8 +290,8 @@ let mt = MersenneTwister(0)
     @test rand!(mt, AF64)[end] == 0.957735065345398
     @test rand!(mt, AF64)[end] == 0.6492481059865669
     resize!(AF64, 2*length(mt.vals))
-    @test invoke(rand!, Tuple{MersenneTwister,AbstractArray{Float64},Base.Random.SamplerTrivial{Base.Random.CloseOpen_64}},
-                 mt, AF64, Base.Random.SamplerTrivial(Base.Random.CloseOpen()))[end]  == 0.1142787906708973
+    @test invoke(rand!, Tuple{MersenneTwister,AbstractArray{Float64},Base.Random.SamplerTrivial{Base.Random.CloseOpen01_64}},
+                 mt, AF64, Base.Random.SamplerTrivial(Base.Random.CloseOpen01()))[end]  == 0.1142787906708973
 end
 
 # Issue #9037
@@ -612,7 +613,7 @@ let b = ['0':'9';'A':'Z';'a':'z']
         @test length(randstring(rng...)) == 8
         @test length(randstring(rng..., 20)) == 20
         @test issubset(randstring(rng...), b)
-        for c = ['a':'z', "qwèrtï", Set(Vector{UInt8}("gcat"))],
+        for c = ['a':'z', "qwèrtï", Set(codeunits("gcat"))],
                 len = [8, 20]
             s = len == 8 ? randstring(rng..., c) : randstring(rng..., c, len)
             @test length(s) == len

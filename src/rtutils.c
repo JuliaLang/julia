@@ -1029,6 +1029,63 @@ JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
     // put a breakpoint in your debugger here
 }
 
+// logging tools --------------------------------------------------------------
+
+void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
+            jl_value_t *file, jl_value_t *line, jl_value_t *kwargs,
+            jl_value_t *msg)
+{
+    static jl_value_t *logmsg_func = NULL;
+    if (!logmsg_func && jl_base_module) {
+        jl_value_t *corelogging = jl_get_global(jl_base_module, jl_symbol("CoreLogging"));
+        if (corelogging && jl_is_module(corelogging)) {
+            logmsg_func = jl_get_global((jl_module_t*)corelogging, jl_symbol("logmsg_shim"));
+        }
+    }
+    if (!logmsg_func) {
+        ios_t str_;
+        ios_mem(&str_, 300);
+        uv_stream_t* str = (uv_stream_t*)&str_;
+        if (jl_is_string(msg)) {
+            jl_uv_puts(str, jl_string_data(msg), jl_string_len(msg));
+        }
+        else if (jl_is_symbol(msg)) {
+            jl_printf(str, "%s", jl_symbol_name((jl_sym_t*)msg));
+        }
+        jl_printf(str, "\n@ ");
+        if (jl_is_string(file)) {
+            jl_uv_puts(str, jl_string_data(file), jl_string_len(file));
+        }
+        else if (jl_is_symbol(file)) {
+            jl_printf(str, "%s", jl_symbol_name((jl_sym_t*)file));
+        }
+        jl_printf(str, ":");
+        jl_static_show(str, line);
+        jl_safe_printf("%s [Fallback logging]: %.*s\n",
+                       level < JL_LOGLEVEL_INFO ? "Debug" :
+                       level < JL_LOGLEVEL_WARN ? "Info" :
+                       level < JL_LOGLEVEL_ERROR ? "Warning" : "Error",
+                       (int)str_.size, str_.buf);
+        ios_close(&str_);
+        return;
+    }
+    jl_value_t **args;
+    const int nargs = 9;
+    JL_GC_PUSHARGS(args, nargs);
+    args[0] = logmsg_func;
+    args[1] = jl_box_long(level);
+    args[2] = msg;
+    // Would some of the jl_nothing here be better as `missing` instead?
+    args[3] = module ? module  : jl_nothing;
+    args[4] = group  ? group   : jl_nothing;
+    args[5] = id     ? id      : jl_nothing;
+    args[6] = file   ? file    : jl_nothing;
+    args[7] = line   ? line    : jl_nothing;
+    args[8] = kwargs ? kwargs  : (jl_value_t*)jl_alloc_vec_any(0);
+    jl_apply(args, nargs);
+    JL_GC_POP();
+}
+
 void jl_depwarn(const char *msg, jl_value_t *sym)
 {
     static jl_value_t *depwarn_func = NULL;

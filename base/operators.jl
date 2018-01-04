@@ -121,9 +121,9 @@ values such as `NaN`.
 """
 function isless end
 
-isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
-isless(x::Real,          y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
-isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
+isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 
 
 function ==(T::Type, S::Type)
@@ -300,7 +300,6 @@ const ≥ = >=
 # this definition allows Number types to implement < instead of isless,
 # which is more idiomatic:
 isless(x::Real, y::Real) = x<y
-lexcmp(x::Real, y::Real) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 
 """
     ifelse(condition::Bool, x, y)
@@ -342,35 +341,12 @@ Stacktrace:
 cmp(x, y) = isless(x, y) ? -1 : ifelse(isless(y, x), 1, 0)
 
 """
-    lexcmp(x, y)
+    cmp(<, x, y)
 
-Compare `x` and `y` lexicographically and return -1, 0, or 1 depending on whether `x` is
-less than, equal to, or greater than `y`, respectively. This function should be defined for
-lexicographically comparable types, and `lexless` will call `lexcmp` by default.
-
-# Examples
-```jldoctest
-julia> lexcmp("abc", "abd")
--1
-
-julia> lexcmp("abc", "abc")
-0
-```
+Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
+respectively. The first argument specifies a less-than comparison function to use.
 """
-lexcmp(x, y) = cmp(x, y)
-
-"""
-    lexless(x, y)
-
-Determine whether `x` is lexicographically less than `y`.
-
-# Examples
-```jldoctest
-julia> lexless("abc", "abd")
-true
-```
-"""
-lexless(x, y) = lexcmp(x,y) < 0
+cmp(<, x, y) = (x < y) ? -1 : ifelse(y < x, 1, 0)
 
 # cmp returns -1, 0, +1 indicating ordering
 cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0))
@@ -787,6 +763,7 @@ julia> widen(1.5f0)
 ```
 """
 widen(x::T) where {T} = convert(widen(T), x)
+widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
 
 # function pipelining
 
@@ -866,3 +843,22 @@ The returned function is of type `Base.EqualTo`. This allows dispatching to
 specialized methods by using e.g. `f::Base.EqualTo` in a method signature.
 """
 const equalto = EqualTo
+
+struct OccursIn{T} <: Function
+    x::T
+
+    OccursIn(x::T) where {T} = new{T}(x)
+end
+
+(f::OccursIn)(y) = y in f.x
+
+"""
+    occursin(x)
+
+Create a function that checks whether its argument is [`in`](@ref) `x`; i.e. returns
+`y -> y in x`.
+
+The returned function is of type `Base.OccursIn`. This allows dispatching to
+specialized methods by using e.g. `f::Base.OccursIn` in a method signature.
+"""
+const occursin = OccursIn
