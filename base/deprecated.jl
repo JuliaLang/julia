@@ -828,18 +828,18 @@ _promote_eltype_op(op, A, B, C, D...) = (@_inline_meta; _promote_eltype_op(op, e
 end
 
 
-function unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer, own::Bool=false)
+function unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer; own::Bool = false)
     Base.depwarn("unsafe_wrap(String, ...) is deprecated; use `unsafe_string` instead.", :unsafe_wrap)
     #ccall(:jl_array_to_string, Ref{String}, (Any,),
     #      ccall(:jl_ptr_to_array_1d, Vector{UInt8}, (Any, Ptr{UInt8}, Csize_t, Cint),
     #            Vector{UInt8}, p, len, own))
     unsafe_string(p, len)
 end
-unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, own::Bool=false) =
-    unsafe_wrap(String, p, ccall(:strlen, Csize_t, (Ptr{UInt8},), p), own)
-unsafe_wrap(::Type{String}, p::Cstring, own::Bool=false) = unsafe_wrap(String, convert(Ptr{UInt8}, p), own)
-unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
-    unsafe_wrap(String, convert(Ptr{UInt8}, p), len, own)
+unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}; own::Bool = false) =
+    unsafe_wrap(String, p, ccall(:strlen, Csize_t, (Ptr{UInt8},), p), own = own)
+unsafe_wrap(::Type{String}, p::Cstring; own::Bool = false) = unsafe_wrap(String, convert(Ptr{UInt8}, p), own = own)
+unsafe_wrap(::Type{String}, p::Cstring, len::Integer; own::Bool = false) =
+    unsafe_wrap(String, convert(Ptr{UInt8}, p), len, own = own)
 
 # #19660
 @deprecate finalize(sa::LibGit2.StrArrayStruct) LibGit2.free(sa)
@@ -3830,6 +3830,7 @@ end
 @deprecate chown(path, owner, mode) chown(path, owner, mode = mode)
 @deprecate countlines(x, eol) countlines(x, eol = eol)
 @deprecate PipeBuffer(data, maxsize) PipeBuffer(data, maxsize = maxsize)
+@deprecate unsafe_wrap(T, pointer, dims, own) unsafe_wrap(T, pointer, dims, own = own)
 
 # END 0.7 deprecations
 

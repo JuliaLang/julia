@@ -4138,7 +4138,7 @@ ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
 @test check_nul(d)
 f = unsafe_wrap(Array, pointer(d), length(d))
 @test !check_nul(f)
-f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, true)
+f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, own = true)
 @test !check_nul(f)
 end
 
