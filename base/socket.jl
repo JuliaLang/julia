@@ -174,7 +174,7 @@ function parse(::Type{IPv4}, str::AbstractString)
         if length(f) > 1 && f[1] == '0'
             throw(ArgumentError(ipv4_leading_zero_error))
         else
-            r = parse(Int,f,10)
+            r = parse(Int, f, base = 10)
         end
         if i != length(fields)
             if r < 0 || r > 255
@@ -207,7 +207,7 @@ function parseipv6fields(fields,num_fields)
             cf -= 1
             continue
         end
-        ret |= UInt128(parse(Int,f,16))<<(cf*16)
+        ret |= UInt128(parse(Int, f, base = 16))<<(cf*16)
         cf -= 1
     end
     ret
