@@ -590,7 +590,7 @@ end
 
 
 # PR #25321
-# checks issue in type inference is resolved
+# checks that issue in type inference is resolved
 A = rand(5,5,5,5)
 V = view(A, 1:1 ,:, 1:3, :)
 @test @inferred(strides(V)) == (1, 5, 25, 125)
