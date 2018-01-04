@@ -2468,16 +2468,16 @@ ndigf(n) = Float64(log(Float32(n)))
     let a = zeros(Int, 3)
         digits!(a, 50)
         @test a == [0, 5, 0]
-        digits!(a, 9, 2)
+        digits!(a, 9, base = 2)
         @test a == [1, 0, 0]
-        digits!(a, 7, 2)
+        digits!(a, 7, base = 2)
         @test a == [1, 1, 1]
     end
 end
 # Fill a pre allocated 2x4 matrix
 let a = zeros(Int,(2,4))
     for i in 0:3
-        digits!(view(a,:,i+1),i,2)
+        digits!(view(a,:,i+1),i, base = 2)
     end
     @test a == [0 1 0 1;
                 0 0 1 1]
