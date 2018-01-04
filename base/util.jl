@@ -328,18 +328,17 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
         else
             lines = split(str, '\n')
             first = true
-            iob = IOBuffer()
             for line in lines
-                first || print(iob, '\n')
+                first || print(buf, '\n')
                 first = false
                 isempty(line) && continue
-                iscolor && bold && print(iob, text_colors[:bold])
-                iscolor && print(iob, get(text_colors, color, color_normal))
-                print(iob, line)
-                iscolor && color != :nothing && print(iob, get(disable_text_style, color, text_colors[:default]))
-                iscolor && (bold || color == :bold) && print(iob, disable_text_style[:bold])
+                bold && color != :bold && print(buf, text_colors[:bold])
+                print(buf, get(text_colors, color, color_normal))
+                print(buf, line)
+                color != :nothing && print(buf, get(disable_text_style, color, text_colors[:default]))
+                bold && color != :bold && print(buf, disable_text_style[:bold])
             end
-            print(io, String(take!(iob)))
+            print(io, String(take!(buf)))
         end
     end
 end
