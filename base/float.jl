@@ -460,22 +460,6 @@ for op in (:<, :<=, :isless)
     @eval ($op)(a::Float16, b::Float16) = ($op)(Float32(a), Float32(b))
 end
 
-function cmp(x::AbstractFloat, y::AbstractFloat)
-    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
-    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
-    ifelse(x<y, -1, ifelse(x>y, 1, 0))
-end
-
-function cmp(x::Real, y::AbstractFloat)
-    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
-    ifelse(x<y, -1, ifelse(x>y, 1, 0))
-end
-
-function cmp(x::AbstractFloat, y::Real)
-    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
-    ifelse(x<y, -1, ifelse(x>y, 1, 0))
-end
-
 # Exact Float (Tf) vs Integer (Ti) comparisons
 # Assumes:
 # - typemax(Ti) == 2^n-1
