@@ -3829,6 +3829,7 @@ end
 @deprecate mkpath(path, mode) mkpath(path, mode = mode)
 @deprecate chown(path, owner, mode) chown(path, owner, mode = mode)
 @deprecate countlines(x, eol) countlines(x, eol = eol)
+@deprecate PipeBuffer(data, maxsize) PipeBuffer(data, maxsize = maxsize)
 
 # END 0.7 deprecations
 
