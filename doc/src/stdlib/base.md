@@ -303,7 +303,7 @@ Base.ExponentialBackOff
 ## Events
 
 ```@docs
-Base.Timer(::Function, ::Real, ::Real)
+Base.Timer(::Function, ::Real)
 Base.Timer
 Base.AsyncCondition
 Base.AsyncCondition(::Function)

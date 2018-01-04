@@ -341,7 +341,7 @@ end
 ## timer-based notifications
 
 """
-    Timer(delay, repeat=0)
+    Timer(delay; repeat = 0)
 
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object).
 
@@ -355,7 +355,7 @@ mutable struct Timer
     cond::Condition
     isopen::Bool
 
-    function Timer(timeout::Real, repeat::Real=0.0)
+    function Timer(timeout::Real; repeat::Real = 0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
         repeat ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $repeat seconds"))
 
@@ -444,7 +444,7 @@ end
 
 # timer with repeated callback
 """
-    Timer(callback::Function, delay, repeat=0)
+    Timer(callback::Function, delay; repeat = 0)
 
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) and
 calls the function `callback`.
@@ -463,7 +463,7 @@ Here the first number is printed after a delay of two seconds, then the followin
 julia> begin
            i = 0
            cb(timer) = (global i += 1; println(i))
-           t = Timer(cb, 2, 0.2)
+           t = Timer(cb, 2, repeat = 0.2)
            wait(t)
            sleep(0.5)
            close(t)
@@ -473,8 +473,8 @@ julia> begin
 3
 ```
 """
-function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
-    t = Timer(timeout, repeat)
+function Timer(cb::Function, timeout::Real; repeat::Real = 0.0)
+    t = Timer(timeout, repeat = repeat)
     waiter = Task(function()
         while isopen(t)
             success = try

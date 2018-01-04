@@ -3807,6 +3807,8 @@ end
 end
 
 @deprecate method_exists(f, t, world) method_exists(f, t, world = world)
+@deprecate Timer(timeout, repeat) Timer(timeout, repeat = repeat)
+@deprecate Timer(callback, delay, repeat) Time(callback, delay, repeat = repeat)
 
 # END 0.7 deprecations
 
