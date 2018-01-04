@@ -77,7 +77,6 @@ Fully implemented by:
 Base.in
 Base.eltype
 Base.indexin
-Base.findin
 Base.unique
 Base.unique!
 Base.allunique

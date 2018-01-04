@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+const Chars = Union{Char,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
+
 # starts with and ends with predicates
 
 """
@@ -258,18 +260,15 @@ function rpad(
     r == 0 ? string(s, p^q) : string(s, p^q, first(p, r))
 end
 
-# splitter can be a Char, Vector{Char}, AbstractString, Regex, ...
-# any splitter that provides search(s::AbstractString, splitter)
-split(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:SubString} =
-    _split(str, splitter, limit, keep, T[])
-
 """
     split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
 
 Return an array of substrings by splitting the given string on occurrences of the given
-character delimiters, which may be specified in any of the formats allowed by `search`'s
-second argument (i.e. a single character, collection of characters, string, or regular
-expression). If `chars` is omitted, it defaults to the set of all space characters, and
+character delimiters, which may be specified in any of the formats allowed by
+[`findnext`](@ref)'s first argument (i.e. as a string, regular expression or a function),
+or as a single character or collection of characters.
+
+If `chars` is omitted, it defaults to the set of all space characters, and
 `keep` is taken to be `false`. The two keyword arguments are optional: they are a
 maximum size for the result and a flag determining whether empty fields should be kept in
 the result.
@@ -285,12 +284,22 @@ julia> split(a,".")
  "rch"
 ```
 """
-split(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _split(str, splitter, limit, keep, SubString{T}[])
+function split end
+
+split(str::T, splitter;
+      limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+    _split(str, splitter, limit, keep, T <: SubString ? T[] : SubString{T}[])
+split(str::T, splitter::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}};
+      limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+    _split(str, occursin(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+split(str::T, splitter::Char;
+      limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+    _split(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+
 function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
-    r = search(str,splitter,i)
+    r = findfirst(splitter,str)
     if r != 0:-1
         j, k = first(r), nextind(str,last(r))
         while 0 < j <= n && length(strs) != limit-1
@@ -301,7 +310,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
                 i = k
             end
             (k <= j) && (k = nextind(str,j))
-            r = search(str,splitter,k)
+            r = findnext(splitter,str,k)
             r == 0:-1 && break
             j, k = first(r), nextind(str,last(r))
         end
@@ -314,9 +323,6 @@ end
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::AbstractString) = split(str, _default_delims; limit=0, keep=false)
-
-rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:SubString} =
-    _rsplit(str, splitter, limit, keep, T[])
 
 """
     rsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
@@ -346,12 +352,21 @@ julia> rsplit(a,".";limit=2)
  "h"
 ```
 """
+function rsplit end
+
 rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _rsplit(str, splitter, limit, keep, SubString{T}[])
+    _rsplit(str, splitter, limit, keep, T <: SubString ? T[] : SubString{T}[])
+rsplit(str::T, splitter::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}};
+       limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+  _rsplit(str, occursin(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+rsplit(str::T, splitter::Char;
+       limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+  _rsplit(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+
 function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
-    r = rsearch(str,splitter)
+    r = findlast(splitter, str)
     j = first(r)-1
     k = last(r)
     while((0 <= j < n) && (length(strs) != limit-1))
@@ -360,7 +375,7 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool
             n = j
         end
         (k <= j) && (j = prevind(str,j))
-        r = rsearch(str,splitter,j)
+        r = findprev(splitter,str,j)
         j = first(r)-1
         k = last(r)
     end
@@ -372,6 +387,7 @@ end
 _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
+
 
 # search the first of a list of patterns.
 # if several match at the same start position prefer the longer one
@@ -438,6 +454,12 @@ end
 
 # the case of a single pair has twice better performance
 
+replace(str::String, pat_repl::Pair{Char}; count::Integer=typemax(Int)) =
+    replace(str, equalto(first(pat_repl)) => last(pat_repl); count=count)
+replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}};
+        count::Integer=typemax(Int)) =
+    replace(str, occursin(first(pat_repl)) => last(pat_repl), count)
+
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = pat_repl
     count == 0 && return str
@@ -445,7 +467,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     n = 1
     e = endof(str)
     i = a = start(str)
-    r = search(str,pattern,i)
+    r = findnext(pattern,str,i)
     j, k = first(r), last(r)
     out = IOBuffer(StringVector(floor(Int, 1.2sizeof(str))), true, true)
     out.size = 0
@@ -462,7 +484,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
         else
             i = k = nextind(str, k)
         end
-        r = search(str,pattern,k)
+        r = findnext(pattern,str,k)
         r == 0:-1 || n == count && break
         j, k = first(r), last(r)
         n += 1
@@ -477,8 +499,8 @@ end
 Search for any of the given patterns `pat` in `s`, and replace each occurrence with
 corresponding `r`.
 If `count` is provided, replace at most `count` occurrences.
-As with [`search`](@ref), each `pat` may be a
-single character, a vector or a set of characters, a string, or a regular expression. If `r`
+Each `pat` may be a single character, a vector or a set of characters, a string,
+or a regular expression. If `r`
 is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.

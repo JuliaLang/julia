@@ -533,7 +533,7 @@ function getindex(v::SimpleVector, i::Int)
         throw(BoundsError(v,i))
     end
     t = @_gc_preserve_begin v
-    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},pointer_from_objref(v)) + i*sizeof(Ptr))
     x == C_NULL && throw(UndefRefError())
     o = unsafe_pointer_to_objref(x)
     @_gc_preserve_end t
@@ -542,7 +542,7 @@ end
 
 function length(v::SimpleVector)
     t = @_gc_preserve_begin v
-    l = unsafe_load(convert(Ptr{Int},data_pointer_from_objref(v)))
+    l = unsafe_load(convert(Ptr{Int},pointer_from_objref(v)))
     @_gc_preserve_end t
     return l
 end
@@ -598,7 +598,7 @@ function isassigned end
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
     t = @_gc_preserve_begin v
-    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},pointer_from_objref(v)) + i*sizeof(Ptr))
     @_gc_preserve_end t
     return x != C_NULL
 end

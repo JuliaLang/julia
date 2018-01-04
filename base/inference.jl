@@ -1331,6 +1331,7 @@ const DataType_name_fieldindex = fieldindex(DataType, :name)
 const DataType_parameters_fieldindex = fieldindex(DataType, :parameters)
 const DataType_types_fieldindex = fieldindex(DataType, :types)
 const DataType_super_fieldindex = fieldindex(DataType, :super)
+const DataType_mutable_fieldindex = fieldindex(DataType, :mutable)
 
 const TypeName_name_fieldindex = fieldindex(TypeName, :name)
 const TypeName_module_fieldindex = fieldindex(TypeName, :module)
@@ -1340,7 +1341,8 @@ function const_datatype_getfield_tfunc(sv, fld)
     if (fld == DataType_name_fieldindex ||
             fld == DataType_parameters_fieldindex ||
             fld == DataType_types_fieldindex ||
-            fld == DataType_super_fieldindex)
+            fld == DataType_super_fieldindex ||
+            fld == DataType_mutable_fieldindex)
         return abstract_eval_constant(getfield(sv, fld))
     end
     return nothing
@@ -2713,7 +2715,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
             spsig = sv.linfo.def.sig
             if isa(spsig, UnionAll)
                 if !isempty(sv.linfo.sparam_vals)
-                    env = data_pointer_from_objref(sv.linfo.sparam_vals) + sizeof(Ptr{Cvoid})
+                    env = pointer_from_objref(sv.linfo.sparam_vals) + sizeof(Ptr{Cvoid})
                     rt = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, env)
                 else
                     rt = rewrap_unionall(e.args[2], spsig)

@@ -127,9 +127,7 @@ repl_search(s) = repl_search(STDOUT, s)
 
 function repl_corrections(io::IO, s)
     print(io, "Couldn't find ")
-    Markdown.with_output_format(:cyan, io) do io
-        println(io, s)
-    end
+    print_with_color(:cyan, io, s, '\n')
     print_correction(io, s)
 end
 repl_corrections(s) = repl_corrections(STDOUT, s)
@@ -148,21 +146,15 @@ function repl_latex(io::IO, s::String)
     latex = symbol_latex(s)
     if !isempty(latex)
         print(io, "\"")
-        Markdown.with_output_format(:cyan, io) do io
-            print(io, s)
-        end
+        print_with_color(:cyan, io, s)
         print(io, "\" can be typed by ")
-        Markdown.with_output_format(:cyan, io) do io
-            print(io, latex, "<tab>")
-        end
+        print_with_color(:cyan, io, latex, "<tab>")
         println(io, '\n')
     elseif any(c -> haskey(symbols_latex, string(c)), s)
         print(io, "\"")
-        Markdown.with_output_format(:cyan, io) do io
-            print(io, s)
-        end
+        print_with_color(:cyan, io, s)
         print(io, "\" can be typed by ")
-        Markdown.with_output_format(:cyan, io) do io
+        with_output_color(:cyan, io) do io
             for c in s
                 cstr = string(c)
                 if haskey(symbols_latex, cstr)
@@ -299,13 +291,11 @@ end
 
 function printmatch(io::IO, word, match)
     is, _ = bestmatch(word, match)
-    Markdown.with_output_format(:fade, io) do io
-        for (i, char) = enumerate(match)
-            if i in is
-                Markdown.with_output_format(print, :bold, io, char)
-            else
-                print(io, char)
-            end
+    for (i, char) = enumerate(match)
+        if i in is
+            print_with_color(:bold, io, char)
+        else
+            print(io, char)
         end
     end
 end
@@ -359,7 +349,7 @@ const builtins = ["abstract type", "baremodule", "begin", "break",
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
-filtervalid(names) = filter(x->!ismatch(r"#", x), map(string, names))
+filtervalid(names) = filter(x->!contains(x, r"#"), map(string, names))
 
 accessible(mod::Module) =
     [filter!(s -> !Base.isdeprecated(mod, s), names(mod, true, true));
@@ -373,7 +363,7 @@ completions(name::Symbol) = completions(string(name))
 # Searching and apropos
 
 # Docsearch simply returns true or false if an object contains the given needle
-docsearch(haystack::AbstractString, needle) = !isempty(search(haystack, needle))
+docsearch(haystack::AbstractString, needle) = !isempty(findfirst(needle, haystack))
 docsearch(haystack::Symbol, needle) = docsearch(string(haystack), needle)
 docsearch(::Nothing, needle) = false
 function docsearch(haystack::Array, needle)

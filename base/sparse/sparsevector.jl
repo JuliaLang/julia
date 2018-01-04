@@ -705,6 +705,8 @@ function find(p::Function, x::SparseVector{<:Any,Ti}) where Ti
 
     return I
 end
+find(p::Base.OccursIn, x::SparseVector{<:Any,Ti}) where {Ti} =
+    invoke(find, Tuple{Base.OccursIn, AbstractArray}, p, x)
 
 function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(x)

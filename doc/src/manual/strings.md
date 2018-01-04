@@ -507,29 +507,30 @@ julia> "1 + 2 = 3" == "1 + 2 = $(1 + 2)"
 true
 ```
 
-You can search for the index of a particular character using the [`search`](@ref) function:
+You can search for the index of a particular character using the [`findfirst`](@ref) function:
 
 ```jldoctest
-julia> search("xylophone", 'x')
+julia> findfirst(equalto('x'), "xylophone")
 1
 
-julia> search("xylophone", 'p')
+julia> findfirst(equalto('p'), "xylophone")
 5
 
-julia> search("xylophone", 'z')
+julia> findfirst(equalto('z'), "xylophone")
 0
 ```
 
-You can start the search for a character at a given offset by providing a third argument:
+You can start the search for a character at a given offset by using [`findnext`](@ref)
+with a third argument:
 
 ```jldoctest
-julia> search("xylophone", 'o')
+julia> findnext(equalto('o'), "xylophone", 1)
 4
 
-julia> search("xylophone", 'o', 5)
+julia> findnext(equalto('o'), "xylophone", 5)
 7
 
-julia> search("xylophone", 'o', 8)
+julia> findnext(equalto('o'), "xylophone", 8)
 0
 ```
 
@@ -603,17 +604,17 @@ julia> typeof(ans)
 Regex
 ```
 
-To check if a regex matches a string, use [`ismatch`](@ref):
+To check if a regex matches a string, use [`contains`](@ref):
 
 ```jldoctest
-julia> ismatch(r"^\s*(?:#|$)", "not a comment")
+julia> contains("not a comment", r"^\s*(?:#|$)")
 false
 
-julia> ismatch(r"^\s*(?:#|$)", "# a comment")
+julia> contains("# a comment", r"^\s*(?:#|$)")
 true
 ```
 
-As one can see here, [`ismatch`](@ref) simply returns true or false, indicating whether the
+As one can see here, [`contains`](@ref) simply returns true or false, indicating whether the
 given regex matches the string or not. Commonly, however, one wants to know not just whether a
 string matched, but also *how* it matched. To capture this information about a match, use the
 [`match`](@ref) function instead:

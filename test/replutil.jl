@@ -310,7 +310,7 @@ let err_str,
     @test contains(err_str, "MethodError: objects of type Array{Float64,1} are not callable")
 end
 @test stringmime("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 0 methods)"
-@test ismatch(r"^@doc \(macro with \d+ method[s]?\)$", stringmime("text/plain", getfield(Base, Symbol("@doc"))))
+@test contains(stringmime("text/plain", getfield(Base, Symbol("@doc"))), r"^@doc \(macro with \d+ method[s]?\)$")
 
 method_defs_lineno = @__LINE__() + 1
 Base.Symbol() = throw(ErrorException("1"))

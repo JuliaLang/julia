@@ -408,7 +408,7 @@ let a = Expr(:quote,Expr(:$,:x8d003))
 end
 
 # issue #9865
-@test ismatch(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
+@test contains(replstr(Set(1:100)), r"^Set\(\[.+….+\]\)$")
 
 # issue #11413
 @test string(:(*{1, 2})) == "*{1, 2}"
@@ -752,7 +752,7 @@ let repr = sprint(dump, Int64)
 end
 let repr = sprint(dump, Any)
     @test length(repr) == 4
-    @test ismatch(r"^Any\n", repr)
+    @test contains(repr, r"^Any\n")
     @test endswith(repr, '\n')
 end
 let repr = sprint(dump, Integer)
@@ -767,7 +767,7 @@ let repr = sprint(dump, Core.svec())
 end
 let sv = Core.svec(:a, :b, :c)
     # unsafe replacement of :c with #undef to test handling of incomplete SimpleVectors
-    unsafe_store!(convert(Ptr{Ptr{Cvoid}}, Base.data_pointer_from_objref(sv)) + 3 * sizeof(Ptr), C_NULL)
+    unsafe_store!(convert(Ptr{Ptr{Cvoid}}, Base.pointer_from_objref(sv)) + 3 * sizeof(Ptr), C_NULL)
     repr = sprint(dump, sv)
     @test repr == "SimpleVector\n  1: Symbol a\n  2: Symbol b\n  3: #undef\n"
 end

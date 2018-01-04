@@ -432,7 +432,7 @@ let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
     function UUID(s::AbstractString)
         s = Base.Unicode.lowercase(s)
 
-        if !ismatch(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)
+        if !contains(s, r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
             throw(ArgumentError("Malformed UUID string"))
         end
 
