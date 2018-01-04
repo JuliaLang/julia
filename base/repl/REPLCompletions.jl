@@ -224,12 +224,13 @@ end
 function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     braces = 0
     r = reverse(s)
-    i = start(r)
+    y = iterate(r)
     in_single_quotes = false
     in_double_quotes = false
     in_back_ticks = false
-    while !done(r, i)
-        c, i = next(r, i)
+    while y !== nothing
+        c, i = y
+        y = iterate(r, i)
         if !in_single_quotes && !in_double_quotes && !in_back_ticks
             if c == c_start
                 braces += 1
@@ -244,13 +245,13 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
             end
         else
             if !in_back_ticks && !in_double_quotes &&
-                c == '\'' && !done(r, i) && next(r, i)[1] != '\\'
+                c == '\'' && y !== nothing && y[1] != '\\'
                 in_single_quotes = !in_single_quotes
             elseif !in_back_ticks && !in_single_quotes &&
-                c == '"' && !done(r, i) && next(r, i)[1] != '\\'
+                c == '"' && y !== nothing && y[1] != '\\'
                 in_double_quotes = !in_double_quotes
             elseif !in_single_quotes && !in_double_quotes &&
-                c == '`' && !done(r, i) && next(r, i)[1] != '\\'
+                c == '`' && y !== nothing && y[1] != '\\'
                 in_back_ticks = !in_back_ticks
             end
         end

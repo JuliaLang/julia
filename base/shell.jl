@@ -17,8 +17,9 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     r = reverse(s)
     i = start(r)
     c_old = nothing
-    while !done(r,i)
-        c, j = next(r,i)
+    while i > firstind(s)
+        c = r[i]
+        j = nextind(r,i)
         if c == '\\' && c_old == ' '
             i -= 1
             break
@@ -52,14 +53,16 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
         arg = []
     end
 
-    while !done(s,j)
-        c, k = next(s,j)
+    while j <= endof(s)
+        c = s[j]
+        k = nextind(s,j)
         if !in_single_quotes && !in_double_quotes && Unicode.isspace(c)
             update_arg(s[i:prevind(s, j)])
             append_arg()
             j = k
-            while !done(s,j)
-                c, k = next(s,j)
+            while j <= endof(s)
+                c = s[j]
+                k = nextind(s,j)
                 if !Unicode.isspace(c)
                     i = j
                     break
@@ -68,7 +71,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             end
         elseif interpolate && !in_single_quotes && c == '$'
             update_arg(s[i:prevind(s, j)]); i = k; j = k
-            if done(s,k)
+            if k > endof(s)
                 error("\$ right before end of command")
             end
             if Unicode.isspace(s[k])
@@ -87,7 +90,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 update_arg(s[i:prevind(s, j)]); i = k
             elseif c == '\\'
                 if in_double_quotes
-                    if done(s,k)
+                    if k > endof(s)
                         error("unterminated double quote")
                     end
                     if s[k] == '"' || s[k] == '$' || s[k] == '\\'
@@ -95,7 +98,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                         c, k = next(s,k)
                     end
                 elseif !in_single_quotes
-                    if done(s,k)
+                    if k > endof(s)
                         error("dangling backslash")
                     end
                     update_arg(s[i:prevind(s, j)]); i = k

@@ -67,10 +67,7 @@ sizehint!(s::Set, newsz) = (sizehint!(s.dict, newsz); s)
 empty!(s::Set) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
 
-start(s::Set)       = start(s.dict)
-done(s::Set, state) = done(s.dict, state)
-# NOTE: manually optimized to take advantage of Dict representation
-next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict, i+1))
+iterate(s::Set, i...)       = iterate(KeySet(s.dict), i...)
 
 """
     union(s, itrs...)

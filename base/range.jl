@@ -351,10 +351,6 @@ size(r::AbstractRange) = (length(r),)
 
 isempty(r::StepRange) =
     (r.start != r.stop) & ((r.step > zero(r.step)) != (r.stop > r.start))
-done(r::StepRange) = isempty(r)
-done(r::AbstractUnitRange) = first(r) > last(r)
-done(r::StepRangeLen) = length(r) == 0
-done(r::LinSpace) = length(r) == 0
 
 """
     step(r)
@@ -451,40 +447,42 @@ copy(r::AbstractRange) = r
 
 ## iteration
 
-start(r::LinSpace) = 1
-done(r::LinSpace, i::Int) = length(r) < i
-function next(r::LinSpace, i::Int)
+function iterate(r::LinSpace, i::Int=1)
     @_inline_meta
+    length(r) < i && return nothing
     unsafe_getindex(r, i), i+1
 end
 
-start(r::StepRange) = oftype(r.start + r.step, r.start)
-next(r::StepRange{T}, i) where {T} = (convert(T,i), i+r.step)
-done(r::StepRange, i) = isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.start, r.stop))
-done(r::StepRange, i::Integer) =
-    isempty(r) | (i == oftype(i, r.stop) + r.step)
+function iterate(r::StepRange, i=oftype(r.start + r.step, r.start))
+    if i isa Integer
+        (isempty(r) | (i == oftype(i, r.stop) + r.step)) && return nothing
+    else
+        (isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.start, r.stop))) && return nothing
+    end
+    (convert(T,i), i+r.step)
+end
 
-start(r::StepRangeLen) = 1
-next(r::StepRangeLen{T}, i) where {T} = unsafe_getindex(r, i), i+1
-done(r::StepRangeLen, i) = i > length(r)
+iterate(r::StepRangeLen{T}, i=1) where {T} = i > length(r) ? nothing : unsafe_getindex(r, i), i+1
 
-start(r::UnitRange{T}) where {T} = oftype(r.start + oneunit(T), r.start)
-next(r::AbstractUnitRange{T}, i) where {T} = (convert(T, i), i + oneunit(T))
-done(r::AbstractUnitRange{T}, i) where {T} = i == oftype(i, r.stop) + oneunit(T)
-
-start(r::OneTo{T}) where {T} = oneunit(T)
+function iterate(r::AbstractUnitRange{T},
+                 i = oftype(r.start + oneunit(T), r.start)) where {T}
+    i == oftype(i, r.stop) + oneunit(T) && return nothing
+    (convert(T, i), i + oneunit(T))
+end
 
 # some special cases to favor default Int type to avoid overflow
 let smallint = (Int === Int64 ?
                 Union{Int8,UInt8,Int16,UInt16,Int32,UInt32} :
                 Union{Int8,UInt8,Int16,UInt16})
-    global start
-    global next
-    start(r::StepRange{<:smallint}) = convert(Int, r.start)
-    next(r::StepRange{T}, i) where {T<:smallint} = (i % T, i + r.step)
-    start(r::UnitRange{<:smallint}) = convert(Int, r.start)
-    next(r::AbstractUnitRange{T}, i) where {T<:smallint} = (i % T, i + 1)
-    start(r::OneTo{<:smallint}) = 1
+    global iterate
+    function iterate(r::StepRange{T}, i=convert(Int, r.start)) where {T<:smallint}
+        (isempty(r) | (i == oftype(i, r.stop) + r.step)) && return nothing
+        (i % T, i + r.step)
+    end
+    function iterate(r::AbstractUnitRange{T}, i=convert(Int, r.start)) where {T<:smallint}
+        i == oftype(i, r.stop) + 1 && return nothing
+        (i % T, i + 1)
+    end
 end
 
 ## indexing
@@ -606,12 +604,10 @@ function ==(r::AbstractRange, s::AbstractRange)
         return false
     end
     u, v = start(r), start(s)
-    while !done(r, u)
-        x, u = next(r, u)
-        y, v = next(s, v)
-        if x != y
-            return false
-        end
+    yr, ys = iterate(r), iterate(s)
+    while yr !== nothing
+        yr[1] == ys[1] || return false
+        yr, ys = iterate(r, yr[2]), iterate(s, ys[2])
     end
     return true
 end

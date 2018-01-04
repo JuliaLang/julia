@@ -323,9 +323,10 @@ dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool}) =
 
 
 ## custom iterator ##
-start(B::BitArray) = 0
-next(B::BitArray, i::Int) = (B.chunks[_div64(i)+1] & (UInt64(1)<<_mod64(i)) != 0, i+1)
-done(B::BitArray, i::Int) = i >= length(B)
+function iterate(B::BitArray, i::Int=0)
+    i >= length(B) && return nothing
+    (B.chunks[_div64(i)+1] & (UInt64(1)<<_mod64(i)) != 0, i+1)
+end
 
 ## similar, fill!, copy! etc ##
 

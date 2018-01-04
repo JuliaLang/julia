@@ -789,9 +789,11 @@ zero(x::AbstractArray{T}) where {T} = fill!(similar(x), zero(T))
 # While the definitions for IndexLinear are all simple enough to inline on their
 # own, IndexCartesian's CartesianIndices is more complicated and requires explicit
 # inlining.
-start(A::AbstractArray) = (@_inline_meta; itr = eachindex(A); (itr, start(itr)))
-next(A::AbstractArray, i) = (@_propagate_inbounds_meta; (idx, s) = next(i[1], i[2]); (A[idx], (i[1], s)))
-done(A::AbstractArray, i) = (@_propagate_inbounds_meta; done(i[1], i[2]))
+function iterate(A::AbstractArray, state=(eachindex(A),))
+    y = iterate(state...)
+    y === nothing && return nothing
+    A[y[1]], (state[1], tail(y)...)
+end
 
 # `eachindex` is mostly an optimization of `keys`
 eachindex(itrs...) = keys(itrs...)

@@ -493,22 +493,24 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
     print(io, op)
     if !show_circular(io, itr)
         recur_io = IOContext(io, :SHOWN_SET => itr)
+        y = iterate(itr)
         state = start(itr)
         first = true
         i0 = i1-1
-        while i1 > 1 && !done(itr, state)
-            _, state = next(itr, state)
+        while i1 > 1 && y !== nothing
+            y = iterate(itr, y[2])
             i1 -= 1
         end
-        if !done(itr, state)
+        if y !== nothing
             typeinfo = get(io, :typeinfo, Any)
             while true
-                x, state = next(itr, state)
+                x, state = y
+                y = iterate(itr, state)
                 show(IOContext(recur_io, :typeinfo =>
                                typeinfo <: Tuple ? typeinfo.parameters[i1+i0] : typeinfo),
                      x)
                 i1 += 1
-                if done(itr, state) || i1 > n
+                if y === nothing || i1 > n
                     delim_one && first && print(io, delim)
                     break
                 end
@@ -586,12 +588,9 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
 is_id_start_char(c::Char) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
 is_id_char(c::Char) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
 function isidentifier(s::AbstractString)
-    i = start(s)
-    done(s, i) && return false
-    (c, i) = next(s, i)
-    is_id_start_char(c) || return false
-    while !done(s, i)
-        (c, i) = next(s, i)
+    isempty(s) && return false
+    is_id_start_char(first(s)) || return false
+    for c in s
         is_id_char(c) || return false
     end
     return true

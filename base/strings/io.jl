@@ -242,10 +242,10 @@ join(strings, delim, last) = sprint(join, strings, delim, last)
 
 ## string escaping & unescaping ##
 
-need_full_hex(s::AbstractString, i::Int) = !done(s,i) && Unicode.isxdigit(next(s,i)[1])
+need_full_hex(s::AbstractString, i::Int) = i <= endof(s) && Unicode.isxdigit(next(s,i)[1])
 
 escape_nul(s::AbstractString, i::Int) =
-    !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
+    i <= endof(s) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
 """
     escape_string(str::AbstractString[, esc::AbstractString]) -> AbstractString
@@ -263,9 +263,7 @@ escape_string(s::AbstractString) = sprint(escape_string, s, "\"", sizehint=endof
 Escape sequences in `str` and print result to `io`. See also [`unescape_string`](@ref).
 """
 function escape_string(io, s::AbstractString, esc::AbstractString="")
-    i = start(s)
-    while !done(s,i)
-        c, j = next(s,i)
+    for (j, c) in Iterators.IndexValue(s, eachindex(s))
         if c in esc
             print(io, '\\', c)
         elseif Unicode.isascii(c)
@@ -288,7 +286,6 @@ function escape_string(io, s::AbstractString, esc::AbstractString="")
                 (u >>= 8) == 0 && break
             end
         end
-        i = j
     end
 end
 
@@ -316,17 +313,18 @@ unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=endof(s
 Unescapes sequences and prints result to `io`. See also [`escape_string`](@ref).
 """
 function unescape_string(io, s::AbstractString)
-    i = start(s)
-    while !done(s,i)
-        c, i = next(s,i)
-        if !done(s,i) && c == '\\'
-            c, i = next(s,i)
+    i = firstind(s)
+    while i <= endof(s)
+        c = s[i]
+        i = next(s,i)
+        if i <= endof(s) && c == '\\'
+            c, i = iterate(s, i)
             if c == 'x' || c == 'u' || c == 'U'
                 n = k = 0
                 m = c == 'x' ? 2 :
                     c == 'u' ? 4 : 8
-                while (k += 1) <= m && !done(s,i)
-                    c, j = next(s,i)
+                while (k += 1) <= m && i <= endof(s)
+                    c, j = iterate(s,i)
                     n = '0' <= c <= '9' ? n<<4 + (c-'0') :
                         'a' <= c <= 'f' ? n<<4 + (c-'a'+10) :
                         'A' <= c <= 'F' ? n<<4 + (c-'A'+10) : break
@@ -345,8 +343,8 @@ function unescape_string(io, s::AbstractString)
             elseif '0' <= c <= '7'
                 k = 1
                 n = c-'0'
-                while (k += 1) <= 3 && !done(s,i)
-                    c, j = next(s,i)
+                while (k += 1) <= 3 && i <= endof(s)
+                    c, j = iterate(s, i)
                     n = ('0' <= c <= '7') ? n<<3 + c-'0' : break
                     i = j
                 end
@@ -435,7 +433,7 @@ Returns:
 """
 function unindent(str::AbstractString, indent::Int; tabwidth=8)
     indent == 0 && return str
-    pos = start(str)
+    pos = firstind(str)
     endpos = endof(str)
     # Note: this loses the type of the original string
     buf = IOBuffer(StringVector(endpos), true, true)
@@ -443,7 +441,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
     cutting = true
     col = 0     # current column (0 based)
     while pos <= endpos
-        ch, pos = next(str,pos)
+        ch, pos = iterate(str, pos)
         if cutting
             if ch == ' '
                 col += 1

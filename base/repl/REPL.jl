@@ -906,7 +906,7 @@ function setup_interface(
             oldpos = start(input)
             firstline = true
             isprompt_paste = false
-            while !done(input, oldpos) # loop until all lines have been executed
+            while oldpos <= endof(input) # loop until all lines have been executed
                 if JL_PROMPT_PASTE[]
                     # Check if the next statement starts with "julia> ", in that case
                     # skip it. But first skip whitespace
@@ -930,7 +930,7 @@ function setup_interface(
                 end
                 ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
                 if (isa(ast, Expr) && (ast.head == :error || ast.head == :continue || ast.head == :incomplete)) ||
-                        (done(input, pos) && !endswith(input, '\n'))
+                        (pos > endof(input) && !endswith(input, '\n'))
                     # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
                     # Insert all the remaining text as one line (might be empty)
                     tail = input[oldpos:end]

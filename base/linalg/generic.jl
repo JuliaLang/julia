@@ -371,8 +371,10 @@ function generic_vecnormp(x, p)
         return convert(T, sum^inv(spp))
     else # rescaling
         sum = (norm(v)/maxabs)^spp
-        while !done(x, s)
-            (v, s) = next(x, s)
+        while true
+            y = iterate(x, s)
+            y == nothing && break
+            (v, s) = y
             sum += (norm(v)/maxabs)^spp
         end
         return convert(T, maxabs*sum^inv(spp))

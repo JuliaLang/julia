@@ -39,10 +39,11 @@ end
 function parse(s::AbstractString)
     # parse format string into strings and format tuples
     list = []
-    i = j = start(s)
+    i = j = firstind(s)
     j1 = 0 # invariant: j1 == prevind(s, j)
-    while !done(s,j)
-        c, k = next(s,j)
+    while j <= endof(s)
+        c = s[j]
+        k = nextind(s, j)
         if c == '%'
             i > j1 || push!(list, s[i:j1])
             flags, width, precision, conversion, k = parse1(s,k)
@@ -84,7 +85,7 @@ end
 #   (h|hh|l|ll|L|j|t|z|q)?  # modifier (ignored)
 #   [diouxXeEfFgGaAcCsSp%]  # conversion
 
-next_or_die(s::AbstractString, k) = !done(s,k) ? next(s,k) :
+next_or_die(s::AbstractString, k) = k < endof(k) ? nextind(s,k) :
     throw(ArgumentError("invalid printf format string: $(repr(s))"))
 
 function parse1(s::AbstractString, k::Integer)

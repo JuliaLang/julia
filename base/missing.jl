@@ -168,25 +168,3 @@ function Base.iterate(itr::SkipMissing, state...)
     end
     y
 end
-
-# Optimized implementation for AbstractArray, relying on the ability to access x[i] twice:
-# once in done() to find the next non-missing entry, and once in next() to return it.
-# This works around the type instability problem of the generic fallback.
-@inline function _next_nonmissing_ind(x::AbstractArray, s)
-    idx = eachindex(x)
-    @inbounds while !done(idx, s)
-        i, new_s = next(idx, s)
-        x[i] isa Missing || break
-        s = new_s
-    end
-    s
-end
-@inline Base.start(itr::SkipMissing{<:AbstractArray}) =
-    _next_nonmissing_ind(itr.x, start(eachindex(itr.x)))
-@inline Base.done(itr::SkipMissing{<:AbstractArray}, state) =
-    done(eachindex(itr.x), state)
-@inline function Base.next(itr::SkipMissing{<:AbstractArray}, state)
-    i, state = next(eachindex(itr.x), state)
-    @inbounds v = itr.x[i]::eltype(itr)
-    (v, _next_nonmissing_ind(itr.x, state))
-end

@@ -609,9 +609,7 @@ function grow_to!(dest, itr, st...)
 end
 
 ## Iteration ##
-start(A::Array) = 1
-next(a::Array,i) = (@_propagate_inbounds_meta; (a[i],i+1))
-done(a::Array,i) = (@_inline_meta; i == length(a)+1)
+iterate(A::Array, i=1) = (@_propagate_inbounds_meta; i==length(a)+1 ? nothing : (a[i], i+1))
 
 ## Indexing: getindex ##
 

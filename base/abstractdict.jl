@@ -54,17 +54,10 @@ isempty(v::Union{KeySet,ValueIterator}) = isempty(v.dict)
 _tt2(::Type{Pair{A,B}}) where {A,B} = B
 eltype(::Type{ValueIterator{D}}) where {D} = _tt2(eltype(D))
 
-start(v::Union{KeySet,ValueIterator}) = start(v.dict)
-done(v::Union{KeySet,ValueIterator}, state) = done(v.dict, state)
-
-function next(v::KeySet, state)
-    n = next(v.dict, state)
-    n[1][1], n[2]
-end
-
-function next(v::ValueIterator, state)
-    n = next(v.dict, state)
-    n[1][2], n[2]
+function iterate(v::Union{KeySet,ValueIterator}, state...)
+    y = iterate(v.dict, state...)
+    y == nothing && return nothing
+    y[1][isa(v, KeySet) ? 1 : 2], y[2]
 end
 
 in(k, v::KeySet) = get(v.dict, k, secret_table_token) !== secret_table_token
@@ -599,9 +592,11 @@ end
 
 _oidd_nextind(a, i) = reinterpret(Int,ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
 
-start(t::ObjectIdDict) = _oidd_nextind(t.ht, 0)
-done(t::ObjectIdDict, i=start(t)) = (i == -1)
-next(t::ObjectIdDict, i) = (Pair{Any,Any}(t.ht[i+1],t.ht[i+2]), _oidd_nextind(t.ht, i+2))
+function iterate(t::ObjectIdDict, idx=0)
+    idx = _oidd_nextind(t.ht, idx)
+    idx == -1 && return nothing
+    Pair{Any,Any}(t.ht[idx+1],t.ht[idx+2]), idx+2
+end
 
 function length(d::ObjectIdDict)
     n = 0

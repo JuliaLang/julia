@@ -2,7 +2,7 @@
 
 ### Multidimensional iterators
 module IteratorsMD
-    import Base: eltype, length, size, start, done, next, first, last, in, getindex,
+    import Base: eltype, length, size, first, last, in, getindex,
                  setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
                  ndims, iteratorsize, convert, show, iterate
 
@@ -150,7 +150,7 @@ module IteratorsMD
 
     # Iteration over the elements of CartesianIndex cannot be supported until its length can be inferred,
     # see #23719
-    Base.start(::CartesianIndex) =
+    Base.iterate(::CartesianIndex) =
         error("iteration is deliberately unsupported for CartesianIndex. Use `I` rather than `I...`, or use `Tuple(I)...`")
 
     # Iteration
@@ -273,15 +273,17 @@ module IteratorsMD
     eltype(::Type{CartesianIndices{N,TT}}) where {N,TT} = CartesianIndex{N}
     iteratorsize(::Type{<:CartesianIndices}) = Base.HasShape()
 
-    @inline function start(iter::CartesianIndices)
+    @inline function iterate(iter::CartesianIndices)
         iterfirst, iterlast = first(iter), last(iter)
         if any(map(>, iterfirst.I, iterlast.I))
-            return iterlast+1
+            return nothing
         end
-        iterfirst
+        iterfirst, iterfirst
     end
-    @inline function next(iter::CartesianIndices, state)
-        state, CartesianIndex(inc(state.I, first(iter).I, last(iter).I))
+    @inline function iterate(iter::CartesianIndices, state)
+        nextstate = inc(state.I, first(iter).I, last(iter).I)
+        nextstate.I[end] > last(iter.indices[end]) && return nothing
+        nextstate, nextstate
     end
 
     # increment & carry
@@ -294,12 +296,9 @@ module IteratorsMD
         newtail = inc(tail(state), tail(start), tail(stop))
         (start[1], newtail...)
     end
-    @inline done(iter::CartesianIndices, state=start(iter)) = state.I[end] > last(iter.indices[end])
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
-    start(iter::CartesianIndices{0}) = false
-    next(iter::CartesianIndices{0}, state) = CartesianIndex(), true
-    done(iter::CartesianIndices{0}, state) = state
+    iterate(iter::CartesianIndices{0}, done=false) = done ? nothing : (CartesianIndex(), true)
 
     size(iter::CartesianIndices) = map(dimlength, first(iter).I, last(iter).I)
     dimlength(start, stop) = stop-start+1
@@ -353,19 +352,18 @@ module IteratorsMD
     end
 
     # reversed CartesianIndices iteration
-    @inline function start(r::Reverse{<:CartesianIndices})
+
+    @inline function itertate(r::Reverse{<:CartesianIndices})
         iterfirst, iterlast = last(r.itr), first(r.itr)
         if any(map(<, iterfirst.I, iterlast.I))
-            return iterlast-1
+            return nothing
         end
         iterfirst
     end
-    @inline function next(r::Reverse{<:CartesianIndices}, state)
-        state, CartesianIndex(dec(state.I, last(r.itr).I, first(r.itr).I))
-    end
-    @inline function iterate(r::Reverse{<:CartesianIndices}, state=start(r))
-        done(r, state) && return nothing
-        next(r, state)
+    @inline function iterate(r::Reverse{<:CartesianIndices}, state)
+        nextstate = dec(state.I, last(r.iter).I, first(r.iter).I)
+        nextstate.I[end] < first(r.iter.indices[end]) && return nothing
+        nextstate, nextstate
     end
 
     # decrement & carry
@@ -378,9 +376,7 @@ module IteratorsMD
         newtail = dec(tail(state), tail(start), tail(stop))
         (start[1], newtail...)
     end
-    @inline done(r::Reverse{<:CartesianIndices}, state) = state.I[end] < first(r.itr.indices[end])
     # 0-d cartesian ranges are special-cased to iterate once and only once
-    done(iter::Reverse{<:CartesianIndices{0}}, state=false) = false
     iterate(iter::Reverse{<:CartesianIndices{0}}, state=false) = state ? nothing : (CartesianIndex(), true)
 
     """
@@ -544,28 +540,27 @@ show(io::IO, r::LogicalIndex) = print(io, "Base.LogicalIndex(", r.mask, ")")
 # Thus the iteration state contains an index iterator and its state. We also
 # keep track of the count of elements since we already know how many there
 # should be -- this way we don't need to look at future indices to check done.
-@inline function start(L::LogicalIndex{Int})
+@inline function iterate(L::LogicalIndex{Int})
     r = linearindices(L.mask)
-    return (r, start(r), 1)
+    iterate(L, (1, r))
 end
-@inline function start(L::LogicalIndex{<:CartesianIndex})
+@inline function iterate(L::LogicalIndex{<:CartesianIndex})
     r = CartesianIndices(axes(L.mask))
-    return (r, start(r), 1)
+    iterate(L, (1, r))
 end
-@propagate_inbounds function next(L::LogicalIndex, s)
+@propagate_inbounds function iterate(L::LogicalIndex, s)
     # We're looking for the n-th true element, using iterator r at state i
-    r, i, n = s
+    n = s[1]
+    n > length(L) && return nothing
     while true
-        done(r, i) # Call done(r, i) for the iteration protocol, but trust done(L, s) was called
-        idx, i = next(r, i)
-        L.mask[idx] && return (idx, (r, i, n+1))
+        idx, i = iterate(tail(s))
+        L.mask[idx] && return (idx, (n+1, s[2], i))
     end
 end
-done(L::LogicalIndex, s) = s[3] > length(L)
 # When wrapping a BitArray, lean heavily upon its internals -- this is a common
 # case. Just use the Int index and count as its state.
-@inline start(L::LogicalIndex{Int,<:BitArray}) = (0, 1)
-@inline function next(L::LogicalIndex{Int,<:BitArray}, s)
+@inline function iterate(L::LogicalIndex{Int,<:BitArray}, s=(0,1))
+    s[2] > length(L) && return nothing
     i, n = s
     Bc = L.mask.chunks
     while true
@@ -576,7 +571,6 @@ done(L::LogicalIndex, s) = s[3] > length(L)
         i += 1
     end
 end
-@inline done(L::LogicalIndex{Int,<:BitArray}, s) = s[2] > length(L)
 
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex{<:Any,<:AbstractArray{Bool,1}}) =
     linearindices(A) == linearindices(I.mask)

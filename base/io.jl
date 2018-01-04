@@ -648,13 +648,11 @@ end
 # requires that indices for target are small ordered integers bounded by start and endof
 function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
     T = eltype(target)
-    first = start(target)
-    if done(target, first)
-        return
-    end
+    isempty(target) && return
+    first = firstind(target)
+    second = nextind(target, first)
     len = endof(target)
     local cache # will be lazy initialized when needed
-    second = next(target, first)[2]
     max_pos = second
     pos = first
     while !eof(io)
@@ -666,7 +664,7 @@ function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
             push!(out, c)
         end
         while true
-            c1, pos1 = next(target, pos)
+            c1, pos1 = nextind(target, pos)
             if c == c1
                 pos = pos1
                 break
@@ -681,8 +679,10 @@ function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
                 end
                 while max_pos < pos
                     b = cache[max_pos] + first
-                    cb, b1 = next(target, b)
-                    ci, max_pos1 = next(target, max_pos)
+                    cb = target[b]
+                    b1 = nextind(target, b)
+                    ci = target[max_pos]
+                    max_pos1 = nextind(target, max_pos)
                     if ci == cb
                         cache[max_pos1] = b1 - first
                     end
@@ -691,16 +691,16 @@ function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
                 pos = cache[pos] + first
             end
         end
-        done(target, pos) && break
+        pos > endof(target) && break
     end
 end
 
 function readuntil(io::IO, target::AbstractString)
     # small-string target optimizations
-    i = start(target)
-    done(target, i) && return ""
-    c, i = next(target, start(target))
-    if done(target, i) && c <= '\x7f'
+    y = iterate(target)
+    y == nothing && return ""
+    c, i = y
+    if iterate(target, i) == nothing && c <= '\x7f'
         return readuntil_string(io, c % UInt8)
     end
     # decide how we can index target
@@ -833,13 +833,10 @@ function eachline(filename::AbstractString; chomp::Bool=true)
     EachLine(s, ondone=()->close(s), chomp=chomp)::EachLine
 end
 
-start(itr::EachLine) = nothing
-function done(itr::EachLine, ::Nothing)
-    eof(itr.stream) || return false
-    itr.ondone()
-    true
+function iterate(itr::EachLine, state=nothing)
+    eof(itr.stream) && return (itr.ondone(); nothing)
+    (readline(itr.stream, chomp=itr.chomp), nothing)
 end
-next(itr::EachLine, ::Nothing) = (readline(itr.stream, chomp=itr.chomp), nothing)
 
 eltype(::Type{EachLine}) = String
 

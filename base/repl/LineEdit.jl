@@ -1204,31 +1204,32 @@ normalize_key(key::Integer) = normalize_key(Char(key))
 function normalize_key(key::AbstractString)
     wildcard in key && error("Matching '\U10f7ff' not supported.")
     buf = IOBuffer()
-    i = start(key)
-    while !done(key, i)
-        c, i = next(key, i)
+    y = iterate(key)
+    while y !== nothing
+        c, i = y
         if c == '*'
             write(buf, wildcard)
         elseif c == '^'
-            c, i = next(key, i)
+            c, i = iterate(key, i)
             write(buf, uppercase(c)-64)
         elseif c == '\\'
-            c, i = next(key, i)
+            c, i = iterate(key, i)
             if c == 'C'
-                c, i = next(key, i)
+                c, i = iterate(key, i)
                 @assert c == '-'
-                c, i = next(key, i)
+                c, i = iterate(key, i)
                 write(buf, uppercase(c)-64)
             elseif c == 'M'
-                c, i = next(key, i)
+                c, i = iterate(key, i)
                 @assert c == '-'
-                c, i = next(key, i)
+                c, i = iterate(key, i)
                 write(buf, '\e')
                 write(buf, c)
             end
         else
             write(buf, c)
         end
+        y = iterate(key, i)
     end
     return String(take!(buf))
 end
@@ -1247,14 +1248,15 @@ function normalize_keys(keymap::Dict)
 end
 
 function add_nested_key!(keymap::Dict, key, value; override = false)
-    i = start(key)
-    while !done(key, i)
-        c, i = next(key, i)
-        if !override && c in keys(keymap) && (done(key, i) || !isa(keymap[c], Dict))
+    y = iterate(key)
+    while y !== nothing
+        c, i = y
+        y = iterate(key, i)
+        if !override && c in keys(keymap) && (y === nothing || !isa(keymap[c], Dict))
             error("Conflicting definitions for keyseq " * escape_string(key) *
                   " within one keymap")
         end
-        if done(key, i)
+        if y === nothing
             keymap[c] = value
             break
         elseif !(c in keys(keymap) && isa(keymap[c], Dict))

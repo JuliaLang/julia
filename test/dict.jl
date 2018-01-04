@@ -4,15 +4,12 @@
     p = Pair(10,20)
     @test p == (10=>20)
     @test isequal(p,10=>20)
-    @test start(p) == 1
-    @test next(p, 1) == (10,2)
-    @test !done(p, 1)
-    @test !done(p,2)
-    @test done(p,3)
-    @test !done(p,0)
+    @test iterate(p)[1] == 10
+    @test iterate(p, iterate(p)[2])[1] == 20
+    @test iterate(p, iterate(p, iterate(p)[2]) == nothing
     @test endof(p) == length(p) == 2
-    @test Base.indexed_next(p, 1, (1,2)) == (10,2)
-    @test Base.indexed_next(p, 2, (1,2)) == (20,3)
+    @test Base.indexed_iterate(p, 1, nothing) == (10,2)
+    @test Base.indexed_iterate(p, 2, nothing) == (20,3)
     @test (1=>2) < (2=>3)
     @test (2=>2) < (2=>3)
     @test !((2=>3) < (2=>3))

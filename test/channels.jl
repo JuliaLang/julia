@@ -65,24 +65,6 @@ let c = Channel(32),
     @test sum(results) == 15
 end
 
-# Test channel iterator with done() being called multiple times
-# This needs to be explicitly tested since `take!` is called
-# in `done()` and not `next()`
-let s, c = Channel(32)
-    foreach(i -> put!(c, i), 1:10)
-    close(c)
-    s = start(c)
-    @test done(c, s) == false
-    res = Int[]
-    while !done(c, s)
-        local v
-        @test done(c,s) == false
-        v, s = next(c, s)
-        push!(res, v)
-    end
-    @test res == Int[1:10...]
-end
-
 # Tests for channels bound to tasks.
 using Distributed
 for N in [0,10]

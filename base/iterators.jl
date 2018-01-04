@@ -14,7 +14,7 @@ using .Base:
     IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange
 
 import .Base:
-    start, done, next, first, last,
+    first, last,
     isempty, length, size, axes, ndims,
     eltype, iteratorsize, iteratoreltype,
     haskey, keys, values, pairs,
@@ -79,6 +79,7 @@ iteratorsize(r::Reverse) = iteratorsize(r.itr)
 iteratoreltype(r::Reverse) = iteratoreltype(r.itr)
 last(r::Reverse) = first(r.itr) # the first shall be last
 first(r::Reverse) = last(r.itr) # and the last shall be first
+isempty(r::Reverse) = isempty(r.itr)
 
 # reverse-order array iterators: assumes more-specialized Reverse for eachindex
 @propagate_inbounds function iterate(A::Reverse{<:AbstractArray}, state=(reverse(eachindex(A.itr)),))
@@ -87,7 +88,6 @@ first(r::Reverse) = last(r.itr) # and the last shall be first
     idx, itrs = y
     (A.itr[idx], (state[1], itrs))
 end
-@propagate_inbounds done(A::Reverse{<:AbstractArray}, i) = done(i[1], i[2])
 
 reverse(R::AbstractRange) = Base.reverse(R) # copying ranges is cheap
 reverse(G::Generator) = Generator(G.f, reverse(G.iter))
@@ -95,8 +95,7 @@ reverse(r::Reverse) = r.itr
 reverse(x::Union{Number,Char}) = x
 reverse(p::Pair) = Base.reverse(p) # copying pairs is cheap
 
-done(r::Reverse{<:Tuple}, i::Int) = i < 1
-iterate(r::Reverse{<:Tuple}, i::Int = length(r.itr)) = done(r, i) ? nothing : (r.itr[i], i-1)
+iterate(r::Reverse{<:Tuple}, i::Int = length(r.itr)) = i < 1 ? nothing : (r.itr[i], i-1)
 
 # enumerate
 
@@ -137,7 +136,6 @@ size(e::Enumerate) = size(e.itr)
     n == nothing && return n
     (i, n[1]), (i+1, n[2])
 end
-@inline done(e::Enumerate, state) = done(e.itr, state[2])
 
 eltype(::Type{Enumerate{I}}) where {I} = Tuple{Int, eltype(I)}
 
@@ -154,7 +152,6 @@ end
     n == nothing && return n
     (i, n[1]), (i-1, ri, n[2])
 end
-@inline done(r::Reverse{<:Enumerate}, state) = state[1] < 1
 
 """
     Iterators.IndexValue(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
@@ -236,7 +233,6 @@ size(v::IndexValue)    = size(v.itr)
     item = v.data[indx]
     return (Pair(indx, item), n)
 end
-@inline done(v::IndexValue, state...) = done(v.itr, state...)
 
 eltype(::Type{IndexValue{K, V}}) where {K, V} = Pair{K, V}
 
@@ -277,7 +273,6 @@ eltype(::Type{Zip1{I}}) where {I} = Tuple{eltype(I)}
     n == nothing && return n
     return ((n[1],), n[2])
 end
-@inline done(z::Zip1, st) = done(z.a,st)
 
 iteratorsize(::Type{Zip1{I}}) where {I} = iteratorsize(I)
 iteratoreltype(::Type{Zip1{I}}) where {I} = iteratoreltype(I)
@@ -290,14 +285,13 @@ zip(a, b) = Zip2(a, b)
 length(z::Zip2) = _min_length(z.a, z.b, iteratorsize(z.a), iteratorsize(z.b))
 size(z::Zip2) = promote_shape(size(z.a), size(z.b))
 axes(z::Zip2) = promote_shape(axes(z.a), axes(z.b))
+@inline isempty(z::Zip2) = isempty(z.a) | isempty(z.b)
 eltype(::Type{Zip2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
 let interleave = (a, b)->((a == nothing || b == nothing) ? nothing : ((a[1],b[1]), (a[2], b[2])))
     global iterate
     @propagate_inbounds iterate(z::Zip2) = interleave(iterate(z.a), iterate(z.b))
     @propagate_inbounds iterate(z::Zip2, st) = interleave(iterate(z.a, st[1]), iterate(z.b, st[2]))
 end
-@inline done(z::Zip2) = done(z.a) | done(z.b)
-@inline done(z::Zip2, st) = done(z.a,st[1]) | done(z.b,st[2])
 
 iteratorsize(::Type{Zip2{I1,I2}}) where {I1,I2} = zip_iteratorsize(iteratorsize(I1),iteratorsize(I2))
 iteratoreltype(::Type{Zip2{I1,I2}}) where {I1,I2} = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
@@ -341,12 +335,12 @@ length(z::Zip) = _min_length(z.a, z.z, iteratorsize(z.a), iteratorsize(z.z))
 size(z::Zip) = promote_shape(size(z.a), size(z.z))
 axes(z::Zip) = promote_shape(axes(z.a), axes(z.z))
 eltype(::Type{Zip{I,Z}}) where {I,Z} = tuple_type_cons(eltype(I), eltype(Z))
+isempty(z::Zip) = isempty(z.a) | isempty(z.z)
 let interleave = (a, b)->((a == nothing || b == nothing) ? nothing : ((a[1],b[1]...), (a[2], b[2])))
     global iterate
     @propagate_inbounds iterate(z::Zip) = interleave(iterate(z.a), iterate(z.z))
     @propagate_inbounds iterate(z::Zip, st) = interleave(iterate(z.a, st[1]), iterate(z.z, st[2]))
 end
-@inline done(z::Zip, st) = done(z.a,st[1]) | done(z.z,st[2])
 
 iteratorsize(::Type{Zip{I1,I2}}) where {I1,I2} = zip_iteratorsize(iteratorsize(I1),iteratorsize(I2))
 iteratoreltype(::Type{Zip{I1,I2}}) where {I1,I2} = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
@@ -432,7 +426,6 @@ rest(itr,state) = Rest(itr,state)
 rest(itr) = itr
 
 @propagate_inbounds iterate(i::Rest, st=i.st) = iterate(i.itr, st)
-done(i::Rest, st) = done(i.itr, st)
 
 eltype(::Type{Rest{I}}) where {I} = eltype(I)
 iteratoreltype(::Type{Rest{I,S}}) where {I,S} = iteratoreltype(I)
@@ -470,7 +463,6 @@ countfrom()                            = Count(1, 1)
 eltype(::Type{Count{S}}) where {S} = S
 
 iterate(it::Count, state=it.start) = (state, state + it.step)
-done(it::Count, state) = false
 
 iteratorsize(::Type{<:Count}) = IsInfinite()
 
@@ -523,11 +515,6 @@ length(t::Take) = _min_length(t.xs, 1:t.n, iteratorsize(t.xs), HasLength())
     y = iterate(it.xs, rest...)
     y == nothing && return nothing
     return y[1], (n - 1, y[2])
-end
-
-function done(it::Take, state=(it.n,))
-    n, rest = state[1], tail(state)
-    return n <= 0 || done(it.xs, rest...)
 end
 
 # Drop -- iterator through all but the first n elements
@@ -583,9 +570,6 @@ function iterate(it::Drop)
     y
 end
 iterate(it::Drop, state) = iterate(it.xs, state)
-done(it::Drop, state) = done(it.xs, state)
-done(it::Drop) = iteratorsize(it) isa HasLength ? it.n >= length(it.xs) :
-    error("Wrapped iterator does not have definite length. Don't know if it's empty without trying.")
 
 # Cycle an iterator forever
 
@@ -620,9 +604,6 @@ function iterate(it::Cycle, state)
     y
 end
 
-done(it::Cycle) = done(it.xs)
-done(it::Cycle, state) = false
-
 reverse(it::Cycle) = Cycle(reverse(it.xs))
 
 # Repeated - repeat an object infinitely many times
@@ -655,7 +636,6 @@ repeated(x, n::Integer) = take(repeated(x), Int(n))
 eltype(::Type{Repeated{O}}) where {O} = O
 
 iterate(it::Repeated, state...) = (it.x, nothing)
-done(it::Repeated, state) = false
 
 iteratorsize(::Type{<:Repeated}) = IsInfinite()
 iteratoreltype(::Type{<:Repeated}) = HasEltype()
@@ -729,7 +709,6 @@ _prod_eltype(t::Tuple) = Base.tuple_type_cons(eltype(t[1]),_prod_eltype(tail(t))
 
 iterate(::ProductIterator{Tuple{}}) = (), true
 iterate(::ProductIterator{Tuple{}}, state) = nothing
-done(::ProductIterator{Tuple{}}, state=false) = state
 
 function iterate(P::ProductIterator)
     svs = map(iterate, P.iterators)
@@ -754,9 +733,6 @@ function iterate(P::ProductIterator, svs)
     svs′ == nothing && return svs′
     map(x->x[1], svs′), svs′
 end
-
-done(P::ProductIterator) = any(done, P.iterators)
-done(P::ProductIterator, state) = all((it,(v,s))->done(it, s), zip(P.iterators, state))
 
 reverse(p::ProductIterator) = ProductIterator(map(reverse, p.iterators))
 
@@ -815,12 +791,6 @@ length(f::Flatten{I}) where {I} = flatten_length(f, eltype(I))
     iterate(f, (x[2], x[1]))
 end
 
-done(f::Flatten) = done(f.it)
-@inline function done(f::Flatten, state)
-    s, inner, s2 = state
-    return done(f.it, s) && done(inner, s2)
-end
-
 reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
 
 """
@@ -857,9 +827,8 @@ function length(itr::PartitionIterator)
     return div(l, itr.n) + ((mod(l, itr.n) > 0) ? 1 : 0)
 end
 
-done(itr::PartitionIterator, state) = done(itr.c, state)
-function iterate(itr::PartitionIterator{<:Vector}, state=start(itr.c))
-    done(itr, state) && return nothing
+function iterate(itr::PartitionIterator{<:Vector}, state=firstind(itr.c))
+    state > endof(itr.c) && return nothing
     l = state
     r = min(state + itr.n-1, length(itr.c))
     return view(itr.c, l:r), r + 1

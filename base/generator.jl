@@ -39,7 +39,6 @@ Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
 
 Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(a->T(a...), zip(I1, I2, Is...))
 
-done(g::Generator, s) = (@_inline_meta; done(g.iter, s))
 function iterate(g::Generator, s...)
     @_inline_meta
     y = iterate(g.iter, s...)

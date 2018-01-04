@@ -5,13 +5,15 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     (width <= 0 || width < truncwidth) && return ""
 
     wid = truncidx = lastidx = 0
-    idx = start(str)
-    while !done(str, idx)
+    y = iterate(str)
+    idx = 0
+    while y !== nothing
         lastidx = idx
-        c, idx = next(str, idx)
+        c, idx = y
         wid += Unicode.textwidth(c)
         wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
         (wid >= width || c in chars) && break
+        y = iterate(str, y[2])
     end
 
     lastidx != 0 && str[lastidx] in chars && (lastidx = prevind(str, lastidx))
@@ -687,24 +689,21 @@ function skip_deleted(h::Dict, i)
     return i
 end
 
-function start(t::Dict)
+@propagate_inbounds _iterate(t::Dict, i) = i > length(t.vals) ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
+@propagate_inbounds function iterate(t::Dict)
     i = skip_deleted(t, t.idxfloor)
     t.idxfloor = i
-    return i
+    _iterate(t, i)
 end
-done(t::Dict, i) = i > length(t.vals)
-@propagate_inbounds function next(t::Dict{K,V}, i) where {K,V}
-    return (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1))
-end
+@propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-@propagate_inbounds function next(v::KeySet{<:Any, <:Dict}, i)
-    return (v.dict.keys[i], skip_deleted(v.dict,i+1))
-end
-@propagate_inbounds function next(v::ValueIterator{<:Dict}, i)
-    return (v.dict.vals[i], skip_deleted(v.dict,i+1))
+@propagate_inbounds function iterate(v::Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}},
+                                     i=t.idxfloor)
+    i = skip_deleted(v.dict, i)
+    (v isa KeySet ? v.dict.keys[i] : v.dict.vals[i], i+1)
 end
 
 filter!(f, d::Dict) = filter_in_one_pass!(f, d)
@@ -773,11 +772,12 @@ function get(dict::ImmutableDict, key, default)
 end
 
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
-start(t::ImmutableDict) = t
-next(::ImmutableDict{K,V}, t) where {K,V} = (Pair{K,V}(t.key, t.value), t.parent)
-done(::ImmutableDict, t) = !isdefined(t, :parent)
+function iterate(d::ImmutableDict{K,V}, t=d)
+    !isdefined(t, :key) && return nothing
+    (Pair{K,V}(t.key, t.value), t.parent)
+end
 length(t::ImmutableDict) = count(x->true, t)
-isempty(t::ImmutableDict) = done(t, start(t))
+isempty(t::ImmutableDict) = !isdefined(t, :key)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
 _similar_for(c::Dict, ::Type{Pair{K,V}}, itr, isz) where {K, V} = empty(c, K, V)

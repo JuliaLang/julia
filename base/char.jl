@@ -78,9 +78,7 @@ first(c::Char) = c
 last(c::Char) = c
 eltype(::Type{Char}) = Char
 
-start(c::Char) = false
-next(c::Char, state) = (c, true)
-done(c::Char, state) = state
+itertate(c::Char, done=false) = done ? nothing : (c, true)
 isempty(c::Char) = false
 in(x::Char, y::Char) = x == y
 

@@ -46,7 +46,8 @@ end
 function parseint_next(s::AbstractString, startpos::Int, endpos::Int)
     (0 < startpos <= endpos) || (return Char(0), 0, 0)
     j = startpos
-    c, startpos = next(s,startpos)
+    c = s[startpos]
+    startpos = nextind(s,startpos)
     c, startpos, j
 end
 
@@ -72,8 +73,9 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
     (j == 0) && (return 0, 0, 0)
 
     if base == 0
-        if c == '0' && !done(s,i)
-            c, i = next(s,i)
+        if c == '0' && i <= endof(s)
+            c = s[i]
+            i = nextind(s, i)
             base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
             if base != 10
                 c, i, j = parseint_next(s,i,endpos)
@@ -123,7 +125,8 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
             n *= sgn
             return n
         end
-        c, i = next(s,i)
+        c = s[i]
+        i = nextind(s, i)
         Unicode.isspace(c) && break
     end
     (T <: Signed) && (n *= sgn)
@@ -144,10 +147,12 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
             return nothing
         end
         (i > endpos) && return n
-        c, i = next(s,i)
+        c = s[i]
+        i = nextind(s,i)
     end
     while i <= endpos
-        c, i = next(s,i)
+        c = s[i]
+        i = nextind(s, i)
         if !Unicode.isspace(c)
             raise && throw(ArgumentError("extra characters after whitespace in $(repr(SubString(s,startpos,endpos)))"))
             return nothing

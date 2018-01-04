@@ -397,24 +397,9 @@ struct RegexMatchIterator
 end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(::Type{RegexMatchIterator}) = RegexMatch
-start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1, UInt32(0))
-done(itr::RegexMatchIterator, prev_match) = (prev_match === nothing)
 iteratorsize(::Type{RegexMatchIterator}) = SizeUnknown()
 
-# Assumes prev_match is not nothing
-function next(itr::RegexMatchIterator, prev_match)
-    prevempty = isempty(prev_match.match)
-
-    if itr.overlap
-        if !prevempty
-            offset = nextind(itr.string, prev_match.offset)
-        else
-            offset = prev_match.offset
-        end
-    else
-        offset = prev_match.offset + endof(prev_match.match)
-    end
-
+function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,true))
     opts_nonempty = UInt32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
     while true
         mat = match(itr.regex, itr.string, offset,
@@ -429,10 +414,19 @@ function next(itr::RegexMatchIterator, prev_match)
                 break
             end
         else
-            return (prev_match, mat)
+            if itr.overlap
+                if !isempty(mat)
+                    offset = nextind(itr.string, mat.offset)
+                else
+                    offset = mat.offset
+                end
+            else
+                offset = mat.offset + endof(mat.match)
+            end
+            return (mat, (new_offset, isempty(mat)))
         end
     end
-    (prev_match, nothing)
+    nothing
 end
 
 function eachmatch(re::Regex, str::AbstractString, ovr::Bool)

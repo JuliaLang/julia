@@ -270,39 +270,41 @@ function lreplace!(sym::Symbol, r::LReplace)
 end
 
 function lreplace!(str::AbstractString, r::LReplace)
-    i = start(str)
+    x = iterate(str)
     pat = r.pat_str
-    j = start(pat)
+    y = iterate(pat)
     matching = false
     local istart::Int
-    while !done(str, i)
-        cstr, i = next(str, i)
+    while x !== nothing
+        cstr, i = x
         if !matching
-            if cstr != '_' || done(str, i)
+            x = iterate(str, i)
+            if cstr != '_' || x == nothing
                 continue
             end
             istart = i
-            cstr, i = next(str, i)
+            cstr, i = x
         end
-        if !done(pat, j)
-            cr, j = next(pat, j)
+        if y !== nothing
+            cr, j = y
             if cstr == cr
                 matching = true
             else
                 matching = false
-                j = start(pat)
+                y = iterate(pat)
                 i = istart
                 continue
             end
         end
-        if matching && done(pat, j)
-            if done(str, i) || next(str, i)[1] == '_'
+        if matching && y == nothing
+            x = iterate(str, i)
+            if x == nothing || x[1] == '_'
                 # We have a match
                 return string(str[1:prevind(str, istart)], r.val, lreplace!(str[i:end], r))
             end
             matching = false
-            j = start(pat)
-            i = istart
+            j = iterate(pat)
+            x = iterate(str, istart)
         end
     end
     str

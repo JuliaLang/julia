@@ -34,12 +34,11 @@ _setindex(v, i::Integer) = ()
 
 ## iterating ##
 
-start(t::Tuple) = 1
-done(t::Tuple, i::Int=1) = (length(t) < i)
-next(t::Tuple, i::Int) = (t[i], i+1)
+iterate(t::Tuple, i::Int=1) = length(t) < i ? nothing : (t[i], i+1)
 
 keys(t::Tuple) = 1:length(t)
 
+firstind(t::Tuple, i::Integer) = Int(1)
 prevind(t::Tuple, i::Integer) = Int(i)-1
 nextind(t::Tuple, i::Integer) = Int(i)+1
 

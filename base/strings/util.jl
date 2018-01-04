@@ -17,14 +17,11 @@ true
 ```
 """
 function startswith(a::AbstractString, b::AbstractString)
-    i = start(a)
-    j = start(b)
-    while !done(a,i) && !done(b,i)
-        c, i = next(a,i)
-        d, j = next(b,j)
+    endof(a) >= endof(b) || return false
+    for (c, d) in zip(a, b)
         (c != d) && (return false)
     end
-    done(b,i)
+    true
 end
 startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in chars
 
@@ -145,9 +142,9 @@ julia> lstrip(a)
 """
 function lstrip(s::AbstractString, chars::Chars=_default_delims)
     e = endof(s)
-    i = start(s)
-    while !done(s,i)
-        c, j = next(s,i)
+    i = firstind(s)
+    while i <= e
+        c, j = iterate(s, i)
         if !(c in chars)
             return SubString(s, i, e)
         end
@@ -288,7 +285,7 @@ julia> split(a,".")
 split(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
     _split(str, splitter, limit, keep, SubString{T}[])
 function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
-    i = start(str)
+    i = firstind(str)
     n = endof(str)
     r = search(str,splitter,i)
     if r != 0:-1
@@ -306,7 +303,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
             j, k = first(r), nextind(str,last(r))
         end
     end
-    if keep_empty || !done(str,i)
+    if keep_empty || i <= endof(str)
         push!(strs, SubString(str,i))
     end
     return strs

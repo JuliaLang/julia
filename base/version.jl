@@ -121,16 +121,12 @@ function ident_cmp(
     A::Tuple{Vararg{Union{Integer,String}}},
     B::Tuple{Vararg{Union{Integer,String}}},
 )
-    i = start(A)
-    j = start(B)
-    while !done(A,i) && !done(B,i)
-       a,i = next(A,i)
-       b,j = next(B,j)
+    for (a,b) in zip(A, B)
        c = ident_cmp(a,b)
        (c != 0) && return c
     end
-    done(A,i) && !done(B,j) ? -1 :
-    !done(A,i) && done(B,j) ? +1 : 0
+    endof(A) < endof(B) ? -1 :
+    endof(B) < endof(A) ? +1 : 0
 end
 
 function ==(a::VersionNumber, b::VersionNumber)

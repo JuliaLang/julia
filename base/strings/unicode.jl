@@ -769,22 +769,23 @@ function length(g::GraphemeIterator)
     return n
 end
 
-start(g::GraphemeIterator) = (start(g.s), Ref{Int32}(0))
-done(g::GraphemeIterator, i) = done(g.s, i[1])
-
-function next(g::GraphemeIterator, i_)
+function iterate(g::GraphemeIterator, i_=(firstint(g.s), UInt32(0)))
     s = g.s
     i, state = i_
+    state = Ref{UInt32}(state)
     j = i
-    c0, k = next(s, i)
-    while !done(s, k) # loop until next grapheme is s[i:j]
-        c, ℓ = next(s, k)
+    y = iterate(s, i)
+    y == nothing && return nothing
+    c0, k = y
+    y = iterate(s, k)
+    while y !== nothing # loop until next grapheme is s[i:j]
+        c, ℓ = y
         isgraphemebreak!(state, c0, c) && break
-        j = k
-        k = ℓ
+        j = y[2]
+        y = iterate(s, j)
         c0 = c
     end
-    return (SubString(s, i, j), (k, state))
+    return (SubString(s, i, j), (nextind(s, j), state[]))
 end
 
 ==(g1::GraphemeIterator, g2::GraphemeIterator) = g1.s == g2.s

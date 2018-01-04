@@ -96,8 +96,8 @@ function search(s::AbstractString, c::Chars, i::Integer)
     isempty(c) && return 1 ≤ i ≤ z ? i : throw(BoundsError(s, i))
     1 ≤ i ≤ z || throw(BoundsError(s, i))
     @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
-    while !done(s,i)
-        d, j = next(s,i)
+    while i <= endof(s)
+        d, j = iterate(s, i)
         if d in c
             return i
         end
@@ -105,7 +105,7 @@ function search(s::AbstractString, c::Chars, i::Integer)
     end
     return 0
 end
-search(s::AbstractString, c::Chars) = search(s,c,start(s))
+search(s::AbstractString, c::Chars) = search(s,c,firstind(s))
 
 in(c::Char, s::AbstractString) = (search(s,c)!=0)
 
@@ -114,20 +114,20 @@ function _searchindex(s, t, i)
         return 1 <= i <= nextind(s,endof(s)) ? i :
                throw(BoundsError(s, i))
     end
-    t1, j2 = next(t,start(t))
+    t1, j2 = iterate(t, firstind(t))
     while true
         i = search(s,t1,i)
         if i == 0 return 0 end
         c, ii = next(s,i)
         j = j2; k = ii
         matched = true
-        while !done(t,j)
-            if done(s,k)
+        while j <= endof(t)
+            if k > endof(s)
                 matched = false
                 break
             end
-            c, k = next(s,k)
-            d, j = next(t,j)
+            c, k = iterate(s,k)
+            d, j = iterate(t,j)
             if c != d
                 matched = false
                 break
@@ -299,13 +299,15 @@ function _rsearchindex(s, t, i)
         c, ii = next(rs, reverseind(rs, i))
         j = j2; k = ii
         matched = true
-        while !done(t, j)
-            if done(rs, k)
+        while true
+            x, y = iterate(t, j), iterate(rs, k)
+            x == nothing && break
+            if y === nothing
                 matched = false
                 break
             end
-            c, k = next(rs, k)
-            d, j = next(t, j)
+            c, k = y
+            d, j = x
             if c != d
                 matched = false
                 break
