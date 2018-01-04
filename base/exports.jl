@@ -846,13 +846,6 @@ export
     time,
     time_ns,
 
-# dates
-    Date,
-    DateTime,
-    DateFormat,
-    @dateformat_str,
-    now,
-
 # errors
     assert,
     backtrace,
