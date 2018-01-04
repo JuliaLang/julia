@@ -5193,22 +5193,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/base/#Base.lexcmp",
-    "page": "Essentials",
-    "title": "Base.lexcmp",
-    "category": "Function",
-    "text": "lexcmp(x, y)\n\nCompare x and y lexicographically and return -1, 0, or 1 depending on whether x is less than, equal to, or greater than y, respectively. This function should be defined for lexicographically comparable types, and lexless will call lexcmp by default.\n\nExamples\n\njulia> lexcmp(\"abc\", \"abd\")\n-1\n\njulia> lexcmp(\"abc\", \"abc\")\n0\n\n\n\n"
-},
-
-{
-    "location": "stdlib/base/#Base.lexless",
-    "page": "Essentials",
-    "title": "Base.lexless",
-    "category": "Function",
-    "text": "lexless(x, y)\n\nDetermine whether x is lexicographically less than y.\n\nExamples\n\njulia> lexless(\"abc\", \"abd\")\ntrue\n\n\n\n"
-},
-
-{
     "location": "stdlib/base/#Core.typeassert",
     "page": "Essentials",
     "title": "Core.typeassert",
@@ -5381,7 +5365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "All Objects",
     "category": "section",
-    "text": "Core.:(===)\nCore.isa\nBase.isequal\nBase.isless\nBase.ifelse\nBase.lexcmp\nBase.lexless\nCore.typeassert\nCore.typeof\nCore.tuple\nBase.ntuple\nBase.object_id\nBase.hash\nBase.finalizer\nBase.finalize\nBase.copy\nBase.deepcopy\nBase.getproperty\nBase.setproperty!\nCore.getfield\nCore.setfield!\nCore.isdefined\nBase.@isdefined\nBase.convert\nBase.promote\nBase.oftype\nBase.widen\nBase.identity"
+    "text": "Core.:(===)\nCore.isa\nBase.isequal\nBase.isless\nBase.ifelse\nCore.typeassert\nCore.typeof\nCore.tuple\nBase.ntuple\nBase.object_id\nBase.hash\nBase.finalizer\nBase.finalize\nBase.copy\nBase.deepcopy\nBase.getproperty\nBase.setproperty!\nCore.getfield\nCore.setfield!\nCore.isdefined\nBase.@isdefined\nBase.convert\nBase.promote\nBase.oftype\nBase.widen\nBase.identity"
 },
 
 {
@@ -8197,7 +8181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.cmp",
     "category": "Function",
-    "text": "cmp(x,y)\n\nReturn -1, 0, or 1 depending on whether x is less than, equal to, or greater than y, respectively. Uses the total order implemented by isless. For floating-point numbers, uses < but throws an error for unordered arguments.\n\nExamples\n\njulia> cmp(1, 2)\n-1\n\njulia> cmp(2, 1)\n1\n\njulia> cmp(2+im, 3-im)\nERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})\nStacktrace:\n[...]\n\n\n\ncmp(a::AbstractString, b::AbstractString) -> Int\n\nCompare two strings for equality. Return 0 if both strings have the same length and the character at each index is the same in both strings. Return -1 if a is a substring of b, or if a comes before b in alphabetical order. Return 1 if b is a substring of a, or if b comes before a in alphabetical order (technically, lexicographical order by Unicode code points).\n\nExamples\n\njulia> cmp(\"abc\", \"abc\")\n0\n\njulia> cmp(\"ab\", \"abc\")\n-1\n\njulia> cmp(\"abc\", \"ab\")\n1\n\njulia> cmp(\"ab\", \"ac\")\n-1\n\njulia> cmp(\"ac\", \"ab\")\n1\n\njulia> cmp(\"α\", \"a\")\n1\n\njulia> cmp(\"b\", \"β\")\n-1\n\n\n\n"
+    "text": "cmp(x,y)\n\nReturn -1, 0, or 1 depending on whether x is less than, equal to, or greater than y, respectively. Uses the total order implemented by isless. For floating-point numbers, uses < but throws an error for unordered arguments.\n\nExamples\n\njulia> cmp(1, 2)\n-1\n\njulia> cmp(2, 1)\n1\n\njulia> cmp(2+im, 3-im)\nERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})\nStacktrace:\n[...]\n\n\n\ncmp(<, x, y)\n\nReturn -1, 0, or 1 depending on whether x is less than, equal to, or greater than y, respectively. The first argument specifies a less-than comparison function to use.\n\n\n\ncmp(a::AbstractString, b::AbstractString) -> Int\n\nCompare two strings for equality. Return 0 if both strings have the same length and the character at each index is the same in both strings. Return -1 if a is a substring of b, or if a comes before b in alphabetical order. Return 1 if b is a substring of a, or if b comes before a in alphabetical order (technically, lexicographical order by Unicode code points).\n\nExamples\n\njulia> cmp(\"abc\", \"abc\")\n0\n\njulia> cmp(\"ab\", \"abc\")\n-1\n\njulia> cmp(\"abc\", \"ab\")\n1\n\njulia> cmp(\"ab\", \"ac\")\n-1\n\njulia> cmp(\"ac\", \"ab\")\n1\n\njulia> cmp(\"α\", \"a\")\n1\n\njulia> cmp(\"b\", \"β\")\n-1\n\n\n\n"
 },
 
 {
@@ -9085,7 +9069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = RowVector([1+im, 1-im])\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = RowVector([1+im, 1-im])\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
