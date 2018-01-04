@@ -188,7 +188,7 @@ targets2 = ["(1.0, 1.0)",
             "([1.0], [1.0])",
             "([1.0], [1.0])"]
 for n = 0:4
-    a = OffsetArray(ones(Float64,ntuple(d->1,n)), ntuple(identity,n))
+    a = OffsetArray(fill(1.,ntuple(d->1,n)), ntuple(identity,n))
     show(IOContext(io, :limit => true), MIME("text/plain"), a)
     @test String(take!(io)) == targets1[n+1]
     show(IOContext(io, :limit => true), MIME("text/plain"), (a,a))
@@ -377,7 +377,7 @@ I,J,N = findnz(z)
 @test var(A_3_3) == 7.5
 @test std(A_3_3, 1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
 @test std(A_3_3, 2) == OffsetArray(reshape([3,3,3], (3,1)), (A_3_3.offsets[1],0))
-@test sum(OffsetArray(ones(Int,3000), -1000)) == 3000
+@test sum(OffsetArray(fill(1,3000), -1000)) == 3000
 
 @test vecnorm(v) ≈ vecnorm(parent(v))
 @test vecnorm(A) ≈ vecnorm(parent(A))

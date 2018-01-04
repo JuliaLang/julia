@@ -713,8 +713,8 @@ end
 @test string(Tuple{Array}) == "Tuple{Array}"
 
 # PR #16651
-@test !contains(repr(ones(10,10)), "\u2026")
-@test contains(sprint((io, x) -> show(IOContext(io, :limit => true), x), ones(30, 30)), "\u2026")
+@test !contains(repr(fill(1.,10,10)), "\u2026")
+@test contains(sprint((io, x) -> show(IOContext(io, :limit => true), x), fill(1.,30,30)), "\u2026")
 
 # showcompact() also sets :multiline=>false (#16817)
 let io = IOBuffer(),

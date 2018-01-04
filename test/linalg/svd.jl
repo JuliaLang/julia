@@ -62,7 +62,7 @@ a2img  = randn(n,n)/2
             @test usv\b ≈ a\b
 
             if eltya <: BlasFloat
-                svdz = svdfact!(ones(eltya,0,0))
+                svdz = svdfact!(Matrix{eltya}(uninitialized,0,0))
                 @test svdz.U ≈ Matrix{eltya}(I, 0, 0)
                 @test svdz.S ≈ real(zeros(eltya,0))
                 @test svdz.Vt ≈ Matrix{eltya}(I, 0, 0)
@@ -87,7 +87,7 @@ a2img  = randn(n,n)/2
             @test d1 ≈ gsvd.D1
             @test d2 ≈ gsvd.D2
             @test q ≈ gsvd.Q
-            @test gsvd.a.^2 + gsvd.b.^2 ≈ ones(eltya,length(gsvd.a))
+            @test gsvd.a.^2 + gsvd.b.^2 ≈ fill(1, length(gsvd.a))
 
             #testing the other layout for D1 & D2
             b = rand(eltya,n,2*n)

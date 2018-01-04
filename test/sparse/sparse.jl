@@ -4,8 +4,8 @@ using Base.LinAlg: mul!, ldiv!, rdiv!, Adjoint, Transpose
 using Base.Printf: @printf
 
 @testset "issparse" begin
-    @test issparse(sparse(ones(5,5)))
-    @test !issparse(ones(5,5))
+    @test issparse(sparse(fill(1,5,5)))
+    @test !issparse(fill(1,5,5))
 end
 
 @testset "iszero specialization for SparseMatrixCSC" begin
@@ -23,11 +23,11 @@ end
 end
 
 @testset "indtype" begin
-    @test Base.SparseArrays.indtype(sparse(ones(Int8,2),ones(Int8,2),rand(2))) == Int8
+    @test Base.SparseArrays.indtype(sparse(Int8[1,1],Int8[1,1],[1,1])) == Int8
 end
 
 @testset "sparse matrix construction" begin
-    @test isequal(Array(sparse(complex.(ones(5,5), ones(5,5)))), complex.(ones(5,5), ones(5,5)))
+    @test (A = fill(1.0+im,5,5); isequal(Array(sparse(A)), A))
     @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
     @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2], 3, 3)
     @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2,3], 0, 1)
@@ -59,7 +59,7 @@ end
 end
 
 se33 = SparseMatrixCSC{Float64}(I, 3, 3)
-do33 = ones(3)
+do33 = fill(1.,3)
 
 @testset "sparse binary operations" begin
     @test isequal(se33 * se33, se33)
@@ -84,14 +84,14 @@ end
     sp33 = sparse(1.0I, 3, 3)
 
     @testset "horizontal concatenation" begin
-        @test all([se33 se33] == sparse([1, 2, 3, 1, 2, 3], [1, 2, 3, 4, 5, 6], ones(6)))
+        @test [se33 se33] == [Array(se33) Array(se33)]
         @test length(([sp33 0I]).nzval) == 3
     end
 
     @testset "vertical concatenation" begin
-        @test all([se33; se33] == sparse([1, 4, 2, 5, 3, 6], [1, 1, 2, 2, 3, 3], ones(6)))
+        @test [se33; se33] == [Array(se33); Array(se33)]
         se33_32bit = convert(SparseMatrixCSC{Float32,Int32}, se33)
-        @test all([se33; se33_32bit] == sparse([1, 4, 2, 5, 3, 6], [1, 1, 2, 2, 3, 3], ones(6)))
+        @test [se33; se33_32bit] == [Array(se33); Array(se33_32bit)]
         @test length(([sp33; 0I]).nzval) == 3
     end
 
@@ -106,7 +106,7 @@ end
     end
 
     @testset "blkdiag concatenation" begin
-        @test all(blkdiag(se33, se33) == sparse([1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6], ones(6)))
+        @test blkdiag(se33, se33) == sparse(1:6,1:6,fill(1.,6))
     end
 
     @testset "concatenation promotion" begin
@@ -208,7 +208,7 @@ end
         @test (maximum(abs.((Transpose(a)*c + d) - (Transpose(Array(a))*c + d))) < 1000*eps())
         c = randn(6) + im*randn(6)
         @test_throws DimensionMismatch α*Transpose(a)*c + β*c
-        @test_throws DimensionMismatch α*Transpose(a)*ones(5) + β*c
+        @test_throws DimensionMismatch α*Transpose(a)*fill(1.,5) + β*c
 
         a = I + 0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2)
         b = randn(5,3)
@@ -346,7 +346,7 @@ dA = Array(sA)
         @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), Diagonal(b))
         @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), Transpose(Diagonal(b)))
         @test scale!(copy(dAt), conj(bi)) ≈ rdiv!(copy(sAt), Adjoint(Diagonal(b)))
-        @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(ones(length(b) + 1)))
+        @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
         @test_throws LinAlg.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
     end
 end
@@ -540,12 +540,12 @@ end
 end
 
 @testset "issue #5824" begin
-    @test sprand(4,5,0.5).^0 == sparse(ones(4,5))
+    @test sprand(4,5,0.5).^0 == sparse(fill(1,4,5))
 end
 
 @testset "issue #5985" begin
     @test sprand(Bool, 4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
-    @test sprand(Bool, 4, 5, 1.00) == sparse(ones(Bool, 4, 5))
+    @test sprand(Bool, 4, 5, 1.00) == sparse(fill(true, 4, 5))
     sprb45nnzs = zeros(5)
     for i=1:5
         sprb45 = sprand(Bool, 4, 5, 0.5)
@@ -581,8 +581,8 @@ end
     @test maximum(P, (2,)) == reshape([1.0,2.0,3.0],3,1)
     @test maximum(P, (1,2)) == reshape([3.0],1,1)
 
-    @test maximum(sparse(-ones(3,3))) == -1
-    @test minimum(sparse(ones(3,3))) == 1
+    @test maximum(sparse(fill(-1,3,3))) == -1
+    @test minimum(sparse(fill(1,3,3))) == 1
 end
 
 @testset "unary functions" begin
@@ -737,10 +737,10 @@ end
     @test count(!iszero, a) == 0
     a[1,:] = 1
     @test count(!iszero, a) == 10
-    @test a[1,:] == sparse(ones(Int,10))
+    @test a[1,:] == sparse(fill(1,10))
     a[:,2] = 2
     @test count(!iszero, a) == 19
-    @test a[:,2] == 2*sparse(ones(Int,10))
+    @test a[:,2] == sparse(fill(2,10))
     b = copy(a)
 
     # Zero-assignment behavior of setindex!(A, v, i, j)
@@ -778,10 +778,10 @@ end
     @test nnz(a) == 20
     @test count(!iszero, a) == 11
     a = copy(b)
-    a[1:2,:] = let c = sparse(ones(2,10)); fill!(c.nzval, 0); c; end
+    a[1:2,:] = let c = sparse(fill(1,2,10)); fill!(c.nzval, 0); c; end
     @test nnz(a) == 19
     @test count(!iszero, a) == 8
-    a[1:2,1:3] = let c = sparse(ones(2,3)); c[1,2] = c[2,1] = c[2,2] = 0; c; end
+    a[1:2,1:3] = let c = sparse(fill(1,2,3)); c[1,2] = c[2,1] = c[2,2] = 0; c; end
     @test nnz(a) == 20
     @test count(!iszero, a) == 11
 
@@ -828,15 +828,15 @@ end
     A[1:5,1:10] = 10
     A[1:5,1:10] = 10
     @test count(!iszero, A) == 50
-    @test A[1:5,1:10] == 10 * ones(Int, 5, 10)
+    @test A[1:5,1:10] == fill(10, 5, 10)
     A[6:10,11:20] = 0
     @test count(!iszero, A) == 50
     A[6:10,11:20] = 20
     @test count(!iszero, A) == 100
-    @test A[6:10,11:20] == 20 * ones(Int, 5, 10)
+    @test A[6:10,11:20] == fill(20, 5, 10)
     A[4:8,8:16] = 15
     @test count(!iszero, A) == 121
-    @test A[4:8,8:16] == 15 * ones(Int, 5, 9)
+    @test A[4:8,8:16] == fill(15, 5, 9)
 
     ASZ = 1000
     TSZ = 800
@@ -1293,7 +1293,7 @@ end
 end
 
 @testset "test that sparse / sparsevec constructors work for AbstractMatrix subtypes" begin
-    D = Diagonal(ones(10,10))
+    D = Diagonal(fill(1,10))
     sm = sparse(D)
     sv = sparsevec(D)
 
@@ -1367,14 +1367,14 @@ end
 end
 
 @testset "sparsevec" begin
-    local A = sparse(ones(5, 5))
-    @test all(Array(sparsevec(A)) .== ones(25))
-    @test all(Array(sparsevec([1:5;], 1)) .== ones(5))
+    local A = sparse(fill(1, 5, 5))
+    @test sparsevec(A) == fill(1, 25)
+    @test sparsevec([1:5;], 1) == fill(1, 5)
     @test_throws ArgumentError sparsevec([1:5;], [1:4;])
 end
 
 @testset "sparse" begin
-    local A = sparse(ones(5, 5))
+    local A = sparse(fill(1, 5, 5))
     @test sparse(A) == A
     @test sparse([1:5;], [1:5;], 1) == sparse(1.0I, 5, 5)
 end
@@ -1385,13 +1385,11 @@ end
 end
 
 @testset "istriu/istril" begin
-    local A
-    A = sparse(triu(rand(5, 5)))
-    @test istriu(A)
-    @test !istriu(sparse(ones(5, 5)))
-    A = sparse(tril(rand(5, 5)))
-    @test istril(A)
-    @test !istril(sparse(ones(5, 5)))
+    local A = fill(1, 5, 5)
+    @test istriu(sparse(triu(A)))
+    @test !istriu(sparse(A))
+    @test istril(sparse(tril(A)))
+    @test !istril(sparse(A))
 end
 
 @testset "droptol" begin
@@ -1446,13 +1444,14 @@ end
 end
 
 @testset "trace" begin
-    @test_throws DimensionMismatch trace(sparse(ones(5,6)))
+    @test_throws DimensionMismatch trace(spzeros(5,6))
     @test trace(sparse(1.0I, 5, 5)) == 5
 end
 
 @testset "spdiagm" begin
-    @test spdiagm(0 => ones(2), -1 => ones(2)) == [1.0 0.0 0.0; 1.0 1.0 0.0; 0.0 1.0 0.0]
-    @test spdiagm(0 => ones(2),  1 => ones(2)) == [1.0 1.0 0.0; 0.0 1.0 1.0; 0.0 0.0 0.0]
+    x = fill(1, 2)
+    @test spdiagm(0 => x, -1 => x) == [1 0 0; 1 1 0; 0 1 0]
+    @test spdiagm(0 => x,  1 => x) == [1 1 0; 0 1 1; 0 0 0]
 
     for (x, y) in ((rand(5), rand(4)),(sparse(rand(5)), sparse(rand(4))))
         @test spdiagm(-1 => x)::SparseMatrixCSC         == diagm(-1 => x)
@@ -1762,7 +1761,8 @@ end
     @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
     @test factorize(tril(A)) == tril(A)
     @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
-    @test !Base.USE_GPL_LIBS || factorize(A[:, 1:4])\ones(size(A, 1)) ≈ Array(A[:, 1:4])\ones(size(A, 1))
+    C, b = A[:, 1:4], fill(1., size(A, 1))
+    @test !Base.USE_GPL_LIBS || factorize(C)\b ≈ Array(C)\b
     @test_throws ErrorException chol(A)
     @test_throws ErrorException lu(A)
     @test_throws ErrorException eig(A)
@@ -1772,15 +1772,13 @@ end
 @testset "issue #13792, use sparse triangular solvers for sparse triangular solves" begin
     local A, n, x
     n = 100
-    A = sprandn(n, n, 0.5) + sqrt(n)*I
-    x = LowerTriangular(A)*ones(n)
-    @test LowerTriangular(A)\x ≈ ones(n)
-    x = UpperTriangular(A)*ones(n)
-    @test UpperTriangular(A)\x ≈ ones(n)
+    A, b = sprandn(n, n, 0.5) + sqrt(n)*I, fill(1., n)
+    @test LowerTriangular(A)\(LowerTriangular(A)*b) ≈ b
+    @test UpperTriangular(A)\(UpperTriangular(A)*b) ≈ b
     A[2,2] = 0
     dropzeros!(A)
-    @test_throws LinAlg.SingularException LowerTriangular(A)\ones(n)
-    @test_throws LinAlg.SingularException UpperTriangular(A)\ones(n)
+    @test_throws LinAlg.SingularException LowerTriangular(A)\b
+    @test_throws LinAlg.SingularException UpperTriangular(A)\b
 end
 
 @testset "issue described in https://groups.google.com/forum/#!topic/julia-dev/QT7qpIpgOaA" begin
@@ -1823,7 +1821,7 @@ end
 # matrices/vectors yield sparse arrays
 @testset "sparse and dense concatenations" begin
     N = 4
-    densevec = ones(N)
+    densevec = fill(1., N)
     densemat = diagm(0 => densevec)
     spmat = spdiagm(0 => densevec)
     # Test that concatenations of pairs of sparse matrices yield sparse arrays
@@ -1971,7 +1969,7 @@ end
     @test String(take!(io)) ==  string("5×3 SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
                                        "  =  1.0\n  ⋮\n  [5, 3]  =  5.0")
 
-    show(ioc, MIME"text/plain"(), sparse(ones(5,3)))
+    show(ioc, MIME"text/plain"(), sparse(fill(1.,5,3)))
     @test String(take!(io)) ==  string("5×3 SparseMatrixCSC{Float64,$Int} with 15 stored entries:\n  [1, 1]",
                                        "  =  1.0\n  ⋮\n  [5, 3]  =  1.0")
 
@@ -1985,7 +1983,7 @@ end
     @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]",
                                        "  =  1.0\n  [2, 1]  =  2.0\n  ⋮\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
 
-    show(ioc, MIME"text/plain"(), sparse(ones(6,3)))
+    show(ioc, MIME"text/plain"(), sparse(fill(1.,6,3)))
     @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,$Int} with 18 stored entries:\n  [1, 1]",
                                        "  =  1.0\n  [2, 1]  =  1.0\n  ⋮\n  [5, 3]  =  1.0\n  [6, 3]  =  1.0")
 
@@ -1999,8 +1997,8 @@ end
     local A
     colptr = [1,2,3,4]
     rowval = [1,2,3]
-    nzval1  = ones(0)
-    nzval2  = ones(3)
+    nzval1  = Int[]
+    nzval2  = [1,1,1]
     A = SparseMatrixCSC(n, n, colptr, rowval, nzval1)
     @test nnz(A) == n
     @test_throws BoundsError A[n,n]
@@ -2123,21 +2121,21 @@ end
     simA = similar(A, (6,6))
     @test typeof(simA) == typeof(A)
     @test size(simA) == (6,6)
-    @test simA.colptr == ones(eltype(A.colptr), 6+1)
+    @test simA.colptr == fill(1, 6+1)
     @test length(simA.rowval) == length(A.rowval)
     @test length(simA.nzval) == length(A.nzval)
     # test similar with entry type and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32,eltype(A.colptr)}
     @test size(simA) == (6,6)
-    @test simA.colptr == ones(eltype(A.colptr), 6+1)
+    @test simA.colptr == fill(1, 6+1)
     @test length(simA.rowval) == length(A.rowval)
     @test length(simA.nzval) == length(A.nzval)
     # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, Int8, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
     @test size(simA) == (6,6)
-    @test simA.colptr == ones(eltype(A.colptr), 6+1)
+    @test simA.colptr == fill(1, 6+1)
     @test length(simA.rowval) == length(A.rowval)
     @test length(simA.nzval) == length(A.nzval)
     # test similar with Dims{1} specification (preserves nothing)

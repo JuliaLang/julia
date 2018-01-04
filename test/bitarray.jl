@@ -93,8 +93,8 @@ timesofar("conversions")
     @test isequal(fill!(b1, false), falses(size(b1)))
 
     for (sz,T) in allsizes
-        @test isequal(Array(trues(sz...)), ones(Bool, sz...))
-        @test isequal(Array(falses(sz...)), zeros(Bool, sz...))
+        @test isequal(Array(trues(sz...)), fill(true, sz...))
+        @test isequal(Array(falses(sz...)), fill(false, sz...))
 
         b1 = rand!(falses(sz...))
         @test isa(b1, T)
@@ -113,7 +113,7 @@ timesofar("conversions")
         for n in [1; 1023:1025]
             b1 = falses(n)
             for m in [1; 10; 1023:1025]
-                u1 = ones(Bool, m)
+                u1 = fill(true, m)
                 for fu! in [u->fill!(u, true), u->rand!(u)]
                     fu!(u1)
                     c1 = convert(Vector{Int}, u1)

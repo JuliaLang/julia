@@ -3731,7 +3731,7 @@ for (stev, stebz, stegr, stein, elty) in
             isplit = similar(dv, BlasInt,n)
             w = similar(dv, $elty,n)
             if length(iblock_in) < m #Not enough block specifications
-                iblock[1:m] = ones(BlasInt, m)
+                iblock[1:m] = fill(BlasInt(1), m)
                 w[1:m] = sort(w_in)
             else
                 iblock[1:m] = iblock_in

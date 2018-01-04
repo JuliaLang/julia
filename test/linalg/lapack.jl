@@ -26,8 +26,7 @@ import Base.LinAlg.BlasInt
         @test LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[vals .< 1.0]
         @test LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[4:5]
         @test vals ≈ LAPACK.syev!('N','U',copy(Asym))
-
-        @test_throws DimensionMismatch LAPACK.sygvd!(1,'V','U',copy(Asym),ones(elty,6,6))
+        @test_throws DimensionMismatch LAPACK.sygvd!(1,'V','U',copy(Asym),Matrix{elty}(uninitialized,6,6))
     end
 end
 
@@ -105,7 +104,7 @@ end
         D = LAPACK.gbtrs!('N',2,1,6,AB,ipiv,D)
         A = diagm(-2 => dl2, -1 => dl, 0 => d, 1 => du)
         @test A\C ≈ D
-        @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,ones(elty,7,6))
+        @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,Matrix{elty}(uninitialized,7,6))
         @test_throws Base.LinAlg.LAPACKException LAPACK.gbtrf!(2,1,6,zeros(elty,6,6))
     end
 end
@@ -113,29 +112,31 @@ end
 
 @testset "geqp3, geqrt error handling" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        A = rand(elty,10,10)
-        @test_throws DimensionMismatch LAPACK.geqlf!(A,zeros(elty,11))
-        @test_throws DimensionMismatch LAPACK.gelqf!(A,zeros(elty,11))
-        @test_throws DimensionMismatch LAPACK.geqp3!(A,ones(Base.LinAlg.BlasInt,11),zeros(elty,10))
-        @test_throws DimensionMismatch LAPACK.geqp3!(A,ones(Base.LinAlg.BlasInt,10),zeros(elty,11))
-        @test_throws ArgumentError LAPACK.geqrt!(A,zeros(elty,11,10))
-        @test_throws DimensionMismatch LAPACK.geqrt3!(A,zeros(elty,11,10))
-        @test_throws DimensionMismatch LAPACK.geqrt3!(ones(elty,10,11),zeros(elty,11,11))
-        @test_throws DimensionMismatch LAPACK.geqrf!(A,zeros(elty,11))
-        @test_throws DimensionMismatch LAPACK.gerqf!(A,zeros(elty,11))
+        x10, x11 = Vector{elty}.(uninitialized, (10, 11))
+        y10, y11 = Vector{Base.LinAlg.BlasInt}.(uninitialized, (10, 11))
+        A10x10, A11x10, A10x11, A11x11 = Matrix{elty}.(uninitialized, ((10,10), (11,10), (10,11), (11,11)))
+        @test_throws DimensionMismatch LAPACK.geqlf!(A10x10, x11)
+        @test_throws DimensionMismatch LAPACK.gelqf!(A10x10, x11)
+        @test_throws DimensionMismatch LAPACK.geqp3!(A10x10, y11, x10)
+        @test_throws DimensionMismatch LAPACK.geqp3!(A10x10, y10, x11)
+        @test_throws ArgumentError LAPACK.geqrt!(A10x10, A11x10)
+        @test_throws DimensionMismatch LAPACK.geqrt3!(A10x10, A11x10)
+        @test_throws DimensionMismatch LAPACK.geqrt3!(A10x11, A11x11)
+        @test_throws DimensionMismatch LAPACK.geqrf!(A10x10, x11)
+        @test_throws DimensionMismatch LAPACK.gerqf!(A10x10, x11)
     end
 end
 
 @testset "gels, gesv, getrs, getri error handling" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        A = rand(elty,10,10)
-        B = rand(elty,11,11)
-        @test_throws DimensionMismatch LAPACK.gels!('N',A,B)
-        @test_throws DimensionMismatch LAPACK.gels!('T',A,B)
-        @test_throws DimensionMismatch LAPACK.gesv!(A,B)
-        @test_throws DimensionMismatch LAPACK.getrs!('N',A,ones(Base.LinAlg.BlasInt,10),B)
-        @test_throws DimensionMismatch LAPACK.getrs!('T',A,ones(Base.LinAlg.BlasInt,10),B)
-        @test_throws DimensionMismatch LAPACK.getri!(A,ones(Base.LinAlg.BlasInt,11))
+        A10x10, B11x11 = Matrix{elty}.(uninitialized, ((10,10), (11,11)))
+        x10, x11 = Vector{Base.LinAlg.BlasInt}.(uninitialized, (10, 11))
+        @test_throws DimensionMismatch LAPACK.gels!('N',A10x10,B11x11)
+        @test_throws DimensionMismatch LAPACK.gels!('T',A10x10,B11x11)
+        @test_throws DimensionMismatch LAPACK.gesv!(A10x10,B11x11)
+        @test_throws DimensionMismatch LAPACK.getrs!('N',A10x10,x10,B11x11)
+        @test_throws DimensionMismatch LAPACK.getrs!('T',A10x10,x10,B11x11)
+        @test_throws DimensionMismatch LAPACK.getri!(A10x10,x11)
     end
 end
 
@@ -257,11 +258,13 @@ end
         d  = rand(elty,10)
         dl = rand(elty,9)
         b  = rand(elty,10)
-        @test_throws DimensionMismatch LAPACK.gttrf!(zeros(elty,11),d,du)
-        @test_throws DimensionMismatch LAPACK.gttrf!(dl,d,zeros(elty,11))
-        @test_throws DimensionMismatch LAPACK.gttrs!('N',zeros(elty,11),d,du,ones(elty,9),zeros(Base.LinAlg.BlasInt,10),b)
-        @test_throws DimensionMismatch LAPACK.gttrs!('N',dl,d,zeros(elty,11),ones(elty,9),zeros(Base.LinAlg.BlasInt,10),b)
-        @test_throws DimensionMismatch LAPACK.gttrs!('N',dl,d,du,ones(elty,9),zeros(Base.LinAlg.BlasInt,10),zeros(elty,11))
+        y10 = Vector{BlasInt}(uninitialized, 10)
+        x9, x11 = Vector{elty}.(uninitialized, (9, 11))
+        @test_throws DimensionMismatch LAPACK.gttrf!(x11, d, du)
+        @test_throws DimensionMismatch LAPACK.gttrf!(dl, d, x11)
+        @test_throws DimensionMismatch LAPACK.gttrs!('N', x11, d, du, x9, y10, b)
+        @test_throws DimensionMismatch LAPACK.gttrs!('N', dl, d, x11, x9, y10, b)
+        @test_throws DimensionMismatch LAPACK.gttrs!('N', dl, d, du, x9, y10, x11)
         A = lufact(Tridiagonal(dl,d,du))
         b  = rand(elty,10,5)
         c = copy(b)
@@ -467,7 +470,7 @@ end
 
 @testset "ptsv" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        dv = ones(elty,10)
+        dv = fill(elty(1),10)
         ev = zeros(elty,9)
         rdv = real(dv)
         A = SymTridiagonal(dv,ev)
@@ -477,14 +480,14 @@ end
         B = rand(elty,10,10)
         C = copy(B)
         @test A\B ≈ LAPACK.ptsv!(rdv,ev,C)
-        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,ones(elty,10),C)
-        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,ev,ones(elty,11,11))
+        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,Vector{elty}(uninitialized,10),C)
+        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,ev,Matrix{elty}(uninitialized,11,11))
     end
 end
 
 @testset "pttrf and pttrs" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        dv = ones(elty,10)
+        dv = fill(elty(1),10)
         ev = zeros(elty,9)
         rdv = real(dv)
         A = SymTridiagonal(dv,ev)
@@ -497,34 +500,36 @@ end
         C = copy(B)
         if elty <: Complex
             @test A\B ≈ LAPACK.pttrs!('U',rdv,ev,C)
-            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,ones(elty,10),C)
-            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,ev,rand(elty,11,11))
+            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,Vector{elty}(uninitialized,10),C)
+            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,ev,Matrix{elty}(uninitialized,11,11))
         else
             @test A\B ≈ LAPACK.pttrs!(rdv,ev,C)
-            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,ones(elty,10),C)
-            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,ev,rand(elty,11,11))
+            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,Vector{elty}(uninitialized,10),C)
+            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,ev,Matrix{elty}(uninitialized,11,11))
         end
     end
 end
 
 @testset "posv and some errors for friends" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        A = rand(elty,10,10)/100
-        A += real(diagm(0 => 10*real(rand(elty,10))))
+        local n = 10
+        A = rand(elty,n,n)/100
+        A += real(diagm(0 => n*real(rand(elty,n))))
         if elty <: Complex
             A = A + adjoint(A)
         else
             A = A + transpose(A)
         end
-        B = rand(elty,10,10)
+        B = rand(elty,n,n)
         D = copy(A)
         C = copy(B)
         D,C = LAPACK.posv!('U',D,C)
         @test A\B ≈ C
-        @test_throws DimensionMismatch LAPACK.posv!('U',D,ones(elty,12,12))
-        @test_throws DimensionMismatch LAPACK.potrs!('U',D,ones(elty,12,12))
+        offsizemat = Matrix{elty}(uninitialized, n+1, n+1)
+        @test_throws DimensionMismatch LAPACK.posv!('U', D, offsizemat)
+        @test_throws DimensionMismatch LAPACK.potrs!('U', D, offsizemat)
 
-        @test LAPACK.potrs!('U',zeros(elty,0,0),ones(elty,0)) == ones(elty,0)
+        @test LAPACK.potrs!('U',Matrix{elty}(uninitialized,0,0),elty[]) == elty[]
     end
 end
 

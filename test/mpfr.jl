@@ -550,7 +550,7 @@ end
     z = BigFloat(3)
     w = BigFloat(4)
     @test sum([x,y,z,w]) == BigFloat(10)
-    big_array = ones(BigFloat, 100)
+    big_array = fill(BigFloat(1), 100)
     @test sum(big_array) == BigFloat(100)
     @test sum(BigFloat[]) == BigFloat(0)
 end

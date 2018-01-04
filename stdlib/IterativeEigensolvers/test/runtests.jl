@@ -180,7 +180,7 @@ let
     # Adjust the tolerance a bit since matrices with repeated eigenvalues
     # can be very stressful to ARPACK and this may therefore fail with
     # info = 3 if the tolerance is too small
-    @test eigs(sparse(1.0I, 50, 50), nev=10, tol = 5e-16)[1] ≈ ones(10) #Issue 4246
+    @test eigs(sparse(1.0I, 50, 50), nev=10, tol = 5e-16)[1] ≈ fill(1., 10) #Issue 4246
 end
 
 @testset "real svds" begin

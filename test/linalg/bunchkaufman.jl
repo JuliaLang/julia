@@ -104,9 +104,9 @@ bimg  = randn(n,2)/2
             end
         end
         if eltya <: BlasReal
-            As1 = ones(eltya, n, n)
-            As2 = complex(ones(eltya, n, n))
-            As3 = complex(ones(eltya, n, n))
+            As1 = fill(eltya(1), n, n)
+            As2 = fill(complex(eltya(1)), n, n)
+            As3 = fill(complex(eltya(1)), n, n)
             As3[end, 1] += im/2
             As3[1, end] -= im/2
             for As = (As1, As2, As3)
@@ -120,7 +120,7 @@ bimg  = randn(n,2)/2
                             @test bks == "Failed factorization of type $(typeof(F))"
                             @test det(F) == 0
                             @test_throws LinAlg.SingularException inv(F)
-                            @test_throws LinAlg.SingularException F \ ones(size(As, 1))
+                            @test_throws LinAlg.SingularException F \ fill(1., size(As,1))
                         end
                     end
                 end

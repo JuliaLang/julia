@@ -406,7 +406,7 @@ end
 
 function sparse_diff1(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     m,n = size(S)
-    m > 1 || return SparseMatrixCSC(0, n, ones(Ti,n+1), Ti[], Tv[])
+    m > 1 || return SparseMatrixCSC(0, n, fill(one(Ti),n+1), Ti[], Tv[])
     colptr = Vector{Ti}(uninitialized, n+1)
     numnz = 2 * nnz(S) # upper bound; will shrink later
     rowval = Vector{Ti}(uninitialized, numnz)

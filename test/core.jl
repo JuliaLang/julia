@@ -2220,7 +2220,7 @@ function issue7897!(data, arr)
 end
 
 let
-    a = ones(UInt8, 10)
+    a = fill(0x01, 10)
     sa = view(a, 4:6)
     # This can throw an error, but shouldn't segfault
     try
@@ -4054,7 +4054,7 @@ end
 # `TypeVar`) without crashing
 let
     function arrayset_unknown_dim(::Type{T}, n) where T
-        Base.arrayset(true, reshape(Vector{T}(uninitialized, 1), ones(Int, n)...), 2, 1)
+        Base.arrayset(true, reshape(Vector{T}(uninitialized, 1), fill(1, n)...), 2, 1)
     end
     arrayset_unknown_dim(Any, 1)
     arrayset_unknown_dim(Any, 2)

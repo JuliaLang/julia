@@ -81,7 +81,7 @@ else
 
                 ## All values equal
                 name = "$(typename)_$(logsize)_$(string(s)[1:end-5])_allequal"
-                data1 = data[ones(Int, size)]
+                data1 = data[fill(1, size)]
                 @timeit(sort!(data1, alg=s), name, "")
 
                 ## QuickSort median killer

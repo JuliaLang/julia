@@ -62,11 +62,12 @@ nn = 100
         @test A\B[:,1] ≈ Array(A)\B[:,1]
         @test A\B ≈ Array(A)\B
         @test_throws DimensionMismatch A\B[1:m-1,:]
-        @test A[1:9,:]*(A[1:9,:]\ones(eltyB, 9)) ≈ ones(9) # Underdetermined system
+        C, x = A[1:9, :], fill(eltyB(1), 9)
+        @test C*(C\x) ≈ x # Underdetermined system
     end
 
     # Make sure that conversion to Sparse doesn't use SuiteSparse's symmetric flag
-    @test qrfact(SparseMatrixCSC{eltyA}(I, 5, 5)) \ ones(eltyA, 5) == ones(5)
+    @test qrfact(SparseMatrixCSC{eltyA}(I, 5, 5)) \ fill(eltyA(1), 5) == fill(1, 5)
 end
 
 @testset "basic solution of rank deficient ls" begin

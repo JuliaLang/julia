@@ -192,7 +192,7 @@ end
 end
 
 @testset "Issue 16520" begin
-    @test_throws DimensionMismatch ones(3,2)\(1:5)
+    @test_throws DimensionMismatch Matrix{Float64}(uninitialized,3,2)\(1:5)
 end
 
 @testset "Issue 22810" begin

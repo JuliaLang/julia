@@ -47,20 +47,20 @@ srand(1)
     for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
        @test Matrix(convert(newtype, A)) == Matrix(A)
     end
-    A = Tridiagonal(ones(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
+    A = Tridiagonal(fill(1., n-1), [1.0:n;], fill(1., n-1)) #not morally Diagonal
     for newtype in [SymTridiagonal, Matrix]
        @test Matrix(convert(newtype, A)) == Matrix(A)
     end
     for newtype in [Diagonal, Bidiagonal]
         @test_throws ArgumentError convert(newtype,A)
     end
-    A = Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
+    A = Tridiagonal(zeros(n-1), [1.0:n;], fill(1., n-1)) #not morally Diagonal
     @test Matrix(convert(Bidiagonal, A)) == Matrix(A)
-    A = UpperTriangular(Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)))
+    A = UpperTriangular(Tridiagonal(zeros(n-1), [1.0:n;], fill(1., n-1)))
     @test Matrix(convert(Bidiagonal, A)) == Matrix(A)
-    A = Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)) #not morally Diagonal
+    A = Tridiagonal(fill(1., n-1), [1.0:n;], zeros(n-1)) #not morally Diagonal
     @test Matrix(convert(Bidiagonal, A)) == Matrix(A)
-    A = LowerTriangular(Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)))
+    A = LowerTriangular(Tridiagonal(fill(1., n-1), [1.0:n;], zeros(n-1)))
     @test Matrix(convert(Bidiagonal, A)) == Matrix(A)
     @test_throws ArgumentError convert(SymTridiagonal,A)
 
@@ -90,7 +90,7 @@ end
            @test Matrix(B - C) ≈ Matrix(A - A)
        end
     end
-    B = SymTridiagonal(a, ones(n-1))
+    B = SymTridiagonal(a, fill(1., n-1))
     for Spectype in [Diagonal, Bidiagonal, Tridiagonal, Matrix]
         @test Matrix(B + convert(Spectype,A)) ≈ Matrix(B + A)
         @test Matrix(convert(Spectype,A) + B) ≈ Matrix(B + A)
@@ -128,10 +128,10 @@ end
 @testset "concatenations of combinations of special and other matrix types" begin
     N = 4
     # Test concatenating pairwise combinations of special matrices
-    diagmat = Diagonal(ones(N))
-    bidiagmat = Bidiagonal(ones(N), ones(N-1), :U)
-    tridiagmat = Tridiagonal(ones(N-1), ones(N), ones(N-1))
-    symtridiagmat = SymTridiagonal(ones(N), ones(N-1))
+    diagmat = Diagonal(1:N)
+    bidiagmat = Bidiagonal(1:N, 1:(N-1), :U)
+    tridiagmat = Tridiagonal(1:(N-1), 1:N, 1:(N-1))
+    symtridiagmat = SymTridiagonal(1:N, 1:(N-1))
     specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat)
     for specialmata in specialmats, specialmatb in specialmats
         @test issparse(hcat(specialmata, specialmatb))
@@ -141,7 +141,7 @@ end
     end
     # Test concatenating pairwise combinations of special matrices with sparse matrices,
     # dense matrices, or dense vectors
-    densevec = ones(N)
+    densevec = fill(1., N)
     densemat = diagm(0 => densevec)
     spmat = spdiagm(0 => densevec)
     for specialmat in specialmats
@@ -181,14 +181,14 @@ end
     # Concatenations involving these types, un/annotated, should yield sparse arrays
     spvec = spzeros(N)
     spmat = sparse(1.0I, N, N)
-    diagmat = Diagonal(ones(N))
-    bidiagmat = Bidiagonal(ones(N), ones(N-1), :U)
-    tridiagmat = Tridiagonal(ones(N-1), ones(N), ones(N-1))
-    symtridiagmat = SymTridiagonal(ones(N), ones(N-1))
+    diagmat = Diagonal(1:N)
+    bidiagmat = Bidiagonal(1:N, 1:(N-1), :U)
+    tridiagmat = Tridiagonal(1:(N-1), 1:N, 1:(N-1))
+    symtridiagmat = SymTridiagonal(1:N, 1:(N-1))
     sparseconcatmats = testfull ? (spmat, diagmat, bidiagmat, tridiagmat, symtridiagmat) : (spmat, diagmat)
     # Concatenations involving strictly these types, un/annotated, should yield dense arrays
-    densevec = ones(N)
-    densemat = ones(N, N)
+    densevec = fill(1., N)
+    densemat = fill(1., N, N)
     # Annotated collections
     annodmats = [annot(densemat) for annot in annotations]
     annospcmats = [annot(spcmat) for annot in annotations, spcmat in sparseconcatmats]

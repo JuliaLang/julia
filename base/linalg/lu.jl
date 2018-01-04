@@ -466,7 +466,7 @@ factorize(A::Tridiagonal) = lufact(A)
 function getproperty(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
     m, n = size(F)
     if d == :L
-        L = Array(Bidiagonal(ones(T, n), getfield(getfield(F, :factors), :dl), d))
+        L = Array(Bidiagonal(fill(one(T), n), getfield(getfield(F, :factors), :dl), d))
         for i = 2:n
             tmp = L[getfield(F, :ipiv)[i], 1:i - 1]
             L[getfield(F, :ipiv)[i], 1:i - 1] = L[i, 1:i - 1]

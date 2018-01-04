@@ -753,7 +753,7 @@ compute the cosine. Otherwise, the cosine is determined by calling [`exp`](@ref)
 
 # Examples
 ```jldoctest
-julia> cos(ones(2, 2))
+julia> cos(fill(1.0, (2,2)))
 2×2 Array{Float64,2}:
   0.291927  -0.708073
  -0.708073   0.291927
@@ -786,7 +786,7 @@ compute the sine. Otherwise, the sine is determined by calling [`exp`](@ref).
 
 # Examples
 ```jldoctest
-julia> sin(ones(2, 2))
+julia> sin(fill(1.0, (2,2)))
 2×2 Array{Float64,2}:
  0.454649  0.454649
  0.454649  0.454649
@@ -820,7 +820,7 @@ Compute the matrix sine and cosine of a square matrix `A`.
 
 # Examples
 ```jldoctest
-julia> S, C = sincos(ones(2, 2));
+julia> S, C = sincos(fill(1.0, (2,2)));
 
 julia> S
 2×2 Array{Float64,2}:
@@ -872,7 +872,7 @@ compute the tangent. Otherwise, the tangent is determined by calling [`exp`](@re
 
 # Examples
 ```jldoctest
-julia> tan(ones(2, 2))
+julia> tan(fill(1.0, (2,2)))
 2×2 Array{Float64,2}:
  -1.09252  -1.09252
  -1.09252  -1.09252
@@ -1144,7 +1144,7 @@ will return a Cholesky factorization.
 
 # Examples
 ```jldoctest
-julia> A = Array(Bidiagonal(ones(5, 5), :U))
+julia> A = Array(Bidiagonal(fill(1.0, (5, 5)), :U))
 5×5 Array{Float64,2}:
  1.0  1.0  0.0  0.0  0.0
  0.0  1.0  1.0  0.0  0.0

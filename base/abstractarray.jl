@@ -31,12 +31,12 @@ lengths of dimensions you asked for.
 
 # Examples
 ```jldoctest
-julia> A = ones(2,3,4);
+julia> A = fill(1, (2,3,4));
 
 julia> size(A, 2)
 3
 
-julia> size(A,3,2)
+julia> size(A, 3, 2)
 (4, 3)
 ```
 """
@@ -51,9 +51,9 @@ Return the valid range of indices for array `A` along dimension `d`.
 
 # Examples
 ```jldoctest
-julia> A = ones(5,6,7);
+julia> A = fill(1, (5,6,7));
 
-julia> axes(A,2)
+julia> axes(A, 2)
 Base.OneTo(6)
 ```
 """
@@ -69,7 +69,7 @@ Return the tuple of valid indices for array `A`.
 
 # Examples
 ```jldoctest
-julia> A = ones(5,6,7);
+julia> A = fill(1, (5,6,7));
 
 julia> axes(A)
 (Base.OneTo(5), Base.OneTo(6), Base.OneTo(7))
@@ -104,7 +104,7 @@ exploit linear indexing.
 
 # Examples
 ```jldoctest
-julia> A = ones(5,6,7);
+julia> A = fill(1, (5,6,7));
 
 julia> b = linearindices(A);
 
@@ -131,7 +131,7 @@ Return the number of dimensions of `A`.
 
 # Examples
 ```jldoctest
-julia> A = ones(3,4,5);
+julia> A = fill(1, (3,4,5));
 
 julia> ndims(A)
 3
@@ -225,7 +225,7 @@ Return the distance in memory (in number of elements) between adjacent elements 
 
 # Examples
 ```jldoctest
-julia> A = ones(3,4,5);
+julia> A = fill(1, (3,4,5));
 
 julia> stride(A,2)
 3
@@ -252,7 +252,7 @@ Return a tuple of the memory strides in each dimension.
 
 # Examples
 ```jldoctest
-julia> A = ones(3,4,5);
+julia> A = fill(1, (3,4,5));
 
 julia> strides(A)
 (1, 3, 12)

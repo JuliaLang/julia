@@ -289,7 +289,7 @@ workloads = Int[sum(ids .== i) for i in 2:nprocs()]
 
 # Testing buffered  and unbuffered reads
 # This large array should write directly to the socket
-a = ones(10^6)
+a = fill(1, 10^6)
 @test a == remotecall_fetch((x)->x, id_other, a)
 
 # Not a bitstype, should be buffered
@@ -1118,7 +1118,7 @@ for i in 1:5
 end
 
 # Different global bindings to the same object
-global v3 = ones(10)
+global v3 = fill(1., 10)
 global v4 = v3
 @test remotecall_fetch(()->v3, id_other) == remotecall_fetch(()->v4, id_other)
 @test remotecall_fetch(()->isdefined(Main, :v3), id_other)
@@ -1188,8 +1188,8 @@ end
 @test testsercnt_d[object_id(tsc)] == n
 
 # Multiple references in a closure should be serialized only once.
-global mrefs = TestSerCnt(ones(10))
-@test remotecall_fetch(()->(mrefs.v, 2*mrefs.v, 3*mrefs.v), id_other) == (ones(10), 2*ones(10), 3*ones(10))
+global mrefs = TestSerCnt(fill(1.,10))
+@test remotecall_fetch(()->(mrefs.v, 2*mrefs.v, 3*mrefs.v), id_other) == (fill(1.,10), fill(2.,10), fill(3.,10))
 @test testsercnt_d[object_id(mrefs)] == 1
 
 
@@ -1201,7 +1201,7 @@ v = rand()
 @test remotecall_fetch(x->f2(x), id_other, v) == v
 
 # consts
-const c1 = ones(10)
+const c1 = fill(1., 10)
 @test remotecall_fetch(()->c1, id_other) == c1
 @test remotecall_fetch(()->isconst(Main, :c1), id_other)
 
@@ -1234,7 +1234,7 @@ end
 wrapped_var_ser_tests()
 
 # Test internal data structures being cleaned up upon gc.
-global ids_cleanup = ones(6)
+global ids_cleanup = fill(1., 6)
 global ids_func = ()->ids_cleanup
 
 clust_ser = (Distributed.worker_from_id(id_other)).w_serializer
@@ -1449,8 +1449,8 @@ npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 # Must be run on a new cluster, i.e., all workers must be in the same state.
 rmprocs(workers())
 p1,p2 = addprocs_with_testenv(2)
-@everywhere f22865(p) = remotecall_fetch(x->x.*2, p, ones(2))
-@test ones(2).*2 == remotecall_fetch(f22865, p1, p2)
+@everywhere f22865(p) = remotecall_fetch(x->x.*2, p, fill(1.,2))
+@test fill(2.,2) == remotecall_fetch(f22865, p1, p2)
 
 function reuseport_tests()
     # Run the test on all processes.

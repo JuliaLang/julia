@@ -228,7 +228,7 @@ Dot product of two vectors consisting of `n` elements of array `X` with stride `
 
 # Examples
 ```jldoctest
-julia> dot(10, ones(10), 1, ones(20), 2)
+julia> dot(10, fill(1.0, 10), 1, fill(1.0, 20), 2)
 10.0
 ```
 """
@@ -243,7 +243,7 @@ conjugating the first vector.
 
 # Examples
 ```jldoctest
-julia> Base.BLAS.dotc(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)
+julia> Base.BLAS.dotc(10, fill(1.0im, 10), 1, fill(1.0+im, 20), 2)
 10.0 - 10.0im
 ```
 """
@@ -257,7 +257,7 @@ with stride `incx` and `n` elements of array `Y` with stride `incy`.
 
 # Examples
 ```jldoctest
-julia> Base.BLAS.dotu(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)
+julia> Base.BLAS.dotu(10, fill(1.0im, 10), 1, fill(1.0+im, 20), 2)
 -10.0 + 10.0im
 ```
 """
@@ -349,10 +349,10 @@ stride1(x::Array) = 1
 
 # Examples
 ```jldoctest
-julia> Base.BLAS.nrm2(4, ones(8), 2)
+julia> Base.BLAS.nrm2(4, fill(1.0, 8), 2)
 2.0
 
-julia> Base.BLAS.nrm2(1, ones(8), 2)
+julia> Base.BLAS.nrm2(1, fill(1.0, 8), 2)
 1.0
 ```
 """
@@ -382,10 +382,10 @@ Sum of the absolute values of the first `n` elements of array `X` with stride `i
 
 # Examples
 ```jldoctest
-julia> Base.BLAS.asum(5, im*ones(10), 2)
+julia> Base.BLAS.asum(5, fill(1.0im, 10), 2)
 5.0
 
-julia> Base.BLAS.asum(2, im*ones(10), 5)
+julia> Base.BLAS.asum(2, fill(1.0im, 10), 5)
 2.0
 ```
 """

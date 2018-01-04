@@ -79,9 +79,9 @@ fill!(r, -1.1)
 
 # Small arrays with init=false
 let A = reshape(1:15, 3, 5)
-    R = ones(Int, 3)
+    R = fill(1, 3)
     @test sum!(R, A, init=false) == [36,41,46]
-    R = ones(Int, 1, 5)
+    R = fill(1, 1, 5)
     @test sum!(R, A, init=false) == [7 16 25 34 43]
 end
 let R = [2]
@@ -133,10 +133,10 @@ end
     @test isequal(sum(A, 2), zeros(Int, 0, 1))
     @test isequal(sum(A, (1, 2)), zeros(Int, 1, 1))
     @test isequal(sum(A, 3), zeros(Int, 0, 1))
-    @test isequal(prod(A, 1), ones(Int, 1, 1))
-    @test isequal(prod(A, 2), ones(Int, 0, 1))
-    @test isequal(prod(A, (1, 2)), ones(Int, 1, 1))
-    @test isequal(prod(A, 3), ones(Int, 0, 1))
+    @test isequal(prod(A, 1), fill(1, 1, 1))
+    @test isequal(prod(A, 2), fill(1, 0, 1))
+    @test isequal(prod(A, (1, 2)), fill(1, 1, 1))
+    @test isequal(prod(A, 3), fill(1, 0, 1))
     @test isequal(var(A, 1), fill(NaN, 1, 1))
     @test isequal(var(A, 2), fill(NaN, 0, 1))
     @test isequal(var(A, (1, 2)), fill(NaN, 1, 1))
