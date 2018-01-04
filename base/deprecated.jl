@@ -3827,6 +3827,7 @@ end
 @deprecate dropzeros!(x, trim) dropzeros!(x, trim = trim)
 @deprecate mkdir(path, mode) mkdir(path, mode = mode)
 @deprecate mkpath(path, mode) mkpath(path, mode = mode)
+@deprecate chown(path, owner, mode) chown(path, owner, mode = mode)
 
 # END 0.7 deprecations
 
