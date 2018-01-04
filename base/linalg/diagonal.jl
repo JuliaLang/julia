@@ -208,7 +208,7 @@ end
 
 *(D::Diagonal, B::Adjoint{<:Any,<:Diagonal}) = Diagonal(D.diag .* Adjoint.(B.parent.diag))
 *(D::Diagonal, B::Adjoint{<:Any,<:AbstractTriangular}) = mul!(D, collect(B))
-*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) = (Q = adjQ.parent; mul!(Array(D), Adjoint(Q)))
+*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) = (Q = adjQ.parent; mul!(Array(D), adjoint(Q)))
 function *(D::Diagonal, adjA::Adjoint{<:Any,<:AbstractMatrix})
     A = adjA.parent
     Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
@@ -346,7 +346,7 @@ rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
 (\)(F::Factorization, D::Diagonal) =
     ldiv!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
 \(adjF::Adjoint{<:Any,<:Factorization}, D::Diagonal) =
-    (F = adjF.parent; ldiv!(Adjoint(F), Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D)))
+    (F = adjF.parent; ldiv!(adjoint(F), Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D)))
 
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal{<:Number}) = D

@@ -38,7 +38,7 @@ julia> Slower = Symmetric(A, :L)
  2  0  3  0  4
 ```
 
-Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if `A == Transpose(A)`).
+Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if `A == transpose(A)`).
 """
 Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (checksquare(A); Symmetric{eltype(A),typeof(A)}(A, char_uplo(uplo)))
 
@@ -255,9 +255,9 @@ transpose(A::Hermitian) = Transpose(A)
 Base.copy(A::Adjoint{<:Any,<:Hermitian}) = copy(A.parent)
 Base.copy(A::Transpose{<:Any,<:Symmetric}) = copy(A.parent)
 Base.copy(A::Adjoint{<:Any,<:Symmetric}) =
-    Symmetric(copy(Adjoint(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
+    Symmetric(copy(adjoint(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
 Base.collect(A::Transpose{<:Any,<:Hermitian}) =
-    Hermitian(copy(Transpose(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
+    Hermitian(copy(transpose(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
 
 trace(A::Hermitian) = real(trace(A.data))
 
@@ -279,13 +279,13 @@ end
 
 function tril(A::Symmetric, k::Integer=0)
     if A.uplo == 'U' && k <= 0
-        return tril!(copy(Transpose(A.data)),k)
+        return tril!(copy(transpose(A.data)),k)
     elseif A.uplo == 'U' && k > 0
-        return tril!(copy(Transpose(A.data)),-1) + tril!(triu(A.data),k)
+        return tril!(copy(transpose(A.data)),-1) + tril!(triu(A.data),k)
     elseif A.uplo == 'L' && k <= 0
         return tril(A.data,k)
     else
-        return tril(A.data,-1) + tril!(triu!(copy(Transpose(A.data))),k)
+        return tril(A.data,-1) + tril!(triu!(copy(transpose(A.data))),k)
     end
 end
 
@@ -305,11 +305,11 @@ function triu(A::Symmetric, k::Integer=0)
     if A.uplo == 'U' && k >= 0
         return triu(A.data,k)
     elseif A.uplo == 'U' && k < 0
-        return triu(A.data,1) + triu!(tril!(copy(Transpose(A.data))),k)
+        return triu(A.data,1) + triu!(tril!(copy(transpose(A.data))),k)
     elseif A.uplo == 'L' && k >= 0
-        return triu!(copy(Transpose(A.data)),k)
+        return triu!(copy(transpose(A.data)),k)
     else
-        return triu!(copy(Transpose(A.data)),1) + triu!(tril(A.data),k)
+        return triu!(copy(transpose(A.data)),1) + triu!(tril(A.data),k)
     end
 end
 

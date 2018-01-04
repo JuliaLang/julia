@@ -330,11 +330,11 @@ unscaled_covzm(x::AbstractMatrix, vardim::Int) = (vardim == 1 ? _conj(x'x) : x *
 
 unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(y, x)
 unscaled_covzm(x::AbstractVector, y::AbstractMatrix, vardim::Int) =
-    (vardim == 1 ? *(Transpose(x), _conj(y)) : *(Transpose(x), Transpose(_conj(y))))
+    (vardim == 1 ? *(transpose(x), _conj(y)) : *(transpose(x), transpose(_conj(y))))
 unscaled_covzm(x::AbstractMatrix, y::AbstractVector, vardim::Int) =
-    (c = vardim == 1 ? *(Transpose(x), _conj(y)) :  x * _conj(y); reshape(c, length(c), 1))
+    (c = vardim == 1 ? *(transpose(x), _conj(y)) :  x * _conj(y); reshape(c, length(c), 1))
 unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) =
-    (vardim == 1 ? *(Transpose(x), _conj(y)) : *(x, Adjoint(y)))
+    (vardim == 1 ? *(transpose(x), _conj(y)) : *(x, adjoint(y)))
 
 # covzm (with centered data)
 

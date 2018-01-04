@@ -437,9 +437,9 @@ ldiv!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloa
 
 function ldiv!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
     if C.uplo == 'L'
-        return ldiv!(Adjoint(LowerTriangular(C.factors)), ldiv!(LowerTriangular(C.factors), B))
+        return ldiv!(adjoint(LowerTriangular(C.factors)), ldiv!(LowerTriangular(C.factors), B))
     else
-        return ldiv!(UpperTriangular(C.factors), ldiv!(Adjoint(UpperTriangular(C.factors)), B))
+        return ldiv!(UpperTriangular(C.factors), ldiv!(adjoint(UpperTriangular(C.factors)), B))
     end
 end
 
@@ -462,21 +462,21 @@ end
 
 function ldiv!(C::CholeskyPivoted, B::StridedVector)
     if C.uplo == 'L'
-        ldiv!(Adjoint(LowerTriangular(C.factors)),
+        ldiv!(adjoint(LowerTriangular(C.factors)),
             ldiv!(LowerTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
     else
         ldiv!(UpperTriangular(C.factors),
-            ldiv!(Adjoint(UpperTriangular(C.factors)), B[C.piv]))[invperm(C.piv)]
+            ldiv!(adjoint(UpperTriangular(C.factors)), B[C.piv]))[invperm(C.piv)]
     end
 end
 
 function ldiv!(C::CholeskyPivoted, B::StridedMatrix)
     if C.uplo == 'L'
-        ldiv!(Adjoint(LowerTriangular(C.factors)),
+        ldiv!(adjoint(LowerTriangular(C.factors)),
             ldiv!(LowerTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
     else
         ldiv!(UpperTriangular(C.factors),
-            ldiv!(Adjoint(UpperTriangular(C.factors)), B[C.piv,:]))[invperm(C.piv),:]
+            ldiv!(adjoint(UpperTriangular(C.factors)), B[C.piv,:]))[invperm(C.piv),:]
     end
 end
 

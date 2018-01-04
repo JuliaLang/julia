@@ -61,9 +61,9 @@ Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F,
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::Factorization{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
-    c2r = reshape(copy(Transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
+    c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = ldiv!(F, c2r)
-    return reshape(copy(reinterpret(Complex{T}, copy(Transpose(reshape(x, div(length(x), 2), 2))))), _ret_size(F, B))
+    return reshape(copy(reinterpret(Complex{T}, copy(transpose(reshape(x, div(length(x), 2), 2))))), _ret_size(F, B))
 end
 
 function \(F::Factorization, B::AbstractVecOrMat)
@@ -77,16 +77,16 @@ function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
     BB = similar(B, TFB, size(B))
     copyto!(BB, B)
-    ldiv!(Adjoint(F), BB)
+    ldiv!(adjoint(F), BB)
 end
 
 # support the same 3-arg idiom as in our other in-place A_*_B functions:
 ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) = ldiv!(A, copyto!(Y, B))
 ldiv!(Y::AbstractVecOrMat, adjA::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat) =
-    (A = adjA.parent; ldiv!(Adjoint(A), copyto!(Y, B)))
+    (A = adjA.parent; ldiv!(adjoint(A), copyto!(Y, B)))
 ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) =
-    (A = transA.parent; ldiv!(Transpose(A), copyto!(Y, B)))
+    (A = transA.parent; ldiv!(transpose(A), copyto!(Y, B)))
 
 # fallback methods for transposed solves
-\(F::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = Adjoint(F.parent) \ B
-\(F::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) = conj.(Adjoint(F.parent) \ conj.(B))
+\(F::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = adjoint(F.parent) \ B
+\(F::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) = conj.(adjoint(F.parent) \ conj.(B))

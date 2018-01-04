@@ -947,7 +947,7 @@ function issymmetric(A::AbstractMatrix)
         return false
     end
     for i = first(indsn):last(indsn), j = (i):last(indsn)
-        if A[i,j] != Transpose(A[j,i])
+        if A[i,j] != transpose(A[j,i])
             return false
         end
     end
@@ -986,7 +986,7 @@ function ishermitian(A::AbstractMatrix)
         return false
     end
     for i = indsn, j = i:last(indsn)
-        if A[i,j] != Adjoint(A[j,i])
+        if A[i,j] != adjoint(A[j,i])
             return false
         end
     end

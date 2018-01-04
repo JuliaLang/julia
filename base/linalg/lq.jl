@@ -37,7 +37,7 @@ lqfact(x::Number) = lqfact(fill(x,1,1))
 
 Perform an LQ factorization of `A` such that `A = L*Q`. The default (`full = false`)
 computes a factorization with possibly-rectangular `L` and `Q`, commonly the "thin"
-factorization. The LQ factorization is the QR factorization of `Transpose(A)`. If the explicit,
+factorization. The LQ factorization is the QR factorization of `transpose(A)`. If the explicit,
 full/square form of `Q` is requested via `full = true`, `L` is not extended with zeros.
 
 !!! note
@@ -72,7 +72,7 @@ Array(A::LQ) = Matrix(A)
 
 adjoint(A::LQ) = Adjoint(A)
 Base.copy(F::Adjoint{T,<:LQ{T}}) where {T} =
-    QR{T,typeof(F.parent.factors)}(copy(Adjoint(F.parent.factors)), copy(F.parent.τ))
+    QR{T,typeof(F.parent.factors)}(copy(adjoint(F.parent.factors)), copy(F.parent.τ))
 
 function getproperty(F::LQ, d::Symbol)
     m, n = size(F)
@@ -158,9 +158,9 @@ function *(adjA::Adjoint{<:Any,<:LQPackedQ}, B::StridedVecOrMat)
     A = adjA.parent
     TAB = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
-        mul!(Adjoint(AbstractMatrix{TAB}(A)), copy_oftype(B, TAB))
+        mul!(adjoint(AbstractMatrix{TAB}(A)), copy_oftype(B, TAB))
     elseif size(B,1) == size(A.factors,1)
-        mul!(Adjoint(AbstractMatrix{TAB}(A)), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
+        mul!(adjoint(AbstractMatrix{TAB}(A)), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
     else
         throw(DimensionMismatch("first dimension of B, $(size(B,1)), must equal one of the dimensions of A, $(size(A))"))
     end
@@ -179,7 +179,7 @@ function *(adjA::Adjoint{<:Any,<:LQPackedQ}, adjB::Adjoint{<:Any,<:StridedVecOrM
     TAB = promote_type(eltype(A), eltype(B))
     BB = similar(B, TAB, (size(B, 2), size(B, 1)))
     adjoint!(BB, B)
-    return mul!(Adjoint(A), BB)
+    return mul!(adjoint(A), BB)
 end
 
 # in-place right-application of LQPackedQs
@@ -209,13 +209,13 @@ mul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:LQPackedQ{T}}) where {T<:BlasCom
 function *(A::StridedVecOrMat, adjQ::Adjoint{<:Any,<:LQPackedQ})
     Q = adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
-    return mul!(copy_oftype(A, TR), Adjoint(AbstractMatrix{TR}(Q)))
+    return mul!(copy_oftype(A, TR), adjoint(AbstractMatrix{TR}(Q)))
 end
 function *(adjA::Adjoint{<:Any,<:StridedMatrix}, adjQ::Adjoint{<:Any,<:LQPackedQ})
     A, Q = adjA.parent, adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
     C = adjoint!(similar(A, TR, reverse(size(A))), A)
-    return mul!(C, Adjoint(AbstractMatrix{TR}(Q)))
+    return mul!(C, adjoint(AbstractMatrix{TR}(Q)))
 end
 #
 # (2) the inner dimension in the multiplication is the LQPackedQ's first dimension.
@@ -281,14 +281,14 @@ end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
-    c2r = reshape(copy(Transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
+    c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = ldiv!(F, c2r)
-    return reshape(copy(reinterpret(Complex{T}, copy(Transpose(reshape(x, div(length(x), 2), 2))))),
+    return reshape(copy(reinterpret(Complex{T}, copy(transpose(reshape(x, div(length(x), 2), 2))))),
                            isa(B, AbstractVector) ? (size(F,2),) : (size(F,2), size(B,2)))
 end
 
 
 function ldiv!(A::LQ{T}, B::StridedVecOrMat{T}) where T
-    mul!(Adjoint(A.Q), ldiv!(LowerTriangular(A.L),B))
+    mul!(adjoint(A.Q), ldiv!(LowerTriangular(A.L),B))
     return B
 end

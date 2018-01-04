@@ -14,7 +14,7 @@ end
 function _absvecormat_mul_adjrot(A::AbstractVecOrMat{T}, adjR::Adjoint{<:Any,<:AbstractRotation{S}}) where {T,S}
     R = adjR.parent
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    mul!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), Adjoint(convert(AbstractRotation{TS}, R)))
+    mul!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), adjoint(convert(AbstractRotation{TS}, R)))
 end
 """
     LinAlg.Givens(i1,i2,c,s) -> G
@@ -366,7 +366,7 @@ end
 function mul!(A::AbstractMatrix, adjR::Adjoint{<:Any,<:Rotation})
     R = adjR.parent
     @inbounds for i = 1:length(R.rotations)
-        mul!(A, Adjoint(R.rotations[i]))
+        mul!(A, adjoint(R.rotations[i]))
     end
     return A
 end

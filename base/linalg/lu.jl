@@ -318,18 +318,18 @@ ldiv!(transA::Transpose{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where
 
 function ldiv!(transA::Transpose{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOrMat)
     A = transA.parent
-    ldiv!(Transpose(UnitLowerTriangular(A.factors)), ldiv!(Transpose(UpperTriangular(A.factors)), B))
+    ldiv!(transpose(UnitLowerTriangular(A.factors)), ldiv!(transpose(UpperTriangular(A.factors)), B))
     _apply_inverse_ipiv!(A, B)
 end
 
 ldiv!(adjF::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:Real} =
-    (F = adjF.parent; ldiv!(Transpose(F), B))
+    (F = adjF.parent; ldiv!(transpose(F), B))
 ldiv!(adjA::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
     (A = adjA.parent; @assertnonsingular(LAPACK.getrs!('C', A.factors, A.ipiv, B), A.info))
 
 function ldiv!(adjA::Adjoint{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOrMat)
     A = adjA.parent
-    ldiv!(Adjoint(UnitLowerTriangular(A.factors)), ldiv!(Adjoint(UpperTriangular(A.factors)), B))
+    ldiv!(adjoint(UnitLowerTriangular(A.factors)), ldiv!(adjoint(UpperTriangular(A.factors)), B))
     _apply_inverse_ipiv!(A, B)
 end
 
@@ -584,7 +584,7 @@ function ldiv!(adjA::Adjoint{<:Any,LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat)
     return B
 end
 
-/(B::AbstractMatrix, A::LU) = copy(Transpose(Transpose(A) \ Transpose(B)))
+/(B::AbstractMatrix, A::LU) = copy(Transpose(transpose(A) \ transpose(B)))
 
 # Conversions
 AbstractMatrix(F::LU) = (F.L * F.U)[invperm(F.p),:]
