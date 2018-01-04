@@ -7,7 +7,7 @@ Arnoldi and Lanczos iteration for computing eigenvalues
 """
 module IterativeEigensolvers
 
-using Base.LinAlg: BlasFloat, BlasInt, SVD, checksquare, mul!, Adjoint, Transpose
+using Base.LinAlg: BlasFloat, BlasInt, SVD, checksquare, mul!
 
 export eigs, svds
 
@@ -208,7 +208,7 @@ end
 function Base.LinAlg.mul!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
     m, mn = size(A.X, 1), length(x)
     mul!( view(y, 1:m), A.X, view(x, m + 1:mn)) # left singular vector
-    mul!(view(y, m + 1:mn), Adjoint(A.X), view(x, 1:m)) # right singular vector
+    mul!(view(y, m + 1:mn), adjoint(A.X), view(x, 1:m)) # right singular vector
     return y
 end
 Base.size(A::SVDAugmented)  = ((+)(size(A.X)...), (+)(size(A.X)...))
@@ -228,9 +228,9 @@ end
 function Base.LinAlg.mul!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
     if size(A.A, 1) >= size(A.A, 2)
         mul!(A.buffer, A.A, x)
-        return mul!(y, Adjoint(A.A), A.buffer)
+        return mul!(y, adjoint(A.A), A.buffer)
     else
-        mul!(A.buffer, Adjoint(A.A), x)
+        mul!(A.buffer, adjoint(A.A), x)
         return mul!(y, A.A, A.buffer)
     end
 end
