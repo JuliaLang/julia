@@ -321,8 +321,7 @@ ifelse(c::Bool, x, y) = select_value(c, x, y)
     cmp(x,y)
 
 Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
-respectively. Uses the total order implemented by `isless`. For floating-point numbers, uses `<`
-but throws an error for unordered arguments.
+respectively. Uses the total order implemented by `isless`.
 
 # Examples
 ```jldoctest
