@@ -3806,6 +3806,8 @@ end
     @deprecate getq(F::Factorization) F.Q
 end
 
+@deprecate method_exists(f, t, world) method_exists(f, t, world = world)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
