@@ -132,6 +132,7 @@ function cmp_sn2(w, hi, lo, slopbits=0)
         return (hi == zero(hi) || abs(w - widen(hi)) < abs(w)) && lo == zero(hi)
     end
     z = widen(hi) + widen(lo)
+    w == z && return true
     zu, wu = asbits(z), asbits(w)
     while zu > 0 && !isodd(zu)
         zu = zu >> 1
