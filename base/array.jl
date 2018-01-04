@@ -886,7 +886,7 @@ function _prepend!(a, ::IteratorSize, iter)
         n += 1
         pushfirst!(a, item)
     end
-    reverse!(a, 1, n)
+    reverse!(a, start = 1, stop = n)
     a
 end
 
@@ -1386,7 +1386,7 @@ function reverseind(a::AbstractVector, i::Integer)
 end
 
 """
-    reverse!(v [, start=1 [, stop=length(v) ]]) -> v
+    reverse!(v; start = 1, stop = length(v)) -> v
 
 In-place version of [`reverse`](@ref).
 
@@ -1411,16 +1411,16 @@ julia> A
  1
 ```
 """
-function reverse!(v::AbstractVector, s=first(linearindices(v)), n=last(linearindices(v)))
+function reverse!(v::AbstractVector; start = first(linearindices(v)), stop = last(linearindices(v)))
     liv = linearindices(v)
-    if n <= s  # empty case; ok
-    elseif !(first(liv) ≤ s ≤ last(liv))
-        throw(BoundsError(v, s))
-    elseif !(first(liv) ≤ n ≤ last(liv))
-        throw(BoundsError(v, n))
+    if n <= start  # empty case; ok
+    elseif !(first(liv) ≤ start ≤ last(liv))
+        throw(BoundsError(v, start))
+    elseif !(first(liv) ≤ stop ≤ last(liv))
+        throw(BoundsError(v, stop))
     end
-    r = n
-    @inbounds for i in s:div(s+n-1, 2)
+    r = stop
+    @inbounds for i in start:div(start + stop - 1, 2)
         v[i], v[r] = v[r], v[i]
         r -= 1
     end

@@ -3818,6 +3818,9 @@ end
 @deprecate chop(s, head) chop(s, head = head)
 @deprecate chop(s, head, tail) chop(s, head = head, tail = tail)
 @deprecate tryparse(T, s, base) tryparse(T, s, base = base)
+@deprecate parse(T, s, base) parse(T, s, base = base)
+@deprecate reverse!(v, start) reverse!(v, start = start)
+@deprecate reverse!(v, start, stop) reverse!(v, start = start, stop = stop)
 
 # END 0.7 deprecations
 
