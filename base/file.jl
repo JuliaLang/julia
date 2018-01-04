@@ -35,7 +35,7 @@ export
 Get the current working directory.
 """
 function pwd()
-    b = Vector{UInt8}(1024)
+    b = Vector{UInt8}(uninitialized, 1024)
     len = Ref{Csize_t}(length(b))
     uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
     String(b[1:len[]])
@@ -257,7 +257,7 @@ end
 if Sys.iswindows()
 
 function tempdir()
-    temppath = Vector{UInt16}(32767)
+    temppath = Vector{UInt16}(uninitialized, 32767)
     lentemppath = ccall(:GetTempPathW,stdcall,UInt32,(UInt32,Ptr{UInt16}),length(temppath),temppath)
     if lentemppath >= length(temppath) || lentemppath == 0
         error("GetTempPath failed: $(Libc.FormatMessage())")
@@ -269,7 +269,7 @@ tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
 const temp_prefix = cwstring("jl_")
 function tempname(temppath::AbstractString,uunique::UInt32)
     tempp = cwstring(temppath)
-    tname = Vector{UInt16}(32767)
+    tname = Vector{UInt16}(uninitialized, 32767)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}), tempp,temp_prefix,uunique,tname)
     lentname = findfirst(iszero,tname)-1
     if uunique == 0 || lentname <= 0
@@ -350,7 +350,7 @@ tempname()
 """
     mktemp(parent=tempdir())
 
-Returns `(path, io)`, where `path` is the path of a new temporary file in `parent` and `io`
+Return `(path, io)`, where `path` is the path of a new temporary file in `parent` and `io`
 is an open file object for this path.
 """
 mktemp(parent)
@@ -403,14 +403,14 @@ end
 """
     readdir(dir::AbstractString=".") -> Vector{String}
 
-Returns the files and directories in the directory `dir` (or the current working directory if not given).
+Return the files and directories in the directory `dir` (or the current working directory if not given).
 """
 function readdir(path::AbstractString)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
-    err = ccall(:uv_fs_scandir, Int32, (Ptr{Void}, Ptr{UInt8}, Cstring, Cint, Ptr{Void}),
+    err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
                 eventloop(), uv_readdir_req, path, 0, C_NULL)
     err < 0 && throw(SystemError("unable to read directory $path", -err))
     #uv_error("unable to read directory $path", err)
@@ -418,12 +418,12 @@ function readdir(path::AbstractString)
     # iterate the listing into entries
     entries = String[]
     ent = Ref{uv_dirent_t}()
-    while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Void}, Ptr{uv_dirent_t}), uv_readdir_req, ent)
+    while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), uv_readdir_req, ent)
         push!(entries, unsafe_string(ent[].name))
     end
 
     # Clean up the request string
-    ccall(:jl_uv_fs_req_cleanup, Void, (Ptr{UInt8},), uv_readdir_req)
+    ccall(:jl_uv_fs_req_cleanup, Cvoid, (Ptr{UInt8},), uv_readdir_req)
 
     return entries
 end
@@ -433,7 +433,7 @@ readdir() = readdir(".")
 """
     walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
 
-The `walkdir` method returns an iterator that walks the directory tree of a directory.
+Return an iterator that walks the directory tree of a directory.
 The iterator returns a tuple containing `(rootpath, dirs, files)`.
 The directory tree can be traversed top-down or bottom-up.
 If `walkdir` encounters a [`SystemError`](@ref)
@@ -465,8 +465,8 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
         close(chnl)
         return chnl
     end
-    dirs = Vector{eltype(content)}(0)
-    files = Vector{eltype(content)}(0)
+    dirs = Vector{eltype(content)}()
+    files = Vector{eltype(content)}()
     for name in content
         if isdir(joinpath(root, name))
             push!(dirs, name)
@@ -565,7 +565,7 @@ function symlink(p::AbstractString, np::AbstractString)
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
     @static if Sys.iswindows()
         if err < 0 && !isdir(p)
-            Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
+            @warn "On Windows, creating file symlinks requires Administrator privileges" maxlog=1 _group=:file
         end
     end
     uv_error("symlink",err)
@@ -574,21 +574,21 @@ end
 """
     readlink(path::AbstractString) -> AbstractString
 
-Returns the target location a symbolic link `path` points to.
+Return the target location a symbolic link `path` points to.
 """
 function readlink(path::AbstractString)
     req = Libc.malloc(_sizeof_uv_fs)
     try
         ret = ccall(:uv_fs_readlink, Int32,
-            (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}),
+            (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
             eventloop(), req, path, C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Void, (Ptr{Void},), req)
+            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
             uv_error("readlink", ret)
             assert(false)
         end
-        tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void},), req))
-        ccall(:uv_fs_req_cleanup, Void, (Ptr{Void},), req)
+        tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Cvoid},), req))
+        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
         return tgt
     finally
         Libc.free(req)

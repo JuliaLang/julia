@@ -139,7 +139,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     }
     PM->add(createPropagateJuliaAddrspaces());
     PM->add(createTypeBasedAAWrapperPass());
-    if (jl_options.opt_level >= 3) {
+    if (opt_level >= 3) {
         PM->add(createBasicAAWrapperPass());
     }
     // list of passes from vmkit
@@ -238,12 +238,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createLoopDeletionPass());          // Delete dead loops
     PM->add(createJumpThreadingPass());         // Thread jumps
 
-    if (jl_options.opt_level >= 3) {
+    if (opt_level >= 3) {
         PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
     }
 
     PM->add(createAggressiveDCEPass());         // Delete dead instructions
-    if (jl_options.opt_level >= 3)
+    if (opt_level >= 3)
         PM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
@@ -335,12 +335,12 @@ void NotifyDebugger(jit_code_entry *JITCodeEntry)
 }
 // ------------------------ END OF TEMPORARY COPY FROM LLVM -----------------
 
-#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_)
+#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
 // Resolve non-lock free atomic functions in the libatomic library.
 // This is the library that provides support for c11/c++11 atomic operations.
 static uint64_t resolve_atomic(const char *name)
 {
-#if defined(_OS_LINUX_)
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
     static const char *const libatomic = "libatomic";
 #elif defined(_OS_WINDOWS_)
     static const char *const libatomic = "libatomic-1";
@@ -579,7 +579,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                         // Step 2: Search the program symbols
                         if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name))
                             return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
-#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_)
+#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
                         if (uint64_t addr = resolve_atomic(Name.c_str()))
                             return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
 #endif

@@ -15,13 +15,17 @@ and summarize them at the end of the test set with `@testset`.
 """
 module Test
 
-export @test, @test_throws, @test_broken, @test_skip, @test_warn, @test_nowarn
+export @test, @test_throws, @test_broken, @test_skip,
+    @test_warn, @test_nowarn,
+    @test_logs, @test_deprecated
 export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray
-export guardsrand
+export guardsrand, TestSetException
+
+import Distributed: myid
 
 #-----------------------------------------------------------------------
 
@@ -70,7 +74,7 @@ function Base.show(io::IO, t::Pass)
     if t.test_type == :test_throws
         # The correct type of exception was thrown
         print(io, "\n      Thrown: ", typeof(t.value))
-    elseif t.test_type == :test && isa(t.data, Expr)
+    elseif t.test_type == :test && t.data !== nothing
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.data)
@@ -103,7 +107,7 @@ function Base.show(io::IO, t::Fail)
         # An exception was expected, but no exception was thrown
         print(io, "\n    Expected: ", t.data)
         print(io, "\n  No exception thrown")
-    elseif t.test_type == :test && isa(t.data, Expr)
+    elseif t.test_type == :test && t.data !== nothing
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.data)
@@ -220,6 +224,17 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
         func_sym = quoted_args[1]
         if isempty(kwargs)
             quoted = Expr(:call, func_sym, args...)
+        elseif func_sym === :≈
+            # in case of `≈(x, y, atol = z)`
+            # make the display like `Evaluated: x ≈ y (atol=z)`
+            kws = [Symbol(Expr(:kw, k, v), ",") for (k, v) in kwargs]
+            kws[end] = Symbol(Expr(:kw, kwargs[end]...))
+            kws[1] = Symbol("(", kws[1])
+            kws[end] = Symbol(kws[end], ")")
+            quoted = Expr(:comparison, args[1], func_sym, args[2], kws...)
+            if length(quoted.args) & 1 == 0  # hack to fit `show_unquoted`
+                push!(quoted.args, Symbol())
+            end
         else
             kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
             quoted = Expr(:call, func_sym, kwargs_expr, args...)
@@ -227,7 +242,10 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
     else
         throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
     end
-    Returned(res, quoted, source)
+    Returned(res,
+             # stringify arguments in case of failure, for easy remote printing
+             res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted)),
+             source)
 end
 
 const comparison_prec = Base.operator_precedence(:(==))
@@ -336,7 +354,7 @@ function get_test_result(ex, source)
             Expr(:comparison, $(quoted_terms...)),
             $(QuoteNode(source)),
         ))
-    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox)
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox, :≈)
         escaped_func = esc(ex.args[1])
         quoted_func = QuoteNode(ex.args[1])
 
@@ -489,12 +507,14 @@ function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), @nosp
 end
 
 #-----------------------------------------------------------------------
-# Test for warning messages
+# Test for log messages
 
-ismatch_warn(s::AbstractString, output) = contains(output, s)
-ismatch_warn(s::Regex, output) = ismatch(s, output)
-ismatch_warn(s::Function, output) = s(output)
-ismatch_warn(S::Union{AbstractArray,Tuple}, output) = all(s -> ismatch_warn(s, output), S)
+# Test for warning messages (deprecated)
+
+contains_warn(output, s::AbstractString) = contains(output, s)
+contains_warn(output, s::Regex) = contains(output, s)
+contains_warn(output, s::Function) = s(output)
+contains_warn(output, S::Union{AbstractArray,Tuple}) = all(s -> contains_warn(output, s), S)
 
 """
     @test_warn msg expr
@@ -509,20 +529,16 @@ See also [`@test_nowarn`](@ref) to check for the absence of error output.
 """
 macro test_warn(msg, expr)
     quote
-        let fname = tempname(), have_color = Base.have_color
+        let fname = tempname()
             try
-                @eval Base have_color = false
                 ret = open(fname, "w") do f
                     redirect_stderr(f) do
                         $(esc(expr))
                     end
                 end
-                eval(Base, Expr(:(=), :have_color, have_color))
-                @test ismatch_warn($(esc(msg)), read(fname, String))
-                eval(Base, Expr(:(=), :have_color, have_color))
+                @test contains_warn(read(fname, String), $(esc(msg)))
                 ret
             finally
-                eval(Base, Expr(:(=), :have_color, have_color))
                 rm(fname, force=true)
             end
         end
@@ -904,6 +920,14 @@ this behavior can be customized in other testset types. If a `for` loop is used
 then the macro collects and returns a list of the return values of the `finish`
 method, which by default will return a list of the testset objects used in
 each iteration.
+
+Before the execution of the body of a `@testset`, there is an implicit
+call to `srand(seed)` where `seed` is the current seed of the global RNG.
+Moreover, after the execution of the body, the state of the global RNG is
+restored to what it was before the `@testset`. This is meant to ease
+reproducibility in case of failure, and to allow seamless
+re-arrangements of `@testset`s regardless of their side-effect on the
+global RNG state.
 """
 macro testset(args...)
     isempty(args) && error("No arguments to @testset")
@@ -940,22 +964,35 @@ function testset_beginend(args, tests, source)
     # it to the task local storage, evaluates the test(s), before
     # finally removing the testset and giving it a chance to take
     # action (such as reporting the results)
-    quote
+    ex = quote
         ts = $(testsettype)($desc; $options...)
         # this empty loop is here to force the block to be compiled,
         # which is needed for backtrace scrubbing to work correctly.
         while false; end
         push_testset(ts)
+        # we reproduce the logic of guardsrand, but this function
+        # cannot be used as it changes slightly the semantic of @testset,
+        # by wrapping the body in a function
+        oldrng = copy(Base.GLOBAL_RNG)
         try
+            # GLOBAL_RNG is re-seeded with its own seed to ease reproduce a failed test
+            srand(Base.GLOBAL_RNG.seed)
             $(esc(tests))
         catch err
             # something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
+        finally
+            copy!(Base.GLOBAL_RNG, oldrng)
         end
         pop_testset()
         finish(ts)
     end
+    # preserve outer location if possible
+    if tests isa Expr && tests.head === :block && !isempty(tests.args) && tests.args[1] isa LineNumberNode
+        ex = Expr(:block, tests.args[1], ex)
+    end
+    return ex
 end
 
 
@@ -1003,6 +1040,9 @@ function testset_forloop(args, testloop, source)
         if !first_iteration
             pop_testset()
             push!(arr, finish(ts))
+            # it's 1000 times faster to copy from tmprng rather than calling srand
+            copy!(Base.GLOBAL_RNG, tmprng)
+
         end
         ts = $(testsettype)($desc; $options...)
         push_testset(ts)
@@ -1016,9 +1056,12 @@ function testset_forloop(args, testloop, source)
         end
     end
     quote
-        arr = Array{Any,1}(0)
+        arr = Vector{Any}()
         local first_iteration = true
         local ts
+        local oldrng = copy(Base.GLOBAL_RNG)
+        srand(Base.GLOBAL_RNG.seed)
+        local tmprng = copy(Base.GLOBAL_RNG)
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
         finally
@@ -1027,6 +1070,7 @@ function testset_forloop(args, testloop, source)
                 pop_testset()
                 push!(arr, finish(ts))
             end
+            copy!(Base.GLOBAL_RNG, oldrng)
         end
         arr
     end
@@ -1201,9 +1245,9 @@ end
 # Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
 # nothing.
 function test_approx_eq_modphase(a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
-                                 err = length(indices(a,1))^3*(eps(S)+eps(T))) where {S<:Real,T<:Real}
-    @test indices(a,1) == indices(b,1) && indices(a,2) == indices(b,2)
-    for i in indices(a,2)
+                                 err = length(axes(a,1))^3*(eps(S)+eps(T))) where {S<:Real,T<:Real}
+    @test axes(a,1) == axes(b,1) && axes(a,2) == axes(b,2)
+    for i in axes(a,2)
         v1, v2 = a[:, i], b[:, i]
         @test min(abs(norm(v1-v2)),abs(norm(v1+v2))) ≈ 0.0 atol=err
     end
@@ -1226,7 +1270,7 @@ function detect_ambiguities(mods...;
                             imported::Bool = false,
                             recursive::Bool = false,
                             ambiguous_bottom::Bool = false,
-                            allow_bottom::Union{Bool,Void} = nothing)
+                            allow_bottom::Union{Bool,Nothing} = nothing)
     if allow_bottom !== nothing
         Base.depwarn("the `allow_bottom` keyword to detect_ambiguities has been renamed to `ambiguous_bottom`", :detect_ambiguities)
         ambiguous_bottom = allow_bottom
@@ -1377,8 +1421,14 @@ with string types besides the standard `String` type.
 struct GenericString <: AbstractString
     string::AbstractString
 end
-Base.endof(s::GenericString) = endof(s.string)
-Base.next(s::GenericString, i::Int) = next(s.string, i)
+Base.ncodeunits(s::GenericString) = ncodeunits(s.string)
+Base.codeunit(s::GenericString) = codeunit(s.string)
+Base.codeunit(s::GenericString, i::Integer) = codeunit(s.string, i)
+Base.isvalid(s::GenericString, i::Integer) = isvalid(s.string, i)
+Base.next(s::GenericString, i::Integer) = next(s.string, i)
+Base.reverse(s::GenericString) = GenericString(reverse(s.string))
+Base.reverse(s::SubString{GenericString}) =
+    GenericString(typeof(s.string)(reverse(String(s))))
 
 """
 The `GenericSet` can be used to test generic set APIs that program to
@@ -1391,17 +1441,16 @@ end
 
 """
 The `GenericDict` can be used to test generic dict APIs that program to
-the `Associative` interface, in order to ensure that functions can work
+the `AbstractDict` interface, in order to ensure that functions can work
 with associative types besides the standard `Dict` type.
 """
-struct GenericDict{K,V} <: Associative{K,V}
-    s::Associative{K,V}
+struct GenericDict{K,V} <: AbstractDict{K,V}
+    s::AbstractDict{K,V}
 end
 
 for (G, A) in ((GenericSet, AbstractSet),
-               (GenericDict, Associative))
+               (GenericDict, AbstractDict))
     @eval begin
-        Base.convert(::Type{$G}, s::$A) = $G(s)
         Base.done(s::$G, state) = done(s.s, state)
         Base.next(s::$G, state) = next(s.s, state)
     end
@@ -1427,7 +1476,7 @@ GenericArray{T}(args...) where {T} = GenericArray(Array{T}(args...))
 GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(args...))
 
 Base.keys(a::GenericArray) = keys(a.a)
-Base.indices(a::GenericArray) = indices(a.a)
+Base.axes(a::GenericArray) = axes(a.a)
 Base.length(a::GenericArray) = length(a.a)
 Base.size(a::GenericArray) = size(a.a)
 Base.getindex(a::GenericArray, i...) = a.a[i...]
@@ -1448,7 +1497,7 @@ end
 
 "`guardsrand(f, seed)` is equivalent to running `srand(seed); f()` and
 then restoring the state of the global RNG as it was before."
-guardsrand(f::Function, seed::Integer) = guardsrand() do
+guardsrand(f::Function, seed::Union{Vector{UInt32},Integer}) = guardsrand() do
     srand(seed)
     f()
 end
@@ -1521,5 +1570,7 @@ begin
     end
     export @test_approx_eq
 end
+
+include("logging.jl")
 
 end # module

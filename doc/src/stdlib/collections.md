@@ -77,7 +77,6 @@ Fully implemented by:
 Base.in
 Base.eltype
 Base.indexin
-Base.findin
 Base.unique
 Base.unique!
 Base.allunique
@@ -133,6 +132,10 @@ Base.collect(::Type, ::Any)
 Base.issubset(::Any, ::Any)
 Base.filter
 Base.filter!
+Base.replace(::Any, ::Pair...)
+Base.replace(::Base.Callable, ::Any, ::Any)
+Base.replace(::Base.Callable, ::Any)
+Base.replace!
 ```
 
 ## Indexable Collections
@@ -160,9 +163,9 @@ Partially implemented by:
   * [`ObjectIdDict`](@ref)
   * [`WeakKeyDict`](@ref)
 
-## Associative Collections
+## Dictionaries
 
-[`Dict`](@ref) is the standard associative collection. Its implementation uses [`hash`](@ref)
+[`Dict`](@ref) is the standard dictionary. Its implementation uses [`hash`](@ref)
 as the hashing function for the key, and [`isequal`](@ref) to determine equality. Define these
 two functions for custom types to override how they are stored in a hash table.
 
@@ -176,7 +179,7 @@ constructor: `Dict("A"=>1, "B"=>2)`. This call will attempt to infer type inform
 keys and values (i.e. this example creates a `Dict{String, Int64}`). To explicitly specify types
 use the syntax `Dict{KeyType,ValueType}(...)`. For example, `Dict{String,Int32}("A"=>1, "B"=>2)`.
 
-Associative collections may also be created with generators. For example, `Dict(i => f(i) for i = 1:10)`.
+Dictionaries may also be created with generators. For example, `Dict(i => f(i) for i = 1:10)`.
 
 Given a dictionary `D`, the syntax `D[x]` returns the value of key `x` (if it exists) or throws
 an error, and `D[x] = y` stores the key-value pair `x => y` in `D` (replacing any existing value
@@ -187,6 +190,7 @@ for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for e
 Base.Dict
 Base.ObjectIdDict
 Base.WeakKeyDict
+Base.ImmutableDict
 Base.haskey
 Base.get(::Any, ::Any, ::Any)
 Base.get
@@ -219,6 +223,8 @@ Partially implemented by:
   * [`EnvDict`](@ref Base.EnvDict)
   * [`Array`](@ref)
   * [`BitArray`](@ref)
+  * [`ImmutableDict`](@ref Base.ImmutableDict)
+  * [`Iterators.IndexValue`](@ref)
 
 ## Set-Like Collections
 
@@ -231,9 +237,7 @@ Base.intersect
 Base.setdiff
 Base.setdiff!
 Base.symdiff
-Base.symdiff!(::BitSet, ::Integer)
-Base.symdiff!(::BitSet, ::Any)
-Base.symdiff!(::BitSet, ::BitSet)
+Base.symdiff!
 Base.intersect!
 Base.issubset
 ```
@@ -252,8 +256,8 @@ Partially implemented by:
 ```@docs
 Base.push!
 Base.pop!
-Base.unshift!
-Base.shift!
+Base.pushfirst!
+Base.popfirst!
 Base.insert!
 Base.deleteat!
 Base.splice!
@@ -271,4 +275,5 @@ Fully implemented by:
 
 ```@docs
 Base.Pair
+Iterators.IndexValue
 ```

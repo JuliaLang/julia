@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+using Base.LinAlg: ldiv!, Adjoint, Transpose
 import Base.LinAlg.BlasInt, Base.LinAlg.BlasFloat
 
 n = 10
@@ -24,7 +25,7 @@ dlimg  = randn(n-1)/2
 dreal = randn(n)/2
 dimg  = randn(n)/2
 
-@testset for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
+@testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
     a = eltya == Int ? rand(1:7, n, n) :
         convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     d = if eltya == Int
@@ -50,49 +51,67 @@ dimg  = randn(n)/2
                                        -0.5     -0.5       0.1     1.0])
             F = eigfact(A, permute=false, scale=false)
             eig(A, permute=false, scale=false)
-            @test F[:vectors]*Diagonal(F[:values])/F[:vectors] ≈ A
+            @test F.vectors*Diagonal(F.values)/F.vectors ≈ A
             F = eigfact(A)
-            # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
+            # @test norm(F.vectors*Diagonal(F.values)/F.vectors - A) > 0.01
         end
     end
     @testset "Singular LU" begin
         lua = lufact(zeros(eltya, 3, 3))
         @test !LinAlg.issuccess(lua)
-        @test sprint(show, lua) == "Failed factorization of type $(typeof(lua))"
+        @test sprint((t, s) -> show(t, "text/plain", s), lua) == "Failed factorization of type $(typeof(lua))"
     end
-    @testset for eltyb in (Float32, Float64, Complex64, Complex128, Int)
+    κ  = cond(a,1)
+    @testset "(Automatic) Square LU decomposition" begin
+        lua   = factorize(a)
+        @test_throws ErrorException lua.Z
+        l,u,p = lua.L, lua.U, lua.p
+        ll,ul,pl = lu(a)
+        @test ll * ul ≈ a[pl,:]
+        @test l*u ≈ a[p,:]
+        @test (l*u)[invperm(p),:] ≈ a
+        @test a * inv(lua) ≈ Matrix(I, n, n)
+        @test copy(lua) == lua
+        if eltya <: BlasFloat
+            # test conversion of LU factorization's numerical type
+            bft = eltya <: Real ? Base.LinAlg.LU{BigFloat} : Base.LinAlg.LU{Complex{BigFloat}}
+            bflua = convert(bft, lua)
+            @test bflua.L*bflua.U ≈ big.(a)[p,:] rtol=ε
+        end
+        # compact printing
+        lstring = sprint(show,l)
+        ustring = sprint(show,u)
+        # @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
+    end
+    κd    = cond(Array(d),1)
+    @testset "Tridiagonal LU" begin
+        lud   = lufact(d)
+        @test LinAlg.issuccess(lud)
+        @test lufact(lud) == lud
+        @test_throws ErrorException lud.Z
+        @test lud.L*lud.U ≈ lud.P*Array(d)
+        @test lud.L*lud.U ≈ Array(d)[lud.p,:]
+        @test AbstractArray(lud) ≈ d
+    end
+    @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         b  = eltyb == Int ? rand(1:5, n, 2) :
             convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         c  = eltyb == Int ? rand(1:5, n) :
             convert(Vector{eltyb}, eltyb <: Complex ? complex.(creal, cimg) : creal)
         εb = eps(abs(float(one(eltyb))))
         ε  = max(εa,εb)
-        κ  = cond(a,1)
-
         @testset "(Automatic) Square LU decomposition" begin
             lua   = factorize(a)
-            @test_throws KeyError lua[:Z]
-            l,u,p = lua[:L], lua[:U], lua[:p]
-            ll,ul,pl = lu(a)
-            @test ll * ul ≈ a[pl,:]
-            @test l*u ≈ a[p,:]
-            @test (l*u)[invperm(p),:] ≈ a
-            @test a * inv(lua) ≈ eye(n)
-            @test copy(lua) == lua
-
-            lstring = sprint(show,l)
-            ustring = sprint(show,u)
-            @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
             let Bs = copy(b), Cs = copy(c)
                 for (bb, cc) in ((Bs, Cs), (view(Bs, 1:n, 1), view(Cs, 1:n)))
                     @test norm(a*(lua\bb) - bb, 1) < ε*κ*n*2 # Two because the right hand side has two columns
                     @test norm(a'*(lua'\bb) - bb, 1) < ε*κ*n*2 # Two because the right hand side has two columns
-                    @test norm(a'*(lua'\a') - a', 1) < ε*κ*n^2
+                    @test norm(a'*(lua'\a') - adjoint(a), 1) < ε*κ*n^2
                     @test norm(a*(lua\cc) - cc, 1) < ε*κ*n # cc is a vector
                     @test norm(a'*(lua'\cc) - cc, 1) < ε*κ*n # cc is a vector
                     @test AbstractArray(lua) ≈ a
-                    @test norm(a.'*(lua.'\bb) - bb,1) < ε*κ*n*2 # Two because the right hand side has two columns
-                    @test norm(a.'*(lua.'\cc) - cc,1) < ε*κ*n
+                    @test norm(Transpose(a)*(Transpose(lua)\bb) - bb,1) < ε*κ*n*2 # Two because the right hand side has two columns
+                    @test norm(Transpose(a)*(Transpose(lua)\cc) - cc,1) < ε*κ*n
                 end
 
                 # Test whether Ax_ldiv_B!(y, LU, x) indeed overwrites y
@@ -101,18 +120,18 @@ dimg  = randn(n)/2
                 b_dest = similar(b, resultT)
                 c_dest = similar(c, resultT)
 
-                A_ldiv_B!(b_dest, lua, b)
-                A_ldiv_B!(c_dest, lua, c)
+                ldiv!(b_dest, lua, b)
+                ldiv!(c_dest, lua, c)
                 @test norm(b_dest - lua \ b, 1) < ε*κ*2n
                 @test norm(c_dest - lua \ c, 1) < ε*κ*n
 
-                At_ldiv_B!(b_dest, lua, b)
-                At_ldiv_B!(c_dest, lua, c)
-                @test norm(b_dest - lua.' \ b, 1) < ε*κ*2n
-                @test norm(c_dest - lua.' \ c, 1) < ε*κ*n
+                ldiv!(b_dest, Transpose(lua), b)
+                ldiv!(c_dest, Transpose(lua), c)
+                @test norm(b_dest - Transpose(lua) \ b, 1) < ε*κ*2n
+                @test norm(c_dest - Transpose(lua) \ c, 1) < ε*κ*n
 
-                Ac_ldiv_B!(b_dest, lua, b)
-                Ac_ldiv_B!(c_dest, lua, c)
+                ldiv!(b_dest, Adjoint(lua), b)
+                ldiv!(c_dest, Adjoint(lua), c)
                 @test norm(b_dest - lua' \ b, 1) < ε*κ*2n
                 @test norm(c_dest - lua' \ c, 1) < ε*κ*n
             end
@@ -122,26 +141,19 @@ dimg  = randn(n)/2
             end
         end
         @testset "Tridiagonal LU" begin
-            κd    = cond(Array(d),1)
-            lud   = lufact(d)
-            @test LinAlg.issuccess(lud)
-            @test lufact(lud) == lud
-            @test_throws KeyError lud[:Z]
-            @test lud[:L]*lud[:U] ≈ lud[:P]*Array(d)
-            @test lud[:L]*lud[:U] ≈ Array(d)[lud[:p],:]
-            @test AbstractArray(lud) ≈ d
+            lud   = factorize(d)
             f = zeros(eltyb, n+1)
             @test_throws DimensionMismatch lud\f
-            @test_throws DimensionMismatch lud.'\f
+            @test_throws DimensionMismatch Transpose(lud)\f
             @test_throws DimensionMismatch lud'\f
-            @test_throws DimensionMismatch Base.LinAlg.At_ldiv_B!(lud, f)
+            @test_throws DimensionMismatch Base.LinAlg.ldiv!(Transpose(lud), f)
             let Bs = copy(b)
                 for bb in (Bs, view(Bs, 1:n, 1))
                     @test norm(d*(lud\bb) - bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                     if eltya <: Real
-                        @test norm((lud.'\bb) - Array(d.')\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+                        @test norm((Transpose(lud)\bb) - Array(transpose(d))\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                         if eltya != Int && eltyb != Int
-                            @test norm(Base.LinAlg.At_ldiv_B!(lud, copy(bb)) - Array(d.')\bb, 1) < ε*κd*n*2
+                            @test norm(Base.LinAlg.ldiv!(Transpose(lud), copy(bb)) - Array(transpose(d))\bb, 1) < ε*κd*n*2
                         end
                     end
                     if eltya <: Complex
@@ -152,7 +164,7 @@ dimg  = randn(n)/2
             if eltya <: BlasFloat && eltyb <: BlasFloat
                 e = rand(eltyb,n,n)
                 @test norm(e/lud - e/d,1) < ε*κ*n^2
-                @test norm((lud.'\e') - Array(d.')\e',1) < ε*κd*n^2
+                @test norm((Transpose(lud)\e') - Array(transpose(d))\e',1) < ε*κd*n^2
                 #test singular
                 du = rand(eltya,n-1)
                 dl = rand(eltya,n-1)
@@ -166,23 +178,24 @@ dimg  = randn(n)/2
         end
         @testset "Thin LU" begin
             lua   = @inferred lufact(a[:,1:n1])
-            @test lua[:L]*lua[:U] ≈ lua[:P]*a[:,1:n1]
+            @test lua.L*lua.U ≈ lua.P*a[:,1:n1]
         end
         @testset "Fat LU" begin
             lua   = lufact(a[1:n1,:])
-            @test lua[:L]*lua[:U] ≈ lua[:P]*a[1:n1,:]
+            @test lua.L*lua.U ≈ lua.P*a[1:n1,:]
         end
     end
 
     @testset "LU of Symmetric/Hermitian" begin
         for HS in (Hermitian(a'a), Symmetric(a'a))
             luhs = lufact(HS)
-            @test luhs[:L]*luhs[:U] ≈ luhs[:P]*Matrix(HS)
+            @test luhs.L*luhs.U ≈ luhs.P*Matrix(HS)
         end
     end
 end
 
 @testset "conversion" begin
+    srand(3)
     a = Tridiagonal(rand(9),rand(10),rand(9))
     fa = Array(a)
     falu = lufact(fa)
@@ -197,10 +210,10 @@ end
     b = rand(1:10,n,2)
     @inferred lufact(a)
     lua   = factorize(a)
-    l,u,p = lua[:L], lua[:U], lua[:p]
+    l,u,p = lua.L, lua.U, lua.p
     @test l*u ≈ a[p,:]
     @test l[invperm(p),:]*u ≈ a
-    @test a*inv(lua) ≈ eye(n)
+    @test a*inv(lua) ≈ Matrix(I, n, n)
     let Bs = b
         for b in (Bs, view(Bs, 1:n, 1))
             @test a*(lua\b) ≈ b
@@ -224,10 +237,30 @@ end
 end
 
 @testset "logdet" begin
-    @test @inferred(logdet(Complex64[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
+    @test @inferred(logdet(ComplexF32[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
     @test_throws DomainError logdet([1 1; 1 -1])
 end
 
 @testset "Issue 21453" begin
     @test_throws ArgumentError LinAlg._cond1Inf(lufact(randn(5,5)), 2, 2.0)
+end
+
+@testset "REPL printing" begin
+        bf = IOBuffer()
+        show(bf, "text/plain", lufact(Matrix(I, 4, 4)))
+        seekstart(bf)
+        @test String(take!(bf)) == """
+Base.LinAlg.LU{Float64,Array{Float64,2}}
+L factor:
+4×4 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0
+ 0.0  1.0  0.0  0.0
+ 0.0  0.0  1.0  0.0
+ 0.0  0.0  0.0  1.0
+U factor:
+4×4 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0
+ 0.0  1.0  0.0  0.0
+ 0.0  0.0  1.0  0.0
+ 0.0  0.0  0.0  1.0"""
 end

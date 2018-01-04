@@ -6,7 +6,7 @@ Interface to BLAS subroutines.
 """ -> BLAS
 
 import ..axpy!, ..axpby!
-import Base: copy!
+import Base: copyto!
 
 export
 # Level 1
@@ -68,16 +68,18 @@ import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, c
 # utility routines
 function vendor()
     lib = Libdl.dlopen_e(Base.libblas_name)
+    vend = :unknown
     if lib != C_NULL
         if Libdl.dlsym_e(lib, :openblas_set_num_threads) != C_NULL
-            return :openblas
+            vend = :openblas
         elseif Libdl.dlsym_e(lib, :openblas_set_num_threads64_) != C_NULL
-            return :openblas64
+            vend = :openblas64
         elseif Libdl.dlsym_e(lib, :MKL_Set_Num_Threads) != C_NULL
-            return :mkl
+            vend = :mkl
         end
+        Libdl.dlclose(lib)
     end
-    return :unknown
+    return vend
 end
 
 if vendor() == :openblas64
@@ -100,12 +102,12 @@ Set the number of threads the BLAS library should use.
 function set_num_threads(n::Integer)
     blas = vendor()
     if blas == :openblas
-        return ccall((:openblas_set_num_threads, Base.libblas_name), Void, (Int32,), n)
+        return ccall((:openblas_set_num_threads, Base.libblas_name), Cvoid, (Int32,), n)
     elseif blas == :openblas64
-        return ccall((:openblas_set_num_threads64_, Base.libblas_name), Void, (Int32,), n)
+        return ccall((:openblas_set_num_threads64_, Base.libblas_name), Cvoid, (Int32,), n)
     elseif blas == :mkl
         # MKL may let us set the number of threads in several ways
-        return ccall((:MKL_Set_Num_Threads, Base.libblas_name), Void, (Cint,), n)
+        return ccall((:MKL_Set_Num_Threads, Base.libblas_name), Cvoid, (Cint,), n)
     end
 
     # OSX BLAS looks at an environment variable
@@ -120,16 +122,18 @@ function check()
     blas = vendor()
     if blas == :openblas || blas == :openblas64
         openblas_config = openblas_get_config()
-        openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
+        openblas64 = contains(openblas_config, r".*USE64BITINT.*")
         if Base.USE_BLAS64 != openblas64
             if !openblas64
-                println("ERROR: OpenBLAS was not built with 64bit integer support.")
-                println("You're seeing this error because Julia was built with USE_BLAS64=1")
-                println("Please rebuild Julia with USE_BLAS64=0")
+                @error """
+                    OpenBLAS was not built with 64bit integer support.
+                    You're seeing this error because Julia was built with USE_BLAS64=1.
+                    Please rebuild Julia with USE_BLAS64=0"""
             else
-                println("ERROR: Julia was not built with support for OpenBLAS with 64bit integer support")
-                println("You're seeing this error because Julia was built with USE_BLAS64=0")
-                println("Please rebuild Julia with USE_BLAS64=1")
+                @error """
+                    Julia was not built with support for OpenBLAS with 64bit integer support.
+                    You're seeing this error because Julia was built with USE_BLAS64=0.
+                    Please rebuild Julia with USE_BLAS64=1"""
             end
             println("Quitting.")
             quit()
@@ -169,12 +173,12 @@ function blascopy! end
 
 for (fname, elty) in ((:dcopy_,:Float64),
                       (:scopy_,:Float32),
-                      (:zcopy_,:Complex128),
-                      (:ccopy_,:Complex64))
+                      (:zcopy_,:ComplexF64),
+                      (:ccopy_,:ComplexF32))
     @eval begin
         # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
         function blascopy!(n::Integer, DX::Union{Ptr{$elty},StridedArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},StridedArray{$elty}}, incy::Integer)
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
                  n, DX, incx, DY, incy)
             DY
@@ -194,18 +198,18 @@ function scal! end
 """
     scal(n, a, X, incx)
 
-Returns `X` scaled by `a` for the first `n` elements of array `X` with stride `incx`.
+Return `X` scaled by `a` for the first `n` elements of array `X` with stride `incx`.
 """
 function scal end
 
 for (fname, elty) in ((:dscal_,:Float64),
                       (:sscal_,:Float32),
-                      (:zscal_,:Complex128),
-                      (:cscal_,:Complex64))
+                      (:zscal_,:ComplexF64),
+                      (:cscal_,:ComplexF32))
     @eval begin
         # SUBROUTINE DSCAL(N,DA,DX,INCX)
         function scal!(n::Integer, DA::$elty, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer)
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                   (Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
                   n, DA, DX, incx)
             DX
@@ -275,8 +279,8 @@ for (fname, elty) in ((:ddot_,:Float64),
         end
     end
 end
-for (fname, elty) in ((:cblas_zdotc_sub,:Complex128),
-                      (:cblas_cdotc_sub,:Complex64))
+for (fname, elty) in ((:cblas_zdotc_sub,:ComplexF64),
+                      (:cblas_cdotc_sub,:ComplexF32))
     @eval begin
                 #       DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
                 # *     .. Scalar Arguments ..
@@ -286,15 +290,15 @@ for (fname, elty) in ((:cblas_zdotc_sub,:Complex128),
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotc(n::Integer, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},DenseArray{$elty}}, incy::Integer)
             result = Ref{$elty}()
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
                  n, DX, incx, DY, incy, result)
             result[]
         end
     end
 end
-for (fname, elty) in ((:cblas_zdotu_sub,:Complex128),
-                      (:cblas_cdotu_sub,:Complex64))
+for (fname, elty) in ((:cblas_zdotu_sub,:ComplexF64),
+                      (:cblas_cdotu_sub,:ComplexF32))
     @eval begin
                 #       DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
                 # *     .. Scalar Arguments ..
@@ -304,7 +308,7 @@ for (fname, elty) in ((:cblas_zdotu_sub,:Complex128),
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotu(n::Integer, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},DenseArray{$elty}}, incy::Integer)
             result = Ref{$elty}()
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
                  n, DX, incx, DY, incy, result)
             result[]
@@ -356,8 +360,8 @@ function nrm2 end
 
 for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
                                 (:snrm2_,:Float32,:Float32),
-                                (:dznrm2_,:Complex128,:Float64),
-                                (:scnrm2_,:Complex64,:Float32))
+                                (:dznrm2_,:ComplexF64,:Float64),
+                                (:scnrm2_,:ComplexF32,:Float32))
     @eval begin
         # SUBROUTINE DNRM2(N,X,INCX)
         function nrm2(n::Integer, X::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer)
@@ -389,8 +393,8 @@ function asum end
 
 for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
                                 (:sasum_,:Float32,:Float32),
-                                (:dzasum_,:Complex128,:Float64),
-                                (:scasum_,:Complex64,:Float32))
+                                (:dzasum_,:ComplexF64,:Float64),
+                                (:scasum_,:ComplexF32,:Float32))
     @eval begin
         # SUBROUTINE ASUM(N, X, INCX)
         function asum(n::Integer, X::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer)
@@ -407,7 +411,7 @@ asum(x::Union{StridedVector,Array}) = Base.@gc_preserve x asum(length(x), pointe
 """
     axpy!(a, X, Y)
 
-Overwrite `Y` with `a*X + Y`, where `a` is a scalar. Returns `Y`.
+Overwrite `Y` with `a*X + Y`, where `a` is a scalar. Return `Y`.
 
 # Examples
 ```jldoctest
@@ -426,8 +430,8 @@ function axpy! end
 
 for (fname, elty) in ((:daxpy_,:Float64),
                       (:saxpy_,:Float32),
-                      (:zaxpy_,:Complex128),
-                      (:caxpy_,:Complex64))
+                      (:zaxpy_,:ComplexF64),
+                      (:caxpy_,:ComplexF32))
     @eval begin
                 # SUBROUTINE DAXPY(N,DA,DX,INCX,DY,INCY)
                 # DY <- DA*DX + DY
@@ -437,7 +441,7 @@ for (fname, elty) in ((:daxpy_,:Float64),
                 #*     .. Array Arguments ..
                 #      DOUBLE PRECISION DX(*),DY(*)
         function axpy!(n::Integer, alpha::($elty), dx::Union{Ptr{$elty}, DenseArray{$elty}}, incx::Integer, dy::Union{Ptr{$elty}, DenseArray{$elty}}, incy::Integer)
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
                  n, alpha, dx, incx, dy, incy)
             dy
@@ -488,7 +492,7 @@ julia> Base.BLAS.axpby!(2., x, 3., y)
 function axpby! end
 
 for (fname, elty) in ((:daxpby_,:Float64), (:saxpby_,:Float32),
-                      (:zaxpby_,:Complex128), (:caxpby_,:Complex64))
+                      (:zaxpby_,:ComplexF64), (:caxpby_,:ComplexF32))
     @eval begin
         # SUBROUTINE DAXPBY(N,DA,DX,INCX,DB,DY,INCY)
         # DY <- DA*DX + DB*DY
@@ -500,7 +504,7 @@ for (fname, elty) in ((:daxpby_,:Float64), (:saxpby_,:Float32),
         function axpby!(n::Integer, alpha::($elty), dx::Union{Ptr{$elty},
                         DenseArray{$elty}}, incx::Integer, beta::($elty),
                         dy::Union{Ptr{$elty}, DenseArray{$elty}}, incy::Integer)
-            ccall((@blasfunc($fname), libblas), Void, (Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
+            ccall((@blasfunc($fname), libblas), Cvoid, (Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                 Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
                 n, alpha, dx, incx, beta, dy, incy)
             dy
@@ -519,8 +523,8 @@ end
 ## iamax
 for (fname, elty) in ((:idamax_,:Float64),
                       (:isamax_,:Float32),
-                      (:izamax_,:Complex128),
-                      (:icamax_,:Complex64))
+                      (:izamax_,:ComplexF64),
+                      (:icamax_,:ComplexF32))
     @eval begin
         function iamax(n::Integer, dx::Union{Ptr{$elty}, DenseArray{$elty}}, incx::Integer)
             ccall((@blasfunc($fname), libblas),BlasInt,
@@ -536,8 +540,8 @@ iamax(dx::Union{StridedVector,Array}) = Base.@gc_preserve dx iamax(length(dx), p
 ### gemv
 for (fname, elty) in ((:dgemv_,:Float64),
                       (:sgemv_,:Float32),
-                      (:zgemv_,:Complex128),
-                      (:cgemv_,:Complex64))
+                      (:zgemv_,:ComplexF64),
+                      (:cgemv_,:ComplexF32))
     @eval begin
              #SUBROUTINE DGEMV(TRANS,M,N,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
              #*     .. Scalar Arguments ..
@@ -551,11 +555,11 @@ for (fname, elty) in ((:dgemv_,:Float64),
             if trans == 'N' && (length(X) != n || length(Y) != m)
                 throw(DimensionMismatch("A has dimensions $(size(A)), X has length $(length(X)) and Y has length $(length(Y))"))
             elseif trans == 'C' && (length(X) != m || length(Y) != n)
-                throw(DimensionMismatch("A' has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
+                throw(DimensionMismatch("the adjoint of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
             elseif trans == 'T' && (length(X) != m || length(Y) != n)
-                throw(DimensionMismatch("A.' has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
+                throw(DimensionMismatch("the transpose of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
             end
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
@@ -578,14 +582,14 @@ end
 
 Update the vector `y` as `alpha*A*x + beta*y` or `alpha*A'x + beta*y`
 according to [`tA`](@ref stdlib-blas-trans).
-`alpha` and `beta` are scalars. Returns the updated `y`.
+`alpha` and `beta` are scalars. Return the updated `y`.
 """
 gemv!
 
 """
     gemv(tA, alpha, A, x)
 
-Returns `alpha*A*x` or `alpha*A'x` according to [`tA`](@ref stdlib-blas-trans).
+Return `alpha*A*x` or `alpha*A'x` according to [`tA`](@ref stdlib-blas-trans).
 `alpha` is a scalar.
 """
 gemv(tA, alpha, A, x)
@@ -593,7 +597,7 @@ gemv(tA, alpha, A, x)
 """
     gemv(tA, A, x)
 
-Returns `A*x` or `A'x` according to [`tA`](@ref stdlib-blas-trans).
+Return `A*x` or `A'x` according to [`tA`](@ref stdlib-blas-trans).
 """
 gemv(tA, A, x)
 
@@ -604,14 +608,14 @@ gemv(tA, A, x)
 
 Update vector `y` as `alpha*A*x + beta*y` or `alpha*A'*x + beta*y` according to [`trans`](@ref stdlib-blas-trans).
 The matrix `A` is a general band matrix of dimension `m` by `size(A,2)` with `kl`
-sub-diagonals and `ku` super-diagonals. `alpha` and `beta` are scalars. Returns the updated `y`.
+sub-diagonals and `ku` super-diagonals. `alpha` and `beta` are scalars. Return the updated `y`.
 """
 function gbmv! end
 
 """
     gbmv(trans, m, kl, ku, alpha, A, x)
 
-Returns `alpha*A*x` or `alpha*A'*x` according to [`trans`](@ref stdlib-blas-trans).
+Return `alpha*A*x` or `alpha*A'*x` according to [`trans`](@ref stdlib-blas-trans).
 The matrix `A` is a general band matrix of dimension `m` by `size(A,2)` with `kl` sub-diagonals and `ku`
 super-diagonals, and `alpha` is a scalar.
 """
@@ -619,8 +623,8 @@ function gbmv end
 
 for (fname, elty) in ((:dgbmv_,:Float64),
                       (:sgbmv_,:Float32),
-                      (:zgbmv_,:Complex128),
-                      (:cgbmv_,:Complex64))
+                      (:zgbmv_,:ComplexF64),
+                      (:cgbmv_,:ComplexF32))
     @eval begin
              # SUBROUTINE DGBMV(TRANS,M,N,KL,KU,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
              # *     .. Scalar Arguments ..
@@ -630,7 +634,7 @@ for (fname, elty) in ((:dgbmv_,:Float64),
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function gbmv!(trans::Char, m::Integer, kl::Integer, ku::Integer, alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty}, beta::($elty), y::StridedVector{$elty})
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
@@ -658,14 +662,14 @@ end
 
 Update the vector `y` as `alpha*A*x + beta*y`. `A` is assumed to be symmetric.
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
-`alpha` and `beta` are scalars. Returns the updated `y`.
+`alpha` and `beta` are scalars. Return the updated `y`.
 """
 function symv! end
 
 for (fname, elty, lib) in ((:dsymv_,:Float64,libblas),
                            (:ssymv_,:Float32,libblas),
-                           (:zsymv_,:Complex128,liblapack),
-                           (:csymv_,:Complex64,liblapack))
+                           (:zsymv_,:ComplexF64,liblapack),
+                           (:csymv_,:ComplexF32,liblapack))
     # Note that the complex symv are not BLAS but auiliary functions in LAPACK
     @eval begin
              #      SUBROUTINE DSYMV(UPLO,N,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
@@ -686,7 +690,7 @@ for (fname, elty, lib) in ((:dsymv_,:Float64,libblas),
             if m != length(y)
                 throw(DimensionMismatch("A has size $(size(A)), and y has length $(length(y))"))
             end
-            ccall((@blasfunc($fname), $lib), Void,
+            ccall((@blasfunc($fname), $lib), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}),
@@ -707,7 +711,7 @@ end
 """
     symv(ul, alpha, A, x)
 
-Returns `alpha*A*x`. `A` is assumed to be symmetric.
+Return `alpha*A*x`. `A` is assumed to be symmetric.
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 `alpha` is a scalar.
 """
@@ -716,14 +720,14 @@ symv(ul, alpha, A, x)
 """
     symv(ul, A, x)
 
-Returns `A*x`. `A` is assumed to be symmetric.
+Return `A*x`. `A` is assumed to be symmetric.
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 """
 symv(ul, A, x)
 
 ### hemv
-for (fname, elty) in ((:zhemv_,:Complex128),
-                      (:chemv_,:Complex64))
+for (fname, elty) in ((:zhemv_,:ComplexF64),
+                      (:chemv_,:ComplexF32))
     @eval begin
         function hemv!(uplo::Char, α::$elty, A::StridedMatrix{$elty}, x::StridedVector{$elty}, β::$elty, y::StridedVector{$elty})
             m, n = size(A)
@@ -739,7 +743,7 @@ for (fname, elty) in ((:zhemv_,:Complex128),
             lda = max(1, stride(A, 2))
             incx = stride(x, 1)
             incy = stride(y, 1)
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}),
@@ -769,7 +773,7 @@ for (fname, elty) in ((:dsbmv_,:Float64),
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function sbmv!(uplo::Char, k::Integer, alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty}, beta::($elty), y::StridedVector{$elty})
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
@@ -791,7 +795,7 @@ end
 """
     sbmv(uplo, k, alpha, A, x)
 
-Returns `alpha*A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k`
+Return `alpha*A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k`
 super-diagonals stored in the argument `A`.
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 """
@@ -800,7 +804,7 @@ sbmv(uplo, k, alpha, A, x)
 """
     sbmv(uplo, k, A, x)
 
-Returns `A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k`
+Return `A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k`
 super-diagonals stored in the argument `A`.
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 """
@@ -815,13 +819,13 @@ is described the reference BLAS module, level-2 BLAS at
 <http://www.netlib.org/lapack/explore-html/>.
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 
-Returns the updated `y`.
+Return the updated `y`.
 """
 sbmv!
 
 ### hbmv, (HB) Hermitian banded matrix-vector multiplication
-for (fname, elty) in ((:zhbmv_,:Complex128),
-                      (:chbmv_,:Complex64))
+for (fname, elty) in ((:zhbmv_,:ComplexF64),
+                      (:chbmv_,:ComplexF32))
     @eval begin
              #       SUBROUTINE ZHBMV(UPLO,N,K,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
              # *     .. Scalar Arguments ..
@@ -831,7 +835,7 @@ for (fname, elty) in ((:zhbmv_,:Complex128),
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function hbmv!(uplo::Char, k::Integer, alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty}, beta::($elty), y::StridedVector{$elty})
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
@@ -855,7 +859,7 @@ end
 """
     trmv(ul, tA, dA, A, b)
 
-Returns `op(A)*b`, where `op` is determined by [`tA`](@ref stdlib-blas-trans).
+Return `op(A)*b`, where `op` is determined by [`tA`](@ref stdlib-blas-trans).
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 [`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
 are assumed to be all ones.
@@ -865,7 +869,7 @@ function trmv end
 """
     trmv!(ul, tA, dA, A, b)
 
-Returns `op(A)*b`, where `op` is determined by [`tA`](@ref stdlib-blas-trans).
+Return `op(A)*b`, where `op` is determined by [`tA`](@ref stdlib-blas-trans).
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 [`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
 are assumed to be all ones.
@@ -875,8 +879,8 @@ function trmv! end
 
 for (fname, elty) in ((:dtrmv_,:Float64),
                         (:strmv_,:Float32),
-                        (:ztrmv_,:Complex128),
-                        (:ctrmv_,:Complex64))
+                        (:ztrmv_,:ComplexF64),
+                        (:ctrmv_,:ComplexF32))
     @eval begin
                 #       SUBROUTINE DTRMV(UPLO,TRANS,DIAG,N,A,LDA,X,INCX)
                 # *     .. Scalar Arguments ..
@@ -889,7 +893,7 @@ for (fname, elty) in ((:dtrmv_,:Float64),
             if n != length(x)
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
             end
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
                  uplo, trans, diag, n,
@@ -911,14 +915,14 @@ Overwrite `b` with the solution to `A*x = b` or one of the other two variants de
 [`tA`](@ref stdlib-blas-trans) and [`ul`](@ref stdlib-blas-uplo).
 [`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
 are assumed to be all ones.
-Returns the updated `b`.
+Return the updated `b`.
 """
 function trsv! end
 
 """
     trsv(ul, tA, dA, A, b)
 
-Returns the solution to `A*x = b` or one of the other two variants determined by
+Return the solution to `A*x = b` or one of the other two variants determined by
 [`tA`](@ref stdlib-blas-trans) and [`ul`](@ref stdlib-blas-uplo).
 [`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
 are assumed to be all ones.
@@ -927,8 +931,8 @@ function trsv end
 
 for (fname, elty) in ((:dtrsv_,:Float64),
                         (:strsv_,:Float32),
-                        (:ztrsv_,:Complex128),
-                        (:ctrsv_,:Complex64))
+                        (:ztrsv_,:ComplexF64),
+                        (:ctrsv_,:ComplexF32))
     @eval begin
                 #       SUBROUTINE DTRSV(UPLO,TRANS,DIAG,N,A,LDA,X,INCX)
                 #       .. Scalar Arguments ..
@@ -941,7 +945,7 @@ for (fname, elty) in ((:dtrsv_,:Float64),
             if n != length(x)
                 throw(DimensionMismatch("size of A is $n != length(x) = $(length(x))"))
             end
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
                  uplo, trans, diag, n,
@@ -965,15 +969,15 @@ function ger! end
 
 for (fname, elty) in ((:dger_,:Float64),
                       (:sger_,:Float32),
-                      (:zgerc_,:Complex128),
-                      (:cgerc_,:Complex64))
+                      (:zgerc_,:ComplexF64),
+                      (:cgerc_,:ComplexF32))
     @eval begin
         function ger!(α::$elty, x::StridedVector{$elty}, y::StridedVector{$elty}, A::StridedMatrix{$elty})
             m, n = size(A)
             if m != length(x) || n != length(y)
                 throw(DimensionMismatch("A has size ($m,$n), x has length $(length(x)), y has length $(length(y))"))
             end
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                  Ref{BlasInt}),
@@ -990,22 +994,22 @@ end
 """
     syr!(uplo, alpha, x, A)
 
-Rank-1 update of the symmetric matrix `A` with vector `x` as `alpha*x*x.' + A`.
+Rank-1 update of the symmetric matrix `A` with vector `x` as `alpha*x*Transpose(x) + A`.
 [`uplo`](@ref stdlib-blas-uplo) controls which triangle of `A` is updated. Returns `A`.
 """
 function syr! end
 
 for (fname, elty, lib) in ((:dsyr_,:Float64,libblas),
                            (:ssyr_,:Float32,libblas),
-                           (:zsyr_,:Complex128,liblapack),
-                           (:csyr_,:Complex64,liblapack))
+                           (:zsyr_,:ComplexF64,liblapack),
+                           (:csyr_,:ComplexF32,liblapack))
     @eval begin
         function syr!(uplo::Char, α::$elty, x::StridedVector{$elty}, A::StridedMatrix{$elty})
             n = checksquare(A)
             if length(x) != n
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
             end
-            ccall((@blasfunc($fname), $lib), Void,
+            ccall((@blasfunc($fname), $lib), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
                  uplo, n, α, x,
@@ -1026,15 +1030,15 @@ as `alpha*x*x' + A`.
 """
 function her! end
 
-for (fname, elty, relty) in ((:zher_,:Complex128, :Float64),
-                             (:cher_,:Complex64, :Float32))
+for (fname, elty, relty) in ((:zher_,:ComplexF64, :Float64),
+                             (:cher_,:ComplexF32, :Float32))
     @eval begin
         function her!(uplo::Char, α::$relty, x::StridedVector{$elty}, A::StridedMatrix{$elty})
             n = checksquare(A)
             if length(x) != n
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
             end
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$relty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
                  uplo, n, α, x,
@@ -1051,15 +1055,15 @@ end
     gemm!(tA, tB, alpha, A, B, beta, C)
 
 Update `C` as `alpha*A*B + beta*C` or the other three variants according to
-[`tA`](@ref stdlib-blas-trans) and `tB`. Returns the updated `C`.
+[`tA`](@ref stdlib-blas-trans) and `tB`. Return the updated `C`.
 """
 function gemm! end
 
 for (gemm, elty) in
         ((:dgemm_,:Float64),
          (:sgemm_,:Float32),
-         (:zgemm_,:Complex128),
-         (:cgemm_,:Complex64))
+         (:zgemm_,:ComplexF64),
+         (:cgemm_,:ComplexF32))
     @eval begin
              # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              # *     .. Scalar Arguments ..
@@ -1079,7 +1083,7 @@ for (gemm, elty) in
             if ka != kb || m != size(C,1) || n != size(C,2)
                 throw(DimensionMismatch("A has size ($m,$ka), B has size ($kb,$n), C has size $(size(C))"))
             end
-            ccall((@blasfunc($gemm), libblas), Void,
+            ccall((@blasfunc($gemm), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
@@ -1102,14 +1106,14 @@ end
 """
     gemm(tA, tB, alpha, A, B)
 
-Returns `alpha*A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
+Return `alpha*A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
 """
 gemm(tA, tB, alpha, A, B)
 
 """
     gemm(tA, tB, A, B)
 
-Returns `A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
+Return `A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
 """
 gemm(tA, tB, A, B)
 
@@ -1117,8 +1121,8 @@ gemm(tA, tB, A, B)
 ## (SY) symmetric matrix-matrix and matrix-vector multiplication
 for (mfname, elty) in ((:dsymm_,:Float64),
                        (:ssymm_,:Float32),
-                       (:zsymm_,:Complex128),
-                       (:csymm_,:Complex64))
+                       (:zsymm_,:ComplexF64),
+                       (:csymm_,:ComplexF32))
     @eval begin
              #     SUBROUTINE DSYMM(SIDE,UPLO,M,N,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              #     .. Scalar Arguments ..
@@ -1136,7 +1140,7 @@ for (mfname, elty) in ((:dsymm_,:Float64),
             if size(B,2) != n
                 throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
             end
-            ccall((@blasfunc($mfname), libblas), Void,
+            ccall((@blasfunc($mfname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                  Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
@@ -1157,7 +1161,7 @@ end
 """
     symm(side, ul, alpha, A, B)
 
-Returns `alpha*A*B` or `alpha*B*A` according to [`side`](@ref stdlib-blas-side).
+Return `alpha*A*B` or `alpha*B*A` according to [`side`](@ref stdlib-blas-side).
 `A` is assumed to be symmetric. Only
 the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 """
@@ -1166,7 +1170,7 @@ symm(side, ul, alpha, A, B)
 """
     symm(side, ul, A, B)
 
-Returns `A*B` or `B*A` according to [`side`](@ref stdlib-blas-side).
+Return `A*B` or `B*A` according to [`side`](@ref stdlib-blas-side).
 `A` is assumed to be symmetric. Only the [`ul`](@ref stdlib-blas-uplo)
 triangle of `A` is used.
 """
@@ -1177,13 +1181,13 @@ symm(side, ul, A, B)
 
 Update `C` as `alpha*A*B + beta*C` or `alpha*B*A + beta*C` according to [`side`](@ref stdlib-blas-side).
 `A` is assumed to be symmetric. Only the [`ul`](@ref stdlib-blas-uplo) triangle of
-`A` is used. Returns the updated `C`.
+`A` is used. Return the updated `C`.
 """
 symm!
 
 ## (HE) Hermitian matrix-matrix and matrix-vector multiplication
-for (mfname, elty) in ((:zhemm_,:Complex128),
-                       (:chemm_,:Complex64))
+for (mfname, elty) in ((:zhemm_,:ComplexF64),
+                       (:chemm_,:ComplexF32))
     @eval begin
              #     SUBROUTINE DHEMM(SIDE,UPLO,M,N,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              #     .. Scalar Arguments ..
@@ -1201,7 +1205,7 @@ for (mfname, elty) in ((:zhemm_,:Complex128),
             if size(B,2) != n
                 throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
             end
-            ccall((@blasfunc($mfname), libblas), Void,
+            ccall((@blasfunc($mfname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                  Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
@@ -1224,7 +1228,7 @@ end
 """
     syrk!(uplo, trans, alpha, A, beta, C)
 
-Rank-k update of the symmetric matrix `C` as `alpha*A*A.' + beta*C` or `alpha*A.'*A +
+Rank-k update of the symmetric matrix `C` as `alpha*A*Transpose(A) + beta*C` or `alpha*Transpose(A)*A +
 beta*C` according to [`trans`](@ref stdlib-blas-trans).
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
 """
@@ -1235,15 +1239,15 @@ function syrk! end
 
 Returns either the upper triangle or the lower triangle of `A`,
 according to [`uplo`](@ref stdlib-blas-uplo),
-of `alpha*A*A.'` or `alpha*A.'*A`,
+of `alpha*A*Transpose(A)` or `alpha*Transpose(A)*A`,
 according to [`trans`](@ref stdlib-blas-trans).
 """
 function syrk end
 
 for (fname, elty) in ((:dsyrk_,:Float64),
                       (:ssyrk_,:Float32),
-                      (:zsyrk_,:Complex128),
-                      (:csyrk_,:Complex64))
+                      (:zsyrk_,:ComplexF64),
+                      (:csyrk_,:ComplexF32))
    @eval begin
        # SUBROUTINE DSYRK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
        # *     .. Scalar Arguments ..
@@ -1259,7 +1263,7 @@ for (fname, elty) in ((:dsyrk_,:Float64),
            nn = size(A, trans == 'N' ? 1 : 2)
            if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
            k  = size(A, trans == 'N' ? 2 : 1)
-           ccall((@blasfunc($fname), libblas), Void,
+           ccall((@blasfunc($fname), libblas), Cvoid,
                  (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                   Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty},
                   Ptr{$elty}, Ref{BlasInt}),
@@ -1296,8 +1300,8 @@ according to [`trans`](@ref stdlib-blas-trans).
 """
 function herk end
 
-for (fname, elty, relty) in ((:zherk_, :Complex128, :Float64),
-                             (:cherk_, :Complex64, :Float32))
+for (fname, elty, relty) in ((:zherk_, :ComplexF64, :Float64),
+                             (:cherk_, :ComplexF32, :Float32))
    @eval begin
        # SUBROUTINE CHERK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
        # *     .. Scalar Arguments ..
@@ -1315,7 +1319,7 @@ for (fname, elty, relty) in ((:zherk_, :Complex128, :Float64),
                throw(DimensionMismatch("the matrix to update has dimension $n but the implied dimension of the update is $(size(A, trans == 'N' ? 1 : 2))"))
            end
            k  = size(A, trans == 'N' ? 2 : 1)
-           ccall((@blasfunc($fname), libblas), Void,
+           ccall((@blasfunc($fname), libblas), Cvoid,
                  (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                   Ref{$relty}, Ptr{$elty}, Ref{BlasInt}, Ref{$relty},
                   Ptr{$elty}, Ref{BlasInt}),
@@ -1335,8 +1339,8 @@ end
 ## syr2k
 for (fname, elty) in ((:dsyr2k_,:Float64),
                       (:ssyr2k_,:Float32),
-                      (:zsyr2k_,:Complex128),
-                      (:csyr2k_,:Complex64))
+                      (:zsyr2k_,:ComplexF64),
+                      (:csyr2k_,:ComplexF32))
     @eval begin
              #       SUBROUTINE DSYR2K(UPLO,TRANS,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              #
@@ -1354,7 +1358,7 @@ for (fname, elty) in ((:dsyr2k_,:Float64),
             nn = size(A, trans == 'N' ? 1 : 2)
             if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
             k  = size(A, trans == 'N' ? 2 : 1)
-            ccall((@blasfunc($fname), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}),
@@ -1372,7 +1376,7 @@ function syr2k(uplo::Char, trans::Char, alpha::Number, A::StridedVecOrMat, B::St
 end
 syr2k(uplo::Char, trans::Char, A::StridedVecOrMat, B::StridedVecOrMat) = syr2k(uplo, trans, one(eltype(A)), A, B)
 
-for (fname, elty1, elty2) in ((:zher2k_,:Complex128,:Float64), (:cher2k_,:Complex64,:Float32))
+for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:ComplexF32,:Float32))
    @eval begin
        # SUBROUTINE CHER2K(UPLO,TRANS,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
        #
@@ -1391,7 +1395,7 @@ for (fname, elty1, elty2) in ((:zher2k_,:Complex128,:Float64), (:cher2k_,:Comple
            nn = size(A, trans == 'N' ? 1 : 2)
            if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
            k  = size(A, trans == 'N' ? 2 : 1)
-           ccall((@blasfunc($fname), libblas), Void,
+           ccall((@blasfunc($fname), libblas), Cvoid,
                  (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                   Ref{$elty1}, Ptr{$elty1}, Ref{BlasInt}, Ptr{$elty1}, Ref{BlasInt},
                   Ref{$elty2},  Ptr{$elty1}, Ref{BlasInt}),
@@ -1448,7 +1452,7 @@ function trsm! end
 """
     trsm(side, ul, tA, dA, alpha, A, B)
 
-Returns the solution to `A*X = alpha*B` or one of the other three variants determined by
+Return the solution to `A*X = alpha*B` or one of the other three variants determined by
 determined by [`side`](@ref stdlib-blas-side) and [`tA`](@ref stdlib-blas-trans).
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 [`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
@@ -1459,8 +1463,8 @@ function trsm end
 for (mmname, smname, elty) in
         ((:dtrmm_,:dtrsm_,:Float64),
          (:strmm_,:strsm_,:Float32),
-         (:ztrmm_,:ztrsm_,:Complex128),
-         (:ctrmm_,:ctrsm_,:Complex64))
+         (:ztrmm_,:ztrsm_,:ComplexF64),
+         (:ctrmm_,:ctrsm_,:ComplexF32))
     @eval begin
         #       SUBROUTINE DTRMM(SIDE,UPLO,TRANSA,DIAG,M,N,ALPHA,A,LDA,B,LDB)
         # *     .. Scalar Arguments ..
@@ -1476,7 +1480,7 @@ for (mmname, smname, elty) in
             if nA != (side == 'L' ? m : n)
                 throw(DimensionMismatch("size of A, $(size(A)), doesn't match $side size of B with dims, $(size(B))"))
             end
-            ccall((@blasfunc($mmname), libblas), Void,
+            ccall((@blasfunc($mmname), libblas), Cvoid,
                   (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                    Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
                   side, uplo, transa, diag, m, n,
@@ -1501,7 +1505,7 @@ for (mmname, smname, elty) in
             if k != (side == 'L' ? m : n)
                 throw(DimensionMismatch("size of A is ($k,$k), size of B is ($m,$n), side is $side, and transa='$transa'"))
             end
-            ccall((@blasfunc($smname), libblas), Void,
+            ccall((@blasfunc($smname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{UInt8},
                  Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
@@ -1518,8 +1522,8 @@ end
 
 end # module
 
-function copy!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
-               src::Array{T}, rsrc::Union{UnitRange{Ti},AbstractRange{Ti}}) where {T<:BlasFloat,Ti<:Integer}
+function copyto!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
+                 src::Array{T}, rsrc::Union{UnitRange{Ti},AbstractRange{Ti}}) where {T<:BlasFloat,Ti<:Integer}
     if minimum(rdest) < 1 || maximum(rdest) > length(dest)
         throw(ArgumentError("range out of bounds for dest, of length $(length(dest))"))
     end

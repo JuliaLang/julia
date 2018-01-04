@@ -5,7 +5,7 @@ using Test
 ######## Utilities ###########
 
 # Generate an array similar to A[indx1, indx2, ...], but only call
-# getindex with scalar-valued indexes. This will be safe even if
+# getindex with scalar-valued indices. This will be safe even if
 # `getindex` someday calls `view`.
 
 # The "nodrop" variant does not drop any dimensions (not even trailing ones)
@@ -33,7 +33,7 @@ _Agen(A, i1, i2, i3) = [A[j1,j2,j3] for j1 in i1, j2 in i2, j3 in i3]
 _Agen(A, i1, i2, i3, i4) = [A[j1,j2,j3,j4] for j1 in i1, j2 in i2, j3 in i3, j4 in i4]
 
 function replace_colon(A::AbstractArray, I)
-    Iout = Array{Any}(length(I))
+    Iout = Vector{Any}(uninitialized, length(I))
     I == (:,) && return (1:length(A),)
     for d = 1:length(I)
         Iout[d] = isa(I[d], Colon) ? (1:size(A,d)) : I[d]
@@ -52,8 +52,8 @@ tup2val(::NTuple{N}) where {N} = Val(N)
 # it's good to copy the contents to an Array. This version protects against
 # `similar` ever changing its meaning.
 function copy_to_array(A::AbstractArray)
-    Ac = Array{eltype(A)}(size(A))
-    copy!(Ac, A)
+    Ac = Array{eltype(A)}(uninitialized, size(A))
+    copyto!(Ac, A)
 end
 
 # Discover the highest dimension along which the values in A are
@@ -72,10 +72,10 @@ function single_stride_dim(A::Array)
         Ar = reshape(A, shp...)
         # Compute the diff along dimension 1
         if size(Ar, 1) > 1
-            indexes = map(d->1:size(Ar,d), [1:ndims(Ar);])
-            indexesp = copy(indexes); indexesp[1] = 2:size(Ar,1)
-            indexesm = copy(indexes); indexesm[1] = 1:size(Ar,1)-1
-            dA = Ar[indexesp...] - Ar[indexesm...]
+            indices = map(d->1:size(Ar,d), [1:ndims(Ar);])
+            indicesp = copy(indices); indicesp[1] = 2:size(Ar,1)
+            indicesm = copy(indices); indicesm[1] = 1:size(Ar,1)-1
+            dA = Ar[indicesp...] - Ar[indicesm...]
             ustride = unique(dA[:])
             if length(ustride) == 1  # is it a single stride?
                 ld += 1
@@ -118,13 +118,13 @@ function test_linear(@nospecialize(A), @nospecialize(B))
     end
     if !isgood
         @show A
-        @show A.indexes
+        @show A.indices
         @show B
         error("Mismatch")
     end
 end
 
-# "mixed" means 2 indexes even for N-dimensional arrays
+# "mixed" means 2 indices even for N-dimensional arrays
 test_mixed(::AbstractArray{T,1}, ::Array) where {T} = nothing
 test_mixed(::AbstractArray{T,2}, ::Array) where {T} = nothing
 test_mixed(A, B::Array) = _test_mixed(A, reshape(B, size(A)))
@@ -132,7 +132,7 @@ function _test_mixed(@nospecialize(A), @nospecialize(B))
     m = size(A, 1)
     n = size(A, 2)
     isgood = true
-    for J in CartesianRange(size(A)[2:end]), i in 1:m
+    for J in CartesianIndices(size(A)[2:end]), i in 1:m
         if A[i,J] != B[i,J]
             isgood = false
             break
@@ -212,9 +212,9 @@ function runsubarraytests(@nospecialize(A), I...)
     C = Agen_nodrop(AA, I...)
     Cld = ld = min(single_stride_dim(C), dim_break_linindex(I))
     Cdim = AIindex = 0
-    while Cdim <= Cld && AIindex < length(A.indexes)
+    while Cdim <= Cld && AIindex < length(A.indices)
         AIindex += 1
-        if isa(A.indexes[AIindex], Real)
+        if isa(A.indices[AIindex], Real)
             ld += 1
         else
             Cdim += 1
@@ -225,7 +225,7 @@ function runsubarraytests(@nospecialize(A), I...)
         S = view(A, I...)
     catch err
         @show typeof(A)
-        @show A.indexes
+        @show A.indices
         @show I
         rethrow(err)
     end
@@ -295,7 +295,7 @@ end
 
 ### Views from views ###
 
-# "outer" indexes create snips that have at least size 5 along each dimension,
+# "outer" indices create snips that have at least size 5 along each dimension,
 # with the exception of Int-slicing
 oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9])
 
@@ -349,10 +349,10 @@ A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2:2, 1:5, :)
 @test strides(sA) == (1, 3, 15)
 @test parent(sA) == A
-@test parentindexes(sA) == (2:2, 1:5, Base.Slice(1:8))
+@test parentindices(sA) == (2:2, 1:5, Base.Slice(1:8))
 @test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (1, 5, 8)
-@test indices(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
+@test axes(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
 @test sA[1, 2, 1:8][:] == [5:15:120;]
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
@@ -372,7 +372,7 @@ test_bounds(sA)
 sA = view(A, 1:3, 3:3, 2:5)
 @test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (3,1,4)
-@test indices(sA) === (Base.OneTo(3), Base.OneTo(1), Base.OneTo(4))
+@test axes(sA) === (Base.OneTo(3), Base.OneTo(1), Base.OneTo(4))
 @test sA == A[1:3,3:3,2:5]
 @test sA[:] == A[1:3,3,2:5][:]
 test_bounds(sA)
@@ -387,10 +387,10 @@ sA = view(A, 1:2:3, 1:3:5, 1:2:8)
 test_bounds(sA)
 sA = view(A, 1:1, 1:5, [1 3; 4 2])
 @test ndims(sA) == 4
-@test indices(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(2), Base.OneTo(2))
+@test axes(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(2), Base.OneTo(2))
 sA = view(A, 1:2, 3, [1 3; 4 2])
 @test ndims(sA) == 3
-@test indices(sA) === (Base.OneTo(2), Base.OneTo(2), Base.OneTo(2))
+@test axes(sA) === (Base.OneTo(2), Base.OneTo(2), Base.OneTo(2))
 
 # logical indexing #4763
 A = view([1:10;], 5:8)
@@ -405,10 +405,10 @@ sB = view(B, 2:3, 2:3)
 A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2, :, 1:8)
 @test parent(sA) == A
-@test parentindexes(sA) == (2, Base.Slice(1:5), 1:8)
+@test parentindices(sA) == (2, Base.Slice(1:5), 1:8)
 @test Base.parentdims(sA) == [2:3;]
 @test size(sA) == (5, 8)
-@test indices(sA) === (Base.OneTo(5), Base.OneTo(8))
+@test axes(sA) === (Base.OneTo(5), Base.OneTo(8))
 @test strides(sA) == (3,15)
 @test sA[2, 1:8][:] == [5:15:120;]
 @test sA[:,1] == [2:3:14;]
@@ -420,20 +420,20 @@ test_bounds(sA)
 sA = view(A, 1:3, 1:5, 5)
 @test Base.parentdims(sA) == [1:2;]
 @test size(sA) == (3,5)
-@test indices(sA) === (Base.OneTo(3),Base.OneTo(5))
+@test axes(sA) === (Base.OneTo(3),Base.OneTo(5))
 @test strides(sA) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:2:3, 3, 1:2:8)
 @test Base.parentdims(sA) == [1,3]
 @test size(sA) == (2,4)
-@test indices(sA) === (Base.OneTo(2), Base.OneTo(4))
+@test axes(sA) === (Base.OneTo(2), Base.OneTo(4))
 @test strides(sA) == (2,30)
-@test sA[:] == A[sA.indexes...][:]
+@test sA[:] == A[sA.indices...][:]
 test_bounds(sA)
 
 let a = [5:8;]
     @test parent(a) == a
-    @test parentindexes(a) == (1:4,)
+    @test parentindices(a) == (1:4,)
 end
 
 # issue #6218 - logical indexing
@@ -583,3 +583,7 @@ let
     s = view(reshape(1:6, 2, 3), 1:2, 1:2)
     @test @inferred(s[2,2,1]) === 4
 end
+
+@test sizeof(view(zeros(UInt8, 10), 1:4)) == 4
+@test sizeof(view(zeros(UInt8, 10), 1:3)) == 3
+@test sizeof(view(zeros(Float64, 10, 10), 1:3, 2:6)) == 120

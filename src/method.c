@@ -16,7 +16,10 @@ extern "C" {
 #endif
 
 extern jl_value_t *jl_builtin_getfield;
-jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals)
+extern jl_value_t *jl_builtin_tuple;
+
+static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals,
+                                   int binding_effects)
 {
     if (jl_is_symbol(expr)) {
         if (module == NULL)
@@ -25,7 +28,7 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
     }
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
-        if (e->head == global_sym) {
+        if (e->head == global_sym && binding_effects) {
             // execute the side-effects of "global x" decl immediately:
             // creates uninitialized mutable binding in module for each global
             jl_toplevel_eval_flex(module, expr, 0, 1);
@@ -38,41 +41,6 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
             // ignore these
         }
         else {
-            if (e->head == call_sym && jl_expr_nargs(e) == 3 &&
-                    jl_is_quotenode(jl_exprarg(e, 2)) && module != NULL) {
-                // replace getfield(module_expr, :sym) with GlobalRef
-                jl_value_t *s = jl_fieldref(jl_exprarg(e, 2), 0);
-                jl_value_t *fe = jl_exprarg(e, 0);
-                if (jl_is_symbol(s) && jl_is_globalref(fe)) {
-                    jl_binding_t *b = jl_get_binding(jl_globalref_mod(fe), jl_globalref_name(fe));
-                    jl_value_t *f = NULL;
-                    if (b && b->constp) {
-                        f = b->value;
-                    }
-                    if (f == jl_builtin_getfield) {
-                        jl_value_t *me = jl_exprarg(e, 1);
-                        jl_module_t *me_mod = NULL;
-                        jl_sym_t *me_sym = NULL;
-                        if (jl_is_globalref(me)) {
-                            me_mod = jl_globalref_mod(me);
-                            me_sym = jl_globalref_name(me);
-                        }
-                        else if (jl_is_symbol(me) && jl_binding_resolved_p(module, (jl_sym_t*)me)) {
-                            me_mod = module;
-                            me_sym = (jl_sym_t*)me;
-                        }
-                        if (me_mod && me_sym) {
-                            jl_binding_t *b = jl_get_binding(me_mod, me_sym);
-                            if (b && b->constp) {
-                                jl_value_t *m = b->value;
-                                if (m && jl_is_module(m)) {
-                                    return jl_module_globalref((jl_module_t*)m, (jl_sym_t*)s);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
             size_t i = 0, nargs = jl_array_len(e->args);
             if (e->head == foreigncall_sym) {
                 JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, cc, narg)
@@ -116,11 +84,73 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
             }
             for (; i < nargs; i++) {
                 // TODO: this should be making a copy, not mutating the source
-                jl_exprargset(e, i, jl_resolve_globals(jl_exprarg(e, i), module, sparam_vals));
+                jl_exprargset(e, i, resolve_globals(jl_exprarg(e, i), module, sparam_vals, binding_effects));
+            }
+            if (e->head == call_sym && jl_expr_nargs(e) == 3 &&
+                    jl_is_globalref(jl_exprarg(e, 0)) &&
+                    jl_is_globalref(jl_exprarg(e, 1)) &&
+                    jl_is_quotenode(jl_exprarg(e, 2))) {
+                // replace module_expr.sym with GlobalRef(module, sym)
+                // for expressions pattern-matching to `getproperty(module_expr, :sym)` in a top-module
+                // (this is expected to help inference performance)
+                // TODO: this was broken by linear-IR
+                jl_value_t *s = jl_fieldref(jl_exprarg(e, 2), 0);
+                jl_value_t *me = jl_exprarg(e, 1);
+                jl_value_t *fe = jl_exprarg(e, 0);
+                jl_module_t *fe_mod = jl_globalref_mod(fe);
+                jl_sym_t *fe_sym = jl_globalref_name(fe);
+                jl_module_t *me_mod = jl_globalref_mod(me);
+                jl_sym_t *me_sym = jl_globalref_name(me);
+                if (fe_mod->istopmod && !strcmp(jl_symbol_name(fe_sym), "getproperty") && jl_is_symbol(s)) {
+                    if (jl_binding_resolved_p(me_mod, me_sym)) {
+                        jl_binding_t *b = jl_get_binding(me_mod, me_sym);
+                        if (b && b->constp && b->value && jl_is_module(b->value)) {
+                            return jl_module_globalref((jl_module_t*)b->value, (jl_sym_t*)s);
+                        }
+                    }
+                }
+            }
+            if (e->head == call_sym && nargs > 0 &&
+                    jl_is_globalref(jl_exprarg(e, 0))) {
+                // TODO: this hack should be deleted once llvmcall is fixed
+                jl_value_t *fe = jl_exprarg(e, 0);
+                jl_module_t *fe_mod = jl_globalref_mod(fe);
+                jl_sym_t *fe_sym = jl_globalref_name(fe);
+                if (jl_binding_resolved_p(fe_mod, fe_sym)) {
+                    // look at some known called functions
+                    jl_binding_t *b = jl_get_binding(fe_mod, fe_sym);
+                    if (b && b->constp && b->value == jl_builtin_tuple) {
+                        size_t j;
+                        for (j = 1; j < nargs; j++) {
+                            if (!jl_is_quotenode(jl_exprarg(e, j)))
+                                break;
+                        }
+                        if (j == nargs) {
+                            jl_value_t *val = NULL;
+                            JL_TRY {
+                                val = jl_interpret_toplevel_expr_in(module, (jl_value_t*)e, NULL, sparam_vals);
+                            }
+                            JL_CATCH {
+                            }
+                            if (val)
+                                return val;
+                        }
+                    }
+                }
             }
         }
     }
     return expr;
+}
+
+void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
+                              int binding_effects)
+{
+    size_t i, l = jl_array_len(stmts);
+    for (i = 0; i < l; i++) {
+        jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+        jl_array_ptr_set(stmts, i, resolve_globals(stmt, m, sparam_vals, binding_effects));
+    }
 }
 
 // copy a :lambda Expr into its CodeInfo representation,
@@ -294,7 +324,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         ptls->world_age = def->min_world;
 
         // invoke code generator
-        jl_value_t *ex = jl_call_staged(linfo->def.method, generator, linfo->sparam_vals, jl_svec_data(tt->parameters), jl_nparams(tt));
+        ex = jl_call_staged(linfo->def.method, generator, linfo->sparam_vals, jl_svec_data(tt->parameters), jl_nparams(tt));
 
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;
@@ -308,12 +338,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             }
 
             jl_array_t *stmts = (jl_array_t*)func->code;
-            size_t i, l;
-            for (i = 0, l = jl_array_len(stmts); i < l; i++) {
-                jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-                stmt = jl_resolve_globals(stmt, linfo->def.method->module, linfo->sparam_vals);
-                jl_array_ptr_set(stmts, i, stmt);
-            }
+            jl_resolve_globals_in_ir(stmts, linfo->def.method->module, linfo->sparam_vals, 1);
         }
 
         ptls->in_pure_callback = last_in;
@@ -437,7 +462,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             }
         }
         else {
-            st = jl_resolve_globals(st, m->module, sparam_vars);
+            st = resolve_globals(st, m->module, sparam_vars, 1);
         }
         jl_array_ptr_set(copy, i, st);
     }
@@ -524,8 +549,6 @@ static jl_method_t *jl_new_method(
 }
 
 // method definition ----------------------------------------------------------
-
-extern int jl_boot_file_loaded;
 
 void print_func_loc(JL_STREAM *s, jl_method_t *m);
 

@@ -18,7 +18,7 @@ srand(1234321)
 
 @testset "Matrix condition number" begin
     ainit = rand(n,n)
-    @testset "for $elty" for elty in (Float32, Float64, Complex64, Complex128)
+    @testset "for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         ainit = convert(Matrix{elty}, ainit)
         for a in (copy(ainit), view(ainit, 1:n, 1:n))
             @test cond(a,1) ≈ 4.837320054554436e+02 atol=0.01
@@ -37,7 +37,7 @@ a2img  = randn(n,n)/2
 breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
-@testset "For A containing $eltya" for eltya in (Float32, Float64, Complex64, Complex128, Int)
+@testset "For A containing $eltya" for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     ainit = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     ainit2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     ε = εa = eps(abs(float(one(eltya))))
@@ -51,7 +51,7 @@ bimg  = randn(n,2)/2
             @test isposdef!(copy(apd))
         end
     end
-    @testset "For b containing $eltyb" for eltyb in (Float32, Float64, Complex64, Complex128, Int)
+    @testset "For b containing $eltyb" for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
@@ -66,12 +66,12 @@ bimg  = randn(n,2)/2
             end
 
             @testset "Test nullspace" begin
-                a15null = nullspace(a[:,1:n1]')
+                a15null = nullspace(adjoint(a[:,1:n1]))
                 @test rank([a[:,1:n1] a15null]) == 10
                 @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
                 @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
                 @test size(nullspace(b), 2) == 0
-                @test nullspace(zeros(eltya,n)) == eye(eltya,1)
+                @test nullspace(zeros(eltya,n)) == Matrix(I, 1, 1)
             end
         end
     end # for eltyb
@@ -95,7 +95,7 @@ bimg  = randn(n,2)/2
         @testset "Matrix square root" begin
             asq = sqrt(a)
             @test asq*asq ≈ a
-            asym = a'+a # symmetric indefinite
+            asym = adjoint(a)+a # symmetric indefinite
             asymsq = sqrt(asym)
             @test asymsq*asymsq ≈ asym
         end
@@ -105,9 +105,9 @@ bimg  = randn(n,2)/2
                 z = zero(eltya)
                 t = convert(eltya,2)
                 r = convert(eltya,2.5)
-                @test a^z ≈ eye(a)
+                @test a^z ≈ Matrix(I, size(a))
                 @test a^t ≈ a^2
-                @test eye(eltya,n,n)^r ≈ eye(a)
+                @test Matrix{eltya}(I, n, n)^r ≈ Matrix(I, size(a))
             end
         end
     end # end for loop over arraytype
@@ -314,21 +314,21 @@ end
     @test A2sq*A2sq ≈ A2
 
     N = 3
-    @test log(det(eye(N))) ≈ logdet(eye(N))
+    @test log(det(Matrix(1.0I, N, N))) ≈ logdet(Matrix(1.0I, N, N))
 end
 
 @testset "issue #2637" begin
     a = [1, 2, 3]
     b = [4, 5, 6]
-    @test kron(eye(2),eye(2)) == eye(4)
+    @test kron(Matrix(I, 2, 2), Matrix(I, 2, 2)) == Matrix(I, 4, 4)
     @test kron(a,b) == [4,5,6,8,10,12,12,15,18]
     @test kron(a',b') == [4 5 6 8 10 12 12 15 18]
     @test kron(a,b')  == [4 5 6; 8 10 12; 12 15 18]
     @test kron(a',b)  == [4 8 12; 5 10 15; 6 12 18]
-    @test kron(a,eye(2)) == [1 0; 0 1; 2 0; 0 2; 3 0; 0 3]
-    @test kron(eye(2),a) == [ 1 0; 2 0; 3 0; 0 1; 0 2; 0 3]
-    @test kron(eye(2),2) == 2*eye(2)
-    @test kron(3,eye(3)) == 3*eye(3)
+    @test kron(a, Matrix(1I, 2, 2)) == [1 0; 0 1; 2 0; 0 2; 3 0; 0 3]
+    @test kron(Matrix(1I, 2, 2), a) == [ 1 0; 2 0; 3 0; 0 1; 0 2; 0 3]
+    @test kron(Matrix(1I, 2, 2), 2) == Matrix(2I, 2, 2)
+    @test kron(3, Matrix(1I, 3, 3)) == Matrix(3I, 3, 3)
     @test kron(a,2) == [2, 4, 6]
     @test kron(b',2) == [8 10 12]
 end
@@ -347,11 +347,11 @@ end
 end
 
 @testset "Matrix exponential" begin
-    @testset "Tests for $elty" for elty in (Float32, Float64, Complex64, Complex128)
+    @testset "Tests for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
-        eA1 = convert(Matrix{elty}, [147.866622446369 127.781085523181  127.781085523182;
+        eA1 = convert(Matrix{elty}, adjoint([147.866622446369 127.781085523181  127.781085523182;
                                      183.765138646367 183.765138646366  163.679601723179;
-                                     71.797032399996  91.8825693231832 111.968106246371]')
+                                     71.797032399996  91.8825693231832 111.968106246371]))
         @test exp(A1) ≈ eA1
 
         A2  = convert(Matrix{elty},
@@ -365,9 +365,9 @@ end
         @test exp(A2) ≈ eA2
 
         A3  = convert(Matrix{elty}, [-131 19 18;-390 56 54;-387 57 52])
-        eA3 = convert(Matrix{elty}, [-1.50964415879218 -5.6325707998812  -4.934938326092;
+        eA3 = convert(Matrix{elty}, adjoint([-1.50964415879218 -5.6325707998812  -4.934938326092;
                                      0.367879439109187 1.47151775849686  1.10363831732856;
-                                     0.135335281175235 0.406005843524598 0.541341126763207]')
+                                     0.135335281175235 0.406005843524598 0.541341126763207]))
         @test exp(A3) ≈ eA3
 
         A4 = convert(Matrix{elty}, [0.25 0.25; 0 0])
@@ -379,7 +379,7 @@ end
         @test exp(A5) ≈ eA5
 
         # Hessenberg
-        @test hessfact(A1)[:H] ≈ convert(Matrix{elty},
+        @test hessfact(A1).H ≈ convert(Matrix{elty},
                                                  [4.000000000000000  -1.414213562373094  -1.414213562373095
                                                   -1.414213562373095   4.999999999999996  -0.000000000000000
                                                   0  -0.000000000000002   3.000000000000000])
@@ -415,7 +415,7 @@ end
 end
 
 @testset "Matrix trigonometry" begin
-    @testset "Tests for $elty" for elty in (Float32, Float64, Complex64, Complex128)
+    @testset "Tests for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A1  = convert(Matrix{elty}, [3 2 0; 1 3 1; 1 1 3])
         A2  = convert(Matrix{elty},
                       [3.975884257819758 0.15631501695814318 -0.4579038628067864;
@@ -455,7 +455,7 @@ end
         # Identities
         for (i, A) in enumerate((A1, A2, A3, A4))
             @test sincos(A) == (sin(A), cos(A))
-            @test cos(A)^2 + sin(A)^2 ≈ eye(A)
+            @test cos(A)^2 + sin(A)^2 ≈ Matrix(I, size(A))
             @test cos(A) ≈ cos(-A)
             @test sin(A) ≈ -sin(-A)
             @test tan(A) ≈ sin(A) / cos(A)
@@ -478,20 +478,20 @@ end
             # The following identities fail for A1, A2 due to rounding errors;
             # probably needs better algorithm for the general case
             if i in (3, 4)
-                @test cosh(A)^2 - sinh(A)^2 ≈ eye(A)
+                @test cosh(A)^2 - sinh(A)^2 ≈ Matrix(I, size(A))
                 @test tanh(A) ≈ sinh(A) / cosh(A)
             end
         end
     end
 
-    @testset "Additional tests for $elty" for elty in (Complex64, Complex128)
+    @testset "Additional tests for $elty" for elty in (ComplexF32, ComplexF64)
         A5 = convert(Matrix{elty}, [1im 2; 0.02+0.5im 3])
 
         @test sincos(A5) == (sin(A5), cos(A5))
 
-        @test cos(A5)^2 + sin(A5)^2 ≈ eye(A5)
-        @test cosh(A5)^2 - sinh(A5)^2 ≈ eye(A5)
-        @test cos(A5)^2 + sin(A5)^2 ≈ eye(A5)
+        @test cos(A5)^2 + sin(A5)^2 ≈ Matrix(I, size(A5))
+        @test cosh(A5)^2 - sinh(A5)^2 ≈ Matrix(I, size(A5))
+        @test cos(A5)^2 + sin(A5)^2 ≈ Matrix(I, size(A5))
         @test tan(A5) ≈ sin(A5) / cos(A5)
         @test tanh(A5) ≈ sinh(A5) / cosh(A5)
 
@@ -578,19 +578,19 @@ end
             @test all(z -> (0 < real(z) < π ||
                             abs(real(z)) < abstol && imag(z) >= 0 ||
                             abs(real(z) - π) < abstol && imag(z) <= 0),
-                      eigfact(acos(A))[:values])
+                      eigfact(acos(A)).values)
             @test all(z -> (-π/2 < real(z) < π/2 ||
                             abs(real(z) + π/2) < abstol && imag(z) >= 0 ||
                             abs(real(z) - π/2) < abstol && imag(z) <= 0),
-                      eigfact(asin(A))[:values])
+                      eigfact(asin(A)).values)
             @test all(z -> (-π < imag(z) < π && real(z) > 0 ||
                             0 <= imag(z) < π && abs(real(z)) < abstol ||
                             abs(imag(z) - π) < abstol && real(z) >= 0),
-                      eigfact(acosh(A))[:values])
+                      eigfact(acosh(A)).values)
             @test all(z -> (-π/2 < imag(z) < π/2 ||
                             abs(imag(z) + π/2) < abstol && real(z) <= 0 ||
                             abs(imag(z) - π/2) < abstol && real(z) <= 0),
-                      eigfact(asinh(A))[:values])
+                      eigfact(asinh(A)).values)
         end
     end
 end
@@ -722,7 +722,7 @@ end
     @testset "Tests for $elty" for elty in (Int128, Int16, Int32, Int64, Int8,
                                             UInt128, UInt16, UInt32, UInt64, UInt8,
                                             BigInt)
-        info("Testing $elty")
+        #@info "Testing $elty"
         @test elty[1 1;1 0]^-1 == [0  1;  1 -1]
         @test elty[1 1;1 0]^-2 == [1 -1; -1  2]
         @test (@inferred elty[1 1;1 0]^2) == elty[2 1;1 1]
@@ -745,8 +745,8 @@ end
 
 @testset "Least squares solutions" begin
     a = [ones(20) 1:20 1:20]
-    b = reshape(eye(8, 5), 20, 2)
-    @testset "Tests for type $elty" for elty in (Float32, Float64, Complex64, Complex128)
+    b = reshape(Matrix(1.0I, 8, 5), 20, 2)
+    @testset "Tests for type $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         a = convert(Matrix{elty}, a)
         b = convert(Matrix{elty}, b)
 
@@ -788,9 +788,9 @@ function test_div_pinv_consistency(a, b)
 end
 
 @testset "/ and \\ consistency with pinv for vectors" begin
-    @testset "Tests for type $elty" for elty in (Float32, Float64, Complex64, Complex128)
+    @testset "Tests for type $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         c = rand(elty, 5)
-        r = rand(elty, 5)'
+        r = (elty <: Complex ? Adjoint : Transpose)(rand(elty, 5))
         cm = rand(elty, 5, 1)
         rm = rand(elty, 1, 5)
         @testset "inner prodcuts" begin
@@ -811,7 +811,7 @@ end
     end
 end
 
-@testset "test ops on Numbers for $elty" for elty in [Float32,Float64,Complex64,Complex128]
+@testset "test ops on Numbers for $elty" for elty in [Float32,Float64,ComplexF32,ComplexF64]
     a = rand(elty)
     @test isposdef(one(elty))
     @test lyap(one(elty),a) == -a/2

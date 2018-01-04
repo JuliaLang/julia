@@ -23,9 +23,6 @@ end
 
 Block the current task until some event occurs, depending on the type of the argument:
 
-* [`RemoteChannel`](@ref) : Wait for a value to become available on the specified remote
-  channel.
-* [`Future`](@ref) : Wait for a value to become available for the specified future.
 * [`Channel`](@ref): Wait for a value to be appended to the channel.
 * [`Condition`](@ref): Wait for [`notify`](@ref) on a condition.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
@@ -60,7 +57,7 @@ Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (t
 all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value
 is raised as an exception in the woken tasks.
 
-Returns the count of tasks woken up. Returns 0 if no tasks are waiting on `condition`.
+Return the count of tasks woken up. Return 0 if no tasks are waiting on `condition`.
 """
 notify(c::Condition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
 function notify(c::Condition, arg, all, error)
@@ -73,7 +70,7 @@ function notify(c::Condition, arg, all, error)
         empty!(c.waitq)
     elseif !isempty(c.waitq)
         cnt = 1
-        t = shift!(c.waitq)
+        t = popfirst!(c.waitq)
         error ? schedule(t, arg, error=error) : schedule(t, arg)
     end
     cnt
@@ -102,7 +99,7 @@ global const Workqueue = Task[]
 
 function enq_work(t::Task)
     t.state == :runnable || error("schedule: Task not runnable")
-    ccall(:uv_stop, Void, (Ptr{Void},), eventloop())
+    ccall(:uv_stop, Cvoid, (Ptr{Cvoid},), eventloop())
     push!(Workqueue, t)
     t.state = :queued
     return t
@@ -199,7 +196,7 @@ end
 
 function try_yieldto(undo, reftask::Ref{Task})
     try
-        ccall(:jl_switchto, Void, (Any,), reftask)
+        ccall(:jl_switchto, Cvoid, (Any,), reftask)
     catch e
         undo(reftask[])
         rethrow(e)
@@ -226,7 +223,7 @@ function ensure_rescheduled(othertask::Task)
     if ct !== othertask && othertask.state == :runnable
         # we failed to yield to othertask
         # return it to the head of the queue to be scheduled later
-        unshift!(Workqueue, othertask)
+        pushfirst!(Workqueue, othertask)
         othertask.state = :queued
     end
     if ct.state == :queued
@@ -241,14 +238,14 @@ function ensure_rescheduled(othertask::Task)
 end
 
 @noinline function poptask()
-    t = shift!(Workqueue)
+    t = popfirst!(Workqueue)
     if t.state != :queued
         # assume this somehow got queued twice,
         # probably broken now, but try discarding this switch and keep going
         # can't throw here, because it's probably not the fault of the caller to wait
         # and don't want to use print() here, because that may try to incur a task switch
-        ccall(:jl_safe_printf, Void, (Ptr{UInt8}, Int32...),
-            "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n")
+        ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
+            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n")
         return
     end
     t.state = :runnable
@@ -278,9 +275,9 @@ function wait()
 end
 
 if Sys.iswindows()
-    pause() = ccall(:Sleep, stdcall, Void, (UInt32,), 0xffffffff)
+    pause() = ccall(:Sleep, stdcall, Cvoid, (UInt32,), 0xffffffff)
 else
-    pause() = ccall(:pause, Void, ())
+    pause() = ccall(:pause, Cvoid, ())
 end
 
 
@@ -296,16 +293,16 @@ Waiting tasks are woken with an error when the object is closed (by [`close`](@r
 Use [`isopen`](@ref) to check whether it is still active.
 """
 mutable struct AsyncCondition
-    handle::Ptr{Void}
+    handle::Ptr{Cvoid}
     cond::Condition
     isopen::Bool
 
     function AsyncCondition()
         this = new(Libc.malloc(_sizeof_uv_async), Condition(), true)
         associate_julia_struct(this.handle, this)
-        finalizer(this, uvfinalize)
-        err = ccall(:uv_async_init, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
-            eventloop(), this, uv_jl_asynccb::Ptr{Void})
+        finalizer(uvfinalize, this)
+        err = ccall(:uv_async_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+            eventloop(), this, uv_jl_asynccb::Ptr{Cvoid})
         if err != 0
             #TODO: this codepath is currently not tested
             Libc.free(this.handle)
@@ -354,7 +351,7 @@ the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. U
 to check whether a timer is still active.
 """
 mutable struct Timer
-    handle::Ptr{Void}
+    handle::Ptr{Cvoid}
     cond::Condition
     isopen::Bool
 
@@ -363,7 +360,7 @@ mutable struct Timer
         repeat ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $repeat seconds"))
 
         this = new(Libc.malloc(_sizeof_uv_timer), Condition(), true)
-        err = ccall(:uv_timer_init, Cint, (Ptr{Void}, Ptr{Void}), eventloop(), this)
+        err = ccall(:uv_timer_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), this)
         if err != 0
             #TODO: this codepath is currently not tested
             Libc.free(this.handle)
@@ -372,18 +369,18 @@ mutable struct Timer
         end
 
         associate_julia_struct(this.handle, this)
-        finalizer(this, uvfinalize)
+        finalizer(uvfinalize, this)
 
-        ccall(:uv_update_time, Void, (Ptr{Void},), eventloop())
-        ccall(:uv_timer_start,  Cint,  (Ptr{Void}, Ptr{Void}, UInt64, UInt64),
-              this, uv_jl_timercb::Ptr{Void},
+        ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), eventloop())
+        ccall(:uv_timer_start,  Cint,  (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
+              this, uv_jl_timercb::Ptr{Cvoid},
               UInt64(round(timeout * 1000)) + 1, UInt64(round(repeat * 1000)))
         return this
     end
 end
 
-unsafe_convert(::Type{Ptr{Void}}, t::Timer) = t.handle
-unsafe_convert(::Type{Ptr{Void}}, async::AsyncCondition) = async.handle
+unsafe_convert(::Type{Ptr{Cvoid}}, t::Timer) = t.handle
+unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
 
 function wait(t::Union{Timer, AsyncCondition})
     isopen(t) || throw(EOFError())
@@ -395,8 +392,8 @@ isopen(t::Union{Timer, AsyncCondition}) = t.isopen
 function close(t::Union{Timer, AsyncCondition})
     if t.handle != C_NULL && isopen(t)
         t.isopen = false
-        isa(t, Timer) && ccall(:uv_timer_stop, Cint, (Ptr{Void},), t)
-        ccall(:jl_close_uv, Void, (Ptr{Void},), t)
+        isa(t, Timer) && ccall(:uv_timer_stop, Cint, (Ptr{Cvoid},), t)
+        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
     end
     nothing
 end
@@ -417,15 +414,15 @@ function _uv_hook_close(t::Union{Timer, AsyncCondition})
     nothing
 end
 
-function uv_asynccb(handle::Ptr{Void})
+function uv_asynccb(handle::Ptr{Cvoid})
     async = @handle_as handle AsyncCondition
     notify(async.cond)
     nothing
 end
 
-function uv_timercb(handle::Ptr{Void})
+function uv_timercb(handle::Ptr{Cvoid})
     t = @handle_as handle Timer
-    if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Void},), t) == 0
+    if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 0
         # timer is stopped now
         close(t)
     end

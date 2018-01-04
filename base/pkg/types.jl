@@ -72,7 +72,7 @@ function VersionSet(versions::Vector{VersionNumber})
     else
         isodd(length(versions)) && push!(versions, typemax(VersionNumber))
         while !isempty(versions)
-            push!(intervals, VersionInterval(shift!(versions), shift!(versions)))
+            push!(intervals, VersionInterval(popfirst!(versions), popfirst!(versions)))
         end
     end
     VersionSet(intervals)

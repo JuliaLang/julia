@@ -26,7 +26,7 @@ program completed successfully (see also [`quit`](@ref)). In an interactive sess
 `exit()` can be called with the keyboard shorcut `^D`.
 
 """
-exit(n) = ccall(:jl_exit, Void, (Int32,), n)
+exit(n) = ccall(:jl_exit, Cvoid, (Int32,), n)
 exit() = exit(0)
 
 """
@@ -59,18 +59,18 @@ code.
 const LOAD_PATH = String[]
 const LOAD_CACHE_PATH = String[]
 
-function init_load_path(JULIA_HOME = JULIA_HOME)
+function init_load_path(BINDIR = Sys.BINDIR)
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV, "JULIA_LOAD_PATH")
         prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @static Sys.iswindows() ? ';' : ':'))
     end
-    push!(LOAD_PATH, abspath(JULIA_HOME, "..", "local", "share", "julia", "site", vers))
-    push!(LOAD_PATH, abspath(JULIA_HOME, "..", "share", "julia", "site", vers))
-    #push!(LOAD_CACHE_PATH, abspath(JULIA_HOME, "..", "lib", "julia")) #TODO: add a builtin location?
+    push!(LOAD_PATH, abspath(BINDIR, "..", "local", "share", "julia", "site", vers))
+    push!(LOAD_PATH, abspath(BINDIR, "..", "share", "julia", "site", vers))
+    #push!(LOAD_CACHE_PATH, abspath(BINDIR, "..", "lib", "julia")) #TODO: add a builtin location?
 end
 
 function early_init()
-    global const JULIA_HOME = ccall(:jl_get_julia_home, Any, ())
+    Sys._early_init()
     # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
     ENV["OPENBLAS_MAIN_FREE"] = get(ENV, "OPENBLAS_MAIN_FREE",
                                     get(ENV, "GOTOBLAS_MAIN_FREE", "1"))
@@ -80,13 +80,6 @@ function early_init()
     end
 end
 
-"""
-    JULIA_HOME
-
-A string containing the full path to the directory containing the `julia` executable.
-"""
-:JULIA_HOME
-
 const atexit_hooks = []
 
 """
@@ -95,7 +88,7 @@ const atexit_hooks = []
 Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
 called in last in first out (LIFO) order and run before object finalizers.
 """
-atexit(f::Function) = (unshift!(atexit_hooks, f); nothing)
+atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
 
 function _atexit()
     for f in atexit_hooks

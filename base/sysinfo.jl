@@ -5,14 +5,15 @@ module Sys
 Provide methods for retrieving information about hardware and the operating system.
 """ -> Sys
 
-export CPU_CORES,
+export BINDIR,
+       CPU_CORES,
+       CPU_NAME,
        WORD_SIZE,
        ARCH,
        MACHINE,
        KERNEL,
        JIT,
        cpu_info,
-       cpu_name,
        cpu_summary,
        uptime,
        loadavg,
@@ -25,6 +26,17 @@ export CPU_CORES,
        iswindows
 
 import ..Base: show
+
+"""
+    Sys.BINDIR
+
+A string containing the full path to the directory containing the `julia` executable.
+"""
+BINDIR = ccall(:jl_get_julia_bindir, Any, ())
+
+_early_init() = global BINDIR = ccall(:jl_get_julia_bindir, Any, ())
+
+# helper to avoid triggering precompile warnings
 
 global CPU_CORES
 """
@@ -66,12 +78,11 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 function __init__()
-    # set CPU core count
     global CPU_CORES =
         haskey(ENV,"JULIA_CPU_CORES") ? parse(Int,ENV["JULIA_CPU_CORES"]) :
                                         Int(ccall(:jl_cpu_cores, Int32, ()))
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
-    global cpu_name = ccall(:jl_get_cpu_name, Ref{String}, ())
+    global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
 end
 
@@ -141,11 +152,11 @@ function cpu_info()
     UVcpus = Ref{Ptr{UV_cpu_info_t}}()
     count = Ref{Int32}()
     Base.uv_error("uv_cpu_info",ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
-    cpus = Vector{CPUinfo}(count[])
+    cpus = Vector{CPUinfo}(uninitialized, count[])
     for i = 1:length(cpus)
         cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
     end
-    ccall(:uv_free_cpu_info, Void, (Ptr{UV_cpu_info_t}, Int32), UVcpus[], count[])
+    ccall(:uv_free_cpu_info, Cvoid, (Ptr{UV_cpu_info_t}, Int32), UVcpus[], count[])
     return cpus
 end
 
@@ -166,8 +177,8 @@ end
 Get the load average. See: https://en.wikipedia.org/wiki/Load_(computing).
 """
 function loadavg()
-    loadavg_ = Vector{Float64}(3)
-    ccall(:uv_loadavg, Void, (Ptr{Float64},), loadavg_)
+    loadavg_ = Vector{Float64}(uninitialized, 3)
+    ccall(:uv_loadavg, Cvoid, (Ptr{Float64},), loadavg_)
     return loadavg_
 end
 
@@ -180,7 +191,7 @@ total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 Get the process title. On some systems, will always return an empty string.
 """
 function get_process_title()
-    buf = Vector{UInt8}(512)
+    buf = Vector{UInt8}(uninitialized, 512)
     err = ccall(:uv_get_process_title, Cint, (Ptr{UInt8}, Cint), buf, 512)
     Base.uv_error("get_process_title", err)
     return unsafe_string(pointer(buf))
@@ -235,6 +246,11 @@ islinux(os::Symbol) = (os == :Linux)
 
 Predicate for testing if the OS is a derivative of BSD.
 See documentation in [Handling Operating System Variation](@ref).
+
+!!! note
+    The Darwin kernel descends from BSD, which means that `Sys.isbsd()` is
+    `true` on macOS systems. To exclude macOS from a predicate, use
+    `Sys.isbsd() && !Sys.isapple()`.
 """
 isbsd(os::Symbol) = (os == :FreeBSD || os == :OpenBSD || os == :NetBSD || os == :DragonFly || os == :Darwin || os == :Apple)
 

@@ -56,7 +56,7 @@ static int endswith_extension(const char *path)
 
 #define PATHBUF 512
 
-extern char *julia_home;
+extern char *julia_bindir;
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
@@ -109,7 +109,7 @@ JL_DLLEXPORT int jl_dlclose(void *handle)
 {
 #ifdef _OS_WINDOWS_
     if (!handle) return -1;
-    return FreeLibrary((HMODULE) handle);
+    return !FreeLibrary((HMODULE) handle);
 #else
     dlerror(); /* Reset error status. */
     if (!handle) return -1;

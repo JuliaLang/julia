@@ -1,12 +1,7 @@
-using Test, SharedArrays
-include(joinpath(JULIA_HOME, "..", "share", "julia", "test", "testenv.jl"))
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Test a few "remote" invocations when no workers are present
-@test remote(myid)() == 1
-@test pmap(identity, 1:100) == [1:100...]
-@test 100 == @parallel (+) for i in 1:100
-        1
-    end
+using Test, Distributed, SharedArrays
+include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
 addprocs_with_testenv(4)
 @test nprocs() == 5
@@ -36,7 +31,7 @@ function check_pids_all(S::SharedArray)
     pidtested = falses(size(S))
     for p in procs(S)
         idxes_in_p = remotecall_fetch(p, S) do D
-            parentindexes(D.loc_subarr_1d)[1]
+            parentindices(D.loc_subarr_1d)[1]
         end
         @test all(sdata(S)[idxes_in_p] .== p)
         pidtested[idxes_in_p] = true
@@ -47,7 +42,7 @@ end
 d = SharedArrays.shmem_rand(1:100, dims)
 a = convert(Array, d)
 
-partsums = Array{Int}(length(procs(d)))
+partsums = Vector{Int}(uninitialized, length(procs(d)))
 @sync begin
     for (i, p) in enumerate(procs(d))
         @async partsums[i] = remotecall_fetch(p, d) do D
@@ -60,7 +55,7 @@ end
 d = SharedArrays.shmem_rand(dims)
 for p in procs(d)
     idxes_in_p = remotecall_fetch(p, d) do D
-        parentindexes(D.loc_subarr_1d)[1]
+        parentindices(D.loc_subarr_1d)[1]
     end
     idxf = first(idxes_in_p)
     idxl = last(idxes_in_p)
@@ -78,10 +73,10 @@ end
 
 d = SharedArrays.shmem_rand(dims)
 s = SharedArrays.shmem_rand(dims)
-copy!(s, d)
+copyto!(s, d)
 @test s == d
 s = SharedArrays.shmem_rand(dims)
-copy!(s, sdata(d))
+copyto!(s, sdata(d))
 @test s == d
 a = rand(dims)
 @test sdata(a) == a
@@ -89,7 +84,7 @@ a = rand(dims)
 d = SharedArray{Int}(dims, init = D->fill!(D.loc_subarr_1d, myid()))
 for p in procs(d)
     idxes_in_p = remotecall_fetch(p, d) do D
-        parentindexes(D.loc_subarr_1d)[1]
+        parentindices(D.loc_subarr_1d)[1]
     end
     idxf = first(idxes_in_p)
     idxl = last(idxes_in_p)
@@ -129,7 +124,7 @@ finalize(S)
 
 # Creating a new file
 fn2 = tempname()
-S = SharedArray{Int,2}(fn2, sz, init=D->D[localindexes(D)] = myid())
+S = SharedArray{Int,2}(fn2, sz, init=D->D[localindices(D)] = myid())
 @test S == filedata
 filedata2 = similar(Atrue)
 read!(fn2, filedata2)
@@ -139,10 +134,10 @@ finalize(S)
 # Appending to a file
 fn3 = tempname()
 write(fn3, ones(UInt8, 4))
-S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->D[localindexes(D)]=0x02)
+S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->D[localindices(D)]=0x02)
 len = prod(sz)+4
 @test filesize(fn3) == len
-filedata = Array{UInt8}(len)
+filedata = Vector{UInt8}(uninitialized, len)
 read!(fn3, filedata)
 @test all(filedata[1:4] .== 0x01)
 @test all(filedata[5:end] .== 0x02)
@@ -186,7 +181,7 @@ d = SharedArrays.shmem_fill(1.0, dims)
 
 # similar
 d = SharedArrays.shmem_rand(dims)
-@test size(similar(d, Complex128)) == dims
+@test size(similar(d, ComplexF64)) == dims
 @test size(similar(d, dims)) == dims
 
 # issue #6362
@@ -198,8 +193,8 @@ pids_d = procs(d)
 remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.0, 1:10)
 @test ds != d
 @test s != d
-copy!(d, s)
-@everywhere setid!(A) = A[localindexes(A)] = myid()
+copyto!(d, s)
+@everywhere setid!(A) = A[localindices(A)] = myid()
 @everywhere procs(ds) setid!($ds)
 @test d == s
 @test ds != s
@@ -217,7 +212,7 @@ d[5,1:2:4,8] = 19
 
 AA = rand(4,2)
 A = @inferred(convert(SharedArray, AA))
-B = @inferred(convert(SharedArray, AA'))
+B = @inferred(convert(SharedArray, adjoint(AA)))
 @test B*A == adjoint(AA)*AA
 
 d=SharedArray{Int64,2}((10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
@@ -240,7 +235,7 @@ map!(x->1, d, d)
 
 # Shared arrays of singleton immutables
 @everywhere struct ShmemFoo end
-for T in [Void, ShmemFoo]
+for T in [Nothing, ShmemFoo]
     local s = @inferred(SharedArray{T}(10))
     @test T() === remotecall_fetch(x->x[3], workers()[1], s)
 end

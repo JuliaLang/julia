@@ -5,13 +5,10 @@
 @test typemin(Char) == Char(0)
 @test ndims(Char) == 0
 @test getindex('a', 1) == 'a'
-@test_throws BoundsError getindex('a',2)
-# This is current behavior, but it seems incorrect
-@test getindex('a',1,1,1) == 'a'
-@test_throws BoundsError getindex('a',1,1,2)
-# bswap of a Char should be removed, only the underlying codeunit (UInt32)
-# should be swapped
-@test bswap('\U10200') == '\U20100'
+@test_throws BoundsError getindex('a', 2)
+# This is current behavior, but it seems questionable
+@test getindex('a', 1, 1, 1) == 'a'
+@test_throws BoundsError getindex('a', 1, 1, 2)
 
 @test 'b' + 1 == 'c'
 @test typeof('b' + 1) == Char
@@ -19,6 +16,8 @@
 @test typeof(1 + 'b') == Char
 @test 'b' - 1 == 'a'
 @test typeof('b' - 1) == Char
+
+@test widen('a') === 'a'
 
 let
     numberchars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
@@ -198,3 +197,44 @@ end
 
 @test sprint(show, "text/plain", '$') == "'\$': ASCII/Unicode U+0024 (category Sc: Symbol, currency)"
 @test repr('$') == "'\$'"
+
+@testset "read incomplete character at end of stream or file" begin
+    local file = tempname()
+    local iob = IOBuffer([0xf0])
+    local bytes(c::Char) = codeunits(string(c))
+    @test bytes(read(iob, Char)) == [0xf0]
+    @test eof(iob)
+    try
+        write(file, 0xf0)
+        open(file) do io
+            @test bytes(read(io, Char)) == [0xf0]
+            @test eof(io)
+        end
+        let io = Base.Filesystem.open(file, Base.Filesystem.JL_O_RDONLY)
+            @test bytes(read(io, Char)) == [0xf0]
+            @test eof(io)
+            close(io)
+        end
+   finally
+        rm(file, force=true)
+    end
+end
+
+function test_overlong(c::Char, n::Integer, rep::String)
+    @test Int(c) == n
+    @test sprint(show, c) == rep
+end
+
+# TODO: use char syntax once #25072 is fixed
+test_overlong('\0', 0, "'\\0'")
+test_overlong("\xc0\x80"[1], 0, "'\\xc0\\x80'")
+test_overlong("\xe0\x80\x80"[1], 0, "'\\xe0\\x80\\x80'")
+test_overlong("\xf0\x80\x80\x80"[1], 0, "'\\xf0\\x80\\x80\\x80'")
+
+test_overlong('\x30', 0x30, "'0'")
+test_overlong("\xc0\xb0"[1], 0x30, "'\\xc0\\xb0'")
+test_overlong("\xe0\x80\xb0"[1], 0x30, "'\\xe0\\x80\\xb0'")
+test_overlong("\xf0\x80\x80\xb0"[1], 0x30, "'\\xf0\\x80\\x80\\xb0'")
+
+test_overlong('\u8430', 0x8430, "'萰'")
+test_overlong("\xf0\x88\x90\xb0"[1], 0x8430, "'\\xf0\\x88\\x90\\xb0'")

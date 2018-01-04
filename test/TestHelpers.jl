@@ -55,14 +55,14 @@ end
 
 function challenge_prompt(code::Expr, challenges; timeout::Integer=10, debug::Bool=true)
     output_file = tempname()
-    wrapped_code = """
-    result = let
-        $code
+    wrapped_code = quote
+        result = let
+            $code
+        end
+        open($output_file, "w") do fp
+            serialize(fp, result)
+        end
     end
-    open("$output_file", "w") do fp
-        serialize(fp, result)
-    end
-    """
     cmd = `$(Base.julia_cmd()) --startup-file=no -e $wrapped_code`
     try
         challenge_prompt(cmd, challenges, timeout=timeout, debug=debug)
@@ -77,24 +77,35 @@ end
 
 function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool=true)
     function format_output(output)
-        debug ? "Process output found:\n\"\"\"\n$(read(seekstart(out), String))\n\"\"\"" : ""
+        !debug && return ""
+        str = read(seekstart(output), String)
+        isempty(str) && return ""
+        "Process output found:\n\"\"\"\n$str\n\"\"\""
     end
     out = IOBuffer()
     with_fake_pty() do slave, master
         p = spawn(detach(cmd), slave, slave, slave)
-        # Kill the process if it takes too long. Typically occurs when process is waiting for input
+
+        # Kill the process if it takes too long. Typically occurs when process is waiting
+        # for input.
+        done = Channel(1)
         @async begin
             sleep(timeout)
-            kill(p)
+            if process_running(p)
+                kill(p)
+                put!(done, :timed_out)
+            else
+                put!(done, :exited)
+            end
             close(master)
         end
+
         try
             for (challenge, response) in challenges
-                process_exited(p) && error("Too few prompts. $(format_output(out))")
-
                 write(out, readuntil(master, challenge))
                 if !isopen(master)
-                    error("Could not locate challenge: \"$challenge\". $(format_output(out))")
+                    error("Could not locate challenge: \"$challenge\". ",
+                          format_output(out))
                 end
                 write(master, response)
             end
@@ -102,9 +113,17 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool
         finally
             kill(p)
         end
-        # Determine if the process was explicitly killed
-        killed = process_exited(p) && (p.exitcode != 0 || p.termsignal != 0)
-        killed && error("Too many prompts. $(format_output(out))")
+
+        # Process timed out or aborted
+        if !success(p)
+            write(out, readavailable(master))
+            if isready(done) && fetch(done) == :timed_out
+                error("Process timed out possibly waiting for a response. ",
+                      format_output(out))
+            else
+                error("Failed process. ", format_output(out), "\n", p)
+            end
+        end
     end
     nothing
 end
@@ -129,8 +148,10 @@ OffsetVector{T,AA<:AbstractArray} = OffsetArray{T,1,AA}
 OffsetArray(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) where {T,N} = OffsetArray{T,N,typeof(A)}(A, offsets)
 OffsetArray(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) where {T,N} = OffsetArray(A, offsets)
 
-OffsetArray{T,N}(inds::Indices{N}) where {T,N} = OffsetArray{T,N,Array{T,N}}(Array{T,N}(map(length, inds)), map(indsoffset, inds))
-OffsetArray{T}(inds::Indices{N}) where {T,N} = OffsetArray{T,N}(inds)
+OffsetArray{T,N}(::Uninitialized, inds::Indices{N}) where {T,N} =
+    OffsetArray{T,N,Array{T,N}}(Array{T,N}(uninitialized, map(length, inds)), map(indsoffset, inds))
+OffsetArray{T}(::Uninitialized, inds::Indices{N}) where {T,N} =
+    OffsetArray{T,N}(uninitialized, inds)
 
 Base.IndexStyle(::Type{T}) where {T<:OffsetArray} = Base.IndexStyle(parenttype(T))
 parenttype(::Type{OffsetArray{T,N,AA}}) where {T,N,AA} = AA
@@ -138,17 +159,17 @@ parenttype(A::OffsetArray) = parenttype(typeof(A))
 
 Base.parent(A::OffsetArray) = A.parent
 
-errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
+errmsg(A) = error("size not supported for arrays with indices $(axes(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
 Base.size(A::OffsetArray) = errmsg(A)
 Base.size(A::OffsetArray, d) = errmsg(A)
-Base.eachindex(::IndexCartesian, A::OffsetArray) = CartesianRange(indices(A))
-Base.eachindex(::IndexLinear, A::OffsetVector) = indices(A, 1)
+Base.eachindex(::IndexCartesian, A::OffsetArray) = CartesianIndices(axes(A))
+Base.eachindex(::IndexLinear, A::OffsetVector) = axes(A, 1)
 
 # Implementations of indices and indices1. Since bounds-checking is
 # performance-critical and relies on indices, these are usually worth
 # optimizing thoroughly.
-@inline Base.indices(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? indices(parent(A))[d] .+ A.offsets[d] : (1:1)
-@inline Base.indices(A::OffsetArray) = _indices(indices(parent(A)), A.offsets)  # would rather use ntuple, but see #15276
+@inline Base.axes(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? axes(parent(A))[d] .+ A.offsets[d] : (1:1)
+@inline Base.axes(A::OffsetArray) = _indices(axes(parent(A)), A.offsets)  # would rather use ntuple, but see #15276
 @inline _indices(inds, offsets) = (inds[1] .+ offsets[1], _indices(tail(inds), tail(offsets))...)
 _indices(::Tuple{}, ::Tuple{}) = ()
 Base.indices1(A::OffsetArray{T,0}) where {T} = 1:1  # we only need to specialize this one
@@ -161,7 +182,12 @@ function Base.similar(A::AbstractArray, T::Type, inds::Tuple{UnitRange,Vararg{Un
     OffsetArray(B, map(indsoffset, inds))
 end
 
-Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(f(map(length, shape)), map(indsoffset, shape))
+Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) =
+    OffsetArray(f(map(length, shape)), map(indsoffset, shape))
+Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:Array} =
+    OffsetArray(T(uninitialized, map(length, shape)), map(indsoffset, shape))
+Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:BitArray} =
+    OffsetArray(T(uninitialized, map(length, shape)), map(indsoffset, shape))
 
 Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(length, inds)), map(indsoffset, inds))
 

@@ -25,7 +25,7 @@ for f in (:-, :+)
         l0 = min(la, lb)
         l1 = max(la, lb)
         ld = la - lb
-        rv = Vector{T}(l1)
+        rv = Vector{T}(uninitialized, l1)
         rf = ($f)(a.rest, b.rest)
         @inbounds for i = 1:l0
             rv[i] = ($f)(av[i], bv[i])
@@ -108,14 +108,8 @@ const _vwprebuild_zero = VWPreBuild(0, HierarchicalValue(VWPreBuildItem))
 function VWPreBuild(ispre::Bool, desc::Tuple{Vararg{Union{Integer,String}}})
     isempty(desc) && return _vwprebuild_zero
     desc == ("",) && return VWPreBuild(ispre ? -1 : 1, HierarchicalValue(VWPreBuildItem[]))
-    nonempty = ispre ? -1 : 0
-    w = Vector{VWPreBuildItem}(length(desc))
-    i = 1
-    @inbounds for item in desc
-        w[i] = VWPreBuildItem(item)
-        i += 1
-    end
-    return VWPreBuild(nonempty, HierarchicalValue(w))
+    hv = HierarchicalValue([VWPreBuildItem(item) for item in desc])
+    return VWPreBuild(ispre ? -1 : 0, hv)
 end
 VWPreBuild() = _vwprebuild_zero
 
@@ -217,5 +211,18 @@ Base.abs(a::VersionWeight) =
 Base.copy(a::VersionWeight) =
     VersionWeight(a.major, a.minor, a.patch,
                   copy(a.prerelease), copy(a.build))
+
+# This isn't nice, but it's for debugging only anyway
+function Base.show(io::IO, a::VersionWeight)
+    print(io, "(", a.major)
+    a == VersionWeight(a.major) && @goto done
+    print(io, ".", a.minor)
+    a == VersionWeight(a.major, a.minor) && @goto done
+    print(io, ".", a.patch)
+    a.prerelease ≠ _vwprebuild_zero && print(io, "-", a.prerelease)
+    a.build ≠ _vwprebuild_zero && print(io, "+", a.build)
+    @label done
+    print(io, ")")
+end
 
 end

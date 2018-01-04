@@ -55,7 +55,7 @@ Look up a symbol from a shared library handle, return callable function pointer 
 """
 function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString})
     hnd == C_NULL && throw(ArgumentError("NULL library handle"))
-    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Cstring), hnd, s)
+    ccall(:jl_dlsym, Ptr{Cvoid}, (Ptr{Cvoid}, Cstring), hnd, s)
 end
 
 """
@@ -65,7 +65,7 @@ Look up a symbol from a shared library handle, silently return `NULL` pointer on
 """
 function dlsym_e(hnd::Ptr, s::Union{Symbol,AbstractString})
     hnd == C_NULL && throw(ArgumentError("NULL library handle"))
-    ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Cstring), hnd, s)
+    ccall(:jl_dlsym_e, Ptr{Cvoid}, (Ptr{Cvoid}, Cstring), hnd, s)
 end
 
 """
@@ -98,7 +98,7 @@ dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
     dlopen(string(s), flags)
 
 dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    ccall(:jl_load_dynamic_library, Ptr{Void}, (Cstring,UInt32), s, flags)
+    ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32), s, flags)
 
 """
     dlopen_e(libfile::AbstractString [, flags::Integer])
@@ -111,7 +111,7 @@ dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
     dlopen_e(string(s), flags)
 
 dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Cstring,UInt32), s, flags)
+    ccall(:jl_load_dynamic_library_e, Ptr{Cvoid}, (Cstring,UInt32), s, flags)
 
 """
     dlclose(handle)
@@ -119,7 +119,7 @@ dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
 Close shared library referenced by handle.
 """
 function dlclose(p::Ptr)
-    0 == ccall(:jl_dlclose, Cint, (Ptr{Void},), p)
+    0 == ccall(:jl_dlclose, Cint, (Ptr{Cvoid},), p)
 end
 
 """
@@ -152,8 +152,8 @@ end
 find_library(libname::Union{Symbol,AbstractString}, extrapaths=String[]) =
     find_library([string(libname)], extrapaths)
 
-function dlpath(handle::Ptr{Void})
-    p = ccall(:jl_pathname_for_handle, Cstring, (Ptr{Void},), handle)
+function dlpath(handle::Ptr{Cvoid})
+    p = ccall(:jl_pathname_for_handle, Cstring, (Ptr{Cvoid},), handle)
     s = unsafe_string(p)
     Sys.iswindows() && Libc.free(p)
     return s
@@ -191,7 +191,7 @@ if Sys.islinux()
         name::Ptr{UInt8}
 
         # Pointer to array of ELF program headers for this object
-        phdr::Ptr{Void}
+        phdr::Ptr{Cvoid}
 
         # Number of program headers for this object
         phnum::Cshort
@@ -218,7 +218,7 @@ if Sys.isbsd() && !Sys.isapple()
         name::Ptr{UInt8}
 
         # Pointer to array of ELF program headers for this object
-        phdr::Ptr{Void}
+        phdr::Ptr{Cvoid}
 
         # Number of program headers for this object
         phnum::Cshort
@@ -234,12 +234,12 @@ if Sys.isbsd() && !Sys.isapple()
 end # bsd family
 
 function dllist()
-    dynamic_libraries = Vector{AbstractString}(0)
+    dynamic_libraries = Vector{AbstractString}()
 
     @static if Sys.islinux()
         callback = cfunction(dl_phdr_info_callback, Cint,
                              Tuple{Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}})
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
+        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
     end
 
     @static if Sys.isapple()
@@ -259,8 +259,8 @@ function dllist()
     @static if Sys.isbsd() && !Sys.isapple()
         callback = cfunction(dl_phdr_info_callback, Cint,
                              Tuple{Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}})
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
-        shift!(dynamic_libraries)
+        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
+        popfirst!(dynamic_libraries)
     end
 
     return dynamic_libraries

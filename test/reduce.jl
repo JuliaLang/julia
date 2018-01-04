@@ -135,18 +135,6 @@ for f in (sum3, sum4, sum7, sum8)
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
 
-@test sum_kbn([1,1e100,1,-1e100]) === 2.0
-@test sum_kbn(Float64[]) === 0.0
-@test sum_kbn(i for i=1.0:1.0:10.0) === 55.0
-@test sum_kbn(i for i=1:1:10) === 55
-@test sum_kbn([1 2 3]) === 6
-@test sum_kbn([2+im 3-im]) === 5+0im
-@test sum_kbn([1+im 2+3im]) === 3+4im
-@test sum_kbn([7 8 9]) === sum_kbn([8 9 7])
-@test sum_kbn(i for i=1:1:10) === sum_kbn(i for i=10:-1:1)
-@test sum_kbn([-0.0]) === -0.0
-@test sum_kbn([-0.0,-0.0]) === -0.0
-
 # check sum(abs, ...) for support of empty collections
 @testset "sum(abs, [])" begin
     @test @inferred(sum(abs, Float64[])) === 0.0
@@ -238,39 +226,39 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
 
 # any & all
 
-@test any([]) == false
-@test any(Bool[]) == false
-@test any([true]) == true
-@test any([false, false]) == false
-@test any([false, true]) == true
-@test any([true, false]) == true
-@test any([true, true]) == true
-@test any([true, true, true]) == true
-@test any([true, false, true]) == true
-@test any([false, false, false]) == false
+@test @inferred any([]) == false
+@test @inferred any(Bool[]) == false
+@test @inferred any([true]) == true
+@test @inferred any([false, false]) == false
+@test @inferred any([false, true]) == true
+@test @inferred any([true, false]) == true
+@test @inferred any([true, true]) == true
+@test @inferred any([true, true, true]) == true
+@test @inferred any([true, false, true]) == true
+@test @inferred any([false, false, false]) == false
 
-@test all([]) == true
-@test all(Bool[]) == true
-@test all([true]) == true
-@test all([false, false]) == false
-@test all([false, true]) == false
-@test all([true, false]) == false
-@test all([true, true]) == true
-@test all([true, true, true]) == true
-@test all([true, false, true]) == false
-@test all([false, false, false]) == false
+@test @inferred all([]) == true
+@test @inferred all(Bool[]) == true
+@test @inferred all([true]) == true
+@test @inferred all([false, false]) == false
+@test @inferred all([false, true]) == false
+@test @inferred all([true, false]) == false
+@test @inferred all([true, true]) == true
+@test @inferred all([true, true, true]) == true
+@test @inferred all([true, false, true]) == false
+@test @inferred all([false, false, false]) == false
 
-@test any(x->x>0, []) == false
-@test any(x->x>0, Int[]) == false
-@test any(x->x>0, [-3]) == false
-@test any(x->x>0, [4]) == true
-@test any(x->x>0, [-3, 4, 5]) == true
+@test @inferred any(x->x>0, []) == false
+@test @inferred any(x->x>0, Int[]) == false
+@test @inferred any(x->x>0, [-3]) == false
+@test @inferred any(x->x>0, [4]) == true
+@test @inferred any(x->x>0, [-3, 4, 5]) == true
 
-@test all(x->x>0, []) == true
-@test all(x->x>0, Int[]) == true
-@test all(x->x>0, [-3]) == false
-@test all(x->x>0, [4]) == true
-@test all(x->x>0, [-3, 4, 5]) == false
+@test @inferred all(x->x>0, []) == true
+@test @inferred all(x->x>0, Int[]) == true
+@test @inferred all(x->x>0, [-3]) == false
+@test @inferred all(x->x>0, [4]) == true
+@test @inferred all(x->x>0, [-3, 4, 5]) == false
 
 @test reduce((a, b) -> a .| b, fill(trues(5), 24))  == trues(5)
 @test reduce((a, b) -> a .| b, fill(falses(5), 24)) == falses(5)
@@ -292,22 +280,22 @@ end
 # 19151 - always short circuit
 let c = Int[], d = Int[], A = 1:9
     all((push!(c, x); x < 5) for x in A)
-    @test c == collect(1:5)
+    @test c == 1:5
 
     any((push!(d, x); x > 4) for x in A)
-    @test d == collect(1:5)
+    @test d == 1:5
 end
 
 # any/all with non-boolean collections
 
 let f(x) = x == 1 ? true : x == 2 ? false : 1
     @test any(Any[false,true,false])
-    @test any(map(f, [2,1,2]))
-    @test any([f(x) for x in [2,1,2]])
+    @test @inferred any(map(f, [2,1,2]))
+    @test @inferred any([f(x) for x in [2,1,2]])
 
     @test all(Any[true,true,true])
-    @test all(map(f, [1,1,1]))
-    @test all([f(x) for x in [1,1,1]])
+    @test @inferred all(map(f, [1,1,1]))
+    @test @inferred all([f(x) for x in [1,1,1]])
 
     @test_throws TypeError any([1,true])
     @test_throws TypeError all([true,1])
@@ -320,8 +308,8 @@ end
 struct SomeFunctor end
 (::SomeFunctor)(x) = true
 
-@test any(SomeFunctor(), 1:10)
-@test all(SomeFunctor(), 1:10)
+@test @inferred any(SomeFunctor(), 1:10)
+@test @inferred all(SomeFunctor(), 1:10)
 
 
 # in
@@ -362,13 +350,12 @@ end
 ## cumsum, cummin, cummax
 
 z = rand(10^6)
-let es = sum_kbn(z), es2 = sum_kbn(z[1:10^5])
+let es = sum(BigFloat.(z)), es2 = sum(BigFloat.(z[1:10^5]))
     @test (es - sum(z)) < es * 1e-13
     cs = cumsum(z)
     @test (es - cs[end]) < es * 1e-13
     @test (es2 - cs[10^5]) < es2 * 1e-13
 end
-
 
 @test sum(collect(map(UInt8,0:255))) == 32640
 @test sum(collect(map(UInt8,254:255))) == 509
@@ -404,3 +391,8 @@ test18695(r) = sum( t^2 for t in r )
 # test neutral element not picked incorrectly for &, |
 @test @inferred(foldl(&, Int[1])) === 1
 @test_throws ArgumentError foldl(&, Int[])
+
+# prod on Chars
+@test prod(Char[]) == ""
+@test prod(Char['a']) == "a"
+@test prod(Char['a','b']) == "ab"

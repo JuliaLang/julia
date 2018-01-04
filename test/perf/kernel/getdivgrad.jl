@@ -5,9 +5,9 @@
 #----------------- Get the A matrix
 function getDivGrad(n1,n2,n3)
     # the Divergence
-    D1 = kron(speye(n3),kron(speye(n2),ddx(n1)))
-    D2 = kron(speye(n3),kron(ddx(n2),speye(n1)))
-    D3 = kron(ddx(n3),kron(speye(n2),speye(n1)))
+    D1 = kron(sparse(1.0I, n3, n3), kron(sparse(1.0I, n2), ddx(n1)))
+    D2 = kron(sparse(1.0I, n3, n3), kron(ddx(n2), sparse(1.0I, n1, n1)))
+    D3 = kron(ddx(n3), kron(sparse(1.0I, n2, n2), sparse(1.0I, n1, n1)))
     # DIV from faces to cell-centers
     Div = [D1 D2 D3]
 

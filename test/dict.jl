@@ -91,6 +91,14 @@ end
     end
 end
 
+let x = Dict(3=>3, 5=>5, 8=>8, 6=>6)
+    pop!(x, 5)
+    for k in keys(x)
+        Dict{Int,Int}(x)
+        @test k in [3, 8, 6]
+    end
+end
+
 let z = Dict()
     get_KeyError = false
     try
@@ -162,7 +170,7 @@ end
 @testset "issue #2344" begin
     local bar
     bestkey(d, key) = key
-    bestkey(d::Associative{K,V}, key) where {K<:AbstractString,V} = string(key)
+    bestkey(d::AbstractDict{K,V}, key) where {K<:AbstractString,V} = string(key)
     bar(x) = bestkey(x, :y)
     @test bar(Dict(:x => [1,2,5])) == :y
     @test bar(Dict("x" => [1,2,5])) == "y"
@@ -274,7 +282,7 @@ end
             Base.show(io, MIME("text/plain"), d)
             out = split(String(take!(s)),'\n')
             for line in out[2:end]
-                @test textwidth(line) <= cols
+                @test Base.Unicode.textwidth(line) <= cols
             end
             @test length(out) <= rows
 
@@ -284,7 +292,7 @@ end
                 Base.show(io, MIME("text/plain"), f(d))
                 out = split(String(take!(s)),'\n')
                 for line in out[2:end]
-                    @test textwidth(line) <= cols
+                    @test Base.Unicode.textwidth(line) <= cols
                 end
                 @test length(out) <= rows
             end
@@ -297,7 +305,7 @@ end
     end
 end
 
-@testset "Issue #15739" begin # Compact REPL printouts of an `Associative` use brackets when appropriate
+@testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
     d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
     buf = IOBuffer()
     showcompact(buf, d)
@@ -381,7 +389,7 @@ end
     a[1] = a
     a[a] = 2
 
-    sa = similar(a)
+    sa = empty(a)
     @test isempty(sa)
     @test isa(sa, ObjectIdDict)
 
@@ -507,8 +515,8 @@ import Base.ImmutableDict
     @test get(d, k1, :default) === :default
     @test d1["key1"] === v1
     @test d4["key1"] === v2
-    @test similar(d3) === d
-    @test similar(d) === d
+    @test empty(d3) === d
+    @test empty(d) === d
 
     @test_throws KeyError d[k1]
     @test_throws KeyError d1["key2"]
@@ -518,7 +526,7 @@ end
     d = Dict(zip(1:1000,1:1000))
     f = p -> iseven(p.first)
     @test filter(f, d) == filter!(f, copy(d)) ==
-          invoke(filter!, Tuple{Function,Associative}, f, copy(d)) ==
+          invoke(filter!, Tuple{Function,AbstractDict}, f, copy(d)) ==
           Dict(zip(2:2:1000, 2:2:1000))
 end
 
@@ -613,9 +621,9 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     local x = 0
     local y = 0
     local z = 0
-    finalizer(A, a->(x+=1))
-    finalizer(B, b->(y+=1))
-    finalizer(C, c->(z+=1))
+    finalizer(a->(x+=1), A)
+    finalizer(b->(y+=1), B)
+    finalizer(c->(z+=1), C)
 
     # construction
     wkd = WeakKeyDict()
@@ -649,8 +657,8 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test !isempty(wkd)
 
     wkd = empty!(wkd)
-    @test wkd == similar(wkd)
-    @test typeof(wkd) == typeof(similar(wkd))
+    @test wkd == empty(wkd)
+    @test typeof(wkd) == typeof(empty(wkd))
     @test length(wkd) == 0
     @test isempty(wkd)
     @test isa(wkd, WeakKeyDict)
@@ -737,4 +745,15 @@ end
     @test pop!(d, 1, 0) == 0
     @test pop!(d) == (3=>4)
     @test_throws ArgumentError pop!(d)
+end
+
+@testset "keys as a set" begin
+    d = Dict(1=>2, 3=>4)
+    @test keys(d) isa AbstractSet
+    @test empty(keys(d)) isa AbstractSet
+    let i = keys(d) ∩ Set([1,2])
+        @test i isa AbstractSet
+        @test i == Set([1])
+    end
+    @test map(string, keys(d)) == Set(["1","3"])
 end

@@ -31,7 +31,7 @@ for ch in "'`!\$%()=+{}[]"
 end
 
 function htmlesc(io::IO, s::AbstractString)
-    # s1 = replace(s, r"&(?!(\w+|\#\d+);)", "&amp;")
+    # s1 = replace(s, r"&(?!(\w+|\#\d+);)" => "&amp;")
     for ch in s
         print(io, get(_htmlescape_chars, ch, ch))
     end

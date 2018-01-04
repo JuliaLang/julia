@@ -55,7 +55,6 @@ JL_DLLEXPORT const char* __asan_default_options() {
 }
 #endif
 
-int jl_boot_file_loaded = 0;
 size_t jl_page_size;
 
 void jl_init_stack_limits(int ismaster)
@@ -492,7 +491,7 @@ static char *abspath(const char *in, int nprefix)
 
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 {   // this function resolves the paths in jl_options to absolute file locations as needed
-    // and it replaces the pointers to `julia_home`, `julia_bin`, `image_file`, and output file paths
+    // and it replaces the pointers to `julia_bindir`, `julia_bin`, `image_file`, and output file paths
     // it may fail, print an error, and exit(1) if any of these paths are longer than PATH_MAX
     //
     // note: if you care about lost memory, you should call the appropriate `free()` function
@@ -509,22 +508,31 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     jl_options.julia_bin = (char*)malloc(path_size+1);
     memcpy((char*)jl_options.julia_bin, free_path, path_size);
     ((char*)jl_options.julia_bin)[path_size] = '\0';
-    if (!jl_options.julia_home) {
-        jl_options.julia_home = getenv("JULIA_HOME");
-        if (!jl_options.julia_home) {
-            jl_options.julia_home = dirname(free_path);
+    if (!jl_options.julia_bindir) {
+        jl_options.julia_bindir = getenv("JULIA_BINDIR");
+        if (!jl_options.julia_bindir) {
+            char *julia_bindir = getenv("JULIA_HOME");
+            if (julia_bindir) {
+                jl_depwarn(
+                    "`JULIA_HOME` environment variable is renamed to `JULIA_BINDIR`",
+                    (jl_value_t*)jl_symbol("JULIA_HOME"));
+                jl_options.julia_bindir = julia_bindir;
+            }
+        }
+        if (!jl_options.julia_bindir) {
+            jl_options.julia_bindir = dirname(free_path);
         }
     }
-    if (jl_options.julia_home)
-        jl_options.julia_home = abspath(jl_options.julia_home, 0);
+    if (jl_options.julia_bindir)
+        jl_options.julia_bindir = abspath(jl_options.julia_bindir, 0);
     free(free_path);
     free_path = NULL;
     if (jl_options.image_file) {
         if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_options.image_file)) {
-            // build time path, relative to JULIA_HOME
+            // build time path, relative to JULIA_BINDIR
             free_path = (char*)malloc(PATH_MAX);
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
-                             jl_options.julia_home, jl_options.image_file);
+                             jl_options.julia_bindir, jl_options.image_file);
             if (n >= PATH_MAX || n < 0) {
                 jl_error("fatal error: jl_options.image_file path too long");
             }
@@ -696,7 +704,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
         jl_load(jl_core_module, "boot.jl");
         jl_get_builtin_hooks();
-        jl_boot_file_loaded = 1;
         jl_init_box_caches();
     }
 

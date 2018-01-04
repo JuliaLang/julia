@@ -211,11 +211,11 @@ function admonition(stream::IO, block::MD)
             let untitled = r"^([a-z]+)$",          # !!! <CATEGORY_NAME>
                 titled   = r"^([a-z]+) \"(.*)\"$", # !!! <CATEGORY_NAME> "<TITLE>"
                 line     = strip(readline(stream))
-                if ismatch(untitled, line)
+                if contains(line, untitled)
                     m = match(untitled, line)
                     # When no title is provided we use CATEGORY_NAME, capitalising it.
                     m.captures[1], ucfirst(m.captures[1])
-                elseif ismatch(titled, line)
+                elseif contains(line, titled)
                     m = match(titled, line)
                     # To have a blank TITLE provide an explicit empty string as TITLE.
                     m.captures[1], m.captures[2]
@@ -270,10 +270,10 @@ function list(stream::IO, block::MD)
         indent = isempty(bullet) ? (return false) : length(bullet)
         # Calculate the starting number and regex to use for bullet matching.
         initial, regex =
-            if ismatch(BULLETS, bullet)
+            if contains(bullet, BULLETS)
                 # An unordered list. Use `-1` to flag the list as unordered.
                 -1, BULLETS
-            elseif ismatch(r"^ {0,3}\d+(\.|\))( |$)", bullet)
+            elseif contains(bullet, r"^ {0,3}\d+(\.|\))( |$)")
                 # An ordered list. Either with `1. ` or `1) ` style numbering.
                 r = contains(bullet, ".") ? r"^ {0,3}(\d+)\.( |$)" : r"^ {0,3}(\d+)\)( |$)"
                 Base.parse(Int, match(r, bullet).captures[1]), r

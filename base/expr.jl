@@ -48,7 +48,7 @@ copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
 """
     macroexpand(m::Module, x; recursive=true)
 
-Takes the expression `x` and returns an equivalent expression with all macros removed (expanded)
+Take the expression `x` and return an equivalent expression with all macros removed (expanded)
 for executing in module `m`.
 The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
 This is demonstrated in the example below:
@@ -231,7 +231,7 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
         push!(exargs[idx].args, tag)
     else
         body::Expr = inner.args[2]
-        unshift!(body.args, Expr(:meta, tag))
+        pushfirst!(body.args, Expr(:meta, tag))
     end
     ex
 end

@@ -93,6 +93,8 @@ function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
     Bidiagonal(diag(A, 0), diag(A, uplo == :U ? 1 : -1), uplo)
 end
 
+Bidiagonal(A::Bidiagonal) = A
+
 function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
         throw(BoundsError(A,(i,j)))
@@ -131,7 +133,7 @@ function Base.replace_in_print_matrix(A::Bidiagonal,i::Integer,j::Integer,s::Abs
 end
 
 #Converting from Bidiagonal to dense Matrix
-function convert(::Type{Matrix{T}}, A::Bidiagonal) where T
+function Matrix{T}(A::Bidiagonal) where T
     n = size(A, 1)
     B = zeros(T, n, n)
     for i = 1:n - 1
@@ -145,27 +147,30 @@ function convert(::Type{Matrix{T}}, A::Bidiagonal) where T
     B[n,n] = A.dv[n]
     return B
 end
-convert(::Type{Matrix}, A::Bidiagonal{T}) where {T} = convert(Matrix{T}, A)
-convert(::Type{Array}, A::Bidiagonal) = convert(Matrix, A)
-promote_rule(::Type{Matrix{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} = Matrix{promote_type(T,S)}
+Matrix(A::Bidiagonal{T}) where {T} = Matrix{T}(A)
+Array(A::Bidiagonal) = Matrix(A)
+promote_rule(::Type{Matrix{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
+    @isdefined(T) && @isdefined(S) ? Matrix{promote_type(T,S)} : Matrix
+promote_rule(::Type{Matrix}, ::Type{<:Bidiagonal}) = Matrix
 
 #Converting from Bidiagonal to Tridiagonal
-Tridiagonal(M::Bidiagonal{T}) where {T} = convert(Tridiagonal{T}, M)
-function convert(::Type{Tridiagonal{T}}, A::Bidiagonal) where T
+function Tridiagonal{T}(A::Bidiagonal) where T
     dv = convert(AbstractVector{T}, A.dv)
     ev = convert(AbstractVector{T}, A.ev)
     z = fill!(similar(ev), zero(T))
     A.uplo == 'U' ? Tridiagonal(z, dv, ev) : Tridiagonal(ev, dv, z)
 end
-promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} = Tridiagonal{promote_type(T,S)}
+promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
+    @isdefined(T) && @isdefined(S) ? Tridiagonal{promote_type(T,S)} : Tridiagonal
+promote_rule(::Type{<:Tridiagonal}, ::Type{<:Bidiagonal}) = Tridiagonal
 
 # No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
-convert(::Type{Bidiagonal{T}}, A::Bidiagonal{T}) where {T} = A
+Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
 # Convert Bidiagonal to Bidiagonal{T} by constructing a new instance with converted elements
-convert(::Type{Bidiagonal{T}}, A::Bidiagonal) where {T} =
+Bidiagonal{T}(A::Bidiagonal) where {T} =
     Bidiagonal(convert(AbstractVector{T}, A.dv), convert(AbstractVector{T}, A.ev), A.uplo)
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
-convert(::Type{AbstractMatrix{T}}, A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
+AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 
 broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.uplo)
 
@@ -182,7 +187,7 @@ similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spze
 
 #Singular values
 svdvals!(M::Bidiagonal{<:BlasReal}) = LAPACK.bdsdc!(M.uplo, 'N', M.dv, M.ev)[1]
-function svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Void} = nothing)
+function svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `svdfact!(A; thin = $(thin))` has ",
@@ -193,7 +198,7 @@ function svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Boo
     d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.uplo, 'I', M.dv, M.ev)
     SVD(U, d, Vt)
 end
-function svdfact(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Void} = nothing)
+function svdfact(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
         Base.depwarn(string("the `thin` keyword argument in `svdfact(A; thin = $(thin))` has ",
@@ -290,9 +295,9 @@ function diag(M::Bidiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     if n == 0
-        return copy!(similar(M.dv, length(M.dv)), M.dv)
+        return copyto!(similar(M.dv, length(M.dv)), M.dv)
     elseif (n == 1 && M.uplo == 'U') ||  (n == -1 && M.uplo == 'L')
-        return copy!(similar(M.ev, length(M.ev)), M.ev)
+        return copyto!(similar(M.ev, length(M.ev)), M.ev)
     elseif -size(M,1) <= n <= size(M,1)
         return fill!(similar(M.dv, size(M,1)-abs(n)), 0)
     else
@@ -325,25 +330,24 @@ end
 
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
-A_mul_B!(C::AbstractMatrix, A::SymTridiagonal, B::BiTriSym) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::BiTri, B::BiTriSym) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::BiTriSym) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::Diagonal, B::BiTriSym) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractVector, A::BiTri, B::AbstractVector) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::BiTri, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractVecOrMat, A::BiTri, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
-
-\(::Diagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-\(::Bidiagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-\(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-
-At_ldiv_B(::Bidiagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-At_ldiv_B(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-
-Ac_ldiv_B(::Bidiagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-Ac_ldiv_B(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+mul!(C::AbstractMatrix,   A::SymTridiagonal,     B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::BiTri,              B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::BiTriSym,           B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::AbstractTriangular, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::AbstractMatrix,     B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::Diagonal,           B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractVector,   A::BiTri,              B::AbstractVector) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::BiTri,              B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractVecOrMat, A::BiTri,              B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}) = A_mul_B_td!(C, A, B) # around bidiag line 330
+mul!(C::AbstractMatrix, A::BiTri, B::Adjoint{<:Any,<:AbstractVecOrMat}) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractVector, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 
 function check_A_mul_B!_sizes(C, A, B)
     nA, mA = size(A)
@@ -358,17 +362,31 @@ function check_A_mul_B!_sizes(C, A, B)
     end
 end
 
+# function to get the internally stored vectors for Bidiagonal and [Sym]Tridiagonal
+# to avoid allocations in A_mul_B_td! below (#24324, #24578)
+_diag(A::Tridiagonal, k) = k == -1 ? A.dl : k == 0 ? A.d : A.du
+_diag(A::SymTridiagonal, k) = k == 0 ? A.dv : A.ev
+function _diag(A::Bidiagonal, k)
+    if k == 0
+        return A.dv
+    elseif (A.uplo == 'L' && k == -1) || (A.uplo == 'U' && k == 1)
+        return A.ev
+    else
+        return diag(A, k)
+    end
+end
+
 function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
-    n <= 3 && return A_mul_B!(C, Array(A), Array(B))
+    n <= 3 && return mul!(C, Array(A), Array(B))
     fill!(C, zero(eltype(C)))
-    Al = diag(A, -1)
-    Ad = diag(A, 0)
-    Au = diag(A, 1)
-    Bl = diag(B, -1)
-    Bd = diag(B, 0)
-    Bu = diag(B, 1)
+    Al = _diag(A, -1)
+    Ad = _diag(A, 0)
+    Au = _diag(A, 1)
+    Bl = _diag(B, -1)
+    Bd = _diag(B, 0)
+    Bu = _diag(B, 1)
     @inbounds begin
         # first row of C
         C[1,1] = A[1,1]*B[1,1] + A[1, 2]*B[2, 1]
@@ -420,10 +438,10 @@ function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat)
     if size(C,2) != nB
         throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
     end
-    nA <= 3 && return A_mul_B!(C, Array(A), Array(B))
-    l = diag(A, -1)
-    d = diag(A, 0)
-    u = diag(A, 1)
+    nA <= 3 && return mul!(C, Array(A), Array(B))
+    l = _diag(A, -1)
+    d = _diag(A, 0)
+    u = _diag(A, 1)
     @inbounds begin
         for j = 1:nB
             b₀, b₊ = B[1, j], B[2, j]
@@ -441,11 +459,11 @@ end
 function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
-    n <= 3 && return A_mul_B!(C, Array(A), Array(B))
+    n <= 3 && return mul!(C, Array(A), Array(B))
     m = size(B,2)
-    Bl = diag(B, -1)
-    Bd = diag(B, 0)
-    Bu = diag(B, 1)
+    Bl = _diag(B, -1)
+    Bd = _diag(B, 0)
+    Bu = _diag(B, 1)
     @inbounds begin
         # first and last column of C
         B11 = Bd[1]
@@ -475,15 +493,17 @@ const SpecialMatrix = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
 *(A::SpecialMatrix, B::SpecialMatrix) = Array(A) * Array(B)
 
 #Generic multiplication
-for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
-    @eval ($func)(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = ($func)(Array(A), B)
-end
+*(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Array(A), B)
+*(adjA::Adjoint{<:Any,<:Bidiagonal{T}}, B::AbstractVector{T}) where {T} = *(Adjoint(Array(adjA.parent)), B)
+*(A::Bidiagonal{T}, adjB::Adjoint{<:Any,<:AbstractVector{T}}) where {T} = *(Array(A), Adjoint(adjB.parent))
+/(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = /(Array(A), B)
+/(A::Bidiagonal{T}, adjB::Adjoint{<:Any,<:AbstractVector{T}}) where {T} = /(Array(A), Adjoint(adjB.parent))
 
 #Linear solvers
-A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
-At_ldiv_B!(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!(transpose(A), b)
-Ac_ldiv_B!(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!(adjoint(A), b)
-function A_ldiv_B!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
+ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
+ldiv!(transA::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(transpose(transA.parent), b)
+ldiv!(adjA::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(adjoint(adjA.parent), b)
+function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
     n = size(B, 1)
@@ -491,27 +511,41 @@ function A_ldiv_B!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
         throw(DimensionMismatch("size of A is ($nA,$mA), corresponding dimension of B is $n"))
     end
     for i = 1:size(B,2)
-        copy!(tmp, 1, B, (i - 1)*n + 1, n)
-        A_ldiv_B!(A, tmp)
-        copy!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
+        copyto!(tmp, 1, B, (i - 1)*n + 1, n)
+        ldiv!(A, tmp)
+        copyto!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
     end
     B
 end
-for func in (:Ac_ldiv_B!, :At_ldiv_B!)
-    @eval function ($func)(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
-        nA,mA = size(A)
-        tmp = similar(B,size(B,1))
-        n = size(B, 1)
-        if mA != n
-            throw(DimensionMismatch("size of A' is ($mA,$nA), corresponding dimension of B is $n"))
-        end
-        for i = 1:size(B,2)
-            copy!(tmp, 1, B, (i - 1)*n + 1, n)
-            ($func)(A, tmp)
-            copy!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
-        end
-        B
+function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
+    A = adjA.parent
+    nA,mA = size(A)
+    tmp = similar(B,size(B,1))
+    n = size(B, 1)
+    if mA != n
+        throw(DimensionMismatch("size of adjoint of A is ($mA,$nA), corresponding dimension of B is $n"))
     end
+    for i = 1:size(B,2)
+        copyto!(tmp, 1, B, (i - 1)*n + 1, n)
+        ldiv!(Adjoint(A), tmp)
+        copyto!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
+    end
+    B
+end
+function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
+    A = transA.parent
+    nA,mA = size(A)
+    tmp = similar(B,size(B,1))
+    n = size(B, 1)
+    if mA != n
+        throw(DimensionMismatch("size of transpose of A is ($mA,$nA), corresponding dimension of B is $n"))
+    end
+    for i = 1:size(B,2)
+        copyto!(tmp, 1, B, (i - 1)*n + 1, n)
+        ldiv!(Transpose(A), tmp)
+        copyto!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
+    end
+    B
 end
 #Generic solver using naive substitution
 function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) where T
@@ -536,15 +570,26 @@ function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) w
 end
 
 ### Generic promotion methods and fallbacks
-for (f,g) in ((:\, :A_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!))
-    @eval begin
-        function ($f)(A::Bidiagonal{TA}, B::AbstractVecOrMat{TB}) where {TA<:Number,TB<:Number}
-            TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
-        end
-        ($f)(A::Bidiagonal, B::AbstractVecOrMat) = ($g)(A, copy(B))
-    end
+function \(A::Bidiagonal{<:Number}, B::AbstractVecOrMat{<:Number})
+    TA, TB = eltype(A), eltype(B)
+    TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
+    ldiv!(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
 end
+\(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(A, copy(B))
+function \(transA::Transpose{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrMat{<:Number})
+    A = transA.parent
+    TA, TB = eltype(A), eltype(B)
+    TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
+    ldiv!(Transpose(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
+end
+\(transA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(Transpose(transA.parent), copy(B))
+function \(adjA::Adjoint{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrMat{<:Number})
+    A = adjA.parent
+    TA, TB = eltype(A), eltype(B)
+    TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
+    ldiv!(Adjoint(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
+end
+\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(Adjoint(adjA.parent), copy(B))
 
 factorize(A::Bidiagonal) = A
 
@@ -552,7 +597,7 @@ factorize(A::Bidiagonal) = A
 eigvals(M::Bidiagonal) = M.dv
 function eigvecs(M::Bidiagonal{T}) where T
     n = length(M.dv)
-    Q = Matrix{T}(n,n)
+    Q = Matrix{T}(uninitialized, n,n)
     blks = [0; find(x -> x == 0, M.ev); n]
     v = zeros(T, n)
     if M.uplo == 'U'
@@ -583,37 +628,3 @@ function eigvecs(M::Bidiagonal{T}) where T
     Q #Actually Triangular
 end
 eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
-
-# fill! methods
-_valuefields(::Type{<:Diagonal}) = [:diag]
-_valuefields(::Type{<:Bidiagonal}) = [:dv, :ev]
-_valuefields(::Type{<:Tridiagonal}) = [:dl, :d, :du]
-_valuefields(::Type{<:SymTridiagonal}) = [:dv, :ev]
-_valuefields(::Type{<:AbstractTriangular}) = [:data]
-
-const SpecialArrays = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal,AbstractTriangular}
-
-function fillslots!(A::SpecialArrays, x)
-    xT = convert(eltype(A), x)
-    if @generated
-        quote
-            $([ :(fill!(A.$field, xT)) for field in _valuefields(A) ]...)
-        end
-    else
-        for field in _valuefields(A)
-            fill!(getfield(A, field), xT)
-        end
-    end
-    return A
-end
-
-_small_enough(A::Bidiagonal) = size(A, 1) <= 1
-_small_enough(A::Tridiagonal) = size(A, 1) <= 2
-_small_enough(A::SymTridiagonal) = size(A, 1) <= 2
-
-function fill!(A::Union{Bidiagonal,Tridiagonal,SymTridiagonal}, x)
-    xT = convert(eltype(A), x)
-    (xT == zero(eltype(A)) || _small_enough(A)) && return fillslots!(A, xT)
-    throw(ArgumentError("array A of type $(typeof(A)) and size $(size(A)) can
-    not be filled with x=$x, since some of its entries are constrained."))
-end

@@ -20,7 +20,7 @@ for region in Any[
     1, 2, 3, 4, 5, (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4),
     (1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)]
     # println("region = $region")
-    r = fill(NaN, map(length, Base.reduced_indices(indices(Areduc), region)))
+    r = fill(NaN, map(length, Base.reduced_indices(axes(Areduc), region)))
     @test sum!(r, Areduc) ≈ safe_sum(Areduc, region)
     @test prod!(r, Areduc) ≈ safe_prod(Areduc, region)
     @test maximum!(r, Areduc) ≈ safe_maximum(Areduc, region)
@@ -62,7 +62,7 @@ end
 # Test reduction along first dimension; this is special-cased for
 # size(A, 1) >= 16
 Breduc = rand(64, 3)
-r = fill(NaN, map(length, Base.reduced_indices(indices(Breduc), 1)))
+r = fill(NaN, map(length, Base.reduced_indices(axes(Breduc), 1)))
 @test sum!(r, Breduc) ≈ safe_sum(Breduc, 1)
 @test sum!(abs, r, Breduc) ≈ safe_sumabs(Breduc, 1)
 @test sum!(abs2, r, Breduc) ≈ safe_sumabs2(Breduc, 1)
@@ -98,10 +98,10 @@ end
 @test @inferred(sum(UInt8[1], 1)) == [1]
 
 # Complex types
-@test typeof(@inferred(sum([1.0+1.0im], 1))) == Vector{Complex128}
+@test typeof(@inferred(sum([1.0+1.0im], 1))) == Vector{ComplexF64}
 @test typeof(@inferred(Base.sum(abs, [1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(Base.sum(abs2, [1.0+1.0im], 1))) == Vector{Float64}
-@test typeof(@inferred(prod([1.0+1.0im], 1))) == Vector{Complex128}
+@test typeof(@inferred(prod([1.0+1.0im], 1))) == Vector{ComplexF64}
 @test typeof(@inferred(Base.prod(abs, [1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(Base.prod(abs2, [1.0+1.0im], 1))) == Vector{Float64}
 
@@ -122,7 +122,7 @@ let rt = Base.return_types(reducedim, Tuple{Function, Array{Float64, 3}, Int, Fl
 end
 
 @testset "empty cases" begin
-    A = Array{Int}(0,1)
+    A = Matrix{Int}(uninitialized, 0,1)
     @test sum(A) === 0
     @test prod(A) === 1
     @test_throws ArgumentError minimum(A)
@@ -339,9 +339,10 @@ for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
 end
 
 # check type of result
-under_test = [UInt8, Int8, Int32, Int64, BigInt]
-@testset "type of sum(::Array{$T}" for T in under_test
+@testset "type of sum(::Array{$T}" for T in [UInt8, Int8, Int32, Int64, BigInt]
     result = sum(T[1 2 3; 4 5 6; 7 8 9], 2)
     @test result == hcat([6, 15, 24])
-    @test eltype(result) === typeof(Base.promote_sys_size_add(zero(T)))
+    @test eltype(result) === (T <: Base.SmallSigned ? Int :
+                              T <: Base.SmallUnsigned ? UInt :
+                              T)
 end

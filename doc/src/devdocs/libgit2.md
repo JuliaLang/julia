@@ -150,9 +150,8 @@ Base.LibGit2.with
 Base.LibGit2.with_warn
 Base.LibGit2.workdir
 Base.LibGit2.GitObject(::Base.LibGit2.GitTreeEntry)
-Base.LibGit2.AbstractCredentials
-Base.LibGit2.UserPasswordCredentials
-Base.LibGit2.SSHCredentials
+Base.LibGit2.UserPasswordCredential
+Base.LibGit2.SSHCredential
 Base.LibGit2.isfilled
 Base.LibGit2.CachedCredentials
 Base.LibGit2.CredentialPayload

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Iterators.Enumerate
+using Base.Iterators: Enumerate
 
 """
     asyncmap(f, c...; ntasks=0, batch_size=nothing)
@@ -246,9 +246,9 @@ end
 
 # Special handling for some types.
 function asyncmap(f, s::AbstractString; kwargs...)
-    s2 = Array{Char,1}(length(s))
+    s2 = Vector{Char}(uninitialized, length(s))
     asyncmap!(f, s2, s; kwargs...)
-    return convert(String, s2)
+    return String(s2)
 end
 
 # map on a single BitArray returns a BitArray if the mapping function is boolean.
@@ -281,7 +281,7 @@ end
 """
     AsyncCollector(f, results, c...; ntasks=0, batch_size=nothing) -> iterator
 
-Returns an iterator which applies `f` to each element of `c` asynchronously
+Return an iterator which applies `f` to each element of `c` asynchronously
 and collects output into `results`.
 
 Keyword args `ntasks` and `batch_size` have the same behavior as in
@@ -313,7 +313,7 @@ function start(itr::AsyncCollector)
     itr.batch_size = verify_batch_size(itr.batch_size)
     if itr.batch_size !== nothing
         exec_func = batch -> begin
-            # extract indexes from the input tuple
+            # extract indices from the input tuple
             batch_idxs = map(x->x[1], batch)
 
             # and the args tuple....

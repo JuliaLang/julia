@@ -1876,7 +1876,10 @@ static void jl_insert_backedges(jl_array_t *list, arraylist_t *dependent_worlds)
             if (jl_is_method_instance(callee)) {
                 sig = callee_mi->specTypes;
                 assert(!module_in_worklist(callee_mi->def.method->module));
-                assert(callee_mi->max_world == ~(size_t)0);
+                if (callee_mi->max_world != ~(size_t)0) {
+                    valid = 0;
+                    break;
+                }
             }
             else {
                 sig = callee;
@@ -1924,53 +1927,29 @@ static int size_isgreater(const void *a, const void *b)
     return *(size_t*)b - *(size_t*)a;
 }
 
-static jl_value_t *read_verify_mod_list(ios_t *s, arraylist_t *dependent_worlds)
+static jl_value_t *read_verify_mod_list(ios_t *s, arraylist_t *dependent_worlds, jl_array_t *mod_list)
 {
     if (!jl_main_module->uuid) {
         return jl_get_exceptionf(jl_errorexception_type,
                 "Main module uuid state is invalid for module deserialization.");
     }
-    jl_array_t *mod_array = jl_alloc_vec_any(0);
-    JL_GC_PUSH1(&mod_array);
-    while (1) {
+    size_t i, l = jl_array_len(mod_list);
+    for (i = 0; ; i++) {
         size_t len = read_int32(s);
-        if (len == 0) {
-            JL_GC_POP();
-            return (jl_value_t*)mod_array;
-        }
-        char *name = (char*)alloca(len+1);
+        if (len == 0 && i == l)
+            return NULL; // success
+        if (len == 0 || i == l)
+            return jl_get_exceptionf(jl_errorexception_type, "Wrong number of entries in module list.");
+        char *name = (char*)alloca(len + 1);
         ios_read(s, name, len);
         name[len] = '\0';
         uint64_t uuid = read_uint64(s);
-        jl_sym_t *sym = jl_symbol(name);
-        jl_module_t *m = NULL;
-        static jl_value_t *require_func = NULL;
-        if (!require_func)
-            require_func = jl_get_global(jl_base_module, jl_symbol("require"));
-        jl_value_t *reqargs[2] = {require_func, (jl_value_t*)sym};
-        JL_TRY {
-            m = (jl_module_t*)jl_apply(reqargs, 2);
-        }
-        JL_CATCH {
-            ios_close(s);
-            jl_rethrow();
-        }
-        if (!m) {
-            JL_GC_POP();
+        jl_sym_t *sym = jl_symbol_n(name, len);
+        jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_list, i);
+        if (!m || !jl_is_module(m) || m->name != sym || m->uuid != uuid) {
             return jl_get_exceptionf(jl_errorexception_type,
-                    "Requiring \"%s\" did not define a corresponding module.", name);
+                "Invalid input in module list: expected %s.", name);
         }
-        if (!jl_is_module(m)) {
-            JL_GC_POP();
-            return jl_get_exceptionf(jl_errorexception_type,
-                "Invalid module path (%s does not name a module).", name);
-        }
-        if (m->uuid != uuid) {
-            JL_GC_POP();
-            return jl_get_exceptionf(jl_errorexception_type,
-                "Module %s uuid did not match cache file.", name);
-        }
-        jl_array_ptr_1d_push(mod_array, (jl_value_t*)m);
         if (m->primary_world > jl_main_module->primary_world)
             arraylist_push(dependent_worlds, (void*)m->primary_world);
     }
@@ -2582,17 +2561,31 @@ static void jl_update_backref_list(jl_value_t *old, jl_value_t *_new, size_t sta
 
 // repeatedly look up older methods until we come to one that existed
 // at the time this module was serialized
-static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t *sig, arraylist_t *dependent_worlds)
+static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t *sig, arraylist_t *dependent_worlds, size_t *max_world)
 {
     size_t world = jl_world_counter;
+    jl_typemap_entry_t *entry;
     jl_method_t *_new;
     while (1) {
-        _new = (jl_method_t*)jl_methtable_lookup(mt, sig, world);
-        assert(_new && jl_is_method(_new));
+        entry = jl_typemap_assoc_by_type(
+            mt->defs, sig, NULL, /*subtype*/0, /*offs*/0, world, /*max_world_mask*/0);
+        if (!entry)
+            break;
+        _new = (jl_method_t*)entry->func.value;
         world = lowerbound_dependent_world_set(_new->min_world, dependent_worlds);
-        if (world == _new->min_world)
+        if (world == _new->min_world) {
+            *max_world = entry->max_world;
             return _new;
+        }
     }
+    // If we failed to find a method (perhaps due to method deletion),
+    // grab anything
+    entry = jl_typemap_assoc_by_type(
+        mt->defs, sig, NULL, /*subtype*/0, /*offs*/0, /*world*/jl_world_counter, /*max_world_mask*/(~(size_t)0) >> 1);
+    assert(entry);
+    assert(entry->max_world != ~(size_t)0);
+    *max_world = entry->max_world;
+    return (jl_method_t*)entry->func.value;
 }
 
 static jl_method_t *jl_recache_method(jl_method_t *m, size_t start, arraylist_t *dependent_worlds)
@@ -2600,8 +2593,9 @@ static jl_method_t *jl_recache_method(jl_method_t *m, size_t start, arraylist_t 
     jl_datatype_t *sig = (jl_datatype_t*)m->sig;
     jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
     jl_methtable_t *mt = ftype->name->mt;
+    size_t max_world = 0;
     jl_set_typeof(m, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
-    jl_method_t *_new = jl_lookup_method_worldset(mt, sig, dependent_worlds);
+    jl_method_t *_new = jl_lookup_method_worldset(mt, sig, dependent_worlds, &max_world);
     jl_update_backref_list((jl_value_t*)m, (jl_value_t*)_new, start);
     return _new;
 }
@@ -2612,8 +2606,8 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li
     assert(jl_is_datatype(sig) || jl_is_unionall(sig));
     jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
     jl_methtable_t *mt = ftype->name->mt;
-    jl_method_t *m = jl_lookup_method_worldset(mt, sig, dependent_worlds);
-
+    size_t max_world = 0;
+    jl_method_t *m = jl_lookup_method_worldset(mt, sig, dependent_worlds, &max_world);
     jl_datatype_t *argtypes = (jl_datatype_t*)li->specTypes;
     jl_set_typeof(li, (void*)(intptr_t)0x40); // invalidate the old value to help catch errors
     jl_svec_t *env = jl_emptysvec;
@@ -2622,6 +2616,7 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li
     if (ti == jl_bottom_type)
         env = jl_emptysvec; // the intersection may fail now if the type system had made an incorrect subtype env in the past
     jl_method_instance_t *_new = jl_specializations_get_linfo(m, (jl_value_t*)argtypes, env, jl_world_counter);
+    _new->max_world = max_world;
     jl_update_backref_list((jl_value_t*)li, (jl_value_t*)_new, start);
     return _new;
 }
@@ -2659,7 +2654,7 @@ static int trace_method(jl_typemap_entry_t *entry, void *closure)
     return 1;
 }
 
-static jl_value_t *_jl_restore_incremental(ios_t *f)
+static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ios_eof(f) || !jl_read_verify_header(f)) {
@@ -2682,13 +2677,12 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     arraylist_new(&dependent_worlds, 0);
 
     // verify that the system state is valid
-    jl_value_t *verify_result = read_verify_mod_list(f, &dependent_worlds);
-    if (!jl_is_array(verify_result)) {
+    jl_value_t *verify_fail = read_verify_mod_list(f, &dependent_worlds, mod_array);
+    if (verify_fail) {
         arraylist_free(&dependent_worlds);
         ios_close(f);
-        return verify_result;
+        return verify_fail;
     }
-    jl_array_t *mod_array = (jl_array_t*)verify_result;
 
     // prepare to deserialize
     int en = jl_gc_enable(0);
@@ -2751,21 +2745,21 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     return (jl_value_t*)restored;
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz, jl_array_t *mod_array)
 {
     ios_t f;
     ios_static_buffer(&f, (char*)buf, sz);
-    return _jl_restore_incremental(&f);
+    return _jl_restore_incremental(&f, mod_array);
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *mod_array)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
         return jl_get_exceptionf(jl_errorexception_type,
             "Cache file \"%s\" not found.\n", fname);
     }
-    return _jl_restore_incremental(&f);
+    return _jl_restore_incremental(&f, mod_array);
 }
 
 // --- init ---

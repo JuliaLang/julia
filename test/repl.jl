@@ -8,7 +8,7 @@ isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__),
 using Main.TestHelpers
 import Base: REPL, LineEdit
 
-function fake_repl(f)
+function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
@@ -19,7 +19,9 @@ function fake_repl(f)
     Base.link_pipe(stdout, julia_only_read=true, julia_only_write=true)
     Base.link_pipe(stderr, julia_only_read=true, julia_only_write=true)
 
-    repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin.out, stdout.in, stderr.in))
+    repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin.out, stdout.in, stderr.in), true)
+    repl.options = options
+
     f(stdin.in, stdout.out, repl)
     t = @async begin
         close(stdin.in)
@@ -33,7 +35,7 @@ function fake_repl(f)
 end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
-ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
+ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 0)
 # These are integration tests. If you want to unit test test e.g. completion, or
 # exact LineEdit behavior, put them in the appropriate test files.
 # Furthermore since we are emulating an entire terminal, there may be control characters
@@ -164,6 +166,7 @@ fake_repl() do stdin_write, stdout_read, repl
             redirect_stdout(old_stdout)
         end
         close(proc_stdout)
+        @test contains(wait(get_stdout), "HI\n")
         @test wait(get_stdout) == "HI\n"
     end
 
@@ -192,10 +195,10 @@ fake_repl() do stdin_write, stdout_read, repl
     # Issue #10222
     # Test ignoring insert key in standard and prefix search modes
     write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
-    @test search(readline(stdout_read), "[2h") == 0:-1
+    @test findfirst("[2h", readline(stdout_read)) == 0:-1
     readline(stdout_read)
     write(stdin_write, "\e[2~\e[2~\n") # insert (VT220-style)
-    @test search(readline(stdout_read), "[2~") == 0:-1
+    @test findfirst("[2~", readline(stdout_read)) == 0:-1
     readline(stdout_read)
     write(stdin_write, "1+1\n") # populate history with a trivial input
     readline(stdout_read)
@@ -640,7 +643,7 @@ fake_repl() do stdin_write, stdout_read, repl
     wait(repltask)
 end
 
-ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
 
 let exename = Base.julia_cmd()
     # Test REPL in dumb mode
@@ -702,7 +705,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base._atreplinit(repl)
     @test slot[]
     @test_throws MethodError Base.repl_hooks[1](repl)
-    copy!(Base.repl_hooks, saved_replinit)
+    copyto!(Base.repl_hooks, saved_replinit)
     nothing
 end
 
@@ -722,10 +725,17 @@ let ends_with_semicolon = Base.REPL.ends_with_semicolon
 end
 
 # PR #20794, TTYTerminal with other kinds of streams
-let term = Base.Terminals.TTYTerminal("dumb",IOBuffer("1+2\n"),IOBuffer(),IOBuffer())
+let term = Base.Terminals.TTYTerminal("dumb",IOBuffer("1+2\n"),IOContext(IOBuffer(),:foo=>true),IOBuffer())
     r = Base.REPL.BasicREPL(term)
     REPL.run_repl(r)
-    @test String(take!(term.out_stream)) == "julia> 3\n\njulia> \n"
+    @test String(take!(term.out_stream.io)) == "julia> 3\n\njulia> \n"
+    @test haskey(term, :foo) == true
+    @test haskey(term, :bar) == false
+    @test (:foo=>true) in term
+    @test (:foo=>false) ∉ term
+    @test term[:foo] == get(term, :foo, nothing) == true
+    @test get(term, :bar, nothing) === nothing
+    @test_throws KeyError term[:bar]
 end
 
 
@@ -808,29 +818,54 @@ for keys = [altkeys, merge(altkeys...)],
 
             # Check that the correct prompt was displayed
             output = readuntil(stdout_read, "1 * 1;")
-            @test !isempty(search(output, LineEdit.prompt_string(altprompt)))
-            @test isempty(search(output, "julia> "))
+            @test !contains(LineEdit.prompt_string(altprompt), output)
+            @test !contains("julia> ", output)
 
             # Check the history file
             history = read(histfile, String)
-            @test ismatch(r"""
-                          ^\#\ time:\ .*\n
-                           \#\ mode:\ julia\n
-                           \t1\ \+\ 1;\n
-                           \#\ time:\ .*\n
-                           \#\ mode:\ julia\n
-                           \tmulti=2;\n
-                           \tline=2;\n
-                           \#\ time:\ .*\n
-                           \#\ mode:\ julia\n
-                           \tmulti=3;\n
-                           \tline=1;\n
-                           \#\ time:\ .*\n
-                           \#\ mode:\ julia\n
-                           \t1\ \*\ 1;\n$
-                          """xm, history)
+            @test contains(history,
+                           r"""
+                           ^\#\ time:\ .*\n
+                            \#\ mode:\ julia\n
+                            \t1\ \+\ 1;\n
+                            \#\ time:\ .*\n
+                            \#\ mode:\ julia\n
+                            \tmulti=2;\n
+                            \tline=2;\n
+                            \#\ time:\ .*\n
+                            \#\ mode:\ julia\n
+                            \tmulti=3;\n
+                            \tline=1;\n
+                            \#\ time:\ .*\n
+                            \#\ mode:\ julia\n
+                            \t1\ \*\ 1;\n$
+                           """xm)
         end
     finally
         rm(histfile, force=true)
     end
+end
+
+# Test that module prefix is omitted when type is reachable from Main (PR #23806)
+fake_repl() do stdin_write, stdout_read, repl
+    repl.specialdisplay = Base.REPL.REPLDisplay(repl)
+    repl.history_file = false
+
+    repltask = @async begin
+        Base.REPL.run_repl(repl)
+    end
+
+    @eval Main module TestShowTypeREPL; export TypeA; struct TypeA end; end
+    write(stdin_write, "TestShowTypeREPL.TypeA\n")
+    @test endswith(readline(stdout_read), "\r\e[7CTestShowTypeREPL.TypeA\r\e[29C")
+    readline(stdout_read)
+    readline(stdout_read)
+    @eval Main using .TestShowTypeREPL
+    write(stdin_write, "TypeA\n")
+    @test endswith(readline(stdout_read), "\r\e[7CTypeA\r\e[12C")
+    readline(stdout_read)
+
+    # Close REPL ^D
+    write(stdin_write, '\x04')
+    wait(repltask)
 end

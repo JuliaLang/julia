@@ -22,13 +22,13 @@ end
 
 function test_code_reflection(freflect, f, types, tester)
     tester(freflect, f, types)
-    tester(freflect, f, (types.parameters...))
+    tester(freflect, f, (types.parameters...,))
     nothing
 end
 
 function test_code_reflections(tester, freflect)
-    test_code_reflection(freflect, ismatch,
-                         Tuple{Regex, AbstractString}, tester) # abstract type
+    test_code_reflection(freflect, contains,
+                         Tuple{AbstractString, Regex}, tester) # abstract type
     test_code_reflection(freflect, +, Tuple{Int, Int}, tester) # leaftype signature
     test_code_reflection(freflect, +,
                          Tuple{Array{Float32}, Array{Float32}}, tester) # incomplete types
@@ -61,13 +61,13 @@ function warntype_hastag(f, types, tag)
     iob = IOBuffer()
     code_warntype(iob, f, types)
     str = String(take!(iob))
-    return !isempty(search(str, tag))
+    return contains(str, tag)
 end
 
 pos_stable(x) = x > 0 ? x : zero(x)
 pos_unstable(x) = x > 0 ? x : 0
 
-tag = Base.have_color ? Base.text_colors[Base.error_color()] : "UNION"
+tag = "UNION"
 @test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
 @test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
@@ -80,22 +80,31 @@ end
 Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
-tag = Base.have_color ? Base.text_colors[Base.error_color()] : "ARRAY{FLOAT64,N}"
+tag = "ARRAY{FLOAT64,N}"
 @test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
 @test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
 @test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
 
 # Make sure emphasis is not used for other functions
-tag = Base.have_color ? Base.text_colors[Base.error_color()] : "ANY"
+tag = "ANY"
 iob = IOBuffer()
 show(iob, Meta.lower(Main, :(x -> x^2)))
 str = String(take!(iob))
-@test isempty(search(str, tag))
+@test !contains(str, tag)
 
 # Make sure non used variables are not emphasized
 has_unused() = (a = rand(5))
 @test !warntype_hastag(has_unused, Tuple{}, tag)
 @test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
+
+# Make sure getproperty and setproperty! works with warntype
+struct T1234321
+    t::Int
+end
+Base.getproperty(t::T1234321, ::Symbol) = "foo"
+@test (@code_typed T1234321(1).f).second == String
+Base.setproperty!(t::T1234321, ::Symbol, ::Symbol) = "foo"
+@test (@code_typed T1234321(1).f = :foo).second == String
 
 module ImportIntrinsics15819
 # Make sure changing the lookup path of an intrinsic doesn't break
@@ -166,7 +175,7 @@ struct AlwaysHasLayout{T}
 end
 @test !isconcrete(AlwaysHasLayout) && !isconcrete(AlwaysHasLayout.body)
 @test isconcrete(AlwaysHasLayout{Any})
-@test isconcrete(Ptr{Void})
+@test isconcrete(Ptr{Cvoid})
 @test !isconcrete(Ptr) && !isconcrete(Ptr.body)
 
 # issue #10165
@@ -342,13 +351,13 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
 
-import Base: isstructtype, type_alignment, return_types
+import Base: isstructtype, datatype_alignment, return_types
 @test !isstructtype(Union{})
 @test !isstructtype(Union{Int,Float64})
 @test !isstructtype(Int)
 @test isstructtype(TLayout)
-@test type_alignment(UInt16) == 2
-@test type_alignment(TLayout) == 4
+@test datatype_alignment(UInt16) == 2
+@test datatype_alignment(TLayout) == 4
 let rts = return_types(TLayout)
     @test length(rts) >= 3 # general constructor, specific constructor, and call-to-convert adapter(s)
     @test all(rts .== TLayout)
@@ -384,9 +393,9 @@ for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
     world = typemax(UInt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     params = Base.CodegenParams()
-    llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
+    llvmf = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
     @test llvmf != C_NULL
-    @test ccall(:jl_get_llvm_fptr, Ptr{Void}, (Ptr{Void},), llvmf) != C_NULL
+    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf) != C_NULL
 end
 
 module MacroTest
@@ -466,12 +475,12 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
         for i in 1:length(src.slotnames)
             name = src.slotnames[i]
             if name in dupnames
-                if name in must_used_vars && ismatch(Regex("_$i\\b"), str)
+                if name in must_used_vars && contains(str, Regex("_$i\\b"))
                     must_used_checked[name] = true
                     global used_dup_var_tested15714 = true
                 end
             else
-                @test !ismatch(Regex("_$i\\b"), str)
+                @test !contains(str, Regex("_$i\\b"))
                 if name in must_used_vars
                     global used_unique_var_tested15714 = true
                 end
@@ -490,7 +499,7 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     # Use the variable names that we know should be present in the optimized AST
     for i in 2:length(src.slotnames)
         name = src.slotnames[i]
-        if name in must_used_vars && ismatch(Regex("_$i\\b"), str)
+        if name in must_used_vars && contains(str, Regex("_$i\\b"))
             must_used_checked[name] = true
         end
     end
@@ -505,42 +514,42 @@ test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
 @test used_dup_var_tested15714
 @test used_unique_var_tested15714
 
-let li = typeof(getfield).name.mt.cache.func::Core.MethodInstance,
+let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
     lrepr = string(li),
     mrepr = string(li.def),
     lmime = stringmime("text/plain", li),
     mmime = stringmime("text/plain", li.def)
 
-    @test lrepr == lmime == "MethodInstance for getfield(...)"
-    @test mrepr == mmime == "getfield(...) in Core"
+    @test lrepr == lmime == "MethodInstance for fieldtype(...)"
+    @test mrepr == mmime == "fieldtype(...) in Core"
 end
 
 
 # Linfo Tracing test
 tracefoo(x, y) = x+y
 didtrace = false
-tracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
-ccall(:jl_register_method_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, Tuple{Ptr{Void}}))
+tracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
+ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), cfunction(tracer, Cvoid, Tuple{Ptr{Cvoid}}))
 meth = which(tracefoo,Tuple{Any,Any})
-ccall(:jl_trace_method, Void, (Any,), meth)
+ccall(:jl_trace_method, Cvoid, (Any,), meth)
 @test tracefoo(1, 2) == 3
-ccall(:jl_untrace_method, Void, (Any,), meth)
+ccall(:jl_untrace_method, Cvoid, (Any,), meth)
 @test didtrace
 didtrace = false
 @test tracefoo(1.0, 2.0) == 3.0
 @test !didtrace
-ccall(:jl_register_method_tracer, Void, (Ptr{Void},), C_NULL)
+ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # Method Tracing test
-methtracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
-ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), cfunction(methtracer, Void, Tuple{Ptr{Void}}))
+methtracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
+ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cfunction(methtracer, Cvoid, Tuple{Ptr{Cvoid}}))
 tracefoo2(x, y) = x*y
 @test didtrace
 didtrace = false
 tracefoo(x::Int64, y::Int64) = x*y
 @test didtrace
 didtrace = false
-ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), C_NULL)
+ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # test for reflection over large method tables
 for i = 1:100; @eval fLargeTable(::Val{$i}, ::Any) = 1; end
@@ -548,7 +557,7 @@ for i = 1:100; @eval fLargeTable(::Any, ::Val{$i}) = 2; end
 fLargeTable(::Any...) = 3
 @test length(methods(fLargeTable, Tuple{})) == 1
 fLargeTable(::Complex, ::Complex) = 4
-fLargeTable(::Union{Complex64, Complex128}...) = 5
+fLargeTable(::Union{ComplexF32, ComplexF64}...) = 5
 @test length(methods(fLargeTable, Tuple{})) == 1
 fLargeTable() = 4
 @test length(methods(fLargeTable)) == 204
@@ -580,35 +589,35 @@ function has_backslashes(mod::Module)
             continue
         end
         h = has_backslashes(f)
-        isnull(h) || return h
+        h === nothing || return h
     end
-    return Nullable{Method}()
+    return nothing
 end
 function has_backslashes(f::Function)
     for m in methods(f)
         h = has_backslashes(m)
-        isnull(h) || return h
+        h === nothing || return h
     end
-    return Nullable{Method}()
+    return nothing
 end
 function has_backslashes(meth::Method)
     if '\\' in string(meth.file)
-        return Nullable{Method}(meth)
+        return meth
     else
-        return Nullable{Method}()
+        return nothing
     end
 end
-has_backslashes(x) = Nullable{Method}()
+has_backslashes(x) = nothing
 h16850 = has_backslashes(Base)
 if Sys.iswindows()
-    if isnull(h16850)
-        warn("No methods found in Base with backslashes in file name, ",
-             "skipping test for Base.url")
+    if h16850 === nothing
+        @warn """No methods found in Base with backslashes in file name,
+                 skipping test for `Base.url`"""
     else
-        @test !('\\' in Base.url(get(h16850)))
+        @test !('\\' in Base.url(h16850))
     end
 else
-    @test isnull(h16850)
+    @test h16850 === nothing
 end
 
 # Adds test for PR #17636
@@ -707,7 +716,7 @@ struct B20086{T,N} <: A20086{T,N} end
 
 # sizeof and nfields
 @test sizeof(Int16) == 2
-@test sizeof(Complex128) == 16
+@test sizeof(ComplexF64) == 16
 primitive type ParameterizedByte__{A,B} 8 end
 @test sizeof(ParameterizedByte__) == 1
 @test sizeof(nothing) == 0
@@ -721,7 +730,7 @@ end
 @test sizeof(Symbol("")) == 0
 @test_throws(ErrorException("argument is an abstract type; size is indeterminate"),
              sizeof(Real))
-@test sizeof(Union{Complex64,Complex128}) == 16
+@test sizeof(Union{ComplexF32,ComplexF64}) == 16
 @test sizeof(Union{Int8,UInt8}) == 1
 @test_throws ErrorException sizeof(AbstractArray)
 @test_throws ErrorException sizeof(Tuple)
@@ -733,12 +742,12 @@ end
 
 @test nfields((1,2)) == 2
 @test nfields(()) == 0
-@test nfields(nothing) == fieldcount(Void) == 0
+@test nfields(nothing) == fieldcount(Nothing) == 0
 @test nfields(1) == 0
 @test fieldcount(Union{}) == 0
 @test fieldcount(Tuple{Any,Any,T} where T) == 3
-@test fieldcount(Complex) == fieldcount(Complex64) == 2
-@test fieldcount(Union{Complex64,Complex128}) == 2
+@test fieldcount(Complex) == fieldcount(ComplexF32) == 2
+@test fieldcount(Union{ComplexF32,ComplexF64}) == 2
 @test fieldcount(Int) == 0
 @test_throws(ErrorException("type does not have a definite number of fields"),
              fieldcount(Union{Complex,Pair}))
@@ -771,3 +780,129 @@ cinfo = cinfos[]
 test_similar_codeinfo(cinfo, cinfo_generated)
 
 @test_throws ErrorException code_lowered(f22979, typeof.(x22979), false)
+
+module MethodDeletion
+using Test
+
+# Deletion after compiling top-level call
+bar1(x) = 1
+bar1(x::Int) = 2
+foo1(x) = bar1(x)
+faz1(x) = foo1(x)
+@test faz1(1) == 2
+@test faz1(1.0) == 1
+m = first(methods(bar1, Tuple{Int}))
+Base.delete_method(m)
+@test bar1(1) == 1
+@test bar1(1.0) == 1
+@test foo1(1) == 1
+@test foo1(1.0) == 1
+@test faz1(1) == 1
+@test faz1(1.0) == 1
+
+# Deletion after compiling middle-level call
+bar2(x) = 1
+bar2(x::Int) = 2
+foo2(x) = bar2(x)
+faz2(x) = foo2(x)
+@test foo2(1) == 2
+@test foo2(1.0) == 1
+m = first(methods(bar2, Tuple{Int}))
+Base.delete_method(m)
+@test bar2(1.0) == 1
+@test bar2(1) == 1
+@test foo2(1) == 1
+@test foo2(1.0) == 1
+@test faz2(1) == 1
+@test faz2(1.0) == 1
+
+# Deletion after compiling low-level call
+bar3(x) = 1
+bar3(x::Int) = 2
+foo3(x) = bar3(x)
+faz3(x) = foo3(x)
+@test bar3(1) == 2
+@test bar3(1.0) == 1
+m = first(methods(bar3, Tuple{Int}))
+Base.delete_method(m)
+@test bar3(1) == 1
+@test bar3(1.0) == 1
+@test foo3(1) == 1
+@test foo3(1.0) == 1
+@test faz3(1) == 1
+@test faz3(1.0) == 1
+
+# Deletion before any compilation
+bar4(x) = 1
+bar4(x::Int) = 2
+foo4(x) = bar4(x)
+faz4(x) = foo4(x)
+m = first(methods(bar4, Tuple{Int}))
+Base.delete_method(m)
+@test bar4(1) == 1
+@test bar4(1.0) == 1
+@test foo4(1) == 1
+@test foo4(1.0) == 1
+@test faz4(1) == 1
+@test faz4(1.0) == 1
+
+# Methods with keyword arguments
+fookw(x; direction=:up) = direction
+fookw(y::Int) = 2
+@test fookw("string") == :up
+@test fookw(1) == 2
+m = collect(methods(fookw))[2]
+Base.delete_method(m)
+@test fookw(1) == 2
+@test_throws MethodError fookw("string")
+
+# functions with many methods
+types = (Float64, Int32, String)
+for T1 in types, T2 in types, T3 in types
+    @eval foomany(x::$T1, y::$T2, z::$T3) = y
+end
+@test foomany(Int32(5), "hello", 3.2) == "hello"
+m = first(methods(foomany, Tuple{Int32, String, Float64}))
+Base.delete_method(m)
+@test_throws MethodError foomany(Int32(5), "hello", 3.2)
+
+struct EmptyType end
+Base.convert(::Type{EmptyType}, x::Integer) = EmptyType()
+m = first(methods(convert, Tuple{Type{EmptyType}, Integer}))
+Base.delete_method(m)
+@test_throws MethodError convert(EmptyType, 1)
+
+# parametric methods
+parametric(A::Array{T,N}, i::Vararg{Int,N}) where {T,N} = N
+@test parametric(rand(2,2), 1, 1) == 2
+m = first(methods(parametric))
+Base.delete_method(m)
+@test_throws MethodError parametric(rand(2,2), 1, 1)
+
+# Deletion and ambiguity detection
+foo(::Int, ::Int) = 1
+foo(::Real, ::Int) = 2
+foo(::Int, ::Real) = 3
+@test all(map(g->g.ambig==nothing, methods(foo)))
+Base.delete_method(first(methods(foo)))
+@test !all(map(g->g.ambig==nothing, methods(foo)))
+@test_throws MethodError foo(1, 1)
+foo(::Int, ::Int) = 1
+foo(1, 1)
+@test map(g->g.ambig==nothing, methods(foo)) == [true, false, false]
+Base.delete_method(first(methods(foo)))
+@test_throws MethodError foo(1, 1)
+@test map(g->g.ambig==nothing, methods(foo)) == [false, false]
+
+# multiple deletions and ambiguities
+typeparam(::Type{T}, a::Array{T}) where T<:AbstractFloat = 1
+typeparam(::Type{T}, a::Array{T}) where T = 2
+for mth in collect(methods(typeparam))
+    Base.delete_method(mth)
+end
+typeparam(::Type{T}, a::AbstractArray{T}) where T<:AbstractFloat = 1
+typeparam(::Type{T}, a::AbstractArray{T}) where T = 2
+@test typeparam(Float64, rand(2))  == 1
+@test typeparam(Int, rand(Int, 2)) == 2
+
+end

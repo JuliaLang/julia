@@ -73,7 +73,7 @@ returned by [`backtrace`](@ref):
 
 ```julia-repl
 julia> top_frame = stacktrace()[1]
-eval(::Module, ::Any) at boot.jl:236
+eval(::Module, ::Expr) at REPL.jl:3
 
 julia> top_frame.func
 :eval
@@ -85,7 +85,7 @@ julia> top_frame.line
 236
 
 julia> top_frame.linfo
-Nullable{Core.MethodInstance}(MethodInstance for eval(::Module, ::Any))
+MethodInstance for eval(::Module, ::Expr)
 
 julia> top_frame.inlined
 false
@@ -183,33 +183,33 @@ ERROR: Whoops!
 
 ## Comparison with [`backtrace`](@ref)
 
-A call to [`backtrace`](@ref) returns a vector of `Ptr{Void}`, which may then be passed into
+A call to [`backtrace`](@ref) returns a vector of `Ptr{Cvoid}`, which may then be passed into
 [`stacktrace`](@ref) for translation:
 
 ```julia-repl
 julia> trace = backtrace()
-21-element Array{Ptr{Void},1}:
- Ptr{Void} @0x00007f10049d5b2f
- Ptr{Void} @0x00007f0ffeb4d29c
- Ptr{Void} @0x00007f0ffeb4d2a9
- Ptr{Void} @0x00007f1004993fe7
- Ptr{Void} @0x00007f10049a92be
- Ptr{Void} @0x00007f10049a823a
- Ptr{Void} @0x00007f10049a9fb0
- Ptr{Void} @0x00007f10049aa718
- Ptr{Void} @0x00007f10049c0d5e
- Ptr{Void} @0x00007f10049a3286
- Ptr{Void} @0x00007f0ffe9ba3ba
- Ptr{Void} @0x00007f0ffe9ba3d0
- Ptr{Void} @0x00007f1004993fe7
- Ptr{Void} @0x00007f0ded34583d
- Ptr{Void} @0x00007f0ded345a87
- Ptr{Void} @0x00007f1004993fe7
- Ptr{Void} @0x00007f0ded34308f
- Ptr{Void} @0x00007f0ded343320
- Ptr{Void} @0x00007f1004993fe7
- Ptr{Void} @0x00007f10049aeb67
- Ptr{Void} @0x0000000000000000
+21-element Array{Ptr{Cvoid},1}:
+ Ptr{Cvoid} @0x00007f10049d5b2f
+ Ptr{Cvoid} @0x00007f0ffeb4d29c
+ Ptr{Cvoid} @0x00007f0ffeb4d2a9
+ Ptr{Cvoid} @0x00007f1004993fe7
+ Ptr{Cvoid} @0x00007f10049a92be
+ Ptr{Cvoid} @0x00007f10049a823a
+ Ptr{Cvoid} @0x00007f10049a9fb0
+ Ptr{Cvoid} @0x00007f10049aa718
+ Ptr{Cvoid} @0x00007f10049c0d5e
+ Ptr{Cvoid} @0x00007f10049a3286
+ Ptr{Cvoid} @0x00007f0ffe9ba3ba
+ Ptr{Cvoid} @0x00007f0ffe9ba3d0
+ Ptr{Cvoid} @0x00007f1004993fe7
+ Ptr{Cvoid} @0x00007f0ded34583d
+ Ptr{Cvoid} @0x00007f0ded345a87
+ Ptr{Cvoid} @0x00007f1004993fe7
+ Ptr{Cvoid} @0x00007f0ded34308f
+ Ptr{Cvoid} @0x00007f0ded343320
+ Ptr{Cvoid} @0x00007f1004993fe7
+ Ptr{Cvoid} @0x00007f10049aeb67
+ Ptr{Cvoid} @0x0000000000000000
 
 julia> stacktrace(trace)
 5-element Array{StackFrame,1}:

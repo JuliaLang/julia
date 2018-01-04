@@ -576,13 +576,12 @@ This is equivalent to [`vecnorm`](@ref).
 """
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
-@inline norm(tv::RowVector) = norm(transpose(tv))
-
 """
-    norm(A::RowVector, q::Real=2)
+    norm(A::Adjoint{<:Any,<:AbstracVector}, q::Real=2)
+    norm(A::Transpose{<:Any,<:AbstracVector}, q::Real=2)
 
-For row vectors, return the ``q``-norm of `A`, which is equivalent to the p-norm with
-value `p = q/(q-1)`. They coincide at `p = q = 2`.
+For Adjoint/Transpose-wrapped vectors, return the ``q``-norm of `A`, which is
+equivalent to the p-norm with value `p = q/(q-1)`. They coincide at `p = q = 2`.
 
 The difference in norm between a vector space and its dual arises to preserve
 the relationship between duality and the inner product, and the result is
@@ -613,7 +612,10 @@ julia> norm(v, Inf)
 1.0
 ```
 """
-@inline norm(tv::RowVector, q::Real) = q == Inf ? norm(transpose(tv), 1) : norm(transpose(tv), q/(q-1))
+norm(v::TransposeAbsVec, q::Real) = q == Inf ? norm(v.parent, 1) : norm(v.parent, q/(q-1))
+norm(v::AdjointAbsVec, q::Real) = q == Inf ? norm(conj(v.parent), 1) : norm(conj(v.parent), q/(q-1))
+norm(v::AdjointAbsVec) = norm(conj(v.parent))
+norm(v::TransposeAbsVec) = norm(v.parent)
 
 function vecdot(x::AbstractArray, y::AbstractArray)
     lx = _length(x)
@@ -736,7 +738,7 @@ of the [`eltype`](@ref) of `A`.
 
 # Examples
 ```jldoctest
-julia> rank(eye(3))
+julia> rank(Matrix(I, 3, 3))
 3
 
 julia> rank(diagm(0 => [1, 0, 2]))
@@ -802,25 +804,30 @@ julia> N = inv(M)
   3.0  -5.0
  -1.0   2.0
 
-julia> M*N == N*M == eye(2)
+julia> M*N == N*M == Matrix(I, 2, 2)
 true
 ```
 """
 function inv(A::AbstractMatrix{T}) where T
+    n = checksquare(A)
     S = typeof(zero(T)/one(T))      # dimensionful
     S0 = typeof(zero(T)/oneunit(T)) # dimensionless
-    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S0, checksquare(A)))
+    dest = Matrix{S0}(I, n, n)
+    ldiv!(factorize(convert(AbstractMatrix{S}, A)), dest)
 end
 
-function pinv(v::AbstractVector{T}, tol::Real=real(zero(T))) where T
-    res = similar(v, typeof(zero(T) / (abs2(one(T)) + abs2(one(T)))))'
+pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Real} = _vectorpinv(Transpose, v, tol)
+pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Complex} = _vectorpinv(Adjoint, v, tol)
+pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T} = _vectorpinv(Adjoint, v, tol)
+function _vectorpinv(dualfn::Tf, v::AbstractVector{Tv}, tol) where {Tv,Tf}
+    res = dualfn(similar(v, typeof(zero(Tv) / (abs2(one(Tv)) + abs2(one(Tv))))))
     den = sum(abs2, v)
     # as tol is the threshold relative to the maximum singular value, for a vector with
     # single singular value σ=√den, σ ≦ tol*σ is equivalent to den=0 ∨ tol≥1
     if iszero(den) || tol >= one(tol)
         fill!(res, zero(eltype(res)))
     else
-        res .= v' ./ den
+        res .= dualfn(v) ./ den
     end
     return res
 end
@@ -878,7 +885,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
-(/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
+(/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = adjoint(Adjoint(B) \ Adjoint(A))
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)
 /(x::Number, v::AbstractVector) = x*pinv(v)
@@ -935,7 +942,7 @@ false
 ```
 """
 function issymmetric(A::AbstractMatrix)
-    indsm, indsn = indices(A)
+    indsm, indsn = axes(A)
     if indsm != indsn
         return false
     end
@@ -974,7 +981,7 @@ true
 ```
 """
 function ishermitian(A::AbstractMatrix)
-    indsm, indsn = indices(A)
+    indsm, indsn = axes(A)
     if indsm != indsn
         return false
     end
@@ -1286,7 +1293,7 @@ end
                 vAj += x[i]'*A[i, j]
             end
 
-            vAj = τ'*vAj
+            vAj = conj(τ)*vAj
 
             # ger
             A[1, j] -= vAj
@@ -1328,6 +1335,31 @@ det(x::Number) = x
 
 Log of absolute value of matrix determinant. Equivalent to
 `(log(abs(det(M))), sign(det(M)))`, but may provide increased accuracy and/or speed.
+
+# Examples
+```jldoctest
+julia> A = [-1. 0.; 0. 1.]
+2×2 Array{Float64,2}:
+ -1.0  0.0
+  0.0  1.0
+
+julia> det(A)
+-1.0
+
+julia> logabsdet(A)
+(0.0, -1.0)
+
+julia> B = [2. 0.; 0. 1.]
+2×2 Array{Float64,2}:
+ 2.0  0.0
+ 0.0  1.0
+
+julia> det(B)
+2.0
+
+julia> logabsdet(B)
+(0.6931471805599453, 1.0)
+```
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
 
@@ -1347,7 +1379,7 @@ julia> M = [1 0; 2 2]
 julia> logdet(M)
 0.6931471805599453
 
-julia> logdet(eye(3))
+julia> logdet(Matrix(I, 3, 3))
 0.0
 ```
 """

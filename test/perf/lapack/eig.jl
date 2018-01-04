@@ -14,7 +14,7 @@ end
 # Symmetric
 function symeigtest(n, iter)
     A = rand(n,n)
-    A = A + A'
+    A = A + adjoint(A)
     d = Vector{eltype(A)}
     v = similar(A)
     for i = 1:iter
@@ -26,7 +26,7 @@ end
 # Hermitian
 function hermitianeigtest(n, iter)
     A = rand(n,n) + im*rand(n,n)
-    A = A + A'
+    A = A + adjoint(A)
     d = Vector{eltype(A)}
     v = similar(A)
     for i = 1:iter

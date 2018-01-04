@@ -39,7 +39,7 @@ struct Base64EncodePipe <: IO
         # The buffer size must be at least 3.
         buffer = Buffer(512)
         pipe = new(io, buffer)
-        finalizer(buffer, _ -> close(pipe))
+        finalizer(_ -> close(pipe), buffer)
         return pipe
     end
 end

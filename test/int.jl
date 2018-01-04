@@ -259,3 +259,8 @@ end
         end
     end
 end
+
+# issue #21092
+@test big"1_0_0_0" == BigInt(1000)
+@test_throws ArgumentError big"1_0_0_0_"
+@test_throws ArgumentError big"_1_0_0_0"

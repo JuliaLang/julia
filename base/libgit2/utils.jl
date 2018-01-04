@@ -33,7 +33,7 @@ function version()
     major = Ref{Cint}(0)
     minor = Ref{Cint}(0)
     patch = Ref{Cint}(0)
-    ccall((:git_libgit2_version, :libgit2), Void,
+    ccall((:git_libgit2_version, :libgit2), Cvoid,
           (Ref{Cint}, Ref{Cint}, Ref{Cint}), major, minor, patch)
     return VersionNumber(major[], minor[], patch[])
 end
@@ -83,7 +83,7 @@ Standardise the path string `path` to use POSIX separators.
 """
 function posixpath end
 if Sys.iswindows()
-    posixpath(path) = replace(path,'\\','/')
+    posixpath(path) = replace(path,'\\' => '/')
 elseif Sys.isunix()
     posixpath(path) = path
 end
@@ -163,7 +163,7 @@ end
 
 function credential_identifier(url::AbstractString)
     m = match(URL_REGEX, url)
-    scheme = m[:scheme] === nothing ? "" : m[:scheme]
+    scheme = coalesce(m[:scheme], "")
     host = m[:host]
     credential_identifier(scheme, host)
 end

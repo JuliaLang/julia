@@ -87,7 +87,7 @@ function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
                 return UpperTriangular(A), info
             end
             A[k,k] = Akk
-            AkkInv = inv(Akk')
+            AkkInv = inv(adjoint(Akk))
             for j = k + 1:n
                 for i = 1:k - 1
                     A[k,j] -= A[i,k]'A[i,j]
@@ -132,8 +132,6 @@ function _chol!(x::Number, uplo)
     rx == abs(x) ? (rval, convert(BlasInt, 0)) : (rval, convert(BlasInt, 1))
 end
 
-chol!(x::Number, uplo) = ((C, info) = _chol!(x, uplo); @assertposdef C info)
-
 # chol!. Destructive methods for computing Cholesky factor of real symmetric or Hermitian
 # matrix
 function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
@@ -153,7 +151,7 @@ end
 function chol(A::RealHermSymComplexHerm)
     AA = similar(A, choltype(A), size(A))
     if A.uplo == 'U'
-        copy!(AA, A.data)
+        copyto!(AA, A.data)
     else
         Base.adjoint!(AA, A.data)
     end
@@ -287,7 +285,7 @@ end
 Compute the Cholesky factorization of a dense symmetric positive definite matrix `A`
 and return a `Cholesky` factorization. The matrix `A` can either be a [`Symmetric`](@ref) or [`Hermitian`](@ref)
 `StridedMatrix` or a *perfectly* symmetric or Hermitian `StridedMatrix`.
-The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
+The triangular Cholesky factor can be obtained from the factorization `F` with: `F.L` and `F.U`.
 The following functions are available for `Cholesky` objects: [`size`](@ref), [`\\`](@ref),
 [`inv`](@ref), [`det`](@ref), [`logdet`](@ref) and [`isposdef`](@ref).
 
@@ -300,22 +298,26 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
  -16.0  -43.0   98.0
 
 julia> C = cholfact(A)
-Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
-[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]
-
-julia> C[:U]
+Base.LinAlg.Cholesky{Float64,Array{Float64,2}}
+U factor:
 3×3 UpperTriangular{Float64,Array{Float64,2}}:
  2.0  6.0  -8.0
   ⋅   1.0   5.0
   ⋅    ⋅    3.0
 
-julia> C[:L]
+julia> C.U
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 2.0  6.0  -8.0
+  ⋅   1.0   5.0
+  ⋅    ⋅    3.0
+
+julia> C.L
 3×3 LowerTriangular{Float64,Array{Float64,2}}:
   2.0   ⋅    ⋅
   6.0  1.0   ⋅
  -8.0  5.0  3.0
 
-julia> C[:L] * C[:U] == A
+julia> C.L * C.U == A
 true
 ```
 """
@@ -330,7 +332,7 @@ cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
 Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix `A`
 and return a `CholeskyPivoted` factorization. The matrix `A` can either be a [`Symmetric`](@ref)
 or [`Hermitian`](@ref) `StridedMatrix` or a *perfectly* symmetric or Hermitian `StridedMatrix`.
-The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
+The triangular Cholesky factor can be obtained from the factorization `F` with: `F.L` and `F.U`.
 The following functions are available for `PivotedCholesky` objects:
 [`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
 The argument `tol` determines the tolerance for determining the rank.
@@ -347,30 +349,30 @@ function cholfact(x::Number, uplo::Symbol=:U)
 end
 
 
-function convert(::Type{Cholesky{T}}, C::Cholesky) where T
+function Cholesky{T}(C::Cholesky) where T
     Cnew = convert(AbstractMatrix{T}, C.factors)
     Cholesky{T, typeof(Cnew)}(Cnew, C.uplo, C.info)
 end
-convert(::Type{Factorization{T}}, C::Cholesky{T}) where {T} = C
-convert(::Type{Factorization{T}}, C::Cholesky) where {T} = convert(Cholesky{T}, C)
-convert(::Type{CholeskyPivoted{T}},C::CholeskyPivoted{T}) where {T} = C
-convert(::Type{CholeskyPivoted{T}},C::CholeskyPivoted) where {T} =
+Factorization{T}(C::Cholesky{T}) where {T} = C
+Factorization{T}(C::Cholesky) where {T} = Cholesky{T}(C)
+CholeskyPivoted{T}(C::CholeskyPivoted{T}) where {T} = C
+CholeskyPivoted{T}(C::CholeskyPivoted) where {T} =
     CholeskyPivoted(AbstractMatrix{T}(C.factors),C.uplo,C.piv,C.rank,C.tol,C.info)
-convert(::Type{Factorization{T}}, C::CholeskyPivoted{T}) where {T} = C
-convert(::Type{Factorization{T}}, C::CholeskyPivoted) where {T} = convert(CholeskyPivoted{T}, C)
+Factorization{T}(C::CholeskyPivoted{T}) where {T} = C
+Factorization{T}(C::CholeskyPivoted) where {T} = CholeskyPivoted{T}(C)
 
-convert(::Type{AbstractMatrix}, C::Cholesky) = C.uplo == 'U' ? C[:U]'C[:U] : C[:L]*C[:L]'
-convert(::Type{AbstractArray}, C::Cholesky) = convert(AbstractMatrix, C)
-convert(::Type{Matrix}, C::Cholesky) = convert(Array, convert(AbstractArray, C))
-convert(::Type{Array}, C::Cholesky) = convert(Matrix, C)
+AbstractMatrix(C::Cholesky) = C.uplo == 'U' ? C.U'C.U : C.L*C.L'
+AbstractArray(C::Cholesky) = AbstractMatrix(C)
+Matrix(C::Cholesky) = Array(AbstractArray(C))
+Array(C::Cholesky) = Matrix(C)
 
-function convert(::Type{AbstractMatrix}, F::CholeskyPivoted)
-    ip = invperm(F[:p])
-    (F[:L] * F[:U])[ip,ip]
+function AbstractMatrix(F::CholeskyPivoted)
+    ip = invperm(F.p)
+    (F.L * F.U)[ip,ip]
 end
-convert(::Type{AbstractArray}, F::CholeskyPivoted) = convert(AbstractMatrix, F)
-convert(::Type{Matrix}, F::CholeskyPivoted) = convert(Array, convert(AbstractArray, F))
-convert(::Type{Array}, F::CholeskyPivoted) = convert(Matrix, F)
+AbstractArray(F::CholeskyPivoted) = AbstractMatrix(F)
+Matrix(F::CholeskyPivoted) = Array(AbstractArray(F))
+Array(F::CholeskyPivoted) = Matrix(F)
 
 copy(C::Cholesky) = Cholesky(copy(C.factors), C.uplo, C.info)
 copy(C::CholeskyPivoted) = CholeskyPivoted(copy(C.factors), C.uplo, C.piv, C.rank, C.tol, C.info)
@@ -378,54 +380,74 @@ copy(C::CholeskyPivoted) = CholeskyPivoted(copy(C.factors), C.uplo, C.piv, C.ran
 size(C::Union{Cholesky, CholeskyPivoted}) = size(C.factors)
 size(C::Union{Cholesky, CholeskyPivoted}, d::Integer) = size(C.factors, d)
 
-function getindex(C::Cholesky, d::Symbol)
-    d == :U && return UpperTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
-    d == :L && return LowerTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
-    d == :UL && return Symbol(C.uplo) == :U ? UpperTriangular(C.factors) : LowerTriangular(C.factors)
-    throw(KeyError(d))
+function getproperty(C::Cholesky, d::Symbol)
+    Cfactors = getfield(C, :factors)
+    Cuplo    = getfield(C, :uplo)
+    if d == :U
+        return UpperTriangular(Symbol(Cuplo) == d ? Cfactors : adjoint(Cfactors))
+    elseif d == :L
+        return LowerTriangular(Symbol(Cuplo) == d ? Cfactors : adjoint(Cfactors))
+    elseif d == :UL
+        return Symbol(Cuplo) == :U ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors)
+    else
+        return getfield(C, d)
+    end
 end
-function getindex(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
-    d == :U && return UpperTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
-    d == :L && return LowerTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
-    d == :p && return C.piv
-    if d == :P
+function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
+    Cfactors = getfield(C, :factors)
+    Cuplo    = getfield(C, :uplo)
+    if d == :U
+        return UpperTriangular(Symbol(Cuplo) == d ? Cfactors : adjoint(Cfactors))
+    elseif d == :L
+        return LowerTriangular(Symbol(Cuplo) == d ? Cfactors : adjoint(Cfactors))
+    elseif d == :p
+        return getfield(C, :piv)
+    elseif d == :P
         n = size(C, 1)
         P = zeros(T, n, n)
         for i = 1:n
-            P[C.piv[i],i] = one(T)
+            P[getfield(C, :piv)[i], i] = one(T)
         end
         return P
+    else
+        return getfield(C, d)
     end
-    throw(KeyError(d))
 end
 
 issuccess(C::Cholesky) = C.info == 0
 
-function show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix})
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
     if issuccess(C)
-        println(io, "$(typeof(C)) with factor:")
-        show(io, C[:UL])
+        println(io, summary(C), "\n$(C.uplo) factor:")
+        show(io, mime, C.UL)
     else
-        print("Failed factorization of type $(typeof(C))")
+        print(io, "Failed factorization of type $(typeof(C))")
     end
 end
 
-A_ldiv_B!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any,<:AbstractMatrix})
+    println(io, summary(C), "\n$(C.uplo) factor with rank $(rank(C)):")
+    show(io, mime, C.uplo == 'U' ? C.U : C.L)
+    println(io, "\npermutation:")
+    show(io, mime, C.p)
+end
+
+ldiv!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     @assertposdef LAPACK.potrs!(C.uplo, C.factors, B) C.info
 
-function A_ldiv_B!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
+function ldiv!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
     if C.uplo == 'L'
-        return Ac_ldiv_B!(LowerTriangular(C.factors), A_ldiv_B!(LowerTriangular(C.factors), B))
+        return ldiv!(Adjoint(LowerTriangular(C.factors)), ldiv!(LowerTriangular(C.factors), B))
     else
-        return A_ldiv_B!(UpperTriangular(C.factors), Ac_ldiv_B!(UpperTriangular(C.factors), B))
+        return ldiv!(UpperTriangular(C.factors), ldiv!(Adjoint(UpperTriangular(C.factors)), B))
     end
 end
 
-function A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedVector{T}) where T<:BlasFloat
+function ldiv!(C::CholeskyPivoted{T}, B::StridedVector{T}) where T<:BlasFloat
     chkfullrank(C)
-    ipermute!(LAPACK.potrs!(C.uplo, C.factors, permute!(B, C.piv)), C.piv)
+    invpermute!(LAPACK.potrs!(C.uplo, C.factors, permute!(B, C.piv)), C.piv)
 end
-function A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
+function ldiv!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
     chkfullrank(C)
     n = size(C, 1)
     for i=1:size(B, 2)
@@ -433,28 +455,28 @@ function A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloa
     end
     LAPACK.potrs!(C.uplo, C.factors, B)
     for i=1:size(B, 2)
-        ipermute!(view(B, 1:n, i), C.piv)
+        invpermute!(view(B, 1:n, i), C.piv)
     end
     B
 end
 
-function A_ldiv_B!(C::CholeskyPivoted, B::StridedVector)
+function ldiv!(C::CholeskyPivoted, B::StridedVector)
     if C.uplo == 'L'
-        Ac_ldiv_B!(LowerTriangular(C.factors),
-            A_ldiv_B!(LowerTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
+        ldiv!(Adjoint(LowerTriangular(C.factors)),
+            ldiv!(LowerTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
     else
-        A_ldiv_B!(UpperTriangular(C.factors),
-            Ac_ldiv_B!(UpperTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
+        ldiv!(UpperTriangular(C.factors),
+            ldiv!(Adjoint(UpperTriangular(C.factors)), B[C.piv]))[invperm(C.piv)]
     end
 end
 
-function A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix)
+function ldiv!(C::CholeskyPivoted, B::StridedMatrix)
     if C.uplo == 'L'
-        Ac_ldiv_B!(LowerTriangular(C.factors),
-            A_ldiv_B!(LowerTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
+        ldiv!(Adjoint(LowerTriangular(C.factors)),
+            ldiv!(LowerTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
     else
-        A_ldiv_B!(UpperTriangular(C.factors),
-            Ac_ldiv_B!(UpperTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
+        ldiv!(UpperTriangular(C.factors),
+            ldiv!(Adjoint(UpperTriangular(C.factors)), B[C.piv,:]))[invperm(C.piv),:]
     end
 end
 
@@ -525,8 +547,8 @@ rank(C::CholeskyPivoted) = C.rank
 """
     lowrankupdate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
-Update a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then
-`CC = cholfact(C[:U]'C[:U] + v*v')` but the computation of `CC` only uses `O(n^2)`
+Update a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U` then
+`CC = cholfact(C.U'C.U + v*v')` but the computation of `CC` only uses `O(n^2)`
 operations. The input factorization `C` is updated in place such that on exit `C == CC`.
 The vector `v` is destroyed during the computation.
 """
@@ -571,8 +593,8 @@ end
 """
     lowrankdowndate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
-Downdate a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then
-`CC = cholfact(C[:U]'C[:U] - v*v')` but the computation of `CC` only uses `O(n^2)`
+Downdate a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U` then
+`CC = cholfact(C.U'C.U - v*v')` but the computation of `CC` only uses `O(n^2)`
 operations. The input factorization `C` is updated in place such that on exit `C == CC`.
 The vector `v` is destroyed during the computation.
 """
@@ -624,8 +646,8 @@ end
 """
     lowrankupdate(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
-Update a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]`
-then `CC = cholfact(C[:U]'C[:U] + v*v')` but the computation of `CC` only uses
+Update a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U`
+then `CC = cholfact(C.U'C.U + v*v')` but the computation of `CC` only uses
 `O(n^2)` operations.
 """
 lowrankupdate(C::Cholesky, v::StridedVector) = lowrankupdate!(copy(C), copy(v))
@@ -633,8 +655,8 @@ lowrankupdate(C::Cholesky, v::StridedVector) = lowrankupdate!(copy(C), copy(v))
 """
     lowrankdowndate(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
-Downdate a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]`
-then `CC = cholfact(C[:U]'C[:U] - v*v')` but the computation of `CC` only uses
+Downdate a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U`
+then `CC = cholfact(C.U'C.U - v*v')` but the computation of `CC` only uses
 `O(n^2)` operations.
 """
 lowrankdowndate(C::Cholesky, v::StridedVector) = lowrankdowndate!(copy(C), copy(v))

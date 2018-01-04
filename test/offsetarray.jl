@@ -11,14 +11,14 @@ let
 v0 = rand(4)
 v = OffsetArray(v0, (-3,))
 h = OffsetArray([-1,1,-2,2,0], (-3,))
-@test indices(v) == (-2:1,)
+@test axes(v) == (-2:1,)
 @test_throws ErrorException size(v)
 @test_throws ErrorException size(v, 1)
 
 A0 = [1 3; 2 4]
 A = OffsetArray(A0, (-1,2))                   # IndexLinear
 S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # IndexCartesian
-@test indices(A) == indices(S) == (0:1, 3:4)
+@test axes(A) == axes(S) == (0:1, 3:4)
 @test_throws ErrorException size(A)
 @test_throws ErrorException size(A, 1)
 
@@ -59,7 +59,7 @@ S4 = OffsetArray(view(reshape(collect(1:4*3*2), 4, 3, 2), 1:3, 1:2, :), (-1,-2,1
 @test A[1, [4,3]] == S[1, [4,3]] == [4,2]
 @test A[:, :] == S[:, :] == A
 
-A_3_3 = OffsetArray(Array{Int}(3,3), (-2,-1))
+A_3_3 = OffsetArray(Matrix{Int}(uninitialized, 3,3), (-2,-1))
 A_3_3[:, :] = reshape(1:9, 3, 3)
 for i = 1:9 @test A_3_3[i] == i end
 A_3_3[-1:1, 0:2] = reshape(1:9, 3, 3)
@@ -78,7 +78,7 @@ for i = 1:9 @test A_3_3[i] == i end
 @test_throws BoundsError A[CartesianIndex(1,1)]
 @test_throws BoundsError S[CartesianIndex(1,1)]
 @test eachindex(A) == 1:4
-@test eachindex(S) == CartesianRange((0:1,3:4))
+@test eachindex(S) == CartesianIndices((0:1,3:4))
 
 # logical indexing
 @test A[A .> 2] == [3,4]
@@ -96,24 +96,24 @@ S = view(A, :, 3)
 @test S[0] == 1
 @test S[1] == 2
 @test_throws BoundsError S[2]
-@test indices(S) === (0:1,)
+@test axes(S) === (0:1,)
 S = view(A, 0, :)
 @test S == OffsetArray([1,3], (A.offsets[2],))
 @test S[3] == 1
 @test S[4] == 3
 @test_throws BoundsError S[1]
-@test indices(S) === (3:4,)
+@test axes(S) === (3:4,)
 S = view(A, 0:0, 4)
 @test S == [3]
 @test S[1] == 3
 @test_throws BoundsError S[0]
-@test indices(S) === (Base.OneTo(1),)
+@test axes(S) === (Base.OneTo(1),)
 S = view(A, 1, 3:4)
 @test S == [2,4]
 @test S[1] == 2
 @test S[2] == 4
 @test_throws BoundsError S[3]
-@test indices(S) === (Base.OneTo(2),)
+@test axes(S) === (Base.OneTo(2),)
 S = view(A, :, :)
 @test S == A
 @test S[0,3] == S[1] == 1
@@ -121,17 +121,17 @@ S = view(A, :, :)
 @test S[0,4] == S[3] == 3
 @test S[1,4] == S[4] == 4
 @test_throws BoundsError S[1,1]
-@test indices(S) === (0:1, 3:4)
+@test axes(S) === (0:1, 3:4)
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/27
 g = OffsetArray(collect(-2:3), (-3,))
 gv = view(g, -1:2)
-@test indices(gv, 1) === Base.OneTo(4)
+@test axes(gv, 1) === Base.OneTo(4)
 @test collect(gv) == collect(-1:2)
 gv = view(g, OffsetArray(-1:2, (-2,)))
-@test indices(gv, 1) === -1:2
+@test axes(gv, 1) === -1:2
 @test collect(gv) == collect(-1:2)
 gv = view(g, OffsetArray(-1:2, (-1,)))
-@test indices(gv, 1) === 0:3
+@test axes(gv, 1) === 0:3
 @test collect(gv) == collect(-1:2)
 
 # iteration
@@ -201,82 +201,82 @@ PV = view(P, 2:3, :)
 # Similar
 B = similar(A, Float32)
 @test isa(B, OffsetArray{Float32,2})
-@test indices(B) === indices(A)
+@test axes(B) === axes(A)
 B = similar(A, (3,4))
 @test isa(B, Array{Int,2})
 @test size(B) == (3,4)
-@test indices(B) === (Base.OneTo(3), Base.OneTo(4))
+@test axes(B) === (Base.OneTo(3), Base.OneTo(4))
 B = similar(A, (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test indices(B) === (-3:3, 1:4)
+@test axes(B) === (-3:3, 1:4)
 B = similar(parent(A), (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test indices(B) === (-3:3, 1:4)
+@test axes(B) === (-3:3, 1:4)
 
 # Indexing with OffsetArray indices
 i1 = OffsetArray([2,1], (-5,))
 i1 = OffsetArray([2,1], -5)
 b = A0[i1, 1]
-@test indices(b) === (-4:-3,)
+@test axes(b) === (-4:-3,)
 @test b[-4] == 2
 @test b[-3] == 1
 b = A0[1,i1]
-@test indices(b) === (-4:-3,)
+@test axes(b) === (-4:-3,)
 @test b[-4] == 3
 @test b[-3] == 1
 v = view(A0, i1, 1)
-@test indices(v) === (-4:-3,)
+@test axes(v) === (-4:-3,)
 v = view(A0, 1:1, i1)
-@test indices(v) === (Base.OneTo(1), -4:-3)
+@test axes(v) === (Base.OneTo(1), -4:-3)
 
-# copy! and fill!
-a = OffsetArray{Int}((-3:-1,))
+# copyto! and fill!
+a = OffsetArray{Int}(uninitialized, (-3:-1,))
 fill!(a, -1)
-copy!(a, (1,2))   # non-array iterables
+copyto!(a, (1,2))   # non-array iterables
 @test a[-3] == 1
 @test a[-2] == 2
 @test a[-1] == -1
 fill!(a, -1)
-copy!(a, -2, (1,2))
+copyto!(a, -2, (1,2))
 @test a[-3] == -1
 @test a[-2] == 1
 @test a[-1] == 2
-@test_throws BoundsError copy!(a, 1, (1,2))
+@test_throws BoundsError copyto!(a, 1, (1,2))
 fill!(a, -1)
-copy!(a, -2, (1,2,3), 2)
+copyto!(a, -2, (1,2,3), 2)
 @test a[-3] == -1
 @test a[-2] == 2
 @test a[-1] == 3
-@test_throws BoundsError copy!(a, -2, (1,2,3), 1)
+@test_throws BoundsError copyto!(a, -2, (1,2,3), 1)
 fill!(a, -1)
-copy!(a, -2, (1,2,3), 1, 2)
+copyto!(a, -2, (1,2,3), 1, 2)
 @test a[-3] == -1
 @test a[-2] == 1
 @test a[-1] == 2
 
 b = 1:2    # copy between AbstractArrays
 bo = OffsetArray(1:2, (-3,))
-@test_throws BoundsError copy!(a, b)
+@test_throws BoundsError copyto!(a, b)
 fill!(a, -1)
-copy!(a, bo)
+copyto!(a, bo)
 @test a[-3] == -1
 @test a[-2] == 1
 @test a[-1] == 2
 fill!(a, -1)
-copy!(a, -2, bo)
+copyto!(a, -2, bo)
 @test a[-3] == -1
 @test a[-2] == 1
 @test a[-1] == 2
-@test_throws BoundsError copy!(a, -4, bo)
-@test_throws BoundsError copy!(a, -1, bo)
+@test_throws BoundsError copyto!(a, -4, bo)
+@test_throws BoundsError copyto!(a, -1, bo)
 fill!(a, -1)
-copy!(a, -3, b, 2)
+copyto!(a, -3, b, 2)
 @test a[-3] == 2
 @test a[-2] == a[-1] == -1
-@test_throws BoundsError copy!(a, -3, b, 1, 4)
-am = OffsetArray{Int}((1:1, 7:9))  # for testing linear indexing
+@test_throws BoundsError copyto!(a, -3, b, 1, 4)
+am = OffsetArray{Int}(uninitialized, (1:1, 7:9))  # for testing linear indexing
 fill!(am, -1)
-copy!(am, b)
+copyto!(am, b)
 @test am[1] == 1
 @test am[2] == 2
 @test am[3] == -1
@@ -314,10 +314,10 @@ a = OffsetArray(a0, (-1,2,3,4,5))
 v = OffsetArray(v0, (-3,))
 @test endof(v) == 1
 @test v ≈ v
-@test indices(v') === (Base.OneTo(1),-2:1)
+@test axes(v') === (Base.OneTo(1),-2:1)
 @test parent(v) == collect(v)
 rv = reverse(v)
-@test indices(rv) == indices(v)
+@test axes(rv) == axes(v)
 @test rv[1] == v[-2]
 @test rv[0] == v[-1]
 @test rv[-1] == v[0]
@@ -327,8 +327,8 @@ cv = copy(v)
 
 A = OffsetArray(rand(4,4), (-3,5))
 @test A ≈ A
-@test indices(A') === (6:9, -2:1)
-@test parent(A') == parent(A)'
+@test axes(adjoint(A)) === (6:9, -2:1)
+@test parent(adjoint(A)) == adjoint(parent(A))
 @test collect(A) == parent(A)
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))
@@ -383,14 +383,20 @@ I,J,N = findnz(z)
 @test vecnorm(A) ≈ vecnorm(parent(A))
 @test vecdot(v, v) ≈ vecdot(v0, v0)
 
-v  = OffsetArray([1,1e100,1,-1e100], (-3,))*1000
-v2 = OffsetArray([1,-1e100,1,1e100], (5,))*1000
-@test isa(v, OffsetArray)
-cv  = OffsetArray([1,1e100,1e100,2], (-3,))*1000
-cv2 = OffsetArray([1,-1e100,-1e100,2], (5,))*1000
-@test isequal(cumsum_kbn(v), cv)
-@test isequal(cumsum_kbn(v2), cv2)
-@test isequal(sum_kbn(v), sum_kbn(parent(v)))
+# Prior to its removal from Base, cumsum_kbn was used here. To achieve the same level of
+# accuracy in the tests, we need to use BigFloats with enlarged precision.
+@testset "high-precision array reduction" begin
+    setprecision(BigFloat, 500) do
+        v  = OffsetArray(BigFloat[1,1e100,1,-1e100], (-3,)) .* 1000
+        v2 = OffsetArray(BigFloat[1,-1e100,1,1e100], ( 5,)) .* 1000
+        @test isa(v, OffsetArray)
+        cv  = OffsetArray(BigFloat[1, 1e100, 1e100,2], (-3,)) .* 1000
+        cv2 = OffsetArray(BigFloat[1,-1e100,-1e100,2], ( 5,)) .* 1000
+        @test cumsum(v) ≈ cv
+        @test cumsum(v2) ≈ cv2
+        @test sum(v) ≈ sum(parent(v))
+    end
+end
 
 io = IOBuffer()
 writedlm(io, A)
@@ -425,7 +431,7 @@ v = OffsetArray(rand(8), (-2,))
 @test circshift(A, (-1,2)) == OffsetArray(circshift(parent(A), (-1,2)), A.offsets)
 
 src = reshape(collect(1:16), (4,4))
-dest = OffsetArray(Array{Int}(4,4), (-1,1))
+dest = OffsetArray(Matrix{Int}(uninitialized, 4,4), (-1,1))
 circcopy!(dest, src)
 @test parent(dest) == [8 12 16 4; 5 9 13 1; 6 10 14 2; 7 11 15 3]
 @test dest[1:3,2:4] == src[1:3,2:4]
@@ -442,7 +448,7 @@ module SimilarUR
         stop::Int
     end
     ur = MyURange(1,3)
-    a = Array{Int}(2)
+    a = Vector{Int}(uninitialized, 2)
     @test_throws MethodError similar(a, ur)
     @test_throws MethodError similar(a, Float64, ur)
     @test_throws MethodError similar(a, Float64, (ur,))

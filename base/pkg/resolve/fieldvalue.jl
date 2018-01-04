@@ -33,6 +33,22 @@ FieldValue(l0::Integer, l1::VersionWeight) = FieldValue(l0, l1, zero(VersionWeig
 FieldValue(l0::Integer) = FieldValue(l0, zero(VersionWeight))
 FieldValue() = FieldValue(0)
 
+# This isn't nice, but it's for debugging only anyway
+function Base.show(io::IO, a::FieldValue)
+    print(io, a.l0)
+    a == FieldValue(a.l0) && return
+    print(io, ".", a.l1)
+    a == FieldValue(a.l0, a.l1) && return
+    print(io, ".", a.l2)
+    a == FieldValue(a.l0, a.l1, a.l2) && return
+    print(io, ".", a.l3)
+    a == FieldValue(a.l0, a.l1, a.l2, a.l3) && return
+    print(io, ".", a.l4)
+    a == FieldValue(a.l0, a.l1, a.l2, a.l3, a.l4) && return
+    print(io, ".", a.l5)
+    return
+end
+
 const Field = Vector{FieldValue}
 
 Base.zero(::Type{FieldValue}) = FieldValue()
@@ -66,7 +82,7 @@ Base.abs(a::FieldValue) = FieldValue(abs(a.l0), abs(a.l1), abs(a.l2), abs(a.l3),
 
 Base.copy(a::FieldValue) = FieldValue(a.l0, copy(a.l1), copy(a.l2), a.l3, a.l4, a.l5)
 
-function Base.unsafe_copy!(dest::Field, doffs, src::Field, soffs, n)
+function Base.unsafe_copyto!(dest::Field, doffs, src::Field, soffs, n)
     for i = 1:n
         dest[doffs+i-1] = copy(src[soffs+i-1])
     end

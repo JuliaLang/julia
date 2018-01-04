@@ -4,7 +4,7 @@
 
 # Stateful string
 mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
-    data::T # T should support: getindex, setindex!, length, copy!, and resize!
+    data::T # T should support: getindex, setindex!, length, copyto!, and resize!
     readable::Bool
     writable::Bool
     seekable::Bool # if not seekable, implementation is free to destroy (compact) past read data
@@ -27,7 +27,7 @@ function GenericIOBuffer(data::T, readable::Bool, writable::Bool, seekable::Bool
 end
 
 # allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
-StringVector(n::Integer) = Vector{UInt8}(_string_n(n))
+StringVector(n::Integer) = unsafe_wrap(Vector{UInt8}, _string_n(n))
 
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 
@@ -38,6 +38,27 @@ Create an `IOBuffer`, which may optionally operate on a pre-existing array. If t
 readable/writable arguments are given, they restrict whether or not the buffer may be read
 from or written to respectively. The last argument optionally specifies a size beyond which
 the buffer may not be grown.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.")
+IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=35, maxsize=Inf, ptr=1, mark=-1)
+
+julia> read(io, String)
+"JuliaLang is a GitHub organization."
+
+julia> write(io, "This isn't writable.")
+ERROR: ArgumentError: ensureroom failed, IOBuffer is not writeable
+
+julia> io = IOBuffer(UInt8[], true, true, 34)
+IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=34, ptr=1, mark=-1)
+
+julia> write(io, "JuliaLang is a GitHub organization.")
+34
+
+julia> String(take!(io))
+"JuliaLang is a GitHub organization"
+```
 """
 IOBuffer(data::AbstractVector{UInt8}, readable::Bool=true, writable::Bool=false, maxsize::Integer=typemax(Int)) =
     GenericIOBuffer(data, readable, writable, true, false, maxsize)
@@ -51,7 +72,18 @@ end
 """
     IOBuffer() -> IOBuffer
 
-Create an in-memory I/O stream.
+Create an in-memory I/O stream, which is both readable and writable.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer();
+
+julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
+56
+
+julia> String(take!(io))
+"JuliaLang is a GitHub organization. It has many members."
+```
 """
 IOBuffer() = IOBuffer(true, true)
 
@@ -59,6 +91,24 @@ IOBuffer() = IOBuffer(true, true)
     IOBuffer(size::Integer)
 
 Create a fixed size IOBuffer. The buffer will not grow dynamically.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer(12)
+IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=12, ptr=1, mark=-1)
+
+julia> write(io, "Hello world.")
+12
+
+julia> String(take!(io))
+"Hello world."
+
+julia> write(io, "Hello world again.")
+12
+
+julia> String(take!(io))
+"Hello world "
+```
 """
 IOBuffer(maxsize::Integer) = (x=IOBuffer(StringVector(maxsize), true, true, maxsize); x.size=0; x)
 
@@ -99,7 +149,7 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     avail = nb_available(from)
     adv = min(avail, nb)
-    @gc_preserve from unsafe_copy!(p, pointer(from.data, from.ptr), adv)
+    @gc_preserve from unsafe_copyto!(p, pointer(from.data, from.ptr), adv)
     from.ptr += adv
     if nb > avail
         throw(EOFError())
@@ -206,7 +256,7 @@ function compact(io::GenericIOBuffer)
         ptr = io.ptr
         bytes_to_move = nb_available(io)
     end
-    copy!(io.data, 1, io.data, ptr, bytes_to_move)
+    copyto!(io.data, 1, io.data, ptr, bytes_to_move)
     io.size -= ptr - 1
     io.ptr -= ptr - 1
     io.mark -= ptr - 1
@@ -262,12 +312,23 @@ isopen(io::GenericIOBuffer) = io.readable || io.writable || io.seekable || nb_av
 
 Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
 `IOBuffer` is reset to its initial state.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer();
+
+julia> write(io, "JuliaLang is a GitHub organization.", "It has many members.")
+55
+
+julia> String(take!(io))
+"JuliaLang is a GitHub organization.It has many members."
+```
 """
 function take!(io::GenericIOBuffer)
     ismarked(io) && unmark(io)
     if io.seekable
         nbytes = io.size
-        data = copy!(StringVector(nbytes), 1, io.data, 1, nbytes)
+        data = copyto!(StringVector(nbytes), 1, io.data, 1, nbytes)
     else
         nbytes = nb_available(io)
         data = read!(io,StringVector(nbytes))
@@ -365,18 +426,18 @@ read(io::GenericIOBuffer) = read!(io,StringVector(nb_available(io)))
 readavailable(io::GenericIOBuffer) = read(io)
 read(io::GenericIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, nb_available(io))))
 
-function search(buf::IOBuffer, delim::UInt8)
+function findfirst(delim::EqualTo{UInt8}, buf::IOBuffer)
     p = pointer(buf.data, buf.ptr)
-    q = @gc_preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim,nb_available(buf))
+    q = @gc_preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim.x,nb_available(buf))
     nb::Int = (q == C_NULL ? 0 : q-p+1)
     return nb
 end
 
-function search(buf::GenericIOBuffer, delim::UInt8)
+function findfirst(delim::EqualTo{UInt8}, buf::GenericIOBuffer)
     data = buf.data
     for i = buf.ptr : buf.size
         @inbounds b = data[i]
-        if b == delim
+        if b == delim.x
             return i - buf.ptr + 1
         end
     end
@@ -408,7 +469,7 @@ function readuntil(io::GenericIOBuffer, delim::UInt8)
 end
 
 # copy-free crc32c of IOBuffer:
-function crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
+function _crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
     io.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     n = min(nb, nb_available(io))
@@ -417,4 +478,4 @@ function crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
     io.ptr += n
     return crc
 end
-crc32c(io::IOBuffer, crc::UInt32=0x00000000) = crc32c(io, nb_available(io), crc)
+_crc32c(io::IOBuffer, crc::UInt32=0x00000000) = _crc32c(io, nb_available(io), crc)

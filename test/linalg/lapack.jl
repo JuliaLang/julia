@@ -10,31 +10,30 @@ import Base.LinAlg.BlasInt
 @test_throws ArgumentError Base.LinAlg.LAPACK.chktrans('Z')
 
 @testset "syevr" begin
-    guardsrand(123) do
-        Ainit = randn(5,5)
-        @testset for elty in (Float32, Float64, Complex64, Complex128)
-            if elty == Complex64 || elty == Complex128
-                A = complex.(Ainit, Ainit)
-            else
-                A = Ainit
-            end
-            A = convert(Array{elty, 2}, A)
-            Asym = A'A
-            vals, Z = LAPACK.syevr!('V', copy(Asym))
-            @test Z*(Diagonal(vals)*Z') ≈ Asym
-            @test all(vals .> 0.0)
-            @test LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[vals .< 1.0]
-            @test LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[4:5]
-            @test vals ≈ LAPACK.syev!('N','U',copy(Asym))
-
-            @test_throws DimensionMismatch LAPACK.sygvd!(1,'V','U',copy(Asym),ones(elty,6,6))
+    srand(123)
+    Ainit = randn(5,5)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        if elty == ComplexF32 || elty == ComplexF64
+            A = complex.(Ainit, Ainit)
+        else
+            A = Ainit
         end
+        A = convert(Array{elty, 2}, A)
+        Asym = A'A
+        vals, Z = LAPACK.syevr!('V', copy(Asym))
+        @test Z*(Diagonal(vals)*Z') ≈ Asym
+        @test all(vals .> 0.0)
+        @test LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[vals .< 1.0]
+        @test LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[4:5]
+        @test vals ≈ LAPACK.syev!('N','U',copy(Asym))
+
+        @test_throws DimensionMismatch LAPACK.sygvd!(1,'V','U',copy(Asym),ones(elty,6,6))
     end
 end
 
 @testset "gglse" begin
     let
-        @testset for elty in (Float32, Float64, Complex64, Complex128)
+        @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
             A = convert(Array{elty, 2}, [1 1 1 1; 1 3 1 1; 1 -1 3 1; 1 1 1 3; 1 1 1 -1])
             c = convert(Array{elty, 1}, [2, 1, 6, 3, 1])
             B = convert(Array{elty, 2}, [1 1 1 -1; 1 -1 1 1; 1 1 -1 1])
@@ -49,7 +48,7 @@ end
         n = 10
         @testset for elty in (Float32, Float64)
             d, e = convert(Vector{elty}, randn(n)), convert(Vector{elty}, randn(n - 1))
-            U, Vt, C = eye(elty, n), eye(elty, n), eye(elty, n)
+            U, Vt, C = Matrix{elty}(I, n, n), Matrix{elty}(I, n, n), Matrix{elty}(I, n, n)
             s, _ = LAPACK.bdsqr!('U', copy(d), copy(e), Vt, U, C)
             @test Array(Bidiagonal(d, e, :U)) ≈ U*Diagonal(s)*Vt
 
@@ -64,7 +63,7 @@ end
             A = rand(elty,n,n)
             B = copy(A)
             B, d, e, tauq, taup = LAPACK.gebrd!(B)
-            U, Vt, C = eye(elty, n), eye(elty, n), eye(elty, n)
+            U, Vt, C = Matrix{elty}(I, n, n), Matrix{elty}(I, n, n), Matrix{elty}(I, n, n)
             s, _ = LAPACK.bdsqr!('U',d,e[1:n-1],Vt, U, C)
             @test s ≈ svdvals(A)
         end
@@ -80,7 +79,7 @@ end
 end
 
 @testset "geqrt(3)" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = copy(A)
         C,T = LAPACK.geqrt!(A,zeros(elty,10,10))
@@ -90,7 +89,7 @@ end
 end
 
 @testset "gbtrf and gbtrs" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         d = rand(elty,6)
         dl = rand(elty,5)
         du = rand(elty,5)
@@ -107,13 +106,13 @@ end
         A = diagm(-2 => dl2, -1 => dl, 0 => d, 1 => du)
         @test A\C ≈ D
         @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,ones(elty,7,6))
-        @test_throws Base.LinAlg.LAPACKException LAPACK.gbtrf!(2,1,6,zeros(AB))
+        @test_throws Base.LinAlg.LAPACKException LAPACK.gbtrf!(2,1,6,zeros(elty,6,6))
     end
 end
 
 
 @testset "geqp3, geqrt error handling" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         @test_throws DimensionMismatch LAPACK.geqlf!(A,zeros(elty,11))
         @test_throws DimensionMismatch LAPACK.gelqf!(A,zeros(elty,11))
@@ -128,7 +127,7 @@ end
 end
 
 @testset "gels, gesv, getrs, getri error handling" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = rand(elty,11,11)
         @test_throws DimensionMismatch LAPACK.gels!('N',A,B)
@@ -141,19 +140,19 @@ end
 end
 
 @testset "gelsy, gelsd" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
-        A = rand(elty,10,10)
-        B = rand(elty,10,10)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        A = rand(elty, 10, 10)
+        B = rand(elty, 10, 10)
         C, j = LAPACK.gelsd!(copy(A),copy(B))
         D, k = LAPACK.gelsy!(copy(A),copy(B))
-        @test C ≈ D
+        @test C ≈ D rtol=eps(cond(A))
         @test_throws DimensionMismatch LAPACK.gelsd!(A,rand(elty,12,10))
         @test_throws DimensionMismatch LAPACK.gelsy!(A,rand(elty,12,10))
     end
 end
 
 @testset "gglse errors" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         @test_throws DimensionMismatch LAPACK.gglse!(A,zeros(elty,10),rand(elty,12,11),zeros(elty,12))
         @test_throws DimensionMismatch LAPACK.gglse!(A,zeros(elty,11),rand(elty,10,10),zeros(elty,10))
@@ -162,13 +161,13 @@ end
 end
 
 @testset "gesvd, ggsvd" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,5)
         U,S,V = svd(A)
         lU,lS,lVt = LAPACK.gesvd!('S','S',A)
         @test U ≈ lU
         @test S ≈ lS
-        @test V' ≈ lVt
+        @test adjoint(V) ≈ lVt
         B = rand(elty,10,10)
         # xggsvd3 replaced xggsvd in LAPACK 3.6.0
         if LAPACK.version() < v"3.6.0"
@@ -180,7 +179,7 @@ end
 end
 
 @testset "geevx, ggev errors" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = rand(elty,10,10)
         @test_throws ArgumentError LAPACK.geevx!('M','N','N','N',A)
@@ -194,7 +193,7 @@ end
 end
 
 @testset "gebal/gebak" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10) * Diagonal(exp10.(linspace(-10,10,10)))
         B = copy(A)
         ilo, ihi, scale = LAPACK.gebal!('S',B)
@@ -206,7 +205,8 @@ end
 end
 
 @testset "gels" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        srand(913)
         A = rand(elty,10,10)
         X = rand(elty,10)
         B,Y,z = LAPACK.gels!('N',copy(A),copy(X))
@@ -215,7 +215,7 @@ end
 end
 
 @testset "getrf/getri" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         iA = inv(A)
         A, ipiv = LAPACK.getrf!(A)
@@ -226,17 +226,17 @@ end
 
 @testset "geev" begin
     # complex is easier for now
-    @testset for elty in (Complex64, Complex128)
+    @testset for elty in (ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         Aw, Avl, Avr = LAPACK.geev!('N','V',copy(A))
         fA = eigfact(A)
-        @test fA[:values] ≈ Aw
-        @test fA[:vectors] ≈ Avr
+        @test fA.values  ≈ Aw
+        @test fA.vectors ≈ Avr
     end
 end
 
 @testset "gtsv" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         du = rand(elty,9)
         d  = rand(elty,10)
         dl = rand(elty,9)
@@ -252,7 +252,7 @@ end
 end
 
 @testset "gttrs,gttrf errors" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         du = rand(elty,9)
         d  = rand(elty,10)
         dl = rand(elty,9)
@@ -272,7 +272,7 @@ end
 end
 
 @testset "orglq and friends errors" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         A,tau = LAPACK.gelqf!(A)
         @test_throws DimensionMismatch LAPACK.orglq!(A,tau,11)
@@ -283,13 +283,13 @@ end
 
         B = copy(A)
         C = LAPACK.orglq!(B,tau)
-        @test LAPACK.ormlq!('R','N',A,tau,eye(elty,10)) ≈ C
+        @test LAPACK.ormlq!('R','N',A,tau, Matrix{elty}(I, 10, 10)) ≈ C
 
         A = rand(elty,10,10)
         A,tau = LAPACK.geqrf!(A)
         @test_throws DimensionMismatch LAPACK.orgqr!(A,tau,11)
         B = copy(A)
-        @test LAPACK.orgqr!(B,tau) ≈ LAPACK.ormqr!('R','N',A,tau,eye(elty,10))
+        @test LAPACK.orgqr!(B,tau) ≈ LAPACK.ormqr!('R','N',A,tau,Matrix{elty}(I, 10, 10))
         @test_throws DimensionMismatch LAPACK.ormqr!('R','N',A,tau,rand(elty,11,11))
         @test_throws DimensionMismatch LAPACK.ormqr!('L','N',A,tau,rand(elty,11,11))
         @test_throws DimensionMismatch LAPACK.ormqr!('R','N',A,zeros(elty,11),rand(elty,10,10))
@@ -299,7 +299,7 @@ end
         A,tau = LAPACK.geqlf!(A)
         @test_throws DimensionMismatch LAPACK.orgql!(A,tau,11)
         B = copy(A)
-        @test LAPACK.orgql!(B,tau) ≈ LAPACK.ormql!('R','N',A,tau,eye(elty,10))
+        @test LAPACK.orgql!(B,tau) ≈ LAPACK.ormql!('R','N',A,tau,Matrix{elty}(I, 10, 10))
         @test_throws DimensionMismatch LAPACK.ormql!('R','N',A,tau,rand(elty,11,11))
         @test_throws DimensionMismatch LAPACK.ormql!('L','N',A,tau,rand(elty,11,11))
         @test_throws DimensionMismatch LAPACK.ormql!('R','N',A,zeros(elty,11),rand(elty,10,10))
@@ -309,7 +309,7 @@ end
         A,tau = LAPACK.gerqf!(A)
         @test_throws DimensionMismatch LAPACK.orgrq!(A,tau,11)
         B = copy(A)
-        @test LAPACK.orgrq!(B,tau) ≈ LAPACK.ormrq!('R','N',A,tau,eye(elty,10))
+        @test LAPACK.orgrq!(B,tau) ≈ LAPACK.ormrq!('R','N',A,tau,Matrix{elty}(I, 10, 10))
         @test_throws DimensionMismatch LAPACK.ormrq!('R','N',A,tau,rand(elty,11,11))
         @test_throws DimensionMismatch LAPACK.ormrq!('L','N',A,tau,rand(elty,11,11))
         @test_throws DimensionMismatch LAPACK.ormrq!('R','N',A,zeros(elty,11),rand(elty,10,10))
@@ -320,7 +320,7 @@ end
         Q,tau = LAPACK.gerqf!(Q)
         R = triu(Q[:,2:11])
         LAPACK.orgrq!(Q,tau)
-        @test Q*Q' ≈ eye(elty,10)
+        @test Q*Q' ≈ Matrix(I, 10, 10)
         @test R*Q ≈ A
         @test_throws DimensionMismatch LAPACK.orgrq!(zeros(elty,11,10),zeros(elty,10))
 
@@ -350,31 +350,32 @@ end
 end
 
 @testset "sytri, sytrs, and sytrf" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
-        A = A + A.' #symmetric!
+        A = A + transpose(A) #symmetric!
         B = copy(A)
         B,ipiv = LAPACK.sytrf!('U',B)
-        @test triu(inv(A)) ≈ triu(LAPACK.sytri!('U',B,ipiv))
+        @test triu(inv(A)) ≈ triu(LAPACK.sytri!('U',B,ipiv)) rtol=eps(cond(A))
         @test_throws DimensionMismatch LAPACK.sytrs!('U',B,ipiv,rand(elty,11,5))
         @test LAPACK.sytrf!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0))
     end
 
     # Rook-pivoting variants
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
-        A = rand(elty,10,10)
-        A = A + A.' #symmetric!
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        A = rand(elty, 10, 10)
+        A = A + transpose(A) #symmetric!
         B = copy(A)
-        B,ipiv = LAPACK.sytrf_rook!('U',B)
-        @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U',B,ipiv))
-        @test_throws DimensionMismatch LAPACK.sytrs_rook!('U',B,ipiv,rand(elty,11,5))
-        @test LAPACK.sytrf_rook!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0))
-        A = rand(elty,10,10)
-        A = A + A.' #symmetric!
-        b = rand(elty,10)
+        B,ipiv = LAPACK.sytrf_rook!('U', B)
+        @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U', B, ipiv)) rtol=eps(cond(A))
+        @test_throws DimensionMismatch LAPACK.sytrs_rook!('U', B, ipiv, rand(elty, 11, 5))
+        @test LAPACK.sytrf_rook!('U',zeros(elty, 0, 0)) == (zeros(elty, 0, 0),zeros(BlasInt, 0))
+        A = rand(elty, 10, 10)
+        A = A + transpose(A) #symmetric!
+        b = rand(elty, 10)
         c = A \ b
-        b,A = LAPACK.sysv_rook!('U',A,b)
-        @test b ≈ c
+        cnd = cond(A)
+        b,A = LAPACK.sysv_rook!('U', A, b)
+        @test b ≈ c rtol=eps(cnd)
         @test_throws DimensionMismatch LAPACK.sysv_rook!('U',A,rand(elty,11))
 
         # syconvf_rook error handling
@@ -388,9 +389,9 @@ end
 end
 
 @testset "hetrf, hetrs" begin
-    @testset for elty in (Complex64, Complex128)
+    @testset for elty in (ComplexF32, ComplexF64)
         A = rand(elty,10,10)
-        A = A + A' #hermitian!
+        A = A + adjoint(A) #hermitian!
         B = copy(A)
         B,ipiv = LAPACK.hetrf!('U',B)
         @test_throws DimensionMismatch LAPACK.hetrs!('U',B,ipiv,rand(elty,11,5))
@@ -405,13 +406,13 @@ end
         @test_throws DimensionMismatch LAPACK.stev!('U',d,rand(elty,10))
         @test_throws DimensionMismatch LAPACK.stebz!('A','B',zero(elty),zero(elty),0,0,-1.,d,rand(elty,10))
         @test_throws DimensionMismatch LAPACK.stegr!('N','A',d,rand(elty,10),zero(elty),zero(elty),0,0)
-        @test_throws DimensionMismatch LAPACK.stein!(d,zeros(elty,10),zeros(d),zeros(BlasInt,10),zeros(BlasInt,10))
+        @test_throws DimensionMismatch LAPACK.stein!(d,zeros(elty,10),zeros(elty,10),zeros(BlasInt,10),zeros(BlasInt,10))
         @test_throws DimensionMismatch LAPACK.stein!(d,e,zeros(elty,11),zeros(BlasInt,10),zeros(BlasInt,10))
     end
 end
 
 @testset "trtri & trtrs" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         A = triu(A)
         B = copy(A)
@@ -421,7 +422,7 @@ end
 end
 
 @testset "tgsen, tzrzf, & trsyl" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         Z = zeros(elty,10,10)
         @test_throws DimensionMismatch LAPACK.tgsen!(zeros(BlasInt,10),Z,zeros(elty,11,11),Z,Z)
         @test_throws DimensionMismatch LAPACK.tgsen!(zeros(BlasInt,10),Z,Z,zeros(elty,11,11),Z)
@@ -432,42 +433,40 @@ end
 end
 
 @testset "sysv" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
-        guardsrand(123) do
-            A = rand(elty,10,10)
-            A = A + A.' #symmetric!
-            b = rand(elty,10)
-            c = A \ b
-            b,A = LAPACK.sysv!('U',A,b)
-            @test b ≈ c
-            @test_throws DimensionMismatch LAPACK.sysv!('U',A,rand(elty,11))
-        end
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        srand(123)
+        A = rand(elty,10,10)
+        A = A + transpose(A) #symmetric!
+        b = rand(elty,10)
+        c = A \ b
+        b,A = LAPACK.sysv!('U',A,b)
+        @test b ≈ c
+        @test_throws DimensionMismatch LAPACK.sysv!('U',A,rand(elty,11))
     end
 end
 
 @testset "hesv" begin
-    @testset for elty in (Complex64, Complex128)
-        guardsrand(935) do
-            A = rand(elty,10,10)
-            A = A + A' #hermitian!
-            b = rand(elty,10)
-            c = A \ b
-            b,A = LAPACK.hesv!('U',A,b)
-            @test b ≈ c
-            @test_throws DimensionMismatch LAPACK.hesv!('U',A,rand(elty,11))
-            A = rand(elty,10,10)
-            A = A + A' #hermitian!
-            b = rand(elty,10)
-            c = A \ b
-            b,A = LAPACK.hesv_rook!('U',A,b)
-            @test b ≈ c
-            @test_throws DimensionMismatch LAPACK.hesv_rook!('U',A,rand(elty,11))
-        end
+    @testset for elty in (ComplexF32, ComplexF64)
+        srand(935)
+        A = rand(elty,10,10)
+        A = A + adjoint(A) #hermitian!
+        b = rand(elty,10)
+        c = A \ b
+        b,A = LAPACK.hesv!('U',A,b)
+        @test b ≈ c
+        @test_throws DimensionMismatch LAPACK.hesv!('U',A,rand(elty,11))
+        A = rand(elty,10,10)
+        A = A + adjoint(A) #hermitian!
+        b = rand(elty,10)
+        c = A \ b
+        b,A = LAPACK.hesv_rook!('U',A,b)
+        @test b ≈ c
+        @test_throws DimensionMismatch LAPACK.hesv_rook!('U',A,rand(elty,11))
     end
 end
 
 @testset "ptsv" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         dv = ones(elty,10)
         ev = zeros(elty,9)
         rdv = real(dv)
@@ -484,7 +483,7 @@ end
 end
 
 @testset "pttrf and pttrs" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         dv = ones(elty,10)
         ev = zeros(elty,9)
         rdv = real(dv)
@@ -509,13 +508,13 @@ end
 end
 
 @testset "posv and some errors for friends" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)/100
         A += real(diagm(0 => 10*real(rand(elty,10))))
         if elty <: Complex
-            A = A + A'
+            A = A + adjoint(A)
         else
-            A = A + A.'
+            A = A + transpose(A)
         end
         B = rand(elty,10,10)
         D = copy(A)
@@ -530,18 +529,18 @@ end
 end
 
 @testset "gesvx" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = rand(elty,10,5)
         C = copy(A)
         D = copy(B)
         X, rcond, f, b, r = LAPACK.gesvx!(C,D)
-        @test X ≈ A\B
+        @test X ≈ A\B rtol=inv(rcond)*eps(real(elty))
     end
 end
 
 @testset "gees, gges error throwing" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = rand(elty,11,11)
         @test_throws DimensionMismatch LAPACK.gges!('V','V',A,B)
@@ -549,7 +548,7 @@ end
 end
 
 @testset "trrfs & trevc" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         T = triu(rand(elty,10,10))
         S = copy(T)
         select = zeros(Base.LinAlg.BlasInt,10)
@@ -570,13 +569,13 @@ end
 end
 
 @testset "laic1" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         @test_throws DimensionMismatch LAPACK.laic1!(1,rand(elty,10),real(rand(elty)),rand(elty,11),rand(elty))
     end
 end
 
 @testset "trsen" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         for job in ('N', 'E', 'V', 'B')
             for c in ('V', 'N')
                 A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
@@ -603,7 +602,7 @@ end
 end
 
 @testset "trexc" begin
-    @testset for elty in (Float32, Float64, Complex64, Complex128)
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         for c in ('V', 'N')
             A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
             T,Q,d = schur(A)

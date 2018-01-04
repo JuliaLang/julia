@@ -46,6 +46,16 @@
 // For C++, C++11 or MSVC is required. Both provide `static_assert`.
 #endif
 
+#ifndef alignof
+#  ifndef __cplusplus
+#    ifdef __GNUC__
+#      define alignof _Alignof
+#    else
+#      define alignof(...) 1
+#    endif
+#  endif
+#endif
+
 #if jl_has_builtin(__builtin_assume)
 #define jl_assume(cond) (__extension__ ({               \
                 __typeof__(cond) cond_ = (cond);        \
@@ -317,7 +327,11 @@ jl_llvm_functions_t jl_compile_linfo(
         const jl_cgparams_t *params);
 jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **li, size_t world);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
+jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs);
+jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam);
+int jl_code_requires_compiler(jl_code_info_t *src);
 jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast);
+JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
 
 STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
                                                      jl_method_instance_t *meth)
@@ -448,6 +462,7 @@ extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle,
                                                jl_value_t *data);
 JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f);
+void jl_uv_flush(uv_stream_t *stream);
 
 typedef struct _typeenv {
     jl_tvar_t *var;
@@ -489,7 +504,6 @@ jl_array_t *jl_get_loaded_modules(void);
 
 jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);
 
-jl_code_info_t *jl_wrap_expr(jl_value_t *expr);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen,
@@ -687,7 +701,7 @@ size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #endif
-JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
+JL_DLLEXPORT void jl_get_backtrace(jl_array_t **bt, jl_array_t **bt2);
 JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int drop_exceptions);
 void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size);
 JL_DLLEXPORT void jl_raise_debugger(void);
@@ -706,6 +720,9 @@ STATIC_INLINE char *jl_copy_str(char **to, const char *from)
     memcpy(*to, from, len);
     return *to;
 }
+JL_DLLEXPORT int jl_is_interpreter_frame(uintptr_t ip);
+JL_DLLEXPORT int jl_is_enter_interpreter_frame(uintptr_t ip);
+JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintptr_t fp, size_t space_remaining);
 
 // timers
 // Returns time in nanosec
@@ -911,7 +928,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
 
 jl_typemap_entry_t *jl_typemap_assoc_by_type(
         union jl_typemap_t ml_or_cache, jl_tupletype_t *types, jl_svec_t **penv,
-        int8_t subtype, int8_t offs, size_t world);
+        int8_t subtype, int8_t offs, size_t world, size_t max_world_mask);
 jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t **args, size_t n, int8_t offs, size_t world);
 jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *mn, jl_value_t **args, size_t n, size_t world);
 STATIC_INLINE jl_typemap_entry_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_value_t **args, size_t n, int8_t offs, size_t world)
@@ -964,6 +981,14 @@ JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a);
 JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n);
 void jl_depwarn(const char *msg, jl_value_t *sym);
 
+// Log `msg` to the current logger by calling CoreLogging.logmsg_shim() on the
+// julia side. If any of module, group, id, file or line are NULL, these will
+// be passed to the julia side as `nothing`.  If `kwargs` is NULL an empty set
+// of keyword arguments will be passed.
+void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
+            jl_value_t *file, jl_value_t *line, jl_value_t *kwargs,
+            jl_value_t *msg);
+
 int isabspath(const char *in);
 
 extern jl_sym_t *call_sym;    extern jl_sym_t *invoke_sym;
@@ -985,7 +1010,7 @@ extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
 extern jl_sym_t *compiler_temp_sym; extern jl_sym_t *foreigncall_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
-extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
+extern jl_sym_t *underscore_sym; extern jl_sym_t *colon_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *primtype_sym;
 extern jl_sym_t *structtype_sym;
 extern jl_sym_t *global_sym; extern jl_sym_t *unused_sym;

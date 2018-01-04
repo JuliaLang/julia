@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-dir = joinpath(JULIA_HOME, Base.DOCDIR, "examples")
+dir = joinpath(Sys.BINDIR, Base.DOCDIR, "examples")
 
 include(joinpath(dir, "bubblesort.jl"))
 a = rand(1:100,100)
@@ -24,9 +24,9 @@ include(joinpath(dir, "ndgrid.jl"))
 r = repmat(1:10,1,10)
 r1, r2 = ndgrid(1:10, 1:10)
 @test r1 == r
-@test r2 == r'
+@test r2 == adjoint(r)
 r3, r4 = meshgrid(1:10,1:10)
-@test r3 == r'
+@test r3 == adjoint(r)
 @test r4 == r
 
 include(joinpath(dir, "queens.jl"))
@@ -45,6 +45,7 @@ if Sys.isunix()
     end
 end
 
+using Distributed
 dc_path = joinpath(dir, "dictchannel.jl")
 # Run the remote on pid 1, since runtests may terminate workers
 # at any time depending on memory usage

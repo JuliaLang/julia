@@ -155,7 +155,7 @@ function testModPi()
     numTestCases = size(testCases,1)
     modFns = [mod2pi]
     xDivisors = [2pi]
-    errsNew, errsOld = Array{Float64}(0), Array{Float64}(0)
+    errsNew, errsOld = Vector{Float64}(), Vector{Float64}()
     for rowIdx in 1:numTestCases
         xExact = testCases[rowIdx,1]
         for colIdx in 1:1
@@ -222,7 +222,7 @@ testModPi()
 
      # ieee754_rem_pio2_return contains the returned value from the ieee754_rem_pio2
      # function in openlibm: https://github.com/JuliaLang/openlibm/blob/0598080ca09468490a13ae393ba17d8620c1b201/src/e_rem_pio2.c
-     ieee754_rem_pio2_return = [1.5707963267948966 1.5707963267948966;
+     ieee754_rem_pio2_return = adjoint([1.5707963267948966 1.5707963267948966;
                                 1.0471975511965979 -1.0471975511965979;
                                 0.10000000000000014 -0.10000000000000014;
                                 6.123233995736766e-17 -6.123233995736766e-17;
@@ -238,7 +238,7 @@ testModPi()
                                 -0.6853981633974484 0.6853981633974484;
                                 3.135095805817224e-14 -3.135095805817224e-14;
                                 3.287386219680602e-8 -3.287386219680602e-8;
-                                -0.1757159771004682 0.1757159771004682]'
+                                -0.1757159771004682 0.1757159771004682])
 
     for (i, case) in enumerate(cases)
         # negative argument

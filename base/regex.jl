@@ -11,10 +11,10 @@ mutable struct Regex
     pattern::String
     compile_options::UInt32
     match_options::UInt32
-    regex::Ptr{Void}
-    extra::Ptr{Void}
+    regex::Ptr{Cvoid}
+    extra::Ptr{Cvoid}
     ovec::Vector{Csize_t}
-    match_data::Ptr{Void}
+    match_data::Ptr{Cvoid}
 
     function Regex(pattern::AbstractString, compile_options::Integer,
                    match_options::Integer)
@@ -29,10 +29,10 @@ mutable struct Regex
         end
         re = compile(new(pattern, compile_options, match_options, C_NULL,
                          C_NULL, Csize_t[], C_NULL))
-        finalizer(re, re->begin
-                              re.regex == C_NULL || PCRE.free_re(re.regex)
-                              re.match_data == C_NULL || PCRE.free_match_data(re.match_data)
-                          end)
+        finalizer(re) do re
+            re.regex == C_NULL || PCRE.free_re(re.regex)
+            re.match_data == C_NULL || PCRE.free_match_data(re.match_data)
+        end
         re
     end
 end
@@ -106,7 +106,7 @@ end
 
 struct RegexMatch
     match::SubString{String}
-    captures::Vector{Union{Void,SubString{String}}}
+    captures::Vector{Union{Nothing,SubString{String}}}
     offset::Int
     offsets::Vector{Int}
     regex::Regex
@@ -141,39 +141,19 @@ function getindex(m::RegexMatch, name::Symbol)
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
-"""
-    ismatch(r::Regex, s::AbstractString) -> Bool
-
-Test whether a string contains a match of the given regular expression.
-
-# Examples
-```jldoctest
-julia> rx = r"a.a"
-r"a.a"
-
-julia> ismatch(rx, "aba")
-true
-
-julia> ismatch(rx, "abba")
-false
-
-julia> rx("aba")
-true
-```
-"""
-function ismatch(r::Regex, s::AbstractString, offset::Integer=0)
+function contains(s::AbstractString, r::Regex, offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, String(s), offset, r.match_options,
                      r.match_data)
 end
 
-function ismatch(r::Regex, s::SubString, offset::Integer=0)
+function contains(s::SubString, r::Regex, offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, s, offset, r.match_options,
                      r.match_data)
 end
 
-(r::Regex)(s) = ismatch(r, s)
+(r::Regex)(s) = contains(s, r)
 
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
@@ -192,7 +172,7 @@ julia> m = match(rx, "cabac")
 RegexMatch("aba", 1="b")
 
 julia> m.captures
-1-element Array{Union{Void, SubString{String}},1}:
+1-element Array{Union{Nothing, SubString{String}},1}:
  "b"
 
 julia> m.match
@@ -213,7 +193,7 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, a
     ovec = re.ovec
     n = div(length(ovec),2) - 1
     mat = SubString(str, ovec[1]+1, prevind(str, ovec[2]+1))
-    cap = Union{Void,SubString{String}}[ovec[2i+1] == PCRE.UNSET ? nothing :
+    cap = Union{Nothing,SubString{String}}[ovec[2i+1] == PCRE.UNSET ? nothing :
                                         SubString(str, ovec[2i+1]+1,
                                                   prevind(str, ovec[2i+2]+1)) for i=1:n]
     off = Int[ ovec[2i+1]+1 for i=1:n ]
@@ -285,7 +265,8 @@ end
 matchall(re::Regex, str::SubString, overlap::Bool=false) =
     matchall(re, String(str), overlap)
 
-function search(str::Union{String,SubString}, re::Regex, idx::Integer)
+# TODO: return only start index and update deprecation
+function findnext(re::Regex, str::Union{String,SubString}, idx::Integer)
     if idx > nextind(str,endof(str))
         throw(BoundsError())
     end
@@ -294,17 +275,21 @@ function search(str::Union{String,SubString}, re::Regex, idx::Integer)
     PCRE.exec(re.regex, str, idx-1, opts, re.match_data) ?
         ((Int(re.ovec[1])+1):prevind(str,Int(re.ovec[2])+1)) : (0:-1)
 end
-search(s::AbstractString, r::Regex, idx::Integer) = throw(ArgumentError(
+findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
     "regex search is only available for the String type; use String(s) to convert"
 ))
-search(s::AbstractString, r::Regex) = search(s,r,start(s))
+findfirst(r::Regex, s::AbstractString) = findnext(r,s,start(s))
 
 struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end
 
-endof(s::SubstitutionString) = endof(s.string)
-next(s::SubstitutionString, idx::Int) = next(s.string, idx)
+ncodeunits(s::SubstitutionString) = ncodeunits(s.string)
+codeunit(s::SubstitutionString) = codeunit(s.string)
+codeunit(s::SubstitutionString, i::Integer) = codeunit(s.string, i)
+isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)
+next(s::SubstitutionString, i::Integer) = next(s.string, i)
+
 function show(io::IO, s::SubstitutionString)
     print(io, "s")
     show(io, s.string)
@@ -338,11 +323,11 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
             if repl[next_i] == SUB_CHAR
                 write(io, SUB_CHAR)
                 i = nextind(repl, next_i)
-            elseif isnumber(repl[next_i])
+            elseif Unicode.isdigit(repl[next_i])
                 group = parse(Int, repl[next_i])
                 i = nextind(repl, next_i)
                 while i <= e
-                    if isnumber(repl[i])
+                    if Unicode.isdigit(repl[i])
                         group = 10group + parse(Int, repl[i])
                         i = nextind(repl, i)
                     else
@@ -364,7 +349,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                 end
                 #  TODO: avoid this allocation
                 groupname = SubString(repl, groupstart, prevind(repl, i))
-                if all(isnumber,groupname)
+                if all(Unicode.isdigit, groupname)
                     _write_capture(io, re, parse(Int, groupname))
                 else
                     group = PCRE.substring_number_from_name(re.regex, groupname)

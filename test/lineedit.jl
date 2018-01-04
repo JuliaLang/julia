@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.LineEdit
-using Base.LineEdit: edit_insert, buffer, content, setmark, getmark
+using Base.LineEdit: edit_insert, buffer, content, setmark, getmark, region
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using Main.TestHelpers
 
 # no need to have animation in tests
-LineEdit.REGION_ANIMATION_DURATION[] = 0.001
+Base.REPL.GlobalOptions.region_animation_duration=0.001
 
 ## helper functions
 
@@ -16,15 +16,18 @@ function new_state()
     LineEdit.init_state(term, ModalInterface([Prompt("test> ")]))
 end
 
-charseek(buf, i) = seek(buf, Base.unsafe_chr2ind(content(buf), i+1)-1)
-charpos(buf, pos=position(buf)) = Base.unsafe_ind2chr(content(buf), pos+1)-1
+charseek(buf, i) = seek(buf, nextind(content(buf), 0, i+1)-1)
+charpos(buf, pos=position(buf)) = length(content(buf), 1, pos)
 
 function transform!(f, s, i = -1) # i is char-based (not bytes) buffer position
     buf = buffer(s)
     i >= 0 && charseek(buf, i)
-    action = f(s)
-    if s isa LineEdit.MIState && action isa Symbol
-        s.last_action = action # simulate what happens in LineEdit.prompt!
+    # simulate what happens in LineEdit.set_action!
+    s isa LineEdit.MIState && (s.current_action = :unknown)
+    status = f(s)
+    if s isa LineEdit.MIState && status != :ignore
+        # simulate what happens in LineEdit.prompt!
+        s.last_action = s.current_action
     end
     content(s), charpos(buf), charpos(buf, getmark(buf))
 end
@@ -646,6 +649,18 @@ end
     LineEdit.edit_delete_next_word(s)
     s.key_repeats = 0
     @test s.kill_ring[end] == "B  C"
+
+    # edit_kill_line_backwards
+    LineEdit.edit_clear(s)
+    edit_insert(s, "begin\n  a=1\n  b=2")
+    LineEdit.edit_kill_line_backwards(s)
+    @test s.kill_ring[end] == "  b=2"
+    s.key_repeats = 1
+    LineEdit.edit_kill_line_backwards(s)
+    @test s.kill_ring[end] == "\n  b=2"
+    LineEdit.edit_kill_line_backwards(s)
+    @test s.kill_ring[end] == "  a=1\n  b=2"
+    s.key_repeats = 0
 end
 
 @testset "undo" begin
@@ -691,6 +706,10 @@ end
     LineEdit.move_line_start(s)
     LineEdit.edit_kill_line(s)
     LineEdit.edit_kill_line(s) # no effect
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.move_line_end(s)
+    @test edit!(LineEdit.edit_kill_line_backwards) == ""
     @test edit!(edit_undo!) == "one two three"
 
     LineEdit.move_line_start(s)
@@ -765,4 +784,81 @@ end
     # pop initial insert of "one two three"
     @test edit!(edit_undo!) == ""
     @test edit!(edit_undo!) == "" # nothing more to undo (this "beeps")
+end
+
+@testset "edit_indent_{left,right}" begin
+    local buf = IOBuffer()
+    write(buf, "1\n22\n333")
+    seek(buf, 0)
+    @test LineEdit.edit_indent(buf, -1, false) == false
+    @test transform!(buf->LineEdit.edit_indent(buf, -1, false), buf) == ("1\n22\n333", 0, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, +1, false), buf) == (" 1\n22\n333", 1, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, +2, false), buf) == ("   1\n22\n333", 3, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, -2, false), buf) == (" 1\n22\n333", 1, 0)
+    seek(buf, 0) # if the cursor is already on the left column, it stays there
+    @test transform!(buf->LineEdit.edit_indent(buf, -2, false), buf) == ("1\n22\n333", 0, 0)
+    seek(buf, 3) # between the two "2"
+    @test transform!(buf->LineEdit.edit_indent(buf, +3, false), buf) == ("1\n   22\n333", 6, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, -9, false), buf) == ("1\n22\n333", 3, 0)
+    seekend(buf) # position 8
+    @test transform!(buf->LineEdit.edit_indent(buf, +3, false), buf) == ("1\n22\n   333", 11, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, -1, false), buf) == ("1\n22\n  333", 10, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, -2, false), buf) == ("1\n22\n333", 8, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, -1, false), buf) == ("1\n22\n333", 8, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, +3, false), buf) == ("1\n22\n   333", 11, 0)
+    seek(buf, 5) # left column
+    @test transform!(buf->LineEdit.edit_indent(buf, -2, false), buf) == ("1\n22\n 333", 5, 0)
+    # multiline tests
+    @test transform!(buf->LineEdit.edit_indent(buf, -2, true), buf) == ("1\n22\n 333", 5, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, +2, true), buf) == ("  1\n  22\n   333", 11, 0)
+    @test transform!(buf->LineEdit.edit_indent(buf, -1, true), buf) == (" 1\n 22\n  333", 8, 0)
+    Base.LineEdit.edit_exchange_point_and_mark(buf)
+    seek(buf, 5)
+    @test transform!(buf->LineEdit.edit_indent(buf, -1, true), buf) == (" 1\n22\n 333", 4, 6)
+
+    # check that if the mark at the beginning of the line, it is moved when right-indenting,
+    # which is more natural when the region is active
+    seek(buf, 0)
+    buf.mark = 0
+#    @test transform!(buf->LineEdit.edit_indent(buf, +1, false), buf) == ("  1\n22\n 333", 1, 1)
+end
+
+@testset "edit_transpose_lines_{up,down}!" begin
+    transpose_lines_up!(buf) = LineEdit.edit_transpose_lines_up!(buf, position(buf)=>position(buf))
+    transpose_lines_up_reg!(buf) = LineEdit.edit_transpose_lines_up!(buf, region(buf))
+    transpose_lines_down!(buf) = LineEdit.edit_transpose_lines_down!(buf, position(buf)=>position(buf))
+    transpose_lines_down_reg!(buf) = LineEdit.edit_transpose_lines_down!(buf, region(buf))
+
+    local buf
+    buf = IOBuffer()
+
+    write(buf, "l1\nl2\nl3")
+    seek(buf, 0)
+    @test transpose_lines_up!(buf) == false
+    @test transform!(transpose_lines_up!, buf) == ("l1\nl2\nl3", 0, 0)
+    @test transform!(transpose_lines_down!, buf) == ("l2\nl1\nl3", 3, 0)
+    @test transpose_lines_down!(buf) == true
+    @test String(take!(copy(buf))) == "l2\nl3\nl1"
+    @test transpose_lines_down!(buf) == false
+    @test String(take!(copy(buf))) == "l2\nl3\nl1" # no change
+    LineEdit.edit_move_right(buf)
+    @test transform!(transpose_lines_up!, buf) == ("l2\nl1\nl3", 4, 0)
+    LineEdit.edit_move_right(buf)
+    @test transform!(transpose_lines_up!, buf) == ("l1\nl2\nl3", 2, 0)
+
+    # multiline
+    @test transpose_lines_up_reg!(buf) == false
+    @test transform!(transpose_lines_down_reg!, buf) == ("l2\nl1\nl3", 5, 0)
+    Base.LineEdit.edit_exchange_point_and_mark(buf)
+    seek(buf, 1)
+    @test transpose_lines_up_reg!(buf) == false
+    @test transform!(transpose_lines_down_reg!, buf) == ("l3\nl2\nl1", 4, 8)
+
+    # check that if the mark is at the beginning of the line, it is moved when transposing down,
+    # which is necessary when the region is active: otherwise, the line which is moved up becomes
+    # included in the region
+    buf.mark = 0
+    seek(buf, 1)
+    @test transform!(transpose_lines_down_reg!, buf) == ("l2\nl3\nl1", 4, 3)
+
 end

@@ -5,8 +5,9 @@ Tools for working with the Markdown file format. Mainly for documentation.
 """
 module Markdown
 
-import Base: show, ==
+import Base: show, ==, with_output_color
 import Core: @doc_str
+using Base.Unicode: lowercase, ucfirst, isspace
 
 include(joinpath("parse", "config.jl"))
 include(joinpath("parse", "util.jl"))
@@ -57,12 +58,6 @@ doc_str(md::AbstractString, source::LineNumberNode, mod::Module) = doc_str(parse
 
 macro doc_str(s::AbstractString, t...)
     docexpr(__source__, __module__, s, t...)
-end
-
-function Base.display(d::Base.REPL.REPLDisplay, mds::Vector{MD})
-    for md in mds
-        display(d, md)
-    end
 end
 
 end

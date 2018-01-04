@@ -234,6 +234,12 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{2}) = x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
 
+# don't use the inv(x) transformation here since float^p is slightly more accurate
+@inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{p}) where {p} = x^p
+@inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{-1}) = inv(x)
+
+# for other types, define x^-n as inv(x)^n so that negative literal powers can
+# be computed in a type-stable way even for e.g. integers.
 @inline @generated function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
     if p < 0
         :(literal_pow(^, inv(x), $(Val{-p}())))
@@ -648,8 +654,8 @@ for sym in (:bin, :oct, :dec, :hex)
     @eval begin
         ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
         ($sym)(x::Unsigned)         = ($sym)(x,1,false)
-        ($sym)(x::Char, p::Int)     = ($sym)(unsigned(x),p,false)
-        ($sym)(x::Char)             = ($sym)(unsigned(x),1,false)
+        ($sym)(x::Char, p::Int)     = ($sym)(UInt32(x),p,false)
+        ($sym)(x::Char)             = ($sym)(UInt32(x),1,false)
         ($sym)(x::Integer, p::Int)  = ($sym)(unsigned(abs(x)),p,x<0)
         ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),1,x<0)
     end
@@ -744,9 +750,9 @@ bitstring(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
 """
     digits([T<:Integer], n::Integer, base::T=10, pad::Integer=1)
 
-Returns an array with element type `T` (default `Int`) of the digits of `n` in the given
+Return an array with element type `T` (default `Int`) of the digits of `n` in the given
 base, optionally padded with zeros to a specified size. More significant digits are at
-higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
+higher indices, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
 
 # Examples
 ```jldoctest
@@ -790,7 +796,7 @@ hastypemax(::Type{T}) where {T} = applicable(typemax, T)
     digits!(array, n::Integer, base::Integer=10)
 
 Fills an array of the digits of `n` in the given base. More significant digits are at higher
-indexes. If the array length is insufficient, the least significant digits are filled up to
+indices. If the array length is insufficient, the least significant digits are filled up to
 the array length. If the array length is excessive, the excess portion is filled with zeros.
 
 # Examples

@@ -10,8 +10,8 @@ julia> `echo hello`
 
 differs in several aspects from the behavior in various shells, Perl, or Ruby:
 
-  * Instead of immediately running the command, backticks create a `Cmd` object to represent the command.
-    You can use this object to connect the command to others via pipes, run it, and read or write
+  * Instead of immediately running the command, backticks create a [`Cmd`](@ref) object to represent the command.
+    You can use this object to connect the command to others via pipes, [`run`](@ref) it, and [`read`](@ref) or [`write`](@ref)
     to it.
   * When the command is run, Julia does not capture its output unless you specifically arrange for
     it to. Instead, the output of the command by default goes to [`STDOUT`](@ref) as it would using
@@ -294,7 +294,7 @@ In terms of UNIX plumbing, what's happening here is that a single UNIX pipe obje
 and written to by both `echo` processes, and the other end of the pipe is read from by the `sort`
 command.
 
-IO redirection can be accomplished by passing keyword arguments stdin, stdout, and stderr to the
+IO redirection can be accomplished by passing keyword arguments `stdin`, `stdout`, and `stderr` to the
 `pipeline` function:
 
 ```julia
@@ -310,7 +310,7 @@ For example, when reading all of the output from a command, call `read(out, Stri
 since the former will actively consume all of the data written by the process, whereas the latter
 will attempt to store the data in the kernel's buffers while waiting for a reader to be connected.
 
-Another common solution is to separate the reader and writer of the pipeline into separate Tasks:
+Another common solution is to separate the reader and writer of the pipeline into separate [`Task`](@ref)s:
 
 ```julia
 writer = @async write(process, "data")

@@ -8,7 +8,7 @@ function default_sysimg_path(debug=false)
     if Sys.isunix()
         splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
     else
-        joinpath(dirname(JULIA_HOME), "lib", "julia", debug ? "sys-debug" : "sys")
+        joinpath(dirname(Sys.BINDIR), "lib", "julia", debug ? "sys-debug" : "sys")
     end
 end
 
@@ -17,7 +17,7 @@ end
 
 Rebuild the system image. Store it in `sysimg_path`, which defaults to a file named `sys.ji`
 that sits in the same folder as `libjulia.{so,dylib}`, except on Windows where it defaults
-to `JULIA_HOME/../lib/julia/sys.ji`.  Use the cpu instruction set given by `cpu_target`.
+to `Sys.BINDIR/../lib/julia/sys.ji`.  Use the cpu instruction set given by `cpu_target`.
 Valid CPU targets are the same as for the `-C` option to `julia`, or the `-march` option to
 `gcc`.  Defaults to `native`, which means to use all CPU instructions available on the
 current processor. Include the user image file given by `userimg_path`, which should contain
@@ -46,7 +46,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
     # Enter base and setup some useful paths
     base_dir = dirname(Base.find_source_file("sysimg.jl"))
     cd(base_dir) do
-        julia = joinpath(JULIA_HOME, debug ? "julia-debug" : "julia")
+        julia = joinpath(Sys.BINDIR, debug ? "julia-debug" : "julia")
         cc, warn_msg = find_system_compiler()
 
         # Ensure we have write-permissions to wherever we're trying to write to

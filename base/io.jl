@@ -33,10 +33,24 @@ buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
 """
     isopen(object) -> Bool
 
-Determine whether an object - such as a stream, timer, or mmap -- is not yet closed. Once an
-object is closed, it will never produce a new event. However, a closed stream may still have
-data to read in its buffer, use [`eof`](@ref) to check for the ability to read data.
+Determine whether an object - such as a stream, timer, or [`mmap`](@ref Mmap.mmap)
+-- is not yet closed. Once an object is closed, it will never produce a new event.
+However, since a closed stream may still have data to read in its buffer,
+use [`eof`](@ref) to check for the ability to read data.
 Use the `FileWatching` package to be notified when a stream might be writable or readable.
+
+# Examples
+```jldoctest
+julia> io = open("my_file.txt", "w+");
+
+julia> isopen(io)
+true
+
+julia> close(io)
+
+julia> isopen(io)
+false
+```
 """
 function isopen end
 
@@ -64,41 +78,103 @@ function readavailable end
 """
     isreadable(io) -> Bool
 
-Returns `true` if the specified IO object is readable (if that can be determined).
+Return `true` if the specified IO object is readable (if that can be determined).
+
+# Examples
+```jldoctest
+julia> open("myfile.txt", "w") do io
+           write(io, "Hello world!");
+           isreadable(io)
+       end
+false
+
+julia> open("myfile.txt", "r") do io
+           isreadable(io)
+       end
+true
+
+julia> rm("myfile.txt")
+```
 """
 function isreadable end
 
 """
     iswritable(io) -> Bool
 
-Returns `true` if the specified IO object is writable (if that can be determined).
+Return `true` if the specified IO object is writable (if that can be determined).
+
+# Examples
+```jldoctest
+julia> open("myfile.txt", "w") do io
+           write(io, "Hello world!");
+           iswritable(io)
+       end
+true
+
+julia> open("myfile.txt", "r") do io
+           iswritable(io)
+       end
+false
+
+julia> rm("myfile.txt")
+```
 """
 function iswritable end
 function copy end
 function eof end
 
 """
-    read(stream::IO, T)
+    read(io::IO, T)
 
-Read a single value of type `T` from `stream`, in canonical binary representation.
+Read a single value of type `T` from `io`, in canonical binary representation.
 
-    read(stream::IO, String)
+    read(io::IO, String)
 
-Read the entirety of `stream`, as a String.
+Read the entirety of `io`, as a `String`.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization");
+
+julia> read(io, Char)
+'J': ASCII/Unicode U+004a (category Lu: Letter, uppercase)
+
+julia> io = IOBuffer("JuliaLang is a GitHub organization");
+
+julia> read(io, String)
+"JuliaLang is a GitHub organization"
+```
 """
 read(stream, t)
 
 """
-    write(stream::IO, x)
+    write(io::IO, x)
     write(filename::AbstractString, x)
 
 Write the canonical binary representation of a value to the given I/O stream or file.
-Returns the number of bytes written into the stream.
+Return the number of bytes written into the stream.
 
 You can write multiple values with the same `write` call. i.e. the following are equivalent:
 
-    write(stream, x, y...)
-    write(stream, x) + write(stream, y...)
+    write(io, x, y...)
+    write(io, x) + write(io, y...)
+
+# Examples
+```jldoctest
+julia> io = IOBuffer();
+
+julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
+56
+
+julia> String(take!(io))
+"JuliaLang is a GitHub organization. It has many members."
+
+julia> write(io, "Sometimes those members") + write(io, " write documentation.")
+44
+
+julia> String(take!(io))
+"Sometimes those members write documentation."
+```
 """
 function write end
 
@@ -167,16 +243,24 @@ wait_readbyte(io::AbstractPipe, byte::UInt8) = wait_readbyte(pipe_reader(io), by
 wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_reader(io)))
 
 """
-    nb_available(stream)
+    nb_available(io)
 
-Returns the number of bytes available for reading before a read from this stream or buffer will block.
+Return the number of bytes available for reading before a read from this stream or buffer will block.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization");
+
+julia> nb_available(io)
+34
+```
 """
 nb_available(io::AbstractPipe) = nb_available(pipe_reader(io))
 
 """
     eof(stream) -> Bool
 
-Tests whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this
+Test whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this
 function will block to wait for more data if necessary, and then return `false`. Therefore
 it is always safe to read one byte after seeing `eof` return `false`. `eof` will return
 `false` as long as buffered data is still available, even if the remote end of a connection
@@ -218,11 +302,27 @@ read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
 
 Read a string from an I/O stream or a file, up to and including the given delimiter byte.
 The text is assumed to be encoded in UTF-8.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
+       end
+57
+
+julia> readuntil("my_file.txt", 'L')
+"JuliaL"
+
+julia> readuntil("my_file.txt", '.')
+"JuliaLang is a GitHub organization."
+
+julia> rm("my_file.txt")
+```
 """
 readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
 
 """
-    readline(stream::IO=STDIN; chomp::Bool=true)
+    readline(io::IO=STDIN; chomp::Bool=true)
     readline(filename::AbstractString; chomp::Bool=true)
 
 Read a single line of text from the given I/O stream or file (defaults to `STDIN`).
@@ -231,6 +331,22 @@ input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `chomp`
 true (as it is by default), these trailing newline characters are removed from the
 line before it is returned. When `chomp` is false, they are returned as part of the
 line.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
+       end
+57
+
+julia> readline("my_file.txt")
+"JuliaLang is a GitHub organization."
+
+julia> readline("my_file.txt", chomp=false)
+"JuliaLang is a GitHub organization.\\n"
+
+julia> rm("my_file.txt")
+```
 """
 function readline(filename::AbstractString; chomp::Bool=true)
     open(filename) do f
@@ -251,12 +367,32 @@ function readline(s::IO=STDIN; chomp::Bool=true)
 end
 
 """
-    readlines(stream::IO=STDIN; chomp::Bool=true)
+    readlines(io::IO=STDIN; chomp::Bool=true)
     readlines(filename::AbstractString; chomp::Bool=true)
 
 Read all lines of an I/O stream or a file as a vector of strings. Behavior is
-equivalent to saving the result of reading `readline` repeatedly with the same
+equivalent to saving the result of reading [`readline`](@ref) repeatedly with the same
 arguments and saving the resulting lines as a vector of strings.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
+       end
+57
+
+julia> readlines("my_file.txt")
+2-element Array{String,1}:
+ "JuliaLang is a GitHub organization."
+ "It has many members."
+
+julia> readlines("my_file.txt", chomp=false)
+2-element Array{String,1}:
+ "JuliaLang is a GitHub organization.\\n"
+ "It has many members.\\n"
+
+julia> rm("my_file.txt")
+```
 """
 function readlines(filename::AbstractString; chomp::Bool=true)
     open(filename) do f
@@ -326,9 +462,22 @@ htol(x)
 
 
 """
-    isreadonly(stream) -> Bool
+    isreadonly(io) -> Bool
 
 Determine whether a stream is read-only.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization");
+
+julia> isreadonly(io)
+true
+
+julia> io = IOBuffer();
+
+julia> isreadonly(io)
+false
+```
 """
 isreadonly(s) = isreadable(s) && !iswritable(s)
 
@@ -386,39 +535,27 @@ function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
     elsz = sizeof(T)
     colsz = size(a,1) * elsz
     @gc_preserve a if stride(a,1) != 1
-        for idxs in CartesianRange(size(a))
+        for idxs in CartesianIndices(size(a))
             unsafe_write(s, pointer(a, idxs.I), elsz)
         end
         return elsz * length(a)
     elseif N <= 1
         return unsafe_write(s, pointer(a, 1), colsz)
     else
-        for idxs in CartesianRange((1, size(a)[2:end]...))
+        for idxs in CartesianIndices((1, size(a)[2:end]...))
             unsafe_write(s, pointer(a, idxs.I), colsz)
         end
         return colsz * trailingsize(a,2)
     end
 end
 
-
-function write(s::IO, ch::Char)
-    c = reinterpret(UInt32, ch)
-    if c < 0x80
-        return write(s, c%UInt8)
-    elseif c < 0x800
-        return (write(s, (( c >> 6          ) | 0xC0)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    elseif c < 0x10000
-        return (write(s, (( c >> 12         ) | 0xE0)%UInt8)) +
-               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    elseif c < 0x110000
-        return (write(s, (( c >> 18         ) | 0xF0)%UInt8)) +
-               (write(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    else
-        return write(s, '\ufffd')
+function write(io::IO, c::Char)
+    u = bswap(reinterpret(UInt32, c))
+    n = 1
+    while true
+        write(io, u % UInt8)
+        (u >>= 8) == 0 && return n
+        n += 1
     end
 end
 
@@ -461,23 +598,20 @@ function read!(s::IO, a::Array{T}) where T
     return a
 end
 
-function read(s::IO, ::Type{Char})
-    ch = read(s, UInt8)
-    if ch < 0x80
-        return Char(ch)
+function read(io::IO, ::Type{Char})
+    b0 = read(io, UInt8)
+    l = 8(4-leading_ones(b0))
+    c = UInt32(b0) << 24
+    if l < 24
+        s = 16
+        while s ≥ l && !eof(io)
+            peek(io) & 0xc0 == 0x80 || break
+            b = read(io, UInt8)
+            c |= UInt32(b) << s
+            s -= 8
+        end
     end
-
-    # mimic utf8.next function
-    trailing = Base.utf8_trailing[ch+1]
-    c::UInt32 = 0
-    for j = 1:trailing
-        c += ch
-        c <<= 6
-        ch = read(s, UInt8)
-    end
-    c += ch
-    c -= Base.utf8_offset[trailing+1]
-    return Char(c)
+    return reinterpret(Char, c)
 end
 
 # readuntil_string is useful below since it has
@@ -485,7 +619,7 @@ end
 readuntil_string(s::IO, delim::UInt8) = String(readuntil(s, delim))
 
 function readuntil(s::IO, delim::Char)
-    if delim < Char(0x80)
+    if delim ≤ '\x7f'
         return readuntil_string(s, delim % UInt8)
     end
     out = IOBuffer()
@@ -566,13 +700,13 @@ function readuntil(io::IO, target::AbstractString)
     i = start(target)
     done(target, i) && return ""
     c, i = next(target, start(target))
-    if done(target, i) && c < Char(0x80)
+    if done(target, i) && c <= '\x7f'
         return readuntil_string(io, c % UInt8)
     end
     # decide how we can index target
     if target isa String
         # convert String to a utf8-byte-iterator
-        target = Vector{UInt8}(target)
+        target = codeunits(target)
     #elseif applicable(codeunit, target)
     #   TODO: a more general version of above optimization
     #         would be to permit accessing any string via codeunit
@@ -593,14 +727,25 @@ function readuntil(io::IO, target::AbstractVector{T}) where T
     return out
 end
 
-
 """
     readchomp(x)
 
-Read the entirety of `x` as a string and remove a single trailing newline.
-Equivalent to `chomp!(read(x, String))`.
+Read the entirety of `x` as a string and remove a single trailing newline
+if there is one. Equivalent to `chomp(read(x, String))`.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
+       end;
+
+julia> readchomp("my_file.txt")
+"JuliaLang is a GitHub organization.\\nIt has many members."
+
+julia> rm("my_file.txt");
+```
 """
-readchomp(x) = chomp!(read(x, String))
+readchomp(x) = chomp(read(x, String))
 
 # read up to nb bytes into nb, returning # bytes read
 
@@ -637,7 +782,7 @@ Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
 function read(s::IO, nb::Integer = typemax(Int))
     # Let readbytes! grow the array progressively by default
     # instead of taking of risk of over-allocating
-    b = Vector{UInt8}(nb == typemax(Int) ? 1024 : nb)
+    b = Vector{UInt8}(uninitialized, nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
     return resize!(b, nr)
 end
@@ -657,15 +802,29 @@ mutable struct EachLine
 end
 
 """
-    eachline(stream::IO=STDIN; chomp::Bool=true)
+    eachline(io::IO=STDIN; chomp::Bool=true)
     eachline(filename::AbstractString; chomp::Bool=true)
 
 Create an iterable `EachLine` object that will yield each line from an I/O stream
-or a file. Iteration calls `readline` on the stream argument repeatedly with
+or a file. Iteration calls [`readline`](@ref) on the stream argument repeatedly with
 `chomp` passed through, determining whether trailing end-of-line characters are
 removed. When called with a file name, the file is opened once at the beginning of
 iteration and closed at the end. If iteration is interrupted, the file will be
 closed when the `EachLine` object is garbage collected.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\\n It has many members.\\n");
+       end;
+
+julia> for line in eachline("my_file.txt")
+           print(line)
+       end
+JuliaLang is a GitHub organization. It has many members.
+
+julia> rm("my_file.txt");
+```
 """
 eachline(stream::IO=STDIN; chomp::Bool=true) = EachLine(stream, chomp=chomp)::EachLine
 
@@ -675,12 +834,12 @@ function eachline(filename::AbstractString; chomp::Bool=true)
 end
 
 start(itr::EachLine) = nothing
-function done(itr::EachLine, ::Void)
+function done(itr::EachLine, ::Nothing)
     eof(itr.stream) || return false
     itr.ondone()
     true
 end
-next(itr::EachLine, ::Void) = (readline(itr.stream, chomp=itr.chomp), nothing)
+next(itr::EachLine, ::Nothing) = (readline(itr.stream, chomp=itr.chomp), nothing)
 
 eltype(::Type{EachLine}) = String
 
@@ -694,7 +853,7 @@ iteratorsize(::Type{EachLine}) = SizeUnknown()
 """
     mark(s)
 
-Add a mark at the current position of stream `s`. Returns the marked position.
+Add a mark at the current position of stream `s`. Return the marked position.
 
 See also [`unmark`](@ref), [`reset`](@ref), [`ismarked`](@ref).
 """
@@ -705,7 +864,7 @@ end
 """
     unmark(s)
 
-Remove a mark from stream `s`. Returns `true` if the stream was marked, `false` otherwise.
+Remove a mark from stream `s`. Return `true` if the stream was marked, `false` otherwise.
 
 See also [`mark`](@ref), [`reset`](@ref), [`ismarked`](@ref).
 """
@@ -718,8 +877,8 @@ end
 """
     reset(s)
 
-Reset a stream `s` to a previously marked position, and remove the mark. Returns the
-previously marked position. Throws an error if the stream is not marked.
+Reset a stream `s` to a previously marked position, and remove the mark. Return the
+previously marked position. Throw an error if the stream is not marked.
 
 See also [`mark`](@ref), [`unmark`](@ref), [`ismarked`](@ref).
 """
@@ -734,7 +893,7 @@ end
 """
     ismarked(s)
 
-Returns `true` if stream `s` is marked.
+Return `true` if stream `s` is marked.
 
 See also [`mark`](@ref), [`unmark`](@ref), [`reset`](@ref).
 """
@@ -757,9 +916,12 @@ Advance the stream `io` such that the next-read character will be the first rema
 which `predicate` returns `false`. If the keyword argument `linecomment` is specified, all
 characters from that character until the start of the next line are ignored.
 
+# Examples
 ```jldoctest
 julia> buf = IOBuffer("    text")
 IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=1, mark=-1)
+
+julia> using Unicode
 
 julia> skipchars(buf, isspace)
 IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=5, mark=-1)
@@ -787,11 +949,27 @@ end
 Read `io` until the end of the stream/file and count the number of lines. To specify a file
 pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
 passing them as the second argument.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.\n");
+
+julia> countlines(io)
+1
+
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
+julia> countlines(io)
+0
+
+julia> countlines(io, '.')
+1
+```
 """
 function countlines(io::IO, eol::Char='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
-    a = Vector{UInt8}(8192)
+    a = Vector{UInt8}(uninitialized, 8192)
     nl = 0
     while !eof(io)
         nb = readbytes!(io, a)

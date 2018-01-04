@@ -691,26 +691,6 @@ Stacktrace:
  [2] verbose_fussy_sqrt(::Int64) at ./none:3
 ```
 
-### Warnings and informational messages
-
-Julia also provides other functions that write messages to the standard error I/O, but do not
-throw any `Exception`s and hence do not interrupt execution:
-
-```jldoctest
-julia> info("Hi"); 1+1
-INFO: Hi
-2
-
-julia> warn("Hi"); 1+1
-WARNING: Hi
-2
-
-julia> error("Hi"); 1+1
-ERROR: Hi
-Stacktrace:
- [1] error(::String) at ./error.jl:33
-```
-
 ### The `try/catch` statement
 
 The `try/catch` statement allows for `Exception`s to be tested for. For example, a customized

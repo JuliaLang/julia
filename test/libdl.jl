@@ -13,7 +13,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     end
 end
 @test length(filter(dlls) do dl
-        return ismatch(Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
+        return contains(basename(dl), Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"))
     end) == 1 # look for something libjulia-like (but only one)
 
 # library handle pointer must not be NULL
@@ -183,8 +183,22 @@ let dl = C_NULL
     end
 end
 
+# test dlclose
+# If dl is NULL, jl_dlclose should return -1 and dlclose should return false
+# dlclose should return true on success and false on failure
+let dl = C_NULL
+    @test -1 == ccall(:jl_dlclose, Cint, (Ptr{Cvoid},), dl)
+    @test !Libdl.dlclose(dl)
+
+    dl = Libdl.dlopen_e("libccalltest")
+    @test dl != C_NULL
+
+    @test Libdl.dlclose(dl)
+    @test_skip !Libdl.dlclose(dl)   # Syscall doesn't fail on Win32
+end
+
 if Sys.KERNEL in (:Linux, :FreeBSD)
-    ccall(:jl_read_sonames, Void, ())
+    ccall(:jl_read_sonames, Cvoid, ())
 end
 
 end

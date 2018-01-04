@@ -79,8 +79,10 @@ const ser_version = 7 # do not make changes without bumping the version #!
 const NTAGS = length(TAGS)
 
 function sertag(@nospecialize(v))
-    ptr = pointer_from_objref(v)
-    ptags = convert(Ptr{Ptr{Void}}, pointer(TAGS))
+    # NOTE: we use jl_value_ptr directly since we know at least one of the arguments
+    # in the comparison below is a singleton.
+    ptr = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), v)
+    ptags = convert(Ptr{Ptr{Cvoid}}, pointer(TAGS))
     # note: constant ints & reserved slots never returned here
     @inbounds for i in 1:(NTAGS-(n_reserved_slots+2*n_int_literals))
         ptr == unsafe_load(ptags,i) && return i%Int32
@@ -272,23 +274,23 @@ function serialize(s::AbstractSerializer, a::SubArray{T,N,A}) where {T,N,A<:Arra
 end
 
 function trimmedsubarray(V::SubArray{T,N,A}) where {T,N,A<:Array}
-    dest = Array{eltype(V)}(trimmedsize(V))
-    copy!(dest, V)
-    _trimmedsubarray(dest, V, (), V.indexes...)
+    dest = Array{eltype(V)}(uninitialized, trimmedsize(V))
+    copyto!(dest, V)
+    _trimmedsubarray(dest, V, (), V.indices...)
 end
 
-trimmedsize(V) = index_lengths(V.indexes...)
+trimmedsize(V) = index_lengths(V.indices...)
 
-function _trimmedsubarray(A, V::SubArray{T,N,P,I,LD}, newindexes) where {T,N,P,I,LD}
-    LD && return SubArray{T,N,P,I,LD}(A, newindexes, Base.compute_offset1(A, 1, newindexes), 1)
-    SubArray{T,N,P,I,LD}(A, newindexes, 0, 0)
+function _trimmedsubarray(A, V::SubArray{T,N,P,I,LD}, newindices) where {T,N,P,I,LD}
+    LD && return SubArray{T,N,P,I,LD}(A, newindices, Base.compute_offset1(A, 1, newindices), 1)
+    SubArray{T,N,P,I,LD}(A, newindices, 0, 0)
 end
-_trimmedsubarray(A, V, newindexes, index::ViewIndex, indexes...) = _trimmedsubarray(A, V, (newindexes..., trimmedindex(V.parent, length(newindexes)+1, index)), indexes...)
+_trimmedsubarray(A, V, newindices, index::ViewIndex, indices...) = _trimmedsubarray(A, V, (newindices..., trimmedindex(V.parent, length(newindices)+1, index)), indices...)
 
 trimmedindex(P, d, i::Real) = oftype(i, 1)
 trimmedindex(P, d, i::Colon) = i
 trimmedindex(P, d, i::Slice) = i
-trimmedindex(P, d, i::AbstractArray) = oftype(i, reshape(linearindices(i), indices(i)))
+trimmedindex(P, d, i::AbstractArray) = oftype(i, reshape(linearindices(i), axes(i)))
 
 function serialize(s::AbstractSerializer, ss::String)
     len = sizeof(ss)
@@ -368,17 +370,15 @@ end
 
 # TODO: make this bidirectional, so objects can be sent back via the same key
 const object_numbers = WeakKeyDict()
-const obj_number_salt = Ref(0)
-function object_number(@nospecialize(l))
+const obj_number_salt = Ref{UInt64}(0)
+function object_number(s::AbstractSerializer, @nospecialize(l))
     global obj_number_salt, object_numbers
     if haskey(object_numbers, l)
         return object_numbers[l]
     end
-    # a hash function that always gives the same number to the same
-    # object on the same machine, and is unique over all machines.
-    ln = obj_number_salt[]+(UInt64(myid())<<44)
-    obj_number_salt[] += 1
+    ln = obj_number_salt[]
     object_numbers[l] = ln
+    obj_number_salt[] += 1
     return ln::UInt64
 end
 
@@ -398,7 +398,7 @@ end
 function serialize(s::AbstractSerializer, meth::Method)
     serialize_cycle(s, meth) && return
     writetag(s.io, METHOD_TAG)
-    write(s.io, object_number(meth))
+    write(s.io, object_number(s, meth))
     serialize(s, meth.module)
     serialize(s, meth.name)
     serialize(s, meth.file)
@@ -476,7 +476,7 @@ end
 function serialize(s::AbstractSerializer, t::TypeName)
     serialize_cycle(s, t) && return
     writetag(s.io, TYPENAME_TAG)
-    write(s.io, object_number(t))
+    write(s.io, object_number(s, t))
     serialize_typename(s, t)
 end
 
@@ -674,7 +674,7 @@ function writeheader(s::AbstractSerializer)
                sizeof(Int) == 8 ? 1 :
                error("unsupported word size in serializer"))
     write(io, UInt8(endianness) | (UInt8(machine) << 2))
-    write(io, b"\x00\x00\x00")  # 3 reserved bytes
+    write(io, [0x00,0x00,0x00]) # 3 reserved bytes
     nothing
 end
 
@@ -864,7 +864,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     line = deserialize(s)::Int32
     sig = deserialize(s)::DataType
     sparam_syms = deserialize(s)::SimpleVector
-    ambig = deserialize(s)::Union{Array{Any,1}, Void}
+    ambig = deserialize(s)::Union{Array{Any,1}, Nothing}
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     template = deserialize(s)
@@ -893,7 +893,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         end
         ftype = ccall(:jl_first_argument_datatype, Any, (Any,), sig)::DataType
         if isdefined(ftype.name, :mt) && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), ftype.name.mt, sig, typemax(UInt))
-            ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Void}), ftype.name.mt, meth, C_NULL)
+            ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), ftype.name.mt, meth, C_NULL)
         end
         remember_object(s, meth, lnumber)
     end
@@ -901,7 +901,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
-    linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Void},), C_NULL)
+    linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Cvoid},), C_NULL)
     deserialize_cycle(s, linfo)
     linfo.inferred = deserialize(s)::CodeInfo
     tag = Int32(read(s.io, UInt8)::UInt8)
@@ -926,7 +926,7 @@ function deserialize_array(s::AbstractSerializer)
     end
     if isa(d1, Integer)
         if elty !== Bool && isbits(elty)
-            a = Array{elty, 1}(d1)
+            a = Vector{elty}(uninitialized, d1)
             s.table[slot] = a
             return read!(s.io, a)
         end
@@ -937,7 +937,7 @@ function deserialize_array(s::AbstractSerializer)
     if isbits(elty)
         n = prod(dims)::Int
         if elty === Bool && n > 0
-            A = Array{Bool, length(dims)}(dims)
+            A = Array{Bool, length(dims)}(uninitialized, dims)
             i = 1
             while i <= n
                 b = read(s.io, UInt8)::UInt8
@@ -950,12 +950,12 @@ function deserialize_array(s::AbstractSerializer)
                 end
             end
         else
-            A = read!(s.io, Array{elty}(dims))
+            A = read!(s.io, Array{elty}(uninitialized, dims))
         end
         s.table[slot] = A
         return A
     end
-    A = Array{elty, length(dims)}(dims)
+    A = Array{elty, length(dims)}(uninitialized, dims)
     s.table[slot] = A
     sizehint!(s.table, s.counter + div(length(A),4))
     for i = eachindex(A)
@@ -1017,7 +1017,7 @@ function deserialize_typename(s::AbstractSerializer, number)
                     tn, tn.module, super, parameters, names, types,
                     abstr, mutabl, ninitialized)
         tn.wrapper = ndt.name.wrapper
-        ccall(:jl_set_const, Void, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
+        ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
         ty = tn.wrapper
         if has_instance && !isdefined(ty, :instance)
             # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
@@ -1036,7 +1036,7 @@ function deserialize_typename(s::AbstractSerializer, number)
             tn.mt.max_args = maxa
             for def in defs
                 if isdefined(def, :sig)
-                    ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Void}), tn.mt, def, C_NULL)
+                    ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), tn.mt, def, C_NULL)
                 end
             end
         end
@@ -1157,7 +1157,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
             return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2, f3)
         else
             flds = Any[ deserialize(s) for i = 1:nf ]
-            return ccall(:jl_new_structv, Any, (Any,Ptr{Void},UInt32), t, flds, nf)
+            return ccall(:jl_new_structv, Any, (Any,Ptr{Cvoid},UInt32), t, flds, nf)
         end
     else
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
@@ -1165,7 +1165,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
         for i in 1:nf
             tag = Int32(read(s.io, UInt8)::UInt8)
             if tag != UNDEFREF_TAG
-                ccall(:jl_set_nth_field, Void, (Any, Csize_t, Any), x, i-1, handle_deserialize(s, tag))
+                ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), x, i-1, handle_deserialize(s, tag))
             end
         end
         return x

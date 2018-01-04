@@ -623,7 +623,9 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             jl_value_t *oldval = e->envout[e->envidx];
             // if we try to assign different variable values (due to checking
             // multiple union members), consider the value unknown.
-            if (!oldval || !jl_is_typevar(oldval) || !jl_is_long(val))
+            if (oldval && !jl_egal(oldval, val))
+                e->envout[e->envidx] = (jl_value_t*)u->var;
+            else
                 e->envout[e->envidx] = fix_inferred_var_bound(u->var, val);
             // TODO: substitute the value (if any) of this variable into previous envout entries
         }

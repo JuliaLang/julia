@@ -11,6 +11,7 @@ end
 
 # sin_kernel and cos_kernel functions are only valid for |x| < pi/4 = 0.7854
 # translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c.
+# atan functions are based on openlibm code: s_atan.c, s_atanf.c.
 # acos functions are based on openlibm code: e_acos.c, e_acosf.c.
 # asin functions are based on openlibm code: e_asin.c, e_asinf.c. The above
 # functions are made available under the following licence:
@@ -444,6 +445,108 @@ function asin(x::T) where T<:Union{Float32, Float64}
 end
 asin(x::Real) = asin(float(x))
 
+# atan methods
+ATAN_1_O_2_HI(::Type{Float64}) = 4.63647609000806093515e-01 # atan(0.5).hi
+ATAN_2_O_2_HI(::Type{Float64}) = 7.85398163397448278999e-01 # atan(1.0).hi
+ATAN_3_O_2_HI(::Type{Float64}) = 9.82793723247329054082e-01 # atan(1.5).hi
+ATAN_INF_HI(::Type{Float64}) = 1.57079632679489655800e+00 # atan(Inf).hi
+
+ATAN_1_O_2_HI(::Type{Float32}) = 4.6364760399f-01 # atan(0.5).hi
+ATAN_2_O_2_HI(::Type{Float32}) = 7.8539812565f-01 # atan(1.0).hi
+ATAN_3_O_2_HI(::Type{Float32}) = 9.8279368877f-01 # atan(1.5).hi
+ATAN_INF_HI(::Type{Float32}) = 1.5707962513f+00 # atan(Inf).hi
+
+ATAN_1_O_2_LO(::Type{Float64}) = 2.26987774529616870924e-17 # atan(0.5).lo
+ATAN_2_O_2_LO(::Type{Float64}) = 3.06161699786838301793e-17 # atan(1.0).lo
+ATAN_3_O_2_LO(::Type{Float64}) = 1.39033110312309984516e-17 # atan(1.5).lo
+ATAN_INF_LO(::Type{Float64}) = 6.12323399573676603587e-17 # atan(Inf).lo
+
+ATAN_1_O_2_LO(::Type{Float32}) = 5.0121582440f-09  # atan(0.5).lo
+ATAN_2_O_2_LO(::Type{Float32}) = 3.7748947079f-08  # atan(1.0).lo
+ATAN_3_O_2_LO(::Type{Float32}) = 3.4473217170f-08  # atan(1.5).lo
+ATAN_INF_LO(::Type{Float32}) = 7.5497894159f-08  # atan(Inf).lo
+
+ATAN_LARGE_X(::Type{Float64}) = 2.0^66 # seems too large? 2.0^60 gives the same
+ATAN_SMALL_X(::Type{Float64}) = 2.0^-27
+ATAN_LARGE_X(::Type{Float32}) = 2.0f0^26
+ATAN_SMALL_X(::Type{Float32}) = 2.0f0^-12
+
+atan_p(z::Float64, w::Float64) = z*@horner(w,
+     3.33333333333329318027e-01,
+     1.42857142725034663711e-01,
+     9.09088713343650656196e-02,
+     6.66107313738753120669e-02,
+     4.97687799461593236017e-02,
+     1.62858201153657823623e-02)
+atan_q(w::Float64) = w*@horner(w,
+     -1.99999999998764832476e-01,
+     -1.11111104054623557880e-01,
+     -7.69187620504482999495e-02,
+     -5.83357013379057348645e-02,
+     -3.65315727442169155270e-02)
+atan_p(z::Float32, w::Float32) = z*@horner(w, 3.3333328366f-01,  1.4253635705f-01, 6.1687607318f-02)
+atan_q(w::Float32) = w*@horner(w, -1.9999158382f-01, -1.0648017377f-01)
+@inline function atan_pq(x)
+    x² = x*x
+    x⁴ = x²*x²
+    # break sum from i=0 to 10 aT[i]z**(i+1) into odd and even poly
+    atan_p(x², x⁴), atan_q(x⁴)
+end
+function atan(x::T) where T<:Union{Float32, Float64}
+    # Method
+    #   1. Reduce x to positive by atan(x) = -atan(-x).
+    #   2. According to the integer k=4t+0.25 chopped, t=x, the argument
+    #      is further reduced to one of the following intervals and the
+    #      arctangent of t is evaluated by the corresponding formula:
+    #
+    #      [0,7/16]      atan(x) = t-t^3*(a1+t^2*(a2+...(a10+t^2*a11)...)
+    #      [7/16,11/16]  atan(x) = atan(1/2) + atan( (t-0.5)/(1+t/2) )
+    #      [11/16.19/16] atan(x) = atan( 1 ) + atan( (t-1)/(1+t) )
+    #      [19/16,39/16] atan(x) = atan(3/2) + atan( (t-1.5)/(1+1.5t) )
+    #      [39/16,INF]   atan(x) = atan(INF) + atan( -1/t )
+    #
+    #  If isnan(x) is true, then the nan value will eventually be passed to
+    #  atan_pq(x) and return the appropriate nan value.
+
+    absx = abs(x)
+    if absx >= ATAN_LARGE_X(T)
+        return copysign(T(1.5707963267948966), x)
+    end
+    if absx < T(7/16)
+        # no reduction needed
+        if absx < ATAN_SMALL_X(T)
+            return x
+        end
+        p, q = atan_pq(x)
+        return x - x*(p + q)
+    end
+    xsign = sign(x)
+    if absx < T(19/16) # 7/16 <= |x| < 19/16
+        if absx < T(11/16) # 7/16 <= |x| <11/16
+            hi = ATAN_1_O_2_HI(T)
+            lo = ATAN_1_O_2_LO(T)
+            x = (T(2.0)*absx - T(1.0))/(T(2.0) + absx)
+        else # 11/16 <= |x| < 19/16
+            hi = ATAN_2_O_2_HI(T)
+            lo = ATAN_2_O_2_LO(T)
+            x  = (absx - T(1.0))/(absx + T(1.0))
+        end
+    else
+        if absx < T(39/16)  # 19/16 <= |x| < 39/16
+            hi = ATAN_3_O_2_HI(T)
+            lo = ATAN_3_O_2_LO(T)
+            x = (absx - T(1.5))/(T(1.0) + T(1.5)*absx)
+        else # 39/16 <= |x| < upper threshold (2.0^66 or 2.0f0^26)
+            hi = ATAN_INF_HI(T)
+            lo = ATAN_INF_LO(T)
+            x  = -T(1.0)/absx
+        end
+    end
+    # end of argument reduction
+    p, q = atan_pq(x)
+    z = hi - ((x*(p + q) - lo) - x)
+    copysign(z, xsign)
+end
 # atan2 methods
 ATAN2_PI_LO(::Type{Float32}) = -8.7422776573f-08
 ATAN2_RATIO_BIT_SHIFT(::Type{Float32}) = 23

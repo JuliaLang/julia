@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
+const STDLIBS = readdir(STDLIB_DIR)
+
 @doc """
 
 `tests, net_on, exit_on_error, seed = choosetests(choices)` selects a set of tests to be
@@ -30,8 +33,8 @@ function choosetests(choices = [])
     testnames = [
         "linalg", "subarray", "core", "inference", "worlds",
         "keywordargs", "numbers", "subtype",
-        "printf", "char", "strings", "triplequote", "unicode", "intrinsics",
-        "dates", "dict", "hashing", "iobuffer", "staged", "offsetarray",
+        "char", "strings", "triplequote", "unicode", "intrinsics",
+        "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
@@ -43,16 +46,16 @@ function choosetests(choices = [])
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
         "replutil", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
-        "nullable", "meta", "stacktraces", "libgit2", "docs",
+        "some", "meta", "stacktraces", "libgit2", "docs",
         "markdown", "serialize", "misc", "threads",
-        "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
-        "checked", "bitset", "floatfuncs", "compile", "distributed", "inline",
+        "enums", "cmdlineargs", "i18n", "libdl", "int",
+        "checked", "bitset", "floatfuncs", "compile", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
         "channels", "iostream", "specificity", "codegen", "codevalidation",
-        "reinterpretarray"
+        "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]
 
-    if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
+    if isdir(joinpath(Sys.BINDIR, Base.DOCDIR, "examples"))
         push!(testnames, "examples")
     end
 
@@ -78,18 +81,8 @@ function choosetests(choices = [])
         tests = testnames
     end
 
-    datestests = ["dates/accessors", "dates/adjusters", "dates/query",
-                  "dates/periods", "dates/ranges", "dates/rounding", "dates/types",
-                  "dates/io", "dates/arithmetic", "dates/conversions"]
-    if "dates" in skip_tests
-        filter!(x -> (x != "dates" && !(x in datestests)), tests)
-    elseif "dates" in tests
-        # specifically selected case
-        filter!(x -> x != "dates", tests)
-        prepend!(tests, datestests)
-    end
 
-    unicodetests = ["unicode/UnicodeError", "unicode/utf8proc", "unicode/utf8"]
+    unicodetests = ["unicode/utf8"]
     if "unicode" in skip_tests
         filter!(x -> (x != "unicode" && !(x in unicodetests)), tests)
     elseif "unicode" in tests
@@ -108,11 +101,7 @@ function choosetests(choices = [])
         prepend!(tests, stringtests)
     end
 
-
     sparsetests = ["sparse/sparse", "sparse/sparsevector", "sparse/higherorderfns"]
-    if Base.USE_GPL_LIBS
-        append!(sparsetests, ["sparse/umfpack", "sparse/cholmod", "sparse/spqr"])
-    end
     if "sparse" in skip_tests
         filter!(x -> (x != "sparse" && !(x in sparsetests)), tests)
     elseif "sparse" in tests
@@ -136,11 +125,7 @@ function choosetests(choices = [])
                    "linalg/diagonal", "linalg/pinv", "linalg/givens",
                    "linalg/cholesky", "linalg/lu", "linalg/symmetric",
                    "linalg/generic", "linalg/uniformscaling", "linalg/lq",
-                   "linalg/hessenberg", "linalg/rowvector", "linalg/conjarray",
-                   "linalg/blas"]
-    if Base.USE_GPL_LIBS
-        push!(linalgtests, "linalg/arnoldi")
-    end
+                   "linalg/hessenberg", "linalg/blas", "linalg/adjtrans"]
 
     if "linalg" in skip_tests
         filter!(x -> (x != "linalg" && !(x in linalgtests)), tests)
@@ -148,6 +133,31 @@ function choosetests(choices = [])
         # specifically selected case
         filter!(x -> x != "linalg", tests)
         prepend!(tests, linalgtests)
+    end
+
+    net_required_for = ["socket", "stdlib", "libgit2"]
+    net_on = true
+    try
+        ipa = getipaddr()
+    catch
+        @warn "Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]"
+        net_on = false
+    end
+
+    if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests
+        @warn "Running under valgrind: Skipping rounding tests"
+        filter!(x -> x != "rounding", tests)
+    end
+
+    if !net_on
+        filter!(!occursin(net_required_for), tests)
+    end
+
+    if "stdlib" in skip_tests
+        filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
+    elseif "stdlib" in tests
+        filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
+        prepend!(tests, STDLIBS)
     end
 
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
@@ -158,25 +168,17 @@ function choosetests(choices = [])
         prepend!(tests, ["ambiguous"])
     end
 
-    net_required_for = ["socket", "distributed", "libgit2"]
-    net_on = true
-    try
-        ipa = getipaddr()
-    catch
-        warn("Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]")
-        net_on = false
+    if startswith(string(Sys.ARCH), "arm")
+        # Remove profile from default tests on ARM since it currently segfaults
+        # Allow explicitly adding it for testing
+        @warn "Skipping Profile tests"
+        filter!(x -> (x != "Profile"), tests)
     end
 
-    if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests
-        warn("Running under valgrind: Skipping rounding tests")
-        filter!(x -> x != "rounding", tests)
-    end
+    # The shift and invert solvers need SuiteSparse for sparse input
+    Base.USE_GPL_LIBS || filter!(x->x != "IterativeEigensolvers", STDLIBS)
 
-    if !net_on
-        filter!(x -> !(x in net_required_for), tests)
-    end
-
-    filter!(x -> !(x in skip_tests), tests)
+    filter!(!occursin(skip_tests), tests)
 
     tests, net_on, exit_on_error, seed
 end

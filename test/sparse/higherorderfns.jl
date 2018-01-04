@@ -118,9 +118,9 @@ end
         @test broadcast!(cos, Z, X) == sparse(broadcast!(cos, fZ, fX))
         # --> test shape checks for broadcast! entry point
         # TODO strengthen this test, avoiding dependence on checking whether
-        # broadcast_indices throws to determine whether sparse broadcast should throw
+        # check_broadcast_indices throws to determine whether sparse broadcast should throw
         try
-            Base.Broadcast.check_broadcast_indices(indices(Z), spzeros((shapeX .- 1)...))
+            Base.Broadcast.check_broadcast_indices(axes(Z), spzeros((shapeX .- 1)...))
         catch
             @test_throws DimensionMismatch broadcast!(sin, Z, spzeros((shapeX .- 1)...))
         end
@@ -142,9 +142,9 @@ end
         @test broadcast!(cos, V, X) == sparse(broadcast!(cos, fV, fX))
         # --> test shape checks for broadcast! entry point
         # TODO strengthen this test, avoiding dependence on checking whether
-        # broadcast_indices throws to determine whether sparse broadcast should throw
+        # check_broadcast_indices throws to determine whether sparse broadcast should throw
         try
-            Base.Broadcast.check_broadcast_indices(indices(V), spzeros((shapeX .- 1)...))
+            Base.Broadcast.check_broadcast_indices(axes(V), spzeros((shapeX .- 1)...))
         catch
             @test_throws DimensionMismatch broadcast!(sin, V, spzeros((shapeX .- 1)...))
         end
@@ -177,9 +177,9 @@ end
             @test broadcast(*, X, Y) == sparse(broadcast(*, fX, fY))
             @test broadcast(f, X, Y) == sparse(broadcast(f, fX, fY))
             # TODO strengthen this test, avoiding dependence on checking whether
-            # broadcast_indices throws to determine whether sparse broadcast should throw
+            # check_broadcast_indices throws to determine whether sparse broadcast should throw
             try
-                Base.Broadcast.broadcast_indices(spzeros((shapeX .- 1)...), Y)
+                Base.Broadcast.combine_indices(spzeros((shapeX .- 1)...), Y)
             catch
                 @test_throws DimensionMismatch broadcast(+, spzeros((shapeX .- 1)...), Y)
             end
@@ -200,9 +200,9 @@ end
             @test broadcast!(f, Z, X, Y) == sparse(broadcast!(f, fZ, fX, fY))
             # --> test shape checks for both broadcast and broadcast! entry points
             # TODO strengthen this test, avoiding dependence on checking whether
-            # broadcast_indices throws to determine whether sparse broadcast should throw
+            # check_broadcast_indices throws to determine whether sparse broadcast should throw
             try
-                Base.Broadcast.check_broadcast_indices(indices(Z), spzeros((shapeX .- 1)...), Y)
+                Base.Broadcast.check_broadcast_indices(axes(Z), spzeros((shapeX .- 1)...), Y)
             catch
                 @test_throws DimensionMismatch broadcast!(f, Z, spzeros((shapeX .- 1)...), Y)
             end
@@ -227,9 +227,9 @@ end
             @test broadcast(*, X, Y, Z) == sparse(broadcast(*, fX, fY, fZ))
             @test broadcast(f, X, Y, Z) == sparse(broadcast(f, fX, fY, fZ))
             # TODO strengthen this test, avoiding dependence on checking whether
-            # broadcast_indices throws to determine whether sparse broadcast should throw
+            # check_broadcast_indices throws to determine whether sparse broadcast should throw
             try
-                Base.Broadcast.broadcast_indices(spzeros((shapeX .- 1)...), Y, Z)
+                Base.Broadcast.combine_indices(spzeros((shapeX .- 1)...), Y, Z)
             catch
                 @test_throws DimensionMismatch broadcast(+, spzeros((shapeX .- 1)...), Y, Z)
             end
@@ -257,9 +257,9 @@ end
             @test broadcast!(f, Q, X, Y, Z) == sparse(broadcast!(f, fQ, fX, fY, fZ))
             # --> test shape checks for both broadcast and broadcast! entry points
             # TODO strengthen this test, avoiding dependence on checking whether
-            # broadcast_indices throws to determine whether sparse broadcast should throw
+            # check_broadcast_indices throws to determine whether sparse broadcast should throw
             try
-                Base.Broadcast.check_broadcast_indices(indices(Q), spzeros((shapeX .- 1)...), Y, Z)
+                Base.Broadcast.check_broadcast_indices(axes(Q), spzeros((shapeX .- 1)...), Y, Z)
             catch
                 @test_throws DimensionMismatch broadcast!(f, Q, spzeros((shapeX .- 1)...), Y, Z)
             end
@@ -269,7 +269,7 @@ end
 
 @testset "sparse map/broadcast with result eltype not a concrete subtype of Number (#19561/#19589)" begin
     N = 4
-    A, fA = speye(N), eye(N)
+    A, fA = sparse(1.0I, N, N), Matrix(1.0I, N, N)
     B, fB = spzeros(1, N), zeros(1, N)
     intorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : Int(1)
     stringorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : "hello"
@@ -414,10 +414,12 @@ end
         @test broadcast!(+, Z, V, A, X) == sparse(broadcast(+, fV, fA, X))
         @test broadcast(*, s, V, A, X)::SparseMatrixCSC == sparse(broadcast(*, s, fV, fA, X))
         @test broadcast!(*, Z, s, V, A, X) == sparse(broadcast(*, s, fV, fA, X))
-        # Issue #20954 combinations of sparse arrays and RowVectors
-        @test broadcast(+, A, X')::SparseMatrixCSC == sparse(broadcast(+, fA, X'))
-        @test broadcast(*, V, X')::SparseMatrixCSC == sparse(broadcast(*, fV, X'))
+        # Issue #20954 combinations of sparse arrays and Adjoint/Transpose vectors
+        @test broadcast(+, A, adjoint(X))::SparseMatrixCSC == sparse(broadcast(+, fA, adjoint(X)))
+        @test broadcast(*, V, adjoint(X))::SparseMatrixCSC == sparse(broadcast(*, fV, adjoint(X)))
     end
+    @test V .+ ntuple(identity, N) isa Vector
+    @test A .+ ntuple(identity, N) isa Matrix
 end
 
 @testset "broadcast! where the destination is a structured matrix" begin
@@ -505,8 +507,8 @@ end
     @test A .- 3 == AF .- 3
     @test 3 .- A == 3 .- AF
     @test A .- B == AF .- BF
-    @test A - AF == zeros(AF)
-    @test AF - A == zeros(AF)
+    @test A - AF == zeros(size(AF))
+    @test AF - A == zeros(size(AF))
     @test A[1,:] .- B == AF[1,:] .- BF
     @test A[:,1] .- B == AF[:,1] .- BF
     @test A .- B[1,:] == AF .-  BF[1,:]

@@ -5,11 +5,18 @@
 </a>
 </div>
 
-Linux, OSX: [![Build Status](https://api.travis-ci.org/JuliaLang/julia.svg?branch=master)](https://travis-ci.org/JuliaLang/julia)
+Build status:
+[![travis][travis-img]](https://travis-ci.org/JuliaLang/julia)
+[![appveyor][appveyor-img]](https://ci.appveyor.com/project/JuliaLang/julia/branch/master)
 
-Windows: [![Build status](https://ci.appveyor.com/api/projects/status/dvial98s5vi6ealt/branch/master?svg=true)](https://ci.appveyor.com/project/JuliaLang/julia/branch/master)
+Code coverage:
+[![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
+[![codecov][codecov-img]](http://codecov.io/github/JuliaLang/julia?branch=master)
 
-Code Coverage: [![Coverage Status](https://coveralls.io/repos/JuliaLang/julia/badge.svg?branch=master)](https://coveralls.io/r/JuliaLang/julia?branch=master) [![codecov.io](http://codecov.io/github/JuliaLang/julia/coverage.svg?branch=master)](http://codecov.io/github/JuliaLang/julia?branch=master)
+[travis-img]: https://img.shields.io/travis/JuliaLang/julia/master.svg?label=Linux+/+macOS
+[appveyor-img]: https://img.shields.io/appveyor/ci/JuliaLang/julia/master.svg?label=Windows
+[coveralls-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=coveralls
+[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov
 
 ## The Julia Language
 
@@ -22,14 +29,14 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Homepage:** <https://julialang.org>
 - **Binaries:** <https://julialang.org/downloads/>
 - **Documentation:** <https://docs.julialang.org/>
-- **Packages:** <http://pkg.julialang.org/>
+- **Packages:** <https://pkg.julialang.org/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Discussion forum:** <https://discourse.julialang.org>
 - **Mailing lists:** <https://julialang.org/community/>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
 - **Gitter:** <https://gitter.im/JuliaLang/julia>
-- **IRC:** <http://webchat.freenode.net/?channels=julia>
+- **IRC:** <https://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
@@ -273,15 +280,17 @@ Julia can be developed in an isolated Vagrant environment. See [the Vagrant READ
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++
-- **[python]** (>=2.7)          - needed to build LLVM.
+- **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++.
+- **[libatomic][gcc]**          — provided by **[gcc]** and needed to support atomic operations.
+- **[python]** (>=2.7)          — needed to build LLVM.
 - **[gfortran]**                — compiling and linking Fortran libraries.
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
+- **[awk]**                     - helper tool for Makefiles.
 - **[patch]**                   — for modifying source code.
 - **[cmake]** (>= 3.4.3)        — needed to build `libgit2`.
-- **[pkg-config]**              - needed to build `libgit2` correctly, especially for proxy support.
+- **[pkg-config]**              — needed to build `libgit2` correctly, especially for proxy support.
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
@@ -402,8 +411,7 @@ On Windows, double-click `usr/bin/julia.exe`.
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](https://julialang.org/manual/getting-started) in the manual.
 
-**Note**: While some system package managers have Julia installers available,
-these are not maintained nor endorsed by the Julia project. They may be outdated
+**Note**: Although some system package managers provide Julia, such installations are neither maintained nor endorsed by the Julia project. They may be outdated
 and/or unmaintained. We recommend you use the official Julia binaries instead.
 
 ## Editor and Terminal Setup

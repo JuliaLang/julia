@@ -181,6 +181,8 @@ ERROR: There was an error during testing
 
 ```@docs
 Test.@inferred
+Test.@test_logs
+Test.@test_deprecated
 Test.@test_warn
 Test.@test_nowarn
 ```

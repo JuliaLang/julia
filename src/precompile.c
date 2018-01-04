@@ -191,7 +191,7 @@ static void _compile_all_union(jl_value_t *sig)
     JL_GC_PUSH2(&p, &methsig);
     int idx_ctr = 0, incr = 0;
     while (!incr) {
-        jl_svec_t *p = jl_alloc_svec_uninit(l);
+        p = jl_alloc_svec_uninit(l);
         for (i = 0, idx_ctr = 0, incr = 1; i < l; i++) {
             jl_value_t *ty = jl_svecref(sigbody->parameters, i);
             if (jl_is_uniontype(ty)) {

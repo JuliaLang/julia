@@ -134,7 +134,7 @@ end
     @test base(2, 5, 7) == "0000101"
 
     @test bitstring(Int16(3)) == "0000000000000011"
-    @test bitstring('3') == "00000000000000000000000000110011"
+    @test bitstring('3') == "00110011000000000000000000000000"
     @test bitstring(1035) == (Int == Int32 ? "00000000000000000000010000001011" :
         "0000000000000000000000000000000000000000000000000000010000001011")
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
@@ -214,10 +214,10 @@ end
     end
 end
 # issue #9786
-let ptr = Ptr{Void}(typemax(UInt))
+let ptr = Ptr{Cvoid}(typemax(UInt))
     for T in (Int, Cssize_t)
         @test T(ptr) == -1
-        @test ptr == Ptr{Void}(T(ptr))
+        @test ptr == Ptr{Cvoid}(T(ptr))
         @test typeof(Ptr{Float64}(T(ptr))) == Ptr{Float64}
     end
 end

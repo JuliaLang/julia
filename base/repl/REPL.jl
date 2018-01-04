@@ -14,7 +14,7 @@ export
     StreamREPL
 
 import Base:
-    Display,
+    AbstractDisplay,
     display,
     show,
     AnyDict,
@@ -33,7 +33,8 @@ import ..LineEdit:
     history_last,
     history_search,
     accept_result,
-    terminal
+    terminal,
+    MIState
 
 abstract type AbstractREPL end
 
@@ -113,7 +114,7 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
-struct REPLDisplay{R<:AbstractREPL} <: Display
+struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
     repl::R
 end
 
@@ -121,7 +122,7 @@ end
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     io = outstream(d.repl)
-    Base.have_color && write(io, answer_color(d.repl))
+    get(io, :color, false) && write(io, answer_color(d.repl))
     show(IOContext(io, :limit => true), mime, x)
     println(io)
 end
@@ -246,15 +247,43 @@ end
 mutable struct Options
     hascolor::Bool
     extra_keymap::Union{Dict,Vector{<:Dict}}
+    # controls the presumed tab width of code pasted into the REPL.
+    # Must satisfy `0 < tabwidth <= 16`.
+    tabwidth::Int
+    # Maximum number of entries in the kill ring queue.
+    # Beyond this number, oldest entries are discarded first.
+    kill_ring_max::Int
+    region_animation_duration::Float64
+    beep_duration::Float64
+    beep_blink::Float64
+    beep_maxduration::Float64
+    beep_colors::Vector{String}
+    beep_use_current::Bool
     backspace_align::Bool
     backspace_adjust::Bool
+    confirm_exit::Bool # ^D must be repeated to confirm exit
 end
 
 Options(;
         hascolor = true,
         extra_keymap = AnyDict[],
-        backspace_align = true, backspace_adjust = backspace_align) =
-            Options(hascolor, extra_keymap, backspace_align, backspace_adjust)
+        tabwidth = 8,
+        kill_ring_max = 100,
+        region_animation_duration = 0.2,
+        beep_duration = 0.2, beep_blink = 0.2, beep_maxduration = 1.0,
+        beep_colors = ["\e[90m"], # gray (text_colors not yet available)
+        beep_use_current = true,
+        backspace_align = true, backspace_adjust = backspace_align,
+        confirm_exit = false) =
+            Options(hascolor, extra_keymap, tabwidth,
+                    kill_ring_max, region_animation_duration,
+                    beep_duration, beep_blink, beep_maxduration,
+                    beep_colors, beep_use_current,
+                    backspace_align, backspace_adjust, confirm_exit)
+
+# for use by REPLs not having an options field
+const GlobalOptions = Options()
+
 
 ## LineEditREPL ##
 
@@ -271,26 +300,27 @@ mutable struct LineEditREPL <: AbstractREPL
     in_help::Bool
     envcolors::Bool
     waserror::Bool
-    specialdisplay::Union{Void,Display}
+    specialdisplay::Union{Nothing,AbstractDisplay}
     options::Options
+    mistate::Union{MIState,Nothing}
     interface::ModalInterface
     backendref::REPLBackendRef
     LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
         new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, Options())
+            in_help,envcolors,false,nothing, Options(), nothing)
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
 
-LineEditREPL(t::TextTerminal, envcolors::Bool=false) =
-    LineEditREPL(t, true,
-        Base.text_colors[:green],
-        Base.input_color(),
-        Base.answer_color(),
-        Base.text_colors[:red],
-        Base.text_colors[:yellow],
+LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
+    LineEditREPL(t, hascolor,
+        hascolor ? Base.text_colors[:green] : "",
+        hascolor ? Base.input_color() : "",
+        hascolor ? Base.answer_color() : "",
+        hascolor ? Base.text_colors[:red] : "",
+        hascolor ? Base.text_colors[:yellow] : "",
         false, false, false, envcolors
     )
 
@@ -324,12 +354,12 @@ end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
     history::Array{String,1}
-    history_file::Union{Void,IO}
+    history_file::Union{Nothing,IO}
     start_idx::Int
     cur_idx::Int
     last_idx::Int
     last_buffer::IOBuffer
-    last_mode::Union{Void,Prompt}
+    last_mode::Union{Nothing,Prompt}
     mode_mapping::Dict
     modes::Array{Symbol,1}
 end
@@ -420,7 +450,7 @@ function add_history(hist::REPLHistoryProvider, s)
     entry = """
     # time: $(Libc.strftime("%Y-%m-%d %H:%M:%S %Z", time()))
     # mode: $mode
-    $(replace(str, r"^"ms, "\t"))
+    $(replace(str, r"^"ms => "\t"))
     """
     # TODO: write-lock history file
     seekend(hist.history_file)
@@ -579,18 +609,23 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1 # position is zero-indexed
-    b = min(endof(response_str), prevind(response_str, a + sizeof(searchdata))) # ensure that b is valid
+    # FIXME: I'm pretty sure this is broken since it uses an index
+    # into the search data to index into the response string
+    b = a + sizeof(searchdata)
+    b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
+    b = min(endof(response_str), b) # ensure that b is valid
 
     !skip_current && searchdata == response_str[a:b] && return true
 
-    searchfunc, searchstart, skipfunc = backwards ? (rsearch, b, prevind) :
-                                                    (search,  a, nextind)
+    searchfunc1, searchfunc2, searchstart, skipfunc = backwards ?
+                                                      (findlast, findprev, b, prevind) :
+                                                      (findfirst, findnext, a, nextind)
     skip_current && (searchstart = skipfunc(response_str, searchstart))
 
     # Start searching
     # First the current response buffer
     if 1 <= searchstart <= endof(response_str)
-        match = searchfunc(response_str, searchdata, searchstart)
+        match = searchfunc2(searchdata, response_str, searchstart)
         if match != 0:-1
             seek(response_buffer, first(match) - 1)
             return true
@@ -601,7 +636,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):length(hist.history))
     for idx in idxs
         h = hist.history[idx]
-        match = searchfunc(h, searchdata)
+        match = searchfunc1(searchdata, h)
         if match != 0:-1 && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
@@ -623,9 +658,7 @@ end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 function return_callback(s)
-    ast = Base.syntax_deprecation_warnings(false) do
-        Base.parse_input_line(String(take!(copy(LineEdit.buffer(s)))))
-    end
+    ast = Base.parse_input_line(String(take!(copy(LineEdit.buffer(s)))), depwarn=false)
     if  !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
         return true
     else
@@ -800,12 +833,14 @@ function setup_interface(
         try
             hist_path = find_hist_file()
             f = open(hist_path, true, true, true, false, false)
-            finalizer(replc, replc->close(f))
+            finalizer(replc) do replc
+                close(f)
+            end
             hist_from_file(hp, f, hist_path)
         catch e
             print_response(repl, e, catch_backtrace(), true, Base.have_color)
             println(outstream(repl))
-            info("Disabling history file for this session.")
+            @info "Disabling history file for this session"
             repl.history_file = false
         end
     end
@@ -853,7 +888,7 @@ function setup_interface(
             sbuffer = LineEdit.buffer(s)
             curspos = position(sbuffer)
             seek(sbuffer, 0)
-            shouldeval = (nb_available(sbuffer) == curspos && search(sbuffer, UInt8('\n')) == 0)
+            shouldeval = (nb_available(sbuffer) == curspos && findfirst(equalto(UInt8('\n')), sbuffer) == 0)
             seek(sbuffer, curspos)
             if curspos == 0
                 # if pasting at the beginning, strip leading whitespace
@@ -894,9 +929,7 @@ function setup_interface(
                         continue
                     end
                 end
-                ast, pos = Base.syntax_deprecation_warnings(false) do
-                    Base.parse(input, oldpos, raise=false)
-                end
+                ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
                 if (isa(ast, Expr) && (ast.head == :error || ast.head == :continue || ast.head == :incomplete)) ||
                         (done(input, pos) && !endswith(input, '\n'))
                     # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
@@ -908,7 +941,7 @@ function setup_interface(
                         tail = lstrip(tail)
                     end
                     if isprompt_paste # remove indentation spaces corresponding to the prompt
-                        tail = replace(tail, r"^ {7}"m, "") # 7: jl_prompt_len
+                        tail = replace(tail, r"^ {7}"m => "") # 7: jl_prompt_len
                     end
                     LineEdit.replace_line(s, tail, true)
                     LineEdit.refresh_line(s)
@@ -918,7 +951,7 @@ function setup_interface(
                 line = strip(input[oldpos:prevind(input, pos)])
                 if !isempty(line)
                     if isprompt_paste # remove indentation spaces corresponding to the prompt
-                        line = replace(line, r"^ {7}"m, "") # 7: jl_prompt_len
+                        line = replace(line, r"^ {7}"m => "") # 7: jl_prompt_len
                     end
                     # put the line on the screen and history
                     LineEdit.replace_line(s, line)
@@ -942,8 +975,7 @@ function setup_interface(
             linfos = Base.LAST_SHOWN_LINE_INFOS
             str = String(take!(LineEdit.buffer(s)))
             n = tryparse(Int, str)
-            isnull(n) && @goto writeback
-            n = get(n)
+            n === nothing && @goto writeback
             if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "./REPL")
                 @goto writeback
             end
@@ -983,7 +1015,8 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
         interface = repl.interface
     end
     repl.backendref = backend
-    run_interface(repl.t, interface)
+    repl.mistate = LineEdit.init_state(terminal(repl), interface)
+    run_interface(terminal(repl), interface, repl.mistate)
     dopushdisplay && popdisplay(d)
 end
 
@@ -1017,7 +1050,7 @@ input_color(r::StreamREPL) = r.input_color
 # heuristic function to decide if the presence of a semicolon
 # at the end of the expression was intended for suppressing output
 function ends_with_semicolon(line::AbstractString)
-    match = rsearch(line, ';')
+    match = findlast(equalto(';'), line)
     if match != 0
         # state for comment parser, assuming that the `;` isn't in a string or comment
         # so input like ";#" will still thwart this to give the wrong (anti-conservative) answer
@@ -1057,7 +1090,7 @@ function ends_with_semicolon(line::AbstractString)
             else
                 # outside of a comment, encountering anything but whitespace
                 # means the semi-colon was internal to the expression
-                isspace(c) || return false
+                Base.Unicode.isspace(c) || return false
             end
         end
         return true

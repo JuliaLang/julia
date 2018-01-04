@@ -901,96 +901,99 @@ static void shrink_big_little(std::vector<std::pair<uint32_t,CPUID>> &list,
     }
 }
 
+static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
+{
+    FeatureList<feature_sz> features = {};
+    // Here we assume that only the lower 32bit are used on aarch64
+    // Change the cast here when that's not the case anymore (and when there's features in the
+    // high bits that we want to detect).
+    features[0] = (uint32_t)jl_getauxval(AT_HWCAP);
+    features[1] = (uint32_t)jl_getauxval(AT_HWCAP2);
+    auto cpuinfo = get_cpuinfo();
+    auto arch = get_elf_arch();
+#ifdef _CPU_ARM_
+    if (arch.first >= 7) {
+        if (arch.second == 'M') {
+            set_bit(features, Feature::mclass, true);
+        }
+        else if (arch.second == 'R') {
+            set_bit(features, Feature::rclass, true);
+        }
+        else if (arch.second == 'A') {
+            set_bit(features, Feature::aclass, true);
+        }
+    }
+    switch (arch.first) {
+    case 8:
+    set_bit(features, Feature::v8, true);
+    JL_FALLTHROUGH;
+    case 7:
+    set_bit(features, Feature::v7, true);
+    break;
+    default:
+    break;
+    }
+#endif
+
+    std::set<uint32_t> cpus;
+    std::vector<std::pair<uint32_t,CPUID>> list;
+    for (auto info: cpuinfo) {
+        auto name = (uint32_t)get_cpu_name(info);
+        if (name == 0)
+            continue;
+        if (!check_cpu_arch_ver(name, arch))
+            continue;
+        if (cpus.insert(name).second) {
+            features = features | find_cpu(name)->features;
+            list.emplace_back(name, info);
+        }
+    }
+    // Not all elements/pairs are valid
+    static constexpr CPU v8order[] = {
+        CPU::arm_cortex_a32,
+        CPU::arm_cortex_a35,
+        CPU::arm_cortex_a53,
+        CPU::arm_cortex_a55,
+        CPU::arm_cortex_a57,
+        CPU::arm_cortex_a72,
+        CPU::arm_cortex_a73,
+        CPU::arm_cortex_a75,
+        CPU::nvidia_denver2,
+        CPU::samsung_exynos_m1
+    };
+    shrink_big_little(list, v8order, sizeof(v8order) / sizeof(CPU));
+#ifdef _CPU_ARM_
+    // Not all elements/pairs are valid
+    static constexpr CPU v7order[] = {
+        CPU::arm_cortex_a5,
+        CPU::arm_cortex_a7,
+        CPU::arm_cortex_a8,
+        CPU::arm_cortex_a9,
+        CPU::arm_cortex_a12,
+        CPU::arm_cortex_a15,
+        CPU::arm_cortex_a17
+    };
+    shrink_big_little(list, v7order, sizeof(v7order) / sizeof(CPU));
+#endif
+    uint32_t cpu = 0;
+    if (list.empty()) {
+        cpu = (uint32_t)generic_for_arch(arch);
+    }
+    else {
+        // This also covers `list.size() > 1` case which means there's a unknown combination
+        // consists of CPU's we know. Unclear what else we could try so just randomly return
+        // one...
+        cpu = list[0].first;
+    }
+    // Ignore feature bits that we are not interested in.
+    mask_features(feature_masks, &features[0]);
+
+    return std::make_pair(cpu, features);
+}
+
 static inline const std::pair<uint32_t,FeatureList<feature_sz>> &get_host_cpu()
 {
-    static const auto host_cpu = [] {
-        FeatureList<feature_sz> features = {};
-        // Here we assume that only the lower 32bit are used on aarch64
-        // Change the cast here when that's not the case anymore (and when there's features in the
-        // high bits that we want to detect).
-        features[0] = (uint32_t)jl_getauxval(AT_HWCAP);
-        features[1] = (uint32_t)jl_getauxval(AT_HWCAP2);
-        auto cpuinfo = get_cpuinfo();
-        auto arch = get_elf_arch();
-#ifdef _CPU_ARM_
-        if (arch.first >= 7) {
-            if (arch.second == 'M') {
-                set_bit(features, Feature::mclass, true);
-            }
-            else if (arch.second == 'R') {
-                set_bit(features, Feature::rclass, true);
-            }
-            else if (arch.second == 'A') {
-                set_bit(features, Feature::aclass, true);
-            }
-        }
-        switch (arch.first) {
-        case 8:
-        set_bit(features, Feature::v8, true);
-        JL_FALLTHROUGH;
-        case 7:
-        set_bit(features, Feature::v7, true);
-        break;
-        default:
-        break;
-        }
-#endif
-
-        std::set<uint32_t> cpus;
-        std::vector<std::pair<uint32_t,CPUID>> list;
-        for (auto info: cpuinfo) {
-            auto name = (uint32_t)get_cpu_name(info);
-            if (name == 0)
-                continue;
-            if (!check_cpu_arch_ver(name, arch))
-                continue;
-            if (cpus.insert(name).second) {
-                features = features | find_cpu(name)->features;
-                list.emplace_back(name, info);
-            }
-        }
-        // Not all elements/pairs are valid
-        static constexpr CPU v8order[] = {
-            CPU::arm_cortex_a32,
-            CPU::arm_cortex_a35,
-            CPU::arm_cortex_a53,
-            CPU::arm_cortex_a55,
-            CPU::arm_cortex_a57,
-            CPU::arm_cortex_a72,
-            CPU::arm_cortex_a73,
-            CPU::arm_cortex_a75,
-            CPU::nvidia_denver2,
-            CPU::samsung_exynos_m1
-        };
-        shrink_big_little(list, v8order, sizeof(v8order) / sizeof(CPU));
-#ifdef _CPU_ARM_
-        // Not all elements/pairs are valid
-        static constexpr CPU v7order[] = {
-            CPU::arm_cortex_a5,
-            CPU::arm_cortex_a7,
-            CPU::arm_cortex_a8,
-            CPU::arm_cortex_a9,
-            CPU::arm_cortex_a12,
-            CPU::arm_cortex_a15,
-            CPU::arm_cortex_a17
-        };
-        shrink_big_little(list, v7order, sizeof(v7order) / sizeof(CPU));
-#endif
-        uint32_t cpu = 0;
-        if (list.empty()) {
-            cpu = (uint32_t)generic_for_arch(arch);
-        }
-        else {
-            // This also covers `list.size() > 1` case which means there's a unknown combination
-            // consists of CPU's we know. Unclear what else we could try so just randomly return
-            // one...
-            cpu = list[0].first;
-        }
-        // Ignore feature bits that we are not interested in.
-        mask_features(feature_masks, &features[0]);
-
-        return std::make_pair(cpu, features);
-    }();
+    static auto host_cpu = _get_host_cpu();
     return host_cpu;
 }
 

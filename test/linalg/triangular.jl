@@ -2,7 +2,9 @@
 
 debug = false
 using Test
-using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!, UnitUpperTriangular, UnitLowerTriangular, A_rdiv_B!, A_rdiv_Bt!, A_rdiv_Bc!
+using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!,
+                    UnitUpperTriangular, UnitLowerTriangular,
+                    mul!, rdiv!, Adjoint, Transpose
 
 debug && println("Triangular matrices")
 
@@ -14,7 +16,7 @@ debug && println("Test basic type functionality")
 @test LowerTriangular(randn(3, 3)) |> t -> [size(t, i) for i = 1:3] == [size(Matrix(t), i) for i = 1:3]
 
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
-for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat}, Int)
+for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
     # Begin loop for first Triangular matrix
     for (t1, uplo1) in ((UpperTriangular, :U),
                         (UnitUpperTriangular, :U),
@@ -42,9 +44,9 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         @test isa(similar(A1, (3,2)), Matrix{elty1})
         @test isa(similar(A1, Int, (3,2)), Matrix{Int})
 
-        #copy!
+        #copyto!
         simA1 = similar(A1)
-        copy!(simA1, A1)
+        copyto!(simA1, A1)
         @test simA1 == A1
 
         # getindex
@@ -109,7 +111,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test_throws ArgumentError tril!(A1, n)
             @test triu(A1,0)  == t1(diagm(0 => diag(A1)))
             @test triu(A1,-1) == t1(tril(triu(A1.data,-1)))
-            @test triu(A1,1)  == LowerTriangular(zeros(A1.data))
+            @test triu(A1,1)  == zeros(size(A1)) # or just @test iszero(triu(A1,1))?
             @test_throws ArgumentError triu!(A1, -n)
             @test_throws ArgumentError triu!(A1, n + 2)
         else
@@ -120,7 +122,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test_throws ArgumentError triu!(A1, n + 2)
             @test tril(A1,0)  == t1(diagm(0 => diag(A1)))
             @test tril(A1,1)  == t1(triu(tril(A1.data,1)))
-            @test tril(A1,-1) == UpperTriangular(zeros(A1.data))
+            @test tril(A1,-1) == zeros(size(A1)) # or just @test iszero(tril(A1,-1))?
             @test_throws ArgumentError tril!(A1, -n - 2)
             @test_throws ArgumentError tril!(A1, n)
         end
@@ -131,17 +133,17 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         # [c]transpose[!] (test views as well, see issue #14317)
         let vrange = 1:n-1, viewA1 = t1(view(A1.data, vrange, vrange))
             # transpose
-            @test A1.' == Matrix(A1).'
-            @test viewA1.' == Matrix(viewA1).'
+            @test transpose(A1) == transpose(Matrix(A1))
+            @test transpose(viewA1) == transpose(Matrix(viewA1))
             # adjoint
-            @test A1' == Matrix(A1)'
-            @test viewA1' == Matrix(viewA1)'
+            @test adjoint(A1) == adjoint(Matrix(A1))
+            @test adjoint(viewA1) == adjoint(Matrix(viewA1))
             # transpose!
-            @test transpose!(copy(A1)) == A1.'
-            @test transpose!(t1(view(copy(A1).data, vrange, vrange))) == viewA1.'
+            @test transpose!(copy(A1)) == transpose(A1)
+            @test transpose!(t1(view(copy(A1).data, vrange, vrange))) == transpose(viewA1)
             # adjoint!
-            @test adjoint!(copy(A1)) == A1'
-            @test adjoint!(t1(view(copy(A1).data, vrange, vrange))) == viewA1'
+            @test adjoint!(copy(A1)) == adjoint(A1)
+            @test adjoint!(t1(view(copy(A1).data, vrange, vrange))) == adjoint(viewA1)
         end
 
         # diag
@@ -155,28 +157,28 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         # Unary operations
         @test -A1 == -Matrix(A1)
 
-        # copy and copy! (test views as well, see issue #14317)
+        # copy and copyto! (test views as well, see issue #14317)
         let vrange = 1:n-1, viewA1 = t1(view(A1.data, vrange, vrange))
             # copy
             @test copy(A1) == copy(Matrix(A1))
             @test copy(viewA1) == copy(Matrix(viewA1))
-            # copy!
+            # copyto!
             B = similar(A1)
-            copy!(B, A1)
+            copyto!(B, A1)
             @test B == A1
-            B = similar(A1.')
-            copy!(B, A1.')
-            @test B == A1.'
+            B = similar(transpose(A1))
+            copyto!(B, transpose(A1))
+            @test B == transpose(A1)
             B = similar(viewA1)
-            copy!(B, viewA1)
+            copyto!(B, viewA1)
             @test B == viewA1
-            B = similar(viewA1.')
-            copy!(B, viewA1.')
-            @test B == viewA1.'
+            B = similar(transpose(viewA1))
+            copyto!(B, transpose(viewA1))
+            @test B == transpose(viewA1)
         end
 
         #exp/log
-        if (elty1 == Float64 || elty1 == Complex128) && (t1 == UpperTriangular || t1 == LowerTriangular)
+        if (elty1 == Float64 || elty1 == ComplexF64) && (t1 == UpperTriangular || t1 == LowerTriangular)
             @test exp(Matrix(log(A1))) ≈ A1
         end
 
@@ -267,7 +269,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         end
 
         # Begin loop for second Triangular matrix
-        for elty2 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat}, Int)
+        for elty2 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
             for (t2, uplo2) in ((UpperTriangular, :U),
                                 (UnitUpperTriangular, :U),
                                 (LowerTriangular, :L),
@@ -290,101 +292,101 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
 
                 # Triangular-Triangualar multiplication and division
                 @test A1*A2 ≈ Matrix(A1)*Matrix(A2)
-                @test A1.'A2 ≈ Matrix(A1).'Matrix(A2)
+                @test Transpose(A1)*A2 ≈ Transpose(Matrix(A1))*Matrix(A2)
                 @test A1'A2 ≈ Matrix(A1)'Matrix(A2)
-                @test A1*A2.' ≈ Matrix(A1)*Matrix(A2).'
+                @test A1*Transpose(A2) ≈ Matrix(A1)*Transpose(Matrix(A2))
                 @test A1*A2' ≈ Matrix(A1)*Matrix(A2)'
-                @test A1.'A2.' ≈ Matrix(A1).'Matrix(A2).'
+                @test Transpose(A1)*Transpose(A2) ≈ Transpose(Matrix(A1))*Transpose(Matrix(A2))
                 @test A1'A2' ≈ Matrix(A1)'Matrix(A2)'
                 @test A1/A2 ≈ Matrix(A1)/Matrix(A2)
                 @test A1\A2 ≈ Matrix(A1)\Matrix(A2)
-                offsizeA = Matrix{Float64}(n+1, n+1)
+                offsizeA = Matrix{Float64}(I, n+1, n+1)
                 @test_throws DimensionMismatch offsizeA / A2
-                @test_throws DimensionMismatch offsizeA / A2.'
+                @test_throws DimensionMismatch offsizeA / Transpose(A2)
                 @test_throws DimensionMismatch offsizeA / A2'
                 @test_throws DimensionMismatch offsizeA * A2
-                @test_throws DimensionMismatch offsizeA * A2.'
+                @test_throws DimensionMismatch offsizeA * Transpose(A2)
                 @test_throws DimensionMismatch offsizeA * A2'
-                @test_throws DimensionMismatch A2.' * offsizeA
+                @test_throws DimensionMismatch Transpose(A2) * offsizeA
                 @test_throws DimensionMismatch A2'  * offsizeA
                 @test_throws DimensionMismatch A2   * offsizeA
             end
         end
 
-        for eltyB in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat})
+        for eltyB in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
             B = convert(Matrix{eltyB}, elty1 <: Complex ? real(A1)*ones(n, n) : A1*ones(n, n))
 
             debug && println("elty1: $elty1, A1: $t1, B: $eltyB")
 
             if !(eltyB in (BigFloat, Complex{BigFloat})) # rand does not support BigFloat and Complex{BigFloat} as of Dec 2015
                 Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
-                @test Base.LinAlg.A_mul_B!(Tri,copy(A1)) ≈ Tri*Matrix(A1)
+                @test mul!(Tri,copy(A1)) ≈ Tri*Matrix(A1)
             end
 
             # Triangular-dense Matrix/vector multiplication
             @test A1*B[:,1] ≈ Matrix(A1)*B[:,1]
             @test A1*B ≈ Matrix(A1)*B
-            @test A1.'B[:,1] ≈ Matrix(A1).'B[:,1]
+            @test Transpose(A1)*B[:,1] ≈ Transpose(Matrix(A1))*B[:,1]
             @test A1'B[:,1] ≈ Matrix(A1)'B[:,1]
-            @test A1.'B ≈ Matrix(A1).'B
+            @test Transpose(A1)*B ≈ Transpose(Matrix(A1))*B
             @test A1'B ≈ Matrix(A1)'B
-            @test A1*B.' ≈ Matrix(A1)*B.'
+            @test A1*Transpose(B) ≈ Matrix(A1)*Transpose(B)
             @test A1*B' ≈ Matrix(A1)*B'
             @test B*A1 ≈ B*Matrix(A1)
-            @test B[:,1].'A1 ≈ B[:,1].'Matrix(A1)
+            @test Transpose(B[:,1])*A1 ≈ Transpose(B[:,1])*Matrix(A1)
             @test B[:,1]'A1 ≈ B[:,1]'Matrix(A1)
-            @test B.'A1 ≈ B.'Matrix(A1)
+            @test Transpose(B)*A1 ≈ Transpose(B)*Matrix(A1)
             @test B'A1 ≈ B'Matrix(A1)
-            @test B*A1.' ≈ B*Matrix(A1).'
+            @test B*Transpose(A1) ≈ B*Transpose(Matrix(A1))
             @test B*A1' ≈ B*Matrix(A1)'
-            @test B[:,1].'A1.' ≈ B[:,1].'Matrix(A1).'
+            @test Transpose(B[:,1])*Transpose(A1) ≈ Transpose(B[:,1])*Transpose(Matrix(A1))
             @test B[:,1]'A1' ≈ B[:,1]'Matrix(A1)'
-            @test B.'A1.' ≈ B.'Matrix(A1).'
+            @test Transpose(B)*Transpose(A1) ≈ Transpose(B)*Transpose(Matrix(A1))
             @test B'A1' ≈ B'Matrix(A1)'
 
             if eltyB == elty1
-                @test A_mul_B!(zeros(B),A1,B)  ≈ A1*B
-                @test A_mul_Bc!(zeros(B),A1,B) ≈ A1*B'
-                @test A_mul_Bt!(zeros(B),A1,B) ≈ A1*B.'
-                @test Ac_mul_B!(zeros(B),A1,B) ≈ A1'*B
-                @test At_mul_B!(zeros(B),A1,B) ≈ A1.'*B
+                @test mul!(similar(B),A1,B)  ≈ A1*B
+                @test mul!(similar(B), A1, Adjoint(B)) ≈ A1*B'
+                @test mul!(similar(B), A1, Transpose(B)) ≈ A1*Transpose(B)
+                @test mul!(similar(B), Adjoint(A1), B) ≈ A1'*B
+                @test mul!(similar(B), Transpose(A1), B) ≈ Transpose(A1)*B
                 # test also vector methods
                 B1 = vec(B[1,:])
-                @test A_mul_B!(zeros(B1),A1,B1)  ≈ A1*B1
-                @test Ac_mul_B!(zeros(B1),A1,B1) ≈ A1'*B1
-                @test At_mul_B!(zeros(B1),A1,B1) ≈ A1.'*B1
+                @test mul!(similar(B1),A1,B1)  ≈ A1*B1
+                @test mul!(similar(B1), Adjoint(A1), B1) ≈ A1'*B1
+                @test mul!(similar(B1), Transpose(A1), B1) ≈ Transpose(A1)*B1
             end
             #error handling
-            @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(A1, ones(eltyB,n+1))
-            @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(ones(eltyB,n+1,n+1), A1)
-            @test_throws DimensionMismatch Base.LinAlg.At_mul_B!(A1, ones(eltyB,n+1))
-            @test_throws DimensionMismatch Base.LinAlg.Ac_mul_B!(A1, ones(eltyB,n+1))
-            @test_throws DimensionMismatch Base.LinAlg.A_mul_Bc!(ones(eltyB,n+1,n+1),A1)
-            @test_throws DimensionMismatch Base.LinAlg.A_mul_Bt!(ones(eltyB,n+1,n+1),A1)
+            @test_throws DimensionMismatch mul!(A1, ones(eltyB,n+1))
+            @test_throws DimensionMismatch mul!(ones(eltyB,n+1,n+1), A1)
+            @test_throws DimensionMismatch mul!(Transpose(A1), ones(eltyB,n+1))
+            @test_throws DimensionMismatch mul!(Adjoint(A1), ones(eltyB,n+1))
+            @test_throws DimensionMismatch mul!(ones(eltyB,n+1,n+1), Adjoint(A1))
+            @test_throws DimensionMismatch mul!(ones(eltyB,n+1,n+1), Transpose(A1))
 
             # ... and division
             @test A1\B[:,1] ≈ Matrix(A1)\B[:,1]
             @test A1\B ≈ Matrix(A1)\B
-            @test A1.'\B[:,1] ≈ Matrix(A1).'\B[:,1]
+            @test Transpose(A1)\B[:,1] ≈ Transpose(Matrix(A1))\B[:,1]
             @test A1'\B[:,1] ≈ Matrix(A1)'\B[:,1]
-            @test A1.'\B ≈ Matrix(A1).'\B
+            @test Transpose(A1)\B ≈ Transpose(Matrix(A1))\B
             @test A1'\B ≈ Matrix(A1)'\B
-            @test A1\B.' ≈ Matrix(A1)\B.'
+            @test A1\Transpose(B) ≈ Matrix(A1)\Transpose(B)
             @test A1\B' ≈ Matrix(A1)\B'
-            @test A1.'\B.' ≈ Matrix(A1).'\B.'
+            @test Transpose(A1)\Transpose(B) ≈ Transpose(Matrix(A1))\Transpose(B)
             @test A1'\B' ≈ Matrix(A1)'\B'
             @test_throws DimensionMismatch A1\ones(elty1,n+2)
             @test_throws DimensionMismatch A1'\ones(elty1,n+2)
-            @test_throws DimensionMismatch A1.'\ones(elty1,n+2)
+            @test_throws DimensionMismatch Transpose(A1)\ones(elty1,n+2)
             if t1 == UpperTriangular || t1 == LowerTriangular
                 @test_throws Base.LinAlg.SingularException naivesub!(t1(zeros(elty1,n,n)),ones(eltyB,n))
             end
             @test B/A1 ≈ B/Matrix(A1)
-            @test B/A1.' ≈ B/Matrix(A1).'
+            @test B/Transpose(A1) ≈ B/Transpose(Matrix(A1))
             @test B/A1' ≈ B/Matrix(A1)'
-            @test B.'/A1 ≈ B.'/Matrix(A1)
+            @test Transpose(B)/A1 ≈ Transpose(B)/Matrix(A1)
             @test B'/A1 ≈ B'/Matrix(A1)
-            @test B.'/A1.' ≈ B.'/Matrix(A1).'
+            @test Transpose(B)/Transpose(A1) ≈ Transpose(B)/Transpose(Matrix(A1))
             @test B'/A1' ≈ B'/Matrix(A1)'
 
             # Error bounds
@@ -407,19 +409,19 @@ Aimg    = randn(n, n)/2
 A2real  = randn(n, n)/2
 A2img   = randn(n, n)/2
 
-for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
+for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
     A = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(Areal, Aimg) : Areal)
     # a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     εa = eps(abs(float(one(eltya))))
 
-    for eltyb in (Float32, Float64, Complex64, Complex128)
+    for eltyb in (Float32, Float64, ComplexF32, ComplexF64)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
         debug && println("\ntype of A: ", eltya, " type of b: ", eltyb, "\n")
 
         debug && println("Solve upper triangular system")
-        Atri = UpperTriangular(lufact(A)[:U]) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
+        Atri = UpperTriangular(lufact(A).U) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
         b = convert(Matrix{eltyb}, eltya <: Complex ? Matrix(Atri)*ones(n, 2) : Matrix(Atri)*ones(n, 2))
         x = Matrix(Atri) \ b
 
@@ -447,7 +449,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         end
 
         debug && println("Solve lower triangular system")
-        Atri = UpperTriangular(lufact(A)[:U]) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
+        Atri = UpperTriangular(lufact(A).U) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
         b = convert(Matrix{eltyb}, eltya <: Complex ? Matrix(Atri)*ones(n, 2) : Matrix(Atri)*ones(n, 2))
         x = Matrix(Atri)\b
 
@@ -489,20 +491,20 @@ end
 let n = 5
     A = rand(Float16, n, n)
     B = rand(Float16, n-1, n-1)
-    @test_throws DimensionMismatch A_rdiv_B!(A, LowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_B!(A, UpperTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_B!(A, UnitLowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_B!(A, UnitUpperTriangular(B))
+    @test_throws DimensionMismatch rdiv!(A, LowerTriangular(B))
+    @test_throws DimensionMismatch rdiv!(A, UpperTriangular(B))
+    @test_throws DimensionMismatch rdiv!(A, UnitLowerTriangular(B))
+    @test_throws DimensionMismatch rdiv!(A, UnitUpperTriangular(B))
 
-    @test_throws DimensionMismatch A_rdiv_Bc!(A, LowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bc!(A, UpperTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bc!(A, UnitLowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bc!(A, UnitUpperTriangular(B))
+    @test_throws DimensionMismatch rdiv!(A, Adjoint(LowerTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, Adjoint(UpperTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, Adjoint(UnitLowerTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, Adjoint(UnitUpperTriangular(B)))
 
-    @test_throws DimensionMismatch A_rdiv_Bt!(A, LowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bt!(A, UpperTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bt!(A, UnitLowerTriangular(B))
-    @test_throws DimensionMismatch A_rdiv_Bt!(A, UnitUpperTriangular(B))
+    @test_throws DimensionMismatch rdiv!(A, Transpose(LowerTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, Transpose(UpperTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, Transpose(UnitLowerTriangular(B)))
+    @test_throws DimensionMismatch rdiv!(A, Transpose(UnitUpperTriangular(B)))
 end
 
 # Test that UpperTriangular(LowerTriangular) throws. See #16201
@@ -510,11 +512,11 @@ end
 @test_throws ArgumentError UpperTriangular(LowerTriangular(randn(3,3)))
 
 # Issue 16196
-@test UpperTriangular(eye(3)) \ view(ones(3), [1,2,3]) == ones(3)
+@test UpperTriangular(Matrix(1.0I, 3, 3)) \ view(ones(3), [1,2,3]) == ones(3)
 
 # dimensional correctness:
 isdefined(Main, :TestHelpers) || @eval Main include("../TestHelpers.jl")
-using Main.TestHelpers.Furlong
+using Main.TestHelpers: Furlong
 let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
     @test sqrt(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
 end

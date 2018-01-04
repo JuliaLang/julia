@@ -54,7 +54,9 @@
              (string (car e) (deparse (cadr e)))
              (string (deparse (cadr e)) " " (car e) " " (deparse (caddr e)))))
         ((memq (car e) '($ &))
-         (string (car e) (deparse (cadr e))))
+         (if (pair? (cadr e))
+             (string (car e) "(" (deparse (cadr e)) ")")
+             (string (car e) (deparse (cadr e)))))
         ((eq? (car e) '|::|)
          (if (length> e 2)
              (string (deparse (cadr e)) (car e) (deparse (caddr e)))
@@ -235,7 +237,9 @@
       (ssavalue? e)))
 
 (define (simple-atom? x)
-  (or (number? x) (string? x) (char? x) (eq? x 'true) (eq? x 'false)))
+  (or (number? x) (string? x) (char? x) (eq? x 'true) (eq? x 'false)
+      (and (pair? x) (memq (car x) '(ssavalue null)))
+      (eq? (typeof x) 'julia_value)))
 
 ;; identify some expressions that are safe to repeat
 (define (effect-free? e)

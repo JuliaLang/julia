@@ -55,15 +55,19 @@ getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ)
 
 function show(io::IO, J::UniformScaling)
     s = "$(J.λ)"
-    if ismatch(r"\w+\s*[\+\-]\s*\w+", s)
+    if contains(s, r"\w+\s*[\+\-]\s*\w+")
         s = "($s)"
     end
     print(io, "$(typeof(J))\n$s*I")
 end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
+conj(J::UniformScaling) = UniformScaling(conj(J.λ))
+
 transpose(J::UniformScaling) = J
+Transpose(S::UniformScaling) = transpose(S)
 adjoint(J::UniformScaling) = UniformScaling(conj(J.λ))
+Adjoint(S::UniformScaling) = adjoint(S)
 
 one(::Type{UniformScaling{T}}) where {T} = UniformScaling(one(T))
 one(J::UniformScaling{T}) where {T} = one(UniformScaling{T})
@@ -99,7 +103,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
             ($op)(UL::$t2, J::UniformScaling) = ($t2)(($op)(UL.data, J))
 
             function ($op)(UL::$t1, J::UniformScaling)
-                ULnew = copy_oftype(UL.data, Base.Broadcast._broadcast_eltype($op, UL, J))
+                ULnew = copy_oftype(UL.data, Broadcast.combine_eltypes($op, UL, J))
                 for i = 1:size(ULnew, 1)
                     ULnew[i,i] = ($op)(1, J.λ)
                 end
@@ -110,7 +114,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
 end
 
 function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
-    ULnew = similar(parent(UL), Base.Broadcast._broadcast_eltype(-, J, UL))
+    ULnew = similar(parent(UL), Broadcast.combine_eltypes(-, J, UL))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n
@@ -126,7 +130,7 @@ function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
     return UpperTriangular(ULnew)
 end
 function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
-    ULnew = similar(parent(UL), Base.Broadcast._broadcast_eltype(-, J, UL))
+    ULnew = similar(parent(UL), Broadcast.combine_eltypes(-, J, UL))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n
@@ -144,8 +148,8 @@ end
 
 function (+)(A::AbstractMatrix, J::UniformScaling)
     n = checksquare(A)
-    B = similar(A, Base.Broadcast._broadcast_eltype(+, A, J))
-    copy!(B,A)
+    B = similar(A, Broadcast.combine_eltypes(+, A, J))
+    copyto!(B,A)
     @inbounds for i = 1:n
         B[i,i] += J.λ
     end
@@ -154,8 +158,8 @@ end
 
 function (-)(A::AbstractMatrix, J::UniformScaling)
     n = checksquare(A)
-    B = similar(A, Base.Broadcast._broadcast_eltype(-, A, J))
-    copy!(B, A)
+    B = similar(A, Broadcast.combine_eltypes(-, A, J))
+    copyto!(B, A)
     @inbounds for i = 1:n
         B[i,i] -= J.λ
     end
@@ -163,7 +167,7 @@ function (-)(A::AbstractMatrix, J::UniformScaling)
 end
 function (-)(J::UniformScaling, A::AbstractMatrix)
     n = checksquare(A)
-    B = convert(AbstractMatrix{Base.Broadcast._broadcast_eltype(-, J, A)}, -A)
+    B = convert(AbstractMatrix{Broadcast.combine_eltypes(-, J, A)}, -A)
     @inbounds for j = 1:n
         B[j,j] += J.λ
     end
@@ -223,7 +227,7 @@ function ==(A::StridedMatrix, J::UniformScaling)
     size(A, 1) == size(A, 2) || return false
     iszero(J.λ) && return iszero(A)
     isone(J.λ) && return isone(A)
-    for j in indices(A, 2), i in indices(A, 1)
+    for j in axes(A, 2), i in axes(A, 1)
         ifelse(i == j, A[i, j] == J.λ, iszero(A[i, j])) || return false
     end
     return true
@@ -245,7 +249,7 @@ function isapprox(J::UniformScaling, A::AbstractMatrix;
 end
 isapprox(A::AbstractMatrix, J::UniformScaling; kwargs...) = isapprox(J, A; kwargs...)
 
-function copy!(A::AbstractMatrix, J::UniformScaling)
+function copyto!(A::AbstractMatrix, J::UniformScaling)
     size(A,1)==size(A,2) || throw(DimensionMismatch("a UniformScaling can only be copied to a square matrix"))
     fill!(A, 0)
     λ = J.λ
@@ -264,7 +268,7 @@ end
 # in A to matrices of type T and sizes given by n[k:end].  n is an array
 # so that the same promotion code can be used for hvcat.  We pass the type T
 # so that we can re-use this code for sparse-matrix hcat etcetera.
-promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copy!(Matrix{T}(n,n), J)
+promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copyto!(Matrix{T}(uninitialized, n,n), J)
 promote_to_arrays_(n::Int, ::Type, A::AbstractVecOrMat) = A
 promote_to_arrays(n,k, ::Type) = ()
 promote_to_arrays(n,k, ::Type{T}, A) where {T} = (promote_to_arrays_(n[k], T, A),)
@@ -378,9 +382,10 @@ Matrix{T}(s::UniformScaling, dims::Dims{2}) where {T} = setindex!(zeros(T, dims)
 Matrix{T}(s::UniformScaling, m::Integer, n::Integer) where {T} = Matrix{T}(s, Dims((m, n)))
 Matrix(s::UniformScaling, m::Integer, n::Integer) = Matrix(s, Dims((m, n)))
 Matrix(s::UniformScaling, dims::Dims{2}) = Matrix{eltype(s)}(s, dims)
-# convenience variations that accept a single integer to specify dims
-Matrix{T}(s::UniformScaling, m::Integer) where {T} = Matrix{T}(s, m, m)
-Matrix(s::UniformScaling, m::Integer) = Matrix(s, m, m)
+Array{T}(s::UniformScaling, dims::Dims{2}) where {T} = Matrix{T}(s, dims)
+Array{T}(s::UniformScaling, m::Integer, n::Integer) where {T} = Matrix{T}(s, m, n)
+Array(s::UniformScaling, m::Integer, n::Integer) = Matrix(s, m, n)
+Array(s::UniformScaling, dims::Dims{2}) = Matrix(s, dims)
 
 ## Diagonal construction from UniformScaling
 Diagonal{T}(s::UniformScaling, m::Integer) where {T} = Diagonal{T}(fill(T(s.λ), m))

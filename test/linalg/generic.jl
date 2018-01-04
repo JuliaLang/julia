@@ -42,13 +42,13 @@ n = 5 # should be odd
         @testset "det(A::Matrix)" begin
             # The determinant of the identity matrix should always be 1.
             for i = 1:10
-                A = eye(elty, i)
+                A = Matrix{elty}(I, i, i)
                 @test det(A) ≈ one(elty)
             end
 
             # The determinant of a Householder reflection matrix should always be -1.
             for i = 1:10
-                A = eye(elty, 10)
+                A = Matrix{elty}(I, 10, 10)
                 A[i, i] = -one(elty)
                 @test det(A) ≈ -one(elty)
             end
@@ -77,10 +77,10 @@ n = 5 # should be odd
         @test logdet(A[1,1]) == log(det(A[1,1]))
         @test logdet(A) ≈ log(det(A))
         @test logabsdet(A)[1] ≈ log(abs(det(A)))
-        @test logabsdet(convert(Matrix{elty}, -eye(n)))[2] == -1
+        @test logabsdet(Matrix{elty}(-I, n, n))[2] == -1
         if elty <: Real
             @test logabsdet(A)[2] == sign(det(A))
-            @test_throws DomainError logdet(convert(Matrix{elty}, -eye(n)))
+            @test_throws DomainError logdet(Matrix{elty}(-I, n, n))
         else
             @test logabsdet(A)[2] ≈ sign(det(A))
         end
@@ -150,7 +150,7 @@ end
 end
 
 @testset "diag" begin
-    A = eye(4)
+    A = Matrix(1.0I, 4, 4)
     @test diag(A) == ones(4)
     @test diag(view(A, 1:3, 1:3)) == ones(3)
     @test diag(view(A, 1:2, 1:2)) == ones(2)
@@ -206,7 +206,7 @@ end
             @test scale!(similar(a), [1.; 2.], a) == a.*[1; 2]
             @test scale!(similar(a), [1; 2], a) == a.*[1; 2]
             @test_throws DimensionMismatch scale!(similar(a), ones(3), a)
-            @test_throws DimensionMismatch scale!(Array{Float64}(3, 2), a, ones(3))
+            @test_throws DimensionMismatch scale!(Matrix{Float64}(uninitialized, 3, 2), a, ones(3))
 
             if isa(a, Array)
                 @test scale!(similar(a), a, [1.; 2.; 3.]) == a.*[1 2 3]
@@ -244,7 +244,7 @@ end
     @test q\qmat ≉ qmat/q
 end
 @testset "ops on Numbers" begin
-    @testset for elty in [Float32,Float64,Complex64,Complex128]
+    @testset for elty in [Float32,Float64,ComplexF32,ComplexF64]
         a = rand(elty)
         @test trace(a)         == a
         @test rank(zero(elty)) == 0
@@ -325,7 +325,7 @@ end
 end
 
 @testset "Issue 14657" begin
-    @test det([true false; false true]) == det(eye(Int, 2))
+    @test det([true false; false true]) == det(Matrix(1I, 2, 2))
 end
 
 @test_throws ArgumentError Base.LinAlg.char_uplo(:Z)
@@ -336,7 +336,7 @@ end
 
 @testset "Issue 19035" begin
     @test Base.LinAlg.promote_leaf_eltypes([1, 2, [3.0, 4.0]]) == Float64
-    @test Base.LinAlg.promote_leaf_eltypes([[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]) == Complex128
+    @test Base.LinAlg.promote_leaf_eltypes([[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]) == ComplexF64
     @test [1, 2, 3] ≈ [1, 2, 3]
     @test [[1, 2], [3, 4]] ≈ [[1, 2], [3, 4]]
     @test [[1, 2], [3, 4]] ≈ [[1.0-eps(), 2.0+eps()], [3.0+2eps(), 4.0-1e8eps()]]
@@ -361,7 +361,10 @@ Base.zero(::Type{ModInt{n}}) where {n} = ModInt{n}(0)
 Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
 Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
+Base.adjoint(a::ModInt{n}) where {n} = ModInt{n}(conj(a))
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
+Base.LinAlg.Adjoint(a::ModInt{n}) where {n} = adjoint(a)
+Base.LinAlg.Transpose(a::ModInt{n}) where {n} = transpose(a)
 
 @testset "Issue 22042" begin
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]

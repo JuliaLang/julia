@@ -4,10 +4,10 @@
 show(io::IO, ::MIME"text/plain", x) = show(io, x)
 
 # multiline show functions for types defined before multimedia.jl:
-function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator})
+function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     print(io, summary(iter))
     isempty(iter) && return
-    print(io, ". ", isa(iter,KeyIterator) ? "Keys" : "Values", ":")
+    print(io, ". ", isa(iter,KeySet) ? "Keys" : "Values", ":")
     limit::Bool = get(io, :limit, false)
     if limit
         sz = displaysize(io)
@@ -25,7 +25,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator}
         i == rows < length(iter) && (print(io, "⋮"); break)
 
         if limit
-            str = sprint(0, show, v, env=io)
+            str = sprint(show, v, context=io, sizehint=0)
             str = _truncate_at_width_or_chars(str, cols, "\r\n")
             print(io, str)
         else
@@ -34,7 +34,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator}
     end
 end
 
-function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
+function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
@@ -55,14 +55,14 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
         rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
-        ks = Vector{AbstractString}(min(rows, length(t)))
-        vs = Vector{AbstractString}(min(rows, length(t)))
+        ks = Vector{AbstractString}(uninitialized, min(rows, length(t)))
+        vs = Vector{AbstractString}(uninitialized, min(rows, length(t)))
         keylen = 0
         vallen = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
-            ks[i] = sprint(0, show, k, env=recur_io)
-            vs[i] = sprint(0, show, v, env=recur_io)
+            ks[i] = sprint(show, k, context=recur_io, sizehint=0)
+            vs[i] = sprint(show, v, context=recur_io, sizehint=0)
             keylen = clamp(length(ks[i]), keylen, cols)
             vallen = clamp(length(vs[i]), vallen, cols)
         end
@@ -80,7 +80,7 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
         else
-            key = sprint(0, show, k, env=recur_io)
+            key = sprint(show, k, context=recur_io, sizehint=0)
         end
         print(recur_io, key)
         print(io, " => ")
@@ -136,19 +136,8 @@ function show(io::IO, ::MIME"text/plain", t::Task)
     end
 end
 
-show(io::IO, ::MIME"text/plain", X::AbstractArray) = showarray(io, X, false)
+show(io::IO, ::MIME"text/plain", X::AbstractArray) = _display(io, X)
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
-
-# display something useful even for strings containing arbitrary
-# (non-UTF8) binary data:
-function show(io::IO, ::MIME"text/plain", s::String)
-    if isvalid(s)
-        show(io, s)
-    else
-        println(io, sizeof(s), "-byte String of invalid UTF-8 data:")
-        showarray(io, Vector{UInt8}(s), false; header=false)
-    end
-end
 
 function show(io::IO, ::MIME"text/plain", opt::JLOptions)
     println(io, "JLOptions(")
@@ -172,7 +161,29 @@ end
 """
     showerror(io, e)
 
-Show a descriptive representation of an exception object.
+Show a descriptive representation of an exception object `e`.
+This method is used to display the exception after a call to [`throw`](@ref).
+
+# Examples
+```jldoctest
+julia> struct MyException <: Exception
+           msg::AbstractString
+       end
+
+julia> function Base.showerror(io::IO, err::MyException)
+           print(io, "MyException: ")
+           print(io, err.msg)
+       end
+
+julia> err = MyException("test exception")
+MyException("test exception")
+
+julia> sprint(showerror, err)
+"MyException: test exception"
+
+julia> throw(MyException("test exception"))
+ERROR: MyException: test exception
+```
 """
 showerror(io::IO, ex) = show(io, ex)
 
@@ -219,7 +230,7 @@ end
 
 function showerror(io::IO, ex, bt; backtrace=true)
     try
-        with_output_color(have_color ? error_color() : :nothing, io) do io
+        with_output_color(get(io, :color, false) ? error_color() : :nothing, io) do io
             showerror(io, ex)
         end
     finally
@@ -272,7 +283,7 @@ function showerror(io::IO, ex::ErrorException)
     print(io, ex.msg)
     if ex.msg == "type String has no field data"
         println(io)
-        print(io, "Use `Vector{UInt8}(str)` instead.")
+        print(io, "Use `codeunits(str)` instead.")
     end
 end
 showerror(io::IO, ex::KeyError) = print(io, "KeyError: key $(repr(ex.key)) not found")
@@ -311,14 +322,13 @@ function showerror(io::IO, ex::MethodError)
     ft = typeof(f)
     name = ft.name.mt.name
     f_is_function = false
-    kwargs = Any[]
+    kwargs = ()
     if startswith(string(ft.name.name), "#kw#")
         f = ex.args[2]
         ft = typeof(f)
         name = ft.name.mt.name
         arg_types_param = arg_types_param[3:end]
-        temp = ex.args[1]
-        kwargs = Any[(temp[i*2-1], temp[i*2]) for i in 1:(length(temp) ÷ 2)]
+        kwargs = ex.args[1]
         ex = MethodError(f, ex.args[3:end])
     end
     if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
@@ -402,20 +412,10 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
-    # Give a helpful error message if the user likely called a type constructor
-    # and sees a no method error for convert
-    if (f === Base.convert && !isempty(arg_types_param) && !is_arg_types &&
-        isa(arg_types_param[1], DataType) &&
-        arg_types_param[1].name === Type.body.name)
-        construct_type = arg_types_param[1].parameters[1]
-        println(io)
-        print(io, "This may have arisen from a call to the constructor $construct_type(...),",
-                  "\nsince type constructors fall back to convert methods.")
-    end
     try
         show_method_candidates(io, ex, kwargs)
-    catch
-        warn(io, "Error showing method candidates, aborted")
+    catch ex
+        @error "Error showing method candidates, aborted" exception=ex
     end
 end
 
@@ -445,14 +445,14 @@ end
 #Show an error by directly calling jl_printf.
 #Useful in Base submodule __init__ functions where STDERR isn't defined yet.
 function showerror_nostdio(err, msg::AbstractString)
-    stderr_stream = ccall(:jl_stderr_stream, Ptr{Void}, ())
-    ccall(:jl_printf, Cint, (Ptr{Void},Cstring), stderr_stream, msg)
-    ccall(:jl_printf, Cint, (Ptr{Void},Cstring), stderr_stream, ":\n")
-    ccall(:jl_static_show, Csize_t, (Ptr{Void},Any), stderr_stream, err)
-    ccall(:jl_printf, Cint, (Ptr{Void},Cstring), stderr_stream, "\n")
+    stderr_stream = ccall(:jl_stderr_stream, Ptr{Cvoid}, ())
+    ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, msg)
+    ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, ":\n")
+    ccall(:jl_static_show, Csize_t, (Ptr{Cvoid},Any), stderr_stream, err)
+    ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, "\n")
 end
 
-function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
+function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
     arg_types_param = Any[arg_types.parameters...]
@@ -478,6 +478,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     for (func,arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
+            iob = IOContext(buf, io)
             tv = Any[]
             sig0 = method.sig
             if Base.is_default_method(method)
@@ -489,20 +490,20 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
             end
             s1 = sig0.parameters[1]
             sig = sig0.parameters[2:end]
-            print(buf, "  ")
+            print(iob, "  ")
             if !isa(func, s1)
                 # function itself doesn't match
                 return
             else
                 # TODO: use the methodshow logic here
                 use_constructor_syntax = isa(func, Type)
-                print(buf, use_constructor_syntax ? func : typeof(func).name.mt.name)
+                print(iob, use_constructor_syntax ? func : typeof(func).name.mt.name)
             end
-            print(buf, "(")
+            print(iob, "(")
             t_i = copy(arg_types_param)
             right_matches = 0
             for i = 1 : min(length(t_i), length(sig))
-                i > 1 && print(buf, ", ")
+                i > 1 && print(iob, ", ")
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
@@ -519,12 +520,12 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 # the type of the first argument is not matched.
                 t_in === Union{} && special && i == 1 && break
                 if t_in === Union{}
-                    if Base.have_color
-                        Base.with_output_color(Base.error_color(), buf) do buf
-                            print(buf, "::$sigstr")
+                    if get(io, :color, false)
+                        Base.with_output_color(Base.error_color(), iob) do iob
+                            print(iob, "::$sigstr")
                         end
                     else
-                        print(buf, "!Matched::$sigstr")
+                        print(iob, "!Matched::$sigstr")
                     end
                     # If there is no typeintersect then the type signature from the method is
                     # inserted in t_i this ensures if the type at the next i matches the type
@@ -532,7 +533,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                     t_i[i] = sig[i]
                 else
                     right_matches += j==i ? 1 : 0
-                    print(buf, "::$sigstr")
+                    print(iob, "::$sigstr")
                 end
             end
             special && right_matches==0 && return # continue the do-block
@@ -559,14 +560,14 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                             sigstr = string(sigtype)
                         end
                         if !((min(length(t_i), length(sig)) == 0) && k==1)
-                            print(buf, ", ")
+                            print(iob, ", ")
                         end
-                        if Base.have_color
-                            Base.with_output_color(Base.error_color(), buf) do buf
-                                print(buf, "::$sigstr")
+                        if get(io, :color, false)
+                            Base.with_output_color(Base.error_color(), iob) do iob
+                                print(iob, "::$sigstr")
                             end
                         else
-                            print(buf, "!Matched::$sigstr")
+                            print(iob, "!Matched::$sigstr")
                         end
                     end
                 end
@@ -574,11 +575,11 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 if isdefined(ft.name.mt, :kwsorter)
                     kwsorter_t = typeof(ft.name.mt.kwsorter)
                     kwords = kwarg_decl(method, kwsorter_t)
-                    length(kwords) > 0 && print(buf, "; ", join(kwords, ", "))
+                    length(kwords) > 0 && print(iob, "; ", join(kwords, ", "))
                 end
-                print(buf, ")")
-                show_method_params(buf, tv)
-                print(buf, " at ", method.file, ":", method.line)
+                print(iob, ")")
+                show_method_params(iob, tv)
+                print(iob, " at ", method.file, ":", method.line)
                 if !isempty(kwargs)
                     unexpected = Symbol[]
                     if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
@@ -589,14 +590,14 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                         end
                     end
                     if !isempty(unexpected)
-                        Base.with_output_color(Base.error_color(), buf) do buf
+                        Base.with_output_color(Base.error_color(), iob) do iob
                             plur = length(unexpected) > 1 ? "s" : ""
-                            print(buf, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
+                            print(iob, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
                         end
                     end
                 end
                 if ex.world < min_world(method)
-                    print(buf, " (method too new to be called from this world context.)")
+                    print(iob, " (method too new to be called from this world context.)")
                 end
                 # TODO: indicate if it's in the wrong world
                 push!(lines, (buf, right_matches))
@@ -635,17 +636,26 @@ end
 global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
 
 function show_backtrace(io::IO, t::Vector)
-    n_frames = 0
-    frame_counter = 0
     resize!(LAST_SHOWN_LINE_INFOS, 0)
-    process_backtrace((a,b) -> n_frames += 1, t)
-    n_frames != 0 && print(io, "\nStacktrace:")
-    process_entry = (last_frame, n) -> begin
+    filtered = Any[]
+    process_backtrace((fr, count) -> push!(filtered, (fr, count)), t)
+    isempty(filtered) && return
+
+    if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
+        f = filtered[1][1]
+        if f.line == 0 && f.file == Symbol("")
+            # don't show a single top-level frame with no location info
+            return
+        end
+    end
+
+    print(io, "\nStacktrace:")
+    frame_counter = 0
+    for (last_frame, n) in filtered
         frame_counter += 1
         show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
         push!(LAST_SHOWN_LINE_INFOS, (string(last_frame.file), last_frame.line))
     end
-    process_backtrace(process_entry, t)
 end
 
 function show_backtrace(io::IO, t::Vector{Any})
@@ -671,7 +681,7 @@ function process_backtrace(process_func::Function, t::Vector, limit::Int=typemax
             count += 1
             if count > limit; break; end
 
-            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func
+            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== lkup.linfo
                 if n > 0
                     process_func(last_frame, n)
                 end
@@ -692,5 +702,12 @@ Determines whether a method is the default method which is provided to all types
 Such a method is usually undesirable to be displayed to the user in the REPL.
 """
 function is_default_method(m::Method)
-    return m.module == Base && m.file == Symbol("sysimg.jl") && m.sig == Tuple{Type{T},Any} where T
+    return m.module == Base && m.sig == Tuple{Type{T},Any} where T
+end
+
+@noinline function throw_eachindex_mismatch(::IndexLinear, A...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(linearindices.(A), ", ", " and "))"))
+end
+@noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
 end

@@ -393,8 +393,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     jl_errorf("type %s has field offset %d that exceeds the page size", jl_symbol_name(st->name->name), descsz);
 }
 
-extern int jl_boot_file_loaded;
-
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
         jl_sym_t *name,
         jl_module_t *module,
@@ -488,21 +486,24 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
 
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, void *data)
 {
-    // data may not have the alignment required by the data type.
+    // data may not have the alignment required by the size
+    // but will always have the alignment required by the datatype
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(jl_is_datatype(dt));
     jl_datatype_t *bt = (jl_datatype_t*)dt;
     size_t nb = jl_datatype_size(bt);
+    // some types have special pools to minimize allocations
     if (nb == 0)               return jl_new_struct_uninit(bt); // returns bt->instance
+    if (bt == jl_bool_type)    return (1 & *(int8_t*)data) ? jl_true : jl_false;
     if (bt == jl_uint8_type)   return jl_box_uint8(*(uint8_t*)data);
-    if (bt == jl_int64_type)   return jl_box_int64(jl_load_unaligned_i64(data));
-    if (bt == jl_bool_type)    return (*(int8_t*)data) ? jl_true : jl_false;
-    if (bt == jl_int32_type)   return jl_box_int32(jl_load_unaligned_i32(data));
-    if (bt == jl_float64_type) {
-        double f;
-        memcpy(&f, data, 8);
-        return jl_box_float64(f);
-    }
+    if (bt == jl_int64_type)   return jl_box_int64(*(int64_t*)data);
+    if (bt == jl_int32_type)   return jl_box_int32(*(int32_t*)data);
+    if (bt == jl_int8_type)    return jl_box_int8(*(int8_t*)data);
+    if (bt == jl_int16_type)   return jl_box_int16(*(int16_t*)data);
+    if (bt == jl_uint64_type)  return jl_box_uint64(*(uint64_t*)data);
+    if (bt == jl_uint32_type)  return jl_box_uint32(*(uint32_t*)data);
+    if (bt == jl_uint16_type)  return jl_box_uint16(*(uint16_t*)data);
+    if (bt == jl_char_type)    return jl_box_char(*(uint32_t*)data);
 
     jl_value_t *v = jl_gc_alloc(ptls, nb, bt);
     switch (nb) {
@@ -639,7 +640,6 @@ SIBOX_FUNC(int16,  int16_t, 1)
 SIBOX_FUNC(int32,  int32_t, 1)
 UIBOX_FUNC(uint16, uint16_t, 1)
 UIBOX_FUNC(uint32, uint32_t, 1)
-UIBOX_FUNC(char,   uint32_t, 1)
 UIBOX_FUNC(ssavalue, size_t, 1)
 UIBOX_FUNC(slotnumber, size_t, 1)
 #ifdef _P64
@@ -649,6 +649,17 @@ UIBOX_FUNC(uint64, uint64_t, 1)
 SIBOX_FUNC(int64,  int64_t, 2)
 UIBOX_FUNC(uint64, uint64_t, 2)
 #endif
+
+static jl_value_t *boxed_char_cache[128];
+JL_DLLEXPORT jl_value_t *jl_box_char(uint32_t x)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (0 < (int32_t)x)
+        return boxed_char_cache[x >> 24];
+    jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), jl_char_type);
+    *(uint32_t*)jl_data_ptr(v) = x;
+    return v;
+}
 
 static jl_value_t *boxed_int8_cache[256];
 JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x)
@@ -683,14 +694,16 @@ void jl_init_int32_int64_cache(void)
 void jl_init_box_caches(void)
 {
     int64_t i;
+    for(i=0; i < 128; i++) {
+        boxed_char_cache[i] = jl_permbox32(jl_char_type, i << 24);
+    }
     for(i=0; i < 256; i++) {
-        boxed_int8_cache[i]  = jl_permbox8(jl_int8_type, i);
+        boxed_int8_cache[i] = jl_permbox8(jl_int8_type, i);
     }
     for(i=0; i < NBOX_C; i++) {
         boxed_int16_cache[i]  = jl_permbox16(jl_int16_type, i-NBOX_C/2);
         boxed_uint16_cache[i] = jl_permbox16(jl_uint16_type, i);
         boxed_uint32_cache[i] = jl_permbox32(jl_uint32_type, i);
-        boxed_char_cache[i]   = jl_permbox32(jl_char_type, i);
         boxed_uint64_cache[i] = jl_permbox64(jl_uint64_type, i);
     }
 }
@@ -726,6 +739,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
     if (type->instance != NULL) return type->instance;
     size_t nf = jl_datatype_nfields(type);
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
+    JL_GC_PUSH1(&jv);
     for (size_t i = 0; i < na; i++) {
         jl_value_t *ft = jl_field_type(type, i);
         if (!jl_isa(args[i], ft))
@@ -744,6 +758,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
             }
         }
     }
+    JL_GC_POP();
     return jv;
 }
 
@@ -853,13 +868,6 @@ JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
     if (ty->layout == NULL || field > jl_datatype_nfields(ty) || field < 1)
         jl_bounds_error_int((jl_value_t*)ty, field);
     return jl_field_offset(ty, field - 1);
-}
-
-JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
-{
-    if (ty->layout == NULL)
-        jl_error("non-leaf type doesn't have an alignment");
-    return jl_datatype_align(ty);
 }
 
 #ifdef __cplusplus

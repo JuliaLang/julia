@@ -14,7 +14,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="")
     s = lstrip(str)
     # strips the end but respects the space when the string ends with "\\ "
-    r = RevString(s)
+    r = reverse(s)
     i = start(r)
     c_old = nothing
     while !done(r,i)
@@ -54,13 +54,13 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
 
     while !done(s,j)
         c, k = next(s,j)
-        if !in_single_quotes && !in_double_quotes && isspace(c)
+        if !in_single_quotes && !in_double_quotes && Unicode.isspace(c)
             update_arg(s[i:prevind(s, j)])
             append_arg()
             j = k
             while !done(s,j)
                 c, k = next(s,j)
-                if !isspace(c)
+                if !Unicode.isspace(c)
                     i = j
                     break
                 end
@@ -71,11 +71,11 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             if done(s,k)
                 error("\$ right before end of command")
             end
-            if isspace(s[k])
+            if Unicode.isspace(s[k])
                 error("space not allowed right after \$")
             end
             stpos = j
-            ex, j = parse(s,j,greedy=false)
+            ex, j = Meta.parse(s,j,greedy=false)
             last_parse = stpos:j
             update_arg(ex); i = j
         else
@@ -140,7 +140,7 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
     has_single = false
     has_special = false
     for c in word
-        if isspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$' || c in special
+        if Unicode.isspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$' || c in special
             has_special = true
             if c == '\''
                 has_single = true
@@ -222,11 +222,11 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
             return true
         end
         if all(isword, arg)
-            have_single && (arg = replace(arg, '\'', "\\'"))
-            have_double && (arg = replace(arg, '"', "\\\""))
+            have_single && (arg = replace(arg, '\'' => "\\'"))
+            have_double && (arg = replace(arg, '"' => "\\\""))
             print(io, arg)
         else
-            print(io, '\'', replace(arg, '\'', "'\\''"), '\'')
+            print(io, '\'', replace(arg, '\'' => "'\\''"), '\'')
         end
         first = false
     end

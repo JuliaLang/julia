@@ -20,7 +20,7 @@ As an overview, the steps are:
   * replace many uses of `size` with `indices`
   * replace `1:length(A)` with `eachindex(A)`, or in some cases `linearindices(A)`
   * replace `length(A)` with `length(linearindices(A))`
-  * replace explicit allocations like `Array{Int}(size(B))` with `similar(Array{Int}, indices(B))`
+  * replace explicit allocations like `Array{Int}(size(B))` with `similar(Array{Int}, axes(B))`
 
 These are described in more detail below.
 
@@ -54,10 +54,10 @@ to check the code, and inspect it for whether it needs to be generalized.
 
 ### Using `indices` for bounds checks and loop iteration
 
-`indices(A)` (reminiscent of `size(A)`) returns a tuple of `AbstractUnitRange` objects, specifying
+`axes(A)` (reminiscent of `size(A)`) returns a tuple of `AbstractUnitRange` objects, specifying
 the range of valid indices along each dimension of `A`.  When `A` has unconventional indexing,
 the ranges may not start at 1.  If you just want the range for a particular dimension `d`, there
-is `indices(A, d)`.
+is `axes(A, d)`.
 
 Base implements a custom range type, `OneTo`, where `OneTo(n)` means the same thing as `1:n` but
 in a form that guarantees (via the type system) that the lower index is 1. For any new [`AbstractArray`](@ref)
@@ -66,7 +66,7 @@ type, this is the default returned by `indices`, and it indicates that this arra
 you can add the following line:
 
 ```julia
-@assert all(x->isa(x, Base.OneTo), indices(A))
+@assert all(x->isa(x, Base.OneTo), axes(A))
 ```
 
 at the top of any function.
@@ -79,15 +79,15 @@ can sometimes simplify such tests.
 
 Some algorithms are most conveniently (or efficiently) written in terms of a single linear index, `A[i]` even if `A` is multi-dimensional. Regardless of the array's native indices, linear indices always range from `1:length(A)`. However, this raises an ambiguity for one-dimensional arrays (a.k.a., [`AbstractVector`](@ref)): does `v[i]` mean linear indexing , or Cartesian indexing with the array's native indices?
 
-For this reason, your best option may be to iterate over the array with `eachindex(A)`, or, if you require the indices to be sequential integers, to get the index range by calling `linearindices(A)`. This will return `indices(A, 1)` if A is an AbstractVector, and the equivalent of `1:length(A)` otherwise.
+For this reason, your best option may be to iterate over the array with `eachindex(A)`, or, if you require the indices to be sequential integers, to get the index range by calling `linearindices(A)`. This will return `axes(A, 1)` if A is an AbstractVector, and the equivalent of `1:length(A)` otherwise.
 
-By this definition, 1-dimensional arrays always use Cartesian indexing with the array's native indices. To help enforce this, it's worth noting that sub2ind(shape, i...) and ind2sub(shape, ind) will throw an error if shape indicates a 1-dimensional array with unconventional indexing (i.e., is a `Tuple{UnitRange}` rather than a tuple of `OneTo`). For arrays with conventional indexing, these functions continue to work the same as always.
+By this definition, 1-dimensional arrays always use Cartesian indexing with the array's native indices. To help enforce this, it's worth noting that the index conversion functions will throw an error if shape indicates a 1-dimensional array with unconventional indexing (i.e., is a `Tuple{UnitRange}` rather than a tuple of `OneTo`). For arrays with conventional indexing, these functions continue to work the same as always.
 
 Using `indices` and `linearindices`, here is one way you could rewrite `mycopy!`:
 
 ```julia
 function mycopy!(dest::AbstractVector, src::AbstractVector)
-    indices(dest) == indices(src) || throw(DimensionMismatch("vectors must match"))
+    axes(dest) == axes(src) || throw(DimensionMismatch("vectors must match"))
     for i in linearindices(src)
         @inbounds dest[i] = src[i]
     end
@@ -97,7 +97,7 @@ end
 
 ### Allocating storage using generalizations of `similar`
 
-Storage is often allocated with `Array{Int}(dims)` or `similar(A, args...)`. When the result needs
+Storage is often allocated with `Array{Int}(uninitialized, dims)` or `similar(A, args...)`. When the result needs
 to match the indices of some other array, this may not always suffice. The generic replacement
 for such patterns is to use `similar(storagetype, shape)`.  `storagetype` indicates the kind of
 underlying "conventional" behavior you'd like, e.g., `Array{Int}` or `BitArray` or even `dims->zeros(Float32, dims)`
@@ -106,13 +106,13 @@ underlying "conventional" behavior you'd like, e.g., `Array{Int}` or `BitArray` 
 a convenient way of producing an all-zeros array that matches the indices of A is simply `zeros(A)`.
 
 Let's walk through a couple of explicit examples. First, if `A` has conventional indices, then
-`similar(Array{Int}, indices(A))` would end up calling `Array{Int}(size(A))`, and thus return
-an array.  If `A` is an `AbstractArray` type with unconventional indexing, then `similar(Array{Int}, indices(A))`
+`similar(Array{Int}, axes(A))` would end up calling `Array{Int}(size(A))`, and thus return
+an array.  If `A` is an `AbstractArray` type with unconventional indexing, then `similar(Array{Int}, axes(A))`
 should return something that "behaves like" an `Array{Int}` but with a shape (including indices)
-that matches `A`.  (The most obvious implementation is to allocate an `Array{Int}(size(A))` and
+that matches `A`.  (The most obvious implementation is to allocate an `Array{Int}(uninitialized, size(A))` and
 then "wrap" it in a type that shifts the indices.)
 
-Note also that `similar(Array{Int}, (indices(A, 2),))` would allocate an `AbstractVector{Int}`
+Note also that `similar(Array{Int}, (axes(A, 2),))` would allocate an `AbstractVector{Int}`
 (i.e., 1-dimensional array) that matches the indices of the columns of `A`.
 
 ### Deprecations
@@ -171,26 +171,26 @@ can sometimes be used to avoid the need to write your own `ZeroRange` type.
 Once you have your `AbstractUnitRange` type, then specialize `indices`:
 
 ```julia
-Base.indices(A::ZeroArray) = map(n->ZeroRange(n), A.size)
+Base.axes(A::ZeroArray) = map(n->ZeroRange(n), A.size)
 ```
 
 where here we imagine that `ZeroArray` has a field called `size` (there would be other ways to
 implement this).
 
-In some cases, the fallback definition for `indices(A, d)`:
+In some cases, the fallback definition for `axes(A, d)`:
 
 ```julia
-indices(A::AbstractArray{T,N}, d) where {T,N} = d <= N ? indices(A)[d] : OneTo(1)
+axes(A::AbstractArray{T,N}, d) where {T,N} = d <= N ? axes(A)[d] : OneTo(1)
 ```
 
 may not be what you want: you may need to specialize it to return something other than `OneTo(1)`
 when `d > ndims(A)`.  Likewise, in `Base` there is a dedicated function `indices1` which is equivalent
-to `indices(A, 1)` but which avoids checking (at runtime) whether `ndims(A) > 0`. (This is purely
+to `axes(A, 1)` but which avoids checking (at runtime) whether `ndims(A) > 0`. (This is purely
 a performance optimization.)  It is defined as:
 
 ```julia
 indices1(A::AbstractArray{T,0}) where {T} = OneTo(1)
-indices1(A::AbstractArray) = indices(A)[1]
+indices1(A::AbstractArray) = axes(A)[1]
 ```
 
 If the first of these (the zero-dimensional case) is problematic for your custom array type, be

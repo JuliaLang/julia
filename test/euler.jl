@@ -65,13 +65,14 @@ end
 #11: 70600674
 function euler11(grid,n)
     m = typemin(eltype(grid))
+    tolinear = LinearIndices(size(grid))
     for i = n:size(grid,1)-n+1,
         j = n:size(grid,2)-n+1,
         di = -1:1, dj = -1:1
         di == dj == 0 && continue
-        idx = sub2ind(size(grid),
-                      di==0 ? fill(i,n) : range(i,di,n),
-                      dj==0 ? fill(j,n) : range(j,dj,n))
+        i_idxs = di==0 ? fill(i,n) : range(i,di,n)
+        j_idxs = dj==0 ? fill(j,n) : range(j,dj,n)
+        idx = tolinear[CartesianIndex.(i_idxs, j_idxs)]
         m = max(m,prod(grid[idx]))
     end
     return m

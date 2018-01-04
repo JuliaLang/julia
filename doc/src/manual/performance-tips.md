@@ -646,7 +646,7 @@ julia> function fill_twos!(a)
 fill_twos! (generic function with 1 method)
 
 julia> function strange_twos(n)
-           a = Array{rand(Bool) ? Int64 : Float64}(n)
+           a = Vector{rand(Bool) ? Int64 : Float64}(uninitialized, n)
            fill_twos!(a)
            return a
        end
@@ -844,7 +844,7 @@ do this in at least four ways (in addition to the recommended call to the built-
 
 ```julia
 function copy_cols(x::Vector{T}) where T
-    inds = indices(x, 1)
+    inds = axes(x, 1)
     out = similar(Array{T}, inds, inds)
     for i = inds
         out[:, i] = x
@@ -853,7 +853,7 @@ function copy_cols(x::Vector{T}) where T
 end
 
 function copy_rows(x::Vector{T}) where T
-    inds = indices(x, 1)
+    inds = axes(x, 1)
     out = similar(Array{T}, inds, inds)
     for i = inds
         out[i, :] = x
@@ -862,7 +862,7 @@ function copy_rows(x::Vector{T}) where T
 end
 
 function copy_col_row(x::Vector{T}) where T
-    inds = indices(x, 1)
+    inds = axes(x, 1)
     out = similar(Array{T}, inds, inds)
     for col = inds, row = inds
         out[row, col] = x[row]
@@ -871,7 +871,7 @@ function copy_col_row(x::Vector{T}) where T
 end
 
 function copy_row_col(x::Vector{T}) where T
-    inds = indices(x, 1)
+    inds = axes(x, 1)
     out = similar(Array{T}, inds, inds)
     for row = inds, col = inds
         out[row, col] = x[col]
@@ -933,7 +933,7 @@ function xinc!(ret::AbstractVector{T}, x::T) where T
 end
 
 function loopinc_prealloc()
-    ret = Array{Int}(3)
+    ret = Vector{Int}(uninitialized, 3)
     y = 0
     for i = 1:10^7
         xinc!(ret, i)
@@ -1076,8 +1076,8 @@ julia> @time sum(view(A, :, inds) * view(x, inds))
 7253.242699002263
 
 julia> @time begin
-           copy!(xtmp, view(x, inds))
-           copy!(Atmp, view(A, :, inds))
+           copyto!(xtmp, view(x, inds))
+           copyto!(Atmp, view(A, :, inds))
            sum(Atmp * xtmp)
        end
   0.261294 seconds (41 allocations: 1.391 KiB)
@@ -1284,7 +1284,7 @@ end
 
 function main()
     n = 2000
-    u = Array{Float64}(n)
+    u = Vector{Float64}(uninitialized, n)
     init!(u)
     du = similar(u)
 

@@ -1,5 +1,16 @@
 # Parallel Computing
 
+This part of the manual details the following types of parallel programming available in Julia.
+
+1. Distributed memory using multiple processes on one or more nodes
+2. Shared memory using multiple processes on a single node
+3. Multi-threading
+
+# Distributed Memory Parallelism
+
+An implementation of distributed memory parallel computing is provided by module `Distributed`
+as part of the standard library shipped with Julia.
+
 Most modern computers possess more than one CPU, and several computers can be combined together
 in a cluster. Harnessing the power of these multiple CPUs allows many computations to be completed
 more quickly. There are two major factors that influence performance: the speed of the CPUs themselves,
@@ -17,7 +28,7 @@ manage only one process in a two-process operation. Furthermore, these operation
 not look like "message send" and "message receive" but rather resemble higher-level operations
 like calls to user functions.
 
-Parallel programming in Julia is built on two primitives: *remote references* and *remote calls*.
+Distributed programming in Julia is built on two primitives: *remote references* and *remote calls*.
 A remote reference is an object that can be used from any process to refer to an object stored
 on a particular process. A remote call is a request by one process to call a certain function
 on certain arguments on another (possibly the same) process.
@@ -38,16 +49,18 @@ to as "workers". When there is only one process, process 1 is considered a worke
 workers are considered to be all processes other than process 1.
 
 Let's try this out. Starting with `julia -p n` provides `n` worker processes on the local machine.
-Generally it makes sense for `n` to equal the number of CPU cores on the machine.
+Generally it makes sense for `n` to equal the number of CPU cores on the machine. Note that the `-p`
+argument implicitly loads module `Distributed`.
+
 
 ```julia
 $ ./julia -p 2
 
 julia> r = remotecall(rand, 2, 2, 2)
-Future(2, 1, 4, Nullable{Any}())
+Future(2, 1, 4, nothing)
 
 julia> s = @spawnat 2 1 .+ fetch(r)
-Future(2, 1, 5, Nullable{Any}())
+Future(2, 1, 5, nothing)
 
 julia> fetch(s)
 2×2 Array{Float64,2}:
@@ -85,10 +98,10 @@ the operation for you:
 
 ```julia-repl
 julia> r = @spawn rand(2,2)
-Future(2, 1, 4, Nullable{Any}())
+Future(2, 1, 4, nothing)
 
 julia> s = @spawn 1 .+ fetch(r)
-Future(3, 1, 5, Nullable{Any}())
+Future(3, 1, 5, nothing)
 
 julia> fetch(s)
 2×2 Array{Float64,2}:
@@ -196,6 +209,18 @@ The base Julia installation has in-built support for two types of clusters:
 Functions [`addprocs`](@ref), [`rmprocs`](@ref), [`workers`](@ref), and others are available
 as a programmatic means of adding, removing and querying the processes in a cluster.
 
+```julia-repl
+julia> using Distributed
+
+julia> addprocs(2)
+2-element Array{Int64,1}:
+ 2
+ 3
+```
+
+Module `Distributed` must be explicitly loaded on the master process before invoking [`addprocs`](@ref).
+It is automatically made available on the worker processes.
+
 Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global
 state (such as global variables, new method definitions, and loaded modules) with any of the other
 running processes.
@@ -205,9 +230,9 @@ below in the [ClusterManagers](@ref) section.
 
 ## Data Movement
 
-Sending messages and moving data constitute most of the overhead in a parallel program. Reducing
+Sending messages and moving data constitute most of the overhead in a distributed program. Reducing
 the number of messages and the amount of data sent is critical to achieving performance and scalability.
-To this end, it is important to understand the data movement performed by Julia's various parallel
+To this end, it is important to understand the data movement performed by Julia's various distributed
 programming constructs.
 
 [`fetch`](@ref) can be considered an explicit data movement operation, since it directly asks
@@ -312,12 +337,13 @@ julia> let B = B
            remotecall_fetch(()->B, 2)
        end;
 
-julia> @spawnat 2 whos();
-
-julia>  From worker 2:                               A    800 bytes  10×10 Array{Float64,2}
-        From worker 2:                            Base               Module
-        From worker 2:                            Core               Module
-        From worker 2:                            Main               Module
+julia> @fetchfrom 2 varinfo()
+name           size summary
+––––––––– ––––––––– ––––––––––––––––––––––
+A         800 bytes 10×10 Array{Float64,2}
+Base                Module
+Core                Module
+Main                Module
 ```
 
 As can be seen, global variable `A` is defined on worker 2, but `B` is captured as a local variable
@@ -348,10 +374,10 @@ trials on two machines, and add together the results:
 julia> @everywhere include_string(Main, $(read("count_heads.jl", String)), "count_heads.jl")
 
 julia> a = @spawn count_heads(100000000)
-Future(2, 1, 6, Nullable{Any}())
+Future(2, 1, 6, nothing)
 
 julia> b = @spawn count_heads(100000000)
-Future(3, 1, 7, Nullable{Any}())
+Future(3, 1, 7, nothing)
 
 julia> fetch(a)+fetch(b)
 100001564
@@ -401,6 +427,8 @@ Parallel for loops like these must be avoided. Fortunately, [Shared Arrays](@ref
 to get around this limitation:
 
 ```julia
+using SharedArrays
+
 a = SharedArray{Float64}(10)
 @parallel for i = 1:10
     a[i] = i
@@ -477,16 +505,14 @@ function pmap(f, lst)
     i = 1
     # function to produce the next work item from the queue.
     # in this case it's just an index.
-    nextidx() = (idx=i; i+=1; idx)
+    nextidx() = (global i; idx=i; i+=1; idx)
     @sync begin
         for p=1:np
             if p != myid() || np == 1
                 @async begin
                     while true
                         idx = nextidx()
-                        if idx > n
-                            break
-                        end
+                        idx > n && break
                         results[idx] = remotecall_fetch(f, p, lst[idx])
                     end
                 end
@@ -499,7 +525,7 @@ end
 
 [`@async`](@ref) is similar to [`@spawn`](@ref), but only runs tasks on the local process. We
 use it to create a "feeder" task for each process. Each task picks the next index that needs to
-be computed, then waits for its process to finish, then repeats until we run out of indexes. Note
+be computed, then waits for its process to finish, then repeats until we run out of indices. Note
 that the feeder tasks do not begin to execute until the main task reaches the end of the [`@sync`](@ref)
 block, at which point it surrenders control and waits for all the local tasks to complete before
 returning from the function. The feeder tasks are able to share state via `nextidx` because
@@ -830,6 +856,9 @@ chunk; in contrast, in a [`SharedArray`](@ref) each "participating" process has 
 entire array.  A [`SharedArray`](@ref) is a good choice when you want to have a large amount of
 data jointly accessible to two or more processes on the same machine.
 
+Shared Array support is available via module `SharedArrays` which must be explicitly loaded on
+all participating workers.
+
 [`SharedArray`](@ref) indexing (assignment and accessing values) works just as with regular arrays,
 and is efficient because the underlying memory is available to the local process. Therefore,
 most algorithms work naturally on [`SharedArray`](@ref)s, albeit in single-process mode. In cases
@@ -855,6 +884,8 @@ portion of the array, thereby parallelizing initialization.
 Here's a brief example:
 
 ```julia-repl
+julia> using Distributed
+
 julia> addprocs(3)
 3-element Array{Int64,1}:
  2
@@ -863,7 +894,7 @@ julia> addprocs(3)
 
 julia> @everywhere using SharedArrays
 
-julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindexes(S)] = myid())
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindices(S)] = myid())
 3×4 SharedArray{Int64,2}:
  2  2  3  4
  2  3  3  4
@@ -879,7 +910,7 @@ julia> S
  2  7  4  4
 ```
 
-[`SharedArrays.localindexes`](@ref) provides disjoint one-dimensional ranges of indexes, and is sometimes
+[`SharedArrays.localindices`](@ref) provides disjoint one-dimensional ranges of indices, and is sometimes
 convenient for splitting up tasks among processes. You can, of course, divide the work any way
 you wish:
 
@@ -919,7 +950,7 @@ into trouble: if `q[i,j,t]` is near the end of the block assigned to one worker 
 is near the beginning of the block assigned to another, it's very likely that `q[i,j,t]` will
 not be ready at the time it's needed for computing `q[i,j,t+1]`. In such cases, one is better
 off chunking the array manually. Let's split along the second dimension.
-Define a function that returns the `(irange, jrange)` indexes assigned to this worker:
+Define a function that returns the `(irange, jrange)` indices assigned to this worker:
 
 ```julia-repl
 julia> @everywhere function myrange(q::SharedArray)
@@ -1119,7 +1150,7 @@ unspecified, i.e, with the `--worker` option, the worker tries to read it from i
  `LocalManager` and `SSHManager` both pass the cookie to newly launched workers via their
  standard inputs.
 
-By default a worker will listen on a free port at the address returned by a call to `getipaddr()`.
+By default a worker will listen on a free port at the address returned by a call to [`getipaddr()`](@ref).
 A specific address to listen on may be specified by optional argument `--bind-to bind_addr[:port]`.
 This is useful for multi-homed hosts.
 
@@ -1133,26 +1164,27 @@ appropriate fields initialized) to `launched`
 ```julia
 mutable struct WorkerConfig
     # Common fields relevant to all cluster managers
-    io::Nullable{IO}
-    host::Nullable{AbstractString}
-    port::Nullable{Integer}
+    io::Union{IO, Nothing}
+    host::Union{AbstractString, Nothing}
+    port::Union{Integer, Nothing}
 
     # Used when launching additional workers at a host
-    count::Nullable{Union{Int, Symbol}}
-    exename::Nullable{AbstractString}
-    exeflags::Nullable{Cmd}
+    count::Union{Int, Symbol, Nothing}
+    exename::Union{AbstractString, Cmd, Nothing}
+    exeflags::Union{Cmd, Nothing}
 
     # External cluster managers can use this to store information at a per-worker level
     # Can be a dict if multiple fields need to be stored.
-    userdata::Nullable{Any}
+    userdata::Any
 
     # SSHManager / SSH tunnel connections to workers
-    tunnel::Nullable{Bool}
-    bind_addr::Nullable{AbstractString}
-    sshflags::Nullable{Cmd}
-    max_parallel::Nullable{Integer}
+    tunnel::Union{Bool, Nothing}
+    bind_addr::Union{AbstractString, Nothing}
+    sshflags::Union{Cmd, Nothing}
+    max_parallel::Union{Integer, Nothing}
 
-    connect_at::Nullable{Any}
+    # Used by Local/SSH managers
+    connect_at::Any
 
     [...]
 end
@@ -1214,7 +1246,7 @@ the other to write data that needs to be sent to worker `pid`. Custom cluster ma
 an in-memory `BufferStream` as the plumbing to proxy data between the custom, possibly non-`IO`
 transport and Julia's in-built parallel infrastructure.
 
-A `BufferStream` is an in-memory `IOBuffer` which behaves like an `IO`--it is a stream which can
+A `BufferStream` is an in-memory [`IOBuffer`](@ref) which behaves like an `IO`--it is a stream which can
 be handled asynchronously.
 
 Folder `examples/clustermanager/0mq` contains an example of using ZeroMQ to connect Julia workers
@@ -1229,7 +1261,7 @@ When using custom transports:
   * For every incoming logical connection with a worker, `Base.process_messages(rd::IO, wr::IO)()`
     must be called. This launches a new task that handles reading and writing of messages from/to
     the worker represented by the `IO` objects.
-  * `init_worker(cookie, manager::FooManager)` MUST be called as part of worker process initialization.
+  * `init_worker(cookie, manager::FooManager)` *must* be called as part of worker process initialization.
   * Field `connect_at::Any` in `WorkerConfig` can be set by the cluster manager when [`launch`](@ref)
     is called. The value of this field is passed in in all [`connect`](@ref) callbacks. Typically,
     it carries information on *how to connect* to a worker. For example, the TCP/IP socket transport
@@ -1273,21 +1305,21 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
     the ephemeral port range (varies by OS).
 
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
-    can be done via a custom ClusterManager.
+    can be done via a custom `ClusterManager`.
 
 ## Cluster Cookie
 
 All processes in a cluster share the same cookie which, by default, is a randomly generated string
 on the master process:
 
-  * [`Base.cluster_cookie()`](@ref) returns the cookie, while `Base.cluster_cookie(cookie)()` sets
+  * [`cluster_cookie()`](@ref) returns the cookie, while `cluster_cookie(cookie)()` sets
     it and returns the new cookie.
   * All connections are authenticated on both sides to ensure that only workers started by the master
     are allowed to connect to each other.
   * The cookie may be passed to the workers at startup via argument `--worker=<cookie>`. If argument
     `--worker` is specified without the cookie, the worker tries to read the cookie from its
-    standard input (STDIN). The STDIN is closed immediately after the cookie is retrieved.
-  * ClusterManagers can retrieve the cookie on the master by calling [`Base.cluster_cookie()`](@ref).
+    standard input ([`STDIN`](@ref)). The `STDIN` is closed immediately after the cookie is retrieved.
+  * `ClusterManager`s can retrieve the cookie on the master by calling [`cluster_cookie()`](@ref).
     Cluster managers not using the default TCP/IP transport (and hence not specifying `--worker`)
     must call `init_worker(cookie, manager)` with the same cookie as on the master.
 
@@ -1300,7 +1332,7 @@ The keyword argument `topology` passed to `addprocs` is used to specify how the 
 connected to each other:
 
   * `:all_to_all`, the default: all workers are connected to each other.
-  * `:master_slave`: only the driver process, i.e. `pid` 1, has connections to the workers.
+  * `:master_worker`: only the driver process, i.e. `pid` 1, has connections to the workers.
   * `:custom`: the `launch` method of the cluster manager specifies the connection topology via the
     fields `ident` and `connect_idents` in `WorkerConfig`. A worker with a cluster-manager-provided
     identity `ident` will connect to all workers specified in `connect_idents`.
@@ -1407,6 +1439,75 @@ julia> a
 
 Note that [`Threads.@threads`](@ref) does not have an optional reduction parameter like [`@parallel`](@ref).
 
+Julia supports accessing and modifying values *atomically*, that is, in a thread-safe way to avoid
+[race conditions](https://en.wikipedia.org/wiki/Race_condition). A value (which must be of a primitive
+type) can be wrapped as [`Threads.Atomic`](@ref) to indicate it must be accessed in this way.
+Here we can see an example:
+
+```julia-repl
+julia> i = Threads.Atomic{Int}(0);
+
+julia> ids = zeros(4);
+
+julia> old_is = zeros(4);
+
+julia> Threads.@threads for id in 1:4
+           old_is[id] = Threads.atomic_add!(i, id)
+           ids[id] = id
+       end
+
+julia> old_is
+4-element Array{Float64,1}:
+ 0.0
+ 1.0
+ 7.0
+ 3.0
+
+julia> ids
+4-element Array{Float64,1}:
+ 1.0
+ 2.0
+ 3.0
+ 4.0
+```
+
+Had we tried to do the addition without the atomic tag, we might have gotten the
+wrong answer due to a race condition. An example of what would happen if we didn't
+avoid the race:
+
+```julia-repl
+julia> using Base.Threads
+
+julia> nthreads()
+4
+
+julia> acc = Ref(0)
+Base.RefValue{Int64}(0)
+
+julia> @threads for i in 1:1000
+          acc[] += 1
+       end
+
+julia> acc[]
+926
+
+julia> acc = Atomic{Int64}(0)
+Atomic{Int64}(0)
+
+julia> @threads for i in 1:1000
+          atomic_add!(acc, 1)
+       end
+
+julia> acc[]
+1000
+```
+
+!!! note
+    Not *all* primitive types can be wrapped in an `Atomic` tag. Supported types
+    are `Int8`, `Int16`, `Int32`, `Int64`, `Int128`, `UInt8`, `UInt16`, `UInt32`,
+    `UInt64`, `UInt128`, `Float16`, `Float32`, and `Float64`. Additionally,
+    `Int128` and `UInt128` are not supported on AAarch32 and ppc64le.
+
 ## @threadcall (Experimental)
 
 All I/O tasks, timers, REPL commands, etc are multiplexed onto a single OS thread via an event
@@ -1424,7 +1525,7 @@ Note that while Julia code runs on a single thread (by default), libraries used 
 their own internal threads. For example, the BLAS library may start as many threads as there are
 cores on a machine.
 
-The `@threadcall` macro addresses scenarios where we do not want a `ccall` to block the main Julia
+The [`@threadcall`](@ref) macro addresses scenarios where we do not want a [`ccall`](@ref) to block the main Julia
 event loop. It schedules a C function for execution in a separate thread. A threadpool with a
 default size of 4 is used for this. The size of the threadpool is controlled via environment variable
 `UV_THREADPOOL_SIZE`. While waiting for a free thread, and during function execution once a thread

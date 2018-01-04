@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+using Base.LinAlg: mul!, Adjoint, Transpose
 import Base.LinAlg: BlasReal, BlasFloat
 
 n = 10 #Size of test matrix
@@ -113,29 +114,32 @@ srand(1)
         end
 
         @testset "triu and tril" begin
+            zerosdv = zeros(elty, length(dv))
+            zerosev = zeros(elty, length(ev))
             bidiagcopy(dv, ev, uplo) = Bidiagonal(copy(dv), copy(ev), uplo)
+
             @test istril(Bidiagonal(dv,ev,:L))
             @test !istril(Bidiagonal(dv,ev,:U))
-            @test tril!(bidiagcopy(dv,ev,:U),-1) == Bidiagonal(zeros(dv),zeros(ev),:U)
-            @test tril!(bidiagcopy(dv,ev,:L),-1) == Bidiagonal(zeros(dv),ev,:L)
-            @test tril!(bidiagcopy(dv,ev,:U),-2) == Bidiagonal(zeros(dv),zeros(ev),:U)
-            @test tril!(bidiagcopy(dv,ev,:L),-2) == Bidiagonal(zeros(dv),zeros(ev),:L)
+            @test tril!(bidiagcopy(dv,ev,:U),-1) == Bidiagonal(zerosdv,zerosev,:U)
+            @test tril!(bidiagcopy(dv,ev,:L),-1) == Bidiagonal(zerosdv,ev,:L)
+            @test tril!(bidiagcopy(dv,ev,:U),-2) == Bidiagonal(zerosdv,zerosev,:U)
+            @test tril!(bidiagcopy(dv,ev,:L),-2) == Bidiagonal(zerosdv,zerosev,:L)
             @test tril!(bidiagcopy(dv,ev,:U),1)  == Bidiagonal(dv,ev,:U)
             @test tril!(bidiagcopy(dv,ev,:L),1)  == Bidiagonal(dv,ev,:L)
-            @test tril!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,zeros(ev),:U)
+            @test tril!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,zerosev,:U)
             @test tril!(bidiagcopy(dv,ev,:L))    == Bidiagonal(dv,ev,:L)
             @test_throws ArgumentError tril!(bidiagcopy(dv, ev, :U), -n - 2)
             @test_throws ArgumentError tril!(bidiagcopy(dv, ev, :U), n)
 
             @test istriu(Bidiagonal(dv,ev,:U))
             @test !istriu(Bidiagonal(dv,ev,:L))
-            @test triu!(bidiagcopy(dv,ev,:L),1)  == Bidiagonal(zeros(dv),zeros(ev),:L)
-            @test triu!(bidiagcopy(dv,ev,:U),1)  == Bidiagonal(zeros(dv),ev,:U)
-            @test triu!(bidiagcopy(dv,ev,:U),2)  == Bidiagonal(zeros(dv),zeros(ev),:U)
-            @test triu!(bidiagcopy(dv,ev,:L),2)  == Bidiagonal(zeros(dv),zeros(ev),:L)
+            @test triu!(bidiagcopy(dv,ev,:L),1)  == Bidiagonal(zerosdv,zerosev,:L)
+            @test triu!(bidiagcopy(dv,ev,:U),1)  == Bidiagonal(zerosdv,ev,:U)
+            @test triu!(bidiagcopy(dv,ev,:U),2)  == Bidiagonal(zerosdv,zerosev,:U)
+            @test triu!(bidiagcopy(dv,ev,:L),2)  == Bidiagonal(zerosdv,zerosev,:L)
             @test triu!(bidiagcopy(dv,ev,:U),-1) == Bidiagonal(dv,ev,:U)
             @test triu!(bidiagcopy(dv,ev,:L),-1) == Bidiagonal(dv,ev,:L)
-            @test triu!(bidiagcopy(dv,ev,:L))    == Bidiagonal(dv,zeros(ev),:L)
+            @test triu!(bidiagcopy(dv,ev,:L))    == Bidiagonal(dv,zerosev,:L)
             @test triu!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,ev,:U)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), -n)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), n + 2)
@@ -156,31 +160,26 @@ srand(1)
                     b += im*convert(Matrix{elty}, rand(1:10, n, 2))
                 end
             end
-            condT = cond(map(Complex128,Tfull))
+            condT = cond(map(ComplexF64,Tfull))
             promty = typeof((zero(relty)*zero(relty) + zero(relty)*zero(relty))/one(relty))
             if relty != BigFloat
-                x = T.'\c.'
-                tx = Tfull.' \ c.'
+                x = Transpose(T)\Transpose(c)
+                tx = Transpose(Tfull) \ Transpose(c)
                 elty <: AbstractFloat && @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
-                @test_throws DimensionMismatch T.'\b.'
-                x = T'\c.'
-                tx = Tfull' \ c.'
+                @test_throws DimensionMismatch Transpose(T)\Transpose(b)
+                x = T'\transpose(c)
+                tx = Tfull'\transpose(c)
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
-                @test_throws DimensionMismatch T'\b.'
-                x = T\c.'
-                tx = Tfull\c.'
+                @test_throws DimensionMismatch T'\transpose(b)
+                x = T\Transpose(c)
+                tx = Tfull\Transpose(c)
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
-                @test_throws DimensionMismatch T\b.'
+                @test_throws DimensionMismatch T\Transpose(b)
             end
             @test_throws DimensionMismatch T \ ones(elty,n+1,2)
-            @test_throws DimensionMismatch T.' \ ones(elty,n+1,2)
+            @test_throws DimensionMismatch Transpose(T) \ ones(elty,n+1,2)
             @test_throws DimensionMismatch T' \ ones(elty,n+1,2)
 
-            @test_throws DimensionMismatch T \ RowVector(ones(elty,n+1))
-            @test_throws DimensionMismatch T.' \ RowVector(ones(elty,n+1))
-            @test_throws DimensionMismatch T' \ RowVector(ones(elty,n+1))
-            @test_throws DimensionMismatch Base.LinAlg.At_ldiv_B(T, RowVector(ones(elty,n+1)))
-            @test_throws DimensionMismatch Base.LinAlg.Ac_ldiv_B(T, RowVector(ones(elty,n+1)))
             let bb = b, cc = c
                 for atype in ("Array", "SubArray")
                     if atype == "Array"
@@ -202,10 +201,6 @@ srand(1)
                         @test T/b' ≈ Tfull/b'
                     end
                 end
-                # test DimensionMismatch for RowVectors
-                @test_throws DimensionMismatch T \ b'
-                @test_throws DimensionMismatch T.' \ b'
-                @test_throws DimensionMismatch T' \ b'
             end
         end
 
@@ -233,7 +228,7 @@ srand(1)
         @testset "Eigensystems" begin
             if relty <: AbstractFloat
                 d1, v1 = eig(T)
-                d2, v2 = eig(map(elty<:Complex ? Complex128 : Float64,Tfull))
+                d2, v2 = eig(map(elty<:Complex ? ComplexF64 : Float64,Tfull))
                 @test (uplo == :U ? d1 : reverse(d1)) ≈ d2
                 if elty <: Real
                     Test.test_approx_eq_modphase(v1, uplo == :U ? v2 : v2[:,n:-1:1])
@@ -272,15 +267,15 @@ srand(1)
                     @test Array(op(T, T2)) ≈ op(Tfull, Tfull2)
                 end
             end
-            # test pass-through of A_mul_B! for SymTridiagonal*Bidiagonal
+            # test pass-through of mul! for SymTridiagonal*Bidiagonal
             TriSym = SymTridiagonal(T.dv, T.ev)
             @test Array(TriSym*T) ≈ Array(TriSym)*Array(T)
-            # test pass-through of A_mul_B! for AbstractTriangular*Bidiagonal
+            # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
             @test Array(Tri*T) ≈ Array(Tri)*Array(T)
         end
 
-        @test inv(T)*Tfull ≈ eye(elty,n)
+        @test inv(T)*Tfull ≈ Matrix(I, n, n)
     end
     BD = Bidiagonal(dv, ev, :U)
     @test Matrix{Complex{Float64}}(BD) == BD
@@ -306,58 +301,62 @@ end
     @test promote(C,A) isa Tuple{Tridiagonal, Tridiagonal}
 end
 
-import Base.LinAlg: fillslots!, UnitLowerTriangular
-@testset "fill! and fillslots!" begin
-    let #fill!
-        let # fillslots!
-            A = Tridiagonal(randn(2), randn(3), randn(2))
-            @test fillslots!(A, 3) == Tridiagonal([3, 3.], [3, 3, 3.], [3, 3.])
-            B = Bidiagonal(randn(3), randn(2), :U)
-            @test fillslots!(B, 2) == Bidiagonal([2.,2,2], [2,2.], :U)
-            S = SymTridiagonal(randn(3), randn(2))
-            @test fillslots!(S, 1) == SymTridiagonal([1,1,1.], [1,1.])
-            Ult = UnitLowerTriangular(randn(3,3))
-            @test fillslots!(Ult, 3) == UnitLowerTriangular([1 0 0; 3 1 0; 3 3 1])
+using Base.LinAlg: fillstored!, UnitLowerTriangular
+@testset "fill! and fillstored!" begin
+    let # fillstored!
+        A = Tridiagonal(randn(2), randn(3), randn(2))
+        @test fillstored!(A, 3) == Tridiagonal([3, 3], [3, 3, 3], [3, 3])
+        B = Bidiagonal(randn(3), randn(2), :U)
+        @test fillstored!(B, 2) == Bidiagonal([2,2,2], [2,2], :U)
+        S = SymTridiagonal(randn(3), randn(2))
+        @test fillstored!(S, 1) == SymTridiagonal([1,1,1], [1,1])
+        Ult = UnitLowerTriangular(randn(3,3))
+        @test fillstored!(Ult, 3) == UnitLowerTriangular([1 0 0; 3 1 0; 3 3 1])
+    end
+    let # fill!(exotic, 0)
+        exotic_arrays = Any[Tridiagonal(randn(3), randn(4), randn(3)),
+        Bidiagonal(randn(3), randn(2), rand([:U,:L])),
+        SymTridiagonal(randn(3), randn(2)),
+        sparse(randn(3,4)),
+        # Diagonal(randn(5)), # Diagonal fill! deprecated, see below
+        sparse(rand(3)),
+        # LowerTriangular(randn(3,3)), # AbstractTriangular fill! deprecated, see below
+        # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
+        ]
+        for A in exotic_arrays
+            @test iszero(fill!(A, 0))
         end
-        let # fill!(exotic, 0)
-            exotic_arrays = Any[Tridiagonal(randn(3), randn(4), randn(3)),
-            Bidiagonal(randn(3), randn(2), rand([:U,:L])),
-            SymTridiagonal(randn(3), randn(2)),
-            sparse(randn(3,4)),
-            # Diagonal(randn(5)), # Diagonal fill! deprecated, see below
-            sparse(rand(3)),
-            # LowerTriangular(randn(3,3)), # AbstractTriangular fill! deprecated, see below
-            # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
-            ]
-            for A in exotic_arrays
-                fill!(A, 0)
-                for a in A
-                    @test a == 0
-                end
-            end
-            # Diagonal and AbstractTriangular fill! were defined as fillslots!,
-            # not matching the general behavior of fill!, and so have been deprecated.
-            # In a future dev cycle, these fill! methods should probably be reintroduced
-            # with behavior matching that of fill! for other structured matrix types.
-            # In the interm, equivalently test fillslots! below
-            @test iszero(fillslots!(Diagonal(fill(1, 3)), 0))
-            @test iszero(fillslots!(LowerTriangular(fill(1, 3, 3)), 0))
-            @test iszero(fillslots!(UpperTriangular(fill(1, 3, 3)), 0))
+        # Diagonal and AbstractTriangular fill! were defined as fillstored!,
+        # not matching the general behavior of fill!, and so have been deprecated.
+        # In a future dev cycle, these fill! methods should probably be reintroduced
+        # with behavior matching that of fill! for other structured matrix types.
+        # In the interm, equivalently test fillstored! below
+        @test iszero(fillstored!(Diagonal(fill(1, 3)), 0))
+        @test iszero(fillstored!(LowerTriangular(fill(1, 3, 3)), 0))
+        @test iszero(fillstored!(UpperTriangular(fill(1, 3, 3)), 0))
+    end
+    let # fill!(small, x)
+        val = randn()
+        b = Bidiagonal(randn(1,1), :U)
+        st = SymTridiagonal(randn(1,1))
+        for x in (b, st)
+            @test Array(fill!(x, val)) == fill!(Array(x), val)
         end
-        let # fill!(small, x)
-            val = randn()
-            b = Bidiagonal(randn(1,1), :U)
-            st = SymTridiagonal(randn(1,1))
-            for x in (b, st)
-                @test Array(fill!(x, val)) == fill!(Array(x), val)
-            end
-            b = Bidiagonal(randn(2,2), :U)
-            st = SymTridiagonal(randn(3), randn(2))
-            t = Tridiagonal(randn(3,3))
-            for x in (b, t, st)
-                @test_throws ArgumentError fill!(x, val)
-                @test Array(fill!(x, 0)) == fill!(Array(x), 0)
-            end
+        b = Bidiagonal(randn(2,2), :U)
+        st = SymTridiagonal(randn(3), randn(2))
+        t = Tridiagonal(randn(3,3))
+        for x in (b, t, st)
+            @test_throws ArgumentError fill!(x, val)
+            @test Array(fill!(x, 0)) == fill!(Array(x), 0)
         end
     end
+end
+
+@testset "pathological promotion (#24707)" begin
+    @test promote_type(Matrix{Int}, Bidiagonal{Tuple{S}} where S<:Integer) <: Matrix
+    @test promote_type(Matrix{Tuple{T}} where T<:Integer, Bidiagonal{Tuple{S}} where S<:Integer) <: Matrix
+    @test promote_type(Matrix{Tuple{T}} where T<:Integer, Bidiagonal{Int}) <: Matrix
+    @test promote_type(Tridiagonal{Int}, Bidiagonal{Tuple{S}} where S<:Integer) <: Tridiagonal
+    @test promote_type(Tridiagonal{Tuple{T}} where T<:Integer, Bidiagonal{Tuple{S}} where S<:Integer) <: Tridiagonal
+    @test promote_type(Tridiagonal{Tuple{T}} where T<:Integer, Bidiagonal{Int}) <: Tridiagonal
 end

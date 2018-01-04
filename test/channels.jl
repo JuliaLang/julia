@@ -84,6 +84,7 @@ let s, c = Channel(32)
 end
 
 # Tests for channels bound to tasks.
+using Distributed
 for N in [0,10]
     # Normal exit of task
     c=Channel(N)
@@ -198,6 +199,7 @@ for N in [0,10]
 end
 
 # Testing timedwait on multiple channels
+using Dates
 @sync begin
     rr1 = Channel(1)
     rr2 = Channel(1)
@@ -219,14 +221,14 @@ end
         @assert (et >= 1.0) && (et <= 1.5)
         @assert !isready(rr3)
     catch
-        warn("timedwait tests delayed. et=$et, isready(rr3)=$(isready(rr3))")
+        @warn "`timedwait` tests delayed. et=$et, isready(rr3)=$(isready(rr3))"
     end
     @test isready(rr1)
 end
 
 
 # test for yield/wait/event failures
-@noinline garbage_finalizer(f) = finalizer("gar" * "bage", f)
+@noinline garbage_finalizer(f) = finalizer(f, "gar" * "bage")
 let t, run = Ref(0)
     gc_enable(false)
     # test for finalizers trying to yield leading to failed attempts to context switch
@@ -265,7 +267,7 @@ let t, run = Ref(0)
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test wait(errstream) == "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n"
+    @test wait(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n"
 end
 
 # schedule_and_wait tests
@@ -318,17 +320,17 @@ let tc = Ref(0),
         tc[] += 1
     end
     @test isopen(async)
-    ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
     Base.process_events(false) # schedule event
-    ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
     Sys.iswindows() && Base.process_events(false) # schedule event (windows?)
     @test tc[] == 0
     yield() # consume event
     @test tc[] == 1
     sleep(0.1) # no further events
     @test tc[] == 1
-    ccall(:uv_async_send, Void, (Ptr{Void},), async)
-    ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
     close(async)
     @test !isopen(async)
     @test tc[] == 1
@@ -344,7 +346,7 @@ let tc = Ref(0),
         tc[] += 1
     end
     @test isopen(async)
-    ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
     close(async)
     @test !isopen(async)
     Base.process_events(false) # schedule event & then close

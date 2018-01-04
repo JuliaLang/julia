@@ -12,7 +12,7 @@ function GitHash(ptr::Ptr{UInt8})
         throw(ArgumentError("NULL pointer passed to GitHash() constructor"))
     end
     oid_ptr = Ref(GitHash())
-    ccall((:git_oid_fromraw, :libgit2), Void, (Ptr{GitHash}, Ptr{UInt8}), oid_ptr, ptr)
+    ccall((:git_oid_fromraw, :libgit2), Cvoid, (Ptr{GitHash}, Ptr{UInt8}), oid_ptr, ptr)
     return oid_ptr[]
 end
 
@@ -106,9 +106,12 @@ Get the identifier (`GitHash`) of the object referred to by the direct reference
 function GitHash(ref::GitReference)
     isempty(ref) && return GitHash()
     reftype(ref) != Consts.REF_OID && return GitHash()
-    oid_ptr = ccall((:git_reference_target, :libgit2), Ptr{UInt8}, (Ptr{Void},), ref.ptr)
-    oid_ptr == C_NULL && return GitHash()
-    return GitHash(oid_ptr)
+    Base.@gc_preserve ref begin
+        oid_ptr = ccall((:git_reference_target, :libgit2), Ptr{UInt8}, (Ptr{Cvoid},), ref.ptr)
+        oid_ptr == C_NULL && return GitHash()
+        oid = GitHash(oid_ptr)
+    end
+    return oid
 end
 
 
@@ -122,7 +125,7 @@ function GitHash(repo::GitRepo, ref_name::AbstractString)
     isempty(repo) && return GitHash()
     oid_ptr  = Ref(GitHash())
     @check ccall((:git_reference_name_to_id, :libgit2), Cint,
-                    (Ptr{GitHash}, Ptr{Void}, Cstring),
+                    (Ptr{GitHash}, Ptr{Cvoid}, Cstring),
                      oid_ptr, repo.ptr, ref_name)
     return oid_ptr[]
 end
@@ -133,7 +136,7 @@ end
 Get the identifier (`GitHash`) of `obj`.
 """
 function GitHash(obj::GitObject)
-    GitHash(ccall((:git_object_id, :libgit2), Ptr{UInt8}, (Ptr{Void},), obj.ptr))
+    GitHash(ccall((:git_object_id, :libgit2), Ptr{UInt8}, (Ptr{Cvoid},), obj.ptr))
 end
 
 """
@@ -146,7 +149,7 @@ unambiuously identify the object in the repository.
 function GitShortHash(obj::GitObject)
     buf_ref = Ref(Buffer())
     @check ccall((:git_object_short_id, :libgit2), Cint,
-                 (Ptr{Buffer},Ptr{Void}), buf_ref, obj.ptr)
+                 (Ptr{Buffer},Ptr{Cvoid}), buf_ref, obj.ptr)
     sid = GitShortHash(buf_ref[])
     free(buf_ref)
     return sid

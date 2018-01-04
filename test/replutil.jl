@@ -3,42 +3,27 @@
 # For curmod_*
 include("testenv.jl")
 
-function test_have_color(buf, color, no_color)
-    if Base.have_color
-        @test String(take!(buf)) == color
-    else
-        @test String(take!(buf)) == no_color
-    end
-end
-
 cfile = " at $(@__FILE__):"
 c1line = @__LINE__() + 1
 method_c1(x::Float64, s::AbstractString...) = true
 
 buf = IOBuffer()
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, "")))
-no_color = "\nClosest candidates are:\n  method_c1(!Matched::Float64, !Matched::AbstractString...)$cfile$c1line"
+@test String(take!(buf)) == "\nClosest candidates are:\n  method_c1(!Matched::Float64, !Matched::AbstractString...)$cfile$c1line"
 @test length(methods(method_c1)) <= 3 # because of '...' in candidate printing
-test_have_color(buf,
-                "\e[0m\nClosest candidates are:\n  method_c1(\e[1m\e[31m::Float64\e[0m, \e[1m\e[31m::AbstractString...\e[0m)$cfile$c1line\e[0m",
-                no_color)
+Base.show_method_candidates(IOContext(buf, :color => true), Base.MethodError(method_c1,(1, 1, "")))
+@test String(take!(buf)) == "\e[0m\nClosest candidates are:\n  method_c1(\e[91m::Float64\e[39m, \e[91m::AbstractString...\e[39m)$cfile$c1line"
 
-no_color = "\nClosest candidates are:\n  method_c1(!Matched::Float64, ::AbstractString...)$cfile$c1line"
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
-test_have_color(buf,
-                "\e[0m\nClosest candidates are:\n  method_c1(\e[1m\e[31m::Float64\e[0m, ::AbstractString...)$cfile$c1line\e[0m",
-                no_color)
+@test String(take!(buf)) == "\nClosest candidates are:\n  method_c1(!Matched::Float64, ::AbstractString...)$cfile$c1line"
 
 # should match
-no_color = "\nClosest candidates are:\n  method_c1(::Float64, ::AbstractString...)$cfile$c1line"
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1., "", "")))
-test_have_color(buf,
-                "\e[0m\nClosest candidates are:\n  method_c1(::Float64, ::AbstractString...)$cfile$c1line\e[0m",
-                no_color)
+@test String(take!(buf)) == "\nClosest candidates are:\n  method_c1(::Float64, ::AbstractString...)$cfile$c1line"
 
 # Have no matches so should return empty
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, 1)))
-test_have_color(buf, "", "")
+@test String(take!(buf)) == ""
 
 # matches the implicit constructor -> convert method
 Base.show_method_candidates(buf, Base.MethodError(Tuple{}, (1, 1, 1)))
@@ -55,41 +40,33 @@ method_c2(x::Int32, y::Int32, z::Int32) = true
 method_c2(x::T, y::T, z::T) where {T<:Real} = true
 
 Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
-color = "\e[0m\nClosest candidates are:\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Any...)$cfile$(c2line+1)\n  method_c2(::T<:Real, ::T<:Real, \e[1m\e[31m::T<:Real\e[0m)$cfile$(c2line+5)\n  ...\e[0m"
-no_color = no_color = "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2(::T<:Real, ::T<:Real, !Matched::T<:Real) where T<:Real$cfile$(c2line+5)\n  ..."
-test_have_color(buf, color, no_color)
+@test String(take!(buf)) ==  "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2(::T<:Real, ::T<:Real, !Matched::T<:Real) where T<:Real$cfile$(c2line+5)\n  ..."
 
 c3line = @__LINE__() + 1
 method_c3(x::Float64, y::Float64) = true
 Base.show_method_candidates(buf, Base.MethodError(method_c3,(1.,)))
-color = "\e[0m\nClosest candidates are:\n  method_c3(::Float64, \e[1m\e[31m::Float64\e[0m)$cfile$c3line\e[0m"
-no_color = no_color = "\nClosest candidates are:\n  method_c3(::Float64, !Matched::Float64)$cfile$c3line"
-test_have_color(buf, color, no_color)
+@test String(take!(buf)) ==  "\nClosest candidates are:\n  method_c3(::Float64, !Matched::Float64)$cfile$c3line"
 
 # Test for the method error in issue #8651
 c4line = @__LINE__
 method_c4() = true
 method_c4(x::AbstractString) = false
 Base.show_method_candidates(buf, MethodError(method_c4,("",)))
-test_have_color(buf,
-    "\e[0m\nClosest candidates are:\n  method_c4(::AbstractString)$cfile$(c4line+2)\n  method_c4()$cfile$(c4line+1)\e[0m",
-    "\nClosest candidates are:\n  method_c4(::AbstractString)$cfile$(c4line+2)\n  method_c4()$cfile$(c4line+1)")
+@test String(take!(buf)) == "\nClosest candidates are:\n  method_c4(::AbstractString)$cfile$(c4line+2)\n  method_c4()$cfile$(c4line+1)"
 
 c5line = @__LINE__() + 1
 method_c5(::Type{Float64}) = true
 Base.show_method_candidates(buf, MethodError(method_c5,(Float64,)))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c5(::Type{Float64})$cfile$c5line\e[0m",
-                "\nClosest candidates are:\n  method_c5(::Type{Float64})$cfile$c5line")
+@test String(take!(buf)) == "\nClosest candidates are:\n  method_c5(::Type{Float64})$cfile$c5line"
 
 Base.show_method_candidates(buf, MethodError(method_c5,(Int32,)))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c5(\e[1m\e[31m::Type{Float64}\e[0m)$cfile$c5line\e[0m",
-                "\nClosest candidates are:\n  method_c5(!Matched::Type{Float64})$cfile$c5line")
+@test String(take!(buf)) == "\nClosest candidates are:\n  method_c5(!Matched::Type{Float64})$cfile$c5line"
 
 mutable struct Test_type end
 test_type = Test_type()
 for f in [getindex, setindex!]
     Base.show_method_candidates(buf, MethodError(f,(test_type, 1,1)))
-    test_have_color(buf, "", "")
+    @test String(take!(buf)) == ""
 end
 
 PR16155line = @__LINE__() + 2
@@ -101,12 +78,10 @@ PR16155line2 = @__LINE__() + 1
 (::Type{T})(arg::Any) where {T<:PR16155} = "replace call-to-convert method from sysimg"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(\e[1m\e[31m::Int64\e[0m, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\e[0m",
-                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2")
+@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(Int64(3), 2.0, Int64(3))))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\e[0m",
-                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2")
+@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
 
 c6line = @__LINE__
 method_c6(; x=1) = x
@@ -130,40 +105,28 @@ m_error = try TestKWError.method_c6_in_module(1, x=1) catch e; e; end
 showerror(buf, m_error)
 error_out3 = String(take!(buf))
 
-if Base.have_color
-    @test contains(error_out, "method_c6(; x)$cfile$(c6line + 1)\e[1m\e[31m got unsupported keyword argument \"y\"\e[0m")
-    @test contains(error_out, "method_c6(\e[1m\e[31m::Any\e[0m; y)$cfile$(c6line + 2)")
-    @test contains(error_out1, "method_c6(::Any; y)$cfile$(c6line + 2)\e[1m\e[31m got unsupported keyword argument \"x\"\e[0m")
-    @test contains(error_out2, "method_c6_in_module(; x)$cfile$(c6mline + 2)\e[1m\e[31m got unsupported keyword argument \"y\"\e[0m")
-    @test contains(error_out2, "method_c6_in_module(\e[1m\e[31m::Any\e[0m; y)$cfile$(c6mline + 3)")
-    @test contains(error_out3, "method_c6_in_module(::Any; y)$cfile$(c6mline + 3)\e[1m\e[31m got unsupported keyword argument \"x\"\e[0m")
-else
-    @test contains(error_out, "method_c6(; x)$cfile$(c6line + 1) got unsupported keyword argument \"y\"")
-    @test contains(error_out, "method_c6(!Matched::Any; y)$cfile$(c6line + 2)")
-    @test contains(error_out1, "method_c6(::Any; y)$cfile$(c6line + 2) got unsupported keyword argument \"x\"")
-    @test contains(error_out2, "method_c6_in_module(; x)$cfile$(c6mline + 2) got unsupported keyword argument \"y\"")
-    @test contains(error_out2, "method_c6_in_module(!Matched::Any; y)$cfile$(c6mline + 3)")
-    @test contains(error_out3, "method_c6_in_module(::Any; y)$cfile$(c6mline + 3) got unsupported keyword argument \"x\"")
-end
+@test contains(error_out, "method_c6(; x)$cfile$(c6line + 1) got unsupported keyword argument \"y\"")
+@test contains(error_out, "method_c6(!Matched::Any; y)$cfile$(c6line + 2)")
+@test contains(error_out1, "method_c6(::Any; y)$cfile$(c6line + 2) got unsupported keyword argument \"x\"")
+@test contains(error_out2, "method_c6_in_module(; x)$cfile$(c6mline + 2) got unsupported keyword argument \"y\"")
+@test contains(error_out2, "method_c6_in_module(!Matched::Any; y)$cfile$(c6mline + 3)")
+@test contains(error_out3, "method_c6_in_module(::Any; y)$cfile$(c6mline + 3) got unsupported keyword argument \"x\"")
 
 c7line = @__LINE__() + 1
 method_c7(a, b; kargs...) = a
-Base.show_method_candidates(buf, MethodError(method_c7, (1, 1)), [(:x, 1), (:y, 2)])
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line\e[0m",
-                     "\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line")
+Base.show_method_candidates(buf, MethodError(method_c7, (1, 1)), pairs((x = 1, y = 2)))
+@test String(take!(buf)) == "\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line"
 c8line = @__LINE__() + 1
 method_c8(a, b; y=1, w=1) = a
-Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), [(:x, 1), (:y, 2), (:z, 1), (:w, 1)])
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line\e[1m\e[31m got unsupported keyword arguments \"x\", \"z\"\e[0m\e[0m",
-                     "\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line got unsupported keyword arguments \"x\", \"z\"")
+Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), pairs((x = 1, y = 2, z = 1, w = 1)))
+@test String(take!(buf)) == "\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line got unsupported keyword arguments \"x\", \"z\""
 
 ac15639line = @__LINE__
 addConstraint_15639(c::Int32) = c
 addConstraint_15639(c::Int64; uncset=nothing) = addConstraint_15639(Int32(c), uncset=uncset)
 
-Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), [(:uncset, nothing)])
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1)\e[1m\e[31m got unsupported keyword argument \"uncset\"\e[0m\n  addConstraint_15639(\e[1m\e[31m::Int64\e[0m; uncset)$cfile$(ac15639line + 2)\e[0m",
-                     "\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1) got unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)$cfile$(ac15639line + 2)")
+Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), pairs((uncset = nothing,)))
+@test String(take!(buf)) == "\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1) got unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)$cfile$(ac15639line + 2)"
 
 macro except_str(expr, err_type)
     return quote
@@ -291,7 +254,7 @@ let undefvar
 
     err_str = @except_str mod(1,0) DivideError
     @test err_str == "DivideError: integer division error"
-    err_str = @except_str Array{Any,1}(1)[1] UndefRefError
+    err_str = @except_str Vector{Any}(uninitialized, 1)[1] UndefRefError
     @test err_str == "UndefRefError: access to undefined reference"
     err_str = @except_str undefvar UndefVarError
     @test err_str == "UndefVarError: undefvar not defined"
@@ -347,7 +310,7 @@ let err_str,
     @test contains(err_str, "MethodError: objects of type Array{Float64,1} are not callable")
 end
 @test stringmime("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 0 methods)"
-@test ismatch(r"^@doc \(macro with \d+ method[s]?\)$", stringmime("text/plain", getfield(Base, Symbol("@doc"))))
+@test contains(stringmime("text/plain", getfield(Base, Symbol("@doc"))), r"^@doc \(macro with \d+ method[s]?\)$")
 
 method_defs_lineno = @__LINE__() + 1
 Base.Symbol() = throw(ErrorException("1"))
@@ -536,7 +499,7 @@ foo_9965(x::Int) = 2x
     end
     @test typeof(ex) == MethodError
     io = IOBuffer()
-    Base.show_method_candidates(io, ex, [(:w,true)])
+    Base.show_method_candidates(io, ex, pairs((w = true,)))
     @test contains(String(take!(io)), "got unsupported keyword argument \"w\"")
 end
 
@@ -624,20 +587,20 @@ end
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
 
     io = IOContext(io, :displaysize => (5, 80))
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry:\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
     d = Base.ImmutableDict(d, 3=>4)
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
 
     io = IOContext(io, :displaysize => (6, 80))
     show(io, MIME"text/plain"(), d)
@@ -645,12 +608,12 @@ end
         "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  3 => 4\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
     d = Base.ImmutableDict(d, 5=>6)
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) ==
         "Base.ImmutableDict{$Int,$Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
 end

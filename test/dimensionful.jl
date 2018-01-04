@@ -11,12 +11,9 @@ struct Furlong{p,T<:Number} <: Number
     Furlong{p,T}(x::Furlong{p}) where {p,T} = new(x.val)
 end
 Furlong(x::T) where {T<:Number} = Furlong{1,T}(x)
-(::Type{T})(x::Furlong{p,T}) where {p,T} = x.val
+(::Type{T})(x::Furlong) where {T<:Number} = T(x.val)
 Furlong{p}(v::Number) where {p} = Furlong{p,typeof(v)}(v)
-Base.convert(::Type{Furlong{p,T}}, x::Furlong{p,S}) where {T,p,S} = Furlong{p,T}(convert(T,x.val))
-Base.convert(::Type{Furlong{0,T}}, x::Furlong{0}) where {T} = Furlong{0,T}(convert(T, x.val))
-Base.convert(::Type{T}, x::Furlong{0}) where {T<:Number} = convert(T, x.val)
-Base.convert(::Type{Furlong{0,T}}, x::Number) where {T} = Furlong{0,T}(convert(T, x))
+Furlong{p,T}(x::Furlong{p,S}) where {T,p,S} = Furlong{p,T}(T(x.val))
 
 Base.promote_type(::Type{Furlong{p,T}}, ::Type{Furlong{p,S}}) where {p,T,S} =
     (Base.@_pure_meta; Furlong{p,promote_type(T,S)})

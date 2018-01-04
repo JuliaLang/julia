@@ -35,7 +35,7 @@ CMAKE_COMMON += -DCMAKE_CXX_COMPILER="$(CXX_BASE)"
 ifneq ($(strip $(CMAKE_CXX_ARG)),)
 CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CMAKE_CXX_ARG)"
 endif
-CMAKE_COMMON += -DCMAKE_LINKER="$(LD)"
+CMAKE_COMMON += -DCMAKE_LINKER="$(LD)" -DCMAKE_AR="$(shell which $(AR))" -DCMAKE_RANLIB="$(shell which $(RANLIB))"
 
 ifeq ($(OS),WINNT)
 CMAKE_COMMON += -DCMAKE_SYSTEM_NAME=Windows
@@ -71,6 +71,15 @@ ifeq ($(USEIFC),1)
 USE_BLAS_FFLAGS += -i8
 else
 USE_BLAS_FFLAGS += -fdefault-integer-8
+endif
+endif
+
+ifeq ($(USE_INTEL_MKL),1)
+# We want to test if gfortran is used but currently only gfortran and ifort are supported
+# so not ifort is the same as gfortran. If support for new Fortran compilers is added
+# then this should be adjusted
+ifneq ($(USEIFC),1)
+USE_BLAS_FFLAGS += -ff2c
 endif
 endif
 

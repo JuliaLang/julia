@@ -40,13 +40,11 @@ function complete_symbol(sym, ffunc)
 
     lookup_module = true
     t = Union{}
-    if rsearch(sym, non_identifier_chars) < rsearch(sym, '.')
+    if findlast(occursin(non_identifier_chars), sym) < findlast(equalto('.'), sym)
         # Find module
         lookup_name, name = rsplit(sym, ".", limit=2)
 
-        ex = Base.syntax_deprecation_warnings(false) do
-            parse(lookup_name, raise=false)
-        end
+        ex = Meta.parse(lookup_name, raise=false, depwarn=false)
 
         b, found = get_value(ex, context_module)
         if found
@@ -106,7 +104,7 @@ const sorted_keywords = [
     "primitive type", "quote", "return", "struct",
     "true", "try", "using", "while"]
 
-function complete_keyword(s::String)
+function complete_keyword(s::Union{String,SubString{String}})
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)
@@ -118,7 +116,7 @@ function complete_keyword(s::String)
 end
 
 function complete_path(path::AbstractString, pos; use_envpath=false)
-    if Base.Sys.isunix() && ismatch(r"^~(?:/|$)", path)
+    if Base.Sys.isunix() && contains(path, r"^~(?:/|$)")
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
             dir, prefix = homedir(), ""
@@ -192,7 +190,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
         end
     end
 
-    matchList = String[replace(s, r"\s", "\\ ") for s in matches]
+    matchList = String[replace(s, r"\s" => "\\ ") for s in matches]
     startpos = pos - endof(prefix) + 1 - length(matchall(r" ", prefix))
     # The pos - endof(prefix) + 1 is correct due to `endof(prefix)-endof(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
@@ -225,7 +223,7 @@ end
 # closed start brace from the end of the string.
 function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     braces = 0
-    r = RevString(s)
+    r = reverse(s)
     i = start(r)
     in_single_quotes = false
     in_double_quotes = false
@@ -245,19 +243,22 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
                 in_back_ticks = true
             end
         else
-            if !in_back_ticks && !in_double_quotes && c == '\'' && !done(r, i) && next(r, i)[1]!='\\'
+            if !in_back_ticks && !in_double_quotes &&
+                c == '\'' && !done(r, i) && next(r, i)[1] != '\\'
                 in_single_quotes = !in_single_quotes
-            elseif !in_back_ticks && !in_single_quotes && c == '"' && !done(r, i) && next(r, i)[1]!='\\'
+            elseif !in_back_ticks && !in_single_quotes &&
+                c == '"' && !done(r, i) && next(r, i)[1] != '\\'
                 in_double_quotes = !in_double_quotes
-            elseif !in_single_quotes && !in_double_quotes && c == '`' && !done(r, i) && next(r, i)[1]!='\\'
+            elseif !in_single_quotes && !in_double_quotes &&
+                c == '`' && !done(r, i) && next(r, i)[1] != '\\'
                 in_back_ticks = !in_back_ticks
             end
         end
         braces == 1 && break
     end
     braces != 1 && return 0:-1, -1
-    method_name_end = reverseind(r, i)
-    startind = nextind(s, rsearch(s, non_identifier_chars, method_name_end))
+    method_name_end = reverseind(s, i)
+    startind = nextind(s, findprev(occursin(non_identifier_chars), s, method_name_end))
     return (startind:endof(s), method_name_end)
 end
 
@@ -369,7 +370,7 @@ function complete_methods(ex_org::Expr)
     t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
     na = length(args_ex)+1
     ml = methods(func)
-    kwtype = isdefined(ml.mt, :kwsorter) ? Nullable{DataType}(typeof(ml.mt.kwsorter)) : Nullable{DataType}()
+    kwtype = isdefined(ml.mt, :kwsorter) ? typeof(ml.mt.kwsorter) : nothing
     io = IOBuffer()
     for method in ml
         ms = method.sig
@@ -405,15 +406,15 @@ function afterusing(string::String, startpos::Int)
     str = string[1:prevind(string,startpos)]
     isempty(str) && return false
     rstr = reverse(str)
-    r = search(rstr, r"\s(gnisu|tropmi)\b")
+    r = findfirst(r"\s(gnisu|tropmi)\b", rstr)
     isempty(r) && return false
     fr = reverseind(str, last(r))
-    return ismatch(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
+    return contains(str[fr:end], r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$")
 end
 
 function bslash_completions(string, pos)
-    slashpos = rsearch(string, '\\', pos)
-    if (rsearch(string, bslash_separators, pos) < slashpos &&
+    slashpos = findprev(equalto('\\'), string, pos)
+    if (findprev(occursin(bslash_separators), string, pos) < slashpos &&
         !(1 < slashpos && (string[prevind(string, slashpos)]=='\\')))
         # latex / emoji symbol substitution
         s = string[slashpos:pos]
@@ -458,10 +459,10 @@ function dict_identifier_key(str,tag)
         # Avoid `isdefined(::Array, ::Symbol)`
         isa(obj, Array) && return (nothing, nothing, nothing)
     end
-    begin_of_key = first(search(str, r"\S", nextind(str, end_of_identifier) + 1)) # 1 for [
+    begin_of_key = first(findnext(r"\S", str, nextind(str, end_of_identifier) + 1)) # 1 for [
     begin_of_key==0 && return (true, nothing, nothing)
     partial_key = str[begin_of_key:end]
-    (isa(obj, Associative) && length(obj) < 1e6) || return (true, nothing, nothing)
+    (isa(obj, AbstractDict) && length(obj) < 1e6) || return (true, nothing, nothing)
     return (obj, partial_key, begin_of_key)
 end
 
@@ -478,9 +479,7 @@ end
 function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
-    inc_tag = Base.syntax_deprecation_warnings(false) do
-        Base.incomplete_tag(parse(partial, raise=false))
-    end
+    inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
 
     # if completing a key in a Dict
     identifier, partial_key, loc = dict_identifier_key(partial,inc_tag)
@@ -500,15 +499,15 @@ function completions(string, pos)
         startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
 
-        expanded = complete_expanduser(replace(string[r], r"\\ ", " "), r)
+        expanded = complete_expanduser(replace(string[r], r"\\ " => " "), r)
         expanded[3] && return expanded  # If user expansion available, return it
 
-        paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
+        paths, r, success = complete_path(replace(string[r], r"\\ " => " "), pos)
 
         if inc_tag == :string &&
            length(paths) == 1 &&  # Only close if there's a single choice,
            !isdir(expanduser(replace(string[startpos:prevind(string, start(r))] * paths[1],
-                                     r"\\ ", " "))) &&  # except if it's a directory
+                                     r"\\ " => " "))) &&  # except if it's a directory
            (length(string) <= pos ||
             string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
             paths[1] *= "\""
@@ -526,9 +525,7 @@ function completions(string, pos)
 
     if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
-        ex = Base.syntax_deprecation_warnings(false) do
-            parse(partial[frange] * ")", raise=false)
-        end
+        ex = Meta.parse(partial[frange] * ")", raise=false, depwarn=false)
         if isa(ex, Expr) && ex.head==:call
             return complete_methods(ex), start(frange):method_name_end, false
         end
@@ -536,8 +533,8 @@ function completions(string, pos)
         return String[], 0:-1, false
     end
 
-    dotpos = rsearch(string, '.', pos)
-    startpos = nextind(string, rsearch(string, non_identifier_chars, pos))
+    dotpos = findprev(equalto('.'), string, pos)
+    startpos = nextind(string, findprev(occursin(non_identifier_chars), string, pos))
 
     ffunc = (mod,x)->true
     suggestions = String[]

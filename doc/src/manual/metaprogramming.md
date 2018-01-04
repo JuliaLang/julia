@@ -26,7 +26,7 @@ The next step is to [parse](https://en.wikipedia.org/wiki/Parsing#Computer_langu
 into an object called an expression, represented by the Julia type `Expr`:
 
 ```jldoctest prog
-julia> ex1 = parse(prog)
+julia> ex1 = Meta.parse(prog)
 :(1 + 1)
 
 julia> typeof(ex1)
@@ -86,7 +86,7 @@ Expr
 `Expr` objects may also be nested:
 
 ```jldoctest ex3
-julia> ex3 = parse("(4 + 4) / 2")
+julia> ex3 = Meta.parse("(4 + 4) / 2")
 :((4 + 4) / 2)
 ```
 
@@ -160,12 +160,12 @@ Expr
 (to view the structure of this expression, try `ex.head` and `ex.args`, or use [`dump`](@ref)
 as above or [`Meta.@dump`](@ref))
 
-Note that equivalent expressions may be constructed using [`parse`](@ref) or the direct `Expr`
+Note that equivalent expressions may be constructed using [`Meta.parse`](@ref) or the direct `Expr`
 form:
 
 ```jldoctest
-julia>      :(a + b*c + 1)  ==
-       parse("a + b*c + 1") ==
+julia>      :(a + b*c + 1)       ==
+       Meta.parse("a + b*c + 1") ==
        Expr(:call, :+, :a, Expr(:call, :*, :b, :c), 1)
 true
 ```
@@ -314,7 +314,7 @@ equivalent of `eval(eval(:x))`.
 The usual representation of a `quote` form in an AST is an `Expr` with head `:quote`:
 
 ```jldoctest interp1
-julia> dump(parse(":(1+2)"))
+julia> dump(Meta.parse(":(1+2)"))
 Expr
   head: Symbol quote
   args: Array{Any}((1,))
@@ -335,7 +335,7 @@ as an object of type `QuoteNode`.
 The parser yields `QuoteNode`s for simple quoted items like symbols:
 
 ```jldoctest interp1
-julia> dump(parse(":x"))
+julia> dump(Meta.parse(":x"))
 QuoteNode
   value: Symbol x
 ```
@@ -864,6 +864,47 @@ However, we don't do this for a good reason: wrapping the `expr` in a new scope 
 also slightly changes the meaning of the expression (the scope of any variables in it),
 while we want `@time` to be usable with minimum impact on the wrapped code.
 
+### Macros and dispatch
+
+Macros, just like Julia functions, are generic. This means they can also have multiple method definitions, thanks to multiple dispatch:
+```jldoctest macromethods
+julia> macro m end
+@m (macro with 0 methods)
+
+julia> macro m(args...)
+           println("$(length(args)) arguments")
+       end
+@m (macro with 1 method)
+
+julia> macro m(x,y)
+           println("Two arguments")
+       end
+@m (macro with 2 methods)
+
+julia> @m "asd"
+1 arguments
+
+julia> @m 1 2
+Two arguments
+```
+However one should keep in mind, that macro dispatch is based on the types of AST
+that are handed to the macro, not the types that the AST evaluates to at runtime:
+```jldoctest macromethods
+julia> macro m(::Int)
+           println("An Integer")
+       end
+@m (macro with 3 methods)
+
+julia> @m 2
+An Integer
+
+julia> x = 2
+2
+
+julia> @m x
+1 arguments
+```
+
 ## Code Generation
 
 When a significant amount of repetitive boilerplate code is required, it is common to generate
@@ -1223,7 +1264,7 @@ to build some more advanced (and valid) functionality...
 
 ### An advanced example
 
-Julia's base library has a [`sub2ind`](@ref) function to calculate a linear index into an n-dimensional
+Julia's base library has a an internal `sub2ind` function to calculate a linear index into an n-dimensional
 array, based on a set of n multilinear indices - in other words, to calculate the index `i` that
 can be used to index into an array `A` using `A[i]`, instead of `A[x,y,z,...]`. One possible implementation
 is the following:

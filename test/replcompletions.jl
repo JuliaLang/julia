@@ -3,7 +3,7 @@
 using Base.REPLCompletions
 
 let ex = quote
-        module CompletionFoo
+    module CompletionFoo
         mutable struct Test_y
             yy
         end
@@ -21,8 +21,8 @@ let ex = quote
             :()
         end
 
-        # Support non-Dict Associatives, #19441
-        mutable struct CustomDict{K, V} <: Associative{K, V}
+        # Support non-Dict AbstractDicts, #19441
+        mutable struct CustomDict{K, V} <: AbstractDict{K, V}
             mydict::Dict{K, V}
         end
 
@@ -704,7 +704,7 @@ end
 let path = tempdir(),
     space_folder = randstring() * " α",
     dir = joinpath(path, space_folder),
-    dir_space = replace(space_folder, " ", "\\ ")
+    dir_space = replace(space_folder, " " => "\\ ")
 
     mkdir(dir)
     cd(path) do

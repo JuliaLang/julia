@@ -76,11 +76,11 @@ function SymTridiagonal(A::AbstractMatrix)
     end
 end
 
-convert(::Type{SymTridiagonal{T}}, S::SymTridiagonal) where {T} =
+SymTridiagonal{T}(S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
-convert(::Type{AbstractMatrix{T}}, S::SymTridiagonal) where {T} =
+AbstractMatrix{T}(S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
-function convert(::Type{Matrix{T}}, M::SymTridiagonal) where T
+function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = zeros(T, n, n)
     @inbounds begin
@@ -93,8 +93,8 @@ function convert(::Type{Matrix{T}}, M::SymTridiagonal) where T
     end
     return Mf
 end
-convert(::Type{Matrix}, M::SymTridiagonal{T}) where {T} = convert(Matrix{T}, M)
-convert(::Type{Array}, M::SymTridiagonal) = convert(Matrix, M)
+Matrix(M::SymTridiagonal{T}) where {T} = Matrix{T}(M)
+Array(M::SymTridiagonal) = Matrix(M)
 
 size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
 function size(A::SymTridiagonal, d::Integer)
@@ -135,9 +135,9 @@ function diag(M::SymTridiagonal, n::Integer=0)
     # same vector type is returned independent of n
     absn = abs(n)
     if absn == 0
-        return copy!(similar(M.dv, length(M.dv)), M.dv)
+        return copyto!(similar(M.dv, length(M.dv)), M.dv)
     elseif absn==1
-        return copy!(similar(M.ev, length(M.ev)), M.ev)
+        return copyto!(similar(M.ev, length(M.ev)), M.ev)
     elseif absn <= size(M,1)
         return fill!(similar(M.dv, size(M,1)-absn), 0)
     else
@@ -153,7 +153,7 @@ end
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
-function A_mul_B!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
+function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if !(m == size(S, 1) == size(C, 1))
         throw(DimensionMismatch("A has first dimension $(size(S,1)), B has $(size(B,1)), C has $(size(C,1)) but all must match"))
@@ -184,56 +184,42 @@ end
 (\)(T::SymTridiagonal, B::StridedVecOrMat) = ldltfact(T)\B
 
 eigfact!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
-function eigfact(A::SymTridiagonal{T}) where T
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
-    eigfact!(copy_oftype(A, S))
-end
+eigfact(A::SymTridiagonal{T}) where T = eigfact!(copy_oftype(A, eigtype(T)))
 
 eigfact!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
-function eigfact(A::SymTridiagonal{T}, irange::UnitRange) where T
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
-    return eigfact!(copy_oftype(A, S), irange)
-end
+eigfact(A::SymTridiagonal{T}, irange::UnitRange) where T =
+    eigfact!(copy_oftype(A, eigtype(T)), irange)
 
 eigfact!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
-function eigfact(A::SymTridiagonal{T}, vl::Real, vu::Real) where T
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
-    return eigfact!(copy_oftype(A, S), vl, vu)
-end
+eigfact(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
+    eigfact!(copy_oftype(A, eigtype(T)), vl, vu)
 
 eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
-function eigvals(A::SymTridiagonal{T}) where T
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
-    return eigvals!(copy_oftype(A, S))
-end
+eigvals(A::SymTridiagonal{T}) where T = eigvals!(copy_oftype(A, eigtype(T)))
 
 eigvals!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     LAPACK.stegr!('N', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)[1]
-function eigvals(A::SymTridiagonal{T}, irange::UnitRange) where T
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
-    return eigvals!(copy_oftype(A, S), irange)
-end
+eigvals(A::SymTridiagonal{T}, irange::UnitRange) where T =
+    eigvals!(copy_oftype(A, eigtype(T)), irange)
 
 eigvals!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     LAPACK.stegr!('N', 'V', A.dv, A.ev, vl, vu, 0, 0)[1]
-function eigvals(A::SymTridiagonal{T}, vl::Real, vu::Real) where T
-    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
-    return eigvals!(copy_oftype(A, S), vl, vu)
-end
+eigvals(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
+    eigvals!(copy_oftype(A, eigtype(T)), vl, vu)
 
 #Computes largest and smallest eigenvalue
 eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
-eigvecs(A::SymTridiagonal) = eigfact(A)[:vectors]
+eigvecs(A::SymTridiagonal) = eigfact(A).vectors
 
 """
     eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix
 
-Returns a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigenvector can
+Return a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigenvector can
 be obtained from the slice `M[:, k]`.)
 
 If the optional vector of eigenvalues `eigvals` is specified, `eigvecs`
@@ -284,9 +270,9 @@ function tril!(M::SymTridiagonal, k::Integer=0)
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     elseif k == -1
         fill!(M.dv,0)
-        return Tridiagonal(M.ev,M.dv,zeros(M.ev))
+        return Tridiagonal(M.ev,M.dv,zero(M.ev))
     elseif k == 0
-        return Tridiagonal(M.ev,M.dv,zeros(M.ev))
+        return Tridiagonal(M.ev,M.dv,zero(M.ev))
     elseif k >= 1
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     end
@@ -303,9 +289,9 @@ function triu!(M::SymTridiagonal, k::Integer=0)
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     elseif k == 1
         fill!(M.dv,0)
-        return Tridiagonal(zeros(M.ev),M.dv,M.ev)
+        return Tridiagonal(zero(M.ev),M.dv,M.ev)
     elseif k == 0
-        return Tridiagonal(zeros(M.ev),M.dv,M.ev)
+        return Tridiagonal(zero(M.ev),M.dv,M.ev)
     elseif k <= -1
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     end
@@ -349,7 +335,7 @@ function inv_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
     for i=n-1:-1:1
         φ[i] = b[i]*φ[i+1]-a[i]*c[i]*φ[i+2]
     end
-    α = Matrix{T}(n, n)
+    α = Matrix{T}(uninitialized, n, n)
     for i=1:n, j=1:n
         sign = (i+j)%2==0 ? (+) : (-)
         if i<j
@@ -490,7 +476,7 @@ function size(M::Tridiagonal, d::Integer)
     end
 end
 
-function convert(::Type{Matrix{T}}, M::Tridiagonal{T}) where T
+function Matrix{T}(M::Tridiagonal{T}) where T
     A = zeros(T, size(M))
     for i = 1:length(M.d)
         A[i,i] = M.d[i]
@@ -501,8 +487,8 @@ function convert(::Type{Matrix{T}}, M::Tridiagonal{T}) where T
     end
     A
 end
-convert(::Type{Matrix}, M::Tridiagonal{T}) where {T} = convert(Matrix{T}, M)
-convert(::Type{Array}, M::Tridiagonal) = convert(Matrix, M)
+Matrix(M::Tridiagonal{T}) where {T} = Matrix{T}(M)
+Array(M::Tridiagonal) = Matrix(M)
 
 # For M<:Tridiagonal, similar(M[, neweltype]) should yield a Tridiagonal matrix.
 # On the other hand, similar(M, [neweltype,] shape...) should yield a sparse matrix.
@@ -511,7 +497,7 @@ similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), sim
 similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 # Operations on Tridiagonal matrices
-copy!(dest::Tridiagonal, src::Tridiagonal) = (copy!(dest.dl, src.dl); copy!(dest.d, src.d); copy!(dest.du, src.du); dest)
+copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
 
 #Elementary operations
 broadcast(::typeof(abs), M::Tridiagonal) = Tridiagonal(abs.(M.dl), abs.(M.d), abs.(M.du))
@@ -536,15 +522,17 @@ broadcast(::typeof(ceil), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
 transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 adjoint(M::Tridiagonal) = conj(transpose(M))
 
+\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = adjoint(A.parent) \ adjoint(B.parent)
+
 function diag(M::Tridiagonal{T}, n::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     if n == 0
-        return copy!(similar(M.d, length(M.d)), M.d)
+        return copyto!(similar(M.d, length(M.d)), M.d)
     elseif n == -1
-        return copy!(similar(M.dl, length(M.dl)), M.dl)
+        return copyto!(similar(M.dl, length(M.dl)), M.dl)
     elseif n == 1
-        return copy!(similar(M.du, length(M.du)), M.du)
+        return copyto!(similar(M.du, length(M.du)), M.du)
     elseif abs(n) <= size(M,1)
         return fill!(similar(M.d, size(M,1)-abs(n)), 0)
     else
@@ -646,11 +634,11 @@ end
 inv(A::Tridiagonal) = inv_usmani(A.dl, A.d, A.du)
 det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
-convert(::Type{Tridiagonal{T}},M::Tridiagonal) where {T} =
+Tridiagonal{T}(M::Tridiagonal) where {T} =
     Tridiagonal(convert(AbstractVector{T}, M.dl), convert(AbstractVector{T}, M.d), convert(AbstractVector{T}, M.du))
-convert(::Type{AbstractMatrix{T}},M::Tridiagonal) where {T} = convert(Tridiagonal{T}, M)
-convert(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
-function convert(::Type{SymTridiagonal{T}}, M::Tridiagonal) where T
+AbstractMatrix{T}(M::Tridiagonal) where {T} = Tridiagonal{T}(M)
+Tridiagonal{T}(M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
+function SymTridiagonal{T}(M::Tridiagonal) where T
     if M.dl == M.du
         return SymTridiagonal{T}(convert(AbstractVector{T},M.d), convert(AbstractVector{T},M.dl))
     else

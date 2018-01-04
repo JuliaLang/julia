@@ -23,7 +23,7 @@ Base.quit
 Base.atexit
 Base.atreplinit
 Base.isinteractive
-Base.whos
+Base.varinfo
 Base.summarysize
 Base.edit(::AbstractString, ::Integer)
 Base.edit(::Any)
@@ -33,7 +33,6 @@ Base.less(::Any)
 Base.@less
 Base.clipboard(::Any)
 Base.clipboard()
-Base.reload
 Base.require
 Base.compilecache
 Base.__precompile__
@@ -48,7 +47,6 @@ Base.methods
 Base.methodswith
 Base.@show
 Base.versioninfo
-Base.workspace
 ans
 ```
 
@@ -89,8 +87,6 @@ primitive type
 ## Base Modules
 ```@docs
 Base.BLAS
-Base.Dates
-Base.Distributed
 Base.Docs
 Base.Iterators
 Base.LAPACK
@@ -115,10 +111,8 @@ Core.:(===)
 Core.isa
 Base.isequal
 Base.isless
-Base.isless(::Nullable, ::Nullable)
 Base.ifelse
-Base.lexcmp
-Base.lexless
+Core.typeassert
 Core.typeof
 Core.tuple
 Base.ntuple
@@ -128,6 +122,10 @@ Base.finalizer
 Base.finalize
 Base.copy
 Base.deepcopy
+Base.getproperty
+Base.setproperty!
+Core.getfield
+Core.setfield!
 Core.isdefined
 Base.@isdefined
 Base.convert
@@ -137,7 +135,7 @@ Base.widen
 Base.identity
 ```
 
-## Dealing with Types
+## Properties of Types
 
 ```@docs
 Base.supertype
@@ -154,8 +152,6 @@ Base.eps(::Type{<:AbstractFloat})
 Base.eps(::AbstractFloat)
 Base.promote_type
 Base.promote_rule
-Core.getfield
-Core.setfield!
 Base.fieldoffset
 Core.fieldtype
 Base.isimmutable
@@ -169,15 +165,16 @@ Base.instances
 ## Special Types
 
 ```@docs
-Core.Void
 Core.Any
-Base.Enums.@enum
 Core.Union
 Union{}
 Core.UnionAll
 Core.Tuple
 Base.Val
 Core.Vararg
+Core.Nothing
+Base.Some
+Base.Enums.@enum
 ```
 
 ## Generic Functions
@@ -211,17 +208,15 @@ Base.@gensym
 Base.@goto
 Base.@label
 Base.@polly
-Base.parse(::AbstractString, ::Int)
-Base.parse(::AbstractString)
 ```
 
-## Nullables
-
+## Missing Values
 ```@docs
-Base.Nullable
-Base.get(::Nullable, ::Any)
-Base.isnull
-Base.unsafe_get
+Base.Missing
+Base.missing
+Base.coalesce
+Base.ismissing
+Base.skipmissing
 ```
 
 ## System
@@ -288,12 +283,11 @@ Core.InterruptException
 Base.KeyError
 Base.LoadError
 Base.MethodError
-Base.NullException
+Base.MissingException
 Core.OutOfMemoryError
 Core.ReadOnlyMemoryError
 Core.OverflowError
 Base.ParseError
-Base.ProcessExitedException
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError
@@ -343,6 +337,8 @@ Base.gc
 Base.gc_enable
 Meta.lower
 Meta.@lower
+Meta.parse(::AbstractString, ::Int)
+Meta.parse(::AbstractString)
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1

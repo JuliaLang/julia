@@ -9,7 +9,7 @@ using Test
 srand(12345)
 
 function hilb(T::Type, n::Integer)
-    a=Array{T}(n,n)
+    a = Matrix{T}(uninitialized, n, n)
     for i=1:n
         for j=1:n
             a[j,i]=one(T)/(i+j-one(T))
@@ -20,7 +20,7 @@ end
 hilb(n::Integer) = hilb(Float64,n)
 
 function hilb(T::Type, m::Integer, n::Integer)
-    a=Array{T}(m,n)
+    a = Matrix{T}(uninitialized, m, n)
     for i=1:n
         for j=1:m
             a[j,i]=one(T)/(i+j-one(T))
@@ -67,7 +67,7 @@ tridiag(m::Integer, n::Integer) = tridiag(Float64, m::Integer, n::Integer)
 
 function randn_float64(m::Integer, n::Integer)
     a=randn(m,n)
-    b=Array{Float64}(m,n)
+    b = Matrix{Float64}(uninitialized, m, n)
     for i=1:n
         for j=1:m
             b[j,i]=convert(Float64,a[j,i])
@@ -78,7 +78,7 @@ end
 
 function randn_float32(m::Integer, n::Integer)
     a=randn(m,n)
-    b=Array{Float32}(m,n)
+    b = Matrix{Float32}(uninitialized, m, n)
     for i=1:n
         for j=1:m
             b[j,i]=convert(Float32,a[j,i])
@@ -101,7 +101,7 @@ function test_pinv(a,m,n,tol1,tol2,tol3)
     @test vecnorm(a*x-b)/vecnorm(b) ≈ 0 atol=tol2
 end
 
-@testset for eltya in (Float32, Float64, Complex64, Complex128)
+@testset for eltya in (Float32, Float64, ComplexF32, ComplexF64)
     @testset for (m, n) in [(1000, 100), (100, 100), (100, 1000)]
         default_tol = (real(one(eltya))) * max(m,n) * 10
         tol1 = 1e-2
@@ -133,9 +133,9 @@ end
             a = rand(eltya, m)
             apinv = @inferred pinv(a)
             @test pinv(hcat(a)) ≈ apinv
-            @test apinv isa RowVector{eltya}
+            @test isa(apinv, eltya <: Complex ? Adjoint{eltya} : Transpose{eltya})
         end
-        @testset "RowVector" begin
+        @testset "Adjoint/Transpose vector" begin
             a = rand(eltya, m)'
             apinv = @inferred pinv(a)
             @test pinv(vcat(a)) ≈ apinv

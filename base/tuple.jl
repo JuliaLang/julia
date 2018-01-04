@@ -20,7 +20,7 @@ endof(t::Tuple) = length(t)
 size(t::Tuple, d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 @eval getindex(t::Tuple, i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
-getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...)
+getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, find(b)) : throw(BoundsError(t, b))
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
@@ -66,7 +66,6 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-eltype(::Type{Tuple{Vararg{E}}}) where {E} = E
 function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
     if @isdefined(E)
         return E
@@ -137,7 +136,7 @@ end
 function _ntuple(f, n)
     @_noinline_meta
     (n >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", n)))
-    ([f(i) for i = 1:n]...)
+    ([f(i) for i = 1:n]...,)
 end
 
 # inferrable ntuple (enough for bootstrapping)
@@ -159,11 +158,11 @@ const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,Vararg{T,N}}
 function map(f, t::Any16)
     n = length(t)
-    A = Array{Any,1}(n)
+    A = Vector{Any}(uninitialized, n)
     for i=1:n
         A[i] = f(t[i])
     end
-    (A...)
+    (A...,)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
@@ -175,11 +174,11 @@ function map(f, t::Tuple, s::Tuple)
 end
 function map(f, t::Any16, s::Any16)
     n = length(t)
-    A = Array{Any,1}(n)
+    A = Vector{Any}(uninitialized, n)
     for i = 1:n
         A[i] = f(t[i], s[i])
     end
-    (A...)
+    (A...,)
 end
 # n argument function
 heads(ts::Tuple...) = map(t -> t[1], ts)
@@ -191,11 +190,11 @@ function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
 end
 function map(f, t1::Any16, t2::Any16, ts::Any16...)
     n = length(t1)
-    A = Array{Any,1}(n)
+    A = Vector{Any}(uninitialized, n)
     for i = 1:n
         A[i] = f(t1[i], t2[i], map(t -> t[i], ts)...)
     end
-    (A...)
+    (A...,)
 end
 
 
@@ -269,12 +268,16 @@ function ==(t1::Tuple, t2::Tuple)
     if length(t1) != length(t2)
         return false
     end
+    anymissing = false
     for i = 1:length(t1)
-        if !(t1[i] == t2[i])
-            return false
-        end
+        eq = (t1[i] == t2[i])
+        if ismissing(eq)
+            anymissing = true
+        elseif !eq
+           return false
+       end
     end
-    return true
+    return anymissing ? missing : true
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
@@ -282,6 +285,20 @@ hash( ::Tuple{}, h::UInt)        = h + tuplehash_seed
 hash(x::Tuple{Any,}, h::UInt)    = hash(x[1], hash((), h))
 hash(x::Tuple{Any,Any}, h::UInt) = hash(x[1], hash(x[2], hash((), h)))
 hash(x::Tuple, h::UInt)          = hash(x[1], hash(x[2], hash(tail(tail(x)), h)))
+
+function <(t1::Tuple, t2::Tuple)
+    n1, n2 = length(t1), length(t2)
+    for i = 1:min(n1, n2)
+        a, b = t1[i], t2[i]
+        eq = (a == b)
+        if ismissing(eq)
+            return missing
+        elseif !eq
+           return a < b
+        end
+    end
+    return n1 < n2
+end
 
 function isless(t1::Tuple, t2::Tuple)
     n1, n2 = length(t1), length(t2)
@@ -328,3 +345,10 @@ any(x::Tuple{}) = false
 any(x::Tuple{Bool}) = x[1]
 any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
+
+"""
+    empty(x::Tuple)
+
+Returns an empty tuple, `()`.
+"""
+empty(x::Tuple) = ()

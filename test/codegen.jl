@@ -10,6 +10,12 @@ const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 get_llvm(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
     sprint(code_llvm, f, t, strip_ir_metadata, dump_module)
 
+get_llvm_noopt(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
+    Base._dump_function(f, t,
+                #=native=# false, #=wrapper=# false, #=strip=# strip_ir_metadata,
+                #=dump_module=# dump_module, #=syntax=#:att, #=optimize=#false)
+
+
 if opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
     @test !contains(get_llvm(identity, Tuple{String}), " call ")
@@ -52,9 +58,9 @@ function test_jl_dump_compiles()
     tfile = tempname()
     io = open(tfile, "w")
     @eval(test_jl_dump_compiles_internal(x) = x)
-    ccall(:jl_dump_compiles, Void, (Ptr{Void},), io.handle)
+    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
     @eval test_jl_dump_compiles_internal(1)
-    ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
+    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
     close(io)
     tstats = stat(tfile)
     tempty = tstats.size == 0
@@ -68,9 +74,9 @@ function test_jl_dump_compiles_toplevel_thunks()
     tfile = tempname()
     io = open(tfile, "w")
     topthunk = Meta.lower(Main, :(for i in 1:10; end))
-    ccall(:jl_dump_compiles, Void, (Ptr{Void},), io.handle)
+    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
     Core.eval(Main, topthunk)
-    ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
+    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
     close(io)
     tstats = stat(tfile)
     tempty = tstats.size == 0
@@ -130,7 +136,7 @@ mutable struct MutableStruct
     MutableStruct() = new()
 end
 
-breakpoint_mutable(a::MutableStruct) = ccall(:jl_breakpoint, Void, (Ref{MutableStruct},), a)
+breakpoint_mutable(a::MutableStruct) = ccall(:jl_breakpoint, Cvoid, (Ref{MutableStruct},), a)
 
 # Allocation with uninitialized field as gcroot
 mutable struct BadRef
@@ -141,10 +147,10 @@ end
 Base.cconvert(::Type{Ptr{BadRef}}, a::MutableStruct) = BadRef(a)
 Base.unsafe_convert(::Type{Ptr{BadRef}}, ar::BadRef) = Ptr{BadRef}(pointer_from_objref(ar.x))
 
-breakpoint_badref(a::MutableStruct) = ccall(:jl_breakpoint, Void, (Ptr{BadRef},), a)
+breakpoint_badref(a::MutableStruct) = ccall(:jl_breakpoint, Cvoid, (Ptr{BadRef},), a)
 
 struct PtrStruct
-    a::Ptr{Void}
+    a::Ptr{Cvoid}
     b::Int
 end
 
@@ -160,10 +166,9 @@ Base.unsafe_convert(::Type{Ref{PtrStruct}}, at::Tuple) =
     Base.unsafe_convert(Ref{PtrStruct}, at[2])
 
 breakpoint_ptrstruct(a::RealStruct) =
-    ccall(:jl_breakpoint, Void, (Ref{PtrStruct},), a)
+    ccall(:jl_breakpoint, Cvoid, (Ref{PtrStruct},), a)
 
 if opt_level > 0
-    @test !contains(get_llvm(isequal, Tuple{Nullable{BigFloat}, Nullable{BigFloat}}), "%gcframe")
     @test !contains(get_llvm(pointer_not_safepoint, Tuple{}), "%gcframe")
     compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})
     @test contains(compare_large_struct_ir, "call i32 @memcmp")
@@ -184,8 +189,8 @@ if opt_level > 0
 end
 
 function two_breakpoint(a::Float64)
-    ccall(:jl_breakpoint, Void, (Ref{Float64},), a)
-    ccall(:jl_breakpoint, Void, (Ref{Float64},), a)
+    ccall(:jl_breakpoint, Cvoid, (Ref{Float64},), a)
+    ccall(:jl_breakpoint, Cvoid, (Ref{Float64},), a)
 end
 
 function load_dummy_ref(x::Int)
@@ -196,10 +201,10 @@ function load_dummy_ref(x::Int)
 end
 
 if opt_level > 0
-    breakpoint_f64_ir = get_llvm((a)->ccall(:jl_breakpoint, Void, (Ref{Float64},), a),
+    breakpoint_f64_ir = get_llvm((a)->ccall(:jl_breakpoint, Cvoid, (Ref{Float64},), a),
                                  Tuple{Float64})
     @test !contains(breakpoint_f64_ir, "jl_gc_pool_alloc")
-    breakpoint_any_ir = get_llvm((a)->ccall(:jl_breakpoint, Void, (Ref{Any},), a),
+    breakpoint_any_ir = get_llvm((a)->ccall(:jl_breakpoint, Cvoid, (Ref{Any},), a),
                                  Tuple{Float64})
     @test contains(breakpoint_any_ir, "jl_gc_pool_alloc")
     two_breakpoint_ir = get_llvm(two_breakpoint, Tuple{Float64})
@@ -216,12 +221,12 @@ end
 # Issue 22770
 let was_gced = false
     @noinline make_tuple(x) = tuple(x)
-    @noinline use(x) = ccall(:jl_breakpoint, Void, ())
+    @noinline use(x) = ccall(:jl_breakpoint, Cvoid, ())
     @noinline assert_not_gced() = @test !was_gced
 
     function foo22770()
         b = Ref(2)
-        finalizer(b, x -> was_gced = true)
+        finalizer(x -> was_gced = true, b)
         y = make_tuple(b)
         x = y[1]
         a = Ref(1)
@@ -249,7 +254,7 @@ end
 function issue22582!(a::AbstractArray, b)
     len = length(a)
     if b
-        ccall(:jl_array_grow_end, Void, (Any, Csize_t), a, 1)
+        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), a, 1)
     end
     return len
 end
@@ -306,3 +311,14 @@ if opt_level > 0
                     "%gcframe")
     @test !contains(get_llvm(g24108, Tuple{B24108}), "%gcframe")
 end
+
+# Issue 24632
+function foo24632(y::Bool)
+    x::Union{Int, String} = y ? "ABC" : 1
+    isa(x, Int) ? x : 0
+end
+
+# A bit coarse-grained perhaps, but ok for now. What we want to check is that the load from
+# the semi-boxed union on the if-branch of the `isa` is not annotated !nonnull
+@test contains(get_llvm_noopt(foo24632, (Bool,), false), "!dereferenceable_or_null")
+@test !contains(get_llvm_noopt(foo24632, (Bool,), false), "!nonnull")

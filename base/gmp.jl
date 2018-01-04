@@ -55,7 +55,7 @@ mutable struct BigInt <: Signed
     function BigInt()
         b = new(zero(Cint), zero(Cint), C_NULL)
         MPZ.init!(b)
-        finalizer(b, cglobal((:__gmpz_clear, :libgmp)))
+        finalizer(cglobal((:__gmpz_clear, :libgmp)), b)
         return b
     end
 end
@@ -89,8 +89,8 @@ function __init__()
                 "Please rebuild Julia.")
         end
 
-        ccall((:__gmp_set_memory_functions, :libgmp), Void,
-              (Ptr{Void},Ptr{Void},Ptr{Void}),
+        ccall((:__gmp_set_memory_functions, :libgmp), Cvoid,
+              (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}),
               cglobal(:jl_gc_counted_malloc),
               cglobal(:jl_gc_counted_realloc_with_old_size),
               cglobal(:jl_gc_counted_free_with_size))
@@ -117,10 +117,10 @@ const bitcnt_t = Culong
 
 gmpz(op::Symbol) = (Symbol(:__gmpz_, op), :libgmp)
 
-init!(x::BigInt) = (ccall((:__gmpz_init, :libgmp), Void, (mpz_t,), x); x)
-init2!(x::BigInt, a) = (ccall((:__gmpz_init2, :libgmp), Void, (mpz_t, bitcnt_t), x, a); x)
+init!(x::BigInt) = (ccall((:__gmpz_init, :libgmp), Cvoid, (mpz_t,), x); x)
+init2!(x::BigInt, a) = (ccall((:__gmpz_init2, :libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
 
-realloc2!(x, a) = (ccall((:__gmpz_realloc2, :libgmp), Void, (mpz_t, bitcnt_t), x, a); x)
+realloc2!(x, a) = (ccall((:__gmpz_realloc2, :libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
 realloc2(a) = realloc2!(BigInt(), a)
 
 sizeinbase(a::BigInt, b) = Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (mpz_t, Cint), a, b))
@@ -128,7 +128,7 @@ sizeinbase(a::BigInt, b) = Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (mp
 for op in (:add, :sub, :mul, :fdiv_q, :tdiv_q, :fdiv_r, :tdiv_r, :gcd, :lcm, :and, :ior, :xor)
     op! = Symbol(op, :!)
     @eval begin
-        $op!(x::BigInt, a::BigInt, b::BigInt) = (ccall($(gmpz(op)), Void, (mpz_t, mpz_t, mpz_t), x, a, b); x)
+        $op!(x::BigInt, a::BigInt, b::BigInt) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t, mpz_t), x, a, b); x)
         $op(a::BigInt, b::BigInt) = $op!(BigInt(), a, b)
         $op!(x::BigInt, b::BigInt) = $op!(x, x, b)
     end
@@ -142,27 +142,27 @@ invert!(x::BigInt, b::BigInt) = invert!(x, x, b)
 for op in (:add_ui, :sub_ui, :mul_ui, :mul_2exp, :fdiv_q_2exp, :pow_ui, :bin_ui)
     op! = Symbol(op, :!)
     @eval begin
-        $op!(x::BigInt, a::BigInt, b) = (ccall($(gmpz(op)), Void, (mpz_t, mpz_t, Culong), x, a, b); x)
+        $op!(x::BigInt, a::BigInt, b) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t, Culong), x, a, b); x)
         $op(a::BigInt, b) = $op!(BigInt(), a, b)
         $op!(x::BigInt, b) = $op!(x, x, b)
     end
 end
 
-ui_sub!(x::BigInt, a, b::BigInt) = (ccall((:__gmpz_ui_sub, :libgmp), Void, (mpz_t, Culong, mpz_t), x, a, b); x)
+ui_sub!(x::BigInt, a, b::BigInt) = (ccall((:__gmpz_ui_sub, :libgmp), Cvoid, (mpz_t, Culong, mpz_t), x, a, b); x)
 ui_sub(a, b::BigInt) = ui_sub!(BigInt(), a, b)
 
 for op in (:scan1, :scan0)
     @eval $op(a::BigInt, b) = Int(ccall($(gmpz(op)), Culong, (mpz_t, Culong), a, b))
 end
 
-mul_si!(x::BigInt, a::BigInt, b) = (ccall((:__gmpz_mul_si, :libgmp), Void, (mpz_t, mpz_t, Clong), x, a, b); x)
+mul_si!(x::BigInt, a::BigInt, b) = (ccall((:__gmpz_mul_si, :libgmp), Cvoid, (mpz_t, mpz_t, Clong), x, a, b); x)
 mul_si(a::BigInt, b) = mul_si!(BigInt(), a, b)
 mul_si!(x::BigInt, b) = mul_si!(x, x, b)
 
 for op in (:neg, :com, :sqrt, :set)
     op! = Symbol(op, :!)
     @eval begin
-        $op!(x::BigInt, a::BigInt) = (ccall($(gmpz(op)), Void, (mpz_t, mpz_t), x, a); x)
+        $op!(x::BigInt, a::BigInt) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t), x, a); x)
         $op(a::BigInt) = $op!(BigInt(), a)
     end
     op == :set && continue # MPZ.set!(x) would make no sense
@@ -172,7 +172,7 @@ end
 for (op, T) in ((:fac_ui, Culong), (:set_ui, Culong), (:set_si, Clong), (:set_d, Cdouble))
     op! = Symbol(op, :!)
     @eval begin
-        $op!(x::BigInt, a) = (ccall($(gmpz(op)), Void, (mpz_t, $T), x, a); x)
+        $op!(x::BigInt, a) = (ccall($(gmpz(op)), Cvoid, (mpz_t, $T), x, a); x)
         $op(a) = $op!(BigInt(), a)
     end
 end
@@ -183,18 +183,18 @@ mpn_popcount(d::Ptr{Limb}, s::Integer) = Int(ccall((:__gmpn_popcount, :libgmp), 
 mpn_popcount(a::BigInt) = mpn_popcount(a.d, abs(a.size))
 
 function tdiv_qr!(x::BigInt, y::BigInt, a::BigInt, b::BigInt)
-    ccall((:__gmpz_tdiv_qr, :libgmp), Void, (mpz_t, mpz_t, mpz_t, mpz_t), x, y, a, b)
+    ccall((:__gmpz_tdiv_qr, :libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t), x, y, a, b)
     x, y
 end
 tdiv_qr(a::BigInt, b::BigInt) = tdiv_qr!(BigInt(), BigInt(), a, b)
 
 powm!(x::BigInt, a::BigInt, b::BigInt, c::BigInt) =
-    (ccall((:__gmpz_powm, :libgmp), Void, (mpz_t, mpz_t, mpz_t, mpz_t), x, a, b, c); x)
+    (ccall((:__gmpz_powm, :libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t), x, a, b, c); x)
 powm(a::BigInt, b::BigInt, c::BigInt) = powm!(BigInt(), a, b, c)
 powm!(x::BigInt, b::BigInt, c::BigInt) = powm!(x, x, b, c)
 
 function gcdext!(x::BigInt, y::BigInt, z::BigInt, a::BigInt, b::BigInt)
-    ccall((:__gmpz_gcdext, :libgmp), Void, (mpz_t, mpz_t, mpz_t, mpz_t, mpz_t), x, y, z, a, b)
+    ccall((:__gmpz_gcdext, :libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t, mpz_t), x, y, z, a, b)
     x, y, z
 end
 gcdext(a::BigInt, b::BigInt) = gcdext!(BigInt(), BigInt(), BigInt(), a, b)
@@ -212,9 +212,12 @@ set_str!(x::BigInt, a, b) = Int(ccall((:__gmpz_set_str, :libgmp), Cint, (mpz_t, 
 get_d(a::BigInt) = ccall((:__gmpz_get_d, :libgmp), Cdouble, (mpz_t,), a)
 
 limbs_write!(x::BigInt, a) = ccall((:__gmpz_limbs_write, :libgmp), Ptr{Limb}, (mpz_t, Clong), x, a)
-limbs_finish!(x::BigInt, a) = ccall((:__gmpz_limbs_finish, :libgmp), Void, (mpz_t, Clong), x, a)
-import!(x::BigInt, a, b, c, d, e, f) = ccall((:__gmpz_import, :libgmp), Void,
-    (mpz_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Void}), x, a, b, c, d, e, f)
+limbs_finish!(x::BigInt, a) = ccall((:__gmpz_limbs_finish, :libgmp), Cvoid, (mpz_t, Clong), x, a)
+import!(x::BigInt, a, b, c, d, e, f) = ccall((:__gmpz_import, :libgmp), Cvoid,
+    (mpz_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Cvoid}), x, a, b, c, d, e, f)
+
+setbit!(x, a) = (ccall((:__gmpz_setbit, :libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
+tstbit(a::BigInt, b) = ccall((:__gmpz_tstbit, :libgmp), Cint, (mpz_t, bitcnt_t), a, b) % Bool
 
 end # module MPZ
 
@@ -228,25 +231,23 @@ widen(::Type{BigInt})  = BigInt
 
 signed(x::BigInt) = x
 
-convert(::Type{BigInt}, x::BigInt) = x
-convert(::Type{Signed}, x::BigInt) = x
+BigInt(x::BigInt) = x
+Signed(x::BigInt) = x
 
 hastypemax(::Type{BigInt}) = false
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
-    _n = Nullable{BigInt}()
-
     # don't make a copy in the common case where we are parsing a whole String
     bstr = startpos == start(s) && endpos == endof(s) ? String(s) : String(SubString(s,startpos,endpos))
 
     sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,start(bstr),endof(bstr))
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
-        return _n
+        return nothing
     end
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(bstr))"))
-        return _n
+        return nothing
     end
     z = BigInt()
     if Base.containsnul(bstr)
@@ -256,19 +257,19 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     end
     if err != 0
         raise && throw(ArgumentError("invalid BigInt: $(repr(bstr))"))
-        return _n
+        return nothing
     end
-    Nullable(flipsign!(z, sgn))
+    flipsign!(z, sgn)
 end
 
-convert(::Type{BigInt}, x::Union{Clong,Int32}) = MPZ.set_si(x)
-convert(::Type{BigInt}, x::Union{Culong,UInt32}) = MPZ.set_ui(x)
-convert(::Type{BigInt}, x::Bool) = BigInt(UInt(x))
+BigInt(x::Union{Clong,Int32}) = MPZ.set_si(x)
+BigInt(x::Union{Culong,UInt32}) = MPZ.set_ui(x)
+BigInt(x::Bool) = BigInt(UInt(x))
 
 unsafe_trunc(::Type{BigInt}, x::Union{Float32,Float64}) = MPZ.set_d(x)
 
-function convert(::Type{BigInt}, x::Union{Float32,Float64})
-    isinteger(x) || throw(InexactError(:convert, BigInt, x))
+function BigInt(x::Union{Float32,Float64})
+    isinteger(x) || throw(InexactError(:BigInt, BigInt, x))
     unsafe_trunc(BigInt,x)
 end
 
@@ -277,10 +278,10 @@ function trunc(::Type{BigInt}, x::Union{Float32,Float64})
     unsafe_trunc(BigInt,x)
 end
 
-convert(::Type{BigInt}, x::Float16) = BigInt(Float64(x))
-convert(::Type{BigInt}, x::Float32) = BigInt(Float64(x))
+BigInt(x::Float16) = BigInt(Float64(x))
+BigInt(x::Float32) = BigInt(Float64(x))
 
-function convert(::Type{BigInt}, x::Integer)
+function BigInt(x::Integer)
     if x < 0
         if typemin(Clong) <= x
             return BigInt(convert(Clong,x))
@@ -322,26 +323,26 @@ function rem(x::BigInt, ::Type{T}) where T<:Union{Base.BitUnsigned,Base.BitSigne
     flipsign(u, x.size)
 end
 
-rem(x::Integer, ::Type{BigInt}) = convert(BigInt, x)
+rem(x::Integer, ::Type{BigInt}) = BigInt(x)
 
-function convert(::Type{T}, x::BigInt) where T<:Base.BitUnsigned
+function (::Type{T})(x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
     else
-        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(:convert, T, x))
+        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(Symbol(string(T)), T, x))
         x % T
     end
 end
 
-function convert(::Type{T}, x::BigInt) where T<:Base.BitSigned
+function (::Type{T})(x::BigInt) where T<:Base.BitSigned
     n = abs(x.size)
     if sizeof(T) < sizeof(Limb)
         SLimb = typeof(Signed(one(Limb)))
         convert(T, convert(SLimb, x))
     else
-        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(:convert, T, x))
+        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(Symbol(string(T)), T, x))
         y = x % T
-        ispos(x) ⊻ (y > 0) && throw(InexactError(:convert, T, x)) # catch overflow
+        ispos(x) ⊻ (y > 0) && throw(InexactError(Symbol(string(T)), T, x)) # catch overflow
         y
     end
 end
@@ -384,9 +385,9 @@ function (::Type{T})(n::BigInt, ::RoundingMode{:Nearest}) where T<:CdoubleMax
     x
 end
 
-convert(::Type{Float64}, n::BigInt) = Float64(n,RoundNearest)
-convert(::Type{Float32}, n::BigInt) = Float32(n,RoundNearest)
-convert(::Type{Float16}, n::BigInt) = Float16(n,RoundNearest)
+Float64(n::BigInt) = Float64(n, RoundNearest)
+Float32(n::BigInt) = Float32(n, RoundNearest)
+Float16(n::BigInt) = Float16(n, RoundNearest)
 
 promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
 
@@ -491,7 +492,7 @@ cmp(x::BigInt, y::CulongMax) = MPZ.cmp_ui(x, y)
 cmp(x::BigInt, y::Integer) = cmp(x, big(y))
 cmp(x::Integer, y::BigInt) = -cmp(y, x)
 
-cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? throw(DomainError(y, "`y` cannot be NaN.")) : MPZ.cmp_d(x, y)
+cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? -1 : MPZ.cmp_d(x, y)
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y, x)
 
 isqrt(x::BigInt) = MPZ.sqrt(x)

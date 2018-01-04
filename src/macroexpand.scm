@@ -20,10 +20,9 @@
         ((atom? x)  x)
         ((and (= d 0) (eq? (car x) '$))
          (if (length= x 2)
-             (if (and (length= (cadr x) 2) (eq? (caadr x) 'tuple)
-                      (vararg? (cadadr x)))
-                 ;; splice expr ($ (tuple (... x)))
-                 `(... ,(cadr (cadr (cadr x))))
+             (if (vararg? (cadr x))
+                 ;; splice expr ($ (... x))
+                 `(... ,(cadr (cadr x)))
                  ;; otherwise normal interpolation
                  (cadr x))
              ;; in e.g. `quote quote $$(x...) end end` multiple expressions can be

@@ -720,6 +720,8 @@ end
     @test !isless(+NaN,+Inf)
     @test !isless(+NaN,-NaN)
     @test !isless(+NaN,+NaN)
+    @test !isless(+NaN,1)
+    @test !isless(-NaN,1)
 
     @test  isequal(   0, 0.0)
     @test  isequal( 0.0,   0)
@@ -729,11 +731,11 @@ end
     @test  !isless(   0,-0.0)
 
     @test isless(-0.0, 0.0f0)
-    @test lexcmp(-0.0, 0.0f0) == -1
-    @test lexcmp(0.0, -0.0f0) == 1
-    @test lexcmp(NaN, 1) == 1
-    @test lexcmp(1, NaN) == -1
-    @test lexcmp(NaN, NaN) == 0
+    @test cmp(isless, -0.0, 0.0f0) == -1
+    @test cmp(isless, 0.0, -0.0f0) == 1
+    @test cmp(isless, NaN, 1) == 1
+    @test cmp(isless, 1, NaN) == -1
+    @test cmp(isless, NaN, NaN) == 0
 end
 @testset "Float vs Integer comparison" begin
     for x=-5:5, y=-5:5
@@ -1816,7 +1818,7 @@ end
     @test isa(0b00000000000000000000000000000000000000000000000000000000000000000,UInt128)
     @test isa(0b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+    @test_throws Meta.ParseError Meta.parse("0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
     @test isa(0b11111111,UInt8)
     @test isa(0b111111111,UInt16)
     @test isa(0b1111111111111111,UInt16)
@@ -1827,25 +1829,24 @@ end
     @test isa(0b11111111111111111111111111111111111111111111111111111111111111111,UInt128)
     @test isa(0b11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("0b111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111")
+    @test_throws Meta.ParseError Meta.parse("0b111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111")
 end
 @testset "octal literals" begin
     @test 0o10 == 0x8
     @test 0o100 == 0x40
     @test 0o1000 == 0x200
     @test 0o724 == 0x1d4
-    @test isa(0o377,UInt8)
     @test isa(0o00,UInt8)
-    @test isa(0o000,UInt16)
+    @test isa(0o000,UInt8)
     @test isa(0o00000,UInt16)
-    @test isa(0o000000,UInt32)
+    @test isa(0o000000,UInt16)
     @test isa(0o0000000000,UInt32)
-    @test isa(0o00000000000,UInt64)
+    @test isa(0o00000000000,UInt32)
     @test isa(0o000000000000000000000,UInt64)
-    @test isa(0o0000000000000000000000,UInt128)
+    @test isa(0o0000000000000000000000,UInt64)
     @test isa(0o000000000000000000000000000000000000000000,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("0o0000000000000000000000000000000000000000000")
+    @test_throws Meta.ParseError Meta.parse("0o00000000000000000000000000000000000000000000")
     @test isa(0o11,UInt8)
     @test isa(0o111,UInt8)
     @test isa(0o11111,UInt16)
@@ -1856,8 +1857,29 @@ end
     @test isa(0o1111111111111111111111,UInt64)
     @test isa(0o111111111111111111111111111111111111111111,UInt128)
     @test isa(0o1111111111111111111111111111111111111111111,UInt128)
+    @test isa(0o3777777777777777777777777777777777777777777,UInt128)
+    @test_throws Meta.ParseError Meta.parse("0o4000000000000000000000000000000000000000000")
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("0o11111111111111111111111111111111111111111111")
+    @test_throws Meta.ParseError Meta.parse("0o11111111111111111111111111111111111111111111")
+    @test isa(0o077, UInt8)
+    @test isa(0o377, UInt8)
+    @test isa(0o400, UInt16)
+    @test isa(0o077777, UInt16)
+    @test isa(0o177777, UInt16)
+    @test isa(0o200000, UInt32)
+    @test isa(0o00000000000, UInt32)
+    @test isa(0o17777777777, UInt32)
+    @test isa(0o40000000000, UInt64)
+    @test isa(0o0000000000000000000000, UInt64)
+    @test isa(0o1000000000000000000000, UInt64)
+    @test isa(0o2000000000000000000000, UInt128)
+    @test isa(0o0000000000000000000000000000000000000000000, UInt128)
+    @test isa(0o1000000000000000000000000000000000000000000, UInt128)
+    @test isa(0o2000000000000000000000000000000000000000000, UInt128)
+    @test_throws Meta.ParseError Meta.parse("0o4000000000000000000000000000000000000000000")
+
+    @test String([0o110, 0o145, 0o154, 0o154, 0o157, 0o054, 0o040, 0o127, 0o157, 0o162, 0o154, 0o144, 0o041]) == "Hello, World!"
+
 end
 @testset "hexadecimal literals" begin
     @test isa(0x00,UInt8)
@@ -1870,7 +1892,7 @@ end
     @test isa(0x00000000000000000,UInt128)
     @test isa(0x00000000000000000000000000000000,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("0x000000000000000000000000000000000")
+    @test_throws Meta.ParseError Meta.parse("0x000000000000000000000000000000000")
 
     @test isa(0x11,UInt8)
     @test isa(0x111,UInt16)
@@ -1882,7 +1904,7 @@ end
     @test isa(0x11111111111111111,UInt128)
     @test isa(0x11111111111111111111111111111111,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("0x111111111111111111111111111111111")
+    @test_throws Meta.ParseError Meta.parse("0x111111111111111111111111111111111")
 end
 @testset "minus sign and unsigned literals" begin
     # "-" is not part of unsigned literals
@@ -1902,7 +1924,7 @@ end
     @test isa(-0x00000000000000000,UInt128)
     @test isa(-0x00000000000000000000000000000000,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws ParseError parse("-0x000000000000000000000000000000000")
+    @test_throws Meta.ParseError Meta.parse("-0x000000000000000000000000000000000")
 end
 @testset "Float32 literals" begin
     @test isa(1f0,Float32)
@@ -2400,6 +2422,9 @@ end
     @test typeof(widemul(UInt64(1),Int64(1))) == Int128
     @test typeof(widemul(Int128(1),UInt128(1))) == BigInt
     @test typeof(widemul(UInt128(1),Int128(1))) == BigInt
+
+    # Check that the widen() fallback doesn't trigger a StackOverflowError
+    @test_throws MethodError widen(String)
 end
 @testset ".//" begin
     @test [1,2,3] // 4 == [1//4, 2//4, 3//4]
@@ -2421,8 +2446,8 @@ end
 
 @testset "issue #12832" begin
     @test_throws ErrorException reinterpret(Float64, Complex{Int64}(1))
-    @test_throws ErrorException reinterpret(Float64, Complex64(1))
-    @test_throws ErrorException reinterpret(Complex64, Float64(1))
+    @test_throws ErrorException reinterpret(Float64, ComplexF32(1))
+    @test_throws ErrorException reinterpret(ComplexF32, Float64(1))
     @test_throws ErrorException reinterpret(Int32, false)
 end
 # issue #41
@@ -2504,8 +2529,8 @@ end
     zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
                      0x40, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0xc0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-    z1 = read(zbuf, Complex64)
-    z2 = read(zbuf, Complex128)
+    z1 = read(zbuf, ComplexF32)
+    z2 = read(zbuf, ComplexF64)
     @test bswap(z1) === -1.5f0 + 2.5f0im
     @test bswap(z2) ===  3.5 - 4.5im
 end
@@ -2711,7 +2736,8 @@ end
     yf = Complex{BigFloat}(1//2 + 1//5*im)
     yi = 4
 
-    @test x^y ≈ xf^yf
+    # FIXME: reenable once #25221 is fixed
+    # @test x^y ≈ xf^yf
     @test x^yi ≈ xf^yi
     @test x^true ≈ xf^true
     @test x^false == xf^false
@@ -2822,9 +2848,9 @@ end
     @test ndims(Integer) == 0
     @test size(1,1) == 1
     @test_throws BoundsError size(1,-1)
-    @test indices(1) == ()
-    @test indices(1,1) == 1:1
-    @test_throws BoundsError indices(1,-1)
+    @test axes(1) == ()
+    @test axes(1,1) == 1:1
+    @test_throws BoundsError axes(1,-1)
     @test isinteger(Integer(2)) == true
     @test !isinteger(π)
     @test size(1) == ()
@@ -2842,7 +2868,7 @@ end
     let types = (Base.BitInteger_types..., BigInt, Bool,
                  Rational{Int}, Rational{BigInt},
                  Float16, Float32, Float64, BigFloat,
-                 Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
+                 Complex{Int}, Complex{UInt}, ComplexF16, ComplexF32, ComplexF64)
         for S in types
             for op in (+, -)
                 T = @inferred Base.promote_op(op, S)
@@ -2965,6 +2991,14 @@ module M20889 # do we get the expected behavior without importing Base.^?
     Test.@test PR20889(2)^3 == 5
 end
 
+@testset "literal negative power accuracy" begin
+    @test 0.7130409001548401^-2 == 0.7130409001548401^-2.0
+    @test 0.09496527f0^-2 == 0.09496527f0^-2.0f0
+    @test 0.20675883960662367^-100 == 0.20675883960662367^-100.0
+    @test 0.6123676f0^-100 == 0.6123676f0^-100.0f0
+    @test 0.004155780785470562^-1 == 0.004155780785470562^-1.0
+end
+
 @testset "iszero & isone" begin
     # Numeric scalars
     for T in [Float16, Float32, Float64, BigFloat,
@@ -2995,14 +3029,16 @@ end
     @test !isone(tril(ones(Int, 5, 5)))
     @test !isone(triu(ones(Int, 5, 5)))
     @test !isone(zeros(Int, 5, 5))
-    @test isone(eye(Int, 5, 5))
-    @test isone(eye(Int, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
+    @test isone(Matrix(1I, 5, 5))
+    @test isone(Matrix(1I, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
 end
 
 f20065(B, i) = UInt8(B[i])
 @testset "issue 20065" begin
     # f20065 must be called from global scope to exhibit the buggy behavior
-    for B in (Array{Bool}(10), Array{Bool}(10,10), reinterpret(Bool, rand(UInt8, 10)))
+    for B in (Vector{Bool}(uninitialized, 10),
+                Matrix{Bool}(uninitialized, 10,10),
+                reinterpret(Bool, rand(UInt8, 10)))
         @test all(x-> x <= 1, (f20065(B, i) for i in eachindex(B)))
         for i in 1:length(B)
             @test (@eval f20065($B, $i) <= 1)
@@ -3060,14 +3096,22 @@ end
     end
 end
 
-@testset "printing non finite floats" for T in subtypes(AbstractFloat)
-    for (x, sx) in [(T(NaN), "NaN"),
-                    (-T(NaN), "NaN"),
-                    (T(Inf), "Inf"),
-                    (-T(Inf), "-Inf")]
-        @assert x isa T
-        @test string(x) == sx
-        @test sprint(io -> show(IOContext(io, :compact => true), x)) == sx
-        @test sprint(print, x) == sx
+@testset "printing non finite floats" begin
+    let float_types = Set()
+        allsubtypes!(Base, AbstractFloat, float_types)
+        allsubtypes!(Core, AbstractFloat, float_types)
+        @test !isempty(float_types)
+
+        for T in float_types
+            for (x, sx) in [(T(NaN), "NaN"),
+                            (-T(NaN), "NaN"),
+                            (T(Inf), "Inf"),
+                            (-T(Inf), "-Inf")]
+                @assert x isa T
+                @test string(x) == sx
+                @test sprint(io -> show(IOContext(io, :compact => true), x)) == sx
+                @test sprint(print, x) == sx
+            end
+        end
     end
 end

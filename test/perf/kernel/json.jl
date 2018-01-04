@@ -69,7 +69,7 @@ function parse_json(strng::AbstractString)
     end
 
     function skip_whitespace()
-        while pos <= len && isspace(strng[pos])
+        while pos <= len && Base.Unicode.isspace(strng[pos])
             pos = pos + 1
         end
     end

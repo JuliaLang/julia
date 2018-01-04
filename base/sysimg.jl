@@ -3,7 +3,18 @@
 baremodule Base
 
 using Core.Intrinsics
-ccall(:jl_set_istopmod, Void, (Any, Bool), Base, true)
+ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, true)
+
+getproperty(x, f::Symbol) = getfield(x, f)
+setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
+
+# Try to help prevent users from shooting them-selves in the foot
+# with ambiguities by defining a few common and critical operations
+# (and these don't need the extra convert code)
+getproperty(x::Module, f::Symbol) = getfield(x, f)
+setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
+getproperty(x::Type, f::Symbol) = getfield(x, f)
+setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
 
 function include(mod::Module, path::AbstractString)
     local result
@@ -29,7 +40,7 @@ function include(path::AbstractString)
     end
     result
 end
-const _included_files = Array{Tuple{Module,String}}(0)
+const _included_files = Array{Tuple{Module,String},1}()
 function _include1(mod::Module, path)
     Core.Inference.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
     Core.include(mod, path)
@@ -85,7 +96,6 @@ end
 include("essentials.jl")
 include("ctypes.jl")
 include("gcutils.jl")
-include("nullabletype.jl")
 include("generator.jl")
 include("reflection.jl")
 include("options.jl")
@@ -109,10 +119,6 @@ include("refpointer.jl")
 include("checked.jl")
 using .Checked
 
-# buggy handling of ispure in type-inference means this should be
-# after re-defining the basic operations that they might try to call
-(::Type{T})(arg) where {T} = convert(T, arg)::T # Hidden from the REPL.
-
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
 
@@ -130,19 +136,31 @@ include("abstractarray.jl")
 include("subarray.jl")
 include("reinterpretarray.jl")
 
-# Array convenience converting constructors
-Array{T}(m::Integer) where {T} = Array{T,1}(Int(m))
-Array{T}(m::Integer, n::Integer) where {T} = Array{T,2}(Int(m), Int(n))
-Array{T}(m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(Int(m), Int(n), Int(o))
-Array{T}(d::Integer...) where {T} = Array{T}(convert(Tuple{Vararg{Int}}, d))
 
-Vector() = Array{Any,1}(0)
-Vector{T}(m::Integer) where {T} = Array{T,1}(Int(m))
-Vector(m::Integer) = Array{Any,1}(Int(m))
-Matrix{T}(m::Integer, n::Integer) where {T} = Matrix{T}(Int(m), Int(n))
-Matrix(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
+# ## dims-type-converting Array constructors for convenience
+# type and dimensionality specified, accepting dims as series of Integers
+Vector{T}(::Uninitialized, m::Integer) where {T} = Vector{T}(uninitialized, Int(m))
+Matrix{T}(::Uninitialized, m::Integer, n::Integer) where {T} = Matrix{T}(uninitialized, Int(m), Int(n))
+# type but not dimensionality specified, accepting dims as series of Integers
+Array{T}(::Uninitialized, m::Integer) where {T} = Array{T,1}(uninitialized, Int(m))
+Array{T}(::Uninitialized, m::Integer, n::Integer) where {T} = Array{T,2}(uninitialized, Int(m), Int(n))
+Array{T}(::Uninitialized, m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(uninitialized, Int(m), Int(n), Int(o))
+Array{T}(::Uninitialized, d::Integer...) where {T} = Array{T}(uninitialized, convert(Tuple{Vararg{Int}}, d))
+# dimensionality but not type specified, accepting dims as series of Integers
+Vector(::Uninitialized, m::Integer) = Vector{Any}(uninitialized, Int(m))
+Matrix(::Uninitialized, m::Integer, n::Integer) = Matrix{Any}(uninitialized, Int(m), Int(n))
+# empty vector constructor
+Vector() = Vector{Any}(uninitialized, 0)
 
-include("associative.jl")
+# Array constructors for nothing and missing
+# type and dimensionality specified
+Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), nothing)
+Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), missing)
+# type but not dimensionality specified
+Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(uninitialized, d...), nothing)
+Array{T}(::Missing, d...) where {T} = fill!(Array{T}(uninitialized, d...), missing)
+
+include("abstractdict.jl")
 
 include("namedtuple.jl")
 
@@ -165,9 +183,6 @@ macro MIME_str(s)
     :(MIME{$(Expr(:quote, Symbol(s)))})
 end
 
-include("char.jl")
-include("strings/string.jl")
-
 # SIMD loops
 include("simdloop.jl")
 using .SimdLoop
@@ -185,11 +200,18 @@ if !isdefined(Core, :Inference)
     Core.atdoc!(CoreDocs.docm)
 end
 
+# Some type
+include("some.jl")
+
 include("dict.jl")
 include("set.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate
 using .Iterators: Flatten, product  # for generators
+
+include("char.jl")
+include("strings/basic.jl")
+include("strings/string.jl")
 
 # Definition of StridedArray
 StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}
@@ -224,6 +246,11 @@ include("parse.jl")
 include("shell.jl")
 include("regex.jl")
 include("show.jl")
+include("arrayshow.jl")
+
+# Logging
+include("logging.jl")
+using .CoreLogging
 
 # multidimensional arrays
 include("cartesian.jl")
@@ -231,9 +258,6 @@ using .Cartesian
 include("multidimensional.jl")
 include("permuteddimsarray.jl")
 using .PermutedDimsArrays
-
-# nullable types
-include("nullable.jl")
 
 include("broadcast.jl")
 using .Broadcast
@@ -352,7 +376,7 @@ import .Random: rand, rand!
 
 # (s)printf macros
 include("printf.jl")
-using .Printf
+# import .Printf
 
 # metaprogramming
 include("meta.jl")
@@ -394,24 +418,20 @@ const × = cross
 # statistics
 include("statistics.jl")
 
+# missing values
+include("missing.jl")
+
 # libgit2 support
 include("libgit2/libgit2.jl")
 
 # package manager
 include("pkg/pkg.jl")
 
-# dates
-include("dates/Dates.jl")
-import .Dates: Date, DateTime, DateFormat, @dateformat_str, now
-
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")
 using .SparseArrays
 
 include("asyncmap.jl")
-
-include("distributed/Distributed.jl")
-using .Distributed
 
 # worker threads
 include("threadcall.jl")
@@ -420,7 +440,7 @@ include("threadcall.jl")
 include("loading.jl")
 
 # set up load path to be able to find stdlib packages
-init_load_path(ccall(:jl_get_julia_home, Any, ()))
+init_load_path(ccall(:jl_get_julia_bindir, Any, ()))
 
 INCLUDE_STATE = 3 # include = include_relative
 
@@ -452,14 +472,12 @@ isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
 function __init__()
     # Base library init
     reinit_stdio()
+    global_logger(SimpleLogger(STDERR))
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_load_path()
-    Distributed.init_parallel()
     init_threadcall()
 end
-
-include("precompile.jl")
 
 INCLUDE_STATE = 3 # include = include_relative
 
@@ -468,12 +486,36 @@ end # baremodule Base
 using Base
 
 # Ensure this file is also tracked
-unshift!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
+pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
 # load some stdlib packages but don't put their names in Main
+Base.require(:Base64)
+Base.require(:CRC32c)
+Base.require(:Dates)
 Base.require(:DelimitedFiles)
+Base.require(:FileWatching)
+Base.require(:Logging)
+Base.require(:IterativeEigensolvers)
+Base.require(:Mmap)
+Base.require(:Profile)
+Base.require(:SharedArrays)
+Base.require(:SuiteSparse)
 Base.require(:Test)
+Base.require(:Unicode)
+Base.require(:Distributed)
+Base.require(:Printf)
+Base.require(:Future)
+
+@eval Base begin
+    @deprecate_binding Test root_module(:Test) true ", run `using Test` instead"
+    @deprecate_binding Mmap root_module(:Mmap) true ", run `using Mmap` instead"
+    @deprecate_binding Profile root_module(:Profile) true ", run `using Profile` instead"
+    @deprecate_binding Dates root_module(:Dates) true ", run `using Dates` instead"
+    @deprecate_binding Distributed root_module(:Distributed) true ", run `using Distributed` instead"
+end
 
 empty!(LOAD_PATH)
 
 Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")
+
+Base.include(Base, "precompile.jl")

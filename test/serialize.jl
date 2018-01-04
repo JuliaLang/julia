@@ -126,8 +126,8 @@ end
 create_serialization_stream() do s # user-defined module
     mod = b"SomeModule"
     modstring = String(mod)
-    eval(parse("module $(modstring); end"))
-    modtype = eval(parse("$(modstring)"))
+    eval(Meta.parse("module $(modstring); end"))
+    modtype = eval(Meta.parse("$(modstring)"))
     serialize(s, modtype)
     seek(s, 0)
     @test deserialize(s) === modtype
@@ -147,8 +147,8 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType"
-    eval(parse("abstract type $(usertype) end"))
-    utype = eval(parse("$(usertype)"))
+    eval(Meta.parse("abstract type $(usertype) end"))
+    utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) === utype
@@ -156,8 +156,8 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType1"
-    eval(parse("mutable struct $(usertype); end"))
-    utype = eval(parse("$(usertype)"))
+    eval(Meta.parse("mutable struct $(usertype); end"))
+    utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) === utype
@@ -165,8 +165,8 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType2"
-    eval(parse("abstract type $(usertype){T} end"))
-    utype = eval(parse("$(usertype)"))
+    eval(Meta.parse("abstract type $(usertype){T} end"))
+    utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) == utype
@@ -174,8 +174,8 @@ end
 
 create_serialization_stream() do s # immutable struct with 1 field
     usertype = "SerializeSomeType3"
-    eval(parse("struct $(usertype){T}; a::T; end"))
-    utype = eval(parse("$(usertype)"))
+    eval(Meta.parse("struct $(usertype){T}; a::T; end"))
+    utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) == utype
@@ -183,8 +183,8 @@ end
 
 create_serialization_stream() do s # immutable struct with 2 field
     usertype = "SerializeSomeType4"
-    eval(parse("struct $(usertype){T}; a::T; b::T; end"))
-    utval = eval(parse("$(usertype)(1,2)"))
+    eval(Meta.parse("struct $(usertype){T}; a::T; b::T; end"))
+    utval = eval(Meta.parse("$(usertype)(1,2)"))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
@@ -192,8 +192,8 @@ end
 
 create_serialization_stream() do s # immutable struct with 3 field
     usertype = "SerializeSomeType5"
-    eval(parse("struct $(usertype){T}; a::T; b::T; c::T; end"))
-    utval = eval(parse("$(usertype)(1,2,3)"))
+    eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; end"))
+    utval = eval(Meta.parse("$(usertype)(1,2,3)"))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
@@ -201,8 +201,8 @@ end
 
 create_serialization_stream() do s # immutable struct with 4 field
     usertype = "SerializeSomeType6"
-    eval(parse("struct $(usertype){T}; a::T; b::T; c::T; d::T; end"))
-    utval = eval(parse("$(usertype)(1,2,3,4)"))
+    eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; d::T; end"))
+    utval = eval(Meta.parse("$(usertype)(1,2,3,4)"))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
@@ -210,10 +210,10 @@ end
 
 # Expression
 create_serialization_stream() do s
-    expr = parse("a = 1")
+    expr = Meta.parse("a = 1")
     serialize(s, expr)
 
-    expr2 = parse(repeat("a = 1;", 300))
+    expr2 = Meta.parse(repeat("a = 1;", 300))
     serialize(s, expr2)
 
     seek(s, 0)
@@ -235,7 +235,7 @@ create_serialization_stream() do s # small 1d array
     arr4 = reshape([true, false, false, false, true, false, false, false, true], 3, 3)
     serialize(s, arr4)       # boolean array
 
-    arr5 = Array{TA1}(3)
+    arr5 = Vector{TA1}(uninitialized, 3)
     arr5[2] = TA1(0x01)
     serialize(s, arr5)
 
@@ -357,11 +357,17 @@ create_serialization_stream() do s # user-defined type array
 end
 
 # corner case: undefined inside immutable struct
+struct MyNullable{T}
+    hasvalue::Bool
+    value::T
+
+    MyNullable{T}() where {T} = new(false)
+end
 create_serialization_stream() do s
-    serialize(s, Nullable{Any}())
+    serialize(s, MyNullable{Any}())
     seekstart(s)
     n = deserialize(s)
-    @test isa(n, Nullable)
+    @test isa(n, MyNullable)
     @test !isdefined(n, :value)
 end
 
@@ -435,8 +441,8 @@ using .Shell, .Instance1
 io = IOBuffer()
 serialize(io, foo)
 str = String(take!(io))
-@test isempty(search(str, "Instance1"))
-@test !isempty(search(str, "Shell"))
+@test !contains(str, "Instance1")
+@test contains(str, "Shell")
 
 end  # module Test13452
 

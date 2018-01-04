@@ -82,7 +82,7 @@ import Base.<
 @test isequal(minmax(TO23094(2), TO23094(1))[1], TO23094(1))
 @test isequal(minmax(TO23094(2), TO23094(1))[2], TO23094(2))
 
-@test lexless('a','b')
+@test isless('a','b')
 
 @test 1 .!= 2
 @test 1 .== 1
@@ -106,12 +106,12 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 
 # pr #17155
 @testset "function composition" begin
-    @test (uppercase∘hex)(239487) == "3A77F"
+    @test (Base.Unicode.uppercase∘hex)(239487) == "3A77F"
 end
 @testset "function negation" begin
     str = randstring(20)
-    @test filter(!isupper, str) == replace(str, r"[A-Z]", "")
-    @test filter(!islower, str) == replace(str, r"[a-z]", "")
+    @test filter(!Base.Unicode.isupper, str) == replace(str, r"[A-Z]" => "")
+    @test filter(!Base.Unicode.islower, str) == replace(str, r"[a-z]" => "")
 end
 
 # issue #19891

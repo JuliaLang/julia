@@ -2,6 +2,8 @@
 
 using Test
 
+using Base.LinAlg: mul!, Adjoint, Transpose
+
 n= 10 #Size of matrix to test
 srand(1)
 
@@ -114,11 +116,11 @@ end
         atri = typ(a)
         b = rand(n,n)
         qrb = qrfact(b,Val(true))
-        @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
-        @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
+        @test *(atri, Adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
+        @test mul!(copy(atri), Adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
         qrb = qrfact(b,Val(false))
-        @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
-        @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ Matrix(atri) * qrb[:Q]'
+        @test *(atri, Adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
+        @test mul!(copy(atri), Adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
     end
 end
 
@@ -178,7 +180,7 @@ end
     annotations = testfull ? (triannotations..., symannotations...) : (LowerTriangular, Symmetric)
     # Concatenations involving these types, un/annotated, should yield sparse arrays
     spvec = spzeros(N)
-    spmat = speye(N)
+    spmat = sparse(1.0I, N, N)
     diagmat = Diagonal(ones(N))
     bidiagmat = Bidiagonal(ones(N), ones(N-1), :U)
     tridiagmat = Tridiagonal(ones(N-1), ones(N), ones(N-1))

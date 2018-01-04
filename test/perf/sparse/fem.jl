@@ -7,7 +7,7 @@ function fdlaplacian(N)
     # create a 1D laplacian and a sparse identity
     fdl1 = spdiagm(-1 => ones(N-1), 0 => -2*ones(N), 1 => ones(N-1))
     # laplace operator on the full grid
-    return kron(speye(N), fdl1) + kron(fdl1, speye(N))
+    return kron(sparse(1.0I, N, N), fdl1) + kron(fdl1, sparse(1.0I, N, N))
 end
 
 # get the list of boundary dof-indices

@@ -816,8 +816,8 @@ end
 ###################
 
 function test_LibcFILE(FILEp)
-    buf = Array{UInt8}(8)
-    str = ccall(:fread, Csize_t, (Ptr{Void}, Csize_t, Csize_t, Ptr{Void}), buf, 1, 8, FILEp)
+    buf = Vector{UInt8}(uninitialized, 8)
+    str = ccall(:fread, Csize_t, (Ptr{Cvoid}, Csize_t, Csize_t, Ptr{Cvoid}), buf, 1, 8, FILEp)
     @test String(buf) == "Hello, w"
     @test position(FILEp) == 8
     seek(FILEp, 5)
@@ -829,7 +829,7 @@ let f = open(file, "w")
     write(f, "Hello, world!")
     close(f)
     f = open(file, "r")
-    test_LibcFILE(convert(Libc.FILE, f))
+    test_LibcFILE(Libc.FILE(f))
     close(f)
     if Sys.iswindows()
         f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))

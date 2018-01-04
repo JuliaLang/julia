@@ -3,10 +3,10 @@
 ## Functions to compute the reduced shape
 
 # for reductions that expand 0 dims to 1
-reduced_indices(a::AbstractArray, region) = reduced_indices(indices(a), region)
+reduced_indices(a::AbstractArray, region) = reduced_indices(axes(a), region)
 
 # for reductions that keep 0 dims as 0
-reduced_indices0(a::AbstractArray, region) = reduced_indices0(indices(a), region)
+reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
 
 function reduced_indices(inds::Indices{N}, d::Int, rd::AbstractUnitRange) where N
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
@@ -62,8 +62,8 @@ end
 ###### Generic reduction functions #####
 
 ## initialization
-
-for (Op, initfun) in ((:(typeof(+)), :zero), (:(typeof(*)), :one))
+# initarray! is only called by sum!, prod!, etc.
+for (Op, initfun) in ((:(typeof(add_sum)), :zero), (:(typeof(mul_prod)), :one))
     @eval initarray!(a::AbstractArray{T}, ::$(Op), init::Bool, src::AbstractArray) where {T} = (init && fill!(a, $(initfun)(T)); a)
 end
 
@@ -75,6 +75,7 @@ for (Op, initval) in ((:(typeof(&)), true), (:(typeof(|)), false))
     @eval initarray!(a::AbstractArray, ::$(Op), init::Bool, src::AbstractArray) = (init && fill!(a, $initval); a)
 end
 
+# reducedim_initarray is called by
 reducedim_initarray(A::AbstractArray, region, v0, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), v0)
 reducedim_initarray(A::AbstractArray, region, v0::T) where {T} = reducedim_initarray(A, region, v0, T)
 
@@ -104,15 +105,15 @@ reducedim_initarray0_empty(A::AbstractArray, region,::typeof(identity), ops) = m
 promote_union(T::Union) = promote_type(promote_union(T.a), promote_union(T.b))
 promote_union(T) = T
 
-function reducedim_init(f, op::typeof(+), A::AbstractArray, region)
+function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::AbstractArray, region)
     _reducedim_init(f, op, zero, sum, A, region)
 end
-function reducedim_init(f, op::typeof(*), A::AbstractArray, region)
+function reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::AbstractArray, region)
     _reducedim_init(f, op, one, prod, A, region)
 end
 function _reducedim_init(f, op, fv, fop, A, region)
     T = promote_union(eltype(A))
-    if applicable(zero, T)
+    if T !== Any && applicable(zero, T)
         x = f(zero(T))
         z = op(fv(x), fv(x))
         Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
@@ -143,18 +144,11 @@ let
         [AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
         [AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
 
-    global reducedim_init(f::typeof(identity), op::typeof(+), A::T, region) =
-        reducedim_initarray(A, region, zero(eltype(A)))
-    global reducedim_init(f::typeof(identity), op::typeof(*), A::T, region) =
-        reducedim_initarray(A, region, one(eltype(A)))
-    global reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(+), A::T, region) =
-        reducedim_initarray(A, region, real(zero(eltype(A))))
-    global reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(*), A::T, region) =
-        reducedim_initarray(A, region, real(one(eltype(A))))
+    global reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::T, region) =
+        reducedim_initarray(A, region, mapreduce_first(f, op, zero(eltype(A))))
+    global reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::T, region) =
+        reducedim_initarray(A, region, mapreduce_first(f, op, one(eltype(A))))
 end
-
-reducedim_init(f::Union{typeof(identity),typeof(abs),typeof(abs2)}, op::typeof(+), A::AbstractArray{Bool}, region) =
-    reducedim_initarray(A, region, 0)
 
 ## generic (map)reduction
 
@@ -174,7 +168,7 @@ function check_reducedims(R, A)
     lsiz = 1
     had_nonreduc = false
     for i = 1:ndims(A)
-        Ri, Ai = indices(R, i), indices(A, i)
+        Ri, Ai = axes(R, i), axes(A, i)
         sRi, sAi = length(Ri), length(Ai)
         if sRi == 1
             if sAi > 1
@@ -185,7 +179,7 @@ function check_reducedims(R, A)
                 end
             end
         else
-            Ri == Ai || throw(DimensionMismatch("reduction on array with indices $(indices(A)) with output with indices $(indices(R))"))
+            Ri == Ai || throw(DimensionMismatch("reduction on array with indices $(axes(A)) with output with indices $(axes(R))"))
             had_nonreduc = true
         end
     end
@@ -199,8 +193,8 @@ copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
 
 function mapfirst!(f, R::AbstractArray, A::AbstractArray)
     lsiz = check_reducedims(R, A)
-    iA = indices(A)
-    iR = indices(R)
+    iA = axes(A)
+    iR = axes(R)
     t = []
     for i in 1:length(iR)
         iAi = iA[i]
@@ -223,23 +217,23 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
         end
         return R
     end
-    indsAt, indsRt = safe_tail(indices(A)), safe_tail(indices(R)) # handle d=1 manually
+    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
     keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
         i1 = first(indices1(R))
-        @inbounds for IA in CartesianRange(indsAt)
+        @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
-            @simd for i in indices(A, 1)
+            @simd for i in axes(A, 1)
                 r = op(r, f(A[i, IA]))
             end
             R[i1,IR] = r
         end
     else
-        @inbounds for IA in CartesianRange(indsAt)
+        @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            @simd for i in indices(A, 1)
+            @simd for i in axes(A, 1)
                 R[i,IR] = op(R[i,IR], f(A[i,IA]))
             end
         end
@@ -610,18 +604,9 @@ julia> any!([1 1], A)
 """
 any!(r, A)
 
-for (fname, op) in [(:sum, :+), (:prod, :*),
+for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
                     (:maximum, :scalarmax), (:minimum, :scalarmin),
                     (:all, :&), (:any, :|)]
-    function compose_promote_sys_size(x)
-        if fname === :sum
-            :(promote_sys_size_add ∘ $x)
-        elseif fname === :prod
-            :(promote_sys_size_mul ∘ $x)
-        else
-            x
-        end
-    end
     fname! = Symbol(fname, '!')
     @eval begin
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
@@ -629,7 +614,7 @@ for (fname, op) in [(:sum, :+), (:prod, :*),
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
         $(fname)(f::Function, A::AbstractArray, region) =
-            mapreducedim($(compose_promote_sys_size(:f)), $(op), A, region)
+            mapreducedim(f, $(op), A, region)
         $(fname)(A::AbstractArray, region) = $(fname)(identity, A, region)
     end
 end
@@ -641,22 +626,22 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval) || isempty(A)) && return Rval, Rind
     lsiz = check_reducedims(Rval, A)
     for i = 1:N
-        indices(Rval, i) == indices(Rind, i) || throw(DimensionMismatch("Find-reduction: outputs must have the same indices"))
+        axes(Rval, i) == axes(Rind, i) || throw(DimensionMismatch("Find-reduction: outputs must have the same indices"))
     end
     # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
     # Otherwise, keep the result in Rval/Rind so that we traverse A in storage order.
-    indsAt, indsRt = safe_tail(indices(A)), safe_tail(indices(Rval))
+    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(Rval))
     keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
     ks = keys(A)
     k, kss = next(ks, start(ks))
     zi = zero(eltype(ks))
     if reducedim1(Rval, A)
         i1 = first(indices1(Rval))
-        @inbounds for IA in CartesianRange(indsAt)
+        @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             tmpRv = Rval[i1,IR]
             tmpRi = Rind[i1,IR]
-            for i in indices(A,1)
+            for i in axes(A,1)
                 tmpAv = A[i,IA]
                 if tmpRi == zi || (tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv)))
                     tmpRv = tmpAv
@@ -668,9 +653,9 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             Rind[i1,IR] = tmpRi
         end
     else
-        @inbounds for IA in CartesianRange(indsAt)
+        @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            for i in indices(A, 1)
+            for i in axes(A, 1)
                 tmpAv = A[i,IA]
                 tmpRv = Rval[i,IR]
                 tmpRi = Rind[i,IR]

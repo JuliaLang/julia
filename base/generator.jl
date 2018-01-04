@@ -59,7 +59,7 @@ struct IsInfinite <: IteratorSize end
 """
     iteratorsize(itertype::Type) -> IteratorSize
 
-Given the type of an iterator, returns one of the following values:
+Given the type of an iterator, return one of the following values:
 
 * `SizeUnknown()` if the length (number of elements) cannot be determined in advance.
 * `HasLength()` if there is a fixed, finite length.
@@ -91,7 +91,7 @@ struct HasEltype <: IteratorEltype end
 """
     iteratoreltype(itertype::Type) -> IteratorEltype
 
-Given the type of an iterator, returns one of the following values:
+Given the type of an iterator, return one of the following values:
 
 * `EltypeUnknown()` if the type of elements yielded by the iterator is not known in advance.
 * `HasEltype()` if the element type is known, and [`eltype`](@ref) would return a meaningful value.
@@ -114,7 +114,7 @@ iteratorsize(::Type{<:AbstractArray}) = HasShape()
 iteratorsize(::Type{Generator{I,F}}) where {I,F} = iteratorsize(I)
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
-indices(g::Generator) = indices(g.iter)
+axes(g::Generator) = axes(g.iter)
 ndims(g::Generator) = ndims(g.iter)
 
 iteratoreltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()

@@ -20,16 +20,16 @@ function uv_sizeof_req(req)
 end
 
 for h in uv_handle_types
-@eval const $(Symbol("_sizeof_",lowercase(string(h)))) = uv_sizeof_handle($h)
+@eval const $(Symbol("_sizeof_",Unicode.lowercase(string(h)))) = uv_sizeof_handle($h)
 end
 for r in uv_req_types
-@eval const $(Symbol("_sizeof_",lowercase(string(r)))) = uv_sizeof_req($r)
+@eval const $(Symbol("_sizeof_",Unicode.lowercase(string(r)))) = uv_sizeof_req($r)
 end
 
-uv_handle_data(handle) = ccall(:jl_uv_handle_data,Ptr{Void},(Ptr{Void},),handle)
-uv_req_data(handle) = ccall(:jl_uv_req_data,Ptr{Void},(Ptr{Void},),handle)
-uv_req_set_data(req,data) = ccall(:jl_uv_req_set_data,Void,(Ptr{Void},Any),req,data)
-uv_req_set_data(req,data::Ptr{Void}) = ccall(:jl_uv_req_set_data,Void,(Ptr{Void},Ptr{Void}),req,data)
+uv_handle_data(handle) = ccall(:jl_uv_handle_data,Ptr{Cvoid},(Ptr{Cvoid},),handle)
+uv_req_data(handle) = ccall(:jl_uv_req_data,Ptr{Cvoid},(Ptr{Cvoid},),handle)
+uv_req_set_data(req,data) = ccall(:jl_uv_req_set_data,Cvoid,(Ptr{Cvoid},Any),req,data)
+uv_req_set_data(req,data::Ptr{Cvoid}) = ccall(:jl_uv_req_set_data,Cvoid,(Ptr{Cvoid},Ptr{Cvoid}),req,data)
 
 macro handle_as(hand, typ)
     quote
@@ -39,11 +39,11 @@ macro handle_as(hand, typ)
     end
 end
 
-associate_julia_struct(handle::Ptr{Void}, @nospecialize(jlobj)) =
-    ccall(:jl_uv_associate_julia_struct, Void, (Ptr{Void}, Any), handle, jlobj)
+associate_julia_struct(handle::Ptr{Cvoid}, @nospecialize(jlobj)) =
+    ccall(:jl_uv_associate_julia_struct, Cvoid, (Ptr{Cvoid}, Any), handle, jlobj)
 disassociate_julia_struct(uv) = disassociate_julia_struct(uv.handle)
-disassociate_julia_struct(handle::Ptr{Void}) =
-    handle != C_NULL && ccall(:jl_uv_disassociate_julia_struct, Void, (Ptr{Void},), handle)
+disassociate_julia_struct(handle::Ptr{Cvoid}) =
+    handle != C_NULL && ccall(:jl_uv_disassociate_julia_struct, Cvoid, (Ptr{Cvoid},), handle)
 
 # A dict of all libuv handles that are being waited on somewhere in the system
 # and should thus not be garbage collected
@@ -70,39 +70,39 @@ show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrornam
 
 ## event loop ##
 
-eventloop() = uv_eventloop::Ptr{Void}
-#mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},()) # this would probably be fine, but is nowhere supported
+eventloop() = uv_eventloop::Ptr{Cvoid}
+#mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Cvoid},()) # this would probably be fine, but is nowhere supported
 
 function run_event_loop()
-    ccall(:jl_run_event_loop,Void,(Ptr{Void},),eventloop())
+    ccall(:jl_run_event_loop,Cvoid,(Ptr{Cvoid},),eventloop())
 end
 function process_events(block::Bool)
     loop = eventloop()
     if block
-        return ccall(:jl_run_once,Int32,(Ptr{Void},),loop)
+        return ccall(:jl_run_once,Int32,(Ptr{Cvoid},),loop)
     else
-        return ccall(:jl_process_events,Int32,(Ptr{Void},),loop)
+        return ccall(:jl_process_events,Int32,(Ptr{Cvoid},),loop)
     end
 end
 
 function reinit_stdio()
-    global uv_jl_alloc_buf     = cfunction(uv_alloc_buf, Void, Tuple{Ptr{Void}, Csize_t, Ptr{Void}})
-    global uv_jl_readcb        = cfunction(uv_readcb, Void, Tuple{Ptr{Void}, Cssize_t, Ptr{Void}})
-    global uv_jl_connectioncb  = cfunction(uv_connectioncb, Void, Tuple{Ptr{Void}, Cint})
-    global uv_jl_connectcb     = cfunction(uv_connectcb, Void, Tuple{Ptr{Void}, Cint})
-    global uv_jl_writecb_task  = cfunction(uv_writecb_task, Void, Tuple{Ptr{Void}, Cint})
-    global uv_jl_getaddrinfocb = cfunction(uv_getaddrinfocb, Void, Tuple{Ptr{Void}, Cint, Ptr{Void}})
-    global uv_jl_getnameinfocb = cfunction(uv_getnameinfocb, Void, Tuple{Ptr{Void}, Cint, Cstring, Cstring})
-    global uv_jl_recvcb        = cfunction(uv_recvcb, Void, Tuple{Ptr{Void}, Cssize_t, Ptr{Void}, Ptr{Void}, Cuint})
-    global uv_jl_sendcb        = cfunction(uv_sendcb, Void, Tuple{Ptr{Void}, Cint})
-    global uv_jl_return_spawn  = cfunction(uv_return_spawn, Void, Tuple{Ptr{Void}, Int64, Int32})
-    global uv_jl_asynccb       = cfunction(uv_asynccb, Void, Tuple{Ptr{Void}})
-    global uv_jl_timercb       = cfunction(uv_timercb, Void, Tuple{Ptr{Void}})
+    global uv_jl_alloc_buf     = cfunction(uv_alloc_buf, Cvoid, Tuple{Ptr{Cvoid}, Csize_t, Ptr{Cvoid}})
+    global uv_jl_readcb        = cfunction(uv_readcb, Cvoid, Tuple{Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}})
+    global uv_jl_connectioncb  = cfunction(uv_connectioncb, Cvoid, Tuple{Ptr{Cvoid}, Cint})
+    global uv_jl_connectcb     = cfunction(uv_connectcb, Cvoid, Tuple{Ptr{Cvoid}, Cint})
+    global uv_jl_writecb_task  = cfunction(uv_writecb_task, Cvoid, Tuple{Ptr{Cvoid}, Cint})
+    global uv_jl_getaddrinfocb = cfunction(uv_getaddrinfocb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Ptr{Cvoid}})
+    global uv_jl_getnameinfocb = cfunction(uv_getnameinfocb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Cstring, Cstring})
+    global uv_jl_recvcb        = cfunction(uv_recvcb, Cvoid, Tuple{Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}, Ptr{Cvoid}, Cuint})
+    global uv_jl_sendcb        = cfunction(uv_sendcb, Cvoid, Tuple{Ptr{Cvoid}, Cint})
+    global uv_jl_return_spawn  = cfunction(uv_return_spawn, Cvoid, Tuple{Ptr{Cvoid}, Int64, Int32})
+    global uv_jl_asynccb       = cfunction(uv_asynccb, Cvoid, Tuple{Ptr{Cvoid}})
+    global uv_jl_timercb       = cfunction(uv_timercb, Cvoid, Tuple{Ptr{Cvoid}})
 
-    global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Void}, ())
-    global STDIN = init_stdio(ccall(:jl_stdin_stream, Ptr{Void}, ()))
-    global STDOUT = init_stdio(ccall(:jl_stdout_stream, Ptr{Void}, ()))
-    global STDERR = init_stdio(ccall(:jl_stderr_stream, Ptr{Void}, ()))
+    global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
+    global STDIN = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
+    global STDOUT = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
+    global STDERR = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
 end
 
 """

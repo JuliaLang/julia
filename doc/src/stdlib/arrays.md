@@ -7,16 +7,24 @@ Core.AbstractArray
 Base.AbstractVector
 Base.AbstractMatrix
 Core.Array
-Core.Array(::Any)
+Core.Array(::Uninitialized, ::Any)
+Core.Array(::Nothing, ::Any)
+Core.Array(::Missing, ::Any)
+Core.Uninitialized
+Core.uninitialized
 Base.Vector
-Base.Vector(::Any)
+Base.Vector(::Uninitialized, ::Any)
+Base.Vector(::Nothing, ::Any)
+Base.Vector(::Missing, ::Any)
 Base.Matrix
-Base.Matrix(::Any, ::Any)
+Base.Matrix(::Uninitialized, ::Any, ::Any)
+Base.Matrix(::Nothing, ::Any, ::Any)
+Base.Matrix(::Missing, ::Any, ::Any)
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
 Base.BitArray
-Base.BitArray(::Integer...)
+Base.BitArray(::Uninitialized, ::Integer...)
 Base.BitArray(::Any)
 Base.trues
 Base.falses
@@ -24,7 +32,6 @@ Base.fill
 Base.fill!
 Base.similar(::AbstractArray)
 Base.similar(::Any, ::Tuple)
-Base.eye
 Base.linspace
 Base.logspace
 Base.Random.randsubseq
@@ -36,8 +43,8 @@ Base.Random.randsubseq!
 ```@docs
 Base.ndims
 Base.size
-Base.indices(::Any)
-Base.indices(::AbstractArray, ::Any)
+Base.axes(::Any)
+Base.axes(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
 Base.eachindex
 Base.linearindices
@@ -45,8 +52,6 @@ Base.IndexStyle
 Base.conj!
 Base.stride
 Base.strides
-Base.ind2sub
-Base.sub2ind
 Base.LinAlg.checksquare
 ```
 
@@ -65,16 +70,28 @@ Base.Broadcast.broadcast_getindex
 Base.Broadcast.broadcast_setindex!
 ```
 
+For specializing broadcast on custom types, see
+```@docs
+Base.BroadcastStyle
+Base.broadcast_similar
+Base.broadcast_indices
+Base.Broadcast.Scalar
+Base.Broadcast.AbstractArrayStyle
+Base.Broadcast.ArrayStyle
+Base.Broadcast.DefaultArrayStyle
+```
+
 ## Indexing and assignment
 
 ```@docs
 Base.getindex(::AbstractArray, ::Any...)
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
-Base.copy!(::AbstractArray, ::CartesianRange, ::AbstractArray, ::CartesianRange)
+Base.copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 Base.isassigned
 Base.Colon
 Base.CartesianIndex
-Base.CartesianRange
+Base.CartesianIndices
+Base.LinearIndices
 Base.to_indices
 Base.checkbounds
 Base.checkindex
@@ -87,7 +104,7 @@ Base.view
 Base.@view
 Base.@views
 Base.parent
-Base.parentindexes
+Base.parentindices
 Base.slicedim
 Base.reinterpret
 Base.reshape
@@ -102,6 +119,7 @@ Base.cat
 Base.vcat
 Base.hcat
 Base.hvcat
+Base.vect
 Base.flipdim
 Base.circshift
 Base.circshift!
@@ -133,8 +151,6 @@ Base.cumprod
 Base.cumprod!
 Base.cumsum
 Base.cumsum!
-Base.cumsum_kbn
-Base.crc32c
 Base.LinAlg.diff
 Base.repeat(::AbstractArray)
 Base.rot180
@@ -143,7 +159,6 @@ Base.rotr90
 Base.reducedim
 Base.mapreducedim
 Base.mapslices
-Base.sum_kbn
 ```
 
 ## Combinatorics
@@ -154,7 +169,7 @@ Base.Random.randperm!
 Base.invperm
 Base.isperm
 Base.permute!(::Any, ::AbstractVector)
-Base.ipermute!
+Base.invpermute!
 Base.Random.randcycle
 Base.Random.randcycle!
 Base.Random.shuffle
@@ -187,9 +202,6 @@ Base.SparseArrays.sparsevec
 Base.SparseArrays.issparse
 Base.SparseArrays.nnz
 Base.SparseArrays.spzeros
-Base.SparseArrays.spones
-Base.SparseArrays.speye(::Type, ::Integer, ::Integer)
-Base.SparseArrays.speye(::SparseMatrixCSC)
 Base.SparseArrays.spdiagm
 Base.SparseArrays.sprand
 Base.SparseArrays.sprandn

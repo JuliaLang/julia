@@ -12,9 +12,9 @@ All Julia streams expose at least a [`read`](@ref) and a [`write`](@ref) method,
 stream as their first argument, e.g.:
 
 ```julia-repl
-julia> write(STDOUT,"Hello World");  # suppress return value 11 with ;
+julia> write(STDOUT, "Hello World");  # suppress return value 11 with ;
 Hello World
-julia> read(STDIN,Char)
+julia> read(STDIN, Char)
 
 '\n': ASCII/Unicode U+000a (category Cc: Other, control)
 ```
@@ -49,7 +49,7 @@ However, since this is slightly cumbersome, there are several convenience method
 example, we could have written the above as:
 
 ```julia-repl
-julia> read(STDIN,4)
+julia> read(STDIN, 4)
 abcd
 4-element Array{UInt8,1}:
  0x61
@@ -92,7 +92,7 @@ Note that the [`write`](@ref) method mentioned above operates on binary streams.
 values do not get converted to any canonical text representation but are written out as is:
 
 ```jldoctest
-julia> write(STDOUT,0x61);  # suppress return value 1 with ;
+julia> write(STDOUT, 0x61);  # suppress return value 1 with ;
 a
 ```
 
@@ -117,7 +117,7 @@ should print a shorter output (if applicable).
 ## Working with Files
 
 Like many other environments, Julia has an [`open`](@ref) function, which takes a filename and
-returns an `IOStream` object that you can use to read and write things from the file. For example
+returns an `IOStream` object that you can use to read and write things from the file. For example,
 if we have a file, `hello.txt`, whose contents are `Hello, World!`:
 
 ```julia-repl
@@ -167,7 +167,7 @@ julia> open(read_and_capitalize, "hello.txt")
 "HELLO AGAIN."
 ```
 
-to open `hello.txt`, call `read_and_capitalize on it`, close `hello.txt` and return the capitalized
+to open `hello.txt`, call `read_and_capitalize` on it, close `hello.txt` and return the capitalized
 contents.
 
 To avoid even having to define a named function, you can use the `do` syntax, which creates an
@@ -249,7 +249,7 @@ the accept function returns a server-side connection to the newly created socket
 World" to indicate that the connection was successful.
 
 A great strength of Julia is that since the API is exposed synchronously even though the I/O is
-actually happening asynchronously, we didn't have to worry callbacks or even making sure that
+actually happening asynchronously, we didn't have to worry about callbacks or even making sure that
 the server gets to run. When we called [`connect`](@ref) the current task waited for the connection
 to be established and only continued executing after that was done. In this pause, the server
 task resumed execution (because a connection request was now available), accepted the connection,
@@ -290,10 +290,10 @@ julia> close(clientside)
 
 One of the [`connect`](@ref) methods that does not follow the [`listen`](@ref) methods is
 `connect(host::String,port)`, which will attempt to connect to the host given by the `host` parameter
-on the port given by the port parameter. It allows you to do things like:
+on the port given by the `port` parameter. It allows you to do things like:
 
 ```julia-repl
-julia> connect("google.com",80)
+julia> connect("google.com", 80)
 TCPSocket(RawFD(30) open, 0 bytes waiting)
 ```
 

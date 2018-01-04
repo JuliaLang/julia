@@ -121,7 +121,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     of the form `if cond; statement; end`, `cond && statement` and `!cond || statement`. Assignment
     statements in the latter two syntaxes must be explicitly wrapped in parentheses, e.g. `cond && (x = value)`.
   * In Julia, `<-`, `<<-` and `->` are not assignment operators.
-  * Julia's `->` creates an anonymous function, like Python.
+  * Julia's `->` creates an anonymous function.
   * Julia constructs vectors using brackets. Julia's `[1, 2, 3]` is the equivalent of R's `c(1, 2, 3)`.
   * Julia's [`*`](@ref) operator can perform matrix multiplication, unlike in R. If `A` and `B` are
     matrices, then `A * B` denotes a matrix multiplication in Julia, equivalent to R's `A %*% B`.
@@ -180,7 +180,12 @@ For users coming to Julia from R, these are some noteworthy differences:
     code is often achieved by using devectorized loops.
   * Julia is eagerly evaluated and does not support R-style lazy evaluation. For most users, this
     means that there are very few unquoted expressions or column names.
-  * Julia does not support the `NULL` type.
+  * Julia does not support the `NULL` type. The closest equivalent is [`nothing`](@ref), but it
+    behaves like a scalar value rather than like a list. Use `x == nothing` instead of `is.null(x)`.
+  * In Julia, missing values are represented by the [`missing`](@ref) object rather than by `NA`.
+    Use [`ismissing(x)`](@ref) instead of `isna(x)`. The [`skipmissing`](@ref) function is generally
+    used instead of `na.rm=TRUE` (though in some particular cases functions take a `skipmissing`
+    argument).
   * Julia lacks the equivalent of R's `assign` or `get`.
   * In Julia, `return` does not require parentheses.
   * In R, an idiomatic way to remove unwanted values is to use logical indexing, like in the expression
@@ -195,7 +200,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
   * Julia's slice indexing includes the last element, unlike in Python. `a[2:3]` in Julia is `a[1:3]`
     in Python.
-  * Julia does not support negative indexes. In particular, the last element of a list or array is
+  * Julia does not support negative indices. In particular, the last element of a list or array is
     indexed with `end` in Julia, not `-1` as in Python.
   * Julia's `for`, `if`, `while`, etc. blocks are terminated by the `end` keyword. Indentation level
     is not significant as it is in Python.

@@ -138,13 +138,7 @@ julia> sB\x
  -1.1086956521739126
  -1.4565217391304346
 ```
-The `\` operation here performs the linear solution. Julia's parser provides convenient dispatch
-to specialized methods for the *transpose* of a matrix left-divided by a vector, or for the various combinations
-of transpose operations in matrix-matrix solutions. Many of these are further specialized for certain special
-matrix types. For example, `A\B` will end up calling [`Base.LinAlg.A_ldiv_B!`](@ref) while `A'\B` will end up calling
-[`Base.LinAlg.Ac_ldiv_B`](@ref), even though we used the same left-division operator. This works for matrices too: `A.'\B.'`
-would call [`Base.LinAlg.At_ldiv_Bt`](@ref). The left-division operator is pretty powerful and it's easy to write compact,
-readable code that is flexible enough to solve all sorts of systems of linear equations.
+The `\` operation here performs the linear solution. The left-division operator is pretty powerful and it's easy to write compact, readable code that is flexible enough to solve all sorts of systems of linear equations.
 
 ## Special matrices
 
@@ -221,6 +215,44 @@ operators are generic and match the other matrix in the binary operations [`+`](
 with the identity operator `I` is a noop (except for checking that the scaling factor is one)
 and therefore almost without overhead.
 
+To see the `UniformScaling` operator in action:
+
+```jldoctest
+julia> U = UniformScaling(2);
+
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> a + U
+2×2 Array{Int64,2}:
+ 3  2
+ 3  6
+
+julia> a * U
+2×2 Array{Int64,2}:
+ 2  4
+ 6  8
+
+julia> [a U]
+2×4 Array{Int64,2}:
+ 1  2  2  0
+ 3  4  0  2
+
+julia> b = [1 2 3; 4 5 6]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> b - U
+ERROR: DimensionMismatch("matrix is not square: dimensions are (2, 3)")
+Stacktrace:
+ [1] checksquare at ./linalg/linalg.jl:220 [inlined]
+ [2] -(::Array{Int64,2}, ::UniformScaling{Int64}) at ./linalg/uniformscaling.jl:156
+ [3] top-level scope
+```
+
 ## [Matrix factorizations](@id man-linalg-factorizations)
 
 [Matrix factorizations (a.k.a. matrix decompositions)](https://en.wikipedia.org/wiki/Matrix_decomposition)
@@ -237,7 +269,6 @@ of the standard library documentation.
 | `CholeskyPivoted` | [Pivoted](https://en.wikipedia.org/wiki/Pivot_element) Cholesky factorization                                  |
 | `LU`              | [LU factorization](https://en.wikipedia.org/wiki/LU_decomposition)                                             |
 | `LUTridiagonal`   | LU factorization for [`Tridiagonal`](@ref) matrices                                                            |
-| `UmfpackLU`       | LU factorization for sparse matrices (computed by UMFPack)                                                     |
 | `QR`              | [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                             |
 | `QRCompactWY`     | Compact WY form of the QR factorization                                                                        |
 | `QRPivoted`       | Pivoted [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                     |

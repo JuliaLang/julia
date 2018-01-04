@@ -3,7 +3,7 @@
 struct BitPerm_19352
     p::NTuple{8,UInt8}
     function BitPerm(p::NTuple{8,UInt8})
-        sort(collect(p)) != collect(0:7) && error("$p is not a permutation of 0:7")
+        sort(collect(p)) != 0:7 && error("$p is not a permutation of 0:7")
         new(p)
     end
     BitPerm_19352(xs::Vararg{Any,8}) = BitPerm(map(UInt8, xs))
@@ -83,6 +83,8 @@ end
         @test Tuple{Int,Vararg{Any}}.ninitialized == 1
         @test Tuple{Any,Any,Vararg{Any}}.ninitialized == 2
     end
+
+    @test empty((1, 2.0, "c")) === ()
 end
 
 @testset "size" begin
@@ -161,8 +163,8 @@ end
     @test_throws BoundsError next((5,6,7), 0)
     @test_throws BoundsError next((), 1)
 
-    @test collect(eachindex((2,5,"foo"))) == collect(1:3)
-    @test collect(eachindex((2,5,"foo"), (1,2,5,7))) == collect(1:4)
+    @test eachindex((2,5,"foo")) === 1:3
+    @test eachindex((2,5,"foo"), (1,2,5,7)) === 1:4
 end
 
 
@@ -227,6 +229,11 @@ end
     @test ==((1,2,3), (1,2,3))
     @test !==((1,2,3), (1,2,4))
     @test !==((1,2,3), (1,2))
+
+    @test (1,2) < (1,3)
+    @test (1,) < (1,2)
+    @test !((1,2) < (1,2))
+    @test (2,1) > (1,2)
 
     @test isless((1,2), (1,3))
     @test isless((1,), (1,2))
@@ -352,4 +359,8 @@ end
         (Complex(1), Complex(2))
     @test convert(Tuple{Complex, Complex}, (1, 2.0)) ===
         (Complex(1), Complex(2.0))
+end
+
+@testset "issue 24707" begin
+    @test eltype(Tuple{Vararg{T}} where T<:Integer) >: Integer
 end

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+if module_name(@__MODULE__) === :Base
+
 """
     NamedTuple{names,T}(args::Tuple)
 
@@ -17,21 +19,11 @@ function NamedTuple{names,T}(args::Tuple) where {names, T <: Tuple}
             NT = NamedTuple{names,T}
             types = T.parameters
             fields = Any[ convert(types[i], args[i]) for i = 1:N ]
-            ccall(:jl_new_structv, Any, (Any, Ptr{Void}, UInt32), NT, fields, N)::NT
+            ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), NT, fields, N)::NT
         end
     else
         throw(ArgumentError("Wrong number of arguments to named tuple constructor."))
     end
-end
-
-"""
-    NamedTuple{names}(args::Tuple)
-
-Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of
-values.
-"""
-function NamedTuple{names}(args::Tuple) where {names}
-    NamedTuple{names,typeof(args)}(args)
 end
 
 """
@@ -50,7 +42,7 @@ function NamedTuple{names}(nt::NamedTuple) where {names}
     end
 end
 
-NamedTuple() = NamedTuple{(),Tuple{}}(())
+end # if Base
 
 length(t::NamedTuple) = nfields(t)
 start(t::NamedTuple) = 1
@@ -60,6 +52,8 @@ endof(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
 getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
 indexed_next(t::NamedTuple, i::Int, state) = (getfield(t, i), i+1)
+isempty(::NamedTuple{()}) = true
+isempty(::NamedTuple) = false
 
 convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T} = nt
 convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
@@ -213,3 +207,32 @@ values(nt::NamedTuple) = Tuple(nt)
 haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
 get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = haskey(nt, key) ? getfield(nt, key) : default
 get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) ? getfield(nt, key) : f()
+
+@pure function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    names = Symbol[]
+    for n in an
+        if !sym_in(n, bn)
+            push!(names, n)
+        end
+    end
+    (names...,)
+end
+
+"""
+    structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn},Type{NamedTuple{bn}}}) where {an,bn}
+
+Construct a copy of named tuple `a`, except with fields that exist in `b` removed.
+`b` can be a named tuple, or a type of the form `NamedTuple{field_names}`.
+"""
+function structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn}, Type{NamedTuple{bn}}}) where {an, bn}
+    if @generated
+        names = diff_names(an, bn)
+        types = Tuple{Any[ fieldtype(a, n) for n in names ]...}
+        vals = Any[ :(getfield(a, $(QuoteNode(n)))) for n in names ]
+        :( NamedTuple{$names,$types}(($(vals...),)) )
+    else
+        names = diff_names(an, bn)
+        types = Tuple{Any[ fieldtype(typeof(a), n) for n in names ]...}
+        NamedTuple{names,types}(map(n->getfield(a, n), names))
+    end
+end

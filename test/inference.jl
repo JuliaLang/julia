@@ -285,7 +285,7 @@ const NInt1{N} = Tuple{Int, Vararg{Int, N}}
 @test Base.eltype(NInt{1}) === Int
 @test Base.eltype(NInt1{0}) === Int
 @test Base.eltype(NInt1{1}) === Int
-fNInt(x::NInt) = (x...)
+fNInt(x::NInt) = (x...,)
 gNInt() = fNInt(x)
 @test Base.return_types(gNInt, ()) == Any[NInt]
 @test Base.return_types(eltype, (NInt,)) == Any[Union{Type{Int}, Type{Union{}}}] # issue 21763
@@ -299,7 +299,7 @@ end
 
 # === with singleton constants
 let f(x) = (x===nothing) ? 1 : 1.0
-    @test Base.return_types(f, (Void,)) == Any[Int]
+    @test Base.return_types(f, (Nothing,)) == Any[Int]
 end
 
 # issue #16530
@@ -614,7 +614,7 @@ function f_inferred_union()
         return f_inferred_union_int(b)
     end
 end
-f_inferred_union_nothing(::Void) = 1
+f_inferred_union_nothing(::Nothing) = 1
 f_inferred_union_nothing(::Any) = "broken"
 f_inferred_union_float(::Float64) = 2
 f_inferred_union_float(::Any) = "broken"
@@ -657,7 +657,7 @@ end
 @test Base.return_types(i20343, ()) == [Int8]
 struct Foo20518 <: AbstractVector{Int}; end # issue #20518; inference assumed AbstractArrays
 Base.getindex(::Foo20518, ::Int) = "oops"      # not to lie about their element type
-Base.indices(::Foo20518) = (Base.OneTo(4),)
+Base.axes(::Foo20518) = (Base.OneTo(4),)
 foo20518(xs::Any...) = -1
 foo20518(xs::Int...) = [0]
 bar20518(xs) = sum(foo20518(xs...))
@@ -855,10 +855,10 @@ end
 
 # issue #21848
 @test Core.Inference.limit_type_depth(Ref{Complex{T} where T}, 0) == Ref
-let T = Tuple{Tuple{Int64, Void},
-              Tuple{Tuple{Int64, Void},
-                    Tuple{Int64, Tuple{Tuple{Int64, Void},
-                                       Tuple{Tuple{Int64, Void}, Tuple{Int64, Tuple{Tuple{Int64, Void}, Tuple{Tuple, Tuple}}}}}}}}
+let T = Tuple{Tuple{Int64, Nothing},
+              Tuple{Tuple{Int64, Nothing},
+                    Tuple{Int64, Tuple{Tuple{Int64, Nothing},
+                                       Tuple{Tuple{Int64, Nothing}, Tuple{Int64, Tuple{Tuple{Int64, Nothing}, Tuple{Tuple, Tuple}}}}}}}}
     @test Core.Inference.limit_type_depth(T, 0) >: T
     @test Core.Inference.limit_type_depth(T, 1) >: T
     @test Core.Inference.limit_type_depth(T, 2) >: T
@@ -885,18 +885,21 @@ f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 
 # issue #21653
 # ensure that we don't try to resolve cycles using uncached edges
+# but which also means we should still be storing the inference result from inferring the cycle
 f21653() = f21653()
 @test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}
+@test which(f21653, ()).specializations.func.rettype === Union{}
 
 # ensure _apply can "see-through" SSAValue to infer precise container types
 let f, m
     f() = 0
     m = first(methods(f))
     m.source = Base.uncompressed_ast(m)::CodeInfo
-    m.source.ssavaluetypes = 1
+    m.source.ssavaluetypes = 2
     m.source.code = Any[
         Expr(:(=), SSAValue(0), Expr(:call, GlobalRef(Core, :svec), 1, 2, 3)),
-        Expr(:return, Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(0)))
+        Expr(:(=), SSAValue(1), Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(0))),
+        Expr(:return, SSAValue(1))
     ]
     @test @inferred(f()) == 6
 end
@@ -914,19 +917,19 @@ let f(x) = isdefined(x, 2) ? 1 : ""
     @test Base.return_types(f, (Tuple{Int,},)) == Any[String]
 end
 let f(x) = isdefined(x, :re) ? 1 : ""
-    @test Base.return_types(f, (Complex64,)) == Any[Int]
+    @test Base.return_types(f, (ComplexF32,)) == Any[Int]
     @test Base.return_types(f, (Complex,)) == Any[Int]
 end
 let f(x) = isdefined(x, :NonExistentField) ? 1 : ""
-    @test Base.return_types(f, (Complex64,)) == Any[String]
+    @test Base.return_types(f, (ComplexF32,)) == Any[String]
     @test Union{Int,String} <: Base.return_types(f, (AbstractArray,))[1]
 end
 import Core.Inference: isdefined_tfunc
-@test isdefined_tfunc(Complex64, Const(())) === Union{}
-@test isdefined_tfunc(Complex64, Const(1)) === Const(true)
-@test isdefined_tfunc(Complex64, Const(2)) === Const(true)
-@test isdefined_tfunc(Complex64, Const(3)) === Const(false)
-@test isdefined_tfunc(Complex64, Const(0)) === Const(false)
+@test isdefined_tfunc(ComplexF32, Const(())) === Union{}
+@test isdefined_tfunc(ComplexF32, Const(1)) === Const(true)
+@test isdefined_tfunc(ComplexF32, Const(2)) === Const(true)
+@test isdefined_tfunc(ComplexF32, Const(3)) === Const(false)
+@test isdefined_tfunc(ComplexF32, Const(0)) === Const(false)
 mutable struct SometimesDefined
     x
     function SometimesDefined()
@@ -993,13 +996,13 @@ copy_dims_out(out) = ()
 copy_dims_out(out, dim::Int, tail...) =  copy_dims_out((out..., dim), tail...)
 copy_dims_out(out, dim::Colon, tail...) = copy_dims_out((out..., dim), tail...)
 @test Base.return_types(copy_dims_out, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 10 < count_specializations(m) < 25, methods(copy_dims_out))
+@test all(m -> 20 < count_specializations(m) < 45, methods(copy_dims_out))
 
 copy_dims_pair(out) = ()
 copy_dims_pair(out, dim::Int, tail...) =  copy_dims_pair(out => dim, tail...)
 copy_dims_pair(out, dim::Colon, tail...) = copy_dims_pair(out => dim, tail...)
 @test Base.return_types(copy_dims_pair, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 5 < count_specializations(m) < 25, methods(copy_dims_pair))
+@test all(m -> 10 < count_specializations(m) < 35, methods(copy_dims_pair))
 
 @test isdefined_tfunc(typeof(NamedTuple()), Const(0)) === Const(false)
 @test isdefined_tfunc(typeof(NamedTuple()), Const(1)) === Const(false)
@@ -1106,8 +1109,8 @@ test_const_return(()->sizeof(Int), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(1), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(DataType), Tuple{}, sizeof(DataType))
 test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
-@eval test_const_return(()->Core.sizeof($(Array{Int}())), Tuple{}, sizeof(Int))
-@eval test_const_return(()->Core.sizeof($(Matrix{Float32}(2, 2))), Tuple{}, 4 * 2 * 2)
+@eval test_const_return(()->Core.sizeof($(Array{Int,0}(uninitialized))), Tuple{}, sizeof(Int))
+@eval test_const_return(()->Core.sizeof($(Matrix{Float32}(uninitialized, 2, 2))), Tuple{}, 4 * 2 * 2)
 
 # Make sure Core.sizeof with a ::DataType as inferred input type is inferred but not constant.
 function sizeof_typeref(typeref)
@@ -1125,7 +1128,7 @@ end
 push!(constvec, 10)
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 4
 
-test_const_return((x)->isdefined(x, :re), Tuple{Complex128}, true)
+test_const_return((x)->isdefined(x, :re), Tuple{ComplexF64}, true)
 isdefined_f3(x) = isdefined(x, 3)
 @test @inferred(isdefined_f3(())) == false
 @test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]).code, isdefined, 3)
@@ -1274,3 +1277,31 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.min_valid === Core.Inference.min_world(opt.linfo) > 2
     @test opt.nargs == 3
 end
+
+# approximate static parameters due to unions
+let T1 = Array{Float64}, T2 = Array{_1,2} where _1
+    inference_test_copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
+    rt = Base.return_types(inference_test_copy, (Union{T1,T2},))[1]
+    @test rt >: T1 && rt >: T2
+
+    el(x::T) where {T} = eltype(T)
+    rt = Base.return_types(el, (Union{T1,Array{Float32,2}},))[1]
+    @test rt >: Union{Type{Float64}, Type{Float32}}
+
+    g(x::Ref{T}) where {T} = T
+    rt = Base.return_types(g, (Union{Ref{Array{Float64}}, Ref{Array{Float32}}},))[1]
+    @test rt >: Union{Type{Array{Float64}}, Type{Array{Float32}}}
+end
+
+# Demonstrate IPO constant propagation (#24362)
+f_constant(x) = convert(Int, x)
+g_test_constant() = (f_constant(3) == 3 && f_constant(4) == 4 ? true : "BAD")
+@test @inferred g_test_constant()
+
+f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
+@test @inferred f_pure_add()
+
+# inference of `T.mutable`
+@test Core.Inference.getfield_tfunc(Const(Int), Const(:mutable)) == Const(false)
+@test Core.Inference.getfield_tfunc(Const(Vector{Int}), Const(:mutable)) == Const(true)
+@test Core.Inference.getfield_tfunc(DataType, Const(:mutable)) == Bool

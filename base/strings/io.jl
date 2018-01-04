@@ -2,13 +2,12 @@
 
 ## core text I/O ##
 
-
 """
-    print(io::IO, x)
+    print([io::IO], xs...)
 
 Write to `io` (or to the default output stream [`STDOUT`](@ref)
 if `io` is not given) a canonical (un-decorated) text representation
-of a value if there is one, otherwise call [`show`](@ref).
+of values `xs` if there is one, otherwise call [`show`](@ref).
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
@@ -18,7 +17,7 @@ julia> print("Hello World!")
 Hello World!
 julia> io = IOBuffer();
 
-julia> print(io, "Hello World!")
+julia> print(io, "Hello", ' ', :World!)
 
 julia> String(take!(io))
 "Hello World!"
@@ -47,7 +46,7 @@ function print(io::IO, xs...)
 end
 
 """
-    println(io::IO, xs...)
+    println([io::IO], xs...)
 
 Print (using [`print`](@ref)) `xs` followed by a newline.
 If `io` is not supplied, prints to [`STDOUT`](@ref).
@@ -69,19 +68,6 @@ println(io::IO, xs...) = print(io, xs..., '\n')
 
 ## conversion of general objects to strings ##
 
-function sprint(size::Integer, f::Function, args...; env=nothing)
-    s = IOBuffer(StringVector(size), true, true)
-    # specialized version of truncate(s,0)
-    s.size = 0
-    s.ptr = 1
-    if env !== nothing
-        f(IOContext(s, env), args...)
-    else
-        f(s, args...)
-    end
-    String(resize!(s.data, s.size))
-end
-
 """
     sprint(f::Function, args...)
 
@@ -94,7 +80,18 @@ julia> sprint(showcompact, 66.66666)
 "66.6667"
 ```
 """
-sprint(f::Function, args...) = sprint(0, f, args...)
+function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
+    s = IOBuffer(StringVector(sizehint), true, true)
+    # specialized version of truncate(s,0)
+    s.size = 0
+    s.ptr = 1
+    if context !== nothing
+        f(IOContext(s, context), args...)
+    else
+        f(s, args...)
+    end
+    String(resize!(s.data, s.size))
+end
 
 tostr_sizehint(x) = 0
 tostr_sizehint(x::AbstractString) = endof(x)
@@ -140,7 +137,7 @@ write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); en
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
 write(to::GenericIOBuffer, s::SubString{String}) =
-    s.endof==0 ? 0 : unsafe_write(to, pointer(s.string, s.offset + 1), UInt(nextind(s, s.endof) - 1))
+    s.ncodeunits ≤ 0 ? 0 : unsafe_write(to, pointer(s.string, s.offset+1), UInt(s.ncodeunits))
 
 ## printing literal quoted string data ##
 
@@ -191,8 +188,8 @@ julia> String(take!(io))
 "Haho"
 ```
 """
-IOBuffer(str::String) = IOBuffer(Vector{UInt8}(str))
-IOBuffer(s::SubString{String}) = IOBuffer(view(Vector{UInt8}(s.string), s.offset + 1 : s.offset + sizeof(s)))
+IOBuffer(str::String) = IOBuffer(unsafe_wrap(Vector{UInt8}, str))
+IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.string), s.offset + 1 : s.offset + sizeof(s)))
 
 # join is implemented using IO
 
@@ -241,40 +238,62 @@ function join(io::IO, strings, delim)
     end
 end
 join(io::IO, strings) = join(io, strings, "")
-join(args...) = sprint(join, args...)
+
+join(strings) = sprint(join, strings)
+join(strings, delim) = sprint(join, strings, delim)
+join(strings, delim, last) = sprint(join, strings, delim, last)
 
 ## string escaping & unescaping ##
 
-need_full_hex(s::AbstractString, i::Int) = !done(s,i) && isxdigit(next(s,i)[1])
+need_full_hex(s::AbstractString, i::Int) = !done(s,i) && Unicode.isxdigit(next(s,i)[1])
 
 escape_nul(s::AbstractString, i::Int) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
 """
-    escape_string([io,] str::AbstractString[, esc::AbstractString]) -> AbstractString
+    escape_string(str::AbstractString[, esc::AbstractString]) -> AbstractString
 
 General escaping of traditional C and Unicode escape sequences.
 Any characters in `esc` are also escaped (with a backslash).
-See also [`unescape_string`](@ref).
+The reverse is [`unescape_string`](@ref).
 """
-function escape_string(io, s::AbstractString, esc::AbstractString)
+escape_string(s::AbstractString, esc::AbstractString) = sprint(escape_string, s, esc, sizehint=endof(s))
+escape_string(s::AbstractString) = sprint(escape_string, s, "\"", sizehint=endof(s))
+
+"""
+    escape_string(io, str::AbstractString[, esc::AbstractString]) -> Nothing
+
+Escape sequences in `str` and print result to `io`. See also [`unescape_string`](@ref).
+"""
+function escape_string(io, s::AbstractString, esc::AbstractString="")
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        c == '\0'       ? print(io, escape_nul(s,j)) :
-        c == '\e'       ? print(io, "\\e") :
-        c == '\\'       ? print(io, "\\\\") :
-        c in esc        ? print(io, '\\', c) :
-        '\a' <= c <= '\r' ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
-        isprint(c)      ? print(io, c) :
-        c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
-        c <= '\uffff'   ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
-                          print(io, "\\U", hex(c, need_full_hex(s,j) ? 8 : 4))
+        if c in esc
+            print(io, '\\', c)
+        elseif Unicode.isascii(c)
+            c == '\0'          ? print(io, escape_nul(s,j)) :
+            c == '\e'          ? print(io, "\\e") :
+            c == '\\'          ? print(io, "\\\\") :
+            c in esc           ? print(io, '\\', c) :
+            '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
+            Unicode.isprint(c) ? print(io, c) :
+                                 print(io, "\\x", hex(c, 2))
+        elseif !isoverlong(c) && !ismalformed(c)
+            Unicode.isprint(c) ? print(io, c) :
+            c <= '\x7f'        ? print(io, "\\x", hex(c, 2)) :
+            c <= '\uffff'      ? print(io, "\\u", hex(c, need_full_hex(s, j) ? 4 : 2)) :
+                                 print(io, "\\U", hex(c, need_full_hex(s, j) ? 8 : 4))
+        else # malformed or overlong
+            u = bswap(reinterpret(UInt32, c))
+            while true
+                print(io, "\\x", hex(u % UInt8, 2))
+                (u >>= 8) == 0 && break
+            end
+        end
         i = j
     end
 end
-
-escape_string(s::AbstractString) = sprint(endof(s), escape_string, s, "\"")
 
 function print_quoted(io, s::AbstractString)
     print(io, '"')
@@ -282,32 +301,22 @@ function print_quoted(io, s::AbstractString)
     print(io, '"')
 end
 
-# bare minimum unescaping function unescapes only given characters
-
-function print_unescaped_chars(io, s::AbstractString, esc::AbstractString)
-    if !('\\' in esc)
-        esc = string("\\", esc)
-    end
-    i = start(s)
-    while !done(s,i)
-        c, i = next(s,i)
-        if c == '\\' && !done(s,i) && s[i] in esc
-            c, i = next(s,i)
-        end
-        print(io, c)
-    end
-end
-
-unescape_chars(s::AbstractString, esc::AbstractString) =
-    sprint(endof(s), print_unescaped_chars, s, esc)
-
 # general unescaping of traditional C and Unicode escape sequences
 
+# TODO: handle unescaping invalid UTF-8 sequences
+
 """
-    unescape_string([io,] s::AbstractString) -> AbstractString
+    unescape_string(str::AbstractString) -> AbstractString
 
 General unescaping of traditional C and Unicode escape sequences. Reverse of
 [`escape_string`](@ref).
+"""
+unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=endof(s))
+
+"""
+    unescape_string(io, str::AbstractString) -> Nothing
+
+Unescapes sequences and prints result to `io`. See also [`escape_string`](@ref).
 """
 function unescape_string(io, s::AbstractString)
     i = start(s)
@@ -319,16 +328,17 @@ function unescape_string(io, s::AbstractString)
                 n = k = 0
                 m = c == 'x' ? 2 :
                     c == 'u' ? 4 : 8
-                while (k+=1) <= m && !done(s,i)
+                while (k += 1) <= m && !done(s,i)
                     c, j = next(s,i)
-                    n = '0' <= c <= '9' ? n<<4 + c-'0' :
-                        'a' <= c <= 'f' ? n<<4 + c-'a'+10 :
-                        'A' <= c <= 'F' ? n<<4 + c-'A'+10 : break
+                    n = '0' <= c <= '9' ? n<<4 + (c-'0') :
+                        'a' <= c <= 'f' ? n<<4 + (c-'a'+10) :
+                        'A' <= c <= 'F' ? n<<4 + (c-'A'+10) : break
                     i = j
                 end
-                if k == 1
+                if k == 1 || n > 0x10ffff
+                    u = m == 4 ? 'u' : 'U'
                     throw(ArgumentError("invalid $(m == 2 ? "hex (\\x)" :
-                                            "unicode (\\u)") escape sequence used in $(repr(s))"))
+                                        "unicode (\\$u)") escape sequence"))
                 end
                 if m == 2 # \x escape sequence
                     write(io, UInt8(n))
@@ -338,7 +348,7 @@ function unescape_string(io, s::AbstractString)
             elseif '0' <= c <= '7'
                 k = 1
                 n = c-'0'
-                while (k+=1) <= 3 && !done(s,i)
+                while (k += 1) <= 3 && !done(s,i)
                     c, j = next(s,i)
                     n = ('0' <= c <= '7') ? n<<3 + c-'0' : break
                     i = j
@@ -363,23 +373,34 @@ function unescape_string(io, s::AbstractString)
     end
 end
 
-unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
-
-macro b_str(s); :(Vector{UInt8}($(unescape_string(s)))); end
+macro b_str(s)
+    v = Vector{UInt8}(codeunits(unescape_string(s)))
+    QuoteNode(v)
+end
 
 """
     @raw_str -> String
 
 Create a raw string without interpolation and unescaping.
-The exception is that quotation marks still must be escaped.
+The exception is that quotation marks still must be escaped. Backslashes
+escape both quotation marks and other backslashes, but only when a sequence
+of backslashes precedes a quote character. Thus, 2n backslashes followed by
+a quote encodes n backslashes and the end of the literal while 2n+1 backslashes
+followed by a quote encodes n backslashes followed by a quote character.
 
 # Examples
 ```jldoctest
-julia> raw"\\""
-"\\""
+julia> println(raw"\\ \$x")
+\\ \$x
 
-julia> raw""\" " ""\"
-" \\" "
+julia> println(raw"\\"")
+"
+
+julia> println(raw"\\\\\\"")
+\\"
+
+julia> println(raw"\\\\x \\\\\\"")
+\\\\x \\"
 ```
 """
 macro raw_str(s); s; end
@@ -478,21 +499,10 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
     String(take!(buf))
 end
 
-function convert(::Type{String}, chars::AbstractVector{Char})
-    sprint(length(chars), io->begin
-        state = start(chars)
-        while !done(chars, state)
-            c, state = next(chars, state)
-            if '\ud7ff' < c && c + 1024 < '\ue000'
-                d, state = next(chars, state)
-                if '\ud7ff' < d - 1024 && d < '\ue000'
-                    c = Char(0x10000 + ((UInt32(c) & 0x03ff) << 10) | (UInt32(d) & 0x03ff))
-                else
-                    write(io, c)
-                    c = d
-                end
-            end
+function String(chars::AbstractVector{Char})
+    sprint(sizehint=length(chars)) do io
+        for c in chars
             write(io, c)
         end
-    end)
+    end
 end

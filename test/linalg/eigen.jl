@@ -15,9 +15,9 @@ srand(1234321)
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 
-@testset for eltya in (Float32, Float64, Complex64, Complex128, Int)
+@testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-    asym = aa'+aa                  # symmetric indefinite
+    asym = adjoint(aa)+aa                  # symmetric indefinite
     apd  = aa'*aa                 # symmetric positive-definite
     for (a, asym, apd) in ((aa, asym, apd),
                            (view(aa, 1:n, 1:n),
@@ -40,8 +40,8 @@ aimg  = randn(n,n)/2
             @test det(a) ≈ det(f)
             @test inv(a) ≈ inv(f)
             @test isposdef(a) == isposdef(f)
-            @test eigvals(f) === f[:values]
-            @test eigvecs(f) === f[:vectors]
+            @test eigvals(f) === f.values
+            @test eigvecs(f) === f.vectors
             @test Array(f) ≈ a
 
             num_fact = eigfact(one(eltya))
@@ -49,8 +49,8 @@ aimg  = randn(n,n)/2
             h = asym
             @test minimum(eigvals(h)) ≈ eigmin(h)
             @test maximum(eigvals(h)) ≈ eigmax(h)
-            @test_throws DomainError eigmin(a - a')
-            @test_throws DomainError eigmax(a - a')
+            @test_throws DomainError eigmin(a - adjoint(a))
+            @test_throws DomainError eigmax(a - adjoint(a))
         end
         @testset "symmetric generalized eigenproblem" begin
             if isa(a, Array)
@@ -61,17 +61,17 @@ aimg  = randn(n,n)/2
                 a_sg = view(a, 1:n, n1+1:n2)
             end
             f = eigfact(asym_sg, a_sg'a_sg)
-            @test asym_sg*f[:vectors] ≈ (a_sg'a_sg*f[:vectors]) * Diagonal(f[:values])
-            @test f[:values] ≈ eigvals(asym_sg, a_sg'a_sg)
-            @test prod(f[:values]) ≈ prod(eigvals(asym_sg/(a_sg'a_sg))) atol=200ε
-            @test eigvecs(asym_sg, a_sg'a_sg) == f[:vectors]
-            @test eigvals(f) === f[:values]
-            @test eigvecs(f) === f[:vectors]
-            @test_throws KeyError f[:Z]
+            @test asym_sg*f.vectors ≈ (a_sg'a_sg*f.vectors) * Diagonal(f.values)
+            @test f.values ≈ eigvals(asym_sg, a_sg'a_sg)
+            @test prod(f.values) ≈ prod(eigvals(asym_sg/(a_sg'a_sg))) atol=200ε
+            @test eigvecs(asym_sg, a_sg'a_sg) == f.vectors
+            @test eigvals(f) === f.values
+            @test eigvecs(f) === f.vectors
+            @test_throws ErrorException f.Z
 
             d,v = eig(asym_sg, a_sg'a_sg)
-            @test d == f[:values]
-            @test v == f[:vectors]
+            @test d == f.values
+            @test v == f.vectors
         end
         @testset "Non-symmetric generalized eigenproblem" begin
             if isa(a, Array)
@@ -82,15 +82,15 @@ aimg  = randn(n,n)/2
                 a2_nsg = view(a, n1+1:n2, n1+1:n2)
             end
             f = eigfact(a1_nsg, a2_nsg)
-            @test a1_nsg*f[:vectors] ≈ (a2_nsg*f[:vectors]) * Diagonal(f[:values])
-            @test f[:values] ≈ eigvals(a1_nsg, a2_nsg)
-            @test prod(f[:values]) ≈ prod(eigvals(a1_nsg/a2_nsg)) atol=50000ε
-            @test eigvecs(a1_nsg, a2_nsg) == f[:vectors]
-            @test_throws KeyError f[:Z]
+            @test a1_nsg*f.vectors ≈ (a2_nsg*f.vectors) * Diagonal(f.values)
+            @test f.values ≈ eigvals(a1_nsg, a2_nsg)
+            @test prod(f.values) ≈ prod(eigvals(a1_nsg/a2_nsg)) atol=50000ε
+            @test eigvecs(a1_nsg, a2_nsg) == f.vectors
+            @test_throws ErrorException f.Z
 
             d,v = eig(a1_nsg, a2_nsg)
-            @test d == f[:values]
-            @test v == f[:vectors]
+            @test d == f.values
+            @test v == f.vectors
         end
     end
 end
@@ -109,6 +109,14 @@ end
 let aa = rand(200, 200)
     for a in (aa, view(aa, 1:n, 1:n))
         f = eigfact(a)
-        @test a ≈ f[:vectors] * Diagonal(f[:values]) / f[:vectors]
+        @test a ≈ f.vectors * Diagonal(f.values) / f.vectors
+    end
+end
+
+@testset "rational promotion: issue #24935" begin
+    A = [1//2 0//1; 0//1 2//3]
+    for λ in (eigvals(A), @inferred(eigvals(Symmetric(A))))
+        @test λ isa Vector{Float64}
+        @test λ ≈ [0.5, 2/3]
     end
 end

@@ -58,6 +58,24 @@ static bool isBundleOperand(CallInst *call, unsigned idx)
 #endif
 }
 
+static void removeGCPreserve(CallInst *call, Instruction *val)
+{
+    auto replace = ConstantPointerNull::get(cast<PointerType>(val->getType()));
+    call->replaceUsesOfWith(val, replace);
+    for (auto &arg: call->arg_operands()) {
+        if (!isa<Constant>(arg.get())) {
+            return;
+        }
+    }
+    while (!call->use_empty()) {
+        auto end = cast<Instruction>(*call->user_begin());
+        // gc_preserve_end returns void.
+        assert(end->use_empty());
+        end->eraseFromParent();
+    }
+    call->eraseFromParent();
+}
+
 /**
  * Promote `julia.gc_alloc_obj` which do not have escaping root to a alloca.
  * Uses that are not considered to escape the object (i.e. heap address) includes,
@@ -608,13 +626,7 @@ void AllocOpt::replaceUsesWith(Instruction *orig_inst, Instruction *new_inst,
             }
             // Also remove the preserve intrinsics so that it can be better optimized.
             if (gc_preserve_begin && gc_preserve_begin == call->getCalledFunction()) {
-                while (!call->use_empty()) {
-                    auto end = cast<Instruction>(*call->user_begin());
-                    // gc_preserve_end returns void.
-                    assert(end->use_empty());
-                    end->eraseFromParent();
-                }
-                call->eraseFromParent();
+                removeGCPreserve(call, orig_i);
                 return;
             }
             if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {

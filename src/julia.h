@@ -43,12 +43,15 @@
 #  define JL_NORETURN __attribute__ ((noreturn))
 #  define JL_CONST_FUNC __attribute__((const))
 #  define JL_USED_FUNC __attribute__((used))
+#  define JL_SECTION(name) __attribute__((section(name)))
 #elif defined(_COMPILER_MICROSOFT_)
 #  define JL_NORETURN __declspec(noreturn)
 // This is the closest I can find for __attribute__((const))
 #  define JL_CONST_FUNC __declspec(noalias)
 // Does MSVC have this?
 #  define JL_USED_FUNC
+// TODO: Figure out what to do on MSVC
+#  define JL_SECTION(x)
 #else
 #  define JL_NORETURN
 #  define JL_CONST_FUNC
@@ -179,7 +182,7 @@ struct _jl_method_instance_t;
 
 // TypeMap is an implicitly defined type
 // that can consist of any of the following nodes:
-//   typedef TypeMap Union{TypeMapLevel, TypeMapEntry, Void}
+//   typedef TypeMap Union{TypeMapLevel, TypeMapEntry, Nothing}
 // it forms a roughly tree-shaped structure, consisting of nodes of TypeMapLevels
 // which split the tree when possible, for example based on the key into the tuple type at `offs`
 // when key is a leaftype, (but only when the tree has enough entries for this to be
@@ -452,7 +455,7 @@ typedef struct _jl_typemap_entry_t {
 // one level in a TypeMap tree
 // indexed by key if it is a sublevel in an array
 struct jl_ordereddict_t {
-    jl_array_t *indexes; // Array{Int{8,16,32}}
+    jl_array_t *indices; // Array{Int{8,16,32}}
     jl_array_t *values; // Array{union jl_typemap_t}
 };
 typedef struct _jl_typemap_level_t {
@@ -772,6 +775,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_gotonode_label(x) (((intptr_t*)(x))[0])
 #define jl_globalref_mod(s) (*(jl_module_t**)(s))
 #define jl_globalref_name(s) (((jl_sym_t**)(s))[1])
+#define jl_quotenode_value(x) (((jl_value_t**)x)[0])
 
 #define jl_nparams(t)  jl_svec_len(((jl_datatype_t*)(t))->parameters)
 #define jl_tparam0(t)  jl_svecref(((jl_datatype_t*)(t))->parameters, 0)
@@ -1235,7 +1239,6 @@ JL_DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
 JL_DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
 JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz);
 JL_DLLEXPORT void jl_array_ptr_1d_push(jl_array_t *a, jl_value_t *item);
-JL_DLLEXPORT void jl_array_ptr_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c);
 JL_DLLEXPORT void jl_array_ptr_1d_append(jl_array_t *a, jl_array_t *a2);
 JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_value_t *type, size_t dim);
 // property access
@@ -1362,7 +1365,7 @@ typedef enum {
 #endif
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(void);
-JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
+JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
                                      const char *image_relative_path);
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void);
 JL_DLLEXPORT int jl_is_initialized(void);
@@ -1378,15 +1381,14 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist);
-JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname);
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz);
+JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods);
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz, jl_array_t *depmods);
 
 // front end interface
 JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len,
                                              const char *filename, size_t filename_len);
 JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
                                          int pos0, int greedy);
-JL_DLLEXPORT int jl_parse_depwarn(int warn);
 JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
                                              char *filename, jl_module_t *inmodule);
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule);
@@ -1515,6 +1517,7 @@ typedef struct _jl_task_t {
     jl_value_t *result;
     jl_value_t *exception;
     jl_value_t *backtrace;
+    jl_value_t *logstate;
     jl_function_t *start;
     jl_jmp_buf ctx;
     size_t bufsz;
@@ -1697,7 +1700,7 @@ JL_DLLEXPORT void jl_(void *jl_value);
 typedef struct {
     int8_t quiet;
     int8_t banner;
-    const char *julia_home;
+    const char *julia_bindir;
     const char *julia_bin;
     const char **cmds;
     const char *image_file;
@@ -1772,6 +1775,13 @@ JL_DLLEXPORT int jl_generating_output(void);
 #define JL_OPTIONS_STARTUPFILE_ON 1
 #define JL_OPTIONS_STARTUPFILE_OFF 2
 
+#define JL_LOGLEVEL_BELOWMIN -1000001
+#define JL_LOGLEVEL_DEBUG    -1000
+#define JL_LOGLEVEL_INFO      0
+#define JL_LOGLEVEL_WARN      1000
+#define JL_LOGLEVEL_ERROR     2000
+#define JL_LOGLEVEL_ABOVEMAX  1000001
+
 #define JL_OPTIONS_DEPWARN_OFF 0
 #define JL_OPTIONS_DEPWARN_ON 1
 #define JL_OPTIONS_DEPWARN_ERROR 2
@@ -1837,17 +1847,17 @@ typedef struct {
     // hooks
 
     // module setup: prepare a module for code emission (data layout, DWARF version, ...)
-    // parameters: LLVMModuleRef as Ptr{Void}
+    // parameters: LLVMModuleRef as Ptr{Cvoid}
     // return value: none
     jl_value_t *module_setup;
 
     // module activation: registers debug info, adds module to JIT
-    // parameters: LLVMModuleRef as Ptr{Void}
+    // parameters: LLVMModuleRef as Ptr{Cvoid}
     // return value: none
     jl_value_t *module_activation;
 
     // exception raising: emit LLVM instructions to raise an exception
-    // parameters: LLVMBasicBlockRef as Ptr{Void}, LLVMValueRef as Ptr{Void}
+    // parameters: LLVMBasicBlockRef as Ptr{Cvoid}, LLVMValueRef as Ptr{Cvoid}
     // return value: none
     jl_value_t *raise_exception;
 } jl_cgparams_t;
