@@ -3813,6 +3813,7 @@ end
 @deprecate names(m, all, imported) names(m, all = all, imported = imported)
 @deprecate code_native(io, f, types, syntax) code_native(io, f, types, syntax = syntax)
 @deprecate code_native(f, types, syntax) code_native(f, types, syntax = syntax)
+@deprecate eachmatch(re, str, overlap) = eachmatch(re, str, overlap = overlap)
 
 # END 0.7 deprecations
 

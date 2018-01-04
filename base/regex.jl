@@ -435,12 +435,8 @@ function next(itr::RegexMatchIterator, prev_match)
     (prev_match, nothing)
 end
 
-function eachmatch(re::Regex, str::AbstractString, ovr::Bool)
-    RegexMatchIterator(re,str,ovr)
-end
-
 """
-    eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
+    eachmatch(r::Regex, s::AbstractString; overlap::Bool=false])
 
 Search for all matches of a the regular expression `r` in `s` and return a iterator over the
 matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the
@@ -459,14 +455,15 @@ julia> collect(m)
  RegexMatch("a1a")
  RegexMatch("a3a")
 
-julia> collect(eachmatch(rx, "a1a2a3a", true))
+julia> collect(eachmatch(rx, "a1a2a3a", overlap = true))
 3-element Array{RegexMatch,1}:
  RegexMatch("a1a")
  RegexMatch("a2a")
  RegexMatch("a3a")
 ```
 """
-eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
+eachmatch(re::Regex, str::AbstractString; overlap = false) =
+    RegexMatchIterator(re, str, overlap)
 
 ## comparison ##
 
