@@ -871,11 +871,10 @@ end
         end
     end
 end
+
 # issue #22758
-if MPFR.version() > v"3.1.5" || "r11590" in MPFR.patches()
-    setprecision(2_000_000) do
-        @test abs(sin(big(pi)/6) - 0.5) < ldexp(big(1.0),-1_999_000)
-    end
+setprecision(2_000_000) do
+    @test abs(sin(big(pi)/6) - 0.5) < ldexp(big(1.0),-1_999_000)
 end
 
 @testset "show BigFloat" begin
