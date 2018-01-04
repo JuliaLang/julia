@@ -359,6 +359,9 @@ This section lists changes that do not have deprecation warnings.
     trait; see its documentation for details. Types which support subtraction (operator
     `-`) must now implement `widen` for hashing to work inside heterogeneous arrays.
 
+  * `findn(x::AbstractVector)` now return a 1-tuple with the vector of indices, to be
+    consistent with higher order arrays ([#25365]).
+
 Library improvements
 --------------------
 

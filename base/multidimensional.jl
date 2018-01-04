@@ -689,13 +689,39 @@ end
 # small helper function since we cannot use a closure in a generated function
 _countnz(x) = x != 0
 
+"""
+    findn(A)
+
+Return one vector for each dimension containing indices giving the
+locations of the non-zeros in `A` (determined by `A[i] != 0`).
+
+# Examples
+```jldoctest
+julia> A = [1 2 0; 0 0 3; 0 4 0]
+3×3 Array{Int64,2}:
+ 1  2  0
+ 0  0  3
+ 0  4  0
+
+julia> findn(A)
+([1, 1, 3, 2], [1, 2, 2, 3])
+
+julia> A = [0 0; 0 0]
+2×2 Array{Int64,2}:
+ 0  0
+ 0  0
+
+julia> findn(A)
+(Int64[], Int64[])
+```
+"""
 @generated function findn(A::AbstractArray{T,N}) where {T,N}
     quote
         nnzA = count(_countnz, A)
         @nexprs $N d->(I_d = Vector{Int}(uninitialized, nnzA))
         k = 1
         @nloops $N i A begin
-            @inbounds if (@nref $N A i) != zero(T)
+            @inbounds if (@nref $N A i) != 0
                 @nexprs $N d->(I_d[k] = i_d)
                 k += 1
             end
