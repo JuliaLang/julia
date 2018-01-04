@@ -97,6 +97,15 @@ has_unused() = (a = rand(5))
 @test !warntype_hastag(has_unused, Tuple{}, tag)
 @test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
 
+# Make sure getproperty and setproperty! works with warntype
+struct T1234321
+    t::Int
+end
+Base.getproperty(t::T1234321, ::Symbol) = "foo"
+@test (@code_typed T1234321(1).f).second == String
+Base.setproperty!(t::T1234321, ::Symbol, ::Symbol) = "foo"
+@test (@code_typed T1234321(1).f = :foo).second == String
+
 module ImportIntrinsics15819
 # Make sure changing the lookup path of an intrinsic doesn't break
 # the heuristic for type instability warning.
