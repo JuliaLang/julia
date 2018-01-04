@@ -226,7 +226,7 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
 ))
 
 """
-    matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
+    matchall(r::Regex, s::AbstractString; overlap::Bool = false]) -> Vector{AbstractString}
 
 Return a vector of the matching substrings from [`eachmatch`](@ref).
 
@@ -241,14 +241,14 @@ julia> matchall(rx, "a1a2a3a")
  "a1a"
  "a3a"
 
-julia> matchall(rx, "a1a2a3a", true)
+julia> matchall(rx, "a1a2a3a", overlap = true)
 3-element Array{SubString{String},1}:
  "a1a"
  "a2a"
  "a3a"
 ```
 """
-function matchall(re::Regex, str::String, overlap::Bool=false)
+function matchall(re::Regex, str::String; overlap::Bool = false)
     regex = compile(re).regex
     n = sizeof(str)
     matches = SubString{String}[]
@@ -282,8 +282,8 @@ function matchall(re::Regex, str::String, overlap::Bool=false)
     matches
 end
 
-matchall(re::Regex, str::SubString, overlap::Bool=false) =
-    matchall(re, String(str), overlap)
+matchall(re::Regex, str::SubString; overlap::Bool = false) =
+    matchall(re, String(str), overlap = overlap)
 
 function search(str::Union{String,SubString}, re::Regex, idx::Integer)
     if idx > nextind(str,endof(str))
