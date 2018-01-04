@@ -944,7 +944,7 @@ function skipchars(io::IO, pred; linecomment=nothing)
 end
 
 """
-    countlines(io::IO, eol::Char='\\n')
+    countlines(io::IO; eol::Char = '\\n')
 
 Read `io` until the end of the stream/file and count the number of lines. To specify a file
 pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
@@ -962,11 +962,11 @@ julia> io = IOBuffer("JuliaLang is a GitHub organization.");
 julia> countlines(io)
 0
 
-julia> countlines(io, '.')
+julia> countlines(io, eol = '.')
 1
 ```
 """
-function countlines(io::IO, eol::Char='\n')
+function countlines(io::IO; eol::Char='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
     a = Vector{UInt8}(uninitialized, 8192)
@@ -980,4 +980,4 @@ function countlines(io::IO, eol::Char='\n')
     nl
 end
 
-countlines(f::AbstractString, eol::Char='\n') = open(io->countlines(io,eol), f)::Int
+countlines(f::AbstractString; eol::Char = '\n') = open(io->countlines(io, eol = eol), f)::Int

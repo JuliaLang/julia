@@ -3828,6 +3828,7 @@ end
 @deprecate mkdir(path, mode) mkdir(path, mode = mode)
 @deprecate mkpath(path, mode) mkpath(path, mode = mode)
 @deprecate chown(path, owner, mode) chown(path, owner, mode = mode)
+@deprecate countlines(x, eol) countlines(x, eol = eol)
 
 # END 0.7 deprecations
 
