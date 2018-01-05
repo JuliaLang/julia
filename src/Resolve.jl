@@ -15,46 +15,33 @@ export resolve, sanity_check
 
 "Resolve package dependencies."
 function resolve(graph::Graph)
-    id(p) = pkgID(p, graph)
-
     # attempt trivial solution first
-    ok, sol = greedysolver(graph)
+    greedy_ok, sol = greedysolver(graph)
 
-    ok && @goto solved
+    greedy_ok && @goto solved
 
     log_event_global!(graph, "greedy solver failed")
 
     # trivial solution failed, use maxsum solver
-    msgs = Messages(graph)
+    maxsum_ok, sol, staged = maxsum(graph)
 
-    try
-        sol = maxsum(graph, msgs)
-        @goto check
-    catch err
-        isa(err, UnsatError) || rethrow(err)
-        apply_maxsum_trace!(graph, err.trace)
-    end
+    maxsum_ok && @goto solved
 
     log_event_global!(graph, "maxsum solver failed")
 
-    check_constraints(graph) # will throw if it fails
-    simplify_graph!(graph)   # will throw if it fails
-    # NOTE: here it seems like there could be an infinite recursion loop.
-    #       However, if maxsum fails with an empty trace (which could lead to
-    #       the recursion) then the two above checks should be able to
-    #       detect an error. Nevertheless, it's probably better to put some
-    #       kind of failsafe here.
-    return resolve(graph)
-
-    @label check
-
-    # verify solution (debug code) and enforce its optimality
-    @assert verify_solution(sol, graph)
-    enforce_optimality!(sol, graph)
+    # the problem is unsat, force-trigger a failure
+    # in order to produce a log - this will contain
+    # information about the best that the solver could
+    # achieve
+    trigger_failure!(graph, sol, staged)
 
     @label solved
 
-    log_event_global!(graph, "the solver found a feasible configuration")
+    # verify solution (debug code) and enforce its optimality
+    @assert verify_solution(sol, graph)
+    greedy_ok || enforce_optimality!(sol, graph)
+
+    log_event_global!(graph, "the solver found $(greedy_ok ? "an optimal" : "a feasible") configuration")
 
     # return the solution as a Dict mapping UUID => VersionNumber
     return compute_output_dict(sol, graph)
@@ -109,65 +96,63 @@ function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose = 
 
     last_str_len = 0
 
-    i = 1
-    for (p,vn) in vers
+    for (i,(p,vn)) in enumerate(vers)
         if verbose
             frac_compl = i / nv
-            print("\r", " "^last_str_len)
-            progr_msg = @sprintf("\r%.3i/%.3i (%i%%) — problematic so far: %i", i, nv, round(Int, 100 * frac_compl), length(problematic))
+            print("\r", " "^last_str_len, "\r")
+            progr_msg = @sprintf("%.3i/%.3i (%i%%) — problematic so far: %i", i, nv, round(Int, 100 * frac_compl), length(problematic))
             print(progr_msg)
             last_str_len = length(progr_msg)
         end
 
         length(gadj[pdict[p]]) == 0 && break
-        checked[i] && (i += 1; continue)
+        checked[i] && continue
 
-        req = Requires(p => vn)
-        sub_graph = copy(graph)
-        add_reqs!(sub_graph, req)
+        push_snapshot!(graph)
 
+        # enforce package version
+        # TODO: use add_reqs! instead...
+        p0 = graph.data.pdict[p]
+        v0 = graph.data.vdict[p0][vn]
+        fill!(graph.gconstr[p0], false)
+        graph.gconstr[p0][v0] = true
+        push!(graph.req_inds, p0)
+
+        ok = false
         try
-            simplify_graph!(sub_graph)
+            simplify_graph_soft!(graph, Set{Int}([p0]), log_events = false)
         catch err
             isa(err, PkgError) || rethrow(err)
-            ## info("ERROR MESSAGE:\n" * err.msg)
+            @goto done
+        end
+
+        ok, sol = greedysolver(graph)
+        ok && @goto done
+        ok, sol = maxsum(graph)
+
+        @label done
+
+        if !ok
             for vneq in eq_classes[p][vn]
                 push!(problematic, (id(p), vneq))
             end
-            i += 1
-            continue
-        end
-
-        ok, sol = greedysolver(sub_graph)
-
-        ok && @goto solved
-
-        msgs = Messages(sub_graph)
-
-        try
-            sol = maxsum(sub_graph, msgs)
-            @assert verify_solution(sol, sub_graph)
-        catch err
-            isa(err, UnsatError) || rethrow(err)
-            for vneq in eq_classes[p][vn]
-                push!(problematic, (id(p), vneq))
+        else
+            @assert verify_solution(sol, graph)
+            sol_dict = compute_output_dict(sol, graph)
+            for (sp,svn) in sol_dict
+                j = svdict[sp,svn]
+                checked[j] = true
             end
-            i += 1
-            continue
         end
 
-        @label solved
-
-        sol_dict = compute_output_dict(sol, sub_graph)
-        for (sp, svn) in sol_dict
-            j = svdict[sp,svn]
-            checked[j] = true
-        end
-
-        i += 1
+        # state reset
+        empty!(graph.req_inds)
+        pop_snapshot!(graph)
     end
-    verbose && println()
-
+    if verbose
+        print("\r", " "^last_str_len, "\r")
+        println("found $(length(problematic)) problematic versions")
+    end
     return sort!(problematic)
 end
 
@@ -208,8 +193,10 @@ function greedysolver(graph::Graph)
     spp = graph.spp
     gadj = graph.gadj
     gmsk = graph.gmsk
-    gconstr = graph.gconstr
     np = graph.np
+
+    push_snapshot!(graph)
+    gconstr = graph.gconstr
 
     # initialize solution: all uninstalled
     sol = [spp[p0] for p0 = 1:np]
@@ -225,6 +212,17 @@ function greedysolver(graph::Graph)
         rv0 = findlast(gconstr[rp0])
         @assert rv0 ≠ 0 && rv0 ≠ spp[rp0]
         sol[rp0] = rv0
+        fill!(gconstr[rp0], false)
+        gconstr[rp0][rv0] = true
+    end
+
+    # propagate the requirements
+    try
+        simplify_graph_soft!(graph, req_inds, log_events = false)
+    catch err
+        err isa PkgError || rethrow(err)
+        pop_snapshot!(graph)
+        return (false, Int[])
     end
 
     # we start from required packages and explore the graph
@@ -251,6 +249,7 @@ function greedysolver(graph::Graph)
                 if v1 > 0 && (sol[p1] == spp[p1] || sol[p1] == v1)
                     sol[p1] = v1
                 else
+                    pop_snapshot!(graph)
                     return (false, Int[])
                 end
 
@@ -261,7 +260,7 @@ function greedysolver(graph::Graph)
         staged = staged_next
     end
 
-    @assert verify_solution(sol, graph)
+    pop_snapshot!(graph)
 
     for p0 = 1:np
         log_event_greedysolved!(graph, p0, sol[p0])
@@ -281,14 +280,17 @@ function verify_solution(sol::Vector{Int}, graph::Graph)
     gmsk = graph.gmsk
     gconstr = graph.gconstr
 
+    @assert length(sol) == np
+    @assert all(sol .> 0)
+
     # verify constraints and dependencies
     for p0 = 1:np
         s0 = sol[p0]
-        gconstr[p0][s0] || return false
+        gconstr[p0][s0] || (warn("gconstr[$p0][$s0] fail"); return false)
         for (j1,p1) in enumerate(gadj[p0])
             msk = gmsk[p0][j1]
             s1 = sol[p1]
-            msk[s1,s0] || return false # TODO: print debug info
+            msk[s1,s0] || (warn("gmsk[$p0][$p1][$s1,$s0] fail"); return false)
         end
     end
     return true
@@ -305,7 +307,6 @@ function enforce_optimality!(sol::Vector{Int}, graph::Graph)
     spp = graph.spp
     gadj = graph.gadj
     gmsk = graph.gmsk
-    gdir = graph.gdir
     gconstr = graph.gconstr
     pkgs = graph.data.pkgs
 
@@ -377,18 +378,36 @@ function enforce_optimality!(sol::Vector{Int}, graph::Graph)
     end
 end
 
-function apply_maxsum_trace!(graph::Graph, trace::Vector{Any})
-    np = graph.np
-    spp = graph.spp
+function apply_maxsum_trace!(graph::Graph, sol::Vector{Int})
     gconstr = graph.gconstr
 
-    for (p0,s0) in trace
-        new_constr = falses(spp[p0])
-        new_constr[s0] = true
-        old_constr = copy(gconstr[p0])
-        gconstr[p0] .&= new_constr
-        gconstr[p0] ≠ old_constr && log_event_maxsumtrace!(graph, p0, s0)
+    for (p0,s0) in enumerate(sol)
+        s0 == 0 && continue
+        gconstr0 = gconstr[p0]
+        old_constr = copy(gconstr0)
+        @assert old_constr[s0]
+        fill!(gconstr0, false)
+        gconstr0[s0] = true
+        gconstr0 ≠ old_constr && log_event_maxsumtrace!(graph, p0, s0)
     end
+end
+
+function trigger_failure!(graph::Graph, sol::Vector{Int}, staged::Tuple{Int,Int})
+    apply_maxsum_trace!(graph, sol)
+    simplify_graph_soft!(graph, Set(find(sol .> 0)), log_events = true) # this may throw an error...
+
+    np = graph.np
+    gconstr = graph.gconstr
+    p0, v0 = staged
+
+    @assert gconstr[p0][v0]
+    fill!(gconstr[p0], false)
+    gconstr[p0][v0] = true
+    log_event_maxsumtrace!(graph, p0, v0)
+    simplify_graph!(graph) # this may throw an error...
+    outdict = resolve(graph) # ...otherwise, this MUST throw an error
+    open(io->showlog(io, graph, view=:chronological), "logchrono.errresolve.txt", "w")
+    error("this is not supposed to happen... $(Dict(pkgID(p, graph) => vn for (p,vn) in outdict))")
 end
 
 end # module

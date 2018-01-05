@@ -15,19 +15,16 @@ export FieldValue, Field, validmax, secondmax
 #       packages
 #  l2 : for favoring higher versions of all other packages
 #  l3 : for favoring uninstallation of non-needed packages
-#  l4 : for favoring dependants over dependencies
 #
 struct FieldValue
     l0::Int64
     l1::VersionWeight
     l2::VersionWeight
     l3::Int64
-    l4::Int64
     FieldValue(l0::Integer = 0,
                l1::VersionWeight = zero(VersionWeight),
                l2::VersionWeight = zero(VersionWeight),
-               l3::Integer = 0,
-               l4::Integer = 0) = new(l0, l1, l2, l3, l4)
+               l3::Integer = 0) = new(l0, l1, l2, l3)
 end
 
 # This isn't nice, but it's for debugging only anyway
@@ -39,8 +36,6 @@ function Base.show(io::IO, a::FieldValue)
     print(io, ".", a.l2)
     a == FieldValue(a.l0, a.l1, a.l2) && return
     print(io, ".", a.l3)
-    a == FieldValue(a.l0, a.l1, a.l2, a.l3) && return
-    print(io, ".", a.l4)
     return
 end
 
@@ -48,10 +43,10 @@ const Field = Vector{FieldValue}
 
 Base.zero(::Type{FieldValue}) = FieldValue()
 
-Base.typemin(::Type{FieldValue}) = (x=typemin(Int64); y=typemin(VersionWeight); FieldValue(x, y, y, x, x))
+Base.typemin(::Type{FieldValue}) = (x=typemin(Int64); y=typemin(VersionWeight); FieldValue(x, y, y, x))
 
-Base.:-(a::FieldValue, b::FieldValue) = FieldValue(a.l0-b.l0, a.l1-b.l1, a.l2-b.l2, a.l3-b.l3, a.l4-b.l4)
-Base.:+(a::FieldValue, b::FieldValue) = FieldValue(a.l0+b.l0, a.l1+b.l1, a.l2+b.l2, a.l3+b.l3, a.l4+b.l4)
+Base.:-(a::FieldValue, b::FieldValue) = FieldValue(a.l0-b.l0, a.l1-b.l1, a.l2-b.l2, a.l3-b.l3)
+Base.:+(a::FieldValue, b::FieldValue) = FieldValue(a.l0+b.l0, a.l1+b.l1, a.l2+b.l2, a.l3+b.l3)
 
 function Base.isless(a::FieldValue, b::FieldValue)
     a.l0 < b.l0 && return true
@@ -63,17 +58,15 @@ function Base.isless(a::FieldValue, b::FieldValue)
     c < 0 && return true
     c > 0 && return false
     a.l3 < b.l3 && return true
-    a.l3 > b.l3 && return false
-    a.l4 < b.l4 && return true
     return false
 end
 
 Base.:(==)(a::FieldValue, b::FieldValue) =
-    a.l0 == b.l0 && a.l1 == b.l1 && a.l2 == b.l2 && a.l3 == b.l3 && a.l4 == b.l4
+    a.l0 == b.l0 && a.l1 == b.l1 && a.l2 == b.l2 && a.l3 == b.l3
 
-Base.abs(a::FieldValue) = FieldValue(abs(a.l0), abs(a.l1), abs(a.l2), abs(a.l3), abs(a.l4))
+Base.abs(a::FieldValue) = FieldValue(abs(a.l0), abs(a.l1), abs(a.l2), abs(a.l3))
 
-Base.copy(a::FieldValue) = FieldValue(a.l0, copy(a.l1), copy(a.l2), a.l3, a.l4)
+Base.copy(a::FieldValue) = FieldValue(a.l0, copy(a.l1), copy(a.l2), a.l3)
 
 # if the maximum field has l0 < 0, it means that
 # some hard constraint is being violated
@@ -96,10 +89,11 @@ end
 
 # secondmax returns the (normalized) value of the second maximum in a
 # field. It's used to determine the most polarized field.
-function secondmax(f::Field)
+function secondmax(f::Field, msk::BitVector = trues(length(f)))
     m = typemin(FieldValue)
     m2 = typemin(FieldValue)
     for i = 1:length(f)
+        msk[i] || continue
         a = f[i]
         if a > m
             m2 = m
