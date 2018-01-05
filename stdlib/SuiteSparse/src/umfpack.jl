@@ -347,7 +347,7 @@ for itype in UmfpackIndexTypes
                         Up,Ui,Ux,
                         P, Q, C_NULL,
                         0, Rs, lu.numeric)
-            (copy(Transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), Lx))),
+            (copy(transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), Lx))),
              SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), Ux),
              increment!(P), increment!(Q), Rs)
         end
@@ -374,7 +374,7 @@ for itype in UmfpackIndexTypes
                         Up,Ui,Ux,Uz,
                         P, Q, C_NULL, C_NULL,
                         0, Rs, lu.numeric)
-            (copy(Transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex.(Lx, Lz)))),
+            (copy(transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex.(Lx, Lz)))),
              SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex.(Ux, Uz)),
              increment!(P), increment!(Q), Rs)
         end
@@ -390,15 +390,15 @@ end
 ldiv!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
     ldiv!(B, lu, copy(B))
 ldiv!(translu::Transpose{T,<:UmfpackLU{T}}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
-    (lu = translu.parent; ldiv!(B, Transpose(lu), copy(B)))
+    (lu = translu.parent; ldiv!(B, transpose(lu), copy(B)))
 ldiv!(adjlu::Adjoint{T,<:UmfpackLU{T}}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
-    (lu = adjlu.parent; ldiv!(B, Adjoint(lu), copy(B)))
+    (lu = adjlu.parent; ldiv!(B, adjoint(lu), copy(B)))
 ldiv!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) =
     ldiv!(B, lu, copy(B))
 ldiv!(translu::Transpose{Float64,<:UmfpackLU{Float64}}, B::StridedVecOrMat{<:Complex}) =
-    (lu = translu.parent; ldiv!(B, Transpose(lu), copy(B)))
+    (lu = translu.parent; ldiv!(B, transpose(lu), copy(B)))
 ldiv!(adjlu::Adjoint{Float64,<:UmfpackLU{Float64}}, B::StridedVecOrMat{<:Complex}) =
-    (lu = adjlu.parent; ldiv!(B, Adjoint(lu), copy(B)))
+    (lu = adjlu.parent; ldiv!(B, adjoint(lu), copy(B)))
 
 ldiv!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
     _Aq_ldiv_B!(X, lu, B, UMFPACK_A)

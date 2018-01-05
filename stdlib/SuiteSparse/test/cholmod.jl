@@ -396,7 +396,7 @@ end
     bT = fill(elty(1), 5)
     @test F'\bT ≈ Array(A1pd)'\b
     @test F'\sparse(bT) ≈ Array(A1pd)'\b
-    @test Transpose(F)\bT ≈ conj(A1pd)'\bT
+    @test transpose(F)\bT ≈ conj(A1pd)'\bT
     @test F\CHOLMOD.Sparse(sparse(bT)) ≈ A1pd\b
     @test logdet(F) ≈ logdet(Array(A1pd))
     @test det(F) == exp(logdet(F))
@@ -713,8 +713,8 @@ end
     @test Fs\fill(1., 4) ≈ Fd\fill(1., 4)
 end
 
-@testset "\\ '\\ and Transpose(...)\\" begin
-    # Test that \ and '\ and Transpose(...)\ work for Symmetric and Hermitian. This is just
+@testset "\\ '\\ and transpose(...)\\" begin
+    # Test that \ and '\ and transpose(...)\ work for Symmetric and Hermitian. This is just
     # a dispatch exercise so it doesn't matter that the complex matrix has
     # zero imaginary parts
     Apre = sprandn(10, 10, 0.2) - I
@@ -725,7 +725,7 @@ end
         x = fill(1., 10)
         b = A*x
         @test x ≈ A\b
-        @test Transpose(A)\b ≈ A'\b
+        @test transpose(A)\b ≈ A'\b
     end
 end
 

@@ -47,25 +47,25 @@
 
             @test A'*x ≈ b
             z = complex.(b)
-            x = SuiteSparse.ldiv!(Adjoint(lua), z)
+            x = SuiteSparse.ldiv!(adjoint(lua), z)
             @test x ≈ float([1:5;])
             @test x === z
             y = similar(x)
-            SuiteSparse.ldiv!(y, Adjoint(lua), complex.(b))
+            SuiteSparse.ldiv!(y, adjoint(lua), complex.(b))
             @test y ≈ x
 
             @test A'*x ≈ b
-            x = Transpose(lua) \ b
+            x = transpose(lua) \ b
             @test x ≈ float([1:5;])
 
-            @test Transpose(A) * x ≈ b
-            x = SuiteSparse.ldiv!(Transpose(lua), complex.(b))
+            @test transpose(A) * x ≈ b
+            x = SuiteSparse.ldiv!(transpose(lua), complex.(b))
             @test x ≈ float([1:5;])
             y = similar(x)
-            SuiteSparse.ldiv!(y, Transpose(lua), complex.(b))
+            SuiteSparse.ldiv!(y, transpose(lua), complex.(b))
             @test y ≈ x
 
-            @test Transpose(A) * x ≈ b
+            @test transpose(A) * x ≈ b
 
             # Element promotion and type inference
             @inferred lua\fill(1, size(A, 2))
@@ -84,8 +84,8 @@
             @test Ac\b ≈ x
             b  = Ac'*x
             @test Ac'\b ≈ x
-            b  = Transpose(Ac)*x
-            @test Transpose(Ac)\b ≈ x
+            b  = transpose(Ac)*x
+            @test transpose(Ac)\b ≈ x
         end
     end
 
@@ -163,8 +163,8 @@
         B = complex.(rand(N, N), rand(N, N))
         luA, lufA = lufact(A), lufact(Array(A))
         @test Base.LinAlg.ldiv!(copy(X), luA, B) ≈ Base.LinAlg.ldiv!(copy(X), lufA, B)
-        @test Base.LinAlg.ldiv!(copy(X), Adjoint(luA), B) ≈ Base.LinAlg.ldiv!(copy(X), Adjoint(lufA), B)
-        @test Base.LinAlg.ldiv!(copy(X), Transpose(luA), B) ≈ Base.LinAlg.ldiv!(copy(X), Transpose(lufA), B)
+        @test Base.LinAlg.ldiv!(copy(X), adjoint(luA), B) ≈ Base.LinAlg.ldiv!(copy(X), adjoint(lufA), B)
+        @test Base.LinAlg.ldiv!(copy(X), transpose(luA), B) ≈ Base.LinAlg.ldiv!(copy(X), transpose(lufA), B)
     end
 
 end
