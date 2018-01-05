@@ -642,11 +642,8 @@ Set([6, 12])
 ```
 """
 replace!(prednew::Callable, A; count::Integer=typemax(Int)) =
+    count isa Int ? throw(MethodError(replace!, (prednew, A))) :
     replace!(prednew, A, count=clamp(count, typemin(Int), typemax(Int)) % Int)
-
-
-replace!(prednew::Callable, A; count::Int=typemax(Int)) =
-    throw(MethodError(replace!, (prednew, A)))
 
 """
     replace(A, old_new::Pair...; [count::Integer])
