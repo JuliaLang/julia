@@ -565,9 +565,11 @@ function write(io::IO, s::Symbol)
 end
 
 function write(to::IO, from::IO)
+    n = 0
     while !eof(from)
-        write(to, readavailable(from))
+        n += write(to, readavailable(from))
     end
+    return n
 end
 
 @noinline unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T} = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)

@@ -293,3 +293,12 @@ let
     io = IOBuffer(Int64(10))
     @test io isa IOBuffer
 end
+
+let
+    # 25398 return value for write(::IO, ::IO)
+    ioa = IOBuffer()
+    iob = IOBuffer("World")
+    n = write(ioa, iob)
+    @test String(take!(ioa)) == "World"
+    @test n == 5
+end
