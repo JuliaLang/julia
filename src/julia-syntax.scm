@@ -2342,7 +2342,7 @@
                      ,.(apply append rows)))
             `(call (top typed_vcat) ,t ,@a)))))
 
-   '|'|  (lambda (e) (expand-forms `(call (core postfixapostrophize) ,(cadr e))))
+   '|'|  (lambda (e) (expand-forms `(call (top adjoint) ,(cadr e))))
    '|.'| (lambda (e) (begin (deprecation-message (string "The syntax `.'` for transposition is deprecated, "
                                              "and the special lowering of `.'` in multiplication "
                                              "(`*`), left-division (`\\`), and right-division (`/`) "
