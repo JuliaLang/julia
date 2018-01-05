@@ -338,13 +338,13 @@ julia> x[1, [2 3; 4 1]]
 ```
 
 Empty ranges of the form `n:n-1` are sometimes used to indicate the inter-index location between
-`n-1` and `n`. For example, the [`searchsorted`](@ref) function uses this convention to indicate
+`n-1` and `n`. For example, the [`findsorted`](@ref) function uses this convention to indicate
 the insertion point of a value not found in a sorted array:
 
 ```jldoctest
 julia> a = [1,2,5,6,7];
 
-julia> searchsorted(a, 3)
+julia> findsorted(3, a)
 3:2
 ```
 

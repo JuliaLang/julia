@@ -908,6 +908,10 @@ Deprecated or removed
 
   * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
 
+  * `searchsorted`, `searchsortedfirst` and `searchsortedlast` have been renamed to
+    `findsorted`, `findsortedfirst` and `findsortedlast` (respectively), swapping the
+    position of their two arguments for consistency with other `find*` functions ([#25414]).
+
 Command-line option changes
 ---------------------------
 
@@ -1151,3 +1155,4 @@ Command-line option changes
 [#25168]: https://github.com/JuliaLang/julia/issues/25168
 [#25184]: https://github.com/JuliaLang/julia/issues/25184
 [#25231]: https://github.com/JuliaLang/julia/issues/25231
+[#25414]: https://github.com/JuliaLang/julia/issues/25414

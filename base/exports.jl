@@ -501,13 +501,13 @@ export
     findn,
     findnext,
     findprev,
+    findsorted,
+    findsortedfirst,
+    findsortedlast,
     findnz,
     occursin,
     match,
     matchall,
-    searchsorted,
-    searchsortedfirst,
-    searchsortedlast,
     startswith,
 
 # linear algebra

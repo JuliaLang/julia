@@ -285,7 +285,7 @@ function setindex!(x::SparseVector{Tv,Ti}, v::Tv, i::Ti) where {Tv,Ti<:Integer}
     nzval = nonzeros(x)
 
     m = length(nzind)
-    k = searchsortedfirst(nzind, i)
+    k = findsortedfirst(i, nzind)
     if 1 <= k <= m && nzind[k] == i  # i found
         nzval[k] = v
     else  # i not found
@@ -327,7 +327,7 @@ function dropstored!(x::SparseVector, i::Integer)
     if !(1 <= i <= x.n)
         throw(BoundsError(x, i))
     end
-    searchk = searchsortedfirst(x.nzind, i)
+    searchk = findsortedfirst(i, x.nzind)
     if searchk <= length(x.nzind) && x.nzind[searchk] == i
         # Entry x[i] is stored. Drop and return.
         deleteat!(x.nzind, searchk)
@@ -429,7 +429,7 @@ function prep_sparsevec_copy_dest!(A::SparseVector, lB, nnzB)
     else
         nnzA = nnz(A)
 
-        lastmodindA = searchsortedlast(A.nzind, lB)
+        lastmodindA = findsortedlast(lB, A.nzind)
         if lastmodindA >= nnzB
             # A will have fewer non-zero elements; unmodified elements are kept at the end.
             deleteat!(A.nzind, nnzB+1:lastmodindA)
@@ -513,8 +513,8 @@ function getindex(x::SparseMatrixCSC, I::AbstractUnitRange, j::Integer)
     c1 = convert(Int, x.colptr[j])
     c2 = convert(Int, x.colptr[j+1]) - 1
     # Restrict to the selected rows
-    r1 = searchsortedfirst(x.rowval, first(I), c1, c2, Forward)
-    r2 = searchsortedlast(x.rowval, last(I), c1, c2, Forward)
+    r1 = findsortedfirst(first(I), x.rowval, c1, c2, Forward)
+    r2 = findsortedlast(last(I), x.rowval, c1, c2, Forward)
     SparseVector(length(I), [x.rowval[i] - first(I) + 1 for i = r1:r2], x.nzval[r1:r2])
 end
 
@@ -543,7 +543,7 @@ function Base.getindex(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector)
         stopA = Int(colptrA[col+1]-1)
         if ptrA <= stopA
             if rowvalA[ptrA] <= rowI
-                ptrA = searchsortedfirst(rowvalA, rowI, ptrA, stopA, Base.Order.Forward)
+                ptrA = findsortedfirst(rowI, rowvalA, ptrA, stopA, Base.Order.Forward)
                 if ptrA <= stopA && rowvalA[ptrA] == rowI
                     push!(nzinds, j)
                     push!(nzvals, nzvalA[ptrA])
@@ -740,7 +740,7 @@ end
 ### getindex
 
 function _spgetindex(m::Int, nzind::AbstractVector{Ti}, nzval::AbstractVector{Tv}, i::Integer) where {Tv,Ti}
-    ii = searchsortedfirst(nzind, convert(Ti, i))
+    ii = findsortedfirst(convert(Ti, i), nzind)
     (ii <= m && nzind[ii] == i) ? nzval[ii] : zero(Tv)
 end
 
@@ -760,9 +760,9 @@ function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractUnitRange) where {T
     m = length(xnzind)
 
     # locate the first j0, s.t. xnzind[j0] >= i0
-    j0 = searchsortedfirst(xnzind, i0)
+    j0 = findsortedfirst(i0, xnzind)
     # locate the last j1, s.t. xnzind[j1] <= i1
-    j1 = searchsortedlast(xnzind, i1, j0, m, Forward)
+    j1 = findsortedlast(i1, xnzind, j0, m, Forward)
 
     # compute the number of non-zeros
     jrgn = j0:j1

@@ -31,72 +31,72 @@ let a=[1:10;]
 end
 @test sum(randperm(6)) == 21
 
-@testset "searchsorted" begin
+@testset "findsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
                 UInt8, UInt16, UInt32, UInt64, UInt128,
                 Float16, Float32, Float64, BigInt, BigFloat]
 
-    @test searchsorted([1:10;], 1, by=(x -> x >= 5)) == 1:4
-    @test searchsorted([1:10;], 10, by=(x -> x >= 5)) == 5:10
-    @test searchsorted([1:5; 1:5; 1:5], 1, 6, 10, Forward) == 6:6
-    @test searchsorted(fill(1, 15), 1, 6, 10, Forward) == 6:10
+    @test findsorted(1, [1:10;], by=(x -> x >= 5)) == 1:4
+    @test findsorted(10, [1:10;], by=(x -> x >= 5)) == 5:10
+    @test findsorted(1, [1:5; 1:5; 1:5], 6, 10, Forward) == 6:6
+    @test findsorted(1, fill(1, 15), 6, 10, Forward) == 6:10
 
     for R in numTypes, T in numTypes
-        @test searchsorted(R[1, 1, 2, 2, 3, 3], T(0)) == 1:0
-        @test searchsorted(R[1, 1, 2, 2, 3, 3], T(1)) == 1:2
-        @test searchsorted(R[1, 1, 2, 2, 3, 3], T(2)) == 3:4
-        @test searchsorted(R[1, 1, 2, 2, 3, 3], T(4)) == 7:6
-        @test searchsorted(R[1, 1, 2, 2, 3, 3], 2.5) == 5:4
+        @test findsorted(T(0), R[1, 1, 2, 2, 3, 3]) == 1:0
+        @test findsorted(T(1), R[1, 1, 2, 2, 3, 3]) == 1:2
+        @test findsorted(T(2), R[1, 1, 2, 2, 3, 3]) == 3:4
+        @test findsorted(T(4), R[1, 1, 2, 2, 3, 3]) == 7:6
+        @test findsorted(2.5, R[1, 1, 2, 2, 3, 3]) == 5:4
 
-        @test searchsorted(1:3, T(0)) == 1:0
-        @test searchsorted(1:3, T(1)) == 1:1
-        @test searchsorted(1:3, T(2)) == 2:2
-        @test searchsorted(1:3, T(4)) == 4:3
+        @test findsorted(T(0), 1:3) == 1:0
+        @test findsorted(T(1), 1:3) == 1:1
+        @test findsorted(T(2), 1:3) == 2:2
+        @test findsorted(T(4), 1:3) == 4:3
 
-        @test searchsorted(R[1:10;], T(1), by=(x -> x >= 5)) == 1:4
-        @test searchsorted(R[1:10;], T(10), by=(x -> x >= 5)) == 5:10
-        @test searchsorted(R[1:5; 1:5; 1:5], T(1), 6, 10, Forward) == 6:6
-        @test searchsorted(fill(R(1), 15), T(1), 6, 10, Forward) == 6:10
+        @test findsorted(T(1),R[1:10;], by=(x -> x >= 5)) == 1:4
+        @test findsorted(T(10), R[1:10;], by=(x -> x >= 5)) == 5:10
+        @test findsorted(T(1), R[1:5; 1:5; 1:5], 6, 10, Forward) == 6:6
+        @test findsorted(T(1), fill(R(1), 15), 6, 10, Forward) == 6:10
     end
 
     for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
         rg_r = reverse(rg)
         rgv, rgv_r = [rg;], [rg_r;]
         for i = I
-            @test searchsorted(rg,i) == searchsorted(rgv,i)
-            @test searchsorted(rg_r,i,rev=true) == searchsorted(rgv_r,i,rev=true)
+            @test findsorted(i,rg) == findsorted(i,rgv)
+            @test findsorted(i,rg_r,rev=true) == findsorted(i,rgv_r,rev=true)
         end
     end
 
     rg = 0.0:0.01:1.0
     for i = 2:101
-        @test searchsorted(rg, rg[i]) == i:i
-        @test searchsorted(rg, prevfloat(rg[i])) == i:i-1
-        @test searchsorted(rg, nextfloat(rg[i])) == i+1:i
+        @test findsorted(rg[i], rg) == i:i
+        @test findsorted(prevfloat(rg[i]), rg) == i:i-1
+        @test findsorted(nextfloat(rg[i]), rg) == i+1:i
     end
 
     rg_r = reverse(rg)
     for i = 1:100
-        @test searchsorted(rg_r, rg_r[i], rev=true) == i:i
-        @test searchsorted(rg_r, prevfloat(rg_r[i]), rev=true) == i+1:i
-        @test searchsorted(rg_r, nextfloat(rg_r[i]), rev=true) == i:i-1
+        @test findsorted(rg_r[i], rg_r, rev=true) == i:i
+        @test findsorted(prevfloat(rg_r[i]), rg_r, rev=true) == i+1:i
+        @test findsorted(nextfloat(rg_r[i]), rg_r, rev=true) == i:i-1
     end
 
-    @test searchsorted(1:10, 1, by=(x -> x >= 5)) == searchsorted([1:10;], 1, by=(x -> x >= 5))
-    @test searchsorted(1:10, 10, by=(x -> x >= 5)) == searchsorted([1:10;], 10, by=(x -> x >= 5))
+    @test findsorted(1, 1:10, by=(x -> x >= 5)) == findsorted(1, [1:10;], by=(x -> x >= 5))
+    @test findsorted(10, 1:10, by=(x -> x >= 5)) == findsorted(10, [1:10;], by=(x -> x >= 5))
 
-    @test searchsorted([], 0) == 1:0
-    @test searchsorted([1,2,3], 0) == 1:0
-    @test searchsorted([1,2,3], 4) == 4:3
+    @test findsorted(0, []) == 1:0
+    @test findsorted(0, [1,2,3]) == 1:0
+    @test findsorted(4, [1,2,3]) == 4:3
 
     @testset "issue 8866" begin
-        @test searchsortedfirst(500:1.0:600, -1.0e20) == 1
-        @test searchsortedfirst(500:1.0:600, 1.0e20) == 102
-        @test searchsortedlast(500:1.0:600, -1.0e20) == 0
-        @test searchsortedlast(500:1.0:600, 1.0e20) == 101
+        @test findsortedfirst(-1.0e20, 500:1.0:600) == 1
+        @test findsortedfirst(1.0e20, 500:1.0:600) == 102
+        @test findsortedlast(-1.0e20, 500:1.0:600) == 0
+        @test findsortedlast(1.0e20, 500:1.0:600) == 101
     end
 end
-# exercise the codepath in searchsorted* methods for ranges that check for zero step range
+# exercise the codepath in findsorted* methods for ranges that check for zero step range
 struct ConstantRange{T} <: AbstractRange{T}
    val::T
    len::Int
@@ -106,16 +106,16 @@ Base.length(r::ConstantRange) = r.len
 Base.getindex(r::ConstantRange, i::Int) = (1 <= i <= r.len || throw(BoundsError(r,i)); r.val)
 Base.step(r::ConstantRange) = 0
 
-@testset "searchsorted method with ranges which check for zero step range" begin
+@testset "findsorted method with ranges which check for zero step range" begin
     r = ConstantRange(1, 5)
 
-    @test searchsortedfirst(r, 1.0, Forward) == 1
-    @test searchsortedfirst(r, 1, Forward) == 1
-    @test searchsortedfirst(r, UInt(1), Forward) == 1
+    @test findsortedfirst(1.0, r, Forward) == 1
+    @test findsortedfirst(1, r, Forward) == 1
+    @test findsortedfirst(UInt(1), r, Forward) == 1
 
-    @test searchsortedlast(r, 1.0, Forward) == 5
-    @test searchsortedlast(r, 1, Forward) == 5
-    @test searchsortedlast(r, UInt(1), Forward) == 5
+    @test findsortedlast(1.0, r, Forward) == 5
+    @test findsortedlast(1, r, Forward) == 5
+    @test findsortedlast(UInt(1), r, Forward) == 5
 
     a = rand(1:10000, 1000)
     for alg in [InsertionSort, MergeSort]
@@ -365,8 +365,8 @@ end
     @test sort([typemax(UInt),0]) == [0,typemax(UInt)]
 end
 @testset "issue #19005" begin
-    @test searchsortedfirst(0:256, 0x80) == 129
-    @test searchsortedlast(0:256, 0x80) == 129
+    @test findsortedfirst(0x80, 0:256) == 129
+    @test findsortedlast(0x80, 0:256) == 129
 end
 # https://discourse.julialang.org/t/sorting-big-int-with-v-0-6/1241
 @test sort([big(3), big(2)]) == [big(2), big(3)]

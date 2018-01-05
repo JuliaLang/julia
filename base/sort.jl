@@ -16,9 +16,9 @@ import
 export # also exported by Base
     # order-only:
     issorted,
-    searchsorted,
-    searchsortedfirst,
-    searchsortedlast,
+    findsorted,
+    findsortedfirst,
+    findsortedlast,
     # order & algorithm:
     sort,
     sort!,
@@ -159,7 +159,7 @@ partialsort(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) =
 
 # index of the first value of vector a that is greater than or equal to x;
 # returns length(v)+1 if x is greater than all values in v.
-function searchsortedfirst(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
+function findsortedfirst(x, v::AbstractVector, lo::Int, hi::Int, o::Ordering)
     lo = lo-1
     hi = hi+1
     @inbounds while lo < hi-1
@@ -175,7 +175,7 @@ end
 
 # index of the last value of vector a that is less than or equal to x;
 # returns 0 if x is less than all values of v.
-function searchsortedlast(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
+function findsortedlast(x, v::AbstractVector, lo::Int, hi::Int, o::Ordering)
     lo = lo-1
     hi = hi+1
     @inbounds while lo < hi-1
@@ -192,7 +192,7 @@ end
 # returns the range of indices of v equal to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
-function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
+function findsorted(x, v::AbstractVector, ilo::Int, ihi::Int, o::Ordering)
     lo = ilo-1
     hi = ihi+1
     @inbounds while lo < hi-1
@@ -202,15 +202,15 @@ function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
         elseif lt(o, x, v[m])
             hi = m
         else
-            a = searchsortedfirst(v, x, max(lo,ilo), m, o)
-            b = searchsortedlast(v, x, m, min(hi,ihi), o)
+            a = findsortedfirst(x, v, max(lo,ilo), m, o)
+            b = findsortedlast(x, v, m, min(hi,ihi), o)
             return a : b
         end
     end
     return (lo + 1) : (hi - 1)
 end
 
-function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+function findsortedlast(x::Real, a::AbstractRange{<:Real}, o::DirectOrdering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -219,7 +219,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+function findsortedfirst(x::Real, a::AbstractRange{<:Real}, o::DirectOrdering)
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
@@ -228,7 +228,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+function findsortedlast(x::Real, a::AbstractRange{<:Integer}, o::DirectOrdering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -236,7 +236,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+function findsortedfirst(x::Real, a::AbstractRange{<:Integer}, o::DirectOrdering)
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
@@ -244,7 +244,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+function findsortedfirst(x::Unsigned, a::AbstractRange{<:Integer}, o::DirectOrdering)
     if lt(o, first(a), x)
         if step(a) == 0
             length(a) + 1
@@ -256,7 +256,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOr
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+function findsortedlast(x::Unsigned, a::AbstractRange{<:Integer}, o::DirectOrdering)
     if lt(o, x, first(a))
         0
     elseif step(a) == 0
@@ -266,20 +266,20 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrd
     end
 end
 
-searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
-    searchsortedfirst(a, x, o) : searchsortedlast(a, x, o)
+findsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
+    findsortedfirst(x, a, o) : findsortedlast(x, a, o)
 
-for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
+for s in [:findsortedfirst, :findsortedlast, :findsorted]
     @eval begin
-        $s(v::AbstractVector, x, o::Ordering) = (inds = axes(v, 1); $s(v,x,first(inds),last(inds),o))
-        $s(v::AbstractVector, x;
+        $s(x, v::AbstractVector, o::Ordering) = (inds = axes(v, 1); $s(x,v,first(inds),last(inds),o))
+        $s(x, v::AbstractVector;
            lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
-            $s(v,x,ord(lt,by,rev,order))
+            $s(x,v,ord(lt,by,rev,order))
     end
 end
 
 """
-    searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+    findsorted(x, a, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Return the range of indices of `a` which compare as equal to `x` (using binary search)
 according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
@@ -295,16 +295,16 @@ julia> a = [4, 3, 2, 1]
  2
  1
 
-julia> searchsorted(a, 4)
+julia> findsorted(4, a)
 5:4
 
-julia> searchsorted(a, 4, rev=true)
+julia> findsorted(4, a, rev=true)
 1:1
 ```
-""" searchsorted
+""" findsorted
 
 """
-    searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+    findsortedfirst(x, a, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Return the index of the first value in `a` greater than or equal to `x`, according to the
 specified order. Return `length(a) + 1` if `x` is greater than all values in `a`.
@@ -312,19 +312,19 @@ specified order. Return `length(a) + 1` if `x` is greater than all values in `a`
 
 # Examples
 ```jldoctest
-julia> searchsortedfirst([1, 2, 4, 5, 14], 4)
+julia> findsortedfirst(4, [1, 2, 4, 5, 14])
 3
 
-julia> searchsortedfirst([1, 2, 4, 5, 14], 4, rev=true)
+julia> findsortedfirst(4, [1, 2, 4, 5, 14], rev=true)
 1
 
-julia> searchsortedfirst([1, 2, 4, 5, 14], 15)
+julia> findsortedfirst(15, [1, 2, 4, 5, 14])
 6
 ```
-""" searchsortedfirst
+""" findsortedfirst
 
 """
-    searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+    findsortedlast(x, a, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Return the index of the last value in `a` less than or equal to `x`, according to the
 specified order. Return `0` if `x` is less than all values in `a`. `a` is assumed to
@@ -332,16 +332,16 @@ be sorted.
 
 # Examples
 ```jldoctest
-julia> searchsortedlast([1, 2, 4, 5, 14], 4)
+julia> findsortedlast(4, [1, 2, 4, 5, 14])
 3
 
-julia> searchsortedlast([1, 2, 4, 5, 14], 4, rev=true)
+julia> findsortedlast(4, [1, 2, 4, 5, 14], rev=true)
 5
 
-julia> searchsortedlast([1, 2, 4, 5, 14], -1)
+julia> findsortedlast(-1, [1, 2, 4, 5, 14])
 0
 ```
-""" searchsortedlast
+""" findsortedlast
 
 
 ## sorting algorithms ##
