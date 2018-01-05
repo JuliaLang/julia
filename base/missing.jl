@@ -77,15 +77,21 @@ for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
 end
 
 # Binary operators/functions
-for f in (:(+), :(-), :(*), :(/), :(^),
-          :(div), :(mod), :(fld), :(rem), :(min), :(max))
+for f in (:(+), :(-), :(*), :(/), :(^), :(div), :(mod), :(fld), :(rem))
     @eval begin
         # Scalar with missing
         ($f)(::Missing, ::Missing) = missing
-        ($f)(d::Missing, x::Number) = missing
-        ($f)(d::Number, x::Missing) = missing
+        ($f)(::Missing, ::Number)  = missing
+        ($f)(::Number,  ::Missing) = missing
     end
 end
+
+min(::Missing, ::Missing) = missing
+min(::Missing, ::Any)     = missing
+min(::Any,     ::Missing) = missing
+max(::Missing, ::Missing) = missing
+max(::Missing, ::Any)     = missing
+max(::Any,     ::Missing) = missing
 
 # Rounding and related functions
 for f in (:(ceil), :(floor), :(round), :(trunc))
