@@ -1259,8 +1259,8 @@ function getindex(A::Sparse{T}, i0::Integer, i1::Integer) where T
     r1 = Int(unsafe_load(s.p, i1) + 1)
     r2 = Int(unsafe_load(s.p, i1 + 1))
     (r1 > r2) && return zero(T)
-    r1 = Int(searchsortedfirst(unsafe_wrap(Array, s.i, (s.nzmax,), false),
-        i0 - 1, r1, r2, Base.Order.Forward))
+    r1 = Int(findsortedfirst(i0 - 1, unsafe_wrap(Array, s.i, (s.nzmax,), false),
+                             r1, r2, Base.Order.Forward))
     ((r1 > r2) || (unsafe_load(s.i, r1) + 1 != i0)) ? zero(T) : unsafe_load(s.x, r1)
 end
 

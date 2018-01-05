@@ -119,9 +119,9 @@ Base.Sort.sortcols
 
 ```@docs
 Base.issorted
-Base.Sort.searchsorted
-Base.Sort.searchsortedfirst
-Base.Sort.searchsortedlast
+Base.Sort.findsorted
+Base.Sort.findsortedfirst
+Base.Sort.findsortedlast
 Base.Sort.partialsort!
 Base.Sort.partialsort
 Base.Sort.partialsortperm

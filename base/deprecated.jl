@@ -3886,6 +3886,10 @@ end
 
 @deprecate findin(a, b) find(occursin(b), a)
 
+# PR #25414
+@deprecate searchsorted(a, x; kwargs...) findsorted(x, a, kwargs...)
+@deprecate searchsortedfirst(a, x; kwargs...) findsortedfirst(x, a, kwargs...)
+@deprecate searchsortedlast(a, x; kwargs...) searchsortedlast(x, a, kwargs...)
 
 # END 0.7 deprecations
 # BEGIN 1.0 deprecations
