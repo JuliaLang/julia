@@ -389,7 +389,7 @@ Float64(n::BigInt) = Float64(n, RoundNearest)
 Float32(n::BigInt) = Float32(n, RoundNearest)
 Float16(n::BigInt) = Float16(n, RoundNearest)
 
-promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
+promote_strict_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
 
 """
     big(x)

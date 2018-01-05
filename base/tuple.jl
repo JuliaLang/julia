@@ -78,13 +78,73 @@ end
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
 function _compute_eltype(t::Type{<:Tuple})
     @_pure_meta
-    t isa Union && return typejoin(eltype(t.a), eltype(t.b))
+    t isa Union && return promote_strict_type(eltype(t.a), eltype(t.b))
     t´ = unwrap_unionall(t)
     r = Union{}
     for ti in t´.parameters
-        r = typejoin(r, rewrap_unionall(unwrapva(ti), t))
+        r = promote_strict_type(r, rewrap_unionall(unwrapva(ti), t))
     end
     return r
+end
+
+# TODO: add similar promote_rule
+promote_strict_rule(a::Type{<:Tuple}, b::Type{<:Tuple}) = _compute_promote_strict(a, b)
+
+function _compute_promote_strict(a::Type{<:Tuple}, b::Type{<:Tuple})
+    ap, bp = a.parameters, b.parameters
+    lar = length(ap)::Int; lbr = length(bp)::Int
+    if lar == 0
+        return Tuple{Vararg{tail_promote_strict_type(bp,1)}}
+    end
+    if lbr == 0
+        return Tuple{Vararg{tail_promote_strict_type(ap,1)}}
+    end
+    laf, afixed = full_va_len(ap)
+    lbf, bfixed = full_va_len(bp)
+    if laf < lbf
+        if isvarargtype(ap[lar]) && !afixed
+            c = Vector{Any}(uninitialized, laf)
+            c[laf] = Vararg{promote_strict_type(unwrapva(ap[lar]),
+                            tail_promote_strict_type(bp,laf))}
+            n = laf-1
+        else
+            c = Vector{Any}(uninitialized, laf+1)
+            c[laf+1] = Vararg{tail_promote_strict_type(bp,laf+1)}
+            n = laf
+        end
+    elseif lbf < laf
+        if isvarargtype(bp[lbr]) && !bfixed
+            c = Vector{Any}(uninitialized, lbf)
+            c[lbf] = Vararg{promote_strict_type(unwrapva(bp[lbr]),
+                            tail_promote_strict_type(ap,lbf))}
+            n = lbf-1
+        else
+            c = Vector{Any}(uninitialized, lbf+1)
+            c[lbf+1] = Vararg{tail_promote_strict_type(ap,lbf+1)}
+            n = lbf
+        end
+    else
+        c = Vector{Any}(uninitialized, laf)
+        n = laf
+    end
+    for i = 1:n
+        ai = ap[min(i,lar)]; bi = bp[min(i,lbr)]
+        ci = promote_strict_type(unwrapva(ai),unwrapva(bi))
+        c[i] = i == length(c) && (isvarargtype(ai) || isvarargtype(bi)) ? Vararg{ci} : ci
+    end
+    return Tuple{c...}
+end
+
+# reduce tail_promote_strict_type over A[i:end]
+function tail_promote_strict_type(A, i)
+    if i > length(A)
+        return unwrapva(A[end])
+    end
+    t = Bottom
+    for j = i:length(A)
+        t = promote_strict_type(t, unwrapva(A[j]))
+    end
+    return t
 end
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)

@@ -23,12 +23,31 @@ nonmissingtype(::Type{Missing}) = Union{}
 nonmissingtype(::Type{T}) where {T} = T
 nonmissingtype(::Type{Any}) = Any
 
-promote_rule(::Type{Missing}, ::Type{T}) where {T} = Union{T, Missing}
-promote_rule(::Type{Union{S,Missing}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), Missing}
-promote_rule(::Type{Any}, ::Type{T}) where {T} = Any
-promote_rule(::Type{Any}, ::Type{Missing}) = Any
-promote_rule(::Type{Missing}, ::Type{Any}) = Any
-promote_rule(::Type{Missing}, ::Type{Missing}) = Missing
+# Both rules need to be defined for types which implement promote_rule
+# but not promote_strict_rule
+for (prule, ptype) in ((:promote_strict_rule, :promote_strict_type),
+                       (:promote_rule, :promote_type)),
+    U in (:Nothing, :Missing)
+    @eval begin
+        $prule(::Type{$U}, ::Type{T}) where {T} = Union{T, $U}
+        $prule(::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{$ptype(T, S), $U}
+        $prule(::Type{Any}, ::Type{$U}) = Any
+        $prule(::Type{$U}, ::Type{Any}) = Any
+        $prule(::Type{$U}, ::Type{$U}) = U
+    end
+end
+
+#= # Both rules need to be defined for types which implement promote_rule
+# but not promote_strict_rule
+for (prule, ptype) in ((promote_strict_rule, promote_strict_type), (promote_rule, promote_type)),
+    U in (Nothing, Missing)
+    prule(::Type{U}, ::Type{T}) where {T} = Union{T, U}
+    prule(::Type{Union{S,U}}, ::Type{T}) where {T,S} = Union{ptype(T, S), U}
+    prule(::Type{Any}, ::Type{T}) where {T} = Any
+    prule(::Type{Any}, ::Type{U}) = Any
+    prule(::Type{U}, ::Type{Any}) = Any
+    prule(::Type{U}, ::Type{U}) = U
+end =#
 
 convert(::Type{Union{T, Missing}}, x) where {T} = convert(T, x)
 # To fix ambiguities

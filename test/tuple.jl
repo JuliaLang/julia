@@ -181,6 +181,12 @@ end
         typejoin(Int, AbstractFloat, Bool)
     @test eltype(Union{Tuple{Int, Float64}, Tuple{Vararg{Bool}}}) ===
         typejoin(Int, Float64, Bool)
+    @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
+    @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
+    @test eltype(Tuple{Int, Missing, Float64}) === Union{Missing, Real}
+    @test eltype(Tuple{Int, Nothing, Float64}) === Union{Missing, Real}
+    @test eltype(Tuple{Int, Missing, Int8}) === Union{Missing, Int}
+    @test eltype(Tuple{Int, Nothing, Int8}) === Union{Missing, Int}
 end
 
 @testset "mapping" begin

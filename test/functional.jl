@@ -147,3 +147,31 @@ end
                  for n = 0:5:100-q-d
                  for p = 100-q-d-n
                  if p < n < d < q] == [(50,30,15,5), (50,30,20,0), (50,40,10,0), (75,20,5,0)]
+
+@testset "map/collect return type on generators with $T" for T in (Nothing, Missing)
+    v = T()
+    x = ["a", "b"]
+    res = @inferred collect(s for s in x)
+    @test res isa Vector{String}
+    res = @inferred map(identity, x)
+    @test res isa Vector{String}
+    res = @inferred collect(s === v for s in x)
+    @test res isa Vector{Bool}
+    res = @inferred map(s -> s === v, x)
+    @test res isa Vector{Bool}
+    y = Union{String, T}["a", v]
+    f(s::Union{Nothing, Missing}) = s
+    f(s::String) = s == "a"
+    res = @inferred collect(s for s in y)
+    @test res isa Vector{Union{String, T}}
+    res = map(identity, y)
+    @test res isa Vector{Union{String, T}}
+    res = @inferred collect(s === v for s in y)
+    @test res isa Vector{Bool}
+    res = @inferred map(s -> s === v, y)
+    @test res isa Vector{Bool}
+    res = collect(f(s) for s in y)
+    @test res isa Vector{Union{Bool, T}}
+    res = map(f, y)
+    @test res isa Vector{Union{Bool, T}}
+end
