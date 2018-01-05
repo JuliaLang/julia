@@ -326,17 +326,18 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
         if !iscolor
             print(io, str)
         else
+            bold && color == :bold && (color = :nothing)
+            enable_ansi  = get(text_colors, color, text_colors[:default]) *
+                               (bold ? text_colors[:bold] : "")
+            disable_ansi = get(disable_text_style, color, text_colors[:default]) *
+                               (bold ? disable_text_style[:bold] : "")
             lines = split(str, '\n')
             first = true
             for line in lines
                 first || print(buf, '\n')
                 first = false
                 isempty(line) && continue
-                bold && color != :bold && print(buf, text_colors[:bold])
-                print(buf, get(text_colors, color, color_normal))
-                print(buf, line)
-                color != :nothing && print(buf, get(disable_text_style, color, text_colors[:default]))
-                bold && color != :bold && print(buf, disable_text_style[:bold])
+                print(buf, enable_ansi, line, disable_ansi)
             end
             print(io, String(take!(buf)))
         end

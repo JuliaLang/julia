@@ -41,6 +41,7 @@ const disable_text_style = AnyDict(
     :hidden    => "\033[28m",
     :normal    => "",
     :default   => "",
+    :nothing   => "",
 )
 
 # Create a docstring with an automatically generated list
