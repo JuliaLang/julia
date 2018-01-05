@@ -817,9 +817,29 @@ end
     @test lyap(one(elty),a) == -a/2
 end
 
-@testset "stride1" begin
+@testset "strides" begin
     a = rand(10)
     b = view(a,2:2:10)
+    A = rand(10,10)
+    B = view(A, 2:2:10, 2:2:10)
+
     @test Base.LinAlg.stride1(a) == 1
     @test Base.LinAlg.stride1(b) == 2
+
+    @test strides(a) == (1,)
+    @test strides(b) == (2,)
+    @test strides(A) == (1,10)
+    @test strides(B) == (2,20)
+
+    @test_deprecated strides(1:5)
+    @test_deprecated stride(1:5,1)
+
+    for M in (a, b, A, B)
+        @inferred strides(M)
+        strides_M = strides(M)
+
+        for (i, _stride) in enumerate(collect(strides_M))
+            @test _stride == stride(M, i)
+        end
+    end
 end

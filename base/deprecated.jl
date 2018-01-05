@@ -3813,6 +3813,21 @@ end
     @deprecate getq(F::Factorization) F.Q
 end
 
+# Issues #17812 Remove default stride implementation
+function strides(a::AbstractArray)
+    depwarn("""
+    `strides(a::AbstractArray)` is deprecated for general arrays.
+    Specialize `strides` for custom array types that have the appropriate representation in memory.
+    Warning: inappropriately implementing this method for an array type that does not use strided
+    storage may lead to incorrect results or segfaults.
+    """, :strides)
+    size_to_strides(1, size(a)...)
+end
+
+@deprecate substrides(s, parent, dim, I::Tuple) substrides(parent, strides(parent), I)
+
+# END 0.7 deprecations
+
 @deprecate lexcmp(x::AbstractArray, y::AbstractArray) cmp(x, y)
 @deprecate lexcmp(x::Real, y::Real)                   cmp(isless, x, y)
 @deprecate lexcmp(x::Complex, y::Complex)             cmp((real(x),imag(x)), (real(y),imag(y)))
@@ -3870,6 +3885,7 @@ end
 @deprecate ismatch(r::Regex, s::AbstractString) contains(s, r)
 
 @deprecate findin(a, b) find(occursin(b), a)
+
 
 # END 0.7 deprecations
 # BEGIN 1.0 deprecations

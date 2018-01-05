@@ -431,13 +431,6 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     # last(a)
     @test last(B) == B[length(B)]
 
-    # strides(a::AbstractArray)
-    @inferred strides(B)
-    strides_B = strides(B)
-    for (i, _stride) in enumerate(collect(strides_B))
-        @test _stride == stride(B, i)
-    end
-
     # isassigned(a::AbstractArray, i::Int...)
     j = rand(1:length(B))
     @test isassigned(B, j) == true

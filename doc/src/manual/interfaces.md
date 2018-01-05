@@ -391,6 +391,37 @@ something other than 1), you should specialize `indices`. You should also specia
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
 perhaps range-types `Ind` of your own design. For more information, see [Arrays with custom indices](@ref).
 
+## [Strided Arrays]
+
+| Methods to implement                            |                                        | Brief description                                                                     |
+|:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
+| `strides(A)`                             |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
+| `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                            |
+| **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
+| `stride(A, i::Int)`                             |     `strides(A)[i]`                                   | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
+
+A strided array is a subtype of `AbstractArray` whose entries are stored in memory with fixed strides.
+Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines
+for more efficient linear algebra routines.  A typical example of a user-defined strided array is one
+that wraps a standard `Array` with additional structure.
+
+Warning: do not implement these methods if the underlying storage is not actually strided, as it
+may lead to incorrect results or segmentation faults.
+
+Here are some examples to demonstrate which type of arrays are strided and which are not:
+```julia
+1:5   # not strided (there is no storage associated with this array.)
+Vector(1:5)  # is strided with strides (1,)
+A = [1 5; 2 6; 3 7; 4 8]  # is strided with strides (1,4)
+V = view(A, 1:2, :)   # is strided with strides (1,4)
+V = view(A, 1:2:3, 1:2)   # is strided with strides (2,4)
+V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not fixed.
+```
+
+
+
+
+
 ## [Broadcasting](@id man-interfaces-broadcasting)
 
 | Methods to implement | Brief description |

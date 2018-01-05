@@ -13,8 +13,8 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     cosh, cot, coth, csc, csch, eltype, exp, findmax, findmin, fill!, floor, getindex, hcat,
     getproperty, imag, inv, isapprox, isone, IndexStyle, kron, length, log, map, ndims,
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
-    setindex!, show, similar, sin, sincos, sinh, size, sqrt, tan, tanh, transpose, trunc,
-    typed_hcat, vec
+    setindex!, show, similar, sin, sincos, sinh, size, size_to_strides, sqrt, StridedReinterpretArray,
+    StridedReshapedArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_vcat
 # We use `_length` because of non-1 indices; releases after julia 0.5
@@ -161,9 +161,40 @@ end
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
 # see PR 16416
+"""
+    stride1(A) -> Int
+
+Return the distance between successive array elements
+in dimension 1 in units of element size.
+
+# Examples
+```jldoctest
+julia> A = [1,2,3,4]
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+
+julia> Base.LinAlg.stride1(A)
+1
+
+julia> B = view(A, 2:2:4)
+2-element view(::Array{Int64,1}, 2:2:4) with eltype Int64:
+ 2
+ 4
+
+julia> Base.LinAlg.stride1(B)
+2
+```
+"""
+stride1(x) = stride(x,1)
+stride1(x::Array) = 1
+stride1(x::DenseArray) = stride(x, 1)::Int
+
 @inline chkstride1(A...) = _chkstride1(true, A...)
 @noinline _chkstride1(ok::Bool) = ok || error("matrix does not have contiguous columns")
-@inline _chkstride1(ok::Bool, A, B...) = _chkstride1(ok & (stride(A, 1) == 1), B...)
+@inline _chkstride1(ok::Bool, A, B...) = _chkstride1(ok & (stride1(A) == 1), B...)
 
 """
     LinAlg.checksquare(A)

@@ -347,7 +347,7 @@ x11289 = randn(5,5)
 # Tests where non-trailing dimensions are preserved
 A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2:2, 1:5, :)
-@test strides(sA) == (1, 3, 15)
+@test @inferred(strides(sA)) == (1, 3, 15)
 @test parent(sA) == A
 @test parentindices(sA) == (2:2, 1:5, Base.Slice(1:8))
 @test Base.parentdims(sA) == [1:3;]
@@ -357,7 +357,7 @@ sA = view(A, 2:2, 1:5, :)
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
-@test strides(sA) == (1,3,15)
+@test @inferred(strides(sA)) == (1,3,15)
 @test stride(sA,3) == 15
 @test stride(sA,4) == 120
 test_bounds(sA)
@@ -367,7 +367,7 @@ sA[1:3,1:5] = -2
 @test all(A[:,:,5] .== -2)
 sA[:] = -3
 @test all(A[:,:,5] .== -3)
-@test strides(sA) == (1,3)
+@test @inferred(strides(sA)) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:3, 3:3, 2:5)
 @test Base.parentdims(sA) == [1:3;]
@@ -378,7 +378,7 @@ sA = view(A, 1:3, 3:3, 2:5)
 test_bounds(sA)
 sA = view(A, 1:2:3, 1:3:5, 1:2:8)
 @test Base.parentdims(sA) == [1:3;]
-@test strides(sA) == (2,9,30)
+@test @inferred(strides(sA)) == (2,9,30)
 @test sA[:] == A[1:2:3, 1:3:5, 1:2:8][:]
 # issue #8807
 @test view(view([1:5;], 1:5), 1:5) == [1:5;]
@@ -409,7 +409,7 @@ sA = view(A, 2, :, 1:8)
 @test Base.parentdims(sA) == [2:3;]
 @test size(sA) == (5, 8)
 @test axes(sA) === (Base.OneTo(5), Base.OneTo(8))
-@test strides(sA) == (3,15)
+@test @inferred(strides(sA)) == (3,15)
 @test sA[2, 1:8][:] == [5:15:120;]
 @test sA[:,1] == [2:3:14;]
 @test sA[2:5:end] == [5:15:110;]
@@ -421,13 +421,13 @@ sA = view(A, 1:3, 1:5, 5)
 @test Base.parentdims(sA) == [1:2;]
 @test size(sA) == (3,5)
 @test axes(sA) === (Base.OneTo(3),Base.OneTo(5))
-@test strides(sA) == (1,3)
+@test @inferred(strides(sA)) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:2:3, 3, 1:2:8)
 @test Base.parentdims(sA) == [1,3]
 @test size(sA) == (2,4)
 @test axes(sA) === (Base.OneTo(2), Base.OneTo(4))
-@test strides(sA) == (2,30)
+@test @inferred(strides(sA)) == (2,30)
 @test sA[:] == A[sA.indices...][:]
 test_bounds(sA)
 
@@ -587,3 +587,10 @@ end
 @test sizeof(view(zeros(UInt8, 10), 1:4)) == 4
 @test sizeof(view(zeros(UInt8, 10), 1:3)) == 3
 @test sizeof(view(zeros(Float64, 10, 10), 1:3, 2:6)) == 120
+
+
+# PR #25321
+# checks that issue in type inference is resolved
+A = rand(5,5,5,5)
+V = view(A, 1:1 ,:, 1:3, :)
+@test @inferred(strides(V)) == (1, 5, 25, 125)
