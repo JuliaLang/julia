@@ -18,14 +18,17 @@ end
 
 function test_path(test)
     if test in STDLIBS
-        test_file = joinpath(STDLIB_DIR, test, "test", "runtests")
-        if !isfile(test_file * ".jl")
-            error("Standard library $test did not provide a `test/runtests.jl` file")
-        end
-        return test_file
+        return joinpath(STDLIB_DIR, test, "test", "runtests")
     else
-        return test
+        return joinpath(@__DIR__, test)
     end
+end
+
+# Check all test files exist
+isfiles = isfile.(test_path.(tests) .* ".jl")
+if any(equalto(false), isfiles)
+    error("did not find test files for the following tests: ",
+          join(tests[.!(isfiles)], ", "))
 end
 
 const node1_tests = String[]
