@@ -329,11 +329,10 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
             bold && color == :bold && (color = :nothing)
             enable_ansi  = get(text_colors, color, text_colors[:default]) *
                                (bold ? text_colors[:bold] : "")
-            disable_ansi = get(disable_text_style, color, text_colors[:default]) *
-                               (bold ? disable_text_style[:bold] : "")
-            lines = split(str, '\n')
+            disable_ansi = (bold ? disable_text_style[:bold] : "") *
+                               get(disable_text_style, color, text_colors[:default])
             first = true
-            for line in lines
+            for line in split(str, '\n')
                 first || print(buf, '\n')
                 first = false
                 isempty(line) && continue

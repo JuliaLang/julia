@@ -477,7 +477,7 @@ end
 let buf_color = IOBuffer()
     str = "Two\nlines"
     print_with_color(:red, IOContext(buf_color, :color=>true), str; bold=true)
-    @test String(take!(buf_color)) == "\e[1m\e[31mTwo\e[39m\e[22m\n\e[1m\e[31mlines\e[39m\e[22m"
+    @test String(take!(buf_color)) == "\e[31m\e[1mTwo\e[22m\e[39m\n\e[31m\e[1mlines\e[22m\e[39m"
 end
 
 if STDOUT isa Base.TTY
@@ -508,7 +508,7 @@ let buf = IOBuffer()
 
     # Check that boldness is turned off
     print_with_color(:red, buf_color, "foo"; bold = true)
-    @test String(take!(buf)) == "\e[1m\e[31mfoo\e[39m\e[22m"
+    @test String(take!(buf)) == "\e[31m\e[1mfoo\e[22m\e[39m"
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
