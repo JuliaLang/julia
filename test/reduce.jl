@@ -46,7 +46,7 @@
 @test mapreduce(-, +, collect(linspace(1.0, 10000.0, 10000))) == -50005000.0
 # empty mr
 @test mapreduce(abs2, +, Float64[]) === 0.0
-@test mapreduce(abs2, Base.scalarmax, Float64[]) === 0.0
+@test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
 @test_throws ArgumentError mapreduce(abs2, &, Float64[])
 @test_throws ArgumentError mapreduce(abs2, |, Float64[])

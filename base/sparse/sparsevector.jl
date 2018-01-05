@@ -2,7 +2,7 @@
 
 ### Common definitions
 
-import Base: scalarmax, scalarmin, sort, find, findnz
+import Base: sort, find, findnz
 import Base.LinAlg: promote_to_array_type, promote_to_arrays_
 
 ### The SparseVector
