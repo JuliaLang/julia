@@ -1548,7 +1548,7 @@ function isequal(A::AbstractArray, B::AbstractArray)
     return true
 end
 
-function cmp(A::AbstractArray, B::AbstractArray)
+function cmp(A::AbstractVector, B::AbstractVector)
     for (a, b) in zip(A, B)
         if !isequal(a, b)
             return isless(a, b) ? -1 : 1
@@ -1557,7 +1557,7 @@ function cmp(A::AbstractArray, B::AbstractArray)
     return cmp(length(A), length(B))
 end
 
-isless(A::AbstractArray, B::AbstractArray) = cmp(A, B) < 0
+isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)
