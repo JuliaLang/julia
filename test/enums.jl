@@ -148,3 +148,11 @@ let b = IOBuffer()
     seekstart(b)
     @test deserialize(b) === apple
 end
+
+# test block form
+@enum BritishFood begin
+    blackpudding = 1
+    scotchegg    = 2
+    haggis       = 4
+end
+@test Int(haggis) == 4
