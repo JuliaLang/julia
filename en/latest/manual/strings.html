@@ -179,21 +179,21 @@ julia&gt; &quot;Hello, world.&quot; != &quot;Goodbye, world.&quot;
 true
 
 julia&gt; &quot;1 + 2 = 3&quot; == &quot;1 + 2 = $(1 + 2)&quot;
-true</code></pre><p>You can search for the index of a particular character using the <a href="../stdlib/strings.html#Base.search"><code>search</code></a> function:</p><pre><code class="language-julia-repl">julia&gt; search(&quot;xylophone&quot;, &#39;x&#39;)
+true</code></pre><p>You can search for the index of a particular character using the <a href="../stdlib/arrays.html#Base.findfirst-Tuple{Any}"><code>findfirst</code></a> function:</p><pre><code class="language-julia-repl">julia&gt; findfirst(equalto(&#39;x&#39;), &quot;xylophone&quot;)
 1
 
-julia&gt; search(&quot;xylophone&quot;, &#39;p&#39;)
+julia&gt; findfirst(equalto(&#39;p&#39;), &quot;xylophone&quot;)
 5
 
-julia&gt; search(&quot;xylophone&quot;, &#39;z&#39;)
-0</code></pre><p>You can start the search for a character at a given offset by providing a third argument:</p><pre><code class="language-julia-repl">julia&gt; search(&quot;xylophone&quot;, &#39;o&#39;)
+julia&gt; findfirst(equalto(&#39;z&#39;), &quot;xylophone&quot;)
+0</code></pre><p>You can start the search for a character at a given offset by using <a href="../stdlib/arrays.html#Base.findnext-Tuple{Any,Integer}"><code>findnext</code></a> with a third argument:</p><pre><code class="language-julia-repl">julia&gt; findnext(equalto(&#39;o&#39;), &quot;xylophone&quot;, 1)
 4
 
-julia&gt; search(&quot;xylophone&quot;, &#39;o&#39;, 5)
+julia&gt; findnext(equalto(&#39;o&#39;), &quot;xylophone&quot;, 5)
 7
 
-julia&gt; search(&quot;xylophone&quot;, &#39;o&#39;, 8)
-0</code></pre><p>You can use the <a href="../stdlib/strings.html#Base.contains-Tuple{AbstractString,AbstractString}"><code>contains</code></a> function to check if a substring is contained in a string:</p><pre><code class="language-julia-repl">julia&gt; contains(&quot;Hello, world.&quot;, &quot;world&quot;)
+julia&gt; findnext(equalto(&#39;o&#39;), &quot;xylophone&quot;, 8)
+0</code></pre><p>You can use the <a href="../stdlib/strings.html#Base.contains"><code>contains</code></a> function to check if a substring is contained in a string:</p><pre><code class="language-julia-repl">julia&gt; contains(&quot;Hello, world.&quot;, &quot;world&quot;)
 true
 
 julia&gt; contains(&quot;Xylophon&quot;, &quot;o&quot;)
@@ -203,7 +203,7 @@ julia&gt; contains(&quot;Xylophon&quot;, &quot;a&quot;)
 false
 
 julia&gt; contains(&quot;Xylophon&quot;, &#39;o&#39;)
-true</code></pre><p>The last example shows that <a href="../stdlib/strings.html#Base.contains-Tuple{AbstractString,AbstractString}"><code>contains</code></a> can also look for a character literal.</p><p>Two other handy string functions are <a href="../stdlib/arrays.html#Base.repeat-Tuple{AbstractArray}"><code>repeat</code></a> and <a href="../stdlib/strings.html#Base.join"><code>join</code></a>:</p><pre><code class="language-julia-repl">julia&gt; repeat(&quot;.:Z:.&quot;, 10)
+true</code></pre><p>The last example shows that <a href="../stdlib/strings.html#Base.contains"><code>contains</code></a> can also look for a character literal.</p><p>Two other handy string functions are <a href="../stdlib/arrays.html#Base.repeat-Tuple{AbstractArray}"><code>repeat</code></a> and <a href="../stdlib/strings.html#Base.join"><code>join</code></a>:</p><pre><code class="language-julia-repl">julia&gt; repeat(&quot;.:Z:.&quot;, 10)
 &quot;.:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:.&quot;
 
 julia&gt; join([&quot;apples&quot;, &quot;bananas&quot;, &quot;pineapples&quot;], &quot;, &quot;, &quot; and &quot;)
@@ -211,11 +211,11 @@ julia&gt; join([&quot;apples&quot;, &quot;bananas&quot;, &quot;pineapples&quot;]
 r&quot;^\s*(?:#|$)&quot;
 
 julia&gt; typeof(ans)
-Regex</code></pre><p>To check if a regex matches a string, use <a href="../stdlib/strings.html#Base.ismatch"><code>ismatch</code></a>:</p><pre><code class="language-julia-repl">julia&gt; ismatch(r&quot;^\s*(?:#|$)&quot;, &quot;not a comment&quot;)
+Regex</code></pre><p>To check if a regex matches a string, use <a href="../stdlib/strings.html#Base.contains"><code>contains</code></a>:</p><pre><code class="language-julia-repl">julia&gt; contains(&quot;not a comment&quot;, r&quot;^\s*(?:#|$)&quot;)
 false
 
-julia&gt; ismatch(r&quot;^\s*(?:#|$)&quot;, &quot;# a comment&quot;)
-true</code></pre><p>As one can see here, <a href="../stdlib/strings.html#Base.ismatch"><code>ismatch</code></a> simply returns true or false, indicating whether the given regex matches the string or not. Commonly, however, one wants to know not just whether a string matched, but also <em>how</em> it matched. To capture this information about a match, use the <a href="../stdlib/strings.html#Base.match"><code>match</code></a> function instead:</p><pre><code class="language-julia-repl">julia&gt; match(r&quot;^\s*(?:#|$)&quot;, &quot;not a comment&quot;)
+julia&gt; contains(&quot;# a comment&quot;, r&quot;^\s*(?:#|$)&quot;)
+true</code></pre><p>As one can see here, <a href="../stdlib/strings.html#Base.contains"><code>contains</code></a> simply returns true or false, indicating whether the given regex matches the string or not. Commonly, however, one wants to know not just whether a string matched, but also <em>how</em> it matched. To capture this information about a match, use the <a href="../stdlib/strings.html#Base.match"><code>match</code></a> function instead:</p><pre><code class="language-julia-repl">julia&gt; match(r&quot;^\s*(?:#|$)&quot;, &quot;not a comment&quot;)
 
 julia&gt; match(r&quot;^\s*(?:#|$)&quot;, &quot;# a comment&quot;)
 RegexMatch(&quot;#&quot;)</code></pre><p>If the regular expression does not match the given string, <a href="../stdlib/strings.html#Base.match"><code>match</code></a> returns <code>nothing</code> – a special value that does not print anything at the interactive prompt. Other than not printing, it is a completely normal value and you can test for it programmatically:</p><pre><code class="language-julia">m = match(r&quot;^\s*(?:#|$)&quot;, line)
