@@ -197,6 +197,8 @@ function resolve_tst(deps_data, reqs_data, want_data = nothing)
     simplify_graph!(graph, verbose = VERBOSE)
     want = resolve(graph, verbose = VERBOSE)
 
+    # info("BACKTRACE:\n" * sprint(showbacktrace, graph))
+
     return want == wantuuids(want_data)
 end
 
@@ -329,6 +331,7 @@ VERBOSE && info("SCHEME 5")
 deps_data = Any[
     ["A", v"1", "B", "2-*"],
     ["A", v"1", "C", "2-*"],
+    # ["A", v"1", "julia", "10"],
     ["A", v"2", "B", "1"],
     ["A", v"2", "C", "1"],
     ["B", v"1", "C", "2-*"],

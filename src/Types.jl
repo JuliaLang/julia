@@ -176,6 +176,15 @@ function Base.convert(::Type{VersionRange}, s::AbstractString)
     return VersionRange(lower, upper)
 end
 
+Base.print(io::IO, r::VersionRange{0,0}) = print(io, '*')
+function Base.print(io::IO, r::VersionRange{0,n}) where {n}
+    print(io, "0-")
+    join(io, r.upper.t, '.')
+end
+function Base.print(io::IO, r::VersionRange{m,0}) where {m}
+    join(io, r.lower.t, '.')
+    print(io, "-*")
+end
 function Base.print(io::IO, r::VersionRange)
     join(io, r.lower.t, '.')
     if r.lower != r.upper
@@ -183,7 +192,6 @@ function Base.print(io::IO, r::VersionRange)
         join(io, r.upper.t, '.')
     end
 end
-Base.print(io::IO, ::VersionRange{0,0}) = print(io, "*")
 Base.show(io::IO, r::VersionRange) = print(io, "VersionRange(\"", r, "\")")
 
 Base.in(v::VersionNumber, r::VersionRange) = r.lower ≲ v ≲ r.upper

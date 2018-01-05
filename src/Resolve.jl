@@ -9,7 +9,7 @@ using ..Types
 using ..GraphType
 using .MaxSum
 import ..Types: uuid_julia
-import ..GraphType: is_current_julia
+import ..GraphType: is_julia, log_event_greedysolved!, log_event_maxsumsolved!
 
 export resolve, sanity_check
 
@@ -76,8 +76,8 @@ function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose::B
     id(p) = pkgID(p, graph)
 
     isempty(req_inds) || warn("sanity check called on a graph with non-empty requirements")
-    if !any(is_current_julia(graph, fp0) for fp0 in fix_inds)
-        warn("sanity check called on a graph without current julia requirement, adding it")
+    if !any(is_julia(graph, fp0) for fp0 in fix_inds)
+        warn("sanity check called on a graph without julia requirement, adding it")
         add_fixed!(graph, Dict(uuid_julia=>Fixed(VERSION)))
     end
     if length(fix_inds) ≠ 1
@@ -257,6 +257,10 @@ function greedysolver(graph::Graph)
 
     @assert verify_solution(sol, graph)
 
+    for p0 = 1:np
+        log_event_greedysolved!(graph, p0, sol[p0])
+    end
+
     return true, sol
 end
 
@@ -297,16 +301,20 @@ function enforce_optimality!(sol::Vector{Int}, graph::Graph)
     gmsk = graph.gmsk
     gdir = graph.gdir
     gconstr = graph.gconstr
+    pkgs = graph.data.pkgs
+
+    # keep a track for the log
+    why = Union{Symbol,Int}[0 for p0 = 1:np]
 
     restart = true
     while restart
         restart = false
         for p0 = 1:np
             s0 = sol[p0]
-            s0 == spp[p0] && continue # the package is not installed
+            s0 == spp[p0] && (why[p0] = :uninst; continue) # the package is not installed
 
             # check if bumping to the higher version would violate a constraint
-            gconstr[p0][s0+1] || continue
+            gconstr[p0][s0+1] || (why[p0] = :constr; continue)
 
             # check if bumping to the higher version would violate a constraint
             viol = false
@@ -315,6 +323,7 @@ function enforce_optimality!(sol::Vector{Int}, graph::Graph)
                 msk = gmsk[p0][j1]
                 if !msk[s1, s0+1]
                     viol = true
+                    why[p0] = p1
                     break
                 end
             end
@@ -352,9 +361,14 @@ function enforce_optimality!(sol::Vector{Int}, graph::Graph)
 
     for p0 in find(uninst)
         sol[p0] = spp[p0]
+        why[p0] = :uninst
     end
 
     @assert verify_solution(sol, graph)
+
+    for p0 = 1:np
+        log_event_maxsumsolved!(graph, p0, sol[p0], why[p0])
+    end
 end
 
 end # module
