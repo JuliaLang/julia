@@ -77,6 +77,15 @@ end
         @test ismissing(f(1, missing))
         @test ismissing(f(missing, 1))
     end
+
+    @test ismissing(min(missing, missing))
+    @test ismissing(max(missing, missing))
+    for f in [min, max]
+        for arg in ["", "a", 1, -1.0, [2]]
+            @test ismissing(f(missing, arg))
+            @test ismissing(f(arg, missing))
+        end
+    end
 end
 
 @testset "bit operators" begin
