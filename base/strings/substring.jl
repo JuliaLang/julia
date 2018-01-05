@@ -140,7 +140,7 @@ julia> reverse("JuliaLang")
 julia> reverse("ax̂e") # combining characters can lead to surprising results
 "êxa"
 
-julia> using Unicode
+julia> using Strings
 
 julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
 "ex̂a"
