@@ -4,7 +4,7 @@ mutable struct GenericIterator{N} end
 Base.start(::GenericIterator{N}) where {N} = 1
 Base.next(::GenericIterator{N}, i) where {N} = (i, i + 1)
 Base.done(::GenericIterator{N}, i) where {N} = i > N ? true : false
-Base.iteratorsize(::Type{GenericIterator{N}}) where {N} = Base.SizeUnknown()
+Base.IteratorSize(::Type{GenericIterator{N}}) where {N} = Base.SizeUnknown()
 
 function generic_map_tests(mapf, inplace_mapf=nothing)
     for typ in (Float16, Float32, Float64,
@@ -61,7 +61,7 @@ function testmap_equivalence(mapf, f, c...)
     x1 = mapf(f,c...)
     x2 = map(f,c...)
 
-    if Base.iteratorsize == Base.HasShape()
+    if Base.IteratorSize == Base.HasShape()
         @test size(x1) == size(x2)
     else
         @test length(x1) == length(x2)

@@ -4,7 +4,7 @@
 module IteratorsMD
     import Base: eltype, length, size, start, done, next, first, last, in, getindex,
                  setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
-                 ndims, iteratorsize, convert, show
+                 ndims, IteratorSize, convert, show
 
     import Base: +, -, *
     import Base: simd_outer_range, simd_inner_length, simd_index
@@ -271,7 +271,7 @@ module IteratorsMD
     eltype(R::CartesianIndices) = eltype(typeof(R))
     eltype(::Type{CartesianIndices{N}}) where {N} = CartesianIndex{N}
     eltype(::Type{CartesianIndices{N,TT}}) where {N,TT} = CartesianIndex{N}
-    iteratorsize(::Type{<:CartesianIndices}) = Base.HasShape()
+    IteratorSize(::Type{<:CartesianIndices}) = Base.HasShape()
 
     @inline function start(iter::CartesianIndices)
         iterfirst, iterlast = first(iter), last(iter)

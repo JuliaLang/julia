@@ -57,7 +57,7 @@ struct HasShape <: IteratorSize end
 struct IsInfinite <: IteratorSize end
 
 """
-    iteratorsize(itertype::Type) -> IteratorSize
+    IteratorSize(itertype::Type) -> IteratorSize
 
 Given the type of an iterator, return one of the following values:
 
@@ -74,22 +74,22 @@ This trait is generally used to select between algorithms that pre-allocate spac
 result, and algorithms that resize their result incrementally.
 
 ```jldoctest
-julia> Base.iteratorsize(1:5)
+julia> Base.IteratorSize(1:5)
 Base.HasShape()
 
-julia> Base.iteratorsize((2,3))
+julia> Base.IteratorSize((2,3))
 Base.HasLength()
 ```
 """
-iteratorsize(x) = iteratorsize(typeof(x))
-iteratorsize(::Type) = HasLength()  # HasLength is the default
+IteratorSize(x) = IteratorSize(typeof(x))
+IteratorSize(::Type) = HasLength()  # HasLength is the default
 
 abstract type IteratorEltype end
 struct EltypeUnknown <: IteratorEltype end
 struct HasEltype <: IteratorEltype end
 
 """
-    iteratoreltype(itertype::Type) -> IteratorEltype
+    IteratorEltype(itertype::Type) -> IteratorEltype
 
 Given the type of an iterator, return one of the following values:
 
@@ -103,20 +103,20 @@ type of result, and algorithms that pick a result type based on the types of yie
 values.
 
 ```jldoctest
-julia> Base.iteratoreltype(1:5)
+julia> Base.IteratorEltype(1:5)
 Base.HasEltype()
 ```
 """
-iteratoreltype(x) = iteratoreltype(typeof(x))
-iteratoreltype(::Type) = HasEltype()  # HasEltype is the default
+IteratorEltype(x) = IteratorEltype(typeof(x))
+IteratorEltype(::Type) = HasEltype()  # HasEltype is the default
 
-iteratorsize(::Type{<:AbstractArray}) = HasShape()
-iteratorsize(::Type{Generator{I,F}}) where {I,F} = iteratorsize(I)
+IteratorSize(::Type{<:AbstractArray}) = HasShape()
+IteratorSize(::Type{Generator{I,F}}) where {I,F} = IteratorSize(I)
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
 axes(g::Generator) = axes(g.iter)
 ndims(g::Generator) = ndims(g.iter)
 
-iteratoreltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
+IteratorEltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
 
-haslength(iter) = iteratorsize(iter) isa Union{HasShape, HasLength}
+haslength(iter) = IteratorSize(iter) isa Union{HasShape, HasLength}

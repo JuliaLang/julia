@@ -13,20 +13,20 @@ to generically build upon those behaviors.
 | `next(iter, state)`            |                        | Returns the current item and the next state                                           |
 | `done(iter, state)`            |                        | Tests if there are any items remaining                                                |
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `iteratorsize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
-| `iteratoreltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
+| `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
+| `IteratorEltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
 | `eltype(IterType)`             | `Any`                  | The type of the items returned by `next()`                                            |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
 | `size(iter, [dim...])`         | (*undefined*)          | The number of items in each dimension, if known                                       |
 
-| Value returned by `iteratorsize(IterType)` | Required Methods                           |
+| Value returned by `IteratorSize(IterType)` | Required Methods                           |
 |:------------------------------------------ |:------------------------------------------ |
 | `HasLength()`                              | `length(iter)`                             |
 | `HasShape()`                               | `length(iter)`  and `size(iter, [dim...])` |
 | `IsInfinite()`                             | (*none*)                                   |
 | `SizeUnknown()`                            | (*none*)                                   |
 
-| Value returned by `iteratoreltype(IterType)` | Required Methods   |
+| Value returned by `IteratorEltype(IterType)` | Required Methods   |
 |:-------------------------------------------- |:------------------ |
 | `HasEltype()`                                | `eltype(IterType)` |
 | `EltypeUnknown()`                            | (*none*)           |

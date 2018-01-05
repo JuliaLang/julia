@@ -937,8 +937,8 @@ function done(t::Task, val)
     istaskdone(t)
 end
 next(t::Task, val) = (t.result, nothing)
-iteratorsize(::Type{Task}) = SizeUnknown()
-iteratoreltype(::Type{Task}) = EltypeUnknown()
+IteratorSize(::Type{Task}) = SizeUnknown()
+IteratorEltype(::Type{Task}) = EltypeUnknown()
 
 isempty(::Task) = error("isempty not defined for Tasks")
 
@@ -3819,6 +3819,9 @@ end
 @deprecate lexcmp(x, y)                               cmp(x, y)
 
 @deprecate lexless isless
+
+@deprecate_binding iteratorsize IteratorSize
+@deprecate_binding iteratoreltype IteratorEltype
 
 @deprecate search(str::Union{String,SubString}, re::Regex, idx::Integer) findnext(re, str, idx)
 @deprecate search(s::AbstractString, r::Regex, idx::Integer) findnext(r, s, idx)

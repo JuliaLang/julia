@@ -843,7 +843,7 @@ next(itr::EachLine, ::Nothing) = (readline(itr.stream, chomp=itr.chomp), nothing
 
 eltype(::Type{EachLine}) = String
 
-iteratorsize(::Type{EachLine}) = SizeUnknown()
+IteratorSize(::Type{EachLine}) = SizeUnknown()
 
 # IOStream Marking
 # Note that these functions expect that io.mark exists for

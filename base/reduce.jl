@@ -69,7 +69,7 @@ In general, this cannot be used with empty collections (see [`reduce(op, itr)`](
 function mapfoldl(f, op, itr)
     i = start(itr)
     if done(itr, i)
-        return Base.mapreduce_empty_iter(f, op, itr, iteratoreltype(itr))
+        return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
     (x, i) = next(itr, i)
     v0 = mapreduce_first(f, op, x)
@@ -139,7 +139,7 @@ In general, this cannot be used with empty collections (see [`reduce(op, itr)`](
 function mapfoldr(f, op, itr)
     i = endof(itr)
     if isempty(itr)
-        return Base.mapreduce_empty_iter(f, op, itr, iteratoreltype(itr))
+        return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
     return mapfoldr_impl(f, op, mapreduce_first(f, op, itr[i]), itr, i-1)
 end

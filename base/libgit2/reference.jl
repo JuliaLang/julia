@@ -340,7 +340,7 @@ function Base.next(bi::GitBranchIter, state)
     return (state[1:2], (GitReference(bi.owner, ref_ptr_ptr[]), btype[], false))
 end
 
-Base.iteratorsize(::Type{GitBranchIter}) = Base.SizeUnknown()
+Base.IteratorSize(::Type{GitBranchIter}) = Base.SizeUnknown()
 
 function Base.map(f::Function, bi::GitBranchIter)
     res = nothing
