@@ -4,9 +4,9 @@ module MaxSum
 
 include("FieldValues.jl")
 
-using .FieldValues, ..VersionWeights, ..PkgToMaxSumInterface
+using .FieldValues, ..VersionWeights, ...Types, ...GraphType
 
-export UnsatError, Graph, Messages, maxsum
+export UnsatError, Messages, maxsum
 
 # An exception type used internally to signal that an unsatisfiable
 # constraint was detected
@@ -34,130 +34,6 @@ mutable struct MaxSumParams
     end
 end
 
-# aux function to make graph generation consistent across platforms
-sortedpairs(d::Dict) = (k=>d[k] for k in sort!(collect(keys(d))))
-
-# Graph holds the graph structure onto which max-sum is run, in
-# sparse format
-mutable struct Graph
-    # adjacency matrix:
-    #   for each package, has the list of neighbors
-    #   indices (both dependencies and dependants)
-    gadj::Vector{Vector{Int}}
-
-    # compatibility mask:
-    #   for each package p0 has a list of bool masks.
-    #   Each entry in the list gmsk[p0] is relative to the
-    #   package p1 as read from gadj[p0].
-    #   Each mask has dimension spp1 x spp0, where
-    #   spp0 is the number of states of p0, and
-    #   spp1 is the number of states of p1.
-    gmsk::Vector{Vector{BitMatrix}}
-
-    # dependency direction:
-    #   keeps track of which direction the dependency goes
-    #   takes 3 values:
-    #     1  = dependant
-    #     -1 = dependency
-    #     0  = both
-    #   Used to break symmetry between dependants and
-    #   dependencies (introduces a FieldValue at level l3).
-    #   The "both" case is for when there are dependency
-    #   relations which go both ways
-    gdir::Vector{Vector{Int}}
-
-    # adjacency dict:
-    #   allows one to retrieve the indices in gadj, so that
-    #   gadj[p0][adjdict[p1][p0]] = p1
-    #   ("At which index does package p1 appear in gadj[p0]?")
-    adjdict::Vector{Dict{Int,Int}}
-
-    # states per package: same as in Interface
-    spp::Vector{Int}
-
-    # update order: shuffled at each iteration
-    perm::Vector{Int}
-
-    # number of packages (all Vectors above have this length)
-    np::Int
-
-    function Graph(interface::Interface)
-        deps = interface.deps
-        np = interface.np
-
-        spp = interface.spp
-        pdict = interface.pdict
-        pvers = interface.pvers
-        vdict = interface.vdict
-
-        gadj = [Int[] for i = 1:np]
-        gmsk = [BitMatrix[] for i = 1:np]
-        gdir = [Int[] for i = 1:np]
-        adjdict = [Dict{Int,Int}() for i = 1:np]
-
-        for (p,depsp) in sortedpairs(deps)
-            p0 = pdict[p]
-            vdict0 = vdict[p0]
-            for (vn,vdep) in sortedpairs(depsp)
-                v0 = vdict0[vn]
-                for (rp, rvs) in sortedpairs(vdep)
-                    p1 = pdict[rp]
-
-                    j0 = 1
-                    while j0 <= length(gadj[p0]) && gadj[p0][j0] != p1
-                        j0 += 1
-                    end
-                    j1 = 1
-                    while j1 <= length(gadj[p1]) && gadj[p1][j1] != p0
-                        j1 += 1
-                    end
-                    @assert (j0 > length(gadj[p0]) && j1 > length(gadj[p1])) ||
-                            (j0 <= length(gadj[p0]) && j1 <= length(gadj[p1]))
-
-                    if j0 > length(gadj[p0])
-                        push!(gadj[p0], p1)
-                        push!(gadj[p1], p0)
-                        j0 = length(gadj[p0])
-                        j1 = length(gadj[p1])
-
-                        adjdict[p1][p0] = j0
-                        adjdict[p0][p1] = j1
-
-                        bm = trues(spp[p1], spp[p0])
-                        bmt = bm'
-
-                        push!(gmsk[p0], bm)
-                        push!(gmsk[p1], bmt)
-
-                        push!(gdir[p0], 1)
-                        push!(gdir[p1], -1)
-                    else
-                        bm = gmsk[p0][j0]
-                        bmt = gmsk[p1][j1]
-                        if gdir[p0][j0] == -1
-                            gdir[p0][j0] = 0
-                            gdir[p1][j1] = 0
-                        end
-                    end
-
-                    for v1 = 1:length(pvers[p1])
-                        if pvers[p1][v1] ∉ rvs
-                            bm[v1, v0] = false
-                            bmt[v0, v1] = false
-                        end
-                    end
-                    bm[end,v0] = false
-                    bmt[v0,end] = false
-                end
-            end
-        end
-
-        perm = [1:np;]
-
-        return new(gadj, gmsk, gdir, adjdict, spp, perm, np)
-    end
-end
-
 # Messages has the cavity messages and the total fields, and
 # gets updated iteratively (and occasionally decimated) until
 # convergence
@@ -180,51 +56,52 @@ mutable struct Messages
     decimated::BitVector
     num_nondecimated::Int
 
-    function Messages(interface::Interface, graph::Graph)
-        reqs = interface.reqs
-        pkgs = interface.pkgs
-        np = interface.np
-        spp = interface.spp
-        pvers = interface.pvers
-        pdict = interface.pdict
-        vweight = interface.vweight
+    function Messages(graph::Graph)
+        np = graph.np
+        spp = graph.spp
+        gconstr = graph.gconstr
+        req_inds = graph.req_inds
+        pvers = graph.data.pvers
+        pdict = graph.data.pdict
+
+        ## generate wveights (v0 == spp[p0] is the "uninstalled" state)
+        vweight = [[VersionWeight(v0 < spp[p0] ? pvers[p0][v0] : v"0") for v0 = 1:spp[p0]] for p0 = 1:np]
 
         # external fields: favor newest versions over older, and no-version over all
         fld = [[FieldValue(0, zero(VersionWeight), vweight[p0][v0], (v0==spp[p0]), 0) for v0 = 1:spp[p0]] for p0 = 1:np]
 
-        # enforce requirements
-        for (rp, rvs) in reqs
-            p0 = pdict[rp]
-            pvers0 = pvers[p0]
-            fld0 = fld[p0]
-            for v0 = 1:spp[p0]-1
-                vn = pvers0[v0]
-                if !in(vn, rvs)
-                    # the state is forbidden by requirements
-                    fld0[v0] = FieldValue(-1)
-                else
-                    # the state is one of those explicitly requested:
-                    # favor it at a higer level than normal (upgrade
-                    # FieldValue from l2 to l1)
-                    fld0[v0] += FieldValue(0, vweight[p0][v0], -vweight[p0][v0])
-                end
-            end
-            # the uninstalled state is forbidden by requirements
-            fld0[spp[p0]] = FieldValue(-1)
-        end
-        # normalize fields
+        # enforce constraints
         for p0 = 1:np
-            m = maximum(fld[p0])
+            fld0 = fld[p0]
+            gconstr0 = gconstr[p0]
             for v0 = 1:spp[p0]
-                fld[p0][v0] -= m
+                gconstr0[v0] || (fld0[v0] = FieldValue(-1))
             end
         end
 
-        initial_fld = deepcopy(fld)
+        # favor explicit requirements
+        for rp0 in req_inds
+            fld0 = fld[rp0]
+            gconstr0 = gconstr[rp0]
+            for v0 = 1:spp[rp0]-1
+                gconstr0[v0] || continue
+                # the state is one of those explicitly requested:
+                # favor it at a higer level than normal (upgrade
+                # FieldValue from l2 to l1)
+                fld0[v0] += FieldValue(0, vweight[rp0][v0], -vweight[rp0][v0])
+            end
+        end
+
+        # normalize fields
+        for p0 = 1:np
+            fld[p0] .-= maximum(fld[p0])
+        end
+
+        initial_fld = [copy(f0) for f0 in fld]
 
         # initialize cavity messages to 0
         gadj = graph.gadj
-        msg = [[zeros(FieldValue, spp[p0]) for p1 = 1:length(gadj[p0])] for p0 = 1:np]
+        msg = [[zeros(FieldValue, spp[p0]) for j1 = 1:length(gadj[p0])] for p0 = 1:np]
 
         return new(msg, fld, initial_fld, falses(np), np)
     end
@@ -285,7 +162,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         # compute the output cavity message p0->p1
         cavmsg = fld0 - msg0[j0]
 
-        if dir1 == -1
+        if dir1 == GraphType.BACKWARDS
             # p0 depends on p1
             for v0 = 1:spp0-1
                 cavmsg[v0] += FieldValue(0, VersionWeight(0), VersionWeight(0), 0, v0)
@@ -302,7 +179,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         # through the constraint encoded in the bitmask
         # (nearly equivalent to:
         #    newmsg = [maximum(cavmsg[bm1[:,v1]]) for v1 = 1:spp1]
-        #  except for the gnrg term)
+        #  except for the directional term)
         m = FieldValue(-1)
         for v1 = 1:spp1
             for v0 = 1:spp0
@@ -310,7 +187,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
                     newmsg[v1] = max(newmsg[v1], cavmsg[v0])
                 end
             end
-            if dir1 == 1 && v1 != spp1
+            if dir1 == GraphType.FORWARD && v1 != spp1
                 # p1 depends on p0
                 newmsg[v1] += FieldValue(0, VersionWeight(0), VersionWeight(0), 0, v1)
             end
@@ -343,30 +220,32 @@ function update(p0::Int, graph::Graph, msgs::Messages)
 end
 
 # A simple shuffling machinery for the update order in iterate()
-# (woulnd't pass any random quality test but it's arguably enough)
-let step = 1
-global shuffleperm, shuffleperminit
-shuffleperminit() = (step = 1)
-function shuffleperm(graph::Graph)
-    perm = graph.perm
-    np = graph.np
-    for j = np:-1:2
-        k = mod(step,j) + 1
-        perm[j], perm[k] = perm[k], perm[j]
-        step += isodd(j) ? 1 : k
+# (wouldn't pass any random quality test but it's arguably enough)
+mutable struct NodePerm
+    p::Vector{Int}
+    step::Int64
+    NodePerm(np::Integer) = new(collect(1:np), 1)
+end
+
+function Base.shuffle!(perm::NodePerm)
+    p = perm.p
+    for j = length(p):-1:2
+        k = perm.step % j + 1
+        p[j], p[k] = p[k], p[j]
+        perm.step += isodd(j) ? 1 : k
     end
-    #@assert isperm(perm)
+    #@assert isperm(p)
 end
-end
+
+Base.start(perm::NodePerm) = start(perm.p)
+Base.next(perm::NodePerm, x) = next(perm.p, x)
+Base.done(perm::NodePerm, x) = done(perm.p, x)
 
 # Call update for all nodes (i.e. packages) in
 # random order
-function iterate(graph::Graph, msgs::Messages)
-    np = graph.np
-
+function iterate(graph::Graph, msgs::Messages, perm::NodePerm)
     maxdiff = zero(FieldValue)
-    shuffleperm(graph)
-    perm = graph.perm
+    shuffle!(perm)
     for p0 in perm
         maxdiff0 = update(p0, graph, msgs)
         maxdiff = max(maxdiff, maxdiff0)
@@ -487,10 +366,10 @@ function maxsum(graph::Graph, msgs::Messages)
     params = MaxSumParams()
 
     it = 0
-    shuffleperminit()
+    perm = NodePerm(graph.np)
     while true
         it += 1
-        maxdiff = iterate(graph, msgs)
+        maxdiff = iterate(graph, msgs, perm)
         #println("it = $it maxdiff = $maxdiff")
 
         if maxdiff == zero(FieldValue)
