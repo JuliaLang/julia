@@ -906,6 +906,13 @@ Deprecated or removed
 
   * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
 
+  * `linspace` and `logspace` now require an explicit number of elements to be
+    supplied rather than defaulting to `50`([#24794], [#24805]).
+
+  * `similar(::Associative)` has been deprecated in favor of `empty(::Associative)`, and
+    `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
+    `empty(::Associative, K, V)` ([#24390]).
+
   * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
 
 Command-line option changes
@@ -1124,6 +1131,7 @@ Command-line option changes
 [#24653]: https://github.com/JuliaLang/julia/issues/24653
 [#24654]: https://github.com/JuliaLang/julia/issues/24654
 [#24656]: https://github.com/JuliaLang/julia/issues/24656
+[#24673]: https://github.com/JuliaLang/julia/issues/24673
 [#24679]: https://github.com/JuliaLang/julia/issues/24679
 [#24684]: https://github.com/JuliaLang/julia/issues/24684
 [#24713]: https://github.com/JuliaLang/julia/issues/24713
@@ -1132,6 +1140,8 @@ Command-line option changes
 [#24781]: https://github.com/JuliaLang/julia/issues/24781
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
 [#24786]: https://github.com/JuliaLang/julia/issues/24786
+[#24794]: https://github.com/JuliaLang/julia/issues/24794
+[#24805]: https://github.com/JuliaLang/julia/issues/24805
 [#24808]: https://github.com/JuliaLang/julia/issues/24808
 [#24831]: https://github.com/JuliaLang/julia/issues/24831
 [#24839]: https://github.com/JuliaLang/julia/issues/24839
@@ -1151,3 +1161,4 @@ Command-line option changes
 [#25168]: https://github.com/JuliaLang/julia/issues/25168
 [#25184]: https://github.com/JuliaLang/julia/issues/25184
 [#25231]: https://github.com/JuliaLang/julia/issues/25231
+[#25365]: https://github.com/JuliaLang/julia/issues/25365
