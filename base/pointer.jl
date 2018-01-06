@@ -76,7 +76,7 @@ element type. `dims` is either an integer (for a 1d array) or a tuple of the arr
 `own` optionally specifies whether Julia should take ownership of the memory,
 calling `free` on the pointer when the array is no longer referenced.
 
-This function is labelled "unsafe" because it will crash if `pointer` is not
+This function is labeled "unsafe" because it will crash if `pointer` is not
 a valid memory address to data of the requested length.
 """
 function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
