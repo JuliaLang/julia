@@ -451,8 +451,9 @@ _similar_for(c, T, itr, isz) = similar(c, T)
     collect(collection)
 
 Return an `Array` of all items in a collection or iterator. For dictionaries, returns
-`Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the `HasShape()`
-trait, the result will have the same shape and number of dimensions as the argument.
+`Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the
+[`HasShape`](@ref iteratorsize) trait,
+the result will have the same shape and number of dimensions as the argument.
 
 # Examples
 ```jldoctest

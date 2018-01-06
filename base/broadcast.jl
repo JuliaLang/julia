@@ -52,10 +52,27 @@ BroadcastStyle(::Type{Union{}}) = Unknown()  # ambiguity resolution
 """
 `Broadcast.Scalar()` is a [`BroadcastStyle`](@ref) indicating that an object is not
 treated as a container for the purposes of broadcasting. This is the default for objects
-that have not customized `BroadcastStyle`.
+that have neither customized `BroadcastStyle` nor implemented the [`start`](@ref) method
+(for iterator types).
 """
 struct Scalar <: BroadcastStyle end
-BroadcastStyle(::Type) = Scalar()
+hasshape_ndims(::Base.HasShape{N}) where {N} = N
+function BroadcastStyle(::Type{T}) where T
+    if method_exists(start, Tuple{T})
+        S = Base.iteratorsize(T)
+        if S isa Base.HasLength
+            DefaultVectorStyle()
+        elseif S isa Base.HasShape
+            DefaultArrayStyle{hasshape_ndims(S)}()
+        else
+            throw(ArgumentError("cannot broadcast iterators with unknown or infinite size"))
+        end
+    else
+        Scalar()
+    end
+end
+BroadcastStyle(::Type{<:Number}) = Scalar()
+BroadcastStyle(::Type{<:AbstractString}) = Scalar()
 BroadcastStyle(::Type{<:Ptr}) = Scalar()
 
 """
