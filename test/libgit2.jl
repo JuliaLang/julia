@@ -904,6 +904,8 @@ mktempdir() do dir
                 blob2 = LibGit2.GitBlob(repo, LibGit2.GitHash(blob))
                 @test LibGit2.isbinary(blob2)
                 @test length(blob2) == len1
+                @test blob  == blob2
+                @test blob !== blob2
             end
         end
         @testset "trees" begin
