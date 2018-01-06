@@ -86,6 +86,8 @@ using Main.TestHelpers.OAs
     @test a[2,1,2,2,1] == b[14]
     @test a[2,2,2,2,2] == b[end]
 
+    @test_throws DimensionMismatch reshape(1:3, 4)
+
     # issue #23107
     a = [1,2,3]
     @test typeof(a)(a) !== a
