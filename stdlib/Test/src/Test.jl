@@ -469,7 +469,7 @@ macro test_throws(extype, ex)
         try
             Returned($(esc(ex)), nothing, $(QuoteNode(__source__)))
         catch _e
-            if $(extype) != InterruptException && _e isa InterruptException
+            if $(esc(extype)) != InterruptException && _e isa InterruptException
                 rethrow(_e)
             end
             Threw(_e, nothing, $(QuoteNode(__source__)))
