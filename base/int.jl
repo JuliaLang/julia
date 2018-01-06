@@ -380,7 +380,7 @@ julia> count_zeros(Int32(2 ^ 16 - 1))
 16
 ```
 """
-count_zeros(x::Integer) = count_ones(~x)
+count_zeros(x::Integer) = count_ones(!x)
 
 """
     leading_ones(x::Integer) -> Integer
@@ -392,7 +392,7 @@ julia> leading_ones(UInt32(2 ^ 32 - 2))
 31
 ```
 """
-leading_ones(x::Integer) = leading_zeros(~x)
+leading_ones(x::Integer) = leading_zeros(!x)
 
 """
     trailing_ones(x::Integer) -> Integer
@@ -404,7 +404,7 @@ julia> trailing_ones(3)
 2
 ```
 """
-trailing_ones(x::Integer) = trailing_zeros(~x)
+trailing_ones(x::Integer) = trailing_zeros(!x)
 
 ## integer comparisons ##
 

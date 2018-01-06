@@ -82,7 +82,7 @@ julia> exp10(0.2)
 ```
 """
 function exp10(x::T) where T<:Union{Float32,Float64}
-    xa = reinterpret(Unsigned, x) & ~sign_mask(T)
+    xa = reinterpret(Unsigned, x) & !sign_mask(T)
     xsb = signbit(x)
 
     # filter out non-finite arguments

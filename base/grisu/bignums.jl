@@ -397,7 +397,7 @@ function assignpoweruint16!(x::Bignum,base::UInt16,power_exponent::Int)
     while mask != 0 && this_value <= max_32bits
         this_value *= this_value
         if (power_exponent & mask) != 0
-            base_bits_mask::UInt64 = ~(UInt64(1) << (64 - bit_size) - 1)
+            base_bits_mask::UInt64 = !(UInt64(1) << (64 - bit_size) - 1)
             high_bits_zero = (this_value & base_bits_mask) == 0
             if high_bits_zero
                 this_value *= base

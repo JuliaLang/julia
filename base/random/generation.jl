@@ -312,7 +312,7 @@ function Sampler(::AbstractRNG, r::AbstractUnitRange{BigInt}, ::Repetition)
     nd = ndigits(m, 2)
     nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
     highbits > 0 && (nlimbs += 1)
-    mask = highbits == 0 ? ~zero(Limb) : one(Limb)<<highbits - one(Limb)
+    mask = highbits == 0 ? !zero(Limb) : one(Limb)<<highbits - one(Limb)
     nlimbsmax = max(nlimbs, abs(last(r).size), abs(first(r).size))
     return SamplerBigInt(first(r), m, nlimbs, nlimbsmax, mask)
 end

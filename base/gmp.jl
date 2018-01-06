@@ -289,7 +289,7 @@ function BigInt(x::Integer)
         b = BigInt(0)
         shift = 0
         while x < -1
-            b += BigInt(~UInt32(x&0xffffffff))<<shift
+            b += BigInt(!UInt32(x&0xffffffff))<<shift
             x >>= 32
             shift += 32
         end

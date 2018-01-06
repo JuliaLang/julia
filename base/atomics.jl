@@ -203,7 +203,7 @@ function atomic_and! end
 
 Atomically bitwise-nand (not-and) `x` with `val`
 
-Performs `x[] = ~(x[] & val)` atomically. Returns the **old** value.
+Performs `x[] = !(x[] & val)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw nand` instruction.
 

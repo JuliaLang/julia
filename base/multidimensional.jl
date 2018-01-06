@@ -1460,10 +1460,10 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
 
     u = _msk64
     if delta_kd == 0
-        msk_d0 = msk_d1 = ~(u << ld0) | (u << (ld1+1))
+        msk_d0 = msk_d1 = !(u << ld0) | (u << (ld1+1))
         lt0 = ld1
     else
-        msk_d0 = ~(u << ld0)
+        msk_d0 = !(u << ld0)
         msk_d1 = (u << (ld1+1))
         lt0 = 63
     end
@@ -1476,7 +1476,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
             c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
             ind += 1
         end
-        Bc[kd0] = (Bc[kd0] & msk_d0) | (c & ~msk_d0)
+        Bc[kd0] = (Bc[kd0] & msk_d0) | (c & !msk_d0)
         bind += 1
     end
 
@@ -1498,7 +1498,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
             c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
             ind += 1
         end
-        Bc[kd1] = (Bc[kd1] & msk_d1) | (c & ~msk_d1)
+        Bc[kd1] = (Bc[kd1] & msk_d1) | (c & !msk_d1)
     end
 end
 

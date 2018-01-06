@@ -133,12 +133,12 @@ function nonzero_chunks(chunks::Vector{UInt64}, pos0::Int, pos1::Int)
     delta_k = k1 - k0
 
     z = UInt64(0)
-    u = ~z
+    u = !z
     if delta_k == 0
-        msk_0 = (u << l0) & ~(u << l1 << 1)
+        msk_0 = (u << l0) & !(u << l1 << 1)
     else
         msk_0 = (u << l0)
-        msk_1 = ~(u << l1 << 1)
+        msk_1 = !(u << l1 << 1)
     end
 
     @inbounds begin
