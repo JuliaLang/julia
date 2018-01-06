@@ -1992,7 +1992,7 @@ end
 @test f15894(fill(1, 100)) == 100
 end
 
-@testset "sign, conj, ~" begin
+@testset "sign, conj, !" begin
     local A, B, C
     A = [-10,0,3]
     B = [-10.0,0.0,3.0]
@@ -2010,8 +2010,8 @@ end
     @test typeof(conj(B)) == Vector{Float64}
     @test typeof(conj(C)) == Vector{Complex{Int}}
 
-    @test .~A == [9,-1,-4]
-    @test typeof(.~A) == Vector{Int}
+    @test .!A == [9,-1,-4]
+    @test typeof(.!A) == Vector{Int}
 end
 
 # @inbounds is expression-like, returning its value; #15558

@@ -132,7 +132,8 @@ function abs end
 abs(x::Unsigned) = x
 abs(x::Signed) = flipsign(x,x)
 
-~(n::Integer) = -n-1
+!(n::Integer) = -n-1
+~(n::Integer) = !n
 
 unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 unsigned(x::Bool) = convert(Unsigned, x)
@@ -252,23 +253,29 @@ end
 ## integer bitwise operations ##
 
 """
-    ~(x)
+    !(x)
 
 Bitwise not.
 
 # Examples
 ```jldoctest
-julia> ~4
+julia> !4
 -5
 
-julia> ~10
+julia> !10
 -11
 
-julia> ~true
+julia> !true
 false
 ```
 """
-(~)(x::BitInteger)             = not_int(x)
+(!)(x::BitInteger) = not_int(x)
+"""
+    ~(x)
+
+Bitwise not.
+""" 
+(~)(x::BitInteger) = !x
 
 """
     &(x, y)
