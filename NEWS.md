@@ -40,6 +40,9 @@ New language features
   * Field access via dot-syntax can now be overloaded by adding methods to
     `Base.getproperty` and `Base.setproperty!` ([#1974]).
 
+  * Values for `Enum`s can now be specified inside of a `begin` block when using the
+    `@enum` macro ([#25424]).
+
 Language changes
 ----------------
 
@@ -1162,3 +1165,4 @@ Command-line option changes
 [#25184]: https://github.com/JuliaLang/julia/issues/25184
 [#25231]: https://github.com/JuliaLang/julia/issues/25231
 [#25365]: https://github.com/JuliaLang/julia/issues/25365
+[#25424]: https://github.com/JuliaLang/julia/issues/25424

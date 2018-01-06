@@ -48,10 +48,12 @@ julia> f(apple)
 
 Values can also be specified inside a `begin` block, e.g.
 
-    @enum EnumName begin
-        value1
-        value2
-    end
+```julia
+@enum EnumName begin
+    value1
+    value2
+end
+```
 
 `BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
 Member values can be converted between the enum type and `BaseType`. `read` and `write`
