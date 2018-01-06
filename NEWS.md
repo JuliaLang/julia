@@ -941,6 +941,9 @@ Deprecated or removed
      have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided
      array interface should define their own `strides` method ([#25321]).
 
+  * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
+    `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
+
 
 Command-line option changes
 ---------------------------
