@@ -133,7 +133,6 @@ abs(x::Unsigned) = x
 abs(x::Signed) = flipsign(x,x)
 
 !(n::Integer) = -n-1
-~(n::Integer) = !n
 
 unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 unsigned(x::Bool) = convert(Unsigned, x)
@@ -270,12 +269,6 @@ false
 ```
 """
 (!)(x::BitInteger) = not_int(x)
-"""
-    ~(x)
-
-Bitwise not.
-""" 
-(~)(x::BitInteger) = !x
 
 """
     &(x, y)

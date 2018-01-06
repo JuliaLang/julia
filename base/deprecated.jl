@@ -2887,6 +2887,18 @@ workspace() = error("`workspace()` is discontinued, consider Revise.jl for an al
 @deprecate Ref(x::Ptr) Ref(x, 1)
 @deprecate Ref(x::Ref) x # or perhaps, `convert(Ref, x)`
 
+# merge ~ into !
+@deprecate (~)(x::Bool)         !x
+@deprecate (~)(n::Integer)      !n
+@deprecate (~)(x::BitInteger)   !x
+@eval Base.GMP begin
+    import Base: ~
+    @deprecate (~)(x::BigInt) !x
+end
+@deprecate map(::typeof(~), A::BitArray)                    map(!, A)
+@deprecate map!(::typeof(~), dest::BitArray, A::BitArray)   map(!, dest, A)
+@deprecate broadcast(::typeof(~), B::BitArray)              broadcast(!, B)
+
 # PR #25184. Use getproperty instead of getindex for Factorizations
 function getindex(F::Factorization, s::Symbol)
     depwarn("`F[:$s]` is deprecated, use `F.$s` instead.", :getindex)

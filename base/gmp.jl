@@ -4,7 +4,7 @@ module GMP
 
 export BigInt
 
-import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (!), (&), (|), xor,
+import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (!), (&), (|), xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
@@ -467,7 +467,6 @@ end
 # unary ops
 (-)(x::BigInt) = MPZ.neg(x)
 (!)(x::BigInt) = MPZ.com(x)
-(~)(x::BigInt) = !x
 
 <<(x::BigInt, c::UInt) = c == 0 ? x : MPZ.mul_2exp(x, c)
 >>(x::BigInt, c::UInt) = c == 0 ? x : MPZ.fdiv_q_2exp(x, c)

@@ -1100,9 +1100,6 @@ function broadcast(::typeof(!), B::BitArray)
     end
     return C
 end
-broadcast(::typeof(~), B::BitArray) = broadcast(!, B) # TODO deprecate
-
-
 
 """
     flipbits!(B::BitArray{N}) -> BitArray{N}
@@ -1692,13 +1689,11 @@ maximum(B::BitArray) = isempty(B) ? throw(ArgumentError("argument must be non-em
 # instead of looping bit-by-bit.
 
 map(::typeof(!), A::BitArray) = bit_map!(!, similar(A), A)
-map(::typeof(~), A::BitArray) = map(!, A) # TODO deprecate
 map(::typeof(zero), A::BitArray) = fill!(similar(A), false)
 map(::typeof(one), A::BitArray) = fill!(similar(A), true)
 map(::typeof(identity), A::BitArray) = copy(A)
 
 map!(::typeof(!), dest::BitArray, A::BitArray) = bit_map!(!, dest, A)
-map!(::typeof(~), dest::BitArray, A::BitArray) = map(!, dest, A) # TODO deprecate
 
 map!(::typeof(zero), dest::BitArray, A::BitArray) = fill!(dest, false)
 map!(::typeof(one), dest::BitArray, A::BitArray) = fill!(dest, true)

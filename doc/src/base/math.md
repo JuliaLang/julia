@@ -44,7 +44,6 @@ Base.:(<=)
 Base.:(>)
 Base.:(>=)
 Base.cmp
-Base.:(~)
 Base.:(&)
 Base.:(|)
 Base.xor
