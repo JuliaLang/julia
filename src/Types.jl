@@ -8,8 +8,7 @@ import Pkg3
 import Pkg3: depots, logdir, iswindows
 
 export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
-    Requires, Fixed, DepsGraph, merge_requires!, satisfies,
-    PkgError, ResolveBacktraceItem, ResolveBacktrace, showitem,
+    Requires, Fixed, merge_requires!, satisfies, PkgError,
     PackageSpec, UpgradeLevel, EnvCache,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
@@ -40,7 +39,7 @@ const uuid_registry = uuid5(uuid_julia, "registry")
 ## user-friendly representation of package IDs ##
 
 function pkgID(p::UUID, uuid_to_name::Dict{UUID,String})
-    name = haskey(uuid_to_name, p) ? uuid_to_name[p] : "UNKNOWN"
+    name = get(uuid_to_name, p, "UNKNOWN")
     uuid_short = string(p)[1:8]
     return "$name [$uuid_short]"
 end
@@ -289,8 +288,6 @@ end
 satisfies(pkg::UUID, ver::VersionNumber, reqs::Requires) =
     !haskey(reqs, pkg) || in(ver, reqs[pkg])
 
-const DepsGraph = Dict{UUID,Dict{VersionNumber,Requires}}
-
 struct Fixed
     version::VersionNumber
     requires::Requires
@@ -326,105 +323,6 @@ function Base.showerror(io::IO, pkgerr::PkgError)
         end
     end
 end
-
-
-const VersionReq = Union{VersionNumber,VersionSpec}
-const WhyReq = Tuple{VersionReq,Any}
-
-# This is used to keep track of dependency relations when propagating
-# requirements, so as to emit useful information in case of unsatisfiable
-# conditions.
-# The `versionreq` field keeps track of the remaining allowed versions,
-# intersecting all requirements.
-# The `why` field is a Vector which keeps track of the requirements. Each
-# entry is a Tuple of two elements:
-# 1) the first element is the version requirement (can be a single VersionNumber
-#    or a VersionSpec).
-# 2) the second element can be either :fixed (for requirements induced by
-#    fixed packages), :required (for requirements induced by explicitly
-#    required packages), or a Pair p=>backtrace_item (for requirements induced
-#    indirectly, where `p` is the package name and `backtrace_item` is
-#    another ResolveBacktraceItem.
-mutable struct ResolveBacktraceItem
-    versionreq::VersionReq
-    why::Vector{WhyReq}
-    ResolveBacktraceItem() = new(VersionSpec(), WhyReq[])
-    ResolveBacktraceItem(reason, versionreq::VersionReq) = new(versionreq, WhyReq[(versionreq,reason)])
-end
-
-function Base.push!(ritem::ResolveBacktraceItem, reason, versionspec::VersionSpec)
-    if ritem.versionreq isa VersionSpec
-        ritem.versionreq = ritem.versionreq ∩ versionspec
-    elseif ritem.versionreq ∉ versionspec
-        ritem.versionreq = copy(empty_versionspec)
-    end
-    push!(ritem.why, (versionspec,reason))
-end
-
-function Base.push!(ritem::ResolveBacktraceItem, reason, version::VersionNumber)
-    if ritem.versionreq isa VersionSpec
-        if version ∈ ritem.versionreq
-            ritem.versionreq = version
-        else
-            ritem.versionreq = copy(empty_versionspec)
-        end
-    elseif ritem.versionreq ≠ version
-        ritem.versionreq = copy(empty_versionspec)
-    end
-    push!(ritem.why, (version,reason))
-end
-
-
-struct ResolveBacktrace
-    uuid_to_name::Dict{UUID,String}
-    bktrc::Dict{UUID,ResolveBacktraceItem}
-    ResolveBacktrace(uuid_to_name::Dict{UUID,String}) = new(uuid_to_name, Dict{UUID,ResolveBacktraceItem}())
-end
-
-Base.getindex(bt::ResolveBacktrace, p) = bt.bktrc[p]
-Base.setindex!(bt::ResolveBacktrace, v, p) = setindex!(bt.bktrc, v, p)
-Base.haskey(bt::ResolveBacktrace, p) = haskey(bt.bktrc, p)
-Base.get!(bt::ResolveBacktrace, p, def) = get!(bt.bktrc, p, def)
-Base.get!(def::Base.Callable, bt::ResolveBacktrace, p) = get!(def, bt.bktrc, p)
-
-showitem(io::IO, bt::ResolveBacktrace, p) = _show(io, bt.uuid_to_name, bt[p], "", Set{ResolveBacktraceItem}([bt[p]]))
-
-function _show(io::IO, uuid_to_name::Dict{UUID,String}, ritem::ResolveBacktraceItem, indent::String, seen::Set{ResolveBacktraceItem})
-    l = length(ritem.why)
-    for (i,(vs,w)) in enumerate(ritem.why)
-        print(io, indent, (i==l ? '└' : '├'), '─')
-        if w ≡ :fixed
-            @assert vs isa VersionNumber
-            println(io, "version $vs set by fixed requirement (package is checked out, dirty or pinned)")
-        elseif w ≡ :required
-            @assert vs isa VersionSpec
-            println(io, "version range $vs set by an explicit requirement")
-        else
-            @assert w isa Pair{UUID,ResolveBacktraceItem}
-            if vs isa VersionNumber
-                print(io, "version $vs ")
-            else
-                print(io, "version range $vs ")
-            end
-            id = pkgID(w[1], uuid_to_name)
-            otheritem = w[2]
-            print(io, "required by package $id, ")
-            if otheritem.versionreq isa VersionSpec
-                println(io, "whose allowed version range is $(otheritem.versionreq):")
-            else
-                println(io, "whose only allowed version is $(otheritem.versionreq):")
-            end
-            if otheritem ∈ seen
-                println(io, (i==l ? "  " : "│ ") * indent, "└─[see above for $id backtrace]")
-                continue
-            end
-            push!(seen, otheritem)
-            _show(io, uuid_to_name, otheritem, (i==l ? "  " : "│ ") * indent, seen)
-        end
-    end
-end
-
-
 
 ## command errors (no stacktrace) ##
 
@@ -984,12 +882,12 @@ function find_registered!(
             for line in eachline(io)
                 ismatch(r"^ \s* \[ \s* packages \s* \] \s* $"x, line) && break
             end
-            # fine lines with uuid or name we're looking for
+            # find lines with uuid or name we're looking for
             for line in eachline(io)
                 ismatch(regex, line) || continue
                 m = match(line_re, line)
                 m == nothing &&
-                    error("misformated registry.toml package entry: $line")
+                    error("misformatted registry.toml package entry: $line")
                 uuid = UUID(m.captures[1])
                 name = Base.unescape_string(m.captures[2])
                 path = abspath(registry, Base.unescape_string(m.captures[3]))
