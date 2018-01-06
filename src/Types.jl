@@ -721,7 +721,7 @@ function find_project(env::String)
             if isfile(env)
                 return path, find_git_repo(path)
             else
-                return init_if_interactive(path), find_git_repo(path)
+                return init_if_interactive(dirname(path)), find_git_repo(path)
             end
         end
         for name in project_names
@@ -744,7 +744,7 @@ function init_if_interactive(path::String)
         choice = TerminalMenus.request("Could not find local environment in $(path), do you want to create it?",
                    TerminalMenus.RadioMenu(["yes", "no"]))
         if choice == 1
-            Pkg3.Operations.init(pwd())
+            Pkg3.Operations.init(path)
             path, gitrepo = find_project(path)
             return path
         end
