@@ -1319,36 +1319,36 @@ function _sparse_findnextnz(m::SparseMatrixCSC, i::Integer)
     if i > length(m)
         return zero(indtype(m))
     end
-    row, col = ind2sub(m, i)
+    row, col = Tuple(CartesianIndices(m)[i])
     lo, hi = m.colptr[col], m.colptr[col+1]
     n = searchsortedfirst(m.rowval, row, lo, hi-1, Base.Order.Forward)
     if lo <= n <= hi-1
-        return sub2ind(m, m.rowval[n], col)
+        return LinearIndices(m)[m.rowval[n], col]
     end
     nextcol = findnext(c->(c>hi), m.colptr, col+1)
     if iszero(nextcol)
         return zero(indtype(m))
     end
     nextlo = m.colptr[nextcol-1]
-    return sub2ind(m, m.rowval[nextlo], nextcol-1)
+    return LinearIndices(m)[m.rowval[nextlo], nextcol-1]
 end
 
 function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
     if iszero(i)
         return zero(indtype(m))
     end
-    row, col = ind2sub(m, i)
+    row, col = Tuple(CartesianIndices(m)[i])
     lo, hi = m.colptr[col], m.colptr[col+1]
     n = searchsortedlast(m.rowval, row, lo, hi-1, Base.Order.Forward)
     if lo <= n <= hi-1
-        return sub2ind(m, m.rowval[n], col)
+        return LinearIndices(m)[m.rowval[n], col]
     end
     prevcol = findprev(c->(c<lo), m.colptr, col-1)
     if iszero(prevcol)
         return zero(indtype(m))
     end
     prevhi = m.colptr[prevcol+1]
-    return sub2ind(m, m.rowval[prevhi-1], prevcol)
+    return LinearIndices(m)[m.rowval[prevhi-1], prevcol]
 end
 
 import Base.Random.GLOBAL_RNG
