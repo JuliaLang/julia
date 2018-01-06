@@ -37,7 +37,7 @@ Copy a string from the address of a C-style (NUL-terminated) string encoded as U
 (The pointer can be safely freed afterwards.) If `length` is specified
 (the length of the data in bytes), the string does not have to be NUL-terminated.
 
-This function is labelled "unsafe" because it will crash if `p` is not
+This function is labeled "unsafe" because it will crash if `p` is not
 a valid memory address to data of the requested length.
 """
 function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer)
