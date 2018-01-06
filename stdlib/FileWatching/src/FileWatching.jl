@@ -380,11 +380,11 @@ function wait(fdw::_FDWatcher; readable=true, writable=true)
             events |= FDEvent(fdw.events)
             haveevent = false
             if readable && isreadable(events)
-                fdw.events &= ~UV_READABLE
+                fdw.events &= !UV_READABLE
                 haveevent = true
             end
             if writable && iswritable(events)
-                fdw.events &= ~UV_WRITABLE
+                fdw.events &= !UV_WRITABLE
                 haveevent = true
             end
             if haveevent
