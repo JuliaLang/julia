@@ -6,7 +6,8 @@ using ..Types
 import ..Types.uuid_julia
 import Pkg3.equalto
 
-export Graph, ResolveLog, add_reqs!, add_fixed!, simplify_graph!, get_resolve_log, showlog
+export Graph, ResolveLog, add_reqs!, add_fixed!, simplify_graph!, simplify_graph_soft!,
+       get_resolve_log, showlog, push_snapshot!, pop_snapshot!, wipe_snapshots!
 
 # The ResolveLog is used to keep track of events that take place during the
 # resolution process. We use one ResolveLogEntry per package, and record all events
@@ -58,14 +59,17 @@ mutable struct ResolveLog
     #        heuristics have been employed
     exact::Bool
 
+    # verbose: print global events messages on screen
+    verbose::Bool
+
     # UUID to names
     uuid_to_name::Dict{UUID,String}
 
-    function ResolveLog(uuid_to_name::Dict{UUID,String})
+    function ResolveLog(uuid_to_name::Dict{UUID,String}, verbose::Bool = false)
         journal = ResolveJournal()
         init = ResolveLogEntry(journal, UUID0, "")
         globals = ResolveLogEntry(journal, UUID0, "Global events:")
-        return new(init, globals, Dict(), journal, true, uuid_to_name)
+        return new(init, globals, Dict(), journal, true, verbose, uuid_to_name)
     end
 end
 
@@ -121,7 +125,8 @@ mutable struct GraphData
             versions::Dict{UUID,Set{VersionNumber}},
             deps::Dict{UUID,Dict{VersionRange,Dict{String,UUID}}},
             compat::Dict{UUID,Dict{VersionRange,Dict{String,VersionSpec}}},
-            uuid_to_name::Dict{UUID,String}
+            uuid_to_name::Dict{UUID,String};
+            verbose::Bool = false
         )
         # generate pkgs
         pkgs = sort!(collect(keys(versions)))
@@ -145,7 +150,7 @@ mutable struct GraphData
         eq_classes = Dict(pkgs[p0] => Dict(eq_vn(v0,p0) => Set([eq_vn(v0,p0)]) for v0 = 1:spp[p0]) for p0 = 1:np)
 
         # the resolution log is actually initialized below
-        rlog = ResolveLog(uuid_to_name)
+        rlog = ResolveLog(uuid_to_name, verbose)
 
         data = new(pkgs, np, spp, pdict, pvers, vdict, uuid_to_name, pruned, eq_classes, rlog)
 
@@ -170,16 +175,6 @@ mutable struct GraphData
     end
 end
 
-
-@enum DepDir FORWARD BACKWARDS BIDIR NONE
-
-function update_depdir(dd0::DepDir, dd1::DepDir)
-    dd0 == dd1 && return dd0
-    dd0 == NONE && return dd1
-    dd1 == NONE && return dd0
-    return BIDIR
-end
-
 mutable struct Graph
     # data:
     #   stores all the structures required to map between
@@ -202,10 +197,6 @@ mutable struct Graph
     #   spp1 is the number of states of p1.
     gmsk::Vector{Vector{BitMatrix}}
 
-    # dependency direction:
-    #   keeps track of which direction the dependency goes.
-    gdir::Vector{Vector{DepDir}}
-
     # constraints:
     #   a mask of allowed states for each package (e.g. to express
     #   requirements)
@@ -225,6 +216,13 @@ mutable struct Graph
     #   used to avoid returning them in the solution
     fix_inds::Set{Int}
 
+    ignored::BitVector
+
+    # stack of constraints/ignored packages:
+    #   allows to keep a sort of "versioning" of the constraints
+    #   such that the solver can implement tentative solutions
+    solve_stack::Vector{Tuple{Vector{BitVector},BitVector}}
+
     # states per package: same as in GraphData
     spp::Vector{Int}
 
@@ -237,13 +235,14 @@ mutable struct Graph
             compat::Dict{UUID,Dict{VersionRange,Dict{String,VersionSpec}}},
             uuid_to_name::Dict{UUID,String},
             reqs::Requires = Requires(),
-            fixed::Dict{UUID,Fixed} = Dict{UUID,Fixed}(uuid_julia=>Fixed(VERSION))
+            fixed::Dict{UUID,Fixed} = Dict{UUID,Fixed}(uuid_julia=>Fixed(VERSION));
+            verbose::Bool = false
         )
 
         extra_uuids = union(keys(reqs), keys(fixed), map(fx->keys(fx.requires), values(fixed))...)
         extra_uuids ⊆ keys(versions) || error("unknown UUID found in reqs/fixed") # TODO?
 
-        data = GraphData(versions, deps, compat, uuid_to_name)
+        data = GraphData(versions, deps, compat, uuid_to_name, verbose = verbose)
         pkgs, np, spp, pdict, pvers, vdict, rlog = data.pkgs, data.np, data.spp, data.pdict, data.pvers, data.vdict, data.rlog
 
         extended_deps = [[Dict{Int,BitVector}() for v0 = 1:(spp[p0]-1)] for p0 = 1:np]
@@ -264,6 +263,7 @@ mutable struct Graph
                     haskey(n2u, name) || error("Unknown package $name found in the compatibility requirements of $(pkgID(pkgs[p0], uuid_to_name))")
                     uuid = n2u[name]
                     p1 = pdict[uuid]
+                    p1 == p0 && error("Package $(pkgID(pkgs[p0], uuid_to_name)) version $vn has a dependency with itself")
                     # check conflicts instead of intersecting?
                     # (intersecting is used by fixed packages though...)
                     req_p1 = get!(req, p1) do; VersionSpec() end
@@ -275,14 +275,12 @@ mutable struct Graph
                 get!(req, pdict[uuid]) do; VersionSpec() end
             end
             # Translate the requirements into bit masks
-            # req_msk = Dict(p1 => BitArray(pvers[p1][v1] ∈ vs for v1 = 0:(spp[p1]-1)) for (p1,vs) in req)
             req_msk = Dict(p1 => (pvers[p1][1:(spp[p1]-1)] .∈ vs) for (p1,vs) in req)
             extended_deps[p0][v0] = req_msk
         end
 
         gadj = [Int[] for p0 = 1:np]
         gmsk = [BitMatrix[] for p0 = 1:np]
-        gdir = [DepDir[] for p0 = 1:np]
         gconstr = [trues(spp[p0]) for p0 = 1:np]
         adjdict = [Dict{Int,Int}() for p0 = 1:np]
 
@@ -307,14 +305,9 @@ mutable struct Graph
 
                 push!(gmsk[p0], bm)
                 push!(gmsk[p1], bmt)
-
-                push!(gdir[p0], FORWARD)
-                push!(gdir[p1], BACKWARDS)
             else
                 bm = gmsk[p0][j0]
                 bmt = gmsk[p1][j1]
-                gdir[p0][j0] = update_depdir(gdir[p0][j0], FORWARD)
-                gdir[p1][j1] = update_depdir(gdir[p1][j1], BACKWARDS)
             end
 
             for v1 = 1:(spp[p1]-1)
@@ -329,7 +322,10 @@ mutable struct Graph
         req_inds = Set{Int}()
         fix_inds = Set{Int}()
 
-        graph = new(data, gadj, gmsk, gdir, gconstr, adjdict, req_inds, fix_inds, spp, np)
+        ignored = falses(np)
+        solve_stack = Tuple{Vector{BitVector},BitVector}[]
+
+        graph = new(data, gadj, gmsk, gconstr, adjdict, req_inds, fix_inds, ignored, solve_stack, spp, np)
 
         _add_fixed!(graph, fixed)
         _add_reqs!(graph, reqs, :explicit_requirement)
@@ -346,13 +342,14 @@ mutable struct Graph
         spp = data.spp
         gadj = [copy(graph.gadj[p0]) for p0 = 1:np]
         gmsk = [[copy(graph.gmsk[p0][j0]) for j0 = 1:length(gadj[p0])] for p0 = 1:np]
-        gdir = [copy(graph.gdir[p0]) for p0 = 1:np]
         gconstr = [copy(graph.gconstr[p0]) for p0 = 1:np]
         adjdict = [copy(graph.adjdict[p0]) for p0 = 1:np]
         req_inds = copy(graph.req_inds)
         fix_inds = copy(graph.fix_inds)
+        ignored = copy(graph.ignored)
+        solve_stack = [([copy(gc0) for gc0 in sav_gconstr],copy(sav_ignored)) for (sav_gconstr,sav_ignored) in graph.solve_stack]
 
-        return new(data, gadj, gmsk, gdir, gconstr, adjdict, req_inds, fix_inds, spp, np)
+        return new(data, gadj, gmsk, gconstr, adjdict, req_inds, fix_inds, ignored, solve_stack, spp, np)
     end
 end
 
@@ -430,11 +427,12 @@ function check_consistency(graph::Graph)
     spp = graph.spp
     gadj = graph.gadj
     gmsk = graph.gmsk
-    gdir = graph.gdir
     gconstr = graph.gconstr
     adjdict = graph.adjdict
     req_inds = graph.req_inds
     fix_inds = graph.fix_inds
+    ignored = graph.ignored
+    solve_stack = graph.solve_stack
     data = graph.data
     pkgs = data.pkgs
     pdict = data.pdict
@@ -443,9 +441,10 @@ function check_consistency(graph::Graph)
     pruned = data.pruned
     eq_classes = data.eq_classes
     rlog = data.rlog
+    # TODO: check ignored and solve_stack
 
     @assert np ≥ 0
-    for x in [spp, gadj, gmsk, gdir, gconstr, adjdict, rlog.pool, pkgs, pdict, pvers, vdict]
+    for x in [spp, gadj, gmsk, gconstr, adjdict, ignored, rlog.pool, pkgs, pdict, pvers, vdict]
         @assert length(x) == np
     end
     for p0 = 1:np
@@ -467,11 +466,9 @@ function check_consistency(graph::Graph)
 
         gadj0 = gadj[p0]
         gmsk0 = gmsk[p0]
-        gdir0 = gdir[p0]
         adjdict0 = adjdict[p0]
         @assert length(gmsk0) == length(gadj0)
         @assert length(adjdict0) == length(gadj0)
-        @assert length(gdir0) == length(gadj0)
         for (j0,p1) in enumerate(gadj0)
             @assert adjdict[p1][p0] == j0
             spp1 = spp[p1]
@@ -500,7 +497,48 @@ function check_consistency(graph::Graph)
         @assert rvn ∈ rvs
     end
 
+    for (sav_gconstr,sav_ignored) in solve_stack
+        @assert length(sav_ignored) == np
+        @assert length(sav_gconstr) == np
+        for p0 = 1:np
+            @assert length(sav_gconstr[p0]) == spp[p0]
+        end
+    end
+
     return true
+end
+
+function push_snapshot!(graph::Graph)
+    np = graph.np
+    gconstr = graph.gconstr
+    ignored = graph.ignored
+    solve_stack = graph.solve_stack
+    sav_gconstr = [copy(gc0) for gc0 in gconstr]
+    sav_ignored = copy(ignored)
+    push!(solve_stack, (gconstr, ignored))
+    graph.gconstr = sav_gconstr
+    graph.ignored = sav_ignored
+    return graph
+end
+
+function pop_snapshot!(graph::Graph)
+    np = graph.np
+    solve_stack = graph.solve_stack
+    @assert length(solve_stack) > 0
+    sav_gconstr, sav_ignored = pop!(graph.solve_stack)
+    graph.gconstr = sav_gconstr
+    graph.ignored = sav_ignored
+    return graph
+end
+
+function wipe_snapshots!(graph::Graph)
+    np = graph.np
+    solve_stack = graph.solve_stack
+    if length(solve_stack) > 0
+        graph.gconstr, graph.ignored = first(solve_stack)
+        empty!(solve_stack)
+    end
+    return graph
 end
 
 function init_log!(data::GraphData)
@@ -571,6 +609,7 @@ end
 
 function log_event_global!(graph::Graph, msg::String)
     rlog = graph.data.rlog
+    rlog.verbose && info(msg)
     push!(rlog.globals, (nothing, msg))
 end
 
@@ -683,7 +722,7 @@ function log_event_maxsumsolved!(graph::Graph, p0::Int, s0::Int, why::Symbol)
         if s0 == spp[p0] - 1
             msg = "set by the solver to its maximum version: $(pvers[p0][s0])"
         else
-            msg = "set by the solver version: $(pvers[p0][s0]) (version $(pvers[p0][s0+1]) would violate its constraints)"
+            msg = "set by the solver to version: $(pvers[p0][s0]) (version $(pvers[p0][s0+1]) would violate its constraints)"
         end
     end
     entry = rlog.pool[p]
@@ -874,13 +913,14 @@ Propagates current constraints, determining new implicit constraints.
 Throws an error in case impossible requirements are detected, printing
 a log trace.
 """
-function propagate_constraints!(graph::Graph)
+function propagate_constraints!(graph::Graph, sources::Set{Int} = Set{Int}(); log_events::Bool = true)
     np = graph.np
     spp = graph.spp
     gadj = graph.gadj
     gmsk = graph.gmsk
     gconstr = graph.gconstr
     adjdict = graph.adjdict
+    ignored = graph.ignored
     pkgs = graph.data.pkgs
     pvers = graph.data.pvers
     rlog = graph.data.rlog
@@ -888,16 +928,23 @@ function propagate_constraints!(graph::Graph)
 
     id(p0::Int) = pkgID(pkgs[p0], graph)
 
-    log_event_global!(graph, "propagating constraints")
+    log_events && log_event_global!(graph, "propagating constraints")
 
-    # packages which are not allowed to be uninstalled
-    staged = Set{Int}(p0 for p0 = 1:np if !gconstr[p0][end])
+    # unless otherwise specified, start from packages which
+    # are not allowed to be uninstalled
+    staged = isempty(sources) ?
+        Set{Int}(p0 for p0 = 1:np if !gconstr[p0][end]) :
+        sources
 
     while !isempty(staged)
         staged_next = Set{Int}()
         for p0 in staged
             gconstr0 = gconstr[p0]
             for (j1,p1) in enumerate(gadj[p0])
+                # if p1 is ignored, the relation between it and all its neighbors
+                # has already been propagated
+                ignored[p1] && continue
+
                 # we don't propagate to julia (purely to have better error messages)
                 pkgs[p1] == uuid_julia && continue
 
@@ -917,7 +964,7 @@ function propagate_constraints!(graph::Graph)
                 # previous ones, record it and propagate them next
                 if gconstr1 ≠ old_gconstr1
                     push!(staged_next, p1)
-                    log_event_implicit_req!(graph, p1, added_constr1, p0)
+                    log_events && log_event_implicit_req!(graph, p1, added_constr1, p0)
                 end
                 if !any(gconstr1)
                     if exact
@@ -950,7 +997,7 @@ function disable_unreachable!(graph::Graph, sources::Set{Int} = Set{Int}())
 
     log_event_global!(graph, "disabling unreachable nodes")
 
-    # packages which are not allowed to be uninstalled
+    # 2nd argument are packages which are not allowed to be uninstalled
     staged = union(sources, Set{Int}(p0 for p0 = 1:np if !gconstr[p0][end]))
     seen = copy(staged)
 
@@ -975,6 +1022,63 @@ function disable_unreachable!(graph::Graph, sources::Set{Int} = Set{Int}())
         fill!(gconstr0, false)
         gconstr0[end] = true
     end
+
+    return graph
+end
+
+function deep_clean!(graph::Graph)
+    np = graph.np
+    spp = graph.spp
+
+    log_event_global!(graph, "cleaning graph")
+
+    sumspp = sum(count(graph.gconstr[p0]) for p0 = 1:np)
+
+    while true
+        gconstr_msk = [trues(spp[p0]) for p0 = 1:np]
+
+        str_len = 0
+
+        for p0 = 1:np, v0 in find(graph.gconstr[p0])
+            print("\r" * " "^str_len * "\r")
+            msg = "> $p0 / $np"
+            print(msg)
+            str_len = length(msg)
+            push_snapshot!(graph)
+            fill!(graph.gconstr[p0], false)
+            graph.gconstr[p0][v0] = true
+            try
+                propagate_constraints!(graph, Set{Int}([p0]), log_events = false)
+            catch err
+                err isa PkgError || rethrow(err)
+                gconstr_msk[p0][v0] = false
+            end
+            pop_snapshot!(graph)
+        end
+
+        println()
+
+        affected = Int[]
+        for p0 = 1:np
+            gconstr0 = graph.gconstr[p0]
+            old_gconstr0 = copy(gconstr0)
+            gconstr0 .&= gconstr_msk[p0]
+            if old_gconstr0 ≠ gconstr0
+                push!(affected, p0)
+                #TODO : log event
+            end
+            if !any(gconstr0)
+                # TODO : what should we do here??
+                # throw(PkgError("aaaaaaaaaaaaaahhhhhhhh")) # XXX
+            end
+        end
+        println("> affected = $(length(affected))")
+        isempty(affected) && break
+    end
+
+    sumspp_new = sum(count(graph.gconstr[p0]) for p0 = 1:np)
+
+    log_event_global!(graph, "cleaned graph, stats (total n. of states): before = $(sumspp) after = $(sumspp_new) diff = $(sumspp-sumspp_new)")
 
     return graph
 end
@@ -1071,6 +1175,85 @@ function build_eq_classes1!(graph::Graph, p0::Int)
     return
 end
 
+function compute_eq_classes_soft!(graph::Graph; log_events::Bool = true)
+    log_events && log_event_global!(graph, "computing version equivalence classes")
+
+    np = graph.np
+
+    np == 0 && return graph
+
+    ignored = graph.ignored
+    gconstr = graph.gconstr
+    sumspp = sum(count(gconstr[p0]) for p0 = 1:np)
+    for p0 = 1:np
+        ignored[p0] && continue
+        build_eq_classes_soft1!(graph, p0)
+    end
+    sumspp_new = sum(count(gconstr[p0]) for p0 = 1:np)
+
+    log_events && log_event_global!(graph, "computed version equivalence classes, stats (total n. of states): before = $(sumspp) after = $(sumspp_new) diff = $(sumspp_new-sumspp)")
+
+    @assert check_consistency(graph)
+
+    return graph
+end
+
+function build_eq_classes_soft1!(graph::Graph, p0::Int)
+    np = graph.np
+    spp = graph.spp
+    gadj = graph.gadj
+    gmsk = graph.gmsk
+    gconstr = graph.gconstr
+    ignored = graph.ignored
+
+    # concatenate all the constraints; the columns of the
+    # result encode the behavior of each version
+    gadj0 = gadj[p0]
+    gmsk0 = gmsk[p0]
+    gconstr0 = gconstr[p0]
+    eff_spp0 = count(gconstr0)
+    cvecs = BitVector[vcat(BitVector(0), (gmsk0[j1][gconstr[gadj0[j1]],v0] for j1 = 1:length(gadj0) if !ignored[gadj0[j1]])...) for v0 in find(gconstr0)]
+
+    @assert length(cvecs) == eff_spp0
+
+    # find unique behaviors
+    repr_vecs = unique(cvecs)
+
+    # number of equivaent classes
+    neq = length(repr_vecs)
+
+    neq == eff_spp0 && return # nothing to do here
+
+    # group versions into sets that behave identically
+    # each set is represented by its highest-valued member
+    repr_vers = sort!(Int[findlast(equalto(repr_vecs[w0]), cvecs) for w0 = 1:neq])
+    @assert all(repr_vers .> 0)
+    @assert repr_vers[end] == eff_spp0
+
+    # convert the version numbers into the original numbering
+    repr_vers = find(gconstr0)[repr_vers]
+
+    @assert all(gconstr0[repr_vers])
+
+    # disable the other versions by introducing additional constraints
+    fill!(gconstr0, false)
+    gconstr0[repr_vers] = true
+
+    return
+end
+
+function update_ignored!(graph::Graph)
+    np = graph.np
+    gconstr = graph.gconstr
+    ignored = graph.ignored
+
+    for p0 = 1:np
+        ignored[p0] = (count(gconstr[p0]) == 1)
+    end
+
+    return graph
+end
+
 """
 Prune away fixed and unnecessary packages, and the
 disallowed versions for the remaining packages.
@@ -1080,11 +1263,11 @@ function prune_graph!(graph::Graph)
     spp = graph.spp
     gadj = graph.gadj
     gmsk = graph.gmsk
-    gdir = graph.gdir
     gconstr = graph.gconstr
     adjdict = graph.adjdict
     req_inds = graph.req_inds
     fix_inds = graph.fix_inds
+    ignored = graph.ignored
     data = graph.data
     pkgs = data.pkgs
     pdict = data.pdict
@@ -1137,6 +1320,8 @@ function prune_graph!(graph::Graph)
     # Update packages records
     new_pkgs = pkgs[pkg_mask]
     new_pdict = Dict(new_pkgs[new_p0]=>new_p0 for new_p0 = 1:new_np)
+    new_ignored = ignored[pkg_mask]
+    empty!(graph.solve_stack)
 
     # For each package (unless it's going to be pruned) we will remove all
     # versions that aren't allowed (but not the "uninstalled" state)
@@ -1193,16 +1378,6 @@ function prune_graph!(graph::Graph)
         new_adjdict[new_p0][new_p1] = new_j1
     end
 
-    # Recompute gdir on the new adjacency list
-    function compute_gdir(new_p0, new_j0)
-        p0 = old_idx[new_p0]
-        new_p1 = new_gadj[new_p0][new_j0]
-        p1 = old_idx[new_p1]
-        j0 = adjdict[p1][p0]
-        return gdir[p0][j0]
-    end
-    new_gdir = [[compute_gdir(new_p0, new_j0) for new_j0 = 1:length(new_gadj[new_p0])] for new_p0 = 1:new_np]
-
     # Recompute compatibility masks on the new adjacency list, and filtering out some versions
     function compute_gmsk(new_p0, new_j0)
         p0 = old_idx[new_p0]
@@ -1234,13 +1409,14 @@ function prune_graph!(graph::Graph)
     # Replace old structures with new ones
     graph.gadj = new_gadj
     graph.gmsk = new_gmsk
-    graph.gdir = new_gdir
     graph.gconstr = new_gconstr
     graph.adjdict = new_adjdict
     graph.req_inds = new_req_inds
     graph.fix_inds = new_fix_inds
+    graph.ignored = new_ignored
     graph.spp = new_spp
     graph.np = new_np
+    # Note: solve_stack was emptied in-place
 
     @assert check_consistency(graph)
 
@@ -1251,11 +1427,20 @@ end
 Simplifies the graph by propagating constraints, disabling unreachable versions, pruning
 and grouping versions into equivalence classes.
 """
-function simplify_graph!(graph::Graph, sources::Set{Int} = Set{Int}())
+function simplify_graph!(graph::Graph, sources::Set{Int} = Set{Int}(); clean_graph::Bool = false)
     propagate_constraints!(graph)
     disable_unreachable!(graph, sources)
+    clean_graph && deep_clean!(graph)
     prune_graph!(graph)
     compute_eq_classes!(graph)
+    return graph
+end
+
+function simplify_graph_soft!(graph::Graph, sources::Set{Int} = Set{Int}(); log_events = true)
+    propagate_constraints!(graph, sources, log_events = log_events)
+    update_ignored!(graph)
+    compute_eq_classes_soft!(graph, log_events = log_events)
+    update_ignored!(graph)
     return graph
 end
 

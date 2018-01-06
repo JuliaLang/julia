@@ -148,7 +148,7 @@ function graph_from_data(deps_data, uuid_to_name = Dict{UUID,String}(Types.uuid_
             end
         end
     end
-    return Graph(all_versions, all_deps, all_compat, uuid_to_name, Requires(), fixed)
+    return Graph(all_versions, all_deps, all_compat, uuid_to_name, Requires(), fixed; verbose = VERBOSE)
 end
 function reqs_from_data(reqs_data, graph::Graph)
     reqs = Dict{UUID,VersionSpec}()
@@ -164,14 +164,14 @@ function reqs_from_data(reqs_data, graph::Graph)
     reqs
 end
 function sanity_tst(deps_data, expected_result; pkgs=[])
-    graph = graph_from_data(deps_data)
-    id(p) = pkgID(pkguuid(p), graph)
     if VERBOSE
         println()
         info("sanity check")
-        @show deps_data
-        @show pkgs
+        # @show deps_data
+        # @show pkgs
     end
+    graph = graph_from_data(deps_data)
+    id(p) = pkgID(pkguuid(p), graph)
     result = sanity_check(graph, Set(pkguuid(p) for p in pkgs), verbose = VERBOSE)
 
     length(result) == length(expected_result) || return false
@@ -183,25 +183,18 @@ function sanity_tst(deps_data, expected_result; pkgs=[])
 end
 sanity_tst(deps_data; kw...) = sanity_tst(deps_data, []; kw...)
 
-function resolve_tst(deps_data, reqs_data, want_data = nothing)
+function resolve_tst(deps_data, reqs_data, want_data = nothing; clean_graph = false)
     if VERBOSE
         println()
         info("resolving")
-        @show deps_data
-        @show reqs_data
+        # @show deps_data
+        # @show reqs_data
     end
     graph = graph_from_data(deps_data)
     reqs = reqs_from_data(reqs_data, graph)
     add_reqs!(graph, reqs)
-
-    simplify_graph!(graph)
+    simplify_graph!(graph, clean_graph = clean_graph)
     want = resolve(graph)
-
-    # rlog = get_resolve_log(graph)
-    # info(sprint(io->showlog(io, rlog)))
-    # println()
-    # info(sprint(io->showlog(io, rlog, view=:chronological)))
-
     return want == wantuuids(want_data)
 end
 
@@ -564,13 +557,27 @@ reqs_data = Any[
 want_data = Dict("A"=>v"1", "B"=>v"2", "C"=>v"2", "D"=>v"2", "E"=>v"2")
 @test resolve_tst(deps_data, reqs_data, want_data)
 
-VERBOSE && info("SCHEME 11")
+VERBOSE && info("SCHEME REALISTIC")
 ## DEPENDENCY SCHEME 11: A REALISTIC EXAMPLE
-## ref issue #21485
+## ref Julia issue #21485
 
 include("resolvedata1.jl")
 
 @test sanity_tst(deps_data, problematic_data)
 @test resolve_tst(deps_data, reqs_data, want_data)
+
+VERBOSE && info("SCHEME NASTY")
+## DEPENDENCY SCHEME 12: A NASTY CASE
+
+include("NastyGenerator.jl")
+deps_data, reqs_data, want_data, problematic_data = NastyGenerator.generate_nasty(5, 20, q=20, d=4, sat = true)
+
+@test sanity_tst(deps_data, problematic_data)
+@test resolve_tst(deps_data, reqs_data, want_data)
+
+deps_data, reqs_data, want_data, problematic_data = NastyGenerator.generate_nasty(5, 20, q=20, d=4, sat = false)
+
+@test sanity_tst(deps_data, problematic_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 end # module
