@@ -3775,6 +3775,9 @@ workspace() = error("`workspace()` is discontinued, consider Revise.jl for an al
 @deprecate_moved isnull "Nullables"
 @deprecate_moved unsafe_get "Nullables"
 
+# rename module_parent to enclosingmodule
+@deprecate module_parent(m::Module) enclosingmodule(m)
+
 # sub2ind and ind2sub deprecation (PR #24715)
 @deprecate ind2sub(A::AbstractArray, ind) CartesianIndices(A)[ind]
 @deprecate ind2sub(::Tuple{}, ind::Integer) CartesianIndices()[ind]

@@ -650,7 +650,7 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
 }
 
 JL_DLLEXPORT jl_sym_t *jl_module_name(jl_module_t *m) { return m->name; }
-JL_DLLEXPORT jl_module_t *jl_module_parent(jl_module_t *m) { return m->parent; }
+JL_DLLEXPORT jl_module_t *jl_enclosing_module(jl_module_t *m) { return m->parent; }
 JL_DLLEXPORT uint64_t jl_module_uuid(jl_module_t *m) { return m->uuid; }
 
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent)

@@ -901,7 +901,7 @@ export
     methods,
     methodswith,
     module_name,
-    module_parent,
+    enclosingmodule,
     names,
     varinfo,
     versioninfo,

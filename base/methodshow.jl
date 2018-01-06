@@ -191,7 +191,7 @@ function inbase(m::Module)
     if m == Base
         true
     else
-        parent = module_parent(m)
+        parent = enclosingmodule(m)
         parent === m ? false : inbase(parent)
     end
 end

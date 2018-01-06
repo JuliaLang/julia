@@ -6,8 +6,8 @@ Methods for working with Iterators.
 module Iterators
 
 # small dance to make this work from Base or Intrinsics
-import ..@__MODULE__, ..module_parent
-const Base = module_parent(@__MODULE__)
+import ..@__MODULE__, ..enclosingmodule
+const Base = enclosingmodule(@__MODULE__)
 using .Base:
     @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,

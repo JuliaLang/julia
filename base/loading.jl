@@ -126,7 +126,7 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
             if isdefined(M, Base.Docs.META)
                 push!(Base.Docs.modules, M)
             end
-            if module_parent(M) === M
+            if enclosingmodule(M) === M
                 register_root_module(module_name(M), M)
             end
         end
