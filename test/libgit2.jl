@@ -426,7 +426,8 @@ mktempdir() do dir
     cache_repo = joinpath(dir, "Example")
     test_repo = joinpath(dir, "Example.Test")
     test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
-    test_file = "testfile"
+    test_dir = "testdir"
+    test_file = joinpath(test_dir, "testfile")
     config_file = "testconfig"
     commit_msg1 = randstring(10)
     commit_msg2 = randstring(10)
@@ -636,6 +637,8 @@ mktempdir() do dir
 
         @testset "with commits" begin
             repo = LibGit2.GitRepo(cache_repo)
+            repo_dir = joinpath(cache_repo,test_dir)
+            mkdir(repo_dir)
             repo_file = open(joinpath(cache_repo,test_file), "a")
             try
                 # create commits
@@ -923,6 +926,10 @@ mktempdir() do dir
                 @test_throws BoundsError tree[0]
                 @test_throws BoundsError tree[2]
                 tree_entry = tree[1]
+                subtree = LibGit2.GitTree(tree_entry)
+                @test_throws BoundsError subtree[0]
+                @test_throws BoundsError subtree[2]
+                tree_entry = subtree[1]
                 @test LibGit2.filemode(tree_entry) == 33188
                 te_str = sprint(show, tree_entry)
                 ref_te_str = "GitTreeEntry:\nEntry name: testfile\nEntry type: Base.LibGit2.GitBlob\nEntry OID: "
