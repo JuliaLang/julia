@@ -2169,6 +2169,37 @@ end
     @test count(SparseMatrixCSC(2, 2, Int[1, 2, 3], Int[1, 2], Bool[true, true, true])) == 2
 end
 
+@testset "sparse findprev/findnext operations" begin
+
+    x = [0,0,0,0,1,0,1,0,1,1,0]
+    x_sp = sparse(x)
+
+    for i=1:length(x)
+        @test findnext(!iszero, x,i) == findnext(!iszero, x_sp,i)
+        @test findprev(!iszero, x,i) == findprev(!iszero, x_sp,i)
+    end
+
+    y = [0 0 0 0 0;
+         1 0 1 0 0;
+         1 0 0 0 1;
+         0 0 1 0 0;
+         1 0 1 1 0]
+    y_sp = sparse(y)
+
+    for i=1:length(y)
+        @test findnext(!iszero, y,i) == findnext(!iszero, y_sp,i)
+        @test findprev(!iszero, y,i) == findprev(!iszero, y_sp,i)
+    end
+
+    z_sp = sparsevec(Dict(1=>1, 5=>1, 8=>0, 10=>1))
+    z = collect(z_sp)
+
+    for i=1:length(z)
+        @test findnext(!iszero, z,i) == findnext(!iszero, z_sp,i)
+        @test findprev(!iszero, z,i) == findprev(!iszero, z_sp,i)
+    end
+end
+
 # #20711
 @testset "vec returns a view" begin
     local A = sparse(Matrix(1.0I, 3, 3))

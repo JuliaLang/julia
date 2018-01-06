@@ -735,6 +735,24 @@ function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     return (I, V)
 end
 
+function _sparse_findnextnz(v::SparseVector, i::Integer)
+    n = searchsortedfirst(v.nzind, i)
+    if n > length(v.nzind)
+        return zero(indtype(v))
+    else
+        return v.nzind[n]
+    end
+end
+
+function _sparse_findprevnz(v::SparseVector, i::Integer)
+    n = searchsortedlast(v.nzind, i)
+    if iszero(n)
+        return zero(indtype(v))
+    else
+        return v.nzind[n]
+    end
+end
+
 ### Generic functions operating on AbstractSparseVector
 
 ### getindex
