@@ -119,7 +119,7 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
     end
 end
 
-function do_cmd!(tokens, repl)
+function do_cmd!(tokens, repl; preview = false)
     local cmd::Symbol
     while !isempty(tokens)
         token = shift!(tokens)
@@ -139,10 +139,11 @@ function do_cmd!(tokens, repl)
         end
     end
     cmd == :init && return do_init!(tokens)
+    cmd == :preview && return do_preview!(tokens, repl)
     local env_opt::Union{String,Void} = get(ENV, "JULIA_ENV", nothing)
     env = EnvCache(env_opt)
+    preview && (env.preview[] = true)
     cmd == :help    ?    do_help!(env, tokens, repl) :
-    cmd == :preview ? do_preview!(env, tokens, repl) :
     cmd == :rm      ?      do_rm!(env, tokens) :
     cmd == :add     ?     do_add!(env, tokens) :
     cmd == :up      ?      do_up!(env, tokens) :
@@ -153,13 +154,13 @@ function do_cmd!(tokens, repl)
         cmderror("`$cmd` command not yet implemented")
 end
 
-function do_preview!(env, tokens, repl)
+function do_preview!(tokens, repl)
     isempty(tokens) && cmderror("`preview` needs a command")
-    env.preview[] = true
     word = tokens[1][2]
     word in keys(cmds) || cmderror("invalid command: ", repr(word))
+    cmds[word] == :init && cmderror("cannot run `init` in preview mode")
     tokens[1] = (:cmd, cmds[word])
-    do_cmd!(env, tokens, repl)
+    do_cmd!(tokens, repl, preview = true)
 end
 
 const help = Base.Markdown.parse("""
