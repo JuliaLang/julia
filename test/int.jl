@@ -102,7 +102,7 @@ end
 @test mod(123, UInt8) == 0x7b
 
 primitive type MyBitsType <: Integer 8 end
-@test_throws MethodError ~reinterpret(MyBitsType, 0x7b)
+@test_throws MethodError !reinterpret(MyBitsType, 0x7b)
 
 UItypes = Base.BitUnsigned_types
 SItypes = Base.BitSigned_types
