@@ -9,12 +9,12 @@ using ..Types
 using ..GraphType
 using .MaxSum
 import ..Types: uuid_julia
-import ..GraphType: is_current_julia
+import ..GraphType: is_julia, check_constraints, log_event_global!, log_event_greedysolved!, log_event_maxsumsolved!, log_event_maxsumtrace!
 
 export resolve, sanity_check
 
 "Resolve package dependencies."
-function resolve(graph::Graph; verbose::Bool = false)
+function resolve(graph::Graph)
     id(p) = pkgID(p, graph)
 
     # attempt trivial solution first
@@ -22,36 +22,31 @@ function resolve(graph::Graph; verbose::Bool = false)
 
     ok && @goto solved
 
-    verbose && info("resolve: greedy failed")
+    log_event_global!(graph, "greedy solver failed")
 
     # trivial solution failed, use maxsum solver
     msgs = Messages(graph)
 
     try
         sol = maxsum(graph, msgs)
+        @goto check
     catch err
         isa(err, UnsatError) || rethrow(err)
-        verbose && info("resolve: maxsum failed")
-        p = graph.data.pkgs[err.info]
-        # TODO: build tools to analyze the problem, and suggest to use them here.
-        msg =
-            """
-            resolve is unable to satisfy package requirements.
-              The problem was detected when trying to find a feasible version
-              for package $(id(p)).
-              However, this only means that package $(id(p)) is involved in an
-              unsatisfiable or difficult dependency relation, and the root of
-              the problem may be elsewhere.
-            """
-        if msgs.num_nondecimated != graph.np
-            msg *= """
-                     (you may try increasing the value of the JULIA_PKGRESOLVE_ACCURACY
-                      environment variable)
-                   """
-        end
-        ## info("ERROR MESSAGE:\n" * msg)
-        throw(PkgError(msg))
+        apply_maxsum_trace!(graph, err.trace)
     end
+
+    log_event_global!(graph, "maxsum solver failed")
+
+    check_constraints(graph) # will throw if it fails
+    simplify_graph!(graph)   # will throw if it fails
+    # NOTE: here it seems like there could be an infinite recursion loop.
+    #       However, if maxsum fails with an empty trace (which could lead to
+    #       the recursion) then the two above checks should be able to
+    #       detect an error. Nevertheless, it's probably better to put some
+    #       kind of failsafe here.
+    return resolve(graph)
+
+    @label check
 
     # verify solution (debug code) and enforce its optimality
     @assert verify_solution(sol, graph)
@@ -59,7 +54,7 @@ function resolve(graph::Graph; verbose::Bool = false)
 
     @label solved
 
-    verbose && info("resolve: succeeded")
+    log_event_global!(graph, "the solver found a feasible configuration")
 
     # return the solution as a Dict mapping UUID => VersionNumber
     return compute_output_dict(sol, graph)
@@ -69,15 +64,15 @@ end
 Scan the graph for (explicit or implicit) contradictions. Returns a list of problematic
 (package,version) combinations.
 """
-function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose::Bool = false)
+function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose = true)
     req_inds = graph.req_inds
     fix_inds = graph.fix_inds
 
     id(p) = pkgID(p, graph)
 
     isempty(req_inds) || warn("sanity check called on a graph with non-empty requirements")
-    if !any(is_current_julia(graph, fp0) for fp0 in fix_inds)
-        warn("sanity check called on a graph without current julia requirement, adding it")
+    if !any(is_julia(graph, fp0) for fp0 in fix_inds)
+        warn("sanity check called on a graph without julia requirement, adding it")
         add_fixed!(graph, Dict(uuid_julia=>Fixed(VERSION)))
     end
     if length(fix_inds) ≠ 1
@@ -88,7 +83,7 @@ function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose::B
         Set{Int}(1:graph.np) :
         Set{Int}(graph.data.pdict[p] for p in sources)
 
-    simplify_graph!(graph, isources, verbose = verbose)
+    simplify_graph!(graph, isources)
 
     np = graph.np
     spp = graph.spp
@@ -112,17 +107,27 @@ function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose::B
 
     checked = falses(nv)
 
+    last_str_len = 0
+
     i = 1
     for (p,vn) in vers
+        if verbose
+            frac_compl = i / nv
+            print("\r", " "^last_str_len)
+            progr_msg = @sprintf("\r%.3i/%.3i (%i%%) — problematic so far: %i", i, nv, round(Int, 100 * frac_compl), length(problematic))
+            print(progr_msg)
+            last_str_len = length(progr_msg)
+        end
+
         length(gadj[pdict[p]]) == 0 && break
         checked[i] && (i += 1; continue)
 
-        sub_graph = deepcopy(graph)
         req = Requires(p => vn)
+        sub_graph = copy(graph)
         add_reqs!(sub_graph, req)
 
         try
-            simplify_graph!(sub_graph, verbose = verbose)
+            simplify_graph!(sub_graph)
         catch err
             isa(err, PkgError) || rethrow(err)
             ## info("ERROR MESSAGE:\n" * err.msg)
@@ -161,6 +166,7 @@ function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose::B
 
         i += 1
     end
+    verbose && println()
 
     return sort!(problematic)
 end
@@ -257,6 +263,10 @@ function greedysolver(graph::Graph)
 
     @assert verify_solution(sol, graph)
 
+    for p0 = 1:np
+        log_event_greedysolved!(graph, p0, sol[p0])
+    end
+
     return true, sol
 end
 
@@ -297,16 +307,20 @@ function enforce_optimality!(sol::Vector{Int}, graph::Graph)
     gmsk = graph.gmsk
     gdir = graph.gdir
     gconstr = graph.gconstr
+    pkgs = graph.data.pkgs
+
+    # keep a track for the log
+    why = Union{Symbol,Int}[0 for p0 = 1:np]
 
     restart = true
     while restart
         restart = false
         for p0 = 1:np
             s0 = sol[p0]
-            s0 == spp[p0] && continue # the package is not installed
+            s0 == spp[p0] && (why[p0] = :uninst; continue) # the package is not installed
 
             # check if bumping to the higher version would violate a constraint
-            gconstr[p0][s0+1] || continue
+            gconstr[p0][s0+1] || (why[p0] = :constr; continue)
 
             # check if bumping to the higher version would violate a constraint
             viol = false
@@ -315,6 +329,7 @@ function enforce_optimality!(sol::Vector{Int}, graph::Graph)
                 msk = gmsk[p0][j1]
                 if !msk[s1, s0+1]
                     viol = true
+                    why[p0] = p1
                     break
                 end
             end
@@ -352,9 +367,28 @@ function enforce_optimality!(sol::Vector{Int}, graph::Graph)
 
     for p0 in find(uninst)
         sol[p0] = spp[p0]
+        why[p0] = :uninst
     end
 
     @assert verify_solution(sol, graph)
+
+    for p0 = 1:np
+        log_event_maxsumsolved!(graph, p0, sol[p0], why[p0])
+    end
+end
+
+function apply_maxsum_trace!(graph::Graph, trace::Vector{Any})
+    np = graph.np
+    spp = graph.spp
+    gconstr = graph.gconstr
+
+    for (p0,s0) in trace
+        new_constr = falses(spp[p0])
+        new_constr[s0] = true
+        old_constr = copy(gconstr[p0])
+        gconstr[p0] .&= new_constr
+        gconstr[p0] ≠ old_constr && log_event_maxsumtrace!(graph, p0, s0)
+    end
 end
 
 end # module

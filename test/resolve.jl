@@ -194,8 +194,13 @@ function resolve_tst(deps_data, reqs_data, want_data = nothing)
     reqs = reqs_from_data(reqs_data, graph)
     add_reqs!(graph, reqs)
 
-    simplify_graph!(graph, verbose = VERBOSE)
-    want = resolve(graph, verbose = VERBOSE)
+    simplify_graph!(graph)
+    want = resolve(graph)
+
+    # rlog = get_resolve_log(graph)
+    # info(sprint(io->showlog(io, rlog)))
+    # println()
+    # info(sprint(io->showlog(io, rlog, view=:chronological)))
 
     return want == wantuuids(want_data)
 end
@@ -329,6 +334,7 @@ VERBOSE && info("SCHEME 5")
 deps_data = Any[
     ["A", v"1", "B", "2-*"],
     ["A", v"1", "C", "2-*"],
+    # ["A", v"1", "julia", "10"],
     ["A", v"2", "B", "1"],
     ["A", v"2", "C", "1"],
     ["B", v"1", "C", "2-*"],
