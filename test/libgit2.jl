@@ -938,6 +938,14 @@ mktempdir() do dir
                 blob = LibGit2.GitBlob(tree_entry)
                 blob_str = sprint(show, blob)
                 @test blob_str == "GitBlob:\nBlob id: $(LibGit2.GitHash(blob))\nContents:\n$(LibGit2.content(blob))\n"
+
+                # tests for walking the tree and accessing objects
+                @test tree[""] == tree
+                @test tree["/"] == tree
+                @test isa(tree[test_dir], LibGit2.GitTree)
+                @test tree["$test_dir/"] == tree[test_dir]
+                @test isa(tree[test_file], LibGit2.GitBlob)
+                @test_throws KeyError tree["nonexistent"]
             end
         end
 

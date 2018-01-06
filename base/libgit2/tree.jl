@@ -131,3 +131,55 @@ function Base.show(io::IO, tree::GitTree)
     println(io, "Owner: ", repository(tree))
     println(io, "Number of entries: ", count(tree))
 end
+
+"""
+    getindex(tree::GitTree, target::AbstractString) -> GitObject
+
+Look up `target` path in the `tree`, returning a [`GitObject`](@ref) (a [`GitBlob`](@ref) in
+the case of a file, or another [`GitTree`](@ref) if looking up a directory).
+
+# Examples
+```julia
+tree = LibGit2.GitTree(repo, "HEAD^{tree}")
+readme = tree["README.md]
+subtree = tree["test"]
+runtests = subtree["runtests.jl"]
+```
+"""
+function Base.getindex(tree::GitTree, target::AbstractString)
+    if basename(target) == ""
+        # get rid of any trailing separator
+        target = dirname(target)
+    end
+    if target == "" || target == "/"
+        return tree
+    end
+
+    payload = Any[tree, target, nothing]
+    treewalk(_getindex_callback, tree, payload)
+    oid = payload[3]
+    if oid === nothing
+        throw(KeyError(target))
+    end
+    return GitObject(repository(tree), oid)
+end
+
+function _getindex_callback(root_cstr, entry_ptr, payload_ptr)
+    # decode arguments
+    root = unsafe_string(root_cstr)
+    payload = Base.unsafe_pointer_to_objref(payload_ptr)
+    tree = payload[1]
+    target = payload[2]
+    entry = GitTreeEntry(tree, entry_ptr, false)
+
+    path = joinpath(root, filename(entry))
+    if path == target
+        # we found the target, save the oid and stop the walk
+        payload[3] = entryid(entry)
+        return Cint(-1)
+    elseif entrytype(entry) == GitTree && !startswith(target, path)
+        # this subtree isn't relevant, so skip it
+        return Cint(1)
+    end
+    return Cint(0)
+end
