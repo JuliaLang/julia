@@ -20,9 +20,18 @@ that the entry will be skipped if `post` is `false`.
 function treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool = false)
     cbf = cfunction(f, Cint, Tuple{Cstring, Ptr{Cvoid}, Ptr{Cvoid}})
     cbf_payload = Ref{typeof(payload)}(payload)
-    @check ccall((:git_tree_walk, :libgit2), Cint,
-                  (Ptr{Cvoid}, Cint, Ptr{Cvoid}, Ptr{Cvoid}),
-                   tree.ptr, post, cbf, cbf_payload)
+    # NOTE: don't use @check/GitError directly, because the code can be arbitrary
+    err = ccall((:git_tree_walk, :libgit2), Cint,
+                (Ptr{Cvoid}, Cint, Ptr{Cvoid}, Ptr{Cvoid}),
+                tree.ptr, post, cbf, cbf_payload)
+    if err < 0
+        err_class, _ = Error.last_error()
+        if err_class != Error.Callback
+            # now we now the code is valid
+            throw(GitError(err))
+        end
+    end
+
     return cbf_payload
 end
 
