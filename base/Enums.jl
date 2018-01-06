@@ -46,6 +46,15 @@ julia> f(apple)
 "I'm a Fruit with value: 1"
 ```
 
+Values can also be specified inside a `begin` block, e.g.
+
+```julia
+@enum EnumName begin
+    value1
+    value2
+end
+```
+
 `BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
 Member values can be converted between the enum type and `BaseType`. `read` and `write`
 perform these conversions automatically.
@@ -69,7 +78,12 @@ macro enum(T, syms...)
     lo = hi = 0
     i = zero(basetype)
     hasexpr = false
+
+    if length(syms) == 1 && syms[1] isa Expr && syms[1].head == :block
+        syms = syms[1].args
+    end
     for s in syms
+        s isa LineNumberNode && continue
         if isa(s, Symbol)
             if i == typemin(basetype) && !isempty(vals)
                 throw(ArgumentError("overflow in value \"$s\" of Enum $typename"))
