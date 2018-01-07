@@ -468,7 +468,7 @@ end
     @test find(c -> c == 'l', s) == [3]
     g = Base.Unicode.graphemes("日本語")
     @test find(isascii, g) == Int[]
-    @test find(!iszero, (i % 2 for i in 1:10)) == Vector(1:2:9)
+    @test find(!iszero, (i % 2 for i in 1:10)) == 1:2:9
 end
 @testset "findn" begin
     b = findn(fill(1,2,2,2,2))
@@ -1631,7 +1631,7 @@ end
     val, state = next(itr, state)
     @test done(itr, state)
     @test r[val] == 3
-    r = sparse(Vector(2:3:8))
+    r = sparse(2:3:8)
     itr = eachindex(r)
     state = start(itr)
     @test !done(itr, state)

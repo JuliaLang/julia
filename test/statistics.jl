@@ -338,9 +338,9 @@ end
     @test quantile([1,2,3,4],0.5) == 2.5
     @test quantile([1,2,3,4],[0.5]) == [2.5]
     @test quantile([1., 3],[.25,.5,.75])[2] == median([1., 3])
-    @test quantile(100.0:-1.0:0.0, 0.0:0.1:1.0) == Vector(0.0:10.0:100.0)
-    @test quantile(0.0:100.0, 0.0:0.1:1.0, sorted=true) == Vector(0.0:10.0:100.0)
-    @test quantile(100f0:-1f0:0.0, 0.0:0.1:1.0) == Vector(0f0:10f0:100f0)
+    @test quantile(100.0:-1.0:0.0, 0.0:0.1:1.0) == 0.0:10.0:100.0
+    @test quantile(0.0:100.0, 0.0:0.1:1.0, sorted=true) == 0.0:10.0:100.0
+    @test quantile(100f0:-1f0:0.0, 0.0:0.1:1.0) == 0f0:10f0:100f0
     @test quantile([Inf,Inf],0.5) == Inf
     @test quantile([-Inf,1],0.5) == -Inf
     @test quantile([0,1],1e-18) == 1e-18

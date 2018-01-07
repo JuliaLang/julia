@@ -126,13 +126,13 @@ S = view(A, :, :)
 g = OffsetArray(Vector(-2:3), (-3,))
 gv = view(g, -1:2)
 @test axes(gv, 1) === Base.OneTo(4)
-@test collect(gv) == Vector(-1:2)
+@test collect(gv) == -1:2
 gv = view(g, OffsetArray(-1:2, (-2,)))
 @test axes(gv, 1) === -1:2
-@test collect(gv) == Vector(-1:2)
+@test collect(gv) == -1:2
 gv = view(g, OffsetArray(-1:2, (-1,)))
 @test axes(gv, 1) === 0:3
-@test collect(gv) == Vector(-1:2)
+@test collect(gv) == -1:2
 
 # iteration
 for (a,d) in zip(A, A0)

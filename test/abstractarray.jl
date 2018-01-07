@@ -791,7 +791,7 @@ for A in (rand(2), rand(2,3))
     for (i, v) in pairs(A)
         @test A[i] == v
     end
-    @test Array(values(A)) == Array(A)
+    @test Array(values(A)) == A
 end
 
 # nextind

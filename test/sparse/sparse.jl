@@ -1864,7 +1864,7 @@ end
 # are called. (Issue #18705.) EDIT: #19239 unified broadcast over a single sparse matrix,
 # eliminating the former operation classes.
 @testset "issue #18705" begin
-    S = sparse(Diagonal(Vector(1.0:5.0)))
+    S = sparse(Diagonal(1.0:5.0))
     @test isa(sin.(S), SparseMatrixCSC)
 end
 
@@ -1906,7 +1906,7 @@ end
 # Check that `broadcast` methods specialized for unary operations over
 # `SparseMatrixCSC`s determine a reasonable return type.
 @testset "issue #18974" begin
-    S = sparse(Diagonal(Vector(Int64(1):Int64(4))))
+    S = sparse(Diagonal(Int64(1):Int64(4)))
     @test eltype(sin.(S)) == Float64
 end
 
