@@ -36,6 +36,9 @@ end
 @test isa(map(Integer, Any[1, 2]), Vector{Int})
 @test isa(map(Integer, Any[]), Vector{Integer})
 
+# issue #25433
+@test @inferred(collect(v for v in [1] if v > 0)) isa Vector{Int}
+
 # filter -- array.jl
 @test isequal(filter(x->(x>1), [0 1 2 3 2 1 0]), [2, 3, 2])
 # TODO: @test_throws isequal(filter(x->x+1, [0 1 2 3 2 1 0]), [2, 3, 2])

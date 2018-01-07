@@ -583,8 +583,15 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
 end
 
 function grow_to!(dest, itr)
-    out = grow_to!(empty(dest, Union{}), itr, start(itr))
-    return isempty(out) ? dest : out
+    st = start(itr)
+    if done(itr, st)
+        return dest
+    else
+        v1, st = next(itr, st)
+        dest2 = empty(dest, typeof(v1))
+        push!(dest2, v1)
+        return grow_to!(dest2, itr, st)
+    end
 end
 
 function grow_to!(dest, itr, st)
