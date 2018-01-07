@@ -230,8 +230,8 @@ end
 *(transD::Transpose{<:Any,<:Diagonal}, transB::Transpose{<:Any,<:Diagonal}) =
     (D = transD.parent; B = transB.parent; Diagonal(transpose.(D.diag) .* transpose.(B.diag)))
 
-mul!(A::Diagonal, B::Diagonal) = throw(MethodError(mul!, Tuple{Diagonal,Diagonal}))
-mul!(A::QRPackedQ, D::Diagonal) = throw(MethodError(mul!, Tuple{Diagonal,Diagonal}))
+mul!(A::Diagonal, B::Diagonal) = throw(MethodError(mul!, (A, B)))
+mul!(A::QRPackedQ, D::Diagonal) = throw(MethodError(mul!, (A, D)))
 mul!(A::QRPackedQ, B::Adjoint{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
 mul!(A::QRPackedQ, B::Transpose{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
 mul!(A::Adjoint{<:Any,<:QRPackedQ}, B::Diagonal) = throw(MethodError(mul!, (A, B)))
@@ -243,10 +243,8 @@ mul!(A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:Diagonal}) = throw(MethodE
 mul!(A::Adjoint{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
 mul!(A::Transpose{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
 mul!(A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
-mul!(transA::Transpose{<:Any,<:Diagonal}, B::Diagonal) =
-    throw(MethodError(mul!, Tuple{Transpose{<:Any,<:Diagonal},Diagonal}))
-mul!(adjA::Adjoint{<:Any,<:Diagonal}, B::Diagonal) =
-    throw(MethodError(mul!, Tuple{Adjoint{<:Any,<:Diagonal},Diagonal}))
+mul!(A::Transpose{<:Any,<:Diagonal}, B::Diagonal) = throw(MethodError(mul!, (A, B)))
+mul!(A::Adjoint{<:Any,<:Diagonal}, B::Diagonal) = throw(MethodError(mul!, (A, B)))
 mul!(A::Diagonal, B::AbstractMatrix)  = scale!(A.diag, B)
 mul!(adjA::Adjoint{<:Any,<:Diagonal}, B::AbstractMatrix) = (A = adjA.parent; scale!(conj(A.diag),B))
 mul!(transA::Transpose{<:Any,<:Diagonal}, B::AbstractMatrix) = (A = transA.parent; scale!(A.diag,B))

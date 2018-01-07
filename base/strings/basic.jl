@@ -82,7 +82,7 @@ I.e. the value returned by `codeunit(s, i)` is of the type returned by
 See also: [`ncodeunits`](@ref), [`checkbounds`](@ref)
 """
 @propagate_inbounds codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(codeunit, Tuple{typeof(s),Int})) : codeunit(s, Int(i))
+    throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i))
 
 """
     isvalid(s::AbstractString, i::Integer) -> Bool
@@ -119,7 +119,7 @@ Stacktrace:
 ```
 """
 @propagate_inbounds isvalid(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(isvalid, Tuple{typeof(s),Int})) : isvalid(s, Int(i))
+    throw(MethodError(isvalid, (s, i))) : isvalid(s, Int(i))
 
 """
     next(s::AbstractString, i::Integer) -> Tuple{Char, Int}
@@ -134,7 +134,7 @@ See also: [`getindex`](@ref), [`start`](@ref), [`done`](@ref),
 [`checkbounds`](@ref)
 """
 @propagate_inbounds next(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(next, Tuple{typeof(s),Int})) : next(s, Int(i))
+    throw(MethodError(next, (s, i))) : next(s, Int(i))
 
 ## basic generic definitions ##
 
