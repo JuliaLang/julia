@@ -164,8 +164,8 @@ skipmissing(itr) = SkipMissing(itr)
 struct SkipMissing{T}
     x::T
 end
-iteratorsize(::Type{<:SkipMissing}) = SizeUnknown()
-iteratoreltype(::Type{SkipMissing{T}}) where {T} = iteratoreltype(T)
+IteratorSize(::Type{<:SkipMissing}) = SizeUnknown()
+IteratorEltype(::Type{SkipMissing{T}}) where {T} = IteratorEltype(T)
 eltype(itr::SkipMissing) = nonmissingtype(eltype(itr.x))
 # Fallback implementation for general iterables: we cannot access a value twice,
 # so after finding the next non-missing element in start() or next(), we have to

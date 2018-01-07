@@ -16,7 +16,7 @@ using .Base:
 import .Base:
     start, done, next, first, last,
     isempty, length, size, axes, ndims,
-    eltype, iteratorsize, iteratoreltype,
+    eltype, IteratorSize, IteratorEltype,
     haskey, keys, values, pairs,
     getindex, setindex!, get
 
@@ -75,8 +75,8 @@ end
 eltype(r::Reverse) = eltype(r.itr)
 length(r::Reverse) = length(r.itr)
 size(r::Reverse) = size(r.itr)
-iteratorsize(r::Reverse) = iteratorsize(r.itr)
-iteratoreltype(r::Reverse) = iteratoreltype(r.itr)
+IteratorSize(r::Reverse) = IteratorSize(r.itr)
+IteratorEltype(r::Reverse) = IteratorEltype(r.itr)
 last(r::Reverse) = first(r.itr) # the first shall be last
 first(r::Reverse) = last(r.itr) # and the last shall be first
 
@@ -138,8 +138,8 @@ end
 
 eltype(::Type{Enumerate{I}}) where {I} = Tuple{Int, eltype(I)}
 
-iteratorsize(::Type{Enumerate{I}}) where {I} = iteratorsize(I)
-iteratoreltype(::Type{Enumerate{I}}) where {I} = iteratoreltype(I)
+IteratorSize(::Type{Enumerate{I}}) where {I} = IteratorSize(I)
+IteratorEltype(::Type{Enumerate{I}}) where {I} = IteratorEltype(I)
 
 @inline function start(r::Reverse{<:Enumerate})
     ri = reverse(r.itr.itr)
@@ -233,8 +233,8 @@ end
 
 eltype(::Type{IndexValue{K, V}}) where {K, V} = Pair{K, V}
 
-iteratorsize(::Type{IndexValue{<:Any, <:Any, I}}) where {I} = iteratorsize(I)
-iteratoreltype(::Type{IndexValue{<:Any, <:Any, I}}) where {I} = iteratoreltype(I)
+IteratorSize(::Type{IndexValue{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
+IteratorEltype(::Type{IndexValue{<:Any, <:Any, I}}) where {I} = IteratorEltype(I)
 
 reverse(v::IndexValue) = IndexValue(v.data, reverse(v.itr))
 
@@ -272,15 +272,15 @@ eltype(::Type{Zip1{I}}) where {I} = Tuple{eltype(I)}
 end
 @inline done(z::Zip1, st) = done(z.a,st)
 
-iteratorsize(::Type{Zip1{I}}) where {I} = iteratorsize(I)
-iteratoreltype(::Type{Zip1{I}}) where {I} = iteratoreltype(I)
+IteratorSize(::Type{Zip1{I}}) where {I} = IteratorSize(I)
+IteratorEltype(::Type{Zip1{I}}) where {I} = IteratorEltype(I)
 
 struct Zip2{I1, I2} <: AbstractZipIterator
     a::I1
     b::I2
 end
 zip(a, b) = Zip2(a, b)
-length(z::Zip2) = _min_length(z.a, z.b, iteratorsize(z.a), iteratorsize(z.b))
+length(z::Zip2) = _min_length(z.a, z.b, IteratorSize(z.a), IteratorSize(z.b))
 size(z::Zip2) = promote_shape(size(z.a), size(z.b))
 axes(z::Zip2) = promote_shape(axes(z.a), axes(z.b))
 eltype(::Type{Zip2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
@@ -292,8 +292,8 @@ eltype(::Type{Zip2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
 end
 @inline done(z::Zip2, st) = done(z.a,st[1]) | done(z.b,st[2])
 
-iteratorsize(::Type{Zip2{I1,I2}}) where {I1,I2} = zip_iteratorsize(iteratorsize(I1),iteratorsize(I2))
-iteratoreltype(::Type{Zip2{I1,I2}}) where {I1,I2} = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
+IteratorSize(::Type{Zip2{I1,I2}}) where {I1,I2} = zip_iteratorsize(IteratorSize(I1),IteratorSize(I2))
+IteratorEltype(::Type{Zip2{I1,I2}}) where {I1,I2} = and_iteratoreltype(IteratorEltype(I1),IteratorEltype(I2))
 
 struct Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
     a::I
@@ -330,7 +330,7 @@ julia> first(c)
 ```
 """
 zip(a, b, c...) = Zip(a, zip(b, c...))
-length(z::Zip) = _min_length(z.a, z.z, iteratorsize(z.a), iteratorsize(z.z))
+length(z::Zip) = _min_length(z.a, z.z, IteratorSize(z.a), IteratorSize(z.z))
 size(z::Zip) = promote_shape(size(z.a), size(z.z))
 axes(z::Zip) = promote_shape(axes(z.a), axes(z.z))
 eltype(::Type{Zip{I,Z}}) where {I,Z} = tuple_type_cons(eltype(I), eltype(Z))
@@ -342,8 +342,8 @@ eltype(::Type{Zip{I,Z}}) where {I,Z} = tuple_type_cons(eltype(I), eltype(Z))
 end
 @inline done(z::Zip, st) = done(z.a,st[1]) | done(z.z,st[2])
 
-iteratorsize(::Type{Zip{I1,I2}}) where {I1,I2} = zip_iteratorsize(iteratorsize(I1),iteratorsize(I2))
-iteratoreltype(::Type{Zip{I1,I2}}) where {I1,I2} = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
+IteratorSize(::Type{Zip{I1,I2}}) where {I1,I2} = zip_iteratorsize(IteratorSize(I1),IteratorSize(I2))
+IteratorEltype(::Type{Zip{I1,I2}}) where {I1,I2} = and_iteratoreltype(IteratorEltype(I1),IteratorEltype(I2))
 
 reverse(z::Zip1) = Zip1(reverse(z.a))
 reverse(z::Zip2) = Zip2(reverse(z.a), reverse(z.b))
@@ -413,8 +413,8 @@ end
 done(f::Filter, s) = s[1]
 
 eltype(::Type{Filter{F,I}}) where {F,I} = eltype(I)
-iteratoreltype(::Type{Filter{F,I}}) where {F,I} = iteratoreltype(I)
-iteratorsize(::Type{<:Filter}) = SizeUnknown()
+IteratorEltype(::Type{Filter{F,I}}) where {F,I} = IteratorEltype(I)
+IteratorSize(::Type{<:Filter}) = SizeUnknown()
 
 reverse(f::Filter) = Filter(f.flt, reverse(f.itr))
 
@@ -446,10 +446,10 @@ start(i::Rest) = i.st
 done(i::Rest, st) = done(i.itr, st)
 
 eltype(::Type{Rest{I}}) where {I} = eltype(I)
-iteratoreltype(::Type{Rest{I,S}}) where {I,S} = iteratoreltype(I)
+IteratorEltype(::Type{Rest{I,S}}) where {I,S} = IteratorEltype(I)
 rest_iteratorsize(a) = SizeUnknown()
 rest_iteratorsize(::IsInfinite) = IsInfinite()
-iteratorsize(::Type{Rest{I,S}}) where {I,S} = rest_iteratorsize(iteratorsize(I))
+IteratorSize(::Type{Rest{I,S}}) where {I,S} = rest_iteratorsize(IteratorSize(I))
 
 # Count -- infinite counting
 
@@ -484,7 +484,7 @@ start(it::Count) = it.start
 next(it::Count, state) = (state, state + it.step)
 done(it::Count, state) = false
 
-iteratorsize(::Type{<:Count}) = IsInfinite()
+IteratorSize(::Type{<:Count}) = IsInfinite()
 
 # Take -- iterate through the first n elements
 
@@ -523,11 +523,11 @@ take(xs, n::Integer) = Take(xs, Int(n))
 take(xs::Take, n::Integer) = Take(xs.xs, min(Int(n), xs.n))
 
 eltype(::Type{Take{I}}) where {I} = eltype(I)
-iteratoreltype(::Type{Take{I}}) where {I} = iteratoreltype(I)
+IteratorEltype(::Type{Take{I}}) where {I} = IteratorEltype(I)
 take_iteratorsize(a) = HasLength()
 take_iteratorsize(::SizeUnknown) = SizeUnknown()
-iteratorsize(::Type{Take{I}}) where {I} = take_iteratorsize(iteratorsize(I))
-length(t::Take) = _min_length(t.xs, 1:t.n, iteratorsize(t.xs), HasLength())
+IteratorSize(::Type{Take{I}}) where {I} = take_iteratorsize(IteratorSize(I))
+length(t::Take) = _min_length(t.xs, 1:t.n, IteratorSize(t.xs), HasLength())
 
 start(it::Take) = (it.n, start(it.xs))
 
@@ -579,12 +579,12 @@ drop(xs::Take, n::Integer) = Take(drop(xs.xs, Int(n)), max(0, xs.n - Int(n)))
 drop(xs::Drop, n::Integer) = Drop(xs.xs, Int(n) + xs.n)
 
 eltype(::Type{Drop{I}}) where {I} = eltype(I)
-iteratoreltype(::Type{Drop{I}}) where {I} = iteratoreltype(I)
+IteratorEltype(::Type{Drop{I}}) where {I} = IteratorEltype(I)
 drop_iteratorsize(::SizeUnknown) = SizeUnknown()
 drop_iteratorsize(::Union{HasShape, HasLength}) = HasLength()
 drop_iteratorsize(::IsInfinite) = IsInfinite()
-iteratorsize(::Type{Drop{I}}) where {I} = drop_iteratorsize(iteratorsize(I))
-length(d::Drop) = _diff_length(d.xs, 1:d.n, iteratorsize(d.xs), HasLength())
+IteratorSize(::Type{Drop{I}}) where {I} = drop_iteratorsize(IteratorSize(I))
+length(d::Drop) = _diff_length(d.xs, 1:d.n, IteratorSize(d.xs), HasLength())
 
 function start(it::Drop)
     xs_state = start(it.xs)
@@ -624,8 +624,8 @@ hellohelloh
 cycle(xs) = Cycle(xs)
 
 eltype(::Type{Cycle{I}}) where {I} = eltype(I)
-iteratoreltype(::Type{Cycle{I}}) where {I} = iteratoreltype(I)
-iteratorsize(::Type{Cycle{I}}) where {I} = IsInfinite()
+IteratorEltype(::Type{Cycle{I}}) where {I} = IteratorEltype(I)
+IteratorSize(::Type{Cycle{I}}) where {I} = IsInfinite()
 
 function start(it::Cycle)
     s = start(it.xs)
@@ -678,8 +678,8 @@ start(it::Repeated) = nothing
 next(it::Repeated, state) = (it.x, nothing)
 done(it::Repeated, state) = false
 
-iteratorsize(::Type{<:Repeated}) = IsInfinite()
-iteratoreltype(::Type{<:Repeated}) = HasEltype()
+IteratorSize(::Type{<:Repeated}) = IsInfinite()
+IteratorEltype(::Type{<:Repeated}) = HasEltype()
 
 reverse(it::Union{Repeated,Take{<:Repeated}}) = it
 
@@ -705,9 +705,9 @@ julia> collect(Iterators.product(1:2,3:5))
 """
 product(iters...) = ProductIterator(iters)
 
-iteratorsize(::Type{ProductIterator{Tuple{}}}) = HasShape()
-iteratorsize(::Type{ProductIterator{T}}) where {T<:Tuple} =
-    prod_iteratorsize( iteratorsize(tuple_type_head(T)), iteratorsize(ProductIterator{tuple_type_tail(T)}) )
+IteratorSize(::Type{ProductIterator{Tuple{}}}) = HasShape()
+IteratorSize(::Type{ProductIterator{T}}) where {T<:Tuple} =
+    prod_iteratorsize( IteratorSize(tuple_type_head(T)), IteratorSize(ProductIterator{tuple_type_tail(T)}) )
 
 prod_iteratorsize(::Union{HasLength,HasShape}, ::Union{HasLength,HasShape}) = HasShape()
 # products can have an infinite iterator
@@ -718,7 +718,7 @@ prod_iteratorsize(a, b) = SizeUnknown()
 
 size(P::ProductIterator) = _prod_size(P.iterators)
 _prod_size(::Tuple{}) = ()
-_prod_size(t::Tuple) = (_prod_size1(t[1], iteratorsize(t[1]))..., _prod_size(tail(t))...)
+_prod_size(t::Tuple) = (_prod_size1(t[1], IteratorSize(t[1]))..., _prod_size(tail(t))...)
 _prod_size1(a, ::HasShape)  = size(a)
 _prod_size1(a, ::HasLength) = (length(a),)
 _prod_size1(a, A) =
@@ -726,7 +726,7 @@ _prod_size1(a, A) =
 
 axes(P::ProductIterator) = _prod_indices(P.iterators)
 _prod_indices(::Tuple{}) = ()
-_prod_indices(t::Tuple) = (_prod_indices1(t[1], iteratorsize(t[1]))..., _prod_indices(tail(t))...)
+_prod_indices(t::Tuple) = (_prod_indices1(t[1], IteratorSize(t[1]))..., _prod_indices(tail(t))...)
 _prod_indices1(a, ::HasShape)  = axes(a)
 _prod_indices1(a, ::HasLength) = (OneTo(length(a)),)
 _prod_indices1(a, A) =
@@ -736,12 +736,12 @@ ndims(p::ProductIterator) = length(axes(p))
 length(P::ProductIterator) = prod(size(P))
 _length(p::ProductIterator) = prod(map(unsafe_length, axes(p)))
 
-iteratoreltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
-iteratoreltype(::Type{ProductIterator{Tuple{I}}}) where {I} = iteratoreltype(I)
-function iteratoreltype(::Type{ProductIterator{T}}) where {T<:Tuple}
+IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
+IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)
+function IteratorEltype(::Type{ProductIterator{T}}) where {T<:Tuple}
     I = tuple_type_head(T)
     P = ProductIterator{tuple_type_tail(T)}
-    iteratoreltype(I) == EltypeUnknown() ? EltypeUnknown() : iteratoreltype(P)
+    IteratorEltype(I) == EltypeUnknown() ? EltypeUnknown() : IteratorEltype(P)
 end
 
 eltype(P::ProductIterator) = _prod_eltype(P.iterators)
@@ -848,8 +848,8 @@ julia> collect(Iterators.flatten((1:2, 8:9)))
 flatten(itr) = Flatten(itr)
 
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
-iteratoreltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, iteratoreltype(I))
-_flatteneltype(I, ::HasEltype) = iteratoreltype(eltype(I))
+IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
+_flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()
 
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:NTuple{N,Any}}) where {N} = HasLength()
@@ -857,7 +857,7 @@ flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Tuple}) = SizeUnknow
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Number}) = HasLength()
 flatten_iteratorsize(a, b) = SizeUnknown()
 
-iteratorsize(::Type{Flatten{I}}) where {I} = flatten_iteratorsize(iteratorsize(I), eltype(I))
+IteratorSize(::Type{Flatten{I}}) where {I} = flatten_iteratorsize(IteratorSize(I), eltype(I))
 
 function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
     fieldcount(T)*length(f.it)
@@ -924,8 +924,8 @@ end
 eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
 partition_iteratorsize(::HasShape) = HasLength()
 partition_iteratorsize(isz) = isz
-function iteratorsize(::Type{PartitionIterator{T}}) where {T}
-    partition_iteratorsize(iteratorsize(T))
+function IteratorSize(::Type{PartitionIterator{T}}) where {T}
+    partition_iteratorsize(IteratorSize(T))
 end
 
 function length(itr::PartitionIterator)

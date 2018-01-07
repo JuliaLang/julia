@@ -429,7 +429,7 @@ julia> collect(Float64, 1:2:5)
  5.0
 ```
 """
-collect(::Type{T}, itr) where {T} = _collect(T, itr, iteratorsize(itr))
+collect(::Type{T}, itr) where {T} = _collect(T, itr, IteratorSize(itr))
 
 _collect(::Type{T}, itr, isz::HasLength) where {T} = copyto!(Vector{T}(uninitialized, Int(length(itr)::Integer)), itr)
 _collect(::Type{T}, itr, isz::HasShape) where {T}  = copyto!(similar(Array{T}, axes(itr)), itr)
@@ -467,11 +467,11 @@ julia> collect(1:2:13)
  13
 ```
 """
-collect(itr) = _collect(1:1 #= Array =#, itr, iteratoreltype(itr), iteratorsize(itr))
+collect(itr) = _collect(1:1 #= Array =#, itr, IteratorEltype(itr), IteratorSize(itr))
 
 collect(A::AbstractArray) = _collect_indices(axes(A), A)
 
-collect_similar(cont, itr) = _collect(cont, itr, iteratoreltype(itr), iteratorsize(itr))
+collect_similar(cont, itr) = _collect(cont, itr, IteratorEltype(itr), IteratorSize(itr))
 
 _collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
     copyto!(_similar_for(cont, eltype(itr), itr, isz), itr)
@@ -524,7 +524,7 @@ _array_for(::Type{T}, itr, ::HasLength) where {T} = Vector{T}(uninitialized, Int
 _array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, axes(itr))::Array{T}
 
 function collect(itr::Generator)
-    isz = iteratorsize(itr.iter)
+    isz = IteratorSize(itr.iter)
     et = @default_eltype(itr)
     if isa(isz, SizeUnknown)
         return grow_to!(Vector{et}(), itr)
@@ -821,7 +821,7 @@ function append!(a::Array{<:Any,1}, items::AbstractVector)
     return a
 end
 
-append!(a::Vector, iter) = _append!(a, iteratorsize(iter), iter)
+append!(a::Vector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::Vector, iter...) = append!(a, iter)
 
 function _append!(a, ::Union{HasLength,HasShape}, iter)
@@ -868,7 +868,7 @@ function prepend!(a::Array{<:Any,1}, items::AbstractVector)
     return a
 end
 
-prepend!(a::Vector, iter) = _prepend!(a, iteratorsize(iter), iter)
+prepend!(a::Vector, iter) = _prepend!(a, IteratorSize(iter), iter)
 pushfirst!(a::Vector, iter...) = prepend!(a, iter)
 
 function _prepend!(a, ::Union{HasLength,HasShape}, iter)

@@ -223,4 +223,4 @@ function Base.next(ci::GitConfigIter, state)
     return (entry, state)
 end
 
-Base.iteratorsize(::Type{GitConfigIter}) = Base.SizeUnknown()
+Base.IteratorSize(::Type{GitConfigIter}) = Base.SizeUnknown()

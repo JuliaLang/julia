@@ -337,7 +337,7 @@ function unique(itr)
         return out
     end
     x, i = next(itr, i)
-    if !_isleaftype(T) && iteratoreltype(itr) == EltypeUnknown()
+    if !_isleaftype(T) && IteratorEltype(itr) == EltypeUnknown()
         S = typeof(x)
         return _unique_from(itr, S[x], Set{S}((x,)), i)
     end

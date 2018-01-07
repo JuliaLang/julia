@@ -530,7 +530,7 @@ julia> BitArray(x+y == 3 for x = 1:2 for y = 1:3)
  false
 ```
 """
-BitArray(itr) = gen_bitarray(iteratorsize(itr), itr)
+BitArray(itr) = gen_bitarray(IteratorSize(itr), itr)
 
 # generic constructor from an iterable without compile-time info
 # (we pass start(itr) explicitly to avoid a type-instability with filters)
