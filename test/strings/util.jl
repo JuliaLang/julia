@@ -267,14 +267,15 @@ end
         @test replace(s, '1' => 'z') == s
         @test replace(s, 'b' => "BbB", count=1) == "aBbBc"
     end
-    for s in ["quick quicker quickest"], cnt in [99, big"99"]
+    for s in ["quick quicker quickest"]
         @test replace(s) === s
         @test replace(s, "quick" => 'a', "quicker" => Base.Unicode.uppercase, "quickest" => 'z') == "a QUICKER z"
+        @test replace(s, "quick"=>"Duck", "quicker"=>"is", "quickest"=>"lame", count=2) == "Duck is quickest"
         @test replace(s, "" => '1') == "1q1u1i1c1k1 1q1u1i1c1k1e1r1 1q1u1i1c1k1e1s1t1"
         @test replace(s, "qu" => "QU", "qu" => "never happens", "ick" => "") == "QU QUer QUest"
         @test replace(s, " " => '_', "r " => "r-") == "quick_quicker-quickest"
         @test replace(s, r"[aeiou]" => "ä", "ui" => "ki", "i" => "I") == "qkick qkickär qkickäst"
-        @test replace(s, r"[^ ]+" => "word", "quicker " => "X") == "word Xword"
+        @test replace(s, r"[^ ]+" => "word", "quicker " => "X", count=big"99") == "word Xword"
     end
 
 end

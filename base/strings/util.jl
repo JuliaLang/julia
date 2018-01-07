@@ -423,7 +423,6 @@ function findnextall(pairs::NTuple{N,Pair}, s::AbstractString, st::Integer=1) wh
 end
 
 # cover the multiple pairs case
-
 function replace(str::String, pat_repls::Pair...; count::Integer=typemax(Int))
     if count == 0 || length(pat_repls) == 0
         return str
@@ -460,7 +459,6 @@ function replace(str::String, pat_repls::Pair...; count::Integer=typemax(Int))
 end
 
 # the case of a single pair has twice better performance
-
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = predicatepair(pat_repl)
     count == 0 && return str
