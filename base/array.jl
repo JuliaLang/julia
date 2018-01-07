@@ -1724,8 +1724,9 @@ Return a vector `I` of the indices or keys of `A` where `f(A[I])` returns `true`
 If there are no such elements of `A`, return an empty array.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
-and [`pairs(A)`](@ref) for `AbstractArray` and `Associative` objects,
-and are linear indices of type `Int` for other iterables.
+and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
+`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+for other iterables.
 
 # Examples
 ```jldoctest
@@ -1771,7 +1772,7 @@ julia> find(x -> x >= 0, d)
 """
 find(testf::Function, A) = collect(first(p) for p in _pairs(A) if testf(last(p)))
 
-_pairs(A::Union{AbstractArray, AbstractDict}) = pairs(A)
+_pairs(A::Union{AbstractArray, AbstractDict, AbstractString, Tuple, NamedTuple}) = pairs(A)
 _pairs(iter) = zip(OneTo(typemax(Int)), iter)  # safe for objects that don't implement length
 
 """

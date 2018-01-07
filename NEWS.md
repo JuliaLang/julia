@@ -365,11 +365,11 @@ This section lists changes that do not have deprecation warnings.
   * `findn(x::AbstractVector)` now returns a 1-tuple with the vector of indices, to be
     consistent with higher order arrays ([#25365]).
 
-  * `find` now returns the same type of indices as `keys`/`pairs` for `AbstractArray` and
-    `AbstractDict` objects ([#24774]). In particular, this means that it returns
-    `CartesianIndex` objects for matrices and higher-dimensional arrays instead of
-    always returning linear indices as it was previously the case. Use
-    `Int[LinearIndices(size(a))[i] for i in find(f, a)]` to compute linear indices
+  * `find` now returns the same type of indices as `keys`/`pairs` for `AbstractArray`,
+    `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774]).
+    In particular, this means that it returns `CartesianIndex` objects for matrices
+    and higher-dimensional arrays instead of linear indices as it was previously the case.
+    Use `Int[LinearIndices(size(a))[i] for i in find(f, a)]` to compute linear indices.
 
 Library improvements
 --------------------

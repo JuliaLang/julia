@@ -471,10 +471,6 @@ end
     @test find(!iszero, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1),
                                CartesianIndex(1, 2), CartesianIndex(2, 2)]
 end
-@testset "find with Dict" begin
-    d = Dict(:A => 10, :B => -1, :C => 0)
-    @test sort(find(x -> x >= 0, d)) == [:A, :C]
-end
 @testset "find with general iterables" begin
     s = "julia"
     @test find(c -> c == 'l', s) == [3]
