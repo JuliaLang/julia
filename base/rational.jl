@@ -102,11 +102,13 @@ big(z::Complex{<:Rational{<:Integer}}) = Complex{Rational{BigInt}}(z)
 
 # Both rules need to be defined for types which implement promote_rule
 # but not promote_strict_rule
-for (prule, ptype) in ((promote_strict_rule, promote_strict_type),
-                       (promote_rule, promote_type))
-    prule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{ptype(T,S)}
-    prule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{ptype(T,S)}
-    prule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = ptype(T,S)
+for (prule, ptype) in ((:promote_strict_rule, :promote_strict_type),
+                       (:promote_rule, :promote_type))
+    @eval begin
+        $prule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{$ptype(T,S)}
+        $prule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{$ptype(T,S)}
+        $prule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = $ptype(T,S)
+    end
 end
 
 widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}

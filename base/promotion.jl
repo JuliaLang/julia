@@ -12,24 +12,26 @@ they both inherit.
 typejoin() = (@_pure_meta; Bottom)
 typejoin(@nospecialize(t)) = (@_pure_meta; t)
 typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
-function typejoin(@nospecialize(a), @nospecialize(b))
+typejoin(@nospecialize(a), @nospecialize(b)) = join_types(a, b, typejoin, false)
+
+function join_types(@nospecialize(a), @nospecialize(b), f, joinparams)
     @_pure_meta
     if a <: b
         return b
     elseif b <: a
         return a
     elseif isa(a,UnionAll)
-        return UnionAll(a.var, typejoin(a.body, b))
+        return UnionAll(a.var, join_types(a.body, b, f, joinparams))
     elseif isa(b,UnionAll)
-        return UnionAll(b.var, typejoin(a, b.body))
+        return UnionAll(b.var, join_types(a, b.body, f, joinparams))
     elseif isa(a,TypeVar)
-        return typejoin(a.ub, b)
+        return f(a.ub, b)
     elseif isa(b,TypeVar)
-        return typejoin(a, b.ub)
+        return f(a, b.ub)
     elseif isa(a,Union)
-        return typejoin(typejoin(a.a,a.b), b)
+        return f(f(a.a,a.b), b)
     elseif isa(b,Union)
-        return typejoin(a, typejoin(b.a,b.b))
+        return f(a, f(b.a,b.b))
     elseif a <: Tuple
         if !(b <: Tuple)
             return Any
@@ -37,31 +39,31 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         ap, bp = a.parameters, b.parameters
         lar = length(ap)::Int; lbr = length(bp)::Int
         if lar == 0
-            return Tuple{Vararg{tailjoin(bp,1)}}
+            return Tuple{Vararg{tailjoin(bp,1,f)}}
         end
         if lbr == 0
-            return Tuple{Vararg{tailjoin(ap,1)}}
+            return Tuple{Vararg{tailjoin(ap,1,f)}}
         end
         laf, afixed = full_va_len(ap)
         lbf, bfixed = full_va_len(bp)
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
                 c = Vector{Any}(uninitialized, laf)
-                c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp,laf))}
+                c[laf] = Vararg{f(unwrapva(ap[lar]), tailjoin(bp,laf,f))}
                 n = laf-1
             else
                 c = Vector{Any}(uninitialized, laf+1)
-                c[laf+1] = Vararg{tailjoin(bp,laf+1)}
+                c[laf+1] = Vararg{tailjoin(bp,laf+1,f)}
                 n = laf
             end
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
                 c = Vector{Any}(uninitialized, lbf)
-                c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap,lbf))}
+                c[lbf] = Vararg{f(unwrapva(bp[lbr]), tailjoin(ap,lbf,f))}
                 n = lbf-1
             else
                 c = Vector{Any}(uninitialized, lbf+1)
-                c[lbf+1] = Vararg{tailjoin(ap,lbf+1)}
+                c[lbf+1] = Vararg{tailjoin(ap,lbf+1,f)}
                 n = lbf
             end
         else
@@ -70,7 +72,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         end
         for i = 1:n
             ai = ap[min(i,lar)]; bi = bp[min(i,lbr)]
-            ci = typejoin(unwrapva(ai),unwrapva(bi))
+            ci = f(unwrapva(ai),unwrapva(bi))
             c[i] = i == length(c) && (isvarargtype(ai) || isvarargtype(bi)) ? Vararg{ci} : ci
         end
         return Tuple{c...}
@@ -93,6 +95,8 @@ function typejoin(@nospecialize(a), @nospecialize(b))
                 ai, bi = a.parameters[i], b.parameters[i]
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
                     p[i] = ai
+                elseif joinparams
+                    p[i] = f(ai, bi)
                 else
                     p[i] = aprimary.parameters[i]
                 end
@@ -118,14 +122,14 @@ function full_va_len(p)
     return length(p)::Int, true
 end
 
-# reduce typejoin over A[i:end]
-function tailjoin(A, i)
+# reduce join_types over A[i:end]
+function tailjoin(A, i, f)
     if i > length(A)
         return unwrapva(A[end])
     end
     t = Bottom
     for j = i:length(A)
-        t = typejoin(t, unwrapva(A[j]))
+        t = f(t, unwrapva(A[j]))
     end
     return t
 end
@@ -201,11 +205,11 @@ promote_strict_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
 promote_strict_rule(::Type{Any}, ::Type) = Any
 
 promote_strict_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} =
-    (@_inline_meta; promote_strict_type(T,S))
+    (promote_strict_type(T,S))
 # If no promote_strict rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
 promote_strict_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} =
-    (@_inline_meta; typejoin(T, S))
+    (join_types(T,S,promote_strict_type,true))
 
 """
     promote_strict(xs...)
@@ -284,7 +288,7 @@ Promotion refers to converting values of mixed types to a single common type.
 operators (usually mathematical) are given arguments of differing types.
 `promote_type` generally tries to return a type which can at least approximate
 most values of either input type without excessively widening. Contrary to
-[`promote_strict_type`] some loss is tolerated.
+[`promote_strict_type`](@ref) some loss is tolerated.
 For example, `promote_type(Int64, Float64)` returns
 [`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be
 represented exactly as `Float64` values.
@@ -414,7 +418,7 @@ promote(x::T, y::T, zs::T...) where {T} = (x, y, zs...)
 # Otherwise, typejoin(T,S) is called (returning Number) so no conversion
 # happens, and +(promote(x,y)...) is called again, causing a stack
 # overflow.
-function promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
+function promote_strict_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
     @_inline_meta
     promote_to_supertype(T, S, typejoin(T,S))
 end
