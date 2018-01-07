@@ -1305,3 +1305,15 @@ f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test Core.Inference.getfield_tfunc(Const(Int), Const(:mutable)) == Const(false)
 @test Core.Inference.getfield_tfunc(Const(Vector{Int}), Const(:mutable)) == Const(true)
 @test Core.Inference.getfield_tfunc(DataType, Const(:mutable)) == Bool
+
+struct Foo_22708
+    x::Ptr{Foo_22708}
+end
+
+f_22708(x::Int) = f_22708(Foo_22708, x)
+f_22708(::Type{Foo_22708}, x) = bar_22708("x")
+f_22708(x) = x
+bar_22708(x) = f_22708(x)
+
+@test bar_22708(1) == "x"
+
