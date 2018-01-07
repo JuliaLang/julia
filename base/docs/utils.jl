@@ -104,6 +104,10 @@ function helpmode(io::IO, line::AbstractString)
             Symbol(line)
         else
             x = Meta.parse(line, raise = false, depwarn = false)
+            if isa(x, Expr) && (x.head == :incomplete || x.head == :error)
+                println("\"$line\" is not a valid help query")
+                return
+            end
             # Retrieving docs for macros requires us to make a distinction between the text
             # `@macroname` and `@macroname()`. These both parse the same, but are used by
             # the docsystem to return different results. The first returns all documentation
