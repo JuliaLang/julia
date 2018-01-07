@@ -389,29 +389,27 @@ _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
 # replace Char with function that compares with this Char
-pairmap(p::Pair{Char}) = equalto(p.first) => p.second
+predicatepair(p::Pair{Char}) = equalto(p.first) => p.second
 
 # replace collection of Char with function that checks occurrence in this collection
-function pairmap(p::Pair{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}})
+function predicatepair(p::Pair{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}})
     occursin(p.first) => p.second
 end
-pairmap(p::Pair) = p
+predicatepair(p::Pair) = p
 
 # find the first of a list of patterns.
 # if several match at the same start position prefer the longer one
 # if also the length is equal, prefer the first in list
-# return value of the successful search and the pair
-
+# return index-range of the successful search and the pair
 function findnextall(pairs::NTuple{N,Pair}, s::AbstractString, st::Integer=1) where N
-    ps = start(pairs)
-    while !done(pairs, ps)
-        p, ps = next(pairs, ps)
+    for n = 1:N
+        p = pairs[n]
         r = findnext(p.first, s, st)
         fr = first(r)
         if fr > 0
             minstart, minend, minp = fr, last(r), p
-            while !done(pairs, ps)
-                p, ps = next(pairs, ps)
+            for j = n+1:N
+                p = pairs[j]
                 r = findnext(p.first, s, st)
                 i, k = first(r), last(r)
                 if i > 0 && ( i < minstart || i == minstart && k > minend)
@@ -431,7 +429,7 @@ function replace(str::String, pat_repls::Pair...; count::Integer=typemax(Int))
         return str
     end
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
-    pat_repls = pairmap.(pat_repls)
+    pat_repls = predicatepair.(pat_repls)
     n = 1
     e = endof(str)
     i = a = start(str)
@@ -464,7 +462,7 @@ end
 # the case of a single pair has twice better performance
 
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
-    pattern, repl = pairmap(pat_repl)
+    pattern, repl = predicatepair(pat_repl)
     count == 0 && return str
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
     n = 1
@@ -497,7 +495,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
 end
 
 """
-    replace(s::AbstractString, pat=>r[, pat=>r ...]; [count::Integer])
+    replace(s::AbstractString, pat=>r...; [count::Integer])
 
 Search for any of the given patterns `pat` in `s`, and replace each occurrence with
 corresponding `r`.
