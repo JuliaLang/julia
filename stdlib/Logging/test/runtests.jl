@@ -158,9 +158,9 @@ import Logging: min_enabled_level, shouldlog, handle_message
     # Basic color test
     @test genmsg(Logging.Info, "line1\nline2", Main, "some/path.jl", 101, color=true) ==
     """
-    \e[1m\e[36m┌ \e[39m\e[22m\e[1m\e[36mInfo: \e[39m\e[22mline1
-    \e[1m\e[36m│ \e[39m\e[22mline2
-    \e[1m\e[36m└ \e[39m\e[22m                                                      \e[90m @ Main path.jl:101\e[39m
+    \e[36m\e[1m┌ \e[22m\e[39m\e[36m\e[1mInfo: \e[22m\e[39mline1
+    \e[36m\e[1m│ \e[22m\e[39mline2
+    \e[36m\e[1m└ \e[22m\e[39m                                                      \e[90m @ Main path.jl:101\e[39m
     """
 
 end
