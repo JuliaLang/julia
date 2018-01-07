@@ -272,7 +272,7 @@ reseteof(io::AbstractPipe) = reseteof(pipe_reader(io))
 
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))
 
-write(filename::AbstractString, args...) = open(io->write(io, args...), filename, "w")
+write(filename::AbstractString, a1, args...) = open(io->write(io, a1, args...), filename, "w")
 
 """
     read(filename::AbstractString, args...)
@@ -484,8 +484,9 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 ## binary I/O ##
 
 write(io::IO, x) = throw(MethodError(write, (io, x)))
-function write(io::IO, xs...)
+function write(io::IO, x1, xs...)
     local written::Int = 0
+    written += write(io, x1)
     for x in xs
         written += write(io, x)
     end
