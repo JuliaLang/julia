@@ -44,16 +44,3 @@ end
 
 print_wrapped(f::Function, io::IO, args...; kws...) = print_wrapped(io, f, args...; kws...)
 
-function print_centred(io::IO, s...; columns = 80, width = columns)
-    lines = wrapped_lines(io, s..., width = width)
-    for line in lines
-        print(io, " "^(div(columns-ansi_length(line), 2)))
-        println(io, line)
-    end
-    length(lines), length(pre) + length(lines[end])
-end
-
-function centred(s, columns)
-    pad = div(columns - ansi_length(s), 2)
-    " "^pad * s
-end
