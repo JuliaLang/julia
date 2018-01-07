@@ -382,7 +382,7 @@ end
     structuredarrays = (D, B, T, S)
     fstructuredarrays = map(Array, structuredarrays)
     for (X, fX) in zip(structuredarrays, fstructuredarrays)
-        @test (Q = broadcast(sin, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(sin, fX)))
+        @test (Q = broadcast(sin, X); typeof(Q) == typeof(X) && Q == sparse(broadcast(sin, fX)))
         @test broadcast!(sin, Z, X) == sparse(broadcast(sin, fX))
         @test (Q = broadcast(cos, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(cos, fX)))
         @test broadcast!(cos, Z, X) == sparse(broadcast(cos, fX))

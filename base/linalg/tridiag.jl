@@ -113,19 +113,22 @@ end
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
+function copyto!(dest::SymTridiagonal, bc::Broadcasted{PromoteToSparse})
+    axs = axes(dest)
+    axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
+    for i in axs[1]
+        dest.dv[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
+    end
+    for i = 1:size(dest, 1)-1
+        dest.ev[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
+    end
+    dest
+end
+
 #Elementary operations
-broadcast(::typeof(abs), M::SymTridiagonal) = SymTridiagonal(abs.(M.dv), abs.(M.ev))
-broadcast(::typeof(round), M::SymTridiagonal) = SymTridiagonal(round.(M.dv), round.(M.ev))
-broadcast(::typeof(trunc), M::SymTridiagonal) = SymTridiagonal(trunc.(M.dv), trunc.(M.ev))
-broadcast(::typeof(floor), M::SymTridiagonal) = SymTridiagonal(floor.(M.dv), floor.(M.ev))
-broadcast(::typeof(ceil), M::SymTridiagonal) = SymTridiagonal(ceil.(M.dv), ceil.(M.ev))
 for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
 end
-broadcast(::typeof(round), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(round.(T, M.dv), round.(T, M.ev))
-broadcast(::typeof(trunc), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(trunc.(T, M.dv), trunc.(T, M.ev))
-broadcast(::typeof(floor), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(floor.(T, M.dv), floor.(T, M.ev))
-broadcast(::typeof(ceil), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(ceil.(T, M.dv), ceil.(T, M.ev))
 
 transpose(M::SymTridiagonal) = M #Identity operation
 adjoint(M::SymTridiagonal) = conj(M)
@@ -500,24 +503,11 @@ similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spz
 copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
 
 #Elementary operations
-broadcast(::typeof(abs), M::Tridiagonal) = Tridiagonal(abs.(M.dl), abs.(M.d), abs.(M.du))
-broadcast(::typeof(round), M::Tridiagonal) = Tridiagonal(round.(M.dl), round.(M.d), round.(M.du))
-broadcast(::typeof(trunc), M::Tridiagonal) = Tridiagonal(trunc.(M.dl), trunc.(M.d), trunc.(M.du))
-broadcast(::typeof(floor), M::Tridiagonal) = Tridiagonal(floor.(M.dl), floor.(M.d), floor.(M.du))
-broadcast(::typeof(ceil), M::Tridiagonal) = Tridiagonal(ceil.(M.dl), ceil.(M.d), ceil.(M.du))
 for func in (:conj, :copy, :real, :imag)
     @eval function ($func)(M::Tridiagonal)
         Tridiagonal(($func)(M.dl), ($func)(M.d), ($func)(M.du))
     end
 end
-broadcast(::typeof(round), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
-    Tridiagonal(round.(T, M.dl), round.(T, M.d), round.(T, M.du))
-broadcast(::typeof(trunc), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
-    Tridiagonal(trunc.(T, M.dl), trunc.(T, M.d), trunc.(T, M.du))
-broadcast(::typeof(floor), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
-    Tridiagonal(floor.(T, M.dl), floor.(T, M.d), floor.(T, M.du))
-broadcast(::typeof(ceil), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
-    Tridiagonal(ceil.(T, M.dl), ceil.(T, M.d), ceil.(T, M.du))
 
 transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 adjoint(M::Tridiagonal) = conj(transpose(M))
@@ -574,6 +564,19 @@ end
 ## structured matrix methods ##
 function Base.replace_in_print_matrix(A::Tridiagonal,i::Integer,j::Integer,s::AbstractString)
     i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
+end
+
+function copyto!(dest::Tridiagonal, bc::Broadcasted{PromoteToSparse})
+    axs = axes(dest)
+    axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
+    for i in axs[1]
+        dest.d[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
+    end
+    for i = 1:size(dest, 1)-1
+        dest.du[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
+        dest.dl[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))
+    end
+    dest
 end
 
 #tril and triu

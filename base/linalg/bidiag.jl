@@ -172,7 +172,23 @@ Bidiagonal{T}(A::Bidiagonal) where {T} =
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
 AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 
-broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.uplo)
+function copyto!(dest::Bidiagonal, bc::Broadcasted{PromoteToSparse})
+    axs = axes(dest)
+    axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
+    for i in axs[1]
+        dest.dv[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
+    end
+    if dest.uplo == 'U'
+        for i = 1:size(dest, 1)-1
+            dest.ev[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
+        end
+    else
+        for i = 1:size(dest, 1)-1
+            dest.ev[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))
+        end
+    end
+    dest
+end
 
 # For B<:Bidiagonal, similar(B[, neweltype]) should yield a Bidiagonal matrix.
 # On the other hand, similar(B, [neweltype,] shape...) should yield a sparse matrix.
@@ -234,18 +250,9 @@ function size(M::Bidiagonal, d::Integer)
 end
 
 #Elementary operations
-broadcast(::typeof(abs), M::Bidiagonal) = Bidiagonal(abs.(M.dv), abs.(M.ev), M.uplo)
-broadcast(::typeof(round), M::Bidiagonal) = Bidiagonal(round.(M.dv), round.(M.ev), M.uplo)
-broadcast(::typeof(trunc), M::Bidiagonal) = Bidiagonal(trunc.(M.dv), trunc.(M.ev), M.uplo)
-broadcast(::typeof(floor), M::Bidiagonal) = Bidiagonal(floor.(M.dv), floor.(M.ev), M.uplo)
-broadcast(::typeof(ceil), M::Bidiagonal) = Bidiagonal(ceil.(M.dv), ceil.(M.ev), M.uplo)
 for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::Bidiagonal) = Bidiagonal(($func)(M.dv), ($func)(M.ev), M.uplo)
 end
-broadcast(::typeof(round), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(round.(T, M.dv), round.(T, M.ev), M.uplo)
-broadcast(::typeof(trunc), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(trunc.(T, M.dv), trunc.(T, M.ev), M.uplo)
-broadcast(::typeof(floor), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(floor.(T, M.dv), floor.(T, M.ev), M.uplo)
-broadcast(::typeof(ceil), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(ceil.(T, M.dv), ceil.(T, M.ev), M.uplo)
 
 transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, M.uplo == 'U' ? :L : :U)
 adjoint(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), M.uplo == 'U' ? :L : :U)

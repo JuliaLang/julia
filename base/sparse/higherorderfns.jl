@@ -9,7 +9,7 @@ import Base: map, map!, broadcast, copy, copyto!
 using Base: TupleLL, TupleLLEnd, front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
                       AbstractSparseMatrix, AbstractSparseArray, indtype, nnz, nzrange
-using Base.Broadcast: BroadcastStyle, Broadcasted, flatten
+using Base.Broadcast: BroadcastStyle, Broadcasted, PromoteToSparse, Args1, Args2, flatten
 
 # This module is organized as follows:
 # (0) Define BroadcastStyle rules and convenience types for dispatch
@@ -54,7 +54,6 @@ SparseMatStyle(::Val{N}) where N = Broadcast.DefaultArrayStyle{N}()
 
 Broadcast.BroadcastStyle(::SparseMatStyle, ::SparseVecStyle) = SparseMatStyle()
 
-struct PromoteToSparse <: Broadcast.AbstractArrayStyle{2} end
 StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}
 Broadcast.BroadcastStyle(::Type{<:StructuredMatrix}) = PromoteToSparse()
 
@@ -969,6 +968,7 @@ function _copy(::Any, bc::Broadcasted{<:SPVM})
     parevalf, passedargstup = capturescalars(bcf.f, args)
     return broadcast(parevalf, passedargstup...)
 end
+
 function _shapecheckbc(bc::Broadcasted)
     args = Tuple(bc.args)
     _aresameshape(bc.args) ? _noshapecheck_map(bc.f, args...) : _diffshape_broadcast(bc.f, args...)
@@ -1044,10 +1044,22 @@ broadcast(f::Tf, A::SparseMatrixCSC, ::Type{T}) where {Tf,T} = broadcast(x -> f(
 # and rebroadcast. otherwise, divert to generic AbstractArray broadcast code.
 
 function copy(bc::Broadcasted{PromoteToSparse})
+    if bc.args isa Args1{<:StructuredMatrix} || bc.args isa Args2{<:Type,<:StructuredMatrix}
+        if _iszero(fzero(bc.f, bc.args))
+            T = Broadcast.combine_eltypes(bc.f, bc.args)
+            M = get_matrix(bc.args)
+            dest = similar(M, T)
+            return copyto!(dest, bc)
+        end
+    end
     bcf = flatten(bc)
     As = Tuple(bcf.args)
     broadcast(bcf.f, map(_sparsifystructured, As)...)
 end
+get_matrix(args::Args1{<:StructuredMatrix}) = args.head
+get_matrix(args::Args2{<:Type,<:StructuredMatrix}) = args.rest.head
+fzero(f::Tf, args::Args1{<:StructuredMatrix}) where Tf = f(zero(eltype(get_matrix(args))))
+fzero(f::Tf, args::Args2{<:Type, <:StructuredMatrix}) where Tf = f(args.head, zero(eltype(get_matrix(args))))
 
 function copyto!(dest::SparseVecOrMat, bc::Broadcasted{PromoteToSparse})
     bcf = flatten(bc)
