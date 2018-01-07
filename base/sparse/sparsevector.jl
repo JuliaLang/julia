@@ -188,7 +188,7 @@ function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, combine::Fun
             len = i
         end
     end
-    _sparsevector!(collect(I), collect(V), len, combine)
+    _sparsevector!(Vector(I), Vector(V), len, combine)
 end
 
 function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, len::Integer, combine::Function)
@@ -197,7 +197,7 @@ function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, len::Integer
     for i in I
         1 <= i <= len || throw(ArgumentError("An index is out of bound."))
     end
-    _sparsevector!(collect(I), collect(V), len, combine)
+    _sparsevector!(Vector(I), Vector(V), len, combine)
 end
 
 sparsevec(I::AbstractVector, V::Union{Number, AbstractVector}, args...) =
@@ -849,8 +849,8 @@ function SparseMatrixCSC{Tv,Ti}(x::AbstractSparseVector) where {Tv,Ti}
     colptr = Ti[1, m+1]
     # Note that this *cannot* share data like normal array conversions, since
     # modifying one would put the other in an inconsistent state
-    rowval = collect(Ti, xnzind)
-    nzval = collect(Tv, xnzval)
+    rowval = Vector{Ti}(xnzind)
+    nzval = Vector{Tv}(xnzval)
     SparseMatrixCSC(n, 1, colptr, rowval, nzval)
 end
 
@@ -1934,7 +1934,7 @@ function sort(x::SparseVector{Tv,Ti}; kws...) where {Tv,Ti}
     sinds = sortperm(allvals;kws...)
     n,k = length(x),length(allvals)
     z = findfirst(equalto(k),sinds)
-    newnzind = collect(Ti,1:k-1)
+    newnzind = Vector{Ti}(1:k-1)
     newnzind[z:end] .+= n-k+1
     newnzvals = allvals[deleteat!(sinds[1:k],z)]
     SparseVector(n,newnzind,newnzvals)

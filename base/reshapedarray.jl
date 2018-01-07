@@ -52,7 +52,7 @@ the specified dimensions is equal to the length of the original array
 `A`. The total number of elements must not change.
 
 ```jldoctest
-julia> A = collect(1:16)
+julia> A = Vector(1:16)
 16-element Array{Int64,1}:
   1
   2

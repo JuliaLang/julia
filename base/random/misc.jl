@@ -158,7 +158,7 @@ optionally supplying the random-number generator `rng`.
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> shuffle!(rng, collect(1:16))
+julia> shuffle!(rng, Vector(1:16))
 16-element Array{Int64,1}:
   2
  15
@@ -204,7 +204,7 @@ indices, see [`randperm`](@ref).
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> shuffle(rng, collect(1:10))
+julia> shuffle(rng, Vector(1:10))
 10-element Array{Int64,1}:
   6
   1

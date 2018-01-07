@@ -31,7 +31,7 @@ module IteratorsMD
 
     # Examples
     ```jldoctest
-    julia> A = reshape(collect(1:16), (2, 2, 2, 2))
+    julia> A = reshape(Vector(1:16), (2, 2, 2, 2))
     2×2×2×2 Array{Int64,4}:
     [:, :, 1, 1] =
      1  3
@@ -1306,7 +1306,7 @@ arrays have overlapping indices, then on the domain of the overlap
 
 # Examples
 ```julia-repl
-julia> src = reshape(collect(1:16), (4,4))
+julia> src = reshape(Vector(1:16), (4,4))
 4×4 Array{Int64,2}:
  1  5   9  13
  2  6  10  14
@@ -1706,7 +1706,7 @@ Return unique regions of `A` along dimension `dim`.
 
 # Examples
 ```jldoctest
-julia> A = map(isodd, reshape(collect(1:8), (2,2,2)))
+julia> A = map(isodd, reshape(Vector(1:8), (2,2,2)))
 2×2×2 Array{Bool,3}:
 [:, :, 1] =
   true   true
@@ -1816,7 +1816,7 @@ Compute the minimum and maximum elements of an array over the given dimensions.
 
 # Examples
 ```jldoctest
-julia> A = reshape(collect(1:2:16), (2,2,2))
+julia> A = reshape(Vector(1:2:16), (2,2,2))
 2×2×2 Array{Int64,3}:
 [:, :, 1] =
  1  5
