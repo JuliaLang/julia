@@ -261,9 +261,9 @@ function symdiff!(s::AbstractSet, itr)
     s
 end
 
+==(l::AbstractSet, r::AbstractSet) = length(l) == length(r) && l ⊆ r
 # convenience functions for AbstractSet
-# (if needed, only their synonyms issetequal, ⊊ and ⊆ must be specialized)
-==(l::AbstractSet, r::AbstractSet) = issetequal(l, r)
+# (if needed, only their synonyms ⊊ and ⊆ must be specialized)
 <( l::AbstractSet, r::AbstractSet) = l ⊊ r
 <=(l::AbstractSet, r::AbstractSet) = l ⊆ r
 
@@ -284,7 +284,7 @@ julia> issubset([1, 2, 3], [1, 2])
 false
 ```
 """
-function ⊆(l, r)
+function issubset(l, r)
     for elt in l
         if !in(elt, r)
             return false
@@ -295,7 +295,7 @@ end
 # use the implementation below when it becoms as efficient
 # issubset(l, r) = all(_in(r), l)
 
-const issubset = ⊆
+const ⊆ = issubset
 
 """
     issetequal(a, b)
@@ -313,6 +313,7 @@ true
 ```
 """
 issetequal(l, r) = length(l) == length(r) && l ⊆ r
+issetequal(l::AbstractSet, r::AbstractSet) = l == r
 
 ⊊(l, r) = length(l) < length(r) && l ⊆ r
 ⊈(l, r) = !⊆(l, r)

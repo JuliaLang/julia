@@ -326,7 +326,7 @@ function _check0(a::Vector{UInt64}, b::Int, e::Int)
     true
 end
 
-function issetequal(s1::BitSet, s2::BitSet)
+function ==(s1::BitSet, s2::BitSet)
     # Swap so s1 has always the smallest offset
     if s1.offset > s2.offset
         s1, s2 = s2, s1
@@ -356,7 +356,7 @@ function issetequal(s1::BitSet, s2::BitSet)
     return true
 end
 
-⊆(a::BitSet, b::BitSet) = a == intersect(a,b)
+issubset(a::BitSet, b::BitSet) = a == intersect(a,b)
 ⊊(a::BitSet, b::BitSet) = a <= b && a != b
 
 
