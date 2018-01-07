@@ -12,14 +12,14 @@ macro kw_str(text) Keyword(Symbol(text)) end
 
     https://docs.julialang.org/
 
-as well many great tutorials and learning resources:
+as well as many great tutorials and learning resources:
 
     https://julialang.org/learning/
 
 For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 """
-kw"help", kw"?", kw"julia"
+kw"help", kw"?", kw"julia", kw""
 
 """
     using
