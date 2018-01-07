@@ -207,6 +207,12 @@ let s = "Pkg.add(\"lol"
     @test res == false
 end
 
+# inexistent completion inside a cmd
+let s = "run(`lol"
+    c, r, res = test_complete(s)
+    @test res == false
+end
+
 # test latex symbol completions
 let s = "\\alpha"
     c, r = test_bslashcomplete(s)
@@ -888,3 +894,4 @@ test_dict_completion("test_repl_comp_customdict")
     c, r, res = test_complete("CompletionFoo.tϵsτc")
     @test "tϵsτcmδ`" in c
 end
+
