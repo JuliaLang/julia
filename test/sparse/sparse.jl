@@ -867,7 +867,7 @@ end
     @test nnz(A) == 13
     @test count(!iszero, A) == 3
     @test A[lininds] == A[X] == zeros(Int, 10)
-    c = collect(11:20); c[1] = c[3] = 0
+    c = Vector(11:20); c[1] = c[3] = 0
     A[lininds] = c
     @test nnz(A) == 13
     @test count(!iszero, A) == 11
@@ -1707,8 +1707,8 @@ end
 end
 
 @testset "issue #13008" begin
-    @test_throws ArgumentError sparse(collect(1:100), collect(1:100), fill(5,100), 5, 5)
-    @test_throws ArgumentError sparse(Int[], collect(1:5), collect(1:5))
+    @test_throws ArgumentError sparse(Vector(1:100), Vector(1:100), fill(5,100), 5, 5)
+    @test_throws ArgumentError sparse(Int[], Vector(1:5), Vector(1:5))
 end
 
 @testset "issue #13024" begin
@@ -1864,7 +1864,7 @@ end
 # are called. (Issue #18705.) EDIT: #19239 unified broadcast over a single sparse matrix,
 # eliminating the former operation classes.
 @testset "issue #18705" begin
-    S = sparse(Diagonal(collect(1.0:5.0)))
+    S = sparse(Diagonal(Vector(1.0:5.0)))
     @test isa(sin.(S), SparseMatrixCSC)
 end
 
@@ -1906,7 +1906,7 @@ end
 # Check that `broadcast` methods specialized for unary operations over
 # `SparseMatrixCSC`s determine a reasonable return type.
 @testset "issue #18974" begin
-    S = sparse(Diagonal(collect(Int64(1):Int64(4))))
+    S = sparse(Diagonal(Vector(Int64(1):Int64(4))))
     @test eltype(sin.(S)) == Float64
 end
 

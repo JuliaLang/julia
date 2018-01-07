@@ -157,7 +157,7 @@ end
             @test CartesianIndices(0:3,3:5,-101:-100)[l] == CartesianIndex(i-1, j+2, k-102)
         end
 
-        local A = reshape(collect(1:9), (3,3))
+        local A = reshape(Vector(1:9), (3,3))
         @test CartesianIndices(size(A))[6] == CartesianIndex(3,2)
         @test LinearIndices(size(A))[3, 2] == 6
         @test CartesianIndices(A)[6] == CartesianIndex(3,2)
@@ -256,7 +256,7 @@ Base.setindex!(A::TSlow{T,5}, v, i1::Int, i2::Int, i3::Int, i4::Int, i5::Int) wh
 const can_inline = Base.JLOptions().can_inline != 0
 function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     N = prod(shape)
-    A = reshape(collect(1:N), shape)
+    A = reshape(Vector(1:N), shape)
     B = T(A)
     @test A == B
     # Test indexing up to 5 dimensions
@@ -379,7 +379,7 @@ end
 function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @testset "test_vector_indexing{$(T)}" begin
         N = prod(shape)
-        A = reshape(collect(1:N), shape)
+        A = reshape(Vector(1:N), shape)
         B = T(A)
         trailing5 = CartesianIndex(ntuple(x->1, max(ndims(B)-5, 0)))
         trailing4 = CartesianIndex(ntuple(x->1, max(ndims(B)-4, 0)))
@@ -425,7 +425,7 @@ end
 
 function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     N = prod(shape)
-    A = reshape(collect(1:N), shape)
+    A = reshape(Vector(1:N), shape)
     B = T(A)
 
     # last(a)
@@ -489,7 +489,7 @@ mutable struct UnimplementedArray{T, N} <: AbstractArray{T, N} end
 
 function test_getindex_internals(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     N = prod(shape)
-    A = reshape(collect(1:N), shape)
+    A = reshape(Vector(1:N), shape)
     B = T(A)
 
     @test getindex(A, 1) == 1
@@ -509,7 +509,7 @@ end
 
 function test_setindex!_internals(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     N = prod(shape)
-    A = reshape(collect(1:N), shape)
+    A = reshape(Vector(1:N), shape)
     B = T(A)
 
     Base.unsafe_setindex!(B, 2, 1)
@@ -610,7 +610,7 @@ function test_ind2sub(::Type{TestAbstractArray})
     n = rand(2:5)
     dims = tuple(rand(1:5, n)...)
     len = prod(dims)
-    A = reshape(collect(1:len), dims...)
+    A = reshape(Vector(1:len), dims...)
     I = CartesianIndices(dims)
     for i in 1:len
         @test A[I[i]] == A[i]
@@ -791,7 +791,7 @@ for A in (rand(2), rand(2,3))
     for (i, v) in pairs(A)
         @test A[i] == v
     end
-    @test collect(values(A)) == collect(A)
+    @test Array(values(A)) == Array(A)
 end
 
 # nextind
@@ -807,7 +807,7 @@ end
 
 @testset "zero-dimensional copy" begin
     Z = Array{Int,0}(uninitialized); Z[] = 17
-    @test Z == collect(Z) == copy(Z)
+    @test Z == Array(Z) == copy(Z)
 end
 
 @testset "empty" begin

@@ -486,12 +486,12 @@ end
 # issue #15168
 let A = rand(10), sA = view(copy(A), :)
     @test sA[Int16(1)] === sA[Int32(1)] === sA[Int64(1)] === A[1]
-    permute!(sA, collect(Int16, 1:10))
+    permute!(sA, Vector{Int16}(1:10))
     @test A == sA
 end
 
 # the following segfaults with LLVM 3.8 on Windows, ref #15417
-@test collect(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6:6, :), 1:2:5, :, 1:2:5)) ==
+@test Array(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6:6, :), 1:2:5, :, 1:2:5)) ==
     cat(3,[68,70,72],[406,408,410],[744,746,748])
 
 # tests @view (and replace_ref_end!)

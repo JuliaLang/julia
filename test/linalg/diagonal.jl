@@ -117,7 +117,7 @@ srand(1)
                 b = sparse(b)
                 @test ldiv!(D, copy(b)) ≈ Array(D)\Array(b)
                 @test_throws SingularException ldiv!(Diagonal(zeros(elty, n)), copy(b))
-                b = view(rand(elty, n), collect(1:n))
+                b = view(rand(elty, n), Vector(1:n))
                 b2 = copy(b)
                 c = ldiv!(D, b)
                 d = Array(D)\b2
@@ -126,7 +126,7 @@ srand(1)
                 b = rand(elty, n+1, n+1)
                 b = sparse(b)
                 @test_throws DimensionMismatch ldiv!(D, copy(b))
-                b = view(rand(elty, n+1), collect(1:n+1))
+                b = view(rand(elty, n+1), Vector(1:n+1))
                 @test_throws DimensionMismatch ldiv!(D, b)
             end
         end

@@ -483,9 +483,9 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test randsubseq(mta,1:10,0.4) == randsubseq(mtb,1:10,0.4)
     @test randsubseq!(mta,Int[],1:10,0.4) == randsubseq!(mtb,Int[],1:10,0.4)
 
-    @test shuffle(mta,collect(1:10)) == shuffle(mtb,collect(1:10))
-    @test shuffle!(mta,collect(1:10)) == shuffle!(mtb,collect(1:10))
-    @test shuffle(mta,collect(2:11)) == shuffle(mtb,2:11)
+    @test shuffle(mta,Vector(1:10)) == shuffle(mtb,Vector(1:10))
+    @test shuffle!(mta,Vector(1:10)) == shuffle!(mtb,Vector(1:10))
+    @test shuffle(mta,Vector(2:11)) == shuffle(mtb,2:11)
     @test shuffle!(mta, rand(mta, 2, 3)) == shuffle!(mtb, rand(mtb, 2, 3))
     @test shuffle(mta, rand(mta, 2, 3)) == shuffle(mtb, rand(mtb, 2, 3))
 

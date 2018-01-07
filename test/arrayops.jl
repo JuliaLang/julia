@@ -94,7 +94,7 @@ using Main.TestHelpers.OAs
     @test Vector(a) !== a
 end
 @testset "reshaping SubArrays" begin
-    a = collect(reshape(1:5, 1, 5))
+    a = Array(reshape(1:5, 1, 5))
     @testset "linearfast" begin
         s = view(a, :, 2:4)
         r = reshape(s, (length(s),))
@@ -195,7 +195,7 @@ end
 end
 
 @testset "operations with IndexLinear ReshapedArray" begin
-    b = collect(1:12)
+    b = Vector(1:12)
     a = Base.ReshapedArray(b, (4,3), ())
     @test a[3,2] == 7
     @test a[6] == 6
@@ -276,8 +276,8 @@ end
     @test find(occursin(Int[]), a) == Int[]
     @test find(occursin(a), Int[]) == Int[]
 
-    a = collect(1:3:15)
-    b = collect(2:4:10)
+    a = Vector(1:3:15)
+    b = Vector(2:4:10)
     @test find(occursin(b), a) == [4]
     @test find(occursin(b), [a[1:4]; a[4:end]]) == [4,5]
 
@@ -468,7 +468,7 @@ end
     @test find(c -> c == 'l', s) == [3]
     g = Base.Unicode.graphemes("日本語")
     @test find(isascii, g) == Int[]
-    @test find(!iszero, (i % 2 for i in 1:10)) == collect(1:2:9)
+    @test find(!iszero, (i % 2 for i in 1:10)) == Vector(1:2:9)
 end
 @testset "findn" begin
     b = findn(fill(1,2,2,2,2))
@@ -570,7 +570,7 @@ end
     @test pointer(cp) == pointer(c)
     @test_throws ArgumentError pointer(cp, 2)
     @test strides(cp) == (9,3,1)
-    ap = PermutedDimsArray(collect(a), (2,1,3))
+    ap = PermutedDimsArray(Array(a), (2,1,3))
     @test strides(ap) == (3,1,12)
 
     for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
@@ -1137,7 +1137,7 @@ end
 
 @testset "filter!" begin
     # base case w/ Vector
-    a = collect(1:10)
+    a = Vector(1:10)
     filter!(x -> x > 5, a)
     @test a == 6:10
 
@@ -1153,9 +1153,9 @@ end
     @test isempty(ea)
 
     # non-1-indexed array
-    oa = OffsetArray(collect(1:10), -5)
+    oa = OffsetArray(Vector(1:10), -5)
     filter!(x -> x > 5, oa)
-    @test oa == OffsetArray(collect(6:10), -5)
+    @test oa == OffsetArray(Vector(6:10), -5)
 
     # empty non-1-indexed array
     eoa = OffsetArray([], -5)
@@ -1227,7 +1227,7 @@ end
     A14 = [11 13; 12 14]
     R = CartesianIndices(axes(A14))
     @test [a for (a,b) in pairs(IndexLinear(),    A14)] == [1,2,3,4]
-    @test [a for (a,b) in pairs(IndexCartesian(), A14)] == vec(collect(R))
+    @test [a for (a,b) in pairs(IndexCartesian(), A14)] == vec(Array(R))
     @test [b for (a,b) in pairs(IndexLinear(),    A14)] == [11,12,13,14]
     @test [b for (a,b) in pairs(IndexCartesian(), A14)] == [11,12,13,14]
 end
@@ -1591,7 +1591,7 @@ end
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
     @test eltype(CartesianIndices{2}) <: CartesianIndex{2}
-    indices = collect(R)
+    indices = Array(R)
     @test indices[1] == CartesianIndex{2}(2,3)
     @test indices[2] == CartesianIndex{2}(3,3)
     @test indices[4] == CartesianIndex{2}(5,3)
@@ -1631,7 +1631,7 @@ end
     val, state = next(itr, state)
     @test done(itr, state)
     @test r[val] == 3
-    r = sparse(collect(2:3:8))
+    r = sparse(Vector(2:3:8))
     itr = eachindex(r)
     state = start(itr)
     @test !done(itr, state)
@@ -1770,7 +1770,7 @@ end
 @test (1:5) + (1.5:5.5) == 2.5:2.0:10.5
 
 @testset "slicedim" begin
-    for A in (reshape(collect(1:20), 4, 5),
+    for A in (reshape(Vector(1:20), 4, 5),
               reshape(1:20, 4, 5))
         local A
         @test slicedim(A, 1, 2) == 2:4:20
@@ -1778,7 +1778,7 @@ end
         @test_throws ArgumentError slicedim(A,0,1)
         @test slicedim(A, 3, 1) == A
         @test_throws BoundsError slicedim(A, 3, 2)
-        @test @inferred(slicedim(A, 1, 2:2)) == collect(2:4:20)'
+        @test @inferred(slicedim(A, 1, 2:2)) == Vector(2:4:20)'
     end
 end
 

@@ -57,7 +57,7 @@ function sparse_getindex_perf()
     intinds = nothing
     logicalinds = nothing # needs to be generated for a specific matrix size.
     rangeinds = 121:237
-    orderedinds = collect(rangeinds)
+    orderedinds = Vector(rangeinds)
     disorderedinds = orderedinds[randperm(length(orderedinds))]
 
     inds = [(intinds, "integers"), (logicalinds, "logical array"), (rangeinds, "a range"),

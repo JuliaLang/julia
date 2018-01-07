@@ -1083,7 +1083,7 @@ sv[1] = 0
     # Compare stored zero semantics between SparseVector and SparseMatrixCSC
     let S = SparseMatrixCSC(10,1,[1,6],[1,3,5,6,7],[0,1,2,0,3]), x = SparseVector(10,[1,3,5,6,7],[0,1,2,0,3])
         @test nnz(S) == nnz(x) == 5
-        for I = (:, 1:10, collect(1:10))
+        for I = (:, 1:10, Vector(1:10))
             @test S[I,1] == S[I] == x[I] == x
             @test nnz(S[I,1]) == nnz(S[I]) == nnz(x[I]) == nnz(x)
         end
@@ -1112,19 +1112,19 @@ end
 @testset "Issue 14589" begin
     # test vectors with no zero elements
     let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
-        @test collect(sort(x)) == sort(collect(x))
+        @test Vector(sort(x)) == sort(Vector(x))
     end
     # test vectors with all zero elements
     let x = sparsevec(Int64[], Float64[], 7)
-        @test collect(sort(x)) == sort(collect(x))
+        @test Vector(sort(x)) == sort(Vector(x))
     end
     # test vector with sparsity approx 1/2
     let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
-        @test collect(sort(x)) == sort(collect(x))
+        @test Vector(sort(x)) == sort(Vector(x))
         # apply three distinct tranformations where zeros sort into start/middle/end
-        @test collect(sort(x, by=abs)) == sort(collect(x), by=abs)
-        @test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
-        @test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
+        @test Vector(sort(x, by=abs)) == sort(Vector(x), by=abs)
+        @test Vector(sort(x, by=sign)) == sort(Vector(x), by=sign)
+        @test Vector(sort(x, by=inv)) == sort(Vector(x), by=inv)
     end
 end
 @testset "fill!" begin

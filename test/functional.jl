@@ -111,7 +111,7 @@ let gen = (x for x in 1:10)
 end
 
 let gen = (x * y for x in 1:10, y in 1:10)
-    @test collect(gen) == collect(1:10) .* collect(1:10)'
+    @test collect(gen) == Vector(1:10) .* Vector(1:10)'
     @test first(gen) == 1
     @test collect(gen)[1:10] == 1:10
 end
