@@ -51,7 +51,7 @@ function launch(manager::TopoTestManager, params::Dict, launched::Array, c::Cond
         wconfig.process = io
         wconfig.io = io.out
         wconfig.ident = i
-        wconfig.connect_idents = collect(i+2:2:manager.np)
+        wconfig.connect_idents = Vector(i+2:2:manager.np)
         push!(launched, wconfig)
     end
 
