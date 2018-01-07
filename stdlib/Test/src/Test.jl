@@ -130,6 +130,10 @@ mutable struct Error <: Result
     source::LineNumberNode
 end
 function Base.show(io::IO, t::Error)
+    if t.test_type == :test_interrupted
+        print_with_color(Base.error_color(), io, "Interrupted")
+        return
+    end
     print_with_color(Base.error_color(), io, "Error During Test"; bold = true)
     print(io, " at ")
     print_with_color(:default, io, t.source.file, ":", t.source.line, "\n"; bold = true)
@@ -666,13 +670,16 @@ record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 function record(ts::DefaultTestSet, t::Union{Fail, Error})
     if myid() == 1
         print_with_color(:white, ts.description, ": ")
-        print(t)
-        # don't print the backtrace for Errors because it gets printed in the show
-        # method
-        if !isa(t, Error)
-            Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
+        # don't print for interrupted tests
+        if !(t isa Error) || t.test_type != :test_interrupted
+            print(t)
+            # don't print the backtrace for Errors because it gets printed in the show
+            # method
+            if !isa(t, Error)
+                Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
+            end
+            println()
         end
-        println()
     end
     push!(ts.results, t)
     t, isa(t, Error) || backtrace()

@@ -92,62 +92,101 @@ cd(dirname(@__FILE__)) do
         end
     end
 
-    @sync begin
-        for p in workers()
-            @async begin
-                while length(tests) > 0
-                    test = popfirst!(tests)
-                    local resp
-                    wrkr = p
-                    try
-                        resp = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
-                    catch e
-                        resp = [e]
-                    end
-                    push!(results, (test, resp))
-                    if resp[1] isa Exception
-                        if exit_on_error
-                            skipped = length(tests)
-                            empty!(tests)
-                        end
-                    elseif resp[end] > max_worker_rss
-                        if n > 1
-                            rmprocs(wrkr, waitfor=30)
-                            p = addprocs_with_testenv(1)[1]
-                            remotecall_fetch(include, p, "testdefs.jl")
-                        else # single process testing
-                            error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
-                        end
-                    end
+    all_tests = [tests; node1_tests]
 
-                    !isa(resp[1], Exception) && print_testworker_stats(test, wrkr, resp)
-                end
-                if p != 1
-                    # Free up memory =)
-                    rmprocs(p, waitfor=30)
+    local stdin_monitor
+    all_tasks = Task[]
+    try
+        if isa(STDIN, Base.TTY)
+            t = current_task()
+            # Monitor STDIN and kill this task on ^C
+            stdin_monitor = @async begin
+                term = Base.Terminals.TTYTerminal("xterm", STDIN, STDOUT, STDERR)
+                try
+                    Base.Terminals.raw!(term, true)
+                    while true
+                        if read(term, Char) == '\x3'
+                            Base.throwto(t, InterruptException())
+                            break
+                        end
+                    end
+                catch e
+                    isa(e, InterruptException) || rethrow(e)
+                finally
+                    Base.Terminals.raw!(term, false)
                 end
             end
         end
+        @sync begin
+            for p in workers()
+                @async begin
+                    push!(all_tasks, current_task())
+                    while length(tests) > 0
+                        test = popfirst!(tests)
+                        local resp
+                        wrkr = p
+                        try
+                            resp = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
+                        catch e
+                            isa(e, InterruptException) && return
+                            resp = [e]
+                        end
+                        push!(results, (test, resp))
+                        if resp[1] isa Exception
+                            if exit_on_error
+                                skipped = length(tests)
+                                empty!(tests)
+                            end
+                        elseif resp[end] > max_worker_rss
+                            if n > 1
+                                rmprocs(wrkr, waitfor=30)
+                                p = addprocs_with_testenv(1)[1]
+                                remotecall_fetch(include, p, "testdefs.jl")
+                            else # single process testing
+                                error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
+                            end
+                        end
+
+                        !isa(resp[1], Exception) && print_testworker_stats(test, wrkr, resp)
+                    end
+                    if p != 1
+                        # Free up memory =)
+                        rmprocs(p, waitfor=30)
+                    end
+                end
+            end
+        end
+
+        n > 1 && length(node1_tests) > 1 && print("\nExecuting tests that run on node 1 only:\n")
+        for t in node1_tests
+            # As above, try to run each test
+            # which must run on node 1. If
+            # the test fails, catch the error,
+            # and either way, append the results
+            # to the overall aggregator
+            isolate = true
+            t == "SharedArrays" && (isolate = false)
+            local resp
+            try
+                resp = eval(Expr(:call, () -> runtests(t, test_path(t), isolate, seed=seed))) # runtests is defined by the include above
+                print_testworker_stats(t, 1, resp)
+            catch e
+                resp = [e]
+            end
+            push!(results, (t, resp))
+        end
+    catch e
+        isa(e, InterruptException) || rethrow(e)
+        # If the test suite was merely interrupted, still print the
+        # summary, which can be useful to diagnose what's going on
+        foreach(task->try; schedule(task, InterruptException(); error=true); end, all_tasks)
+        foreach(wait, all_tasks)
+    finally
+        if isa(STDIN, Base.TTY)
+            schedule(stdin_monitor, InterruptException(); error=true)
+        end
     end
 
-    n > 1 && length(node1_tests) > 1 && print("\nExecuting tests that run on node 1 only:\n")
-    for t in node1_tests
-        # As above, try to run each test
-        # which must run on node 1. If
-        # the test fails, catch the error,
-        # and either way, append the results
-        # to the overall aggregator
-        isolate = true
-        t == "SharedArrays" && (isolate = false)
-        local resp
-        try
-            resp = eval(Expr(:call, () -> runtests(t, test_path(t), isolate, seed=seed))) # runtests is defined by the include above
-            print_testworker_stats(t, 1, resp)
-        catch e
-            resp = [e]
-        end
-        push!(results, (t, resp))
-    end
     #=
 `   Construct a testset on the master node which will hold results from all the
     test files run on workers and on node1. The loop goes through the results,
@@ -172,7 +211,9 @@ cd(dirname(@__FILE__)) do
     =#
     o_ts = Test.DefaultTestSet("Overall")
     Test.push_testset(o_ts)
+    completed_tests = Set{String}()
     for res in results
+        push!(completed_tests, res[1])
         if isa(res[2][1], Test.DefaultTestSet)
             Test.push_testset(res[2][1])
             Test.record(o_ts, res[2][1])
@@ -217,6 +258,14 @@ cd(dirname(@__FILE__)) do
         else
             error(string("Unknown result type : ", typeof(res)))
         end
+    end
+    for test in all_tests
+        (test in completed_tests) && continue
+        fake = Test.DefaultTestSet(test)
+        Test.record(fake, Test.Error(:test_interrupted, test, InterruptException(), [], LineNumberNode(1)))
+        Test.push_testset(fake)
+        Test.record(o_ts, fake)
+        Test.pop_testset()
     end
     println()
     Test.print_test_results(o_ts,1)
