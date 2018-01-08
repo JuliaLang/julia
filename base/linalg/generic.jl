@@ -823,9 +823,9 @@ function inv(A::AbstractMatrix{T}) where T
     ldiv!(factorize(convert(AbstractMatrix{S}, A)), dest)
 end
 
-pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Real} = _vectorpinv(Transpose, v, tol)
-pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Complex} = _vectorpinv(Adjoint, v, tol)
-pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T} = _vectorpinv(Adjoint, v, tol)
+pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Real} = _vectorpinv(transpose, v, tol)
+pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Complex} = _vectorpinv(adjoint, v, tol)
+pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T} = _vectorpinv(adjoint, v, tol)
 function _vectorpinv(dualfn::Tf, v::AbstractVector{Tv}, tol) where {Tv,Tf}
     res = dualfn(similar(v, typeof(zero(Tv) / (abs2(one(Tv)) + abs2(one(Tv))))))
     den = sum(abs2, v)

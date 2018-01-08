@@ -934,27 +934,27 @@ function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
         return \(qrfact(A), B)
     end
 end
-for xform in (:Adjoint, :Transpose)
+for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
     @eval begin
-        function \(xformA::($xform){<:Any,<:SparseMatrixCSC}, B::AbstractVecOrMat)
+        function \(xformA::($xformtype){<:Any,<:SparseMatrixCSC}, B::AbstractVecOrMat)
             A = xformA.parent
             m, n = size(A)
             if m == n
                 if istril(A)
                     if istriu(A)
-                        return \($xform(Diagonal(Vector(diag(A)))), B)
+                        return \($xformop(Diagonal(Vector(diag(A)))), B)
                     else
-                        return \($xform(LowerTriangular(A)), B)
+                        return \($xformop(LowerTriangular(A)), B)
                     end
                 elseif istriu(A)
-                    return \($xform(UpperTriangular(A)), B)
+                    return \($xformop(UpperTriangular(A)), B)
                 end
                 if ishermitian(A)
-                    return \($xform(Hermitian(A)), B)
+                    return \($xformop(Hermitian(A)), B)
                 end
-                return \($xform(lufact(A)), B)
+                return \($xformop(lufact(A)), B)
             else
-                return \($xform(qrfact(A)), B)
+                return \($xformop(qrfact(A)), B)
             end
         end
     end
