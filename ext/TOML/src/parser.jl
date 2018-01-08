@@ -1,6 +1,9 @@
-NONE() = Nullable()
-NONE(::Type{T}) where {T} = Nullable{T}()
-SOME(v::T) where {T} = Nullable{T}(v)
+NONE() = nothing
+NONE(::Type{T}) where {T} = nothing
+SOME(v::T) where {T} = v
+isnull(x) = x === nothing
+get(x) = (@assert !isnull(x); x)
+
 
 "TOML Table"
 mutable struct Table
@@ -90,10 +93,10 @@ end
 
 "Peeks ahead `n` characters"
 function peek(p::Parser) #, i::Int=0
-    eof(p) && return NONE(Char)
+    eof(p) && return nothing
     res = Base.peek(p.input)
-    res == -1 && return NONE(Char)
-    return SOME(Char(res))
+    res == -1 && return nothing
+    return Char(res)
 end
 
 "Returns `true` and consumes the next character if it matches `ch`, otherwise do nothing and return `false`"

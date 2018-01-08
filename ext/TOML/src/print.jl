@@ -17,13 +17,13 @@ function printkey(io::IO, keys::Vector{String})
 end
 
 function printvalue(io::IO, value; sorted=false)
-    if isa(value, Associative)
+    if isa(value, AbstractDict)
         _print(io, value, sorted=sorted)
     elseif isa(value, Array)
         Base.print(io, "[")
         for (i, x) in enumerate(value)
             i != 1 && Base.print(io, ", ")
-            if isa(x, Associative)
+            if isa(x, AbstractDict)
                 _print(io, x, sorted=sorted)
             else
                 printvalue(io, x, sorted=sorted)
@@ -39,7 +39,7 @@ function printvalue(io::IO, value; sorted=false)
     end
 end
 
-function _print(io::IO, a::Associative, ks=String[]; sorted=false)
+function _print(io::IO, a::AbstractDict, ks=String[]; sorted=false)
     akeys = keys(a)
     if sorted
         akeys = sort!(collect(akeys))
@@ -49,9 +49,9 @@ function _print(io::IO, a::Associative, ks=String[]; sorted=false)
     for key in akeys
         value = a[key]
         # skip tables
-        isa(value, Associative) && continue # skip tables
+        isa(value, AbstractDict) && continue # skip tables
         # skip arrays of tabels
-        isa(value, Array) && length(value)>0 && isa(value[1], Associative) && continue
+        isa(value, Array) && length(value)>0 && isa(value[1], AbstractDict) && continue
 
         Base.print(io, repeat("    ", max(0, length(ks)-1)))
         printkey(io, [key])
@@ -64,7 +64,7 @@ function _print(io::IO, a::Associative, ks=String[]; sorted=false)
     indent = repeat("    ", length(ks))
     for key in akeys
         value = a[key]
-        if isa(value, Associative)
+        if isa(value, AbstractDict)
             # print table
             first_block || println(io)
             first_block = false
@@ -75,7 +75,7 @@ function _print(io::IO, a::Associative, ks=String[]; sorted=false)
             Base.print(io,"]\n")
             _print(io, value, ks, sorted=sorted)
             pop!(ks)
-        elseif isa(value, Array) && length(value)>0 && isa(value[1], Associative)
+        elseif isa(value, Array) && length(value)>0 && isa(value[1], AbstractDict)
             # print array of tables
             first_block || println(io)
             first_block = false
@@ -85,7 +85,7 @@ function _print(io::IO, a::Associative, ks=String[]; sorted=false)
                 Base.print(io,"[[")
                 printkey(io, ks)
                 Base.print(io,"]]\n")
-                !isa(v, Associative) && error("array should contain only tables")
+                !isa(v, AbstractDict) && error("array should contain only tables")
                 _print(io, v, ks, sorted=sorted)
             end
             pop!(ks)
@@ -93,5 +93,5 @@ function _print(io::IO, a::Associative, ks=String[]; sorted=false)
     end
 end
 
-print(io::IO, a::Associative; sorted=false) = _print(io, a, sorted=sorted)
-print(a::Associative; sorted=false) = print(STDOUT, a, sorted=sorted)
+print(io::IO, a::AbstractDict; sorted=false) = _print(io, a, sorted=sorted)
+print(a::AbstractDict; sorted=false) = print(STDOUT, a, sorted=sorted)
