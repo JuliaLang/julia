@@ -138,7 +138,7 @@ version_slug(uuid::UUID, sha1::SHA1) = joinpath(slug(uuid), slug(sha1))
 
 ## finding packages ##
 
-const ENVINFO = Symbol("#ENVINFO")
+const uuid_sym = Symbol("#uuid")
 
 const project_names = ["JuliaProject.toml", "Project.toml"]
 const manifest_names = ["JuliaManifest.toml", "Manifest.toml"]
@@ -197,8 +197,8 @@ load_path() = filter(env -> env ≠ nothing, map(find_env, LOAD_PATH))
 
 # find `import name` inside of `into` module
 function find_package(into::Module, name::String)
-    isdefined(into, ENVINFO) || return find_package(name)
-    into_uuid = getfield(into, ENVINFO)::UUID
+    isdefined(into, uuid_sym) || return find_package(name)
+    into_uuid = getfield(into, uuid_sym)::UUID
     into_name = String(module_name(into))
     find_package(into_name => into_uuid, name)
 end
@@ -746,15 +746,15 @@ function require(into::Module, mod::Symbol)
     end
     m = root_module(mod)
     if info isa Tuple
-        envinfo = info[2]
-        if !isdefined(m, ENVINFO)
-            ccall(:jl_set_const, Cvoid, (Any, Any, Any), m, ENVINFO, envinfo)
+        uuid = info[2]
+        if !isdefined(m, uuid_sym)
+            ccall(:jl_set_const, Cvoid, (Any, Any, Any), m, uuid_sym, uuid)
         else
-            envinfo == (oldinfo = getfield(m, ENVINFO)) ||
+            uuid == (uuid′ = getfield(m, uuid_sym)) ||
                 @warn """
-                require($into, $mod) environment info mismatch:
-                 - old = $(oldinfo)
-                 - new = $(envinfo)
+                require($into, $mod) UUID mismatch:
+                 - old = $(uuid′)
+                 - new = $(uuid)
                 """
         end
     end
@@ -869,7 +869,7 @@ function _require(into::Module, mod::Symbol)
         # for unknown dependencies
         if info isa Tuple
             # horrible hack, but since we don't control module creation, ¯\_(ツ)_/¯
-            ccall(:jl_set_global, Cvoid, (Any, Any, Any), __toplevel__, ENVINFO, info[2])
+            ccall(:jl_set_global, Cvoid, (Any, Any, Any), __toplevel__, uuid_sym, info[2])
         end
         try
             Base.include_relative(__toplevel__, path)
@@ -889,7 +889,7 @@ function _require(into::Module, mod::Symbol)
             end
         finally
             if info isa Tuple
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), __toplevel__, ENVINFO, nothing)
+                ccall(:jl_set_global, Cvoid, (Any, Any, Any), __toplevel__, uuid_sym, nothing)
             end
         end
     finally
@@ -983,7 +983,7 @@ evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 function create_expr_cache(
     input::String, output::String,
     concrete_deps::typeof(_concrete_dependencies),
-    envinfo::Union{Nothing,UUID})
+    uuid::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
     code_object = """
         while !eof(STDIN)
@@ -1008,10 +1008,10 @@ function create_expr_cache(
                   empty!(Base._concrete_dependencies)
                   append!(Base._concrete_dependencies, $concrete_deps)
                   Base._track_dependencies[] = true
-                  const $ENVINFO = $envinfo
+                  const $uuid_sym = $uuid
                   # same horrible hack as in _require
                   ccall(:jl_set_global, Cvoid, (Any, Any, Any),
-                        Base.__toplevel__, $(Meta.quot(ENVINFO)), $envinfo)
+                        Base.__toplevel__, $(Meta.quot(uuid_sym)), $uuid)
                   end)
         source = source_path(nothing)
         if source !== nothing
@@ -1069,8 +1069,8 @@ function compilecache(into::Module, name::String)
     else
         @logmsg verbosity "Precompiling module $name"
     end
-    envinfo = info isa Tuple ? info[2] : nothing
-    if success(create_expr_cache(path, cachefile, concrete_deps, envinfo))
+    uuid = info isa Tuple ? info[2] : nothing
+    if success(create_expr_cache(path, cachefile, concrete_deps, uuid))
         # append checksum to the end of the .ji file:
         open(cachefile, "a+") do f
             write(f, hton(_crc32c(seekstart(f))))
