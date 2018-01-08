@@ -94,7 +94,7 @@ function writeLine(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Bool)
         print(buf, CONFIG[:unchecked], " ")
     end
 
-    print(buf, replace(menu.options[idx], "\n", "\\n"))
+    print(buf, replace(menu.options[idx], "\n" => "\\n"))
 end
 
 # d: Done, return from request

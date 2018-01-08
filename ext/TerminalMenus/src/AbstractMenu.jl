@@ -101,7 +101,7 @@ varies based on menu type.
 """
 request(m::AbstractMenu) = request(terminal, m)
 
-function request(term::Base.Terminals.TTYTerminal, m::AbstractMenu)
+function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu)
     cursor = 1
 
     menu_header = header(m)
@@ -212,7 +212,7 @@ Shorthand for `println(msg); request(m)`.
 request(msg::AbstractString, m::AbstractMenu) =
     request(terminal, msg, m)
 
-function request(term::Base.Terminals.TTYTerminal,
+function request(term::REPL.Terminals.TTYTerminal,
                  msg::AbstractString, m::AbstractMenu)
     println(term.out_stream, msg)
     request(term, m)
