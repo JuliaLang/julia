@@ -8,7 +8,6 @@ export
     StackTraces,
     Sys,
     Libc,
-    Libdl,
     LinAlg,
     BLAS,
     LAPACK,

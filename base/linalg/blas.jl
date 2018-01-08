@@ -65,6 +65,8 @@ const liblapack = Base.liblapack_name
 
 import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1, axpy!
 
+import Libdl
+
 # utility routines
 function vendor()
     lib = Libdl.dlopen_e(Base.libblas_name)
