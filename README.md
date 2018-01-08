@@ -222,6 +222,10 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `replace` accepts a pair of pattern and replacement, with the number of replacements as
   a keyword argument ([#25165]).
 
+* `CartesianIndices` and `LinearIndices` types represent cartesian and linear indices of
+  an array (respectively), and indexing such objects allows translating from one kind of index
+  to the other ([#25113]).
+
 ## Renaming
 
 
@@ -431,3 +435,4 @@ includes this fix. Find the minimum version from there.
 [#25162]: https://github.com/JuliaLang/julia/issues/25162
 [#25165]: https://github.com/JuliaLang/julia/issues/25165
 [#25168]: https://github.com/JuliaLang/julia/issues/25168
+[#25113]: https://github.com/JuliaLang/julia/issues/25113

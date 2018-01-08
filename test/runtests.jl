@@ -1076,6 +1076,23 @@ end
 @test replace("abcb", "b"=>"c") == "accc"
 @test replace("abcb", "b"=>"c", count=1) == "accb"
 
+# 0.7.0-DEV.3025
+let c = CartesianIndices(1:3, 1:2), l = LinearIndices(1:3, 1:2)
+    @test LinearIndices(c) == collect(l)
+    @test CartesianIndices(l) == collect(c)
+    @test first(c) == CartesianIndex(1, 1)
+    @test CartesianIndex(1, 1) in c
+    @test first(l) == 1
+    @test size(c) == (3, 2)
+    @test c == collect(c) == [CartesianIndex(1, 1) CartesianIndex(1, 2)
+                              CartesianIndex(2, 1) CartesianIndex(2, 2)
+                              CartesianIndex(3, 1) CartesianIndex(3, 2)]
+    @test l == collect(l) == reshape(1:6, 3, 2)
+    @test c[1:6] == vec(c)
+    @test l == l[c] == map(i -> l[i], c)
+    @test l[vec(c)] == collect(1:6)
+end
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end
