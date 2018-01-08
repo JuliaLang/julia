@@ -1294,12 +1294,7 @@ want to set this to `false`. See [`Base.isambiguous`](@ref).
 function detect_ambiguities(mods...;
                             imported::Bool = false,
                             recursive::Bool = false,
-                            ambiguous_bottom::Bool = false,
-                            allow_bottom::Union{Bool,Nothing} = nothing)
-    if allow_bottom !== nothing
-        Base.depwarn("the `allow_bottom` keyword to detect_ambiguities has been renamed to `ambiguous_bottom`", :detect_ambiguities)
-        ambiguous_bottom = allow_bottom
-    end
+                            ambiguous_bottom::Bool = false)
     function sortdefs(m1, m2)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
