@@ -365,6 +365,15 @@ This section lists changes that do not have deprecation warnings.
   * `findn(x::AbstractVector)` now return a 1-tuple with the vector of indices, to be
     consistent with higher order arrays ([#25365]).
 
+  * the default behavior of `titlecase` is changed in two ways ([#23393]):
+    + characters not starting a word are converted to lowercase;
+      a new keyword argument `strict` is added which
+      allows to get the old behavior when it's `false`.
+    + any non-letter character is considered as a word separator;
+      to get the old behavior (only "space" characters are considered as
+      word separators), use the keyword `wordsep=isspace`.
+
+
 Library improvements
 --------------------
 
@@ -917,6 +926,7 @@ Deprecated or removed
     `empty(::Associative, K, V)` ([#24390]).
 
   * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
+
 
 Command-line option changes
 ---------------------------
