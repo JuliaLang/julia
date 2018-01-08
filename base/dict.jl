@@ -180,8 +180,8 @@ function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
             dest[k] = v
         else
             new = empty(dest,
-                        promote_strict_type(K,typeof(k)),
-                        promote_strict_type(V,typeof(v)))
+                        promote_type(ExactPromotion(),K,typeof(k)),
+                        promote_type(ExactPromotion(),V,typeof(v)))
             merge!(new, dest)
             new[k] = v
             return grow_to!(new, itr, st)

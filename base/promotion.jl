@@ -134,163 +134,25 @@ function tailjoin(A, i, f)
     return t
 end
 
-## strict promotion mechanism ##
-
-"""
-    promote_strict_type(type1, type2)
-
-Promotion refers to converting values of mixed types to a single common type.
-`promote_strict_type` represents the promotion mechanism used by [`collect`](@ref)
-[`map`](@ref) and [`broadcast`](@ref) when producing an array with elements of
-differing types. `promote_strict_type` is guaranteed to return a type which can
-xactly represent all values of either input type. Contrary to [`promote_type`](@ref),
-no loss is tolerated. For example, `promote_strict_type(Int64, Float64)` returns
-`Union{Float64, Int64}` since not all [`Int64`](@ref) values can be
-represented exactly as `Float64` values.
-
-```jldoctest
-julia> promote_strict_type(Int64, Float64)
-Union{Float64, Int64}
-
-julia> promote_strict_type(Int32, Int64)
-Int64
-
-# FIXME: should this be Union{Float32, BigInt}?
-julia> promote_strict_type(Float32, BigInt)
-BigFloat
-
-julia> promote_strict_type(Int16, Float16)
-Float16
-
-# FIXME: should this be Float16?
-julia> promote_type(Int64, Float16)
-Union{Float16, Int64}
-
-julia> promote_strict_type(Int8, UInt16)
-UInt16
-```
-"""
-function promote_type end
-
-promote_strict_type()  = Bottom
-promote_strict_type(T) = T
-promote_strict_type(T, S, U, V...) =
-    (@_inline_meta; promote_strict_type(T, promote_strict_type(S, U, V...)))
-
-promote_strict_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
-promote_strict_type(::Type{T}, ::Type{T}) where {T} = T
-promote_strict_type(::Type{T}, ::Type{Bottom}) where {T} = T
-promote_strict_type(::Type{Bottom}, ::Type{T}) where {T} = T
-
-function promote_strict_type(::Type{T}, ::Type{S}) where {T,S}
-    @_inline_meta
-    # Try promote_rule in both orders. Typically only one is defined,
-    # and there is a fallback returning Bottom below, so the common case is
-    #   promote_strict_type(T, S) =>
-    #   promote_strict_result(T, S, result, Bottom) =>
-    #   typejoin(result, Bottom) => result
-    promote_strict_result(T, S, promote_strict_rule(T,S), promote_strict_rule(S,T))
-end
-
-"""
-    promote_strict_rule(type1, type2)
-
-Specifies what type should be used by [`promote_strict`](@ref) when given values
-of types `type1` and `type2`. This function should not be called directly,
-but should have definitions added to it for new types as appropriate.
-"""
-function promote_strict_rule end
-
-promote_strict_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
-promote_strict_rule(::Type{Any}, ::Type) = Any
-
-promote_strict_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} =
-    (promote_strict_type(T,S))
-# If no promote_strict rule is defined, both directions give Bottom. In that
-# case use typejoin on the original types instead.
-promote_strict_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} =
-    (join_types(T,S,promote_strict_type,true))
-
-"""
-    promote_strict(xs...)
-
-Convert all arguments to a common type, and return them all (as a tuple).
-If no arguments can be converted, an error is raised.
-
-# Examples
-```jldoctest
-julia> promote_strict(Int8(1), Float16(4.5), Float32(4.1))
-(1.0f0, 4.5f0, 4.1f0)
-```
-"""
-function promote_strict end
-
-function _promote_strict(x::T, y::S) where {T,S}
-    @_inline_meta
-    R = promote_strict_type(T, S)
-    return (convert(R, x), convert(R, y))
-end
-promote_strict_typeof(x) = typeof(x)
-promote_strict_typeof(x, xs...) = (@_inline_meta; promote_strict_type(typeof(x), promote_strict_typeof(xs...)))
-function _promote_strict(x, y, z)
-    @_inline_meta
-    R = promote_strict_typeof(x, y, z)
-    return (convert(R, x), convert(R, y), convert(R, z))
-end
-function _promote_strict(x, y, zs...)
-    @_inline_meta
-    R = promote_strict_typeof(x, y, zs...)
-    return (convert(R, x), convert(R, y), convert(Tuple{Vararg{R}}, zs)...)
-end
-# TODO: promote_strict(x::T, ys::T...) where {T} here to catch all circularities?
-
-promote_strict() = ()
-promote_strict(x) = (x,)
-
-function promote_strict(x, y)
-    @_inline_meta
-    px, py = _promote_strict(x, y)
-    not_sametype((x,y), (px,py))
-    px, py
-end
-function promote_strict(x, y, z)
-    @_inline_meta
-    px, py, pz = _promote_strict(x, y, z)
-    not_sametype((x,y,z), (px,py,pz))
-    px, py, pz
-end
-function promote_strict(x, y, z, a...)
-    p = _promote_strict(x, y, z, a...)
-    not_sametype((x, y, z, a...), p)
-    p
-end
-
-promote_strict(x::T, y::T, zs::T...) where {T} = (x, y, zs...)
-
-not_sametype(x::T, y::T) where {T} = sametype_error(x)
-
-not_sametype(x, y) = nothing
-
-function sametype_error(input)
-    @_noinline_meta
-    error("promotion of types ",
-          join(map(x->string(typeof(x)), input), ", ", " and "),
-          " failed to change any arguments")
-end
-
 ## promotion mechanism ##
+
+abstract type PromotionStyle end
+struct ExactPromotion <: PromotionStyle end
+struct DefaultPromotion <: PromotionStyle end
 
 """
     promote_type(type1, type2)
+    promote_type(::DefaultPromotion, type1, type2)
 
 Promotion refers to converting values of mixed types to a single common type.
-`promote_type` represents the default promotion behavior in Julia when
+`promote_type(type1, type2)`, equivalent to `promote_type(DefaultPromotion(), type1, type2)`
+represents the default promotion behavior in Julia when
 operators (usually mathematical) are given arguments of differing types.
+
 `promote_type` generally tries to return a type which can at least approximate
 most values of either input type without excessively widening. Contrary to
-[`promote_strict_type`](@ref) some loss is tolerated.
-For example, `promote_type(Int64, Float64)` returns
-[`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be
+`ExactPromotion` some loss is tolerated. For example, `promote_type(Int64, Float64)`
+returns [`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be
 represented exactly as `Float64` values.
 
 ```jldoctest
@@ -313,53 +175,133 @@ julia> promote_type(Int8, UInt16)
 UInt16
 ```
 """
-function promote_type end
-
-promote_type()  = Bottom
-promote_type(T) = T
-promote_type(T, S, U, V...) = (@_inline_meta; promote_type(T, promote_type(S, U, V...)))
-
-promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
-promote_type(::Type{T}, ::Type{T}) where {T} = T
-promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
-promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
-
-function promote_type(::Type{T}, ::Type{S}) where {T,S}
+function promote_type(::DefaultPromotion, ::Type{T}, ::Type{S}) where {T,S}
     @_inline_meta
     # Try promote_rule in both orders. Typically only one is defined,
     # and there is a fallback returning Bottom below, so the common case is
-    #   promote_type(T, S) =>
-    #   promote_result(T, S, result, Bottom) =>
-    #   promote_strict_type(T, S) =>
-    #   promote_strict_result(T, S, result, Bottom) =>
+    #   promote_type(DefaultPromotion(), T, S) =>
+    #   promote_result(DefaultPromotion(), T, S, result, Bottom) =>
+    #   promote_type(ExactPromotion(), T, S) =>
+    #   promote_result(ExactPromotion(), T, S, result, Bottom) =>
     #   typejoin(result, Bottom) => result
-    promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
+    promote_result(DefaultPromotion(), T, S,
+                   promote_rule(DefaultPromotion(),T,S),
+                   promote_rule(DefaultPromotion(),S,T))
 end
 
 """
+    promote_type(::ExactPromotion, type1, type2)
+
+`ExactPromotion` represents the promotion mechanism used by [`collect`](@ref)
+[`map`](@ref) and [`broadcast`](@ref) when producing an array with elements of
+differing types. It is guaranteed to return a type which can exactly represent
+all values of either input type. Contrary to [`promote_type`](@ref),
+no loss is tolerated. For example, `promote_type(ExactPromotion(), Int64, Float64)`
+returns `Union{Float64, Int64}` since not all [`Int64`](@ref) values can be
+represented exactly as `Float64` values.
+
+```jldoctest
+julia> promote_type(ExactPromotion(), Int64, Float64)
+Union{Float64, Int64}
+
+julia> promote_type(ExactPromotion(), Int32, Int64)
+Int64
+
+# FIXME: should this be Union{Float32, BigInt}?
+julia> promote_type(ExactPromotion(), Float32, BigInt)
+BigFloat
+
+julia> promote_type(ExactPromotion(), Int16, Float16)
+Float16
+
+# FIXME: should this be Float16?
+julia> promote_type(ExactPromotion(), Int64, Float16)
+Union{Float16, Int64}
+
+julia> promote_type(ExactPromotion(), Int8, UInt16)
+UInt16
+```
+"""
+function promote_type(::ExactPromotion, ::Type{T}, ::Type{S}) where {T,S}
+    @_inline_meta
+    # Try promote_rule in both orders. Typically only one is defined,
+    # and there is a fallback returning Bottom below, so the common case is
+    #   promote_type(ExactPromotion(), T, S) =>
+    #   promote_result(ExactPromotion(), T, S, result, Bottom) =>
+    #   typejoin(result, Bottom) => result
+    promote_result(ExactPromotion(), T, S,
+                   promote_rule(ExactPromotion(),T,S),
+                   promote_rule(ExactPromotion(),S,T))
+end
+
+promote_type(args...) = promote_type(DefaultPromotion, args...)
+
+promote_type(::PromotionStyle, ::Type{Bottom}, ::Type{Bottom}) = Bottom
+promote_type(::PromotionStyle, ::Type{T}, ::Type{T}) where {T} = T
+promote_type(::PromotionStyle, ::Type{T}, ::Type{Bottom}) where {T} = T
+promote_type(::PromotionStyle, ::Type{Bottom}, ::Type{T}) where {T} = T
+
+promote_type(::PromotionStyle) = Bottom
+promote_type(::PromotionStyle, T) = T
+promote_type(p::PromotionStyle, T, S, U, V...) =
+    (@_inline_meta; promote_type(P, T, promote_type(p, S, U, V...)))
+
+"""
     promote_rule(type1, type2)
+    promote_rule(style::PromotionStyle, type1, type2)
 
 Specifies what type should be used by [`promote`](@ref) when given values of types `type1` and
 `type2`. This function should not be called directly, but should have definitions added to
 it for new types as appropriate.
+
+Defining a two-argument method is equivalent to defining a
+`promote_rule(style::DefaultPromotion, type1, type2)` method. `style` can also be of
+type `ExactPromotion` to define a promotion rule which is guaranteed to return a type
+able to represent all values of `type1` and `type2` exactly (see [`promote_type`](@ref)).
 """
 function promote_rule end
 
-promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
-promote_rule(::Type{Any}, ::Type) = Any
+promote_rule(::PromotionStyle, ::Type{<:Any}, ::Type{<:Any}) = Bottom
+promote_rule(::PromotionStyle, ::Type{Any}, ::Type) = Any
 
-promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} =
-    (@_inline_meta; promote_type(T,S))
+# Fallback so that rules defined without DefaultPromotion() are used
+promote_rule(::DefaultPromotion,::Type{T},::Type{S}) where {T,S} = promote_rule(T, S)
+
+promote_result(::DefaultPromotion,::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} =
+    (@_inline_meta; promote_type(DefaultPromotion(), T, S))
 # If no promote_rule is defined, both directions give Bottom. In that
-# case use promote_strict_type on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} =
-    (@_inline_meta; promote_strict_type(T, S))
+# case use ExactPromotion on the original types instead.
+promote_result(::DefaultPromotion,::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} =
+    (@_inline_meta; promote_type(ExactPromotion(),T,S))
+
+promote_result(::ExactPromotion,::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} =
+    (promote_type(ExactPromotion(),T,S))
+# If no promote_rule is defined, both directions give Bottom. In that
+# case use typejoin on the original types instead.
+promote_result(::ExactPromotion,::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} =
+    (join_types(T, S, (T,S)->promote_type(ExactPromotion(),T,S), true))
+
+not_sametype(x::T, y::T) where {T} = sametype_error(x)
+
+not_sametype(x, y) = nothing
+
+function sametype_error(input)
+    @_noinline_meta
+    error("promotion of types ",
+          join(map(x->string(typeof(x)), input), ", ", " and "),
+          " failed to change any arguments")
+end
 
 """
     promote(xs...)
+    promote(style::PromotionStyle, xs...)
 
 Convert all arguments to a common type, and return them all (as a tuple).
 If no arguments can be converted, an error is raised.
+
+`style` can be either `DefaultPromotion` (the default when omitted), or
+`ExactPromotion` to guarantee that the returned type can hold all values of
+`type1` and `type2` (see [`promote_type`](@ref)).
 
 # Examples
 ```jldoctest
@@ -369,47 +311,52 @@ julia> promote(Int8(1), Float16(4.5), Float32(4.1))
 """
 function promote end
 
-function _promote(x::T, y::S) where {T,S}
+function _promote(::P, x::T, y::S) where {P<:PromotionStyle,T,S}
     @_inline_meta
-    R = promote_type(T, S)
+    R = promote_type(P, T, S)
     return (convert(R, x), convert(R, y))
 end
-promote_typeof(x) = typeof(x)
-promote_typeof(x, xs...) = (@_inline_meta; promote_type(typeof(x), promote_typeof(xs...)))
-function _promote(x, y, z)
+
+promote_typeof(args...) = promote_typeof(DefaultPromotion, args...)
+promote_typeof(::PromotionStyle, x) = typeof(x)
+promote_typeof(p::PromotionStyle, x, xs...) =
+    (@_inline_meta; promote_type(p, typeof(x), promote_typeof(p, xs...)))
+function _promote(p::PromotionStyle, x, y, z)
     @_inline_meta
-    R = promote_typeof(x, y, z)
+    R = promote_typeof(p, x, y, z)
     return (convert(R, x), convert(R, y), convert(R, z))
 end
-function _promote(x, y, zs...)
+function _promote(p::PromotionStyle, x, y, zs...)
     @_inline_meta
-    R = promote_typeof(x, y, zs...)
+    R = promote_typeof(p, x, y, zs...)
     return (convert(R, x), convert(R, y), convert(Tuple{Vararg{R}}, zs)...)
 end
-# TODO: promote(x::T, ys::T...) where {T} here to catch all circularities?
+# TODO: promote(::P, x::T, ys::T...) where {P<:PromotionStyle, T} here to catch all circularities?
 
-promote() = ()
-promote(x) = (x,)
+promote(args...) = promote(DefaultPromotion(), args...)
 
-function promote(x, y)
+promote(::PromotionStyle) = ()
+promote(::PromotionStyle, x) = (x,)
+
+function promote(p::PromotionStyle, x, y)
     @_inline_meta
-    px, py = _promote(x, y)
+    px, py = _promote(p, x, y)
     not_sametype((x,y), (px,py))
     px, py
 end
-function promote(x, y, z)
+function promote(p::PromotionStyle, x, y, z)
     @_inline_meta
-    px, py, pz = _promote(x, y, z)
+    px, py, pz = _promote(p, x, y, z)
     not_sametype((x,y,z), (px,py,pz))
     px, py, pz
 end
-function promote(x, y, z, a...)
-    p = _promote(x, y, z, a...)
+function promote(p::PromotionStyle, x, y, z, a...)
+    p = _promote(p, x, y, z, a...)
     not_sametype((x, y, z, a...), p)
     p
 end
 
-promote(x::T, y::T, zs::T...) where {T} = (x, y, zs...)
+promote(p::PromotionStyle, x::T, y::T, zs::T...) where {T} = (p, x, y, zs...)
 
 ## promotions in arithmetic, etc. ##
 
@@ -418,7 +365,9 @@ promote(x::T, y::T, zs::T...) where {T} = (x, y, zs...)
 # Otherwise, typejoin(T,S) is called (returning Number) so no conversion
 # happens, and +(promote(x,y)...) is called again, causing a stack
 # overflow.
-function promote_strict_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
+function promote_result(::PromotionStyle,
+                        ::Type{T},::Type{S},
+                        ::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
     @_inline_meta
     promote_to_supertype(T, S, typejoin(T,S))
 end

@@ -23,17 +23,16 @@ nonmissingtype(::Type{Missing}) = Union{}
 nonmissingtype(::Type{T}) where {T} = T
 nonmissingtype(::Type{Any}) = Any
 
-# Both rules need to be defined for types which implement promote_rule
-# but not promote_strict_rule
-for (prule, ptype) in ((:promote_strict_rule, :promote_strict_type),
-                       (:promote_rule, :promote_type)),
+# Both rules need to be defined for types which implement
+# DefaultPromotion but not ExactPromotion
+for P in (DefaultPromotion, ExactPromotion),
     U in (:Nothing, :Missing)
     @eval begin
-        $prule(::Type{$U}, ::Type{T}) where {T} = Union{T, $U}
-        $prule(::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{$ptype(T, S), $U}
-        $prule(::Type{Any}, ::Type{$U}) = Any
-        $prule(::Type{$U}, ::Type{Any}) = Any
-        $prule(::Type{$U}, ::Type{$U}) = U
+        promote_rule(::$P, ::Type{$U}, ::Type{T}) where {T} = Union{T, $U}
+        promote_rule(::$P, ::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{promote_type($P, T, S), $U}
+        promote_rule(::$P, ::Type{Any}, ::Type{$U}) = Any
+        promote_rule(::$P, ::Type{$U}, ::Type{Any}) = Any
+        promote_rule(::$P, ::Type{$U}, ::Type{$U}) = U
     end
 end
 
