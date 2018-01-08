@@ -397,29 +397,142 @@ function predicatepair(p::Pair{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},
 end
 predicatepair(p::Pair) = p
 
+# specialized search function for Char
+function findfunc(p::Pair{Char})
+    (s::AbstractString, i::Int) -> begin
+        r = findnext(equalto(p.first), s, i)
+        r, r, ind
+    end
+end
+
+# specialized search function for collections of Char
+function findfunc(p::Pair{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}})
+    (s::AbstractString, i::Int) -> begin
+        r = findnext(occursin(p.first), s, i)
+        r, r, p
+    end
+end
+
+# search function for all other cases (p.first can be passed to findnext)
+function findfunc(p::Pair)
+    (s::AbstractString, i::Int) -> begin
+        r = findnext(p.first, s, i)
+        first(r), last(r), p
+    end
+end
+
+# accumulate in st/d - discard duplicate patterns
+function pushrx!(c::String, repl::Any, st::Vector{String}, d::Dict{String,Any})
+    cs = string(c)
+    if !haskey(d, cs)
+        d[cs] = repl
+        push!(st, cs)
+    end
+end
+
+# push pattern-repl pair depending on type of pattern
+function pushpat!(pair::Pair{<:Union{Char,AbstractString}}, pairs, st, d)
+    pushrx!(string(pair.first), pair.second, st, d)
+end
+function pushpat!(pair::Pair{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}}, pairs, st, d)
+    for c in pat
+        pushrx!(string(c), pair.second, st, d)
+    end
+end
+function pushpat!(pair::Pair{<:Base.EqualTo}, pairs, st, d)
+    pushrx!(string(pair.first.x), pair.second, st, d)
+end
+function pushpat!(pair::Pair{<:Base.OccursIn}, pairs, st, d)
+    for c in pair.first.x
+        pushrx!(string(c), pair.second, st, d)
+    end
+end
+
+pushpat!(pair::Pair, pairs, st, d) = push!(pairs, pair)
+
+function _postprocessor(d::Dict{String,Any})
+    (s::AbstractString) -> _postprocess(s, d[s])
+end
+
+_postprocess(s::AbstractString, ds::Union{AbstractString,Char}) = ds
+_postprocess(s::AbstractString, ds::Function) = ds(s)
+_postprocess(s::AbstractString, ds) = string(ds)
+
+# extract all String, Char, and collection of Char patterns
+# and combine to one regex + replacement function
+# all others remain
+function build_regex(pat_repls::NTuple{N,Pair}) where N
+    pairs = Vector{Pair}()
+    st = Vector{String}()
+    d = Dict{String,Any}()
+
+    for pair in pat_repls
+        pushpat!(pair, pairs, st, d)
+    end
+
+    if length(st) == 1
+        str = st[1]
+        pushfirst!(pairs, str=>d[str])
+    elseif length(st) > 1
+        buf = IOBuffer()
+        sort!(st, lt=(a,b)->sizeof(a)>sizeof(b))
+        frst = true
+        for pat in st
+            frst || print(buf, '|')
+            escape_string(buf, pat, "[\\^\$.|?*+()")
+            frst = false
+        end
+        rs = String(take!(buf))
+        pushfirst!(pairs, Regex(rs)=>_postprocessor(d))
+    end
+    pairs
+end
+
 # find the first of a list of patterns.
 # if several match at the same start position prefer the longer one
 # if also the length is equal, prefer the first in list
 # return index-range of the successful search and the pair
-function findnextall(pairs::NTuple{N,Pair}, s::AbstractString, st::Integer=1) where N
-    for n = 1:N
-        p = pairs[n]
-        r = findnext(p.first, s, st)
-        fr = first(r)
-        if fr > 0
-            minstart, minend, minp = fr, last(r), p
-            for j = n+1:N
-                p = pairs[j]
-                r = findnext(p.first, s, st)
-                i, k = first(r), last(r)
-                if i > 0 && ( i < minstart || i == minstart && k > minend)
-                    minstart, minend, minp = i, k, p
-                end
+# if no match is found, return 0, 0 and some pair
+# The search moves forward through s exactly once for each pair
+# If no match is found for a pair, it is removed from the list
+function findnextall(fun::Vector{Function}, indo::Vector{Pair}, rv1::Vector{Int}, rv2::Vector{Int}, s::AbstractString)
+
+    n = length(fun)
+    if n == 0
+        0, 0, (""=>"")
+    else
+        minstart = rv1[1]
+        minend = rv2[1]
+        minp = indo[1]
+        for i = 2:n
+            r1 = rv1[i]
+            r2 = rv2[i]
+            if r1 < minstart || ( r1 == minstart && r2 > minend)
+                minstart = r1
+                minend = r2
+                minp = indo[i]
             end
-            return minstart:minend, minp
         end
+        # next match at minstart:minend for pat_repl with original index minp
+
+        nexttome = nextind(s, minend)
+        for i = 1:n
+            if rv1[i] <= minend #overlap
+                # new search starting one after minend
+                rv1[i], rv2[i], indo[i] = fun[i](s, nexttome)
+            end
+        end
+        # remove all pairs without matching patterns
+        for i = n:-1:1
+            if rv1[i] == 0
+                deleteat!(fun, i)
+                deleteat!(indo, i)
+                deleteat!(rv1, i)
+                deleteat!(rv2, i)
+            end
+        end
+        minstart, minend, minp
     end
-    0:-1, (""=>"")
 end
 
 # cover the multiple pairs case
@@ -428,19 +541,39 @@ function replace(str::String, pat_repls::Pair...; count::Integer=typemax(Int))
         return str
     end
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
-    pat_repls = predicatepair.(pat_repls)
+    fun = Vector{Function}()
+    indo = Vector{Pair}()
+    rv1 = Vector{Int}()
+    rv2 = Vector{Int}()
+
+    pairs = build_regex(pat_repls)
+    n = length(pairs)
+    n == 0 && return str
+    n == 1 && return replace(str, pairs[1], count=count) # special for one pair
+
+    for i = 1:n
+        pair = pairs[i]
+        f = findfunc(pair)
+        r1, r2, rp = f(str, 1)
+        if r1 > 0
+            push!(fun, f)
+            push!(indo, pair)
+            push!(rv1, r1)
+            push!(rv2, r2)
+        end
+    end
     n = 1
     e = endof(str)
     i = a = start(str)
-    r, (pattern, repl) = findnextall(pat_repls, str, i)
-    j, k = first(r), last(r)
-    out = IOBuffer(StringVector(floor(Int, 1.2sizeof(str))), true, true)
+    j, k, ind = findnextall(fun, indo, rv1, rv2, str)
+    out = IOBuffer(StringVector(sizeof(str)*12÷10), true, true)
     out.size = 0
     out.ptr = 1
     while j != 0
         if i == a || i <= k
             unsafe_write(out, pointer(str, i), UInt(j-i))
-            _replace(out, repl, str, r, pattern)
+            pattern, repl = ind
+            _replace(out, repl, str, j:k, pattern)
         end
         if k < j
             i = j
@@ -449,9 +582,8 @@ function replace(str::String, pat_repls::Pair...; count::Integer=typemax(Int))
         else
             i = k = nextind(str, k)
         end
-        r, (pattern, repl) = findnextall(pat_repls, str, k)
-        r == 0:-1 || n == count && break
-        j, k = first(r), last(r)
+        j, k, ind = findnextall(fun, indo, rv1, rv2, str)
+        j == 0 || n == count && break
         n += 1
     end
     write(out, SubString(str, i))
