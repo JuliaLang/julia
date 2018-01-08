@@ -136,14 +136,6 @@ slug(sha1::SHA1, p::Int=4) = slug(sha1.bytes, p)
 
 version_slug(uuid::UUID, sha1::SHA1) = joinpath(slug(uuid), slug(sha1))
 
-function find_installed(uuid::UUID, sha1::SHA1, name::AbstractString)
-    slug = version_slug(uuid, sha1)
-    for depot in DEPOT_PATH
-        file = abspath(depot, "packages", slug, "src", "$name.jl")
-        isfile_casesensitive(file) && return file
-    end
-end
-
 ## finding packages ##
 
 const ENVINFO = Symbol("#ENVINFO")
@@ -201,210 +193,329 @@ end
 
 find_env(env::Function) = find_env(env())
 
-load_path() = filter(env -> env != nothing, map(find_env, LOAD_PATH))
+load_path() = filter(env -> env ≠ nothing, map(find_env, LOAD_PATH))
 
-package_entry_points(path::AbstractString, name::AbstractString) = [
-    joinpath(path, "$name.jl"),
-    joinpath(path, "$name.jl", "src", "$name.jl"),
-    joinpath(path,   name,     "src", "$name.jl"),
-]
+# find `import name` inside of `into` module
+function find_package(into::Module, name::String)
+    isdefined(into, ENVINFO) || return find_package(name)
+    into_uuid = getfield(into, ENVINFO)::UUID
+    into_name = String(module_name(into))
+    find_package(into_name => into_uuid, name)
+end
 
-function find_package(into::Module, name::AbstractString)
-    # Core.println("$(getpid()): find_package($into, $name)")
-    endswith(name, ".jl") && (name = chop(name, 0, 3))
-    if isdefined(into, ENVINFO)
-        manifest_file, into_uuid = getfield(into, ENVINFO)::Tuple{String,UUID}
-        return find_package_in_manifest(manifest_file, into_uuid, name)
+# find top-level `import name`
+function find_package(name::String)
+    path = nothing
+    for env in (envs = load_path())
+        what = project_uuid_or_path(env, name)
+        what isa UUID && return (manifest_path(what, name, envs), what)
+        path == nothing && (path = what)
     end
-    for path in load_path()
-        if isdir(path) # package directory
-            for file in package_entry_points(path, name)
-                isfile_casesensitive(file) && return file
+    return path
+end
+
+# find `import name` with respect to `into_uuid` + `into_name`
+function find_package(into::Pair{String,UUID}, name::String)
+    # look for `into_uuid` + `into_name` in each manifest
+    # look up `name` in corresponding deps section --> uuid | path
+    # if the result is a UUID scan all manifests for it
+    # if the result is a path just return it
+    for env in (envs = load_path())
+        if isdir(env) # package directory
+            # look for `into` entry point & project file
+            for dir in [into[1], "$(into[1]).jl"]
+                dir = abspath(env, dir)
+                path = joinpath(dir, "src", "$(into[1]).jl")
+                isfile_casesensitive(path) || continue
+                for proj in project_names
+                    project_file = joinpath(dir, proj)
+                    isfile_casesensitive(project_file) || continue
+                    # have both entry point and project file
+                    uuid = project_file_uuid(project_file)
+                    uuid == into[2] || break # next env
+                    what = project_file_deps_uuid_or_path(project_file, name)
+                    if what isa UUID
+                        # now look UUID + name up in envs as manifests
+                        return manifest_path(what, name, envs), what
+                    else
+                        # just return the given entry point
+                        return entry_path(what, name)
+                    end
+                end
+                break
             end
-        elseif endswith(path, ".toml") # project file
-            info = find_package_in_project(path, name)
-            info != nothing && return info
+        elseif basename(env) in project_names && isfile_casesensitive(env)
+            manifest_file = project_file_manifest_path(env)
+            isfile_casesensitive(manifest_file) || continue
+            io = open(manifest_file)
+            try
+                deps = manifest_file_deps(manifest_file, into[2], io)
+                deps == nothing && continue
+                if deps isa Vector
+                    name in deps || return nothing
+                    what = name
+                elseif deps isa Dict
+                    haskey(deps, name) || return nothing
+                    what = deps[name]::UUID
+                end
+                seekstart(io) # rewind IO handle
+                path_and_uuid = manifest_file_path_and_uuid(manifest_file, what, io)
+                path_and_uuid == nothing && return nothing
+                path = entry_path(path_and_uuid[1], name)
+                return path, path_and_uuid[2]
+            finally
+                close(io)
+            end
         end
     end
 end
 
-function find_package_in_project(project_file::AbstractString, name::AbstractString)
-    # Core.println("$(getpid()): find_package_in_project($project_file, $name)")
-    isfile_casesensitive(project_file) || return nothing
+function find_package(name::String, names::String...)
+    what = find_package(name)
+    what isa String && return find_package(names...)
+    what isa Tuple  && return find_package(name => what[2], names...)
+    return what
+end
+
+function find_package(into::Pair{String,UUID}, name::String, names::String...)
+    what = find_package(into, name)
+    what isa String && return find_package(names...)
+    what isa Tuple  && return find_package(name => what[2], names...)
+    return what
+end
+
+## helper functions for finding packages ##
+
+function entry_path(path::String, name::String)
+    isfile_casesensitive(path) && return path
+    path = joinpath(path, "src", "$name.jl")
+    isfile_casesensitive(path) ? path : nothing
+end
+entry_path(::Nothing, name::String) = nothing
+
+# search `env` as a project (implicit or explicit):
+#  - return `uuid` of `name` if it exists
+#  - return `path` of `name` if it exists otherwise
+#  - return `nothing` otherwise
+function project_uuid_or_path(env::String, name::String)
+    if isdir(env) # package directory
+        for dir in ["", joinpath(name, "src"), joinpath("$name.jl", "src")]
+            dir = joinpath(env, dir)
+            path = joinpath(dir, "$name.jl")
+            isfile_casesensitive(path) || continue
+            if basename(dir) == "src"
+                for proj in project_names
+                    project_file = joinpath(dirname(dir), proj)
+                    isfile_casesensitive(project_file) || continue
+                    return project_file_uuid(project_file)
+                end
+            end
+            return path
+        end
+    elseif basename(env) in project_names && isfile_casesensitive(env)
+        what = project_file_deps_uuid_or_path(env, name)
+        return what isa UUID ? what : entry_path(what, name)
+    end
+    return nothing
+end
+
+# search each `env` as a manifest (implicit or explicit) for `uuid`:
+#  - implicit: look for `name` entry point with matching `uuid`
+#  - explicit: look for `uuid` stanza and entry point for `name`
+function manifest_path(uuid::UUID, name::String, envs::Vector{String})
+    for env in envs # load_path() from caller
+        if isdir(env) # package directory
+            for dir in [name, "$name.jl"]
+                dir = joinpath(env, dir)
+                path = joinpath(dir, "src", "$name.jl")
+                isfile_casesensitive(path) || continue
+                uuid′ = nothing
+                for proj in project_names
+                    project_file = joinpath(dir, proj)
+                    isfile_casesensitive(project_file) || continue
+                    # have both entry point and project file
+                    uuid′ = project_file_uuid(project_file)
+                    break
+                end
+                uuid′ == uuid && return path
+                break # found but uuid didn't match
+            end
+        elseif basename(env) in project_names && isfile_casesensitive(env)
+            manifest_file = project_file_manifest_path(env)
+            isfile_casesensitive(manifest_file) || continue
+            path_and_uuid = manifest_file_path_and_uuid(manifest_file, uuid)
+            path_and_uuid == nothing && return nothing
+            return entry_path(path_and_uuid[1], name)
+        end
+    end
+end
+
+## TOML file parsing helpers ##
+
+const re_section            = r"^\s*\["
+const re_array_of_tables    = r"^\s*\[\s*\["
+const re_section_deps       = r"^\s*\[\s*\"?deps\"?\s*\]\s*(?:#|$)"
+const re_section_capture    = r"^\s*\[\s*\[\s*\"?(\w+)\"?\s*\]\s*\]\s*(?:#|$)"
+const re_subsection_deps    = r"^\s*\[\s*\"?(\w+)\"?\s*\.\s*\"?deps\"?\s*\]\s*(?:#|$)"
+const re_key_to_string      = r"^\s*(\w+)\s*=\s*\"(.*)\"\s*(?:#|$)"
+const re_uuid_to_string     = r"^\s*uuid\s*=\s*\"(.*)\"\s*(?:#|$)"
+const re_path_to_string     = r"^\s*path\s*=\s*\"(.*)\"\s*(?:#|$)"
+const re_hash_to_string     = r"^\s*hash-sha1\s*=\s*\"(.*)\"\s*(?:#|$)"
+const re_manifest_to_string = r"^\s*manifest\s*=\s*\"(.*)\"\s*(?:#|$)"
+const re_deps_to_any        = r"^\s*deps\s*=\s*(.*?)\s*(?:#|$)"
+
+# find project file's top-level UUID entry (or nothing)
+function project_file_uuid(project_file::String)
     open(project_file) do io
         for line in eachline(io)
-            # look for the [deps] section
-            ismatch(r"^\s*\[\s*deps\s*\]\s*$", line) && break
-            # TODO: look for `manifest = "$manifest_file"` entry?
+            ismatch(re_section, line) && break
+            if (m = match(re_uuid_to_string, line)) != nothing
+                return UUID(m.captures[1])
+            end
         end
-        uuid = nothing
+    end
+end
+
+# find project file's corresponding manifest file
+function project_file_manifest_path(project_file::String)
+    open(project_file) do io
+        dir = abspath(dirname(project_file))
         for line in eachline(io)
-            # look for `$name = "$uuid"` entry
-            m = match(r"^(?:\s*(?:#.*)?|\s*(\w+)\s*=\s*\"(.*)\"\s*)$", line)
-            m == nothing && return nothing
-            m.captures[1] != name && continue
-            uuid = UUID(m.captures[2]) # TODO: allow path?
+            ismatch(re_section, line) && break
+            if (m = match(re_manifest_to_string, line)) != nothing
+                return normpath(joinpath(dir, m.captures[1]))
+            end
         end
-        uuid == nothing && return nothing
-        # TODO: manifest path from project file
-        dir = dirname(project_file)
-        manifest_file = nothing
+        local manifest_file
         for mfst in manifest_names
-            file = abspath(dir, mfst)
-            isfile_casesensitive(file) || continue
-            manifest_file = file
-            break
+            manifest_file = joinpath(dir, mfst)
+            isfile_casesensitive(manifest_file) && return manifest_file
         end
-        manifest_file != nothing &&
-            return find_package_in_manifest(manifest_file, uuid)
-        @warn """
-            $name/$uuid in project file but not in manifest
-             - project = $(repr(project_file))
-             - manifest = $(repr(manifest_file))
-            """
+        return manifest_file
     end
 end
 
-function find_package_in_manifest(
-    manifest_file::AbstractString, into_uuid::UUID, name::AbstractString)
-    # Core.println("$(getpid()): find_package_in_manifest($manifest_file, $into_uuid, $name)")
-    isfile_casesensitive(manifest_file) || return nothing
-    open(manifest_file) do io
-        # scan manifest for stanza with `uuid = "$into_uuid"`
-        found = in_deps = false
-        deps_str = uuid = nothing
+# find project file deps section's `name => uuid | path` mapping
+function project_file_deps_uuid_or_path(project_file::String, name::String)
+    open(project_file) do io
         for line in eachline(io)
-            if !in_deps
-                if ismatch(r"^\s*\[\s*\[\s*\w+\s*\]\s*\]\s*$", line)
-                    found = in_deps = false
-                    deps_str = uuid = nothing
-                elseif (m = match(r"^\s*uuid\s*=\s*\"(.*)\"\s*$", line)) != nothing
-                    found = into_uuid == UUID(m.captures[1])
-                elseif (m = match(r"^\s*deps\s*=\s*(.*?)\s*$", line)) != nothing
-                    deps_str = m.captures[1]
-                elseif (m = match(r"^\s*\[\s*\w+\s*\.\s*deps\s*\]\s*$", line)) != nothing
-                    in_deps = true
-                end
-            else # in_deps
-                if (m = match(r"^\s*(\w+)\s*=\"(.*)\"\s*$")) != nothing
-                    m.captures[1] == name && (uuid = UUID(m.captures[2]))
-                end
-            end
-            if found && uuid == nothing && deps_str != nothing
-                if deps_str[1] != '[' || deps_str[end] != ']'
-                    @warn "Unexpected TOML deps format:\n$deps_str"
-                    return nothing
-                end
-                # TODO: give better feedback on unregistered dependency
-                isempty(search(deps_str, repr(name))) && return nothing
-                # name should be unique in manifest, so find by name
-                return find_package_in_manifest(manifest_file, name, seekstart(io))
-            end
-            found && uuid != nothing && break
+            ismatch(re_section_deps, line) && break
         end
-        found && uuid != nothing || return nothing
-        return find_package_in_manifest(manifest_file, uuid, seekstart(io))
+        for line in eachline(io)
+            ismatch(re_section, line) && break
+            m = match(re_key_to_string, line)
+            m.captures[1] != name && continue
+            what = m.captures[2]
+            if '/' in what || '\\' in what
+                return normpath(joinpath(dirname(project_file), what))
+            else
+                return UUID(what)
+            end
+        end
     end
 end
 
-function find_package_in_manifest(
-    manifest_file::AbstractString, name::AbstractString, io::IO)
-    # Core.println("$(getpid()): find_package_in_manifest($manifest_file, $name, $io)")
-    found = false
-    path = uuid = hash = nothing
+function manifest_file_deps(manifest_file::AbstractString, uuid::UUID)
+    open(manifest_file) do io
+        manifest_file_deps(manifest_file, uuid, io)
+    end
+end
+
+# find manifest file's `into` stanza's deps
+function manifest_file_deps(manifest_file::AbstractString, into::UUID, io::IO)
+    deps = nothing
+    found = in_deps = false
     for line in eachline(io)
-        if (m = match(r"^\s*\[\s*\[\s*(\w+)\s*\]\s*\]\s*$", line)) != nothing
-            found && break
-            found = m.captures[1] == name
-        elseif (m = match(r"^\s*path\s*=\s*\"(.*)\"\s*$", line)) != nothing
-            found && (path = m.captures[1])
-        elseif (m = match(r"^\s*hash-sha1\s*=\s*\"(.*)\"\s*$", line)) != nothing
-            found && (hash = SHA1(m.captures[1]))
-        elseif (m = match(r"^\s*uuid\s*=\s*\"(.*)\"\s*$", line)) != nothing
-            found && (uuid = UUID(m.captures[1]))
+        if !in_deps
+            if ismatch(re_array_of_tables, line)
+                found && break
+                deps = nothing
+                found = false
+            elseif (m = match(re_uuid_to_string, line)) != nothing
+                found = (into == UUID(m.captures[1]))
+            elseif (m = match(re_deps_to_any, line)) != nothing
+                deps = String(m.captures[1])
+            elseif ismatch(re_subsection_deps, line)
+                deps = Dict{String,UUID}()
+                in_deps = true
+            end
+        else # in_deps
+            if (m = match(re_key_to_string, line)) != nothing
+                deps[m.captures[1]] = UUID(m.captures[2])
+            elseif ismatch(re_section, line)
+                found && break
+                in_deps = false
+            end
         end
     end
-    if !found
-        @warn """
-            $name referenced in manifest but not found
-             - manifest = $(repr(manifest_file))
-            """
+    found || return nothing
+    deps isa String || return deps
+    # TODO: handle inline table syntax
+    if deps[1] != '[' || deps[end] != ']'
+        @warn "Unexpected TOML deps format:\n$deps"
         return nothing
     end
-    if uuid == nothing
-        @warn """
-            $name appears in manifest with no UUID
-             - manifest = $(repr(manifest_file))
-            """
-        return nothing
-    end
-    if path != nothing
-        path = abspath(dirname(manifest_file), path)
-        ispath(path) && return path, manifest_file, uuid
-        @warn """
-            $name/$uuid not installed at $(repr(path))
-             - manifest = $(repr(manifest_file))
-            """
-        return nothing
-    end
-    if uuid != nothing && hash != nothing
-        path = find_installed(uuid, hash, name)
-        path != nothing && return path, manifest_file, uuid
-        # TODO: prompt for installation
-        @warn "$name/$uuid not installed at $hash"
-    end
-    return nothing
+    return map(m->m.captures[1], eachmatch(r"\"(.*?)\"", deps))
 end
 
-function find_package_in_manifest(
-    manifest_file::AbstractString, uuid::UUID, io::IO)
-    # Core.println("$(getpid()): find_package_in_manifest($manifest_file, $uuid, $io)")
-    # uuid of package to be loaded
+function manifest_file_path_and_uuid(manifest_file::AbstractString, what::Union{UUID,String})
+    open(manifest_file) do io
+        manifest_file_path_and_uuid(manifest_file, what, io)
+    end
+end
+
+function manifest_file_path_and_uuid(manifest_file::AbstractString, uuid::UUID, io::IO)
     uuid′ = name = path = hash = nothing
     for line in eachline(io)
-        if (m = match(r"^\s*\[\s*\[\s*(\w+)\s*\]\s*\]\s*$", line)) != nothing
+        if (m = match(re_section_capture, line)) != nothing
             uuid′ == uuid && break
-            name = m.captures[1]
+            name = String(m.captures[1])
             path = hash = nothing
-        elseif (m = match(r"^\s*path\s*=\s*\"(.*)\"\s*$", line)) != nothing
-            path = m.captures[1]
-        elseif (m = match(r"^\s*hash-sha1\s*=\s*\"(.*)\"\s*$", line)) != nothing
-            hash = SHA1(m.captures[1])
-        elseif (m = match(r"^\s*uuid\s*=\s*\"(.*)\"\s*$", line)) != nothing
+        elseif (m = match(re_uuid_to_string, line)) != nothing
             uuid′ = UUID(m.captures[1])
+        elseif (m = match(re_path_to_string, line)) != nothing
+            path = String(m.captures[1])
+        elseif (m = match(re_hash_to_string, line)) != nothing
+            hash = SHA1(m.captures[1])
         end
     end
-    if uuid != uuid′
-        @warn """
-            $uuid referenced in manifest but not found
-             - manifest = $(repr(manifest_file))
-            """
-        return nothing
+    uuid′ == uuid || return nothing
+    path != nothing && return normpath(abspath(dirname(manifest_file), path)), uuid
+    hash == nothing && return nothing
+    slug = version_slug(uuid, hash)
+    for depot in DEPOT_PATH
+        path = abspath(depot, "packages", slug)
+        ispath(path) && return path, uuid
     end
-    if path != nothing
-        path = abspath(dirname(manifest_file), path)
-        ispath(path) && return path, manifest_file, uuid
-        @warn """
-            $name/$uuid not installed at $(repr(path))
-             - manifest = $(repr(manifest_file))
-            """
-        return nothing
-    end
-    if hash != nothing
-        path = find_installed(uuid, hash, name)
-        path != nothing && return path, manifest_file, uuid
-        # TODO: prompt for installation
-        @warn "$name/$uuid not installed at $hash"
-    end
-    return nothing
 end
 
-function find_package_in_manifest(manifest_file::AbstractString, uuid::UUID)
-    isfile_casesensitive(manifest_file) || return nothing
-    open(manifest_file) do io
-        find_package_in_manifest(manifest_file, uuid, io)
+function manifest_file_path_and_uuid(manifest_file::String, name::String, io::IO)
+    uuid = name′ = path = hash = nothing
+    for line in eachline(io)
+        if (m = match(re_section_capture, line)) != nothing
+            name′ == name && break
+            name′ = String(m.captures[1])
+            path = hash = nothing
+        elseif (m = match(re_uuid_to_string, line)) != nothing
+            uuid = UUID(m.captures[1])
+        elseif (m = match(re_path_to_string, line)) != nothing
+            path = String(m.captures[1])
+        elseif (m = match(re_hash_to_string, line)) != nothing
+            hash = SHA1(m.captures[1])
+        end
+    end
+    name′ == name || return nothing
+    path != nothing && return normpath(abspath(dirname(manifest_file), path)), uuid
+    uuid == nothing && return nothing
+    hash == nothing && return nothing
+    slug = version_slug(uuid, hash)
+    for depot in DEPOT_PATH
+        path = abspath(depot, "packages", slug)
+        ispath(path) && return path, uuid
     end
 end
+
+## other code loading functionality ##
 
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
@@ -635,7 +746,7 @@ function require(into::Module, mod::Symbol)
     end
     m = root_module(mod)
     if info isa Tuple
-        envinfo = info[2:end]
+        envinfo = info[2]
         if !isdefined(m, ENVINFO)
             ccall(:jl_set_const, Cvoid, (Any, Any, Any), m, ENVINFO, envinfo)
         else
@@ -756,9 +867,9 @@ function _require(into::Module, mod::Symbol)
 
         # just load the file normally via include
         # for unknown dependencies
-        if info isa Tuple{String,String,UUID}
+        if info isa Tuple
             # horrible hack, but since we don't control module creation, ¯\_(ツ)_/¯
-            ccall(:jl_set_global, Cvoid, (Any, Any, Any), __toplevel__, ENVINFO, info[2:end])
+            ccall(:jl_set_global, Cvoid, (Any, Any, Any), __toplevel__, ENVINFO, info[2])
         end
         try
             Base.include_relative(__toplevel__, path)
@@ -777,7 +888,7 @@ function _require(into::Module, mod::Symbol)
                 error("Module $mod declares __precompile__(true) but require failed to create a usable precompiled cache file.")
             end
         finally
-            if info isa Tuple{String,String,UUID}
+            if info isa Tuple
                 ccall(:jl_set_global, Cvoid, (Any, Any, Any), __toplevel__, ENVINFO, nothing)
             end
         end
@@ -872,7 +983,7 @@ evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 function create_expr_cache(
     input::String, output::String,
     concrete_deps::typeof(_concrete_dependencies),
-    envinfo::Union{Nothing,Tuple})
+    envinfo::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
     code_object = """
         while !eof(STDIN)
@@ -958,7 +1069,7 @@ function compilecache(into::Module, name::String)
     else
         @logmsg verbosity "Precompiling module $name"
     end
-    envinfo = info isa Tuple ? info[2:end] : nothing
+    envinfo = info isa Tuple ? info[2] : nothing
     if success(create_expr_cache(path, cachefile, concrete_deps, envinfo))
         # append checksum to the end of the .ji file:
         open(cachefile, "a+") do f
