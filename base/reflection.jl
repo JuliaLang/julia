@@ -222,6 +222,8 @@ Get a hash value for `x` based on object identity. `objectid(x)==objectid(y)` if
 """
 objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
+# concrete datatype predicates
+
 struct DataTypeLayout
     nfields::UInt32
     alignment::UInt32
@@ -231,22 +233,64 @@ struct DataTypeLayout
     # fielddesc_type : 2;
 end
 
+"""
+    Base.datatype_alignment(dt::DataType) -> Int
 
-# type predicates
-datatype_alignment(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    Int(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment & 0x1FF)
-
-datatype_haspadding(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 9) & 1 == 1
-
-datatype_pointerfree(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 10) & 0xFFFFF == 0
-
-datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 30) & 3
+Memory allocation minimum alignment for instances of this type.
+Can be called on any `isconcretetype`.
+"""
+function datatype_alignment(dt::DataType)
+    @_pure_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
+    return Int(alignment & 0x1FF)
+end
 
 """
-    isimmutable(v)
+    Base.datatype_haspadding(dt::DataType) -> Bool
+
+Return whether the fields of instances of this type are packed in memory,
+with no intervening padding bytes.
+Can be called on any `isconcretetype`.
+"""
+function datatype_haspadding(dt::DataType)
+    @_pure_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
+    return (alignment >> 9) & 1 == 1
+end
+
+"""
+    Base.datatype_pointerfree(dt::DataType) -> Bool
+
+Return whether instances of this type can contain references to gc-managed memory.
+Can be called on any `isconcretetype`.
+"""
+function datatype_pointerfree(dt::DataType)
+    @_pure_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
+    return (alignment >> 10) & 0xFFFFF == 0
+end
+
+"""
+    Base.datatype_fielddesc_type(dt::DataType) -> Int
+
+Return the size in bytes of each field-description entry in the layout array,
+located at `(dt.layout + sizeof(DataTypeLayout))`.
+Can be called on any `isconcretetype`.
+
+See also [`Base.fieldoffset`](@ref).
+"""
+function datatype_fielddesc_type(dt::DataType)
+    @_pure_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
+    return (alignment >> 30) & 3
+end
+
+"""
+    isimmutable(v) -> Bool
 
 Return `true` iff value `v` is immutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
@@ -263,15 +307,45 @@ false
 """
 isimmutable(@nospecialize(x)) = (@_pure_meta; !typeof(x).mutable)
 
-isstructtype(t::DataType) = (@_pure_meta; length(t.types) != 0 || (t.size==0 && !t.abstract))
-isstructtype(x) = (@_pure_meta; false)
+"""
+    Base.isstructtype(T) -> Bool
+
+Determine whether type `T` was declared as a struct type
+(i.e. using the `struct` or `mutable struct` keyword).
+"""
+function isstructtype(@nospecialize(t::Type))
+    @_pure_meta
+    t = unwrap_unionall(t)
+    # TODO: what to do for `Union`?
+    isa(t, DataType) || return false
+    return length(t.types) != 0 || (t.size == 0 && !t.abstract)
+end
+
+"""
+    Base.isprimitivetype(T) -> Bool
+
+Determine whether type `T` was declared as a primitive type
+(i.e. using the `primitive` keyword).
+"""
+function isprimitivetype(@nospecialize(t::Type))
+    @_pure_meta
+    t = unwrap_unionall(t)
+    # TODO: what to do for `Union`?
+    isa(t, DataType) || return false
+    return length(t.types) == 0 && t.size != 0 && !t.abstract
+end
 
 """
     isbits(T)
 
-Return `true` if `T` is a "plain data" type, meaning it is immutable and contains no
-references to other values. Typical examples are numeric types such as [`UInt8`](@ref),
+Return `true` if type `T` is a "plain data" type,
+meaning it is immutable and contains no references to other values,
+only `primitive` types and other `isbits` types.
+Typical examples are numeric types such as [`UInt8`](@ref),
 [`Float64`](@ref), and [`Complex{Float64}`](@ref).
+This category of types is significant since they are valid as type parameters,
+may not track [`isdefined`](@ref) / [`isassigned`](@ref) status,
+and have a defined layout that is compatible with C.
 
 # Examples
 ```jldoctest
@@ -282,71 +356,75 @@ julia> isbits(Complex)
 false
 ```
 """
-isbits(t::DataType) = (@_pure_meta; !t.mutable & (t.layout != C_NULL) && datatype_pointerfree(t))
-isbits(t::Type) = (@_pure_meta; false)
-isbits(x) = (@_pure_meta; isbits(typeof(x)))
-
-_isleaftype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
+isbits(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitstype)
+isbits(@nospecialize x) = (@_pure_meta; typeof(x).isbitstype)
 
 """
-    isconcrete(T)
+    isdispatchtuple(T)
 
-Determine whether `T` is a concrete type, meaning it can have direct instances
+Determine whether type `T` is a tuple "leaf type",
+meaning it could appear as a type signature in dispatch
+and has no subtypes (or supertypes) which could appear in a call.
+"""
+isdispatchtuple(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isdispatchtuple)
+
+"""
+    isconcretetype(T)
+
+Determine whether type `T` is a concrete type, meaning it could have direct instances
 (values `x` such that `typeof(x) === T`).
 
 # Examples
 ```jldoctest
-julia> isconcrete(Complex)
+julia> isconcretetype(Complex)
 false
 
-julia> isconcrete(Complex{Float32})
+julia> isconcretetype(Complex{Float32})
 true
 
-julia> isconcrete(Vector{Complex})
+julia> isconcretetype(Vector{Complex})
 true
 
-julia> isconcrete(Vector{Complex{Float32}})
+julia> isconcretetype(Vector{Complex{Float32}})
 true
 
-julia> isconcrete(Union{})
+julia> isconcretetype(Union{})
 false
 
-julia> isconcrete(Union{Int,String})
+julia> isconcretetype(Union{Int,String})
 false
 ```
 """
-function isconcrete(@nospecialize(t))
-    @_pure_meta
-    return (isa(t, DataType) && !t.abstract &&
-            !t.hasfreetypevars &&
-            (t.name !== Tuple.name || all(isconcrete, t.parameters)))
-end
+isconcretetype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isconcretetype)
 
 """
-    Base.isabstract(T)
+    Base.isabstracttype(T)
 
-Determine whether `T` was declared as an abstract type (i.e. using the
-`abstract` keyword).
+Determine whether type `T` was declared as an abstract type
+(i.e. using the `abstract` keyword).
 
 # Examples
 ```jldoctest
-julia> Base.isabstract(AbstractArray)
+julia> Base.isabstracttype(AbstractArray)
 true
 
-julia> Base.isabstract(Vector)
+julia> Base.isabstracttype(Vector)
 false
 ```
 """
-function isabstract(@nospecialize(t))
+function isabstracttype(@nospecialize(t))
     @_pure_meta
     t = unwrap_unionall(t)
-    isa(t,DataType) && t.abstract
+    # TODO: what to do for `Union`?
+    return isa(t, DataType) && t.abstract
 end
 
 """
     Base.parameter_upper_bound(t::UnionAll, idx)
 
-Determine the upper bound of a type parameter in the underlying type. E.g.:
+Determine the upper bound of a type parameter in the underlying datatype.
+This method should generally not be relied upon:
+code instead should usually use static parameters in dispatch to extract these values.
 
 # Examples
 ```jldoctest
@@ -363,7 +441,7 @@ Any
 """
 function parameter_upper_bound(t::UnionAll, idx)
     @_pure_meta
-    rewrap_unionall(unwrap_unionall(t).parameters[idx], t)
+    return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
 end
 
 """
@@ -541,7 +619,7 @@ function _subtypes(m::Module, x::Union{DataType,UnionAll},
 end
 
 function _subtypes_in(mods::Array, x::Union{DataType,UnionAll})
-    if !isabstract(x)
+    if !isabstracttype(x)
         # Fast path
         return Union{DataType,UnionAll}[]
     end
@@ -821,8 +899,8 @@ function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::B
                     (Ptr{Cvoid}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)
     end
 
-    # TODO: use jl_is_cacheable_sig instead of isleaftype
-    _isleaftype(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" * str)
+    # TODO: use jl_is_cacheable_sig instead of isdispatchtuple
+    isdispatchtuple(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" * str)
     return str
 end
 
@@ -853,7 +931,7 @@ code_native(::IO, ::Any, ::Symbol) = error("illegal code_native call") # resolve
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
 function func_for_method_checked(m::Method, @nospecialize types)
-    if isdefined(m,:generator) && !_isleaftype(types)
+    if isdefined(m, :generator) && !isdispatchtuple(types)
         error("cannot call @generated function `", m, "` ",
               "with abstract argument types: ", types)
     end

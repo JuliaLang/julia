@@ -34,7 +34,7 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
     if isempty(t)
         print(io, typeof(t), "()")
     else
-        if _isleaftype(K) && _isleaftype(V)
+        if isconcretetype(K) && isconcretetype(V)
             print(io, typeof(t).name)
         else
             print(io, typeof(t))
@@ -158,7 +158,7 @@ dict_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
 dict_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(dict_with_eltype(DT_apply, @default_eltype(typeof(kv))), kv)
 function dict_with_eltype(DT_apply::F, kv::Generator, t) where F
     T = @default_eltype(kv)
-    if T <: Union{Pair, Tuple{Any, Any}} && _isleaftype(T)
+    if T <: Union{Pair, Tuple{Any, Any}} && isconcretetype(T)
         return dict_with_eltype(DT_apply, kv, T)
     end
     return grow_to!(dict_with_eltype(DT_apply, T), kv)

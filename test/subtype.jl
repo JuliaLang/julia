@@ -639,7 +639,6 @@ macro testintersect(a, b, result)
     else
         cmp = :(==)
     end
-    cmp = esc(cmp)
     a = esc(a)
     b = esc(b)
     result = esc(result)
@@ -1068,7 +1067,7 @@ let a = Tuple{Float64,T7} where T7,
 end
 let a = Tuple{T1,T1} where T1,
     b = Tuple{Val{S2},S6} where S2 where S6
-    @test_broken typeintersect(a, b) == typeintersect(b, a)
+    @test typeintersect(a, b) == typeintersect(b, a)
 end
 let a = Val{Tuple{T1,T1}} where T1,
     b = Val{Tuple{Val{S2},S6}} where S2 where S6

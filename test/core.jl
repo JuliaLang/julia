@@ -175,7 +175,7 @@ let elT = T22624.body.body.body.types[1].parameters[1]
     elT2 = elT.body.types[1].parameters[1]
     @test elT2 == T22624{Int64, Int64, C} where C
     @test elT2.body.types[1].parameters[1] === elT2
-    @test Base._isleaftype(elT2.body.types[1])
+    @test Base.isconcretetype(elT2.body.types[1])
 end
 
 # issue #3890
@@ -4511,7 +4511,7 @@ let a = Val{Val{TypeVar(:_, Int)}},
 
     @test !isdefined(a, :instance)
     @test  isdefined(b, :instance)
-    @test Base._isleaftype(b)
+    @test Base.isconcretetype(b)
 end
 
 # A return type widened to Type{Union{T,Nothing}} should not confuse
@@ -5667,9 +5667,9 @@ let
     b3 = B23367[b][1] # copy b via array assignment
     addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
     @test addr(b)  == addr(b)
-    @test addr(b)  != addr(b2)
-    @test addr(b)  != addr(b3)
-    @test addr(b2) != addr(b3)
+    @test addr(b)  == addr(b2)
+    @test addr(b)  == addr(b3)
+    @test addr(b2) == addr(b3)
 
     @test b === b2 === b3 === b
     @test egal(b, b2) && egal(b2, b3) && egal(b3, b)
@@ -5678,7 +5678,7 @@ let
     @test b.x === Int8(91)
     @test b.z === Int8(23)
     @test b.y === A23367((Int8(1), Int8(2), Int8(3), Int8(4), Int8(5), Int8(6), Int8(7)))
-    @test sizeof(b) == 12
+    @test sizeof(b) == sizeof(Int) * 3
     @test A23367(Int8(1)).x === Int8(1)
     @test A23367(Int8(0)).x === Int8(0)
     @test A23367(Int16(1)).x === Int16(1)

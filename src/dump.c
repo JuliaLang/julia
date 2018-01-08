@@ -334,9 +334,13 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt)
     write_int32(s->s, dt->size);
     int has_instance = (dt->instance != NULL);
     int has_layout = (dt->layout != NULL);
-    write_uint8(s->s, dt->abstract | (dt->mutabl<<1) | (has_layout<<2) | (has_instance<<3) |
-                (dt->hasfreetypevars<<4) | (dt->isleaftype<<5));
-    write_int32(s->s, dt->depth);
+    write_uint8(s->s, dt->abstract | (dt->mutabl << 1) | (has_layout << 2) | (has_instance << 3));
+    write_uint8(s->s, dt->hasfreetypevars
+            | (dt->isconcretetype << 1)
+            | (dt->isdispatchtuple << 2)
+            | (dt->isbitstype << 3)
+            | (dt->zeroinit << 4)
+            | (dt->isinlinealloc << 5));
     if (!dt->abstract) {
         write_uint16(s->s, dt->ninitialized);
     }
@@ -1154,7 +1158,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     }
     size_t size = read_int32(s->s);
     uint8_t flags = read_uint8(s->s);
-    uint8_t depth = read_int32(s->s);
+    uint8_t memflags = read_uint8(s->s);
     jl_datatype_t *dt = NULL;
     if (tag == 0 || tag == 5 || tag == 10)
         dt = jl_new_uninitialized_datatype();
@@ -1169,13 +1173,16 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->struct_decl = NULL;
     dt->instance = NULL;
     dt->ditype = NULL;
-    dt->abstract = flags&1;
-    dt->mutabl = (flags>>1)&1;
-    int has_layout = (flags>>2)&1;
-    int has_instance = (flags>>3)&1;
-    dt->hasfreetypevars = (flags>>4)&1;
-    dt->isleaftype = (flags>>5)&1;
-    dt->depth = depth;
+    dt->abstract = flags & 1;
+    dt->mutabl = (flags >> 1) & 1;
+    int has_layout = (flags >> 2) & 1;
+    int has_instance = (flags >> 3) & 1;
+    dt->hasfreetypevars = memflags & 1;
+    dt->isconcretetype = (memflags >> 1) & 1;
+    dt->isdispatchtuple = (memflags >> 2) & 1;
+    dt->isbitstype = (memflags >> 3) & 1;
+    dt->zeroinit = (memflags >> 4) & 1;
+    dt->isinlinealloc = (memflags >> 5) & 1;
     dt->types = NULL;
     dt->parameters = NULL;
     dt->name = NULL;

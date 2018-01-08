@@ -827,10 +827,10 @@ Deprecated or removed
     been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
     instead ([#22880], [#22932]).
 
-  * `isleaftype` is deprecated in favor of a simpler predicate `isconcrete`. Concrete types are
-    those that might equal `typeof(x)` for some `x`; `isleaftype` includes some types for which
-    this is not true. If you are certain you need the old behavior, it is temporarily available
-    as `Base._isleaftype` ([#17086]).
+  * `isleaftype` is deprecated in favor of the simpler predicates `isconcretetype` and `isdispatchtuple`.
+    Concrete types are those that might equal `typeof(x)` for some `x`;
+    `isleaftype` included some types for which this is not true. Those are now categorized more precisely
+    as "dispatch tuple types" and "!has_free_typevars" (not exported). ([#17086], [#25496])
 
   * `contains(eq, itr, item)` is deprecated in favor of `any` with a predicate ([#23716]).
 

@@ -13,44 +13,10 @@ const TUPLE_COMPLEXITY_LIMIT_DEPTH = 3
 # limitation heuristics #
 #########################
 
-function limit_type_depth(@nospecialize(t), d::Int)
-    r = limit_type_depth(t, d, true, TypeVar[])
-    @assert !isa(t, Type) || t <: r
-    return r
-end
-
-limit_tuple_depth(params::Params, @nospecialize(t)) = limit_tuple_depth_(params,t,0)
-
-function limit_tuple_depth_(params::Params, @nospecialize(t), d::Int)
-    if isa(t,Union)
-        # also limit within Union types.
-        # may have to recur into other stuff in the future too.
-        return Union{limit_tuple_depth_(params, t.a, d+1),
-                     limit_tuple_depth_(params, t.b, d+1)}
-    elseif isa(t,UnionAll)
-        ub = limit_tuple_depth_(params, t.var.ub, d)
-        if ub !== t.var.ub
-            var = TypeVar(t.var.name, t.var.lb, ub)
-            body = t{var}
-        else
-            var = t.var
-            body = t.body
-        end
-        body = limit_tuple_depth_(params, body, d)
-        return UnionAll(var, body)
-    elseif !(isa(t,DataType) && t.name === Tuple.name)
-        return t
-    elseif d > params.MAX_TUPLE_DEPTH
-        return Tuple
-    end
-    p = map(x->limit_tuple_depth_(params,x,d+1), t.parameters)
-    Tuple{p...}
-end
-
-limit_tuple_type = (@nospecialize(t), params::Params) -> limit_tuple_type_n(t, params.MAX_TUPLETYPE_LEN)
+limit_tuple_type(@nospecialize(t), params::Params) = limit_tuple_type_n(t, params.MAX_TUPLETYPE_LEN)
 
 function limit_tuple_type_n(@nospecialize(t), lim::Int)
-    if isa(t,UnionAll)
+    if isa(t, UnionAll)
         return UnionAll(t.var, limit_tuple_type_n(t.body, lim))
     end
     p = t.parameters
@@ -60,75 +26,6 @@ function limit_tuple_type_n(@nospecialize(t), lim::Int)
         return Tuple{p[1:(lim-1)]..., Vararg{tail}}
     end
     return t
-end
-
-function limit_type_depth(@nospecialize(t), d::Int, cov::Bool, vars::Vector{TypeVar}=TypeVar[])
-    if isa(t, Union)
-        if d < 0
-            if cov
-                return Any
-            else
-                var = TypeVar(:_)
-                push!(vars, var)
-                return var
-            end
-        end
-        return Union{limit_type_depth(t.a, d - 1, cov, vars),
-                     limit_type_depth(t.b, d - 1, cov, vars)}
-    elseif isa(t, UnionAll)
-        v = t.var
-        if v.ub === Any
-            if v.lb === Bottom
-                return UnionAll(t.var, limit_type_depth(t.body, d, cov, vars))
-            end
-            ub = Any
-        else
-            ub = limit_type_depth(v.ub, d - 1, cov, vars)
-        end
-        if v.lb === Bottom || type_depth(v.lb) > d
-            # note: lower bounds need to be widened by making them lower
-            lb = Bottom
-        else
-            lb = v.lb
-        end
-        v2 = TypeVar(v.name, lb, ub)
-        return UnionAll(v2, limit_type_depth(t{v2}, d, cov, vars))
-    elseif !isa(t,DataType)
-        return t
-    end
-    P = t.parameters
-    isempty(P) && return t
-    if d < 0
-        if isvarargtype(t)
-            # never replace Vararg with non-Vararg
-            # passing depth=0 avoids putting a bare typevar here, for the diagonal rule
-            return Vararg{limit_type_depth(P[1], 0, cov, vars), P[2]}
-        end
-        widert = t.name.wrapper
-        if !(t <: widert)
-            # This can happen when a typevar has bounds too wide for its context, e.g.
-            # `Complex{T} where T` is not a subtype of `Complex`. In that case widen even
-            # faster to something safe to ensure the result is a supertype of the input.
-            widert = Any
-        end
-        cov && return widert
-        var = TypeVar(:_, widert)
-        push!(vars, var)
-        return var
-    end
-    stillcov = cov && (t.name === Tuple.name)
-    newdepth = d - 1
-    if isvarargtype(t)
-        newdepth = max(newdepth, 0)
-    end
-    Q = map(x -> limit_type_depth(x, newdepth, stillcov, vars), P)
-    R = t.name.wrapper{Q...}
-    if cov && !stillcov
-        for var in vars
-            R = UnionAll(var, R)
-        end
-    end
-    return R
 end
 
 # limit the complexity of type `t` to be simpler than the comparison type `compare`
@@ -144,6 +41,61 @@ function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize
       # since we only actually need to demonstrate that repeated application would reaches a fixed point,
       #not that it is already at the fixed point
     return r
+end
+
+# try to find `type` somewhere in `comparison` type
+# at a minimum nesting depth of `mindepth`
+function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
+    if mindepth > 0
+        mindepth -= 1
+    end
+    if t === c
+        return mindepth == 0
+    end
+    if isa(c, TypeVar)
+        # see if it is replacing a TypeVar upper bound with something simpler
+        return is_derived_type(t, c.ub, mindepth)
+    elseif isa(c, Union)
+        # see if it is one of the elements of the union
+        return is_derived_type(t, c.a, mindepth + 1) || is_derived_type(t, c.b, mindepth + 1)
+    elseif isa(c, UnionAll)
+        # see if it is derived from the body
+        return is_derived_type(t, c.body, mindepth)
+    elseif isa(c, DataType)
+        if isa(t, DataType)
+            # see if it is one of the supertypes of a parameter
+            super = supertype(c)
+            while super !== Any
+                t === super && return true
+                super = supertype(super)
+            end
+        end
+        # see if it was extracted from a type parameter
+        cP = c.parameters
+        for p in cP
+            is_derived_type(t, p, mindepth) && return true
+        end
+        if isconcretetype(c) && isbits(c)
+            # see if it was extracted from a fieldtype
+            # however, only look through types that can be inlined
+            # to ensure monotonicity of derivation
+            # since we know that for immutable, concrete, bits types,
+            # the field types must have been constructed prior to the type,
+            # it cannot have a reference cycle in the type graph
+            cF = c.types
+            for f in cF
+                is_derived_type(t, f, mindepth) && return true
+            end
+        end
+    end
+    return false
+end
+
+function is_derived_type_from_any(@nospecialize(t), sources::SimpleVector, mindepth::Int)
+    for s in sources
+        is_derived_type(t, s, mindepth) && return true
+    end
+    return false
 end
 
 # type vs. comparison or which was derived from source

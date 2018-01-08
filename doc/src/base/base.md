@@ -119,6 +119,7 @@ Base.copy
 Base.deepcopy
 Base.getproperty
 Base.setproperty!
+Base.propertynames
 Core.getfield
 Core.setfield!
 Core.isdefined
@@ -132,28 +133,56 @@ Base.identity
 
 ## Properties of Types
 
+### Type relations
+
 ```@docs
 Base.supertype
 Core.:(<:)
 Base.:(>:)
 Base.subtypes
+Base.typejoin
+Base.typeintersect
+Base.promote_type
+Base.promote_rule
+Base.isdispatchtuple
+```
+
+### Declared structure
+
+```@docs
+Base.isimmutable
+Base.isabstracttype
+Base.isprimitivetype
+Base.isstructtype
+Base.datatype_name
+Base.fieldnames
+Base.fieldname
+```
+
+### Memory layout
+
+```@docs
+Base.sizeof(::Type)
+Base.isconcretetype
+Base.isbits
+Core.fieldtype
+Base.fieldcount
+Base.fieldoffset
+Base.datatype_alignment
+Base.datatype_haspadding
+Base.datatype_pointerfree
+```
+
+### Special values
+
+```@docs
 Base.typemin
 Base.typemax
 Base.realmin
 Base.realmax
 Base.maxintfloat
-Base.sizeof(::Type)
 Base.eps(::Type{<:AbstractFloat})
 Base.eps(::AbstractFloat)
-Base.promote_type
-Base.promote_rule
-Base.fieldoffset
-Core.fieldtype
-Base.isimmutable
-Base.isbits
-Base.isconcrete
-Base.typejoin
-Base.typeintersect
 Base.instances
 ```
 
@@ -311,11 +340,6 @@ Base.@__MODULE__
 Base.fullname
 Base.names
 Core.nfields
-Base.fieldnames
-Base.fieldname
-Base.fieldcount
-Base.propertynames
-Base.datatype_name
 Base.isconst
 Base.function_name
 Base.functionloc(::Any, ::Any)

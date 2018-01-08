@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @pure, @propagate_inbounds, _return_type, _default_type, _isleaftype, @_inline_meta
+using Base: @propagate_inbounds, _return_type, _default_type, @_inline_meta
 import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
 
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
@@ -24,19 +24,22 @@ struct Transpose{T,S} <: AbstractMatrix{T}
 end
 
 function checkeltype_adjoint(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype,ParentEltype}
-    ResultEltype === Base.promote_op(adjoint, ParentEltype) || error(string(
-        "Element type mismatch. Tried to create an `Adjoint{$ResultEltype}` ",
-        "from an object with eltype `$ParentEltype`, but the element type of ",
-        "the adjoint of an object with eltype `$ParentEltype` must be ",
-        "`$(Base.promote_op(adjoint, ParentEltype))`."))
+    Expected = Base.promote_op(adjoint, ParentEltype)
+    ResultEltype === Expected || error(string(
+        "Element type mismatch. Tried to create an `Adjoint{", ResultEltype, "}` ",
+        "from an object with eltype `", ParentEltype, "`, but the element type of ",
+        "the adjoint of an object with eltype `", ParentEltype, "` must be ",
+        "`", Expected, "`."))
     return nothing
 end
-function checkeltype_transpose(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype,ParentEltype}
-    ResultEltype === Base.promote_op(transpose, ParentEltype) || error(string(
-        "Element type mismatch. Tried to create a `Transpose{$ResultEltype}` ",
-        "from an object with eltype `$ParentEltype`, but the element type of ",
-        "the transpose of an object with eltype `$ParentEltype` must be ",
-        "`$(Base.promote_op(transpose, ParentEltype))`."))
+
+function checkeltype_transpose(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype, ParentEltype}
+    Expected = Base.promote_op(transpose, ParentEltype)
+    ResultEltype === Expected || error(string(
+        "Element type mismatch. Tried to create a `Transpose{", ResultEltype, "}` ",
+        "from an object with eltype `", ParentEltype, "`, but the element type of ",
+        "the transpose of an object with eltype `", ParentEltype, "` must be ",
+        "`", Expected, "`."))
     return nothing
 end
 

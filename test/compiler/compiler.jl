@@ -2,7 +2,6 @@
 
 # tests for Core.Compiler correctness and precision
 import Core.Compiler: Const, Conditional, ⊑
-const isleaftype = Core.Compiler._isleaftype
 
 using Random
 
@@ -210,8 +209,8 @@ end
 end
 let
     ast12474 = code_typed(f12474, Tuple{Float64})
-    @test isleaftype(ast12474[1][2])
-    @test all(isleaftype, ast12474[1][1].slottypes)
+    @test isconcretetype(ast12474[1][2])
+    @test all(isconcretetype, ast12474[1][1].slottypes)
 end
 
 
@@ -243,7 +242,7 @@ bar7810() = [Foo7810([(a,b) for a in 1:2]) for b in 3:4]
 
 # issue #11366
 f11366(x::Type{Ref{T}}) where {T} = Ref{x}
-@test !isleaftype(Base.return_types(f11366, (Any,))[1])
+@test !isconcretetype(Base.return_types(f11366, (Any,))[1])
 
 
 let f(T) = Type{T}
@@ -437,10 +436,10 @@ function is_typed_expr(e::Expr)
     return false
 end
 test_inferred_static(@nospecialize(other)) = true
-test_inferred_static(slot::TypedSlot) = @test isleaftype(slot.typ)
+test_inferred_static(slot::TypedSlot) = @test isconcretetype(slot.typ)
 function test_inferred_static(expr::Expr)
     if is_typed_expr(expr)
-        @test isleaftype(expr.typ)
+        @test isconcretetype(expr.typ)
     end
     for a in expr.args
         test_inferred_static(a)
@@ -448,10 +447,10 @@ function test_inferred_static(expr::Expr)
 end
 function test_inferred_static(arrow::Pair)
     code, rt = arrow
-    @test isleaftype(rt)
+    @test isconcretetype(rt)
     @test code.inferred
-    @test all(x->isleaftype(x), code.slottypes)
-    @test all(x->isleaftype(x), code.ssavaluetypes)
+    @test all(isconcretetype, code.slottypes)
+    @test all(isconcretetype, code.ssavaluetypes)
     for e in code.code
         test_inferred_static(e)
     end
@@ -652,7 +651,7 @@ function h20343()
     i = ntuple(i->n==i ? "" : 0, 3)::Union{Tuple{String,Int,Int},Tuple{Int,String,Int},Tuple{Int,Int,String}}
     f20343(i..., i...)
 end
-@test all(t -> t<:Integer, Base.return_types(h20343, ()))
+@test Base.return_types(h20343, ()) == [Union{Int8, Int}]
 function i20343()
     f20343([1,2,3]..., 4)
 end
@@ -695,16 +694,6 @@ end
 # infinite type growth via lower bounds (formed by intersection)
 f20267(x::T20267{T}, y::T) where (T) = f20267(Any[1][1], x.inds)
 @test Base.return_types(f20267, (Any, Any)) == Any[Union{}]
-
-# issue #20615
-let A = 1:2, z = zip(A, A, A, A, A, A, A, A, A, A, A, A)
-    @test z isa Core.Compiler.limit_type_depth(typeof(z), 0)
-    @test start(z) == (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, 1)))))))))))
-end
-# introduce TypeVars in Unions in invariant position
-let T = Val{Val{Val{Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64}}}}
-    @test T <: Core.Compiler.limit_type_depth(T, 0)
-end
 
 # issue #20704
 f20704(::Int) = 1
@@ -853,17 +842,6 @@ tuplevec_20847 = Tuple{Float64, Float64}[(0.0,0.0), (1.0,0.0)]
 
 for A in (1,)
     @test segfaultfunction_20847(tuplevec_20847) == nothing
-end
-
-# issue #21848
-@test Core.Compiler.limit_type_depth(Ref{Complex{T} where T}, 0) == Ref
-let T = Tuple{Tuple{Int64, Nothing},
-              Tuple{Tuple{Int64, Nothing},
-                    Tuple{Int64, Tuple{Tuple{Int64, Nothing},
-                                       Tuple{Tuple{Int64, Nothing}, Tuple{Int64, Tuple{Tuple{Int64, Nothing}, Tuple{Tuple, Tuple}}}}}}}}
-    @test Core.Compiler.limit_type_depth(T, 0) >: T
-    @test Core.Compiler.limit_type_depth(T, 1) >: T
-    @test Core.Compiler.limit_type_depth(T, 2) >: T
 end
 
 # Issue #20902, check that this doesn't error.
@@ -1150,7 +1128,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(UnionAll, Const(Type{Array})) === Bool
     @test isa_tfunc(Union, Const(Union{Float32, Float64})) === Bool
     @test isa_tfunc(Union, Type{Union}) === Const(true)
-    @test isa_tfunc(typeof(Union{}), Const(Int)) === Bool # any result is ok
+    @test isa_tfunc(typeof(Union{}), Const(Int)) === Const(false) # any result is ok
     @test isa_tfunc(typeof(Union{}), Const(Union{})) === Const(false)
     @test isa_tfunc(typeof(Union{}), typeof(Union{})) === Const(false)
     @test isa_tfunc(typeof(Union{}), Union{}) === Const(false) # any result is ok
@@ -1251,13 +1229,6 @@ f23685() = update23685!(h23685)
 let c(::Type{T}, x) where {T<:Array} = T,
     f() = c(Vector{Any[Int][1]}, [1])
     @test f() === Vector{Int}
-end
-
-# issue #23786
-struct T23786{D<:Tuple{Vararg{Vector{T} where T}}, N}
-end
-let t = Tuple{Type{T23786{D, N} where N where D<:Tuple{Vararg{Array{T, 1} where T, N} where N}}}
-    @test Core.Compiler.limit_type_depth(t, 4) >: t
 end
 
 # issue #13183
