@@ -190,7 +190,7 @@ end
 # pr #11554
 let a,
     io = IOBuffer(SubString("***αhelloworldω***", 4, 16)),
-    io2 = IOBuffer(b"goodnightmoon", true, true)
+    io2 = IOBuffer(Vector{UInt8}(b"goodnightmoon"), true, true)
 
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
