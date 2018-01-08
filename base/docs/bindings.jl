@@ -9,7 +9,7 @@ struct Binding
     function Binding(m::Module, v::Symbol)
         # Normalise the binding module for module symbols so that:
         #   Binding(Base, :Base) === Binding(Main, :Base)
-        m = module_name(m) === v ? module_parent(m) : m
+        m = module_name(m) === v ? enclosingmodule(m) : m
         new(Base.binding_module(m, v), v)
     end
 end

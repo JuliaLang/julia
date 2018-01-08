@@ -197,7 +197,7 @@ function is_exported_from_stdlib(name::Symbol, mod::Module)
     !isdefined(mod, name) && return false
     orig = getfield(mod, name)
     while !(mod === Base || mod === Core)
-        parent = module_parent(mod)
+        parent = enclosingmodule(mod)
         if mod === Main || mod === parent || parent === Main
             return false
         end
@@ -1568,7 +1568,7 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
             t = getfield(m, s)
             if t === x || t === m
                 continue
-            elseif isa(t, Module) && module_name(t) === s && module_parent(t) === m
+            elseif isa(t, Module) && module_name(t) === s && enclosingmodule(t) === m
                 # recurse into primary module bindings
                 dumpsubtypes(io, x, t, n, indent)
             elseif isa(t, UnionAll) && directsubtype(t::UnionAll, x)
