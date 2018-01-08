@@ -548,6 +548,10 @@ convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
 
 ## replace/replace! ##
 
+# to make replace/replace! work for a new container type Cont, only
+# replace!(prednew::Callable, A::Cont; count::Integer=typemax(Int))
+# has to be implemented
+
 """
     replace!(A, old_new::Pair...; [count::Integer])
 
@@ -641,12 +645,12 @@ julia> replace!(x->2x, Set([3, 6]))
 Set([6, 12])
 ```
 """
-replace!(prednew::Callable, A; count::Integer=typemax(Int)) =
-    replace!(prednew, A, count=clamp(count, typemin(Int), typemax(Int)) % Int)
-
-
-replace!(prednew::Callable, A; count::Int=typemax(Int)) =
-    throw(MethodError(replace!, (prednew, A)))
+function replace!(prednew::Callable, A::Union{AbstractArray,AbstractDict,AbstractSet};
+                  count::Integer=typemax(Int))
+    count < 0 && throw(DomainError(count, "`count` must not be negative"))
+    count != 0 && _replace!(prednew, A, min(count, typemax(Int)) % Int)
+    A
+end
 
 """
     replace(A, old_new::Pair...; [count::Integer])
@@ -746,9 +750,7 @@ end
 _replace_update_dict!(repl::Vector{<:Pair}, x, ::Nothing) = false
 _replace_update_dict!(repl::Vector{<:Pair}, x, y) = _replace_update_dict!(repl, x, Some(y))
 
-function replace!(prednew::Callable, A::Union{AbstractDict,AbstractSet}; count::Int=typemax(Int))
-    count < 0 && throw(DomainError(count, "`count` must not be negative"))
-    count == 0 && return A
+function _replace!(prednew::Callable, A::Union{AbstractDict,AbstractSet}, count::Int)
     repl = Pair{eltype(A),eltype(A)}[]
     c = 0
     for x in A
@@ -761,7 +763,6 @@ function replace!(prednew::Callable, A::Union{AbstractDict,AbstractSet}; count::
     for oldnew in repl
         push!(A, last(oldnew))
     end
-    A
 end
 
 ### AbstractArray
@@ -774,13 +775,10 @@ end
 _replace_update!(A::AbstractArray, i::Integer, ::Nothing) = false
 _replace_update!(A::AbstractArray, i::Integer, y) = _replace_update!(A, i, Some(y))
 
-function replace!(prednew::Callable, A::AbstractArray; count::Int=typemax(Int))
-    count < 0 && throw(DomainError(count, "`count` must not be negative"))
-    count == 0 && return A
+function _replace!(prednew::Callable, A::AbstractArray, count::Int)
     c = 0
     for i in eachindex(A)
         c += _replace_update!(A, i, prednew(A[i]))
         c == count && break
     end
-    A
 end
