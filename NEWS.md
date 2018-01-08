@@ -849,7 +849,7 @@ Deprecated or removed
 
   * `cumsum`, `cumprod`, `accumulate`, their mutating versions, and `diff` all now require a `dim`
     argument instead of defaulting to using the first dimension unless there is only
-    one dimension ([#24684]).
+    one dimension ([#24684], [#25457]).
 
   * The `sum_kbn` and `cumsum_kbn` functions have been moved to the
     [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
