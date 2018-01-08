@@ -211,7 +211,7 @@ function find_package(name::String)
         what isa UUID && return (manifest_path(what, name, envs), what)
         path == nothing && (path = what)
     end
-    return path
+    return path, nothing
 end
 
 # find `import name` with respect to `into_uuid` + `into_name`
@@ -239,7 +239,7 @@ function find_package(into::Pair{String,UUID}, name::String)
                         return manifest_path(what, name, envs), what
                     else
                         # just return the given entry point
-                        return entry_path(what, name)
+                        return entry_path(what, name), nothing
                     end
                 end
                 break
@@ -252,15 +252,15 @@ function find_package(into::Pair{String,UUID}, name::String)
                 deps = manifest_file_deps(manifest_file, into[2], io)
                 deps == nothing && continue
                 if deps isa Vector
-                    name in deps || return nothing
+                    name in deps || return nothing, nothing
                     what = name
                 elseif deps isa Dict
-                    haskey(deps, name) || return nothing
+                    haskey(deps, name) || return nothing, nothing
                     what = deps[name]::UUID
                 end
                 seekstart(io) # rewind IO handle
                 path_and_uuid = manifest_file_path_and_uuid(manifest_file, what, io)
-                path_and_uuid == nothing && return nothing
+                path_and_uuid == nothing && return nothing, nothing
                 path = entry_path(path_and_uuid[1], name)
                 return path, path_and_uuid[2]
             finally
@@ -271,17 +271,17 @@ function find_package(into::Pair{String,UUID}, name::String)
 end
 
 function find_package(name::String, names::String...)
-    what = find_package(name)
-    what isa String && return find_package(names...)
-    what isa Tuple  && return find_package(name => what[2], names...)
-    return what
+    path, uuid = find_package(name)
+    path === nothing && return nothing, nothing
+    uuid === nothing && return find_package(names...)
+    return find_package(name => uuid, names...)
 end
 
 function find_package(into::Pair{String,UUID}, name::String, names::String...)
-    what = find_package(into, name)
-    what isa String && return find_package(names...)
-    what isa Tuple  && return find_package(name => what[2], names...)
-    return what
+    path, uuid = find_package(into, name)
+    path === nothing && return nothing, nothing
+    uuid === nothing && return find_package(names...)
+    return find_package(name => uuid, names...)
 end
 
 ## helper functions for finding packages ##
