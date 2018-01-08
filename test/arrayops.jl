@@ -2274,3 +2274,7 @@ end
 @testset "issue 24707" begin
     @test eltype(Vector{Tuple{V}} where V<:Integer) >: Tuple{Integer}
 end
+
+@testset "inference hash array 22740" begin
+    @inferred hash([1,2,3])
+end
