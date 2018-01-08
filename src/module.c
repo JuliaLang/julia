@@ -229,7 +229,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
     return jl_get_binding_(m, var, NULL);
 }
 
-void jl_binding_deprecation_warning(jl_binding_t *b);
+void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var)
 {
@@ -237,7 +237,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var
     if (b == NULL)
         jl_undefined_var_error(var);
     if (b->deprecated)
-        jl_binding_deprecation_warning(b);
+        jl_binding_deprecation_warning(m, b);
     return b;
 }
 
@@ -451,7 +451,7 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
     if (b == NULL) return NULL;
-    if (b->deprecated) jl_binding_deprecation_warning(b);
+    if (b->deprecated) jl_binding_deprecation_warning(m, b);
     return b->value;
 }
 
@@ -510,7 +510,7 @@ jl_binding_t *jl_get_dep_message_binding(jl_module_t *m, jl_binding_t *deprecate
     return jl_get_binding(m, jl_symbol(dep_binding_name));
 }
 
-void jl_binding_deprecation_warning(jl_binding_t *b)
+void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
 {
     // Only print a warning for deprecated == 1 (renamed).
     // For deprecated == 2 (moved to a package) the binding is to a function
@@ -559,8 +559,14 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
         }
         jl_printf(JL_STDERR, ".\n");
 
-        if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR)
-            jl_printf(JL_STDERR, "  likely near %s:%d\n", jl_filename, jl_lineno);
+        if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR) {
+            if (jl_lineno == 0) {
+                jl_printf(JL_STDERR, " in module %s\n", jl_symbol_name(m->name));
+            }
+            else {
+                jl_printf(JL_STDERR, "  likely near %s:%d\n", jl_filename, jl_lineno);
+            }
+        }
 
         if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR) {
             if (b->owner)
