@@ -2,7 +2,7 @@
 
 module ResolveTest
 
-using ..Test
+using Test
 using Pkg3.Types
 using Pkg3.GraphType
 using Pkg3.Types: VersionBound
@@ -66,7 +66,7 @@ function gen_versionranges(dict::Dict{K,Set{VersionNumber}}, srtvers::Vector{Ver
         vranges[vreq] = VersionRange[]
         while !isempty(vset)
             vn0 = minimum(vset)
-            i = findfirst(srtvers, vn0)
+            i = findfirst(equalto(vn0), srtvers)
             @assert i ≠ 0
             pop!(vset, vn0)
             vn1 = vn0
@@ -557,27 +557,31 @@ reqs_data = Any[
 want_data = Dict("A"=>v"1", "B"=>v"2", "C"=>v"2", "D"=>v"2", "E"=>v"2")
 @test resolve_tst(deps_data, reqs_data, want_data)
 
-VERBOSE && info("SCHEME REALISTIC")
-## DEPENDENCY SCHEME 11: A REALISTIC EXAMPLE
-## ref Julia issue #21485
+@testset "realistic" begin
+    VERBOSE && info("SCHEME REALISTIC")
+    ## DEPENDENCY SCHEME 11: A REALISTIC EXAMPLE
+    ## ref Julia issue #21485
 
-include("resolvedata1.jl")
+    include("resolvedata1.jl")
 
-@test sanity_tst(deps_data, problematic_data)
-@test resolve_tst(deps_data, reqs_data, want_data)
+    @test sanity_tst(deps_data, problematic_data)
+    @test resolve_tst(deps_data, reqs_data, want_data)
+end
 
-VERBOSE && info("SCHEME NASTY")
-## DEPENDENCY SCHEME 12: A NASTY CASE
+@testset "nasty" begin
+    VERBOSE && info("SCHEME NASTY")
+    ## DEPENDENCY SCHEME 12: A NASTY CASE
 
-include("NastyGenerator.jl")
-deps_data, reqs_data, want_data, problematic_data = NastyGenerator.generate_nasty(5, 20, q=20, d=4, sat = true)
+    include("NastyGenerator.jl")
+    deps_data, reqs_data, want_data, problematic_data = NastyGenerator.generate_nasty(5, 20, q=20, d=4, sat = true)
 
-@test sanity_tst(deps_data, problematic_data)
-@test resolve_tst(deps_data, reqs_data, want_data)
+    @test sanity_tst(deps_data, problematic_data)
+    @test resolve_tst(deps_data, reqs_data, want_data)
 
-deps_data, reqs_data, want_data, problematic_data = NastyGenerator.generate_nasty(5, 20, q=20, d=4, sat = false)
+    deps_data, reqs_data, want_data, problematic_data = NastyGenerator.generate_nasty(5, 20, q=20, d=4, sat = false)
 
-@test sanity_tst(deps_data, problematic_data)
-@test_throws PkgError resolve_tst(deps_data, reqs_data)
+    @test sanity_tst(deps_data, problematic_data)
+    @test_throws PkgError resolve_tst(deps_data, reqs_data)
+end
 
 end # module

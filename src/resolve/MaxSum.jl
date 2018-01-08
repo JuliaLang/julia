@@ -2,6 +2,8 @@
 
 module MaxSum
 
+using Random
+
 include("FieldValues.jl")
 
 using .FieldValues, ..VersionWeights, ...Types, ...GraphType
@@ -93,7 +95,7 @@ function reset_messages!(msgs::Messages, graph::Graph)
     for p0 = 1:np
         ignored[p0] && continue
         map(m->fill!(m, zero(FieldValue)), msg[p0])
-        copy!(fld[p0], initial_fld[p0])
+        copyto!(fld[p0], initial_fld[p0])
         gconstr0 = gconstr[p0]
         for v0 = 1:spp[p0]
             gconstr0[v0] || (fld[p0][v0] = FieldValue(-1))
@@ -109,7 +111,7 @@ mutable struct SolutionTrace
     num_nondecimated::Int
 
     best::Vector{Int}
-    staged::Union{Tuple{Int,Int},Void}
+    staged::Union{Tuple{Int,Int},Nothing}
 
     function SolutionTrace(graph::Graph)
         np = graph.np
@@ -131,14 +133,14 @@ function update_solution!(strace::SolutionTrace, graph::Graph)
     best = strace.best
     nnd = np
     fill!(solution, 0)
-    for p0 in find(ignored)
+    for p0 in findall(ignored)
         s0 = findfirst(gconstr[p0])
         solution[p0] = s0
         nnd -= 1
     end
     strace.num_nondecimated = nnd
     if nnd ≤ sum(best .== 0)
-        copy!(best, solution)
+        copyto!(best, solution)
         strace.staged = nothing
         return true
     else
@@ -223,7 +225,7 @@ mutable struct NodePerm
     NodePerm(np::Integer) = new(collect(1:np), 1)
 end
 
-function Base.shuffle!(perm::NodePerm)
+function Random.shuffle!(perm::NodePerm)
     p = perm.p
     for j = length(p):-1:2
         k = perm.step % j + 1
@@ -265,7 +267,7 @@ function decimate1!(p0::Int, graph::Graph, strace::SolutionTrace, msgs::Messages
     # the constraints...
     gconstr[p0][s0] || return 0
     # ...and with the previously decimated nodes
-    for p1 in find(solution .> 0)
+    for p1 in findall(solution .> 0)
         haskey(adjdict[p0], p1) || continue
         s1 = solution[p1]
         j1 = adjdict[p0][p1]
@@ -286,7 +288,7 @@ function decimate!(graph::Graph, strace::SolutionTrace, msgs::Messages, n::Integ
     dtrace = Tuple{Int,Int}[]
     dec = 0
 
-    fldorder = sort(find(.!(ignored)), by=p0->secondmax(fld[p0], gconstr[p0]))
+    fldorder = sort(findall(.!(ignored)), by=p0->secondmax(fld[p0], gconstr[p0]))
     for p0 in fldorder
         s0 = decimate1!(p0, graph, strace, msgs)
         s0 == 0 && continue
@@ -310,7 +312,7 @@ function clean_forbidden!(graph::Graph, msgs::Messages)
         ignored[p0] && continue
         fld0 = fld[p0]
         gconstr0 = gconstr[p0]
-        for v0 in find(gconstr0)
+        for v0 in findall(gconstr0)
             validmax(fld0[v0]) && continue
             push!(affected, (p0,v0))
             removed += 1
@@ -413,7 +415,7 @@ function converge!(graph::Graph, msgs::Messages, strace::SolutionTrace, perm::No
         if is_best_sofar
             # pick the first decimation candidate
             smx(p1) = secondmax(msgs.fld[p1], graph.gconstr[p1])
-            p0 = reduce((p1,p2)->(smx(p1)≤smx(p2) ? p1 : p2), find(.!(graph.ignored)))
+            p0 = reduce((p1,p2)->(smx(p1)≤smx(p2) ? p1 : p2), findall(.!(graph.ignored)))
             s0 = indmax(fld[p0])
             strace.staged = dec_firstcandidate(graph, msgs)
         end

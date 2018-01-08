@@ -6,21 +6,21 @@ function packagelt(a::String, b::String)
     return lowercase(a) < lowercase(b)
 end
 
-≲(v::VersionNumber, t::NTuple{0,Int}) = true
-≲(v::VersionNumber, t::NTuple{1,Int}) = v.major ≤ t[1]
-≲(v::VersionNumber, t::NTuple{2,Int}) = v.major < t[1] ||
-                                        v.major ≤ t[1] && v.minor ≤ t[2]
-≲(v::VersionNumber, t::NTuple{3,Int}) = v.major < t[1] ||
-                                        v.major ≤ t[1] && v.minor < t[2] ||
-                                        v.major ≤ t[1] && v.minor ≤ t[2] && v.patch ≤ t[3]
+≲(v::VersionNumber, t::NTuple{0,Integer}) = true
+≲(v::VersionNumber, t::NTuple{1,Integer}) = v.major ≤ t[1]
+≲(v::VersionNumber, t::NTuple{2,Integer}) = v.major < t[1] ||
+                                            v.major ≤ t[1] && v.minor ≤ t[2]
+≲(v::VersionNumber, t::NTuple{3,Integer}) = v.major < t[1] ||
+                                            v.major ≤ t[1] && v.minor < t[2] ||
+                                            v.major ≤ t[1] && v.minor ≤ t[2] && v.patch ≤ t[3]
 
-≲(t::NTuple{0,Int}, v::VersionNumber) = true
-≲(t::NTuple{1,Int}, v::VersionNumber) = t[1] ≤ v.major
-≲(t::NTuple{2,Int}, v::VersionNumber) = t[1] < v.major ||
-                                        t[1] ≤ v.major && t[2] ≤ v.minor
-≲(t::NTuple{3,Int}, v::VersionNumber) = t[1] < v.major ||
-                                        t[1] ≤ v.major && t[2] < v.minor ||
-                                        t[1] ≤ v.major && t[2] ≤ v.minor && t[3] ≤ v.patch
+≲(t::NTuple{0,Integer}, v::VersionNumber) = true
+≲(t::NTuple{1,Integer}, v::VersionNumber) = t[1] ≤ v.major
+≲(t::NTuple{2,Integer}, v::VersionNumber) = t[1] < v.major ||
+                                            t[1] ≤ v.major && t[2] ≤ v.minor
+≲(t::NTuple{3,Integer}, v::VersionNumber) = t[1] < v.major ||
+                                            t[1] ≤ v.major && t[2] < v.minor ||
+                                            t[1] ≤ v.major && t[2] ≤ v.minor && t[3] ≤ v.patch
 
 function compress_versions(inc::Vector{VersionNumber}, from::Vector{VersionNumber})
     issorted(inc) || (inc = sort(inc))
@@ -54,7 +54,7 @@ compress_versions(inc, from) = compress_versions(inc, collect(from))
 
 versions_string(p::Pair) = versions_string(p...)
 versions_string(a::Tuple{}, b::Tuple{}) = "*"
-versions_string(a::NTuple{m,Int}, b::NTuple{n,Int}) where {m,n} =
+versions_string(a::NTuple{m,Integer}, b::NTuple{n,Integer}) where {m,n} =
     a == b ? join(a, '.') : "$(join(a, '.'))-$(join(b, '.'))"
 
 versions_repr(x) = repr(versions_string(x))

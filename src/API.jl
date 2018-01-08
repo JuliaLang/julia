@@ -1,12 +1,17 @@
 module API
 
-import Pkg3
-using Pkg3.Display.DiffEntry
-import Pkg3: depots, logdir, TOML
-using Pkg3: Types, Dates
-using Base.Random.UUID
+import Base.UUID
+using Printf
+import Random
+import Dates
 
-previewmode_info() = info("In preview mode")
+import Pkg3
+import Pkg3: depots, logdir, Display.DiffEntry
+using Pkg3.Types
+using Pkg3.TOML
+
+
+previewmode_info() = @info("In preview mode")
 
 add(pkg::String; kwargs...)               = add([pkg]; kwargs...)
 add(pkgs::Vector{String}; kwargs...)      = add([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
@@ -52,9 +57,9 @@ function up(env::EnvCache, pkgs::Vector{PackageSpec};
     else
         for reg in registries()
             if !isdir(joinpath(reg, ".git"))
-                info("Registry at $reg is not a git repo, skipping update")
+                @info("Registry at $reg is not a git repo, skipping update")
             end
-            info("Updating registry at $reg")
+            @info("Updating registry at $reg")
             LibGit2.with(LibGit2.GitRepo, reg) do repo
                 if LibGit2.isdirty(repo)
                     push!(errors, (reg, "registry dirty"))
@@ -91,12 +96,13 @@ function up(env::EnvCache, pkgs::Vector{PackageSpec};
         for (reg, err) in errors
             warn_str *= "\n    — $reg — $err"
         end
-        warn(warn_str)
+        @warn warn_str
     end
 
     if isempty(pkgs)
         if mode == :project
-            for (name::String, uuid::UUID) in env.project["deps"]
+            for (name::String, uuidstr::String) in env.project["deps"]
+                uuid = UUID(uuidstr)
                 push!(pkgs, PackageSpec(name, uuid, level))
             end
         elseif mode == :manifest
@@ -128,7 +134,7 @@ function test(env::EnvCache, pkgs::Vector{PackageSpec}; coverage=false, preview=
 end
 
 
-function convert(::Type{Dict{String, VersionNumber}}, diffs::Union{Array{DiffEntry}, Void})    
+function convert(::Type{Dict{String, VersionNumber}}, diffs::Union{Array{DiffEntry}, Nothing})
     version_status = Dict{String, VersionNumber}()
     diffs == nothing && return version_status
     for entry in diffs
@@ -157,11 +163,11 @@ function gc(env::EnvCache=EnvCache(); period = Week(6), preview=env.preview[])
     preview && previewmode_info()
 
     # If the manifest was not used
-    gc_time = now() - period
+    gc_time = Dates.now() - period
     usage_file = joinpath(logdir(), "usage.toml")
 
     # Collect only the manifest that is least recently used
-    manifest_date = Dict{String, DateTime}()
+    manifest_date = Dict{String, Dates.DateTime}()
     for (manifest_file, infos) in TOML.parse(String(read(usage_file)))
         for info in infos
             date = info["time"]
@@ -239,7 +245,7 @@ function gc(env::EnvCache=EnvCache(); period = Week(6), preview=env.preview[])
     info("Deleted $(length(paths_to_delete)) package installations", byte_save_str)
 end
 
-function _get_deps!(env::EnvCache, pkgs::Vector{PackageSpec}, uuids::Vector{Base.Random.UUID})
+function _get_deps!(env::EnvCache, pkgs::Vector{PackageSpec}, uuids::Vector{UUID})
    for pkg in pkgs
        info = manifest_info(env, pkg.uuid)
        pkg.uuid in uuids && continue
@@ -269,7 +275,7 @@ function build(env::EnvCache, pkgs::Vector{PackageSpec})
    end
    manifest_resolve!(env, pkgs)
    ensure_resolved(env, pkgs)
-   uuids = Base.Random.UUID[]
+   uuids = Random.UUID[]
    _get_deps!(env, pkgs, uuids)
    length(uuids) == 0 && (info("No packages to build!"); return)
    Pkg3.Operations.build_versions(env, uuids)

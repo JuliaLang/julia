@@ -2,9 +2,9 @@
 
 module GraphType
 
-using ..Types
-import ..Types.uuid_julia
-import Pkg3.equalto
+import ..Pkg3
+using Pkg3.Types
+import Pkg3: equalto, Nothing, Types.uuid_julia
 
 export Graph, ResolveLog, add_reqs!, add_fixed!, simplify_graph!, simplify_graph_soft!,
        get_resolve_log, showlog, push_snapshot!, pop_snapshot!, wipe_snapshots!
@@ -30,11 +30,11 @@ mutable struct ResolveLogEntry
     journal::ResolveJournal # shared with all other entries
     pkg::UUID
     header::String
-    events::Vector{Tuple{Any,String}} # here Any should ideally be Union{ResolveLogEntry,Void}
+    events::Vector{Tuple{Any,String}} # here Any should ideally be Union{ResolveLogEntry,Nothing}
     ResolveLogEntry(journal::ResolveJournal, pkg::UUID, header::String = "") = new(journal, pkg, header, [])
 end
 
-function Base.push!(entry::ResolveLogEntry, reason::Tuple{Union{ResolveLogEntry,Void},String}, to_journal::Bool = true)
+function Base.push!(entry::ResolveLogEntry, reason::Tuple{Union{ResolveLogEntry,Nothing},String}, to_journal::Bool = true)
     push!(entry.events, reason)
     to_journal && entry.pkg ≠ uuid_julia && push!(entry.journal, (entry.pkg, reason[2]))
     return entry
@@ -74,7 +74,7 @@ mutable struct ResolveLog
 end
 
 # Installation state: either a version, or uninstalled
-const InstState = Union{VersionNumber,Void}
+const InstState = Union{VersionNumber,Nothing}
 
 
 # GraphData is basically a part of Graph that collects data structures useful
@@ -329,7 +329,7 @@ mutable struct Graph
                 adjdict[p0][p1] = j1
 
                 bm = trues(spp[p1], spp[p0])
-                bmt = transpose(bm)
+                bmt = permutedims(bm)
 
                 push!(gmsk[p0], bm)
                 push!(gmsk[p1], bmt)
@@ -504,7 +504,7 @@ function check_consistency(graph::Graph)
             @assert size(gmsk0[j0]) == (spp1,spp0)
             j1 = adjdict0[p1]
             gmsk1 = gmsk[p1]
-            @assert gmsk1[j1] == transpose(gmsk0[j0])
+            @assert gmsk1[j1] == permutedims(gmsk0[j0])
         end
     end
     for (p,p0) in pdict
@@ -840,7 +840,7 @@ function showlog(io::IO, rlog::ResolveLog; view::Symbol = :plain)
     view ∈ [:plain, :tree, :chronological] || throw(ArgumentError("the view argument should be `:plain`, `:tree` or `:chronological`"))
     println(io, "Resolve log:")
     view == :chronological && return showlogjournal(io, rlog)
-    seen = ObjectIdDict()
+    seen = IdDict()
     recursive = (view == :tree)
     _show(io, rlog, rlog.globals, _logindent, seen, false)
     initentries = [event[1] for event in rlog.init.events]
@@ -868,7 +868,7 @@ function showlog(io::IO, rlog::ResolveLog, p::UUID; view::Symbol = :tree)
     view ∈ [:plain, :tree] || throw(ArgumentError("the view argument should be `:plain` or `:tree`"))
     entry = rlog.pool[p]
     if view == :tree
-        _show(io, rlog, entry, _logindent, ObjectIdDict(entry=>true), true)
+        _show(io, rlog, entry, _logindent, IdDict(entry=>true), true)
     else
         entries = ResolveLogEntry[entry]
         function getentries(entry)
@@ -880,13 +880,13 @@ function showlog(io::IO, rlog::ResolveLog, p::UUID; view::Symbol = :tree)
         end
         getentries(entry)
         for entry in entries
-            _show(io, rlog, entry, _logindent, ObjectIdDict(), false)
+            _show(io, rlog, entry, _logindent, IdDict(), false)
         end
     end
 end
 
 # Show a recursive tree with requirements applied to a package, either directly or indirectly
-function _show(io::IO, rlog::ResolveLog, entry::ResolveLogEntry, indent::String, seen::ObjectIdDict, recursive::Bool)
+function _show(io::IO, rlog::ResolveLog, entry::ResolveLogEntry, indent::String, seen::IdDict, recursive::Bool)
     toplevel = (indent == _logindent)
     firstglyph = toplevel ? "" : "└─"
     pre = toplevel ? "" : "  "
@@ -983,7 +983,7 @@ function propagate_constraints!(graph::Graph, sources::Set{Int} = Set{Int}(); lo
                 # if an entire row of the sub-mask is false, that version of p1
                 # is effectively forbidden
                 # (this is just like calling `any` row-wise)
-                added_constr1 = any!(BitVector(spp[p1]), sub_msk)
+                added_constr1 = any!(BitVector(uninitialized, spp[p1]), sub_msk)
                 # apply the new constraints, checking for contradictions
                 # (keep the old ones for comparison)
                 gconstr1 = gconstr[p1]
@@ -1033,7 +1033,7 @@ function disable_unreachable!(graph::Graph, sources::Set{Int} = Set{Int}())
     while !isempty(staged)
         staged_next = Set{Int}()
         for p0 in staged
-            gconstr0idx = find(gconstr[p0][1:(end-1)])
+            gconstr0idx = findall(gconstr[p0][1:(end-1)])
             for (j1,p1) in enumerate(gadj[p0])
                 all(gmsk[p0][j1][end,gconstr0idx]) && continue # the package is not required by any of the allowed versions of p0
                 p1 ∈ seen || push!(staged_next, p1)
@@ -1068,7 +1068,7 @@ function deep_clean!(graph::Graph)
 
         str_len = 0
 
-        for p0 = 1:np, v0 in find(graph.gconstr[p0])
+        for p0 = 1:np, v0 in findall(graph.gconstr[p0])
             print("\r" * " "^str_len * "\r")
             msg = "> $p0 / $np"
             print(msg)
@@ -1149,7 +1149,7 @@ function build_eq_classes1!(graph::Graph, p0::Int)
 
     # concatenate all the constraints; the columns of the
     # result encode the behavior of each version
-    cmat = vcat(BitMatrix(transpose(gconstr[p0])), gmsk[p0]...)
+    cmat = vcat(BitMatrix(permutedims(gconstr[p0])), gmsk[p0]...)
     cvecs = [cmat[:,v0] for v0 = 1:spp[p0]]
 
     # find unique behaviors
@@ -1241,7 +1241,7 @@ function build_eq_classes_soft1!(graph::Graph, p0::Int)
     gmsk0 = gmsk[p0]
     gconstr0 = gconstr[p0]
     eff_spp0 = count(gconstr0)
-    cvecs = BitVector[vcat(BitVector(0), (gmsk0[j1][gconstr[gadj0[j1]],v0] for j1 = 1:length(gadj0) if !ignored[gadj0[j1]])...) for v0 in find(gconstr0)]
+    cvecs = BitVector[vcat(BitVector(0), (gmsk0[j1][gconstr[gadj0[j1]],v0] for j1 = 1:length(gadj0) if !ignored[gadj0[j1]])...) for v0 in findall(gconstr0)]
 
     @assert length(cvecs) == eff_spp0
 
@@ -1260,7 +1260,7 @@ function build_eq_classes_soft1!(graph::Graph, p0::Int)
     @assert repr_vers[end] == eff_spp0
 
     # convert the version numbers into the original numbering
-    repr_vers = find(gconstr0)[repr_vers]
+    repr_vers = findall(gconstr0)[repr_vers]
 
     @assert all(gconstr0[repr_vers])
 
@@ -1312,7 +1312,7 @@ function prune_graph!(graph::Graph)
 
     # a map that translates the new index ∈ 1:new_np into its
     # corresponding old index ∈ 1:np
-    old_idx = find(pkg_mask)
+    old_idx = findall(pkg_mask)
     # the reverse of the above
     new_idx = Dict{Int,Int}()
     for new_p0 = 1:new_np
@@ -1333,7 +1333,7 @@ function prune_graph!(graph::Graph)
     end
 
     # Record which packages we are going to prune
-    for p0 in find(.~(pkg_mask))
+    for p0 in findall(.~(pkg_mask))
         # Find the version
         s0 = findfirst(gconstr[p0])
         # We don't record fixed packages
