@@ -426,7 +426,7 @@ if VERSION < v"0.6.0-dev.1024"
         using Base: partition
     end
 else
-    using Base: Iterators
+    using Base.Iterators
 end
 
 @static if VERSION < v"0.6.0-dev.2840"
