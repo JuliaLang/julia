@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
-using Unicode
-using Unicode: normalize, isassigned
+using Strings
+using Strings: normalize, isassigned
 
 @testset "string normalization" begin
     # normalize (Unicode normalization etc.):
