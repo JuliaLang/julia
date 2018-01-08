@@ -847,8 +847,9 @@ Deprecated or removed
   * `workspace` is discontinued, check out [Revise.jl](https://github.com/timholy/Revise.jl)
     for an alternative workflow ([#25046]).
 
-  * `cumsum`, `cumprod`, `accumulate`, and their mutating versions now require a `dim`
-    argument instead of defaulting to using the first dimension ([#24684]).
+  * `cumsum`, `cumprod`, `accumulate`, their mutating versions, and `diff` all now require a `dim`
+    argument instead of defaulting to using the first dimension unless there is only
+    one dimension ([#24684]).
 
   * The `sum_kbn` and `cumsum_kbn` functions have been moved to the
     [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
