@@ -902,6 +902,22 @@ end
 
 #-----------------------------------------------------------------------
 
+function _check_testset(testsettype, testsetname)
+    if !(testsettype isa Type && testsettype <: AbstractTestSet)
+        error("Expected `$testsetname` to be an AbstractTestSet, it is a ",
+              typeof(testsettype), ". ",
+              typeof(testsettype) == String ?
+                  """
+                  To use `$testsetname` as a testset name, interpolate it into a string, e.g:
+                      @testset "\$$testsetname" begin
+                          ...
+                      end"""
+             :
+                  ""
+            )
+    end
+end
+
 """
     @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
@@ -972,6 +988,7 @@ function testset_beginend(args, tests, source)
     # finally removing the testset and giving it a chance to take
     # action (such as reporting the results)
     ex = quote
+        _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         ts = $(testsettype)($desc; $options...)
         # this empty loop is here to force the block to be compiled,
         # which is needed for backtrace scrubbing to work correctly.
@@ -1042,6 +1059,7 @@ function testset_forloop(args, testloop, source)
     # wrapped in the outer loop provided by the user
     tests = testloop.args[2]
     blk = quote
+        _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         # Trick to handle `break` and `continue` in the test code before
         # they can be handled properly by `finally` lowering.
         if !first_iteration
