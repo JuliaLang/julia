@@ -1,9 +1,10 @@
 module Display
 
-using Base.Random: UUID
-using Pkg3.Types
+import Base: UUID
 
-export print_project_diff, print_manifest_diff
+using Pkg3.Types
+import Pkg3: @info, Nothing
+
 
 const colors = Dict(
     ' ' => :white,
@@ -20,7 +21,7 @@ function status(env::EnvCache, mode::Symbol, use_as_api=false)
     project₀ = project₁ = env.project
     manifest₀ = manifest₁ = env.manifest
     diff = nothing
-    
+
     if env.git != nothing
         git_path = LibGit2.path(env.git)
         project_path = relpath(env.project_file, git_path)
@@ -32,12 +33,12 @@ function status(env::EnvCache, mode::Symbol, use_as_api=false)
         # TODO: handle project deps missing from manifest
         m₀ = filter_manifest(in_project(project₀["deps"]), manifest₀)
         m₁ = filter_manifest(in_project(project₁["deps"]), manifest₁)
-        info("Status ", pathrepr(env, env.project_file))
+        @info "Status $(pathrepr(env, env.project_file))"
         diff = manifest_diff(m₀, m₁)
         use_as_api || print_diff(diff)
     end
     if mode == :manifest
-        info("Status ", pathrepr(env, env.manifest_file))
+        @info "Status $(pathrepr(env, env.manifest_file))"
         diff = manifest_diff(manifest₀, manifest₁)
         use_as_api || print_diff(diff)
     elseif mode == :combined
@@ -46,7 +47,7 @@ function status(env::EnvCache, mode::Symbol, use_as_api=false)
         m₁ = filter_manifest(p, manifest₁)
         c_diff = filter!(x->x.old != x.new, manifest_diff(m₀, m₁))
         if !isempty(c_diff)
-            info("Status ", pathrepr(env, env.manifest_file))
+            @info "Status $(pathrepr(env, env.manifest_file))"
             use_as_api || print_diff(c_diff)
             diff =  Base.vcat(c_diff, diff)
         end
@@ -77,7 +78,7 @@ end
 
 struct VerInfo
     hash::SHA1
-    ver::Union{VersionNumber,Void}
+    ver::Union{VersionNumber,Nothing}
 end
 
 vstring(a::VerInfo) =
@@ -92,8 +93,8 @@ Base.:(==)(a::VerInfo, b::VerInfo) =
 struct DiffEntry
     uuid::UUID
     name::String
-    old::Union{VerInfo,Void}
-    new::Union{VerInfo,Void}
+    old::Union{VerInfo,Nothing}
+    new::Union{VerInfo,Nothing}
 end
 
 function print_diff(io::IO, diff::Vector{DiffEntry})
@@ -140,7 +141,7 @@ function manifest_by_uuid(manifest::Dict)
     entries = Dict{UUID,Dict}()
     for (name, infos) in manifest, info in infos
         uuid = UUID(info["uuid"])
-        haskey(entries, uuid) && warn("Duplicate UUID in manifest: $uuid")
+        haskey(entries, uuid) && @warn("Duplicate UUID in manifest: $uuid")
         entries[uuid] = merge(info, Dict("name" => name))
     end
     return entries

@@ -1,2 +1,2 @@
-push!(empty!(LOAD_PATH), dirname(dirname(@__DIR__)))
-Base.require(:Pkg3)
+push!(LOAD_PATH, dirname(dirname(@__DIR__)))
+Base.require(Base, :Pkg3)

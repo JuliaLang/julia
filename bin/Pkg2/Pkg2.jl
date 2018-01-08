@@ -4,12 +4,12 @@ module Pkg2
 
 struct PkgError <: Exception
     msg::AbstractString
-    ex::Nullable{Exception}
+    ex::Union{Exception, Nothing}
 end
-PkgError(msg::AbstractString) = PkgError(msg, Nullable{Exception}())
+PkgError(msg::AbstractString) = PkgError(msg, nothing)
 function Base.showerror(io::IO, pkgerr::PkgError)
     print(io, pkgerr.msg)
-    if !isnull(pkgerr.ex)
+    if pkgerr.ex !== nothing
         pkgex = get(pkgerr.ex)
         if isa(pkgex, CompositeException)
             for cex in pkgex

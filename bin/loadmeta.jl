@@ -1,8 +1,8 @@
 #!/usr/bin/env julia
 
 using Base: thispatch, thisminor, nextpatch, nextminor
-using Base.LinAlg: checksquare
-using Base.Random: UUID
+import LinearAlgebra: checksquare
+import Random: UUID
 using Pkg3.Types
 using Pkg3.Types: uuid_package, uuid_registry, uuid5
 
@@ -121,7 +121,7 @@ julia_versions(vi::VersionInterval) = julia_versions(v->v in vi)
 
 macro clean(ex) :(x = $(esc(ex)); $(esc(:clean)) &= x; x) end
 
-function prune!(pkgs::Associative{String,Package})
+function prune!(pkgs::AbstractDict{String,Package})
     # remove unsatisfiable versions
     while true
         clean = true

@@ -5,11 +5,15 @@ module Resolve
 include(joinpath("resolve", "VersionWeights.jl"))
 include(joinpath("resolve", "MaxSum.jl"))
 
-using ..Types
-using ..GraphType
-using .MaxSum
-import ..Types: uuid_julia
-import ..GraphType: is_julia, check_constraints, log_event_global!, log_event_greedysolved!, log_event_maxsumsolved!, log_event_maxsumtrace!
+using Pkg3.Types
+using Pkg3.GraphType
+using Pkg3.Resolve.MaxSum
+import Pkg3.Types: uuid_julia
+import Pkg3.GraphType: is_julia, check_constraints, log_event_global!, log_event_greedysolved!, log_event_maxsumsolved!, log_event_maxsumtrace!
+
+if Base.isdeprecated(Base, Symbol("@sprintf"))
+    using Printf
+end
 
 export resolve, sanity_check
 
@@ -57,13 +61,13 @@ function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose = 
 
     id(p) = pkgID(p, graph)
 
-    isempty(req_inds) || warn("sanity check called on a graph with non-empty requirements")
+    isempty(req_inds) || @warn("sanity check called on a graph with non-empty requirements")
     if !any(is_julia(graph, fp0) for fp0 in fix_inds)
-        warn("sanity check called on a graph without julia requirement, adding it")
+        @warn("sanity check called on a graph without julia requirement, adding it")
         add_fixed!(graph, Dict(uuid_julia=>Fixed(VERSION)))
     end
     if length(fix_inds) ≠ 1
-        warn("sanity check called on a graph with extra fixed requirements (besides julia)")
+        @warn("sanity check called on a graph with extra fixed requirements (besides julia)")
     end
 
     isources = isempty(sources) ?
@@ -286,11 +290,11 @@ function verify_solution(sol::Vector{Int}, graph::Graph)
     # verify constraints and dependencies
     for p0 = 1:np
         s0 = sol[p0]
-        gconstr[p0][s0] || (warn("gconstr[$p0][$s0] fail"); return false)
+        gconstr[p0][s0] || (@warn("gconstr[$p0][$s0] fail"); return false)
         for (j1,p1) in enumerate(gadj[p0])
             msk = gmsk[p0][j1]
             s1 = sol[p1]
-            msk[s1,s0] || (warn("gmsk[$p0][$p1][$s1,$s0] fail"); return false)
+            msk[s1,s0] || (@warn("gmsk[$p0][$p1][$s1,$s0] fail"); return false)
         end
     end
     return true
@@ -366,7 +370,7 @@ function enforce_optimality!(sol::Vector{Int}, graph::Graph)
         staged = staged_next
     end
 
-    for p0 in find(uninst)
+    for p0 in findall(uninst)
         sol[p0] = spp[p0]
         why[p0] = :uninst
     end
@@ -394,7 +398,7 @@ end
 
 function trigger_failure!(graph::Graph, sol::Vector{Int}, staged::Tuple{Int,Int})
     apply_maxsum_trace!(graph, sol)
-    simplify_graph_soft!(graph, Set(find(sol .> 0)), log_events = true) # this may throw an error...
+    simplify_graph_soft!(graph, Set(findall(sol .> 0)), log_events = true) # this may throw an error...
 
     np = graph.np
     gconstr = graph.gconstr
