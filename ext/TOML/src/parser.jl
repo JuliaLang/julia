@@ -52,11 +52,13 @@ Base.position(p::Parser) = Int(position(p.input))+1
 Base.write(p::Parser, x) = write(p.charbuffer, x)
 Base.read(p::Parser) = p.currentchar = read(p.input, Char)
 
-NONE() = Nullable()
-NONE(::Type{T}) where {T} = Nullable{T}()
-SOME(v::T) where {T} = Nullable{T}(v)
-NONE(::Type{String}, p::Parser) = (take!(p.charbuffer); Nullable{String}())
-SOME(::Type{String}, p::Parser) = Nullable{String}(String(take!(p.charbuffer)))
+NONE() = nothing
+NONE(::Type{T}) where {T} = nothing
+SOME(v::T) where {T} = v
+NONE(::Type{String}, p::Parser) = (take!(p.charbuffer); nothing)
+SOME(::Type{String}, p::Parser) = String(take!(p.charbuffer))
+isnull(x) = x === nothing
+get(x) = (@assert !isnull(x); x)
 
 "Rewind parser input on `n` characters."
 function rewind(p::Parser, n=1)
@@ -91,10 +93,10 @@ end
 
 "Peeks ahead `n` characters"
 function peek(p::Parser) #, i::Int=0
-    eof(p) && return NONE(Char)
+    eof(p) && return nothing
     res = Base.peek(p.input)
-    res == -1 && return NONE(Char)
-    return SOME(Char(res))
+    res == -1 && return nothing
+    return Char(res)
 end
 
 "Returns `true` and consumes the next character if it matches `ch`, otherwise do nothing and return `false`"
