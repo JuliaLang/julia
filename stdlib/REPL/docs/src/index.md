@@ -314,7 +314,7 @@ Fields for output from functions can also be completed:
 
 ```julia-repl
 julia> split("","")[1].[TAB]
-endof  offset  string
+lastindex  offset  string
 ```
 
 The completion of fields for output from functions uses type inference, and it can only suggest

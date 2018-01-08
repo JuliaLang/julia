@@ -86,35 +86,46 @@
 (define (expand-compare-chain e)
   (car (expand-vector-compare e)))
 
-;; return the appropriate computation for an `end` symbol for indexing
+;; return the appropriate computation for a `begin` or `end` symbol for indexing
 ;; the array `a` in the `n`th index.
 ;; `tuples` are a list of the splatted arguments that precede index `n`
 ;; `last` = is this last index?
-;; returns a call to endof(a) or size(a,n)
+;; returns a call to, e.g., lastindex(a) or last(axes(a,n))
 (define (end-val a n tuples last)
   (if (null? tuples)
       (if (and last (= n 1))
-          `(call (top endof) ,a)
-          `(call (top size) ,a ,n))
+          `(call (top lastindex) ,a)
+          `(call (top last) (call (top axes) ,a ,n)))
       (let ((dimno `(call (top +) ,(- n (length tuples))
                           ,.(map (lambda (t) `(call (top length) ,t))
                                  tuples))))
-            `(call (top size) ,a ,dimno))))
+            `(call (top last) (call (top axes) ,a ,dimno)))))
 
-;; replace `end` for the closest ref expression, so doesn't go inside nested refs
-(define (replace-end ex a n tuples last)
+(define (begin-val a n tuples last)
+  (if (null? tuples)
+      (if (and last (= n 1))
+          `(call (top firstindex) ,a)
+          `(call (top first) (call (top axes) ,a ,n)))
+      (let ((dimno `(call (top +) ,(- n (length tuples))
+                          ,.(map (lambda (t) `(call (top length) ,t))
+                                 tuples))))
+            `(call (top first) (call (top axes) ,a ,dimno)))))
+
+;; replace `begin` and `end` for the closest ref expression, so doesn't go inside nested refs
+(define (replace-beginend ex a n tuples last)
   (cond ((eq? ex 'end)                (end-val a n tuples last))
+        ((eq? ex 'begin)              (begin-val a n tuples last))
         ((or (atom? ex) (quoted? ex)) ex)
         ((eq? (car ex) 'ref)
          ;; inside ref only replace within the first argument
-         (list* 'ref (replace-end (cadr ex) a n tuples last)
+         (list* 'ref (replace-beginend (cadr ex) a n tuples last)
                 (cddr ex)))
         (else
          (cons (car ex)
-               (map (lambda (x) (replace-end x a n tuples last))
+               (map (lambda (x) (replace-beginend x a n tuples last))
                     (cdr ex))))))
 
-;; go through indices and replace the `end` symbol
+;; go through indices and replace the `begin` or `end` symbol
 ;; a = array being indexed, i = list of indices
 ;; returns (values index-list stmts) where stmts are statements that need
 ;; to execute first.
@@ -133,17 +144,17 @@
                   (loop (cdr lst) (+ n 1)
                         stmts
                         (cons (cadr idx) tuples)
-                        (cons `(... ,(replace-end (cadr idx) a n tuples last))
+                        (cons `(... ,(replace-beginend (cadr idx) a n tuples last))
                               ret))
                   (let ((g (make-ssavalue)))
                     (loop (cdr lst) (+ n 1)
-                          (cons `(= ,g ,(replace-end (cadr idx) a n tuples last))
+                          (cons `(= ,g ,(replace-beginend (cadr idx) a n tuples last))
                                 stmts)
                           (cons g tuples)
                           (cons `(... ,g) ret))))
               (loop (cdr lst) (+ n 1)
                     stmts tuples
-                    (cons (replace-end idx a n tuples last) ret)))))))
+                    (cons (replace-beginend idx a n tuples last) ret)))))))
 
 ;; GF method does not need to keep decl expressions on lambda args
 ;; except for rest arg
@@ -1500,7 +1511,8 @@
         (idxs (cddr e)))
     (let* ((reuse (and (pair? a)
                        (contains (lambda (x)
-                                   (or (eq? x 'end)
+                                   (or (eq? x 'begin)
+                                       (eq? x 'end)
                                        (eq? x ':)
                                        (and (pair? x)
                                             (eq? (car x) ':))))
@@ -1515,7 +1527,7 @@
 
 (define (expand-update-operator op op= lhs rhs . declT)
   (cond ((and (pair? lhs) (eq? (car lhs) 'ref))
-         ;; expand indexing inside op= first, to remove "end" and ":"
+         ;; expand indexing inside op= first, to remove "begin", "end", and ":"
          (let* ((ex (partially-expand-ref lhs))
                 (stmts (butlast (cdr ex)))
                 (refex (last    (cdr ex)))

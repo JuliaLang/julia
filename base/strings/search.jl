@@ -122,7 +122,7 @@ function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,Char,Int8,UInt8},
                       i::Integer)
     if isempty(t)
-        return 1 <= i <= nextind(s,endof(s)) ? i :
+        return 1 <= i <= nextind(s,lastindex(s)) ? i :
                throw(BoundsError(s, i))
     end
     t1, j2 = next(t,start(t))
@@ -162,7 +162,7 @@ _nthbyte(a::Union{AbstractVector{UInt8},AbstractVector{Int8}}, i) = a[i]
 
 function _searchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
-    endof(t) == 1 && return coalesce(findnext(equalto(t[1]), s, i), 0)
+    lastindex(t) == 1 && return coalesce(findnext(equalto(t[1]), s, i), 0)
     _searchindex(unsafe_wrap(Vector{UInt8},s), unsafe_wrap(Vector{UInt8},t), i)
 end
 
@@ -234,7 +234,7 @@ function _search(s::Union{AbstractString,ByteArray},
     if isempty(t)
         idx:idx-1
     else
-        idx:(idx > 0 ? idx + endof(t) - 1 : -1)
+        idx:(idx > 0 ? idx + lastindex(t) - 1 : -1)
     end
 end
 
@@ -271,7 +271,7 @@ findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)
     findlast(pattern::Regex, string::String)
 
 Find the last occurrence of `pattern` in `string`. Equivalent to
-[`findlast(pattern, string, endof(s))`](@ref).
+[`findlast(pattern, string, lastindex(s))`](@ref).
 
 # Examples
 ```jldoctest
@@ -283,7 +283,7 @@ julia> findfirst("Julia", "JuliaLang")
 ```
 """
 findlast(pattern::AbstractString, string::AbstractString) =
-    findprev(pattern, string, endof(string))
+    findprev(pattern, string, lastindex(string))
 
 # AbstractString implementation of the generic findprev interface
 function findprev(testf::Function, s::AbstractString, i::Integer)
@@ -305,12 +305,12 @@ function _rsearchindex(s::AbstractString,
                        t::Union{AbstractString,Char,Int8,UInt8},
                        i::Integer)
     if isempty(t)
-        return 1 <= i <= nextind(s, endof(s)) ? i :
+        return 1 <= i <= nextind(s, lastindex(s)) ? i :
                throw(BoundsError(s, i))
     end
     t = t isa AbstractString ? reverse(t) : t
     rs = reverse(s)
-    l = endof(s)
+    l = lastindex(s)
     t1, j2 = next(t, start(t))
     while true
         i = findprev(equalto(t1), s, i)
@@ -337,9 +337,9 @@ end
 
 function _rsearchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
-    if endof(t) == 1
+    if lastindex(t) == 1
         return coalesce(findprev(equalto(t[1]), s, i), 0)
-    elseif endof(t) != 0
+    elseif lastindex(t) != 0
         j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
         return _rsearchindex(unsafe_wrap(Vector{UInt8}, s), unsafe_wrap(Vector{UInt8}, t), j)
     elseif i > sizeof(s)
@@ -419,7 +419,7 @@ function _rsearch(s::Union{AbstractString,ByteArray},
     if isempty(t)
         idx:idx-1
     else
-        idx:(idx > 0 ? idx + endof(t) - 1 : -1)
+        idx:(idx > 0 ? idx + lastindex(t) - 1 : -1)
     end
 end
 

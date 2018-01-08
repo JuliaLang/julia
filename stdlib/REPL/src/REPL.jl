@@ -332,7 +332,7 @@ beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 function complete_line(c::REPLCompletionProvider, s)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = completions(full, endof(partial))
+    ret, range, should_complete = completions(full, lastindex(partial))
     return ret, partial[range], should_complete
 end
 
@@ -340,14 +340,14 @@ function complete_line(c::ShellCompletionProvider, s)
     # First parse everything up to the current position
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = shell_completions(full, endof(partial))
+    ret, range, should_complete = shell_completions(full, lastindex(partial))
     return ret, partial[range], should_complete
 end
 
 function complete_line(c::LatexCompletions, s)
     partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)
-    ret, range, should_complete = bslash_completions(full, endof(partial))[2]
+    ret, range, should_complete = bslash_completions(full, lastindex(partial))[2]
     return ret, partial[range], should_complete
 end
 
@@ -612,7 +612,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     # into the search data to index into the response string
     b = a + sizeof(searchdata)
     b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
-    b = min(endof(response_str), b) # ensure that b is valid
+    b = min(lastindex(response_str), b) # ensure that b is valid
 
     !skip_current && searchdata == response_str[a:b] && return true
 
@@ -623,7 +623,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     # Start searching
     # First the current response buffer
-    if 1 <= searchstart <= endof(response_str)
+    if 1 <= searchstart <= lastindex(response_str)
         match = searchfunc2(searchdata, response_str, searchstart)
         if match != 0:-1
             seek(response_buffer, first(match) - 1)

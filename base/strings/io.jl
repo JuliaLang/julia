@@ -94,7 +94,7 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
 end
 
 tostr_sizehint(x) = 0
-tostr_sizehint(x::AbstractString) = endof(x)
+tostr_sizehint(x::AbstractString) = lastindex(x)
 tostr_sizehint(x::Float64) = 20
 tostr_sizehint(x::Float32) = 12
 
@@ -266,8 +266,8 @@ General escaping of traditional C and Unicode escape sequences.
 Any characters in `esc` are also escaped (with a backslash).
 The reverse is [`unescape_string`](@ref).
 """
-escape_string(s::AbstractString, esc::AbstractString) = sprint(escape_string, s, esc, sizehint=endof(s))
-escape_string(s::AbstractString) = sprint(escape_string, s, "\"", sizehint=endof(s))
+escape_string(s::AbstractString, esc::AbstractString) = sprint(escape_string, s, esc, sizehint=lastindex(s))
+escape_string(s::AbstractString) = sprint(escape_string, s, "\"", sizehint=lastindex(s))
 
 """
     escape_string(io, str::AbstractString[, esc::AbstractString]) -> Nothing
@@ -320,7 +320,7 @@ end
 General unescaping of traditional C and Unicode escape sequences. Reverse of
 [`escape_string`](@ref).
 """
-unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=endof(s))
+unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=lastindex(s))
 
 """
     unescape_string(io, str::AbstractString) -> Nothing
@@ -451,7 +451,7 @@ Returns:
 function unindent(str::AbstractString, indent::Int; tabwidth=8)
     indent == 0 && return str
     pos = start(str)
-    endpos = endof(str)
+    endpos = lastindex(str)
     # Note: this loses the type of the original string
     buf = IOBuffer(StringVector(endpos), true, true)
     truncate(buf,0)

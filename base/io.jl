@@ -661,15 +661,13 @@ function readuntil(s::IO, delim::T; keep::Bool=false) where T
     return out
 end
 
-# requires that indices for target are small ordered integers bounded by start and endof
+# requires that indices for target are small ordered integers bounded by firstindex and lastindex
 # returns whether the delimiter was matched
 function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
     T = eltype(target)
-    first = start(target)
-    if done(target, first)
-        return true
-    end
-    len = endof(target)
+    isempty(target) && return true
+    first = firstindex(target)
+    len = lastindex(target)
     local cache # will be lazy initialized when needed
     second = next(target, first)[2]
     max_pos = second

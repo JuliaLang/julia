@@ -75,7 +75,7 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
     # Test that the entire input string appears in error messages
     let s = "     false    true     "
         result = @test_throws(ArgumentError,
-            Base.tryparse_internal(Bool, s, start(s), endof(s), 0, true))
+            Base.tryparse_internal(Bool, s, start(s), lastindex(s), 0, true))
         @test result.value.msg == "invalid Bool representation: $(repr(s))"
     end
 

@@ -143,7 +143,8 @@ Base.replace!
 ```@docs
 Base.getindex
 Base.setindex!
-Base.endof
+Base.firstindex
+Base.lastindex
 ```
 
 Fully implemented by:

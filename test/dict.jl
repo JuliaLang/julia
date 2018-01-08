@@ -12,7 +12,7 @@ using Random
     @test !done(p,2)
     @test done(p,3)
     @test !done(p,0)
-    @test endof(p) == length(p) == 2
+    @test lastindex(p) == length(p) == 2
     @test Base.indexed_next(p, 1, (1,2)) == (10,2)
     @test Base.indexed_next(p, 2, (1,2)) == (20,3)
     @test (1=>2) < (2=>3)
@@ -655,13 +655,13 @@ import Base.==
 const global hashoffset = [UInt(190)]
 
 Base.hash(s::MyString) = hash(s.str) + hashoffset[]
-Base.endof(s::MyString) = endof(s.str)
+Base.lastindex(s::MyString) = lastindex(s.str)
 Base.next(s::MyString, v::Int) = next(s.str, v)
 Base.isequal(a::MyString, b::MyString) = isequal(a.str, b.str)
 ==(a::MyString, b::MyString) = (a.str == b.str)
 
 Base.hash(v::MyInt) = v.val + hashoffset[]
-Base.endof(v::MyInt) = endof(v.val)
+Base.lastindex(v::MyInt) = lastindex(v.val)
 Base.next(v::MyInt, i::Int) = next(v.val, i)
 Base.isequal(a::MyInt, b::MyInt) = isequal(a.val, b.val)
 ==(a::MyInt, b::MyInt) = (a.val == b.val)

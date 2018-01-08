@@ -1298,9 +1298,9 @@ end
 @deprecate rsearch(s::AbstractString, r::Regex) findlast(r, s)
 @deprecate rsearch(s::AbstractString, c::Char, i::Integer) findprev(equalto(c), s, i)
 @deprecate rsearch(s::AbstractString, c::Char) findlast(equalto(c), s)
-@deprecate rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = endof(a)) findprev(equalto(b), a, i)
-@deprecate rsearch(a::String, b::Union{Int8,UInt8}, i::Integer = endof(a)) findprev(equalto(Char(b)), a, i)
-@deprecate rsearch(a::ByteArray, b::Char, i::Integer = endof(a)) findprev(equalto(UInt8(b)), a, i)
+@deprecate rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = lastindex(a)) findprev(equalto(b), a, i)
+@deprecate rsearch(a::String, b::Union{Int8,UInt8}, i::Integer = lastindex(a)) findprev(equalto(Char(b)), a, i)
+@deprecate rsearch(a::ByteArray, b::Char, i::Integer = lastindex(a)) findprev(equalto(UInt8(b)), a, i)
 
 @deprecate searchindex(s::AbstractString, t::AbstractString) first(findfirst(t, s))
 @deprecate searchindex(s::AbstractString, t::AbstractString, i::Integer) first(findnext(t, s, i))
@@ -1384,6 +1384,13 @@ export readandwrite
 @deprecate runtests(tests, ncores; kw...) runtests(tests; ncores = ncores, kw...) false
 @deprecate methodswith(typ, supertypes) methodswith(typ, supertypes = supertypes)
 @deprecate code_lowered(f, types, generated) code_lowered(f, types, generated = generated)
+
+# PR 25458
+@deprecate endof(a) lastindex(a)
+function firstindex(a)
+    depwarn("if appropriate you should implement `firstindex` for type $(typeof(a)), which might just return 1", :beginof)
+    1
+end
 
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
 @deprecate Timer(callback, delay, repeat) Time(callback, delay, interval = repeat)
