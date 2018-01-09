@@ -391,7 +391,7 @@ something other than 1), you should specialize `indices`. You should also specia
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
 perhaps range-types `Ind` of your own design. For more information, see [Arrays with custom indices](@ref).
 
-## [Strided Arrays]
+## [Strided Arrays](@id man-interface-strided-arrays)
 
 | Methods to implement                            |                                        | Brief description                                                                     |
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
