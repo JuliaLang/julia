@@ -178,6 +178,7 @@ function deps_graph(env::EnvCache, uuid_to_name::Dict{UUID,String}, reqs::Requir
     end
 
     for uuid in uuids
+        uuid == uuid_julia && continue
         try
             uuid_to_name[uuid] = registered_name(env, uuid)
         end

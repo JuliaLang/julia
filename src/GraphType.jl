@@ -301,7 +301,7 @@ mutable struct Graph
                 adjdict[p0][p1] = j1
 
                 bm = trues(spp[p1], spp[p0])
-                bmt = bm'
+                bmt = transpose(bm)
 
                 push!(gmsk[p0], bm)
                 push!(gmsk[p1], bmt)
@@ -470,12 +470,13 @@ function check_consistency(graph::Graph)
         @assert length(gmsk0) == length(gadj0)
         @assert length(adjdict0) == length(gadj0)
         for (j0,p1) in enumerate(gadj0)
+            @assert p1 ≠ p0
             @assert adjdict[p1][p0] == j0
             spp1 = spp[p1]
             @assert size(gmsk0[j0]) == (spp1,spp0)
             j1 = adjdict0[p1]
             gmsk1 = gmsk[p1]
-            @assert gmsk1[j1] == gmsk0[j0]'
+            @assert gmsk1[j1] == transpose(gmsk0[j0])
         end
     end
     for (p,p0) in pdict
@@ -1120,7 +1121,7 @@ function build_eq_classes1!(graph::Graph, p0::Int)
 
     # concatenate all the constraints; the columns of the
     # result encode the behavior of each version
-    cmat = vcat(BitMatrix(gconstr[p0]'), gmsk[p0]...)
+    cmat = vcat(BitMatrix(transpose(gconstr[p0])), gmsk[p0]...)
     cvecs = [cmat[:,v0] for v0 = 1:spp[p0]]
 
     # find unique behaviors
