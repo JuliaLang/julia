@@ -234,17 +234,22 @@ function promote_type(::ExactPromotion, ::Type{T}, ::Type{S}) where {T,S}
                    promote_rule(ExactPromotion(),S,T))
 end
 
-promote_type(args...) = promote_type(DefaultPromotion, args...)
+promote_type(args...) = promote_type(DefaultPromotion(), args...)
 
-promote_type(::PromotionStyle, ::Type{Bottom}, ::Type{Bottom}) = Bottom
-promote_type(::PromotionStyle, ::Type{T}, ::Type{T}) where {T} = T
-promote_type(::PromotionStyle, ::Type{T}, ::Type{Bottom}) where {T} = T
-promote_type(::PromotionStyle, ::Type{Bottom}, ::Type{T}) where {T} = T
+promote_type(::DefaultPromotion, ::Type{Bottom}, ::Type{Bottom}) = Bottom
+promote_type(::DefaultPromotion, ::Type{T}, ::Type{T}) where {T} = T
+promote_type(::DefaultPromotion, ::Type{T}, ::Type{Bottom}) where {T} = T
+promote_type(::DefaultPromotion, ::Type{Bottom}, ::Type{T}) where {T} = T
+
+promote_type(::ExactPromotion, ::Type{Bottom}, ::Type{Bottom}) = Bottom
+promote_type(::ExactPromotion, ::Type{T}, ::Type{T}) where {T} = T
+promote_type(::ExactPromotion, ::Type{T}, ::Type{Bottom}) where {T} = T
+promote_type(::ExactPromotion, ::Type{Bottom}, ::Type{T}) where {T} = T
 
 promote_type(::PromotionStyle) = Bottom
 promote_type(::PromotionStyle, T) = T
 promote_type(p::PromotionStyle, T, S, U, V...) =
-    (@_inline_meta; promote_type(P, T, promote_type(p, S, U, V...)))
+    (@_inline_meta; promote_type(p, T, promote_type(p, S, U, V...)))
 
 """
     promote_rule(type1, type2)
@@ -261,11 +266,13 @@ able to represent all values of `type1` and `type2` exactly (see [`promote_type`
 """
 function promote_rule end
 
-promote_rule(::PromotionStyle, ::Type{<:Any}, ::Type{<:Any}) = Bottom
-promote_rule(::PromotionStyle, ::Type{Any}, ::Type) = Any
-
 # Fallback so that rules defined without DefaultPromotion() are used
-promote_rule(::DefaultPromotion,::Type{T},::Type{S}) where {T,S} = promote_rule(T, S)
+promote_rule(::DefaultPromotion, ::Type{T}, ::Type{S}) where {T,S} = promote_rule(T, S)
+promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
+promote_rule(::Type{Any}, ::Type) = Any
+
+promote_rule(::ExactPromotion, ::Type{<:Any}, ::Type{<:Any}) = Bottom
+promote_rule(::ExactPromotion, ::Type{Any}, ::Type) = Any
 
 promote_result(::DefaultPromotion,::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} =
     (@_inline_meta; promote_type(DefaultPromotion(), T, S))
@@ -311,13 +318,13 @@ julia> promote(Int8(1), Float16(4.5), Float32(4.1))
 """
 function promote end
 
-function _promote(::P, x::T, y::S) where {P<:PromotionStyle,T,S}
+function _promote(p::PromotionStyle, x::T, y::S) where {T,S}
     @_inline_meta
-    R = promote_type(P, T, S)
+    R = promote_type(p, T, S)
     return (convert(R, x), convert(R, y))
 end
 
-promote_typeof(args...) = promote_typeof(DefaultPromotion, args...)
+promote_typeof(args...) = promote_typeof(DefaultPromotion(), args...)
 promote_typeof(::PromotionStyle, x) = typeof(x)
 promote_typeof(p::PromotionStyle, x, xs...) =
     (@_inline_meta; promote_type(p, typeof(x), promote_typeof(p, xs...)))

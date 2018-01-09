@@ -102,14 +102,14 @@ big(z::Complex{<:Rational{<:Integer}}) = Complex{Rational{BigInt}}(z)
 
 # Both rules need to be defined for types which implement
 # DefaultPromotion but not ExactPromotion
-for P in (DefaultPromotion, ExactPromotion)
+for P in (:DefaultPromotion, :ExactPromotion)
     @eval begin
-        promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} =
+        promote_rule(::$P, ::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} =
             Rational{promote_type($P(),T,S)}
-        promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} =
+        promote_rule(::$P, ::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} =
             Rational{promote_type($P(),T,S)}
-        promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} =
-            promote_type($P(),T,S)}
+        promote_rule(::$P, ::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} =
+            promote_type($P(),T,S)
     end
 end
 
