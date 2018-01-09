@@ -1382,6 +1382,8 @@ end
 
 @deprecate cumsum(A::AbstractArray)     cumsum(A, 1)
 @deprecate cumprod(A::AbstractArray)    cumprod(A, 1)
+import .LinAlg: diff
+@deprecate diff(A::AbstractMatrix) diff(A, 1)
 
 # issue #16307
 @deprecate finalizer(o, f::Function) finalizer(f, o)
