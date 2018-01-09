@@ -3,7 +3,6 @@
 module Printf
 using Base.Grisu
 using Base.GMP
-using Base.Unicode: lowercase, textwidth, isupper
 
 ### printf formatter generation ###
 const SmallFloatingPoint = Union{Float64,Float32,Float16}

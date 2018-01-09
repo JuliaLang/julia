@@ -763,8 +763,6 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> map(uppercase∘hex, 250:255)
 6-element Array{String,1}:
  "FA"

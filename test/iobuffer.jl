@@ -258,7 +258,6 @@ let io = IOBuffer()
 end
 
 # skipchars
-using Base.Unicode: isspace
 let
     io = IOBuffer("")
     @test eof(skipchars(io, isspace))
@@ -279,7 +278,7 @@ let
 
     for char in ['@','߷','࿊','𐋺']
         io = IOBuffer("alphabeticalstuff$char")
-        @test !eof(skipchars(io, Base.Unicode.isalpha))
+        @test !eof(skipchars(io, isalpha))
         @test read(io, Char) == char
     end
 end

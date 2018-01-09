@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test skipchars for IOStreams
-using Base.Unicode: isspace
 mktemp() do path, file
     function append_to_file(str)
         mark(file)
@@ -35,7 +34,7 @@ mktemp() do path, file
     for (byte,char) in zip(1:4, ('@','߷','࿊','𐋺'))
         append_to_file("abcdef$char")
         @test Base.codelen(char) == byte
-        @test !eof(skipchars(file, Base.Unicode.isalpha))
+        @test !eof(skipchars(file, isalpha))
         @test read(file, Char) == char
     end
 end

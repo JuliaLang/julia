@@ -297,7 +297,7 @@ end
     @test Dates.format(Dates.Date(2009, 12, 1), f) == "01Dec2009"
     f = "duy"
     globex = ["f", "g", "h", "j", "k", "m", "n", "q", "u", "v", "x", "z"]
-    locale = Dates.DateLocale(globex, map(Base.Unicode.uppercase, globex), globex[1:7], globex[1:7])
+    locale = Dates.DateLocale(globex, map(uppercase, globex), globex[1:7], globex[1:7])
     @test Dates.Date("1F4", f; locale=locale) + Dates.Year(2010) == Dates.Date(2014, 1, 1)
     @test Dates.format(Dates.Date(2014, 1, 1), f; locale=locale) == "1F4"
 

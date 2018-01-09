@@ -17,7 +17,6 @@ using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connecte
             binding_module, notify_error, atexit, julia_exename, julia_cmd,
             AsyncGenerator, acquire, release, invokelatest,
             shell_escape_posixly, uv_error, coalesce, notnothing
-using Base.Unicode: isdigit, isnumeric
 
 # NOTE: clusterserialize.jl imports additional symbols from Base.Serializer for use
 

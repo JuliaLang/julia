@@ -430,7 +430,7 @@ UInt128(u::UUID) = u.value
 let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
     global UUID
     function UUID(s::AbstractString)
-        s = Base.Unicode.lowercase(s)
+        s = lowercase(s)
 
         if !contains(s, r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
             throw(ArgumentError("Malformed UUID string"))

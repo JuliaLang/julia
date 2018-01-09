@@ -532,7 +532,6 @@ generic_map_tests(pmap_fallback)
 
 # pmap with various types. Test for equivalence with map
 run_map_equivalence_tests(pmap)
-using Base.Unicode: uppercase
 @test pmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
 
 
