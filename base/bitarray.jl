@@ -1504,7 +1504,8 @@ end
 findfirstnot(B::BitArray) = findnextnot(B,1)
 
 # returns the index of the first matching element
-function findnext(B::BitArray, v, start::Integer)
+function findnext(pred::EqualTo, B::BitArray, start::Integer)
+    v = pred.x
     v == false && return findnextnot(B, start)
     v == true && return findnext(B, start)
     return 0
@@ -1575,7 +1576,8 @@ end
 findlastnot(B::BitArray) = findprevnot(B, length(B))
 
 # returns the index of the previous matching element
-function findprev(B::BitArray, v, start::Integer)
+function findprev(pred::EqualTo, B::BitArray, start::Integer)
+    v = pred.x
     v == false && return findprevnot(B, start)
     v == true && return findprev(B, start)
     return 0

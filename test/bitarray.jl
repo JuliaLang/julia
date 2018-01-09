@@ -1114,7 +1114,7 @@ timesofar("nnz&find")
     b1 = trues(v1)
     b2 = falses(v1)
     for i = 1:v1
-        @test findprev(b1, i) == findprev(b1, true, i) == findprev(identity, b1, i)
+        @test findprev(b1, i) == findprev(identity, b1, i)
         @test findprevnot(b2, i) == findprev(!, b2, i) == i
     end
 
