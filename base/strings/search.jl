@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function findnext(pred::EqualTo{Char}, s::String, i::Integer)
+function findnext(pred::EqualTo{Char}, s::String, i)
     if i < 1 || i > sizeof(s)
         i == sizeof(s) + 1 && return 0
         throw(BoundsError(s, i))
@@ -17,7 +17,7 @@ end
 
 findfirst(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray) = _search(a, pred.x)
 
-findnext(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
+findnext(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray, i) =
     _search(a, pred.x, i)
 
 function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
@@ -41,7 +41,7 @@ function _search(a::ByteArray, b::Char, i::Integer = 1)
     end
 end
 
-function findprev(pred::EqualTo{Char}, s::String, i::Integer)
+function findprev(pred::EqualTo{Char}, s::String, i)
     c = pred.x
     c ≤ '\x7f' && return _rsearch(s, c % UInt8, i)
     b = first_utf8_byte(c)
@@ -54,7 +54,7 @@ end
 
 findlast(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray) = _rsearch(a, pred.x)
 
-findprev(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
+findprev(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray, i) =
     _rsearch(a, pred.x, i)
 
 function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
@@ -98,7 +98,7 @@ findfirst(pattern::AbstractString, string::AbstractString) =
     findnext(pattern, string, start(string))
 
 # AbstractString implementation of the generic findnext interface
-function findnext(testf::Function, s::AbstractString, i::Integer)
+function findnext(testf::Function, s::AbstractString, i)
     z = ncodeunits(s) + 1
     1 ≤ i ≤ z || throw(BoundsError(s, i))
     @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
@@ -260,7 +260,7 @@ julia> findnext("Julia", "JuliaLang", 2)
 1:5
 ```
 """
-findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)
+findnext(t::AbstractString, s::AbstractString, i) = _search(s, t, i)
 
 """
     findlast(pattern::AbstractString, string::AbstractString)
@@ -282,7 +282,7 @@ findlast(pattern::AbstractString, string::AbstractString) =
     findprev(pattern, string, endof(string))
 
 # AbstractString implementation of the generic findprev interface
-function findprev(testf::Function, s::AbstractString, i::Integer)
+function findprev(testf::Function, s::AbstractString, i)
     if i < 1
         return i == 0 ? 0 : throw(BoundsError(s, i))
     end
@@ -445,7 +445,7 @@ julia> findprev("Julia", "JuliaLang", 6)
 1:5
 ```
 """
-findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, i)
+findprev(t::AbstractString, s::AbstractString, i) = _rsearch(s, t, i)
 
 """
     contains(haystack::AbstractString, needle::Union{AbstractString,Regex,Char})

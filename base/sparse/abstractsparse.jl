@@ -48,7 +48,7 @@ end
 _sparse_findnextnz(v::AbstractSparseArray, i::Integer) = (I = find(!iszero, v); n = searchsortedfirst(I, i); n<=length(I) ? I[n] : zero(indtype(v)))
 _sparse_findprevnz(v::AbstractSparseArray, i::Integer) = (I = find(!iszero, v); n = searchsortedlast(I, i);  !iszero(n)   ? I[n] : zero(indtype(v)))
 
-function findnext(f::typeof(!iszero), v::AbstractSparseArray, i::Integer)
+function findnext(f::typeof(!iszero), v::AbstractSparseArray, i)
     j = _sparse_findnextnz(v, i)
     while !iszero(j) && !f(v[j])
         j = _sparse_findnextnz(v, j+1)
@@ -56,7 +56,7 @@ function findnext(f::typeof(!iszero), v::AbstractSparseArray, i::Integer)
     return j
 end
 
-function findprev(f::typeof(!iszero), v::AbstractSparseArray, i::Integer)
+function findprev(f::typeof(!iszero), v::AbstractSparseArray, i)
     j = _sparse_findprevnz(v, i)
     while !iszero(j) && !f(v[j])
         j = _sparse_findprevnz(v, j-1)

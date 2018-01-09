@@ -266,7 +266,7 @@ matchall(re::Regex, str::SubString, overlap::Bool=false) =
     matchall(re, String(str), overlap)
 
 # TODO: return only start index and update deprecation
-function findnext(re::Regex, str::Union{String,SubString}, idx::Integer)
+function findnext(re::Regex, str::Union{String,SubString}, idx)
     if idx > nextind(str,endof(str))
         throw(BoundsError())
     end
@@ -275,7 +275,7 @@ function findnext(re::Regex, str::Union{String,SubString}, idx::Integer)
     PCRE.exec(re.regex, str, idx-1, opts, re.match_data) ?
         ((Int(re.ovec[1])+1):prevind(str,Int(re.ovec[2])+1)) : (0:-1)
 end
-findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
+findnext(r::Regex, s::AbstractString, idx) = throw(ArgumentError(
     "regex search is only available for the String type; use String(s) to convert"
 ))
 findfirst(r::Regex, s::AbstractString) = findnext(r,s,start(s))

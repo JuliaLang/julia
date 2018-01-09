@@ -1269,11 +1269,13 @@ end
 # (2) base/linalg/qr.jl
 # (3) base/linalg/lq.jl
 
-@deprecate find(x::Number)            find(!iszero, x)
-@deprecate findnext(A, v, i::Integer) findnext(equalto(v), A, i)
-@deprecate findfirst(A, v)            findfirst(equalto(v), A)
-@deprecate findprev(A, v, i::Integer) findprev(equalto(v), A, i)
-@deprecate findlast(A, v)             findlast(equalto(v), A)
+@deprecate find(x::Number)             find(!iszero, x)
+@deprecate findnext(A, v, i)           findnext(equalto(v), A, i)
+@deprecate findfirst(A, v)             findfirst(equalto(v), A)
+@deprecate findprev(A, v, i)           findprev(equalto(v), A, i)
+@deprecate findlast(A, v)              findlast(equalto(v), A)
+@deprecate findnext(A::BitArray, v, i) findnext(equalto(v), A, i)
+@deprecate findprev(A::BitArray, v, i) findprev(equalto(v), A, i)
 # also remove deprecation warnings in find* functions in array.jl, sparse/sparsematrix.jl,
 # and sparse/sparsevector.jl.
 
