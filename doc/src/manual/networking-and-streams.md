@@ -100,7 +100,7 @@ Note that `a` is written to [`STDOUT`](@ref) by the [`write`](@ref) function and
 value is `1` (since `0x61` is one byte).
 
 For text I/O, use the [`print`](@ref) or [`show`](@ref) methods, depending on your needs (see
-the standard library reference for a detailed discussion of the difference between the two):
+the Julia Base reference for a detailed discussion of the difference between the two):
 
 ```jldoctest
 julia> print(STDOUT, 0x61)

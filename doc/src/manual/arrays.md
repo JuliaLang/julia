@@ -944,7 +944,7 @@ as a given sparse matrix `S`, or that the resulting sparse matrix has density `d
 element has a probability `d` of being non-zero.
 
 Details can be found in the [Sparse Vectors and Matrices](@ref stdlib-sparse-arrays)
-section of the standard library reference.
+section of the Julia Base reference.
 
 | Sparse                     | Dense                  | Description                                                                                                                                                           |
 |:-------------------------- |:---------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
