@@ -119,13 +119,39 @@ its methods are restricted to cases that are considered "safe" or "unsurprising"
 It is also usually lossless; converting a value to a different type and back again
 should result in the exact same value.
 
-Notice that some constructors don't implement the concept of "conversion".
-For example, `Vector{Int}(5)` constructs a 5-element vector, which is not really a
-"conversion" from an integer to a vector.
+There are four general kinds of cases where constructors differ from `convert`:
 
-Finally, `convert(T, x)` is expected to return the original `x` if `x` is already of type `T`.
+#### Constructors for types unrelated to their arguments
+
+Some constructors don't implement the concept of "conversion".
+For example, `Timer(2)` creates a 2-second timer, which is not really a
+"conversion" from an integer to a timer.
+
+#### Mutable collections
+
+`convert(T, x)` is expected to return the original `x` if `x` is already of type `T`.
 In contrast, if `T` is a mutable collection type then `T(x)` should always make a new
 collection (copying elements from `x`).
+
+#### Wrapper types
+
+For some types which "wrap" other values, the constructor may wrap its argument inside
+a new object even if it is already of the requested type.
+For example `Some(x)` wraps `x` to indicate that a value is present (in a context
+where the result might be a `Some` or `nothing`).
+However, `x` itself might be the object `Some(y)`, in which case the result is
+`Some(Some(y))`, with two levels of wrapping.
+`convert(Some, x)`, on the other hand, would just return `x` since it is already
+a `Some`.
+
+#### Constructors that don't return instances of their own type
+
+In *very rare* cases it might make sense for the constructor `T(x)` to return
+an object not of type `T`.
+This could happen if a wrapper type is its own inverse (e.g. `Flip(Flip(x)) === x`),
+or to support an old calling syntax for backwards compatibility when a library is
+restructured.
+But `convert(T, x)` should always return a value of type `T`.
 
 ### Defining New Conversions
 
@@ -146,8 +172,8 @@ The type of the first argument of this method is a [singleton type](@ref man-sin
 when the first argument is the type value `MyType`. Notice the syntax used for the first
 argument: the argument name is omitted prior to the `::` symbol, and only the type is given.
 This is the syntax in Julia for a function argument whose type is specified but whose value
-is never used in the function body. In this example, since the type is a singleton, there
-would never be any reason to use its value within the body.
+does not need to be referenced by name. In this example, since the type is a singleton, we
+already know its value without referring to an argument name.
 
 All instances of some abstract types are by default considered "sufficiently similar"
 that a universal `convert` definition is provided in Julia Base.
