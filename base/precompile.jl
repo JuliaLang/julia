@@ -165,7 +165,7 @@ precompile(Tuple{typeof(Base.show_circular), Base.IOContext{Base.GenericIOBuffer
 precompile(Tuple{typeof(Base.show_delim_array), Base.IOContext{Base.GenericIOBuffer{Array{UInt8, 1}}}, Tuple{}, Char, Char, Char, Bool, Int64, Int64})
 precompile(Tuple{typeof(Base.throw_boundserror), Array{Base.StackTraces.StackFrame, 1}, Tuple{Base.UnitRange{Int64}}})
 precompile(Tuple{typeof(Base.splice!), Array{Base.StackTraces.StackFrame, 1}, Base.UnitRange{Int64}, Array{Any, 1}})
-precompile(Tuple{typeof(Base.REPL.ip_matches_func), Ptr{Cvoid}, Symbol})
+precompile(Tuple{typeof(Base.ip_matches_func), Ptr{Cvoid}, Symbol})
 precompile(Tuple{typeof(Base.throw_boundserror), Array{Ptr{Cvoid}, 1}, Tuple{Base.UnitRange{Int64}}})
 precompile(Tuple{typeof(Base.unsafe_copyto!), Array{Ptr{Cvoid}, 1}, Int64, Array{Ptr{Cvoid}, 1}, Int64, Int64})
 precompile(Tuple{Type{Base.Channel{Any}}, Int64})

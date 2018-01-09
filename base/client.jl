@@ -139,6 +139,16 @@ function repl_cmd(cmd, out)
     nothing
 end
 
+function ip_matches_func(ip, func::Symbol)
+    for fr in StackTraces.lookup(ip)
+        if fr === StackTraces.UNKNOWN || fr.from_c
+            return false
+        end
+        fr.func === func && return true
+    end
+    return false
+end
+
 function display_error(io::IO, er, bt)
     if !isempty(bt)
         st = stacktrace(bt)
@@ -148,7 +158,7 @@ function display_error(io::IO, er, bt)
     end
     print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
     # remove REPL-related frames from interactive printing
-    eval_ind = findlast(addr->Base.REPL.ip_matches_func(addr, :eval), bt)
+    eval_ind = findlast(addr->ip_matches_func(addr, Symbol("top-level scope")), bt)
     if eval_ind != 0
         bt = bt[1:eval_ind-1]
     end
