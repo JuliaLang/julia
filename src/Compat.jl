@@ -585,10 +585,11 @@ module Sys
         import Base.Sys: isapple, isbsd, islinux, isunix, iswindows
     end
 
-    @static if VERSION < v"0.7.0-DEV.3073"
-        const BINDIR = JULIA_HOME
-    else
-        const BINDIR = Base.Sys.BINDIR
+    # https://github.com/JuliaLang/julia/pull/25102
+    # NOTE: This needs to be in an __init__ because JULIA_HOME is not
+    # defined when building system images.
+    function __init__()
+        global BINDIR = VERSION < v"0.7.0-DEV.3073" ? JULIA_HOME : Base.Sys.BINDIR
     end
 end
 
