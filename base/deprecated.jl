@@ -188,6 +188,8 @@ end
 
 # BEGIN 0.7 deprecations
 
+# TODO: remove warning for using `_` in parse_input_line in base/client.jl
+
 @deprecate issubtype (<:)
 
 @deprecate union() Set()
@@ -2909,8 +2911,6 @@ end
 
 @deprecate substrides(s, parent, dim, I::Tuple) substrides(parent, strides(parent), I)
 
-# END 0.7 deprecations
-
 @deprecate lexcmp(x::AbstractArray, y::AbstractArray) cmp(x, y)
 @deprecate lexcmp(x::Real, y::Real)                   cmp(isless, x, y)
 @deprecate lexcmp(x::Complex, y::Complex)             cmp((real(x),imag(x)), (real(y),imag(y)))
@@ -2974,6 +2974,7 @@ end
 
 
 # END 0.7 deprecations
+
 # BEGIN 1.0 deprecations
 
 # END 1.0 deprecations
