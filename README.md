@@ -273,6 +273,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `unshift!` and `shift!` are now `pushfirst!` and `popfirst!` ([#25100]).
 
+* `copy!` and `unsafe_copy!` are now `copyto!` and `unsafe_copyto!` ([#24808]).
+
 * `ipermute!` is now `invpermute!` ([#25168]).
 
 ## New macros

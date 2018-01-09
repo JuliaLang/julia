@@ -838,7 +838,7 @@ no_specialize_kw2(@nospecialize(x::Integer=0)) = sin(2)
 
 # 0.7
 let M = [1 + 2im 3 + 4im; 5 + 6im 7 + 8im],
-    M2 = adjoint(M),
+    M2 = adjoint(copy(M)),
     Mc = [1 - 2im 5 - 6im; 3 - 4im 7 - 8im]
 
     @test adjoint(M) == Mc
@@ -1067,6 +1067,14 @@ end
 let coolvec = [1,2,3]
     @test pushfirst!(coolvec, 0) == [0,1,2,3]
     @test popfirst!(coolvec) == 0
+end
+
+# 0.7.0-DEV.3057
+let A = [0, 0, 0], B = [1, 2, 3]
+    @test copyto!(A, B) === A == B
+end
+let A = [0, 0, 0], B = [1, 2, 3]
+    @test unsafe_copyto!(A, 2, B, 1, 1) === A == [0, 1, 0]
 end
 
 # 0.7.0-DEV.3173

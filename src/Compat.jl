@@ -1071,6 +1071,13 @@ end
         replace(s, first(pat_rep), last(pat_rep), count)
 end
 
+# 0.7.0-DEV.3057
+@static if !isdefined(Base, :copyto!)
+    const copyto! = Base.copy!
+    const unsafe_copyto! = Base.unsafe_copy!
+    export copyto!, unsafe_copyto!
+end
+
 @static if VERSION < v"0.7.0-DEV.3025"
     import Base: convert, ndims, getindex, size, length, eltype,
                  start, next, done, first, last
