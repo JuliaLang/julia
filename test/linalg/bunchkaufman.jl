@@ -24,8 +24,8 @@ bimg  = randn(n,2)/2
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     asym = transpose(a) + a                  # symmetric indefinite
-    aher = adjoint(a) + a                  # Hermitian indefinite
-    apd  = adjoint(a) * a                  # Positive-definite
+    aher = a' + a                  # Hermitian indefinite
+    apd  = a' * a                  # Positive-definite
     for (a, a2, aher, apd) in ((a, a2, aher, apd),
                                (view(a, 1:n, 1:n),
                                 view(a2, 1:n, 1:n),
@@ -66,8 +66,8 @@ bimg  = randn(n,2)/2
                 end
 
                 bc1 = bkfact(Symmetric(asym, uplo))
-                @test getproperty(bc1, uplo)*bc1.D*Transpose(getproperty(bc1, uplo)) ≈ asym[bc1.p, bc1.p]
-                @test getproperty(bc1, uplo)*bc1.D*Transpose(getproperty(bc1, uplo)) ≈ bc1.P*asym*Transpose(bc1.P)
+                @test getproperty(bc1, uplo)*bc1.D*transpose(getproperty(bc1, uplo)) ≈ asym[bc1.p, bc1.p]
+                @test getproperty(bc1, uplo)*bc1.D*transpose(getproperty(bc1, uplo)) ≈ bc1.P*asym*transpose(bc1.P)
                 @test_throws ErrorException bc1.Z
                 @test_throws ArgumentError uplo == :L ? bc1.U : bc1.L
             end

@@ -103,10 +103,10 @@ end
 function *(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::StridedVecOrMat{S}) where {T,S}
     Q = adjQ.parent
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return mul!(Adjoint(Q), copy_oftype(X, TT))
+    return mul!(adjoint(Q), copy_oftype(X, TT))
 end
 function *(X::StridedVecOrMat{S}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T,S}
     Q = adjQ.parent
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    return mul!(copy_oftype(X, TT), Adjoint(Q))
+    return mul!(copy_oftype(X, TT), adjoint(Q))
 end

@@ -217,7 +217,7 @@ end
     for uplo in (:U, :L)
         AcA = A'*A
         BcB = AcA + v*v'
-        BcB = (BcB + adjoint(BcB))/2
+        BcB = (BcB + BcB')/2
         F = cholfact(Hermitian(AcA, uplo))
         G = cholfact(Hermitian(BcB, uplo))
         @test Base.getproperty(LinAlg.lowrankupdate(F, v), uplo) ≈ Base.getproperty(G, uplo)

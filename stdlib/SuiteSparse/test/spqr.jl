@@ -44,9 +44,9 @@ nn = 100
 
         offsizeA = Matrix{Float64}(I, m+1, m+1)
         @test_throws DimensionMismatch mul!(Q, offsizeA)
-        @test_throws DimensionMismatch mul!(Adjoint(Q), offsizeA)
+        @test_throws DimensionMismatch mul!(adjoint(Q), offsizeA)
         @test_throws DimensionMismatch mul!(offsizeA, Q)
-        @test_throws DimensionMismatch mul!(offsizeA, Adjoint(Q))
+        @test_throws DimensionMismatch mul!(offsizeA, adjoint(Q))
     end
 
     @testset "element type of B: $eltyB" for eltyB in (Int, Float64, Complex{Float64})
