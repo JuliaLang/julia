@@ -51,22 +51,40 @@ Transpose(x::Number) = transpose(x)
 # unwrapping constructors
 Adjoint(A::Adjoint) = A.parent
 Transpose(A::Transpose) = A.parent
-# normalizing unwrapping constructors
-# technically suspect, but at least fine for now
-Adjoint(A::Transpose) = conj(A.parent)
-Transpose(A::Adjoint) = conj(A.parent)
 
-# eager lowercase quasi-constructors, unwrapping
-adjoint(A::Adjoint) = copy(A.parent)
-transpose(A::Transpose) = copy(A.parent)
-# eager lowercase quasi-constructors, normalizing
-# technically suspect, but at least fine for now
-adjoint(A::Transpose) = conj!(copy(A.parent))
-transpose(A::Adjoint) = conj!(copy(A.parent))
+# wrapping lowercase quasi-constructors
+adjoint(A::AbstractVecOrMat) = Adjoint(A)
+"""
+    transpose(A::AbstractMatrix)
 
-# lowercase quasi-constructors for vectors, TODO: deprecate
-adjoint(sv::AbstractVector) = Adjoint(sv)
-transpose(sv::AbstractVector) = Transpose(sv)
+Lazy matrix transpose. Mutating the returned object should appropriately mutate `A`. Often,
+but not always, yields `Transpose(A)`, where `Transpose` is a lazy transpose wrapper. Note
+that this operation is recursive.
+
+This operation is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref), which is non-recursive.
+
+# Examples
+```jldoctest
+julia> A = [1 2 3; 4 5 6; 7 8 9]
+3×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+ 7  8  9
+
+julia> transpose(A)
+3×3 Transpose{Int64,Array{Int64,2}}:
+ 1  4  7
+ 2  5  8
+ 3  6  9
+```
+"""
+transpose(A::AbstractVecOrMat) = Transpose(A)
+# unwrapping lowercase quasi-constructors
+adjoint(A::Adjoint) = A.parent
+transpose(A::Transpose) = A.parent
+adjoint(A::Transpose{<:Real}) = A.parent
+transpose(A::Adjoint{<:Real}) = A.parent
 
 
 # some aliases for internal convenience use
@@ -116,6 +134,8 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 parent(A::AdjOrTrans) = A.parent
 vec(v::AdjOrTransAbsVec) = v.parent
 
+cmp(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = cmp(parent(A), parent(B))
+isless(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = isless(parent(A), parent(B))
 
 ### concatenation
 # preserve Adjoint/Transpose wrapper around vectors
@@ -185,13 +205,14 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 ## right-division \
 /(u::AdjointAbsVec, A::AbstractMatrix) = Adjoint(Adjoint(A) \ u.parent)
 /(u::TransposeAbsVec, A::AbstractMatrix) = Transpose(Transpose(A) \ u.parent)
-
+/(u::AdjointAbsVec, A::Transpose{<:Any,<:AbstractMatrix}) = Adjoint(conj(A.parent) \ u.parent) # technically should be Adjoint(copy(Adjoint(copy(A))) \ u.parent)
+/(u::TransposeAbsVec, A::Adjoint{<:Any,<:AbstractMatrix}) = Transpose(conj(A.parent) \ u.parent) # technically should be Transpose(copy(Transpose(copy(A))) \ u.parent)
 
 # dismabiguation methods
-*(A::AdjointAbsVec, B::Transpose{<:Any,<:AbstractMatrix}) = A * transpose(B.parent)
-*(A::TransposeAbsVec, B::Adjoint{<:Any,<:AbstractMatrix}) = A * adjoint(B.parent)
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractMatrix}) = transpose(A.parent) * B
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractMatrix}) = A * transpose(B.parent)
+*(A::AdjointAbsVec, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
+*(A::TransposeAbsVec, B::Adjoint{<:Any,<:AbstractMatrix}) = A * copy(B)
+*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractMatrix}) = copy(A) * B
+*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
 # Adj/Trans-vector * Trans/Adj-vector, shouldn't exist, here for ambiguity resolution? TODO: test removal
 *(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))

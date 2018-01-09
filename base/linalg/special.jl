@@ -119,9 +119,9 @@ for op in (:+, :-)
 end
 
 mul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    (B = adjB.parent; mul!(full!(A), Adjoint(B)))
+    (B = adjB.parent; mul!(full!(A), adjoint(B)))
 *(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    (B = adjB.parent; *(copyto!(similar(parent(A)), A), Adjoint(B)))
+    (B = adjB.parent; *(copyto!(similar(parent(A)), A), adjoint(B)))
 
 # fill[stored]! methods
 fillstored!(A::Diagonal, x) = (fill!(A.diag, x); A)

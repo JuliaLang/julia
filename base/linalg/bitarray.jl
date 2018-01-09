@@ -123,7 +123,7 @@ end
 
 ## Structure query functions
 
-issymmetric(A::BitMatrix) = size(A, 1)==size(A, 2) && count(!iszero, A - transpose(A))==0
+issymmetric(A::BitMatrix) = size(A, 1)==size(A, 2) && count(!iszero, A - copy(A'))==0
 ishermitian(A::BitMatrix) = issymmetric(A)
 
 function nonzero_chunks(chunks::Vector{UInt64}, pos0::Int, pos1::Int)
@@ -250,16 +250,19 @@ function put_8x8_chunk(Bc::Vector{UInt64}, i1::Int, i2::Int, x::UInt64, m::Int, 
     return
 end
 
-function transpose(B::BitMatrix)
-    l1 = size(B, 1)
-    l2 = size(B, 2)
-    Bt = falses(l2, l1)
+adjoint(B::Union{BitVector,BitMatrix}) = Adjoint(B)
+transpose(B::Union{BitVector,BitMatrix}) = Transpose(B)
+Base.copy(B::Adjoint{Bool,BitMatrix}) = transpose!(falses(size(B)), B.parent)
+Base.copy(B::Transpose{Bool,BitMatrix}) = transpose!(falses(size(B)), B.parent)
+function transpose!(C::BitMatrix, B::BitMatrix)
+    @boundscheck size(C) == reverse(size(B)) || throw(DimensionMismatch())
+    l1, l2 = size(B)
 
     cgap1, cinc1 = Base._div64(l1), Base._mod64(l1)
     cgap2, cinc2 = Base._div64(l2), Base._mod64(l2)
 
     Bc = B.chunks
-    Btc = Bt.chunks
+    Cc = C.chunks
 
     nc = length(Bc)
 
@@ -278,10 +281,8 @@ function transpose(B::BitMatrix)
                 msk8_2 >>>= j + 7 - l2
             end
 
-            put_8x8_chunk(Btc, j, i, x, l2, cgap2, cinc2, nc, msk8_2)
+            put_8x8_chunk(Cc, j, i, x, l2, cgap2, cinc2, nc, msk8_2)
         end
     end
-    return Bt
+    return C
 end
-
-adjoint(B::Union{BitMatrix,BitVector}) = transpose(B)

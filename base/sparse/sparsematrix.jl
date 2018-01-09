@@ -830,8 +830,10 @@ function ftranspose(A::SparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
                         Vector{Tv}(uninitialized, nnz(A)))
     halfperm!(X, A, 1:A.n, f)
 end
-transpose(A::SparseMatrixCSC) = ftranspose(A, identity)
-adjoint(A::SparseMatrixCSC) = ftranspose(A, conj)
+adjoint(A::SparseMatrixCSC) = Adjoint(A)
+transpose(A::SparseMatrixCSC) = Transpose(A)
+Base.copy(A::Adjoint{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, conj)
+Base.copy(A::Transpose{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, identity)
 
 """
     unchecked_noalias_permute!(X::SparseMatrixCSC{Tv,Ti},

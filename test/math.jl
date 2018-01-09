@@ -297,7 +297,7 @@ end
 
 @testset "test abstractarray trig functions" begin
     TAA = rand(2,2)
-    TAA = (TAA + transpose(TAA))/2.
+    TAA = (TAA + TAA')/2.
     STAA = Symmetric(TAA)
     @test Array(atanh.(STAA)) == atanh.(TAA)
     @test Array(asinh.(STAA)) == asinh.(TAA)

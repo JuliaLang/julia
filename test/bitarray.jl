@@ -1312,7 +1312,7 @@ end
 
     for m1 = 0:n1, m2 = 0:n2
         b1 = bitrand(m1, m2)
-        @check_bit_operation transpose(b1) BitMatrix
+        @check_bit_operation copy(b1') BitMatrix
     end
 end
 
@@ -1390,7 +1390,7 @@ timesofar("cat")
     end
 
     b1 = bitrand(n1,n1)
-    b1 .|= transpose(b1)
+    b1 .|= copy(b1')
     @check_bit_operation issymmetric(b1) Bool
     @check_bit_operation ishermitian(b1) Bool
 
@@ -1406,7 +1406,8 @@ timesofar("cat")
     @check_bit_operation diff(b1) Vector{Int}
 
     b1 = bitrand(n1, n2)
-    @check_bit_operation diff(b1) Matrix{Int}
+    @check_bit_operation diff(b1, 1) Matrix{Int}
+    @check_bit_operation diff(b1, 2) Matrix{Int}
 
     b1 = bitrand(n1, n1)
     @check_bit_operation svd(b1)

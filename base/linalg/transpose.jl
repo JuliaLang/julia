@@ -169,19 +169,8 @@ julia> transpose(A)
  3  6  9
 ```
 """
-function transpose(A::AbstractMatrix)
-    ind1, ind2 = axes(A)
-    B = similar(A, (ind2, ind1))
-    transpose!(B, A)
-end
-function adjoint(A::AbstractMatrix)
-    ind1, ind2 = axes(A)
-    B = similar(A, (ind2, ind1))
-    adjoint!(B, A)
-end
-
-@inline adjoint(A::AbstractVector{<:Real}) = transpose(A)
-@inline adjoint(A::AbstractMatrix{<:Real}) = transpose(A)
+Base.copy(A::Transpose{<:Any,<:AbstractMatrix}) = transpose!(similar(A.parent, reverse(axes(A.parent))), A.parent)
+Base.copy(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint!(similar(A.parent, reverse(axes(A.parent))), A.parent)
 
 function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
                          A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int})

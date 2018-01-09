@@ -23,7 +23,7 @@ APP_COPYRIGHT:=© 2016 The Julia Project
 all: clean $(DMG_NAME)
 
 $(DMG_NAME): dmg/$(APP_NAME) dmg/.VolumeIcon.icns dmg/Applications
-	hdiutil create $@ -size 500m -ov -volname "$(VOL_NAME)" -imagekey zlib-level=9 -srcfolder dmg
+	hdiutil create $@ -size 1t -ov -volname "$(VOL_NAME)" -imagekey zlib-level=9 -srcfolder dmg
 
 dmg/.VolumeIcon.icns: julia.icns
 	-mkdir -p dmg

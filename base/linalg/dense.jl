@@ -1238,7 +1238,7 @@ the pseudoinverse by inverting only singular values above a given threshold,
 
 The optimal choice of `tol` varies both with the value of `M` and the intended application
 of the pseudoinverse. The default value of `tol` is
-`eps(real(float(one(eltype(M)))))*maximum(size(A))`, which is essentially machine epsilon
+`eps(real(float(one(eltype(M)))))*maximum(size(M))`, which is essentially machine epsilon
 for the real part of a matrix element multiplied by the larger matrix dimension. For
 inverting dense ill-conditioned matrices in a least-squares sense,
 `tol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
@@ -1336,7 +1336,7 @@ function nullspace(A::StridedMatrix{T}) where T
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
     SVD = svdfact(A, full = true)
     indstart = sum(SVD.S .> max(m,n)*maximum(SVD.S)*eps(eltype(SVD.S))) + 1
-    return adjoint(SVD.Vt[indstart:end,:])
+    return copy(SVD.Vt[indstart:end,:]')
 end
 nullspace(a::StridedVector) = nullspace(reshape(a, length(a), 1))
 
@@ -1402,9 +1402,9 @@ function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) 
     RA, QA = schur(A)
     RB, QB = schur(B)
 
-    D = -(Adjoint(QA) * (C*QB))
+    D = -(adjoint(QA) * (C*QB))
     Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
-    scale!(QA*(Y * Adjoint(QB)), inv(scale))
+    scale!(QA*(Y * adjoint(QB)), inv(scale))
 end
 sylvester(A::StridedMatrix{T}, B::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = sylvester(float(A), float(B), float(C))
 
@@ -1445,9 +1445,9 @@ julia> A*X + X*A' + B
 function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
     R, Q = schur(A)
 
-    D = -(Adjoint(Q) * (C*Q))
+    D = -(adjoint(Q) * (C*Q))
     Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
-    scale!(Q*(Y * Adjoint(Q)), inv(scale))
+    scale!(Q*(Y * adjoint(Q)), inv(scale))
 end
 lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = lyap(float(A), float(C))
 lyap(a::T, c::T) where {T<:Number} = -c/(2a)

@@ -105,7 +105,7 @@ def parse_int(t):
 def printfd(t):
     f = open("/dev/null", "w")
     for i in range(1,t):
-        f.write("%d %d\n")
+        f.write("{:d} {:d}\n".format(i, i+1))
     f.close()
     
 

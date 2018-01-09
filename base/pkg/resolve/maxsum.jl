@@ -122,7 +122,7 @@ mutable struct Graph
                         adjdict[p0][p1] = j1
 
                         bm = trues(spp[p1], spp[p0])
-                        bmt = adjoint(bm)
+                        bmt = trues(spp[p0], spp[p1])
 
                         push!(gmsk[p0], bm)
                         push!(gmsk[p1], bmt)

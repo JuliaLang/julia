@@ -1000,7 +1000,7 @@ end
 """
     syr!(uplo, alpha, x, A)
 
-Rank-1 update of the symmetric matrix `A` with vector `x` as `alpha*x*Transpose(x) + A`.
+Rank-1 update of the symmetric matrix `A` with vector `x` as `alpha*x*transpose(x) + A`.
 [`uplo`](@ref stdlib-blas-uplo) controls which triangle of `A` is updated. Returns `A`.
 """
 function syr! end
@@ -1243,7 +1243,7 @@ end
 """
     syrk!(uplo, trans, alpha, A, beta, C)
 
-Rank-k update of the symmetric matrix `C` as `alpha*A*Transpose(A) + beta*C` or `alpha*Transpose(A)*A +
+Rank-k update of the symmetric matrix `C` as `alpha*A*transpose(A) + beta*C` or `alpha*transpose(A)*A +
 beta*C` according to [`trans`](@ref stdlib-blas-trans).
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
 """
@@ -1254,7 +1254,7 @@ function syrk! end
 
 Returns either the upper triangle or the lower triangle of `A`,
 according to [`uplo`](@ref stdlib-blas-uplo),
-of `alpha*A*Transpose(A)` or `alpha*Transpose(A)*A`,
+of `alpha*A*transpose(A)` or `alpha*transpose(A)*A`,
 according to [`trans`](@ref stdlib-blas-trans).
 """
 function syrk end

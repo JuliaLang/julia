@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Julia standard library contains a range of functions and macros appropriate for performing
+Julia Base contains a range of functions and macros appropriate for performing
 scientific and numerical computing, but is also as broad as those of many general purpose programming
 languages.  Additional functionality is available from a growing collection of available packages.
 Functions are grouped by topic below.

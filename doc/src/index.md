@@ -1,5 +1,10 @@
 # Julia Documentation
 
+* [Manual](#Manual-1)
+* [Base](#Base-1)
+* [Standard Library](#Standard-Library-1)
+* [Developer Documentation](#Developer-Documentation-1)
+
 ## Manual
 
   * [Introduction](@ref man-introduction)
@@ -42,7 +47,7 @@
   * [Noteworthy Differences from other Languages](@ref)
   * [Unicode Input](@ref)
 
-## Standard Library
+## Base
 
   * [Essentials](@ref)
   * [Collections and Data Structures](@ref)
@@ -57,26 +62,32 @@
   * [Linear Algebra](@ref)
   * [Constants](@ref lib-constants)
   * [Filesystem](@ref)
-  * [Delimited Files](@ref)
   * [I/O and Network](@ref)
   * [Punctuation](@ref)
   * [Sorting and Related Functions](@ref)
   * [Package Manager Functions](@ref)
-  * [Dates and Time](@ref stdlib-dates)
   * [Iteration utilities](@ref)
-  * [Unit Testing](@ref)
   * [C Interface](@ref)
   * [C Standard Library](@ref)
   * [Dynamic Linker](@ref)
   * [StackTraces](@ref)
   * [SIMD Support](@ref)
-  * [Profiling](@ref lib-profiling)
-  * [Memory-mapped I/O](@ref)
+
+## Standard Library
+
   * [Base64](@ref)
+  * [CRC32c](@ref)
+  * [Dates and Time](@ref stdlib-dates)
+  * [Delimited Files](@ref)
+  * [Distributed Computing](@ref)
   * [File Events](@ref lib-filewatching)
   * [Iterative Eigensolvers](@ref lib-itereigen)
-  * [Unicode](@ref)
+  * [Memory-mapped I/O](@ref)
   * [Printf](@ref)
+  * [Profiling](@ref lib-profiling)
+  * [Shared Arrays](@ref)
+  * [Unit Testing](@ref)
+  * [Unicode](@ref)
 
 ## Developer Documentation
 

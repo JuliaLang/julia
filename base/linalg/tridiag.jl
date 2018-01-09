@@ -127,8 +127,11 @@ broadcast(::typeof(trunc), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = Sy
 broadcast(::typeof(floor), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(floor.(T, M.dv), floor.(T, M.ev))
 broadcast(::typeof(ceil), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(ceil.(T, M.dv), ceil.(T, M.ev))
 
-transpose(M::SymTridiagonal) = M #Identity operation
-adjoint(M::SymTridiagonal) = conj(M)
+transpose(S::SymTridiagonal) = S
+adjoint(S::SymTridiagonal{<:Real}) = S
+adjoint(S::SymTridiagonal) = Adjoint(S)
+Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(Adjoint.(x)), (S.parent.dv, S.parent.ev))...)
+Base.copy(S::Transpose{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(Transpose.(x)), (S.parent.dv, S.parent.ev))...)
 
 function diag(M::SymTridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
@@ -519,10 +522,14 @@ broadcast(::typeof(floor), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
 broadcast(::typeof(ceil), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
     Tridiagonal(ceil.(T, M.dl), ceil.(T, M.d), ceil.(T, M.du))
 
-transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
-adjoint(M::Tridiagonal) = conj(transpose(M))
+adjoint(S::Tridiagonal) = Adjoint(S)
+transpose(S::Tridiagonal) = Transpose(S)
+adjoint(S::Tridiagonal{<:Real}) = Tridiagonal(S.du, S.d, S.dl)
+transpose(S::Tridiagonal{<:Number}) = Tridiagonal(S.du, S.d, S.dl)
+Base.copy(aS::Adjoint{<:Any,<:Tridiagonal}) = (S = aS.parent; Tridiagonal(map(x -> copy.(Adjoint.(x)), (S.du, S.d, S.dl))...))
+Base.copy(tS::Transpose{<:Any,<:Tridiagonal}) = (S = tS.parent; Tridiagonal(map(x -> copy.(Transpose.(x)), (S.du, S.d, S.dl))...))
 
-\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = adjoint(A.parent) \ adjoint(B.parent)
+\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = copy(A) \ copy(B)
 
 function diag(M::Tridiagonal{T}, n::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the

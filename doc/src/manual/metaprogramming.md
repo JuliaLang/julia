@@ -676,7 +676,7 @@ Notice that it would not be possible to write this as a function, since only the
 condition is available and it would be impossible to display the expression that computed it in
 the error message.
 
-The actual definition of `@assert` in the standard library is more complicated. It allows the
+The actual definition of `@assert` in Julia Base is more complicated. It allows the
 user to optionally specify their own error message, instead of just printing the failed expression.
 Just like in functions with a variable number of arguments, this is specified with an ellipses
 following the last argument:
@@ -776,7 +776,7 @@ end
 ```
 
 Here, we want `t0`, `t1`, and `val` to be private temporary variables, and we want `time` to refer
-to the [`time`](@ref) function in the standard library, not to any `time` variable the user
+to the [`time`](@ref) function in Julia Base, not to any `time` variable the user
 might have (the same applies to `println`). Imagine the problems that could occur if the user
 expression `ex` also contained assignments to a variable called `t0`, or defined its own `time`
 variable. We might get errors, or mysteriously incorrect behavior.
@@ -787,7 +787,7 @@ to (and not declared global), declared local, or used as a function argument nam
 it is considered global. Local variables are then renamed to be unique (using the [`gensym`](@ref)
 function, which generates new symbols), and global variables are resolved within the macro definition
 environment. Therefore both of the above concerns are handled; the macro's locals will not conflict
-with any user variables, and `time` and `println` will refer to the standard library definitions.
+with any user variables, and `time` and `println` will refer to the Julia Base definitions.
 
 One problem remains however. Consider the following use of this macro:
 

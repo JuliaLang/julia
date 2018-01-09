@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
-using Base.LinAlg: mul!, Adjoint, Transpose
+using Base.LinAlg: mul!
 import Base.LinAlg: BlasReal, BlasFloat
 
 n = 10 #Size of test matrix
@@ -163,22 +163,22 @@ srand(1)
             condT = cond(map(ComplexF64,Tfull))
             promty = typeof((zero(relty)*zero(relty) + zero(relty)*zero(relty))/one(relty))
             if relty != BigFloat
-                x = Transpose(T)\Transpose(c)
-                tx = Transpose(Tfull) \ Transpose(c)
+                x = transpose(T)\transpose(c)
+                tx = transpose(Tfull) \ transpose(c)
                 elty <: AbstractFloat && @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
-                @test_throws DimensionMismatch Transpose(T)\Transpose(b)
-                x = T'\transpose(c)
-                tx = Tfull'\transpose(c)
+                @test_throws DimensionMismatch transpose(T)\transpose(b)
+                x = T'\copy(transpose(c))
+                tx = Tfull'\copy(transpose(c))
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
-                @test_throws DimensionMismatch T'\transpose(b)
-                x = T\Transpose(c)
-                tx = Tfull\Transpose(c)
+                @test_throws DimensionMismatch T'\copy(transpose(b))
+                x = T\transpose(c)
+                tx = Tfull\transpose(c)
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
-                @test_throws DimensionMismatch T\Transpose(b)
+                @test_throws DimensionMismatch T\transpose(b)
             end
             offsizemat = Matrix{elty}(uninitialized, n+1, 2)
             @test_throws DimensionMismatch T \ offsizemat
-            @test_throws DimensionMismatch Transpose(T) \ offsizemat
+            @test_throws DimensionMismatch transpose(T) \ offsizemat
             @test_throws DimensionMismatch T' \ offsizemat
 
             let bb = b, cc = c

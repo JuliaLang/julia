@@ -644,9 +644,6 @@ JL_CALLABLE(jl_f_isdefined)
     jl_module_t *m = NULL;
     jl_sym_t *s = NULL;
     JL_NARGSV(isdefined, 1);
-    if (jl_is_array(args[0])) {
-        return jl_array_isdefined(args, nargs) ? jl_true : jl_false;
-    }
     if (nargs == 1) {
         JL_TYPECHK(isdefined, symbol, args[0]);
         s = (jl_sym_t*)args[0];
@@ -925,16 +922,7 @@ JL_CALLABLE(jl_f_invoke)
     JL_NARGSV(invoke, 2);
     jl_value_t *argtypes = args[1];
     JL_GC_PUSH1(&argtypes);
-    if (jl_is_tuple(args[1])) {
-        jl_depwarn("`invoke(f, (types...), ...)` is deprecated, "
-                   "use `invoke(f, Tuple{types...}, ...)` instead",
-                   (jl_value_t*)jl_symbol("invoke"));
-        argtypes = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(argtypes),
-                                                      jl_nfields(argtypes));
-    }
-    else {
-        jl_check_type_tuple(args[1], jl_gf_name(args[0]), "invoke");
-    }
+    jl_check_type_tuple(args[1], jl_gf_name(args[0]), "invoke");
     if (!jl_tuple_isa(&args[2], nargs-2, (jl_datatype_t*)argtypes))
         jl_error("invoke: argument type error");
     args[1] = args[0];  // move function directly in front of arguments

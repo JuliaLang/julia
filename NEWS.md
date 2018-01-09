@@ -368,8 +368,20 @@ This section lists changes that do not have deprecation warnings.
   * `find` now returns the same type of indices as `keys`/`pairs` for `AbstractArray`,
     `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774]).
     In particular, this means that it returns `CartesianIndex` objects for matrices
-    and higher-dimensional arrays instead of linear indices as it was previously the case.
+    and higher-dimensional arrays instead of linear indices as was previously the case.
     Use `Int[LinearIndices(size(a))[i] for i in find(f, a)]` to compute linear indices.
+
+ * `AbstractSet` objects are now considered equal by `==` and `isequal` if all of their
+    elements are equal ([#25368]). This has required changing the hashing algorithm
+    for `BitSet`.
+
+  * the default behavior of `titlecase` is changed in two ways ([#23393]):
+    + characters not starting a word are converted to lowercase;
+      a new keyword argument `strict` is added which
+      allows to get the old behavior when it's `false`.
+    + any non-letter character is considered as a word separator;
+      to get the old behavior (only "space" characters are considered as
+      word separators), use the keyword `wordsep=isspace`.
 
 Library improvements
 --------------------
@@ -853,8 +865,9 @@ Deprecated or removed
   * `workspace` is discontinued, check out [Revise.jl](https://github.com/timholy/Revise.jl)
     for an alternative workflow ([#25046]).
 
-  * `cumsum`, `cumprod`, `accumulate`, and their mutating versions now require a `dim`
-    argument instead of defaulting to using the first dimension ([#24684]).
+  * `cumsum`, `cumprod`, `accumulate`, their mutating versions, and `diff` all now require a `dim`
+    argument instead of defaulting to using the first dimension unless there is only
+    one dimension ([#24684], [#25457]).
 
   * The `sum_kbn` and `cumsum_kbn` functions have been moved to the
     [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
@@ -923,6 +936,7 @@ Deprecated or removed
     `empty(::Associative, K, V)` ([#24390]).
 
   * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
+
 
 Command-line option changes
 ---------------------------

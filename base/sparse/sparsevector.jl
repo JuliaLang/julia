@@ -2,7 +2,6 @@
 
 ### Common definitions
 
-using Base.LinAlg: Adjoint, Transpose
 import Base: scalarmax, scalarmin, sort, find, findnz
 import Base.LinAlg: promote_to_array_type, promote_to_arrays_
 
@@ -1612,7 +1611,7 @@ function mul!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number,
     return y
 end
 
-# * and mul!(C, Transpose(A), B)
+# * and mul!(C, transpose(A), B)
 
 function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     A = transA.parent
@@ -1620,11 +1619,11 @@ function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector
     length(x) == m || throw(DimensionMismatch())
     Ty = promote_type(Ta, Tx)
     y = Vector{Ty}(uninitialized, n)
-    mul!(y, Transpose(A), x)
+    mul!(y, transpose(A), x)
 end
 
 mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(one(Tx), Transpose(A), x, zero(Ty), y))
+    (A = transA.parent; mul!(one(Tx), transpose(A), x, zero(Ty), y))
 
 function mul!(α::Number, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, β::Number, y::AbstractVector)
     A = transA.parent
@@ -1671,9 +1670,9 @@ function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::Char='N')
     if trans == 'N' || trans == 'N'
         mul!(y, A, x)
     elseif trans == 'T' || trans == 't'
-        mul!(y, Transpose(A), x)
+        mul!(y, transpose(A), x)
     elseif trans == 'C' || trans == 'c'
-        mul!(y, Adjoint(A), x)
+        mul!(y, adjoint(A), x)
     else
         throw(ArgumentError("Invalid trans character $trans"))
     end
@@ -1716,13 +1715,13 @@ end
 # * and *(Tranpose(A), B)
 
 mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(one(Tx), Transpose(A), x, zero(Ty), y))
+    (A = transA.parent; mul!(one(Tx), transpose(A), x, zero(Ty), y))
 
 mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, β::Number, y::AbstractVector) =
     (A = transA.parent; _At_or_Ac_mul_B!(*, α, A, x, β, y))
 
 mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = adjA.parent; mul!(one(Tx), Adjoint(A), x, zero(Ty), y))
+    (A = adjA.parent; mul!(one(Tx), adjoint(A), x, zero(Ty), y))
 
 mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, β::Number, y::AbstractVector) =
     (A = adjA.parent; _At_or_Ac_mul_B!(dot, α, A, x, β, y))

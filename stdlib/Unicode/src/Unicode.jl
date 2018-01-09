@@ -7,7 +7,7 @@ module Unicode
 using Base.Unicode: normalize, graphemes, isassigned, textwidth, isvalid,
                     islower, isupper, isalpha, isdigit, isxdigit, isnumeric, isalnum,
                     iscntrl, ispunct, isspace, isprint, isgraph,
-                    lowercase, uppercase, titlecase, lcfirst, ucfirst
+                    lowercase, uppercase, titlecase, lcfirst, ucfirst, iscased
 
 export graphemes, textwidth, isvalid,
        islower, isupper, isalpha, isdigit, isxdigit, isnumeric, isalnum,

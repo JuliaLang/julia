@@ -48,7 +48,7 @@ using Main.TestHelpers.OAs
     a[1,2] = 2
     a[2,1] = 3
     a[2,2] = 4
-    b = adjoint(a)
+    b = copy(a')
     @test a[1,1] == 1. && a[1,2] == 2. && a[2,1] == 3. && a[2,2] == 4.
     @test b[1,1] == 1. && b[2,1] == 2. && b[1,2] == 3. && b[2,2] == 4.
     a[[1 2 3 4]] = 0
@@ -310,16 +310,8 @@ end
     @test size(Matrix{Int}(uninitialized, 2,3)) == (2,3)
     @test size(Matrix(uninitialized, 2,3)) == (2,3)
 
-    # TODO: will throw MethodError after 0.6 deprecations are deleted
-    dw = Base.JLOptions().depwarn
-    if dw == 2
-        # FIXME: Remove this special case after deperror cleanup
-        @test_throws ErrorException Matrix{Int}()
-        @test_throws ErrorException Matrix()
-    else
-        @test size(@test_deprecated Matrix{Int}()) == (0,0)
-        @test size(@test_deprecated Matrix()) == (0,0)
-    end
+    @test_throws MethodError Matrix()
+    @test_throws MethodError Matrix{Int}()
     @test_throws MethodError Array{Int,3}()
 end
 @testset "get" begin
@@ -623,7 +615,7 @@ let A, B, C, D
     C = unique(B, 1)
     @test sortrows(C) == sortrows(A)
     @test unique(B, 2) == B
-    @test transpose(unique(transpose(B), 2)) == C
+    @test unique(B', 2)' == C
 
     # Along third dimension
     D = cat(3, B, B)
@@ -637,7 +629,7 @@ end
 @testset "large matrices transpose" begin
     for i = 1 : 3
         a = rand(200, 300)
-        @test isequal(adjoint(a), permutedims(a, [2, 1]))
+        @test isequal(copy(a'), permutedims(a, [2, 1]))
     end
 end
 
@@ -1364,14 +1356,14 @@ end
 @test size([]') == (1,0)
 
 # issue #6996
-@test adjoint(Any[ 1 2; 3 4 ]) == transpose(Any[ 1 2; 3 4 ])
+@test copy(adjoint(Any[ 1 2; 3 4 ])) == copy(transpose(Any[ 1 2; 3 4 ]))
 
 # map with promotion (issue #6541)
 @test map(join, ["z", "я"]) == ["z", "я"]
 
 # Handle block matrices
 let A = [randn(2, 2) for i = 1:2, j = 1:2]
-    @test issymmetric(Transpose(A)*A)
+    @test issymmetric(A'A)
 end
 let A = [complex.(randn(2, 2), randn(2, 2)) for i = 1:2, j = 1:2]
     @test ishermitian(A'A)
@@ -2228,7 +2220,7 @@ end
     test_zeros(zeros(Int, (2, 3)), Matrix{Int}, (2,3))
 
     # #19265"
-    @test_throws ErrorException zeros(Float64, [1.]) # TODO change to MethodError, when v0.6 deprecations are done
+    @test_throws MethodError zeros(Float64, [1.])
 end
 
 # issue #11053
@@ -2279,4 +2271,8 @@ end
 
 @testset "issue 24707" begin
     @test eltype(Vector{Tuple{V}} where V<:Integer) >: Tuple{Integer}
+end
+
+@testset "inference hash array 22740" begin
+    @inferred hash([1,2,3])
 end

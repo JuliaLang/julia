@@ -243,10 +243,11 @@ tril!(M::AbstractMatrix) = tril!(M,0)
 diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 
 """
-    diff(A, [dim::Integer=1])
+    diff(A::AbstractVector)
+    diff(A::AbstractMatrix, dim::Integer)
 
 Finite difference operator of matrix or vector `A`. If `A` is a matrix,
-compute the finite difference over a dimension `dim` (default `1`).
+specify the dimension over which to operate with the `dim` argument.
 
 # Examples
 ```jldoctest
@@ -259,9 +260,15 @@ julia> diff(a,2)
 2×1 Array{Int64,2}:
   2
  10
+
+julia> diff(vec(a))
+3-element Array{Int64,1}:
+  4
+ -2
+ 12
 ```
 """
-function diff(A::AbstractMatrix, dim::Integer=1)
+function diff(A::AbstractMatrix, dim::Integer)
     if dim == 1
         [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
     elseif dim == 2
@@ -885,7 +892,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
-(/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = adjoint(Adjoint(B) \ Adjoint(A))
+(/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = copy(adjoint(adjoint(B) \ adjoint(A)))
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)
 /(x::Number, v::AbstractVector) = x*pinv(v)

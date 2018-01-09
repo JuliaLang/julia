@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.LinAlg: mul!, ldiv!, Adjoint, Transpose
+using Base.LinAlg: mul!, ldiv!
 
 ### Data
 
@@ -392,7 +392,7 @@ end
     @test complex(acp) == acp
     @test isa(acp, SparseVector{ComplexF64,Int})
     @test exact_equal(acp, SparseVector(8, [2, 5, 6], complex([12., 35., 72.])))
-    @test sparsevec(adjoint(adjoint(acp))) == acp
+    @test sparsevec((acp')') == acp
 end
 
 @testset "Type conversion" begin
@@ -830,12 +830,12 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*A'xf + β*y
-                @test mul!(α, Transpose(A), x, β, y) === y
+                @test mul!(α, transpose(A), x, β, y) === y
                 @test y ≈ rr
             end
-            y = *(Transpose(A), x)
+            y = *(transpose(A), x)
             @test isa(y, Vector{Float64})
-            @test y ≈ *(Transpose(A), xf)
+            @test y ≈ *(transpose(A), xf)
         end
     end
     @testset "sparse A * sparse x -> dense y" begin
@@ -859,12 +859,12 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*Af'xf + β*y
-                @test mul!(α, Transpose(A), x, β, y) === y
+                @test mul!(α, transpose(A), x, β, y) === y
                 @test y ≈ rr
             end
             y = SparseArrays.densemv(A, x; trans='T')
             @test isa(y, Vector{Float64})
-            @test y ≈ *(Transpose(Af), xf)
+            @test y ≈ *(transpose(Af), xf)
         end
 
         let A = complex.(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
@@ -874,7 +874,7 @@ end
             xf = Array(x)
             x2f = Array(x2)
             @test SparseArrays.densemv(A, x; trans='N') ≈ Af * xf
-            @test SparseArrays.densemv(A, x2; trans='T') ≈ Transpose(Af) * x2f
+            @test SparseArrays.densemv(A, x2; trans='T') ≈ transpose(Af) * x2f
             @test SparseArrays.densemv(A, x2; trans='C') ≈ Af'x2f
             @test_throws ArgumentError SparseArrays.densemv(A, x; trans='D')
         end
@@ -890,7 +890,7 @@ end
             @test all(nonzeros(y) .!= 0.0)
             @test Array(y) ≈ Af * xf
 
-            y = *(Transpose(A), x2)
+            y = *(transpose(A), x2)
             @test isa(y, SparseVector{Float64,Int})
             @test all(nonzeros(y) .!= 0.0)
             @test Array(y) ≈ Af'x2f
@@ -907,11 +907,11 @@ end
             @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af * xf
 
-            y = *(Transpose(A), x2)
+            y = *(transpose(A), x2)
             @test isa(y, SparseVector{ComplexF64,Int})
-            @test Array(y) ≈ Transpose(Af) * x2f
+            @test Array(y) ≈ transpose(Af) * x2f
 
-            y = *(Adjoint(A), x2)
+            y = *(adjoint(A), x2)
             @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af'x2f
         end
@@ -958,23 +958,23 @@ end
                     # test out-of-place left-division methods
                     for mat in (trimats..., unittrimats...)
                         @test \(mat, spvec)            ≈ \(mat, fspvec)
-                        @test \(Adjoint(mat), spvec)   ≈ \(Adjoint(mat), fspvec)
-                        @test \(Transpose(mat), spvec) ≈ \(Transpose(mat), fspvec)
+                        @test \(adjoint(mat), spvec)   ≈ \(adjoint(mat), fspvec)
+                        @test \(transpose(mat), spvec) ≈ \(transpose(mat), fspvec)
                     end
                     # test in-place left-division methods not involving quotients
                     if eltypevec == typeof(zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))
                         for mat in unittrimats
                             @test ldiv!(mat, copy(spvec)) ≈ ldiv!(mat, copy(fspvec))
-                            @test ldiv!(Adjoint(mat), copy(spvec)) ≈ ldiv!(Adjoint(mat), copy(fspvec))
-                            @test ldiv!(Transpose(mat), copy(spvec)) ≈ ldiv!(Transpose(mat), copy(fspvec))
+                            @test ldiv!(adjoint(mat), copy(spvec)) ≈ ldiv!(adjoint(mat), copy(fspvec))
+                            @test ldiv!(transpose(mat), copy(spvec)) ≈ ldiv!(transpose(mat), copy(fspvec))
                         end
                     end
                     # test in-place left-division methods involving quotients
                     if eltypevec == typeof((zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))/one(eltypemat))
                         for mat in trimats
                             @test ldiv!(mat, copy(spvec)) ≈ ldiv!(mat, copy(fspvec))
-                            @test ldiv!(Adjoint(mat), copy(spvec)) ≈ ldiv!(Adjoint(mat), copy(fspvec))
-                            @test ldiv!(Transpose(mat), copy(spvec)) ≈ ldiv!(Transpose(mat), copy(fspvec))
+                            @test ldiv!(adjoint(mat), copy(spvec)) ≈ ldiv!(adjoint(mat), copy(fspvec))
+                            @test ldiv!(transpose(mat), copy(spvec)) ≈ ldiv!(transpose(mat), copy(fspvec))
                         end
                     end
                 end
@@ -984,7 +984,7 @@ end
     @testset "#16716" begin
         # The preceding tests miss the edge case where the sparse vector is empty
         origmat = [-1.5 -0.7; 0.0 1.0]
-        transmat = transpose(origmat)
+        transmat = copy(origmat')
         utmat = UpperTriangular(origmat)
         ltmat = LowerTriangular(transmat)
         uutmat = Base.LinAlg.UnitUpperTriangular(origmat)
@@ -995,11 +995,11 @@ end
 
         for mat in (utmat, ltmat, uutmat, ultmat)
             @test isequal(\(mat, zerospvec), zerodvec)
-            @test isequal(\(Adjoint(mat), zerospvec), zerodvec)
-            @test isequal(\(Transpose(mat), zerospvec), zerodvec)
+            @test isequal(\(adjoint(mat), zerospvec), zerodvec)
+            @test isequal(\(transpose(mat), zerospvec), zerodvec)
             @test isequal(ldiv!(mat, copy(zerospvec)), zerospvec)
-            @test isequal(ldiv!(Adjoint(mat), copy(zerospvec)), zerospvec)
-            @test isequal(ldiv!(Transpose(mat), copy(zerospvec)), zerospvec)
+            @test isequal(ldiv!(adjoint(mat), copy(zerospvec)), zerospvec)
+            @test isequal(ldiv!(transpose(mat), copy(zerospvec)), zerospvec)
         end
     end
 end
