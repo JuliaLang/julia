@@ -305,7 +305,12 @@ broadcast_skip_axes_instantiation(bc::Broadcasted{Style{Tuple}}) = true
     is_broadcast_incremental(bc)
 
 Return `true` if `bc` contains arguments and operations that should be evaluated incrementally.
-See [`broadcast_incremental`](@ref).
+
+Defining this to be true means that you want this particular expression to be
+eagerly executed as an independent call to `broadcast(f, args...)`. As such,
+you must also ensure that you have specialized the particular `broadcast`
+signature for which this returns true; falling back to the default
+implementation will lead to a dispatch loop and a stack overflow.
 """
 is_broadcast_incremental(bc::Broadcasted) = false
 is_broadcast_incremental(bc::Broadcasted{DefaultArrayStyle{1}}) = maybe_range_safe(bc)
