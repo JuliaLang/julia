@@ -2,6 +2,7 @@
 
 using Test
 using Future
+using SparseArrays
 
 @testset "Future.copy! for AbstractSet" begin
     for S = (Set, BitSet)

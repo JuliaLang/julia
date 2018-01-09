@@ -881,6 +881,8 @@ Deprecated or removed
   * The functions `eigs` and `svds` have been moved to the `IterativeEigensolvers` standard
     library module ([#24714]).
 
+  * Sparse array functionality has moved to the `SparseArrays` standard library module ([#25249]).
+
   * `@printf` and `@sprintf` have been moved to the `Printf` standard library ([#23929],[#25056]).
 
   * `isnumber` has been deprecated in favor of `isnumeric`, `is_assigned_char`

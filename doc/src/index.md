@@ -81,6 +81,7 @@
   * [Delimited Files](@ref)
   * [Distributed Computing](@ref)
   * [File Events](@ref lib-filewatching)
+  * [Sparse Arrays](@ref)
   * [Iterative Eigensolvers](@ref lib-itereigen)
   * [Memory-mapped I/O](@ref)
   * [Printf](@ref)

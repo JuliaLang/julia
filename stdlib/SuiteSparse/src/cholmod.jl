@@ -9,7 +9,7 @@ import Base.LinAlg: (\),
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
                  issuccess, issymmetric, ldltfact, ldltfact!, logdet
 
-using ..SparseArrays
+using SparseArrays
 using Base.Printf.@printf
 
 import Libdl
@@ -19,7 +19,7 @@ export
     Factor,
     Sparse
 
-import ..SparseArrays: AbstractSparseMatrix, SparseMatrixCSC, indtype, sparse, spzeros, nnz
+import SparseArrays: AbstractSparseMatrix, SparseMatrixCSC, indtype, sparse, spzeros, nnz
 
 import ..increment, ..increment!, ..decrement, ..decrement!
 

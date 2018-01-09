@@ -303,8 +303,6 @@ Vector `kv.second` will be placed on the `kv.first` diagonal.
 versions with fast arithmetic, see [`Diagonal`](@ref), [`Bidiagonal`](@ref)
 [`Tridiagonal`](@ref) and [`SymTridiagonal`](@ref).
 
-See also: [`spdiagm`](@ref)
-
 # Examples
 ```jldoctest
 julia> diagm(1 => [1,2,3])

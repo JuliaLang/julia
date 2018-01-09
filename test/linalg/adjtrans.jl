@@ -4,6 +4,7 @@
 
 using Test
 using Base.LinAlg: Adjoint, Transpose
+using SparseArrays
 
 @testset "Adjoint and Transpose inner constructor basics" begin
     intvec, intmat = [1, 2], [1 2; 3 4]

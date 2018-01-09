@@ -59,7 +59,8 @@ Array(D::Diagonal) = Matrix(D)
 # On the other hand, similar(D, [neweltype,] shape...) should yield a sparse matrix.
 # The first method below effects the former, and the second the latter.
 similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
-similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+# The method below is moved to SparseArrays for now
+# similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 

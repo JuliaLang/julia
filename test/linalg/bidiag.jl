@@ -3,6 +3,7 @@
 using Test
 using Base.LinAlg: mul!
 import Base.LinAlg: BlasReal, BlasFloat
+using SparseArrays
 
 n = 10 #Size of test matrix
 srand(1)
