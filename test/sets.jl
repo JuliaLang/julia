@@ -61,6 +61,15 @@ end
     @test !isequal(Set{Any}([1,2,3,4]), Set{Int}([1,2,3]))
     @test !isequal(Set{Int}([1,2,3,4]), Set{Any}([1,2,3]))
 end
+
+@testset "hash and == for Set/BitSet" begin
+    for s = (Set([1]), Set(1:10), Set(-100:7:100))
+        b = BitSet(s)
+        @test hash(s) == hash(b)
+        @test s == b
+    end
+end
+
 @testset "eltype, empty" begin
     s1 = empty(Set([1,"hello"]))
     @test isequal(s1, Set())
@@ -535,4 +544,41 @@ end
 
     # avoid recursive call issue #25384
     @test_throws MethodError replace!("")
+end
+
+@testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
+    a = [1, 2]
+    b = [2, 1, 3]
+    for C = (Tuple, identity, Set, BitSet)
+        A = C(a)
+        B = C(b)
+        @test A ⊆ B
+        @test A ⊊ B
+        @test !(A ⊈ B)
+        @test !(A ⊇ B)
+        @test !(A ⊋ B)
+        @test A ⊉ B
+        @test !(B ⊆ A)
+        @test !(B ⊊ A)
+        @test B ⊈ A
+        @test B ⊇ A
+        @test B ⊋ A
+        @test !(B ⊉ A)
+        @test !issetequal(A, B)
+        @test !issetequal(B, A)
+        if A isa AbstractSet && B isa AbstractSet
+            @test A <= B
+            @test A <  B
+            @test !(A >= B)
+            @test !(A >  B)
+            @test !(B <= A)
+            @test !(B <  A)
+            @test B >= A
+            @test B >  A
+        end
+        for D = (Tuple, identity, Set, BitSet)
+            @test issetequal(A, D(A))
+            @test !issetequal(A, D(B))
+        end
+    end
 end

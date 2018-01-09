@@ -362,6 +362,10 @@ This section lists changes that do not have deprecation warnings.
     trait; see its documentation for details. Types which support subtraction (operator
     `-`) must now implement `widen` for hashing to work inside heterogeneous arrays.
 
+  * `AbstractSet` objects are now considered equal by `==` and `isequal` if all of their
+    elements are equal ([#25368]). This has required changing the hashing algorithm
+    for `BitSet`.
+
   * `findn(x::AbstractVector)` now return a 1-tuple with the vector of indices, to be
     consistent with higher order arrays ([#25365]).
 
