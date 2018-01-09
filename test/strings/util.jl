@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Unicode
+
 @testset "padding (lpad and rpad)" begin
     @test lpad("foo", 2) == "foo"
     @test rpad("foo", 2) == "foo"
@@ -276,6 +278,26 @@ end
         @test replace(s, " " => '_', "r " => "r-") == "quick_quicker-quickest"
         @test replace(s, r"[aeiou]" => "ä", "ui" => "ki", "i" => "I") == "qkick qkickär qkickäst"
         @test replace(s, r"[^ ]+" => "word", "quicker " => "X", count=big"99") == "word Xword"
+
+        @test replace(s, r"(quick)(e)"=>s"\2-\1", "x"=>"X") == "quick e-quickr e-quickst"
+
+        @test replace(s, 'q'=>'Q', 'u'=>'U') == "QUick QUicker QUickest"
+        @test replace(s, 'q'=>'Q', r"u"=>'U') == "QUick QUicker QUickest"
+        @test replace(s, 'q'=>'Q', equalto('u')=>uppercase) == "QUick QUicker QUickest"
+        @test replace(s, 'q'=>'Q', islower=>'-') == "Q---- Q------ Q-------"
+        @test replace(s, ['q', 'u']=>'K') == "KKick KKicker KKickest"
+        @test replace(s, occursin("uq")=>'K') == "KKick KKicker KKickest"
+        @test replace(s, equalto('q')=>"B") == "Buick Buicker Buickest"
+
+        @test replace(s, "qui"=>"A", 'r'=>'R') == "Ack AckeR Ackest"
+        @test replace(s, 'r'=>'x', islower=>uppercase) == "QUICK QUICKEx QUICKEST"
+        @test replace(s, islower=>uppercase, 'r'=>'x') == "QUICK QUICKER QUICKEST"
+        @test replace(s, "q"=>"z", islower=>uppercase, 'r'=>'x') == "zUICK zUICKER zUICKEST"
+        @test replace(s, "qui"=>"A", 'r'=>'x', islower=>uppercase) == "ACK ACKEx ACKEST"
+        @test replace(s, "qui"=>"A", 'r'=>'x', islower=>uppercase) == "ACK ACKEx ACKEST"
+        @test replace(s, r"q"=>"z", islower=>uppercase, 'r'=>'x') == "QUICK QUICKER QUICKEST"
+        @test_throws ErrorException("type String has no field match_data") replace(s, "q"=>s"a\1b")
+        @test_throws ErrorException("PCRE error: unknown substring") replace(s, r"q"=>s"a\1b")
     end
 
 end
