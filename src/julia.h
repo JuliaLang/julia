@@ -1512,7 +1512,6 @@ typedef struct _jl_task_t {
     struct _jl_task_t *parent;
     jl_value_t *tls;
     jl_sym_t *state;
-    jl_value_t *consumers;
     jl_value_t *donenotify;
     jl_value_t *result;
     jl_value_t *exception;

@@ -149,13 +149,6 @@ end
 
 # BEGIN 0.6 deprecations
 
-## produce, consume, and task iteration
-# NOTE: When removing produce/consume, also remove field Task.consumers and related code in
-# task.jl and event.jl
-
-# TODO: remove `:typealias` from BINDING_HEADS in base/docs/Docs.jl
-# TODO: remove `'typealias` case in expand-table in julia-syntax.scm
-
 # removing the .op deprecations breaks a few things. TODO: fix
 # deprecations for uses of old dot operators (.* etc) as objects, rather than
 # just calling them infix.

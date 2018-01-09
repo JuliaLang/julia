@@ -111,7 +111,6 @@
 #    parent::Task
 #    storage::Any
 #    state::Symbol
-#    consumers::Any
 #    donenotify::Any
 #    result::Any
 #    exception::Any
