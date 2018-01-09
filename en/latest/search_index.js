@@ -5269,7 +5269,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "Function",
-    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n"
+    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n"
 },
 
 {
@@ -7229,7 +7229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "Function",
-    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n"
+    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n"
 },
 
 {
@@ -7261,7 +7261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n"
+    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n"
 },
 
 {
@@ -7573,7 +7573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n"
 },
 
 {
@@ -13117,7 +13117,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.Symmetric",
     "category": "Type",
-    "text": "Symmetric(A, uplo=:U)\n\nConstruct a Symmetric view of the upper (if uplo = :U) or lower (if uplo = :L) triangle of the matrix A.\n\nExamples\n\njulia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]\n5×5 Array{Int64,2}:\n 1  0  2  0  3\n 0  4  0  5  0\n 6  0  7  0  8\n 0  9  0  1  0\n 2  0  3  0  4\n\njulia> Supper = Symmetric(A)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  2  0  3\n 0  4  0  5  0\n 2  0  7  0  8\n 0  5  0  1  0\n 3  0  8  0  4\n\njulia> Slower = Symmetric(A, :L)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  6  0  2\n 0  4  0  9  0\n 6  0  7  0  3\n 0  9  0  1  0\n 2  0  3  0  4\n\nNote that Supper will not be equal to Slower unless A is itself symmetric (e.g. if A == Transpose(A)).\n\n\n\n"
+    "text": "Symmetric(A, uplo=:U)\n\nConstruct a Symmetric view of the upper (if uplo = :U) or lower (if uplo = :L) triangle of the matrix A.\n\nExamples\n\njulia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]\n5×5 Array{Int64,2}:\n 1  0  2  0  3\n 0  4  0  5  0\n 6  0  7  0  8\n 0  9  0  1  0\n 2  0  3  0  4\n\njulia> Supper = Symmetric(A)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  2  0  3\n 0  4  0  5  0\n 2  0  7  0  8\n 0  5  0  1  0\n 3  0  8  0  4\n\njulia> Slower = Symmetric(A, :L)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  6  0  2\n 0  4  0  9  0\n 6  0  7  0  3\n 0  9  0  1  0\n 2  0  3  0  4\n\nNote that Supper will not be equal to Slower unless A is itself symmetric (e.g. if A == transpose(A)).\n\n\n\n"
 },
 
 {
@@ -13325,7 +13325,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lq",
     "category": "Function",
-    "text": "lq(A; full = false) -> L, Q\n\nPerform an LQ factorization of A such that A = L*Q. The default (full = false) computes a factorization with possibly-rectangular L and Q, commonly the \"thin\" factorization. The LQ factorization is the QR factorization of Transpose(A). If the explicit, full/square form of Q is requested via full = true, L is not extended with zeros.\n\nnote: Note\nWhile in QR factorization the \"thin\" factorization is so named due to yielding either a square or \"tall\"/\"thin\" rectangular factor Q, in LQ factorization the \"thin\" factorization somewhat confusingly produces either a square or \"short\"/\"wide\" rectangular factor Q. \"Thin\" factorizations more broadly are also referred to as \"reduced\" factorizatons.\n\n\n\n"
+    "text": "lq(A; full = false) -> L, Q\n\nPerform an LQ factorization of A such that A = L*Q. The default (full = false) computes a factorization with possibly-rectangular L and Q, commonly the \"thin\" factorization. The LQ factorization is the QR factorization of transpose(A). If the explicit, full/square form of Q is requested via full = true, L is not extended with zeros.\n\nnote: Note\nWhile in QR factorization the \"thin\" factorization is so named due to yielding either a square or \"tall\"/\"thin\" rectangular factor Q, in LQ factorization the \"thin\" factorization somewhat confusingly produces either a square or \"short\"/\"wide\" rectangular factor Q. \"Thin\" factorizations more broadly are also referred to as \"reduced\" factorizatons.\n\n\n\n"
 },
 
 {
@@ -13333,7 +13333,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.bkfact",
     "category": "Function",
-    "text": "bkfact(A, rook::Bool=false) -> BunchKaufman\n\nCompute the Bunch-Kaufman [Bunch1977] factorization of a symmetric or Hermitian matrix A as P*U*D*U*P or P*L*D*L*P, depending on which triangle is stored in A, and return a BunchKaufman object. Note that if A is complex symmetric then U' and L' denote the unconjugated transposes, i.e. Transpose(U) and Transpose(L).\n\nIf rook is true, rook pivoting is used. If rook is false, rook pivoting is not used.\n\nThe following functions are available for BunchKaufman objects: size, \\, inv, issymmetric, ishermitian, getindex.\n\n[Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. url.\n\nExamples\n\njulia> A = [1 2; 2 3]\n2×2 Array{Int64,2}:\n 1  2\n 2  3\n\njulia> bkfact(A)\nBase.LinAlg.BunchKaufman{Float64,Array{Float64,2}}\nD factor:\n2×2 Tridiagonal{Float64,Array{Float64,1}}:\n -0.333333  0.0\n  0.0       3.0\nU factor:\n2×2 Base.LinAlg.UnitUpperTriangular{Float64,Array{Float64,2}}:\n 1.0  0.666667\n 0.0  1.0\npermutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
+    "text": "bkfact(A, rook::Bool=false) -> BunchKaufman\n\nCompute the Bunch-Kaufman [Bunch1977] factorization of a symmetric or Hermitian matrix A as P*U*D*U*P or P*L*D*L*P, depending on which triangle is stored in A, and return a BunchKaufman object. Note that if A is complex symmetric then U' and L' denote the unconjugated transposes, i.e. transpose(U) and transpose(L).\n\nIf rook is true, rook pivoting is used. If rook is false, rook pivoting is not used.\n\nThe following functions are available for BunchKaufman objects: size, \\, inv, issymmetric, ishermitian, getindex.\n\n[Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. url.\n\nExamples\n\njulia> A = [1 2; 2 3]\n2×2 Array{Int64,2}:\n 1  2\n 2  3\n\njulia> bkfact(A)\nBase.LinAlg.BunchKaufman{Float64,Array{Float64,2}}\nD factor:\n2×2 Tridiagonal{Float64,Array{Float64,1}}:\n -0.333333  0.0\n  0.0       3.0\nU factor:\n2×2 Base.LinAlg.UnitUpperTriangular{Float64,Array{Float64,2}}:\n 1.0  0.666667\n 0.0  1.0\npermutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
 },
 
 {
@@ -14037,7 +14037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.RowVector",
     "category": "Type",
-    "text": "RowVector(vector)\n\nA lazy-view wrapper of an AbstractVector, which turns a length-n vector into a 1×n shaped row vector and represents the transpose of a vector (the elements are also transposed recursively).\n\nBy convention, a vector can be multiplied by a matrix on its left (A * v) whereas a row vector can be multiplied by a matrix on its right (such that RowVector(v) * A = RowVector(Transpose(A) * v)). It differs from a 1×n-sized matrix by the facts that its transpose returns a vector and the inner product RowVector(v1) * v2 returns a scalar, but will otherwise behave similarly.\n\nExamples\n\njulia> a = [1; 2; 3; 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> RowVector(a)\n1×4 RowVector{Int64,Array{Int64,1}}:\n 1  2  3  4\n\njulia> RowVector(a)[3]\n3\n\njulia> RowVector(a)[1,3]\n3\n\njulia> RowVector(a)[3,1]\nERROR: BoundsError: attempt to access 1×4 RowVector{Int64,Array{Int64,1}} at index [3, 1]\n[...]\n\njulia> RowVector(a)*a\n30\n\njulia> B = [1 2; 3 4; 5 6; 7 8]\n4×2 Array{Int64,2}:\n 1  2\n 3  4\n 5  6\n 7  8\n\njulia> RowVector(a)*B\n1×2 RowVector{Int64,Array{Int64,1}}:\n 50  60\n\n\n\n"
+    "text": "RowVector(vector)\n\nA lazy-view wrapper of an AbstractVector, which turns a length-n vector into a 1×n shaped row vector and represents the transpose of a vector (the elements are also transposed recursively).\n\nBy convention, a vector can be multiplied by a matrix on its left (A * v) whereas a row vector can be multiplied by a matrix on its right (such that RowVector(v) * A = RowVector(transpose(A) * v)). It differs from a 1×n-sized matrix by the facts that its transpose returns a vector and the inner product RowVector(v1) * v2 returns a scalar, but will otherwise behave similarly.\n\nExamples\n\njulia> a = [1; 2; 3; 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> RowVector(a)\n1×4 RowVector{Int64,Array{Int64,1}}:\n 1  2  3  4\n\njulia> RowVector(a)[3]\n3\n\njulia> RowVector(a)[1,3]\n3\n\njulia> RowVector(a)[3,1]\nERROR: BoundsError: attempt to access 1×4 RowVector{Int64,Array{Int64,1}} at index [3, 1]\n[...]\n\njulia> RowVector(a)*a\n30\n\njulia> B = [1 2; 3 4; 5 6; 7 8]\n4×2 Array{Int64,2}:\n 1  2\n 3  4\n 5  6\n 7  8\n\njulia> RowVector(a)*B\n1×2 RowVector{Int64,Array{Int64,1}}:\n 50  60\n\n\n\n"
 },
 
 {
@@ -14053,7 +14053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.transpose",
     "category": "Function",
-    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n"
+    "text": "transpose(A::AbstractMatrix)\n\nLazy matrix transpose. Mutating the returned object should appropriately mutate A. Often, but not always, yields Transpose(A), where Transpose is a lazy transpose wrapper. Note that this operation is recursive.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Transpose{Int64,Array{Int64,2}}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n"
 },
 
 {
@@ -14069,7 +14069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.adjoint",
     "category": "Function",
-    "text": "adjoint(A)\n\nThe conjugate transposition operator ('). Note that adjoint is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims.\n\nExamples\n\njulia> A =  [3+2im 9+2im; 8+7im  4+6im]\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\njulia> adjoint(A)\n2×2 Array{Complex{Int64},2}:\n 3-2im  8-7im\n 9-2im  4-6im\n\n\n\n"
+    "text": "adjoint(A)\n\nLazy adjoint (conjugate transposition) (also postfix '). Note that adjoint is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims.\n\nExamples\n\njulia> A = [3+2im 9+2im; 8+7im  4+6im]\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\njulia> adjoint(A)\n2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:\n 3-2im  8-7im\n 9-2im  4-6im\n\n\n\n"
 },
 
 {
@@ -14253,7 +14253,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.BLAS.syr!",
     "category": "Function",
-    "text": "syr!(uplo, alpha, x, A)\n\nRank-1 update of the symmetric matrix A with vector x as alpha*x*Transpose(x) + A. uplo controls which triangle of A is updated. Returns A.\n\n\n\n"
+    "text": "syr!(uplo, alpha, x, A)\n\nRank-1 update of the symmetric matrix A with vector x as alpha*x*transpose(x) + A. uplo controls which triangle of A is updated. Returns A.\n\n\n\n"
 },
 
 {
@@ -14261,7 +14261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.BLAS.syrk!",
     "category": "Function",
-    "text": "syrk!(uplo, trans, alpha, A, beta, C)\n\nRank-k update of the symmetric matrix C as alpha*A*Transpose(A) + beta*C or alpha*Transpose(A)*A + beta*C according to trans. Only the uplo triangle of C is used. Returns C.\n\n\n\n"
+    "text": "syrk!(uplo, trans, alpha, A, beta, C)\n\nRank-k update of the symmetric matrix C as alpha*A*transpose(A) + beta*C or alpha*transpose(A)*A + beta*C according to trans. Only the uplo triangle of C is used. Returns C.\n\n\n\n"
 },
 
 {
@@ -14269,7 +14269,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.BLAS.syrk",
     "category": "Function",
-    "text": "syrk(uplo, trans, alpha, A)\n\nReturns either the upper triangle or the lower triangle of A, according to uplo, of alpha*A*Transpose(A) or alpha*Transpose(A)*A, according to trans.\n\n\n\n"
+    "text": "syrk(uplo, trans, alpha, A)\n\nReturns either the upper triangle or the lower triangle of A, according to uplo, of alpha*A*transpose(A) or alpha*transpose(A)*A, according to trans.\n\n\n\n"
 },
 
 {
@@ -14645,7 +14645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.LAPACK.gels!",
     "category": "Function",
-    "text": "gels!(trans, A, B) -> (F, B, ssr)\n\nSolves the linear equation A * X = B, Transpose(A) * X = B, or Adjoint(A) * X = B using a QR or LQ factorization. Modifies the matrix/vector B in place with the solution. A is overwritten with its QR or LQ factorization. trans may be one of N (no modification), T (transpose), or C (conjugate transpose). gels! searches for the minimum norm/least squares solution. A may be under or over determined. The solution is returned in B.\n\n\n\n"
+    "text": "gels!(trans, A, B) -> (F, B, ssr)\n\nSolves the linear equation A * X = B, transpose(A) * X = B, or adjoint(A) * X = B using a QR or LQ factorization. Modifies the matrix/vector B in place with the solution. A is overwritten with its QR or LQ factorization. trans may be one of N (no modification), T (transpose), or C (conjugate transpose). gels! searches for the minimum norm/least squares solution. A may be under or over determined. The solution is returned in B.\n\n\n\n"
 },
 
 {
@@ -14661,7 +14661,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.LAPACK.getrs!",
     "category": "Function",
-    "text": "getrs!(trans, A, ipiv, B)\n\nSolves the linear equation A * X = B, Transpose(A) * X = B, or Adjoint(A) * X = B for square A. Modifies the matrix/vector B in place with the solution. A is the LU factorization from getrf!, with ipiv the pivoting information. trans may be one of N (no modification), T (transpose), or C (conjugate transpose).\n\n\n\n"
+    "text": "getrs!(trans, A, ipiv, B)\n\nSolves the linear equation A * X = B, transpose(A) * X = B, or adjoint(A) * X = B for square A. Modifies the matrix/vector B in place with the solution. A is the LU factorization from getrf!, with ipiv the pivoting information. trans may be one of N (no modification), T (transpose), or C (conjugate transpose).\n\n\n\n"
 },
 
 {
@@ -14677,7 +14677,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.LAPACK.gesvx!",
     "category": "Function",
-    "text": "gesvx!(fact, trans, A, AF, ipiv, equed, R, C, B) -> (X, equed, R, C, B, rcond, ferr, berr, work)\n\nSolves the linear equation A * X = B (trans = N), Transpose(A) * X = B (trans = T), or Adjoint(A) * X = B (trans = C) using the LU factorization of A. fact may be E, in which case A will be equilibrated and copied to AF; F, in which case AF and ipiv from a previous LU factorization are inputs; or N, in which case A will be copied to AF and then factored. If fact = F, equed may be N, meaning A has not been equilibrated; R, meaning A was multiplied by Diagonal(R) from the left; C, meaning A was multiplied by Diagonal(C) from the right; or B, meaning A was multiplied by Diagonal(R) from the left and Diagonal(C) from the right. If fact = F and equed = R or B the elements of R must all be positive. If fact = F and equed = C or B the elements of C must all be positive.\n\nReturns the solution X; equed, which is an output if fact is not N, and describes the equilibration that was performed; R, the row equilibration diagonal; C, the column equilibration diagonal; B, which may be overwritten with its equilibrated form Diagonal(R)*B (if trans = N and equed = R,B) or Diagonal(C)*B (if trans = T,C and equed = C,B); rcond, the reciprocal condition number of A after equilbrating; ferr, the forward error bound for each solution vector in X; berr, the forward error bound for each solution vector in X; and work, the reciprocal pivot growth factor.\n\n\n\ngesvx!(A, B)\n\nThe no-equilibration, no-transpose simplification of gesvx!.\n\n\n\n"
+    "text": "gesvx!(fact, trans, A, AF, ipiv, equed, R, C, B) -> (X, equed, R, C, B, rcond, ferr, berr, work)\n\nSolves the linear equation A * X = B (trans = N), transpose(A) * X = B (trans = T), or adjoint(A) * X = B (trans = C) using the LU factorization of A. fact may be E, in which case A will be equilibrated and copied to AF; F, in which case AF and ipiv from a previous LU factorization are inputs; or N, in which case A will be copied to AF and then factored. If fact = F, equed may be N, meaning A has not been equilibrated; R, meaning A was multiplied by Diagonal(R) from the left; C, meaning A was multiplied by Diagonal(C) from the right; or B, meaning A was multiplied by Diagonal(R) from the left and Diagonal(C) from the right. If fact = F and equed = R or B the elements of R must all be positive. If fact = F and equed = C or B the elements of C must all be positive.\n\nReturns the solution X; equed, which is an output if fact is not N, and describes the equilibration that was performed; R, the row equilibration diagonal; C, the column equilibration diagonal; B, which may be overwritten with its equilibrated form Diagonal(R)*B (if trans = N and equed = R,B) or Diagonal(C)*B (if trans = T,C and equed = C,B); rcond, the reciprocal condition number of A after equilbrating; ferr, the forward error bound for each solution vector in X; berr, the forward error bound for each solution vector in X; and work, the reciprocal pivot growth factor.\n\n\n\ngesvx!(A, B)\n\nThe no-equilibration, no-transpose simplification of gesvx!.\n\n\n\n"
 },
 
 {
@@ -14781,7 +14781,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.LAPACK.gttrs!",
     "category": "Function",
-    "text": "gttrs!(trans, dl, d, du, du2, ipiv, B)\n\nSolves the equation A * X = B (trans = N), Transpose(A) * X = B (trans = T), or Adjoint(A) * X = B (trans = C) using the LU factorization computed by gttrf!. B is overwritten with the solution X.\n\n\n\n"
+    "text": "gttrs!(trans, dl, d, du, du2, ipiv, B)\n\nSolves the equation A * X = B (trans = N), transpose(A) * X = B (trans = T), or adjoint(A) * X = B (trans = C) using the LU factorization computed by gttrf!. B is overwritten with the solution X.\n\n\n\n"
 },
 
 {
@@ -14821,7 +14821,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.LAPACK.ormlq!",
     "category": "Function",
-    "text": "ormlq!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), Transpose(Q) * C (trans = T), Adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a LQ factorization of A computed using gelqf!. C is overwritten.\n\n\n\n"
+    "text": "ormlq!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a LQ factorization of A computed using gelqf!. C is overwritten.\n\n\n\n"
 },
 
 {
@@ -14829,7 +14829,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.LAPACK.ormqr!",
     "category": "Function",
-    "text": "ormqr!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), Transpose(Q) * C (trans = T), Adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a QR factorization of A computed using geqrf!. C is overwritten.\n\n\n\n"
+    "text": "ormqr!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a QR factorization of A computed using geqrf!. C is overwritten.\n\n\n\n"
 },
 
 {
@@ -14837,7 +14837,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.LAPACK.ormql!",
     "category": "Function",
-    "text": "ormql!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), Transpose(Q) * C (trans = T), Adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a QL factorization of A computed using geqlf!. C is overwritten.\n\n\n\n"
+    "text": "ormql!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a QL factorization of A computed using geqlf!. C is overwritten.\n\n\n\n"
 },
 
 {
@@ -14845,7 +14845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.LAPACK.ormrq!",
     "category": "Function",
-    "text": "ormrq!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), Transpose(Q) * C (trans = T), Adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a RQ factorization of A computed using gerqf!. C is overwritten.\n\n\n\n"
+    "text": "ormrq!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a RQ factorization of A computed using gerqf!. C is overwritten.\n\n\n\n"
 },
 
 {
@@ -14853,7 +14853,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.LAPACK.gemqrt!",
     "category": "Function",
-    "text": "gemqrt!(side, trans, V, T, C)\n\nComputes Q * C (trans = N), Transpose(Q) * C (trans = T), Adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a QR factorization of A computed using geqrt!. C is overwritten.\n\n\n\n"
+    "text": "gemqrt!(side, trans, V, T, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a QR factorization of A computed using geqrt!. C is overwritten.\n\n\n\n"
 },
 
 {
@@ -14933,7 +14933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.LAPACK.trtrs!",
     "category": "Function",
-    "text": "trtrs!(uplo, trans, diag, A, B)\n\nSolves A * X = B (trans = N), Transpose(A) * X = B (trans = T), or Adjoint(A) * X = B (trans = C) for (upper if uplo = U, lower if uplo = L) triangular matrix A. If diag = N, A has non-unit diagonal elements. If diag = U, all diagonal elements of A are one. B is overwritten with the solution X.\n\n\n\n"
+    "text": "trtrs!(uplo, trans, diag, A, B)\n\nSolves A * X = B (trans = N), transpose(A) * X = B (trans = T), or adjoint(A) * X = B (trans = C) for (upper if uplo = U, lower if uplo = L) triangular matrix A. If diag = N, A has non-unit diagonal elements. If diag = U, all diagonal elements of A are one. B is overwritten with the solution X.\n\n\n\n"
 },
 
 {
@@ -14957,7 +14957,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.LAPACK.trrfs!",
     "category": "Function",
-    "text": "trrfs!(uplo, trans, diag, A, B, X, Ferr, Berr) -> (Ferr, Berr)\n\nEstimates the error in the solution to A * X = B (trans = N), Transpose(A) * X = B (trans = T), Adjoint(A) * X = B (trans = C) for side = L, or the equivalent equations a right-handed side = R X * A after computing X using trtrs!. If uplo = U, A is upper triangular. If uplo = L, A is lower triangular. If diag = N, A has non-unit diagonal elements. If diag = U, all diagonal elements of A are one. Ferr and Berr are optional inputs. Ferr is the forward error and Berr is the backward error, each component-wise.\n\n\n\n"
+    "text": "trrfs!(uplo, trans, diag, A, B, X, Ferr, Berr) -> (Ferr, Berr)\n\nEstimates the error in the solution to A * X = B (trans = N), transpose(A) * X = B (trans = T), adjoint(A) * X = B (trans = C) for side = L, or the equivalent equations a right-handed side = R X * A after computing X using trtrs!. If uplo = U, A is upper triangular. If uplo = L, A is lower triangular. If diag = N, A has non-unit diagonal elements. If diag = U, all diagonal elements of A are one. Ferr and Berr are optional inputs. Ferr is the forward error and Berr is the backward error, each component-wise.\n\n\n\n"
 },
 
 {
