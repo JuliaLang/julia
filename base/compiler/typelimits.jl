@@ -250,6 +250,9 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
             # never replace Vararg with non-Vararg
             return Vararg
         end
+        if allowed_tuplelen < 1 && t.name === Tuple.name
+            return Any
+        end
         widert = t.name.wrapper
         if !(t <: widert)
             # This can happen when a typevar has bounds too wide for its context, e.g.

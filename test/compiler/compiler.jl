@@ -13,8 +13,8 @@ let comparison = Tuple{X, X} where X<:Tuple
     sig = Tuple{X, X} where X<:comparison
     ref = Tuple{X, X} where X
     @test Core.Compiler.limit_type_size(sig, comparison, comparison, 10) == comparison
-    @test Core.Compiler.limit_type_size(sig, ref, comparison,  10) == comparison
-    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison,  10) == Tuple{comparison}
+    @test Core.Compiler.limit_type_size(sig, ref, comparison,  10) == ref
+    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison,  10) == Tuple{ref}
     @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison},  10) == sig
 end
 
