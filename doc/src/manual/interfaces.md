@@ -422,7 +422,7 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 
 
 
-## [Broadcasting](@id man-interfaces-broadcasting)
+## [Customizing broadcasting](@id man-interfaces-broadcasting)
 
 | Methods to implement | Brief description |
 |:-------------------- |:----------------- |
@@ -438,24 +438,40 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 | `Base.is_broadcast_incremental(bc::Broadcasted{DestStyle})` | Indicate that nested broadcasting should be implemented eagerly |
 | `Base.broadcast_skip_axes_instantiation(::Broadcasted{DestStyle})` | Define to return `true` if `DestStyle` doesn't benefit from computing the axes of the output |
 
-[Broadcasting](@ref) is triggered by an explicit call to `broadcast` or `broadcast!`, or implicitly by
-"dot" operations like `A .+ b`. Any `AbstractArray` type supports broadcasting,
-but the default result (output) type is `Array`. To specialize the result for specific input type(s),
-the main task is the allocation of an appropriate result object.
-(This is not an issue for `broadcast!`, where
-the result object is passed as an argument.) Internally, this process is split into two stages:
- - creation of a `Broadcasted{DestStyle}(args...)` wrapper, where `DestStyle` is computed by combining
-   the results of ([`Base.BroadcastStyle`](@ref)) applied to the argument types
- - execution of `copy(bc::Broadcasted{DestStyle})`, which in simple cases only requires that
-   you allocate the output with [`Base.broadcast_similar`](@ref). In more complex cases, you may
-   wish to specialize `copy` and/or `copy!` for `DestStyle`.
+[Broadcasting](@ref) is represented by explicit calls to `broadcast` or `broadcast!`, or implicit
+"dot" operations like `A .+ b`. By default, all `AbstractArray`s support broadcasting operations
+through built-in generic implementations, but there are a number of ways in which custom arrays can
+customize and specialize the behavior of broadcasting in order to improve and optimize the
+operation.
 
-`Base.BroadcastStyle` is an abstract type from which all styles are
-derived. When used as a function it has two possible forms,
-unary (single-argument) and binary.
-The unary variant states that you intend to
-implement specific broadcasting behavior and/or output type,
-and do not wish to rely on the default fallback ([`Broadcast.Scalar`](@ref) or [`Broadcast.DefaultArrayStyle`](@ref)).
+In general, a broadcast operation is represented by a lazy `Broadcasted` container that holds onto
+the function to be applied alongside its arguments. Those arguments may themselves be more nested
+`Broadcasted` containers, forming a large expression tree to be evaluated. A nested tree of
+`Broadcasted` containers is directly constructed by the implicit dot syntax; `5 .+ 2.*x` is
+transiently represented by `Broadcasted(+, 5, Broadcasted(*, 2, x))`, for example. This is
+invisible to users as it is immediately realized through a call to `copy`, but it is this container
+that provides the basis for broadcast's extensibility for authors of custom types. The built-in
+broadcast machinery will then determine the result type and size based upon the arguments, allocate
+it, and then finally copy the realization of the `Broadcasted` object into it with a default
+`copyto!(::AbstractArray, ::Broadcasted)` method. The built-in fallback `broadcast` and
+`broadcast!` methods similarly construct a transient `Broadcasted` representation of the operation
+so they can follow the same codepath. This allows custom array implementations to
+[provide their own `copyto!` specialization](@ref extending-in-place-broadcast) to customize and
+optimize broadcasting. In order to get to that point, though, custom arrays must first signal the
+fact that they should return a custom array from the broadcast operation.
+
+### Customizing the broadcast result type
+
+All `AbstractArray`s support broadcasting in arbitrary combinations with one another, but the
+default result (output) type is `Array`. The `Broadcasted` container has a dedicated type parameter
+— `Broadcasted{DestStyle}` — specifically to allow for dispatch and specialization. It computes
+this "broadcast style" by recursively asking every argument for its `Base.BroadcastStyle` and
+[combining them together with a promotion-like computation](@ref writing-binary-broadcasting-rules).
+
+`Base.BroadcastStyle` is an abstract type from which all styles are derived. When used as a
+function it has two possible forms, unary (single-argument) and binary. The unary variant states
+that you intend to implement specific broadcasting behavior and/or output type, and do not wish to
+rely on the default fallback ([`Broadcast.Scalar`](@ref) or [`Broadcast.DefaultArrayStyle`](@ref)).
 To achieve this, you can define a custom `BroadcastStyle` for your object:
 
 ```julia
@@ -516,7 +532,7 @@ You might want broadcasting to preserve the `char` "metadata." First we define
 Base.BroadcastStyle(::Type{<:ArrayAndChar}) = Broadcast.ArrayStyle{ArrayAndChar}()
 ```
 
-This forces us to also define a `broadcast_similar` method:
+This means we must also define a corresponding `broadcast_similar` method:
 ```jldoctest
 function Base.broadcast_similar(::Broadcast.ArrayStyle{ArrayAndChar}, ::Type{ElType}, inds, bc) where ElType
     # Scan the inputs for the ArrayAndChar:
