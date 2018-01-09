@@ -104,16 +104,6 @@ function start_repl_backend(repl_channel::Channel, response_channel::Channel)
     backend
 end
 
-function ip_matches_func(ip, func::Symbol)
-    for fr in StackTraces.lookup(ip)
-        if fr === StackTraces.UNKNOWN || fr.from_c
-            return false
-        end
-        fr.func === func && return true
-    end
-    return false
-end
-
 struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
     repl::R
 end
