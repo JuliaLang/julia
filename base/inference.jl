@@ -1681,7 +1681,7 @@ function invoke_tfunc(@nospecialize(f), @nospecialize(types), @nospecialize(argt
         return Bottom
     end
     ft = type_typeof(f)
-    types = Tuple{ft, types.parameters...}
+    types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)
     argtype = Tuple{ft, argtype.parameters...}
     entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), types, sv.params.world)
     if entry === nothing
@@ -4649,8 +4649,8 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
              invoke_tt.parameters[1] <: Tuple)
             return NF
         end
-        invoke_tt_params = invoke_tt.parameters[1].parameters
-        invoke_types = Tuple{ft, invoke_tt_params...}
+        invoke_tt = invoke_tt.parameters[1]
+        invoke_types = rewrap_unionall(Tuple{ft, unwrap_unionall(invoke_tt).parameters...}, invoke_tt)
         invoke_entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt),
                              invoke_types, sv.params.world)
         invoke_entry === nothing && return NF

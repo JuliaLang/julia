@@ -399,7 +399,7 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_method_instance_t *meth, jl
     return jl_call_fptr_internal(&fptr, meth, args, nargs);
 }
 
-jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types);
+jl_value_t *jl_argtype_with_function(jl_function_t *f, jl_value_t *types);
 
 JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
 
@@ -516,7 +516,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e);
 jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule);
 
 jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache, size_t world);
-jl_value_t *jl_gf_invoke(jl_tupletype_t *types, jl_value_t **args, size_t nargs);
+jl_value_t *jl_gf_invoke(jl_value_t *types, jl_value_t **args, size_t nargs);
 jl_method_instance_t *jl_lookup_generic(jl_value_t **args, uint32_t nargs, uint32_t callsite, size_t world);
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid);
@@ -638,10 +638,10 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz);
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
 jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world);
-JL_DLLEXPORT int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m);
+JL_DLLEXPORT int jl_has_call_ambiguities(jl_value_t *types, jl_method_t *m);
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp);
 int jl_is_rettype_inferred(jl_method_instance_t *li);
-JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_tupletype_t *type, size_t world);
+JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *type, size_t world);
 JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, jl_value_t *type, jl_svec_t *sparams, size_t world);
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_method_instance_t *caller);
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *typ, jl_value_t *caller);
@@ -926,7 +926,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
                                       jl_value_t **overwritten);
 
 jl_typemap_entry_t *jl_typemap_assoc_by_type(
-        union jl_typemap_t ml_or_cache, jl_tupletype_t *types, jl_svec_t **penv,
+        union jl_typemap_t ml_or_cache, jl_value_t *types, jl_svec_t **penv,
         int8_t subtype, int8_t offs, size_t world, size_t max_world_mask);
 jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t **args, size_t n, int8_t offs, size_t world);
 jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *mn, jl_value_t **args, size_t n, size_t world);

@@ -255,6 +255,12 @@ end
 @test length(detect_ambiguities(Ambig9, ambiguous_bottom=true)) == 1
 @test length(detect_ambiguities(Ambig9)) == 0
 
+# issue #25341
+module M25341
+_totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = E
+end
+@test length(detect_unbound_args(M25341; recursive=true)) == 1
+
 # Test that Core and Base are free of UndefVarErrors
 # not using isempty so this prints more information when it fails
 @testset "detect_unbound_args in Base and Core" begin
