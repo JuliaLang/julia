@@ -190,7 +190,7 @@ s = copy(sdata(d))
 ds = deepcopy(d)
 @test ds == d
 pids_d = procs(d)
-remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.0, 1:10)
+remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)::Int], d, 1.0, 1:10)
 @test ds != d
 @test s != d
 copyto!(d, s)

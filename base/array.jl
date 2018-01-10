@@ -1495,7 +1495,7 @@ cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x
 """
     findnext(A, i::Integer)
 
-Find the next linear index >= `i` of a `true` element of `A`, or `0` if not found.
+Find the next linear index >= `i` of a `true` element of `A`, or `nothing` if not found.
 
 # Examples
 ```jldoctest
@@ -1508,7 +1508,6 @@ julia> findnext(A, 1)
 2
 
 julia> findnext(A, 3)
-0
 ```
 """
 function findnext(A, start::Integer)
@@ -1526,14 +1525,14 @@ function findnext(A, start::Integer)
         end
         i = nextind(A, i)
     end
-    return 0
+    return nothing
 end
 
 """
     findfirst(A)
 
 Return the linear index of the first `true` value in `A`.
-Return `0` if no such value is found.
+Return `nothing` if no such value is found.
 To search for other kinds of values, pass a predicate as the first argument.
 
 # Examples
@@ -1546,8 +1545,8 @@ julia> A = [false false; true false]
 julia> findfirst(A)
 2
 
-julia> findfirst(falses(3))
-0
+julia> findfirst(falses(3)) == nothing
+true
 ```
 """
 findfirst(A) = findnext(A, 1)
@@ -1555,7 +1554,8 @@ findfirst(A) = findnext(A, 1)
 """
     findnext(predicate::Function, A, i::Integer)
 
-Find the next linear index >= `i` of an element of `A` for which `predicate` returns `true`, or `0` if not found.
+Find the next linear index >= `i` of an element of `A` for which `predicate` returns `true`,
+or `nothing` if not found.
 
 # Examples
 ```jldoctest
@@ -1567,8 +1567,8 @@ julia> A = [1 4; 2 2]
 julia> findnext(isodd, A, 1)
 1
 
-julia> findnext(isodd, A, 2)
-0
+julia> findnext(isodd, A, 2) == nothing
+true
 ```
 """
 function findnext(testf::Function, A, start::Integer)
@@ -1580,14 +1580,14 @@ function findnext(testf::Function, A, start::Integer)
         end
         i = nextind(A, i)
     end
-    return 0
+    return nothing
 end
 
 """
     findfirst(predicate::Function, A)
 
 Return the linear index of the first element of `A` for which `predicate` returns `true`.
-Return `0` if there is no such element.
+Return `nothing` if there is no such element.
 
 # Examples
 ```jldoctest
@@ -1599,8 +1599,8 @@ julia> A = [1 4; 2 2]
 julia> findfirst(iseven, A)
 2
 
-julia> findfirst(x -> x>10, A)
-0
+julia> findfirst(x -> x>10, A) == nothing
+true
 
 julia> findfirst(equalto(4), A)
 3
@@ -1611,7 +1611,7 @@ findfirst(testf::Function, A) = findnext(testf, A, 1)
 """
     findprev(A, i::Integer)
 
-Find the previous linear index <= `i` of a `true` element of `A`, or `0` if not found.
+Find the previous linear index <= `i` of a `true` element of `A`, or `nothing` if not found.
 
 # Examples
 ```jldoctest
@@ -1623,8 +1623,8 @@ julia> A = [false false; true true]
 julia> findprev(A,2)
 2
 
-julia> findprev(A,1)
-0
+julia> findprev(A,1) == nothing
+true
 ```
 """
 function findprev(A, start::Integer)
@@ -1639,14 +1639,14 @@ function findprev(A, start::Integer)
         a != 0 && return i
         i = prevind(A, i)
     end
-    return 0
+    return nothing
 end
 
 """
     findlast(A)
 
 Return the linear index of the last `true` value in `A`.
-Return `0` if there is no `true` value in `A`.
+Return `nothing` if there is no `true` value in `A`.
 
 # Examples
 ```jldoctest
@@ -1660,8 +1660,8 @@ julia> findlast(A)
 
 julia> A = falses(2,2);
 
-julia> findlast(A)
-0
+julia> findlast(A) == nothing
+true
 ```
 """
 findlast(A) = findprev(A, endof(A))
@@ -1670,7 +1670,7 @@ findlast(A) = findprev(A, endof(A))
     findprev(predicate::Function, A, i::Integer)
 
 Find the previous linear index <= `i` of an element of `A` for which `predicate` returns `true`, or
-`0` if not found.
+`nothing` if not found.
 
 # Examples
 ```jldoctest
@@ -1679,8 +1679,8 @@ julia> A = [4 6; 1 2]
  4  6
  1  2
 
-julia> findprev(isodd, A, 1)
-0
+julia> findprev(isodd, A, 1) == nothing
+true
 
 julia> findprev(isodd, A, 3)
 2
@@ -1692,14 +1692,14 @@ function findprev(testf::Function, A, start::Integer)
         testf(A[i]) && return i
         i = prevind(A, i)
     end
-    return 0
+    return nothing
 end
 
 """
     findlast(predicate::Function, A)
 
 Return the linear index of the last element of `A` for which `predicate` returns `true`.
-Return `0` if there is no such element.
+Return `nothing` if there is no such element.
 
 # Examples
 ```jldoctest
@@ -1711,8 +1711,8 @@ julia> A = [1 2; 3 4]
 julia> findlast(isodd, A)
 2
 
-julia> findlast(x -> x > 5, A)
-0
+julia> findlast(x -> x > 5, A) == nothing
+true
 ```
 """
 findlast(testf::Function, A) = findprev(testf, A, endof(A))

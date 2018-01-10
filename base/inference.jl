@@ -1822,7 +1822,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
         tf = t_ifunc[iidx]
     else
         fidx = findfirst(x->x===f, t_ffunc_key)
-        if fidx == 0
+        if fidx === nothing
             # unknown/unhandled builtin function
             return Any
         end
@@ -5147,7 +5147,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, mod::Module, params:
                     return plus_saturate(argcost, isknowntype(ex.typ) ? 4 : params.inline_nonleaf_penalty)
                 end
                 fidx = findfirst(x->x===f, t_ffunc_key)
-                if fidx == 0
+                if fidx === nothing
                     # unknown/unhandled builtin or anonymous function
                     # Use the generic cost of a direct function call
                     return plus_saturate(argcost, 20)

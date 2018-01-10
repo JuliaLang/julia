@@ -1319,7 +1319,7 @@ end
 
 function _sparse_findnextnz(m::SparseMatrixCSC, i::Integer)
     if i > length(m)
-        return zero(indtype(m))
+        return nothing
     end
     row, col = Tuple(CartesianIndices(m)[i])
     lo, hi = m.colptr[col], m.colptr[col+1]
@@ -1328,16 +1328,14 @@ function _sparse_findnextnz(m::SparseMatrixCSC, i::Integer)
         return LinearIndices(m)[m.rowval[n], col]
     end
     nextcol = findnext(c->(c>hi), m.colptr, col+1)
-    if iszero(nextcol)
-        return zero(indtype(m))
-    end
+    nextcol === nothing && return nothing
     nextlo = m.colptr[nextcol-1]
     return LinearIndices(m)[m.rowval[nextlo], nextcol-1]
 end
 
 function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
     if iszero(i)
-        return zero(indtype(m))
+        return nothing
     end
     row, col = Tuple(CartesianIndices(m)[i])
     lo, hi = m.colptr[col], m.colptr[col+1]
@@ -1346,9 +1344,7 @@ function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
         return LinearIndices(m)[m.rowval[n], col]
     end
     prevcol = findprev(c->(c<lo), m.colptr, col-1)
-    if iszero(prevcol)
-        return zero(indtype(m))
-    end
+    prevcol === nothing && return nothing
     prevhi = m.colptr[prevcol+1]
     return LinearIndices(m)[m.rowval[prevhi-1], prevcol]
 end

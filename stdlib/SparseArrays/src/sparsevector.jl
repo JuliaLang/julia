@@ -737,7 +737,7 @@ end
 function _sparse_findnextnz(v::SparseVector, i::Integer)
     n = searchsortedfirst(v.nzind, i)
     if n > length(v.nzind)
-        return zero(indtype(v))
+        return nothing
     else
         return v.nzind[n]
     end
@@ -746,7 +746,7 @@ end
 function _sparse_findprevnz(v::SparseVector, i::Integer)
     n = searchsortedlast(v.nzind, i)
     if iszero(n)
-        return zero(indtype(v))
+        return nothing
     else
         return v.nzind[n]
     end
@@ -1944,7 +1944,7 @@ function sort(x::SparseVector{Tv,Ti}; kws...) where {Tv,Ti}
     allvals = push!(copy(nonzeros(x)),zero(Tv))
     sinds = sortperm(allvals;kws...)
     n,k = length(x),length(allvals)
-    z = findfirst(equalto(k),sinds)
+    z = findfirst(equalto(k),sinds)::Int
     newnzind = Vector{Ti}(1:k-1)
     newnzind[z:end] .+= n-k+1
     newnzvals = allvals[deleteat!(sinds[1:k],z)]

@@ -271,7 +271,7 @@ function tempname(temppath::AbstractString,uunique::UInt32)
     tempp = cwstring(temppath)
     tname = Vector{UInt16}(uninitialized, 32767)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}), tempp,temp_prefix,uunique,tname)
-    lentname = findfirst(iszero,tname)-1
+    lentname = coalesce(findfirst(iszero,tname), 0)-1
     if uunique == 0 || lentname <= 0
         error("GetTempFileName failed: $(Libc.FormatMessage())")
     end
