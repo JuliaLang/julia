@@ -279,9 +279,22 @@ static jl_cgval_t ghostValue(jl_value_t *ty);
 static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
 {
     Type *ty = unboxed->getType();
-    assert(ty != T_void);
     bool frompointer = ty->isPointerTy();
     bool topointer = to->isPointerTy();
+#if JL_LLVM_VERSION >= 40000
+    const DataLayout &DL = jl_data_layout;
+#else
+    const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
+#endif
+    if (ty == T_int1 && to == T_int8) {
+        // bools may be stored internally as int8
+        unboxed = ctx.builder.CreateZExt(unboxed, T_int8);
+    }
+    else if (ty == T_void || DL.getTypeSizeInBits(ty) != DL.getTypeSizeInBits(to)) {
+        // this can happen in dead code
+        //emit_unreachable(ctx);
+        return UndefValue::get(to);
+    }
     if (frompointer && topointer) {
         unboxed = emit_bitcast(ctx, unboxed, to);
     }
@@ -296,10 +309,6 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
         if (to != INTT_to)
             unboxed = ctx.builder.CreateBitCast(unboxed, INTT_to);
         unboxed = ctx.builder.CreateIntToPtr(unboxed, to);
-    }
-    else if (ty == T_int1 && to == T_int8) {
-        // bools may be stored internally as int8
-        unboxed = ctx.builder.CreateZExt(unboxed, T_int8);
     }
     else if (ty != to) {
         unboxed = ctx.builder.CreateBitCast(unboxed, to);
@@ -319,7 +328,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         if (type_is_ghost(to)) {
             return NULL;
         }
-        //emit_error(ctx, "emit_unbox: a type mismatch error in occurred during codegen");
+        //emit_unreachable(ctx);
         return UndefValue::get(to); // type mismatch error
     }
 
