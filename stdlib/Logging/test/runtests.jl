@@ -19,148 +19,199 @@ import Logging: min_enabled_level, shouldlog, handle_message
     handle_message(logger, Logging.Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
     @test shouldlog(logger, Logging.Info, Base, :group, :asdf) === false
 
+    @testset "Default metadata formatting" begin
+        @test Logging.default_metafmt(Logging.Debug, Base, :g, :i, "path/to/somefile.jl", 42) ==
+            (:blue,      "Debug:",   "@ Base somefile.jl:42")
+        @test Logging.default_metafmt(Logging.Info,  Main, :g, :i, "a.jl", 1) ==
+            (:cyan,      "Info:",    "")
+        @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", 2) ==
+            (:yellow,    "Warning:", "@ Main b.jl:2")
+        @test Logging.default_metafmt(Logging.Error, Main, :g, :i, "", 0) ==
+            (:light_red, "Error:",   "@ Main :0")
+    end
+
+    function dummy_metafmt(level, _module, group, id, file, line)
+        :cyan,"PREFIX","SUFFIX"
+    end
+
     # Log formatting
-    function genmsg(level, message, _module, filepath, line; color=false,
-                    meta_formatter=Logging.default_metafmt, show_limited=true, kws...)
+    function genmsg(message; level=Logging.Info, _module=Main,
+                    file="some/path.jl", line=101, color=false, width=75,
+                    meta_formatter=dummy_metafmt, show_limited=true,
+                    right_justify=0, kws...)
         buf = IOBuffer()
-        io = IOContext(buf, :displaysize=>(30,75), :color=>color)
+        io = IOContext(buf, :displaysize=>(30,width), :color=>color)
         logger = ConsoleLogger(io, Logging.Debug,
                                meta_formatter=meta_formatter,
-                               show_limited=show_limited)
+                               show_limited=show_limited,
+                               right_justify=right_justify)
         Logging.handle_message(logger, level, message, _module, :a_group, :an_id,
-                               filepath, line; kws...)
+                               file, line; kws...)
         String(take!(buf))
     end
 
-    # Single line formatting, default metadata
-    @test genmsg(Logging.Debug, "msg", Main, "some/path.jl", 101) ==
+    # Basic tests for the default setup
+    @test genmsg("msg", level=Logging.Info, meta_formatter=Logging.default_metafmt) ==
     """
-    [ Debug: msg                                             @ Main path.jl:101
+    [ Info: msg
     """
-    @test genmsg(Logging.Info, "msg", Main, "some/path.jl", 101) ==
-    """
-    [ Info: msg                                              @ Main path.jl:101
-    """
-    @test genmsg(Logging.Warn, "msg", Main, "some/path.jl", 101) ==
-    """
-    [ Warning: msg                                           @ Main path.jl:101
-    """
-    @test genmsg(Logging.Error, "msg", Main, "some/path.jl", 101) ==
-    """
-    [ Error: msg                                             @ Main path.jl:101
-    """
-
-    # Configurable metadata formatting
-    @test genmsg(Logging.Debug, "msg", Main, "some/path.jl", 101,
-                 meta_formatter=(level, _module, group, id, file, line)->
-                                ("Foo!", "$level $_module $group $id $file $line")) ==
-    """
-    [ Foo! msg                        Debug Main a_group an_id some/path.jl 101
-    """
-
-    # Empty message string
-    @test genmsg(Logging.Error, "", Main, "some/path.jl", 101) ==
-    """
-    [ Error:                                                 @ Main path.jl:101
-    """
-    @test genmsg(Logging.Error, "", Main, "some/path.jl", 101, a=1) ==
-    replace("""
-    ┌ Error: EOL
-    │   a = 1
-    └                                                        @ Main path.jl:101
-    """, "EOL"=>"")
-
-    # Long message line
-    @test genmsg(Logging.Error, "msg msg msg msg msg msg msg msg msg msg msg msg msg", Main, "some/path.jl", 101) ==
-    """
-    ┌ Error: msg msg msg msg msg msg msg msg msg msg msg msg msg
-    └                                                        @ Main path.jl:101
-    """
-
-    # Multiline messages
-    @test genmsg(Logging.Warn, "line1\nline2", Main, "some/path.jl", 101) ==
+    @test genmsg("line1\nline2", level=Logging.Warn, _module=Base,
+                 file="other.jl", line=42, meta_formatter=Logging.default_metafmt) ==
     """
     ┌ Warning: line1
     │ line2
-    └                                                        @ Main path.jl:101
+    └ @ Base other.jl:42
+    """
+    # Full metadata formatting
+    @test genmsg("msg", level=Logging.Debug,
+                 meta_formatter=(level, _module, group, id, file, line)->
+                                (:white,"Foo!", "$level $_module $group $id $file $line")) ==
+    """
+    ┌ Foo! msg
+    └ Debug Main a_group an_id some/path.jl 101
     """
 
+    @testset "Prefix and suffix layout" begin
+        @test genmsg("") ==
+        replace("""
+        ┌ PREFIX EOL
+        └ SUFFIX
+        """, "EOL"=>"")
+        @test genmsg("msg") ==
+        """
+        ┌ PREFIX msg
+        └ SUFFIX
+        """
+        # Behavior with empty prefix / suffix
+        @test genmsg("msg", meta_formatter=(args...)->(:white, "PREFIX", "")) ==
+        """
+        [ PREFIX msg
+        """
+        @test genmsg("msg", meta_formatter=(args...)->(:white, "", "SUFFIX")) ==
+        """
+        ┌ msg
+        └ SUFFIX
+        """
+    end
+
+    @testset "Metadata suffix, right justification" begin
+        @test genmsg("xxx", width=20, right_justify=200) ==
+        """
+        [ PREFIX xxx  SUFFIX
+        """
+        @test genmsg("xxx\nxxx", width=20, right_justify=200) ==
+        """
+        ┌ PREFIX xxx
+        └ xxx         SUFFIX
+        """
+        # When adding the suffix would overflow the display width, add it on
+        # the next line:
+        @test genmsg("xxxx", width=20, right_justify=200) ==
+        """
+        ┌ PREFIX xxxx
+        └             SUFFIX
+        """
+        # Same for multiline messages
+        @test genmsg("""xxx
+                        xxxxxxxxxx""", width=20, right_justify=200) ==
+        """
+        ┌ PREFIX xxx
+        └ xxxxxxxxxx  SUFFIX
+        """
+        @test genmsg("""xxx
+                        xxxxxxxxxxx""", width=20, right_justify=200) ==
+        """
+        ┌ PREFIX xxx
+        │ xxxxxxxxxxx
+        └             SUFFIX
+        """
+        # min(right_justify,width) is used
+        @test genmsg("xxx", width=200, right_justify=20) ==
+        """
+        [ PREFIX xxx  SUFFIX
+        """
+        @test genmsg("xxxx", width=200, right_justify=20) ==
+        """
+        ┌ PREFIX xxxx
+        └             SUFFIX
+        """
+    end
+
     # Keywords
-    @test genmsg(Logging.Error, "msg", Base, "other.jl", 101, a=1, b="asdf") ==
+    @test genmsg("msg", a=1, b="asdf") ==
     """
-    ┌ Error: msg
+    ┌ PREFIX msg
     │   a = 1
     │   b = "asdf"
-    └                                                       @ Base other.jl:101
+    └ SUFFIX
     """
-    # Exceptions use showerror
-    @test genmsg(Logging.Info, "msg", Base, "other.jl", 101, exception=DivideError()) ==
+    # Exceptions shown with showerror
+    @test genmsg("msg", exception=DivideError()) ==
     """
-    ┌ Info: msg
+    ┌ PREFIX msg
     │   exception = DivideError: integer division error
-    └                                                       @ Base other.jl:101
+    └ SUFFIX
     """
+
     # Attaching backtraces
     bt = func1()
-    @test startswith(genmsg(Logging.Info, "msg", Base, "other.jl", 101,
-                            exception=(DivideError(),bt)),
+    @test startswith(genmsg("msg", exception=(DivideError(),bt)),
     """
-    ┌ Info: msg
+    ┌ PREFIX msg
     │   exception =
     │    DivideError: integer division error
     │    Stacktrace:
     │     [1] func1() at""")
 
 
-    # Keywords - limiting the amount which is printed
-    @test genmsg(Logging.Info, "msg", Main, "some/path.jl", 101,
-                 a=fill(1.00001, 100,100), b=fill(2.00002, 10,10)) ==
-    replace("""
-    ┌ Info: msg
-    │   a =
-    │    100×100 Array{Float64,2}:
-    │     1.00001  1.00001  1.00001  1.00001  …  1.00001  1.00001  1.00001
-    │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
-    │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
-    │     ⋮                                   ⋱                           EOL
-    │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
-    │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
-    │   b =
-    │    10×10 Array{Float64,2}:
-    │     2.00002  2.00002  2.00002  2.00002  …  2.00002  2.00002  2.00002
-    │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
-    │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
-    │     ⋮                                   ⋱                           EOL
-    │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
-    │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
-    └                                                        @ Main path.jl:101
-    """, "EOL"=>"") # EOL hack to work around git whitespace errors
-    # Limiting the amount which is printed
-    @test genmsg(Logging.Info, "msg", Main, "some/path.jl", 101,
-                 a=fill(1.00001, 10,10), show_limited=false) ==
-    """
-    ┌ Info: msg
-    │   a =
-    │    10×10 Array{Float64,2}:
-    │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-    │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-    │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-    │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-    │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-    │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-    │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-    │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-    │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-    │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-    └                                                        @ Main path.jl:101
-    """
+    @testset "Limiting large data structures" begin
+        @test genmsg("msg", a=fill(1.00001, 100,100), b=fill(2.00002, 10,10)) ==
+        replace("""
+        ┌ PREFIX msg
+        │   a =
+        │    100×100 Array{Float64,2}:
+        │     1.00001  1.00001  1.00001  1.00001  …  1.00001  1.00001  1.00001
+        │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
+        │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
+        │     ⋮                                   ⋱                           EOL
+        │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
+        │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
+        │   b =
+        │    10×10 Array{Float64,2}:
+        │     2.00002  2.00002  2.00002  2.00002  …  2.00002  2.00002  2.00002
+        │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
+        │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
+        │     ⋮                                   ⋱                           EOL
+        │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
+        │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
+        └ SUFFIX
+        """, "EOL"=>"") # EOL hack to work around git whitespace errors
+        # Limiting the amount which is printed
+        @test genmsg("msg", a=fill(1.00001, 10,10), show_limited=false) ==
+        """
+        ┌ PREFIX msg
+        │   a =
+        │    10×10 Array{Float64,2}:
+        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        └ SUFFIX
+        """
+    end
 
-    # Basic color test
-    @test genmsg(Logging.Info, "line1\nline2", Main, "some/path.jl", 101, color=true) ==
+    # Basic colorization test
+    @test genmsg("line1\nline2", color=true) ==
     """
-    \e[36m\e[1m┌ \e[22m\e[39m\e[36m\e[1mInfo: \e[22m\e[39mline1
+    \e[36m\e[1m┌ \e[22m\e[39m\e[36m\e[1mPREFIX \e[22m\e[39mline1
     \e[36m\e[1m│ \e[22m\e[39mline2
-    \e[36m\e[1m└ \e[22m\e[39m                                                      \e[90m @ Main path.jl:101\e[39m
+    \e[36m\e[1m└ \e[22m\e[39m\e[90mSUFFIX\e[39m
     """
 
 end
