@@ -568,15 +568,13 @@ promote_rule(::ExactPromotion, ::Type{Int64}, ::Union{Type{Int16}, Type{Int32}, 
 promote_rule(::ExactPromotion, ::Type{Int128}, ::Union{Type{Int16}, Type{Int32}, Type{Int64}, Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt8}}) = Int128
 promote_rule(::ExactPromotion, ::Type{UInt16}, ::Type{UInt8}) = UInt16
 promote_rule(::ExactPromotion, ::Type{UInt32}, ::Union{Type{UInt16}, Type{UInt8}}) = UInt32
-promote_rule(::ExactPromotion, ::Type{UInt64}, ::Union{Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt8}}) = UInt64
-promote_rule(::ExactPromotion, ::Type{UInt128}, ::Union{Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt8}}) = UInt128
-# with mixed signedness when unsigned type is not smaller, promote to another signed type
+promote_rule(::ExactPromotion, ::Type{UInt64}, ::Union{Type{UInt16}, Type{UInt32}, Type{UInt8}}) = UInt64
+promote_rule(::ExactPromotion, ::Type{UInt128}, ::Union{Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt8}}) = UInt128
+# with mixed signedness when unsigned type is not smaller, promote to another larger signed type
 promote_rule(::ExactPromotion, ::Type{UInt8},   ::Type{Int8}) = Int16
 promote_rule(::ExactPromotion, ::Type{UInt16},  ::Union{Type{Int16}, Type{Int8}}) = Int32
 promote_rule(::ExactPromotion, ::Type{UInt32},  ::Union{Type{Int32}, Type{Int16}, Type{Int8}}) = Int64
 promote_rule(::ExactPromotion, ::Type{UInt64},  ::Union{Type{Int16}, Type{Int32}, Type{Int64}, Type{Int8}}) = Int128
-promote_rule(::ExactPromotion, ::Type{UInt128}, ::Union{Type{Int16}, Type{Int32}, Type{Int64}, Type{Int128}, Type{Int8}}) = BigInt
-# TODO: what about Bool?
 
 # DefaultPromotion
 # with different sizes, promote to larger type
