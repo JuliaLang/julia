@@ -510,7 +510,7 @@ However, if needed you can specialize on any or all of these arguments.
 `bc` is the overall `Broadcasted` wrapper, available in case allocation of the output requires
 access to some of the inputs. For these purposes, the important field of `Broadcasted` is called
 `args`, which stores the inputs as a linked list (a `TupleLL`). `ll.head` extracts the first
-element, while `ll.rest` retrieves the remaining list. The list is terminated by a `TupleLL{Nothing,Nothing}`.
+element, while `ll.rest` retrieves the remaining list. The list is terminated by a `TupleLLEnd()`.
 
 For a complete example, let's say you have created a type, `ArrayAndChar`, that stores an
 array and a single character:
@@ -536,14 +536,17 @@ This means we must also define a corresponding `broadcast_similar` method:
 ```jldoctest
 function Base.broadcast_similar(::Broadcast.ArrayStyle{ArrayAndChar}, ::Type{ElType}, inds, bc) where ElType
     # Scan the inputs for the ArrayAndChar:
-    A = find_aac(bc.args)
+    A = find_aac(bc)
     # Use the char field of A to create the output
     ArrayAndChar(similar(Array{ElType}, inds), A.char)
 end
 
-"`A = find_aac(As...)` returns the first ArrayAndChar among the arguments."
-find_aac(ll::Base.TupleLL{<:ArrayAndChar}) = ll.head
-find_aac(ll::Base.TupleLL) = find_aac(ll.rest)
+"`A = find_aac(As)` returns the first ArrayAndChar among the arguments."
+find_aac(bc::Base.Broadcast.Broadcasted) = find_aac(bc.args)
+find_aac(ll::Base.TupleLL) = find_aac(find_aac(ll.head), ll.rest)
+find_aac(x) = x
+find_aac(a::ArrayAndChar, rest) = a
+find_aac(::Any, rest) = find_aac(rest)
 ```
 
 From these definitions, one obtains the following behavior:
@@ -593,8 +596,8 @@ is_broadcast_incremental(bc::Broadcasted{DefaultArrayStyle{1}}) = maybe_range_sa
 # Broadcast.broadcast_all(f_filter, arg_filter, bc) is a function that checks all
 # inputs to a nested broadcasting operation, ensuring that the function `f` and
 # arguments return `true` for their respective filter functions.
-const Args1{T} = TupleLL{T,Nothing}
-const Args2{S,T} = TupleLL{S,TupleLL{T,Nothing}}
+const Args1{T} = TupleLL{T,TupleLLEnd}
+const Args2{S,T} = TupleLL{S,TupleLL{T,TupleLLEnd}}
 @inline maybe_range_safe(bc::Broadcasted{Style}) where {Style<:AbstractArrayStyle{1}} =
     Broadcast.broadcast_all(maybe_range_safe_f, maybe_range_safe_arg, bc) && bc.args isa Union{Args1,Args2}
 
