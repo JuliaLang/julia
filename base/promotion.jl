@@ -12,9 +12,9 @@ they both inherit.
 typejoin() = (@_pure_meta; Bottom)
 typejoin(@nospecialize(t)) = (@_pure_meta; t)
 typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
-typejoin(@nospecialize(a), @nospecialize(b)) = join_types(a, b, typejoin, false)
+typejoin(@nospecialize(a), @nospecialize(b)) = join_types(a, b, typejoin, Union{})
 
-function join_types(@nospecialize(a), @nospecialize(b), f, joinparams)
+function join_types(@nospecialize(a), @nospecialize(b), f::Function, joinparams::Type)
     @_pure_meta
     if a <: b
         return b
@@ -95,7 +95,7 @@ function join_types(@nospecialize(a), @nospecialize(b), f, joinparams)
                 ai, bi = a.parameters[i], b.parameters[i]
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
                     p[i] = ai
-                elseif joinparams
+                elseif aprimary <: joinparams && isa(ai,Type) && isa(bi,Type)
                     p[i] = f(ai, bi)
                 else
                     p[i] = aprimary.parameters[i]
@@ -234,8 +234,6 @@ function promote_type(::ExactPromotion, ::Type{T}, ::Type{S}) where {T,S}
                    promote_rule(ExactPromotion(),S,T))
 end
 
-promote_type(args...) = promote_type(DefaultPromotion(), args...)
-
 promote_type(::DefaultPromotion, ::Type{Bottom}, ::Type{Bottom}) = Bottom
 promote_type(::DefaultPromotion, ::Type{T}, ::Type{T}) where {T} = T
 promote_type(::DefaultPromotion, ::Type{T}, ::Type{Bottom}) where {T} = T
@@ -247,9 +245,15 @@ promote_type(::ExactPromotion, ::Type{T}, ::Type{Bottom}) where {T} = T
 promote_type(::ExactPromotion, ::Type{Bottom}, ::Type{T}) where {T} = T
 
 promote_type(::PromotionStyle) = Bottom
-promote_type(::PromotionStyle, T) = T
-promote_type(p::PromotionStyle, T, S, U, V...) =
+promote_type(::PromotionStyle, T::Type) = T
+promote_type(p::PromotionStyle, T::Type, S::Type, U::Type, V::Type...) =
     (@_inline_meta; promote_type(p, T, promote_type(p, S, U, V...)))
+# Default fallback
+promote_type(T::Type) = T
+function promote_type(T::Type, S::Type, U::Type...)
+    @_inline_meta
+    promote_type(DefaultPromotion(), T, promote_type(DefaultPromotion(), S, U...))
+end
 
 """
     promote_rule(type1, type2)
@@ -268,8 +272,10 @@ function promote_rule end
 
 # Fallback so that rules defined without DefaultPromotion() are used
 promote_rule(::DefaultPromotion, ::Type{T}, ::Type{S}) where {T,S} = promote_rule(T, S)
+# TODO: change ::Type{T} to ::Type{<:Any}?
+promote_rule(::DefaultPromotion, ::Type{Any}, ::Type{T}) where {T} = Any
 promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
-promote_rule(::Type{Any}, ::Type) = Any
+promote_rule(::Type{Any}, ::Type{T}) where {T} = Any
 
 promote_rule(::ExactPromotion, ::Type{<:Any}, ::Type{<:Any}) = Bottom
 promote_rule(::ExactPromotion, ::Type{Any}, ::Type) = Any
@@ -286,7 +292,7 @@ promote_result(::ExactPromotion,::Type{<:Any},::Type{<:Any},::Type{T},::Type{S})
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
 promote_result(::ExactPromotion,::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} =
-    (join_types(T, S, (T,S)->promote_type(ExactPromotion(),T,S), true))
+    (join_types(T, S, (T,S)->promote_type(ExactPromotion(),T,S), Union{Tuple, NamedTuple, AbstractArray}))
 
 not_sametype(x::T, y::T) where {T} = sametype_error(x)
 
@@ -363,7 +369,7 @@ function promote(p::PromotionStyle, x, y, z, a...)
     p
 end
 
-promote(p::PromotionStyle, x::T, y::T, zs::T...) where {T} = (p, x, y, zs...)
+promote(p::PromotionStyle, x::T, y::T, zs::T...) where {T} = (x, y, zs...)
 
 ## promotions in arithmetic, etc. ##
 
@@ -372,13 +378,17 @@ promote(p::PromotionStyle, x::T, y::T, zs::T...) where {T} = (p, x, y, zs...)
 # Otherwise, typejoin(T,S) is called (returning Number) so no conversion
 # happens, and +(promote(x,y)...) is called again, causing a stack
 # overflow.
-function promote_result(::PromotionStyle,
+# FIXME: find a way to re-enable this. The issue is that
+# this function should only be called when DefaultPromotion falls back to ExactPromotion,
+# just before the latter falls back to typejoin(). But it should not be called when
+# ExactPromotion is used directly, as it triggers errors in places where typejoin() would be fine.
+#= function promote_result(::ExactPromotion,
                         ::Type{T},::Type{S},
                         ::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
     @_inline_meta
     promote_to_supertype(T, S, typejoin(T,S))
 end
-
+ =#
 # promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
 # for example this makes promote_type(Integer,Real) == Real without
 # promoting arbitrary pairs of numeric types to Number.

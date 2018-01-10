@@ -162,7 +162,7 @@ end
     y = Union{String, T}["a", v]
     f(s::Union{Nothing, Missing}) = s
     f(s::String) = s == "a"
-    res = @inferred collect(s for s in y)
+    res = collect(s for s in y)
     @test res isa Vector{Union{String, T}}
     res = map(identity, y)
     @test res isa Vector{Union{String, T}}

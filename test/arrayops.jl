@@ -949,7 +949,7 @@ end
     @testset "tuples" begin # Issue #25338
         @test union((1, 2), (3)) == [1, 2, 3]
         u = union((1, 0x2), [3])
-        @test eltype(u) == Integer
+        @test eltype(u) == Int
         @test u == [1, 2, 3]
         @test intersect((1, 2), (3, 2)) == [2]
         @test setdiff((1, 2), (3, 2)) == [1]

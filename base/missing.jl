@@ -25,18 +25,21 @@ nonmissingtype(::Type{Any}) = Any
 
 # Both rules need to be defined for types which implement
 # DefaultPromotion but not ExactPromotion
-for P in (:DefaultPromotion, :ExactPromotion)
-    for U in (:Nothing, :Missing)
-        @eval begin
-            promote_rule(::$P, ::Type{$U}, ::Type{T}) where {T} = Union{T, $U}
-            promote_rule(::$P, ::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{promote_type($P(), T, S), $U}
-            promote_rule(::$P, ::Type{Any}, ::Type{$U}) = Any
-            promote_rule(::$P, ::Type{$U}, ::Type{Any}) = Any
-            promote_rule(::$P, ::Type{$U}, ::Type{$U}) = U
-        end
+for P in (:DefaultPromotion, :ExactPromotion), U in (:Nothing, :Missing)
+    @eval begin
+        promote_rule(::$P, ::Type{$U}, ::Type{T}) where {T} = Union{T, $U}
+        promote_rule(::$P, ::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{promote_type($P(), T, S), $U}
+        promote_rule(::$P, ::Type{Any}, ::Type{$U}) = Any
+        promote_rule(::$P, ::Type{$U}, ::Type{Any}) = Any
+        promote_rule(::$P, ::Type{$U}, ::Type{$U}) = U
     end
-    promote_rule(::P, ::Type{Union{Nothing, Missing}}, ::Type{T}) where {T} = Union{Nothing, Missing, T}
 end
+# To fix ambiguities
+# FIXME: needed?
+promote_rule(::DefaultPromotion, ::Type{Union{Nothing, Missing}}, ::Type{T}) where {T} =
+    Union{Nothing, Missing, T}
+promote_rule(::ExactPromotion, ::Type{Union{Nothing, Missing}}, ::Type{T}) where {T} =
+    Union{Nothing, Missing, T}
 
 convert(::Type{Union{T, Missing}}, x) where {T} = convert(T, x)
 # To fix ambiguities

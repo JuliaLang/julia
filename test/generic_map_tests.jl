@@ -31,8 +31,8 @@ function generic_map_tests(mapf, inplace_mapf=nothing)
     @test mapf(f, Int[], Float64[]) == Union{}[]
     # map with different result types
     let m = mapf(x->x+1, Number[1, 2.0])
-        @test isa(m, Vector{Real})
-        @test m == Real[2, 3.0]
+        @test isa(m, Vector{BigFloat})
+        @test m == BigFloat[2, 3.0]
     end
 
     # AbstractArray map for N-arg case

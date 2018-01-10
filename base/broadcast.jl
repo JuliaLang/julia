@@ -3,7 +3,7 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: Indices, OneTo, linearindices, tail, to_shape,
+using Base: Indices, OneTo, ExactPromotion, linearindices, tail, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
             isoperator
 import Base: broadcast, broadcast!
