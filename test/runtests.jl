@@ -1083,6 +1083,10 @@ end
 # 0.7.0-DEV.3172
 @test replace("abcb", "b"=>"c") == "accc"
 @test replace("abcb", "b"=>"c", count=1) == "accb"
+# 0.7.0-DEV.3216
+@test Compat.AbstractDateTime === (isdefined(Compat.Dates, :AbstractDateTime) ? Compat.Dates.AbstractDateTime : Compat.Dates.TimeType)
+@test Compat.AbstractDateTime <: Compat.Dates.TimeType
+@test Compat.Dates.DateTime <: Compat.AbstractDateTime
 
 # 0.7.0-DEV.3025
 let c = CartesianIndices(1:3, 1:2), l = LinearIndices(1:3, 1:2)

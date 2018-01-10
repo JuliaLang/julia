@@ -301,7 +301,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 ## New types
 
-Currently, no new exported types are introduced by Compat.
+* `Compat.AbstractDateTime` is an alias for `Compat.Dates.AbstractDateTime` as of ([#25227]) and `Compat.Dates.TimeType` prior to that.
 
 ## Developer tips
 
