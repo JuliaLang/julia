@@ -1553,46 +1553,46 @@ for (f1, f2) in ((:*, :mul!), (:\, :ldiv!))
     end
 end
 
-for (ipop, op, xform) in (
-        (:mul!, :*, :Adjoint),
-        (:mul!, :*, :Transpose),
-        (:ldiv!, :\, :Adjoint),
-        (:ldiv!, :\, :Transpose))
+for (ipop, op, xformtype, xformop) in (
+        (:mul!, :*, :Adjoint, :adjoint),
+        (:mul!, :*, :Transpose, :transpose),
+        (:ldiv!, :\, :Adjoint, :adjoint),
+        (:ldiv!, :\, :Transpose, :transpose))
     @eval begin
-        function ($op)(xformA::($xform){<:Any,<:UpperTriangular}, B::LowerTriangular)
+        function ($op)(xformA::($xformtype){<:Any,<:UpperTriangular}, B::LowerTriangular)
             A = xformA.parent
-            TAB = typeof(($op)($xform(zero(eltype(A))), zero(eltype(B))) +
-                         ($op)($xform(zero(eltype(A))), zero(eltype(B))))
+            TAB = typeof(($op)($xformop(zero(eltype(A))), zero(eltype(B))) +
+                         ($op)($xformop(zero(eltype(A))), zero(eltype(B))))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
-            return LowerTriangular(($ipop)($xform(convert(AbstractMatrix{TAB}, A)), BB))
+            return LowerTriangular(($ipop)($xformop(convert(AbstractMatrix{TAB}, A)), BB))
         end
 
-        function ($op)(xformA::($xform){<:Any,<:UnitUpperTriangular}, B::LowerTriangular)
+        function ($op)(xformA::($xformtype){<:Any,<:UnitUpperTriangular}, B::LowerTriangular)
             A = xformA.parent
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
-            return LowerTriangular($ipop($xform(convert(AbstractMatrix{TAB}, A)), BB))
+            return LowerTriangular($ipop($xformop(convert(AbstractMatrix{TAB}, A)), BB))
         end
 
-        function ($op)(xformA::($xform){<:Any,<:LowerTriangular}, B::UpperTriangular)
+        function ($op)(xformA::($xformtype){<:Any,<:LowerTriangular}, B::UpperTriangular)
             A = xformA.parent
-            TAB = typeof(($op)($xform(zero(eltype(A))), zero(eltype(B))) +
-                         ($op)($xform(zero(eltype(A))), zero(eltype(B))))
+            TAB = typeof(($op)($xformop(zero(eltype(A))), zero(eltype(B))) +
+                         ($op)($xformop(zero(eltype(A))), zero(eltype(B))))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
-            return UpperTriangular($ipop($xform(convert(AbstractMatrix{TAB}, A)), BB))
+            return UpperTriangular($ipop($xformop(convert(AbstractMatrix{TAB}, A)), BB))
         end
 
-        function ($op)(xformA::($xform){<:Any,<:UnitLowerTriangular}, B::UpperTriangular)
+        function ($op)(xformA::($xformtype){<:Any,<:UnitLowerTriangular}, B::UpperTriangular)
             A = xformA.parent
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
-            return UpperTriangular($ipop($xform(convert(AbstractMatrix{TAB}, A)), BB))
+            return UpperTriangular($ipop($xformop(convert(AbstractMatrix{TAB}, A)), BB))
         end
     end
 end
@@ -1626,46 +1626,46 @@ function (/)(A::UpperTriangular, B::UnitUpperTriangular)
     return UpperTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
 end
 
-for (ipop, op, xform) in (
-        (:mul!, :*, :Adjoint),
-        (:mul!, :*, :Transpose),
-        (:rdiv!, :/, :Adjoint),
-        (:rdiv!, :/, :Transpose))
+for (ipop, op, xformtype, xformop) in (
+        (:mul!, :*, :Adjoint, :adjoint),
+        (:mul!, :*, :Transpose, :transpose),
+        (:rdiv!, :/, :Adjoint, :adjoint),
+        (:rdiv!, :/, :Transpose, :transpose))
     @eval begin
-        function ($op)(A::LowerTriangular, xformB::($xform){<:Any,<:UpperTriangular})
+        function ($op)(A::LowerTriangular, xformB::($xformtype){<:Any,<:UpperTriangular})
             B = xformB.parent
-            TAB = typeof(($op)(zero(eltype(A)), $xform(zero(eltype(B)))) +
-                         ($op)(zero(eltype(A)), $xform(zero(eltype(B)))))
+            TAB = typeof(($op)(zero(eltype(A)), $xformop(zero(eltype(B)))) +
+                         ($op)(zero(eltype(A)), $xformop(zero(eltype(B)))))
             AA = similar(A, TAB, size(A))
             copyto!(AA, A)
-            return LowerTriangular($ipop(AA, $xform(convert(AbstractMatrix{TAB}, B))))
+            return LowerTriangular($ipop(AA, $xformop(convert(AbstractMatrix{TAB}, B))))
         end
 
-        function ($op)(A::LowerTriangular, xformB::($xform){<:Any,<:UnitUpperTriangular})
+        function ($op)(A::LowerTriangular, xformB::($xformtype){<:Any,<:UnitUpperTriangular})
             B = xformB.parent
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
             AA = similar(A, TAB, size(A))
             copyto!(AA, A)
-            return LowerTriangular($ipop(AA, $xform(convert(AbstractMatrix{TAB}, B))))
+            return LowerTriangular($ipop(AA, $xformop(convert(AbstractMatrix{TAB}, B))))
         end
 
-        function ($op)(A::UpperTriangular, xformB::($xform){<:Any,<:LowerTriangular})
+        function ($op)(A::UpperTriangular, xformB::($xformtype){<:Any,<:LowerTriangular})
             B = xformB.parent
-            TAB = typeof(($op)(zero(eltype(A)), $xform(zero(eltype(B)))) +
-                         ($op)(zero(eltype(A)), $xform(zero(eltype(B)))))
+            TAB = typeof(($op)(zero(eltype(A)), $xformop(zero(eltype(B)))) +
+                         ($op)(zero(eltype(A)), $xformop(zero(eltype(B)))))
             AA = similar(A, TAB, size(A))
             copyto!(AA, A)
-            return UpperTriangular($ipop(AA, $xform(convert(AbstractMatrix{TAB}, B))))
+            return UpperTriangular($ipop(AA, $xformop(convert(AbstractMatrix{TAB}, B))))
         end
 
-        function ($op)(A::UpperTriangular, xformB::($xform){<:Any,<:UnitLowerTriangular})
+        function ($op)(A::UpperTriangular, xformB::($xformtype){<:Any,<:UnitLowerTriangular})
             B = xformB.parent
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
             AA = similar(A, TAB, size(A))
             copyto!(AA, A)
-            return UpperTriangular($ipop(AA, $xform(convert(AbstractMatrix{TAB}, B))))
+            return UpperTriangular($ipop(AA, $xformop(convert(AbstractMatrix{TAB}, B))))
         end
     end
 end

@@ -1306,7 +1306,7 @@ end
 
 # TODO
 
-@testset "Transpose" begin
+@testset "transpose" begin
     b1 = bitrand(v1)
     @check_bit_operation transpose(b1) Transpose{Bool,BitVector}
 

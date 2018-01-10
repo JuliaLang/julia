@@ -790,7 +790,7 @@ end
 @testset "/ and \\ consistency with pinv for vectors" begin
     @testset "Tests for type $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         c = rand(elty, 5)
-        r = (elty <: Complex ? Adjoint : Transpose)(rand(elty, 5))
+        r = (elty <: Complex ? adjoint : transpose)(rand(elty, 5))
         cm = rand(elty, 5, 1)
         rm = rand(elty, 1, 5)
         @testset "inner prodcuts" begin

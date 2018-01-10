@@ -1812,25 +1812,25 @@ for isunittri in (true, false), islowertri in (true, false)
     tritype = :(Base.LinAlg.$(Symbol(unitstr, halfstr, "Triangular")))
 
     # build out-of-place left-division operations
-    for (istrans, applyxform, xform) in (
-            (false, false, :identity),
-            (true,  true,  :Transpose),
-            (true,  true,  :Adjoint) )
+    for (istrans, applyxform, xformtype, xformop) in (
+            (false, false, :identity,  :identity),
+            (true,  true,  :Transpose, :transpose),
+            (true,  true,  :Adjoint,   :adjoint) )
 
         # broad method where elements are Numbers
-        xformtritype = applyxform ? :($xform{<:TA,<:$tritype{<:Any,<:AbstractMatrix}}) :
+        xformtritype = applyxform ? :($xformtype{<:TA,<:$tritype{<:Any,<:AbstractMatrix}}) :
                                     :($tritype{<:TA,<:AbstractMatrix})
         @eval function \(xformA::$xformtritype, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}
             A = $(applyxform ? :(xformA.parent) : :(xformA) )
             TAb = $(isunittri ?
                 :(typeof(zero(TA)*zero(Tb) + zero(TA)*zero(Tb))) :
                 :(typeof((zero(TA)*zero(Tb) + zero(TA)*zero(Tb))/one(TA))) )
-            Base.LinAlg.ldiv!($xform(convert(AbstractArray{TAb}, A)), convert(Array{TAb}, b))
+            Base.LinAlg.ldiv!($xformop(convert(AbstractArray{TAb}, A)), convert(Array{TAb}, b))
         end
 
         # faster method requiring good view support of the
         # triangular matrix type. hence the StridedMatrix restriction.
-        xformtritype = applyxform ? :($xform{<:TA,<:$tritype{<:Any,<:StridedMatrix}}) :
+        xformtritype = applyxform ? :($xformtype{<:TA,<:$tritype{<:Any,<:StridedMatrix}}) :
                                     :($tritype{<:TA,<:StridedMatrix})
         @eval function \(xformA::$xformtritype, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}
             A = $(applyxform ? :(xformA.parent) : :(xformA) )
@@ -1847,25 +1847,25 @@ for isunittri in (true, false), islowertri in (true, false)
                     :(1:b.nzind[end]) )
                 nzrangeviewr = view(r, nzrange)
                 nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
-                Base.LinAlg.ldiv!($xform(convert(AbstractArray{TAb}, nzrangeviewA)), nzrangeviewr)
+                Base.LinAlg.ldiv!($xformop(convert(AbstractArray{TAb}, nzrangeviewA)), nzrangeviewr)
             end
             r
         end
 
         # fallback where elements are not Numbers
-        xformtritype = applyxform ? :($xform{<:Any,<:$tritype}) : :($tritype)
+        xformtritype = applyxform ? :($xformtype{<:Any,<:$tritype}) : :($tritype)
         @eval function \(xformA::$xformtritype, b::SparseVector)
             A = $(applyxform ? :(xformA.parent) : :(xformA) )
-            Base.LinAlg.ldiv!($xform(A), copy(b))
+            Base.LinAlg.ldiv!($xformop(A), copy(b))
         end
     end
 
     # build in-place left-division operations
-    for (istrans, applyxform, xform) in (
-            (false, false, :identity),
-            (true,  true,  :Transpose),
-            (true,  true,  :Adjoint) )
-        xformtritype = applyxform ? :($xform{<:Any,<:$tritype{<:Any,<:StridedMatrix}}) :
+    for (istrans, applyxform, xformtype, xformop) in (
+            (false, false, :identity,  :identity),
+            (true,  true,  :Transpose, :transpose),
+            (true,  true,  :Adjoint,   :adjoint) )
+        xformtritype = applyxform ? :($xformtype{<:Any,<:$tritype{<:Any,<:StridedMatrix}}) :
                                     :($tritype{<:Any,<:StridedMatrix})
 
         # the generic in-place left-division methods handle these cases, but
@@ -1890,7 +1890,7 @@ for isunittri in (true, false), islowertri in (true, false)
                     :(1:b.nzind[end]) )
                 nzrangeviewbnz = view(b.nzval, nzrange .- (b.nzind[1] - 1))
                 nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
-                Base.LinAlg.ldiv!($xform(nzrangeviewA), nzrangeviewbnz)
+                Base.LinAlg.ldiv!($xformop(nzrangeviewA), nzrangeviewbnz)
             end
             b
         end

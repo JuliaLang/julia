@@ -62,23 +62,12 @@ end
     # the tests for the inner constructors exercise abstract scalar and concrete array eltype, forgoing here
 end
 
-@testset "Adjoint and Transpose of Numbers" begin
-    @test Adjoint(1) == 1
-    @test Adjoint(1.0) == 1.0
-    @test Adjoint(1im) == -1im
-    @test Adjoint(1.0im) == -1.0im
-    @test Transpose(1) == 1
-    @test Transpose(1.0) == 1.0
-    @test Transpose(1im) == 1im
-    @test Transpose(1.0im) == 1.0im
-end
-
-@testset "Adjoint and Transpose unwrapping" begin
+@testset "Adjoint and Transpose add additional layers to already-wrapped objects" begin
     intvec, intmat = [1, 2], [1 2; 3 4]
-    @test Adjoint(Adjoint(intvec)) === intvec
-    @test Adjoint(Adjoint(intmat)) === intmat
-    @test Transpose(Transpose(intvec)) === intvec
-    @test Transpose(Transpose(intmat)) === intmat
+    @test (A = Adjoint(Adjoint(intvec))::Adjoint{Int,Adjoint{Int,Vector{Int}}}; A.parent.parent === intvec)
+    @test (A = Adjoint(Adjoint(intmat))::Adjoint{Int,Adjoint{Int,Matrix{Int}}}; A.parent.parent === intmat)
+    @test (A = Transpose(Transpose(intvec))::Transpose{Int,Transpose{Int,Vector{Int}}}; A.parent.parent === intvec)
+    @test (A = Transpose(Transpose(intmat))::Transpose{Int,Transpose{Int,Matrix{Int}}}; A.parent.parent === intmat)
 end
 
 @testset "Adjoint and Transpose basic AbstractArray functionality" begin
@@ -439,6 +428,17 @@ end
         @test norm(Transpose(v), 1) ≈ 4
         @test norm(Transpose(v), Inf) ≈ 7
     end
+end
+
+@testset "adjoint and transpose of Numbers" begin
+    @test adjoint(1) == 1
+    @test adjoint(1.0) == 1.0
+    @test adjoint(1im) == -1im
+    @test adjoint(1.0im) == -1.0im
+    @test transpose(1) == 1
+    @test transpose(1.0) == 1.0
+    @test transpose(1im) == 1im
+    @test transpose(1.0im) == 1.0im
 end
 
 @testset "adjoint!(a, b) return a" begin

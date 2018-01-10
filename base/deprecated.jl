@@ -2226,10 +2226,10 @@ end
     @deprecate A_mul_Bt(A::AbstractMatrix, B::AbstractTriangular)  (*)(A, transpose(B))
 end
 for (f, op, transform) in (
-        (:A_mul_Bc, :*, :Adjoint),
-        (:A_mul_Bt, :*, :Transpose),
-        (:A_rdiv_Bc, :/, :Adjoint),
-        (:A_rdiv_Bt, :/, :Transpose))
+        (:A_mul_Bc, :*, :adjoint),
+        (:A_mul_Bt, :*, :transpose),
+        (:A_rdiv_Bc, :/, :adjoint),
+        (:A_rdiv_Bt, :/, :transpose))
     @eval Base.LinAlg begin
         @deprecate $f(A::LowerTriangular, B::UpperTriangular)       ($op)(A, ($transform)(B))
         @deprecate $f(A::LowerTriangular, B::UnitUpperTriangular)   ($op)(A, ($transform)(B))
@@ -2238,10 +2238,10 @@ for (f, op, transform) in (
     end
 end
 for (f, op, transform) in (
-        (:Ac_mul_B, :*, :Adjoint),
-        (:At_mul_B, :*, :Transpose),
-        (:Ac_ldiv_B, :\, :Adjoint),
-        (:At_ldiv_B, :\, :Transpose))
+        (:Ac_mul_B, :*, :adjoint),
+        (:At_mul_B, :*, :transpose),
+        (:Ac_ldiv_B, :\, :adjoint),
+        (:At_ldiv_B, :\, :transpose))
     @eval Base.LinAlg begin
         @deprecate ($f)(A::UpperTriangular, B::LowerTriangular)     ($op)(($transform)(A), B)
         @deprecate ($f)(A::UnitUpperTriangular, B::LowerTriangular) ($op)(($transform)(A), B)
