@@ -1361,8 +1361,10 @@ function detect_unbound_args(mods...;
                     if has_unbound_vars(m.sig)
                         tuple_sig = Base.unwrap_unionall(m.sig)::DataType
                         if Base.isvatuple(tuple_sig)
-                            params = tuple_sig.parameters[1:(end - 1)]
-                            tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
+                            params = tuple_sig.parameters[1:end-1]
+                            # tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
+                            tuple_sig = Tuple{params...}
+                            @assert !isa(tuple_sig, UnionAll) # jl_gf_invoke will seqfault on UnionAll
                             mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, typemax(UInt))
                             if mf != nothing && mf.func !== m && mf.func.sig <: tuple_sig
                                 continue
