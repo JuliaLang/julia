@@ -184,9 +184,9 @@ end
     @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
     @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
     @test eltype(Tuple{Int, Missing, Float64}) === Union{Missing, Real}
-    @test eltype(Tuple{Int, Nothing, Float64}) === Union{Missing, Real}
+    @test eltype(Tuple{Int, Nothing, Float64}) === Union{Nothing, Real}
     @test eltype(Tuple{Int, Missing, Int8}) === Union{Missing, Int}
-    @test eltype(Tuple{Int, Nothing, Int8}) === Union{Missing, Int}
+    @test eltype(Tuple{Int, Nothing, Int8}) === Union{Nothing, Int}
 end
 
 @testset "mapping" begin

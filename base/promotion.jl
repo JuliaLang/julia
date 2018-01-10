@@ -12,18 +12,18 @@ they both inherit.
 typejoin() = (@_pure_meta; Bottom)
 typejoin(@nospecialize(t)) = (@_pure_meta; t)
 typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
-typejoin(@nospecialize(a), @nospecialize(b)) = join_types(a, b, typejoin, Union{})
+typejoin(@nospecialize(a), @nospecialize(b)) = join_types(a, b, typejoin)
 
-function join_types(@nospecialize(a), @nospecialize(b), f::Function, joinparams::Type)
+function join_types(@nospecialize(a), @nospecialize(b), f::Function)
     @_pure_meta
     if a <: b
         return b
     elseif b <: a
         return a
     elseif isa(a,UnionAll)
-        return UnionAll(a.var, join_types(a.body, b, f, joinparams))
+        return UnionAll(a.var, join_types(a.body, b, f))
     elseif isa(b,UnionAll)
-        return UnionAll(b.var, join_types(a, b.body, f, joinparams))
+        return UnionAll(b.var, join_types(a, b.body, f))
     elseif isa(a,TypeVar)
         return f(a.ub, b)
     elseif isa(b,TypeVar)
@@ -95,8 +95,6 @@ function join_types(@nospecialize(a), @nospecialize(b), f::Function, joinparams:
                 ai, bi = a.parameters[i], b.parameters[i]
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
                     p[i] = ai
-                elseif aprimary <: joinparams && isa(ai,Type) && isa(bi,Type)
-                    p[i] = f(ai, bi)
                 else
                     p[i] = aprimary.parameters[i]
                 end
@@ -207,16 +205,14 @@ Union{Float64, Int64}
 julia> promote_type(ExactPromotion(), Int32, Int64)
 Int64
 
-# FIXME: should this be Union{Float32, BigInt}?
 julia> promote_type(ExactPromotion(), Float32, BigInt)
 BigFloat
 
 julia> promote_type(ExactPromotion(), Int16, Float16)
 Float16
 
-# FIXME: should this be Float16?
 julia> promote_type(ExactPromotion(), Int64, Float16)
-Union{Float16, Int64}
+Real
 
 julia> promote_type(ExactPromotion(), Int8, UInt16)
 UInt16
@@ -272,10 +268,9 @@ function promote_rule end
 
 # Fallback so that rules defined without DefaultPromotion() are used
 promote_rule(::DefaultPromotion, ::Type{T}, ::Type{S}) where {T,S} = promote_rule(T, S)
-# TODO: change ::Type{T} to ::Type{<:Any}?
-promote_rule(::DefaultPromotion, ::Type{Any}, ::Type{T}) where {T} = Any
+promote_rule(::DefaultPromotion, ::Type{Any}, ::Type{<:Any}) = Any
 promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
-promote_rule(::Type{Any}, ::Type{T}) where {T} = Any
+promote_rule(::Type{Any}, ::Type{<:Any}) = Any
 
 promote_rule(::ExactPromotion, ::Type{<:Any}, ::Type{<:Any}) = Bottom
 promote_rule(::ExactPromotion, ::Type{Any}, ::Type) = Any
@@ -292,7 +287,7 @@ promote_result(::ExactPromotion,::Type{<:Any},::Type{<:Any},::Type{T},::Type{S})
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
 promote_result(::ExactPromotion,::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} =
-    (join_types(T, S, (T,S)->promote_type(ExactPromotion(),T,S), Union{Tuple, NamedTuple, AbstractArray}))
+    (join_types(T, S, (T,S)->promote_type(ExactPromotion(),T,S)))
 
 not_sametype(x::T, y::T) where {T} = sametype_error(x)
 
@@ -382,13 +377,13 @@ promote(p::PromotionStyle, x::T, y::T, zs::T...) where {T} = (x, y, zs...)
 # this function should only be called when DefaultPromotion falls back to ExactPromotion,
 # just before the latter falls back to typejoin(). But it should not be called when
 # ExactPromotion is used directly, as it triggers errors in places where typejoin() would be fine.
-#= function promote_result(::ExactPromotion,
-                        ::Type{T},::Type{S},
-                        ::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
-    @_inline_meta
-    promote_to_supertype(T, S, typejoin(T,S))
-end
- =#
+# function promote_result(::ExactPromotion,
+#                         ::Type{T},::Type{S},
+#                         ::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
+#     @_inline_meta
+#     promote_to_supertype(T, S, typejoin(T,S))
+# end
+#
 # promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
 # for example this makes promote_type(Integer,Real) == Real without
 # promoting arbitrary pairs of numeric types to Number.
