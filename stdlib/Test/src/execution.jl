@@ -1,0 +1,375 @@
+
+struct Returned <: ExecutionResult
+    value
+    data
+    source::LineNumberNode
+end
+
+struct Threw <: ExecutionResult
+    exception
+    backtrace
+    source::LineNumberNode
+end
+
+function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
+    res = true
+    i = 1
+    evaled_args = evaluated.args
+    quoted_args = quoted.args
+    n = length(evaled_args)
+    if evaluated.head == :comparison
+        args = evaled_args
+        while i < n
+            a, op, b = args[i], args[i+1], args[i+2]
+            if res
+                res = op(a, b) === true  # Keep `res` type stable
+            end
+            quoted_args[i] = a
+            quoted_args[i+2] = b
+            i += 2
+        end
+
+    elseif evaluated.head == :call
+        op = evaled_args[1]
+        kwargs = evaled_args[2].args  # Keyword arguments from `Expr(:parameters, ...)`
+        args = evaled_args[3:n]
+
+        res = op(args...; kwargs...) === true
+
+        # Create "Evaluated" expression which looks like the original call but has all of
+        # the arguments evaluated
+        func_sym = quoted_args[1]
+        if isempty(kwargs)
+            quoted = Expr(:call, func_sym, args...)
+        elseif func_sym === :≈
+            # in case of `≈(x, y, atol = z)`
+            # make the display like `Evaluated: x ≈ y (atol=z)`
+            kws = [Symbol(Expr(:kw, k, v), ",") for (k, v) in kwargs]
+            kws[end] = Symbol(Expr(:kw, kwargs[end]...))
+            kws[1] = Symbol("(", kws[1])
+            kws[end] = Symbol(kws[end], ")")
+            quoted = Expr(:comparison, args[1], func_sym, args[2], kws...)
+            if length(quoted.args) & 1 == 0  # hack to fit `show_unquoted`
+                push!(quoted.args, Symbol())
+            end
+        else
+            kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
+            quoted = Expr(:call, func_sym, kwargs_expr, args...)
+        end
+    else
+        throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
+    end
+    Returned(res,
+             # stringify arguments in case of failure, for easy remote printing
+             res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted)),
+             source)
+end
+
+const comparison_prec = Base.operator_precedence(:(==))
+
+"""
+    test_expr!(ex, kws...)
+
+Preprocess test expressions of function calls with trailing keyword arguments
+so that e.g. `@test a ≈ b atol=ε` means `@test ≈(a, b, atol=ε)`.
+"""
+test_expr!(m, ex) = ex
+
+function test_expr!(m, ex, kws...)
+    ex isa Expr && ex.head == :call || @goto fail
+    for kw in kws
+        kw isa Expr && kw.head == :(=) || @goto fail
+        kw.head = :kw
+        push!(ex.args, kw)
+    end
+    return ex
+@label fail
+    error("invalid test macro call: $m $ex $(join(kws," "))")
+end
+
+# @test - check if the expression evaluates to true
+"""
+    @test ex
+    @test f(args...) key=val ...
+
+Tests that the expression `ex` evaluates to `true`.
+Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
+`false`, and an `Error` `Result` if it could not be evaluated.
+
+The `@test f(args...) key=val...` form is equivalent to writing
+`@test f(args..., key=val...)` which can be useful when the expression
+is a call using infix syntax such as approximate comparisons:
+
+    @test a ≈ b atol=ε
+
+This is equivalent to the uglier test `@test ≈(a, b, atol=ε)`.
+It is an error to supply more than one expression unless the first
+is a call expression and the rest are assignments (`k=v`).
+"""
+macro test(ex, kws...)
+    test_expr!("@test", ex, kws...)
+    orig_ex = Expr(:inert, ex)
+    result = get_test_result(ex, __source__)
+    :(do_test($result, $orig_ex))
+end
+
+"""
+    @test_broken ex
+    @test_broken f(args...) key=val ...
+
+Indicates a test that should pass but currently consistently fails.
+Tests that the expression `ex` evaluates to `false` or causes an
+exception. Returns a `Broken` `Result` if it does, or an `Error` `Result`
+if the expression evaluates to `true`.
+
+The `@test_broken f(args...) key=val...` form works as for the `@test` macro.
+"""
+macro test_broken(ex, kws...)
+    test_expr!("@test_broken", ex, kws...)
+    orig_ex = Expr(:inert, ex)
+    result = get_test_result(ex, __source__)
+    # code to call do_test with execution result and original expr
+    :(do_broken_test($result, $orig_ex))
+end
+
+"""
+    @test_skip ex
+    @test_skip f(args...) key=val ...
+
+Marks a test that should not be executed but should be included in test
+summary reporting as `Broken`. This can be useful for tests that intermittently
+fail, or tests of not-yet-implemented functionality.
+
+The `@test_skip f(args...) key=val...` form works as for the `@test` macro.
+"""
+macro test_skip(ex, kws...)
+    test_expr!("@test_skip", ex, kws...)
+    orig_ex = Expr(:inert, ex)
+    testres = :(Broken(:skipped, $orig_ex))
+    :(record(get_testset(), $testres))
+end
+
+# An internal function, called by the code generated by the @test
+# macro to get results of the test expression.
+# In the special case of a comparison, e.g. x == 5, generate code to
+# evaluate each term in the comparison individually so the results
+# can be displayed nicely.
+function get_test_result(ex, source)
+    # Normalize non-dot comparison operator calls to :comparison expressions
+    is_splat = x -> isa(x, Expr) && x.head == :...
+    if isa(ex, Expr) && ex.head == :call && length(ex.args) == 3 &&
+        first(string(ex.args[1])) != '.' && !is_splat(ex.args[2]) && !is_splat(ex.args[3]) &&
+        (ex.args[1] === :(==) || Base.operator_precedence(ex.args[1]) == comparison_prec)
+        ex = Expr(:comparison, ex.args[2], ex.args[1], ex.args[3])
+    end
+    if isa(ex, Expr) && ex.head == :comparison
+        # pass all terms of the comparison to `eval_comparison`, as an Expr
+        escaped_terms = [esc(arg) for arg in ex.args]
+        quoted_terms = [QuoteNode(arg) for arg in ex.args]
+        testret = :(eval_test(
+            Expr(:comparison, $(escaped_terms...)),
+            Expr(:comparison, $(quoted_terms...)),
+            $(QuoteNode(source)),
+        ))
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox, :≈)
+        escaped_func = esc(ex.args[1])
+        quoted_func = QuoteNode(ex.args[1])
+
+        escaped_args = []
+        escaped_kwargs = []
+
+        # Keywords that occur before `;`. Note that the keywords are being revised into
+        # a form we can splat.
+        for a in ex.args[2:end]
+            if isa(a, Expr) && a.head == :kw
+                push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
+            end
+        end
+
+        # Keywords that occur after ';'
+        parameters_expr = ex.args[2]
+        if isa(parameters_expr, Expr) && parameters_expr.head == :parameters
+            for a in parameters_expr.args
+                if isa(a, Expr) && a.head == :kw
+                    push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
+                elseif isa(a, Expr) && a.head == :...
+                    push!(escaped_kwargs, Expr(:..., esc(a.args[1])))
+                end
+            end
+        end
+
+        # Positional arguments
+        for a in ex.args[2:end]
+            isa(a, Expr) && a.head in (:kw, :parameters) && continue
+
+            if isa(a, Expr) && a.head == :...
+                push!(escaped_args, Expr(:..., esc(a)))
+            else
+                push!(escaped_args, esc(a))
+            end
+        end
+
+        testret = :(eval_test(
+            Expr(:call, $escaped_func, Expr(:parameters, $(escaped_kwargs...)), $(escaped_args...)),
+            Expr(:call, $quoted_func),
+            $(QuoteNode(source)),
+        ))
+    else
+        testret = :(Returned($(esc(ex)), nothing, $(QuoteNode(source))))
+    end
+    result = quote
+        try
+            $testret
+        catch _e
+            Threw(_e, catch_backtrace(), $(QuoteNode(source)))
+        end
+    end
+    Base.remove_linenums!(result)
+    result
+end
+
+# An internal function, called by the code generated by the @test
+# macro to actually perform the evaluation and manage the result.
+function do_test(result::ExecutionResult, orig_expr)
+    # get_testset() returns the most recently added test set
+    # We then call record() with this test set and the test result
+    if isa(result, Returned)
+        # expr, in the case of a comparison, will contain the
+        # comparison with evaluated values of each term spliced in.
+        # For anything else, just contains the test expression.
+        # value is the evaluated value of the whole test expression.
+        # Ideally it is true, but it may be false or non-Boolean.
+        value = result.value
+        testres = if isa(value, Bool)
+            # a true value Passes
+            value ? Pass(:test, nothing, nothing, value) :
+                    Fail(:test, orig_expr, result.data, value, result.source)
+        else
+            # If the result is non-Boolean, this counts as an Error
+            Error(:test_nonbool, orig_expr, value, nothing, result.source)
+        end
+    else
+        # The predicate couldn't be evaluated without throwing an
+        # exception, so that is an Error and not a Fail
+        @assert isa(result, Threw)
+        testres = Error(:test_error, orig_expr, result.exception, result.backtrace, result.source)
+    end
+    record(get_testset(), testres)
+end
+
+function do_broken_test(result::ExecutionResult, orig_expr)
+    testres = Broken(:test, orig_expr)
+    # Assume the test is broken and only change if the result is true
+    if isa(result, Returned)
+        value = result.value
+        if isa(value, Bool) && value
+            testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
+        end
+    end
+    record(get_testset(), testres)
+end
+
+#-----------------------------------------------------------------------
+
+"""
+    @test_throws exception expr
+
+Tests that the expression `expr` throws `exception`.
+The exception may specify either a type,
+or a value (which will be tested for equality by comparing fields).
+Note that `@test_throws` does not support a trailing keyword form.
+"""
+macro test_throws(extype, ex)
+    orig_ex = Expr(:inert, ex)
+    result = quote
+        try
+            Returned($(esc(ex)), nothing, $(QuoteNode(__source__)))
+        catch _e
+            Threw(_e, nothing, $(QuoteNode(__source__)))
+        end
+    end
+    Base.remove_linenums!(result)
+    :(do_test_throws($result, $orig_ex, $(esc(extype))))
+end
+
+# An internal function, called by the code generated by @test_throws
+# to evaluate and catch the thrown exception - if it exists
+function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), @nospecialize(extype))
+    if isa(result, Threw)
+        # Check that the right type of exception was thrown
+        success = false
+        exc = result.exception
+        if isa(extype, Type)
+            success = isa(exc, extype)
+        else
+            if isa(exc, typeof(extype))
+                success = true
+                for fld in 1:nfields(extype)
+                    if !(getfield(extype, fld) == getfield(exc, fld))
+                        success = false
+                        break
+                    end
+                end
+            end
+        end
+        if success
+            testres = Pass(:test_throws, nothing, nothing, exc)
+        else
+            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, result.source)
+        end
+    else
+        testres = Fail(:test_throws_nothing, orig_expr, extype, nothing, result.source)
+    end
+    record(get_testset(), testres)
+end
+
+#-----------------------------------------------------------------------
+# Test for log messages
+
+# Test for warning messages (deprecated)
+
+contains_warn(output, s::AbstractString) = contains(output, s)
+contains_warn(output, s::Regex) = contains(output, s)
+contains_warn(output, s::Function) = s(output)
+contains_warn(output, S::Union{AbstractArray,Tuple}) = all(s -> contains_warn(output, s), S)
+
+"""
+    @test_warn msg expr
+
+Test whether evaluating `expr` results in [`STDERR`](@ref) output that contains
+the `msg` string or matches the `msg` regular expression.  If `msg` is
+a boolean function, tests whether `msg(output)` returns `true`.  If `msg` is a
+tuple or array, checks that the error output contains/matches each item in `msg`.
+Returns the result of evaluating `expr`.
+
+See also [`@test_nowarn`](@ref) to check for the absence of error output.
+"""
+macro test_warn(msg, expr)
+    quote
+        let fname = tempname()
+            try
+                ret = open(fname, "w") do f
+                    redirect_stderr(f) do
+                        $(esc(expr))
+                    end
+                end
+                @test contains_warn(read(fname, String), $(esc(msg)))
+                ret
+            finally
+                rm(fname, force=true)
+            end
+        end
+    end
+end
+
+"""
+    @test_nowarn expr
+
+Test whether evaluating `expr` results in empty [`STDERR`](@ref) output
+(no warnings or other messages).  Returns the result of evaluating `expr`.
+"""
+macro test_nowarn(expr)
+    quote
+        @test_warn r"^(?!.)"s $(esc(expr))
+    end
+end
