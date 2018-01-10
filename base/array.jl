@@ -1341,7 +1341,7 @@ for reverse-order iteration without making a copy.
 
 # Examples
 ```jldoctest
-julia> A = collect(1:5)
+julia> A = Vector(1:5)
 5-element Array{Int64,1}:
  1
  2
@@ -1399,7 +1399,7 @@ In-place version of [`reverse`](@ref).
 
 # Examples
 ```jldoctest
-julia> A = collect(1:5)
+julia> A = Vector(1:5)
 5-element Array{Int64,1}:
  1
  2
@@ -2124,7 +2124,7 @@ The function `f` is passed one argument.
 
 # Examples
 ```jldoctest
-julia> filter!(isodd, collect(1:10))
+julia> filter!(isodd, Vector(1:10))
 5-element Array{Int64,1}:
  1
  3

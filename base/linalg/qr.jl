@@ -161,7 +161,7 @@ end
 
 function qrfactPivotedUnblocked!(A::StridedMatrix)
     m, n = size(A)
-    piv = collect(UnitRange{BlasInt}(1,n))
+    piv = Vector(UnitRange{BlasInt}(1,n))
     τ = Vector{eltype(A)}(uninitialized, min(m,n))
     for j = 1:min(m,n)
 

@@ -96,7 +96,7 @@ vals = Any[
 for a in vals, b in vals
     @test isequal(a,b) == (hash(a)==hash(b))
     if a isa AbstractArray
-        @test hash(a) == hash(collect(a)) == hash(collect(Any, a))
+        @test hash(a) == hash(Array(a)) == hash(Array{Any}(a))
     end
 end
 
@@ -166,7 +166,7 @@ vals = Any[
 ]
 
 for a in vals
-    @test hash(collect(a)) == hash(a)
+    @test hash(Array(a)) == hash(a)
 end
 
 @test hash(SubString("--hello--",3,7)) == hash("hello")

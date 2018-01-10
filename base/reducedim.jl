@@ -255,7 +255,7 @@ faster because the intermediate array is avoided.
 
 # Examples
 ```jldoctest
-julia> a = reshape(collect(1:16), (4,4))
+julia> a = reshape(Vector(1:16), (4,4))
 4×4 Array{Int64,2}:
  1  5   9  13
  2  6  10  14
@@ -289,7 +289,7 @@ associativity, e.g. left-to-right, you should write your own loop. See documenta
 
 # Examples
 ```jldoctest
-julia> a = reshape(collect(1:16), (4,4))
+julia> a = reshape(Vector(1:16), (4,4))
 4×4 Array{Int64,2}:
  1  5   9  13
  2  6  10  14

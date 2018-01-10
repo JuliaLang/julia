@@ -188,7 +188,7 @@ end
     @test Base.LinAlg.qr!(Int[1]) == (Int[1],1)
 
     B = rand(7,2)
-    @test (1:7)\B ≈ collect(1:7)\B
+    @test (1:7)\B ≈ Vector(1:7)\B
 end
 
 @testset "Issue 16520" begin
@@ -204,7 +204,7 @@ end
 
 @testset "Issue 24107" begin
     A = rand(200,2)
-    @test A \ linspace(0,1,200) == A \ collect(linspace(0,1,200))
+    @test A \ linspace(0,1,200) == A \ Vector(linspace(0,1,200))
 end
 
 @testset "Issue #24589. Promotion of rational matrices" begin

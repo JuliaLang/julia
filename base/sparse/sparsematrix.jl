@@ -729,7 +729,7 @@ end
 
 function sparse(D::Diagonal{T}) where T
     m = length(D.diag)
-    return SparseMatrixCSC(m, m, collect(1:(m+1)), collect(1:m), Vector{T}(D.diag))
+    return SparseMatrixCSC(m, m, Vector(1:(m+1)), Vector(1:m), Vector{T}(D.diag))
 end
 
 ## Transposition and permutation methods

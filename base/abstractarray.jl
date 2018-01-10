@@ -1727,7 +1727,7 @@ for all `i` and `j`.
 
 # Examples
 ```jldoctest
-julia> a = reshape(collect(1:16),(2,2,2,2))
+julia> a = reshape(Vector(1:16),(2,2,2,2))
 2×2×2×2 Array{Int64,4}:
 [:, :, 1, 1] =
  1  3
