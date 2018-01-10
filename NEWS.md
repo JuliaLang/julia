@@ -362,12 +362,18 @@ This section lists changes that do not have deprecation warnings.
     trait; see its documentation for details. Types which support subtraction (operator
     `-`) must now implement `widen` for hashing to work inside heterogeneous arrays.
 
-  * `AbstractSet` objects are now considered equal by `==` and `isequal` if all of their
+  * `findn(x::AbstractVector)` now returns a 1-tuple with the vector of indices, to be
+    consistent with higher order arrays ([#25365]).
+
+  * `find` now returns the same type of indices as `keys`/`pairs` for `AbstractArray`,
+    `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774]).
+    In particular, this means that it returns `CartesianIndex` objects for matrices
+    and higher-dimensional arrays instead of linear indices as was previously the case.
+    Use `Int[LinearIndices(size(a))[i] for i in find(f, a)]` to compute linear indices.
+
+ * `AbstractSet` objects are now considered equal by `==` and `isequal` if all of their
     elements are equal ([#25368]). This has required changing the hashing algorithm
     for `BitSet`.
-
-  * `findn(x::AbstractVector)` now return a 1-tuple with the vector of indices, to be
-    consistent with higher order arrays ([#25365]).
 
   * the default behavior of `titlecase` is changed in two ways ([#23393]):
     + characters not starting a word are converted to lowercase;
@@ -376,7 +382,6 @@ This section lists changes that do not have deprecation warnings.
     + any non-letter character is considered as a word separator;
       to get the old behavior (only "space" characters are considered as
       word separators), use the keyword `wordsep=isspace`.
-
 
 Library improvements
 --------------------
@@ -1155,6 +1160,7 @@ Command-line option changes
 [#24713]: https://github.com/JuliaLang/julia/issues/24713
 [#24714]: https://github.com/JuliaLang/julia/issues/24714
 [#24715]: https://github.com/JuliaLang/julia/issues/24715
+[#24774]: https://github.com/JuliaLang/julia/issues/24774
 [#24781]: https://github.com/JuliaLang/julia/issues/24781
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
 [#24786]: https://github.com/JuliaLang/julia/issues/24786

@@ -364,3 +364,10 @@ end
 @testset "issue 24707" begin
     @test eltype(Tuple{Vararg{T}} where T<:Integer) >: Integer
 end
+
+@testset "find" begin
+    @test @inferred find(equalto(1), (1, 2)) == [1]
+    @test @inferred find(equalto(1), (1, 1)) == [1, 2]
+    @test @inferred isempty(find(equalto(1), ()))
+    @test @inferred isempty(find(equalto(1), (2, 3)))
+end
