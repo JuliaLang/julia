@@ -212,7 +212,7 @@ end
 @test_me ArgumentError("@sprintf: wrong number of arguments (2) should be (1)") @macroexpand(@sprintf "%s" "1" "2")
 
 # no interpolation
-@test_me ArgumentError("@sprintf: format must be a plain static string (no interpolation or prefix)") @macroexpand(@sprintf "$n")
+@test_me ArgumentError("@sprintf: format must be a plain static string (no interpolation or macro prefix)") @macroexpand(@sprintf "$n")
 
 # type width specifier parsing (ignored)
 @test (@sprintf "%llf" 1.2) == "1.200000"
