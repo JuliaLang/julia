@@ -439,7 +439,8 @@ end
 
 # generate anonymous function
 function format_fun(line::LineNumberNode, fmt)
-    f(io::IO, args...) = Base.invokelatest(eval(format_expr(line, fmt)), io, args...)
+    fun = eval(format_expr(line, fmt))
+    f(io::IO, args...) = Base.invokelatest(fun, io, args...)
 end
 """
     format(fmt::AbstractString) -> Function(::IO, args...)
