@@ -2,7 +2,7 @@
 
 using Test, Printf
 
-# this macro tests for exceptions thrown at macro expansion
+# to test macro expansion - call like @test_me <Exception> @macroexpand(<@sprintf ...>)
 macro test_me(ty, ex)
     return quote
         @test_throws $(esc(ty)) try
@@ -270,6 +270,8 @@ end
 # comprehension
 @test (@sprintf "%s %s %s %d %d %d %f %f %f" Any[10^x+y for x=1:3,y=1:3 ]...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
 
+@test_throws ArgumentError("@sprintf: wrong number of arguments (9) should be (10)") (@sprintf "%s %s %s %d %d %d %f %f %f %f" Any[10^x+y for x=1:3,y=1:3 ]...)
+
 # @printf
 @test_me ArgumentError("@printf: first or second argument must be a format string") @macroexpand(@printf 1)
 
@@ -291,7 +293,27 @@ end
 @test_me ArgumentError @macroexpand(@sprintf("%\u0f00%d", 1, 2))
 @test_me ArgumentError @macroexpand(@sprintf("%\U0001ffff%d", 1, 2))
 
-# test at macro execution time
-@test_throws ArgumentError("@sprintf: wrong number of arguments (2) should be (3)") (@sprintf "%d%d%d" 1:2...)
+# test extensions
+# change argument positions
+@test (@sprintf("%2&d %3&d %1&d", 41, 42, 43)) == "42 43 41"
+# reuse of arguments
+@test (@sprintf("%2&d %3&d %1&d %2&d", 41, 42, 43)) == "42 43 41 42"
 
+# verify behavior of automatic positioning
+@test (@sprintf("%d %3&d %2&d",1,2,3)) == "1 3 2"
+@test (@sprintf("%d %3&d %d %2&d",1,2,3,4)) == "1 3 4 2"
+@test (@sprintf("%3&d %d %1&d %d",1,2,3,4)) == "3 4 1 2"
 
+# combo
+@test (@sprintf "%4&f %3&d %2&d %1&f" 1.0 [3 4]... 5) == "5.000000 4 3 1.000000"
+
+# multi
+@test (@sprintf "%1&s %9&f %10&9.5f %2&d %d %d %d%d%d%d" [1:6;]... [7,8,9,10]...) == "1 9.000000  10.00000 2 3 4 5678"
+
+# comprehension
+@test (@sprintf "%1&s %4&s %7&s %2&d %5&d %8&d %3&f %6&f %9&f" Any[10^x+y for x=1:3,y=1:3 ]...) == "11 12 13 101 102 103 1001.000000 1002.000000 1003.000000"
+@test (@sprintf "%1&s %4&s %7&s %2&d %5&d %8&d %3&f %6&f %9&f %1&f" Any[10^x+y for x=1:3,y=1:3 ]...) == "11 12 13 101 102 103 1001.000000 1002.000000 1003.000000 11.000000"
+
+@test_throws ArgumentError("@sprintf: wrong number of arguments (9) should be (10)") (@sprintf "%1&s %4&s %7&s %2&d %5&d %8&d %3&f %6&f %9&f %10&f" Any[10^x+y for x=1:3,y=1:3 ]...)
+
+# end
