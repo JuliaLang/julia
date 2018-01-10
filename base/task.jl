@@ -204,9 +204,6 @@ function task_done_hook(t::Task)
         t.backtrace = catch_backtrace()
     end
 
-    q = t.consumers
-    t.consumers = nothing
-
     if isa(t.donenotify, Condition) && !isempty(t.donenotify.waitq)
         handled = true
         notify(t.donenotify, result, true, err)
@@ -217,21 +214,6 @@ function task_done_hook(t::Task)
         foreach(hook -> hook(t), t.storage[:TASKDONE_HOOKS])
         delete!(t.storage, :TASKDONE_HOOKS)
         handled = true
-    end
-
-    #### un-optimized version
-    #isa(q,Condition) && notify(q, result, error=err)
-    if isa(q,Task)
-        handled = true
-        nexttask = q
-        nexttask.state = :runnable
-        if err
-            nexttask.exception = result
-        end
-        yieldto(nexttask, result) # this terminates the task
-    elseif isa(q,Condition) && !isempty(q.waitq)
-        handled = true
-        notify(q, result, error=err)
     end
 
     if err && !handled

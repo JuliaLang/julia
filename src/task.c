@@ -604,7 +604,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->current_module = NULL;
     t->parent = ptls->current_task;
     t->tls = jl_nothing;
-    t->consumers = jl_nothing;
     t->state = runnable_sym;
     t->start = start;
     t->result = jl_nothing;
@@ -676,18 +675,17 @@ void jl_init_tasks(void)
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(10,
+                        jl_perm_symsvec(9,
                                         "parent",
                                         "storage",
                                         "state",
-                                        "consumers",
                                         "donenotify",
                                         "result",
                                         "exception",
                                         "backtrace",
                                         "logstate",
                                         "code"),
-                        jl_svec(10,
+                        jl_svec(9,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_sym_type,
@@ -696,9 +694,8 @@ void jl_init_tasks(void)
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
-                                jl_any_type,
                                 jl_any_type),
-                        0, 1, 9);
+                        0, 1, 8);
     jl_svecset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
 
     done_sym = jl_symbol("done");
@@ -728,7 +725,6 @@ void jl_init_root_task(void *stack, size_t ssize)
     ptls->current_task->parent = ptls->current_task;
     ptls->current_task->current_module = ptls->current_module;
     ptls->current_task->tls = jl_nothing;
-    ptls->current_task->consumers = jl_nothing;
     ptls->current_task->state = runnable_sym;
     ptls->current_task->start = NULL;
     ptls->current_task->result = jl_nothing;
