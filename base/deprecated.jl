@@ -1737,6 +1737,13 @@ end
     @deprecate RowVector{T}(n::Tuple{Int,Int}) where {T}    RowVector{T}(uninitialized, n)
 end
 
+# TODOs re. .' deprecation
+#   (1) remove .' deprecation from src/julia-syntax.scm around line 2346
+#   (2) remove .' documentation from base/docs/basedocs.jl around line 255
+#   (3) remove .'-involving code from base/show.jl around line 1277
+#   (4) remove .'-involving test from test/deprecation_exec.jl around line 178
+#   (5) remove .'-related code from src/ast.scm and src/julia-parser.scm
+
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/operators.jl, to deprecate
 @deprecate Ac_ldiv_Bt(a,b)  (\)(adjoint(a), transpose(b))
 @deprecate At_ldiv_Bt(a,b)  (\)(transpose(a), transpose(b))
