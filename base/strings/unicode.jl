@@ -329,7 +329,7 @@ julia> isassigned('\\x01')
 true
 ```
 """
-isassigned(c) = category_code(c) != UTF8PROC_CATEGORY_CN
+isassigned(c) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
 
 ## libc character class predicates ##
 
