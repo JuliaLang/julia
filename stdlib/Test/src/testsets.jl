@@ -50,7 +50,7 @@ function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true)
     print_with_color(Base.error_color(), io, string(ex))
 end
 
------------------------------------------------------------------------
+#-----------------------------------------------------------------------
 
 function _check_testset(testsettype, testsetname)
     if !(testsettype isa Type && testsettype <: AbstractTestSet)
