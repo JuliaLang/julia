@@ -268,7 +268,7 @@ function getproperty(F::LU{T,<:StridedMatrix}, d::Symbol) where T
     end
 end
 
-Base.propertynames(F::LU, private::Bool=false) = append!([:L,:U,:p,:P], private ? Symbol[] : fieldnames(typeof(F)))
+Base.propertynames(F::LU, private::Bool=false) = append!([:L,:U,:p,:P], private ? fieldnames(typeof(F)) : Symbol[])
 
 issuccess(F::LU) = F.info == 0
 

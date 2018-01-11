@@ -449,7 +449,7 @@ function getproperty(F::QRCompactWY, d::Symbol)
         getfield(F, d)
     end
 end
-Base.propertynames(F::Union{QR,QRCompactWY}, private::Bool=false) = append!([:R,:Q], private ? Symbol[] : fieldnames(typeof(F)))
+Base.propertynames(F::Union{QR,QRCompactWY}, private::Bool=false) = append!([:R,:Q], private ? fieldnames(typeof(F)) : Symbol[])
 function getproperty(F::QRPivoted{T}, d::Symbol) where T
     m, n = size(F)
     if d == :R
@@ -470,7 +470,7 @@ function getproperty(F::QRPivoted{T}, d::Symbol) where T
         getfield(F, d)
     end
 end
-Base.propertynames(F::QRPivoted, private::Bool=false) = append!([:R,:Q,:p,:P], private ? Symbol[] : fieldnames(typeof(F)))
+Base.propertynames(F::QRPivoted, private::Bool=false) = append!([:R,:Q,:p,:P], private ? fieldnames(typeof(F)) : Symbol[])
 
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
 
