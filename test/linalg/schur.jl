@@ -111,6 +111,6 @@ aimg  = randn(n,n)/2
         T, Z, λ = Base.LinAlg.schur(A)
         @test T == A
         @test Z == A
-        @test λ == zeros(0)
+        @test λ == []
     end
 end

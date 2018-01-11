@@ -1246,7 +1246,7 @@ end
 function _cat(A, shape::NTuple{N}, catdims, X...) where N
     offsets = zeros(Int, N)
     inds = Vector{UnitRange{Int}}(uninitialized, N)
-    concat = copyto!(zeros(Bool, N), catdims)
+    concat = copyto!(Vector{Bool}(uninitialized, N), catdims)
     for x in X
         for i = 1:N
             if concat[i]

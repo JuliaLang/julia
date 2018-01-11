@@ -1730,7 +1730,7 @@ e.g. `10-element Array{Int64,1}`.
 julia> summary(1)
 "Int64"
 
-julia> summary(zeros(2))
+julia> summary([0., 0.])
 "2-element Array{Float64,1}"
 ```
 """

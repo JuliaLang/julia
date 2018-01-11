@@ -2259,14 +2259,16 @@ end
 
 # Issue #23629
 @testset "issue 23629" begin
-    @test_throws BoundsError zeros(2,3,0)[2,3]
-    @test_throws BoundsError checkbounds(zeros(2,3,0), 2, 3)
+    A2x3x0 = Array{Float64}(uninitialized, (2,3,0))
+    @test_throws BoundsError A2x3x0[2,3]
+    @test_throws BoundsError checkbounds(A2x3x0, 2, 3)
 end
 
 # TODO: Enable this testset after the deprecations introduced in 0.7 are removed
 # @testset "indexing by Bool values" begin
-#     @test_throws ArgumentError zeros(2)[false]
-#     @test_throws ArgumentError zeros(2)[true]
+#     A = Vector{Float64}(uninitialized, 2)
+#     @test_throws ArgumentError A[false]
+#     @test_throws ArgumentError A[true]
 # end
 
 @testset "issue 24707" begin

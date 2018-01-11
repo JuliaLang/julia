@@ -125,7 +125,7 @@ mul!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
 mul!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat} =
     A.L * LAPACK.ormlq!('L', 'N', A.factors, A.τ, Matrix(B))
 mul!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat} =
-    mul!(zeros(eltype(A), size(A)), Matrix(A), Matrix(B))
+    mul!(Matrix{T}(uninitialized, size(A)), Matrix(A), Matrix(B))
 function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
     mul!(Factorization{TAB}(A), copy_oftype(B, TAB))

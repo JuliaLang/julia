@@ -659,19 +659,22 @@ end
     @test diag(A, 3) == []
     @test_throws ArgumentError diag(A, 4)
 
-    @test diag(zeros(0,0)) == []
-    @test_throws ArgumentError diag(zeros(0,0),1)
-    @test_throws ArgumentError diag(zeros(0,0),-1)
+    A0x0 = Matrix{Float64}(uninitialized, (0,0))
+    @test diag(A0x0) == []
+    @test_throws ArgumentError diag(A0x0,1)
+    @test_throws ArgumentError diag(A0x0,-1)
 
-    @test diag(zeros(1,0)) == []
-    @test diag(zeros(1,0),-1) == []
-    @test_throws ArgumentError diag(zeros(1,0),1)
-    @test_throws ArgumentError diag(zeros(1,0),-2)
+    A1x0 = Matrix{Float64}(uninitialized, (1,0))
+    @test diag(A1x0) == []
+    @test diag(A1x0,-1) == []
+    @test_throws ArgumentError diag(A1x0,1)
+    @test_throws ArgumentError diag(A1x0,-2)
 
-    @test diag(zeros(0,1)) == []
-    @test diag(zeros(0,1),1) == []
-    @test_throws ArgumentError diag(zeros(0,1),-1)
-    @test_throws ArgumentError diag(zeros(0,1),2)
+    A0x1 = Matrix{Float64}(uninitialized, (0,1))
+    @test diag(A0x1) == []
+    @test diag(A0x1,1) == []
+    @test_throws ArgumentError diag(A0x1,-1)
+    @test_throws ArgumentError diag(A0x1,2)
 end
 
 @testset "Matrix to real power" for elty in (Float64, Complex{Float64})

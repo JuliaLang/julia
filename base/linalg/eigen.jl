@@ -30,11 +30,11 @@ Same as [`eigfact`](@ref), but saves space by overwriting the input `A` (and
 """
 function eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasReal
     n = size(A, 2)
-    n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
+    n == 0 && return Eigen(T[], Matrix{T}(unininitialized, 0, 0))
     issymmetric(A) && return eigfact!(Symmetric(A))
     A, WR, WI, VL, VR, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
     iszero(WI) && return Eigen(WR, VR)
-    evec = zeros(Complex{T}, n, n)
+    evec = Matrix{Complex{T}}(unininitialized, n, n)
     j = 1
     while j <= n
         if WI[j] == 0
@@ -53,7 +53,7 @@ end
 
 function eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasComplex
     n = size(A, 2)
-    n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
+    n == 0 && return Eigen(T[], Matrix{T}(unininitialized, 0, 0))
     ishermitian(A) && return eigfact!(Hermitian(A))
     return Eigen(LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)[[2,4]]...)
 end
@@ -317,7 +317,7 @@ function eigfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasReal
     alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
     iszero(alphai) && return GeneralizedEigen(alphar ./ beta, vr)
 
-    vecs = zeros(Complex{T}, n, n)
+    vecs = Matrix{Complex{T}}(unininitialized, n, n)
     j = 1
     while j <= n
         if alphai[j] == 0

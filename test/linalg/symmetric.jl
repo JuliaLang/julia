@@ -38,12 +38,9 @@ end
         aposs = apos + transpose(apos)        # Symmetric positive definite
         ε = εa = eps(abs(float(one(eltya))))
 
-        x = randn(n)
-        y = randn(n)
-        b = randn(n,n)/2
-        x = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex.(x, zeros(n)) : x)
-        y = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex.(y, zeros(n)) : y)
-        b = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(b, zeros(n,n)) : b)
+        x = eltya == Int ? rand(1:7, n) : copy!(Vector{eltya}(uninitialized, n), randn(n))
+        y = eltya == Int ? rand(1:7, n) : copy!(Vector{eltya}(uninitialized, n), randn(n))
+        b = eltya == Int ? rand(1:7, n, n) : copy!(Matrix{eltya}(uninitialized, n, n), randn(n,n)/2)
         @testset "basic ops" begin
             @testset "constructor" begin
                 @test Symmetric(Symmetric(asym, :U))     === Symmetric(asym, :U)
@@ -302,7 +299,7 @@ end
             end
 
             @testset "mat * mat" begin
-                C = zeros(eltya,n,n)
+                C = Matrix{eltya}(uninitialized, n, n)
                 @test Hermitian(aherm) * a ≈ aherm * a
                 @test a * Hermitian(aherm) ≈ a * aherm
                 @test Hermitian(aherm) * Hermitian(aherm) ≈ aherm*aherm

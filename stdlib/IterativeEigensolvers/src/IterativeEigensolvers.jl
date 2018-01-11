@@ -17,7 +17,7 @@ using .ARPACK
 
 ## eigs
 """
-    eigs(A; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+    eigs(A; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=[]) -> (d,[v,],nconv,niter,nmult,resid)
 
 Computes eigenvalues `d` of `A` using implicitly restarted Lanczos or Arnoldi iterations for real symmetric or
 general nonsymmetric matrices respectively. See [the manual](@ref lib-itereigen) for more information.
@@ -57,7 +57,7 @@ function eigs(A::AbstractMatrix, B::AbstractMatrix; kwargs...)
     eigs(convert(AbstractMatrix{Tnew}, A), convert(AbstractMatrix{Tnew}, B); kwargs...)
 end
 """
-    eigs(A, B; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+    eigs(A, B; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=[]) -> (d,[v,],nconv,niter,nmult,resid)
 
 Computes generalized eigenvalues `d` of `A` and `B` using implicitly restarted Lanczos or Arnoldi iterations for
 real symmetric or general nonsymmetric matrices respectively. See [the manual](@ref lib-itereigen) for more information.
@@ -65,7 +65,7 @@ real symmetric or general nonsymmetric matrices respectively. See [the manual](@
 eigs(A, B; kwargs...) = _eigs(A, B; kwargs...)
 function _eigs(A, B;
                nev::Integer=6, ncv::Integer=max(20,2*nev+1), which=:LM,
-               tol=0.0, maxiter::Integer=300, sigma=nothing, v0::Vector=zeros(eltype(A),(0,)),
+               tol=0.0, maxiter::Integer=300, sigma=nothing, v0::Vector=eltype(A)[],
                ritzvec::Bool=true)
     n = checksquare(A)
 
@@ -246,7 +246,7 @@ function svds(A::AbstractMatrix{T}; kwargs...) where T
 end
 
 """
-    svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000, ncv=2*nsv, v0=zeros((0,))) -> (SVD([left_sv,] s, [right_sv,]), nconv, niter, nmult, resid)
+    svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000, ncv=2*nsv, v0=[]) -> (SVD([left_sv,] s, [right_sv,]), nconv, niter, nmult, resid)
 
 Computes the largest singular values `s` of `A` using implicitly restarted Lanczos
 iterations derived from [`eigs`](@ref).
@@ -292,7 +292,7 @@ julia> s.S
     that the size is smallest.
 """
 svds(A; kwargs...) = _svds(A; kwargs...)
-function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000, ncv::Int = 2*nsv, v0::Vector=zeros(eltype(X),(0,)))
+function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000, ncv::Int = 2*nsv, v0::Vector=eltype(X)[])
     if nsv < 1
         throw(ArgumentError("number of singular values (nsv) must be ≥ 1, got $nsv"))
     end

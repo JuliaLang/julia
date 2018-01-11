@@ -2150,7 +2150,7 @@ end
 
 # issue #7074
 let z(A::StridedMatrix{T}) where {T<:Union{Float64,Complex{Float64},Float32,Complex{Float32}}} = T,
-    S = zeros(Complex,2,2)
+    S = Matrix{Complex}(uninitialized, (2,2))
     @test_throws MethodError z(S)
 end
 

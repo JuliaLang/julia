@@ -142,7 +142,7 @@ dimg  = randn(n)/2
         end
         @testset "Tridiagonal LU" begin
             lud   = factorize(d)
-            f = zeros(eltyb, n+1)
+            f = Vector{eltyb}(uninitialized, n+1)
             @test_throws DimensionMismatch lud\f
             @test_throws DimensionMismatch transpose(lud)\f
             @test_throws DimensionMismatch lud'\f

@@ -19,21 +19,24 @@ using Test
 @test_throws DimensionMismatch _bcs((-1:1, 2:6), (-1:1, 2:5))
 @test_throws DimensionMismatch _bcs((-1:1, 2:5), (2, 2:5))
 
-@test @inferred(Broadcast.combine_indices(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
-@test @inferred(Broadcast.combine_indices(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
-@test @inferred(Broadcast.combine_indices(zeros(3),   zeros(3,4))) == (OneTo(3),OneTo(4))
-@test @inferred(Broadcast.combine_indices(zeros(3), zeros(1,4), zeros(1))) == (OneTo(3),OneTo(4))
+A3x4, A3, A1x4, A1, A3x5, A3x1, A2x5, A3x4x2, A2 = Array{Float64}.(uninitialized,
+    ((3,4), (3,), (1,4), (1,), (3,5), (3,1), (2,5), (3,4,2), (2,)))
 
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,1))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), zeros(3))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), 1)
+@test @inferred(Broadcast.combine_indices(A3x4, A3x4))     == (OneTo(3),OneTo(4))
+@test @inferred(Broadcast.combine_indices(A3x4, A3))       == (OneTo(3),OneTo(4))
+@test @inferred(Broadcast.combine_indices(A3,   A3x4))     == (OneTo(3),OneTo(4))
+@test @inferred(Broadcast.combine_indices(A3,   A1x4, A1)) == (OneTo(3),OneTo(4))
+
+check_broadcast_indices((OneTo(3),OneTo(5)), A3x5)
+check_broadcast_indices((OneTo(3),OneTo(5)), A3x1)
+check_broadcast_indices((OneTo(3),OneTo(5)), A3)
+check_broadcast_indices((OneTo(3),OneTo(5)), A3x5, A3)
+check_broadcast_indices((OneTo(3),OneTo(5)), A3x5, 1)
 check_broadcast_indices((OneTo(3),OneTo(5)), 5, 2)
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(2,5))
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,4))
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,4,2))
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), zeros(2))
+@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), A2x5)
+@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), A3x4)
+@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), A3x4x2)
+@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), A3x5, A2)
 check_broadcast_indices((-1:1, 6:9), 1)
 
 check_broadcast_shape((-1:1, 6:9), (-1:1, 6:9))
@@ -414,8 +417,8 @@ end
 
 # Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722),
 # and similarly for broadcast!(f, A, numbers...) (#19799).
-@test let z = 1; A = broadcast!(() -> z += 1, zeros(2)); A[1] != A[2]; end
-@test let z = 1; A = broadcast!(x -> z += x, zeros(2), 1); A[1] != A[2]; end
+@test let z = 1; A = broadcast!(() -> z += 1, [0., 0.]); A[1] != A[2]; end
+@test let z = 1; A = broadcast!(x -> z += x, [0., 0.], 1); A[1] != A[2]; end
 
 ## broadcasting for custom AbstractArray
 abstract type ArrayData{T,N} <: AbstractArray{T,N} end

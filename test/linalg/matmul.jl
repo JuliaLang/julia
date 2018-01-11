@@ -15,12 +15,13 @@ using Base.LinAlg: mul!
             ((0,0), (0,4), (0,4)),
             ((3,0), (0,0), (3,0)),
             ((0,0), (0,0), (0,0)) )
-        @test Matrix{Float64}(uninitialized, dimsA) * Matrix{Float64}(uninitialized, dimsB) == zeros(dimsC)
+        A, B, C = Matrix{Float64}.(uninitialized, (dimsA, dimsB, dimsC))
+        @test A * B == C
     end
-    @test Matrix{Float64}(uninitialized, 5, 0) |> t -> t't == zeros(0,0)
-    @test Matrix{Float64}(uninitialized, 5, 0) |> t -> t*t' == zeros(5,5)
-    @test Matrix{ComplexF64}(uninitialized, 5, 0) |> t -> t't == zeros(0,0)
-    @test Matrix{ComplexF64}(uninitialized, 5, 0) |> t -> t*t' == zeros(5,5)
+    A = Matrix{Float64}(uninitialized, 5, 0)
+    B = Matrix{ComplexF64}(uninitialized, 5, 0)
+    @test A'A  == B'B  == fill(0, (0,0))
+    @test A*A' == B*B' == fill(0, (5,5))
 end
 @testset "2x2 matmul" begin
     AA = [1 2; 3 4]
@@ -118,8 +119,9 @@ end
     AA = rand(5,5)
     BB = rand(5)
     for A in (copy(AA), view(AA, 1:5, 1:5)), B in (copy(BB), view(BB, 1:5))
-        @test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(zeros(6),'N',A,B)
-        @test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(B,'N',A,zeros(6))
+        x6 = Vector{Float64}(uninitialized, 6)
+        @test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(x6,'N',A,B)
+        @test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(B,'N',A,x6)
     end
     vv = [1,2,3]
     CC = Matrix{Int}(uninitialized, 3, 3)
@@ -136,7 +138,7 @@ end
 @testset "fallbacks & such for BlasFloats" begin
     AA = rand(Float64,6,6)
     BB = rand(Float64,6,6)
-    CC = zeros(Float64,6,6)
+    CC = Matrix{Float64}(uninitialized, (6,6))
     for A in (copy(AA), view(AA, 1:6, 1:6)), B in (copy(BB), view(BB, 1:6, 1:6)), C in (copy(CC), view(CC, 1:6, 1:6))
         @test Base.LinAlg.mul!(C, transpose(A), transpose(B)) == transpose(A)*transpose(B)
         @test Base.LinAlg.mul!(C, A, adjoint(B)) == A*transpose(B)
@@ -161,14 +163,14 @@ end
 
 @testset "issue #15286" begin
     A = reshape(map(Float64, 1:20), 5, 4)
-    C = zeros(8, 8)
+    C = Matrix{Float64}(uninitialized, 8, 8)
     sC = view(C, 1:2:8, 1:2:8)
     B = reshape(map(Float64,-9:10),5,4)
     @test mul!(sC, transpose(A), A) == A'*A
     @test mul!(sC, transpose(A), B) == A'*B
 
     Aim = A .- im
-    C = zeros(ComplexF64,8,8)
+    C = Matrix{ComplexF64}(uninitialized, 8, 8)
     sC = view(C, 1:2:8, 1:2:8)
     B = reshape(map(Float64,-9:10),5,4) .+ im
     @test mul!(sC, adjoint(Aim), Aim) == Aim'*Aim

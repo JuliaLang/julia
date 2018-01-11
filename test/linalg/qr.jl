@@ -140,8 +140,9 @@ rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 @test mul!(squareQ(q), adjoint(q)) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1), adjoint(q))
                 @test_throws BoundsError size(q,-1)
-                @test_throws DimensionMismatch Base.LinAlg.mul!(q,zeros(eltya,n1+1))
-                @test_throws DimensionMismatch Base.LinAlg.mul!(adjoint(q), zeros(eltya,n1+1))
+                xn11 = Vector{Float64}(uninitialized, n1+1)
+                @test_throws DimensionMismatch Base.LinAlg.mul!(q,xn11)
+                @test_throws DimensionMismatch Base.LinAlg.mul!(adjoint(q), xn11)
 
                 qra = qrfact(a[:,1:n1], Val(false))
                 q, r = qra.Q, qra.R

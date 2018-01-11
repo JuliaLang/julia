@@ -1828,8 +1828,8 @@ julia> findnz(A)
 """
 function findnz(A::AbstractMatrix{T}) where T
     nnzA = count(t -> t != 0, A)
-    I = zeros(Int, nnzA)
-    J = zeros(Int, nnzA)
+    I = Vector{Int}(uninitialized, nnzA)
+    J = Vector{Int}(uninitialized, nnzA)
     NZs = Vector{T}(uninitialized, nnzA)
     cnt = 1
     if nnzA > 0

@@ -3768,10 +3768,9 @@ end
 stegr!(jobz::Char, dv::AbstractVector, ev::AbstractVector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0)
 
 # Allow user to skip specification of iblock and isplit
-stein!(dv::AbstractVector, ev::AbstractVector, w_in::AbstractVector) = stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
+stein!(dv::AbstractVector, ev::AbstractVector, w_in::AbstractVector) = stein!(dv, ev, w_in, BlasInt[], BlasInt[])
 # Allow user to specify just one eigenvector to get in stein!
-stein!(dv::AbstractVector, ev::AbstractVector, eval::Real) = stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
-
+stein!(dv::AbstractVector, ev::AbstractVector, eval::Real) = stein!(dv, ev, [eval], BlasInt[], BlasInt[])
 """
     stev!(job, dv, ev) -> (dv, Zmat)
 

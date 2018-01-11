@@ -780,8 +780,8 @@ julia> digits(10, 2, 6)
 """
 digits(n::Integer, base::T=10, pad::Integer=1) where {T<:Integer} = digits(T, n, base, pad)
 
-function digits(T::Type{<:Integer}, n::Integer, base::Integer=10, pad::Integer=1)
-    digits!(zeros(T, ndigits(n, base, pad)), n, base)
+function digits(::Type{T}, n::Integer, base::Integer=10, pad::Integer=1) where {T<:Integer}
+    digits!(Vector{T}(uninitialized, ndigits(n, base, pad)), n, base)
 end
 
 """

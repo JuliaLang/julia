@@ -472,7 +472,7 @@ function test_in_bounds(::Type{TestAbstractArray})
     n = rand(2:5)
     sz = rand(2:5, n)
     len = prod(sz)
-    A = zeros(sz...)
+    A = Array{Float64}(uninitialized, sz...)
     for i in 1:len
         @test checkbounds(Bool, A, i) == true
     end
@@ -658,9 +658,10 @@ end
 
 # checksquare
 function test_checksquare()
-    @test LinAlg.checksquare(zeros(2,2)) == 2
-    @test LinAlg.checksquare(zeros(2,2),zeros(3,3)) == [2,3]
-    @test_throws DimensionMismatch LinAlg.checksquare(zeros(2,3))
+    A2x2, A3x3, A2x3 = Matrix{Float64}.(uninitialized, ((2,2), (3,3), (2,3)))
+    @test LinAlg.checksquare(A2x2) == 2
+    @test LinAlg.checksquare(zA2x2, A3x3) == [2, 3]
+    @test_throws DimensionMismatch LinAlg.checksquare(A2x3)
 end
 
 #----- run tests -------------------------------------------------------------#

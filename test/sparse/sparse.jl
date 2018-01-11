@@ -1314,7 +1314,7 @@ end
 
 @testset "issue #9917" begin
     @test sparse([]') == reshape(sparse([]), 1, 0)
-    @test Array(sparse([])) == zeros(0)
+    @test Array(sparse([])) == []
     @test_throws BoundsError sparse([])[1]
     @test_throws BoundsError sparse([])[1] = 1
     x = sparse(1.0I, 100, 100)
@@ -1553,7 +1553,7 @@ end
     @test ishermitian(A) == true
     @test issymmetric(A) == false
 
-    A = sparse(zeros(5,5))
+    A = spzeros(5,5)
     @test ishermitian(A) == true
     @test issymmetric(A) == true
 

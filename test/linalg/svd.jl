@@ -64,7 +64,7 @@ a2img  = randn(n,n)/2
             if eltya <: BlasFloat
                 svdz = svdfact!(Matrix{eltya}(uninitialized,0,0))
                 @test svdz.U ≈ Matrix{eltya}(I, 0, 0)
-                @test svdz.S ≈ real(zeros(eltya,0))
+                @test svdz.S ≈ real(eltya[]))
                 @test svdz.Vt ≈ Matrix{eltya}(I, 0, 0)
             end
         end

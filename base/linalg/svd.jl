@@ -52,7 +52,7 @@ function svdfact!(A::StridedMatrix{T}; full::Bool = false, thin::Union{Bool,Noth
     end
     m,n = size(A)
     if m == 0 || n == 0
-        u,s,vt = (Matrix{T}(I, m, full ? m : n), real(zeros(T,0)), Matrix{T}(I, n, n))
+        u,s,vt = (Matrix{T}(I, m, full ? m : n), real(T[]), Matrix{T}(I, n, n))
     else
         u,s,vt = LAPACK.gesdd!(full ? 'A' : 'S', A)
     end
@@ -216,7 +216,7 @@ julia> A
   0.0       0.0  -2.0  0.0  0.0
 ```
 """
-svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = isempty(A) ? zeros(real(T), 0) : LAPACK.gesdd!('N', A)[2]
+svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = isempty(A) ? real(T)[] : LAPACK.gesdd!('N', A)[2]
 svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
 
 """
