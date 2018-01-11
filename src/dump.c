@@ -1037,7 +1037,7 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
 }
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 4;
+static const int JI_FORMAT_VERSION = 5;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static void write_header(ios_t *s)
@@ -1070,11 +1070,22 @@ static void write_work_list(ios_t *s)
     write_int32(s, 0);
 }
 
+static void write_module_path(ios_t *s, jl_module_t *depmod)
+{
+    if (depmod->parent == jl_main_module || depmod->parent == depmod)
+        return;
+    const char *mname = jl_symbol_name(depmod->name);
+    size_t slen = strlen(mname);
+    write_module_path(s, depmod->parent);
+    write_int32(s, slen);
+    ios_write(s, mname, slen);
+}
+
 // serialize the global _require_dependencies array of pathnames that
 // are include depenencies
-static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp)
+static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp, jl_array_t *mod_array)
 {
-    size_t total_size = 0;
+    int64_t initial_pos = 0;
     int64_t pos = 0;
     static jl_array_t *deps = NULL;
     if (!deps)
@@ -1091,37 +1102,44 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp)
     jl_array_t *udeps = (*udepsp = deps && unique_func ? (jl_array_t*)jl_apply(uniqargs, 2) : NULL);
     jl_get_ptls_states()->world_age = last_age;
 
-    if (udeps) {
-        size_t l = jl_array_len(udeps);
-        for (size_t i=0; i < l; i++) {
-            jl_value_t *dep = jl_fieldref(jl_array_ptr_ref(udeps, i), 0);
-            size_t slen = jl_string_len(dep);
-            dep = jl_fieldref(jl_array_ptr_ref(udeps, i), 1);
-            slen += jl_string_len(dep);
-            total_size += 8 + slen + 8;
-        }
-        total_size += 4 + 8;
-    }
-    // write the total size so that we can quickly seek past all of the
+    // write a placeholder for total size so that we can quickly seek past all of the
     // dependencies if we don't need them
-    write_uint64(s, total_size);
+    initial_pos = ios_pos(s);
+    write_uint64(s, 0);
     if (udeps) {
-        size_t l = jl_array_len(udeps);
-        for (size_t i=0; i < l; i++) {
+        size_t i, l = jl_array_len(udeps);
+        for (i = 0; i < l; i++) {
             jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
-            jl_value_t *dep = jl_fieldref(deptuple, 0);  // evaluating module (as string)
+            jl_value_t *dep = jl_fieldref(deptuple, 1);              // file abspath
             size_t slen = jl_string_len(dep);
-            write_int32(s, slen);
-            ios_write(s, jl_string_data(dep), slen);
-            dep = jl_fieldref(deptuple, 1);              // file abspath
-            slen = jl_string_len(dep);
             write_int32(s, slen);
             ios_write(s, jl_string_data(dep), slen);
             write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 2)));  // mtime
+            jl_module_t *depmod = (jl_module_t*)jl_fieldref(deptuple, 0);  // evaluating module
+            jl_module_t *depmod_top = depmod;
+            while (depmod_top->parent != jl_main_module && depmod_top->parent != depmod_top)
+                depmod_top = depmod_top->parent;
+            unsigned provides = 0;
+            size_t j, lj = jl_array_len(serializer_worklist);
+            for (j = 0; j < lj; j++) {
+                jl_module_t *workmod = (jl_module_t*)jl_array_ptr_ref(serializer_worklist, j);
+                if (workmod->parent == jl_main_module || workmod->parent == workmod) {
+                    ++provides;
+                    if (workmod == depmod_top) {
+                        write_int32(s, provides);
+                        write_module_path(s, depmod);
+                        break;
+                    }
+                }
+            }
+            write_int32(s, 0);
         }
         write_int32(s, 0); // terminator, for ease of reading
         // write a dummy file position to indicate the beginning of the source-text
         pos = ios_pos(s);
+        ios_seek(s, initial_pos);
+        write_uint64(s, pos - initial_pos);
+        ios_seek(s, pos);
         write_int64(s, 0);
     }
     return pos;
@@ -1927,7 +1945,7 @@ static int size_isgreater(const void *a, const void *b)
     return *(size_t*)b - *(size_t*)a;
 }
 
-static jl_value_t *read_verify_mod_list(ios_t *s, arraylist_t *dependent_worlds, jl_array_t *mod_list)
+static jl_value_t *read_verify_mod_list(jl_module_t *from, ios_t *s, arraylist_t *dependent_worlds, jl_array_t *mod_list)
 {
     if (!jl_main_module->uuid) {
         return jl_get_exceptionf(jl_errorexception_type,
@@ -2288,7 +2306,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     serializer_worklist = worklist;
     write_header(&f);
     write_work_list(&f);
-    int64_t srctextpos = write_dependency_list(&f, &udeps);
+    int64_t srctextpos = write_dependency_list(&f, &udeps, mod_array);
     write_mod_list(&f, mod_array); // this can return errors during deserialize,
                                    // best to keep it early (before any actual initialization)
 
@@ -2347,12 +2365,15 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
         ios_t srctext;
         for (i = 0; i < len; i++) {
             jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
-            jl_value_t *dep = jl_fieldref(deptuple, 0);  // module name
+            jl_value_t *depmod = jl_fieldref(deptuple, 0);  // module
             // Dependencies declared with `include_dependency` are excluded
             // because these may not be Julia code (and could be huge)
-            if (strcmp(jl_string_data(dep), "#__external__") != 0) {
-                dep = jl_fieldref(deptuple, 1);  // file abspath
-                ios_t *srctp = ios_file(&srctext, jl_string_data(dep), 1, 0, 0, 0);
+            if (depmod != (jl_value_t*)jl_main_module) {
+                jl_value_t *dep = jl_fieldref(deptuple, 1);  // file abspath
+                const char *depstr = jl_string_data(dep);
+                if (!depstr[0])
+                    continue;
+                ios_t *srctp = ios_file(&srctext, depstr, 1, 0, 0, 0);
                 if (!srctp) {
                     jl_printf(JL_STDERR, "WARNING: could not cache source text for \"%s\".\n",
                               jl_string_data(dep));
@@ -2360,7 +2381,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
                 }
                 size_t slen = jl_string_len(dep);
                 write_int32(&f, slen);
-                ios_write(&f, jl_string_data(dep), slen);
+                ios_write(&f, depstr, slen);
                 posfile = ios_pos(&f);
                 write_uint64(&f, 0);   // placeholder for length of this file in bytes
                 uint64_t filelen = (uint64_t) ios_copyall(&f, &srctext);
@@ -2654,7 +2675,7 @@ static int trace_method(jl_typemap_entry_t *entry, void *closure)
     return 1;
 }
 
-static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
+static jl_value_t *_jl_restore_incremental(jl_module_t *into, ios_t *f, jl_array_t *mod_array)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ios_eof(f) || !jl_read_verify_header(f)) {
@@ -2677,7 +2698,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     arraylist_new(&dependent_worlds, 0);
 
     // verify that the system state is valid
-    jl_value_t *verify_fail = read_verify_mod_list(f, &dependent_worlds, mod_array);
+    jl_value_t *verify_fail = read_verify_mod_list(into, f, &dependent_worlds, mod_array);
     if (verify_fail) {
         arraylist_free(&dependent_worlds);
         ios_close(f);
@@ -2745,21 +2766,21 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     return (jl_value_t*)restored;
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz, jl_array_t *mod_array)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(jl_module_t *into, const char *buf, size_t sz, jl_array_t *mod_array)
 {
     ios_t f;
     ios_static_buffer(&f, (char*)buf, sz);
-    return _jl_restore_incremental(&f, mod_array);
+    return _jl_restore_incremental(into, &f, mod_array);
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *mod_array)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental(jl_module_t *into, const char *fname, jl_array_t *mod_array)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
         return jl_get_exceptionf(jl_errorexception_type,
             "Cache file \"%s\" not found.\n", fname);
     }
-    return _jl_restore_incremental(&f, mod_array);
+    return _jl_restore_incremental(into, &f, mod_array);
 }
 
 // --- init ---

@@ -165,6 +165,11 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     jl_module_t *newm = jl_new_module(name);
     jl_value_t *defaultdefs = NULL, *form = NULL;
     JL_GC_PUSH4(&last_module, &defaultdefs, &form, &newm);
+    // copy parent environment info into submodule
+    jl_sym_t *uuid_sym = jl_symbol("#uuid");
+    jl_value_t *uuid = jl_get_global(parent_module, uuid_sym);
+    if (uuid && uuid != jl_nothing)
+        jl_set_const(newm, uuid_sym, uuid);
     if (jl_base_module &&
         (jl_value_t*)parent_module == jl_get_global(jl_base_module, jl_symbol("__toplevel__"))) {
         newm->parent = newm;
@@ -401,15 +406,15 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
     }
 }
 
-static jl_module_t *call_require(jl_sym_t *var)
+static jl_module_t *call_require(jl_module_t *into, jl_sym_t *var)
 {
     static jl_value_t *require_func = NULL;
     jl_module_t *m = NULL;
     if (require_func == NULL && jl_base_module != NULL)
         require_func = jl_get_global(jl_base_module, jl_symbol("require"));
     if (require_func != NULL) {
-        jl_value_t *reqargs[2] = {require_func, (jl_value_t*)var};
-        m = (jl_module_t*)jl_apply(reqargs, 2);
+        jl_value_t *reqargs[3] = {require_func, (jl_value_t*)into, (jl_value_t*)var};
+        m = (jl_module_t*)jl_apply(reqargs, 3);
     }
     if (m == NULL || !jl_is_module(m)) {
         jl_errorf("failed to load module %s", jl_symbol_name(var));
@@ -420,7 +425,7 @@ static jl_module_t *call_require(jl_sym_t *var)
 // either:
 //   - sets *name and returns the module to import *name from
 //   - sets *name to NULL and returns a module to import
-static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from, jl_array_t *args, jl_sym_t **name, const char *keyword)
+static jl_module_t *eval_import_path(jl_module_t *into, jl_module_t *from, jl_array_t *args, jl_sym_t **name, const char *keyword)
 {
     jl_sym_t *var = (jl_sym_t*)jl_array_ptr_ref(args, 0);
     size_t i = 1;
@@ -442,14 +447,14 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from, jl_a
             m = jl_base_module;
         }
         else {
-            m = call_require(var);
+            m = call_require(into, var);
         }
         if (i == jl_array_len(args))
             return m;
     }
     else {
         // `.A.B.C`: strip off leading dots by following parent links
-        m = where;
+        m = into;
         while (1) {
             if (i >= jl_array_len(args))
                 jl_error("invalid module path");
@@ -523,7 +528,7 @@ static jl_module_t *deprecation_replacement_module(jl_module_t *parent, jl_sym_t
 {
     if (parent == jl_base_module) {
         if (name == jl_symbol("Test") || name == jl_symbol("Mmap"))
-            return call_require(name);
+            return call_require(parent, name);
     }
     return NULL;
 }

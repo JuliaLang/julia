@@ -439,8 +439,11 @@ include("threadcall.jl")
 # code loading
 include("loading.jl")
 
-# set up load path to be able to find stdlib packages
-init_load_path(ccall(:jl_get_julia_bindir, Any, ()))
+# set up depot & load paths to be able to find stdlib packages
+let BINDIR = ccall(:jl_get_julia_bindir, Any, ())
+    init_depot_path(BINDIR)
+    init_load_path(BINDIR)
+end
 
 INCLUDE_STATE = 3 # include = include_relative
 
@@ -475,6 +478,7 @@ function __init__()
     global_logger(root_module(:Logging).ConsoleLogger(STDERR))
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
+    init_depot_path()
     init_load_path()
     init_threadcall()
 end
@@ -489,22 +493,22 @@ using Base
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
 # load some stdlib packages but don't put their names in Main
-Base.require(:Base64)
-Base.require(:CRC32c)
-Base.require(:Dates)
-Base.require(:DelimitedFiles)
-Base.require(:FileWatching)
-Base.require(:Logging)
-Base.require(:IterativeEigensolvers)
-Base.require(:Mmap)
-Base.require(:Profile)
-Base.require(:SharedArrays)
-Base.require(:SuiteSparse)
-Base.require(:Test)
-Base.require(:Unicode)
-Base.require(:Distributed)
-Base.require(:Printf)
-Base.require(:Future)
+Base.require(Base, :Base64)
+Base.require(Base, :CRC32c)
+Base.require(Base, :Dates)
+Base.require(Base, :DelimitedFiles)
+Base.require(Base, :FileWatching)
+Base.require(Base, :Logging)
+Base.require(Base, :IterativeEigensolvers)
+Base.require(Base, :Mmap)
+Base.require(Base, :Profile)
+Base.require(Base, :SharedArrays)
+Base.require(Base, :SuiteSparse)
+Base.require(Base, :Test)
+Base.require(Base, :Unicode)
+Base.require(Base, :Distributed)
+Base.require(Base, :Printf)
+Base.require(Base, :Future)
 
 @eval Base begin
     @deprecate_binding Test root_module(:Test) true ", run `using Test` instead"

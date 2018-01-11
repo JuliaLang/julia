@@ -57,10 +57,15 @@ try
           __precompile__(true)
 
           module $Foo_module
-              import $FooBase_module, $FooBase_module.typeA
+              using $FooBase_module, $FooBase_module.typeA
               import $Foo2_module: $Foo2_module, override
               import $FooBase_module.hash
               import Test
+              module Inner
+                  import $FooBase_module.hash
+                  using ..$Foo_module
+                  import ..$Foo2_module
+              end
 
               struct typeB
                   y::typeA
@@ -150,14 +155,14 @@ try
     @test __precompile__(true) === nothing
 
     # Issue #21307
-    Base.require(Foo2_module)
+    Base.require(Main, Foo2_module)
     @eval let Foo2_module = $(QuoteNode(Foo2_module)), # use @eval to see the results of loading the compile
               Foo = root_module(Foo2_module)
         Foo.override(::Int) = 'a'
         Foo.override(::Float32) = 'b'
     end
 
-    Base.require(Foo_module)
+    Base.require(Main, Foo_module)
 
     @eval let Foo_module = $(QuoteNode(Foo_module)), # use @eval to see the results of loading the compile
               Foo = root_module(Foo_module)
@@ -174,8 +179,8 @@ try
     cachefile = joinpath(dir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
-    @test_logs (:warn, "Replacing module `$Foo_module`") begin
-        ms = Base._require_from_serialized(cachefile)
+    @test_logs (:warn,"Replacing module `$Foo_module`") begin
+        ms = Base._require_from_serialized(Main, Foo_module, cachefile)
         @test isa(ms, Array{Any,1})
     end
 
@@ -202,10 +207,14 @@ try
         @test string(Base.Docs.doc(Foo.foo)) == "foo function\n"
         @test string(Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
 
-        modules, deps, required_modules = Base.parse_cache_header(cachefile)
+        modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3])
         @test modules == [Foo_module => Base.module_uuid(Foo)]
-        @test map(x -> x[1],  sort(discard_module.(deps))) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
+        @test map(x -> x[2], deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
+        @test requires == [ string(Foo_module) => string(FooBase_module),
+                            string(Foo_module) => string(Foo2_module),
+                            string(Foo_module) => "Test",
+                            string(Foo_module, ".Inner") => string(FooBase_module) ]
         srctxt = Base.read_dependency_src(cachefile, Foo_file)
         @test !isempty(srctxt) && srctxt == read(Foo_file, String)
         @test_throws ErrorException Base.read_dependency_src(cachefile, "/tmp/nonexistent.txt")
@@ -270,7 +279,7 @@ try
           """)
 
     @test_warn "ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\nStacktrace:\n [1] __precompile__" try
-        Base.compilecache("Baz") # from __precompile__(false)
+        Base.compilecache(Main, "Baz") # from __precompile__(false)
         error("__precompile__ disabled test failed")
     catch exc
         isa(exc, ErrorException) || rethrow(exc)
@@ -295,28 +304,28 @@ try
           end
           """)
 
-    Base.compilecache("FooBar")
+    Base.compilecache(Main, "FooBar")
     @test isfile(joinpath(dir, "FooBar.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) isa Vector
+    @test Base.stale_cachefile(Main, FooBar_file, joinpath(dir, "FooBar.ji")) isa Vector
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
 
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) isa (Sys.iswindows() ? Vector : Bool) # `..` is not a symlink on Windows
+    @test Base.stale_cachefile(Main, relFooBar_file, joinpath(dir, "FooBar.ji")) isa (Sys.iswindows() ? Vector : Bool) # `..` is not a symlink on Windows
     mkdir(joinpath(dir, "subfolder"))
-    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) isa Vector
+    @test Base.stale_cachefile(Main, relFooBar_file, joinpath(dir, "FooBar.ji")) isa Vector
 
     @eval using FooBar
     fb_uuid = Base.module_uuid(FooBar)
     sleep(2); touch(FooBar_file)
     insert!(Base.LOAD_CACHE_PATH, 1, dir2)
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(Main, FooBar_file, joinpath(dir, "FooBar.ji")) === true
     @eval using FooBar1
     @test !isfile(joinpath(dir2, "FooBar.ji"))
     @test !isfile(joinpath(dir, "FooBar1.ji"))
     @test isfile(joinpath(dir2, "FooBar1.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
-    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) isa Vector
+    @test Base.stale_cachefile(Main, FooBar_file, joinpath(dir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(Main, FooBar1_file, joinpath(dir2, "FooBar1.ji")) isa Vector
     @test fb_uuid == Base.module_uuid(FooBar)
     fb_uuid1 = Base.module_uuid(FooBar1)
     @test fb_uuid != fb_uuid1
@@ -325,7 +334,7 @@ try
     open(joinpath(dir2, "FooBar1.ji"), "a") do f
         write(f, 0x076cac96) # append 4 random bytes
     end
-    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) === true
+    @test Base.stale_cachefile(Main, FooBar1_file, joinpath(dir2, "FooBar1.ji")) === true
 
     # test behavior of precompile modules that throw errors
     FooBar2_file = joinpath(dir, "FooBar2.jl")
@@ -337,7 +346,7 @@ try
           end
           """)
     @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
-        Base.require(:FooBar2)
+        Base.require(Main, :FooBar2)
         error("\"LoadError: break me\" test failed")
     catch exc
         isa(exc, ErrorException) || rethrow(exc)
@@ -368,7 +377,7 @@ try
               using FooBarT1
           end
           """)
-    Base.compilecache("FooBarT2")
+    Base.compilecache(Main, "FooBarT2")
     write(FooBarT1_file,
           """
           __precompile__(true)
@@ -376,8 +385,8 @@ try
           end
           """)
     rm(FooBarT_file)
-    @test Base.stale_cachefile(FooBarT2_file, joinpath(dir2, "FooBarT2.ji")) === true
-    @test Base.require(:FooBarT2) isa Module
+    @test Base.stale_cachefile(Main, FooBarT2_file, joinpath(dir2, "FooBarT2.ji")) === true
+    @test Base.require(Main, :FooBarT2) isa Module
 finally
     splice!(Base.LOAD_CACHE_PATH, 1:2)
     splice!(LOAD_PATH, 1)
@@ -401,7 +410,7 @@ let dir = mktempdir(),
         eval(quote
             insert!(LOAD_PATH, 1, $(dir))
             insert!(Base.LOAD_CACHE_PATH, 1, $(dir))
-            Base.compilecache(:Time4b3a94a1a081a8cb)
+            Base.compilecache(Main, :Time4b3a94a1a081a8cb)
         end)
 
         exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`
@@ -500,7 +509,7 @@ let dir = mktempdir()
               end
               """)
 
-        Base.compilecache("$(Test1_module)")
+        Base.compilecache(Main, "$(Test1_module)")
         write(joinpath(dir, "$(Test2_module).jl"),
               """
               module $(Test2_module)
@@ -508,9 +517,9 @@ let dir = mktempdir()
                   using $(Test1_module)
               end
               """)
-        Base.compilecache("$(Test2_module)")
+        Base.compilecache(Main, "$(Test2_module)")
         @test !Base.isbindingresolved(Main, Test2_module)
-        Base.require(Test2_module)
+        Base.require(Main, Test2_module)
         @test take!(loaded_modules) == Test1_module
         @test take!(loaded_modules) == Test2_module
         write(joinpath(dir, "$(Test3_module).jl"),
@@ -519,7 +528,7 @@ let dir = mktempdir()
                   using $(Test3_module)
               end
               """)
-        Base.require(Test3_module)
+        Base.require(Main, Test3_module)
         @test take!(loaded_modules) == Test3_module
     finally
         pop!(Base.package_callbacks)
@@ -568,14 +577,14 @@ let
             pushfirst!(Base.LOAD_CACHE_PATH, $load_cache_path)
         end
         try
-            @eval using $ModuleB
-            uuid = Base.module_uuid(root_module(ModuleB))
-            for wid in test_workers
-                @test Distributed.remotecall_eval(Main, wid, :( Base.module_uuid(Base.root_module($(QuoteNode(ModuleB)))) )) == uuid
-                if wid != myid() # avoid world-age errors on the local proc
-                    @test remotecall_fetch(g, wid) == wid
-                end
-            end
+            # @eval using $ModuleB
+            # uuid = Base.module_uuid(root_module(ModuleB))
+            # for wid in test_workers
+            #     @test Distributed.remotecall_eval(Main, wid, :( Base.module_uuid(Base.root_module($(QuoteNode(ModuleB)))) )) == uuid
+            #     if wid != myid() # avoid world-age errors on the local proc
+            #         @test remotecall_fetch(g, wid) == wid
+            #     end
+            # end
         finally
             @everywhere test_workers begin
                 popfirst!(LOAD_PATH)
@@ -632,12 +641,12 @@ try
 
           end
           """)
-    Base.require(A_module)
+    Base.require(Main, A_module)
     A = root_module(A_module)
     for mths in (collect(methods(A.apc)), collect(methods(A.anopc)))
         Base.delete_method(mths[1])
     end
-    Base.require(B_module)
+    Base.require(Main, B_module)
     B = root_module(B_module)
     @test Base.invokelatest(B.bpc, 1) == Base.invokelatest(B.bpc, 1.0) == 2
     @test Base.invokelatest(B.bnopc, 1) == Base.invokelatest(B.bnopc, 1.0) == 2
