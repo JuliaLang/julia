@@ -181,7 +181,7 @@ end
     @test BigInt(-5) << -1 == -3
 end
 @testset "boolean ops" begin
-    @test ~BigInt(123) == -124
+    @test flipbits(BigInt(123)) == -124
     @test BigInt(123) & BigInt(234) == 106
     @test BigInt(123) | BigInt(234) == 251
     @test BigInt(123) ⊻ BigInt(234) == 145

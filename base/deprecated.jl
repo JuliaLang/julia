@@ -292,12 +292,13 @@ module Operators
     for op in [:!, :(!=), :(!==), :%, :&, :*, :+, :-, :/, ://, :<, :<:, :<<, :(<=),
                :<|, :(==), :(===), :>, :>:, :(>=), :>>, :>>>, :\, :^, :colon,
                :adjoint, :getindex, :hcat, :hvcat, :setindex!, :transpose, :vcat,
-               :xor, :|, :|>, :~, :×, :÷, :∈, :∉, :∋, :∌, :∘, :√, :∛, :∩, :∪, :≠, :≤,
+               :xor, :|, :|>, :×, :÷, :∈, :∉, :∋, :∌, :∘, :√, :∛, :∩, :∪, :≠, :≤,
                :≥, :⊆, :⊈, :⊊, :⊻, :⋅]
         if isdefined(Base, op)
             @eval Base.@deprecate_binding $op Base.$op
         end
     end
+    Base.@deprecate ~(x) Base.flipbits(x)
 end
 export Operators
 
@@ -2972,6 +2973,7 @@ end
 
 @deprecate findin(a, b) find(occursin(b), a)
 
+@deprecate ~(x) flipbits(x)
 
 # END 0.7 deprecations
 

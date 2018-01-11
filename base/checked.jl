@@ -148,8 +148,8 @@ end
 if BrokenUnsignedInt != Union{}
 function add_with_overflow(x::T, y::T) where T<:BrokenUnsignedInt
     # x + y > typemax(T)
-    # Note: ~y == -y-1
-    x + y, x > ~y
+    # Note: flipbits(y) == -y-1
+    x + y, x > flipbits(y)
 end
 end
 

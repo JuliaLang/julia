@@ -2016,8 +2016,8 @@ end
     @test typeof(conj(B)) == Vector{Float64}
     @test typeof(conj(C)) == Vector{Complex{Int}}
 
-    @test .~A == [9,-1,-4]
-    @test typeof(.~A) == Vector{Int}
+    @test flipbits.(A) == [9,-1,-4]
+    @test typeof(flipbits.(A)) == Vector{Int}
 end
 
 # @inbounds is expression-like, returning its value; #15558

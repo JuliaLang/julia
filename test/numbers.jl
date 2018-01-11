@@ -19,8 +19,8 @@ const ≣ = isequal # convenient for comparing NaNs
     @test true  != false
     @test false != true
 
-    @test ~true == false
-    @test ~false == true
+    @test flipbits(true) == false
+    @test flipbits(false) == true
 
     @test false & false == false
     @test true  & false == false
@@ -2081,9 +2081,9 @@ end
     @test signif(Float16(1.1), 70) === Float16(1.1)
 end
 @testset "issue #1308" begin
-    @test hex(~UInt128(0)) == "f"^32
-    @test (~0)%UInt128 == ~UInt128(0)
-    @test Int128(~0) == ~Int128(0)
+    @test hex(flipbits(UInt128(0))) == "f"^32
+    @test flipbits(0) % UInt128 == flipbits(UInt128(0))
+    @test Int128(flipbits(0)) == flipbits(Int128(0))
 end
 @testset "issue 1552" begin
     @test isa(rationalize(Int8, float(pi)), Rational{Int8})
@@ -2311,7 +2311,7 @@ end
 @testset "ispow2" begin
     @test  ispow2(64)
     @test !ispow2(42)
-    @test !ispow2(~typemax(Int))
+    @test !ispow2(flipbits(typemax(Int)))
 end
 @testset "nextpow/prevpow" begin
     @test nextpow(2,1) == 1
@@ -2900,8 +2900,8 @@ end
 
     let types = (Base.BitInteger_types..., BigInt, Bool)
         for S in types
-            T = @inferred Base.promote_op(~, S)
-            t = @inferred ~one(S)
+            T = @inferred Base.promote_op(flipbits, S)
+            t = @inferred flipbits(one(S))
             @test T === typeof(t)
 
             for R in types

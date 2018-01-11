@@ -450,7 +450,7 @@ function decimate(n::Int, graph::Graph, msgs::Messages)
     end
     if !did_dec
         # still didn't succeed, give up
-        p0 = first(fldorder[.~(decimated)])
+        p0 = first(fldorder[flipbits.(decimated)])
         throw(UnsatError(p0))
     end
 
