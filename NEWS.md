@@ -179,6 +179,8 @@ Language changes
   * The syntax `using A.B` can now only be used when `A.B` is a module, and the syntax
     `using A: B` can only be used for adding single bindings ([#8000]).
 
+  * `=>` now has its own precedence level, giving it strictly higher precedence than
+    `=` and `,` ([#25391]).
 
 Breaking changes
 ----------------
