@@ -103,22 +103,13 @@ julia> foldl(=>, 1:4)
 foldl(op, itr) = mapfoldl(identity, op, itr)
 
 ## foldr & mapfoldr
-
-function mapfoldr_impl(f, op, v0, itr, i::Integer)
-    # Unroll the while loop once; if v0 is known, the call to op may
-    # be evaluated at compile time
-    if isempty(itr) || i == 0
-        return v0
-    else
-        x = itr[i]
-        v  = op(f(x), v0)
-        while i > 1
-            x = itr[i -= 1]
-            v = op(f(x), v)
-        end
-        return v
-    end
+# switches the order of arguments of a binary operator
+struct Switch{F}
+    op::F
 end
+(s::Switch)(x,y) = s.op(y,x)
+reduce_empty(s::Switch, T) = reduce_empty(s.op, T)
+reduce_first(s::Switch, x) = reduce_first(s.op, x)
 
 """
     mapfoldr(f, op, v0, itr)
@@ -126,7 +117,7 @@ end
 Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr`](@ref).
 `v0` will be used exactly once.
 """
-mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
+mapfoldr(f, op, v0, itr) = mapfoldl(f, Switch(op), v0, Iterators.Reverse(itr))
 
 """
     mapfoldr(f, op, itr)
@@ -136,13 +127,7 @@ Specifically, `mapfoldr(f, op, itr)` produces the same result as
 `mapfoldr(f, op, f(last(itr)), take(itr, length(itr)-1))`.
 In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 """
-function mapfoldr(f, op, itr)
-    i = endof(itr)
-    if isempty(itr)
-        return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
-    end
-    return mapfoldr_impl(f, op, mapreduce_first(f, op, itr[i]), itr, i-1)
-end
+mapfoldr(f, op, itr) = mapfoldl(f, Switch(op), Iterators.Reverse(itr))
 
 """
     foldr(op, v0, itr)
