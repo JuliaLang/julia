@@ -1066,6 +1066,15 @@ end
     export pushfirst!, popfirst!
 end
 
+# 0.7.0-DEV.3309
+@static if VERSION < v"0.7.0-DEV.3309"
+    const IteratorSize = Base.iteratorsize
+    const IteratorEltype = Base.iteratoreltype
+else
+    const IteratorSize = Base.IteratorSize
+    const IteratorEltype = Base.IteratorEltype
+end
+
 # 0.7.0-DEV.3173
 @static if !isdefined(Base, :invpermute!)
     const invpermute! = ipermute!

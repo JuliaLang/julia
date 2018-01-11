@@ -273,6 +273,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `unshift!` and `shift!` are now `pushfirst!` and `popfirst!` ([#25100]).
 
+* `Base.IteratorSize` and `Base.IteratorEltype` are available as
+  `Compat.IteratorSize` and `Compat.IteratorEltype` ([#25402]).
+
 * `copy!` and `unsafe_copy!` are now `copyto!` and `unsafe_copyto!` ([#24808]).
 
 * `ipermute!` is now `invpermute!` ([#25168]).
@@ -428,13 +431,16 @@ includes this fix. Find the minimum version from there.
 [#24657]: https://github.com/JuliaLang/julia/issues/24657
 [#24714]: https://github.com/JuliaLang/julia/issues/24714
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
+[#24808]: https://github.com/JuliaLang/julia/issues/24808
 [#25012]: https://github.com/JuliaLang/julia/issues/25012
 [#25021]: https://github.com/JuliaLang/julia/issues/25021
 [#25056]: https://github.com/JuliaLang/julia/issues/25056
 [#25057]: https://github.com/JuliaLang/julia/issues/25057
 [#25100]: https://github.com/JuliaLang/julia/issues/25100
 [#25102]: https://github.com/JuliaLang/julia/issues/25102
+[#25113]: https://github.com/JuliaLang/julia/issues/25113
 [#25162]: https://github.com/JuliaLang/julia/issues/25162
 [#25165]: https://github.com/JuliaLang/julia/issues/25165
 [#25168]: https://github.com/JuliaLang/julia/issues/25168
-[#25113]: https://github.com/JuliaLang/julia/issues/25113
+[#25227]: https://github.com/JuliaLang/julia/issues/25227
+[#25402]: https://github.com/JuliaLang/julia/issues/25402
