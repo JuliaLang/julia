@@ -239,25 +239,40 @@ function gc(env::EnvCache=EnvCache(); period = Week(6), preview=env.preview[])
     info("Deleted $(length(paths_to_delete)) package installations", byte_save_str)
 end
 
+function _get_deps!(env::EnvCache, pkgs::Vector{PackageSpec}, uuids::Vector{Base.Random.UUID})
+   for pkg in pkgs
+       info = manifest_info(env, pkg.uuid)
+       pkg.uuid in uuids && continue
+       push!(uuids, pkg.uuid)
+       if haskey(info, "deps")
+           pkgs = [PackageSpec(name, UUID(uuid)) for (name, uuid) in info["deps"]]
+           _get_deps!(env, pkgs, uuids)
+       end
+   end
+end
 
-build(pkg::String) = build([pkg])
-build(pkgs::Vector{String}) = build([PackageSpec(pkg) for pkg in pkgs])
+
+build(pkgs...) = build([PackageSpec(pkg) for pkg in pkgs])
+build(pkg::Array{Union{}, 1}) = build(PackageSpec[])
 build(pkg::PackageSpec) = build([pkg])
 build(pkgs::Vector{PackageSpec}) = build(EnvCache(), pkgs)
 
 function build(env::EnvCache, pkgs::Vector{PackageSpec})
-    if isempty(pkgs)
-        for (name, infos) in env.manifest, info in infos
-            uuid = UUID(info["uuid"])
-            push!(pkgs, PackageSpec(name, uuid))
-        end
-    end
-    for pkg in pkgs
-        pkg.mode = :manifest
-    end
-    manifest_resolve!(env, pkgs)
-    ensure_resolved(env, pkgs)
-    Pkg3.Operations.build_versions(env, [pkg.uuid for pkg in pkgs])
+   if isempty(pkgs)
+       for (name, infos) in env.manifest, info in infos
+           uuid = UUID(info["uuid"])
+           push!(pkgs, PackageSpec(name, uuid))
+       end
+   end
+   for pkg in pkgs
+       pkg.mode = :manifest
+   end
+   manifest_resolve!(env, pkgs)
+   ensure_resolved(env, pkgs)
+   uuids = Base.Random.UUID[]
+   _get_deps!(env, pkgs, uuids)
+   length(uuids) == 0 && (info("No packages to build!"); return)
+   Pkg3.Operations.build_versions(env, uuids)
 end
 
 
