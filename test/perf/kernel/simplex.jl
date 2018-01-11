@@ -18,7 +18,7 @@ const dualTol = 1e-7
 function doTwoPassRatioTest()
     n = 8000
 
-    candidates = zeros(Int,n) # don't count allocation time, assume reuse
+    candidates = fill(0, n) # don't count allocation time, assume reuse
     thetaMax = 1e25
     pivotTol = 1e-7
 

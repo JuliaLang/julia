@@ -12,7 +12,7 @@ end
 
 # get the list of boundary dof-indices
 function get_free(N)
-    L = zeros(Int, N, N)
+    L = fill(0, N, N)
     L[2:N-1, 2:N-1] = 1
     return find(L)
 end

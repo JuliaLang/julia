@@ -3382,7 +3382,7 @@ mutable struct Sampler11587{N}
 end
 function Sampler11587()
     a = tuple(Any[32,32]...,)
-    Sampler11587(zeros(Int,a), zeros(Float64,a))
+    Sampler11587(fill(0, a), zeros(Float64,a))
 end
 @test isa(Sampler11587(), Sampler11587{2})
 

@@ -3025,10 +3025,10 @@ end
 
     # Array reduction
     @test !iszero([0, 1, 2, 3])
-    @test iszero(zeros(Int, 5))
+    @test iszero(fill(0, 5))
     @test !isone(tril(fill(1, 5, 5)))
     @test !isone(triu(fill(1, 5, 5)))
-    @test !isone(zeros(Int, 5, 5))
+    @test !isone(fill(0, (5, 5)))
     @test isone(Matrix(1I, 5, 5))
     @test isone(Matrix(1I, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
 end

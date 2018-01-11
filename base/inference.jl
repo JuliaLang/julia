@@ -3091,7 +3091,7 @@ genlabel(sv::OptimizationState) = LabelNode(sv.next_label += 1)
 
 function get_label_map(body::Vector{Any})
     nlabels = label_counter(body)
-    labelmap = zeros(Int, nlabels)
+    labelmap = fill(0, nlabels)
     for i = 1:length(body)
         el = body[i]
         if isa(el, LabelNode)
@@ -3127,7 +3127,7 @@ function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
 end
 
 function find_ssavalue_defs(body::Vector{Any}, nvals::Int)
-    defs = zeros(Int, nvals)
+    defs = fill(0, nvals)
     for line in 1:length(body)
         e = body[line]
         if isa(e, Expr) && e.head === :(=)
@@ -4942,7 +4942,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
 
     # make labels / goto statements unique
     # relocate inlining information
-    newlabels = zeros(Int, label_counter(body.args))
+    newlabels = fill(0, label_counter(body.args))
     for i = 1:length(body.args)
         a = body.args[i]
         if isa(a, LabelNode)
@@ -5779,7 +5779,7 @@ function split_undef_flag_pass!(sv::OptimizationState)
     len = length(body)
     next_i = 1
     norigslots = length(sv.src.slotflags)
-    flagslots = zeros(Int, norigslots)
+    flagslots = fill(0, norigslots)
     while next_i <= len
         i = next_i
         next_i += 1
@@ -6657,7 +6657,7 @@ function split_struct_alloc!(ctx::AllocOptContext, info, key)
     end
     if ndef > 1
         allowed_idx = trues(min_nf)
-        idx_count = zeros(Int, min_nf)
+        idx_count = fill(0, min_nf)
         for v in values(ctx.sym_count)
             # Ignore field names that will not be allowed to be optimized
             if isa(v, Pair{Int,Int})

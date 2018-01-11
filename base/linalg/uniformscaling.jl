@@ -303,7 +303,7 @@ end
 function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling}...)
     nr = length(rows)
     sum(rows) == length(A) || throw(ArgumentError("mismatch between row sizes and number of arguments"))
-    n = zeros(Int, length(A))
+    n = fill(0, length(A))
     needcols = false # whether we also need to infer some sizes from the column count
     j = 0
     for i = 1:nr # infer UniformScaling sizes from row counts, if possible:

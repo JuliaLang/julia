@@ -863,10 +863,10 @@ end
     @test A[lininds] == A[X] == [1,0,0,0,0,0,1,0,0,0]
     A[lininds] = [1:10;]
     @test A[lininds] == A[X] == 1:10
-    A[lininds] = zeros(Int, 10)
+    A[lininds] = fill(0, 10)
     @test nnz(A) == 13
     @test count(!iszero, A) == 3
-    @test A[lininds] == A[X] == zeros(Int, 10)
+    @test A[lininds] == A[X] == fill(0, 10)
     c = Vector(11:20); c[1] = c[3] = 0
     A[lininds] = c
     @test nnz(A) == 13

@@ -680,7 +680,7 @@ function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
             else
                 # grow cache to contain up to `pos`
                 if !@isdefined(cache)
-                    cache = zeros(Int, len)
+                    cache = fill(0, len)
                 end
                 while max_pos < pos
                     b = cache[max_pos] + first

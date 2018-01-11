@@ -2076,7 +2076,7 @@ function getindex_I_sorted_linear(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrS = Vector{Ti}(uninitialized, nJ+1)
     colptrS[1] = 1
-    cacheI = zeros(Int, A.m)
+    cacheI = fill(0, A.m)
 
     ptrS   = 1
     # build the cache and determine result size
@@ -2140,7 +2140,7 @@ function getindex_I_sorted_bsearch_I(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVecto
 
     # cacheI is used first to store num occurrences of each row in columns of interest
     # and later to store position of first occurrence of each row in I
-    cacheI = zeros(Int, m)
+    cacheI = fill(0, m)
 
     # count rows
     @inbounds for j = 1:nJ

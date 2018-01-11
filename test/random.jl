@@ -442,7 +442,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
 end
 
 function hist(X, n)
-    v = zeros(Int, n)
+    v = fill(0, n)
     for x in X
         v[floor(Int, x*n) + 1] += 1
     end

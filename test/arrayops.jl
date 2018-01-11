@@ -331,7 +331,7 @@ end
     @test isnan.(X) == [trues(6);falses(5)]
     @test X[7:11] == [1:5;]
     X = get(A, (2:4, 9:-2:-13), 0)
-    Xv = zeros(Int, 3, 12)
+    Xv = fill(0, (3,12))
     Xv[1:2, 2:5] = A[2:3, 7:-2:1]
     @test X == Xv
     X2 = get(A, Vector{Int}[[2:4;], [9:-2:-13;]], 0)
@@ -1898,7 +1898,7 @@ foo_squares = SquaresVector(5)
 @test convert(Array{Int, 1}, foo_squares) == [1,4,9,16,25]
 
 # issue #13254
-let A = zeros(Int, 2, 2), B = zeros(Float64, 2, 2)
+let A = fill(0, (2,2)), B = fill(0.0, (2,2))
     f1() = [1]
     f2() = [1;]
     f3() = [1;2]

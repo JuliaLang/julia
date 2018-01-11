@@ -1059,7 +1059,7 @@ end
 ## Unary operators ##
 
 function (-)(B::BitArray)
-    A = zeros(Int, size(B))
+    A = fill(0, size(B))
     l = length(B)
     l == 0 && return A
     Bc = B.chunks

@@ -129,10 +129,10 @@ end
     @test_throws ArgumentError maximum(A)
     @test var(A) === NaN
 
-    @test isequal(sum(A, 1), zeros(Int, 1, 1))
-    @test isequal(sum(A, 2), zeros(Int, 0, 1))
-    @test isequal(sum(A, (1, 2)), zeros(Int, 1, 1))
-    @test isequal(sum(A, 3), zeros(Int, 0, 1))
+    @test isequal(sum(A, 1), fill(0, 1, 1))
+    @test isequal(sum(A, 2), fill(0, 0, 1))
+    @test isequal(sum(A, (1, 2)), fill(0, 1, 1))
+    @test isequal(sum(A, 3), fill(0, 0, 1))
     @test isequal(prod(A, 1), fill(1, 1, 1))
     @test isequal(prod(A, 2), fill(1, 0, 1))
     @test isequal(prod(A, (1, 2)), fill(1, 1, 1))
@@ -144,15 +144,15 @@ end
 
     for f in (minimum, maximum)
         @test_throws ArgumentError f(A, 1)
-        @test isequal(f(A, 2), zeros(Int, 0, 1))
+        @test isequal(f(A, 2), fill(0, 0, 1))
         @test_throws ArgumentError f(A, (1, 2))
-        @test isequal(f(A, 3), zeros(Int, 0, 1))
+        @test isequal(f(A, 3), fill(0, 0, 1))
     end
     for f in (findmin, findmax)
         @test_throws ArgumentError f(A, 1)
-        @test isequal(f(A, 2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+        @test isequal(f(A, 2), (fill(0, 0, 1), fill(0, 0, 1)))
         @test_throws ArgumentError f(A, (1, 2))
-        @test isequal(f(A, 3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+        @test isequal(f(A, 3), (fill(0, 0, 1), fill(0, 0, 1)))
     end
 
 end

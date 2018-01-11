@@ -86,7 +86,7 @@ using Test
             @test_throws ArgumentError eigs(a, which=:Z)
             @test_throws ArgumentError eigs(a, which=:BE)
             @test_throws DimensionMismatch eigs(a, v0=zeros(elty,n+2))
-            @test_throws ArgumentError eigs(a, v0=zeros(Int,n))
+            @test_throws ArgumentError eigs(a, v0=fill(0, n))
             if elty == Float64
                 @test_throws ArgumentError eigs(a + copy(transpose(a)), which=:SI)
                 @test_throws ArgumentError eigs(a + copy(transpose(a)), which=:LI)

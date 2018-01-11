@@ -212,7 +212,7 @@ end
 
 #14: 837799
 function euler14(m)
-    c = zeros(Int,m)
+    c = fill(0, m)
     c[1] = 1
     for n::Int64 = 2:m
         nʹ, d = n, 0

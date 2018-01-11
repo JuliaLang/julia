@@ -560,7 +560,7 @@ indices of the result will match `A`.
 would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
 
-    similar(dims->zeros(Int, dims), axes(A))
+    similar(dims->fill(0, dims), axes(A))
 
 would create an array of `Int`, initialized to zero, matching the
 indices of `A`.
@@ -1244,7 +1244,7 @@ function cat_t(dims, T::Type, X...)
 end
 
 function _cat(A, shape::NTuple{N}, catdims, X...) where N
-    offsets = zeros(Int, N)
+    offsets = fill(0, N)
     inds = Vector{UnitRange{Int}}(uninitialized, N)
     concat = copyto!(Vector{Bool}(uninitialized, N), catdims)
     for x in X
