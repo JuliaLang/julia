@@ -68,11 +68,11 @@ for f in (:(!), :(~), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
           :(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
           :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
           :(exp), :(exp2), :(expm1), :(log), :(log10), :(log1p),
-          :(log2), :(exponent), :(sqrt), :(gamma), :(lgamma),
+          :(log2), :(Math.exponent), :(sqrt), :(Math.gamma), :(Math.lgamma),
           :(iseven), :(ispow2), :(isfinite), :(isinf), :(isodd),
           :(isinteger), :(isreal), :(isnan), :(isempty),
-          :(iszero), :(transpose), :(float))
-    @eval Math.$(f)(::Missing) = missing
+          :(iszero), :(transpose), :(adjoint), :(float))
+    @eval $(f)(::Missing) = missing
 end
 
 for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
