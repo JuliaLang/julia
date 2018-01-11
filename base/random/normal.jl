@@ -126,13 +126,11 @@ Also see the [`rand`](@ref) function.
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> randn!(rng, zeros(Float64, 5))
-5-element Array{Float64,1}:
+julia> randn!(rng, [0.0, 0.0, 0.0])
+3-element Array{Float64,1}:
   0.8673472019512456
  -0.9017438158568171
  -0.4944787535042339
- -0.9029142938652416
-  0.8644013132535154
 ```
 """
 function randn! end
@@ -147,13 +145,11 @@ Fill the array `A` with random numbers following the exponential distribution
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> randexp!(rng, zeros(Float64, 5))
-5-element Array{Float64,1}:
+julia> randexp!(rng, [0.0, 0.0, 0.0])
+3-element Array{Float64,1}:
  2.4835053723904896
  1.516703605376473
  0.6044364871025417
- 0.6958665886385867
- 1.3065196315496677
 ```
 """
 function randexp! end

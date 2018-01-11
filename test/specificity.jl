@@ -84,7 +84,7 @@ begin
     f(dims::Tuple{}, A::AbstractArray{T,0}) where {T} = 1
     f(dims::NTuple{N,Int}, A::AbstractArray{T,N}) where {T,N} = 2
     f(dims::NTuple{M,Int}, A::AbstractArray{T,N}) where {T,M,N} = 3
-    A = zeros(Float64, 2, 2)
+    A = [0.0 0.0; 0.0 0.0]
     @test f((1,2,3), A) == 3
     @test f((1,2), A) == 2
     @test f((), reshape([1])) == 1

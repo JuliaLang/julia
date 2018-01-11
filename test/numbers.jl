@@ -2467,7 +2467,7 @@ ndigf(n) = Float64(log(Float32(n)))
     @test digits(24, 2, 7) == [0, 0, 0, 1, 1, 0, 0]
     @test digits(100) == [0, 0, 1]
     @test digits(BigInt(2)^128, 2) == [zeros(Float64, 128); 1]
-    let a = zeros(Int, 3)
+    let a = [0, 0, 0]
         digits!(a, 50)
         @test a == [0, 5, 0]
         digits!(a, 9, 2)
@@ -2477,7 +2477,7 @@ ndigf(n) = Float64(log(Float32(n)))
     end
 end
 # Fill a pre allocated 2x4 matrix
-let a = zeros(Int,(2,4))
+let a = [0 0 0 0; 0 0 0 0]
     for i in 0:3
         digits!(view(a,:,i+1),i,2)
     end

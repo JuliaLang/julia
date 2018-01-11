@@ -334,10 +334,8 @@ end
 end
 
 @testset "issue #4796" begin
-    dim=2
-    S=zeros(Complex,dim,dim)
-    T=zeros(Complex,dim,dim)
-    T[:] = 1
+    S = Complex[0 0; 0 0]
+    T = Complex[1 1 ; 1 1]
     z = 2.5 + 1.5im
     S[1] = z
     @test S*T == [z z; 0 0]

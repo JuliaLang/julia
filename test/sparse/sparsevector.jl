@@ -991,7 +991,7 @@ end
         ultmat = Base.LinAlg.UnitLowerTriangular(transmat)
 
         zerospvec = spzeros(Float64, 2)
-        zerodvec = zeros(Float64, 2)
+        zerodvec = [0.0, 0.0]
 
         for mat in (utmat, ltmat, uutmat, ultmat)
             @test isequal(\(mat, zerospvec), zerodvec)
@@ -1175,7 +1175,7 @@ end
 @testset "corner cases of broadcast arithmetic operations with scalars (#21515)" begin
     # test both scalar literals and variables
     areequal(a, b, c) = isequal(a, b) && isequal(b, c)
-    inf, zeroh, zv, spzv = Inf, 0.0, zeros(Float64, 1), spzeros(1)
+    inf, zeroh, zv, spzv = Inf, 0.0, [0.0],      spzeros(1)
     @test areequal(spzv .* Inf,  spzv .* inf,    sparsevec(zv .* Inf))
     @test areequal(Inf .* spzv,  inf .* spzv,    sparsevec(Inf .* zv))
     @test areequal(spzv ./ 0.0,  spzv ./ zeroh,  sparsevec(zv ./ 0.0))

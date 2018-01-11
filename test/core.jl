@@ -2125,7 +2125,7 @@ end
 @test @M6938.mac() == 0
 
 # issue #7012
-let x = zeros(Float64, 2)
+let x = [0.0, 0.0]
     x[1]::Float64 = 1
     @test x == [1.0, 0.0]
     @test_throws TypeError (x[1]::Int = 1)
@@ -2317,7 +2317,7 @@ end
 
 # issue #9134
 function f9134()
-    ii = zeros(Int32, 1)
+    ii = Int32[0]
     let i
         ii[1] = i
     end

@@ -301,13 +301,15 @@ but without allocating a new array.
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> rand!(rng, zeros(Float64, 5))
-5-element Array{Float64,1}:
+julia> A = [0.0, 0.0, 0.0];
+
+julia> rand!(rng, A);
+
+julia> A
+3-element Array{Float64,1}:
  0.5908446386657102
  0.7667970365022592
  0.5662374165061859
- 0.4600853424625171
- 0.7940257103317943
 ```
 """
 rand!

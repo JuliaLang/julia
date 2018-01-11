@@ -1907,7 +1907,7 @@ collection. `destination` must be at least as large as the first collection.
 
 # Examples
 ```jldoctest
-julia> A = zeros(Float64, 3);
+julia> A = [0.0, 0.0, 0.0];
 
 julia> map!(x -> x * 2, A, [1, 2, 3]);
 

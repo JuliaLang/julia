@@ -87,7 +87,7 @@ be retried.
 
 Example: On errors, retry `f` on an element a maximum of 3 times without any delay between retries.
 ```julia
-pmap(f, c; retry_delays = zeros(Float64, 3))
+pmap(f, c; retry_delays = [0.0, 0.0, 0.0])
 ```
 
 Example: Retry `f` only if the exception is not of type `InexactError`, with exponentially increasing

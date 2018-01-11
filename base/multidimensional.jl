@@ -1044,21 +1044,19 @@ See also [`accumulate`](@ref).
 
 # Examples
 ``jldoctest
-julia> x = SparseVector(7, [1, 3, 5], [2., 4., 5.]);
+julia> x = [2, 0, 4, 0, 5];
 
-julia> y = zeros(Float64, 7);
+julia> y = [0, 0, 0, 0, 0];
 
 julia> accumulate!(+, y, x);
 
 julia> y
-7-element Array{Float64,1}:
-  2.0
-  2.0
-  6.0
-  6.0
- 11.0
- 11.0
- 11.0
+5-element Array{Int64,1}:
+  2
+  2
+  6
+  6
+ 11
 ```
 """
 function accumulate!(op::Op, y, x::AbstractVector) where Op
@@ -1139,15 +1137,15 @@ the same object. `fill!(A, Foo())` will return `A` filled with the result of eva
 
 # Examples
 ```jldoctest
-julia> A = zeros(Float64, 2, 3)
-2×3 Array{Float64,2}:
- 0.0  0.0  0.0
- 0.0  0.0  0.0
+julia> A = [0.0 0.0; 0.0 0.0]
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
 
-julia> fill!(A, 2.)
-2×3 Array{Float64,2}:
- 2.0  2.0  2.0
- 2.0  2.0  2.0
+julia> fill!(A, 2.0)
+2×2 Array{Float64,2}:
+ 2.0  2.0
+ 2.0  2.0
 
 julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(uninitialized, 3), a); a[1] = 2; A
 3-element Array{Array{Int64,1},1}:
@@ -1180,19 +1178,17 @@ the other elements are left untouched.
 
 # Examples
 ```jldoctest
-julia> x = [1., 0., 3., 0., 5.];
+julia> x = [1.0, 2.0, 3.0];
 
-julia> y = zeros(Float64, 7);
+julia> y = [0.0, 0.0, 0.0, 0.0, 0.0];
 
 julia> copyto!(y, x);
 
 julia> y
-7-element Array{Float64,1}:
+5-element Array{Float64,1}:
  1.0
- 0.0
+ 2.0
  3.0
- 0.0
- 5.0
  0.0
  0.0
 ```

@@ -52,7 +52,7 @@ using Main.TestHelpers.OAs
     @test a[1,1] == 1. && a[1,2] == 2. && a[2,1] == 3. && a[2,2] == 4.
     @test b[1,1] == 1. && b[2,1] == 2. && b[1,2] == 3. && b[2,2] == 4.
     a[[1 2 3 4]] = 0
-    @test a == zeros(Float64, 2, 2)
+    @test a == [0 0; 0 0]
     a[[1 2], [1 2]] = 1
     @test a == fill(1.,2,2)
     a[[1 2], 1] = 0
@@ -232,7 +232,7 @@ end
     rng = (2,2:3,2:2:5)
     tmp = zeros(Int,map(maximum,rng)...)
     tmp[rng...] = A[rng...]
-    @test  tmp == cat(3,zeros(Int,2,3),[0 0 0; 0 47 52],zeros(Int,2,3),[0 0 0; 0 127 132])
+    @test  tmp == cat(3,[0 0 0; 0 0 0],[0 0 0; 0 47 52],[0 0 0; 0 0 0],[0 0 0; 0 127 132])
 
     @test cat([1,2],1,2,3.,4.,5.) == diagm(0 => [1,2,3.,4.,5.])
     blk = [1 2;3 4]

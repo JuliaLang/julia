@@ -320,7 +320,7 @@ end
         D = Diagonal(d)
         @test inv(D) ≈ inv(Array(D))
     end
-    @test_throws SingularException inv(Diagonal(zeros(Float64, n)))
+    @test_throws SingularException inv(Diagonal([0.0, 0.0, 0.0]))
     @test_throws SingularException inv(Diagonal([0, 1, 2]))
     @test_throws SingularException inv(Diagonal([0im, 1im, 2im]))
 end
