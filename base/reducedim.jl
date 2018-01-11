@@ -67,7 +67,7 @@ for (Op, initfun) in ((:(typeof(add_sum)), :zero), (:(typeof(mul_prod)), :one))
     @eval initarray!(a::AbstractArray{T}, ::$(Op), init::Bool, src::AbstractArray) where {T} = (init && fill!(a, $(initfun)(T)); a)
 end
 
-for Op in (:(typeof(scalarmax)), :(typeof(scalarmin)), :(typeof(max)), :(typeof(min)))
+for Op in (:(typeof(max)), :(typeof(min)))
     @eval initarray!(a::AbstractArray{T}, ::$(Op), init::Bool, src::AbstractArray) where {T} = (init && copyfirst!(a, src); a)
 end
 
@@ -124,13 +124,9 @@ function _reducedim_init(f, op, fv, fop, A, region)
     return reducedim_initarray(A, region, z, Tr)
 end
 
-reducedim_init(f, op::typeof(max), A::AbstractArray, region) = reducedim_init(f, scalarmax, A, region)
-reducedim_init(f, op::typeof(min), A::AbstractArray, region) = reducedim_init(f, scalarmin, A, region)
-reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray, region) = reducedim_init(f, scalarmax, A, region)
-
-reducedim_init(f, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, maximum)
-reducedim_init(f, op::typeof(scalarmin), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, minimum)
-reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} =
+reducedim_init(f, op::typeof(max), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, maximum)
+reducedim_init(f, op::typeof(min), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, minimum)
+reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))))
 
 reducedim_init(f, op::typeof(&), A::AbstractArray, region) = reducedim_initarray(A, region, true)
@@ -605,7 +601,7 @@ julia> any!([1 1], A)
 any!(r, A)
 
 for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
-                    (:maximum, :scalarmax), (:minimum, :scalarmin),
+                    (:maximum, :max), (:minimum, :min),
                     (:all, :&), (:any, :|)]
     fname! = Symbol(fname, '!')
     @eval begin
