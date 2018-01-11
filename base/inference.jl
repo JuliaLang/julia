@@ -488,6 +488,35 @@ function retrieve_code_info(linfo::MethodInstance)
     return c
 end
 
+# TODO: Use these functions instead of directly manipulating
+# the "actual" method for appropriate places in inference (see #24676)
+function method_for_inference_heuristics(cinfo, default)
+    if isa(cinfo, CodeInfo)
+        # appropriate format for `sig` is svec(ftype, argtypes, world)
+        sig = cinfo.signature_for_inference_heuristics
+        if isa(sig, SimpleVector) && length(sig) == 3
+            methods = _methods(sig[1], sig[2], -1, sig[3])
+            if length(methods) == 1
+                _, _, m = methods[]
+                if isa(m, Method)
+                    return m
+                end
+            end
+        end
+    end
+    return default
+end
+
+function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams, world)
+    if isdefined(method, :generator) && method.generator.expand_early
+        method_instance = code_for_method(method, sig, sparams, world, false)
+        if isa(method_instance, MethodInstance)
+            return method_for_inference_heuristics(get_staged(method_instance), method)
+        end
+    end
+    return method
+end
+
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id # using a function to ensure we can infer this
 
 # avoid cycle due to over-specializing `any` when used by inference
@@ -2089,33 +2118,6 @@ end
 
 const deprecated_sym = Symbol("deprecated.jl")
 
-function method_for_inference_heuristics(cinfo, default)
-    if isa(cinfo, CodeInfo)
-        # appropriate format for `sig` is svec(ftype, argtypes, world)
-        sig = cinfo.signature_for_inference_heuristics
-        if isa(sig, SimpleVector) && length(sig) == 3
-            methods = _methods(sig[1], sig[2], -1, sig[3])
-            if length(methods) == 1
-                _, _, m = methods[]
-                if isa(m, Method)
-                    return m
-                end
-            end
-        end
-    end
-    return default
-end
-
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams, world)
-    if isdefined(method, :generator) && method.generator.expand_early
-        method_instance = code_for_method(method, sig, sparams, world, false)
-        if isa(method_instance, MethodInstance)
-            return method_for_inference_heuristics(get_staged(method_instance), method)
-        end
-    end
-    return method
- end
-
 function abstract_call_method(method::Method, @nospecialize(sig), sparams::SimpleVector, sv::InferenceState)
     # TODO: remove with 0.7 deprecations
     if method.file === deprecated_sym && method.sig == (Tuple{Type{T},Any} where T)
@@ -2129,18 +2131,16 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
     cyclei = 0
     infstate = sv
     edgecycle = false
-    checked_method = method_for_inference_heuristics(method, sig, sparams, sv.params.world)
     while !(infstate === nothing)
         infstate = infstate::InferenceState
-        if infstate.linfo.specTypes == sig
-            # avoid widening when detecting self-recursion
-            # TODO: merge call cycle and return right away
-            topmost = nothing
-            edgecycle = true
-            break
-        end
-        working_method = method_for_inference_heuristics(infstate.src, infstate.linfo.def)
-        if checked_method === working_method
+        if method === infstate.linfo.def
+            if infstate.linfo.specTypes == sig
+                # avoid widening when detecting self-recursion
+                # TODO: merge call cycle and return right away
+                topmost = nothing
+                edgecycle = true
+                break
+            end
             if topmost === nothing
                 # inspect the parent of this edge,
                 # to see if they are the same Method as sv
@@ -2159,8 +2159,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                     # then check the parent link
                     if topmost === nothing && parent !== nothing
                         parent = parent::InferenceState
-                        parent_method = method_for_inference_heuristics(parent.src, parent.linfo.def)
-                        if parent.cached && parent_method === working_method
+                        if parent.cached && parent.linfo.def === sv.linfo.def
                             topmost = infstate
                             edgecycle = true
                         end
