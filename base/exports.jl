@@ -865,6 +865,7 @@ export
     fieldname,
     fieldnames,
     fieldcount,
+    # propertynames,
     isconcrete,
     oftype,
     promote,
