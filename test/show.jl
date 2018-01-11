@@ -950,25 +950,25 @@ end
 
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
     # 0-dim
-    @test replstr(zeros(Complex{Int})) == "0-dimensional Array{Complex{$Int},0}:\n0 + 0im"
+    @test replstr(fill(0+0im)) == "0-dimensional Array{Complex{$Int},0}:\n0 + 0im"
     A = Array{Pair,0}(uninitialized); A[] = 1=>2
     @test replstr(A) == "0-dimensional Array{Pair,0}:\n1 => 2"
     # 1-dim
-    @test replstr(zeros(Complex{Int}, 2)) ==
+    @test replstr(fill(0+0im, 2)) ==
         "2-element Array{Complex{$Int},1}:\n 0 + 0im\n 0 + 0im"
     @test replstr([1=>2, 3=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n 1 => 2\n 3 => 4"
     # 2-dim
-    @test replstr(zeros(Complex{Int}, 2, 1)) ==
+    @test replstr(fill(0+0im, 2, 1)) ==
         "2×1 Array{Complex{$Int},2}:\n 0 + 0im\n 0 + 0im"
-    @test replstr(zeros(Complex{Int}, 1, 2)) ==
+    @test replstr(fill(0+0im, 1, 2)) ==
         "1×2 Array{Complex{$Int},2}:\n 0+0im  0+0im"
     @test replstr([1=>2 3=>4]) == "1×2 Array{Pair{$Int,$Int},2}:\n 1=>2  3=>4"
     @test replstr([1=>2 for x in 1:2, y in 1:1]) ==
         "2×1 Array{Pair{$Int,$Int},2}:\n 1 => 2\n 1 => 2"
     # 3-dim
-    @test replstr(zeros(Complex{Int}, 1, 1, 1)) ==
+    @test replstr(fill(0+0im, 1, 1, 1)) ==
         "1×1×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0 + 0im"
-    @test replstr(zeros(Complex{Int}, 1, 2, 1)) ==
+    @test replstr(fill(0+0im, 1, 2, 1)) ==
         "1×2×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0+0im  0+0im"
 end
 
