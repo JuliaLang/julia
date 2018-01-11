@@ -936,7 +936,7 @@ Deprecated or removed
     `empty(::Associative, K, V)` ([#24390]).
 
   * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
-  
+
   * `strides(::AbstractArray)` and `stride(::AbstractArray, ::Int)` have been deprecated.
      Subtypes of `AbstractArray` that implement the newly introduced strided array interface 
      should override `strides` directly ([#25321]).
