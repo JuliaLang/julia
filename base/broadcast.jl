@@ -689,6 +689,7 @@ end
 # )::_broadcast_getindex_eltype(A)
 _broadcast_getindex_eltype(A) = _broadcast_getindex_eltype(combine_styles(A), A)
 _broadcast_getindex_eltype(::Scalar, ::Type{T}) where T = Type{T}
+_broadcast_getindex_eltype(::Scalar, ::Broadcasted{<:Any,T}) where T = T
 _broadcast_getindex_eltype(::Union{Unknown,Scalar}, A) = typeof(A)
 _broadcast_getindex_eltype(::BroadcastStyle, A) = eltype(A)  # Tuple, Array, etc.
 

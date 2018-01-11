@@ -485,15 +485,20 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1
     a  = randn(10)
     aa = Array19745(a)
     fadd(aa) = aa .+ 1
+    fadd2(aa) = aa .+ 1 .* 2
     fprod(aa) = aa .* aa'
     @test a .+ 1  == @inferred(fadd(aa))
+    @test a .+ 1 .* 2  == @inferred(fadd2(aa))
     @test a .* a' == @inferred(fprod(aa))
     @test isa(aa .+ 1, Array19745)
+    @test isa(aa .+ 1 .* 2, Array19745)
     @test isa(aa .* aa', Array19745)
     a1 = AD1(rand(2,3))
     a2 = AD2(rand(2))
     @test a1 .+ 1 isa AD1
     @test a2 .+ 1 isa AD2
+    @test a1 .+ 1 .* 2 isa AD1
+    @test a2 .+ 1 .* 2 isa AD2
     @test a1 .+ a2 isa Array
     @test a2 .+ a1 isa Array
     @test a1 .+ a2 .+ a1 isa Array
@@ -502,6 +507,8 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1
     a2 = AD2P(rand(2))
     @test a1 .+ 1 isa AD1P
     @test a2 .+ 1 isa AD2P
+    @test a1 .+ 1 .* 2 isa AD1P
+    @test a2 .+ 1 .* 2 isa AD2P
     @test a1 .+ a2 isa AD1P
     @test a2 .+ a1 isa AD1P
     @test a1 .+ a2 .+ a1 isa AD1P
@@ -510,6 +517,8 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1
     a2 = AD2B(rand(2))
     @test a1 .+ 1 isa AD1B
     @test a2 .+ 1 isa AD2B
+    @test a1 .+ 1 .* 2 isa AD1B
+    @test a2 .+ 1 .* 2 isa AD2B
     @test a1 .+ a2 isa AD1B
     @test a2 .+ a1 isa AD1B
     @test a1 .+ a2 .+ a1 isa AD1B
@@ -518,6 +527,8 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1
     a2 = AD2C(rand(2))
     @test a1 .+ 1 isa AD1C
     @test a2 .+ 1 isa AD2C
+    @test a1 .+ 1 .* 2 isa AD1C
+    @test a2 .+ 1 .* 2 isa AD2C
     @test_throws ErrorException a1 .+ a2
 end
 
