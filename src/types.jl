@@ -87,6 +87,7 @@ state_type(::Type{SHA2_224_CTX}) = UInt32
 state_type(::Type{SHA2_256_CTX}) = UInt32
 state_type(::Type{SHA2_384_CTX}) = UInt64
 state_type(::Type{SHA2_512_CTX}) = UInt64
+state_type(::Type{SHA3_CTX}) = UInt64
 
 # blocklen is the number of bytes of data processed by the transform!() function at once
 blocklen(::Type{SHA1_CTX}) = UInt64(64)
@@ -102,7 +103,7 @@ blocklen(::Type{SHA3_512_CTX}) = UInt64(25*8 - 2*digestlen(SHA3_512_CTX))
 
 
 # short_blocklen is the size of a block minus the width of bytecount
-short_blocklen(::Type{T}) where {T<:Union{SHA1_CTX,SHA2_CTX}} = blocklen(T) - 2*sizeof(state_type(T))
+short_blocklen(::Type{T}) where {T<:SHA_CTX} = blocklen(T) - 2*sizeof(state_type(T))
 
 # Once the "blocklen" methods are defined, we can define our outer constructors for SHA types:
 SHA2_224_CTX() = SHA2_224_CTX(copy(SHA2_224_initial_hash_value), 0, zeros(UInt8, blocklen(SHA2_224_CTX)))
@@ -142,3 +143,7 @@ show(io::IO, ::SHA3_224_CTX) = write(io, "SHA3 224-bit hash state")
 show(io::IO, ::SHA3_256_CTX) = write(io, "SHA3 256-bit hash state")
 show(io::IO, ::SHA3_384_CTX) = write(io, "SHA3 384-bit hash state")
 show(io::IO, ::SHA3_512_CTX) = write(io, "SHA3 512-bit hash state")
+
+
+# use out types to define a method to get a pointer to the state buffer
+buffer_pointer(ctx::T) where {T<:SHA_CTX} = Ptr{state_type(T)}(pointer(ctx.buffer))
