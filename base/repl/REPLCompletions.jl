@@ -85,7 +85,7 @@ function complete_symbol(sym, ffunc)
             append!(suggestions, filtered_mod_names(p, mod, name, true, false))
         end
     elseif val !== nothing # looking for a property of an instance
-        for property in propertynames(val)
+        for property in propertynames(val, false)
             s = string(property)
             if startswith(s, name)
                 push!(suggestions, s)
