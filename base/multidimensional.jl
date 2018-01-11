@@ -689,7 +689,7 @@ end
 
 # see discussion in #18364 ... we try not to widen type of the resulting array
 # from cumsum or cumprod, but in some cases (+, Bool) we may not have a choice.
-rcum_promote_type(op, ::Type{T}, ::Type{S}) where {T,S<:Number} = promote_op(op, T, S)
+rcum_promote_type(op, ::Type{T}, ::Type{S}) where {T,S} = promote_op(op, T, S)
 rcum_promote_type(op, ::Type{T}) where {T<:Number} = rcum_promote_type(op, T,T)
 rcum_promote_type(op, ::Type{T}) where {T} = T
 

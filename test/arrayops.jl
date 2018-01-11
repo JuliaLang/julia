@@ -2152,6 +2152,9 @@ end
     op(x,y) = 2x+y
     @test accumulate(op, [10,20, 30]) == [10, op(10, 20), op(op(10, 20), 30)] == [10, 40, 110]
     @test accumulate(op, [10 20 30], 2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
+
+    #25506
+    @test accumulate((acc, x) -> acc+x[1], 0, [(1,2), (3,4), (5,6)]) == [1, 4, 9]
 end
 
 struct F21666{T <: Base.ArithmeticStyle}
