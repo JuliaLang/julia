@@ -2200,11 +2200,7 @@ Float64(x::F21666) = Float64(x.x)
     @test norm(f_truth - f_rounds) < norm(f_truth - f_inexact)
 end
 
-@testset "zeros and ones" begin
-    @test ones(2) == ones(Int, 2) ==  [1,1]
-    @test isa(ones(2), Vector{Float64})
-    @test isa(ones(Int, 2), Vector{Int})
-
+@testset "zeros" begin
     function test_zeros(arr, T, s)
         @test all(arr .== 0)
         @test isa(arr, T)

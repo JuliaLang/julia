@@ -435,7 +435,6 @@ export
     minmax,
     ndims,
     nonzeros,
-    ones,
     parent,
     parentindices,
     partialsort,

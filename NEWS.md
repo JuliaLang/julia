@@ -647,6 +647,14 @@ Deprecated or removed
     necessary, consider `fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))})`.
     For an algebraic multiplicative identity, consider `one(A)` ([#24656]).
 
+  * `ones(dims...)` and `ones(T, dims)` have been deprecated. The direct replacements are
+    `fill(1.0, dims...)` and `fill(one(T), dims...)`/`fill(T(1), dims...)`, but for common
+    types it is often shorter to use numeric literals, e.g. `fill(1, dims...)` for `Int`s,
+    `fill(1f0, dims...)` for `Float32`s, `fill(1+0im, dims...)` for complex types,
+    `fill(0x1, dims...)` for `UInt8`s etc. Other common patterns, such as `x*ones(dims)`
+    for some value `x` can, with advantage, instead be rewritten as
+    `fill(x, dims)` ([#25087]).
+
   * The `Operators` module is deprecated. Instead, import required operators explicitly
     from `Base`, e.g. `import Base: +, -, *, /` ([#22251]).
 

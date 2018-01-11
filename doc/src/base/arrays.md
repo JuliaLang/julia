@@ -22,7 +22,6 @@ Base.Matrix(::Nothing, ::Any, ::Any)
 Base.Matrix(::Missing, ::Any, ::Any)
 Base.getindex(::Type, ::Any...)
 Base.zeros
-Base.ones
 Base.BitArray
 Base.BitArray(::Uninitialized, ::Integer...)
 Base.BitArray(::Any)
