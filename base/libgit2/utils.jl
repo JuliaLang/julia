@@ -51,7 +51,7 @@ isset(val::Integer, flag::Integer) = (val & flag == flag)
 
 Unset the bits of `val` indexed by `flag`, returning them to `0`.
 """
-reset(val::Integer, flag::Integer) = (val &= ~flag)
+reset(val::Integer, flag::Integer) = (val &= flipbits(flag))
 
 """
     toggle(val::Integer, flag::Integer)

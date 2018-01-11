@@ -132,7 +132,7 @@ function abs end
 abs(x::Unsigned) = x
 abs(x::Signed) = flipsign(x,x)
 
-~(n::Integer) = -n-1
+flipbits(n::Integer) = -n-1
 
 unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 unsigned(x::Bool) = convert(Unsigned, x)
@@ -252,23 +252,23 @@ end
 ## integer bitwise operations ##
 
 """
-    ~(x)
+    flipbits(x)
 
 Bitwise not.
 
 # Examples
 ```jldoctest
-julia> ~4
+julia> flipbits(4)
 -5
 
-julia> ~10
+julia> flipbits(10)
 -11
 
-julia> ~true
+julia> flipbits(true)
 false
 ```
 """
-(~)(x::BitInteger)             = not_int(x)
+flipbits(x::BitInteger) = not_int(x)
 
 """
     &(x, y)
@@ -373,7 +373,7 @@ julia> count_zeros(Int32(2 ^ 16 - 1))
 16
 ```
 """
-count_zeros(x::Integer) = count_ones(~x)
+count_zeros(x::Integer) = count_ones(flipbits(x))
 
 """
     leading_ones(x::Integer) -> Integer
@@ -385,7 +385,7 @@ julia> leading_ones(UInt32(2 ^ 32 - 2))
 31
 ```
 """
-leading_ones(x::Integer) = leading_zeros(~x)
+leading_ones(x::Integer) = leading_zeros(flipbits(x))
 
 """
     trailing_ones(x::Integer) -> Integer
@@ -397,7 +397,7 @@ julia> trailing_ones(3)
 2
 ```
 """
-trailing_ones(x::Integer) = trailing_zeros(~x)
+trailing_ones(x::Integer) = trailing_zeros(flipbits(x))
 
 ## integer comparisons ##
 

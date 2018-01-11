@@ -1067,8 +1067,8 @@ end
     @test conj(A) === A
     @test conj(B) === B
 
-    @test .~A == [0,-1,-2]
-    @test typeof(.~A) == Vector{Int}
+    @test flipbits.(A) == [0,-1,-2]
+    @test typeof(flipbits.(A)) == Vector{Int}
 end
 
 @testset "conversion to Array" begin

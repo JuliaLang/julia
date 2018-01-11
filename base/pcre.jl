@@ -67,7 +67,7 @@ const EXECUTE_MASK      =
 
 const OPTIONS_MASK = COMPILE_MASK | EXECUTE_MASK
 
-const UNSET = ~Csize_t(0)  # Indicates that an output vector element is unset
+const UNSET = flipbits(Csize_t(0))  # Indicates that an output vector element is unset
 
 function info(regex::Ptr{Cvoid}, what::Integer, ::Type{T}) where T
     buf = Ref{T}()

@@ -937,6 +937,8 @@ Deprecated or removed
 
   * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
 
+  * `~` has been deprecated in favor of `flipbits` ([#25514]).
+
 
 Command-line option changes
 ---------------------------
@@ -1187,3 +1189,4 @@ Command-line option changes
 [#25231]: https://github.com/JuliaLang/julia/issues/25231
 [#25365]: https://github.com/JuliaLang/julia/issues/25365
 [#25424]: https://github.com/JuliaLang/julia/issues/25424
+[#25514]: https://github.com/JuliaLang/julia/issues/25514

@@ -265,7 +265,7 @@ intersect(s1::BitSet, s2::BitSet) =
 
 intersect!(s1::BitSet, s2::BitSet) = _matched_map!(&, s1, s2)
 
-setdiff!(s1::BitSet, s2::BitSet) = _matched_map!((p, q) -> p & ~q, s1, s2)
+setdiff!(s1::BitSet, s2::BitSet) = _matched_map!((p, q) -> p & flipbits(q), s1, s2)
 
 symdiff!(s::BitSet, ns) = foldl(int_symdiff!, s, ns)
 
