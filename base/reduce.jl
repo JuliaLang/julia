@@ -117,7 +117,7 @@ reduce_first(s::Switch, x) = reduce_first(s.op, x)
 Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr`](@ref).
 `v0` will be used exactly once.
 """
-mapfoldr(f, op, v0, itr) = mapfoldl(f, Switch(op), v0, Iterators.Reverse(itr))
+mapfoldr(f, op, v0, itr) = mapfoldl(f, Switch(op), v0, Iterators.reverse(itr))
 
 """
     mapfoldr(f, op, itr)
@@ -127,7 +127,7 @@ Specifically, `mapfoldr(f, op, itr)` produces the same result as
 `mapfoldr(f, op, f(last(itr)), take(itr, length(itr)-1))`.
 In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 """
-mapfoldr(f, op, itr) = mapfoldl(f, Switch(op), Iterators.Reverse(itr))
+mapfoldr(f, op, itr) = mapfoldl(f, Switch(op), Iterators.reverse(itr))
 
 """
     foldr(op, v0, itr)
