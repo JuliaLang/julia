@@ -1735,7 +1735,7 @@ julia> unique(A, 3)
 ```
 """
 @generated function unique(A::AbstractArray{T,N}, dim::Int) where {T,N}
-    inds = inds -> zeros(UInt, inds)
+    inds = inds -> fill(zero(UInt), inds)
     quote
         1 <= dim <= $N || return copy(A)
         hashes = similar($inds, axes(A, dim))

@@ -378,7 +378,7 @@ chol(J::UniformScaling, args...) = ((C, info) = _chol!(J, nothing); @assertposde
 
 
 ## Matrix construction from UniformScaling
-Matrix{T}(s::UniformScaling, dims::Dims{2}) where {T} = setindex!(zeros(T, dims), T(s.λ), diagind(dims...))
+Matrix{T}(s::UniformScaling, dims::Dims{2}) where {T} = setindex!(fill(zero(T), dims), T(s.λ), diagind(dims...))
 Matrix{T}(s::UniformScaling, m::Integer, n::Integer) where {T} = Matrix{T}(s, Dims((m, n)))
 Matrix(s::UniformScaling, m::Integer, n::Integer) = Matrix(s, Dims((m, n)))
 Matrix(s::UniformScaling, dims::Dims{2}) = Matrix{eltype(s)}(s, dims)

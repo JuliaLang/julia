@@ -560,19 +560,19 @@ let seed = rand(UInt32, 10)
 end
 
 # MersenneTwister initialization with invalid values
-@test_throws DomainError Base.dSFMT.DSFMT_state(zeros(Int32, rand(0:Base.dSFMT.JN32-1)))
+@test_throws DomainError Base.dSFMT.DSFMT_state(fill(zero(Int32), rand(0:Base.dSFMT.JN32-1)))
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
-                                         fill(0.0, 10), zeros(UInt128, MT_CACHE_I>>4), 0, 0)
+@test_throws DomainError MersenneTwister(fill(zero(UInt32), 1), Base.dSFMT.DSFMT_state(),
+                                         fill(0.0, 10), fill(zero(UInt128), MT_CACHE_I>>4), 0, 0)
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
-                                         fill(0.0, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), -1, 0)
+@test_throws DomainError MersenneTwister(fill(zero(UInt32), 1), Base.dSFMT.DSFMT_state(),
+                                         fill(0.0, MT_CACHE_F), fill(zero(UInt128), MT_CACHE_I>>4), -1, 0)
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
-                                         fill(0.0, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>3), 0, 0)
+@test_throws DomainError MersenneTwister(fill(zero(UInt32), 1), Base.dSFMT.DSFMT_state(),
+                                         fill(0.0, MT_CACHE_F), fill(zero(UInt128), MT_CACHE_I>>3), 0, 0)
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
-                                         fill(0.0, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), 0, -1)
+@test_throws DomainError MersenneTwister(fill(zero(UInt32), 1), Base.dSFMT.DSFMT_state(),
+                                         fill(0.0, MT_CACHE_F), fill(zero(UInt128), MT_CACHE_I>>4), 0, -1)
 
 # seed is private to MersenneTwister
 let seed = rand(UInt32, 10)

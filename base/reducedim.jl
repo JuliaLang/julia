@@ -708,10 +708,10 @@ function findmin(A::AbstractArray{T}, region) where T
         if prod(map(length, reduced_indices(A, region))) != 0
             throw(ArgumentError("collection slices must be non-empty"))
         end
-        (similar(A, ri), similar(dims->zeros(eltype(keys(A)), dims), ri))
+        (similar(A, ri), similar(dims->fill(zero(eltype(keys(A))), dims), ri))
     else
         findminmax!(isless, fill!(similar(A, ri), first(A)),
-                    similar(dims->zeros(eltype(keys(A)), dims), ri), A)
+                    similar(dims->fill(zero(eltype(keys(A))), dims), ri), A)
     end
 end
 
@@ -755,10 +755,10 @@ function findmax(A::AbstractArray{T}, region) where T
         if prod(map(length, reduced_indices(A, region))) != 0
             throw(ArgumentError("collection slices must be non-empty"))
         end
-        similar(A, ri), similar(dims->zeros(eltype(keys(A)), dims), ri)
+        similar(A, ri), similar(dims->fill(zero(eltype(keys(A))), dims), ri)
     else
         findminmax!(isgreater, fill!(similar(A, ri), first(A)),
-                    similar(dims->zeros(eltype(keys(A)), dims), ri), A)
+                    similar(dims->fill(zero(eltype(keys(A))), dims), ri), A)
     end
 end
 

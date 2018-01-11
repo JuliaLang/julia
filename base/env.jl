@@ -13,7 +13,7 @@ if Sys.iswindows()
         if len == 0
             return Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND ? "" : onError(str)
         end
-        val = zeros(UInt16,len)
+        val = fill(zero(UInt16), len)
         ret = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,val,len)
         if (ret == 0 && len != 1) || ret != len-1 || val[end] != 0
             error(string("getenv: ", str, ' ', len, "-1 != ", ret, ": ", Libc.FormatMessage()))

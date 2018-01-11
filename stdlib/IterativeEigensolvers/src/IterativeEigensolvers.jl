@@ -324,9 +324,9 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
         return (SVD(U, svals, copy(V')), ex[3], ex[4], ex[5], ex[6])
     else
         #The sort is necessary to work around #10329
-        return (SVD(zeros(eltype(svals), n, 0),
+        return (SVD(fill(zero(eltype(svals)), (n, 0)),
                     svals,
-                    zeros(eltype(svals), 0, m)),
+                    fill(zero(eltype(svals)), (0, m))),
                     ex[2], ex[3], ex[4], ex[5])
     end
 end

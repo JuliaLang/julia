@@ -31,7 +31,7 @@ end
 hilb(m::Integer, n::Integer) = hilb(Float64,m,n)
 
 function onediag(T::Type, m::Integer, n::Integer)
-    a=zeros(T,m,n)
+    a = fill(zero(T), m, n)
     for i=1:min(n,m)
         a[i,i]=one(T)/(float(i)^5)
     end
@@ -42,7 +42,7 @@ end
 onediag(m::Integer, n::Integer) = onediag(Float64, m::Integer, n::Integer)
 
 function onediag_sparse(T::Type, n::Integer)
-    a=zeros(T,n)
+    a = fill(zero(T), n)
     for i=1:n
         a[i]=one(T)/(float(i)^5)
     end
@@ -53,7 +53,7 @@ end
 onediag_sparse(n::Integer) = onediag_sparse(Float64, n::Integer)
 
 function tridiag(T::Type, m::Integer, n::Integer)
-    a=zeros(T,m,n)
+    a = fill(zero(T), m, n)
     for i=1:min(n,m)
         a[i,i]=one(T)/(float(i)^5)
     end

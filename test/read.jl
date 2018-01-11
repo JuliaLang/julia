@@ -542,7 +542,7 @@ let p = Pipe()
     Base.link_pipe(p, julia_only_read=true, julia_only_write=true)
     t = @schedule read(p)
     @sync begin
-        @async write(p, zeros(UInt16, 660_000))
+        @async write(p, fill(zero(UInt16), 660_000))
         for i = 1:typemax(UInt16)
             @async write(p, UInt16(i))
         end

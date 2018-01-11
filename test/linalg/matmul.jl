@@ -269,7 +269,7 @@ end
     @test_throws DimensionMismatch Base.LinAlg.gemv!(x10,'N',A10x10,x11)
     @test_throws DimensionMismatch Base.LinAlg.gemv!(x11,'N',A10x10,x10)
     @test Base.LinAlg.gemv!(elty[], 'N', Matrix{elty}(uninitialized,0,0), elty[]) == elty[]
-    @test Base.LinAlg.gemv!(x10, 'N', Matrix{elty}(uninitialized,10,0), elty[]) == zeros(elty,10)
+    @test Base.LinAlg.gemv!(x10, 'N', Matrix{elty}(uninitialized,10,0), elty[]) == fill(0, 10)
 
     I0x0 = Matrix{elty}(I, 0, 0)
     I10x10 = Matrix{elty}(I, 10, 10)

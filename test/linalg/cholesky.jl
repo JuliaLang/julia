@@ -128,7 +128,7 @@ end
 
         #pivoted upper Cholesky
         if eltya != BigFloat
-            cz = cholfact(Hermitian(zeros(eltya,n,n)), Val(true))
+            cz = cholfact(Hermitian(fill(zero(eltya), n,n)), Val(true))
             @test_throws Base.LinAlg.RankDeficientException Base.LinAlg.chkfullrank(cz)
             cpapd = cholfact(apdh, Val(true))
             unary_ops_tests(apdh, cpapd, ε*κ*n)

@@ -404,7 +404,7 @@ function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
         return getfield(C, :piv)
     elseif d == :P
         n = size(C, 1)
-        P = zeros(T, n, n)
+        P = fill(zero(T), n, n)
         for i = 1:n
             P[getfield(C, :piv)[i], i] = one(T)
         end

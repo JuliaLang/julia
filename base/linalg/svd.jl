@@ -439,23 +439,23 @@ svd(x::Number, y::Number) = first.(svd(fill(x, 1, 1), fill(y, 1, 1)))
     elseif d == :D1
         m = size(FU, 1)
         if m - Fk - Fl >= 0
-            return [Matrix{T}(I, Fk, Fk)  zeros(T, Fk, Fl)            ;
-                    zeros(T, Fl, Fk)      Diagonal(Fa[Fk + 1:Fk + Fl]);
-                    zeros(T, m - Fk - Fl, Fk + Fl)                    ]
+            return [Matrix{T}(I, Fk, Fk)  fill(zero(T), Fk, Fl)            ;
+                    fill(zero(T), Fl, Fk)      Diagonal(Fa[Fk + 1:Fk + Fl]);
+                    fill(zero(T), m - Fk - Fl, Fk + Fl)                    ]
         else
-            return [Matrix{T}(I, m, Fk) [zeros(T, Fk, m - Fk); Diagonal(Fa[Fk + 1:m])] zeros(T, m, Fk + Fl - m)]
+            return [Matrix{T}(I, m, Fk) [fill(zero(T), Fk, m - Fk); Diagonal(Fa[Fk + 1:m])] fill(zero(T), m, Fk + Fl - m)]
         end
     elseif d == :D2
         m = size(FU, 1)
         p = size(FV, 1)
         if m - Fk - Fl >= 0
-            return [zeros(T, Fl, Fk) Diagonal(Fb[Fk + 1:Fk + Fl]); zeros(T, p - Fl, Fk + Fl)]
+            return [fill(zero(T), Fl, Fk) Diagonal(Fb[Fk + 1:Fk + Fl]); fill(zero(T), p - Fl, Fk + Fl)]
         else
-            return [zeros(T, p, Fk) [Diagonal(Fb[Fk + 1:m]); zeros(T, Fk + p - m, m - Fk)] [zeros(T, m - Fk, Fk + Fl - m); Matrix{T}(I, Fk + p - m, Fk + Fl - m)]]
+            return [fill(zero(T), p, Fk) [Diagonal(Fb[Fk + 1:m]); fill(zero(T), Fk + p - m, m - Fk)] [fill(zero(T), m - Fk, Fk + Fl - m); Matrix{T}(I, Fk + p - m, Fk + Fl - m)]]
         end
     elseif d == :R0
         n = size(FQ, 1)
-        return [zeros(T, Fk + Fl, n - Fk - Fl) FR]
+        return [fill(zero(T), Fk + Fl, n - Fk - Fl) FR]
     else
         getfield(F, d)
     end

@@ -107,7 +107,7 @@ aimg  = randn(n,n)/2
             @test NS.Z ≈ sZ
         end
     end
-    @testset "0x0 matrix" for A in (zeros(eltya, 0, 0), view(rand(eltya, 2, 2), 1:0, 1:0))
+    @testset "0x0 matrix" for A in (fill(zero(eltya), 0, 0), view(rand(eltya, 2, 2), 1:0, 1:0))
         T, Z, λ = Base.LinAlg.schur(A)
         @test T == A
         @test Z == A

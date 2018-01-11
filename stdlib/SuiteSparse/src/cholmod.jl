@@ -1736,7 +1736,7 @@ function diag(F::Factor{Tv}) where Tv
     f = unsafe_load(pointer(F))
     fsuper = f.super
     fpi = f.pi
-    res = Base.zeros(Tv, Int(f.n))
+    res = fill(zero(Tv), Int(f.n))
     xv  = f.x
     if f.is_super!=0
         px = f.px

@@ -1083,7 +1083,7 @@ end
     @test replstr(Real[Float16(1)]) == "1-element Array{Real,1}:\n Float16(1.0)"
     @test replstr(Array{Real}[Real[1]]) == "1-element Array{Array{Real,N} where N,1}:\n [1]"
     # printing tuples (Issue #25042)
-    @test replstr(fill((Int64(1), zeros(Float16, 3)), 1)) ==
+    @test replstr(fill((Int64(1), fill(zero(Float16), 3)), 1)) ==
                  "1-element Array{Tuple{Int64,Array{Float16,1}},1}:\n (1, [0.0, 0.0, 0.0])"
     @testset "nested Any eltype" begin
         x = Any[Any[Any[1]]]

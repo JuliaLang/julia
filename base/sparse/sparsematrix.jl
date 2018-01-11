@@ -374,7 +374,7 @@ end
 # converting from SparseMatrixCSC to other matrix types
 function Matrix(S::SparseMatrixCSC{Tv}) where Tv
     # Handle cases where zero(Tv) is not defined but the array is dense.
-    A = length(S) == nnz(S) ? Matrix{Tv}(uninitialized, S.m, S.n) : zeros(Tv, S.m, S.n)
+    A = length(S) == nnz(S) ? Matrix{Tv}(uninitialized, S.m, S.n) : fill(zero(Tv), S.m, S.n)
     for Sj in 1:S.n
         for Sk in nzrange(S, Sj)
             Si = S.rowval[Sk]
@@ -424,7 +424,7 @@ function sparse_IJ_sorted!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     n = n < 0 ? 0 : n
     if isempty(V); return spzeros(eltype(V),Ti,m,n); end
 
-    cols = zeros(Ti, n+1)
+    cols = fill(zero(Ti), n+1)
     cols[1] = 1  # For cumsum purposes
     cols[J[1] + 1] = 1
 
@@ -1811,7 +1811,7 @@ function _findr(op, A, region, Tv)
             throw(ArgumentError("array slices must be non-empty"))
         else
             ri = Base.reduced_indices0(A, region)
-            return (similar(A, ri), similar(dims->zeros(Ti, dims), ri))
+            return (similar(A, ri), similar(dims->fill(zero(Ti), dims), ri))
         end
     end
 
@@ -2271,7 +2271,7 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractArray) where {Tv,Ti}
     outm = size(I,1)
     outn = size(I,2)
     szB = (outm, outn)
-    colptrB = zeros(Ti, outn+1)
+    colptrB = fill(zero(Ti), outn+1)
     rowvalB = Vector{Ti}(uninitialized, n)
     nzvalB = Vector{Tv}(uninitialized, n)
 
@@ -3378,9 +3378,9 @@ function sortSparseMatrixCSC!(A::SparseMatrixCSC{Tv,Ti}; sortindices::Symbol = :
     m, n = size(A)
     colptr = A.colptr; rowval = A.rowval; nzval = A.nzval
 
-    index = zeros(Ti, m)
-    row = zeros(Ti, m)
-    val = zeros(Tv, m)
+    index = fill(zero(Ti), m)
+    row = fill(zero(Ti), m)
+    val = fill(zero(Tv), m)
 
     for i = 1:n
         @inbounds col_start = colptr[i]

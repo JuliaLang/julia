@@ -229,7 +229,7 @@ mutable struct Messages
 
         # initialize cavity messages to 0
         gadj = graph.gadj
-        msg = [[zeros(FieldValue, spp[p0]) for p1 = 1:length(gadj[p0])] for p0 = 1:np]
+        msg = [[fill(zero(FieldValue), spp[p0]) for p1 = 1:length(gadj[p0])] for p0 = 1:np]
 
         return new(msg, fld, initial_fld, falses(np), np)
     end

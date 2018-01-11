@@ -62,7 +62,7 @@ bimg  = randn(n,2)/2
                 @test_throws DimensionMismatch b'\b
                 @test_throws DimensionMismatch b\b'
                 @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
-                @test zeros(eltya,n)\fill(eltya(1),n) ≈ (zeros(eltya,n,1)\fill(eltya(1),n,1))[1,1]
+                @test fill(zero(eltya),n)\fill(eltya(1),n) ≈ (fill(zero(eltya),n,1)\fill(eltya(1),n,1))[1,1]
             end
 
             @testset "Test nullspace" begin
@@ -71,7 +71,7 @@ bimg  = randn(n,2)/2
                 @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
                 @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
                 @test size(nullspace(b), 2) == 0
-                @test nullspace(zeros(eltya,n)) == Matrix(I, 1, 1)
+                @test nullspace(fill(zero(eltya), n)) == Matrix(I, 1, 1)
             end
         end
     end # for eltyb
@@ -275,7 +275,7 @@ end
 
             @testset "issue #10234" begin
                 if elty <: AbstractFloat || elty <: Complex
-                    z = zeros(elty, 100)
+                    z = fill(zero(elty), 100)
                     z[1] = -Inf
                     for p in [-2,-1.5,-1,-0.5,0.5,1,1.5,2,Inf]
                         @test norm(z, p) == (p < 0 ? 0 : Inf)

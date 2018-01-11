@@ -43,7 +43,7 @@ const pieces = (
 )
 
 const solutions = Any[]
-const masks = zeros(UInt64, 10)
+const masks = fill(zero(UInt64), 10)
 const masksAtCell = Matrix{Any}(uninitialized, width*height, height)
 
 valid(x, y) = (0 <= x < width) && (0 <= y < height)

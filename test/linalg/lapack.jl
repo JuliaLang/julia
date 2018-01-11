@@ -83,8 +83,8 @@ end
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = copy(A)
-        C,T = LAPACK.geqrt!(A,zeros(elty,10,10))
-        D,S = LAPACK.geqrt3!(A,zeros(elty,10,10))
+        C,T = LAPACK.geqrt!(A, fill(zero(elty), 10, 10))
+        D,S = LAPACK.geqrt3!(A, fill(zero(elty), 10, 10))
         @test C ≈ D
     end
 end
@@ -95,7 +95,7 @@ end
         dl = rand(elty,5)
         du = rand(elty,5)
         dl2 = rand(elty,4)
-        AB = zeros(elty,6,6)
+        AB = fill(zero(elty), 6, 6)
         AB[6,1:4] = dl2
         AB[5,1:5] = dl
         AB[4,:] = d
@@ -107,7 +107,7 @@ end
         A = diagm(-2 => dl2, -1 => dl, 0 => d, 1 => du)
         @test A\C ≈ D
         @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,Matrix{elty}(uninitialized,7,6))
-        @test_throws Base.LinAlg.LAPACKException LAPACK.gbtrf!(2,1,6,zeros(elty,6,6))
+        @test_throws Base.LinAlg.LAPACKException LAPACK.gbtrf!(2,1,6,fill(zero(elty), (6,6)))
     end
 end
 
@@ -347,7 +347,7 @@ end
         B,ipiv = LAPACK.sytrf!('U',B)
         @test triu(inv(A)) ≈ triu(LAPACK.sytri!('U',B,ipiv)) rtol=eps(cond(A))
         @test_throws DimensionMismatch LAPACK.sytrs!('U',B,ipiv,rand(elty,11,5))
-        Z0x0 = fill(elty(0), (0,0))
+        Z0x0 = fill(zero(elty), (0,0))
         @test LAPACK.sytrf!('U',Z0x0) == (Z0x0,BlasInt[])
     end
 
@@ -359,7 +359,7 @@ end
         B,ipiv = LAPACK.sytrf_rook!('U', B)
         @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U', B, ipiv)) rtol=eps(cond(A))
         @test_throws DimensionMismatch LAPACK.sytrs_rook!('U', B, ipiv, rand(elty, 11, 5))
-        Z0x0 = fill(elty(0), (0,0))
+        Z0x0 = fill(zero(elty), (0,0))
         @test LAPACK.sytrf_rook!('U',Z0x0) == (Z0x0,BlasInt[])
         A = rand(elty, 10, 10)
         A = A + transpose(A) #symmetric!
@@ -467,7 +467,7 @@ end
 @testset "ptsv" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         dv = fill(elty(1),10)
-        ev = zeros(elty,9)
+        ev = fill(zero(elty), 9)
         rdv = real(dv)
         A = SymTridiagonal(dv,ev)
         if elty <: Complex
@@ -484,7 +484,7 @@ end
 @testset "pttrf and pttrs" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         dv = fill(elty(1),10)
-        ev = zeros(elty,9)
+        ev = fill(zero(elty), 9)
         rdv = real(dv)
         A = SymTridiagonal(dv,ev)
         if elty <: Complex
@@ -552,14 +552,14 @@ end
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         T = triu(rand(elty,10,10))
         S = copy(T)
-        select = zeros(Base.LinAlg.BlasInt,10)
+        select = fill(zero(BlasInt),10)
         select[1] = 1
         select,Vr = LAPACK.trevc!('R','S',select,copy(T))
         @test Vr ≈ eigvecs(S)[:,1]
-        select = zeros(Base.LinAlg.BlasInt,10)
+        select = fill(zero(BlasInt),10)
         select[1] = 1
         select,Vl = LAPACK.trevc!('L','S',select,copy(T))
-        select = zeros(Base.LinAlg.BlasInt,10)
+        select = fill(zero(BlasInt),10)
         select[1] = 1
         select,Vln,Vrn = LAPACK.trevc!('B','S',select,copy(T))
         @test Vrn ≈ eigvecs(S)[:,1]

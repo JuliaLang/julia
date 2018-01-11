@@ -461,7 +461,7 @@ end
     ## Low level interface
     @test CHOLMOD.nnz(A1Sparse) == nnz(A1)
     @test CHOLMOD.speye(5, 5, elty) == Matrix(I, 5, 5)
-    @test CHOLMOD.spzeros(5, 5, 5, elty) == zeros(elty, 5, 5)
+    @test CHOLMOD.spzeros(5, 5, 5, elty) == fill(zero(elty), 5, 5)
     if elty <: Real
         @test CHOLMOD.copy(A1Sparse, 0, 1) == A1Sparse
         @test CHOLMOD.horzcat(A1Sparse, A2Sparse, true) == [A1 A2]

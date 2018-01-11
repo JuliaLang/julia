@@ -54,10 +54,10 @@ srand(1)
         @test_throws ArgumentError diag(D, -n-1)
         @test (@inferred diag(D))::typeof(dd) == dd
         @test (@inferred diag(D, 0))::typeof(dd) == dd
-        @test (@inferred diag(D, 1))::typeof(dd) == zeros(elty, n-1)
+        @test (@inferred diag(D, 1))::typeof(dd) == fill(0, n-1)
         DG = Diagonal(GenericArray(dd))
         @test (@inferred diag(DG))::typeof(GenericArray(dd)) == GenericArray(dd)
-        @test (@inferred diag(DG, 1))::typeof(GenericArray(dd)) == GenericArray(zeros(elty, n-1))
+        @test (@inferred diag(DG, 1))::typeof(GenericArray(dd)) == fill(0, n-1)
     end
 
 
@@ -112,17 +112,17 @@ srand(1)
                 @test rdiv!(Uc, adjoint(conj(D))) ≈ target atol=atol_three
                 @test ldiv!(D, Matrix{eltype(D)}(I, size(D))) ≈ D \ Matrix{eltype(D)}(I, size(D)) atol=atol_three
                 @test_throws DimensionMismatch ldiv!(D, fill(elty(1), n + 1))
-                @test_throws SingularException ldiv!(Diagonal(zeros(relty, n)), copy(v))
+                @test_throws SingularException ldiv!(Diagonal(fill(zero(relty), n)), copy(v))
                 b = rand(elty, n, n)
                 b = sparse(b)
                 @test ldiv!(D, copy(b)) ≈ Array(D)\Array(b)
-                @test_throws SingularException ldiv!(Diagonal(zeros(elty, n)), copy(b))
+                @test_throws SingularException ldiv!(Diagonal(fill(zero(elty), n)), copy(b))
                 b = view(rand(elty, n), Vector(1:n))
                 b2 = copy(b)
                 c = ldiv!(D, b)
                 d = Array(D)\b2
                 @test c ≈ d
-                @test_throws SingularException ldiv!(Diagonal(zeros(elty, n)), b)
+                @test_throws SingularException ldiv!(Diagonal(fill(zero(elty), n)), b)
                 b = rand(elty, n+1, n+1)
                 b = sparse(b)
                 @test_throws DimensionMismatch ldiv!(D, copy(b))

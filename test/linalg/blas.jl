@@ -36,13 +36,13 @@ srand(100)
     end
 
     o4 = fill(elty(1), 4)
-    z4 = zeros(elty, 4)
+    z4 = fill(zero(elty), 4)
 
     I4 = Matrix{elty}(I, 4, 4)
     I43 = Matrix{elty}(I, 4, 3)
     L4 = tril(fill(elty(1), 4,4))
     U4 = triu(fill(elty(1), 4,4))
-    Z4 = zeros(elty, (4,4))
+    Z4 = fill(zero(elty), (4,4))
 
     elm1 = convert(elty, -1)
     el2 = convert(elty, 2)
@@ -208,7 +208,7 @@ srand(100)
                 TD  = Tridiagonal(rand(elty,n-1),rand(elty,n),rand(elty,n-1))
                 x   = rand(elty,n)
                 #put TD into the BLAS format!
-                fTD = zeros(elty,3,n)
+                fTD = fill(zero(elty),3,n)
                 fTD[1,2:n] = TD.du
                 fTD[2,:] = TD.d
                 fTD[3,1:n-1] = TD.dl
@@ -220,14 +220,14 @@ srand(100)
                     ST  = SymTridiagonal(rand(elty,n),rand(elty,n-1))
                     x   = rand(elty,n)
                     #put TD into the BLAS format!
-                    fST = zeros(elty,2,n)
+                    fST = fill(zero(elty),2,n)
                     fST[1,2:n] = ST.ev
                     fST[2,:] = ST.dv
                     @test BLAS.sbmv('U',1,fST,x) ≈ ST*x
                 else
                     dv = real(rand(elty,n))
                     ev = rand(elty,n-1)
-                    bH = zeros(elty,2,n)
+                    bH = fill(zero(elty),2,n)
                     bH[1,2:n] = ev
                     bH[2,:] = dv
                     fullH = diagm(0 => dv, -1 => conj(ev), 1 => ev)

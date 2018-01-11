@@ -85,7 +85,7 @@ using Test
             @test_throws ArgumentError eigs(a, nev=-1)
             @test_throws ArgumentError eigs(a, which=:Z)
             @test_throws ArgumentError eigs(a, which=:BE)
-            @test_throws DimensionMismatch eigs(a, v0=zeros(elty,n+2))
+            @test_throws DimensionMismatch eigs(a, v0=fill(zero(elty),n+2))
             @test_throws ArgumentError eigs(a, v0=fill(0, n))
             if elty == Float64
                 @test_throws ArgumentError eigs(a + copy(transpose(a)), which=:SI)
@@ -140,7 +140,7 @@ issymmetric(Phi::CPM) = false
 ishermitian(Phi::CPM) = false
 function Base.LinAlg.mul!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:Base.LinAlg.BlasFloat}
     rho = reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
-    rho1 = zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
+    rho1 = fill(zero(T),(size(Phi.kraus,1),size(Phi.kraus,1)))
     for s = 1:size(Phi.kraus,2)
         As = view(Phi.kraus,:,s,:)
         rho1 += As*rho*As'

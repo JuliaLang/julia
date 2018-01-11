@@ -86,7 +86,7 @@ function getproperty(F::LQ, d::Symbol)
 end
 
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
-    mul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
+    mul!(A, setindex!(fill(zero(eltype(A)), size(A, 2)), 1, j))[i]
 
 function show(io::IO, C::LQ)
     println(io, "$(typeof(C)) with factors L and Q:")
@@ -160,7 +160,7 @@ function *(adjA::Adjoint{<:Any,<:LQPackedQ}, B::StridedVecOrMat)
     if size(B,1) == size(A.factors,2)
         mul!(adjoint(AbstractMatrix{TAB}(A)), copy_oftype(B, TAB))
     elseif size(B,1) == size(A.factors,1)
-        mul!(adjoint(AbstractMatrix{TAB}(A)), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
+        mul!(adjoint(AbstractMatrix{TAB}(A)), [B; fill(zero(TAB), size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
     else
         throw(DimensionMismatch("first dimension of B, $(size(B,1)), must equal one of the dimensions of A, $(size(A))"))
     end
@@ -235,7 +235,7 @@ function *(A::StridedVecOrMat, Q::LQPackedQ)
     if size(A, 2) == size(Q.factors, 2)
         C = copy_oftype(A, TR)
     elseif size(A, 2) == size(Q.factors, 1)
-        C = zeros(TR, size(A, 1), size(Q.factors, 2))
+        C = fill(zero(TR), size(A, 1), size(Q.factors, 2))
         copyto!(C, 1, A, 1, length(A))
     else
         _rightappdimmismatch("columns")
@@ -248,7 +248,7 @@ function *(adjA::Adjoint{<:Any,<:StridedMatrix}, Q::LQPackedQ)
     if size(A, 1) == size(Q.factors, 2)
         C = adjoint!(similar(A, TR, reverse(size(A))), A)
     elseif size(A, 1) == size(Q.factors, 1)
-        C = zeros(TR, size(A, 2), size(Q.factors, 2))
+        C = fill(zero(TR), size(A, 2), size(Q.factors, 2))
         adjoint!(view(C, :, 1:size(A, 1)), A)
     else
         _rightappdimmismatch("rows")

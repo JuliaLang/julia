@@ -736,7 +736,7 @@ and `tau`, which stores the elementary reflectors.
 """
 function geqp3!(A::AbstractMatrix{<:BlasFloat})
     m, n = size(A)
-    geqp3!(A, zeros(BlasInt, n), similar(A, min(m, n)))
+    geqp3!(A, fill(zero(BlasInt), n), similar(A, min(m, n)))
 end
 
 ## Complete orthogonaliztion tools
@@ -1206,7 +1206,7 @@ for (gelsd, gelsy, elty) in
             if size(B, 1) != m
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)) but needs $m"))
             end
-            newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
+            newB = [B; fill(zero($elty), max(0, n - size(B, 1)), size(B, 2))]
             s     = similar(A, $elty, min(m, n))
             rnk   = Ref{BlasInt}()
             info  = Ref{BlasInt}()
@@ -1250,10 +1250,10 @@ for (gelsd, gelsy, elty) in
             if size(B, 1) != m
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)) but needs $m"))
             end
-            newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
+            newB = [B; fill(zero($elty), max(0, n - size(B, 1)), size(B, 2))]
             lda = max(1, stride(A,2))
             ldb = max(1, stride(newB,2))
-            jpvt = zeros(BlasInt, n)
+            jpvt = fill(zero(BlasInt), n)
             rnk = Ref{BlasInt}()
             work = Vector{$elty}(uninitialized, 1)
             lwork = BlasInt(-1)
@@ -1299,7 +1299,7 @@ for (gelsd, gelsy, elty, relty) in
             if size(B, 1) != m
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)) but needs $m"))
             end
-            newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
+            newB = [B; fill(zero($elty), max(0, n - size(B, 1)), size(B, 2))]
             s     = similar(A, $relty, min(m, n))
             rnk   = Ref{BlasInt}()
             info  = Ref{BlasInt}()
@@ -1345,10 +1345,10 @@ for (gelsd, gelsy, elty, relty) in
             if size(B, 1) != m
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)) but needs $m"))
             end
-            newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
+            newB = [B; fill(zero($elty), max(0, n - size(B, 1)), size(B, 2))]
             lda = max(1, m)
             ldb = max(1, m, n)
-            jpvt = zeros(BlasInt, n)
+            jpvt = fill(zero(BlasInt), n)
             rnk = Ref{BlasInt}(1)
             work = Vector{$elty}(uninitialized, 1)
             lwork = BlasInt(-1)
@@ -1424,7 +1424,7 @@ for (gglse, elty) in ((:dgglse_, :Float64),
             if length(d) != p
                 throw(DimensionMismatch("d has length $(length(d)), needs $p"))
             end
-            X = zeros($elty, n)
+            X = fill(zero($elty), n)
             info  = Ref{BlasInt}()
             work  = Vector{$elty}(uninitialized, 1)
             lwork = BlasInt(-1)
@@ -3721,7 +3721,7 @@ for (stev, stebz, stegr, stein, elty) in
             if length(ev_in) != n - 1
                 throw(DimensionMismatch("ev_in has length $(length(ev_in)) but needs one less than dv's length, $n)"))
             end
-            ev = [ev_in; zeros($elty,1)]
+            ev = [ev_in; fill(zero($elty),1)]
             ldz = n #Leading dimension
             #Number of eigenvalues to find
             if !(1 <= length(w_in) <= n)
