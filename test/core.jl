@@ -1683,7 +1683,7 @@ g4731() = f4731()
 @test g4731() == ""
 
 # issue #4675
-z50x50 = zeros(Float64, 50, 50)
+z50x50 = fill(0.0, 50, 50)
 f4675(x::StridedArray...) = 1
 f4675(x::StridedArray{T}...) where {T} = 2
 @test f4675(z50x50, z50x50) == 2
@@ -2225,7 +2225,7 @@ let
     sa = view(a, 4:6)
     # This can throw an error, but shouldn't segfault
     try
-        issue7897!(sa, zeros(Float64, 10))
+        issue7897!(sa, fill(0.0, 10))
     end
 end
 
@@ -3382,7 +3382,7 @@ mutable struct Sampler11587{N}
 end
 function Sampler11587()
     a = tuple(Any[32,32]...,)
-    Sampler11587(fill(0, a), zeros(Float64,a))
+    Sampler11587(fill(0, a), fill(0.0, a))
 end
 @test isa(Sampler11587(), Sampler11587{2})
 

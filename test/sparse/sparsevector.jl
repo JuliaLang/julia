@@ -8,7 +8,7 @@ spv_x1 = SparseVector(8, [2, 5, 6], [1.25, -0.75, 3.5])
 
 @test isa(spv_x1, SparseVector{Float64,Int})
 
-x1_full = zeros(Float64, length(spv_x1))
+x1_full = fill(0.0, length(spv_x1))
 x1_full[SparseArrays.nonzeroinds(spv_x1)] = nonzeros(spv_x1)
 
 @testset "basic properties" begin
@@ -438,7 +438,7 @@ end
         @test isa(H, SparseMatrixCSC{Float64,Int})
         @test size(H) == (m, n)
         @test nnz(H) == tnnz
-        Hr = zeros(Float64, m, n)
+        Hr = fill(0.0, m, n)
         for j = 1:n
             Hr[:,j] = Array(A[j])
         end

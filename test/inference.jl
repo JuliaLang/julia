@@ -585,7 +585,7 @@ tpara18457(::Type{A}) where {A<:AbstractMyType18457} = tpara18457(supertype(A))
         num_iters, num_chains = size(Y)
         start_iters = unique([1; [round(Int64, s) for s in logspace(log(10,100),
                                                                     log(10,num_iters/2),nbins-1)]])
-        result = zeros(Float64, 10, length(start_iters) * num_chains)
+        result = fill(0.0, (10, length(start_iters) * num_chains))
         j=1
         for c in 1:num_chains
             for st in 1:length(start_iters)

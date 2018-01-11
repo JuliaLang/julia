@@ -91,7 +91,7 @@ end
 
 macro timeit_init(ex,init,name,desc,group...)
     quote
-        t = zeros(Float64, mintrials)
+        t = fill(0.0, mintrials)
         for i=0:mintrials
             $(esc(init))
             e = 1000*(@elapsed $(esc(ex)))

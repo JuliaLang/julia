@@ -795,8 +795,8 @@ for A in (rand(2), rand(2,3))
 end
 
 # nextind
-@test nextind(zeros(Float64, 4), 2) == 3
-@test nextind(zeros(Float64, 2, 3), CartesianIndex(2,1)) == CartesianIndex(1, 2)
+@test nextind(fill(0.0, 4), 2) == 3
+@test nextind(fill(0.0, 2, 3), CartesianIndex(2,1)) == CartesianIndex(1, 2)
 
 @testset "ImageCore #40" begin
     Base.convert(::Type{Array{T,n}}, a::Array{T,n}) where {T<:Number,n} = a

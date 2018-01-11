@@ -270,7 +270,7 @@ end
 @testset "sparse map/broadcast with result eltype not a concrete subtype of Number (#19561/#19589)" begin
     N = 4
     A, fA = sparse(1.0I, N, N), Matrix(1.0I, N, N)
-    B, fB = spzeros(1, N), zeros(Float64, 1, N)
+    B, fB = spzeros(1, N), fill(0.0, 1, N)
     intorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : Int(1)
     stringorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : "hello"
     intorfloat_notzeropres(xs...) = all(iszero, xs) ? Int(1) : zero(Float64)
@@ -538,10 +538,10 @@ end
     @test A .^ BF[:,1] == AF .^ BF[:,1]
     @test BF[:,1] .^ A == BF[:,1] .^ AF
 
-    @test spzeros(0,0)  + spzeros(0,0) == zeros(Float64, 0, 0)
-    @test spzeros(0,0)  * spzeros(0,0) == zeros(Float64, 0, 0)
-    @test spzeros(1,0) .+ spzeros(2,1) == zeros(Float64, 2, 0)
-    @test spzeros(1,0) .* spzeros(2,1) == zeros(Float64, 2, 0)
-    @test spzeros(1,2) .+ spzeros(0,1) == zeros(Float64, 0, 2)
-    @test spzeros(1,2) .* spzeros(0,1) == zeros(Float64, 0, 2)
+    @test spzeros(0,0)  + spzeros(0,0) == fill(0, 0, 0)
+    @test spzeros(0,0)  * spzeros(0,0) == fill(0, 0, 0)
+    @test spzeros(1,0) .+ spzeros(2,1) == fill(0, 2, 0)
+    @test spzeros(1,0) .* spzeros(2,1) == fill(0, 2, 0)
+    @test spzeros(1,2) .+ spzeros(0,1) == fill(0, 0, 2)
+    @test spzeros(1,2) .* spzeros(0,1) == fill(0, 0, 2)
 end

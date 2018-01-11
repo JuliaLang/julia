@@ -33,8 +33,8 @@ end
 end
 
 @testset "Future.copy! for AbstractArray" begin
-    @test_throws ArgumentError Future.copy!(zeros(Float64, 2, 3), zeros(Float64, 3, 2))
-    s = zeros(Float64, 2, 2)
+    @test_throws ArgumentError Future.copy!(fill(0.0, 2, 3)), fill(0.0, 3, 2))
+    s = fill(0.0, 2, 2)
     @test s === Future.copy!(s, fill(1, 2, 2)) == fill(1, 2, 2)
     @test s === Future.copy!(s, fill(1.0, 2, 2)) == fill(1.0, 2, 2)
 end

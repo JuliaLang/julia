@@ -2080,7 +2080,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     # Get the Gauss-Legendre quadrature points and weights
-    R = zeros(Float64, m, m)
+    R = fill(0.0, m, m)
     for i = 1:m - 1
         R[i,i+1] = i / sqrt((2 * i)^2 - 1)
         R[i+1,i] = R[i,i+1]

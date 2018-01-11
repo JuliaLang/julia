@@ -197,10 +197,11 @@ end
 end
 
 @testset "Issue 22810" begin
-    A = zeros(Float64, 1, 2)
-    B = zeros(Float64, 1, 1)
-    @test A \ B == zeros(Float64, 2, 1)
-    @test qrfact(A, Val(true)) \ B == zeros(Float64, 2, 1)
+    A = fill(0.0, 1, 2)
+    B = fill(0.0, 1, 1)
+    C = fill(0.0, 2, 1)
+    @test A \ B == C
+    @test qrfact(A, Val(true)) \ B == C
 end
 
 @testset "Issue 24107" begin

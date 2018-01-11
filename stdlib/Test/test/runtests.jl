@@ -591,7 +591,7 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
                 end
             end
             @testset "Arrays" begin
-                @test foo(zeros(Float64, 2)) == 4
+                @test foo(fill(0., 2)) == 4
                 @test foo(fill(1., 4)) == 15
             end
         end'`), stderr=DevNull), String)

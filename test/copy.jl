@@ -55,7 +55,7 @@ end
         copyto!(B, RA, A, RA)
         @test B == A
     end
-    let A = reshape(1:6, 3, 2), B = zeros(Float64, 8, 8)
+    let A = reshape(1:6, 3, 2), B = fill(0.0, 8, 8)
         RA = CartesianIndices(axes(A))
         copyto!(B, CartesianIndices((5:7,2:3)), A, RA)
         @test B[5:7,2:3] == A

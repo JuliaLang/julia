@@ -28,8 +28,8 @@ end
 
 function approximate(n)
     u = fill(1., n)
-    v = zeros(Float64,n)
-    w = zeros(Float64,n)
+    v = fill(0.0, n)
+    w = fill(0.0, n)
     vv = vBv = 0
     for i = 1:10
         Au(u,w)

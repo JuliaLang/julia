@@ -268,7 +268,7 @@ end
 
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
-    Z2x3, Z3x2 = zeros(Float64, 2, 3), zeros(Flaot64, 3, 2)
+    Z2x3, Z3x2 = fill(0.0, 2, 3), fill(0.0, 3, 2)
     @test sort([svdvals(D)...;], rev = true) ≈
         svdvals([D.diag[1] Z3x2; Z2x3 D.diag[2]])
     @test [eigvals(D)...;] ≈ eigvals([D.diag[1] Z3x2; Z2x3 D.diag[2]])

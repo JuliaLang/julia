@@ -15,7 +15,7 @@ end
 
 function laplace_devec()
     N = 150
-    u = zeros(Float64, N, N)
+    u = fill(0.0, N, N)
     u[1,:] = 1
     Niter = 2^10
     dx2 = dy2 = 0.1*0.1
@@ -31,7 +31,7 @@ end
 
 function laplace_vec()
     N = 150
-    u = zeros(Float64, N, N)
+    u = fill(0.0, N, N)
     u[1,:] = 1
     Niter = 2^10
     dx2 = dy2 = 0.1*0.1
@@ -47,7 +47,7 @@ end
 
 function laplace_vec_sub()
     N = 150
-    u = zeros(Float64, N, N)
+    u = fill(0.0, N, N)
     u[1,:] = 1
     Niter = 2^10
     dx2 = dy2 = 0.1*0.1

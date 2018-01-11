@@ -141,7 +141,7 @@ end
     Lfull, Qfull = lq(A, full = true)
     @test size(Lfull) == (m, m)
     @test size(Qfull) == (n, n)
-    @test isapprox(A, [Lfull zeros(Float64, m, n - m)] * Qfull)
+    @test isapprox(A, [Lfull fill(0.0, m, n-m)] * Qfull)
 end
 
 @testset "getindex on LQPackedQ (#23733)" begin
