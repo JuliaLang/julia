@@ -145,5 +145,5 @@ show(io::IO, ::SHA3_384_CTX) = write(io, "SHA3 384-bit hash state")
 show(io::IO, ::SHA3_512_CTX) = write(io, "SHA3 512-bit hash state")
 
 
-# use out types to define a method to get a pointer to the state buffer
+# use our types to define a method to get a pointer to the state buffer
 buffer_pointer(ctx::T) where {T<:SHA_CTX} = Ptr{state_type(T)}(pointer(ctx.buffer))
