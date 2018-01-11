@@ -186,7 +186,7 @@ function getproperty(F::SVD, d::Symbol)
     end
 end
 
-Base.propertynames(F::SVD) = append!([:V], fieldnames(typeof(F)))
+Base.propertynames(F::SVD, private::Bool=false) = private ? append!([:V], fieldnames(typeof(F))) : [:U,:S,:V,:Vt]
 
 """
     svdvals!(A)

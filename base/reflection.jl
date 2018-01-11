@@ -1121,12 +1121,17 @@ min_world(m::Core.MethodInstance) = reinterpret(UInt, m.min_world)
 max_world(m::Core.MethodInstance) = reinterpret(UInt, m.max_world)
 
 """
-    propertynames(x)
+    propertynames(x, private=false)
 
 Get an array of the properties (`x.property`) of an object `x`.   This
 is typically the same as [`fieldnames(typeof(x))`](@ref), but types
 that overload [`getproperty`](@ref) should generally overload `propertynames`
 as well to get the properties of an instance of the type.
+
+`propertynames(x)` may return only "public" property names that are part
+of the documented interface of `x`.   If you want it to also return "private"
+fieldnames intended for internal use, pass `true` for the optional second argument.
 """
 propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
+propertynames(x, private) = propertynames(x) # ignore private flag by default
