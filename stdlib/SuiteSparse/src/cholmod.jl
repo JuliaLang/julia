@@ -12,6 +12,8 @@ import Base.LinAlg: (\),
 using ..SparseArrays
 using Base.Printf.@printf
 
+import Libdl
+
 export
     Dense,
     Factor,

@@ -100,7 +100,6 @@ const PAGES = [
         "base/iterators.md",
         "base/c.md",
         "base/libc.md",
-        "base/libdl.md",
         "base/stacktraces.md",
         "base/simd-types.md",
     ],
