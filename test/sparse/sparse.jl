@@ -544,7 +544,7 @@ end
 end
 
 @testset "issue #5985" begin
-    @test sprand(Bool, 4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
+    @test sprand(Bool, 4, 5, 0.0) == sparse(fill(false, 4, 5))
     @test sprand(Bool, 4, 5, 1.00) == sparse(fill(true, 4, 5))
     sprb45nnzs = fill(0.0, 5)
     for i=1:5

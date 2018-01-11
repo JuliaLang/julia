@@ -16,7 +16,7 @@ function test_threaded_loop_and_atomic_add()
     x = Atomic()
     a = fill(0, 10000)
     threaded_loop(a,1:10000,x)
-    found = zeros(Bool,10000)
+    found = fill(false, 10000)
     was_inorder = true
     for i=1:length(a)
         was_inorder &= a[i]==i
