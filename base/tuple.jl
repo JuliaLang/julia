@@ -211,7 +211,7 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 # constructing from an iterator
 
 # only define these in Base, to avoid overwriting the constructors
-# NOTE: this means this constructor must be avoided in Inference!
+# NOTE: this means this constructor must be avoided in Core.Compiler!
 if module_name(@__MODULE__) === :Base
 
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples

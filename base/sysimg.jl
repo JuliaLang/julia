@@ -42,7 +42,7 @@ function include(path::AbstractString)
 end
 const _included_files = Array{Tuple{Module,String},1}()
 function _include1(mod::Module, path)
-    Core.Inference.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
+    Core.Compiler.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
     Core.include(mod, path)
 end
 let SOURCE_PATH = ""
@@ -75,8 +75,8 @@ convert(::Type{T}, arg::T) where {T<:VecElement} = arg
 
 # init core docsystem
 import Core: @doc, @__doc__, @doc_str, WrappedException
-if isdefined(Core, :Inference)
-    import Core.Inference.CoreDocs
+if isdefined(Core, :Compiler)
+    import Core.Compiler.CoreDocs
     Core.atdoc!(CoreDocs.docm)
 end
 
@@ -195,7 +195,7 @@ include("reshapedarray.jl")
 include("bitarray.jl")
 include("bitset.jl")
 
-if !isdefined(Core, :Inference)
+if !isdefined(Core, :Compiler)
     include("docs/core.jl")
     Core.atdoc!(CoreDocs.docm)
 end
@@ -487,7 +487,7 @@ include("docs/basedocs.jl")
 include("markdown/Markdown.jl")
 include("docs/Docs.jl")
 using .Docs, .Markdown
-isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
+isdefined(Core, :Compiler) && Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
 
 function __init__()
     # for the few uses of Crand in Base:

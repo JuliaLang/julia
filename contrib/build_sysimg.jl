@@ -69,16 +69,16 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
             cp(userimg_path, "userimg.jl")
         end
         try
-            # Start by building inference.{ji,o}
-            inference_path = joinpath(dirname(sysimg_path), "inference")
-            info("Building inference.o")
-            info("$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl")
-            run(`$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl`)
+            # Start by building basecompiler.{ji,o}
+            basecompiler_path = joinpath(dirname(sysimg_path), "basecompiler")
+            info("Building basecompiler.o")
+            info("$julia -C $cpu_target --output-ji $basecompiler_path.ji --output-o $basecompiler_path.o compiler/compiler.jl")
+            run(`$julia -C $cpu_target --output-ji $basecompiler_path.ji --output-o $basecompiler_path.o compiler/compiler.jl`)
 
             # Bootstrap off of that to create sys.{ji,o}
             info("Building sys.o")
-            info("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl")
-            run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl`)
+            info("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $basecompiler_path.ji --startup-file=no sysimg.jl")
+            run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $basecompiler_path.ji --startup-file=no sysimg.jl`)
 
             if cc !== nothing
                 link_sysimg(sysimg_path, cc, debug)

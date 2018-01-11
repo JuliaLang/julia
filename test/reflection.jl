@@ -666,11 +666,11 @@ let
 
     code_typed(f18888, Tuple{}; optimize=false)
     @test m.specializations !== nothing  # uncached, but creates the specializations entry
-    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
+    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
     @test !isdefined(code, :inferred)
 
     code_typed(f18888, Tuple{}; optimize=true)
-    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
+    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
     @test isdefined(code, :inferred)
 end
 
@@ -768,8 +768,8 @@ x22979 = (1, 2.0, 3.0 + im)
 T22979 = Tuple{typeof(f22979),typeof.(x22979)...}
 world = typemax(UInt)
 mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[]
-instance = Core.Inference.code_for_method(m, mtypes, msp, world, false)
-cinfo_generated = Core.Inference.get_staged(instance)
+instance = Core.Compiler.code_for_method(m, mtypes, msp, world, false)
+cinfo_generated = Core.Compiler.get_staged(instance)
 @test_throws ErrorException Base.uncompressed_ast(m)
 
 test_similar_codeinfo(@code_lowered(f22979(x22979...)), cinfo_generated)

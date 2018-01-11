@@ -1,21 +1,21 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# tests for Core.Inference correctness and precision
-import Core.Inference: Const, Conditional, ⊑
-const isleaftype = Core.Inference._isleaftype
+# tests for Core.Compiler correctness and precision
+import Core.Compiler: Const, Conditional, ⊑
+const isleaftype = Core.Compiler._isleaftype
 
 using Random
 
 # demonstrate some of the type-size limits
-@test Core.Inference.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 0) == Ref
-@test Core.Inference.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 0) == Ref{Complex{T} where T}
+@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 0) == Ref
+@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 0) == Ref{Complex{T} where T}
 let comparison = Tuple{X, X} where X<:Tuple
     sig = Tuple{X, X} where X<:comparison
     ref = Tuple{X, X} where X
-    @test Core.Inference.limit_type_size(sig, comparison, comparison, 10) == comparison
-    @test Core.Inference.limit_type_size(sig, ref, comparison,  10) == comparison
-    @test Core.Inference.limit_type_size(Tuple{sig}, Tuple{ref}, comparison,  10) == Tuple{comparison}
-    @test Core.Inference.limit_type_size(sig, ref, Tuple{comparison},  10) == sig
+    @test Core.Compiler.limit_type_size(sig, comparison, comparison, 10) == comparison
+    @test Core.Compiler.limit_type_size(sig, ref, comparison,  10) == comparison
+    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison,  10) == Tuple{comparison}
+    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison},  10) == sig
 end
 
 
@@ -121,9 +121,9 @@ barTuple2() = fooTuple{tuple(:y)}()
 @test Base.return_types(barTuple1,Tuple{})[1] == Base.return_types(barTuple2,Tuple{})[1] == fooTuple{(:y,)}
 
 # issue #6050
-@test Core.Inference.getfield_tfunc(
+@test Core.Compiler.getfield_tfunc(
           Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
-          Core.Inference.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
+          Core.Compiler.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
 
 # issue #12476
 function f12476(a)
@@ -396,7 +396,7 @@ f18450() = ifelse(true, Tuple{Vararg{Int}}, Tuple{Vararg})
 @test f18450() == Tuple{Vararg{Int}}
 
 # issue #18569
-@test !Core.Inference.isconstType(Type{Tuple})
+@test !Core.Compiler.isconstType(Type{Tuple})
 
 # ensure pure attribute applies correctly to all signatures of fpure
 Base.@pure function fpure(a=rand(); b=rand())
@@ -493,7 +493,7 @@ for codetype in Any[
         @code_typed(g18679()),
         @code_typed(h18679()),
         @code_typed(g19348((1, 2.0)))]
-    # make sure none of the slottypes are left as Core.Inference.Const objects
+    # make sure none of the slottypes are left as Core.Compiler.Const objects
     code = codetype[1]
     @test all(x->isa(x, Type), code.slottypes)
     local notconst(@nospecialize(other)) = true
@@ -557,7 +557,7 @@ end
 
 # Issue 19641
 foo19641() = let a = 1.0
-    Core.Inference.return_type(x -> x + a, Tuple{Float64})
+    Core.Compiler.return_type(x -> x + a, Tuple{Float64})
 end
 @inferred foo19641()
 
@@ -698,12 +698,12 @@ f20267(x::T20267{T}, y::T) where (T) = f20267(Any[1][1], x.inds)
 
 # issue #20615
 let A = 1:2, z = zip(A, A, A, A, A, A, A, A, A, A, A, A)
-    @test z isa Core.Inference.limit_type_depth(typeof(z), 0)
+    @test z isa Core.Compiler.limit_type_depth(typeof(z), 0)
     @test start(z) == (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, 1)))))))))))
 end
 # introduce TypeVars in Unions in invariant position
 let T = Val{Val{Val{Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64}}}}
-    @test T <: Core.Inference.limit_type_depth(T, 0)
+    @test T <: Core.Compiler.limit_type_depth(T, 0)
 end
 
 # issue #20704
@@ -752,19 +752,19 @@ test_no_apply(::Any) = true
 
 # issue #20033
 # check return_type_tfunc for calls where no method matches
-bcast_eltype_20033(f, A) = Core.Inference.return_type(f, Tuple{eltype(A)})
+bcast_eltype_20033(f, A) = Core.Compiler.return_type(f, Tuple{eltype(A)})
 err20033(x::Float64...) = prod(x)
 @test bcast_eltype_20033(err20033, [1]) === Union{}
 @test Base.return_types(bcast_eltype_20033, (typeof(err20033), Vector{Int},)) == Any[Type{Union{}}]
 # return_type on builtins
-@test Core.Inference.return_type(tuple, Tuple{Int,Int8,Int}) === Tuple{Int,Int8,Int}
+@test Core.Compiler.return_type(tuple, Tuple{Int,Int8,Int}) === Tuple{Int,Int8,Int}
 
 # issue #21088
-@test Core.Inference.return_type(typeof, Tuple{Int}) == Type{Int}
+@test Core.Compiler.return_type(typeof, Tuple{Int}) == Type{Int}
 
 # Inference of constant svecs
 @eval fsvecinf() = $(QuoteNode(Core.svec(Tuple{Int,Int}, Int)))[1]
-@test Core.Inference.return_type(fsvecinf, Tuple{}) == Type{Tuple{Int,Int}}
+@test Core.Compiler.return_type(fsvecinf, Tuple{}) == Type{Tuple{Int,Int}}
 
 # nfields tfunc on `DataType`
 let f = ()->Val{nfields(DataType[Int][1])}
@@ -856,14 +856,14 @@ for A in (1,)
 end
 
 # issue #21848
-@test Core.Inference.limit_type_depth(Ref{Complex{T} where T}, 0) == Ref
+@test Core.Compiler.limit_type_depth(Ref{Complex{T} where T}, 0) == Ref
 let T = Tuple{Tuple{Int64, Nothing},
               Tuple{Tuple{Int64, Nothing},
                     Tuple{Int64, Tuple{Tuple{Int64, Nothing},
                                        Tuple{Tuple{Int64, Nothing}, Tuple{Int64, Tuple{Tuple{Int64, Nothing}, Tuple{Tuple, Tuple}}}}}}}}
-    @test Core.Inference.limit_type_depth(T, 0) >: T
-    @test Core.Inference.limit_type_depth(T, 1) >: T
-    @test Core.Inference.limit_type_depth(T, 2) >: T
+    @test Core.Compiler.limit_type_depth(T, 0) >: T
+    @test Core.Compiler.limit_type_depth(T, 1) >: T
+    @test Core.Compiler.limit_type_depth(T, 2) >: T
 end
 
 # Issue #20902, check that this doesn't error.
@@ -926,7 +926,7 @@ let f(x) = isdefined(x, :NonExistentField) ? 1 : ""
     @test Base.return_types(f, (ComplexF32,)) == Any[String]
     @test Union{Int,String} <: Base.return_types(f, (AbstractArray,))[1]
 end
-import Core.Inference: isdefined_tfunc
+import Core.Compiler: isdefined_tfunc
 @test isdefined_tfunc(ComplexF32, Const(())) === Union{}
 @test isdefined_tfunc(ComplexF32, Const(1)) === Const(true)
 @test isdefined_tfunc(ComplexF32, Const(2)) === Const(true)
@@ -973,10 +973,10 @@ end
 # issue #22875
 
 typeargs = (Type{Int},)
-@test Base.Core.Inference.return_type((args...) -> one(args...), typeargs) === Int
+@test Base.Core.Compiler.return_type((args...) -> one(args...), typeargs) === Int
 
 typeargs = (Type{Int},Type{Int},Type{Int},Type{Int},Type{Int},Type{Int})
-@test Base.Core.Inference.return_type(promote_type, typeargs) === Type{Int}
+@test Base.Core.Compiler.return_type(promote_type, typeargs) === Type{Int}
 
 # demonstrate that inference must converge
 # while doing constant propagation
@@ -1066,7 +1066,7 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
             continue
         elseif isa(ex, Expr)
             ex = ex::Expr
-            if Core.Inference.is_meta_expr(ex)
+            if Core.Compiler.is_meta_expr(ex)
                 continue
             elseif ex.head === :return
                 # multiple returns
@@ -1098,7 +1098,7 @@ function find_call(code, func, narg)
             if farg === func
                 return true
             end
-        elseif Core.Inference.is_meta_expr(ex)
+        elseif Core.Compiler.is_meta_expr(ex)
             continue
         end
         find_call(ex.args, func, narg) && return true
@@ -1135,8 +1135,8 @@ isdefined_f3(x) = isdefined(x, 3)
 @test @inferred(isdefined_f3(())) == false
 @test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]).code, isdefined, 3)
 
-let isa_tfunc = Core.Inference.t_ffunc_val[
-        findfirst(x->x===isa, Core.Inference.t_ffunc_key)][3]
+let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
+        findfirst(x->x===isa, Core.Compiler.T_FFUNC_KEY)][3]
     @test isa_tfunc(Array, Const(AbstractArray)) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray}) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray{Int}}) == Bool
@@ -1175,8 +1175,8 @@ let isa_tfunc = Core.Inference.t_ffunc_val[
     @test isa_tfunc(Union{Int64, Float64}, Type{AbstractArray}) === Const(false)
 end
 
-let subtype_tfunc = Core.Inference.t_ffunc_val[
-        findfirst(x->x===(<:), Core.Inference.t_ffunc_key)][3]
+let subtype_tfunc = Core.Compiler.T_FFUNC_VAL[
+        findfirst(x->x===(<:), Core.Compiler.T_FFUNC_KEY)][3]
     @test subtype_tfunc(Type{<:Array}, Const(AbstractArray)) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray}) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray{Int}}) == Bool
@@ -1235,7 +1235,7 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 @test Base.return_types(g23024, (Tuple{DataType},)) == Any[Int]
 @test g23024((UInt8,)) === 2
 
-@test !Core.Inference.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
+@test !Core.Compiler.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
 @test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any]
 
 # issue #23685
@@ -1257,7 +1257,7 @@ end
 struct T23786{D<:Tuple{Vararg{Vector{T} where T}}, N}
 end
 let t = Tuple{Type{T23786{D, N} where N where D<:Tuple{Vararg{Array{T, 1} where T, N} where N}}}
-    @test Core.Inference.limit_type_depth(t, 4) >: t
+    @test Core.Compiler.limit_type_depth(t, 4) >: t
 end
 
 # issue #13183
@@ -1268,7 +1268,7 @@ gg13183(x::X...) where {X} = (_false13183 ? gg13183(x, x) : 0)
 # test the external OptimizationState constructor
 let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     world = typemax(UInt),
-    opt = Core.Inference.OptimizationState(linfo, Core.Inference.InferenceParams(world))
+    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.Params(world))
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == length(opt.src.slotnames) == length(opt.src.slottypes)
@@ -1276,7 +1276,7 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test !opt.src.inferred
     @test opt.mod === Base
     @test opt.max_valid === typemax(UInt)
-    @test opt.min_valid === Core.Inference.min_world(opt.linfo) > 2
+    @test opt.min_valid === Core.Compiler.min_world(opt.linfo) > 2
     @test opt.nargs == 3
 end
 
@@ -1304,9 +1304,9 @@ f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test @inferred f_pure_add()
 
 # inference of `T.mutable`
-@test Core.Inference.getfield_tfunc(Const(Int), Const(:mutable)) == Const(false)
-@test Core.Inference.getfield_tfunc(Const(Vector{Int}), Const(:mutable)) == Const(true)
-@test Core.Inference.getfield_tfunc(DataType, Const(:mutable)) == Bool
+@test Core.Compiler.getfield_tfunc(Const(Int), Const(:mutable)) == Const(false)
+@test Core.Compiler.getfield_tfunc(Const(Vector{Int}), Const(:mutable)) == Const(true)
+@test Core.Compiler.getfield_tfunc(DataType, Const(:mutable)) == Bool
 
 struct Foo_22708
     x::Ptr{Foo_22708}
@@ -1331,7 +1331,7 @@ function f24852_kernel_cinfo(x, y)
     sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f24852_kernel),x,y}, -1, typemax(UInt))[1]
     code_info = Base.uncompressed_ast(method)
     body = Expr(:block, code_info.code...)
-    Base.Core.Inference.substitute!(body, 0, Any[], sig, Any[spvals...], 0, :propagate)
+    Base.Core.Compiler.substitute!(body, 0, Any[], sig, Any[spvals...], 0, :propagate)
     return method, code_info
 end
 
@@ -1342,7 +1342,7 @@ end
 
 function f24852_gen_cinfo_inflated(X, Y, f, x, y)
     method, code_info = f24852_kernel_cinfo(x, y)
-    code_info.signature_for_inference_heuristics = Core.Inference.svec(f, (x, y), typemax(UInt))
+    code_info.signature_for_inference_heuristics = Core.Compiler.svec(f, (x, y), typemax(UInt))
     return code_info
 end
 

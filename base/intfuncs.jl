@@ -225,7 +225,7 @@ end
 const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float32,Float64}
 const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
-# inference.jl has complicated logic to inline x^2 and x^3 for
+# Core.Compiler has complicated logic to inline x^2 and x^3 for
 # numeric types.  In terms of Val we can do it much more simply.
 # (The first argument prevents unexpected behavior if a function ^
 # is defined that is not equal to Base.^)

@@ -492,18 +492,18 @@ function _collect_indices(indsA, A)
     copyto!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
 end
 
-# define this as a macro so that the call to Inference
+# define this as a macro so that the call to Core.Compiler
 # gets inlined into the caller before recursion detection
 # gets a chance to see it, so that recursive calls to the caller
 # don't trigger the inference limiter
-if isdefined(Core, :Inference)
+if isdefined(Core, :Compiler)
     macro default_eltype(itr)
         I = esc(itr)
         return quote
             if $I isa Generator && ($I).f isa Type
                 ($I).f
             else
-                Core.Inference.return_type(first, Tuple{typeof($I)})
+                Core.Compiler.return_type(first, Tuple{typeof($I)})
             end
         end
     end
