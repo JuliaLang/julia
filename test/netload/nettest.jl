@@ -77,7 +77,7 @@ function test_send(exp)
         take!(server_started)
         print("[CLIENT] Connecting to port $(port)\n")
         cli_sock = connect("localhost", port)
-        data = fill!(zeros(UInt8, block), Int8(65))
+        data = fill(0x41, block)
         cli_bsent = 0
         while cli_bsent < size
             write(cli_sock, data)
@@ -127,7 +127,7 @@ test_send(9)
 
         send_task = @task begin
             # write in chunks of xfer_block
-            data = fill!(zeros(UInt8, xfer_block), Int8(65))
+            data = fill(0x41, xfer_block)
             while bsent < xfer_size
                 write(s, data)
                 bsent += xfer_block

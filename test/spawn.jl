@@ -509,7 +509,7 @@ end
 #    Base.link_pipe(stdin, julia_only_write=true)
 #    p = spawn(pipeline(catcmd, stdin=stdin, stdout=stdout, stderr=DevNull))
 #    @async begin # feed cat with 2 MB of data (zeros)
-#        write(stdin, zeros(UInt8, 1048576 * 2))
+#        write(stdin, fill(0x0, 1048576 * 2))
 #        close(stdin)
 #    end
 #    sleep(0.5) # give cat a chance to fill the write buffer for stdout

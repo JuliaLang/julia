@@ -15,7 +15,7 @@ end
 # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
 # in the case where we take! it.
 function IOStream(name::AbstractString, finalize::Bool)
-    buf = zeros(UInt8,sizeof_ios_t)
+    buf = fill(0x0, sizeof_ios_t)
     x = IOStream(name, buf)
     if finalize
         finalizer(close, x)

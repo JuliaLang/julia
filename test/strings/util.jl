@@ -324,7 +324,7 @@ end
         @test hex2bytes(view(b"012345",1:6)) == UInt8[0x01,0x23,0x45]
         @test begin
             s = view(b"012345ab",1:6)
-            d = view(zeros(UInt8, 10),1:3)
+            d = view(fill(0x0, 10),1:3)
             hex2bytes!(d,s) == UInt8[0x01,0x23,0x45]
         end
         # odd size

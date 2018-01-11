@@ -126,7 +126,7 @@ Base.ensureroom(io,100)
 seekend(io)
 @test ioslength(io) == 0
 @test position(io) == 0
-write(io,zeros(UInt8,200))
+write(io,fill(0x0, 200))
 @test ioslength(io) == 75
 @test length(io.data) == 75
 write(io,1)
@@ -143,7 +143,7 @@ skip(io,71)
 @test write(io,'y') === 1
 @test read(io, String) == "happy"
 @test eof(io)
-write(io,zeros(UInt8,73))
+write(io,fill(0x0, 73))
 write(io,'a')
 write(io,'b')
 write(io,'c')
@@ -240,7 +240,7 @@ let bstream = BufferStream()
     @test a[1] == b
     b = read(bstream,UInt8)
     @test a[2] == b
-    c = zeros(UInt8,8)
+    c = fill(0x0, 8)
     @test nb_available(bstream) == 8
     @test !eof(bstream)
     read!(bstream,c)

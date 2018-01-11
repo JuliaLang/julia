@@ -230,7 +230,7 @@ end
     @test A[:,7:-3:1,5] == [191 176 161; 192 177 162; 193 178 163; 194 179 164; 195 180 165]
     @test reshape(A, Val(2))[:,3:9] == reshape(11:45,5,7)
     rng = (2,2:3,2:2:5)
-    tmp = zeros(Int,map(maximum,rng)...)
+    tmp = fill(0, map(maximum,rng)...)
     tmp[rng...] = A[rng...]
     @test  tmp == cat(3,[0 0 0; 0 0 0],[0 0 0; 0 47 52],[0 0 0; 0 0 0],[0 0 0; 0 127 132])
 

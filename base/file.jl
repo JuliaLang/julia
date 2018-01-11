@@ -407,7 +407,7 @@ Return the files and directories in the directory `dir` (or the current working 
 """
 function readdir(path::AbstractString)
     # Allocate space for uv_fs_t struct
-    uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
+    uv_readdir_req = fill(0x0, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
     err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),

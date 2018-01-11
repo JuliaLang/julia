@@ -101,7 +101,7 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
 
     function Dict{K,V}() where V where K
         n = 16
-        new(zeros(UInt8,n), Vector{K}(uninitialized, n), Vector{V}(uninitialized, n), 0, 0, 0, 1, 0)
+        new(fill(0x0, n), Vector{K}(uninitialized, n), Vector{V}(uninitialized, n), 0, 0, 0, 1, 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
@@ -213,7 +213,7 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
         return h
     end
 
-    slots = zeros(UInt8,newsz)
+    slots = fill(0x0, newsz)
     keys = Vector{K}(uninitialized, newsz)
     vals = Vector{V}(uninitialized, newsz)
     age0 = h.age

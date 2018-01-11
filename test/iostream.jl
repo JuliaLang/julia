@@ -42,8 +42,8 @@ end
 
 # issue #18755
 mktemp() do path, io
-    write(io, zeros(UInt8, 131073))
+    write(io, fill(0x0, 131073))
     @test position(io) == 131073
-    write(io, zeros(UInt8, 131073))
+    write(io, fill(0x0, 131073))
     @test position(io) == 262146
 end

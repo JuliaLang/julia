@@ -25,7 +25,7 @@ elseif Sys.isapple()
     const COMMONATTR = 5
     const FSOPT_NOFOLLOW = 1  # Don't follow symbolic links
 
-    const attr_list = zeros(UInt8, 24)
+    const attr_list = fill(0x0, 24)
     attr_list[BITMAPCOUNT] = ATRATTR_BIT_MAP_COUNT
     attr_list[COMMONATTR] = ATTR_CMN_NAME
 
