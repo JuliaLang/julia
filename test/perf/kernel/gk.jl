@@ -8,7 +8,7 @@
 
 ##### generate skew symmetric matrix  #######
 function myunifskew(n)
-    A = zeros(n, n)
+    A = zeros(Float64, n, n)
 
     #print("A[i,j] initialized with zeros \n")
 
@@ -45,16 +45,16 @@ function gk(n, myeps)
     A = myunifskew(n)
 
     g = length(myeps)
-    iteration = zeros(g)
-    times = zeros(g)
+    iteration = zeros(Float64, g)
+    times = zeros(Float64, g)
 
     for KK=1:g
 
         eps = myeps[KK]
 
         e = fill(1., n)
-        X = zeros(n)
-        U = zeros(n)
+        X = zeros(Float64, n)
+        U = zeros(Float64, n)
         p = e./n
 
         t = 0
@@ -63,7 +63,7 @@ function gk(n, myeps)
         iter = 0
         epse = eps .* e
 
-        csum = zeros(n)
+        csum = zeros(Float64, n)
 
         while(stop != 1)
             t=t+1

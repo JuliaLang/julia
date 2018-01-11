@@ -1683,12 +1683,13 @@ g4731() = f4731()
 @test g4731() == ""
 
 # issue #4675
+z50x50 = zeros(Float64, 50, 50)
 f4675(x::StridedArray...) = 1
 f4675(x::StridedArray{T}...) where {T} = 2
-@test f4675(zeros(50,50), zeros(50,50)) == 2
+@test f4675(z50x50, z50x50) == 2
 g4675(x::StridedArray{T}...) where {T} = 2
 g4675(x::StridedArray...) = 1
-@test g4675(zeros(50,50), zeros(50,50)) == 2
+@test g4675(z50x50, z50x50) == 2
 
 # issue #4771
 module Lib4771
@@ -2124,7 +2125,7 @@ end
 @test @M6938.mac() == 0
 
 # issue #7012
-let x = zeros(2)
+let x = zeros(Float64, 2)
     x[1]::Float64 = 1
     @test x == [1.0, 0.0]
     @test_throws TypeError (x[1]::Int = 1)
@@ -2224,7 +2225,7 @@ let
     sa = view(a, 4:6)
     # This can throw an error, but shouldn't segfault
     try
-        issue7897!(sa, zeros(10))
+        issue7897!(sa, zeros(Float64, 10))
     end
 end
 

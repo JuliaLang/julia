@@ -347,7 +347,7 @@ dA = Array(sA)
         @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
         @test scale!(copy(dAt), conj(bi)) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
-        @test_throws LinAlg.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
+        @test_throws LinAlg.SingularException rdiv!(copy(sAt), Diagonal(zeros(Float64, length(b))))
     end
 end
 
@@ -546,7 +546,7 @@ end
 @testset "issue #5985" begin
     @test sprand(Bool, 4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
     @test sprand(Bool, 4, 5, 1.00) == sparse(fill(true, 4, 5))
-    sprb45nnzs = zeros(5)
+    sprb45nnzs = zeros(Float64, 5)
     for i=1:5
         sprb45 = sprand(Bool, 4, 5, 0.5)
         @test length(sprb45) == 20

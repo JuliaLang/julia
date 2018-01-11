@@ -274,7 +274,7 @@ end
               Dict(string(i) => i for i = 1:30),
               Dict(reshape(1:i^2,i,i) => reshape(1:i^2,i,i) for i = 1:24),
               Dict(String(Char['α':'α'+i;]) => String(Char['α':'α'+i;]) for i = (1:10)*10),
-              Dict("key" => zeros(0, 0)))
+              Dict("key" => zeros(Float64, 0, 0)))
         for cols in (12, 40, 80), rows in (2, 10, 24)
             # Ensure output is limited as requested
             s = IOBuffer()

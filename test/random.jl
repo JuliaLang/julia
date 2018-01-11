@@ -32,12 +32,12 @@ end
 
 # Test array filling, Issues #7643, #8360
 @test rand(MersenneTwister(0), 1) == [0.8236475079774124]
-let A = zeros(2, 2)
+let A = zeros(Float64, 2, 2)
     rand!(MersenneTwister(0), A)
     @test A == [0.8236475079774124  0.16456579813368521;
                 0.9103565379264364  0.17732884646626457]
 end
-let A = zeros(2, 2)
+let A = zeros(Float64, 2, 2)
     @test_throws ArgumentError rand!(MersenneTwister(0), A, 5)
     @test rand(MersenneTwister(0), Int64, 1) == [2118291759721269919]
 end
@@ -64,7 +64,7 @@ end
 
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
-let A = zeros(2, 2)
+let A = zeros(Float64, 2, 2)
     randn!(MersenneTwister(42), A)
     @test A == [-0.5560268761463861  0.027155338009193845;
                 -0.444383357109696  -0.29948409035891055]

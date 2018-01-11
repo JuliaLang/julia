@@ -268,8 +268,10 @@ end
 
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
-    @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
-    @test [eigvals(D)...;] ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
+    Z2x3, Z3x2 = zeros(Float64, 2, 3), zeros(Flaot64, 3, 2)
+    @test sort([svdvals(D)...;], rev = true) ≈
+        svdvals([D.diag[1] Z3x2; Z2x3 D.diag[2]])
+    @test [eigvals(D)...;] ≈ eigvals([D.diag[1] Z3x2; Z2x3 D.diag[2]])
 end
 
 @testset "isposdef" begin
@@ -318,7 +320,7 @@ end
         D = Diagonal(d)
         @test inv(D) ≈ inv(Array(D))
     end
-    @test_throws SingularException inv(Diagonal(zeros(n)))
+    @test_throws SingularException inv(Diagonal(zeros(Float64, n)))
     @test_throws SingularException inv(Diagonal([0, 1, 2]))
     @test_throws SingularException inv(Diagonal([0im, 1im, 2im]))
 end

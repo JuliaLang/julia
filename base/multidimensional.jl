@@ -1046,7 +1046,7 @@ See also [`accumulate`](@ref).
 ``jldoctest
 julia> x = SparseVector(7, [1, 3, 5], [2., 4., 5.]);
 
-julia> y = zeros(7);
+julia> y = zeros(Float64, 7);
 
 julia> accumulate!(+, y, x);
 
@@ -1139,7 +1139,7 @@ the same object. `fill!(A, Foo())` will return `A` filled with the result of eva
 
 # Examples
 ```jldoctest
-julia> A = zeros(2,3)
+julia> A = zeros(Float64, 2, 3)
 2×3 Array{Float64,2}:
  0.0  0.0  0.0
  0.0  0.0  0.0
@@ -1182,7 +1182,7 @@ the other elements are left untouched.
 ```jldoctest
 julia> x = [1., 0., 3., 0., 5.];
 
-julia> y = zeros(7);
+julia> y = zeros(Float64, 7);
 
 julia> copyto!(y, x);
 

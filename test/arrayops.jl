@@ -52,7 +52,7 @@ using Main.TestHelpers.OAs
     @test a[1,1] == 1. && a[1,2] == 2. && a[2,1] == 3. && a[2,2] == 4.
     @test b[1,1] == 1. && b[2,1] == 2. && b[1,2] == 3. && b[2,2] == 4.
     a[[1 2 3 4]] = 0
-    @test a == zeros(2,2)
+    @test a == zeros(Float64, 2, 2)
     a[[1 2], [1 2]] = 1
     @test a == fill(1.,2,2)
     a[[1 2], 1] = 0
@@ -129,7 +129,7 @@ end
         @test_throws ErrorException Base.unsafe_convert(Ptr{Int}, r)
         r[2] = -1
         @test a[3] == -1
-        a = zeros(0, 5)  # an empty linearslow array
+        a = zeros(Float64, 0, 5) # an empty linearslow array
         s = view(a, :, [2,3,5])
         @test length(reshape(s, length(s))) == 0
     end
@@ -252,7 +252,7 @@ end
     b = x[2:3,2]
     @test b[1] == x[2,2] && b[2] == x[3,2]
 
-    B = zeros(4,5)
+    B = zeros(Float64, 4, 5)
     B[:,3] = 1:4
     @test B == [0 0 1 0 0; 0 0 2 0 0; 0 0 3 0 0; 0 0 4 0 0]
     B[2,:] = 11:15
@@ -479,7 +479,7 @@ end
 
     #hand made case
     a = ([2,1,2],[1,2,2],[2,2,2])
-    z = zeros(2,2,2)
+    z = zeros(Float64, 2, 2, 2)
     for i = 1:3
         z[a[1][i],a[2][i],a[3][i]] = 10
     end
@@ -532,12 +532,12 @@ end
     @test isequal(size(b), tuple(p[q]...))
 
     # hand made case
-    y = zeros(1,2,3)
+    y = zeros(Float64, 1, 2, 3)
     for i = 1:6
         y[i]=i
     end
 
-    z = zeros(3,1,2)
+    z = zeros(Float64, 3, 1, 2)
     for i = 1:3
         z[i] = i*2-1
         z[i+3] = i*2
@@ -1001,7 +1001,7 @@ end
     # mutating functions
     o = fill(1, 3, 4)
     m = mapslices(x->fill!(x, 0), o, 2)
-    @test m == zeros(3, 4)
+    @test m == zeros(Float64, 3, 4)
     @test o == fill(1, 3, 4)
 
     # issue #18524
@@ -1063,7 +1063,7 @@ end
     # mutating functions
     o = fill(1, 3, 4)
     m = mapslices(x->fill!(x, 0), o, 2)
-    @test m == zeros(3, 4)
+    @test m == zeros(Float64, 3, 4)
     @test o == fill(1, 3, 4)
 
     asr = sortrows(a, rev=true)
@@ -1349,7 +1349,7 @@ let x = Float64[]
     for i = 1:5
         push!(x, 1.0)
     end
-    @test dot(zeros(5), x) == 0.0
+    @test dot(zeros(Float64, 5), x) == 0.0
 end
 
 # issue #6977
@@ -1529,8 +1529,8 @@ end
         @test_throws BoundsError @view a[1:4, [CartesianIndex(1,3),CartesianIndex(2,4)]]
     end
 
-    for a in (view(zeros(3, 4, 5), :, :, :),
-              view(zeros(3, 4, 5), 1:3, :, :))
+    for a in (view(zeros(Float64, 3, 4, 5), :, :, :),
+              view(zeros(Float64, 3, 4, 5), 1:3, :, :))
         a[CartesianIndex{3}(2,3,3)] = -1
         @test a[CartesianIndex{3}(2,3,3)] == -1
         a[1,CartesianIndex{2}(3,4)] = -2
@@ -1651,8 +1651,8 @@ R = CartesianIndices((3,0))
 @test done(R, start(R)) == true
 
 @testset "multi-array eachindex" begin
-    local a = zeros(2,2)
-    local b = view(zeros(3,2), 1:2, :)
+    local a = zeros(Float64, 2, 2)
+    local b = view(zeros(Float64, 3, 2), 1:2, :)
     @test @inferred(eachindex(Base.IndexCartesian(), a, b)) == CartesianIndices((2,2))
     @test @inferred(eachindex(Base.IndexLinear(), a, b)) == 1:4
     @test @inferred(eachindex(a, b)) == CartesianIndices((2,2))
@@ -1881,7 +1881,7 @@ copyto!(S, A)
 @test A/3 == B/3 == S/3
 
 # issue #13250
-x13250 = zeros(3)
+x13250 = zeros(Float64, 3)
 x13250[UInt(1):UInt(2)] = 1.0
 @test x13250[1] == 1.0
 @test x13250[2] == 1.0
@@ -2033,7 +2033,7 @@ end
 end
 
 @testset "issue #16247" begin
-    local A = zeros(3,3)
+    local A = zeros(Float64, 3, 3)
     @test size(A[:,0x1:0x2]) == (3, 2)
     @test size(A[:,UInt(1):UInt(2)]) == (3,2)
     @test size(similar(A, UInt(3), 0x3)) == size(similar(A, (UInt(3), 0x3))) == (3,3)
@@ -2189,7 +2189,7 @@ Float64(x::F21666) = Float64(x.x)
     # test that cumsum uses more stable algorithm
     # for types with unknown/rounding arithmetic
     # we make v pretty large, because stable algorithm may have a large base case
-    v = zeros(300); v[1] = 2; v[200:end] = eps(Float32)
+    v = zeros(Float64, 300); v[1] = 2; v[200:end] = eps(Float32)
 
     f_rounds = Float64.(cumsum(F21666{Base.ArithmeticRounds}.(v)))
     f_unknown = Float64.(cumsum(F21666{Base.ArithmeticUnknown}.(v)))

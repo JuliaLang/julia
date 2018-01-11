@@ -159,7 +159,7 @@ Create a string from any value using the [`show`](@ref) function.
 julia> repr(1)
 "1"
 
-julia> repr(zeros(3))
+julia> repr(zeros(Float64, 3))
 "[0.0, 0.0, 0.0]"
 
 ```

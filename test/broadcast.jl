@@ -128,14 +128,14 @@ for arr in (identity, as_sub)
     @test_throws BoundsError broadcast_getindex(M, [2 1; 1 2], arr([1, 2]), [2])
     @test broadcast_getindex(M, [2 1; 1 2],arr([2, 1]), [1]) == [22 12; 11 21]
 
-    A = arr(zeros(2,2))
+    A = arr(zeros(Float64, 2, 2))
     broadcast_setindex!(A, arr([21 11; 12 22]), [2 1; 1 2], arr([1, 2]))
     @test A == M
     broadcast_setindex!(A, 5, [1,2], [2 2])
     @test A == [11 5; 21 5]
     broadcast_setindex!(A, 7, [1,2], [1 2])
     @test A == fill(7, 2, 2)
-    A = arr(zeros(3,3))
+    A = arr(zeros(Float64, 3, 3))
     broadcast_setindex!(A, 10:12, 1:3, 1:3)
     @test A == diagm(0 => 10:12)
     @test_throws BoundsError broadcast_setindex!(A, 7, [1,-1], [1 2])
@@ -556,10 +556,10 @@ end
 # Test that broadcasting identity where the input and output Array shapes do not match
 # yields the correct result, not merely a partial copy. See pull request #19895 for discussion.
 let N = 5
-    @test iszero(fill(1, N, N) .= zeros(N, N))
-    @test iszero(fill(1, N, N) .= zeros(N, 1))
-    @test iszero(fill(1, N, N) .= zeros(1, N))
-    @test iszero(fill(1, N, N) .= zeros(1, 1))
+    @test iszero(fill(1, N, N) .= zeros(Float64, N, N))
+    @test iszero(fill(1, N, N) .= zeros(Float64, N, 1))
+    @test iszero(fill(1, N, N) .= zeros(Float64, 1, N))
+    @test iszero(fill(1, N, N) .= zeros(Float64, 1, 1))
 end
 
 @testset "test broadcast for matrix of matrices" begin

@@ -1907,11 +1907,11 @@ collection. `destination` must be at least as large as the first collection.
 
 # Examples
 ```jldoctest
-julia> x = zeros(3);
+julia> A = zeros(Float64, 3);
 
-julia> map!(x -> x * 2, x, [1, 2, 3]);
+julia> map!(x -> x * 2, A, [1, 2, 3]);
 
-julia> x
+julia> A
 3-element Array{Float64,1}:
  2.0
  4.0

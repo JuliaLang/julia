@@ -37,7 +37,7 @@ function fem_perf()
 
     # runs the tests
     #NN = 2.^(3:8)
-    #TT = zeros(3, length(NN))
+    #TT = zeros(Float64, 3, length(NN))
     #@printf("(All times are seconds)\n")
     #@printf("     N   |   assembly |   slice   |   lufact  | slice / N^4 \n")
     #@printf("---------|------------|-----------|-----------|-------------\n")

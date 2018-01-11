@@ -894,10 +894,10 @@ let fname = tempname()
     try
         open(fname, "w") do fout
             redirect_stdout(fout) do
-                @show zeros(2, 2)
+                @show zeros(Float64, 2, 2)
             end
         end
-        @test read(fname, String) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
+        @test read(fname, String) == "zeros(Float64, 2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
     finally
         rm(fname, force=true)
     end
@@ -988,12 +988,12 @@ end
     push!(A, 3)
     @test arrstr(A, 6) == "3-element Array{Int64,1}:\n 1\n ⋮"
 
-    @test arrstr(zeros(4, 3), 4)  == "4×3 Array{Float64,2}: …"
-    @test arrstr(zeros(4, 30), 4) == "4×30 Array{Float64,2}: …"
-    @test arrstr(zeros(4, 3), 5)  == "4×3 Array{Float64,2}:\n ⋮      ⋱  "
-    @test arrstr(zeros(4, 30), 5) == "4×30 Array{Float64,2}:\n ⋮      ⋱  "
-    @test arrstr(zeros(4, 3), 6)  == "4×3 Array{Float64,2}:\n 0.0  0.0  0.0\n ⋮            "
-    @test arrstr(zeros(4, 30), 6) ==
+    @test arrstr(zeros(Float64, 4, 3), 4)  == "4×3 Array{Float64,2}: …"
+    @test arrstr(zeros(Float64, 4, 30), 4) == "4×30 Array{Float64,2}: …"
+    @test arrstr(zeros(Float64, 4, 3), 5)  == "4×3 Array{Float64,2}:\n ⋮      ⋱  "
+    @test arrstr(zeros(Float64, 4, 30), 5) == "4×30 Array{Float64,2}:\n ⋮      ⋱  "
+    @test arrstr(zeros(Float64, 4, 3), 6)  == "4×3 Array{Float64,2}:\n 0.0  0.0  0.0\n ⋮            "
+    @test arrstr(zeros(Float64, 4, 30), 6) ==
               string("4×30 Array{Float64,2}:\n",
                      " 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  …  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n",
                      " ⋮                        ⋮              ⋱            ⋮                      ")

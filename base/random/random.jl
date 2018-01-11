@@ -301,7 +301,7 @@ but without allocating a new array.
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> rand!(rng, zeros(5))
+julia> rand!(rng, zeros(Float64, 5))
 5-element Array{Float64,1}:
  0.5908446386657102
  0.7667970365022592

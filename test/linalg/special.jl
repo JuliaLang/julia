@@ -25,7 +25,7 @@ srand(1)
         tritype = isupper ? UpperTriangular : LowerTriangular
         @test Matrix(tritype(A)) == Matrix(A)
 
-        A = Bidiagonal(a, zeros(n-1), ifelse(isupper, :U, :L)) #morally Diagonal
+        A = Bidiagonal(a, zeros(Float64, n-1), ifelse(isupper, :U, :L)) #morally Diagonal
         for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Matrix]
            @test Matrix(convert(newtype, A)) == Matrix(A)
            @test Matrix(newtype(A)) == Matrix(A)
@@ -40,10 +40,10 @@ srand(1)
     for newtype in [Diagonal, Bidiagonal]
        @test_throws ArgumentError convert(newtype,A)
     end
-    A = SymTridiagonal(a, zeros(n-1))
+    A = SymTridiagonal(a, zeros(Float64, n-1))
     @test Matrix(convert(Bidiagonal,A)) == Matrix(A)
 
-    A = Tridiagonal(zeros(n-1), [1.0:n;], zeros(n-1)) #morally Diagonal
+    A = Tridiagonal(zeros(Float64, n-1), [1.0:n;], zeros(Float64, n-1)) # morally Diagonal
     for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
        @test Matrix(convert(newtype, A)) == Matrix(A)
     end
@@ -54,13 +54,13 @@ srand(1)
     for newtype in [Diagonal, Bidiagonal]
         @test_throws ArgumentError convert(newtype,A)
     end
-    A = Tridiagonal(zeros(n-1), [1.0:n;], fill(1., n-1)) #not morally Diagonal
+    A = Tridiagonal(zeros(Float64, n-1), [1.0:n;], zeros(Float64, n-1)) # not morally Diagonal
     @test Matrix(convert(Bidiagonal, A)) == Matrix(A)
-    A = UpperTriangular(Tridiagonal(zeros(n-1), [1.0:n;], fill(1., n-1)))
+    A = UpperTriangular(Tridiagonal(zeros(Float64, n-1), [1.0:n;], fill(1., n-1)))
     @test Matrix(convert(Bidiagonal, A)) == Matrix(A)
-    A = Tridiagonal(fill(1., n-1), [1.0:n;], zeros(n-1)) #not morally Diagonal
+    A = Tridiagonal(fill(1., n-1), [1.0:n;], zeros(Float64, n-1)) # not morally Diagonal
     @test Matrix(convert(Bidiagonal, A)) == Matrix(A)
-    A = LowerTriangular(Tridiagonal(fill(1., n-1), [1.0:n;], zeros(n-1)))
+    A = LowerTriangular(Tridiagonal(fill(1., n-1), [1.0:n;], zeros(Float64, n-1)))
     @test Matrix(convert(Bidiagonal, A)) == Matrix(A)
     @test_throws ArgumentError convert(SymTridiagonal,A)
 

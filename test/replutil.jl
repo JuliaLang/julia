@@ -223,7 +223,7 @@ let undefvar
     @test contains(err_str, "Cannot raise an integer x to a negative power -1")
     err_str = @except_strbt (-1)^0.25 DomainError
     @test contains(err_str, "Exponentiation yielding a complex result requires a complex argument")
-    A = zeros(10, 10)
+    A = zeros(Float64, 10, 10)
     A[2,1] = 1
     A[1,2] = -1
     err_str = @except_strbt eigmax(A) DomainError

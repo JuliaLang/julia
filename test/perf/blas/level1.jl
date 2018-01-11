@@ -13,7 +13,7 @@ end
 function axpytest(n, iter)
     a = rand(1)[1]
     x = rand(n)
-    y = zeros(n)
+    y = zeros(Float64, n)
     for i = 1:iter
         BLAS.axpy!(a, x, y)
     end

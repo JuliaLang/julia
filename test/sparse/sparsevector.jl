@@ -8,7 +8,7 @@ spv_x1 = SparseVector(8, [2, 5, 6], [1.25, -0.75, 3.5])
 
 @test isa(spv_x1, SparseVector{Float64,Int})
 
-x1_full = zeros(length(spv_x1))
+x1_full = zeros(Float64, length(spv_x1))
 x1_full[SparseArrays.nonzeroinds(spv_x1)] = nonzeros(spv_x1)
 
 @testset "basic properties" begin
@@ -438,7 +438,7 @@ end
         @test isa(H, SparseMatrixCSC{Float64,Int})
         @test size(H) == (m, n)
         @test nnz(H) == tnnz
-        Hr = zeros(m, n)
+        Hr = zeros(Float64, m, n)
         for j = 1:n
             Hr[:,j] = Array(A[j])
         end
@@ -1175,7 +1175,7 @@ end
 @testset "corner cases of broadcast arithmetic operations with scalars (#21515)" begin
     # test both scalar literals and variables
     areequal(a, b, c) = isequal(a, b) && isequal(b, c)
-    inf, zeroh, zv, spzv = Inf, 0.0, zeros(1), spzeros(1)
+    inf, zeroh, zv, spzv = Inf, 0.0, zeros(Float64, 1), spzeros(1)
     @test areequal(spzv .* Inf,  spzv .* inf,    sparsevec(zv .* Inf))
     @test areequal(Inf .* spzv,  inf .* spzv,    sparsevec(Inf .* zv))
     @test areequal(spzv ./ 0.0,  spzv ./ zeroh,  sparsevec(zv ./ 0.0))

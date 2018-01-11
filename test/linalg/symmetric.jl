@@ -340,7 +340,7 @@ end
         (Symmetric(diagm(0 => 1.0:3.0)),
          Hermitian(diagm(0 => 1.0:3.0)),
          Hermitian(diagm(0 => complex(1.0:3.0))),
-         SymTridiagonal([1.0:3.0;], zeros(2)))
+         SymTridiagonal([1.0:3.0;], zeros(Float64, 2)))
     @test eigmin(Mi7647)  == eigvals(Mi7647, 0.5, 1.5)[1] == 1.0
     @test eigmax(Mi7647)  == eigvals(Mi7647, 2.5, 3.5)[1] == 3.0
     @test eigvals(Mi7647) == eigvals(Mi7647, 0.5, 3.5) == [1.0:3.0;]

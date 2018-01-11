@@ -17,9 +17,9 @@ function stockcorr()
     r = 0.03                      # Risk-free rate
 
     ## Define storages
-    SimulPriceA = zeros(T,n)      # Simulated Price of Asset A
+    SimulPriceA = zeros(Float64, T, n)      # Simulated Price of Asset A
     SimulPriceA[1,:] = CurrentPrice[1]
-    SimulPriceB = zeros(T,n)      # Simulated Price of Asset B
+    SimulPriceB = zeros(Float64, T, n)      # Simulated Price of Asset B
     SimulPriceB[1,:] = CurrentPrice[2]
 
     ## Generating the paths of stock prices by Geometric Brownian Motion

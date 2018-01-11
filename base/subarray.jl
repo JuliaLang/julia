@@ -566,7 +566,7 @@ unaffected.
 
 # Examples
 ```jldoctest
-julia> A = zeros(3, 3);
+julia> A = zeros(Float64, 3, 3);
 
 julia> @views for row in 1:3
            b = A[row, :]
