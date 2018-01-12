@@ -464,8 +464,6 @@ import .LinAlg: lufact, lufact!, qrfact, qrfact!, cholfact, cholfact!
 @deprecate cholfact!(A::AbstractMatrix, ::Type{Val{false}}) cholfact!(A, Val(false))
 @deprecate cholfact!(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholfact!(A, Val(true); tol = tol)
 @deprecate cat(::Type{Val{N}}, A::AbstractArray...) where {N} cat(Val(N), A...)
-@deprecate cat(::Type{Val{N}}, A::SparseArrays._SparseConcatGroup...) where {N} cat(Val(N), A...)
-@deprecate cat(::Type{Val{N}}, A::SparseArrays._DenseConcatGroup...) where {N} cat(Val(N), A...)
 @deprecate cat_t(::Type{Val{N}}, ::Type{T}, A, B) where {N,T} cat_t(Val(N), T, A, B) false
 @deprecate reshape(A::AbstractArray, ::Type{Val{N}}) where {N} reshape(A, Val(N))
 
@@ -500,6 +498,7 @@ function OverflowError()
 end
 
 # PR #22703
+import .LinAlg: Bidiagonal
 @deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, isupper::Bool) Bidiagonal(dv, ev, ifelse(isupper, :U, :L))
 @deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) Bidiagonal(dv, ev, ifelse(uplo == 'U', :U, :L))
 @deprecate Bidiagonal(A::AbstractMatrix, isupper::Bool) Bidiagonal(A, ifelse(isupper, :U, :L))
@@ -516,25 +515,6 @@ end
 #     move prec-bitshift after prec-rational
 #     remove parse-with-chains-warn and bitshift-warn
 # update precedence table in doc/src/manual/mathematical-operations.md
-
-# deprecate remaining vectorized methods over SparseVectors (zero-preserving)
-for op in (:floor, :ceil, :trunc, :round,
-        :log1p, :expm1,  :sinpi,
-        :sin,   :tan,    :sind,   :tand,
-        :asin,  :atan,   :asind,  :atand,
-        :sinh,  :tanh,   :asinh,  :atanh)
-    @eval import .Math: $op
-    @eval @deprecate ($op)(x::AbstractSparseVector{<:Number,<:Integer}) ($op).(x)
-end
-# deprecate remaining vectorized methods over SparseVectors (not-zero-preserving)
-for op in (:exp, :exp2, :exp10, :log, :log2, :log10,
-           :cos, :cosd, :acos, :cosh, :cospi,
-           :csc, :cscd, :acot, :csch, :acsch,
-           :cot, :cotd, :acosd, :coth,
-           :sec, :secd, :acotd, :sech, :asech)
-    @eval import .Math: $op
-    @eval @deprecate ($op)(x::AbstractSparseVector{<:Number,<:Integer}) ($op).(x)
-end
 
 # PR #22182
 @deprecate is_apple   Sys.isapple
@@ -568,6 +548,7 @@ end
 
 # PR #22925
 # also uncomment constructor tests in test/linalg/bidiag.jl
+import .LinAlg: Bidiagonal
 function Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}, uplo::Symbol) where {T,S}
     depwarn(string("`Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}, uplo::Symbol) where {T, S}`",
         " is deprecated, manually convert both vectors to the same type instead."), :Bidiagonal)
@@ -577,6 +558,7 @@ end
 
 # PR #23035
 # also uncomment constructor tests in test/linalg/tridiag.jl
+import .LinAlg: SymTridiagonal
 function SymTridiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}) where {T,S}
     depwarn(string("`SymTridiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}) ",
         "where {T, S}` is deprecated, convert both vectors to the same type instead."), :SymTridiagonal)
@@ -586,6 +568,7 @@ end
 
 # PR #23154
 # also uncomment constructor tests in test/linalg/tridiag.jl
+import .LinAlg: Tridiagonal
 function Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::AbstractVector{Tu}) where {Tl,Td,Tu}
     depwarn(string("`Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::AbstractVector{Tu}) ",
         "where {Tl, Td, Tu}` is deprecated, convert all vectors to the same type instead."), :Tridiagonal)
@@ -705,11 +688,8 @@ end
 # PR #23066
 @deprecate cfunction(f, r, a::Tuple) cfunction(f, r, Tuple{a...})
 
-# PR 23341
-import .LinAlg: diagm
-@deprecate diagm(A::SparseMatrixCSC) sparse(Diagonal(sparsevec(A)))
-
 # PR #23373
+import .LinAlg: diagm
 @deprecate diagm(A::BitMatrix) BitMatrix(Diagonal(vec(A)))
 
 # PR 23341
@@ -822,33 +802,6 @@ end
 @deprecate(ind2sub(dims::NTuple{N,Integer}, idx::CartesianIndex{N}) where N, Tuple(idx))
 
 @deprecate contains(eq::Function, itr, x) any(y->eq(y,x), itr)
-
-# PR #23757
-import .SparseArrays.spdiagm
-@deprecate spdiagm(x::AbstractVector) sparse(Diagonal(x))
-function spdiagm(x::AbstractVector, d::Number)
-    depwarn(string("`spdiagm(x::AbstractVector, d::Number)` is deprecated, use ",
-        "`spdiagm(d => x)` instead, which now returns a square matrix. To preserve the old ",
-        "behaviour, use `sparse(SparseArrays.spdiagm_internal(d => x)...)`"), :spdiagm)
-    I, J, V = SparseArrays.spdiagm_internal(d => x)
-    return sparse(I, J, V)
-end
-function spdiagm(x, d)
-    depwarn(string("`spdiagm((x1, x2, ...), (d1, d2, ...))` is deprecated, use ",
-        "`spdiagm(d1 => x1, d2 => x2, ...)` instead, which now returns a square matrix. ",
-        "To preserve the old behaviour, use ",
-        "`sparse(SparseArrays.spdiagm_internal(d1 => x1, d2 => x2, ...)...)`"), :spdiagm)
-    I, J, V = SparseArrays.spdiagm_internal((d[i] => x[i] for i in 1:length(x))...)
-    return sparse(I, J, V)
-end
-function spdiagm(x, d, m::Integer, n::Integer)
-    depwarn(string("`spdiagm((x1, x2, ...), (d1, d2, ...), m, n)` is deprecated, use ",
-        "`spdiagm(d1 => x1, d2 => x2, ...)` instead, which now returns a square matrix. ",
-        "To specify a non-square matrix and preserve the old behaviour, use ",
-        "`I, J, V = SparseArrays.spdiagm_internal(d1 => x1, d2 => x2, ...); sparse(I, J, V, m, n)`"), :spdiagm)
-    I, J, V = SparseArrays.spdiagm_internal((d[i] => x[i] for i in 1:length(x))...)
-    return sparse(I, J, V, m, n)
-end
 
 # deprecate zeros(D::Diagonal[, opts...])
 function zeros(D::Diagonal)
@@ -982,7 +935,6 @@ function eye(::Type{Diagonal{T}}, n::Int) where T
     return Diagonal{T}(I, n)
 end
 @eval Base.LinAlg import Base.eye
-# @eval Base.SparseArrays import Base.eye # SparseArrays has an eye for things cholmod
 
 
 export tic, toq, toc
@@ -1015,8 +967,6 @@ function toc()
     println("elapsed time: ", t, " seconds")
     return t
 end
-
-@eval Base.SparseArrays @deprecate sparse(s::UniformScaling, m::Integer) sparse(s, m, m)
 
 # A[I...] .= with scalar indices should modify the element at A[I...]
 function Broadcast.dotview(A::AbstractArray, args::Number...)
@@ -1095,12 +1045,6 @@ end
 # PR #25030
 @eval LinAlg @deprecate fillslots! fillstored! false
 
-# PR #25037
-@eval SparseArrays @deprecate spones(A::SparseMatrixCSC) LinAlg.fillstored!(copy(A), 1)
-@eval SparseArrays @deprecate spones(A::SparseVector) LinAlg.fillstored!(copy(A), 1)
-using .SparseArrays.spones
-export spones
-
 function diagm(v::BitVector)
     depwarn(string("`diagm(v::BitVector)` is deprecated, use `diagm(0 => v)` or ",
         "`BitMatrix(Diagonal(v))` instead."), :diagm)
@@ -1147,19 +1091,6 @@ function full(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal})
         "option is too narrow, `Array(A)`. Also consider `SparseMatrixCSC(A)` ",
         "or, if that option is too narrow, `sparse(A)`."),  :full)
     return Matrix(A)
-end
-
-# full for sparse arrays
-function full(S::Union{SparseVector,SparseMatrixCSC})
-    (arrtypestr, desttypestr) =
-        isa(S, SparseVector)    ? ("SparseVector",    "Vector") :
-        isa(S, SparseMatrixCSC) ? ("SparseMatrixCSC", "Matrix") :
-            error("should not be reachable!")
-    depwarn(string(
-        "`full(S::$(arrtypestr))` (and `full` in general) has been deprecated. ",
-        "To replace `full(S::$(arrtypestr))`, consider `$(desttypestr)(S)` or, ",
-        "if that option is too narrow, `Array(S)`."), :full)
-    return Array(S)
 end
 
 # full for factorizations
@@ -1274,7 +1205,6 @@ end
 
 # issue #22849
 @deprecate reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where {T, S, N} reshape(reinterpret(T, vec(a)), dims)
-@deprecate reinterpret(::Type{T}, a::SparseMatrixCSC{S}, dims::NTuple{N,Int}) where {T, S, N} reinterpret(T, reshape(a, dims))
 @deprecate reinterpret(::Type{T}, a::ReinterpretArray{S}, dims::NTuple{N,Int}) where {T, S, N} reshape(reinterpret(T, vec(a)), dims)
 
 # issue #24006
@@ -1310,55 +1240,6 @@ end
 
 # deprecate bits to bitstring (#24263, #24281)
 @deprecate bits bitstring
-
-# deprecate speye
-export speye
-function speye(n::Integer)
-    depwarn(string("`speye(n::Integer)` has been deprecated in favor of `I`, `sparse`, and ",
-                    "`SparseMatrixCSC` constructor methods. For a direct replacement, consider ",
-                    "`sparse(1.0I, n, n)`, `SparseMatrixCSC(1.0I, n, n)`, or `SparseMatrixCSC{Float64}(I, n, n)`. ",
-                    "If `Float64` element type is not necessary, consider the shorter `sparse(I, n, n)` ",
-                    "or `SparseMatrixCSC(I, n, n)` (with default `eltype(I)` of `Bool`)."), :speye)
-    return sparse(1.0I, n, n)
-end
-function speye(m::Integer, n::Integer)
-    depwarn(string("`speye(m::Integer, n::Integer)` has been deprecated in favor of `I`, ",
-                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
-                    "replacement, consider `sparse(1.0I, m, n)`, `SparseMatrixCSC(1.0I, m, n)`, ",
-                    "or `SparseMatrixCSC{Float64}(I, m, n)`. If `Float64` element type is not ",
-                    " necessary, consider the shorter `sparse(I, m, n)` or `SparseMatrixCSC(I, m, n)` ",
-                    "(with default `eltype(I)` of `Bool`)."), :speye)
-    return sparse(1.0I, m, n)
-end
-function speye(::Type{T}, n::Integer) where T
-    depwarn(string("`speye(T, n::Integer)` has been deprecated in favor of `I`, `sparse`, and ",
-                    "`SparseMatrixCSC` constructor methods. For a direct replacement, consider ",
-                    "`sparse(T(1)I, n, n)` if `T` is concrete or `SparseMatrixCSC{T}(I, n, n)` ",
-                    "if `T` is either concrete or abstract. If element type `T` is not necessary, ",
-                    "consider the shorter `sparse(I, n, n)` or `SparseMatrixCSC(I, n, n)` ",
-                    "(with default `eltype(I)` of `Bool`)."), :speye)
-    return SparseMatrixCSC{T}(I, n, n)
-end
-function speye(::Type{T}, m::Integer, n::Integer) where T
-    depwarn(string("`speye(T, m::Integer, n::Integer)` has been deprecated in favor of `I`, ",
-                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
-                    "replacement, consider `sparse(T(1)I, m, n)` if `T` is concrete or ",
-                    "`SparseMatrixCSC{T}(I, m, n)` if `T` is either concrete or abstract. ",
-                    "If element type `T` is not necessary, consider the shorter ",
-                    "`sparse(I, m, n)` or `SparseMatrixCSC(I, m, n)` (with default `eltype(I)` ",
-                    "of `Bool`)."), :speye)
-    return SparseMatrixCSC{T}(I, m, n)
-end
-function speye(S::SparseMatrixCSC{T}) where T
-    depwarn(string("`speye(S::SparseMatrixCSC{T})` has been deprecated in favor of `I`, ",
-                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
-                    "replacement, consider `sparse(T(1)I, size(S)...)` if `T` is concrete or ",
-                    "`SparseMatrixCSC{eltype(S)}(I, size(S))` if `T` is either concrete or abstract. ",
-                    "If preserving element type `T` is not necessary, consider the shorter ",
-                    "`sparse(I, size(S)...)` or `SparseMatrixCSC(I, size(S))` (with default ",
-                    "`eltype(I)` of `Bool`)."), :speye)
-    return SparseMatrixCSC{T}(I, m, n)
-end
 
 # issue #24167
 @deprecate EnvHash EnvDict
@@ -2340,87 +2221,6 @@ end
     @deprecate A_mul_Bc(A::AbstractVecOrMat{T}, R::AbstractRotation{S}) where {T,S}     (*)(A, adjoint(R))
 end
 
-# former imports into SparseArrays
-@eval Base.SparseArrays begin
-    import Base: A_mul_B!, Ac_mul_B, Ac_mul_B!, At_mul_B, At_mul_B!
-    import Base: A_mul_Bc, A_mul_Bt, Ac_mul_Bc, At_mul_Bt
-    import Base: At_ldiv_B, Ac_ldiv_B, A_ldiv_B!
-    import Base.LinAlg: At_ldiv_B!, Ac_ldiv_B!, A_rdiv_B!, A_rdiv_Bc!, mul!, ldiv!, rdiv!
-end
-
-# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/sparse/linalg.jl, to deprecate
-@eval Base.SparseArrays begin
-    using Base.LinAlg: Adjoint, Transpose
-    @deprecate Ac_ldiv_B(A::SparseMatrixCSC, B::RowVector)  (\)(adjoint(A), B)
-    @deprecate At_ldiv_B(A::SparseMatrixCSC, B::RowVector)  (\)(transpose(A), B)
-    @deprecate Ac_ldiv_B(A::SparseMatrixCSC, B::AbstractVecOrMat)   (\)(adjoint(A), B)
-    @deprecate At_ldiv_B(A::SparseMatrixCSC, B::AbstractVecOrMat)   (\)(transpose(A), B)
-    @deprecate A_rdiv_Bc!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T}  rdiv!(A, adjoint(D))
-    @deprecate A_rdiv_Bt!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T}  rdiv!(A, transpose(D))
-    @deprecate A_rdiv_B!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T}   rdiv!(A, D)
-    @deprecate A_ldiv_B!(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T}     ldiv!(L, B)
-    @deprecate A_ldiv_B!(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T}     ldiv!(U, B)
-    @deprecate A_mul_Bt(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}     (*)(A, transpose(B))
-    @deprecate A_mul_Bc(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}     (*)(A, adjoint(B))
-    @deprecate At_mul_B(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}     (*)(transpose(A), B)
-    @deprecate Ac_mul_B(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}     (*)(adjoint(A), B)
-    @deprecate At_mul_Bt(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}    (*)(transpose(A), transpose(B))
-    @deprecate Ac_mul_Bc(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}    (*)(adjoint(A), adjoint(B))
-    @deprecate A_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat)     mul!(C, A, B)
-    @deprecate Ac_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat)    mul!(C, adjoint(A), B)
-    @deprecate At_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat)    mul!(C, transpose(A), B)
-    @deprecate A_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)   mul!(α, A, B, β, C)
-    @deprecate A_mul_B(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx}  (*)(A, x)
-    @deprecate A_mul_B(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx}  (*)(A, B)
-    @deprecate Ac_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)  mul!(α, adjoint(A), B, β, C)
-    @deprecate Ac_mul_B(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx}     (*)(adjoint(A), x)
-    @deprecate Ac_mul_B(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx}     (*)(adjoint(A), B)
-    @deprecate At_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)  mul!(α, transpose(A), B, β, C)
-    @deprecate At_mul_B(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx}     (*)(transpose(A), x)
-    @deprecate At_mul_B(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx}     (*)(transpose(A), B)
-    @deprecate A_mul_Bt(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}   (*)(A, transpose(B))
-    @deprecate A_mul_Bc(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}   (*)(A, adjoint(B))
-    @deprecate At_mul_B(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}   (*)(transpose(A), B)
-    @deprecate Ac_mul_B(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}   (*)(adjoint(A),B)
-    @deprecate At_mul_Bt(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}  (*)(transpose(A), transpose(B))
-    @deprecate Ac_mul_Bc(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}  (*)(adjoint(A), adjoint(B))
-end
-
-# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/sparse/sparsevector.jl, to deprecate
-for isunittri in (true, false), islowertri in (true, false)
-    unitstr = isunittri ? "Unit" : ""
-    halfstr = islowertri ? "Lower" : "Upper"
-    tritype = :(Base.LinAlg.$(Symbol(unitstr, halfstr, "Triangular")))
-    @eval Base.SparseArrays begin
-        using Base.LinAlg: Adjoint, Transpose
-        @deprecate At_ldiv_B(A::$tritype{TA,<:AbstractMatrix}, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}   (\)(transpose(A), b)
-        @deprecate At_ldiv_B(A::$tritype{TA,<:StridedMatrix}, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}    (\)(transpose(A), b)
-        @deprecate At_ldiv_B(A::$tritype, b::SparseVector)  (\)(transpose(A), b)
-        @deprecate Ac_ldiv_B(A::$tritype{TA,<:AbstractMatrix}, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}   (\)(adjoint(A), b)
-        @deprecate Ac_ldiv_B(A::$tritype{TA,<:StridedMatrix}, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}    (\)(adjoint(A), b)
-        @deprecate Ac_ldiv_B(A::$tritype, b::SparseVector)  (\)(adjoint(A), b)
-        @deprecate A_ldiv_B!(A::$tritype{<:Any,<:StridedMatrix}, b::SparseVector)   ldiv!(A, b)
-        @deprecate At_ldiv_B!(A::$tritype{<:Any,<:StridedMatrix}, b::SparseVector)  ldiv!(transpose(A), b)
-        @deprecate Ac_ldiv_B!(A::$tritype{<:Any,<:StridedMatrix}, b::SparseVector)  ldiv!(adjoint(A), b)
-    end
-end
-@eval Base.SparseArrays begin
-    using Base.LinAlg: Adjoint, Transpose
-    @deprecate Ac_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector)    (*)(adjoint(A), x)
-    @deprecate At_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector)    (*)(transpose(A), x)
-    @deprecate Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)   mul!(α, adjoint(A), x, β, y)
-    @deprecate Ac_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty}   mul!(y, adjoint(A), x)
-    @deprecate At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)   mul!(α, transpose(A), x, β, y)
-    @deprecate At_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty}   mul!(y, transpose(A), x)
-    @deprecate A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)    mul!(α, A, x, β, y)
-    @deprecate A_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty}    mul!(y, A, x)
-    @deprecate At_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector)     mul!(α, transpose(A), x, β, y)
-    @deprecate At_mul_B!(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty}     mul!(y, transpose(A), x)
-    @deprecate At_mul_B(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}    (*)(transpose(A), x)
-    @deprecate A_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector)  mul!(α, A, x, β, y)
-    @deprecate A_mul_B!(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty}  mul!(y, A, x)
-end
-
 
 # methods involving RowVector from base/linalg/bidiag.jl, to deprecate
 @eval Base.LinAlg begin
@@ -2439,13 +2239,6 @@ end
     *(rowvec::RowVector, D::Diagonal) = rvtranspose(D * rvtranspose(rowvec)) # seems potentially incorrect without also transposing D?
     *(D::Diagonal, transrowvec::Transpose{<:Any,<:RowVector}) = (rowvec = transrowvec.parent; D*rvtranspose(rowvec))
     *(D::Diagonal, adjrowvec::Adjoint{<:Any,<:RowVector}) = (rowvec = adjrowvec.parent; D*rvadjoint(rowvec))
-end
-
-# methods involving RowVector from base/sparse/linalg.jl, to deprecate
-@eval Base.SparseArrays begin
-    \(::SparseMatrixCSC, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-    \(::Adjoint{<:Any,<:SparseMatrixCSC}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-    \(::Transpose{<:Any,<:SparseMatrixCSC}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 end
 
 # methods involving RowVector from base/linalg/qr.jl, to deprecate
@@ -2504,11 +2297,6 @@ end
     \(A::Adjoint{<:Any,<:Factorization}, B::RowVector) = adjoint(A.parent) \ B
     \(A::Transpose{<:Any,<:Factorization}, B::RowVector) = transpose(A.parent) \ B
     \(A::Transpose{<:Any,<:Factorization{<:Real}}, B::RowVector) = transpose(A.parent) \ B
-end
-
-# methods involving RowVector from base/sparse/higherorderfns.jl, to deprecate
-@eval Base.SparseArrays.HigherOrderFns begin
-    BroadcastStyle(::Type{<:Base.RowVector{T,<:Vector}}) where T = Broadcast.MatrixStyle()
 end
 
 # methods involving RowVector from base/linalg/symmetric.jl, to deprecate
@@ -2796,6 +2584,31 @@ end
 # issue #24804
 @deprecate_moved sum_kbn "KahanSummation"
 @deprecate_moved cumsum_kbn "KahanSummation"
+
+# PR #25249: SparseArrays to stdlib
+## the Base.SparseArrays module itself and exported types are deprecated in base/sysimg.jl
+## functions that were re-exported from Base
+@deprecate_moved nonzeros   "SparseArrays" true true
+@deprecate_moved permute    "SparseArrays" true true
+@deprecate_moved blkdiag    "SparseArrays" true true
+@deprecate_moved dropzeros  "SparseArrays" true true
+@deprecate_moved dropzeros! "SparseArrays" true true
+@deprecate_moved issparse   "SparseArrays" true true
+@deprecate_moved sparse     "SparseArrays" true true
+@deprecate_moved sparsevec  "SparseArrays" true true
+@deprecate_moved spdiagm    "SparseArrays" true true
+@deprecate_moved sprand     "SparseArrays" true true
+@deprecate_moved sprandn    "SparseArrays" true true
+@deprecate_moved spzeros    "SparseArrays" true true
+@deprecate_moved rowvals    "SparseArrays" true true
+@deprecate_moved nzrange    "SparseArrays" true true
+@deprecate_moved nnz        "SparseArrays" true true
+## functions that were exported from Base.SparseArrays but not from Base
+@deprecate_moved droptol!   "SparseArrays" false true
+## deprecated functions that are moved to stdlib/SparseArrays/src/deprecated.jl
+@deprecate_moved spones     "SparseArrays" true true
+@deprecate_moved speye      "SparseArrays" true true
+
 
 # PR #25021
 @deprecate_moved normalize_string "Unicode" true true

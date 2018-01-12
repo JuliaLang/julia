@@ -433,7 +433,6 @@ export
     minimum,
     minmax,
     ndims,
-    nonzeros,
     ones,
     parent,
     parentindices,
@@ -441,7 +440,6 @@ export
     partialsort!,
     partialsortperm,
     partialsortperm!,
-    permute,
     permute!,
     permutedims,
     permutedims!,
@@ -512,7 +510,6 @@ export
 # linear algebra
     bkfact!,
     bkfact,
-    blkdiag,
     chol,
     cholfact!,
     cholfact,
@@ -592,10 +589,6 @@ export
     vecnorm,
     ⋅,
     ×,
-
-# sparse
-    dropzeros,
-    dropzeros!,
 
 # bitarrays
     falses,
@@ -1183,22 +1176,4 @@ export
     @goto,
     @view,
     @views,
-    @static,
-
-# SparseArrays module re-exports
-    SparseArrays,
-    AbstractSparseArray,
-    AbstractSparseMatrix,
-    AbstractSparseVector,
-    SparseMatrixCSC,
-    SparseVector,
-    issparse,
-    sparse,
-    sparsevec,
-    spdiagm,
-    sprand,
-    sprandn,
-    spzeros,
-    rowvals,
-    nzrange,
-    nnz
+    @static

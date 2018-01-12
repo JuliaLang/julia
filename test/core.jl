@@ -3,6 +3,8 @@
 # test core language features
 const Bottom = Union{}
 
+using SparseArrays
+
 # For curmod_*
 include("testenv.jl")
 

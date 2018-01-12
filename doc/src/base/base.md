@@ -97,7 +97,6 @@ Base.Markdown
 Base.Meta
 Base.Pkg
 Base.Serializer
-Base.SparseArrays
 Base.StackTraces
 Base.Sys
 Base.Threads

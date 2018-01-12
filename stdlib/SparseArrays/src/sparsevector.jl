@@ -896,12 +896,6 @@ vec(x::AbstractSparseVector) = x
 copy(x::AbstractSparseVector) =
     SparseVector(length(x), copy(nonzeroinds(x)), copy(nonzeros(x)))
 
-function reinterpret(::Type{T}, x::AbstractSparseVector{Tv}) where {T,Tv}
-    sizeof(T) == sizeof(Tv) ||
-        throw(ArgumentError("reinterpret of sparse vectors only supports element types of the same size."))
-    SparseVector(length(x), copy(nonzeroinds(x)), reinterpret(T, nonzeros(x)))
-end
-
 float(x::AbstractSparseVector{<:AbstractFloat}) = x
 float(x::AbstractSparseVector) =
     SparseVector(length(x), copy(nonzeroinds(x)), float(nonzeros(x)))

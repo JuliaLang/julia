@@ -447,10 +447,6 @@ using .LinAlg
 const ⋅ = dot
 const × = cross
 
-# sparse matrices, vectors, and sparse linear algebra
-include("sparse/sparse.jl")
-using .SparseArrays
-
 include("asyncmap.jl")
 
 include("multimedia.jl")
@@ -504,6 +500,7 @@ Base.require(:IterativeEigensolvers)
 Base.require(:Mmap)
 Base.require(:Profile)
 Base.require(:SharedArrays)
+Base.require(:SparseArrays)
 Base.require(:SuiteSparse)
 Base.require(:Test)
 Base.require(:Unicode)
@@ -518,6 +515,19 @@ Base.require(:Libdl)
     @deprecate_binding Profile root_module(:Profile) true ", run `using Profile` instead"
     @deprecate_binding Dates root_module(:Dates) true ", run `using Dates` instead"
     @deprecate_binding Distributed root_module(:Distributed) true ", run `using Distributed` instead"
+
+    # PR #25249
+    @deprecate_binding SparseArrays root_module(:SparseArrays) true ", run `using SparseArrays` instead"
+    @deprecate_binding(AbstractSparseArray, root_module(:SparseArrays).AbstractSparseArray, true,
+        ", run `using SparseArrays` to load sparse array functionality")
+    @deprecate_binding(AbstractSparseMatrix, root_module(:SparseArrays).AbstractSparseMatrix, true,
+        ", run `using SparseArrays` to load sparse array functionality")
+    @deprecate_binding(AbstractSparseVector, root_module(:SparseArrays).AbstractSparseVector, true,
+        ", run `using SparseArrays` to load sparse array functionality")
+    @deprecate_binding(SparseMatrixCSC, root_module(:SparseArrays).SparseMatrixCSC, true,
+        ", run `using SparseArrays` to load sparse array functionality")
+    @deprecate_binding(SparseVector, root_module(:SparseArrays).SparseVector, true,
+        ", run `using SparseArrays` to load sparse array functionality")
 end
 
 empty!(LOAD_PATH)

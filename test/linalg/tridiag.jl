@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using SparseArrays
+
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
 function test_approx_eq_vecs(a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, error=nothing) where {S<:Real,T<:Real}
     n = size(a, 1)

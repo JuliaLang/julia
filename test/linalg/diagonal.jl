@@ -3,6 +3,7 @@
 using Test
 using Base.LinAlg: mul!, ldiv!, rdiv!
 import Base.LinAlg: BlasFloat, BlasComplex, SingularException
+using SparseArrays
 
 n=12 #Size of matrix problem to test
 srand(1)

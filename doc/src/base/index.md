@@ -31,5 +31,6 @@
   * [Memory-mapped I/O](@ref)
   * [Base64](@ref)
   * [File Events](@ref lib-filewatching)
+  * [Sparse Arrays](@ref)
   * [Iterative Eigensolvers](@ref lib-itereigen)
   * [Printf](@ref)
