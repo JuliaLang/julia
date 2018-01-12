@@ -295,7 +295,7 @@ end
 
 # Timer / AsyncCondition triggering and race #12719
 let tc = Ref(0),
-    t = Timer(repeat = 0) do t
+    t = Timer(interval = 0) do t
         tc[] += 1
     end
     @test isopen(t)
@@ -306,7 +306,7 @@ let tc = Ref(0),
     @test tc[] == 1
 end
 let tc = Ref(0),
-    t = Timer(repeat = 0) do t
+    t = Timer(interval = 0) do t
         tc[] += 1
     end
     @test isopen(t)

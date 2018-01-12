@@ -125,7 +125,7 @@ end
 # issue #12473
 # make sure 1-shot timers work
 let a = []
-    Timer(t -> push!(a, 1), 0.01, repeat = 0)
+    Timer(t -> push!(a, 1), 0.01, interval = 0)
     sleep(0.2)
     @test a == [1]
 end

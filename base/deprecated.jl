@@ -3807,8 +3807,8 @@ end
 end
 
 @deprecate method_exists(f, t, world) method_exists(f, t, world = world)
-@deprecate Timer(timeout, repeat) Timer(timeout, repeat = repeat)
-@deprecate Timer(callback, delay, repeat) Time(callback, delay, repeat = repeat)
+@deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
+@deprecate Timer(callback, delay, repeat) Time(callback, delay, interval = repeat)
 @deprecate names(m, all) names(m, all = all)
 @deprecate names(m, all, imported) names(m, all = all, imported = imported)
 @deprecate code_native(io, f, types, syntax) code_native(io, f, types, syntax = syntax)

@@ -183,7 +183,7 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "1+1\n") # populate history with a trivial input
     readline(stdout_read)
     write(stdin_write, "\e[A\n")
-    t = Timer(repeat = 10) do t
+    t = Timer(interval = 10) do t
         isopen(t) || return
         error("Stuck waiting for the repl to write `1+1`")
     end
@@ -212,7 +212,7 @@ fake_repl() do stdin_write, stdout_read, repl
     # Test down arrow to go back to history
     # populate history with a trivial input
 
-    t = Timer(repeat = 10) do t
+    t = Timer(interval = 10) do t
         isopen(t) || return
         error("Stuck waiting for history test")
     end
