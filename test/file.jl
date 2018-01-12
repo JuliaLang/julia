@@ -166,21 +166,21 @@ rm(c_tmpdir, recursive=true)
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
     if get(ENV, "USER", "") == "root" || get(ENV, "HOME", "") == "/root"
-        chown(file, -2, group = -1)  # Change the file owner to nobody
+        chown(file, nothing, group = missing)  # Change the file owner to nobody
         @test stat(file).uid !=0
-        chown(file, 0, group = -2)  # Change the file group to nogroup (and owner back to root)
+        chown(file, 0, group = nothing)  # Change the file group to nogroup (and owner back to root)
         @test stat(file).gid !=0
         @test stat(file).uid ==0
-        chown(file, -1, group = 0)
+        chown(file, missing, group = 0)
         @test stat(file).gid ==0
         @test stat(file).uid ==0
     else
-        @test_throws Base.UVError chown(file, -2, group = -1)  # Non-root user cannot change ownership to another user
-        @test_throws Base.UVError chown(file, -1, group = -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        @test_throws Base.UVError chown(file, nothing, group = missing)  # Non-root user cannot change ownership to another user
+        @test_throws Base.UVError chown(file, missing, group = nothing)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
     end
 else
     # test that chown doesn't cause any errors for Windows
-    @test chown(file, -2, group = -2) === nothing
+    @test chown(file, nothing, group = nothing) === nothing
 end
 
 ##############

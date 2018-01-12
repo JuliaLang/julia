@@ -620,13 +620,36 @@ function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
 end
 
 """
-    chown(path::AbstractString, owner::Integer; group::Integer = -1)
+    chown(path::AbstractString, owner::Integer; group::Integer = nothing)
 
-Change the owner and/or group of `path` to `owner` and/or `group`. If the value entered for `owner` or `group`
-is `-1` the corresponding ID will not change. Only integer `owner`s and `group`s are currently supported.
+Change the owner and/or group of `path` to `owner` and/or `group`. If the value
+entered for `owner` or `group` is `missing` the corresponding ID will not
+change. If the value entered for `owner` or `group` is `nothing` the
+corresponding ID will be `nobody` or `nogroup` respectively. Only non-negative
+integer `owner`s and `group`s are currently supported.
 """
-function chown(path::AbstractString, owner::Integer; group::Integer = -1)
-    err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
+function chown(path::AbstractString, owner::Integer; group::Integer = missing)
+    if group < 0
+        ArgumentError("group cannot be negative")
+    elseif group === nothing
+        c_group = -2
+    elseif group === missing
+        c_group = -1
+    else
+        c_group = group
+    end
+
+    if owner < 0
+        ArgumentError("owner cannot be negative")
+    elseif owner === missing
+        c_owner = -1
+    elseif owner === nothing
+        c_owner = -2
+    else
+        c_owner = owner
+    end
+
+    err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, c_owner, c_group)
     uv_error("chown",err)
     nothing
 end
