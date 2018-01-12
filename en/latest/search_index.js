@@ -5113,14 +5113,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.Libdl",
-    "page": "Essentials",
-    "title": "Base.Libdl",
-    "category": "Module",
-    "text": "Interface to libdl. Provides dynamic linking support.\n\n\n\n"
-},
-
-{
     "location": "base/base/#Base.LinAlg",
     "page": "Essentials",
     "title": "Base.LinAlg",
@@ -5197,7 +5189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base Modules",
     "category": "section",
-    "text": "Base.BLAS\nBase.Docs\nBase.Iterators\nBase.LAPACK\nBase.LibGit2\nBase.Libc\nBase.Libdl\nBase.LinAlg\nBase.Markdown\nBase.Meta\nBase.Pkg\nBase.Serializer\nBase.SparseArrays\nBase.StackTraces\nBase.Sys\nBase.Threads"
+    "text": "Base.BLAS\nBase.Docs\nBase.Iterators\nBase.LAPACK\nBase.LibGit2\nBase.Libc\nBase.LinAlg\nBase.Markdown\nBase.Meta\nBase.Pkg\nBase.Serializer\nBase.SparseArrays\nBase.StackTraces\nBase.Sys\nBase.Threads"
 },
 
 {
@@ -5309,7 +5301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "Function",
-    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n"
+    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\ntranspose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n"
 },
 
 {
@@ -9109,7 +9101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = RowVector([1+im, 1-im])\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = RowVector([1+im, 1-im])\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -14869,7 +14861,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Constants",
     "title": "Constants",
     "category": "section",
-    "text": "Core.nothing\nBase.PROGRAM_FILE\nBase.ARGS\nBase.C_NULL\nBase.VERSION\nBase.LOAD_PATH\nBase.Sys.BINDIR\nBase.Sys.CPU_CORES\nBase.Sys.WORD_SIZE\nBase.Sys.KERNEL\nBase.Sys.ARCH\nBase.Sys.MACHINESee also:STDIN\nSTDOUT\nSTDERR\nENV\nENDIAN_BOM\nLibc.MS_ASYNC\nLibc.MS_INVALIDATE\nLibc.MS_SYNC\nLibdl.DL_LOAD_PATH\nLibdl.RTLD_DEEPBIND\nLibdl.RTLD_LOCAL\nLibdl.RTLD_NOLOAD\nLibdl.RTLD_LAZY\nLibdl.RTLD_NOW\nLibdl.RTLD_GLOBAL\nLibdl.RTLD_NODELETE\nLibdl.RTLD_FIRST"
+    "text": "Core.nothing\nBase.PROGRAM_FILE\nBase.ARGS\nBase.C_NULL\nBase.VERSION\nBase.LOAD_PATH\nBase.Sys.BINDIR\nBase.Sys.CPU_CORES\nBase.Sys.WORD_SIZE\nBase.Sys.KERNEL\nBase.Sys.ARCH\nBase.Sys.MACHINESee also:STDIN\nSTDOUT\nSTDERR\nENV\nENDIAN_BOM\nLibc.MS_ASYNC\nLibc.MS_INVALIDATE\nLibc.MS_SYNC"
 },
 
 {
@@ -17105,94 +17097,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libdl/#",
-    "page": "Dynamic Linker",
-    "title": "Dynamic Linker",
-    "category": "page",
-    "text": ""
-},
-
-{
-    "location": "base/libdl/#Base.Libdl.dlopen",
-    "page": "Dynamic Linker",
-    "title": "Base.Libdl.dlopen",
-    "category": "Function",
-    "text": "dlopen(libfile::AbstractString [, flags::Integer])\n\nLoad a shared library, returning an opaque handle.\n\nThe extension given by the constant dlext (.so, .dll, or .dylib) can be omitted from the libfile string, as it is automatically appended if needed.   If libfile is not an absolute path name, then the paths in the array DL_LOAD_PATH are searched for libfile, followed by the system load path.\n\nThe optional flags argument is a bitwise-or of zero or more of RTLD_LOCAL, RTLD_GLOBAL, RTLD_LAZY, RTLD_NOW, RTLD_NODELETE, RTLD_NOLOAD, RTLD_DEEPBIND, and RTLD_FIRST. These are converted to the corresponding flags of the POSIX (and/or GNU libc and/or MacOS) dlopen command, if possible, or are ignored if the specified functionality is not available on the current platform. The default flags are platform specific. On MacOS the default dlopen flags are RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL while on other platforms the defaults are RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL. An important usage of these flags is to specify non default behavior for when the dynamic library loader binds library references to exported symbols and if the bound references are put into process local or global scope. For instance RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL allows the library's symbols to be available for usage in other shared libraries, addressing situations where there are dependencies between shared libraries.\n\n\n\n"
-},
-
-{
-    "location": "base/libdl/#Base.Libdl.dlopen_e",
-    "page": "Dynamic Linker",
-    "title": "Base.Libdl.dlopen_e",
-    "category": "Function",
-    "text": "dlopen_e(libfile::AbstractString [, flags::Integer])\n\nSimilar to dlopen, except returns a NULL pointer instead of raising errors.\n\n\n\n"
-},
-
-{
-    "location": "base/libdl/#Base.Libdl.RTLD_NOW",
-    "page": "Dynamic Linker",
-    "title": "Base.Libdl.RTLD_NOW",
-    "category": "Constant",
-    "text": "RTLD_DEEPBIND\nRTLD_FIRST\nRTLD_GLOBAL\nRTLD_LAZY\nRTLD_LOCAL\nRTLD_NODELETE\nRTLD_NOLOAD\nRTLD_NOW\n\nEnum constant for dlopen. See your platform man page for details, if applicable.\n\n\n\n"
-},
-
-{
-    "location": "base/libdl/#Base.Libdl.dlsym",
-    "page": "Dynamic Linker",
-    "title": "Base.Libdl.dlsym",
-    "category": "Function",
-    "text": "dlsym(handle, sym)\n\nLook up a symbol from a shared library handle, return callable function pointer on success.\n\n\n\n"
-},
-
-{
-    "location": "base/libdl/#Base.Libdl.dlsym_e",
-    "page": "Dynamic Linker",
-    "title": "Base.Libdl.dlsym_e",
-    "category": "Function",
-    "text": "dlsym_e(handle, sym)\n\nLook up a symbol from a shared library handle, silently return NULL pointer on lookup failure.\n\n\n\n"
-},
-
-{
-    "location": "base/libdl/#Base.Libdl.dlclose",
-    "page": "Dynamic Linker",
-    "title": "Base.Libdl.dlclose",
-    "category": "Function",
-    "text": "dlclose(handle)\n\nClose shared library referenced by handle.\n\n\n\n"
-},
-
-{
-    "location": "base/libdl/#Base.Libdl.dlext",
-    "page": "Dynamic Linker",
-    "title": "Base.Libdl.dlext",
-    "category": "Constant",
-    "text": "dlext\n\nFile extension for dynamic libraries (e.g. dll, dylib, so) on the current platform.\n\n\n\n"
-},
-
-{
-    "location": "base/libdl/#Base.Libdl.find_library",
-    "page": "Dynamic Linker",
-    "title": "Base.Libdl.find_library",
-    "category": "Function",
-    "text": "find_library(names, locations)\n\nSearches for the first library in names in the paths in the locations list, DL_LOAD_PATH, or system library paths (in that order) which can successfully be dlopen'd. On success, the return value will be one of the names (potentially prefixed by one of the paths in locations). This string can be assigned to a global const and used as the library name in future ccall's. On failure, it returns the empty string.\n\n\n\n"
-},
-
-{
-    "location": "base/libdl/#Base.Libdl.DL_LOAD_PATH",
-    "page": "Dynamic Linker",
-    "title": "Base.Libdl.DL_LOAD_PATH",
-    "category": "Constant",
-    "text": "DL_LOAD_PATH\n\nWhen calling dlopen, the paths in this list will be searched first, in order, before searching the system locations for a valid library handle.\n\n\n\n"
-},
-
-{
-    "location": "base/libdl/#Dynamic-Linker-1",
-    "page": "Dynamic Linker",
-    "title": "Dynamic Linker",
-    "category": "section",
-    "text": "The names in Base.Libdl are not exported and need to be called e.g. as Libdl.dlopen.Base.Libdl.dlopen\nBase.Libdl.dlopen_e\nBase.Libdl.RTLD_NOW\nBase.Libdl.dlsym\nBase.Libdl.dlsym_e\nBase.Libdl.dlclose\nBase.Libdl.dlext\nBase.Libdl.find_library\nBase.Libdl.DL_LOAD_PATH"
-},
-
-{
     "location": "base/stacktraces/#",
     "page": "StackTraces",
     "title": "StackTraces",
@@ -18453,7 +18357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n"
+    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n"
 },
 
 {
@@ -18878,6 +18782,94 @@ var documenterSearchIndex = {"docs": [
     "title": "Iterative Eigensolvers",
     "category": "section",
     "text": "Julia provides bindings to ARPACK, which can be used to perform iterative solutions for eigensystems (using eigs) or singular value decompositions (using svds).eigs calculates the eigenvalues and, optionally, eigenvectors of its input(s) using implicitly restarted Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively.For the single matrix version,eigs(A; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)the following keyword arguments are supported:nev: Number of eigenvalues\nncv: Number of Krylov vectors used in the computation; should satisfy nev+1 <= ncv <= n for real symmetric problems and nev+2 <= ncv <= n for other problems, where n is the size of the input matrix A. The default is ncv = max(20,2*nev+1). Note that these restrictions limit the input matrix A to be of dimension at least 2.\nwhich: type of eigenvalues to compute. See the note below.which type of eigenvalues\n:LM eigenvalues of largest magnitude (default)\n:SM eigenvalues of smallest magnitude\n:LR eigenvalues of largest real part\n:SR eigenvalues of smallest real part\n:LI eigenvalues of largest imaginary part (nonsymmetric or complex A only)\n:SI eigenvalues of smallest imaginary part (nonsymmetric or complex A only)\n:BE compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric A only)tol: parameter defining the relative tolerance for convergence of Ritz values (eigenvalue estimates).    A Ritz value  is considered converged when its associated residual    is less than or equal to the product of tol and max(^23 ),    where ɛ = eps(real(eltype(A)))/2 is LAPACK's machine epsilon.    The residual associated with  and its corresponding Ritz vector v    is defined as the norm Av - v.    The specified value of tol should be positive; otherwise, it is ignored    and  is used instead.    Default: .\nmaxiter: Maximum number of iterations (default = 300)\nsigma: Specifies the level shift used in inverse iteration. If nothing (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to sigma using shift and invert iterations.\nritzvec: Returns the Ritz vectors v (eigenvectors) if true\nv0: starting vector from which to start the iterationsWe can see the various keywords in action in the following examples:julia> using IterativeEigensolvers\n\njulia> A = Diagonal(1:4);\n\njulia> λ, ϕ = eigs(A, nev = 2, which=:SM);\n\njulia> λ\n2-element Array{Float64,1}:\n 1.0000000000000002\n 2.0\n\njulia> B = Diagonal([1., 2., -3im, 4im])\n4×4 Diagonal{Complex{Float64},Array{Complex{Float64},1}}:\n 1.0+0.0im      ⋅          ⋅          ⋅\n     ⋅      2.0+0.0im      ⋅          ⋅\n     ⋅          ⋅      0.0-3.0im      ⋅\n     ⋅          ⋅          ⋅      0.0+4.0im\n\njulia> λ, ϕ = eigs(B, nev=1, which=:LI);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n -4.440892098500626e-16 + 3.999999999999998im\n\njulia> λ, ϕ = eigs(B, nev=1, which=:SI);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n 1.3877787807814457e-16 - 2.999999999999999im\n\njulia> λ, ϕ = eigs(B, nev=1, which=:LR);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n 2.0 + 4.242754940683747e-17im\n\njulia> λ, ϕ = eigs(B, nev=1, which=:SR);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n 4.440892098500626e-16 + 4.0000000000000036im\n\njulia> λ, ϕ = eigs(B, nev=1, sigma=1.5);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n 1.9999999999999996 + 2.4290457684137336e-17imnote: Note\nThe sigma and which keywords interact: the description of eigenvalues searched for by which do not necessarily refer to the eigenvalues of A, but rather the linear operator constructed by the specification of the iteration mode implied by sigma.sigma iteration mode which refers to eigenvalues of\nnothing ordinary (forward) A\nreal or complex inverse with level shift sigma (A - sigma I )^-1note: Note\nAlthough tol has a default value, the best choice depends strongly on the matrix A. We recommend that users _always_ specify a value for tol which suits their specific needs.For details of how the errors in the computed eigenvalues are estimated, see:B. N. Parlett, \"The Symmetric Eigenvalue Problem\", SIAM: Philadelphia, 2/e (1998), Ch. 13.2, \"Accessing Accuracy in Lanczos Problems\", pp. 290-292 ff.\nR. B. Lehoucq and D. C. Sorensen, \"Deflation Techniques for an Implicitly Restarted Arnoldi Iteration\", SIAM Journal on Matrix Analysis and Applications (1996), 17(4), 789–821.  doi:10.1137/S0895479895281484For the two-input generalized eigensolution version,eigs(A, B; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)the following keyword arguments are supported:nev: Number of eigenvalues\nncv: Number of Krylov vectors used in the computation; should satisfy nev+1 <= ncv <= n for real symmetric problems and nev+2 <= ncv <= n for other problems, where n is the size of the input matrices A and B. The default is ncv = max(20,2*nev+1). Note that these restrictions limit the input matrix A to be of dimension at least 2.\nwhich: type of eigenvalues to compute. See the note below.which type of eigenvalues\n:LM eigenvalues of largest magnitude (default)\n:SM eigenvalues of smallest magnitude\n:LR eigenvalues of largest real part\n:SR eigenvalues of smallest real part\n:LI eigenvalues of largest imaginary part (nonsymmetric or complex A only)\n:SI eigenvalues of smallest imaginary part (nonsymmetric or complex A only)\n:BE compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric A only)tol: relative tolerance used in the convergence criterion for eigenvalues, similar to    tol in the eigs(A) method for the ordinary eigenvalue    problem, but effectively for the eigenvalues of B^-1 A instead of A.    See the documentation for the ordinary eigenvalue problem in    eigs(A) and the accompanying note about tol.\nmaxiter: Maximum number of iterations (default = 300)\nsigma: Specifies the level shift used in inverse iteration. If nothing (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to sigma using shift and invert iterations.\nritzvec: Returns the Ritz vectors v (eigenvectors) if true\nv0: starting vector from which to start the iterationseigs returns the nev requested eigenvalues in d, the corresponding Ritz vectors v (only if ritzvec=true), the number of converged eigenvalues nconv, the number of iterations niter and the number of matrix vector multiplications nmult, as well as the final residual vector resid.We can see the various keywords in action in the following examples:julia> using IterativeEigensolvers\n\njulia> A = sparse(1.0I, 4, 4); B = Diagonal(1:4);\n\njulia> λ, ϕ = eigs(A, B, nev = 2);\n\njulia> λ\n2-element Array{Float64,1}:\n 1.0\n 0.4999999999999999\n\njulia> A = sparse(1.0I, 4, 4); B = Diagonal([1, -2im, 3, 4im]);\n\njulia> λ, ϕ = eigs(A, B, nev=1, which=:SI);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n 0.03291282838780993 - 2.0627621271174514im\n\njulia> λ, ϕ = eigs(A, B, nev=1, which=:LI);\n\njulia> λ\n1-element Array{Complex{Float64},1}:\n -0.6428551411711136 + 2.1820633510068994imnote: Note\nThe sigma and which keywords interact: the description of eigenvalues searched for by which do not necessarily refer to the eigenvalue problem Av = Bvlambda, but rather the linear operator constructed by the specification of the iteration mode implied by sigma.sigma iteration mode which refers to the problem\nnothing ordinary (forward) Av = Bvlambda\nreal or complex inverse with level shift sigma (A - sigma B )^-1B = vnuIterativeEigensolvers.eigs(::Any)\nIterativeEigensolvers.eigs(::Any, ::Any)\nIterativeEigensolvers.svds"
+},
+
+{
+    "location": "stdlib/Libdl/#",
+    "page": "Dynamic Linker",
+    "title": "Dynamic Linker",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/Libdl/#Libdl.dlopen",
+    "page": "Dynamic Linker",
+    "title": "Libdl.dlopen",
+    "category": "Function",
+    "text": "dlopen(libfile::AbstractString [, flags::Integer])\n\nLoad a shared library, returning an opaque handle.\n\nThe extension given by the constant dlext (.so, .dll, or .dylib) can be omitted from the libfile string, as it is automatically appended if needed.   If libfile is not an absolute path name, then the paths in the array DL_LOAD_PATH are searched for libfile, followed by the system load path.\n\nThe optional flags argument is a bitwise-or of zero or more of RTLD_LOCAL, RTLD_GLOBAL, RTLD_LAZY, RTLD_NOW, RTLD_NODELETE, RTLD_NOLOAD, RTLD_DEEPBIND, and RTLD_FIRST. These are converted to the corresponding flags of the POSIX (and/or GNU libc and/or MacOS) dlopen command, if possible, or are ignored if the specified functionality is not available on the current platform. The default flags are platform specific. On MacOS the default dlopen flags are RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL while on other platforms the defaults are RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL. An important usage of these flags is to specify non default behavior for when the dynamic library loader binds library references to exported symbols and if the bound references are put into process local or global scope. For instance RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL allows the library's symbols to be available for usage in other shared libraries, addressing situations where there are dependencies between shared libraries.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Libdl/#Libdl.dlopen_e",
+    "page": "Dynamic Linker",
+    "title": "Libdl.dlopen_e",
+    "category": "Function",
+    "text": "dlopen_e(libfile::AbstractString [, flags::Integer])\n\nSimilar to dlopen, except returns a NULL pointer instead of raising errors.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Libdl/#Libdl.RTLD_NOW",
+    "page": "Dynamic Linker",
+    "title": "Libdl.RTLD_NOW",
+    "category": "Constant",
+    "text": "RTLD_DEEPBIND\nRTLD_FIRST\nRTLD_GLOBAL\nRTLD_LAZY\nRTLD_LOCAL\nRTLD_NODELETE\nRTLD_NOLOAD\nRTLD_NOW\n\nEnum constant for dlopen. See your platform man page for details, if applicable.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Libdl/#Libdl.dlsym",
+    "page": "Dynamic Linker",
+    "title": "Libdl.dlsym",
+    "category": "Function",
+    "text": "dlsym(handle, sym)\n\nLook up a symbol from a shared library handle, return callable function pointer on success.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Libdl/#Libdl.dlsym_e",
+    "page": "Dynamic Linker",
+    "title": "Libdl.dlsym_e",
+    "category": "Function",
+    "text": "dlsym_e(handle, sym)\n\nLook up a symbol from a shared library handle, silently return NULL pointer on lookup failure.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Libdl/#Libdl.dlclose",
+    "page": "Dynamic Linker",
+    "title": "Libdl.dlclose",
+    "category": "Function",
+    "text": "dlclose(handle)\n\nClose shared library referenced by handle.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Libdl/#Libdl.dlext",
+    "page": "Dynamic Linker",
+    "title": "Libdl.dlext",
+    "category": "Constant",
+    "text": "dlext\n\nFile extension for dynamic libraries (e.g. dll, dylib, so) on the current platform.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Libdl/#Libdl.find_library",
+    "page": "Dynamic Linker",
+    "title": "Libdl.find_library",
+    "category": "Function",
+    "text": "find_library(names, locations)\n\nSearches for the first library in names in the paths in the locations list, DL_LOAD_PATH, or system library paths (in that order) which can successfully be dlopen'd. On success, the return value will be one of the names (potentially prefixed by one of the paths in locations). This string can be assigned to a global const and used as the library name in future ccall's. On failure, it returns the empty string.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Libdl/#Base.DL_LOAD_PATH",
+    "page": "Dynamic Linker",
+    "title": "Base.DL_LOAD_PATH",
+    "category": "Constant",
+    "text": "DL_LOAD_PATH\n\nWhen calling dlopen, the paths in this list will be searched first, in order, before searching the system locations for a valid library handle.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Libdl/#Dynamic-Linker-1",
+    "page": "Dynamic Linker",
+    "title": "Dynamic Linker",
+    "category": "section",
+    "text": "Libdl.dlopen\nLibdl.dlopen_e\nLibdl.RTLD_NOW\nLibdl.dlsym\nLibdl.dlsym_e\nLibdl.dlclose\nLibdl.dlext\nLibdl.find_library\nLibdl.DL_LOAD_PATH"
 },
 
 {
