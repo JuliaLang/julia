@@ -362,7 +362,8 @@
                                                            'nothing
                                                            (cons 'list (map car sparams)))
                                                       ,(if (null? loc) 0 (cadr loc))
-                                                      (inert ,(if (null? loc) 'none (caddr loc))))))))
+                                                      (inert ,(if (null? loc) 'none (caddr loc)))
+                                                      false)))))
                              (list gf))
                            '()))
             (types (llist-types argl))
