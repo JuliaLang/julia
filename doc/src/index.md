@@ -2,7 +2,7 @@
 
 Welcome to the documentation for Julia 0.7.
 
-Please read the [release notes](NEWS.md) to see what has changed since Julia 0.6.
+Please read the [release notes](NEWS.md) to see what has changed since the last release.
 
 * [Manual](#Manual-1)
 * [Base](#Base-1)
